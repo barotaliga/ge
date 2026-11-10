@@ -4,39 +4,68 @@
 
 void() player_die;
 void() player_pain;
+void(entity targ) dmm4_soaked;
 
-// The frags a death is worth: a kill +1, a death by one's own hand or the world's -1.
+// The frags a death is worth: a kill +1, a teammate's -1 to the killer, a death by one's own hand
+// or the world's -1. It is told in the loaded game's words when it has them (the glue's
+// `death_words`), else in ours; before the match a game that asks tells and scores nothing.
 void(entity targ, entity attacker) score_death = {
-  local string how;
+  local string how, told;
   if (targ.classname != "player") return;
+  if (game_quiet()) return;
   how = targ.deathtype;
+  told = death_words(targ, attacker);
   if (attacker == targ) {
     targ.frags = targ.frags - 1;
-    say_all(PRINT_MEDIUM, targ.netname, " fragged themselves\n", "", "", "", "");
+    if (told != "") say_all(PRINT_MEDIUM, told, "", "", "", "", "");
+    else say_all(PRINT_MEDIUM, targ.netname, " fragged themselves\n", "", "", "", "");
     return;
   }
   if (attacker.classname == "player") {
-    attacker.frags = attacker.frags + 1;
+    if (same_team(targ, attacker)) attacker.frags = attacker.frags - 1;
+    else attacker.frags = attacker.frags + 1;
     note_frag(attacker, targ);
+    if (told != "") {
+      say_all(PRINT_MEDIUM, told, "", "", "", "", "");
+      return;
+    }
     if (how == "") how = "fragged";
     say_all(PRINT_MEDIUM, targ.netname, " was ", how, " by ", attacker.netname, "\n");
     return;
   }
   targ.frags = targ.frags - 1;
+  if (told != "") {
+    say_all(PRINT_MEDIUM, told, "", "", "", "", "");
+    return;
+  }
   if (how == "") how = "died";
   say_all(PRINT_MEDIUM, targ.netname, " ", how, "\n", "", "");
+};
+
+// The push of a blow: away from its centre, more for a lighter blow's target than a heavier.
+void(entity targ, entity inflictor, float damage) blow_push = {
+  local vector dir;
+  if (inflictor == world || targ.movetype != MOVETYPE_WALK) return;
+  dir = targ.origin - (inflictor.absmin + inflictor.absmax) * 0.5;
+  dir = normalize(dir);
+  targ.velocity = targ.velocity + dir * damage * 8;
 };
 
 // `damage` points from `attacker` through `inflictor` (the missile, or the attacker itself).
 void(entity targ, entity inflictor, entity attacker, float damage) damage = {
   local float saved, taken;
-  local vector dir;
   local entity was_self;
   if (!targ.takedamage || targ.health <= 0) return;
   if (match_over) return;
   if (targ.invincible_finished > time) return;  // the shield
-  if (same_team(targ, attacker)) return;          // a teammate, under teamplay
-  if (attacker.super_damage_finished > time) damage = damage * 4;  // the quad
+  if (!telefragging && same_team(targ, attacker)) {  // a teammate: no harm, a push if the rules say
+    if (team_shoves(targ, attacker)) blow_push(targ, inflictor, damage);
+    return;
+  }
+  if (attacker.super_damage_finished > time) {  // the quad (deathmatch 4's OctaPower: eight)
+    if (deathmatch == 4) damage = damage * 8;
+    else damage = damage * 4;
+  }
   // Armour takes its share, as far as it lasts.
   saved = ceil(targ.armortype * damage);
   if (saved >= targ.armorvalue) {
@@ -49,11 +78,12 @@ void(entity targ, entity inflictor, entity attacker, float damage) damage = {
   targ.dmg_take = targ.dmg_take + taken;
   targ.dmg_save = targ.dmg_save + saved;
   targ.dmg_inflictor = inflictor;
-  // The push: away from the blow's centre, more for a lighter blow's target than a heavier.
-  if (inflictor != world && targ.movetype == MOVETYPE_WALK) {
-    dir = targ.origin - (inflictor.absmin + inflictor.absmax) * 0.5;
-    dir = normalize(dir);
-    targ.velocity = targ.velocity + dir * damage * 8;
+  blow_push(targ, inflictor, damage);
+  // Deathmatch 4's spawn protection (common/dmm4.qc): the armour wore and the blow pushed, the
+  // health is spared (a telefrag still kills).
+  if (targ.shield_finished > time && !telefragging) {
+    dmm4_soaked(targ);
+    return;
   }
   targ.health = targ.health - taken;
   damage_attacker = attacker;
@@ -68,6 +98,43 @@ void(entity targ, entity inflictor, entity attacker, float damage) damage = {
     else player_pain();
   }
   self = was_self;
+};
+
+// `who` takes the spot he stands on: a living player there dies, teammate or not (no two players
+// are ever left stuck inside each other), unless the shield holds him, when `who` dies instead.
+void(entity who) telefrag = {
+  local entity p, next;
+  p = findradius(who.origin, 48);
+  while (p) {
+    next = p.chain;  // a death may search the world again
+    if (p != who && p.classname == "player" && p.health > 0) {
+      telefragging = TRUE;
+      if (deathmatch == 4 && p.shield_finished > time) {
+        // Deathmatch 4: onto a protected player. Both protected, both die; else `who` does.
+        // The one who dies loses a frag and nobody gains one.
+        if (who.shield_finished > time) {
+          p.shield_finished = 0;
+          p.deathtype = "telefragged";
+          damage(p, world, world, 50000);
+        }
+        who.shield_finished = 0;
+        who.deathtype = "telefragged";
+        damage(who, world, world, 50000);
+        telefragging = FALSE;
+        return;
+      }
+      if (p.invincible_finished > time) {
+        who.deathtype = "telefragged";
+        damage(who, p, p, 50000);
+        telefragging = FALSE;
+        return;
+      }
+      p.deathtype = "telefragged";
+      damage(p, who, who, 50000);
+      telefragging = FALSE;
+    }
+    p = next;
+  }
 };
 
 // A blast at `inflictor`: everything within reach that takes damage gets `points` less half its

@@ -13,8 +13,10 @@
 //   in the ball and still burning: it EMITS the blackbody light of its temperature
 //   (render/blackbody.hpp's table, a perfect radiator's luminance, so the fireball sits in the
 //   sun's units and is white-hot, then orange, then a dull red); and it SCATTERS as smoke of
-//   its look's albedo and tint (soot, dust, steam), lit by the sun (its sunward side brighter),
-//   the sky and the fire inside it; the look's billows, fray and billow size shape its edge.
+//   its look's albedo and tint (soot, dust, steam), lit by the sun (its sunward side brighter)
+//   and the sky as far as they reach it (`BlastLight::sky`), the room's own light (`lit`: a
+//   room's smoke is as bright as the room, not sunlit) and the fire inside it; the look's
+//   billows, fray and billow size shape its edge.
 //   Emission and absorption are integrated front to back; the march stops once the ray is
 //   nearly opaque.
 // - THE COST is a pixel's steps where a fireball covers the screen, and nothing elsewhere: no
@@ -50,6 +52,7 @@
 #include "render/explosion.hpp"
 #include "render/frame.hpp"
 #include "render/impact.hpp"
+#include "render/lights.hpp"
 #include "render/muzzle.hpp"
 #include "render/particles.hpp"
 #include "render/view.hpp"
@@ -73,13 +76,15 @@ struct GpuBlast {
   float soot[4];    // the smoke's albedo times its tint; 0
   float axis[4];    // the stretch's axis (unit); the stretch, its length over its width (1: none)
   float side[4];    // where the first prong points (unit, square to the axis); the prongs (0: none)
+  float light[4];   // the local light on it, whites (BlastLight::lit); the sun's and sky's share
 };
-static_assert(sizeof(GpuBlast) == 128, "match explosions.wgsl's Blast");
+static_assert(sizeof(GpuBlast) == 144, "match explosions.wgsl's Blast");
 
 // A shot's flame this frame: the shot and the muzzle's pose of this frame.
 struct MuzzleFire {
   Shot shot;
   MuzzlePose pose;
+  BlastLight light{};  // what lights the gas that is not burning
 };
 
 struct Explosions {
@@ -112,6 +117,13 @@ void stage_explosions(Explosions& ex, std::span<const Blast> blasts, const Frame
 void prepare_explosions(gpu::Device& device, Explosions& ex, std::span<const Blast> blasts,
                         const FrameView& view, uint32_t width, uint32_t height,
                         std::span<const MuzzleFire> fires = {});
+
+// The flash of every blast alive at `now_s` (render/explosion.hpp's `flash_at`) as a local light
+// appended to `out`: a point at the fireball's centre, its candela and colour reset from the curve
+// each frame (white-hot, then an orange glow, then out), reaching out to where its light has
+// fallen to a lux (the look's range at least, four times it at most); a blast whose fire is out
+// gives none. The count appended.
+size_t flash_lights(std::span<const Blast> blasts, double now_s, std::vector<LocalLight>& out);
 
 // The pass "explosions" (after the particles, before the resolve): one quad a staged blast.
 void encode_explosions(const Explosions& ex, const gpu::PipelineSet& pipelines, FrameRecorder& rec,

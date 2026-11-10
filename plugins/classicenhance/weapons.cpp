@@ -12,6 +12,7 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <utility>
 
 #include "morph/read.hpp"
 #include "morph/smooth.hpp"
@@ -287,31 +288,86 @@ std::span<const ClassicFire> classic_fires() {
   // As a real gun's flash looks: a few milliseconds of glowing gas, small and dim, the smoke what
   // is left; each preset's shape (the shotguns' short wide flash, the grenade launcher's thump,
   // the rocket launcher's jet) at that scale. A nailgun throws nails, not burning powder: no
-  // flame, no flash, only a faint puff from the barrel that fired. The rates are the classic
-  // game's.
+  // flame, no flash, and next to no smoke, a breath of haze from the barrel that fired, thin and
+  // gone in under half a second, so a stream of them never builds a cloud. The rest leave a short
+  // grey puff at the muzzle, a hand or two across and gone in about a second, never a white cloud
+  // hanging between the shooter and what he shot (the pack's weapons are drawn at their true size,
+  // so the presets' smoke is turned down to it). The rates are the classic game's.
   static constexpr std::string_view kPuff =
-      "length=0.02,width=0.02,glow=0,flash=0,sparks=0,light_range=0,smoke.smoke=0.14,"
-      "smoke_speed=1.5";
+      "length=0.02,width=0.02,glow=0,flash=0,sparks=0,light_range=0,smoke.smoke=0.02,"
+      "smoke.smoke_grow=0.3,smoke.smoke_time=0.35,smoke.smoke_albedo=0.45,smoke_speed=1.2";
   static constexpr std::string_view kShotgun =
       "life=0.018,length=0.24,width=0.144,glow=0.0175,flash=0.2,sparks=2,light_range=3.6,"
-      "smoke.smoke=0.45";
+      "smoke.smoke=0.28,smoke.radius=0.1,smoke.smoke_grow=0.9,smoke.smoke_time=0.9,"
+      "smoke.smoke_albedo=0.38";
   static constexpr std::string_view kGrenade =
       "life=0.021,length=0.12,width=0.102,glow=0.0175,flash=0.12,sparks=0,light_range=2.4,"
-      "smoke.smoke=0.54";
+      "smoke.smoke=0.3,smoke.radius=0.1,smoke.smoke_grow=0.8,smoke.smoke_time=1.0,"
+      "smoke.smoke_albedo=0.32";
   static constexpr std::string_view kRocket =
       "life=0.036,length=0.54,width=0.12,glow=0.0315,flash=0.22,sparks=3,light_range=5.6,"
-      "smoke.smoke=0.63";
+      "smoke.smoke=0.3,smoke.radius=0.12,smoke.smoke_grow=0.8,smoke.smoke_time=1.1,"
+      "smoke.smoke_albedo=0.35";
   static constexpr ClassicFire kFires[] = {
-      {"v_axe", "", "", 0.5},
+      {"v_axe", "", "", 0.5, 2},
       {"v_shot", "muzzle.shotgun", kShotgun, 0.5},
       {"v_shot2", "muzzle.shotgun", kShotgun, 0.7},
       {"v_nail", "muzzle.nailgun", kPuff, 0.1},
       {"v_nail2", "muzzle.nailgun", kPuff, 0.1},
       {"v_rock", "muzzle.grenade", kGrenade, 0.6},
       {"v_rock2", "muzzle.rocket", kRocket, 0.8},
-      {"v_light", "", "", 0.1},
+      {"v_light", "", "", 0.1, 1, true},
   };
   return kFires;
+}
+
+bool find_arc(viewmodel::HeldModel& h) {
+  constexpr size_t kTip = 4;  // the prong's vertices nearest the arc's end
+  if (h.flame.empty()) return false;
+  const size_t n = h.vertex_count();
+  std::vector<uint8_t> in_flame(n, 0);
+  for (size_t t = 0; t < h.flame.size(); ++t)
+    if (h.flame[t] != 0)
+      for (size_t k = 0; k < 3; ++k) in_flame[h.indices[t * 3 + k]] = 1;
+  // The frame where the flash, in front of the eye, stands widest across the gun (held x).
+  int best = -1;
+  double span = 0, lo[3] = {0, 0, 0}, hi[3] = {0, 0, 0};
+  for (size_t f = 0; f < h.frames.size(); ++f) {
+    const std::vector<float>& p = h.frames[f].positions;
+    double l[3] = {1e18, 0, 0}, r[3] = {-1e18, 0, 0};
+    bool ahead = true, any = false;
+    for (size_t v = 0; v < n; ++v) {
+      if (in_flame[v] == 0) continue;
+      any = true;
+      ahead = ahead && p[v * 3 + 2] > 0;
+      if (p[v * 3] < l[0])
+        for (int k = 0; k < 3; ++k) l[k] = p[v * 3 + size_t(k)];
+      if (p[v * 3] > r[0])
+        for (int k = 0; k < 3; ++k) r[k] = p[v * 3 + size_t(k)];
+    }
+    if (!any || !ahead || r[0] - l[0] <= span) continue;
+    best = static_cast<int>(f);
+    span = r[0] - l[0];
+    for (int k = 0; k < 3; ++k) lo[k] = l[k], hi[k] = r[k];
+  }
+  if (best < 0 || span < kArcSpanM) return false;
+  // Each end: the gun's own vertices (not the flash's) nearest it on that frame.
+  const std::vector<float>& p = h.frames[size_t(best)].positions;
+  for (int e = 0; e < 2; ++e) {
+    const double* at = e == 0 ? lo : hi;
+    std::vector<std::pair<double, uint32_t>> near;
+    for (size_t v = 0; v < n; ++v) {
+      if (in_flame[v] != 0) continue;
+      double d = 0;
+      for (size_t k = 0; k < 3; ++k) d += (p[v * 3 + k] - at[k]) * (p[v * 3 + k] - at[k]);
+      near.emplace_back(d, static_cast<uint32_t>(v));
+    }
+    if (near.size() < kTip) return false;
+    std::partial_sort(near.begin(), near.begin() + kTip, near.end());
+    h.arc_ends[e].clear();
+    for (size_t i = 0; i < kTip; ++i) h.arc_ends[e].push_back(near[i].second);
+  }
+  return true;
 }
 
 const ClassicFire* classic_fire_of(std::string_view path) {

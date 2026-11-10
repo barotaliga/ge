@@ -1,5 +1,6 @@
 // THE ITEMS: health, armour, ammunition and weapons lying on the map. Each is a trigger a living
-// player picks up by touching; it is gone for its respawn time, then comes back with a sound.
+// player picks up by touching; it is gone for its respawn time, then comes back with a sound. Where
+// the glue's `items_come_back` says no (the campaign's single player and co-op) it is gone for good.
 //
 //   item_health      25 (spawnflags 1: 15; 2: 100 that may go over the maximum, to 250, and
 //                    decays back a point a second)                                  20 s
@@ -27,7 +28,8 @@ void() item_return = {
   sound(self, CHAN_VOICE, "items/itembk2.wav", 1, ATTN_NORM);
 };
 
-// Takes the item away for its respawn time.
+// Takes the item away for its respawn time, or for good where items do not come back (removed
+// on the next frame, once its targets have fired).
 void() item_taken = {
   sound(other, CHAN_ITEM, self.noise, 1, ATTN_NORM);
   stuffcmd(other, "bf\n");
@@ -35,6 +37,10 @@ void() item_taken = {
   self.modelindex = 0;
   self.nextthink = time + self.respawn_time;
   self.think = item_return;
+  if (!items_come_back()) {
+    self.nextthink = time;
+    self.think = remove_self;
+  }
   activator = other;
   use_targets();
 };
@@ -62,6 +68,18 @@ float() can_pick_up = {
   return other.classname == "player" && other.health > 0 && !match_over;
 };
 
+float(entity p) dmm4_shielded;
+void() dmm4_octa_taken;
+void() dmm4_octa_off;
+void() dmm4_pack_take;
+void() dmm4_frame;
+
+// And may take health, armour or a pack: in deathmatch 4 not while a shield holds him.
+float() can_heal = {
+  if (!can_pick_up()) return FALSE;
+  return deathmatch != 4 || !dmm4_shielded(other);
+};
+
 // --- health ---
 
 void() health_decay = {
@@ -72,15 +90,19 @@ void() health_decay = {
     self.nextthink = time + 1;
     return;
   }
-  // Back at the maximum: the big box comes back after its own wait.
+  // Back at the maximum: the big box comes back after its own wait (or is gone for good).
   self.owner = world;
+  if (!items_come_back()) {
+    remove(self);
+    return;
+  }
   self.nextthink = time + self.respawn_time;
   self.think = item_return;
 };
 
 void() health_touch = {
   local float limit;
-  if (!can_pick_up()) return;
+  if (!can_heal()) return;
   limit = other.max_health;
   if (self.spawnflags & 2) limit = 250;
   if (other.health >= limit) return;
@@ -96,6 +118,10 @@ void() health_touch = {
 };
 
 void() item_health = {
+  if (deathmatch == 4 && (self.spawnflags & 2)) {  // no mega health in deathmatch 4
+    remove(self);
+    return;
+  }
   self.touch = health_touch;
   if (self.spawnflags & 1) {
     self.health = 15;
@@ -112,27 +138,45 @@ void() item_health = {
 // --- armour ---
 
 void() armour_touch = {
-  if (!can_pick_up()) return;
+  if (!can_heal()) return;
   if (other.armortype * other.armorvalue >= self.armortype * self.armorvalue) return;
   other.armortype = self.armortype;
   other.armorvalue = self.armorvalue;
   other.items = other.items - (other.items & IT_ARMOR_ALL) + self.items;
-  say_to(other, PRINT_LOW, "You got armor\n", "", "", "");
+  if (name_of(self.classname, "") == "") say_to(other, PRINT_LOW, "You got armor\n", "", "", "");
+  else say_to(other, PRINT_LOW, "You got the ", name_of(self.classname, ""), "\n", "");
   item_taken();
 };
 
-void(float share, float value, float bit, float skin) armour_start = {
-  self.armortype = share;
-  self.armorvalue = value;
-  self.items = bit;
-  self.touch = armour_touch;
-  self.skin = skin;
-  item_start("progs/armor.mdl", "items/armor1.wav", '-16 -16 0', '16 16 56', 20);
+// An armour's row (games/shooters_edge/profiles/arsenal.hpp): the share of a blow it takes, its
+// amount, its pickup's skin, model and sound. The game puts its rows in the server's settings
+// (`arsenal_armour1` .. `arsenal_armour3`, weakest first); a slot with none keeps ours.
+string(float slot) armour_own_row = {
+  if (slot == 1) return "0.3 100 0 progs/armor.mdl items/armor1.wav";
+  if (slot == 2) return "0.6 150 1 progs/armor.mdl items/armor1.wav";
+  return "0.8 200 2 progs/armor.mdl items/armor1.wav";
 };
 
-void() item_armor1 = { armour_start(0.3, 100, IT_ARMOR1, 0); };
-void() item_armor2 = { armour_start(0.6, 150, IT_ARMOR2, 1); };
-void() item_armorInv = { armour_start(0.8, 200, IT_ARMOR3, 2); };
+void(float slot, float bit) armour_start = {
+  local string row, mdl, snd;
+  if (slot == 1) row = cvar_string("arsenal_armour1");
+  else if (slot == 2) row = cvar_string("arsenal_armour2");
+  else row = cvar_string("arsenal_armour3");
+  if (row == "") row = armour_own_row(slot);
+  tokenize(row);
+  mdl = strzone(argv(3));  // held by the item for as long as the map runs
+  snd = strzone(argv(4));
+  self.armortype = number_of(argv(0));
+  self.armorvalue = number_of(argv(1));
+  self.skin = number_of(argv(2));
+  self.items = bit;
+  self.touch = armour_touch;
+  item_start(mdl, snd, '-16 -16 0', '16 16 56', 20);
+};
+
+void() item_armor1 = { armour_start(1, IT_ARMOR1); };
+void() item_armor2 = { armour_start(2, IT_ARMOR2); };
+void() item_armorInv = { armour_start(3, IT_ARMOR3); };
 
 // --- ammunition ---
 
@@ -164,6 +208,10 @@ void() ammo_touch = {
 
 void(string mdl) ammo_start = {
   local float n;
+  if (deathmatch == 4) {  // none lies on the map in deathmatch 4
+    remove(self);
+    return;
+  }
   n = 1;
   if (self.spawnflags & 1) n = 2;
   self.ammo_shells = self.ammo_shells * n;
@@ -201,10 +249,33 @@ void() weapon_touch = {
   self = was_self;
 };
 
+// A weapon lying on the map in slot `w`'s place: the arsenal's row gives the model it lies as and
+// the ammunition that comes with it; a row with no pickup leaves the map's own (`mdl` and the
+// amount the item's spawn function set).
 void(float w, string name, string mdl) weapon_start = {
+  local string pickup, kind;
+  local float n;
+  if (deathmatch == 4) {  // every player holds them all in deathmatch 4
+    remove(self);
+    return;
+  }
   self.weapon = w;
   self.netname = name;
   self.touch = weapon_touch;
+  pickup = weapon_word(w, 15);
+  if (pickup != "" && pickup != "-") {
+    mdl = strzone(pickup);  // held by the item for as long as the map runs
+    n = weapon_number(w, 16);
+    kind = weapon_word(w, 1);
+    self.ammo_shells = 0;
+    self.ammo_nails = 0;
+    self.ammo_rockets = 0;
+    self.ammo_cells = 0;
+    if (kind == "shells") self.ammo_shells = n;
+    else if (kind == "nails") self.ammo_nails = n;
+    else if (kind == "rockets") self.ammo_rockets = n;
+    else if (kind == "cells") self.ammo_cells = n;
+  }
   item_start(mdl, "weapons/pkup.wav", '-16 -16 0', '16 16 56', 30);
 };
 
@@ -289,7 +360,12 @@ void(float had) backpack_say = {
 void() backpack_touch = {
   local entity was_self;
   local float had;
-  if (!can_pick_up()) return;
+  if (!can_heal()) return;
+  if (deathmatch == 4) {  // health, and the bonus powers (dmm4.qc)
+    dmm4_pack_take();
+    remove(self);
+    return;
+  }
   had = other.items & self.weapon;
   ammo_give(self.ammo_shells, self.ammo_nails, self.ammo_rockets, self.ammo_cells);
   other.items = other.items | self.weapon;
@@ -343,11 +419,18 @@ float POWER_TIME = 30;
 
 void() power_touch = {
   if (!can_pick_up()) return;
-  if (self.items == IT_QUAD) {
+  if (self.items == IT_QUAD && deathmatch == 4) {  // the OctaPower (dmm4.qc)
     other.super_damage_finished = time + POWER_TIME;
+    other.power_said = other.power_said - (other.power_said & IT_QUAD);
+    say_to(other, PRINT_LOW, "You got the OctaPower\n", "", "", "");
+    dmm4_octa_taken();
+  } else if (self.items == IT_QUAD) {
+    other.super_damage_finished = time + POWER_TIME;
+    other.power_said = other.power_said - (other.power_said & IT_QUAD);
     say_to(other, PRINT_LOW, "You got the ", name_of(self.classname, "Quad Damage"), "\n", "");
   } else {
     other.invincible_finished = time + POWER_TIME;
+    other.power_said = other.power_said - (other.power_said & IT_INVULNERABILITY);
     say_to(other, PRINT_LOW, "You got the ", name_of(self.classname, "Shield"), "\n", "");
   }
   other.items = other.items | self.items;
@@ -370,14 +453,31 @@ void() item_artifact_invulnerability = {
 };
 
 // Each frame for a living player: the powers that ran out taken away, the glow of the ones held.
+// A power's end told 3 s before it comes, once, in the loaded game's words (none in ours).
+void(float bit, float finished, string key, string sample) power_warn = {
+  local string told;
+  if (!finished || finished - 3 > time || (self.power_said & bit)) return;
+  self.power_said = self.power_said | bit;
+  told = game_words(key, "", "", "", "");
+  if (told == "") return;
+  say_to(self, PRINT_HIGH, told, "", "", "");
+  sound(self, CHAN_ITEM, sample, 1, ATTN_NORM);
+};
+
 void() power_frame = {
+  if (deathmatch == 4) dmm4_frame();
+  power_warn(IT_QUAD, self.super_damage_finished, "power_quad_off", "items/damage2.wav");
+  power_warn(IT_INVULNERABILITY, self.invincible_finished, "power_pent_off", "items/protect2.wav");
   if (self.super_damage_finished && self.super_damage_finished < time) {
     self.super_damage_finished = 0;
+    self.power_said = self.power_said - (self.power_said & IT_QUAD);
     self.items = self.items - (self.items & IT_QUAD);
+    if (deathmatch == 4) dmm4_octa_off();
   }
   if (self.invincible_finished && self.invincible_finished < time) {
     self.invincible_finished = 0;
-    self.items = self.items - (self.items & IT_INVULNERABILITY);
+    self.power_said = self.power_said - (self.power_said & IT_INVULNERABILITY);
+    if (self.shield_finished <= time) self.items = self.items - (self.items & IT_INVULNERABILITY);
   }
   self.effects = self.effects - (self.effects & (EF_DIMLIGHT | EF_BLUE | EF_RED));
   if (self.super_damage_finished) self.effects = self.effects | EF_DIMLIGHT | EF_BLUE;

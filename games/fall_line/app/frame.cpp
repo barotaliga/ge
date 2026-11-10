@@ -105,6 +105,10 @@ constexpr std::string_view kLoadInputs =
 
 constexpr int kPasses = static_cast<int>(std::size(kPassTable));
 
+// The trails' maps' texels a side while they are off (made at the load all the same, so a stop
+// turns them on live: render/snow_marks.hpp's resize_snow_marks).
+constexpr uint32_t kTrailsAsleep = 16;
+
 // The lamps' tiles each casting family carries slots for (none without the lamps' shadows).
 int lamp_slots(const GameFrame& f) {
   return f.options.lights && f.options.light_shadows
@@ -127,6 +131,14 @@ void stand_posts(ge::gpu::Device& device, GameFrame& f, r::InstanceFamily& famil
   r::set_instances(device, family, 0, stood);
   f.families.push_back(&family);
   f.still.push_back(&family);
+}
+
+// The cloud march's grain the options ask for (render/clouds.hpp's cloud_grain).
+int cloud_grain_of(const FrameOptions& o) {
+  r::Clouds c;
+  c.quarter = o.cloud_quarter;
+  c.spread = o.cloud_spread;
+  return r::cloud_grain(c);
 }
 
 // The targets, the pyramid, the histories and the post pass's groups for outputs of w x h.
@@ -152,7 +164,7 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
   r::bind_particle_targets(device, f.particles, f.targets);
   r::bind_flame_targets(device, f.flames, f.targets);
   r::bind_precip_targets(device, f.precip, f.targets);
-  r::bind_cloud_targets(device, f.clouds, f.targets);
+  r::bind_cloud_targets(device, f.clouds, f.targets, cloud_grain_of(f.options));
   r::create_water_targets(device, f.water, f.targets);
   r::bind_underwater(device, f.under, f.water);
   // The post pass (and the bloom) read TAA's two histories, or the HDR target for both.
@@ -252,20 +264,28 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   source.levels = kGroundLevels;
   source.overdraw_probe = options.overdraw_probe;
   source.wire_probe = options.wire_probe;
+  // The snow's material and the trails' maps and stamp whatever the stops, the ground drawn in the
+  // default material while the snow is off, so a ladder stop turns either on or off live
+  // (set_picture). Trails off at the load: their maps a few texels until a stop asks for them.
   f->tracks = options.snow && options.trails;
-  if (f->tracks) {
-    ge::mountain::app::create_trails(device, f->pipelines, f->trails, level, options.trail_maps);
-  }
-  if (options.snow) {
-    ge::mountain::app::create_snow(device, f->snow, level, {}, f->tracks ? &f->trails : nullptr);
-    source.shader = ge::mountain::app::snow_shader();
-    source.shader_label = "snow";
-    source.material = f->snow.layout;
-  }
+  ge::mountain::app::TrailOptions maps = options.trail_maps;
+  if (!options.trails) maps.fine_size = maps.coarse_size = kTrailsAsleep;
+  ge::mountain::app::create_trails(device, f->pipelines, f->trails, level, maps);
+  ge::mountain::app::create_snow(device, f->snow, level, {}, f->tracks ? &f->trails : nullptr);
+  source.shader = ge::mountain::app::snow_shader();
+  source.shader_label = "snow";
+  source.material = f->snow.layout;
+  source.plain_too = true;
   r::create_terrain(device, f->pipelines, f->terrain, source, f->frame_layout);
   r::create_particles(device, f->pipelines, f->particles, f->frame_layout, f->terrain,
                       options.particles);
-  r::create_precip(device, f->pipelines, f->precip, f->frame_layout, f->terrain, options.fall);
+  // The falling snow's pool at the largest the ladder draws, so a stop raises it live
+  // (set_picture); the count drawn is the options'.
+  r::PrecipSettings fall = options.fall;
+  fall.particles = std::max(fall.particles, r::PrecipSettings{}.particles);
+  f->fall_capacity = fall.particles;
+  r::create_precip(device, f->pipelines, f->precip, f->frame_layout, f->terrain, fall);
+  f->precip.settings.particles = options.fall.particles;
   r::create_bolts(device, f->pipelines, f->bolts, f->frame_layout);
   r::create_flames(device, f->pipelines, f->flames, f->frame_layout);
   r::create_clouds(device, f->pipelines, f->clouds, f->frame_layout);
@@ -281,12 +301,16 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
     taa.scale = options.scale;
     r::create_taa(device, f->pipelines, f->taa, f->frame_layout, taa);
   }
-  if (options.bloom > 0) {
+  // The bloom's pipelines whether it is on or not (the post pass's with it and without), so a
+  // ladder stop turns it on and off live (set_picture); off at the load, at the default's share.
+  f->bloom_ready = options.bloom > 0 ? options.bloom : FrameOptions{}.bloom;
+  {
     r::BloomSettings bloom;
-    bloom.strength = options.bloom;
+    bloom.strength = f->bloom_ready;
     r::create_bloom_pipelines(device, f->pipelines, f->bloom, bloom);
   }
-  if (r::lens_on(options.lens)) {
+  f->lens_ready = r::lens_on(options.lens);
+  if (f->lens_ready) {
     r::create_lens_pipelines(device, f->pipelines, f->lens, f->frame_layout, options.lens);
   }
   if (options.look.motion_blur > 0) r::create_motion_blur_pipelines(device, f->pipelines, f->blur);
@@ -298,11 +322,13 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
     r::set_ao(device, f->ao, options.ao);
   }
   r::PostSettings post;
-  post.bloom = options.bloom;
+  post.bloom = f->bloom_ready;
+  post.bloom_switch = true;
   post.look = options.look;
   post.lens = r::lens_on(options.lens);
   post.dof = r::dof_on(options.dof);
   r::create_post(device, f->pipelines, f->post, f->frame_layout, output, post);
+  r::set_post_bloom(f->post, options.bloom > 0);
   std::vector<float> grade = bake_grade();
   r::apply_grade_knobs(grade, options.grade);
   r::set_grade(device, f->post, grade);
@@ -355,7 +381,8 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   f->piste_lamps = ge::mountain::app::piste_lamps(level);
   stand_posts(device, *f, f->masts, "lamps.masts", f->piste_lamps);
   r::bind_terrain_shadows(f->terrain, f->shadows.group);
-  if (options.snow) r::bind_terrain_material(f->terrain, f->snow.group);
+  r::bind_terrain_material(f->terrain, f->snow.group);
+  r::set_terrain_plain(f->terrain, !options.snow);
   r::bind_instance_shadows(f->instancing, f->shadows.group);
   r::bind_particle_shadows(f->particles, f->shadows.group);
   r::bind_fog_shadows(f->fog, f->shadows.group);
@@ -479,6 +506,88 @@ void show_village(ge::gpu::Device& device, GameFrame& f,
 
 void resize(ge::gpu::Device& device, GameFrame& f, uint32_t width, uint32_t height) {
   make_targets(device, f, width, height);
+}
+
+PictureChange set_picture(ge::gpu::Device& device, GameFrame& f, const FrameOptions& next) {
+  PictureChange change;
+  FrameOptions& o = f.options;
+  const auto later = [&](const char* what) {
+    change.later += change.later.empty() ? what : std::string(", ") + what;
+  };
+  // Each frame's: set and drawn from the next frame.
+  o.spray = next.spray;
+  o.precip = next.precip;
+  o.clouds = next.clouds;
+  o.cloud_quarter = next.cloud_quarter;
+  o.cloud_spread = next.cloud_spread;
+  o.reach_m = next.reach_m;
+  if (next.fall.particles <= f.fall_capacity) {
+    o.fall.particles = next.fall.particles;
+    f.precip.settings.particles = next.fall.particles;
+  } else if (next.fall.particles != o.fall.particles) {
+    later("the falling snow's count");
+  }
+  // The render size, the bloom and the lens: the targets and the post pass's groups made again.
+  if (next.scale != o.scale) {
+    o.scale = next.scale;
+    change.targets = true;
+  }
+  if ((next.bloom > 0) != (o.bloom > 0) || (next.bloom > 0 && next.bloom != o.bloom)) {
+    if (next.bloom == 0 || next.bloom == f.bloom_ready) {
+      o.bloom = next.bloom;
+      r::set_post_bloom(f.post, next.bloom > 0);
+      change.targets = true;
+    } else {
+      later("the bloom's share");
+    }
+  }
+  if (r::lens_on(next.lens) != r::lens_on(o.lens)) {
+    if (!r::lens_on(next.lens) || f.lens_ready) {
+      o.lens = next.lens;
+      change.targets = true;
+    } else {
+      later("the lens");
+    }
+  }
+  if (change.targets) make_targets(device, f, f.output_width, f.output_height);
+  // The cloud's march targets at a new grain (every pixel's march spread, or the quarter's).
+  if (!change.targets && cloud_grain_of(o) != f.clouds.grain)
+    r::bind_cloud_targets(device, f.clouds, f.targets, cloud_grain_of(o));
+  if (r::lens_on(o.lens)) r::set_lens(device, f.lens, o.lens);
+  // The sun's shadow maps at a new size, rebound into what receives them; drawn again.
+  if (next.shadow_size != o.shadow_size) {
+    o.shadow_size = next.shadow_size;
+    r::ShadowSettings shadows;
+    shadows.size = o.shadow_size;
+    r::create_sun_shadows(device, f.shadows, shadows, f.frame_layout, f.sky);
+    r::bind_terrain_shadows(f.terrain, f.shadows.group);
+    r::bind_instance_shadows(f.instancing, f.shadows.group);
+    r::bind_particle_shadows(f.particles, f.shadows.group);
+    r::bind_fog_shadows(f.fog, f.shadows.group);
+    change.shadows = true;
+  }
+  // The snow's material and the trails: the terrain's pipeline pair switched, the trails' maps made
+  // again at a new size (every trail laid drawn into them again), the snow's group rebound over
+  // them or over none.
+  namespace ma = ge::mountain::app;
+  const bool was_tracks = f.tracks;
+  o.snow = next.snow;
+  o.trails = next.trails;
+  r::set_terrain_plain(f.terrain, !o.snow);
+  const bool resized = next.trails && (next.trail_maps.fine_size != f.trails.options.fine_size ||
+                                       next.trail_maps.coarse_size != f.trails.options.coarse_size);
+  if (next.trails) o.trail_maps = next.trail_maps;
+  if (resized) ma::resize_trails(device, f.trails, o.trail_maps);
+  f.tracks = o.snow && o.trails;
+  if (resized || f.tracks != was_tracks) {
+    ma::bind_snow_trails(device, f.snow, f.tracks ? &f.trails : nullptr);
+    r::bind_terrain_material(f.terrain, f.snow.group);
+    change.trails = true;
+  }
+  // The pens start again: a ski's last print from before the tracks went off is not joined to its
+  // next.
+  if (f.tracks && !was_tracks) f.pens.clear();
+  return change;
 }
 
 void cut(GameFrame& f) {

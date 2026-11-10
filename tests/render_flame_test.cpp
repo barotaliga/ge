@@ -5,6 +5,7 @@
 // ge:summary Tests for flames: the flame's light, its flicker and its bounds
 // ge:keywords test render flame flame_light flame_level flame_bounds
 // ge:skill render testing
+#include <algorithm>
 #include <cmath>
 
 #include "check.hpp"
@@ -50,4 +51,29 @@ TEST(the_bounds_hold_the_gas_and_lean_downwind) {
   CHECK(hi2[0] > hi[0] + 0.3 && std::fabs(lo2[0] - lo[0]) < 1e-9);
   // Its light leans with it.
   CHECK(r::flame_light(f).position[0] > kBase[0]);
+}
+
+TEST(a_flame_puffs_by_its_width_and_its_level_swings_round_one) {
+  // 1.5 / sqrt(width): a 10 cm torch about 4.7 a second, a 1 m fire 1.5, held in 1..12.
+  CHECK(std::abs(r::flame_puff_hz(0.1f) - 4.743f) < 1e-3f);
+  CHECK(std::abs(r::flame_puff_hz(1.0f) - 1.5f) < 1e-6f);
+  CHECK(r::flame_puff_hz(0.0f) == 12.0f && r::flame_puff_hz(100.0f) == 1.0f);
+  const double base[3] = {0, 0, 0};
+  r::Flame f = r::torch_flame(base, 5);
+  CHECK(r::flame_puff_rate(f) == r::flame_puff_hz(2 * f.radius_m));
+  f.puff_hz = 2;
+  CHECK(r::flame_puff_rate(f) == 2.0f);
+  // Over many puffs the level averages one and swings about a seventh either way.
+  double sum = 0, lo = 9, hi = 0;
+  for (int i = 0; i < 4000; ++i) {
+    const double l = r::flame_puff_level(f, i * 0.01);
+    sum += l;
+    lo = std::min(lo, l);
+    hi = std::max(hi, l);
+  }
+  CHECK(std::abs(sum / 4000 - 1) < 0.01);
+  CHECK(lo > 0.86 && lo < 0.89 && hi > 1.11 && hi < 1.14);
+  // The phase advances at the rate on average, never backwards.
+  for (int i = 0; i < 400; ++i)
+    CHECK(r::flame_puff_phase(3, (i + 1) * 0.01, 0.3) > r::flame_puff_phase(3, i * 0.01, 0.3));
 }

@@ -1,8 +1,9 @@
 // The held weapon's frame: the followers chased, the pieces summed into a turn and a shift, and
 // the turn written as the placement's matrix.
 //
-// ge:summary The held weapon's frame: bob, sway, kick, dip and put-away summed into a placement
+// ge:summary The held weapon's frame: bob, sway, kick, dip, put-away and breath as a placement
 // ge:keywords viewmodel frame_viewmodel classic_row modern_row place_point place_vector
+// ge:keywords step_breath breath_shape exertion wander
 // ge:skill render camera
 // ge:test tests/viewmodel_place_test.cpp
 #include "viewmodel/place.hpp"
@@ -18,7 +19,13 @@ namespace ge::viewmodel {
 
 namespace libm = core::libm;
 
-PlaceRow classic_row() { return PlaceRow{}; }
+PlaceRow classic_row() {
+  PlaceRow r;
+  r.breath_m = 0.0025;
+  r.breath_pitch = 0.004;
+  r.breath_wander_m = 0.0008;
+  return r;
+}
 
 PlaceRow modern_row() {
   PlaceRow r;
@@ -28,9 +35,82 @@ PlaceRow modern_row() {
   r.sway_poles = camera::Poles{3.5, 0.55, 0.0};
   r.sway_max = 0.18;
   r.sway_shift = 0.08;
-  r.idle_m = 0.003;
+  r.breath_m = 0.004;
+  r.breath_pitch = 0.007;
+  r.breath_wander_m = 0.0015;
   return r;
 }
+
+namespace {
+
+constexpr double kBreathIn = 0.4;     // the share of a breath spent breathing in
+constexpr double kBreathEaseS = 0.8;  // s the breath's depth takes to ease 63% to a new one
+
+// The breath's shape over one breath, 0 (emptied) to 1 (full): up over the first `kBreathIn`,
+// down over the rest, smooth at both turns.
+double breath_shape(double phase) {
+  const double s = phase < kBreathIn ? 0.5 * phase / kBreathIn
+                                     : 0.5 + 0.5 * (phase - kBreathIn) / (1.0 - kBreathIn);
+  return 0.5 - 0.5 * libm::cos(core::kTau * s);
+}
+
+// One frame of the breath: the exertion followed, the phase advanced (a new breath drawing its
+// depth and length), the wander's leg walked. Writes the lift (m), the pitch (rad) and the drift
+// across and up (m), all before the comfort scale.
+void step_breath(const PlaceRow& row, const PlaceInput& in, PlaceState& st, double dt, double& lift,
+                 double& pitch, double& across, double& up) {
+  // Exertion: towards the speed's share of all-out, quick to climb, slow to fall.
+  const double work =
+      row.exert_run_mps > 0 ? core::clamp(in.ground_speed / row.exert_run_mps, 0.0, 1.0) : 0.0;
+  const double tau = work > st.exertion ? row.exert_rise_s : row.exert_fall_s;
+  if (tau > 0) st.exertion += (work - st.exertion) * (1.0 - libm::exp(-dt / tau));
+  if (in.landing > 0) st.exertion += row.exert_landing * in.landing;
+  st.exertion = core::clamp(st.exertion, 0.0, 1.0);
+  const double e = st.exertion;
+  if (row.breath_m <= 0 && row.breath_wander_m <= 0) return;
+
+  // The phase: faster with exertion, each breath its own length.
+  const double hz = row.breath_hz * (1.0 + row.exert_rate * e) / st.breath_len;
+  st.breath_phase += hz * dt;
+  while (st.breath_phase >= 1.0) {
+    st.breath_phase -= 1.0;
+    st.breath_depth = core::range(st.breath_rng, 0.8, 1.2);
+    st.breath_len = core::range(st.breath_rng, 0.85, 1.2);
+    if (core::chance(st.breath_rng, 0.08 * (1.0 - e))) {  // a sigh, only when settled
+      st.breath_depth *= 1.7;
+      st.breath_len *= 1.5;
+    }
+  }
+  const double moving = core::smoothstep(0.0, 2.0, in.ground_speed);
+  const double keep = core::lerp(1.0, row.breath_moving, moving);
+  // The depth eases to its new value (a new breath's, a stop's) so the gun never jumps.
+  const double depth_to = st.breath_depth * (1.0 + row.exert_depth * e) * keep;
+  if (st.breath_amp < 0) st.breath_amp = depth_to;
+  st.breath_amp += (depth_to - st.breath_amp) * (1.0 - libm::exp(-dt / kBreathEaseS));
+  const double depth = st.breath_amp;
+  const double b = breath_shape(st.breath_phase) - 0.5;
+  lift = row.breath_m * depth * b;
+  pitch = row.breath_pitch * depth * b;
+
+  // The wander: a smooth walk between random points, quicker and wider when out of breath.
+  if (row.breath_wander_m > 0) {
+    st.wander_t += dt * (1.0 + e);
+    if (st.wander_t >= st.wander_s) {
+      st.wander_t = 0;
+      st.wander_s = core::range(st.breath_rng, 1.5, 3.0);
+      for (int k = 0; k < 2; ++k) {
+        st.wander_from[k] = st.wander_to[k];
+        st.wander_to[k] = core::range(st.breath_rng, -1.0, 1.0);
+      }
+    }
+    const double t = core::smoothstep(0.0, 1.0, st.wander_t / st.wander_s);
+    const double w = row.breath_wander_m * (1.0 + e) * keep;
+    across = w * core::lerp(st.wander_from[0], st.wander_to[0], t);
+    up = 0.6 * w * core::lerp(st.wander_from[1], st.wander_to[1], t);
+  }
+}
+
+}  // namespace
 
 Placement frame_viewmodel(const PlaceRow& row, const PlaceInput& in, PlaceState& st, double dt,
                           double motion) {
@@ -81,12 +161,10 @@ Placement frame_viewmodel(const PlaceRow& row, const PlaceInput& in, PlaceState&
     side = w * libm::sin(a);
     lift = -0.5 * w * std::fabs(libm::sin(a));
   }
-  if (row.idle_m > 0) {
-    const double still = 1.0 - core::smoothstep(0.0, 2.0, in.ground_speed);
-    const double a = core::kTau * row.idle_hz * st.clock;
-    side += row.idle_m * still * libm::sin(a * 0.5);
-    lift += row.idle_m * still * libm::cos(a);
-  }
+  double breath = 0, breath_pitch = 0, wander_x = 0, wander_y = 0;
+  step_breath(row, in, st, dt, breath, breath_pitch, wander_x, wander_y);
+  side += wander_x;
+  lift += breath + wander_y;
 
   Placement p;
   p.fov_y = row.fov_y;
@@ -96,8 +174,10 @@ Placement frame_viewmodel(const PlaceRow& row, const PlaceInput& in, PlaceState&
   p.shift_m[2] = motion * (row.bob_forward * in.bob_m + back);
   // A gun left behind by a turn to the right points left of the look: its yaw is the lag.
   p.turn[0] = motion * lag_yaw;
-  p.turn[1] = motion * (lag_pitch + rise) - away * row.lower_pitch;
+  p.turn[1] = motion * (lag_pitch + rise + breath_pitch) - away * row.lower_pitch;
   p.turn[2] = 0;
+  p.exertion = st.exertion;
+  p.breath = motion * breath;
 
   const core::Quat q = core::from_euler(p.turn[0], p.turn[1], p.turn[2]);
   const core::Vec3 ax = core::rotate(q, core::Vec3{1, 0, 0});
@@ -170,6 +250,15 @@ void muzzle_to_world(const HeldModel& model, int a, int b, double t, const Place
   }
   len = std::sqrt(len);
   for (int k = 0; k < 3; ++k) up[k] = len > 0 ? up[k] / len : (k == 1 ? 1 : 0);
+}
+
+bool arc_to_world(const HeldModel& model, int a, int b, double t, const Placement& p,
+                  double gun_fov_y, const camera::Pose& view, double end0[3], double end1[3]) {
+  float e0[3], e1[3];
+  if (!arc_at(model, a, b, t, e0, e1)) return false;
+  held_to_world(p, gun_fov_y, view, e0, end0);
+  held_to_world(p, gun_fov_y, view, e1, end1);
+  return true;
 }
 
 }  // namespace ge::viewmodel

@@ -10,7 +10,7 @@ void() wizard_spit = {
   local entity m;
   self.think = wizard_spit;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   face_enemy();
   if (self.anim_step == 2 || self.anim_step == 3) {
     sound(self, CHAN_WEAPON, "wizard/wattack.wav", 1, ATTN_NORM);
@@ -21,21 +21,21 @@ void() wizard_spit = {
 };
 
 void() wizard_missile = {
-  self.anim_step = 0;
+  anim_begin(self.fr_missile);
   wizard_spit();
 };
 
 void() wizard_flinch = {
   self.think = wizard_flinch;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step >= 2) monster_run();
 };
 
 void() wizard_pain = {
   if (self.pain_finished < time + 1) self.pain_finished = time + 1;
   sound(self, CHAN_VOICE, "wizard/wpain.wav", 1, ATTN_NORM);
-  self.anim_step = 0;
+  anim_begin(self.fr_pain);
   wizard_flinch();
 };
 
@@ -67,6 +67,14 @@ void() monster_wizard = {
   self.th_missile = wizard_missile;
   self.th_pain = wizard_pain;
   self.th_die = wizard_die;
+  self.fr_stand = '0 14 1';
+  self.fr_walk = '0 14 1';
+  self.fr_run = '15 28 1';
+  self.fr_missile = '29 41 1';
+  self.fr_pain = '42 45 1';
+  self.fr_death = '46 53 1';
+  self.death_solid = 2;
+  self.gib_model = "progs/gib2.mdl";
   flymonster_start("progs/wizard.mdl", 80, '-16 -16 -24', '16 16 40');
 };
 
@@ -75,7 +83,7 @@ void() monster_wizard = {
 void() fish_bite_step = {
   self.think = fish_bite_step;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   ai_charge(10);
   if (self.anim_step == 3) {
     sound(self, CHAN_VOICE, "fish/bite.wav", 1, ATTN_NORM);
@@ -85,13 +93,13 @@ void() fish_bite_step = {
 };
 
 void() fish_melee = {
-  self.anim_step = 0;
+  anim_begin(self.fr_melee);
   fish_bite_step();
 };
 
 void() fish_pain = {
   if (self.pain_finished < time + 1) self.pain_finished = time + 1;
-  self.anim_step = 0;
+  anim_begin(self.fr_pain);
   wizard_flinch();
 };
 
@@ -104,11 +112,18 @@ void() monster_fish = {
   self.noise = "";
   self.noise1 = "fish/death.wav";
   self.head_model = "progs/gib2.mdl";
-  self.gib_health = -35;
+  self.gib_health = -1000;  // never gibbed
   self.walk_step = 8;
   self.run_step = 12;
   self.th_melee = fish_melee;
   self.th_pain = fish_pain;
   self.th_die = monster_die;
+  self.fr_stand = '39 56 1';
+  self.fr_walk = '39 56 1';
+  self.fr_run = '39 56 1';
+  self.fr_melee = '0 17 1';
+  self.fr_pain = '57 65 1';
+  self.fr_death = '18 38 1';
+  self.death_solid = 20;
   swimmonster_start("progs/fish.mdl", 25, '-16 -16 -24', '16 16 24');
 };

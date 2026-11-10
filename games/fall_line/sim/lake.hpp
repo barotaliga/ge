@@ -19,12 +19,23 @@
 //   water) and is stood on the bank facing away from the water. Drowning, at swim failure, or
 //   after `kSwimReset` s, he is reset as if he had asked.
 //
+// THE SNOWMOBILE ON IT (`sled_on_lake`, before the ridden machine's own step): its belt at the
+// surface inside an open lake's shore, faster than `kSledSkim` across the water it PLANES (a
+// `skim` event), its belt's paddles driving it on (`kSledPaddle` at full throttle against
+// `kSledDrag` times the speed squared: flat out it holds 18 m/s), the brake digging in
+// (`kSledBrake`), the bars turning it (`kSledTurn`). Over the far shore it is on the snow again;
+// slower than `kSledSink` (or onto the water that slowly) it GOES UNDER (a `sled` event, `sunk`):
+// the machine sinks to the dug bed, its engine drowned, and its rider is thrown into the water
+// and swims out as the skier does. His reset hauls it out onto the bank nearest it, stood on its
+// belt, and puts him back on it (`haul_out`).
+//
 // The swimmer's state is the racer's (`FreeRide::swim`), so a run in the water replays.
 // Allocates nothing in a step.
 //
 // ge:summary The free ride's tarn: skimming it at speed, through thin ice, swimming out, reset
 // ge:keywords tarn lake sank skim ashore swim dressed-skier through-the-ice planing lake_water
 // ge:keywords enter_lake step_on_water on_water skim-speed sink-speed skimming swimming
+// ge:keywords snowmobile-on-water sled_on_lake haul_out sunk-sled watercross paddle-thrust
 // ge:skill sim
 // ge:test tests/fall_line_lake_test.cpp
 #pragma once
@@ -47,6 +58,16 @@ inline constexpr double kPlunge = 1.3;      // m under the surface his feet go i
 inline constexpr double kShore = 1.2;       // m from the shore a swimmer climbs out
 inline constexpr double kWade = 0.9;        // m of water a swimmer stands up in and wades out of
 inline constexpr double kBank = 2;          // m up the bank he is stood, out of the water
+inline constexpr double kSledSkim = 11;     // m/s across the water a snowmobile planes at
+inline constexpr double kSledSink = 6;      // m/s: a planing snowmobile slower goes under
+inline constexpr double kSledDrag = 0.012;  // 1/m: the planing belt's drag over the speed squared
+inline constexpr double kSledPaddle = 3.9;  // m/s² the belt's paddles drive it at full throttle
+inline constexpr double kSledBrake = 2.5;   // m/s² the brake slows it (the belt stopped digs in)
+inline constexpr double kSledTurn = 0.5;    // rad/s at full bars, planing
+inline constexpr double kSledDraft = 0.15;  // m the planing belt rides under the surface
+
+// What `sled_on_lake` did with the ridden machine this step.
+enum class SledWater : uint8_t { off, skims, sunk };
 
 // The engine's water world of `level`'s open lakes (none frozen to bear a skier); null for none.
 std::shared_ptr<const ge::water::World> lake_water(
@@ -61,5 +82,14 @@ void enter_lake(GameState& state, int32_t i);
 bool step_on_water(GameState& state, int32_t i, double steer, double dt);
 // Forget racer `i`'s water (a reset).
 void dry_off(GameState& state, int32_t i);
+// Racer `i`'s ridden machine `m` on an open lake, before its own step: `skims` when it planed this
+// step (stepped here, its rider still to be held on it), `sunk` when it went under and threw him
+// in, `off` when the water does not have it (step it on the snow).
+SledWater sled_on_lake(GameState& state, int32_t i, FreeSled& m,
+                       const ge::snowmobile::SledControls& c, double dt);
+// Machine `m`, planing with nobody on it (he hopped off), gone under where it is.
+void sink_empty(const ge::mountain::mapgen::Level& level, FreeSled& m);
+// A sunk machine hauled out: stood on its belt on the bank nearest it, its lake forgotten.
+void haul_out(const ge::mountain::mapgen::Level& level, FreeSled& m);
 
 }  // namespace fall_line::sim

@@ -56,11 +56,12 @@ struct ScriptStep {
 const std::vector<ScriptStep>& match_script();
 
 struct MatchOptions {
-  int frames = 1100;        // server frames of 13 ms (14.3 s)
-  int client_frame_ms = 8;  // each client renders every this many ms
-  int latency_ms = 40;      // one way, each direction
-  int lose_every = 23;      // player 2 loses every Nth packet it sends (0: none lost)
-  bool predict = true;      // the clients predict (false: they show the server's state)
+  int frames = 1100;           // server frames of 13 ms (14.3 s)
+  int client_frame_ms = 8;     // each client renders every this many ms
+  int latency_ms = 40;         // one way, each direction
+  int lose_every = 23;         // player 2 loses every Nth packet it sends (0: none lost)
+  bool predict = true;         // the clients predict (false: they show the server's state)
+  bool original_move = false;  // the server steps the original move (sv_playermove original)
   // A C++ mod (a loaded table, engine/mod/loader.hpp) run after the native program, its stream
   // seeded with `mod_seed`; null for none (the match and its hashes are then the native ones).
   const ge_mod_v1* mod = nullptr;

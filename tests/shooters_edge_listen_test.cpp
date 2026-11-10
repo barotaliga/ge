@@ -7,11 +7,12 @@
 // mouse as commands, the HUD's status off the player, and the weapon in his hand: the launcher
 // raised, one shot seen for one rocket and none for the spawn. The powers: the quad's and the
 // shield's glow round their holder, the shield taking a blast, both running out. A game stopped
-// lets go of its servers and map and starts again.
+// lets go of its servers and map and starts again. A mod's named effects (pointparticles,
+// trailparticles) reach the player by name, or as the classic effect of a classic name.
 //
 // ge:summary Tests: the listen server headless: a fixture map from a pack, a rocket jump, golden
 // ge:keywords test listen-server rocket-jump search-path pak baseline-mod controls hud-status
-// ge:keywords listen_stop
+// ge:keywords listen_stop pointparticles trailparticles named-effect
 // ge:keywords golden fixture held-weapon step_held quad shield powers effects
 // ge:skill shooter progs testing
 #include <algorithm>
@@ -25,6 +26,8 @@
 #include <string>
 #include <vector>
 
+#include "audio/synth.hpp"
+#include "audio/wav.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "golden.hpp"
@@ -34,9 +37,12 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/listen_sound.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/view.hpp"
+#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge_campaign_fixture.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -103,7 +109,8 @@ bool start(cl::Listen& l) {
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "halls", error);
   CHECK_MSG(map != nullptr, error);
   if (!map) return false;
-  const bool ok = cl::listen_start(l, baseline(), std::move(map), {}, error);
+  const bool ok =
+      cl::listen_start(l, baseline(), std::move(map), shooters_edge::net::listen_options(), error);
   CHECK_MSG(ok, error);
   return ok;
 }
@@ -116,6 +123,7 @@ struct Rjump {
   float health_before = 0, health_after = 0;
   float rockets_before = 0, rockets_after = 0;
   int weapon = 0;
+  std::vector<std::string> sounds;  // what the server started for the player, by name, in order
 };
 
 uint64_t bits(float f) {
@@ -133,6 +141,9 @@ Rjump rocket_jump() {
     for (int i = 0; i < frames; i++) {
       cl::listen_frame(l, cmd);
       cmd.impulse = 0;
+      for (const cl::DemoSound& d : l.sounds)
+        r.sounds.push_back(l.server->sounds[static_cast<size_t>(d.sound)]);
+      l.sounds.clear();
       const sh::Edict& me = l.server->sv.edicts[1];
       if (peak) *peak = std::max(*peak, me.origin.z);
       if (l.frames % 10 == 0)
@@ -288,7 +299,7 @@ TEST(keys_and_the_mouse_make_the_command_and_turn_the_view) {
   CHECK(std::fabs(view.x + 3.3f) < 1e-3f);         // up is a negative pitch
 }
 
-TEST(the_binds_buttons_make_the_command_walk_run_and_sidestep) {
+TEST(the_binds_buttons_make_the_command_always_run_and_sidestep) {
   ge::console::Console con;
   cl::ControlSettings c;
   cl::add_cvars(con, c);
@@ -305,18 +316,33 @@ TEST(the_binds_buttons_make_the_command_walk_run_and_sidestep) {
   con.run();
   ge::input::InputState in;
   sh::MoveCmd cmd = cl::read_controls(cl::button_moves(c), in, c);
-  CHECK(cmd.forward == -400);  // cl_run 1: running
+  CHECK(cmd.forward == -400);  // always running
   CHECK(cmd.buttons == sh::kButtonAttack);
   CHECK(cmd.impulse == 7);
   CHECK(cl::button_moves(c).impulse == 0);  // the impulse is sent once
-  con.key("shift", true);                   // +speed walks
+  // Nobody walks: cl_run is on by default and no key walks (+speed is bound to nothing); a config
+  // that binds it walks at half the run.
+  CHECK(con.cvars().find("cl_run") != nullptr);
+  CHECK(con.binds().get(ge::console::BindMode::game, "shift").empty());
+  con.key("shift", true);
   con.run();
-  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -200);
-  con.execute("cl_run 0");  // off, +speed runs
   CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -400);
   con.key("shift", false);
+  con.execute("bind shift +speed");
+  con.key("shift", true);
   con.run();
   CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -200);
+  con.key("shift", false);
+  con.run();
+  // No crouch in the classic game: C is bound to nothing; +movedown swims down where bound.
+  CHECK(con.binds().get(ge::console::BindMode::game, "c").empty());
+  con.execute("bind c +movedown");
+  con.key("c", true);
+  con.run();
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).up == -200);
+  con.key("c", false);
+  con.run();
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).up == 0);
   // lookstrafe: the mouse's sideways counts sidestep and leave the yaw alone.
   in.mouse.dx = 50;
   sh::Vec3f view{0, 90, 0};
@@ -380,7 +406,8 @@ void set_field(cl::Listen& l, int entity, const char* name, float value) {
   const ge::progs::Def* d = ge::progs::find_field(*l.progs, name);
   CHECK_MSG(d != nullptr, std::string("the baseline mod has no field ") + name);
   if (d != nullptr) {
-    *ge::progs::entity_field(l.server->q.vm, entity, d->offset) = std::bit_cast<uint32_t>(value);
+    *ge::progs::entity_field(shooters_edge::server::qc_of(*l.rules)->q.vm, entity, d->offset) =
+        std::bit_cast<uint32_t>(value);
   }
 }
 
@@ -447,7 +474,29 @@ TEST(the_hand_raises_the_launcher_and_sees_one_shot_a_rocket) {
   CHECK(held.shots == 1);
 }
 
-TEST(a_demo_s_hand_holds_the_recorder_s_weapon_and_none_without_a_view_model_or_dead) {
+// The baseline mod's body cycles (common/player.qc): the run cycle (6-11, a gun in hand) while he
+// moves across the plan, a frame every 0.1 s; the stand cycle (12-16) once he is still. The rule
+// reads the speed across the plan alone, so a swimmer runs as a walker does (lab se-swim).
+TEST(the_player_s_body_runs_while_he_moves_and_stands_when_still) {
+  cl::Listen l;
+  if (!start(l)) return;
+  const auto frame = [&] { return static_cast<int>(cl::field_named(l, 1, "frame")); };
+  for (int i = 0; i < 80; i++) cl::listen_frame(l, {});
+  CHECK(frame() >= 12 && frame() <= 16);
+  sh::MoveCmd walk;
+  walk.forward = 200;
+  std::vector<int> seen;
+  for (int i = 0; i < 60; i++) {  // 0.78 s: the cycle round once and on
+    cl::listen_frame(l, walk);
+    if (seen.empty() || seen.back() != frame()) seen.push_back(frame());
+  }
+  CHECK(seen.size() >= 7);
+  for (size_t k = 1; k < seen.size(); k++) CHECK(seen[k] >= 6 && seen[k] <= 11);
+  for (int i = 0; i < 80; i++) cl::listen_frame(l, {});
+  CHECK(frame() >= 12 && frame() <= 16);
+}
+
+TEST(a_demo_s_hand_holds_the_recorder_s_weapon_none_without_a_view_model_and_sinks_dead) {
   cl::DemoState s;
   s.stats[cl::kStatHealth] = 100;
   s.stats[cl::kStatWeapon] = 5;         // a view model's index
@@ -462,9 +511,14 @@ TEST(a_demo_s_hand_holds_the_recorder_s_weapon_and_none_without_a_view_model_or_
   s.stats[cl::kStatWeapon] = 0;  // a spectator's recording
   CHECK(!step().drawn);
   s.stats[cl::kStatWeapon] = 5;
-  s.stats[cl::kStatHealth] = 0;
+  for (int i = 0; i < 60; i++) step();  // up again
+  s.stats[cl::kStatHealth] = 0;         // dead: the weapon sinks, then is gone
+  s.stats[cl::kStatWeapon] = 0;         // the recording clears it at once
+  CHECK(step().drawn);
+  for (int i = 0; i < 60; i++) step();  // 0.78 s, past kDeathLowerS
   CHECK(!step().drawn);
   s.stats[cl::kStatHealth] = 100;
+  s.stats[cl::kStatWeapon] = 5;
   s.intermission = true;
   CHECK(!step().drawn);
 }
@@ -495,4 +549,120 @@ TEST(the_hud_counts_down_the_quad_and_the_shield_and_drops_them_when_they_run_ou
   for (int i = 0; i < 10; i++) cl::listen_frame(l, {});
   const hud::Status gone = cl::status_of(l, 2.0);
   CHECK(!gone.powered(hud::Power::damage) && !gone.powered(hud::Power::shield));
+}
+
+TEST(a_mods_named_effects_reach_the_player_by_name_or_as_the_classic_effect) {
+  cl::Listen l;
+  if (!start(l)) return;
+  for (int i = 0; i < 10; i++) cl::listen_frame(l, {});
+  const size_t before = l.effects.size(), booms = l.explosions.size();
+  const auto event = [](shooters_edge::server::EventKind k, const char* name) {
+    shooters_edge::server::NetEvent ev;
+    ev.kind = k;
+    ev.to = 1;
+    ev.origin = {64, 0, 40};
+    ev.values[2] = 1;
+    ev.values[3] = 3;
+    ev.text = name;
+    return ev;
+  };
+  namespace sv = shooters_edge::server;
+  l.server->out.events.push_back(event(sv::EventKind::point_effect, "spark_fountain"));
+  l.server->out.events.push_back(event(sv::EventKind::point_effect, "TE_GUNSHOT"));
+  l.server->out.events.push_back(event(sv::EventKind::point_effect, "te_explosion"));
+  l.server->out.events.push_back(event(sv::EventKind::trail_effect, "spark_trail"));
+  sv::NetEvent other = event(sv::EventKind::point_effect, "for_someone_else");
+  other.to = 2;
+  l.server->out.events.push_back(other);
+  cl::listen_frame(l, {});
+  CHECK_MSG(l.effects.size() == before + 3, std::to_string(l.effects.size() - before));
+  if (l.effects.size() != before + 3) return;
+  const cl::Effect& named = l.effects[before];
+  CHECK(named.kind == cl::EffectKind::named && named.name == "spark_fountain" && named.count == 3 &&
+        named.way.z == 1.0f && named.at.x == 64.0f);
+  CHECK(l.effects[before + 1].kind == cl::EffectKind::impact && l.effects[before + 1].count == 3);
+  const cl::Effect& trail = l.effects[before + 2];
+  CHECK(trail.kind == cl::EffectKind::named_trail && trail.name == "spark_trail" &&
+        trail.end.y == 0.0f);
+  CHECK(l.explosions.size() == booms + 1);
+}
+
+TEST(the_window_hears_its_own_game_the_launcher_picked_up_and_fired) {
+  const Rjump& r = the_jump();
+  const auto heard = [&r](std::string_view part) {
+    return std::any_of(r.sounds.begin(), r.sounds.end(),
+                       [part](const std::string& s) { return s.find(part) != std::string::npos; });
+  };
+  CHECK_MSG(!r.sounds.empty(), "the server started no sound for the player");
+  CHECK_MSG(heard("weapons/"), "no weapon's sound among " + std::to_string(r.sounds.size()));
+  // Played: every name on the sound list a short tone in the packs, the same game heard.
+  cl::Listen l;
+  if (!start(l)) return;
+  std::vector<float> tone(2400);
+  for (size_t i = 0; i < tone.size(); i++) tone[i] = (i / 24) % 2 == 0 ? 0.2f : -0.2f;
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> entries;
+  for (size_t i = 1; i < l.server->sounds.size(); i++)
+    entries.push_back({"sound/" + l.server->sounds[i], ge::audio::wav_bytes(tone, 1, 22050)});
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak(entries, &pak, &error), error);
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  ge::audio::Synth synth;
+  cl::ListenHearing hearing(synth);
+  const auto run = [&](int frames, sh::MoveCmd cmd) {
+    for (int i = 0; i < frames; i++) {
+      cl::listen_frame(l, cmd);
+      cmd.impulse = 0;
+      hearing.frame(l, files, 1.0f / 77);
+      CHECK(l.sounds.empty());  // played and emptied
+    }
+  };
+  run(80, {});
+  l.impulse = 7;
+  run(80, {});
+  sh::MoveCmd fire;
+  fire.buttons = sh::kButtonAttack;
+  run(2, fire);
+  run(40, {});
+  const cl::DemoSoundStats* st = hearing.stats();
+  CHECK(st != nullptr);
+  if (st == nullptr) return;
+  CHECK_MSG(st->started > 0, "nothing played");
+  CHECK_MSG(st->missing == 0, std::to_string(st->missing) + " recordings missing");
+  CHECK(hearing.state().sounds == l.server->sounds);
+  const sh::Edict& me = l.server->sv.edicts[1];
+  CHECK(hearing.state().eye.z > me.origin.z);  // the listener at the eye, above the origin
+  cl::listen_stop(l);
+  hearing.frame(l, files, 0.01f);  // no game: everything stopped
+  CHECK(hearing.stats() == nullptr);
+}
+
+TEST(the_campaign_s_looping_sounds_set_off_at_the_map_s_load_are_heard) {
+  auto map = std::make_unique<cl::LoadedMap>();
+  map->name = map->spec.name = "first";
+  map->spec.models = shooters_edge::server::arena_models(true);
+  map->spec.entities = R"({
+"classname" "worldspawn"
+}
+{
+"classname" "info_player_start"
+"origin" "-416 0 24"
+}
+{
+"classname" "ambient_drip"
+"origin" "-300 0 64"
+}
+)";
+  cl::Listen l;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.console = {"deathmatch 0"};
+  std::string error;
+  CHECK_MSG(cl::listen_start(l, campfix::mod(), std::move(map), opt, error), error);
+  if (l.server == nullptr) return;
+  CHECK_MSG(l.static_sounds.size() == 1, std::to_string(l.static_sounds.size()) + " loops");
+  if (l.static_sounds.size() != 1) return;
+  const cl::DemoStaticSound& drip = l.static_sounds[0];
+  CHECK(l.server->sounds[static_cast<size_t>(drip.sound)].find("drip") != std::string::npos);
+  CHECK(drip.origin.x == -300.0f && drip.volume > 0 && drip.attenuation > 0);
 }

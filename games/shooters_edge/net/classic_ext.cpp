@@ -32,6 +32,7 @@ const ExtBit kExtBits[] = {
     {ExtFamily::z, true, kZOnGround, "on-ground"},
     {ExtFamily::z, true, kZVwep, "view-weapons"},
     {ExtFamily::z, true, kZSolid, "solid"},
+    {ExtFamily::ge, true, kGeNamedEffects, "named-effects"},
 };
 const int kExtBitCount = static_cast<int>(sizeof kExtBits / sizeof kExtBits[0]);
 
@@ -58,6 +59,8 @@ const char* family_name(ExtFamily f) {
       return "mvd";
     case ExtFamily::z:
       return "z";
+    case ExtFamily::ge:
+      return "ge";
     default:
       return "?";
   }

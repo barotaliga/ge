@@ -8,8 +8,16 @@
 #include "platform/window.hpp"
 
 #include <SDL3/SDL.h>
+// SDL_RunApp alone: this file defines no main (SDL_MAIN_HANDLED keeps SDL's own out of it).
+#define SDL_MAIN_HANDLED
+#include <SDL3/SDL_main.h>
 
 #include "platform/devices_sdl.hpp"
+
+#if defined(__APPLE__)
+#include <objc/message.h>
+#include <objc/runtime.h>
+#endif
 
 #include <mutex>
 #include <string>
@@ -32,6 +40,10 @@ struct Window::Impl {
   SDL_MetalView metal_view = nullptr;
   FolderPick pick;
 };
+
+int run_app(int argc, char** argv, int (*body)(int argc, char** argv)) {
+  return SDL_RunApp(argc, argv, body, nullptr);
+}
 
 bool display_available() {
   if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) return false;
@@ -177,6 +189,10 @@ void set_relative_mouse(Window& window, bool on) {
   SDL_SetWindowRelativeMouseMode(window.impl_->window, on);
 }
 
+bool has_focus(const Window& window) {
+  return (SDL_GetWindowFlags(window.impl_->window) & SDL_WINDOW_INPUT_FOCUS) != 0;
+}
+
 bool relative_mouse(const Window& window) {
   return SDL_GetWindowRelativeMouseMode(window.impl_->window);
 }
@@ -283,6 +299,35 @@ bool set_fullscreen(Window& window, bool on, int display) {
 }
 
 uint64_t now_ns() { return SDL_GetTicksNS(); }
+
+void wait_until_ns(uint64_t deadline_ns) {
+  const uint64_t now = SDL_GetTicksNS();
+  if (deadline_ns > now) SDL_DelayPrecise(deadline_ns - now);
+}
+
+double refresh_hz(const Window& window) {
+  const SDL_DisplayID id = SDL_GetDisplayForWindow(window.impl_->window);
+  if (id == 0) return 0;
+  const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(id);
+  return mode != nullptr && mode->refresh_rate > 0 ? static_cast<double>(mode->refresh_rate) : 0;
+}
+
+void set_swap_images(Window& window, int images) {
+#if defined(__APPLE__)
+  if (window.impl_->metal_view == nullptr) return;
+  void* layer = SDL_Metal_GetLayer(window.impl_->metal_view);
+  if (layer == nullptr) return;
+  // The layer's maximumDrawableCount (2 or 3), set through the Objective-C runtime so this file
+  // stays C++.
+  const unsigned long count = images <= 2 ? 2ul : 3ul;
+  using SetCount = void (*)(void*, SEL, unsigned long);
+  reinterpret_cast<SetCount>(objc_msgSend)(layer, sel_registerName("setMaximumDrawableCount:"),
+                                           count);
+#else
+  (void)window;
+  (void)images;
+#endif
+}
 
 std::string prefs_dir(std::string_view org, std::string_view app) {
   char* path = SDL_GetPrefPath(std::string(org).c_str(), std::string(app).c_str());

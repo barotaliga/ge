@@ -89,7 +89,8 @@ void run(gl::Lab& lab) {
        "a red disc right of centre, a third of the frame tall, darker at its top; cloud over it",
        open);
   shot("later", "FOUR SECONDS ON",
-       "The same night four seconds later: the cloud has moved across the moon, the moon has not.",
+       "The same night four seconds later: the cloud has drifted a little across the moon, the "
+       "moon has not.",
        "the cloud's shapes moved against the first frame; the moon in the same place", later);
   shot("loading", "A MAP LOADING BEHIND IT",
        "The frame a map loads behind: the title, and the spinner in the bottom right corner with "

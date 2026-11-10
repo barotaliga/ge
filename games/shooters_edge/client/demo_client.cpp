@@ -241,7 +241,7 @@ void player_info(Demo& d, DemoMsg& m) {
   p.model = (flags & 0x20) != 0 ? m.u8() : d.player_model;
   if ((flags & 0x40) != 0) p.skin = m.u8();
   if ((flags & 0x80) != 0) p.effects = m.u8();
-  if ((flags & 0x100) != 0) m.u8();      // weapon frame
+  if ((flags & 0x100) != 0) p.weapon_frame = m.u8();
   if ((flags & (1 << 17)) != 0) m.u8();  // transparency
   p.dead = (flags & 0x200) != 0;
   p.gib = (flags & 0x400) != 0;
@@ -272,7 +272,7 @@ void multiview_player(Demo& d, DemoMsg& m) {
   if ((bits & kMvModel) != 0) p.model = m.u8();
   if ((bits & kMvSkin) != 0) p.skin = m.u8();
   if ((bits & kMvEffects) != 0) p.effects = m.u8();
-  if ((bits & kMvWeaponFrame) != 0) m.u8();
+  if ((bits & kMvWeaponFrame) != 0) p.weapon_frame = m.u8();
   p.dead = (bits & kMvDead) != 0;
   p.gib = (bits & kMvGib) != 0;
   p.present = true;
@@ -335,37 +335,54 @@ void name_list(DemoMsg& m, std::vector<std::string>& list, bool wide_start) {
   m.u8();  // where the next chunk starts, or 0
 }
 
-bool temp_entity(DemoMsg& m, const Wire& w, std::string& error) {
-  const int kind = m.u8();
-  const auto point = [&] { skip_point(m, w); };
-  switch (kind) {
-    case 2:
-    case 12:  // gunshot, blood: a count and a point
-      m.u8();
-      point();
-      return true;
-    case 0:
+bool temp_entity(DemoMsg& m, const Wire& w, DemoState& s, std::string& error) {
+  DemoEffect e;
+  e.code = m.u8();
+  const auto point = [&] {
+    const float x = coord(m, w), y = coord(m, w);
+    return sh::Vec3f{x, y, coord(m, w)};
+  };
+  switch (e.code) {
+    case 2:  // gunshot, blood: a count and a point
+    case 12:
+      e.kind = e.code == 2 ? DemoEffectKind::gunshot : DemoEffectKind::blood;
+      e.count = m.u8();
+      break;
+    case 0:  // the spikes
     case 1:
-    case 3:
-    case 4:
     case 7:
     case 8:
+      e.kind = DemoEffectKind::spike;
+      e.count = e.code == 1 ? 2 : 1;
+      break;
+    case 3:  // the explosions
+    case 4:
+      e.kind = DemoEffectKind::explosion;
+      break;
     case 10:
+      e.kind = DemoEffectKind::lava;
+      break;
     case 11:
-    case 13:
-      point();
-      return true;
-    case 5:
+      e.kind = DemoEffectKind::teleport;
+      break;
+    case 13:  // the beam's blood
+      e.kind = DemoEffectKind::blood;
+      break;
+    case 5:  // the beams: an entity and two points
     case 6:
-    case 9:  // lightning: an entity and two points
-      m.i16();
-      point();
-      point();
-      return true;
+    case 9:
+      e.kind = DemoEffectKind::beam;
+      e.entity = m.i16();
+      break;
     default:
-      error = "a temporary entity of kind " + std::to_string(kind) + " is not one the protocol has";
+      error =
+          "a temporary entity of kind " + std::to_string(e.code) + " is not one the protocol has";
       return false;
   }
+  e.at = point();
+  e.end = e.kind == DemoEffectKind::beam ? point() : e.at;
+  if (!m.bad) s.effects.push_back(e);
+  return true;
 }
 
 sh::Vec3f point(DemoMsg& m, const Wire& w) {
@@ -443,10 +460,11 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         s.centre = m.str();
         break;
       case 10: {  // setangle; a multiview recording's names the player it turns first
-        if (s.format == DemoFormat::multiview) m.u8();
+        const int slot = s.format == DemoFormat::multiview ? m.u8() : s.player;
         if ((d.ext_mvd & kMvdHighLagTeleport) != 0) m.u8();
         const float a = angle(m, w), b = angle(m, w), c = angle(m, w);
         s.angles = {a, b, c};
+        if (slot >= 0 && slot < 32) s.set_angles |= 1u << slot;
         break;
       }
       case 11:
@@ -499,7 +517,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         break;
       }
       case 23:
-        ok = temp_entity(m, w, error);
+        ok = temp_entity(m, w, s, error);
         break;
       case 24:
       case 32:
@@ -642,7 +660,30 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 79:
         m.u8();
         m.f32();
-        break;  // updatestatfloat
+        break;   // updatestatfloat
+      case 120:  // the game's own named effects, on a live stream that agreed them
+      case 121: {
+        if (!d.named_effects) {
+          error = "message id " + std::to_string(id) + " is not one this reader knows";
+          ok = false;
+          break;
+        }
+        DemoEffect e;
+        e.code = -1;
+        e.kind = id == 120 ? DemoEffectKind::named : DemoEffectKind::named_trail;
+        e.name = m.str();
+        e.at = point(m, w);
+        if (id == 120) {
+          const float x = static_cast<float>(m.i8()) / 127, y = static_cast<float>(m.i8()) / 127;
+          e.way = {x, y, static_cast<float>(m.i8()) / 127};
+          e.count = m.u8();
+          e.end = e.at;
+        } else {
+          e.end = point(m, w);
+        }
+        s.effects.push_back(std::move(e));
+        break;
+      }
       default:
         error = "message id " + std::to_string(id) + " is not one this reader knows";
         ok = false;

@@ -1,10 +1,12 @@
 // The version 38 reader: nineteen lumps; faces are polygons of surfedges as in 29, but a texinfo
 // carries its texture's name (the pixels live in other files), luxels are RGB, every leaf names
 // its own cluster and area, and the visibility starts with the cluster count and each cluster's
-// offsets to its potentially visible and potentially hearable rows.
+// offsets to its potentially visible and potentially hearable rows. The brushes, their sides
+// and each leaf's run of them are read whole, for the trace (trace.hpp).
 //
 // ge:summary Reads version 38 maps: polygons, texinfo names, RGB lightmaps, clusters and rows
 // ge:keywords v38 read texinfo texture name surface flags rgb lighting leafs cluster area brushes
+// ge:keywords brushsides leafbrushes brush-side plane-type surface-value
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
 #include <algorithm>
@@ -55,6 +57,7 @@ constexpr int32_t kLavaContents = 0x8, kSlimeContents = 0x10, kWaterContents = 0
 struct Texinfo {
   float v[2][4];
   int32_t flags;
+  int32_t value;
   uint32_t texture;
   int32_t next;  // the next texinfo of its animation, or -1
 };
@@ -85,7 +88,8 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
     for (Plane& p : m.planes) {
       for (float& x : p.n) x = c.f32();
       p.d = c.f32();
-      c.skip(4);
+      const int32_t type = c.i32();
+      p.type = uint8_t(type >= 0 && type <= 5 ? type : 3);
     }
   }
 
@@ -106,7 +110,7 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
         for (float& x : row) x = c.f32();
       }
       t.flags = c.i32();
-      c.skip(4);
+      t.value = c.i32();
       const std::string name = c.name(32);
       t.next = c.i32();
       const auto [it, added] = by_name.emplace(name, uint32_t(m.textures.size()));
@@ -218,28 +222,47 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
     }
   }
 
-  if (!detail::count_of(L[kBrushes], 12, f, &n, err)) return false;
-  m.brushes = uint32_t(n);
+  // The brushes: each a run of sides (a plane and a texinfo, −1 for none) and its contents.
   {
-    // A warped texture's liquid kind: the contents of the brushes it sides, else its name.
     size_t sides = 0;
     if (!detail::count_of(L[kBrushsides], 4, f, &sides, err)) return false;
-    std::vector<int32_t> side_texinfo(sides);
+    m.brush_sides.resize(sides);
     Cursor s = lump(kBrushsides);
-    for (int32_t& x : side_texinfo) {
-      s.skip(2);
-      x = s.i16();
+    for (size_t i = 0; i < sides; ++i) {
+      BrushSide& side = m.brush_sides[i];
+      side.plane = s.u16();
+      const int32_t ti = s.i16();
+      if (side.plane >= m.planes.size() || ti < -1 || (ti >= 0 && size_t(ti) >= texinfo.size())) {
+        return detail::refuse(
+            err, f, "brush side " + std::to_string(i) + " names a plane or texinfo not in the map",
+            "the file is damaged: rebuild the map");
+      }
+      if (ti >= 0) {
+        const Texinfo& t = texinfo[size_t(ti)];
+        side.texture = int32_t(t.texture);
+        side.flags = t.flags;
+        side.value = t.value;
+      }
     }
+  }
+  if (!detail::count_of(L[kBrushes], 12, f, &n, err)) return false;
+  m.brushes.resize(n);
+  {
+    // A warped texture's liquid kind: the contents of the brushes it sides, else its name.
     std::vector<int32_t> contents_of(m.textures.size(), 0);
     Cursor c = lump(kBrushes);
     for (size_t i = 0; i < n; ++i) {
       const int32_t first = c.i32(), count = c.i32(), contents = c.i32();
-      if (first < 0 || count < 0 || size_t(first) > sides || size_t(count) > sides - size_t(first))
-        continue;  // a brush whose sides are out of range marks nothing (the view keeps no brush)
+      if (first < 0 || count < 0 || size_t(first) > m.brush_sides.size() ||
+          size_t(count) > m.brush_sides.size() - size_t(first)) {
+        return detail::refuse(
+            err, f, "brush " + std::to_string(i) + "'s sides run past the brush side lump",
+            "the file is damaged: rebuild the map");
+      }
+      m.brushes[i] = Brush{uint32_t(first), uint32_t(count), contents};
       for (int32_t k = 0; k < count; ++k) {
-        const int32_t ti = side_texinfo[size_t(first) + size_t(k)];
-        if (ti >= 0 && size_t(ti) < texinfo.size())
-          contents_of[texinfo[size_t(ti)].texture] |= contents;
+        const int32_t t = m.brush_sides[size_t(first) + size_t(k)].texture;
+        if (t >= 0) contents_of[size_t(t)] |= contents;
       }
     }
     for (size_t t = 0; t < m.textures.size(); ++t) {
@@ -250,6 +273,20 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
                    : (k & kSlimeContents) ? Liquid::slime
                    : (k & kWaterContents) ? Liquid::water
                                           : liquid_by_name(tex.name);
+    }
+  }
+  if (!detail::count_of(L[kLeafbrushes], 2, f, &n, err)) return false;
+  {
+    Cursor c = lump(kLeafbrushes);
+    m.leaf_brushes.resize(n);
+    for (size_t i = 0; i < n; ++i) {
+      m.leaf_brushes[i] = c.u16();
+      if (m.leaf_brushes[i] >= m.brushes.size()) {
+        return detail::refuse(err, f,
+                              "leaf brush " + std::to_string(i) + " names brush " +
+                                  std::to_string(m.leaf_brushes[i]) + ", not in the map",
+                              "the file is damaged: rebuild the map");
+      }
     }
   }
 
@@ -305,11 +342,17 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
       for (float& x : lf.maxs) x = float(c.i16());
       lf.first_mark = c.u16();
       lf.marks = c.u16();
-      c.skip(4);
+      lf.first_brush = c.u16();
+      lf.brushes = c.u16();
       if (uint64_t(lf.first_mark) + lf.marks > m.marks.size()) {
         return detail::refuse(err, f,
                               "leaf " + std::to_string(i) + "'s faces run past the leaf face lump",
                               "the file is damaged: rebuild the map");
+      }
+      if (uint64_t(lf.first_brush) + lf.brushes > m.leaf_brushes.size()) {
+        return detail::refuse(
+            err, f, "leaf " + std::to_string(i) + "'s brushes run past the leaf brush lump",
+            "the file is damaged: rebuild the map");
       }
       lf.solid = (lf.contents & 1) != 0;
       if (lf.cluster < 0) lf.cluster = -1;

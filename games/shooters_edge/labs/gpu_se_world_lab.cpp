@@ -310,8 +310,8 @@ void run(gl::Lab& lab) {
     const ba::Scene& s = m->scene;
     lab.metric(names[i] + ".light-layers", double(s.light_layers), "count");
     lab.metric(names[i] + ".animated-frames", double(s.frames.size()), "count");
-    m->sky = ba::pick_sky(s.sky_colours);
-    ba::night_over(m->sky, names[i]);
+    m->sky = ba::pick_sky(s.sky_colours, names[i]);
+    if (ba::dark_sky(m->sky)) ba::night_over(m->sky, names[i]);  // the game's own hour
     if (own) {
       for (const View& v : room_views(fixture, names[i])) views.push_back(v);
     } else {
@@ -503,15 +503,14 @@ void run(gl::Lab& lab) {
     ahead(4, 2.2, -0.8, hit);
     ahead(6, -2.6, -1.5, tele);
     ahead(3.5, 0.2, -1.4, lava);
-    const double wall[3] = {-c, 0, s};
     std::vector<gl::Picture> pics;
     for (lk::Look look : {lk::Look::classic, lk::Look::modern}) {
       fx::Particles births;
-      fx::explosion(boom, 1, &births);
-      fx::rocket_trail(from, to, 2, &births);
-      fx::impact(hit, wall, 3, &births);
-      fx::teleport_splash(tele, 4, &births);
-      fx::lava_splash(lava, 5, &births);
+      fx::explosion(boom, 1, palette, &births);
+      fx::rocket_trail(from, to, 2, palette, &births);
+      fx::impact(hit, 20, 3, palette, &births);
+      fx::teleport_splash(tele, 4, palette, &births);
+      fx::lava_splash(lava, 5, palette, &births);
       gr::clear_particles(d, f.particles);
       gr::emit_particles(f.particles, births);
       ba::DynamicLight lights[2];

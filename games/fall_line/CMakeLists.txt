@@ -18,9 +18,12 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_cfg)
 # Its `play` executable (play/): the game on the play contract, which `ge play`, `ge sim`,
 # `ge replay`, `ge state` and `ge diverge` build and run (skill: agent-interface).
 # It lands at the build's root (build/<preset>/play), where ge looks for a game's play target.
-add_executable(play play/main.cpp)
-target_link_libraries(play PRIVATE fall_line_sim fall_line_cfg)
-set_target_properties(play PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
+# A host tool: not built for a mobile target (GE_HOST_TOOLS).
+if(GE_HOST_TOOLS)
+  add_executable(play play/main.cpp)
+  target_link_libraries(play PRIVATE fall_line_sim fall_line_cfg)
+  set_target_properties(play PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
+endif()
 
 # Its sound (sound/): the bank, the event route, the listener and the faders, over the skier's
 # beds. No GPU and no device, so the tests and the `audition` lab link it headless (skill: audio).
@@ -28,7 +31,9 @@ file(GLOB FALL_LINE_SOUND_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/
 add_library(fall_line_sound STATIC ${FALL_LINE_SOUND_SOURCES})
 target_link_libraries(fall_line_sound PUBLIC fall_line_sim ge_skier_app ge_audio)
 # The play executable writes a run with its sound (`ge record --format=mkv`).
-target_link_libraries(play PRIVATE fall_line_sound)
+if(TARGET play)
+  target_link_libraries(play PRIVATE fall_line_sound)
+endif()
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_sound)
 
 # Its camera (camera/): the ladder of engine rigs a run is seen from, the skier as the camera's
@@ -69,11 +74,14 @@ if(GE_GPU)
     ${PROJECT_SOURCE_DIR}/plugins/skier/assets/skier/skier.glb)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS fall_line_app)
   # The play executable draws the GPU's pictures too (`ge shot --gpu`, `ge record --gpu`).
-  target_link_libraries(play PRIVATE fall_line_app)
-  target_compile_definitions(play PRIVATE FALL_LINE_PLAY_GPU=1)
+  if(TARGET play)
+    target_link_libraries(play PRIVATE fall_line_app)
+    target_compile_definitions(play PRIVATE FALL_LINE_PLAY_GPU=1)
+  endif()
 endif()
 if(GE_PLATFORM AND GE_GPU)
   add_executable(fall_line app/main.cpp)
+  ge_app_bundle(fall_line NAME "Fall Line" ID fall-line)
   target_link_libraries(fall_line PRIVATE ge_platform fall_line_app fall_line_sound fall_line_cfg
                                           fall_line_controls)
 endif()

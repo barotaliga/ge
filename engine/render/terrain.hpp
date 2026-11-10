@@ -37,6 +37,7 @@
 // ge:keywords clipmap_reach clipmap_levels_to draw-distance reach
 // ge:keywords clipmap_levels create_terrain prepare_terrain encode_terrain_cull draw_terrain
 // ge:keywords ground-material terrain-material material-shader bind_terrain_material ground_at
+// ge:keywords set_terrain_plain plain_too plain-material live-material
 // ge:skill render
 // ge:test tests/render_terrain_test.cpp
 #pragma once
@@ -89,6 +90,10 @@ struct TerrainSource {
   std::string_view shader;
   const char* shader_label = "terrain";
   wgpu::BindGroupLayout material;
+  // With a material of its own, also build the default material's pipelines (terrain.wgsl, the
+  // albedo lit), so `set_terrain_plain` switches between the two in a live frame (a quality
+  // setting) with no pipeline made after the load.
+  bool plain_too = false;
 };
 
 struct Terrain {
@@ -106,6 +111,10 @@ struct Terrain {
   wgpu::BindGroup material;  // group 3: the material's own (TerrainSource::material)
   bool has_material = false;
   uint32_t p_depth = 0, p_draw = 0, p_cull = 0, p_normals = 0;
+  // The default material's prepass and colour pass beside the game's (TerrainSource::plain_too),
+  // and which of the two draws (set_terrain_plain).
+  uint32_t p_depth_plain = 0, p_draw_plain = 0;
+  bool has_plain = false, plain = false;
   uint32_t p_count_equal = 0, p_count_greater = 0;  // the overdraw probe's, when asked for
   uint32_t p_wire = 0;                              // the wire probe's, when asked for
   bool wire = false;
@@ -131,6 +140,9 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
 void bind_terrain_shadows(Terrain& terrain, const wgpu::BindGroup& shadows);
 // The material's own bind group (group 3, in TerrainSource::material's layout).
 void bind_terrain_material(Terrain& terrain, const wgpu::BindGroup& material);
+// The ground drawn in the default material (on) or the game's (off), live; only with
+// TerrainSource::plain_too (else the game's always).
+void set_terrain_plain(Terrain& terrain, bool on);
 // The levels round this frame's eye and the horizon maps the sun needs, staged and uploaded; the
 // indirect count reset.
 void prepare_terrain(gpu::Device& device, Terrain& terrain, const FrameView& view);

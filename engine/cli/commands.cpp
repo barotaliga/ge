@@ -78,7 +78,8 @@ constexpr FlagSpec kLabSweepFlags[] = {
 constexpr FlagSpec kLabPublishFlags[] = {
     {"before", "<tag>",
      "a kept run (ge lab <id> --tag=<tag>) shown beside this one, metric by metric"},
-    {"width", "<px>", "the pictures' width on the page (default 720)"},
+    {"width", "<px>",
+     "the pictures' width on the page (default 720; shrunk to fit the page limit)"},
     {"out", "<file>", "where the page goes (default previews/<id>/publish.html)"},
     {"title", "<text>", "the page's title (default \"<id> lab run\", or \"Lab runs\")"},
     kRepo};
@@ -127,7 +128,9 @@ constexpr FlagSpec kMergeMainFlags[] = {
     kEngine,
     kRepo};
 constexpr FlagSpec kDigestFlags[] = {
-    {"write", "", "rewrite the lab's file under tests/digests/ (every lab's with no lab named)"},
+    {"write", "",
+     "rewrite the lab's file under tests/digests/ (with --affected, every lab the change "
+     "reaches; with no lab named, every lab's)"},
     {"diff", "", "print only the labs whose digest is off the baseline; write nothing"},
     {"affected", "", "the labs the change since --base reaches, each by its own source's object"},
     {"base", "<ref>",
@@ -603,8 +606,10 @@ const CommandSpec kCommands[] = {
      kMergeMainFlags, "ge merge-main", "commit"},
     {"digest", "[<lab>...]", 0, -1, "build",
      "the labs named (or every lab) at their smoke flags, twice: each digest beside the "
-     "committed baseline; --write moves only those labs' rows; --diff prints only the labs "
-     "that moved; --why names what moved in each",
+     "committed baseline (only the labs executable is built); --write moves only those labs' rows; "
+     "--diff prints only the labs "
+     "that moved; --why names what moved in each; a lab's digest at another ref (is the "
+     "baseline stale on main?) is ge lab before <lab>",
      kDigestFlags, "ge digest wind-sweep level --write", "labs"},
     {"golden diff", "[<golden|test>...]", 0, -1, "build",
      "each golden file against git's --base: the rows that changed and, column by column, what "
@@ -632,7 +637,8 @@ const CommandSpec kCommands[] = {
      kLabDiffFlags, "ge lab diff world --run -- --views=start,vista", "labs"},
     {"lab before", "<id>...", 1, -1, "see",
      "the labs at origin/main (or --ref), built once in a scratch worktree and run at their "
-     "smoke flags, kept under the tag before: a change's before with nothing stashed",
+     "smoke flags, kept under the tag before: a change's before with nothing stashed; each "
+     "lab's digest at the ref is printed beside the committed baseline (a lab's digest on main)",
      kLabBeforeFlags, "ge lab before se-world se-models", "labs"},
     {"lab pair", "<id>", 1, 1, "see",
      "a lab drawn twice, under the --before cvars and the --after ones (the runner's --cvars), "

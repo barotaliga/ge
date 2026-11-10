@@ -43,6 +43,9 @@ const ServerTrial& lan_trial() {
 // A console whose only file is the base game's `server.cfg` with `text`.
 void cfg_files(ge::console::Console& con, const std::string& text) {
   con.set_files(
+      // A callback held in a std::function: what it throws (a string out of memory)
+      // reaches its caller, as any call's does.
+      // NOLINTNEXTLINE(bugprone-exception-escape)
       [text](std::string_view name, std::string& out) {
         if (name != "base/server.cfg") return false;
         out = text;
@@ -117,6 +120,20 @@ TEST(server_settings_cfg_then_flags_then_commands) {
   CHECK(c.port == 27999);
   CHECK(c.map == "ring");  // the game's default
   CHECK(c.seconds == 3);
+}
+
+// The first command needs no `+`, even after flags that become `+set` lines of their own.
+TEST(server_first_command_needs_no_plus) {
+  ge::console::Console con(true);
+  cfg_files(con, "");
+  ServerConfig c;
+  ServerCfg cfg;
+  std::string error;
+  CHECK(server_configure(con, {"--port=27999", "set", "sv_description", "bare"}, c, cfg,
+                         sample_game(), error));
+  CHECK(error.empty());
+  CHECK(c.description == "bare");
+  CHECK(c.port == 27999);
 }
 
 TEST(server_settings_refused_with_where_and_next) {

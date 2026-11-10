@@ -7,7 +7,8 @@
 // THE MESSAGES, by their byte: 30 intermission (none), 31 finale (a string), 34 cutscene (a
 // string), 33 sellscreen (none), 32 cdtrack (track and loop bytes: recorded, never played: the
 // game has no music), 27 killedmonster and 28 foundsecret (none: one more of statistic 14 or 13),
-// 10 setangle (three angles, a byte each of 360/256 degrees: the view snaps to them). A byte it
+// 10 setangle (three angles, a byte each of 360/256 degrees: the view snaps to them), 52 the
+// re-release's achievement (its id, a string: stepped over, no store here). A byte it
 // does not know ends the read of that buffer (what it cannot size it cannot step over): counted in
 // `unread` and the first one named in `unknown`.
 //
@@ -48,6 +49,7 @@ namespace shooters_edge::client {
 namespace campaign_svc {
 constexpr uint8_t setangle = 10, killedmonster = 27, foundsecret = 28, intermission = 30;
 constexpr uint8_t finale = 31, cdtrack = 32, sellscreen = 33, cutscene = 34;
+constexpr uint8_t achievement = 52;  // the re-release's: an achievement's id, a string (skipped)
 }  // namespace campaign_svc
 
 namespace campaign_svc {
@@ -55,13 +57,28 @@ constexpr uint8_t temp_entity = 23;
 }  // namespace campaign_svc
 
 // What a temporary entity shows.
-enum class EffectKind : uint8_t { impact, spike, explosion, teleport, lava, beam, blood };
+// `named` and `named_trail`: an effect a mod named (pointparticles, trailparticles) that is no
+// classic one, drawn from the game's files' effect of that name or not at all.
+enum class EffectKind : uint8_t {
+  impact,
+  spike,
+  explosion,
+  teleport,
+  lava,
+  beam,
+  blood,
+  named,
+  named_trail
+};
 struct Effect {
   EffectKind kind = EffectKind::impact;
   int code = 0;            // the temporary entity's kind byte (-1: a particle burst)
   int entity = 0;          // a beam's owner
+  int count = 1;           // a gunshot's pellets, a blood's drops (a match's; 1 elsewhere)
   ge::shooter::Vec3f at;   // map units; a beam's start
-  ge::shooter::Vec3f end;  // a beam's end
+  ge::shooter::Vec3f end;  // a beam's end; a named trail's
+  ge::shooter::Vec3f way;  // a named effect's way (zero: up)
+  std::string name;        // a named effect's
 };
 
 inline constexpr double kPrintSpeed = 8;  // scr_printspeed's default, characters a second

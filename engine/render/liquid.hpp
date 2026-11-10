@@ -6,10 +6,10 @@
 // - LAVA (`LavaLook`): the surface's TEMPERATURE is the picture, and its colour and brightness
 //   follow from it as a black body's glow (water/glow.hpp's table, Planck under the CIE
 //   observer: no colour is picked). The crust is a field of plates (a Voronoi tiling at the
-//   plate's size) carried by the flow on two phases of a flow map so it never stretches; each
-//   plate has an age, which cools its skin from `crust_hot` to `crust_cold` (dull red to black)
-//   and widens the cracks between it and its neighbours, where the melt's own heat shows, falling
-//   off exp(-d / w) from the crack's line. Over the plates lie the open patches (a slow noise over
+//   plate's size) carried by the flow on two phases of a flow map, each unseen where it jumps
+//   back; each plate has an age, which cools its skin from `crust_hot` to `crust_cold`, widens its
+//   cracks (the melt's heat falling off exp(-d / w) from them), and at its end melts back and
+//   sinks, so no plate pops. Over the plates lie the open patches (a slow noise over
 //   `cover`), molten and nearly at `core`, a thin skin wrinkling on them; the crust's edge at a
 //   patch is the hottest. Pahoehoe's ropy folds run across the flow on the crust. The crust is a
 //   rough black glass lit by the sun and the sky; the melt a smoother one; both glow.
@@ -45,7 +45,8 @@
 //   at once and skinning over from its edge, the plates round it cracked and glowing, a crest
 //   running out in the first second; carried by the flow.
 // - SEEN FROM BELOW (`Liquids::eye_under`, docs/liquids.md § From below): a slime a fog of its
-//   colour with Snell's window overhead, a lava its melt all round; `under_reach` a least view.
+//   colour with Snell's window overhead, a lava its melt all round; `under_reach` a least view
+//   (a lava with one a thick light-red glowing goo the eye sees a few metres into).
 //
 // Not yet: a flow region's surface; the waterline split for an eye at the level.
 //
@@ -54,7 +55,7 @@
 // ge:keywords incandescence pahoehoe ropes kubelka-munk turbid bubbles scum iridescence
 // ge:keywords thin-film sheen toxic gel mucus sludge tar create_liquid add_liquid_body
 // ge:keywords lava_look slime_look liquid_look prepare_liquid encode_liquid liquid_lamps
-// ge:keywords glowing-body lava-light area-light reflections ssr heat-shimmer crust-broken
+// ge:keywords glowing-body lava-goo area-light reflections ssr heat-shimmer crust-broken
 // ge:keywords break_liquid_crust splash under-lava under-slime from-below eye_under under_reach
 // ge:skill render water
 // ge:test tests/render_liquid_test.cpp
@@ -157,7 +158,8 @@ struct Liquids {
   wgpu::BindGroupLayout layout, copy_layout;
   uint32_t p_copy = 0, p_draw = 0, p_shimmer = 0, p_under = 0;
   bool reflections = true;  // the scene mirrored in the surface (else the sky's alone)
-  double under_reach = 0;   // m: the least an eye under a body sees (0: as thick as it is)
+  double under_reach = 0;   // m: the least an eye under a body sees (0: as thick as it is; a
+                            // lava with one is a goo, docs/liquids.md § From below)
   int eye_under = -1;       // this frame's: the body the eye is under, or -1
   wgpu::Texture scene_colour, scene_depth;
   wgpu::TextureView scene_colour_view, scene_depth_view;

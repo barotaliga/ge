@@ -9,7 +9,7 @@
 void() knight_swing = {
   self.think = knight_swing;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   ai_charge(10);
   if (self.anim_step == 1) {
     if (random() < 0.5) sound(self, CHAN_WEAPON, "knight/sword1.wav", 1, ATTN_NORM);
@@ -20,7 +20,7 @@ void() knight_swing = {
 };
 
 void() knight_melee = {
-  self.anim_step = 0;
+  anim_begin(self.fr_melee);
   knight_swing();
 };
 
@@ -35,14 +35,14 @@ float() knight_check = {
 void() knight_flinch = {
   self.think = knight_flinch;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step >= 3) monster_run();
 };
 
 void() knight_pain = {
   if (self.pain_finished < time + 1) self.pain_finished = time + 1;
   sound(self, CHAN_VOICE, "knight/khurt.wav", 1, ATTN_NORM);
-  self.anim_step = 0;
+  anim_begin(self.fr_pain);
   knight_flinch();
 };
 
@@ -66,6 +66,14 @@ void() monster_knight = {
   self.th_check = knight_check;
   self.th_pain = knight_pain;
   self.th_die = monster_die;
+  self.fr_stand = '0 8 1';
+  self.fr_walk = '53 66 1';
+  self.fr_run = '9 16 1';
+  self.fr_melee = '17 27 1';
+  self.fr_pain = '28 30 1';
+  self.fr_death = '76 85 1';
+  self.fr_death2 = '86 96 1';
+  self.death_solid = 2;
   walkmonster_start("progs/knight.mdl", 75, '-16 -16 -24', '16 16 40');
 };
 
@@ -93,7 +101,7 @@ void() ogre_throw = {
   local entity g;
   self.think = ogre_throw;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step <= 2) face_enemy();
   if (self.anim_step == 3) {
     sound(self, CHAN_WEAPON, "weapons/grenade.wav", 1, ATTN_NORM);
@@ -108,7 +116,7 @@ void() ogre_throw = {
 };
 
 void() ogre_missile = {
-  self.anim_step = 0;
+  anim_begin(self.fr_missile);
   ogre_throw();
 };
 
@@ -116,7 +124,7 @@ void() ogre_missile = {
 void() ogre_saw = {
   self.think = ogre_saw;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   ai_charge(6);
   if (self.anim_step == 1) sound(self, CHAN_WEAPON, "ogre/ogsawatk.wav", 1, ATTN_NORM);
   if (self.anim_step >= 3 && self.anim_step <= 6) melee_blow(4);
@@ -124,21 +132,21 @@ void() ogre_saw = {
 };
 
 void() ogre_melee = {
-  self.anim_step = 0;
+  anim_begin(self.fr_melee);
   ogre_saw();
 };
 
 void() ogre_flinch = {
   self.think = ogre_flinch;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step >= 4) monster_run();
 };
 
 void() ogre_pain = {
   if (self.pain_finished < time + 1.5) self.pain_finished = time + 1.5;
   sound(self, CHAN_VOICE, "ogre/ogpain1.wav", 1, ATTN_NORM);
-  self.anim_step = 0;
+  anim_begin(self.fr_pain);
   ogre_flinch();
 };
 
@@ -165,6 +173,17 @@ void() monster_ogre = {
   self.th_missile = ogre_missile;
   self.th_pain = ogre_pain;
   self.th_die = monster_die;
+  self.fr_stand = '0 8 1';
+  self.fr_walk = '9 24 1';
+  self.fr_run = '25 32 1';
+  self.fr_melee = '33 46 1';
+  self.fr_missile = '61 66 1';
+  self.fr_pain = '67 71 1';
+  self.fr_death = '112 125 1';
+  self.fr_death2 = '126 135 1';
+  self.death_solid = 2;
+  self.drop_ammo = DROP_ROCKETS;
+  self.gib_model = "progs/gib3.mdl";
   walkmonster_start("progs/ogre.mdl", 200, '-32 -32 -24', '32 32 64');
 };
 
@@ -180,7 +199,7 @@ void() ghoul_throw = {
   local entity m;
   self.think = ghoul_throw;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step <= 3) face_enemy();
   if (self.anim_step == 4) {
     sound(self, CHAN_WEAPON, "zombie/z_shot1.wav", 1, ATTN_NORM);
@@ -191,7 +210,7 @@ void() ghoul_throw = {
 };
 
 void() ghoul_missile = {
-  self.anim_step = 0;
+  anim_begin(self.fr_missile);
   ghoul_throw();
 };
 
@@ -199,7 +218,7 @@ void() ghoul_missile = {
 void() ghoul_down = {
   self.think = ghoul_down;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step == 50) {
     self.solid = SOLID_SLIDEBOX;
     self.takedamage = DAMAGE_AIM;
@@ -224,7 +243,7 @@ void() ghoul_hurt = {
   self.takedamage = DAMAGE_NO;
   self.angles_z = 90;
   setorigin(self, self.origin - '0 0 16');
-  self.anim_step = 0;
+  anim_begin(self.fr_pain);
   ghoul_down();
 };
 
@@ -235,9 +254,8 @@ void() ghoul_pain = {
 
 // Only a single blow of its whole health (an explosion, say) ends it, in pieces.
 void() ghoul_die = {
-  self.health = -1000;
+  self.health = -1000;  // whatever killed it: it always bursts
   monster_die();
-  sound(self, CHAN_VOICE, "zombie/z_gib.wav", 1, ATTN_NORM);
 };
 
 void() monster_zombie = {
@@ -258,12 +276,18 @@ void() monster_zombie = {
   self.noise = "zombie/z_idle.wav";
   self.noise1 = "zombie/z_gib.wav";
   self.head_model = "progs/h_zombie.mdl";
+  self.gib_noise = "zombie/z_gib.wav";
   self.gib_health = 0;
   self.walk_step = 1;
   self.run_step = 6;
   self.th_missile = ghoul_missile;
   self.th_pain = ghoul_pain;
   self.th_die = ghoul_die;
+  self.fr_stand = '0 14 1';
+  self.fr_walk = '15 33 1';
+  self.fr_run = '34 51 1';
+  self.fr_missile = '52 64 1';
+  self.fr_pain = '91 102 1';
   walkmonster_start("progs/zombie.mdl", GHOUL_HEALTH, '-16 -16 -24', '16 16 40');
   self.th_hurt = ghoul_hurt;
 };

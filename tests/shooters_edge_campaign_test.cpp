@@ -1,11 +1,12 @@
 // Tests: the campaign host (games/shooters_edge/server/campaign.hpp) on the campaign stub, a
 // single-player program compiled from QC (test_mod.hpp): a map's start (the rules written, the
 // settle, the clock), a new game's parms, a level change carrying the parms and serverflags, a
-// restart, a new game clearing both, and the single-player clock's one think a frame.
+// restart, a new game clearing both, the single-player clock's one think a frame, and in coop a
+// taken weapon taken away (the coop weapon rule).
 //
 // ge:summary Tests: the campaign host: map start, parms carried, changelevel, restart, the clock
 // ge:keywords test campaign single-player host changelevel restart spawn-parms serverflags skill
-// ge:keywords registered coop settle single-player-clock statistics
+// ge:keywords registered coop settle single-player-clock statistics coop-weapons weapon-stay
 // ge:skill progs shooter testing
 #include <string>
 #include <vector>
@@ -60,7 +61,7 @@ struct Fixture {
     o.settings = std::move(settings);
     return sv::campaign_new_game(c, mod, o, map, error);
   }
-  sv::QcServer& s() { return *c.server; }
+  sv::QcServer& s() { return *sv::qc_of(c.server); }
   float f(int e, int ofs) { return pg::as_float(*pg::entity_field(s().q.vm, e, ofs)); }
   // Frames until the map changes (at most `most`).
   int run_until_change(int most) {
@@ -134,6 +135,45 @@ TEST(a_restart_keeps_the_parms_the_map_was_entered_with) {
   CHECK(fx.c.history.back() == "restart second");
   CHECK(fx.f(1, kF.health) == 75 && fx.f(1, kF.frags) == 1);
   CHECK(fx.c.serverflags == 1);
+}
+
+// A weapon's touch that gave the player new items leaves it unshown and untouchable in coop; one
+// that gave nothing (he had it already) leaves it be, and so does any item but a weapon.
+TEST(in_coop_a_taken_weapon_is_taken_away) {
+  Fixture fx;
+  CHECK_MSG(fx.start("start", {"coop 1"}), fx.error);
+  sv::QcServer& s = fx.s();
+  CHECK(s.sv.touch_watch == &sv::coop_weapon_touch);
+  sv::campaign_join(fx.c, 0, "player");
+  pg::Vm& vm = s.q.vm;
+  const auto& f = s.q.layout->f;
+  // An entity with a model stands in for the item: the world's (its map's model) is shown.
+  const int item = 0;
+  const int toucher = 1;
+  CHECK(sv::model_shown(s, item));
+  const uint32_t name = *pg::entity_field(vm, item, f.classname);
+  const auto touch = [&](float items_after) {
+    sv::coop_weapon_touch(s.sv.touch_watch_ctx, s.sv, item, toucher, false);
+    *pg::entity_field(vm, toucher, f.items) = pg::as_word(items_after);
+    sv::coop_weapon_touch(s.sv.touch_watch_ctx, s.sv, item, toucher, true);
+  };
+  *pg::entity_field(vm, toucher, f.items) = pg::as_word(1.0f);
+  touch(1.0f);  // not a weapon: left be
+  CHECK(sv::model_shown(s, item));
+  *pg::entity_field(vm, item, f.classname) =
+      static_cast<uint32_t>(pg::engine_string(vm, "weapon_nailgun"));
+  touch(1.0f);  // a weapon that gave nothing new: left be
+  CHECK(sv::model_shown(s, item));
+  touch(5.0f);  // a weapon that gave him one: gone
+  CHECK(!sv::model_shown(s, item));
+  CHECK(s.sv.edicts[static_cast<size_t>(item)].solid == sh::kSolidNot);
+  *pg::entity_field(vm, item, f.classname) = name;
+}
+
+TEST(single_player_sets_no_coop_weapon_rule) {
+  Fixture fx;
+  CHECK_MSG(fx.start("start"), fx.error);
+  CHECK(fx.s().sv.touch_watch == nullptr);
 }
 
 TEST(a_new_game_clears_the_parms_and_the_flags) {

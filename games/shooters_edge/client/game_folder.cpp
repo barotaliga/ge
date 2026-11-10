@@ -1,11 +1,12 @@
 // The game folder a player loads (game_folder.hpp).
 //
 // ge:summary The game folder a player loads: the install checked, its game folder, kept, programs
-// ge:keywords game-folder check_game_folder game_of remembered_folder remember_folder load_programs
+// ge:keywords game-folder check_game_folder game_of remembered_game remember_game load_programs
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_game_folder_test.cpp
 #include "shooters_edge/client/game_folder.hpp"
 
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -13,6 +14,7 @@
 #include <utility>
 
 #include "core/output.hpp"
+#include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
 namespace shooters_edge::client {
@@ -102,34 +104,61 @@ std::string game_of(const std::string& basedir, const ge::classicenhance::Profil
 }
 
 void choose_folder(Args& args, const std::string& prefs) {
-  std::string basedir, why;
-  if (!args.basedir_set && !check_game_folder(args.basedir, &basedir, &why)) {
-    const std::string kept = remembered_folder(prefs);
-    if (!kept.empty() && check_game_folder(kept, &basedir, &why)) {
-      out::status("shooters_edge: the game loaded last, " + basedir + " (-basedir names another)");
+  if (!args.basedir_set) {
+    const KeptGame kept = remembered_game(prefs);
+    const ge::classicenhance::Profile* content =
+        kept.basedir.empty() ? nullptr : ge::classicenhance::find_profile(kept.profile);
+    std::string basedir, why;
+    if (!kept.basedir.empty() && content == nullptr) {
+      out::warn("shooters_edge: the game loaded last is " + kept.profile +
+                ", which this build does not know (it knows " + ge::classicenhance::profile_ids() +
+                "); next: OPTIONS > CLASSIC ENHANCED > LOAD GAME");
+    } else if (content != nullptr && check_game_folder(kept.basedir, &basedir, &why, *content)) {
+      out::status("shooters_edge: the game loaded last, " + std::string(content->what) + " in " +
+                  basedir + " (-basedir names another)");
       args.basedir = basedir;
+      if (!args.game_set) args.game = game_of(basedir, *content);
+      return;
+    } else if (content != nullptr) {
+      out::warn("shooters_edge: the game loaded last no longer opens: " + why +
+                "; so the folder the game runs in; next: OPTIONS > CLASSIC ENHANCED > LOAD GAME");
     }
   }
   if (!args.game_set) args.game = game_of(args.basedir);
 }
 
-std::string remembered_folder(const std::string& prefs) {
-  if (prefs.empty()) return {};
+KeptGame remembered_game(const std::string& prefs) {
+  KeptGame kept;
+  if (prefs.empty()) return kept;
   std::ifstream f(fs::path(prefs) / kKeptFile);
   std::string line;
-  if (!f || !std::getline(f, line)) return {};
-  while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
-  return line;
+  bool keyed = false;
+  while (f && std::getline(f, line)) {
+    while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+    if (line.rfind("profile ", 0) == 0) {
+      kept.profile = line.substr(8);
+      keyed = true;
+    } else if (line.rfind("basedir ", 0) == 0) {
+      kept.basedir = line.substr(8);
+      keyed = true;
+    } else if (!keyed && kept.basedir.empty() && !line.empty()) {
+      kept.basedir = line;  // the older form: the folder alone
+    }
+  }
+  if (!kept.basedir.empty() && kept.profile.empty())
+    kept.profile = std::string(ge::classicenhance::classic_profile().id);
+  return kept;
 }
 
-bool remember_folder(const std::string& prefs, const std::string& basedir) {
+bool remember_game(const std::string& prefs, const std::string& basedir,
+                   const ge::classicenhance::Profile& content) {
   if (prefs.empty()) return false;
   const fs::path file = fs::path(prefs) / kKeptFile;
   const fs::path tmp = fs::path(prefs) / (std::string(kKeptFile) + ".tmp");
   {
     std::ofstream f(tmp, std::ios::trunc);
     if (!f) return false;
-    f << basedir << "\n";
+    f << "profile " << content.id << "\nbasedir " << basedir << "\n";
     if (!f) return false;
   }
   std::error_code ec;
@@ -144,6 +173,7 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
   out.progs = {};
   out.pack_progs = {};
   out.item_names.clear();
+  out.arsenal.clear();
   bool loaded = false;
   if (!progs_path.empty()) {
     std::string source;
@@ -159,8 +189,12 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
     } else {
       if (!why.empty()) out::status("shooters_edge: the baseline mod runs (" + why + ")");
       loaded = baseline_progs(out.progs, error);
-      if (!archive_paths(files).empty())
+      if (!archive_paths(files).empty()) {
         out.item_names = profiles::item_name_lines(game.tables.names);
+        out.arsenal = profiles::arsenal_lines(game.arsenal);
+        for (std::string& line : profiles::word_lines(game.words))
+          out.item_names.push_back(std::move(line));
+      }
     }
   }
   if (!loaded) return false;
@@ -191,15 +225,43 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
   using CArgs = ge::console::Args;
   using Con = ge::console::Console;
   if (content.campaign == nullptr) {
-    for (const char* name : {"newgame", "save", "load"}) con.remove_command(name);
+    for (const char* name : {"newgame", "coopgame", "save", "load"}) con.remove_command(name);
     return;
   }
   con.add_command("newgame", "newgame: a new single-player game from the start map",
                   [&listen, &next_map, &content](Con&, const CArgs&) {
                     listen.opt.console.emplace_back("deathmatch 0");
                     listen.opt.console.emplace_back("coop 0");
+                    listen.opt.companions = 0;
                     next_map = content.start_map;
                   });
+  con.add_command(
+      "coopgame",
+      "coopgame [bots] [novice|average|expert] [map]: a new coop game (teammates spared unless "
+      "sv_friendlyfire 1) with that many companion bots beside you, 1 by default, from the start "
+      "map or the map named; `addbot` and `removebot` change the party during the game",
+      [&listen, &next_map, &content](Con& c, const CArgs& a) {
+        int bots = 1;
+        sh::AimSkill skill = sh::AimSkill::average;
+        std::string map = content.start_map;
+        for (size_t i = 1; i < a.size(); i++) {
+          const std::string& w = a[i];
+          if (!w.empty() && w[0] >= '0' && w[0] <= '9') {
+            bots = std::atoi(w.c_str());
+          } else if (!skill_named(w, skill)) {
+            map = w;
+          }
+        }
+        if (bots < 0 || bots > kPartyMost) {
+          c.print("coopgame: 0 to " + std::to_string(kPartyMost) + " bots");
+          return;
+        }
+        listen.opt.console.emplace_back("deathmatch 0");
+        listen.opt.console.emplace_back("coop 1");
+        listen.opt.companions = bots;
+        listen.opt.companion_skill = skill;
+        next_map = map;
+      });
   con.add_command("save",
                   "save <name>: the single-player game saved as saves/<name>.save (<name>.sav: "
                   "the classic text save in the game folder)",

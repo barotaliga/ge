@@ -478,7 +478,8 @@ std::vector<uint8_t> write_multiview_match(const MatchScript& s) {
       const int health = held(p.health, f, 100);
       const int bits =
           1 | 2 | 4 | 8 | 16 | 32 | 2048 | (health <= 0 ? 256 : 0) | (health <= -40 ? 512 : 0);
-      multiview_player(m, static_cast<int>(k), at(p.origins, f), {0, p.yaw, 0}, bits);
+      multiview_player(m, static_cast<int>(k), at(p.origins, f),
+                       p.angles.empty() ? ge::shooter::Vec3f{0, p.yaw, 0} : at(p.angles, f), bits);
     }
     m.u8(47);  // packetentities: the rockets in flight, the whole list
     for (size_t r = 0; r < s.rockets.size(); r++) {
@@ -502,6 +503,14 @@ std::vector<uint8_t> write_multiview_match(const MatchScript& s) {
       m.u8(static_cast<int>(k));
       m.i16(frags);
     }
+    for (const MatchRocket& rk : s.rockets)  // a rocket's blast where its flight ends
+      if (i == rk.to) {
+        m.u8(23);  // temp entity: an explosion
+        m.u8(3);
+        m.coord(rk.end.x);
+        m.coord(rk.end.y);
+        m.coord(rk.end.z);
+      }
     multiview_record(file, i == 0 ? 0 : ms, kAll, 0, m);
     for (size_t k = 0; k < s.players.size(); k++) {  // each player's stats as they change
       const MatchPlayer& p = s.players[k];

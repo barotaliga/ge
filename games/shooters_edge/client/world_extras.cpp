@@ -24,11 +24,15 @@ namespace ba = ge::brush::app;
 namespace gr = ge::render;
 
 constexpr double kDegree = 3.14159265358979323846 / 180;
+// The rms slope of the swell the pools keep from the players in them (rad): low, so a pool no one
+// is in lies nearly still, the way a hall's water does.
+constexpr double kPoolChop = 0.02;
 
 struct WorldExtras {
   const ba::Scene* scene = nullptr;
   const ge::classicenhance::Switches* on = nullptr;
   const ba::WeatherCvars* weather = nullptr;
+  const shooters_edge::look::Stops* stops = nullptr;
   ba::LiquidRows rows;
   ba::LiquidWorld world;
   gr::Water water;
@@ -52,40 +56,64 @@ struct WorldExtras {
 
 void WorldExtrasDeleter::operator()(WorldExtras* x) const { delete x; }
 
-WorldExtrasPtr create_extras(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines,
-                             const wgpu::BindGroupLayout& frame, const ba::Scene& scene,
-                             const ge::classicenhance::Switches& switches,
-                             const ba::WeatherCvars& weather, const gr::Sky& sky) {
+WorldExtrasPtr new_extras(const ba::Scene& scene, const ge::classicenhance::Switches& switches,
+                          const ba::WeatherCvars& weather,
+                          const shooters_edge::look::Stops& stops) {
   WorldExtrasPtr x(new WorldExtras);
   x->scene = &scene;
   x->on = &switches;
   x->weather = &weather;
-  gr::create_water(d, pipelines, x->water, frame);
-  gr::create_underwater(d, pipelines, x->under, frame);
-  // The maps' pools are indoors: the water lit by the room, rippled, caustics on its walls and
-  // the ceiling over it.
-  gr::underwater_look("pool", x->under.look);
-  gr::create_liquid(d, pipelines, x->liquids, frame);
-  // A player dropped in the slime sees a few metres round them, not the two centimetres a toxic
-  // ooze lets through.
-  x->liquids.under_reach = kUnderReach;
-  gr::create_flames(d, pipelines, x->flames, frame);
-  gr::PrecipSettings precip;
-  precip.particles = ba::weather_particles(precip, weather.density);
-  gr::create_precip(d, pipelines, x->precip, frame, precip);
-  // The waves under the weather's wind as far as each pool is open to it (re-laid when it changes).
-  x->wind = switches.wind ? weather.wind : 0;
-  x->from = weather.wind_from * kDegree;
-  x->world = ba::liquid_world(scene, x->rows, x->wind, x->from);
-  ba::add_bsp_liquids(d, x->water, x->liquids, x->world, x->rows);
-  ba::create_bsp_views(d, x->views, frame, sky);
-  // The liquid slots in the order add_bsp_liquids made them: every body that is not water and
-  // whose row is known.
-  for (const ba::Kind k : x->world.kinds) {
-    if (k == ba::kWater) continue;
-    if (gr::find_liquid_look(k == ba::kLava ? x->rows.lava : x->rows.slime))
-      x->liquid_kinds.push_back(k);
+  x->stops = &stops;
+  return x;
+}
+
+void create_extras_part(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines,
+                        const wgpu::BindGroupLayout& frame, const gr::Sky& sky, WorldExtras& x,
+                        int part) {
+  if (part == 0) {
+    gr::create_water(d, pipelines, x.water, frame);
+    gr::create_underwater(d, pipelines, x.under, frame);
+    // The maps' pools are indoors: the water lit by the room, rippled, caustics on its walls and
+    // the ceiling over it.
+    gr::underwater_look("pool", x.under.look);
+  } else if (part == 1) {
+    gr::create_liquid(d, pipelines, x.liquids, frame);
+    // A player dropped in the slime sees a few metres round them, not the two centimetres a toxic
+    // ooze lets through; in the lava a thick light-red glowing goo, not the opaque melt.
+    x.liquids.under_reach = kUnderReach;
+  } else if (part == 2) {
+    const ba::WeatherCvars& weather = *x.weather;
+    gr::create_flames(d, pipelines, x.flames, frame);
+    gr::PrecipSettings precip;
+    precip.particles = ba::weather_particles(precip, weather.density);
+    gr::create_precip(d, pipelines, x.precip, frame, precip);
+    // The waves under the weather's wind as far as each pool is open to it (re-laid when it
+    // changes).
+    x.wind = x.on->wind ? weather.wind : 0;
+    x.from = weather.wind_from * kDegree;
+    // A deathmatch map's pools are jumped into all game long: never glass, wind or none.
+    x.rows.chop = kPoolChop;
+    x.world = ba::liquid_world(*x.scene, x.rows, x.wind, x.from);
+    ba::add_bsp_liquids(d, x.water, x.liquids, x.world, x.rows);
+    ba::create_bsp_views(d, x.views, frame, sky);
+    // The liquid slots in the order add_bsp_liquids made them: every body that is not water and
+    // whose row is known.
+    for (const ba::Kind k : x.world.kinds) {
+      if (k == ba::kWater) continue;
+      if (gr::find_liquid_look(k == ba::kLava ? x.rows.lava : x.rows.slime))
+        x.liquid_kinds.push_back(k);
+    }
   }
+}
+
+WorldExtrasPtr create_extras(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines,
+                             const wgpu::BindGroupLayout& frame, const ba::Scene& scene,
+                             const ge::classicenhance::Switches& switches,
+                             const ba::WeatherCvars& weather,
+                             const shooters_edge::look::Stops& stops, const gr::Sky& sky) {
+  WorldExtrasPtr x = new_extras(scene, switches, weather, stops);
+  for (int part = 0; part < kExtrasParts; ++part)
+    create_extras_part(d, pipelines, frame, sky, *x, part);
   return x;
 }
 
@@ -104,10 +132,10 @@ void bind_extras_targets(ge::gpu::Device& d, WorldExtras& x, const gr::FrameTarg
 void dress_extras(WorldExtras& x, gr::FrameView& view, ba::Options& options, double dt) {
   const ge::classicenhance::Switches& on = *x.on;
   const bool v2 = options.mode == ba::Mode::v2;
-  if (!on.shadows) options.shadowed = 0;
   options.portal_lights = options.portal_lights && on.teleports;
   options.bonfires = v2 && on.flames && on.bonfires;
   x.fire_look.bonfires = options.bonfires;
+  x.fire_look.pace = options.fire_pace;
   for (double& a : x.fire_look.air) a = 0;
   if (on.wind) ba::wind_air(*x.weather, view.time_s, x.fire_look.air);
   if (!on.lava) options.lava_glow = 0;
@@ -127,10 +155,32 @@ void dress_extras(WorldExtras& x, gr::FrameView& view, ba::Options& options, dou
   x.now.draw.near_m = view.near_m;
 }
 
-// The body the water's views are drawn for this frame: the one the eye is in, else the nearest
-// over whose level the eye stands (-1: none drawn, or none within reach).
+// The body the water's views are drawn for this frame: with the eye in the water, the nearest
+// surface over it; else the nearest over whose level the eye stands (-1: none drawn, or none
+// within reach).
 int view_body(const WorldExtras& x, const gr::FrameView& view, int eye_in) {
-  if (eye_in >= 0) return eye_in;
+  if (eye_in >= 0) {
+    // In the water: the surface nearest the eye of those over it, its top's box at its level (in
+    // a flooded passage, the pool the eye is swimming toward once it is the nearer surface,
+    // whichever the eye is counted in).
+    int near = eye_in;
+    double near_d = 1e300;
+    for (size_t i = 0; i < x.water.bodies.size(); ++i) {
+      const gr::Water::Slot& s = x.water.bodies[i];
+      if (s.hidden || view.eye[1] >= s.staged.info[0] || view.eye[1] <= s.floor) continue;
+      const double dx =
+          std::max({s.staged.box[0] - view.eye[0], 0.0, view.eye[0] - s.staged.box[2]});
+      const double dz =
+          std::max({s.staged.box[1] - view.eye[2], 0.0, view.eye[2] - s.staged.box[3]});
+      const double dy = s.staged.info[0] - view.eye[1];
+      const double d = dx * dx + dz * dz + dy * dy;
+      if (d < near_d) {
+        near_d = d;
+        near = int(i);
+      }
+    }
+    return near;
+  }
   int best = -1;
   double best_d = 60 * 60;  // m^2: past 60 m a pool's reflection is a few pixels
   for (size_t i = 0; i < x.water.bodies.size(); ++i) {
@@ -172,22 +222,33 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
   ba::light_pools_by_sun(x.water, x.scene->map, x.world, sun);
   // The eye in the water when the map's leaf there is water: at any depth, in any passage.
   const int eye_in = ba::eye_water_body(x.scene->map, x.world, view.eye);
-  const bool water_on = v2 && on.water;
-  const int body = water_on ? view_body(x, view, eye_in) : -1;
+  // The water's stop: what the surface sums and reads, and whether the map is drawn again for it.
+  using shooters_edge::look::Stop;
+  const Stop stop = x.stops->water;
+  x.water.quality = {.chop = stop >= Stop::medium,
+                     .sunlight = stop == Stop::high,
+                     .reflect = stop >= Stop::medium,
+                     .shore = stop >= Stop::medium};
+  const bool planar = v2 && on.water && stop == Stop::high;
+  const int body = planar ? view_body(x, view, eye_in) : -1;
   const double level = body >= 0 ? x.water.bodies[size_t(body)].staged.info[0] : 0;
-  ba::prepare_bsp_views(d, x.views, uniforms, body, level, body >= 0 && eye_in == body);
+  const float no_box[4] = {0, 0, 0, 0};
+  const float* box = body >= 0 ? x.water.bodies[size_t(body)].staged.box : no_box;
+  ba::prepare_bsp_views(d, x.views, uniforms, body, level, body >= 0 && eye_in >= 0, box);
   const gr::WaterViews handed = ba::water_views(x.views);
   if (handed.body != x.handed.body || handed.below != x.handed.below ||
       handed.has_up != x.handed.has_up || handed.level != x.handed.level) {
     x.handed = handed;
     gr::set_water_views(d, x.water, x.handed);
   }
+  gr::set_water_up_view(x.water, handed.up_view_proj);
   gr::prepare_water(d, x.water, view, eye_in);
   gr::prepare_underwater(d, x.under, x.water, view, x.height);
   gr::prepare_liquid(d, x.liquids, view);
   x.fires.clear();
   if (v2 && on.flames)
-    ba::bsp_fires(*x.scene, view.time_s, options.brightness, x.fires, x.fire_look);
+    ba::bsp_fires(*x.scene, view.time_s, options.brightness * options.fire_glow, x.fires,
+                  x.fire_look);
   gr::prepare_flames(d, x.flames, x.fires, view);
   const gr::PrecipShelter shelter = ba::bsp_shelter(bsp);
   gr::bind_precip_shelter(d, x.precip, x.raining ? &shelter : nullptr);

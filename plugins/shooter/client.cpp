@@ -121,6 +121,24 @@ void run_original_piece(Server& sv, int slot, const MoveCmd& cmd, double dt) {
   c.last_cmd_time = sv.time;
 }
 
+// THE PROGRAM'S WATER JUMP ON THE ARENA MOVE: a single-player program sets the water jump flag,
+// throws the player up and out and keeps the time it ends at in `teleport_time` (absolute, s).
+// As the original move does, it ends past that time or out of the water; while it lasts the move
+// is handed the time left (so it holds the throw, as during its own water jump) and the player
+// keeps the program's push toward the bank (on the piece that ends it too).
+void program_water_jump(const Server& sv, Edict& ed, MoveState& ms) {
+  ms.waterjump_time = 0;
+  if ((ed.flags & kFlagWaterJump) == 0) return;
+  if (sv.time > ed.teleport_time || ed.waterlevel == 0) {
+    ed.flags &= ~kFlagWaterJump;
+    ed.teleport_time = 0;
+  } else {
+    ms.waterjump_time = static_cast<float>(ed.teleport_time - sv.time);
+  }
+  ms.velocity.x = ed.movedir.x;
+  ms.velocity.y = ed.movedir.y;
+}
+
 // One command piece of at most 50 ms: steps 1 to 7.
 void run_piece(Server& sv, int slot, const MoveCmd& in) {
   ClientSlot& c = sv.clients[static_cast<size_t>(slot)];
@@ -166,6 +184,7 @@ void run_piece(Server& sv, int slot, const MoveCmd& in) {
   ms.type = move_type_of(ed, c.old_spectator);
   ms.jump_held = c.jump_held;
   ms.waterjump_time = ed.teleport_time;
+  if (sv.set.program_jumps) program_water_jump(sv, ed, ms);
   ms.waterlevel = ed.waterlevel;
   ms.watertype = ed.watertype == 0 ? kContentsEmpty : ed.watertype;
   ms.entgravity = ed.gravity != 0 ? ed.gravity : 1.0f;
@@ -181,12 +200,14 @@ void run_piece(Server& sv, int slot, const MoveCmd& in) {
     for (int i = 0; i < world.count; i++)
       if (ents[i] == ed.groundentity) ms.ground = i;
   }
-  const MoveResult r = player_move(ms, cmd, sv.set.move, world);
+  MoveSettings mine = sv.set.move;
+  mine.program_jumps = sv.set.program_jumps;
+  const MoveResult r = player_move(ms, cmd, mine, world);
 
-  // Back into the fields.
+  // Back into the fields (a program that jumps for itself keeps its own water jump's time).
   c.jump_held = ms.jump_held;
   c.ground_normal = ms.ground_normal;
-  ed.teleport_time = ms.waterjump_time;
+  if (!sv.set.program_jumps) ed.teleport_time = ms.waterjump_time;
   ed.waterlevel = ms.waterlevel;
   ed.watertype = ms.watertype;
   if (ms.ground != -1) {

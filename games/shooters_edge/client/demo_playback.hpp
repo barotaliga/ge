@@ -15,6 +15,7 @@
 // | Home, End | `demo_seek <s>` | the start / a second before the end; any time by hand ("1:23") |
 // | the bar | | a press on the track drags the playhead, the release seeks; the button plays or
 // pauses | | | `demo_highlights` | list the highlights (everyone's, the tracked player's marked) |
+// | | `demo_lerp 0|1` | drawn between the demo's frames (1, demo_lerp.hpp) or each as read |
 // | | `demo_bar 0|1|2` | the bar: hidden, shown a while after the pointer moves or a key (1),
 // always |
 //
@@ -27,7 +28,7 @@
 // ge:keywords demo playback playdemo play-bar seek scrub pause resume speed cl_demospeed skip
 // ge:keywords demo_skip demo_skip_forward demo_skip_back demo_next demo_prev demo_seek
 // ge:keywords demo_pause demo_highlights demo_bar demo_track highlights markers video-player
-// ge:keywords add_demo_commands timedemo playdemo
+// ge:keywords add_demo_commands timedemo playdemo demo_lerp
 // ge:skill shooter replay ui
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #pragma once
@@ -59,6 +60,7 @@ struct DemoPlayback {
   double skip_back_s = 5;      // demo_skip_back
   int bar = 1;                 // demo_bar
   int track = -1;              // demo_track
+  int lerp = 1;                // demo_lerp: drawn between frames (demo_lerp.hpp)
   RecordSettings record;       // demo_pack, demo_pack_level (record_cvars.hpp)
   VideoSettings video;         // demovideo_ (video_cfg.hpp), read by -demovideo alone
   // The demo playing:

@@ -17,7 +17,9 @@
 // ge:keywords focus quit resize pixel-size hidpi input-snapshot poll clock ticks monotonic
 // ge:keywords headless display_available open_window poll_input now_ns prefs_dir prefs user-dir
 // ge:keywords fullscreen set_fullscreen displays external-monitor pick_folder folder_picked
-// ge:keywords folder-dialog file-dialog folder-chooser
+// ge:keywords folder-dialog file-dialog folder-chooser run_app app-entry uikit ios-main
+// ge:keywords refresh_hz refresh-rate promotion wait_until_ns precise-sleep set_swap_images
+// ge:keywords maximum-drawable-count swap-images
 // ge:skill platform
 // ge:test tests/platform_window_test.cpp
 #pragma once
@@ -48,15 +50,21 @@ enum class Key : uint8_t {
   a = 4,
   c = 6,
   d = 7,
+  r = 21,
   s = 22,
   w = 26,
   enter = 40,
   escape = 41,
+  backspace = 42,
   tab = 43,
   space = 44,
   f1 = 58,
   f2 = 59,
   f3 = 60,
+  f4 = 61,
+  f5 = 62,
+  f6 = 63,
+  del = 76,
   right = 79,
   left = 80,
   down = 81,
@@ -92,6 +100,11 @@ struct WindowDesc {
 // container with no display: a test that needs a window skips.
 bool display_available();
 
+// THE APP'S ENTRY: a windowed game's `main` hands its body to `run_app`, which returns what the
+// body returns. On iOS it starts the system's app first (UIKit) and runs the body inside it, which
+// is the only way a window can open there; elsewhere it runs the body directly.
+int run_app(int argc, char** argv, int (*body)(int argc, char** argv));
+
 class Window {
  public:
   ~Window();
@@ -110,10 +123,13 @@ class Window {
   friend void poll_input(Window& window, InputSnapshot& input);
   friend void set_relative_mouse(Window& window, bool on);
   friend bool relative_mouse(const Window& window);
+  friend bool has_focus(const Window& window);
   friend void set_text_input(Window& window, bool on);
   friend bool set_fullscreen(Window& window, bool on, int display);
   friend bool pick_folder(Window& window, std::string_view title, std::string_view start);
   friend bool folder_picked(Window& window, std::string* path, std::string* error);
+  friend double refresh_hz(const Window& window);
+  friend void set_swap_images(Window& window, int images);
   std::unique_ptr<Impl> impl_;
 };
 
@@ -149,6 +165,21 @@ void poll_input(Window& window, InputSnapshot& input);
 
 // A monotonic clock, ns. For the frame's delta only: the simulation never sees it.
 uint64_t now_ns();
+
+// Wait until `now_ns()` reaches `deadline_ns` (at once when it has): the OS's sleep for most of
+// it, then a short spin, so a frame cap lands within tens of microseconds, not a timer tick.
+void wait_until_ns(uint64_t deadline_ns);
+
+// THE DISPLAY'S REFRESH under the window, Hz (120 on a ProMotion panel, 60 on most), or 0 when
+// the platform does not say. It changes when the window moves to another display: read it each
+// frame (it is a cached lookup).
+double refresh_hz(const Window& window);
+
+// How many images the window's swap chain may hold, 2 or 3 (clamped): one on the display and one
+// drawn is the least lag at vsync; a third lets a slow frame queue instead of missing a refresh.
+// Apple's Metal layer takes it (its own default is 3); elsewhere the GPU's present mode decides
+// and this does nothing. Call it after every surface configure.
+void set_swap_images(Window& window, int images);
 
 // The player's own directory for what a game keeps between sessions (the bindings file, the
 // runs), made when missing and ending in a separator: the platform's per-user place for an app's

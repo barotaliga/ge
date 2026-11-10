@@ -81,6 +81,43 @@ TEST(a_layer_covers_the_share_its_cover_asks) {
   }
 }
 
+TEST(a_warped_layer_twists_its_cells_and_keeps_its_cover) {
+  // The warp moves the cells' outlines (the columns differ), keeps the sky's share near the
+  // cover, keeps the drift's wrap seamless at kWarpTiles tiles
+  // and is in the rows for the shader; it never repeats tile by tile.
+  for (double cover : {0.2, 0.4}) {
+    gr::CloudLayer l = heap(cover);
+    l.warp = 1.2;
+    CHECK(std::fabs(share(l) - cover) < 0.1);
+    int differ = 0;
+    for (int k = 0; k < 200; ++k) {
+      const double x = 173.0 * k, z = 61.0 * k;
+      if (std::fabs(gr::cloud_column(l, x, z) - gr::cloud_column(heap(cover), x, z)) > 0.05)
+        ++differ;
+    }
+    CHECK(differ > 20);
+    // A whole tile on, the warped cells are not the same ones again (the sky shows no repeat);
+    // kWarpTiles tiles on they are, so the drift's wrap is seamless.
+    const double tile = l.cell_m * gr::kCloudTileCells;
+    int again = 0;
+    for (int k = 0; k < 200; ++k) {
+      const double x = 173.0 * k, z = 61.0 * k;
+      if (std::fabs(gr::cloud_column(l, x, z) - gr::cloud_column(l, x + tile, z)) < 0.02) ++again;
+      gr::CloudLayer moved = l;
+      moved.drift_m = tile * gr::kWarpTiles;
+      CHECK(std::fabs(gr::cloud_column(moved, x, z) - gr::cloud_column(l, x, z)) < 1e-9);
+    }
+    CHECK(again < 160);
+  }
+  gr::Clouds c;
+  c.count = 1;
+  c.layers[0] = heap(0.3);
+  c.layers[0].warp = 0.9;
+  float info[4], rows[gr::kCloudLayers * gr::kCloudRows][4];
+  gr::cloud_rows(c, info, rows);
+  CHECK(std::fabs(rows[5][3] - 0.9f) < 1e-6f);
+}
+
 TEST(the_drift_carries_the_column_along_the_wind) {
   gr::CloudLayer l = heap(0.4);
   l.heading = 0.7;  // toward +x and +z
@@ -153,14 +190,27 @@ TEST(the_march_is_spread_only_with_the_last_frames_camera) {
   CHECK(u.cloud_info[3] == 2);
   gr::fill_uniforms(u, view, 64, 32, &history);
   CHECK(u.cloud_info[2] == 1);
-  // Not at a quarter, or not asked for: never.
+  // Not asked for: never.
   view.clouds.spread = false;
   gr::fill_uniforms(u, view, 64, 32, &history);
   CHECK(u.cloud_info[2] == 0);
+  // At every pixel, spread as at a quarter (every pixel's own ray, one frame in four).
   view.clouds.spread = true;
   view.clouds.quarter = false;
   gr::fill_uniforms(u, view, 64, 32, &history);
-  CHECK(u.cloud_info[2] == 0);
+  CHECK(u.cloud_info[2] == 1);
+}
+
+TEST(every_pixels_march_spread_takes_a_target_of_the_frames_size) {
+  gr::Clouds c;
+  CHECK(gr::cloud_grain(c) == 2);
+  c.quarter = false;
+  CHECK(gr::cloud_grain(c) == 1);
+  // The reference, every pixel each frame, draws without the target.
+  c.spread = false;
+  CHECK(gr::cloud_grain(c) == 2);
+  c.quarter = true;
+  CHECK(gr::cloud_grain(c) == 2);
 }
 
 TEST(a_layer_is_thin_in_patches_and_thick_in_its_cores) {

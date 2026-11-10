@@ -11,6 +11,7 @@
 #include <cstdio>
 
 #include "shooter/frame.hpp"
+#include "shooter/settings.hpp"
 #include "shooters_edge/server/builtins.hpp"
 #include "shooters_edge/server/catalogue.hpp"
 #include "shooters_edge/server/client_data.hpp"
@@ -25,20 +26,28 @@ namespace con = ge::console;
 constexpr int kFirstDynamic = 33;  // entities after the world and the 32 client slots
 constexpr int kNotInDeathmatch = 2048, kNotEasy = 256, kNotMedium = 512, kNotHard = 1024;
 
-void add_settings(QcServer& s) {
+}  // namespace
+
+void add_mod_settings(RulesCommon& s, const sh::ServerSettings& loop) {
   const uint32_t srv = con::kServer, info = con::kServer | con::kServerInfo;
   s.cvars.add({"deathmatch", "1", info, "the match's rules: 0 cooperative, 1 and up deathmatch"});
   s.cvars.add({"skill", "1", srv, "the monsters' skill, 0..3"});
   s.cvars.add({"teamplay", "0", info, "team rules, as the mod reads them"});
   s.cvars.add({"coop", "0", srv, "a single-player program's cooperative game (on: deathmatch 0)"});
+  s.cvars.add({"sv_friendlyfire", "0", info,
+               "coop: 1 lets one player's shots harm another (0: teammates are spared)"});
+  s.cvars.add({"sv_friendlypush", "0", info,
+               "coop with sv_friendlyfire 0: 1 lets a teammate's blow push you, harmless (a rocket "
+               "boost off a friend); 0 no push"});
+  s.cvars.add({"sv_episodes_done", "0", srv,
+               "coop: the episodes done, a bit each (1, 2, 4, 8); each next episode opens on the "
+               "start map once the one before is done; the host keeps it from game to game"});
   s.cvars.add({"registered", "0", srv,
                "1 when the packs carry the full game (a single-player program opens its "
                "episodes); the host sets it"});
   s.cvars.add({"timelimit", "0", info, "the match's length, minutes (0 none)"});
   s.cvars.add({"fraglimit", "0", info, "frags that end the match (0 none)"});
   s.cvars.add({"samelevel", "0", info, "1: the map does not change at the end"});
-  s.cvars.add({"sv_gravity", "800", info, "the world's gravity, units/s^2"});
-  s.cvars.add({"sv_maxspeed", "320", info, "a player's run speed, units/s"});
   s.cvars.add({"sv_playermove", "auto", info,
                "the player move: arena (the predicted move), original (the server's own step) or "
                "auto (original for a single-player program); read at map start",
@@ -46,9 +55,17 @@ void add_settings(QcServer& s) {
   s.cvars.add({"sv_idealpitchscale", "0.8", srv,
                "a single-player program's view tilt on a slope: degrees a unit of the floor's "
                "step (0 off)"});
-  s.cvars.add({"edgefriction", "2", info, "the original move's friction factor at a ledge"});
-  s.cvars.add(
-      {"sv_nostep", "0", info, "1: the original move never steps up", con::CvarKind::boolean});
+  // The move's and the loop's own (plugins/shooter/settings.hpp), their defaults the options'.
+  int count = 0;
+  const sh::Setting* table = sh::settings_table(count);
+  for (int i = 0; i < count; i++) {
+    const sh::Setting& t = table[i];
+    const std::string fallback = sh::setting_text(t, loop);
+    s.cvars.add({t.name, fallback, info, t.help,
+                 t.flag ? con::CvarKind::boolean : con::CvarKind::number, t.low, t.high});
+  }
+  s.cvars.add({"pausable", "1", srv, "1: a player may pause the game (0: only unpausing)",
+               con::CvarKind::boolean});
   s.cvars.add({"sv_phs", "1", srv, "1: sounds go only to clients that can hear them"});
   s.cvars.add({"sv_specprint", "0", srv,
                "bits: 1 spectators get a copy of a tracked player's centerprints, 2 sprints"});
@@ -59,6 +76,8 @@ void add_settings(QcServer& s) {
                con::CvarKind::text});
   s.cvars.add({"hostname", "unnamed", info, "the server's name", con::CvarKind::text});
 }
+
+namespace {
 
 // Records the loop's own hook calls (StartFrame, the thinks, connect, ...) as they start.
 void before_call(sim::QcProgram& q, sh::Func fn) {
@@ -243,16 +262,22 @@ bool set_info_value(std::vector<std::pair<std::string, std::string>>& info, cons
   return true;
 }
 
-void apply_settings(QcServer& s) {
-  s.sv.set.move.gravity = static_cast<float>(s.cvars.find("sv_gravity")->number);
-  s.sv.set.move.maxspeed = static_cast<float>(s.cvars.find("sv_maxspeed")->number);
+// The settings' cvars written into `set`: every one (`live_only` false, a map starting) or the
+// move's alone (between frames).
+void settings_from_cvars(const RulesCommon& s, sh::ServerSettings& set, bool live_only) {
+  int count = 0;
+  const sh::Setting* table = sh::settings_table(count);
+  for (int i = 0; i < count; i++)
+    if (!live_only || table[i].live) table[i].put(set, s.cvars.find(table[i].name)->number);
 }
+
+void apply_settings(QcServer& s) { settings_from_cvars(s, s.sv.set, true); }
 
 bool create_qc_server(QcServer& s, const pg::Progs& progs, const QcServerOptions& opt,
                       std::string& error) {
   s.opt = opt;
   s.progs = &progs;
-  if (s.cvars.find("deathmatch") == nullptr) add_settings(s);
+  if (s.cvars.find("deathmatch") == nullptr) add_mod_settings(s, s.opt.loop);
   if (pg::find_global(progs, "self") == nullptr) {
     error = "mod server: the progs has no engine-side globals; load a multiplayer progs";
     return false;
@@ -313,8 +338,7 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
   set.playermove = move == "original" || (move != "arena" && set.program_jumps)
                        ? sh::PlayerMove::original
                        : sh::PlayerMove::arena;
-  set.edgefriction = static_cast<float>(s.cvars.find("edgefriction")->number);
-  set.nostep = s.cvars.find("sv_nostep")->on();
+  settings_from_cvars(s, set, false);
   sh::create_server(s.sv, set, map.models, sim::qc_program(s.q));
   apply_settings(s);
   s.map_name = map.name;

@@ -25,7 +25,8 @@
 // the whole atlas loses the glyphs past it, with an error line).
 //
 // IMAGES. A box's `ui::Image` is uploaded the first time a list draws it and kept, keyed by its
-// address; `ui_image` uploads it again after its pixels change. A picture the GPU already has
+// address; it is uploaded again when its `revision` moves (or by `ui_image`) after its pixels
+// change. A picture the GPU already has
 // (the live frame under a menu) is bound to a key with `ui_texture`, and a box that names that
 // key draws it.
 //
@@ -104,6 +105,8 @@ struct UiPass {
     wgpu::TextureView view;
     wgpu::BindGroup group;
     uint32_t width = 0, height = 0;
+    uint64_t revision = 0;  // the image's when it was uploaded
+    bool external = false;  // bound by ui_texture: never uploaded from the image
   };
   std::unordered_map<const ui::Image*, Picture> pictures;
   wgpu::BindGroup blank;

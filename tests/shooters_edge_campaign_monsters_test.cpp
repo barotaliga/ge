@@ -6,135 +6,24 @@
 // brute hurt a player near them, a ghoul shrugs off a small hit and is knocked down by a big one
 // and gets up again whole, and only its whole health in one blow ends it; a flyer keeps its height
 // and spits at the player. The big and late kinds: each counts at spawn and hurts a player in front
-// of it, the giant takes half of a blast, and a spawn bursts when it dies.
+// of it, the giant takes half of a blast, and a spawn bursts when it dies. The bosses: the lava
+// boss rises when used, throws, and falls to three strikes; arriving inside the final boss kills
+// it and ends the game; a teleport train rides its path. A rifleman shows its model's frames
+// for standing, shooting and falling.
 //
 // ge:summary Tests: our campaign mod's monsters: counting, noticing, attacking, paths, each kind
 // ge:keywords test campaign-mod monsters monster-ai rifleman hound path-corner killed-monsters
 // ge:keywords notice show-hostile swordsman brute ghoul flyer eel knockdown leaper giant caster
-// ge:keywords trooper spawn heavy-swordsman blast-share
+// ge:keywords trooper spawn heavy-swordsman blast-share lava-boss final-boss telefrag
+// ge:keywords teleport-train event-lightning animation-frames death-frames
 // ge:skill progs shooter testing
 #include <algorithm>
-#include <filesystem>
-#include <initializer_list>
 #include <string>
 
 #include "check.hpp"
-#include "progs/layout.hpp"
-#include "progs/qc_compile.hpp"
-#include "progs/vm.hpp"
-#include "shooters_edge/server/campaign.hpp"
-#include "shooters_edge/server/mod_match.hpp"
-#include "shooters_edge/sim/qc_program.hpp"
+#include "shooters_edge_campaign_fixture.hpp"
 
-namespace sv = shooters_edge::server;
-namespace pg = ge::progs;
-namespace sh = ge::shooter;
-namespace se = shooters_edge::sim;
-
-namespace {
-
-std::string g_things;  // the map's entities after the world and the start
-
-bool load(void* /*ctx*/, const std::string& /*name*/, sv::MapSpec& out, std::string& /*error*/) {
-  out.models = sv::arena_models(true);
-  out.entities = R"({
-"classname" "worldspawn"
-}
-{
-"classname" "info_player_start"
-"origin" "-416 0 24"
-}
-)" + g_things;
-  return true;
-}
-
-const pg::Progs& mod() {
-  static const pg::Progs p = [] {
-    const pg::QcProject built = pg::compile_project(std::filesystem::path(GE_SOURCE_DIR) /
-                                                    "games/shooters_edge/qc/campaign/progs.src");
-    for (const pg::QcDiagnostic& d : built.result.diagnostics)
-      CHECK_MSG(!d.error, pg::diagnostic_text(d));
-    return built.result.progs;
-  }();
-  return p;
-}
-
-struct Game {
-  sv::Campaign c;
-  std::string error;
-  uint32_t sequence = 0;
-  explicit Game(const std::string& things) {
-    g_things = things;
-    sv::CampaignOptions o;
-    o.server.loop.max_edicts = 128;
-    o.load = &load;
-    o.settings = {"deathmatch 0"};
-    CHECK_MSG(sv::campaign_new_game(c, mod(), o, "first", error), error);
-    sv::campaign_join(c, 0, "player");
-  }
-  sv::QcServer& s() { return *c.server; }
-  const pg::LayoutFields& f() { return s().q.layout->f; }
-  float field(int e, int ofs) { return pg::as_float(*pg::entity_field(s().q.vm, e, ofs)); }
-  void set(int e, int ofs, float v) { *pg::entity_field(s().q.vm, e, ofs) = pg::as_word(v); }
-  int entity_of(int e, int ofs) {
-    return pg::entity_number(s().q.vm, static_cast<int32_t>(*pg::entity_field(s().q.vm, e, ofs)));
-  }
-  float global(const char* name) {
-    const pg::Def* d = pg::find_global(mod(), name);
-    return d ? pg::as_float(s().q.vm.globals[d->offset]) : -1;
-  }
-  int find(const char* classname, int after = 0) {
-    for (int e = after + 1; e < s().sv.num_edicts; e++) {
-      const char* cn = pg::vm_string(
-          s().q.vm, static_cast<int32_t>(*pg::entity_field(s().q.vm, e, f().classname)));
-      if (!s().sv.edicts[static_cast<size_t>(e)].free && cn != nullptr &&
-          std::string(cn) == classname)
-        return e;
-    }
-    return 0;
-  }
-  // A function of the program called with these parameter words, the way the host calls a hook
-  // with arguments.
-  bool call(const char* name, std::initializer_list<uint32_t> args) {
-    const int fn = pg::find_function(mod(), name);
-    if (fn < 0) return false;
-    pg::Vm& vm = s().q.vm;
-    se::enter_qc(s().q, s().sv);
-    int i = 0;
-    for (uint32_t a : args) vm.globals[static_cast<size_t>(pg::parm(i++))] = a;
-    const bool ok = se::run_qc(s().q, fn);
-    se::leave_qc(s().q);
-    return ok;
-  }
-  uint32_t ent(int e) { return static_cast<uint32_t>(pg::entity_value(s().q.vm, e)); }
-  // One blow of `points` on `target` from `attacker`, through the program's own `damage`.
-  bool hit(int target, int attacker, float points) {
-    return call("damage", {ent(target), ent(attacker), ent(attacker), pg::as_word(points)});
-  }
-  // A blast of `points` centred on `at`'s origin, through the program's own `radius_damage`.
-  bool blast(int at, int attacker, float points) {
-    return call("radius_damage", {ent(at), ent(attacker), pg::as_word(points), ent(0), 0});
-  }
-  const sh::Edict& ed(int e) { return s().sv.edicts[static_cast<size_t>(e)]; }
-  // One host frame with the player looking along `yaw` and pressing `buttons`.
-  bool frame(float yaw = 0, uint8_t buttons = 0, uint8_t impulse = 0) {
-    sh::Packet pk;
-    pk.client = 0;
-    pk.sequence = ++sequence;
-    for (sh::MoveCmd& m : pk.cmds) {
-      m = {};
-      m.msec = 14;
-      m.angles = {0, yaw, 0};
-      m.buttons = buttons;
-      m.impulse = impulse;
-    }
-    return sv::campaign_frame(c, &pk, 1, error);
-  }
-};
-
-constexpr int kFrames = 72;  // host frames a second
-
-}  // namespace
+using namespace campfix;
 
 TEST(monsters_count_at_spawn) {
   Game g(R"({
@@ -445,5 +334,111 @@ TEST(a_spawn_bursts_when_it_dies) {
   CHECK(g.global("killed_monsters") == 1);
   CHECK(g.find("monster_tarbaby") == 0);  // nothing left of it
   CHECK(g.field(1, g.f().health) < 100);  // the player beside it caught the burst
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(the_lava_boss_rises_when_used_throws_and_falls_to_three_strikes) {
+  Game g(R"({
+"classname" "monster_boss"
+"origin" "-150 0 24"
+}
+)");
+  const int boss = g.find("monster_boss");
+  CHECK(g.global("total_monsters") == 1);
+  CHECK(g.ed(boss).solid == 0);  // under the lava until used
+  CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.call("boss_use", {}, boss));
+  CHECK(g.ed(boss).solid != 0);
+  CHECK(g.field(boss, g.f().frame) <= 16);  // rising
+  for (int i = 0; i < kFrames * 8 && g.field(1, g.f().health) == 100; i++)
+    CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.field(1, g.f().health) < 100);  // its fire reached the player
+  // The lightning with no doors to strike between does nothing.
+  CHECK(g.call("lightning_use", {}, g.find("player")));
+  CHECK(g.field(boss, g.f().health) == 3);
+  for (int i = 0; i < 3; i++) CHECK(g.call("boss_struck", {}));
+  CHECK(g.field(boss, g.f().health) == 0);
+  CHECK(g.global("killed_monsters") == 1);
+  CHECK(g.ed(boss).solid == 0);
+  for (int i = 0; i < kFrames * 2; i++) CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.field(boss, g.f().frame) == 56);  // its death frames played through
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(arriving_inside_the_final_boss_kills_it_and_ends_the_game) {
+  Game g(R"({
+"classname" "monster_oldone"
+"origin" "-416 0 24"
+}
+)");
+  const int boss = g.find("monster_oldone");
+  CHECK(g.field(boss, g.f().health) == 40000);
+  CHECK_MSG(g.frame(0), g.error);
+  // The player stands inside it, as a teleporter would have put him there.
+  CHECK(g.call("teleport_arrived", {g.ent(1)}));
+  CHECK(g.global("killed_monsters") == 1);
+  for (int i = 0; i < kFrames * 5 && g.global("intermission_running") == 0; i++)
+    CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.global("intermission_running") == 1);
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(a_teleport_train_rides_its_path) {
+  Game g(R"({
+"classname" "misc_teleporttrain"
+"origin" "-300 0 100"
+"target" "c1"
+"speed" "200"
+}
+{
+"classname" "path_corner"
+"targetname" "c1"
+"target" "c2"
+"origin" "-300 0 100"
+}
+{
+"classname" "path_corner"
+"targetname" "c2"
+"target" "c1"
+"origin" "-100 0 100"
+}
+)");
+  const int train = g.find("misc_teleporttrain");
+  float most = -1000;
+  for (int i = 0; i < kFrames * 2; i++) {
+    CHECK_MSG(g.frame(0), g.error);
+    most = std::max(most, g.ed(train).origin.x);
+  }
+  CHECK_MSG(most > -110, std::to_string(most));  // reached the far corner
+  CHECK_MSG(g.ed(train).origin.x < most, std::to_string(g.ed(train).origin.x));  // and turned back
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(a_rifleman_shows_its_kinds_frames_standing_shooting_and_falling) {
+  Game g(R"({
+"classname" "monster_army"
+"origin" "-100 0 24"
+"angle" "0"
+}
+)");
+  const int army = g.find("monster_army");
+  for (int i = 0; i < kFrames; i++) CHECK_MSG(g.frame(180), g.error);
+  const float standing = g.field(army, g.f().frame);
+  CHECK_MSG(standing >= 0 && standing <= 7, std::to_string(standing));  // its stand loop
+  // Woken and angry: it runs or shoots, each with its own frames.
+  CHECK(g.hit(army, 1, 1));
+  bool shot = false;
+  for (int i = 0; i < kFrames * 4; i++) {
+    CHECK_MSG(g.frame(180), g.error);
+    const float fr = g.field(army, g.f().frame);
+    CHECK_MSG(fr <= 89, std::to_string(fr));
+    shot = shot || (fr >= 81 && fr <= 89);
+  }
+  CHECK(shot);
+  CHECK(g.hit(army, 1, 40));  // dead, not gibbed (-35 is the line)
+  for (int i = 0; i < kFrames * 2; i++) CHECK_MSG(g.frame(180), g.error);
+  // Its death frames played to the last, of one of its two sequences (8-17 or 18-28).
+  const float lying = g.field(army, g.f().frame);
+  CHECK_MSG(lying == 17 || lying == 28, std::to_string(lying));
   CHECK(g.s().q.faults == 0);
 }

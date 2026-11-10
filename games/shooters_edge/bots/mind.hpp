@@ -19,7 +19,8 @@
 //
 // THE ROLE each player plans every `kPlan_s` from his own beliefs (team.hpp names the roles):
 // carry with the quad; rush when he believes the quad due within `kRushAhead_s` and himself one of
-// the two of his team nearest it; hold the key area he claimed (at the start the nearest of the
+// the two of his team nearest it; push when his team takes the base back together (below); hold
+// the key area he claimed (at the start the nearest of the
 // rocket launcher, the best armour and the quad that no teammate said he is coming for, called
 // with `coming X`, then held with `safe [X]`); free otherwise. A player gives an item up to a
 // teammate in sight near it when he has no use for it (the armour no better than his own, a weapon
@@ -28,27 +29,53 @@
 // key areas. The calls that matter most (the quad's and the shield's) are said again more often
 // when he believes no teammate is near them.
 //
+// THE OPENING: at the match's start every player first says where he spawned (his status with
+// his place); at his next plan, the team's spawns read, the two of a team who believe themselves
+// nearest the quad (a mate's spawn as he said it) claim it and rush it, and the rest claim the
+// nearest of the launcher and the best armour: the quad, where a map has one, is taken first. A
+// rusher whose quad is gone claims the nearest of those two no mate holds, as at the opening.
+//
+// THE PUSH: a team that loses its base (the map plan's held armour) takes it back together, not
+// one by one as each comes back in (one at a time feeds the holders a frag apiece). A strong
+// player who believes the base the enemy's (an enemy seen or called out in it within
+// `kLostFresh_s` and no mate believed there, or worked out lost) calls `attack ya [X]`, X a place
+// outside one of the base's ways in (the map plan's entries), the one nearest him. Each mate who
+// reads it and is strong enough goes there too, the base's own holder among them; once a mate is
+// there with him (or `kGather_s` has passed) he goes in, and the push holds until he stands on
+// the base with no enemy seen for a while, or `kPush_s` has passed.
+//
+// THE STRATEGY: a plan line (`lets take quad`, `camp ra and rl`, `free play`), from a mate bot or
+// person, read as any line is, sets the team's objectives for this player: TAKE claims the item
+// (the quad rushed when due) for `kTake_s`; CAMP holds the area of the first item or the second,
+// the roster split by slot order (the first, third ... the first item), until another plan; FREE
+// plays its own plan again. Taken up from someone else it says "ok" now and then, as people do.
+//
 // Deterministic: a pure function of what the fighter saw, heard and drew from its own stream.
 //
 // ge:summary A fighter's own mind: team lines read by skill, its role chosen alone, its calls
 // ge:keywords mind team-message read-by-skill beliefs mates claims timers role rush hold carry
 // ge:keywords point give-up opening-rush safe report spam quad-call separate-brains
+// ge:keywords push attack gather regroup retake-together base-lost staging
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "shooter/locs.hpp"
 #include "shooter/vec.hpp"
 #include "shooters_edge/bots/talk.hpp"
-#include "shooters_edge/server/qc_server.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::bots {
 
 constexpr double kRepeatWindow_s = 12;     // a line said again within this reads as a repeat
+constexpr double kTake_s = 45;             // a TAKE plan holds this long
+constexpr double kCamp_s = 300;            // a CAMP plan this long, unless another is said
+constexpr double kAckChance = 0.35;        // a plan read from a mate is answered "ok" this often
 constexpr double kMateFresh_s = 15;        // a mate's place or status this old is still believed
 constexpr double kExpertMateFresh_s = 10;  // an expert drops a mate's place this old
 constexpr double kReport_s[3] = {40, 20, 12};  // a report this often: novice, average, expert
@@ -61,6 +88,8 @@ struct Mate {
   double strength_t = -1e9;  // when his status was last read
   double quad_t = -1e9;      // when he was last believed to have the quad
   double going_t = -1e9;     // when he said where he is going
+  double weapon_t = -1e9;    // when his status last said his best weapon
+  bool has_rl = false;       // and whether it was the launcher
   double holds_t = -1e9;     // when he last said his area is safe
   float strength = 100;      // health plus armour's protection, a launcher counted extra
   int32_t going = -1;        // the item he said he is coming for
@@ -81,6 +110,11 @@ struct Mind {
   std::vector<HeardLine> heard;
   ge::shooter::Vec3f enemy_at;  // where the enemy was last called out (heard or seen)
   ge::shooter::Vec3f help_at;   // where a mate last called for help
+  ge::shooter::Vec3f pack_at;   // where a pack worth having was called (`rl pack [mh]`)
+  double pack_t = -1e9;         // when
+  double pack_claim_t = -1e9;   // a mate's `coming [ga]` right after it: he takes it
+  double pack_answered = -1e9;  // the call (its `pack_t`) this player said `coming` to
+  bool pack_rl = false;         // a launcher in it
   double enemy_t = -1e9;
   double help_until = -1e9;
   double told_t = -1e9;        // when it was pointed at `told`
@@ -90,27 +124,58 @@ struct Mind {
   double quad_call_at = -1e9;  // its last call of the quad
   double pent_call_at = -1e9;
   double timer_call_at = -1e9;
-  double gave_at = -1e9;         // its last point at an item it gave up
-  double help_said_at = -1e9;    // its last call for help
+  double gave_at = -1e9;       // its last point at an item it gave up
+  double help_said_at = -1e9;  // its last call for help
+  // THE PUSH: its team's attack on the base it believes the enemy's.
+  ge::shooter::Vec3f push_at;     // where the team gathers before it goes in
+  ge::shooter::Vec3f sighted_at;  // where it last saw an enemy itself
+  double sighted_t = -1e9;
+  double push_t = -1e9;          // when the push was called (said or read)
+  double push_go_t = -1e9;       // when the gather was over and it went in (-1e9: not yet)
+  double push_said_at = -1e9;    // its last call of a push
+  int32_t push_item = -1;        // the key item the push is for (-1: none)
   int64_t read = 0, missed = 0;  // team lines read and missed
   int32_t told = -1;             // an item a mate pointed it at ("you take it")
   int32_t claim = -1;            // the key item whose area it claimed (-1: none)
   int32_t gave = -1;             // the item it gave up last
   int32_t retake = -1;           // a key area believed lost: to take back (-1: none)
   double retake_t = -1e9;        // when it was last believed lost
+  // THE TEAM'S STRATEGY (talk.hpp `Strategy`), as its leader last said it and this player read
+  // it: the items it is about (-1: none), when it was taken up, and an "ok" owed for it.
+  Strategy strategy = Strategy::none;
+  int32_t strategy_items[2] = {-1, -1};
+  double strategy_t = -1e9;
+  bool ack_due = false;
   bool claimed_said = false;
-  bool opened = false;  // its first plan alive is behind it
+  bool opened = false;       // its first plan alive is behind it (its spawn said)
+  bool opening_due = false;  // the next plan is the match's opening: the claims, the quad first
 };
 
 struct Fighter;
 struct Stats;
 
+// The team's strategy `said` (a plan) taken up at `t`; false when it names no item this player
+// knows (a take or a camp) or is no plan.
+bool mind_take_plan(Fighter& f, const Said& said, double t);
+
 // A team line this player's client was sent, from the player named `from`: read or missed by its
 // skill, and what it says taken into its beliefs when read.
 void mind_hear(Fighter& f, const std::string& from, const std::string& text, double t);
 
+// Whether a server line's rest after a player's name reads as his death ("was nailed by", ...).
+bool death_words(std::string_view rest);
+
+// A line its client was printed that is not a team line: when it is a teammate's obituary (his name
+// first, then the words of a death: "was", "ate", "sleeps", ...), where he was last believed to be
+// (his own news, or seen, while still fresh) is a danger spot (`mind_danger`). True when it was.
+bool mind_obituary(Fighter& f, const std::string& line, double t);
+// A place it should not heal at for a while: where it died, where a mate died (his last status or
+// sighting placed him, then his obituary), an area called lost, where a mate called for help (kept
+// the last 12; `best_item` reads them while it retreats to heal).
+void mind_danger(Fighter& f, ge::shooter::Vec3f at, double t);
+
 // The role and the calls, every `kPlan_s`, off its own beliefs (`me` is its entity).
-void mind_plan(Fighter& f, const server::QcServer& s, int me, const Stats& st, double t);
+void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, double t);
 
 // A team message from this player, its place filled in from where it stands (`at`).
 bool mind_say(Fighter& f, double t, Said said, ge::shooter::Vec3f at);
@@ -127,7 +192,7 @@ bool wants_help(const Fighter& f, ge::shooter::Vec3f at, bool weak, double t);
 bool mate_going(const Fighter& f, int32_t i, double t);
 
 // Whether item `i` is left to a teammate (no use to this player, or the quad's carrier's due).
-bool gives_up(const Fighter& f, const server::QcServer& s, int me, int32_t i, const Stats& st,
+bool gives_up(const Fighter& f, const server::RulesCommon& s, int me, int32_t i, const Stats& st,
               double t);
 
 // This player's status as a message carries it.

@@ -1,0 +1,35 @@
+// The engine's commands of a player's game CLI, one function each, defined by subject:
+// settings.cpp (the player's config and the server's server.cfg), servers.cpp (the browser, one
+// server's info and players, the remote console) and launch.cpp (hosting, joining, the logs).
+// gamecli.cpp's table names them; nothing else calls them.
+//
+// ge:summary The engine's game CLI commands, declared for the table in gamecli.cpp
+// ge:keywords gamecli commands settings servers players rcon host join logs where
+// ge:skill agent-interface
+// ge:test tests/gamecli_cli_test.cpp tests/gamecli_settings_test.cpp
+#pragma once
+
+#include "gamecli/gamecli.hpp"
+
+namespace ge::gamecli {
+
+int cmd_settings_list(Ctx& ctx);
+int cmd_settings_get(Ctx& ctx);
+int cmd_settings_set(Ctx& ctx);
+int cmd_settings_reset(Ctx& ctx);
+int cmd_server_settings(Ctx& ctx);
+int cmd_server_set(Ctx& ctx);
+
+int cmd_servers(Ctx& ctx);
+int cmd_server_info(Ctx& ctx);
+int cmd_players(Ctx& ctx);
+int cmd_rcon(Ctx& ctx);
+
+int cmd_host(Ctx& ctx);
+int cmd_host_list(Ctx& ctx);
+int cmd_host_stop(Ctx& ctx);
+int cmd_join(Ctx& ctx);
+int cmd_logs(Ctx& ctx);
+int cmd_where(Ctx& ctx);
+
+}  // namespace ge::gamecli

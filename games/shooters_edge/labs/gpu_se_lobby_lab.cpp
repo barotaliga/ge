@@ -1,10 +1,11 @@
 // LAB `se-lobby-view`: THE LOBBY IN THE WINDOW'S FRAME. The fixture halls (plugins/brush) with four
 // deathmatch spots, the baseline mod as a listen server with the lobby on (client/lobby_room.hpp),
-// the player and two bots seated; the frame drawn as the window draws it (the world from the
-// player's eyes, the weapon in hand, the HUD, then the lobby panel of hud/lobby_panel.hpp over
-// it) at three moments: the WARMUP (the player roaming the hall, not ready), the COUNTDOWN after
-// his `ready`, and the MATCH's first frame after the map restarted (no panel). The warmup and the
-// countdown are drawn again in the CLASSIC LOOK (menu/lobby_screen.hpp): in the fixture's menu
+// the player and two bots seated; the frame drawn as the window draws it at four moments: the
+// LOBBY'S SCREEN (hud/lobby_page.hpp over the main menu's night, client/title.hpp: the player not
+// yet on the map, the bots warming up), the WARMUP after F4 (the world from the player's eyes, the
+// weapon in hand, the HUD, the banner of hud/lobby_panel.hpp over it), the COUNTDOWN after his
+// `ready`, and the MATCH's first frame after the map restarted (no banner). The first three are
+// drawn again in the CLASSIC LOOK (menu/lobby_screen.hpp): in the fixture's menu
 // pictures (`classic-*`) and, given `--pack`, in the player's own pack's (`pack-*`, never
 // committed or published beyond a private page). The lobby's counts are deterministic metrics;
 // the pictures are measured (each adapter rasterises its own way).
@@ -27,13 +28,16 @@
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/title.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/layout.hpp"
+#include "shooters_edge/hud/lobby_page.hpp"
 #include "shooters_edge/hud/lobby_panel.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -120,7 +124,7 @@ void run(gl::Lab& lab) {
   }
 
   cl::Listen l;
-  cl::ListenOptions opt;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.lobby = true;
   opt.lobby_settings.countdown_s = 3;
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "halls", error);
@@ -139,12 +143,17 @@ void run(gl::Lab& lab) {
   std::vector<ge::viewmodel::HeldModel> weapons;
   if (!shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error))
     lab.note("no weapon is drawn: " + error);
-  cl::WorldDrawPtr world;
+  cl::WorldDrawPtr world, night;  // the map's, and the main menu's night behind the lobby
   ge::gpu::Target out;
   if (device) {
     world = cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,
                                   look, weapons, error);
     if (!world) {
+      lab.fail(error, "Read the gpu: lines above. Skill: render.");
+      return;
+    }
+    night = cl::make_title_world(*device, w, h, wgpu::TextureFormat::RGBA8Unorm, look, error);
+    if (!night) {
       lab.fail(error, "Read the gpu: lines above. Skill: render.");
       return;
     }
@@ -183,9 +192,10 @@ void run(gl::Lab& lab) {
   // when `classic`.
   const auto picture = [&](const std::string& id, const std::string& title,
                            const std::string& caption, const std::string& look_for, bool classic) {
-    ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
-    cl::step_fx(l, shown, fx_state, t, 0, fx);
-    const se::LobbyView lv = cl::lobby_view(*l.room, l.server->sv.time, 0, true);
+    const bool page = cl::on_lobby_screen(l);
+    ge::render::FrameView view = page ? cl::title_view(t) : cl::frame_view(l, shown, 0, t, 0);
+    if (!page) cl::step_fx(l, shown, fx_state, t, 0, fx);
+    const se::LobbyView lv = cl::listen_lobby_view(l);
     std::vector<const Look*> sets = {nullptr};
     if (classic)
       for (const Look& k : looks) sets.push_back(&k);
@@ -197,24 +207,31 @@ void run(gl::Lab& lab) {
       }
       ge::ui::DrawList overlay;
       overlay.begin(static_cast<int>(w), static_cast<int>(h));
-      se::fill_hud(hud, cl::status_of(l, t), art);
-      hud.layout.draw(overlay,
-                      hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
-                      se::hud_style());
-      if (k)
-        sm::draw_lobby_classic(overlay, k->art, lv, static_cast<int>(w), static_cast<int>(h));
-      else
-        se::draw_lobby(overlay, lv, static_cast<int>(w), static_cast<int>(h));
-      cl::draw_world(*device, *world, view, fx, &hand, 0, overlay, out.view);
+      const int iw = static_cast<int>(w), ih = static_cast<int>(h);
+      if (page) {  // the lobby's own screen over the main menu's night, as the window draws it
+        if (k)
+          sm::draw_lobby_page_classic(overlay, k->art, lv, iw, ih);
+        else
+          se::draw_lobby_page(overlay, lv, iw, ih);
+        cl::draw_world(*device, *night, view, {}, nullptr, 0, overlay, out.view);
+      } else {
+        se::fill_hud(hud, cl::status_of(l, t), art);
+        hud.layout.draw(overlay, hud.layout.frame(iw, ih, se::hud_style()), se::hud_style());
+        if (k)
+          sm::draw_lobby_classic(overlay, k->art, lv, iw, ih);
+        else
+          se::draw_lobby(overlay, lv, iw, ih);
+        cl::draw_world(*device, *world, view, fx, &hand, 0, overlay, out.view);
+      }
       const ge::gpu::Image img = ge::gpu::read_now(*device, out);
       const std::string t2 = k ? title + " (" +
                                      (k->name == "pack" ? "the pack's" : "the fixture's") +
                                      " menu pictures)"
                                : title;
       const std::string c2 =
-          k ? "The same moment in the classic look: the banner and the roster in the text box of "
-              "the menu pictures, the glyph sheet's two sets, the count in the big figures. " +
-                  caption
+          k ? "The same moment in the classic look: the menu pictures' text boxes, the glyph "
+              "sheet's two sets" +
+                  std::string(page ? ". " : ", the count in the big figures. ") + caption
             : caption;
       lab.shot({shot_id, t2, c2, look_for, {{"map", "halls"}, {"size", lab.arg("size")}}},
                gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
@@ -222,21 +239,29 @@ void run(gl::Lab& lab) {
     }
   };
 
-  play(80, {});  // the spawn, the fall onto the launcher
+  play(120, {});  // the bots spawn and roam the warmup; the player is on the lobby's screen
+  picture("lobby", "THE LOBBY'S SCREEN",
+          "The match's map has opened and the player is on the lobby's own screen, over the main "
+          "menu's night: the two bots are already in the warmup (IN WARMUP, ready), the player IN "
+          "LOBBY and not ready; the keys run along the foot, F4 (join the warmup) lit.",
+          "the night and the moon behind, both teams' rows readable, the keys inside the frame",
+          true);
+  cl::listen_lobby(l, "warmup");  // F4
+  play(80, {});                   // the spawn, the fall onto the launcher
   l.impulse = 7;
   sh::MoveCmd walk;
   walk.forward = 300;
   play(60, walk);
   picture("warmup", "THE WARMUP IN THE HALL",
-          "The player free in the fixture hall with the launcher he picked up, the HUD along the "
-          "bottom, and the lobby over it: WARMUP, 2 of 3 ready (the bots), the keys, and the two "
-          "teams' roster on the right with the player's row lit and NOT READY.",
-          "the banner at the top centre, the roster clear of the HUD, the world lit behind", true);
+          "After F4 the player is in the warmup: free in the fixture hall with the launcher he "
+          "picked up, the HUD along the bottom, and of the lobby only the banner: WARMUP, 2 of 3 "
+          "ready (the bots), F1 and F4.",
+          "the banner at the top centre and nothing else of the lobby, the world lit behind", true);
   cl::listen_lobby(l, "ready");
   play(80, {});
   picture("countdown", "THE COUNTDOWN",
           "After `ready` (F1): everyone is ready and the countdown's seconds stand large in the "
-          "upper half; the roster's marks are all READY.",
+          "upper half under the banner.",
           "the count readable over the world, the banner saying COUNTDOWN", true);
   const int countdowns = l.room->lobby.countdowns;
   play(260, {});
@@ -262,10 +287,11 @@ const gl::LabSpec kSpec{
     "se-lobby-view",
     gl::LabKind::picture,
     "game:shooters_edge",
-    "games/shooters_edge/hud/lobby_panel over the window's frame (the listen server's lobby)",
+    "games/shooters_edge/hud/lobby_page and lobby_panel in the window's frame (the listen "
+    "server's lobby)",
     "shooter",
-    "Does the lobby read over the game in the window's frame: the warmup, the countdown, and "
-    "nothing once the match is on?",
+    "Does the lobby read in the window's frame: its own screen over the main menu's night, the "
+    "warmup's banner over the game, the countdown, and nothing once the match is on?",
     {{"size", "960,540", "the frame's width and height, px"},
      {"models", "games/shooters_edge/content/models/view", "the held weapons' folder"},
      {"pack", "",

@@ -7,7 +7,7 @@
 void() demon_claw = {
   self.think = demon_claw;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   ai_charge(8);
   if (self.anim_step == 3 || self.anim_step == 6) {
     if (vlen(self.enemy.origin - self.origin) <= 80 && can_see(self.enemy)) {
@@ -20,7 +20,7 @@ void() demon_claw = {
 };
 
 void() demon_melee = {
-  self.anim_step = 0;
+  anim_begin(self.fr_melee);
   demon_claw();
 };
 
@@ -36,7 +36,7 @@ void() demon_leap_touch = {
 void() demon_leap_step = {
   self.think = demon_leap_step;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if ((self.anim_step > 2 && (self.flags & FL_ONGROUND)) || self.anim_step > 30) {
     if (self.flags & FL_ONGROUND) sound(self, CHAN_BODY, "demon/dland2.wav", 1, ATTN_NORM);
     self.touch = noop;
@@ -54,7 +54,7 @@ void() demon_leap = {
   self.flags = self.flags - (self.flags & FL_ONGROUND);
   self.touch = demon_leap_touch;
   sound(self, CHAN_VOICE, "demon/djump.wav", 1, ATTN_NORM);
-  self.anim_step = 0;
+  anim_begin(self.fr_leap);
   demon_leap_step();
 };
 
@@ -81,7 +81,7 @@ float() demon_check = {
 void() demon_flinch = {
   self.think = demon_flinch;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step >= 3) monster_run();
 };
 
@@ -89,7 +89,7 @@ void() demon_pain = {
   if (self.touch == demon_leap_touch) return;  // no flinch in the air
   if (self.pain_finished < time + 1) self.pain_finished = time + 1;
   sound(self, CHAN_VOICE, "demon/dpain1.wav", 1, ATTN_NORM);
-  self.anim_step = 0;
+  anim_begin(self.fr_pain);
   demon_flinch();
 };
 
@@ -114,6 +114,15 @@ void() monster_demon1 = {
   self.th_check = demon_check;
   self.th_pain = demon_pain;
   self.th_die = monster_die;
+  self.fr_stand = '0 12 1';
+  self.fr_walk = '13 20 1';
+  self.fr_run = '21 26 1';
+  self.fr_melee = '54 68 1';
+  self.fr_leap = '27 38 1';
+  self.fr_pain = '39 44 1';
+  self.fr_death = '45 53 1';
+  self.death_solid = 5;
+  self.gib_model = "progs/gib1.mdl";
   walkmonster_start("progs/demon.mdl", 300, '-32 -32 -24', '32 32 64');
 };
 
@@ -126,7 +135,7 @@ void() monster_demon1 = {
 void() shambler_claw = {
   self.think = shambler_claw;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   ai_charge(6);
   if (self.anim_step == 1) {
     if (random() < 0.33) {
@@ -146,7 +155,7 @@ void() shambler_claw = {
 };
 
 void() shambler_melee = {
-  self.anim_step = 0;
+  anim_begin(self.fr_melee);
   shambler_claw();
 };
 
@@ -155,7 +164,7 @@ void() shambler_bolt = {
   local vector from, dir;
   self.think = shambler_bolt;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   face_enemy();
   if (self.anim_step == 1) sound(self, CHAN_WEAPON, "shambler/sattck1.wav", 1, ATTN_NORM);
   if (self.anim_step >= 4 && self.anim_step <= 6) {
@@ -173,14 +182,14 @@ void() shambler_bolt = {
 };
 
 void() shambler_missile = {
-  self.anim_step = 0;
+  anim_begin(self.fr_missile);
   shambler_bolt();
 };
 
 void() shambler_flinch = {
   self.think = shambler_flinch;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step >= 4) monster_run();
 };
 
@@ -189,7 +198,7 @@ void() shambler_pain = {
   if (self.health > 400 && random() < 0.5) return;
   if (self.pain_finished < time + 2) self.pain_finished = time + 2;
   sound(self, CHAN_VOICE, "shambler/shurt2.wav", 1, ATTN_NORM);
-  self.anim_step = 0;
+  anim_begin(self.fr_pain);
   shambler_flinch();
 };
 
@@ -217,6 +226,14 @@ void() monster_shambler = {
   self.th_missile = shambler_missile;
   self.th_pain = shambler_pain;
   self.th_die = monster_die;
+  self.fr_stand = '0 16 1';
+  self.fr_walk = '17 28 1';
+  self.fr_run = '29 34 1';
+  self.fr_melee = '35 46 1';
+  self.fr_missile = '65 76 1';
+  self.fr_pain = '77 82 1';
+  self.fr_death = '83 93 1';
+  self.death_solid = 2;
   walkmonster_start("progs/shambler.mdl", 600, '-32 -32 -24', '32 32 64');
 };
 
@@ -249,7 +266,7 @@ void() caster_cast = {
   local entity m;
   self.think = caster_cast;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   face_enemy();
   if (self.anim_step == 1) sound(self, CHAN_VOICE, "shalrath/attack.wav", 1, ATTN_NORM);
   if (self.anim_step == 6) {
@@ -265,21 +282,21 @@ void() caster_cast = {
 };
 
 void() caster_missile = {
-  self.anim_step = 0;
+  anim_begin(self.fr_missile);
   caster_cast();
 };
 
 void() caster_flinch = {
   self.think = caster_flinch;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step >= 4) monster_run();
 };
 
 void() caster_pain = {
   if (self.pain_finished < time + 3) self.pain_finished = time + 3;
   sound(self, CHAN_VOICE, "shalrath/pain.wav", 1, ATTN_NORM);
-  self.anim_step = 0;
+  anim_begin(self.fr_pain);
   caster_flinch();
 };
 
@@ -304,5 +321,11 @@ void() monster_shalrath = {
   self.th_missile = caster_missile;
   self.th_pain = caster_pain;
   self.th_die = monster_die;
+  self.fr_stand = '23 34 1';
+  self.fr_walk = '23 34 1';
+  self.fr_run = '23 34 1';
+  self.fr_missile = '0 10 1';
+  self.fr_pain = '11 15 1';
+  self.fr_death = '16 22 1';
   walkmonster_start("progs/shalrath.mdl", 400, '-32 -32 -24', '32 32 64');
 };

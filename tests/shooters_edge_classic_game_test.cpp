@@ -2,18 +2,30 @@
 // server core. Offline and on the network with nobody connected it is one digest; a classic client
 // over the simulated network connects to the core's server, follows the signon and plays, and the
 // core counts it seated; the settings reach the endpoint (the name in its status, the password at
-// the connect); bots are refused with the next step; a whole session replays to the bit; the mod's
-// own rules come in as settings (`+set fraglimit 20`) and reach the mod; a map read from a pack;
-// the mod's changelevel takes the players to the next map (the rotation's when it has one).
+// the connect); too many bots are refused with the next step; a whole session replays to the bit;
+// the mod's own rules come in as settings (`+set fraglimit 20`) and reach the mod; a map read from
+// a pack; a mod folder's own program (from a pack of any name) runs over the base game, its
+// name in serverdata and the serverinfo's `*gamedir`, and a mod folder with no program is refused;
+// the mod's changelevel takes the players to the next map (the rotation's when it has one); bots
+// are players every client sees, with their teams; the lobby warms up (its limits held, a bot
+// alone never counts down) until the client is ready, then restarts the map into the match; the
+// window's own match (the listen server) is the same server, and a classic client joins it; on
+// it the window's player hears the visitor talk and is heard by him while talking; a player's vote
+// changes a rule for the map (and the next map puts it back), a vote on the move restarts the map
+// and is kept, and the owner's settings are refused.
 //
 // ge:summary Test: Shooter's Edge's dedicated server on the core: one digest, a client plays on it
 // ge:keywords test classic-game dedicated-server classic-client simulated-network serve net_frame
 // ge:keywords game-rules fraglimit pack-map changelevel map-change maprotation reconnect
+// ge:keywords bots sv_bots sv_lobby lobby warmup ready countdown match-restart local-seat
+// ge:keywords listen-server listen_options join-the-window listen_mic local-voice sv_voip
+// ge:keywords sv_mod mod-folder gamedir qwprogs misc-pak vote sv_vote per-map-vote
 // ge:skill net shooter testing
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "brush/write.hpp"
@@ -25,7 +37,9 @@
 #include "server/server.hpp"
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/server/test_mod.hpp"
 #include "vfs/pak.hpp"
 
 using namespace ge::server;
@@ -53,11 +67,15 @@ struct Session {
   std::string error;
   bool opened = false;
   uint64_t digest = 1469598103934665603ull;
+  int look_at = -1;    // a frame whose status is kept
+  std::string looked;  // its status
 };
 
 // The core's server on the simulated network, one classic client joining at once, `frames`
 // frames; the digest folds every frame's hash and the client's end.
-void run_session(Session& r, const ServerConfig& c, int frames, const std::string& password = "") {
+// The client says `ready` at frame `ready_at` (-1: never), and each of `lines` at its frame.
+void run_session(Session& r, const ServerConfig& c, int frames, const std::string& password = "",
+                 int ready_at = -1, const std::vector<std::pair<int, std::string>>& lines = {}) {
   gn::LinkConditions lan;
   r.net = gn::make_sim_network(c.seed, lan);
   gn::open_sim_transport(r.server_port, r.net, gn::sim_address(0, kPort));
@@ -72,8 +90,12 @@ void run_session(Session& r, const ServerConfig& c, int frames, const std::strin
   for (int f = 0; f < frames; f++) {
     const int64_t now = r.s.now_us;
     gn::sim_advance(r.net, now);
+    if (f == ready_at) se::client_command(r.client, "ready");
+    for (const auto& [at, line] : lines)
+      if (f == at) se::client_command(r.client, line);
     se::client_tick(r.client, now);
     server_frame(r.s);
+    if (f == r.look_at) r.looked = server_status(r.s);
     r.digest = (r.digest ^ server_digest(r.s)) * 1099511628211ull;
   }
   r.digest = (r.digest ^ static_cast<uint64_t>(r.client.stage)) * 1099511628211ull;
@@ -131,11 +153,11 @@ TEST(classic_game_the_settings_reach_the_endpoint) {
   }
   {
     ServerConfig c = arena();
-    c.bots = 2;
+    c.bots = 8;  // every slot: none left for a player
     Server s;
     std::string error;
     CHECK(!server_open(s, se::classic_game(), c, nullptr, nullptr, error));
-    CHECK(error.find("next: --bots=0") != std::string::npos);
+    CHECK_MSG(error.find("next: lower sv_bots") != std::string::npos, error);
   }
   {
     ServerConfig c = arena();
@@ -179,6 +201,54 @@ TEST(classic_game_the_mod_s_rules_are_settings) {
   CHECK_MSG(error.find("next: set fraglimit") != std::string::npos, error);
 }
 
+TEST(classic_game_the_shooter_s_and_the_endpoint_s_settings) {
+  ge::console::Console con{true};
+  ServerConfig c;
+  ServerCfg cfg;
+  std::string error;
+  CHECK_MSG(server_configure(con,
+                             {"--map=arena", "+set", "pm_ktjump", "0", "+set", "sv_maxrate", "8000",
+                              "+set", "sv_floodprot", "2 5 3", "+set", "sv_floodprotmsg", "hush",
+                              "+set", "maxfps", "100"},
+                             c, cfg, se::classic_game(), error),
+            error);
+  CHECK(c.rules["pm_ktjump"] == "0");
+  CHECK(c.floodprot == "2 5 3");
+  CHECK(explain(con, cfg, "pm_ktjump").find("command line") != std::string::npos);
+  // The client is told the changed switch and the move rate; its third line in a burst is
+  // refused (to it alone) and the silence holds the fourth.
+  Session r;
+  run_session(r, c, 700, "", -1,
+              {{500, "say one"}, {502, "say two"}, {504, "say three"}, {506, "say four"}});
+  CHECK(r.client.stage == se::ClientStage::active);
+  CHECK_MSG(r.client.serverinfo.find("\\pm_ktjump\\0") != std::string::npos, r.client.serverinfo);
+  CHECK_MSG(r.client.serverinfo.find("\\maxfps\\100") != std::string::npos, r.client.serverinfo);
+  int said = 0, hushed = 0, silenced = 0;
+  for (const std::string& p : r.client.prints) {
+    said += p.find(": one") != std::string::npos || p.find(": two") != std::string::npos;
+    said += p.find(": three") != std::string::npos ? 100 : 0;
+    hushed += p == "FloodProt: hush\n";
+    silenced += p.find("You can't talk for") != std::string::npos;
+  }
+  CHECK_MSG(said == 2 && hushed == 1 && silenced == 1, std::to_string(said));
+  // Out of range: refused with the range and the next step.
+  for (const auto& [name, value] : {std::pair<std::string, std::string>{"sv_mintic", "0.5"},
+                                    {"pm_airstep", "2"},
+                                    {"sv_downloadchunksperframe", "99"}}) {
+    ServerConfig bad = arena();
+    bad.rules[name] = value;
+    Server refused;
+    CHECK(!server_open(refused, se::classic_game(), bad, nullptr, nullptr, error));
+    CHECK_MSG(error.find(name) != std::string::npos && error.find("next:") != std::string::npos,
+              error);
+  }
+  ServerConfig bad = arena();
+  bad.floodprot = "lots";
+  Server refused;
+  CHECK(!server_open(refused, se::classic_game(), bad, nullptr, nullptr, error));
+  CHECK_MSG(error.find("sv_floodprot") != std::string::npos, error);
+}
+
 TEST(classic_game_a_map_from_the_game_folder_s_pack) {
   namespace fs = std::filesystem;
   const fs::path root = fs::temp_directory_path() / "ge_se_classic_game_pack";
@@ -206,6 +276,47 @@ TEST(classic_game_a_map_from_the_game_folder_s_pack) {
   fs::remove_all(root);
 }
 
+TEST(classic_game_a_mod_folder_runs_its_own_program) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "ge_se_classic_game_mod";
+  fs::remove_all(root);
+  fs::create_directories(root / se::kGameFolder);
+  fs::create_directories(root / "mymod");
+  std::string error;
+  std::vector<uint8_t> bsp, pak, misc;
+  CHECK_MSG(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bsp, &error),
+            error);
+  CHECK_MSG(ge::vfs::write_pak({{"maps/halls.bsp", bsp}}, &pak, &error), error);
+  std::vector<int32_t> lines;
+  CHECK_MSG(ge::vfs::write_pak({{"qwprogs.dat", shooters_edge::server::test_mod_bytes(lines)}},
+                               &misc, &error),
+            error);
+  auto put = [](const fs::path& at, const std::vector<uint8_t>& bytes) {
+    std::ofstream out(at, std::ios::binary);
+    out.write(reinterpret_cast<const char*>(bytes.data()),
+              static_cast<std::streamsize>(bytes.size()));
+  };
+  put(root / se::kGameFolder / "pak0.pak", pak);
+  ServerConfig c = arena();
+  c.map = "halls";
+  c.root = root.string();
+  c.mod = "mymod";
+  {
+    Server s;  // no program in the mod's folder: refused, naming it
+    CHECK(!server_open(s, se::classic_game(), c, nullptr, nullptr, error));
+    CHECK_MSG(error.find("the mod folder mymod holds no multiplayer program") == 0, error);
+  }
+  put(root / "mymod" / "misc.pak", misc);  // a mod's program in its unnumbered pack
+  Session r;
+  run_session(r, c, 300);
+  CHECK_MSG(r.opened, r.error);
+  CHECK(r.client.stage == se::ClientStage::active);
+  CHECK(r.client.gamedir == "mymod");
+  CHECK_MSG(r.client.serverinfo.find("\\*gamedir\\mymod") != std::string::npos,
+            r.client.serverinfo);
+  fs::remove_all(root);
+}
+
 TEST(classic_game_the_mod_s_changelevel_takes_the_players_along) {
   ServerConfig c = arena();
   c.rules["timelimit"] = "0.05";
@@ -218,4 +329,224 @@ TEST(classic_game_the_mod_s_changelevel_takes_the_players_along) {
   Session again;
   run_session(again, c, 900);
   CHECK(r.digest == again.digest);
+}
+
+TEST(classic_game_bots_are_players_every_client_sees) {
+  ServerConfig c = arena();
+  c.bots = 2;
+  Session r;
+  run_session(r, c, 600);
+  CHECK_MSG(r.opened, r.error);
+  CHECK(r.client.stage == se::ClientStage::active);
+  const std::string status = server_status(r.s);
+  CHECK_MSG(status.find("seated=3") != std::string::npos, status);
+  CHECK_MSG(status.find("bots=2") != std::string::npos, status);
+  int bots = 0, teamed = 0;
+  for (const std::string& info : r.client.userinfos) {
+    bots += info.find("\\*bot\\1") != std::string::npos ? 1 : 0;
+    teamed += info.find("\\team\\") != std::string::npos ? 1 : 0;
+  }
+  CHECK_MSG(bots == 2, std::to_string(bots) + " bots in the client's scoreboard");
+  CHECK_MSG(teamed == 3, std::to_string(teamed) + " seats with a team");
+  Session again;
+  run_session(again, c, 600);
+  CHECK(r.digest == again.digest);
+}
+
+TEST(classic_game_the_lobby_warms_up_until_everyone_is_ready) {
+  ServerConfig c = arena();
+  c.lobby = 1;
+  c.bots = 1;
+  c.rules["fraglimit"] = "20";
+  {
+    Server alone;  // a bot alone never counts down
+    std::string error;
+    CHECK_MSG(server_open(alone, se::classic_game(), c, nullptr, nullptr, error), error);
+    for (int f = 0; f < 800; f++) server_frame(alone);
+    CHECK_MSG(server_status(alone).find("lobby=warmup") != std::string::npos, server_status(alone));
+  }
+  Session r;
+  r.look_at = 399;
+  run_session(r, c, 1100, "", 400);  // ready at 5.2 s, the countdown's 5 s, the restart
+  CHECK_MSG(r.looked.find("lobby=warmup ready=1/2") != std::string::npos, r.looked);
+  CHECK_MSG(r.looked.find("fraglimit=0") != std::string::npos, r.looked);  // warmup holds it
+  const std::string status = server_status(r.s);
+  CHECK_MSG(status.find("lobby=match") != std::string::npos, status);
+  CHECK_MSG(status.find("matches=1") != std::string::npos, status);
+  CHECK_MSG(status.find("fraglimit=20") != std::string::npos, status);
+  CHECK(r.client.stage == se::ClientStage::active);
+  CHECK_MSG(r.client.spawncount == 2, "spawncount " + std::to_string(r.client.spawncount));
+  Session again;
+  again.look_at = 399;
+  run_session(again, c, 1100, "", 400);
+  CHECK(r.digest == again.digest);
+}
+
+namespace {
+
+bool printed(const se::ClassicClientEnd& c, const std::string& part) {
+  for (const std::string& p : c.prints)
+    if (p.find(part) != std::string::npos) return true;
+  return false;
+}
+
+}  // namespace
+
+TEST(classic_game_a_vote_changes_a_rule_for_the_map) {
+  ServerConfig c = arena();
+  c.rules["timelimit"] = "0.05";  // the match ends at 3 s, the map changes at about 8 s
+  Session r;
+  r.look_at = 200;
+  run_session(r, c, 900, "", -1, {{120, "vote hostname mine"}, {140, "vote fraglimit 30"}});
+  CHECK_MSG(r.opened, r.error);
+  CHECK(printed(r.client, "hostname may not be voted on (sv_vote_deny)"));
+  CHECK(printed(r.client, "visitor calls fraglimit 30: vote yes/no"));
+  CHECK(printed(r.client, "Vote passed: fraglimit 30 for this map"));
+  CHECK_MSG(r.looked.find("fraglimit=30") != std::string::npos, r.looked);
+  // The map changed: the vote's change went back to the server's own (the mod's 0).
+  CHECK_MSG(r.client.spawncount == 2, "spawncount " + std::to_string(r.client.spawncount));
+  CHECK(printed(r.client, "fraglimit back to default for the new map"));
+  const std::string status = server_status(r.s);
+  CHECK_MSG(status.find("fraglimit=0") != std::string::npos, status);
+  Session again;
+  again.look_at = 200;
+  run_session(again, c, 900, "", -1, {{120, "vote hostname mine"}, {140, "vote fraglimit 30"}});
+  CHECK(r.digest == again.digest);
+}
+
+TEST(classic_game_a_vote_on_the_move_restarts_the_map_and_is_kept) {
+  ServerConfig c = arena();
+  Session r;
+  run_session(r, c, 400, "", -1, {{140, "vote sv_gravity 400"}});
+  CHECK_MSG(r.opened, r.error);
+  CHECK(printed(r.client, "Vote passed: sv_gravity 400"));
+  CHECK(printed(r.client, "The map restarts so everyone moves by the new setting"));
+  CHECK_MSG(r.client.spawncount == 2, "spawncount " + std::to_string(r.client.spawncount));
+  CHECK(r.client.stage == se::ClientStage::active);
+  CHECK_MSG(r.client.movevars[0] == 400.0f, std::to_string(r.client.movevars[0]));  // gravity
+  CHECK(!printed(r.client, "back to"));  // a restart keeps it
+  Session refused;
+  run_session(refused, c, 300, "", -1, {{140, "vote sv_gravity heavy"}, {160, "vote sv_coop 1"}});
+  CHECK(refused.client.spawncount == 1);
+  CHECK(printed(refused.client, "sv_coop may not be voted on"));
+}
+
+TEST(classic_game_sv_intermission_holds_the_next_map) {
+  ServerConfig c = arena();
+  c.lobby = 1;
+  c.countdown_s = 1;
+  c.intermission_s = 4;
+  c.rules["timelimit"] = "0.05";  // the match's 3 s
+  Session r;
+  r.look_at = 1149;  // 15 s
+  // Ready at 3.9 s: the match from about 5 s to 8 s, the mod's own end until about 13 s, then
+  // the next map held 4 s more.
+  run_session(r, c, 1700, "", 300);
+  CHECK_MSG(r.opened, r.error);
+  CHECK_MSG(r.looked.find("lobby=intermission") != std::string::npos, r.looked);
+  CHECK_MSG(r.client.spawncount == 3, "spawncount " + std::to_string(r.client.spawncount));
+  const std::string status = server_status(r.s);
+  CHECK_MSG(status.find("lobby=warmup") != std::string::npos, status);  // the next map
+  Session again;
+  again.look_at = 1149;
+  run_session(again, c, 1700, "", 300);
+  CHECK(r.digest == again.digest);
+}
+
+TEST(classic_game_a_client_joins_the_window_s_own_match) {
+  ge::progs::Progs progs;
+  std::string error;
+  CHECK_MSG(shooters_edge::client::baseline_progs(progs, error), error);
+  gn::LinkConditions lan;
+  gn::SimNetwork net = gn::make_sim_network(1, lan);
+  gn::Transport port, client_port;
+  gn::open_sim_transport(port, net, gn::sim_address(0, kPort));
+  gn::open_sim_transport(client_port, net, gn::sim_address(1, kClientPort));
+  shooters_edge::client::Listen l;
+  shooters_edge::client::ListenOptions opt = se::listen_options();
+  opt.transport = &port;
+  opt.player = "host";
+  shooters_edge::client::SearchPath none;
+  auto map = shooters_edge::client::load_named_map(none, "arena", error);
+  CHECK_MSG(map != nullptr, error);
+  CHECK_MSG(shooters_edge::client::listen_start(l, progs, std::move(map), opt, error), error);
+  CHECK(l.match != nullptr && l.match->own_protocol);  // the core's server, on the window's side
+  se::ClassicClientEnd visitor;
+  se::ClientConfig cc;
+  cc.name = "visitor";
+  cc.files = {"skins/base.pcx"};
+  se::client_start(visitor, client_port, gn::sim_address(0, kPort), cc, 0);
+  ge::shooter::MoveCmd idle;
+  for (int f = 0; f < 400; f++) {
+    const int64_t now = l.match->now_us;
+    gn::sim_advance(net, now);
+    se::client_tick(visitor, now);
+    shooters_edge::client::listen_frame(l, idle);
+  }
+  CHECK(visitor.stage == se::ClientStage::active);
+  CHECK(l.server->clients[0].active && l.server->clients[1].active);  // the host and the visitor
+  // The visitor sees the window's player as a player, not a bot.
+  CHECK(se::info_get(visitor.userinfos[0], "name") == "host");
+  CHECK(se::info_get(visitor.userinfos[0], "*bot").empty());
+  shooters_edge::client::listen_stop(l);
+}
+
+namespace {
+bool always_talks(int, int) { return true; }
+}  // namespace
+
+TEST(classic_game_the_window_s_player_hears_a_visitor_and_is_heard_on_its_own_match) {
+  namespace cl = shooters_edge::client;
+  ge::progs::Progs progs;
+  std::string error;
+  CHECK_MSG(cl::baseline_progs(progs, error), error);
+  gn::LinkConditions lan;
+  gn::SimNetwork net = gn::make_sim_network(1, lan);
+  gn::Transport port, client_port;
+  gn::open_sim_transport(port, net, gn::sim_address(0, kPort));
+  gn::open_sim_transport(client_port, net, gn::sim_address(1, kClientPort));
+  cl::Listen l;
+  cl::ListenOptions opt = se::listen_options();
+  opt.transport = &port;
+  opt.player = "host";
+  cl::SearchPath none;
+  auto map = cl::load_named_map(none, "arena", error);
+  CHECK_MSG(map != nullptr, error);
+  CHECK_MSG(cl::listen_start(l, progs, std::move(map), opt, error), error);
+  CHECK(cl::listen_voice(l));
+  se::ClassicClientEnd visitor;
+  se::ClientConfig cc;
+  cc.name = "visitor";
+  cc.voice = true;
+  cc.talk = always_talks;
+  se::client_start(visitor, client_port, gn::sim_address(0, kPort), cc, 0);
+  std::vector<float> tone(48000 / 77);  // a frame's worth of a microphone
+  for (size_t i = 0; i < tone.size(); i++) tone[i] = (i / 24) % 2 == 0 ? 0.25f : -0.25f;
+  ge::shooter::MoveCmd idle;
+  size_t heard = 0, from_visitor = 0;
+  const auto run = [&](int frames, bool talking) {
+    for (int f = 0; f < frames; f++) {
+      const int64_t now = l.match->now_us;
+      gn::sim_advance(net, now);
+      se::client_tick(visitor, now);
+      cl::listen_mic(l, tone, talking);
+      cl::listen_frame(l, idle);
+      for (const cl::DemoVoice& v : l.voices) {
+        heard++;
+        if (v.sender == visitor.playernum) from_visitor++;
+      }
+      l.voices.clear();
+    }
+  };
+  run(400, false);
+  CHECK(visitor.stage == se::ClientStage::active);
+  CHECK(visitor.ext.has(se::ExtFamily::x2, se::kX2Voice));
+  CHECK_MSG(
+      from_visitor > 0 && from_visitor == heard,
+      std::to_string(from_visitor) + " of " + std::to_string(heard) + " voices the visitor's");
+  CHECK_MSG(visitor.voice_heard[0] == 0, "the host was heard without talking");
+  run(200, true);
+  CHECK_MSG(visitor.voice_heard[0] > 0, "the visitor heard nothing of the host");
+  CHECK(l.voice.sent > 0);
+  cl::listen_stop(l);
 }

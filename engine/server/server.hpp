@@ -18,9 +18,17 @@
 //
 // THE SETTINGS are `ServerConfig`, every field a cvar on the server's tier (`add_server_cvars`):
 // `sv_hostname`, `sv_description`, `net_ip`, `net_port`, `sv_maxclients`, `sv_map`, `sv_bots`,
-// `sv_seed`, `sv_password`, `sv_visibility`; and those kept for what reads them as it lands:
+// `sv_lobby` (the engine's lobby, match.hpp, before every match) and its timers `sv_countdown`
+// and `sv_intermission`, `sv_seed`, `sv_password`,
+// `sv_visibility`; and those kept for what reads them as it lands:
 // `sv_motd`, `sv_admin`, `sv_maprotation`, `sv_maxspectators`, `sv_spectatorpassword`,
-// `sv_rendezvous`, `sv_mod` (read-only: the mods the server was started with). A dedicated server
+// `sv_rendezvous`, `sv_mod` (read-only: the mods the server was started with), `rcon_password`
+// (the remote console's password; empty, a game offers none). The guards a game's
+// endpoint holds its clients to: `sv_timeout` (a client nothing was heard from for that long is
+// dropped: a dead link, not an idle player, who still sends moves) and `sv_floodprot`,
+// `sv_floodprotmsg` (the chat flood rule, guards.hpp). Players' votes on the settings for a map
+// (vote.hpp): `sv_vote`, `sv_vote_time`, `sv_vote_wait`, `sv_vote_allow`, `sv_vote_deny`, read by
+// the game that runs them (`vote_settings`). A dedicated server
 // reads them from the game directories' `server.cfg` in layers and its command line (config.hpp,
 // main.hpp).
 //
@@ -28,8 +36,12 @@
 // ge:keywords server dedicated-server listen-server server-core servergame server_frame
 // ge:keywords server_open hostname description port listen-address maxclients bots seed
 // ge:keywords sv_hostname sv_description net_ip net_port sv_maxclients sv_map sv_bots sv_seed
+// ge:keywords sv_lobby sv_timeout sv_floodprot sv_floodprotmsg client-timeout sv_countdown
+// ge:keywords sv_intermission intermission sv_vote sv_vote_time sv_vote_wait sv_vote_allow
+// ge:keywords sv_vote_deny vote_settings
 // ge:keywords sv_password sv_visibility sv_motd sv_admin sv_maprotation sv_maxspectators
 // ge:keywords sv_spectatorpassword sv_rendezvous sv_mod lan-advert multiplayer hosting
+// ge:keywords rcon_password remote-console
 // ge:skill net
 // ge:test tests/server_core_test.cpp
 #pragma once
@@ -44,6 +56,7 @@
 #include "net/node.hpp"
 #include "net/session.hpp"
 #include "net/transport.hpp"
+#include "server/vote.hpp"
 
 namespace ge::server {
 
@@ -52,24 +65,36 @@ constexpr int kMaxClients = 32;
 // Everything a server is started with. The first block are cvars (`add_server_cvars`); the second
 // only how a dedicated process runs (main.hpp's flags).
 struct ServerConfig {
-  std::string hostname = "server";  // sv_hostname: the name in the browser and the lobby
-  std::string description;          // sv_description: a line under the name
-  std::string ip;                   // net_ip: the address to listen on (empty: every interface)
-  int32_t port = 0;                 // net_port: the game's port (0: the game's default)
-  int32_t maxclients = 8;           // sv_maxclients: 1..32
-  std::string map;                  // sv_map (empty: the game's default)
-  int32_t bots = 0;                 // sv_bots: slots the game's bots fill at the start
-  uint32_t seed = 1;                // sv_seed: the run's seed
-  std::string password;             // sv_password: joining takes it (the advert says locked)
-  std::string visibility = "lan";   // sv_visibility: lan, invite or listed (net/hosting.hpp)
-  std::string motd;                 // sv_motd: the message a player sees on joining
-  std::string admin;                // sv_admin: how to reach the server's owner
-  std::string maprotation;          // sv_maprotation: the maps after the first, space-separated
-  int32_t max_spectators = 0;       // sv_maxspectators: spectators beside the players
-  std::string spectator_password;   // sv_spectatorpassword: watching takes it
-  std::string rendezvous;           // sv_rendezvous: the rendezvous to list with (M17r)
-  std::string mod;                  // sv_mod: the mods' directories, lowest first (read-only)
-  std::string root = ".";           // where the game directories are (`--root`): maps, cfgs
+  std::string hostname = "server";   // sv_hostname: the name in the browser and the lobby
+  std::string description;           // sv_description: a line under the name
+  std::string ip;                    // net_ip: the address to listen on (empty: every interface)
+  int32_t port = 0;                  // net_port: the game's port (0: the game's default)
+  int32_t maxclients = 8;            // sv_maxclients: 1..32
+  std::string map;                   // sv_map (empty: the game's default)
+  int32_t bots = 0;                  // sv_bots: slots the game's bots fill at the start
+  int32_t lobby = 0;                 // sv_lobby: 1 warms up every map until the lobby's match
+  uint32_t seed = 1;                 // sv_seed: the run's seed
+  std::string password;              // sv_password: joining takes it (the advert says locked)
+  std::string visibility = "lan";    // sv_visibility: lan, invite or listed (net/hosting.hpp)
+  std::string motd;                  // sv_motd: the message a player sees on joining
+  std::string admin;                 // sv_admin: how to reach the server's owner
+  std::string maprotation;           // sv_maprotation: the maps after the first, space-separated
+  int32_t max_spectators = 0;        // sv_maxspectators: spectators beside the players
+  std::string spectator_password;    // sv_spectatorpassword: watching takes it
+  std::string rcon_password;         // rcon_password: the remote console's (empty: none offered)
+  std::string rendezvous;            // sv_rendezvous: the rendezvous to list with (M17r)
+  std::string mod;                   // sv_mod: the mods' directories, lowest first (read-only)
+  double timeout_s = 65;             // sv_timeout: a client silent this long is dropped
+  double countdown_s = 5;            // sv_countdown: everyone ready to the match, s (sv_lobby)
+  double intermission_s = 0;         // sv_intermission: a match's end to the next map, s
+  std::string floodprot = "10 1 1";  // sv_floodprot: "N S T" chat lines (guards.hpp)
+  std::string floodprot_msg;         // sv_floodprotmsg: what a flooder is told ("": the silence)
+  int32_t vote = 1;         // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
+  double vote_time_s = 30;  // sv_vote_time: how long a vote stays open, s
+  double vote_wait_s = 30;  // sv_vote_wait: a failed vote's caller waits this long, s
+  std::string vote_allow;   // sv_vote_allow: settings that may be voted on (empty: all)
+  std::string vote_deny = kVoteDenyDefault;  // sv_vote_deny: settings that never may
+  std::string root = ".";  // where the game directories are (`--root`): maps, cfgs
   // The game's own rules (ServerGame::rules: `fraglimit`, `timelimit`) by name, as set; empty is
   // unset, the game's own default.
   std::map<std::string, std::string> rules;
@@ -82,6 +107,10 @@ struct ServerConfig {
   std::string replay;          // replay this input log instead of running
   bool explain = false;        // print every server value with its source instead of running
   std::string explain_prefix;  // only the cvars starting with this
+  // A LISTEN server's content, prepared by the game's own client in its process (the program, the
+  // map it already read, its player): the game's own type, read by its `create`; null for a
+  // dedicated server, which makes everything from the settings above.
+  void* host = nullptr;
 };
 
 // What a replay found.
@@ -163,6 +192,10 @@ struct Server {
 // The settings' cvars bound to `config` (which must outlive `cvars`), its values the fallbacks;
 // the game's limits on them (the most clients, the default port and map) from `game`.
 void add_server_cvars(console::Cvars& cvars, ServerConfig& config, const ServerGame& game);
+
+// The vote's settings from the server's (`sv_vote`, `sv_vote_time`, `sv_vote_wait`,
+// `sv_vote_allow`, `sv_vote_deny`).
+VoteSettings vote_settings(const ServerConfig& config);
 
 // The game created on `config`; with `transport` (the game's port) the node, the session host and
 // the hosting round it, answering the LAN on `lan` (null: pings only). False with `error`.

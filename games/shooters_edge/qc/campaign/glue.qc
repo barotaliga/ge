@@ -15,13 +15,25 @@ void(entity to, float level, string a, string b, string c, string d) say_to = {
 // An item's name: the form has no local info to read a game's own words from, so always ours.
 string(string class_name, string fallback) name_of = { return fallback; };
 
+// A loaded game's own words: the form has no local info, so none (the mod's own words always).
+string(string key, string a, string b, string c, string d) game_words = { return ""; };
+float() game_quiet = { return FALSE; };
+// A blast's pellets on one body land as one blow, as the classic single-player game has them.
+float() pellets_as_one_blow = { return TRUE; };
+string(entity targ, entity attacker) death_words = { return ""; };
+
 void(vector org, float set) effect_send = {};
 
 // A puff where a shot hits: a burst of red particles on something that bleeds (the form has no
-// blood message), a chip of the wall elsewhere (its gunshot carries no count).
+// blood message), eight drops a pellet thrown back off the wound (along the shot, twice as hard
+// out of the body's side it struck, jittered across), a chip of the wall elsewhere (its gunshot
+// carries no count).
 void(vector org, float count, float bleeds) effect_impact = {
+  local vector way;
   if (bleeds) {
-    particle(org, '0 0 0', 73, count * 20);
+    way = 4 * v_forward + 8 * trace_plane_normal + (8 * random() - 4) * v_right +
+          (8 * random() - 4) * v_up;
+    particle(org, way, 73, count * 8);
     return;
   }
   WriteByte(MSG_BROADCAST, SVC_TEMPENTITY);
@@ -35,9 +47,71 @@ void(entity killer, entity killed) note_frag = {};
 
 void(entity m) missile_now = {};
 
-// The campaign has no teams and leaves no backpacks.
-float(entity a, entity b) same_team = { return FALSE; };
+// In coop the players are one side unless `sv_friendlyfire` is on: one player's shots never harm
+// another (his own blast still harms himself). Monsters are on no side. No backpacks are left.
+float(entity a, entity b) same_team = {
+  if (!coop || a == b || cvar("sv_friendlyfire")) return FALSE;
+  return (a.flags & FL_CLIENT) && (b.flags & FL_CLIENT);
+};
+
+// And a teammate's blow that does not harm him pushes him only with `sv_friendlypush` on (off: no
+// rocket boost off a friend).
+float(entity a, entity b) team_shoves = { return cvar("sv_friendlypush"); };
 void() drop_on_death = {};
+
+// A taken item is gone for good in single player and co-op; only a deathmatch brings it back.
+float() items_come_back = { return deathmatch != 0; };
+
+// --- the jump: the single-player form's program jumps for itself (the move never does) ---
+
+float FL_WATERJUMP = 2048;     // out of the water onto a ledge: the move carries him by movedir
+
+// A ledge ahead at the water's edge: the jump out (checked at water level 2, every frame).
+void() water_jump_check = {
+  local vector start, end;
+  makevectors(self.angles);
+  start = self.origin;
+  start_z = start_z + 8;
+  v_forward_z = 0;
+  end = start + v_forward * 24;  // not renormalised: a little short when the body is pitched
+  traceline(start, end, TRUE, self);
+  if (trace_fraction == 1) return;
+  start_z = start_z + self.maxs_z - 8;
+  end = start + v_forward * 24;
+  self.movedir = trace_plane_normal * -50;
+  traceline(start, end, TRUE, self);
+  if (trace_fraction < 1) return;
+  self.flags = self.flags | FL_WATERJUMP;
+  self.velocity_z = 225;
+  self.flags = self.flags - (self.flags & FL_JUMPRELEASED);
+  self.teleport_time = time + 2;
+};
+
+void() jump_sound;
+void() swim_sound;
+
+// Before the move: the water jump's check, then the jump button: swimming up in deep water, a jump
+// of 270 off the ground once the button was let go since the last.
+void() player_jump = {
+  if (self.waterlevel == 2) water_jump_check();
+  if (!self.button2) {
+    self.flags = self.flags | FL_JUMPRELEASED;
+    return;
+  }
+  if (self.flags & FL_WATERJUMP) return;
+  if (self.waterlevel >= 2) {
+    if (self.watertype == CONTENT_WATER) self.velocity_z = 100;
+    else if (self.watertype == CONTENT_SLIME) self.velocity_z = 80;
+    else self.velocity_z = 50;
+    swim_sound();
+    return;
+  }
+  if (!(self.flags & FL_ONGROUND) || !(self.flags & FL_JUMPRELEASED)) return;
+  self.flags = self.flags - (self.flags & FL_JUMPRELEASED);
+  self.flags = self.flags - (self.flags & FL_ONGROUND);
+  self.velocity_z = self.velocity_z + 270;
+  jump_sound();
+};
 
 // --- spawn parms: the inventory carried from map to map ---
 // parm1 the items, parm2 health, parm3 armour, parm4..7 shells, nails, rockets and cells, parm8 the
@@ -88,12 +162,42 @@ entity(string kind) next_spot = {
   return spot;
 };
 
+// A spot no living player stands on (within a player's width), self aside.
+float(entity spot) spot_free = {
+  local entity e;
+  e = findradius(spot.origin, 40);
+  while (e) {
+    if (e != self && (e.flags & FL_CLIENT) && e.health > 0) return FALSE;
+    e = e.chain;
+  }
+  return TRUE;
+};
+
+// In coop the next coop start no one stands on (round the map's list; the map's start counts as
+// one), the next in turn when every one is taken.
+entity() coop_spot = {
+  local entity first, spot;
+  local float n;
+  first = next_spot("info_player_coop");
+  spot = first;
+  n = 0;
+  while (spot && n < 16) {
+    if (spot_free(spot)) return spot;
+    spot = next_spot("info_player_coop");
+    if (spot == first) spot = world;
+    n = n + 1;
+  }
+  spot = find(world, classname, "info_player_start");
+  if (spot && spot_free(spot)) return spot;
+  return first;
+};
+
 // A coop start in coop, a deathmatch spawn point in deathmatch, else the map's start; the start
 // when the map has none of the kind asked for.
 entity() spawn_point = {
   local entity spot;
   spot = world;
-  if (coop) spot = next_spot("info_player_coop");
+  if (coop) spot = coop_spot();
   else if (deathmatch) spot = next_spot("info_player_deathmatch");
   if (!spot) spot = find(world, classname, "info_player_start");
   if (!spot) error("the map has no info_player_start");

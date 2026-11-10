@@ -55,7 +55,7 @@ bool well_formed(const ClassicClient& c, const uint8_t* data, size_t size) {
 // well formed and fit; otherwise counts them dropped.
 void mod_bytes(ClassicServer& s, int slot, const uint8_t* data, size_t size, bool reliable) {
   ClassicClient& c = s.clients[slot];
-  if (size == 0) return;
+  if (size == 0 || c.local) return;
   if (!well_formed(c, data, size)) {
     s.counts.mod_bytes_dropped += static_cast<int64_t>(size);
     return;
@@ -70,6 +70,7 @@ void mod_bytes(ClassicServer& s, int slot, const uint8_t* data, size_t size, boo
 
 void unreliable_svc(ClassicServer& s, int slot, const SvcMsg& m) {
   ClassicClient& c = s.clients[slot];
+  if (c.local) return;
   uint8_t buf[kMaxMsgLen];
   gn::Writer w = gn::make_writer(buf, sizeof buf);
   write_svc(w, m, ctx_of(c));
@@ -81,8 +82,8 @@ void unreliable_svc(ClassicServer& s, int slot, const SvcMsg& m) {
 }
 
 int sound_index(const ClassicServer& s, const std::string& name) {
-  for (size_t i = 1; i < s.qc->sounds.size(); i++)
-    if (s.qc->sounds[i] == name) return static_cast<int>(i);
+  for (size_t i = 1; i < s.game->sounds.size(); i++)
+    if (s.game->sounds[i] == name) return static_cast<int>(i);
   return 0;
 }
 
@@ -141,6 +142,51 @@ void route_event(ClassicServer& s, const sv::NetEvent& ev) {
         m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
         unreliable_svc(s, j, m);
         break;
+      case sv::EventKind::point_effect: {
+        // A named effect: by its name to a client of the game's own that agreed it (the ge set);
+        // to a classic client only as the temporary entity of its name.
+        uint8_t kind = 0;
+        if (c.ext.has(ExtFamily::ge, kGeNamedEffects) && !ev.text.empty() && ev.text.size() < 64) {
+          m.id = svc::ge_point;
+          m.strings = {ev.text};
+          m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
+          const auto way = [](float v) {  // a unit way's part as a char of 1/127
+            const float q = v * 127;
+            return !(q > -127) ? -127 : q > 127 ? 127 : static_cast<int>(q);
+          };
+          const float n = ev.values[3];
+          m.ints = {way(ev.values[0]), way(ev.values[1]), way(ev.values[2]),
+                    !(n >= 1) ? 1
+                    : n > 255 ? 255
+                              : static_cast<int>(n)};
+          unreliable_svc(s, j, m);
+          break;
+        }
+        if (!sv::classic_temp_entity(ev.text, kind)) {
+          s.counts.effects_dropped++;
+          break;
+        }
+        m.id = svc::temp_entity;
+        m.ints = {kind};
+        if (kind == te::gunshot || kind == te::blood) {
+          const float n = ev.values[3];  // NaN: once
+          m.ints.push_back(!(n >= 1) ? 1 : n > 255 ? 255 : static_cast<int>(n));
+        }
+        m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
+        unreliable_svc(s, j, m);
+        break;
+      }
+      case sv::EventKind::trail_effect:  // a classic client has no message for a named trail
+        if (!c.ext.has(ExtFamily::ge, kGeNamedEffects) || ev.text.empty() || ev.text.size() >= 64) {
+          s.counts.effects_dropped++;
+          break;
+        }
+        m.id = svc::ge_trail;
+        m.strings = {ev.text};
+        m.floats = {ev.origin.x,  ev.origin.y,  ev.origin.z,
+                    ev.values[0], ev.values[1], ev.values[2]};
+        unreliable_svc(s, j, m);
+        break;
       case sv::EventKind::ambient:
         m.id = svc::spawnstaticsound;
         m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
@@ -153,7 +199,7 @@ void route_event(ClassicServer& s, const sv::NetEvent& ev) {
         break;
       case sv::EventKind::pause:
         m.id = svc::setpause;
-        m.ints = {s.qc->paused ? 1 : 0};
+        m.ints = {s.game->paused ? 1 : 0};
         reliable_svc(s, j, m);
         break;
       default:
@@ -163,7 +209,7 @@ void route_event(ClassicServer& s, const sv::NetEvent& ev) {
 }
 
 PmType pm_of(const ClassicServer& s, int slot) {
-  const sh::Edict& e = s.qc->sv.edicts[static_cast<size_t>(slot) + 1];
+  const sh::Edict& e = s.game->sv.edicts[static_cast<size_t>(slot) + 1];
   switch (sh::move_type_of(e, false)) {
     case sh::MoveType::spectator:
       return PmType::spectator;
@@ -176,16 +222,16 @@ PmType pm_of(const ClassicServer& s, int slot) {
     case sh::MoveType::lock:
       return PmType::lock;
     default:
-      return s.qc->sv.clients[static_cast<size_t>(slot)].jump_held ? PmType::normal_jump_held
-                                                                   : PmType::normal;
+      return s.game->sv.clients[static_cast<size_t>(slot)].jump_held ? PmType::normal_jump_held
+                                                                     : PmType::normal;
   }
 }
 
 PlayerState player_state(const ClassicServer& s, int about, int to) {
-  const sh::Server& sv = s.qc->sv;
+  const sh::Server& sv = s.game->sv;
   const sh::Edict& e = sv.edicts[static_cast<size_t>(about) + 1];
   const sh::ClientSlot& cs = sv.clients[static_cast<size_t>(about)];
-  const sv::RulesWorld& w = s.qc->world;
+  const sv::RulesWorld& w = s.game->world;
   const sv::WorldEntity& row = w.entities[static_cast<size_t>(about) + 1];
   PlayerState p;
   p.slot = about;
@@ -210,7 +256,7 @@ PlayerState player_state(const ClassicServer& s, int about, int to) {
   p.effects = row.effects;
   if (about == to && w.weapon_frames) {
     p.has_weaponframe = true;
-    p.weaponframe = w.clients[about].numbers.weapon_frame;
+    p.weaponframe = static_cast<int>(w.clients[about].numbers.weapon_frame);
   }
   p.dead = e.health <= 0;
   p.gib = e.mins.z != -24;
@@ -223,15 +269,15 @@ PlayerState player_state(const ClassicServer& s, int about, int to) {
 }  // namespace
 
 void player_stats(const ClassicServer& s, int slot, int32_t st[kStats], bool view_height) {
-  const sv::RulesWorld& w = s.qc->world;
+  const sv::RulesWorld& w = s.game->world;
   const sv::PlayerNumbers& n = w.clients[slot].numbers;
-  st[0] = n.health;
+  st[0] = static_cast<int32_t>(n.health);
   st[2] = n.weapon_model;
-  st[3] = n.current_ammo;
-  st[4] = n.armour;
-  for (int i = 0; i < 4; i++) st[6 + i] = n.ammo[i];
-  st[10] = n.weapon;
-  st[15] = n.items | (static_cast<int32_t>(w.serverflags) << 28);
+  st[3] = static_cast<int32_t>(n.current_ammo);
+  st[4] = static_cast<int32_t>(n.armour);
+  for (int i = 0; i < 4; i++) st[6 + i] = static_cast<int32_t>(n.ammo[i]);
+  st[10] = static_cast<int32_t>(n.weapon);
+  st[15] = static_cast<int32_t>(n.items) | (static_cast<int32_t>(w.serverflags) << 28);
   if (view_height) st[16] = static_cast<int32_t>(n.view_z);
 }
 
@@ -253,11 +299,24 @@ void update_stats(ClassicServer& s, int slot) {
   }
 }
 
+// Whether the client at `me` may see entity `ed`: its origin in the visibility set, or, for a brush
+// entity (a door, a plat, a button: its origin is its model's own, often the map's 0 0 0), its
+// box's middle or any of its corners, so a door is sent wherever its model stands.
+bool entity_seen(const ClassicServer& s, sh::Vec3f me, const sh::Edict& ed) {
+  const auto in = [&](sh::Vec3f p) { return s.game->vis(s.game->vis_ctx, me, p, true); };
+  if (ed.solid != sh::kSolidBsp) return in(ed.origin);
+  const sh::Vec3f lo = ed.absmin, hi = ed.absmax;
+  if (in({(lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f, (lo.z + hi.z) * 0.5f})) return true;
+  for (int k = 0; k < 8; k++)
+    if (in({(k & 1) ? hi.x : lo.x, (k & 2) ? hi.y : lo.y, (k & 4) ? hi.z : lo.z})) return true;
+  return false;
+}
+
 // The visible entities for a client, sorted by number, on its grid.
 void visible_entities(const ClassicServer& s, int slot, std::vector<EntityState>& out) {
   const ClassicClient& c = s.clients[slot];
   out.clear();
-  const sh::Server& sv = s.qc->sv;
+  const sh::Server& sv = s.game->sv;
   const int limit = c.ext.has(ExtFamily::x, kX256Entities) ? 256 : 64;
   const int top = c.ext.has(ExtFamily::x, kXEntityDbl2)  ? 2048
                   : c.ext.has(ExtFamily::x, kXEntityDbl) ? 1024
@@ -268,7 +327,7 @@ void visible_entities(const ClassicServer& s, int slot, std::vector<EntityState>
     if (ed.free) continue;
     const EntityState st = entity_state(s, e);
     if (st.modelindex == 0) continue;
-    if (s.qc->vis && !s.qc->vis(s.qc->vis_ctx, me, ed.origin, true)) continue;
+    if (s.game->vis && !entity_seen(s, me, ed)) continue;
     out.push_back(grid_entity(st, c.coords));
   }
   if (static_cast<int>(out.size()) > limit) {
@@ -283,9 +342,9 @@ void visible_entities(const ClassicServer& s, int slot, std::vector<EntityState>
 }
 
 void send_static_updates(ClassicServer& s) {
-  const int n = static_cast<int>(s.qc->statics.size());
+  const int n = static_cast<int>(s.game->statics.size());
   for (; s.statics_known < n; s.statics_known++) {
-    const sv::StaticEntity& st = s.qc->statics[static_cast<size_t>(s.statics_known)];
+    const sv::StaticEntity& st = s.game->statics[static_cast<size_t>(s.statics_known)];
     for (int j = 0; j < sh::kMaxClients; j++) {
       ClassicClient& c = s.clients[j];
       if (c.state != ConnState::spawned) continue;
@@ -302,7 +361,7 @@ void send_static_updates(ClassicServer& s) {
 }  // namespace
 
 void route_events(ClassicServer& s) {
-  sv::MessageSink& out = s.qc->out;
+  sv::MessageSink& out = s.game->out;
   if (s.mvd) mvd_events(s, *s.mvd);
   for (const sv::NetEvent& ev : out.events) route_event(s, ev);
   s.counts.events += static_cast<int64_t>(out.events.size());
@@ -342,7 +401,7 @@ void send_frames(ClassicServer& s) {
     ServerFrame& f = c.frames[seq & 63];
     f.sequence = seq;
     f.sent = s.now;
-    f.server_time = s.qc->sv.time;
+    f.server_time = s.game->sv.time;
     f.entities = false;
     if (c.state == ConnState::spawned) {
       if (c.chokecount) {
@@ -351,11 +410,11 @@ void send_frames(ClassicServer& s) {
         c.chokecount = 0;
       }
       for (int k = 0; k < sh::kMaxClients; k++) {
-        if (!s.clients[k].qc_active || s.clients[k].spectator) continue;
-        if (!s.qc->sv.clients[static_cast<size_t>(k)].active) continue;
-        const sh::Vec3f me = s.qc->sv.edicts[static_cast<size_t>(j) + 1].origin;
-        const sh::Vec3f it = s.qc->sv.edicts[static_cast<size_t>(k) + 1].origin;
-        if (k != j && s.qc->vis && !s.qc->vis(s.qc->vis_ctx, me, it, true)) continue;
+        if (!s.clients[k].rules_active || s.clients[k].spectator) continue;
+        if (!s.game->sv.clients[static_cast<size_t>(k)].active) continue;
+        const sh::Vec3f me = s.game->sv.edicts[static_cast<size_t>(j) + 1].origin;
+        const sh::Vec3f it = s.game->sv.edicts[static_cast<size_t>(k) + 1].origin;
+        if (k != j && s.game->vis && !s.game->vis(s.game->vis_ctx, me, it, true)) continue;
         write_byte(w, svc::playerinfo);
         write_playerinfo(w, player_state(s, k, j), c.ext);
       }

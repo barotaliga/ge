@@ -4,10 +4,12 @@
 // console line or a client sends; then the listen server on the built-in arena with three bots:
 // warmup with the limits held off, the bots ready as they join, the player ready, the countdown,
 // the map restarted for the match with every frag gone and every seat back on its team, and a map
-// change returning to warmup. The lobby panel drawn at two viewports.
+// change returning to warmup. The player on the lobby's screen, off the map, until he joins the
+// warmup (F4). The warmup's banner and the lobby's screen drawn at two viewports, in both looks.
 //
 // ge:summary Tests: the lobby: teams, ready and break, the countdown, warmup on the listen server
 // ge:keywords test lobby warmup countdown ready break team leader addbot match-restart panel
+// ge:keywords lobby-screen sitout togglewarmup frags-reset
 // ge:skill shooter testing
 #include <memory>
 #include <span>
@@ -19,9 +21,11 @@
 #include "progs/vm.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
+#include "shooters_edge/hud/lobby_page.hpp"
 #include "shooters_edge/hud/lobby_panel.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/server/lobby.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
@@ -112,8 +116,8 @@ TEST(only_the_leader_starts_and_too_few_players_wait) {
 }
 
 int frags_of(const cl::Listen& l, int slot) {
-  return static_cast<int>(
-      ge::progs::as_float(*ge::progs::entity_field(l.server->q.vm, slot + 1, ge::progs::kFFrags)));
+  return static_cast<int>(ge::progs::as_float(*ge::progs::entity_field(
+      shooters_edge::server::qc_of(*l.rules)->q.vm, slot + 1, ge::progs::kFFrags)));
 }
 
 TEST(the_listen_server_warms_up_then_restarts_the_map_for_the_match) {
@@ -121,7 +125,7 @@ TEST(the_listen_server_warms_up_then_restarts_the_map_for_the_match) {
   std::string error;
   CHECK_MSG(cl::baseline_progs(progs, error), error);
   cl::Listen l;
-  cl::ListenOptions opt;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.console = {"deathmatch 1", "fraglimit 20", "timelimit 10"};
   opt.lobby = true;
   opt.lobby_settings.countdown_s = 2;
@@ -131,6 +135,10 @@ TEST(the_listen_server_warms_up_then_restarts_the_map_for_the_match) {
   CHECK_MSG(cl::listen_start(l, progs, std::move(map), opt, error), error);
   CHECK(l.room != nullptr);
   CHECK(l.room->lobby.seats[0].used);
+  // The player opens on the lobby's screen, off the map, until he joins the warmup.
+  CHECK(cl::on_lobby_screen(l));
+  CHECK(!l.server->clients[0].active);
+  CHECK(sv::lobby_start(l.room->lobby, 0, l.server->sv.time) == sv::LobbyWhy::too_few);  // alone
   // Warmup holds the limits off.
   CHECK(l.server->cvars.find("fraglimit")->number == 0);
   CHECK(l.server->cvars.find("timelimit")->number == 0);
@@ -140,16 +148,31 @@ TEST(the_listen_server_warms_up_then_restarts_the_map_for_the_match) {
   CHECK(l.server->clients[3].active);
   CHECK(sv::info_value(l.server->clients[1].userinfo, "team") == "blue");
   CHECK(sv::info_value(l.server->clients[1].userinfo, "topcolor") == "13");
-  // Free roam: the bots run their commands with the player's; nobody leaves the warmup alone.
+  // The bots fight in the warmup while the player is on the lobby's screen; F4 puts him on the
+  // map, F4 again takes him off it.
   sh::MoveCmd idle;
+  for (int f = 0; f < 20; f++) cl::listen_frame(l, idle);
+  CHECK(!l.server->clients[0].active);
+  CHECK(cl::listen_lobby(l, "warmup"));
+  CHECK(l.server->clients[0].active);
+  CHECK(!cl::on_lobby_screen(l));
+  CHECK(sv::info_value(l.server->clients[0].userinfo, "team") == "red");
+  CHECK(cl::listen_lobby(l, "togglewarmup"));
+  CHECK(!l.server->clients[0].active);
+  CHECK(cl::listen_lobby(l, "togglewarmup"));
+  CHECK(l.server->clients[0].active);
+  // Free roam: the bots run their commands with the player's; nobody leaves the warmup alone.
   const sh::Vec3f bot_at = l.server->sv.edicts[2].origin;
   for (int f = 0; f < 600; f++) cl::listen_frame(l, idle);
   CHECK(l.room->lobby.phase == sv::LobbyPhase::warmup);
   const sh::Vec3f bot_now = l.server->sv.edicts[2].origin;
   CHECK(bot_now.x != bot_at.x || bot_now.y != bot_at.y);
   // A frag in the warmup does not count: give one by hand.
-  *ge::progs::entity_field(l.server->q.vm, 2, ge::progs::kFFrags) = ge::progs::as_word(3);
+  *ge::progs::entity_field(shooters_edge::server::qc_of(*l.rules)->q.vm, 2, ge::progs::kFFrags) =
+      ge::progs::as_word(3);
   CHECK(frags_of(l, 1) == 3);
+  CHECK(cl::listen_lobby_view(l).rows[1].frags == 3);  // the warmup's frags, on the lobby's screen
+  CHECK(cl::listen_lobby(l, "sitout"));  // the countdown and the match reach him off the map too
   CHECK(cl::listen_lobby(l, "team switch"));
   CHECK(l.room->lobby.seats[0].team == sv::Team::blue);
   CHECK(cl::listen_lobby(l, "ready"));
@@ -167,12 +190,14 @@ TEST(the_listen_server_warms_up_then_restarts_the_map_for_the_match) {
   CHECK(l.server->sv.time < warm_time);  // a new server: its clock started over
   CHECK(l.room->lobby.phase == sv::LobbyPhase::match);
   CHECK(ran >= 150 && ran <= 160);  // 2 s of 13 ms frames
-  CHECK(frags_of(l, 1) == 0);
+  CHECK(frags_of(l, 1) == 0);       // starting the match reset the warmup's frags
+  CHECK(!cl::on_lobby_screen(l));   // and put the player on the map
   for (int s = 1; s <= 4; s++) CHECK(l.server->sv.edicts[static_cast<size_t>(s)].health == 100);
   for (int s = 0; s < 4; s++) CHECK(l.server->clients[s].active);
   CHECK(sv::info_value(l.server->clients[0].userinfo, "team") == "blue");
   CHECK(l.server->cvars.find("fraglimit")->number == 20);
   CHECK(cl::listen_lobby(l, "ready"));  // refused in the match, but a lobby word
+  cl::listen_frame(l, idle);            // the server's answer goes out with its next frame
   bool refused = false;
   for (const std::string& p : l.prints)
     refused = refused || p.find("the match is on") != std::string::npos;
@@ -182,6 +207,8 @@ TEST(the_listen_server_warms_up_then_restarts_the_map_for_the_match) {
   CHECK_MSG(cl::listen_change(l, std::move(again), error), error);
   CHECK(l.room->lobby.phase == sv::LobbyPhase::warmup);
   CHECK(!l.room->lobby.seats[0].ready);
+  CHECK(cl::on_lobby_screen(l));  // back on the lobby's screen
+  CHECK(!l.server->clients[0].active);
   CHECK(l.server->clients[3].active);
   CHECK(cl::listen_lobby(l, "removebot"));
   CHECK(!l.server->clients[3].active);
@@ -199,24 +226,45 @@ TEST(the_lobby_words_are_console_commands) {
   CHECK(!l.prints.empty() && l.prints.back().find("no lobby runs") != std::string::npos);
 }
 
-TEST(the_panel_draws_at_both_viewports_and_not_in_the_match) {
+TEST(the_banner_and_the_lobbys_screen_draw_at_both_viewports_and_not_in_the_match) {
   shooters_edge::hud::LobbyView v;
+  v.map = "arena";
+  v.min_players = 2;
   v.rows = {{"player", 1, false, false, true, true},
-            {"bot1 (average)", 2, true, true, false, false}};
+            {"bot1 (average)", 2, true, true, false, false, true, 4}};
   for (const auto& [w, h] : {std::pair{1280, 720}, std::pair{390, 844}}) {
-    ge::ui::DrawList dl;
-    dl.begin(w, h);
-    shooters_edge::hud::draw_lobby(dl, v, w, h);
-    CHECK(dl.size() > 10);
+    ge::ui::DrawList banner, page;
+    banner.begin(w, h);
+    shooters_edge::hud::draw_lobby(banner, v, w, h);
+    CHECK(banner.size() >= 5);  // the box, the ready bar, the title, the count, the keys
+    page.begin(w, h);
+    shooters_edge::hud::draw_lobby_page(page, v, w, h);
+    CHECK(page.size() > banner.size());  // the teams, the notes and the keys
   }
-  v.phase = shooters_edge::hud::LobbyShown::match;
+  // Too few: the page says how many more the match needs.
+  shooters_edge::hud::LobbyView alone = v;
+  alone.rows.resize(1);
   ge::ui::DrawList dl;
   dl.begin(1280, 720);
-  shooters_edge::hud::draw_lobby(dl, v, 1280, 720);
-  CHECK(dl.size() == 0);
+  shooters_edge::hud::draw_lobby_page(dl, alone, 1280, 720);
+  bool needs = false;
+  for (const ge::ui::Cmd& c : dl.cmds())
+    needs = needs || (c.kind == ge::ui::CmdKind::text &&
+                      c.text.text.find("needs 2 players") != std::string::npos);
+  CHECK(needs);
+  v.phase = shooters_edge::hud::LobbyShown::match;
+  for (const bool page : {false, true}) {
+    ge::ui::DrawList m;
+    m.begin(1280, 720);
+    if (page)
+      shooters_edge::hud::draw_lobby_page(m, v, 1280, 720);
+    else
+      shooters_edge::hud::draw_lobby(m, v, 1280, 720);
+    CHECK(m.size() == 0);
+  }
 }
 
-TEST(the_classic_look_draws_in_the_packs_pictures_and_stops_above_the_status_bar) {
+TEST(the_classic_look_draws_in_the_packs_pictures_and_the_screen_fits_the_classic_frame) {
   namespace sm = shooters_edge::menu;
   const auto files = sm::fixture_files();
   sm::ClassicArt art;
@@ -229,33 +277,37 @@ TEST(the_classic_look_draws_in_the_packs_pictures_and_stops_above_the_status_bar
   CHECK(sm::load_classic_art(find, &art, &error));
   shooters_edge::hud::LobbyView v;
   v.rows = {{"player", 1, false, false, true, true},
-            {"bot1 (average)", 2, true, true, false, false}};
-  const auto drawn = [&](const shooters_edge::hud::LobbyView& view, int w, int h) {
+            {"bot1 (average)", 2, true, true, false, false, true, 2}};
+  const auto drawn = [&](const shooters_edge::hud::LobbyView& view, int w, int h, bool page) {
     ge::ui::DrawList dl;
     dl.begin(w, h);
-    sm::draw_lobby_classic(dl, art, view, w, h);
+    if (page)
+      sm::draw_lobby_page_classic(dl, art, view, w, h);
+    else
+      sm::draw_lobby_classic(dl, art, view, w, h);
     return dl.size();
   };
-  for (const auto& [w, h] : {std::pair{1280, 720}, std::pair{390, 844}}) CHECK(drawn(v, w, h) > 40);
-  // The countdown adds the big figures; a hidden roster leaves the banner alone.
+  for (const auto& [w, h] : {std::pair{1280, 720}, std::pair{390, 844}}) {
+    CHECK(drawn(v, w, h, false) > 20);
+    CHECK(drawn(v, w, h, true) > drawn(v, w, h, false));
+  }
+  // The countdown adds the big figures to the banner.
   shooters_edge::hud::LobbyView c = v;
   c.phase = shooters_edge::hud::LobbyShown::countdown;
   c.seconds_left = 3;
-  CHECK(drawn(c, 1280, 720) > drawn(v, 1280, 720));
-  shooters_edge::hud::LobbyView hidden = v;
-  hidden.roster = false;
-  CHECK(drawn(hidden, 1280, 720) < drawn(v, 1280, 720));
-  // A full team shows as many rows as fit above the status bar, and no more.
-  CHECK(sm::lobby_classic_rows() == 7);
+  CHECK(drawn(c, 1280, 720, false) > drawn(v, 1280, 720, false));
+  // A full team shows as many rows as fit, and no more.
+  CHECK(sm::lobby_classic_rows() == 5);
   shooters_edge::hud::LobbyView full, more;
-  for (int i = 0; i < 7; i++) full.rows.push_back({"bot" + std::to_string(i), 1, true, true});
+  for (int i = 0; i < 5; i++) full.rows.push_back({"bot" + std::to_string(i), 1, true, true});
   more = full;
-  for (int i = 7; i < 12; i++) more.rows.push_back({"bot" + std::to_string(i), 1, true, true});
-  // Only the tallies differ (7/7 and 7 OF 7 against 12/12 and 12 OF 12): four glyphs more.
-  CHECK(drawn(more, 1280, 720) == drawn(full, 1280, 720) + 4);
+  for (int i = 5; i < 9; i++) more.rows.push_back({"bot" + std::to_string(i), 1, true, true});
+  // Only the tallies differ (5/5 and 5 OF 5 against 9/9 and 9 OF 9): no glyph more.
+  CHECK(drawn(more, 1280, 720, true) == drawn(full, 1280, 720, true));
   shooters_edge::hud::LobbyView m = v;
   m.phase = shooters_edge::hud::LobbyShown::match;
-  CHECK(drawn(m, 1280, 720) == 0);
+  CHECK(drawn(m, 1280, 720, false) == 0);
+  CHECK(drawn(m, 1280, 720, true) == 0);
 }
 
 }  // namespace

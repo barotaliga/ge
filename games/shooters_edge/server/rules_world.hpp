@@ -11,6 +11,7 @@
 // ge:summary The rules' world: the lists, the clients and one row an entity, filled by the runner
 // ge:keywords rules-world rules-runner runner world-view entity-rows client-rows player-numbers
 // ge:keywords fill_world model-list sound-list vwep statics lightstyles serverinfo frags stats
+// ge:keywords model-shown taken-item hidden-item model-text
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_rules_world_test.cpp
 #pragma once
@@ -33,21 +34,27 @@ struct WorldEntity {
   bool free = true;
   sh::Vec3f origin, angles, velocity;
   sh::Vec3f mins, maxs;
-  int modelindex = 0;  // the model list's index; 0 none
+  sh::Vec3f absmin, absmax;  // the box in the world, as the world links it
+  sh::Vec3f view_angles;     // a player's view, degrees
+  int flags = 0;             // the loop's flags (on the ground, in water, ...)
+  int waterlevel = 0;        // 0 dry .. 3 under
+  int modelindex = 0;        // the model list's index; 0 none
   int frame = 0, skin = 0, colormap = 0, effects = 0;
   float alpha = 1;  // 1 opaque (the extension field; 1 when the program has none)
   float health = 0;
 };
 
-// What a player carries, by meaning (a program without one of them leaves it 0).
+// What a player carries, by meaning, as the rules hold it (a program without one leaves it 0). A
+// reader that shows a whole number truncates it (`static_cast<int>`), as the wire does.
 struct PlayerNumbers {
-  int health = 0, armour = 0;
-  int ammo[4] = {};  // shells, nails, rockets, cells
-  int current_ammo = 0;
-  int weapon = 0;        // the program's weapon bit
+  float health = 0, armour = 0;
+  float armour_type = 0;  // the share of a blow the armour takes, 0..1
+  float ammo[4] = {};     // shells, nails, rockets, cells
+  float current_ammo = 0;
+  float weapon = 0;      // the program's weapon bit
   int weapon_model = 0;  // the model list's index of the held weapon; 0 none
-  int weapon_frame = 0;
-  int items = 0;     // the program's item bits
+  float weapon_frame = 0;
+  float items = 0;   // the program's item bits
   float view_z = 0;  // the eye above the origin
   float frags = 0;
 };
@@ -95,6 +102,11 @@ struct RulesWorld {
 };
 
 struct QcServer;
+
+// True when entity `e` is shown: drawn by a window and sent to clients. It needs a model index
+// AND a model text: a program hides a taken item by emptying its `model` (keeping the index, so
+// setting the text again brings it back), and such an entity is drawn and sent by no one.
+bool model_shown(const QcServer& s, int e);
 
 // The runner's half for the QC server: the lists, then the clients and every entity row. The lists
 // are copied only at the map's start (`full`); a frame's fill rewrites the rest in place.

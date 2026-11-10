@@ -23,8 +23,6 @@ namespace ge::cli {
 
 namespace {
 
-constexpr size_t kMaxPage = 15u << 20;  // a published page's limit is 16 MB: a margin under it
-
 std::optional<double> number_of(const std::string& s) {
   if (s.empty()) return std::nullopt;
   char* end = nullptr;
@@ -405,23 +403,42 @@ bool read_page(const fs::path& repo, const std::string& id, const PublishOptions
 
 }  // namespace
 
-Outcome run_lab_publish(const fs::path& repo, const PublishOptions& o) {
+Outcome run_lab_publish(const fs::path& repo, const PublishOptions& asked) {
+  // A page past the limit is built again with its pictures at a smaller width, down to
+  // kMinFitWidth, so a run with many or large shots still publishes in one call.
+  constexpr int kMinFitWidth = 180;
+  PublishOptions o = asked;
   Outcome out;
-  std::vector<Page> pages;
   int unreadable = 0;
   size_t shots = 0, metrics = 0, tables = 0;
-  for (const std::string& id : o.ids) {
-    Page page;
-    if (!read_page(repo, id, o, page, unreadable, out)) return out;
-    shots += page.shots.size();
-    metrics += page.metrics.size();
-    tables += page.tables.size();
-    pages.push_back(std::move(page));
+  std::string html;
+  for (;;) {
+    out = Outcome{};
+    unreadable = 0;
+    shots = metrics = tables = 0;
+    std::vector<Page> pages;
+    for (const std::string& id : o.ids) {
+      Page page;
+      if (!read_page(repo, id, o, page, unreadable, out)) return out;
+      shots += page.shots.size();
+      metrics += page.metrics.size();
+      tables += page.tables.size();
+      pages.push_back(std::move(page));
+    }
+    html = publish_html(pages, 60, o.title);
+    if (html.size() <= o.max_page || o.width <= kMinFitWidth) break;
+    o.width = std::max(kMinFitWidth, o.width * 3 / 4);
   }
+  if (o.width != asked.width)
+    out.findings.push_back({Severity::warn,
+                            "the pictures were shrunk to " + std::to_string(o.width) +
+                                " px wide (asked " + std::to_string(asked.width) +
+                                ") to keep the page under its limit (" +
+                                std::to_string(o.max_page >> 20) + " MB)",
+                            "", "fewer shots keep them larger: ge lab <id> --shots=<id,...>"});
   std::string error;
   const std::string name = o.ids.size() == 1 ? o.ids[0] : "the labs";
   const fs::path dir = o.ids.size() == 1 ? repo / "previews" / o.ids[0] : repo / "previews";
-  const std::string html = publish_html(pages, 60, o.title);
   const fs::path file = o.out.empty() ? dir / "publish.html" : fs::path(o.out);
   if (!write_text(file, html, error)) {
     out.findings.push_back({Severity::error, "could not write the page: " + error, file.string(),
@@ -435,13 +452,15 @@ Outcome run_lab_publish(const fs::path& repo, const PublishOptions& o) {
   const double mb = static_cast<double>(html.size()) / (1u << 20);
   char size[32];
   std::snprintf(size, sizeof size, "%.1f MB", mb);
-  if (html.size() > kMaxPage)
+  if (html.size() > o.max_page)
     out.findings.push_back(
         {Severity::error,
-         std::string("the page is ") + size + ", past the 15 MB a published page may be",
+         std::string("the page is ") + size + ", past its limit (" +
+             std::to_string(o.max_page >> 20) + " MB)",
          file.string(),
-         "shrink it: --width=" + std::to_string(o.width / 2) +
-             ", or run the lab with fewer shots"});
+         "even at " + std::to_string(o.width) +
+             " px wide; run the lab with fewer shots (--shots=<id,...>), or publish its labs "
+             "one at a time"});
   out.text.append("  page: ").append(file.string()).append("  (").append(size).append(")\n");
   out.text.append("  pictures: ").append(std::to_string(shots));
   if (!o.before.empty()) out.text.append(", each beside the kept run ").append(o.before);

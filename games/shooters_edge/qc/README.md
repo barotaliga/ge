@@ -54,6 +54,8 @@ then its own files (`progs.src` lists them in order), `world.qc` last.
 | `campaign/monsters_air.qc` | The roster, continued: the flyer and the eel |
 | `campaign/monsters_big.qc` | The roster, continued: the leaper, the giant and the caster |
 | `campaign/monsters_more.qc` | The roster, continued: the trooper, the spawn and the heavy swordsman |
+| `campaign/bosses.qc` | The bosses and their set pieces: the lava boss and the lightning, the final boss and the teleport train, and the campaign's teleporting |
+| `campaign/set_pieces.qc` | The other set pieces: trains, secret doors, exploding boxes, fireball spouts, spike and laser traps, bubbles, the ambient sounds |
 | `campaign/world.qc` | The world, the intermission and the next map, the campaign's map things |
 
 ## The game
@@ -71,6 +73,11 @@ then its own files (`progs.src` lists them in order), `world.qc` last.
   second, or by himself after five.
 - **The match**: `deathmatch`, `fraglimit` and `timelimit` are read from the server's cvars every
   frame; when a limit is hit the scores are printed and the level changes five seconds later.
+- **A loaded game's words**: with a classic game's packs open, the server's local info holds its
+  item names (read by `name_of`) and its server words (`game_words(key, a, b, c, d)` in the
+  arena's glue, the `words` builtin #640): its deaths, its clock, the end and the powers wearing
+  off. Each returns "" when the game names none, and the mod then says its own words; a new
+  message is a key in `profiles/words.hpp` and a `game_words` call.
 - **The map's entities**: `info_player_deathmatch`, `info_player_start`, `func_wall`,
   `func_illusionary`, `func_door` (opens for a player near it, or when triggered), `func_plat`,
   `func_button`, `trigger_multiple`, `trigger_once`, `trigger_teleport` with

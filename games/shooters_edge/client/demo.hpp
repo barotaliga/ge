@@ -112,6 +112,7 @@ enum DemoStat : uint8_t {
 struct DemoEntity {
   sh::Vec3f origin, angles;  // units, degrees
   int model = 0, frame = 0, skin = 0, effects = 0;
+  int weapon_frame = 0;  // a player's held weapon's frame (client, multiview; single: DemoState's)
   bool present = false;  // updated this frame (single) or in the last entity list (client)
   bool dead = false, gib = false;  // a multiview player's state this frame (its dead and gib bits)
 };
@@ -152,6 +153,29 @@ struct DemoVoice {
   std::vector<uint8_t> data;  // the frames: each a u16 length and its bytes
 };
 
+// A temporary entity the frame sent: a hit, a spike, an explosion, a beam, a splash, blood.
+// `named` and `named_trail`: the game's own named effects (svc 120, 121; `Demo::named_effects`).
+enum class DemoEffectKind : uint8_t {
+  spike,
+  gunshot,
+  explosion,
+  beam,
+  lava,
+  teleport,
+  blood,
+  named,
+  named_trail
+};
+struct DemoEffect {
+  DemoEffectKind kind = DemoEffectKind::gunshot;
+  int code = 0;       // the message's kind byte
+  int count = 1;      // a gunshot's pellets, blood's drops (the multiplayer protocol's); else 1
+  int entity = 0;     // a beam's owner
+  sh::Vec3f at, end;  // units; a beam's start and end (`end` is `at` for the rest); a trail's
+  sh::Vec3f way;      // a named effect's way
+  std::string name;   // a named effect's
+};
+
 struct DemoState {
   DemoFormat format = DemoFormat::single;
   bool voice_format = false;                // a `.qwdv` or `.mvdv` (the voice header)
@@ -162,8 +186,10 @@ struct DemoState {
   sh::Vec3f eye;                            // the view's eye, units
   sh::Vec3f angles;                         // the view's angles, degrees
   int view_entity = 1;                      // single: the entity the eye rides
+  int max_clients = 1;                      // single: the players, entities 1 to this
   int player = 0;                           // the recording (client) or tracked (multiview) slot
   float view_height = 22;                   // over the origin, units
+  int weapon_frame = 0;                     // single: the held weapon's frame (client data)
   bool intermission = false;                // the level ended: the eye is the intermission's
   int32_t stats[kStatCount] = {};           // health, ammo, items ... (DemoStat)
   std::vector<std::string> models, sounds;  // precache lists, index 1 first ([0] is "")
@@ -181,8 +207,10 @@ struct DemoState {
   std::vector<std::pair<int, int>> stopped;  // (entity, channel) stopped
   std::vector<DemoVoice> voice;              // voice messages, in order
   std::vector<DemoPrint> prints;             // lines printed (a multiview: the tracked one's)
-  std::string centre;  // a centre message or the finale's text (the last); empty when none
-  int64_t frames = 0;  // frames read
+  std::vector<DemoEffect> effects;           // temporary entities, in order
+  std::string centre;       // a centre message or the finale's text (the last); empty when none
+  uint32_t set_angles = 0;  // client, multiview: a bit a slot whose view the server set (setangle)
+  int64_t frames = 0;       // frames read
 };
 
 struct Demo {
@@ -200,6 +228,9 @@ struct Demo {
   int cmd_size = 0;                   // the client format's usercmd struct: 24 or 28 (0: unknown)
   int player_model = 0;  // the client format's `progs/player.mdl` index: a playerinfo's default
   bool ended = false;
+  // The stream is a live connection's that agreed the game's own named effects (the ge set): its
+  // ids 120 and 121 are read as them. Off (every file), they are ids this reader does not know.
+  bool named_effects = false;
   // The multiview format: the player the view rides (-1: the lowest slot playing), each player's
   // own stats (the stats records write them; the tracked one's are copied to `state.stats`).
   int track = -1;

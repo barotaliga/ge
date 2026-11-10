@@ -139,10 +139,39 @@ TEST(buttons_follow_keys) {
 TEST(command_line_plus_commands) {
   Console c;
   c.cvars().add({.name = "r_x", .fallback = "0"});
-  CHECK(c.append_command_line({"ignored", "+set", "r_x", "2", "+echo", "a b"}) == 2);
+  CHECK(c.append_command_line({"+set", "r_x", "2", "+echo", "a b"}) == 2);
   c.run();
   CHECK(c.cvars().find("r_x")->number == 2);
   CHECK(c.output().back() == "a b");
+}
+
+// The first command on the command line needs no `+`; a `+` starts each one after it.
+TEST(command_line_first_command_needs_no_plus) {
+  Console c;
+  c.cvars().add({.name = "r_x", .fallback = "0"});
+  CHECK(c.append_command_line({"set", "r_x", "3", "+echo", "done"}) == 2);
+  c.run();
+  CHECK(c.cvars().find("r_x")->number == 3);
+  CHECK(c.output().back() == "done");
+}
+
+// `+` and `-` mark a button's press and release; a plain command typed with a `+` runs as itself,
+// and its `-` (a key bound to `+coopgame` let go) runs nothing.
+TEST(a_plus_on_a_plain_command_is_dropped) {
+  Console c;
+  std::vector<std::string> got;
+  c.add_command("coopgame", "", [&got](Console&, const Args& a) { got.push_back(a.raw); });
+  Button& jump = c.add_button("jump", "");
+  c.execute("+coopgame 2 expert");
+  CHECK(got.size() == 1 && got[0] == "coopgame 2 expert");
+  c.execute("-coopgame");
+  CHECK(got.size() == 1 && c.problems().empty());
+  c.execute("+jump");
+  CHECK(jump.down());
+  c.execute("-jump");
+  CHECK(!jump.down());
+  c.execute("+nothing");
+  CHECK(!c.problems().empty() && c.problems().back().what == "unknown command '+nothing'");
 }
 
 TEST(completion_and_suggestions) {
@@ -173,4 +202,18 @@ TEST(a_command_taken_away_is_gone) {
   CHECK(c.remove_command("NEWGAME"));
   CHECK(!c.has_command("newgame"));
   CHECK(!c.remove_command("newgame"));
+}
+
+TEST(a_host_takes_the_lines_no_command_names) {
+  Console c;
+  std::vector<std::string> taken;
+  c.set_unknown([&](const Args& a) {
+    if (a[0] == "nothing") return false;
+    taken.push_back(a.raw);
+    return true;
+  });
+  c.execute("bot1 skill expert\nskill novice\nnothing here\n");
+  CHECK(taken.size() == 2);
+  CHECK(taken.size() == 2 && taken[0] == "bot1 skill expert" && taken[1] == "skill novice");
+  CHECK(!c.problems().empty() && c.problems().back().what == "unknown command 'nothing'");
 }

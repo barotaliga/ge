@@ -10,25 +10,44 @@
 //   wind, so a powder cloud drifts off downwind), and
 //   the ground (the terrain's heights, render/terrain.hpp): a grain that comes down on the snow is
 //   gone, a fine one comes to rest on it and fades (one under the snow and rising is coming up out
-//   of it: a ski sinks into soft snow, and what it throws starts there). `step_particle` is its CPU
+//   of it: a ski sinks into soft snow, and what it throws starts there); and a particle's own
+//   `floor_y`, where a game says (a chip knocked off a wall hops on the floor below and lies
+//   there). `step_particle` is its CPU
 //   twin, which the test holds the pass to.
+// - WHAT WAS DRAWN (`ParticleSettings::collide`, a world of brushes or models): a particle that
+//   falls (a grain, a spark, a chip of debris) meets whatever the last frame drew. The sim runs
+//   before the frame is drawn, so the depth target still holds the last frame's, and the pool keeps
+//   the camera that drew it (`prepare_particles`'s view). A particle that has gone behind the
+//   surface there by less than a step's travel is put back on its face, and its speed into the
+//   face is turned back at its `bounce` (kSurfaceBounce when it has none), its way along the face
+//   slowed by kFloorSlide; slower than kFloorRest it lies there and fades on a floor and slides
+//   down a wall. The face's normal is rebuilt from the depth beside it. Only what the last frame
+//   saw can be met: a spark off the screen or behind the eye flies on, and nothing nearer the
+//   eye than 0.8 m is met (the held weapon is drawn into the same depth). `collide_particle` is the
+//   bounce's CPU twin.
 // - THE DRAW ("particles", after the sky, before the resolve): one quad a slot, a dead one folded
 //   away in the vertex stage. A particle is a STREAK along its motion over `streak` s (a fast grain
 //   reads as a stroke, the way a camera's shutter sees spray) at least `size` m long, thinned by
 //   its length so a fast grain is no brighter than a slow one, faded in over its first tenth and
-//   out over its last third, and SOFTENED where it nears what is behind it (the depth, read). It is
+//   out over its last third, GROWN by `grow` m a second of its age (a puff spreading as it thins:
+//   its opacity falls by its width), and SOFTENED where it nears what is behind it (the depth,
+//   read). It is
 //   lit as the instances are, by the sun past the ground's horizon and the shadow maps and by the
-//   sky, with a forward lobe so spray seen into a low sun is silver, and hazed. Blended
+//   sky, with a forward lobe so spray seen into a low sun is silver, its `tint` the colour of what
+//   it reflects (blood red, dust tan; white for snow), and hazed. Blended
 //   premultiplied over the picture, unsorted (a grain is small and nearly opaque, the fines nearly
 //   clear). A particle with a `kelvin` GLOWS as well: a blackbody at a heat falling from it toward
 //   700 K by e every `cool_s` (render/blackbody.hpp's table, kSparkEmissivity of a perfect
 //   radiator's light), so a spark thrown white-hot reddens and goes dark as it falls; it writes the
 //   motion target's reactive channel (b) so the resolve does not smear it, and nothing else there.
+//   One with a negative `kelvin` SHINES its tint instead, unlit, in the picture's whites (a
+//   classic palette speck: its colour drifts toward its `albedo`'s grey as it ages).
 //
 // ge:summary GPU particles: a ring pool, births, the compute flight, streaks softened by depth
 // ge:keywords render particles spray particle-pool ring births compute streak soft-particles
 // ge:keywords premultiplied reactive emit_particles prepare_particles encode_particles_sim
 // ge:keywords encode_particles step_particle create_particles read_particles glow spark kelvin
+// ge:keywords shine emissive palette-speck tint grow
 // ge:skill render
 // ge:test tests/render_particles_test.cpp
 #pragma once
@@ -57,20 +76,54 @@ struct Particle {
   float streak;   // s of motion drawn as its streak
   float albedo;   // its whiteness, 0..1
   float opacity;  // at its densest, 0..1
-  float kelvin;   // a glowing particle's heat at birth, K (0: it gives no light of its own)
-  float cool_s;   // its heat's fall toward a dull red, e-folding s
+  // A glowing particle's heat at birth, K (0: it gives no light of its own). Below 0 it SHINES
+  // instead: an unlit speck of its `tint` (linear) at -kelvin times the light of a white surface
+  // the picture is keyed to (frame.wgsl's white_luminance: 1 reads as a fullbright texel of that
+  // colour), the colour turning toward the grey `albedo` by e every `cool_s` (0: steady): a
+  // classic palette speck, an ember's yellow going to brown, a trail's orange going to grey.
+  float kelvin;
+  float cool_s;                        // its heat's (its colour's) fall, e-folding s
+  float tint[3] = {1.0f, 1.0f, 1.0f};  // the colour its albedo reflects (1, 1, 1: grey)
+  float grow = 0;                      // m across it gains a second (a puff of smoke spreading)
+  // A FLOOR of its own (world y, m: the floor under where a game threw it, in a world the pool has
+  // no ground for): coming down on it, it hops back up at `bounce` of its speed (the rest of its
+  // way along the floor slowed by kFloorSlide) while it falls faster than kFloorRest m/s, else it
+  // lies there and fades. Below every floor by default: it never lands.
+  float floor_y = -1e9f;
+  float bounce = 0;
+  float hops = 0;  // the hops it has made off a floor or a drawn surface (max_hops: then it lies)
+  // m/s: THE AIR'S EDDIES it rides (`eddy`: crossed travelling waves round it, its own phase), so
+  // a fleck over a fire swirls and zig-zags instead of rising on a line; 0: the still air or the
+  // wind alone.
+  float swirl = 0;
 };
-static_assert(sizeof(Particle) == 64, "match particles.wgsl's Particle");
+static_assert(sizeof(Particle) == 96, "match particles.wgsl's Particle");
+inline constexpr float kFloorRest = 0.35f;   // m/s: slower than this down, it lies still
+inline constexpr float kFloorSlide = 0.55f;  // its way along the floor kept at a hop
+// A thrown thing hops twice at most, a third of them three times (`max_hops`, by the particle's own
+// size and life, so the same particle always the same), then it lies where it came down.
+inline constexpr float kMaxHops = 2;
+inline constexpr float kSurfaceBounce = 0.35f;  // a drawn surface's hop for one with no `bounce`
+inline constexpr float kSurfaceSkin = 0.12f;    // m behind a drawn surface still counted as on it
 
 inline constexpr double kGravity = 9.81;          // m/s²
 inline constexpr double kSparkEmissivity = 0.35;  // a glowing particle's light over a blackbody's
 
-// THE FLIGHT of one particle over `dt` s (no ground) in air moving at `air` m/s (null: still): the
-// CPU twin of particles_sim.wgsl's `fly`.
+// THE FLIGHT of one particle over `dt` s (no terrain; its own floor) in air moving at `air` m/s
+// (null: still) and the eddies round it (`eddy`): the CPU twin of particles_sim.wgsl's `fly` and
+// its floor.
 void step_particle(Particle& p, float dt, const float air[3] = nullptr);
+// The eddies' air round `p` now, m/s (particle_types.wgsl's `eddy`, its twin).
+void eddy(const Particle& p, float out[3]);
+// THE BOUNCE off a drawn surface whose face at `at` (world m) points along `normal` (unit, out of
+// it): the CPU twin of particles_sim.wgsl's `off_surface`, for a particle found behind it.
+void collide_particle(Particle& p, const float at[3], const float normal[3]);
+// How many hops `p` makes at most: kMaxHops, or one more for about a third (particle_types.wgsl's).
+float max_hops(const Particle& p);
 
 struct ParticleSettings {
   uint32_t capacity = 16384;  // slots in the ring
+  bool collide = false;       // particles that fall meet what the last frame drew (its depth)
   float soft_m = 0.4f;        // the depth over which a particle fades into what is behind it
   float glow = 1;             // the glowing particles' light, a share of kSparkEmissivity's
 };
@@ -90,6 +143,14 @@ struct Particles {
   // A pool with no ground's stand-ins (the second `create_particles`).
   wgpu::Buffer ground;
   wgpu::Texture ground_height, ground_horizon;
+  // The sim's ground and the depth it meets (a blank until the targets are bound), and the camera
+  // the depth target was last drawn by (`collide`).
+  wgpu::Buffer sim_ground;
+  wgpu::TextureView sim_heights;
+  wgpu::Texture blank_depth;
+  float seen_vp[16] = {}, seen_inv[16] = {};
+  double seen_eye[3] = {0, 0, 0};
+  bool seen = false;
 };
 
 // The pool, its pipelines (into `pipelines`, before the load ends) and its groups over the
@@ -117,6 +178,10 @@ void clear_particles(gpu::Device& device, Particles& particles);
 // velocity, m/s, that every particle's drag pulls it toward (null: still air).
 void prepare_particles(gpu::Device& device, Particles& particles, double dt, double near_m,
                        const double* air = nullptr);
+// The same for a pool that `collide`s: `view` on a `width` x `height` render is the camera this
+// frame is drawn by, kept for the next frame's sim (the depth it meets is this frame's).
+void prepare_particles(gpu::Device& device, Particles& particles, double dt, const FrameView& view,
+                       uint32_t width, uint32_t height, const double* air = nullptr);
 
 // The two passes: "particles.sim" (before any view is drawn) and "particles" (after the sky).
 void encode_particles_sim(const Particles& particles, const gpu::PipelineSet& pipelines,

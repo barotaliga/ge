@@ -29,7 +29,7 @@
 // ge:summary The console: the command buffer, commands, aliases, macros, exec, keys, problems
 // ge:keywords console command commands buffer append insert run wait alias aliases macro exec
 // ge:keywords cfg config autoexec problem problems stuff stuffcmd kstuffable source depth
-// ge:keywords set_fallback_reader fallback-reader
+// ge:keywords set_fallback_reader fallback-reader set_unknown unknown-command host-commands
 // ge:keywords complete completion key press release button command-line plus-set
 // ge:skill console
 // ge:test tests/console_console_test.cpp tests/console_script_test.cpp
@@ -133,8 +133,8 @@ class Console {
 
   // `exec`: the file's commands inserted at the front. False, with a problem, when not found.
   bool exec_file(std::string_view name, Source source = Source::local, const Origin& from = {});
-  // The command line's `+cmd args …` runs (`+exec my.cfg +set r_x 1`), appended in order;
-  // words before the first `+` are ignored. Returns how many commands it appended.
+  // The command line's commands, appended in order: a `+` starts each (`+exec my.cfg +set r_x 1`),
+  // and the first needs none (`coopgame 2 expert +map e1m2` is two). Returns how many it appended.
   int append_command_line(const std::vector<std::string>& args);
 
   // FILES: the search directories, the first also where cfg_save writes.
@@ -147,6 +147,10 @@ class Console {
   // A host's reader tried after the directories find nothing (a game's packs, say); the
   // directories still come first and writes still go to the first of them.
   void set_fallback_reader(Reader read);
+  // A host's own command set past the console's: a line whose first word is no command, cvar or
+  // alias goes to `run` (the whole line, as typed) and is not refused when it returns true (a
+  // window driving bots takes `skill expert` and `bot1 skill expert`). Null: refused as unknown.
+  void set_unknown(std::function<bool(const Args&)> run) { unknown_ = std::move(run); }
   bool read_file(std::string_view name, std::string& text) const;
   bool write_file(std::string_view name, std::string_view text) const;
 
@@ -229,6 +233,8 @@ class Console {
     std::string via;  // the alias or file it came from, for a depth problem
   };
   void dispatch(Entry& e);
+  // A command or an alias of that (lower-case) name.
+  bool known_name(const std::string& name) const;
   void queue_front(std::string_view text, Source source, const Origin& where, int depth,
                    const std::string& via, bool keep_lines);
   void register_builtins();
@@ -250,6 +256,7 @@ class Console {
   std::vector<std::filesystem::path> search_;
   Reader reader_;
   Reader fallback_;
+  std::function<bool(const Args&)> unknown_;
   Writer writer_;
   std::function<void(std::string_view)> sink_;
   std::vector<std::string> output_;

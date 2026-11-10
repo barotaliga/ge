@@ -34,6 +34,7 @@ float FL_INWATER = 16;
 float FL_MONSTER = 32;
 float FL_ITEM = 256;
 float FL_ONGROUND = 512;
+float FL_JUMPRELEASED = 4096;  // the jump let go since the last one (no pogo)
 
 // takedamage
 float DAMAGE_NO = 0;
@@ -128,6 +129,7 @@ float EF_RED = 128;     // the shield's
 .float wait;              // seconds a mover or trigger waits
 .float speed;             // a mover's units per second, a missile's
 .float lip;               // the units a door leaves showing
+.float worldtype;         // the world's: 0, 1 or 2, the locked doors' sounds by it
 .float height;            // the units a plat travels (its own height when not set)
 .float dmg;               // damage a mover or a trigger deals
 .float state;             // a mover's: STATE_ below
@@ -139,24 +141,35 @@ float EF_RED = 128;     // the shield's
 .float respawn_time;      // an item's seconds to come back
 .float hazard_finished;   // when lava or slime next hurts
 .float super_damage_finished;  // the quad runs out
+.float power_said;             // the powers whose wearing off was told (IT_QUAD, IT_INVULNERABILITY)
 .float invincible_finished;    // the shield runs out
+.float shield_finished;  // deathmatch 4: a spawn's protection runs out (common/dmm4.qc)
+.float shield_said;      // its running out told
+.float shield_flash;     // its next flash
+.float shield_heard;     // a soaked hit next heard after this
 .float light_lev;         // a light's brightness (the map's "light" key)
 .float style;             // a light's style
 .void() th_die;           // what a death does to this kind of thing (unset: a player's)
 .void() th_hurt;          // what a hit that leaves it alive does (unset: a player's pain)
 .float show_hostile;      // a player is noisy until this (he fired): monsters hear him
 .float blast_share;       // the share of a blast it takes (0: all of it)
+.float body_next;         // a player's next body frame is due (common/player.qc)
+.float body_first;        // the first frame of the cycle his body plays
+.float body_step;         // the cycle's next step
+.float splash_next;       // a swimmer's next splash may be heard (common/player.qc)
 
 float STATE_TOP = 0;
 float STATE_BOTTOM = 1;
 float STATE_UP = 2;
 float STATE_DOWN = 3;
+float STATE_WAITING = 4;  // a named plat at its top, until it is used
 
 // --- the mod's own globals ---
 
 float fraglimit;
 float timelimit;
 float match_over;
+float telefragging;     // a telefrag under way: it kills a teammate too
 float intermission_time;  // when the match ended (0: still on)
 entity last_spawn;        // the spawn point used last
 entity activator;         // the entity that set off the targets being fired
@@ -174,3 +187,8 @@ void() player_respawn;
 float(float w) weapon_rank;
 void() weapon_select_best;
 void(float w) weapon_set;
+
+// Each variant's answer to a teleporter (its world.qc): whether one sends this thing, and what its
+// arrival does where it lands.
+float(entity who) teleport_takes;
+void(entity who) teleport_arrived;

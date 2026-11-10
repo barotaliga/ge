@@ -121,6 +121,15 @@ void up_matrices(double fov_deg, double near_m, float out[16], float inv_out[16]
   inv_out[2 * 4 + 3] = static_cast<float>(1 / near_m);
 }
 
+void up_place(const float box[4], float x, float z, float out[2]) {
+  const float at[2] = {x, z};
+  for (int k = 0; k < 2; ++k) {
+    const float lo = box[k], hi = box[k + 2];
+    const float in = std::min(0.25f, 0.5f * (hi - lo));
+    out[k] = std::clamp(at[k], lo + in, hi - in);
+  }
+}
+
 void create_bsp_views(gpu::Device& device, BspViews& views, const wgpu::BindGroupLayout& layout,
                       const r::Sky& sky) {
   for (BspView* v : {&views.mirror, &views.up}) {
@@ -139,7 +148,7 @@ void create_bsp_view_targets(gpu::Device& device, BspViews& views, uint32_t widt
 }
 
 void prepare_bsp_views(gpu::Device& device, BspViews& views, const r::FrameUniforms& main, int body,
-                       double level, bool below) {
+                       double level, bool below, const float box[4]) {
   views.body = body;
   views.below = below;
   views.level = level;
@@ -162,8 +171,13 @@ void prepare_bsp_views(gpu::Device& device, BspViews& views, const r::FrameUnifo
     up_matrices(kUpFov, 0.05, vp, inv);
     const float plane[4] = {0, 1, 0, -h};
     // From the surface straight over the eye, so the rays the surface bends out start about where
-    // the view's do (a deep eye's own place would look through the pool's walls).
-    const float eye[3] = {main.eye[0], h, main.eye[2]};
+    // the view's do (a deep eye's own place would look through the pool's walls); from a flooded
+    // passage, the nearest point of the pool's top.
+    float at[2];
+    up_place(box, main.eye[0], main.eye[2], at);
+    views.up_shift[0] = main.eye[0] - at[0];
+    views.up_shift[1] = main.eye[2] - at[1];
+    const float eye[3] = {at[0], h, at[1]};
     stage(views.up, main, vp, inv, eye, plane);
     device.queue.WriteBuffer(views.up.uniforms, 0, &views.up.staged, sizeof views.up.staged);
   }
@@ -194,6 +208,11 @@ r::WaterViews water_views(const BspViews& views) {
   w.up = views.up.colour_view;
   float inv[16];
   up_matrices(kUpFov, 0.05, w.up_view_proj, inv);
+  // The water reads it relative to the level straight over the eye: moved by the shift, the
+  // translation column gains the x and z columns times it.
+  for (int k = 0; k < 4; ++k)
+    w.up_view_proj[12 + k] +=
+        views.up_shift[0] * w.up_view_proj[0 + k] + views.up_shift[1] * w.up_view_proj[8 + k];
   return w;
 }
 

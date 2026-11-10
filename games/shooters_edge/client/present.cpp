@@ -12,6 +12,7 @@
 
 #include "brush/map.hpp"
 #include "camera/to_view.hpp"
+#include "shooter/brush_hull.hpp"
 #include "shooters_edge/client/view.hpp"
 
 namespace shooters_edge::client {
@@ -26,11 +27,37 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
   if (frames > 0) missiles_of(l, v.missiles);
   if (l.explosions.size() < v.explosions_seen) v.explosions_seen = 0;  // a new map
   for (; v.explosions_seen < l.explosions.size(); v.explosions_seen++)
-    v.blasts.push_back({engine_point(l.explosions[v.explosions_seen]), t});
+    v.blasts.push_back(
+        {engine_point(l.explosions[v.explosions_seen]), t, l.explosions[v.explosions_seen]});
   std::erase_if(v.blasts, [&](const Blast& b) { return t - b.t > kBlastS; });
 
   ge::camera::Subject s = subject_of(l, v.row);
   const PlayerState me = player_state(l);
+  // The eye's place between the last two states, one server frame behind.
+  if (l.server != nullptr) {
+    const double now = l.server->sv.time;
+    if (now != v.eye_now_s) {
+      const float dx = me.origin.x - v.eye_now.x, dy = me.origin.y - v.eye_now.y,
+                  dz = me.origin.z - v.eye_now.z;
+      const bool cut = v.eye_now_s < 0 || now < v.eye_now_s || l.forced ||
+                       dx * dx + dy * dy + dz * dz > kEyeSnapUnits * kEyeSnapUnits;
+      v.eye_prev = cut ? me.origin : v.eye_now;
+      v.eye_prev_s = cut ? now : v.eye_now_s;
+      v.eye_now = me.origin;
+      v.eye_now_s = now;
+    }
+    const double gap = v.eye_now_s - v.eye_prev_s;
+    if (v.lerp && gap > 0 && gap <= 0.25) {
+      const double tic = listen_tic(l);
+      const double drawn = now + std::min(l.owed, tic) - tic;
+      const auto f = static_cast<float>(std::clamp((drawn - v.eye_prev_s) / gap, 0.0, 1.0));
+      sh::Vec3f feet{v.eye_prev.x + (v.eye_now.x - v.eye_prev.x) * f,
+                     v.eye_prev.y + (v.eye_now.y - v.eye_prev.y) * f,
+                     v.eye_prev.z + (v.eye_now.z - v.eye_prev.z) * f};
+      feet.z += ge::shooter::kPlayerMins.z;
+      s.pos = engine_point(feet);
+    }
+  }
   // The blows since the last look, each kicking the view away from its source.
   v.row.kick_pitch = v.row.kick_roll = kHitKickDeg * kDeg;
   if (l.blows.size() < v.blows_seen) v.blows_seen = 0;  // a new map

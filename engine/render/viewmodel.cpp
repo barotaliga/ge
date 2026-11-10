@@ -101,6 +101,7 @@ GpuHeldDraw pack_held_draw(const HeldDraw& d, const FrameView& view, uint32_t wi
     o[6] = h.rgb[2];
     o[7] = h.radius_m;
   }
+  pack_warp(d.warp, g.warp);
   // The view's basis in the world, as the frame's camera has it: the view matrix's rows are the
   // right, the up and the backward.
   const CameraMatrices cam = camera_matrices(view, aspect);
@@ -110,6 +111,8 @@ GpuHeldDraw pack_held_draw(const HeldDraw& d, const FrameView& view, uint32_t wi
     g.forward[i] = -cam.view.m[i * 4 + 2];
   }
   g.right[3] = static_cast<float>(libm::tan(view.fov_y * 0.5) / tan_y);
+  g.up[3] = 2 * d.lift;
+  g.forward[3] = 1 - std::clamp(d.opacity, 0.0f, 1.0f);
   return g;
 }
 

@@ -1,11 +1,12 @@
 // engine/render/water.hpp: the detail band carries the spectrum on past the simulation's waves
 // (its components shorter than the laid band's, its slope variance growing with the wind, the
-// same components for the same seed); and on a device, a sea drawn over a sea floor fills the
-// lower half of the frame with water, darker than the sky over it, with no GPU error and no
-// pipeline after the load.
+// same components for the same seed); the chop runs every way with the slope asked; the surface
+// over a flooded passage (render/underwater.hpp's level_over) slides from one pool's to the
+// other's; and on a device, a sea drawn over a sea floor fills the lower half of the frame with
+// water, darker than the sky over it, with no GPU error and no pipeline after the load.
 //
 // ge:summary Tests for the water's surface drawn: the detail band, a sea on a device
-// ge:keywords test render water detail-waves spectrum-tail slope-variance gpu sea
+// ge:keywords test render water detail-waves spectrum-tail slope-variance gpu sea chop level_over
 // ge:skill render water testing
 #include <algorithm>
 #include <cmath>
@@ -58,9 +59,14 @@ TEST(a_lake_is_drawn_only_inside_its_shore) {
   };
   CHECK(at(50, 50) == 255 && at(150, 50) == 255 && at(50, 150) == 255);
   CHECK(at(150, 150) == 0 && at(190, 190) == 0);
+  CHECK(at(100 + 0.5 * r::kShoreReach, 120) > 0);
   // Grown by a texel round the outline: just past the inner corner is still drawn.
   CHECK(at(100 + 0.5 * m.texel, 100 + 0.5 * m.texel) == 255);
-  CHECK(at(100 + 3 * m.texel, 100 + 3 * m.texel) == 0);
+  // Past it the texels tell how near the water the ground is (the wet band's reach), always under
+  // the half that draws, and nothing far from it.
+  const uint8_t near = at(100 + 3 * m.texel, 100 + 3 * m.texel);
+  CHECK(near > 0 && near < 128);
+  CHECK(at(100 + 2 * r::kShoreReach, 100 + 2 * r::kShoreReach) == 0);
   // A body with no outline is drawn everywhere.
   const gw::World seas = sea(5);
   const r::ShoreMask open = r::shore_mask(seas.bodies[0]);
@@ -105,6 +111,65 @@ TEST(the_detail_band_carries_the_spectrum_past_the_simulations_waves) {
     CHECK(a.waves[3].phase == b.waves[3].phase && a.waves[3].kx == b.waves[3].kx);
     last = a.mss;
   }
+}
+
+TEST(the_chop_runs_every_way_with_the_slope_asked) {
+  const std::vector<gw::Component> chop = r::chop_waves(0.05, r::kWaterChopWaves, 3);
+  const std::vector<gw::Component> again = r::chop_waves(0.05, r::kWaterChopWaves, 3);
+  CHECK(static_cast<int>(chop.size()) == r::kWaterChopWaves);
+  CHECK(r::chop_waves(0, r::kWaterChopWaves, 3).empty());  // a pool no one swims in: none
+  double mss = 0, sx = 0, sz = 0;
+  for (size_t i = 0; i < chop.size(); ++i) {
+    const gw::Component& c = chop[i];
+    mss += 0.5 * (c.k * c.a) * (c.k * c.a);
+    sx += c.kx / c.k;
+    sz += c.kz / c.k;
+    // From 1.2 m down to 5 cm, each faster than gravity alone runs it (the ripples' tension).
+    CHECK(c.k >= 2 * 3.14159 / 1.2 && c.k <= 2 * 3.14159 / 0.05);
+    CHECK(c.w > std::sqrt(9.80665 * c.k));
+    CHECK(c.phase == again[i].phase && c.kx == again[i].kx);
+  }
+  CHECK(std::fabs(mss - 0.05 * 0.05) < 1e-9);
+  // Every way at once: the headings' mean is near nothing (one way would sum to 16).
+  CHECK(std::sqrt(sx * sx + sz * sz) < 2.0);
+}
+
+TEST(the_surface_over_a_flooded_passage_slides_from_one_pool_to_the_other) {
+  // Two pools' tops 6 m apart along z, their levels 3 m apart, a passage between them.
+  const float tops[2][4] = {{0, 0, 10, 10}, {0, 16, 10, 20}};
+  const float levels[2] = {-5, -8};
+  CHECK(r::level_over(tops, levels, 2, 5, 5) > -5.001);  // in a top's box: its level
+  CHECK(r::level_over(tops, levels, 2, 5, 18) < -7.999);
+  CHECK(std::fabs(r::level_over(tops, levels, 2, 5, 13) + 6.5) < 1e-9);  // halfway: between
+  double last = r::level_over(tops, levels, 2, 5, 10);
+  for (int step = 1; step <= 24; ++step) {
+    const double now = r::level_over(tops, levels, 2, 5, 10 + 0.25 * step);
+    CHECK(now <= last && last - now < 0.5);  // falling toward the far pool, never at once
+    last = now;
+  }
+}
+
+TEST(the_foam_answers_the_wind_that_grew_the_sea) {
+  // A light air whitens next to nothing; past it the cover is the whitecap law's at the sea's own
+  // wind, the fold's threshold rises toward 1 (more of the surface folds), and the foam drifts
+  // faster.
+  const r::WaterFoam calm = r::foam_of(sea(3).bodies[0].waves);
+  CHECK(calm.cover < 1e-3 && calm.runup > 0.03);
+  double fold = -1e9, drift = 0;
+  for (const double wind : {10.0, 15.0, 22.0}) {
+    const gw::World world = sea(wind);
+    const r::WaterFoam f = r::foam_of(world.bodies[0].waves);
+    CHECK(std::fabs(f.wind - wind) < 0.05 * wind);
+    CHECK(std::fabs(f.cover - gw::whitecap_cover(f.wind)) < 1e-12);
+    CHECK(f.fold > fold && f.fold < 1);
+    CHECK(f.drift > drift);
+    CHECK(f.hs > 0 && f.runup > 0.7 * f.hs && f.fold_length > 0);
+    fold = f.fold;
+    drift = f.drift;
+  }
+  // A lake with no waves laid laps its shore and makes no foam.
+  const r::WaterFoam still = r::foam_of(gw::Waves{});
+  CHECK(still.cover == 0 && still.fold < -1 && std::fabs(still.runup - 0.03) < 1e-12);
 }
 
 TEST(a_sea_draws_under_the_sky) {

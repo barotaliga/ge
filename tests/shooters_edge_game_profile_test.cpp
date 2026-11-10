@@ -7,6 +7,9 @@
 // ge:summary Tests the game profile rows: content rows, program names, the items and sounds
 // ge:keywords test shooters-edge game-profile program qwprogs multiplayer items
 // ge:skill shooter testing
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -74,4 +77,33 @@ TEST(the_item_names_become_the_servers_local_info) {
     CHECK_MSG(power || pf::item_row(t.items, n.class_name, 0) != nullptr,
               "no item row for " + std::string(n.class_name));
   }
+}
+
+// The classic game's arsenal: a row a slot, written as server lines, and our programs' own rows
+// the same text (so a game with no arsenal and the classic game's play alike).
+TEST(the_arsenal_rows_become_server_lines_our_programs_read) {
+  const pf::Arsenal& a = pf::classic_game().arsenal;
+  CHECK(a.weapons.size() == 8 && a.armour.size() == 3);
+  for (size_t i = 0; i < a.weapons.size(); i++) CHECK(a.weapons[i].slot == int(i) + 1);
+  const std::vector<std::string> lines = pf::arsenal_lines(a);
+  CHECK(lines.size() == 11);
+  CHECK_MSG(lines[0] ==
+                "set arsenal_weapon1 \"melee none 0 0.5 1 20 0 64 0 0 progs/v_axe.mdl "
+                "weapons/ax1.wav - player/axhit2.wav - - 0\"",
+            lines[0]);
+  CHECK_MSG(lines[8] == "set arsenal_armour1 \"0.3 100 0 progs/armor.mdl items/armor1.wav\"",
+            lines[8]);
+  const auto text_of = [](const char* rel) {
+    std::ifstream in(std::filesystem::path(GE_SOURCE_DIR) / rel);
+    std::stringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
+  };
+  const std::string weapons = text_of("games/shooters_edge/qc/common/weapons.qc");
+  const std::string items = text_of("games/shooters_edge/qc/common/items.qc");
+  for (const pf::WeaponRow& w : a.weapons)
+    CHECK_MSG(weapons.find('"' + pf::weapon_text(w) + '"') != std::string::npos,
+              pf::weapon_text(w));
+  for (const pf::ArmourRow& r : a.armour)
+    CHECK_MSG(items.find('"' + pf::armour_text(r) + '"') != std::string::npos, pf::armour_text(r));
 }

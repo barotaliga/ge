@@ -5,15 +5,20 @@
 # Each red gate's whole log is printed, up to 400 lines (every lint finding in every file).
 #
 #   1. fmt-check     clang-format over every source
-#   2. agents-check  the links, the router, the line cap, the ge: tags, the lessons
+#   2. agents-check  the links, the router, the line cap (warns past 1000, fails past 2000), the ge: tags, the lessons
 #   3. libm-check    no <cmath> transcendental in simulation code
 #   4. release       the changeset fragments valid
-#   5. build         the preset's build (incremental); a change no build reads (prose, the gates'
-#                    Node and Python tools) stops after step 4
-#   6. lint          clang-tidy over what the change since BASE (default origin/main) reaches
+#   5. build         every object and every program but the test executables, incremental
+#                    (PRECHECK_FULL_BUILD=1: the whole build); a change no build reads (prose,
+#                    the gates' Node and Python tools) stops after step 4; under PRECHECK_MIN_FREE_GB
+#                    (default 10) free it warns first, and a full disk is named as the cause
+#   6. lint          clang-tidy over what the change since BASE (default origin/main) reaches,
+#                    a changed header through one includer (LINT_SAMPLE=0: every includer)
 #      shaders       every embedded WGSL shader through Tint (incremental: only what changed)
 #   7. tests         cli_diagnostics_test (every message held to the diagnostics convention),
-#                    each changed test, and the test every changed file's ge:test tag names
+#                    each changed test, and the test every changed file's ge:test tag names,
+#                    only their executables linked; when the disk cannot hold them all, a
+#                    batch at a time, each batch's executables deleted after it runs
 #   8. digests       each lab the change reaches (`ge digest --affected --list`) at its smoke flags,
 #                    against tests/digests: a digest the change moved is caught here,
 #                    not by CI's labs_smoke a round later
@@ -26,7 +31,7 @@
 #
 # ge:summary CI's cheap gates before a push: format, agents, libm, lint, tests, the reached labs
 # ge:keywords ci precheck gates fmt-check agents-check libm-check lint changed-files affected-tests
-# ge:keywords reached-labs digests
+# ge:keywords reached-labs digests disk-full test-batches batch delete-executables
 # ge:skill commit
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -67,6 +72,10 @@ gate release python3 tools/release.py check || true
 
 # A change no build reads (prose as ci.yml's gates job counts it, the gates' own Node and Python
 # tools, .gitignore) stops at the gates above: building 10 GB to test it proves nothing more.
+# A stale local base makes the lint and the reach read main's own newer files as this change's.
+if [[ "$base" == origin/* ]] && ! git fetch -q origin "${base#origin/}" 2>/dev/null; then
+  echo "precheck: could not fetch $base; the change is measured against the local copy." >&2
+fi
 merge_base="$(git merge-base "$base" HEAD 2>/dev/null || echo HEAD)"
 gate_only='^(docs/|\.agents/|\.changes/|porting/.*\.md$|[^/]*\.md$|LICENSE$|\.gitignore$|tools/[^/]*\.(mjs|py)$)'
 # The list is taken whole first: under pipefail, grep -q quitting at its first match would kill
@@ -83,14 +92,46 @@ if ! grep -Evq "$gate_only" <<<"$touched"; then
   exit 0
 fi
 
-if ! gate build make -s build PRESET="$preset"; then
+# The debug build's ASan test executables alone reach about 20 GB, so a small cloud disk fills
+# mid-build. Say so before the build starts, with the safe cleanup (link outputs only: the
+# objects stay, and only the executables a later build needs are linked again).
+free_gb=$(df -Pk "$build" 2>/dev/null | awk 'NR==2 {print int($4 / 1048576)}')
+cleanup="find $build/tests -maxdepth 1 -type f -name '*_test' -delete"
+if [[ -n "$free_gb" ]] && ((free_gb < ${PRECHECK_MIN_FREE_GB:-10})); then
+  echo "precheck: only $free_gb GB free under $build; the build can fill the disk. Free space" \
+    "first: $cleanup (the test executables, linked again as needed)." >&2
+fi
+# Every object compiles (a compile error anywhere is caught, and the include graph the reach and
+# the lint read is whole), and every library and program links, but no test executable: those
+# are about 20 GB under ASan, so only the ones the change reaches are linked, below.
+# PRECHECK_FULL_BUILD=1 builds everything, as `make build` does.
+lean_build() {
+  tools/ccache-share.sh restore || true
+  tools/configure.sh "$preset" >/dev/null
+  local targets
+  mapfile -t targets < <(ninja -C "$build" -t targets all 2>/dev/null | awk -F': ' '
+    $2 ~ /^(C|CXX)_COMPILER|_LIBRARY_LINKER/ { print $1 }
+    $2 ~ /_EXECUTABLE_LINKER/ && $1 !~ /^tests\// { print $1 }' | grep -v '^/')
+  ((${#targets[@]})) || return 1
+  printf '%s\n' "${targets[@]}" | xargs ninja -C "$build"
+}
+if [[ "${PRECHECK_FULL_BUILD:-0}" == 1 ]]; then
+  build_step=(make -s build PRESET="$preset")
+else
+  build_step=(lean_build)
+fi
+if ! gate build "${build_step[@]}"; then
+  if grep -qE 'No space left on device|Bus error' "$log" 2>/dev/null; then
+    echo "precheck: the disk filled during the build. Free space ($cleanup, or remove other" \
+      "build trees), then make precheck again." >&2
+  fi
   echo "precheck: the build failed, so the lint, the tests and the digests could not run;" \
     "red: ${failed[*]}. Fix them, then make precheck again." >&2
   exit 1
 fi
 # A good build's objects kept for the next cloud container (in the background; a no-op elsewhere).
 tools/ccache-share.sh save || true
-gate lint tools/lint.sh "$build" "$base" || true
+gate lint env LINT_SAMPLE="${LINT_SAMPLE:-1}" tools/lint.sh "$build" "$base" || true
 # shaders_check exists only where the build has the GPU and Tint (GE_GPU, GE_TINT).
 if grep -q 'shaders_check' "$build/build.ninja" 2>/dev/null; then
   gate shaders cmake --build "$build" --target shaders_check || true
@@ -114,8 +155,52 @@ while read -r t; do
 done < <("$build/ge" test --affected --list --preset="$preset" --base="$base" 2>/dev/null || true)
 mapfile -t tests < <(printf '%s\n' "${tests[@]}" | sort -u)
 regex="^($(IFS='|'; echo "${tests[*]}"))\$"
-gate "tests (${#tests[@]})" ctest --test-dir "$build" -R "$regex" -j "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" \
-  --output-on-failure || true
+# Only the reached tests' executables are linked (lean_build linked none of them).
+mapfile -t test_targets < <(ninja -C "$build" -t targets all 2>/dev/null |
+  sed -n 's/^\(tests\/[a-z0-9_]*_test\): .*EXECUTABLE_LINKER.*/\1/p' |
+  grep -xF -f <(printf 'tests/%s\n' "${tests[@]}") || true)
+# A change to a low library (engine/core) reaches every test, and their ASan executables (about
+# 32 MB each) outgrow a small cloud disk. When the free space cannot hold them all with half to
+# spare, they are linked, run and deleted a batch at a time (PRECHECK_TEST_BATCH sets the size;
+# the objects stay, so a later build links only what it needs again).
+batch=${PRECHECK_TEST_BATCH:-}
+if [[ -z "$batch" && -n "$free_gb" ]]; then
+  free_now=$(df -Pk "$build" 2>/dev/null | awk 'NR==2 {print int($4 / 1048576)}')
+  batch=$(( ${free_now:-$free_gb} * 16 ))
+  ((batch < 8)) && batch=8
+fi
+jobs="$(nproc 2>/dev/null || sysctl -n hw.ncpu)"
+if [[ -z "$batch" ]] || ((${#test_targets[@]} <= batch)); then
+  if ((${#test_targets[@]})); then
+    gate "link tests" ninja -C "$build" "${test_targets[@]}" || true
+  fi
+  gate "tests (${#tests[@]})" ctest --test-dir "$build" -R "$regex" -j "$jobs" \
+    --output-on-failure || true
+else
+  # One batch: its executables linked, its tests run, the executables deleted again.
+  test_batch() {
+    local rc=0 names=() t
+    ninja -C "$build" "$@" || rc=1
+    for t in "$@"; do names+=("$(basename "$t")"); done
+    ctest --test-dir "$build" -R "^($(IFS='|'; echo "${names[*]}"))\$" -j "$jobs" \
+      --output-on-failure || rc=1
+    for t in "$@"; do rm -f "${build:?}/$t"; done
+    return $rc
+  }
+  echo "precheck: ${#test_targets[@]} test executables will not fit the disk at once; linked," \
+    "run and deleted $batch at a time (PRECHECK_TEST_BATCH)."
+  for ((i = 0; i < ${#test_targets[@]}; i += batch)); do
+    part=("${test_targets[@]:i:batch}")
+    gate "tests $((i + 1))-$((i + ${#part[@]})) of ${#test_targets[@]}" test_batch "${part[@]}" || true
+  done
+  # Tests the change reaches that are not one of those executables (none today) run last.
+  mapfile -t rest < <(printf '%s\n' "${tests[@]}" |
+    grep -vxF -f <(printf '%s\n' "${test_targets[@]}" | sed 's|^tests/||') || true)
+  if ((${#rest[@]})); then
+    gate "tests (${#rest[@]} more)" ctest --test-dir "$build" \
+      -R "^($(IFS='|'; echo "${rest[*]}"))\$" -j "$jobs" --output-on-failure || true
+  fi
+fi
 
 # The labs the change reaches, each against its committed digest, side by side. As in CTest's
 # labs_smoke (tests/CMakeLists.txt), the leak check is off: the software GPU driver's worker
@@ -128,7 +213,10 @@ labs_digests() {
 mapfile -t labs < <("$build/ge" digest --affected --list --preset="$preset" --base="$base" 2>/dev/null |
   grep -E '^[a-z0-9-]+$' || true)
 if ((${#labs[@]})); then
-  gate "digests (${labs[*]})" labs_digests "${labs[@]}" || true
+  gate "digests (${labs[*]})" labs_digests "${labs[@]}" ||
+    echo "precheck: a move you meant (a deliberate change of behaviour): $build/ge digest" \
+      "--affected --write --preset=$preset --base=$base rewrites every reached lab's digest" \
+      "in one step; say why in the PR." >&2
 fi
 if ((${#failed[@]})); then
   echo "precheck: red: ${failed[*]} (each above; every gate's output in $log). Fix them, then" \

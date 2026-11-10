@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "check.hpp"
+#include "core/libm/libm.hpp"
 #include "core/prng.hpp"
 #include "golden.hpp"
 #include "progs/assembler.hpp"
@@ -92,14 +93,16 @@ struct Machine {
 
 TEST(every_stdlib_builtin_has_its_standard_number) {
   const std::pair<int, const char*> want[] = {
-      {7, "random"},     {9, "normalize"},  {12, "vlen"},          {13, "vectoyaw"},
-      {26, "ftos"},      {27, "vtos"},      {36, "rint"},          {37, "floor"},
-      {38, "ceil"},      {43, "fabs"},      {51, "vectoangles"},   {60, "sin"},
-      {61, "cos"},       {62, "sqrt"},      {68, "precache_file"}, {77, "precache_file2"},
-      {81, "stof"},      {84, "tokenize"},  {85, "argc"},          {86, "argv"},
-      {91, "randomvec"}, {94, "min"},       {95, "max"},           {96, "bound"},
-      {97, "pow"},       {114, "strlen"},   {115, "strcat"},       {116, "substr"},
-      {118, "strzone"},  {119, "strunzone"}};
+      {7, "random"},       {9, "normalize"},    {12, "vlen"},          {13, "vectoyaw"},
+      {26, "ftos"},        {27, "vtos"},        {36, "rint"},          {37, "floor"},
+      {38, "ceil"},        {43, "fabs"},        {51, "vectoangles"},   {60, "sin"},
+      {61, "cos"},         {62, "sqrt"},        {68, "precache_file"}, {77, "precache_file2"},
+      {81, "stof"},        {84, "tokenize"},    {85, "argc"},          {86, "argv"},
+      {91, "randomvec"},   {94, "min"},         {95, "max"},           {96, "bound"},
+      {97, "pow"},         {114, "strlen"},     {115, "strcat"},       {116, "substr"},
+      {118, "strzone"},    {119, "strunzone"},  {65, "etos"},          {471, "asin"},
+      {472, "acos"},       {473, "atan"},       {474, "atan2"},        {475, "tan"},
+      {480, "strtolower"}, {481, "strtoupper"}, {484, "strreplace"},   {485, "strireplace"}};
   CHECK(pg::kStdlibCount == static_cast<int>(sizeof want / sizeof want[0]));
   for (const auto& [n, name] : want) {
     const pg::StdBuiltin* b = pg::stdlib_builtin(name);
@@ -201,6 +204,39 @@ TEST(the_string_builtins) {
   CHECK(m.s().empty());
   m.call("precache_file", {"maps/x.bsp"});
   CHECK(m.s() == "maps/x.bsp");
+}
+
+TEST(the_extension_maths_and_strings) {
+  Machine m;
+  m.call("asin", {1.0f});
+  CHECK(m.f() == static_cast<float>(ge::core::libm::asin(1.0)));
+  m.call("acos", {-1.0f});
+  CHECK(m.f() == static_cast<float>(ge::core::libm::acos(-1.0)));
+  m.call("atan", {1.0f});
+  CHECK(m.f() == static_cast<float>(ge::core::libm::atan(1.0)));
+  m.call("atan2", {1.0f, -1.0f});
+  CHECK(m.f() == static_cast<float>(ge::core::libm::atan2(1.0, -1.0)));
+  m.call("tan", {0.5f});
+  CHECK(m.f() == static_cast<float>(ge::core::libm::tan(0.5)));
+  m.call("strtolower", {"Quad DAMAGE 4x"});
+  CHECK(m.s() == "quad damage 4x");
+  m.call("strtoupper", {"Quad damage"});
+  CHECK(m.s() == "QUAD DAMAGE");
+  m.call("strreplace", {"aa", "a", "aaaab"});
+  CHECK(m.s() == "aab");  // left to right, never inside a replacement
+  m.call("strreplace", {"", "x", "abc"});
+  CHECK(m.s() == "abc");
+  m.call("strreplace", {"b", "", "abcb"});
+  CHECK(m.s() == "ac");
+  m.call("strireplace", {"RED", "blue", "red Red rEd"});
+  CHECK(m.s() == "blue blue blue");
+  m.call("strreplace", {"RED", "blue", "red"});
+  CHECK(m.s() == "red");
+  // An entity as text: its number.
+  pg::set_global_int(m.vm, pg::parm(0), pg::entity_value(m.vm, 2));
+  m.vm.argc = 1;
+  pg::stdlib_builtin("etos")->fn(m.vm);
+  CHECK(m.s() == "entity 2");
 }
 
 TEST(strzone_keeps_a_string_until_strunzone) {

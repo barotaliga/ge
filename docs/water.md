@@ -412,10 +412,55 @@ With no body shown both rows run empty. What it draws:
   every lake a game laid on its map (`app/lakes.hpp`, § Fall Line's tarn); the `lake` lab digs
   a tarn of its own into a seed's race map, low in the valley, for the water's own looks.
 
-Not built yet (M24g2): the GPU detail FFT and its cascades, foam, caustics, the shore's wet band,
-rain, the lake shore mesh and the channel's and flow region's own geometry, the reflections over
-the Hi-Z pyramid with a probe behind them, and the stops on the quality ladder. The plan for all
-of it follows.
+**Built (M24g2, part: the foam and the wet shore; `foam_of`, `water.wgsl`'s `foam_at`,
+`render/water_shore.wgsl`).**
+
+- **Whitecaps from the Jacobian.** The waves are drawn as heights, but water moves sideways
+  too: a component's choppy displacement is (k / |k|) a cos(phi), and where the Jacobian of that
+  motion falls under a threshold the surface is folding over itself and breaks white. The laid
+  components fold, and so do the detail band's down to 1.5 m (`kFoamShortest`, faded in from 3 m),
+  so the whitecaps are the short steep waves breaking where the long ones' crests carry them. The
+  threshold is set from the sea's own wind, never by hand: `water::wind_of` reads the wind back
+  off the sea's height and period (the growth laws inverted), `water::whitecap_cover` gives the
+  share of the face white at that wind (3.84e-6 U^3.41: 1 % at 10 m/s, 10.6 % at 20), and the
+  Jacobian's trace, Gaussian of variance sum (k a)^2 / 2, is cut where `kFoamActive` (0.15) of
+  that cover is breaking now; the rest of the cover is the trails.
+- **The history is the waves' own past.** A patch of foam stays where the water carried it while
+  the crest that made it runs on, fading over about two seconds. Rather than keep a texture of it
+  from frame to frame, each pixel looks back at ten moments 0.3 s apart over the last three
+  seconds, at the places the surface's drift (3 % of the wind, downwind) brought its water from,
+  and keeps the strongest fold or surf it finds there, faded by its age. So the foam is a pure
+  function of the place and the clock: right on a lab's first frame, after a cut and after a
+  replay's seek, the same on every machine, with no texture to reproject as the eye moves. A
+  pixel wider than a sixteenth of the folds' wavelength takes the cover's mean instead.
+- **Surf by the depth.** A wave over 0.78 of the depth under it breaks (the simulation's
+  `breaking_at`, eased in from 0.6 of that), the depth read off the opaque depth copy under the
+  pixel; its foam is kept and drifts the same way, so white water rolls in and lace trails behind
+  it. A line of foam lies where the water laps the shore, as wide as the sea's height asks. A sea
+  under 15 cm Hs (a tarn's chop) laps without breaking white.
+- **Lace, never a sheet.** The share is cut into ridges of noise at two sizes carried with the
+  drift: threads round holes that open as a patch fades. A pixel too wide for the threads takes
+  the share as its mean, so far foam whitens evenly and never sparkles. Foam is lit as a white face
+  by the sun (or the moon), the sky and the lamps.
+- **The shore's wet band.** In the "water" pass before the bodies, a full-screen triangle per body
+  multiplies the frame's colour: every opaque point a little over the level and near the water
+  (the shore mask's ramp: past the outline its texels fall from 127 to 0 over `kShoreReach`, 12 m)
+  is darkened by up to 30 %: fully up to a quarter of the run-up (0.03 m for a calm lake's lap
+  plus 0.7 of the sea's Hs), fading to nothing at 1.3 of it, and fully where the waves run up it
+  now (their height there carried up the beach by half again). The water darkens its own bed the
+  same in its last 30 cm, since the copy it reads was taken before the band: no dry seam shows at
+  the waterline. A body with no outline wets nothing past its box.
+- **The foam is OFF by default.** `WaterDraw::foam` is false: the owner did not find the foam nice
+  looking, so no game draws it until its look is reworked and signed off; a game or a lab turns it
+  on per body. `wet_band` is on. The `gpu-water` lab's `whitecaps`, `foam-trail`, `surf` and
+  `surf-night` views turn the foam on (and draw the same view without it), and it fails when the
+  gale's whitecaps whiten under a quarter of the law's cover.
+
+Not built yet (M24g2): the GPU detail FFT and its cascades, the ripple field, the lake shore mesh,
+the reflections over the Hi-Z pyramid with a probe behind them, and the stops on the quality
+ladder with the pass priced. (The caustics are built since M24h3 and the rain's rings since M36d,
+below; the channel's ribbon and the flow region's grid since M24i.) The plan for all of it
+follows.
 
 The water is a pass in the frame's table after the opaque geometry (it reads the scene's
 colour and depth) and before TAA-U. All of it runs on GPU-less Linux on the software adapter,
@@ -522,6 +567,24 @@ with its veil looking down. `water.under` lays the underside in where the eye's 
 the scene, fogged over the way there; the eye's own three fixed ripples and its flat-window test
 are gone. A look with `window` 0 (the classic tint) sees through the surface as through air.
 
+**Built (the rim, and flooded passages).** The Fresnel terms are taken per colour (n = 1.331,
+1.334 and 1.339 for red, green and blue: blue's window is the narrowest, so the rim is fringed) and
+averaged over the normals the pixel cannot resolve (half the slope variance its waves lose to the
+footprint tilts the normal in the plane of incidence; three Gauss-Hermite nodes), so a far or
+choppy rim fades into the mirror over a few degrees, as on real water, while a near calm one stays
+sharp; the waves a pixel does resolve break it up. The light through the window is n^2 (1.78)
+times the air's radiance, the whole hemisphere gathered into its cone, and `water.under` blurs the
+underside with the eye's own blur by its distance, from the taps that hold the surface. Every body
+the eye is under whose water reaches down to it is drawn from below (`Water::Slot::under`), the
+depth test keeping the nearest, so a flooded passage between two pools sees the far pool's surface
+rather than through it; with the eye under, a pixel no underside covers is never the flat level
+(that fallback is the waterline's, with the eye over the surface). The surface over a point
+(`level_over`, up to four tops) is the level of the top whose box holds it, else the tops' levels
+weighed by the inverse square of the plan's distance to each box: the eye's depth, each point's and
+the shafts' read it, so down the passage the light changes smoothly from one end's to the other's.
+Judged in a classic map's flooded passage (dm3's, under the pent pool and 3 and 5 m under its big
+pool) through `se-client`, before and after (private pictures).
+
 Under a lit room (the "pool" look: `ambient`) the water's light is read off the room seen round
 the eye, in a third of the water's hue, and the eye adapts to it (at most three times), so the
 window is a few times brighter than the water rather than a lamp in a black sea. Seen from below,
@@ -568,7 +631,14 @@ roughness) are raised and laid by a field of value noise in the plan and in time
 some metres across in lulls a few times wider), drifting downwind at most of the peak's phase
 speed, from near calm in a lull to nearly twice the mean under a puff, so ripples come in patches
 and no stretch repeats. Water no wind reaches is never glass: `stir` is a faint slope off a noise
-that wanders in time (two sizes, 0.9 and 0.3 m), a far pixel taking it as roughness. `daylight` is
+that wanders in time (two sizes, 0.9 and 0.3 m), a far pixel taking it as roughness. Water in use is
+never still either: `chop` (`chop_waves`) is what swimmers, a diver's splash and the walls turning
+their rings back leave on a pool, a confused field of real short waves running every way at once
+with no wind at all: sixteen components from 1.2 m down to 5 cm, each octave the same share of the
+slope (`chop`, rms), on the capillary-gravity dispersion, headed round the circle and shuffled
+against their lengths. They are summed by the pixels and the caustics as the detail band is, never
+raised or laid by the gusts; a few millimetres high, they are the picture's own, nothing a float
+feels. A wild lake takes none; Shooter's Edge's pools 0.05. `daylight` is
 the share of the sun's and the sky's light on the water itself, apart from the share of the sky it
 mirrors (`open_sky`): a courtyard's pool sees the sky overhead, but its walls keep most of the day
 off it.
@@ -586,8 +656,8 @@ A classic map's water lies level in rooms, so its pools are drawn as rooms make 
   leaves to the sky or a wall, give the share of the dome that is sky and the share of the low rays
   toward the wind that reach it (a window or a doorway it blows in by). The pool's share of the open
   map's wind is 0.8 of the second plus a quarter of the square of the first, so a closed hall's pool
-  gets none and lies still (only the stir moves it), a courtyard's a little, a pool under a window
-  facing the wind most of it.
+  gets none of it (only the stir and the game's chop move it), a courtyard's a little, a pool under
+  a window facing the wind most of it.
 - **The wind** is the weather's (`sv_wind`, `sv_winddir`; `ce_wind 0` still air) times each pool's
   share, laid by `water::lay_waves`'s own-wind form, and laid again when the cvars change.
 - **The room's light** (`light_rooms`) is what the lightmaps say the pool's bed is lit by (the
@@ -596,9 +666,12 @@ A classic map's water lies level in rooms, so its pools are drawn as rooms make 
 - **The eye in the water** is the map's word: its leaf at the eye (`eye_water_body`), at any depth
   and in a flooded passage beyond the top's box, handed to `prepare_water`.
 - **The mirror and the view up** (`bsp_views.hpp`, "bsp.views"): the map drawn again at half the
-  render's size for the nearest pool (the one the eye is in, else the nearest it stands over),
-  every face, those on the water's far side dropped by the frame's sixth plane (zero in the frame's
-  own view), the sky faces left at alpha 0.
+  render's size for the nearest pool (in the water, the nearest surface over the eye, its top's box
+  at its level: in a flooded passage the pool swum toward once it is the nearer; else the nearest
+  the eye stands over), every face, those on the water's far side dropped by the frame's sixth
+  plane (zero in the frame's own view), the sky faces left at alpha 0. The view up stands on the
+  top's box at the point nearest the eye, a quarter metre inside it (`up_place`): from a flooded
+  passage, the point straight over the eye is rock.
 
 **Under water**, the plan: one `UnderwaterLook`, derived from the body's optics and open to
 every knob a game wants:
@@ -830,6 +903,17 @@ The generator lays no water, so no dealt map moves; a game lays it after, as a `
   `ashore` event, `value` his seconds in the water) and is stood on the bank facing away from
   the water. Drowning, at swim failure or after 90 s he is reset as if he had asked. The
   swimmer's state is the racer's, so a run in the water replays.
+- **The snowmobile on it** (`sim/lake.hpp`'s `sled_on_lake`, M24l4): the free ride's machine,
+  ridden, its belt down at the surface inside an open tarn's shore. Faster than 11 m/s across
+  the water it PLANES (a `skim` event): held level on the surface with its belt 0.15 m under,
+  its paddles driving it on (3.9 m/s² at full throttle against 0.012 per metre times the speed
+  squared, so flat out it holds 18 m/s), the brake digging in (2.5 m/s²) and the bars turning it
+  (0.5 rad/s); over the far shore it is on the snow again with him still on. Slower than 6 m/s,
+  or onto the water slower than it planes, it GOES UNDER (a `sled` event, `sunk`): the machine
+  sinks to the dug bed, its engine drowned, and its rider is thrown into the water with the way
+  it had and swims out as above. The press cannot take a machine under the water; his reset
+  hauls it out onto the bank nearest it, stood on its belt, and puts him back on its boards. A
+  rider who hops off a planing machine goes in, and it goes under where it is.
 - **Heard**: going in and climbing out are each the water's splash (`play_splash`, the body's
   size and speed) on the effects bus; through ice, the sheet cracks first (the bank's
   `ice_crack`: a white crack, then the falling whistle a thin sheet carries off across the
@@ -902,7 +986,29 @@ kept bit for bit where a face has none.
   --views=stream,stream-high --day=200"` follows a face's longest stream in summer; `--day=40`
   shows its gully under the snow.
 
-Not yet (M24l5): the valley's reservoir on a dealt map.
+## The valley's reservoir (`plugins/mountain/tarn/reservoir.hpp`, M24l5)
+
+A dealt map has no mapped water, so the free ride builds a reservoir after its tarn: an earth
+dam across one of the mountain's valleys and the water it holds (`MapLake` in `Level::lakes`,
+`MapDam` in `Level::dams`). The generator builds no water, so no dealt map moves; `free_map`
+lays it.
+
+- **The site** (`find_reservoir`): every 32 m of the mountain's lower 60 % (above the hub) is
+  tried as the middle of a dam across the ground's fall, at 8, 12, 18, 25 and 35 m over that
+  ground: the crest runs both ways along the contour until the valley's sides rise to it, 420 m
+  at most. The water stands 2 m under the crest, and the ground under it is flooded from just
+  upstream on an 8 m grid: the flood must not run round the dam's ends or off the map, must
+  stay 30 m clear of every run, ski route, lift, the hub and a laid lake, and must cover 3 to
+  60 ha. The site that floods the most is kept.
+- **The shore**: the flooded cells' outline thinned to 5 m; its centroid and its circle's radius
+  as a mapped lake's.
+- **The dam** (`lay_reservoir`): an earth bank 8 m across its crest, its faces falling 1 in 2 to
+  the ground and run on 10 m into the valley's sides; the trees on it felled. Seed 38's holds
+  3.9 ha behind a 392 m crest 35 m over its valley.
+- **The water**: the flooded ground already lies under it; ice that bears fills the shore flat,
+  as a frozen tarn's. Drawn through `app/lakes.hpp` like every lake. `make lab LAB=world
+  ARGS="--reservoir --views=reservoir,reservoir-high --day=200"` looks up it from the dam's
+  crest and from over the valley below; `--day=40` frozen.
 
 ## Determinism (G1)
 
@@ -926,7 +1032,7 @@ never read back by the simulation.
 | `flow` | picture | M24f | Dam break against the analytic solution, a basin emptying through a breach against Torricelli, a river to steady state, a waterfall's sheet; depth filmstrips; the volume held |
 | `gpu-water` | picture | M24g, M24g2, M24i, M36d | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a boat's wake from behind and from the side, crates dropped in, the lake in a light and a heavy rain, a river, a waterfall, sunset glitter, night; the distance-band diff |
 | `lake` | picture | M24g, M24h, M51f | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it, frozen |
-| `tarn-ride` | drive | M24l3 | A skier onto seed 38's open tarn from its south bank at a ladder of speeds: how he met the water, how far he skimmed, where he went in, his time in the water and the metres swum, how it ended; the tarn from above with every ride's line, white on skis, yellow skimming, blue swimming |
+| `tarn-ride` | drive | M24l3, M24l4 | A skier onto seed 38's open tarn from its south bank at a ladder of speeds: how he met the water, how far he skimmed, where he went in, his time in the water and the metres swum, how it ended; the tarn from above with every ride's line, white on skis, yellow skimming, blue swimming. Then the snowmobile from the same bank, coasting at a ladder of its own and once flat out: the same table and a second picture, orange planing |
 | `tarn` | picture | M24l, M24l3 | The free ride's tarn on a seed in the game's frame: on the map's day, open, under thin black ice, frozen to bear a skier and thawing over a moat, from below its lip and from high over it; its site, surface, ice and thaw as rows |
 | `gpu-underwater` | picture | M24h, M24h3 | Every look's view round a scene under water, the presets, Snell's window measured by ring means, the caustics and the shafts each off beside on (each must add contrast), a dive through the surface |
 | `gpu-plunge` | picture | M24h2 | A first-person player in the classic move jumping off a bank into a dirty pond: the plunge from his eyes, the splash from the bank (crater, crown, jet, rings), under the water, surfacing through the waterline into the wet lens; four bodies of different mass dropped in; the player straight in against running in; the entry's numbers |
@@ -936,7 +1042,7 @@ never read back by the simulation.
 | `water-cost` | bench | M24f, M24g | The CPU's costs per step (sample, floats, the flow grid) and the GPU's per pass |
 | `free --water` | drive | M24l3 | Fall Line: the bot near and into water on the free ride |
 | `real-hints` | picture | M24l2, M24l5 | Each real face's lifts, pistes, woods, lakes (the lakes' count and area) and streams (their count and length); a face named alone drawn with its lakes in blue and its streams in cyan; `--bake --water` reads the water off the open map data into the tree's hints |
-| `world --face` | picture | M24l2, M24l5 | Fall Line's frame on a real face's ski area with its mapped lakes and streams laid, iced by `--day`; the `tarn` views frame the largest lake, the `stream` views follow the longest stream |
+| `world --face` | picture | M24l2, M24l5 | Fall Line's frame on a real face's ski area with its mapped lakes and streams laid, iced by `--day`; the `tarn` views frame the largest lake, the `stream` views follow the longest stream; `--reservoir` lays a dealt map's reservoir and the `reservoir` views look up it from its dam |
 | `liquids`, `gpu-lava`, `gpu-slime` | picture | M30 | The other liquids: lava and slime (`docs/liquids.md` § Labs) |
 
 ## Sources

@@ -24,6 +24,18 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `scoreboard.md` | The scores key's boards (M18k3): the network client's players' and teams' scoreboards, what fills each row, the scorebar, the single-player solo scorebar and the intermission's positions |
 | `frame-move.md` | The original player move and the movement setting `sv_playermove` (M18s): who jumps in each mix of program and move, the single-player frame |
 | `campaign-rules.md` | What a campaign program does (monsters' senses and states, the roster, the level flow), for our own campaign variant mod (M18s7) |
+| `deaths.md` | Monster deaths, gibs and blood: each kind's death sequences, gib health and pieces, the gib and head throw, blood at hits, the client's bursts and model-flag trails, bouncing, the zombie, the player (M18s7) |
+| `deathmatch4.md` | Deathmatch 4 in the classic match mod: the armed spawn, spawn invincibility, the items stripped and kept, backpacks and bonus powers, OctaPower, its settings and commands, spawns and scoring |
+| `weapon-switch.md` | The weapon after a shot in the classic match mod: refire times, the switch held until the refire ends, what a dropped pack holds, what onlookers can tell, the client's switch-after-fire settings |
+| `demo-smoothing.md` | Recorded games drawn between their frames: the client's one-frame-behind playback, the rules for players, the tracked view and entities, where it snaps |
+| `held-weapons.md` | The first-person weapon's frames: the axe's two swings, how a swing is picked, when the frame is set, what the client draws |
+| `jump-walk-death.md` | The jump's and the swimmer's sounds, landing sounds, walking (there is none at the modern defaults: `+speed` is a run key), the view weapon and eye at death |
+| `sequel.md` | The sequel (M18t2, for M18t3 and M18t4): the index of its notes, the game's shape, the demo pack measured, the game library's calls as our rules runner's |
+| `sequel-formats.md` | The sequel's files: the search order, contents and surface flags, the collision lumps, WAL, PCX and the palette, MD2, SP2, the sky, player models, skins and sounds |
+| `sequel-movement.md` | The sequel's player move (the packed state, the command, every step, snapping) and the brush trace and point contents it moves through |
+| `sequel-rules.md` | The sequel's rules: the 10 Hz frame, entities and physics, items, armour, damage, every weapon and projectile, a player's life, deathmatch and `dmflags`, the demo maps' entities |
+| `sequel-monsters.md` | The sequel's monsters on the demo maps: life, senses, the attack choice, the roster's numbers |
+| `localization.md` | The re-release's text keys (clean-room answers): which prints carry `$` keys, how arguments fill `{}`/`{N}`, its extra builtins by number and by name, the words file's place and format, where an engine resolves them |
 
 The recorded-game formats are built (M18h, `games/shooters_edge/client/demo.hpp`) and their note
 retired. Every fact marked `verify` is checked by a lab before code depends on it.
@@ -39,8 +51,25 @@ without their code (`docs/shooters-edge.md` § Licensing and the clean room):
 - **Say where each fact came from**: a public format description, the language reference, a
   measurement (name the lab and its recording), or a research session that read source (named
   as such, so the building session knows not to look further).
-- **Separate sessions.** A session that reads GPL source to answer a question writes only the
-  note. The session that builds the subsystem reads the note and the measurements, not the
-  source.
+- **Separate agents.** A reader agent that reads GPL source to answer a question writes only the
+  note (or a scratch answer document) with no code. The agent that builds or verifies the
+  subsystem reads the note and the measurements, never the source, not even a grep hit. The
+  `clean-room` skill is the procedure: the questions, the reader's brief, the screen for code.
 - **Running is fine; shipping is not.** A lab may fetch and build an existing server or client
   into its cache to measure it. Nothing of it is committed, linked or distributed.
+
+## The shareware release
+
+The labs and the client that need a real map take `--game=<folder>`. The folder is laid out in
+one step from the shareware release 1.06 zip as published, which its licence lets anyone keep and
+pass on (its SHA-256 is `kKnownZips` in `plugins/classicenhance/source.hpp`):
+
+```sh
+ge tool classicenhance -- setup https://ftp.gwdg.de/pub/misc/ftp.idsoftware.com/idstuff/quake/quake106.zip \
+    --basedir=<scratch>/classic --cache=<scratch>/cache
+# then --game=<scratch>/classic/id1
+```
+
+The zip is fetched once into `<scratch>/cache/downloads/` and checked against the known digest; a
+second `setup` reads that copy. Nothing it writes goes into the tree.
+

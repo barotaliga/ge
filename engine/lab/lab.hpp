@@ -20,7 +20,7 @@
 // ge:summary The lab contract: LabSpec, the Lab context, GE_LAB registration, the lab kinds
 // ge:keywords lab labs registry contract spec flags metric table shot caption digest
 // ge:keywords screenshot simulation scenario drive bot playtest bench attach file wav
-// ge:keywords distance-map depth
+// ge:keywords distance-map depth wants only-shots views some-views one-view
 // ge:skill labs
 // ge:test tests/lab_runner_test.cpp
 #pragma once

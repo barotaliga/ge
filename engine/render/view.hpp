@@ -137,6 +137,10 @@ struct CloudLayer {
   double thin = 1;
   double thick_cells = 3;
   double thick_bias = 0;
+  // Its WARP: how far (in cells, 0 none .. about 1.5) the column's read is pushed about by a
+  // second read of the noise, so a cell's outline leans and twists instead of standing round
+  // and alike beside its neighbours (a sky of real heaps is never a field of matching domes).
+  double warp = 0;
 };
 inline constexpr int kCloudLayers = 4;
 // The frame block's rows a layer (render/clouds.hpp's `cloud_rows`).
@@ -148,7 +152,10 @@ struct Clouds {
   CloudLayer layers[kCloudLayers];
   double steps = 1;     // the share of the march's full steps taken (the quality ladder's), 0.25..1
   bool quarter = true;  // marched at a quarter of the pixels, then upsampled (false: every pixel)
-  bool spread = true;   // the quarter's march spread over four frames, the rest reprojected
+  // The march spread over four frames, a quarter of its pixels a frame and the rest reprojected:
+  // the quarter's, or with `quarter` false every pixel's own (false there: the reference, every
+  // pixel marched each frame).
+  bool spread = true;
 };
 
 // A MOON OF ANOTHER WORLD where it stands at the frame's moment (render/night.hpp's `set_moons`

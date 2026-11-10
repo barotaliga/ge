@@ -8,8 +8,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include "core/num_text.hpp"
+#include "core/solar.hpp"
 #include "render/cloud_kinds.hpp"
 #include "render/clouds.hpp"
 #include "render/night.hpp"
@@ -61,19 +63,22 @@ double hash01(uint32_t seed, uint32_t salt) {
 
 double deal(const double band[2], double u) { return band[0] + (band[1] - band[0]) * u; }
 
-// A night layer of `kind` over the map's top, dealt off the pick's seed on `salt`, its cover
-// `cover`, carried `t` s on the wind aloft at its height.
-void night_layer(const render::CloudKind& kind, uint32_t salt, double cover, const SkyPick& p,
-                 double top_y, double t, render::CloudLayer& l) {
-  auto u = [&](uint32_t k) { return hash01(p.seed, 101 + salt * 17 + k); };
+// Layer `i` of the pick's stack over the map's top, dealt off the pick's seed on `i`, carried `t`
+// s on the wind aloft at its height (and the evening's jet).
+void deal_layer(const SkyLayer& sl, uint32_t i, const SkyPick& p, double top_y, double t,
+                render::CloudLayer& l) {
+  const render::CloudKind& kind = *sl.kind;
+  auto u = [&](uint32_t k) { return hash01(p.seed, 101 + i * 17 + k); };
   const double base = deal(kind.base, u(0));
   const double depth = deal(kind.depth, u(1));
   const double h = base + 0.5 * depth;
   l.base_m = top_y + base;
   l.top_m = l.base_m + depth;
   render::take_form(kind, depth, l);
-  l.cover = cover;
-  l.cell_m = deal(kind.cell, u(3));
+  l.cover = sl.cover;
+  l.cell_m = deal(kind.cell, u(3)) * sl.cell;
+  l.patch = std::max(l.patch, sl.patch);
+  l.warp = sl.warp;
   l.heading = p.wind_from + kPi + ge::wind::veer_aloft(h, kLatitude);
   const double tile = l.cell_m * l.stretch * render::kCloudTileCells;
   const double dusk = ge::wind::dusk_of(p.sun_elevation * kDeg);
@@ -84,11 +89,85 @@ void night_layer(const render::CloudKind& kind, uint32_t salt, double cover, con
 
 }  // namespace
 
-SkyPick pick_sky(const SkyColours& c) {
+void add_layer(SkyPick& p, const char* name, double cover, double patch, double warp, double cell) {
+  if (p.layer_count >= kSkyLayers) return;
+  SkyLayer& l = p.layers[p.layer_count++];
+  l.kind = render::cloud_kind_named(name);
+  l.cover = cover;
+  l.patch = patch;
+  l.warp = warp;
+  l.cell = cell;
+}
+
+namespace {
+
+// One of `names` (n of them) by the share `u` (0..1).
+const char* one_of(const char* const* names, int n, double u) {
+  return names[std::min(n - 1, static_cast<int>(u * n))];
+}
+
+std::string stack_words(const SkyPick& p) {
+  std::string s;
+  for (int i = 0; i < p.layer_count; ++i) {
+    s += (i == 0                   ? ""
+          : i + 1 == p.layer_count ? " and "
+                                   : ", ") +
+         std::string(p.layers[i].kind->name) + " over " + pct(p.layers[i].cover);
+  }
+  return s.empty() ? "a clear sky" : s;
+}
+
+// THE DAY'S STACK: a low layer of heaps, rolls or towering heaps over a share of the sky the
+// texture's own cloud sets (a third of it at the most), sometimes scud racing under it, and most
+// often a high layer (ice's hairs, a rippled middle sheet, fine ripples or a few streaks) for the
+// sky's depth; every layer in islands, its outlines twisted.
+void deal_day(SkyPick& p) {
+  auto u = [&](uint32_t k) { return hash01(p.seed, 300 + k); };
+  p.layer_count = 0;
+  const double share = std::clamp(p.cover, 0.0, 1.0);
+  static const char* const kLow[] = {"cumulus", "cumulus", "stratocumulus", "congestus"};
+  const char* low = one_of(kLow, 4, u(0));
+  const double cover = std::clamp((0.16 + 0.3 * share) * (0.75 + 0.5 * u(1)), 0.1, 0.42);
+  add_layer(p, low, cover, 0.3 + 0.3 * u(2), 0.6 + 0.5 * u(3), 0.7 + 0.4 * u(4));
+  if (u(5) < 0.35) add_layer(p, "fractus", 0.4 * cover, 0.6, 1.3, 0.8 + 0.4 * u(6));
+  static const char* const kHigh[] = {"cirrus", "cirrus", "altocumulus", "cirrocumulus", "wisps"};
+  if (u(7) < 0.75) {
+    const render::CloudKind* high = render::cloud_kind_named(one_of(kHigh, 5, u(8)));
+    add_layer(p, high->name, deal(high->cover, u(9)) * 0.7, 0.5 + 0.3 * u(10), 0.6 + 0.5 * u(11),
+              0.8 + 0.4 * u(12));
+  }
+}
+
+// THE NIGHT'S STACK: the scud racing low across the moon, and one layer over it (broken rolls,
+// a rippled middle sheet or high ice), sometimes high streaks over that; the sky between open.
+void deal_night(SkyPick& p) {
+  auto u = [&](uint32_t k) { return hash01(p.seed, 9 + k); };
+  p.layer_count = 0;
+  add_layer(p, "fractus", 0.14 + 0.14 * u(0), 0.5 + 0.3 * u(1), 1.0 + 0.5 * u(2), 0.8 + 0.4 * u(3));
+  const double r = u(4);
+  if (r < 0.45) {
+    add_layer(p, "stratocumulus", 0.22 + 0.16 * u(5), 0.55 + 0.25 * u(6), 0.9 + 0.5 * u(7),
+              0.7 + 0.4 * u(8));
+  } else if (r < 0.7) {
+    add_layer(p, "altocumulus", 0.3 + 0.15 * u(5), 0.6, 0.8 + 0.4 * u(7), 0.8 + 0.4 * u(8));
+  } else {
+    add_layer(p, "cirrus", 0.3 + 0.15 * u(5), 0.5, 0.7 + 0.4 * u(7), 0.8 + 0.4 * u(8));
+  }
+  if (r < 0.7 && u(9) < 0.4) add_layer(p, "wisps", 0.1 + 0.1 * u(10), 0.4, 0.8, 1);
+}
+
+}  // namespace
+
+SkyPick pick_sky(const SkyColours& c, std::string_view map) {
   SkyPick p;
+  // The map's own air: its seed, and a wind always blowing (8 to 14 m/s at 10 m).
+  p.seed = seed_of(map);
+  p.wind = 8 + 6 * hash01(p.seed, 7);
+  p.wind_from = 2 * kPi * hash01(p.seed, 8);
   if (!c.found) {
     render::sky_style_named(p.type, p.style);
-    p.why = "no sky texture: the Earth's fair day";
+    deal_day(p);
+    p.why = "no sky texture: the Earth's fair day, " + stack_words(p);
     return p;
   }
   // The sky as seen: the back layer under the cloud layer's share.
@@ -141,11 +220,21 @@ SkyPick pick_sky(const SkyColours& c) {
   // A tint halfway toward the texture's own hue, its brightest channel 1.
   for (int k = 0; k < 3; ++k) p.tint[k] = std::sqrt(seen[k] / std::max(hi, 1e-9));
   p.cover = std::clamp(c.cover, 0.1, 0.9);
+  p.bright = y;
+  deal_day(p);
   p.why = "a " + hue + " sky (" + pct(y) + " bright, " + pct(sat) + " saturated) with " +
           pct(c.cover) + " cloud: " + p.type + ", the sun at " +
           core::num::to_fixed(p.sun_elevation, 0) + " degrees, the sky at " + pct(p.sky_light) +
-          " against the rooms";
+          " against the rooms, " + stack_words(p);
   return p;
+}
+
+bool dark_sky(const SkyPick& p) { return p.bright < kDarkSky; }
+
+void set_cover(SkyPick& p, double cover) {
+  if (p.layer_count == 0 || p.layers[0].cover <= 0) return;
+  const double k = std::max(cover, 0.0) / p.layers[0].cover;
+  for (int i = 0; i < p.layer_count; ++i) p.layers[i].cover = std::min(1.0, p.layers[i].cover * k);
 }
 
 bool with_type(SkyPick& pick, std::string_view name) {
@@ -159,6 +248,8 @@ bool with_type(SkyPick& pick, std::string_view name) {
 void night_over(SkyPick& p, std::string_view map) {
   p.night = true;
   p.seed = seed_of(map);
+  p.wind = 8 + 6 * hash01(p.seed, 7);
+  p.wind_from = 2 * kPi * hash01(p.seed, 8);
   auto u = [&](uint32_t k) { return hash01(p.seed, k); };
   const bool evening = u(0) < 0.4;
   p.sun_azimuth = 360 * u(2);
@@ -175,10 +266,11 @@ void night_over(SkyPick& p, std::string_view map) {
     p.moon_lit = 0.55 + 0.45 * u(5);
   }
   p.sidereal = 360 * u(6);
-  p.wind = 8 + 6 * u(7);
-  p.wind_from = 2 * kPi * u(8);
-  p.scud_cover = 0.3 + 0.15 * u(9);
-  p.deck_cover = 0.4 + 0.15 * u(10);
+  // The night's stack in place of the day's (and of its words).
+  const std::string day = ", " + stack_words(p);
+  if (p.why.size() >= day.size() && p.why.compare(p.why.size() - day.size(), day.size(), day) == 0)
+    p.why.resize(p.why.size() - day.size());
+  deal_night(p);
   p.sky_light = 1;
   p.adapt_cd = kRoomCd;
   // The light the night sky gives a level face: the twilight's, the moon's through the air and
@@ -192,31 +284,34 @@ void night_over(SkyPick& p, std::string_view map) {
            core::num::to_fixed(-p.sun_elevation, 0) + " degrees down, the moon " +
            core::num::to_fixed(p.moon_elevation, 0) + " up at a heading of " +
            core::num::to_fixed(std::fmod(p.moon_azimuth, 360.0), 0) + " and " + pct(p.moon_lit) +
-           " lit, a wind of " + core::num::to_fixed(p.wind, 0) + " m/s, scud over " +
-           pct(p.scud_cover) + " and a broken deck over " + pct(p.deck_cover) +
-           " of the sky, seen " + core::num::to_fixed(p.sky_seen, 0) + " times brighter";
+           " lit, a wind of " + core::num::to_fixed(p.wind, 0) + " m/s, " + stack_words(p) +
+           ", seen " + core::num::to_fixed(p.sky_seen, 0) + " times brighter";
+}
+
+void at_hour(SkyPick& p, const SkyPick& night, double hour) {
+  constexpr double kDeclination = 15;  // a summer's day: the sun this far north of the equator
+  const core::SunPlace sun = core::sun_at(hour, kLatitude, kDeclination);
+  const double elevation = sun.elevation / kDeg, azimuth = sun.azimuth / kDeg;
+  if (elevation < -6) {
+    // Night: the map's own, the sun under the horizon where the hour puts it and the moon across
+    // the sky from it.
+    const double turn = azimuth - night.sun_azimuth;
+    p = night;
+    p.moon_azimuth += turn;
+    p.sidereal = std::fmod(night.sidereal + 15 * hour, 360.0);
+  } else {
+    p.night = false;
+  }
+  p.sun_elevation = elevation;
+  p.sun_azimuth = azimuth;
 }
 
 render::Clouds clouds_of(const SkyPick& p, double top_y, double t) {
   render::Clouds c;
-  if (!p.night) {
-    if (p.cover <= 0) return c;
-    c.count = 1;
-    render::CloudLayer& l = c.layers[0];
-    l.base_m = 1500;
-    l.top_m = 2300;
-    l.cover = p.cover;
-    l.cell_m = p.cell_m;
-    l.stretch = 1.3;
-    l.dome = 1;
-    l.density = 28.0 / 800;
-    l.shadow_tau = 2.4;
-    return c;
+  for (int i = 0; i < p.layer_count && c.count < render::kCloudLayers; ++i) {
+    if (p.layers[i].kind == nullptr || p.layers[i].cover <= 0) continue;
+    deal_layer(p.layers[i], static_cast<uint32_t>(i), p, top_y, t, c.layers[c.count++]);
   }
-  c.count = 2;
-  night_layer(*render::cloud_kind_named("fractus"), 0, p.scud_cover, p, top_y, t, c.layers[0]);
-  night_layer(*render::cloud_kind_named("stratocumulus"), 1, p.deck_cover, p, top_y, t,
-              c.layers[1]);
   return c;
 }
 
@@ -231,6 +326,43 @@ void dress_sky(render::FrameView& v, const SkyPick& p, double top_y, double t) {
                           render::kMoonMeanKm};
   render::set_night(v, moon, kLatitude, p.sidereal);
   v.adapt_cd = p.adapt_cd;
+}
+
+const render::FarLandKind* far_land_for(const SkyPick& pick, std::string_view map,
+                                        std::string_view word, bool* known) {
+  if (known != nullptr) *known = true;
+  if (word == "off") return nullptr;
+  if (word != "auto") {
+    const render::FarLandKind* k = render::find_far_land(word);
+    if (known != nullptr) *known = k != nullptr;
+    return k;
+  }
+  const std::string_view t = pick.type;
+  if (t == "dust") return render::find_far_land("sierra");
+  if (t == "alien" || t == "violet" || t == "toxic" || t == "nebula")
+    return render::find_far_land("xeno");
+  if (t == "hell" || t == "ash") return render::find_far_land("ember");
+  if (t == "ice") return render::find_far_land("rime");
+  // The Earth's air, and a black sky (a plain night's, though it picks the airless type): one of
+  // the Earth's lands, dealt off the name.
+  std::vector<const render::FarLandKind*> earthly;
+  for (const render::FarLandKind& k : render::far_land_kinds()) {
+    if (!k.alien) earthly.push_back(&k);
+  }
+  const double u = hash01(seed_of(map), 61);
+  return earthly[std::min(earthly.size() - 1, static_cast<size_t>(u * double(earthly.size())))];
+}
+
+render::FarSite far_site_of(const Scene& scene, std::string_view map) {
+  render::FarSite s;
+  s.x = 0.5 * (scene.mins[0] + scene.maxs[0]);
+  s.z = 0.5 * (scene.mins[2] + scene.maxs[2]);
+  const double hx = 0.5 * (scene.maxs[0] - scene.mins[0]),
+               hz = 0.5 * (scene.maxs[2] - scene.mins[2]);
+  s.radius_m = std::sqrt(hx * hx + hz * hz) + 4;
+  s.floor_y = scene.mins[1];
+  s.seed = 1 + (seed_of(map) % 9973);
+  return s;
 }
 
 }  // namespace ge::brush::app

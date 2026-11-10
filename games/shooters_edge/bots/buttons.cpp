@@ -1,9 +1,10 @@
 // The map's buttons (buttons.hpp): read and linked once, and a novice's pokes.
 //
 // ge:summary The map's buttons linked to doors and items; a novice's random shots and touches
-// ge:keywords buttons_init button_poke button_poke_cmd button_node door-keeps
+// ge:keywords buttons_init button_poke button_poke_cmd button_node door-keeps trigger_relay
+// ge:keywords relayed-button button_fires
 // ge:skill shooter bots
-// ge:test tests/shooters_edge_team_test.cpp
+// ge:test tests/shooters_edge_footwork_test.cpp
 #include "shooters_edge/bots/buttons.hpp"
 
 #include "core/prng.hpp"
@@ -38,20 +39,20 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 
 float draw(Fighter& f) { return static_cast<float>(ge::core::next(f.rng)); }
 
-sh::Vec3f middle(const sh::Edict& e) {
+sh::Vec3f middle(const server::WorldEntity& e) {
   return {(e.absmin.x + e.absmax.x) * 0.5f, (e.absmin.y + e.absmax.y) * 0.5f,
           (e.absmin.z + e.absmax.z) * 0.5f};
 }
 
 // The line from `eye` meets nothing before the button.
-bool sees(const server::QcServer& s, sh::Vec3f eye, const ButtonSpot& b) {
+bool sees(const server::RulesCommon& s, sh::Vec3f eye, const ButtonSpot& b) {
   const sh::HullTrace tr = sh::trace_move(s.sv, eye, {}, {}, b.at, sh::kTraceNoMonsters, -1);
   return tr.fraction >= 1 || tr.ent == b.ent;
 }
 
 // The node a button is pressed (or shot) from: the nearest within reach whose line meets the
 // button itself, so a node behind the wall the button is set in is never chosen.
-int32_t button_node(const sh::NavGraph& g, const server::QcServer& s, const ButtonSpot& b,
+int32_t button_node(const sh::NavGraph& g, const server::RulesCommon& s, const ButtonSpot& b,
                     float reach) {
   int32_t best = -1;
   float best_d = reach;
@@ -73,7 +74,31 @@ bool near_box(sh::Vec3f p, sh::Vec3f lo, sh::Vec3f hi, float r) {
 
 }  // namespace
 
-void buttons_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s,
+std::vector<std::string> button_fires(const std::vector<pg::EntityBlock>& blocks,
+                                      const char* target) {
+  std::vector<std::string> names;
+  if (!target || !target[0]) return names;
+  names.emplace_back(target);
+  for (size_t from = 0, depth = 0; from < names.size() && depth < kRelayDepth; depth++) {
+    const size_t to = names.size();
+    for (; from < to; from++)
+      for (const pg::EntityBlock& b : blocks) {
+        const char* cn = pg::block_value(b, "classname");
+        const char* tn = pg::block_value(b, "targetname");
+        const char* next = pg::block_value(b, "target");
+        if (!cn || !tn || !next || !next[0] || names[from] != tn) continue;
+        if (std::strcmp(cn, "trigger_relay") != 0 && std::strcmp(cn, "trigger_once") != 0 &&
+            std::strcmp(cn, "trigger_multiple") != 0)
+          continue;
+        bool seen = false;
+        for (const std::string& n : names) seen |= n == next;
+        if (!seen) names.emplace_back(next);
+      }
+  }
+  return names;
+}
+
+void buttons_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s,
                   const char* entities) {
   f.button_spots.clear();
   f.poke = -1;
@@ -82,7 +107,7 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s,
   if (!entities || !pg::parse_entity_text(entities, blocks, error)) return;
   const auto entity_on = [&](const char* model) {
     for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
-      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+      const server::WorldEntity& d = s.world.entities[static_cast<size_t>(e)];
       if (!d.free && d.modelindex > 0 && static_cast<size_t>(d.modelindex) < s.models.size() &&
           s.models[static_cast<size_t>(d.modelindex)] == model)
         return e;
@@ -97,21 +122,23 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s,
     ButtonSpot bs;
     bs.ent = entity_on(model);
     if (bs.ent < 0) continue;
-    bs.at = middle(s.sv.edicts[static_cast<size_t>(bs.ent)]);
+    bs.at = middle(s.world.entities[static_cast<size_t>(bs.ent)]);
     const char* health = pg::block_value(b, "health");
     bs.shoot = health && std::atof(health) > 0;
     bs.node = button_node(g, s, bs, bs.shoot ? 900.f : 256.f);
+    const std::vector<std::string> fired = button_fires(blocks, target);
     for (const pg::EntityBlock& d : blocks) {
       const char* dc = pg::block_value(d, "classname");
       const char* dn = pg::block_value(d, "targetname");
       const char* dm = pg::block_value(d, "model");
-      if (!target || !dc || std::strcmp(dc, "func_door") != 0 || !dn ||
-          std::strcmp(dn, target) != 0 || !dm)
-        continue;
+      if (!dc || std::strcmp(dc, "func_door") != 0 || !dn || !dm) continue;
+      bool opened = false;
+      for (const std::string& n : fired) opened |= n == dn;
+      if (!opened) continue;
       const int door = entity_on(dm);
       if (door < 0) continue;
       bs.doors.push_back(door);
-      const sh::Edict& de = s.sv.edicts[static_cast<size_t>(door)];
+      const server::WorldEntity& de = s.world.entities[static_cast<size_t>(door)];
       for (size_t i = 0; i < f.items.size(); i++) {
         ItemSpot& it = f.items[i];
         if (!near_box(it.at, de.absmin, de.absmax, kDoorKeeps)) continue;
@@ -131,14 +158,75 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s,
   }
 }
 
-bool button_poke(Fighter& f, const server::QcServer& s, int me, double t) {
+void exits_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s,
+                const char* entities) {
+  f.exits.clear();
+  f.locked.clear();
+  f.locked_rest.clear();
+  std::vector<pg::EntityBlock> blocks;
+  std::string error;
+  if (!entities || !pg::parse_entity_text(entities, blocks, error)) return;
+  for (const pg::EntityBlock& b : blocks) {
+    const char* cn = pg::block_value(b, "classname");
+    const char* model = pg::block_value(b, "model");
+    // A door that only something else opens: one with a name (not one that starts open), or a
+    // secret door. A touch does not open it, so a route through it waits there for ever.
+    if (cn && model && model[0] == '*') {
+      const char* name = pg::block_value(b, "targetname");
+      const char* sf = pg::block_value(b, "spawnflags");
+      const bool start_open = sf && (std::atoi(sf) & 1) != 0;
+      if ((std::strcmp(cn, "func_door") == 0 && name && !start_open) ||
+          std::strcmp(cn, "func_door_secret") == 0) {
+        for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
+          const server::WorldEntity& d = s.world.entities[static_cast<size_t>(e)];
+          if (!d.free && d.modelindex > 0 && static_cast<size_t>(d.modelindex) < s.models.size() &&
+              s.models[static_cast<size_t>(d.modelindex)] == model) {
+            f.locked.push_back(e);
+            f.locked_rest.push_back(d.origin);
+            break;
+          }
+        }
+      }
+    }
+    if (!cn || std::strcmp(cn, "trigger_changelevel") != 0 || !model || model[0] != '*') continue;
+    // The trigger's brush model by its name in the model list (a trigger draws none, so no
+    // entity carries the index): its bounds are the box.
+    size_t mi = 0;
+    for (size_t i = 1; i < s.models.size() && i < s.sv.models.size(); i++)
+      if (s.models[i] == model) mi = i;
+    if (mi == 0) continue;
+    ExitSpot x;
+    x.lo = s.sv.models[mi].mins;
+    x.hi = s.sv.models[mi].maxs;
+    // The box a standing player at a node fills: 16 each way across, 24 below, 32 above.
+    const auto gap = [&](sh::Vec3f o) {
+      const float dx = std::fmax(std::fmax(x.lo.x - (o.x + 16), (o.x - 16) - x.hi.x), 0.f);
+      const float dy = std::fmax(std::fmax(x.lo.y - (o.y + 16), (o.y - 16) - x.hi.y), 0.f);
+      const float dz = std::fmax(std::fmax(x.lo.z - (o.z + 32), (o.z - 24) - x.hi.z), 0.f);
+      return std::sqrt(dx * dx + dy * dy + dz * dz);
+    };
+    float best = 1e30f;
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      const float d = gap(g.nodes[n].origin);
+      if (d <= kExitMargin) {
+        x.inside.push_back(static_cast<int32_t>(n));
+      } else if (d >= kExitClear && d <= kExitStandFar && d < best) {
+        best = d;
+        x.stand = static_cast<int32_t>(n);
+      }
+    }
+    f.exits.push_back(std::move(x));
+  }
+}
+
+bool button_poke(Fighter& f, const server::RulesCommon& s, int me, double t) {
   if (f.sense != MapSense::novice || f.button_spots.empty()) return false;
   if (f.poke >= 0 && t < f.poke_until) return true;
   f.poke = -1;
   if (t < f.next_poke) return false;
   f.next_poke = t + kPokeEvery_s;
   if (draw(f) >= kPokeChance) return false;
-  const sh::Vec3f self = s.sv.edicts[static_cast<size_t>(me)].origin;
+  const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   const sh::Vec3f eye{self.x, self.y, self.z + 22};
   float best = kPokeSight;
   for (size_t k = 0; k < f.button_spots.size(); k++) {
@@ -155,10 +243,10 @@ bool button_poke(Fighter& f, const server::QcServer& s, int me, double t) {
   return true;
 }
 
-void button_poke_cmd(Fighter& f, const server::QcServer& s, int me, double t, sh::MoveCmd& cmd) {
+void button_poke_cmd(Fighter& f, const server::RulesCommon& s, int me, double t, sh::MoveCmd& cmd) {
   if (f.poke < 0 || t >= f.poke_until || f.bot.aiming) return;
   const ButtonSpot& b = f.button_spots[static_cast<size_t>(f.poke)];
-  const sh::Vec3f self = s.sv.edicts[static_cast<size_t>(me)].origin;
+  const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   const sh::Vec3f eye{self.x, self.y, self.z + 22};
   if (!sees(s, eye, b)) return;
   const sh::Vec3f d = b.at - eye;
@@ -166,6 +254,7 @@ void button_poke_cmd(Fighter& f, const server::QcServer& s, int me, double t, sh
   if (flat > 900) return;
   cmd.angles.y = static_cast<float>(ge::core::libm::atan2(d.y, d.x) * (180.0 / ge::core::kPi));
   cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(d.z, flat) * (180.0 / ge::core::kPi));
+  f.bot.set_by = "poke";
   if (flat < 200) {
     cmd.forward = 320;  // into it: a touch presses it
     cmd.side = 0;

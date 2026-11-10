@@ -9,6 +9,9 @@
 //   it to its refire ahead, and a spawn sets it to now, so a spawn is never taken for a shot.
 // - THE PLACE: the eye's look, the speed along the ground and whether the player stands on it (the
 //   stride's clock runs while he walks), from the view and the player's state.
+// - A RECORDING OR A JOINED SERVER (`step_demo_held`): a classic set's frame is the one the server
+//   sent (the player's weapon frame), drawn from the last over the time its frames last
+//   (model_lerp.hpp's `track_frame`) under `ViewSettings::lerp`; a frame the model lacks is rest.
 //
 // ge:summary The weapon in hand: whose set, which one, a shot, the look, the stride
 // ge:keywords held-weapon hand step_held attack_finished shot weapon-switch viewmodel stride
@@ -26,6 +29,7 @@
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/model_lerp.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/view/hand.hpp"
 
@@ -36,6 +40,10 @@ struct HeldState {
   float attack_finished = 0;  // the last frame's
   double stride_s = 0;        // the stride's clock, s
   int shots = 0;              // shots seen
+  bool shown = false;         // the last frame drew a weapon (a dead recorder's sinks from it)
+  // A recording's or a joined server's weapon frame (a classic set's), drawn between its changes.
+  FrameTrack recorded;
+  int recorded_weapon = -1;  // the weapon `recorded` is of
 };
 
 // The held weapons the window draws into `out`. With a classic game's folder open (`files`), only
@@ -54,7 +62,7 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
 
 // The hand in a recorded game whose frame is `frame` (timedemo.hpp's demo_view): the weapon the
 // recording's HUD shows at the view's eye and look; not drawn while the recorder holds no view
-// model (a spectator), is dead or the level has ended.
+// model (a spectator) or the level has ended; when the recorder dies, the weapon sinks out of view.
 // shortcut: no shot and no stride (the recording's weapon frame and velocity are not read), so the
 // weapon neither kicks, flashes nor bobs; read them for that.
 view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::ViewSettings& settings,

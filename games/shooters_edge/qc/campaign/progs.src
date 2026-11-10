@@ -10,6 +10,7 @@ glue.qc
 ../common/combat.qc
 ../common/weapons.qc
 ../common/items.qc
+../common/dmm4.qc
 ../common/player.qc
 ../common/map.qc
 ai.qc
@@ -19,3 +20,5 @@ monsters_air.qc
 monsters_big.qc
 monsters_more.qc
 world.qc
+bosses.qc
+set_pieces.qc

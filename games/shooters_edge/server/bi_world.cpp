@@ -5,10 +5,13 @@
 // ge:summary Builtins over entities and the world: traces, finds, models, sizes, statics, dumps
 // ge:keywords makevectors setmodel setsize traceline tracebox checkclient find findradius
 // ge:keywords droptofloor pointcontents aim nextent makestatic setspawnparms coredump eprint
-// ge:keywords traceon traceoff trace-globals chain area-tree autoaim sv_aim
+// ge:keywords traceon traceoff trace-globals chain area-tree autoaim sv_aim findfloat vectorvectors
+// ge:keywords findchain findchainfloat copyentity
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_qc_builtins_test.cpp
+#include <cmath>
 #include <cstring>
+#include <string>
 
 #include "core/num_text.hpp"
 #include "progs/stdlib.hpp"
@@ -159,7 +162,26 @@ void bi_setmodel(pg::Vm& vm) {
     flush_to_world(qc_of(vm));
     sh::set_brush_model(s.sv, e, index);
     refresh_from_world(qc_of(vm));
+    return;
   }
+  // A single-player program sizes nothing it gives a brush model in its own file (the exploding
+  // boxes): the size is the file's first model's bounds, one unit wider on every side, unrotated.
+  // A multiplayer program sets such sizes itself, and its setmodel leaves them alone.
+  const size_t len = std::strlen(m);
+  const bool own_file = len > 4 && std::strcmp(m + len - 4, ".bsp") == 0;
+  if (!own_file || s.progs == nullptr || s.progs->layout == nullptr ||
+      !s.progs->layout->single_player || s.opt.model_bounds == nullptr)
+    return;
+  sh::Vec3f lo, hi;
+  if (!s.opt.model_bounds(s.opt.model_ctx, m, lo, hi)) {
+    console_print(s, std::string("setmodel: no bounds for ") + m +
+                         ": the entity stays pointlike, so shots pass through it; next: check "
+                         "the file is in the game folder's packs\n");
+    return;
+  }
+  flush_to_world(qc_of(vm));
+  sh::set_size(s.sv, e, {lo.x - 1, lo.y - 1, lo.z - 1}, {hi.x + 1, hi.y + 1, hi.z + 1});
+  refresh_from_world(qc_of(vm));
 }
 
 void bi_setsize(pg::Vm& vm) {
@@ -254,6 +276,106 @@ void bi_find(pg::Vm& vm) {
     }
   }
   pg::return_int(vm, 0);
+}
+
+// The next entity after the start whose float field equals the value (DP_QC_FINDFLOAT); an
+// entity field compares the same way, by its value.
+void bi_findfloat(pg::Vm& vm) {
+  QcServer& s = server_of(vm);
+  const int start = any_entity(vm, 0, "findfloat");
+  if (start < 0) return;
+  const int32_t f = pg::arg_int(vm, 1);
+  if (f < 0 || f >= vm.entityfields) {
+    pg::vm_error(vm, "findfloat: the field argument is not a field of the entity");
+    return;
+  }
+  const float want = pg::arg_float(vm, 2);
+  for (int e = start + 1; e < s.sv.num_edicts; e++) {
+    if (!in_use(s, e)) continue;
+    if (pg::as_float(*pg::entity_field(vm, e, f)) == want) {
+      pg::return_int(vm, pg::entity_value(vm, e));
+      return;
+    }
+  }
+  pg::return_int(vm, 0);
+}
+
+// Every entity in use whose string field equals the text (DP_QC_FINDCHAIN) or whose float field
+// equals the value (DP_QC_FINDCHAINFLOAT), linked through `chain` from the last to the first;
+// the head returned (world when none).
+void find_chain(pg::Vm& vm, bool by_float, const char* name) {
+  QcServer& s = server_of(vm);
+  const int32_t f = pg::arg_int(vm, 0);
+  if (f < 0 || f >= vm.entityfields) {
+    pg::vm_error(vm,
+                 (std::string(name) + ": the field argument is not a field of the entity").c_str());
+    return;
+  }
+  const char* want = by_float ? "" : pg::arg_string(vm, 1);
+  const float want_f = by_float ? pg::arg_float(vm, 1) : 0.0f;
+  if (vm.fault.set) return;
+  const int chain = pg::vm_layout(vm).f.chain;
+  int32_t head = 0;
+  for (int e = 1; e < s.sv.num_edicts; e++) {
+    if (!in_use(s, e)) continue;
+    const uint32_t w = *pg::entity_field(vm, e, f);
+    bool hit = false;
+    if (by_float) {
+      hit = pg::as_float(w) == want_f;
+    } else {
+      const char* have = pg::vm_string(vm, static_cast<int32_t>(w));
+      hit = have != nullptr && std::strcmp(have, want) == 0;
+    }
+    if (!hit) continue;
+    *pg::entity_field(vm, e, chain) = static_cast<uint32_t>(head);
+    head = pg::entity_value(vm, e);
+  }
+  pg::return_int(vm, head);
+}
+void bi_findchain(pg::Vm& vm) { find_chain(vm, false, "findchain"); }
+void bi_findchainfloat(pg::Vm& vm) { find_chain(vm, true, "findchainfloat"); }
+
+// Every field of one entity copied onto another (DP_QC_COPYENTITY), which is then linked where
+// it now stands; the world or a free entity as either side faults.
+void bi_copyentity(pg::Vm& vm) {
+  QcServer& s = server_of(vm);
+  const int from = any_entity(vm, 0, "copyentity");
+  const int to = any_entity(vm, 1, "copyentity");
+  if (from < 0 || to < 0) return;
+  if (from == 0 || to == 0 || !in_use(s, from) || !in_use(s, to)) {
+    pg::vm_error(vm, "copyentity: both entities must be in use and neither the world");
+    return;
+  }
+  if (from == to) return;
+  std::memcpy(pg::entity_field(vm, to, 0), pg::entity_field(vm, from, 0),
+              static_cast<size_t>(vm.entityfields) * sizeof(uint32_t));
+  flush_to_world(qc_of(vm));
+  sh::link_edict(s.sv, to, false);
+  refresh_from_world(qc_of(vm));
+}
+
+// v_forward, v_right and v_up from a direction (DP_QC_VECTORVECTORS): forward the direction
+// normalized as normalize does; straight up or down, right is +x and up is (-forward z, 0, 0);
+// else right is (forward y, -forward x, 0) normalized and up is right x forward.
+void bi_vectorvectors(pg::Vm& vm) {
+  const auto unit = [](sh::Vec3f v) {
+    const float sq = (v.x * v.x + v.y * v.y) + v.z * v.z;
+    const auto len = static_cast<float>(std::sqrt(static_cast<double>(sq)));
+    if (len == 0) return sh::Vec3f{0, 0, 0};
+    const float k = 1.0f / len;
+    return sh::Vec3f{v.x * k, v.y * k, v.z * k};
+  };
+  const sh::Vec3f fwd = unit(vec_arg(vm, 0));
+  sh::Vec3f right{1, 0, 0}, up{-fwd.z, 0, 0};
+  if (fwd.x != 0 || fwd.y != 0) {
+    right = unit({fwd.y, -fwd.x, 0});
+    up = {right.y * fwd.z - right.z * fwd.y, right.z * fwd.x - right.x * fwd.z,
+          right.x * fwd.y - right.y * fwd.x};
+  }
+  const pg::LayoutGlobals& g = pg::vm_layout(vm).g;
+  set_global_vec(vm, g.v_forward, fwd);
+  set_global_vec(vm, g.v_right, right);
+  set_global_vec(vm, g.v_up, up);
 }
 
 namespace {

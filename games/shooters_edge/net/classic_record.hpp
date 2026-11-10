@@ -44,6 +44,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
 #include <vector>
 
 #include "shooter/pmove.hpp"
@@ -59,7 +60,11 @@ struct ClassicServer;
 inline constexpr int64_t kPackFlushBytes = int64_t{1} << 20;
 
 struct ClientRecorder {
-  bool voice = false;   // the voice format: the header, voice kept, own voice spliced in
+  bool voice = false;  // the voice format: the header, voice kept, own voice spliced in
+  // A recording our own reader reads at once (the remote view's), never a file: the game's own
+  // named effects (svc ge_point, ge_trail) and the voices relayed kept, with no voice header and
+  // the recorder's own voice left out (the player does not hear himself).
+  bool live = false;
   bool packed = false;  // the packed form (above)
   std::vector<uint8_t>
       bytes;                 // the file so far (packed: the bytes not yet fed; whole once stopped)
@@ -75,7 +80,8 @@ void record_start(ClientRecorder& r, bool voice, int pack_level = 0);
 // The recording ended: a packed one's stream ended, its whole file in `bytes`.
 void record_stop(ClientRecorder& r);
 // A packet received at `time`: its channel header and its messages, each a span of the payload.
-// Voice messages are dropped from a plain recording; own voice is appended to a voice one.
+// Voice messages are dropped from a plain recording (kept when `live`); own voice is appended to a
+// voice one. The game's own named effects are dropped unless `live`.
 void record_packet(ClientRecorder& r, double time, std::span<const uint8_t> header,
                    std::span<const uint8_t> payload,
                    std::span<const std::pair<size_t, size_t>> messages);
@@ -96,6 +102,7 @@ struct MultiviewRecorder {
   int statics = 0, static_sounds = 0;  // written so far
   int32_t stats[32][kStats] = {};
   bool stats_known[32][kStats] = {};
+  std::string info[32];  // each slot's public user info as last written (name, team, colours)
   struct Held {
     int kind = 6;  // all, multiple or single
     int target = 0;

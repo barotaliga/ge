@@ -8,8 +8,10 @@
 #include "shooters_edge/server/campaign.hpp"
 
 #include <algorithm>
+#include <string_view>
 
 #include "core/num.hpp"
+#include "progs/vm.hpp"
 #include "shooter/frame.hpp"
 #include "shooters_edge/server/commands.hpp"
 
@@ -44,7 +46,7 @@ void round_skill(QcServer& s) {
 bool start_level(Campaign& c, const std::string& name, const char* kind, bool join,
                  std::string& error) {
   keep_settings(c);
-  c.server.reset();  // it points into the old map: it goes before the loader is asked again
+  c.server = {};  // it points into the old map: it goes before the loader is asked again
   c.map = MapSpec{};
   if (c.opt.load == nullptr) {
     error = "campaign: no map loader; next: set CampaignOptions::load";
@@ -57,9 +59,10 @@ bool start_level(Campaign& c, const std::string& name, const char* kind, bool jo
   so.loop.single_player_clock = true;
   so.loop.mintic = kCampaignStep;
   so.loop.start_time = 1.0;
-  c.server = make_qc_server(*c.progs, so, error);
-  if (!c.server) return false;
-  QcServer& s = *c.server;
+  std::unique_ptr<QcServer> made = make_qc_server(*c.progs, so, error);
+  if (!made) return false;
+  QcServer& s = *made;
+  c.server = qc_runner(std::move(made));
   for (const auto& [k, v] : c.settings) set(s, k, v);
   set(s, "registered", c.opt.registered ? "1" : "0");
   if (s.cvars.find("coop")->on()) set(s, "deathmatch", "0");
@@ -67,7 +70,13 @@ bool start_level(Campaign& c, const std::string& name, const char* kind, bool jo
   apply_settings(s);
   s.serverflags = c.serverflags;
   c.entered_serverflags = c.serverflags;
-  if (!load_map(s, c.map, error)) return false;
+  if (!c.server.start(c.map, error)) return false;
+  // The map's server is made by the start: its touch watch is set on it now, before it settles.
+  if (s.cvars.find("coop")->on()) {
+    c.coop_weapons = CoopWeapons{&s, 0};
+    s.sv.touch_watch = &coop_weapon_touch;
+    s.sv.touch_watch_ctx = &c.coop_weapons;
+  }
   sh::settle_frames(s.sv, kSettleFrames, kSettleSeconds);
 
   c.history.push_back(kind + name);
@@ -75,7 +84,7 @@ bool start_level(Campaign& c, const std::string& name, const char* kind, bool jo
   for (int i = 0; i < sh::kMaxClients; i++) {
     CampaignPlayer& p = c.players[i];
     if (!p.active) continue;
-    connect(s, i, p.name, false, false, p.carried ? p.parms : nullptr);
+    c.server.connect(i, p.name, false, false, p.carried ? p.parms : nullptr);
     std::copy(std::begin(s.clients[i].spawn_parms), std::end(s.clients[i].spawn_parms),
               std::begin(p.entered));
   }
@@ -84,9 +93,30 @@ bool start_level(Campaign& c, const std::string& name, const char* kind, bool jo
 
 }  // namespace
 
+void coop_weapon_touch(void* ctx, sh::Server& sv, int trigger, int toucher, bool after) {
+  CoopWeapons& w = *static_cast<CoopWeapons*>(ctx);
+  if (w.server == nullptr || toucher < 1 || toucher > sv.set.maxclients) return;
+  QcServer& s = *w.server;
+  pg::Vm& vm = s.q.vm;
+  const auto& f = s.q.layout->f;
+  const char* cn =
+      pg::vm_string(vm, static_cast<int32_t>(*pg::entity_field(vm, trigger, f.classname)));
+  if (cn == nullptr || std::string_view(cn).substr(0, 7) != "weapon_") return;
+  const float items = pg::as_float(*pg::entity_field(vm, toucher, f.items));
+  if (!after) {
+    w.items_before = items;
+    return;
+  }
+  // Nothing new given (he had it already), or the program took it away itself.
+  if (items == w.items_before || !model_shown(s, trigger)) return;
+  *pg::entity_field(vm, trigger, f.model) = 0;  // the empty text: neither drawn nor sent
+  *pg::entity_field(vm, trigger, f.solid) = pg::as_word(static_cast<float>(sh::kSolidNot));
+  sv.edicts[static_cast<size_t>(trigger)].solid = sh::kSolidNot;
+}
+
 bool campaign_new_game(Campaign& c, const pg::Progs& progs, const CampaignOptions& opt,
                        const std::string& map, std::string& error) {
-  c.server.reset();
+  c.server = {};
   c.opt = opt;
   c.progs = &progs;
   c.settings.clear();
@@ -97,8 +127,8 @@ bool campaign_new_game(Campaign& c, const pg::Progs& progs, const CampaignOption
     QcServerOptions so = opt.server;
     std::unique_ptr<QcServer> scratch = make_qc_server(progs, so, error);
     if (!scratch) return false;
-    for (const std::string& line : opt.settings) server_command(*scratch, line);
-    c.server = std::move(scratch);
+    c.server = qc_runner(std::move(scratch));
+    for (const std::string& line : opt.settings) c.server.console(line);
   }
   return campaign_change(c, MapChange::new_game, map, error);
 }
@@ -109,8 +139,8 @@ void campaign_join(Campaign& c, int slot, const std::string& name) {
   p.active = true;
   p.name = name;
   if (!c.server) return;
-  QcServer& s = *c.server;
-  connect(s, slot, name, false, false);
+  c.server.connect(slot, name, false, false);
+  const RulesCommon& s = *c.server;
   std::copy(std::begin(s.clients[slot].spawn_parms), std::end(s.clients[slot].spawn_parms),
             std::begin(p.entered));
 }
@@ -123,8 +153,8 @@ bool campaign_change(Campaign& c, MapChange change, const std::string& map, std:
       break;
     case MapChange::change_level:
       if (c.server) {
-        QcServer& s = *c.server;
-        save_change_parms(s);
+        c.server.carry();
+        const RulesCommon& s = *c.server;
         for (int i = 0; i < sh::kMaxClients; i++) {
           CampaignPlayer& p = c.players[i];
           if (!p.active) continue;
@@ -132,8 +162,7 @@ bool campaign_change(Campaign& c, MapChange change, const std::string& map, std:
                     std::begin(p.parms));
           p.carried = true;
         }
-        const int at = s.q.layout->g.serverflags;
-        if (at >= 0) c.serverflags = pg::global_float(s.q.vm, at);
+        c.serverflags = s.world.serverflags;
       }
       break;
     case MapChange::restart:
@@ -153,7 +182,7 @@ bool campaign_change(Campaign& c, MapChange change, const std::string& map, std:
 
 bool campaign_reopen(Campaign& c, const pg::Progs& progs, const CampaignOptions& opt,
                      const std::string& map, std::string& error) {
-  c.server.reset();  // the settings are the caller's (`c.settings`), never the old server's
+  c.server = {};  // the settings are the caller's (`c.settings`), never the old server's
   c.opt = opt;
   c.progs = &progs;
   return start_level(c, map, "load ", false, error);
@@ -164,8 +193,8 @@ bool campaign_frame(Campaign& c, const sh::Packet* packets, int count, std::stri
     error = "campaign: no map is running; next: start a new game";
     return false;
   }
-  QcServer& s = *c.server;
-  qc_frame(s, packets, count);
+  c.server.frame(packets, count);
+  const RulesCommon& s = *c.server;
   if (s.pending_map.empty()) return true;
   const std::string map = s.pending_map;
   const MapChange change = s.pending_change;

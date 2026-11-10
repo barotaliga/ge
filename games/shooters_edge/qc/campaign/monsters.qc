@@ -18,14 +18,14 @@ void() army_attack = {
   self.think = army_attack;
   self.nextthink = time + 0.1;
   self.effects = self.effects - (self.effects & EF_MUZZLEFLASH);
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step <= 4) face_enemy();
   if (self.anim_step == 5) army_fire();
   if (self.anim_step >= 8) monster_run();
 };
 
 void() army_missile = {
-  self.anim_step = 0;
+  anim_begin(self.fr_missile);
   army_attack();
 };
 
@@ -33,7 +33,7 @@ void() army_missile = {
 void() army_flinch = {
   self.think = army_flinch;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step >= 3) monster_run();
 };
 
@@ -41,7 +41,7 @@ void() army_pain = {
   if (self.pain_finished < time + 1) self.pain_finished = time + 1;
   if (random() < 0.5) sound(self, CHAN_VOICE, "soldier/pain1.wav", 1, ATTN_NORM);
   else sound(self, CHAN_VOICE, "soldier/pain2.wav", 1, ATTN_NORM);
-  self.anim_step = 0;
+  anim_begin(self.fr_pain);
   army_flinch();
 };
 
@@ -67,6 +67,15 @@ void() monster_army = {
   self.th_missile = army_missile;
   self.th_pain = army_pain;
   self.th_die = monster_die;
+  self.fr_stand = '0 7 1';
+  self.fr_walk = '90 113 1';
+  self.fr_run = '73 80 1';
+  self.fr_missile = '81 89 1';
+  self.fr_pain = '40 45 1';
+  self.fr_death = '8 17 1';
+  self.fr_death2 = '18 28 1';
+  self.death_solid = 2;
+  self.drop_ammo = DROP_SHELLS;
   walkmonster_start("progs/soldier.mdl", 30, '-16 -16 -24', '16 16 40');
 };
 
@@ -75,7 +84,7 @@ void() monster_army = {
 void() dog_bite_step = {
   self.think = dog_bite_step;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   ai_charge(12);
   if (self.anim_step == 3) {
     sound(self, CHAN_VOICE, "dog/dattack1.wav", 1, ATTN_NORM);
@@ -85,7 +94,7 @@ void() dog_bite_step = {
 };
 
 void() dog_melee = {
-  self.anim_step = 0;
+  anim_begin(self.fr_melee);
   dog_bite_step();
 };
 
@@ -102,7 +111,7 @@ void() dog_leap_touch = {
 void() dog_leap_step = {
   self.think = dog_leap_step;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step > 2 && (self.flags & FL_ONGROUND)) {
     self.touch = noop;
     monster_run();
@@ -122,7 +131,7 @@ void() dog_leap = {
   self.flags = self.flags - (self.flags & FL_ONGROUND);
   self.touch = dog_leap_touch;
   sound(self, CHAN_VOICE, "dog/dattack1.wav", 1, ATTN_NORM);
-  self.anim_step = 0;
+  anim_begin(self.fr_leap);
   dog_leap_step();
 };
 
@@ -152,7 +161,7 @@ float() dog_check = {
 void() dog_flinch = {
   self.think = dog_flinch;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step >= 3) monster_run();
 };
 
@@ -160,7 +169,7 @@ void() dog_pain = {
   if (self.pain_finished < time + 1) self.pain_finished = time + 1;
   sound(self, CHAN_VOICE, "dog/dpain1.wav", 1, ATTN_NORM);
   self.touch = noop;
-  self.anim_step = 0;
+  anim_begin(self.fr_pain);
   dog_flinch();
 };
 
@@ -186,5 +195,15 @@ void() monster_dog = {
   self.th_check = dog_check;
   self.th_pain = dog_pain;
   self.th_die = monster_die;
+  self.fr_stand = '69 77 1';
+  self.fr_walk = '78 85 1';
+  self.fr_run = '48 59 1';
+  self.fr_melee = '0 7 1';
+  self.fr_leap = '60 68 1';
+  self.fr_pain = '26 31 1';
+  self.fr_death = '8 16 1';
+  self.fr_death2 = '17 25 1';
+  self.gib_model = "progs/gib3.mdl";
+  self.gib_first = TRUE;
   walkmonster_start("progs/dog.mdl", 25, '-32 -32 -24', '32 32 40');
 };

@@ -14,6 +14,7 @@
 #include "progs/vm.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 
 namespace shooters_edge::net {
@@ -60,8 +61,8 @@ struct Scratch {
 };
 
 bool playing(const ClassicServer& s, int k) {
-  return s.clients[k].qc_active && !s.clients[k].spectator &&
-         s.qc->sv.clients[static_cast<size_t>(k)].active;
+  return s.clients[k].rules_active && !s.clients[k].spectator &&
+         s.game->sv.clients[static_cast<size_t>(k)].active;
 }
 
 // The mask of every spawned player.
@@ -107,7 +108,7 @@ bool whole_messages(std::span<const uint8_t> b) {
 }
 
 void signon(ClassicServer& s, MultiviewRecorder& r) {
-  const sv::QcServer& q = *s.qc;
+  const sv::RulesCommon& q = *s.game;
   Scratch o;
   gn::Writer& w = o.w;
   write_byte(w, svc::serverdata);  // no extension families: shorts for coordinates
@@ -142,14 +143,15 @@ void signon(ClassicServer& s, MultiviewRecorder& r) {
   r.start_time = q.sv.time;
   r.written_ms = 0;
   for (auto& known : r.stats_known) std::fill(std::begin(known), std::end(known), false);
+  for (std::string& i : r.info) i.clear();
 }
 
 // The statics and static sounds the level has that the recording has not.
 void statics(ClassicServer& s, MultiviewRecorder& r) {
   Scratch o;
-  const int n = static_cast<int>(s.qc->statics.size());
+  const int n = static_cast<int>(s.game->statics.size());
   for (; r.statics < n; r.statics++) {
-    const sv::StaticEntity& st = s.qc->statics[static_cast<size_t>(r.statics)];
+    const sv::StaticEntity& st = s.game->statics[static_cast<size_t>(r.statics)];
     SvcMsg m;
     m.id = svc::spawnstatic;
     m.ints = {st.modelindex, static_cast<int>(st.frame), static_cast<int>(st.colormap),
@@ -171,9 +173,9 @@ void statics(ClassicServer& s, MultiviewRecorder& r) {
 
 // A player in the recorder's form: every field, every frame.
 void player(const ClassicServer& s, int k, gn::Writer& w) {
-  const sh::Edict& e = s.qc->sv.edicts[static_cast<size_t>(k) + 1];
-  const sh::MoveCmd& cmd = s.qc->sv.clients[static_cast<size_t>(k)].last_cmd;
-  const sv::RulesWorld& world = s.qc->world;
+  const sh::Edict& e = s.game->sv.edicts[static_cast<size_t>(k) + 1];
+  const sh::MoveCmd& cmd = s.game->sv.clients[static_cast<size_t>(k)].last_cmd;
+  const sv::RulesWorld& world = s.game->world;
   const sv::WorldEntity& row = world.entities[static_cast<size_t>(k) + 1];
   constexpr int kAllFields = 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 1024 | 2048;
   write_byte(w, svc::playerinfo);
@@ -185,7 +187,7 @@ void player(const ClassicServer& s, int k, gn::Writer& w) {
   write_byte(w, row.modelindex);
   write_byte(w, row.skin);
   write_byte(w, row.effects);
-  write_byte(w, world.clients[k].numbers.weapon_frame);
+  write_byte(w, static_cast<int>(world.clients[k].numbers.weapon_frame));
 }
 
 // A packed recorder's new plain bytes fed to its stream (flushed every kPackFlushBytes).
@@ -234,8 +236,12 @@ void record_packet(ClientRecorder& r, double time, std::span<const uint8_t> head
                    std::span<const std::pair<size_t, size_t>> messages) {
   std::vector<uint8_t> kept(header.begin(), header.end());
   for (const auto& [from, to] : messages) {
+    if ((payload[from] == svc::ge_point || payload[from] == svc::ge_trail) && !r.live) {
+      r.stripped++;
+      continue;
+    }
     if (payload[from] == svc::voice) {
-      if (!r.voice) {
+      if (!r.voice && !r.live) {
         r.stripped++;
         continue;
       }
@@ -296,7 +302,7 @@ void mvd_start(MultiviewRecorder& r, bool voice, int pack_level) {
 void mvd_events(ClassicServer& s, MultiviewRecorder& r) {
   if (r.spawncount != s.spawncount) return;  // before the signon: the level's start sends it all
   const uint32_t all = everyone(s);
-  const sv::MessageSink& out = s.qc->out;
+  const sv::MessageSink& out = s.game->out;
   for (const sv::NetEvent& ev : out.events) {
     SvcMsg m;
     switch (ev.kind) {
@@ -316,8 +322,8 @@ void mvd_events(ClassicServer& s, MultiviewRecorder& r) {
         break;
       case sv::EventKind::sound: {
         int snd = 0;
-        for (size_t i = 1; i < s.qc->sounds.size(); i++)
-          if (s.qc->sounds[i] == ev.text) snd = static_cast<int>(i);
+        for (size_t i = 1; i < s.game->sounds.size(); i++)
+          if (s.game->sounds[i] == ev.text) snd = static_cast<int>(i);
         if (snd == 0 || snd > 255 || ev.ent > 1023) {
           r.dropped++;
           continue;
@@ -342,6 +348,25 @@ void mvd_events(ClassicServer& s, MultiviewRecorder& r) {
         }
         m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
         break;
+      case sv::EventKind::point_effect: {
+        // A named effect reaches a classic client only as the temporary entity of its name.
+        uint8_t kind = 0;
+        if (!sv::classic_temp_entity(ev.text, kind)) {
+          r.dropped++;
+          continue;
+        }
+        m.id = svc::temp_entity;
+        m.ints = {kind};
+        if (kind == te::gunshot || kind == te::blood) {
+          const float n = ev.values[3];  // NaN: once
+          m.ints.push_back(!(n >= 1) ? 1 : n > 255 ? 255 : static_cast<int>(n));
+        }
+        m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
+        break;
+      }
+      case sv::EventKind::trail_effect:  // a classic client has no message for a named trail
+        r.dropped++;
+        continue;
       case sv::EventKind::multicast:
         if (whole_messages(ev.bytes))
           hold(r, ev.to, all, ev.bytes);
@@ -378,14 +403,14 @@ void mvd_frame(ClassicServer& s, MultiviewRecorder& r) {
   }
   statics(s, r);
   // The frame's clock: whole milliseconds since the signon, at least one a frame.
-  const int64_t now_ms = std::llround((s.qc->sv.time - r.start_time) * 1000);
+  const int64_t now_ms = std::llround((s.game->sv.time - r.start_time) * 1000);
   const int ms = static_cast<int>(std::clamp<int64_t>(now_ms - r.written_ms, 1, 255));
   r.written_ms += ms;
   Scratch o;
   for (int k = 0; k < sh::kMaxClients; k++)
     if (playing(s, k)) player(s, k, o.w);
   std::vector<EntityState> ents;
-  const sh::Server& sv = s.qc->sv;
+  const sh::Server& sv = s.game->sv;
   for (int e = sv.set.maxclients + 1; e < sv.num_edicts && e < 512; e++) {
     if (sv.edicts[static_cast<size_t>(e)].free) continue;
     const EntityState st = entity_state(s, e);
@@ -409,6 +434,22 @@ void mvd_frame(ClassicServer& s, MultiviewRecorder& r) {
       r.stats_known[k][i] = true;
     }
     if (so.w.size > 0) put_record(r.bytes, 0, kRecStats, k, 0, so.bytes());
+  }
+  // Each player's public user info (his name, team and colours) when it is new or changed, so a
+  // viewer names him and knows his side.
+  for (int k = 0; k < sh::kMaxClients; k++) {
+    if (!playing(s, k)) continue;
+    const ClassicClient& c = s.clients[k];
+    std::string info = info_public(c.userinfo);
+    if (info == r.info[k]) continue;
+    SvcMsg m;
+    m.id = svc::updateuserinfo;
+    m.ints = {k, c.userid};
+    m.strings = {info};
+    Scratch ui;
+    write_svc(ui.w, m, WireCtx{});
+    put_record(r.bytes, 0, kRecAll, 0, 0, ui.bytes());
+    r.info[k] = std::move(info);
   }
   for (const MultiviewRecorder::Held& h : r.held)
     put_record(r.bytes, 0, h.kind, h.target, h.mask, h.msg);

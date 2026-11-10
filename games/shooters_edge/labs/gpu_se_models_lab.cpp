@@ -2,25 +2,36 @@
 // a listen server, its items dropped to the floor, then each kind of thing it placed seen from a
 // little way off in both looks, drawn as the window draws them (client/world_draw.hpp with
 // client/world_models.hpp): the ARMOUR, a HEALTH box, an AMMO box, a WEAPON lying about, a
-// TORCH or a FLAME (static: the server forgot them), and the view from the spawn.
+// TORCH or a FLAME (static: the server forgot them), and the view from the spawn. Then the
+// player WARPING (client/warps.hpp, client/world_fx.hpp, labs/warp_film.hpp): blown in as ash
+// from ahead of him at three moments, then crumbling into ash the wind takes at three; and the
+// player with a rocket's glow beside him (the dynamic lights on the models).
 //
 // With `--pak` (a pack holding the map, its models and `gfx/palette.lmp`) it is the pack's own
 // map (`--map`, default e1m1); without one, the fixture halls (plugins/brush) with the fixture
-// model (plugins/morph) under the names the mod asks for, so the loader and the passes run on any
-// machine. The models loaded by kind and the things placed by kind are deterministic metrics; the
-// pictures are measured (each adapter rasterises its own way).
+// model (plugins/morph) under the names the mod asks for (`--models=iqm`: the test limb as a
+// skeletal model instead, assets/iqm.hpp), so the loader and the passes run on any machine. The
+// models loaded by kind and the things placed by kind are deterministic metrics; the pictures are
+// measured (each adapter rasterises its own way).
 //
 // ge:summary Lab: the window's models on a map (armour, health, ammo, weapons, flames), both looks
 // ge:keywords lab se-models world-models items armour health ammo weapons flames torches statics
-// ge:keywords classic modern r_look pak
+// ge:keywords classic modern r_look pak warp spawn-effect teleport-effect dust ash iqm
+// ge:keywords skeletal-model
 // ge:skill shooter render labs
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "assets/image.hpp"
+#include "assets/iqm.hpp"
+#include "assets/test_model.hpp"
+#include "assets/tga.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/read.hpp"
 #include "brush/write.hpp"
@@ -29,14 +40,19 @@
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
+#include "lab/labs/explosion_scene.hpp"
 #include "lab/labs/liquid_scene.hpp"
 #include "morph/write.hpp"
+#include "progs/qc_compile.hpp"
 #include "shooter/trace.hpp"
+#include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/client/world_models.hpp"
+#include "shooters_edge/labs/warp_film.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -45,7 +61,9 @@ namespace gl = ge::lab;
 namespace cl = shooters_edge::client;
 namespace sh = ge::shooter;
 namespace br = ge::brush;
+namespace ba = ge::brush::app;
 namespace ls = ge::lab::liquid_scene;
+namespace es = ge::lab::explosion_scene;
 namespace lm = ge::core::libm;
 
 ge::brush::Entity entity(std::initializer_list<std::pair<std::string, std::string>> pairs) {
@@ -56,7 +74,7 @@ ge::brush::Entity entity(std::initializer_list<std::pair<std::string, std::strin
 
 // The halls with a thing of each kind on the floor, the fixture model under every name they
 // ask for, and a palette of our own ramps, in a pack.
-bool fixture_pack(std::vector<uint8_t>& out, std::string& error) {
+bool fixture_pack(bool skeletal, std::vector<uint8_t>& out, std::string& error) {
   br::Fixture f = br::sample_fixture();
   f.entities.push_back(
       entity({{"classname", "info_player_deathmatch"}, {"origin", "64 192 40"}, {"angle", "0"}}));
@@ -66,7 +84,11 @@ bool fixture_pack(std::vector<uint8_t>& out, std::string& error) {
       entity({{"classname", "light_flame_large_yellow"}, {"origin", "232 160 24"}}));
   std::vector<uint8_t> bsp;
   if (!br::write_bsp(f, br::Family::v29, &bsp, &error)) return false;
-  const std::vector<uint8_t> model = ge::morph::write_model(ge::morph::sample_model());
+  // `--models=iqm`: the test limb as a skeletal model (a metre tall, 40 units) under every name,
+  // its `skin` material's picture beside it, so the window's skeletal path draws in its place.
+  const std::vector<uint8_t> model =
+      skeletal ? ge::assets::write_iqm(ge::assets::make_test_model(), {.metres = 0.025})
+               : ge::morph::write_model(ge::morph::sample_model());
   std::vector<uint8_t> palette(768);
   for (int i = 0; i < 256; ++i) {
     const int ramp = i / 16, v = (i % 16) * 16 + 8;
@@ -78,8 +100,19 @@ bool fixture_pack(std::vector<uint8_t>& out, std::string& error) {
   }
   std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {{"maps/halls.bsp", bsp},
                                                                      {"gfx/palette.lmp", palette}};
-  for (const char* name : {"progs/armor.mdl", "progs/g_rock2.mdl", "progs/flame2.mdl"})
+  for (const char* name :
+       {"progs/armor.mdl", "progs/g_rock2.mdl", "progs/flame2.mdl", "progs/player.mdl"})
     files.push_back({name, model});
+  if (skeletal) {
+    ge::assets::Image skin{16, 16, {}};
+    for (int y = 0; y < 16; ++y)
+      for (int x = 0; x < 16; ++x) {
+        const bool band = (y / 4) % 2 == 0;
+        skin.rgba.insert(skin.rgba.end(), {uint8_t(band ? 200 : 60), uint8_t(band ? 120 : 70),
+                                           uint8_t(band ? 40 : 160), 255});
+      }
+    files.push_back({"progs/skin.tga", ge::assets::encode_tga(skin, true)});
+  }
   return ge::vfs::write_pak(files, &out, &error);
 }
 
@@ -90,6 +123,8 @@ const char* kind_of(const std::string& name) {
   if (name.rfind("maps/b_", 0) == 0) return "ammo";
   if (name.rfind("progs/g_", 0) == 0) return "weapon";
   if (name.find("flame") != std::string::npos) return "flame";
+  if (name == "progs/s_light.spr") return "globe";
+  if (name == "progs/s_bubble.spr") return "bubbles";
   if (name.find("quaddama") != std::string::npos) return "quad";
   if (name.find("invulner") != std::string::npos) return "shield";
   if (name.find("player") != std::string::npos) return "player";
@@ -115,6 +150,17 @@ constexpr Subject kSubjects[] = {
     {"flame", "A TORCH OR A FLAME",
      "A torch on its wall or a flame in its bowl: a static thing the server forgot at spawn.",
      "the flame's bright fullbright texels, the stick or the bowl lit by the wall"},
+    {"globe", "A GLOBE LAMP",
+     "A globe lamp where the map hangs one: the pack's flare sprite in the classic look; in the "
+     "enhanced look the engine's flare in its place (classic-enhance's replacement table, "
+     "ce_flares), a soft added glow, its light the map's own.",
+     "the classic's flat sprite beside a round warm glow fading to nothing, no square edge"},
+    {"bubbles", "BUBBLES UNDER WATER",
+     "Air bubbles rising from a water's floor (the campaign's air_bubbles: pass "
+     "--progs=games/shooters_edge/qc/campaign/progs.src): the pack's bubble sprite in the classic "
+     "look; in the enhanced look the engine's bubbles in its place (ce_bubbles), each a clear "
+     "ball wobbling off its path as it rises.",
+     "the classic's flat sprite beside small clear balls with a bright rim and a highlight"},
     {"quad", "THE QUAD DAMAGE",
      "The quad's pickup where the map puts it, turning, its blue glow on the floor round it.",
      "the rune turning over the floor, the floor lit blue round it"},
@@ -146,7 +192,14 @@ void run(gl::Lab& lab) {
   std::string map_name = own ? "halls" : lab.arg("map");
   if (own) {
     std::vector<uint8_t> pak;
-    if (!fixture_pack(pak, error) || !cl::add_archive(files, "pak0.pak", std::move(pak), error)) {
+    const std::string& kind = lab.arg("models");
+    if (kind != "mdl" && kind != "iqm") {
+      lab.fail("--models=" + kind + " is not a model kind the fixture holds",
+               "next: pass --models=mdl or --models=iqm. Skill: shooter.");
+      return;
+    }
+    if (!fixture_pack(kind == "iqm", pak, error) ||
+        !cl::add_archive(files, "pak0.pak", std::move(pak), error)) {
       lab.fail(error, "Read the fixture writers' refusal above. Skill: shooter.");
       return;
     }
@@ -158,13 +211,29 @@ void run(gl::Lab& lab) {
       return;
     }
   }
-  if (!cl::baseline_progs(progs, error)) {
+  // The baseline mod (its arena), or `--progs`: a progs.src compiled here (the campaign's, whose
+  // set pieces the arena removes: air bubbles), played as a single game.
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  if (const std::string& src = lab.arg("progs"); !src.empty()) {
+    const ge::progs::QcProject built = ge::progs::compile_project(src);
+    if (!built.result.ok) {
+      std::string why;
+      for (const ge::progs::QcDiagnostic& d : built.result.diagnostics)
+        why += ge::progs::diagnostic_text(d) + "\n";
+      lab.fail("se-models: " + src + " does not compile:\n" + why,
+               "next: fix the first error at its file and line. Skill: progs.");
+      return;
+    }
+    progs = built.result.progs;
+    opt.console = {"deathmatch 0"};
+    opt.files = &files;
+  } else if (!cl::baseline_progs(progs, error)) {
     lab.fail(error, "The baseline mod should compile. Skill: progs.");
     return;
   }
   cl::Listen l;
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, map_name, error);
-  if (!map || !cl::listen_start(l, progs, std::move(map), {}, error)) {
+  if (!map || !cl::listen_start(l, progs, std::move(map), opt, error)) {
     lab.fail(error, "Check --map names a map in the pack. Skill: shooter.");
     return;
   }
@@ -184,10 +253,10 @@ void run(gl::Lab& lab) {
   // What the server placed, by kind; the first of each kind is a subject.
   std::vector<cl::Placed> placed;
   cl::place_models(l, placed);
-  constexpr size_t kPlayer = 7, kPowered = 8, kKindCount = 9;
+  constexpr size_t kPlayer = 9, kPowered = 10, kKindCount = 11;
   double placed_by[kKindCount] = {};
-  const char* kKinds[kKindCount] = {"armour", "health", "ammo",   "weapon", "flame",
-                                    "quad",   "shield", "player", "powered"};
+  const char* kKinds[kKindCount] = {"armour",  "health", "ammo",   "weapon", "flame",  "globe",
+                                    "bubbles", "quad",   "shield", "player", "powered"};
   std::vector<std::vector<const cl::Placed*>> of_kind(kKindCount);
   for (const cl::Placed& p : placed) {
     const std::string kind = kind_of(l.server->models[size_t(p.modelindex)]);
@@ -240,6 +309,14 @@ void run(gl::Lab& lab) {
       return;
     }
     out = ge::gpu::create_target(*device, "se-models.final", w, h);
+    // The map's lights, and those whose source shows (draw_data.hpp's PointLight::seen): only
+    // they throw a figure's shadow.
+    const auto lights = cl::world_lights(*frame);
+    lab.metric("map-lights", double(lights.size()), "count", gl::Det::measured);
+    lab.metric("map-lights-seen",
+               double(std::count_if(lights.begin(), lights.end(),
+                                    [](const ba::PointLight& pl) { return pl.seen; })),
+               "count", gl::Det::measured);
   } else {
     lab.note("No GPU adapter on this machine: no pictures.");
   }
@@ -249,6 +326,10 @@ void run(gl::Lab& lab) {
   cl::FxFrame fx;
   cl::frame_view(l, shown, 1, t, kTic);
   cl::step_fx(l, shown, fx_state, t, kTic, fx);
+  // The effects' clock a second on, past the player's spawn (its sparks and flash, warps.hpp), so
+  // the views below show the things alone; the warp's own view stages it.
+  constexpr double kFxSettle = 1.0;
+  cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
   // A free spot `dist` units from `at` toward the eye, `up` units above it: the eight ways round
   // tried in turn, the first whose line to the thing crosses no wall.
   // The server's own sweep (brush models alone block), a box of `r` units each way.
@@ -257,13 +338,14 @@ void run(gl::Lab& lab) {
         sh::trace_move(l.server->sv, a, {-r, -r, -r}, {r, r, r}, b, sh::kTraceNoMonsters, -1);
     return !tr.startsolid && !tr.allsolid && tr.fraction >= 1;
   };
-  const auto eye_for = [&](const sh::Vec3f& at, float dist, float up, float out_eye[3]) {
+  const auto eye_for = [&](const sh::Vec3f& at, float dist, float up, float out_eye[3],
+                           float lift = 16) {
     for (int k = 0; k < 8; k++) {
       const double a = k * 0.785398163397448;
       const sh::Vec3f e{at.x + float(dist * lm::cos(a)), at.y + float(dist * lm::sin(a)),
                         at.z + up};
       // The eye clear of the walls by a margin, its line to the thing's middle clear.
-      if (open_line(e, e, 16) && open_line(e, {at.x, at.y, at.z + 16}, 0)) {
+      if (open_line(e, e, 16) && open_line(e, {at.x, at.y, at.z + lift}, 0)) {
         out_eye[0] = e.x;
         out_eye[1] = e.y;
         out_eye[2] = e.z;
@@ -293,6 +375,44 @@ void run(gl::Lab& lab) {
                gl::Det::measured);
     }
   };
+  // The player warping in and out where he stands, as another player sees it
+  // (labs/warp_film.hpp): blown in as ash, then crumbling into it.
+  const auto shoot_warps = [&](const ge::render::FrameView& view, const cl::Placed& figure) {
+    for (const char* lk : {"classic", "modern"}) {
+      const std::string shot_id = std::string("warp-") + lk;
+      if (!device) {
+        ls::placeholders(lab, {shot_id.c_str()});
+        continue;
+      }
+      look.look = lk;
+      shooters_edge::labs::WarpFilm film;
+      shooters_edge::labs::WarpTake take;
+      std::vector<uint8_t> palette_store;  // the original's specks in the pack's own colours
+      take.palette = cl::find_file(files, "gfx/palette.lmp", palette_store);
+      take.figure = figure;
+      take.enhanced = std::string(lk) == "modern";  // the classic look: the original
+      take.moments = {0.15, 0.35, 0.55};
+      take.seed = 11;
+      shooters_edge::labs::film_warp(*device, *frame, out, view, fx, nullptr, take, film);
+      take.arriving = false;
+      take.moments = {0.2, 0.4, 0.6};
+      take.seed = 12;
+      shooters_edge::labs::film_warp(*device, *frame, out, view, fx, nullptr, take, film);
+      lab.shot({shot_id,
+                std::string("THE PLAYER WARPING (") + lk + ")",
+                "Above, a player arriving (a spawn, a respawn, a teleport's far end) at 150, 350 "
+                "and 550 ms: ash blown in from ahead of him, each flake landing where his body "
+                "appears, his face and head first, the band at the cut grey as ash. Below, leaving "
+                "(a teleport's near end) at 200, 400 and 600 ms: crumbling from his back, the ash "
+                "streaming behind him on the wind. The classic look (and ce_warps 0) shows the "
+                "original: the teleport's fog at his feet, the figure there or gone at once.",
+                "modern: grey flakes converging on a partly formed figure, whole soon after; then "
+                "the figure eaten away from behind, flakes drifting off behind it. classic: the "
+                "figure whole at once in the fog, then gone with the fog",
+                {{"map", map_name}, {"look", lk}, {"size", lab.arg("size")}}},
+               es::sheet_of(film.pics, film.names, 3), gl::Det::measured);
+    }
+  };
   ge::render::FrameView base = cl::frame_view(l, shown, 0, t, 0);
   shoot("spawn", "FROM THE SPAWN", "The player's eyes where he spawned, looking the way he faces.",
         "whatever stands in view drawn on the floor, the HUD-less frame", base);
@@ -312,7 +432,18 @@ void run(gl::Lab& lab) {
       if (box) c = {c.x + 16, c.y + 16, c.z};
       float ce[3], rgb[3] = {0, 0, 0};
       const bool figure = k >= kPlayer;
-      if (!eye_for(c, figure ? 96.0f : 56.0f, figure ? 24.0f : 32.0f, ce)) continue;
+      // A globe on its wall and a bubble in the water are seen at their own middle, a little
+      // further off; the rest stand on a floor.
+      const bool hung = std::string(kKinds[k]) == "globe" || std::string(kKinds[k]) == "bubbles";
+      if (!eye_for(c,
+                   figure ? 96.0f
+                   : hung ? 72.0f
+                          : 56.0f,
+                   figure ? 24.0f
+                   : hung ? 0.0f
+                          : 32.0f,
+                   ce, hung ? 0.0f : 16.0f))
+        continue;
       const float above[3] = {c.x, c.y, c.z + 8};
       shooters_edge::models::light_under(probe, world, above, rgb);
       const float lum = rgb[0] + rgb[1] + rgb[2];
@@ -345,19 +476,21 @@ void run(gl::Lab& lab) {
       for (const char* f : {"super_damage_finished", "invincible_finished"}) {
         const ge::progs::Def* def = ge::progs::find_field(progs, f);
         if (def != nullptr)
-          *ge::progs::entity_field(l.server->q.vm, me.entity, def->offset) =
+          *ge::progs::entity_field(shooters_edge::server::qc_of(*l.rules)->q.vm, me.entity,
+                                   def->offset) =
               std::bit_cast<uint32_t>(float(l.server->sv.time + 30));
       }
       cl::listen_frame(l, {});
       t += kTic;
       me.effects = int(cl::field_named(l, me.entity, "effects"));
       lab.metric("powered.effects", me.effects, "bits");
-      cl::step_fx(l, shown, fx_state, t, 0, fx);
+      cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
     }
     if (k >= kPlayer)
       fx.models.push_back(me);  // the window never draws its own player; the lab does
     ge::render::FrameView v = base;
-    const float at_f[3] = {aim.x, aim.y, aim.z + (k >= kPlayer ? 0.0f : 12.0f)};
+    const bool hung_aim = std::string(kKinds[k]) == "globe" || std::string(kKinds[k]) == "bubbles";
+    const float at_f[3] = {aim.x, aim.y, aim.z + (k >= kPlayer || hung_aim ? 0.0f : 12.0f)};
     double eye[3], at[3];
     br::to_engine(e, eye);
     br::to_engine(at_f, at);
@@ -366,7 +499,388 @@ void run(gl::Lab& lab) {
     v.heading = lm::atan2(dx, dz);
     v.pitch = lm::atan2(dy, std::sqrt(dx * dx + dz * dz));
     shoot(s.id, s.title, s.caption, s.look_for, v);
+    if (k == kPlayer) shoot_warps(v, me);
+    if (k == kPlayer) {
+      // A rocket's glow hung beside him, a little toward the eye and to his right: the walls
+      // and the floor take it, and so does he (the dynamic lights on the models).
+      const double fw[3] = {eye[0] - at[0], 0, eye[2] - at[2]};
+      const double fl = std::sqrt(fw[0] * fw[0] + fw[2] * fw[2]) + 1e-9;
+      const double glow_at[3] = {at[0] + 0.3 * fw[0] - 0.8 * fw[2] / fl, at[1] + 0.4,
+                                 at[2] + 0.3 * fw[2] + 0.8 * fw[0] / fl};
+      fx.lights.push_back(shooters_edge::effects::rocket_light(glow_at));
+      shoot("player-glow", "A ROCKET'S GLOW BESIDE HIM",
+            "The player as another sees him, a rocket's glow (a dynamic light of 200 units) hung "
+            "at chest height to his side, a little toward the eye. The floor and the walls take "
+            "its light, and so does he: the side of him facing it brighter and warmer than the "
+            "rest, as the floor under him is.",
+            "the figure's near side lit warm like the floor round him; not left as dim as in the "
+            "plain view beside it",
+            v);
+      fx.lights.pop_back();
+    }
   }
+  // THE PLAYER'S SHADOW (M54): the player stood a pace from a torch on its wall (and again from a
+  // large flame), facing away from it, his own eyes looking down at the floor ahead where his
+  // shadow falls, and from the side; the classic look has none. A wall torch is a small light
+  // (a sharp shadow), a large flame a big one (a soft shadow). Measured: how much darker the floor
+  // in the eyes' picture is with him there than with him gone.
+  {
+    const cl::PlayerState ps = cl::player_state(l);
+    // The powers the `powered` view handed him taken back first: their glow lights the floor round
+    // him, him drawn or not, and would wash out the shadow measured here.
+    for (const char* f : {"super_damage_finished", "invincible_finished"}) {
+      const ge::progs::Def* def = ge::progs::find_field(progs, f);
+      if (def != nullptr)
+        *ge::progs::entity_field(shooters_edge::server::qc_of(*l.rules)->q.vm, ps.entity,
+                                 def->offset) = std::bit_cast<uint32_t>(0.0f);
+    }
+    cl::listen_frame(l, {});
+    t += kTic;
+    cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
+    if (int(cl::field_named(l, ps.entity, "effects")) != 0)
+      lab.note("shadow views: the player still glows (effects " +
+               std::to_string(int(cl::field_named(l, ps.entity, "effects"))) + ")");
+    sh::Edict& body = l.server->sv.edicts[size_t(ps.entity)];
+    const sh::Vec3f was_at = body.origin, was_angles = body.angles;
+    struct Lamp {
+      const char* id;
+      const char* source;  // a fire's model, or a plain light's classname
+      const char* what;
+    };
+    // A plain lamp is a bulb's small source (a sharp shadow); a torch's flame and a large flame
+    // are bigger sources (softer, the large flame's the softest).
+    const Lamp lamps[] = {{"shadow-lamp", "light", "a lamp, a small light"},
+                          {"shadow-torch", "progs/flame.mdl", "a wall torch"},
+                          {"shadow-flame", "progs/flame2.mdl", "a large flame, a big light"}};
+    const auto floor_under = [&](sh::Vec3f a) {
+      return sh::trace_move(l.server->sv, a, {0, 0, 0}, {0, 0, 0}, {a.x, a.y, a.z - 512},
+                            sh::kTraceNoMonsters, ps.entity)
+          .endpos.z;
+    };
+    // The views of him standing at `stand`, his back to the light `what` (at `away` degrees
+    // round from +x), his own eyes' with how much darker he leaves the floor and where, and
+    // the side's; `place` says where he stands for the caption.
+    const auto shadow_views = [&](const std::string& id, const std::string& what,
+                                  const std::string& place, sh::Vec3f stand, float away) {
+      body.origin = stand;
+      body.angles = {0, away, 0};
+      cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
+      ge::render::FrameView v = base;
+      const float eye_map[3] = {body.origin.x, body.origin.y, body.origin.z + 22};
+      double eye[3];
+      br::to_engine(eye_map, eye);
+      for (int c = 0; c < 3; c++) v.eye[c] = eye[c];
+      v.heading = ge::core::kPi / 2 - double(away) * ge::core::kPi / 180;
+      v.pitch = -0.8;
+      // A dozen frames there first: the lights round a new place take their cubes a few a frame
+      // (bsp_draw.hpp's fresh_cubes), as they do when a player walks into a room.
+      if (device) {
+        look.look = "modern";
+        for (int i = 0; i < 48; ++i)
+          cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
+      }
+      std::string caption = "The player ";
+      caption += place;
+      caption +=
+          ", his back to it, his own eyes looking down at the floor ahead: his body is never drawn "
+          "in his own eyes, but it casts his shadow from every light near him whose source "
+          "shows (the moving casters' cubes), as soft as the light is big; a fill light hanging "
+          "unseen in the air throws none.";
+      shoot(id, "THE PLAYER'S SHADOW FROM " + what, caption,
+            "his shadow on the floor ahead of him, from his feet outward, sharper near his feet "
+            "and softer further off; none in the classic look",
+            v);
+      if (device) {
+        // How much darker the floor ahead is with him than without (the lower half's mean), each
+        // drawn a dozen frames first so the resolve holds no trace of the other.
+        const auto settled = [&](bool with_him) {
+          const bool had = fx.has_self;
+          fx.has_self = with_him && had;
+          look.look = "modern";
+          for (int i = 0; i < 48; ++i)
+            cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
+          fx.has_self = had;
+          return ge::gpu::read_now(*device, out);
+        };
+        const ge::gpu::Image with_img = settled(true);
+        const ge::gpu::Image without_img = settled(false);
+        const auto luma = [](const ge::gpu::Image& img, size_t i) {
+          const uint8_t* q = &img.rgba[i * 4];
+          return 0.2126 * q[0] + 0.7152 * q[1] + 0.0722 * q[2];
+        };
+        double with_him = 0, without = 0;
+        const size_t pixels = size_t(with_img.width) * with_img.height;
+        for (size_t i = pixels / 2; i < pixels; ++i) {
+          with_him += luma(with_img, i);
+          without += luma(without_img, i);
+        }
+        lab.metric(id + "-darker", without > 0 ? 100.0 * (without - with_him) / without : 0, "%",
+                   gl::Det::measured);
+        // The deepest of it: the 99th percentile of the share each pixel loses with him there
+        // (pixels too dark to read left out), what an eye sees as his shadow.
+        std::vector<double> lost;
+        for (size_t i = 0; i < pixels; ++i)
+          if (luma(without_img, i) > 8)
+            lost.push_back(std::max(0.0, 1 - luma(with_img, i) / luma(without_img, i)));
+        if (!lost.empty()) {
+          const auto at99 = lost.begin() + std::ptrdiff_t(lost.size() * 99 / 100);
+          std::nth_element(lost.begin(), at99, lost.end());
+          lab.metric(id + "-deepest", 100.0 * *at99, "%", gl::Det::measured);
+        }
+        // Where it falls: the picture with him, greyed and dimmed, and in red how much darker
+        // each pixel is with him than without, eight times over.
+        gl::Picture shade{int(with_img.width), int(with_img.height), with_img.rgba};
+        for (size_t i = 0; i < pixels; ++i) {
+          const double grey = luma(with_img, i) * 0.5;
+          const double red =
+              std::min(255.0, grey + 8 * std::max(0.0, luma(without_img, i) - luma(with_img, i)));
+          shade.rgba[i * 4] = uint8_t(red);
+          shade.rgba[i * 4 + 1] = uint8_t(grey);
+          shade.rgba[i * 4 + 2] = uint8_t(grey);
+        }
+        lab.shot({id + "-shade",
+                  "WHERE HIS SHADOW FALLS: " + what,
+                  "The eyes' picture above, greyed, and in red how much darker each pixel is with "
+                  "him there than with him gone (eight times over): his shadow from every light "
+                  "whose source shows, the casters' cubes' and the capsules'; the light bounced "
+                  "round the room never darkened.",
+                  "a red shadow on the floor ahead from his feet outward, the strongest where "
+                  "the light he stands before falls; nothing red elsewhere",
+                  {{"map", map_name}, {"look", "modern"}, {"size", lab.arg("size")}}},
+                 shade, gl::Det::measured);
+        cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
+      } else {
+        // No adapter: the same shot ids, so the digest is the device path's.
+        ls::placeholders(lab, {(id + "-shade").c_str()});
+      }
+      // From the side: his figure (drawn, as another player sees him) and the shadow it throws.
+      ge::render::FrameView side = v;
+      const double r = double(away) * 3.14159265358979323846 / 180;
+      const float cr = float(lm::cos(r)), sr = float(lm::sin(r));
+      // Well off to one side, high and a little ahead, looking down across the floor his shadow
+      // falls on, his figure at its end: the first of a few places, the widest and highest first,
+      // with standing room and clear lines to his chest, his feet and the floor where his shadow
+      // falls.
+      const float floor_z = body.origin.z - 24;
+      const sh::Vec3f chest{body.origin.x, body.origin.y, body.origin.z + 16};
+      const sh::Vec3f at_feet{body.origin.x + 8 * cr, body.origin.y + 8 * sr, floor_z + 4};
+      const sh::Vec3f floor_ahead{body.origin.x + 56 * cr, body.origin.y + 56 * sr, floor_z + 4};
+      sh::Vec3f cam{body.origin.x - 70 * sr + 30 * cr, body.origin.y + 70 * cr + 30 * sr,
+                    body.origin.z + 30};
+      bool placed_cam = false;
+      for (const float aside : {112.0f, 88.0f, 64.0f})
+        for (const float up : {104.0f, 80.0f, 56.0f})
+          for (const float ahead : {64.0f, 96.0f, 32.0f})
+            for (const float hand : {1.0f, -1.0f}) {
+              const sh::Vec3f c{body.origin.x + ahead * cr - hand * aside * sr,
+                                body.origin.y + ahead * sr + hand * aside * cr, floor_z + up};
+              if (!placed_cam && open_line(c, c, 16) && open_line(c, chest, 0) &&
+                  open_line(c, at_feet, 0) && open_line(c, floor_ahead, 0)) {
+                cam = c;
+                placed_cam = true;
+              }
+            }
+      if (!placed_cam) lab.note(id + "-side: no clear place beside him");
+      const float side_map[3] = {cam.x, cam.y, cam.z};
+      double se[3];
+      br::to_engine(side_map, se);
+      // Aimed at the floor his shadow falls on, a pace ahead of his feet: it and him both in view.
+      double aim[3];
+      const float aim_map[3] = {body.origin.x + 32 * cr, body.origin.y + 32 * sr, floor_z + 12};
+      br::to_engine(aim_map, aim);
+      for (int c = 0; c < 3; c++) side.eye[c] = se[c];
+      const double sx = aim[0] - se[0], sy = aim[1] - se[1], sz = aim[2] - se[2];
+      side.heading = lm::atan2(sx, sz);
+      side.pitch = lm::atan2(sy, std::sqrt(sx * sx + sz * sz));
+      cl::Placed figure;
+      figure.entity = ps.entity;
+      figure.modelindex = body.modelindex;
+      figure.origin = body.origin;
+      figure.angles = body.angles;
+      fx.models.push_back(figure);  // seen from the side, as another player sees him
+      fx.has_self = false;          // the figure drawn is the one casting
+      shoot(id + "-side", "THE PLAYER'S SHADOW FROM " + what + ", FROM THE SIDE",
+            "As above, from ahead of him and to one side, looking back: the shadow his figure "
+            "throws on the floor before him, the light behind him.",
+            "the figure's shadow on the floor in front of him, the light behind him", side);
+      // The same from the side with him and with him gone, side by side (modern, each settled
+      // through the resolve): the floor his shadow darkens against the same floor without it.
+      if (device) {
+        const auto side_settled = [&] {
+          look.look = "modern";
+          for (int i = 0; i < 48; ++i)
+            cl::draw_world(*device, *frame, side, fx, nullptr, 0, {}, out.view);
+          return ge::gpu::read_now(*device, out);
+        };
+        const ge::gpu::Image with_img = side_settled();
+        fx.models.pop_back();
+        const ge::gpu::Image without_img = side_settled();
+        fx.models.push_back(figure);
+        const int pw = int(with_img.width), ph = int(with_img.height), gap = 4;
+        gl::Picture pair{2 * pw + gap, ph,
+                         std::vector<uint8_t>(size_t(2 * pw + gap) * size_t(ph) * 4, 255)};
+        for (int y = 0; y < ph; ++y)
+          for (int x = 0; x < pw; ++x)
+            for (int c = 0; c < 4; ++c) {
+              const size_t from = (size_t(y) * size_t(pw) + size_t(x)) * 4 + size_t(c);
+              pair.rgba[(size_t(y) * size_t(pair.width) + size_t(x)) * 4 + size_t(c)] =
+                  with_img.rgba[from];
+              pair.rgba[(size_t(y) * size_t(pair.width) + size_t(x + pw + gap)) * 4 + size_t(c)] =
+                  without_img.rgba[from];
+            }
+        lab.shot({id + "-side-pair",
+                  "HIS SHADOW FROM " + what + ": WITH HIM, AND WITH HIM GONE",
+                  "The side view above (modern), left with him standing there, right with him "
+                  "gone: the same floor, lit the same, but for the shadow he throws.",
+                  "on the left a darker patch on the floor ahead of his feet, away from the light; "
+                  "on the right the same floor evenly lit",
+                  {{"map", map_name}, {"look", "modern"}, {"size", lab.arg("size")}}},
+                 pair, gl::Det::measured);
+      } else {
+        ls::placeholders(lab, {(id + "-side-pair").c_str()});
+      }
+      fx.models.pop_back();
+    };
+    for (const Lamp& lamp : lamps) {
+      // The light's places: the fires the server placed, or the map's plain lights, those whose
+      // source shows first, then the brightest.
+      std::vector<std::pair<float, sh::Vec3f>> at;
+      for (const cl::Placed& p : placed)
+        if (l.server->models[size_t(p.modelindex)] == lamp.source) at.push_back({0.0f, p.origin});
+      for (const br::Entity& e : world.entities) {
+        if (e.get("classname") != lamp.source) continue;
+        float o[3];
+        if (std::sscanf(e.get("origin").c_str(), "%f %f %f", &o[0], &o[1], &o[2]) != 3) continue;
+        float bright = e.get("light").empty() ? 300 : std::strtof(e.get("light").c_str(), nullptr);
+        // A lamp whose source shows first (draw_data.hpp's PointLight::seen): a fill light hanging
+        // unseen in the air throws no figure's shadow (bsp_draw.hpp's fill_shadows).
+        if (frame) {
+          const float om[3] = {o[0], o[1], o[2]};
+          double oe[3];
+          br::to_engine(om, oe);
+          for (const ba::PointLight& pl : cl::world_lights(*frame)) {
+            const double dx = pl.pos[0] - oe[0], dy = pl.pos[1] - oe[1], dz = pl.pos[2] - oe[2];
+            if (pl.seen && dx * dx + dy * dy + dz * dz < 1e-6) bright += 1e6f;
+          }
+        }
+        at.push_back({-bright, {o[0], o[1], o[2]}});
+      }
+      std::stable_sort(at.begin(), at.end(),
+                       [](const auto& a, const auto& b) { return a.first < b.first; });
+      // A place to stand one to three metres off a light (the further, the longer his shadow
+      // ahead), his back to it: standing room on a floor not far under the light, the light's front
+      // (12 units out toward him: a torch's origin is in its wall) in clear sight of his chest, and
+      // the most open, level floor ahead of him, where his shadow falls and his eyes look.
+      const sh::Vec3f* fire = nullptr;
+      sh::Vec3f stand{};
+      float away = 0;
+      float best = 0;
+      for (size_t i = 0; i < at.size() && i < 24 && best < 1; i++) {
+        const sh::Vec3f& o = at[i].second;
+        for (int k = 0; k < 16; k++)
+          for (const float dist : {112.0f, 88.0f, 64.0f, 48.0f}) {
+            const double a = k * 0.392699081698724;
+            const float cx = float(lm::cos(a)), cy = float(lm::sin(a));
+            const sh::Vec3f e{o.x + dist * cx, o.y + dist * cy, o.z};
+            if (!open_line(e, e, 16) || !open_line(e, {o.x + 12 * cx, o.y + 12 * cy, o.z}, 0))
+              continue;
+            const float floor = floor_under(e);
+            if (o.z - floor > 160) continue;  // the light far over his head
+            const sh::Vec3f origin{e.x, e.y, floor + 24};
+            const sh::Vec3f chest{e.x, e.y, floor + 40};
+            if (!open_line(origin, origin, 16) || !open_line(chest, e, 0)) continue;
+            // The floor ahead: open at his eyes for up to 4 m and level where his shadow falls.
+            const sh::Vec3f eye{e.x, e.y, floor + 46};
+            const sh::HullTrace ahead = sh::trace_move(l.server->sv, eye, {0, 0, 0}, {0, 0, 0},
+                                                       {eye.x + 160 * cx, eye.y + 160 * cy, eye.z},
+                                                       sh::kTraceNoMonsters, ps.entity);
+            float score = ahead.startsolid ? 0 : ahead.fraction;
+            for (const float reach : {32.0f, 72.0f})
+              if (std::abs(floor_under({eye.x + reach * cx, eye.y + reach * cy, eye.z}) - floor) >
+                  8)
+                score *= 0.25f;
+            if (score > best) {
+              best = score;
+              fire = &o;
+              stand = origin;
+              away = float(a * 180 / 3.14159265358979323846);
+            }
+          }
+      }
+      if (fire == nullptr) {
+        lab.note(std::string("no ") + lamp.source + " on " + map_name + " with room round it");
+        continue;
+      }
+      shadow_views(lamp.id, lamp.what, std::string("a pace from ") + lamp.what + " on " + map_name,
+                   stand, away);
+    }
+    // In the sun (shadow-sun): where the map's entities stand, one whose line toward the
+    // sun reaches the sky through open leaves, standing room there, his back to the sun, the most
+    // open level floor ahead, at noon. A map with no sun up or no such place has no view.
+    {
+      // At noon, the sun high enough to reach a floor between a map's walls.
+      const double was_hour = look.weather.hour;
+      look.weather.hour = 13;
+      double sun_e[3] = {0, -1, 0};  // no device, no frame: no sun
+      if (frame) cl::world_sun(*frame, base, sun_e);
+      const double sun_m[3] = {sun_e[0], sun_e[2], sun_e[1]};  // the map's: z up
+      // The sun seen from `from`: a line toward it runs out of the map's open leaves into its sky.
+      const auto sky_toward_sun = [&](sh::Vec3f from) {
+        const sh::Vec3f to{from.x + float(8192 * sun_m[0]), from.y + float(8192 * sun_m[1]),
+                           from.z + float(8192 * sun_m[2])};
+        const sh::HullTrace tr = sh::trace_move(l.server->sv, from, {0, 0, 0}, {0, 0, 0}, to,
+                                                sh::kTraceNoMonsters, ps.entity);
+        if (tr.startsolid) return false;
+        for (const float back : {-4.0f, 4.0f}) {
+          const float q[3] = {tr.endpos.x + back * float(sun_m[0]),
+                              tr.endpos.y + back * float(sun_m[1]),
+                              tr.endpos.z + back * float(sun_m[2])};
+          if (world.leaves[br::leaf_at(world, q)].contents == -6) return true;  // the sky
+        }
+        return false;
+      };
+      sh::Vec3f stand{};
+      float best = 0;
+      const float away = float(lm::atan2(-sun_m[1], -sun_m[0]) * 180 / 3.14159265358979323846);
+      const float cx = float(lm::cos(double(away) * 3.14159265358979323846 / 180));
+      const float cy = float(lm::sin(double(away) * 3.14159265358979323846 / 180));
+      if (sun_m[2] > 0.1) {
+        for (const br::Entity& e : world.entities) {
+          float o[3];
+          if (std::sscanf(e.get("origin").c_str(), "%f %f %f", &o[0], &o[1], &o[2]) != 3) continue;
+          const float floor = floor_under({o[0], o[1], o[2] + 16});
+          const sh::Vec3f origin{o[0], o[1], floor + 24};
+          const sh::Vec3f eye{origin.x, origin.y, floor + 46};
+          if (!open_line(origin, origin, 16) || !sky_toward_sun(eye) ||
+              !sky_toward_sun({origin.x, origin.y, floor + 8}) ||
+              !sky_toward_sun({origin.x + 32 * cx, origin.y + 32 * cy, floor + 2}) ||
+              !sky_toward_sun({origin.x + 64 * cx, origin.y + 64 * cy, floor + 2}))
+            continue;  // he, and the floor his shadow falls on, in the sun
+          const sh::HullTrace ahead = sh::trace_move(l.server->sv, eye, {0, 0, 0}, {0, 0, 0},
+                                                     {eye.x + 160 * cx, eye.y + 160 * cy, eye.z},
+                                                     sh::kTraceNoMonsters, ps.entity);
+          float score = ahead.startsolid ? 0 : ahead.fraction;
+          for (const float reach : {32.0f, 72.0f})
+            if (std::abs(floor_under({eye.x + reach * cx, eye.y + reach * cy, eye.z}) - floor) > 8)
+              score *= 0.25f;
+          if (score > best) {
+            best = score;
+            stand = origin;
+          }
+        }
+      }
+      if (best > 0)
+        shadow_views("shadow-sun", "the sun", "in the sun on " + map_name, stand, away);
+      else
+        lab.note("no place in the sun on " + map_name +
+                 " (the sun up: " + (sun_m[2] > 0.1 ? "yes" : "no") + ")");
+      look.weather.hour = was_hour;
+    }
+    body.origin = was_at;
+    body.angles = was_angles;
+    cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
+  }
+
   // The map's own moving brush models: a lift where the mod lowered it at spawn and raised, a door
   // shut and open. The server's entity holding "*N" moves its faces (place_brushes).
   const auto vector_field = [&](int e, const char* name, sh::Vec3f& out_v) {
@@ -374,8 +888,8 @@ void run(gl::Lab& lab) {
     if (def == nullptr) return false;
     float c[3];
     for (int q = 0; q < 3; q++)
-      c[q] = std::bit_cast<float>(
-          *ge::progs::entity_field(l.server->q.vm, e, def->offset + uint32_t(q)));
+      c[q] = std::bit_cast<float>(*ge::progs::entity_field(
+          shooters_edge::server::qc_of(*l.rules)->q.vm, e, def->offset + uint32_t(q)));
     out_v = {c[0], c[1], c[2]};
     return true;
   };
@@ -461,7 +975,7 @@ void run(gl::Lab& lab) {
         if (!vector_field(ent, mv.field, to)) break;
         l.server->sv.edicts[size_t(ent)].origin = to;
       }
-      cl::step_fx(l, shown, fx_state, t, 0, fx);
+      cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
       shoot(mv.id[stage], mv.title[stage], mv.caption, mv.look_for, v);
     }
   }
@@ -565,11 +1079,14 @@ const gl::LabSpec kSpec{
     "game:shooters_edge",
     "games/shooters_edge/client/world_models (the packs' models, sprites and items in the world)",
     "shooter",
-    "Do the items, weapons, armour, health and ammo boxes and the torches' flames a map places "
+    "Do the items, weapons, armour, health and ammo boxes, the torches' flames, the globes and the "
+    "bubbles a map places "
     "stand where the server put them, lit as the floor under them, in both looks?",
     {{"size", "960,540", "the frame's width and height, px"},
      {"pak", "", "a pack holding the map, its models and gfx/palette.lmp (empty: the fixture)"},
      {"map", "e1m1", "the pack's map to stand in (with --pak)"},
+     {"models", "mdl", "the fixture's models: mdl (classic) or iqm (a skeletal model, baked)"},
+     {"progs", "", "a progs.src compiled and played as a single game (empty: the arena mod)"},
      {"cvars", "", "picture cvars run before the frames (r_look is set per shot)"}},
     "--size=480,270",
     run,

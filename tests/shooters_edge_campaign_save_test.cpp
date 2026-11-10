@@ -15,6 +15,7 @@
 #include "check.hpp"
 #include "progs/vm.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/server/campaign_save.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
@@ -89,14 +90,15 @@ TEST(a_loaded_game_runs_on_as_the_one_never_saved) {
   for (int k = 0; k < 20; k++) b.frame(k * 7);
   CHECK_MSG(sv::campaign_load(b.c, b.mod, options({}), file, "quick", error), error);
   b.sequence = a.sequence;
-  CHECK(sv::campaign_digest(*b.c.server) == sv::campaign_digest(*a.c.server));
+  CHECK(sv::campaign_digest(*sv::qc_of(b.c.server)) == sv::campaign_digest(*sv::qc_of(a.c.server)));
   CHECK(b.c.server->sv.time == a.c.server->sv.time);
   CHECK_MSG(b.c.history.back() == "load " + a.c.map.name, b.c.history.back());
   CHECK(b.c.history.size() == a.c.history.size() + 1);
   for (int k = 150; k < 400; k++) {
     a.frame(k);
     b.frame(k);
-    if (sv::campaign_digest(*a.c.server) != sv::campaign_digest(*b.c.server)) {
+    if (sv::campaign_digest(*sv::qc_of(a.c.server)) !=
+        sv::campaign_digest(*sv::qc_of(b.c.server))) {
       CHECK_MSG(false, "the loaded game parted at frame " + std::to_string(k));
       break;
     }
@@ -113,7 +115,7 @@ TEST(a_loaded_game_runs_on_as_the_one_never_saved) {
 TEST(strings_parms_and_settings_come_back) {
   Game a({"skill 3"});
   for (int k = 0; k < 10; k++) a.frame(k);
-  sv::QcServer& s = *a.c.server;
+  sv::QcServer& s = *sv::qc_of(a.c.server);
   pg::Vm& vm = s.q.vm;
   // A string the engine made and a zone string, held in the player's fields.
   const int32_t made = pg::engine_string(vm, "a string the engine made");
@@ -128,7 +130,7 @@ TEST(strings_parms_and_settings_come_back) {
 
   Game b;
   CHECK_MSG(sv::campaign_load(b.c, b.mod, options({}), file, "s", error), error);
-  sv::QcServer& t = *b.c.server;
+  sv::QcServer& t = *sv::qc_of(b.c.server);
   const int32_t v = static_cast<int32_t>(*pg::entity_field(t.q.vm, 1, f.netname));
   CHECK(std::strcmp(pg::vm_string(t.q.vm, v), "a string the engine made") == 0);
   CHECK(b.c.players[0].parms[3] == 42 && b.c.players[0].active);
@@ -172,7 +174,7 @@ TEST(a_damaged_or_foreign_file_is_refused_on_load) {
   CHECK_MSG(error.find("another program") != std::string::npos, error);
   // The right one still loads.
   CHECK_MSG(sv::campaign_load(b.c, b.mod, options({}), file, "good", error), error);
-  CHECK(sv::campaign_digest(*b.c.server) == sv::campaign_digest(*a.c.server));
+  CHECK(sv::campaign_digest(*sv::qc_of(b.c.server)) == sv::campaign_digest(*sv::qc_of(a.c.server)));
 }
 
 TEST(the_listen_saves_and_loads_the_game_playing) {
@@ -184,7 +186,7 @@ TEST(the_listen_saves_and_loads_the_game_playing) {
     m->spec.entities = sv::kStubEntities;
     return m;
   };
-  cl::ListenOptions opt;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.console = {"deathmatch 0"};
   std::string error;
   cl::Listen a;
@@ -200,19 +202,19 @@ TEST(the_listen_saves_and_loads_the_game_playing) {
   CHECK_MSG(cl::listen_load(b, stub, opt, file, "quick", error, stub_map()), error);
   CHECK(b.map_changed && b.map && b.map->name == a.map->name);
   CHECK(b.sequence == a.sequence);
-  CHECK(sv::campaign_digest(*b.server) == sv::campaign_digest(*a.server));
+  CHECK(sv::campaign_digest(*sv::qc_of(*b.rules)) == sv::campaign_digest(*sv::qc_of(*a.rules)));
   for (int k = 0; k < 8; k++) {  // (the stub changes map at its 22nd frame: no files to read)
     cl::listen_frame(a, walk);
     cl::listen_frame(b, walk);
   }
-  CHECK(sv::campaign_digest(*b.server) == sv::campaign_digest(*a.server));
+  CHECK(sv::campaign_digest(*sv::qc_of(*b.rules)) == sv::campaign_digest(*sv::qc_of(*a.rules)));
 
   // Not at the level's end; a damaged save leaves the game playing.
   a.campaign.end = cl::LevelEnd::intermission;
   CHECK(!cl::listen_save(a, file, error));
   CHECK_MSG(error.find("level is over") != std::string::npos, error);
   file[file.size() / 3] ^= 1;
-  const uint64_t before = sv::campaign_digest(*b.server);
+  const uint64_t before = sv::campaign_digest(*sv::qc_of(*b.rules));
   CHECK(!cl::listen_load(b, stub, opt, file, "bad", error, stub_map()));
-  CHECK(b.server != nullptr && sv::campaign_digest(*b.server) == before);
+  CHECK(b.server != nullptr && sv::campaign_digest(*sv::qc_of(*b.rules)) == before);
 }

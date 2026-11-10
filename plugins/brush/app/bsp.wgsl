@@ -41,6 +41,7 @@
 // ge:skill brush render
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/fall_shelter.wgsl"
+#include "render/wgsl/capsules.wgsl"
 
 struct Bsp {
   // mode (0 classic, 1 v2), lighting (0 lightmaps, 1 lights, 2 rebaked), lights, ambient
@@ -58,7 +59,8 @@ struct Bsp {
   info4: vec4f,
   // the sky faces' pixels times these (bsp_fix.wgsl's veil)
   veil: vec4f,
-  // the weather on (1), the rain falling now (0 .. 1), the fall's spread, 0
+  // the weather on (1), the rain falling now (0 .. 1), the fall's spread, the glowing texels' share
+  // under the real-time lights (Options::glow)
   weather: vec4f,
   // the sun's map, the zenith's and the fall's
   ortho: array<Job, 3>,
@@ -69,6 +71,14 @@ struct Bsp {
   grid: vec4f,
   // the 64 light styles' levels now, four a vector
   styles: array<vec4f, 16>,
+  // the moving casters as capsules (bsp_draw.hpp's kShadowCapsules): x how many, y 1 for the
+  // casters' cubes' hard edges, z a second view's shadows (Options::view_shadows), w the share
+  // of the bounce a figure's shadow dims (Options::fill_shadows); then each one's two ends, the
+  // radius in the first's w
+  capsule_info: vec4f,
+  capsules: array<vec4f, 8>,
+  // the moving casters along the sun: their atlas's last row's first tile (info.z 1: drawn)
+  sun_caster: Job,
 };
 
 // A shadow map's camera: an origin, three axes (z the way it looks) and its reach: a point
@@ -93,6 +103,9 @@ struct Light {
   info: vec4f,
   // xyz: the way an aimed light points; w: its cone's edge's cosine (-2: lit all round)
   spot: vec4f,
+  // x: its moving casters' cube's row in their atlas (-1: none); y: its source's radius, m (how
+  // soft its shadows are)
+  more: vec4f,
 };
 
 @group(1) @binding(0) var<uniform> bsp: Bsp;
@@ -123,6 +136,9 @@ struct Mover {
 // THE LIGHT GRID (bsp_draw.hpp): each cell's first entry (the last the lists' end), then the
 // lists of the lights that can reach the cell, in the lights' order
 @group(1) @binding(15) var<storage, read> grid: array<u32>;
+// The moving casters' cubes (bsp_draw.hpp's kCasterLights of them): one atlas in layer 0, a light's
+// six faces a row, each face as the world's.
+@group(1) @binding(16) var caster_cubes: texture_depth_2d_array;
 // bsp_draw.hpp's kGridX, kGridY, kGridZ and kGridCells
 const kGridDims = vec3f(32.0, 16.0, 32.0);
 const kGridCells = 16384u;
@@ -368,21 +384,15 @@ fn ggx(n: vec3f, l: vec3f, v: vec3f, rough: f32, spread: f32) -> f32 {
   return dist * vis * f * nl;
 }
 
-// THE TELEPORT'S MAGIC LIQUID (v2): a black ink marbled with grey, flowing UP the panel; silver
-// threads climbing it in lanes; motes rising and twinkling; a pale shimmer where it is seen edge
-// on; the whole breathing slowly. Its own light, in a white face's units.
-fn t_hash(p: vec2f) -> f32 {
-  let q = fract(p * vec2f(0.1031, 0.1030));
-  let r = q + dot(q, q.yx + 33.33);
-  return fract((r.x + r.y) * r.x);
-}
-
+// THE TELEPORT'S MAGIC LIQUID (v2): a black ink marbled with grey, flowing UP the panel; motes
+// rising and twinkling; a pale shimmer where it is seen edge on; the whole breathing slowly. No
+// bright lanes run up it: thin vertical lines read as white seams scratched on the panel. Its own light, in a white face's units (hash12 seeds it).
 fn t_noise(p: vec2f) -> f32 {
   let i = floor(p);
   let f = fract(p);
   let u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(t_hash(i), t_hash(i + vec2f(1.0, 0.0)), u.x),
-             mix(t_hash(i + vec2f(0.0, 1.0)), t_hash(i + vec2f(1.0, 1.0)), u.x), u.y);
+  return mix(mix(hash12(i), hash12(i + vec2f(1.0, 0.0)), u.x),
+             mix(hash12(i + vec2f(0.0, 1.0)), hash12(i + vec2f(1.0, 1.0)), u.x), u.y);
 }
 
 fn t_fbm(p: vec2f) -> f32 {
@@ -411,23 +421,11 @@ fn teleport(world: vec3f, n: vec3f, eye_dir: vec3f, t: f32) -> vec3f {
   let fine = pow(max(1.0 - abs(2.0 * t_fbm(p * 6.0 + 4.0 * w2 + 2.0 * up) - 1.0), 0.0), 14.0);
   var c = vec3f(0.003, 0.003, 0.005) + vec3f(0.025, 0.025, 0.03) * smoothstep(0.4, 0.8, w2.y);
   c += vec3f(0.09, 0.09, 0.1) * smoke + vec3f(0.3, 0.31, 0.36) * fine * smoke;
-  // The threads: a liquid that runs UP the panel, a few lanes of it, each swaying and lit in
-  // drops that climb it, with a halo.
-  let lane_at = p.x * 5.0 + 0.6 * sin(1.3 * p.y + 0.7 * t) + 1.2 * (w1.x - 0.5);
-  let lane_id = floor(lane_at);
-  let live = step(0.55, t_hash(vec2f(lane_id, 7.0)));
-  let lane = abs(fract(lane_at) - 0.5);
-  let core = 1.0 - smoothstep(0.0, 0.025, lane);
-  let halo = exp(-lane * 22.0);
-  let speed = 1.2 + 1.4 * t_hash(vec2f(lane_id, 3.0));
-  let drops = smoothstep(0.5, 0.95, t_noise(vec2f(lane_id * 3.1, p.y * 1.6 - speed * t)));
-  let flow = live * (0.25 + 1.6 * drops);
-  c += vec3f(1.1, 1.12, 1.2) * core * flow + vec3f(0.14, 0.15, 0.19) * halo * flow;
   // The motes: sparks in a few cells, rising and swaying, twinkling, each with a glow.
   let cp = vec2f(p.x * 6.0 + 0.3 * sin(p.y * 2.0 + t), p.y * 6.0 - 1.8 * t);
   let ci = floor(cp);
-  let h = t_hash(ci);
-  let at = vec2f(t_hash(ci + 17.0), t_hash(ci + 31.0)) * 0.6 + 0.2;
+  let h = hash12(ci);
+  let at = vec2f(hash12(ci + 17.0), hash12(ci + 31.0)) * 0.6 + 0.2;
   let r = length(fract(cp) - at);
   let twinkle = pow(max(0.5 + 0.5 * sin(5.0 * t + 40.0 * h), 0.0), 3.0);
   c += vec3f(1.0, 1.0, 1.1) * step(0.8, h) * (smoothstep(0.05, 0.0, r) * 3.0 + exp(-r * 18.0) * 0.4) *
@@ -496,7 +494,7 @@ fn relief_normal(ng: vec3f, st: vec2f, rect: vec4f, lod: f32, dx: vec2f, dy: vec
     return ng;
   }
   let k = u32(clamp(lod, 0.0, f32(textureNumLevels(atlas) - 1u)));
-  let w = vec3f(0.2126, 0.7152, 0.0722);
+  let w = kLuma;
   let h0 = dot(bilinear(st, rect, k).rgb, w);
   let hx = (dot(bilinear(st + dx, rect, k).rgb, w) - h0) * depth;
   let hy = (dot(bilinear(st + dy, rect, k).rgb, w) - h0) * depth;
@@ -522,9 +520,20 @@ fn classic_sky(d: vec3f) -> vec3f {
   return select(front.rgb, back.rgb, front.a > 0.002 && front.a < 0.006);
 }
 
-// The share of a point a cube of depth sees lit: its face by the major axis of `q` (from the
-// light to the point), its texel there, 2 x 2 compared.
-fn cube_shadow(q: vec3f, far: f32, base: i32) -> f32 {
+// THE SOFT SHADOW OF A LIGHT THAT HAS A SIZE (percentage-closer soft shadows) for the moving
+// casters: a blocker search over the part of their cube a light of radius `size` could be hidden by
+// from the point, the mean depth of what blocks it, the penumbra that depth casts (a blocker near
+// the point casts a sharp edge, one near the light a wide soft one: size * (d - d_blocker) /
+// d_blocker), then that many directions compared. The search reads the casters' cube alone, so a
+// point no figure stands before (most of them) pays for the search and no filter. The world's kept
+// cube is one 2 x 2 compare, as for a light with no casters' cube. The taps are a Vogel disc in the
+// directions round the point's, turned by a noise of the pixel and the frame (the resolve averages
+// it), so a cube's seams are crossed with no special case.
+const kSearchTaps = 8u;
+const kFilterTaps = 12u;
+
+// The face and uv a direction `q` (from the light) reads.
+fn cube_uv(q: vec3f) -> vec3f {
   let a = abs(q);
   var i = 0;
   if (a.y > a.x && a.y >= a.z) {
@@ -536,10 +545,135 @@ fn cube_shadow(q: vec3f, far: f32, base: i32) -> f32 {
   let f = 2 * i + select(0, 1, q[i] < 0.0);
   let u = q[(i + 1) % 3] / m;
   let v = q[(i + 2) % 3] / m;
-  let uv = vec2f(0.5 + 0.5 * u, 0.5 - 0.5 * v);
-  let ref_depth = length(q) / far - 0.004;
-  return textureSampleCompareLevel(cubes, shadow_cmp, uv, base + f, ref_depth);
+  return vec3f(0.5 + 0.5 * u, 0.5 - 0.5 * v, f32(f));
 }
+
+// Where face c.z of the casters' cube on row `row` holds c.xy in their atlas: kept half a texel
+// inside the face, so a compare's 2 x 2 never reads the next face's tile.
+fn caster_uv(c: vec3f, row: i32) -> vec2f {
+  let dims = vec2f(textureDimensions(caster_cubes));
+  let face = dims.x / 6.0;
+  let half = 0.5 / face;
+  let uv = clamp(c.xy, vec2f(half), vec2f(1.0 - half));
+  return (vec2f(c.z, f32(row)) + uv) * face / dims;
+}
+
+// The nearest thing the casters' cube on row `row` saw along `q`, a share of the reach.
+fn caster_nearest(q: vec3f, row: i32) -> f32 {
+  let size = vec2f(textureDimensions(caster_cubes));
+  return textureLoad(caster_cubes, vec2i(caster_uv(cube_uv(q), row) * size), 0, 0);
+}
+
+// The share lit along `q` at the point's own depth `ref_depth`, 2 x 2 compared: by the world's
+// cube from layer `base`, and by the casters' cube on row `row`.
+fn world_lit(q: vec3f, ref_depth: f32, base: i32) -> f32 {
+  let c = cube_uv(q);
+  return textureSampleCompareLevel(cubes, shadow_cmp, c.xy, base + i32(c.z), ref_depth);
+}
+fn caster_lit(q: vec3f, ref_depth: f32, row: i32) -> f32 {
+  return textureSampleCompareLevel(caster_cubes, shadow_cmp, caster_uv(cube_uv(q), row), 0,
+                                   ref_depth);
+}
+
+// The Vogel discs of 8 and 12 taps (tap i at radius sqrt((i + 0.5) / n), turned i times the
+// golden angle), worked once here rather than a sine and a cosine a tap a light.
+const kVogel8 = array<vec2f, 8>(vec2f(0.25, 0.0), vec2f(-0.319290, 0.292496),
+                                vec2f(0.048872, -0.556877), vec2f(0.402445, 0.524917),
+                                vec2f(-0.738535, -0.130636), vec2f(0.699604, -0.445032),
+                                vec2f(-0.234003, 0.870484), vec2f(-0.446273, -0.859268));
+const kVogel12 = array<vec2f, 12>(vec2f(0.204124, 0.0), vec2f(-0.260699, 0.238822),
+                                  vec2f(0.039904, -0.454688), vec2f(0.328595, 0.428593),
+                                  vec2f(-0.603011, -0.106664), vec2f(0.571225, -0.363367),
+                                  vec2f(-0.191063, 0.710747), vec2f(-0.364380, -0.701589),
+                                  vec2f(0.790557, 0.288709), vec2f(-0.822442, 0.339494),
+                                  vec2f(0.396470, -0.847238), vec2f(0.292985, 0.934073));
+
+// A disc's tap turned by the pixel's spin (its cosine and sine).
+fn spun(o: vec2f, spin: vec2f) -> vec2f {
+  return vec2f(o.x * spin.x - o.y * spin.y, o.x * spin.y + o.y * spin.x);
+}
+
+// The pixel's turn of the discs this frame (the resolve averages it), as a cosine and a sine.
+fn disc_spin(frag: vec2f) -> vec2f {
+  let turn = fract(52.9829189 * fract(dot(frag + vec2f(f32(frame.time.y % 64.0) * 5.588238),
+                                          vec2f(0.06711056, 0.00583715)))) *
+             6.2831853;
+  return vec2f(cos(turn), sin(turn));
+}
+
+// x: lit by the world alone, y: by the world and the moving casters.
+fn soft_shadow(q: vec3f, far: f32, l: Light, spin: vec2f) -> vec2f {
+  let d = length(q);
+  let n = q / max(d, 1e-4);
+  let ref_depth = d / far - 0.004;
+  let world = world_lit(n, ref_depth, i32(l.info.x));
+  let row = i32(l.more.x);
+  if (row < 0 || world <= 0.0) {
+    return vec2f(world);
+  }
+  // Hard edges (bsp_draw.hpp's Options::soft_casters off): the casters' cube one 2 x 2 compare.
+  if (bsp.capsule_info.y > 0.5) {
+    return vec2f(world, world * caster_lit(n, ref_depth, row));
+  }
+  let size = max(l.more.y, 0.01);
+  // A frame round the direction.
+  let side = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(n.y) > 0.9);
+  let t = normalize(cross(n, side));
+  let b = cross(n, t);
+  let texel = 2.0 / f32(textureDimensions(caster_cubes).x / 6u);
+  // The search: what could hide the light's disc lies within its size seen from blockers as near
+  // the light as a fifth of the way (a direction's angle, the cube's own measure).
+  let search = clamp(4.0 * size / max(d, 0.1), texel, 0.15);
+  var blockers = 0.0;
+  var found = 0.0;
+  for (var i = 0u; i < kSearchTaps; i++) {
+    let o = spun(kVogel8[i], spin) * search;
+    let z = caster_nearest(n + t * o.x + b * o.y, row);
+    if (z < ref_depth) {
+      blockers += z;
+      found += 1.0;
+    }
+  }
+  if (found == 0.0) {
+    return vec2f(world);
+  }
+  // The penumbra the blockers' mean distance casts, as an angle at the point.
+  let db = max(blockers / found * far, 0.02);
+  let pen = clamp(size * (d - db) / (db * d), texel * 0.75, 0.15);
+  var lit = 0.0;
+  for (var i = 0u; i < kFilterTaps; i++) {
+    let o = spun(kVogel12[i], spin) * pen;
+    lit += caster_lit(n + t * o.x + b * o.y, ref_depth, row);
+  }
+  return vec2f(world, world * lit / f32(kFilterTaps));
+}
+
+// AN AIMED LIGHT'S BEAM: a map's cone (40 degrees, its inner three quarters full, unless it says)
+// is a disc with a band of a few degrees at its edge, and a lamp far past white on a near wall then
+// shows a flat white plate with a hard rim. A real lamp's beam is brightest on its axis and fades
+// out from it, so here the beam is a bell: a gaussian in the angle off the axis (in cosines,
+// 1 - c grows as the angle squared), exp(-kSpotFade) of it left at the map's own edge, the last of
+// it cut by kSpotEnd edges (in the same measure). `c` is the cosine off the light's axis; a light
+// with no cone (spot.w -2) gives 1.
+const kSpotFade = 2.0;
+const kSpotEnd = 3.0;
+fn spot_edge(l: Light, c: f32) -> f32 {
+  let outer = l.spot.w;
+  if (outer < -1.5) {
+    return 1.0;
+  }
+  let x = (1.0 - c) / max(1.0 - outer, 1e-4);
+  return exp(-kSpotFade * x) * (1.0 - smoothstep(kSpotEnd - 1.0, kSpotEnd, x));
+}
+
+// THE MOVING CASTERS' SHARE OF THE ROOM'S OWN LIGHT: a body standing in the light hides the light
+// bounced round the room from what is under it too (the light reaching the floor from the
+// hemisphere he stands in), most of it from the way the nearest lights come. So the bounce and the
+// floor of light are dimmed by capsule_info.w of the share of the casters' lights he hides here:
+// 0 unless bsp_draw.hpp's Options::fill_shadows asks for it, since a shadow in the bounce reads as
+// one cast by no light.
+// A figure's capsule shadows nothing further than this from its middle (squared, m^2).
+const kCapsuleReach2 = 36.0;
 
 // An orthographic map's lit share at `p` over a 3 x 3 spread of `spread` m.
 fn ortho_lit(j: Job, layer: i32, p: vec3f, spread: f32) -> f32 {
@@ -556,6 +690,29 @@ fn ortho_lit(j: Job, layer: i32, p: vec3f, spread: f32) -> f32 {
     }
   }
   return lit / 9.0;
+}
+
+// The share of the sun the moving casters leave `p` (1 outside their tile round the eye): the
+// tile's 2 x 2 compare, kept half a texel inside it.
+fn sun_casters_lit(p: vec3f) -> f32 {
+  let j = bsp.sun_caster;
+  if (j.info.z < 0.5) {
+    return 1.0;
+  }
+  let q = p - j.o.xyz;
+  let x = dot(q, j.x.xyz) / j.o.w;
+  let y = dot(q, j.y.xyz) / j.o.w;
+  if (abs(x) >= 1.0 || abs(y) >= 1.0) {
+    return 1.0;
+  }
+  let z = (dot(q, j.z.xyz) + j.info.y) / (2.0 * j.info.y);
+  let dims = vec2f(textureDimensions(caster_cubes));
+  let face = dims.x / 6.0;
+  let half = 0.5 / face;
+  let uv = clamp(vec2f(0.5 + 0.5 * x, 0.5 - 0.5 * y), vec2f(half), vec2f(1.0 - half));
+  let row = dims.y / face - 1.0;
+  return textureSampleCompareLevel(caster_cubes, shadow_cmp, (vec2f(0.0, row) + uv) * face / dims,
+                                   0, z - 0.0005);
 }
 
 // THE SHARE OF THE FALL THAT REACHES `p` (0 .. 1): the fall's map (`bsp.ortho[2]`) marched along
@@ -699,18 +856,20 @@ fn second_view() -> bool {
 // THE FOG IN AN AREA (render/fog.hpp; bsp_fog.hpp's volumes): under v2 every face but the sky's
 // mask seen through it, the dust of a hall, the haze over a pool of lava. With no volume in reach
 // `local_fog` hands the colour back as it came, so a map with no fog draws the bits it drew.
+// The far side's fragments are dropped before they are shaded: most of the mirror's.
 @fragment
 fn fs_main(in: VsOut) -> FsOut {
+  let second = second_view();
+  if (second && dot(frame.planes[5].xyz, in.world) + frame.planes[5].w < 0.0) {
+    discard;
+  }
   var out = shade(in);
   if (bsp.info.x > 0.5 && out.mask.x < 0.5) {
     let rel = in.world - frame.eye.xyz;
     out.colour = vec4f(local_fog(out.colour.rgb, in.clip.xy * frame.size.zw, length(rel)),
                        out.colour.a);
   }
-  if (second_view()) {
-    if (dot(frame.planes[5].xyz, in.world) + frame.planes[5].w < 0.0) {
-      discard;
-    }
+  if (second) {
     if (out.mask.x > 0.5) {
       out.colour.a = 0.0;
     }
@@ -855,7 +1014,23 @@ fn shade(in: VsOut) -> FsOut {
   // the highlights, the lightmaps' units
   var es = vec3f(0.0);
   var phys_s = vec3f(0.0);
+  // The light of the lights with a moving casters' cube: whole (the world's shadow alone) and as
+  // the casters leave it, for their share of the room's own light.
+  var cast_full = 0.0;
+  var cast_lit = 0.0;
   // Only the lights the grid lists for p's cell (every light outside the grid), in order.
+  let spin = disc_spin(in.clip.xy);
+  // The shadows a second view (the water's mirror, the view up) draws (bsp_draw.hpp's
+  // Options::view_shadows): 2 as the frame's, 1 the walls' kept cubes alone, 0 none.
+  let view_cut = select(2.0, bsp.capsule_info.z, second_view());
+  // The casters' capsules near enough to p to shadow it, a bit each, found once for every light.
+  var near_capsules = 0u;
+  for (var c = 0u; c < u32(bsp.capsule_info.x); c++) {
+    let mid = (bsp.capsules[c * 2u].xyz + bsp.capsules[c * 2u + 1u].xyz) * 0.5;
+    if (dot(p - mid, p - mid) <= kCapsuleReach2) {
+      near_capsules |= 1u << c;
+    }
+  }
   let cell = grid_cell(p);
   var first = 0u;
   var end = u32(bsp.info.z);
@@ -878,8 +1053,8 @@ fn shade(in: VsOut) -> FsOut {
     if (dot(n, to_light) <= 0.0) {
       continue;
     }
-    // An aimed light: only inside its cone.
-    let aim = smoothstep(l.spot.w, max(l.info.w, l.spot.w + 1e-3), dot(l.spot.xyz, -to_light));
+    // An aimed light: only inside its cone, its edge eased (spot_edge).
+    let aim = spot_edge(l, dot(l.spot.xyz, -to_light));
     if (aim <= 0.0) {
       continue;
     }
@@ -889,9 +1064,40 @@ fn shade(in: VsOut) -> FsOut {
     let window = (1.0 - r4) * (1.0 - r4);
     // Softened near the light over its source's size (a fire's whole flame), 0.2 m at least.
     var fall = aim * window / (d2 + max(l.info.y, 0.04));
-    if (l.info.x >= 0.0) {
-      fall *= cube_shadow(q, reach, i32(l.info.x));
+    if (l.info.x >= 0.0 && view_cut > 0.5) {
+      // The walls' cube alone: as for a light with no casters' cube.
+      var ls = l;
+      if (view_cut < 1.5) {
+        ls.more.x = -1.0;
+      }
+      let lit = soft_shadow(q, reach, ls, spin);
+      if (l.more.x >= 0.0) {
+        let lum = dot(l.colour.rgb, kLuma) * ndl * fall;
+        cast_full += lum * lit.x;
+        cast_lit += lum * lit.y;
+      }
+      fall *= lit.y;
       // wholly in its shadow: every sum below would add 0
+      if (fall <= 0.0) {
+        continue;
+      }
+    }
+    // A light with no cube of the moving casters: their capsules shadow it instead (none at a
+    // point kCapsuleReachM past them: a figure's shadow is near him).
+    // Only a light whose source he can see throws it (more.z; bsp_draw.hpp's fill_shadows).
+    if (l.more.x < 0.0 && l.more.z > 0.5 && bsp.capsule_info.x > 0.5 && view_cut > 1.5) {
+      var seen = 1.0;
+      let lr = max(l.more.y, 0.04);
+      for (var c = 0u; near_capsules != 0u && c < u32(bsp.capsule_info.x); c++) {
+        if ((near_capsules & (1u << c)) != 0u) {
+          let ca = bsp.capsules[c * 2u];
+          seen *= capsule_one(p, to_light, d, lr, ca.xyz, bsp.capsules[c * 2u + 1u].xyz, ca.w);
+        }
+      }
+      let lum = dot(l.colour.rgb, kLuma) * ndl * fall;
+      cast_full += lum;
+      cast_lit += lum * seen;
+      fall *= seen;
       if (fall <= 0.0) {
         continue;
       }
@@ -909,13 +1115,15 @@ fn shade(in: VsOut) -> FsOut {
     }
   }
   // The light bounced round the room: the rebake's own where it has one, else the map's baked
-  // light (its light probes) at a share.
+  // light (its light probes) at a share; dimmed where a moving caster hides the nearest lights.
+  let hidden = select(0.0, 1.0 - cast_lit / cast_full, cast_full > 1e-6);
+  let indirect = cavity * (1.0 - bsp.capsule_info.w * hidden);
   if (bsp.info3.y < 0.0 && in.lm2.x >= 0.0) {
-    e += textureSampleLevel(rebake_bounce, light_sampler, in.lm2, 0.0).rgb * cavity;
+    e += textureSampleLevel(rebake_bounce, light_sampler, in.lm2, 0.0).rgb * indirect;
   } else {
-    e += lightmap(in.lm, in.styles) * abs(bsp.info3.y) * cavity;
+    e += lightmap(in.lm, in.styles) * abs(bsp.info3.y) * indirect;
   }
-  e = floor_light(e, bsp.info3.x * cavity);
+  e = floor_light(e, bsp.info3.x * indirect);
   e += wl.flash;
   var c = wl.albedo * e * white;
   // The highlights: a light in the lightmaps' units is a white face's irradiance over pi.
@@ -926,7 +1134,7 @@ fn shade(in: VsOut) -> FsOut {
   let sun_dir = frame.sun.xyz;
   let sun_ndl = max(dot(wl.n, sun_dir), 0.0);
   if (sun_ndl > 0.0 && frame.sun.y > 0.0) {
-    let lit = ortho_lit(bsp.ortho[0], 0, p, 0.05);
+    let lit = ortho_lit(bsp.ortho[0], 0, p, 0.05) * sun_casters_lit(p);
     let sun = sun_light(in.world.y, in.world.xz) * lit * bsp.info3.z;
     // No highlight: the classic's dark painted walls under a whole sky's sun would read as foil.
     c += wl.albedo / PI * sun * sun_ndl;
@@ -934,7 +1142,7 @@ fn shade(in: VsOut) -> FsOut {
   let open = ortho_lit(bsp.ortho[1], 1, in.world + n * 0.3, 1.2);
   c += wl.albedo / PI * sky_irradiance(wl.n) * open * bsp.info3.z * cavity;
   c += wl.sheen;
-  c += albedo * white * glow;
+  c += albedo * white * glow * bsp.weather.w;
   out.colour = vec4f(c, 1.0);
   // A pixel whose light came out not a number (a degenerate face) or past a half float: black,
   // never a NaN for the bloom to spread over the frame.

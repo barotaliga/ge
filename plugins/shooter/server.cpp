@@ -126,7 +126,9 @@ void touch_links(Server& sv, int e) {
     sv.g.other = e;
     sv.g.time = static_cast<float>(sv.time);
     sv.counts.trigger_touches++;
+    if (sv.touch_watch != nullptr) sv.touch_watch(sv.touch_watch_ctx, sv, t, e, false);
     call_program(sv, trig.touch);
+    if (sv.touch_watch != nullptr) sv.touch_watch(sv.touch_watch_ctx, sv, t, e, true);
   }
   sv.g.self = old_self;
   sv.g.other = old_other;
@@ -187,7 +189,7 @@ void start_sound(Server& sv, int e, int channel, const char* sample, float volum
     sv.counts.sounds_dropped++;
     return;
   }
-  sv.sounds[sv.sound_count++] = {e, channel, sample, volume, attenuation};
+  sv.sounds[sv.sound_count++] = {e, channel, sample, volume, attenuation, false, {}};
 }
 
 int world_contents(const Server& sv, Vec3f p) { return point_contents(sv.models[1].hulls[0], p); }

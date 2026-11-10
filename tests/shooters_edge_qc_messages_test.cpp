@@ -2,17 +2,22 @@
 // bi_message.cpp): each Write builtin's encoding in its destination's buffer, the signon only
 // while loading and msg_entity's client, multicast carrying and clearing its buffer to the
 // right recipients, sound's checks and recipients, stuffcmd's line buffering and the drop, the
-// prints and their spectator copies, light styles, particles and ambient sounds.
+// prints and their spectator copies, light styles, particles and ambient sounds, and a mod's named
+// effects (particleeffectnum, pointparticles, trailparticles) and the classic kind each stands for.
 //
 // ge:summary Tests: the Write encodings, multicast, sound, stuffcmd, the prints and their copies
 // ge:keywords test qc messages writebyte writecoord writeangle writestring multicast sound
 // ge:keywords stuffcmd bprint sprint centerprint sv_specprint lightstyle particle ambientsound
+// ge:keywords particleeffectnum pointparticles trailparticles classic_temp_entity
 // ge:skill progs shooter testing
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "check.hpp"
 #include "progs/assembler.hpp"
+#include "progs/localized.hpp"
+#include "shooters_edge/server/catalogue.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge_qc_fixture.hpp"
 
@@ -172,6 +177,51 @@ TEST(the_prints_and_their_spectator_copies) {
   CHECK(fx.events(sv::EventKind::centerprint).back()->to == 1u);
 }
 
+// A release that prints keys: the server puts in the words (and each argument's) before a print,
+// a centre print or a written string leaves it; a key it lacks goes out as written.
+TEST(a_programs_keys_leave_the_server_as_their_words) {
+  Fixture fx;
+  const int p = fx.join(0, "player");
+  auto words = std::make_shared<pg::LocalizedText>();
+  pg::read_localized(
+      "qc_got_item = \"You got the {}\\n\"\nqc_nailgun = \"Nailgun\"\n"
+      "map_skill_normal = \"This hall selects NORMAL skill\"\nqc_finale_e1 = \"The end\"\n",
+      *words);
+  fx.s->opt.localized = words;
+  fx.call(24, {ent(p), 1, "$qc_got_item", "$qc_nailgun"});
+  CHECK(fx.events(sv::EventKind::print).back()->text == "You got the Nailgun\n");
+  fx.call(23, {2, "$qc_missing"});
+  CHECK(fx.events(sv::EventKind::print).back()->text == "$qc_missing");
+  fx.call(73, {ent(p), "$map_skill_normal"});
+  CHECK(fx.events(sv::EventKind::centerprint).back()->text == "This hall selects NORMAL skill");
+  fx.call(58, {2, "$qc_finale_e1"});
+  CHECK(fx.s->out.all == (Bytes{'T', 'h', 'e', ' ', 'e', 'n', 'd', 0}));
+}
+
+// The re-release's program (a `$qc_` key among its strings) gets its own builtins: its numbers
+// 79..92 over the multiplayer and extension ones, and the slots its names bind to.
+TEST(the_rereleases_program_gets_its_own_builtins) {
+  pg::Progs mod;
+  std::string error;
+  CHECK_MSG(sv::build_test_mod(mod, error), error);
+  CHECK(!sv::rerelease_program(mod));
+  const Fixture plain(sv::kArenaEntities, {}, &mod);
+  CHECK(std::string(plain.s->q.vm.builtins[90].name) == "tracebox");
+  const std::string key = "$qc_got_item";
+  mod.strings.insert(mod.strings.end(), key.begin(), key.end());
+  mod.strings.push_back(0);
+  CHECK(sv::rerelease_program(mod));
+  Fixture fx(sv::kArenaEntities, {}, &mod);
+  CHECK(std::string(fx.s->q.vm.builtins[90].name) == "centerprint");
+  CHECK(std::string(fx.s->q.vm.builtins[92].name) == "sprint");
+  CHECK(std::string(fx.s->q.vm.builtins[sv::kRereleaseOnly].name) == "CheckPlayerEXFlags");
+  const int p = fx.join(0, "player");
+  fx.call(92, {ent(p), 1, "$qc_got_item", " and more"});
+  CHECK(fx.events(sv::EventKind::print).back()->text == "$qc_got_item and more");
+  fx.call(79, {});
+  CHECK(!fx.fault && fx.rf == 0);
+}
+
 TEST(a_spectator_tracking_a_player_gets_the_copies_both_ask_for) {
   pg::Progs mod;
   {
@@ -221,6 +271,42 @@ TEST(light_styles_particles_and_ambient_sounds) {
   fx.call(74, {sh::Vec3f{0, 0, 0}, "weapons/explode.wav", 0.5f, 1});
   const auto amb = fx.events(sv::EventKind::ambient);
   CHECK(amb.size() == 1 && amb[0]->values[0] == 127.0f && amb[0]->values[1] == 64.0f);
+}
+
+TEST(a_mods_named_effects_go_out_by_their_names) {
+  Fixture fx;
+  fx.join(0, "one");
+  fx.call(335, {"spark_fountain"});
+  CHECK(fx.rf == 1.0f);
+  fx.call(335, {"TE_GUNSHOT"});
+  CHECK(fx.rf == 2.0f);
+  fx.call(335, {"spark_fountain"});
+  CHECK(fx.rf == 1.0f);  // the same name, the same number
+  fx.call(335, {""});
+  CHECK(fx.rf == 0.0f);
+  fx.call(337, {1, sh::Vec3f{1, 2, 3}, sh::Vec3f{0, 0, 1}, 5});
+  const auto point = fx.events(sv::EventKind::point_effect);
+  CHECK(point.size() == 1);
+  CHECK(!point.empty() && point[0]->text == "spark_fountain" && point[0]->values[2] == 1.0f &&
+        point[0]->values[3] == 5.0f && point[0]->origin.z == 3.0f && (point[0]->to & 1u) != 0);
+  fx.call(336, {ent(1), 2, sh::Vec3f{0, 0, 0}, sh::Vec3f{64, 0, 0}});
+  const auto trail = fx.events(sv::EventKind::trail_effect);
+  CHECK(trail.size() == 1);
+  CHECK(!trail.empty() && trail[0]->text == "TE_GUNSHOT" && trail[0]->ent == 1 &&
+        trail[0]->values[0] == 64.0f);
+  fx.call(337, {0, sh::Vec3f{1, 2, 3}, sh::Vec3f{0, 0, 1}, 1});  // no effect: nothing sent
+  fx.call(337, {9, sh::Vec3f{1, 2, 3}, sh::Vec3f{0, 0, 1}, 1});  // never given out
+  CHECK(fx.events(sv::EventKind::point_effect).size() == 1 && !fx.fault);
+}
+
+TEST(a_named_effect_of_a_classic_name_is_its_classic_temporary_entity) {
+  uint8_t kind = 99;
+  CHECK(sv::classic_temp_entity("TE_GUNSHOT", kind) && kind == 2);
+  CHECK(sv::classic_temp_entity("explosion", kind) && kind == 3);
+  CHECK(sv::classic_temp_entity("Lava", kind) && kind == 10);
+  CHECK(sv::classic_temp_entity("te_blood", kind) && kind == 12);
+  CHECK(!sv::classic_temp_entity("spark_fountain", kind));
+  CHECK(!sv::classic_temp_entity("te_", kind));
 }
 
 TEST(clear_frame_keeps_the_reliable_streams) {

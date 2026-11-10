@@ -52,13 +52,17 @@ class DemoHearing {
   // True when a centre message came (the caller shows it for a while).
   bool frame(const DemoState& s, DemoHeard& h, float dt, std::vector<std::string>& lines,
              std::string& centre);
-  // The demo over: everything it plays stopped.
+  // The demo over: everything it plays stopped (its recordings freed once their fades end, at a
+  // later `frame` or `stop`).
   void stop();
+  // Sounds stopped whose voices are still fading, for a test.
+  size_t retired() const { return retired_.kept(); }
 
  private:
   ge::audio::Synth& synth_;
   const SearchPath* files_ = nullptr;
   std::unique_ptr<DemoSounds> sounds_;
+  RetiredSounds retired_;  // the last folders' and demos' sounds, until their voices fade
   std::unique_ptr<DemoVoices> voices_;
   std::string partial_;  // printed text not yet ended by a newline
 };

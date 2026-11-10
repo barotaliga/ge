@@ -5,11 +5,13 @@
 // eight characters a second, the completed time; and the listen client running the campaign host
 // on the campaign stub (games/shooters_edge/server/test_mod.hpp): its clock, the statistics a
 // joining client is sent, the messages read after a frame, the next map read ahead and entered
-// when the program changes level, and which game the server's lines ask for.
+// when the program changes level, and which game the server's lines ask for; in coop, the party
+// of companions seated, carried through the level change and let go.
 //
 // ge:summary Tests: the campaign's client messages, typed text, and the listen client's campaign
 // ge:keywords test campaign intermission finale cutscene sellscreen cdtrack killedmonster
 // ge:keywords foundsecret setangle typed-text listen_campaign level-change wants_campaign
+// ge:keywords coop party companions addbot removebot
 // ge:skill shooter testing
 #include <memory>
 #include <string>
@@ -18,6 +20,7 @@
 #include "check.hpp"
 #include "shooters_edge/client/campaign_view.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 
@@ -154,11 +157,11 @@ TEST(the_listen_client_plays_a_single_player_program_on_the_campaign_host) {
   CHECK_MSG(sv::build_campaign_stub(stub, error), error);
   CHECK(cl::single_player(stub));
   cl::Listen l;
-  cl::ListenOptions opt;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.console = {"deathmatch 0"};
   CHECK_MSG(cl::listen_start(l, stub, stub_map("first"), opt, error), error);
-  CHECK(l.campaign_host != nullptr && l.match == nullptr);
-  CHECK(l.server == l.campaign_host->server.get());
+  CHECK(l.campaign_host != nullptr && !l.match);
+  CHECK(l.rules == &l.campaign_host->server && l.server == l.campaign_host->server.common);
   CHECK(cl::listen_tic(l) == sv::kCampaignStep);
   // The stub counts 3 monsters, one killed, and 2 secrets: what a joining client is sent.
   CHECK(l.campaign.total_monsters == 3 && l.campaign.monsters == 1);
@@ -193,7 +196,7 @@ TEST(the_listen_client_plays_a_single_player_program_on_the_campaign_host) {
   CHECK_MSG(l.map_changed, "no level change in " + std::to_string(frames) + " frames");
   CHECK(l.failed.empty());
   CHECK(l.map.get() == ahead && l.map->name == "second");
-  CHECK(l.server == l.campaign_host->server.get());
+  CHECK(l.rules == &l.campaign_host->server && l.server == l.campaign_host->server.common);
   CHECK(l.campaign.end == cl::LevelEnd::none);  // a new map's record
   CHECK(l.entered_at == l.server->sv.time);
   CHECK(l.campaign_host->history.back() == "change second");
@@ -202,12 +205,58 @@ TEST(the_listen_client_plays_a_single_player_program_on_the_campaign_host) {
   CHECK(!l.map_changed && l.failed.empty());
 }
 
+TEST(a_coop_campaign_seats_companions_carries_them_and_lets_them_go) {
+  ge::progs::Progs stub;
+  std::string error;
+  CHECK_MSG(sv::build_campaign_stub(stub, error), error);
+  cl::Listen l;
+  cl::ListenOptions opt;
+  opt.console = {"deathmatch 0", "coop 1", "teamplay 1"};
+  opt.companions = 2;
+  CHECK_MSG(cl::listen_start(l, stub, stub_map("first"), opt, error), error);
+  CHECK(l.party != nullptr && cl::party_size(*l.party) == 2);
+  CHECK(l.server->clients[1].active && l.server->clients[2].active);
+  CHECK(l.campaign_host->players[1].active && l.campaign_host->players[2].active);
+  // The level change at 1.5 s carries them: on the next map, still seated, made afresh on it.
+  l.next = stub_map("second");
+  int frames = 0;
+  while (!l.map_changed && frames < 400) {
+    cl::listen_frame(l, {});
+    frames++;
+  }
+  CHECK_MSG(l.map_changed && l.failed.empty(), l.failed);
+  CHECK(cl::party_size(*l.party) == 2);
+  CHECK(l.server->clients[1].active && l.server->clients[2].active);
+  CHECK(l.party->graph_of == "second");
+  cl::listen_frame(l, {});
+  CHECK(cl::listen_lobby(l, "removebot"));
+  CHECK(cl::party_size(*l.party) == 1 && !l.server->clients[2].active);
+  CHECK(cl::listen_lobby(l, "addbot expert"));
+  CHECK(cl::party_size(*l.party) == 1 + 1 &&
+        l.party->mates[2]->skill == ge::shooter::AimSkill::expert);
+}
+
+TEST(a_companion_asked_for_without_coop_is_refused_with_the_next_step) {
+  ge::progs::Progs stub;
+  std::string error;
+  CHECK_MSG(sv::build_campaign_stub(stub, error), error);
+  cl::Listen l;
+  cl::ListenOptions opt;
+  opt.console = {"deathmatch 0"};
+  CHECK_MSG(cl::listen_start(l, stub, stub_map("first"), opt, error), error);
+  CHECK(cl::listen_lobby(l, "addbot"));
+  CHECK(!l.party || cl::party_size(*l.party) == 0);
+  CHECK(!l.prints.empty() && l.prints.back().find("coopgame") != std::string::npos);
+}
+
 TEST(a_campaigns_next_map_with_nowhere_to_read_it_from_fails_with_a_reason) {
   ge::progs::Progs stub;
   std::string error;
   CHECK_MSG(sv::build_campaign_stub(stub, error), error);
   cl::Listen l;
-  CHECK_MSG(cl::listen_start(l, stub, stub_map("first"), {}, error), error);
+  CHECK_MSG(
+      cl::listen_start(l, stub, stub_map("first"), shooters_edge::net::listen_options(), error),
+      error);
   for (int i = 0; i < 400 && l.failed.empty(); i++) cl::listen_frame(l, {});
   CHECK_MSG(l.failed.find("no search path") != std::string::npos, l.failed);
   CHECK(l.server == nullptr);
@@ -215,7 +264,7 @@ TEST(a_campaigns_next_map_with_nowhere_to_read_it_from_fails_with_a_reason) {
 }
 
 TEST(the_server_lines_say_which_game_a_map_starts) {
-  cl::ListenOptions o;
+  cl::ListenOptions o = shooters_edge::net::listen_options();
   CHECK(!cl::wants_campaign(o));  // deathmatch 1 by default
   o.console.emplace_back("deathmatch 0");
   CHECK(cl::wants_campaign(o));

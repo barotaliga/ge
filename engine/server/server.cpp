@@ -10,7 +10,9 @@
 #include <cstdio>
 
 #include "core/num.hpp"
+#include "core/num_text.hpp"
 #include "net/packet.hpp"
+#include "server/guards.hpp"
 
 namespace ge::server {
 
@@ -52,11 +54,13 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   // The fallbacks copied first: binding writes each into the field it is read from.
   const std::string port = std::to_string(c.port), clients = std::to_string(c.maxclients);
   const std::string bots = std::to_string(c.bots), seed = std::to_string(c.seed);
+  const std::string lobby = std::to_string(c.lobby);
   const std::string name = c.hostname, about = c.description, ip = c.ip, map = c.map;
   const std::string password = c.password, visibility = c.visibility;
   const std::string motd = c.motd, admin = c.admin, rotation = c.maprotation;
   const std::string spectators = std::to_string(c.max_spectators);
   const std::string spec_password = c.spectator_password, rendezvous = c.rendezvous, mod = c.mod;
+  const std::string rcon = c.rcon_password;
   cvars.bind(
       {"sv_hostname", name, info, "the server's name in the browser and the lobby", CvarKind::text},
       &c.hostname);
@@ -75,6 +79,10 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   cvars.bind({"sv_bots", bots, latched, "slots the game's bots fill at the start",
               CvarKind::integer, 0, static_cast<double>(most)},
              &c.bots);
+  cvars.bind({"sv_lobby", lobby, latched_info,
+              "1: every map warms up until everyone is ready (ready, break, team, start)",
+              CvarKind::integer, 0, 1},
+             &c.lobby);
   cvars.bind({"sv_seed", seed, latched, "the run's seed", CvarKind::integer, 0, 4294967295.0},
              &c.seed);
   cvars.bind(
@@ -96,18 +104,77 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   cvars.bind({"sv_spectatorpassword", spec_password, cn::kServer,
               "a password to watch (empty: none)", CvarKind::text},
              &c.spectator_password);
+  cvars.bind({"rcon_password", rcon, cn::kServer,
+              "the remote console's password: `rcon <password> <line>` runs a server console line "
+              "from afar (empty: no remote console)",
+              CvarKind::text},
+             &c.rcon_password);
   cvars.bind({"sv_rendezvous", rendezvous, latched, "the rendezvous to list with (empty: none)",
               CvarKind::text},
              &c.rendezvous);
   cvars.bind({"sv_mod", mod, cn::kServer | cn::kServerInfo | cn::kReadOnly,
               "the mods' directories over the base, lowest first (--mod)", CvarKind::text},
              &c.mod);
+  const std::string timeout = core::num::to_string(c.timeout_s);
+  const std::string flood = c.floodprot, flood_msg = c.floodprot_msg;
+  cvars.bind({"sv_timeout", timeout, cn::kServer,
+              "seconds a client may go unheard before it is dropped", CvarKind::number, 1, 3600},
+             &c.timeout_s);
+  const std::string countdown = core::num::to_string(c.countdown_s);
+  const std::string intermission = core::num::to_string(c.intermission_s);
+  cvars.bind(
+      {"sv_countdown", countdown, cn::kServer,
+       "with sv_lobby: seconds between everyone ready and the match", CvarKind::number, 0, 600},
+      &c.countdown_s);
+  cvars.bind({"sv_intermission", intermission, cn::kServer,
+              "with sv_lobby: seconds the scores stay up after a match before the next map",
+              CvarKind::number, 0, 600},
+             &c.intermission_s);
+  cvars.bind({"sv_floodprot", flood, cn::kServer,
+              "\"N S T\": N chat lines in S seconds, else silent for T seconds", CvarKind::text},
+             &c.floodprot);
+  cvars.bind({"sv_floodprotmsg", flood_msg, cn::kServer,
+              "what a player who floods the chat is told (empty: how long the silence is)",
+              CvarKind::text},
+             &c.floodprot_msg);
+  const std::string vote = std::to_string(c.vote);
+  const std::string vote_time = core::num::to_string(c.vote_time_s);
+  const std::string vote_wait = core::num::to_string(c.vote_wait_s);
+  const std::string vote_allow = c.vote_allow, vote_deny = c.vote_deny;
+  cvars.bind({"sv_vote", vote, cn::kServer,
+              "1: players may vote on settings for the map (vote <name> <value>)",
+              CvarKind::integer, 0, 1},
+             &c.vote);
+  cvars.bind({"sv_vote_time", vote_time, cn::kServer, "seconds a vote stays open", CvarKind::number,
+              5, 600},
+             &c.vote_time_s);
+  cvars.bind({"sv_vote_wait", vote_wait, cn::kServer,
+              "seconds a player whose vote failed waits before calling another", CvarKind::number,
+              0, 3600},
+             &c.vote_wait_s);
+  cvars.bind({"sv_vote_allow", vote_allow, cn::kServer,
+              "settings players may vote on, * for any characters (empty: all but sv_vote_deny)",
+              CvarKind::text},
+             &c.vote_allow);
+  cvars.bind({"sv_vote_deny", vote_deny, cn::kServer,
+              "settings no vote may change, * for any characters", CvarKind::text},
+             &c.vote_deny);
   for (int i = 0; i < game.rule_count; i++) {
     const GameRule& r = game.rules[i];
     std::string& field = c.rules[r.name];  // a map's node: its address outlives the inserts
     const std::string fallback = field;
     cvars.bind({r.name, fallback, info, r.help, CvarKind::text}, &field);
   }
+}
+
+VoteSettings vote_settings(const ServerConfig& c) {
+  VoteSettings v;
+  v.enabled = c.vote != 0;
+  v.time_s = c.vote_time_s;
+  v.wait_s = c.vote_wait_s;
+  v.allow = c.vote_allow;
+  v.deny = c.vote_deny;
+  return v;
 }
 
 bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
@@ -130,6 +197,8 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
             " slots; next: raise sv_maxclients or lower sv_bots";
     return false;
   }
+  FloodRule flood;
+  if (!parse_flood_rule(config.floodprot, flood, error)) return false;
   gn::Visibility vis{};
   if (!gn::visibility_of(config.visibility, vis)) {
     error =

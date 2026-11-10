@@ -5,7 +5,7 @@
 #
 #   ge_add_plugin(mountain ENGINE core PLUGINS racing)
 #
-# which builds every .cpp under the directory (labs/, assets/, app/ and tool/ excepted) into the target ge_<name>,
+# which builds every .cpp under the directory (labs/, assets/, app/, cli/ and tool/ excepted) into the target ge_<name>,
 # puts plugins/ on its include path (so its headers are spelled "<name>/<file>.hpp"), and links the
 # engine targets it names (ENGINE core -> ge_core) and the plugins it names (PLUGINS racing ->
 # ge_racing). A plugin with a presentation half (plugins/<name>/app/: the sounds and looks a genre
@@ -13,7 +13,10 @@
 # simulation's; app/ is built into ge_<name>_app, which links ge_<name> and those, so the
 # simulation target never links a renderer or a synth. A half whose APP list names an engine
 # target this build does not make (APP render with GE_GPU=OFF) is not built, and nothing that
-# links it is either; a half's shaders are embedded beside the call, under
+# links it is either. A plugin's commands in a game's player CLI (plugins/<name>/cli/: a group of
+# rows a game adds to its `<game>_cli`, engine/gamecli) are built into ge_<name>_cli, which links
+# ge_<name> and ge_gamecli, so neither the plugin nor the game's window links the CLI's
+# machinery. A half's shaders are embedded beside the call, under
 # `if(TARGET ge_<name>_app)`: ge_embed_wgsl(ge_<name>_app app/<file>.wgsl). Those lists are the plugin's whole
 # dependency contract: tools/check-plugins.mjs (make agents-check) fails an #include outside them, a cycle, and a name that is not one
 # lower-case word or that shadows an engine directory.
@@ -42,6 +45,9 @@ function(ge_add_plugin name)
   set(tool_sources ${sources})
   list(FILTER tool_sources INCLUDE REGEX "/plugins/${name}/tool/")
   list(FILTER sources EXCLUDE REGEX "/plugins/${name}/tool/")
+  set(cli_sources ${sources})
+  list(FILTER cli_sources INCLUDE REGEX "/plugins/${name}/cli/")
+  list(FILTER sources EXCLUDE REGEX "/plugins/${name}/cli/")
   set(app_sources ${sources})
   list(FILTER app_sources INCLUDE REGEX "/plugins/${name}/app/")
   list(FILTER sources EXCLUDE REGEX "/plugins/${name}/app/")
@@ -71,11 +77,18 @@ function(ge_add_plugin name)
 
   # A plugin's command-line tool (plugins/<name>/tool/): the executable `<name>` beside the labs
   # in the build's root, linking the plugin, run by `ge tool <name> -- <its arguments>`.
-  if(tool_sources)
+  if(tool_sources AND (NOT DEFINED GE_HOST_TOOLS OR GE_HOST_TOOLS))
     add_executable(${name} ${tool_sources})
     target_link_libraries(${name} PRIVATE ${target})
     set_target_properties(${name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
     set_property(GLOBAL APPEND PROPERTY GE_PLUGIN_TOOLS ${name})
+  endif()
+
+  # The plugin's group of commands in a game's player CLI (plugins/<name>/cli/).
+  if(cli_sources AND TARGET ge_gamecli)
+    add_library(${target}_cli STATIC ${cli_sources})
+    target_link_libraries(${target}_cli PUBLIC ${target} ge_gamecli)
+    set_property(GLOBAL APPEND PROPERTY GE_PLUGIN_TARGETS ${target}_cli)
   endif()
 
   set(missing "")

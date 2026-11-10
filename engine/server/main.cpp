@@ -37,6 +37,7 @@ constexpr CvarFlag kCvarFlags[] = {
     {"--maxclients", "sv_maxclients"},
     {"--map", "sv_map"},
     {"--bots", "sv_bots"},
+    {"--lobby", "sv_lobby"},
     {"--seed", "sv_seed"},
     {"--password", "sv_password"},
     {"--visibility", "sv_visibility"},
@@ -234,11 +235,9 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
   for (size_t i = 0; i < args.size(); i++) {
     const std::string& a = args[i];
     if (a.rfind("--", 0) != 0) {
-      if ((a.empty() || a[0] != '+') && rest.empty()) {
-        error = "'" + a + "' is not a flag or a +command; next: " + game.binary + " --help";
-        return false;
-      }
-      rest.push_back(a);
+      // The first command needs no `+` (`map dm2`); it gets one here, since the flags' `+set`
+      // lines go before it.
+      rest.push_back(rest.empty() && (a.empty() || a[0] != '+') ? "+" + a : a);
       continue;
     }
     const size_t eq = a.find('=');
@@ -295,7 +294,16 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
     error = "--base needs a directory; next: " + std::string(game.binary) + " --help";
     return false;
   }
-  if (!dir.empty()) con.set_search_path({std::filesystem::path(dir)});
+  // Files are named from the root (the layers' own paths: `mymod/server.cfg`); a name the root does
+  // not have is looked for the way the game looks: in the top mod's directory, the mods under it,
+  // then the base game's (a mod's server.cfg that runs `exec mymod.cfg`).
+  {
+    const std::filesystem::path root = dir.empty() ? std::string(".") : dir;
+    std::vector<std::filesystem::path> search{root};
+    for (auto m = cfg.mods.rbegin(); m != cfg.mods.rend(); ++m) search.push_back(root / *m);
+    search.push_back(root / cfg.base);
+    con.set_search_path(std::move(search));
+  }
   std::string mods;
   for (const std::string& m : cfg.mods) mods.append(mods.empty() ? "" : ",").append(m);
   con.cvars().set("sv_mod", mods, console::Source::code);
@@ -318,8 +326,8 @@ std::string server_help(const ServerGame& game) {
   std::string out = std::string(game.binary) + ": " + game.title + "'s dedicated server.\n\n";
   out +=
       "Settings come from the base game directory's server.cfg, then each mod's, then a\n"
-      "profile, then these flags, then any +commands (+set sv_hostname \"Arena\"). Each flag\n"
-      "sets the cvar beside it.\n\n"
+      "profile, then these flags, then any commands, a + before each after the first\n"
+      "(map dm2 +set sv_hostname \"Arena\"). Each flag sets the cvar beside it.\n\n"
       "  --name=TEXT        sv_hostname: the name in the browser and the lobby\n"
       "  --description=TEXT sv_description: a line under the name\n"
       "  --ip=ADDR          net_ip: the address to listen on (default every interface)\n"
@@ -333,6 +341,7 @@ std::string server_help(const ServerGame& game) {
       std::string(game.default_map) +
       ")\n"
       "  --bots=N           sv_bots: slots the game's bots fill\n"
+      "  --lobby=1          sv_lobby: warm up every map until everyone is ready\n"
       "  --seed=N           sv_seed: the run's seed\n"
       "  --password=TEXT    sv_password: joining takes it\n"
       "  --visibility=V     sv_visibility: lan, invite or listed\n"
@@ -356,6 +365,9 @@ std::string server_help(const ServerGame& game) {
 }
 
 int server_main(int argc, char** argv, const ServerGame& game) {
+  // A line at a time even into a file or a pipe (a server started detached writes its log there),
+  // so the log reads as the server runs and a crash loses nothing printed before it.
+  std::setvbuf(stdout, nullptr, _IOLBF, 0);
   // What nothing else caught ends the program here, with a line that says so, rather than in
   // std::terminate's bare abort.
   try {

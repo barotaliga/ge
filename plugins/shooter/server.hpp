@@ -88,6 +88,10 @@ struct SoundEvent {
   int channel = 0;
   const char* sample = "";  // the content's sound name
   float volume = 1, attenuation = 1;
+  // Where it was started, when the one who keeps the record knows it (a client's packet says;
+  // a server's own sound is where its entity stands, so it leaves this unset).
+  bool placed = false;
+  Vec3f at;
 };
 
 // What a client's connection keeps for the loop (the player is entity slot + 1).
@@ -100,6 +104,8 @@ struct ClientSlot {
   bool any_packet = false;      // a packet has been received
   MoveCmd last_cmd;             // the newest command, buttons cleared
   bool jump_held = false;       // the move's jump-held flag between commands
+  bool speedjump = false;       // the player's client strafes for him (cl_speedjump 1 in his
+                                // user info, disclosed; pm_speedjump its share)
   Vec3f ground_normal;          // the plane the move last stood on (its jump and landing fix)
   int speed_bank_ms = 0;        // the speed check's banked surplus, 0..500
   double speed_check_time = 0;  // the server time of the last speed check
@@ -115,6 +121,10 @@ struct LoopCounts {
   int64_t pushes = 0, pushes_blocked = 0, new_missiles = 0, commands = 0, commands_lost = 0;
   int64_t speed_cuts = 0, physics_frames = 0, sounds_dropped = 0, spawns_full = 0;
 };
+
+// A game's rule that reads what a trigger's touch did: called just before (`after` false) and just
+// after each trigger touch `touch_links` runs. A plain function and its context: nothing virtual.
+using TouchWatch = void (*)(void* ctx, struct Server& sv, int trigger, int toucher, bool after);
 
 struct Server {
   ServerSettings set;
@@ -138,6 +148,8 @@ struct Server {
   bool original_walk = false;
   std::vector<uint32_t> touched;  // per entity: the packet stamp it last touched a player in
   uint32_t touch_stamp = 0;
+  TouchWatch touch_watch = nullptr;  // a game's rule round each trigger touch; none when null
+  void* touch_watch_ctx = nullptr;
   LoopCounts counts;
 };
 

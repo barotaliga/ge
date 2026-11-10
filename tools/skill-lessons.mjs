@@ -82,7 +82,11 @@ function parse(skill, name) {
 }
 
 function skillNames() {
-  return readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
+  // A `<name>-private` skill is a person's own (git-ignored), never in the inventory.
+  return readdirSync(SKILLS, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && !d.name.endsWith("-private"))
+    .map((d) => d.name)
+    .sort();
 }
 function lessonsOf(skill) {
   const dir = join(SKILLS, skill, ".lessons");

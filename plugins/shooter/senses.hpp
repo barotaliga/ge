@@ -11,15 +11,23 @@
 // read.
 //
 // WHAT THE BOT TAKES FROM IT (`sense`), for each other player sent:
-// - SEEN when it lies inside the view's cone (`fov` degrees across, about the view's yaw and
-//   pitch), within `range`, and the line from the eye (`view_height` over the origin) to its
+// - SEEN when it lies inside the view (a round cone `fov` degrees across about the view's yaw
+//   and pitch, or a screen `fov` wide and `fov_y` high, as a player's monitor shows it), within
+//   `range`, and the line from the eye (`view_height` over the origin) to its
 //   head or its middle is clear of the world and every brush entity (a shut door hides; another
-//   player does not). Seen, its place is remembered (`ai::Memory`), and its velocity is taken off
-//   the last two sightings when they are a frame apart.
+//   player does not) and crosses no water surface: an eye in the air does not see a point under
+//   water, nor an eye under water one in the air (`water_opaque`; slime and lava alike). Seen, its
+//   place is remembered (`ai::Memory`), and its velocity is a player's as the server sent it
+//   (sightings across a network come bunched as the packets do), else taken off the last two
+//   sightings when they are a frame apart.
 // - DEAD (the protocol's flag on a player at no health): no contact; one kept is dropped, so a bot
 //   never aims at a body.
 // - HEARD when it started a sound this frame that reached the client: its place is remembered as
 //   heard (a footstep, a shot, a jump), not as seen.
+// - A FOE that is not a player (a monster in a co-op game): an entity the game marks in
+//   `Senses::foes` is taken as a contact like a player, seen by the same cone and line and heard
+//   when it starts a sound; one the game unmarks (dead, or no threat any more) is dropped. What
+//   marks one is the game's choice, from what its client is sent.
 // A contact is forgotten `forget_s` after it was last seen or heard. Every change (seen, lost,
 // heard, forgotten) is a decision on the `ai::Why` handed in, so `ge why` reads why a bot turned.
 //
@@ -29,6 +37,7 @@
 // ge:summary The bot's senses: what a client is sent, sight by the hull trace in a cone, sounds
 // ge:keywords senses sight hearing client-view sent entities sounds attenuation fov cone
 // ge:keywords line-of-sight trace memory contact forget seen heard velocity pvs friends team
+// ge:keywords foes monsters co-op
 // ge:skill shooter bots
 // ge:test tests/shooter_senses_test.cpp
 #pragma once
@@ -70,18 +79,28 @@ void client_view(const Server& sv, int viewer, ClientView& out);
 
 struct SenseSettings {
   float view_height = 22;  // the eye over the origin, units
-  float fov = 100;         // the view's cone across, degrees
-  float range = 4096;      // units
-  float forget_s = 6;      // a contact neither seen nor heard this long is forgotten
+  float fov = 100;         // the view across, degrees (360: all round)
+  // The view's height, degrees: set, the view is a screen's rectangle `fov` wide and `fov_y`
+  // high about the view's axes, as a player's monitor shows it; 0, a round cone `fov` across.
+  float fov_y = 0;
+  float range = 4096;  // units
+  float forget_s = 6;  // a contact neither seen nor heard this long is forgotten
   // Every player's sound that reaches the client is heard, exactly where it is. A bot with ears of
   // its own (hearing.hpp) turns this off and hands in what it takes in with `sense_heard`.
   bool hear_players = true;
+  // A change of course is read this late, s (`Contact::course`): a person sees a strafer turn
+  // round a reaction after he does. 0: at once.
+  float course_s = 0;
+  // A liquid's surface hides what is on its other side, as a player's screen draws it opaque: the
+  // eye and the point seen must be in the same contents (air, or the same liquid).
+  bool water_opaque = true;
 };
 
 struct Contact {
-  int ent = -1;              // a player's entity; -1 a free contact
-  ai::Memory seen;           // where and when it was last seen
-  Vec3f velocity;            // off the last two sightings a frame apart
+  int ent = -1;     // a player's entity; -1 a free contact
+  ai::Memory seen;  // where and when it was last seen
+  Vec3f velocity;   // a player's as sent; else off the last two sightings a frame apart
+  Vec3f course;     // the velocity as the eye takes it in: `velocity` caught up over `course_s`
   bool visible = false;      // seen this frame
   bool was_visible = false;  // seen the frame before
   ai::Memory heard;          // where and when it was last heard
@@ -97,12 +116,16 @@ struct Senses {
   // Players this bot does not take as contacts (its team): bit k is the player in slot k (entity
   // k + 1). A teammate is neither seen nor heard as someone to fight.
   uint32_t friends = 0;
+  // Entities other than players this bot takes as contacts: `foes[e]` non-zero for entity `e`
+  // (empty: players only). The game sets and clears them between frames.
+  std::vector<uint8_t> foes;
   std::vector<Contact> contacts;
   SenseStats stats;
 };
 
 // Whether the eye at `eye` with the view `angles` (pitch down positive, yaw) sees the player at
-// `origin`: in the cone, in range, and a clear line to its head or its middle.
+// `origin`: in the view, in range, and a clear line to its head or its middle that crosses no
+// liquid's surface.
 bool sees_player(const Server& sv, const SenseSettings& set, int viewer, Vec3f eye, Vec3f angles,
                  Vec3f origin);
 

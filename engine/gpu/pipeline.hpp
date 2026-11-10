@@ -16,6 +16,7 @@
 // ge:keywords gpu shader wgsl shader-module compilation-info pipeline render-pipeline
 // ge:keywords compute-pipeline manifest pipeline-set create-async creation-counter mid-run
 // ge:keywords create_shader add_render add_compute finish ready poll background-load
+// ge:keywords shader-cache
 // ge:skill gpu
 // ge:test tests/gpu_device_test.cpp tests/gpu_capture_test.cpp
 #pragma once
@@ -31,7 +32,9 @@ namespace ge::gpu {
 
 // Compile `wgsl` into a module labelled `label`. Compile errors are error lines quoting the
 // label, line and column; the module is still returned (Dawn makes it an error object, and
-// a pipeline that uses it fails validation by name).
+// a pipeline that uses it fails validation by name). A device keeps each module by its text
+// (`Device::shaders`): the same WGSL asked for again, by another pass or the next map's world,
+// is the module made the first time, its parse and its messages not repeated.
 wgpu::ShaderModule create_shader(Device& device, std::string_view wgsl, std::string_view label);
 
 // A pipeline manifest being loaded. Entries are indices in the order they were added.

@@ -226,3 +226,60 @@ TEST(the_lens_and_the_film_do_what_they_name) {
   CHECK(std::labs(grain_sum - sum) < static_cast<long>(kW * kH));  // averaging under a level
   CHECK(d.errors.load() == 0);
 }
+
+TEST(the_bloom_switch_holds_without_its_dry_pipeline) {
+  // With no pipeline built without the bloom, the bloom stays on whatever it is told: the only
+  // pipeline there is draws.
+  ge::render::Post post;
+  ge::render::set_post_bloom(post, false);
+  CHECK(post.bloom_on);
+  post.has_dry = true;
+  ge::render::set_post_bloom(post, false);
+  CHECK(!post.bloom_on);
+  ge::render::set_post_bloom(post, true);
+  CHECK(post.bloom_on);
+}
+
+TEST(the_arrival_flashes_opens_and_is_gone_by_its_end) {
+  const double white[3] = {1, 1, 1};
+  const r::PostWarp start = r::arrival_warp(0, 1, white);
+  CHECK(start.flash > 0.8 && start.share == 1 && start.zoom == 1 && start.reveal == 0);
+  const r::PostWarp mid = r::arrival_warp(0.2, 1, white);
+  CHECK(mid.flash < start.flash && mid.reveal > 0.5 && mid.zoom < start.zoom);
+  // Open past the corners by kArrivalOpenS, nothing left at kArrivalS, nothing outside it.
+  CHECK(r::arrival_warp(r::kArrivalOpenS, 1, white).reveal > 1.0);
+  CHECK(r::arrival_warp(r::kArrivalS - 1e-3, 1, white).share < 1e-4);
+  const r::PostWarp after = r::arrival_warp(r::kArrivalS, 1, white);
+  const r::PostWarp before = r::arrival_warp(-0.01, 1, white);
+  const r::PostWarp none = r::arrival_warp(0.1, 0, white);
+  for (const r::PostWarp* w : {&after, &before, &none})
+    CHECK(w->share == 0 && w->flash == 0 && w->zoom == 0);
+  // Half the strength: half the flash.
+  CHECK(std::abs(r::arrival_warp(0, 0.5, white).flash - 0.5 * start.flash) < 1e-12);
+}
+
+TEST(the_arrival_whites_out_then_leaves_the_picture_as_it_was) {
+  auto device = ge::test::test_device();
+  if (!device) return;
+  ge::gpu::Device& d = *device;
+  Scene s;
+  make_scene(d, s);
+  const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
+  const float grey[3] = {0.1f, 0.1f, 0.1f};
+  fill(d, s, grey, 0);
+  const ge::gpu::Image plain = draw(d, s, s.plain, false, out);
+  const double cyan[3] = {0.2, 1, 1};
+  r::set_post_warp(d, s.plain, r::arrival_warp(0, 1, cyan));
+  const ge::gpu::Image flash = draw(d, s, s.plain, false, out);
+  // The flash lifts the whole view (the grey at about 175) toward its tint: green to near white,
+  // red less.
+  CHECK(at(plain, 3, 3, 1) < 200);
+  CHECK(at(flash, 3, 3, 1) > 240);
+  CHECK(at(flash, kW / 2, kH / 2, 1) > 240);
+  CHECK(at(flash, 3, 3, 1) > at(flash, 3, 3, 0) + 20);
+  r::set_post_warp(d, s.plain, r::arrival_warp(r::kArrivalS, 1, cyan));
+  const ge::gpu::Image after = draw(d, s, s.plain, false, out);
+  for (uint32_t y = 0; y < kH; y += 7)
+    for (uint32_t x = 0; x < kW; x += 7) CHECK(at(after, x, y, 1) == at(plain, x, y, 1));
+  CHECK(d.errors.load() == 0);
+}

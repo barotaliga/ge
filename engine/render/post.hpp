@@ -9,6 +9,12 @@
 // curve, so it works where the eye judges colour and its 32 steps a channel are evenly spent.
 // It starts as the identity (`identity_grade`).
 //
+// THE ARRIVAL (`set_post_warp`, `arrival_warp`): the whole view warped while a player arrives
+// (a spawn, a teleport's far end): it opens out of a flash, the world pulled in toward the middle
+// and streaked toward it, washed out and tinted, and a clear disc grows from the middle with a
+// bright rim until the view is whole. Live, off a small uniform: a share of 0 costs the pass one
+// uniform branch, so it is never compiled out.
+//
 // THE LENS AND THE FILM (M35a): what a camera does to the picture past the scene, each off at 0
 // and each its own `override` switch, so a game that leaves one off compiles it out and pays
 // nothing; every one is folded into this one pass (no full-screen pass of its own):
@@ -41,9 +47,11 @@
 // ge:keywords render post exposure tone-mapping tonemap pbr-neutral dither srgb encode output
 // ge:keywords bloom colour-grade color-grade lut lookup-table 3d-lut grade
 // ge:keywords create_post post_group encode_post set_grade identity_grade set_post_look
+// ge:keywords set_post_bloom bloom_switch live-bloom
 // ge:keywords sharpen cas contrast-adaptive-sharpening chromatic-aberration vignette film-grain
 // ge:keywords lens-dirt post-look lens-effects motion-blur shutter post-motion
 // ge:keywords screen-blend set_post_blend tint damage-flash
+// ge:keywords arrival arrival_warp set_post_warp post-warp teleport-flash spawn-flash warp-in
 // ge:skill render
 // ge:test tests/render_post_test.cpp
 #pragma once
@@ -77,6 +85,9 @@ struct PostSettings {
   PostLook look;      // which of the lens and film are compiled (above 0), and their start
   bool lens = false;  // mix in the lens pass's target (render/lens.hpp)
   bool dof = false;   // mix in depth of field's gather (render/dof.hpp)
+  // Also build the pipeline with the bloom compiled out, so `set_post_bloom` turns the bloom off
+  // and on in a live frame (a quality ladder's stop) with no pipeline made after the load.
+  bool bloom_switch = false;
 };
 
 struct Post {
@@ -94,6 +105,9 @@ struct Post {
   wgpu::TextureView flat_view;
   wgpu::Buffer look;  // PostLook's strengths, as the shader reads them
   uint32_t p_draw = 0;
+  uint32_t p_dry = 0;    // the bloom compiled out (PostSettings::bloom_switch)
+  bool has_dry = false;  // p_dry was built
+  bool bloom_on = true;  // which of the two draws (set_post_bloom)
 };
 
 // Add the post pipeline for an output of `format` to the manifest; the grade starts as the
@@ -114,12 +128,31 @@ struct PostReads {
 wgpu::BindGroup post_group(gpu::Device& device, const Post& post, const wgpu::TextureView& hdr,
                            const wgpu::TextureView& bloom = nullptr,
                            const wgpu::TextureView& lens = nullptr, const PostReads& reads = {});
+// The bloom mixed in (on) or not (off), live: the pipeline built with it or the one without
+// (PostSettings::bloom_switch; without that, only the pipeline built at create_post draws).
+void set_post_bloom(Post& post, bool on);
 // The strengths, live; a feature not compiled at create_post stays off whatever it is given.
 void set_post_look(gpu::Device& device, const Post& post, const PostLook& look);
 // THE SCREEN'S BLEND: the whole picture mixed toward one colour after the grade (a game's flash
 // when its player is hurt, the tint of a liquid round the eye): `rgba` an sRGB-encoded colour and
 // its share, 0..1; a share of 0 (the start) leaves the picture as it is.
 void set_post_blend(gpu::Device& device, const Post& post, const double rgba[4]);
+// THE ARRIVAL'S WARP this frame (all 0: none, the pass as it was).
+struct PostWarp {
+  double share = 0;            // 0..1: how warped the view still is outside the clear disc
+  double reveal = 0;           // the clear disc's radius, a share of the middle-to-corner distance
+  double zoom = 0;             // 0..1: the view pulled in toward the middle (1: by a third)
+  double flash = 0;            // 0..1: the tint laid over the whole view (1: about white)
+  double tint[3] = {1, 1, 1};  // the flash's and the rim's colour, sRGB-encoded
+};
+inline constexpr double kArrivalS = 0.65;  // the arrival's warp, s
+// The arrival's warp `age_s` into it at `strength` (0..1; 0: none) in `tint` (sRGB-encoded): a
+// flash held kArrivalFlashS then fading, the clear disc opening from the middle to past the
+// corners by kArrivalOpenS (eased out), the pull and the warp fading to nothing by kArrivalS.
+// Outside 0..kArrivalS: none.
+inline constexpr double kArrivalFlashS = 0.05, kArrivalOpenS = 0.45;
+PostWarp arrival_warp(double age_s, double strength, const double tint[3]);
+void set_post_warp(gpu::Device& device, const Post& post, const PostWarp& warp);
 // Depth of field's focus, sharp share and strength (render/dof.hpp's), live: the post pass mixes
 // the gather in by each pixel's own circle under the same lens the dof pass gathered with.
 void set_post_focus(gpu::Device& device, const Post& post, const DofSettings& dof);

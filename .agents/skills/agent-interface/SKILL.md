@@ -99,12 +99,25 @@ example and consumer skill); the parser, `ge help` and `ge help --json` all read
   use skier`, `ge add system wind` and `ge check --engine=<this tree>`. Packaging's `scaffold`
   job does exactly that on every PR.
 
+## The player's game CLI (`engine/gamecli`, `docs/gamecli.md`)
+
+`ge` is the developer's; `<game>_cli` (`shooters_edge_cli`) is the player's agent's: settings,
+servers, players, the remote console, hosting, joining, logs. It is layered like everything else:
+the engine's rows and frame in `engine/gamecli/` (the table, the parser, `answer`/`refuse`, `help
+--json`, `skill`), a plugin's group in `plugins/<name>/cli/` (`ge_<name>_cli`: classic enhance's
+`content`), the game's `Spec` and own rows in `games/<game>/cli/`. The answer is the same shape as
+ge's (`ok`, `result`, `summary`, `next`; a refusal `error`, `next`), every flag is declared or the
+call is refused, and `skill` is generated from the rows. Settings go through the game's own
+registration: `Spec::add_cvars` and the catalog the window writes (`console/catalog.hpp`).
+`tests/gamecli_*_test.cpp` hold it (a stand-in classic server on the loopback); the `gamecli` lab
+draws its sessions as terminals.
+
 ## Consumer skills (`consumer-skills/`)
 
 The skills a game repo needs, written for a game repo (its paths, its `make` targets, the
 engine as a dependency), never for this one: `ge` (the command line and its loop), `play-test` (the play contract,
 `ge play` and its siblings), `multiplayer` (`ge::net`, the simulated network and `ge net`),
-`start-work`, `write-code`, `engine` (the pin, determinism, upgrading, reporting an engine
+`game-cli` (a player's CLI for the game, `ge::gamecli`), `start-work`, `write-code`, `engine` (the pin, determinism, upgrading, reporting an engine
 bug), `sim-system`, `labs`, `skill-reflection` and `commit`, plus one per plugin (`racing`,
 `mountain`, `skier`) and per opted-in engine module (`water`) with `plugin:` front matter.
 Each is a `SKILL.md` alone: lessons accumulate in each game

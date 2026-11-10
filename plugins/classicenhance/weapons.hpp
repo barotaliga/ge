@@ -30,7 +30,10 @@
 // - **The fire** (`classic_fire_of`, `classic_fire_frame`): which of the engine's muzzle-fire
 //   looks (render/muzzle.hpp's presets, by id) each weapon fires in the enhanced mode, in place of
 //   the flash its file draws (hidden by the model's `flame` mask), how often it fires, and which
-//   frames a shot plays: the firing frames at ten a second, then the rest frame.
+//   frames a shot plays: the firing frames at ten a second, then the rest frame; or, for a weapon
+//   whose firing frames are several takes (`takes`, the axe's two swings), one take of them.
+//   A weapon whose flash is an ARC across its prongs (`arc`, the lightning gun) has the arc's two
+//   ends found (`find_arc`): the game draws its own arc between them in place of the file's.
 //
 // Everything here reads what the pack holds; nothing it makes is committed or shipped
 // (docs/classic-enhance.md).
@@ -39,7 +42,9 @@
 // ge:keywords viewmodel view-model held-weapon first-person weapon mdl morph classic palette
 // ge:keywords fullbright glow light-point lightmap probe floor muzzle-flash torch flame dlight
 // ge:keywords held_from_morph probe_under classic_weapon_row classic_fire_of muzzle-look refire
+// ge:keywords find_arc arc prongs lightning-gun
 // ge:keywords firing-frames barrels alternating classic_shot_barrel classic_stream_frame puff
+// ge:keywords axe-swing two-swings takes
 // ge:skill classicenhance
 // ge:test tests/classicenhance_weapons_test.cpp
 #pragma once
@@ -91,12 +96,16 @@ std::vector<viewmodel::PointLight> flame_lights(const brush::Map& map);
 
 // A held weapon's fire in the enhanced mode: the file it is (`v_shot`), the engine's muzzle-fire
 // preset it fires (empty: it throws no flame, as the axe and the lightning gun do not), and the
-// time between its shots, s.
+// time between its shots, s. `takes`: the firing frames are that many animations of equal length
+// one after another, and a shot plays one of them (the axe's two swings, frames 1-4 and 5-8: the
+// classic game picks one of the two at random on each swing, even odds); 1, a shot plays them all.
 struct ClassicFire {
   std::string_view weapon;
   std::string_view muzzle;
   std::string_view knobs;  // turned on the preset: "knob=value,..." (render/muzzle.hpp's names)
   double refire_s;
+  int takes = 1;
+  bool arc = false;  // its flash is an arc across its prongs (`find_arc`)
 };
 std::span<const ClassicFire> classic_fires();
 // The fire of the weapon at `path` (`progs/v_shot.mdl` or `v_shot`), or null for a file the
@@ -112,6 +121,12 @@ void classic_stream_frame(int frames, double since_s, int* a, int* b, double* t)
 // flash on for that frame (`frame_barrel`, read by `held_from_morph`), or the next frame's that
 // shows one; -1 for a model with no barrels (its one muzzle).
 int classic_shot_barrel(const viewmodel::HeldModel& model, int frame);
+// THE ARC's ENDS of a model whose flash (`flame`) is an arc across its prongs: on the firing frame
+// where the flash stands widest across the gun, the model's own vertices nearest each side of it
+// are the prongs' tips (`HeldModel::arc_ends`), which then ride every frame. False, and the model
+// untouched, when it has no flash in front of the eye or the flash is narrower than kArcSpanM.
+inline constexpr double kArcSpanM = 0.15;
+bool find_arc(viewmodel::HeldModel& model);
 
 // The pack's held weapons by name (`progs/v_*.mdl`, sorted), read; a model the reader refuses is
 // skipped with its reason in `*skipped`.

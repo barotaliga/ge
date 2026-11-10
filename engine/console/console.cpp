@@ -166,7 +166,17 @@ void Console::dispatch(Entry& e) {
   }
   std::vector<std::string> first = tokenize(e.text);
   if (first.empty()) return;
-  const std::string name = lower(first[0]);
+  std::string name = lower(first[0]);
+  // A `+` or `-` marks only a button's press and release. On a plain command (or alias) it is
+  // dropped: `+coopgame 2` runs `coopgame 2`, and the `-coopgame` a key bound to it sends on its
+  // release runs nothing.
+  if (name.size() > 1 && (name[0] == '+' || name[0] == '-') && !known_name(name) &&
+      known_name(name.substr(1))) {
+    if (name[0] == '-') return;
+    e.text.erase(e.text.find('+'), 1);
+    first[0].erase(0, 1);
+    name.erase(0, 1);
+  }
   const auto cmd = commands_.find(name);
   const bool expand_it = cmd == commands_.end() || (cmd->second.flags & kNoExpand) == 0;
 
@@ -212,6 +222,8 @@ void Console::dispatch(Entry& e) {
       const std::string why = set_result_text(r, c->name);
       if (!why.empty()) error(why, "");
     }
+  } else if (unknown_ && unknown_(args)) {
+    // the host's own command
   } else {
     const std::string near = suggest(name);
     error("unknown command '" + name + "'",
@@ -280,6 +292,10 @@ bool Console::exec_file(std::string_view name, Source source, const Origin& from
   return true;
 }
 
+bool Console::known_name(const std::string& name) const {
+  return commands_.count(name) != 0 || aliases_.count(name) != 0;
+}
+
 int Console::append_command_line(const std::vector<std::string>& args) {
   int n = 0;
   std::string cur;
@@ -296,6 +312,8 @@ int Console::append_command_line(const std::vector<std::string>& args) {
       cur = a.substr(1);
     } else if (!cur.empty()) {
       cur += " " + quote(a);
+    } else {
+      cur = a;  // a command with no `+` in front: its line runs to the next `+`
     }
   }
   flush();

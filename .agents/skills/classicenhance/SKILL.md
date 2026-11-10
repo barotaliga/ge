@@ -85,6 +85,7 @@ ge tool classicenhance -- manifest <path>    # the packs' files as a known set's
 ge tool classicenhance -- run <path>         # every stage into the cache
 ge tool classicenhance -- run <path> --only=textures --scale=2 --limit=20   # a quick look
 ge tool classicenhance -- status             # the cache's packs and their stages
+ge tool classicenhance -- setup <path|https-url> --basedir=<dir>   # a --game folder in one step
 ge tool classicenhance -- run <path> --upscaler=kernel --device=cpu   # no download, no GPU
 make lab LAB=gpu-upscaler ARGS="--weights=<file> --limit=2"           # CPU against GPU, timed
 make lab LAB=enhance ARGS="--weights=<file>"                          # the network's column
@@ -103,6 +104,13 @@ default is the trained network.
 `<path>` is the shareware release zip as published, an installed game folder (its `id1/pak0.pak`
 and any later packs, in any case), the pack file itself, or a folder holding the release zip. In this repository's
 container the pack is fetched into the scratchpad only, never into the tree.
+
+**A game folder for a lab or the client** is `setup`: given the release zip's https URL it
+fetches it once with curl into the cache's `downloads/` folder (refusing and removing it unless
+it is a known release), or given any `<path>` above it reads that, and writes the packs unchanged
+into `<dir>/<base folder>/`; the answer's `game` is what `--game=` takes. Point `--cache` at the
+scratchpad in this container. The release zip's URL is kept in the working area
+(`porting/shooters-edge/README.md` § The shareware release), the only place that may name it.
 
 ## Changing a stage
 

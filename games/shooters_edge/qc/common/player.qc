@@ -10,7 +10,7 @@ void() ClientConnect = {
 };
 
 void() PutClientInServer = {
-  local entity spot, p;
+  local entity spot;
   self.classname = "player";
   self.health = 100;
   self.max_health = 100;
@@ -22,6 +22,7 @@ void() PutClientInServer = {
   self.effects = 0;
   self.super_damage_finished = 0;
   self.invincible_finished = 0;
+  self.power_said = 0;
   self.attack_finished = time;
   self.pain_finished = 0;
   self.air_finished = time + 12;
@@ -44,16 +45,8 @@ void() PutClientInServer = {
   if (deathmatch) {
     // A deathmatch spawn is heard: the fog's sound where the player comes in.
     sound(self, CHAN_VOICE, "misc/r_tele1.wav", 1, ATTN_NORM);
-    // And it takes the spot: a living player standing on it dies (no two players ever stand
-    // stuck inside each other when every spawn point is taken).
-    p = findradius(self.origin, 48);
-    while (p) {
-      if (p != self && p.classname == "player" && p.health > 0) {
-        p.deathtype = "telefragged";
-        damage(p, self, self, 50000);
-      }
-      p = p.chain;
-    }
+    // And it takes the spot (combat.qc), for when every spawn point is taken.
+    telefrag(self);
   }
   if (match_over) {
     self.takedamage = DAMAGE_NO;
@@ -121,6 +114,50 @@ void() player_water = {
   }
 };
 
+// --- the body's cycles ---
+
+// The player model's own cycles, a frame every 0.1 s: RUNNING (frames 0-5 with the blade, 6-11
+// with any other weapon) while he has any speed across the plan, on the ground, in the air or in
+// the water (swimming is running: a swimmer drifting down after he lets go runs on until a wall
+// or the floor stops him), STANDING (17-28 with the blade, 12-16 otherwise) when he has none. A
+// change of cycle starts the new one at its first frame.
+void() player_body = {
+  local float first, count;
+  if (time < self.body_next) return;
+  self.body_next = time + 0.1;
+  if (self.velocity_x || self.velocity_y) {
+    count = 6;
+    if (self.weapon == W_BLADE) first = 0;
+    else first = 6;
+  } else if (self.weapon == W_BLADE) {
+    first = 17;
+    count = 12;
+  } else {
+    first = 12;
+    count = 5;
+  }
+  if (first != self.body_first || self.body_step >= count) {
+    self.body_first = first;
+    self.body_step = 0;
+  }
+  self.frame = first + self.body_step;
+  self.body_step = self.body_step + 1;
+};
+
+// --- the jump heard ---
+
+// A jump leaving the ground (the variant's player_jump calls it): its sound on the body.
+void() jump_sound = { sound(self, CHAN_BODY, "player/plyrjmp8.wav", 1, ATTN_NORM); };
+
+// Swimming up (the jump held deep in water, slime or lava): a splash, one of two, at most once a
+// second.
+void() swim_sound = {
+  if (time < self.splash_next) return;
+  self.splash_next = time + 1;
+  if (random() < 0.5) sound(self, CHAN_BODY, "misc/water1.wav", 1, ATTN_NORM);
+  else sound(self, CHAN_BODY, "misc/water2.wav", 1, ATTN_NORM);
+};
+
 // --- the frame around a command ---
 
 void() PlayerPreThink = {
@@ -131,11 +168,15 @@ void() PlayerPreThink = {
     return;
   }
   player_water();
+  player_body();
+  player_jump();  // the variant's: the campaign's program jumps for itself
 };
 
 void() PlayerPostThink = {
   if (self.deadflag != DEAD_NO || match_over) return;
-  if (self.impulse) weapon_impulse();
+  // A weapon select waits out the refire, held until the weapon is ready (a newer one replaces
+  // it): a launcher fired stays in hand for its refire, and a pack dropped inside it holds it.
+  if (self.impulse && time >= self.attack_finished) weapon_impulse();
   weapon_frame();
   power_frame();
   self.dmg_take = 0;
@@ -151,9 +192,17 @@ void() ClientKill = {
   damage(self, self, self, 1000);
 };
 
+// Leaving is told in the loaded game's words (`left`) when it has them, and then only in the match.
 void() ClientDisconnect = {
-  say_all(PRINT_HIGH, self.netname, " left the game with ", ftos(self.frags), " frags\n", "", "");
-  sound(self, CHAN_BODY, "player/tornoff2.wav", 1, ATTN_NONE);
+  local string told;
+  told = game_words("left", self.netname, ftos(self.frags), "", "");
+  if (told == "") {
+    say_all(PRINT_HIGH, self.netname, " left the game with ", ftos(self.frags), " frags\n", "", "");
+    sound(self, CHAN_BODY, "player/tornoff2.wav", 1, ATTN_NONE);
+  } else if (!game_quiet()) {
+    say_all(PRINT_HIGH, told, "", "", "", "", "");
+    sound(self, CHAN_BODY, "player/tornoff2.wav", 1, ATTN_NONE);
+  }
   self.classname = "disconnected";
   self.takedamage = DAMAGE_NO;
   self.solid = SOLID_NOT;
@@ -166,5 +215,8 @@ void() player_precache = {
   precache_sound("player/death1.wav");
   precache_sound("player/udeath.wav");
   precache_sound("player/tornoff2.wav");
+  precache_sound("player/plyrjmp8.wav");
+  precache_sound("misc/water1.wav");
+  precache_sound("misc/water2.wav");
   precache_sound("items/r_item1.wav");
 };

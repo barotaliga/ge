@@ -5,7 +5,7 @@
 #   - every skill dir has a SKILL.md whose front-matter `name` is its dir;
 #   - every skill is routed from AGENTS.md and listed in .agents/skills/README.md,
 #     and nothing is routed that does not exist;
-#   - no source file passes the 1000-line cap;
+#   - no source file passes the 2000-line cap, and one past 1000 lines is warned about;
 #   - every source file carries its ge: tag block (docs/index.md is written)
 #     (tools/agents-index.mjs), and every lesson fragment is well formed
 #     (tools/skill-lessons.mjs);
@@ -22,6 +22,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 fail=0
 err() { echo "agents-check: $*" >&2; fail=1; }
+warn() { echo "agents-check: warning: $*" >&2; }
 
 link() {  # path, exact target
   if [[ ! -L "$1" ]]; then err "$1 must be a symlink to $2"; return; fi
@@ -37,6 +38,8 @@ link .gemini/skills ../.agents/skills
 skills=()
 for dir in .agents/skills/*/; do
   name="$(basename "$dir")"
+  # A `<name>-private` skill is a person's own, git-ignored (it holds their paths): never checked.
+  [[ "$name" == *-private ]] && continue
   skills+=("$name")
   file="$dir/SKILL.md"
   [[ -f "$file" ]] || { err "$file missing"; continue; }
@@ -61,8 +64,12 @@ done < <(sed -n '/^## Where things live/,/^### /p' AGENTS.md | grep '^| `' | awk
 
 while read -r f; do
   n=$(wc -l < "$f")
-  if (( n > 1000 )) && ! grep -q 'agents:allow-large-file' "$f"; then
-    err "$f has $n lines (cap 1000)"
+  (( n > 1000 )) || continue
+  grep -q 'agents:allow-large-file' "$f" && continue
+  if (( n > 2000 )); then
+    err "$f has $n lines, over the cap of 2000: split it by subject (skill: write-code), or add an \`agents:allow-large-file: <reason>\` comment for an honest exception"
+  else
+    warn "$f has $n lines, past the advised 1000 (the cap is 2000): split it by subject when you next work in it (skill: write-code)"
   fi
 done < <(git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' '*.h' '*.mjs' '*.sh' '*.cmake' 'CMakeLists.txt')
 

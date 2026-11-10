@@ -1,17 +1,18 @@
 // THE PLAYER'S HANDS: one frame's keys and mouse as the view's turn and the command the listen
 // server runs. The keys are the console's binds (`bind w +forward`): `add_cvars` registers the
-// moves as buttons (+forward, +back, +moveleft, +moveright, +jump, +attack, +speed, +strafe,
-// +left, +right) and `impulse <n>`, and `default_binds` gives every key the classic layout has
-// unbound (W A S D and the arrows move, SPACE jumps, the left button fires, SHIFT walks or runs,
-// ALT sidesteps with the mouse, 1..8 pick a weapon, the wheel the next one carried, F12 takes a
-// screenshot: engine/capture/screenshot.hpp), before the player's config rebinds them. OPTIONS ▸
-// CUSTOMIZE CONTROLS rebinds them too.
+// moves as buttons (+forward, +back, +moveleft, +moveright, +moveup, +movedown, +jump, +attack,
+// +speed, +strafe, +left, +right, +attack2: the quick weapon's second key, quick_fire.hpp) and
+// `impulse <n>`, and `default_binds` gives every key the classic layout has unbound (W A S D and
+// the arrows move, SPACE jumps, the left button fires, ALT sidesteps with the mouse, 1..8 pick a
+// weapon, the wheel the next one carried, F12 takes a screenshot: engine/capture/screenshot.hpp;
+// no key walks or crouches), before the player's config rebinds them. OPTIONS ▸ CUSTOMIZE CONTROLS
+// rebinds them too.
 //
 // - `button_moves` reads the buttons (the window); `key_moves` reads the default keys straight off
 //   the input state (a scripted session, a test), so a session's frames make the same commands on
 //   any machine whatever the player bound.
-// - `read_controls` makes the command: forward at the run's speeds with `cl_run` on (the default)
-//   and +speed held to walk, or the other way round with it off; the left button fires.
+// - `read_controls` makes the command: at the run's speeds with `cl_run` on (the default) and
+//   +speed, bound to no key, to walk; the other way round with it off; the left button fires.
 // - `turn_view`: raw mouse counts turn the view (`sensitivity` degrees a count, `m_invert` flips
 //   the pitch), the pitch held within `pitch_limit`; +left and +right turn at `cl_yawspeed`; with
 //   +strafe held (or `lookstrafe` on) the mouse's sideways counts sidestep instead of turning.
@@ -22,23 +23,29 @@
 // ge:summary The player's keys and mouse as the view's turn and the server's command
 // ge:keywords controls keys mouse-look raw-mouse sensitivity invert wasd jump fire impulse
 // ge:keywords weapon-keys wheel read_controls turn_view move-cmd m_invert cvars
-// ge:keywords lookspring spring_view ideal-pitch centre-view cl_run always-run lookstrafe
+// ge:keywords lookspring spring_view ideal-pitch centre-view always-run cl_run
+// ge:keywords lookstrafe attack2
 // ge:keywords buttons binds default_binds forward attack speed strafe impulse key_moves
+// ge:keywords movedown moveup swim-down
+// ge:keywords in_mouse_release mouse-capture
 // ge:skill input shooter
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
 
 #include "console/console.hpp"
+#include "input/mouse_capture.hpp"
 #include "input/state.hpp"
 #include "shooter/pmove.hpp"
+#include "shooters_edge/client/quick_fire.hpp"
 
 namespace shooters_edge::client {
 
 // The console's buttons the moves are read from (null until `add_cvars` registers them).
 struct ControlButtons {
   ge::console::Button *forward = nullptr, *back = nullptr, *moveleft = nullptr,
-                      *moveright = nullptr, *jump = nullptr, *attack = nullptr, *speed = nullptr,
-                      *strafe = nullptr, *left = nullptr, *right = nullptr;
+                      *moveright = nullptr, *moveup = nullptr, *movedown = nullptr, *jump = nullptr,
+                      *attack = nullptr, *speed = nullptr, *strafe = nullptr, *left = nullptr,
+                      *right = nullptr, *attack2 = nullptr;
   int impulse = 0;  // the last `impulse <n>` not yet sent (0 none)
 };
 
@@ -54,13 +61,18 @@ struct ControlSettings {
   int side_speed = 350;
   int up_speed = 200;
   double strafe_scale = 36;  // units/s of sidestep a degree the mouse's counts would have turned
+  // in_mouse_release: what takes the pointer back from the look (input::Release's bits)
+  uint32_t mouse_release = ge::input::kReleaseDefault;
   ControlButtons buttons;
+  QuickFire quick;  // the quick weapon's cvars and state (quick_fire.hpp)
 };
 
 // One frame's moves: what is held, and the impulse asked for.
 struct Moves {
   bool forward = false, back = false, moveleft = false, moveright = false;
+  bool moveup = false, movedown = false;  // swim up and down; down crouches where the move ducks
   bool jump = false, attack = false, speed = false, strafe = false;
+  bool attack2 = false;  // the second fire key (quick_fire.hpp); a plain attack where unread
   bool left = false, right = false;  // turning
   int impulse = 0;
 };

@@ -16,12 +16,13 @@
 //
 // ge:summary A map loaded behind the window: read and decoded on a thread, compiled while drawing
 // ge:keywords map-load background-load async loading spinner load_map load_world step_load
-// ge:keywords cancel_load take_load freeze hitch title
+// ge:keywords cancel_load take_load freeze hitch title warm-up
 // ge:skill render shooter
 #pragma once
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <future>
 #include <memory>
 #include <span>
@@ -55,7 +56,9 @@ struct MapLoad {
   std::chrono::steady_clock::time_point began;  // the same, for the line a world's arrival says
   std::future<MapRead> map;
   std::future<WorldReadDone> world;
-  WorldDrawPtr compiling;                           // its GPU half, its pipelines compiling
+  WorldDrawPtr compiling;  // its GPU half, its pipelines compiling
+  WorldDrawPtr warming;    // made, warmed up offscreen a few frames before it is shown (warm_world)
+  int warmed = 0;          // the warm-up frames it has had
   std::vector<std::future<WorldReadDone>> dropped;  // reads let run out
 };
 
@@ -99,7 +102,8 @@ LoadStep step_load(MapLoad& load, ge::gpu::Device& device, uint32_t width, uint3
 // THE WINDOW'S TURN: one frame's step taken (every step with `measured`): a map read started on
 // `listen` (`game_folder.hpp`'s `start_map`; the arena when a game's first map does not read)
 // and its world asked for; a rebuild that failed said on `con`, the old world kept; a world made
-// handed over to `world` (`current`: it is the server's map's; `fresh`: a new map's, so what was
+// warmed up from `at.view` a frame at a time (a measured run: not at all) and then handed over to
+// `world` (`current`: it is the server's map's; `fresh`: a new map's, so what was
 // seen of the last is let go). 0, or the window's exit code (1 the world, 2 the server) with the
 // error line said.
 struct LoadWindow {
@@ -111,7 +115,12 @@ struct LoadWindow {
   const SearchPath* files = nullptr;
   const GameAdapter* adapter = nullptr;
   const GameContent* content = nullptr;
+  // Where the player will first see the new world from (a warm-up frame's view).
+  std::function<ge::render::FrameView()> view;
 };
+// A warm-up frame's new shadow cubes (a frame shown draws 2), and the most frames a world is
+// warmed before it is shown whatever is left.
+inline constexpr int kWarmCubes = 2, kMostWarmFrames = 40;
 int take_load(MapLoad& load, const LoadWindow& at, Listen& listen, ge::console::Console& con,
               bool measured, double now_s, WorldDrawPtr& world, bool& current, bool& fresh);
 

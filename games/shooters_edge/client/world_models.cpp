@@ -16,8 +16,11 @@
 #include "brush/read.hpp"
 #include "classicenhance/cached.hpp"
 #include "classicenhance/models.hpp"
+#include "classicenhance/replace.hpp"
 #include "core/output.hpp"
 #include "morph/read.hpp"
+#include "render/sprite_shapes.hpp"
+#include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
 namespace shooters_edge::client {
@@ -29,16 +32,19 @@ namespace ba = ge::brush::app;
 
 namespace {
 
+// The made frames drawn for the pack's flare and bubble sprites (ce_flares, ce_bubbles): their
+// texels, their size in the world, and how far a bubble wobbles off its path as it rises.
+constexpr uint32_t kFlarePx = 64, kBubblePx = 32;
+constexpr double kFlareM = 1.3, kBubbleM = 0.07, kBubbleWobbleM = 0.015;
+// A bubble the server moves is drawn as a little cluster: itself and two smaller ones trailing
+// under it, each its own share of the size, its offset (m: across, down) and its own wobble.
+constexpr double kCluster[3][3] = {{1.0, 0, 0}, {0.5, 0.025, 0.06}, {0.32, -0.02, 0.11}};
+
 constexpr uint32_t kSpin = 8;           // a model file's flag: the item turns
 constexpr double kSpinDegPerS = 100;    // how fast
 constexpr float kAmbientShare = 0.75f;  // of the floor's light, from every side
 constexpr float kShadeShare = 0.6f;     // and from above and ahead
 constexpr float kRelightUnits = 1;      // a move that takes the light again
-
-bool ends_with(const std::string& s, const char* tail) {
-  const size_t n = std::char_traits<char>::length(tail);
-  return s.size() >= n && s.compare(s.size() - n, n, tail) == 0;
-}
 
 uint32_t colour_row(const sv::ClientInfo& c, const char* key, uint32_t fallback) {
   const std::string v = sv::info_value(c.userinfo, key);
@@ -50,6 +56,24 @@ uint32_t colour_row(const sv::ClientInfo& c, const char* key, uint32_t fallback)
     if (n > 99) break;
   }
   return uint32_t(std::clamp(n, 0, int(models::kColourRows) - 1));
+}
+
+// The two frames of `k` a placed `p` is drawn between at `at` and the share of the way: its
+// animation between its last two frames when one is under way, else its group flowing between its
+// own frames (`Placed::lerp`), else the frame alone.
+void frames_of(const ModelKind& k, const Placed& p, double at, uint32_t& a, uint32_t& b, float& f) {
+  if (p.frame_from >= 0 && p.frame_f < 1) {
+    a = models::frame_in(k.frames, p.frame_from, at);
+    b = models::frame_in(k.frames, p.frame, at);
+    f = std::clamp(p.frame_f, 0.0f, 1.0f);
+    return;
+  }
+  if (p.lerp) {
+    models::frames_between(k.frames, p.frame, at, a, b, f);
+    return;
+  }
+  a = b = models::frame_in(k.frames, p.frame, at);
+  f = 0;
 }
 
 void to_world(const sh::Vec3f& p, double out[3]) {
@@ -127,12 +151,13 @@ void not_drawn(std::string_view kind, const std::string& name, const std::string
 void place_models(const Listen& l, std::vector<Placed>& out) {
   out.clear();
   if (!l.server) return;
-  const sv::QcServer& s = *l.server;
+  const sv::RulesCommon& s = *l.server;
   const int me = player_state(l).entity;
   const int models = int(s.models.size());
   for (int e = 1; e < s.sv.num_edicts; e++) {
     const sh::Edict& ed = s.sv.edicts[size_t(e)];
     if (ed.free || ed.modelindex <= 0 || ed.modelindex >= models || e == me) continue;
+    if (!model_shown(l, e)) continue;  // a taken item: its model text emptied
     Placed p;
     p.entity = e;
     p.modelindex = ed.modelindex;
@@ -179,11 +204,15 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
   uint32_t most = 0;
   std::vector<gr::SpriteFrame>& frames = m.frames;
   std::set<std::string> refused;
-  m.kinds.assign(load.names.size(), {});
-  m.brush_of.assign(load.names.size(), 0);
+  // The server's list, then the effects' own models (kEffectModels).
+  std::vector<std::string> names(load.names.begin(), load.names.end());
+  for (const char* e : kEffectModels) names.emplace_back(e);
+  m.kinds.assign(names.size(), {});
+  m.brush_of.assign(names.size(), 0);
   m.brushes = uint32_t(map.models.size());
-  for (size_t i = 0; i < load.names.size(); i++) {
-    const std::string& name = load.names[i];
+  for (size_t i = 0; i < names.size(); i++) {
+    const std::string& name = names[i];
+    const bool own = i >= load.names.size();  // an effect's: no word when the pack lacks it
     ModelKind& k = m.kinds[i];
     // [1] is the map itself and "*N" its own brush models: the map's to draw, not these.
     if (name.size() > 1 && name[0] == '*') {
@@ -192,11 +221,13 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       continue;
     }
     if (i == 1 || name.empty()) continue;
+    const ge::classicenhance::Replacement* rep = ge::classicenhance::replacement_of(name);
+    if (rep != nullptr) k.effect = rep->effect;
     OpenedModel opened;
     std::string error;
     if (!game.open_model(game, files, name, opened, error)) {
       // Not in the files (the map itself is not in the packs by this name either) or refused.
-      if (!error.empty() && refused.insert(name).second) not_drawn("model", name, error);
+      if (!own && !error.empty() && refused.insert(name).second) not_drawn("model", name, error);
       continue;
     }
     if (opened.form == ModelForm::morph) {
@@ -206,6 +237,7 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       k.frames = models::frame_groups(model);
       k.skins = models::skin_groups(model);
       k.spin = (model.flags & kSpin) != 0;
+      k.flags = model.flags;
       k.synced = model.synced;
       bool any_stand_in = false;
       for (size_t s = 0; s < std::max<size_t>(1, model.skins.size()); s++) {
@@ -230,7 +262,8 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
           }
         }
       }
-      if (ends_with(name, "/flame.mdl") || ends_with(name, "/flame2.mdl")) {
+      if (rep != nullptr &&
+          !rep->keep_glowing) {  // the engine's fire burns in its painted flame's place
         const mo::Model bare = ge::classicenhance::drop_glowing(model);
         k.bare = uint32_t(morphs.size());
         for (size_t s = 0; s < std::max<size_t>(1, bare.skins.size()); s++)
@@ -244,6 +277,12 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       k.facing = models::facing_of(sprite.facing);
       for (gr::SpriteFrame& f : models::sprite_frames_of(sprite, palette))
         frames.push_back(std::move(f));
+      // A flare's or a bubble's made frame, drawn in its place when its switch is on.
+      if (k.effect == "flare" || k.effect == "bubbles") {
+        k.made = uint32_t(frames.size());
+        frames.push_back(k.effect == "flare" ? gr::flare_frame(kFlarePx)
+                                             : gr::bubble_frame(kBubblePx));
+      }
     } else if (opened.form == ModelForm::brush) {
       gr::MorphModel mm = models::morph_from_brush(opened.brush, palette);
       if (mm.indices.empty()) continue;
@@ -307,6 +346,15 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
       ge::core::output::status(
           "shooters_edge: the models' skins do not fit the atlas; models not drawn");
   }
+  // The frames and triangles kept for the ash; the skins and coordinates are the GPU's alone.
+  m.shapes.clear();
+  m.shapes.reserve(morphs.size());
+  for (const gr::MorphModel& mm : morphs) {
+    gr::MorphModel shape;
+    shape.positions = mm.positions;
+    shape.indices = mm.indices;
+    m.shapes.push_back(std::move(shape));
+  }
   if (!frames.empty()) {
     m.has_sprites = gr::create_sprites(d, pipelines, m.sprites, frame, frames);
     if (!m.has_sprites)
@@ -333,9 +381,80 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed,
   }
 }
 
+bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::vector<float>& out) {
+  out.clear();
+  if (p.modelindex <= 0 || size_t(p.modelindex) >= m.kinds.size()) return false;
+  const ModelKind& k = m.kinds[size_t(p.modelindex)];
+  if (k.is != ModelKind::Is::alias) return false;
+  // The model and frame as prepare_models picks them.
+  const double at =
+      k.synced ? time_s : time_s + double(uint32_t(p.entity) * 2654435761u % 1000) * 1e-3;
+  const uint32_t model = k.first + models::frame_in(k.skins, p.skin, at);
+  if (model >= m.shapes.size()) return false;
+  const gr::MorphModel& shape = m.shapes[model];
+  if (shape.positions.empty()) return false;
+  uint32_t a = 0, b = 0;
+  float f = 0;
+  frames_of(k, p, at, a, b, f);
+  const auto last = uint32_t(shape.positions.size() - 1);
+  const std::vector<float>& pa = shape.positions[std::min(a, last)];
+  const std::vector<float>& pb = shape.positions[std::min(b, last)];
+  out.reserve(shape.indices.size() * 3);
+  for (const uint32_t i : shape.indices)
+    for (size_t c = 0; c < 3; c++) {
+      const float va = pa[size_t(i) * 3 + c];
+      out.push_back(f > 0 ? va + (pb[size_t(i) * 3 + c] - va) * f : va);
+    }
+  return !out.empty();
+}
+
+void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const Placed* self,
+                    const gr::FrameView& view, std::vector<float>& out,
+                    std::vector<ge::brush::app::CasterBox>& boxes) {
+  out.clear();
+  boxes.clear();
+  std::vector<float> body;
+  const auto cast = [&](const Placed& p) {
+    if (size_t(p.modelindex) >= m.kinds.size()) return;
+    const ModelKind& k = m.kinds[size_t(p.modelindex)];
+    if (k.is != ModelKind::Is::alias || k.effect.starts_with("fire")) return;
+    if (p.warp.shown < 1) return;  // half ash: its shadow would be whole
+    double w[3];
+    to_world(p.origin, w);
+    const double dx = w[0] - view.eye[0], dy = w[1] - view.eye[1], dz = w[2] - view.eye[2];
+    if (dx * dx + dy * dy + dz * dz > kCasterReachM * kCasterReachM) return;
+    if (!body_triangles(m, p, view.time_s, body)) return;
+    const float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
+    float q[4];
+    models::rotation_of(ang, true, q);
+    const double x = q[0], y = q[1], z = q[2], s = q[3];
+    const size_t first = out.size();
+    for (size_t i = 0; i + 2 < body.size(); i += 3) {
+      const double v[3] = {body[i], body[i + 1], body[i + 2]};
+      const double t[3] = {2 * (y * v[2] - z * v[1]), 2 * (z * v[0] - x * v[2]),
+                           2 * (x * v[1] - y * v[0])};
+      out.push_back(float(w[0] + v[0] + s * t[0] + (y * t[2] - z * t[1])));
+      out.push_back(float(w[1] + v[1] + s * t[1] + (z * t[0] - x * t[2])));
+      out.push_back(float(w[2] + v[2] + s * t[2] + (x * t[1] - y * t[0])));
+    }
+    ge::brush::app::CasterBox box{{1e30f, 1e30f, 1e30f}, {-1e30f, -1e30f, -1e30f}};
+    for (size_t i = first; i < out.size(); i += 3)
+      for (int a = 0; a < 3; ++a) {
+        box.lo[a] = std::min(box.lo[a], out[i + size_t(a)]);
+        box.hi[a] = std::max(box.hi[a], out[i + size_t(a)]);
+      }
+    if (out.size() > first) boxes.push_back(box);
+  };
+  for (const Placed& p : placed) cast(p);
+  if (self != nullptr) cast(*self);
+}
+
 void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                     std::span<const Placed> placed, const gr::FrameView& view, double brightness,
-                    double minlight, bool smooth, bool bare_flames) {
+                    double minlight, bool smooth, const InPlace& in_place,
+                    std::span<const ge::brush::app::DynamicLight> dynamic,
+                    double dynamic_strength) {
+  const bool bare_flames = in_place.flames;
   m.morph_draws.clear();
   m.sprite_draws.clear();
   m.near.clear();
@@ -360,6 +479,38 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     const double at = k.synced ? t : t + double(uint32_t(p.entity) * 2654435761u % 1000) * 1e-3;
     if (k.is == ModelKind::Is::sprite) {
       if (!m.has_sprites || m.sprite_draws.size() >= gr::kMaxSprites) continue;
+      const bool flare = k.made != ModelKind::kNone && k.effect == "flare" && in_place.flares;
+      const bool bubble = k.made != ModelKind::kNone && k.effect == "bubbles" && in_place.bubbles;
+      if (flare || bubble) {
+        gr::SpriteDraw s;
+        s.frame = k.made;
+        s.facing = gr::SpriteFacing::parallel;
+        s.outdoor = 0;
+        s.smooth = true;
+        if (flare) {
+          s.blend = gr::SpriteBlend::add;
+          s.scale = float(kFlareM / kFlarePx);
+          s.glow = 2.5f;  // a lamp outshines the wall it hangs on
+          s.colour[0] = 1.0f, s.colour[1] = 0.74f, s.colour[2] = 0.42f;  // the globe's warm flame
+          for (int a = 0; a < 3; a++) s.position[a] = s.last[a] = w[a];
+          m.sprite_draws.push_back(s);
+          continue;
+        }
+        s.blend = gr::SpriteBlend::over;
+        s.glow = 0.7f;  // its rim catches the room's light
+        // Each its own phase, so a column of bubbles never wobbles as one.
+        const double phase = double(uint32_t(p.entity) * 2654435761u % 6283) * 1e-3;
+        for (int b = 0; b < 3 && m.sprite_draws.size() < gr::kMaxSprites; b++) {
+          const double ph = phase + b * 2.1, wob = kBubbleWobbleM * (1 + 0.5 * b);
+          double c[3] = {w[0] + kCluster[b][1], w[1] - kCluster[b][2], w[2]};
+          c[0] += wob * std::sin(t * 2 * 3.14159265358979 * (2.7 + 0.6 * b) + ph);
+          c[2] += wob * std::cos(t * 2 * 3.14159265358979 * (2.3 + 0.5 * b) + ph * 1.3);
+          s.scale = float(kBubbleM * kCluster[b][0] / kBubblePx);
+          for (int a = 0; a < 3; a++) s.position[a] = s.last[a] = c[a];
+          m.sprite_draws.push_back(s);
+        }
+        continue;
+      }
       gr::SpriteDraw s;
       s.frame = k.first + models::frame_in(k.frames, p.frame, at);
       for (int c = 0; c < 3; c++) s.position[c] = s.last[c] = w[c];
@@ -377,18 +528,22 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     if (!m.has_morph || m.morph_draws.size() >= gr::kMaxMorphDraws) continue;
     gr::MorphDraw g;
     g.model = bare_flames && k.bare != ModelKind::kNone ? k.bare : k.first;
-    uint32_t frame = 0;
+    uint32_t frame_a = 0, frame_b = 0;
+    float blend = 0;
     if (k.is == ModelKind::Is::alias) {
       g.model += models::frame_in(k.skins, p.skin, at);
-      frame = models::frame_in(k.frames, p.frame, at);
+      frames_of(k, p, at, frame_a, frame_b, blend);
     }
     for (int c = 0; c < 3; c++) g.now.position[c] = w[c];
     float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
     if (k.spin) ang[1] = float(std::fmod(t * kSpinDegPerS, 360.0));
     models::rotation_of(ang, k.is == ModelKind::Is::alias, g.now.rotation);
-    g.now.frame_a = g.now.frame_b = frame;
+    g.now.frame_a = frame_a;
+    g.now.frame_b = frame_b;
+    g.now.blend = blend;
     const auto last = m.last_pose.find(p.entity);
-    g.last = last == m.last_pose.end() ? g.now : last->second;
+    g.last = last == m.last_pose.end() || p.warp.shown < 1 ? g.now : last->second;
+    g.warp = p.warp;
     m.last_pose[p.entity] = g.now;
     g.tint[0] = p.top;
     g.tint[1] = p.bottom;
@@ -403,19 +558,31 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
         lit.rgb[0] = lit.rgb[1] = lit.rgb[2] = 1;
       lit.at = p.origin;
     }
+    // The frame's dynamic lights at its middle (a figure's chest, an item's top), added as they
+    // are to the floor under it.
+    double dyn[3], toward[3];
+    const double mid[3] = {w[0], w[1] + 16 * br::kUnitM, w[2]};
+    effects::dynamic_light_at(dynamic, mid, dynamic_strength, dyn, toward);
+    double floor_lum = 0, dyn_lum = 0;
     for (int c = 0; c < 3; c++) {
       // The world's own soft floor (bsp_draw's r_minlight), so a thing in a dark corner reads
       // as the walls round it do.
       const double raw = lit.rgb[c];
-      const float l = float(std::sqrt(raw * raw + minlight * minlight) * brightness);
+      const double floor = std::sqrt(raw * raw + minlight * minlight);
+      const float l = float((floor + dyn[c]) * brightness);
       g.ambient[c] = kAmbientShare * l;
       g.shade[c] = kShadeShare * l;
+      floor_lum += floor;
+      dyn_lum += dyn[c];
     }
-    // From above and a little toward the eye, so a face turned to the player is never black.
+    // From above and a little toward the eye, so a face turned to the player is never black;
+    // turned toward the dynamic lights by their share of the light.
     const double len = std::sqrt(dist) + 1e-9;
-    const double sd[3] = {-0.3 * (w[0] - view.eye[0]) / len, 0.9,
-                          -0.3 * (w[2] - view.eye[2]) / len};
-    const double sl = std::sqrt(sd[0] * sd[0] + sd[1] * sd[1] + sd[2] * sd[2]);
+    double sd[3] = {-0.3 * (w[0] - view.eye[0]) / len, 0.9, -0.3 * (w[2] - view.eye[2]) / len};
+    const double sd_len = std::sqrt(sd[0] * sd[0] + sd[1] * sd[1] + sd[2] * sd[2]);
+    const double share = dyn_lum / (dyn_lum + floor_lum + 1e-9);
+    for (int c = 0; c < 3; c++) sd[c] = (1 - share) * sd[c] / sd_len + share * toward[c];
+    const double sl = std::sqrt(sd[0] * sd[0] + sd[1] * sd[1] + sd[2] * sd[2]) + 1e-9;
     for (int c = 0; c < 3; c++) g.shade_dir[c] = float(sd[c] / sl);
     g.outdoor = 0;
     g.glow = 1;

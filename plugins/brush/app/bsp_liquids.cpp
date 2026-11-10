@@ -277,6 +277,7 @@ void add_bsp_liquids(gpu::Device& device, render::Water& water, render::Liquids&
       }
       if (lw.kinds[i] == kLava) {
         here.lava.cover = rows.lava_cover;
+        here.lava.core = rows.lava_core;
         here.lava.plate = rows.lava_plate;
         here.lava.crack = rows.lava_crack;
         here.lava.ropes = rows.lava_ropes;
@@ -296,6 +297,8 @@ void add_bsp_liquids(gpu::Device& device, render::Water& water, render::Liquids&
       draw.sunlit = 0;  // none until light_pools_by_sun finds where the sun reaches
       draw.room = rows.room;
       draw.stir = rows.stir;
+      draw.chop = rows.chop;
+      draw.chop_shortest = rows.chop_shortest;
       // The wind's gusts break the water into patches of ripples and calm as it reaches it.
       draw.gusts = lw.sites[i].exposure > 0 ? 1 : 0;
       render::add_water_body(device, water, b, draw);

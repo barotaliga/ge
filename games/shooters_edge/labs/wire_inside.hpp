@@ -50,10 +50,20 @@ class InsideView {
     pic_ = gl::create_picture(c.width, c.height, {236, 238, 242, 255});
   }
 
+  // How a face is painted: SHADE (pale, by how it faces up), NORMAL (its normal as a colour,
+  // x red, y green, z blue, each from -1 dark to +1 bright) or FLOORS (a floor a player stands
+  // on, normal z 0.7 and over, green; steeper slopes orange; walls and ceilings grey).
+  enum class Paint : uint8_t { shade, normal, floors };
+
   // The world model's faces into the picture and the depth buffer.
-  void faces(const ge::brush::Map& map) {
-    if (map.models.empty()) return;
-    const ge::brush::Model& w = map.models[0];
+  void faces(const ge::brush::Map& map, Paint paint = Paint::shade) { model_faces(map, 0, paint); }
+
+  // Brush model `index`'s faces (a door, a plat, a button, a trigger as the map built it), every
+  // one in `tint` when given, else painted as `paint` says.
+  void model_faces(const ge::brush::Map& map, size_t index, Paint paint = Paint::shade,
+                   const gl::Rgba* tint = nullptr) {
+    if (index >= map.models.size()) return;
+    const ge::brush::Model& w = map.models[index];
     for (uint32_t s = w.first_surface; s < w.first_surface + w.surface_count; s++) {
       if (s >= map.surfaces.size()) break;
       const ge::brush::Surface& surf = map.surfaces[s];
@@ -73,8 +83,22 @@ class InsideView {
         const double nz = std::fabs(n[2] / len);
         const auto k = static_cast<uint8_t>(205 + 40 * nz);
         gl::Rgba col{k, k, static_cast<uint8_t>(k > 250 ? 255 : k + 5), 255};
+        if (paint == Paint::normal) {
+          auto ch = [&](double c) { return static_cast<uint8_t>(127.5 + 127 * (c / len)); };
+          col = {ch(n[0]), ch(n[1]), ch(n[2]), 255};
+        } else if (paint == Paint::floors) {
+          // The side the eye sees: the normal turned toward it (the winding says neither).
+          const double toward = (c_.eye.x - v[0][0]) * n[0] + (c_.eye.y - v[0][1]) * n[1] +
+                                (c_.eye.z - v[0][2]) * n[2];
+          const double up = (toward < 0 ? -n[2] : n[2]) / len;
+          col = up >= 0.7    ? gl::Rgba{110, 200, 110, 255}   // a floor
+                : up >= 0.05 ? gl::Rgba{235, 160, 70, 255}    // a slope too steep to stand on
+                : up <= -0.7 ? gl::Rgba{170, 175, 195, 255}   // a ceiling
+                             : gl::Rgba{205, 205, 208, 255};  // a wall
+        }
         if (sky) col = {214, 226, 244, 255};
         if (surf.kind == ge::brush::SurfaceKind::liquid) col = {150, 190, 230, 255};
+        if (tint != nullptr) col = *tint;
         triangle(v, col);
       }
     }
@@ -131,6 +155,9 @@ class InsideView {
   }
 
   gl::Picture& picture() { return pic_; }
+  // How far each pixel's nearest face stands along the view, units (1e30: nothing drawn).
+  const std::vector<double>& depth() const { return depth_; }
+  const InsideCamera& camera() const { return c_; }
 
  private:
   void cam(sh::Vec3f p, double* out) const {

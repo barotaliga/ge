@@ -8,8 +8,9 @@
 //   share of the open map's wind that reaches it: rays from over the pool, level and climbing,
 //   marched through the map's leaves to the sky or a wall. A ray that reaches the sky low down
 //   and from the way the wind blows is a window or a doorway the wind comes in by; the sky
-//   overhead lets a little down into a courtyard. A pool in a closed hall gets none: its water
-//   lies still, as a pool indoors does, and only the room's faint stir moves it.
+//   overhead lets a little down into a courtyard. A pool in a closed hall gets none of the wind:
+//   only the room's faint stir and the chop the game asks for (`LiquidRows::chop`: the rings of
+//   whoever swims in it, turned back off its walls) move it.
 // - THE WIND (`liquid_world`'s `wind`, `from`: the weather's sv_wind and sv_winddir) times each
 //   pool's share is the air its waves are grown from (water::lay_waves's own wind).
 // - THE ROOM'S LIGHT (`light_rooms`): what the map's lightmaps say the pool's bed is lit by (the
@@ -40,6 +41,8 @@ struct LiquidRows {
   std::string lava = "lava", slime = "slime";                // rows of water/liquids.hpp
   double least_depth = 0.5;  // m: a pool's volume reaches at least this far under its top
   double lava_cover = 0.3;   // the share of the lava crusted over (the classic's lava is molten)
+  // degrees C: the melt, cooler than a basalt's 1150 so its light sits among the torch-lit rooms
+  double lava_core = 1000;
   // m: a crust plate's size and a young plate's crack (the classic's lava is fine-grained: its
   // texture's cells are a hand across, so the plates are too)
   double lava_plate = 0.25;
@@ -65,6 +68,13 @@ struct LiquidRows {
   // The slope of a still pool's own stir (the room's draughts, a drip, the warmth): the water is
   // never quite glass, but close.
   double stir = 0.004;
+  // The chop's rms slope (render/water.hpp's WaterDraw::chop): the short waves a pool in use keeps
+  // running every way, its rings turned back off the walls; 0 a pool no one ever swims in.
+  double chop = 0;
+  // The chop's shortest waves, m (render/water.hpp's WaterDraw::chop_shortest): a pool's chop is
+  // the swell left over from the last swimmer, so the quick ripples under 20 cm, which run 3 to 6
+  // times a second and read as wind, are left out.
+  double chop_shortest = 0.2;
 };
 
 // What the map says of a pool, worked out once (`pool_site`).

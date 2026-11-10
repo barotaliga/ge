@@ -38,6 +38,7 @@
 // ge:keywords gpu-span span_add span_report price prices price_report switch-off-pricing
 // ge:keywords demo_game_dir demo_folder gamedir game-folder mod-folder fortress
 // ge:keywords playdemo playdemo_step cl_demospeed demo-pace timeline demo_seek seek demo-timeline
+// ge:keywords demo_drawn smooth lerp
 // ge:skill shooter perf
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -47,10 +48,12 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "render/view.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_lerp.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/hud/status.hpp"
@@ -73,14 +76,21 @@ BenchStats bench_stats(std::span<const double> frame_s);
 std::vector<std::string> bench_report(const std::string& demo, const std::string& setup,
                                       const BenchStats& s);
 
-// The GPU's span of each timed frame over a run, ms.
+// The GPU's span of each timed frame over a run, ms, and each pass's own time by its name (the
+// frames it ran in; on a tiled GPU passes overlap, so they add up to more than the span).
 struct PassTimes {
   std::vector<double> span_ms;
+  std::vector<std::pair<std::string, std::vector<double>>> pass_ms;
 };
 // A frame's GPU span (NaN, not measured, left out).
 void span_add(PassTimes& p, double ms);
+// A pass's GPU time in a frame (NaN, not measured, left out).
+void pass_add(PassTimes& p, std::string_view name, double ms);
 // The report's GPU line: the median span, or that this GPU has no timestamp queries.
 std::string span_report(const PassTimes& p);
+// One line a pass, the dearest first: its mean a timed frame (0 in the frames it did not run),
+// its median where it ran and in how many frames; empty when nothing was timed.
+std::vector<std::string> pass_report(const PassTimes& p, size_t frames);
 
 // One run of a price: what was switched off (empty for the base) and its medians, ms (span NaN
 // when the GPU has no timestamp queries).
@@ -100,9 +110,10 @@ struct Price {
 std::vector<Price> prices(std::span<const PriceRun> bases, std::span<const PriceRun> off);
 // The largest gap between two neighbouring base runs' median frames, ms.
 double price_noise(std::span<const PriceRun> bases);
-// The price as lines: the base runs' spread (the noise) and each saving, most first.
-std::vector<std::string> price_report(std::span<const PriceRun> bases,
-                                      std::span<const Price> saved);
+// The price as lines: the base runs' spread (the noise) and each saving, most first, each run's
+// name followed by `what` (" off": "ce_water off saves ..."; "" for a name that says it all).
+std::vector<std::string> price_report(std::span<const PriceRun> bases, std::span<const Price> saved,
+                                      std::string_view what = " off");
 // The median of `v` (0 when empty).
 double median_of(std::vector<double> v);
 
@@ -180,7 +191,14 @@ struct Timedemo {
   double clock = -1;        // the paced run's demo clock, s (-1: not started)
   bool hear = false;        // gather each frame's sounds and prints into `heard`
   DemoHeard heard;
+  // Drawn between frames (demo_lerp.hpp; playdemo's `demo_lerp`): every frame read is kept.
+  bool smooth = false;
+  DemoLerp lerp;
 };
+
+// What the window draws of `t`: a paced run with `smooth` between its last two frames at its
+// clock (demo_lerp.hpp), else the last frame as read.
+const DemoState& demo_drawn(Timedemo& t);
 
 // `name` found and opened by the game's adapter (game_adapter.hpp); the run begins at the next
 // step.
@@ -193,14 +211,16 @@ enum class TimedemoStep : uint8_t {
   end,        // the demo is over: report
   error,      // a frame did not read: report what was timed and the error
 };
-// The next demo frame.
+// The next demo frame. Its `effects` hold every temporary entity read since the last step (the
+// signon's frames before a map too), for the effects (demo_fx.hpp).
 TimedemoStep timedemo_step(Timedemo& t, std::string& error);
 
 // PLAYBACK AT THE DEMO'S OWN PACE (`playdemo <demo>`): the same run, but each drawn frame reads
 // the demo frames up to the demo's clock moved on by the frame's wall time (at most
 // `kMostPlayStep`) times `speed` (`cl_demospeed`, 0..20; 0 pauses), none when the clock has not
 // reached the next one. A level start stops the step there as `new_level` and sets the clock to
-// that level's time; the frames are not timed.
+// that level's time; the frames are not timed. The state's `effects` are every frame's read this
+// step (none when none was read).
 TimedemoStep playdemo_step(Timedemo& t, double wall_dt_s, double speed, std::string& error);
 
 // SEEKING: the demo stood at the first frame at or after `timeline_s` on the timeline (a frame

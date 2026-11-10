@@ -506,6 +506,21 @@ bool reads_asset(const std::string& source, std::string_view text, const AssetCh
          text.find(a.name + ".glb") != std::string_view::npos;
 }
 
+std::set<std::string> data_dirs(const std::set<std::string>& changed) {
+  std::set<std::string> out;
+  for (const std::string& f : changed) {
+    if (!generator_input(f) || f.starts_with("tests/") || f.find("/assets/") != std::string::npos)
+      continue;
+    // Every ancestor three or more levels deep: games/<game>/qc/ and games/<game>/qc/common/,
+    // never games/<game>/ (which every lab of the game names).
+    for (size_t slash = f.find('/'), depth = 1; slash != std::string::npos;
+         slash = f.find('/', slash + 1), ++depth) {
+      if (depth >= 3) out.insert(f.substr(0, slash + 1));
+    }
+  }
+  return out;
+}
+
 std::set<std::string> moved_digest_labs(const std::set<std::string>& changed) {
   const std::string dir = std::string(kDigestBaseline) + "/";
   std::set<std::string> out;
@@ -546,7 +561,9 @@ Outcome run_digest(const BuildOptions& o, const DigestOptions& d) {
     out.exit = 2;
     return out;
   }
-  if (!build_into(o, out)) return out;
+  // Only the labs executable: the digests need nothing else, and the whole tree's test
+  // binaries fill a small cloud disk.
+  if (!build_targets(o, out, "labs")) return out;
   const fs::path baseline = o.repo / kDigestBaseline;
   const std::string rel(kDigestBaseline);
   std::error_code ec;
@@ -583,18 +600,23 @@ Outcome run_digest(const BuildOptions& o, const DigestOptions& d) {
       labs = labs_reached(reach, sources, moved_rows);
       // A committed asset is read at run time, by path, so no include names it: a lab is
       // reached through one when it lives under the asset's plugin or game, or names it.
+      // Other data read from the tree at run time (a mod's QC compiled by a lab) reaches a lab
+      // whose text names the data's directory.
       const auto assets = asset_changes(reach.changed);
+      const auto data = data_dirs(reach.changed);
       for (const auto& [id, source] : sources) {
-        if (assets.empty() || source.empty() ||
+        if ((assets.empty() && data.empty()) || source.empty() ||
             std::find(labs.begin(), labs.end(), id) != labs.end()) {
           continue;
         }
         const std::string text = read_text(o.repo / source).value_or("");
-        for (const AssetChange& a : assets) {
-          if (!reads_asset(source, text, a)) continue;
-          labs.push_back(id);
-          break;
-        }
+        const bool reads =
+            std::any_of(assets.begin(), assets.end(),
+                        [&](const AssetChange& a) { return reads_asset(source, text, a); }) ||
+            std::any_of(data.begin(), data.end(), [&](const std::string& dir) {
+              return text.find(dir) != std::string::npos;
+            });
+        if (reads) labs.push_back(id);
       }
       std::sort(labs.begin(), labs.end());
     }

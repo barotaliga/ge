@@ -5,14 +5,18 @@
 // glowing eyes. Named views: four runners in four teams' colours on a yard by day; one runner's
 // skin read sharp (the classic look) beside smooth; the run's frames and the frames drawn
 // between them at quarter steps; the team at dusk with their eyes glowing; and a runner lit
-// indoors by a game's own light (no sun or sky, an ambient and a shade from one side). Checks:
-// each team's shirt reads as its colour, the eyes glow at dusk, the in-between frame lies
-// between its two frames, no GPU error, no pipeline after the load. Measured: the pass's GPU
-// time for 64 runners. Without an adapter it notes that, with grey cards.
+// indoors by a game's own light (no sun or sky, an ambient and a shade from one side); and a
+// runner WARPING in (MorphWarp) at four shares, as dust (dissolving head first, the cut turned to
+// ash) and as a beam (pinched into a shimmering column, the cut burning). Checks: each team's shirt
+// reads as its colour, the eyes glow at dusk, the in-between frame lies between its two frames, a
+// warp gone draws nothing and one whole draws the plain runner, no GPU error, no pipeline after the
+// load. Measured: the pass's GPU time for 64 runners. Without an adapter it notes that, with grey
+// cards.
 //
 // ge:summary Lab: morph meshes in team colours, sharp and smooth skins, frame blending, glow
 // ge:keywords lab gpu morph morph-mesh vertex-animation frames blend tint team-colours
 // ge:keywords player-colours skin sharp smooth glow indoor-light runner picture
+// ge:keywords warp dissolve materialize spawn teleport burning-edge
 // ge:skill render labs
 // ge:test tests/render_morph_test.cpp
 #include <chrono>
@@ -346,7 +350,7 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    placeholders(lab, {"teams", "sharp-smooth", "frames", "dusk", "indoor"}, w, h);
+    placeholders(lab, {"teams", "sharp-smooth", "frames", "dusk", "indoor", "warp"}, w, h);
     return;
   }
   Scene s;
@@ -445,6 +449,66 @@ void run(gl::Lab& lab) {
              draw(*device, s, eye(0, 1.2, 0, 0, -0.03, 0.7), lit).pic, Det::measured);
   }
 
+  // The warp: one runner coming into being, by share, in two looks: dust (the knobs at rest: the
+  // band at the cut turned to ash) and a beam (pinched into a column, shimmering, a burning edge).
+  {
+    const auto warped = [&](float shown, bool beam) {
+      std::vector<gr::MorphDraw> one = {runner_at(0, 4.2, 3.141592653589793 - 0.3, 1.5, 1)};
+      gr::MorphWarp& wp = one[0].warp;
+      wp.shown = shown;
+      wp.low = 0;
+      wp.high = 1.8f;
+      if (beam) {
+        wp.pinch = wp.shimmer = 1;
+        wp.edge[0] = 0.5f, wp.edge[1] = 0.8f, wp.edge[2] = 1.6f;
+      }
+      return one;
+    };
+    const gr::FrameView v = eye(0, 1.1, 0, 0, 0.06, 0.5);
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> names;
+    for (const bool beam : {false, true}) {
+      for (const float shown : {0.2f, 0.45f, 0.7f, 0.9f}) {
+        pics.push_back(draw(*device, s, v, warped(shown, beam)).pic);
+        names.push_back(std::string(beam ? "BEAM " : "DUST ") + fixed(shown, 2));
+      }
+    }
+    lab.shot({"warp",
+              "A RUNNER WARPING IN",
+              "MorphWarp's share rising, top row with the knobs at rest (DUST: the figure "
+              "dissolving by a noise fixed to its body and its height, the head first in and the "
+              "feet first out, the band at the cut turned grey as ash), bottom row with PINCH, "
+              "SHIMMER and a burning EDGE (a BEAM: drawn into a shimmering column, the cut "
+              "glowing). Leaving runs the same shares backwards.",
+              "top: a ragged figure growing down from the head with a dark grey crumbling edge, "
+              "whole by 0.9; bottom: a thin tall shimmering column with glowing blue flecks "
+              "widening into the runner",
+              {{"view", "4.2 m, day"}}},
+             es::sheet_of(pics, names, 4), Det::measured);
+    // Gone draws nothing; whole is the plain draw.
+    const auto changed = [](const gl::Picture& a, const gl::Picture& b) {
+      double n = 0;
+      for (size_t i = 0; i < a.rgba.size(); ++i) n += a.rgba[i] != b.rgba[i] ? 1 : 0;
+      return n;
+    };
+    const double gone =
+        changed(draw(*device, s, v, warped(0, true)).pic, draw(*device, s, v, {}).pic);
+    std::vector<gr::MorphDraw> plain = warped(1, true);
+    plain[0].warp = gr::MorphWarp{};
+    const double whole =
+        changed(draw(*device, s, v, warped(1, true)).pic, draw(*device, s, v, plain).pic);
+    // Read off the pictures, so measured like the teams' colours (a machine with no adapter has
+    // none); the check below fails the run instead.
+    lab.metric("warp.gone-changed", gone, "count", Det::measured);
+    lab.metric("warp.whole-changed", whole, "count", Det::measured);
+    if (gone != 0 || whole != 0) {
+      lab.fail("a warp gone changed " + fixed(gone, 0) + " channels or one whole changed " +
+                   fixed(whole, 0) + " against the plain runner",
+               "warp_cut in morph.wgsl draws nothing at shown 0 and leaves shown 1 alone; compare "
+               "it with morph.cpp's twin. Skill: render.");
+    }
+  }
+
   // The cost: 64 runners in a crowd.
   {
     std::vector<gr::MorphDraw> crowd;
@@ -480,7 +544,7 @@ const gl::LabSpec kSpec{
     "engine/render/morph.hpp",
     "render",
     "Do vertex-animated models draw in their teams' colours, sharp or smooth, blend smoothly "
-    "between their frames, glow where their skin says, and take a game's own light?",
+    "between their frames, glow where their skin says, take a game's own light, and warp in?",
     {
         {"width", "640", "each view's width, px"},
         {"height", "360", "each view's height, px"},

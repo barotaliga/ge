@@ -18,11 +18,16 @@
 // at every preset. Times are measured, and a software adapter's say nothing of a GPU's.
 // `--spread=0` prices the cloud's quarter march taken whole every frame (FrameOptions::
 // cloud_spread off), the before of a change to the spread.
+//
+// THE LIVE CHANGE (`--live`, on the same stage): a frame made at the top picture is lowered to each
+// preset in place (frame.hpp's set_picture) and drawn on, against a frame made fresh with the
+// options the change left it with; the two pictures' difference and the pipelines the change made
+// (none, or the lab fails) are measured.
 // Built only with GE_GPU.
 //
 // ge:summary Lab: Fall Line's quality ladder checked, its fit swept, and every stop priced
 // ge:keywords lab ladder quality-ladder price-table preset auto-preset fit bench gpu-ms
-// ge:keywords fall-line picture-rows stops
+// ge:keywords fall-line picture-rows stops set_picture live-change
 // ge:skill render perf labs
 #include <algorithm>
 #include <cmath>
@@ -135,87 +140,119 @@ void check_table(ge::lab::Lab& lab) {
   }
 }
 
-void price(ge::lab::Lab& lab) {
-  const double seed = lab.arg_num("seed");
-  const int width = static_cast<int>(lab.arg_num("width"));
-  const int height = static_cast<int>(lab.arg_num("height"));
-  const int frames = static_cast<int>(lab.arg_num("frames"));
-  const int warm = static_cast<int>(lab.arg_num("warm"));
-  const double from = lab.arg_num("from");
-  const double fall = lab.arg_num("fall");
-  const int rounds = std::max(1, static_cast<int>(lab.arg_num("rounds")));
-  const std::string view_name = lab.arg("view");
-  const double lift = lab.arg_num("lift");
-  const bool chase = view_name == "chase";
-  const std::string camera = chase ? "The chase camera" : "The `" + view_name + "` view";
-  auto device = ge::gpu::create_device({.label = "ladder", .validation = 0});
-  if (!device) {
-    lab.fail("no GPU device to price the ladder on",
-             "Run it where an adapter is (Mesa's lavapipe, or a GPU). Skill: gpu.");
-    return;
-  }
-  const auto& rep = device->report;
-  const std::string machine = rep.name + (rep.software ? " (software)" : "");
-  lab.note("adapter: " + rep.name + " / " + rep.driver + " / " + rep.backend);
-
-  mg::GenerateOptions opts;
-  opts.version = fa::kMapVersion;
-  mg::Level built = mg::generate_level(seed, opts);
-  built.weather.kind = mg::WeatherKind::flurries;
-  built.weather.snowfall = fall;
-  const auto shared = std::make_shared<const mg::Level>(std::move(built));
-  const mg::Level& level = *shared;
-  if (gr::FrameView probe; !chase && !fa::make_view(level, view_name, probe)) {
-    lab.fail("no view named '" + view_name + "'",
-             "next: pass --view=chase, or a name from games/fall_line/app/views.hpp (start, piste, "
-             "vista).");
-    return;
-  }
-  const bool spread = lab.arg_bool("spread");
-  const ge::gpu::Target target = ge::gpu::create_target(
-      *device, "ladder.final", static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-
-  // The run, stepped once to --from and replayed from there for every picture.
-  fall_line::sim::Driver racing(shared, 1);
-  auto step = [&] { racing.step(fall_line::sim::bot_controls(racing.state(), 0, racing.plan())); };
-  while (racing.state().t < from && !racing.over()) step();
+// WHAT A PICTURE IS DRAWN FROM: the device, seed --seed's map under a flurry, the bot's run from
+// --from seconds in (--warm + --frames moments, stepped once and replayed for every picture), the
+// view and the target. Null (the lab failed, saying why) when it cannot be made.
+struct Stage {
+  std::unique_ptr<ge::gpu::Device> device;
+  std::shared_ptr<const mg::Level> level;
   std::vector<std::vector<ge::skier::SkierState>> moments;
   std::vector<double> times;
-  for (int k = 0; k < warm + frames; ++k) {
+  ge::gpu::Target target;
+  int width = 0, height = 0, warm = 0;
+  double seed = 0, lift = 0;
+  bool chase = false, spread = true;
+  std::string view_name, camera;
+};
+
+std::unique_ptr<Stage> make_stage(ge::lab::Lab& lab, const char* why) {
+  auto st = std::make_unique<Stage>();
+  st->seed = lab.arg_num("seed");
+  st->width = static_cast<int>(lab.arg_num("width"));
+  st->height = static_cast<int>(lab.arg_num("height"));
+  st->warm = static_cast<int>(lab.arg_num("warm"));
+  const int frames = static_cast<int>(lab.arg_num("frames"));
+  const double from = lab.arg_num("from");
+  const double fall = lab.arg_num("fall");
+  st->view_name = lab.arg("view");
+  st->lift = lab.arg_num("lift");
+  st->chase = st->view_name == "chase";
+  st->camera = st->chase ? "The chase camera" : "The `" + st->view_name + "` view";
+  st->device = ge::gpu::create_device({.label = "ladder", .validation = 0});
+  if (!st->device) {
+    lab.fail(std::string("no GPU device ") + why,
+             "Run it where an adapter is (Mesa's lavapipe, or a GPU). Skill: gpu.");
+    return nullptr;
+  }
+  const auto& rep = st->device->report;
+  lab.note("adapter: " + rep.name + " / " + rep.driver + " / " + rep.backend);
+  mg::GenerateOptions opts;
+  opts.version = fa::kMapVersion;
+  mg::Level built = mg::generate_level(st->seed, opts);
+  built.weather.kind = mg::WeatherKind::flurries;
+  built.weather.snowfall = fall;
+  st->level = std::make_shared<const mg::Level>(std::move(built));
+  if (gr::FrameView probe; !st->chase && !fa::make_view(*st->level, st->view_name, probe)) {
+    lab.fail("no view named '" + st->view_name + "'",
+             "next: pass --view=chase, or a name from games/fall_line/app/views.hpp (start, piste, "
+             "vista).");
+    return nullptr;
+  }
+  st->spread = lab.arg_bool("spread");
+  st->target = ge::gpu::create_target(*st->device, "ladder.final", static_cast<uint32_t>(st->width),
+                                      static_cast<uint32_t>(st->height));
+  fall_line::sim::Driver racing(st->level, 1);
+  auto step = [&] { racing.step(fall_line::sim::bot_controls(racing.state(), 0, racing.plan())); };
+  while (racing.state().t < from && !racing.over()) step();
+  for (int k = 0; k < st->warm + frames; ++k) {
     std::vector<ge::skier::SkierState> s;
     for (const auto& racer : racing.state().racers) s.push_back(racer.skier);
-    moments.push_back(std::move(s));
-    times.push_back(racing.state().t);
+    st->moments.push_back(std::move(s));
+    st->times.push_back(racing.state().t);
     for (int i = 0; i < 2 && !racing.over(); ++i) step();
   }
+  return st;
+}
+
+// The stage's moments [first, last) drawn into `frame`, the first settled; returns each frame's
+// span on the GPU past the stage's --warm (FrameStats::gpu_span_ms).
+std::vector<double> draw_moments(Stage& st, fa::GameFrame& frame, size_t first, size_t last) {
+  ge::gpu::Device& device = *st.device;
+  const mg::Level& level = *st.level;
+  gr::FrameView view;
+  fa::day_view(level, -1, view);
+  if (!st.chase) {
+    fa::make_view(level, st.view_name, view);
+    view.pitch += st.lift * 3.14159265358979 / 180;
+  }
+  std::vector<double> totals;
+  for (size_t k = first; k < last; ++k) {
+    if (st.chase) fa::chase_view(level, st.moments[k][0], view);
+    view.frame = k;
+    view.time_s = st.times[k];
+    fa::draw(device, frame, view, {st.moments[k], 2.0 / 120.0, k == first}, st.target.view);
+    frame.recorder.wait(device);
+    if (static_cast<int>(k) < st.warm) continue;
+    const double span = frame.recorder.stats.gpu_span_ms();
+    if (std::isfinite(span)) totals.push_back(span);
+  }
+  return totals;
+}
+
+void price(ge::lab::Lab& lab) {
+  const std::unique_ptr<Stage> stage = make_stage(lab, "to price the ladder on");
+  if (!stage) return;
+  Stage& st = *stage;
+  ge::gpu::Device& device_ref = *st.device;
+  const double seed = st.seed;
+  const int width = st.width, height = st.height;
+  const int rounds = std::max(1, static_cast<int>(lab.arg_num("rounds")));
+  const std::string& camera = st.camera;
+  const auto& rep = device_ref.report;
+  const std::string machine = rep.name + (rep.software ? " (software)" : "");
+  const mg::Level& level = *st.level;
+  auto* device = &device_ref;
 
   // The median GPU frame of a picture, and its last frame's picture when `shot` names one.
   auto time = [&](const gr::LadderPick& pick, const std::string& shot) {
     fa::FrameOptions options = fa::apply_picture(pick);
-    options.cloud_spread = spread;
+    options.cloud_spread = st.spread;
     auto frame =
         fa::create_frame(*device, level, static_cast<uint32_t>(width),
                          static_cast<uint32_t>(height), wgpu::TextureFormat::RGBA8Unorm, options);
     if (!frame) return -1.0;
-    gr::FrameView view;
-    fa::day_view(level, -1, view);
     fa::cut(*frame);
-    std::vector<double> totals;
-    if (!chase) {
-      fa::make_view(level, view_name, view);
-      view.pitch += lift * 3.14159265358979 / 180;
-    }
-    for (size_t k = 0; k < moments.size(); ++k) {
-      if (chase) fa::chase_view(level, moments[k][0], view);
-      view.frame = k;
-      view.time_s = times[k];
-      fa::draw(*device, *frame, view, {moments[k], 2.0 / 120.0, k == 0}, target.view);
-      frame->recorder.wait(*device);
-      if (static_cast<int>(k) < warm) continue;
-      // The frame's span on the GPU, not the sum of its passes (FrameStats::gpu_span_ms).
-      const double span = frame->recorder.stats.gpu_span_ms();
-      if (std::isfinite(span)) totals.push_back(span);
-    }
+    const std::vector<double> totals = draw_moments(st, *frame, 0, st.moments.size());
     if (!shot.empty()) {
       lab.shot({shot,
                 "PRESET " + shot + ", SEED " + fixed(seed, 0) + " UNDER A FLURRY",
@@ -224,7 +261,7 @@ void price(ge::lab::Lab& lab) {
                 "the same moment at every preset: softer pixels, coarser shadows and fewer "
                 "flakes lower down, never a missing skier, tree or track",
                 {{"preset", shot}, {"width", std::to_string(width)}}},
-               ge::lab::Picture{width, height, ge::gpu::read_now(*device, target).rgba},
+               ge::lab::Picture{width, height, ge::gpu::read_now(*device, st.target).rgba},
                Det::measured);
     }
     return median(totals);
@@ -291,9 +328,119 @@ void price(ge::lab::Lab& lab) {
   }
 }
 
+// THE LIVE CHANGE (`--live`): a frame made at the top picture, drawn, then lowered to each preset
+// in place (frame.hpp's set_picture) and drawn on, against a frame made fresh with the options the
+// change left it with, drawn over the same run and cut at the same moment. The two must draw the
+// same picture, and the change must make no pipeline.
+void live(ge::lab::Lab& lab) {
+  const std::unique_ptr<Stage> stage = make_stage(lab, "to change the ladder live on");
+  if (!stage) return;
+  Stage& st = *stage;
+  ge::gpu::Device& device = *st.device;
+  const auto w = static_cast<uint32_t>(st.width), h = static_cast<uint32_t>(st.height);
+  const size_t half = st.moments.size() / 2;
+  ge::lab::LabTable table{
+      "Each preset put on a live frame made at the top, against a frame made "
+      "fresh with the options it took",
+      {"preset", "pipelines made", "targets", "shadows", "trails", "later", "max diff",
+       "pixels off"},
+      {}};
+  // The presets, then the top with the snow's material off and with the trails off: no preset
+  // turns either off, and each is a pipeline or maps of its own.
+  struct Case {
+    std::string name;
+    gr::LadderPick pick;
+    bool shot;
+  };
+  std::vector<Case> cases;
+  for (fa::Preset p : {fa::Preset::high, fa::Preset::medium, fa::Preset::low, fa::Preset::top})
+    cases.push_back({std::string(fa::preset_name(p)), fa::preset_pick(p),
+                     p == fa::Preset::low || p == fa::Preset::top});
+  for (const auto& [row, label] : {std::pair{fa::PictureRow::snow, "snow-off"},
+                                   std::pair{fa::PictureRow::trails, "trails-off"}}) {
+    gr::LadderPick pick = fa::preset_pick(fa::Preset::top);
+    pick[static_cast<size_t>(row)] = 0;
+    cases.push_back({label, pick, std::string(label) == "snow-off"});
+  }
+  for (const Case& c : cases) {
+    const std::string& name = c.name;
+    fa::FrameOptions top = fa::apply_picture(fa::preset_pick(fa::Preset::top));
+    top.cloud_spread = st.spread;
+    device.loading = true;
+    auto changed = fa::create_frame(device, *st.level, w, h, wgpu::TextureFormat::RGBA8Unorm, top);
+    if (!changed) return;
+    fa::cut(*changed);
+    draw_moments(st, *changed, 0, half);
+    fa::FrameOptions next = fa::apply_picture(c.pick);
+    next.cloud_spread = st.spread;
+    const uint32_t before = device.pipelines_after_load;
+    const fa::PictureChange change = fa::set_picture(device, *changed, next);
+    fa::cut(*changed);
+    draw_moments(st, *changed, half, st.moments.size());
+    const uint32_t made = device.pipelines_after_load - before;
+    const ge::gpu::Image a = ge::gpu::read_now(device, st.target);
+    device.loading = true;
+    auto fresh = fa::create_frame(device, *st.level, w, h, wgpu::TextureFormat::RGBA8Unorm,
+                                  changed->options);
+    if (!fresh) return;
+    // Drawn over the same run (the trails laid, the spray and the snow in the air), cut where the
+    // change was.
+    fa::cut(*fresh);
+    draw_moments(st, *fresh, 0, half);
+    fa::cut(*fresh);
+    draw_moments(st, *fresh, half, st.moments.size());
+    const ge::gpu::Image b = ge::gpu::read_now(device, st.target);
+    int most = 0;
+    size_t off = 0;
+    for (size_t i = 0; i < a.rgba.size() && i < b.rgba.size(); i += 4) {
+      int d = 0;
+      for (size_t ch = 0; ch < 3; ++ch)
+        d = std::max(d, std::abs(int(a.rgba[i + ch]) - int(b.rgba[i + ch])));
+      most = std::max(most, d);
+      off += d > 2 ? 1 : 0;
+    }
+    const double share = a.rgba.empty() ? 0 : double(off) / double(a.rgba.size()) / 4;
+    lab.metric("live." + name + ".pipelines", made, "count", Det::measured);
+    lab.metric("live." + name + ".max-diff", most, "levels", Det::measured);
+    lab.metric("live." + name + ".pixels-off", share, "share", Det::measured);
+    table.rows.push_back({name, std::to_string(made), change.targets ? "made again" : "kept",
+                          change.shadows ? "made again" : "kept",
+                          change.trails ? "made again" : "kept",
+                          change.later.empty() ? "none" : change.later, std::to_string(most),
+                          fixed(100 * share, 3) + " %"});
+    if (!change.later.empty()) {
+      lab.fail("the " + name + " preset left " + change.later + " for the frame made again",
+               "Make it live in set_picture (games/fall_line/app/frame.cpp) with what it needs "
+               "made at the load. Skill: render.");
+    }
+    if (made != 0) {
+      lab.fail("putting the " + name + " preset on a live frame made " + std::to_string(made) +
+                   " pipelines",
+               "Make them at the load in create_frame (games/fall_line/app/frame.cpp) and pick "
+               "between them in set_picture. Skill: render.");
+    }
+    if (c.shot) {
+      lab.shot({"live-" + name,
+                "THE TOP PUT TO " + name + " LIVE",
+                st.camera + " on seed " + fixed(st.seed, 0) +
+                    ": a frame made at the top and lowered "
+                    "to the " +
+                    name + " preset in place, drawn " + std::to_string(st.moments.size() - half) +
+                    " frames on.",
+                "the same picture as a frame made at that preset, the trails laid before the "
+                "change drawn into its maps again",
+                {{"preset", name}}},
+               ge::lab::Picture{st.width, st.height, a.rgba}, Det::measured);
+    }
+  }
+  lab.table(std::move(table), Det::measured);
+  lab.metric("gpu-errors", device.errors.load(), "count", Det::measured);
+}
+
 void run(ge::lab::Lab& lab) {
   check_table(lab);
   if (lab.arg_bool("price")) price(lab);
+  if (lab.arg_bool("live")) live(lab);
 }
 
 const ge::lab::LabSpec kSpec{
@@ -306,6 +453,7 @@ const ge::lab::LabSpec kSpec{
     "preset keep the most of the look inside a budget?",
     {
         {"price", "", "time every stop on this machine's adapter, and shoot the presets", true},
+        {"live", "", "put each preset on a live frame made at the top, against a fresh one", true},
         {"seed", "38", "the map's seed (with --price)"},
         {"width", "1280", "the output's width, px (with --price)"},
         {"height", "720", "the output's height, px (with --price)"},

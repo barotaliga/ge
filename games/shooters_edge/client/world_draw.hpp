@@ -20,7 +20,7 @@
 // ge:keywords world-draw bsp render frame sky bloom post overlay ui-pass r_look classic modern
 // ge:keywords create_world_draw draw_world resize_world palette particles dynamic-lights blend
 // ge:keywords models items flames read_world begin_world world_compiled finish_world own_sky
-// ge:keywords background-load async-load title
+// ge:keywords background-load async-load title warm_world warm-up shadow-cubes
 // ge:keywords viewmodel held-weapon light-probe
 // ge:skill render brush shooter
 #pragma once
@@ -84,6 +84,13 @@ bool finish_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_
                   std::string& error);
 
 void resize_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_t height);
+// The models it draws (world_models.hpp): their shapes, for where a warp's ash lands.
+const WorldModels& world_models(const WorldDraw& w);
+// The map's light entities as it draws them (brush/app/draw_data.hpp's PointLight), each one's
+// `seen` set: for a lab to stand by a light whose source shows.
+std::span<const ge::brush::app::PointLight> world_lights(const WorldDraw& w);
+// Labs (blocks): every slot of its particle pool as the GPU holds it.
+std::vector<ge::render::Particle> world_particles(ge::gpu::Device& device, const WorldDraw& w);
 // With `own` the frame's sky is the view's as the caller dressed it (the title's), not the map's.
 void own_sky(WorldDraw& w, bool own);
 // Whether a setting read only when the world is made changed since it was made (`ce_textures`,
@@ -96,6 +103,17 @@ bool world_stale(const WorldDraw& w);
 void draw_world(ge::gpu::Device& device, WorldDraw& w, ge::render::FrameView view,
                 const FxFrame& fx, const shooters_edge::view::HandFrame* held, double dt,
                 const ge::ui::DrawList& overlay, const wgpu::TextureView& target);
+
+// A WARM-UP frame of a world not shown yet, from `view` (where the player will see it from first):
+// nothing drawn but its sky's tables and at most `cubes` new shadow cubes (each the map drawn six
+// times, about 6 ms of GPU on dm6; a map's first frame shown would draw every one at once). True
+// once every caster near the view has its cube: the world can be shown with no hitch.
+bool warm_world(ge::gpu::Device& device, WorldDraw& w, const ge::render::FrameView& view,
+                int cubes);
+
+// The way to the sun (engine frame, unit) a frame drawn from `view` lights the map with: the map's
+// own sky, at the picture's sv_hour.
+void world_sun(const WorldDraw& w, ge::render::FrameView view, double out[3]);
 
 // The last GPU reading of the frame's span (a frame or more late) into `p`; nothing when the GPU
 // has no timestamp queries.

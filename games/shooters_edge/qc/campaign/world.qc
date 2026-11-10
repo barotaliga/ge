@@ -2,8 +2,9 @@
 // map), the spawn points, and the campaign's own map things (porting/shooters-edge/
 // campaign-rules.md § The map vocabulary, § The game's flow): the exits and the intermission,
 // secrets, counters and relays, the skill triggers, the registered-only triggers, the episode and
-// boss gates, the runes and the keys. The monsters are ai.qc's and monsters.qc's; the set pieces
-// come in a later step, their brushes standing as walls meanwhile.
+// boss gates, the runes and the keys, and the words at each episode's end. The monsters are
+// ai.qc's and monsters*.qc's, the bosses and their set pieces bosses.qc's, the other set pieces
+// set_pieces.qc's.
 
 .string map;       // a changelevel trigger's next map
 .float count;      // a counter's uses still owed
@@ -12,6 +13,9 @@
 float intermission_running;  // the level is over: everyone is held at an intermission spot
 float intermission_exit;     // a button press after this leaves for the next map
 string next_map;
+string finale_words;         // an episode's closing words, shown before the next map ("" none)
+
+float SVC_FINALE = 31;
 
 float SVC_INTERMISSION = 30;
 float SVC_FOUNDSECRET = 28;
@@ -23,6 +27,7 @@ void() worldspawn = {
   match_over = 0;
   intermission_running = 0;
   next_map = "";
+  finale_words = "";
   player_precache();
   weapon_precache();
   item_precache();
@@ -43,13 +48,21 @@ void() worldspawn = {
   lightstyle(2, "abcdefghijklmnopqrstuvwxyzyxwvutsrqponmlkjihgfedcba");
 };
 
-// During the intermission: once its wait is over, any player's button leaves for the next map.
+// During the intermission: once its wait is over, any player's button leaves for the next map,
+// or first shows the episode's closing words when it has them (then a second button leaves).
 void() intermission_frame = {
   local entity p;
   if (time < intermission_exit) return;
   p = find(world, classname, "player");
   while (p) {
     if (p.button0 || p.button1 || p.button2) {
+      if (finale_words != "") {
+        WriteByte(MSG_ALL, SVC_FINALE);
+        WriteString(MSG_ALL, finale_words);
+        finale_words = "";
+        intermission_exit = time + 2;
+        return;
+      }
       intermission_exit = time + 1000;  // asked once
       changelevel(next_map);
       return;
@@ -118,8 +131,34 @@ void() intermission_start = {
   WriteByte(MSG_ALL, SVC_INTERMISSION);
 };
 
+// The episode (its bit, as a rune's) a start map's way in leads to; 0 for any other map.
+float(string m) episode_of = {
+  if (m == "e1m1") return 1;
+  if (m == "e2m1") return 2;
+  if (m == "e3m1") return 4;
+  if (m == "e4m1") return 8;
+  return 0;
+};
+
+// In coop the episodes open one at a time: the first always, each next once the one before is
+// done (`sv_episodes_done`, a rune's bit for each, kept by the host from game to game).
+float(string m) episode_shut = {
+  local float bit;
+  if (!coop || mapname != "start") return FALSE;
+  bit = episode_of(m);
+  if (bit <= 1) return FALSE;
+  return !(cvar("sv_episodes_done") & (bit / 2));
+};
+
 void() changelevel_touch = {
   if (other.classname != "player" || intermission_running) return;
+  if (episode_shut(self.map)) {
+    if (time >= self.attack_finished) {
+      centerprint(other, "This episode opens once the one before it is done.");
+      self.attack_finished = time + 2;
+    }
+    return;
+  }
   next_map = self.map;
   activator = other;
   use_targets();
@@ -245,10 +284,28 @@ void(string mdl) pickup_start = {
   setorigin(self, self.origin + '0 0 1');
 };
 
-// The rune: its episode's bit in serverflags.
+// Each episode's closing words, shown when its last map is left (our own words).
+string(float bit) episode_words = {
+  if (bit & 1)
+    return "The first rune hums in your hand, and the halls behind you fall silent.\n\nThree more "
+           "lie in deeper places. The way back to the hall of gates is open.";
+  if (bit & 2)
+    return "The second rune is yours. The dead in the old keeps lie still at last.\n\nTwo more "
+           "remain, further down.";
+  if (bit & 4)
+    return "Three runes now. The pits below have stopped their noise.\n\nOne more waits in the "
+           "oldest place of all.";
+  return "The last rune is yours, and something at the bottom of the world has felt it.\n\nThe "
+         "four gates stand open. Go down and finish it.";
+};
+
+// The rune: its episode's bit in serverflags, and the episode's closing words for the way out.
 void() sigil_touch = {
   if (other.classname != "player" || other.health <= 0) return;
   serverflags = serverflags | (self.spawnflags & 15);
+  // In coop the next episode opens for good (the host keeps it from game to game).
+  if (coop) cvar_set("sv_episodes_done", ftos(cvar("sv_episodes_done") | (self.spawnflags & 15)));
+  if (!deathmatch) finale_words = episode_words(self.spawnflags & 15);
   centerprint(other, "The episode's rune is yours.");
   sound(other, CHAN_ITEM, "weapons/pkup.wav", 1, ATTN_NORM);
   activator = other;
@@ -294,11 +351,3 @@ void() item_key2 = {
   self.touch = key_touch;
 };
 
-// --- the set pieces, until their own step: their brushes stand, the rest is not there ---
-
-void() func_train = { func_wall(); };
-void() func_door_secret = { func_wall(); };
-void() misc_explobox = { remove(self); };
-void() misc_explobox2 = { remove(self); };
-void() misc_fireball = { remove(self); };
-void() air_bubbles = { remove(self); };

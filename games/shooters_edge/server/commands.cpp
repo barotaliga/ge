@@ -165,6 +165,7 @@ static void change_user_info(QcServer& s, int slot, const std::string& key,
   std::string old;
   if (!set_info_value(s.clients[slot].userinfo, key, value, old)) return;
   if (key == "name") set_netname(s, slot + 1, value);
+  if (key == "cl_speedjump") s.sv.clients[slot].speedjump = value == "1";  // pm_speedjump's ask
   call_hook(s, HookId::user_info_changed, s.named.user_info_changed, slot + 1, {key, old, value});
 }
 
@@ -222,7 +223,14 @@ bool request_pause(QcServer& s, int slot, bool pause) {
   if (pause == s.paused) return false;
   int self = 0;
   if (slot >= 0) {
-    if (s.clients[slot].spectator) return false;
+    if (s.clients[slot].spectator) {
+      print_to(s, 1u << slot, 2, "Spectators can not pause.\n");
+      return false;
+    }
+    if (pause && !s.cvars.find("pausable")->on()) {
+      print_to(s, 1u << slot, 2, "Pause not allowed.\n");
+      return false;
+    }
     self = slot + 1;
   } else if (!pause && players_left(s)) {
     return false;  // the server unpauses on its own only when no players are left

@@ -22,7 +22,9 @@
 //   alternates, a cluster that turns; `muzzle_at` takes the barrel.
 // - CLIPS: a model's animations (a pump, a swing, barrels turning) baked as runs of frames after
 //   the rest frame (`held_with_clips`), each run named in `clips` with its rate, so a game plays
-//   one by time (`held_clip_frames`) and the frames blend as any morph frames do.
+//   one by time (`held_clip_frames`) and the frames blend as any morph frames do. Several clips
+//   of ONE NAME are TAKES of it (an axe's two swings): each play is one take, which the game picks
+//   (`count_held_clips`, `find_held_clip` with a take).
 // - THE MODEL'S OWN FLAME: `flame` marks the triangles that are the file's muzzle flash (a classic
 //   weapon draws its flash as glowing geometry on its firing frames), so a game whose engine
 //   draws the flash hides them (`DrawLit::hidden`).
@@ -36,7 +38,9 @@
 // ge:keywords pose_frames held-frame muzzle-tip find_muzzle muzzle_at muzzle-flash flame
 // ge:keywords kept-texture baked-texture emissive-glow held-clip held_with_clips animation
 // ge:keywords find_held_clip held_clip_frames fire-animation bounds_frame
-// ge:keywords barrels multi-barrel alternating-barrels frame_barrel barrel_of_frame
+// ge:keywords takes clip-takes count_held_clips alternate-swings two-swings
+// ge:keywords barrels multi-barrel alternating-barrels frame_barrel barrel_of_frame arc_ends arc_at
+// ge:keywords prongs lightning-gun-arc
 // ge:keywords hide-hands mark_hands hidden_triangles hands-off arms
 // ge:skill render assets
 // ge:test tests/viewmodel_held_test.cpp
@@ -64,12 +68,15 @@ struct Skin {
 };
 
 // A clip baked into a held model's frames: `count` frames from `first`, `fps` apart, the first at
-// the clip's start and the last at its end.
+// the clip's start and the last at its end. `frame_a_shot`: a weapon held firing steps the clip
+// on by one frame a shot, round and round, each frame held until the next shot (a nailgun's: each
+// frame shows its own barrel firing); otherwise a shot plays the clip from its start.
 struct HeldClip {
   std::string name;
   int first = 0;
   int count = 0;
   double fps = 30;
+  bool frame_a_shot = false;
 };
 
 struct HeldModel {
@@ -86,6 +93,10 @@ struct HeldModel {
   // the barrel each frame fires from, one a frame (-1: none; empty: barrel 0 on every frame).
   std::vector<std::vector<uint32_t>> barrels;
   std::vector<int16_t> frame_barrel;
+  // A gun that holds an ARC across its muzzle (a lightning gun's two prongs): each end's tip
+  // vertices, riding every frame as the prongs do (both empty: none). A game draws its own arc
+  // from one end to the other while the gun fires, in place of the file's flame.
+  std::vector<uint32_t> arc_ends[2];
   std::vector<HeldClip> clips;  // the model's animations as runs of `frames` (empty: none)
   uint32_t vertex_count() const {
     return frames.empty() ? 0 : static_cast<uint32_t>(frames[0].positions.size() / 3);
@@ -129,6 +140,9 @@ void find_muzzle(HeldModel& model, double share = 0.04);
 // The barrel's tip on frames `a` and `b` blended by `t`, held frame, m: barrel `barrel` of
 // `barrels` (-1, or a model with none: the one muzzle).
 void muzzle_at(const HeldModel& model, int a, int b, double t, float out[3], int barrel = -1);
+// The two ends of the model's arc (`arc_ends`) between frames a and b at t, held frame, m; false
+// for a model with no arc.
+bool arc_at(const HeldModel& model, int a, int b, double t, float end0[3], float end1[3]);
 // The barrel frame `frame` fires from (`frame_barrel`), or -1 (the one muzzle) when it names none.
 int barrel_of_frame(const HeldModel& model, int frame);
 
@@ -154,8 +168,12 @@ bool mark_hands(HeldModel& model, const assets::Model& source, std::string_view 
 // and `flame` is set, or its hands and `hands` is set. Empty when nothing is hidden.
 void hidden_triangles(const HeldModel& model, bool flame, bool hands, std::vector<uint8_t>& out);
 
-// The clip named `name`, or -1.
+// The clip named `name` (its first take), or -1.
 int find_held_clip(const HeldModel& model, std::string_view name);
+// Take `take` of the clips named `name` (0 the first, in `clips` order), or -1.
+int find_held_clip(const HeldModel& model, std::string_view name, int take);
+// How many clips are named `name`: its takes (0: none).
+int count_held_clips(const HeldModel& model, std::string_view name);
 
 // The frames to draw `t_s` s into clip `clip`: `a` and `b` blended by `t`. Past its end it holds
 // the last frame, or wraps when `loop`; with no such clip, the rest frame (0, 0, 0).

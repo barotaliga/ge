@@ -109,6 +109,7 @@ struct Ball {
   double glow = 1;  // the emission's share of a blackbody's
   double billows, fray, billow_size, roll;
   double soot[3] = {0, 0, 0};
+  BlastLight light;
 };
 
 Ball ball_of(const Blast& b, double now_s) {
@@ -127,6 +128,7 @@ Ball ball_of(const Blast& b, double now_s) {
   o.billow_size = k.billow_size;
   o.roll = k.roll;
   for (int c = 0; c < 3; ++c) o.soot[c] = k.smoke_albedo * k.smoke_tint[c];
+  o.light = b.light;
   return o;
 }
 
@@ -153,6 +155,7 @@ Ball ball_of(const MuzzleFire& m, double now_s) {
   o.fray = k.fray;
   o.billow_size = k.billow_size;
   o.roll = 0;
+  o.light = m.light;
   return o;
 }
 
@@ -244,6 +247,8 @@ void stage_explosions(Explosions& ex, std::span<const Blast> blasts, const Frame
     }
     g.axis[3] = static_cast<float>(o.stretch);
     g.side[3] = static_cast<float>(o.prongs);
+    for (int c = 0; c < 3; ++c) g.light[c] = o.light.lit[c];
+    g.light[3] = static_cast<float>(o.light.sky);
   }
 }
 
@@ -366,6 +371,33 @@ size_t throw_impact(Particles& particles, const Impact& hit) {
   std::array<Particle, kMostBirths> births{};
   for (size_t i = 0; i < n; ++i) births[i] = spark_particle(sparks[i]);
   emit_particles(particles, std::span<const Particle>(births.data(), n));
+  return n;
+}
+
+namespace {
+constexpr double kFlashEdgeLux = 1.0;  // the flash's light where its reach ends, lx
+constexpr double kFlashReach = 4.0;    // its reach at most, a share of the look's range
+}  // namespace
+
+size_t flash_lights(std::span<const Blast> blasts, double now_s, std::vector<LocalLight>& out) {
+  size_t n = 0;
+  for (const Blast& b : blasts) {
+    const Flash f = flash_at(b, now_s);
+    if (!(f.candela > 0) || !(f.range_m > 0)) continue;
+    LocalLight l;
+    for (int k = 0; k < 3; ++k) {
+      l.position[k] = f.at[k];
+      l.colour[k] = f.colour[k];
+    }
+    l.candela = static_cast<float>(f.candela);
+    // Out to where it has fallen to kFlashEdgeLux, never short of the look's range nor past
+    // kFlashReach of it: a fixed range would end a white-hot flash in a lit dome with a hard rim.
+    l.range_m = static_cast<float>(
+        std::clamp(std::sqrt(f.candela / kFlashEdgeLux), f.range_m, kFlashReach * f.range_m));
+    l.radius_m = static_cast<float>(f.radius_m);
+    out.push_back(l);
+    n++;
+  }
   return n;
 }
 

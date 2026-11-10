@@ -121,6 +121,11 @@ struct PointLight {
   Fire fire = Fire::none;  // the fire drawn at it (bsp_flames.hpp)
   float sky = 0;           // the share of open sky over its fire, 0..1 (bsp_flames' place_fires)
   bool physical = false;   // `value` is a luminous intensity, cd (a glowing liquid's light)
+  // A light whose source the player can see (`seen_lights`): a flame, a globe, or a lamp beside a
+  // face that glows. Only such a light throws a figure's shadow (bsp_draw.hpp); a fill light (an
+  // entity alone in the air, standing in for light bounced round the room) lights without one.
+  bool seen = false;
+  bool globe = false;  // a globe's light (brush/lights.hpp): the game draws its sprite
   // Its fall-off and its cone, as the entity's (brush/lights.hpp's LightEntity).
   double gain = 1;
   double soft_m = 0;
@@ -130,6 +135,12 @@ struct PointLight {
 };
 // The light's share of its brightness at time t, s.
 double flicker_at(const PointLight& light, double t);
+
+// THE PACE: how fast the fires puff and churn against a real flame's of their size
+// (render/flame.hpp § THE MOTION: about 1.5 / sqrt(width) puffs a second, a wall torch's 3.4, a
+// bonfire's 1.3), lower slower; a game's setting (r_fire_speed); bsp_flames.hpp's fire_flicker and
+// bsp_fires.
+inline constexpr double kFirePace = 1.0;
 
 struct Atlas {
   uint32_t width = 0, height = 0, mips = 1;
@@ -216,6 +227,16 @@ inline constexpr uint8_t kFlatSurface[4] = {128, 128, 255, 191};
 // The map `path` in `pack` read and made ready, with `palette` (768 bytes) for its pixels.
 bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t> palette,
                 Scene* out, std::string* error, const TextureSource& source = {});
+
+// THE SEEN LIGHTS: a light entity is a source the player can see when the game draws one at it (a
+// flame, a torch, a globe) or when a face whose texture glows (kFixtureGlow of its texels or more,
+// the atlas's alpha 255; the sky's faces never) comes within kFixtureM of it: the lamp's own
+// fitting. Every other entity is a fill light, placed alone in the air to brighten a room the way
+// light bounced off its walls would.
+inline constexpr double kFixtureM = 1.0;
+inline constexpr double kFixtureGlow = 0.03;
+// Sets every light's `seen` (above) in `scene`; returns how many are seen.
+size_t seen_lights(Scene& scene);
 
 // Each texture's mean colour in linear light (rebake.hpp's albedo), from the atlas's mip 0.
 std::vector<std::array<float, 3>> texture_means(const Scene& scene);

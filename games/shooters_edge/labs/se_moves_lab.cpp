@@ -13,14 +13,24 @@
 // turn against the move's most; his speed over the match; and every player's ground frames
 // before a jump and view lag side by side. Deterministic: the digest holds the reading.
 //
+// `--dir=<a folder of one map's recordings>` (people's, or se-team --save's) answers WHO MOVES
+// FASTEST instead: every player's speed across at a run's 320 or more with what a blast gave cut
+// out, ranked by its 95th percentile, with his jumps' weave and gain by speed; and THE WEAVE BY
+// SPEED for every player and for the fastest tenth: each jump's flight by its takeoff speed, how
+// far the velocity's heading swept, how far the view swept, the speed gained (fastest(), below).
+//
 // ge:summary Lab: a recorded player's movement read as hops and drawn over the map's wireframe
 // ge:keywords lab se-moves movement bunny-hop demo mvd wireframe path speed chain turn-share
-// ge:keywords view-lag ground-frames players compare study
+// ge:keywords view-lag ground-frames players compare study fastest who-moves-fastest weave
+// ge:keywords weave-by-speed hop-gain speed-percentile blast-cut strafe-jumpers
 // ge:skill shooter labs
 // ge:test tests/shooter_hops_test.cpp
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -94,12 +104,292 @@ float chase_heading(const sh::HopReading& r, size_t i, float last) {
   return f.phase != sh::HopPhase::cut && f.speed > 60 ? f.heading : last;
 }
 
+// THE FASTEST AND THE WEAVE (`--dir`): every recording of the map in a folder read alike, each
+// player's speed across while at or over a run's 320 units/s, with what a blast gave cut out (a
+// stretch from a jump of more than `kBlastRise` units/s inside 0.1 s until he stands again under
+// 320: a rocket or grenade jump, a knock), ranked by its 95th percentile; and every
+// jump out of a blast (0.3-1 s in the air) by its takeoff speed and its place in its chain (hop 1
+// a chain's start): how far the velocity's heading swept over the flight (the weave), how far the
+// view swept, the speed it gained.
+constexpr float kBlastRise = 150;
+constexpr float kRun = 320;
+constexpr int kSpeedBins = 7;
+constexpr float kSpeedEdge[kSpeedBins] = {0, 340, 380, 420, 460, 500, 560};
+constexpr int kChainBins = 6;  // the chain's hop 1..5, then 6 and on
+
+float wrap_deg(float d) {
+  while (d > 180) d -= 360;
+  while (d < -180) d += 360;
+  return d;
+}
+
+float pct(std::vector<float>& v, double p) {
+  if (v.empty()) return 0;
+  std::sort(v.begin(), v.end());
+  const size_t k = std::min(v.size() - 1, static_cast<size_t>(p * static_cast<double>(v.size())));
+  return v[k];
+}
+
+struct HopCell {
+  std::vector<float> turned, sweep, gain, off;
+};
+
+struct Fast {
+  std::string name;
+  int32_t demos = 0;
+  double alive = 0, fast = 0;  // frames alive, frames at 320 or more (not blasted)
+  std::vector<float> speeds;   // across at 320 or more, not blasted
+  int32_t hops = 0;
+  std::array<HopCell, kSpeedBins> by_speed{};  // his own jumps, as the weave tables
+  std::array<HopCell, kChainBins> by_k{};
+};
+
+void hop_cells(const sh::HopReading& r, const std::vector<uint8_t>& blast,
+               std::array<HopCell, kSpeedBins>& by_speed, std::array<HopCell, kChainBins>& by_k) {
+  int32_t chain = -1, k = 0;
+  for (const sh::Hop& h : r.hops) {
+    k = h.chain == chain ? k + 1 : 0;
+    chain = h.chain;
+    // A jump's flight (a step or a ledge is shorter, a fall longer), out of a blast.
+    if (h.air_s < 0.3f || h.air_s > 1.0f) continue;
+    if (blast[static_cast<size_t>(h.takeoff)] || blast[static_cast<size_t>(h.land)]) continue;
+    // The view's and the velocity's sweeps over the flight: the range each covers.
+    float lo = 0, hi = 0, hlo = 0, hhi = 0, yaw = 0, head = 0;
+    for (int32_t i = h.takeoff + 1; i <= h.land; i++) {
+      const sh::HopFrame &a = r.frames[static_cast<size_t>(i - 1)],
+                         &b = r.frames[static_cast<size_t>(i)];
+      yaw += wrap_deg(b.yaw - a.yaw);
+      if (i < h.land) head += wrap_deg(b.heading - a.heading);
+      lo = std::min(lo, yaw);
+      hi = std::max(hi, yaw);
+      hlo = std::min(hlo, head);
+      hhi = std::max(hhi, head);
+    }
+    int b = 0;
+    while (b + 1 < kSpeedBins && h.speed_off >= kSpeedEdge[b + 1]) b++;
+    const float turned = hhi - hlo;
+    for (HopCell* c : {&by_speed[static_cast<size_t>(b)],
+                       &by_k[static_cast<size_t>(std::min(k, kChainBins - 1))]}) {
+      c->turned.push_back(turned);
+      c->sweep.push_back(hi - lo);
+      c->gain.push_back(h.speed_land - h.speed_off);
+      c->off.push_back(h.speed_off);
+    }
+  }
+}
+
+void fastest(gl::Lab& lab, const la::StudyMap& m) {
+  const std::string dir = lab.arg("dir");
+  std::vector<std::string> paths;
+  std::error_code ec;
+  for (const auto& e : std::filesystem::directory_iterator(dir, ec))
+    if (e.path().extension() == ".mvd") paths.push_back(e.path().string());
+  if (ec || paths.empty()) {
+    lab.fail("se-moves: the folder " + dir + " lists no .mvd recordings" +
+                 (ec ? ": " + ec.message() : ""),
+             "next: pass --dir=<a folder of one map's .mvd recordings>");
+    return;
+  }
+  std::sort(paths.begin(), paths.end());
+  sh::HopSettings hs;
+  hs.cmd_hz = lab.arg_num("hz");
+  std::vector<Fast> players;
+  std::array<HopCell, kSpeedBins> all_speed{}, top_speed{};
+  std::array<HopCell, kChainBins> all_k{}, top_k{};
+  struct Kept {
+    size_t player;
+    sh::HopReading read;
+    std::vector<uint8_t> blast;
+  };
+  std::vector<Kept> kept;
+  int32_t read = 0;
+  // THE TRACK (`--track=<tsv>`): every player's every frame of the first `--track-demos`
+  // recordings as a row, for the questions the tables do not answer (the bot plan's scripts).
+  std::ofstream track;
+  if (!lab.arg("track").empty()) {
+    track.open(lab.arg("track"));
+    track << "demo\tslot\tname\tteam\tt\tx\ty\tz\tspeed\tyaw\tpitch\theading\tphase\ttakeoff"
+             "\tblast\n";
+  }
+  const int32_t track_demos = static_cast<int32_t>(lab.arg_num("track-demos"));
+  for (const std::string& path : paths) {
+    std::string error;
+    la::DemoTracks dt;
+    if (!la::read_demo_tracks(la::read_whole(path), dt, error) || dt.map != m.name) continue;
+    read++;
+    for (size_t k = 0; k < 32; k++) {
+      if (dt.tracks[k].size() < 3 || dt.names[k].empty()) continue;
+      sh::HopReading r;
+      sh::read_hops(dt.tracks[k], *m.world, hs, r);
+      // The blast's stretches.
+      std::vector<uint8_t> blast(r.frames.size(), 0);
+      bool on = false;
+      size_t back = 0;
+      for (size_t i = 0; i < r.frames.size(); i++) {
+        const sh::HopFrame& f = r.frames[i];
+        if (f.phase == sh::HopPhase::cut) {
+          on = false;
+          continue;
+        }
+        while (back < i && r.frames[i].t - r.frames[back].t > 0.1) back++;
+        if (!on && r.frames[back].phase != sh::HopPhase::cut &&
+            f.speed - r.frames[back].speed > kBlastRise)
+          on = true;
+        if (on && f.phase == sh::HopPhase::ground && f.speed < kRun) on = false;
+        blast[i] = on;
+      }
+      if (track.is_open() && read <= track_demos) {
+        const bool same = r.frames.size() == dt.tracks[k].size();
+        for (size_t i = 0; i < r.frames.size(); i++) {
+          const sh::HopFrame& f = r.frames[i];
+          track << read << '\t' << k << '\t' << dt.names[k] << '\t' << dt.teams[k] << '\t'
+                << to_fixed(f.t, 3) << '\t' << to_fixed(f.origin.x, 1) << '\t'
+                << to_fixed(f.origin.y, 1) << '\t' << to_fixed(f.origin.z, 1) << '\t'
+                << to_fixed(f.speed, 1) << '\t' << to_fixed(f.yaw, 2) << '\t'
+                << to_fixed(same ? dt.tracks[k][i].pitch : 0.f, 2) << '\t' << to_fixed(f.heading, 2)
+                << '\t'
+                << (f.phase == sh::HopPhase::cut      ? 'c'
+                    : f.phase == sh::HopPhase::ground ? 'g'
+                                                      : 'a')
+                << '\t' << (f.takeoff ? 1 : 0) << '\t' << static_cast<int>(blast[i]) << '\n';
+        }
+      }
+      size_t who = players.size();
+      for (size_t j = 0; j < players.size(); j++)
+        if (players[j].name == dt.names[k]) who = j;
+      if (who == players.size()) {
+        players.emplace_back();
+        players.back().name = dt.names[k];
+      }
+      Fast& p = players[who];
+      p.demos++;
+      for (size_t i = 0; i < r.frames.size(); i++) {
+        const sh::HopFrame& f = r.frames[i];
+        if (f.phase == sh::HopPhase::cut) continue;
+        p.alive++;
+        if (blast[i] || f.speed < kRun) continue;
+        p.fast++;
+        p.speeds.push_back(f.speed);
+      }
+      p.hops += static_cast<int32_t>(r.hops.size());
+      hop_cells(r, blast, all_speed, all_k);
+      hop_cells(r, blast, p.by_speed, p.by_k);
+      kept.push_back({who, std::move(r), std::move(blast)});
+    }
+  }
+  if (players.empty()) {
+    lab.fail("se-moves: no recording in " + dir + " is on " + m.name,
+             "next: pass --mapname=<the recordings' map> with --basedir");
+    return;
+  }
+  // Ranked by the 95th percentile of the fast speed, players with a minute alive or more.
+  struct Row {
+    size_t k;
+    float p75, p95, p99, top;
+  };
+  std::vector<Row> rows;
+  for (size_t k = 0; k < players.size(); k++) {
+    Fast& p = players[k];
+    if (p.alive < 60 * 20 || p.speeds.size() < 50) continue;
+    rows.push_back(
+        {k, pct(p.speeds, 0.75), pct(p.speeds, 0.95), pct(p.speeds, 0.99), pct(p.speeds, 1.0)});
+  }
+  std::sort(rows.begin(), rows.end(),
+            [](const Row& a, const Row& b) { return a.p95 != b.p95 ? a.p95 > b.p95 : a.k < b.k; });
+  gl::LabTable t{"who moves fastest: speed across at 320 or more, blasts cut out",
+                 {"rank", "name", "demos", "fast %", "p75", "p95", "p99", "top", "jumps",
+                  "weave <340", "weave 340-420", "weave 420+", "gain <420", "gain 420+"},
+                 {}};
+  for (size_t i = 0; i < rows.size(); i++) {
+    Fast& p = players[rows[i].k];
+    // His jumps' weave and gain under 340, at 340-420 and past 420 (the speed bins pooled).
+    HopCell lo = p.by_speed[0], mid, hi;
+    for (int b = 1; b < kSpeedBins; b++)
+      for (HopCell* c : {kSpeedEdge[b] < 420 ? &mid : &hi}) {
+        const HopCell& f = p.by_speed[static_cast<size_t>(b)];
+        c->turned.insert(c->turned.end(), f.turned.begin(), f.turned.end());
+        c->gain.insert(c->gain.end(), f.gain.begin(), f.gain.end());
+      }
+    HopCell under = lo;
+    under.gain.insert(under.gain.end(), mid.gain.begin(), mid.gain.end());
+    t.rows.push_back({std::to_string(i + 1), p.name, std::to_string(p.demos),
+                      to_fixed(100 * p.fast / p.alive, 1), to_fixed(rows[i].p75, 0),
+                      to_fixed(rows[i].p95, 0), to_fixed(rows[i].p99, 0), to_fixed(rows[i].top, 0),
+                      std::to_string(lo.turned.size() + mid.turned.size() + hi.turned.size()),
+                      to_fixed(pct(lo.turned, 0.5), 0), to_fixed(pct(mid.turned, 0.5), 0),
+                      to_fixed(pct(hi.turned, 0.5), 0), to_fixed(pct(under.gain, 0.5), 1),
+                      to_fixed(pct(hi.gain, 0.5), 1)});
+  }
+  lab.table(t);
+  // The fastest tenth (at least one) again, their hops alone.
+  const size_t top_n = std::max<size_t>(1, rows.size() / 10);
+  for (const Kept& r : kept)
+    for (size_t i = 0; i < top_n && i < rows.size(); i++)
+      if (rows[i].k == r.player) hop_cells(r.read, r.blast, top_speed, top_k);
+
+  auto cell_row = [](const std::string& label, HopCell c) {
+    return std::vector<std::string>{label,
+                                    std::to_string(c.turned.size()),
+                                    to_fixed(pct(c.off, 0.5), 0),
+                                    to_fixed(pct(c.turned, 0.5), 1),
+                                    to_fixed(pct(c.turned, 0.9), 1),
+                                    to_fixed(pct(c.sweep, 0.5), 1),
+                                    to_fixed(pct(c.gain, 0.5), 1)};
+  };
+  const std::vector<std::string> cols = {"",          "hops",           "takeoff p50", "weave p50",
+                                         "weave p90", "view sweep p50", "gain p50"};
+  for (int who = 0; who < 2; who++) {
+    const auto& sp = who == 0 ? all_speed : top_speed;
+    const auto& kk = who == 0 ? all_k : top_k;
+    const std::string whom = who == 0 ? "every player" : "the fastest " + std::to_string(top_n);
+    gl::LabTable ts{"the weave by takeoff speed, " + whom +
+                        " (jumps of 0.3-1 s in the air, out of a blast; degrees, units/s)",
+                    cols,
+                    {}};
+    for (int b = 0; b < kSpeedBins; b++)
+      ts.rows.push_back(cell_row(
+          b + 1 < kSpeedBins ? to_fixed(kSpeedEdge[b], 0) + "-" + to_fixed(kSpeedEdge[b + 1], 0)
+                             : to_fixed(kSpeedEdge[b], 0) + "+",
+          sp[static_cast<size_t>(b)]));
+    lab.table(ts);
+    gl::LabTable tk{"the weave by the hop's place in its chain, " + whom, cols, {}};
+    for (int b = 0; b < kChainBins; b++)
+      tk.rows.push_back(cell_row(b + 1 < kChainBins ? "hop " + std::to_string(b + 1) : "hop 6+",
+                                 kk[static_cast<size_t>(b)]));
+    lab.table(tk);
+    const std::string key = who == 0 ? "fast.all." : "fast.top.";
+    for (int b = 0; b < kSpeedBins; b++) {
+      HopCell c = sp[static_cast<size_t>(b)];
+      const std::string bin = "s" + to_fixed(kSpeedEdge[b], 0);
+      lab.metric(key + bin + ".weave", pct(c.turned, 0.5), "deg");
+      lab.metric(key + bin + ".gain", pct(c.gain, 0.5), "u/s");
+    }
+  }
+  double alive = 0, fast = 0;
+  std::vector<float> every;
+  for (const Fast& p : players) {
+    alive += p.alive;
+    fast += p.fast;
+    every.insert(every.end(), p.speeds.begin(), p.speeds.end());
+  }
+  lab.metric("fast.demos", read, "count");
+  lab.metric("fast.players", static_cast<double>(players.size()), "count");
+  lab.metric("fast.share", alive > 0 ? fast / alive : 0, "share");
+  lab.metric("fast.p75", pct(every, 0.75), "u/s");
+  lab.metric("fast.p95", pct(every, 0.95), "u/s");
+  lab.metric("fast.p99", pct(every, 0.99), "u/s");
+}
+
 void run(gl::Lab& lab) {
   std::string error;
   la::StudyMap m;
   if (!la::load_study_map(lab.arg("map"), lab.arg("basedir"), lab.arg("game"), lab.arg("mapname"),
                           m, error)) {
     lab.fail("se-moves: " + error, "next: make lab LAB=se-moves ARGS=--help; skill: shooter");
+    return;
+  }
+  if (!lab.arg("dir").empty()) {
+    fastest(lab, m);
     return;
   }
   const std::string file = lab.arg("file");
@@ -461,6 +751,8 @@ const gl::LabSpec kSpec{
     "what path does he take?",
     {
         {"file", "", "a demo's path (plain or gzip); empty: a walk written in code"},
+        {"dir", "",
+         "a folder of one map's .mvd recordings: who moves fastest and the weave by speed"},
         {"map", "", "the map's .bsp path (the demo's map); empty: --basedir, else the fixture"},
         {"basedir", "", "a folder holding a game folder, to read --mapname from"},
         {"game", "id1", "the game folder under --basedir"},
@@ -468,6 +760,10 @@ const gl::LabSpec kSpec{
         {"player", "", "the player followed: a name or a slot (empty: the top fragger)"},
         {"hz", "77", "the commands a second the air's most turn is read at"},
         {"yaw", "30", "the angled view's turn about z, degrees"},
+        {"track", "",
+         "with --dir: every player's every frame as a TSV row (place, view, speed, the velocity's "
+         "heading, ground or air, takeoffs, blasts)"},
+        {"track-demos", "8", "--track's recordings: the first this many"},
     },
     "",
     run,

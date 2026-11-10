@@ -12,11 +12,14 @@
 #include <charconv>
 #include <cstring>
 #include <iterator>
+#include <string_view>
 
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
 #include "progs/text.hpp"
 #include "shooter/client.hpp"
+#include "shooter/settings.hpp"
+#include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -26,8 +29,6 @@ namespace shooters_edge::net {
 namespace pg = ge::progs;
 
 namespace {
-
-constexpr double kTimeout = 30;  // s of silence before a client is dropped
 
 bool same_host(const gn::Address& a, const gn::Address& b) {
   gn::Address x = a, y = b;
@@ -163,13 +164,19 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
         (c.ch.qport == qport || c.address.port == from.port))
       classic_drop(s, i, "reconnected");
   }
-  const int maxclients = s.qc->sv.set.maxclients;
+  const int maxclients = s.game->sv.set.maxclients;
   int slot = -1;
   for (int i = 0; i < maxclients && i < sh::kMaxClients; i++)
-    if (s.clients[i].state == ConnState::free && !s.qc->clients[i].active) {
+    if (s.clients[i].state == ConnState::free && !s.game->clients[i].active) {
       slot = i;
       break;
     }
+  if (s.cfg.most_players > 0) {
+    int seated = 0;
+    for (int i = 0; i < maxclients && i < sh::kMaxClients; i++)
+      if (s.clients[i].state != ConnState::free || s.game->clients[i].active) seated++;
+    if (seated >= s.cfg.most_players) slot = -1;
+  }
   if (slot < 0) {
     reject(s, from, "server is full");
     return;
@@ -188,6 +195,10 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   const std::string z = info_get(userinfo, "*z_ext");
   asked[ExtFamily::z] = z.empty() ? 0u : static_cast<uint32_t>(std::atoi(z.c_str()));
   info_remove(userinfo, "*z_ext");
+  const std::string ge = info_get(userinfo, "*ge_ext");
+  asked[ExtFamily::ge] = ge.empty() ? 0u : static_cast<uint32_t>(std::atoi(ge.c_str()));
+  info_remove(userinfo, "*ge_ext");
+  info_remove(userinfo, "*speedjump");  // the easy jump's grant is the server's to give
   c.ext = agree(s.cfg.offered, asked);
   c.coords = coords_of(c.ext);
   const bool proxy = !info_get(userinfo, "Qizmo").empty() || !info_get(userinfo, "*qtv").empty();
@@ -201,7 +212,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   const std::string msg = info_get(userinfo, "msg");
   c.msg_level = msg.empty() ? 1 : std::atoi(msg.c_str());
   channel_set_rate(c.ch, rate_of(s, userinfo), std::atoi(info_get(userinfo, "dupe").c_str()));
-  c.connect_time = s.qc->sv.time;
+  c.connect_time = s.game->sv.time;
   c.datagram.reserve(kMaxMsgLen);
   s.counts.connects++;
   s.log.push_back("connect " + std::to_string(slot) + " " + c.name + " " + gn::to_string(from) +
@@ -228,7 +239,7 @@ void handle_oob(ClassicServer& s, const gn::Address& from, const uint8_t* data, 
   } else if (cmd == "connect") {
     handle_connect(s, from, text);
   } else if (cmd == "rcon") {
-    send_oob_print(s, from, "Remote console is not offered by this server.\n");
+    classic_rcon(s, from, text.substr(0, text.find('\n')));
   }
   // `ip`, `log` and the server extras are not answered.
 }
@@ -250,7 +261,8 @@ void read_move(ClassicServer& s, int slot, const ClcMsg& m, const uint8_t* paylo
     c.moves_unchecked++;
   }
   c.loss_pct = m.loss;
-  if (c.state != ConnState::spawned || !s.qc->sv.clients[static_cast<size_t>(slot)].active) return;
+  if (c.state != ConnState::spawned || !s.game->sv.clients[static_cast<size_t>(slot)].active)
+    return;
   sh::Packet p;
   p.client = slot;
   p.sequence = c.ch.incoming_sequence;
@@ -278,9 +290,14 @@ void relay_voice(ClassicServer& s, int slot, const ClcMsg& m) {
   for (int j = 0; j < sh::kMaxClients && !w.overflow; j++) {
     ClassicClient& d = s.clients[j];
     if (j == slot || d.state != ConnState::spawned || !d.ext.has(ExtFamily::x2, kX2Voice)) continue;
-    if (s.cfg.voice_route == VoiceRoute::team &&
-        (team.empty() || info_get(d.userinfo, "team") != team))
+    // By team: his team-mates; with no team (a free-for-all), the others with none.
+    if (s.cfg.voice_route == VoiceRoute::team && info_get(d.userinfo, "team") != team) continue;
+    if (d.local) {  // the listen server's own player: handed over, no packet carries it
+      if (s.local_voice == nullptr) continue;
+      s.local_voice(s.local_ctx, j, v);
+      s.counts.voice_out++;
       continue;
+    }
     if (d.datagram.size() + w.size > kMaxMsgLen / 2) {
       s.counts.voice_dropped++;
       continue;
@@ -325,8 +342,8 @@ void handle_packet(ClassicServer& s, int slot, const uint8_t* data, size_t size)
         c.delta_byte = m.delta;
         break;
       case clc::tmove:
-        if (c.spectator && c.qc_active)
-          s.qc->sv.edicts[static_cast<size_t>(slot) + 1].origin = m.origin;
+        if (c.spectator && c.rules_active)
+          s.game->sv.edicts[static_cast<size_t>(slot) + 1].origin = m.origin;
         break;
       case clc::upload:
         client_print(s, slot, 2, "Uploads are not taken.\n");
@@ -348,27 +365,27 @@ void lag_rewind(void* ctx, int shooter, bool begin) {
   if (me < 0 || me >= sh::kMaxClients) return;
   if (!begin) {
     for (int j = 0; j < sh::kMaxClients; j++)
-      if (s.lag_moved[j]) sh::set_origin(s.qc->sv, j + 1, s.lag_saved[j]);
+      if (s.lag_moved[j]) sh::set_origin(s.game->sv, j + 1, s.lag_saved[j]);
     for (bool& m : s.lag_moved) m = false;
     return;
   }
   const ClassicClient& sc = s.clients[me];
-  if (sc.state != ConnState::spawned) return;
+  if (sc.state != ConnState::spawned || sc.local) return;  // a bot aims at where players are
   const ServerFrame& f = sc.frames[sc.ch.incoming_acknowledged & 63];
-  const double acked = f.sequence == sc.ch.incoming_acknowledged ? f.server_time : s.qc->sv.time;
+  const double acked = f.sequence == sc.ch.incoming_acknowledged ? f.server_time : s.game->sv.time;
   const std::string maxfps = info_get(s.serverinfo, "maxfps");
   const double target = antilag_target(
-      acked, sc.ping_s, maxfps.empty() ? 77 : std::atoi(maxfps.c_str()), s.qc->sv.time);
+      acked, sc.ping_s, maxfps.empty() ? 77 : std::atoi(maxfps.c_str()), s.game->sv.time);
   s.lag_rewinds++;
   for (int j = 0; j < sh::kMaxClients; j++) {
-    if (j == me || !s.clients[j].qc_active || s.clients[j].spectator) continue;
-    sh::Edict& e = s.qc->sv.edicts[static_cast<size_t>(j) + 1];
+    if (j == me || !s.clients[j].rules_active || s.clients[j].spectator) continue;
+    sh::Edict& e = s.game->sv.edicts[static_cast<size_t>(j) + 1];
     if (e.health <= 0) continue;
     sh::Vec3f at;
     if (!antilag_position(s.antilag.players[j], target, e.velocity, at)) continue;
     s.lag_saved[j] = e.origin;
     s.lag_moved[j] = true;
-    sh::set_origin(s.qc->sv, j + 1, at);
+    sh::set_origin(s.game->sv, j + 1, at);
   }
 }
 
@@ -397,7 +414,7 @@ void send_oob_print(ClassicServer& s, const gn::Address& to, const std::string& 
 
 void reliable_bytes(ClassicServer& s, int slot, const uint8_t* data, size_t size) {
   ClassicClient& c = s.clients[slot];
-  if (c.state == ConnState::free) return;
+  if (c.state == ConnState::free || c.local) return;
   channel_reliable(c.ch, data, size);
 }
 
@@ -419,6 +436,10 @@ void stuff(ClassicServer& s, int slot, const std::string& text) {
 }
 
 void client_print(ClassicServer& s, int slot, int level, const std::string& text) {
+  if (s.clients[slot].local) {
+    if (s.local_print != nullptr) s.local_print(s.local_ctx, slot, text);
+    return;
+  }
   if (level < s.clients[slot].msg_level && level < 3) return;
   SvcMsg m;
   m.id = svc::print;
@@ -429,12 +450,16 @@ void client_print(ClassicServer& s, int slot, int level, const std::string& text
 
 // What the endpoint reads off a map's server once: the player model, the mod's fields, the
 // map's static sounds and signon writes, the baselines and the server info.
-bool bind_map(ClassicServer& s, sv::QcServer& qc, std::string& error) {
-  if (qc.progs == nullptr || qc.models.empty()) {
-    error = "classic_start: the mod server has no map; next: call load_map before classic_start";
+bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error) {
+  if (!rules || rules->models.empty()) {
+    error =
+        "classic_start: the rules have no map; next: start a map on the runner before "
+        "classic_start";
     return false;
   }
-  s.qc = &qc;
+  s.rules = &rules;
+  s.game = rules.common;
+  sv::RulesCommon& qc = *rules.common;
   s.player_model = 0;
   s.static_sounds.clear();
   s.signon.clear();
@@ -472,10 +497,35 @@ bool bind_map(ClassicServer& s, sv::QcServer& qc, std::string& error) {
   s.serverinfo.clear();
   info_set(s.serverinfo, "*version", "ShootersEdge 0.1", kServerInfoBytes);
   info_set(s.serverinfo, "*z_ext", std::to_string(s.cfg.offered[ExtFamily::z]), kServerInfoBytes);
+  if (s.cfg.offered[ExtFamily::ge] != 0)
+    info_set(s.serverinfo, "*ge_ext", std::to_string(s.cfg.offered[ExtFamily::ge]),
+             kServerInfoBytes);
   info_set(s.serverinfo, "hostname", s.cfg.hostname, kServerInfoBytes);
   info_set(s.serverinfo, "maxclients", std::to_string(qc.sv.set.maxclients), kServerInfoBytes);
-  info_set(s.serverinfo, "maxfps", "77", kServerInfoBytes);
+  info_set(s.serverinfo, "maxfps", std::to_string(s.cfg.maxfps), kServerInfoBytes);
   info_set(s.serverinfo, "sv_antilag", s.cfg.antilag ? "1" : "0", kServerInfoBytes);
+  // What a server browser lists (classic_browse.hpp): the map, the rules' kind and whether
+  // joining takes a password.
+  info_set(s.serverinfo, "map", qc.map_name, kServerInfoBytes);
+  // The skill only where monsters play it (a match's skill is the mod's leftover default).
+  bool monsters = true;
+  for (const char* rule : {"deathmatch", "teamplay", "coop"}) {
+    const ge::console::Cvar* c = qc.cvars.find(rule);
+    if (c == nullptr || c->value == "0") continue;
+    info_set(s.serverinfo, rule, c->value, kServerInfoBytes);
+    if (std::string_view(rule) == "deathmatch") monsters = false;
+  }
+  if (const ge::console::Cvar* c = qc.cvars.find("skill"); c != nullptr && monsters)
+    info_set(s.serverinfo, "skill", c->value, kServerInfoBytes);
+  // A cooperative campaign says `deathmatch 0` outright, as other coop servers do.
+  if (const ge::console::Cvar* coop = qc.cvars.find("coop"); coop != nullptr && coop->on())
+    info_set(s.serverinfo, "deathmatch", "0", kServerInfoBytes);
+  const int needpass =
+      (s.cfg.password.empty() ? 0 : 1) | (s.cfg.spectator_password.empty() ? 0 : 2);
+  if (needpass != 0) info_set(s.serverinfo, "needpass", std::to_string(needpass), kServerInfoBytes);
+  // The move's switches a client predicts with, when not at their defaults (pm_ktjump 0).
+  for (const auto& [k, v] : sh::changed_info(qc.sv.set))
+    info_set(s.serverinfo, k, v, kServerInfoBytes);
   for (const auto& [k, v] : qc.serverinfo) info_set(s.serverinfo, k, v, kServerInfoBytes);
   if (s.cfg.antilag) {
     qc.lag_rewind = &lag_rewind;
@@ -484,30 +534,32 @@ bool bind_map(ClassicServer& s, sv::QcServer& qc, std::string& error) {
   return true;
 }
 
-bool classic_start(ClassicServer& s, sv::QcServer& qc, gn::Transport& t, const ServerConfig& cfg,
-                   std::string& error) {
+bool classic_start(ClassicServer& s, const sv::RulesRunner& rules, gn::Transport& t,
+                   const ServerConfig& cfg, std::string& error) {
   s.cfg = cfg;
   s.transport = &t;
   s.rng = ge::core::make_rng(cfg.seed);
   if (cfg.voice) s.cfg.offered[ExtFamily::x2] |= kX2Voice;
-  if (!bind_map(s, qc, error)) return false;
+  if (!bind_map(s, rules, error)) return false;
   s.packets.reserve(static_cast<size_t>(sh::kMaxClients) * 4);
   return true;
 }
 
-bool classic_change(ClassicServer& s, sv::QcServer& next, std::string& error) {
+bool classic_change(ClassicServer& s, const sv::RulesRunner& next, std::string& error) {
   for (int i = 0; i < sh::kMaxClients; i++)
     if (s.clients[i].state != ConnState::free) stuff(s, i, "changing\n");
-  s.qc->lag_rewind = nullptr;
-  s.qc->lag_ctx = nullptr;
+  if (s.game != nullptr) {
+    s.game->lag_rewind = nullptr;
+    s.game->lag_ctx = nullptr;
+  }
   if (!bind_map(s, next, error)) return false;
   s.spawncount++;
   for (int i = 0; i < sh::kMaxClients; i++) {
     ClassicClient& c = s.clients[i];
     antilag_clear(s.antilag, i);
-    if (c.state == ConnState::free) continue;
+    if (c.state == ConnState::free || c.local) continue;  // the game seats its own on `next`
     c.state = ConnState::connected;
-    c.qc_active = false;
+    c.rules_active = false;
     c.delta_byte = -1;
     for (ServerFrame& f : c.frames) f = ServerFrame{};
     for (bool& known : c.stats_known) known = false;
@@ -515,8 +567,17 @@ bool classic_change(ClassicServer& s, sv::QcServer& next, std::string& error) {
     c.dl = ServerDownload{};
     stuff(s, i, "reconnect\n");
   }
-  s.log.push_back("change " + next.map_name);
+  s.log.push_back("change " + next->map_name);
   return true;
+}
+
+void classic_unbind(ClassicServer& s) {
+  if (s.game != nullptr) {
+    s.game->lag_rewind = nullptr;
+    s.game->lag_ctx = nullptr;
+  }
+  s.game = nullptr;
+  s.rules = nullptr;
 }
 
 void classic_drop(ClassicServer& s, int slot, const std::string& why) {
@@ -524,13 +585,16 @@ void classic_drop(ClassicServer& s, int slot, const std::string& why) {
   if (c.state == ConnState::free) return;
   uint8_t buf[kMaxPacket];
   const uint8_t bye = svc::disconnect;
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < (c.local ? 0 : 2); i++) {
     const size_t n = channel_transmit(c.ch, &bye, 1, s.now, buf);
     gn::transport_send(*s.transport, c.address, buf, n, static_cast<int64_t>(s.now * 1e6));
     s.counts.datagrams_out++;
     s.counts.bytes_out += static_cast<int64_t>(n);
   }
-  if (c.qc_active) sv::disconnect(*s.qc, slot);
+  if (c.rules_active && s.unseat != nullptr)
+    s.unseat(s.seat_ctx, slot);
+  else if (c.rules_active && s.rules != nullptr)
+    s.rules->drop(slot);
   antilag_clear(s.antilag, slot);
   std::string line = "drop " + std::to_string(slot);
   line += ' ';
@@ -541,6 +605,55 @@ void classic_drop(ClassicServer& s, int slot, const std::string& why) {
   s.counts.drops++;
   c = ClassicClient{};
   full_client_update(s, slot, -1);
+}
+
+bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std::string& error,
+                       bool bot) {
+  if (slot < 0 || slot >= sh::kMaxClients || s.clients[slot].state != ConnState::free) {
+    error = "slot " + std::to_string(slot) + " is a client's; next: seat the bot in a free slot";
+    return false;
+  }
+  ClassicClient& c = s.clients[slot];
+  c = ClassicClient{};
+  c.state = ConnState::spawned;
+  c.local = true;
+  c.rules_active = true;
+  c.name = name;
+  c.userid = s.next_userid;
+  s.next_userid = s.next_userid % 99 + 1;
+  c.connect_time = s.game->sv.time;
+  info_set(c.userinfo, "name", name);
+  if (bot) info_set(c.userinfo, "*bot", "1");
+  if (!bot && s.cfg.voice) c.ext[ExtFamily::x2] |= kX2Voice;  // the window's player talks, hears
+  s.log.push_back("local " + std::to_string(slot) + " " + name);
+  full_client_update(s, slot, -1);
+  return true;
+}
+
+void classic_local_voice(ClassicServer& s, int slot, const ClcMsg& m) {
+  if (slot < 0 || slot >= sh::kMaxClients || !s.clients[slot].local) return;
+  relay_voice(s, slot, m);
+}
+
+void classic_set_info(ClassicServer& s, int slot, const std::string& key,
+                      const std::string& value) {
+  ClassicClient& c = s.clients[slot];
+  if (c.state == ConnState::free || info_get(c.userinfo, key) == value) return;
+  if (!info_set(c.userinfo, key, value)) return;
+  if (c.rules_active) s.rules->user_info(slot, key, value);
+  for (int j = 0; j < sh::kMaxClients; j++) {
+    if (s.clients[j].state == ConnState::free) continue;
+    SvcMsg m;
+    m.id = svc::setinfo;
+    m.ints = {slot};
+    m.strings = {key, value};
+    reliable_svc(s, j, m);
+  }
+}
+
+void classic_print_all(ClassicServer& s, const std::string& text) {
+  for (int j = 0; j < sh::kMaxClients; j++)
+    if (s.clients[j].state == ConnState::spawned) client_print(s, j, 2, text);
 }
 
 int classic_count(const ClassicServer& s, ConnState at_least) {
@@ -569,11 +682,11 @@ std::string status_text(const ClassicServer& s, int opt) {
     const ClassicClient& c = s.clients[i];
     if (c.state == ConnState::free) continue;
     int frags = 0;
-    if (c.qc_active) frags = static_cast<int>(s.qc->world.clients[i].numbers.frags);
+    if (c.rules_active) frags = static_cast<int>(s.game->world.clients[i].numbers.frags);
     const int ping = c.state != ConnState::spawned ? 999
                      : c.ping_samples == 0         ? 9999
                                                    : static_cast<int>(c.ping_s * 1000);
-    const int minutes = static_cast<int>((s.qc->sv.time - c.connect_time) / 60);
+    const int minutes = static_cast<int>((s.game->sv.time - c.connect_time) / 60);
     auto colour = [&](const char* key) {
       int v = std::atoi(info_get(c.userinfo, key).c_str());
       return v < 0 ? 0 : v > 16 ? 16 : v;
@@ -610,7 +723,7 @@ std::string status_text(const ClassicServer& s, int opt) {
 EntityState entity_state(const ClassicServer& s, int e) {
   EntityState st;
   st.number = e;
-  const sv::WorldEntity& row = s.qc->world.entities[static_cast<size_t>(e)];
+  const sv::WorldEntity& row = s.game->world.entities[static_cast<size_t>(e)];
   st.modelindex = row.modelindex;
   st.frame = row.frame;
   st.colormap = row.colormap;
@@ -624,6 +737,26 @@ EntityState entity_state(const ClassicServer& s, int e) {
   }
   return st;
 }
+
+namespace {
+
+// A score that moved this frame told to every client, as the scoreboard reads it.
+void tell_frags(ClassicServer& s) {
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    ClassicClient& c = s.clients[i];
+    if (!c.rules_active) continue;
+    const int frags = static_cast<int>(s.game->world.clients[i].numbers.frags);
+    if (frags == c.frags_told) continue;
+    c.frags_told = frags;
+    SvcMsg m;
+    m.id = svc::updatefrags;
+    m.ints = {i, frags};
+    for (int j = 0; j < sh::kMaxClients; j++)
+      if (s.clients[j].state != ConnState::free) reliable_svc(s, j, m);
+  }
+}
+
+}  // namespace
 
 void classic_frame(ClassicServer& s, int64_t now_us) {
   s.now = static_cast<double>(now_us) / 1e6;
@@ -655,23 +788,32 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
     }
     if (slot >= 0) handle_packet(s, slot, buf, size);
   }
+  for (const sh::Packet& p : s.local_moves)  // the game's own seats, after the network's
+    if (p.client >= 0 && p.client < sh::kMaxClients && s.clients[p.client].local &&
+        s.game->sv.clients[static_cast<size_t>(p.client)].active)
+      s.packets.push_back(p);
+  s.local_moves.clear();
 
-  sv::qc_frame(*s.qc, s.packets.data(), static_cast<int>(s.packets.size()));
+  s.rules->frame(s.packets.data(), static_cast<int>(s.packets.size()));
+  if (s.local_tap != nullptr) s.local_tap(s.local_ctx, *s.game);
   for (int i = 0; i < sh::kMaxClients; i++)
-    if (s.clients[i].qc_active)
-      antilag_record(s.antilag, i, s.qc->sv.time,
-                     s.qc->sv.edicts[static_cast<size_t>(i) + 1].origin);
+    if (s.clients[i].rules_active)
+      antilag_record(s.antilag, i, s.game->sv.time,
+                     s.game->sv.edicts[static_cast<size_t>(i) + 1].origin);
   route_events(s);
+  tell_frags(s);
   if (s.mvd) mvd_frame(s, *s.mvd);
 
   for (int i = 0; i < sh::kMaxClients; i++) {
     ClassicClient& c = s.clients[i];
-    if (c.state == ConnState::free) continue;
+    if (c.state == ConnState::free || c.local) continue;
     if (c.ch.overflow)
       classic_drop(s, i, "reliable channel overflowed");
-    else if (s.now - c.ch.last_received > kTimeout)
+    else if (s.now - c.ch.last_received > s.cfg.timeout_s) {
+      const std::string name = c.name;
       classic_drop(s, i, "timed out");
-    else if (c.qc_active && s.qc->clients[i].drop)
+      classic_print_all(s, name + " timed out\n");
+    } else if (c.rules_active && s.game->clients[i].drop)
       classic_drop(s, i, "dropped by the mod");
   }
   if (s.now - s.last_ping_update >= 2) {

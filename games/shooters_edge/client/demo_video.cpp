@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string_view>
 #include <system_error>
 #include <vector>
@@ -125,8 +126,72 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
   for (size_t i = 0; i < s.statics.size(); i++) put(-1 - static_cast<int>(i), s.statics[i]);
 }
 
+void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
+                   const ge::render::FrameView& view, FxScene& out) {
+  out.map = map;
+  out.server = nullptr;
+  out.pose.eye = {view.eye[0], view.eye[1], view.eye[2]};
+  out.pose.yaw = view.heading;
+  out.pose.pitch = view.pitch;
+  out.pose.fov_y = view.fov_y;
+  out.missiles = fx.missiles;
+  out.explosions = fx.explosions;
+  out.effects = fx.effects;
+  out.blows = {};
+  out.campaign = s.format == DemoFormat::single;  // the single protocol's codes (13: a beam)
+  out.effect_models = static_cast<int>(s.models.size());
+  demo_placed(s, out.models);
+  // The players: a client's or multiview's by slot, the single protocol's the first entities.
+  const bool single = s.format == DemoFormat::single;
+  const DemoEntity* players = single ? s.entities.data() + 1 : s.players.data();
+  const size_t count = single ? std::min<size_t>(s.entities.size() > 0 ? s.entities.size() - 1 : 0,
+                                                 static_cast<size_t>(s.max_clients))
+                              : s.players.size();
+  out.bodies.clear();
+  for (size_t k = 0; k < count; k++)
+    if (players[k].present && players[k].model > 0)
+      out.bodies.push_back({static_cast<int>(k) + 1, players[k].origin, !players[k].dead});
+  out.own = listener_of(s);
+  const DemoEntity* own =
+      out.own >= 1 && static_cast<size_t>(out.own) <= count ? &players[out.own - 1] : nullptr;
+  out.me = PlayerState{};
+  out.me.entity = out.own;
+  out.me.origin = s.eye;
+  out.me.health = static_cast<float>(s.stats[kStatHealth]);
+  out.me.dead = out.me.health <= 0;
+  out.me_effects = own ? own->effects : 0;
+  out.waterlevel = out.watertype = 0;
+  out.placed_of = [players, count, &s](int e) {
+    Placed p;
+    if (e < 1 || static_cast<size_t>(e) > count) return p;
+    const DemoEntity& d = players[e - 1];
+    if (d.model <= 0 || static_cast<size_t>(d.model) >= s.models.size()) return p;
+    p.entity = e;
+    p.modelindex = d.model;
+    p.frame = d.frame;
+    p.skin = d.skin;
+    p.effects = d.effects;
+    p.origin = d.origin;
+    p.angles = d.angles;
+    return p;
+  };
+  out.health_of = [players, count](int e) {
+    return e >= 1 && static_cast<size_t>(e) <= count && !players[e - 1].dead ? 1.0f : 0.0f;
+  };
+}
+
+void demo_fx_step(const DemoState& s, DemoFx& fx, const LoadedMap* map,
+                  const ge::render::FrameView& view, FxState& state, double t, double dt,
+                  FxFrame& out) {
+  thread_local FxScene scene;
+  demo_fx_frame(s, fx);
+  demo_fx_scene(s, fx, map, view, scene);
+  step_fx(scene, state, t, dt, out);
+}
+
 bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVideoOptions& o,
-                DemoVideoReport& report, std::string& error, const DemoVideoPicture& picture) {
+                DemoVideoReport& report, std::string& error, const DemoVideoPicture& picture,
+                const DemoVideoLerp& picture_lerp) {
   report = DemoVideoReport{};
   report.adapter = ge::gpu::adapter_line(device);
   if (o.width <= 0 || o.height <= 0 || o.width % 2 != 0 || o.height % 2 != 0 || !(o.fps > 0)) {
@@ -141,6 +206,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   if (!timedemo_start(files, o.demo, t, error)) return false;
   t.demo.track = o.track;
   t.start.track = o.track;
+  t.smooth = o.lerp;
   report.found = t.found;
   report.format =
       std::string(format_name(t.demo.state.format)) + (t.demo.state.voice_format ? " + voice" : "");
@@ -193,7 +259,21 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   WorldDrawPtr world;
   size_t world_models = 0;  // the model list's length the world was made with
   FxFrame fx;
-  const DemoState& s = t.demo.state;
+  FxState fx_state;  // the demo's effects as they live (world_fx.hpp)
+  DemoFx demo_fx;    // its temporary entities this level (demo_fx.hpp)
+  fx_state.on = fx_switches(look);
+  {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> pal = find_file(files, "gfx/palette.lmp", store);
+    fx_state.palette.assign(pal.begin(), pal.end());
+  }
+  ge::particles::Book book;  // the game's files' effects (particles/*.fx)
+  {
+    std::vector<std::string> faults;
+    load_effects(files, book, faults);
+  }
+  fx_state.book = &book;
+  const DemoState& read = t.demo.state;  // the last frame read (what is heard)
 
   double from = std::max(o.from_s, 0.0);  // the clip's start on the demo's timeline, s
   double length = o.seconds;              // its length (0: to the end)
@@ -211,35 +291,52 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     report.demo_frames++;
     if (st == TimedemoStep::new_level) {
       report.levels++;
-      map = load_named_map(files, s.map, error);
+      map = load_named_map(files, read.map, error);
       if (!map) {
-        error = "the demo's map " + s.map + ": " + error;
+        error = "the demo's map " + read.map + ": " + error;
         return false;
       }
       world.reset();
       last = -1;
+      demo_fx = {};
+      const std::vector<uint8_t> palette = std::move(fx_state.palette);
+      fx_state = {};
+      fx_state.on = fx_switches(look);
+      fx_state.palette = palette;
+      fx_state.book = &book;
     }
-    const double dt = last < 0 ? 0 : std::clamp(s.time - last, 0.0, kMostDemoGap);
-    last = s.time;
+    demo_fx_frame(read, demo_fx);
+    const double dt = last < 0 ? 0 : std::clamp(read.time - last, 0.0, kMostDemoGap);
+    last = read.time;
     vt += dt;
-    if (o.messages) notices.take(s, vt);
+    if (o.messages) notices.take(read, vt);
     if (o.sound && !gif) {
-      sounds.level(s, map ? &map->bsp.map : nullptr);
+      sounds.level(read, map ? &map->bsp.map : nullptr);
       if (vt >= from) {  // the clip's sounds, on the clip's own clock
         exp.sound_to(std::llround((vt - from) * ge::audio::kRate));
-        sounds.frame(s, listener_of(s), static_cast<float>(dt));
-        for (const DemoVoice& v : s.voice) voices.play(v);
+        sounds.frame(read, listener_of(read), static_cast<float>(dt));
+        for (const DemoVoice& v : read.voice) voices.play(v);
       }
     }
     return true;
   };
 
+  if (o.autotrack) {  // the hottest player's cuts, worked out over the whole demo first
+    DemoScan scan;
+    if (!scan_demo(t.start, scan, error)) return false;
+    if (!autotrack_plan(t.start, scan, o.autotrack_set, report.autotrack, error)) return false;
+  }
+  const auto follow = [&] {
+    if (!o.autotrack) return;
+    const int slot = autotrack_at(report.autotrack, vt);
+    if (slot >= 0) t.demo.track = slot;
+  };
   if (o.highlight > 0) from = 1e300;  // nothing heard until the highlight is known
   if (!step()) return false;
   if (o.highlight > 0) {  // the clip is a highlight's window
     DemoScan scan;
     if (!scan_demo(t.start, scan, error)) return false;
-    const int subject = s.format == DemoFormat::single ? -1 : s.player;
+    const int subject = read.format == DemoFormat::single ? -1 : read.player;
     const ge::replay::Highlights found = demo_highlights(scan, subject);
     if (static_cast<size_t>(o.highlight) > found.list.size()) {
       error = "the demo has " + std::to_string(found.list.size()) + " highlights for " +
@@ -256,9 +353,15 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   for (int64_t k = 0;; k++) {
     const double at = from + static_cast<double>(k) / o.fps;
     if (length > 0 && at >= from + length) break;
-    while (!ended && vt < at)
+    while (!ended && vt < at) {
+      follow();
       if (!step()) return false;
+    }
     if (ended) break;
+    // The picture at `at` is drawn between the last two frames read (demo_lerp.hpp): the
+    // timeline runs `vt - at` ahead of it, and in a level the demo's clock with it.
+    const DemoState& s = o.lerp ? lerp_at(t.lerp, read, read.time - (vt - at)) : read;
+    if (picture_lerp) picture_lerp(t.lerp);
     // The model list grows through a client recording's signon: the world is made again with it.
     if (map && (!world || s.models.size() != world_models)) {
       world.reset();
@@ -286,7 +389,14 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
       if (o.messages && at < notices.centre_until)
         draw_centre(overlay, glyphs, o.width, o.height, notices.centre);
     }
-    demo_placed(s, fx.models);
+    if (k == 0) {  // what went off before the clip's start is not thrown at its first frame
+      fx_state.explosions_seen = demo_fx.explosions.size();
+      fx_state.effects_seen = demo_fx.effects.size();
+    }
+    fx_state.models = &client::world_models(*world);
+    thread_local FxScene scene;
+    demo_fx_scene(s, demo_fx, map.get(), view, scene);
+    step_fx(scene, fx_state, at, 1.0 / o.fps, fx);
     draw_world(device, *world, view, fx, nullptr, 1.0 / o.fps, overlay, out.view);
     const ge::gpu::Image img = ge::gpu::read_now(device, out);
     const ge::lab::Picture p{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba};
@@ -346,6 +456,9 @@ std::vector<std::string> demo_video_lines(const DemoVideoOptions& o, const DemoV
   if (!r.highlight.empty() || r.from_s > 0)
     out.push_back("demovideo: the clip " + clock(r.from_s) + " to " + clock(r.to_s) +
                   (r.highlight.empty() ? "" : ": " + r.highlight));
+  if (o.autotrack)
+    out.push_back("demovideo: autotrack: " + std::to_string(r.autotrack.cuts.size()) +
+                  " cuts to the hottest player over " + clock(r.autotrack.length_s));
   out.push_back("demovideo: " + std::to_string(r.frames) + " pictures, " + num(r.seconds) + " s, " +
                 std::to_string(r.levels) + " levels, " + std::to_string(o.width) + "x" +
                 std::to_string(o.height) + " at " + num(o.fps) + " fps, " + r.container + " " +
@@ -406,6 +519,8 @@ int demo_video_main(ge::console::Console& console, const Args& args, const Searc
   o.highlight = args.highlight;
   o.gif_width = args.gif_width;
   o.track = playback.track;
+  o.lerp = playback.lerp != 0;
+  o.autotrack = args.autotrack;
   o.picture = &picture;
   DemoVideoReport r;
   std::string error;

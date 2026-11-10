@@ -175,6 +175,17 @@ void(entity killer, entity killed) logfrag = #79;
 string(entity e, string key) infokey = #80;
 float(string s) stof = #81;
 void(vector where, float set) multicast = #82;
+// The arsenal's rows (common/weapons.qc), the same extensions in either form:
+string(string s) cvar_string = #103;
+float(string s) tokenize = #84;
+string(float n) argv = #86;
+float(string s) strlen = #114;
+string(string s, float start, float length) substr = #116;
+string(string s) strzone = #118;
+string(string s1, string s2, ...) strcat = #115;
+// A loaded game's own words (GE_QC_WORDS): the template under `key` in the server's local info
+// filled with the four arguments, "" when the game names none.
+string(string key, string a, string b, string c, string d) words = #640;
 
 // --- the variant's own settings, read each frame ---
 

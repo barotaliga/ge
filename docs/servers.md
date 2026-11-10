@@ -20,14 +20,33 @@ value's file and line kept (`Cvars::set_watch`), the rest of the server's cvars,
 deathmatch over the classic protocol (`games/shooters_edge/net/classic_game.hpp`), so a classic
 client connects and plays (the `se-dedicated` lab). The game's own rules are settings too: a game
 names them (`ServerGame::rules`, a `GameRule` each: Shooter's Edge's `deathmatch`, `teamplay`,
-`fraglimit`, `timelimit`, `samelevel`, `sv_gravity`, `sv_maxspeed`), the core makes each a server
+`fraglimit`, `timelimit`, `samelevel`, `pausable`; the move's and the loop's settings every
+shooter shares, `plugins/shooter/settings.hpp`: `sv_gravity`, `sv_maxspeed`, `sv_mintic`,
+`sv_maxvelocity`, `pm_ktjump`, …; and its endpoint's: `sv_maxrate`, `sv_antilag`, `sv_voip`, `maxfps`,
+`allow_download*`), the core makes each a server
 cvar with an empty fallback (unset: the game's own default), every layer, `+set` and `--explain`
 reach it like the core's, and `create` gets the values in `ServerConfig::rules`. A map is read from
 the game folder's loose files or its packs, and when a match ends the server moves everyone to
 the next map (`sv_maprotation`'s when set). M53c part one: the lobby's match flow lives in the
 engine (`engine/server/match`: seats, teams, ready and break, the leader's start, warmup, the
 countdown, the match), and Shooter's Edge's lobby is that plus what a team is in its game.
-Running one:
+M53c part two: the dedicated server runs it. `sv_bots` seats the game's bots (Shooter's Edge's
+are local seats of its classic endpoint: shown to every client as players, sent nothing) and
+`sv_lobby 1` opens every map in warmup with the game's limits held; the players' `ready`,
+`break`, `team` and `start` (and the leader's `addbot`, `removebot`) arrive as their own console
+lines, a countdown run out restarts the map into the match, and the match's end brings the next
+map up in warmup. With `LobbySettings::humans` set (a dedicated server's 1) bots alone never
+count down, and a bot never leads while a player is seated (the `se-dedicated-lobby` lab).
+The lobby and the warmup are apart: with `LobbySettings::warm_on_join` off (a game that has a
+lobby screen of its own, as Shooter's Edge's window does) a player waits on that screen, off the
+map, until `warmup` puts him in the warmup (`sitout` takes him back, `lobby_on_map` says where a
+seat is); bots are in the warmup as they join, and the match puts every seat on the map. `start`
+is refused below `min_players` seated (bots count) or `humans` players. A dedicated server's
+clients have no lobby screen, so there `warm_on_join` stays on and they join the warmup at once.
+M53a part four: Shooter's Edge's listen server is the same `Server` on the same game, opened in
+the window's process (`ServerConfig::host` carries what the window prepared: its program, the map
+it read, its lines, its player), the player a local seat whose moves the window puts in and whose
+prints and effects the endpoint hands back; `sv_port` lets others join it. Running one:
 
 ```
 make build
@@ -84,8 +103,9 @@ needs all of it, and Shooter's Edge has its own copy of half of it today.
 
 - **One `Server`, two ways to run it.** A `Server` owns the node, the session host, the hosting,
   the server's console and cvars, the match's phases and the features. A listen server is a
-  `Server` the client loop steps between its own frames, with the host's player on a loopback
-  link (`net/local_pipe`) like anyone else; a dedicated server is the same `Server` stepped by
+  `Server` the client loop steps between its own frames, with the host's player in it (a local
+  seat of a game's own endpoint, as Shooter's Edge's is, or on a loopback link,
+  `net/local_pipe`); a dedicated server is the same `Server` stepped by
   `engine/server/main` on the run clock. Nothing in a game branches on which one it is in.
 - **The game plugs in through `ServerGame`.** A plain table of function pointers and a context
   pointer (the frame calls it once a tick, so the indirection costs nothing that matters): make
@@ -151,11 +171,20 @@ so an agent or an owner can answer "why is this server set like this" without re
 | `sv_visibility` | `lan`, `invite` or `listed` (M17r) | server |
 | `sv_rendezvous` | the rendezvous to register and list with | server, latched |
 | `sv_map`, `sv_maprotation` | the first map and the rotation | server info |
+| `sv_bots` | seats the game's bots fill at the start | server, latched |
+| `sv_lobby` | 1: every map warms up until everyone is ready, then the countdown and the match | server info, latched |
+| `sv_countdown` | with `sv_lobby`: seconds from everyone ready to the match (5) | server |
+| `sv_intermission` | with `sv_lobby`: seconds the scores stay up after a match before the next map (0: none) | server |
 | `sv_mod` | the mod's game directory, mounted over the base | server, latched |
 | `sv_admin` | how to reach the server's owner, shown in its info | server info |
+| `sv_timeout` | seconds a client may go unheard before it is dropped (65): a dead link, not an idle player | server |
+| `sv_floodprot`, `sv_floodprotmsg` | the chat flood rule, `"N S T"`: N lines in any S seconds, else silent for T (`10 1 1`), and what a flooder is told (`engine/server/guards.hpp`) | server |
+| `sv_vote` | 1: players may vote on the settings for the map (`vote <setting> <value>`, § Votes) | server |
+| `sv_vote_time`, `sv_vote_wait` | seconds a vote stays open (30); seconds a player whose vote failed waits before calling another (30) | server |
+| `sv_vote_allow`, `sv_vote_deny` | the settings a vote may change (empty: every one but the deny list's), and those it never may (`*` any characters; the default keeps passwords, rcon, the name, the slots, the address, the vote's own, the mod, the seed, the rotation and the frame rate out) | server |
 
 and the flags `--port`, `--ip`, `--maxclients`, `--name`, `--description`, `--cfg`, `--mod`,
-`--map`, which are the same cvars set at layer 6. The game adds its own (`fraglimit`, a mountain's
+`--map`, `--bots`, `--lobby`, which are the same cvars set at layer 6. The game adds its own (`fraglimit`, a mountain's
 seed) the same way.
 
 ## Meta-cvars: one switch for a group
@@ -196,13 +225,40 @@ from the lobby Shooter's Edge lands first:
 ```
 
 - **Warmup** on the map itself (players move and play, scores do not count), with `ready` and
-  `break` (unready) as console commands and lobby buttons, `team <name>` and the leader's `start`.
+  `break` (unready) as console commands and lobby buttons, `team <name>` and the leader's `start`
+  (never with fewer than `min_players` seated). A game with a lobby screen keeps each player on it,
+  off the map, until he joins the warmup (`warmup`, `sitout`); the match puts everyone on the map.
 - **Countdown**, cancelled by a `break`; the **match**, which the game restarts the map for; an
   **intermission** with the scores, then back to warmup or to the next map in the rotation.
 - **The game decides what each phase means** through `ServerGame`'s phase events; the engine owns
   the transitions, the commands, the timers (`sv_countdown`, `sv_intermission`) and what the
   lobby shows. A free ride (Fall Line's pilot) skips the match and stays in an endless warmup with
   the lobby's picks.
+
+## Votes: the players change a setting for one map
+
+Any player may ask everyone on the server to change a setting until the map changes
+(`engine/server/vote.hpp`, every game's): `vote fraglimit 30` calls the vote, `vote yes` and
+`vote no` (or `yes` and `no` alone while one is open) answer, `vote` says what is open and
+`vote rules` what may be voted on.
+
+- **More than half say yes.** The voters are the people on the server, players and spectators,
+  never bots. A vote passes the moment its yes are more than half of them, fails the moment half
+  say no, or runs out after `sv_vote_time`. The caller's own ballot is yes, so a player alone
+  passes one at once; someone leaving takes their ballot along and the vote is weighed again
+  among those left. One vote at a time; a player whose vote failed waits `sv_vote_wait`.
+- **For this map.** A passed change lasts until the map changes: then every change goes back to
+  what the server had (newest first, each to its value before the map's first vote on it). A
+  restart of the same map (the lobby's match starting) keeps it.
+- **Which settings.** A name on `sv_vote_deny` never; with `sv_vote_allow` empty every other one,
+  else only those it names (`*` any characters). Past the lists the game decides: a setting it has,
+  a value in its range. A game names what a change touches (`key`), so a per-player grant (the
+  easy jump for one player) is voted on like a setting.
+- **The game makes the change.** `vote_take` hands it the passed change and `vote_map_over` what
+  to put back. Shooter's Edge writes it into the rules every map is made from: a mod's rule
+  (`fraglimit`, `teamplay`) takes effect at once (a limit the warmup holds, at the match), and a
+  setting the players' moves are predicted with (`sv_gravity`, `pm_speedjump`) restarts the map so
+  every client is told it. The endpoint's own settings (read when the server starts) are refused.
 
 ## Open for extension
 
@@ -250,4 +306,5 @@ What maps onto which classic feature is kept in the working area
 | `server-core` | M53a | A dedicated server and a listen server running the same game program on the simulated network, clients joining both, digests equal |
 | `server-cfg` | M53b, M53e | A base, a mod and a profile `server.cfg` with the explained table drawn as an image; meta-cvars on and off |
 | `server-lobby` | M53c | Warmup, ready and break, countdown, match, intermission, rotation, charted per phase, for both games |
+| `server-vote` | M53h | People coming and going while votes are called and answered: each vote's count over time against the yes needed, how each ended, every change put back at the map's end, replayed to the bit |
 | `server-launch` | M53d | The game spawning a dedicated server, joining it, leaving, finding it again and stopping it |

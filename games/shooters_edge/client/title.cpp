@@ -26,9 +26,9 @@ constexpr double kDeg = kPi / 180;
 // low in the frame.
 constexpr double kMoonElevation = 24, kMoonAzimuth = 200;  // degrees
 constexpr double kLookLeft = 17, kLookUnder = 7;           // degrees
-// The cloud played this many times faster than life: a deck a few km up crosses the disc in a
-// few seconds, not a minute.
-constexpr double kPace = 12;
+// The cloud played this many times faster than life: a deck a few km up drifts across the disc
+// in about half a minute, slow enough to sit behind a menu (12 raced across it in a few seconds).
+constexpr double kPace = 2.5;
 // The Earth's shadow at the moon's distance, rad (a central eclipse's umbra and penumbra), and
 // its axis set off the disc's middle toward its top (a fraction of the moon's radius): the lower
 // limb, nearer the umbra's edge, a brighter red.
@@ -57,8 +57,9 @@ ba::SkyPick title_sky() {
   p.moon_lit = 1;
   p.wind = 22;
   p.wind_from = (kMoonAzimuth - 70) * kDeg;  // across the line of sight, not along it
-  p.scud_cover = 0.3;
-  p.deck_cover = 0.38;
+  p.layer_count = 0;
+  ba::add_layer(p, "fractus", 0.3);
+  ba::add_layer(p, "stratocumulus", 0.38);
   p.adapt_cd = kAdaptCd;
   return p;
 }

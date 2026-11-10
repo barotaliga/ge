@@ -8,13 +8,16 @@
 #include "shooters_edge/net/classic_client.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <utility>
 
 #include "net/voice_trial.hpp"
 #include "progs/text.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/classic_mapsum.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 
 namespace shooters_edge::net {
@@ -57,8 +60,11 @@ std::string userinfo_of(const ClassicClientEnd& c) {
   info_set(u, "msg", "1");
   if (!c.cfg.team.empty()) info_set(u, "team", c.cfg.team);
   if (c.cfg.spectator) info_set(u, "spectator", "1");
+  if (c.cfg.speedjump)
+    info_set(u, "cl_speedjump", "1");  // a server that does not know it ignores it
   if (!c.cfg.password.empty()) info_set(u, "password", c.cfg.password);
   if (c.cfg.ask[ExtFamily::z]) info_set(u, "*z_ext", std::to_string(c.cfg.ask[ExtFamily::z]));
+  if (c.cfg.ask[ExtFamily::ge]) info_set(u, "*ge_ext", std::to_string(c.cfg.ask[ExtFamily::ge]));
   return u;
 }
 
@@ -174,6 +180,7 @@ void on_stufftext(ClassicClientEnd& c, const std::string& text) {
     if (end == std::string::npos) end = text.size();
     const std::string line = text.substr(at, end - at);
     at = end + 1;
+    if (c.stuffed.size() < kStuffedKept) c.stuffed.push_back(line);
     pg::Words w;
     pg::tokenize_words(line.c_str(), w);
     const std::string cmd = pg::word(w, 0);
@@ -192,8 +199,39 @@ void on_stufftext(ClassicClientEnd& c, const std::string& text) {
       c.serverinfo = pg::word(w, 1);
       const std::string z = info_get(c.serverinfo, "*z_ext");
       c.ext[ExtFamily::z] = c.cfg.ask[ExtFamily::z] & static_cast<uint32_t>(std::atoi(z.c_str()));
+      const std::string ge = info_get(c.serverinfo, "*ge_ext");
+      c.ext[ExtFamily::ge] =
+          c.cfg.ask[ExtFamily::ge] & static_cast<uint32_t>(std::atoi(ge.c_str()));
     } else if (cmd == "skins") {
       start_skins(c);
+    } else if (cmd == "color" && w.count >= 2) {
+      // The player's colours, as a mod sets them (a team's): the user info and the server told.
+      c.cfg.topcolor = std::atoi(pg::word(w, 1));
+      c.cfg.bottomcolor = w.count >= 3 ? std::atoi(pg::word(w, 2)) : c.cfg.topcolor;
+      client_command(c, "setinfo topcolor " + std::to_string(c.cfg.topcolor));
+      client_command(c, "setinfo bottomcolor " + std::to_string(c.cfg.bottomcolor));
+    } else if ((cmd == "team" || cmd == "skin" || cmd == "name" || cmd == "topcolor" ||
+                cmd == "bottomcolor") &&
+               w.count >= 2) {
+      const std::string value = pg::word(w, 1);
+      if (cmd == "team") c.cfg.team = value;
+      if (cmd == "skin") c.cfg.skin = value;
+      if (cmd == "name") c.cfg.name = value;
+      if (cmd == "topcolor") c.cfg.topcolor = std::atoi(value.c_str());
+      if (cmd == "bottomcolor") c.cfg.bottomcolor = std::atoi(value.c_str());
+      std::string ask = "setinfo ";
+      ask += cmd;
+      ask += " \"";
+      ask += value;
+      ask += '"';
+      client_command(c, ask);
+    } else if (cmd == "setinfo" && w.count >= 3) {
+      std::string ask = "setinfo ";
+      ask += pg::word(w, 1);
+      ask += " \"";
+      ask += pg::word(w, 2);
+      ask += '"';
+      client_command(c, ask);
     } else if (cmd == "reconnect" || cmd == "changing") {
       // The server changed the map: the signon again, to `begin` on the new one.
       if (cmd == "reconnect") {
@@ -203,6 +241,14 @@ void on_stufftext(ClassicClientEnd& c, const std::string& text) {
       }
     }
   }
+}
+
+// The map's second checksum as the first prespawn sends it (signed, as the server prints it).
+int32_t map_checksum(const ClassicClientEnd& c) {
+  if (!c.cfg.read_file || c.models.size() < 2) return 0;
+  const std::vector<uint8_t> bsp = c.cfg.read_file(c.gamedir, c.models[1]);
+  const MapChecksums sums = map_checksums(bsp);
+  return sums.ok ? static_cast<int32_t>(sent_checksum(c.models[1], sums)) : 0;
 }
 
 void on_list(ClassicClientEnd& c, const SvcMsg& m, bool models) {
@@ -224,7 +270,16 @@ void on_list(ClassicClientEnd& c, const SvcMsg& m, bool models) {
   } else if (!models) {
     client_command(c, "modellist " + sc + " 0");
   } else {
-    client_command(c, "prespawn " + sc + " 0 0");
+    // The model checks (the player's and the eyes' whole files, CRC-16), then the map's.
+    for (const auto& [key, path] :
+         {std::pair{"pmodel", "progs/player.mdl"}, std::pair{"emodel", "progs/eyes.mdl"}}) {
+      if (!c.cfg.read_file) break;
+      const std::vector<uint8_t> mdl = c.cfg.read_file(c.gamedir, path);
+      if (!mdl.empty())
+        client_command(
+            c, std::string("setinfo ") + key + " " + std::to_string(crc16(mdl.data(), mdl.size())));
+    }
+    client_command(c, "prespawn " + sc + " 0 " + std::to_string(map_checksum(c)));
   }
 }
 
@@ -261,6 +316,23 @@ void on_entities(ClassicClientEnd& c, gn::Reader& r, bool delta) {
   }
 }
 
+sh::MoveType move_type_of(const PlayerState& p) {
+  switch (p.pm) {
+    case PmType::spectator:
+      return sh::MoveType::spectator;
+    case PmType::old_spectator:
+      return sh::MoveType::old_spectator;
+    case PmType::fly:
+      return sh::MoveType::fly;
+    case PmType::none:
+      return sh::MoveType::none;
+    case PmType::lock:
+      return sh::MoveType::lock;
+    default:
+      return p.dead ? sh::MoveType::dead : sh::MoveType::normal;
+  }
+}
+
 void apply(ClassicClientEnd& c, const SvcMsg& m) {
   switch (m.id) {
     case svc::serverdata:
@@ -268,6 +340,7 @@ void apply(ClassicClientEnd& c, const SvcMsg& m) {
         ExtFamily f{};
         if (family_of_magic(magic, f)) c.ext[f] = bits;
       }
+      for (size_t i = 0; i < 10 && i < m.floats.size(); i++) c.movevars[i] = m.floats[i];
       c.spawncount = m.ints[1];
       c.playernum = m.ints[2] & 0x7f;
       c.gamedir = m.strings[0];
@@ -336,6 +409,16 @@ void apply(ClassicClientEnd& c, const SvcMsg& m) {
     case svc::print:
       c.prints.push_back(m.strings[0]);
       break;
+    case svc::sound:
+    case svc::soundextended:
+      if (m.ints.size() >= 5 && m.floats.size() >= 3)
+        c.heard.push_back({m.ints[0],
+                           m.ints[1],
+                           m.ints[4],
+                           static_cast<float>(m.ints[2]) / 255.f,
+                           static_cast<float>(m.ints[3]) / 64.f,
+                           {m.floats[0], m.floats[1], m.floats[2]}});
+      break;
     case svc::centerprint:
       c.centerprints.push_back(m.strings[0]);
       break;
@@ -343,6 +426,7 @@ void apply(ClassicClientEnd& c, const SvcMsg& m) {
       if (m.player.slot >= 0 && m.player.slot < 32) {
         c.players[m.player.slot] = m.player;
         c.player_seen[m.player.slot] = true;
+        c.player_at[m.player.slot] = c.now;
       }
       break;
     case svc::setangle:
@@ -394,32 +478,24 @@ void read_payload(ClassicClientEnd& c, const uint8_t* data, size_t size, size_t 
 
 // The voice cut since the last tick (`samples` of it) and, while talking, sent as one message.
 void speak(ClassicClientEnd& c, int samples) {
-  const bool talking = c.cfg.talk != nullptr && c.cfg.talk(c.tick, c.cfg.seed);
-  for (int i = 0; i < samples; i++) {
-    const bool say = talking && !c.speech.empty();
-    c.mic.push_back(say ? c.speech[c.speech_at] : 0.0f);
-    if (say) c.speech_at = (c.speech_at + 1) % c.speech.size();
+  const bool talking =
+      c.cfg.live_mic ? c.mic_talking : c.cfg.talk != nullptr && c.cfg.talk(c.tick, c.cfg.seed);
+  std::vector<float> said;  // the samples cut this tick
+  if (c.cfg.live_mic) {     // the microphone's samples as they came, whatever the tick's length
+    said.swap(c.mic_in);
+  } else {
+    said.resize(static_cast<size_t>(samples), 0.0f);
+    for (float& x : said) {
+      if (!talking || c.speech.empty()) break;
+      x = c.speech[c.speech_at];
+      c.speech_at = (c.speech_at + 1) % c.speech.size();
+    }
   }
   ClcMsg m;
   m.id = clc::voice;
   m.gen = cl::kVoiceOpus << 4;
-  m.seq = c.voice_seq;
-  int frames = 0;
-  while (c.mic.size() >= static_cast<size_t>(gn::kVoiceFrame)) {
-    if (talking && c.encoder) {
-      uint8_t frame[gn::kVoiceMaxBytes];
-      const int n = c.encoder->encode(c.mic.data(), frame, sizeof frame);
-      if (n > 0) {
-        m.data.push_back(static_cast<uint8_t>(n & 0xFF));
-        m.data.push_back(static_cast<uint8_t>(n >> 8));
-        m.data.insert(m.data.end(), frame, frame + n);
-        frames++;
-      }
-    }
-    c.mic.erase(c.mic.begin(), c.mic.begin() + gn::kVoiceFrame);
-  }
+  const int frames = cl::voice_out_cut(c.voice, said, talking, m.data, m.seq);
   if (frames == 0) return;
-  c.voice_seq = (c.voice_seq + frames) & 0xFF;
   c.voice_sent += frames;
   uint8_t buf[kMaxMsgLen];
   gn::Writer w = gn::make_writer(buf, sizeof buf);
@@ -466,6 +542,9 @@ void read_oob(ClassicClientEnd& c, const uint8_t* data, size_t size) {
     c.refused = std::string(reinterpret_cast<const char*>(data) + 5,
                             strnlen(reinterpret_cast<const char*>(data) + 5, size - 5));
     c.stage = ClientStage::dropped;
+  } else if (type == 'n') {  // after the connect: a remote console's answer
+    c.oob_prints.emplace_back(reinterpret_cast<const char*>(data) + 5,
+                              strnlen(reinterpret_cast<const char*>(data) + 5, size - 5));
   }
 }
 
@@ -509,13 +588,16 @@ void client_start(ClassicClientEnd& c, gn::Transport& t, const gn::Address& serv
   c.now = now;
   if (cfg.voice) {
     c.cfg.ask[ExtFamily::x2] |= kX2Voice;
-    c.encoder = std::make_unique<gn::VoiceEncoder>();
-    std::string error;
-    if (!c.encoder->open(gn::VoiceCodecConfig{}, error)) c.encoder.reset();
-    c.speech = cfg.speech ? *cfg.speech
-                          : gn::voice_trial_speech(static_cast<uint32_t>(cfg.seed) * 7919u + 17u,
-                                                   6.0, 100.0 + 25.0 * (cfg.seed % 5));
+    cl::voice_out_open(c.voice);
+    if (!cfg.live_mic)
+      c.speech = cfg.speech ? *cfg.speech
+                            : gn::voice_trial_speech(static_cast<uint32_t>(cfg.seed) * 7919u + 17u,
+                                                     6.0, 100.0 + 25.0 * (cfg.seed % 5));
   }
+}
+
+void client_rcon(ClassicClientEnd& c, const std::string& password, const std::string& line) {
+  send_oob_text(c, "rcon \"" + password + "\" " + line + "\n");
 }
 
 void client_command(ClassicClientEnd& c, const std::string& line) {
@@ -526,9 +608,39 @@ void client_command(ClassicClientEnd& c, const std::string& line) {
   channel_reliable(c.ch, buf, w.size);
 }
 
+sh::MoveSettings client_move_settings(const ClassicClientEnd& c) {
+  sh::MoveSettings m;
+  const float* v = c.movevars;
+  m.gravity = v[0];
+  m.stopspeed = v[1];
+  m.maxspeed = v[2];
+  m.spectatormaxspeed = v[3];
+  m.accelerate = v[4];
+  m.airaccelerate = v[5];
+  m.wateraccelerate = v[6];
+  m.friction = v[7];
+  m.waterfriction = v[8];
+  return m;
+}
+
+sh::NetPlayer client_net_player(const PlayerState& p) {
+  sh::NetPlayer n;
+  const float at[3] = {p.origin.x, p.origin.y, p.origin.z};
+  const float speed[3] = {p.velocity.x, p.velocity.y, p.velocity.z};
+  for (int i = 0; i < 3; i++) {
+    n.origin8[i] = static_cast<int32_t>(at[i] * 8);
+    n.velocity[i] = static_cast<int16_t>(speed[i]);
+  }
+  n.type = move_type_of(p);
+  n.onground = p.onground;
+  n.jump_held = p.pm == PmType::normal_jump_held;
+  return n;
+}
+
 void client_tick(ClassicClientEnd& c, int64_t now_us) {
   c.now = static_cast<double>(now_us) / 1e6;
   c.tick++;
+  c.heard.clear();
   gn::transport_pump(*c.transport, now_us);
   uint8_t buf[gn::kMaxDatagram];
   gn::Address from;
@@ -545,7 +657,14 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
     }
     if (c.stage != ClientStage::signon && c.stage != ClientStage::active) continue;
     size_t at = 0;
+    const uint32_t acked = c.ch.incoming_acknowledged;
     if (!channel_process(c.ch, buf, size, c.now, at)) continue;
+    const uint32_t ack = c.ch.incoming_acknowledged;
+    if (ack != acked && c.sent_seq[ack & 63] == ack) {
+      c.latency = c.now - c.sent_at[ack & 63];
+      c.latency_avg =
+          c.latency_avg <= 0 ? c.latency : c.latency_avg + (c.latency - c.latency_avg) / 16;
+    }
     read_payload(c, buf, size, at);
     if (!c.error.empty()) {
       c.stage = ClientStage::dropped;
@@ -589,6 +708,9 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
     const int loss =
         c.ch.accepted ? static_cast<int>(100 * c.ch.dropped / (c.ch.accepted + c.ch.dropped)) : 0;
     write_move(w, c.cmds, static_cast<uint8_t>(loss), c.ch.outgoing_sequence);
+    c.sent[c.ch.outgoing_sequence & 63] = cmd;
+    c.sent_seq[c.ch.outgoing_sequence & 63] = c.ch.outgoing_sequence;
+    c.sent_at[c.ch.outgoing_sequence & 63] = c.now;
     if (c.record) record_command(*c.record, c.now, cmd);
     if (c.valid_frame >= 0) {
       write_byte(w, clc::delta);

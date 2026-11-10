@@ -7,6 +7,7 @@
 #include "shooters_edge/net/classic_team.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -15,6 +16,8 @@
 #include <memory>
 #include <utility>
 
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "progs/entity_text.hpp"
@@ -23,14 +26,19 @@
 #include "shooter/swim.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
+#include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/bots/mind.hpp"
+#include "shooters_edge/bots/packs.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/net/classic_client.hpp"
+#include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/classic_mirror.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/net/classic_team_nav.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
 #include "shooters_edge/server/commands.hpp"
 
@@ -47,6 +55,35 @@ namespace cl = shooters_edge::client;
 constexpr double kHz = 1000.0 / bt::kPilotMsec;
 constexpr int kTickUs = 13000;
 constexpr int32_t kItQuad = 4194304;
+constexpr int32_t kItRockets = 32;  // the launcher's weapon bit
+
+// The drill: every player's weapons cut to `bit` alone (the blade kept, so nothing is left with no
+// weapon) and put in hand, and the ammunition it fires topped up when it runs under half (so a
+// refill, which the hit book would read as a pickup, comes once every hundred shots or so).
+void drill_frame(server::QcServer& s, int32_t bit) {
+  constexpr int32_t kWeapons = 1 | 2 | 4 | 8 | 16 | 32 | 64;  // the baseline mod's guns
+  constexpr int32_t kBlade = 4096;
+  const pg::LayoutFields& f = s.q.layout->f;
+  const int ammo = bit <= 2    ? f.ammo_shells
+                   : bit <= 8  ? f.ammo_nails
+                   : bit <= 32 ? f.ammo_rockets
+                               : f.ammo_cells;
+  for (int e = 1; e <= s.sv.set.maxclients; e++) {
+    if (!s.clients[static_cast<size_t>(e - 1)].active || f.items < 0 || ammo < 0) continue;
+    uint32_t* items = pg::entity_field(s.q.vm, e, f.items);
+    const int32_t had = static_cast<int32_t>(pg::as_float(*items));
+    *items = pg::as_word(static_cast<float>((had & ~kWeapons) | bit | kBlade));
+    uint32_t* a = pg::entity_field(s.q.vm, e, ammo);
+    if (pg::as_float(*a) < 50) *a = pg::as_word(100.f);
+    // And in hand: a player comes in holding the starting gun, which he would fire before his
+    // switch to the drill's weapon went through.
+    if (f.weapon >= 0) {
+      uint32_t* held = pg::entity_field(s.q.vm, e, f.weapon);
+      const int32_t w = static_cast<int32_t>(pg::as_float(*held));
+      if ((w & kWeapons) != 0 && w != bit) *held = pg::as_word(static_cast<float>(bit));
+    }
+  }
+}
 
 uint64_t fold(uint64_t h, uint32_t w) { return (h ^ w) * 1099511628211ull; }
 
@@ -56,142 +93,6 @@ uint64_t fold_f(uint64_t h, float f) {
   return fold(h, b);
 }
 
-// A door that starts open (spawnflags 1) stays where it spawned until a button moves it: a plate
-// over a pit, a wall drawn aside.
-bool start_open(const pg::EntityBlock& b) {
-  const char* sf = pg::block_value(b, "spawnflags");
-  return sf && (std::atoi(sf) & 1) != 0;
-}
-
-// Those doors as solids of the nav's world, where they stand (the rest of the movers are left
-// out of it and tagged on the links they close).
-void open_doors_as_floor(const sv::QcServer& s, const sv::MapSpec& spec, sh::MoveWorld& world) {
-  std::vector<pg::EntityBlock> blocks;
-  std::string error;
-  if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) return;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* model = pg::block_value(b, "model");
-    if (!cn || !model || model[0] != '*' || std::strcmp(cn, "func_door") != 0 || !start_open(b))
-      continue;
-    const int m = std::atoi(model + 1);
-    if (m <= 0 || static_cast<size_t>(m) >= spec.models.size() || world.count >= sh::kMaxSolids)
-      continue;
-    for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
-      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
-      if (d.free || d.modelindex <= 0 || static_cast<size_t>(d.modelindex) >= s.models.size() ||
-          s.models[static_cast<size_t>(d.modelindex)] != model)
-        continue;
-      const sh::BrushModel& bm = spec.models[static_cast<size_t>(m)];
-      sh::Solid& so = world.solids[world.count++];
-      so = sh::Solid{};
-      so.kind = sh::SolidKind::brush;
-      so.origin = d.origin;
-      so.point_hull = bm.hulls[0];
-      so.clip_hull = bm.hulls[1];
-      so.mins = bm.mins;
-      so.maxs = bm.maxs;
-      break;
-    }
-  }
-}
-
-// The map's doors and plats as the nav's movers, off the entity text's brush entities and the
-// edicts the mod made of them (each found by its inline model's name).
-std::vector<sh::NavMover> map_movers(const sv::QcServer& s, const sv::MapSpec& spec) {
-  std::vector<sh::NavMover> out;
-  std::vector<pg::EntityBlock> blocks;
-  std::string error;
-  if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) return out;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* model = pg::block_value(b, "model");
-    if (!cn || !model || model[0] != '*') continue;
-    const bool door = std::strcmp(cn, "func_door") == 0;
-    const bool plat = std::strcmp(cn, "func_plat") == 0;
-    if (!door && !plat) continue;
-    if (door && start_open(b)) continue;  // a floor to the nav (open_doors_as_floor)
-    const int m = std::atoi(model + 1);
-    if (m <= 0 || static_cast<size_t>(m) >= spec.models.size()) continue;
-    int ent = -1;
-    for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
-      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
-      if (d.free || d.modelindex <= 0 || static_cast<size_t>(d.modelindex) >= s.models.size())
-        continue;
-      if (s.models[static_cast<size_t>(d.modelindex)] == model) {
-        ent = e;
-        break;
-      }
-    }
-    if (ent < 0) continue;
-    sh::NavMover mv;
-    mv.ent = ent;
-    mv.absmin = s.sv.edicts[static_cast<size_t>(ent)].absmin;
-    mv.absmax = s.sv.edicts[static_cast<size_t>(ent)].absmax;
-    if (plat) {
-      const sh::BrushModel& bm = spec.models[static_cast<size_t>(m)];
-      const char* h = pg::block_value(b, "height");
-      const char* sp = pg::block_value(b, "speed");
-      const float rise = h ? static_cast<float>(std::atof(h)) : (bm.maxs.z - bm.mins.z) - 8;
-      const float speed = sp ? static_cast<float>(std::atof(sp)) : 150;
-      mv.model = &bm;
-      mv.rest = s.sv.edicts[static_cast<size_t>(ent)].origin;  // lowered from where it was built
-      mv.travel = {0, 0, rise};
-      mv.ride_s = 1 + rise / (speed > 0 ? speed : 150);
-    }
-    out.push_back(mv);
-  }
-  return out;
-}
-
-// The map's teleporters as links: from every node whose player box touches a teleporter's trigger
-// to the node at its destination (a teleporter another entity switches on, by its name, is left
-// out: nothing says when it works).
-std::vector<sh::NavExtraLink> teleport_links(const sh::NavGraph& g, const sv::MapSpec& spec) {
-  std::vector<sh::NavExtraLink> out;
-  std::vector<pg::EntityBlock> blocks;
-  std::string error;
-  if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) return out;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* model = pg::block_value(b, "model");
-    const char* target = pg::block_value(b, "target");
-    if (!cn || std::strcmp(cn, "trigger_teleport") != 0 || !model || model[0] != '*' || !target ||
-        pg::block_value(b, "targetname"))
-      continue;
-    const int m = std::atoi(model + 1);
-    if (m <= 0 || static_cast<size_t>(m) >= spec.models.size()) continue;
-    const sh::BrushModel& box = spec.models[static_cast<size_t>(m)];
-    sh::Vec3f dest;
-    bool found = false;
-    for (const pg::EntityBlock& d : blocks) {
-      const char* dn = pg::block_value(d, "targetname");
-      const char* dc = pg::block_value(d, "classname");
-      const char* org = pg::block_value(d, "origin");
-      if (!dn || !dc || !org || std::strcmp(dn, target) != 0 ||
-          std::strcmp(dc, "info_teleport_destination") != 0)
-        continue;
-      char* end = nullptr;
-      dest.x = std::strtof(org, &end);
-      dest.y = std::strtof(end, &end);
-      dest.z = std::strtof(end, &end) + 27;  // the mod lifts a destination 27 units
-      found = true;
-      break;
-    }
-    if (!found) continue;
-    const int32_t to = sh::nav_nearest(g, dest);
-    if (to < 0) continue;
-    for (size_t a = 0; a < g.nodes.size(); a++) {
-      const sh::Vec3f o = g.nodes[a].origin;
-      if (o.x + 16 < box.mins.x || o.x - 16 > box.maxs.x || o.y + 16 < box.mins.y ||
-          o.y - 16 > box.maxs.y || o.z + 32 < box.mins.z || o.z - 24 > box.maxs.z)
-        continue;
-      out.push_back({static_cast<int32_t>(a), to, sh::NavKind::walk, 0.1f});
-    }
-  }
-  return out;
-}
-
 struct Seat {
   bt::Fighter fighter;
   bool ready = false;  // the fighter initialised on its slot
@@ -199,19 +100,20 @@ struct Seat {
   int team = 0, index = 0;
   sh::AimSkill skill = sh::AimSkill::average;
   bool had_quad = false;
+  bool had_rl = false;
   size_t heard = 0;  // its client's prints read so far
+  // The last frames' places and pilot modes (a ring), for where a death came from.
+  struct Was {
+    double t = -1;
+    sh::Vec3f at;
+    uint8_t mode = 0;
+    sh::Vec3f from, to;  // the link it was on
+    uint8_t kind = 0;
+  };
+  std::array<Was, 512> was{};
+  size_t was_n = 0;
+  std::unique_ptr<ClientMirror> mirror;  // client-fed: its world, off its client alone
 };
-
-// Place names off the items, for a map with no place names file: each key item, weapon and mega
-// health's spot by its callout ("ra", "rl", "mh").
-void locs_from_items(const std::vector<bt::ItemSpot>& items, sh::Locs& out) {
-  for (const bt::ItemSpot& it : items) {
-    if (!bt::key_item(it) && it.kind != bt::ItemKind::weapon && it.kind != bt::ItemKind::mega)
-      continue;
-    out.points.push_back({bt::item_call(it), it.at});
-  }
-  out.from = "the map's items";
-}
 
 }  // namespace
 
@@ -229,67 +131,33 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   so.loop.max_edicts = 1024;
   std::unique_ptr<sv::QcServer> qc = sv::make_qc_server(*opt.progs, so, r.error);
   if (!qc) return r;
-  sv::server_command(*qc, "deathmatch 1");
-  sv::server_command(*qc, "teamplay 1");
-  sv::server_command(*qc, "timelimit " + std::to_string(opt.timelimit));
-  if (!sv::load_map(*qc, map->spec, r.error)) return r;
-  sv::use_map_sets(*qc, map->bsp);
+  sv::RulesRunner rules = sv::qc_runner(std::move(qc));
+  sv::QcServer& q = *sv::qc_of(rules);
+  rules.console("deathmatch " + std::to_string(opt.deathmatch));
+  rules.console("teamplay 1");
+  rules.console("timelimit " + std::to_string(opt.timelimit));
+  for (const std::string& line : opt.settings) rules.console(line);
+  if (!rules.start(map->spec, r.error)) return r;
+  sv::use_map_sets(q, map->bsp);
 
-  // The nav graph off the world and the movers.
-  sh::MoveWorld world;
-  sh::map_world(map->spec.models[0], world);
-  open_doors_as_floor(*qc, map->spec, world);
-  const std::vector<sh::NavMover> movers = map_movers(*qc, map->spec);
-  sh::NavGraph graph;
-  sh::SwimField swim;
-  ge::ai::Search best;  // what the map's main part reaches (the largest a spawn spot reaches)
-  int32_t best_n = 0;
-  std::vector<uint8_t> wet;               // the nodes standing in water
-  std::vector<sh::NavExtraLink> entries;  // the links into the water the graph closed
-  const auto t0 = std::chrono::steady_clock::now();
-  sh::build_nav(world, movers, sh::MoveSettings{}, sh::NavSettings{}, graph);
-  const std::vector<sh::NavExtraLink> teleports = teleport_links(graph, map->spec);
-  sh::nav_add_links(graph, teleports);
-  r.teleport_links = static_cast<int64_t>(teleports.size());
-  // Water: the links prove no swim, so a pool is closed to entry (no route leads into it, and an
-  // item under water is out of reach); a player knocked in finds his own way out (the fighter).
-  {
-    wet.assign(graph.nodes.size(), 0);
-    for (size_t n = 0; n < graph.nodes.size(); n++) {
-      const sh::Vec3f o = graph.nodes[n].origin;
-      wet[n] = sh::water_contents(world, {o.x, o.y, o.z - 10}) <= sh::kContentsWater ? 1 : 0;
-    }
-    r.closed_links = sh::nav_close_entries(graph, wet, &entries);
-    // The way out of the water: to any dry node of the map's main part (the largest a spawn
-    // spot reaches).
-    std::vector<pg::EntityBlock> blocks;
-    std::string perr;
-    ge::ai::Search sr;
-    if (pg::parse_entity_text(map->spec.entities.c_str(), blocks, perr))
-      for (const pg::EntityBlock& b : blocks) {
-        const char* cn = pg::block_value(b, "classname");
-        const char* org = pg::block_value(b, "origin");
-        if (!cn || !org || std::strcmp(cn, "info_player_deathmatch") != 0) continue;
-        char* end = nullptr;
-        sh::Vec3f o;
-        o.x = std::strtof(org, &end);
-        o.y = std::strtof(end, &end);
-        o.z = std::strtof(end, &end);
-        const int32_t k = sh::nav_reach(graph, sh::nav_nearest(graph, o), sr);
-        if (k > best_n) {
-          best_n = k;
-          std::swap(best, sr);
-        }
-      }
-    std::vector<uint8_t> exits(graph.nodes.size(), 0);
-    for (size_t n = 0; n < graph.nodes.size(); n++)
-      exits[n] = best_n > 0 && best.reached(static_cast<int32_t>(n)) && !wet[n] ? 1 : 0;
-    sh::build_swim(world, graph, exits, sh::SwimSettings{}, swim);
-    r.swim_wet = swim.wet;
-    r.swim_leading = swim.leading;
+  // The nav graph off the world and the movers (bots/map_nav.hpp).
+  TeamNav tn;
+  tn.given = opt.locs;
+  bt::MapNav& nav = tn.nav;
+  if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, r.error)) {
+    r.error = "run_team_match: " + r.error;
+    return r;
   }
-  r.nav_build_ms =
-      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+  sh::NavGraph& graph = nav.graph;
+  sh::SwimField& swim = nav.swim;
+  const std::vector<sh::NavMover>& movers = nav.movers;
+  ge::ai::Search& best = nav.main;  // what the map's main part reaches
+  const int32_t best_n = nav.main_n;
+  r.teleport_links = nav.teleport_links;
+  r.closed_links = nav.closed_links;
+  r.swim_wet = swim.wet;
+  r.swim_leading = swim.leading;
+  r.nav_build_ms = nav.build_ms;
   r.lo = graph.lo;
   r.hi = graph.hi;
   r.nav_nodes = static_cast<int64_t>(graph.nodes.size());
@@ -303,13 +171,18 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   // The server over the simulated network, recording.
   gn::LinkConditions lan;
   gn::conditions_preset("lan", lan);
+  if (opt.latency_ms > 0) {
+    lan.latency_ms = opt.latency_ms;
+    lan.jitter_ms = opt.latency_ms / 10;
+  }
   gn::SimNetwork net = gn::make_sim_network(opt.seed, lan);
   gn::Transport st;
   gn::open_sim_transport(st, net, gn::sim_address(0, kPortServer));
   auto server = std::make_unique<ClassicServer>();
   ServerConfig cfg;
   cfg.hostname = "Shooter's Edge bots 4on4";
-  if (!classic_start(*server, *qc, st, cfg, r.error)) return r;
+  cfg.antilag = opt.antilag;
+  if (!classic_start(*server, rules, st, cfg, r.error)) return r;
   MultiviewRecorder mvd;
   if (opt.record) {
     mvd_start(mvd, false, opt.packed ? cl::kDefaultPackLevel : 0);
@@ -324,12 +197,11 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     return r;
   }
   std::vector<Seat> seats(static_cast<size_t>(n));
-  sh::Locs locs;  // the map's place names, every fighter's
   std::vector<gn::Transport> ct(static_cast<size_t>(n));
   auto clients = std::make_unique<ClassicClientEnd[]>(static_cast<size_t>(n));
   bt::Team teams[2];
   r.players.resize(static_cast<size_t>(n));
-  sv::QcServer& s = *qc;
+  sv::QcServer& s = q;
   {
     int k = 0;
     for (int t = 0; t < 2; t++) {
@@ -350,6 +222,11 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           r.error = p.name + ": " + r.error;
           return r;
         }
+        p.features = sh::features_of(p.skill);
+        if (!sh::apply_features(side.features, p.features, r.error)) {
+          r.error = p.name + ": " + r.error;
+          return r;
+        }
         gn::open_sim_transport(ct[static_cast<size_t>(k)], net,
                                gn::sim_address(static_cast<uint32_t>(k + 1), kPortClient));
         ClientConfig cc;
@@ -360,15 +237,30 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         cc.seed = k + 1;
         ClassicClientEnd* c = &clients[static_cast<size_t>(k)];
         Seat* sp = &seat;
-        cc.brain = [sp, c, &s](int) -> sh::MoveCmd {
+        cc.brain = [sp, c, &s, lead = opt.lead_lag, hook = opt.on_command,
+                    hook_ctx = opt.on_command_ctx, k](int) -> sh::MoveCmd {
           if (!sp->ready) return {};
+          // Client-fed, its world is what its client was sent, nothing more.
+          if (sp->mirror) mirror_update(*sp->mirror, *c);
+          const server::RulesCommon& w = sp->mirror ? sp->mirror->s : s;
           // The team lines its client was sent, read (or missed) by its own mind.
           for (; sp->heard < c->prints.size(); sp->heard++) {
             std::string who, words;
             if (bt::split_team_line(c->prints[sp->heard], who, words))
-              bt::mind_hear(sp->fighter, who, words, s.sv.time);
+              bt::mind_hear(sp->fighter, who, words, w.sv.time);
+            else
+              bt::mind_obituary(sp->fighter, c->prints[sp->heard], w.sv.time);
+            bt::packs_obituary(sp->fighter, w, c->prints[sp->heard], w.sv.time);
           }
-          const sh::MoveCmd cmd = bt::fighter_command(sp->fighter, s, c->playernum, bt::kPilotMsec);
+          bt::packs_truth(sp->fighter, s);  // the lab's score of its guesses, off the server
+          // Its shots led on the network's round trip, as on any server across one (bot.hpp).
+          if (sp->mirror) {
+            sp->fighter.bot.lag_s = lead ? static_cast<float>(c->latency_avg) : 0.f;
+            const std::string antilag = info_get(c->serverinfo, "sv_antilag");
+            sp->fighter.bot.rewound = !antilag.empty() && antilag != "0";
+          }
+          const sh::MoveCmd cmd = bt::fighter_command(sp->fighter, w, c->playernum, bt::kPilotMsec);
+          if (hook != nullptr) hook(hook_ctx, k, sp->fighter, w, cmd);
           // The fighter's team messages, as a player types them.
           for (const std::string& line : sp->fighter.outbox)
             client_command(*c, "say_team \"" + line + "\"");
@@ -380,97 +272,46 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     }
   }
 
-  // The dives: a field through the water into each pocket that holds an item no route reaches,
-  // and the node of the main part it is entered from; made once the items are known.
-  struct Dive {
-    std::vector<uint8_t> pocket;  // the pocket's dry nodes
-    sh::SwimField field;
-    int32_t node = -1, entry = -1;  // the node it is entered from, and the wet node it drops to
-    float swim_s = 0;
-  };
-  std::vector<std::unique_ptr<Dive>> dives;
-  std::vector<int32_t> item_dive;  // each item's dive, -1 none
-  bool dives_made = false;
   const std::vector<sh::Vec3f>* known_items = nullptr;
   int64_t now = 0;
   uint64_t h = 1469598103934665603ull;
+  HitBook hits;  // every player's shots and hits by weapon
   for (int frame = 0; frame < opt.frames; frame++) {
     now += kTickUs;
     gn::sim_advance(net, now);
     s.sv.sound_count = 0;
     classic_frame(*server, now);
+    hits_frame(hits, s);
+    if (opt.drill != 0) drill_frame(s, opt.drill);
     // Fighters take their slots once their players are in the game.
     for (int k = 0; k < n; k++) {
       Seat& seat = seats[static_cast<size_t>(k)];
       const int slot = clients[k].playernum;
-      if (seat.ready || slot < 0 || !server->clients[slot].qc_active) continue;
-      bt::fighter_init(seat.fighter, graph, s, slot, map->spec.entities.c_str(), seat.skill,
-                       r.players[static_cast<size_t>(k)].traits, kHz,
-                       opt.seed + 31u * static_cast<uint32_t>(k));
-      seat.fighter.bot.yaw = s.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
-      seat.fighter.bot.pilot.world = &world;  // the hop looks ahead through the map
-      seat.fighter.name = r.players[static_cast<size_t>(k)].name;
-      if (locs.points.empty()) {
-        if (!opt.locs.points.empty()) {
-          locs = opt.locs;
-        } else {
-          locs_from_items(seat.fighter.items, locs);
-        }
-        r.locs_from = locs.from;
-        r.locs = static_cast<int64_t>(locs.points.size());
+      if (seat.ready || slot < 0 || !server->clients[slot].rules_active) continue;
+      if (opt.client_fed) {
+        // Its world off its client: started on the map file's models once the signon is in, and
+        // set up on the baselines (every item the map has, as a client that loaded it knows).
+        const ClassicClientEnd& ce = clients[k];
+        if (ce.stage != ClientStage::active || !ce.player_seen[slot]) continue;
+        seat.mirror = std::make_unique<ClientMirror>();
+        if (!mirror_start(*seat.mirror, map->spec.models, ce, r.error)) return r;
+        seat.mirror->baselines = true;
+        mirror_update(*seat.mirror, ce);
+        seat.mirror->baselines = false;
       }
-      seat.fighter.locs = &locs;
+      const server::RulesCommon& seen = seat.mirror ? seat.mirror->s : s;
+      seat.fighter.features = r.players[static_cast<size_t>(k)].features;
+      team_fighter_setup(tn, seat.fighter, seen, slot, map->spec.entities.c_str(), seat.skill,
+                         r.players[static_cast<size_t>(k)].traits, kHz,
+                         opt.seed + 31u * static_cast<uint32_t>(k),
+                         r.players[static_cast<size_t>(k)].name);
       seat.ready = true;
-      if (!dives_made && swim.leading > 0 && best_n > 0) {
-        dives_made = true;
-        const std::vector<bt::ItemSpot>& items = seat.fighter.items;
-        item_dive.assign(items.size(), -1);
-        for (size_t i = 0; i < items.size(); i++) {
-          const int32_t node = items[i].node;
-          if (node < 0 || best.reached(node)) continue;
-          for (size_t d = 0; d < dives.size() && item_dive[i] < 0; d++)
-            if (dives[d]->pocket[static_cast<size_t>(node)]) item_dive[i] = static_cast<int32_t>(d);
-          if (item_dive[i] >= 0) continue;
-          auto dv = std::make_unique<Dive>();
-          ge::ai::Search pr;
-          sh::nav_reach(graph, node, pr);
-          dv->pocket.assign(graph.nodes.size(), 0);
-          for (size_t m = 0; m < graph.nodes.size(); m++)
-            dv->pocket[m] = pr.reached(static_cast<int32_t>(m)) && !wet[m] &&
-                                    !best.reached(static_cast<int32_t>(m))
-                                ? 1
-                                : 0;
-          dv->pocket[static_cast<size_t>(node)] = 1;
-          sh::build_swim(world, graph, dv->pocket, sh::SwimSettings{}, dv->field, &swim);
-          // Entered by a way into the water the graph closed, from a node of the main part that
-          // reaches most of it again (not a pit dropped into), the one nearest the pocket by water.
-          int32_t steps = -1;
-          ge::ai::Search back;
-          for (const sh::NavExtraLink& e : entries) {
-            if (!best.reached(e.from)) continue;
-            const int32_t way =
-                sh::swim_steps(dv->field, graph.nodes[static_cast<size_t>(e.to)].origin);
-            if (way < 0 || (steps >= 0 && way >= steps)) continue;
-            if (sh::nav_reach(graph, e.from, back) * 10 < best_n * 9) continue;
-            steps = way;
-            dv->node = e.from;
-            dv->entry = e.to;
-          }
-          if (dv->node < 0) continue;
-          dv->swim_s = static_cast<float>(steps) * dv->field.cell / 200.f;  // a swimmer's pace
-          item_dive[i] = static_cast<int32_t>(dives.size());
-          dives.push_back(std::move(dv));
-        }
-        r.dives = static_cast<int64_t>(dives.size());
+      if (r.locs_from.empty()) {
+        r.locs_from = tn.locs.from;
+        r.locs = static_cast<int64_t>(tn.locs.points.size());
+        r.places = sh::loc_places(tn.locs);
       }
-      for (size_t i = 0; i < item_dive.size() && i < seat.fighter.items.size(); i++) {
-        if (item_dive[i] < 0) continue;
-        const Dive& dv = *dives[static_cast<size_t>(item_dive[i])];
-        seat.fighter.items[i].dive = &dv.field;
-        seat.fighter.items[i].dive_node = dv.node;
-        seat.fighter.items[i].dive_entry = dv.entry;
-        seat.fighter.items[i].dive_s = dv.swim_s;
-      }
+      r.dives = static_cast<int64_t>(tn.dives.size());
       r.players[static_cast<size_t>(k)].slot = slot;
       if (r.nav_reached.empty()) {
         ge::ai::Search search;
@@ -484,13 +325,68 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       bt::Team& tm = teams[seat.team];
       tm.members.push_back(&seat.fighter);
       seat.fighter.team = &tm;
-      if (swim.leading > 0) seat.fighter.swim = &swim;
       bt::team_init(tm);
       for (bt::Fighter* f : tm.members) f->bot.senses.friends = tm.friends;
     }
     for (bt::Team& tm : teams) bt::team_count(tm);
     for (int k = 0; k < n; k++) client_tick(clients[k], now);
     r.frames = frame + 1;
+    // Client-fed: how far each fighter's own place, as its world holds it, is from the server's.
+    for (int k = 0; k < n; k++) {
+      const Seat& seat = seats[static_cast<size_t>(k)];
+      const int slot = clients[k].playernum;
+      if (!seat.mirror || !seat.ready || slot < 0) continue;
+      const sh::Edict& truth = s.sv.edicts[static_cast<size_t>(slot) + 1];
+      if (truth.health <= 0) continue;
+      const sh::Vec3f d =
+          seat.mirror->s.sv.edicts[static_cast<size_t>(slot) + 1].origin - truth.origin;
+      TeamPlayer& p = r.players[static_cast<size_t>(k)];
+      p.mirror_err += std::sqrt(static_cast<double>(d.x) * d.x + static_cast<double>(d.y) * d.y +
+                                static_cast<double>(d.z) * d.z);
+      p.mirror_err_n++;
+      p.lag_s += clients[k].latency;
+      p.lag_n++;
+    }
+
+    // The key items lying untaken, and what the fighters made of each (every 4 frames). The items
+    // are read in the same order by every fighter, so an index names one spot for all of them.
+    if (frame % 4 == 0 && n > 0 && seats[0].ready) {
+      const std::vector<bt::ItemSpot>& spots = seats[0].fighter.items;
+      for (size_t i = 0; i < spots.size(); i++) {
+        const bt::ItemSpot& sp = spots[i];
+        int kind = -1;
+        if (sp.kind == bt::ItemKind::armor1) kind = 0;
+        if (sp.kind == bt::ItemKind::armor2) kind = 1;
+        if (sp.kind == bt::ItemKind::armor3) kind = 2;
+        if (sp.kind == bt::ItemKind::mega) kind = 3;
+        if (sp.kind == bt::ItemKind::quad) kind = 4;
+        if (sp.kind == bt::ItemKind::weapon && sp.weapon == kItRockets) kind = 5;
+        if (kind < 0 || sp.ent < 0) continue;
+        const sh::Edict& e = s.sv.edicts[static_cast<size_t>(sp.ent)];
+        const auto ki = static_cast<size_t>(kind);
+        r.lying_n[ki]++;
+        if (e.free || e.modelindex <= 0 || e.solid == sh::kSolidNot) continue;
+        r.lying[ki]++;
+        int why = 0;
+        for (int k = 0; k < n; k++) {
+          const Seat& seat = seats[static_cast<size_t>(k)];
+          const int sl = r.players[static_cast<size_t>(k)].slot;
+          if (!seat.ready || sl < 0 || s.sv.edicts[static_cast<size_t>(sl) + 1].health <= 0)
+            continue;
+          const bt::Fighter& f = seat.fighter;
+          if (i >= f.items.size()) continue;
+          const bt::ItemSpot& mine = f.items[i];
+          int w = mine.present && (mine.known || mine.in_sight) ? 1 : 0;
+          if (f.goal_item == static_cast<int32_t>(i)) {
+            const sh::Vec3f d = s.sv.edicts[static_cast<size_t>(sl) + 1].origin - mine.at;
+            const float far = std::sqrt(d.x * d.x + d.y * d.y);
+            w = f.mode != bt::FightMode::roam ? std::max(w, 2) : far < 64 ? 5 : far < 400 ? 4 : 3;
+          }
+          why = std::max(why, w);
+        }
+        r.lying_why[ki][static_cast<size_t>(why)]++;
+      }
+    }
 
     // The report's frame.
     for (int k = 0; k < n; k++) {
@@ -499,17 +395,167 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       if (!seat.ready) continue;
       const sh::Edict& d = s.sv.edicts[static_cast<size_t>(p.slot) + 1];
       const bool live = d.health > 0;
-      if (seat.alive && !live) p.deaths++;
+      if (live) {
+        const sh::Pilot& pw = seat.fighter.bot.pilot.pilot;
+        Seat::Was w{s.sv.time, d.origin, static_cast<uint8_t>(pw.mode), {}, {}, 0};
+        if (pw.g && pw.k + 1 < pw.route.size()) {
+          w.from = pw.g->nodes[static_cast<size_t>(pw.route[pw.k])].origin;
+          w.to = pw.g->nodes[static_cast<size_t>(pw.route[pw.k + 1])].origin;
+          const sh::NavNode& na = pw.g->nodes[static_cast<size_t>(pw.route[pw.k])];
+          for (int32_t x = 0; x < na.links; x++) {
+            const sh::NavLink& l =
+                pw.g->links[static_cast<size_t>(na.first_link) + static_cast<size_t>(x)];
+            if (l.to == pw.route[pw.k + 1]) w.kind = static_cast<uint8_t>(l.kind);
+          }
+        }
+        seat.was[seat.was_n++ % seat.was.size()] = w;
+      }
+      if (seat.alive && !live) {
+        p.deaths++;
+        // Where it was three seconds before.
+        Seat::Was back;
+        for (const Seat::Was& w : seat.was)
+          if (w.t >= 0 && w.t <= s.sv.time - 3 && w.t > back.t) back = w;
+        const sh::Pilot& pl = seat.fighter.bot.pilot.pilot;
+        const char* link = "-";
+        if (pl.g && pl.k + 1 < pl.route.size()) {
+          const sh::NavNode& a = pl.g->nodes[static_cast<size_t>(pl.route[pl.k])];
+          for (int32_t x = 0; x < a.links; x++) {
+            const sh::NavLink& l =
+                pl.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(x)];
+            if (l.to == pl.route[pl.k + 1]) link = sh::nav_kind_name(l.kind);
+          }
+        }
+        const char* liquid = d.watertype == sh::kContentsLava    ? "lava"
+                             : d.watertype == sh::kContentsSlime ? "slime"
+                             : d.watertype == sh::kContentsWater ? "water"
+                                                                 : "-";
+        // And its way in: where it was 2, 1 and a half second before.
+        std::string way;
+        for (const double ago : {3.0, 2.5, 2.0, 1.5, 1.0, 0.5}) {
+          Seat::Was at;
+          for (const Seat::Was& w : seat.was)
+            if (w.t >= 0 && w.t <= s.sv.time - ago && w.t > at.t) at = w;
+          char c[128];
+          std::snprintf(c, sizeof c, "%s%.0f %.0f %.0f %s", way.empty() ? "" : " > ", at.at.x,
+                        at.at.y, at.at.z, sh::pilot_mode_name(static_cast<sh::PilotMode>(at.mode)));
+          way += c;
+          if (ago > 3.5) continue;
+          std::snprintf(c, sizeof c, " [%s %.0f %.0f %.0f to %.0f %.0f %.0f]",
+                        sh::nav_kind_name(static_cast<sh::NavKind>(at.kind)), at.from.x, at.from.y,
+                        at.from.z, at.to.x, at.to.y, at.to.z);
+          way += c;
+        }
+        char b[1400];
+        std::snprintf(b, sizeof b, "%.1f\t%s\t%.0f %.0f %.0f\t%s\t%s\t%s\t%.0f %.0f %.0f\t%s\t%s",
+                      s.sv.time, p.name.c_str(), d.origin.x, d.origin.y, d.origin.z, liquid,
+                      sh::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
+                      sh::pilot_mode_name(static_cast<sh::PilotMode>(back.mode)), way.c_str());
+        r.deaths.push_back(b);
+      }
       seat.alive = live;
-      const bool quad = (static_cast<int32_t>(bt::read_stats(s, p.slot + 1).items) & kItQuad) != 0;
+      const bt::Stats rst = bt::read_stats(s, p.slot + 1);
+      const bool quad = (rst.items & kItQuad) != 0;
       if (quad && !seat.had_quad) r.teams[seat.team].quad_pickups++;
       seat.had_quad = quad;
+      // The launcher taken (off the map or out of a pack), and the rockets in hand when it was.
+      const bool rl = live && (rst.items & kItRockets) != 0;
+      if (rl && !seat.had_rl) p.rl_pickups++;
+      seat.had_rl = rl;
+      if (live && frame % 4 == 0) {
+        p.rl_samples += rl;
+        p.rl_loaded += rl && rst.rockets > 0;
+      }
       if (frame % opt.path_every == 0) {
         p.path.push_back(d.origin);
         p.roles.push_back(live ? static_cast<uint8_t>(seat.fighter.role) : 255);
         p.known.push_back(static_cast<int16_t>(bt::items_known(seat.fighter)));
       }
+      // How often an enemy stands in plain view of him (in range, a clear line, any way he looks),
+      // against how often he sees one (in his cone): a bot that roams with nobody known while
+      // an enemy is in view misses him; one with nobody in view is in the wrong place.
+      if (live && frame % 4 == 0) {
+        sh::SenseSettings all = seat.fighter.bot.senses.set;
+        all.fov = 360;
+        const sh::Vec3f eye{d.origin.x, d.origin.y, d.origin.z + all.view_height};
+        bool any = false;
+        float near = 1e30f, near_off = 0;  // the nearest in plain view, and his yaw off the view
+        for (int j = 0; j < n; j++) {
+          const Seat& o = seats[static_cast<size_t>(j)];
+          const int os = r.players[static_cast<size_t>(j)].slot;
+          if (!o.ready || o.team == seat.team || os < 0) continue;
+          const sh::Edict& e = s.sv.edicts[static_cast<size_t>(os) + 1];
+          if (e.health <= 0 || !sh::sees_player(s.sv, all, p.slot + 1, eye, {}, e.origin)) continue;
+          any = true;
+          const float dx = e.origin.x - eye.x, dy = e.origin.y - eye.y;
+          const float dd = dx * dx + dy * dy;
+          if (dd < near) {
+            near = dd;
+            float yaw = 0, pitch = 0;
+            sh::aim_angles(eye, e.origin, yaw, pitch);
+            float off = std::fmod(yaw - seat.fighter.bot.yaw, 360.f);
+            if (off > 180) off -= 360;
+            if (off < -180) off += 360;
+            near_off = std::fabs(off);
+          }
+        }
+        bool seen = false;
+        for (const sh::Contact& c : seat.fighter.bot.senses.contacts) seen = seen || c.visible;
+        const sh::Vec3f vel = s.world.entities[static_cast<size_t>(p.slot) + 1].velocity;
+        const float vh = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+        if (!any && vh > 100) {
+          const sh::Bot& bb = seat.fighter.bot;
+          const sh::PilotMode pm = bb.pilot.pilot.mode;
+          const bool walk = pm == sh::PilotMode::walk || pm == sh::PilotMode::idle ||
+                            pm == sh::PilotMode::wait || pm == sh::PilotMode::arrived ||
+                            pm == sh::PilotMode::ride;
+          const int holder = bb.aiming    ? 0
+                             : bb.looking ? 1
+                             : walk       ? (bb.calm ? 2 : 3)
+                             : (pm == sh::PilotMode::hop || pm == sh::PilotMode::strafe ||
+                                pm == sh::PilotMode::air || pm == sh::PilotMode::jump ||
+                                pm == sh::PilotMode::run_up)
+                                 ? 4
+                                 : 5;
+          float off = static_cast<float>(
+              std::fmod(static_cast<double>(seat.fighter.view_sent[1]) -
+                            ge::core::libm::atan2(vel.y, vel.x) * 180 / ge::core::kPi,
+                        360.0));
+          if (off > 180) off -= 360;
+          if (off < -180) off += 360;
+          if (holder == 2) {
+            float ro = static_cast<float>(
+                std::fmod(static_cast<double>(bb.pilot.pilot.yaw) -
+                              ge::core::libm::atan2(vel.y, vel.x) * 180 / ge::core::kPi,
+                          360.0));
+            if (ro > 180) ro -= 360;
+            if (ro < -180) ro += 360;
+            p.calm_route_off += std::fabs(ro) > 45;
+          }
+          p.moving_n[holder]++;
+          p.moving_off[holder] += std::fabs(off) > 45;
+        }
+        if (any && !seen) {
+          p.unseen_off[near_off < 60 ? 0 : near_off < 90 ? 1 : near_off < 135 ? 2 : 3]++;
+          p.unseen_calm += seat.fighter.bot.calm && !seat.fighter.bot.aiming &&
+                           (seat.fighter.bot.pilot.pilot.mode == sh::PilotMode::walk ||
+                            seat.fighter.bot.pilot.pilot.mode == sh::PilotMode::idle ||
+                            seat.fighter.bot.pilot.pilot.mode == sh::PilotMode::wait ||
+                            seat.fighter.bot.pilot.pilot.mode == sh::PilotMode::arrived);
+        }
+        p.view_n++;
+        p.in_view += any;
+        p.seen_n += seen;
+        p.unnoticed += any && seat.fighter.mode == bt::FightMode::roam;
+        // With one in plain view: did it see him, aim at him, hold its fire?
+        if (any) {
+          p.in_view_seen += seen;
+          p.in_view_aiming += seat.fighter.bot.aiming;
+          p.in_view_reacting += sh::bot_reacting(seat.fighter.bot, s.sv.time);
+        }
+      }
       if (live) {
+        static_assert(std::size(TeamPlayer{}.role_commands) == bt::kRoles);
         p.role_commands[static_cast<int>(seat.fighter.role)]++;
         p.pilot_modes[static_cast<int>(seat.fighter.bot.pilot.pilot.mode)]++;
       }
@@ -577,9 +623,29 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.switches = fs.switches;
     p.packs = fs.packs;
     p.held_fire = fs.held_fire;
+    p.trigger_checks = fs.trigger_checks;
+    p.trigger_far = fs.trigger_far;
+    p.trigger_off = fs.trigger_off;
     p.reactions = seat.fighter.bot.stats.reactions;
     p.pre_aimed = seat.fighter.bot.stats.pre_aimed;
+    p.strokes = seat.fighter.bot.hand.stats.strokes;
+    p.lifts = seat.fighter.bot.hand.stats.lifts;
+    p.target_kept = seat.fighter.bot.stats.kept;
+    p.sound_swipes = seat.fighter.bot.stats.sound_swipes;
     p.react_s = seat.fighter.bot.stats.react_s;
+    if (p.slot >= 0 && static_cast<size_t>(p.slot) < hits.players.size())
+      p.hits = hits.players[static_cast<size_t>(p.slot)];
+    r.pellets_at = hits.pellets_at;
+    r.rockets_at = hits.rockets_at;
+    r.given_at = hits.given_at;
+    r.frames_at = hits.frames_at;
+    if (p.slot >= 0 && static_cast<size_t>(p.slot) < hits.given.size())
+      p.given = hits.given[static_cast<size_t>(p.slot)];
+    if (p.slot >= 0 && static_cast<size_t>(p.slot) < hits.lead_n.size()) {
+      p.lead_sum = hits.lead_sum[static_cast<size_t>(p.slot)];
+      p.lead_abs = hits.lead_abs[static_cast<size_t>(p.slot)];
+      p.lead_n = hits.lead_n[static_cast<size_t>(p.slot)];
+    }
     p.dives = seat.fighter.dives;
     p.dives_given_up = fs.dives_given_up;
     p.dive_wet_s = fs.dive_wet_s;
@@ -604,6 +670,32 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       p.last = b;
     }
     p.plans = ps.plans;
+    p.goal_changes = seat.fighter.stats.goal_changes;
+    p.surfaced = seat.fighter.stats.surfaced;
+    p.surface_failed = seat.fighter.stats.surface_failed;
+    p.swim_fights = seat.fighter.stats.swim_fights;
+    {
+      const bt::FighterStats& pk = seat.fighter.stats;
+      for (size_t pf = 0; pf < 5; pf++) p.packs_known[pf] = pk.packs_known[pf];
+      p.pack_guesses = pk.pack_guesses;
+      p.pack_right = pk.pack_guess_right;
+      p.pack_guess_rl = pk.pack_guess_rl;
+      p.pack_truth_rl = pk.pack_truth_rl;
+      p.pack_trips = pk.pack_trips;
+      p.pack_reached = pk.pack_reached;
+      p.pack_seen_gone = pk.pack_seen_gone;
+    }
+    p.wet = seat.fighter.stats.wet;
+    for (size_t w = 0; w < 12; w++) {
+      p.wet_why[w] = seat.fighter.stats.wet_why[w];
+    }
+    for (size_t w = 0; w < 3; w++) {
+      p.wet_speed[w] = seat.fighter.stats.wet_speed[w];
+      p.wet_n[w] = seat.fighter.stats.wet_n[w];
+      p.wet_still[w] = seat.fighter.stats.wet_still[w];
+    }
+    p.on_the_way = seat.fighter.stats.on_the_way;
+    for (size_t w = 0; w < 12; w++) p.took[w] = seat.fighter.stats.took[w];
     p.stuck = ps.stuck;
     p.lost = ps.lost;
     p.waits = ps.waits;
@@ -626,10 +718,19 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.teams[t].messages = ts.messages;
     r.teams[t].lost_seen = ts.lost_seen;
     r.teams[t].retakes = ts.retakes;
+    r.teams[t].pushes = ts.pushes;
+    r.teams[t].joins = ts.joins;
     r.teams[t].spam_shots = ts.spam_shots;
+  }
+  if (tn.plan_made && !seats.empty()) {
+    r.plan = bt::plan_text(tn.plan, seats[0].fighter.items);
+    r.goals = bt::goals_text(tn.goals);
+    r.plan_areas = static_cast<int32_t>(tn.plan.areas.size());
+    r.plan_base = tn.plan.base;
   }
   for (size_t k = 0; k < seats.size(); k++) {
     const bt::Mind& mn = seats[k].fighter.mind;
+    if (k == 0) r.prints = clients[0].prints;
     r.players[k].read = mn.read;
     r.players[k].missed = mn.missed;
     const bt::Fighter& fi = seats[k].fighter;
@@ -640,6 +741,29 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].spam_shots = fi.stats.spam_shots;
     r.players[k].outmatched = fi.stats.outmatched;
     r.players[k].sound_chases = fi.stats.sound_chases;
+    r.players[k].dodging = fi.stats.dodging;
+    r.players[k].dodge_turns = fi.stats.dodge_turns;
+    r.players[k].rocket_jumps = fi.bot.pilot.pilot.stats.rocket_jumps;
+    r.players[k].flips = fi.bot.pilot.pilot.stats.flips;
+    r.players[k].escapes = fi.bot.pilot.pilot.stats.escapes;
+    r.players[k].escapes_out = fi.bot.pilot.pilot.stats.escapes_out;
+    r.players[k].gap_jumps = fi.bot.pilot.pilot.stats.gap_jumps;
+    r.players[k].gap_landed = fi.bot.pilot.pilot.stats.gap_landed;
+    r.players[k].gap_refused = fi.bot.pilot.pilot.stats.gap_refused;
+    r.players[k].hops = fi.bot.pilot.pilot.stats.hops;
+    r.players[k].hop_jumps = fi.bot.pilot.pilot.stats.hop_jumps;
+    r.players[k].circles = fi.bot.pilot.pilot.stats.circles;
+    r.players[k].circle_speed = fi.bot.pilot.pilot.stats.circle_speed;
+    r.players[k].watching = fi.stats.watching;
+    r.players[k].speed_sum = fi.stats.speed_sum;
+    for (int m = 0; m <= sh::kPilotModes; m++) {
+      r.players[k].mode_speed[m] = fi.stats.mode_speed[m];
+      r.players[k].mode_n[m] = fi.stats.mode_n[m];
+    }
+    if (seats[k].mirror) {
+      r.players[k].mirrored = seats[k].mirror->updates;
+      r.players[k].predicted = seats[k].mirror->predicted;
+    }
     r.lines_read += mn.read;
     r.lines_missed += mn.missed;
   }

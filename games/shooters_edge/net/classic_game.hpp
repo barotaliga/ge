@@ -11,20 +11,44 @@
 // challenges'), and the mod's own rules (`fraglimit`, `timelimit`, `deathmatch`, `teamplay`, …:
 // `ServerGame::rules`), each left to the mod's default when unset, and `sv_maprotation` (the map
 // after each match's end; unset, the one the mod asks for).
-// `sv_bots` must be 0: bots on the classic server come with the engine's lobby (M53c).
 //
-// Offline (no socket: a test, a lab) the frame is the mod's own frame with no moves; on the
-// network it is the endpoint's frame at the server's time, which is the same frame while nobody
-// is connected, so both give one digest.
+// A MOD FOLDER (`sv_mod`, `--mod=<folder>`; the last of a comma list): the maps and files are its
+// folder's over the base game's, the program is the folder's own multiplayer program (the game
+// adapter's `find_program`: `qwprogs.dat`, loose or in any of its packs) in place of the baseline
+// mod, serverdata names the folder, and the server info's `*gamedir` says it before the map loads
+// (a mod checks it). A mod folder without a program this server runs is refused, naming it.
+//
+// BOTS AND THE LOBBY: `sv_bots` seats the listen server's fighters (client/lobby_room.hpp) in the
+// slots after 0, each a local seat of the endpoint every client sees as a player. `sv_lobby 1`
+// runs the engine's lobby (engine/server/match.hpp): every map warms up with the limits held, a
+// client's `ready`, `break`, `team`, `start` and `lobby` (and the leader's `addbot`, `removebot`)
+// are taken before the mod, a seat's team goes into its user info and the mod's `.team`, the
+// countdown run out restarts the map into the match, and the match's next map warms up again.
+// Bots alone never count down. Without `sv_lobby` the bots play every map as a match.
+//
+// COOP (`sv_coop 1`, a dedicated server only): the game folder's campaign in coop in place of a
+// match, with `sv_coopbots` companions, listed as coop (classic_coop_game.hpp).
+//
+// A LISTEN SERVER is the same game in the window's process (client/listen.hpp's `ListenHost` in
+// `ServerConfig::host`): the window's program, map and lines, its player slot 0 (a local seat
+// the window moves and sees), the next map the mod asks for read by the window. Others join it
+// on the window's port like a dedicated server's clients.
+//
+// Offline (no socket: a test, a lab) the frame is the mod's own frame with the bots' moves; on
+// the network it is the endpoint's frame at the server's time, which is the same frame while
+// nobody is connected, so both give one digest.
 //
 // ge:summary Shooter's Edge's playable dedicated server: the mod on the classic protocol
 // ge:keywords dedicated-server classic-server servergame serve net_frame baseline-mod deathmatch
 // ge:keywords classic_game playable-server game-rules fraglimit timelimit map-change maprotation
+// ge:keywords sv_bots sv_lobby bots lobby warmup addbot removebot listen-server listen_options
+// ge:keywords sv_coop dedicated-coop
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_game_test.cpp
 #pragma once
 
 #include "server/server.hpp"
+#include "shooters_edge/client/listen.hpp"
 
 namespace shooters_edge::net {
 
@@ -32,5 +56,9 @@ namespace shooters_edge::net {
 inline constexpr const char* kGameFolder = "id1";
 
 const ge::server::ServerGame& classic_game();
+
+// A listen server's options with its matches on `classic_game()` and a coop campaign's door
+// `classic_coop()` (classic_coop.hpp).
+client::ListenOptions listen_options();
 
 }  // namespace shooters_edge::net

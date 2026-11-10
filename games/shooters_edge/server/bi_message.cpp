@@ -8,12 +8,14 @@
 //
 // ge:summary The network builtins: Write*, multicast, sound, prints, stuffcmd, lightstyle, particle
 // ge:keywords sound stuffcmd bprint sprint dprint centerprint lightstyle particle ambientsound
+// ge:keywords particleeffectnum pointparticles trailparticles dp_sv_pointparticles
 // ge:keywords writebyte writechar writeshort writelong writecoord writeangle writestring
 // ge:keywords writeentity multicast msg_entity recipients phs pvs spectator-copies sv_specprint
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_qc_messages_test.cpp
 #include <cstring>
 
+#include "progs/localized.hpp"
 #include "progs/stdlib.hpp"
 #include "shooters_edge/server/builtins.hpp"
 
@@ -86,7 +88,9 @@ void write(pg::Vm& vm, WriteKind kind) {
   float number = pg::arg_float(vm, 1);
   const char* text = "";
   if (kind == WriteKind::string) {
-    text = pg::arg_string(vm, 1);
+    // A program's key (`$qc_finale_e1`) goes out as its words (progs/localized.hpp).
+    const std::string_view words = pg::resolve_key(s.opt.localized.get(), pg::arg_string(vm, 1));
+    text = words.data();
     if (vm.fault.set) return;
   } else if (kind == WriteKind::entity) {
     const int n = pg::entity_number(vm, pg::arg_int(vm, 1));
@@ -275,7 +279,7 @@ void bi_bprint(pg::Vm& vm) {
   QcServer& s = server_of(vm);
   const bool solo = pg::vm_layout(vm).single_player;
   char buf[pg::kTempStringBytes];
-  pg::join_args(vm, solo ? 0 : 1, buf, sizeof buf);
+  pg::localize_join_args(vm, s.opt.localized.get(), solo ? 0 : 1, buf, sizeof buf);
   if (vm.fault.set) return;
   NetEvent ev;
   ev.kind = EventKind::print;
@@ -291,7 +295,7 @@ void bi_sprint(pg::Vm& vm) {
   const int e = pg::entity_number(vm, pg::arg_int(vm, 0));
   const bool solo = pg::vm_layout(vm).single_player;
   char buf[pg::kTempStringBytes];
-  pg::join_args(vm, solo ? 1 : 2, buf, sizeof buf);
+  pg::localize_join_args(vm, s.opt.localized.get(), solo ? 1 : 2, buf, sizeof buf);
   if (vm.fault.set) return;
   if (e < 1 || e > sh::kMaxClients || !s.clients[e - 1].active) {
     console_print(s, "tried to sprint to a non-client");
@@ -308,17 +312,18 @@ void bi_sprint(pg::Vm& vm) {
 }
 
 void bi_dprint(pg::Vm& vm) {
+  QcServer& s = server_of(vm);
   char buf[pg::kTempStringBytes];
-  pg::join_args(vm, 0, buf, sizeof buf);
+  pg::localize_join_args(vm, s.opt.localized.get(), 0, buf, sizeof buf);
   if (vm.fault.set) return;
-  console_print(server_of(vm), buf);
+  console_print(s, buf);
 }
 
 void bi_centerprint(pg::Vm& vm) {
   QcServer& s = server_of(vm);
   const int e = pg::entity_number(vm, pg::arg_int(vm, 0));
   char buf[pg::kTempStringBytes];
-  pg::join_args(vm, 1, buf, sizeof buf);
+  pg::localize_join_args(vm, s.opt.localized.get(), 1, buf, sizeof buf);
   if (vm.fault.set) return;
   if (e < 1 || e > sh::kMaxClients || !s.clients[e - 1].active) {
     console_print(s, "tried to centerprint to a non-client");
@@ -376,6 +381,7 @@ void bi_particle(pg::Vm& vm) {
   NetEvent ev;
   ev.kind = EventKind::particle;
   ev.origin = {org[0], org[1], org[2]};
+  ev.dir = {dir[0], dir[1], dir[2]};
   ev.to = clients_reaching(s, ev.origin, true);
   ev.values[0] = colour;
   ev.values[1] = count;
@@ -392,6 +398,80 @@ void bi_writelong(pg::Vm& vm) { write(vm, WriteKind::long_); }
 void bi_writecoord(pg::Vm& vm) { write(vm, WriteKind::coord); }
 void bi_writeangle(pg::Vm& vm) { write(vm, WriteKind::angle); }
 void bi_writestring(pg::Vm& vm) { write(vm, WriteKind::string); }
+// particleeffectnum (#335): the effect's number by its name, the same name the same number for
+// the server's life (1 up; 0 for an empty name). The number stands for the name on the server
+// only: the events carry the name, so a client draws the effect its own files define by it.
+void bi_particleeffectnum(pg::Vm& vm) {
+  QcServer& s = server_of(vm);
+  const std::string name = pg::arg_string(vm, 0);
+  if (name.empty()) {
+    pg::return_float(vm, 0);
+    return;
+  }
+  size_t n = 0;
+  while (n < s.effect_names.size() && s.effect_names[n] != name) n++;
+  if (n == s.effect_names.size()) {
+    if (s.effect_names.size() >= kMaxEffectNames) {
+      pg::vm_error(vm, "particleeffectnum: more than 1024 effect names; next: name fewer effects");
+      return;
+    }
+    s.effect_names.push_back(name);
+  }
+  pg::return_float(vm, static_cast<float>(n + 1));
+}
+
+namespace {
+
+// The name of effect number `num`; null (nothing sent) for 0 or a number never given out.
+const std::string* effect_name(const QcServer& s, float num) {
+  const int32_t n = trunc_i32(num);
+  if (n < 1 || static_cast<size_t>(n) > s.effect_names.size()) return nullptr;
+  return &s.effect_names[static_cast<size_t>(n) - 1];
+}
+
+}  // namespace
+
+// pointparticles (#337): effect `num` at `org` along `dir`, `count` times, to those who see it.
+void bi_pointparticles(pg::Vm& vm) {
+  QcServer& s = server_of(vm);
+  const std::string* name = effect_name(s, pg::arg_float(vm, 0));
+  if (name == nullptr) return;
+  float org[3], dir[3];
+  pg::arg_vector(vm, 1, org);
+  pg::arg_vector(vm, 2, dir);
+  NetEvent ev;
+  ev.kind = EventKind::point_effect;
+  ev.origin = {org[0], org[1], org[2]};
+  ev.to = clients_reaching(s, ev.origin, true);
+  ev.values[0] = dir[0];
+  ev.values[1] = dir[1];
+  ev.values[2] = dir[2];
+  ev.values[3] = vm.argc >= 4 ? pg::arg_float(vm, 3) : 1;
+  ev.text = *name;
+  push(s, std::move(ev));
+}
+
+// trailparticles (#336): effect `num` laid from `start` to `end` for entity `ent`.
+void bi_trailparticles(pg::Vm& vm) {
+  QcServer& s = server_of(vm);
+  const std::string* name = effect_name(s, pg::arg_float(vm, 1));
+  if (name == nullptr) return;
+  float from[3], to[3];
+  pg::arg_vector(vm, 2, from);
+  pg::arg_vector(vm, 3, to);
+  NetEvent ev;
+  ev.kind = EventKind::trail_effect;
+  ev.ent = pg::entity_number(vm, pg::arg_int(vm, 0));
+  ev.origin = {from[0], from[1], from[2]};
+  ev.to = clients_reaching(s, ev.origin, true) |
+          clients_reaching(s, sh::Vec3f{to[0], to[1], to[2]}, true);
+  ev.values[0] = to[0];
+  ev.values[1] = to[1];
+  ev.values[2] = to[2];
+  ev.text = *name;
+  push(s, std::move(ev));
+}
+
 void bi_writeentity(pg::Vm& vm) { write(vm, WriteKind::entity); }
 
 void bi_ambientsound(pg::Vm& vm) {

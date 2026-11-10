@@ -125,3 +125,15 @@ TEST(the_match_does_what_it_is_scripted_to) {
     if (f.origin[1].z > 127 && f.origin[1].y < -384 && f.onground[1]) on_ledge = true;
   CHECK(on_ledge);
 }
+
+TEST(the_match_on_the_original_move_is_predicted_with_it) {
+  // The server steps the original move a command and the clients predict with the same step on
+  // their stand-in: the plat's rider corrects as little as on the arena move (under 2 units).
+  se::MatchOptions opt;
+  opt.frames = 700;
+  opt.original_move = true;
+  const se::MatchReport r = se::run_match(opt);
+  CHECK(count(r, se::EventKind::rocket_fired) >= 2);
+  CHECK_MSG(r.clients[1].worst_correction < 2.0f,
+            "player 2's worst correction " + std::to_string(r.clients[1].worst_correction));
+}

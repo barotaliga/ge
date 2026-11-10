@@ -15,7 +15,8 @@
 //   lights it kept with `light_held`, the floor, the gloss), the share of the frame's sun and sky
 //   it stands in (`outdoor`: the sun through the sun's shadow maps, render/shadows.hpp, at the
 //   gun's place), and the frame's own LAMPS (render/lights.hpp's clusters, read at the gun's
-//   pixel) when `lamps` is set.
+//   pixel) when `lamps` is set. Its WARP (render/morph.hpp's MorphWarp) dissolves it in or out
+//   along an axis of the held frame, as a spawn assembles the gun in the player's hands.
 // - THE UNITS: the held light's 1 is a white surface lit white. On the frame's HDR target that is
 //   `white_lux` on a white face (the frame's lux, as the sun's 128 000), or, at 0, the white the
 //   frame's eye adapted to (`white_luminance` in wgsl/frame.wgsl), so a gun in a dim corridor is
@@ -40,6 +41,7 @@
 // ge:keywords depth-range guard reversed-z shade_held lamps clustered-lights sun-shadow outdoor
 // ge:keywords white-lux held_candela held_depth_floor create_viewmodel prepare_viewmodel
 // ge:keywords encode_viewmodel encode_viewmodel_resolved resolved cpu-reference flame-hidden
+// ge:keywords warp dissolve held-warp spawn
 // ge:skill render
 // ge:test tests/render_viewmodel_test.cpp
 #pragma once
@@ -80,6 +82,17 @@ struct HeldDraw {
   double white_lux = 0;            // lx on white that the held unit's 1 is (0: the eye's white)
   bool hide_flame = true;          // leave out the model's own flash (`HeldModel::flame`)
   bool hide_hands = false;         // leave out the hands holding it (`HeldModel::hand`)
+  // The share of the screen's height the gun is raised by, the whole of it alike: a view drawn
+  // above a status bar (Shooter's Edge's classic bar) shows the gun over the bar, not behind it.
+  float lift = 0;
+  // The share of the gun drawn: below 1 a see-through ghost, its pixels screen-door dithered by a
+  // pattern that moves frame to frame, so the frame's TAA-U averages it to a see-through gun in an
+  // opaque pass (a game's preview of a weapon not yet in hand); a ghost also takes a faint cool
+  // light of its own, so it reads in a dark room.
+  float opacity = 1;
+  // Coming into being or going out of it (render/morph.hpp's MorphWarp): its axis and span in the
+  // held frame; pinch and shimmer are not drawn here.
+  MorphWarp warp;
 };
 
 // The reversed-z depth the gun's nearest point may take least: what the world at `guard_m` has
@@ -104,11 +117,12 @@ struct GpuHeldDraw {
   float direct[4];   // rgb; shininess
   float toward[4];   // view, unit; the held lights' count
   float right[4];    // the view's right in the world (camera-relative); the lens ratio
-  float up[4];       // and its up
-  float forward[4];  // and its forward
+  float up[4];       // and its up; the lift in NDC (twice the share of the screen)
+  float forward[4];  // and its forward; 1 - the opacity
   float lights[viewmodel::kHeldLights][8];  // at (view, m), range; rgb, radius
+  float warp[16];                           // render/wgsl/warp.wgsl's Warp
 };
-static_assert(sizeof(GpuHeldDraw) == 496, "match viewmodel.wgsl's HeldDraw");
+static_assert(sizeof(GpuHeldDraw) == 560, "match viewmodel.wgsl's HeldDraw");
 
 // One draw packed for a frame seen through `view` on a `width` x `height` render.
 GpuHeldDraw pack_held_draw(const HeldDraw& d, const FrameView& view, uint32_t width,

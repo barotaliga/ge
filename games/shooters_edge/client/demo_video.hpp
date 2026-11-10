@@ -12,7 +12,8 @@
 // are within a frame of each other whatever the machine's speed. The video's clock runs on through
 // the levels: a level's start (whose own clock starts over) and a stall between two frames longer
 // than `kMostDemoGap` move it on by no more than that, so a long pause in a recording does not
-// become a long still in the video.
+// become a long still in the video. A picture is drawn between the last two demo frames read
+// (demo_lerp.hpp, `lerp`), so a recording made at any rate moves smoothly at the video's.
 //
 // A CLIP is a part of the demo: from `from_s` on the play bar's timeline (timedemo.hpp's
 // `DemoTimeline`, the same clock as this one) for `seconds`, or one of the tracked player's
@@ -35,7 +36,8 @@
 // ge:keywords demo-video demovideo export video mp4 webm mkv record demo-to-video frame-clock
 // ge:keywords sound voice qwdv mvdv capture h264 av1 opus offscreen readback
 // ge:keywords clip gif animated-gif highlight from-to start-end excerpt caption text conchars
-// ge:keywords demo_placed demo-players other-players player-colours
+// ge:keywords demo_placed demo-players other-players player-colours smooth lerp between-frames
+// ge:keywords autotrack hottest-player
 // ge:skill shooter replay render
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -47,11 +49,16 @@
 
 #include "gpu/device.hpp"
 #include "lab/raster.hpp"
+#include "render/view.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_autotrack.hpp"
+#include "shooters_edge/client/demo_fx.hpp"
+#include "shooters_edge/client/demo_lerp.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/client/world_models.hpp"
 
 namespace shooters_edge::client {
@@ -74,10 +81,16 @@ struct DemoVideoOptions {
   bool gif = false;     // an animated GIF (also when `file` ends in .gif)
   int gif_width = 480;  // a GIF's width, px (the height in proportion)
   int track = -1;       // a multiview recording's player (-1: the lowest playing)
+  // A multiview recording's camera on the hottest player, cut by cut (demo_autotrack.hpp); `track`
+  // is then ignored.
+  bool autotrack = false;
+  AutotrackSettings autotrack_set;
   bool hud = true;
   bool text = true;      // the words in the upper left (demo_caption.hpp: the packs' console font)
   bool messages = true;  // the prints, the chat and the centre prints the recorded player read
   bool sound = true;
+  bool lerp =
+      true;  // drawn between the demo's frames (demo_lerp.hpp), as `demo_lerp` in the window
   float volume = 0.5f;                     // the game's sounds, under the voices
   float voice_volume = 1.5f;               // the players' voices, over the game as voice chat is
   const look::Picture* picture = nullptr;  // the look (null: the classic look's defaults)
@@ -101,21 +114,38 @@ struct DemoVideoReport {
   std::string highlight;        // the highlight that made it ("": none)
   std::string text_font;        // the words' type: cache, packs or charset ("": no words)
   std::string hud_art;          // the status bar's pictures: packs or free
+  AutotrackPlan autotrack;      // with `autotrack`: the cuts the camera followed
 };
 
 // Called with each picture as it goes into the file (a lab's strip): its index and its time on
 // the demo's timeline.
 using DemoVideoPicture = std::function<void(int64_t frame, double t, const ge::lab::Picture&)>;
+// Called before each picture is drawn with the state between frames it is drawn from (a lab's
+// chart of what moved and how far).
+using DemoVideoLerp = std::function<void(const DemoLerp&)>;
 
 // What a demo has standing in the world this frame, for `FxFrame::models`: its entities with a
 // model (not the eye's own), the other players in their colours, the level's statics. The video
 // and the window's playback (`playdemo`, `timedemo`) both draw these.
 void demo_placed(const DemoState& s, std::vector<Placed>& out);
 
+// A demo's frame as the effects read it (world_fx.hpp's FxScene): `fx`'s explosions, temporary
+// entities and missiles (demo_fx.hpp), what stands in the world (`demo_placed`), the players as
+// bodies (alive unless a multiview marks one dead), the eye's own as the local player (his place,
+// his health for the hit's flash, his glow). `map`: the level's faces (null: none).
+void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
+                   const ge::render::FrameView& view, FxScene& out);
+// `s`'s frames since the last draw (its effects) into `fx`, then the effects stepped for this
+// draw into `out` (its models too): what the window's playback, a joined game and the video draw.
+void demo_fx_step(const DemoState& s, DemoFx& fx, const LoadedMap* map,
+                  const ge::render::FrameView& view, FxState& state, double t, double dt,
+                  FxFrame& out);
+
 // `o.demo` from `files` into `o.file` on `device`. False with the reason and the next step.
 bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVideoOptions& o,
                 DemoVideoReport& report, std::string& error,
-                const DemoVideoPicture& picture = nullptr);
+                const DemoVideoPicture& picture = nullptr,
+                const DemoVideoLerp& picture_lerp = nullptr);
 
 // The report as `-demovideo` prints it: where from and to, the clip, the pictures, the file, the
 // sounds, a line each.

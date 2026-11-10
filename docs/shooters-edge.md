@@ -138,15 +138,19 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
   not ship comes from the base game (saves go to the mod's folder). **`-progs <file>`** runs a mod's progs in place of the
   baseline mod (§ Running your own mod), and **`-models <dir>`** names the held weapons' folder
   (by default the tree's `games/shooters_edge/content/models/view`). Each folder's packs are read in number order (`pak0.pak`, `pak1.pak`,
-  ...; any case), then its zips (`*.pk3`) and unpacked zips (`*.pk3dir`), and a loose file in the
+  ...; any case), then its other packs (a mod's `misc.pak`), zips (`*.pk3`) and unpacked zips (`*.pk3dir`), and a loose file in the
   folder (`maps/mymap.bsp`) overrides them all (`client/files.hpp`, over `engine/vfs/search.hpp`).
 - **`+<command>`**: console lines run at start. `+map dm6` loads that map; `+map arena` the
   built-in test arena (no packs needed, only the sky drawn). With no `+map`, the map `start`
   when the packs have it, else the arena. `--size=WxH` sets the window's size, `--frames=N`
   quits after N frames.
 - **The keys**: W A S D move, SPACE jumps, the left button fires, 1 to 8 pick a weapon (7 the
-  rocket launcher), the wheel the next one. The mouse looks while the window has it (raw
-  counts, captured); a click takes it back after the console; closing the window quits.
+  rocket launcher), the wheel the next one. The mouse looks (raw counts, captured) from the
+  moment the window gets the focus, by a click on it or on the app's icon in the Dock or the
+  taskbar, with no second click; only the console lets it go by default, and closing the console
+  takes it back. `in_mouse_release` names what frees it (bits: 1 the console, 2 a menu, whose
+  pointer then hovers and clicks; 4 a demo's play bar; default 5), so a menu is driven by the keys
+  unless it holds 2. Closing the window quits.
 - **The main menu** (ESCAPE; ESCAPE again goes back, and out of it at its root): the classic
   game's pages (§ The main menu), every row the game can do working and the rest dimmed.
 - **The console** (the key under ESCAPE): `map <name>` changes the map, `sv <line>` runs a line on
@@ -157,8 +161,11 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
   lights, water, lava, slime, torch flames and weather) with the picture's other cvars
   (`r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`; the bloom's from the next
   map), every classic-enhance switch (`ce_water 0`, `ce_flames 0`, `ce_shadows 0`, ...;
-  `ce_textures` and `ce_bloom` from the next map), the weather's (`sv_weather 1` brings the rain)
-  and `quit`.
+  `ce_textures` and `ce_bloom` from the next map), the three dearest switches' levels
+  (`ce_shadows_quality`, `ce_water_quality`, `ce_skies_quality`: `low`, `medium` or `high`) and
+  `r_quality` over all three (`custom`, the default, leaves them as set; `low`, `medium`, `high`,
+  `top`, `auto` inside `r_budget` ms, or 0..1: the quality ladder, `app/ladder.hpp`), the
+  weather's (`sv_weather 1` brings the rain) and `quit`.
 - **The campaign** (M18s4): ESCAPE ▸ SINGLE PLAYER ▸ NEW GAME (or `newgame` in the console)
   plays the packs' own single-player program from the map `start`, on the campaign host
   (`server/campaign.hpp`): the maps in a chain, the next one read when the program changes level,
@@ -216,12 +223,15 @@ fullbright texels glowing; with `ce_models` on and the pack enhanced, each skin 
 cache's upscaled copy, raised to twice the pack's size and then toward the cache's own scale
 while the models' one atlas holds them all, read when the map loads); the weapon in hand (`client/held.hpp`: the game's free
 models, switched with the number keys, kicked and lit by its muzzle flash as the mod fires it,
-lit by the map's baked light under the player, every shot firing the engine's muzzle flame, smoke
-and sparks (`app/muzzle.hpp`; `ce_muzzles 0` leaves the light alone); `r_drawviewmodel`,
+lit by the map's baked light under the player, every shot firing the engine's muzzle flame and
+sparks, no smoke (`app/muzzle.hpp`; `ce_muzzles 0` leaves the light alone); `r_drawviewmodel`,
 `r_viewmodel_fov`, `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`, `r_viewmodel_center` (1 by
 default: centred under the crosshair; 0 to the right) and `r_viewmodel_hands` (0: the weapon
 without its hands) in the console); the HUD (`hud_style
-classic|modern|compact`, the classic status bar by default, drawn in the packs' own pictures when
+classic|modern|compact|arena|tactical|minimal`, the classic status bar by default; `hud_sbar 0`
+its pieces without the panels, `hud_swap 1` every other look on the other side, `hud_guns
+ammo|pairs|row`, `hud_guns_all`, `hud_ammo_all`; the weapon in hand raised over the classic bars
+while they show; drawn in the packs' own pictures when
 a classic game is loaded, the free art only for Shooter's Edge's own content; `viewsize
 110` drops the inventory bar and `viewsize 120` every bar); the console; the main menu (below). The map's own moving brush
 models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, and one
@@ -240,45 +250,39 @@ engine's burning gas is the flame.
 
 **What a pickup says.** The baseline mod names an item in the loaded game's own words: the game's
 profile has a table of names by class name (`profiles/items.hpp`'s `names`; the classic game's
-`kClassicNames`: "shells", "Nailgun", "Thunderbolt", "Pentagram of Protection"), which the window
-gives the server as local info (`localinfo weapon_nailgun "Nailgun"`) when the mod plays a game's
-packs, and the mod's `name_of` (each variant's `glue.qc`) reads it under the item's class name.
-So "You got the rockets", "You got the Nailgun", and a backpack lists what was in it ("You get the
-Rocket Launcher, 20 shells, 5 rockets", the weapon only when it is new to its taker). Armour says
-"You got armor" whatever its colour, as the classic game does. On the built-in arena, with no
-packs, the mod speaks its own words ("You got ammunition", "You got the Spiker").
+`kClassicNames`: "shells", "nailgun", "Double-barrelled Shotgun", "Red Armor", "Pentagram of
+Protection"), which the window gives the server as local info (`localinfo weapon_nailgun
+"nailgun"`) when the mod plays a game's packs, and the mod's `name_of` (each variant's `glue.qc`)
+reads it under the item's class name. So "You got the rockets", "You got the Red Armor", and a
+backpack lists what was in it ("You get the Rocket Launcher, 20 shells, 5 rockets", the weapon only
+when it is new to its taker). On the built-in arena, with no packs, the mod speaks its own words
+("You got ammunition", "You got the Spiker", "You got armor").
 
-### Joining a game over the network
-
-Any server that speaks the classic protocol can be joined from a window:
-
-```sh
-build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +connect 192.168.1.20
-```
-
-The game's own dedicated server, `shooters_edge_server` (docs/servers.md), is what a machine runs
-to host one, for example dm6 from the packs with a frag limit:
-
-```sh
-build/release/shooters_edge_server --root=$HOME/games/classic --map=dm6 --port=27500 --realtime --for=0 +set fraglimit 20
-```
-
-The window's console joins and leaves (`net/classic_remote.hpp`):
-
-| Command | What |
-| --- | --- |
-| `connect <host>[:port]` | join a server (an IPv4 address or `localhost`; 27500 when no port) |
-| `disconnect` | leave it, back to your own game |
-| `reconnect` | the last server again |
-| `netstatus` | the server joined, the stage, the packets and bytes each way |
-
-Joined, the window plays the server's game with your keys, mouse, `name`, `topcolor` and
-`bottomcolor`, and draws what the server sends exactly as it draws a client demo (the map, the
-items, the other players, the HUD, the sounds, the printed lines): the connection is read as a
-recording of it while it is made. Your own game waits until you leave. Not yet: your own moves are
-not predicted, so on a network with lag you see yourself a round trip late (on a LAN it is a few
-milliseconds); and a server is found by its
-address, not yet on a list.
+**What the server says.** Everything else a player reads from the server comes in the loaded
+game's words too: a second table in the profile (`profiles/words.hpp`'s `kClassicServerWords`),
+each a template in plain ASCII (`server/words.hpp`: `%1` a name, `%g1` its digits in the gold
+figures, `^red text^`, `%[ %]` the gold brackets, `%>4g1` right-aligned, `%n` a newline), put in
+the server's local info beside the item names by the window and by the dedicated server when the
+game folder holds packs. The mod fills one with the `words` builtin (#640, `GE_QC_WORDS`):
+- **Deaths**: one line to everyone at the medium level, chosen by the weapon, whether the victim
+  was gibbed (health below -40) and whether the killer had the quad ("bob rides ann's rocket",
+  "bob was gibbed by ann's rocket", "ann rips bob a new one"), a teammate's kill (-1 to the killer:
+  "ann checks his glasses"), one's own ("bob discovers blast radius") and the world's ("bob sleeps
+  with the fishes", "bob burst into flames"); where a death has variants one is drawn from the
+  game's stream. Before the match (the lobby's warmup and countdown, `ge_phase` in the local info)
+  nothing is told or scored, and a player who leaves is told only in the match ("bob left the game
+  with 3 frags").
+- **The clock**: each whole minute left ("[19] minutes remaining" in gold, and in a two-team game
+  "Team [red] leads by 3 frags" or "The game is currently a tie"), then 30, 15 and 10 to 1 seconds;
+  the end is "The match is over" and, in a team game, the teams' scores and shares.
+- **The powers**: "Quad Damage is wearing off" and "Protection is almost burned out" 3 s before.
+- **The lobby** (`server/announce.hpp`): "ann is ready - no matchtag set" (red text after the
+  name), "All players ready", "Timer started", "bob stops the countdown", "The match has begun!",
+  and each second of the countdown the centre print with the seconds in gold and the match's
+  settings a line each (the window's lobby panel then leaves out its own big count). Its start
+  plays `items/protect2.wav`, its last five seconds `buttons/switch04.wav`.
+The built-in arena, and Shooter's Edge's own content, keep the mod's and the lobby's own words.
+`make lab LAB=se-words` draws both side by side in a console font.
 
 ### Benchmarking a demo
 
@@ -337,8 +341,11 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
   or getting busier over the minutes reads as no saving), and the largest gap between neighbouring
   all-on runs is the noise. The lab charts each run's frames as a box and lists what each switch
   saved off the median frame, the most first.
-- **The shadow maps** (the modern look): a light's cube is drawn when it joins the shadowed few
-  and kept while it stays; at most two new cubes a frame (`Options::fresh_cubes`), the rest of a
+- **The shadow maps** (the modern look): the shadowed few (32) are the nearest lights in the
+  eye's potentially visible set first, then the nearest of the rest; by nearness alone the map's
+  big lights behind walls took half the slots on an open map (a dm4 doorway: 14 of the 30 lights
+  in view lit unshadowed, their shadows popping in a few steps on). A light's cube is drawn when
+  it joins the few and kept while it stays; at most two new cubes a frame (`Options::fresh_cubes`), the rest of a
   room's torches unshadowed for the frames until their turn, so walking into a room costs no
   frame more than two cubes; a dynamic light (a flash, a rocket) lights without a shadow.
 - **The light grid** (the modern look): the frame's up to 160 lights are binned on the CPU into
@@ -358,7 +365,10 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
 demo ends) plays a recorded game **at its own pace**: vsync on, nothing timed, each drawn frame
 moving the demo's clock on by the frame's wall time (at most a tenth of a second, so a stall
 slows the demo instead of skipping it). `cl_demospeed <x>` sets the speed (1 by default, up to
-20; 0 pauses). ESCAPE stops it. The demo is found and drawn as the benchmark finds and draws it:
+20; 0 pauses). ESCAPE pauses it and opens the main menu with the paused demo drawn behind it;
+ESCAPE out of the menu plays on (a demo paused by hand stays paused), and whatever the menu or the
+console starts there (a map, a save, a server, another demo, another game folder) stops it. The
+demo is found and drawn as the benchmark finds and draws it:
 the map from the recorded eye, the HUD, and every entity the demo holds (the other players in
 their colours, the items, the missiles, the level's statics), as `-demovideo` draws them.
 
@@ -368,14 +378,20 @@ folder is beside it under `-basedir`, the demo plays from it, the base under it,
 models, skins and maps are found; a `-game` you pass always wins. A folder that is not there is
 named in the console with what to do.
 
-**Heard and read.** A played demo is heard on the window's audio device: its sounds (the pack's
+**Heard and read.** The window's own game, a match on its listen server or the campaign, is heard
+through the same players (`client/listen_sound.hpp`): each sound the server starts for the player
+(a shot, a door, a lift, a pickup) at its entity, moving with it, the map's loops from its load,
+and the ambience by leaf, for a listener at his eye. The built-in arena, with no classic game's
+folder open, is heard through the game's own recordings: `content/classic.assetmap`'s `sound` rows
+mount each under the classic name the baseline mod plays (`client/own_sounds.hpp`), never over a
+classic game's own folder. A played demo is heard on the window's audio
+device: its sounds (the pack's
 recordings, moving with what makes them, the level's loops and ambience) and the players' voices,
 the same players `-demovideo` renders (`client/demo_heard.hpp`), at `volume` (0..1, 0.7; the
 menu's SOUND VOLUME). The lines the server printed to the player the view rides (the deaths, the
 chat and team chat, the pickups) go to the HUD's feed and the console as plain words (the charset's
 coloured letters and the colour marks clients write into chat taken out), and a centre message to
-the HUD's centre for two seconds. A seek plays nothing of what it skipped. The game's own sound
-outside a demo is not played yet.
+the HUD's centre for two seconds. A seek plays nothing of what it skipped.
 
 ```sh
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
@@ -423,6 +439,34 @@ data) are skipped. The demo's clock is the sum of the records' milliseconds. `ma
 LAB=se-demo ARGS="--file=<demo>"` reads any demo without a GPU and draws every player's path
 from above and his health over the clock, with a table of who played (`--track=<slot>` picks
 the view).
+
+**Smooth at any rate.** A played demo is drawn between its last two frames: the playback reads a
+frame once its clock passes the one before, and each picture places the players, the entities and
+the eye between the two by the time that passed, angles turned the shortest way round
+(`client/demo_lerp.hpp`). A recording made at 77 frames a second then moves evenly at 60, 120 or
+144 pictures a second and in a 30 fps video, instead of repeating one frame and jumping two. A
+teleport, a respawn, a gib and a model change are not drawn across, and a view the server turned
+jumps. `demo_lerp 0` draws each frame as read (`timedemo` always does: one frame a picture).
+`make lab LAB=se-demo-smooth ARGS="--file=<demo> --track=<slot>"` measures it: how far the eye
+moves each picture with and without, charted.
+
+**Models drawn between their frames** (`client/model_lerp.hpp`, every path: your own game, a
+played demo, a joined server). A classic program steps a model's frame ten times a second; when an
+entity's frame changes, the window draws it from the frame it left to the new one over the time its
+frames last (the gap between its last two changes, 20 to 150 ms; at first 0.1 s), the GPU blending
+the two frames' vertices, and a looping group (a torch's flame) flows between its own frames. In
+your own game the places are drawn too: every model one server frame behind, between the last two
+states the window saw (the server's 72 or 77 frames a second fall unevenly on 50, 60 or 144
+pictures), and a walking monster, which the program moves a stride at a time, drawn over each
+stride's time rather than jumping. A first sight, a new model, a warp, a move over 128 units and a
+gap over a quarter second are not drawn across. The held weapon's frames flow too: a nailgun's shot
+frame from the last, and a played fire clip back to rest over a frame's time; in a demo or on a
+joined server a classic set's weapon plays the weapon frame the server sends, blended between its
+changes. Your own eye rides the same clock as the models: drawn one server frame behind, between
+the server's last two states. A played demo's walking monster glides over its strides too
+(`demo_lerp.hpp`'s stride rule). `r_lerpmodels 0` and `r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
+films a monster walking up to the player both ways side by side (a GIF) and measures the judder
+and the pose jumps.
 
 ### A demo as a video
 
@@ -525,6 +569,13 @@ bit) among their messages. Without the header and the voice messages it is a pla
   out (`net/classic_record.hpp`).
 - **The server's multiview recording (`.mvdv`)** holds every voice it relayed, whoever heard it:
   all the teams.
+- **The window joined to a server** (`connect`, `net/classic_remote.hpp`) asks for voice with
+  `cl_voip 1` and hears what the server routes to the player through the same players, its own
+  voice left out; while `+voip` is held (V) the microphone is sent. The live recording it reads
+  (`ClientRecorder::live`) keeps the voices with no header; a file it records is unchanged.
+- **The window's own match** relays voice too (`sv_voip 1` while `cl_voip` is on): its player
+  hears the joined players and is heard while `+voip` is held (`listen_mic`). In a free-for-all
+  (nobody on a team) the team route reaches everyone.
 - **Playing one back** (`playdemo`, `-demovideo`, the labs): the reader finds the header by its
   bytes; each talker's frames play on a stream of their own, a gap of up to three frames
   concealed by the codec (`client/demo_voice.hpp`).
@@ -547,14 +598,14 @@ server's frames go on under it). Its pages are the classic game's:
 | MULTIPLAYER | JOIN A GAME, NEW GAME (the rules, then START), SETUP (name, shirt and pants colours) |
 | NEW GAME | MAX PLAYERS, GAME TYPE (`deathmatch`), TEAMPLAY, SKILL, FRAG LIMIT, TIME LIMIT, MAP, START |
 | SETUP | NAME, SHIRT COLOUR (`topcolor`), PANTS COLOUR (`bottomcolor`): the player's user info, sent to the server as it changes |
-| OPTIONS | CUSTOMIZE CONTROLS, GO TO CONSOLE, RESET TO DEFAULTS, SCREEN SIZE, BRIGHTNESS (`gamma`), MOUSE SPEED (`sensitivity`), MUSIC VOLUME, SOUND VOLUME, ALWAYS RUN (`cl_run`), INVERT MOUSE (`m_invert`), LOOKSPRING, LOOKSTRAFE, VIDEO OPTIONS, CLASSIC ENHANCED |
+| OPTIONS | CUSTOMIZE CONTROLS, GO TO CONSOLE, RESET TO DEFAULTS, SCREEN SIZE, BRIGHTNESS (`gamma`), MOUSE SPEED (`sensitivity`), MUSIC VOLUME, SOUND VOLUME, INVERT MOUSE (`m_invert`), LOOKSPRING, LOOKSTRAFE, VIDEO OPTIONS, CLASSIC ENHANCED |
 | CUSTOMIZE CONTROLS | ATTACK, MOVE FORWARD, MOVE BACK, STEP LEFT, STEP RIGHT, JUMP, WALK / RUN (`+speed`), SIDESTEP (`+strafe`), TURN LEFT, TURN RIGHT, NEXT WEAPON: each the keys bound to it; ENTER, then the key (BACKSPACE clears, ESCAPE leaves it, a third key replaces both) |
 | VIDEO | WORLD LOOK (`r_look`), HUD (`hud_style`), MENU LOOK (`menu_look`), FULLSCREEN, HELD WEAPON |
 | HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`) |
 | CLASSIC ENHANCED | LOAD GAME (the desktop's folder chooser: your install), ENHANCE (the loaded game's enhancing, stage by stage), TEXTURES AND MODELS, LIGHT AND SHADOW, WATER, LAVA AND SKY, FIRE AND WIND, WEATHER |
 | TEXTURES AND MODELS | `ce_textures`, `ce_relief`, `ce_parallax`, `ce_models`, `ce_smooth`, `ce_pictures` |
 | LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
-| WATER, LAVA AND SKY | `ce_water`, `ce_lava`, `r_lava_glow`, `ce_slime`, `r_slime_glow`, `ce_teleports`, `ce_skies`, `ce_clouds` |
+| WATER, LAVA AND SKY | `ce_water`, `ce_lava`, `r_lava_glow`, `ce_slime`, `r_slime_glow`, `ce_teleports`, `ce_warps`, `ce_skies`, `ce_clouds` |
 | FIRE AND WIND | `ce_flames`, `ce_bonfires`, `ce_wind` |
 | WEATHER | `sv_weather`, `sv_rain` (snow, sleet, rain), `sv_precip`, `sv_wind`, `r_lightning`, `r_snowcover`, `r_wet`, `ce_fog` |
 | HELP | the keys (in the classic look, the pack's help pages) |
@@ -618,6 +669,18 @@ by `se-campaign --progs=games/shooters_edge/qc/campaign/progs.src`. What both va
   folders there are; so `-game mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
   over (the base game's own `progs.dat` is its campaign, found the same way for SINGLE
   PLAYER), and with none the baseline mod runs; the status line says which.
+- **Or ship it compiled** (M18p): a mod folder whose packs hold a `qwprogs.qvm` runs that
+  module on the dedicated server (`shooters_edge_server --root=<game> --mod=<folder>
+  --map=<map>`) ahead of any `qwprogs.dat`, on the module server
+  (`server/qvm_server.hpp`, the system calls in `server/qvm_calls.cpp`, the adapter to the loop
+  `sim/qvm_program.hpp`). The module starts the map itself (it reads the map's entity text token
+  by token and spawns everything), answers a client's commands before the server's overridable
+  ones, reads and writes the console, and reads its own config files through the mod's search
+  path; its file writes go only to the mod's folder. Classic clients join it unmodified. The
+  `se-qvm` lab is the front end: `make lab LAB=se-qvm ARGS="--root=<game> --mod=<folder>
+  --map=dm4 --seconds=10"` lists the exports and system calls it made, its entities by class,
+  its console lines and any fault, and draws the entities from above. The bot calls answer
+  "no bot" for now.
 - **Line numbers in faults**: put the line table beside the file as `<file>.lines` (a line
   number per statement, the sidecar `ge qc` reads: `parse_lines` in `plugins/progs/file.hpp`). Without it a fault names the function and the
   statement.
@@ -625,7 +688,8 @@ by `se-campaign --progs=games/shooters_edge/qc/campaign/progs.src`. What both va
   `server/catalogue.hpp`, each answered by `checkextension` (the maths, `tokenize`, `tracebox`,
   `randomvec`, `registercvar`, `min`/`max`/`bound`, `cvar_string`, the string extensions and
   `strzone`, `calltimeofday`, pausing, visible weapons, the console's `set`, client commands,
-  `items2`, the extra move types). A builtin the server does not offer faults with its number;
+  `items2`, the extra move types, `etos`, `findfloat`, `findchain`, `findchainfloat`, `copyentity`, `vectorvectors`, the inverse
+  trigonometry and `tan`, `strtolower`/`strtoupper`, `strreplace`/`strireplace`). A builtin the server does not offer faults with its number;
   an unknown map key is skipped with a message (`x is not a field`).
 - **When it does not load**: the message says why (a refused record, a missing engine-side
   global or field, a layout of another version) and what to do next. A mod built for the
@@ -772,14 +836,26 @@ for its own content (its own maps and mod), never a stand-in for a classic game'
 them never changes a classic game. Playing one classic game with another's parts is classic
 remix, a feature of classic-enhance (M18u), shown only when two full games are loaded.
 
-### The rules runner: the next seam (steps 1 and 2 landed)
+### The rules runner: the seam a second program form plugs into (steps 1 to 4 landed)
 
 The adapter answers what a game's FILES hold. What its RULES do is the other half: the listen
 server, the dedicated server, the campaign, the bots and the recorder all hold the QC server
 (`server/qc_server.hpp`) itself today. A second program form (the sequel's native rules, a
 sandboxed bytecode, the engine's C++ mod as the whole game) needs them to hold a **runner**
-instead, of which the QC server is the first implementation. Steps 1 and 2 below have landed
-(`server/rules_world.hpp`); steps 3 and 4 follow, and step 5 waits for the sequel (M18v).
+instead, of which the QC server is the first implementation. Steps 1 to 4 below have landed
+(`server/rules_world.hpp`, `server/rules_runner.hpp`). Step 5, the sequel's runner (M18t4), is
+under way. Its maps' brushes and the trace its move collides through landed first
+(`plugins/brush/trace.hpp`, `docs/levels.md` § The classic BSP families). Then came its player
+move (`plugins/shooter/sequel_move.hpp`): packed integer state, a third of the pitch when walking,
+the step slide that keeps the farther of two slides, ducking, ladders, currents and the landing
+pause, over any world's trace (`SequelBrushWorld` for a map's brushes). A player at rest stands an
+eighth above a floor: resting on the plane counts as touching it, which the trace calls solid, so
+the packing nudges the origin up. Then the runner itself (`server/sequel_server.hpp`, form
+`"sequel"`): a map started from its brushes (`MapSpec::brushes`, the version 38 map read whole),
+its entities spawned as data, players placed at deathmatch spots or the start and moved by every
+command as it arrives, the rules' frame every 100 ms of host time, `kill` and the respawn by
+attack, and the world filled in the shape every runner fills. Items, weapons, damage, movers and
+monsters come next; the move becomes `sv_playermove sequel` when the host can pick the runner.
 
 **What holds the QC server today** (counted 2026-11-02, outside `server/`): 31 files, in three
 groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/classic_*`) start
@@ -821,11 +897,21 @@ the last):
    between frames sees what the last call left. Every lab's digest is the same.
 2. **Landed.** The wire's entity and player states, the player's stats, the frags, the map's
    title and the recorders read the view; nothing in `net/` reads a program field for them.
-3. The bots read the view (`se-bots`, `se-team`, `se-hop` digests the same): the largest group.
-4. The host holds a runner (a table pointer and its state) where it held a `QcServer`; the
-   campaign and the dedicated server the same.
+3. **Landed.** The bots read the view: each body's place, bounds, view, flags and water from its
+   row, a bot's stats and every frag from its client's numbers. They still trace the loop's world
+   (`trace_move`), which is the map's collision and no rules'. Every lab's digest is the same.
+4. **Landed.** The listen host, the lobby room, the campaign, the wire's endpoint and the
+   dedicated server hold a `RulesRunner` (`server/rules_runner.hpp`: the table of calls, the
+   runner's state, and `RulesCommon`, the part every runner keeps alike: the loop, the lists, the
+   clients' info, the settings, the message sink, the map change asked for and the world). Only
+   the code that makes a runner names the QC server (`qc_runner`). The bots take the common part.
+   What still reads the program behind a runner goes through `qc_of` in one place each: the
+   listen's field and global by name, an entity's class, the campaign's statistics, the saves'
+   VM state and the lobby's team field; each is a candidate for the world when a second runner
+   needs it. Every lab's digest is the same.
 5. The sequel's rules as a second runner (M18t4), with its own program form; nothing in steps 1
-   to 4 names it.
+   to 4 names it. **Started**: `server/sequel_server.hpp` runs the map, the spawns, the move and
+   the frame (golden `tests/golden/shooters_edge_sequel_server.txt`).
 
 **What stays QC-only**: the QC VM's own tools (`ge qc`, the profile, the fault traces), the
 extension catalogue and the C++ mods' hooks over a QC program (§ C++ mods), which are hooks on the
@@ -844,7 +930,9 @@ armour, or both, once the sequel's profile lands. The design makes that possible
   its amount and its pickup. A profile ships one weapon set and one armour set, so the classic
   game's set and the sequel's set are rows in two profiles. Nothing in our programs names a
   weapon by a constant.
-- **Our programs read the arsenal, never their own copies.** The weapons and armour in
+- **Our programs read the arsenal, never their own copies.** (Landed: the rows are
+  `games/shooters_edge/profiles/arsenal.hpp`, handed to the program as the server settings
+  `arsenal_weapon1..8` and `arsenal_armour1..3`; a slot with no row keeps the program's own.) The weapons and armour in
   `qc/common/` (the arena and campaign variants share them) fire, pick up and absorb through the
   arsenal's rows. The settings `sv_weapons <profile>` and `sv_armour <profile>` pick which set a
   map's items give. They default to the content's own sets, and each can be set without the
@@ -861,6 +949,22 @@ armour, or both, once the sequel's profile lands. The design makes that possible
   arsenal). The exact classic campaign stays exact. Our campaign variant plays the classic maps
   with any arsenal.
 
+### The re-release: words by key
+
+The full game's later release ships a program and maps that print text KEYS (a `$`, then
+lower-case letters, digits and underscores: `$map_skill_normal`, `$qc_got_item`) instead of
+words, with values passed as further arguments to the print builtins. Its words are a UTF-8 text
+file of `key = "text"` rows (`localization/loc_english.txt`) in the release's own archive beside
+the game folder (a zip with its own extension), where `{}` or `{N}` mark where argument N goes.
+The client reads the file once (`client/files.hpp`'s `localized_text`; a loose copy on the search
+path wins) and hands it to the server (`QcServerOptions::localized`), which puts in the words
+(`plugins/progs/localized.hpp`) in bprint, sprint, centerprint, dprint and WriteString and in the
+level's name, so no client sees a key. The program's own builtins (the prints that take a key and
+arguments, the finale's end, a local sound, debug drawing, the player's weapon-switch flags, path
+walking, bots' moves) are installed by number in its first form and bound by name in its later one
+(`server/catalogue.hpp` § The re-release's program); all but the prints do nothing and return 0,
+the classic behaviour each falls back to. Its achievement message (52, one string) is stepped over.
+
 ### Single player and multiplayer as variants of our mod
 
 The baseline mod (M18d) becomes two variants built from one source tree, and the classic game's
@@ -876,6 +980,55 @@ Choosing single or multiplayer is choosing a program: the menu's SINGLE PLAYER �
 the profile's campaign program (the pack's own when present, else ours), MULTIPLAYER its arena
 program. Our variants are built by `ge qc build` from their own `progs.src`; a modder copies
 either.
+
+### Co-op and its companions
+
+A campaign in coop is the campaign host (`server/campaign.hpp`) with more than one player and
+`coop 1`: every player starts at the map's coop starts, is carried from map to map in his own
+spawn parms, takes keys the others still find, and comes back on a coop start with a fresh
+inventory when he dies, the map going on, on a coop start no one stands on. Teammates are spared:
+one player's blows never harm another unless `sv_friendlyfire 1`, and a spared teammate's blow
+does not push him either unless `sv_friendlypush 1` (then a rocket at a friend boosts him without
+harm); his own blast still harms himself. Monsters choose among the players. On the start map the
+episodes open one at a time: the first always, each next once the one before is done
+(`sv_episodes_done`, a rune's bit each, set by the program when the rune is taken and kept by the
+window from game to game).
+
+A COMPANION (`bots/companion.hpp`) is a fighter that plays beside the player rather than for
+him, an enabler: it keeps at his shoulder, steps out of his way, kills only what has come for him
+or itself (a monster asleep on its spot is left for him to find), holds its fire while he stands
+in the line, presses the button he stops by, catches up when left behind (past 440 units), and
+never lets a blast off near a player: grenades and rockets only for a foe more than 260 units from
+everyone, itself among them, another weapon taken up otherwise. The exit is HIS: the nodes in an
+exit's box are closed to the companion's routes and goals and any step into it is turned back, and
+when he has stood a moment within 640 units of an exit it goes to stand beside it, faces him and
+jumps now and then to show him the way out. While he stands still it fidgets as a person does
+(`plugins/shooter/idle.hpp`: spins, looks at an item in sight, glances at him, hops round him,
+jumps, sways), stopping a human moment after he moves on. It reads
+only what its client is sent, like every bot here, and its personality's traits set its moves and
+its patience.
+
+THE WAY THROUGH (`bots/way_through.hpp`) is what a leader bot plays a campaign map by, as a
+person does the first time through, off nothing but the map's own entities and his nav graph
+(`bots/map_nav.hpp`): the exit when a route leads there past every shut door that only something
+else opens; else the nearest button, key or trigger that opens such a door whose opening reaches
+places he has not seen; else the nearest place he has not been; and when nothing at all is left
+where he stands (a pool let him out on a ledge whose doors open from the other side) he swims
+back. A bridge a button slides out (a door that starts open and is a plate) is shut to him until
+it is out. He fights what he meets on the way, passing the monsters no weapon he holds keeps down.
+`se-coop-episode` plays our campaign in coop on the player's own pack from `e1m1` with a companion
+beside him, map after map, and draws each map with the tracks, the exits and where monsters fell.
+
+In the window, `sv_coop 1` makes the campaign a coop game (`client/coop_mode.hpp`): set in a cfg
+or on the command line the game starts as one on the start map, set in the console one starts at
+once, with `sv_coopbots` companions (1 by default, at most seven: eight players); `skill` is the
+monsters' for everyone. `coopgame [bots] [novice|average|expert] [map]` starts one by hand, and
+`addbot` and `removebot` change the party during it (`client/coop_party.hpp`). With `sv_port`
+set, others join the coop game over the classic protocol as they would a server
+(`net/classic_coop.hpp`): the window's player and the companions are the endpoint's local seats, a
+client who joins enters the campaign and is carried from map to map with his parms as the player
+is (every client signs on again on each next map), and the ninth player is refused as the server
+being full.
 
 ## Licensing and the clean room
 
@@ -899,9 +1052,9 @@ from specifications, not source:
    it never quotes source.
 2. **The builder reads the note, not the source.** An agent writing engine or game code works
    from the note and from the black-box measurements (step 3). It does not open GPL source while
-   building that subsystem. Research that needs to read source to answer a question writes the
-   answer as a fact in the note, in a separate session, and the building session reads only
-   the note.
+   building that subsystem. Research that needs to read source to answer a question is done by a
+   separate reader agent, which writes the answer as facts in the note with no code; the
+   building agent reads only the note (the `clean-room` skill holds the procedure).
 3. **Behaviour is matched by measurement.** Where the feel must match (the player's movement,
    the timing of a weapon, what a server sends after a given input), a lab runs an existing
    server or client as a separate program, never linked and never committed (fetched and built
@@ -1076,10 +1229,58 @@ every pass, and judged by captioned screenshots:
   fullbright palette colours as emissive.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
-- **Effects** (`games/shooters_edge/app/effects.hpp`): our own trails and bursts on the engine's
-  particles (a pool over no ground: nothing lands): a rocket's embers and smoke, a grenade's
-  smoke, an explosion's sparks and smoke, a hit's sparks and dust, a wound's droplets (dark: the
-  pool has no colour channel yet), a teleport's column of cold light, lava thrown up. **Dynamic
+- **Effects from the game's files** (`client/world_fx.hpp`, M18l): a file `particles/<any>.fx`
+  in the game's files (a mod's over its base game's) defines effects as text
+  (`engine/particles/effect.hpp`, lengths in map units); one named `explosion`, `gunshot`, `spike`,
+  `blood`, `teleport`, `lava`, `rocket_trail` or `grenade_trail` is thrown in place of the classic
+  effect of that name (its light as strong as a classic light that far reaching). A file that
+  does not read is named on the console with its line and the fix. The `se-timedemo` lab's
+  `--particles=sample` plays the match with a mod's own blast and rocket trail.
+- **Effects, classic** (`games/shooters_edge/app/effects.hpp`): the classic client's effects in
+  its own numbers, drawn as unlit specks of the pack's own palette colours (the engine's shining
+  particles, read from `gfx/palette.lmp`) that run along the palette's ramps as they age: an
+  explosion's 1024 specks off a 32-unit box at up to 256 units a second (half speeding out on the
+  bright ramp, half slowing on the second), a rocket's speck every 3 units on the fire ramp rising
+  as it greys and a grenade's from the ramp's greys, 20 dark grey specks a pellet and 10 a nail,
+  20 dark red ones a wound, a teleport's grid of 896, lava's 1024; all falling at 40 units a
+  second squared. The pack's own models stand in for the rest (`client/world_models.hpp`'s
+  `kEffectModels`, loaded by the window whether the program precached them or not): the
+  explosion's sprite (its 6 frames at 10 a second) and the lightning bolt's model laid every 30
+  units from the player's origin to the end, each segment turned to a fresh roll every frame.
+  The classic look also draws each weapon's own flash frames, not the engine's muzzle fire.
+- **Effects, enhanced** (`games/shooters_edge/app/weapon_fx.hpp`, the modern look, each behind
+  its `ce_` switch: `ce_muzzles`, `ce_explosions`, `ce_trails`, `ce_hits`, `ce_beams`): a
+  LAYERED fireball of the engine's (`render/explosion.hpp`: the main ball, then three smaller
+  billows born round it a few hundredths of a second later, a dome when it goes off against a
+  surface), the classic's ember ball kept as glowing embers that cool from yellow to a dull red,
+  white-hot sparks, dark chunks and smoke that lingers, its light white-hot then orange; a rocket
+  burns a short flame out of its motor (the muzzle fire's march stretched back along its flight)
+  and lays fire into puffs of smoke that spread as they thin (the particles' `grow`), a grenade
+  pale smoke; a pellet's or a nail's hit tears debris off the face it hit and makes no smoke (big
+  chunks, smaller chips and a spray of dirt in the wall's own colour, flung out of the hole, that
+  fall and hop on the floor under the hit before they lie still; how much is the surface's,
+  `render/impact.hpp`
+  by the surface class of the map triangle the round's line crosses there, its normal off that
+  triangle); the arc gun's beam is the engine's bolt (`render/beam.hpp`) in ONE look every player sees
+  (no style to pick, so nobody plays with a worse one): as thin as the classic's bolt, a hair-thin
+  white-hot core in a narrow blue sheath, its brightness keyed to the eye so it reads the same by
+  day and in a dark room at night, rooted on the gun's own muzzle, and the brightest light in the
+  room along it and where it lands (`bolt_lights`, boosted over `r_fx_lights`' share). While it fires, the same bolt crackles
+  across the gun's two prongs (`prong_arc_look`, between the ends `find_arc` reads off the pack's
+  own arc), in place of the file's flash. Under `ce_decals` the weapons leave
+  their MARKS (`client/world_fx.hpp`): engine/detail's decals pressed onto the map's own faces, a
+  scorch where a blast went off against a surface (its embers glowing for a second and a half), a
+  bullet hole where each pellet hit a face (a classic program's one message for a shot spread over
+  the shot's cone), the bolt's burns where it lands, and WOUNDS on a body: a hole with blood
+  splattered round it, pinned to the triangle of the figure's skin the round's line crossed, riding
+  its frames until it comes back to life; a pool of 128, drawn as
+  the beams' pass's burns (soot and ember). The classic drew none, so its look shows none. Smoke is lit as the room round it is
+  (`render::BlastLight` off the lightmap under it and the open sky over it), not by the sun
+  through the roof. A match's temporary entities (the gunshots, spikes, beams and blood the
+  baseline mod multicasts) reach these effects as a campaign's do. The `se-weapon-fx` lab fires
+  every weapon at a wall in both looks, from the eye and from beside the line of fire; with
+  `--game=<install>/id1 --map=e1m1` the pack's own maps and weapons, for private pictures.
+- **Dynamic
   lights** (`set_dynamic_lights`): the classic adds them to the lightmaps' light, falling off in
   a straight line to their radius; the modern draws them as point lights. **The screen's blend**
   (`render/post.hpp`'s `set_post_blend`): the liquid round the eye, the powers held and a hurt's
@@ -1151,18 +1352,71 @@ smaller; `team red|blue|auto|switch`), and says `ready` or takes it back with `b
 seated player is ready (and at least `sv_minplayers` are seated) a countdown of `sv_countdown`
 seconds runs, stopped by a break or a player joining unready; the leader (the listen server's own
 player) may `start` it whoever is ready. When the match's map changes, everyone is back in warmup,
-unready. The window shows a banner (the phase, how many are ready, the keys: F1 ready or break, F2
-the other team, F3 the roster), the countdown's seconds and both teams' roster; `addbot` seats a
-fighter. `sv_lobby 0` starts the match with the map, as before. When the player's packs carry the
-classic menu's pictures, the lobby is drawn in them (`menu/lobby_screen.hpp`): the banner and the
-roster in the menu's text box, the words in the glyph sheet's two sets, the countdown in the big
-figures, as the ESC menu is; without them it keeps the modern panel.
+unready. The lobby is a screen of its own, full screen over the main menu's night
+(`hud/lobby_page.hpp`), never over the game: both teams, each player's place (IN WARMUP or IN
+LOBBY), his frags so far and READY, and the keys: F4 join the warmup, F1 ready or break, F2 the
+other team, F5 and F6 a bot more or less (`addbot`, `removebot`), ENTER the leader's start. The
+player opens on it; F4 (`warmup`) puts him on the map in the warmup, where the others fight and
+frags are scored, and F4 again (`sitout`) takes him back. On the map only a banner is left (the
+phase, how many are ready, F1 and F4) and the countdown's seconds. The match needs at least
+`sv_minplayers` seated (2; a bot counts), and starting it restarts the map, which resets every
+frag the warmup scored and puts every seat on the map. `sv_lobby 0` starts the match with the
+map, as before. On the dedicated server `sv_countdown` sets the countdown's seconds (5) and
+`sv_intermission` keeps the scores up that many seconds after the mod ends a match, before the
+next map (0, none: the mod's own end alone). When the player's packs carry the classic menu's pictures, the lobby is drawn in
+them (`menu/lobby_screen.hpp`): the screen and the banner in the menu's text boxes, the words in
+the glyph sheet's two sets, the countdown in the big figures, as the ESC menu is; without them it
+keeps the modern look.
+
+**Hosting from the window (M53a).** The window's match is the dedicated server's game run in the
+window's process (`client/listen.hpp`, `net/classic_game.hpp`): the same server core, the same
+lobby and bots, the player a seat of it. With `sv_port <port>` set before `map <name>`, others join
+it over UDP with a classic client (`connect <address>:<port>`) as they would `shooters_edge_server`;
+`sv_maxclients` is its slots (32). `sv_port 0`, the default, keeps the match the window's alone.
+
+**Who is on, and the easy jump for one player (M53f).** `users` lists every player on the
+server by user id (`userid frags name`); any client may ask it, so a player can tell the
+administrator his id. `status` is the administrator's table: slot, id, name, frags, ping, loss,
+minutes on, address (`bot`, `local` for the window's player) and the easy jump (`-`, `asks`, the
+share `pm_speedjump` allows, or `<share> granted`). `speedjump <id|name> on|off|<share 0..1>`
+grants the easy jump to one player (a player whose disability makes strafing hard) while
+`pm_speedjump` stays as it is for everyone else, `speedjump` alone lists who has it. The grant is
+the server-only key `*speedjump <share>` in that player's user info: every client sees it and
+everyone is told, a client cannot set it (one sent in a connect is removed), it stays across map
+changes and goes when the player leaves; the player still turns it on with `cl_speedjump 1`. In
+the window these are console commands for the match it hosts (`sv <line>` too); on a dedicated
+server set `rcon_password` and send `rcon <password> <line>` from a joined window (`rcon secret
+speedjump 3 on`) or any classic client. Without a password the remote console is refused. The
+words and the remote console are `net/classic_admin.hpp`.
 
 **The lobby (M18q).** Before the match, on M17d's sessions: the players and their pings, teams,
 ready, chat to all or the team, a map vote, kick, and the host's start; at the end of the match
 everyone returns to it. Joining is from the server browser, an invite (M17j's friends), or an
 address, with NATs crossed by hole punching or the relay (M17e). A client speaking the
 compatible protocol skips the lobby and joins the match, as it would on an existing server.
+
+**The server browser (M18q).** MULTIPLAYER ▸ JOIN A GAME (`menu_servers`) lists the servers on the
+LAN (the status query broadcast to ports 27500 to 27505, `sb_lan`), at the masters (`sb_masters`,
+and the masters the loaded install's own `<folder>/sb/sources.txt` lists) and the player's own
+(`sb_servers`): any server answering the classic status query, ours or another program's. Each row
+is the name (`*` when it wants a password), the mode (the server's `mode` key, else coop, team,
+ffa or single from its `coop`, `deathmatch` and `teamplay`), the map, players over slots, the ping
+and the skill when the server says it; the foot holds the address, the game folder, what the match
+is doing and the players by name and team. UP and DOWN choose, LEFT and RIGHT sort, R or F5
+refreshes, ENTER runs `connect <address>`. Our server's info carries what a browser lists: `map`,
+`deathmatch`, `teamplay` and `coop` when set, `skill` where monsters play it, `needpass` when a
+password is set. `connect` takes a host name as well as an address.
+
+**Demos from anywhere (M18k2).** DEMOS on the main menu's root (`menu_demos`) browses the
+player's own folders (the game's folder first, then home, Downloads, Desktop, Documents and the
+machine's roots; it opens on the folder the last demo was played from, `menu_demo_dir`) through
+the engine's folder browser (`engine/vfs/browse.hpp`). It lists folders and the game's
+recordings (every format the window plays, the voice and packed formats too), also packed the way they are
+downloaded (`.gz`, `.zip`, `.7z`, `.xz`, `.zst`, `.tar.gz`): a packed file is listed only when a
+recording's extension stands before its packing, so `match.mvd.gz` is and `maps.zip` is not.
+ENTER checks the file before anything starts (`client/demo_check.hpp`: the bytes, not the name;
+unpacked, then read to its level's map) and plays it as `playdemo` does, or shows in the footer
+why it is no demo. BACKSPACE goes up a folder, LEFT and RIGHT through the places, R lists again.
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
 output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),
@@ -1251,7 +1505,7 @@ odds: turning away only shows him a back. The labs take `--tempers` (`a`, `b`, `
 **Personalities (M18r11b).** A bot is a set of traits (`plugins/shooter/traits.hpp`), each from 1
 to 10: its aim with each kind of weapon (the scattergun, the spikers, the grenades, the rockets, the
 arc), its reaction, its timing of items, its knowledge of the map, camping, discipline, moves,
-hearing, communication, teamplay and aggression. Novice, average, expert and perfect are presets
+hearing, communication, teamplay, aggression and the dodge. Novice, average, expert and perfect are presets
 (every trait 2, 5, 8 or 10), and the temperament sets aggression (9, 5 or 2) and an aggressive
 player's teamplay at most 3, so the presets play exactly as the skills did. A trait read in steps
 reads 1 to 3 as a novice, 4 to 6 as average and 7 and up as an expert: knowledge (where items and
@@ -1275,6 +1529,93 @@ on, within 5 degrees (pre-aimed at a doorway), takes half the draw: the only way
 sound takes longer to act on than a sight: a chase after an enemy only heard starts the median
 reaction plus 100 ms (a quick player, trait 8) to 200 ms (a slow one, trait 2) after the sound.
 `se-team` prints each player's sightings, their mean reaction and the share pre-aimed.
+
+**The dodge and the watch.** In a fight a bot does not run its route under the enemy's crosshair:
+it steps across the line to him, left and right, turning back at drawn times (an expert's dodge
+trait 8 every 0.2 to 0.6 s, seldom running straight; a 2 every 0.45 to 1.35 s, half the key, half
+the time straight at him), and never to a side the player's box would leave the floor, meet a wall
+or stand in a liquid on (`plugins/shooter/dodge.hpp`). Not on a jump the route proved, a lift, at a
+door or in the water. Every bot's hit rate fell from 30 % to 27 % on e1m2 with it. Standing (on an
+item, waiting for one), or holding its area, a bot with nobody in sight watches the ways in
+(`bots/watch.hpp`): for each of the area's entries in the map plan, the first node of the way in it
+sees, one after another for 1.5 to 4 s, the one nearest a sound first; the view goes there on the
+aim's hands (`Bot::look`), so a man coming in is pre-aimed at. `se-team` prints the share of the
+fight spent dodging, the dodge's turns a minute, the share of the match spent watching and each
+weapon's share of the match.
+
+**Hit rates (M18r11d).** A team game counts every player's shots and hits by weapon
+(`games/shooters_edge/net/classic_hits.hpp`), the way a match's statistics do, and `se-team`
+prints them per player and per skill (`team.hits.<skill>.<weapon>`). A shot is ammunition spent on
+the weapon held (the scatterguns count pellets, 6 and 14 a shot; the arc counts cells; nothing in
+a frame its player is dead in or comes back from, when the mod empties his ammunition); a hit is
+health and armour an enemy lost to whatever last hurt him (`dmg_inflictor`: a player's hitscan
+by the weapon he holds, or a missile counted once however many it hurt). A rocket's direct hit is
+a blow of exactly the mod's direct damage, or one that killed a player the rocket was next to;
+any other rocket that hurt an enemy hit by its blast. The bands the bots are held to, a division's
+players in percent (Div1 / Div2 / Div3): the arc 38–45 / 28–35 / 15–25, a rocket's direct hit
+30–35 / 22–28 / 10–18 and its blast 18–25 / 15–20 / 12–15, the double scattergun 35–45 / 25–35 /
+15–25, grenades 8–15 / 5–10 / 2–5. A **weapon drill** (`se-team --drill=arc`, `TeamMatchOptions::drill`)
+cuts every player's weapons to one, its ammunition topped up, so a match measures that weapon
+alone: on a map whose every item a route reaches (dm6), two seeds of six minutes give each skill a
+few hundred shots or more.
+
+The trigger is a finger, not a filter: a fighter fires while his view is within the target's width
+and a slack his weapon's aim trait sets (10° at trait 2, 7° at 5, 3° at 8, 2° at 10; the arc's beam
+held down longer, 14°, 9°, 6° and 4°), measured on the view the command carries, which a swim or a
+button may have turned. The double is fired within 350 units and chosen under 250, the launcher
+within 1200, a rocket at a man within 400 aimed at his middle and at his feet farther off.
+
+**Bots on an existing server (M18r14).** The bots are tested where it matters: a team of them
+joins a live classic server running the common match mod and plays a 4on4 against people, and
+every match leaves data that is read here, learnt from, and played again. The server is an
+existing one, built beside the checkout and never in the tree; the bots are ours.
+
+- **One process, one team.** `shooters_edge_bots --server=<host:port>` runs a whole team: each
+  bot is its own classic client (`net/classic_client.hpp`) on its own UDP socket, one move a tick
+  at the server's rate, paced by the wall clock as the window's remote client is. The map is
+  loaded from the player's own packs by the name serverdata carries, and its nav built as
+  `run_team_match` builds it. Two processes can play the two teams of a bots-only match; each
+  knows nothing of the other but what its clients are sent.
+- **A bot knows only its own client.** On our server a fighter reads the server's world; on
+  someone else's there is none. So the fighter's world is rebuilt from what its client was sent
+  (`net/classic_mirror.hpp`): its own player and stats, the other players' places and dead flags,
+  the entities of the newest frame, the frame's sounds, the frags and the prints. Nothing else
+  reaches it, and a fact a client is never sent (another player's health) has no field to read.
+  Where the server culls by the map's visibility, an item that stops being sent counts as taken
+  only when its spot is in the client's own visibility set. What a bot knows of its team is what
+  its teammates said on `say_team`, as before (M18r9): four bots in one process share no memory.
+- **The match mod's ways.** The team and colours it stuffs are taken, `ready` and `break` are
+  said on the owner's word or once every person is ready, the countdown and the match's end are
+  read off its prints, and a map change is followed by the reconnect and a new nav.
+- **The bot client in the window.** `shooters_edge --bots=4 --server=<host:port> --team=<name>`
+  runs the same team in the game's window, which draws the team's world as its bots believe it
+  (`net/classic_team_view.hpp`): the map from above, each bot's route, goal and the enemies it
+  believes in, the item timers, the enemies the four clients were sent together (which no single
+  bot knows), each bot's plan and the team's lines. The console drives the bots: a line no command
+  names goes to every bot, `bot<N> <line>` to one (`bot1 skill expert`, `ready`, `status`); the
+  picture records as a video with `--bots-view=<file>`.
+- **The narrator.** The process describes its own team's game, read off its bots' beliefs and the
+  public scores and never written back into them: the score and its trend; each area by its
+  place name (held, lost, contested, last seen when) and the key items' believed timers; each
+  member's role, goal, health, armour, weapons, mode and last words. It prints every few seconds
+  and on `status`, and keeps a timeline. It knows no more than the team does; what the team
+  believes wrongly, it reports wrongly, and that is the point.
+- **The match folder.** Each bot's client recording (every packet read and every command sent),
+  its decisions, the team's lines and the narrator's timeline. A bot is a function of the packets
+  it was sent and its seed, so a fresh fighter fed its recording gives back its commands bit for
+  bit: `ge why` answers a live match's decisions here, and a changed bot run over the same
+  recording shows where it would have decided otherwise.
+- **The match's video.** `shooters_edge -demovideo <mvd> <file> --autotrack` follows the hottest
+  player (`client/demo_autotrack.hpp`): his kit (armour, the best weapon, powerups, frags) and his
+  kill streaks, cut to a challenger that beats him by a margin after a dwell, to the hottest alive
+  two seconds after he dies, and at once to one who takes the quad or the shield or kills twice
+  quickly. The plan reads the whole demo first, so a cut lands before the fight.
+- **Read against the truth.** The server's own multiview recording is the truth. The `se-live`
+  lab sets each bot's beliefs against it (where each enemy was against where he was believed,
+  each key item's timer against its respawn, the team lines read and missed), and draws the kill
+  map by area, item control over time, and hit rates per weapon and humanness for the bots and the
+  people of the same match side by side; given a folder of matches, it sets them side by side so a
+  change to a bot is read against the same people.
 
 **Place names (`.loc` files).** `plugins/shooter/locs.hpp` reads a map's place names in the
 community's `.loc` format (one point a line, `x y z name`, coordinates in eighths of a unit, the
@@ -1305,12 +1646,39 @@ list is in `porting/shooters-edge/survey.md`.
 | Better | Coloured lightmaps, replacement textures, skyboxes, fog, transparency | M18i |
 | Better | Real-time shadows from the engine's shadow passes on models | M18i |
 | Better | Voice chat on the native protocol (M17h) | M18l |
-| Better | Skeletal models (IQM, glTF) beside MDL, on the engine's skinning | M18l |
+| Better | Skeletal models (IQM) beside MDL: read into the engine's model, baked into the model pass's frames (glTF later) | M18l |
+| Better | A mod's own particle effects by name (point and trail builtins), drawn from the game's `particles/*.fx` | M18l |
 | Better | A data-driven particle system for mods (effects named in a script) | M18l |
 | Better | The common QC extension builtins and fields (string handling, tracing, the extra entity fields), registered by name | M18c, M18l |
 | Later | Client-side QC (a mod drawing its own HUD and predicting its own entities) | M18m |
 | Later | Single-player campaigns and co-op on the single-player `progs` | M18s |
+| Better | The easy jump: `cl_speedjump 1` hops and gains on forward and jump alone where the server's `pm_speedjump` allows it, and on any other server by the client strafing for the player, disclosed in the user info (`docs/movement.md`) | M18e |
+| Better | The quick weapon: `cl_quickweapon 1` makes +attack fire the best weapon carried of `cl_quickweapon_prio` and put `cl_quickweapon_default` back; +attack2 the same off `cl_quickweapon_prio2`; `cl_quickweapon_preview` shows the weapon a press would fire see-through in hand, `cl_quickweapon_hide` hides the hand instead (§ The quick weapon) | M48i |
 | Later | Splitscreen; touch controls for phones and tablets | M18m |
+
+### The quick weapon
+
+A fire key that fires the best weapon carried, then puts the usual one back, all on the client
+(`plugins/shooter/quick_weapon.hpp` for any shooter, `client/quick_fire.hpp` the game's wiring),
+so it works in the window's own match and on any server joined: it asks only for what a player
+could, a weapon by its key (`impulse`) and the attack.
+
+| Cvar | Default | What it does |
+| --- | --- | --- |
+| `cl_quickweapon` | 0 | 1: +attack is a quick fire off `cl_quickweapon_prio` |
+| `cl_quickweapon_prio` | `7 8 5 6 3 2 4 1` | +attack's weapons, best first, by weapon key |
+| `cl_quickweapon_prio2` | `8 3 2` | +attack2's (the hitscan guns); empty: +attack2 fires what is in hand |
+| `cl_quickweapon_default` | `2 1` | the weapon put back: the first carried with ammunition |
+| `cl_quickweapon_preview` | 1 | the weapon +attack would fire drawn see-through in hand, solid as it fires |
+| `cl_quickweapon_hide` | 0 | with the preview off: no weapon drawn while +attack would switch |
+
++attack2 is bound to no key: `bind mouse2 +attack2` (MOUSE2 jumps by default). A press asks for
+the weapon with the attack in every command until it is in hand, so a server that keeps an ask
+only for the command it came in still switches and fires the moment the weapon in hand is free; a
+tap holds the attack until the shot shows (the ammunition fell) or a second passes; the way back
+is asked every 0.2 s for 1.5 s; a weapon key the player presses wins. The preview is the held
+weapon drawn with `HeldDraw::opacity` below 1: a screen door that moves each frame, which the
+frame's TAA-U averages to a see-through gun. Lab: `se-quickweapon`.
 
 ## Labs
 
@@ -1328,6 +1696,8 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-baseline` | scenario | The baseline mod compiled from its sources and played by bots on the arena with its door and plat: the build's counts, frags and deaths, obituaries by weapon, pickups, every path and missile from above, the frags and the movers' heights against the clock (built, M18d) |
 | `se-mod` | scenario | A mod (the test mod, or a player's progs from `--progs`) played by bots on the test arena to its time limit: the hooks it was called on, the builtins it called, frags, every path from above, the hooks' timeline (built, M18p) |
 | `se-campaign` | scenario | A single-player program (crc 5927: the player's own from `--game`, or the test mod's single-player stub) on its layout table: the program, the layout check entry by entry, the builtins it declares against what the server installs for its form, whether the full game's packs are there; the two forms' offsets compared name by name, the autoaim on the arena from the side; the campaign host on the campaign stub (a level change, a restart: the parms and runes carried) and, with `--game`, on the pack's own map (`--map`, `--skill`, `--then=changelevel e1m2`, `--forward` and `--yaw`: the player walked on the server's move; the monsters and secrets counted, the faults, the player's parms; `--exit=1`: the player stood in the map's exit, the level's end read as the window reads it, the attack held on to the next map; `--fire=1`: the attack held on the walk; the client data on the walk charted: the ideal pitch, the punch, the health and every blow; the effects on the walk counted by kind, and anything left unread; `--save=<s>`: the game saved after the walk, loaded into a second campaign and both walked on that long with the same commands, their digests compared every frame and charted as `save-continue`; then the classic text save written, read into a third campaign and written again (the same text?), and that game walked on beside the original: its faults, the players' distance, the entities live; on the stub always: a save after the restart run on 200 frames) (built, M18s1 to M18s5) |
+| `se-coop-episode` | drive | A co-op episode played through on the player's own pack (`--game`; without it the coop hall with an exit): a leader bot finding each map's way out (`bots/way_through.hpp`) and companions beside him, map after map; a row a map (out or not and how long, the monsters and who killed them, the deaths, the companions' share of the time near him, what his plan went for), each map from above with everyone's track, the exits and the kills, the leader's changes of plan (`--plan=1`) and a digest of every frame (`--first`, `--maps`, `--map-seconds`, `--skills`, `--leader`, `--seed`) (built, M18s6a) |
+| `se-coop` | scenario | Co-op companions beside a scripted leader on the coop hall (our campaign in coop: the arena with a button, coop starts and monsters): the trails, the monsters and where each fell from above, each companion's distance from the leader against time (his waits shaded, the button, the door and the kills marked), a ribbon of each one's mode and idle act against the leader's legs, and how near it kept, its kills, its held shots and its idle acts tabled (`--skills`, `--traits`) (built, M18s6a) |
 | `mod` | scenario | The engine's own C++ mod format: the sample mod's match beside the plain match (the loader's verdict, rockets, bounces, the mod's log, both matches' missiles, the rocket's distance and the grenade's height), and the modded match replayed to the bit (built, M52a) |
 | `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |
 | `se-nav` | scenario | Where a player can go on a map by the player move's own proof: the nav graph from above to scale (the floor shaded off the point hull, every node and link by kind, what a mover closes), the quickest routes as the proofs moved a player, from above and the side; on the nav course and the test arena (built, M18r1) |
@@ -1340,6 +1710,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-lobby` | sim | The warmup on the listen server: bots seated on teams, the free roam, ready, break, the countdown and the map restarted for a clean match (built, M18q1); later clients find a hosted game on the LAN and through the rendezvous, fill the lobby, chat, start, play and return, and a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections (the compatible server half built, M18g: scripted clients under every preset, bytes a second, loss, downloads, the digest) |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |
+| `se-weapon-fx` | picture | Every weapon's effects in the window's frame, classic beside enhanced: the player handed every weapon, aimed at the wall nearest 9 m off, each weapon fired and pictured after its shot (a launcher's after its blast), from the eye and from a camera beside the line of fire; the fixture halls, or a pack's map and its own weapons with `--game` (private); the births, the blasts and the beams each look drew |
 | `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the weapon in hand, the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost, the effects thrown and the shots the hand saw (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-models` | picture | The things a map places, as the window draws them: the armour, a health box, an ammo box, a weapon, a torch or a flame, the quad, the shield, another player in his colours and one holding both powers, each from a clear spot near it in both looks; a lift lowered and up, a door shut and open (M18i6); the things placed by kind and the light under each (built, M18i3; `--pak` and `--map` for a pack's own maps) |

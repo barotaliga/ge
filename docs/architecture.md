@@ -116,7 +116,7 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   bound as console cvars (`cvars.hpp`). It depends on `engine/core`, and on `engine/console` for
   that binding alone; the step is a pure function of its inputs, so a run replays from its commands.
 - **`engine/vfs`**: content files (`ge::vfs`, M18a): the search path over game directories (packs
-  in number order, then pk3 zips and `.pk3dir` directories in name order, then loose files; a later
+  in number order, then other packs, pk3 zips and `.pk3dir` directories in name order, then loose files; a later
   game directory over an earlier one), a lookup that never allocates, every archive's directory
   checked whole before anything is read, files handed out as views where they are stored; the wad
   and its pictures, the palette and the colour map. It depends on `engine/core` only (the inflater
@@ -296,8 +296,9 @@ The simulation never sees the frame rate, and the renderer never writes `GameSta
 - **SoA where a loop is hot.** Trees, particles and spatial-hash cells use structure of
   arrays. Everything else uses the natural struct. Change a layout only with a
   measurement.
-- **One subject per file, under 1000 lines** (`agents:allow-large-file: <reason>` for
-  honest exceptions). A file opens with a comment that states what it owns, in the
+- **One subject per file, under 1000 lines as advice, 2000 as the cap.** `make agents-check`
+  warns past 1000 and fails past 2000 (`agents:allow-large-file: <reason>` for honest
+  exceptions): splitting a file at 1001 lines buys nothing, so the split waits for a subject. A file opens with a comment that states what it owns, in the
   engine's own terms (never where it came from: `AGENTS.md` § A clean slate).
 - **Every number has a unit in its name or its comment** (`speed_mps`, `cell_m`), and
   every tuning number lives in its `defs/` table.
@@ -413,7 +414,16 @@ shared project folder: `make build`, `make test` and `make precheck` restore the
 container before their first compile (installing ccache first when it is missing), and a good
 build saves them back, at most every half hour. The folder silently drops a file over about
 500 MB, so each cache is saved as 200 MB parts behind a manifest written last; ccache runs with
-`base_dir` at the checkout and `compiler_check=content`, so a cache from another container hits. On Linux every link goes through mold or LLD when one is installed
+`base_dir` at the checkout and `compiler_check=content`, so a cache from another container hits.
+**A git worktree builds warm with nothing to set up.** `cmake/CompilerCache.cmake` finds the main
+checkout (`git rev-parse --git-common-dir`) and points the worktree's `GE_DEPS_DIR` at the main
+checkout's `.cache/deps/` (no Dawn, SDL or codec downloaded again; a build folder configured
+before forgets every path it found under its own), maps the build folder out of the debug
+information (`-fdebug-prefix-map=<build>=.`) and runs ccache with `hash_dir=false`, so a `-g`
+compile in another checkout hashes the same (measured: without both, a debug compile in a second
+checkout misses every time), and while ccache's size is its own default (5 GiB, which a few
+checkouts' debug and release objects overflow, evicting what the next worktree needs) gives it
+`GE_CCACHE_WORKTREE_SIZE` (10G). On Linux every link goes through mold or LLD when one is installed
 (`cmake/Linker.cmake`, `-DGE_FAST_LINKER=OFF` for the default): with the compiles cached,
 linking the tree's 500-odd executables is most of a rebuild. Measured in the cloud container
 (4 cores, the debug preset, a fresh build directory each time):

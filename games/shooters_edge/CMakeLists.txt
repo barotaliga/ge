@@ -43,7 +43,7 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_bots)
 file(GLOB SHOOTERS_EDGE_CLASSIC_SOURCES CONFIGURE_DEPENDS
      ${CMAKE_CURRENT_SOURCE_DIR}/net/classic_*.cpp)
 add_library(shooters_edge_classic STATIC ${SHOOTERS_EDGE_CLASSIC_SOURCES})
-target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters_edge_client ge_net)
+target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters_edge_client ge_net ge_play)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 
 # The headless dedicated server (server/bin/), named `shooters_edge_server` on disk, at the build's
@@ -52,6 +52,14 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 # protocol). `--help` lists its flags.
 ge_add_server(shooters_edge_dedicated OUTPUT_NAME shooters_edge_server SOURCES server/bin/main.cpp
               LINK shooters_edge_classic)
+
+# The bot team, headless (net/bots_main.cpp), named `shooters_edge_bots` on disk at the build's
+# root: a team of bots joins a classic server, any server (net/classic_bot_team.hpp). `--help`
+# lists its flags.
+add_executable(shooters_edge_bots_cli net/bots_main.cpp)
+target_link_libraries(shooters_edge_bots_cli PRIVATE shooters_edge_classic ge_flags)
+set_target_properties(shooters_edge_bots_cli PROPERTIES OUTPUT_NAME shooters_edge_bots
+                      RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # Its HUD (hud/): the player's status snapshot, the HUD's pictures (the free set painted in code),
 # and the three looks over the engine's HUD layout with their hud_ cvars. No GPU: the CPU raster
@@ -80,8 +88,8 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_view)
 file(GLOB SHOOTERS_EDGE_MENU_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/menu/*.cpp)
 add_library(shooters_edge_menu STATIC ${SHOOTERS_EDGE_MENU_SOURCES})
 target_include_directories(shooters_edge_menu PUBLIC ${PROJECT_SOURCE_DIR}/games)
-target_link_libraries(shooters_edge_menu PUBLIC ge_ui ge_console ge_vfs ge_classicenhance
-                                            shooters_edge_hud)
+target_link_libraries(shooters_edge_menu PUBLIC ge_ui ge_console ge_vfs ge_net ge_classicenhance
+                                            ge_play shooters_edge_hud)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_menu)
 
 # Its app half (app/): the picture's game side over the engine's passes and the brush world's
@@ -109,7 +117,7 @@ ge_add_mod(shooters_edge_mod_rocket_bounce NAME rocket-bounce VERSION 1.0.0 GAME
 # the GPU and the platform are built. Headers are spelled "shooters_edge/client/<file>.hpp".
 file(GLOB SHOOTERS_EDGE_CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/client/*.cpp)
 list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX
-     "/client/(main|window_cvars|world_draw|world_extras|world_fx|world_models|demo_video|title|map_load)\\.cpp$")
+     "/client/(main|window_cvars|bot_view|world_draw|world_extras|world_fx|world_fx_book|world_models|demo_video|title|map_load)\.cpp$")
 add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
 target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_bots shooters_edge_hud
                                                   shooters_edge_view shooters_edge_sound ge_vfs
@@ -119,7 +127,7 @@ target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_
 include(${PROJECT_SOURCE_DIR}/cmake/EmbedBinary.cmake)
 # Each source as `<variant>_<file>` (qc/<variant>/<file>.qc): the arena variant's and the shared.
 foreach(qc arena_engine common_defs arena_glue common_util common_combat common_weapons
-           common_items common_player common_map arena_world)
+           common_items common_dmm4 common_player common_map arena_world)
   string(REGEX REPLACE "^([a-z]+)_(.*)$" "\\1/\\2" qc_path ${qc})
   ge_embed_binary(shooters_edge_client se_qc_${qc} ${CMAKE_CURRENT_SOURCE_DIR}/qc/${qc_path}.qc)
 endforeach()
@@ -133,20 +141,35 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_client)
 # labs/gpu_se_client_lab.cpp) link.
 if(GE_GPU AND TARGET ge_brush_app)
   add_library(shooters_edge_client_gpu STATIC client/world_draw.cpp client/world_extras.cpp
-                                              client/world_fx.cpp client/world_models.cpp
-                                              client/demo_video.cpp client/title.cpp
+                                              client/world_fx.cpp client/world_fx_book.cpp
+                                              client/world_models.cpp client/demo_video.cpp client/title.cpp
                                               client/map_load.cpp)
   target_link_libraries(shooters_edge_client_gpu PUBLIC shooters_edge_client shooters_edge_app
                                                         ge_brush_app ge_classicenhance ge_render
-                                                        ge_ui ge_morph ge_play)
+                                                        ge_ui ge_morph ge_play ge_detail)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_client_gpu)
 endif()
 if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
-  add_executable(shooters_edge client/main.cpp client/window_cvars.cpp)
+  add_executable(shooters_edge client/main.cpp client/window_cvars.cpp client/bot_view.cpp)
   target_link_libraries(shooters_edge PRIVATE shooters_edge_client_gpu shooters_edge_classic
                                               shooters_edge_menu
                                               ge_platform ge_hud ge_console)
-  # The held weapons' models where the tree is, for a game run from somewhere else (-models wins).
+  # The held weapons' models and the game's own content (its sounds for the built-in arena)
+  # where the tree is, for a game run from somewhere else (-models wins).
   target_compile_definitions(shooters_edge
-                             PRIVATE SE_MODELS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/content/models/view")
+                             PRIVATE SE_MODELS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/content/models/view"
+                                     SE_CONTENT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/content")
+endif()
+
+# Its player CLI (cli/): the engine's game CLI (engine/gamecli, docs/gamecli.md) over the game's
+# Spec, classic enhance's group and the game's own rows, as a library the tests link and the
+# `shooters_edge_cli` executable at the build's root beside the window and the dedicated server
+# (skills: agent-interface, shooter).
+if(TARGET ge_gamecli)
+  add_library(shooters_edge_gamecli STATIC cli/spec.cpp)
+  target_link_libraries(shooters_edge_gamecli PUBLIC ge_gamecli ge_classicenhance_cli
+                                                     shooters_edge_classic)
+  set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_gamecli)
+  ge_add_game_cli(shooters_edge_cli OUTPUT_NAME shooters_edge_cli SOURCES cli/main.cpp
+                  LINK shooters_edge_gamecli)
 endif()

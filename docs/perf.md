@@ -136,9 +136,38 @@ GPU's round trip (0.6 ms on the M3 Max) shorter than before at the same GPU cost
 | --- | --- | --- |
 | The light grid binned by runs: each row of cells along x a light's reach touches is one run from one square root, not a sphere test a cell, and the lists are the same lights in the same order (every picture the same) | 0.124 / 0.206 → 0.072 / 0.116 | `brush/app/bsp_draw.cpp` |
 
+Models' shadows (M54), the same demo and Mac at 2560x1440, every build run alternately with main's
+(14.7 ms), found by switching each part off in a scratch build and by `se-timedemo`'s GPU time by
+pass (`gpu.pass.<name>`):
+
+| Change | GPU span (median ms) | Where |
+| --- | --- | --- |
+| The moving casters' 48 cube faces (8 lights) drawn as one atlas in one pass, a viewport a face, not a pass each: on the M3 Max a pass cost about 0.12 ms whatever it drew (`bsp.shadows` 3.8 to 0.09 ms at 960x540) | 22.7 → 18.1 | `brush/app/bsp_draw.cpp`, `bsp.wgsl` |
+| The blocker search reads the casters' cube alone, so a point no figure stands before skips the filter; the world's kept cube one compare again (its 4-tap soft filter cost 1.2); the capsules near a pixel found once, not for every light; the Vogel discs as constant tables turned by one spin a pixel | 18.1 → 15.7 | `brush/app/bsp.wgsl` |
+
 What the relief still costs at 1440p is its work: the parallax's march 0.41 ms (its steps 0.28,
 the loop's presence the rest; a coarser mip for the march saves nothing), the highlights 0.26,
 the texel's normal 0.10. Main had moved to 4.34 ms by the trades' row.
+
+The quality stops (M41o), the classic pack's demo1 on the M3 Max at 2560x1440, each part priced
+by `se-timedemo --price-cvars` (the demo with one thing changed, between runs with everything on,
+the GPU span's median saving; about 0.05 ms is noise). What the three dearest switches spend:
+the SHADOWS' 1.16 ms is the walls' kept cubes about 0.35, the moving casters' cubes 0.35 (their
+soft edges nearly all of it: hard, from all eight lights, they cost 0.02) and the capsules 0.43;
+the shadows in the water's mirror cost nothing measurable (0.01). The WATER's 1.0 ms is the
+planar mirror's map drawn again 0.21 more than a reflection marched off the screen (0.31 more
+than none; drawn at a quarter of the pixels it saves 0.05: the bill is the map's every face
+again, not its pixels), the wet band 0.26, the surface's own draw 0.18 and the scene's copy
+0.09; the chop 0.07, the sun's caustics and shafts 0.01 (demo1's pools are roofed), the detail
+waves 0.02 and the rings' levels nothing. The SKIES' 0.5 ms is the cloud layer 0.28 and the far
+land 0.10 (the cloud marched at a quarter of the pixels costs what every pixel does here).
+
+| Change | GPU span (median ms) | Where |
+| --- | --- | --- |
+| The shore's wet band (a full-screen triangle a pool) scissored to the slab it can darken on the screen, and not drawn for a body with no band: every pixel the same (dm3's pools, byte for byte) | the band 0.26 → 0.14 | `render/water.cpp` |
+| The mirror's fragments beyond the water's plane dropped before they are shaded, not after | both rows: the top 6.52 → 6.38 (main's run against this tree's) | `brush/app/bsp.wgsl` |
+| `r_quality medium` against the top (shadows hard-edged with no capsules, the water's reflection marched off the screen and no sun under it, the sky with no far land) | 6.38 → 5.21 (frame 6.63 → 5.49) | `shooters_edge/app/ladder.cpp` |
+| `r_quality low` (no figure's shadow, a still and unreflecting pool, our sky with its mean cloud) | 6.38 → 4.67 | |
 
 ## Shooter's Edge's start and map loads
 
@@ -152,6 +181,8 @@ unchanged (a settled frame of dm3 byte for byte the size of main's).
 | The pack's SHA-256 kept per pack (`find_cache` hashed the 179 MB pack every call: three times a world, again for the pictures and the enhance run) | | 1.25 s less | | `classicenhance/cached.cpp` |
 | The world's CPU half (`read_world`: the textures' and skins' PNGs, the rebake, the probes) on a thread, its pipelines polled (`PipelineSet::ready`) while frames go on, the window opened first on the title, the first pictures read on a thread and the enhance run's pack opened on its own | about 12 s → 0.6 s (the window's first frame), the menu up at 1.9 s | about 3.3 s → 0.22 s (`begin_world`'s uploads) | 3.3 s → 0.22 to 0.26 s (start: drawn 3.7 s after it was asked for; dm6: 2.1 s) | `client/map_load.hpp`, `world_draw.hpp`, `gpu/pipeline.hpp`, `classicenhance/progress.hpp` |
 | An enhance run that wrote nothing no longer makes the world again | about 5 s less | | | `client/main.cpp` |
+| The world's GPU half made in steps, one a frame (the frame's passes; the effects, the weapon and the 2D layer; the map; its models; the extras' three parts), each 5 to 25 ms; the other worlds' moon maps decoded and their mips worked once a process (115 ms every world's sky before); a shader module kept a device by its WGSL; the classic grade's palette search on the read's thread | | | 0.22 s → about 50 ms (dm6, start), the frame the new world is first drawn (its shadow cubes, all at once, as the renderer's first frame of a map does) | `client/world_draw.cpp`, `world_extras.hpp`, `render/moon_maps.cpp`, `gpu/pipeline.hpp` |
+| A new map's world warmed up offscreen before it is shown: a frame at a time, from where the player will stand, nothing drawn but the sky's tables and two new shadow cubes (a cube is the map drawn six times, about 6 ms of GPU on dm6; the first frame shown used to draw all 32 at once, a 60 ms GPU frame); the title's clouds at a quarter of the pixels spread over four frames (its GPU frame about 20–26 ms → 15) | | | about 50 ms → 27 to 36 ms (dm6, start; the title at start), at most one refresh missed | `client/map_load.hpp`, `world_draw.hpp`'s `warm_world`, `brush/app/bsp_draw.hpp`'s `first_all`, `encode_bsp_shadows` |
 
 Before, the start drew nothing for about 12 s: the first world made before the window opened
 (3.3 s: 1.65 s waiting on Dawn's pipeline compiles, 1.3 s of PNG decode, the rest hashing), the

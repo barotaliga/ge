@@ -9,12 +9,15 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <span>
+#include <vector>
 
 #include "core/libm/libm.hpp"
 #include "core/prng.hpp"
 #include "render/water.wgsl.hpp"
 #include "render/water_below.wgsl.hpp"
 #include "render/water_copy.wgsl.hpp"
+#include "render/water_shore.wgsl.hpp"
 #include "render/water_stream.hpp"
 #include "render/water_stream.wgsl.hpp"
 #include "water/spectrum.hpp"
@@ -25,7 +28,7 @@ namespace {
 
 namespace lm = core::libm;
 constexpr double kPi = 3.14159265358979323846;
-constexpr uint32_t kWaveSlots = water::kMaxComponents + kWaterDetailWaves;
+constexpr uint32_t kWaveSlots = water::kMaxComponents + kWaterDetailWaves + kWaterChopWaves;
 // How far down a covered coarse vertex sinks, in its level's spacings; where the morph starts.
 constexpr float kSink = 2.0f;
 constexpr float kMorphStart = 0.8f;
@@ -92,6 +95,22 @@ void upload_waves(gpu::Device& device, Water::Slot& slot, const water::Body& bod
       detail_waves(body.waves, kWaterDetailWaves, slot.draw.seed + 977u * slot.draw.seed);
   slot.staged.info[3] = static_cast<float>(detail.waves.size());
   slot.staged.rough[0] = static_cast<float>(detail.tail_mss);
+  WaterFoam foam = foam_of(body.waves, detail.waves);
+  if (!slot.draw.foam) {
+    foam.fold = -1e9;
+    foam.cover = 0;
+    foam.hs = 0;
+  }
+  // A run-up under the ground's lowest reach (-0.05 m) leaves no band.
+  if (!slot.draw.wet_band) foam.runup = -1;
+  slot.staged.foam[0] = static_cast<float>(foam.fold);
+  slot.staged.foam[1] = static_cast<float>(foam.cover);
+  slot.staged.foam[2] = static_cast<float>(foam.drift * lm::sin(body.waves.sea.toward));
+  slot.staged.foam[3] = static_cast<float>(foam.drift * lm::cos(body.waves.sea.toward));
+  slot.staged.surf[0] = static_cast<float>(foam.hs);
+  slot.staged.surf[1] = static_cast<float>(foam.runup);
+  slot.staged.surf[2] = static_cast<float>(foam.fold_length);
+  slot.staged.surf[3] = static_cast<float>(foam.sigma);
   std::vector<float> data(size_t{kWaveSlots} * 8, 0.0f);
   size_t i = 0;
   const auto put = [&](const water::Component& c) {
@@ -107,7 +126,13 @@ void upload_waves(gpu::Device& device, Water::Slot& slot, const water::Body& bod
   };
   for (int c = 0; c < body.waves.count; ++c) put(body.waves.c[c]);
   for (const water::Component& c : detail.waves) put(c);
-  slot.mss = detail.mss + detail.tail_mss + slot.draw.stir * slot.draw.stir;
+  const std::vector<water::Component> chop = chop_waves(
+      slot.draw.chop, kWaterChopWaves, slot.draw.seed * 131u + 5u, 1.2, slot.draw.chop_shortest);
+  for (const water::Component& c : chop) put(c);
+  slot.staged.chop[0] = static_cast<float>(chop.size());
+  slot.staged.chop[1] = static_cast<float>(slot.draw.chop);
+  slot.mss = detail.mss + detail.tail_mss + slot.draw.stir * slot.draw.stir +
+             slot.draw.chop * slot.draw.chop;
   for (int c = 0; c < body.waves.count; ++c) {
     const double ka = body.waves.c[c].k * body.waves.c[c].a;
     slot.mss += 0.5 * ka * ka;
@@ -140,6 +165,45 @@ void bind_body(gpu::Device& device, const Water& water, Water::Slot& slot, int i
 }
 
 }  // namespace
+
+WaterFoam foam_of(const water::Waves& waves, std::span<const water::Component> detail) {
+  WaterFoam f;
+  f.hs = 4 * std::sqrt(waves.m0);
+  // A calm lake still laps its shore a few centimetres; a sea runs up most of its height.
+  f.runup = 0.03 + 0.7 * f.hs;
+  if (waves.count == 0 || waves.sea.hs <= 0) return f;
+  // The waves that fold: every laid one, and the detail band's down to kFoamShortest m (faded in
+  // from twice that, as water.wgsl's `fold_at` keeps them), so the whitecaps are the short steep
+  // waves breaking where the long ones' crests carry them; and the folds' own size, the wavelength
+  // their slopes weigh most (k weighted by (k a)^2).
+  double var = 0, sk = 0;
+  const auto fold = [&](const water::Component& c) {
+    double keep = std::clamp((2 * kPi / c.k - kFoamShortest) / kFoamShortest, 0.0, 1.0);
+    keep = keep * keep * (3 - 2 * keep);
+    const double ka = keep * c.k * c.a;
+    var += 0.5 * ka * ka;
+    sk += 0.5 * ka * ka * c.k;
+  };
+  for (int i = 0; i < waves.count; ++i) fold(waves.c[i]);
+  for (const water::Component& c : detail) fold(c);
+  f.fold_length = sk > 0 ? 2 * kPi * var / sk : 0;
+  f.wind = water::wind_of(waves.sea);
+  f.cover = water::whitecap_cover(f.wind);
+  // The foam drifts with the surface's water, about 3 % of the wind.
+  f.drift = 0.03 * f.wind;
+  // The Jacobian's trace is 1 - sum k a sin(phi), Gaussian of variance sum (k a)^2 / 2: the
+  // fold under which `active` of the surface lies is 1 - sigma z, z the normal's quantile.
+  const double active = kFoamActive * f.cover;
+  if (active < 1e-6 || var <= 0) return f;
+  double lo = 0, hi = 12;
+  for (int i = 0; i < 60; ++i) {
+    const double z = 0.5 * (lo + hi);
+    (0.5 * std::erfc(z / std::sqrt(2.0)) > active ? lo : hi) = z;
+  }
+  f.sigma = std::sqrt(var);
+  f.fold = 1 - f.sigma * 0.5 * (lo + hi);
+  return f;
+}
 
 WaterDetail detail_waves(const water::Waves& laid, int count, uint32_t seed, double shortest,
                          double finest) {
@@ -182,6 +246,36 @@ WaterDetail detail_waves(const water::Waves& laid, int count, uint32_t seed, dou
     const double lo = w1 * lm::exp(tail * i), hi = w1 * lm::exp(tail * (i + 1));
     const double w = std::sqrt(lo * hi), k = deep_k(w);
     out.tail_mss += k * k * water::jonswap_at(sea, w, norm) * (hi - lo);
+  }
+  return out;
+}
+
+std::vector<water::Component> chop_waves(double rms_slope, int count, uint32_t seed, double longest,
+                                         double shortest) {
+  std::vector<water::Component> out;
+  if (rms_slope <= 0 || count <= 0 || shortest <= 0 || longest <= shortest) return out;
+  // Surface tension over density (m^3/s^2): the ripples under a couple of centimetres run faster
+  // than gravity alone would take them.
+  constexpr double kTension = 7.28e-5;
+  core::Rng rng = core::make_rng(seed);
+  // Each component the same share of the slope's variance: ka = sqrt(2 s^2 / count).
+  const double ka = std::sqrt(2 * rms_slope * rms_slope / count);
+  // Coprime with any count it is given that is not a multiple of 7: the headings shuffled
+  // against the lengths, so no length runs only one way.
+  const int stride = count % 7 == 0 ? 5 : 7;
+  for (int i = 0; i < count; ++i) {
+    const double f = (i + 0.5) / count;
+    const double length = longest * lm::exp(f * lm::log(shortest / longest));
+    const double k = 2 * kPi / length;
+    const double heading = 2 * kPi * (((i * stride) % count) + core::next(rng)) / count;
+    water::Component c;
+    c.k = k;
+    c.w = std::sqrt(water::kGravity * k + kTension * k * k * k);
+    c.kx = k * lm::sin(heading);
+    c.kz = k * lm::cos(heading);
+    c.a = ka / k;
+    c.phase = core::next(rng) * 2 * kPi;
+    out.push_back(c);
   }
   return out;
 }
@@ -278,6 +372,38 @@ void create_water(gpu::Device& device, gpu::PipelineSet& pipelines, Water& water
     water.p_below = pipelines.add_render(device, desc);
   }
   {
+    // THE SHORE'S WET BAND: a full-screen triangle over the body's group, darkening the ground the
+    // waves wet (the colour multiplied, the motion and the depth left alone). Its own module
+    // (render/water_shore.wgsl over the shared half), drawn in the "water" pass before the bodies.
+    const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::water_shore, "water.shore");
+    wgpu::BlendState multiply{};
+    multiply.color = {wgpu::BlendOperation::Add, wgpu::BlendFactor::Zero, wgpu::BlendFactor::Src};
+    multiply.alpha = {wgpu::BlendOperation::Add, wgpu::BlendFactor::Zero, wgpu::BlendFactor::One};
+    wgpu::ColorTargetState colours[2] = {};
+    colours[0].format = kHdrFormat;
+    colours[0].blend = &multiply;
+    colours[1].format = kMotionFormat;
+    colours[1].writeMask = wgpu::ColorWriteMask::None;
+    wgpu::FragmentState fragment{};
+    fragment.module = module;
+    fragment.entryPoint = "fs_shore";
+    fragment.targetCount = 2;
+    fragment.targets = colours;
+    wgpu::DepthStencilState depth{};
+    depth.format = kDepthFormat;
+    depth.depthWriteEnabled = false;
+    depth.depthCompare = wgpu::CompareFunction::Always;
+    wgpu::RenderPipelineDescriptor desc{};
+    desc.label = "water.shore";
+    desc.layout = make_pipeline_layout(device, "water.shore", {frame, water.layout});
+    desc.vertex.module = module;
+    desc.vertex.entryPoint = "vs_full";
+    desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
+    desc.depthStencil = &depth;
+    desc.fragment = &fragment;
+    water.p_shore = pipelines.add_render(device, desc);
+  }
+  {
     Water::Streams& st = water.streams;
     st.layout =
         make_layout(device, "water.stream",
@@ -339,6 +465,8 @@ void create_water_targets(gpu::Device& device, Water& water, const FrameTargets&
                                    wgpu::TextureFormat::R32Float, usage);
   water.scene_colour_view = water.scene_colour.CreateView();
   water.scene_depth_view = water.scene_depth.CreateView();
+  water.width = targets.width;
+  water.height = targets.height;
   water.copy_group =
       make_group(device, "water.copy", water.copy_layout, {targets.hdr_view, targets.depth_view});
   water.streams.group = make_group(device, "water.stream", water.streams.layout,
@@ -409,6 +537,42 @@ ShoreMask shore_mask(const water::Body& body) {
       }
     }
   }
+  // Past the shore, how near the water: 127 at the grown outline falling to 0 at kShoreReach m,
+  // by a chamfer distance (3 a side step, 4 a diagonal) in two sweeps.
+  const int reach = std::max(2, static_cast<int>(std::ceil(kShoreReach / m.texel)));
+  constexpr int kFar = 1 << 28;
+  std::vector<int> d(m.texels.size(), kFar);
+  for (size_t i = 0; i < d.size(); ++i)
+    if (m.texels[i] == 255) d[i] = 0;
+  const auto relax = [&](int c, int r, int dc, int dr, int step) {
+    const int cc = c + dc, rr = r + dr;
+    if (cc < 0 || cc >= m.cols || rr < 0 || rr >= m.rows) return;
+    int& here = d[static_cast<size_t>(r) * static_cast<size_t>(m.cols) + static_cast<size_t>(c)];
+    const int there =
+        d[static_cast<size_t>(rr) * static_cast<size_t>(m.cols) + static_cast<size_t>(cc)];
+    here = std::min(here, there + step);
+  };
+  for (int r = 0; r < m.rows; ++r) {
+    for (int c = 0; c < m.cols; ++c) {
+      relax(c, r, -1, 0, 3);
+      relax(c, r, 0, -1, 3);
+      relax(c, r, -1, -1, 4);
+      relax(c, r, 1, -1, 4);
+    }
+  }
+  for (int r = m.rows - 1; r >= 0; --r) {
+    for (int c = m.cols - 1; c >= 0; --c) {
+      relax(c, r, 1, 0, 3);
+      relax(c, r, 0, 1, 3);
+      relax(c, r, 1, 1, 4);
+      relax(c, r, -1, 1, 4);
+    }
+  }
+  for (size_t i = 0; i < d.size(); ++i) {
+    if (m.texels[i] == 255) continue;
+    const double near = 1 - d[i] / (3.0 * reach);
+    m.texels[i] = near > 0 ? static_cast<uint8_t>(std::lround(127 * near)) : 0;
+  }
   return m;
 }
 
@@ -426,6 +590,8 @@ int add_water_body(gpu::Device& device, Water& water, const water::Body& body,
   upload_waves(device, slot, body);
   {
     const ShoreMask mask = shore_mask(body);
+    // water_shore.wgsl reads a mask of more than one column as a lake's, its band out past the box.
+    slot.shore_grow = mask.cols > 1 ? kShoreReach : 0;
     const auto cols = static_cast<uint32_t>(mask.cols), rows = static_cast<uint32_t>(mask.rows);
     slot.shore = make_texture(device, "water.shore", cols, rows, 1, wgpu::TextureFormat::R8Unorm,
                               wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst);
@@ -477,7 +643,57 @@ void set_water_wakes(gpu::Device& device, Water& water, int index, const water::
   if (n > 0) device.queue.WriteBuffer(slot.rings, 0, data.data(), data.size() * sizeof(float));
 }
 
+void set_water_up_view(Water& water, const float up_view_proj[16]) {
+  std::memcpy(water.views.up_view_proj, up_view_proj, sizeof water.views.up_view_proj);
+}
+
+namespace {
+
+// The slot's shore band's rectangle on screen (Slot::shore_rect) for the camera `cam` at `eye`.
+void shore_rect(Water::Slot& slot, const CameraMatrices& cam, const double eye[3], uint32_t width,
+                uint32_t height) {
+  uint32_t* r = slot.shore_rect;
+  r[0] = r[1] = r[2] = r[3] = 0;
+  const WaterGpuBody& b = slot.staged;
+  const double runup = b.surf[1];
+  if (!slot.shown || runup < 0 || width == 0 || height == 0) return;
+  const double g = slot.shore_grow;
+  const double xs[2] = {b.box[0] - g, b.box[2] + g}, zs[2] = {b.box[1] - g, b.box[3] + g};
+  const double ys[2] = {b.info[0] - 0.05, b.info[0] + 1.3 * runup};
+  double lo[2] = {1e30, 1e30}, hi[2] = {-1e30, -1e30};
+  for (int k = 0; k < 8; ++k) {
+    const float p[4] = {static_cast<float>(xs[k & 1] - eye[0]),
+                        static_cast<float>(ys[(k >> 1) & 1] - eye[1]),
+                        static_cast<float>(zs[(k >> 2) & 1] - eye[2]), 1.0f};
+    float c[4];
+    transform(cam.view_proj, p, c);
+    if (c[3] < 1e-3f) {  // a corner at or behind the eye: the slab may span the screen
+      r[2] = width;
+      r[3] = height;
+      return;
+    }
+    for (int a = 0; a < 2; ++a) {
+      lo[a] = std::min(lo[a], double(c[a]) / c[3]);
+      hi[a] = std::max(hi[a], double(c[a]) / c[3]);
+    }
+  }
+  // NDC to pixels (y down), two pixels' margin for the jitter, held on the screen.
+  const double x0 = std::max(0.0, (lo[0] * 0.5 + 0.5) * width - 2);
+  const double x1 = std::min(double(width), (hi[0] * 0.5 + 0.5) * width + 2);
+  const double y0 = std::max(0.0, (0.5 - hi[1] * 0.5) * height - 2);
+  const double y1 = std::min(double(height), (0.5 - lo[1] * 0.5) * height + 2);
+  if (x1 <= x0 || y1 <= y0) return;
+  r[0] = static_cast<uint32_t>(x0);
+  r[1] = static_cast<uint32_t>(y0);
+  r[2] = static_cast<uint32_t>(std::ceil(x1)) - r[0];
+  r[3] = static_cast<uint32_t>(std::ceil(y1)) - r[1];
+}
+
+}  // namespace
+
 void prepare_water(gpu::Device& device, Water& water, const FrameView& view, int eye_in) {
+  const CameraMatrices cam = camera_matrices(
+      view, static_cast<double>(std::max(water.width, 1u)) / std::max(water.height, 1u));
   water.eye_under = -1;
   water.eye_near = -1;
   if (eye_in >= 0 && eye_in < static_cast<int>(water.bodies.size()) &&
@@ -504,6 +720,11 @@ void prepare_water(gpu::Device& device, Water& water, const FrameView& view, int
     if (slot.shown && inside && view.eye[1] < b.info[0] + kWaterlineBand && water.eye_near < 0) {
       water.eye_near = static_cast<int>(&slot - water.bodies.data());
     }
+    // The quality's cuts on what is uploaded, the staged body kept whole for the next frame's.
+    const float chop = b.chop[0], sunlit = b.sun[0], mirror = b.view[0];
+    if (!water.quality.chop) b.chop[0] = 0;
+    if (!water.quality.sunlight) b.sun[0] = 0;
+    if (!water.quality.reflect) b.view[0] = -1;
     const int levels = static_cast<int>(b.grid[0]);
     const double half = kWaterGrid / 2.0;
     for (int i = 0; i < levels; ++i) {
@@ -516,7 +737,18 @@ void prepare_water(gpu::Device& device, Water& water, const FrameView& view, int
       b.levels[i][3] = 0;
     }
     device.queue.WriteBuffer(slot.uniform, 0, &b, sizeof b);
+    shore_rect(slot, cam, view.eye, water.width, water.height);
+    b.chop[0] = chop;
+    b.sun[0] = sunlit;
+    b.view[0] = mirror;
   }
+  // Every body whose underside the eye may see: the eye in water, under the body's level, and
+  // the body's water reaching down to it (a flooded passage's far pool, never a pool upstairs).
+  for (Water::Slot& slot : water.bodies) {
+    slot.under = water.eye_under >= 0 && !slot.hidden && view.eye[1] < slot.staged.info[0] &&
+                 view.eye[1] > slot.floor;
+  }
+  if (water.eye_under >= 0) water.bodies[static_cast<size_t>(water.eye_under)].under = true;
 }
 
 void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
@@ -567,8 +799,20 @@ void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRe
   desc.colorAttachments = colours;
   desc.depthStencilAttachment = &depth;
   wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "water");
-  pass.SetPipeline(pipelines.render(water.p_draw));
   pass.SetBindGroup(0, frame);
+  // The shore's wet band under every body first: the ground over the level, which the water
+  // then leaves alone.
+  pass.SetPipeline(pipelines.render(water.p_shore));
+  for (const Water::Slot& slot : water.bodies) {
+    const uint32_t* r = slot.shore_rect;
+    if (!slot.shown || !water.quality.shore || r[2] == 0 || r[3] == 0) continue;
+    pass.SetScissorRect(r[0], r[1], r[2], r[3]);
+    pass.SetBindGroup(1, slot.group);
+    pass.Draw(3);
+    ++rec.current().draws;
+  }
+  pass.SetScissorRect(0, 0, targets.width, targets.height);
+  pass.SetPipeline(pipelines.render(water.p_draw));
   pass.SetIndexBuffer(water.indices, wgpu::IndexFormat::Uint32);
   for (const Water::Slot& slot : water.bodies) {
     if (!slot.shown) continue;
@@ -605,13 +849,16 @@ void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRe
   under.colorAttachments = below;
   under.depthStencilAttachment = &test;
   wgpu::RenderPassEncoder bp = rec.render(encoder, under, "water.below");
-  const Water::Slot& slot = water.bodies[static_cast<size_t>(water.eye_under)];
   bp.SetPipeline(pipelines.render(water.p_below));
   bp.SetBindGroup(0, frame);
-  bp.SetBindGroup(1, slot.group);
   bp.SetIndexBuffer(water.indices, wgpu::IndexFormat::Uint32);
-  bp.DrawIndexed(kWaterGrid * kWaterGrid * 6, static_cast<uint32_t>(slot.staged.grid[0]));
-  ++rec.current().draws;
+  // Each underside the eye may see; the depth test keeps the nearest.
+  for (const Water::Slot& slot : water.bodies) {
+    if (!slot.under) continue;
+    bp.SetBindGroup(1, slot.group);
+    bp.DrawIndexed(kWaterGrid * kWaterGrid * 6, static_cast<uint32_t>(slot.staged.grid[0]));
+    ++rec.current().draws;
+  }
   bp.End();
 }
 

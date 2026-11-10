@@ -20,7 +20,7 @@
 //
 // ge:summary Writes fixture maps of every classic BSP family: rooms, tree, visibility, lightmaps
 // ge:keywords write fixture bsp v29 bsp2 v38 v46 rooms doorway tree split visibility lightmap
-// ge:keywords luxel light patch vault miptex writer
+// ge:keywords luxel light patch vault miptex writer brush-world box_brush write_brush_world
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
 #pragma once
@@ -77,5 +77,38 @@ Fixture fog_fixture();
 // The fixture as a map of `family`; false with the reason in `*error`.
 bool write_bsp(const Fixture& fixture, Family family, std::vector<uint8_t>* out,
                std::string* error);
+
+// A BRUSH WORLD: convex brushes written as a version 38 map with no faces, for the brush trace
+// (trace.hpp) and the moves that collide through it (world_writer.cpp says how it is compiled).
+// A side's plane faces out of the brush; the solid is behind every side. Each brush lists its six
+// axial sides (as a map's compiler bevels every brush), and may add slanted ones.
+struct WorldSide {
+  float n[3] = {};
+  float d = 0;
+  std::string texture;  // "" for a side with no surface (texinfo −1)
+  int32_t flags = 0, value = 0;
+};
+
+struct WorldBrush {
+  std::vector<WorldSide> sides;
+  int32_t contents = 1;  // solid
+};
+
+struct BrushWorld {
+  // [0] the world, then one brush model each (a door, a platform: `*1`, `*2` ...), each with its
+  // own head node into the one tree.
+  std::vector<std::vector<WorldBrush>> models;
+  std::vector<Entity> entities;  // after worldspawn
+};
+
+// An axis-aligned box brush over [lo, hi]: its six sides, each textured `texture`.
+WorldBrush box_brush(const float lo[3], const float hi[3], int32_t contents = 1,
+                     const std::string& texture = "world/wall");
+// Adds a slanted side to `b` (its normal is normalised in float here; d along it).
+void add_side(WorldBrush* b, const float n[3], float d, const std::string& texture = "world/wall");
+
+// The world as a version 38 map; false with the reason in `*error` (a brush with no axial sides,
+// an empty world).
+bool write_brush_world(const BrushWorld& world, std::vector<uint8_t>* out, std::string* error);
 
 }  // namespace ge::brush

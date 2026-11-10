@@ -47,7 +47,21 @@ bool read_bsp_map(std::span<const uint8_t> bytes, const std::string& name, BspMa
   return true;
 }
 
-void use_map_sets(QcServer& s, const BspMap& map) {
+bool bsp_file_bounds(std::span<const uint8_t> bytes, sh::Vec3f& mins, sh::Vec3f& maxs,
+                     std::string& error) {
+  br::Map m;
+  if (!br::read_bsp(bytes, &m, &error)) return false;
+  if (m.models.empty()) {
+    error = "the file has no models";
+    return false;
+  }
+  const br::Model& w = m.models[0];
+  mins = {w.mins[0], w.mins[1], w.mins[2]};
+  maxs = {w.maxs[0], w.maxs[1], w.maxs[2]};
+  return true;
+}
+
+void use_map_sets(RulesCommon& s, const BspMap& map) {
   s.vis = &map_sets;
   s.vis_ctx = const_cast<BspMap*>(&map);
 }

@@ -1,8 +1,11 @@
-// THE LISTEN SERVER: Shooter's Edge as one player plays it on his own machine. The mod server
-// (server/qc_server.hpp) runs a progs (the baseline deathmatch mod, compiled at start from the
-// sources built into the game: `baseline_progs`) on a map, and the local player is client slot 0,
-// his commands handed to the server's frame directly as packets that are never lost (no network,
-// no prediction: what he sees is the server's own state after each frame).
+// THE LISTEN SERVER: Shooter's Edge as one player plays it on his own machine. A match is the
+// engine's server core (engine/server) on the game's server (`ListenOptions::game`, the classic
+// game the dedicated server runs) opened in this process with the window's program (the baseline
+// mod, compiled at start from the sources built into the game: `baseline_progs`) and map
+// (`ListenHost`): the local player is client slot 0, a local seat whose commands go into each
+// frame as packets that are never lost (no prediction: what he sees is the server's own state
+// after each frame), and others join on `ListenOptions::port` (`sv_port`) as they would a
+// dedicated server.
 //
 // A MAP (`LoadedMap`): a map file from the search path (`maps/<name>.bsp`, read by
 // server/bsp_map.hpp: its hulls, its entity text, its visibility and hearing sets) or the
@@ -26,24 +29,33 @@
 // campaign_save.hpp) written to bytes and read back as the game playing, so it plays on as if
 // never stopped.
 //
-// THE LOBBY (`ListenOptions::lobby`, a match only): every map opens in warmup with the player and
-// the bots seated in `room` (lobby_room.hpp); the bots' packets go into each frame after his; the
-// lobby's lines are printed like the server's; when the countdown runs out the map is restarted
+// THE PARTY (a campaign in coop: coop_party.hpp): companions seated by `addbot` or
+// `ListenOptions::companions`, carried from map to map by the campaign host, their packets in each
+// frame after the player's; `removebot` lets one go. With a port, others join it (`CampaignDoor`).
+//
+// THE LOBBY (`ListenOptions::lobby`, a match only): the server's (net/classic_game.hpp). Every
+// map opens in warmup with the player and the bots seated in `room` (lobby_room.hpp); the player is
+// on the map only once he joins the warmup (`warmup`, F4) or the match starts, and off it again
+// when he goes back to the lobby's screen (`sitout`), the bots fighting on meanwhile; the lobby's
+// lines are printed like the server's; when the countdown runs out the server restarts the map
 // with every seat on it (`restarted`), and a map change goes back to warmup. `listen_lobby` runs
-// the player's lobby words.
+// the player's lobby words. THE EASY JUMP: a player with `cl_speedjump 1` has the aid strafe
+// for him (`listen_frame`, shooter/speedjump_assist.hpp) at the server's `pm_speedjump` (the
+// window's 0.8, ListenHost::speedjump; a dedicated one only when set).
 //
 // THE VIEW: the player's angles are the client's (`Listen::view`, degrees: pitch down positive,
 // yaw counter-clockwise from +x), sent with every command; when the server turns him (a spawn, a
 // teleport: the mod's forced view) the client takes the server's angles (`forced`).
 //
-// ge:summary The listen server: the mod server and its local player in one process, no network
+// ge:summary The listen server: a match on the server core in the window's process
 // ge:keywords listen-server local-player client slot usercmd packet listen_start listen_frame
 // ge:keywords listen_advance listen_change loaded-map load_named_map baseline_progs map-change
-// ge:keywords listen_stop
+// ge:keywords listen_stop listen-host listenhost sv_port server-core hosting
 // ge:keywords forced-view mintic player_state missiles rocket-jump lobby warmup listen_lobby
-// ge:keywords match-restart restarted
+// ge:keywords match-restart restarted listen_lobby_view on_lobby_screen lobby-screen
 // ge:keywords listen_campaign campaign single-player map_changed level-change
 // ge:keywords listen_save listen_load savegame listen_save_text listen_load_text classic-save
+// ge:keywords coop party companions campaign-door coop-join coop-over-network
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -56,11 +68,17 @@
 #include <string_view>
 #include <vector>
 
+#include "net/transport.hpp"
 #include "progs/file.hpp"
+#include "server/server.hpp"
 #include "shooter/pmove.hpp"
+#include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/client/campaign_view.hpp"
+#include "shooters_edge/client/coop_party.hpp"
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
+#include "shooters_edge/client/voice_out.hpp"
 #include "shooters_edge/server/bsp_map.hpp"
 #include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/qc_server.hpp"
@@ -70,7 +88,8 @@ namespace shooters_edge::client {
 namespace sh = ge::shooter;
 namespace sv = shooters_edge::server;
 
-inline constexpr int kMostFrames = 8;  // server frames a wall frame may run
+inline constexpr int kMostFrames = 8;             // server frames a wall frame may run
+inline constexpr size_t kMostListenSounds = 256;  // sounds kept for the window between its plays
 
 // The baseline mod compiled from the sources built into the game. False with every diagnostic.
 bool baseline_progs(ge::progs::Progs& out, std::string& error);
@@ -92,17 +111,113 @@ std::unique_ptr<LoadedMap> map_from_bytes(std::span<const uint8_t> bytes, const 
 std::unique_ptr<LoadedMap> load_named_map(const SearchPath& files, const std::string& name,
                                           std::string& error);
 
+// A LISTEN SERVER ON THE CORE: a match is a `ge::server::Server` the listen opens on
+// `ListenOptions::game` (net/classic_game.hpp's `classic_game()`, which the client cannot name:
+// it sits above it), handing it this in `ServerConfig::host`. The listen fills the first block;
+// the game's `create` fills the second and keeps it current through the run (a map change swaps
+// `rules` and `map`), so the listen reads the game playing without knowing its type.
+struct ListenHost {
+  const ge::progs::Progs* progs = nullptr;  // the program (outlives the server)
+  std::shared_ptr<LoadedMap> map;           // the first map, read
+  const SearchPath* files = nullptr;        // where the next map is read (null: the arena only)
+  std::vector<std::string> lines;           // server lines before each map's rules start
+  bool lobby = false;
+  sv::LobbySettings lobby_settings;
+  std::string player = "player";  // slot 0, the window's own player: a local seat
+  float speedjump = 0;            // pm_speedjump on each map's server (the easy jump allowed)
+  // The player's side of every frame: the rules' frame before the endpoint routes it (prints,
+  // effects, blows), and a line printed to him (the lobby's and the room's answers).
+  void (*tap)(void* ctx, const sv::RulesCommon& game) = nullptr;
+  void (*print)(void* ctx, const std::string& text) = nullptr;
+  // A voice the server relayed to him (the match's `sv_voip`): the talker's slot, the protocol's
+  // generation and first sequence, the frames (demo.hpp's `DemoVoice`).
+  void (*heard)(void* ctx, int talker, int gen, int seq,
+                const std::vector<uint8_t>& data) = nullptr;
+  void* ctx = nullptr;
+
+  void* game = nullptr;  // the game's state, for the calls below
+  sv::RulesRunner* rules = nullptr;
+  Room* room = nullptr;  // null: no lobby and no bots
+  int changes = 0;       // maps the game moved to (a lobby's restart too)
+  std::string asked;     // a map the mod asked for that the window reads (then `change`)
+  // The player's words the game takes (the room's `addbot`, `removebot`; the lobby's): false
+  // when none of them.
+  bool (*words)(void* game, const std::string& line) = nullptr;
+  // The player's move for the next frame.
+  void (*move)(void* game, const sh::Packet& p) = nullptr;
+  // The game moved onto `map` (read by the window): false with `error`, the game on the old map.
+  bool (*change)(void* game, std::shared_ptr<LoadedMap> map, std::string& error) = nullptr;
+  // A key of the player's user info, told to every client.
+  void (*set_info)(void* game, const std::string& key, const std::string& value) = nullptr;
+  // The player's voice message (voice_out.hpp's frames), relayed to those who hear him.
+  void (*speak)(void* game, int gen, int seq, const std::vector<uint8_t>& data) = nullptr;
+  // The administrator's words on the window's own server (net/classic_admin.hpp: `users`,
+  // `status`, `speedjump <id> on|off|<share>`): false when the line is none of them, the answer
+  // in `out`.
+  bool (*admin)(void* game, const std::string& line, std::string& out) = nullptr;
+};
+
+// THE CAMPAIGN'S DOOR: a coop campaign served to others over the classic protocol, so they join
+// the window's coop game as they would a server (net/classic_coop.hpp's `classic_coop()`, which
+// the client cannot name: it sits above it). The window's player and the companions are its local
+// seats; a client who joins enters the campaign (carried from map to map as the player is), and
+// the endpoint follows the campaign onto each next map.
+struct CampaignDoor {
+  // The endpoint opened on the campaign's map over `t` (which outlives it), `most` players at
+  // most; `tap` sees each frame's rules before the endpoint routes them. Null with `error`.
+  void* (*open)(sv::Campaign& c, ge::net::Transport& t, const std::string& hostname, uint32_t seed,
+                int most, void (*tap)(void* ctx, const sv::RulesCommon& game), void* ctx,
+                std::string& error) = nullptr;
+  // A seat the window plays (its player, `bot` false; a companion) shown to every client.
+  bool (*seat)(void* door, int slot, const std::string& name, bool bot,
+               std::string& error) = nullptr;
+  void (*unseat)(void* door, int slot) = nullptr;
+  // One frame at the network's time with the local seats' moves, then the change it asked for
+  // (the endpoint follows the campaign onto the next map). False with `error` when that map did
+  // not load.
+  bool (*frame)(void* door, const sh::Packet* local, int count, int64_t now_us,
+                std::string& error) = nullptr;
+  // The campaign moves maps outside a frame (a new game by hand): let go before, follow after.
+  void (*unbind)(void* door) = nullptr;
+  bool (*rebind)(void* door, std::string& error) = nullptr;
+  int (*joined)(const void* door) = nullptr;  // clients that joined over the network, playing
+  void (*close)(void* door) = nullptr;
+};
+
 struct ListenOptions {
   uint32_t seed = 1;
   std::vector<std::string> console = {"deathmatch 1"};  // server lines before each map loads
   std::vector<std::string> item_names;  // a match's server lines before `console` (GameContent's)
+  std::vector<std::string>
+      arsenal;  // the game's weapons and armour as server lines (GameContent's)
   std::string player = "player";
   const SearchPath* files = nullptr;  // where a campaign's next map is read (outlives the listen)
   bool registered = false;            // a campaign's content is the full game (gfx/pop.lmp)
   // A match opens every map in the lobby's warmup (lobby_room.hpp): ready, teams, bots, the
   // countdown, then the map restarted for the match. Off: the match starts with the map.
   bool lobby = false;
-  sv::LobbySettings lobby_settings;
+  // The window's lobby: two seats (a bot counts) before a match may start, and the player waits
+  // on the lobby's own screen until he joins the warmup (F4).
+  sv::LobbySettings lobby_settings = {.min_players = 2, .warm_on_join = false};
+  // The server a match runs on (net/classic_game.hpp's `classic_game()`); a match does not start
+  // without one. A campaign runs on its own host.
+  const ge::server::ServerGame* game = nullptr;
+  // Others join the match on this UDP port (0: nobody: the match is the window's alone).
+  int port = 0;
+  // Or the socket others join on, opened by the caller (a test's simulated network): it outlives
+  // the listen, and `port` is not opened.
+  ge::net::Transport* transport = nullptr;
+  std::string hostname = "Shooter's Edge";
+  int maxclients = 32;
+  // A match relays its players' voices (`sv_voip 1`), the window's player among them
+  // (`listen_mic`, `Listen::voices`).
+  bool voice = true;
+  // A campaign in coop is served to others on `port` (or `transport`) through this door
+  // (net/classic_coop.hpp's `classic_coop()`); null: a coop game is the window's alone.
+  const CampaignDoor* door = nullptr;
+  // A campaign in coop starts with this many companions beside the player (coop_party.hpp).
+  int companions = 0;
+  sh::AimSkill companion_skill = sh::AimSkill::average;
 };
 
 // A blow the player took (a single-player program's damage record, client_data.hpp): its armour
@@ -115,9 +230,14 @@ struct Blow {
 struct Listen {
   const ge::progs::Progs* progs = nullptr;
   ListenOptions opt;
-  std::unique_ptr<LoadedMap> map;
-  sv::QcServer* server = nullptr;       // the one playing: `match`'s, or the campaign's map's
-  std::unique_ptr<sv::QcServer> match;  // a match's server (null in a campaign)
+  std::shared_ptr<LoadedMap> map;     // the map playing (a match's is the server's too)
+  sv::RulesRunner* rules = nullptr;   // the rules playing: the match server's, or the campaign's
+  sv::RulesCommon* server = nullptr;  // what they keep (`*rules`'s): the loop, the lists, the sink
+  // A match: the engine's server on `opt.game` and the window's content it was opened with; its
+  // socket (closed when nobody may join).
+  std::unique_ptr<ge::server::Server> match;
+  std::unique_ptr<ListenHost> host;
+  std::unique_ptr<ge::net::Transport> port;
   std::unique_ptr<sv::Campaign> campaign_host;  // a campaign's host (null in a match)
   std::unique_ptr<LoadedMap> next;              // a map read ahead for the campaign's loader
   bool map_changed = false;  // the campaign moved to another map in the last frames (the window
@@ -127,26 +247,49 @@ struct Listen {
   CampaignView campaign;     // the program's client messages (campaign_view.hpp)
   double entered_at = 0;     // the server's time the player entered this map, s
   uint32_t sequence = 0;
-  sh::MoveCmd cmds[3];              // the three newest, oldest first
-  double owed = 0;                  // wall seconds not yet run, s
-  int64_t frames = 0;               // server frames run on this map
-  sh::Vec3f view;                   // the player's view angles, degrees
-  bool forced = false;              // the server turned the view in the last frame
-  int impulse = 0;                  // waiting for a frame
-  std::string pending_map;          // the mod or the console asked for this map
-  std::vector<std::string> prints;  // what the server printed to the player, in order
+  sh::MoveCmd cmds[3];  // the three newest, oldest first
+  double owed = 0;      // wall seconds not yet run, s
+  int64_t frames = 0;   // server frames run on this map
+  sh::Vec3f view;       // the player's view angles, degrees (his aim)
+  // The easy jump (shooter/speedjump_assist.hpp): the aid strafing for him while his slot asks
+  // (`cl_speedjump 1`), at the server's pm_speedjump; `speedjump_view` of its swing is drawn.
+  sh::SpeedJumpAid jump_aid;
+  float speedjump_view = 0.5f;       // cl_speedjump_view
+  bool forced = false;               // the server turned the view in the last frame
+  int impulse = 0;                   // waiting for a frame
+  std::string pending_map;           // the mod or the console asked for this map
+  std::vector<std::string> prints;   // what the server printed to the player, in order
+  std::vector<std::string> centres;  // its centre prints, in order ("" clears the last)
   // Where the mod's explosions went off on this map (its temporary-entity message), map units,
   // in order.
   std::vector<sh::Vec3f> explosions;
   std::vector<Blow> blows;  // the blows the player took on this map, in order
+  // The sounds the server started for the player (the protocol's sound message to slot 0) since
+  // the window last played them (listen_sound.hpp empties it), and the map's looping sounds.
+  std::vector<DemoSound> sounds;
+  std::vector<DemoStaticSound> static_sounds;
+  // A match's voices: what the server relayed to the player since the window last played them
+  // (listen_sound.hpp empties it), and his own microphone cut into frames (`listen_mic`).
+  std::vector<DemoVoice> voices;
+  VoiceOut voice;
   // A campaign's effects on this map (its temporary entities and particle bursts), in order; its
   // explosions are in `explosions` too.
   std::vector<Effect> effects;
   // The lobby (a match with `ListenOptions::lobby`; null otherwise) and whether the last frames
   // restarted the map for the match (the window clears what it keeps of the old server's
   // entities, then this).
-  std::unique_ptr<Room> room;
+  Room* room = nullptr;  // the match server's
   bool restarted = false;
+  bool voice_tried = false;  // `voice`'s encoder was opened (or failed to) for this game
+  int changes = 0;           // the match server's map changes the listen has caught up with
+  int entries = 0;           // maps entered (a new one, the next level, a restart, a load), ever
+  // A campaign's companions (coop_party.hpp; null when none was ever seated).
+  std::unique_ptr<Party> party;
+  // A coop campaign's door open to others (`ListenOptions::door`; null: nobody joins) and the
+  // network's time it runs on, s.
+  void* door = nullptr;
+  const CampaignDoor* door_calls = nullptr;
+  double net_s = 0;
 };
 
 // The server made for `progs` (which must outlive it) on `map`, the player connected.
@@ -184,6 +327,10 @@ bool listen_save_text(const Listen& l, std::string& out, std::string& error);
 bool listen_load_text(Listen& l, const ge::progs::Progs& progs, const ListenOptions& opt,
                       std::string_view text, std::string_view name, std::string& error,
                       std::unique_ptr<LoadedMap> map = nullptr);
+// A brush model file's bounds read from the search path `ctx` (a `const SearchPath*`): the mod
+// server's ModelBounds (qc_server.hpp), so a single-player program's exploding box has its size.
+bool search_path_model_bounds(void* ctx, const std::string& name, ge::shooter::Vec3f& mins,
+                              ge::shooter::Vec3f& maxs);
 // Whether a program is a single-player one (its layout's form).
 bool single_player(const ge::progs::Progs& progs);
 // Whether the server's lines ask for a single-player game: the last `deathmatch` set is 0 (the
@@ -195,9 +342,28 @@ std::string map_title(const Listen& l);
 double listen_tic(const Listen& l);
 
 // A lobby line from the player (slot 0): the lobby's words (server/lobby.hpp: ready, break,
-// notready, toggleready, team, start, lobby), `addbot [novice|average|expert]` and `removebot`.
-// False when the line is none of them, or when no lobby runs (a line saying so is printed).
+// notready, toggleready, team, start, warmup, sitout, togglewarmup, lobby), `addbot
+// [novice|average|expert]` and `removebot`, and the vote's (`vote ...`, `yes`, `no`: any match). In
+// a campaign the last two seat and let go a companion (coop on: `coopgame` starts one so). False
+// when the line is none of them, or when no lobby runs (a line saying so is printed).
 bool listen_lobby(Listen& l, std::string_view line);
+// An administrator's line on the window's own server (`users`, `status`, `speedjump`: ListenHost's
+// `admin`): false when no match is hosted or the line is none of them, the answer in `out`.
+bool listen_admin(Listen& l, const std::string& line, std::string& out);
+
+// What the lobby's banner and screen show (lobby_room.hpp's `lobby_view` for the player), each
+// seat's frags read off the server when it is on the map, and the map's name. A view with no rows
+// when no lobby runs.
+hud::LobbyView listen_lobby_view(const Listen& l);
+// Whether the player is on the lobby's screen: a lobby runs and he is not on the map (he has not
+// joined the warmup, and the match is not on).
+bool on_lobby_screen(const Listen& l);
+
+// The player's microphone since the last call (48 kHz mono): while `talking` (his talk key held)
+// on a match with voice, sent to those who hear him. Nothing in a campaign or with no match.
+void listen_mic(Listen& l, std::span<const float> samples, bool talking);
+// Whether the game playing carries the player's voice (a match with `ListenOptions::voice`).
+bool listen_voice(const Listen& l);
 
 // One server frame with the player's command `cmd` (its angles are `l.view`, its length the
 // server's frame; an impulse waiting goes with it).
@@ -221,11 +387,20 @@ PlayerState player_state(const Listen& l);
 struct Missile {
   int entity = 0;
   sh::Vec3f origin;
-  bool rocket = false;  // a rocket or a grenade: something that explodes
+  bool rocket = false;   // a rocket or a grenade: something that explodes
+  bool grenade = false;  // a grenade (bounces, smokes) rather than a rocket
 };
 void missiles_of(const Listen& l, std::vector<Missile>& out);
 
+// True when the entity is drawn: a model index and a model text (a program hides a taken item by
+// emptying its text; server::model_shown). Without a QC program: a model index alone.
+bool model_shown(const Listen& l, int entity);
+
 // A float field of an entity by its name in the progs (0 when the progs has no such field).
 float field_named(const Listen& l, int entity, const char* name);
+// Sets that field (nothing when the progs has no such field): a lab hands the player its weapons.
+void set_field_named(Listen& l, int entity, const char* name, float value);
+// A float global of the program by its name (0, and `found` false, when it has no such global).
+float global_named(const Listen& l, const char* name, bool* found = nullptr);
 
 }  // namespace shooters_edge::client

@@ -104,6 +104,14 @@ void span_add(PassTimes& p, double ms) {
   if (!std::isnan(ms)) p.span_ms.push_back(ms);
 }
 
+void pass_add(PassTimes& p, std::string_view name, double ms) {
+  if (std::isnan(ms)) return;
+  auto at = std::find_if(p.pass_ms.begin(), p.pass_ms.end(),
+                         [&](const auto& e) { return e.first == name; });
+  if (at == p.pass_ms.end()) at = p.pass_ms.insert(p.pass_ms.end(), {std::string(name), {}});
+  at->second.push_back(ms);
+}
+
 double median_of(std::vector<double> v) {
   if (v.empty()) return 0;
   const auto mid = v.begin() + static_cast<std::ptrdiff_t>(v.size() / 2);
@@ -115,6 +123,26 @@ std::string span_report(const PassTimes& p) {
   if (p.span_ms.empty()) return "  GPU frame: not measured (this GPU has no timestamp queries)";
   return "  GPU frame span, median " + fixed(median_of(p.span_ms), 2) +
          " ms (what each thing costs: the se-timedemo lab's --price)";
+}
+
+std::vector<std::string> pass_report(const PassTimes& p, size_t frames) {
+  if (p.pass_ms.empty() || frames == 0) return {};
+  std::vector<std::pair<double, size_t>> order;
+  for (size_t i = 0; i < p.pass_ms.size(); i++) {
+    double sum = 0;
+    for (const double ms : p.pass_ms[i].second) sum += ms;
+    order.push_back({sum / static_cast<double>(frames), i});
+  }
+  std::sort(order.begin(), order.end(),
+            [](const auto& a, const auto& b) { return a.first > b.first; });
+  std::vector<std::string> out{
+      "  GPU by pass (mean a timed frame; median where it ran, in how many):"};
+  for (const auto& [mean, i] : order) {
+    const auto& [name, ms] = p.pass_ms[i];
+    out.push_back("    " + name + " " + fixed(mean, 3) + " ms; " + fixed(median_of(ms), 3) +
+                  " ms in " + std::to_string(ms.size()) + " of " + std::to_string(frames));
+  }
+  return out;
 }
 
 std::vector<Price> prices(std::span<const PriceRun> bases, std::span<const PriceRun> off) {
@@ -136,8 +164,8 @@ double price_noise(std::span<const PriceRun> bases) {
   return most;
 }
 
-std::vector<std::string> price_report(std::span<const PriceRun> bases,
-                                      std::span<const Price> saved) {
+std::vector<std::string> price_report(std::span<const PriceRun> bases, std::span<const Price> saved,
+                                      std::string_view what) {
   std::vector<std::string> out;
   if (bases.empty()) return out;
   double lo = bases[0].frame_p50_ms, hi = lo;
@@ -149,8 +177,8 @@ std::vector<std::string> price_report(std::span<const PriceRun> bases,
                 " ms over " + std::to_string(bases.size()) + " runs; a saving under " +
                 fixed(price_noise(bases), 2) + " ms is noise");
   for (const Price& p : saved)
-    out.push_back("    " + p.name + " off saves " + fixed(p.frame_ms, 2) + " ms a frame (span " +
-                  fixed(p.span_ms, 2) + ")");
+    out.push_back("    " + p.name + std::string(what) + " saves " + fixed(p.frame_ms, 2) +
+                  " ms a frame (span " + fixed(p.span_ms, 2) + ")");
   return out;
 }
 
@@ -274,11 +302,17 @@ void DemoTimeline::frame(const DemoState& s, bool new_level) {
 }
 
 TimedemoStep timedemo_step(Timedemo& t, std::string& error) {
+  std::vector<DemoEffect> effects;  // every frame read's, the ones not drawn too
   for (;;) {
     const DemoRead r = next_frame(t.demo, error);
     if (r == DemoRead::error) return TimedemoStep::error;
     if (r == DemoRead::end) return TimedemoStep::end;
-    const DemoState& s = t.demo.state;
+    DemoState& s = t.demo.state;
+    if (!effects.empty()) {
+      effects.insert(effects.end(), s.effects.begin(), s.effects.end());
+      s.effects.swap(effects);
+      effects.clear();
+    }
     if (t.hear) {  // the frame's own sounds and lines, kept for the next draw
       DemoHeard& h = t.heard;
       h.started.insert(h.started.end(), s.started.begin(), s.started.end());
@@ -287,7 +321,14 @@ TimedemoStep timedemo_step(Timedemo& t, std::string& error) {
       h.prints.insert(h.prints.end(), s.prints.begin(), s.prints.end());
       if (!s.centre.empty()) h.centre = s.centre;
     }
-    if (s.map.empty()) continue;  // the signon before the level's map is named: nothing to draw
+    if (s.map.empty()) {  // the signon before the level's map is named: nothing to draw
+      effects.swap(s.effects);
+      continue;
+    }
+    if (t.smooth)
+      lerp_frame(t.lerp, s, s.levels != t.levels);
+    else
+      t.lerp.to.levels = -1;  // switched on again later: not drawn from a frame long gone
     if (s.levels != t.levels) {
       t.levels = s.levels;
       t.skip = kSkipAfterLevel;
@@ -311,17 +352,25 @@ TimedemoStep playdemo_step(Timedemo& t, double wall_dt_s, double speed, std::str
   // second, so the run slows over the stall rather than skipping what it would have shown.
   t.clock += std::min(wall_dt_s, kMostPlayStep) * std::clamp(speed, 0.0, 20.0);
   TimedemoStep out = TimedemoStep::frame;
+  // The frames' temporary entities, every one read this draw (none when none was read: the last
+  // draw's are not thrown again).
+  std::vector<DemoEffect> effects;
   // The next demo frame is read once the clock reaches the time it will carry; its time is known
   // only after reading it, so the run reads while the last frame read is behind the clock.
   while (t.demo.state.time < t.clock) {
     const TimedemoStep s = timedemo_step(t, error);
-    if (s == TimedemoStep::end || s == TimedemoStep::error) return s;
+    effects.insert(effects.end(), t.demo.state.effects.begin(), t.demo.state.effects.end());
+    if (s == TimedemoStep::end || s == TimedemoStep::error) {
+      out = s;
+      break;
+    }
     if (s == TimedemoStep::new_level) {  // a level's clock starts over: the run's with it
       t.clock = t.demo.state.time;
       out = s;
       break;
     }
   }
+  t.demo.state.effects = std::move(effects);
   return out;
 }
 
@@ -346,10 +395,17 @@ TimedemoStep demo_seek(Timedemo& t, double timeline_s, std::string& error) {
   }
   t.clock = t.demo.state.time;
   t.skip = 0;
-  t.heard.clear();  // what the seek read past is not played
+  if (t.smooth) lerp_frame(t.lerp, t.demo.state, true);  // not drawn from before the seek
+  t.heard.clear();                                       // what the seek read past is not played
+  t.demo.state.effects.clear();                          // nor thrown
   if (out == TimedemoStep::end) return out;
   return t.levels != level_before || t.demo.state.map != map_before ? TimedemoStep::new_level
                                                                     : TimedemoStep::frame;
+}
+
+const DemoState& demo_drawn(Timedemo& t) {
+  if (!t.paced || !t.smooth || t.clock < 0) return t.demo.state;
+  return lerp_at(t.lerp, t.demo.state, t.clock);
 }
 
 void timedemo_mark(Timedemo& t, uint64_t now_ns) {

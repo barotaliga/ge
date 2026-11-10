@@ -11,7 +11,7 @@
 //
 // ge:summary A map file as the mod server plays it: read, its hulls and entities, its PVS and PHS
 // ge:keywords bsp map load read_bsp_map use_map_sets pvs phs vis hearing entity-text models
-// ge:keywords mapspec cluster leaf
+// ge:keywords mapspec cluster leaf bsp_file_bounds model-bounds
 // ge:skill shooter progs brush
 // ge:test tests/shooters_edge_bsp_map_test.cpp
 #pragma once
@@ -36,7 +36,12 @@ struct BspMap {
 bool read_bsp_map(std::span<const uint8_t> bytes, const std::string& name, BspMap* out,
                   MapSpec* spec, std::string& error);
 
+// A brush model file's own bounds (`bytes`: "maps/b_explob.bsp"): its first model's mins and maxs
+// as stored; false with the reason in `error` when it does not read.
+bool bsp_file_bounds(std::span<const uint8_t> bytes, sh::Vec3f& mins, sh::Vec3f& maxs,
+                     std::string& error);
+
 // The server's visibility and hearing sets answered by the map's.
-void use_map_sets(QcServer& s, const BspMap& map);
+void use_map_sets(RulesCommon& s, const BspMap& map);
 
 }  // namespace shooters_edge::server

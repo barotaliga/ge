@@ -168,7 +168,10 @@ and linear sRGB. 1150 °C is about 2900 cd/m² of deep orange at ε = 0.9.
 
 - **The crust** is a warped Voronoi tiling of plates with sub-cracks. Each plate has an age
   (hashed, running on at `age_rate`) that cools its skin from `crust_hot` to `crust_cold` and
-  widens its cracks. The melt's heat shows in a crack and falls off as exp(−d/w) from it.
+  widens its cracks. The melt's heat shows in a crack and falls off as exp(−d/w) from it. A
+  plate's life is a loop with no jump: it congeals out of the melt over its first 8 %, and over
+  its last 15 % melts back and sinks, the melt eating in from its cracks, so where its age wraps
+  it is melt on both sides and never pops.
 - **Open melt** shows where a slow noise passes `cover`. It carries swirls, threads and hot
   streaks.
 - **Relief**: plates stand over cracks, and ropy folds (pāhoehoe) run across the flow, with
@@ -177,7 +180,9 @@ and linear sRGB. 1150 °C is about 2900 cd/m² of deep orange at ε = 0.9.
   sky, and the glow is added on top.
 - **The flow** carries everything on a two-phase flow map. Each phase's pattern is drawn back
   along the flow for its share of the period and the two are crossfaded, so the pattern never
-  stretches.
+  stretches. Each phase weighs nothing at the moment its offset jumps back, so the jump is never
+  seen; a still pool draws one pattern and no phases. The `gpu-lava` lab's `steady` view holds
+  both: the share of pixels that jump between frames 0.2 s apart over 20 s.
 - **Filtering**: a crack narrower than the pixel's footprint is widened to it, with its heat
   spread over the width, so distant crust does not sparkle.
 
@@ -255,6 +260,15 @@ sees the liquid all round it. One full-screen triangle is drawn after the surfac
   The eye is keyed to the melt at 0.6 of a white face's luminance, so the view stays orange
   and the tone curve does not whiten it. Only what touches the eye shows through
   the first few centimetres.
+- **With a game's reach, lava is a goo the eye sees into.** A game that lets its players fall in
+  lava and swim out (Shooter's Edge) sets `under_reach`, and the eye sees a thick, light-red,
+  glowing goo instead of the opaque melt. Its glow is the melt's key in a light red, shaded by the
+  same swirl and streaks. What is in it is lit by it (the scene's colour times 1 + 2 × the goo's
+  tint, so its walls read red and brighter than the room leaves them). The scene fades into the
+  goo over exp(-b d / reach) with b = (0.6, 1.0, 1.2) by band, so red carries farthest: at the
+  reach 55 % of the red and 37 % of the green is left. A ray that meets the surface first sees
+  the opaque melt from below, churning overhead like the lava without a reach, and the view
+  wobbles slowly.
 - **A game's least view (`Liquids::under_reach`, m).** A toxic slime's attenuation is hundreds
   per metre, so an eye in it honestly sees two centimetres. A game that wants to see where it
   swims sets a reach: no band's attenuation passes 3 / reach, so the reach is where 5 % of the

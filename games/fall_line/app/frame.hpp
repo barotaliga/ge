@@ -174,7 +174,9 @@ struct FrameOptions {
   const ge::render::CloudKind* cloud_kinds[ge::render::kCloudLayers] = {};
   int cloud_count = -1;
   bool cloud_quarter = true;  // the cloud marched at a quarter of the pixels (false: every one)
-  bool cloud_spread = true;   // the quarter's march spread over four frames, the rest reprojected
+  // The march spread over four frames, the rest reprojected: the quarter's, or every pixel's own
+  // ray (false with every pixel: each marched every frame, the reference).
+  bool cloud_spread = true;
   double reach_m = 0;  // how far the picture draws, misted (render/view.hpp); 0: the whole ground
   ge::render::PrecipSettings fall;
   ge::render::FogSettings froxels;             // the fog in areas' froxel volume
@@ -276,10 +278,15 @@ struct GameFrame {
   ge::render::Taa taa;
   ge::render::Bloom bloom;
   ge::render::Lens lens;        // made only when FrameOptions::lens has a half on
+  bool lens_ready = false;      // its pipelines were made at the load (set_picture turns it on)
   ge::render::MotionBlur blur;  // made only with FrameOptions::look.motion_blur above 0
   ge::render::Ao ao;            // made only with FrameOptions::ao's strength above 0
   ge::render::Dof dof;          // made only with FrameOptions::dof's strength above 0
   ge::render::Post post;
+  // THE LADDER'S READINESS (set_picture): the bloom's share its pipelines were made for (the
+  // options', or the default's when it was off at the load), and the falling snow's capacity.
+  double bloom_ready = 0;
+  uint32_t fall_capacity = 0;
   ge::render::UiPass ui;
   ge::render::InstancePipelines instancing;
   ge::render::InstanceFamily forest, figures, crowd;
@@ -360,6 +367,25 @@ void show_village(ge::gpu::Device& device, GameFrame& frame,
 
 // New targets for outputs of width x height (a resized window); the history starts over.
 void resize(ge::gpu::Device& device, GameFrame& frame, uint32_t width, uint32_t height);
+
+// A QUALITY LADDER STOP CHANGED ON A LIVE FRAME (app/ladder.hpp's rows: the fields `apply_picture`
+// sets), with no pipeline made after the load: the spray, the falling snow (up to the capacity
+// made at the load), the cloud's march, its quarter and the reach are each frame's; a new
+// resolution makes the render-size targets again, a new shadow size the sun's maps (rebound into
+// what receives them), the bloom on or off picks the post pass's pipeline with or without it (both
+// made at the load), the lens goes off (and on when it was made at the load); the snow's material
+// on or off picks the terrain's pipeline pair (both made at the load: TerrainSource::plain_too),
+// and the trails on, off or at a new size make their maps again with every trail laid drawn back
+// into them. `later` names what is kept until the frame is made again: a falling snow's count
+// over the pool made at the load, a bloom's share other than the one its pipelines were made for,
+// a lens not made at the load.
+struct PictureChange {
+  bool targets = false;  // the render-size targets were made again (the history starts over)
+  bool shadows = false;  // the sun's shadow maps were made again
+  bool trails = false;   // the trails' maps made again or turned on or off (the snow's group)
+  std::string later;     // the settings kept until the frame is made again, by name; empty: none
+};
+PictureChange set_picture(ge::gpu::Device& device, GameFrame& frame, const FrameOptions& next);
 
 // The camera cut: the next frame keeps nothing of the last (no motion, no history, the sun's
 // cascades drawn again round the new camera). The tracks stay: they are the run's, not the

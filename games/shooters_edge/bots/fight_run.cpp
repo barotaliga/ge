@@ -37,9 +37,9 @@ uint64_t frame_digest(const server::QcServer& s, int players) {
   h = fold(h, static_cast<uint32_t>(t));
   h = fold(h, static_cast<uint32_t>(t >> 32));
   for (int e = 1; e <= players; e++) {
-    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+    const server::WorldEntity& d = s.world.entities[static_cast<size_t>(e)];
     h = fold_f(fold_f(fold_f(h, d.origin.x), d.origin.y), d.origin.z);
-    h = fold_f(fold_f(h, d.v_angle.x), d.v_angle.y);
+    h = fold_f(fold_f(h, d.view_angles.x), d.view_angles.y);
     h = fold_f(h, d.health);
   }
   return h;
@@ -48,7 +48,7 @@ uint64_t frame_digest(const server::QcServer& s, int players) {
 // The entity on inline model `name` ("*1"), or -1.
 int entity_on(const server::QcServer& s, const char* name) {
   for (int e = 1; e < s.sv.num_edicts; e++) {
-    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+    const server::WorldEntity& d = s.world.entities[static_cast<size_t>(e)];
     if (d.free || d.modelindex <= 0 || d.modelindex >= static_cast<int>(s.models.size())) continue;
     if (s.models[static_cast<size_t>(d.modelindex)] == name) return e;
   }
@@ -92,11 +92,11 @@ FightReport run_fight(const FightOptions& opt) {
   }
   sh::NavMover movers[2];
   movers[0].ent = door;
-  movers[0].absmin = s.sv.edicts[static_cast<size_t>(door)].absmin;
-  movers[0].absmax = s.sv.edicts[static_cast<size_t>(door)].absmax;
+  movers[0].absmin = s.world.entities[static_cast<size_t>(door)].absmin;
+  movers[0].absmax = s.world.entities[static_cast<size_t>(door)].absmax;
   movers[1].ent = plat;
-  movers[1].absmin = s.sv.edicts[static_cast<size_t>(plat)].absmin;
-  movers[1].absmax = s.sv.edicts[static_cast<size_t>(plat)].absmax;
+  movers[1].absmin = s.world.entities[static_cast<size_t>(plat)].absmin;
+  movers[1].absmax = s.world.entities[static_cast<size_t>(plat)].absmax;
   movers[1].model = &map.models[2];
   movers[1].travel = {0, 0, kPlatRise};
   movers[1].ride_s = 1 + kPlatRise / kPlatSpeed;
@@ -122,10 +122,12 @@ FightReport run_fight(const FightOptions& opt) {
   }
   for (int k = 0; k < n; k++) {
     Fighter& f = fighters[static_cast<size_t>(k)];
+    f.features = sh::features_of(opt.skills[static_cast<size_t>(k)]);
+    if (!sh::apply_features(opt.features, f.features, r.error)) return r;
     fighter_init(f, graph, s, k, server::kBaselineArenaEntities, opt.skills[static_cast<size_t>(k)],
                  r.players[static_cast<size_t>(k)].traits, kHz,
                  opt.seed + 31u * static_cast<uint32_t>(k));
-    f.bot.yaw = s.sv.edicts[static_cast<size_t>(k) + 1].v_angle.y;
+    f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
     f.bot.pilot.world = &world;  // the hop looks ahead through the map
     if (k == 0) f.bot.pilot.why = opt.why;
   }
@@ -153,14 +155,12 @@ FightReport run_fight(const FightOptions& opt) {
     server::clear_frame(s.out);
     r.frames = frame + 1;
     for (int k = 0; k < n; k++) {
-      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(k) + 1];
+      const server::WorldEntity& d = s.world.entities[static_cast<size_t>(k) + 1];
       FightPlayer& p = r.players[static_cast<size_t>(k)];
       p.path.push_back(d.origin);
       const bool live = d.health > 0;
       p.mode.push_back(live ? static_cast<uint8_t>(fighters[static_cast<size_t>(k)].mode) : 255);
-      p.frags_at.push_back(ge::progs::as_float(
-          s.q.vm.entities[static_cast<size_t>(k + 1) * static_cast<size_t>(s.q.vm.entityfields) +
-                          static_cast<size_t>(ge::progs::kFFrags)]));
+      p.frags_at.push_back(s.world.clients[static_cast<size_t>(k)].numbers.frags);
       if (alive[static_cast<size_t>(k)] && !live) r.deaths.push_back({frame, k, d.origin});
       alive[static_cast<size_t>(k)] = live;
     }

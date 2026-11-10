@@ -17,12 +17,18 @@
 // the edge-following kernel instead and fetches nothing. The network runs on the GPU
 // (app/upscaler_gpu.hpp) when the build has one and the adapter is not a software one, else on
 // the CPU; --device picks.
+//   setup <path|https-url> --basedir=<dir> [--cache=<dir>]
+//                                      a game folder laid out for --game in one step: the source
+//                                      verified (a URL fetched once with curl into the cache's
+//                                      `downloads/` folder and refused unless it is a known
+//                                      release), its packs written unchanged into the profile's
+//                                      base folder under <dir>
 //   status [--cache=<dir>]             the cache's pack folders and the stages each has done
 //   help                               this list
 //
 // ge:summary The classicenhance tool: verify a source, run the pipeline, show the cache, as JSON
 // ge:keywords classicenhance tool executable command verify run status json cache stages
-// ge:keywords manifest known-set rows
+// ge:keywords manifest known-set rows setup basedir game-folder fetch download release-zip
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #include <algorithm>
@@ -60,6 +66,9 @@ constexpr const char* kHelp =
     "[--force] "
     "[--scale=<1..8>] [--limit=<n>] [--round=<0..4>] [--upscaler=network|kernel] "
     "[--weights=<file>] [--device=auto|gpu|cpu]\n"
+    "  setup <path|https-url> --basedir=<dir> [--cache=<dir>]   the source verified (a URL "
+    "fetched once into the cache's downloads/ folder, refused unless a known release) and its "
+    "packs written unchanged into the game's base folder under <dir>, ready for --game\n"
     "  status [--cache=<dir>]\n"
     "The cache defaults to GE_CLASSIC_CACHE, else the platform's per-user cache folder.\n"
     "The textures are upscaled by a trained network at 4x; its weights (CC0) are fetched once "
@@ -119,7 +128,7 @@ std::string source_json(const Source& s) {
 
 struct Flags {
   std::vector<std::string> words;
-  std::string cache, only, upscaler = "network", weights, device = "auto";
+  std::string cache, only, upscaler = "network", weights, device = "auto", basedir;
   bool force = false;
   int scale = 4;
   int round = 0;
@@ -136,7 +145,8 @@ bool parse(int argc, char** argv, Flags* f, std::string* error) {
       return true;
     };
     std::string v;
-    if (value("cache", &f->cache) || value("only", &f->only) || value("weights", &f->weights)) {
+    if (value("cache", &f->cache) || value("only", &f->only) || value("weights", &f->weights) ||
+        value("basedir", &f->basedir)) {
       continue;
     }
     if (a == "--force") {
@@ -215,6 +225,64 @@ int manifest(const Source& src) {
   return 0;
 }
 
+// `setup`: the source (a path, or an https URL fetched once into the cache) verified and its
+// packs written unchanged into `<basedir>/<base folder>/`, which is what a game's --game takes.
+int setup(const Flags& f) {
+  if (f.basedir.empty()) {
+    return fail("setup needs --basedir=<dir>: the folder the game's base folder is made in", 2);
+  }
+  std::string where = f.words[0];
+  const bool url = where.rfind("https://", 0) == 0;
+  std::error_code ec;
+  if (url) {
+    const std::string name = url_file_name(where);
+    if (where.find_first_of("\"\\$`") != std::string::npos) {
+      return fail("the URL holds a quote, a backslash, a $ or a backquote; give it without them",
+                  2);
+    }
+    if (name.empty()) {
+      return fail(
+          "the URL names no file to keep; give the release zip's own URL, ending in its "
+          "file name",
+          2);
+    }
+    const fs::path root = f.cache.empty() ? default_cache_root() : fs::path(f.cache);
+    const fs::path file = root / "downloads" / name;
+    if (!fs::exists(file, ec)) {
+      fs::create_directories(file.parent_path(), ec);
+      const fs::path part = file.string() + ".part";
+      const std::string cmd = "curl -fsSL --retry 2 -o \"" + part.string() + "\" \"" + where + "\"";
+      if (std::system(cmd.c_str()) != 0) {
+        fs::remove(part, ec);
+        return fail("could not fetch " + where +
+                    "; check the network and that curl is installed, or fetch it yourself and "
+                    "give its path");
+      }
+      fs::rename(part, file, ec);
+    }
+    where = file.string();
+  }
+  Source src;
+  std::string error;
+  if (!open_source(where, &src, &error)) return fail(error);
+  if (url && !src.zip && !src.known) {
+    fs::remove(where, ec);
+    return fail("the file fetched from " + f.words[0] + " is not a known release (pack SHA-256 " +
+                src.pack_sha256 +
+                "); removed it. Check the URL; a copy of your own is set up by "
+                "its path instead");
+  }
+  std::vector<std::string> paths;
+  if (!lay_out_game(src, f.basedir, &paths, &error)) return fail(error);
+  const std::string game = (fs::path(f.basedir) / std::string(src.profile->base_dir)).string();
+  std::string written;
+  for (const std::string& p : paths) written += std::string(written.empty() ? "" : ",") + esc(p);
+  std::printf("{\"ok\":true,\"source\":%s,\"game\":%s,\"files\":[%s],\"next\":%s}\n",
+              source_json(src).c_str(), esc(game).c_str(), written.c_str(),
+              esc("pass --game=" + game + " to the lab or the client").c_str());
+  return 0;
+}
+
 // The trained upscaler's weights: --weights, else the cache's copy, fetched when missing.
 bool network(const Flags& f, Upscaler* out, std::string* note, std::string* error) {
   fs::path file = f.weights;
@@ -263,12 +331,13 @@ static int run_main(int argc, char** argv) {
   std::string error;
   if (!parse(argc, argv, &f, &error)) return fail(error, 2);
   if (cmd == "status") return status(f);
-  if (cmd != "verify" && cmd != "run" && cmd != "manifest") {
+  if (cmd != "verify" && cmd != "run" && cmd != "manifest" && cmd != "setup") {
     return fail("unknown command '" + cmd + "'; `classicenhance help` lists them", 2);
   }
   if (f.words.size() != 1) {
     return fail(cmd + " takes one path: the release zip, an installed folder or its pak0.pak", 2);
   }
+  if (cmd == "setup") return setup(f);
   Source src;
   if (!open_source(f.words[0], &src, &error)) return fail(error);
   if (cmd == "verify") {

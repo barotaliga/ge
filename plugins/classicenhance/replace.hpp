@@ -2,7 +2,10 @@
 // effect of the engine's replaces (a sprite explosion, a flame drawn as a flickering model),
 // stated once here. The models stage writes them as `replaced.txt` in the cache, one line a
 // row, so the renderer that reads the cache (row M41c) draws the engine's effect where the map
-// or the game asks for the pack's file, and an agent sees why.
+// or the game asks for the pack's file, and an agent sees why. Shooter's Edge's window reads the
+// table itself (client/world_models.cpp's model kinds, client/world_fx.cpp's switches): the
+// explosion sprite, the flare and the bubbles drawn as the engine's under their ce_ switch, a
+// torch's painted flame left out where the engine's fire burns.
 //
 // - `effect` is an id the renderer maps to its own effect: `explosion`, `flare` and `bubbles`
 //   are the particle effects; `fire.<kind>` is the brush renderer's fire of that kind

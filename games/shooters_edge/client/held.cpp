@@ -50,11 +50,16 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
   const PlayerState p = player_state(l);
   view::HandInput in;
   in.weapon = static_cast<view::Weapon>(status_of(l, t).weapon);
+  in.dead = p.dead;  // the weapon sinks out of view (view/hand.hpp)
   const float attack = field_named(l, p.entity, "attack_finished");
   const double now = l.server ? l.server->sv.time : 0;
   in.fired = !p.dead && attack > s.attack_finished && static_cast<double>(attack) > now + 1e-3;
   s.attack_finished = attack;
-  if (in.fired) ++s.shots;
+  if (in.fired) {
+    ++s.shots;
+    // The mod's own weapon frame as the shot starts it: which of the axe's swings it chose.
+    in.fire_frame = static_cast<int>(field_named(l, p.entity, "weaponframe"));
+  }
   in.place.look_yaw = v.pose.yaw;
   in.place.look_pitch = v.pose.pitch;
   const double vx = p.velocity.x, vy = p.velocity.y;
@@ -79,8 +84,29 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
   in.place.look_yaw = pose.yaw;
   in.place.look_pitch = pose.pitch;
   in.place.grounded = true;
+  // Dead, the recorder's weapon sinks out of view (the recording clears the weapon at once: the
+  // one shown goes on being drawn as it sinks).
+  in.dead = s.stats[kStatHealth] <= 0;
   view::HandFrame f = view::step_hand(h.hand, in, settings, models, pose, dt);
-  f.drawn = f.drawn && s.stats[kStatWeapon] != 0 && s.stats[kStatHealth] > 0 && !s.intermission;
+  // A classic set's frame as the server sent it: its fire animations played as recorded.
+  const auto w = static_cast<size_t>(f.weapon);
+  if (h.hand.at_eye && w < models.size()) {
+    const auto slot = static_cast<size_t>(s.player);
+    int wf = s.format == DemoFormat::single             ? s.weapon_frame
+             : s.player >= 0 && slot < s.players.size() ? s.players[slot].weapon_frame
+                                                        : 0;
+    if (wf < 0 || static_cast<size_t>(wf) >= models[w].frames.size()) wf = 0;
+    if (h.recorded_weapon != static_cast<int>(w)) h.recorded = FrameTrack{};
+    h.recorded_weapon = static_cast<int>(w);
+    int from = -1;
+    float g = 1;
+    track_frame(h.recorded, wf, t, from, g);
+    f.frame_b = wf;
+    f.frame_a = settings.lerp && from >= 0 ? from : wf;
+    f.frame_t = settings.lerp && from >= 0 ? g : 0;
+  }
+  f.drawn = f.drawn && !s.intermission && (s.stats[kStatWeapon] != 0 || (in.dead && h.shown));
+  h.shown = f.drawn;
   return f;
 }
 

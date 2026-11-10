@@ -11,6 +11,7 @@
 #include <memory>
 
 #include "shooter/frame.hpp"
+#include "shooter/predict_original.hpp"
 #include "shooter/usercmd.hpp"
 
 namespace shooters_edge::sim {
@@ -45,6 +46,9 @@ struct ClientSim {
   uint8_t impulse = 0;
   bool acked = false;
   sh::MoveKeys keys;
+  // The original move's stand-in (MatchOptions::original_move), built at its first prediction.
+  sh::OriginalPrediction original;
+  bool original_built = false;
 };
 
 sh::KeyState& key_of(sh::MoveKeys& k, ScriptKey key) {
@@ -93,9 +97,10 @@ struct World {
 };
 
 // The client's own player predicted over its commands after the acknowledged one.
-bool predict(const World& w, const sh::MoveSettings& set, ClientSim& c, int now_ms, int latency_ms,
-             sh::Vec3f& out, int& unacked) {
+bool predict(const World& w, const sh::ServerSettings& server, ClientSim& c, int now_ms,
+             int latency_ms, sh::Vec3f& out, int& unacked) {
   if (!c.acked) return false;
+  const sh::MoveSettings& set = server.move;
   const sh::ClientModel movers[2] = {{&w.models[1], c.last.door}, {&w.models[2], c.last.plat}};
   sh::MoveWorld bare;
   sh::client_world(w.models[0], movers, 2, nullptr, 0, bare);
@@ -105,6 +110,15 @@ bool predict(const World& w, const sh::MoveSettings& set, ClientSim& c, int now_
   sh::MoveWorld world;
   sh::client_world(w.models[0], movers, 2, &other.origin, 1, world);
   unacked = static_cast<int>(c.sequence - c.last.ack);
+  if (server.playermove == sh::PlayerMove::original) {
+    if (!c.original_built) sh::original_prediction_level(c.original, w.models, server);
+    c.original_built = true;
+    const sh::ModelAt at[2] = {{1, c.last.door}, {2, c.last.plat}};
+    sh::original_prediction_place(c.original, at, 2, &other.origin, 1);
+    out = sh::predict_player_original(c.original, c.last.own, c.sent.data() + c.last.ack, unacked)
+              .origin;
+    return true;
+  }
   const sh::MoveState s =
       sh::predict_player(c.last.own, c.sent.data() + c.last.ack, unacked, set, world);
   out = s.origin;
@@ -173,6 +187,7 @@ MatchReport run_match(const MatchOptions& opt) {
   sh::ServerSettings set;
   set.maxclients = kPlayers;
   set.max_edicts = 64;
+  if (opt.original_move) set.playermove = sh::PlayerMove::original;
   Rules rules;
   create_rules(rules, arena, set.max_edicts);
   sh::Program program = rules_program(rules);
@@ -210,12 +225,12 @@ MatchReport run_match(const MatchOptions& opt) {
       while (!replies[p].empty() && replies[p].front().arrive_ms <= t) {
         sh::Vec3f before{}, after{};
         int n = 0;
-        const bool had = predict(w, sv.set.move, c, t, opt.latency_ms, before, n);
+        const bool had = predict(w, sv.set, c, t, opt.latency_ms, before, n);
         c.last = replies[p].front();
         c.acked = true;
         replies[p].erase(replies[p].begin());
         cr.replies++;
-        if (had && opt.predict && predict(w, sv.set.move, c, t, opt.latency_ms, after, n)) {
+        if (had && opt.predict && predict(w, sv.set, c, t, opt.latency_ms, after, n)) {
           sh::smoothing_frame(c.smooth, before, after);
           const float err = sh::length(before - after);
           cr.corrections.push_back({t, err});
@@ -255,7 +270,7 @@ MatchReport run_match(const MatchOptions& opt) {
       sh::smoothing_decay(c.smooth, opt.client_frame_ms * 0.001);
       ViewSample v;
       v.t_ms = t;
-      if (opt.predict && predict(w, sv.set.move, c, t, opt.latency_ms, v.predicted, v.unacked)) {
+      if (opt.predict && predict(w, sv.set, c, t, opt.latency_ms, v.predicted, v.unacked)) {
         v.shown = sh::smoothed(c.smooth, v.predicted);
         cr.views.push_back(v);
       } else if (c.acked) {

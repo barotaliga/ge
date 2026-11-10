@@ -53,8 +53,9 @@ const Halls& halls() {
   return h;
 }
 
-cn::TeamMatchReport match(int frames, uint32_t seed, bool record) {
+cn::TeamMatchReport match(int frames, uint32_t seed, bool record, int32_t drill = 0) {
   cn::TeamMatchOptions o;
+  o.drill = drill;
   o.map = halls().bsp;
   o.map_name = "halls";
   o.entities = cn::kTeamHallsEntities;
@@ -89,6 +90,18 @@ TEST(a_team_game_of_bots_plays_as_teams_and_records) {
   CHECK_MSG(r.faults == 0, "the baseline mod faulted under the team game");
   CHECK_MSG(r.players.size() == 8, "eight players");
   for (const cn::TeamPlayer& p : r.players) CHECK_MSG(p.slot >= 0, p.name + " never got a slot");
+  // Shots and hits by weapon (net/classic_hits.hpp): a frag takes hits, and no weapon hits more
+  // than it fired.
+  int64_t hits = 0;
+  for (const cn::TeamPlayer& p : r.players)
+    for (int w = 0; w < cn::kHitWeapons; w++) {
+      const cn::HitCount& c = p.hits[static_cast<size_t>(w)];
+      CHECK_MSG(c.hit >= 0 && c.hit <= c.fired,
+                p.name + "'s " + cn::hit_weapon_name(static_cast<cn::HitWeapon>(w)) + " hit " +
+                    std::to_string(c.hit) + " of " + std::to_string(c.fired));
+      hits += c.hit;
+    }
+  CHECK_MSG(hits > 0, "the match's frags were made with no hit counted");
   for (int t = 0; t < 2; t++) {
     CHECK_MSG(r.teams[t].frags >= 3,
               "team " + std::to_string(t) + " scored " + std::to_string(r.teams[t].frags));
@@ -138,13 +151,44 @@ TEST(a_team_game_of_bots_plays_as_teams_and_records) {
   CHECK_MSG(cl::open_demo(r.mvd, d, error), error);
   int frames = 0;
   std::set<int> seen;
+  std::set<std::string> teams;
   while (cl::next_frame(d, error) == cl::DemoRead::frame) {
     frames++;
     for (size_t k = 0; k < d.state.players.size(); k++)
-      if (d.state.players[k].present) seen.insert(static_cast<int>(k));
+      if (d.state.players[k].present) {
+        seen.insert(static_cast<int>(k));
+        CHECK_MSG(!d.state.names[k].empty(), "player " + std::to_string(k) + " has no name");
+        teams.insert(d.state.teams[k]);
+      }
   }
+  // Its players' names and teams, so a viewer names each and knows his side.
+  CHECK_MSG(teams.size() == 2, "the recording shows " + std::to_string(teams.size()) + " teams");
   CHECK_MSG(frames > 4000, "the recording has " + std::to_string(frames) + " frames");
   CHECK_MSG(seen.size() == 8, "the recording shows " + std::to_string(seen.size()) + " players");
+}
+
+TEST(a_weapon_drill_fires_only_its_weapon) {
+  if (!halls().ok) return;
+  // The double scattergun alone (the mod's bit 2), its shells topped up: no other weapon fires,
+  // and the double does, in pellets of 14.
+  const cn::TeamMatchReport r = match(2300, 2, false, 2);
+  CHECK_MSG(r.ok, r.error);
+  if (!r.ok) return;
+  int64_t doubles = 0;
+  for (const cn::TeamPlayer& p : r.players)
+    for (int w = 0; w < cn::kHitWeapons; w++) {
+      const cn::HitCount& c = p.hits[static_cast<size_t>(w)];
+      if (w == static_cast<int>(cn::HitWeapon::dbl)) {
+        doubles += c.fired;
+        CHECK_MSG(c.fired % 14 == 0, p.name + "'s double fired " + std::to_string(c.fired) +
+                                         " pellets, not a whole number of shots");
+      } else {
+        CHECK_MSG(c.fired == 0, p.name + "'s " +
+                                    cn::hit_weapon_name(static_cast<cn::HitWeapon>(w)) + " fired " +
+                                    std::to_string(c.fired) + " in a drill of the double");
+      }
+    }
+  CHECK_MSG(doubles > 0, "no double was fired in its drill");
 }
 
 TEST(a_team_game_replays_to_the_bit_and_matches_its_golden) {

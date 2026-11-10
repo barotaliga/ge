@@ -20,12 +20,16 @@ edges. `docs/shooters-edge.md` is the design;
 | `shooter/bsp_world.hpp/.cpp` | A read brush map (29, BSP2) as the server's brush models: hull 0 from the node tree, hulls 1 and 2 from the clip nodes |
 | `shooter/world.hpp/.cpp` | A move's solids (`MoveWorld`): `player_trace`, `box_free`, `water_contents`, `brush_contents` |
 | `shooter/pmove.hpp/.cpp` | The move: `MoveCmd`, `MoveSettings`, `MoveState`, `player_move`, `run_command` (the 50 ms split) |
+| `shooter/sequel_move.hpp/.cpp` | The sequel's move: `SequelState` (packed eighths), `SequelCmd`, `sequel_move` over a `SequelWorld`; `SequelBrushWorld` over a 38 map's `BrushTracer` |
+| `games/shooters_edge/server/sequel_server.hpp/.cpp` | The sequel's rules as a runner (form `"sequel"`): the map from `MapSpec::brushes`, spawn points, each command through `sequel_move`, the 10 Hz frame, `kill` and the respawn, `fill_rows` into the world |
 | `shooter/slide.hpp/.cpp` | The slide along planes, the step-slide up stairs, `clip_velocity` |
 | `shooter/recording.hpp/.cpp` | The recorded scenarios: the text format, `replay` line by line, the tolerance |
 | `shooter/hull_world.hpp/.cpp` | The engine mover's world over brush models' clip hulls (`mover_world`, the axes `to_engine`/`to_map`, `contents_at`) and a hull 0's liquids laid as `engine/water` volumes (`add_liquids`) |
 | `shooter/row.hpp/.cpp` | The classic row on the engine's mover and swimmer: `classic_rows` from the settings, `row_body`, `row_command` |
 | `shooter/row_recording.hpp/.cpp` | The row against the recordings, one command at a time and as runs (`replay_row`, `row_covers`) |
 | `labs/pmove_lab.cpp` | The `pmove` lab: every scenario's worst error, paths from above and the side |
+| `plugins/shooter/speedjump_assist.hpp` | `assisted_command`: the command a client sends for forward and jump on a server without `pm_speedjump` (the jump let go in the air, the side key and a sent yaw) |
+| `games/shooters_edge/labs/gpu_se_speedjump_lab.cpp` | The `se-speedjump` lab: the easy jump (`pm_speedjump`, `cl_speedjump`) against the classic move and the best strafe, alone and on the listen server |
 | `shooter/program.hpp` | The game-program seam: hooks and functions by number, the globals |
 | `shooter/entity.hpp`, `server.hpp/.cpp` | The entity record and pool, linking, trigger and impact touches, sounds, `server_hash` |
 | `shooter/area.hpp/.cpp`, `trace.hpp/.cpp` | The 31-node area tree and its listing; world traces and `test_entity_position` |
@@ -100,6 +104,12 @@ edges. `docs/shooters-edge.md` is the design;
   change to `engine/move/step.cpp` or `engine/water/swim.cpp` can move the second: rewrite it
   only when the first stays green. A classic behaviour the row lacks is a new engine KNOB, off
   by default (the `move` skill), never a branch on the classic in `engine/`.
+- **The easy jump is the client's hands, never the move's rule.** `assisted_command`
+  (`speedjump_assist.hpp`) sends what a strafer would (side key, weaving yaw, jump let go in the
+  air) and every server runs it with its classic move; `pm_speedjump` is only the share a server
+  states (ours always do, `Setting::always_info`; 0 turns the aid off). Its memory
+  (`SpeedJumpAid`) lives in the client (`Listen::jump_aid`, `Remote::jump_aid`), never in
+  `MoveState`, so prediction stays exact; `cl_speedjump_view` turns only the drawn view.
 - Still to come: the cvars bound through `engine/console` (setting `pm_airstep` sets
   `pm_pground`), a map's compiled hulls (M18b) answering `MoveWorld`, and the other entities'
   interpolation on the client (M18h).

@@ -251,6 +251,26 @@ browser on the home LAN and a stranger's on the internet refresh three times, jo
 list, an invite and the relay, chat, see the game start and see it leave the list. It draws both
 browsers as a game's menu would.
 
+### A game's own servers: the server list (M18q)
+
+A game whose servers speak a protocol of their own (Shooter's Edge's classic servers, and every
+server of that protocol already running on the internet) lists them with `server_list.hpp`
+instead of the directory. The game hands it four functions (`ServerQuery`): the STATUS QUERY's
+bytes, its reply read into a `ServerInfo` (name, map, mode, game, the match's state, players and
+slots, spectators, skill, a password, the roster and every key), and, when the game has masters, a
+MASTER's query and its reply read into addresses. One refresh broadcasts the status query to the
+LAN's ports, asks each master (again until it answers, `master_tries`), adds the servers the
+player named, and queries every server it heard of: straight, `tries` times at most, paced one
+every `gap_us` round the list so a master's thousand servers do not burst. A reply is matched to
+its server by the address it came from; its round trip is the server's ping. The view filters
+(full, empty, silent, a ping bound, the mode, part of the name, map or mode) and sorts (ping,
+players, name, map, mode), ties by name then address. `resolve_ipv4` (`udp_socket.hpp`) turns a
+master's or a server's host name into an address when the player opens the page.
+
+Shooter's Edge's reader is `games/shooters_edge/net/classic_browse.hpp`; its page is
+MULTIPLAYER ▸ JOIN A GAME (`menu/servers_page.hpp`); the `se-browser` lab runs seven of the game's
+dedicated servers, a master and a silent address on the simulated network and walks the page.
+
 ## Replication (M17f)
 
 The server-authoritative model, for fast action, racing and the persistent world alike:

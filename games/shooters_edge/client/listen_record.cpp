@@ -10,7 +10,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <exception>
 #include <filesystem>
 #include <system_error>
 
@@ -24,7 +26,6 @@ constexpr int kAll = 6, kStats = 5;        // the record kinds written
 constexpr int kMultiviewTag = 0x3144564D;  // the multiview extension family's tag
 constexpr int kProtocol = 28;              // the protocol's version
 constexpr int kMostNumbered = 512;         // entities above are left out (no extension byte)
-constexpr int kStatHealth = 0, kStatItems = 15;
 
 struct Out {
   std::vector<uint8_t> b;
@@ -116,7 +117,18 @@ void name_list(Out& m, int id, const std::vector<std::string>& names) {
 
 }  // namespace
 
-ListenRecorder::~ListenRecorder() { record_close(*this); }
+// A recording still open is closed (its last frames written). A destructor must not throw: a
+// failure to finish the file (out of memory, the disk) is said on stderr and the file left as is.
+ListenRecorder::~ListenRecorder() {
+  try {
+    record_close(*this);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr,
+                 "listen record: the recording was not finished on close (%s): its last frames "
+                 "are missing. Next: stop the recording (`stop`) before quitting.\n",
+                 e.what());
+  }
+}
 
 void record_listen_begin(ListenRecorder& r, const Listen& l, int pack_level) {
   r.on = true;
@@ -124,7 +136,7 @@ void record_listen_begin(ListenRecorder& r, const Listen& l, int pack_level) {
   r.ready.clear();
   r.plain = r.flushed_at = r.frames = 0;
   if (r.packed) ge::vfs::zstd_begin(r.pack, {std::clamp(pack_level, 1, 22), 0, false});
-  const sv::QcServer& s = *l.server;
+  const sv::RulesCommon& s = *l.server;
   r.last_time = r.flushed_time = s.sv.time;
   r.prints_seen = l.prints.size();
   r.explosions_seen = l.explosions.size();
@@ -177,7 +189,7 @@ void record_listen_begin(ListenRecorder& r, const Listen& l, int pack_level) {
 
 void record_listen_frame(ListenRecorder& r, const Listen& l) {
   if (!r.on || l.server == nullptr) return;
-  const sv::QcServer& s = *l.server;
+  const sv::RulesCommon& s = *l.server;
   const int ms =
       std::clamp(static_cast<int>(std::lround((s.sv.time - r.last_time) * 1000)), 1, 255);
   r.last_time = s.sv.time;
@@ -208,6 +220,7 @@ void record_listen_frame(ListenRecorder& r, const Listen& l) {
   for (int e = sh::kMaxClients + 1; e < std::min(s.sv.num_edicts, kMostNumbered); e++) {
     const sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
     if (ed.free || ed.modelindex <= 0 || ed.modelindex >= models || ed.modelindex > 255) continue;
+    if (!model_shown(l, e)) continue;  // a taken item: its model text emptied
     // The number, every origin and angle, the frame, then the more byte: angles 1 and 3, the
     // model, the skin, the effects.
     m.i16(e | 1 << 9 | 1 << 10 | 1 << 11 | 1 << 12 | 1 << 13 | 1 << 15);

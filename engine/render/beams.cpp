@@ -169,6 +169,8 @@ void stage_beams(Beams& beams, std::span<const BeamDraw> draws, std::span<const 
     g.shape[3] = static_cast<float>(d.seed % 997u) / 997.0f;
     g.more[0] = std::min(l.glow_m * 0.5f, std::max(0.02f, l.step_m * 0.45f));
     g.more[1] = 0.12f;
+    g.more[2] = l.core_keys * level;
+    g.more[3] = l.glow_keys * level;
     float rel[3];
     for (int k = 0; k < 3; ++k) rel[k] = static_cast<float>(d.shape->origin[k] - view.eye[k]);
     for (int i = 0; i < d.shape->count; ++i) {
@@ -203,6 +205,12 @@ void stage_beams(Beams& beams, std::span<const BeamDraw> draws, std::span<const 
     o.uv[1] = b.v;
     o.uv[2] = b.soot;
     o.uv[3] = b.ember;
+    o.more[0] = b.relief;
+    o.more[1] = b.up[0];
+    o.more[2] = b.up[1];
+    o.more[3] = 0;
+    for (int k = 0; k < 3; ++k) o.lit[k] = b.light[k];
+    o.lit[3] = 0;
   }
   beams.seg_count = nseg;
   beams.burn_count = nburn;

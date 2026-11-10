@@ -26,6 +26,11 @@ void bi_traceline(pg::Vm& vm);
 void bi_tracebox(pg::Vm& vm);
 void bi_checkclient(pg::Vm& vm);
 void bi_find(pg::Vm& vm);
+void bi_findfloat(pg::Vm& vm);
+void bi_findchain(pg::Vm& vm);
+void bi_findchainfloat(pg::Vm& vm);
+void bi_copyentity(pg::Vm& vm);
+void bi_vectorvectors(pg::Vm& vm);
 void bi_findradius(pg::Vm& vm);
 void bi_droptofloor(pg::Vm& vm);
 void bi_pointcontents(pg::Vm& vm);
@@ -49,8 +54,8 @@ void bi_movetogoal(pg::Vm& vm);
 // move (with `enemy` 0 for none).
 float wrap_angle(float a);
 float turned_yaw(float yaw, float ideal, float speed);
-bool check_bottom(QcServer& s, int e);
-bool step_move(QcServer& s, int e, sh::Vec3f move, int enemy, bool relink);
+bool check_bottom(sh::Server& sv, int e);
+bool step_move(sh::Server& sv, int e, sh::Vec3f move, int enemy, bool relink);
 
 // Messages, prints and sounds (bi_message.cpp).
 void bi_sound(pg::Vm& vm);
@@ -60,6 +65,9 @@ void bi_sprint(pg::Vm& vm);
 void bi_dprint(pg::Vm& vm);
 void bi_lightstyle(pg::Vm& vm);
 void bi_particle(pg::Vm& vm);
+void bi_particleeffectnum(pg::Vm& vm);  // DP_SV_POINTPARTICLES: 335, 336, 337
+void bi_trailparticles(pg::Vm& vm);
+void bi_pointparticles(pg::Vm& vm);
 void bi_writebyte(pg::Vm& vm);
 void bi_writechar(pg::Vm& vm);
 void bi_writeshort(pg::Vm& vm);
@@ -83,6 +91,7 @@ void bi_changelevel(pg::Vm& vm);
 void bi_cvar_set(pg::Vm& vm);
 void bi_logfrag(pg::Vm& vm);
 void bi_infokey(pg::Vm& vm);
+void bi_words(pg::Vm& vm);  // words.cpp
 void bi_registercvar(pg::Vm& vm);
 void bi_checkextension(pg::Vm& vm);
 void bi_cvar_string(pg::Vm& vm);

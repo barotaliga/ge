@@ -110,9 +110,19 @@ extension behind a feature tier, never a second graphics API.
 macOS (arm64): `cmake/Dawn.cmake` pins one release tag and each archive's SHA-256, and
 downloads it into `.cache/deps/` at configure time (the archive also carries `tint`, which
 `make shaders-check` runs). The prebuilt library is a Release build, so an MSVC Debug build
-refuses `GE_GPU=ON`. iOS, iPadOS and Android (and Linux arm64) will build Dawn from source with
-its CMake build, cached in CI (M11). Until then those rows build with `GE_GPU=OFF`, which
-builds and tests everything except `engine/gpu`, `engine/render` and the app.
+refuses `GE_GPU=ON`. The same release carries the MOBILE archives (M11a): an Apple
+xcframework (a static library for iOS and iPadOS devices, one for the iOS Simulator, one for
+the Mac), Android's static libraries (one an ABI) and a headers archive. Their CMake package
+was written by the Android build, with that machine's paths, so `cmake/Dawn.cmake` declares
+`dawn::webgpu_dawn` itself over the target's slice and the system libraries it needs (Metal,
+QuartzCore, IOSurface, UIKit; Android's log). Only Linux arm64 has no archive; it will build Dawn
+from source, and until then builds with `GE_GPU=OFF`, which builds and tests everything except
+`engine/gpu`, `engine/render` and the app.
+
+**The iOS Simulator draws no shadowed frame.** Dawn's Metal backend turns comparison samplers
+off there (the simulator's Metal has none), and every shadow lookup samples with one, so the
+device is lost at the first frame. A device has them. The simulator proves the build, the
+bundle and the start; the picture is a device's (M11b).
 
 **The C++ surface.** `engine/gpu` calls Dawn's `webgpu_cpp.h` (`wgpu::Device`,
 `wgpu::Buffer`, …), whose handles are reference-counted RAII already. The engine adds
@@ -218,8 +228,9 @@ The order, with what each stage is for:
    depth copied (`water.copy`), then every body drawn over it (`water`), reading the copies
    for what lies under it and what it mirrors, testing and writing the depth, so what follows
    sits in front of or behind it; both rows run empty with no water in view. With the eye
-   under a body, `water.below` draws that body's surface seen from under it (Snell's window, the
-   world above bent through it, total internal reflection past it) into targets of its own, and
+   under a body, `water.below` draws the surface seen from under it of every body the eye is
+   under (Snell's window, the world above bent through it, total internal reflection past it;
+   a flooded passage's far pool too, the depth test keeping the nearest) into targets of its own, and
    `water.under` redraws the picture as seen through the water, the underside laid in where the
    eye's ray meets it first (`render/underwater.hpp`). A game that draws its world again for the
    water (a classic map's `bsp.views`: a planar mirror in the pool's plane, the view up from under
@@ -269,6 +280,49 @@ instead of causing a hitch in a run.
 `shadows.far` and `shadows.figures`, each a depth-only pass into its layer of the shadow maps;
 the `terrain` and `instances` rows read `shadows.maps`. A cascade that is not due still opens its
 pass (read-only, nothing drawn), so the recorder's GPU times keep their order.
+
+## Frame pacing
+
+How a window's frames meet the display matters as much as how fast they are drawn: a frame that
+starts at the wrong moment either waits in the swap chain's queue (lag between the mouse and the
+picture) or misses its refresh (a repeated picture). The pacing is the engine's, whole
+(`engine/loop/pacing.hpp` the arithmetic, `engine/platform/pacing.hpp` the cvars and the wait,
+`engine/gpu/frame_gate.hpp` the frames in flight); a game wires it in a few lines (Shooter's
+Edge's `client/main.cpp`). The `pacing` lab runs every strategy against a model of a display and
+measures the lag and the judder each gives.
+
+A frame, in order: the GPU's queue waited down to `vid_framelatency` (the gate, before the input
+is read: the time a frame waits is time its input does not age), the cap waited on its grid, the
+input read, the game stepped by the STEADY time, the frame drawn and presented, the gate told.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `vid_vsync` | 1 | Present at the refresh (FIFO); 0 presents as soon as drawn (immediate, else mailbox): a desktop's compositor shows the newest at each refresh, a fullscreen display tears |
+| `vid_framelatency` | 2 | GPU frames that may be queued when a frame reads its input. The swap chain keeps 2 images (3 at latency 3; Apple's Metal layer takes it through `platform::set_swap_images`, its own default being 3) |
+| `vid_steady` | 1 | At vsync the game's frame time is whole refreshes (`loop::SteadyClock`), the difference from the wall clock repaid a twentieth a frame: the motion is even whenever the frame started |
+| `cl_maxfps` | 0 | A cap in frames a second on a fixed grid of deadlines (a late frame paid back by the next; a frame late by a whole interval restarts the grid) |
+| `cl_maxfps_hz` | 0 | The cap as a multiple of the display's refresh (`platform::refresh_hz`); wins over `cl_maxfps` |
+| `vid_vsync_lag_fix` | 0 | With vsync, each frame starts just in time to finish before its refresh (`loop::VsyncPhase`): the refresh's phase from the acquires that block, the frame's cost the worst of the last 8 (start to the GPU's last work, less the acquire's wait), the start the next refresh less the cost and `vid_vsync_lag_tweak`. The window waits for its GPU after each present to measure the cost, so a frame that takes more than a refresh runs as at `vid_framelatency 1` |
+| `vid_vsync_lag_tweak` | 1 | The ms the lag fix leaves spare before the refresh: lower is less lag, too low misses refreshes |
+| `scr_showfps` | 0 | 1 the rate in the top-right corner; 2 with the last 120 frames' times as bars, the refresh's interval dashed, a missed refresh red |
+| `framestats` | | One line: the rate, the 1% low, the percentiles, the jitter, the hitches, the waits, the display's refresh, the cap, the present mode |
+
+**Why these defaults** (the `pacing` lab, 120 Hz, a light and a heavy load): the old loop (vsync,
+Metal's three images, nothing else) held every frame ~25 ms from input to picture. Two images and
+two frames in flight take that to ~16.6 ms with no missed refresh until the CPU or the GPU alone
+passes a refresh; one frame in flight is ~13.7 ms but misses refreshes once CPU and GPU together
+pass one. A cap at the refresh looks ideal on paper and is undone by the display's clock drifting
+from the CPU's. Vsync off is the least lag at vsync's rate of pictures and the most judder unless
+the frame rate is far above the refresh (why the classic competitive setting is vsync off at
+hundreds of frames). Variable refresh with a cap a few percent under the panel's top rate is
+best of all where the display has it. The lag fix (`vid_vsync_lag_fix 1`) keeps vsync's even
+pictures and takes the light load to ~8.8 ms (its frame plus the 1 ms margin and the wait for the
+display's scan); under the heavy load, where a frame does not fit a refresh, it cannot help and
+runs as one frame in flight.
+
+**Stated once:** the frame's own interpolation (models, the eye: the client's `model_lerp.hpp` and
+the eye in `present.cpp`) is what makes a 77 Hz server look smooth at 120 Hz; the pacing makes
+the pictures land evenly. Both are needed.
 
 ## GPU-driven instances
 
@@ -374,13 +428,25 @@ measures how much of the skier each outside lens sees in the densest wood of see
 
 Most of what the game draws is built in code at load (above). A few things are worth
 authoring: the rigged, detailed objects the camera sits close to (the skis, the player's
-figure, the machines). They come in as **glTF 2.0** and nothing else.
+figure, the machines). They come in as **glTF 2.0**, and a mod's skinned model as the
+skeletal model file (`.iqm`, below).
 
 - **Loaded once, into the engine's form** (`engine/assets`, the `assets` skill). The loader
   (cgltf) fills a `Model`: every node a joint, every mesh skinned (a rigid part bound
   whole to its node's joint), the base colours as materials, the clips baked at 60 Hz. glTF's
   frame is mirrored in x into the world's, so a model faces heading 0. Nothing after the
   load reads glTF.
+- **A mod's skeletal model** (`assets/iqm.hpp`): the `.iqm` file (version 2) is read into the
+  same `Model`: its joints at rest, one mesh a file's mesh (a run of one name joined), the
+  material names a game reads as textures, and each animation baked at 60 Hz from its 16-bit
+  frames. Its frame is +z up and front +x, turned into the world's with a mirror, so a triangle
+  faces as its normals say. `write_iqm` writes a `Model` back, which is how the tests and the
+  `models` lab (`--format=iqm`, or `--model=<file>.iqm --metres=0.025`) make one in code. A game
+  that draws vertex-animated models draws one as it draws them: `morph/skeletal.hpp` poses each
+  clip on the CPU at a steady rate (20 a second in Shooter's Edge) into a morph model's frames, a
+  clip a frame group, and the morph pass blends between them. A few hundred frames of a few
+  thousand vertices is a few megabytes, and every lighting, tint and warp path of the morph pass
+  is the skeletal model's with no new pipeline; the GPU skinning pass stays the authored models'.
 - **Morph targets are read too**: each mesh's targets (offsets of its positions and normals from
   the bind, named by the mesh's `targetNames`) and its default weights, and each clip's weights
   channels baked at 60 Hz into a track a mesh (`MorphTarget`, `MorphTrack` in
@@ -463,7 +529,10 @@ row M48). Three questions decide how it looks, and each has one answer in one fi
   at a time from the look, the eye's own bob and the moments (a shot, a landing, a weapon put
   away): the rest offset low and right, the bob pushed forward, the sway that lags a turn on a
   second-order follower (so a gun has weight), the kick on a stiff spring, the put-away at a
-  steady rate. Presentation only; comfort (`cl_motion`) scales every motion the player did not
+  steady rate, and the breath at rest: the gun rises and falls about 15 times a minute, each
+  breath drawn its own depth and length (now and then a sigh) and the hands wandering slowly, and
+  after a run the body's exertion (climbing with ground speed, falling over about ten seconds)
+  makes it faster and deeper until it settles. Presentation only; comfort (`cl_motion`) scales every motion the player did not
   command. A classic row and a modern one are the starting points.
 - **How it is lit** (`light.hpp`): by the place the player stands in, never by a fixed lamp. A
   game samples its baked light at the player (the lightmap under the feet, a light grid's cell,
@@ -481,8 +550,12 @@ light per pixel and is held to that reference.
 **A game's own set** sits on top of these three answers. Shooter's Edge's (`games/shooters_edge/view`,
 M48d) is its eight free models, each with its own mount (held length, grip), offset from the eye,
 kick, refire and muzzle light. Its hand switches weapons by putting one away and raising the
-next, and lights the muzzle on every shot. The player moves it with `r_drawviewmodel`,
-`r_viewmodel_fov`, `cl_gunx`/`cl_guny`/`cl_gunz` and `cl_gunsway`, `r_viewmodel_center` (1, the
+next in `cl_gunswitch` s (0.2: 40% down, the rest up; 0 at once); a shot during the switch takes the old
+weapon out of the picture and raises the new one from low in the picture `cl_gunswitch_fire` times faster
+(4), firing as it comes up. It lights the muzzle on every shot. The player moves it with `r_drawviewmodel`,
+`r_viewmodel_fov`, `cl_gunx`/`cl_guny`/`cl_gunz` and `cl_gunsway`, the breath's `cl_gunidle` (its
+share, 0 off), `cl_gunidle_rate` (breaths a minute at rest) and `cl_gunidle_exertion` (how much a
+run quickens and deepens it), `r_viewmodel_center` (1, the
 default: centred under the crosshair as the classic arena games hold it; 0 to the right) and
 `r_viewmodel_hands` (0: the weapon without the hands and arms it is built holding, the triangles
 `HeldModel::hand` marks, left out by `HeldDraw::hide_hands` on the GPU and `DrawLit::hidden` on
@@ -544,7 +617,7 @@ frame a list of `MorphDraw`s.
 - **Upload once.** Every frame of every model goes into one storage buffer, two `vec4` a vertex.
   The triangles and the coordinates go into two more. The skins are shelf-packed into one
   2048-wide atlas, tallest first, a texel apart (`pack_morph_atlas`). A frame writes only its
-  draws: 160 bytes each, at most `kMaxMorphDraws`.
+  draws: 224 bytes each, at most `kMaxMorphDraws`.
 - **Frames blended on the GPU.** The vertex stage pulls each vertex by index and mixes the draw's
   two frames by its share. It does the same for the frame before, so a swinging limb carries its
   own motion into the motion target and TAA keeps it sharp. A model with frames at 10 a second
@@ -567,12 +640,27 @@ frame a list of `MorphDraw`s.
 - **The game's own light.** `outdoor` is the share of the frame's sun and sky. `ambient` and a
   `shade` from one direction are what a game samples where the model stands: an indoor map's
   light at its feet. Glowing texels add `glow` times the scene's white, whatever the light.
+- **The warp** (`MorphWarp`, `wgsl/warp.wgsl`, shared with the view-model pass): a draw coming
+  into being or going out of it, a spawn or a teleport, as one share `shown` (1 whole, 0 gone). A
+  fragment is drawn where a field lies under `shown`. The field is two octaves of value noise,
+  fixed to the model's own frame so it stays on the body as it turns, plus the point's place along
+  a sweep axis, so the far end comes in first and the near end goes out first. Within `kWarpEdge`
+  of the cut the surface turns to ash: its light greyed and tinted by `ash`. That is the knobs at
+  rest, a figure crumbling to dust; the game throws its flakes where the cut passes, reading the
+  same field on the CPU (`warp_field`). Other looks are knobs: `edge` burns the band in a light of
+  its own, `pinch` draws the figure into a column stretched up, `shimmer` runs bands up it. A
+  warped fragment is marked reactive, so TAA does not trail the cut. The view-model pass reads
+  the same warp along an axis of the held frame, so a spawn assembles the gun in the hands.
+  Shooter's Edge times it at 0.7 s arriving and 0.8 s leaving
+  (`games/shooters_edge/client/warps.hpp`).
 - The draws go into the HDR and motion targets after the opaque world. Depth is tested and
   written (reversed z) and back faces are culled.
 
-The CPU twins (`pose_morph`, `morph_texel`) are the shader's arithmetic for
-`tests/render_morph_test.cpp`. The `gpu-morph` lab draws a runner in four teams, sharp beside
-smooth, its frames and in-betweens, at dusk and in a game's own light, and times 64 of them.
+The CPU twins (`pose_morph`, `morph_texel`, `warp_vertex`, `warp_field`, `warp_cut`) are the shader's arithmetic
+for `tests/render_morph_test.cpp`. The `gpu-morph` lab draws a runner in four teams, sharp beside
+smooth, its frames and in-betweens, at dusk, in a game's own light and warping in as dust and as
+a beam, checks that a
+warp gone draws nothing and one whole draws the plain runner, and times 64 of them.
 **Not yet:** the local lights of the lighting pass, shadows cast by the figures, and the classic
 model reader (it lands with its plugin).
 
@@ -613,6 +701,13 @@ classic effects and pickups this way (M18i). The pass is generic. A game hands i
 `tests/render_sprites_test.cpp` holds the five rules and the atlas. The `gpu-sprites` lab draws
 every kind on a yard by day, from the eye's height and from above, sharp beside smooth, a
 fireball's frames and the yard at dusk, and times 2000 sprites.
+
+**Made frames** (`render/sprite_shapes.hpp`): the pictures a game draws in place of a pack's flat
+effect sprites, made once at load, pure functions of their size. `flare_frame` is a light's glow,
+a warm core and a soft halo fading to nothing at the frame's edge, drawn `add`ed. `bubble_frame` is
+a ball of air in water: nearly clear, a Fresnel rim, a highlight up and to the left and a darker
+ring just inside the rim, drawn `over`. Shooter's Edge draws them for the pack's light globe and
+bubble sprites under `ce_flares` and `ce_bubbles` (classic-enhance's replacement table names them).
 
 ## Terrain
 
@@ -852,6 +947,57 @@ too). An added sprite (a flame, a fireball) is light of its own and takes none. 
 `gpu-sprites`'s `lamp-night` (the yard's bushes and sign under a 400 cd lamp), each with `-off`
 beside it.
 
+### Shadows of moving models
+
+**As built (M54, in progress)** (`brush/app/casters.hpp`, `bsp_draw.cpp`, `bsp.wgsl`,
+`wgsl/capsules.wgsl`). The brush world's v2 look lit in real time keeps each shadowed light's cube
+of the map (drawn when the light takes a slot, not every frame). The models that move (players,
+monsters, and the first-person player, who is never drawn in his own eyes but casts) are handed
+over each frame (`set_shadow_casters`: their posed triangles in world metres and a box each) and
+shadow the lights in two tiers:
+
+- **The casters' cubes.** `caster_lights` ranks the shadowed lights by the most light each puts on
+  one caster (its strength over the squared distance to the box, inside its reach), a caster
+  counting less the further it is from the eye (half at 4 m), and the first 8 get a cube of the
+  casters alone, 384 texels a face. The 48 faces are one depth atlas (a light a row, a face a
+  column) drawn in ONE pass with a viewport a face, as the lamps' tiles above: as 48 passes they
+  cost 6 ms of GPU a frame on the M3 Max whatever they drew. A pixel reads the world's cube with
+  one 2 × 2 compare and the casters' cube with percentage-closer soft shadows: a blocker search
+  of 8 taps in the casters' cube alone (most pixels find none and stop there), the penumbra
+  `size × (d − d_blocker) / d_blocker`, then 12 compares. The taps are Vogel discs from constant
+  tables, turned by one spin a pixel and frame that the TAA resolves; they are directions round the
+  point's, so they cross a cube's seams with no special case (a tap is clamped half a texel inside
+  its face's tile). A light's source radius (`GpuLight::more.y`) sets how soft: a plain light's
+  4 cm is sharp, a flame's a quarter of its height (a wall torch 0.14 m, a large flame 0.26 m).
+- **Only a light whose source shows throws a figure's shadow.** A classic map lights a room with
+  many overlapping fill lights: entities hanging alone in the air, where the mapper wanted light
+  bounced round the room. A shadow from one is a shadow cast by nothing the player can see, so a
+  light throws a figure's shadow only when it is `seen` (`seen_lights`, draw_data.hpp): a flame,
+  a torch or a globe the game draws at it, or a lamp within 1 m of a face whose texture glows (3 %
+  of its texels or more; never a sky face), its fitting. Pools' and teleporters' glows throw none;
+  the dynamic lights (a rocket, an explosion) do. Only seen lights get a casters' cube, and the
+  capsules shadow only them. The walls' own cubes stay every shadowed light's: they keep a light in
+  its room, as the map's lightmaps do. `r_fill_shadows 1` (`Options::fill_shadows`) brings back
+  every light's figure shadow.
+- **The capsules.** The 4 casters nearest the eye become vertical capsules fitted to their boxes
+  (`shadow_capsules`), and every seen light without a casters' cube is shadowed by the ones within
+  6 m of the pixel (found once a pixel), the penumbra from the light's size seen from the point.
+- **The sun.** A row more of the atlas: its first tile is the casters seen along the sun, an
+  orthographic view 16 m wide round the eye (4 cm texels), drawn in the same pass. A pixel inside
+  it multiplies the sun's map of the world by its 2 × 2 compare (`sun_casters_lit`).
+- **The room's own light is never shadowed.** The light bounced round the room (the rebake's
+  bounce, the lightmaps' share, the `r_minlight` floor) has no one direction, so a figure leaves it
+  whole: a darkening there reads as a shadow with no light behind it. Under `r_fill_shadows 1` it is
+  dimmed by 0.8 of the share of the casters' lights he hides at the pixel (`kIndirectShadow`), the
+  look before.
+
+Lab `se-models`: the views `shadow-lamp`, `shadow-torch`, `shadow-flame` and `shadow-sun` (at
+noon, on a map with open sky), each from his eyes and from high to one side, `-side-pair` (the
+side view with him and with him gone) and `-shade` (in red, how much darker each pixel is with
+him there, eight times over), with the metrics `-darker` (the lower half's mean) and `-deepest`
+(the 99th percentile). The cost is `se-timedemo`'s
+(`docs/perf.md` § Shooter's Edge's world frame): main + 7 % at 2560 × 1440 on demo1.
+
 ### Materials
 
 **As built (M39b)** (`render/surface.hpp`, `wgsl/surface.wgsl`). One physically based model for
@@ -873,15 +1019,19 @@ the presets under the noon sun and under one lamp at night.
 a sprite or a model: one quad a flame facing the eye over its bounding sphere, and per pixel a
 march of 14 steps through the gas, stopped at the scene's depth so a bracket or a wall in front
 of it hides it (the `gpu-flames` lab holds a flame behind a wall to changing no byte). The steps
-start at a per-pixel offset that changes every frame, and the resolve averages them; 14 were 28
+start at a per-pixel offset (a fixed white hash a pixel, stepped by the golden ratio each frame, so
+each pixel covers its step evenly over a few frames; a fresh hash every frame left a grain that
+boiled at the frame rate, and interleaved gradient noise showed its diagonal lattice in the gas), and the resolve averages them over the two or so frames of history the gas keeps (its
+reactive mark is half, `kFlameReactive`: wholly reactive, the TAA threw every frame's grain on
+screen); 14 were 28
 until round 7 of the timedemo, which halved the noise drawn for 0.23 ms at 1440p on the M3 Max,
 at the price of a finer grain on a thin wind-torn tongue in a single still frame. A step
 no eddy can carry gas to (past the largest sway the noise gives at its height, and again once the
 sway is known) returns before any noise is drawn: those points' light is exactly zero, so the
 picture is the same and the gas costs about half (round 4 of the timedemo's price). The gas is
 a teardrop on its fuel (widest an eighth of the way up, a point at its tip), its edge a Gaussian
-in its radius so it fades over decades of light, torn by three octaves of value noise carried up
-at the gas's rise and growing toward the tip, where the tongues tear loose. Its temperature is
+in its radius so it fades over decades of light, torn by value noise that grows toward the tip,
+where the tongues tear loose. Its temperature is
 hottest on the axis low down and cools toward the rim and the tip; every temperature's colour
 and brightness come from Planck's law against the CIE 1931 observer (`render/blackbody.hpp`, a
 64-row table any glowing thing can read through `render/wgsl/blackbody.wgsl`), so a cooling gas dims by orders of magnitude, softened to the eye's 0.45 power. A candle
@@ -899,11 +1049,36 @@ with the flame's seed), and
 its lights list. `Flame::wind` bends the flame downwind against its rise, and its light leans
 with it. The presets are a torch, a candle, a brazier, a camp fire and a bonfire.
 
+**The motion (M41q)** (`flame_puff_hz`, `flame_puff_phase`, `flame_puff_level`; the shader's
+`flame_age`, `flame_puff`). A still of the gas looked right while the gas in motion did not: its
+noise was a frozen volume slid up through a fixed teardrop at one speed, and the whole flame was
+scaled up and down at its light's flutter (13 times a second, then 5 at M41p's 0.4 pace), which
+reads as a picture pumping, not a fire. A real flame moves in three ways the pass now draws:
+
+1. **The gas accelerates.** Buoyant gas speeds up as the square root of its height (McCaffrey's
+   flame zone), so a parcel's time from the fuel grows as sqrt(height): the shader reads every
+   eddy at the moment its gas left the fuel (`flame_age`, `born`), so a parcel keeps its eddies as
+   it climbs, crawling round at the base and stretched into licks near the tip. `kFlameTransit`
+   (1.3) puff cycles carry the gas from the fuel to the tip.
+2. **It puffs.** A buoyant diffusion flame sheds a ring vortex at a frequency set by its width
+   alone, f = 1.5 / sqrt(D) (Cetegen and Ahmed's pool-fire law; Hamins' Strouhal-Froude form):
+   a wall torch of 20 cm about 3.4 times a second, a brazier 2.4, a bonfire 1.3. Each puff swells
+   the body low down, rides up with the gas and pinches the top off between two puffs as a pocket
+   that rises past the tip and burns out, so the tip's height swings with it. The rate drifts a
+   tenth either way on two slow beats (`flame_puff_phase`), so no two puffs are alike.
+3. **It snakes.** The sway at the fuel (smooth noise in time) is carried up the flame's spine at
+   the gas's speed, wider the higher (the spine of Lamorlette and Foster's production flames).
+
+The light follows the puffs (`flame_puff_level`: mean 1, about 13 % either way, read where the gas
+is half way up): as the gas swells it gives more light, as the top pinches off less. The gas's own
+size swings only 7 % with it; the puffs do the rest. In brush maps both the gas's level and the
+wall's light come from it (`fire_flicker`), so the wall wavers with the flame it sees.
+
 **In brush maps (M39g)** (`plugins/brush/app/bsp_flames.hpp`). A classic map's wall torches and
 large flames are light entities; `bsp_fires` stands a torch or a brazier flame where each one's
 model burns, scaled to the model's flame (a wall torch's from 6 to 29 units above its origin, a
-large flame's from 2 to 43), and drives its gas with the light's own `flicker_at`, so the fire and
-the wall it lights waver together. The light is lifted to the middle of the gas and softened over
+large flame's from 2 to 43), and drives its gas and the light it casts with the same puffs
+(`fire_flicker`), so the fire and the wall it lights waver together. The light is lifted to the middle of the gas and softened over
 the flame's height (`fire_light_lift`, `fire_light_size`), as `flame_light` does. A brush map is
 lit in its lightmaps' units rather than the sun's, so the gas's core is set by `Flame::relative`:
 `kFireGlow` (30) times a white face under the map's own light. The `gpu-bsp` lab draws them in
@@ -924,6 +1099,13 @@ without a bonfire's room over and round it (a lantern's cage, a low roof: `place
 as tall (58 units) and 1.5 times as wide as the pack's flame, filling its cage, its light 1.25
 times as bright (`fire_light_gain`), with no sparks. Wall torches and small flames stay as they
 were.
+
+**The fires' pace (M41p, M41q)** (`FireLook::pace`, `Options::fire_pace`, Shooter's Edge's
+`r_fire_speed`). A map's fires puff at `kFirePace` (1) times a real flame's rate for their width,
+the gas and the wall's light in step; lower is slower. (M41p slowed the old frozen-noise gas to
+0.4 of its presets' pace with `r_fire_pace`; M41q's motion made that a real fire's own pace and the
+setting was renamed, so a saved 0.4 does not carry over.) The draught a fire wavers in under a roof
+is 0.15 m/s, a breath.
 
 **Shadows use three techniques, one for each scale:**
 
@@ -1108,8 +1290,9 @@ and a storm's 2. The cloud volume itself is M8f3 (below).
   it (R32F). Then each pixel of the frame takes the four half-size pixels round it, each weighted
   by its share of the bilinear footprint and by exp(−40 × how far its distance misses the
   pixel's own, as a share of the nearer); a pixel that none of the four matches within 10 %
-  (the near side of an edge) marches its own ray. Marching every pixel (the quality ladder's
-  top) draws "clouds" alone and leaves "clouds.march" empty; with no layer both are empty. The
+  (the near side of an edge) marches its own ray. Marching every pixel each frame (the
+  reference the labs hold the rest to: `Clouds::quarter` and `Clouds::spread` both false) draws
+  "clouds" alone and leaves "clouds.march" empty; with no layer both are empty. The
   ladder also takes a share of the steps (`Clouds::steps`, never under four) or draws no layer
   at all (§ The quality ladder). The `weather` lab holds the quarter to every pixel's march:
   under 1 % of the picture may differ by more than 8 levels of luma (`<sky>.quarter-misses`).
@@ -1140,6 +1323,19 @@ and a storm's 2. The cloud volume itself is M8f3 (below).
   full-size upsample, about 8, is the same either way); on a GPU, whose pass has no such floor,
   the march is nearer a quarter of its cost. In one ladder pricing run the clouds' high stop
   fell from 63 % of every pixel's march to 42 %.
+- EVERY PIXEL'S MARCH SPREAD (`Clouds::quarter` false, `Clouds::spread` true: the quality
+  ladder's top). The march target is a GRID over the frame (`kGrain`, a pipeline constant: the
+  three passes are made at the load at both grains, `cloud_grain` says which a view asks for and
+  `bind_cloud_targets` makes the targets at it): at grain 1 it is the frame's own size, so each
+  pixel marches its own ray to its own depth one frame in four, in the same turn order, and the
+  other three reproject as the half-size pixels do; "clouds" then lays the target over the
+  frame as it is. Targets bound at the other grain draw the reference instead. On the M3 Max at
+  2560 × 1440 from seed 38's start looking up into a flurry, the clouds' top stop fell from
+  8.17 ms over none to 4.61 (the frame's top from 11.77 to 8.17), the reprojection 0.4 of it
+  and the full-size lay-over 0.02; the `weather` lab's `--every=1` holds it to the reference
+  with the view swinging 30 degrees a second: 0.06 % of the fair sky's picture differs by more
+  than 8 levels (the quarter's spread march 0.87 %), the flurry's 0.38 % (the falling snow's
+  own, the same either way).
 
 What the mountain's broken skies stand is `plugins/mountain/app/cloud_field.hpp`: FAIR heaps at
 1.5 to 2 km over the valley floor and a few ice streaks at 8 km, FLURRIES' taller heaps under a
@@ -1215,6 +1411,16 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
   stratocumulus from 2.7 to 18, cirrus from 0.4 to 4; a storm's tower is never less than half
   its depth. The cloud's shadow on the ground (`cloud_cast`) is the column times its thickness,
   so a thin patch's shadow is faint.
+- THE WARP (`cloud_warped` in `wgsl/frame.wgsl`, `CloudLayer::warp`, mirrored by
+  `render/clouds.cpp`): the column's tile point pushed up to `warp` cells by two more reads of
+  the noise a tile apart, at the tile's own scale so the drift's wrap stays seamless. A cell's
+  outline leans and twists instead of standing as a dome its neighbours match; every read the
+  layer makes (its column, its thickness, its detail, its shadow) takes the warped point. A warped
+  layer never shows its tile repeating: the warp's second read is at three sevenths of the tile's
+  scale, its column's noise is blended with a read at five sevenths (spread back to the noise's
+  range, so the cover holds), its islands are read at two sevenths, and its drift wraps at
+  `kWarpTiles` (7) tiles, so it repeats every 56 cells instead of every 8. 0 by default; the
+  classic maps' stacks deal it (`plugins/brush/app/bsp_sky.hpp`, M8f15).
 - THROUGH IT, THE DISC: the sky draws the sun's and the moon's discs behind the cloud, so a
   disc shows by the ray's own transmittance, exp(−τ), wherever on the ray its light was taken:
   bright through a thin patch, gone behind a core. Two things used to leak it: the march stopping
@@ -1244,10 +1450,17 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
   Gaussian of the first's core (0.257 wavelengths over the radius) widened as the root of the
   order, so the disc melts into a bright smudge where the sun stands and, thicker still, into
   the deck's grey: frosted glass, then a bright patch, then nothing.
-- THE SHAFTS (`shafts` in `wgsl/frame.wgsl`): six points along the view ray, out to 20 km,
-  read the cloud's shadow; the air scatters that share of the sun (70 % of its in-scatter is
-  shadowed at most), on the world through the haze and on the sky strongest toward the sun, so
-  the gaps between heaps throw beams.
+- THE SHAFTS (`shafts` in `wgsl/frame.wgsl`): the mean of the cloud's shadow over the view
+  ray's points out to 20 km, bunched toward the eye (at R a² for a uniform a); the air scatters
+  that share of the sun (70 % of its in-scatter is shadowed at most), on the world through the
+  haze and on the sky strongest toward the sun, so the gaps between heaps throw beams. They are
+  the camera's alone, so a compute pass ("sky.shafts" in the sky's tables, `sky_shafts.wgsl`)
+  works them out once a frame in a volume over the screen (128 × 72 rays, 32 slices at
+  sqrt(distance / 20 km), 64 points a ray, the running mean kept at each slice's end) and every
+  pixel reads it once (group 0's binding 16). Every pixel's haze, the sky and each cloud layer's
+  haze once marched six points of their own; on the M3 Max at 2560 × 1440 from the chase camera
+  under a flurry that was 1.84 ms of the top's 8.40, and the `weather` lab's pictures against
+  the per-pixel march differ by a mean of 0.17 levels at most (a fair sky, 54 dB).
 - THE HEIGHT AND THE WIND (M8f9, `mountain/app/cloud_field.hpp`): every layer stands at its
   true height over the valley floor. The march walks the eye's rays through each slab, so a
   cirrus 8 km up needs no world under it. Each layer drifts on the wind aloft at its own
@@ -1366,6 +1579,65 @@ The `night` lab draws it on seed 38's vista: the snow's luma falls from 194 at t
 under to 67 at fourteen, a full moon's snow is 71, a quarter's 28 and a new moon's 10, the
 handover moves the snow by 0.1 %, a moonless sky draws 319 star pixels, and the sky tables'
 twilight matches `twilight_lux` within 1 % down to twelve degrees under.
+
+## The far land
+
+A small world closed under the sky (a classic map's halls under their sky faces) stands in
+nothing: through the sky faces there was only sky. **The far land** (`render/far_land.hpp`, M8f16)
+is the land round it that is never walked, a "3D skybox": ranges of mountains to the horizon,
+lakes and seas, snow, meadows, forest and rock, seen once the eye is high enough to look over the
+walls.
+
+- **Real geometry, not a picture.** It is a mesh at its true size (90 km out), drawn with the
+  frame's camera, so it has true parallax as the eye climbs, it is lit by the frame's key light
+  and sky (the sun, the moon at night, the deck's flat light), it stands in the cloud (the clouds
+  march to its depth) and goes through the frame's haze. A cube map painted once could do none of
+  that with a sky that turns through the hours.
+- **The keep-out.** The site is the world's circle on the plan and its lowest point; the land
+  is a level top just under that point inside the circle, then falls to the valley floor past it,
+  and the ranges rise from there. So the world's own faces hide the land wherever the two could
+  meet, and the pass needs nothing but the depth test: it draws after the world's opaque passes
+  and the sky faces' fix-up (which gives their pixels the cleared depth), tests `greater` and
+  writes depth, colour and motion, and the sky pass fills what is left. A classic map's veil over
+  its sky pixels dims or lifts the land with the sky, so the two stay one picture.
+- **The mesh**, built once a site on the CPU in bands (about 250 ms for 246k vertices; `build_far_land`):
+  a polar grid round the site, 640 bearings by 384 rings spaced by a constant ratio, so it is fine
+  under the eye and coarse at the horizon; the Earth's curve sinks it with distance (283 m at
+  60 km); the water is a second polar sheet at its level. Each vertex keeps its HORIZON in eight
+  bearings, marched over the grid: the key light's elevation against the horizon toward it is the
+  ranges' own shadow (long across the valleys at a low sun), and the share of sky they leave is
+  the valleys' shade under the open sky. No shadow map, no per-frame work.
+- **The shape** of a kind: ridged noise (each octave folded about its mean, the finer weighed by
+  the coarser's crest, so detail climbs the ridges) on a broad body, in massifs with passes;
+  flat-topped towers where a coarse noise crosses a band (dolomites, needles); cones in a share
+  of a coarse grid's cells, concave flanks and a crater (volcanoes); a mesa's terraces; lakes dug
+  into the low ground under the water's level.
+- **The climate** decides the ground in the shader: the air's temperature at a point is the
+  valley's cooled by the standard lapse rate (6.5 K a km), so the snow lies over the snow line
+  `temp_c / 0.0065` m over the valley floor, off the rock too steep to hold it; the forest stops at
+  the kind's tree line and the cover thins to bare rock 500 to 1000 m over it; the shore is sand;
+  water under air below -1 C is ice. A game warms or cools a kind (Shooter's Edge's
+  `r_farland_warm`): colder brings the snow down the ranges and freezes the lakes.
+- **The glade.** The key light off the water is the surface model's GGX lobe (2 % head on) over
+  the drawn ripples, its roughness rising from 0.12 near the eye to 0.3 where a pixel spans the
+  ripples, so the moon's (or the low sun's) light lies across the water in a path that widens
+  with distance and sparkles near. The water keeps its horizons as the land does, so a moon behind
+  a ridge lays no glade on the water under it.
+- **The far air.** The frame's aerial volume reaches 8 km; past it the land closes toward the sky
+  at the horizon at the kind's own visual range (30 km in a hellish air, 120 km on an airless ice
+  moon), so ranges stack into paler layers to the horizon.
+
+Eleven kinds (`far_land_kinds`, `render/far_land_kinds.cpp`): the Earth's alps, fjord, highlands,
+winter, dolomites, sierra, volcano and arctic, and other worlds' xeno (violet meadows, teal needles,
+green-glass lakes), ember (black crags, lava lakes) and rime (an ice moon). Nothing is built on
+them: no houses. A classic map's land is dealt off its name among the kinds that suit its sky's type
+(`brush/app/bsp_sky.hpp`'s `far_land_for`: an Earth air one of the eight, a violet or alien air
+xeno, a hellish or ashen one ember), and the player picks one with `r_farland`.
+
+The `far-land` lab draws every kind from 60 m over a site by day, at a low sun and by night, each
+kind with open water under the moon's glade (the moon 7 degrees up over the way the land is
+lowest), and the first kind warmed and cooled; the `gpu-bsp` lab's `<map>-high` view looks out from just
+under a map's largest sky ceiling (`--farland=off` is the before).
 
 ## Fog in an area
 
@@ -1627,6 +1899,10 @@ in tile memory):
   classic look bakes one that pulls every colour to the nearest of its palette's 256);
 - the screen's blend (`set_post_blend`): the whole picture mixed toward one colour after the
   grade, a game's hurt flash or the liquid round the eye, a uniform the game sets each frame;
+- the arrival (`set_post_warp`, `arrival_warp`): the whole view opening out of a flash and a warp
+  while the player arrives (a spawn, a teleport's far end): pulled in and streaked toward the
+  middle, washed out and tinted, a clear disc with a bright rim growing past the corners; a
+  uniform too, its share 0 one uniform branch;
 - tone mapping, a blue-noise dither against banding, and the output transfer function.
 
 **As built (M7a)** (`render/post.hpp`): the exposure maps a white Lambertian surface under
@@ -1840,7 +2116,7 @@ A pool over no ground (the second `create_particles`: a world of brushes or room
 stand-ins for the terrain's heights and horizon, so nothing lands and the sun is not shaded by a
 horizon.
 
-**As built (M8d1).** `engine/render/particles.hpp` is one pool of 16384 slots of 64 bytes, a
+**As built (M8d1).** `engine/render/particles.hpp` is one pool of 16384 slots of 96 bytes, a
 ring: the game hands each frame's births (`emit_particles`) and `prepare_particles` writes
 them into the next slots, so a full pool lets its oldest go first. There is no compaction or
 indirect count yet: `particles.sim` (one thread a slot) skips a dead slot, and `particles`
@@ -1858,6 +2134,35 @@ reactive channel so TAA does not smear it. What fills the pool is the game's: Fa
 throws each racer's spray (`plugins/skier/app/spray.hpp`) over the time between two frames'
 `time_s`. On the software adapter the pass pair costs about 0.6 + 0.13 ms (the `profile`
 lab), the flight of all 16384 slots the larger half.
+
+**Colour, growth and shining (M47c).** A slot is 80 bytes: `tint` is the colour its albedo reflects
+(blood red, dust tan; white for snow, the default), and `grow` the metres across it gains a second,
+thinning by its width as it spreads (a puff of smoke that widens behind a rocket). A particle with
+a negative `kelvin` SHINES instead of being lit: an unlit speck of its tint at -kelvin times the
+light of a white surface the picture is keyed to (`frame.wgsl`'s `white_luminance`, so 1 reads as
+a fullbright texel of that colour at any exposure), its colour drifting toward the grey `albedo`
+by e every `cool_s`. That is how a game draws a classic palette speck (an ember's yellow going to
+brown, a trail's orange going to grey), and how a game lights smoke by its own light where the
+sun does not reach (Shooter's Edge pre-lights each puff by the lightmap under it). A particle may carry a
+FLOOR of its own (`floor_y`, world y) for a world the pool has no ground for: coming down on it, it
+hops back up at `bounce` of its speed while it falls faster than `kFloorRest`, else it lies there
+and fades (a chip knocked off a wall hops on the floor below). It hops twice at most, a third of
+them three times (`max_hops`, off the particle's own size and life), then lies where it came down,
+off its own floor and off a drawn surface alike. A slot is 96 bytes.
+
+**What was drawn (M47c).** A pool made with `ParticleSettings::collide` lets what falls (a grain,
+a spark, debris) meet whatever the last frame drew, in a world of brushes or models with no
+heightfield. The sim runs before the frame is drawn, so the depth target still holds the last
+frame's, and `prepare_particles` (its view overload) keeps the camera that drew it. A particle
+that has gone behind the drawn surface there by less than kSurfaceSkin plus a step's travel is put
+back on the face, and its speed into the face is turned back at its `bounce` (kSurfaceBounce
+without one). Too slow for a hop, it lies on a floor and fades, or slides down a wall. The face's
+normal is rebuilt from the depth beside it, the nearer side each way. Nothing nearer the eye than
+0.8 m is met, because the held weapon is drawn into the same depth. Only what the last frame saw
+can be met: a spark flung out of the view or behind the eye flies on, so a game also gives it a
+floor (Shooter's Edge: the floor under the blast, traced through the world and its brush
+entities). `collide_particle` is the bounce's CPU twin (`tests/render_particles_test.cpp`).
+`se-weapon-fx`'s `<look>.<launcher>-sunk` counts what still fell through.
 
 **As built (M8d2).** The drag pulls a particle toward the AIR, not still air: the frame hands the
 pool the map's wind at the view's time (`plugins/mountain/air/air.hpp`), so a powder cloud (the
@@ -1963,13 +2268,16 @@ drain and dry by the wind and the sun). The picture reads the same numbers:
   on the water). The rain's sound by its rate is `engine/water/rain.hpp` (the `rain-audition`
   lab).
 
-**The weather on a BSP map (M36e).** `plugins/brush/app/bsp_weather.hpp` turns twelve cvars
-(`sv_weather`, `sv_precip`, `sv_rain`, `sv_wind`, `sv_winddir`, `sv_gust` the server's;
+**The weather on a BSP map (M36e).** `plugins/brush/app/bsp_weather.hpp` turns thirteen cvars
+(`sv_weather`, `sv_precip`, `sv_rain`, `sv_wind`, `sv_winddir`, `sv_gust`, `sv_hour` the server's;
 `r_precip`, `r_precip_density`, `r_splashes`, `r_wet`, `r_snowcover`, `r_lightning` the player's)
-into a frame's weather: the wind off `engine/wind`'s field with its gusts and veer, the fall's
+into a frame's weather (`sv_hour`, 0 to 24, sets the sun where that hour of a summer's day puts it
+at 46 N, `bsp_sky.hpp`'s `at_hour`; past dusk the map's own classic night; -1 the map's own pick):
+the wind off `engine/wind`'s field with its gusts and veer, the fall's
 way, the wet ground and the snow's cover for the whole map stepped by the clock, the flash, and
 a storm's deck over the sky. The v2 renderer draws a third orthographic map of its `orthos`
-array along the fall (the sky faces do not block it), binds it as the fall's shelter, and reads
+array along the fall (the sky faces do not block it; every texel no sky face stands over is shut,
+below), binds it as the fall's shelter, and reads
 it in every face's material (`weathered` in `bsp.wgsl`): what faces the fall and the map reaches
 is wet, a flat's low noise pools into puddles that the drops ring while it rains, what faces up
 gathers the snow in drifts (a thin cover in the hollows first, the floor showing between), and a
@@ -1978,6 +2286,16 @@ decide all of it, through a cone of ways marched through the map whose spread is
 over the fall's pace (snow, slow, scatters wider than rain), with the wet and the snow struck in noise spots across it: lab `gpu-bsp-weather` (the weather fixture, a hall with windows onto a yard and
 a store behind it) shows eight weathers in four views and checks, with no GPU, that a ray back up
 the fall leaves by the sky from the yard and the window's patch and is stopped from the store.
+
+A classic level is closed all round and its sky shows only through its sky faces, so its
+orthographic maps (the sun's, the zenith's, the fall's: `kOrthoFormat`, depth and stencil) are
+drawn in three steps: the solid faces' depth; the sky faces that stand nearer the sky than them
+marking the stencil; and every texel left unmarked shut at the near plane. Without the last step
+a texel nothing was drawn into read as open sky: the thickness of every wall, the seams along a
+wall's top and the cracks between faces, so a closed room under a storm got streaks of rain, wet
+patches and the sky's light in its corners and down its walls (dm4, 2026-11-09). Now a map with
+no sky face over a place lets no sun, sky light, rain or snow in there, and a map with no sky at
+all has no weather inside.
 
 A classic map's own areas of fog (M38g, `plugins/brush/app/bsp_fog.hpp`) are read when it loads
 into the engine's `FogVolume`s (§ Fog in an area): a `fog_volume` entity, a brush entity (its
@@ -2040,6 +2358,22 @@ the silhouette, not the folds. The `crowd-look` lab
 films a lift's queue, a busy run, a group and one of them down at `--hour` (11: the sun on the
 runs), each with the crowd and without.
 
+### Effects as data
+
+A particle effect can be a few lines of text instead of code (`engine/particles/effect.hpp`,
+`ge::particles`, no GPU): `effect <name>` and its emitters, each a `burst <count>` thrown at once
+or a `trail <spacing>` laid along a flight, with where the specks start (`box`, `ball`), how they
+leave (`speed` any way, `along` the effect's way, `rise`), how long and how big, how they fall
+and slow, their colour (linear, or a run of the game's palette) and whether they shine as unlit
+specks or hang as lit smoke, how they cool, grow, streak and bounce, and an effect's light.
+Lengths are the game's own unit, scaled by `Throw::metres`. A file is read whole or refused with
+its file, line and fix; a later effect of a name replaces it, so a mod's file wins over its game's.
+`throw_effect` and `throw_trail` are pure functions of the place and a seed; `render/spark.hpp`
+copies the specks into the pool. The `gpu-particle-effects` lab throws a sample book on the yard
+and pictures it, and lists the faults a bad file meets. Shooter's Edge reads `particles/*.fx`
+from the game's files and throws an effect of a classic effect's name in its place
+(`docs/shooters-edge.md`).
+
 ### Beams
 
 A held electric beam (a weapon's lightning gun, a machine's arc, a spell) is a channel of
@@ -2062,13 +2396,20 @@ room round it and burning where it lands (`engine/render/beam.hpp`, `beams.hpp`,
   the glow along the beam (`shimmer`).
 - **The look is a core and a sheath in physical units.** The core (`core_m`, `core_cd`, cd/m²)
   is a Gaussian at least a pixel and a half wide (its light kept as it widens, so a far beam is
-  a fainter line, never a gap) and at most a hundredth of the screen's height (its brightness
-  kept, so the root by the eye is a thick line, not a white blot), and is whitened as it
-  brightens; the sheath (`glow_m`,
-  `glow_cd`) is the ionised air's glow round it. Both are emissive at the frame's pre-exposure,
-  added over the lit picture, depth-tested and softened against the depth behind so the beam
+  a fainter line, never a gap) and at most a hundred and fiftieth of the screen's height (its
+  brightness kept, so the root by the eye is a line, not a white blot), and is whitened as it
+  brightens; the sheath (`glow_m`, `glow_cd`, at most a fiftieth of the screen's height across)
+  is the ionised air's glow round it. Both are emissive at the frame's pre-exposure, added over
+  the lit picture, depth-tested and softened against the depth behind so the beam
   sinks into the wall it hits. A segment's ribbon runs a ramp past each end and the ramps of two
   segments cross-fade, so the glow is even along a bent channel with no bead at a joint.
+- **Or keyed to the eye.** A fixed luminance that reads right by day is hundreds of times the
+  white of a dark room at night, where the eye has opened to the dark: the core and the sheath
+  swell into a blinding blot that fills the screen, the bloom spreading it further. A look's
+  `core_keys` and `glow_keys` set them instead as the eye sees them, in multiples of the white it
+  is adapted to (the shader divides the frame's `exposure()` out), so the beam is as bright on
+  the screen by day as at night, the way the eye sees a bright light against whatever it is set
+  for. A game's weapon uses this (Shooter's Edge's bolt: a core of 6 whites, a sheath of 0.35).
 - **It lights the world through the local lights.** `beam_lights` hands render/lights a row of
   steady point lights along the beam (one each `light_every_m`, the look's `light_cd` shared
   among them, each as soft as their spacing), one at its root by the source (`root_cd`: the
@@ -2133,28 +2474,59 @@ it faces. The scorch it leaves (`scorch_of`) is its kind's size times its scale,
 off the seed, for a game to press with `engine/detail`'s scorch decal (none for a look whose
 scorch is 0).
 
+**The light round it (M47c).** A blast's smoke is lit by what reaches it, `Blast::light`
+(`BlastLight`): the share of the sun and the sky (1 in the open air, the default) and the local
+light in whites (a white surface there reads as the picture's white). A game of rooms sets both
+(Shooter's Edge: the lightmap on the floor under the blast and whether a line straight up meets
+the sky), so smoke in a dim corridor is dim and brown-grey rather than sunlit through the roof; a
+muzzle's flame (`MuzzleFire::light`) takes the same.
+
 `engine/render/explosions.hpp` draws them. Each live blast is ONE QUAD round its ball's outline on
 the screen (the whole screen when the eye is inside it), and the pixel's ray is cut by the ball and
 by the scene's depth, so a wall or the floor clips it exactly, and marched in 10 steps from a jittered
 start that the TAA resolve averages away. Each step reads the cloud's tileable noise twice (the
 billows and a finer fray, `render/clouds.hpp`'s texture already bound in group 0, so the pass has no
 texture of its own) and carves the ball's edge into rolling billows. Gas that is deep inside and
-still burning emits its temperature's blackbody light; the rest is smoke of its look's albedo and tint lit by the sun
-on its sunward side, the sky and the fire inside it; emission and absorption are integrated front to
-back and the march stops once the ray is opaque. At most 32 are drawn a frame, the nearest, back to
+still burning emits its temperature's blackbody light, its noise cutting dark lanes of soot through
+the fire; the rest is smoke of its look's albedo and tint lit by the sun, the sky and the fire inside
+it, each THROUGH THE SMOKE BETWEEN: toward the key light (the sun as far as it reaches, else straight
+down, a room's lamps and the open sky) the ball's own chord that way plus two reads of the billows at
+0.25 and 0.6 radii, toward the sky the chord alone, toward the core one read half way in, each
+through Beer's law mixed with a softer law for the later scatterings. So the underside and the far
+side sit in their own shade, the lobes shade each other and the fire glows out through the thin
+parts: a cloud with depth, where light that took no account of the smoke drew a flat grey disc
+(`gpu-explosion`'s `day`, `se-weapon-fx` on a real map). The edge rises from clear air to full
+density over a quarter of the billows' swing, so the lobes read crisp. Emission and absorption are
+integrated front to back and the march stops once the ray is opaque. At most 32 are drawn a frame, the nearest, back to
 front, premultiplied, each writing the reactive channel so TAA does not smear it. The sparks are the
 particle pool's (§ Particles and figures): a particle with a `kelvin` glows as a blackbody cooling
 toward 700 K by e every `cool_s`.
 
-**The cost.** The pass runs only on the pixels a ball covers, two fetches a step. On the software
+**The cost.** The pass runs only on the pixels a ball covers, two fetches a step, and three more
+where smoke shows (two toward the light, one toward the core while it burns; none in pure fire). On the software
 adapter at 640 x 360 (`gpu-explosion`, the pass's own timestamps), a frame of the yard costs about
-42 ms; one blast 10 m ahead (3% of the screen) costs the pass 0.5 to 0.7 ms, 32 at once 0.8 ms (most of them small
-and far), and one filling the whole screen 0.9 ms, since dense smoke ends the march early (about 2% of the frame at most). A real
+42 ms; one blast 10 m ahead (3% of the screen) costs the pass about 1 ms, 32 at once 1.2 ms (most of
+them small and far), and one filling the whole screen 1.9 ms, since dense smoke ends the march early
+(about 4% of the frame at most; the smoke's own shade took it from 0.4, 0.9 and 1.4 ms). A real
 GPU's times need the Mac. The CPU stages 32 blasts in about 0.1 ms in the debug build.
 
-**Not yet:** the flash lighting the scene (it needs the local lights, M39a) and the scorch pressed
-(it needs the decals, M42b), and particles colliding with anything but a heightfield: rows M47b and
-M47c.
+**The flash and the scorch in the world (M47b).** Each frame `flash_lights` turns every live
+blast's `flash_at` into a local light (§ Local lights): a point at the fireball's centre, its
+candela and colour reset from the curve, reaching out to where its light has fallen to a lux (the
+look's range at least, four times it at most). A fixed range would end a white-hot flash in a lit
+dome with a hard rim, and an eye outside that range would never adapt to it. The eye adapts
+through `FrameView::lamp_lux` (the flash's light on a face at the eye turned to it), so at night
+the yard round a blast reads lit by it instead of blown out against the dark; a game that wants a
+slower eye eases that value itself. The scorch is pressed with `engine/detail`'s decals as the blast
+goes off and drawn as the beams pass's burns (`engine/render/marks.hpp`: the masks' atlas,
+`press_scorch`, `mark_burns`, the same glue Shooter's Edge's marks use), its embers glowing for
+their first 1.5 s and the soot left. `gpu-explosion`'s `flash` view shows the yard and the wall lit
+by day, at dusk and at night, and its `scorch` view a floor's mark and a wall's; every older view now
+has its flash on the ground too (its march's pixel count leaves the flash out). Held by
+`tests/render_marks_test.cpp`.
+
+**Not yet:** particles colliding with anything but a heightfield (M47c); the eye's slower
+adaptation to a flash.
 
 ## Muzzle fire
 
@@ -2249,6 +2621,35 @@ normal), so the hole and the burst never depend on each other. A game classes th
 hit by its texture and hands the impact here and the hole to the decals (M18, M42f); a light for
 the metal's sparks; chips tinted by the surface's own texture rather than its shade.
 
+## Heat haze
+
+Air that something hot has just passed through bends the light crossing it, as the air over a road
+in the sun does: what is behind it is seen a little displaced, the displacement wandering as the
+hot cells rise and mix, and gone once the air has cooled. Nothing is added to the picture; light is
+only moved. A hot nail leaves a thread of it a few centimetres wide for a fifth of a second; a
+rocket motor leaves a wide wake that spreads and rises for most of a second. The bend is a few
+milliradians (a road's mirage), a pixel or three on a 1080-line screen: seen moving, it is a
+trail; in a still it is barely there.
+
+**As built.** `engine/render/haze.hpp`, `haze.wgsl`, `haze_copy.wgsl`. A game lays a trail a
+STRETCH a frame (`HazeTrail`: where the hot thing was, where it is, the frame's time, a look), and
+each stretch ages on its own, so the trail is hottest at its head. `haze_level` is a stretch's heat
+(up over 10 ms, then (1 - age/life)^2), a pure function of the moment. The LOOK (`HazeLook`,
+presets `haze.nail` and `haze.rocket`) is the width laid and how fast it spreads, the bend at its
+hottest, the cells' size, how fast it rises and its life. The pass copies the frame's colour so far
+("haze.copy"), then draws every warm stretch as a ribbon turned to the eye ("haze"), whose pixels
+read the copy pushed off by two octaves of smooth 3D noise churning in the air. The push is largest
+along the ribbon's middle and zero at its edges, and is the bend in radians turned into pixels at
+the ribbon's distance. The ribbon is hidden behind anything nearer (the depth, read and never
+written), and a push that would land on something nearer than the air keeps the pixel's own
+colour, so a hand in front never smears into the air behind it. Shooter's Edge draws it after the
+explosions and the beams, so the smoke and the fire behind the hot air bend too, under `ce_trails`.
+`stage_haze` keeps the newest kMaxHaze (2048) stretches and allocates nothing; held by
+`tests/render_haze_test.cpp`.
+
+**Not yet:** a priced row on the software adapter; the explosions' own heat over a blast and a
+muzzle's.
+
 ## Shaders
 
 - **WGSL**, one file per pass, beside the pass's C++. A small build step resolves
@@ -2314,6 +2715,20 @@ own bill, because a machine can be short of pixels and rich in passes, or the ot
 
 The table's costs are the reference machine's (an Apple M3 Max at 1920 × 1080, by the span; the
 numbers and how they were measured are beside the table in `ladder.cpp`).
+- **Shooter's Edge's ladder** (`games/shooters_edge/app/ladder.hpp`) is the same concept over its
+  three dearest enhancements: SHADOWS, WATER and SKIES, each `off` (its `ce_` switch off, the
+  classic original) and then on at low, medium and high (`ce_<id>_quality`, high the default and
+  the whole look). Each stop is the passes' parameters, or a pass left out: the shadows' moving
+  casters drawn into cubes or not, their edges soft (the blocker search and the disc of taps) or
+  one compare, and the capsules (`brush::app::Options`); the water's chop, the sun's caustics and
+  shafts, the reflection (the map drawn again in the pool's plane, the screen marched, or the
+  room's light) and the wet band (`render::WaterQuality`, a uniform a body); the sky's cloud layer
+  and its far land. Its prices are a demo's, not a still view's: the `se-timedemo` lab's
+  `--price-stops=1` plays the classic pack's demo at 1440p with each row lowered alone to each
+  stop, between runs with everything on, and the presets and the floor the same way;
+  `--price-cvars` prices any set of cvars so, which is how the parts were found (`docs/perf.md`).
+  Its window applies `r_quality` each frame (the pick worked out again only when the word, the
+  budget or the size changes), so a stop changes on a live frame with no pipeline made.
 - **The reach and its mist.** `FrameView::reach_m` is how far a picture draws. The ground's
   clipmap draws only the levels that cover it (`clipmap_levels_to`: 1, 2 or 4 km round the eye
   where all eight reach 8 km), the instances' cull drops every one past it (counted with the
@@ -2325,11 +2740,27 @@ numbers and how they were measured are beside the table in `ladder.cpp`).
   on a clear day (`--view=vista --lift=0 --fall=0`): there the woods past 2 km are most of the
   frame's cost on the software adapter.
 
-The table's costs today are the software adapter's (lavapipe at 1280 × 720), whose ratios are a
-CPU raster's: the reference machine's prices (the Mac, § Where it is developed) replace them.
-What the ladder does not have yet: the cloud's march spread over frames with reprojection, and
-changing a stop without making the frame again (the reach already can: it is a field of the
-view, not of the frame).
+- **A stop changed on a live frame** (Fall Line's `set_picture`, `games/fall_line/app/frame.hpp`):
+  the window watches its `r_` cvars' revisions and puts the ladder's rows on the frame it has,
+  with no pipeline made after the load. The spray, the falling snow (its pool made at the
+  ladder's largest at the load), the cloud's march and quarter, and the reach are each frame's;
+  a new resolution makes the render-size targets again, as a resize does; a new shadow size makes
+  the sun's maps again and rebinds them into the terrain, the instances, the particles and the
+  fog; the bloom turns on and off by the post pass's two pipelines, one with it compiled in and
+  one without (`PostSettings::bloom_switch`, `set_post_bloom`), both made at the load with the
+  bloom's own; the lens turns off (its target black) and on where it was made at the load. The
+  snow's material turns on and off by the terrain's two pipeline pairs, the game's material and
+  the default one (`TerrainSource::plain_too`, `set_terrain_plain`), both made at the load; the
+  trails' maps and stamp are made at the load whatever the stop (a few texels while off), and a
+  new size or the trails turned on makes the maps again with every trail laid drawn back into
+  them (`resize_snow_marks`: the stamps' blend is the larger, so a stamp drawn twice leaves what
+  it left once), the snow's group rebound over them (`bind_snow_trails`). What is still kept for
+  the frame made again, and said: a falling snow's count over the pool made at the load, a bloom
+  share other than the one its pipelines were made for, a lens not made at the load. The
+  `ladder` lab's `--live` lowers a frame made at the top to each preset, and to the top with the
+  snow and with the trails off, in place, and draws it against a frame made fresh with the
+  options it took over the same run: the same picture (no pixel more than one level apart),
+  nothing left for later and no pipeline made.
 
 ## Measurement
 
@@ -2349,6 +2780,12 @@ view, not of the frame).
   (60 Hz) frame. The renderer's CPU half
   (every `prepare` and `encode`) stays under 1 ms on one core, whatever the instance
   counts. The `perf` skill says how a claim against these budgets is proven.
+  Held on the M3 Max (2026-11-06, the frame's GPU span, 2560 × 1440, seed 38): the top is
+  6.53 ms from the start looking up into a flurry (the `ladder` lab's `--price`, the heaviest
+  sky), 6.44 from the chase camera and 7.62 from the vista over the whole mountain; the
+  `profile` lab's chase frame 6.48 at the median and 6.96 at the p95, the middle of the ladder
+  4.02, and the CPU half 0.18 ms at the median. The phone's half is M11's: no device build
+  draws the frame yet.
 
 ## Where it is developed
 
@@ -2450,7 +2887,7 @@ Each library is added in the milestone that first needs it, pinned to a tag.
 
 | Library | Licence | For | Milestone |
 | --- | --- | --- | --- |
-| Dawn | BSD-3-Clause | The GPU API on every target (prebuilt on the desktop, from source for iOS, iPadOS and Android); Tint for `make shaders-check` | M6 |
+| Dawn | BSD-3-Clause | The GPU API on every target (the pinned release's prebuilt archives: the desktop's, and the mobile ones for iOS, iPadOS and Android); Tint for `make shaders-check` | M6 |
 | SDL3 | zlib | The window and the surface (already the platform layer) | M6 |
 | cgltf | MIT | Loading authored glTF models (`cmake/Cgltf.cmake`: one header, pinned by commit and SHA-256) | M8e1 |
 | Dear ImGui | MIT | The developer UI, behind `GE_DEV_UI` | M10 |

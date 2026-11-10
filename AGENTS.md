@@ -56,6 +56,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/grass.md`](docs/grass.md) | Grass (M34): the research, kinds and recipes, covers on a heightfield or a mesh's floors, the blade scatter, the sway in the wind, the grass drawn, and the rows |
 | [`docs/mods.md`](docs/mods.md) | The engine's own mods (M52): the C ABI each way and how it grows, determinism (the state block, the game's stream, the libm), the sandbox, the loader, the platforms and the store form, the package, `ge mod` |
 | [`docs/servers.md`](docs/servers.md) | Servers for every multiplayer game (M53): the one core a game plugs into, listen and dedicated, `server.cfg` in layers, meta-cvars, the lobby and the match's phases, the feature seam for admin tools, recording and match mods |
+| [`docs/gamecli.md`](docs/gamecli.md) | A player's game CLI (M55): `<game>_cli` for players' agents, its layers (engine, plugin, game), the answer, settings and the catalog, servers, hosting and joining, places, the lab |
 
 **The working area.** `porting/` holds everything that only matters while modules are
 being carried over from their reference sources: the porting guide (`porting/README.md`),
@@ -86,8 +87,8 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   sources of a model, run headless by `ge asset` (docs/goals.md M8g), whose output (a .glb)
   is committed and loaded by the engine in C++; they never run in a game, CI never needs
   Blender, and no other scripting enters the tree. The one runtime exception is
-  Shooter's Edge's QC VM (`plugins/progs`, `docs/shooters-edge.md`), which executes existing mods'
-  bytecode for compatibility; the tree's own QC is limited to that game's baseline mod and its test mod. Nothing about the reference sources'
+  Shooter's Edge's QC VM and compiled-module VM (`plugins/progs`, `docs/shooters-edge.md`), which
+  execute existing mods' bytecode (a `.dat` or a `.qvm`) for compatibility; the tree's own QC is limited to that game's baseline mod and its test mod. Nothing about the reference sources'
   architecture (their layers, module split, file layout, state shape, names or data
   formats) is assumed to carry over: each design decision is made here, for this engine,
   and recorded in `docs/architecture.md`. Where a carried-over module keeps a behaviour (a
@@ -97,6 +98,12 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   them) are read-only: clone them beside this checkout, read them and run them, but never
   commit, push, open issues or comment there. If a reference has a bug, the engine
   reproduces it and you tell the user.
+- **CLEAN ROOM: THE IMPLEMENTER NEVER READS THE SOURCE.** Source this tree may not copy (a GPL
+  client, server, mod or tool; any third-party code under another licence) is read only by a
+  READER subagent, which answers your written questions in a document of facts with no code.
+  The agent that writes or verifies engine code builds from that document, the notes in
+  `porting/` and black-box measurements, and never opens, greps or diffs the source itself
+  (`clean-room` skill).
 - **THIS REPOSITORY IS PUBLIC.** Nothing sensitive goes in the tree, in workflow files or
   in repository variables: no tokens, keys, passwords, e-mail addresses, account or
   device ids, or paths under a home directory. Credentials live only in **GitHub
@@ -210,7 +217,7 @@ make play         # an agent at the controls: the play protocol on stdio (engine
 build/debug/play why runs/fall_line-38.inputs --step=1200 --around=6   # why the bot did it (ge why)
 build/release/play bench --seeds=38 --rivals=3   # Fall Line's step timed per zone (ge bench's engine half)
 make labs-smoke   # every lab at its smoke flags, twice, digests against tests/digests/
-make agents-check # symlinks, skills ↔ this router, the 1000-line cap, ge: tags (writing docs/index.md), lesson fragments
+make agents-check # symlinks, skills ↔ this router, the line cap (warns past 1000, fails past 2000), ge: tags (writing docs/index.md), lesson fragments
 make index        # write docs/index.md from every file's ge: tags (gitignored: never committed)
 make find Q="noise sample_field"  # files, skills, lessons and the porting map matching any word
 make lessons ARGS="port --scope=engine/core"   # read a skill's lessons, filtered (no ARGS: the inventory)
@@ -228,6 +235,8 @@ make shaders-check # every embedded WGSL shader compiled by Tint offline (needs 
 too) and then `make build` (the debug preset, reusing `build/debug/`) in the background while you read. Before you
 rely on the build, `tools/session-start.sh --wait` blocks until it is done and exits with its
 result; the output is `build/session-start.log`, the one-line state `build/session-start.status`.
+`make build`, `make test`, `make shaders-check` and precheck wait for it on their own (`tools/configure.sh`), so
+two builds never regenerate `build/debug/build.ninja` at once.
 **The hook fires only when the session starts IN this checkout:** a project thread that starts
 above it (several repositories side by side) never reads this tree's `.claude/settings.json`, so
 there, run `tools/session-start.sh` yourself as your first command. Every build in a new cloud
@@ -275,6 +284,7 @@ characters.
 | `engine/water/` | The water (`ge::water`): bodies and the one `sample` query, the sea a wind grows over a fetch, floating, swimming, the colour from what is in the water, flowing water and its tiers | `water` |
 | `engine/detail/` | Brush detail (`ge::detail`, `docs/detail.md`): convex solids and bevels on their exposed edges, the receivers grid, decals that age in a pool, seeded props by rules and their shapes, the test hall | `detail` |
 | `engine/bake/` | The light bake (`ge::bake`): charts and the atlas, a BVH ray tracer, direct light, colour bounce and the light's direction a luxel, worked out once on the CPU | `render` |
+| `engine/particles/` | Particle effects as data (`ge::particles`): the effect text a game or a mod ships, read into a book with faults by line, and a burst or a trail thrown from it on a seed; no GPU | `render` |
 | `engine/grass/` | The grass (`ge::grass`): kinds and recipes, covers from a heightfield's region or a mesh's floors, every blade scattered off its triangle's seed, a blade's sway in the engine's wind | `grass` |
 | `engine/cli/` | The `ge` command line for game repos (`cmake/Cli.cmake`): the command catalog, the answer shape and findings, and one file per command group | `agent-interface` |
 | `consumer-skills/` | The skills a game repo gets from `ge new` and `ge skills sync`, compiled into `ge`; written for a game repo, never for this one | `agent-interface` |
@@ -288,6 +298,7 @@ characters.
 | `engine/save/` | Saves (`ge::save`, `docs/saves.md`): the save file (header, meta, tagged versioned chunks, directory, XXH64), the state described once for its writer and reader | `save` |
 | `engine/capture/` | Video with sound (`ge::capture`, in `ge_play`; `docs/replays.md`): the Matroska and fragmented MP4 muxers and readers, I420, the encoders, the export's A/V clock, the live capture, the sync fixture | `replay` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |
+| `engine/gamecli/` | A player's game CLI (`ge::gamecli`, `docs/gamecli.md`): the command table and answer, settings through the catalog, servers, players, rcon, hosting, joining, logs; `ge_add_game_cli` | `agent-interface` |
 | `engine/server/` | The server core (`ge::server`, `docs/servers.md`): `ServerGame` a game plugs in, the frame, the node, session and hosting round it, the dedicated process (`ge_add_server`), the sample game and trial | `net` |
 | `engine/texgen/` | Procedural textures (`ge::texgen`, `docs/textures.md`): the `.tex` recipe, tileable noise, the layer kinds, the bake to maps and its disk cache; `library/` the specimens | `textures` |
 | `engine/snow/` | Snow over any ground (`ge::snow`, `docs/snow.md`): the layer and its cover, sparse fixed-point tiles, `sample`, `press` and imprint records, reference contacts, the snapshot | `snow` |
@@ -302,7 +313,7 @@ characters.
 | `engine/gpu/` | The native GPU device over Dawn (`GE_GPU`): adapters and tiers, pipelines and the manifest, surfaces, targets, timers; the only place webgpu.h is included | `gpu` |
 | `engine/render/` | Generic rendering mechanisms (`docs/rendering.md`): the frame and its pass table, sky, terrain, shadows, Hi-Z, TAA-U, bloom, post, meshes, instances, skinning; WGSL beside each | `render` |
 | `engine/audio/` | The synth (`ge::audio`): the voice vocabulary, the DSP graph, sounds and racks, the meter, WAV; deterministic, no platform | `audio` |
-| `engine/assets/` | Authored models: the glTF loader and writer, the `Model`, posing and CPU skinning; no GPU | `assets` |
+| `engine/assets/` | Authored models: the glTF loader and writer, the skeletal model file (.iqm), the `Model`, posing and CPU skinning; no GPU | `assets` |
 | `engine/ui/` | The 2D layer (`ge::ui`): paints, the draw list, images, fonts, the CPU raster, backdrops, menus as a model and a view; no GPU | `ui` |
 | `engine/charset/` | The bitmap fonts (`ge::charset`, `docs/charsets.md`): ten ASCII charsets as committed atlases and their builder, the noise layers, the text looks, text layout | `ui` |
 | `engine/hud/` | The HUD kit (`ge::hud`): faces over TrueType or a charset, the frame and anchors, readouts, bars, pips, banners, the feed, the layout check | `ui` |
@@ -325,7 +336,7 @@ characters.
 | `plugins/morph/` | Classic vertex-animated models and sprites (`ge::morph`): skins, the seam split, every frame a morph target, refused when damaged; fixture writers; smooth normals and optional rounding | `morph` |
 | `plugins/rooms/` | The engine's own level format (`ge::rooms`, `docs/levels.md`): rooms, openings and solids in a few bytes, the .gelv bytes and text form, rooms grown from seeds | `rooms` |
 | `plugins/shooter/` | The first-person shooter's simulation (`ge::shooter`): the classic player move in floats, clip hulls and their trace, hulls from brushes, the recorded scenarios | `shooter` |
-| `plugins/progs/` | The QC VM and compiler (`ge::progs`): the progs loader and checker, the interpreter, strings, the builtin table and extensions, the profiler, the assembler, the QC compiler, the `qc` tool | `progs` |
+| `plugins/progs/` | The QC VM and compiler (`ge::progs`): the progs loader and checker, the interpreter, strings, builtins and extensions, the profiler, the assembler, the QC compiler, the `qc` tool, the compiled-module VM | `progs` |
 | `games/fall_line/sim/` | Fall Line's own simulation (`fall_line_sim`): the state, the step, the course, the free ride and lifts, the bot and the field, the headless run, the hunt, the play contract | `sim` |
 | `games/fall_line/cfg/` | Fall Line's cvars (`fall_line_cfg`): every setting a cfg may change, bound to the Settings its app reads | `console` |
 | `games/fall_line/sound/` | Fall Line's sound (`fall_line_sound`, no GPU): the bank, the route, the listener, the mix | `audio`, `sim` |
@@ -339,6 +350,7 @@ characters.
 | `games/shooters_edge/profiles/` | Shooter's Edge's game half of each classic game as header-only data: programs, fallback map, items, words, sounds; beside the content row (`plugins/classicenhance`) | `shooter` |
 | `games/shooters_edge/menu/` | Shooter's Edge's main menu (`shooters_edge_menu`, no GPU): the classic pages on ESCAPE, rows wired to cvars, the rest dimmed, the pack's own pictures, classic enhance under OPTIONS | `ui` |
 | `games/shooters_edge/labs/` | Shooter's Edge's labs | `labs`, `ui` |
+| `games/shooters_edge/cli/` | Shooter's Edge's player CLI (`shooters_edge_cli`): its Spec over engine/gamecli (places, the classic protocol, launch words, settings), classic enhance's group, its demos | `agent-interface`, `shooter` |
 | `games/shooters_edge/server/` | Shooter's Edge's server: the host, its slots and input log, the dedicated binary; the mod server (QC builtins and extensions, hooks, the test and baseline mods, a progs from a path) | `shooter`, `progs` |
 | `games/shooters_edge/qc/` | Shooter's Edge's own QC mods modders start from: `common/` shared, `arena/` the deathmatch, `campaign/` the single-player game (built by `ge qc build`) | `progs` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (the harness), `golden.hpp`, `golden/` | `testing` |
@@ -414,6 +426,7 @@ and the directories agree.
 | `skill-reflection` | At the start and end of a session: read and record a skill's lessons |
 | `determinism` | Anything in `engine/core`, any floating-point or RNG question, a golden failure |
 | `port` | Carrying a module over from its reference source (the working area's skill: `porting/`) |
+| `clean-room` | Any answer that needs source this tree may not copy (GPL or other third-party code): porting a behaviour, verifying ours against it; a reader subagent writes the facts, you never read the source |
 | `testing` | Writing a test, a golden table or a golden generator |
 | `build` | CMake, presets, dependencies (`FetchContent`), compiler flags, CI workflows |
 | `release` | A changeset fragment, `cmake/Packaging.cmake`, a public target, cutting or dry-running a release |

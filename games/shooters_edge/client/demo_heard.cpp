@@ -65,7 +65,7 @@ DemoHearing::DemoHearing(ge::audio::Synth& synth) : synth_(synth) {}
 
 void DemoHearing::level(const DemoState& s, const SearchPath& files, const ge::brush::Map* map) {
   if (!sounds_ || files_ != &files) {
-    if (sounds_) sounds_->silence();
+    retired_.retire(std::move(sounds_));  // kept until its voices have faded
     sounds_ = std::make_unique<DemoSounds>(synth_, files);
     files_ = &files;
   }
@@ -75,6 +75,7 @@ void DemoHearing::level(const DemoState& s, const SearchPath& files, const ge::b
 
 bool DemoHearing::frame(const DemoState& s, DemoHeard& h, float dt, std::vector<std::string>& lines,
                         std::string& centre) {
+  retired_.prune();
   if (sounds_) sounds_->frame(s, h.started, h.stopped, listener_of(s), dt);
   if (voices_)
     for (const DemoVoice& v : h.voice) voices_->play(v);
@@ -97,8 +98,7 @@ bool DemoHearing::frame(const DemoState& s, DemoHeard& h, float dt, std::vector<
 }
 
 void DemoHearing::stop() {
-  if (sounds_) sounds_->silence();
-  sounds_.reset();
+  retired_.retire(std::move(sounds_));  // silenced, freed once its voices have faded
   voices_.reset();
   files_ = nullptr;
   partial_.clear();

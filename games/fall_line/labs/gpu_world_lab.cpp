@@ -15,8 +15,10 @@
 // terrain shades per covered pixel with the depth prepass, which must be 1 but for coincident
 // surfaces, and without it, the cost the prepass saves), both over the ground and the instances;
 // and the CULL check: the same still drawn again with the depth pyramid's culling off must be the
-// same picture, or the cull dropped something that shows (a difference is drawn again first: on a
-// hardware adapter one that does not come back is a warning, `cull-unrepeated`, never a fault). And
+// same picture, or the cull dropped something that shows (the same bits on the software adapter;
+// within kHardwareWobble levels on a GPU, whose two draws of one frame differ by a level here and
+// there; a difference is drawn again first, and one that does not come back is a warning,
+// `cull-unrepeated`, never a fault). And
 // the sun's CASCADES over the whole run, without a device: how many frames of the chase camera
 // redraw the near and the far one.
 //
@@ -32,7 +34,8 @@
 // --face lays the ski area off a real face instead of a dealt mountain, with the face's mapped
 // lakes laid on it (mountain/tarn/mapped.hpp; the `tarn` views frame the largest) and its streams
 // (mountain/tarn/brook.hpp; the `stream` views follow the longest), each iced by the map's day
-// (--day moves it).
+// (--day moves it). --reservoir lays a dealt map's valley reservoir behind its dam
+// (mountain/tarn/reservoir.hpp; the `reservoir` views look over it from its dam).
 //
 // --cfg runs console commands over Fall Line's cvars first (cfg/cvars.hpp), so a sky a server
 // picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_clouddensity,
@@ -80,6 +83,7 @@
 #include "mountain/mapgen/generate.hpp"
 #include "mountain/tarn/brook.hpp"
 #include "mountain/tarn/mapped.hpp"
+#include "mountain/tarn/reservoir.hpp"
 #include "render/shadows.hpp"
 #include "render/taa.hpp"
 #include "ui/console.hpp"
@@ -202,7 +206,15 @@ std::string layers_of(const ge::render::Clouds& clouds, double floor_y) {
   return out;
 }
 
-// The pixels two stills differ in, and the box round them.
+// How far, in levels of a channel, two draws of one frame may differ on a GPU and still be the same
+// picture. On the M3 Max (and the merge queue's paravirtual Metal) two unculled draws of the
+// `run-4` moment differ by one level in a few pixels of the sky, with or without the cull, from
+// run to run: the blend and the sums done in another order, not an instance lost. A dropped tree
+// changes a pixel by tens of levels. The software adapter draws the same bits every time: 0.
+constexpr int kHardwareWobble = 4;
+
+// The pixels two stills differ in by more than `tolerance` levels in a channel, and the box round
+// them.
 struct CullDiff {
   double pixels = 0;
   int x0 = 0, y0 = 0, x1 = -1, y1 = -1;
@@ -213,12 +225,18 @@ struct CullDiff {
   }
 };
 
-CullDiff cull_diff(const ge::gpu::Image& a, const ge::gpu::Image& b, int width) {
+bool differs(const uint8_t* a, const uint8_t* b, int tolerance) {
+  for (int c = 0; c < 3; ++c)
+    if (std::abs(static_cast<int>(a[c]) - static_cast<int>(b[c])) > tolerance) return true;
+  return false;
+}
+
+CullDiff cull_diff(const ge::gpu::Image& a, const ge::gpu::Image& b, int width, int tolerance) {
   CullDiff d;
   d.x0 = width;
   d.y0 = 1 << 30;
   for (size_t i = 0; i + 3 < std::min(a.rgba.size(), b.rgba.size()); i += 4) {
-    if (std::memcmp(&a.rgba[i], &b.rgba[i], 3) == 0) continue;
+    if (!differs(&a.rgba[i], &b.rgba[i], tolerance)) continue;
     const int x = static_cast<int>(i / 4 % static_cast<size_t>(width));
     const int y = static_cast<int>(i / 4 / static_cast<size_t>(width));
     ++d.pixels;
@@ -232,12 +250,12 @@ CullDiff cull_diff(const ge::gpu::Image& a, const ge::gpu::Image& b, int width) 
 
 // The culled still darkened, with every pixel the unculled one differs in painted red.
 ge::lab::Picture diff_picture(const ge::gpu::Image& culled, const ge::gpu::Image& all, int width,
-                              int height) {
+                              int height, int tolerance) {
   ge::lab::Picture p{width, height, culled.rgba};
   for (size_t i = 0; i + 3 < std::min(p.rgba.size(), all.rgba.size()); i += 4) {
-    const bool differs = std::memcmp(&culled.rgba[i], &all.rgba[i], 3) != 0;
+    const bool off = differs(&culled.rgba[i], &all.rgba[i], tolerance);
     for (int c = 0; c < 3; ++c) {
-      p.rgba[i + c] = static_cast<uint8_t>(differs ? (c == 0 ? 255 : 0) : p.rgba[i + c] / 3);
+      p.rgba[i + c] = static_cast<uint8_t>(off ? (c == 0 ? 255 : 0) : p.rgba[i + c] / 3);
     }
   }
   return p;
@@ -328,6 +346,7 @@ void run(ge::lab::Lab& lab) {
     opts.face = face;
     opts.version.reset();  // a face is laid only by a generator that builds a ski area
   }
+  if (lab.arg_bool("reservoir")) opts.version.reset();  // the free ride's map, ski area and all
   ge::mountain::mapgen::Level built;
   try {
     built = ge::mountain::mapgen::generate_level(seed, opts);
@@ -343,6 +362,16 @@ void run(ge::lab::Lab& lab) {
     if (lab.arg_num("day") > 0) built.sun.day_of_year = lab.arg_num("day");
     ge::mountain::tarn::lay_mapped_lakes(built);
     ge::mountain::tarn::lay_mapped_streams(built);
+  } else if (lab.arg_bool("reservoir")) {
+    // The valley's reservoir behind its dam, iced by the day the map is lit on (free_map's).
+    if (lab.arg_num("day") > 0) built.sun.day_of_year = lab.arg_num("day");
+    if (const auto r = ge::mountain::tarn::find_reservoir(built)) {
+      ge::mountain::tarn::lay_reservoir(built, *r);
+    } else {
+      lab.fail("seed " + std::to_string(static_cast<long long>(seed)) +
+                   " has no valley a dam closes clear of its ski area",
+               "Read find_reservoir in plugins/mountain/tarn/reservoir.hpp (skill: mountain).");
+    }
   }
   if (lab.arg_num("day") > 0) built.sun.day_of_year = lab.arg_num("day");
   if (const std::string problem = fall_line::sim::server_sky(cvars, built); !problem.empty()) {
@@ -558,7 +587,7 @@ void run(ge::lab::Lab& lab) {
       *device, "world.overdraw", render_w, render_h, 1, wgpu::TextureFormat::R16Float,
       wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc);
   const wgpu::TextureView count_view = count.CreateView();
-  int overdraw_faults = 0, cull_faults = 0, cull_unrepeated = 0, cull_hardware = 0;
+  int overdraw_faults = 0, cull_faults = 0, cull_unrepeated = 0;
 
   // A still of the scene: a cut, then `settle` frames.
   auto still = [&](Scene& sc) {
@@ -650,19 +679,19 @@ void run(ge::lab::Lab& lab) {
     // frustum; on the software adapter the two pictures are the same bits, so a pixel that differs
     // is one the cull dropped although it shows.
     // A cull that drops what shows drops it every time it draws the same frames, so a difference
-    // is drawn again before it is called the cull's. On the software adapter any difference is a
-    // fault. On a hardware adapter it is measured and warned, with the pictures, and never gates:
-    // Apple's paravirtual Metal drops a pixel of a tree on some runs and not others in one process
-    // (docs/goals/M7d1.md), so a count there would move the digest from run to run.
+    // is drawn again before it is called the cull's: a repeated one is a fault. On a GPU a pixel
+    // counts only past kHardwareWobble levels (docs/goals/M7d1.md), and a difference that does not
+    // come back is warned and measured, never a fault.
     {
+      const int tolerance = device->report.software ? 0 : kHardwareWobble;
       frame->options.occlusion = false;
       const ge::gpu::Image all = still(sc);
       frame->options.occlusion = true;
-      const CullDiff first = cull_diff(img, all, width);
+      const CullDiff first = cull_diff(img, all, width, tolerance);
       lab.metric(name + ".cull-diff-pixels", first.pixels, "count", Det::measured);
       if (first.pixels > 0) {
         const ge::gpu::Image again = still(sc);
-        const CullDiff second = cull_diff(again, all, width);
+        const CullDiff second = cull_diff(again, all, width, tolerance);
         const ge::render::InstanceStats seen_again =
             ge::render::read_instance_stats(*device, frame->forest);
         const std::string line =
@@ -674,7 +703,7 @@ void run(ge::lab::Lab& lab) {
             std::to_string(seen_again.late) + ", " + std::to_string(seen_again.hidden) + ").";
         lab.note(line);
         // The pictures only where a difference fails: an attachment's name is in the digest.
-        if (device->report.software) {
+        if (device->report.software || second.pixels > 0) {
           ++cull_faults;
           ge::core::output::error(line);
           lab.attach(name + ".cull-culled.png", ge::lab::encode_png({width, height, img.rgba}),
@@ -682,11 +711,8 @@ void run(ge::lab::Lab& lab) {
           lab.attach(name + ".cull-unculled.png", ge::lab::encode_png({width, height, all.rgba}),
                      Det::measured);
           lab.attach(name + ".cull-diff.png",
-                     ge::lab::encode_png(diff_picture(img, all, width, height)), Det::measured);
-        } else if (second.pixels > 0) {
-          ++cull_hardware;
-          ge::core::output::warn(line +
-                                 " Repeated on hardware: measured, not gating. Skill: render.");
+                     ge::lab::encode_png(diff_picture(img, all, width, height, tolerance)),
+                     Det::measured);
         } else {
           ++cull_unrepeated;
           ge::core::output::warn(line + " Not repeated: not counted as the cull's. Skill: render.");
@@ -740,7 +766,6 @@ void run(ge::lab::Lab& lab) {
   }
   lab.metric("cull-faults", cull_faults, "count");
   lab.metric("cull-unrepeated", cull_unrepeated, "count", Det::measured);
-  lab.metric("cull-hardware", cull_hardware, "count", Det::measured);
   if (cull_faults != 0) {
     lab.fail("the depth pyramid's cull dropped instances that show (the .cull-diff-pixels rows)",
              "Check engine/render/instances_cull.wgsl's `hidden` (the box's nearest corner, the "
@@ -773,6 +798,8 @@ const ge::lab::LabSpec kSpec{
          "longest stream)"},
         {"views", "all", "the views to shoot, comma-separated (games/fall_line/app/views.hpp)"},
         {"hour", "-1", "the solar hour to light the map at; negative: the map's own"},
+        {"reservoir", "",
+         "on a dealt map: lay the valley's reservoir behind its dam (the reservoir views)", true},
         {"day", "0", "the day of the year the map is lit on (its moon with it); 0: the map's own"},
         {"cfg", "",
          "console commands over Fall Line's cvars (\"sv_weather storm; sv_cover 0.6\"): "

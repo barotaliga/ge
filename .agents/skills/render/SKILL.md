@@ -121,8 +121,18 @@ fragment shader on tile GPUs). A technique that answers no measured cost stays i
   `medium_at` each collided once). Prefix a shared function with its file's subject
   (`surface_fresnel`) and grep the tree's `.wgsl` for the name first. A module that must write
   a binding `frame.wgsl` declares read-only gets its own module and its own copy of the struct.
-- `from` and `target` are reserved words. Tint's error names the first shader that includes the
-  file, and a pipeline only reports `finish()` false.
+- `from` and `target` are reserved words, and `a * b ^ c` is refused (bracket the products).
+  Tint's error names the first shader that includes the file, and a pipeline only reports
+  `finish()` false.
+- An embedded shader is capped at 60000 bytes after resolving, and trailing comments count
+  (full-line ones are stripped). Near the cap, look for duplicated functions in the resolved file
+  (`build/<preset>/gen/...`) before cutting code, and debug with one short line.
+- A pass with its own group 0 (a copy, a table built by compute) lives in its own module. A
+  compute pass that writes a texture group 0 samples gets a hand-built layout holding only the
+  bindings its code reads, at group 0's numbers (`make_layout` numbers its slots in order).
+- `select(x, y, c)` evaluates both sides, integer `%` and `/` are dear (a float wrap is cheap), a
+  SIMD group runs as long as its slowest lane, and a loop's mere presence costs registers: a path
+  no pixel of a frame takes is removed with an `override` in a second pipeline, not a branch.
 - When a pipeline fails with no message, run `make shaders-check`, or the resolved file under
   `build/<preset>/gen/render/` through `.cache/deps/Dawn-*/bin/tint --format spirv`. A missing
   entry point means the resolved file was cut short: read its tail.
@@ -136,10 +146,19 @@ fragment shader on tile GPUs). A technique that answers no measured cost stays i
 - A texture is a storage target or sampled within one dispatch, never both, counting every
   binding of every bound group. Passes that BUILD a table group-0 bind their own layout (`sky.in`).
 - A level change is a load: set `device.loading = true` before building its frame and call
-  `gpu::end_load` after, or every pipeline counts as created mid-run.
+  `gpu::end_load` after, or every pipeline counts as created mid-run. The proof nothing was built
+  mid-run is `device.pipelines_after_load` before and after, not the absence of a crash.
+- Pipelines compile asynchronously but `CreateShaderModule` parses WGSL synchronously (tens of
+  ms a pass): a device keeps each module by its text, constant inputs (moon maps) are prepared
+  once a process, and a world is built a step a frame. A GPU cost shows on the CPU as
+  `surface.acquire` waiting; `FrameRecorder::stats` says which pass.
+- A feature compiled in by an `override` is turned off live by a second pipeline made at load
+  with it compiled out; binding a black input is not off where the shader mixes toward it.
+- A vertex rewritten on the GPU (skinning, morphs) copies its old position out before writing,
+  or TAA smears motion inside the mesh; a cut, a still or an undrawn slot settles with no motion.
 - A generated data table is a `nullptr`-ended array of one short literal a line: Clang rejects a
   literal over 65,536 characters and MSVC caps one piece at 16 KB; GCC accepts both, so only CI's
-  other rows catch it. The 1000-line cap holds generated files too.
+  other rows catch it. The line cap (warned past 1000, failed past 2000) holds generated files too.
 
 **The pass table.**
 - A pass that is only sometimes needed still opens every frame, or the recorder's GPU times shift
@@ -163,6 +182,12 @@ fragment shader on tile GPUs). A technique that answers no measured cost stays i
   in (dusk, or the darkest room with bloom on), where the exposure is highest and it clips first.
 - A lab view with a lamp in it sets `lamp_lux` as the game's frame does; a lab measuring the moon
   turns the lamps off.
+- State a brightness that must hold at any exposure ("as bright as the room", a fullbright
+  colour) in multiples of the picture's white (`white_luminance()`), not in cd/m²: a value right
+  by day is invisible or blown out at night. Look at every glow change at night too.
+- What lights a thing indoors is the game's to hand over: the engine lights smoke, particles and
+  ash by the open sky and the sun unless the game passes the room's light (`Blast::light`,
+  pre-lit particles), so in a room of a brush world they glow white.
 
 **Judging a picture.**
 - A view must find its subject: a shadow, a fog or a glint needs the sun on it. A pass that costs
@@ -176,6 +201,35 @@ fragment shader on tile GPUs). A technique that answers no measured cost stays i
   resolution change saves the pixels' ratio on a GPU, not on the CPU raster.
 - An honest before of a shader change: copy the new shaders aside, `git checkout` the old ones,
   build, run the labs `--tag=before` with the new views in, restore, `--compare=before`.
+- Anything that moves is judged in motion, never by stills: a film (`se-client --film=<frames>`,
+  a lab's frame-to-frame jump share) shows what a still hides. Any `fract` or `floor` of time in
+  a shader must wrap where its result is unseen (a weight of 0, or a state equal on both sides).
+- An effect too subtle for the eye (a bend of milliradians, a cull, a scissor) is proved by the
+  same run with the pass skipped or switched off, diffed by pixel count; a cull or a scissor
+  must match to the byte on the software adapter.
+- A small subject must be big enough to judge: a speck far off is under a pixel, so throw an
+  effect a few metres from the eye (the explosion labs' yard), and a particle within the pool's
+  soft band of a surface (`ParticleSettings::soft_m`) fades to nothing.
+- A GPU lab's digest is the same with and without an adapter: plan the shot list once and walk it
+  in both paths, count CPU-side metrics before asking for the adapter, attach files in the same
+  order in both (an attachment's name enters the digest), and check with `GE_GPU_OFF=1`.
+
+## Finding a cause, pricing a cost
+
+- **Knock out, never guess.** A glow, a dark rim or a cost is found by switching off each thing
+  that could make it, one at a time, at one view (`--cvars="<one thing off>"`, or a scratch edit
+  of the shader), and printing a pixel row or the GPU span. An hour of guessing at the obvious
+  knob has lost to minutes of this more than once; the cause was a neighbour (sparks, a map light,
+  a filter) each time.
+- **A switch's price is not the bill.** Price a quality stop by its parts first
+  (`se-timedemo --price-cvars=...`, a knocked-out part in a release build, `GPU span: p50` over
+  three runs at 1440p, where the frame waits on the GPU): the cost was rarely the pixels a stop
+  would halve. Time a pass by drawing the same frames without it.
+- **Price from a view the subject fills**, by the whole frame's median, with nothing else drawing
+  on that GPU (other threads' game windows count). Skipping pixels inside one pass saves nothing
+  while every SIMD group still holds one that works: put the working pixels in a pass of their own.
+- Work that depends only on the camera's ray (shafts, aerial perspective) goes in a volume made
+  once a frame, read once a pixel.
 
 ## Labs
 

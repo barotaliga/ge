@@ -1,7 +1,8 @@
 // engine/hud/pictures and the layout's picture kinds: a picture is its pixels times the unit
 // over its density and samples nearest only at a whole scale; a digit field is right-aligned in
 // its cells, the alternate sheet drawn when asked; a strip keeps an empty slot's place and sizes
-// a cell by its picture when the strip gives none; a child hangs on its parent's point, moves in
+// a cell by its picture when the strip gives none, breaks into lines and reads from the right
+// when mirrored; a child hangs on its parent's point, moves in
 // the parent's units and takes its scale; snap floors the unit and fit keeps a wide element on
 // the screen; a ring fills a second lap past 1; a glyph sheet maps the figures to its own cells.
 //
@@ -103,6 +104,35 @@ TEST(a_strip_keeps_an_empty_slots_place_and_sizes_a_cell_by_its_picture) {
   CHECK(dl.size() == 2);
   CHECK(near(dl.cmds()[1].box.rect.x, 96));  // after the empty slot's 48 px
   CHECK(near(dl.cmds()[1].box.rect.w, 96));
+}
+
+TEST(a_strip_breaks_into_lines_and_a_mirrored_one_starts_each_line_from_the_right) {
+  const ui::Image narrow = solid_image(24, 16), wide = solid_image(48, 16);
+  // 2-2-1 lines: two narrow, two narrow, one wide.
+  std::vector<Cell> cells(5);
+  for (Cell& c : cells) c.image = &narrow;
+  cells[4].image = &wide;
+  cells[2].breaks = cells[4].breaks = true;
+  StripShape shape;
+  shape.cell_w = 0;
+  shape.gap = 0;
+  shape.line_gap = 4;
+  const Strip strip{&cells};
+  const Size m = measure(shape, strip, 1);
+  CHECK(near(m.w, 48));              // the widest line
+  CHECK(near(m.h, 16 * 3 + 4 * 2));  // three lines and two gaps
+  ui::DrawList dl;
+  dl.begin(400, 100);
+  draw(dl, shape, strip, {100, 0, 48, 56}, 1);
+  CHECK(dl.size() == 5);
+  CHECK(near(dl.cmds()[0].box.rect.x, 100) && near(dl.cmds()[0].box.rect.y, 0));
+  CHECK(near(dl.cmds()[2].box.rect.y, 20));  // the second line under the first and the gap
+  // Mirrored, each line reads from the right: its first cell at the right edge (drawn last).
+  ui::DrawList mir;
+  mir.begin(400, 100);
+  draw(mir, shape, strip, {100, 0, 48, 56}, 1, true);
+  CHECK(mir.size() == 5);
+  CHECK(near(mir.cmds()[0].box.rect.x, 100) && near(mir.cmds()[1].box.rect.x, 124));
 }
 
 TEST(a_child_hangs_on_its_parents_point_in_its_units_and_follows_a_player_cvar) {

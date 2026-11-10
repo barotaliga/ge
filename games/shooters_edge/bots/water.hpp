@@ -1,7 +1,11 @@
 // THE FIGHTER IN THE WATER: its air, the dive it swims and when it gives one up, and the way it
 // swims this command. The fighter (fighter.hpp) steers along the answer.
-// - AIR: the time its head has been under. Past `kAir_s` a walk along a pool's floor turns up and
-//   out by the map's swim field (drowning starts at 12 s).
+// - AIR: the time its head has been under. Past `kAir_s`, under OPEN water (nothing solid between
+//   its head and the water's top within `kSurfaceLook`), it swims straight up, takes a breath at
+//   the surface for `kBreathe_s` and goes on as it was going: a person comes up for air, he does
+//   not give his swim up. Not out by the rise's time and `kRiseSlack_s` (a ledge's lip, a grate),
+//   it gives the rise up for `kSurfaceRetry_s` and takes the shorter way out. Under a ceiling, a
+//   walk along a pool's floor turns up and out by the map's swim field (drowning starts at 12 s).
 // - A DIVE (an item in a pocket only the water reaches, swum on the item's own field) is given up
 //   when it has been in the water `kDiveLate_s` longer than its swim's planned time (held under a
 //   ledge it cannot climb, or lost), or when it is short of air and the way back out is shorter
@@ -22,14 +26,19 @@
 namespace shooters_edge::bots {
 
 constexpr double kAir_s = 6;  // under this long, the shorter way out of the water (drowning at 12)
-constexpr double kDiveMost_s = 8;    // no dive whose swim is longer than this
-constexpr double kDiveLate_s = 3;    // a dive this far behind its swim's time is given up
-constexpr double kDiveRetry_s = 30;  // and not tried again for this long
+constexpr double kBreathe_s = 1;       // up for air: this long at the surface, then on
+constexpr float kSurfaceLook = 320;    // open water's top looked for this far over the head, units
+constexpr float kRise = 100;           // a swimmer rises about this fast, units/s
+constexpr double kRiseSlack_s = 2;     // out of the water this long past the rise's time, or not
+constexpr double kSurfaceRetry_s = 6;  // a rise given up is not tried again for this long
+constexpr double kDiveMost_s = 8;      // no dive whose swim is longer than this
+constexpr double kDiveLate_s = 3;      // a dive this far behind its swim's time is given up
+constexpr double kDiveRetry_s = 30;    // and not tried again for this long
 
 // One command's look at the water for player entity `me` at time `t`, `msec` long: the air clock,
 // the dive kept or given up (on `why` when non-null). True with `way` the point to swim at when it
 // dives or swims out this command. Call every command, alive or dead.
-bool water_way(Fighter& f, const server::QcServer& s, int me, double t, int msec, ge::ai::Why* why,
-               sh::Vec3f& way);
+bool water_way(Fighter& f, const server::RulesCommon& s, int me, double t, int msec,
+               ge::ai::Why* why, sh::Vec3f& way);
 
 }  // namespace shooters_edge::bots

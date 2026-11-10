@@ -30,6 +30,8 @@ struct VertexOut {
   @location(1) rel: vec3f,                     // camera-relative, m
   @location(2) @interpolate(flat) look: vec4f, // albedo, opacity at this age, thinning, size
   @location(3) @interpolate(flat) kelvin: f32, // its glow's heat now, K (0: none)
+  @location(4) @interpolate(flat) tint: vec3f,  // the colour its albedo reflects
+  @location(5) @interpolate(flat) shine: vec3f, // an unlit speck's own light, whites (0: lit)
 }
 
 const kCorners = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0),
@@ -44,6 +46,9 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
     return out;
   }
   let c = kCorners[vid];
+  // A puff spreads as it ages, thinning as it grows (by its width: a puff is deeper as it spreads).
+  let size = p.size + p.grow * p.age;
+  let spread = p.size / max(size, 1e-4);
   let rel = p.p - frame.eye.xyz;
   let to_eye = -normalize(rel);
   // The streak: the motion over the shutter, laid flat in the plane facing the eye.
@@ -51,7 +56,7 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
   let flat_motion = motion - dot(motion, to_eye) * to_eye;
   let len = length(flat_motion);
   var along = vec3f(0.0);
-  if (len > p.size) {
+  if (len > size) {
     along = flat_motion / len;
   } else {
     // Too slow to streak: a round speck, its along any line in the plane.
@@ -59,21 +64,27 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
     along = side / max(length(side), 1e-4);
   }
   let across = normalize(cross(to_eye, along));
-  let half_len = max(len, p.size) * 0.5;
+  let half_len = max(len, size) * 0.5;
   // The streak trails behind the particle: its head where it is now.
-  let centre = rel - flat_motion * 0.5 * select(0.0, 1.0, len > p.size);
-  let corner = centre + along * (c.x * half_len) + across * (c.y * p.size * 0.5);
+  let centre = rel - flat_motion * 0.5 * select(0.0, 1.0, len > size);
+  let corner = centre + along * (c.x * half_len) + across * (c.y * size * 0.5);
   out.position = frame.view_proj * vec4f(corner, 1.0);
   out.quad = c;
   out.rel = corner;
   let t = p.age / max(p.life, 1e-4);
   let fade = smoothstep(0.0, 0.1, t) * (1.0 - smoothstep(0.66, 1.0, t));
   // A streak spreads the same grain over its length: thinner the longer it is.
-  let thin = p.size / max(len, p.size);
-  out.look = vec4f(p.albedo, p.opacity * fade, thin, p.size);
+  let thin = size / max(len, size);
+  out.look = vec4f(p.albedo, p.opacity * fade * spread, thin, size);
+  out.tint = p.tint;
   out.kelvin = 0.0;
+  out.shine = vec3f(0.0);
   if (p.kelvin > 0.0) {
     out.kelvin = kBlackbodyLoK + (p.kelvin - kBlackbodyLoK) * exp(-p.age / max(p.cool_s, 1e-3));
+  } else if (p.kelvin < 0.0) {
+    // Shining: its tint drifting to its albedo's grey.
+    let k = select(1.0, exp(-p.age / p.cool_s), p.cool_s > 0.0);
+    out.shine = mix(vec3f(p.albedo), p.tint, k) * -p.kelvin;
   }
   return out;
 }
@@ -83,13 +94,19 @@ struct FragmentOut {
   @location(1) motion: vec4f,  // b only: the reactive mask
 }
 
-// A glowing particle's own light at `kelvin`, in the frame's units (pre-exposed sun units).
+// A glowing particle's own light at `kelvin`, in the frame's units (pre-exposed sun units), never
+// brighter on the screen than kGlowKeys times the white the eye is adapted to: by day a spark is
+// as hot as it is, but in a dark room at night the eye, opened to the dark, would see every spark
+// swell into a blinding ball through the bloom.
+const kGlowKeys = 4.0;
 fn glow_light(kelvin: f32) -> vec3f {
   let x = blackbody_coord(kelvin);
   let i = u32(x);
   let lo = pp.table[i];
   let hi = pp.table[min(i + 1u, kBlackbodyRows - 1u)];
-  return blackbody_mix(lo, hi, x - f32(i), 1.0) * pp.glow.x * frame.world.y / kSunLux;
+  let c = blackbody_mix(lo, hi, x - f32(i), 1.0) * pp.glow.x * frame.world.y / kSunLux;
+  let top = kGlowKeys / max(exposure(), 1e-20);
+  return c * min(1.0, top / max(dot(c, kLuma), 1e-20));
 }
 
 // Henyey–Greenstein, normalised to 1 over the sphere times 4 pi: light scattered by cos `c`
@@ -123,10 +140,13 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // cloud of grains is lit through, not on one face: the sun's whole light round the lobe, as
   // bright as the snow it came off facing the sun.
   let lobe = mix(1.0, forward_lobe(dot(-to_eye, frame.sun.xyz), 0.6), 0.6);
-  var c = in.look.x / PI * (sun_light(y, xz) * lit * lobe + sky_irradiance(vec3f(0.0, 1.0, 0.0)));
+  let shining = any(in.shine > vec3f(0.0));
+  let albedo = select(in.look.x * in.tint, vec3f(0.0), shining);
+  var c = in.shine * white_luminance() +
+          albedo / PI * (sun_light(y, xz) * lit * lobe + sky_irradiance(vec3f(0.0, 1.0, 0.0)));
   // The lamps lit through the cloud the same way: a headlamp's beam in the spray, a floodlight's
   // haloed by the snow thrown under it.
-  c += in.look.x / PI * lamps_through(in.rel, -to_eye, in.position.xyz, 0.6, 0.6);
+  c += albedo / PI * lamps_through(in.rel, -to_eye, in.position.xyz, 0.6, 0.6);
   if (in.kelvin > 0.0) {
     c += glow_light(in.kelvin);
   }

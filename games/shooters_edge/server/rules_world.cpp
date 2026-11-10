@@ -48,13 +48,14 @@ void fill_numbers(const QcServer& s, int slot, WorldClient& c) {
   const auto& f = s.q.layout->f;
   const auto& w = s.world_fields;
   PlayerNumbers& n = c.numbers;
-  n.health = static_cast<int32_t>(field(s, e, f.health));
-  n.armour = static_cast<int32_t>(field(s, e, w.armorvalue));
-  for (int k = 0; k < 4; k++) n.ammo[k] = static_cast<int32_t>(field(s, e, w.ammo[k]));
-  n.current_ammo = static_cast<int32_t>(field(s, e, w.currentammo));
-  n.weapon = static_cast<int32_t>(field(s, e, w.weapon));
-  n.weapon_frame = static_cast<int>(field(s, e, w.weaponframe));
-  n.items = static_cast<int32_t>(field(s, e, f.items));
+  n.health = field(s, e, f.health);
+  n.armour = field(s, e, w.armorvalue);
+  n.armour_type = field(s, e, f.armortype);
+  for (int k = 0; k < 4; k++) n.ammo[k] = field(s, e, w.ammo[k]);
+  n.current_ammo = field(s, e, w.currentammo);
+  n.weapon = field(s, e, w.weapon);
+  n.weapon_frame = field(s, e, w.weaponframe);
+  n.items = field(s, e, f.items);
   n.view_z = field(s, e, f.view_ofs + 2);
   n.frags = field(s, e, f.frags);
   n.weapon_model = model_index_of(
@@ -62,6 +63,13 @@ void fill_numbers(const QcServer& s, int slot, WorldClient& c) {
 }
 
 }  // namespace
+
+bool model_shown(const QcServer& s, int e) {
+  if (field(s, e, s.q.layout->f.modelindex) == 0) return false;
+  const char* text = pg::vm_string(
+      s.q.vm, static_cast<int32_t>(*pg::entity_field(s.q.vm, e, s.q.layout->f.model)));
+  return text != nullptr && text[0] != 0;
+}
 
 void fill_world(const QcServer& s, RulesWorld& w, bool full) {
   // Before the first map there is no program running and nothing to show.
@@ -82,7 +90,8 @@ void fill_world(const QcServer& s, RulesWorld& w, bool full) {
     {
       const char* title = pg::vm_string(
           s.q.vm, static_cast<int32_t>(*pg::entity_field(s.q.vm, 0, s.q.layout->f.message)));
-      if (title != nullptr) w.map_title = title;
+      // A release that names its levels by key (`$map_...`) has them in its words too.
+      if (title != nullptr) w.map_title = pg::resolve_key(s.opt.localized.get(), title);
     }
     w.entities.assign(static_cast<size_t>(s.sv.set.max_edicts), WorldEntity{});
     for (WorldClient& c : w.clients) c = WorldClient{};
@@ -129,8 +138,13 @@ void fill_world(const QcServer& s, RulesWorld& w, bool full) {
     r.velocity = ed.velocity;
     r.mins = ed.mins;
     r.maxs = ed.maxs;
+    r.absmin = ed.absmin;
+    r.absmax = ed.absmax;
+    r.view_angles = ed.v_angle;
+    r.flags = ed.flags;
+    r.waterlevel = ed.waterlevel;
     r.health = ed.health;
-    r.modelindex = static_cast<int>(field(s, e, f.modelindex));
+    r.modelindex = model_shown(s, e) ? static_cast<int>(field(s, e, f.modelindex)) : 0;
     r.frame = static_cast<int>(field(s, e, f.frame));
     r.colormap = static_cast<int>(field(s, e, f.colormap));
     r.skin = static_cast<int>(field(s, e, f.skin));

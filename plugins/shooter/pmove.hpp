@@ -17,6 +17,8 @@
 //     feet + 1, the middle and the eyes; then snapped to the ground trace's end.
 //  7. the water jump check at water level 2; 8. the water jump's clock; 9. the jump;
 //  10. friction; 11. the water, fly or walk/air move; 12. categorise again; 13. the landing fix.
+// The easy jump is not a rule of the move: it is the client's aid (speedjump_assist.hpp), which
+// sends the commands a strafer would; the move runs them like any other.
 // The rules of each step are stated beside it in pmove.cpp and slide.cpp.
 //
 // Pure, allocation-free, no clock, transcendentals through core's libm only. Held within the
@@ -76,10 +78,18 @@ struct MoveSettings {
   float waterfriction = 4;        // sv_waterfriction
   float ktjump = 1;               // pm_ktjump, 0..1: a weak jump pulled up toward 270
   float bunnyspeedcap = 0;        // pm_bunnyspeedcap: air gain capped at maxspeed x cap; 0 off
-  bool slidefix = false;          // pm_slidefix: downward speed kept on the ground
-  bool airstep = false;           // pm_airstep: steps climbed in the air (a console sets
-                                  // pm_pground with it)
-  bool pground = false;           // pm_pground: on the ground persists between moves
+  // pm_speedjump, 0..1: the share of the best strafe's gain the server lets a client's easy jump
+  // (speedjump_assist.hpp) take. The move never reads it: it is told in the server info, and a
+  // client with `cl_speedjump 1` strafes for its player at this share (0: not at all).
+  float speedjump = 0;
+  bool slidefix = false;  // pm_slidefix: downward speed kept on the ground
+  bool airstep = false;   // pm_airstep: steps climbed in the air (a console sets
+                          // pm_pground with it)
+  bool pground = false;   // pm_pground: on the ground persists between moves
+  // A single-player program jumps for itself in its pre-think (the jump, swimming up and the
+  // water jump, which it times itself): the move then never checks for a water jump, never
+  // jumps, and leaves `waterjump_time` as it was handed (the program's time left).
+  bool program_jumps = false;
 };
 
 // What a player carries from one command to the next.
@@ -120,6 +130,12 @@ struct MoveResult {
   int blocked = 0;  // the walk/air, water or fly move's slide result; 0 when it did not slide
   TouchList touches;
 };
+
+// How deep a player standing at `origin` is in water, as the move works it out: 0 dry, 1 the feet
+// (one unit over the box's bottom), 2 the box's middle, 3 the eyes (22 over the origin); and the
+// water's contents at the feet (`kContentsEmpty` when dry). A client reads its own player's depth
+// off its prediction with it even when no command has run since the server's state.
+int water_level(const MoveWorld& world, Vec3f origin, int* watertype = nullptr);
 
 // One command of at most 50 ms (`run_command` splits a longer one).
 MoveResult player_move(MoveState& state, const MoveCmd& cmd, const MoveSettings& settings,

@@ -1,14 +1,16 @@
 // LAB `se-lobby`: the lobby before the match, played on the listen server the window runs
 // (client/listen.hpp with the lobby on, client/lobby_room.hpp). The built-in arena, the baseline
-// mod, the player in slot 0 and three bots (a novice, an average and an expert fighter) seated in
-// the warmup; the player runs a slow circle while the bots roam and fight. On a script of the
-// player's console words: `team switch` (red to blue), `ready` (the countdown starts), `break`
-// (it stops), `ready` again, the countdown runs out and the map restarts for the match, which is
-// played for `--match` seconds.
+// mod, the player in slot 0 on the lobby's screen and three bots (a novice, an average and an
+// expert fighter) seated and fighting in the warmup. On a script of the player's console words:
+// `warmup` (F4: he joins them on the map, running a slow circle), `team switch` (red to blue),
+// `sitout` (back to the lobby's screen), `ready` (the countdown starts), `break` (it stops),
+// `warmup` and `ready` again, the countdown runs out and the map restarts for the match with
+// everyone on it, which is played for `--match` seconds.
 //
-// The pictures: the lobby panel (hud/lobby_panel.hpp) at each moment (the warmup, after the
-// switch, the countdown, the break) at 1280x720 and 390x844 over a painted stand-in for the
-// game; the players from above, warmup and match apart; the ready count and every player's frags
+// The pictures: the lobby's screen (hud/lobby_page.hpp) over a painted stand-in for the title's
+// night, or the banner on the map (hud/lobby_panel.hpp) over a painted stand-in for the game, at
+// each moment (the lobby, the warmup, after the switch, the countdown, the break) at 1280x720 and
+// 390x844; the players from above, warmup and match apart; the ready count and every player's frags
 // over time, the warmup's frags thrown away at the match's start. The metrics (countdowns,
 // stopped, frames to the match, the frags at the start and at the end) are deterministic.
 //
@@ -16,6 +18,7 @@
 // ge:keywords lab se-lobby lobby warmup countdown ready break team bots panel free-roam
 // ge:skill shooter labs
 // ge:test tests/shooters_edge_lobby_test.cpp
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <utility>
@@ -27,8 +30,10 @@
 #include "progs/layout.hpp"
 #include "progs/vm.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/hud/lobby_page.hpp"
 #include "shooters_edge/hud/lobby_panel.hpp"
 #include "shooters_edge/labs/arena_chart.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/sim/arena.hpp"
 #include "ui/raster.hpp"
 
@@ -68,11 +73,35 @@ ui::Image backdrop(int w, int h) {
   return img;
 }
 
-gl::Picture panel_picture(const shooters_edge::hud::LobbyView& v, int w, int h) {
+// The night the lobby's screen sits on: a stand-in for the title's (client/title.hpp, drawn by
+// the GPU in the `se-lobby-view` lab), a dark red sky over a black horizon and a low moon.
+ui::Image night(int w, int h) {
   ui::DrawList dl;
   dl.begin(w, h);
-  shooters_edge::hud::draw_lobby(dl, v, w, h);
-  ui::Image img = backdrop(w, h);
+  const float fw = static_cast<float>(w), fh = static_cast<float>(h);
+  ui::Box b;
+  const ui::Stop sky[3] = {
+      {0, ui::hex(0x07080d)}, {0.7f, ui::hex(0x2a1012)}, {1, ui::hex(0x521a14)}};
+  b.rect = {0, 0, fw, fh * 0.78f};
+  b.fill = ui::linear(0, 0, 0, b.rect.h, sky, 3);
+  dl.box(b);
+  dl.rect({0, fh * 0.78f, fw, fh * 0.22f}, ui::hex(0x050404));
+  const float r = std::min(fw, fh) * 0.07f;
+  dl.rect({fw * 0.68f - r, fh * 0.6f - r, 2 * r, 2 * r}, ui::hex(0x8a2a1c), r);
+  ui::Image img = ui::make_image(w, h, ui::hex(0x000000));
+  ui::render(dl, img);
+  return img;
+}
+
+// The lobby's look for `v` (its screen when `page`, else the banner on the map) over its backdrop.
+gl::Picture panel_picture(const shooters_edge::hud::LobbyView& v, int w, int h, bool page) {
+  ui::DrawList dl;
+  dl.begin(w, h);
+  if (page)
+    shooters_edge::hud::draw_lobby_page(dl, v, w, h);
+  else
+    shooters_edge::hud::draw_lobby(dl, v, w, h);
+  ui::Image img = page ? night(w, h) : backdrop(w, h);
   ui::render(dl, img);
   gl::Picture p;
   p.width = img.width, p.height = img.height, p.rgba = std::move(img.rgba);
@@ -81,7 +110,7 @@ gl::Picture panel_picture(const shooters_edge::hud::LobbyView& v, int w, int h) 
 
 float frags(const cl::Listen& l, int slot) {
   return ge::progs::as_float(
-      *ge::progs::entity_field(l.server->q.vm, slot + 1, ge::progs::kFFrags));
+      *ge::progs::entity_field(sv::qc_of(*l.rules)->q.vm, slot + 1, ge::progs::kFFrags));
 }
 
 struct Step {
@@ -101,7 +130,7 @@ void run(gl::Lab& lab) {
     return;
   }
   cl::Listen l;
-  cl::ListenOptions opt;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.console = {"deathmatch 1", "fraglimit 30", "timelimit 10"};
   opt.player = "player";
   opt.lobby = true;
@@ -123,16 +152,23 @@ void run(gl::Lab& lab) {
   }
 
   const Step steps[] = {
-      {1.0, "lobby", "warmup",
-       "The warmup: three bots seated and ready as they joined, the player not yet. The banner "
-       "says 3 of 4 ready and the keys; the roster has both teams, the player's row lit, the host "
-       "tagged."},
-      {4.0, "team switch", "switched",
-       "After `team switch` (F2): the player has moved from red to blue."},
+      {1.0, "lobby", "lobby",
+       "The lobby's screen, before the player joins the warmup: three bots seated, ready and "
+       "already fighting in the warmup, the player on this screen (IN LOBBY) and not ready. The "
+       "head says 3 of 4 ready; the keys run along the foot, F4 lit."},
+      {2.0, "warmup", "warmup",
+       "After `warmup` (F4): the player is on the map, the lobby's screen gone; only the banner "
+       "is left, 3 of 4 ready, F1 and F4 named."},
+      {4.0, "team switch", "", ""},
+      {5.0, "sitout", "switched",
+       "After `team switch` (F2) and `sitout` (F4 on the map): back on the lobby's screen, the "
+       "player now on blue, the frags the warmup scored beside every name."},
       {6.0, "ready", "countdown",
-       "After `ready` (F1): everyone is ready, so the countdown runs, its seconds large."},
+       "After `ready` (F1) on the lobby's screen: everyone is ready, so the countdown runs, its "
+       "seconds large; the player will be put on the map when it runs out."},
       {7.5, "break", "break",
        "After `break` (F1 again): the countdown stopped, back to warmup, the player not ready."},
+      {8.0, "warmup", "", ""},
       {10.0, "ready", "", ""},
   };
   const double tic = cl::listen_tic(l);
@@ -140,7 +176,7 @@ void run(gl::Lab& lab) {
   sh::MoveCmd cmd;
   cmd.forward = 200;
   size_t next = 0;
-  int frame = 0, match_frame = -1, after_match = 0;
+  int frame = 0, match_frame = -1, after_match = 0, lobby_frames = 0;
   const int match_frames = static_cast<int>(match_s / tic);
   // Over time: the ready count, every player's frags; from above: each one's path.
   std::vector<gl::Trace> frag_lines(kPlayers);
@@ -156,17 +192,19 @@ void run(gl::Lab& lab) {
            l.server->sv.time - t0 >= steps[next].at_s) {
       cl::listen_lobby(l, steps[next].line);
       if (*steps[next].shot) {
+        const bool page = cl::on_lobby_screen(l);
         for (const auto& [w, h] : {std::pair{1280, 720}, std::pair{390, 844}}) {
-          const shooters_edge::hud::LobbyView v =
-              cl::lobby_view(*l.room, l.server->sv.time, 0, true);
+          const shooters_edge::hud::LobbyView v = cl::listen_lobby_view(l);
           const std::string size = std::to_string(w) + "x" + std::to_string(h);
           lab.shot({std::string("panel-") + steps[next].shot + "-" + size,
                     std::string("THE LOBBY, ") + steps[next].shot + ", AT " + size,
                     steps[next].caption,
-                    "the banner's count and keys, the teams' rows and their marks, nothing off "
-                    "the screen or under another",
+                    page ? "the head's phase and count, both teams' rows with where each player "
+                           "is, frags and ready, the keys along the foot, nothing off the screen "
+                           "or under another"
+                         : "the banner's count and keys alone over the game, no roster",
                     {{"viewport", size}, {"after", steps[next].line}}},
-                   panel_picture(v, w, h));
+                   panel_picture(v, w, h, page));
         }
       }
       next++;
@@ -185,9 +223,11 @@ void run(gl::Lab& lab) {
       for (int s = 0; s < kPlayers; s++) start_frags += frags(l, s);
     }
     if (match_frame >= 0) after_match++;
+    if (match_frame < 0 && cl::on_lobby_screen(l)) lobby_frames++;
     for (int s = 0; s < kPlayers; s++) {
       const sh::Vec3f p = l.server->sv.edicts[static_cast<size_t>(s) + 1].origin;
-      if (frame % 10 == 0) (match_frame < 0 ? warm_paths : match_paths)[s].push_back(p);
+      if (frame % 10 == 0 && l.server->clients[s].active)  // on the map, not the lobby's screen
+        (match_frame < 0 ? warm_paths : match_paths)[s].push_back(p);
       frag_lines[s].x.push_back(t);
       frag_lines[s].y.push_back(frags(l, s));
       if (match_frame < 0) warm_frags = std::max(warm_frags, frags(l, s));
@@ -210,7 +250,7 @@ void run(gl::Lab& lab) {
     if (p.find("ready") != std::string::npos || p.find("team") != std::string::npos ||
         p.find("countdown") != std::string::npos || p.find("match") != std::string::npos ||
         p.find("joins") != std::string::npos || p.find("lobby") != std::string::npos ||
-        p.find("  ") == 0)
+        p.find("warmup") != std::string::npos || p.find("  ") == 0)
       timeline.rows.push_back({p});
   lab.table(timeline);
   const double match_at = match_frame * tic;
@@ -218,6 +258,7 @@ void run(gl::Lab& lab) {
   lab.metric("countdowns-stopped", lobby.stopped, "count");
   lab.metric("matches", lobby.matches, "count");
   lab.metric("warmup.frames", match_frame, "frames");
+  lab.metric("warmup.player-on-lobby-screen", lobby_frames, "frames");
   lab.metric("warmup.most-frags", warm_frags, "frags");
   lab.metric("match.frags-at-start", start_frags, "frags");
   lab.metric("match.frags-at-end", end_frags, "frags");
@@ -239,9 +280,10 @@ void run(gl::Lab& lab) {
     const gl::Chart chart = gl::line_chart(c);
     sl::shoot(lab, "timeline", chart,
               "Every player's frags and the count of ready players by server time. The bots are "
-              "ready from the start (3), the player's ready makes 4 and the countdown runs, his "
-              "break stops it, his second ready runs it out, and the map restarts: every line of "
-              "frags drops to 0 and the match's own count begins.",
+              "ready from the start (3) and fight in the warmup while the player is on the "
+              "lobby's screen; his ready makes 4 and the countdown runs, his break stops it, his "
+              "second ready runs it out, and the map restarts: every line of frags drops to 0 "
+              "and the match's own count begins.",
               "the ready count's steps at the script's words; every frag line at 0 at the match "
               "mark; frags rising again only after it",
               in);
@@ -269,9 +311,9 @@ void run(gl::Lab& lab) {
       c.traces.push_back(t);
     }
     sl::shoot(lab, part == 0 ? "warmup-above" : "match-above", gl::line_chart(c),
-              part == 0 ? "Every player's origin every tenth frame of the warmup: the player's "
-                          "slow circle and the bots roaming and fighting over both rooms while "
-                          "nothing counts."
+              part == 0 ? "Every player's origin every tenth frame of the warmup he is on the map "
+                          "for: the player's slow circle and the bots roaming and fighting over "
+                          "both rooms while nothing counts."
                         : "The same after the map restarted for the match: everyone from a "
                           "spawn point again.",
               "the lines inside the walls; in the match every line starting at a spawn", in);

@@ -15,7 +15,13 @@
 include_guard(GLOBAL)
 include(GNUInstallDirs)
 
-option(GE_CLI "Build the ge command line (engine/cli)" ON)
+# Off with the other host tools (CMakeLists.txt's GE_HOST_TOOLS: a mobile target).
+if(NOT DEFINED GE_HOST_TOOLS OR GE_HOST_TOOLS)
+  set(ge_cli_default ON)
+else()
+  set(ge_cli_default OFF)
+endif()
+option(GE_CLI "Build the ge command line (engine/cli)" ${ge_cli_default})
 
 function(ge_add_cli)
   if(NOT GE_CLI)

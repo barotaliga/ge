@@ -10,6 +10,7 @@
 #include <string>
 
 #include "console/cvar.hpp"
+#include "shooter/usercmd.hpp"
 
 namespace shooters_edge::client {
 
@@ -22,22 +23,36 @@ bool held(const ge::input::InputState& in, uint16_t k) { return ge::input::key_h
 
 bool down(const ge::console::Button* b) { return b != nullptr && b->down(); }
 
-// The default layout: a key, the command it runs.
+// The default layout: a key, the command it runs (+voip talks on a server joined:
+// net/classic_remote.hpp; screenshot: engine/capture/screenshot.hpp).
 constexpr const char* kDefaults[][2] = {
-    {"w", "+forward"},          {"s", "+back"},
-    {"a", "+moveleft"},         {"d", "+moveright"},
-    {"up", "+forward"},         {"down", "+back"},
-    {"left", "+left"},          {"right", "+right"},
-    {",", "+moveleft"},         {".", "+moveright"},
-    {"space", "+jump"},         {"mouse1", "+attack"},
-    {"ctrl", "+attack"},        {"mouse2", "+jump"},
-    {"shift", "+speed"},        {"alt", "+strafe"},
-    {"1", "impulse 1"},         {"2", "impulse 2"},
-    {"3", "impulse 3"},         {"4", "impulse 4"},
-    {"5", "impulse 5"},         {"6", "impulse 6"},
-    {"7", "impulse 7"},         {"8", "impulse 8"},
-    {"mwheelup", "impulse 10"}, {"mwheeldown", "impulse 10"},
-    {"f12", "screenshot"},  // engine/capture/screenshot.hpp
+    {"w", "+forward"},
+    {"s", "+back"},
+    {"a", "+moveleft"},
+    {"d", "+moveright"},
+    {"up", "+forward"},
+    {"down", "+back"},
+    {"left", "+left"},
+    {"right", "+right"},
+    {",", "+moveleft"},
+    {".", "+moveright"},
+    {"space", "+jump"},
+    {"mouse1", "+attack"},
+    {"ctrl", "+attack"},
+    {"mouse2", "+jump"},
+    {"alt", "+strafe"},
+    {"1", "impulse 1"},
+    {"2", "impulse 2"},
+    {"3", "impulse 3"},
+    {"4", "impulse 4"},
+    {"5", "impulse 5"},
+    {"6", "impulse 6"},
+    {"7", "impulse 7"},
+    {"8", "impulse 8"},
+    {"mwheelup", "impulse 10"},
+    {"mwheeldown", "impulse 10"},
+    {"v", "+voip"},
+    {"f12", "screenshot"},
 };
 
 }  // namespace
@@ -75,6 +90,16 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
                             "+strafe held does)",
                     .kind = ge::console::CvarKind::boolean},
                    &c.lookstrafe);
+  con.cvars().bind({.name = "in_mouse_release",
+                    .fallback = "5",
+                    .flags = ge::console::kArchive,
+                    .help = "what frees the mouse while the window has the focus (it is taken "
+                            "the moment the window gets it): 1 the console, 2 a menu (its pointer "
+                            "then hovers and clicks), 4 a demo's play bar; add them (0: never)",
+                    .kind = ge::console::CvarKind::integer,
+                    .min = 0,
+                    .max = 7},
+                   &c.mouse_release);
   con.cvars().bind({.name = "cl_yawspeed",
                     .fallback = "140",
                     .flags = ge::console::kArchive,
@@ -88,8 +113,15 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
   b.moveleft = &con.add_button("moveleft", "+moveleft: step left while held");
   b.moveright = &con.add_button("moveright", "+moveright: step right while held");
   b.jump = &con.add_button("jump", "+jump: jump (and swim up) while held");
-  b.attack = &con.add_button("attack", "+attack: fire while held");
-  b.speed = &con.add_button("speed", "+speed: walk while held (run with cl_run 0)");
+  b.attack = &con.add_button(
+      "attack", "+attack: fire while held (cl_quickweapon 1: the best of cl_quickweapon_prio)");
+  b.attack2 = &con.add_button(
+      "attack2", "+attack2: fire the best of cl_quickweapon_prio2 while held, then switch back");
+  add_quick_cvars(con, c.quick);
+  b.moveup = &con.add_button("moveup", "+moveup: swim up while held");
+  b.movedown = &con.add_button("movedown",
+                               "+movedown: swim down while held (crouches in a move that ducks)");
+  b.speed = &con.add_button("speed", "+speed: walk while held (run with cl_run 0); unbound");
   b.strafe = &con.add_button("strafe", "+strafe: the mouse and the turn keys sidestep while held");
   b.left = &con.add_button("left", "+left: turn left while held (cl_yawspeed)");
   b.right = &con.add_button("right", "+right: turn right while held (cl_yawspeed)");
@@ -116,8 +148,11 @@ Moves button_moves(ControlSettings& c) {
   m.back = down(b.back);
   m.moveleft = down(b.moveleft);
   m.moveright = down(b.moveright);
+  m.moveup = down(b.moveup);
+  m.movedown = down(b.movedown);
   m.jump = down(b.jump);
   m.attack = down(b.attack);
+  m.attack2 = down(b.attack2);
   m.speed = down(b.speed);
   m.strafe = down(b.strafe);
   m.left = down(b.left);
@@ -129,8 +164,8 @@ Moves button_moves(ControlSettings& c) {
 
 void release_buttons(ControlSettings& c) {
   ControlButtons& b = c.buttons;
-  for (ge::console::Button* p : {b.forward, b.back, b.moveleft, b.moveright, b.jump, b.attack,
-                                 b.speed, b.strafe, b.left, b.right})
+  for (ge::console::Button* p : {b.forward, b.back, b.moveleft, b.moveright, b.moveup, b.movedown,
+                                 b.jump, b.attack, b.speed, b.strafe, b.left, b.right, b.attack2})
     if (p != nullptr) p->held = 0;
   b.impulse = 0;
 }
@@ -181,7 +216,8 @@ void turn_view(const ge::input::InputState& in, const ControlSettings& c,
 ge::shooter::MoveCmd read_controls(const Moves& m, const ge::input::InputState& in,
                                    const ControlSettings& c) {
   ge::shooter::MoveCmd cmd;
-  // cl_run on: run, +speed walks; off: walk, +speed runs. Walking is half the run.
+  // cl_run on (the default): run, +speed (bound to no key) walks; off: walk, +speed runs. Walking
+  // is half the run. Nobody walks: no key is bound to +speed.
   const bool run = c.run != m.speed;
   const int fs = run ? c.forward_speed : c.forward_speed / 2;
   const int ss = run ? c.side_speed : c.side_speed / 2;
@@ -198,9 +234,14 @@ ge::shooter::MoveCmd read_controls(const Moves& m, const ge::input::InputState& 
     const double side = in.mouse.dx * c.sensitivity * c.strafe_scale;
     s = std::clamp(s + static_cast<int>(side), -c.side_speed, c.side_speed);
   }
+  // Up and down: swimming in the classic move (bound to no key; SPACE swims up); down crouches in
+  // a move that ducks (the sequel's, plugins/shooter/sequel_move.hpp: up below 0 on the ground).
+  const int us = run ? c.up_speed : c.up_speed / 2;
+  const int u = (m.moveup ? us : 0) - (m.movedown ? us : 0);
   cmd.forward = static_cast<int16_t>(f);
   cmd.side = static_cast<int16_t>(s);
-  if (m.attack) cmd.buttons |= ge::shooter::kButtonAttack;
+  cmd.up = static_cast<int16_t>(u);
+  if (m.attack || m.attack2) cmd.buttons |= ge::shooter::kButtonAttack;
   if (m.jump) cmd.buttons |= ge::shooter::kButtonJump;
   cmd.impulse = static_cast<uint8_t>(m.impulse);
   return cmd;

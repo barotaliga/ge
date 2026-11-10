@@ -9,6 +9,7 @@
 //
 // ge:summary Tests: the classic player move's own bits per scenario, the split and still types
 // ge:keywords test pmove golden digest determinism run_command split none lock dead landing
+// ge:keywords pm_speedjump
 // ge:skill shooter testing
 #include <cstdio>
 #include <cstdlib>
@@ -249,4 +250,27 @@ TEST(a_spectator_flies_through_the_floor) {
   CHECK(s.origin.z < -24);
   CHECK(s.ground == -1);
   CHECK(sh::length(s.velocity) <= set.spectatormaxspeed + 0.01f);
+}
+
+// pm_speedjump is the server's word to a client's easy jump (speedjump_assist.hpp): the move never
+// reads it, so forward and jump held stay the classic move to the bit at any value.
+TEST(the_move_never_reads_pm_speedjump) {
+  Flat flat;
+  sh::MoveSettings off, on;
+  on.speedjump = 1;
+  sh::MoveState a = standing(), b = standing();
+  sh::MoveCmd cmd;
+  cmd.msec = 13;
+  cmd.forward = 400;
+  cmd.buttons = sh::kButtonJump;
+  int jumps = 0;
+  for (int i = 0; i < 4 * 77; i++) {
+    const float rising = a.velocity.z;
+    sh::player_move(a, cmd, off, flat.sw.world);
+    sh::player_move(b, cmd, on, flat.sw.world);
+    if (a.velocity.z > 200 && rising < 100) jumps++;
+  }
+  CHECK(same_bits(a, b));
+  CHECK(jumps == 1);  // a held jump does not hop again
+  CHECK(sh::root_of(a.velocity.x * a.velocity.x + a.velocity.y * a.velocity.y) <= 320.01f);
 }

@@ -14,6 +14,7 @@
 #include <array>
 #include <atomic>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "audio/dsp.hpp"
@@ -209,6 +210,10 @@ struct Synth::Impl {
   uint32_t next_sample = 1;
   std::atomic<uint32_t> applied_sample{0};
   std::array<std::atomic<uint32_t>, kMaxSamples> sample_ids{};
+  // each slot's recording while it sounds (null: free), for `reads`, and the producer's
+  // sampled voices sent and not yet applied (id, recording), pruned as they apply
+  std::array<std::atomic<const Pcm*>, kMaxSamples> sample_pcms{};
+  std::vector<std::pair<uint32_t, const Pcm*>> sent_samples;
   // the stats, read from any thread
   std::atomic<uint64_t> frames{0};
   std::atomic<uint32_t> voices_live{0}, layers_live{0}, samples_live{0}, stolen{0};
@@ -226,6 +231,14 @@ struct Synth::Impl {
     limit_release = glide_coeff(kLimitReleaseS);
     limit_below = gain_of_db(kLimitThresholdDb - kLimitKneeDb / 2);
     for (auto& f : stream_free) f.store(true, std::memory_order_relaxed);
+    for (auto& p : sample_pcms) p.store(nullptr, std::memory_order_relaxed);
+    sent_samples.reserve(kRingSize);
+  }
+
+  // The producer's sent list without the voices the render side has applied.
+  void prune_sent() {
+    const uint32_t applied = applied_sample.load(std::memory_order_acquire);
+    std::erase_if(sent_samples, [&](const auto& s) { return s.first <= applied; });
   }
 
   bool push(const Command& c) {
@@ -360,6 +373,7 @@ struct Synth::Impl {
     const int64_t start = frame + (c.play.delay_ms > 0 ? frames_of(c.play.delay_ms) : 0);
     begin_sample(s, *c.pcm, c.play, c.id, ++order, c.bus, start);
     // The slot's id before the applied mark, so `sample_live` never sees a gap between them.
+    sample_pcms[static_cast<size_t>(&s - samples.data())].store(c.pcm, std::memory_order_release);
     sample_ids[static_cast<size_t>(&s - samples.data())].store(c.id, std::memory_order_relaxed);
     applied_sample.store(c.id, std::memory_order_release);
   }
@@ -695,6 +709,8 @@ struct Synth::Impl {
       }
       sounding += s.live;
       sample_ids[k].store(s.live ? s.id : 0, std::memory_order_relaxed);
+      // Released after the block read it: the producer that sees null may free the recording.
+      sample_pcms[k].store(s.live ? s.pcm : nullptr, std::memory_order_release);
     }
     samples_live.store(sounding, std::memory_order_relaxed);
     for (int k = 0; k < kMaxStreams; k++)
@@ -851,7 +867,9 @@ SampleId Synth::sample(const Pcm& pcm, const SamplePlay& play, int bus) {
   c.id = impl_->next_sample;
   c.pcm = &pcm;
   c.play = play;
+  impl_->prune_sent();
   if (!impl_->push(c)) return SampleId{};
+  impl_->sent_samples.emplace_back(c.id, &pcm);
   if (++impl_->next_sample == 0) impl_->next_sample = 1;
   return SampleId{c.id};
 }
@@ -933,6 +951,15 @@ bool Synth::sample_live(SampleId id) const {
   for (const std::atomic<uint32_t>& s : impl_->sample_ids) {
     if (s.load(std::memory_order_relaxed) == id.id) return true;
   }
+  return false;
+}
+
+bool Synth::reads(const Pcm& pcm) const {
+  impl_->prune_sent();
+  for (const auto& s : impl_->sent_samples)
+    if (s.second == &pcm) return true;
+  for (const std::atomic<const Pcm*>& p : impl_->sample_pcms)
+    if (p.load(std::memory_order_acquire) == &pcm) return true;
   return false;
 }
 

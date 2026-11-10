@@ -1,18 +1,20 @@
-// THE CLASSIC PROTOCOL'S SERVER ENDPOINT: the mod server (games/shooters_edge/server/qc_server.hpp)
-// served to clients that speak the classic protocol, over engine/net's transport (a UDP socket or
-// the simulated network). It owns no game rules: a client's moves become the loop's packets, its
-// string commands the mod's, and what the mod writes (messages.hpp) becomes svc messages.
+// THE CLASSIC PROTOCOL'S SERVER ENDPOINT: a game's rules, held as a runner
+// (games/shooters_edge/server/rules_runner.hpp), served to clients that speak the classic protocol,
+// over engine/net's transport (a UDP socket or the simulated network). It owns no game rules: a
+// client's moves become the loop's packets, its string commands the mod's, and what the mod writes
+// (messages.hpp) becomes svc messages.
 //
 // ONE FRAME (`classic_frame`, called once a server frame with the network's time): every datagram
-// waiting is read (out of band: ping, status, getchallenge, connect, the rest answered or ignored
-// as docs/shooters-edge.md § The network says; in band: the channel by address and qport, then
-// its clc messages in order, a client that sends an unknown one dropped); the spawned clients'
-// moves run as one packet each in `qc_frame`; what the mod wrote is routed (prints, sounds, stuffed
-// text, light styles, effects as temporary entities, static entities and sounds, multicasts, the
-// Write buffers, pauses); then every client the server heard from since its last reply gets one
-// packet when its rate allows (else its choke count grows): the reliable stream's next message,
-// and, once spawned, the choke count, the players it can see, the entities as a delta against the
-// frame it acknowledged (or from the baselines), and the frame's unreliable messages.
+// waiting is read (out of band: ping, status, getchallenge, connect, rcon (classic_admin.hpp), the
+// rest answered or ignored as docs/shooters-edge.md § The network says; in band: the channel by
+// address and qport, then its clc messages in order, a client that sends an unknown one dropped);
+// the spawned clients' moves run as one packet each in the runner's `frame`; what the mod wrote is
+// routed (prints, sounds, stuffed text, light styles, effects as temporary entities, static
+// entities and sounds, multicasts, the Write buffers, pauses); then every client the server heard
+// from since its last reply gets one packet when its rate allows (else its choke count grows): the
+// reliable stream's next message, and, once spawned, the choke count, the players it can see, the
+// entities as a delta against the frame it acknowledged (or from the baselines), and the frame's
+// unreliable messages.
 //
 // THE SIGNON (classic_signon.cpp): `new` (the `pext` step first when the connect named no
 // extension families), `soundlist` and `modellist` in pages, `prespawn` (static entities,
@@ -29,13 +31,16 @@
 // 1/25 within 10..1024 bytes) or, when agreed, chunks of 1024 bytes asked for by number, the first
 // a frame inside the packet and the rest out of band as `\chunk` packets.
 //
+// LOCAL SEATS (`classic_add_local`, a bot): shown to every client as a player, sent nothing, kept
+// over a map change, its moves the game's (`local_moves`). `game_command` sees a client's words
+// before the rules (a lobby's).
+//
 // VOICE (`ServerConfig::voice`): the x2 family's voice bit offered, and each voice message a
 // client sends (clc 83, at most `kMostVoiceBytes`) relayed as svc 84 with the talker's slot to the
 // clients that agreed the bit and may hear it: by `voice_route`, everyone, or only the players
-// whose user info names the talker's `team` (a talker with no team is heard by nobody on that
-// route); a talker never gets his own back. With a multiview recording running
-// (`ClassicServer::mvd`, classic_record.hpp), every relayed message goes into it too, whoever heard
-// it.
+// whose `team` is the talker's (in a free-for-all, nobody's: everyone); never his own back. A
+// listen server's own player hears through `local_voice` and talks by `classic_local_voice`. A
+// multiview recording running (`ClassicServer::mvd`) gets every relayed message, whoever heard it.
 //
 // LAG COMPENSATION (`ServerConfig::antilag`, classic_antilag.hpp): each player's origins are kept
 // with their server times; a hitscan trace a mod marks lagged sees the other players where the
@@ -49,8 +54,9 @@
 // ge:keywords classic-server endpoint connectionless challenge connect signon serverdata
 // ge:keywords prespawn baselines spawn begin skins download chunked packet-entities playerinfo
 // ge:keywords stats choke rate ping user-info server-info classic_start classic_frame
-// ge:keywords classic_change map-change changing reconnect
+// ge:keywords classic_change map-change changing reconnect classic_add_local local-seat bots
 // ge:keywords verify_move_checksum antilag status voice voice-relay team-voice voice_route mvd
+// ge:keywords sv_timeout timed-out flood-protection sv_floodprot chat-flood most-players
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_server_test.cpp
 #pragma once
@@ -61,14 +67,16 @@
 
 #include "core/prng.hpp"
 #include "net/transport.hpp"
+#include "server/guards.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
 #include "shooters_edge/net/classic_channel.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
-#include "shooters_edge/server/qc_server.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::net {
 
 namespace sv = shooters_edge::server;
+namespace gs = ge::server;
 
 struct MultiviewRecorder;
 
@@ -85,8 +93,16 @@ struct ServerConfig {
   std::string hostname = "Shooter's Edge";
   std::string gamedir = "edge";  // the game directory serverdata names
   std::string password, spectator_password;
+  std::string rcon_password;  // the remote console's (classic_admin.hpp; empty: none offered)
   bool verify_move_checksum = true;  // false: moves are accepted unchecked (and counted)
   int maxrate = 0;                   // sv_maxrate: a client's rate cap, bytes/s (0: none)
+  int maxfps = 77;                   // maxfps: the moves a second clients are told they may send
+  // THE GUARDS (never on a local seat): a client unheard for `timeout_s` is dropped and everyone
+  // told "<name> timed out"; a `say` or `say_team` past the flood rule (engine/server/guards.hpp)
+  // is dropped and only its sender told why.
+  double timeout_s = 65;  // sv_timeout
+  gs::FloodRule flood;    // sv_floodprot
+  std::string flood_msg;  // sv_floodprotmsg: what a flooder is told ("": the silence)
   bool allow_download = true, allow_skins = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true, allow_other = false;
   std::vector<ServedFile> files;
@@ -96,6 +112,8 @@ struct ServerConfig {
   bool voice = false;  // offer the voice bit and relay voice
   VoiceRoute voice_route = VoiceRoute::team;
   uint32_t seed = 1;  // the challenges' stream
+  // Players at most, the game's local seats counted (0: the loop's slots): a coop game's eight.
+  int most_players = 0;
 };
 
 enum class ConnState : uint8_t { free, connected, spawned };
@@ -124,7 +142,7 @@ struct ClassicClient {
   std::string userinfo, name;
   int userid = 0;
   bool spectator = false;
-  bool qc_active = false;  // the mod placed the player (after `begin`)
+  bool rules_active = false;  // the mod placed the player (after `begin`)
   Ext ext;
   Coords coords = Coords::shorts;
   bool need_pext = false;
@@ -144,6 +162,9 @@ struct ClassicClient {
   std::vector<uint8_t> datagram;  // this frame's unreliable messages
   uint64_t moves = 0, moves_unchecked = 0, moves_bad_checksum = 0;
   int statics_sent = 0;  // static entities the client has (signon and later)
+  bool local = false;    // a seat the game plays in its own process (a bot): no address, no packets
+  int frags_told = 0;    // the frags every client was last sent
+  gs::FloodGuard flood;  // its chat lines' times and its silence
 };
 
 struct ServerCounts {
@@ -152,6 +173,8 @@ struct ServerCounts {
   int64_t effects_dropped = 0, events = 0;
   int64_t mod_bytes_dropped = 0;  // a mod's raw bytes that did not read as whole messages
   int64_t voice_in = 0, voice_out = 0, voice_refused = 0, voice_dropped = 0;
+  int64_t chat_flooded = 0;                // say and say_team lines dropped by the flood rule
+  int64_t rcon_run = 0, rcon_refused = 0;  // remote console lines run; refused or not answered
 };
 
 struct Challenge {
@@ -162,7 +185,8 @@ struct Challenge {
 
 struct ClassicServer {
   ServerConfig cfg;
-  sv::QcServer* qc = nullptr;
+  const sv::RulesRunner* rules = nullptr;  // the rules served (their map started)
+  sv::RulesCommon* game = nullptr;         // what every runner keeps: `*rules`'s
   gn::Transport* transport = nullptr;
   ClassicClient clients[sh::kMaxClients];
   Challenge challenges[64];
@@ -170,6 +194,8 @@ struct ClassicServer {
   ge::core::Rng rng{1};
   int spawncount = 1;
   int next_userid = 1;
+  int64_t rcon_second = -1;  // the second (network time) the rcon tries are counted in
+  int rcon_tries = 0;
   std::string serverinfo;
   std::vector<EntityState> baselines;  // by entity number
   struct StaticSound {
@@ -191,15 +217,49 @@ struct ClassicServer {
   bool lag_moved[sh::kMaxClients] = {};
   int64_t lag_rewinds = 0;
   MultiviewRecorder* mvd = nullptr;  // a multiview recording running (classic_record.hpp)
+  // A client's string command the game sees before the rules (a lobby's words): true takes it.
+  bool (*game_command)(void* ctx, int slot, const std::string& line) = nullptr;
+  void* game_ctx = nullptr;
+  std::vector<sh::Packet> local_moves;  // the local seats' moves for the next frame (the game's)
+  // A listen server's own player, a local seat: the rules' frame handed to the game before the
+  // endpoint routes its events (what the player sees and hears), and the lines printed to a local
+  // seat (the lobby's answers), which no packet carries.
+  void (*local_tap)(void* ctx, const sv::RulesCommon& game) = nullptr;
+  void (*local_print)(void* ctx, int slot, const std::string& text) = nullptr;
+  // A voice relayed to a listen server's own player (`slot`, a local seat that is no bot), which
+  // no packet carries: `v` the voice message as a client would read it (its talker in ints[0]).
+  void (*local_voice)(void* ctx, int slot, const SvcMsg& v) = nullptr;
+  void* local_ctx = nullptr;
+  // A game that seats its players itself (a campaign, which carries them from map to map): a
+  // client's `begin` and its drop go to it in place of the rules' connect and drop.
+  void (*seat)(void* ctx, int slot, const std::string& name, bool spectator) = nullptr;
+  void (*unseat)(void* ctx, int slot) = nullptr;
+  void* seat_ctx = nullptr;
 };
 
-// Serves `qc` (its map already loaded) over `t`. False with `error` when it cannot.
-bool classic_start(ClassicServer& s, sv::QcServer& qc, gn::Transport& t, const ServerConfig& cfg,
-                   std::string& error);
+// Serves `rules` (its map already started) over `t`. False with `error` when it cannot.
+bool classic_start(ClassicServer& s, const sv::RulesRunner& rules, gn::Transport& t,
+                   const ServerConfig& cfg, std::string& error);
 // The endpoint moves to `next` (its map loaded; the server before it is no longer read and may
 // go): every client is told the map is changing and to sign on again (`reconnect`), and the
 // next signon is the new map's. False with `error` when `next` has no map.
-bool classic_change(ClassicServer& s, sv::QcServer& next, std::string& error);
+bool classic_change(ClassicServer& s, const sv::RulesRunner& next, std::string& error);
+// The endpoint lets go of the rules it serves before the game destroys them in place (a campaign's
+// next map is made where the last one was): nothing reads them until `classic_change`.
+void classic_unbind(ClassicServer& s);
+// A seat the game plays in its own process at `slot` (a bot it connected to the rules itself):
+// shown to every client as a player (`*bot` in its user info), sent nothing, never timed out, kept
+// over a map change (the game connects it to the next map's rules), its moves `local_moves`.
+// False with `error` when the slot is a client's. `bot` false: a listen server's own player.
+bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std::string& error,
+                       bool bot = true);
+// A listen server's own player talking (`slot` a local seat that is no bot): his voice message
+// relayed as a client's is, by `voice_route`, when the server has voice (`ServerConfig::voice`).
+void classic_local_voice(ClassicServer& s, int slot, const ClcMsg& m);
+// One key of a seat's user info set, told to every client and to the rules (a lobby's team).
+void classic_set_info(ClassicServer& s, int slot, const std::string& key, const std::string& value);
+// A line printed to every spawned client.
+void classic_print_all(ClassicServer& s, const std::string& text);
 // One server frame at the network's time `now_us`.
 void classic_frame(ClassicServer& s, int64_t now_us);
 // Drops a client with a reason (it is told with a disconnect).

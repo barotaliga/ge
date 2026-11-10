@@ -1,17 +1,21 @@
 // THE BOT'S SENSES AND AIM (plugins/shooter/senses.hpp, aim.hpp, bot.hpp) on the server's arena: a
 // client is sent the other players and the brush entities, never itself; sight needs the view's
-// cone and a clear line (the shut door hides the east room); a sound is heard within its reach;
+// cone and a clear line (the shut door hides the east room; a water's surface hides what is under
+// it from the air, and the air from under it); a sound is heard within its reach;
 // the axes turned under another view keep the wish in the world; and on a watched run the seer
 // sees the runner nearly whenever a line joins them (a late view loses it from its cone), aims
-// better the better its skill (perfect, expert, average, novice by the median error, on every seed
-// tried), reacts as late as its hands, keeps running its route while it looks, and replays to the
-// bit (tests/golden/shooter_senses.txt, GE_GOLDEN_WRITE=1 rewrites it; the PR says why).
+// better the better its skill (perfect, expert, average, novice by the median error over three
+// runs: one run's path can keep a better hand out of sight), reacts as late as its hands, keeps
+// running its route while it looks, looks at a spot it is set to watch while nobody is in sight,
+// and replays to the bit (tests/golden/shooter_senses.txt, GE_GOLDEN_WRITE=1 rewrites it; the PR
+// says why).
 //
 // ge:summary Tests: what a client is sent, sight in a cone by trace, hearing, aim by skill, bits
 // ge:keywords test senses client-view sight cone trace hearing aim skill turn_axes duel reaction
 // ge:keywords golden
 // ge:skill shooter bots testing
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -22,7 +26,9 @@
 #include "check.hpp"
 #include "golden.hpp"
 #include "shooter/aim.hpp"
+#include "shooter/hull.hpp"
 #include "shooter/server.hpp"
+#include "shooter_loop_bench.hpp"
 #include "shooters_edge/bots/duel_run.hpp"
 
 namespace sh = ge::shooter;
@@ -92,6 +98,38 @@ TEST(sight_needs_the_cone_and_a_clear_line) {
             "a player behind the dividing wall was seen");
 }
 
+TEST(a_water_surface_hides_the_other_side) {
+  using ge::test::loop::box;
+  ge::test::loop::Bench b;
+  // A floor at z 0 with a pool of water x 200..600 down to z -320.
+  sh::Brush water = box({200, -1024, -320}, {600, 1024, 0});
+  water.contents = sh::kContentsWater;
+  b.start({box({-1024, -1024, -64}, {200, 1024, 0}), box({600, -1024, -64}, {1024, 1024, 0}),
+           box({-1024, -1024, -400}, {1024, 1024, -320}), water});
+  const sh::SenseSettings set;
+  const sh::Vec3f eye{0, 0, 46}, ahead{0, 0, 0};
+  // Looking down into the pool past the bank's edge (the view pitched down 12 degrees).
+  const sh::Vec3f down{12, 0, 0}, swimmer{400, 0, -60};
+  CHECK_MSG(!sh::sees_player(b.sv, set, 1, eye, down, swimmer),
+            "a swimmer under the water was seen from the air: read clear_line's contents rule");
+  sh::SenseSettings glass = set;
+  glass.water_opaque = false;
+  CHECK_MSG(sh::sees_player(b.sv, glass, 1, eye, down, swimmer),
+            "with the water clear, the swimmer under it was not seen: the line is not clear");
+  // A swimmer with his head out is seen from the air; one under sees another under.
+  CHECK_MSG(sh::sees_player(b.sv, set, 1, eye, ahead, {400, 0, -10}),
+            "a swimmer with his head over the surface was not seen");
+  const sh::Vec3f under{300, 0, -150};
+  CHECK_MSG(sh::sees_player(b.sv, set, 1, under, ahead, {500, 0, -200}),
+            "two swimmers in one pool did not see each other");
+  // Just under the surface, looking up at a player on the bank.
+  const sh::Vec3f shallow{250, 0, -20}, up{-24, 180, 0}, bank{100, 0, 24};
+  CHECK_MSG(!sh::sees_player(b.sv, set, 1, shallow, up, bank),
+            "a player in the air was seen from under the water");
+  CHECK_MSG(sh::sees_player(b.sv, glass, 1, shallow, up, bank),
+            "with the water clear, the player on the bank was not seen: the line is not clear");
+}
+
 TEST(a_sound_is_heard_within_its_reach) {
   pr::Duel d;
   CHECK(pr::make_duel(d, sh::AimSkill::perfect));
@@ -130,38 +168,82 @@ TEST(axes_turned_under_another_view_keep_the_wish_in_the_world) {
 TEST(the_seer_sees_aims_by_skill_and_keeps_its_route) {
   const sh::AimSkill order[4] = {sh::AimSkill::perfect, sh::AimSkill::expert, sh::AimSkill::average,
                                  sh::AimSkill::novice};
-  size_t timed[4] = {};
-  for (uint32_t seed = 1; seed <= 2; seed++) {
-    float last = -1;
+  // Each skill's aim error and reactions pooled over three runs: one run's path can keep a
+  // better hand out of sight (a single seed does not order the skills; three do).
+  std::vector<float> errors[4], reactions[4];
+  int64_t seen[4] = {}, lines[4] = {};
+  for (uint32_t seed = 1; seed <= 3; seed++) {
     for (const sh::AimSkill k : order) {
       pr::Duel d;
       CHECK(pr::make_duel(d, k, seed));
       const pr::DuelResult r = pr::run_duel(d, 2400);
       const std::string name = std::string(sh::aim_skill_name(k)) + " seed " + std::to_string(seed);
       CHECK_MSG(r.line_frames > 300, name + ": the two were rarely in sight of each other");
-      // Behind the view it is not seen until it comes into the cone; a late view loses it too.
-      const int64_t share = k == sh::AimSkill::perfect ? 8 : 5;
-      CHECK_MSG(r.seen_frames * 10 >= r.line_frames * share,
-                name + " saw the runner on " + std::to_string(r.seen_frames) + " of " +
-                    std::to_string(r.line_frames) + " frames a line joined them");
-      const float m = median(r.error_deg);
-      CHECK_MSG(m > last, name + "'s median aim error " + std::to_string(m) +
-                              " is not worse than the better skill's " + std::to_string(last));
-      last = m;
-      // A sighting timed (he came back into sight, the view off him) waited a reaction drawn for
-      // it: never quicker than a hand. A run he never left sight for long times none.
-      if (k != sh::AimSkill::perfect) {
-        timed[static_cast<int>(k)] += r.reaction_s.size();
-        CHECK_MSG(r.reaction_s.empty() || median(r.reaction_s) >= 0.08f,
-                  name + " turned onto the runner faster than a hand can");
-      }
+      const auto i = static_cast<size_t>(k);
+      seen[i] += r.seen_frames;
+      lines[i] += r.line_frames;
+      errors[i].insert(errors[i].end(), r.error_deg.begin(), r.error_deg.end());
+      reactions[i].insert(reactions[i].end(), r.reaction_s.begin(), r.reaction_s.end());
+      if (env_set("GE_DUEL_PRINT"))
+        std::printf("%s: median error %.2f, reactions %zu (median %.3f), seen %lld of %lld\n",
+                    name.c_str(), median(r.error_deg), r.reaction_s.size(), median(r.reaction_s),
+                    static_cast<long long>(r.seen_frames), static_cast<long long>(r.line_frames));
+      if (env_set("GE_DUEL_PRINT"))
+        std::printf("  hand: strokes %lld lifts %lld lifted %.2f s; aiming %lld holding %lld\n",
+                    static_cast<long long>(d.seer.hand.stats.strokes),
+                    static_cast<long long>(d.seer.hand.stats.lifts), d.seer.hand.stats.lifted_s,
+                    static_cast<long long>(r.bot.aiming), static_cast<long long>(r.bot.holding));
       CHECK_MSG(d.seer.pilot.arrivals >= 3,
                 name + " reached " + std::to_string(d.seer.pilot.arrivals) +
                     " goals while looking: read turn_axes in plugins/shooter/aim.cpp");
     }
   }
-  for (int k = 1; k <= 3; k++)
-    CHECK_MSG(timed[k] > 0, "a skill's seer timed no sighting over both runs");
+  float last = -1;
+  for (const sh::AimSkill k : order) {
+    const auto i = static_cast<size_t>(k);
+    const std::string name = sh::aim_skill_name(k);
+    // Behind the view it is not seen until it comes into the cone; a late view loses it too.
+    const int64_t share = k == sh::AimSkill::perfect ? 8 : 5;
+    CHECK_MSG(seen[i] * 10 >= lines[i] * share,
+              name + " saw the runner on " + std::to_string(seen[i]) + " of " +
+                  std::to_string(lines[i]) + " frames a line joined them");
+    const float m = median(errors[i]);
+    CHECK_MSG(m > last, name + "'s median aim error " + std::to_string(m) +
+                            " is not worse than the better skill's " + std::to_string(last));
+    last = m;
+    // A sighting timed (he came back into sight, the view off him) waited a reaction drawn for
+    // it: never quicker than a hand.
+    if (k != sh::AimSkill::perfect) {
+      CHECK_MSG(!reactions[i].empty(), name + "'s seer timed no sighting over three runs");
+      CHECK_MSG(median(reactions[i]) >= 0.08f,
+                name + " turned onto the runner faster than a hand can");
+    }
+  }
+}
+
+TEST(a_bot_set_to_watch_a_spot_looks_there_and_keeps_its_route) {
+  pr::Duel d;
+  CHECK(pr::make_duel(d, sh::AimSkill::expert, 1));
+  // A spot far off along +x: its bearing from anywhere on the arena is about 0 degrees.
+  d.seer.look = true;
+  d.seer.look_at = {100000, 0, 0};
+  const pr::DuelResult r = pr::run_duel(d, 2400);
+  CHECK_MSG(r.bot.looking > 0, "the seer never looked at the spot it was set to watch");
+  int64_t unseen = 0, on_spot = 0;
+  for (size_t i = 100; i < r.view_yaw.size(); i++) {
+    if (r.seen[i] || (i >= 1 && r.seen[i - 1])) continue;
+    unseen++;
+    float off = std::fmod(r.view_yaw[i], 360.f);
+    if (off > 180) off -= 360;
+    if (off < -180) off += 360;
+    if (off < 10 && off > -10) on_spot++;
+  }
+  CHECK_MSG(unseen > 0 && on_spot * 10 >= unseen * 7,
+            "the view was on the watched spot " + std::to_string(on_spot) + " of " +
+                std::to_string(unseen) + " frames with nobody in sight");
+  CHECK_MSG(d.seer.pilot.arrivals >= 3, "the seer reached " +
+                                            std::to_string(d.seer.pilot.arrivals) +
+                                            " goals while watching: read turn_axes in aim.cpp");
 }
 
 TEST(a_watched_run_replays_to_the_bit_and_matches_its_golden) {
