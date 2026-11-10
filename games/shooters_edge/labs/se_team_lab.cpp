@@ -36,6 +36,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -52,6 +53,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/labs/move_study.hpp"
 #include "shooters_edge/net/classic_team.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
@@ -89,6 +91,15 @@ struct View {
 // the air's gain (the last hopping command's speed less the takeoff's), a crash (80 u/s or more
 // lost), a takeoff past 360, chained (the next command jumps again off a landing) or the
 // stretch ended. People hop 36 % of their time; the bots' gap jumps need 420-500 at takeoff.
+// WHY AND WHERE THEY STAND STILL: the share of every bot's commands that wait for a mover in the
+// way, have no route, or walk the route under 20 u/s, and the top spots of each (64-unit cells,
+// with the goal and the fight mode: feed one to se-spot). THE VIEW BY WHAT TURNED IT: each view
+// writer's (aim, look, calm, air, swim, pilot and the game's overrides: shooter/bot.hpp `view_by`)
+// share of the time and its reversals a second (the yaw's turn flipping between two commands,
+// both past 60 degrees a second; people 0.09 a second in se-people's `hand.reversals-per-s`).
+constexpr int kStillKinds = 3;
+constexpr const char* kStillNames[kStillKinds] = {"mover", "no-route", "walk"};
+
 struct HopSkill {
   int64_t alive = 0, hop = 0, fast = 0;
   int flights = 0, crashes = 0, takeoffs_360 = 0, chained = 0;
@@ -105,6 +116,21 @@ struct Watch {
   };
   std::array<Flight, 64> flight{};
   std::array<HopSkill, 4> skill{};  // by sh::AimSkill
+  // Why and where they stand (`team.still.*`): a mover in the way, no route, walking under 20 u/s.
+  int64_t commands = 0;
+  std::array<int64_t, kStillKinds> still{};
+  std::array<std::map<std::tuple<int, int, int, std::string, std::string>, int>, kStillKinds> spots;
+  // The view's turn by what turned it (`team.view.*`): each bot's last yaw and rate.
+  struct View {
+    double t = -1;
+    float yaw = 0, rate = 0;
+  };
+  std::array<View, 64> view{};
+  // Each bot's pilot mode over the match, a row a change (the time, the mode's name): the
+  // flights read off the recording afterwards are put down to the mode at their takeoff.
+  std::array<std::vector<std::pair<double, const char*>>, 64> modes;
+  double t_last = 0;
+  std::map<std::string, std::pair<double, int64_t>> writers;  // time, reversals
 };
 
 void watch_hop(Watch& w, int k, sh::AimSkill skill, bool alive, bool hop, const char* because,
@@ -146,6 +172,84 @@ float median(std::vector<float> v) {
   return v[v.size() / 2];
 }
 
+void watch_still(Watch& w, const shooters_edge::bots::Fighter& f, const sh::Pilot& p, float speed,
+                 float x, float y, float z) {
+  w.commands++;
+  const std::string_view why = p.because != nullptr ? p.because : "";
+  int kind = -1;
+  if (why == "a mover in the way")
+    kind = 0;
+  else if (why == "no route")
+    kind = 1;
+  else if (p.mode == sh::PilotMode::walk && speed < 20)
+    kind = 2;
+  if (kind < 0) return;
+  w.still[static_cast<size_t>(kind)]++;
+  const auto cell = [](float v, int g) {
+    return static_cast<int>(std::lround(v / static_cast<float>(g))) * g;
+  };
+  const char* goal = f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
+                         ? shooters_edge::bots::item_call(f.items[static_cast<size_t>(f.goal_item)])
+                         : "-";
+  w.spots[static_cast<size_t>(kind)][{cell(x, 64), cell(y, 64), cell(z, 32), goal,
+                                      shooters_edge::bots::fight_mode_name(f.mode)}]++;
+}
+
+void watch_view(Watch& w, int k, double t, float yaw, const char* by) {
+  Watch::View& v = w.view[static_cast<size_t>(k)];
+  const double dt = t - v.t;
+  if (v.t < 0 || dt <= 0 || dt > 0.05) {
+    v = {t, yaw, 0};
+    return;
+  }
+  float d = yaw - v.yaw;
+  while (d > 180) d -= 360;
+  while (d < -180) d += 360;
+  const auto rate = static_cast<float>(-d / dt);
+  auto& wr = w.writers[by != nullptr ? by : "-"];
+  wr.first += dt;
+  if (std::fabs(rate) > 60 && std::fabs(v.rate) > 60 && rate * v.rate < 0) wr.second++;
+  v = {t, yaw, rate};
+}
+
+void still_view_metrics(gl::Lab& lab, const Watch& w) {
+  const double n = static_cast<double>(std::max<int64_t>(1, w.commands));
+  gl::LabTable st{"where they stand still (share of every command; 64-unit cells)",
+                  {"why", "share %", "at", "goal", "mode"},
+                  {}};
+  for (int k = 0; k < kStillKinds; k++) {
+    lab.metric(std::string("team.still.") + kStillNames[k] + "-share",
+               static_cast<double>(w.still[static_cast<size_t>(k)]) / n, "share");
+    std::vector<std::pair<int, std::tuple<int, int, int, std::string, std::string>>> top;
+    for (const auto& [spot, c] : w.spots[static_cast<size_t>(k)]) top.push_back({-c, spot});
+    std::sort(top.begin(), top.end());
+    for (size_t i = 0; i < top.size() && i < 5; i++) {
+      const auto& [x, y, z, goal, mode] = top[i].second;
+      st.rows.push_back({kStillNames[k], to_fixed(100.0 * -top[i].first / n, 1),
+                         std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(z),
+                         goal, mode});
+    }
+  }
+  lab.table(st);
+  double all_t = 0;
+  int64_t all_r = 0;
+  for (const auto& [by, tr] : w.writers) {
+    all_t += tr.first;
+    all_r += tr.second;
+  }
+  gl::LabTable vt{"the view by what turned it", {"writer", "time %", "reversals/s"}, {}};
+  for (const auto& [by, tr] : w.writers) {
+    const double share = all_t > 0 ? tr.first / all_t : 0;
+    const double rev = tr.first > 0 ? static_cast<double>(tr.second) / tr.first : 0;
+    vt.rows.push_back({by, to_fixed(100 * share, 1), to_fixed(rev, 2)});
+    lab.metric("team.view." + by + ".share", share, "share");
+    lab.metric("team.view." + by + ".reversals-per-s", rev, "per-s");
+  }
+  lab.table(vt);
+  lab.metric("team.view.reversals-per-s", all_t > 0 ? static_cast<double>(all_r) / all_t : 0,
+             "per-s");
+}
+
 void hop_metrics(gl::Lab& lab, const Watch& w) {
   for (const sh::AimSkill k :
        {sh::AimSkill::expert, sh::AimSkill::average, sh::AimSkill::novice, sh::AimSkill::perfect}) {
@@ -164,6 +268,65 @@ void hop_metrics(gl::Lab& lab, const Watch& w) {
     lab.metric(key + "takeoffs-360", s.takeoffs_360, "count");
     lab.metric(key + "chained-share", share(s.chained, s.flights), "share");
   }
+}
+
+// EVERY FLIGHT BY WHAT FLEW IT (`team.air.s380.<mode>.*`, a real map's match only): the match's
+// own recording read as se-moves reads people's (move_study.hpp, shooter/hops.hpp: each player's
+// track off the server's frames, its hops traced on the map's hulls), each flight of 0.3-1 s
+// taking off at 380-460 u/s put down to its bot's pilot mode at the takeoff: how many, the air's
+// gain (landing less takeoff speed) and the crashes (80 u/s or more lost). People hold their
+// speed there (gain -1 to +5 on dm2); the mode says which of the bots' ways loses it.
+void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
+                     const std::string& basedir, const std::string& game, const std::string& map,
+                     bool packed) {
+  if (basedir.empty() || r.mvd.empty() || packed) return;
+  namespace la = shooters_edge::labs;
+  std::string error;
+  la::StudyMap m;
+  la::DemoTracks dt;
+  if (!la::load_study_map("", basedir, game, map, m, error) ||
+      !la::read_demo_tracks(r.mvd, dt, error)) {
+    lab.note("flights by mode: not read: " + error);
+    return;
+  }
+  // The recording's clock against the fighters' (the server's): both end with the match.
+  const double offset = w.t_last - dt.seconds;
+  lab.note("flights by mode: the recording's clock + " + to_fixed(offset, 2) + " s = the server's");
+  std::map<std::string, std::vector<float>> gain;
+  const sh::HopSettings hs;
+  for (size_t slot = 0; slot < dt.tracks.size(); slot++) {
+    size_t k = r.players.size();
+    for (size_t j = 0; j < r.players.size(); j++)
+      if (r.players[j].name == dt.names[slot]) k = j;
+    if (k >= r.players.size() || k >= w.modes.size() || dt.tracks[slot].size() < 3) continue;
+    sh::HopReading hr;
+    sh::read_hops(dt.tracks[slot], *m.world, hs, hr);
+    const auto& ml = w.modes[k];
+    for (const sh::Hop& h : hr.hops) {
+      if (h.air_s < 0.3f || h.air_s > 1.0f || h.speed_off < 380 || h.speed_off >= 460) continue;
+      const double t = hr.frames[static_cast<size_t>(h.takeoff)].t + offset;
+      const char* mode = "-";
+      for (const auto& [at, name] : ml) {
+        if (at > t) break;
+        mode = name;
+      }
+      gain[mode].push_back(h.speed_land - h.speed_off);
+    }
+  }
+  gl::LabTable at{"flights taking off at 380-460 u/s (0.3-1 s up), by the pilot's mode then",
+                  {"mode", "flights", "gain p50", "crash %"},
+                  {}};
+  for (const auto& [mode, g] : gain) {
+    int crashes = 0;
+    for (const float x : g) crashes += x < -80 ? 1 : 0;
+    const double crash = static_cast<double>(crashes) / static_cast<double>(g.size());
+    at.rows.push_back(
+        {mode, std::to_string(g.size()), to_fixed(median(g), 1), to_fixed(100 * crash, 1)});
+    lab.metric("team.air.s380." + mode + ".flights", static_cast<double>(g.size()), "count");
+    lab.metric("team.air.s380." + mode + ".gain-p50", median(g), "units/s");
+    lab.metric("team.air.s380." + mode + ".crash-share", crash, "share");
+  }
+  lab.table(at);
 }
 
 void run(gl::Lab& lab) {
@@ -313,6 +476,12 @@ void run(gl::Lab& lab) {
     const sh::Pilot& p = f.bot.pilot.pilot;
     const float sp = std::sqrt(e.velocity.x * e.velocity.x + e.velocity.y * e.velocity.y);
     watch_hop(tr, k, f.skill, e.health > 0, p.mode == sh::PilotMode::hop, p.because, sp);
+    watch_still(tr, f, p, sp, e.origin.x, e.origin.y, e.origin.z - 24);
+    watch_view(tr, k, w.sv.time, cmd.angles.y, f.bot.view_by);
+    auto& ml = tr.modes[static_cast<size_t>(k)];
+    const char* mode = sh::pilot_mode_name(p.mode);
+    if (ml.empty() || ml.back().second != mode) ml.push_back({w.sv.time, mode});
+    tr.t_last = std::max(tr.t_last, w.sv.time);
     if (tr.out == nullptr || (tr.count[static_cast<size_t>(k)]++ % tr.every) != 0) return;
     std::ofstream& out = *tr.out;
     const char* link = "-";
@@ -347,6 +516,8 @@ void run(gl::Lab& lab) {
   }
   const double secs = r.seconds;
   hop_metrics(lab, watch);
+  still_view_metrics(lab, watch);
+  flights_by_mode(lab, watch, r, basedir, lab.arg("game"), name, o.packed);
 
   // The table.
   static const char* kWeapon[9] = {
