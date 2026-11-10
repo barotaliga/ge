@@ -223,8 +223,8 @@ fullbright texels glowing; with `ce_models` on and the pack enhanced, each skin 
 cache's upscaled copy, raised to twice the pack's size and then toward the cache's own scale
 while the models' one atlas holds them all, read when the map loads); the weapon in hand (`client/held.hpp`: the game's free
 models, switched with the number keys, kicked and lit by its muzzle flash as the mod fires it,
-lit by the map's baked light under the player, every shot firing the engine's muzzle flame, smoke
-and sparks (`app/muzzle.hpp`; `ce_muzzles 0` leaves the light alone); `r_drawviewmodel`,
+lit by the map's baked light under the player, every shot firing the engine's muzzle flame and
+sparks, no smoke (`app/muzzle.hpp`; `ce_muzzles 0` leaves the light alone); `r_drawviewmodel`,
 `r_viewmodel_fov`, `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`, `r_viewmodel_center` (1 by
 default: centred under the crosshair; 0 to the right) and `r_viewmodel_hands` (0: the weapon
 without its hands) in the console); the HUD (`hud_style
@@ -1256,9 +1256,10 @@ every pass, and judged by captioned screenshots:
   white-hot sparks, dark chunks and smoke that lingers, its light white-hot then orange; a rocket
   burns a short flame out of its motor (the muzzle fire's march stretched back along its flight)
   and lays fire into puffs of smoke that spread as they thin (the particles' `grow`), a grenade
-  pale smoke; a pellet's or a nail's hit throws, subtly, the burst of the face it hit (a small puff
-  of dust, a thin wisp of smoke, chips, grit and flakes in the wall's own colour that fall and hop
-  on the floor under the hit before they lie still; `render/impact.hpp`
+  pale smoke; a pellet's or a nail's hit tears debris off the face it hit and makes no smoke (big
+  chunks, smaller chips and a spray of dirt in the wall's own colour, flung out of the hole, that
+  fall and hop on the floor under the hit before they lie still; how much is the surface's,
+  `render/impact.hpp`
   by the surface class of the map triangle the round's line crosses there, its normal off that
   triangle); the arc gun's beam is the engine's bolt (`render/beam.hpp`) in ONE look every player sees
   (no style to pick, so nobody plays with a worse one): as thin as the classic's bolt, a hair-thin
@@ -1637,7 +1638,7 @@ list is in `porting/shooters-edge/survey.md`.
 | Later | Client-side QC (a mod drawing its own HUD and predicting its own entities) | M18m |
 | Later | Single-player campaigns and co-op on the single-player `progs` | M18s |
 | Better | The easy jump: `cl_speedjump 1` hops and gains on forward and jump alone where the server's `pm_speedjump` allows it, and on any other server by the client strafing for the player, disclosed in the user info (`docs/movement.md`) | M18e |
-| Better | The quick weapon: `cl_quickweapon 1` makes +attack fire the best weapon carried of `cl_quickweapon_prio` and put `cl_quickweapon_default` back; +attack2 the same off `cl_quickweapon_prio2`; `cl_quickweapon_preview` shows the weapon a press would fire see-through in hand, `cl_quickweapon_hide` hides the hand instead (§ The quick weapon) | M48h |
+| Better | The quick weapon: `cl_quickweapon 1` makes +attack fire the best weapon carried of `cl_quickweapon_prio` and put `cl_quickweapon_default` back; +attack2 the same off `cl_quickweapon_prio2`; `cl_quickweapon_preview` shows the weapon a press would fire see-through in hand, `cl_quickweapon_hide` hides the hand instead (§ The quick weapon) | M48i |
 | Later | Splitscreen; touch controls for phones and tablets | M18m |
 
 ### The quick weapon

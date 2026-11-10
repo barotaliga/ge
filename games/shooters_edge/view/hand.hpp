@@ -3,11 +3,14 @@
 // engine's placement (viewmodel/place.hpp). Presentation only: it reads the simulation's word and
 // feeds nothing back.
 //
-// - THE SWITCH: when the game's weapon changes, the weapon in the hand is put away (the row's
-//   `switch_s`), swapped for the new one at the bottom, and raised again; asked for another on the
-//   way, it goes on down and raises the last one asked for. A shot of the new weapon during the
-//   switch (the simulation changed it at once) snaps the new weapon up: the shot is never fired
-//   from a weapon out of the picture.
+// - THE SWITCH: when the game's weapon changes, the weapon in the hand is put away, swapped for
+//   the new one at the bottom, and raised again, the whole in `cl_gunswitch` s (a fifth of a
+//   second: `kSwitchDownShare` of it down, the rest up); asked for another on the way, it goes on
+//   down and raises the last one asked for. A shot of the new weapon during the switch (the
+//   simulation changed it at once) takes the old weapon out of the picture and RUSHES the new one
+//   up from low in the picture (`kRushFrom`, or from where it is, already rising),
+//   `cl_gunswitch_fire` times faster, firing as it comes: the shot is never held back by the
+//   picture. 0 switches at once.
 // - THE SHOT: the weapon's kick (weapons.hpp) handed to the placement, and its FLASH: a point
 //   light at the muzzle (held_to_world: where the gun's own lens puts it in the world), fading over
 //   the weapon's `flash_s`, for the world's lamps and the gun's own light (`light_held`).
@@ -17,35 +20,21 @@
 //   a classic axe's two swings) plays one a shot: the take whose frames hold the frame the game
 //   says the shot starts on (`HandInput::fire_frame`, a classic mod's weapon frame), or, when the
 //   game does not say, one picked at random with even odds, as the classic game picks a swing. A
-//   clip stepped a frame a shot
-//   (`HeldClip::frame_a_shot`, a nailgun held firing) goes one frame round on each shot and holds
-//   it, and the shot's muzzle, flash and fire are on the barrel that frame fires from: the
-//   nailgun's two in turn, the super nailgun's cluster one barrel at a time. Each shot's
-//   frame is held (its barrel fires); with `ViewSettings::lerp` a clip played or held ends by
-//   flowing back to the rest frame over a frame's time, never a jump.
+//   clip stepped a frame a shot (`HeldClip::frame_a_shot`, a nailgun held firing) goes one frame
+//   round on each shot and holds it, and the shot's muzzle, flash and fire are on the barrel that
+//   frame fires from: the nailgun's two in turn, the super nailgun's cluster one barrel at a time.
+//   Each shot's frame is held (its barrel fires); with `ViewSettings::lerp` a clip played or held
+//   ends by flowing back to the rest frame over a frame's time, never a jump.
 // - DEATH (`HandInput::dead`): the weapon sinks out of view (`kDeathLowerS`), up with a new life.
 // - A CLASSIC GAME'S OWN WEAPONS (`Hand::at_eye`): models authored at the eye, placed by the
 //   classic row (`eye_row`) with no offset of their own; the kick, the flash and the fire are
 //   still each weapon's look.
-// - THE PLAYER'S CVARS (`ViewSettings`, `add_view_cvars`), all the player's own (archived):
-//     r_drawviewmodel   draw the weapon at all (0: the hand still switches and flashes, unseen)
-//     r_viewmodel_fov   the weapon's own lens, deg vertical (0: the view's)
-//     cl_gunx cl_guny cl_gunz
-//                       the weapon moved from its place: right, up, forward, m
-//     cl_gunsway        the share of the sway, the stride's swing and the breath (0 still, 1 the
-//                       game's, 2 twice)
-//     cl_gunidle        the share of the breath at rest (place.hpp's THE BREATH): 0 none, 1 the
-//                       game's, 2 twice
-//     cl_gunidle_rate   breaths a minute at rest (the game's: 15)
-//     cl_gunidle_exertion
-//                       how much a run quickens and deepens the breath after it: 0 not at all,
-//                       1 the game's, 2 twice
-//     r_viewmodel_center
-//                       1 (the default, as the classic arena games hold it): the weapon in the
-//                       middle under the crosshair, nearer the eye and a little higher
-//                       (kCentreNearM, kCentreRiseM), its muzzle below the picture's middle line; 0
-//                       the modern place to the right
-//     r_viewmodel_hands 0: the hands and arms holding the weapon are not drawn, the weapon alone
+// - THE PLAYER'S CVARS (`ViewSettings`, `add_view_cvars`; each one's unit and range in its help),
+//   all archived: r_drawviewmodel (0: still switches and flashes, unseen), r_viewmodel_fov,
+//   cl_gunx/y/z, cl_gunsway (sway, stride and breath), cl_gunidle, cl_gunidle_rate,
+//   cl_gunidle_exertion (place.hpp's THE BREATH), r_viewmodel_center (1, the default: centred under
+//   the crosshair, nearer and higher by kCentreNearM, kCentreRiseM; 0 to the right),
+//   r_viewmodel_hands (0: the weapon alone), cl_gunswitch and cl_gunswitch_fire (THE SWITCH).
 // - THE MUZZLE each frame: where the barrel's tip is in the world (the firing animation's frame,
 //   the kick, the lens match), the way it points and the gun's up, for the engine's muzzle fire
 //   (render/muzzle.hpp) the window stages from it; `fired` says a shot left it this frame.
@@ -57,6 +46,7 @@
 // ge:keywords r_viewmodel_center centred-weapon centered r_viewmodel_hands hide-hands muzzle-pose
 // ge:keywords at_eye eye_row classic-weapons axe-swing two-swings takes fire_frame weaponframe
 // ge:keywords cl_gunidle cl_gunidle_rate cl_gunidle_exertion idle-sway breathing breath
+// ge:keywords cl_gunswitch cl_gunswitch_fire switch-speed rushed-raise fire-during-switch
 // ge:skill render shooter
 // ge:test tests/shooters_edge_view_test.cpp
 #pragma once
@@ -82,7 +72,22 @@ struct ViewSettings {
   bool centre = true;           // r_viewmodel_center
   bool hands = true;            // r_viewmodel_hands
   bool lerp = true;  // r_lerpmodels (bound with the picture's): a clip's end flows back to rest
+  double switch_s = 0.2;   // cl_gunswitch, s a whole switch takes (0: at once)
+  double switch_fire = 4;  // cl_gunswitch_fire, a shot's speed-up of the raise
 };
+
+// How far a model authored at the eye (`eye_row`) drops and tips when put away, m and rad: just
+// out of the picture's bottom edge at the bottom of a switch, so every frame of a fast switch shows
+// the weapon moving instead of most of it spent out of view.
+inline constexpr double kEyeLowerM = 0.07;
+inline constexpr double kEyeLowerPitch = 0.3;
+
+// The share of a switch spent putting the old weapon away; the rest raises the new one.
+inline constexpr double kSwitchDownShare = 0.4;
+
+// How far put away a weapon rushed up by a shot during a switch starts (0 up, 1 out of view):
+// low in the picture, but in it, so the frame the shot leaves shows the weapon it left from.
+inline constexpr double kRushFrom = 0.7;
 
 // How long the weapon takes to sink out of view when the player dies, s: slower than a switch's
 // put-away, so the death reads as the hand letting go. It comes back up at the switch's pace.
@@ -125,6 +130,9 @@ struct Hand {
   // The models are a classic game's own (GameAdapter::held_weapons), authored at the eye: placed
   // by `eye_row`, never on a look's offset.
   bool at_eye = false;
+  // A shot came during the switch: the new weapon is coming up `cl_gunswitch_fire` times faster
+  // until it is all the way up.
+  bool rushed = false;
 };
 
 struct HandInput {
@@ -140,10 +148,12 @@ struct HandFrame {
   vm::Placement placement;
   bool drawn = true;             // r_drawviewmodel, and not all the way down
   bool switching = false;        // the hand is between weapons
+  bool rushed = false;           // ... and a shot is rushing the new one up
   bool flashing = false;         // `flash` is lit
   vm::PointLight flash;          // the shot's light, world (its intensity faded)
   int frame_a = 0, frame_b = 0;  // the model's frames to draw, blended by `frame_t`
   double frame_t = 0;
+  double lowered = 0;                // how far put away, 0 up .. 1 out of view
   bool hands = true;                 // draw the hands holding it (r_viewmodel_hands)
   bool fired = false;                // a shot left the muzzle this frame
   double muzzle_at[3] = {0, 0, 0};   // the barrel's tip, world, m
