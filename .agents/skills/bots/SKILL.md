@@ -219,9 +219,12 @@ no live server: every match runs on our own server, in process (`se-team`), head
   costly and no more human, or when it moves a human measure away from people's. For movement,
   SPEED decides first: a person moves fast, a bot that crawls is spotted at once.
 - **Head to head is the verdict**: one team with the feature, the other without, in the same 4on4
-  (`se-team --features-red=all,-<name> --sides=1`), read against the same build's full-against-
-  full set (the sides are not even), on seeds 1-6 and then 7-12 (a set swings about +-35). Both
-  sides with it only says whether the game got faster or more violent.
+  (`se-team --features-red=-<name> --sides=1`), AND AGAIN WITH THE SIDES SWAPPED
+  (`--features-blue=-<name>`), each read against the same build's full-against-full set (the
+  sides are not even, and their skew moves with the seeds); the effect is the mean of the two.
+  One side alone is a draw (dm2: -7.4 on blue, -0.3 on red, for a change even over 24 seeds).
+  10-minute matches, 12 seeds. Both sides with it only says whether the game got faster or more
+  violent. Each side's speed and bumps: `team.side.<side>.*`.
 - **Six seeds, never one, in one call**: `se-team --seeds=1-6 --variants="on:--sides=1;off:
   --features=-<name> --sides=1;h2h:--features-red=-<name> --sides=1" --client-fed=1 --minutes=10
   --basedir=<basedir> --map=e1m2` plays every variant on every seed in parallel (`--jobs`, one a

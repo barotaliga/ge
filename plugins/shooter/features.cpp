@@ -11,17 +11,16 @@ namespace ge::shooter {
 namespace {
 
 constexpr const char* kNames[kFeatures] = {
-    "calm",       "pace",   "swimaim", "screen",   "keep",      "lead",       "lane",   "hop",
-    "shortgoals", "commit", "danger",  "dodge",    "watch",     "spam",       "packs",  "talk",
-    "plan",       "rj",     "gj",      "airsteer", "surface",   "glance",     "eye",    "selfaim",
-    "pools",      "routes", "corner",  "mouse",    "packinfer", "listen",     "stairs", "locked",
-    "escape",     "brink",  "gapjump", "headroom", "liphop",    "circlejump", "ahead",  "trial"};
+    "calm",      "pace",       "swimaim",    "screen", "keep",   "lead",     "lane",
+    "hop",       "shortgoals", "commit",     "danger", "dodge",  "watch",    "spam",
+    "packs",     "talk",       "plan",       "rj",     "gj",     "airsteer", "surface",
+    "glance",    "eye",        "selfaim",    "pools",  "routes", "corner",   "mouse",
+    "packinfer", "listen",     "stairs",     "locked", "escape", "brink",    "gapjump",
+    "headroom",  "liphop",     "circlejump", "ahead",  "bodies", "trial"};
 
-// Every switch but `trial` (the last) and `ahead` (a head to head against it still to settle:
-// dm2, 12 ten-minute seeds, wall bumps 12.0 -> 9.9 a bot-minute, speed even, -6 frags a match).
+// Every switch but `trial` (the last).
 constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);
-constexpr uint64_t kAhead = uint64_t{1} << static_cast<uint64_t>(Feature::ahead);
-constexpr uint64_t kAll = (kTrial - 1) & ~kAhead;
+constexpr uint64_t kAll = kTrial - 1;
 
 bool separator(char c) { return c == ',' || c == ' ' || c == '/' || c == '\t'; }
 

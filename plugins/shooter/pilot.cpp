@@ -1,5 +1,5 @@
 // ge:summary The pilot's step: the link's mode, the run-up, the jump, waits, rides, strafe jumps
-// ge:keywords pilot pilot_step pilot_go pilot_source run-up strafe-jump wait ride stuck replan
+// ge:keywords pilot pilot_step pilot_go run-up strafe-jump wait ride stuck replan
 // ge:skill shooter bots
 // ge:test tests/shooter_pilot_test.cpp
 #include "shooter/pilot.hpp"
@@ -589,7 +589,8 @@ WalkWay foresee(const Pilot& p, const PilotSense& s, Vec3f aim, Vec3f near, Want
                      {static_cast<float>(p.pressed[0]), static_cast<float>(p.pressed[1]),
                       static_cast<float>(p.pressed[2])},
                      p.set.lead_s,
-                     p.set.lead_s + p.set.ahead_s};
+                     p.set.lead_s + p.set.ahead_s,
+                     p.set.ahead_bodies ? s.others : std::span<const OtherBox>{}};
   WalkKeys keys;
   WalkSeen seen[kWalkWays];
   bool flown = false;
@@ -1828,13 +1829,21 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       target = lane_target(p, dt, t, aim);
       const bool foreseeing = p.set.ahead && s.world != nullptr && s.onground;
       if (foreseeing) target = aim_clear(p, *s.world, s.origin, ahead, aim, target);
+      // A player standing on the way (`ahead_bodies`): round him, or wait where there is no room.
+      Vec3f round;
+      const bool body = foreseeing && p.set.ahead_bodies &&
+                        body_on_way(*s.world, s.origin, target, s.others, round);
+      const bool wait_body = body && across(round, s.origin) < 1;
+      if (body && !wait_body) target = round;
       if (across(ahead, target) > 1) w.yaw = unwrap(yaw_at(ahead, target), p.yaw);
-      w.forward = facing(w.yaw, p.yaw);
+      w.forward = wait_body ? 0.f : facing(w.yaw, p.yaw);
       const WalkWay seen = foreseeing ? foresee(p, s, target, B, w, why) : WalkWay::pursue;
       // Slowing into the goal (late hands run past a small top and off it, or orbit it).
       const float d = across(ahead, node(*p.g, p.route.back()).origin);
       if (d < p.set.look) w.forward *= d < p.set.look * kBrake ? kBrake : d / p.set.look;
-      because = seen != WalkWay::pursue   ? walk_way_because(seen)
+      because = wait_body                 ? "a player standing in the way: waiting for him"
+                : body                    ? "a player standing in the way: round him"
+                : seen != WalkWay::pursue ? walk_way_because(seen)
                 : l.kind == NavKind::drop ? "walking off the edge"
                                           : "walking the route";
       // A flip ahead within its turn: turning round into it already, strafing along the route.
@@ -1949,52 +1958,5 @@ std::vector<Vec3f> pilot_path(const Pilot& p, Vec3f at, std::vector<uint8_t>* br
   }
   return out;
 }
-
-namespace {
-
-MoveCmd pilot_next(void* ctx, const Server& sv, int slot, int msec) {
-  PilotBot& b = *static_cast<PilotBot*>(ctx);
-  Pilot& p = b.pilot;
-  const Edict& me = sv.edicts[static_cast<size_t>(slot) + 1];
-  PilotSense s;
-  s.origin = me.origin;
-  s.velocity = me.velocity;
-  s.onground = (me.flags & kFlagOnGround) != 0;
-  s.waterlevel = me.waterlevel;
-  s.maxspeed = me.maxspeed > 0 ? me.maxspeed : 320;
-  b.now.resize(p.g->movers.size());
-  for (size_t i = 0; i < b.now.size(); i++) {
-    const NavMover& m = p.g->movers[i];
-    const Edict& e = sv.edicts[static_cast<size_t>(m.ent)];
-    b.now[i] = m;
-    // Where the mover stands now; one the player's client was not sent this frame (outside its
-    // visibility set: a free slot in a client's world) is taken as the graph planned it.
-    if (!e.free) {
-      b.now[i].absmin = e.absmin;
-      b.now[i].absmax = e.absmax;
-    }
-  }
-  s.movers = b.now;
-  s.world = b.world;
-  s.grenade_ready = b.grenade_ready;
-  s.rocket_ready = b.rocket_ready;
-  if ((p.mode == PilotMode::idle || p.mode == PilotMode::arrived) && !b.goals.empty()) {
-    if (p.mode == PilotMode::arrived) b.arrivals++;
-    for (int32_t& d : p.barred) d = -1;
-    p.cut = p.failed;
-    for (size_t tries = 0; tries < b.goals.size(); tries++) {
-      const int32_t goal = b.goals[b.next_goal];
-      b.next_goal = (b.next_goal + 1) % b.goals.size();
-      if (pilot_go(p, goal, s)) break;
-    }
-  }
-  ai::Why* why = b.why ? b.why->follow(slot, b.command) : nullptr;
-  b.command++;
-  return pilot_step(p, s, msec, why);
-}
-
-}  // namespace
-
-CmdSource pilot_source(PilotBot& b) { return {&b, pilot_next}; }
 
 }  // namespace ge::shooter

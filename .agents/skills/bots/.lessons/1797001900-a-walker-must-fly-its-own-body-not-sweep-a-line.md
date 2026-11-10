@@ -19,9 +19,9 @@ concepts: [bumps, walk, look-ahead, foresee, player-move, corner, pursuit, momen
   delay first with the keys already pressed (`p.pressed`), then each candidate way for
   `ahead_s`, and press the way that does not bump, nearest the aim. Wall bumps 12.7 -> 10.3,
   speed up, not down, on six 3-minute seeds. The user's rule: a bot must know how its collision
-  model will hit the environment. BUT the 12-seed 10-minute head to head read -6 frags a match
-  for the side with it: fewer bumps is not yet a win, so it ships off in the presets until the
-  cost is found. Always run the long head to head before calling a movement change kept.
+  model will hit the environment. A one-sided 12-seed head to head first read -6 frags a match;
+  read side by side over 24 seeds it was even (+0.4), and it went on in the presets (see the
+  side-swap lesson, 1797002000).
 - `--features=all,+x` is not "the default plus x": `all` also turns on what each skill's preset
   keeps off (`eye`, the novice's `glance`). Write `--features=+x`.
 - Cost: a cheap straight sweep gates it, and the pursuit is flown first; the other ways only when

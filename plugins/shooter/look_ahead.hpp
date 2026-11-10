@@ -6,17 +6,20 @@
 // each way of pressing (the pursuit, the turn braked, the next node, no keys); a way that bumps (a
 // wall or a corner takes `kWalkBump` u/s or more in a command) is put after every way that does
 // not, and among those the one that ends nearest the aim wins, the pursuit first on a tie. A person
-// knows how their body meets the room; the pilot asks the move (pilot.hpp `ahead`).
+// knows how their body meets the room; the pilot asks the move (pilot.hpp `ahead`). OTHER
+// PLAYERS too (`OtherBox`, pilot.hpp `ahead_bodies`): each one near put in the flight as a box
+// moved along his velocity, so a way that runs into a mate or an enemy is a bump as a wall's is.
 //
 // ge:summary The box's look ahead: the hop's arc, the walk's straight line, the walk's keys flown
 // ge:summary through the move before a bump
 // ge:keywords look-ahead foresee foresee_walk walk_clear arc_clear hop_turn_rate bumps corner
-// ge:keywords player-move collision walk-ahead brake-the-turn
+// ge:keywords player-move collision walk-ahead brake-the-turn other-players bodies player-bumps
 // ge:skill shooter bots
 // ge:test tests/shooter_pilot_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <span>
 
 #include "ai/why.hpp"
 #include "shooter/vec.hpp"
@@ -46,6 +49,13 @@ const char* walk_way_name(WalkWay way);
 // The pilot's `because` for a walk pressed the way `way` (not the pursuit).
 const char* walk_way_because(WalkWay way);
 
+// Another player as the walk foresees him: his box where he stands now, moved along `velocity`
+// (flat) through the flight. The pilot is handed at most `kWalkOthers`, the nearest.
+struct OtherBox {
+  Vec3f origin, velocity;
+};
+constexpr int kWalkOthers = 8;
+
 struct WalkKeys {
   float yaw = 0, forward = 0, side = 0;  // degrees; shares of maxspeed
 };
@@ -55,9 +65,10 @@ struct WalkStart {
   bool onground = true;
   int waterlevel = 0;
   float maxspeed = 320;
-  WalkKeys pressed;   // the keys the hands press now (flown for `delay`)
-  float delay = 0;    // the hands' delay, s
-  float horizon = 0;  // the flight's length, s (the delay included)
+  WalkKeys pressed;                  // the keys the hands press now (flown for `delay`)
+  float delay = 0;                   // the hands' delay, s
+  float horizon = 0;                 // the flight's length, s (the delay included)
+  std::span<const OtherBox> others;  // the players near, as boxes in the flight (empty: none)
 };
 
 struct WalkSeen {
@@ -68,9 +79,20 @@ struct WalkSeen {
 // The way to press from `st` toward `aim` (`near`: the route's next node, the `near` way's aim),
 // its keys in `keys` (the pursuit's when it is chosen) and every way's flight in `seen`. Nothing is
 // flown (`flown` false, the pursuit) unless the box swept straight along the velocity meets a wall
-// within the horizon; the other ways are flown only when the pursuit's bumps.
+// within the horizon, or another player's box comes within touch of it on both their velocities;
+// the other ways are flown only when the pursuit's bumps.
 WalkWay foresee_walk(const MoveWorld& world, const WalkStart& st, Vec3f aim, Vec3f near,
                      WalkKeys& keys, WalkSeen seen[kWalkWays], bool& flown);
+
+// A BODY ON THE WAY: the nearest of `others` standing (under `kBodyStill` u/s) whose box the
+// walker's, walked straight from `o` to `to`, runs into within `kBodyLook`. True when one does,
+// `round` then the point beside and just past him to walk to first: on the side the line already
+// passes him, else the other, both legs clear of walls (`walk_clear`); `o` itself when neither
+// side is clear (wait for him to move). A person walks round a mate standing in a doorway.
+constexpr float kBodyStill = 60;  // u/s: a player slower than this stands
+constexpr float kBodyLook = 192;  // units: a body further along the line is not in the way yet
+bool body_on_way(const MoveWorld& world, Vec3f o, Vec3f to, std::span<const OtherBox> others,
+                 Vec3f& round);
 
 // The flights as the `foresee` decision on `why` (null: nothing): each way's score its nearness
 // less its bumps, the chosen one and why.

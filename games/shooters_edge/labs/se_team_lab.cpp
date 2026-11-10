@@ -51,6 +51,7 @@
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -141,6 +142,9 @@ struct Watch {
   std::array<float, 64> last_health{};
   std::array<bool, 64> moved{};
   int64_t bumps = 0, hard_bumps = 0, alive_commands = 0;
+  // Each side's (red 0, blue 1) commands alive and its bumps by walls and by players, for an A/B
+  // by team (`--sides=1`): which side the feature under test slowed or sped.
+  std::array<int64_t, 2> side_alive{}, side_wall{}, side_player{};
   std::map<std::string, int64_t> bumps_by_mode, bumps_by;
   std::map<std::tuple<int, int, int, std::string, std::string>, int> bump_spots;
   double t_last = 0;
@@ -260,6 +264,14 @@ void still_view_metrics(gl::Lab& lab, const Watch& w) {
     lab.metric("team.bumps." + mode + "-per-bot-min", static_cast<double>(n) / bot_min, "per-min");
   for (const auto& [by, n] : w.bumps_by)
     lab.metric("team.bumps.by-" + by + "-per-bot-min", static_cast<double>(n) / bot_min, "per-min");
+  for (size_t side = 0; side < 2 && lab.arg("sides") == "1"; side++) {
+    const double side_min = std::max(1.0, static_cast<double>(w.side_alive[side]) / (77.0 * 60));
+    const std::string k = std::string("team.side.") + (side == 0 ? "red." : "blue.");
+    lab.metric(k + "bumps.by-wall-per-bot-min", static_cast<double>(w.side_wall[side]) / side_min,
+               "per-min");
+    lab.metric(k + "bumps.by-player-per-bot-min",
+               static_cast<double>(w.side_player[side]) / side_min, "per-min");
+  }
   {
     gl::LabTable bt{"where they bump (a bot-minute's count; 64-unit cells)",
                     {"by", "per bot-min", "at", "mode"},
@@ -598,6 +610,10 @@ void run(gl::Lab& lab) {
     watch_view(tr, k, w.sv.time, cmd.angles.y, f.bot.view_by);
     if (e.health > 0) {
       tr.alive_commands++;
+      const size_t side = f.team != nullptr && f.team->name == "blue" ? 1 : 0;
+      tr.side_alive[side]++;
+      if (bumped && std::string_view(by) == "wall") tr.side_wall[side]++;
+      if (bumped && std::string_view(by) == "player") tr.side_player[side]++;
       if (bumped) {
         tr.bumps++;
         if (sp < 100) tr.hard_bumps++;
@@ -1208,7 +1224,7 @@ void run(gl::Lab& lab) {
     bool differ = lab.arg("sides") == "1";
     for (const cn::TeamPlayer& p : r.players) differ |= p.features != r.players.front().features;
     for (int side = 0; side < 2 && differ; side++) {
-      double dmg = 0, react = 0, s_fired = 0, s_hit = 0;
+      double dmg = 0, react = 0, s_fired = 0, s_hit = 0, s_speed = 0;
       int64_t n = 0, reactions = 0, s_pre = 0, view_n = 0, in_view = 0, seen = 0, checks = 0,
               off = 0, shots = 0, deaths = 0, s_wet = 0, s_alive = 0;
       for (const cn::TeamPlayer& p : r.players) {
@@ -1227,6 +1243,7 @@ void run(gl::Lab& lab) {
         deaths += p.deaths;
         s_wet += p.wet;
         for (int m = 0; m < 4; m++) s_alive += p.mode_commands[m];
+        s_speed += p.speed_sum;
         for (const cn::HitCount& h : p.hits) {
           s_fired += static_cast<double>(h.fired);
           s_hit += static_cast<double>(h.hit);
@@ -1235,6 +1252,7 @@ void run(gl::Lab& lab) {
       const auto ratio = [](double a, double b) { return b > 0 ? a / b : 0; };
       const std::string k = std::string("team.side.") + (side == 0 ? "red." : "blue.");
       lab.metric(k + "deaths", static_cast<double>(deaths), "count");
+      lab.metric(k + "speed-avg", ratio(s_speed, static_cast<double>(s_alive)), "units/s");
       lab.metric(k + "wet", ratio(static_cast<double>(s_wet), static_cast<double>(s_alive)),
                  "share");
       lab.metric(k + "damage-per-min", ratio(dmg, secs / 60 * static_cast<double>(n)), "per-min");

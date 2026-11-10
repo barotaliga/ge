@@ -60,6 +60,7 @@
 // ge:test tests/shooter_pilot_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -70,6 +71,7 @@
 #include "core/prng.hpp"
 #include "shooter/circle_jump.hpp"
 #include "shooter/cmd_source.hpp"
+#include "shooter/look_ahead.hpp"
 #include "shooter/nav.hpp"
 
 namespace ge::shooter {
@@ -157,10 +159,18 @@ struct PilotSettings {
   // `ahead_s`, the keys are flown through the move itself (player_move over the map's solids: the
   // keys already pressed for the delay, then the pursuit's, the turn braked, the next node, or no
   // keys) and a way that does not bump is pressed, the nearest to the aim (a person knows how
-  // their body meets the room). dm2, six 3-minute seeds: wall bumps 12.7 -> 10.3 a bot-minute,
-  // speed 192 -> 194, the set's time +5 %.
+  // their body meets the room). dm2, 24 ten-minute seeds, one side with it: its wall bumps 12.0 ->
+  // 9.8 a bot-minute, its speed no lower, head to head even (+0.4 frags a match over both sides).
   bool ahead = false;
   float ahead_s = 0.25f;  // the walk's flights foreseen this long past the hands' delay, s
+  // OTHER PLAYERS' BOXES in the walk foreseen (`bodies`, with `ahead`): the players the sense
+  // hands over (`PilotSense::others`) flown as boxes along their velocities, so a way that runs
+  // into a mate or an enemy is a bump, and one standing on the walk's line is walked round
+  // (look_ahead.hpp `body_on_way`), or waited for where there is no room; off, the walk knows the
+  // map's solids alone. dm2, 24 ten-minute seeds, one side with it: its player bumps 5.4 -> 4.4 a
+  // bot-minute, its speed +6 u/s, head to head +1.6 frags a match over both sides; on both sides
+  // player bumps 5.5 -> 4.1 and speed 174 -> 182.
+  bool ahead_bodies = false;
 };
 
 // `swim`: on a swim link (nav.hpp), the view pitched at the next node, forward held, jump to rise;
@@ -212,6 +222,9 @@ struct PilotSense {
   const MoveWorld* world = nullptr;
   bool grenade_ready = true;  // the grenade launcher in hand: a grenade jump fires only then
   bool rocket_ready = true;   // the rocket launcher in hand: a rocket out of a pit fires only then
+  // The other players alive near, as the client was sent them (look_ahead.hpp `OtherBox`): the
+  // walk foreseen flies them as boxes (`ahead_bodies`).
+  std::span<const OtherBox> others;
 };
 
 struct PilotStats {
@@ -321,7 +334,8 @@ struct PilotBot {
   Pilot pilot;
   std::vector<int32_t> goals;
   size_t next_goal = 0;
-  std::vector<NavMover> now;   // the movers as they stand (reused)
+  std::vector<NavMover> now;                   // the movers as they stand (reused)
+  std::array<OtherBox, kWalkOthers> others{};  // the players near (`PilotSense::others`)
   MoveWorld* world = nullptr;  // the map's solids the hop looks ahead through (null: none)
   bool grenade_ready = true;   // the grenade launcher in hand (the caller's say, each command)
   bool rocket_ready = true;    // the rocket launcher in hand (the caller's say, each command)

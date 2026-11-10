@@ -1289,6 +1289,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   ps.circle.most_s = expert ? 0.3f : 0.2f;
   ps.brink = f.features[sh::Feature::brink];
   ps.ahead = f.features[sh::Feature::ahead];
+  ps.ahead_bodies = f.features[sh::Feature::bodies];
   // Its lane off the route's line (shooter/pilot.hpp): a person never walks the line; the less
   // practised wander wider. A perfect player keeps to it.
   ps.lane = skill == sh::AimSkill::perfect || !f.features[sh::Feature::lane] ? 0.f
