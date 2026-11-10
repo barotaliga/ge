@@ -3,14 +3,18 @@
 // reloading and shows the client its state a round trip late: a tap fires exactly one shot of the
 // best weapon and ends on the kept one; a held key fires on, moving down the list as each runs dry;
 // a key that is off fires what is in hand; the player's own weapon key wins; a dead player is let
-// be; the look ghosts the weapon +attack would fire and turns it solid as it is pressed.
+// be; the look ghosts the weapon +attack would fire, turns it solid as it is pressed and fades it
+// back once let go, the weapon kept in hand never drawn on the way.
 //
 // ge:summary Tests: quick weapon taps, holds, lists, the way back and the preview, against a
 // ge:summary model server
 // ge:keywords test quick-weapon quick_step quick_look weapon_list best_ready
 // ge:skill shooter testing
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <deque>
+#include <string>
 
 #include "check.hpp"
 #include "shooter/quick_weapon.hpp"
@@ -174,27 +178,73 @@ TEST(the_look_ghosts_the_weapon_attack_would_fire) {
   r.lag = 0;
   r.idle(2);
   sh::QuickLook look = sh::quick_look(r.q, r.s, r.server.armed(), r.t);
-  CHECK(look.ghost && look.weapon == 7 && look.opacity == sh::kGhost);
+  CHECK(look.ghost && look.rest && look.weapon == 7 && look.opacity == sh::kGhost);
+  sh::QuickState other = r.q;
   r.s.preview = false;
-  CHECK(!sh::quick_look(r.q, r.s, r.server.armed(), r.t).hide);  // neither asked for
+  CHECK(!sh::quick_look(other, r.s, r.server.armed(), r.t).hide);  // neither asked for
   r.s.hide = true;
-  look = sh::quick_look(r.q, r.s, r.server.armed(), r.t);
+  look = sh::quick_look(other, r.s, r.server.armed(), r.t);
   CHECK(look.hide && !look.ghost);
   r.s.preview = true;
   // Pressed while the shotgun reloads: the ghost turns solid while the rocket is not yet in hand.
   r.server.free_at = r.t + 1;
   r.frame(true);
-  const double pressed = r.q.pressed_at;
-  look = sh::quick_look(r.q, r.s, r.server.armed(), pressed + sh::kSolidS / 2);
-  CHECK(look.ghost && look.weapon == 7 && look.opacity > sh::kGhost && look.opacity < 1);
-  look = sh::quick_look(r.q, r.s, r.server.armed(), pressed + sh::kSolidS);
+  float last = sh::kGhost;
+  bool rising = true;
+  for (double at = r.t; at <= r.t + sh::kSolidS + kDt; at += kDt / 4) {
+    look = sh::quick_look(r.q, r.s, r.server.armed(), at);
+    rising = rising && look.ghost && look.rest && look.weapon == 7 && look.opacity >= last;
+    last = look.opacity;
+  }
+  CHECK(rising);
   CHECK(look.opacity == 1);
-  // The launcher in hand: no ghost.
+  // The launcher in hand and solid: the hand as it is.
   r.server.in_hand = 7;
-  CHECK(!sh::quick_look(r.q, r.s, r.server.armed(), r.t).ghost);
+  CHECK(!sh::quick_look(r.q, r.s, r.server.armed(), r.t + 1).ghost);
   // With cl_quickweapon off, no look at all.
   r.s.on[0] = false;
   r.server.in_hand = 2;
   r.q = {};
   CHECK(!sh::quick_look(r.q, r.s, r.server.armed(), r.t).ghost);
+}
+
+TEST(a_tap_keeps_the_quick_weapon_in_the_picture_and_fades_it_back) {
+  Run r;
+  r.idle(10);
+  sh::QuickLook look = sh::quick_look(r.q, r.s, r.seen.front(), r.t);
+  CHECK(look.ghost && look.weapon == 7 && look.opacity == sh::kGhost);
+  float last = look.opacity, step_max = 0;
+  int other_shown = 0;
+  bool solid = false;
+  for (int i = 0; i < 200; ++i) {
+    r.frame(i == 0);
+    const sh::QuickArmed& a = r.seen.front();  // what the client sees
+    look = sh::quick_look(r.q, r.s, a, r.t);
+    // The weapon drawn: the look's, or the one in hand.
+    if ((look.ghost ? look.weapon : a.in_hand) != 7) ++other_shown;
+    const float opacity = look.ghost ? look.opacity : 1;
+    step_max = std::max(step_max, std::abs(opacity - last));
+    solid = solid || opacity == 1;
+    last = opacity;
+  }
+  CHECK(r.server.shots[7] == 1 && r.server.in_hand == 2);
+  CHECK(other_shown == 0);  // the shotgun's way back is never drawn
+  CHECK(solid);             // solid as it fired
+  CHECK(last == sh::kGhost);
+  // Eased both ways: no frame moves more than the steepest point of the ease allows.
+  CHECK_MSG(step_max <= (1 - sh::kGhost) * 1.5 * kDt / sh::kSolidS + 1e-4,
+            std::to_string(step_max));
+}
+
+TEST(the_second_key_shows_the_weapon_in_hand) {
+  Run r;
+  r.lag = 0;
+  r.idle(2);
+  r.frame(false, true);
+  CHECK(!sh::quick_look(r.q, r.s, r.server.armed(), r.t).ghost);  // the beam gun as it is
+  r.idle(200);
+  CHECK(r.server.in_hand == 2 && r.server.shots[8] == 1);
+  // Back on the shotgun: the launcher's ghost again.
+  const sh::QuickLook look = sh::quick_look(r.q, r.s, r.server.armed(), r.t);
+  CHECK(look.ghost && look.rest && look.weapon == 7);
 }

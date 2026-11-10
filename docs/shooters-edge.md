@@ -1654,7 +1654,7 @@ could, a weapon by its key (`impulse`) and the attack.
 | `cl_quickweapon_prio` | `7 8 5 6 3 2 4 1` | +attack's weapons, best first, by weapon key |
 | `cl_quickweapon_prio2` | `8 3 2` | +attack2's (the hitscan guns); empty: +attack2 fires what is in hand |
 | `cl_quickweapon_default` | `2 1` | the weapon put back: the first carried with ammunition |
-| `cl_quickweapon_preview` | 1 | the weapon +attack would fire drawn see-through in hand, solid as it fires |
+| `cl_quickweapon_preview` | 1 | the weapon +attack would fire held see-through in hand, turning solid as it fires and back |
 | `cl_quickweapon_hide` | 0 | with the preview off: no weapon drawn while +attack would switch |
 
 +attack2 is bound to no key: `bind mouse2 +attack2` (MOUSE2 jumps by default). A press asks for
@@ -1663,7 +1663,10 @@ only for the command it came in still switches and fires the moment the weapon i
 tap holds the attack until the shot shows (the ammunition fell) or a second passes; the way back
 is asked every 0.2 s for 1.5 s; a weapon key the player presses wins. The preview is the held
 weapon drawn with `HeldDraw::opacity` below 1: a screen door that moves each frame, which the
-frame's TAA-U averages to a see-through gun. Lab: `se-quickweapon`.
+frame's TAA-U averages to a see-through gun. Through a tap of +attack the hand keeps holding the
+quick weapon: the ghost turns solid in 0.06 s, fires, stays solid 0.15 s more and eases back to the
+ghost over 0.25 s while the kept weapon comes back unseen, so no weapon switch is drawn. +attack2
+switches as any weapon key does. Lab: `se-quickweapon` (its `tap-chart`).
 
 ## Labs
 

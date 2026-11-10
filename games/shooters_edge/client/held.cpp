@@ -49,11 +49,13 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
                           std::span<const ge::viewmodel::HeldModel> models, double t, double dt) {
   const PlayerState p = player_state(l);
   view::HandInput in;
-  in.weapon = static_cast<view::Weapon>(status_of(l, t).weapon);
+  const auto game = static_cast<view::Weapon>(status_of(l, t).weapon);
+  in.weapon = s.show >= 0 ? static_cast<view::Weapon>(s.show) : game;
   in.dead = p.dead;  // the weapon sinks out of view (view/hand.hpp)
   const float attack = field_named(l, p.entity, "attack_finished");
   const double now = l.server ? l.server->sv.time : 0;
-  in.fired = !p.dead && attack > s.attack_finished && static_cast<double>(attack) > now + 1e-3;
+  in.fired = !p.dead && in.weapon == game && attack > s.attack_finished &&
+             static_cast<double>(attack) > now + 1e-3;
   s.attack_finished = attack;
   if (in.fired) {
     ++s.shots;
@@ -80,7 +82,8 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
   pose.fov_y = frame.fov_y;
   pose.near_m = frame.near_m;
   view::HandInput in;
-  in.weapon = static_cast<view::Weapon>(demo_status(s, t).weapon);
+  const auto game = static_cast<view::Weapon>(demo_status(s, t).weapon);
+  in.weapon = h.show >= 0 ? static_cast<view::Weapon>(h.show) : game;
   in.place.look_yaw = pose.yaw;
   in.place.look_pitch = pose.pitch;
   in.place.grounded = true;
@@ -90,7 +93,7 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
   view::HandFrame f = view::step_hand(h.hand, in, settings, models, pose, dt);
   // A classic set's frame as the server sent it: its fire animations played as recorded.
   const auto w = static_cast<size_t>(f.weapon);
-  if (h.hand.at_eye && w < models.size()) {
+  if (h.hand.at_eye && w < models.size() && f.weapon == game) {
     const auto slot = static_cast<size_t>(s.player);
     int wf = s.format == DemoFormat::single             ? s.weapon_frame
              : s.player >= 0 && slot < s.players.size() ? s.players[slot].weapon_frame
