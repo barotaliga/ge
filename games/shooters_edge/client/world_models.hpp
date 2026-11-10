@@ -172,9 +172,11 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed,
 // brightness and minlight), `smooth` texels; with `in_place` the pack's effects the engine draws
 // instead: a torch's flame drawn bare (the modern look's burning gas, `ce_flames`, is the flame),
 // a flare a soft added glow (`ce_flares`), a bubble a clear ball with a bright rim that wobbles as
-// it rises (`ce_bubbles`).
+// it rises (`ce_bubbles`); of the bubbles the game blows only `bubbles_share` is drawn, the pack's
+// sprites and the made ones alike (`ce_bubbles_share`).
 struct InPlace {
   bool flames = false, flares = false, bubbles = false;
+  double bubbles_share = 1;
 };
 // `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a
 // power's glow: what bsp_draw adds to the walls' lightmaps), at `dynamic_strength`: each adds to

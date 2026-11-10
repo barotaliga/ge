@@ -1,6 +1,6 @@
 // ge:summary Shooter's Edge's looks: the switch's options and the palette grade
 // ge:keywords look classic modern palette grade quantize r_look r_fx_lights r_fx_glow r_bloom
-// ge:keywords r_farland r_farland_warm far-land
+// ge:keywords r_farland r_farland_warm far-land ce_bubbles_share bubbles
 // ge:skill render shooter
 // ge:test tests/shooters_edge_effects_test.cpp
 #include "shooters_edge/app/look.hpp"
@@ -70,6 +70,14 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .min = 0,
            .max = 1},
           &picture.arrival);
+  cv.bind({.name = "ce_bubbles_share",
+           .fallback = "0.3",
+           .flags = gc::kArchive,
+           .help = "the share of the bubbles rising under water that is drawn, in either look: 1 "
+                   "every one the game blows, 0 none",
+           .min = 0,
+           .max = 1},
+          &picture.bubbles_share);
   cv.bind({.name = "r_slime_glow",
            .fallback = "1",
            .help = "how much the slime's green glow lights the walls round it in the modern look, "

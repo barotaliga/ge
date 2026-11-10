@@ -2,6 +2,7 @@
 //
 // ge:summary The window's models: items, weapons, flames, players, loaded from the packs and drawn
 // ge:keywords world-models create_models place_models prepare_models encode_models
+// ge:keywords bubbles ce_bubbles_share
 // ge:skill render shooter morph
 #include "shooters_edge/client/world_models.hpp"
 
@@ -36,9 +37,13 @@ namespace {
 // texels, their size in the world, and how far a bubble wobbles off its path as it rises.
 constexpr uint32_t kFlarePx = 64, kBubblePx = 32;
 constexpr double kFlareM = 1.3, kBubbleM = 0.07, kBubbleWobbleM = 0.015;
-// A bubble the server moves is drawn as a little cluster: itself and two smaller ones trailing
-// under it, each its own share of the size, its offset (m: across, down) and its own wobble.
-constexpr double kCluster[3][3] = {{1.0, 0, 0}, {0.5, 0.025, 0.06}, {0.32, -0.02, 0.11}};
+
+// Whether the bubble the server moves as `entity` is one of the `share` (0..1) drawn: a fixed pick
+// by its number, so a bubble kept stays kept all the way up and a column thins evenly.
+bool bubble_kept(int entity, double share) {
+  if (share >= 1) return true;
+  return double(uint32_t(entity) * 2654435761u % 1000u) < share * 1000;
+}
 
 constexpr uint32_t kSpin = 8;           // a model file's flag: the item turns
 constexpr double kSpinDegPerS = 100;    // how fast
@@ -479,6 +484,8 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     const double at = k.synced ? t : t + double(uint32_t(p.entity) * 2654435761u % 1000) * 1e-3;
     if (k.is == ModelKind::Is::sprite) {
       if (!m.has_sprites || m.sprite_draws.size() >= gr::kMaxSprites) continue;
+      // Only a share of the bubbles the game blows is drawn, in either look (ce_bubbles_share).
+      if (k.effect == "bubbles" && !bubble_kept(p.entity, in_place.bubbles_share)) continue;
       const bool flare = k.made != ModelKind::kNone && k.effect == "flare" && in_place.flares;
       const bool bubble = k.made != ModelKind::kNone && k.effect == "bubbles" && in_place.bubbles;
       if (flare || bubble) {
@@ -499,16 +506,13 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
         s.blend = gr::SpriteBlend::over;
         s.glow = 0.7f;  // its rim catches the room's light
         // Each its own phase, so a column of bubbles never wobbles as one.
-        const double phase = double(uint32_t(p.entity) * 2654435761u % 6283) * 1e-3;
-        for (int b = 0; b < 3 && m.sprite_draws.size() < gr::kMaxSprites; b++) {
-          const double ph = phase + b * 2.1, wob = kBubbleWobbleM * (1 + 0.5 * b);
-          double c[3] = {w[0] + kCluster[b][1], w[1] - kCluster[b][2], w[2]};
-          c[0] += wob * std::sin(t * 2 * 3.14159265358979 * (2.7 + 0.6 * b) + ph);
-          c[2] += wob * std::cos(t * 2 * 3.14159265358979 * (2.3 + 0.5 * b) + ph * 1.3);
-          s.scale = float(kBubbleM * kCluster[b][0] / kBubblePx);
-          for (int a = 0; a < 3; a++) s.position[a] = s.last[a] = c[a];
-          m.sprite_draws.push_back(s);
-        }
+        const double ph = double(uint32_t(p.entity) * 2654435761u % 6283) * 1e-3;
+        double c[3] = {w[0], w[1], w[2]};
+        c[0] += kBubbleWobbleM * std::sin(t * 2 * 3.14159265358979 * 2.7 + ph);
+        c[2] += kBubbleWobbleM * std::cos(t * 2 * 3.14159265358979 * 2.3 + ph * 1.3);
+        s.scale = float(kBubbleM / kBubblePx);
+        for (int a = 0; a < 3; a++) s.position[a] = s.last[a] = c[a];
+        m.sprite_draws.push_back(s);
         continue;
       }
       gr::SpriteDraw s;
