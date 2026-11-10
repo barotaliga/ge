@@ -213,6 +213,8 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
   std::vector<uint8_t> store;
   out.registered = !find_file(files, content.full_game, store).empty();
   out.start_map = std::string(content.start_map);
+  out.episodes.start_map = out.start_map;
+  out.episodes.first_maps.assign(game.episode_maps.begin(), game.episode_maps.end());
   out.first_map =
       find_file(files, ge::classicenhance::asset_path(content.maps, out.start_map), store).empty()
           ? std::string(game.fallback_map)
@@ -229,9 +231,12 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
     return;
   }
   con.add_command("newgame", "newgame: a new single-player game from the start map",
-                  [&listen, &next_map, &content](Con&, const CArgs&) {
+                  [&listen, &next_map, &content](Con& c, const CArgs&) {
                     listen.opt.console.emplace_back("deathmatch 0");
                     listen.opt.console.emplace_back("coop 0");
+                    // What the player has finished opens and shuts the start map's episodes.
+                    if (const ge::console::Cvar* done = c.cvars().find("sv_episodes_done"))
+                      listen.opt.console.emplace_back("sv_episodes_done " + done->value);
                     listen.opt.companions = 0;
                     next_map = content.start_map;
                   });
@@ -258,6 +263,8 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
         }
         listen.opt.console.emplace_back("deathmatch 0");
         listen.opt.console.emplace_back("coop 1");
+        if (const ge::console::Cvar* done = c.cvars().find("sv_episodes_done"))
+          listen.opt.console.emplace_back("sv_episodes_done " + done->value);
         listen.opt.companions = bots;
         listen.opt.companion_skill = skill;
         next_map = map;

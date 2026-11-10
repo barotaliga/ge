@@ -13,6 +13,7 @@
 #include "core/num.hpp"
 #include "progs/vm.hpp"
 #include "shooter/frame.hpp"
+#include "shooters_edge/server/campaign_episodes.hpp"
 #include "shooters_edge/server/commands.hpp"
 
 namespace shooters_edge::server {
@@ -39,6 +40,24 @@ void round_skill(QcServer& s) {
   const double r = ge::core::num::round(v->number);
   const int skill = static_cast<int>(std::clamp(r, 0.0, 3.0));
   set(s, "skill", std::to_string(skill));
+}
+
+// The episodes done (campaign_episodes.hpp): the runes the game carried in added to the server's
+// `sv_episodes_done`; on the start map every done episode's rune in `serverflags`.
+uint32_t episodes_done(const QcServer& s) {
+  const con::Cvar* v = s.cvars.find("sv_episodes_done");
+  return v == nullptr ? 0u : static_cast<uint32_t>(v->integer()) & kEpisodeBits;
+}
+
+void keep_episodes(Campaign& c, QcServer& s) {
+  if (c.opt.episodes.start_map.empty()) return;
+  const uint32_t carried =
+      static_cast<uint32_t>(ge::core::num::to_int32(c.serverflags)) & kEpisodeBits;
+  const uint32_t done = episodes_done(s) | carried;
+  if (done != episodes_done(s)) set(s, "sv_episodes_done", std::to_string(done));
+  if (c.map.name == c.opt.episodes.start_map)
+    c.serverflags =
+        static_cast<float>(static_cast<uint32_t>(ge::core::num::to_int32(c.serverflags)) | done);
 }
 
 // The map `name` started on a new server, `kind` its line in the history; with `join`, the
@@ -68,6 +87,9 @@ bool start_level(Campaign& c, const std::string& name, const char* kind, bool jo
   if (s.cvars.find("coop")->on()) set(s, "deathmatch", "0");
   round_skill(s);
   apply_settings(s);
+  keep_episodes(c, s);
+  if (!shut_episode_bars(c.map, c.opt.episodes, episodes_done(s), c.opt.registered, c.bars, error))
+    return false;
   s.serverflags = c.serverflags;
   c.entered_serverflags = c.serverflags;
   if (!c.server.start(c.map, error)) return false;

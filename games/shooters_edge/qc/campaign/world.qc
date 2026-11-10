@@ -140,11 +140,12 @@ float(string m) episode_of = {
   return 0;
 };
 
-// In coop the episodes open one at a time: the first always, each next once the one before is
-// done (`sv_episodes_done`, a rune's bit for each, kept by the host from game to game).
+// The episodes open one at a time, alone or in coop: the first always, each next once the one
+// before is done (`sv_episodes_done`, a rune's bit for each, kept by the host from game to game,
+// which also keeps the bars in front of a shut episode down).
 float(string m) episode_shut = {
   local float bit;
-  if (!coop || mapname != "start") return FALSE;
+  if (deathmatch || mapname != "start") return FALSE;
   bit = episode_of(m);
   if (bit <= 1) return FALSE;
   return !(cvar("sv_episodes_done") & (bit / 2));

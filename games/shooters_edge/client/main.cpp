@@ -467,6 +467,7 @@ int run_main(int argc, char** argv) {
   listen_opt.port = listen.opt.port;  // others join on it (sv_port)
   listen_opt.maxclients = listen.opt.maxclients;
   listen_opt.registered = game_content.registered;
+  listen_opt.episodes = game_content.episodes;
   listen_opt.item_names = game_content.item_names;
   listen_opt.arsenal = game_content.arsenal;
   listen_opt.voice = remote.voip;  // cl_voip: the window's match relays its players' voices
@@ -686,6 +687,7 @@ int run_main(int argc, char** argv) {
     console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
     if (!cl::load_programs(adapter, files, args.progs, game_content, error)) return false;
     listen.opt.registered = game_content.registered;
+    listen.opt.episodes = game_content.episodes;
     listen.opt.item_names = game_content.item_names;
     listen.opt.arsenal = game_content.arsenal;
     cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);
