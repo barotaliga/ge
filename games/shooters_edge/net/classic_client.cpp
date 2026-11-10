@@ -613,10 +613,6 @@ sh::MoveSettings client_move_settings(const ClassicClientEnd& c) {
   m.wateraccelerate = v[6];
   m.friction = v[7];
   m.waterfriction = v[8];
-  // The easy jump is predicted only where the server says it allows it (its pm_speedjump in the
-  // server info) and the player asked for it; a server that never heard of it says nothing.
-  if (c.cfg.speedjump)
-    m.speedjump = static_cast<float>(std::atof(info_get(c.serverinfo, "pm_speedjump").c_str()));
   return m;
 }
 

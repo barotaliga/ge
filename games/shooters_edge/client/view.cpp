@@ -109,7 +109,7 @@ ge::camera::Subject subject_of(const Listen& l, ge::camera::FirstPersonRow& row)
   const ge::camera::Vec3 v = engine_point(p.velocity);
   s.vel = v;
   s.grounded = p.on_ground;
-  s.look_yaw = engine_heading(l.view.y);
+  s.look_yaw = engine_heading(l.view.y + l.jump_aid.shown);  // the easy jump's swing as shown
   s.look_pitch = engine_pitch(l.view.x);
   s.heading = s.look_yaw;
   row.eye_stand_m =
