@@ -24,6 +24,7 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
+#include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_coop.hpp"
 #include "shooters_edge/net/classic_coop_game.hpp"
 #include "shooters_edge/net/classic_server.hpp"
@@ -380,6 +381,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.hostname = c.hostname;
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
+  g->cfg.rcon_password = c.rcon_password;
   g->cfg.seed = c.seed;
   g->cfg.timeout_s = c.timeout_s;
   g->cfg.flood_msg = c.floodprot_msg;
@@ -743,6 +745,11 @@ bool host_words(void* g, const std::string& line) {
   return taken;
 }
 
+bool host_admin(void* g, const std::string& line, std::string& out) {
+  Game& game = *static_cast<Game*>(g);
+  return game.classic && classic_admin(*game.classic, line, out);
+}
+
 void host_move(void* g, const sh::Packet& p) {
   Game& game = *static_cast<Game*>(g);
   if (game.classic) game.classic->local_moves.push_back(p);
@@ -787,6 +794,7 @@ void host_bind(Game& g) {
   h.change = host_change;
   h.set_info = host_info;
   h.speak = host_speak;
+  h.admin = host_admin;
 }
 
 gs::ServerGame make() {

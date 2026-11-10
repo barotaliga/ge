@@ -19,6 +19,7 @@
 #include "progs/layout.hpp"
 #include "progs/text.hpp"
 #include "progs/vm.hpp"
+#include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -462,6 +463,8 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
     cmd_nextdl(s, slot, w);
   } else if (cmd == "stopdownload" || cmd == "stopdl") {
     c.dl = ServerDownload{};
+  } else if (cmd == "users") {
+    client_print(s, slot, 2, classic_users(s));  // who is on, by user id (classic_admin.hpp)
   } else if (cmd == "ptrack" || cmd == "snap" || cmd == "upload") {
     // Spectator tracking, screenshots and uploads: not built.
   } else {

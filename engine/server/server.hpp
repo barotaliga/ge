@@ -22,7 +22,8 @@
 // and `sv_intermission`, `sv_seed`, `sv_password`,
 // `sv_visibility`; and those kept for what reads them as it lands:
 // `sv_motd`, `sv_admin`, `sv_maprotation`, `sv_maxspectators`, `sv_spectatorpassword`,
-// `sv_rendezvous`, `sv_mod` (read-only: the mods the server was started with). The guards a game's
+// `sv_rendezvous`, `sv_mod` (read-only: the mods the server was started with), `rcon_password`
+// (the remote console's password; empty, a game offers none). The guards a game's
 // endpoint holds its clients to: `sv_timeout` (a client nothing was heard from for that long is
 // dropped: a dead link, not an idle player, who still sends moves) and `sv_floodprot`,
 // `sv_floodprotmsg` (the chat flood rule, guards.hpp). A dedicated server
@@ -37,6 +38,7 @@
 // ge:keywords sv_intermission intermission
 // ge:keywords sv_password sv_visibility sv_motd sv_admin sv_maprotation sv_maxspectators
 // ge:keywords sv_spectatorpassword sv_rendezvous sv_mod lan-advert multiplayer hosting
+// ge:keywords rcon_password remote-console
 // ge:skill net
 // ge:test tests/server_core_test.cpp
 #pragma once
@@ -75,6 +77,7 @@ struct ServerConfig {
   std::string maprotation;           // sv_maprotation: the maps after the first, space-separated
   int32_t max_spectators = 0;        // sv_maxspectators: spectators beside the players
   std::string spectator_password;    // sv_spectatorpassword: watching takes it
+  std::string rcon_password;         // rcon_password: the remote console's (empty: none offered)
   std::string rendezvous;            // sv_rendezvous: the rendezvous to list with (M17r)
   std::string mod;                   // sv_mod: the mods' directories, lowest first (read-only)
   double timeout_s = 65;             // sv_timeout: a client silent this long is dropped

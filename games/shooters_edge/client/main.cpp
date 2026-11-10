@@ -125,6 +125,7 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
+#include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_bot_team.hpp"
 #include "shooters_edge/net/classic_browse.hpp"
 #include "shooters_edge/net/classic_game.hpp"
@@ -193,7 +194,16 @@ int run_main(int argc, char** argv) {
                           next_map = a[1];
                       });
   console.add_command("sv", "sv <line>: a line for the server's console",
-                      [&](Con&, const CArgs& a) {
+                      [&](Con& c, const CArgs& a) {
+                        std::string out;  // the administrator's words first (users, speedjump)
+                        if (cl::listen_admin(listen, a.rest(0), out)) {
+                          for (size_t at = 0; at < out.size();) {
+                            const size_t end = std::min(out.find('\n', at), out.size());
+                            c.print(out.substr(at, end - at));
+                            at = end + 1;
+                          }
+                          return;
+                        }
                         listen.opt.console.push_back(a.rest(0));
                         if (listen.server) listen.rules->console(a.rest(0));
                       });
@@ -219,6 +229,7 @@ int run_main(int argc, char** argv) {
   cl::Timedemo bench;
   sn::Remote remote;  // `connect`: the window on a server elsewhere
   sn::add_remote_commands(console, remote);
+  sn::add_admin_commands(console, listen, remote);  // users, status, speedjump, rcon
   cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
   cl::add_playback_commands(console, playback, bench);
   // The window's sound: its own game's (client/listen_sound.hpp) or a played demo's or a joined

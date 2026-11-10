@@ -930,6 +930,12 @@ bool listen_lobby(Listen& l, std::string_view line) {
   return taken;
 }
 
+bool listen_admin(Listen& l, const std::string& line, std::string& out) {
+  if (!l.host || l.host->admin == nullptr || l.host->game == nullptr || l.match == nullptr)
+    return false;
+  return l.host->admin(l.host->game, line, out);
+}
+
 hud::LobbyView listen_lobby_view(const Listen& l) {
   if (!l.room || l.server == nullptr) return {};
   hud::LobbyView v = lobby_view(*l.room, l.server->sv.time, 0);

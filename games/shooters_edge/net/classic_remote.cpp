@@ -295,6 +295,14 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
     r.now_us += kTickUs;
     client_tick(r.end, r.now_us);
   }
+  for (std::string& line : r.end.oob_prints) {  // rcon's answers, a line each
+    for (size_t at = 0; at < line.size();) {
+      const size_t end = std::min(line.find('\n', at), line.size());
+      if (end > at) said.push_back(line.substr(at, end - at));
+      at = end + 1;
+    }
+  }
+  r.end.oob_prints.clear();
   if (r.end.stage != r.said) {
     r.said = r.end.stage;
     std::string line = stage_words(r.said) + r.server_name;

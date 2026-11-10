@@ -542,6 +542,9 @@ void read_oob(ClassicClientEnd& c, const uint8_t* data, size_t size) {
     c.refused = std::string(reinterpret_cast<const char*>(data) + 5,
                             strnlen(reinterpret_cast<const char*>(data) + 5, size - 5));
     c.stage = ClientStage::dropped;
+  } else if (type == 'n') {  // after the connect: a remote console's answer
+    c.oob_prints.emplace_back(reinterpret_cast<const char*>(data) + 5,
+                              strnlen(reinterpret_cast<const char*>(data) + 5, size - 5));
   }
 }
 
@@ -591,6 +594,10 @@ void client_start(ClassicClientEnd& c, gn::Transport& t, const gn::Address& serv
                             : gn::voice_trial_speech(static_cast<uint32_t>(cfg.seed) * 7919u + 17u,
                                                      6.0, 100.0 + 25.0 * (cfg.seed % 5));
   }
+}
+
+void client_rcon(ClassicClientEnd& c, const std::string& password, const std::string& line) {
+  send_oob_text(c, "rcon \"" + password + "\" " + line + "\n");
 }
 
 void client_command(ClassicClientEnd& c, const std::string& line) {
