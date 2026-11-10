@@ -29,6 +29,8 @@ struct Look {
   b: vec4f,
   c: vec4f,  // depth of field: the focus (m), the sharp share, the widest circle (of the height)
   d: vec4f,  // the screen's blend: an sRGB-encoded colour, its share (`set_post_blend`)
+  e: vec4f,  // the arrival (`set_post_warp`): share, reveal, zoom, flash
+  f: vec4f,  // the arrival's tint, sRGB-encoded
 }
 @group(1) @binding(6) var<uniform> look: Look;
 // Motion blur's inputs at the render size (render/motion_blur.hpp): the motion target (rg the
@@ -247,6 +249,37 @@ fn defocused(uv: vec2f, c: vec3f, size: vec2f) -> vec3f {
   return mix(c, textureSampleLevel(dof, lin, uv, 0.0).rgb, clamp(px / 1.5, 0.0, 1.0));
 }
 
+// THE ARRIVAL (render/post.hpp's PostWarp): outside the clear disc the view is pulled in toward
+// the middle and streaked toward it, red reaching farther than blue, washed out and tinted; the
+// disc's edge is a bright rim and the flash lies over everything. Linear light, before the
+// exposure (the tint is divided by it, so a flash of 1 is about white whatever the room).
+const kWarpTaps: i32 = 8;
+
+fn arrived(uv: vec2f, c: vec3f, size: vec2f, e: f32) -> vec3f {
+  let share = look.e.x;
+  let reveal = look.e.y;
+  let aspect = vec2f(size.x / size.y, 1.0);
+  let r = length((uv - 0.5) * aspect) / length(0.5 * aspect);  // 0 the middle, 1 a corner
+  let outside = smoothstep(reveal - 0.3, reveal + 0.02, r);
+  let k = share * mix(0.3, 1.0, outside);
+  let q = 0.5 + (uv - 0.5) * (1.0 - 0.35 * look.e.z - 0.12 * k * r);
+  let streak = (q - 0.5) * (0.3 * k);
+  let split = (q - 0.5) * (0.04 * k);
+  var sum = vec3f(0.0);
+  for (var i = 0; i < kWarpTaps; i++) {
+    let t = q - streak * ((f32(i) + 0.5) / f32(kWarpTaps));
+    sum += vec3f(textureSampleLevel(hdr, lin, t + split, 0.0).r,
+                 textureSampleLevel(hdr, lin, t, 0.0).g,
+                 textureSampleLevel(hdr, lin, t - split, 0.0).b);
+  }
+  var w = mix(c, sum / f32(kWarpTaps), clamp(4.0 * k + look.e.z, 0.0, 1.0));
+  w = mix(w, vec3f(dot(w, kLuma)), 0.7 * outside * share);
+  let ring = (r - reveal) / 0.07;
+  let rim = share * exp(-ring * ring);
+  let tint = srgb_to_linear(look.f.rgb);
+  return w + tint * ((look.e.w + 1.5 * rim + 0.5 * outside * share) / e);
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4f {
   let size = vec2f(textureDimensions(hdr));
@@ -266,6 +299,9 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   }
   if (kDof) {
     c = defocused(uv, c, size);
+  }
+  if (look.e.x > 0.0 || look.e.w > 0.0 || look.e.z > 0.0) {
+    c = arrived(uv, c, size, e);
   }
   var glow = vec3f(0.0);  // the light the dirt shows: the glow past white, and the lens's
   if (kBloom > 0.0) {

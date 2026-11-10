@@ -643,6 +643,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   // Under a lava's or a slime's level the modern look draws the liquid round the eye itself.
   const bool round = f.extras && liquid_round_eye(*f.extras);
   gr::set_post_blend(d, f.post[p], round ? fx.blend_dry : fx.blend);
+  // The local player's own arrival opens the whole view out of a flash and a warp (r_arrival).
+  gr::set_post_warp(
+      d, f.post[p],
+      gr::arrival_warp(fx.arrival_s, fx_switches(*f.picture).arrival, fx.arrival_tint));
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
     // The engine's fire burns in place of the file's flash, and its arc across a lightning gun's

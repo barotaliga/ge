@@ -1869,6 +1869,10 @@ in tile memory):
   classic look bakes one that pulls every colour to the nearest of its palette's 256);
 - the screen's blend (`set_post_blend`): the whole picture mixed toward one colour after the
   grade, a game's hurt flash or the liquid round the eye, a uniform the game sets each frame;
+- the arrival (`set_post_warp`, `arrival_warp`): the whole view opening out of a flash and a warp
+  while the player arrives (a spawn, a teleport's far end): pulled in and streaked toward the
+  middle, washed out and tinted, a clear disc with a bright rim growing past the corners; a
+  uniform too, its share 0 one uniform branch;
 - tone mapping, a blue-noise dither against banding, and the output transfer function.
 
 **As built (M7a)** (`render/post.hpp`): the exposure maps a white Lambertian surface under
