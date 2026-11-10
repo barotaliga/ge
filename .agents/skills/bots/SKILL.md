@@ -144,7 +144,13 @@ The traits say how WELL a bot does a thing; a feature says WHETHER it does it.
 The shooter bots' plan is a checklist in `docs/goals/M18r.md` § M18r14g: what is done with its
 numbers, what is open in order with its yardstick, and what was tried and dropped (never tried
 again blind). "Continue the bot work" means: the first open item there, built, judged as below,
-its entry updated with the before and after, in the same pull request.
+its entry updated with the before and after.
+
+**A SESSION KEEPS GOING.** One checkpoint is not a session: after each one (pushed and its
+entry updated), take the next open item and go on, checkpoint after checkpoint, until about 70 %
+of the context window is used. Only then stop: the plan's entries current, the branch pushed, and
+a short handoff of where the next session starts. Stop earlier only for a question that is the
+maintainer's to answer.
 
 **The locations: `.bots/local.md`.** Nothing about a machine is in the tree. The game's packs,
 people's recordings and the scratch output live where `.bots/local.md` says (git-ignored, one per
