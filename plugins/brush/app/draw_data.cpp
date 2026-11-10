@@ -3,7 +3,7 @@
 //
 // ge:summary The classic map experiment's data: the pack, atlases, liquid bodies and point lights
 // ge:keywords lab classic bsp pack palette miptex atlas lightmap liquid-body point-light flicker
-// ge:keywords surface-atlas relief
+// ge:keywords surface-atlas relief seen-lights fill-light fixture
 // ge:skill brush labs
 #include <algorithm>
 #include <array>
@@ -849,9 +849,11 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
         l.flicker = l.flame ? Flicker::candle : Flicker::steady;
     }
     for (int k = 0; k < 3; ++k) l.colour[k] = le.colour[k];
+    l.globe = le.globe;
     s.lights.push_back(l);
   }
   place_fires(s);
+  seen_lights(s);
   return true;
 }
 
@@ -884,6 +886,61 @@ std::vector<std::array<float, 3>> texture_means(const Scene& scene) {
     done[sf.texture] = true;
   }
   return out;
+}
+
+size_t seen_lights(Scene& scene) {
+  const Atlas& a = scene.textures;
+  // Each drawn face's box (engine m) and whether its texture glows, its share read off the atlas
+  // once a texture (a face's rectangle from its first vertex).
+  std::vector<int8_t> glows(scene.map.textures.size(), -1);
+  struct Box {
+    double lo[3], hi[3];
+  };
+  std::vector<Box> lamps;
+  for (size_t si = 0; si < scene.face_runs.size() && si < scene.map.surfaces.size(); ++si) {
+    const auto [first, count] = scene.face_runs[si];
+    if (count < 3 || a.levels.empty()) continue;
+    const DrawVertex& v0 = scene.vertices[scene.indices[first]];
+    if (v0.kind == uint32_t(kSky) || v0.kind == uint32_t(kHidden)) continue;
+    const uint32_t tex = scene.map.surfaces[si].texture;
+    if (tex >= glows.size()) continue;
+    if (glows[tex] < 0) {
+      const auto x0 = uint32_t(v0.rect[0]), y0 = uint32_t(v0.rect[1]);
+      const uint32_t x1 = std::min(x0 + uint32_t(v0.rect[2]), a.width),
+                     y1 = std::min(y0 + uint32_t(v0.rect[3]), a.height);
+      double lit = 0, n = 0;
+      for (uint32_t y = y0; y < y1; ++y)
+        for (uint32_t x = x0; x < x1; ++x) {
+          lit += a.levels[0][(size_t(y) * a.width + x) * 4 + 3] == 255 ? 1 : 0;
+          n += 1;
+        }
+      glows[tex] = n > 0 && lit >= kFixtureGlow * n ? 1 : 0;
+    }
+    if (glows[tex] == 0) continue;
+    Box b{{1e30, 1e30, 1e30}, {-1e30, -1e30, -1e30}};
+    for (uint32_t i = first; i < first + count; ++i) {
+      const float* p = scene.vertices[scene.indices[i]].pos;
+      for (int k = 0; k < 3; ++k) {
+        b.lo[k] = std::min(b.lo[k], double(p[k]));
+        b.hi[k] = std::max(b.hi[k], double(p[k]));
+      }
+    }
+    lamps.push_back(b);
+  }
+  size_t seen = 0;
+  for (PointLight& l : scene.lights) {
+    l.seen = l.flame || l.fire != Fire::none || l.globe;
+    for (size_t i = 0; i < lamps.size() && !l.seen; ++i) {
+      double d2 = 0;
+      for (int k = 0; k < 3; ++k) {
+        const double out = std::max({lamps[i].lo[k] - l.pos[k], l.pos[k] - lamps[i].hi[k], 0.0});
+        d2 += out * out;
+      }
+      l.seen = d2 <= kFixtureM * kFixtureM;
+    }
+    seen += l.seen ? 1 : 0;
+  }
+  return seen;
 }
 
 std::vector<bake::Light> bake_lights(const Scene& scene, double strength) {

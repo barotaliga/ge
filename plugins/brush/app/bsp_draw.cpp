@@ -593,16 +593,19 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     const double spread = std::max(soft, near);
     // An aimed light: full inside info.w's cosine, none outside spot.w's.
     set4(g.info, -1, spread * spread, 0, l.spot ? l.cone_cos[0] : -1);
-    // Its shadows as soft as its source is big: a flame's over its size, a bulb's sharp.
-    set4(g.more, -1, std::max(soft * kFlameWidthShare, kPointSourceM), 0, 0);
-    if (l.spot)
-      set4(g.spot, l.dir[0], l.dir[1], l.dir[2], l.cone_cos[1]);
-    else
-      set4(g.spot, 0, -1, 0, -2);
     // A dynamic light moves or goes out from one frame to the next, so a cube of it would be drawn
     // again every frame: it lights without a shadow.
     const bool dynamic = !d.dynamic_points.empty() && p.l >= d.dynamic_points.data() &&
                          p.l < d.dynamic_points.data() + d.dynamic_points.size();
+    // Whether it throws a figure's shadow (Options::fill_shadows): a source he can see.
+    const bool figure = o.fill_shadows || dynamic || (l.seen && !l.physical);
+    // Its shadows as soft as its source is big: a flame's over its size, a bulb's sharp; z 1 when
+    // it throws a figure's.
+    set4(g.more, -1, std::max(soft * kFlameWidthShare, kPointSourceM), figure ? 1 : 0, 0);
+    if (l.spot)
+      set4(g.spot, l.dir[0], l.dir[1], l.dir[2], l.cone_cos[1]);
+    else
+      set4(g.spot, 0, -1, 0, -2);
     if (!l.physical && !dynamic && int(casters.size()) < d.options.shadowed)
       casters.push_back(d.frame_lights.size());
     d.frame_lights.push_back(g);
@@ -680,8 +683,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   {
     const std::vector<Capsule> caps =
         lights && o.capsules ? shadow_capsules(d.caster_boxes, view.eye) : std::vector<Capsule>{};
+    // w: the share of the bounce a figure's shadow dims (Options::fill_shadows; bsp.wgsl).
     set4(d.staged.capsule_info, double(caps.size()), o.soft_casters ? 0 : 1,
-         std::clamp(o.view_shadows, 0, 2), 0);
+         std::clamp(o.view_shadows, 0, 2), o.fill_shadows ? kIndirectShadow : 0);
     for (size_t c = 0; c < caps.size(); ++c) {
       set4(d.staged.capsules[c * 2], caps[c].a[0], caps[c].a[1], caps[c].a[2], caps[c].r);
       set4(d.staged.capsules[c * 2 + 1], caps[c].b[0], caps[c].b[1], caps[c].b[2], 0);
@@ -695,7 +699,11 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   const bool casting = lights && !d.casters.empty() && cast_by > 0;
   if (casting) {
     d.caster_count = uint32_t(std::min<size_t>(d.casters.size() / 3, kMaxCasterVerts) / 3 * 3);
-    for (const size_t c : caster_lights(d.frame_lights, casters, d.caster_boxes, view.eye)) {
+    // Only the lights that throw a figure's shadow get a cube of the casters.
+    std::vector<size_t> figure;
+    for (const size_t c : casters)
+      if (d.frame_lights[c].more[2] > 0.5f) figure.push_back(c);
+    for (const size_t c : caster_lights(d.frame_lights, figure, d.caster_boxes, view.eye)) {
       if (d.caster_lights >= cast_by) break;
       GpuLight& g = d.frame_lights[c];
       const int n = d.caster_lights++;

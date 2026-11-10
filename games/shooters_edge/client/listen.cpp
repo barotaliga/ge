@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
@@ -471,6 +472,13 @@ void read_streams(Listen& l, const sv::RulesCommon& s, bool clear = true) {
       e.code = -1;
       e.kind = ev.text == "explosion" ? EffectKind::explosion : EffectKind::blood;
       e.at = e.end = ev.origin;
+      // A burst's drops and its way as the wire would carry them: the count a byte, each axis of
+      // the way in sixteenths from -8 to 7.94.
+      e.count = std::clamp(static_cast<int>(ev.values[1]), 0, 255);
+      for (int k = 0; k < 3; k++) {
+        const float w = ev.dir[k];
+        e.way[k] = std::clamp(std::trunc(w * 16), -128.f, 127.f) / 16;
+      }
       l.effects.push_back(e);
     }
     for (size_t i = first; i < l.effects.size(); i++)

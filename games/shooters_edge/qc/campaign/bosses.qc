@@ -261,6 +261,27 @@ void() oldone_end = {
               "four runes go quiet. The way home is open.");
 };
 
+// Fifty pieces from all through its body (a grid 32 apart, five by five across, at two
+// heights), each the first piece three times in ten, the second three, the third four, torn
+// away as fast as a piece can fly.
+void() oldone_gibs = {
+  local float x, y, z, r;
+  local vector org;
+  local string mdl;
+  for (z = 16; z <= 112; z += 96) {
+    for (x = -64; x <= 64; x += 32) {
+      for (y = -64; y <= 64; y += 32) {
+        org = self.origin + x * '1 0 0' + y * '0 1 0' + z * '0 0 1';
+        r = random();
+        if (r < 0.3) mdl = "progs/gib1.mdl";
+        else if (r < 0.6) mdl = "progs/gib2.mdl";
+        else mdl = "progs/gib3.mdl";
+        throw_gib_at(mdl, org, -999);
+      }
+    }
+  }
+};
+
 // Torn apart: it shakes through its last frames, then bursts, and the game ends.
 void() oldone_burst = {
   anim_tick();
@@ -269,9 +290,7 @@ void() oldone_burst = {
     return;
   }
   sound(self, CHAN_VOICE, "boss2/pop2.wav", 1, ATTN_NONE);
-  throw_gib("progs/gib1.mdl", 300);
-  throw_gib("progs/gib2.mdl", 300);
-  throw_gib("progs/gib3.mdl", 300);
+  oldone_gibs();
   self.modelindex = 0;
   self.think = oldone_end;
   self.nextthink = time + 2;

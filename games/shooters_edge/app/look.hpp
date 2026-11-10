@@ -73,6 +73,9 @@ struct Picture {
   double fire_glow = 1;   // r_fire_glow: the flames' own brightness, 1 as made
   double fire_pace = ge::brush::app::kFirePace;  // r_fire_speed: the flames' pace, 1 a real fire's
   double gamma = 1;  // gamma: the picture's brightness, below 1 brighter
+  // r_fill_shadows: 1 lets every map light throw a figure's shadow and dims the bounce round him,
+  // 0 (the default) only the lights whose source shows (brush/app/bsp_draw.hpp's fill_shadows)
+  double fill_shadows = 0;
   // r_beam_style: the arc gun's bolt in the modern look under ce_beams, by number
   // (app/weapon_fx.hpp's kBoltStyles: 1 forked, 2 arc, 3 bolt, 4 braid)
   double beam_style = 3;
