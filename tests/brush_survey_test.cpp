@@ -5,6 +5,7 @@
 // ge:summary Test: leaf cells by family, liquid bodies, a slice, entity places and the class glob
 // ge:keywords test brush survey cell liquid-bodies deepest slice entity-place glob
 // ge:skill brush testing
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -81,7 +82,7 @@ TEST(a_slice_tells_the_halls_from_the_rock_round_them) {
     CHECK(br::slice_map(m, 2, 64, 32, &s, &error));
     CHECK(s.u_axis == 0 && s.v_axis == 1 && s.step == 32 && !s.rows.empty());
     // The hall's middle (256, 192) is open; the cell at the box's far corner is rock.
-    const int col = int((256 - s.u0) / 32 + 0.5), row = int((s.v0 - 192) / 32 + 0.5);
+    const int col = int(std::lround((256 - s.u0) / 32)), row = int(std::lround((s.v0 - 192) / 32));
     CHECK(s.rows[size_t(row)][size_t(col)] == '.');
     CHECK(s.rows.back().back() == '#' || s.rows.front().back() == '#');
     size_t open = 0;
