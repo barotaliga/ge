@@ -19,6 +19,13 @@
 // more: a bot of that level learns it), and written to tricks.tsv for the nav (a rocket link
 // to prove), beside jumps.tsv with every jump.
 //
+// THE GAP TRICKS: each track's plain jumps over a pit, a chasm or lava (shooter/gap_jumps.hpp:
+// the floor under the flight traced through the world and the solid brush entities resting where
+// the map builds them), gathered the same way into the spots people jump again and again, with
+// the takeoff's speed (its quarter: the speed a bot must bring), whether a run's jump would fall
+// short (a speed jump, built by hopping) and whether the gap holds lava or slime; tabled and
+// written to gap_tricks.tsv (a jump link at speed to prove).
+//
 // What it shows: the tables; each map from above and at an angle with every jump as a line from
 // takeoff to landing coloured by kind and its tricks thick and numbered. Deterministic: the
 // digest holds the counts.
@@ -26,24 +33,28 @@
 // ge:summary Lab: rocket jumps read off many demos: kinds, keys, levels, the maps' tricks
 // ge:keywords lab se-rj rocket-jump rj flip tricks trick-spots demos mvd keys levels amateur
 // ge:keywords intermediate expert movement-skill copy-movement best-movements analytics
+// ge:keywords gap-tricks gap-jump speed-jump strafe-jump-over lava-jump
 // ge:skill bots labs
 // ge:test tests/shooter_rocket_jumps_test.cpp
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "core/parallel.hpp"
 #include "core/prng.hpp"
 #include "lab/lab.hpp"
+#include "shooter/gap_jumps.hpp"
 #include "shooter/hops.hpp"
 #include "shooter/rocket_jumps.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -74,6 +85,19 @@ struct Jump {
   std::string map;
   sh::RocketJump j;
 };
+
+// A gap jump (shooter/gap_jumps.hpp) and whose it was.
+struct Gap {
+  int demo = 0, slot = 0, player = 0;
+  std::string map;
+  sh::GapJump j;
+};
+
+float quantile(std::vector<float> v, float q) {
+  if (v.empty()) return 0;
+  std::sort(v.begin(), v.end());
+  return v[static_cast<size_t>(q * static_cast<float>(v.size() - 1))];
+}
 
 // An arrival at the asked spot (`--spot`): who, when, and the blasts and takeoff before it.
 struct Arrival {
@@ -189,10 +213,30 @@ std::vector<std::vector<uint8_t>> written_matches(int count) {
   return out;
 }
 
+// The solid brush entities of a map that rest where the map builds them (doors, walls, bridges:
+// every func_ entity but the illusionary ones you walk through, the plats that rest lowered, the
+// trains that move and the doors that start open, resting away), the floors a gap jump's flight
+// is traced over.
+std::vector<sh::BrushModel> solid_models(const la::StudyMap& m) {
+  std::vector<sh::BrushModel> out;
+  for (const auto& e : m.map.entities) {
+    const std::string& c = e.get("classname");
+    const std::string& model = e.get("model");
+    if (c.rfind("func_", 0) != 0 || c == "func_illusionary" || c == "func_plat" ||
+        c == "func_train" || model.size() < 2 || model[0] != '*')
+      continue;
+    if (c == "func_door" && (std::atoi(e.get("spawnflags").c_str()) & 1) != 0) continue;
+    const size_t n = static_cast<size_t>(std::atoi(model.c_str() + 1));
+    if (n > 0 && n < m.bsp.models.size()) out.push_back(m.bsp.models[n]);
+  }
+  return out;
+}
+
 // A map read once for every demo of it.
 struct Maps {
   std::string basedir, game;
   std::map<std::string, std::unique_ptr<la::StudyMap>> by_name;
+  std::map<std::string, std::vector<sh::BrushModel>> solids;  // solid_models of each
   la::StudyMap* get(const std::string& name, std::string& error) {
     auto it = by_name.find(name);
     if (it != by_name.end()) return it->second.get();
@@ -204,6 +248,7 @@ struct Maps {
       return nullptr;
     }
     la::StudyMap* raw = m.get();
+    solids[name] = solid_models(*raw);
     by_name[name] = std::move(m);
     return raw;
   }
@@ -259,9 +304,10 @@ void run(gl::Lab& lab) {
   const double window_s = lab.arg_num("spot-s");
   const float rise_least = static_cast<float>(lab.arg_num("spot-rise"));
   std::vector<Arrival> arrivals;
-  Maps maps{lab.arg("basedir"), lab.arg("game"), {}};
+  Maps maps{lab.arg("basedir"), lab.arg("game"), {}, {}};
   std::vector<Player> players;
   std::vector<Jump> jumps;
+  std::vector<Gap> gaps;
   int read = 0, broken = 0, no_map = 0;
   for (size_t i = 0; i < demo_count; i++) {
     Scanned& sc = scans[i];
@@ -299,12 +345,21 @@ void run(gl::Lab& lab) {
         shots[static_cast<size_t>(f.shooter)].push_back({f.t0, f.t1, f.from, f.to, at_another(f)});
     std::vector<std::vector<sh::RocketJump>> found(32);
     std::vector<sh::HopReading> hops(32);
+    std::vector<std::vector<sh::GapJump>> gap_found(32);
+    const std::vector<sh::BrushModel>& models = maps.solids[scan.map];
     ge::core::parallel_bands(32, 32, [&](size_t b, size_t e) {
       for (size_t k = b; k < e; k++) {
         const std::vector<sh::TrackPoint>& tr = scan.tracks[k];
         if (tr.size() < 8) continue;
         sh::read_hops(tr, *m->world, sh::HopSettings{}, hops[k]);
         sh::read_rocket_jumps(tr, hops[k], shots[k], sh::RocketJumpReadSettings{}, found[k]);
+        // The gap jumps: his plain jumps over a pit, a rocket jump's frames left out (and any
+        // frame a rocket of his burst by him: an unseen point-blank one leaves no rocket jump).
+        std::vector<std::pair<int32_t, int32_t>> blasts;
+        for (const sh::RocketJump& j : found[k])
+          blasts.push_back({j.shot, j.land >= 0 ? j.land : j.burst});
+        sh::read_gap_jumps(tr, hops[k], *m->world, models, blasts, sh::GapJumpReadSettings{},
+                           gap_found[k]);
       }
     });
     for (size_t k = 0; k < 32; k++) {
@@ -322,6 +377,8 @@ void run(gl::Lab& lab) {
       players.push_back(p);
       for (const sh::RocketJump& j : found[k])
         jumps.push_back({static_cast<int>(i), static_cast<int>(k), at, scan.map, j});
+      for (const sh::GapJump& j : gap_found[k])
+        gaps.push_back({static_cast<int>(i), static_cast<int>(k), at, scan.map, j});
     }
     if (asked)
       for (size_t k = 0; k < 32; k++) {
@@ -594,6 +651,99 @@ void run(gl::Lab& lab) {
            std::to_string(by_level[2]) + "\t" + kLevelName[level] + "\n";
   }
 
+  // THE GAP TRICKS: plain jumps over a pit made on the same spot again and again, gathered as the
+  // rocket tricks are; with the takeoff's speed people had (its quarter: most made it faster) and
+  // the share a run's jump could not make (a speed jump: built by hopping first).
+  struct GapTrick {
+    std::string map;
+    std::vector<int> jumps;
+    sh::Vec3f from_sum, to_sum;
+  };
+  std::vector<GapTrick> gap_all;
+  for (size_t k = 0; k < gaps.size(); k++) {
+    const Gap& j = gaps[k];
+    GapTrick* in_one = nullptr;
+    for (GapTrick& t : gap_all) {
+      const float inv = 1.0f / static_cast<float>(t.jumps.size());
+      if (t.map == j.map && near(t.from_sum * inv, j.j.from) && near(t.to_sum * inv, j.j.to)) {
+        in_one = &t;
+        break;
+      }
+    }
+    if (!in_one) {
+      gap_all.push_back({j.map, {}, {}, {}});
+      in_one = &gap_all.back();
+    }
+    in_one->jumps.push_back(static_cast<int>(k));
+    in_one->from_sum = in_one->from_sum + j.j.from;
+    in_one->to_sum = in_one->to_sum + j.j.to;
+  }
+  std::vector<GapTrick> gap_tricks;
+  for (const GapTrick& t : gap_all) {
+    std::vector<std::pair<int, int>> who;
+    who.reserve(t.jumps.size());
+    for (const int k : t.jumps)
+      who.push_back({gaps[static_cast<size_t>(k)].demo, gaps[static_cast<size_t>(k)].slot});
+    std::sort(who.begin(), who.end());
+    who.erase(std::unique(who.begin(), who.end()), who.end());
+    if (static_cast<int>(t.jumps.size()) >= gold && who.size() >= 2) gap_tricks.push_back(t);
+  }
+  std::sort(gap_tricks.begin(), gap_tricks.end(), [](const GapTrick& a, const GapTrick& b) {
+    return a.jumps.size() != b.jumps.size() ? a.jumps.size() > b.jumps.size() : a.jumps < b.jumps;
+  });
+  gl::LabTable gt{
+      "the gap tricks: plain jumps over a pit made on the same spot again and again "
+      "(speed: the takeoff's across, its quarter and median; speed jump: the share a "
+      "run's jump falls short of)",
+      {"#", "map", "from (x y z)", "to (x y z)", "jumps", "speed p25", "speed p50", "heading",
+       "height", "across", "a run reaches", "speed jump", "over harm", "by level", "level"},
+      {}};
+  std::string gtsv =
+      "map\tfrom_x\tfrom_y\tfrom_z\tto_x\tto_y\tto_z\tjumps\tspeed_p25\tspeed_p50\theading\t"
+      "speed_jump\tharm\tamateur\tintermediate\texpert\tlevel\n";
+  int speed_jumps = 0;
+  for (const Gap& g : gaps) speed_jumps += g.j.speed_needed;
+  for (size_t n = 0; n < gap_tricks.size(); n++) {
+    const GapTrick& t = gap_tricks[n];
+    std::vector<float> speed, height, across, run_reach;
+    int needed = 0, harm = 0, by_level[kLevels] = {}, graded = 0;
+    for (const int k : t.jumps) {
+      const Gap& j = gaps[static_cast<size_t>(k)];
+      speed.push_back(j.j.speed);
+      height.push_back(j.j.height);
+      across.push_back(j.j.across);
+      run_reach.push_back(j.j.run_reach);
+      needed += j.j.speed_needed;
+      harm += j.j.harm;
+      const int lv = players[static_cast<size_t>(j.player)].level;
+      if (lv >= 0) by_level[lv]++, graded++;
+    }
+    int level = kLevels - 1;
+    for (int lv = kLevels - 1; lv >= 0; lv--)
+      if (graded > 0 && by_level[lv] * 5 >= graded) level = lv;
+    const float inv = 1.0f / static_cast<float>(t.jumps.size());
+    const sh::Vec3f from = t.from_sum * inv, to = t.to_sum * inv;
+    const float head = static_cast<float>(ge::core::libm::atan2(to.y - from.y, to.x - from.x) *
+                                          (180.0 / ge::core::kPi));
+    const std::string counts = std::to_string(by_level[0]) + "/" + std::to_string(by_level[1]) +
+                               "/" + std::to_string(by_level[2]);
+    const auto share = [&](int c) { return to_fixed(100.0 * c * inv, 0) + "%"; };
+    if (static_cast<int>(n) < rows)
+      gt.rows.push_back({std::to_string(n + 1), t.map, v3(from), v3(to),
+                         std::to_string(t.jumps.size()), to_fixed(quantile(speed, 0.25f), 0),
+                         to_fixed(median(speed), 0), to_fixed(head, 0), to_fixed(median(height), 0),
+                         to_fixed(median(across), 0), to_fixed(median(run_reach), 0), share(needed),
+                         share(harm), counts, kLevelName[level]});
+    gtsv += t.map + "\t" + to_fixed(from.x, 0) + "\t" + to_fixed(from.y, 0) + "\t" +
+            to_fixed(from.z, 0) + "\t" + to_fixed(to.x, 0) + "\t" + to_fixed(to.y, 0) + "\t" +
+            to_fixed(to.z, 0) + "\t" + std::to_string(t.jumps.size()) + "\t" +
+            to_fixed(quantile(speed, 0.25f), 0) + "\t" + to_fixed(median(speed), 0) + "\t" +
+            to_fixed(head, 0) + "\t" + to_fixed(static_cast<float>(needed) * inv, 2) + "\t" +
+            to_fixed(static_cast<float>(harm) * inv, 2) + "\t" + std::to_string(by_level[0]) +
+            "\t" + std::to_string(by_level[1]) + "\t" + std::to_string(by_level[2]) + "\t" +
+            kLevelName[level] + "\n";
+  }
+
   // The best jumps: the fastest across among those landed.
   std::vector<int> best;
   for (size_t k = 0; k < jumps.size(); k++)
@@ -707,9 +857,13 @@ void run(gl::Lab& lab) {
              jumps.empty() ? 0 : static_cast<double>(flips) / static_cast<double>(jumps.size()),
              "share");
   lab.metric("rj.tricks", static_cast<double>(tricks.size()), "count");
+  lab.metric("rj.gap-jumps", static_cast<double>(gaps.size()), "count");
+  lab.metric("rj.gap-speed-jumps", speed_jumps, "count");
+  lab.metric("rj.gap-tricks", static_cast<double>(gap_tricks.size()), "count");
   lab.table(kinds);
   lab.table(levels);
   lab.table(tt);
+  lab.table(gt);
   lab.table(bt);
   if (asked) {
     // The arrivals at the spot, by how (his own blasts before) and each one.
@@ -736,6 +890,7 @@ void run(gl::Lab& lab) {
     lab.table(at);
   }
   lab.attach("tricks.tsv", std::vector<uint8_t>(tsv.begin(), tsv.end()));
+  lab.attach("gap_tricks.tsv", std::vector<uint8_t>(gtsv.begin(), gtsv.end()));
   lab.attach("jumps.tsv", std::vector<uint8_t>(jtsv.begin(), jtsv.end()));
 }
 
@@ -748,7 +903,8 @@ const gl::LabSpec kSpec{
     "bots",
     "How do people rocket jump, read off their recorded games: which kinds, at which pitch, run "
     "at or standing, with which keys, by players of each level, and which spots of each map are "
-    "rocket-jumped again and again (the tricks a bot should learn)?",
+    "rocket-jumped again and again (the tricks a bot should learn), and which gaps people jump "
+    "over at speed (the gap tricks)?",
     {
         {"dir", "", "a folder of demos (any format, plain or gzip); other files skipped"},
         {"file", "", "one demo's path (with --dir: read too)"},
