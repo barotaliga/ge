@@ -89,6 +89,7 @@
 #include "platform/devices.hpp"
 #include "platform/pacing.hpp"
 #include "platform/window.hpp"
+#include "play/session_flags.hpp"
 #include "play/window_output.hpp"
 #include "render/screenshot_copy.hpp"
 #include "shooters_edge/bots/handles.hpp"
@@ -156,6 +157,14 @@ constexpr uint64_t kBenchShowNs = 33'333'333;
 int run_main(int argc, char** argv) {
   cl::Args args;
   std::string log_error;
+  // The flags every game takes (play/session_flags.hpp): -config and -logfile, off first.
+  ge::play::SessionFlags session;
+  if (std::string why; !ge::play::take_session_flags(argc, argv, session, why)) {
+    ge::play::attach_window_output("", log_error);
+    out::error("shooters_edge: the command line was refused: " + why +
+               "; next: -config <file> and -logfile <file> each take a file");
+    return 2;
+  }
   if (std::string why; !cl::parse(argc, argv, args, why)) {
     ge::play::attach_window_output("", log_error);
     out::error("shooters_edge: the command line was refused: " + why +
@@ -169,8 +178,9 @@ int run_main(int argc, char** argv) {
     return 2;
   }
   // Every line on the terminal, and in `-logfile <file>` too when it is named.
-  if (!ge::play::attach_window_output(args.logfile, log_error))
-    out::error("shooters_edge: " + log_error);
+  if (!ge::play::apply_session_flags(session, nullptr, log_error))
+    out::error("shooters_edge: the log file was not opened, the terminal only: " + log_error +
+               "; next: name a file in a folder you can write");
 
   // The console: its lines on the terminal and in its scrollback; the client's commands.
   ge::console::Console console;
@@ -249,7 +259,7 @@ int run_main(int argc, char** argv) {
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
   console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
   // A session's own config (`-config <file>`): read and saved there, the player's left alone.
-  if (!args.config.empty()) console.set_config_file(args.config);
+  if (!session.config.empty()) console.set_config_file(session.config);
   // F12's screenshots (engine/capture/screenshot.hpp), in <game folder>/screenshots/ beside its
   // recordings, saves/ and settings/; made before the + lines so `+screenshot` takes the first.
   ge::capture::ScreenshotSettings shot_settings;  // scr_format, scr_quality, scr_chroma

@@ -45,8 +45,7 @@ bool attach_window_output(const std::string& file, std::string& error) {
     if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path(), ec);
     g_file = std::fopen(file.c_str(), "a");
     if (g_file == nullptr) {
-      error = "the log file " + file +
-              " cannot be opened for appending; next: name a file in a folder you can write";
+      error = "the log file " + file + " cannot be opened for appending";
       ok = false;
     } else {
       g_path = file;

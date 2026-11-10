@@ -72,7 +72,8 @@ A game reads, in order:
 A missing file is skipped. A dedicated server reads `server.cfg` in place of the first three. A
 latched value set during startup is applied once it is over.
 
-**A session's own config.** A game's `-config <file>` (`Console::set_config_file`) puts that file in
+**A session's own config.** Every game window's `-config <file>` (`engine/play/session_flags.hpp`,
+`Console::set_config_file`) puts that file in
 place of `config.cfg`: it is read at startup, every save of the settings (`cfg_save`, the menu
 closing, quitting) writes it, and `autoexec.cfg` is skipped. The player's own files are neither read
 nor written, so a measurement, a test or an agent's run cannot change them. A file that is not there

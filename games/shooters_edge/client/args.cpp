@@ -72,10 +72,6 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
     if ((arg == "-basedir" || arg == "--basedir") && i + 1 < argc) {
       a.basedir = expand_home(argv[++i]);
       a.basedir_set = true;
-    } else if ((arg == "-logfile" || arg == "--logfile") && i + 1 < argc) {
-      a.logfile = expand_home(argv[++i]);
-    } else if ((arg == "-config" || arg == "--config") && i + 1 < argc) {
-      a.config = expand_home(argv[++i]);
     } else if ((arg == "-progs" || arg == "--progs") && i + 1 < argc) {
       a.progs = expand_home(argv[++i]);
     } else if ((arg == "-models" || arg == "--models") && i + 1 < argc) {
