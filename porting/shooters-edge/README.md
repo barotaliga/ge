@@ -57,3 +57,19 @@ without their code (`docs/shooters-edge.md` § Licensing and the clean room):
   `clean-room` skill is the procedure: the questions, the reader's brief, the screen for code.
 - **Running is fine; shipping is not.** A lab may fetch and build an existing server or client
   into its cache to measure it. Nothing of it is committed, linked or distributed.
+
+## The shareware release
+
+The labs and the client that need a real map take `--game=<folder>`. The folder is laid out in
+one step from the shareware release 1.06 zip as published, which its licence lets anyone keep and
+pass on (its SHA-256 is `kKnownZips` in `plugins/classicenhance/source.hpp`):
+
+```sh
+ge tool classicenhance -- setup https://ftp.gwdg.de/pub/misc/ftp.idsoftware.com/idstuff/quake/quake106.zip \
+    --basedir=<scratch>/classic --cache=<scratch>/cache
+# then --game=<scratch>/classic/id1
+```
+
+The zip is fetched once into `<scratch>/cache/downloads/` and checked against the known digest; a
+second `setup` reads that copy. Nothing it writes goes into the tree.
+

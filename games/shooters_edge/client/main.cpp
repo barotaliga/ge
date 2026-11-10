@@ -230,6 +230,19 @@ int run_main(int argc, char** argv) {
   cl::Timedemo bench;
   sn::Remote remote;  // `connect`: the window on a server elsewhere
   sn::add_remote_commands(console, remote);
+  // The vote on a setting (engine/server/vote.hpp): to the server joined, else the window's own.
+  for (const char* word : {"vote", "yes", "no"})
+    console.add_command(word,
+                        "vote <setting> <value>: ask everyone to change a setting for this map; "
+                        "vote yes, vote no (or yes, no): answer; vote: what is open; vote rules",
+                        [&](Con&, const CArgs& a) {
+                          std::string line = a[0];
+                          if (const std::string rest = a.rest(0); !rest.empty()) line += " " + rest;
+                          if (remote.active)
+                            sn::client_command(remote.end, line);
+                          else
+                            cl::listen_lobby(listen, line);
+                        });
   cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
   cl::add_playback_commands(console, playback, bench);
   // The window's sound: its own game's (client/listen_sound.hpp) or a played demo's or a joined
@@ -1153,6 +1166,7 @@ int run_main(int argc, char** argv) {
     auto joined = sn::RemoteStep::waiting;
     if (remote.active || (bench_map && !bench.active)) {
       const bool hands = playing && !game_menu.open();
+      remote.speedjump_view = user_info.speedjump_view;  // cl_speedjump_view, live
       sn::remote_hands(remote, hands ? cl::button_moves(controls) : cl::Moves{}, played, controls,
                        wall);
       std::vector<std::string> lines;
@@ -1304,7 +1318,8 @@ int run_main(int argc, char** argv) {
       ++presented;
       continue;
     }
-    cl::send_user_info(listen, console, user_info);  // the name and colours, as they change
+    cl::send_user_info(listen, console, user_info);    // the name and colours, as they change
+    listen.speedjump_view = user_info.speedjump_view;  // cl_speedjump_view, live
     // The lobby's keys (F1 ready or break, F2 the other team, F4 the warmup or the lobby's
     // screen; on the screen F5 and F6 a bot more or less, ENTER the start), then the player's
     // hands, then the server's frames.

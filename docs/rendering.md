@@ -550,7 +550,9 @@ light per pixel and is held to that reference.
 **A game's own set** sits on top of these three answers. Shooter's Edge's (`games/shooters_edge/view`,
 M48d) is its eight free models, each with its own mount (held length, grip), offset from the eye,
 kick, refire and muzzle light. Its hand switches weapons by putting one away and raising the
-next, and lights the muzzle on every shot. The player moves it with `r_drawviewmodel`,
+next in `cl_gunswitch` s (0.2: 40% down, the rest up; 0 at once); a shot during the switch takes the old
+weapon out of the picture and raises the new one from low in the picture `cl_gunswitch_fire` times faster
+(4), firing as it comes up. It lights the muzzle on every shot. The player moves it with `r_drawviewmodel`,
 `r_viewmodel_fov`, `cl_gunx`/`cl_guny`/`cl_gunz` and `cl_gunsway`, the breath's `cl_gunidle` (its
 share, 0 off), `cl_gunidle_rate` (breaths a minute at rest) and `cl_gunidle_exertion` (how much a
 run quickens and deepens it), `r_viewmodel_center` (1, the
@@ -2485,17 +2487,27 @@ by the scene's depth, so a wall or the floor clips it exactly, and marched in 10
 start that the TAA resolve averages away. Each step reads the cloud's tileable noise twice (the
 billows and a finer fray, `render/clouds.hpp`'s texture already bound in group 0, so the pass has no
 texture of its own) and carves the ball's edge into rolling billows. Gas that is deep inside and
-still burning emits its temperature's blackbody light; the rest is smoke of its look's albedo and tint lit by the sun
-on its sunward side, the sky and the fire inside it; emission and absorption are integrated front to
-back and the march stops once the ray is opaque. At most 32 are drawn a frame, the nearest, back to
+still burning emits its temperature's blackbody light, its noise cutting dark lanes of soot through
+the fire; the rest is smoke of its look's albedo and tint lit by the sun, the sky and the fire inside
+it, each THROUGH THE SMOKE BETWEEN: toward the key light (the sun as far as it reaches, else straight
+down, a room's lamps and the open sky) the ball's own chord that way plus two reads of the billows at
+0.25 and 0.6 radii, toward the sky the chord alone, toward the core one read half way in, each
+through Beer's law mixed with a softer law for the later scatterings. So the underside and the far
+side sit in their own shade, the lobes shade each other and the fire glows out through the thin
+parts: a cloud with depth, where light that took no account of the smoke drew a flat grey disc
+(`gpu-explosion`'s `day`, `se-weapon-fx` on a real map). The edge rises from clear air to full
+density over a quarter of the billows' swing, so the lobes read crisp. Emission and absorption are
+integrated front to back and the march stops once the ray is opaque. At most 32 are drawn a frame, the nearest, back to
 front, premultiplied, each writing the reactive channel so TAA does not smear it. The sparks are the
 particle pool's (§ Particles and figures): a particle with a `kelvin` glows as a blackbody cooling
 toward 700 K by e every `cool_s`.
 
-**The cost.** The pass runs only on the pixels a ball covers, two fetches a step. On the software
+**The cost.** The pass runs only on the pixels a ball covers, two fetches a step, and three more
+where smoke shows (two toward the light, one toward the core while it burns; none in pure fire). On the software
 adapter at 640 x 360 (`gpu-explosion`, the pass's own timestamps), a frame of the yard costs about
-42 ms; one blast 10 m ahead (3% of the screen) costs the pass 0.5 to 0.7 ms, 32 at once 0.8 ms (most of them small
-and far), and one filling the whole screen 0.9 ms, since dense smoke ends the march early (about 2% of the frame at most). A real
+42 ms; one blast 10 m ahead (3% of the screen) costs the pass about 1 ms, 32 at once 1.2 ms (most of
+them small and far), and one filling the whole screen 1.9 ms, since dense smoke ends the march early
+(about 4% of the frame at most; the smoke's own shade took it from 0.4, 0.9 and 1.4 ms). A real
 GPU's times need the Mac. The CPU stages 32 blasts in about 0.1 ms in the debug build.
 
 **The flash and the scorch in the world (M47b).** Each frame `flash_lights` turns every live

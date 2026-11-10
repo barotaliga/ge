@@ -25,7 +25,9 @@
 // `sv_rendezvous`, `sv_mod` (read-only: the mods the server was started with). The guards a game's
 // endpoint holds its clients to: `sv_timeout` (a client nothing was heard from for that long is
 // dropped: a dead link, not an idle player, who still sends moves) and `sv_floodprot`,
-// `sv_floodprotmsg` (the chat flood rule, guards.hpp). A dedicated server
+// `sv_floodprotmsg` (the chat flood rule, guards.hpp). Players' votes on the settings for a map
+// (vote.hpp): `sv_vote`, `sv_vote_time`, `sv_vote_wait`, `sv_vote_allow`, `sv_vote_deny`, read by
+// the game that runs them (`vote_settings`). A dedicated server
 // reads them from the game directories' `server.cfg` in layers and its command line (config.hpp,
 // main.hpp).
 //
@@ -34,7 +36,8 @@
 // ge:keywords server_open hostname description port listen-address maxclients bots seed
 // ge:keywords sv_hostname sv_description net_ip net_port sv_maxclients sv_map sv_bots sv_seed
 // ge:keywords sv_lobby sv_timeout sv_floodprot sv_floodprotmsg client-timeout sv_countdown
-// ge:keywords sv_intermission intermission
+// ge:keywords sv_intermission intermission sv_vote sv_vote_time sv_vote_wait sv_vote_allow
+// ge:keywords sv_vote_deny vote_settings
 // ge:keywords sv_password sv_visibility sv_motd sv_admin sv_maprotation sv_maxspectators
 // ge:keywords sv_spectatorpassword sv_rendezvous sv_mod lan-advert multiplayer hosting
 // ge:skill net
@@ -51,6 +54,7 @@
 #include "net/node.hpp"
 #include "net/session.hpp"
 #include "net/transport.hpp"
+#include "server/vote.hpp"
 
 namespace ge::server {
 
@@ -82,7 +86,12 @@ struct ServerConfig {
   double intermission_s = 0;         // sv_intermission: a match's end to the next map, s
   std::string floodprot = "10 1 1";  // sv_floodprot: "N S T" chat lines (guards.hpp)
   std::string floodprot_msg;         // sv_floodprotmsg: what a flooder is told ("": the silence)
-  std::string root = ".";            // where the game directories are (`--root`): maps, cfgs
+  int32_t vote = 1;         // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
+  double vote_time_s = 30;  // sv_vote_time: how long a vote stays open, s
+  double vote_wait_s = 30;  // sv_vote_wait: a failed vote's caller waits this long, s
+  std::string vote_allow;   // sv_vote_allow: settings that may be voted on (empty: all)
+  std::string vote_deny = kVoteDenyDefault;  // sv_vote_deny: settings that never may
+  std::string root = ".";  // where the game directories are (`--root`): maps, cfgs
   // The game's own rules (ServerGame::rules: `fraglimit`, `timelimit`) by name, as set; empty is
   // unset, the game's own default.
   std::map<std::string, std::string> rules;
@@ -180,6 +189,10 @@ struct Server {
 // The settings' cvars bound to `config` (which must outlive `cvars`), its values the fallbacks;
 // the game's limits on them (the most clients, the default port and map) from `game`.
 void add_server_cvars(console::Cvars& cvars, ServerConfig& config, const ServerGame& game);
+
+// The vote's settings from the server's (`sv_vote`, `sv_vote_time`, `sv_vote_wait`,
+// `sv_vote_allow`, `sv_vote_deny`).
+VoteSettings vote_settings(const ServerConfig& config);
 
 // The game created on `config`; with `transport` (the game's port) the node, the session host and
 // the hosting round it, answering the LAN on `lan` (null: pings only). False with `error`.

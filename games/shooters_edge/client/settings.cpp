@@ -1,12 +1,13 @@
 // The window's settings, the user info and the mouse on the binds (settings.hpp).
 //
 // ge:summary The window's settings kept in config.cfg, the user info sent, the mouse on binds
-// ge:keywords settings save_settings send_user_info mouse_to_binds keys_to_menu
+// ge:keywords settings save_settings send_user_info mouse_to_binds keys_to_menu catalog cvars-txt
 // ge:skill console input
 // ge:test tests/shooters_edge_listen_test.cpp
 #include "shooters_edge/client/settings.hpp"
 
 #include "console/binds.hpp"
+#include "console/catalog.hpp"
 #include "console/cfg.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -18,7 +19,10 @@ std::filesystem::path settings_dir(const std::string& basedir, const std::string
 }
 
 bool save_settings(ge::console::Console& con) {
-  if (con.write_file(ge::console::kConfigFile, con.save_text())) return true;
+  // The catalog beside it: every setting described, for the player's CLI (console/catalog.hpp).
+  if (con.write_file(ge::console::kConfigFile, con.save_text()) &&
+      con.write_file(ge::console::kCatalogFile, ge::console::catalog_text(con.cvars())))
+    return true;
   const std::filesystem::path dir =
       con.search_path().empty() ? std::filesystem::path(".") : con.search_path()[0];
   const std::filesystem::path file =
@@ -45,11 +49,20 @@ void add_user_info_cvars(ge::console::Console& con, UserInfo& info) {
   con.cvars().bind({.name = "cl_speedjump",
                     .fallback = "0",
                     .flags = ge::console::kArchive | ge::console::kUserInfo,
-                    .help = "1: the easy jump: hold forward and jump to gain speed without "
-                            "strafing (a strafe still gains more); acts where the server's "
-                            "pm_speedjump allows it",
+                    .help = "1: the easy jump: hold forward and jump and the game strafes for "
+                            "you, weaving the hops for speed; the mouse steers; the server's "
+                            "pm_speedjump sets its share (0 off)",
                     .kind = ge::console::CvarKind::boolean},
                    &info.speedjump);
+  con.cvars().bind({.name = "cl_speedjump_view",
+                    .fallback = "0.5",
+                    .flags = ge::console::kArchive,
+                    .help = "0..1: how much of the easy jump's left and right swing your view "
+                            "shows (0 a still view, 1 all of it, as a strafer sees)",
+                    .kind = ge::console::CvarKind::number,
+                    .min = 0,
+                    .max = 1},
+                   &info.speedjump_view);
 }
 
 void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) {

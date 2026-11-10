@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <optional>
 #include <regex>
 #include <system_error>
 #include <thread>
@@ -564,6 +565,30 @@ bool run_at_ref(const BuildOptions& o, const LabOptions& lab, const std::string&
   }
   out.text = "before: " + lab.id + " at " + lab.before + " (" + sha + "), built in " +
              rel_path(o.repo, tree) + ", kept as previews/" + lab.id + "@" + tag + "/\n";
+  // The lab's digest at the ref beside the baseline the ref itself commits: a smoke run that
+  // already differs there says the baseline was stale before this change began.
+  static const std::regex kDigest("\"digest\":\\s*\"([0-9a-f]+)\"");
+  std::smatch m;
+  const std::optional<std::string> report =
+      read_text(o.repo / "previews" / (lab.id + "@" + tag) / "report.json");
+  if (lab.smoke && report && std::regex_search(*report, m, kDigest)) {
+    const std::string at_ref = m[1];
+    const std::optional<std::string> base =
+        read_text(tree / "tests" / "digests" / (lab.id + ".txt"));
+    std::string committed = base ? *base : "";
+    while (!committed.empty() && (committed.back() == '\n' || committed.back() == '\r')) {
+      committed.pop_back();
+    }
+    out.text += "before: " + lab.id + "'s digest at " + lab.before + " is " + at_ref;
+    if (committed.empty()) {
+      out.text += " (" + lab.before + " commits no baseline for it in tests/digests/)\n";
+    } else if (committed == at_ref) {
+      out.text += ", the baseline " + lab.before + " commits\n";
+    } else {
+      out.text += ", not the baseline " + lab.before + " commits (" + committed +
+                  "): stale there already, not moved by this change\n";
+    }
+  }
   return true;
 }
 

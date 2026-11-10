@@ -20,6 +20,7 @@
 #include "progs/layout.hpp"
 #include "progs/qc_compile.hpp"
 #include "progs/vm.hpp"
+#include "shooter/client.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/campaign_save.hpp"
@@ -62,9 +63,9 @@ namespace {
 // and its TE_ kinds, the multiplayer protocol's layout: a gunshot and blood carry a count).
 constexpr uint8_t kTempEntity = 23, kExplosion = 3;
 
-// The player's own server allows the easy jump (pm_speedjump) at half the best strafe's gain; it
+// The player's own server lets the easy jump (pm_speedjump) take 0.8 of the best strafe's gain; it
 // acts only once he asks for it (cl_speedjump 1). A server.cfg or the console may change it.
-constexpr float kListenSpeedJump = 0.5f;
+constexpr float kListenSpeedJump = 0.8f;
 
 // A match's temporary entity (one multicast's bytes) as an effect the window draws: false for a
 // kind it does not draw or bytes cut short. The explosion is Listen::explosions' already.
@@ -824,6 +825,19 @@ double listen_tic(const Listen& l) {
 void listen_frame(Listen& l, sh::MoveCmd cmd) {
   cmd.msec = static_cast<uint8_t>(ge::core::num::round(listen_tic(l) * 1000));
   cmd.angles = l.view;
+  // The easy jump: the aid strafes for him from the server's own player (speedjump_assist.hpp).
+  if (l.server != nullptr && l.server->sv.clients[0].active && l.server->sv.clients[0].speedjump) {
+    const sh::Edict& me = l.server->sv.edicts[1];
+    sh::MoveState s;
+    s.velocity = me.velocity;
+    s.ground = (me.flags & sh::kFlagOnGround) != 0 ? 0 : -1;
+    s.type = sh::move_type_of(me, false);
+    s.waterlevel = me.waterlevel;
+    cmd =
+        sh::assisted_command(cmd, s, l.server->sv.set.move.speedjump, l.speedjump_view, l.jump_aid);
+  } else {
+    l.jump_aid = {};
+  }
   if (l.impulse != 0) {
     cmd.impulse = static_cast<uint8_t>(l.impulse);
     l.impulse = 0;
@@ -908,6 +922,15 @@ bool listen_lobby(Listen& l, std::string_view line) {
     }
     seat_companion(l, skill);
     return true;
+  }
+  // A vote on the settings (engine/server/vote.hpp): the server's own words, with or without a
+  // lobby.
+  if ((word == "vote" || word == "yes" || word == "no") && !l.campaign_host && l.host &&
+      l.host->words != nullptr && l.server != nullptr) {
+    l.host->ctx = &l;
+    const bool taken = l.host->words(l.host->game, std::string(line));
+    catch_up(l);
+    return taken;
   }
   if (!l.room || l.server == nullptr) {
     if (bot_word || word == "ready" || word == "break" || word == "notready" ||

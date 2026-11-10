@@ -5,11 +5,12 @@
 // any case; an unknown pack taken as the player's own copy, unverified; a damaged one refused,
 // with its digest, writing nothing; the full game's later packs layered over the first; and a
 // release known by its files whatever packs hold them (split, repacked into one with extras, a
-// content zip), with the nearest set and what of it differs named when none matches.
+// content zip), with the nearest set and what of it differs named when none matches; a game folder
+// laid out from a source for --game, and a download named by its URL.
 //
 // ge:summary Tests the LHA reader and the source search: every route, unverified and later packs
 // ge:keywords test classicenhance lha lh5 source zip folder pack verify refuse sha256
-// ge:keywords known-set repack pk3 content-zip remaster
+// ge:keywords known-set repack pk3 content-zip remaster lay-out setup basedir url
 // ge:skill classicenhance testing
 #include <filesystem>
 #include <fstream>
@@ -462,4 +463,49 @@ TEST(the_known_sets_list_every_file_once_sorted) {
   CHECK(!ce::kKnownSets[0].remade_sounds && ce::kKnownSets[1].remade_sounds);
   const ce::SetMatch m = ce::match_sets(fixture_pack(), ce::kKnownSets);
   CHECK(!m.whole() && m.held <= 1);
+}
+
+TEST(source_lays_out_a_game_folder_from_any_route) {
+  const std::vector<uint8_t> pack = fixture_pack();
+  const std::string sha = ge::assets::sha256_hex(pack);
+  const ce::KnownFile known[] = {{sha.c_str(), uint32_t(pack.size()), "the fixture pack"}};
+  const fs::path dir = scratch("layout");
+  std::string error;
+  ce::Source s;
+  // The release zip: the pack out of the installer's archive, written as the base folder's first.
+  write(dir / "release.zip",
+        ge::vfs::write_stored_zip({{"resource.1", sfx({{"ID1\\PAK0.PAK", pack}})}}));
+  CHECK_MSG(ce::open_source((dir / "release.zip").string(), &s, &error, known), error);
+  std::vector<std::string> written;
+  CHECK_MSG(ce::lay_out_game(s, (dir / "out").string(), &written, &error), error);
+  const fs::path first = dir / "out" / std::string(s.profile->base_dir) / "pak0.pak";
+  CHECK(written.size() == 1 && fs::path(written[0]) == first);
+  ce::Source back;
+  CHECK_MSG(ce::open_source((dir / "out").string(), &back, &error, known), error);
+  CHECK(back.route == ce::Route::folder && back.pack == pack && back.known == &known[0]);
+  CHECK(!fs::exists(first.string() + ".part"));
+  // An install with a later pack: both written, the later one under its own spelling.
+  std::vector<uint8_t> second;
+  CHECK(ge::vfs::write_pak({{"maps/e2m1.bsp", text("map")}}, &second, &error));
+  write(dir / "install" / "ID1" / "PAK0.PAK", pack);
+  write(dir / "install" / "ID1" / "Pak1.pak", second);
+  CHECK_MSG(ce::open_source((dir / "install").string(), &s, &error, known), error);
+  CHECK_MSG(ce::lay_out_game(s, (dir / "out2").string(), &written, &error), error);
+  CHECK(written.size() == 2 && fs::path(written[1]).filename() == "Pak1.pak");
+  CHECK_MSG(ce::open_source((dir / "out2").string(), &back, &error, known), error);
+  CHECK(back.later.size() == 1 && back.later[0].bytes == second);
+  // A base folder that cannot be made is refused by name.
+  write(dir / "blocked", text("a file, not a folder"));
+  CHECK(!ce::lay_out_game(s, (dir / "blocked").string(), &written, &error));
+  CHECK(error.find("--basedir") != std::string::npos);
+  fs::remove_all(dir);
+}
+
+TEST(source_names_a_download_by_its_urls_last_segment) {
+  CHECK(ce::url_file_name("https://example.org/pub/release106.zip") == "release106.zip");
+  CHECK(ce::url_file_name("https://example.org/get/r.zip?mirror=2#top") == "r.zip");
+  CHECK(ce::url_file_name("https://example.org/") == "");
+  CHECK(ce::url_file_name("https://example.org/a/..") == "");
+  CHECK(ce::url_file_name("https://example.org/a$b.zip") == "");
+  CHECK(ce::url_file_name("no-slash") == "");
 }

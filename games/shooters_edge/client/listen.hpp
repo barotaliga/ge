@@ -39,8 +39,9 @@
 // when he goes back to the lobby's screen (`sitout`), the bots fighting on meanwhile; the lobby's
 // lines are printed like the server's; when the countdown runs out the server restarts the map
 // with every seat on it (`restarted`), and a map change goes back to warmup. `listen_lobby` runs
-// the player's lobby words. THE EASY JUMP: the window's server allows it (`pm_speedjump 0.5`,
-// ListenHost::speedjump) for a player with `cl_speedjump 1`; a dedicated one only when set.
+// the player's lobby words. THE EASY JUMP: a player with `cl_speedjump 1` has the aid strafe
+// for him (`listen_frame`, shooter/speedjump_assist.hpp) at the server's `pm_speedjump` (the
+// window's 0.8, ListenHost::speedjump; a dedicated one only when set).
 //
 // THE VIEW: the player's angles are the client's (`Listen::view`, degrees: pitch down positive,
 // yaw counter-clockwise from +x), sent with every command; when the server turns him (a spawn, a
@@ -71,6 +72,7 @@
 #include "progs/file.hpp"
 #include "server/server.hpp"
 #include "shooter/pmove.hpp"
+#include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/client/campaign_view.hpp"
 #include "shooters_edge/client/coop_party.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -241,10 +243,14 @@ struct Listen {
   CampaignView campaign;     // the program's client messages (campaign_view.hpp)
   double entered_at = 0;     // the server's time the player entered this map, s
   uint32_t sequence = 0;
-  sh::MoveCmd cmds[3];               // the three newest, oldest first
-  double owed = 0;                   // wall seconds not yet run, s
-  int64_t frames = 0;                // server frames run on this map
-  sh::Vec3f view;                    // the player's view angles, degrees
+  sh::MoveCmd cmds[3];  // the three newest, oldest first
+  double owed = 0;      // wall seconds not yet run, s
+  int64_t frames = 0;   // server frames run on this map
+  sh::Vec3f view;       // the player's view angles, degrees (his aim)
+  // The easy jump (shooter/speedjump_assist.hpp): the aid strafing for him while his slot asks
+  // (`cl_speedjump 1`), at the server's pm_speedjump; `speedjump_view` of its swing is drawn.
+  sh::SpeedJumpAid jump_aid;
+  float speedjump_view = 0.5f;       // cl_speedjump_view
   bool forced = false;               // the server turned the view in the last frame
   int impulse = 0;                   // waiting for a frame
   std::string pending_map;           // the mod or the console asked for this map
@@ -333,9 +339,9 @@ double listen_tic(const Listen& l);
 
 // A lobby line from the player (slot 0): the lobby's words (server/lobby.hpp: ready, break,
 // notready, toggleready, team, start, warmup, sitout, togglewarmup, lobby), `addbot
-// [novice|average|expert]` and `removebot`. In a campaign the last two seat and let go a companion
-// (coop on: `coopgame` starts one so). False when the line is none of them, or when no lobby runs
-// (a line saying so is printed).
+// [novice|average|expert]` and `removebot`, and the vote's (`vote ...`, `yes`, `no`: any match). In
+// a campaign the last two seat and let go a companion (coop on: `coopgame` starts one so). False
+// when the line is none of them, or when no lobby runs (a line saying so is printed).
 bool listen_lobby(Listen& l, std::string_view line);
 
 // What the lobby's banner and screen show (lobby_room.hpp's `lobby_view` for the player), each

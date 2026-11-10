@@ -6,6 +6,7 @@
 // ge:test tests/classicenhance_source_test.cpp
 #include "classicenhance/source.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -379,6 +380,86 @@ bool open_source(const std::string& path, Source* out, std::string* error,
   if (!open_any(path, out, error, packs)) return false;
   match_known_set(out, sets);
   return true;
+}
+
+namespace {
+
+bool read_whole(const fs::path& path, std::vector<uint8_t>* out) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in) return false;
+  out->assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+  return !in.bad();
+}
+
+bool write_whole(const fs::path& path, std::span<const uint8_t> bytes, std::string* error) {
+  const fs::path part = path.string() + ".part";
+  std::error_code ec;
+  {
+    std::ofstream out(part, std::ios::binary | std::ios::trunc);
+    out.write(reinterpret_cast<const char*>(bytes.data()), std::streamsize(bytes.size()));
+    if (!out.good()) {
+      out.close();
+      fs::remove(part, ec);
+      *error = "could not write " + path.string() + "; check the folder is writable and has room";
+      return false;
+    }
+  }
+  fs::rename(part, path, ec);
+  if (ec) {
+    fs::remove(part, ec);
+    *error = "could not move " + part.string() + " onto " + path.string() +
+             "; check nothing "
+             "holds it open";
+    return false;
+  }
+  return true;
+}
+
+}  // namespace
+
+bool lay_out_game(const Source& src, const std::string& basedir, std::vector<std::string>* written,
+                  std::string* error) {
+  const fs::path game = fs::path(basedir) / std::string(src.profile->base_dir);
+  std::error_code ec;
+  fs::create_directories(game, ec);
+  if (ec) {
+    *error = "could not make " + game.string() + " (" + ec.message() + "); check --basedir";
+    return false;
+  }
+  written->clear();
+  if (src.content_zip) {
+    // A content zip stood in for the first pack: it is copied back as that zip, unchanged.
+    std::vector<uint8_t> zip;
+    if (!read_whole(src.path, &zip)) {
+      *error = "could not read " + src.path + " again to copy it; check it is still there";
+      return false;
+    }
+    const fs::path to = game / zip_name(*src.profile, 0);
+    if (!write_whole(to, zip, error)) return false;
+    written->push_back(to.string());
+  } else {
+    const fs::path to = game / pack_name(*src.profile, 0);
+    if (!write_whole(to, src.pack, error)) return false;
+    written->push_back(to.string());
+  }
+  for (const LaterPack& p : src.later) {
+    const fs::path to = game / p.name;
+    if (!write_whole(to, p.bytes, error)) return false;
+    written->push_back(to.string());
+  }
+  return true;
+}
+
+std::string url_file_name(std::string_view url) {
+  url = url.substr(0, std::min(url.find_first_of("?#"), url.size()));
+  const size_t slash = url.rfind('/');
+  if (slash == std::string_view::npos) return "";
+  const std::string_view name = url.substr(slash + 1);
+  if (name.empty() || name == "." || name == ".." ||
+      name.find_first_of("\"'\\$`;&|<>") != std::string_view::npos) {
+    return "";
+  }
+  return std::string(name);
 }
 
 }  // namespace ge::classicenhance

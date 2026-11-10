@@ -608,7 +608,8 @@ const CommandSpec kCommands[] = {
      "the labs named (or every lab) at their smoke flags, twice: each digest beside the "
      "committed baseline (only the labs executable is built); --write moves only those labs' rows; "
      "--diff prints only the labs "
-     "that moved; --why names what moved in each",
+     "that moved; --why names what moved in each; a lab's digest at another ref (is the "
+     "baseline stale on main?) is ge lab before <lab>",
      kDigestFlags, "ge digest wind-sweep level --write", "labs"},
     {"golden diff", "[<golden|test>...]", 0, -1, "build",
      "each golden file against git's --base: the rows that changed and, column by column, what "
@@ -636,7 +637,8 @@ const CommandSpec kCommands[] = {
      kLabDiffFlags, "ge lab diff world --run -- --views=start,vista", "labs"},
     {"lab before", "<id>...", 1, -1, "see",
      "the labs at origin/main (or --ref), built once in a scratch worktree and run at their "
-     "smoke flags, kept under the tag before: a change's before with nothing stashed",
+     "smoke flags, kept under the tag before: a change's before with nothing stashed; each "
+     "lab's digest at the ref is printed beside the committed baseline (a lab's digest on main)",
      kLabBeforeFlags, "ge lab before se-world se-models", "labs"},
     {"lab pair", "<id>", 1, 1, "see",
      "a lab drawn twice, under the --before cvars and the --after ones (the runner's --cvars), "
