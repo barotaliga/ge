@@ -118,6 +118,7 @@ struct ModelKind {
   uint32_t made = kNone;
   models::Groups frames, skins;
   bool spin = false, synced = true;
+  uint32_t flags = 0;  // a model file's effect flags (effects.hpp's kTrailGib, ...)
   ge::render::SpriteFacing facing = ge::render::SpriteFacing::parallel;
 };
 

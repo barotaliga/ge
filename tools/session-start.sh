@@ -71,7 +71,7 @@ worker() {
     fi
     step=build
     echo "== make build $(stamp)"
-    make build
+    GE_SESSION_START_WORKER=1 make build
   } >>"$LOG" 2>&1 && rc=0 || rc=$?
   if ((rc == 0)); then
     tools/ccache-share.sh save >>"$LOG" 2>&1 || true

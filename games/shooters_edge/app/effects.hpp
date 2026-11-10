@@ -12,7 +12,9 @@
 // yellow to a dark brown, an orange to a grey) and falling at the classic's 40 units a second
 // squared:
 // - TRAILS: a rocket's (a speck every 3 units on the fire ramp, rising as it greys) and a
-//   grenade's (the same from the ramp's greys), over the stretch it flew this frame.
+//   grenade's (the same from the ramp's greys), over the stretch it flew this frame; a gib's or a
+//   head's blood (a dark red speck every 3 units, every 6 behind a zombie's flesh: still where it
+//   was left, falling slowly, gone in 2 s), by the flag its model file carries.
 // - BURSTS: an explosion (1024 specks off a 32-unit box at up to 256 units a second, half on the
 //   bright ramp speeding out, half on the second ramp slowing), a shot's or a nail's hit (20 or 10
 //   dark grey specks a round), a wound (20 dark red specks a drop), a teleport's arrival (a grid of
@@ -70,9 +72,19 @@ void explosion(const double at[3], uint32_t seed, Palette palette, Particles* ou
 // A shot's or a nail's hit at `at`: `specks` dark grey specks (20 a pellet, 10 a nail, 20 a big
 // nail's).
 void impact(const double at[3], int specks, uint32_t seed, Palette palette, Particles* out);
-// A wound at `at`: `specks` dark red specks (20 a drop; 50 the arc's, of the lava's reds).
-void blood(const double at[3], int specks, bool arc, uint32_t seed, Palette palette,
-           Particles* out);
+// A wound at `at`: `specks` dark red specks (20 a drop; 50 the arc's, of the lava's reds), each
+// thrown at `way` (engine m/s; none: they hang and fall).
+void blood(const double at[3], int specks, bool arc, uint32_t seed, Palette palette, Particles* out,
+           const double way[3] = nullptr);
+// A model file's flags for the trail it leaves (the format's bits): a gib's blood, a zombie's
+// flesh's thinner blood.
+inline constexpr uint32_t kTrailGib = 4, kTrailZombieGib = 32;
+// The blood a flying gib leaves over the stretch `from` .. `to` (engine metres): a speck every
+// `step` m from `carry` m along (the stretch's last part short of a step carried into the next
+// frame's, returned), so a gib leaves as much blood at any frame rate.
+inline constexpr double kBloodStep = 3 * 0.025, kThinBloodStep = 6 * 0.025;
+double blood_trail(const double from[3], const double to[3], double step, double carry,
+                   uint32_t seed, Palette palette, Particles* out);
 // A teleport's arrival at `at` (the feet): a grid of grey specks flying out.
 void teleport_splash(const double at[3], uint32_t seed, Palette palette, Particles* out);
 // Lava thrown up at `at` (its surface): glowing specks over a 6 m square that arc and fall.

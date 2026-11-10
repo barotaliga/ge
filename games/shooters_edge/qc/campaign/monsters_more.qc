@@ -75,6 +75,9 @@ void() monster_enforcer = {
   self.fr_missile = '31 40 1';
   self.fr_pain = '66 69 1';
   self.fr_death = '41 54 1';
+  self.fr_death2 = '55 65 1';
+  self.death_solid = 2;
+  self.drop_ammo = DROP_CELLS;
   walkmonster_start("progs/enforcer.mdl", 80, '-16 -16 -24', '16 16 40');
 };
 
@@ -280,5 +283,7 @@ void() monster_hell_knight = {
   self.fr_leap = '63 78 1';
   self.fr_pain = '37 41 1';
   self.fr_death = '42 53 1';
+  self.fr_death2 = '54 62 1';
+  self.death_solid = 2;
   walkmonster_start("progs/hknight.mdl", 250, '-16 -16 -24', '16 16 40');
 };

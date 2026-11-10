@@ -281,6 +281,49 @@ instead of causing a hitch in a run.
 the `terrain` and `instances` rows read `shadows.maps`. A cascade that is not due still opens its
 pass (read-only, nothing drawn), so the recorder's GPU times keep their order.
 
+## Frame pacing
+
+How a window's frames meet the display matters as much as how fast they are drawn: a frame that
+starts at the wrong moment either waits in the swap chain's queue (lag between the mouse and the
+picture) or misses its refresh (a repeated picture). The pacing is the engine's, whole
+(`engine/loop/pacing.hpp` the arithmetic, `engine/platform/pacing.hpp` the cvars and the wait,
+`engine/gpu/frame_gate.hpp` the frames in flight); a game wires it in a few lines (Shooter's
+Edge's `client/main.cpp`). The `pacing` lab runs every strategy against a model of a display and
+measures the lag and the judder each gives.
+
+A frame, in order: the GPU's queue waited down to `vid_framelatency` (the gate, before the input
+is read: the time a frame waits is time its input does not age), the cap waited on its grid, the
+input read, the game stepped by the STEADY time, the frame drawn and presented, the gate told.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `vid_vsync` | 1 | Present at the refresh (FIFO); 0 presents as soon as drawn (immediate, else mailbox): a desktop's compositor shows the newest at each refresh, a fullscreen display tears |
+| `vid_framelatency` | 2 | GPU frames that may be queued when a frame reads its input. The swap chain keeps 2 images (3 at latency 3; Apple's Metal layer takes it through `platform::set_swap_images`, its own default being 3) |
+| `vid_steady` | 1 | At vsync the game's frame time is whole refreshes (`loop::SteadyClock`), the difference from the wall clock repaid a twentieth a frame: the motion is even whenever the frame started |
+| `cl_maxfps` | 0 | A cap in frames a second on a fixed grid of deadlines (a late frame paid back by the next; a frame late by a whole interval restarts the grid) |
+| `cl_maxfps_hz` | 0 | The cap as a multiple of the display's refresh (`platform::refresh_hz`); wins over `cl_maxfps` |
+| `vid_vsync_lag_fix` | 0 | With vsync, each frame starts just in time to finish before its refresh (`loop::VsyncPhase`): the refresh's phase from the acquires that block, the frame's cost the worst of the last 8 (start to the GPU's last work, less the acquire's wait), the start the next refresh less the cost and `vid_vsync_lag_tweak`. The window waits for its GPU after each present to measure the cost, so a frame that takes more than a refresh runs as at `vid_framelatency 1` |
+| `vid_vsync_lag_tweak` | 1 | The ms the lag fix leaves spare before the refresh: lower is less lag, too low misses refreshes |
+| `scr_showfps` | 0 | 1 the rate in the top-right corner; 2 with the last 120 frames' times as bars, the refresh's interval dashed, a missed refresh red |
+| `framestats` | | One line: the rate, the 1% low, the percentiles, the jitter, the hitches, the waits, the display's refresh, the cap, the present mode |
+
+**Why these defaults** (the `pacing` lab, 120 Hz, a light and a heavy load): the old loop (vsync,
+Metal's three images, nothing else) held every frame ~25 ms from input to picture. Two images and
+two frames in flight take that to ~16.6 ms with no missed refresh until the CPU or the GPU alone
+passes a refresh; one frame in flight is ~13.7 ms but misses refreshes once CPU and GPU together
+pass one. A cap at the refresh looks ideal on paper and is undone by the display's clock drifting
+from the CPU's. Vsync off is the least lag at vsync's rate of pictures and the most judder unless
+the frame rate is far above the refresh (why the classic competitive setting is vsync off at
+hundreds of frames). Variable refresh with a cap a few percent under the panel's top rate is
+best of all where the display has it. The lag fix (`vid_vsync_lag_fix 1`) keeps vsync's even
+pictures and takes the light load to ~8.8 ms (its frame plus the 1 ms margin and the wait for the
+display's scan); under the heavy load, where a frame does not fit a refresh, it cannot help and
+runs as one frame in flight.
+
+**Stated once:** the frame's own interpolation (models, the eye: the client's `model_lerp.hpp` and
+the eye in `present.cpp`) is what makes a 77 Hz server look smooth at 120 Hz; the pacing makes
+the pictures land evenly. Both are needed.
+
 ## GPU-driven instances
 
 Every repeated thing (trees, rocks, props, carriers, crowd members, gate poles) is an
@@ -919,17 +962,27 @@ shadow the lights in two tiers:
   point's, so they cross a cube's seams with no special case (a tap is clamped half a texel inside
   its face's tile). A light's source radius (`GpuLight::more.y`) sets how soft: a plain light's
   4 cm is sharp, a flame's a quarter of its height (a wall torch 0.14 m, a large flame 0.26 m).
-- **The capsules.** A classic map lights a room with many overlapping fill lights (on e1m4 the 32
-  nearest shadowed ones carry 5 to 20 % of a floor's light), so 8 cubes alone leave no shadow
-  to see. The 4 casters nearest the eye become vertical capsules fitted to their boxes
-  (`shadow_capsules`), and every light without a casters' cube is shadowed by the ones within 6 m
-  of the pixel (found once a pixel), the penumbra from the light's size seen from the point.
+- **Only a light whose source shows throws a figure's shadow.** A classic map lights a room with
+  many overlapping fill lights: entities hanging alone in the air, where the mapper wanted light
+  bounced round the room. A shadow from one is a shadow cast by nothing the player can see, so a
+  light throws a figure's shadow only when it is `seen` (`seen_lights`, draw_data.hpp): a flame,
+  a torch or a globe the game draws at it, or a lamp within 1 m of a face whose texture glows (3 %
+  of its texels or more; never a sky face), its fitting. Pools' and teleporters' glows throw none;
+  the dynamic lights (a rocket, an explosion) do. Only seen lights get a casters' cube, and the
+  capsules shadow only them. The walls' own cubes stay every shadowed light's: they keep a light in
+  its room, as the map's lightmaps do. `r_fill_shadows 1` (`Options::fill_shadows`) brings back
+  every light's figure shadow.
+- **The capsules.** The 4 casters nearest the eye become vertical capsules fitted to their boxes
+  (`shadow_capsules`), and every seen light without a casters' cube is shadowed by the ones within
+  6 m of the pixel (found once a pixel), the penumbra from the light's size seen from the point.
 - **The sun.** A row more of the atlas: its first tile is the casters seen along the sun, an
   orthographic view 16 m wide round the eye (4 cm texels), drawn in the same pass. A pixel inside
   it multiplies the sun's map of the world by its 2 × 2 compare (`sun_casters_lit`).
-- **The room's own light.** A figure standing in the light hides some of what bounces round the
-  room too: the bounce and the `r_minlight` floor are dimmed by 0.8 of the share of the casters'
-  lights he hides at the pixel.
+- **The room's own light is never shadowed.** The light bounced round the room (the rebake's
+  bounce, the lightmaps' share, the `r_minlight` floor) has no one direction, so a figure leaves it
+  whole: a darkening there reads as a shadow with no light behind it. Under `r_fill_shadows 1` it is
+  dimmed by 0.8 of the share of the casters' lights he hides at the pixel (`kIndirectShadow`), the
+  look before.
 
 Lab `se-models`: the views `shadow-lamp`, `shadow-torch`, `shadow-flame` and `shadow-sun` (at
 noon, on a map with open sky), each from his eyes and from high to one side, `-side-pair` (the
