@@ -26,11 +26,11 @@ namespace r = ge::render;
 namespace {
 
 wgpu::Texture depth_array(gpu::Device& device, std::string_view label, uint32_t size,
-                          uint32_t layers) {
+                          uint32_t layers, wgpu::TextureFormat format = r::kDepthFormat) {
   wgpu::TextureDescriptor desc{};
   desc.label = wgpu::StringView(label.data(), label.size());
   desc.size = {size, size, layers};
-  desc.format = r::kDepthFormat;
+  desc.format = format;
   desc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
   return device.device.CreateTexture(&desc);
 }
@@ -43,10 +43,12 @@ wgpu::TextureView layer_view(const wgpu::Texture& t, uint32_t k) {
   return t.CreateView(&desc);
 }
 
+// All the layers to sample: the depth alone (a depth and stencil map's stencil is the drawing's).
 wgpu::TextureView array_view(const wgpu::Texture& t, uint32_t layers) {
   wgpu::TextureViewDescriptor desc{};
   desc.dimension = wgpu::TextureViewDimension::e2DArray;
   desc.arrayLayerCount = layers;
+  desc.aspect = wgpu::TextureAspect::DepthOnly;
   return t.CreateView(&desc);
 }
 
@@ -292,7 +294,7 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
   }
   d.caster_vertices = r::make_buffer(device, "bsp.casters", sizeof(float) * 3 * kMaxCasterVerts,
                                      wgpu::BufferUsage::Vertex);
-  d.orthos = depth_array(device, "bsp.orthos", kOrthoSize, kOrthos);
+  d.orthos = depth_array(device, "bsp.orthos", kOrthoSize, kOrthos, kOrthoFormat);
   for (uint32_t k = 0; k < kOrthos; ++k) d.ortho_layers[k] = layer_view(d.orthos, k);
   d.orthos_view = array_view(d.orthos, kOrthos);
   {
@@ -483,6 +485,30 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     desc.label = "bsp.casters";
     desc.vertex.buffers = &bare;
     d.p_caster = pipelines.add_render(device, desc);
+    // THE ORTHOGRAPHIC MAPS' THREE STEPS (encode_bsp_shadows): the solid faces as a cube face's,
+    // into the depth and stencil format; the sky faces nearer the sky than them marking the
+    // stencil (no depth written); and every texel left unmarked filled at the near plane, so
+    // whatever no sky face stands over along the camera's way is covered at any depth.
+    depth.format = kOrthoFormat;
+    desc.label = "bsp.ortho";
+    desc.vertex.buffers = &pos;
+    d.p_ortho = pipelines.add_render(device, desc);
+    depth.depthWriteEnabled = false;
+    depth.stencilFront.passOp = wgpu::StencilOperation::Replace;
+    depth.stencilBack = depth.stencilFront;
+    desc.label = "bsp.ortho_sky";
+    d.p_ortho_sky = pipelines.add_render(device, desc);
+    depth.depthWriteEnabled = true;
+    depth.depthCompare = wgpu::CompareFunction::Always;
+    depth.stencilFront.compare = wgpu::CompareFunction::Equal;  // unmarked: the reference 0
+    depth.stencilFront.passOp = wgpu::StencilOperation::Keep;
+    depth.stencilBack = depth.stencilFront;
+    desc.label = "bsp.ortho_shut";
+    desc.vertex.entryPoint = "vs_shut";
+    desc.vertex.bufferCount = 0;
+    desc.vertex.buffers = nullptr;
+    desc.fragment = nullptr;  // the near plane's depth, straight from the triangle
+    d.p_ortho_shut = pipelines.add_render(device, desc);
   }
   create_bsp_cull(device, pipelines, d.cull, scene, chunk_of, d.indices, frame);
   d.lava = lava_lights(scene, 1150, 0.3);
@@ -590,16 +616,19 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     const double spread = std::max(soft, near);
     // An aimed light: full inside info.w's cosine, none outside spot.w's.
     set4(g.info, -1, spread * spread, 0, l.spot ? l.cone_cos[0] : -1);
-    // Its shadows as soft as its source is big: a flame's over its size, a bulb's sharp.
-    set4(g.more, -1, std::max(soft * kFlameWidthShare, kPointSourceM), 0, 0);
-    if (l.spot)
-      set4(g.spot, l.dir[0], l.dir[1], l.dir[2], l.cone_cos[1]);
-    else
-      set4(g.spot, 0, -1, 0, -2);
     // A dynamic light moves or goes out from one frame to the next, so a cube of it would be drawn
     // again every frame: it lights without a shadow.
     const bool dynamic = !d.dynamic_points.empty() && p.l >= d.dynamic_points.data() &&
                          p.l < d.dynamic_points.data() + d.dynamic_points.size();
+    // Whether it throws a figure's shadow (Options::fill_shadows): a source he can see.
+    const bool figure = o.fill_shadows || dynamic || (l.seen && !l.physical);
+    // Its shadows as soft as its source is big: a flame's over its size, a bulb's sharp; z 1 when
+    // it throws a figure's.
+    set4(g.more, -1, std::max(soft * kFlameWidthShare, kPointSourceM), figure ? 1 : 0, 0);
+    if (l.spot)
+      set4(g.spot, l.dir[0], l.dir[1], l.dir[2], l.cone_cos[1]);
+    else
+      set4(g.spot, 0, -1, 0, -2);
     if (!l.physical && !dynamic && int(casters.size()) < d.options.shadowed)
       casters.push_back(d.frame_lights.size());
     d.frame_lights.push_back(g);
@@ -677,8 +706,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   {
     const std::vector<Capsule> caps =
         lights && o.capsules ? shadow_capsules(d.caster_boxes, view.eye) : std::vector<Capsule>{};
+    // w: the share of the bounce a figure's shadow dims (Options::fill_shadows; bsp.wgsl).
     set4(d.staged.capsule_info, double(caps.size()), o.soft_casters ? 0 : 1,
-         std::clamp(o.view_shadows, 0, 2), 0);
+         std::clamp(o.view_shadows, 0, 2), o.fill_shadows ? kIndirectShadow : 0);
     for (size_t c = 0; c < caps.size(); ++c) {
       set4(d.staged.capsules[c * 2], caps[c].a[0], caps[c].a[1], caps[c].a[2], caps[c].r);
       set4(d.staged.capsules[c * 2 + 1], caps[c].b[0], caps[c].b[1], caps[c].b[2], 0);
@@ -692,7 +722,11 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   const bool casting = lights && !d.casters.empty() && cast_by > 0;
   if (casting) {
     d.caster_count = uint32_t(std::min<size_t>(d.casters.size() / 3, kMaxCasterVerts) / 3 * 3);
-    for (const size_t c : caster_lights(d.frame_lights, casters, d.caster_boxes, view.eye)) {
+    // Only the lights that throw a figure's shadow get a cube of the casters.
+    std::vector<size_t> figure;
+    for (const size_t c : casters)
+      if (d.frame_lights[c].more[2] > 0.5f) figure.push_back(c);
+    for (const size_t c : caster_lights(d.frame_lights, figure, d.caster_boxes, view.eye)) {
       if (d.caster_lights >= cast_by) break;
       GpuLight& g = d.frame_lights[c];
       const int n = d.caster_lights++;
@@ -901,8 +935,40 @@ void encode_bsp_shadows(const BspDraw& d, const gpu::PipelineSet& pipelines, r::
       for (const int slot : d.fresh_slots)
         for (int f = 0; f < 6; ++f)
           shadow_pass(d.cube_layers[size_t(slot) * 6 + size_t(f)], uint32_t(slot * 6 + f), true);
+    // An orthographic map (the sun's, the zenith's, the fall's) sees its level's sky only through
+    // the sky faces: the solid faces' depth, the sky faces that stand nearer marking the stencil,
+    // and every texel left unmarked shut at the near plane (kOrthoFormat). A closed level has no
+    // sky anywhere, so no light from it and no weather; its seams and cracks let none in.
+    const auto ortho_pass = [&](const wgpu::TextureView& view, uint32_t job) {
+      wgpu::RenderPassDepthStencilAttachment depth{};
+      depth.view = view;
+      depth.depthLoadOp = wgpu::LoadOp::Clear;
+      depth.depthStoreOp = wgpu::StoreOp::Store;
+      depth.depthClearValue = 1.0f;
+      depth.stencilLoadOp = wgpu::LoadOp::Clear;
+      depth.stencilStoreOp = wgpu::StoreOp::Discard;
+      depth.stencilClearValue = 0;
+      wgpu::RenderPassDescriptor desc{};
+      desc.depthStencilAttachment = &depth;
+      wgpu::RenderPassEncoder pass = rec.render_part(encoder, desc, "bsp.shadows", part++, parts);
+      rec.current().draws += 3;
+      pass.SetPipeline(pipelines.render(d.p_ortho));
+      pass.SetBindGroup(0, d.shadow_group);
+      pass.SetVertexBuffer(0, d.vertices);
+      pass.SetIndexBuffer(d.indices, wgpu::IndexFormat::Uint32);
+      draw_solid(pass, job);
+      if (d.range[kSky][1] > 0) {
+        pass.SetPipeline(pipelines.render(d.p_ortho_sky));
+        pass.SetStencilReference(1);
+        pass.DrawIndexed(d.range[kSky][1], 1, d.range[kSky][0], 0, job);
+      }
+      pass.SetPipeline(pipelines.render(d.p_ortho_shut));
+      pass.SetStencilReference(0);
+      pass.Draw(3);
+      pass.End();
+    };
     for (uint32_t k = 0; k < kOrthos; ++k)
-      if (d.ortho_fresh[k]) shadow_pass(d.ortho_layers[k], first_ortho + k, false);
+      if (d.ortho_fresh[k]) ortho_pass(d.ortho_layers[k], first_ortho + k);
     // The moving casters, every frame: each lit cube's six faces of them alone, every face its
     // tile of the atlas in one pass (a pass a face cost 0.1 ms each on a tiled GPU, whatever it
     // drew).

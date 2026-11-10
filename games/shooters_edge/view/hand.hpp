@@ -33,6 +33,12 @@
 //                       the weapon moved from its place: right, up, forward, m
 //     cl_gunsway        the share of the sway, the stride's swing and the breath (0 still, 1 the
 //                       game's, 2 twice)
+//     cl_gunidle        the share of the breath at rest (place.hpp's THE BREATH): 0 none, 1 the
+//                       game's, 2 twice
+//     cl_gunidle_rate   breaths a minute at rest (the game's: 15)
+//     cl_gunidle_exertion
+//                       how much a run quickens and deepens the breath after it: 0 not at all,
+//                       1 the game's, 2 twice
 //     r_viewmodel_center
 //                       1 (the default, as the classic arena games hold it): the weapon in the
 //                       middle under the crosshair, nearer the eye and a little higher
@@ -49,6 +55,7 @@
 // ge:keywords step_hand held_row add_view_cvars view-settings fire-clip animation frames
 // ge:keywords r_viewmodel_center centred-weapon centered r_viewmodel_hands hide-hands muzzle-pose
 // ge:keywords at_eye eye_row classic-weapons axe-swing two-swings takes fire_frame weaponframe
+// ge:keywords cl_gunidle cl_gunidle_rate cl_gunidle_exertion idle-sway breathing breath
 // ge:skill render shooter
 // ge:test tests/shooters_edge_view_test.cpp
 #pragma once
@@ -68,6 +75,9 @@ struct ViewSettings {
   double fov_deg = 0;           // r_viewmodel_fov, vertical (0: the view's)
   double gun_m[3] = {0, 0, 0};  // cl_gunx, cl_guny, cl_gunz
   double sway = 1;              // cl_gunsway
+  double idle = 1;              // cl_gunidle
+  double idle_rate = 15;        // cl_gunidle_rate, breaths a minute at rest
+  double idle_exertion = 1;     // cl_gunidle_exertion
   bool centre = true;           // r_viewmodel_center
   bool hands = true;            // r_viewmodel_hands
   bool lerp = true;  // r_lerpmodels (bound with the picture's): a clip's end flows back to rest

@@ -72,8 +72,9 @@ struct Bsp {
   // the 64 light styles' levels now, four a vector
   styles: array<vec4f, 16>,
   // the moving casters as capsules (bsp_draw.hpp's kShadowCapsules): x how many, y 1 for the
-  // casters' cubes' hard edges, z a second view's shadows (Options::view_shadows); then each
-  // one's two ends, the radius in the first's w
+  // casters' cubes' hard edges, z a second view's shadows (Options::view_shadows), w the share
+  // of the bounce a figure's shadow dims (Options::fill_shadows); then each one's two ends, the
+  // radius in the first's w
   capsule_info: vec4f,
   capsules: array<vec4f, 8>,
   // the moving casters along the sun: their atlas's last row's first tile (info.z 1: drawn)
@@ -383,9 +384,9 @@ fn ggx(n: vec3f, l: vec3f, v: vec3f, rough: f32, spread: f32) -> f32 {
   return dist * vis * f * nl;
 }
 
-// THE TELEPORT'S MAGIC LIQUID (v2): a black ink marbled with grey, flowing UP the panel; silver
-// threads climbing it in lanes; motes rising and twinkling; a pale shimmer where it is seen edge
-// on; the whole breathing slowly. Its own light, in a white face's units (hash12 seeds it).
+// THE TELEPORT'S MAGIC LIQUID (v2): a black ink marbled with grey, flowing UP the panel; motes
+// rising and twinkling; a pale shimmer where it is seen edge on; the whole breathing slowly. No
+// bright lanes run up it: thin vertical lines read as white seams scratched on the panel. Its own light, in a white face's units (hash12 seeds it).
 fn t_noise(p: vec2f) -> f32 {
   let i = floor(p);
   let f = fract(p);
@@ -420,18 +421,6 @@ fn teleport(world: vec3f, n: vec3f, eye_dir: vec3f, t: f32) -> vec3f {
   let fine = pow(max(1.0 - abs(2.0 * t_fbm(p * 6.0 + 4.0 * w2 + 2.0 * up) - 1.0), 0.0), 14.0);
   var c = vec3f(0.003, 0.003, 0.005) + vec3f(0.025, 0.025, 0.03) * smoothstep(0.4, 0.8, w2.y);
   c += vec3f(0.09, 0.09, 0.1) * smoke + vec3f(0.3, 0.31, 0.36) * fine * smoke;
-  // The threads: a liquid that runs UP the panel, a few lanes of it, each swaying and lit in
-  // drops that climb it, with a halo.
-  let lane_at = p.x * 5.0 + 0.6 * sin(1.3 * p.y + 0.7 * t) + 1.2 * (w1.x - 0.5);
-  let lane_id = floor(lane_at);
-  let live = step(0.55, hash12(vec2f(lane_id, 7.0)));
-  let lane = abs(fract(lane_at) - 0.5);
-  let core = 1.0 - smoothstep(0.0, 0.025, lane);
-  let halo = exp(-lane * 22.0);
-  let speed = 1.2 + 1.4 * hash12(vec2f(lane_id, 3.0));
-  let drops = smoothstep(0.5, 0.95, t_noise(vec2f(lane_id * 3.1, p.y * 1.6 - speed * t)));
-  let flow = live * (0.25 + 1.6 * drops);
-  c += vec3f(1.1, 1.12, 1.2) * core * flow + vec3f(0.14, 0.15, 0.19) * halo * flow;
   // The motes: sparks in a few cells, rising and swaying, twinkling, each with a glow.
   let cp = vec2f(p.x * 6.0 + 0.3 * sin(p.y * 2.0 + t), p.y * 6.0 - 1.8 * t);
   let ci = floor(cp);
@@ -680,8 +669,9 @@ fn spot_edge(l: Light, c: f32) -> f32 {
 // THE MOVING CASTERS' SHARE OF THE ROOM'S OWN LIGHT: a body standing in the light hides the light
 // bounced round the room from what is under it too (the light reaching the floor from the
 // hemisphere he stands in), most of it from the way the nearest lights come. So the bounce and the
-// floor of light are dimmed by kIndirectShadow of the share of the casters' lights he hides here.
-const kIndirectShadow = 0.8;
+// floor of light are dimmed by capsule_info.w of the share of the casters' lights he hides here:
+// 0 unless bsp_draw.hpp's Options::fill_shadows asks for it, since a shadow in the bounce reads as
+// one cast by no light.
 // A figure's capsule shadows nothing further than this from its middle (squared, m^2).
 const kCapsuleReach2 = 36.0;
 
@@ -1094,7 +1084,8 @@ fn shade(in: VsOut) -> FsOut {
     }
     // A light with no cube of the moving casters: their capsules shadow it instead (none at a
     // point kCapsuleReachM past them: a figure's shadow is near him).
-    if (l.more.x < 0.0 && bsp.capsule_info.x > 0.5 && view_cut > 1.5) {
+    // Only a light whose source he can see throws it (more.z; bsp_draw.hpp's fill_shadows).
+    if (l.more.x < 0.0 && l.more.z > 0.5 && bsp.capsule_info.x > 0.5 && view_cut > 1.5) {
       var seen = 1.0;
       let lr = max(l.more.y, 0.04);
       for (var c = 0u; near_capsules != 0u && c < u32(bsp.capsule_info.x); c++) {
@@ -1126,7 +1117,7 @@ fn shade(in: VsOut) -> FsOut {
   // The light bounced round the room: the rebake's own where it has one, else the map's baked
   // light (its light probes) at a share; dimmed where a moving caster hides the nearest lights.
   let hidden = select(0.0, 1.0 - cast_lit / cast_full, cast_full > 1e-6);
-  let indirect = cavity * (1.0 - kIndirectShadow * hidden);
+  let indirect = cavity * (1.0 - bsp.capsule_info.w * hidden);
   if (bsp.info3.y < 0.0 && in.lm2.x >= 0.0) {
     e += textureSampleLevel(rebake_bounce, light_sampler, in.lm2, 0.0).rgb * indirect;
   } else {

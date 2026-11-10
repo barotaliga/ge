@@ -16,3 +16,9 @@ concepts: [merge-queue, ejection, required-check, pull-request-ci, empty-commit,
 - A PR's `mergeQueueEntry` null with no merge and no failed run of its own is this case, or the
   queue dropping the PRs behind a failed group; `gh api repos/<o>/<r>/issues/<n>/timeline` tells
   which.
+- The same happens when a draft is marked ready seconds after a push: PR 624's push, then
+  `ccr/ready_for_review` at once, started the `ready_for_review` run on the PREVIOUS head, so the
+  new head had no `required` and sat in the queue with no group run. Converting to draft and back
+  started nothing (a ready from that route runs no workflow). Push, confirm the `pull_request` run
+  shows the new sha, and only then mark ready; when it is missing, the next real commit (a lesson,
+  a doc line) starts it.

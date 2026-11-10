@@ -241,11 +241,18 @@ void() weapon_impulse = {
 // --- firing ---
 
 // A hitscan line from the eye along v_forward with a spread, `reach` long: what it hits takes
-// `points`.
+// `points`. Where the game says so (`pellets_as_one_blow`: the campaign), the pellets that strike
+// one body in a row land as ONE blow, their points summed (a pellet on another body lands the sum
+// so far first), so a blast that kills does it with all of its weight: the double barrel at close
+// range bursts a body the single pellets would only fell. Each pellet still bleeds where it
+// struck.
 void(float pellets, float points, float spread, float reach) fire_pellets_far = {
   local vector from, dir, to;
-  local float i;
+  local float i, summed;
+  local entity struck;
   from = self.origin + self.view_ofs;
+  struck = world;
+  summed = 0;
   for (i = 0; i < pellets; i += 1) {
     dir = v_forward + crandom() * spread * v_right + crandom() * spread * v_up;
     to = from + dir * reach;
@@ -253,13 +260,24 @@ void(float pellets, float points, float spread, float reach) fire_pellets_far = 
     if (trace_fraction < 1) {
       if (trace_ent.takedamage) {
         effect_impact(trace_endpos, 1, TRUE);
-        trace_ent.deathtype = "shot";
-        damage(trace_ent, self, self, points);
+        if (!pellets_as_one_blow()) {
+          trace_ent.deathtype = "shot";
+          damage(trace_ent, self, self, points);
+        } else {
+          if (trace_ent != struck) {
+            if (summed > 0) damage(struck, self, self, summed);
+            struck = trace_ent;
+            struck.deathtype = "shot";
+            summed = 0;
+          }
+          summed = summed + points;
+        }
       } else {
         effect_impact(trace_endpos, 1, FALSE);
       }
     }
   }
+  if (summed > 0) damage(struck, self, self, summed);
 };
 
 void(float pellets, float points, float spread) fire_pellets = {

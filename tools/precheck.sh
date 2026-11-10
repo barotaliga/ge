@@ -106,7 +106,7 @@ fi
 # PRECHECK_FULL_BUILD=1 builds everything, as `make build` does.
 lean_build() {
   tools/ccache-share.sh restore || true
-  cmake --preset "$preset" >/dev/null
+  tools/configure.sh "$preset" >/dev/null
   local targets
   mapfile -t targets < <(ninja -C "$build" -t targets all 2>/dev/null | awk -F': ' '
     $2 ~ /^(C|CXX)_COMPILER|_LIBRARY_LINKER/ { print $1 }
