@@ -3,10 +3,12 @@
 // as the window draws it, a thirtieth of a second a frame, a picture at each moment asked; or the
 // original (ce_warps off: the teleport's classic specks, the figure there or gone at once). Seen
 // from aside (another player arriving or leaving) or from his own eyes (`first_person`: his own
-// arrival, the ash streaming at the eyes and the weapon in hand assembling).
+// arrival, the ash streaming at the eyes, the weapon in hand assembling and the whole view opening
+// out of the arrival's flash and warp, at r_arrival).
 //
 // ge:summary Labs' helper: a player's warp in or out filmed through the window's world draw
 // ge:keywords lab warp film dust ash spawn teleport first-person held-warp film_warp warp_dust
+// ge:keywords arrival-film r_arrival
 // ge:skill shooter labs
 #pragma once
 
@@ -18,6 +20,7 @@
 #include <vector>
 
 #include "gpu/target.hpp"
+#include "lab/gif.hpp"
 #include "lab/lab.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/warps.hpp"
@@ -29,6 +32,7 @@ namespace shooters_edge::labs {
 struct WarpFilm {
   std::vector<ge::lab::Picture> pics;
   std::vector<std::string> names;
+  std::vector<ge::lab::Picture> frames;  // every frame drawn, at `WarpTake::film_width` (0: none)
 };
 
 struct WarpTake {
@@ -39,6 +43,7 @@ struct WarpTake {
   effects::Palette palette;  // the pack's (gfx/palette.lmp) for the original's specks; empty: greys
   std::vector<double> moments;  // s into the warp, rising
   uint32_t seed = 1;
+  int film_width = 0;  // above 0: every frame also kept in WarpFilm::frames, shrunk to this width
 };
 
 // `take` drawn over `base` (the frame's other models and effects) from `view`, with `hand` in
@@ -81,6 +86,13 @@ inline void film_warp(ge::gpu::Device& d, client::WorldDraw& world, const ge::gp
       s.models.push_back(m);
     } else {
       s.held_shown = float(shown);
+      // His whole view's warp (the post pass's arrival, at r_arrival).
+      s.arrival_s = age;
+      if (take.palette.size() >= 768) {
+        const double hi =
+            std::max({take.palette[42], take.palette[43], take.palette[44], uint8_t{1}});
+        for (int k = 0; k < 3; ++k) s.arrival_tint[k] = take.palette[42 + size_t(k)] / hi;
+      }
     }
     if (births)
       client::warp_dust(warp, dust, was, age, take.seed + uint32_t(age * 1000), &s.births);
@@ -96,6 +108,12 @@ inline void film_warp(ge::gpu::Device& d, client::WorldDraw& world, const ge::gp
       fv.time_s += age;
       const client::FxFrame s = stage(age, was, true);
       client::draw_world(d, world, fv, s, hand, was < 0 ? 0 : age - was, {}, out.view);
+      if (take.film_width > 0) {
+        const ge::gpu::Image fi = ge::gpu::read_now(d, out);
+        film.frames.push_back(ge::lab::shrink(
+            ge::lab::Picture{static_cast<int>(fi.width), static_cast<int>(fi.height), fi.rgba},
+            take.film_width));
+      }
     }
     // The moment held a frame (the particles' step 0), so the picture is the moment's.
     ge::render::FrameView fv = view;
