@@ -26,6 +26,24 @@ sh::Vec3f lerp_angles(const sh::Vec3f& a, const sh::Vec3f& b, float f) {
   return {lerp_angle(a.x, b.x, f), lerp_angle(a.y, b.y, f), lerp_angle(a.z, b.z, f)};
 }
 
+// Where `e` (now at `to`) is drawn at `time` by its stride, or false when it is not stepping.
+bool stride_at(const DemoStride& st, const DemoEntity& to, double time, sh::Vec3f& origin,
+               sh::Vec3f& angles) {
+  if (!st.stepping) return false;
+  const double g = (time - st.at) / st.span;
+  if (g >= 1) return false;
+  const auto f = static_cast<float>(std::max(g, 0.0));
+  origin = lerp3(st.origin, to.origin, f);
+  angles = lerp_angles(st.angles, to.angles, f);
+  return true;
+}
+
+// The first entity number that is not a player's: a single recording's players are its entities
+// 1 to `max_clients`; the multiplayer formats keep their players apart.
+size_t first_thing(const DemoState& s) {
+  return s.format == DemoFormat::single ? static_cast<size_t>(std::max(s.max_clients, 0)) + 1 : 1;
+}
+
 }  // namespace
 
 float lerp_angle(float a, float b, float f) {
@@ -73,6 +91,39 @@ void lerp_frame(DemoLerp& l, const DemoState& s, bool cut) {
   p.entities.assign(s.entities.begin(), s.entities.end());
   p.players.assign(s.players.begin(), s.players.end());
   l.between = !cut && s.frames > 1 && l.from.levels == p.levels && p.time > l.from.time;
+  // The strides: a thing still through the frame before that moves now steps from where it was
+  // drawn when the frame before stood, over the time since its last move.
+  const DemoPose& a = l.from;
+  l.stride.resize(p.entities.size());
+  for (size_t n = 0; n < p.entities.size(); n++) {
+    DemoStride& st = l.stride[n];
+    const DemoEntity& to = p.entities[n];
+    const bool kept =
+        l.strides && l.between && n >= first_thing(s) && n < a.entities.size() &&
+        a.entities[n].present && to.present && a.entities[n].model == to.model &&
+        distance2(a.entities[n].origin, to.origin) <= kEntitySnapUnits * kEntitySnapUnits;
+    const DemoEntity& was = n < a.entities.size() ? a.entities[n] : to;
+    if (!kept) {
+      st = DemoStride{};
+      st.moved = p.time;
+      continue;
+    }
+    const bool moved = distance2(was.origin, to.origin) > 0 || was.angles.x != to.angles.x ||
+                       was.angles.y != to.angles.y || was.angles.z != to.angles.z;
+    if (!moved) continue;
+    if (st.moved < a.time) {  // still through the frame before: a stride
+      sh::Vec3f origin = was.origin, angles = was.angles;
+      stride_at(st, was, a.time, origin, angles);
+      st.span = frame_pace(p.time - st.moved, st.span);
+      st.origin = origin;
+      st.angles = angles;
+      st.at = a.time;
+      st.stepping = true;
+    } else {
+      st.stepping = false;
+    }
+    st.moved = p.time;
+  }
 }
 
 double lerp_fraction(const DemoLerp& l, double time) {
@@ -87,6 +138,12 @@ const DemoState& lerp_at(DemoLerp& l, const DemoState& s, double time) {
   d = s;
   l.f = lerp_fraction(l, time);
   l.snapped = 0;
+  // A stride drawn over its time, whatever the two frames' fraction.
+  const size_t strides =
+      std::min(l.stride.size(), std::min(l.to.entities.size(), d.entities.size()));
+  for (size_t n = 0; n < strides && l.between; n++)
+    if (l.to.entities[n].present)
+      stride_at(l.stride[n], l.to.entities[n], time, d.entities[n].origin, d.entities[n].angles);
   if (l.f >= 1) return d;
   const float f = static_cast<float>(l.f);
   const DemoPose& a = l.from;
@@ -99,7 +156,10 @@ const DemoState& lerp_at(DemoLerp& l, const DemoState& s, double time) {
   }
   const size_t entities = std::min(a.entities.size(), b.entities.size());
   for (size_t n = 0; n < entities; n++) {
-    if (!b.entities[n].present) continue;
+    if (!b.entities[n].present ||
+        (n < l.stride.size() && l.stride[n].stepping &&
+         stride_at(l.stride[n], b.entities[n], time, d.entities[n].origin, d.entities[n].angles)))
+      continue;
     if (!lerp_entity(a.entities[n], b.entities[n], f, d.entities[n])) l.snapped++;
   }
   if (s.intermission || a.intermission || a.player != b.player) return d;

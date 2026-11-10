@@ -14,11 +14,6 @@ namespace shooters_edge::client {
 
 namespace {
 
-// The time a pace's gap says its next step takes: the gap itself when it is a pace, else the last.
-double pace(double gap, double last) {
-  return gap >= kLeastFrameSpan && gap <= kMostFrameSpan ? gap : last;
-}
-
 sh::Vec3f mix(const sh::Vec3f& a, const sh::Vec3f& b, float f) {
   return {a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, a.z + (b.z - a.z) * f};
 }
@@ -56,6 +51,26 @@ void drawn_place(const ModelTrack& tr, double drawn_s, sh::Vec3f& origin, sh::Ve
 
 }  // namespace
 
+void track_frame(FrameTrack& tr, int frame, double t, int& from, float& f) {
+  if (t < tr.changed) tr = FrameTrack{};  // a seek
+  if (frame != tr.frame) {
+    if (tr.frame >= 0) {
+      if (tr.changed >= 0) tr.span = frame_pace(t - tr.changed, tr.span);
+      tr.from = tr.frame;
+    }
+    tr.frame = frame;
+    tr.changed = t;
+  }
+  from = -1;
+  f = 1;
+  if (tr.from < 0) return;
+  const double g = (t - tr.changed) / tr.span;
+  if (g < 1) {
+    from = tr.from;
+    f = static_cast<float>(std::max(g, 0.0));
+  }
+}
+
 void lerp_models(ModelLerp& l, std::span<LerpModel> placed, double t, const ModelLerpClock& clock,
                  const ModelLerpSwitches& on) {
   const bool moves = on.moves && clock.moves;
@@ -74,7 +89,7 @@ void lerp_models(ModelLerp& l, std::span<LerpModel> placed, double t, const Mode
       tr = ModelTrack{};
       tr.seen = l.calls;
       tr.modelindex = p.modelindex;
-      tr.frame = p.frame;
+      tr.anim.frame = p.frame;
       tr.origin = tr.prev_origin = p.origin;
       tr.angles = tr.prev_angles = p.angles;
       tr.now_s = tr.prev_s = tr.moved_s = clock.state_s;
@@ -82,21 +97,13 @@ void lerp_models(ModelLerp& l, std::span<LerpModel> placed, double t, const Mode
       continue;
     }
     // THE ANIMATION: a new frame drawn from the last over the time its frames last.
-    if (p.frame != tr.frame) {
-      if (tr.changed >= 0) tr.span = pace(t - tr.changed, tr.span);
-      tr.from = tr.frame;
-      tr.frame = p.frame;
-      tr.changed = t;
-    }
+    int from = -1;
+    float f = 1;
+    track_frame(tr.anim, p.frame, t, from, f);
     if (on.frames) {
       p.lerp = true;
-      if (tr.from >= 0) {
-        const double f = (t - tr.changed) / tr.span;
-        if (f < 1) {
-          p.frame_from = tr.from;
-          p.frame_f = static_cast<float>(std::max(f, 0.0));
-        }
-      }
+      p.frame_from = from;
+      p.frame_f = f;
     }
     if (!moves) {  // drawn where it stands: kept for the snap's test alone
       tr.origin = p.origin;
@@ -115,7 +122,7 @@ void lerp_models(ModelLerp& l, std::span<LerpModel> placed, double t, const Mode
           tr.step_angles = angles;
           tr.stepping = true;
           tr.step_at = clock.drawn_s;
-          tr.step_span = pace(clock.state_s - tr.moved_s, tr.step_span);
+          tr.step_span = frame_pace(clock.state_s - tr.moved_s, tr.step_span);
         } else {
           tr.stepping = false;
         }

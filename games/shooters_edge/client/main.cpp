@@ -77,13 +77,16 @@
 #include "console/view.hpp"
 #include "core/output.hpp"
 #include "gpu/device.hpp"
+#include "gpu/frame_gate.hpp"
 #include "gpu/surface.hpp"
 #include "gpu/target.hpp"
+#include "hud/frame_graph.hpp"
 #include "hud/spinner.hpp"
 #include "input/state.hpp"
 #include "net/voice_codec.hpp"
 #include "platform/audio.hpp"
 #include "platform/devices.hpp"
+#include "platform/pacing.hpp"
 #include "platform/window.hpp"
 #include "render/screenshot_copy.hpp"
 #include "shooters_edge/client/args.hpp"
@@ -201,6 +204,9 @@ int run_main(int argc, char** argv) {
   cl::add_user_info_cvars(console, user_info);
   cl::WindowCvars win;  // vid_fullscreen (followed each frame), vid_display, volume, ...
   cl::add_window_cvars(console, win);
+  // vid_vsync, cl_maxfps, cl_maxfps_hz, vid_framelatency, scr_showfps and `framestats`.
+  ge::platform::Pacing pacing;
+  ge::platform::add_pacing_cvars(console, pacing);
   std::string bench_ask;  // a demo the console asked to benchmark (`timedemo`) or play
   bool play_ask = false;  // the demo asked for is played at its own pace (`playdemo`)
   cl::add_demo_commands(console, bench_ask, play_ask);
@@ -319,7 +325,13 @@ int run_main(int argc, char** argv) {
   // The pointer comes in the window's logical units; the menu is laid out in pixels.
   const float px_per_unit =
       args.width > 0 ? static_cast<float>(w) / static_cast<float>(args.width) : 1;
-  surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), true);
+  // The frames the GPU may queue (vid_framelatency): waited on before each frame reads its input.
+  ge::gpu::FrameGate gate;
+  bool vsync_applied = pacing.settings.vsync;
+  int32_t latency_applied = pacing.settings.latency;
+  surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync_applied);
+  ge::platform::set_swap_images(*window, ge::platform::swap_images(pacing.settings));
+  pacing.present = surface.present_mode();
   cl::WorldDrawPtr title =
       cl::make_title_world(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h),
                            surface.format(), picture, error);
@@ -353,6 +365,7 @@ int run_main(int argc, char** argv) {
     cl::draw_world(*device, *title, cl::title_view(t), {}, nullptr, dt, overlay, target);
     shot_copy.frame(*device, surface.frame_target(), shots, console);
     surface.present();
+    gate.submitted(*device);
   };
   title_frame(0, 0, "LOADING", 0);
   // The main menu's maps, its classic pictures when the packs carry them, and the packs classic
@@ -495,7 +508,16 @@ int run_main(int argc, char** argv) {
   std::vector<float> mic_samples(static_cast<size_t>(sn::kMicMostSamples));
   ge::platform::set_relative_mouse(*window, true);
   bool captured = true;
-  bool vsync = true;
+  bool vsync = true;  // false while a timedemo runs unlocked; the player's vid_vsync otherwise
+  // The surface at the window's size, its present mode the player's vid_vsync (a timedemo's
+  // unlocked one aside), its swap chain's images by vid_framelatency.
+  const auto configure_surface = [&] {
+    vsync_applied = pacing.settings.vsync;
+    latency_applied = pacing.settings.latency;
+    surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync_applied);
+    ge::platform::set_swap_images(*window, ge::platform::swap_images(pacing.settings));
+    pacing.present = surface.present_mode();
+  };
   bool full_applied = false;  // what the window was last set to; vid_fullscreen is the ask
   std::unique_ptr<cl::LoadedMap> bench_map;  // the benchmark's level (the world draws it)
   cl::DemoFolder bench_folder;               // the demo's game folder (timedemo.hpp's demo_folder)
@@ -560,7 +582,7 @@ int run_main(int argc, char** argv) {
     hearing.stop();
     hud.centre.clear();
     vsync = true;
-    surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync);
+    configure_surface();
     if (!listen.map || listen.server == nullptr) {  // run from the title: back to it
       world.reset();
       return true;
@@ -666,6 +688,7 @@ int run_main(int argc, char** argv) {
   };
   size_t printed = 0, centred = 0;
   uint64_t last = first_ns;
+  double game_t = 0;  // the game's clock, s: the sum of the frames' game times
   long presented = 0;
   double longest = 0;  // the longest frame, s: a hitch a load or a stall made
   while ((args.frames == 0 || presented < args.frames) && !quit) {
@@ -673,13 +696,25 @@ int run_main(int argc, char** argv) {
       pictures_enhanced = use_pictures(first_pictures.get(), true);
     if (!first_pictures.valid() && picture.ce.pictures != pictures_enhanced)
       pictures_enhanced = load_pictures(false);
+    // The frame's pacing BEFORE its input is read, so the input is as fresh as the waits allow:
+    // the GPU's queue down to vid_framelatency, then the cap (a timedemo runs unpaced).
+    if (vsync) {
+      if (pacing.settings.vsync != vsync_applied || pacing.settings.latency != latency_applied)
+        configure_surface();
+      const double gpu_s = gate.wait(*device, pacing.settings.latency);
+      ge::platform::pace(*window, pacing, gpu_s);
+    }
     queue.clear();
     ge::platform::poll_input(*window, input, *devices, queue);
     const uint64_t now = ge::platform::now_ns();
-    const double wall = static_cast<double>(now - last) * 1e-9;
-    const double t = static_cast<double>(now - first_ns) * 1e-9;
+    const double frame_s = static_cast<double>(now - last) * 1e-9;
+    // The game's time: at vsync whole refreshes (vid_steady), so the motion is even whenever the
+    // frame started; a timedemo's as measured.
+    const double wall = vsync ? ge::platform::game_dt(pacing, frame_s) : frame_s;
+    game_t += wall;
+    const double t = game_t;
     last = now;
-    if (presented > 0) longest = std::max(longest, wall);
+    if (presented > 0) longest = std::max(longest, frame_s);
     if (input.quit) {
       save_settings();
       break;
@@ -766,7 +801,11 @@ int run_main(int argc, char** argv) {
     if (input.resized) {
       w = input.width_px;
       h = input.height_px;
-      surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync);
+      if (vsync) {
+        configure_surface();
+      } else {
+        surface.configure_unlocked(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
+      }
       if (world)
         cl::resize_world(*device, *world, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
       cl::resize_world(*device, *title, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
@@ -926,6 +965,7 @@ int run_main(int argc, char** argv) {
     if (bench.active || drawn_remote) {
       std::vector<std::string> said;
       const bool paced = bench.paced || drawn_remote;  // every frame shown, nothing timed
+      bench.lerp.strides = picture.lerp_move;          // r_lerpmove: a monster's strides glide
       const cl::TimedemoStep step =
           drawn_remote ? (joined == decltype(joined)::new_level ? cl::TimedemoStep::new_level
                                                                 : cl::TimedemoStep::frame)
@@ -985,6 +1025,8 @@ int run_main(int argc, char** argv) {
           hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style());
       playback.bar_bottom_px = cl::hud_inset(placed, h);
       if (bench.paced) cl::playback_draw(overlay, playback, bench, w, h, t);
+      ge::hud::draw_frame_rate(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(),
+                               pacing.times, pacing.refresh, pacing.show);
       if (drawn_remote) {  // a game joined: its menu and console over it
         game_menu.draw(overlay, w, h, t);
         con_view.frame(wall);
@@ -1024,6 +1066,7 @@ int run_main(int argc, char** argv) {
       if (bench_shown_ns == frame_ns) {
         shot_copy.frame(*device, surface.frame_target(), shots, console);
         surface.present();
+        if (paced) gate.submitted(*device);
       }
       if (paced) {  // playback: every frame shown, nothing timed
         ++presented;
@@ -1117,6 +1160,7 @@ int run_main(int argc, char** argv) {
       hud.centre_until = hud.centre.empty() ? 0 : t + 2;
     }
     // The eyes on the player and what the world throws, then the overlay: the HUD, the console.
+    shown.lerp = picture.lerp_move;  // r_lerpmove: the eye between the server's frames too
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
     view.frame = static_cast<uint64_t>(presented);
     fx_state.models = world ? &cl::world_models(*world) : nullptr;
@@ -1156,6 +1200,8 @@ int run_main(int argc, char** argv) {
     cl::draw_scores(overlay, listen, game_menu.art(), w, h,
                     !con_keys.held && !was_open && input.down(ge::platform::Key::tab),
                     win.level_stats, board_view);
+    ge::hud::draw_frame_rate(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(),
+                             pacing.times, pacing.refresh, pacing.show);
     game_menu.draw(overlay, w, h, t);
     con_view.frame(wall);
     ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
@@ -1163,11 +1209,18 @@ int run_main(int argc, char** argv) {
       ge::hud::draw_spinner(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(), t,
                             cl::load_caption(loader), t - loader.since_s);
 
+    const uint64_t acquiring = ge::platform::now_ns();
     wgpu::TextureView target = surface.acquire(*device);
+    ge::platform::acquired(pacing, acquiring, ge::platform::now_ns());
     if (!target) continue;
     cl::draw_world(*device, *world, view, fx, &hand, wall, overlay, target);
     shot_copy.frame(*device, surface.frame_target(), shots, console);
     surface.present();
+    gate.submitted(*device);
+    if (ge::platform::late_start_on(pacing)) {  // the frame's cost, to its GPU's last work
+      gate.wait(*device, 1);
+      ge::platform::frame_done(pacing, ge::platform::now_ns());
+    }
     ++presented;
   }
   if (quit) save_settings();

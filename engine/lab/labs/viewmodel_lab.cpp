@@ -2,13 +2,14 @@
 // stage.hpp). Every weapon held at rest side by side; one weapon under every named light (day,
 // dim, dark, a torch, its own muzzle flash, a red and a blue lamp), so the light of the place
 // visibly reaches the gun; and a scripted second and a half of walking, turning, firing and
-// putting it away as a strip, with the placement's numbers as a table. `--models` names a
+// putting it away as a strip, with the placement's numbers as a table; and the gun's breath charted
+// over 45 s (at rest, a run, at rest again). `--models` names a
 // directory of .glb weapons (each turned muzzle forward and gripped by `fit_mount`); without it,
 // a weapon built of boxes. CPU pictures from the engine's own arithmetic, so in the digest.
 //
 // ge:summary Lab: the held weapon in first person: every weapon, every light, walk, turn, fire
 // ge:keywords lab viewmodel view-model first-person weapon gun held lineup lights torch flash
-// ge:keywords dark coloured motion bob sway kick lower corridor stage
+// ge:keywords dark coloured motion bob sway kick lower corridor stage breath exertion idle-sway
 // ge:skill render labs
 // ge:test tests/viewmodel_raster_test.cpp
 #include <algorithm>
@@ -21,6 +22,7 @@
 #include "camera/first_person.hpp"
 #include "camera/pose.hpp"
 #include "core/math.hpp"
+#include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "viewmodel/held.hpp"
@@ -324,6 +326,61 @@ void run(ge::lab::Lab& lab) {
               "and settles within a few frames; put away, the gun leaves the picture downward",
               inp},
              sheet(panels, labels, 4));
+  }
+
+  // The breath: 10 s at rest, a 10 s run at 8 m/s, 25 s at rest again; the gun's breath and the
+  // body's exertion charted, the breaths a minute and their depth before and after the run.
+  {
+    vm::PlaceState st;
+    vm::PlaceInput in;
+    const double dt = 1.0 / 60;
+    ge::lab::Trace lift{"breath lift (mm)", {}, {}}, exert{"exertion (x10)", {}, {}};
+    struct Span {
+      double t0, t1;
+      int breaths = 0;
+      double low = 1, high = -1;
+    } still{0, 10}, after{20, 30};
+    double last = 0;
+    for (int i = 1; i <= 45 * 60; ++i) {
+      const double t = i * dt;
+      in.ground_speed = t > 10 && t <= 20 ? 8.0 : 0.0;
+      const vm::Placement p = vm::frame_viewmodel(row, in, st, dt);
+      if (i % 2 == 0) {
+        lift.x.push_back(t);
+        lift.y.push_back(1000 * p.breath);
+        exert.x.push_back(t);
+        exert.y.push_back(10 * p.exertion);
+      }
+      for (Span* s : {&still, &after}) {
+        if (t <= s->t0 || t > s->t1) continue;
+        s->low = std::min(s->low, p.breath);
+        s->high = std::max(s->high, p.breath);
+        if (last < 0 && p.breath >= 0) ++s->breaths;
+      }
+      last = p.breath;
+    }
+    lab.metric("breath-rest-per-min", still.breaths * 6.0, "1/min");
+    lab.metric("breath-after-run-per-min", after.breaths * 6.0, "1/min");
+    lab.metric("breath-rest-depth", still.high - still.low, "m");
+    lab.metric("breath-after-run-depth", after.high - after.low, "m");
+    ge::lab::LineChart lc;
+    lc.frame = {"THE GUN BREATHING: AT REST, A RUN, AND AT REST AGAIN",
+                "row " + row_name + ", 60 Hz; the breath's own lift and the body's exertion",
+                "t (s)",
+                "mm, exertion x10",
+                960,
+                420};
+    lc.traces = {lift, exert};
+    lc.bands = {{10, 20, "run 8 m/s"}};
+    lc.spikes = false;
+    const ge::lab::Chart ch = ge::lab::line_chart(lc);
+    lab.shot({"breath", ch.title,
+              "45 s at 60 Hz: 10 s standing, a 10 s run at 8 m/s (the gun's breath kept at its "
+              "moving share under the bob) and 25 s standing again while the exertion falls.",
+              "about 15 breaths a minute at rest, each a little different; faster and deeper "
+              "right after the run, settling back over the next 20 s",
+              inputs},
+             ge::lab::to_picture(ch.plot));
   }
 }
 

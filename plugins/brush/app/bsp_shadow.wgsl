@@ -42,6 +42,14 @@ fn vs_main(@location(0) pos: vec3f, @builtin(instance_index) job: u32) -> Out {
   return o;
 }
 
+// THE SHUT STEP of an orthographic map: one triangle over the whole map at the near plane,
+// drawn where no sky face marked the stencil (bsp_draw.cpp's encode_bsp_shadows).
+@vertex
+fn vs_shut(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+  let uv = vec2f(f32((i << 1u) & 2u), f32(i & 2u));
+  return vec4f(uv * 2.0 - 1.0, 0.0, 1.0);
+}
+
 @fragment
 fn fs_main(in: Out) -> @builtin(frag_depth) f32 {
   let j = jobs[in.job];

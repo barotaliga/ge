@@ -5,6 +5,6 @@
 ge_module(ge_platform)
 if(GE_PLATFORM)
   add_library(ge_platform STATIC engine/platform/window.cpp engine/platform/audio.cpp
-    engine/platform/devices.cpp)
-  target_link_libraries(ge_platform PUBLIC ge_core ge_input PRIVATE SDL3::SDL3-static)
+    engine/platform/devices.cpp engine/platform/pacing.cpp)
+  target_link_libraries(ge_platform PUBLIC ge_core ge_input ge_console PRIVATE SDL3::SDL3-static)
 endif()

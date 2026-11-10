@@ -477,6 +477,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
 
 const WorldModels& world_models(const WorldDraw& w) { return w.models; }
 
+std::span<const ba::PointLight> world_lights(const WorldDraw& w) { return w.scene.lights; }
+
 std::vector<gr::Particle> world_particles(ge::gpu::Device& d, const WorldDraw& w) {
   return gr::read_particles(d, w.particles);
 }
@@ -641,6 +643,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   // Under a lava's or a slime's level the modern look draws the liquid round the eye itself.
   const bool round = f.extras && liquid_round_eye(*f.extras);
   gr::set_post_blend(d, f.post[p], round ? fx.blend_dry : fx.blend);
+  // The local player's own arrival opens the whole view out of a flash and a warp (r_arrival).
+  gr::set_post_warp(
+      d, f.post[p],
+      gr::arrival_warp(fx.arrival_s, fx_switches(*f.picture).arrival, fx.arrival_tint));
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
     gr::HeldDraw draw = held_draw(f, *held, view, fx_switches(*f.picture).muzzles, fx.held_shown);

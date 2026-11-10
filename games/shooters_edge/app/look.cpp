@@ -62,6 +62,14 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
                    "monster's strides over their time (1), or where each frame puts them (0)",
            .kind = gc::CvarKind::boolean},
           &picture.lerp_move);
+  cv.bind({.name = "r_arrival",
+           .fallback = "1",
+           .flags = gc::kArchive,
+           .help = "how strongly your own arrival (a spawn, a teleporter's far end) sweeps the "
+                   "whole view in a flash and a warp, with ce_warps on in the modern look; 0 none",
+           .min = 0,
+           .max = 1},
+          &picture.arrival);
   cv.bind({.name = "r_slime_glow",
            .fallback = "1",
            .help = "how much the slime's green glow lights the walls round it in the modern look, "
@@ -85,6 +93,15 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .min = 0,
            .max = 4},
           &picture.fire_glow);
+  cv.bind({.name = "r_fill_shadows",
+           .fallback = "0",
+           .flags = gc::kArchive,
+           .help = "1: every map light throws a figure's shadow, the unseen fill lights too, and "
+                   "a figure darkens the light bounced round him; 0: only lights whose source "
+                   "shows (flames, globes, lamps at their glowing fittings)",
+           .min = 0,
+           .max = 1},
+          &picture.fill_shadows);
   cv.bind({.name = "r_fire_pace",
            .fallback = "0.4",
            .flags = gc::kArchive,
@@ -251,6 +268,7 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
     base.slime_glow = picture.slime_glow;
     base.fire_glow = picture.fire_glow;
     base.fire_pace = picture.fire_pace;
+    base.fill_shadows = picture.fill_shadows > 0.5;
     base.glow = picture.glow;
     base.near_soft = kNearSoft;
     base.pack_sky = stops.skies == Stop::off;  // ce_skies off: the pack's own scrolling sky

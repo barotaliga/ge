@@ -23,6 +23,7 @@
 // 0"`: one switch's before and after). `--swings=<n>` then has the player take the axe and swing it
 // n times with the game's own held weapons in hand: a sheet, a GIF and which of the axe's two
 // swings each one played.
+// `--film=<n> --hand=1` films the weapon in hand breathing at rest, `--exertion=1` as after a run.
 //
 // `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
 // two wall torches, their textures enhanced into a cache of the lab's own (classic-enhance's
@@ -32,7 +33,8 @@
 // ge:summary Lab: the window's frame drawn headless: the halls, a rocket jump, its effects, the HUD
 // ge:keywords lab se-client listen-server window frame rocket-jump hud effects trail explosion
 // ge:keywords before-after relief parallax enhanced-textures fixture-cache
-// ge:keywords axe-swing swings two-swings weaponframe film_swings fire explobox
+// ge:keywords axe-swing swings two-swings weaponframe film_swings breath exertion film-hand
+// ge:keywords fire explobox
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
@@ -51,6 +53,7 @@
 #include "classicenhance/pipeline.hpp"
 #include "classicenhance/texture.hpp"
 #include "console/console.hpp"
+#include "core/math.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/gif.hpp"
@@ -483,13 +486,26 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
                  gl::Det::measured);
         // THE FILM (--film=<frames>): the enhanced look run on from the view's moment, a thirtieth
         // of a second a frame, kept as an animated GIF (the flames, the sparks, the water moving).
+        // With `--hand`, the weapon in hand is stepped through the film at rest (its breath), from
+        // `--exertion` (0..1: how hard the body has just worked, as after a run; else as it is).
         const int film = k == 1 ? static_cast<int>(lab.arg_num("film")) : 0;
         std::vector<gl::Picture> frames;
         const double step = lab.arg_num("film-step");
+        if (film > 0 && in_hand && !lab.arg("exertion").empty())
+          held.hand.place.exertion = ge::core::clamp(lab.arg_num("exertion"), 0.0, 1.0);
+        double film_t = t;
         for (int f = 1; f <= film; ++f) {
           ge::render::FrameView on = view;
           on.time_s = view.time_s + f * step;
-          cl::draw_world(*device, *world[k], on, fx, nullptr, step, {}, out.view);
+          const shooters_edge::view::HandFrame* film_hand = nullptr;
+          if (in_hand) {
+            film_t += step;
+            hand = cl::step_held(l, shown, held, view_settings, weapons, film_t, step);
+            hand.lift = se::status_lift(hud, static_cast<int>(h));
+            film_hand = hand.drawn ? &hand : nullptr;
+          }
+          cl::draw_world(*device, *world[k], on, fx, film_hand, step,
+                         in_hand ? overlay : ge::ui::DrawList{}, out.view);
           const ge::gpu::Image fi = ge::gpu::read_now(*device, out);
           frames.push_back(gl::shrink(
               gl::Picture{static_cast<int>(fi.width), static_cast<int>(fi.height), fi.rgba}, 640));
@@ -572,18 +588,25 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     own.figure.origin = player.origin;
     own.figure.angles = {0, p.yaw, 0};
     own.first_person = true;
-    own.moments = {0.1, 0.25, 0.45, 0.8};
+    own.palette = take.palette;
+    own.moments = {0.03, 0.15, 0.3, 0.5};
     own.seed = 23;
+    own.film_width = 640;
     sl::WarpFilm eyes;
     sl::film_warp(*device, *world[1], out, view, fx, &hand, own, eyes);
+    // A beat of the view as it stands after, so the film reads as an arrival into a place.
+    for (int i = 0; i < 9; ++i) eyes.frames.push_back(eyes.frames.back());
     lab.shot({"warp-eyes-" + std::to_string(v),
               "his own arrival through his eyes, enhanced",
-              "The local player spawning or coming out of a teleporter here: the ash blown at his "
-              "eyes from ahead, landing round him, the weapon in his hands assembling muzzle "
-              "first.",
-              "grey flakes streaming toward the eye and thinning; the gun ragged, then whole",
-              {{"map", lab.arg("map")}}},
+              "The local player spawning or coming out of a teleporter here: the whole view opens "
+              "out of a flash in the pack's teleport colour (r_arrival), pulled in and streaked "
+              "toward the middle, a clear disc with a bright rim growing out to the corners; the "
+              "ash blown at his eyes from ahead, the weapon in his hands assembling muzzle first.",
+              "a white-out first, then the world rushing in from the edges; whole by 0.65 s",
+              {{"map", lab.arg("map")}, {"cvars", lab.arg("cvars")}}},
              es::sheet_of(eyes.pics, eyes.names, 4), gl::Det::measured);
+    lab.attach("warp-eyes-" + std::to_string(v) + ".gif", gl::encode_gif_frames(eyes.frames, 3),
+               gl::Det::measured);
   }
   if (swings > 0)
     film_swings(lab, *device, *world[1], out, l, shown, fx_state, fx, held, view_settings, weapons,
@@ -783,6 +806,9 @@ const gl::LabSpec kSpec{
       "attached as film-<view>.gif (the flames and the sparks moving)"},
      {"film-step", "0.0333333",
       "with --film: seconds between the film's frames (0.2: the lava's crust over 12 s in 60)"},
+     {"exertion", "",
+      "with --film and --hand: how hard the body has just worked as the film starts, 0..1 (1: as "
+      "after a run), the weapon's breath settling from it"},
      {"warp", "",
       "with --game: x,y,z,yaw where another player warps in and out, filmed from each view in the "
       "enhanced look, then the local player's own arrival through his eyes"},

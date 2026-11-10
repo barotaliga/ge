@@ -3,11 +3,14 @@
 // faces' texture coordinates are doubled so the picture covers them as the map's own did; one at
 // a size that is no multiple keeps the map's own; and with no source the atlas is as before.
 // A replaced texture's relief lands in the surface atlas at its rectangle and mips, flat elsewhere.
+// A light is seen by its fire, its globe or a glowing face within kFixtureM; a fill light is not.
 //
 // ge:summary Tests the BSP scene's texture source: upscaled textures, their rects, st and mips
 // ge:keywords test brush scene load_scene texture-source upscaled atlas mips st rect
-// ge:keywords surface-atlas relief
+// ge:keywords surface-atlas relief seen-lights fill-light fixture
 // ge:skill brush testing
+#include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -194,4 +197,73 @@ TEST(a_full_colour_pictures_alpha_and_a_fence_textures_holes_make_the_cover) {
   size_t zeros = 0;
   for (uint8_t c : fenced.cover.levels[0]) zeros += c == 0;
   CHECK(zeros == 64);
+}
+
+TEST(a_light_is_seen_by_its_fire_its_globe_or_a_glowing_face_within_reach) {
+  const ba::Pack pack = fixture_pack();
+  const std::vector<uint8_t> palette = grey_palette();
+  ba::Scene s;
+  std::string error;
+  CHECK_MSG(ba::load_scene(pack, "maps/hall.bsp", palette, &s, &error), error);
+  CHECK(!s.face_runs.empty() && !s.textures.levels.empty());
+  // A wall's point: the first drawn solid face's first vertex.
+  const float* wall = nullptr;
+  for (const auto& [first, count] : s.face_runs) {
+    if (count >= 3 && s.vertices[s.indices[first]].kind == uint32_t(ba::kSolid)) {
+      wall = s.vertices[s.indices[first]].pos;
+      break;
+    }
+  }
+  CHECK(wall != nullptr);
+  if (wall == nullptr) return;
+  // A point in the air: the one of a half-metre grid furthest from every drawn face's box.
+  const auto off_faces = [&](const double q[3]) {
+    double nearest = 1e30;
+    for (const auto& [first, count] : s.face_runs) {
+      if (count < 3) continue;
+      double lo[3] = {1e30, 1e30, 1e30}, hi[3] = {-1e30, -1e30, -1e30};
+      for (uint32_t i = first; i < first + count; ++i)
+        for (int k = 0; k < 3; ++k) {
+          lo[k] = std::min(lo[k], double(s.vertices[s.indices[i]].pos[k]));
+          hi[k] = std::max(hi[k], double(s.vertices[s.indices[i]].pos[k]));
+        }
+      double d2 = 0;
+      for (int k = 0; k < 3; ++k) {
+        const double out = std::max({lo[k] - q[k], q[k] - hi[k], 0.0});
+        d2 += out * out;
+      }
+      nearest = std::min(nearest, d2);
+    }
+    return std::sqrt(nearest);
+  };
+  double mid[3] = {0, 0, 0}, best = -1;
+  const auto steps = [&](int k) { return int((s.maxs[k] - s.mins[k]) / 0.5); };
+  for (int i = 0; i <= steps(0); ++i)
+    for (int j = 0; j <= steps(1); ++j)
+      for (int m = 0; m <= steps(2); ++m) {
+        const double q[3] = {s.mins[0] + 0.5 * i, s.mins[1] + 0.5 * j, s.mins[2] + 0.5 * m};
+        if (const double d = off_faces(q); d > best) {
+          best = d;
+          for (int k = 0; k < 3; ++k) mid[k] = q[k];
+        }
+      }
+  CHECK_MSG(best > 2 * ba::kFixtureM,
+            "the fixture's hall should hold a point a few metres off every face");
+  const auto light_at = [](const double p[3]) {
+    ba::PointLight l;
+    for (int k = 0; k < 3; ++k) l.pos[k] = p[k];
+    return l;
+  };
+  const double near[3] = {wall[0] + 0.5 * ba::kFixtureM, double(wall[1]), double(wall[2])};
+  s.lights = {light_at(near), light_at(mid), light_at(mid), light_at(mid)};
+  s.lights[2].flame = true;
+  s.lights[3].globe = true;
+  // No texel glows: only the flame and the globe show.
+  for (size_t i = 3; i < s.textures.levels[0].size(); i += 4) s.textures.levels[0][i] = 0;
+  CHECK(ba::seen_lights(s) == 2);
+  CHECK(!s.lights[0].seen && !s.lights[1].seen && s.lights[2].seen && s.lights[3].seen);
+  // Every texel glows: the light beside a wall is at its fitting, the one in the air is not.
+  for (size_t i = 3; i < s.textures.levels[0].size(); i += 4) s.textures.levels[0][i] = 255;
+  CHECK(ba::seen_lights(s) == 3);
+  CHECK(s.lights[0].seen && !s.lights[1].seen);
 }

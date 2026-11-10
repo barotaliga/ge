@@ -21,6 +21,12 @@
 // player tracked; the view set by the server in `to` (angles) | | the clock | | the two frames more
 // than `kMostLerpGap` apart (a stall: `to` as read), a level's start, a seek |
 //
+// A STRIDE: a thing that is not a player and stood still through the frame before (a walking
+// monster, which the program moves a stride at a time, ten a second, while a recording holds 72
+// frames a second) is drawn over the time since its last move instead of between two frames 14 ms
+// apart (`DemoLerp::strides`, r_lerpmove): from where it was drawn, the same pace rule as a model's
+// frame (model_lerp.hpp's `frame_pace`). Every rule that snaps an entity ends its stride too.
+//
 // What is not drawn between: a model's animation frame (one frame drawn), the statics, the stats
 // and the HUD, the sounds and effects (they belong to the frame that carried them).
 //
@@ -38,6 +44,7 @@
 #include <vector>
 
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/model_lerp.hpp"
 
 namespace shooters_edge::client {
 
@@ -55,7 +62,17 @@ struct DemoPose {
   std::vector<DemoEntity> entities, players;
 };
 
+// An entity's stride (the rule above), by its number.
+struct DemoStride {
+  double moved = -1;      // the frame time it last moved in, s
+  bool stepping = false;  // drawn over its stride's time from `origin`, `angles`
+  sh::Vec3f origin, angles;
+  double at = 0, span = kFrameSpan;  // the stride's start and length on the demo's clock, s
+};
+
 struct DemoLerp {
+  bool strides = true;  // draw a still thing's moves over their time (r_lerpmove)
+  std::vector<DemoStride> stride;
   DemoPose from, to;     // the frame before the last read, and the last
   bool between = false;  // `from` may be drawn from (false: a level's first frame, a seek)
   DemoState drawn;       // the last `lerp_at`'s
