@@ -20,7 +20,6 @@
 //   wind's ripples cut by the liquid's viscosity (water/liquid.hpp's `ripples`), bubbles that
 //   swell and burst into a ring, a scum of patches drifting with the surface, a thin oily film's
 //   interference colours (the sheen on tar), a gloss of its own and a glow of its own.
-//
 // - ITS LIGHT ROUND IT (`liquid_lamps`): a glowing body (lava, a slime with a glow of its own)
 //   handed to the frame's lamps (render/lights.hpp) as a few point lights over its plan, one a
 //   cell of a grid laid on its box, each as bright as its cell of surface: a flat face of luminance
@@ -29,34 +28,16 @@
 //   radius and softened by it (an area's light, not a point's), its colour the glow's own. Lava's L
 //   is the share of open melt at the core's glow and the crust's at a share of its young skin's
 //   (the cracks and the plates still hot). Steady: the melt changes slower than a frame.
-//
 // - THE SCENE IN IT (`Liquids::reflections`): the reflected ray marched through the scene's own
 //   depth copy (24 steps growing with distance, then halved down onto the hit), the colour copy
 //   read where it meets the scene, faded toward the screen's edges and the march's end, the sky's
 //   own light where it meets nothing. The Hi-Z pyramid holds each texel's FARTHEST depth (a
 //   cull's bound), so it cannot skip empty space for a ray, which needs the nearest: the full
 //   depth copy the pass already makes is marched instead.
-// - THE AIR OVER IT, worked out per pixel through a box kShimmerHeight deep over the body (after
-//   the surfaces), in closed form: the layer's weight along a ray (its density falling off
-//   exp(-h / scale) with the height h over the level) is integrated exactly, and each stir's
-//   plume (below) adds its own, so a pixel reads its noise once, not once a step.
-//   - THE HEAT SHIMMER (`LavaLook::shimmer`): the air over the melt is hot, and a ray through it
-//     is bent by its rising cells, a few thousandths of a radian a metre near the melt. The bend
-//     is the hot air's weight along the ray times the cells' push at the ray's lowest stretch (two
-//     octaves of value noise rising with the hot air), so what lies across the lake wavers. What
-//     is seen across the lake is drawn again through the bent ray, and the lava's own surface is
-//     looked up where its bent ray lands.
-//   - THE FUMES (`FumeLook`): a thin gas hanging over the surface, lava's smoke and soot lit from
-//     below by the melt, a slime's acid vapour lit by the room and its own glow, in wisps (a slow
-//     noise drifting over the surface thins and thickens it). Its optical depth along the ray is
-//     its weight times its density; it is laid over the picture, premultiplied.
-//   - STIRRED round a body in it (`LiquidStir`, `set_liquid_stirs`): a burning body in lava throws
-//     up a plume of hotter air and smoke round itself, an acid-wet one in slime a plume of fumes.
-//     A plume is a column over the stir, its density falling off as a Gaussian of the distance to
-//     its axis and exp(-h / kStirScale) up it; its weight along a ray is taken at the ray's closest
-//     approach to the axis (the Gaussian's integral across it), clipped to the stretch in the box.
-//   All three are one box over the body, one fragment a pixel (its far faces): the gas is laid
-//   over the bent scene, or alone over the melt, premultiplied.
+// - THE AIR OVER IT (docs/liquids.md § The air over it): one box kShimmerHeight deep over the
+//   body, its far faces, one fragment a pixel, in closed form (no march): lava's heat SHIMMER
+//   (`LavaLook::shimmer`) bends what is seen across it, the GAS (`FumeLook`: lava's soot, a slime's
+//   acid vapour) is laid over that premultiplied, and a body STIRS a plume of both (`LiquidStir`).
 // - THE CRUST BROKEN (`break_liquid_crust`): a hole of open melt where something fell in, opening
 //   at once and skinning over from its edge, the plates round it cracked and glowing, a crest
 //   running out in the first second; carried by the flow.

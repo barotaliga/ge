@@ -38,12 +38,9 @@
 //   Knobs for other looks: its EDGE burning in a light of its own, a PINCH into a column stretched
 //   up, a SHIMMER of bands that climb it. The fragments it touches are marked reactive, so TAA
 //   does not trail the cut.
-// - THE BURN (`MorphBurn`, render/body_burn.hpp's skin): a figure burned by lava or eaten by an
-// acid.
-//   CHARRED blackens it in patches of value noise fixed to the model's own frame that spread over
-//   it as the char grows (soot and burned skin, a little rougher and no longer shining); EMBERS
-//   glow orange-red in the char's cracks, flickering, while it is hot; ETCHED bleaches and yellows
-//   it in pitted patches. All three 0: the shader skips it.
+// - THE BURN (`MorphBurn`, render/body_burn.hpp's skin): CHARRED blackens it in noise patches fixed
+//   to the model that spread as the char grows; EMBERS glow in the char's cracks while it is hot;
+//   ETCHED bleaches and pits it (an acid). All three 0: the shader skips it.
 // - THE PASS draws after the opaque world (depth tested and written, reversed z, back faces
 //   culled), one draw a model instance, at most `kMaxMorphDraws` a frame.
 //
