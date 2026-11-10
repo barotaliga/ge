@@ -1,7 +1,8 @@
 // WHERE A SHOT MEETS A MOVING PLAYER: the aim point a projectile is fired at so it arrives where
 // its target will be, and the pitch a lobbed grenade leaves at to come down there.
 //
-// - THE TARGET (`Mover`): a place and a velocity. On the ground he goes on in a straight line
+// - THE TARGET (`MovingTarget`): a place and a velocity. On the ground he goes on in a straight
+// line
 //   across; in the AIR (`airborne`: off the floor under him) he follows his own arc under the
 //   server's gravity and lands on `floor_z`, where he goes on across: a player knocked up by a
 //   blast comes down where his arc does, which is where a midair shot is fired.
@@ -31,7 +32,7 @@ namespace ge::shooter {
 
 inline constexpr float kServerGravity = 800;  // units/s/s
 
-struct Mover {
+struct MovingTarget {
   Vec3f at, velocity;
   bool airborne = false;  // on his own arc until `floor_z`
   float floor_z = -1e9f;  // the height his origin lands at
@@ -39,7 +40,7 @@ struct Mover {
 };
 
 // Where `m` is `t` seconds on.
-Vec3f mover_at(const Mover& m, double t);
+Vec3f mover_at(const MovingTarget& m, double t);
 
 struct Shot {
   float speed = 1000;  // along the view, units/s
@@ -61,6 +62,7 @@ struct Intercept {
 
 // The shot from `from` at `m`, the target taken `head_s` on before it flies (the reaction, the
 // network), the flight worked out `iterations` times (at least 1).
-Intercept intercept(Vec3f from, const Mover& m, double head_s, const Shot& s, int iterations);
+Intercept intercept(Vec3f from, const MovingTarget& m, double head_s, const Shot& s,
+                    int iterations);
 
 }  // namespace ge::shooter

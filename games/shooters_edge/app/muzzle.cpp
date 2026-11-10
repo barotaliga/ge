@@ -18,7 +18,6 @@ bool fire_looks(std::span<const FireRow> rows, double scale, std::vector<gr::Muz
     if (rows[i].preset.empty()) {
       look.length_m = look.width_m = 0;
       look.sparks = 0;
-      look.smoke.smoke = 0;
     } else if (!gr::tuned_muzzle(rows[i].preset, rows[i].knobs, &look)) {
       if (error)
         *error = "weapon row " + std::to_string(i) + ": the fire \"" + std::string(rows[i].preset) +
@@ -28,6 +27,7 @@ bool fire_looks(std::span<const FireRow> rows, double scale, std::vector<gr::Muz
     } else {
       gr::scale_muzzle(look, scale);
     }
+    look.smoke.smoke = 0;  // a shot leaves no smoke (muzzle.hpp)
     out.push_back(look);
   }
   return true;

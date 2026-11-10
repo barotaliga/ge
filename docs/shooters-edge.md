@@ -223,8 +223,8 @@ fullbright texels glowing; with `ce_models` on and the pack enhanced, each skin 
 cache's upscaled copy, raised to twice the pack's size and then toward the cache's own scale
 while the models' one atlas holds them all, read when the map loads); the weapon in hand (`client/held.hpp`: the game's free
 models, switched with the number keys, kicked and lit by its muzzle flash as the mod fires it,
-lit by the map's baked light under the player, every shot firing the engine's muzzle flame, smoke
-and sparks (`app/muzzle.hpp`; `ce_muzzles 0` leaves the light alone); `r_drawviewmodel`,
+lit by the map's baked light under the player, every shot firing the engine's muzzle flame and
+sparks, no smoke (`app/muzzle.hpp`; `ce_muzzles 0` leaves the light alone); `r_drawviewmodel`,
 `r_viewmodel_fov`, `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`, `r_viewmodel_center` (1 by
 default: centred under the crosshair; 0 to the right) and `r_viewmodel_hands` (0: the weapon
 without its hands) in the console); the HUD (`hud_style
@@ -1256,9 +1256,10 @@ every pass, and judged by captioned screenshots:
   white-hot sparks, dark chunks and smoke that lingers, its light white-hot then orange; a rocket
   burns a short flame out of its motor (the muzzle fire's march stretched back along its flight)
   and lays fire into puffs of smoke that spread as they thin (the particles' `grow`), a grenade
-  pale smoke; a pellet's or a nail's hit throws, subtly, the burst of the face it hit (a small puff
-  of dust, a thin wisp of smoke, chips, grit and flakes in the wall's own colour that fall and hop
-  on the floor under the hit before they lie still; `render/impact.hpp`
+  pale smoke; a pellet's or a nail's hit tears debris off the face it hit and makes no smoke (big
+  chunks, smaller chips and a spray of dirt in the wall's own colour, flung out of the hole, that
+  fall and hop on the floor under the hit before they lie still; how much is the surface's,
+  `render/impact.hpp`
   by the surface class of the map triangle the round's line crosses there, its normal off that
   triangle); the arc gun's beam is the engine's bolt (`render/beam.hpp`) in ONE look every player sees
   (no style to pick, so nobody plays with a worse one): as thin as the classic's bolt, a hair-thin
