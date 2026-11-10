@@ -288,7 +288,7 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
             continue;
           Color e = kEnemy;
           e.a = static_cast<float>(1 - age / 6);
-          o.arc(p, c.visible ? 9 : 7, c.visible ? 9 : 3, 0, 6.3f, ge::ui::solid(e));
+          o.arc(p, c.visible ? 9.0f : 7.0f, c.visible ? 9.0f : 3.0f, 0, 6.3f, ge::ui::solid(e));
           o.line(m, p, 1, {col.r, col.g, col.b, 0.35f});
         }
       }

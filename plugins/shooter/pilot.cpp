@@ -808,7 +808,7 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
     // A standing flip: turned round on the spot, then the back key with the jump.
     const float up = heading(dir.x, dir.y) + (flip ? 180 : 0);
     w.yaw = unwrap(up, p.yaw);
-    w.forward = flip ? 0 : 1;
+    w.forward = flip ? 0.0f : 1.0f;
     const float off = wrap(p.yaw - up);
     // The shot when the turn is done: the rest of it at about a hand's about-face.
     p.shot_yaw = up;
