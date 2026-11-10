@@ -1,6 +1,6 @@
 ---
 name: bots
-description: "Use for anything a bot DECIDES in gameengine2 or a game on it: engine/ai (the decision record ai::Why every bot writes, and the pieces bots share as they land: the hands, thinking on a schedule, sight and memory, paths, steering, choosing), a game's Run::trace hook, ge why and the play protocol's why op, and the loop that makes a bot behave more like a person. Load it before writing or changing a bot, a pilot, a rival or a pursuer, and to find out why one did what it did."
+description: "Use for anything a bot DECIDES in gameengine2 or a game on it: engine/ai (the decision record ai::Why every bot writes, and the pieces bots share as they land: the hands, thinking on a schedule, sight and memory, paths, steering, choosing), a game's Run::trace hook, ge why and the play protocol's why op, the loop that makes a bot behave more like a person, and Shooter's Edge's bot plan worked headless (docs/goals/M18r.md § M18r14g, the locations in a git-ignored .bots/local.md, how a change is judged, the labs). Load it before writing or changing a bot, a pilot, a rival or a pursuer, and to find out why one did what it did."
 ---
 
 # Bots
@@ -138,6 +138,65 @@ side, and charts the steer meant against pressed.
 bot team's `--features=` and the console's `features -dodge`. A new behaviour lands with its switch
 and gates its code on `f.features[...]`, so its A/B is one flag on one build, not an env variable.
 The traits say how WELL a bot does a thing; a feature says WHETHER it does it.
+
+## Shooter's Edge's bot plan, worked headless
+
+The shooter bots' plan is a checklist in `docs/goals/M18r.md` § M18r14g: what is done with its
+numbers, what is open in order with its yardstick, and what was tried and dropped (never tried
+again blind). "Continue the bot work" means: the first open item there, built, judged as below,
+its entry updated with the before and after, in the same pull request.
+
+**The locations: `.bots/local.md`.** Nothing about a machine is in the tree. The game's packs,
+people's recordings and the scratch output live where `.bots/local.md` says (git-ignored, one per
+checkout; write it on first use, the defaults below when nothing else is known):
+
+```
+basedir: .bots/game    # holds the game folder with the packs: every lab's --basedir=
+demos: .bots/demos     # people's recordings, one folder a map: <demos>/<map>/*.mvd
+work: .bots/work       # traces, A/B runs, samples: anything a run writes
+```
+
+A path in it is absolute or relative to the checkout. A machine without the full game plays the
+shareware pack's maps (e1m2 is one); dm2 to dm6 and povdmm4 need the player's own full game.
+
+**A checkpoint** is `make precheck` green (a golden or digest a change moves on purpose
+rewritten, and the commit says why), a commit, a push, and the plan's entry updated. No video and
+no live server: every match runs on our own server, in process (`se-team`), headless.
+
+**How a change is judged.**
+
+- **Two axes, always both**: frags head to head, and a HUMAN measure against people's (se-people's
+  `hand.*`, sighting, speed, item control, wet). A feature that brings a human measure closer to
+  people's is kept at a small frag cost (within a set's noise); it is dropped only when it is
+  costly and no more human, or when it moves a human measure away from people's. For movement,
+  SPEED decides first: a person moves fast, a bot that crawls is spotted at once.
+- **Head to head is the verdict**: one team with the feature, the other without, in the same 4on4
+  (`se-team --features-red=all,-<name> --sides=1`), read against the same build's full-against-
+  full set (the sides are not even), on seeds 1-6 and then 7-12 (a set swings about +-35). Both
+  sides with it only says whether the game got faster or more violent.
+- **Six seeds, never one**: six `se-team --seed=<n>` runs in parallel (`--client-fed=1
+  --minutes=10 --basedir=<basedir> --map=e1m2`), each written under `<work>/<tag>/`, read only
+  once all six are done; a single match swings by more than most changes move it. A quick read:
+  six 3-minute seeds with `--trace=<work>/<tag>/t<n>.tsv --trace-every=1` first.
+- **People and bots by one rule**: `se-team --save=<file>.mvd` records the bots' match and
+  `se-people --file=<it>` measures it exactly as it measures people's (`--dir=<demos>/<map>`).
+- **What it newly triggers**: a change that should help and hurts is read for what it set off;
+  break a number down by its cause before tuning a knob. **A behaviour that rarely runs cannot
+  move a number**: count how often it runs first.
+- **Ask people's recordings before guessing**: where the bots lag people, measure how people play
+  that place, item or moment (se-people `--samples`, se-moves, se-rj) and copy it.
+
+**The labs it is worked with** (`build/release/labs <name> ...`, `--basedir=<basedir>`):
+
+| Lab | What it answers |
+| --- | --- |
+| `se-team` | a 4on4 of our bots on our server: `--map`, `--seed`, `--minutes`, `--client-fed=1`, `--sides=1` (each side's numbers), `--features`, `--features-red`, `--features-blue`, `--trace=<tsv>` (`--trace-every`: every bot's command as a row: feet, speed, mode, goal, pilot mode, link kind, the view and who turned it), `--save=<mvd>` |
+| `se-people` | people and bots measured alike off recordings: in view, faced, speed, the hand's sweeps (`hand.*`, `hop.*`), fire in view, item control, wet; `--samples=<tsv>` every sample alive |
+| `se-moves` | who moves fastest and the weave by speed, per player, off a folder of recordings |
+| `se-rj` | rocket, grenade and gap jumps read off recordings and clustered into tricks |
+| `se-reach` | a map's nav asked: `--route` node by node, `--floors`, `--escapes=fly` |
+| `se-spot` | a place drawn every way (top, cuts, inside views, a route) |
+| `se-duel` | 3-minute duels, deathmatch mode 4 on povdmm4 by default |
 
 ## What lives where
 
