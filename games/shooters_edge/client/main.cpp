@@ -714,7 +714,9 @@ int run_main(int argc, char** argv) {
   const auto forget_seen = [&] {
     shown = {};
     fx_state = {};
-    in_hand = {.hand = {.at_eye = in_hand.hand.at_eye}};
+    const bool at_eye = in_hand.hand.at_eye;  // the loaded set's, not the level's
+    in_hand = {};
+    in_hand.hand.at_eye = at_eye;
     held_fire.shots = {};
     user_info.sent_to = nullptr;
   };
