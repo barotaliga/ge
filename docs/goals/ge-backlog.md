@@ -43,7 +43,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - a shared `--viewports=<w>x<h>,...` flag for picture labs (every view drawn at each size, e.g. a phone, a laptop and a 4K screen, without each lab adding its own)
 - `ge profile --pass=<name>` (one pass's median and p95, before and after) and `--cost <shader-term>`
 - `ge lab <id> --at-ref=<git-ref>` (the "before" shot from a worktree build of that ref, without stashing, rebuilding and restoring this tree)
-- `ge bench --pass=<name>` (one pass timed alone over many draws: the software rasterizer's timestamps misattribute cost between passes)
+- `ge bench --pass=<name>` (one pass timed alone over many draws: the software rasterizer's timestamps misattribute cost between passes; asked again as `ge bench gpu <lab> --repeat=N --pass=<name>`, the pass drawn N times a frame and its cost per draw taken from the whole frame's span, A/B against a stash: on lavapipe the air pass read 0.3 ms while the frame grew 17 ms, and the lava haze thread hand-made an `--air-draws` knob and rebuilt five times, #655)
 - `ge lab time <lab> --passes=<glob>` (each matching pass's GPU milliseconds, the median over N frames, from any GPU lab without a bench of its own)
 - `ge lab sweep <lab> --flag=<flag>=a,b --rounds=N` (the built sweep, which already runs a lab once per flag value with every metric side by side, run N interleaved rounds with each metric's median and spread: a quality knob priced in one call, where a container's timings wander; asked as `ge lab ab` and `ge lab compare --knob`, and it generalizes `ge net sweep`)
 - `ge lab diff <lab> --with=<flag>` (the same shots with and without one pass or option, the share of pixels it changes per distance band: the water labs each hand-roll it)
