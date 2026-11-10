@@ -341,10 +341,15 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
   or getting busier over the minutes reads as no saving), and the largest gap between neighbouring
   all-on runs is the noise. The lab charts each run's frames as a box and lists what each switch
   saved off the median frame, the most first.
-- **The shadow maps** (the modern look): the shadowed few (32) are the nearest lights in the
-  eye's potentially visible set first, then the nearest of the rest; by nearness alone the map's
-  big lights behind walls took half the slots on an open map (a dm4 doorway: 14 of the 30 lights
-  in view lit unshadowed, their shadows popping in a few steps on). A light's cube is drawn when
+- **The shadow maps** (the modern look): the shadowed few (48) are the nearest lights in the
+  eye's potentially visible set whose reach comes into the view first (the cone round the look
+  that holds a 32:9 picture), then the nearest of the others in that set, then the nearest of the
+  rest; by nearness alone the map's big lights behind walls took half the slots on an open map (a
+  dm4 doorway: 14 of the 30 lights in view lit unshadowed, their shadows popping in a few steps
+  on). A light with no slot shines through what stands before it: with 32 slots, start's corridor
+  (57 lights in view) left the lamps before the NORMAL hall's slipgate unshadowed, and the frame's
+  shadow on the wall behind it (in the map's own lightmap too) came only once the player walked in.
+  48 cost about 5% of a frame on llvmpipe over 32 (demo1, the modern look: 358 -> 375 ms median). A light's cube is drawn when
   it joins the few and kept while it stays; at most two new cubes a frame (`Options::fresh_cubes`), the rest of a
   room's torches unshadowed for the frames until their turn, so walking into a room costs no
   frame more than two cubes; a dynamic light (a flash, a rocket) lights without a shadow.

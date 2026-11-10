@@ -61,6 +61,9 @@
 
 namespace ge::brush::app {
 
+// The lights that cast shadows at most (Options::shadowed, a cube each kept in its slot).
+inline constexpr int kMaxShadowedLights = 48;
+
 enum class Mode : uint8_t { classic, v2 };
 enum class Lighting : uint8_t { lightmaps, lights, rebaked };
 // "classic" or "v2"; false for any other word.
@@ -73,7 +76,7 @@ struct Options {
   double brightness = 2.0;      // a lightmap's 1 against a white face under the open day
   double strength = 1;          // the point lights' strength against the classic's
   double dynamic_strength = 1;  // the dynamic lights' (set_dynamic_lights) against the classic's
-  int shadowed = 32;            // the lights that cast shadows (those in view first, nearest first)
+  int shadowed = kMaxShadowedLights;  // the lights that cast shadows (in view first, nearest first)
   // A map's light near it softened over this share of its half reach (0: over its source's size
   // alone). Its inverse square matches the classic's straight fall-off at the half reach, but the
   // classic's light is at most twice that at the light, where the square's grows without end: a
@@ -188,7 +191,10 @@ struct Options {
 
 inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side
 inline constexpr uint32_t kOrthoSize = 2048;  // the sun's and the zenith's maps
-inline constexpr int kMaxShadowed = 48;
+inline constexpr int kMaxShadowed = kMaxShadowedLights;
+// The widest picture a window draws, width over height (a 32:9 screen's): the cone round the look
+// that holds it decides which shadowed lights reach the view (bsp_draw.cpp).
+inline constexpr double kWidestAspect = 32.0 / 9.0;
 // The share of the light bounced round the room a figure dims by the share of the lights he hides
 // at a point, under Options::fill_shadows alone (bsp.wgsl's `indirect`).
 inline constexpr double kIndirectShadow = 0.8;
