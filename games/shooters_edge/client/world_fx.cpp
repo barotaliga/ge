@@ -951,7 +951,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       if (w.arriving && own > 0 && w.entity == own) out.arrival_s = t - w.t0;
     if (out.arrival_s >= 0) {
       if (s.palette.size() >= 768) {
-        const size_t i = 14 * 3;
+        const size_t i = size_t{14} * 3;
         const double hi = std::max({s.palette[i], s.palette[i + 1], s.palette[i + 2], uint8_t{1}});
         for (int k = 0; k < 3; ++k) out.arrival_tint[k] = s.palette[i + size_t(k)] / hi;
       } else {
