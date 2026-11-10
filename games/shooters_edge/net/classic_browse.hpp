@@ -16,10 +16,14 @@
 // - THE MASTER QUERY is `c\n` (no header); the reply is `\xff\xff\xff\xff` `d\n` then six bytes a
 //   server, its IPv4 address and port in network order. A master with many servers sends several
 //   replies; each is read as it comes.
+// - THE REMOTE CONSOLE is a connectionless `rcon <password> <command>` (the password quoted when
+//   it holds a space); a server that takes it answers with prints (`\xff\xff\xff\xff` `n` then
+//   the console's text), as many as the output needs.
 //
 // ge:summary The classic status query and master list for the engine's server list
 // ge:keywords classic status-query master-server server-browser serverinfo hostname maxclients
 // ge:keywords needpass skill coop deathmatch teamplay mode players spectators team masters
+// ge:keywords rcon remote-console classic_rcon classic_read_print
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_browse_test.cpp
 #pragma once
@@ -27,6 +31,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "net/server_list.hpp"
@@ -46,6 +51,11 @@ size_t classic_status_query(uint8_t* out, size_t cap);
 bool classic_read_status(const uint8_t* data, size_t size, ge::net::ServerInfo& out);
 size_t classic_master_query(uint8_t* out, size_t cap);
 bool classic_read_master(const uint8_t* data, size_t size, std::vector<ge::net::Address>& out);
+
+// The remote console's request (0 when it does not fit `cap`), and a print's text (false: not a
+// print).
+size_t classic_rcon(std::string_view password, std::string_view command, uint8_t* out, size_t cap);
+bool classic_read_print(const uint8_t* data, size_t size, std::string& text);
 
 // The four together.
 ge::net::ServerQuery classic_query();
