@@ -10,6 +10,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "shooter/escape.hpp"
+#include "shooter/look_ahead.hpp"
 #include "shooter/nav_gaps.hpp"
 #include "shooter/nav_script.hpp"
 #include "shooter/server.hpp"
@@ -405,43 +406,6 @@ bool circling(Pilot& p, const PilotSense& s, float vh, float speed, float err, f
   return true;
 }
 
-// The most the velocity turns a second in the air with the wish across it (hops.hpp's rule:
-// 30 units/s across it a command), degrees/s.
-float hop_turn_rate(float speed, float dt) {
-  if (speed <= 1 || dt <= 0) return 0;
-  const double r = core::libm::atan2(30.0, static_cast<double>(speed));
-  return static_cast<float>(r * (180.0 / core::kPi)) / dt;
-}
-
-// How long the hop's arc on `side` (-1 left, 1 right) stays clear of walls, up to `horizon`: the
-// velocity turned at the move's most each command, the player's box traced along it a step up
-// (so a stair's riser is not a wall). Floors and ramps it meets do not count.
-float arc_clear(const MoveWorld& world, Vec3f o, Vec3f v, int side, float dt, float horizon) {
-  const float speed = root_of(v.x * v.x + v.y * v.y);
-  if (speed < 1 || dt <= 0) return horizon;
-  const double step =
-      -static_cast<double>(side) * hop_turn_rate(speed, dt) * dt * (core::kPi / 180.0);
-  const auto c = static_cast<float>(core::libm::cos(step)),
-             sn = static_cast<float>(core::libm::sin(step));
-  Vec3f at{o.x, o.y, o.z + kStepHeight};
-  if (!box_free(world, at)) at = o;
-  Vec3f vel{v.x, v.y, 0};
-  constexpr int kChunk = 4;  // commands a trace covers
-  for (float t = 0; t < horizon;) {
-    Vec3f to = at;
-    for (int i = 0; i < kChunk; i++) {
-      vel = {vel.x * c - vel.y * sn, vel.x * sn + vel.y * c, 0};
-      to = to + vel * dt;
-    }
-    const HullTrace tr = player_trace(world, at, to);
-    if (tr.startsolid) return t;
-    if (tr.fraction < 1 && tr.plane.normal.z < 0.7f) return t + tr.fraction * dt * kChunk;
-    at = to;
-    t += dt * kChunk;
-  }
-  return horizon;
-}
-
 // Out of a pit (escape.hpp): standing out of the liquid near the escape's ledge (not respawned
 // elsewhere after dying in its flight).
 bool landed_out(const Pilot& p, const PilotSense& s) {
@@ -571,13 +535,13 @@ Vec3f lane_target(Pilot& p, float dt, float t, Vec3f target) {
 
 // The point `look` units along the route from where `at` stands on the current link, carried
 // through the nodes a walk passes through (passed() above) and stopped at any other.
-Vec3f pursue(const Pilot& p, Vec3f at) {
+Vec3f pursue(const Pilot& p, Vec3f at, float look) {
   const NavGraph& g = *p.g;
   float f = 0;
   Vec3f a = node(g, p.route[p.k]).origin, b = node(g, p.route[p.k + 1]).origin;
   off_segment(at, a, b, &f);
   Vec3f from{a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, b.z};
-  float left = p.set.look;
+  float left = look;
   for (size_t k = p.k;; k++) {
     b = node(g, p.route[k + 1]).origin;
     const float d = across(from, b);
@@ -594,6 +558,48 @@ Vec3f pursue(const Pilot& p, Vec3f at) {
         !level(g, p.route[k + 1], p.route[k + 2]))
       return b;
   }
+}
+
+Vec3f pursue(const Pilot& p, Vec3f at) { return pursue(p, at, p.set.look); }
+
+// The walk's aim `target` (the pursuit point `aim` with the lane's offset) pulled back along the
+// route until the box reaches it straight from `o`: the look halved, the lane's offset kept while
+// it clears and then dropped; unchanged when nothing nearer clears either (a door shut ahead is
+// the mover's wait to handle).
+Vec3f aim_clear(const Pilot& p, const MoveWorld& world, Vec3f o, Vec3f at, Vec3f aim,
+                Vec3f target) {
+  if (walk_clear(world, o, target)) return target;
+  const Vec3f lane = target - aim;
+  for (int div = 2; p.set.look / static_cast<float>(div) >= 8; div *= 2) {
+    const Vec3f a = pursue(p, at, p.set.look / static_cast<float>(div));
+    if (walk_clear(world, o, a + lane)) return a + lane;
+    if (walk_clear(world, o, a)) return a;
+  }
+  return target;
+}
+
+// THE WALK FORESEEN (look_ahead.hpp `foresee_walk`): the way the walk presses now; `w` keeps the
+// pursuit's keys or takes another way's.
+WalkWay foresee(const Pilot& p, const PilotSense& s, Vec3f aim, Vec3f near, Want& w, ai::Why* why) {
+  const WalkStart st{s.origin,
+                     s.velocity,
+                     s.onground,
+                     s.waterlevel,
+                     s.maxspeed,
+                     {static_cast<float>(p.pressed[0]), static_cast<float>(p.pressed[1]),
+                      static_cast<float>(p.pressed[2])},
+                     p.set.lead_s,
+                     p.set.lead_s + p.set.ahead_s};
+  WalkKeys keys;
+  WalkSeen seen[kWalkWays];
+  bool flown = false;
+  const WalkWay way = foresee_walk(*s.world, st, aim, near, keys, seen, flown);
+  if (flown) record_walk(why, across({}, s.velocity), way, seen);
+  if (way == WalkWay::pursue) return way;
+  w.yaw = unwrap(keys.yaw, p.yaw);
+  w.forward = keys.forward * facing(w.yaw, p.yaw);
+  w.side = keys.side;
+  return way;
 }
 
 // A jump missed (landed short, or no nearer its start): the second miss of the same one is not a
@@ -1818,13 +1824,19 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       if (p.mode == PilotMode::wait || p.mode == PilotMode::run_up || p.mode == PilotMode::jump ||
           p.mode == PilotMode::swim)
         p.mode = PilotMode::walk;
-      target = lane_target(p, dt, t, pursue(p, ahead));
+      const Vec3f aim = pursue(p, ahead);
+      target = lane_target(p, dt, t, aim);
+      const bool foreseeing = p.set.ahead && s.world != nullptr && s.onground;
+      if (foreseeing) target = aim_clear(p, *s.world, s.origin, ahead, aim, target);
       if (across(ahead, target) > 1) w.yaw = unwrap(yaw_at(ahead, target), p.yaw);
       w.forward = facing(w.yaw, p.yaw);
+      const WalkWay seen = foreseeing ? foresee(p, s, target, B, w, why) : WalkWay::pursue;
       // Slowing into the goal (late hands run past a small top and off it, or orbit it).
       const float d = across(ahead, node(*p.g, p.route.back()).origin);
       if (d < p.set.look) w.forward *= d < p.set.look * kBrake ? kBrake : d / p.set.look;
-      because = l.kind == NavKind::drop ? "walking off the edge" : "walking the route";
+      because = seen != WalkWay::pursue   ? walk_way_because(seen)
+                : l.kind == NavKind::drop ? "walking off the edge"
+                                          : "walking the route";
       // A flip ahead within its turn: turning round into it already, strafing along the route.
       float back = 0;
       float flip_v = 0;

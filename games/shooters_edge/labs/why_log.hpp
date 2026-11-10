@@ -58,9 +58,10 @@ struct WhyLog {
   std::array<std::string, 64> names{};  // a bot's name by its index `k`, set by the caller
 
   // After bot `k`'s command at `t`: its decisions read (kept when changed) and cleared; a speed
-  // lost since its last command noted as an event (`mode`, `link`: the pilot's then).
+  // lost since its last command noted as an event (`mode`, `link`: the pilot's then; `by`: what
+  // took it, se-team's bump_by).
   void take(int k, double t, float speed, const char* mode, const char* link, float x, float y,
-            float z) {
+            float z, const char* by = "") {
     if (k < 0 || k >= 64) return;
     Bot& b = bots[static_cast<size_t>(k)];
     for (const ge::ai::Decision& d : why.decisions()) {
@@ -83,7 +84,8 @@ struct WhyLog {
                          "from=" + ge::core::num::to_fixed(b.speed, 0) +
                              " to=" + ge::core::num::to_fixed(speed, 0) +
                              " at=" + ge::core::num::to_fixed(x, 0) + "," +
-                             ge::core::num::to_fixed(y, 0) + "," + ge::core::num::to_fixed(z, 0)});
+                             ge::core::num::to_fixed(y, 0) + "," + ge::core::num::to_fixed(z, 0) +
+                             (by != nullptr && *by != 0 ? std::string(" by=") + by : "")});
     b.speed = speed;
     b.seen = true;
   }

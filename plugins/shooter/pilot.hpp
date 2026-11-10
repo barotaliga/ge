@@ -150,6 +150,17 @@ struct PilotSettings {
   // over `lane_ease_s`, back to the line before a jump, a drop, a mover, water or a narrow place.
   float lane = 0;  // 0: on the line
   float lane_min_s = 1.2f, lane_max_s = 3.0f, lane_ease_s = 0.8f;
+  // THE WALK'S LOOK AHEAD (`ahead`, with a world): a proven link is clear, the line a walker runs
+  // round a corner at 320 u/s is not. Two halves: the AIM pulled back along the route (the look
+  // halved, its lane kept and then dropped) until the player's box reaches it straight; and THE
+  // WALK FORESEEN: where the box swept along the velocity meets a wall within the hands' delay and
+  // `ahead_s`, the keys are flown through the move itself (player_move over the map's solids: the
+  // keys already pressed for the delay, then the pursuit's, the turn braked, the next node, or no
+  // keys) and a way that does not bump is pressed, the nearest to the aim (a person knows how
+  // their body meets the room). dm2, six 3-minute seeds: wall bumps 12.7 -> 10.3 a bot-minute,
+  // speed 192 -> 194, the set's time +5 %.
+  bool ahead = false;
+  float ahead_s = 0.25f;  // the walk's flights foreseen this long past the hands' delay, s
 };
 
 // `swim`: on a swim link (nav.hpp), the view pitched at the next node, forward held, jump to rise;

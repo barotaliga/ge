@@ -43,12 +43,11 @@
 // - `headroom`: no hop's jump into a lintel, nor its last one onto a stair (pilot.hpp).
 // - `liphop`: a hop runs on along a lava lip, the brink guard on its feet (pilot.hpp).
 // - `circlejump`: a hop's first jump out of a curve on the ground, past a run's 320 (pilot.hpp).
+// - `ahead`: the walk's keys flown through the move before a bump (pilot.hpp); off in presets.
 // - `trial`: read by an A/B now; off in every preset (`all` too): `--features-red=+trial`.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: all but what that level
 // does not do: none `eye`, a novice no `glance`), `features_none` (a plain bot).
-// The text form (`apply_features`) reads `all`, `none` (`plain`), `+name` or `name` (on), `-name`
-// (off), separated by commas, spaces or '/', applied in order: "plain,+dodge,-swimaim".
-//
+// The text form (`apply_features`): `all`, `none` (`plain`), `+name`/`name`, `-name`, in order.
 // ge:summary A bot's features: each behaviour switched on or off by name, and the presets
 // ge:keywords features feature-switch bot-features apply_features features_text presets routes calm
 // ge:keywords pace swimaim screen keep lead lane hop shortgoals commit danger dodge watch spam
@@ -56,7 +55,7 @@
 // ge:keywords trial eye selfaim course-change own-motion pools pool-floor swim-under-view corner
 // ge:keywords lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen sound-swipe
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
-// ge:keywords liphop circlejump circle-jump
+// ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -108,9 +107,10 @@ enum class Feature : uint8_t {
   headroom,
   liphop,
   circlejump,
+  ahead,
   trial,
 };
-constexpr size_t kFeatures = 39;
+constexpr size_t kFeatures = 40;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

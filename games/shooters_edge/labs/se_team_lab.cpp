@@ -47,6 +47,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "shooter/nav.hpp"
+#include "shooter/trace.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
@@ -133,13 +134,43 @@ struct Watch {
   std::array<std::vector<std::pair<double, const char*>>, 64> modes;
   // The bumps (`team.bumps.*`): a speed lost in one command, 120 u/s or more (a wall, a corner,
   // a player met; the move brakes at most ~40 a command), hard when it ends under 100 u/s.
+  // Each is put down to what took the speed (bump_by: a wall, a mover, a player, open) and its
+  // spot kept (64-unit cells, the pilot's mode): the corners a look ahead must see.
   std::array<float, 64> last_speed{};
+  std::array<sh::Vec3f, 64> last_vel{};
+  std::array<float, 64> last_health{};
   std::array<bool, 64> moved{};
   int64_t bumps = 0, hard_bumps = 0, alive_commands = 0;
-  std::map<std::string, int64_t> bumps_by_mode;
+  std::map<std::string, int64_t> bumps_by_mode, bumps_by;
+  std::map<std::tuple<int, int, int, std::string, std::string>, int> bump_spots;
   double t_last = 0;
   std::map<std::string, std::pair<double, int64_t>> writers;  // time, reversals
 };
+
+// What took a bumped player's speed: the box swept 16 units on along its velocity before the bump
+// meets the world (`wall`), another player (`player`) or a brush entity (`mover`: a door, a plat);
+// nothing there is `open` (a landing, water, a push). A bump in a command that took health is put
+// down to the hit's knockback (`hit`) before this is asked.
+const char* bump_by(const sh::Server& sv, int ent, sh::Vec3f origin, sh::Vec3f vel) {
+  const float len = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+  if (len < 1) return "open";
+  const sh::Vec3f to{origin.x + vel.x * 16 / len, origin.y + vel.y * 16 / len, origin.z};
+  const sh::HullTrace tr =
+      sh::trace_move(sv, origin, {-16, -16, -24}, {16, 16, 32}, to, sh::kTraceNormal, ent);
+  // Another player's box within 8 units of this one's (the move clips against players its own
+  // way: the server's sweep does not always meet them).
+  for (int c = 1; c <= static_cast<int>(sv.clients.size()); c++) {
+    if (c == ent || static_cast<size_t>(c) >= sv.edicts.size()) continue;
+    const sh::Edict& o = sv.edicts[static_cast<size_t>(c)];
+    if (o.free || o.health <= 0) continue;
+    const float dx = o.origin.x - origin.x, dy = o.origin.y - origin.y, dz = o.origin.z - origin.z;
+    if (std::fabs(dx) < 40 && std::fabs(dy) < 40 && std::fabs(dz) < 64) return "player";
+  }
+  if (tr.fraction >= 1 && !tr.startsolid) return "open";
+  if (tr.ent <= 0) return tr.plane.normal.z >= 0.7f ? "open" : "wall";
+  if (tr.ent <= static_cast<int>(sv.clients.size())) return "player";
+  return "mover";
+}
 
 void watch_hop(Watch& w, int k, sh::AimSkill skill, bool alive, bool hop, const char* because,
                float speed) {
@@ -227,6 +258,24 @@ void still_view_metrics(gl::Lab& lab, const Watch& w) {
   lab.metric("team.bumps.hard-per-bot-min", static_cast<double>(w.hard_bumps) / bot_min, "per-min");
   for (const auto& [mode, n] : w.bumps_by_mode)
     lab.metric("team.bumps." + mode + "-per-bot-min", static_cast<double>(n) / bot_min, "per-min");
+  for (const auto& [by, n] : w.bumps_by)
+    lab.metric("team.bumps.by-" + by + "-per-bot-min", static_cast<double>(n) / bot_min, "per-min");
+  {
+    gl::LabTable bt{"where they bump (a bot-minute's count; 64-unit cells)",
+                    {"by", "per bot-min", "at", "mode"},
+                    {}};
+    std::vector<std::pair<int, std::tuple<int, int, int, std::string, std::string>>> top;
+    top.reserve(w.bump_spots.size());
+    for (const auto& [spot, c] : w.bump_spots) top.push_back({-c, spot});
+    std::sort(top.begin(), top.end());
+    for (size_t i = 0; i < top.size() && i < 10; i++) {
+      const auto& [x, y, z, by, mode] = top[i].second;
+      bt.rows.push_back({by, to_fixed(-top[i].first / bot_min, 2),
+                         std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(z),
+                         mode});
+    }
+    lab.table(bt);
+  }
   const double n = static_cast<double>(std::max<int64_t>(1, w.commands));
   gl::LabTable st{"where they stand still (share of every command; 64-unit cells)",
                   {"why", "share %", "at", "goal", "mode"},
@@ -537,23 +586,34 @@ void run(gl::Lab& lab) {
     const float sp = std::sqrt(e.velocity.x * e.velocity.x + e.velocity.y * e.velocity.y);
     watch_hop(tr, k, f.skill, e.health > 0, p.mode == sh::PilotMode::hop, p.because, sp);
     watch_still(tr, f, p, sp, e.origin.x, e.origin.y, e.origin.z - 24);
+    const auto i = static_cast<size_t>(k);
+    const bool bumped = e.health > 0 && tr.moved[i] && tr.last_speed[i] - sp >= 120;
+    const char* by = !bumped ? ""
+                     : e.health < tr.last_health[i]
+                         ? "hit"
+                         : bump_by(w.sv, f.slot + 1, e.origin, tr.last_vel[i]);
     if (tr.log != nullptr)
       tr.log->take(k, w.sv.time, sp, sh::pilot_mode_name(p.mode), link_of(p), e.origin.x,
-                   e.origin.y, e.origin.z - 24);
+                   e.origin.y, e.origin.z - 24, by);
     watch_view(tr, k, w.sv.time, cmd.angles.y, f.bot.view_by);
-    {
-      const auto i = static_cast<size_t>(k);
-      if (e.health > 0) {
-        tr.alive_commands++;
-        if (tr.moved[i] && tr.last_speed[i] - sp >= 120) {
-          tr.bumps++;
-          if (sp < 100) tr.hard_bumps++;
-          tr.bumps_by_mode[sh::pilot_mode_name(p.mode)]++;
-        }
+    if (e.health > 0) {
+      tr.alive_commands++;
+      if (bumped) {
+        tr.bumps++;
+        if (sp < 100) tr.hard_bumps++;
+        tr.bumps_by_mode[sh::pilot_mode_name(p.mode)]++;
+        tr.bumps_by[by]++;
+        const auto cell = [](float v, int g) {
+          return static_cast<int>(std::lround(v / static_cast<float>(g))) * g;
+        };
+        tr.bump_spots[{cell(e.origin.x, 64), cell(e.origin.y, 64), cell(e.origin.z - 24, 32), by,
+                       sh::pilot_mode_name(p.mode)}]++;
       }
-      tr.last_speed[i] = sp;
-      tr.moved[i] = e.health > 0;
     }
+    tr.last_speed[i] = sp;
+    tr.last_vel[i] = {e.velocity.x, e.velocity.y, 0};
+    tr.last_health[i] = e.health;
+    tr.moved[i] = e.health > 0;
     auto& ml = tr.modes[static_cast<size_t>(k)];
     const char* mode = sh::pilot_mode_name(p.mode);
     if (ml.empty() || ml.back().second != mode) ml.push_back({w.sv.time, mode});
