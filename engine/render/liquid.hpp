@@ -20,7 +20,6 @@
 //   wind's ripples cut by the liquid's viscosity (water/liquid.hpp's `ripples`), bubbles that
 //   swell and burst into a ring, a scum of patches drifting with the surface, a thin oily film's
 //   interference colours (the sheen on tar), a gloss of its own and a glow of its own.
-//
 // - ITS LIGHT ROUND IT (`liquid_lamps`): a glowing body (lava, a slime with a glow of its own)
 //   handed to the frame's lamps (render/lights.hpp) as a few point lights over its plan, one a
 //   cell of a grid laid on its box, each as bright as its cell of surface: a flat face of luminance
@@ -29,7 +28,6 @@
 //   radius and softened by it (an area's light, not a point's), its colour the glow's own. Lava's L
 //   is the share of open melt at the core's glow and the crust's at a share of its young skin's
 //   (the cracks and the plates still hot). Steady: the melt changes slower than a frame.
-//
 // - THE SCENE IN IT (`Liquids::reflections`): the reflected ray marched through the scene's own
 //   depth copy (24 steps growing with distance, then halved down onto the hit), the colour copy
 //   read where it meets the scene, faded toward the screen's edges and the march's end, the sky's
@@ -44,6 +42,8 @@
 // - THE CRUST BROKEN (`break_liquid_crust`): a hole of open melt where something fell in, opening
 //   at once and skinning over from its edge, the plates round it cracked and glowing, a crest
 //   running out in the first second; carried by the flow.
+// - WADED THROUGH (render/liquid_wade.hpp, `LiquidLook::wade`): a furrow, a bow and rings, as
+//   thick as the look's viscosity (water 1, slime 2, lava 4); lava's crust torn, slime's scum parted.
 // - SEEN FROM BELOW (`Liquids::eye_under`, docs/liquids.md § From below): a slime a fog of its
 //   colour with Snell's window overhead, a lava its melt all round; `under_reach` a least view
 //   (a lava with one a thick light-red glowing goo the eye sees a few metres into).
@@ -70,6 +70,7 @@
 #include "gpu/pipeline.hpp"
 #include "render/frame.hpp"
 #include "render/lights.hpp"
+#include "render/liquid_wade.hpp"
 #include "water/optics.hpp"
 #include "water/world.hpp"
 
@@ -128,6 +129,7 @@ struct LiquidLook {
   // open day, over the rest.
   double open_sky = 1;
   double room = 0;
+  WadeLook wade;  // how it takes a body wading through it (render/liquid_wade.hpp)
 };
 
 // The named looks: "lava", "lava-crusted", "slime", "slime-gel", "slime-mucus", "slime-sludge",
@@ -152,6 +154,12 @@ struct LiquidGpuBody {
   float fx[4];       // reflections on (1) or off, the shimmer (rad/m), the breaks held, reach
   float breaks[kLiquidBreaks][4];  // x, z (m), radius (m), the time it fell in (s)
   float table[kGlowEntries][4];    // the glow table, cd/m^2 rgb (water/glow.hpp)
+  // Wading (render/liquid_wade.hpp): the stamps held, the furrow's half width (m), its depth (m),
+  // a ring's height (m); the rings' speed (m/s), wavelength (m), life (s), the furrow's closing
+  // (s); the crust's healing (s), a stamp's life (s), 0, 0.
+  float wade0[4], wade1[4], wade2[4];
+  float wades[kLiquidWades][4];   // x, z (m), the time (s), the strength (0..1)
+  float wade_v[kLiquidWades][4];  // vx, vz (m/s), the span to the stamp before (s), head (1)
 };
 
 struct Liquids {
@@ -173,6 +181,7 @@ struct Liquids {
     bool shown = true;
     int next_break = 0;
     double floor = 0;  // m: the lowest its liquid reaches (an eye under it is not in it)
+    WadeLook wade;     // its look's (wade_liquids' spacing)
   };
   std::vector<Slot> bodies;
 };

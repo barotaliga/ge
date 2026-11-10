@@ -278,12 +278,57 @@ sees the liquid all round it. One full-screen triangle is drawn after the surfac
 Not yet: the waterline split for an eye at the level (the water's lens plate,
 `render/underwater.hpp`).
 
+## Wading (M30k)
+
+A body moving through a lava or a slime leaves its mark on the surface, and how the surface moves
+says how thick the liquid is (`engine/render/liquid_wade.hpp`). A game hands the bodies standing
+in its liquids each frame (`LiquidWader`: the feet, the height); `wade_liquids` stamps each
+body's track onto the body of liquid it stands in, a stamp each 0.45 m moved and a small one
+every 0.7 s standing still, the latest 48 a body. The surface draws from every stamp:
+
+- **The furrow.** A trough along the track as wide as the body, its lips raised either side (the
+  shape (1 − ρ²) e^−ρ² across it, which moves no liquid), filling back in slowly: the liquid
+  parts round the legs and closes behind them. A **bow** piles up ahead of a body moving on.
+- **The rings.** A packet of waves runs out from every stamp, dying as it goes and spreading as
+  1/√r; summed along the track they are the wake. Rings shorter than a few pixels are left out.
+- **Lava's crust torn.** The furrow is open melt, hot and glowing, the crust either side cracked
+  hot while it is fresh; it skins over again from its edge.
+- **Slime's scum parted.** What floats (scum, grime, debris) is pushed off the furrow, and a
+  glowing slime glows brighter where it was stirred.
+
+The look's **viscosity** (`WadeLook::viscosity`) is the surface's thickness relative to water's.
+It is the picture's knob, not the stuff's viscosity (lava's is hundreds of thousands of times
+water's; a surface that thick would not move within a game's seconds). Water is 1, the slimes 2
+(a gel 3, a sludge 2.5, tar 8), lava 4 (crusted lava 5). Every rule is a power of it:
+
+| | Water (1) | Slime (2) | Lava (4) | Rule |
+| --- | --- | --- | --- | --- |
+| The rings' speed | 0.70 m/s | 0.49 m/s | 0.35 m/s | v^−½ |
+| Their wavelength | 0.30 m | 0.42 m | 0.60 m | v^½ |
+| Their life | 1.6 s | 1.35 s | 1.1 s | v^−¼ |
+| The furrow closing | 0.45 s | 0.9 s | 1.8 s | v |
+| The crust healing | | | 6 s | v |
+| The furrow's depth | 6 cm | 7 cm | 8.5 cm | v^¼ |
+
+So a thicker liquid's rings are longer, slower and reach less far (1.1 m on water, 0.4 m on
+lava), and its furrow is deeper and stays open longer. The surface's vertices take the furrow and
+the bow (the rings are shorter than the grid); the pixels take all of it, its slope from the
+height's change across the pixel's quad. The same surface is worked out on the CPU
+(`wade_height`) for the lab's charts and the test. Shooter's Edge stamps every player whose feet
+are in lava or slime (`ce_wade`).
+
+Not taken: stepping the liquid as a height field (a grid a body, a pass a frame) for what a few
+dozen closed-form stamps give; slowing the player's own move in the thicker liquids, which the
+classic game's move and its servers decide (a client that moved its player otherwise would
+mispredict on every server).
+
 ## Labs (G9)
 
 | Lab | Kind | Row | What it shows |
 | --- | --- | --- | --- |
 | `liquids` | picture | M30a | The share of a gale's input each liquid keeps by wavelength, the drift, the swim each gives (stroke speed, the scales, metres in 10 s), the damage over time at each immersion (lava's burns, the slimes' ticks), the radiant heat over a lava pool by height |
 | `gpu-lava` | picture | M30b | A lava pool in a quarry by day, at dusk and at night; the crust's cover from 15 to 97 %; the plates close up by day and night; the flow at four moments; the heat shimmer across the lake (off, on, a moment later); three stones breaking the crust at four moments; the view from under the level; both lavas; the glow table |
+| `se-wade` | scenario | M30k | Water, slime and lava waded through, from above (the CPU twin), the furrow closing at each viscosity; on real maps a player walking through the lava and the slime with `ce_wade` off and on, a film and the pass's cost |
 | `gpu-slime` | picture | M30c | The five slimes from the rim and close up; the toxic slime glowing by day, at dusk and at night; the gel seen into; one gale over three slimes; three crags mirrored in the tar, reflections off and on; the toxic slime and the gel from under the level |
 
 ## Sources

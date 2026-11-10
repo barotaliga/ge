@@ -58,6 +58,10 @@ const SwitchSpec kSwitches[] = {
      false},
     {"slime", "LIQUIDS AND SKY", "SLIME",
      "Slime that is thick and glows. Off: the pack's warped picture.", &S::slime, false},
+    {"wade", "LIQUIDS AND SKY", "WADING",
+     "Lava and slime part round a player wading through them and close slowly behind him, thick "
+     "as they are; lava's crust tears open. Off: a still surface.",
+     &S::wade, false},
     {"teleports", "LIQUIDS AND SKY", "TELEPORTERS",
      "Teleporters drawn as a shimmering field. Off: the pack's warped picture.", &S::teleports,
      false},

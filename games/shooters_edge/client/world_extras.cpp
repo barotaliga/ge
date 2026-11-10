@@ -14,9 +14,12 @@
 #include "brush/app/bsp_views.hpp"
 #include "render/flame.hpp"
 #include "render/liquid.hpp"
+#include "render/liquid_wade.hpp"
 #include "render/precip.hpp"
 #include "render/underwater.hpp"
 #include "render/water.hpp"
+#include "shooter/server.hpp"
+#include "shooters_edge/client/view.hpp"
 
 namespace shooters_edge::client {
 
@@ -43,7 +46,9 @@ struct WorldExtras {
   double wind = -1, from = 0;        // the air the waves were last laid under (m/s, rad)
   uint32_t height = 1;               // the targets' rows
   gr::Liquids liquids;
-  std::vector<ba::Kind> liquid_kinds;  // each liquid slot's: kLava or kSlime
+  gr::LiquidWading wading;  // the players' tracks through the lava and the slime (ce_wade)
+  std::vector<gr::LiquidWader> waders;  // this frame's
+  std::vector<ba::Kind> liquid_kinds;   // each liquid slot's: kLava or kSlime
   gr::Flames flames;
   std::vector<gr::Flame> fires;
   ba::FireLook fire_look;  // this frame's: bonfires or not, the wind
@@ -256,6 +261,26 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
   if (x.raining && x.weather->draw) fall = x.now.draw;
   fall.near_m = view.near_m;
   gr::prepare_precip(d, x.precip, fall);
+}
+
+void wade_extras(WorldExtras& x, std::span<const Placed> models, const Placed* self, double t_s) {
+  // The map's contents codes for the two liquids, and a player's feet under his origin (units).
+  constexpr int32_t kSlime = -4, kLava = -5;
+  constexpr float kFeetUnits = -24;
+  constexpr double kPlayerHeightM = 1.4;
+  x.waders.clear();
+  auto add = [&](const Placed& p) {
+    // In it when the point a few units over his feet is lava or slime.
+    const float probe[3] = {p.origin.x, p.origin.y, p.origin.z + kFeetUnits + 6};
+    const int32_t c = ge::brush::hull_contents(x.scene->map, probe, 0, 0);
+    if (c != kSlime && c != kLava) return;
+    const ge::camera::Vec3 feet = engine_point({p.origin.x, p.origin.y, p.origin.z + kFeetUnits});
+    x.waders.push_back({p.entity, {feet.x, feet.y, feet.z}, kPlayerHeightM});
+  };
+  for (const Placed& p : models)
+    if (p.entity > 0 && p.entity <= ge::shooter::kMaxClients) add(p);
+  if (self != nullptr) add(*self);
+  gr::wade_liquids(x.liquids, x.wading, x.waders, t_s, x.on->wade && (x.on->lava || x.on->slime));
 }
 
 void extras_births(WorldExtras& x, double t_s, std::vector<gr::Particle>& out) {

@@ -25,12 +25,14 @@
 // ge:summary The modern look's water, lava, slime, flames and weather in the window, by ce_ switch
 // ge:keywords world-extras water lava slime liquids flames torches weather rain snow precip
 // ge:keywords underwater warped-liquids planar-mirror bsp-views pool-wind
+// ge:keywords wade_extras wading ce_wade
 // ge:keywords classicenhance switches ce_water ce_lava ce_slime ce_flames ce_weather ce_shadows
 // ge:keywords bonfires ce_bonfires sparks extras_births ce_water_quality water-stop
 // ge:skill render shooter classicenhance
 #pragma once
 
 #include <memory>
+#include <span>
 
 #include "brush/app/bsp_draw.hpp"
 #include "brush/app/bsp_weather.hpp"
@@ -42,6 +44,7 @@
 #include "render/sky.hpp"
 #include "render/view.hpp"
 #include "shooters_edge/app/look.hpp"
+#include "shooters_edge/client/world_models.hpp"
 
 namespace shooters_edge::client {
 
@@ -84,6 +87,10 @@ void dress_extras(WorldExtras& x, ge::render::FrameView& view, ge::brush::app::O
 void prepare_extras(ge::gpu::Device& device, WorldExtras& x, const ge::brush::app::BspDraw& bsp,
                     const ge::render::FrameView& view, const ge::brush::app::Options& options,
                     const ge::render::FrameUniforms& uniforms);
+// Before prepare_extras: the players wading in lava or slime this frame (`models`' players and
+// `self`, the local player, when not null) stamped onto the surface they stand in (ce_wade,
+// render/liquid_wade.hpp), at the frame's time `t_s`.
+void wade_extras(WorldExtras& x, std::span<const Placed> models, const Placed* self, double t_s);
 // After prepare_extras: the bonfires' sparks since the last call, to `t_s`, appended to `out` for
 // the frame's particle pool (none when ce_bonfires is off, or on the first call).
 void extras_births(WorldExtras& x, double t_s, std::vector<ge::render::Particle>& out);
