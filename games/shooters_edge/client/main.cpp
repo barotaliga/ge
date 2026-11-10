@@ -8,7 +8,7 @@
 // switched, kicked and flashing as the mod fires it), the HUD (hud/layout.hpp) and the console.
 //
 //   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [-models <dir>]
-//                 [-timedemo <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH]
+//                 [-timedemo <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH] [-config <f>]
 //                 [-demovideo <demo> <file> [--from=m:ss --to=m:ss | --highlight=N] ...]
 //                 [+<command> ...]
 //
@@ -36,7 +36,7 @@
 // `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, `vid_fullscreen 0|1` the
 // window over the whole screen (`vid_display n` which one, of those `vid_displays` lists), `gamma`
 // the brightness, `topcolor` and `bottomcolor` the player's colours, and `quit` quits; the settings
-// are kept in `<game folder>/settings/config.cfg` (client/settings.hpp).
+// are kept in `<game folder>/settings/config.cfg` (`-config <f>`: a session's own; settings.hpp).
 //
 // THE LOBBY: its own screen over the title's night until F4 joins the warmup (lobby_console).
 //
@@ -161,13 +161,14 @@ int run_main(int argc, char** argv) {
   out::set_output_sink(print_line);
   cl::Args args;
   if (std::string why; !cl::parse(argc, argv, args, why)) {
-    out::error("shooters_edge: the command line was refused: " + why +
-               " Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
-               "[-progs <file>] [-models <dir>] [-timedemo <demo>] [-playdemo <demo>] "
-               "[--frames=N] [--size=WxH] [-demovideo <demo> <file> [--fps=N] "
-               "[--resolution=<WxH|720p|1080p|1440p|4k>] [--from=m:ss] [--to=m:ss] [--highlight=N] "
-               "[--gif-width=N] [--codec=<c>] [--seconds=S]] "
-               "[+<command> ...]; next: rerun with only those flags.");
+    out::error(
+        "shooters_edge: the command line was refused: " + why +
+        " Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
+        "[-config <file>] [-progs <file>] [-models <dir>] [-timedemo <demo>] [-playdemo <demo>] "
+        "[--frames=N] [--size=WxH] [-demovideo <demo> <file> [--fps=N] "
+        "[--resolution=<WxH|720p|1080p|1440p|4k>] [--from=m:ss] [--to=m:ss] [--highlight=N] "
+        "[--gif-width=N] [--codec=<c>] [--seconds=S]] "
+        "[+<command> ...]; next: rerun with only those flags.");
     return 2;
   }
 
@@ -247,6 +248,8 @@ int run_main(int argc, char** argv) {
   cl::choose_folder(args, prefs);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
   console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
+  // A session's own config (`-config <file>`): read and saved there, the player's left alone.
+  if (!args.config.empty()) console.set_config_file(args.config);
   // F12's screenshots (engine/capture/screenshot.hpp), in <game folder>/screenshots/ beside its
   // recordings, saves/ and settings/; made before the + lines so `+screenshot` takes the first.
   ge::capture::ScreenshotSettings shot_settings;  // scr_format, scr_quality, scr_chroma

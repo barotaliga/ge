@@ -3,6 +3,7 @@
 // ge:summary Tests cfg files: default, config, autoexec, then +commands; server.cfg; the dump
 // ge:keywords test cfg start start_server autoexec config dump_text describe
 // ge:skill console testing
+#include <filesystem>
 #include <map>
 
 #include "check.hpp"
@@ -37,6 +38,45 @@ TEST(startup_order) {
   CHECK(c.output()[2] == "autoexec 100");
   CHECK(c.cvars().find("cl_fov")->number == 110);
   CHECK(c.problems().empty());
+}
+
+// A session's own config (a game's `-config <file>`): read in place of the player's config.cfg,
+// autoexec.cfg skipped, and every save of config.cfg written to it; the player's files untouched.
+TEST(a_session_config_is_read_and_saved_in_place_of_the_players) {
+  Console c;
+  c.cvars().add({.name = "cl_fov", .fallback = "90", .flags = kArchive});
+  bool player_written = false;
+  c.set_files(
+      [](std::string_view name, std::string& text) {
+        if (name == "config.cfg")
+          text = "cl_fov 100\necho player config";
+        else if (name == "autoexec.cfg")
+          text = "echo player autoexec";
+        else
+          return false;
+        return true;
+      },
+      [&player_written](std::string_view, std::string_view) {
+        player_written = true;
+        return true;
+      });
+  const std::filesystem::path file =
+      std::filesystem::temp_directory_path() / "ge_console_session_test" / "session.cfg";
+  std::error_code ec;
+  std::filesystem::remove_all(file.parent_path(), ec);
+  c.set_config_file(file);
+  start(c, {});  // no session file yet: the defaults, nothing of the player's
+  CHECK(c.output().empty());
+  CHECK(c.cvars().find("cl_fov")->number == 90);
+  c.execute("cl_fov 105; cfg_save");
+  CHECK(!player_written);
+  CHECK(std::filesystem::exists(file));
+  Console again;
+  again.cvars().add({.name = "cl_fov", .fallback = "90", .flags = kArchive});
+  again.set_config_file(file);
+  start(again, {});
+  CHECK(again.cvars().find("cl_fov")->number == 105);
+  std::filesystem::remove_all(file.parent_path(), ec);
 }
 
 TEST(missing_files_are_skipped_quietly) {
