@@ -10,14 +10,16 @@
 // are players every client sees, with their teams; the lobby warms up (its limits held, a bot
 // alone never counts down) until the client is ready, then restarts the map into the match; the
 // window's own match (the listen server) is the same server, and a classic client joins it; on
-// it the window's player hears the visitor talk and is heard by him while talking.
+// it the window's player hears the visitor talk and is heard by him while talking; a player's vote
+// changes a rule for the map (and the next map puts it back), a vote on the move restarts the map
+// and is kept, and the owner's settings are refused.
 //
 // ge:summary Test: Shooter's Edge's dedicated server on the core: one digest, a client plays on it
 // ge:keywords test classic-game dedicated-server classic-client simulated-network serve net_frame
 // ge:keywords game-rules fraglimit pack-map changelevel map-change maprotation reconnect
 // ge:keywords bots sv_bots sv_lobby lobby warmup ready countdown match-restart local-seat
 // ge:keywords listen-server listen_options join-the-window listen_mic local-voice sv_voip
-// ge:keywords sv_mod mod-folder gamedir qwprogs misc-pak
+// ge:keywords sv_mod mod-folder gamedir qwprogs misc-pak vote sv_vote per-map-vote
 // ge:skill net shooter testing
 #include <filesystem>
 #include <fstream>
@@ -378,6 +380,55 @@ TEST(classic_game_the_lobby_warms_up_until_everyone_is_ready) {
   again.look_at = 399;
   run_session(again, c, 1100, "", 400);
   CHECK(r.digest == again.digest);
+}
+
+namespace {
+
+bool printed(const se::ClassicClientEnd& c, const std::string& part) {
+  for (const std::string& p : c.prints)
+    if (p.find(part) != std::string::npos) return true;
+  return false;
+}
+
+}  // namespace
+
+TEST(classic_game_a_vote_changes_a_rule_for_the_map) {
+  ServerConfig c = arena();
+  c.rules["timelimit"] = "0.05";  // the match ends at 3 s, the map changes at about 8 s
+  Session r;
+  r.look_at = 200;
+  run_session(r, c, 900, "", -1, {{120, "vote hostname mine"}, {140, "vote fraglimit 30"}});
+  CHECK_MSG(r.opened, r.error);
+  CHECK(printed(r.client, "hostname may not be voted on (sv_vote_deny)"));
+  CHECK(printed(r.client, "visitor calls fraglimit 30: vote yes/no"));
+  CHECK(printed(r.client, "Vote passed: fraglimit 30 for this map"));
+  CHECK_MSG(r.looked.find("fraglimit=30") != std::string::npos, r.looked);
+  // The map changed: the vote's change went back to the server's own (the mod's 0).
+  CHECK_MSG(r.client.spawncount == 2, "spawncount " + std::to_string(r.client.spawncount));
+  CHECK(printed(r.client, "fraglimit back to default for the new map"));
+  const std::string status = server_status(r.s);
+  CHECK_MSG(status.find("fraglimit=0") != std::string::npos, status);
+  Session again;
+  again.look_at = 200;
+  run_session(again, c, 900, "", -1, {{120, "vote hostname mine"}, {140, "vote fraglimit 30"}});
+  CHECK(r.digest == again.digest);
+}
+
+TEST(classic_game_a_vote_on_the_move_restarts_the_map_and_is_kept) {
+  ServerConfig c = arena();
+  Session r;
+  run_session(r, c, 400, "", -1, {{140, "vote sv_gravity 400"}});
+  CHECK_MSG(r.opened, r.error);
+  CHECK(printed(r.client, "Vote passed: sv_gravity 400"));
+  CHECK(printed(r.client, "The map restarts so everyone moves by the new setting"));
+  CHECK_MSG(r.client.spawncount == 2, "spawncount " + std::to_string(r.client.spawncount));
+  CHECK(r.client.stage == se::ClientStage::active);
+  CHECK_MSG(r.client.movevars[0] == 400.0f, std::to_string(r.client.movevars[0]));  // gravity
+  CHECK(!printed(r.client, "back to"));  // a restart keeps it
+  Session refused;
+  run_session(refused, c, 300, "", -1, {{140, "vote sv_gravity heavy"}, {160, "vote sv_coop 1"}});
+  CHECK(refused.client.spawncount == 1);
+  CHECK(printed(refused.client, "sv_coop may not be voted on"));
 }
 
 TEST(classic_game_sv_intermission_holds_the_next_map) {

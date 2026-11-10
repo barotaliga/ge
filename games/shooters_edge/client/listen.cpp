@@ -909,6 +909,15 @@ bool listen_lobby(Listen& l, std::string_view line) {
     seat_companion(l, skill);
     return true;
   }
+  // A vote on the settings (engine/server/vote.hpp): the server's own words, with or without a
+  // lobby.
+  if ((word == "vote" || word == "yes" || word == "no") && !l.campaign_host && l.host &&
+      l.host->words != nullptr && l.server != nullptr) {
+    l.host->ctx = &l;
+    const bool taken = l.host->words(l.host->game, std::string(line));
+    catch_up(l);
+    return taken;
+  }
   if (!l.room || l.server == nullptr) {
     if (bot_word || word == "ready" || word == "break" || word == "notready" ||
         word == "toggleready" || word == "team" || word == "start" || word == "lobby" ||

@@ -333,9 +333,9 @@ double listen_tic(const Listen& l);
 
 // A lobby line from the player (slot 0): the lobby's words (server/lobby.hpp: ready, break,
 // notready, toggleready, team, start, warmup, sitout, togglewarmup, lobby), `addbot
-// [novice|average|expert]` and `removebot`. In a campaign the last two seat and let go a companion
-// (coop on: `coopgame` starts one so). False when the line is none of them, or when no lobby runs
-// (a line saying so is printed).
+// [novice|average|expert]` and `removebot`, and the vote's (`vote ...`, `yes`, `no`: any match). In
+// a campaign the last two seat and let go a companion (coop on: `coopgame` starts one so). False
+// when the line is none of them, or when no lobby runs (a line saying so is printed).
 bool listen_lobby(Listen& l, std::string_view line);
 
 // What the lobby's banner and screen show (lobby_room.hpp's `lobby_view` for the player), each
