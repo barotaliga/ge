@@ -28,10 +28,11 @@
 // wrong by 4 to 64 units is not snapped but folded into a correction that decays (`Smoothing`).
 // The drawn eye and the player's own place are the prediction; `cl_nopred 1` draws the server's.
 // THE EASY JUMP: with `cl_speedjump 1` when joining, the user info says so (the server, its admins
-// and the players see the help is on). A server with `pm_speedjump` in its server info (ours) runs
-// it and the prediction follows its value; on any other the client strafes for the player
-// (shooter/speedjump_assist.hpp, `kStockShare` of the best strafe's gain) off its newest
-// prediction, the drawn view untouched (it needs `cl_nopred 0`). Changed later, it acts next join.
+// and the players see the help is on), and the client strafes for the player on every server
+// (shooter/speedjump_assist.hpp) off its newest prediction: at the server's `pm_speedjump` where
+// its server info states one (ours always do; 0 turns it off), else at `kStockShare` of the best
+// strafe's gain. The drawn view turns by `Remote::speedjump_view` of the swing
+// (`cl_speedjump_view`). It needs `cl_nopred 0`. Changed later, `cl_speedjump` acts next join.
 //
 // THE OTHER PLAYERS are run forward from their newest record (plugins/shooter/predict.hpp's
 // `predict_other`) to the drawn time (the window's clock less the newest move's round trip plus
@@ -69,6 +70,7 @@
 #include "net/transport.hpp"
 #include "shooter/predict.hpp"
 #include "shooter/predict_original.hpp"
+#include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_client.hpp"
@@ -79,7 +81,7 @@ namespace shooters_edge::net {
 inline constexpr int kTickUs = 13000;    // a move's length: the server's frame
 inline constexpr int kMostTicks = 8;     // ticks a call may run; a longer stall drops the rest
 inline constexpr float kLerpMost = 200;  // units: an entity moved further between two frames snaps
-inline constexpr float kStockShare = 0.5f;         // the easy jump's share on a server without it
+inline constexpr float kStockShare = 0.8f;         // the easy jump's share on a server without it
 inline constexpr int kMicMostSamples = 48000 / 4;  // the microphone's samples a frame may hold
 
 enum class RemoteStep : uint8_t {
@@ -106,15 +108,17 @@ struct Remote {
   ClientRecorder recording;
   client::Demo demo;  // the recording read back: what the window draws
   ClassicClientEnd end;
-  int levels = 0;        // level starts drawn
-  int replayed = 0;      // prediction: the moves it ran past the acknowledged one
-  int others = 0;        // other players predicted the last step
-  int others_msec = 0;   // the most milliseconds one of them was run forward the last step
-  int lerped = 0;        // entities drawn between two frames the last step
-  sh::Vec3f view;        // the player's angles, degrees (sent with every move)
-  sh::Vec3f prediction;  // the player's predicted origin, the correction not added
-  sh::MoveState ahead;   // the player's whole predicted state (the easy jump's help reads it)
-  sh::Smoothing smooth;  // the prediction's correction
+  int levels = 0;             // level starts drawn
+  int replayed = 0;           // prediction: the moves it ran past the acknowledged one
+  int others = 0;             // other players predicted the last step
+  int others_msec = 0;        // the most milliseconds one of them was run forward the last step
+  int lerped = 0;             // entities drawn between two frames the last step
+  sh::Vec3f view;             // the player's angles, degrees (sent with every move)
+  sh::Vec3f prediction;       // the player's predicted origin, the correction not added
+  sh::MoveState ahead;        // the player's whole predicted state (the easy jump's help reads it)
+  sh::SpeedJumpAid jump_aid;  // the easy jump's memory (shooter/speedjump_assist.hpp)
+  float speedjump_view = 0.5f;  // cl_speedjump_view: the share of its swing drawn
+  sh::Smoothing smooth;         // the prediction's correction
   // Prediction on the original move (the server's `sv_playermove original`): the stand-in
   // server, built for the level `original_level` counts and the models `original_for` points at.
   sh::OriginalPrediction original;

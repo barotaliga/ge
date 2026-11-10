@@ -44,11 +44,20 @@ void add_user_info_cvars(ge::console::Console& con, UserInfo& info) {
   con.cvars().bind({.name = "cl_speedjump",
                     .fallback = "0",
                     .flags = ge::console::kArchive | ge::console::kUserInfo,
-                    .help = "1: the easy jump: hold forward and jump to gain speed without "
-                            "strafing (a strafe still gains more); acts where the server's "
-                            "pm_speedjump allows it",
+                    .help = "1: the easy jump: hold forward and jump and the game strafes for "
+                            "you, weaving the hops for speed; the mouse steers; the server's "
+                            "pm_speedjump sets its share (0 off)",
                     .kind = ge::console::CvarKind::boolean},
                    &info.speedjump);
+  con.cvars().bind({.name = "cl_speedjump_view",
+                    .fallback = "0.5",
+                    .flags = ge::console::kArchive,
+                    .help = "0..1: how much of the easy jump's left and right swing your view "
+                            "shows (0 a still view, 1 all of it, as a strafer sees)",
+                    .kind = ge::console::CvarKind::number,
+                    .min = 0,
+                    .max = 1},
+                   &info.speedjump_view);
 }
 
 void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) {

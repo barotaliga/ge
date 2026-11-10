@@ -182,34 +182,35 @@ trips over a real map the expert hop takes about 1.2 times his time, the walk 1.
 ### The easy jump (`cl_speedjump`)
 
 A player who cannot strafe can still hop for speed. With `cl_speedjump 1` (the player's own
-setting, archived, 0 by default) holding forward and jump is enough: the held jump hops again on
-each landing, and while the forward key alone is held in the air with the view within about 45
-degrees of the way he moves, each command gains a share of what the best strafe would gain (v^2
-grows by `pm_speedjump` x 900) and turns the way toward the view as fast as that strafe would, so
-the mouse still steers. A side key, or a view further off the way, is the classic move to the
-bit, so the best strafe (side key, view on the way, jump pressed on landing) still gains more:
-over eight seconds from 320 the easy jump reaches about 616 units/s at the share 0.5, the best
-strafe about 810 (the `se-speedjump` lab).
+setting, archived, 0 by default) holding forward and jump is enough: the client strafes for him
+(`plugins/shooter/speedjump_assist.hpp`, `assisted_command`) and every server runs the commands it
+sends with its classic move, ours and any other alike. From the player's own state (the listen
+server's player, or a remote server's prediction) it sends the jump let go while flying and pressed
+while standing, and in the air the side key in place of the forward key with a yaw that puts the
+wish where it gains the share asked of the best strafe's gain (a wish whose share along the way
+is `30 x sqrt(1 - share)` adds `share x 900` to v^2).
 
-The server decides. `pm_speedjump` (0..1, a server setting like `pm_ktjump`, always told to
-clients in the server info, 0 included) is the share; a player's ask (`cl_speedjump 1` in his user info)
-switches it on for him alone, so the server runs it only for those who asked and a predicting
-client runs it only when both his setting and the server info say so. The window's own listen
-server allows it at 0.5; a dedicated server allows it only when its owner sets `pm_speedjump`.
-With `pm_speedjump 0` (the default) the move is unchanged to the bit:
-`tests/golden/shooter_pmove.txt` and the recordings hold it.
+The hops weave like a strafer's. The player's own yaw is the aim (his mouse left and right
+steers; his pitch plays no part, the walk's wish being flat). At each takeoff the way turns back
+across the aim, and in the air it turns the other way once it is 30 degrees past it
+(`kSpeedJumpSwing`); an aim far off is turned to at the strafe's full rate while it gains, so
+the player turns while hopping. The sent yaw is the side key's (left for a left turn) with the
+wish 90 degrees off it, which keeps it near the way, as a strafer looks.
 
-On a server that never heard of it (any other implementation: its server info has no
-`pm_speedjump`) the client helps instead, so the setting works everywhere
-(`plugins/shooter/speedjump_assist.hpp`, `assisted_command`). From its own prediction it sends the
-jump let go while flying and pressed while standing, and in the air the side key in place of the
-forward key with a yaw that puts the wish where it gains half the best strafe's gain (a wish
-whose share along the way is `30 x sqrt(1 - share)` adds `share x 900` to v^2), on the side that
-turns the way toward the view. The player's own screen never turns and a command with attack
-carries his real view. It gains within a percent or two of the server's own (611 against 616
-units/s after eight seconds in the lab). It is disclosed, never hidden: the user info still says
-`cl_speedjump 1`, so the server, its admins and the other players can see it; a server that wants
-none of it says `pm_speedjump 0`. It needs the prediction (`cl_nopred 0`).
+`cl_speedjump_view` (0..1, archived, 0.5) is how much of that swing the screen shows: the drawn
+yaw is the aim plus that share of the sent yaw's swing, eased over a few commands; 0 a still
+view, 1 a strafer's. A command with attack carries the view the screen shows, so a shot goes where
+the player looks.
+
+The server decides the share. `pm_speedjump` (0..1, a server setting like `pm_ktjump`, always
+told to clients in the server info, 0 included) is the share a client strafes at; 0 turns the aid
+off. The window's own listen server says 0.8; a dedicated server says 0 unless its owner sets it;
+on a server that says nothing (another implementation) the client strafes at 0.8 (`kStockShare`).
+The move itself never reads `pm_speedjump`: `tests/golden/shooter_pmove.txt` and the recordings
+hold it. Over eight seconds from 320 the easy jump reaches about 655 units/s at 0.5, 760 at 0.8
+and 835 at 1 against the best strafe by hand's 810 (the `se-speedjump` lab). It is disclosed,
+never hidden: the user info says `cl_speedjump 1`, so the server, its admins and the other
+players can see it. On a remote server it needs the prediction (`cl_nopred 0`).
 
 The labs: `se-moves` (any demo, any player: the map as a wireframe from above and at an angle,
 the path coloured by speed, the longest chain close up with the view's ticks, a chase view from
