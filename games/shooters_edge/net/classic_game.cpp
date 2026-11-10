@@ -421,6 +421,12 @@ std::string next_map(const gs::ServerConfig& c, const std::string& current,
 // for the match), and a setting the players' own moves are predicted with restarts the map, so
 // every client is told it as it signs on again. A restart keeps the change; the next map puts it
 // back.
+//
+// `vote speedjump <id|name> on|off|<share>` grants one player the easy jump for this map, or takes
+// it back (classic_admin.hpp's grant: disclosed, `*speedjump` in his user info). The change is
+// keyed `speedjump:<user id>`, so two votes on one player are one change and two players are two;
+// its value names the player and the share (`Ann on`, `Ann 0.5`, `Ann off`), its `before` what he
+// had. The next map puts each back; a player who left is passed over.
 
 // A rule the warmup holds at 0 (hold_limits) while the lobby waits for its match.
 bool held_now(const Game& g, std::string_view name) {
@@ -428,15 +434,75 @@ bool held_now(const Game& g, std::string_view name) {
          (name == "fraglimit" || name == "timelimit");
 }
 
+constexpr std::string_view kSpeedjumpVote = "speedjump";
+
+// The share a speedjump change's value ends in (`Ann on`, `Ann 0.5`): -1 for `off`.
+float speedjump_vote_share(std::string_view value) {
+  const size_t space = value.find_last_of(' ');
+  const std::string last(space == std::string_view::npos ? value : value.substr(space + 1));
+  float share = -1;
+  if (last == "on") return kGrantShare;
+  if (last != "off" && !speedjump_parse_share(last, share)) return -1;
+  return share;
+}
+
+// `vote speedjump <id|name> on|off|<share>`: the player named, and the grant asked for him.
+bool speedjump_vote_check(const Game& g, std::string_view value, gs::VoteCheck& out) {
+  const std::string text(value);
+  const size_t space = text.find_last_of(' ');
+  if (!g.classic || space == std::string::npos) {
+    out.error = "speedjump needs a player and on or off; next: `vote speedjump <id|name> on`";
+    return false;
+  }
+  const std::string who = text.substr(0, text.find_last_not_of(' ', space) + 1);
+  const std::string what = text.substr(space + 1);
+  float share = -1;
+  if (what == "on")
+    share = kGrantShare;
+  else if (what != "off" && !speedjump_parse_share(what, share)) {
+    out.error = "speedjump: " + what + " is not on, off or a share 0..1; next: `vote speedjump " +
+                who + " on`";
+    return false;
+  }
+  const ClassicServer& cs = *g.classic;
+  const int slot = classic_find_seat(cs, who);
+  if (slot < 0) {
+    out.error = "speedjump: no player is " + who + "; next: `users` lists the ids and names";
+    return false;
+  }
+  const ClassicClient& c = cs.clients[slot];
+  const float had = classic_speedjump_granted(cs, slot);
+  const auto word = [](float s) {
+    return s < 0              ? std::string("off")
+           : s == kGrantShare ? std::string("on")
+                              : speedjump_share_text(s);
+  };
+  out.key = "speedjump:" + std::to_string(c.userid);
+  out.value = c.name + " " + word(share);
+  out.before = c.name + " " + word(had);
+  return true;
+}
+
+// A passed or put-back speedjump change made: the grant set on the user id its key names, while
+// he is on the server.
+void speedjump_vote_apply(Game& g, const gs::VoteChange& c) {
+  if (!g.classic) return;
+  const int userid = std::atoi(c.key.c_str() + kSpeedjumpVote.size() + 1);
+  std::string error;
+  classic_speedjump(*g.classic, userid, speedjump_vote_share(c.value), error);
+}
+
 bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::VoteCheck& out) {
   const Game& g = *static_cast<const Game*>(ctx);
+  if (name == kSpeedjumpVote) return speedjump_vote_check(g, value, out);
   const std::string rule(name), text(value);
   bool known = false;
   for (const gs::GameRule& r : all_rules()) known = known || rule == r.name;
   if (!known) {
     out.error = rule +
                 " is not a setting of this server; next: `vote rules` says what may be "
-                "voted on (fraglimit, timelimit, teamplay, sv_gravity, pm_speedjump...)";
+                "voted on (fraglimit, timelimit, teamplay, sv_gravity, pm_speedjump, "
+                "speedjump <player> on...)";
     return false;
   }
   if (is_endpoint_rule(rule)) {
@@ -479,6 +545,10 @@ void vote_turn(Game& g) {
   b.notes.clear();
   bool restart = false;
   for (const gs::VoteChange& c : gs::vote_take(b)) {
+    if (c.name == kSpeedjumpVote) {
+      speedjump_vote_apply(g, c);
+      continue;
+    }
     g.settings.rules[c.name] = c.value;
     if (sh::find_setting(c.name) != nullptr)
       restart = true;
@@ -511,7 +581,12 @@ void vote_sync(Game& g) {
 // A map change: every change a vote made goes back in the settings the next map is made from.
 // Their lines go out at once, while the players are still on the map that is ending.
 void vote_map_over(Game& g) {
-  for (const gs::VoteChange& c : gs::vote_map_over(g.vote)) g.settings.rules[c.name] = c.value;
+  for (const gs::VoteChange& c : gs::vote_map_over(g.vote)) {
+    if (c.name == kSpeedjumpVote)
+      speedjump_vote_apply(g, c);
+    else
+      g.settings.rules[c.name] = c.value;
+  }
   vote_turn(g);
 }
 

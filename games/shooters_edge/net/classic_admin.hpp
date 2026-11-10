@@ -70,6 +70,10 @@ int classic_find_seat(const ClassicServer& s, const std::string& id_or_name);
 // The easy jump granted to the seat with user id `userid` at `share` (0..1), or taken back
 // (`share` < 0); everyone told. False with `error` when no seat has that id.
 bool classic_speedjump(ClassicServer& s, int userid, float share, std::string& error);
+// A share as the key and the tables show it (`0.8`, `1`): at most two decimals, no trailing zeros.
+std::string speedjump_share_text(float share);
+// `text` read whole as a share 0..1, rounded to hundredths; false when it is not one.
+bool speedjump_parse_share(const std::string& text, float& out);
 // The easy jump's share granted to `slot` (-1: none).
 float classic_speedjump_granted(const ClassicServer& s, int slot);
 // An administrator's console line: true when it was one of the words above, its answer in `out`.
