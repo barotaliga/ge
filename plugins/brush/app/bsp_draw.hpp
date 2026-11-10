@@ -7,7 +7,8 @@
 //   write a mask, and a fix-up pass gives their pixels the cleared depth the sky pass draws
 //   over); the liquids are bodies of our water, lava and slime (bsp_liquids.hpp), not drawn here;
 //   and the light is the lightmaps' or REAL-TIME: the map's light entities as point lights (each
-//   one's flicker, the nearest `shadowed` with a cube of depth), the lava's glow as lights over
+//   one's flicker, `shadowed` of them with a cube of depth: the nearest in the eye's potentially
+//   visible set first, then the nearest of the rest), the lava's glow as lights over
 //   it, the sun through the sky faces with its own shadow map, the sky's light by how open a
 //   point is overhead, and the glowing texels. The shadow maps are KEPT: the world they see
 //   stands still, so a light's cube is drawn when it takes a slot (and only then) and an
@@ -38,7 +39,7 @@
 // ge:keywords set_movers movers moving-brush-models doors plats
 // ge:keywords relief normal-map parallax-occlusion roughness specular ggx surface-atlas
 // ge:keywords shadow-cache shadow-slot fresh_slots fresh_cubes shadow-budget shadow-hitch
-// ge:keywords encode_bsp_shadows first_all warm-up
+// ge:keywords encode_bsp_shadows first_all warm-up shadow-pick shadow-pop pvs-shadows
 // ge:skill brush render
 #pragma once
 
@@ -72,7 +73,7 @@ struct Options {
   double brightness = 2.0;      // a lightmap's 1 against a white face under the open day
   double strength = 1;          // the point lights' strength against the classic's
   double dynamic_strength = 1;  // the dynamic lights' (set_dynamic_lights) against the classic's
-  int shadowed = 32;            // the nearest lights that cast shadows
+  int shadowed = 32;            // the lights that cast shadows (those in view first, nearest first)
   // A map's light near it softened over this share of its half reach (0: over its source's size
   // alone). Its inverse square matches the classic's straight fall-off at the half reach, but the
   // classic's light is at most twice that at the light, where the square's grows without end: a
