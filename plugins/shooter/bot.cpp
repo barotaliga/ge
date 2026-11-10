@@ -164,7 +164,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     // of the hands' own) swings the aim wider than it gains (se-team at 200 ms: none on the
     // ground keeps a strong aim at its LAN rate).
     const double net = b.shot_speed > 0 || !b.rewound ? b.lag_s : 0;
-    Mover m;
+    MovingTarget m;
     m.at = {static_cast<float>(c->seen.x), static_cast<float>(c->seen.y),
             static_cast<float>(c->seen.z)};
     m.velocity = c->course;
