@@ -3,7 +3,9 @@
 //
 // - **Kept**: `<game folder>/settings/config.cfg` (`settings_dir`) is the console's first search
 //   directory, so `config.cfg` is read from it at start and every archived cvar and bind is
-//   written back to it (`save_settings`) when the menu closes and when the game quits.
+//   written back to it (`save_settings`) when the menu closes and when the game quits, with the
+//   catalog of every setting beside it (`cvars.txt`, console/catalog.hpp), which the player's CLI
+//   (`shooters_edge_cli settings`) describes and checks them by.
 // - **The user info**: `topcolor` and `bottomcolor` (`add_user_info_cvars`, archived) and the
 //   console's `name` go to the listen server's slot 0 whenever one changes or the server is a new
 //   one (`send_user_info`); a lobby's team game keeps the team's colours over the player's own.

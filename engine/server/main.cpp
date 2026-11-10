@@ -365,6 +365,9 @@ std::string server_help(const ServerGame& game) {
 }
 
 int server_main(int argc, char** argv, const ServerGame& game) {
+  // A line at a time even into a file or a pipe (a server started detached writes its log there),
+  // so the log reads as the server runs and a crash loses nothing printed before it.
+  std::setvbuf(stdout, nullptr, _IOLBF, 0);
   // What nothing else caught ends the program here, with a line that says so, rather than in
   // std::terminate's bare abort.
   try {

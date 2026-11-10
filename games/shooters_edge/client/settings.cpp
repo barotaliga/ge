@@ -1,12 +1,13 @@
 // The window's settings, the user info and the mouse on the binds (settings.hpp).
 //
 // ge:summary The window's settings kept in config.cfg, the user info sent, the mouse on binds
-// ge:keywords settings save_settings send_user_info mouse_to_binds keys_to_menu
+// ge:keywords settings save_settings send_user_info mouse_to_binds keys_to_menu catalog cvars-txt
 // ge:skill console input
 // ge:test tests/shooters_edge_listen_test.cpp
 #include "shooters_edge/client/settings.hpp"
 
 #include "console/binds.hpp"
+#include "console/catalog.hpp"
 #include "console/cfg.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -18,7 +19,10 @@ std::filesystem::path settings_dir(const std::string& basedir, const std::string
 }
 
 bool save_settings(ge::console::Console& con) {
-  if (con.write_file(ge::console::kConfigFile, con.save_text())) return true;
+  // The catalog beside it: every setting described, for the player's CLI (console/catalog.hpp).
+  if (con.write_file(ge::console::kConfigFile, con.save_text()) &&
+      con.write_file(ge::console::kCatalogFile, ge::console::catalog_text(con.cvars())))
+    return true;
   const std::filesystem::path dir =
       con.search_path().empty() ? std::filesystem::path(".") : con.search_path()[0];
   ge::core::output::status(

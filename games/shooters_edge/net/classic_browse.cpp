@@ -93,6 +93,25 @@ size_t classic_master_query(uint8_t* out, size_t cap) {
   return put(out, cap, std::string_view("c\n\0", 3));
 }
 
+size_t classic_rcon(std::string_view password, std::string_view command, uint8_t* out, size_t cap) {
+  const bool quote = password.find(' ') != std::string_view::npos;
+  std::string text = "\xff\xff\xff\xffrcon ";
+  text += quote ? "\"" + std::string(password) + "\"" : std::string(password);
+  text += " ";
+  text += command;
+  if (text.size() + 1 > cap) return 0;
+  std::memcpy(out, text.data(), text.size());
+  out[text.size()] = 0;
+  return text.size() + 1;
+}
+
+bool classic_read_print(const uint8_t* data, size_t size, std::string& text) {
+  if (size < 5 || std::memcmp(data, kHeader, 4) != 0 || data[4] != 'n') return false;
+  text.assign(reinterpret_cast<const char*>(data) + 5,
+              strnlen(reinterpret_cast<const char*>(data) + 5, size - 5));
+  return true;
+}
+
 std::string classic_mode(const std::vector<std::pair<std::string, std::string>>& keys) {
   if (const std::string* m = find(keys, "mode"); m != nullptr && !m->empty()) return *m;
   if (number(keys, "coop", 0) != 0) return "coop";

@@ -7,7 +7,8 @@
 //     names that skill in its ge:skill line;
 //   - every #include "<root>/..." in a plugin reaches only itself, an engine directory whose
 //     target it lists under ENGINE, or a plugin it lists under PLUGINS (and from app/, an engine
-//     directory whose target it lists under APP); never games/ or tools/;
+//     directory whose target it lists under APP; from cli/, the game CLI's engine/gamecli too);
+//     never games/ or tools/;
 //   - the PLUGINS graph has no cycle;
 //   - nothing under engine/ includes a plugin, and no plugin's name is a games/ directory.
 //
@@ -103,9 +104,12 @@ for (const [name, decl] of plugins) {
       const isLab = f.startsWith(`plugins/${name}/labs/`);
       const isAsset = f.startsWith(`plugins/${name}/assets/`);
       const isApp = f.startsWith(`plugins/${name}/app/`);
+      // Its cli/ is built into ge_<name>_cli, which links the game CLI's module (engine/gamecli).
+      const isCli = f.startsWith(`plugins/${name}/cli/`);
       const may = isApp || isLab || isAsset ? appAllowed : allowed;
       for (const root of includes(f)) {
-        if (!may.has(root) && !(isLab && root === "lab") && !(isAsset && root === "assets")) {
+        if (!may.has(root) && !(isLab && root === "lab") && !(isAsset && root === "assets") &&
+            !(isCli && root === "gamecli")) {
           err(`${f} includes "${root}/...", which plugins/${name} does not declare. Add it to ENGINE, ` +
             `PLUGINS or (for app/) APP in plugins/${name}/CMakeLists.txt if the dependency is right; a plugin never ` +
             `includes a game (skill: plugins).`);

@@ -86,7 +86,7 @@ TEST(classic_status_reply_refuses_other_datagrams) {
   CHECK(!se::classic_read_status(ping.data(), ping.size(), info));
   const std::vector<uint8_t> print = bytes("\xff\xff\xff\xffnno info here\n");
   CHECK(!se::classic_read_status(print.data(), print.size(), info));
-  const std::vector<uint8_t> game = bytes("\x01\x00\x00\x00\x02\x00");
+  const std::vector<uint8_t> game = bytes(std::string("\x01\x00\x00\x00\x02\x00", 6));
   CHECK(!se::classic_read_status(game.data(), game.size(), info));
 }
 

@@ -160,3 +160,16 @@ if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
                              PRIVATE SE_MODELS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/content/models/view"
                                      SE_CONTENT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/content")
 endif()
+
+# Its player CLI (cli/): the engine's game CLI (engine/gamecli, docs/gamecli.md) over the game's
+# Spec, classic enhance's group and the game's own rows, as a library the tests link and the
+# `shooters_edge_cli` executable at the build's root beside the window and the dedicated server
+# (skills: agent-interface, shooter).
+if(TARGET ge_gamecli)
+  add_library(shooters_edge_gamecli STATIC cli/spec.cpp)
+  target_link_libraries(shooters_edge_gamecli PUBLIC ge_gamecli ge_classicenhance_cli
+                                                     shooters_edge_classic)
+  set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_gamecli)
+  ge_add_game_cli(shooters_edge_cli OUTPUT_NAME shooters_edge_cli SOURCES cli/main.cpp
+                  LINK shooters_edge_gamecli)
+endif()

@@ -56,6 +56,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/grass.md`](docs/grass.md) | Grass (M34): the research, kinds and recipes, covers on a heightfield or a mesh's floors, the blade scatter, the sway in the wind, the grass drawn, and the rows |
 | [`docs/mods.md`](docs/mods.md) | The engine's own mods (M52): the C ABI each way and how it grows, determinism (the state block, the game's stream, the libm), the sandbox, the loader, the platforms and the store form, the package, `ge mod` |
 | [`docs/servers.md`](docs/servers.md) | Servers for every multiplayer game (M53): the one core a game plugs into, listen and dedicated, `server.cfg` in layers, meta-cvars, the lobby and the match's phases, the feature seam for admin tools, recording and match mods |
+| [`docs/gamecli.md`](docs/gamecli.md) | A player's game CLI (M55): `<game>_cli` for players' agents, its layers (engine, plugin, game), the answer, settings and the catalog, servers, hosting and joining, places, the lab |
 
 **The working area.** `porting/` holds everything that only matters while modules are
 being carried over from their reference sources: the porting guide (`porting/README.md`),
@@ -297,6 +298,7 @@ characters.
 | `engine/save/` | Saves (`ge::save`, `docs/saves.md`): the save file (header, meta, tagged versioned chunks, directory, XXH64), the state described once for its writer and reader | `save` |
 | `engine/capture/` | Video with sound (`ge::capture`, in `ge_play`; `docs/replays.md`): the Matroska and fragmented MP4 muxers and readers, I420, the encoders, the export's A/V clock, the live capture, the sync fixture | `replay` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |
+| `engine/gamecli/` | A player's game CLI (`ge::gamecli`, `docs/gamecli.md`): the command table and answer, settings through the catalog, servers, players, rcon, hosting, joining, logs; `ge_add_game_cli` | `agent-interface` |
 | `engine/server/` | The server core (`ge::server`, `docs/servers.md`): `ServerGame` a game plugs in, the frame, the node, session and hosting round it, the dedicated process (`ge_add_server`), the sample game and trial | `net` |
 | `engine/texgen/` | Procedural textures (`ge::texgen`, `docs/textures.md`): the `.tex` recipe, tileable noise, the layer kinds, the bake to maps and its disk cache; `library/` the specimens | `textures` |
 | `engine/snow/` | Snow over any ground (`ge::snow`, `docs/snow.md`): the layer and its cover, sparse fixed-point tiles, `sample`, `press` and imprint records, reference contacts, the snapshot | `snow` |
@@ -348,6 +350,7 @@ characters.
 | `games/shooters_edge/profiles/` | Shooter's Edge's game half of each classic game as header-only data: programs, fallback map, items, words, sounds; beside the content row (`plugins/classicenhance`) | `shooter` |
 | `games/shooters_edge/menu/` | Shooter's Edge's main menu (`shooters_edge_menu`, no GPU): the classic pages on ESCAPE, rows wired to cvars, the rest dimmed, the pack's own pictures, classic enhance under OPTIONS | `ui` |
 | `games/shooters_edge/labs/` | Shooter's Edge's labs | `labs`, `ui` |
+| `games/shooters_edge/cli/` | Shooter's Edge's player CLI (`shooters_edge_cli`): its Spec over engine/gamecli (places, the classic protocol, launch words, settings), classic enhance's group, its demos | `agent-interface`, `shooter` |
 | `games/shooters_edge/server/` | Shooter's Edge's server: the host, its slots and input log, the dedicated binary; the mod server (QC builtins and extensions, hooks, the test and baseline mods, a progs from a path) | `shooter`, `progs` |
 | `games/shooters_edge/qc/` | Shooter's Edge's own QC mods modders start from: `common/` shared, `arena/` the deathmatch, `campaign/` the single-player game (built by `ge qc build`) | `progs` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (the harness), `golden.hpp`, `golden/` | `testing` |
