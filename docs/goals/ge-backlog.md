@@ -19,6 +19,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge golden write` listing every golden file it rewrote, and the engine's own tree pointed at it (`build/<preset>/ge golden write <test>`) rather than setting `GE_GOLDEN_WRITE` by hand
 - `ge digest-diff --base=<ref> --versions --regions` (which generator versions and regions a change moved)
 - `ge digest --rebase=<ref>` (after a merge, the ref's digest files taken for every lab this change does not reach, only the reached labs rerun and written: a conflict in tests/digests/ settled in one step; multiplayer thread)
+- `ge digest --stale-on-main` (the labs whose committed digest is already off on origin/main, built and checked at that ref, so a digest a change did not move is told apart from one main left stale before the change began; easy-jump-for-chosen-players thread)
 
 ## Before and after across refs
 
