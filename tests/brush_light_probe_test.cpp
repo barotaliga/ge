@@ -3,7 +3,8 @@
 // with no lightmaps gives an empty probe.
 //
 // ge:summary Test: the light under a point read off the fixture's lightmaps, and nothing outside
-// ge:keywords test brush light-probe light_below make_light_probe lightmap floor fixture lightmap_at
+// ge:keywords test brush light-probe light_below make_light_probe lightmap floor fixture
+// ge:keywords lightmap_at
 // ge:skill brush testing
 #include <string>
 #include <vector>

@@ -16,7 +16,7 @@
 // Each shot draws its noise and its sparks off its own seed from a counter, so a replay throws the
 // same fire.
 //
-// ge:summary Shooter's Edge's muzzle fire: the weapons' looks, the shots' flames and sparks, no smoke
+// ge:summary Shooter's Edge's muzzle fire: the weapons' looks, each shot's flame and sparks
 // ge:keywords shooters-edge muzzle muzzle-fire muzzle-flash flame no-smoke sparks shot
 // ge:keywords fire_looks step_muzzle muzzle-shots first-person explosions-pass
 // ge:skill render shooter
