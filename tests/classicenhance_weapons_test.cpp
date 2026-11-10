@@ -173,6 +173,7 @@ TEST(classic_fire_names_each_weapons_muzzle_look) {
   CHECK(ce::classic_fire_of("v_rock2")->muzzle == "muzzle.rocket");
   CHECK(ce::classic_fire_of("progs/v_axe.mdl")->muzzle.empty());  // a blade throws no flame
   CHECK(ce::classic_fire_of("progs/g_shot.mdl") == nullptr);
+  CHECK(ce::classic_fire_of("v_light")->arc && !ce::classic_fire_of("v_shot2")->arc);
   for (const ce::ClassicFire& f : ce::classic_fires()) CHECK(f.refire_s > 0);
 }
 
@@ -211,4 +212,38 @@ TEST(a_shot_leaves_from_the_barrel_its_frame_names) {
   CHECK(ce::classic_shot_barrel(m, 3) == 1);
   const vm::HeldModel none;
   CHECK(ce::classic_shot_barrel(none, 1) == -1);
+}
+
+TEST(find_arc_takes_the_prongs_either_side_of_a_wide_flash) {
+  // Two prongs (4 vertices each) at x = -0.17 and +0.17, and a flash of one triangle spanning
+  // them in front of the eye on frame 1, behind it on frame 0 (the file hides it between shots).
+  vm::HeldModel h;
+  const float prongs[8][3] = {{-0.17f, 0, 0.8f},    {-0.18f, 0, 0.8f}, {-0.17f, 0.01f, 0.8f},
+                              {-0.17f, 0, 0.79f},   {0.17f, 0, 0.8f},  {0.18f, 0, 0.8f},
+                              {0.17f, 0.01f, 0.8f}, {0.17f, 0, 0.79f}};
+  const float flash[2][3][3] = {{{-0.16f, 0, -0.5f}, {0.16f, 0, -0.5f}, {0, 0.02f, -0.5f}},
+                                {{-0.16f, 0, 0.82f}, {0.16f, 0, 0.82f}, {0, 0.02f, 0.82f}}};
+  for (int f = 0; f < 2; ++f) {
+    vm::HeldFrame fr;
+    for (const auto& p : prongs) fr.positions.insert(fr.positions.end(), p, p + 3);
+    for (const auto& p : flash[f]) fr.positions.insert(fr.positions.end(), p, p + 3);
+    fr.normals.assign(fr.positions.size(), 0);
+    h.frames.push_back(fr);
+  }
+  h.indices = {0, 1, 2, 4, 5, 6, 8, 9, 10};
+  h.flame = {0, 0, 1};
+  CHECK(ce::find_arc(h));
+  float a[3], b[3];
+  CHECK(vm::arc_at(h, 1, 1, 0, a, b));
+  CHECK(a[0] < -0.16f && b[0] > 0.16f);  // one end on each prong
+  for (uint32_t v : h.arc_ends[0]) CHECK(v < 4);
+  for (uint32_t v : h.arc_ends[1]) CHECK(v >= 4 && v < 8);
+  // A flash narrower than kArcSpanM is a muzzle's, not an arc.
+  vm::HeldModel narrow = h;
+  narrow.arc_ends[0].clear();
+  narrow.arc_ends[1].clear();
+  for (vm::HeldFrame& fr : narrow.frames)
+    for (size_t v = 8; v < 11; ++v) fr.positions[v * 3] *= 0.2f;
+  CHECK(!ce::find_arc(narrow));
+  CHECK(!vm::arc_at(narrow, 1, 1, 0, a, b));
 }

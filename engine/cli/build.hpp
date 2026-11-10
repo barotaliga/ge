@@ -15,6 +15,7 @@
 // ge:summary ge build, test, check and lab: CMake, CTest and the labs run, their output as findings
 // ge:keywords cli ge build test check lab cmake ctest clang-format compiler-errors findings log
 // ge:keywords run_build run_test run_check run_lab compiler_findings test_findings preset
+// ge:keywords lab-before before-picture revision ref scratch-worktree true-before
 // ge:skill agent-interface
 // ge:test tests/cli_build_test.cpp
 #pragma once

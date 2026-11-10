@@ -39,7 +39,8 @@
 // ge:keywords kept-texture baked-texture emissive-glow held-clip held_with_clips animation
 // ge:keywords find_held_clip held_clip_frames fire-animation bounds_frame
 // ge:keywords takes clip-takes count_held_clips alternate-swings two-swings
-// ge:keywords barrels multi-barrel alternating-barrels frame_barrel barrel_of_frame
+// ge:keywords barrels multi-barrel alternating-barrels frame_barrel barrel_of_frame arc_ends arc_at
+// ge:keywords prongs lightning-gun-arc
 // ge:keywords hide-hands mark_hands hidden_triangles hands-off arms
 // ge:skill render assets
 // ge:test tests/viewmodel_held_test.cpp
@@ -92,6 +93,10 @@ struct HeldModel {
   // the barrel each frame fires from, one a frame (-1: none; empty: barrel 0 on every frame).
   std::vector<std::vector<uint32_t>> barrels;
   std::vector<int16_t> frame_barrel;
+  // A gun that holds an ARC across its muzzle (a lightning gun's two prongs): each end's tip
+  // vertices, riding every frame as the prongs do (both empty: none). A game draws its own arc
+  // from one end to the other while the gun fires, in place of the file's flame.
+  std::vector<uint32_t> arc_ends[2];
   std::vector<HeldClip> clips;  // the model's animations as runs of `frames` (empty: none)
   uint32_t vertex_count() const {
     return frames.empty() ? 0 : static_cast<uint32_t>(frames[0].positions.size() / 3);
@@ -135,6 +140,9 @@ void find_muzzle(HeldModel& model, double share = 0.04);
 // The barrel's tip on frames `a` and `b` blended by `t`, held frame, m: barrel `barrel` of
 // `barrels` (-1, or a model with none: the one muzzle).
 void muzzle_at(const HeldModel& model, int a, int b, double t, float out[3], int barrel = -1);
+// The two ends of the model's arc (`arc_ends`) between frames a and b at t, held frame, m; false
+// for a model with no arc.
+bool arc_at(const HeldModel& model, int a, int b, double t, float end0[3], float end1[3]);
 // The barrel frame `frame` fires from (`frame_barrel`), or -1 (the one muzzle) when it names none.
 int barrel_of_frame(const HeldModel& model, int frame);
 

@@ -152,13 +152,12 @@ int barrel_of_frame(const HeldModel& model, int frame) {
   return b >= 0 && static_cast<size_t>(b) < model.barrels.size() ? b : -1;
 }
 
-void muzzle_at(const HeldModel& model, int a, int b, double t, float out[3], int barrel) {
+namespace {
+
+// The centre of `tip`'s vertices between frames a and b at t (the origin for none).
+void tip_at(const HeldModel& model, const std::vector<uint32_t>& tip, int a, int b, double t,
+            float out[3]) {
   out[0] = out[1] = out[2] = 0;
-  const std::vector<uint32_t>& tip = barrel >= 0 &&
-                                             static_cast<size_t>(barrel) < model.barrels.size() &&
-                                             !model.barrels[size_t(barrel)].empty()
-                                         ? model.barrels[size_t(barrel)]
-                                         : model.muzzle_vertices;
   if (model.frames.empty() || tip.empty()) return;
   const int last = static_cast<int>(model.frames.size()) - 1;
   a = a < 0 ? 0 : a > last ? last : a;
@@ -175,6 +174,21 @@ void muzzle_at(const HeldModel& model, int a, int b, double t, float out[3], int
   }
   const auto n = static_cast<double>(tip.size());
   for (size_t k = 0; k < 3; ++k) out[k] = static_cast<float>(sum[k] / n);
+}
+
+}  // namespace
+
+void muzzle_at(const HeldModel& model, int a, int b, double t, float out[3], int barrel) {
+  const bool own = barrel >= 0 && static_cast<size_t>(barrel) < model.barrels.size() &&
+                   !model.barrels[size_t(barrel)].empty();
+  tip_at(model, own ? model.barrels[size_t(barrel)] : model.muzzle_vertices, a, b, t, out);
+}
+
+bool arc_at(const HeldModel& model, int a, int b, double t, float end0[3], float end1[3]) {
+  if (model.arc_ends[0].empty() || model.arc_ends[1].empty()) return false;
+  tip_at(model, model.arc_ends[0], a, b, t, end0);
+  tip_at(model, model.arc_ends[1], a, b, t, end1);
+  return true;
 }
 
 namespace {

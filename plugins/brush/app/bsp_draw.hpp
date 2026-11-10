@@ -220,6 +220,9 @@ struct DynamicLight {
   double pos[3] = {0, 0, 0};     // engine metres
   double radius = 5;             // m: where its light ends
   double colour[3] = {1, 1, 1};  // its light at its middle, the lightmaps' units (1: as baked 'm')
+  // Its share against the frame's dynamic_strength: a light brighter than the rest of the effects'
+  // (a lightning bolt beside a muzzle's flash) stays that much brighter whatever the player sets.
+  double boost = 1;
 };
 
 struct GpuJob {

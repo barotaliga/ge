@@ -94,13 +94,19 @@ struct FragmentOut {
   @location(1) motion: vec4f,  // b only: the reactive mask
 }
 
-// A glowing particle's own light at `kelvin`, in the frame's units (pre-exposed sun units).
+// A glowing particle's own light at `kelvin`, in the frame's units (pre-exposed sun units), never
+// brighter on the screen than kGlowKeys times the white the eye is adapted to: by day a spark is
+// as hot as it is, but in a dark room at night the eye, opened to the dark, would see every spark
+// swell into a blinding ball through the bloom.
+const kGlowKeys = 4.0;
 fn glow_light(kelvin: f32) -> vec3f {
   let x = blackbody_coord(kelvin);
   let i = u32(x);
   let lo = pp.table[i];
   let hi = pp.table[min(i + 1u, kBlackbodyRows - 1u)];
-  return blackbody_mix(lo, hi, x - f32(i), 1.0) * pp.glow.x * frame.world.y / kSunLux;
+  let c = blackbody_mix(lo, hi, x - f32(i), 1.0) * pp.glow.x * frame.world.y / kSunLux;
+  let top = kGlowKeys / max(exposure(), 1e-20);
+  return c * min(1.0, top / max(dot(c, kLuma), 1e-20));
 }
 
 // Henyey–Greenstein, normalised to 1 over the sphere times 4 pi: light scattered by cos `c`

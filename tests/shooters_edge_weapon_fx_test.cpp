@@ -121,27 +121,44 @@ TEST(a_hit_throws_its_surfaces_burst_in_the_walls_colour_and_nothing_off_the_sky
   CHECK(sparks > 0);  // a nail off metal strikes sparks
 }
 
-TEST(the_bolts_sparks_leave_the_face_and_its_light_is_capped) {
+TEST(the_bolts_sparks_leave_the_face) {
   const double at[3] = {0, 0, 0}, n[3] = {1, 0, 0};
   fx::Particles sparks;
   fx::bolt_hit(at, n, 2, &sparks);
   CHECK(!sparks.empty());
   for (const auto& p : sparks) CHECK(p.v[0] >= 0 && p.kelvin > 5000);
-  gr::LocalLight bright;
-  bright.candela = 1e6f;
-  const fx::Light l = fx::dynamic_light(bright);
-  for (double c : l.colour) CHECK(c <= 1.2);
 }
 
-TEST(every_bolt_style_is_numbered_and_its_light_is_a_glow) {
-  // 1 forked, 2 arc, 3 bolt (the default), 4 braid; out of range the default's.
-  CHECK(&fx::bolt_look() == &fx::bolt_look(3));
-  CHECK(&fx::bolt_look(0) == &fx::bolt_look(3) && &fx::bolt_look(9) == &fx::bolt_look(3));
-  gr::BeamLook bolt, arc;
-  CHECK(gr::beam_look("bolt", bolt) && gr::beam_look("arc", arc));
-  CHECK(fx::bolt_look(3).wander == bolt.wander && fx::bolt_look(2).wander == arc.wander);
-  CHECK(fx::bolt_look(4).filaments > 1);  // the braid's rope
-  for (int s = 1; s <= 4; ++s) CHECK(fx::bolt_look(s).light_cd < bolt.light_cd);
+TEST(there_is_one_bolt_as_thin_as_the_classics_and_keyed_to_the_eye) {
+  const gr::BeamLook& l = fx::bolt_look();
+  CHECK(&l == &fx::bolt_look());
+  // The classic's bolt is a zigzag some 30 cm across round a thin line: a core under 2 cm, a
+  // sheath under 10 cm, kinked every few centimetres.
+  CHECK(l.core_m <= 0.02f && l.glow_m <= 0.1f && l.step_m <= 0.15f);
+  CHECK(l.filaments == 1);
+  // As bright on the screen at night as by day.
+  CHECK(l.core_keys > 1 && l.glow_keys > 0 && l.glow_keys < 1);
+}
+
+TEST(the_bolt_is_the_brightest_light_in_the_room) {
+  gr::BeamShot shot;
+  shot.to[2] = 6;
+  shot.born_s = 0;
+  fx::Light ll[gr::kBeamLights];
+  const int n = fx::bolt_lights(shot, 0.2, ll);
+  CHECK(n >= 3);  // the gun, along it, the hit
+  double hit = 0;
+  for (int i = 0; i < n; ++i) {
+    CHECK(ll[i].radius == fx::kBoltReachM);
+    CHECK(ll[i].boost == fx::kBoltBoost);
+    for (double c : ll[i].colour) CHECK(c >= 0 && c <= 1.5);
+  }
+  for (double c : ll[n - 1].colour) hit = std::max(hit, c);
+  CHECK(hit >= 0.5);  // where it lands, near the classic's full strength whatever the flicker
+  // At r_fx_lights' default it lights as the classic's bolt does; let go, it is dark.
+  fx::Light none[gr::kBeamLights];
+  shot.end_s = 0.1;
+  CHECK(fx::bolt_lights(shot, 1.0, none) == 0);
 }
 
 TEST(a_chip_hops_on_its_floor_and_comes_to_rest) {

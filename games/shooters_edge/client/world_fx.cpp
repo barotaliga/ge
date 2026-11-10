@@ -45,6 +45,7 @@ constexpr double kSpriteFps = 10;
 constexpr double kBoltSegment = 30;
 // The placed effects' entity numbers (below every static's): the sprites', then the bolts'.
 constexpr int kSpriteEntities = -(1 << 20), kBoltEntities = -(1 << 21);
+constexpr int kArcEntity = -(1 << 22);  // the arc across the player's gun's prongs
 // The hot air a nail's flight and a rocket's motor leave (render/haze.hpp's presets).
 const ge::render::HazeLook* const kNailHaze = ge::render::haze_look("haze.nail");
 const ge::render::HazeLook* const kRocketHaze = ge::render::haze_look("haze.rocket");
@@ -395,7 +396,6 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.arrival = picture.ce.warps ? std::clamp(picture.arrival, 0.0, 1.0) : 0;
   s.flares = picture.ce.flares;
   s.bubbles = picture.ce.bubbles;
-  s.bolt = &fx::bolt_look(static_cast<int>(picture.beam_style));
   return s;
 }
 
@@ -1199,7 +1199,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   for (HeldBeam& b : s.beams)
     if (b.shot.end_s < 0 && t - b.seen > kBeamHoldS) b.shot.end_s = b.seen + kBeamHoldS;
   std::erase_if(s.beams, [&](const HeldBeam& b) {
-    const double release = s.on.beams && b.look != nullptr ? b.look->release_s : 0;
+    const double release = s.on.beams ? fx::bolt_look().release_s : 0;
     return b.shot.end_s >= 0 && t > b.shot.end_s + release;
   });
   ge::core::Rng roll = ge::core::make_rng(s.seed++);  // the classic bolt's segments' roll
@@ -1208,15 +1208,15 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     if (s.on.beams) {
       // Its burns where it lands, a few to fill a sweep's gap.
       ge::render::BeamBurn burn;
-      for (int i = 0; s.on.decals && b.look != nullptr && i < 4 &&
-                      ge::render::beam_burns(*b.look, b.shot, t, b.trail, burn);
+      for (int i = 0; s.on.decals && i < 4 &&
+                      ge::render::beam_burns(fx::bolt_look(), b.shot, t, b.trail, burn);
            ++i)
         mark(s, ge::detail::DecalKind::scorch, burn.at, burn.normal, burn.size_m, burn.spin_rad,
              burn.variant, burn.born_s);
       out.beams.push_back(b);
-      ge::render::LocalLight ll[ge::render::kBeamLights];
-      const int n = ge::render::beam_lights(b.look ? *b.look : fx::bolt_look(), b.shot, t, ll);
-      for (int i = 0; i < n; ++i) out.lights.push_back(fx::dynamic_light(ll[i]));
+      fx::Light ll[ge::render::kBeamLights];
+      const int n = fx::bolt_lights(b.shot, t, ll);
+      out.lights.insert(out.lights.end(), ll, ll + n);
       continue;
     }
     // The classic bolt: its model every kBoltSegment units from the root to the end, each turned
@@ -1346,10 +1346,28 @@ void fire_held(HeldFire& f, const view::HandFrame& hand, bool on, double now_s, 
   }
   fx::step_muzzle(f.shots, look, hand.fired && hand.drawn, pose, now_s, &out.births, &out.puffs,
                   &out.flames);
-  if (hand.drawn)
-    for (HeldBeam& b : out.beams)
-      if (b.entity == 1)
-        for (int k = 0; k < 3; ++k) b.shot.from[k] = hand.muzzle_at[k];
+  if (!hand.drawn) return;
+  for (HeldBeam& b : out.beams)
+    if (b.entity == 1)
+      for (int k = 0; k < 3; ++k) b.shot.from[k] = hand.muzzle_at[k];
+  // While the player's own bolt is held, an arc crackles across the gun's prongs too, as the
+  // classic gun's own flash does: the same bolt from one prong to the other, struck on its own
+  // seed; drawn only (the bolt's lights already light the gun).
+  if (!hand.arc) return;
+  for (size_t i = 0, n = out.beams.size(); i < n; ++i) {
+    if (out.beams[i].entity != 1) continue;
+    HeldBeam across = out.beams[i];
+    across.entity = kArcEntity;
+    across.across = true;
+    across.shot.seed ^= 0x5bd1e995u;
+    for (int k = 0; k < 3; ++k) {
+      across.shot.from[k] = hand.arc_from[k];
+      across.shot.to[k] = hand.arc_to[k];
+      across.shot.normal[k] = -hand.muzzle_dir[k];
+    }
+    out.beams.push_back(across);
+    return;
+  }
 }
 
 }  // namespace shooters_edge::client
