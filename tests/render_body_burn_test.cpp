@@ -6,6 +6,7 @@
 // ge:summary Tests for a body's scorch: the lags in and out, the births, the skin and the stir
 // ge:keywords test render scorch burn charred acid fumes flames smoke births wear-off
 // ge:skill render testing
+#include <cmath>
 #include <cstdio>
 #include <vector>
 
@@ -19,7 +20,7 @@ namespace r = ge::render;
 constexpr double kDt = 1.0 / 60;
 
 void run(r::BodyBurn& s, double hot, double acid, double seconds) {
-  const int steps = static_cast<int>(seconds / kDt + 0.5);
+  const int steps = static_cast<int>(std::lround(seconds / kDt));
   for (int i = 0; i < steps; ++i) r::step_body_burn(s, r::body_burn_look(), hot, acid, kDt);
 }
 
@@ -38,7 +39,7 @@ Counts throw_for(r::BodyBurn& s, double hot, double acid, double seconds) {
   Counts c;
   std::vector<r::Particle> out;
   const r::BurnShape b = body();
-  const int steps = static_cast<int>(seconds / kDt + 0.5);
+  const int steps = static_cast<int>(std::lround(seconds / kDt));
   for (int i = 0; i < steps; ++i) {
     r::step_body_burn(s, r::body_burn_look(), hot, acid, kDt);
     out.clear();
