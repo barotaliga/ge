@@ -249,7 +249,8 @@ bool find_walk(const br::Map& m, int c, float a[3], float b[3]) {
             // Liquid a body's width and more either side, so the furrow lies in open liquid.
             const float sx = -dy * 40, sy = dx * 40;
             if (contents(m, px, py, z - 22) != c || contents(m, px, py, z - 2) != c ||
-                contents(m, px, py, z + 24) != kEmpty || contents(m, px + sx, py + sy, z - 2) != c ||
+                contents(m, px, py, z + 24) != kEmpty ||
+                contents(m, px + sx, py + sy, z - 2) != c ||
                 contents(m, px - sx, py - sy, z - 2) != c)
               break;
             len = s;
@@ -282,8 +283,8 @@ struct Eye {
   float at[3] = {0, 0, 0};
   float yaw = 0, pitch = 0;
 };
-bool find_eye(const br::Map& m, const float target[3], const float a[3], const float b[3],
-              int near, int far, float lift, Eye& out) {
+bool find_eye(const br::Map& m, const float target[3], const float a[3], const float b[3], int near,
+              int far, float lift, Eye& out) {
   const double along = libm::atan2(b[1] - a[1], b[0] - a[0]);
   // Beside the walk first, then round it; the nearer the better.
   for (const bool both_ends : {true, false})
@@ -293,8 +294,7 @@ bool find_eye(const br::Map& m, const float target[3], const float a[3], const f
         const double ang = along + off * kPi;
         for (const float rise : {lift, lift * 0.6f, lift * 1.5f}) {
           const float e[3] = {target[0] + static_cast<float>(d * libm::cos(ang)),
-                              target[1] + static_cast<float>(d * libm::sin(ang)),
-                              target[2] + rise};
+                              target[1] + static_cast<float>(d * libm::sin(ang)), target[2] + rise};
           if (contents(m, e[0], e[1], e[2]) == kSolid) continue;
           if (!clear(m, e, target)) continue;
           if (both_ends && (!clear(m, e, a) || !clear(m, e, b))) continue;

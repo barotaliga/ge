@@ -43,7 +43,7 @@
 //   at once and skinning over from its edge, the plates round it cracked and glowing, a crest
 //   running out in the first second; carried by the flow.
 // - WADED THROUGH (render/liquid_wade.hpp, `LiquidLook::wade`): a furrow, a bow and rings, as
-//   thick as the look's viscosity (water 1, slime 2, lava 4); lava's crust torn, slime's scum parted.
+//   thick as the look's viscosity (water 1, slime 2, lava 4); lava's crust torn, scum parted.
 // - SEEN FROM BELOW (`Liquids::eye_under`, docs/liquids.md § From below): a slime a fog of its
 //   colour with Snell's window overhead, a lava its melt all round; `under_reach` a least view
 //   (a lava with one a thick light-red glowing goo the eye sees a few metres into).

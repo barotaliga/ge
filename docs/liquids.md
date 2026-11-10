@@ -308,7 +308,7 @@ water's; a surface that thick would not move within a game's seconds). Water is 
 | Their life | 1.6 s | 1.35 s | 1.1 s | v^−¼ |
 | The furrow closing | 0.45 s | 0.9 s | 1.8 s | v |
 | The crust healing | | | 6 s | v |
-| The furrow's depth | 6 cm | 7 cm | 8.5 cm | v^¼ |
+| The furrow's depth | 10 cm | 12 cm | 14 cm | v^¼ |
 
 So a thicker liquid's rings are longer, slower and reach less far (1.1 m on water, 0.4 m on
 lava), and its furrow is deeper and stays open longer. The surface's vertices take the furrow and
