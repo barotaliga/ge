@@ -159,6 +159,12 @@ work: .bots/work       # traces, A/B runs, samples: anything a run writes
 A path in it is absolute or relative to the checkout. A machine without the full game plays the
 shareware pack's maps (e1m2 is one); dm2 to dm6 and povdmm4 need the player's own full game.
 
+**To watch a match**, `make bot-video ARGS="--map=e1m2 --seed=2"` (`tools/bot-match-video.sh`):
+a 4on4 played by this build, recorded, and rendered with the camera on the hottest player as
+`~/Downloads/bots_<commit>_<map>_s<seed>[_<features>].mkv` (`--out=` elsewhere; `--features-red=`
+against `--features-blue=` for a head to head). It needs a GPU adapter to render, so it is the
+maintainer's to run on request, never a checkpoint's step.
+
 **A checkpoint** is `make precheck` green (a golden or digest a change moves on purpose
 rewritten, and the commit says why), a commit, a push, and the plan's entry updated. No video and
 no live server: every match runs on our own server, in process (`se-team`), headless.
