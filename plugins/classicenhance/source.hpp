@@ -43,7 +43,8 @@
 // ge:summary Finds the classic packs in a zip, LHA archive, file or folder, verified by SHA-256
 // ge:keywords source pack pak0 pak1 shareware registered release zip lha folder installed
 // ge:keywords verify sha256 known unchanged licence refuse identity merge layered later-pack
-// ge:keywords pk3 content-zip repack single-pack known-set remaster
+// ge:keywords pk3 content-zip repack single-pack known-set remaster lay-out setup basedir
+// ge:keywords game-folder download url
 // ge:skill classicenhance
 // ge:test tests/classicenhance_source_test.cpp
 #pragma once
@@ -51,6 +52,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "classicenhance/known_sets.hpp"
@@ -131,5 +133,16 @@ bool add_later_packs(const std::string& dir, Source* out, std::string* error,
 // whose palette the pack holds; the first row when none does) and `out->known` when it is one of
 // `packs` (nullptr: the player's own copy, unverified).
 bool verify_pack(Source* out, std::string* error, std::span<const KnownFile> packs = kKnownPacks);
+
+// The game folder a client's or a lab's --game takes, laid out from `src`: its packs written
+// unchanged into `<basedir>/<the profile's base folder>/` under the profile's names (the first
+// pack, or the content zip that stood in for it, then the later packs as the source spelled them),
+// each through a `.part` file so a reader never sees half of one. The paths written in `*written`;
+// false with what failed and what to do in `*error`.
+bool lay_out_game(const Source& src, const std::string& basedir, std::vector<std::string>* written,
+                  std::string* error);
+// The file name a download from `url` is kept under (its last path segment, the query dropped);
+// "" when it names no file, or the name is one a shell or a path would read as more than a name.
+std::string url_file_name(std::string_view url);
 
 }  // namespace ge::classicenhance
