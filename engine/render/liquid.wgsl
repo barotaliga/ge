@@ -511,6 +511,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     // The waders' furrows, bows and rings: their slope from the height's change across the pixel's
     // quad (as lava's), never steeper than a footprint's relief allows.
     let wade = wade_at(in.xz, t, foot, true);
+    var wade_slope = vec2f(0.0);
     let ax = dpdx(in.xz);
     let ay = dpdy(in.xz);
     let hx = dpdx(wade.x);
@@ -518,7 +519,8 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let det = ax.x * ay.y - ax.y * ay.x;
     if (abs(det) > 1e-12) {
       let g = vec2f(hx * ay.y - hy * ax.y, hy * ax.x - hx * ay.x) / det;
-      slope += g * min(1.0, 2.0 / max(length(g), 1e-6));
+      wade_slope = g * min(1.0, 2.0 / max(length(g), 1e-6));
+      slope += wade_slope;
     }
     // What floats is pushed off the furrow.
     let parted = 1.0 - 0.9 * wade.z;
@@ -540,6 +542,13 @@ fn fs_main(in: VertexOut) -> FragmentOut {
                 room * PI;
     let body_colour = own * (1.0 - through) * light / PI;
     var into = seen * through + body_colour;
+    // A wader's furrow and its lips shaded as a room's light from overhead sees them (the turbid
+    // stuff scatters what the tilt sends it), the trough darker where the layer is churned.
+    if (body.wade0.x >= 0.5) {
+      let up = normalize(vec3f(0.35, 1.0, 0.25));
+      let tilt = dot(normalize(vec3f(-wade_slope.x, 1.0, -wade_slope.y)), up) / dot(n0, up);
+      into *= clamp(1.0 + 4.0 * (tilt - 1.0), 0.35, 1.8) * (1.0 - 0.45 * wade.z);
+    }
     // A bubble's skin is thinner than the pool, so its dome is a little lighter, and darker where
     // it meets the surface.
     into *= 1.0 + dome * (0.5 - 1.1 * rim);

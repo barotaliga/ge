@@ -221,7 +221,8 @@ int contents(const br::Map& m, float x, float y, float z) {
 }
 
 // THE WALK: the longest straight line through the map's liquid `c` a body can wade along waist
-// deep (feet 24 units under the surface, the liquid there all along, air 24 units over it), up to
+// deep (feet 24 units under the surface, the liquid there all along and 40 units either side, air
+// 24 units over it), up to
 // 320 units long, searched round the points of its pools on a 32-unit lattice in eight ways. `a`
 // and `b` its ends (z the surface). False when there is none 96 units long.
 bool find_walk(const br::Map& m, int c, float a[3], float b[3]) {
@@ -245,8 +246,11 @@ bool find_walk(const br::Map& m, int c, float a[3], float b[3]) {
           float len = 0;
           for (float s = 8; s <= 320; s += 8) {
             const float px = x + dx * s, py = y + dy * s;
+            // Liquid a body's width and more either side, so the furrow lies in open liquid.
+            const float sx = -dy * 40, sy = dx * 40;
             if (contents(m, px, py, z - 22) != c || contents(m, px, py, z - 2) != c ||
-                contents(m, px, py, z + 24) != kEmpty)
+                contents(m, px, py, z + 24) != kEmpty || contents(m, px + sx, py + sy, z - 2) != c ||
+                contents(m, px - sx, py - sy, z - 2) != c)
               break;
             len = s;
           }
@@ -278,23 +282,30 @@ struct Eye {
   float at[3] = {0, 0, 0};
   float yaw = 0, pitch = 0;
 };
-bool find_eye(const br::Map& m, const float target[3], const float a[3], const float b[3], int near,
-              int far, float lift, Eye& out) {
+bool find_eye(const br::Map& m, const float target[3], const float a[3], const float b[3],
+              int near, int far, float lift, Eye& out) {
   const double along = libm::atan2(b[1] - a[1], b[0] - a[0]);
-  for (int d = near; d <= far; d += 16)
-    for (const double off : {0.5, -0.5, 0.35, -0.35, 0.65, -0.65, 0.2, -0.2}) {
-      const double ang = along + off * kPi + (off > 0 ? 0 : 0);
-      const float e[3] = {target[0] + static_cast<float>(d * libm::cos(ang)),
-                          target[1] + static_cast<float>(d * libm::sin(ang)), target[2] + lift};
-      if (contents(m, e[0], e[1], e[2]) == kSolid) continue;
-      if (!clear(m, e, target) || !clear(m, e, a) || !clear(m, e, b)) continue;
-      for (int i = 0; i < 3; i++) out.at[i] = e[i];
-      out.yaw = static_cast<float>(libm::atan2(target[1] - e[1], target[0] - e[0]) * 180 / kPi);
-      const float dx = target[0] - e[0], dy = target[1] - e[1];
-      out.pitch = static_cast<float>(libm::atan2(e[2] - target[2], std::sqrt(dx * dx + dy * dy)) *
-                                     180 / kPi);
-      return true;
-    }
+  // Beside the walk first, then round it; the nearer the better.
+  for (const bool both_ends : {true, false})
+    for (int d = near; d <= far; d += 16)
+      for (int k = 0; k < 16; ++k) {
+        const double off = (k % 2 == 0 ? 1 : -1) * (0.5 - 0.0625 * (k / 2));
+        const double ang = along + off * kPi;
+        for (const float rise : {lift, lift * 0.6f, lift * 1.5f}) {
+          const float e[3] = {target[0] + static_cast<float>(d * libm::cos(ang)),
+                              target[1] + static_cast<float>(d * libm::sin(ang)),
+                              target[2] + rise};
+          if (contents(m, e[0], e[1], e[2]) == kSolid) continue;
+          if (!clear(m, e, target)) continue;
+          if (both_ends && (!clear(m, e, a) || !clear(m, e, b))) continue;
+          for (int i = 0; i < 3; i++) out.at[i] = e[i];
+          out.yaw = static_cast<float>(libm::atan2(target[1] - e[1], target[0] - e[0]) * 180 / kPi);
+          const float dx = target[0] - e[0], dy = target[1] - e[1];
+          out.pitch = static_cast<float>(
+              libm::atan2(e[2] - target[2], std::sqrt(dx * dx + dy * dy)) * 180 / kPi);
+          return true;
+        }
+      }
   return false;
 }
 
@@ -343,9 +354,10 @@ void run_pool(gl::Lab& lab, const cl::SearchPath& files, const std::string& map_
              std::string("Pass --") + name + "=<a map with one>. Skill: shooter.");
     return;
   }
-  const float mid[3] = {(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, a[2]};
+  // Looked at three quarters along: the body near its end and the track behind it in view.
+  const float mid[3] = {a[0] + (b[0] - a[0]) * 0.7f, a[1] + (b[1] - a[1]) * 0.7f, a[2]};
   Eye eye;
-  if (!find_eye(map->bsp.map, mid, a, b, 160, 400, 72, eye)) {
+  if (!find_eye(map->bsp.map, mid, a, b, 128, 480, 80, eye)) {
     lab.fail("se-wade: " + map_name + "'s " + name + " pool has no eye in the clear over it",
              "Pass another map. Skill: shooter.");
     return;
@@ -428,7 +440,7 @@ void run_pool(gl::Lab& lab, const cl::SearchPath& files, const std::string& map_
   const int moments = std::max(2, static_cast<int>(lab.arg_num("moments")));
   std::vector<double> at_s;
   for (int k = 0; k < moments; k++)
-    at_s.push_back(total_s * (0.2 + 0.75 * k / std::max(1, moments - 1)));
+    at_s.push_back(walk_s * 0.6 + (total_s - walk_s * 0.6) * k / std::max(1, moments - 1) * 0.9);
   const int frames = static_cast<int>(total_s / kDt);
   // Each run from the same start: the light settled, then the walk, the pictures at the moments.
   auto run = [&](bool on, std::vector<gl::Picture>* shots, std::vector<gl::Picture>* film,
@@ -479,6 +491,21 @@ void run_pool(gl::Lab& lab, const cl::SearchPath& files, const std::string& map_
                               "over a second or two; short rings",
               inputs},
              waded[k], gl::Det::measured);
+  }
+  // What the wading changed: the two pictures' difference, four times over, on black.
+  if (!waded.empty() && !still.empty()) {
+    const size_t k = waded.size() / 2;
+    gl::Picture d = waded[k];
+    for (size_t i = 0; i + 3 < d.rgba.size(); i += 4)
+      for (size_t c = 0; c < 3; ++c)
+        d.rgba[i + c] = static_cast<uint8_t>(
+            std::min(255, 4 * std::abs(int(waded[k].rgba[i + c]) - int(still[k].rgba[i + c]))));
+    lab.shot({std::string(name) + "-difference",
+              std::string(name) + " on " + map_name + ": what the wading changed",
+              "The difference between ce_wade 1 and 0 at the middle moment, four times over: "
+              "every pixel the furrow, the bow and the rings moved.",
+              "a track behind the body, rings round it; black elsewhere", inputs},
+             d, gl::Det::measured);
   }
   lab.attach(std::string(name) + "-film.gif", gl::encode_gif_frames(film, 10), gl::Det::measured);
   for (const auto& [what, p] :
@@ -532,7 +559,7 @@ const gl::LabSpec kSpec{
         {"game", "", "a game folder (<base>/<folder>); empty: the CPU half alone"},
         {"lava", "start", "with --game: a map with a lava pool"},
         {"slime", "e1m1", "with --game: a map with a slime pool"},
-        {"moments", "4", "with --game: pictures through the walk and the stand after"},
+        {"moments", "3", "with --game: pictures through the walk and the stand after"},
         {"width", "800", "with --game: the frame's width, px"},
         {"height", "500", "with --game: the frame's height, px"},
     },
