@@ -192,3 +192,24 @@ TEST(a_teleport_is_not_dragged_across_the_map) {
   cl::lerp_models(l, v, 2 * tic, {.moves = true, .state_s = 2 * tic, .drawn_s = tic * 1.5}, kBoth);
   CHECK(v[0].origin.x == 1000);
 }
+
+// A held weapon's recorded frame (a demo, a joined server): blended from the last over its pace,
+// alone once there, and started over when the clock runs back.
+TEST(a_recorded_frame_is_drawn_between_its_changes) {
+  cl::FrameTrack tr;
+  int from = 0;
+  float f = 0;
+  cl::track_frame(tr, 0, 1.0, from, f);
+  CHECK(from == -1 && f == 1);
+  cl::track_frame(tr, 1, 1.1, from, f);
+  CHECK(from == 0 && near(f, 0));
+  cl::track_frame(tr, 1, 1.15, from, f);
+  CHECK(from == 0 && near(f, 0.5f));
+  cl::track_frame(tr, 2, 1.2, from, f);  // a pace of 0.1 s
+  cl::track_frame(tr, 2, 1.275, from, f);
+  CHECK(from == 1 && near(f, 0.75f));
+  cl::track_frame(tr, 2, 1.4, from, f);
+  CHECK(from == -1 && f == 1);
+  cl::track_frame(tr, 5, 0.5, from, f);  // a seek back: nothing to come from
+  CHECK(from == -1 && f == 1);
+}

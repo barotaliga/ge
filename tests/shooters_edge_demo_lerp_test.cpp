@@ -3,12 +3,14 @@
 // the first gibbed frame, another model, a gap), and a written multiview match played in the
 // window's paced run: the walker drawn on his straight line at the clock's time, evenly spaced
 // between the recording's frames, the teleporter not dragged across the map, the eye riding the
-// tracked player's drawn origin, and `demo_lerp 0` drawing each frame as read.
+// tracked player's drawn origin, `demo_lerp 0` drawing each frame as read, and a single-player
+// recording's walking monster gliding over its strides.
 //
 // ge:summary Tests: a demo drawn between its frames, the snapping rules, the paced run smooth
 // ge:keywords test demo lerp interpolation smooth teleport respawn gib shortest-angle playdemo
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_demo_lerp_test.cpp
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -186,5 +188,49 @@ TEST(demo_lerp_off_draws_each_frame_as_read) {
     CHECK(&d == &t.demo.state);
     if (!d.players.empty() && d.players[0].present)
       CHECK(std::fmod(d.players[0].origin.x, 16.0f) == 0);  // on a frame's place
+  }
+}
+
+// A single-player recording at 72 frames a second of a monster the program moves 8 units every
+// tenth of a second (every 7 or 8 frames, the rest still), drawn at 60 pictures a second: every
+// picture a little further, never standing then jumping; with `strides` off it hops.
+TEST(a_monsters_strides_glide_in_a_single_player_demo) {
+  for (const bool strides : {true, false}) {
+    cl::DemoLerp l;
+    l.strides = strides;
+    cl::DemoState s;
+    s.format = cl::DemoFormat::single;
+    s.max_clients = 1;
+    s.entities.resize(6);
+    s.entities[5] = body({0, 0, 24});
+    const double tic = 1.0 / 72, pic = 1.0 / 60;
+    double next_stride = 0.1, read_s = 0;
+    float last = 0, most = 0;
+    int still = 0;
+    for (int k = 0; k < 120; k++) {
+      const double clock = k * pic;
+      while (read_s + tic <= clock + tic) {  // the reader one frame ahead of the clock
+        read_s += tic;
+        s.time = read_s;
+        s.frames++;
+        if (read_s >= next_stride) {
+          s.entities[5].origin.x += 8;
+          next_stride += 0.1;
+        }
+        cl::lerp_frame(l, s);
+      }
+      const float x = cl::lerp_at(l, s, clock).entities[5].origin.x;
+      if (k > 12) {
+        most = std::max(most, x - last);
+        if (x - last < 1e-4f) still++;
+      }
+      last = x;
+    }
+    if (strides) {
+      CHECK_MSG(most < 3, std::to_string(most).c_str());
+      CHECK_MSG(still < 5, std::to_string(still).c_str());
+    } else {
+      CHECK(still > 30);  // as recorded: standing, then a stride
+    }
   }
 }

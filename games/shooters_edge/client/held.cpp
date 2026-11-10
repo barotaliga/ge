@@ -88,6 +88,23 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
   // one shown goes on being drawn as it sinks).
   in.dead = s.stats[kStatHealth] <= 0;
   view::HandFrame f = view::step_hand(h.hand, in, settings, models, pose, dt);
+  // A classic set's frame as the server sent it: its fire animations played as recorded.
+  const auto w = static_cast<size_t>(f.weapon);
+  if (h.hand.at_eye && w < models.size()) {
+    const auto slot = static_cast<size_t>(s.player);
+    int wf = s.format == DemoFormat::single             ? s.weapon_frame
+             : s.player >= 0 && slot < s.players.size() ? s.players[slot].weapon_frame
+                                                        : 0;
+    if (wf < 0 || static_cast<size_t>(wf) >= models[w].frames.size()) wf = 0;
+    if (h.recorded_weapon != static_cast<int>(w)) h.recorded = FrameTrack{};
+    h.recorded_weapon = static_cast<int>(w);
+    int from = -1;
+    float g = 1;
+    track_frame(h.recorded, wf, t, from, g);
+    f.frame_b = wf;
+    f.frame_a = settings.lerp && from >= 0 ? from : wf;
+    f.frame_t = settings.lerp && from >= 0 ? g : 0;
+  }
   f.drawn = f.drawn && !s.intermission && (s.stats[kStatWeapon] != 0 || (in.dead && h.shown));
   h.shown = f.drawn;
   return f;

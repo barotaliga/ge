@@ -965,6 +965,7 @@ int run_main(int argc, char** argv) {
     if (bench.active || drawn_remote) {
       std::vector<std::string> said;
       const bool paced = bench.paced || drawn_remote;  // every frame shown, nothing timed
+      bench.lerp.strides = picture.lerp_move;          // r_lerpmove: a monster's strides glide
       const cl::TimedemoStep step =
           drawn_remote ? (joined == decltype(joined)::new_level ? cl::TimedemoStep::new_level
                                                                 : cl::TimedemoStep::frame)
@@ -1159,6 +1160,7 @@ int run_main(int argc, char** argv) {
       hud.centre_until = hud.centre.empty() ? 0 : t + 2;
     }
     // The eyes on the player and what the world throws, then the overlay: the HUD, the console.
+    shown.lerp = picture.lerp_move;  // r_lerpmove: the eye between the server's frames too
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
     view.frame = static_cast<uint64_t>(presented);
     fx_state.models = world ? &cl::world_models(*world) : nullptr;

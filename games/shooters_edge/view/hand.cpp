@@ -1,6 +1,6 @@
 // ge:summary Shooter's Edge's first-person hand: the switch, the kick, the flash, the cvars
 // ge:keywords shooters-edge viewmodel step_hand held_row add_view_cvars switch flash
-// ge:keywords pick_take axe-swing takes
+// ge:keywords pick_take axe-swing takes breathe cl_gunidle
 // ge:skill render shooter
 // ge:test tests/shooters_edge_view_test.cpp
 #include "shooters_edge/view/hand.hpp"
@@ -35,6 +35,19 @@ void add_view_cvars(con::Cvars& c, ViewSettings& out) {
           "the held weapon's sway, stride swing and breath, share of the game's (0 still)",
           con::CvarKind::number, 0, 2},
          &out.sway);
+  c.bind({"cl_gunidle", "1", con::kArchive,
+          "the held weapon's breathing at rest, share of the game's (0 none)",
+          con::CvarKind::number, 0, 3},
+         &out.idle);
+  c.bind({"cl_gunidle_rate", "15", con::kArchive,
+          "the held weapon's breaths a minute at rest (a run quickens them)", con::CvarKind::number,
+          4, 40},
+         &out.idle_rate);
+  c.bind({"cl_gunidle_exertion", "1", con::kArchive,
+          "how much a run quickens and deepens the held weapon's breathing after it, share of "
+          "the game's (0 none)",
+          con::CvarKind::number, 0, 3},
+         &out.idle_exertion);
   c.bind({"r_viewmodel_center", "1", con::kArchive,
           "hold the weapon in the middle under the crosshair, the classic arena way (0: to the "
           "right)",
@@ -45,6 +58,22 @@ void add_view_cvars(con::Cvars& c, ViewSettings& out) {
        "draw the hands and arms holding the weapon (0: the weapon alone)", con::CvarKind::boolean},
       &out.hands);
 }
+
+namespace {
+
+// The breath's cvars on a row: its depth, tip and wander by the sway's share and the idle's, its
+// rate the player's, the run's mark on it by the exertion's share.
+void breathe(vm::PlaceRow& r, const vm::PlaceRow& base, const ViewSettings& s) {
+  const double k = s.sway * s.idle;
+  r.breath_m = base.breath_m * k;
+  r.breath_pitch = base.breath_pitch * k;
+  r.breath_wander_m = base.breath_wander_m * k;
+  r.breath_hz = s.idle_rate / 60.0;
+  r.exert_rate = base.exert_rate * s.idle_exertion;
+  r.exert_depth = base.exert_depth * s.idle_exertion;
+}
+
+}  // namespace
 
 vm::PlaceRow held_row(const WeaponLook& look, const ViewSettings& s, const vm::PlaceRow& base) {
   vm::PlaceRow r = base;
@@ -58,7 +87,7 @@ vm::PlaceRow held_row(const WeaponLook& look, const ViewSettings& s, const vm::P
   r.sway_max = base.sway_max * s.sway;
   r.sway_shift = base.sway_shift * s.sway;
   r.bob_side = base.bob_side * s.sway;
-  r.idle_m = base.idle_m * s.sway;
+  breathe(r, base, s);
   return r;
 }
 
@@ -70,7 +99,7 @@ vm::PlaceRow eye_row(const ViewSettings& s) {
   r.sway_max = base.sway_max * s.sway;
   r.sway_shift = base.sway_shift * s.sway;
   r.bob_side = base.bob_side * s.sway;
-  r.idle_m = base.idle_m * s.sway;
+  breathe(r, base, s);
   return r;
 }
 

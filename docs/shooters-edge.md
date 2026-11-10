@@ -450,8 +450,11 @@ states the window saw (the server's 72 or 77 frames a second fall unevenly on 50
 pictures), and a walking monster, which the program moves a stride at a time, drawn over each
 stride's time rather than jumping. A first sight, a new model, a warp, a move over 128 units and a
 gap over a quarter second are not drawn across. The held weapon's frames flow too: a nailgun's shot
-frame from the last, and a played fire clip back to rest over a frame's time. `r_lerpmodels 0` and
-`r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
+frame from the last, and a played fire clip back to rest over a frame's time; in a demo or on a
+joined server a classic set's weapon plays the weapon frame the server sends, blended between its
+changes. Your own eye rides the same clock as the models: drawn one server frame behind, between
+the server's last two states. A played demo's walking monster glides over its strides too
+(`demo_lerp.hpp`'s stride rule). `r_lerpmodels 0` and `r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
 films a monster walking up to the player both ways side by side (a GIF) and measures the judder
 and the pose jumps.
 
