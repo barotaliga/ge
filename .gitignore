@@ -15,5 +15,8 @@ __pycache__/
 games/shooters_edge/qc/*/progs.dat
 games/shooters_edge/qc/*/progs.dat.lines
 
+# A checkout's own bot-work locations (.bots/local.md: the packs, people's recordings, scratch)
+/.bots/
+
 # A person's own skills (their machine's paths, servers and files), never committed
 /.agents/skills/*-private/
