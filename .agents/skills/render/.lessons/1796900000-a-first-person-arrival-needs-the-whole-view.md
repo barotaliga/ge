@@ -2,7 +2,7 @@
 title: A first-person arrival needs the whole view; particles at the eye read as a few specks
 date: 2026-11-09
 scope: engine/render/post.wgsl, games/shooters_edge/client/world_fx.cpp, games/shooters_edge/labs/warp_film.hpp
-concepts: [arrival, teleport, spawn, first-person, post-warp, screen-effect, r_arrival, live-uniform]
+concepts: [arrival, teleport, spawn, first-person, post-warp, screen-effect, r-arrival, live-uniform]
 ---
 
 Ash blown past the eye (kept off it so it never fills the near plane) covered the middle of the
