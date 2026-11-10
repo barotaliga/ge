@@ -8,6 +8,7 @@
 #include "shooters_edge/net/classic_client.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <utility>
 
@@ -315,6 +316,23 @@ void on_entities(ClassicClientEnd& c, gn::Reader& r, bool delta) {
   }
 }
 
+sh::MoveType move_type_of(const PlayerState& p) {
+  switch (p.pm) {
+    case PmType::spectator:
+      return sh::MoveType::spectator;
+    case PmType::old_spectator:
+      return sh::MoveType::old_spectator;
+    case PmType::fly:
+      return sh::MoveType::fly;
+    case PmType::none:
+      return sh::MoveType::none;
+    case PmType::lock:
+      return sh::MoveType::lock;
+    default:
+      return p.dead ? sh::MoveType::dead : sh::MoveType::normal;
+  }
+}
+
 void apply(ClassicClientEnd& c, const SvcMsg& m) {
   switch (m.id) {
     case svc::serverdata:
@@ -390,6 +408,16 @@ void apply(ClassicClientEnd& c, const SvcMsg& m) {
       break;
     case svc::print:
       c.prints.push_back(m.strings[0]);
+      break;
+    case svc::sound:
+    case svc::soundextended:
+      if (m.ints.size() >= 5 && m.floats.size() >= 3)
+        c.heard.push_back({m.ints[0],
+                           m.ints[1],
+                           m.ints[4],
+                           static_cast<float>(m.ints[2]) / 255.f,
+                           static_cast<float>(m.ints[3]) / 64.f,
+                           {m.floats[0], m.floats[1], m.floats[2]}});
       break;
     case svc::centerprint:
       c.centerprints.push_back(m.strings[0]);
@@ -573,9 +601,43 @@ void client_command(ClassicClientEnd& c, const std::string& line) {
   channel_reliable(c.ch, buf, w.size);
 }
 
+sh::MoveSettings client_move_settings(const ClassicClientEnd& c) {
+  sh::MoveSettings m;
+  const float* v = c.movevars;
+  m.gravity = v[0];
+  m.stopspeed = v[1];
+  m.maxspeed = v[2];
+  m.spectatormaxspeed = v[3];
+  m.accelerate = v[4];
+  m.airaccelerate = v[5];
+  m.wateraccelerate = v[6];
+  m.friction = v[7];
+  m.waterfriction = v[8];
+  // The easy jump is predicted only where the server says it allows it (its pm_speedjump in the
+  // server info) and the player asked for it; a server that never heard of it says nothing.
+  if (c.cfg.speedjump)
+    m.speedjump = static_cast<float>(std::atof(info_get(c.serverinfo, "pm_speedjump").c_str()));
+  return m;
+}
+
+sh::NetPlayer client_net_player(const PlayerState& p) {
+  sh::NetPlayer n;
+  const float at[3] = {p.origin.x, p.origin.y, p.origin.z};
+  const float speed[3] = {p.velocity.x, p.velocity.y, p.velocity.z};
+  for (int i = 0; i < 3; i++) {
+    n.origin8[i] = static_cast<int32_t>(at[i] * 8);
+    n.velocity[i] = static_cast<int16_t>(speed[i]);
+  }
+  n.type = move_type_of(p);
+  n.onground = p.onground;
+  n.jump_held = p.pm == PmType::normal_jump_held;
+  return n;
+}
+
 void client_tick(ClassicClientEnd& c, int64_t now_us) {
   c.now = static_cast<double>(now_us) / 1e6;
   c.tick++;
+  c.heard.clear();
   gn::transport_pump(*c.transport, now_us);
   uint8_t buf[gn::kMaxDatagram];
   gn::Address from;
@@ -595,7 +657,11 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
     const uint32_t acked = c.ch.incoming_acknowledged;
     if (!channel_process(c.ch, buf, size, c.now, at)) continue;
     const uint32_t ack = c.ch.incoming_acknowledged;
-    if (ack != acked && c.sent_seq[ack & 63] == ack) c.latency = c.now - c.sent_at[ack & 63];
+    if (ack != acked && c.sent_seq[ack & 63] == ack) {
+      c.latency = c.now - c.sent_at[ack & 63];
+      c.latency_avg =
+          c.latency_avg <= 0 ? c.latency : c.latency_avg + (c.latency - c.latency_avg) / 16;
+    }
     read_payload(c, buf, size, at);
     if (!c.error.empty()) {
       c.stage = ClientStage::dropped;

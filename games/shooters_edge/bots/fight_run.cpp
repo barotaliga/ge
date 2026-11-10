@@ -122,6 +122,8 @@ FightReport run_fight(const FightOptions& opt) {
   }
   for (int k = 0; k < n; k++) {
     Fighter& f = fighters[static_cast<size_t>(k)];
+    f.features = sh::features_of(opt.skills[static_cast<size_t>(k)]);
+    if (!sh::apply_features(opt.features, f.features, r.error)) return r;
     fighter_init(f, graph, s, k, server::kBaselineArenaEntities, opt.skills[static_cast<size_t>(k)],
                  r.players[static_cast<size_t>(k)].traits, kHz,
                  opt.seed + 31u * static_cast<uint32_t>(k));

@@ -32,7 +32,15 @@ struct Args {
   double fps = 30, seconds = 0;
   double from = 0, to = -1;  // -demovideo's clip on the demo's timeline, s (to < 0: the end)
   int highlight = 0;         // -demovideo's clip: the tracked player's Nth highlight
-  int gif_width = 480;       // -demovideo to a .gif: its width in pixels
+  bool autotrack = false;    // -demovideo of a multiview recording: follow the hottest player
+  // The bot client (`--bots=N --server=host:port`): a team of bots joins the server and the window
+  // shows the team's world (net/classic_team_view.hpp), the console driving the bots.
+  int bots = 0;
+  std::string server = "127.0.0.1:27500", team = "bots", skills, bots_out, bots_view;
+  std::string bot_features;  // `--bot-features=-dodge,+rj`: every bot's (shooter/features.hpp)
+  int colour = 4;
+  bool bots_paths = true;  // `--bots-paths=0`: the bots' overview draws no paths
+  int gif_width = 480;     // -demovideo to a .gif: its width in pixels
   std::string codec = "auto";
   std::string playdemo;  // a demo to play at its own pace ("": none)
   long frames = 0;       // 0: until quit

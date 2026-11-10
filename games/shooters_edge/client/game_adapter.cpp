@@ -20,6 +20,9 @@ void add_adapter_commands(ge::console::Console& con, const GameAdapter& adapter,
   using Args = ge::console::Args;
   using Con = ge::console::Console;
   con.add_command("mods", "mods: the mod folders beside the base game (play one: -game <it>)",
+                  // A callback held in a std::function: what it throws (a string out of memory)
+                  // reaches its caller, as any call's does.
+                  // NOLINTNEXTLINE(bugprone-exception-escape)
                   [&adapter, basedir](Con& c, const Args&) {
                     const std::vector<ModFolder> mods = adapter.list_mods(adapter, basedir);
                     if (mods.empty()) c.print("mods: no mod folders in " + basedir);

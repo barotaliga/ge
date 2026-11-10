@@ -4,6 +4,7 @@
 
 void() player_die;
 void() player_pain;
+void(entity targ) dmm4_soaked;
 
 // The frags a death is worth: a kill +1, a teammate's -1 to the killer, a death by one's own hand
 // or the world's -1. It is told in the loaded game's words when it has them (the glue's
@@ -61,7 +62,10 @@ void(entity targ, entity inflictor, entity attacker, float damage) damage = {
     if (team_shoves(targ, attacker)) blow_push(targ, inflictor, damage);
     return;
   }
-  if (attacker.super_damage_finished > time) damage = damage * 4;  // the quad
+  if (attacker.super_damage_finished > time) {  // the quad (deathmatch 4's OctaPower: eight)
+    if (deathmatch == 4) damage = damage * 8;
+    else damage = damage * 4;
+  }
   // Armour takes its share, as far as it lasts.
   saved = ceil(targ.armortype * damage);
   if (saved >= targ.armorvalue) {
@@ -75,6 +79,12 @@ void(entity targ, entity inflictor, entity attacker, float damage) damage = {
   targ.dmg_save = targ.dmg_save + saved;
   targ.dmg_inflictor = inflictor;
   blow_push(targ, inflictor, damage);
+  // Deathmatch 4's spawn protection (common/dmm4.qc): the armour wore and the blow pushed, the
+  // health is spared (a telefrag still kills).
+  if (targ.shield_finished > time && !telefragging) {
+    dmm4_soaked(targ);
+    return;
+  }
   targ.health = targ.health - taken;
   damage_attacker = attacker;
   was_self = self;
@@ -99,6 +109,20 @@ void(entity who) telefrag = {
     next = p.chain;  // a death may search the world again
     if (p != who && p.classname == "player" && p.health > 0) {
       telefragging = TRUE;
+      if (deathmatch == 4 && p.shield_finished > time) {
+        // Deathmatch 4: onto a protected player. Both protected, both die; else `who` does.
+        // The one who dies loses a frag and nobody gains one.
+        if (who.shield_finished > time) {
+          p.shield_finished = 0;
+          p.deathtype = "telefragged";
+          damage(p, world, world, 50000);
+        }
+        who.shield_finished = 0;
+        who.deathtype = "telefragged";
+        damage(who, world, world, 50000);
+        telefragging = FALSE;
+        return;
+      }
       if (p.invincible_finished > time) {
         who.deathtype = "telefragged";
         damage(who, p, p, 50000);

@@ -25,6 +25,8 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `frame-move.md` | The original player move and the movement setting `sv_playermove` (M18s): who jumps in each mix of program and move, the single-player frame |
 | `campaign-rules.md` | What a campaign program does (monsters' senses and states, the roster, the level flow), for our own campaign variant mod (M18s7) |
 | `deaths.md` | Monster deaths, gibs and blood: each kind's death sequences, gib health and pieces, the gib and head throw, blood at hits, the client's bursts and model-flag trails, bouncing, the zombie, the player (M18s7) |
+| `deathmatch4.md` | Deathmatch 4 in the classic match mod: the armed spawn, spawn invincibility, the items stripped and kept, backpacks and bonus powers, OctaPower, its settings and commands, spawns and scoring |
+| `weapon-switch.md` | The weapon after a shot in the classic match mod: refire times, the switch held until the refire ends, what a dropped pack holds, what onlookers can tell, the client's switch-after-fire settings |
 | `demo-smoothing.md` | Recorded games drawn between their frames: the client's one-frame-behind playback, the rules for players, the tracked view and entities, where it snaps |
 | `held-weapons.md` | The first-person weapon's frames: the axe's two swings, how a swing is picked, when the frame is set, what the client draws |
 | `jump-walk-death.md` | The jump's and the swimmer's sounds, landing sounds, walking (there is none at the modern defaults: `+speed` is a run key), the view weapon and eye at death |

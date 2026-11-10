@@ -189,7 +189,7 @@ void start_sound(Server& sv, int e, int channel, const char* sample, float volum
     sv.counts.sounds_dropped++;
     return;
   }
-  sv.sounds[sv.sound_count++] = {e, channel, sample, volume, attenuation};
+  sv.sounds[sv.sound_count++] = {e, channel, sample, volume, attenuation, false, {}};
 }
 
 int world_contents(const Server& sv, Vec3f p) { return point_contents(sv.models[1].hulls[0], p); }

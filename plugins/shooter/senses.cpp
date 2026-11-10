@@ -4,6 +4,7 @@
 // ge:test tests/shooter_senses_test.cpp
 #include "shooter/senses.hpp"
 
+#include <cmath>
 #include <limits>
 
 #include "shooter/trace.hpp"
@@ -45,7 +46,17 @@ Contact& contact_for(Senses& s, int ent) {
   return s.contacts.back();
 }
 
-bool clear_line(const Server& sv, int viewer, Vec3f eye, Vec3f to) {
+// What a point is in, for sight: air (solid and sky read as air: the trace stops at a wall) or
+// the liquid's contents number.
+int seen_through(const Server& sv, Vec3f p) {
+  const int c = world_contents(sv, p);
+  return c <= kContentsWater && c >= kContentsLava ? c : kContentsEmpty;
+}
+
+bool clear_line(const Server& sv, const SenseSettings& set, int viewer, Vec3f eye, Vec3f to) {
+  // A liquid's surface between them: a surface is level, so an eye and a point both in the air
+  // (or both in one pool) have none between them; one in and one out do.
+  if (set.water_opaque && seen_through(sv, eye) != seen_through(sv, to)) return false;
   const HullTrace tr = trace_move(sv, eye, {}, {}, to, kTraceNoMonsters, viewer);
   return !tr.startsolid && tr.fraction >= 1;
 }
@@ -68,7 +79,7 @@ void client_view(const Server& sv, int viewer, ClientView& out) {
     const SoundEvent& se = sv.sounds[i];
     if (se.ent < 0 || se.ent >= sv.num_edicts) continue;
     const Edict& d = sv.edicts[static_cast<size_t>(se.ent)];
-    const Vec3f at = d.solid == kSolidBsp ? middle_of(d) : d.origin;
+    const Vec3f at = se.placed ? se.at : d.solid == kSolidBsp ? middle_of(d) : d.origin;
     if (se.attenuation > 0) {
       const float reach = kHearAt / se.attenuation;
       if (dist2(at, me.origin) > reach * reach) continue;
@@ -83,7 +94,17 @@ bool sees_player(const Server& sv, const SenseSettings& set, int viewer, Vec3f e
   const Vec3f to = head - eye;
   const float d2 = to.x * to.x + to.y * to.y + to.z * to.z;
   if (d2 > set.range * set.range) return false;
-  if (d2 > 1) {
+  if (d2 > 1 && set.fov < 360 && set.fov_y > 0) {
+    // A screen: ahead, and within half its width and half its height of the view's axis (each
+    // half angle's tangent off the move's own angle vectors: a yaw's sine over its cosine).
+    const ViewAxes ax = angle_vectors(angles);
+    const float ahead = dot(ax.forward, to);
+    if (ahead <= 0) return false;
+    const Vec3f wide = angle_vectors({0, set.fov * 0.5f, 0}).forward;
+    const Vec3f high = angle_vectors({0, set.fov_y * 0.5f, 0}).forward;
+    if (std::fabs(dot(ax.right, to)) * wide.x > ahead * wide.y) return false;
+    if (std::fabs(dot(ax.up, to)) * high.x > ahead * high.y) return false;
+  } else if (d2 > 1) {
     const Vec3f fwd = angle_vectors(angles).forward;
     const float d = root_of(d2);
     const float c = (fwd.x * to.x + fwd.y * to.y + fwd.z * to.z) / d;
@@ -92,7 +113,7 @@ bool sees_player(const Server& sv, const SenseSettings& set, int viewer, Vec3f e
     const float edge = angle_vectors({0, set.fov * 0.5f, 0}).forward.x;
     if (c < edge) return false;
   }
-  return clear_line(sv, viewer, eye, head) || clear_line(sv, viewer, eye, origin);
+  return clear_line(sv, set, viewer, eye, head) || clear_line(sv, set, viewer, eye, origin);
 }
 
 void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3f angles, double t,
@@ -137,9 +158,10 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
     }
     if (!sees_player(sv, s.set, viewer, eye, angles, v.origin)) continue;
     Contact& c = contact_for(s, v.ent);
-    if (c.was_visible && ai::age(c.seen, t) <= kFrameGap_s) {
-      const double dt = t - c.seen.at;
-      if (dt > 0) c.velocity = (v.origin - at_of(c.seen)) * static_cast<float>(1.0 / dt);
+    const bool follows = c.was_visible && ai::age(c.seen, t) <= kFrameGap_s;
+    const double gap = t - c.seen.at;
+    if (follows) {
+      if (gap > 0) c.velocity = (v.origin - at_of(c.seen)) * static_cast<float>(1.0 / gap);
     } else {
       c.velocity = {};
       s.stats.acquired++;
@@ -149,6 +171,16 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
         why->choose("acquired", "in the cone with a clear line to it");
       }
     }
+    // A player's velocity is what the server sent with him: across a network the sightings come
+    // as the packets do, bunched, so two of them a tick apart read 0 or twice the speed.
+    if (is_player(sv, v.ent)) c.velocity = sv.edicts[static_cast<size_t>(v.ent)].velocity;
+    // The course as the eye takes it in: a new sighting's as it is, then caught up on a change.
+    if (!follows || s.set.course_s <= 0)
+      c.course = c.velocity;
+    else
+      c.course =
+          c.course + (c.velocity - c.course) *
+                         static_cast<float>(gap >= s.set.course_s ? 1 : gap / s.set.course_s);
     ai::see(c.seen, v.origin.x, v.origin.y, v.origin.z, t);
     c.visible = true;
     c.since = t;

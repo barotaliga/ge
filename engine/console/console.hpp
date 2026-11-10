@@ -29,7 +29,7 @@
 // ge:summary The console: the command buffer, commands, aliases, macros, exec, keys, problems
 // ge:keywords console command commands buffer append insert run wait alias aliases macro exec
 // ge:keywords cfg config autoexec problem problems stuff stuffcmd kstuffable source depth
-// ge:keywords set_fallback_reader fallback-reader
+// ge:keywords set_fallback_reader fallback-reader set_unknown unknown-command host-commands
 // ge:keywords complete completion key press release button command-line plus-set
 // ge:skill console
 // ge:test tests/console_console_test.cpp tests/console_script_test.cpp
@@ -147,6 +147,10 @@ class Console {
   // A host's reader tried after the directories find nothing (a game's packs, say); the
   // directories still come first and writes still go to the first of them.
   void set_fallback_reader(Reader read);
+  // A host's own command set past the console's: a line whose first word is no command, cvar or
+  // alias goes to `run` (the whole line, as typed) and is not refused when it returns true (a
+  // window driving bots takes `skill expert` and `bot1 skill expert`). Null: refused as unknown.
+  void set_unknown(std::function<bool(const Args&)> run) { unknown_ = std::move(run); }
   bool read_file(std::string_view name, std::string& text) const;
   bool write_file(std::string_view name, std::string_view text) const;
 
@@ -252,6 +256,7 @@ class Console {
   std::vector<std::filesystem::path> search_;
   Reader reader_;
   Reader fallback_;
+  std::function<bool(const Args&)> unknown_;
   Writer writer_;
   std::function<void(std::string_view)> sink_;
   std::vector<std::string> output_;
