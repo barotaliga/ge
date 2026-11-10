@@ -341,8 +341,11 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
   or getting busier over the minutes reads as no saving), and the largest gap between neighbouring
   all-on runs is the noise. The lab charts each run's frames as a box and lists what each switch
   saved off the median frame, the most first.
-- **The shadow maps** (the modern look): a light's cube is drawn when it joins the shadowed few
-  and kept while it stays; at most two new cubes a frame (`Options::fresh_cubes`), the rest of a
+- **The shadow maps** (the modern look): the shadowed few (32) are the nearest lights in the
+  eye's potentially visible set first, then the nearest of the rest; by nearness alone the map's
+  big lights behind walls took half the slots on an open map (a dm4 doorway: 14 of the 30 lights
+  in view lit unshadowed, their shadows popping in a few steps on). A light's cube is drawn when
+  it joins the few and kept while it stays; at most two new cubes a frame (`Options::fresh_cubes`), the rest of a
   room's torches unshadowed for the frames until their turn, so walking into a room costs no
   frame more than two cubes; a dynamic light (a flash, a rocket) lights without a shadow.
 - **The light grid** (the modern look): the frame's up to 160 lights are binned on the CPU into
