@@ -38,6 +38,12 @@
 //   Knobs for other looks: its EDGE burning in a light of its own, a PINCH into a column stretched
 //   up, a SHIMMER of bands that climb it. The fragments it touches are marked reactive, so TAA
 //   does not trail the cut.
+// - THE BURN (`MorphBurn`, render/body_burn.hpp's skin): a figure burned by lava or eaten by an
+// acid.
+//   CHARRED blackens it in patches of value noise fixed to the model's own frame that spread over
+//   it as the char grows (soot and burned skin, a little rougher and no longer shining); EMBERS
+//   glow orange-red in the char's cracks, flickering, while it is hot; ETCHED bleaches and yellows
+//   it in pitted patches. All three 0: the shader skips it.
 // - THE PASS draws after the opaque world (depth tested and written, reversed z, back faces
 //   culled), one draw a model instance, at most `kMaxMorphDraws` a frame.
 //
@@ -45,6 +51,7 @@
 // what the shader does, for the tests and the CPU pictures.
 //
 // ge:summary Morph meshes drawn: vertex-animated models, frames blended on the GPU, tinted skins
+// ge:keywords burn charred embers etched morph_burn scorch-skin
 // ge:keywords render morph morph-mesh vertex-animation frames blend interpolation skin atlas
 // ge:keywords tint team-colours player-colours ramp glow fullbright sharp smooth nearest
 // ge:keywords hole cut-out alpha see-through mark-hole
@@ -128,6 +135,12 @@ struct MorphWarp {
 };
 inline constexpr float kWarpEdge = 0.08f;  // the band at the cut, a share of the field's 0..1
 
+// A figure's burns, each 0..1 (render/body_burn.hpp's BurnSkin).
+struct MorphBurn {
+  float charred = 0, embers = 0, etched = 0;
+  float seed = 0;  // the patches' offset, 0..1
+};
+
 struct MorphDraw {
   uint32_t model = 0;
   MorphPose now, last;        // `last`: where it was the frame before (a cut: the same as now)
@@ -143,6 +156,7 @@ struct MorphDraw {
   // whose light is a map's lightmaps samples under a model.
   bool light_in_white = false;
   MorphWarp warp;
+  MorphBurn burn;
 };
 
 // Where each model's skin sits in the atlas, texels.

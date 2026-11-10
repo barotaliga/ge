@@ -58,6 +58,14 @@ const SwitchSpec kSwitches[] = {
      false},
     {"slime", "LIQUIDS AND SKY", "SLIME",
      "Slime that is thick and glows. Off: the pack's warped picture.", &S::slime, false},
+    {"heathaze", "LIQUIDS AND SKY", "HEAT HAZE",
+     "The hot air over lava bends the light, wavering what lies across it, more round a body "
+     "burning in it. Off: still air.",
+     &S::heathaze, false},
+    {"fumes", "LIQUIDS AND SKY", "FUMES",
+     "Acid fumes hang over slime and smoke over lava, thick round anything in them. Off: clear "
+     "air.",
+     &S::fumes, false},
     {"teleports", "LIQUIDS AND SKY", "TELEPORTERS",
      "Teleporters drawn as a shimmering field. Off: the pack's warped picture.", &S::teleports,
      false},
@@ -95,6 +103,10 @@ const SwitchSpec kSwitches[] = {
      "A player teleporting away crumbles into ash the wind takes, and one arriving or spawning is "
      "blown back in out of it. Off: the pack's teleport flash, the player there at once.",
      &S::warps, false},
+    {"burning", "EFFECTS", "BURNING",
+     "A player in lava smokes, chars and catches small flames, one in slime fumes and is etched; "
+     "it wears off a few seconds after he is out. Off: no change.",
+     &S::burning, false},
     {"fog", "AIR", "FOG", "Fog and haze in the distance and in the rooms. Off: clear air.", &S::fog,
      false},
     {"clouds", "AIR", "LOW CLOUDS", "Low cloud over the open levels. Off: the sky alone.",

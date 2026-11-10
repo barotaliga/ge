@@ -5,6 +5,8 @@
 // ge:skill render shooter morph
 #include "shooters_edge/client/world_models.hpp"
 
+#include "shooters_edge/client/burning.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -452,8 +454,8 @@ void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const 
 void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                     std::span<const Placed> placed, const gr::FrameView& view, double brightness,
                     double minlight, bool smooth, const InPlace& in_place,
-                    std::span<const ge::brush::app::DynamicLight> dynamic,
-                    double dynamic_strength) {
+                    std::span<const ge::brush::app::DynamicLight> dynamic, double dynamic_strength,
+                    const Burning* burning) {
   const bool bare_flames = in_place.flames;
   m.morph_draws.clear();
   m.sprite_draws.clear();
@@ -544,6 +546,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     const auto last = m.last_pose.find(p.entity);
     g.last = last == m.last_pose.end() || p.warp.shown < 1 ? g.now : last->second;
     g.warp = p.warp;
+    if (burning != nullptr) g.burn = burn_skin_of(*burning, p.entity);
     m.last_pose[p.entity] = g.now;
     g.tint[0] = p.top;
     g.tint[1] = p.bottom;

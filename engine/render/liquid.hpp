@@ -1,7 +1,7 @@
 // LAVA AND SLIME DRAWN (docs/liquids.md § Drawn): a body of a hot or a thick liquid from
-// engine/water (`water::Body`: its level, its box) drawn over the opaque scene by its look, in a
-// pass of its own after the water's ("liquid.copy", then "liquid"). Every look is a row of knobs
-// a game tunes; the named rows match the liquids of the same name (water/liquids.hpp).
+// engine/water (`water::Body`: its level, its box) drawn over the opaque scene by its look, in
+// passes of its own after the water's ("liquid.copy", "liquid", "liquid.air"). Every look is a row
+// of knobs a game tunes; the named rows match the liquids of the same name (water/liquids.hpp).
 //
 // - LAVA (`LavaLook`): the surface's TEMPERATURE is the picture, and its colour and brightness
 //   follow from it as a black body's glow (water/glow.hpp's table, Planck under the CIE
@@ -36,11 +36,27 @@
 //   own light where it meets nothing. The Hi-Z pyramid holds each texel's FARTHEST depth (a
 //   cull's bound), so it cannot skip empty space for a ray, which needs the nearest: the full
 //   depth copy the pass already makes is marched instead.
-// - THE HEAT SHIMMER (`LavaLook::shimmer`): the air over the melt is hot, and a ray through it is
-//   bent by its rising cells, a few thousandths of a radian over a lake; the bend is summed along
-//   the ray through a layer kShimmerHeight deep, strongest at the surface. What is seen across
-//   the lake is drawn again through the bent rays (a box over the body, after the surfaces), and
-//   the lava's own surface is looked up where its bent ray lands.
+// - THE AIR OVER IT, worked out per pixel through a box kShimmerHeight deep over the body (after
+//   the surfaces), in closed form: the layer's weight along a ray (its density falling off
+//   exp(-h / scale) with the height h over the level) is integrated exactly, and each stir's
+//   plume (below) adds its own, so a pixel reads its noise once, not once a step.
+//   - THE HEAT SHIMMER (`LavaLook::shimmer`): the air over the melt is hot, and a ray through it
+//     is bent by its rising cells, a few thousandths of a radian a metre near the melt. The bend
+//     is the hot air's weight along the ray times the cells' push at the ray's lowest stretch (two
+//     octaves of value noise rising with the hot air), so what lies across the lake wavers. What
+//     is seen across the lake is drawn again through the bent ray, and the lava's own surface is
+//     looked up where its bent ray lands.
+//   - THE FUMES (`FumeLook`): a thin gas hanging over the surface, lava's smoke and soot lit from
+//     below by the melt, a slime's acid vapour lit by the room and its own glow, in wisps (a slow
+//     noise drifting over the surface thins and thickens it). Its optical depth along the ray is
+//     its weight times its density; it is laid over the picture, premultiplied.
+//   - STIRRED round a body in it (`LiquidStir`, `set_liquid_stirs`): a burning body in lava throws
+//     up a plume of hotter air and smoke round itself, an acid-wet one in slime a plume of fumes.
+//     A plume is a column over the stir, its density falling off as a Gaussian of the distance to
+//     its axis and exp(-h / kStirScale) up it; its weight along a ray is taken at the ray's closest
+//     approach to the axis (the Gaussian's integral across it), clipped to the stretch in the box.
+//   All three are one box over the body, one fragment a pixel (its far faces): the gas is laid
+//   over the bent scene, or alone over the melt, premultiplied.
 // - THE CRUST BROKEN (`break_liquid_crust`): a hole of open melt where something fell in, opening
 //   at once and skinning over from its edge, the plates round it cracked and glowing, a crest
 //   running out in the first second; carried by the flow.
@@ -57,6 +73,8 @@
 // ge:keywords lava_look slime_look liquid_look prepare_liquid encode_liquid liquid_lamps
 // ge:keywords glowing-body lava-goo area-light reflections ssr heat-shimmer crust-broken
 // ge:keywords break_liquid_crust splash under-lava under-slime from-below eye_under under_reach
+// ge:keywords fumes fume_look smoke gas acid-vapour heat-haze stir liquid_stir set_liquid_stirs
+// ge:keywords plume warm-air bends-light
 // ge:skill render water
 // ge:test tests/render_liquid_test.cpp
 #pragma once
@@ -81,7 +99,9 @@ inline constexpr int kGlowEntries = 32;      // the glow table's entries
 inline constexpr double kGlowLo = 600;       // K: the table's first (under any visible glow)
 inline constexpr double kGlowHi = 1700;      // K: its last
 inline constexpr int kLiquidBreaks = 8;      // the crust's breaks a body remembers (the latest)
-inline constexpr double kShimmerHeight = 3;  // m: the hot air's layer over lava, drawn as a box
+inline constexpr double kShimmerHeight = 3;  // m: the air's layer over a body, drawn as a box
+inline constexpr int kLiquidStirs = 8;       // the stirs a body draws a frame (the strongest)
+inline constexpr double kStirScale = 1.2;    // m: a plume's density's e-folding height
 
 enum class LiquidKind : uint8_t { lava, slime };
 
@@ -99,8 +119,26 @@ struct LavaLook {
   double melt_rough = 0.12;
   water::Rgb crust_albedo{0.045, 0.041, 0.038};
   double patch = 0;  // m: the open melt's patches' size (0: seven plates)
-  // rad/m: the heat shimmer, how far a metre of the hot air over the melt bends a ray (0 none).
-  double shimmer = 0.0008;
+  // rad/m: the heat shimmer, how far a metre of the hot air at the melt bends a ray (0 none).
+  double shimmer = 0.004;
+};
+
+// The gas over a body: lava's smoke, a slime's fumes.
+struct FumeLook {
+  double density = 0;                // 1/m: its extinction at the surface (0: no gas)
+  double scale_m = 0.6;              // m: its density's e-folding height over the surface
+  water::Rgb albedo{0.5, 0.5, 0.5};  // what it scatters
+  double drift_mps = 0.15;           // m/s: how fast its wisps drift over the surface
+  double glow_lit = 0;               // the share of the body's own glow its underside catches
+};
+
+// A body in a body of liquid stirring the air over it this frame: at (x, z) on the plan (m), a
+// plume `radius_m` wide; `heat` adds its shimmer, `smoke` its gas, each 0..1
+// (render/body_burn.hpp's body_burn_stir gives both for a burning or acid-wet body).
+struct LiquidStir {
+  double x = 0, y = 0, z = 0;  // m: the body's middle (y: near the level it stands in)
+  double radius_m = 0.45;
+  double heat = 0, smoke = 0;
 };
 
 struct SlimeLook {
@@ -122,6 +160,7 @@ struct LiquidLook {
   LiquidKind kind = LiquidKind::slime;
   LavaLook lava;
   SlimeLook slime;
+  FumeLook fume;            // the gas over it (lava's smoke, a slime's fumes)
   double flow[2] = {0, 0};  // m/s: the surface's own motion (a channel's current, the drift)
   // Under a roof (a cave's lava, a sewer's slime): the share of the dome the surface sees the sky
   // through, and the room's own light round it, a share of a white face's luminance under the
@@ -136,28 +175,36 @@ const LiquidLook* find_liquid_look(std::string_view name);
 std::span<const std::string_view> liquid_look_names();
 
 struct LiquidGpuBody {
-  float info[4];     // level, kind (0 lava, 1 slime), ripples, the eye's footprint scale
-  float box[4];      // x0, z0, x1, z1
-  float flow[4];     // flow x, z (m/s), the open sky's share, the room's light
-  float lava0[4];    // core K, crust_hot K, crust_cold K, cover
-  float lava1[4];    // plate, crack, ropes, age_rate
-  float lava2[4];    // emissivity, crust_rough, melt_rough, 0
-  float crust[4];    // the crust's albedo
-  float absorb[4];   // slime K
-  float scatter[4];  // slime S
-  float glow[4];     // slime's own light, cd/m^2; w: the pulse
-  float slime0[4];   // rough, film nm, scum, bubbles
-  float slime1[4];   // bubble_size, grime, debris, 0
-  float scum[4];     // the scum's albedo
-  float fx[4];       // reflections on (1) or off, the shimmer (rad/m), the breaks held, reach
-  float breaks[kLiquidBreaks][4];  // x, z (m), radius (m), the time it fell in (s)
-  float table[kGlowEntries][4];    // the glow table, cd/m^2 rgb (water/glow.hpp)
+  float info[4];         // level, kind (0 lava, 1 slime), ripples, the eye's footprint scale
+  float box[4];          // x0, z0, x1, z1
+  float flow[4];         // flow x, z (m/s), the open sky's share, the room's light
+  float lava0[4];        // core K, crust_hot K, crust_cold K, cover
+  float lava1[4];        // plate, crack, ropes, age_rate
+  float lava2[4];        // emissivity, crust_rough, melt_rough, 0
+  float crust[4];        // the crust's albedo
+  float absorb[4];       // slime K
+  float scatter[4];      // slime S
+  float glow[4];         // slime's own light, cd/m^2; w: the pulse
+  float slime0[4];       // rough, film nm, scum, bubbles
+  float slime1[4];       // bubble_size, grime, debris, 0
+  float scum[4];         // the scum's albedo
+  float fx[4];           // reflections on (1) or off, the shimmer (rad/m), the breaks held, reach
+  float fume[4];         // density (1/m, 0: none), its e-folding height (m), drift (m/s), stirs
+  float fume_albedo[4];  // rgb; the share of the glow its underside catches
+  float fume_light[4];   // the body's own glow under it, cd/m^2 rgb; the stirs' smoke on (1)
+  float breaks[kLiquidBreaks][4];     // x, z (m), radius (m), the time it fell in (s)
+  float stirs[kLiquidStirs][4];       // x, z (m), radius (m), heat
+  float stir_smoke[kLiquidStirs][4];  // smoke, 0, 0, 0
+  float table[kGlowEntries][4];       // the glow table, cd/m^2 rgb (water/glow.hpp)
 };
 
 struct Liquids {
   wgpu::BindGroupLayout layout, copy_layout;
-  uint32_t p_copy = 0, p_draw = 0, p_shimmer = 0, p_under = 0;
+  uint32_t p_copy = 0, p_draw = 0, p_air = 0, p_under = 0;
   bool reflections = true;  // the scene mirrored in the surface (else the sky's alone)
+  bool shimmer = true;      // the heat shimmer over lava drawn (a game's switch)
+  bool fumes = true;        // the gas over the bodies drawn (a game's switch)
+  int air_draws = 1;        // times the air is drawn a frame: 1, more only for a bench's timing
   double under_reach = 0;   // m: the least an eye under a body sees (0: as thick as it is; a
                             // lava with one is a goo, docs/liquids.md § From below)
   int eye_under = -1;       // this frame's: the body the eye is under, or -1
@@ -173,6 +220,7 @@ struct Liquids {
     bool shown = true;
     int next_break = 0;
     double floor = 0;  // m: the lowest its liquid reaches (an eye under it is not in it)
+    float shimmer = 0, fume_density = 0;  // its look's, staged each frame as the switches say
   };
   std::vector<Slot> bodies;
 };
@@ -213,13 +261,19 @@ void set_liquid_body(gpu::Device& device, Liquids& liquids, int index, const wat
 // Uploads this frame's; a body seen from under its level is not drawn, and the one the eye is
 // inside (under its level, over its floor, in its box) is `eye_under`, drawn round the eye.
 void prepare_liquid(gpu::Device& device, Liquids& liquids, const FrameView& view);
+// This frame's stirs (the strongest kLiquidStirs a body): each goes to the shown body whose box
+// holds it and whose level is within a body's height of it; the rest are dropped. Replaces the
+// last frame's; call before prepare_liquid.
+void set_liquid_stirs(Liquids& liquids, std::span<const LiquidStir> stirs);
+// The body whose box holds (x, z) and whose level is within `reach` m of y, or -1.
+int liquid_body_at(const Liquids& liquids, double x, double y, double z, double reach = 2);
 // Something fell into body `index` at (x, z) at time `t` (s, the frame's clock), breaking its
 // crust over `radius` m: the melt shows through a hole that opens at once and skins over again,
 // the broken plates round it glowing hot (lava; a slime ignores it). The latest kLiquidBreaks are
 // kept.
 void break_liquid_crust(Liquids& liquids, int index, double x, double z, double radius, double t);
-// "liquid.copy" and "liquid" (the surfaces, then the shimmer over lava, then the view from under
-// `eye_under`).
+// "liquid.copy", "liquid" (the surfaces) and "liquid.air" (the air over every body with a haze, a
+// gas or a stir, then the view from under `eye_under`).
 void encode_liquid(const Liquids& liquids, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                    wgpu::CommandEncoder& encoder, const FrameTargets& targets,
                    const wgpu::BindGroup& frame);
