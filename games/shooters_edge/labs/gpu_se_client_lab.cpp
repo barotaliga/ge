@@ -26,6 +26,8 @@
 // them) and die, the weapon sinking out of view: a sheet and a GIF. `--switch=1` has him change
 // weapons twice, calmly and with a shot during the change: sheets, a GIF and a chart.
 // `--film=<n> --hand=1` films the weapon in hand breathing at rest, `--exertion=1` as after a run.
+// `--say="vote fraglimit 30;vote rules"` has the player type those lines at the console first,
+// what the server prints back shown in the HUD's feed (a vote on the settings, say).
 //
 // `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
 // two wall torches, their textures enhanced into a cache of the lab's own (classic-enhance's
@@ -37,6 +39,7 @@
 // ge:keywords before-after relief parallax enhanced-textures fixture-cache
 // ge:keywords axe-swing swings two-swings weaponframe film_swings breath exertion film-hand
 // ge:keywords fire explobox film_death death jump-sound film_switch weapon-change cl_gunswitch
+// ge:keywords say vote notify-feed
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
@@ -610,6 +613,24 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     cl::step_fx(l, shown, fx_state, t, 0.013, fx);
     if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
   }
+  // `--say`: lines the player types at the console (`vote fraglimit 30;vote rules`), half a second
+  // apart, and what the server prints back in the HUD's feed as the window shows it.
+  const std::string say = lab.arg("say");
+  size_t told = l.prints.size();
+  for (size_t a = 0; a < say.size();) {
+    const size_t b = std::min(say.find(';', a), say.size());
+    cl::listen_lobby(l, say.substr(a, b - a));
+    for (int i = 0; i < 38; i++) {
+      cl::listen_frame(l, {});
+      t += 0.013;
+      cl::frame_view(l, shown, 1, t, 0.013);
+      cl::step_fx(l, shown, fx_state, t, 0.013, fx);
+      for (; told < l.prints.size(); told++)
+        hud.notify.push(l.prints[told], se::hud_style().ink, t);
+    }
+    a = b + 1;
+  }
+  if (!say.empty()) lab.metric("said.prints", static_cast<double>(l.prints.size()), "");
   // The views: `--views` (x,y,z,yaw,pitch in the map's units and degrees, ';' between), the
   // player stood there; else the start, four ways.
   struct Place {
@@ -1030,7 +1051,10 @@ const gl::LabSpec kSpec{
       "game's own weapon in hand sinking out of view (a sheet and a GIF)"},
      {"switch", "0",
       "with --game: 1, after the views the player changes weapons twice, calmly and with a shot "
-      "during the change, the game's own weapons in hand (sheets, a GIF and a chart)"}},
+      "during the change, the game's own weapons in hand (sheets, a GIF and a chart)"},
+     {"say", "",
+      "with --game: console lines the player types first, ';' between (`vote fraglimit 30`), "
+      "the server's answers in the HUD's feed"}},
     "--size=480,270",
     run,
 };

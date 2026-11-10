@@ -219,6 +219,19 @@ int run_main(int argc, char** argv) {
   cl::Timedemo bench;
   sn::Remote remote;  // `connect`: the window on a server elsewhere
   sn::add_remote_commands(console, remote);
+  // The vote on a setting (engine/server/vote.hpp): to the server joined, else the window's own.
+  for (const char* word : {"vote", "yes", "no"})
+    console.add_command(word,
+                        "vote <setting> <value>: ask everyone to change a setting for this map; "
+                        "vote yes, vote no (or yes, no): answer; vote: what is open; vote rules",
+                        [&](Con&, const CArgs& a) {
+                          std::string line = a[0];
+                          if (const std::string rest = a.rest(0); !rest.empty()) line += " " + rest;
+                          if (remote.active)
+                            sn::client_command(remote.end, line);
+                          else
+                            cl::listen_lobby(listen, line);
+                        });
   cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
   cl::add_playback_commands(console, playback, bench);
   // The window's sound: its own game's (client/listen_sound.hpp) or a played demo's or a joined
