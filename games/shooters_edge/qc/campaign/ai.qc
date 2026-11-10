@@ -6,8 +6,11 @@
 //
 // A state is a think that runs every 0.1 s and takes one decision with the kind's step distance.
 // A kind starts with `walkmonster_start`, `flymonster_start` or `swimmonster_start`.
-// The animation frames are not chosen yet: every monster holds its model's first frame, and a
-// dead one is laid on its side.
+// A death (porting/shooters-edge/deaths.md): the body plays one of the kind's death sequences
+// (two for some kinds, half the time each) and lies on its last frame for good, solid for its
+// first few frames, a backpack dropped on the third by the kinds that carry ammunition; below the
+// kind's gib health it bursts instead, the body turned into its head and its pieces thrown at a
+// speed set by how far below zero the health went.
 
 // --- the fields a monster carries ---
 
@@ -31,8 +34,18 @@
 // frame a 0.1 s step and holding the last, for an attack, a leap, a pain and a death.
 .vector fr_stand, fr_walk, fr_run, fr_melee, fr_missile, fr_leap, fr_pain, fr_death;
 .vector fr_now;         // the frames of the attack, leap or pain in progress
+.vector fr_death2;      // a second death sequence, played instead half the time (unset: none)
+.float death_solid;     // the death frames the body stays solid for (0: none)
+.float drop_ammo;       // DROP_ below: the backpack dropped on the third death frame
 .float gib_health;      // a death below this health gibs the body
 .string head_model;     // what is left of a gibbed body
+.string gib_model;      // the piece a gibbed body throws three of (unset: one of each of the three)
+.float gib_first;       // the pieces leave before the body turns into its head (where it stood)
+.string gib_noise;      // the sound of the burst (unset: player/udeath.wav)
+
+float DROP_SHELLS = 1;  // 5 shells
+float DROP_CELLS = 2;   // 5 cells
+float DROP_ROCKETS = 3; // 2 rockets
 
 float AS_STRAIGHT = 1;  // chasing the enemy
 float AS_MELEE = 3;     // turning to strike
@@ -331,62 +344,112 @@ void() monster_use = {
   found_target();
 };
 
-void(string mdl, float speed) throw_gib = {
+// A piece's speed from the health its body died on (`dm`, below zero): up to 100 each way across
+// and 200 to 300 up, times 0.7 above -50, 2 down to -200, 10 below that (a body torn apart).
+vector(float dm) gib_velocity = {
+  local vector v;
+  v = crandom() * 100 * '1 0 0' + crandom() * 100 * '0 1 0' + (200 + random() * 100) * '0 0 1';
+  if (dm > -50) return v * 0.7;
+  if (dm > -200) return v * 2;
+  return v * 10;
+};
+
+// A piece thrown from `org`: it bounces, spins, passes through bodies and goes in 10 to 20 s. Its
+// model's flag leaves the blood trail behind it.
+void(string mdl, vector org, float dm) throw_gib_at = {
   local entity g;
   g = spawn();
   g.classname = "gib";
   g.movetype = MOVETYPE_BOUNCE;
   g.solid = SOLID_NOT;
-  g.velocity = '0 0 200' + crandom() * speed * '1 0 0' + crandom() * speed * '0 1 0';
-  g.velocity_z = g.velocity_z + random() * speed;
-  g.avelocity = random() * '0 600 0' + random() * '600 0 0';
+  g.velocity = gib_velocity(dm);
+  g.avelocity = random() * 600 * '1 0 0' + random() * 600 * '0 1 0' + random() * 600 * '0 0 1';
   setmodel(g, mdl);
   setsize(g, '0 0 0', '0 0 0');
-  setorigin(g, self.origin);
+  setorigin(g, org);
   g.think = remove_self;
   g.nextthink = time + 10 + random() * 10;
 };
 
-// The body falls through the kind's death frames and lies on the last.
+void(string mdl, float dm) throw_gib = { throw_gib_at(mdl, self.origin, dm); };
+
+// The kind's pieces from where the body is now.
+void() throw_pieces = {
+  if (self.gib_model != "") {
+    throw_gib(self.gib_model, self.health);
+    throw_gib(self.gib_model, self.health);
+    throw_gib(self.gib_model, self.health);
+    return;
+  }
+  throw_gib("progs/gib1.mdl", self.health);
+  throw_gib("progs/gib2.mdl", self.health);
+  throw_gib("progs/gib3.mdl", self.health);
+};
+
+// The body itself becomes its head: 24 lower, thrown as a piece is, spinning about its height,
+// lying where it lands for good.
+void(string mdl) become_head = {
+  setmodel(self, mdl);
+  self.frame = 0;
+  self.movetype = MOVETYPE_BOUNCE;
+  self.takedamage = DAMAGE_NO;
+  self.solid = SOLID_NOT;
+  self.view_ofs = '0 0 8';
+  setsize(self, '-16 -16 0', '16 16 56');
+  self.velocity = gib_velocity(self.health);
+  setorigin(self, self.origin - '0 0 24');
+  self.flags = self.flags - (self.flags & FL_ONGROUND);
+  self.avelocity = crandom() * 600 * '0 1 0';
+};
+
+// The body falls through its death frames and lies on the last: no longer solid after the kind's
+// first few, a backpack dropped on the third by a kind that carries one.
 void() corpse_fall = {
   anim_tick();
+  if (self.anim_step > self.death_solid) self.solid = SOLID_NOT;
+  if (self.anim_step == 3 && self.drop_ammo) {
+    if (self.drop_ammo == DROP_SHELLS) self.ammo_shells = 5;
+    if (self.drop_ammo == DROP_CELLS) self.ammo_cells = 5;
+    if (self.drop_ammo == DROP_ROCKETS) self.ammo_rockets = 2;
+    backpack_drop();
+  }
   if (self.frame >= self.fr_now_y) return;
   self.think = corpse_fall;
   self.nextthink = time + 0.1;
 };
 
-// Counted and told, its targets fired for its enemy, then the body: gibbed when the blow was big
-// enough (the head left), else laid down.
+// Counted and told, its targets fired for its enemy, then the body: gibbed when the blow left it
+// below the kind's gib health (the head left), else falling through a death sequence. The health
+// goes no lower than -99, so the pieces fly at most twice as fast as a plain gibbing.
 void() monster_die = {
   killed_monsters = killed_monsters + 1;
   WriteByte(MSG_ALL, SVC_KILLEDMONSTER);
   activator = self.enemy;
   use_targets();
+  if (self.health < -99) self.health = -99;
   self.deadflag = DEAD_DEAD;
   self.takedamage = DAMAGE_NO;
-  self.solid = SOLID_NOT;
   self.flags = self.flags - (self.flags & FL_MONSTER);
   self.think = noop;
   self.nextthink = -1;
   if (self.health < self.gib_health) {
-    sound(self, CHAN_VOICE, "player/udeath.wav", 1, ATTN_NORM);
-    throw_gib("progs/gib1.mdl", 300);
-    throw_gib("progs/gib2.mdl", 300);
-    throw_gib("progs/gib3.mdl", 300);
-    setmodel(self, self.head_model);
-    setsize(self, '-16 -16 0', '16 16 56');
-    self.movetype = MOVETYPE_BOUNCE;
-    self.velocity = '0 0 200';
-    self.flags = self.flags - (self.flags & FL_ONGROUND);
+    if (self.gib_noise != "") sound(self, CHAN_VOICE, self.gib_noise, 1, ATTN_NORM);
+    else sound(self, CHAN_VOICE, "player/udeath.wav", 1, ATTN_NORM);
+    if (self.gib_first) throw_pieces();
+    become_head(self.head_model);
+    if (!self.gib_first) throw_pieces();
     return;
   }
   if (self.noise1 != "") sound(self, CHAN_VOICE, self.noise1, 1, ATTN_NORM);
   if (!self.fr_death_z) {  // a kind with no death frames is laid on its side
+    self.solid = SOLID_NOT;
     self.angles_z = 90;
     setorigin(self, self.origin - '0 0 16');
     return;
   }
-  anim_begin(self.fr_death);
+  if (!self.death_solid) self.solid = SOLID_NOT;
+  if (self.fr_death2_z && random() < 0.5) anim_begin(self.fr_death2);
+  else anim_begin(self.fr_death);
   corpse_fall();
 };
 
@@ -532,5 +595,6 @@ void() ai_precache = {
   precache_model("progs/gib1.mdl");
   precache_model("progs/gib2.mdl");
   precache_model("progs/gib3.mdl");
+  precache_model("progs/backpack.mdl");
   precache_sound("player/udeath.wav");
 };

@@ -72,6 +72,8 @@ void() monster_knight = {
   self.fr_melee = '17 27 1';
   self.fr_pain = '28 30 1';
   self.fr_death = '76 85 1';
+  self.fr_death2 = '86 96 1';
+  self.death_solid = 2;
   walkmonster_start("progs/knight.mdl", 75, '-16 -16 -24', '16 16 40');
 };
 
@@ -178,6 +180,10 @@ void() monster_ogre = {
   self.fr_missile = '61 66 1';
   self.fr_pain = '67 71 1';
   self.fr_death = '112 125 1';
+  self.fr_death2 = '126 135 1';
+  self.death_solid = 2;
+  self.drop_ammo = DROP_ROCKETS;
+  self.gib_model = "progs/gib3.mdl";
   walkmonster_start("progs/ogre.mdl", 200, '-32 -32 -24', '32 32 64');
 };
 
@@ -248,9 +254,8 @@ void() ghoul_pain = {
 
 // Only a single blow of its whole health (an explosion, say) ends it, in pieces.
 void() ghoul_die = {
-  self.health = -1000;
+  self.health = -1000;  // whatever killed it: it always bursts
   monster_die();
-  sound(self, CHAN_VOICE, "zombie/z_gib.wav", 1, ATTN_NORM);
 };
 
 void() monster_zombie = {
@@ -271,6 +276,7 @@ void() monster_zombie = {
   self.noise = "zombie/z_idle.wav";
   self.noise1 = "zombie/z_gib.wav";
   self.head_model = "progs/h_zombie.mdl";
+  self.gib_noise = "zombie/z_gib.wav";
   self.gib_health = 0;
   self.walk_step = 1;
   self.run_step = 6;

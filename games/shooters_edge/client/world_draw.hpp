@@ -86,6 +86,9 @@ bool finish_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_
 void resize_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_t height);
 // The models it draws (world_models.hpp): their shapes, for where a warp's ash lands.
 const WorldModels& world_models(const WorldDraw& w);
+// The map's light entities as it draws them (brush/app/draw_data.hpp's PointLight), each one's
+// `seen` set: for a lab to stand by a light whose source shows.
+std::span<const ge::brush::app::PointLight> world_lights(const WorldDraw& w);
 // Labs (blocks): every slot of its particle pool as the GPU holds it.
 std::vector<ge::render::Particle> world_particles(ge::gpu::Device& device, const WorldDraw& w);
 // With `own` the frame's sky is the view's as the caller dressed it (the title's), not the map's.
