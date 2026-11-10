@@ -83,9 +83,11 @@ void engine_dir(const sh::Vec3f& d, double out[3]) {
 // THE FACE A ROUND HIT: the map's triangle the line from `from` through `at` (map units) crosses
 // within a few units of `at`, among the surfaces marked in the leaf just before it: its normal
 // toward `from` (map axes, unit), its texture's surface class and its baked light there (its own
-// lightmap's first style, 0..1 a channel; all -1 when it has none). False when no triangle is near.
+// lightmap's first style, 0..1 a channel; all -1 when it has none) and its texture coordinates
+// there (Vertex::st's kind). False when no triangle is near.
 bool face_hit(const ge::brush::Map& m, const sh::Vec3f& from, const sh::Vec3f& at,
-              uint32_t* texture, sh::Vec3f* n, ge::detail::SurfaceClass* surface, float light[3]) {
+              uint32_t* texture, sh::Vec3f* n, ge::detail::SurfaceClass* surface, float light[3],
+              float st[2]) {
   const double d[3] = {at.x - from.x, at.y - from.y, at.z - from.z};
   const double len = ge::core::hypot3(d[0], d[1], d[2]);
   if (len < 1e-3 || m.leaves.empty()) return false;
@@ -141,6 +143,11 @@ bool face_hit(const ge::brush::Map& m, const sh::Vec3f& from, const sh::Vec3f& a
       const float uv[2] = {wa * la[0] + wb * lb[0] + wc * lc[0],
                            wa * la[1] + wb * lb[1] + wc * lc[1]};
       if (!ge::brush::lightmap_at(m, sf.lightmap, uv, light)) light[0] = light[1] = light[2] = -1;
+      // And where on its texture (texels where the family stores them so, else whole textures).
+      const float* ta = m.vertices[m.indices[sf.first + t]].st;
+      const float* tb = m.vertices[m.indices[sf.first + t + 1]].st;
+      const float* tc = m.vertices[m.indices[sf.first + t + 2]].st;
+      for (int k = 0; k < 2; ++k) st[k] = wa * ta[k] + wb * tb[k] + wc * tc[k];
       const ge::brush::Texture* tex =
           sf.texture < m.textures.size() ? &m.textures[sf.texture] : nullptr;
       *surface = tex == nullptr                           ? ge::detail::SurfaceClass::unknown
@@ -240,6 +247,36 @@ void wall_colour(FxState& s, const ge::brush::Map& m, uint32_t index, float out[
   }
   s.wall_colours[index] = mean;
   for (int k = 0; k < 3; ++k) out[k] = mean[k];
+}
+
+// THE COLOUR WHERE A ROUND WENT IN: the texture's own texels round the point `st` (Vertex::st's
+// kind) the hole is pressed at, kHolePatch across and wrapping as the texture tiles, their mean in
+// linear light through the palette; the whole texture's mean (`wall_colour`) where the map holds no
+// pixels for it or its coordinates are not texels. So what a hit tears off a brick is the brick's,
+// off the mortar the mortar's.
+constexpr int kHolePatch = 4;  // texels: about a hole's width on a classic wall
+void hole_colour(FxState& s, const ge::brush::Map& m, uint32_t index, const float st[2],
+                 float out[3]) {
+  const ge::brush::Texture* tex = index < m.textures.size() ? &m.textures[index] : nullptr;
+  if (tex == nullptr || !m.st_texels || tex->width == 0 || tex->height == 0 ||
+      tex->indexed.size() < size_t(tex->width) * tex->height || s.palette.size() < 768) {
+    wall_colour(s, m, index, out);
+    return;
+  }
+  const int w = static_cast<int>(tex->width), h = static_cast<int>(tex->height);
+  const int x0 = static_cast<int>(std::floor(st[0])) - kHolePatch / 2;
+  const int y0 = static_cast<int>(std::floor(st[1])) - kHolePatch / 2;
+  double sum[3] = {0, 0, 0};
+  for (int dy = 0; dy < kHolePatch; ++dy)
+    for (int dx = 0; dx < kHolePatch; ++dx) {
+      const int x = ((x0 + dx) % w + w) % w, y = ((y0 + dy) % h + h) % h;
+      const uint8_t i = tex->indexed[size_t(y) * size_t(w) + size_t(x)];
+      for (int k = 0; k < 3; ++k) {
+        const double c = s.palette[size_t(i) * 3 + size_t(k)] / 255.0;
+        sum[k] += c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4);
+      }
+    }
+  for (int k = 0; k < 3; ++k) out[k] = static_cast<float>(sum[k] / (kHolePatch * kHolePatch));
 }
 
 // Two unit ways square to `n` and to each other.
@@ -1053,12 +1090,14 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     bool on_face = false;                // `face` found the map's triangle
     uint32_t face_texture = 0;           // and its texture
     float face_light[3] = {-1, -1, -1};  // and its baked light there
+    float face_st[2] = {0, 0};           // and where on its texture
     const auto face = [&](const sh::Vec3f& from, double normal[3], double dir[3]) {
       sh::Vec3f fn{};
       ge::detail::SurfaceClass sc = ge::detail::SurfaceClass::unknown;
       const sh::Vec3f hit = e.kind == EffectKind::beam ? e.end : e.at;
       engine_dir({hit.x - from.x, hit.y - from.y, hit.z - from.z}, dir);
-      on_face = map != nullptr && face_hit(*map, from, hit, &face_texture, &fn, &sc, face_light);
+      on_face =
+          map != nullptr && face_hit(*map, from, hit, &face_texture, &fn, &sc, face_light, face_st);
       if (on_face) {
         engine_dir(fn, normal);
       } else {
@@ -1104,7 +1143,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           }
           w.surface = ge::detail::surface_name(sc);
           w.nail = nail;
-          if (on_face && map != nullptr) wall_colour(s, *map, face_texture, w.colour);
+          if (on_face && map != nullptr) hole_colour(s, *map, face_texture, face_st, w.colour);
           // The light on the face where it hit (its own lightmap there).
           for (int k = 0; k < 3; ++k) w.light[k] = face_light[k] >= 0 ? 2 * face_light[k] : -1;
           if (l.map) w.floor_y = floor_under(*l.map, e.at, eye_map);
