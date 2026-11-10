@@ -86,6 +86,16 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
                             "+strafe held does)",
                     .kind = ge::console::CvarKind::boolean},
                    &c.lookstrafe);
+  con.cvars().bind({.name = "in_mouse_release",
+                    .fallback = "5",
+                    .flags = ge::console::kArchive,
+                    .help = "what frees the mouse while the window has the focus (it is taken "
+                            "the moment the window gets it): 1 the console, 2 a menu (its pointer "
+                            "then hovers and clicks), 4 a demo's play bar; add them (0: never)",
+                    .kind = ge::console::CvarKind::integer,
+                    .min = 0,
+                    .max = 7},
+                   &c.mouse_release);
   con.cvars().bind({.name = "cl_yawspeed",
                     .fallback = "140",
                     .flags = ge::console::kArchive,
