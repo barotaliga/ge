@@ -17,7 +17,8 @@
 #      shaders       every embedded WGSL shader through Tint (incremental: only what changed)
 #   7. tests         cli_diagnostics_test (every message held to the diagnostics convention),
 #                    each changed test, and the test every changed file's ge:test tag names,
-#                    only their executables linked
+#                    only their executables linked; when the disk cannot hold them all, a
+#                    batch at a time, each batch's executables deleted after it runs
 #   8. digests       each lab the change reaches (`ge digest --affected --list`) at its smoke flags,
 #                    against tests/digests: a digest the change moved is caught here,
 #                    not by CI's labs_smoke a round later
@@ -30,7 +31,7 @@
 #
 # ge:summary CI's cheap gates before a push: format, agents, libm, lint, tests, the reached labs
 # ge:keywords ci precheck gates fmt-check agents-check libm-check lint changed-files affected-tests
-# ge:keywords reached-labs digests
+# ge:keywords reached-labs digests disk-full test-batches batch delete-executables
 # ge:skill commit
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -158,11 +159,48 @@ regex="^($(IFS='|'; echo "${tests[*]}"))\$"
 mapfile -t test_targets < <(ninja -C "$build" -t targets all 2>/dev/null |
   sed -n 's/^\(tests\/[a-z0-9_]*_test\): .*EXECUTABLE_LINKER.*/\1/p' |
   grep -xF -f <(printf 'tests/%s\n' "${tests[@]}") || true)
-if ((${#test_targets[@]})); then
-  gate "link tests" ninja -C "$build" "${test_targets[@]}" || true
+# A change to a low library (engine/core) reaches every test, and their ASan executables (about
+# 32 MB each) outgrow a small cloud disk. When the free space cannot hold them all with half to
+# spare, they are linked, run and deleted a batch at a time (PRECHECK_TEST_BATCH sets the size;
+# the objects stay, so a later build links only what it needs again).
+batch=${PRECHECK_TEST_BATCH:-}
+if [[ -z "$batch" && -n "$free_gb" ]]; then
+  free_now=$(df -Pk "$build" 2>/dev/null | awk 'NR==2 {print int($4 / 1048576)}')
+  batch=$(( ${free_now:-$free_gb} * 16 ))
+  ((batch < 8)) && batch=8
 fi
-gate "tests (${#tests[@]})" ctest --test-dir "$build" -R "$regex" -j "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" \
-  --output-on-failure || true
+jobs="$(nproc 2>/dev/null || sysctl -n hw.ncpu)"
+if [[ -z "$batch" ]] || ((${#test_targets[@]} <= batch)); then
+  if ((${#test_targets[@]})); then
+    gate "link tests" ninja -C "$build" "${test_targets[@]}" || true
+  fi
+  gate "tests (${#tests[@]})" ctest --test-dir "$build" -R "$regex" -j "$jobs" \
+    --output-on-failure || true
+else
+  # One batch: its executables linked, its tests run, the executables deleted again.
+  test_batch() {
+    local rc=0 names=() t
+    ninja -C "$build" "$@" || rc=1
+    for t in "$@"; do names+=("$(basename "$t")"); done
+    ctest --test-dir "$build" -R "^($(IFS='|'; echo "${names[*]}"))\$" -j "$jobs" \
+      --output-on-failure || rc=1
+    for t in "$@"; do rm -f "${build:?}/$t"; done
+    return $rc
+  }
+  echo "precheck: ${#test_targets[@]} test executables will not fit the disk at once; linked," \
+    "run and deleted $batch at a time (PRECHECK_TEST_BATCH)."
+  for ((i = 0; i < ${#test_targets[@]}; i += batch)); do
+    part=("${test_targets[@]:i:batch}")
+    gate "tests $((i + 1))-$((i + ${#part[@]})) of ${#test_targets[@]}" test_batch "${part[@]}" || true
+  done
+  # Tests the change reaches that are not one of those executables (none today) run last.
+  mapfile -t rest < <(printf '%s\n' "${tests[@]}" |
+    grep -vxF -f <(printf '%s\n' "${test_targets[@]}" | sed 's|^tests/||') || true)
+  if ((${#rest[@]})); then
+    gate "tests (${#rest[@]} more)" ctest --test-dir "$build" \
+      -R "^($(IFS='|'; echo "${rest[*]}"))\$" -j "$jobs" --output-on-failure || true
+  fi
+fi
 
 # The labs the change reaches, each against its committed digest, side by side. As in CTest's
 # labs_smoke (tests/CMakeLists.txt), the leak check is off: the software GPU driver's worker

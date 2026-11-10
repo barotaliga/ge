@@ -1643,7 +1643,32 @@ list is in `porting/shooters-edge/survey.md`.
 | Later | Client-side QC (a mod drawing its own HUD and predicting its own entities) | M18m |
 | Later | Single-player campaigns and co-op on the single-player `progs` | M18s |
 | Better | The easy jump: `cl_speedjump 1` hops and gains on forward and jump alone where the server's `pm_speedjump` allows it, and on any other server by the client strafing for the player, disclosed in the user info (`docs/movement.md`) | M18e |
+| Better | The quick weapon: `cl_quickweapon 1` makes +attack fire the best weapon carried of `cl_quickweapon_prio` and put `cl_quickweapon_default` back; +attack2 the same off `cl_quickweapon_prio2`; `cl_quickweapon_preview` shows the weapon a press would fire see-through in hand, `cl_quickweapon_hide` hides the hand instead (§ The quick weapon) | M48i |
 | Later | Splitscreen; touch controls for phones and tablets | M18m |
+
+### The quick weapon
+
+A fire key that fires the best weapon carried, then puts the usual one back, all on the client
+(`plugins/shooter/quick_weapon.hpp` for any shooter, `client/quick_fire.hpp` the game's wiring),
+so it works in the window's own match and on any server joined: it asks only for what a player
+could, a weapon by its key (`impulse`) and the attack.
+
+| Cvar | Default | What it does |
+| --- | --- | --- |
+| `cl_quickweapon` | 0 | 1: +attack is a quick fire off `cl_quickweapon_prio` |
+| `cl_quickweapon_prio` | `7 8 5 6 3 2 4 1` | +attack's weapons, best first, by weapon key |
+| `cl_quickweapon_prio2` | `8 3 2` | +attack2's (the hitscan guns); empty: +attack2 fires what is in hand |
+| `cl_quickweapon_default` | `2 1` | the weapon put back: the first carried with ammunition |
+| `cl_quickweapon_preview` | 1 | the weapon +attack would fire drawn see-through in hand, solid as it fires |
+| `cl_quickweapon_hide` | 0 | with the preview off: no weapon drawn while +attack would switch |
+
++attack2 is bound to no key: `bind mouse2 +attack2` (MOUSE2 jumps by default). A press asks for
+the weapon with the attack in every command until it is in hand, so a server that keeps an ask
+only for the command it came in still switches and fires the moment the weapon in hand is free; a
+tap holds the attack until the shot shows (the ammunition fell) or a second passes; the way back
+is asked every 0.2 s for 1.5 s; a weapon key the player presses wins. The preview is the held
+weapon drawn with `HeldDraw::opacity` below 1: a screen door that moves each frame, which the
+frame's TAA-U averages to a see-through gun. Lab: `se-quickweapon`.
 
 ## Labs
 

@@ -85,6 +85,11 @@ struct HeldDraw {
   // The share of the screen's height the gun is raised by, the whole of it alike: a view drawn
   // above a status bar (Shooter's Edge's classic bar) shows the gun over the bar, not behind it.
   float lift = 0;
+  // The share of the gun drawn: below 1 a see-through ghost, its pixels screen-door dithered by a
+  // pattern that moves frame to frame, so the frame's TAA-U averages it to a see-through gun in an
+  // opaque pass (a game's preview of a weapon not yet in hand); a ghost also takes a faint cool
+  // light of its own, so it reads in a dark room.
+  float opacity = 1;
   // Coming into being or going out of it (render/morph.hpp's MorphWarp): its axis and span in the
   // held frame; pinch and shimmer are not drawn here.
   MorphWarp warp;
@@ -113,7 +118,7 @@ struct GpuHeldDraw {
   float toward[4];   // view, unit; the held lights' count
   float right[4];    // the view's right in the world (camera-relative); the lens ratio
   float up[4];       // and its up; the lift in NDC (twice the share of the screen)
-  float forward[4];  // and its forward
+  float forward[4];  // and its forward; 1 - the opacity
   float lights[viewmodel::kHeldLights][8];  // at (view, m), range; rgb, radius
   float warp[16];                           // render/wgsl/warp.wgsl's Warp
 };
