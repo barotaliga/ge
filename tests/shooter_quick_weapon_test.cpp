@@ -191,8 +191,9 @@ TEST(the_look_ghosts_the_weapon_attack_would_fire) {
   r.frame(true);
   float last = sh::kGhost;
   bool rising = true;
-  for (double at = r.t; at <= r.t + sh::kSolidS + kDt; at += kDt / 4) {
-    look = sh::quick_look(r.q, r.s, r.server.armed(), at);
+  const int steps = static_cast<int>((sh::kSolidS + kDt) / (kDt / 4));
+  for (int i = 0; i <= steps; ++i) {
+    look = sh::quick_look(r.q, r.s, r.server.armed(), r.t + i * kDt / 4);
     rising = rising && look.ghost && look.rest && look.weapon == 7 && look.opacity >= last;
     last = look.opacity;
   }
