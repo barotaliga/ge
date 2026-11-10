@@ -40,6 +40,8 @@ void see_movers(Pilot& p, const PilotSense& s);
 bool silent(const Pilot& p, int32_t m);
 // Whether the player stands on mover `ent`'s top as it is now (true for one that is not ridden).
 bool on_mover_top(const Pilot& p, const PilotSense& s, int32_t ent);
+// Whether the player stands on ridden mover `ent`'s top, inside its box: aboard it.
+bool aboard(const Pilot& p, const PilotSense& s, int32_t ent);
 // Whether the link a -> b's mover keeps the pilot at its start now.
 bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t a, int32_t b);
 // Whether the player is under ridden mover `m`, raised off its rest.

@@ -188,9 +188,12 @@ bool reached(const Pilot& p, const PilotSense& s, int32_t n) {
   if (!s.onground) return false;
   // A ride's top is wherever on the mover the player boarded: arrived by height alone.
   if (b.ride >= 0) return s.origin.z >= b.origin.z - kRideArrive;
+  // A node on a plat: anywhere on its top (stepped onto, the player is on it; late hands
+  // circling its node let it leave without him); a door's, near it.
+  if (b.mover >= 0 && aboard(p, s, b.mover)) return true;
   if (across(s.origin, b.origin) > p.set.arrive) return false;
   const float dz = s.origin.z - b.origin.z;
-  if (b.mover >= 0) return on_mover_top(p, s, b.mover);  // on a plat: on its top as it is now
+  if (b.mover >= 0) return on_mover_top(p, s, b.mover);
   return dz <= kStandUp && dz >= -kStandUp;
 }
 

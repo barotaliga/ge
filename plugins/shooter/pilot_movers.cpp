@@ -68,6 +68,16 @@ bool on_mover_top(const Pilot& p, const PilotSense& s, int32_t ent) {
   return feet >= now->absmax.z - tol && feet <= now->absmax.z + tol;
 }
 
+bool aboard(const Pilot& p, const PilotSense& s, int32_t ent) {
+  const NavMover* rest = mover_of(p.g->movers, ent);
+  const NavMover* now = mover_of(s.movers, ent);
+  if (rest == nullptr || now == nullptr || rest->model == nullptr) return false;
+  // (Not `onground`: a plat starting up lifts its rider off it for a frame.)
+  return on_mover_top(p, s, ent) && s.origin.x + kPlayerMaxs.x > now->absmin.x &&
+         s.origin.x + kPlayerMins.x < now->absmax.x && s.origin.y + kPlayerMaxs.y > now->absmin.y &&
+         s.origin.y + kPlayerMins.y < now->absmax.y;
+}
+
 // Whether the link's mover keeps the pilot at its start now. A ride's plat away from its rest
 // with a swimmer under its top (`floor_swim`: on a pool's floor under a raised plat, which a plat
 // coming down onto him sends back up, so it would never come for him) is in his way too.
@@ -99,6 +109,8 @@ bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t
              s.origin.x + kPlayerMins.x < now->absmax.x &&
              s.origin.y + kPlayerMaxs.y > now->absmin.y &&
              s.origin.y + kPlayerMins.y < now->absmax.y;
+    // Already aboard (it starts up under him as he steps on): no longer in his way.
+    if (aboard(p, s, l.mover)) return false;
     if (away || up > kBoardRest || up < -kBoardRest || !silent(p, l.mover)) return true;
     // Its top already more than a step over the feet (rising off its rest under another rider):
     // walked on, the player goes in under it, and standing in its field holds it up for good.
