@@ -12,8 +12,10 @@
 // ge:summary The bot team headless: N bots join a classic server, a stdin console, a match folder
 // ge:keywords shooters_edge_bots bots-cli headless-bots live-server stdin-console match-folder
 // ge:skill bots net
+#ifndef _WIN32
 #include <poll.h>
 #include <unistd.h>
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -216,7 +218,8 @@ int run(int argc, char** argv) {
     next_tick += 13000;
     if (now - next_tick > 200000) next_tick = now;  // a stall: never a flood of ticks after it
     sn::bot_team_tick(team, now);
-    // The console.
+    // The console, typed on stdin (a POSIX terminal; on Windows the control channel alone).
+#ifndef _WIN32
     pollfd p{0, POLLIN, 0};
     while (poll(&p, 1, 0) > 0 && (p.revents & POLLIN)) {
       char buf[512];
@@ -233,6 +236,7 @@ int run(int argc, char** argv) {
           sn::bot_team_command(team, line);
       }
     }
+#endif
     const double now_s = static_cast<double>(now) / 1e6;
     if (!control.path.empty() && team.ticks % 8 == 0)
       for (const std::string& line : sn::control_poll(control)) {
