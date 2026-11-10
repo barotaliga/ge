@@ -299,7 +299,7 @@ TEST(keys_and_the_mouse_make_the_command_and_turn_the_view) {
   CHECK(std::fabs(view.x + 3.3f) < 1e-3f);         // up is a negative pitch
 }
 
-TEST(the_binds_buttons_make_the_command_walk_run_and_sidestep) {
+TEST(the_binds_buttons_make_the_command_always_run_and_sidestep) {
   ge::console::Console con;
   cl::ControlSettings c;
   cl::add_cvars(con, c);
@@ -316,18 +316,27 @@ TEST(the_binds_buttons_make_the_command_walk_run_and_sidestep) {
   con.run();
   ge::input::InputState in;
   sh::MoveCmd cmd = cl::read_controls(cl::button_moves(c), in, c);
-  CHECK(cmd.forward == -400);  // cl_run 1: running
+  CHECK(cmd.forward == -400);  // always running
   CHECK(cmd.buttons == sh::kButtonAttack);
   CHECK(cmd.impulse == 7);
   CHECK(cl::button_moves(c).impulse == 0);  // the impulse is sent once
-  con.key("shift", true);                   // +speed walks
+  // The classic game has no walking: there is no cl_run, and +speed (SHIFT) is the run key,
+  // doubling the moves inside the protocol's limit, never slower.
+  CHECK(con.cvars().find("cl_run") == nullptr);
+  con.key("shift", true);
   con.run();
-  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -200);
-  con.execute("cl_run 0");  // off, +speed runs
-  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -400);
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -508);
   con.key("shift", false);
   con.run();
-  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -200);
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -400);
+  // C crouches: the up axis below 0 (a move that ducks: the sequel's; the classic swims down).
+  CHECK(con.binds().get(ge::console::BindMode::game, "c") == "+movedown");
+  con.key("c", true);
+  con.run();
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).up == -200);
+  con.key("c", false);
+  con.run();
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).up == 0);
   // lookstrafe: the mouse's sideways counts sidestep and leave the yaw alone.
   in.mouse.dx = 50;
   sh::Vec3f view{0, 90, 0};
@@ -481,7 +490,7 @@ TEST(the_player_s_body_runs_while_he_moves_and_stands_when_still) {
   CHECK(frame() >= 12 && frame() <= 16);
 }
 
-TEST(a_demo_s_hand_holds_the_recorder_s_weapon_and_none_without_a_view_model_or_dead) {
+TEST(a_demo_s_hand_holds_the_recorder_s_weapon_none_without_a_view_model_and_sinks_dead) {
   cl::DemoState s;
   s.stats[cl::kStatHealth] = 100;
   s.stats[cl::kStatWeapon] = 5;         // a view model's index
@@ -496,9 +505,14 @@ TEST(a_demo_s_hand_holds_the_recorder_s_weapon_and_none_without_a_view_model_or_
   s.stats[cl::kStatWeapon] = 0;  // a spectator's recording
   CHECK(!step().drawn);
   s.stats[cl::kStatWeapon] = 5;
-  s.stats[cl::kStatHealth] = 0;
+  for (int i = 0; i < 60; i++) step();  // up again
+  s.stats[cl::kStatHealth] = 0;         // dead: the weapon sinks, then is gone
+  s.stats[cl::kStatWeapon] = 0;         // the recording clears it at once
+  CHECK(step().drawn);
+  for (int i = 0; i < 60; i++) step();  // 0.78 s, past kDeathLowerS
   CHECK(!step().drawn);
   s.stats[cl::kStatHealth] = 100;
+  s.stats[cl::kStatWeapon] = 5;
   s.intermission = true;
   CHECK(!step().drawn);
 }

@@ -144,9 +144,10 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   }
 
   const WeaponLook& look = weapon_look(hand.held);
-  const vm::PlaceRow row = hand.at_eye ? eye_row(s) : held_row(look, s);
+  vm::PlaceRow row = hand.at_eye ? eye_row(s) : held_row(look, s);
+  if (in.dead) row.switch_s = kDeathLowerS;  // the death's slower sink
   vm::PlaceInput pin = in.place;
-  pin.lowered = hand.held != hand.wanted ? 1.0 : 0.0;
+  pin.lowered = hand.held != hand.wanted || in.dead ? 1.0 : 0.0;
   pin.shot = in.fired ? look.kick : 0.0;
   HandFrame f;
   f.weapon = hand.held;

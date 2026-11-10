@@ -27,6 +27,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `deaths.md` | Monster deaths, gibs and blood: each kind's death sequences, gib health and pieces, the gib and head throw, blood at hits, the client's bursts and model-flag trails, bouncing, the zombie, the player (M18s7) |
 | `demo-smoothing.md` | Recorded games drawn between their frames: the client's one-frame-behind playback, the rules for players, the tracked view and entities, where it snaps |
 | `held-weapons.md` | The first-person weapon's frames: the axe's two swings, how a swing is picked, when the frame is set, what the client draws |
+| `jump-walk-death.md` | The jump's and the swimmer's sounds, landing sounds, walking (there is none at the modern defaults: `+speed` is a run key), the view weapon and eye at death |
 | `sequel.md` | The sequel (M18t2, for M18t3 and M18t4): the index of its notes, the game's shape, the demo pack measured, the game library's calls as our rules runner's |
 | `sequel-formats.md` | The sequel's files: the search order, contents and surface flags, the collision lumps, WAL, PCX and the palette, MD2, SP2, the sky, player models, skins and sounds |
 | `sequel-movement.md` | The sequel's player move (the packed state, the command, every step, snapping) and the brush trace and point contents it moves through |

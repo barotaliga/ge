@@ -15,10 +15,20 @@ namespace {
 
 // CUSTOMIZE CONTROLS' moves, in the classic page's order.
 constexpr Control kControls[] = {
-    {"+attack", "ATTACK"},      {"+forward", "MOVE FORWARD"},  {"+back", "MOVE BACK"},
-    {"+moveleft", "STEP LEFT"}, {"+moveright", "STEP RIGHT"},  {"+jump", "JUMP"},
-    {"+speed", "WALK / RUN"},   {"+strafe", "SIDESTEP"},       {"+left", "TURN LEFT"},
-    {"+right", "TURN RIGHT"},   {"impulse 10", "NEXT WEAPON"}, {"+voip", "PUSH TO TALK"},
+    {"+attack", "ATTACK"},
+    {"+forward", "MOVE FORWARD"},
+    {"+back", "MOVE BACK"},
+    {"+moveleft", "STEP LEFT"},
+    {"+moveright", "STEP RIGHT"},
+    {"+jump", "JUMP"},
+    {"+speed", "RUN"},
+    {"+strafe", "SIDESTEP"},
+    {"+left", "TURN LEFT"},
+    {"+right", "TURN RIGHT"},
+    {"impulse 10", "NEXT WEAPON"},
+    {"+voip", "PUSH TO TALK"},
+    {"+movedown", "CROUCH / SWIM DOWN"},
+    {"+moveup", "SWIM UP"},
 };
 
 }  // namespace
