@@ -495,12 +495,14 @@ int run_main(int argc, char** argv) {
   const auto pull = [](float* out, int frames, void* user) {
     static_cast<ge::audio::Synth*>(user)->render(out, frames);
   };
+  // The hearings before the device: it is closed first, so its thread never reads a recording
+  // they free on the way out.
+  cl::DemoHearing hearing(synth);       // a played demo's sounds, voices and printed lines
+  cl::ListenHearing heard_here(synth);  // the window's own game's sounds (listen_sound.hpp)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
   out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"
                       : std::string("shooters_edge: no audio device; a demo plays silent"));
-  cl::DemoHearing hearing(synth);       // a played demo's sounds, voices and printed lines
-  cl::ListenHearing heard_here(synth);  // the window's own game's sounds (listen_sound.hpp)
   // The microphone, opened the first time +voip is held on a server joined (the system asks the
   // player's leave then, never at start) and read every frame after (net/classic_remote.hpp).
   std::unique_ptr<ge::platform::AudioIn> mic;
@@ -510,6 +512,7 @@ int run_main(int argc, char** argv) {
   // nothing in `in_mouse_release` asks for the pointer. Taken below on the first frame.
   ge::input::MouseCapture mouse;
   bool focused = ge::platform::has_focus(*window);
+  bool paused_before_menu = false;  // a played demo's pause when the menu opened over it
   bool vsync = true;  // false while a timedemo runs unlocked; the player's vid_vsync otherwise
   // The surface at the window's size, its present mode the player's vid_vsync (a timedemo's
   // unlocked one aside), its swap chain's images by vid_framelatency.
@@ -551,14 +554,16 @@ int run_main(int argc, char** argv) {
   // The benchmark over: its report, vsync back, the listen server's world again.
   int bench_failed = 0;
   std::function<bool()> back_to_listen;  // below
-  const auto end_bench = [&](const std::string& why, double now_s) {
+  // `by_player`: the player stopped a played demo (Escape on a timedemo, or something else asked
+  // for from the menu or the console over a paused one): not a failure.
+  const auto end_bench = [&](const std::string& why, double now_s, bool by_player = false) {
     const std::string setup = std::to_string(w) + "x" + std::to_string(h) +
                               ", drawn offscreen, shown at 30 Hz, r_look " + picture.look + ", " +
                               device->report.name + " on " + device->report.backend;
     // A run stopped before a frame was timed has no report, only its reason; playback times none.
     if (bench.paced) {
       console.print("playdemo: " + bench.name + (why.empty() ? " ended" : " stopped: " + why));
-      if (why.find("Escape") == std::string::npos && !why.empty()) bench_failed = 1;
+      if (!by_player && !why.empty()) bench_failed = 1;
     } else if (why.empty() || !bench.frame_s.empty())
       for (const std::string& line :
            cl::bench_report(bench.name, setup, cl::bench_stats(bench.frame_s)))
@@ -727,14 +732,20 @@ int run_main(int argc, char** argv) {
       full_applied = win.fullscreen;
     }
     ge::input::update(held, queue);
+    // What the console and the menu ask for this frame, against what was asked before it: a
+    // played demo paused behind the menu gives the window up to it (below).
+    const std::string map_before = next_map;
+    const bool joined_before = remote.active;
     ge::ui::feed_console(console, con_view, queue, con_keys);
     if (con_view.open() != text_on) {
       text_on = con_view.open();
       ge::platform::set_text_input(*window, text_on);
     }
     // The main menu: Escape opens it and goes back out of it; while it is up it has the keys and
-    // the pointer.
+    // the pointer. Over a played demo it pauses it, the demo's frame the backdrop, and closing it
+    // plays on (as it was: a demo paused by hand stays paused).
     const bool was_open = game_menu.open();
+    const bool watched = bench.active && bench.paced;
     {
       using ge::platform::Key;
       ge::ui::MenuInput mi;
@@ -757,28 +768,41 @@ int run_main(int argc, char** argv) {
       }
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
       // A benchmark's Escape stops the run (below) and opens nothing.
-      const bool opening =
-          (!con_keys.held && !was_open && !bench.active && input.tapped(Key::escape)) ||
-          (!first_pictures.valid() && std::exchange(menu_at_start, false));
+      const bool opening = (!con_keys.held && !was_open && (!bench.active || watched) &&
+                            input.tapped(Key::escape)) ||
+                           (!first_pictures.valid() && std::exchange(menu_at_start, false));
       if (opening) {  // the slots' lines read again: a save may have been made since
         menu_host.saves.assign(shooters_edge::menu::kSaveSlots, {});
         for (int i = 0; i < shooters_edge::menu::kSaveSlots; i++)
           menu_host.saves[static_cast<size_t>(i)] = cl::save_label(files, "s" + std::to_string(i));
       }
       game_menu.update(mi, opening, menu_host, wall);
+      if (watched && !was_open && game_menu.open()) {  // (Escape or `togglemenu`): held behind it
+        paused_before_menu = playback.paused;
+        playback.paused = true;
+      }
       cl::keys_to_menu(game_menu, menu_host, queue, held);            // CUSTOMIZE CONTROLS' key
       if (std::string demo = game_menu.take_demo(); !demo.empty()) {  // DEMOS: checked, played
         bench_ask = std::move(demo);
         play_ask = true;
       }
       if (was_open && !game_menu.open()) {
-        save_settings();   // what the menu changed is kept
+        if (watched) playback.paused = paused_before_menu;  // the demo plays on
+        save_settings();                                    // what the menu changed is kept
         on_title = false;  // the title's menu closed: the map is played (once it has loaded)
         // A setting the world reads once (the enhanced textures and skins, the rebaked light, the
         // bloom) changed: the world made again behind the window, the old one drawn meanwhile.
         if (world && listen.server != nullptr && listen.map && cl::world_stale(*world))
           cl::load_world(loader, files, *listen.map, picture, listen.server->models, adapter, t);
       }
+    }
+    // Something else asked for while a played demo is up (a map, a save, a game folder, a server,
+    // another demo): the demo stopped, so it is not held behind what comes next.
+    if (watched && (next_map != map_before || !load_ask.empty() || !folder_ask.empty() ||
+                    (remote.active && !joined_before) || !bench_ask.empty())) {
+      bench.quit_after = false;  // `-playdemo`'s window stays for what was asked
+      if (!end_bench("the player asked for something else", t, true)) return 1;
+      game_menu.hide();
     }
     // The mouse is the look's whenever the window has the focus: a click on the window or on the
     // app's icon in the Dock takes it, no click in the window needed. Only what `in_mouse_release`
@@ -970,8 +994,8 @@ int run_main(int argc, char** argv) {
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
     const bool drawn_remote = remote.active && (bench_map || joined == decltype(joined)::new_level);
-    if (bench.active && input.tapped(ge::platform::Key::escape)) {
-      if (!end_bench("Escape pressed", t)) return 1;
+    if (bench.active && !bench.paced && input.tapped(ge::platform::Key::escape)) {
+      if (!end_bench("Escape pressed", t, true)) return 1;
       continue;
     }
     if (bench.active || drawn_remote) {
@@ -982,11 +1006,16 @@ int run_main(int argc, char** argv) {
           drawn_remote ? (joined == decltype(joined)::new_level ? cl::TimedemoStep::new_level
                                                                 : cl::TimedemoStep::frame)
           : bench.paced
-              ? cl::playback_step(playback, bench,
-                                  {con_view.open() ? std::span<const bool>{} : input.pressed,
-                                   input.pointer_x * px_per_unit, input.pointer_y * px_per_unit,
-                                   (input.pointer_buttons & 1u) != 0},
-                                  w, h, wall, t, said, error)
+              // The menu or the console up: the play bar and its keys left alone.
+              ? (con_view.open() || game_menu.open()
+                     ? cl::playback_step(playback, bench,
+                                         {{}, playback.pointer_x, playback.pointer_y, false}, w, h,
+                                         wall, t, said, error)
+                     : cl::playback_step(
+                           playback, bench,
+                           {input.pressed, input.pointer_x * px_per_unit,
+                            input.pointer_y * px_per_unit, (input.pointer_buttons & 1u) != 0},
+                           w, h, wall, t, said, error))
               : cl::timedemo_step(bench, error);
       for (const std::string& line : said) console.print(line);
       // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.
@@ -1036,10 +1065,10 @@ int run_main(int argc, char** argv) {
       const auto placed =
           hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style());
       playback.bar_bottom_px = cl::hud_inset(placed, h);
-      if (bench.paced) cl::playback_draw(overlay, playback, bench, w, h, t);
+      if (bench.paced && !game_menu.open()) cl::playback_draw(overlay, playback, bench, w, h, t);
       ge::hud::draw_frame_rate(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(),
                                pacing.times, pacing.refresh, pacing.show);
-      if (drawn_remote) {  // a game joined: its menu and console over it
+      if (paced) {  // a demo watched or a game joined: the menu and the console over it
         game_menu.draw(overlay, w, h, t);
         con_view.frame(wall);
         ge::ui::draw_console(overlay, con_view, {}, nullptr, t);

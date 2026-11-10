@@ -365,7 +365,10 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
 demo ends) plays a recorded game **at its own pace**: vsync on, nothing timed, each drawn frame
 moving the demo's clock on by the frame's wall time (at most a tenth of a second, so a stall
 slows the demo instead of skipping it). `cl_demospeed <x>` sets the speed (1 by default, up to
-20; 0 pauses). ESCAPE stops it. The demo is found and drawn as the benchmark finds and draws it:
+20; 0 pauses). ESCAPE pauses it and opens the main menu with the paused demo drawn behind it;
+ESCAPE out of the menu plays on (a demo paused by hand stays paused), and whatever the menu or the
+console starts there (a map, a save, a server, another demo, another game folder) stops it. The
+demo is found and drawn as the benchmark finds and draws it:
 the map from the recorded eye, the HUD, and every entity the demo holds (the other players in
 their colours, the items, the missiles, the level's statics), as `-demovideo` draws them.
 

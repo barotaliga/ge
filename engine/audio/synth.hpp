@@ -36,8 +36,10 @@
 // A SAMPLED VOICE is steered like a layer (`sample_set`: a gain and a pan on a glide, which is
 // how `channels.hpp` places a moving source each frame) and ends on its own when a recording
 // that does not loop runs out. Its `Pcm` is read in place, never copied: the caller keeps it
-// alive until the synth is gone. `kMaxSamples` sound at once; a new one past that steals the
-// quietest (`Stats::stolen`), so a far sound gives way before a near one.
+// alive until the synth is gone, or until `reads` says no voice reads it any more (a voice
+// stopped still fades for a while on the render thread, so a recording freed at its
+// `sample_stop` is read after it was freed). `kMaxSamples` sound at once; a new one past that
+// steals the quietest (`Stats::stolen`), so a far sound gives way before a near one.
 //
 // THREADS: the game thread is the PRODUCER (`tone`, `noise`, `layer`, `set`, `stop`, `bus_gain`)
 // and the render thread is the CONSUMER (`render`): calls travel through a single-producer
@@ -53,6 +55,7 @@
 // ge:keywords synth instrument dsp-graph render block one-shot layer bus fader echo delay
 // ge:keywords limiter compressor ring spsc command producer consumer render-thread device
 // ge:keywords voice-pool steal stats offline-render room reverb stream feed queued starved pcm
+// ge:keywords reads pcm-lifetime use-after-free free-recording
 // ge:skill audio
 // ge:test tests/audio_synth_test.cpp
 #pragma once
@@ -161,6 +164,9 @@ class Synth {
   void sample_stop(SampleId id, float fade_s = 0.01f);
   // Whether it is still sounding (or waiting for its first block). Safe from the producer.
   bool sample_live(SampleId id) const;
+  // Whether a sampled voice reads `pcm`: one sounding, fading out, or sent and not yet applied.
+  // A recording may be freed once this is false (and no `sample` of it is sent after). Producer.
+  bool reads(const Pcm& pcm) const;
   // Build a stream at gain 1, centred, with `echo` of it sent to the echo. Invalid when all
   // `kMaxStreams` are built or a stopped one has not finished fading. Its ring is allocated the
   // first time its slot is used, here, on the producer's thread.

@@ -17,6 +17,7 @@
 // entity that moves follows it frame by frame. `volume` is the player's master volume over it all.
 //
 // ge:summary A recorded game's sounds on the synth: the pack's WAVs, channels, loops, ambience
+// ge:keywords retired-sounds sounding use-after-free audio-thread
 // ge:keywords demo-sound demo sounds sound-list static-sound loop ambience listener channels
 // ge:keywords stopsound attenuation playback export
 // ge:skill audio shooter
@@ -68,6 +69,9 @@ class DemoSounds {
              std::span<const std::pair<int, int>> stopped, int listener, float dt);
   // Every sound and loop stopped and the ambience silenced (the demo stopped).
   void silence();
+  // Whether the synth still reads one of its recordings (a voice sounding or fading out): until
+  // it does not, freeing it would free what the render thread reads (`RetiredSounds`).
+  bool sounding() const;
 
   const DemoSoundStats& stats() const { return stats_; }
 
@@ -88,6 +92,25 @@ class DemoSounds {
   std::optional<Ambience> ambience_;
   const ge::brush::Map* map_ = nullptr;
   DemoSoundStats stats_;
+};
+
+// SOUNDS STOPPED BUT NOT YET SILENT: a stopped voice fades for a while on the render thread,
+// reading its recording in place, so a `DemoSounds` let go (a demo over, another folder's) is
+// kept here until the synth reads none of its recordings, then freed. Freed at once it would be
+// read after it was freed (a crash on the audio thread when Escape stopped a demo).
+class RetiredSounds {
+ public:
+  RetiredSounds() = default;
+  RetiredSounds(const RetiredSounds&) = delete;
+  RetiredSounds& operator=(const RetiredSounds&) = delete;
+  // `s` silenced and kept (null: nothing).
+  void retire(std::unique_ptr<DemoSounds> s);
+  // Those the synth no longer reads freed. Called each frame and at each `retire`.
+  void prune();
+  size_t kept() const { return kept_.size(); }
+
+ private:
+  std::vector<std::unique_ptr<DemoSounds>> kept_;
 };
 
 }  // namespace shooters_edge::client

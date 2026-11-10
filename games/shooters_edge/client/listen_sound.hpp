@@ -50,6 +50,7 @@ class ListenHearing {
   ge::audio::Synth& synth_;
   float volume_;
   std::unique_ptr<DemoSounds> sounds_;
+  RetiredSounds retired_;               // the last folders' sounds, until their voices fade
   std::unique_ptr<DemoVoices> voices_;  // a match's players' voices (`Listen::voices`)
   const SearchPath* files_ = nullptr;
   int entries_ = -1;  // the listen's map entry the loops are of

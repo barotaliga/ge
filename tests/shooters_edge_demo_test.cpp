@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "audio/synth.hpp"
+#include "audio/wav.hpp"
 #include "check.hpp"
 #include "core/inflate.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -621,6 +622,44 @@ TEST(a_line_printed_in_pieces_shows_as_one_line) {
   h.prints = {{1, "next\n"}};
   hearing.frame(s, h, 0.1f, lines, centre);
   CHECK(lines.size() == 3 && lines[2] == "next");
+}
+
+TEST(a_demo_stopped_keeps_its_recordings_until_their_voices_have_faded) {
+  // Escape stops a played demo while the audio thread still fades its voices: the recordings they
+  // read must outlive the fade (freed at once, the render below reads freed memory under ASan).
+  std::vector<float> hum(11025);
+  for (size_t i = 0; i < hum.size(); i++) hum[i] = (i / 25) % 2 == 0 ? 0.3f : -0.3f;
+  cl::SearchPath files;
+  std::string error;
+  std::vector<uint8_t> pak;
+  CHECK(ge::vfs::write_pak({{"sound/hum.wav", ge::audio::wav_bytes(hum, 1, 22050)}}, &pak, &error));
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  ge::audio::Synth synth;
+  cl::DemoHearing hearing(synth);
+  cl::DemoState s;
+  s.sounds = {"", "hum.wav"};
+  s.entities.resize(4);
+  hearing.level(s, files, nullptr);
+  cl::DemoHeard h;
+  cl::DemoSound hum_on;
+  hum_on.entity = 1;
+  hum_on.channel = 1;
+  hum_on.sound = 1;
+  hum_on.attenuation = 0;  // heard everywhere
+  h.started.push_back(hum_on);
+  std::vector<std::string> lines;
+  std::string centre;
+  hearing.frame(s, h, 0.01f, lines, centre);
+  std::vector<float> out(size_t{2} * 960);
+  synth.render(out.data(), 960);  // sounding
+  CHECK(synth.stats().samples == 1);
+  hearing.stop();
+  CHECK(hearing.retired() == 1);  // its voice fades on: the recording kept
+  synth.render(out.data(), 960);  // the fade reads it
+  for (int i = 0; i < 25; i++) synth.render(out.data(), 960);
+  CHECK(synth.stats().samples == 0);
+  hearing.frame(s, h, 0.01f, lines, centre);
+  CHECK(hearing.retired() == 0);  // faded: freed
 }
 
 TEST(a_printed_line_shows_without_the_charset_s_own_letters) {
