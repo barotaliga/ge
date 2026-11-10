@@ -1,8 +1,8 @@
 // Shooter's Edge's enhanced weapon effects (games/shooters_edge/app/weapon_fx.hpp): a blast is a
 // main ball and its later billows with the same throw for the same seed, a dome off a surface that
 // throws into the half space it faces; the rocket's trail is puffs that spread and its flame points
-// back along its flight; a hit throws what its surface throws and nothing off the sky; the bolt's
-// sparks leave the face; a beam's light is capped so it never washes a room out.
+// back along its flight; a hit tears debris off the wall and no smoke, nothing off the sky; the
+// bolt's sparks leave the face; a beam's light is capped so it never washes a room out.
 //
 // ge:summary Tests Shooter's Edge's enhanced weapon effects: blasts, trails, exhaust, hits, bolt
 // ge:keywords test weapon-fx blast billows dome trail exhaust hit bolt dynamic-light shooter
@@ -87,38 +87,66 @@ TEST(the_rockets_trail_spreads_and_its_flame_points_back) {
   CHECK(f.shot.born_s < 2.0 && f.shot.look == &fx::exhaust_look());
 }
 
-TEST(a_hit_throws_its_surfaces_burst_in_the_walls_colour_and_nothing_off_the_sky) {
+TEST(a_hit_tears_debris_in_the_walls_colour_with_no_smoke_and_nothing_off_the_sky) {
   const double at[3] = {0, 0, 0}, n[3] = {0, 0, -1}, dir[3] = {0, 0, 1};
-  std::vector<gr::Blast> dust;
-  fx::Particles stone, metal, sky;
+  fx::Particles stone, metal, sky, sand, water;
   fx::WallHit w;
   for (int k = 0; k < 3; ++k) w.at[k] = at[k], w.normal[k] = n[k], w.dir[k] = dir[k];
   w.floor_y = -1.5;
   w.colour[0] = 0.3f, w.colour[1] = 0.2f, w.colour[2] = 0.1f;  // a brown wall
-  fx::hit(w, 5, 0.0, &dust, &stone);
+  fx::hit(w, 5, &stone);
   fx::WallHit steel = w;
   steel.surface = "metal";
   steel.nail = true;
-  fx::hit(steel, 5, 0.0, nullptr, &metal);
+  fx::hit(steel, 5, &metal);
   fx::WallHit sky_hit = w;
   sky_hit.surface = "sky";
-  fx::hit(sky_hit, 5, 0.0, &dust, &sky);
-  CHECK(dust.size() == 1);  // the stone's puff; the sky none
-  CHECK(!stone.empty() && !metal.empty() && sky.empty());
-  int flakes = 0, browned = 0;
+  fx::hit(sky_hit, 5, &sky);
+  fx::WallHit sand_hit = w;
+  sand_hit.surface = "sand";
+  fx::hit(sand_hit, 5, &sand);
+  fx::WallHit pool = w;
+  pool.surface = "liquid";
+  fx::hit(pool, 5, &water);
+  CHECK(!stone.empty() && !metal.empty() && sky.empty() && !sand.empty());
+  float big = 0, small = 1;
+  int fine = 0, browned = 0, hop = 0;
   for (const auto& p : stone) {
     CHECK(p.v[2] <= 1e-6f);     // off the face, back toward the shooter
-    if (p.grow > 0) continue;   // the wisp
-    CHECK(p.floor_y == -1.5f);  // what it knocks loose comes down on the floor under it
-    flakes += p.bounce > 0 ? 1 : 0;
-    browned += p.tint[0] > p.tint[2] ? 1 : 0;  // a hint of the wall's own colour
-    CHECK(std::abs(p.tint[0] - 1) < 0.2f && std::abs(p.tint[2] - 1) < 0.2f);  // monotone
-    CHECK(p.kelvin <= 0);                                                     // no sparks off stone
+    CHECK(p.grow == 0);         // nothing spreads: no smoke, no dust cloud
+    CHECK(p.fall == 1);         // everything falls on its arc
+    CHECK(p.opacity == 1);      // solid pieces, not haze
+    CHECK(p.kelvin <= 0);       // no sparks off stone
+    CHECK(p.floor_y == -1.5f);  // it comes down on the floor under the hit
+    big = std::max(big, p.size);
+    small = std::min(small, p.size);
+    fine += p.size < 0.011f ? 1 : 0;
+    hop += p.bounce > 0 ? 1 : 0;
+    browned += p.tint[0] > p.tint[2] ? 1 : 0;               // the wall's own colour
+    CHECK(p.tint[2] < p.tint[1] && p.tint[1] < p.tint[0]);  // brown, as the wall is
   }
-  CHECK(flakes >= 2 && browned >= 2);
-  int sparks = 0;
-  for (const auto& p : metal) sparks += p.kelvin > 0 ? 1 : 0;
-  CHECK(sparks > 0);  // a nail off metal strikes sparks
+  CHECK(big >= 0.04f && small < 0.011f);  // big chunks and fine dirt
+  CHECK(fine >= 8 && hop >= 4 && browned >= 4);
+  for (const auto& p : sand) CHECK(p.size < 0.011f && p.grow == 0);  // sand sprays grains alone
+  for (const auto& p : water) CHECK(p.grow == 0 && p.size < 0.03f);  // a splash's beads
+  int sparks = 0, metal_pieces = 0;
+  for (const auto& p : metal) {
+    sparks += p.kelvin > 0 ? 1 : 0;
+    metal_pieces += p.kelvin == 0 ? 1 : 0;
+  }
+  CHECK(sparks > 0);          // a nail off metal strikes sparks
+  CHECK(metal_pieces >= 20);  // and every solid face breaks, metal too
+  // In the wall's baked light the pieces shine as the wall does: brighter in more light.
+  fx::WallHit bright = w, dim = w;
+  for (int k = 0; k < 3; ++k) bright.light[k] = 1.6f, dim.light[k] = 0.4f;
+  fx::Particles in_bright, in_dim;
+  fx::hit(bright, 5, &in_bright);
+  fx::hit(dim, 5, &in_dim);
+  CHECK(in_bright.size() == in_dim.size() && in_bright.size() == stone.size());
+  for (size_t i = 0; i < in_bright.size(); ++i) {
+    CHECK(in_bright[i].kelvin == -1 && in_dim[i].kelvin == -1);
+    CHECK(std::abs(in_bright[i].tint[1] - 4 * in_dim[i].tint[1]) < 1e-5f);
+  }
 }
 
 TEST(the_bolts_sparks_leave_the_face) {
