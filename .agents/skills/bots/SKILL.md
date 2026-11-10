@@ -1,6 +1,6 @@
 ---
 name: bots
-description: "Use for anything a bot DECIDES in gameengine2 or a game on it: engine/ai (the decision record ai::Why every bot writes, and the pieces bots share as they land: the hands, thinking on a schedule, sight and memory, paths, steering, choosing), a game's Run::trace hook, ge why and the play protocol's why op, the loop that makes a bot behave more like a person, and Shooter's Edge's bot plan worked headless (docs/goals/M18r.md § M18r14g, the locations in a git-ignored .bots/local.md, how a change is judged, the labs). Load it before writing or changing a bot, a pilot, a rival or a pursuer, and to find out why one did what it did."
+description: "Use for anything a bot DECIDES in gameengine2 or a game on it: engine/ai (the decision record ai::Why every bot writes, and the pieces bots share as they land: the hands, thinking on a schedule, sight and memory, paths, steering, choosing), a game's Run::trace hook, ge why and the play protocol's why op, the loop that makes a bot behave more like a person, a match video or demo of the bots on request (make bot-video), and Shooter's Edge's bot plan worked headless (docs/goals/M18r.md § M18r14g, the locations in a git-ignored .bots/local.md, how a change is judged, the labs). Load it before writing or changing a bot, a pilot, a rival or a pursuer, and to find out why one did what it did."
 ---
 
 # Bots
@@ -159,11 +159,23 @@ work: .bots/work       # traces, A/B runs, samples: anything a run writes
 A path in it is absolute or relative to the checkout. A machine without the full game plays the
 shareware pack's maps (e1m2 is one); dm2 to dm6 and povdmm4 need the player's own full game.
 
-**To watch a match**, `make bot-video ARGS="--map=e1m2 --seed=2"` (`tools/bot-match-video.sh`):
-a 4on4 played by this build, recorded, and rendered with the camera on the hottest player as
-`~/Downloads/bots_<commit>_<map>_s<seed>[_<features>].mkv` (`--out=` elsewhere; `--features-red=`
-against `--features-blue=` for a head to head). It needs a GPU adapter to render, so it is the
-maintainer's to run on request, never a checkpoint's step.
+**A MATCH VIDEO OR A DEMO, ON REQUEST.** When the maintainer asks for a video, a demo or "a match
+to watch", play one with `make bot-video` (`tools/bot-match-video.sh`) in the background (a
+10-minute match takes about 10-20 minutes on the Mac) and answer with the file's path and the
+score. It plays a 4on4 with this build's bots on our server, keeps the recording (the demo,
+`<work>/videos/<name>.mvd`) and renders it with the camera on the hottest player as
+`~/Downloads/bots_<commit>_<map>_s<seed>[_<features>].mkv`. Map the ask onto its flags:
+
+| Asked for | Flags (`make bot-video ARGS="..."`) |
+| --- | --- |
+| a map, a seed, a length | `--map=dm2 --seed=3 --minutes=5` (defaults e1m2, 1, 10) |
+| a feature shown off, or the bots without it | `--features=-hop` (every bot), `--features=+trial` |
+| one team with it, one without (a head to head) | `--features-red=-hop` (or `--features-blue=`) |
+| the video somewhere else | `--out=<folder>` |
+| the demo alone, no video | `--no-video`: the `.mvd` only, played in the window with `-playdemo <mvd>` |
+
+Rendering needs a GPU adapter, so on a machine without one say so and offer the demo alone. A
+video is never a checkpoint's step: checkpoints are judged headless (below).
 
 **A checkpoint** is `make precheck` green (a golden or digest a change moves on purpose
 rewritten, and the commit says why), a commit, a push, and the plan's entry updated. No video and

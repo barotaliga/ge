@@ -5,14 +5,15 @@
 #
 #   tools/bot-match-video.sh [--map=e1m2] [--seed=1] [--minutes=10] [--features=<list>]
 #                            [--features-red=<list>] [--features-blue=<list>] [--out=<folder>]
-#                            [--no-build]
+#                            [--no-build] [--no-video]
 #
 # The game folder comes from `.bots/local.md` (`basedir:`, default .bots/game; the bots skill §
 # Shooter's Edge's bot plan), and the recording is kept under its `work:` (default .bots/work) in
 # videos/. The video is named bots_<commit>_<map>_s<seed>[_<features>].mkv, so a checkpoint's
 # video says which build played it. --features-red against --features-blue shows a head to head.
 # It builds the release preset's `labs` and `shooters_edge` first unless --no-build. Rendering
-# needs a GPU adapter (the Mac's, or the container's software one, much slower).
+# needs a GPU adapter (the Mac's, or the container's software one, much slower); --no-video keeps
+# the recording (the demo) alone, to play in the window with `-playdemo <mvd>`.
 #
 # ge:summary Plays a 4on4 of the bots on our server, records it and renders it as an .mkv to watch
 # ge:keywords bots 4on4 video mkv demovideo autotrack se-team record watch match checkpoint
@@ -20,7 +21,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-map=e1m2 seed=1 minutes=10 out="$HOME/Downloads" build=1
+map=e1m2 seed=1 minutes=10 out="$HOME/Downloads" build=1 video=1
 features="" features_red="" features_blue=""
 for a in "$@"; do
   case $a in
@@ -32,8 +33,9 @@ for a in "$@"; do
     --features-blue=*) features_blue=${a#--features-blue=} ;;
     --out=*) out=${a#--out=} ;;
     --no-build) build=0 ;;
+    --no-video) video=0 ;;
     -h | --help)
-      sed -n '2,15p' "$0"
+      sed -n '2,17p' "$0"
       exit 0
       ;;
     *)
@@ -89,6 +91,8 @@ echo "bot-match-video: playing $map, seed $seed, $minutes minutes ($name)"
   exit 1
 }
 grep -E '^  team\.(red|blue)\.frags ' "$work/videos/$name.log" | awk '{printf "  %s %s\n", $1, $2}'
+echo "bot-match-video: the demo is $mvd (watch: $game -basedir $basedir -playdemo $mvd)"
+((video)) || exit 0
 
 echo "bot-match-video: rendering $mkv"
 "$game" -basedir "$basedir" -demovideo "$mvd" "$mkv" --autotrack \
