@@ -1,7 +1,9 @@
 // SHOOTER'S EDGE'S MUZZLE FIRE: each shot of the weapon in hand fires the engine's muzzle fire
 // (render/muzzle.hpp, drawn by the explosions' pass, render/explosions.hpp): a flame on the
-// barrel's tip that rides the gun's kick and its firing animation, a puff of smoke left in the
-// world where the shot went off, and a few sparks flung down the barrel's line into the particles.
+// barrel's tip that rides the gun's kick and its firing animation and a few sparks flung down the
+// barrel's line into the particles. NO SMOKE: a shot leaves no puff in the world (`fire_looks`
+// turns every look's smoke off whatever its preset says), so the only smoke a weapon makes is a
+// launcher's trail and its blast's.
 // Every weapon's fire is its table row's (view/weapons.hpp: a preset and its knobs at the true
 // size), scaled by the share of its true size the gun is drawn at, so the flame fits the gun.
 //
@@ -14,8 +16,8 @@
 // Each shot draws its noise and its sparks off its own seed from a counter, so a replay throws the
 // same fire.
 //
-// ge:summary Shooter's Edge's muzzle fire: the weapons' looks, the shots' flames, smoke and sparks
-// ge:keywords shooters-edge muzzle muzzle-fire muzzle-flash flame smoke puff sparks shot
+// ge:summary Shooter's Edge's muzzle fire: the weapons' looks, the shots' flames and sparks, no smoke
+// ge:keywords shooters-edge muzzle muzzle-fire muzzle-flash flame no-smoke sparks shot
 // ge:keywords fire_looks step_muzzle muzzle-shots first-person explosions-pass
 // ge:skill render shooter
 // ge:test tests/shooters_edge_muzzle_test.cpp
@@ -43,7 +45,7 @@ struct FireRow {
 };
 
 // Every row's look scaled by `scale` (the share of its true size the gun is drawn at), in the
-// rows' order; a row with no preset gets a look of no flame and no smoke and is never fired.
+// rows' order, its smoke off; a row with no preset gets a look of no flame and is never fired.
 // False with the row and the reason in `error` when a preset or a knob is not known.
 bool fire_looks(std::span<const FireRow> rows, double scale, std::vector<gr::MuzzleLook>& out,
                 std::string* error);

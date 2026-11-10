@@ -3,7 +3,7 @@
 // with no lightmaps gives an empty probe.
 //
 // ge:summary Test: the light under a point read off the fixture's lightmaps, and nothing outside
-// ge:keywords test brush light-probe light_below make_light_probe lightmap floor fixture
+// ge:keywords test brush light-probe light_below make_light_probe lightmap floor fixture lightmap_at
 // ge:skill brush testing
 #include <string>
 #include <vector>
@@ -66,4 +66,25 @@ TEST(a_map_with_no_lightmaps_gives_an_empty_probe) {
   float rgb[3];
   const float p[3] = {0, 0, 0};
   CHECK(!br::light_below(probe, map, p, rgb));
+}
+
+TEST(a_faces_own_lightmap_is_read_where_it_is_asked) {
+  const br::Map map = fixture_map();
+  int lit = 0;
+  for (const br::Surface& s : map.surfaces) {
+    if (s.lightmap < 0 || s.count < 3) continue;
+    // The middle of its first triangle, in its lightmap's coordinates.
+    float uv[2] = {0, 0};
+    for (uint32_t i = 0; i < 3; ++i)
+      for (int k = 0; k < 2; ++k) uv[k] += map.vertices[map.indices[s.first + i]].lm[k] / 3;
+    float rgb[3] = {-1, -1, -1};
+    CHECK(br::lightmap_at(map, s.lightmap, uv, rgb));
+    for (float c : rgb) CHECK(c >= 0 && c <= 1);
+    lit += rgb[0] + rgb[1] + rgb[2] > 0 ? 1 : 0;
+  }
+  CHECK(lit > 0);
+  const float uv[2] = {0.5f, 0.5f};
+  float rgb[3];
+  CHECK(!br::lightmap_at(map, -1, uv, rgb));
+  CHECK(!br::lightmap_at(map, static_cast<int32_t>(map.lightmaps.size()), uv, rgb));
 }

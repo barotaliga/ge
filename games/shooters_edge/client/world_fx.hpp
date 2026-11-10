@@ -23,7 +23,8 @@
 //   a hit's flash, fading: in a campaign off the blows the program reported (Listen::blows: the
 //   blood red, what the armour took a duller amber), in a match off the health lost.
 //
-// - THE HELD WEAPON'S FIRE: each shot's flame, smoke and sparks from the barrel the hand puts in
+// - THE HELD WEAPON'S FIRE: each shot's flame and sparks (no smoke) from the barrel the hand puts
+// in
 //   the world (app/muzzle.hpp, each weapon's row at the size its gun is drawn), under ce_muzzles.
 //
 // THE GAME'S FILES' EFFECTS (engine/particles/effect.hpp, `FxState::book`): an effect a file
@@ -44,8 +45,9 @@
 //   (app/weapon_fx.hpp's bolt_look), held while the program keeps sending it, the brightest light
 //   in the room along it (bolt_lights), its root on the gun's own muzzle for the player's own;
 //   blue-white sparks and a scorch where it lands.
-// - ce_hits: a pellet's or a nail's hit throws the burst of the face it hit (the map's triangle
-//   the round's line crosses there: its normal and its texture's surface class, engine/detail).
+// - ce_hits: a pellet's or a nail's hit tears debris off the face it hit, no smoke (the map's
+//   triangle the round's line crosses there: its normal and its texture's surface class,
+//   engine/detail).
 //
 // Every burst draws on its own seed from a counter, so the same run throws the same sparks.
 //
