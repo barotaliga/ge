@@ -2,7 +2,7 @@
 title: Debris off a classic wall shines in that face's own lightmap, in its full hue, judged from se-weapon-fx's side camera
 date: 2026-11-10
 scope: games/shooters_edge/app/weapon_fx.cpp, games/shooters_edge/client/world_fx.cpp, plugins/brush/light_probe.hpp
-concepts: [impact, debris, chunks, dirt, side-along, particle-shine, lightmap_at, real-map, e1m1]
+concepts: [impact, debris, chunks, dirt, side-along, particle-shine, lightmap-at, real-map, e1m1]
 ---
 
 From the eye, a hit's pieces on a wall five metres off are a few pixels: run `se-weapon-fx` with

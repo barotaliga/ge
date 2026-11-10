@@ -551,7 +551,7 @@ void hit(const WallHit& w, uint32_t seed, Particles* births) {
     births->push_back(q);
   }
   // CHIPS: smaller pieces, faster and wider.
-  const int chips = loose ? 0 : static_cast<int>(std::max(k.chips, 6u) * bite + 0.5);
+  const int chips = loose ? 0 : static_cast<int>(std::lround(std::max(k.chips, 6u) * bite));
   for (int i = 0; i < chips; ++i) {
     Particle q = out_of_hole(k.chip_spread, k.chip_speed * rnd(r, 0.4, 1.0));
     q.life = float(rnd(r, 1.6, 2.6));
@@ -565,7 +565,8 @@ void hit(const WallHit& w, uint32_t seed, Particles* births) {
     births->push_back(q);
   }
   // DIRT: a spray of fine grains, the fastest of it, that rains straight down and lies still.
-  const int dirt = static_cast<int>(std::max(3 * std::max(k.grit, k.chips), 20u) * bite + 0.5);
+  const int dirt =
+      static_cast<int>(std::lround(std::max(3 * std::max(k.grit, k.chips), 20u) * bite));
   const double dirt_speed = std::max(k.chip_speed, k.grit_speed);
   for (int i = 0; i < dirt; ++i) {
     Particle q = out_of_hole(0.9 * k.chip_spread + 0.2, dirt_speed * rnd(r, 0.35, 1.2));
