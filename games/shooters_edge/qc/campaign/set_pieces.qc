@@ -235,23 +235,21 @@ void() func_door_secret = {
 };
 
 // --- the exploding boxes (misc_explobox, misc_explobox2): 20 health, then a blast of 160 ---
+// The box stands on its origin, a bottom corner: 32 by 32, 64 high (the small one 32 high).
 
-void() explobox_blow = {
-  self.origin = self.origin + '0 0 32';
+// Dying: it blows at once, in the damage that killed it, so a box beside it in the blast goes up
+// in the same frame. The blast starts from the origin; the flash and the sound 32 higher.
+void() explobox_die = {
+  self.takedamage = DAMAGE_NO;
+  self.classname = "explo_box";
   radius_damage(self, self, 160, world, "blew up");
+  self.origin = self.origin + '0 0 32';
   sound(self, CHAN_VOICE, "weapons/r_exp3.wav", 1, ATTN_NORM);
   effect_explosion(self.origin);
   remove(self);
 };
 
-// Dying: it blows a moment later, so a row of boxes goes off one after the other.
-void() explobox_die = {
-  self.takedamage = DAMAGE_NO;
-  self.think = explobox_blow;
-  self.nextthink = time + 0.2;
-};
-
-void(string mdl) explobox_start = {
+void(string mdl, vector size) explobox_start = {
   if (deathmatch) {
     remove(self);
     return;
@@ -261,6 +259,7 @@ void(string mdl) explobox_start = {
   self.solid = SOLID_BBOX;
   self.movetype = MOVETYPE_NONE;
   setmodel(self, mdl);
+  setsize(self, '0 0 0', size);
   self.origin_z = self.origin_z + 2;
   setorigin(self, self.origin);
   if (!droptofloor()) setorigin(self, self.origin);  // left where the map put it
@@ -270,8 +269,8 @@ void(string mdl) explobox_start = {
   self.th_die = explobox_die;
 };
 
-void() misc_explobox = { explobox_start("maps/b_explob.bsp"); };
-void() misc_explobox2 = { explobox_start("maps/b_exbox2.bsp"); };
+void() misc_explobox = { explobox_start("maps/b_explob.bsp", '32 32 64'); };
+void() misc_explobox2 = { explobox_start("maps/b_exbox2.bsp", '32 32 32'); };
 
 // --- the fireball spout (misc_fireball): a ball of lava up at .speed (1000) every 0-5 s ---
 
