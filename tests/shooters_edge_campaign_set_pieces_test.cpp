@@ -1,9 +1,11 @@
 // Tests: the set pieces of our campaign mod (games/shooters_edge/qc/campaign/set_pieces.qc) and
 // the words at an episode's end (world.qc), on the campaign host in the arena's west room. A
 // train rides its path of corners and back; a secret door shot moves back, then aside, and closes
-// again; an exploding box shot blows and hurts a player beside it; a spike trap used fires at the
-// player; a fireball spout throws; bubbles rise; an ambient sound leaves nothing behind; a rune
-// taken holds its episode's closing words, and the intermission shows them before it leaves.
+// again; an exploding box shot blows and hurts a player beside it, the shotgun hits it, and a box
+// in another's blast goes up in the same blow; a single-player setmodel sizes a brush model file; a
+// spike trap used fires at the player; a fireball spout throws; bubbles rise; an ambient sound
+// leaves nothing behind; a rune taken holds its episode's closing words, and the intermission shows
+// them before it leaves.
 //
 // ge:summary Tests: our campaign mod's set pieces and an episode's closing words
 // ge:keywords test campaign-mod set-pieces func-train func-door-secret explobox trap-spikeshooter
@@ -143,6 +145,77 @@ TEST(an_exploding_box_shot_blows_and_hurts_a_player_beside_it) {
   for (int i = 0; i < kFrames; i++) CHECK_MSG(g.frame(0), g.error);
   CHECK(g.find("misc_explobox") == 0);
   CHECK(g.field(1, g.f().health) < 100);
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(an_exploding_box_stands_on_its_corner_and_the_shotgun_blows_it) {
+  // The player at -416 0 24 looks along +x at the box 40 units off: a shot's pellets are line
+  // traces, so they hit it only because it has a size.
+  Game g(R"({
+"classname" "misc_explobox"
+"origin" "-360 -16 0"
+}
+)");
+  const int box = g.find("misc_explobox");
+  CHECK(box > 0);
+  CHECK(g.ed(box).mins.x == 0 && g.ed(box).mins.y == 0 && g.ed(box).mins.z == 0);
+  CHECK(g.ed(box).maxs.x == 32 && g.ed(box).maxs.y == 32 && g.ed(box).maxs.z == 64);
+  for (int i = 0; i < kFrames && g.find("misc_explobox") == box; i++)
+    CHECK_MSG(g.frame(0, 1), g.error);  // the attack button held
+  CHECK(g.find("misc_explobox") == 0);
+  CHECK(g.find("explo_box") == 0);  // gone in the frame it died
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(a_box_in_another_boxes_blast_goes_up_in_the_same_blow) {
+  Game g(R"({
+"classname" "misc_explobox"
+"origin" "-200 0 0"
+}
+{
+"classname" "misc_explobox2"
+"origin" "-140 0 0"
+}
+)");
+  const int big = g.find("misc_explobox"), small = g.find("misc_explobox2");
+  CHECK(big > 0 && small > 0);
+  CHECK(g.ed(small).maxs.z == 32);
+  CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.hit(big, 1, 20));  // no frame between: both gone in the one call
+  CHECK(g.find("misc_explobox") == 0);
+  CHECK(g.find("misc_explobox2") == 0);
+  CHECK(g.s().q.faults == 0);
+}
+
+namespace {
+
+int g_asked = 0;
+bool box_bounds(void*, const std::string& name, sh::Vec3f& mins, sh::Vec3f& maxs) {
+  g_asked++;
+  if (name != "maps/b_explob.bsp") return false;
+  mins = {0, 0, 0};
+  maxs = {32, 32, 64};
+  return true;
+}
+
+}  // namespace
+
+TEST(a_single_player_setmodel_sizes_a_brush_model_file_from_its_bounds_one_wider) {
+  g_asked = 0;
+  Game g(R"({
+"classname" "misc_explobox"
+"origin" "-200 0 0"
+}
+)",
+         {}, &box_bounds);
+  const int box = g.find("misc_explobox");
+  CHECK(box > 0);
+  CHECK(g_asked == 1);  // the spawn's setmodel asked; its setsize then set 0..32 x 0..64
+  const uint32_t model = *pg::entity_field(g.s().q.vm, box, g.f().model);
+  CHECK(g.call("setmodel", {g.ent(box), model}));
+  CHECK(g_asked == 2);
+  CHECK(g.ed(box).mins.x == -1 && g.ed(box).mins.z == -1);
+  CHECK(g.ed(box).maxs.x == 33 && g.ed(box).maxs.y == 33 && g.ed(box).maxs.z == 65);
   CHECK(g.s().q.faults == 0);
 }
 

@@ -17,10 +17,12 @@
 // side's cvars as the console would. The server's models (items, monsters, the other players)
 // stand where it put them. `--progs=<progs.src>` runs a program of our own there (the campaign
 // variant: its monsters; `pack` the packs' own), and `--settle=<frames>` lets the world run at
-// each view. `--before="<cvars>"` draws the left side in the modern look with those cvars in
-// place of the classic look (`--before="ce_relief 0; ce_parallax 0"`: one switch's before and
-// after). `--swings=<n>` then has the player take the axe and swing it n times with the game's
-// own held weapons in hand: a sheet, a GIF and which of the axe's two swings each one played.
+// each view, and `--fire=<frames>` has the player hold attack that long at each view and draws it
+// again (`-fired`: an exploding box shot, say). `--before="<cvars>"` draws the left side in the
+// modern look with those cvars in place of the classic look (`--before="ce_relief 0; ce_parallax
+// 0"`: one switch's before and after). `--swings=<n>` then has the player take the axe and swing it
+// n times with the game's own held weapons in hand: a sheet, a GIF and which of the axe's two
+// swings each one played.
 // `--film=<n> --hand=1` films the weapon in hand breathing at rest, `--exertion=1` as after a run.
 //
 // `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
@@ -32,6 +34,7 @@
 // ge:keywords lab se-client listen-server window frame rocket-jump hud effects trail explosion
 // ge:keywords before-after relief parallax enhanced-textures fixture-cache
 // ge:keywords axe-swing swings two-swings weaponframe film_swings breath exertion film-hand
+// ge:keywords fire explobox
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
@@ -323,6 +326,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     return;
   }
   cl::ListenOptions lo = shooters_edge::net::listen_options();
+  lo.files = &files;  // as the window: the next map, and a brush model file's bounds
   if (cl::single_player(progs)) lo.console.emplace_back("deathmatch 0");  // as NEW GAME starts it
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, lab.arg("map"), error);
   if (!map || !cl::listen_start(l, progs, std::move(map), lo, error)) {
@@ -449,65 +453,97 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       cl::step_fx(l, shown, fx_state, t, 0.013, fx);
       if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
     }
-    fx.births.clear();
-    ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
-    ge::ui::DrawList overlay;
-    overlay.begin(static_cast<int>(w), static_cast<int>(h));
-    se::fill_hud(hud, cl::status_of(l, t), art);
-    hud.layout.draw(overlay,
-                    hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
-                    se::hud_style());
-    hand.lift = se::status_lift(hud, static_cast<int>(h));
-    const shooters_edge::view::HandFrame* shown_hand = in_hand && hand.drawn ? &hand : nullptr;
-    for (int k = 0; k < 2; ++k) {
-      // The weather, the flames and the bonfires' sparks run a second in, ending on the view's
-      // moment.
-      for (int f = 0; f < 29; ++f) {
-        ge::render::FrameView run_in = view;
-        run_in.time_s = view.time_s - (29 - f) / 30.0;
-        cl::draw_world(*device, *world[k], run_in, fx, nullptr, 1.0 / 30, {}, out.view);
-      }
-      cl::draw_world(*device, *world[k], view, fx, shown_hand, 1.0 / 30, overlay, out.view);
-      const ge::gpu::Image img = ge::gpu::read_now(*device, out);
-      const std::string id = std::string(kLooks[k]) + "-" + std::to_string(v);
-      lab.shot({id,
-                id,
-                "View " + std::to_string(v) + " in the " + kLooks[k] + " look.",
-                "the map from the player's eyes",
-                {{"map", lab.arg("map")}, {"views", views}}},
-               gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
-               gl::Det::measured);
-      // THE FILM (--film=<frames>): the enhanced look run on from the view's moment, a thirtieth
-      // of a second a frame, kept as an animated GIF (the flames, the sparks, the water moving).
-      // With `--hand`, the weapon in hand is stepped through the film at rest (its breath), from
-      // `--exertion` (0..1: how hard the body has just worked, as after a run; else as it is).
-      const int film = k == 1 ? static_cast<int>(lab.arg_num("film")) : 0;
-      std::vector<gl::Picture> frames;
-      const double step = lab.arg_num("film-step");
-      if (film > 0 && in_hand && !lab.arg("exertion").empty())
-        held.hand.place.exertion = ge::core::clamp(lab.arg_num("exertion"), 0.0, 1.0);
-      double film_t = t;
-      for (int f = 1; f <= film; ++f) {
-        ge::render::FrameView on = view;
-        on.time_s = view.time_s + f * step;
-        const shooters_edge::view::HandFrame* film_hand = nullptr;
-        if (in_hand) {
-          film_t += step;
-          hand = cl::step_held(l, shown, held, view_settings, weapons, film_t, step);
-          hand.lift = se::status_lift(hud, static_cast<int>(h));
-          film_hand = hand.drawn ? &hand : nullptr;
+    ge::render::FrameView view;
+    const auto shoot = [&](const std::string& tag) {
+      fx.births.clear();
+      view = cl::frame_view(l, shown, 0, t, 0);
+      ge::ui::DrawList overlay;
+      overlay.begin(static_cast<int>(w), static_cast<int>(h));
+      se::fill_hud(hud, cl::status_of(l, t), art);
+      hud.layout.draw(overlay,
+                      hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
+                      se::hud_style());
+      hand.lift = se::status_lift(hud, static_cast<int>(h));
+      const shooters_edge::view::HandFrame* shown_hand = in_hand && hand.drawn ? &hand : nullptr;
+      for (int k = 0; k < 2; ++k) {
+        // The weather, the flames and the bonfires' sparks run a second in, ending on the view's
+        // moment.
+        for (int f = 0; f < 29; ++f) {
+          ge::render::FrameView run_in = view;
+          run_in.time_s = view.time_s - (29 - f) / 30.0;
+          cl::draw_world(*device, *world[k], run_in, fx, nullptr, 1.0 / 30, {}, out.view);
         }
-        cl::draw_world(*device, *world[k], on, fx, film_hand, step,
-                       in_hand ? overlay : ge::ui::DrawList{}, out.view);
-        const ge::gpu::Image fi = ge::gpu::read_now(*device, out);
-        frames.push_back(gl::shrink(
-            gl::Picture{static_cast<int>(fi.width), static_cast<int>(fi.height), fi.rgba}, 640));
+        cl::draw_world(*device, *world[k], view, fx, shown_hand, 1.0 / 30, overlay, out.view);
+        const ge::gpu::Image img = ge::gpu::read_now(*device, out);
+        const std::string id = std::string(kLooks[k]) + "-" + std::to_string(v) + tag;
+        lab.shot({id,
+                  id,
+                  "View " + std::to_string(v) + " in the " + kLooks[k] + " look" +
+                      (tag.empty() ? std::string(".") : ", after the player fired."),
+                  "the map from the player's eyes",
+                  {{"map", lab.arg("map")}, {"views", views}}},
+                 gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
+                 gl::Det::measured);
+        // THE FILM (--film=<frames>): the enhanced look run on from the view's moment, a thirtieth
+        // of a second a frame, kept as an animated GIF (the flames, the sparks, the water moving).
+        // With `--hand`, the weapon in hand is stepped through the film at rest (its breath), from
+        // `--exertion` (0..1: how hard the body has just worked, as after a run; else as it is).
+        const int film = k == 1 ? static_cast<int>(lab.arg_num("film")) : 0;
+        std::vector<gl::Picture> frames;
+        const double step = lab.arg_num("film-step");
+        if (film > 0 && in_hand && !lab.arg("exertion").empty())
+          held.hand.place.exertion = ge::core::clamp(lab.arg_num("exertion"), 0.0, 1.0);
+        double film_t = t;
+        for (int f = 1; f <= film; ++f) {
+          ge::render::FrameView on = view;
+          on.time_s = view.time_s + f * step;
+          const shooters_edge::view::HandFrame* film_hand = nullptr;
+          if (in_hand) {
+            film_t += step;
+            hand = cl::step_held(l, shown, held, view_settings, weapons, film_t, step);
+            hand.lift = se::status_lift(hud, static_cast<int>(h));
+            film_hand = hand.drawn ? &hand : nullptr;
+          }
+          cl::draw_world(*device, *world[k], on, fx, film_hand, step,
+                         in_hand ? overlay : ge::ui::DrawList{}, out.view);
+          const ge::gpu::Image fi = ge::gpu::read_now(*device, out);
+          frames.push_back(gl::shrink(
+              gl::Picture{static_cast<int>(fi.width), static_cast<int>(fi.height), fi.rgba}, 640));
+        }
+        if (!frames.empty())
+          lab.attach(
+              "film-" + std::to_string(v) + tag + ".gif",
+              gl::encode_gif_frames(frames, std::max(2, static_cast<int>(std::lround(step * 100)))),
+              gl::Det::measured);
       }
-      if (!frames.empty())
-        lab.attach(
-            "film-" + std::to_string(v) + ".gif",
-            gl::encode_gif_frames(frames, std::max(2, static_cast<int>(std::lround(step * 100)))),
-            gl::Det::measured);
+    };
+    shoot("");
+    // `--fire=<frames>`: then the player holds attack that long where he stands (the view's
+    // aim), the world runs on, and the views are drawn again (`-fired`).
+    if (const int fire = static_cast<int>(lab.arg_num("fire")); fire > 0) {
+      const auto alive = [&] {
+        int n = 0;
+        for (int e = 1; e < l.server->sv.num_edicts; e++)
+          n += l.server->sv.edicts[static_cast<size_t>(e)].free ? 0 : 1;
+        return n;
+      };
+      const int alive_before = alive();
+      sh::MoveCmd cmd;
+      cmd.msec = 13;
+      cmd.angles = {p.pitch, p.yaw, 0};
+      for (int i = 0; i < fire + 40; i++) {
+        if (p.moved) player.origin = {p.at[0], p.at[1], p.at[2]};
+        player.velocity = {};
+        cmd.buttons = i < fire ? 1 : 0;
+        cl::listen_frame(l, cmd);
+        t += 0.013;
+        cl::frame_view(l, shown, 1, t, 0.013);
+        cl::step_fx(l, shown, fx_state, t, 0.013, fx);
+        if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
+        if (i == fire + 15) shoot("-fired");  // the smoke settled, the gibs down
+      }
+      lab.metric("fire.entities_delta_" + std::to_string(v), alive() - alive_before, "",
+                 gl::Det::measured);
     }
     if (!warp) continue;
     // Another player at --warp arriving, then leaving, from this view.
@@ -762,6 +798,9 @@ const gl::LabSpec kSpec{
      {"progs", "",
       "with --game: a progs.src compiled and run instead of the arena variant, or pack"},
      {"settle", "4", "with --game: host frames run at each view before it is drawn (at least 4)"},
+     {"fire", "0",
+      "with --game: the player then holds attack this many frames at each view and it is drawn "
+      "again (<look>-<view>-fired; fire.entities_delta_<view>: entities after less before)"},
      {"film", "0",
       "with --game: the enhanced look run on this many frames (--film-step apart) from each view, "
       "attached as film-<view>.gif (the flames and the sparks moving)"},
