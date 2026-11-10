@@ -41,11 +41,11 @@
 // - `brink`: no lip of lava or slime walked, hopped or strafed over (shooter/brink.hpp).
 // - `gapjump`: a hopper takes people's speed jumps over a pit, out of a hop (shooter/nav_gaps.hpp).
 // - `headroom`: no hop's jump into a lintel, nor its last one onto a stair (pilot.hpp).
-// - `liphop`: a hop runs on along a lava lip, the brink guard on its feet; in no skill's preset.
+// - `liphop`: a hop runs on along a lava lip, the brink guard on its feet (pilot.hpp).
 // - `circlejump`: a hop's first jump out of a curve on the ground, past a run's 320 (pilot.hpp).
 // - `trial`: read by an A/B now; off in every preset (`all` too): `--features-red=+trial`.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: all but what that level
-// does not do: none `eye` or `liphop`, a novice no `glance`), `features_none` (a plain bot).
+// does not do: none `eye`, a novice no `glance`), `features_none` (a plain bot).
 // The text form (`apply_features`) reads `all`, `none` (`plain`), `+name` or `name` (on), `-name`
 // (off), separated by commas, spaces or '/', applied in order: "plain,+dodge,-swimaim".
 //

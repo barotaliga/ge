@@ -10,7 +10,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <exception>
 #include <filesystem>
 #include <system_error>
 
@@ -115,7 +117,18 @@ void name_list(Out& m, int id, const std::vector<std::string>& names) {
 
 }  // namespace
 
-ListenRecorder::~ListenRecorder() { record_close(*this); }
+// A recording still open is closed (its last frames written). A destructor must not throw: a
+// failure to finish the file (out of memory, the disk) is said on stderr and the file left as is.
+ListenRecorder::~ListenRecorder() {
+  try {
+    record_close(*this);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr,
+                 "listen record: the recording was not finished on close (%s): its last frames "
+                 "are missing. Next: stop the recording (`stop`) before quitting.\n",
+                 e.what());
+  }
+}
 
 void record_listen_begin(ListenRecorder& r, const Listen& l, int pack_level) {
   r.on = true;

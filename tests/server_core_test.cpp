@@ -43,6 +43,9 @@ const ServerTrial& lan_trial() {
 // A console whose only file is the base game's `server.cfg` with `text`.
 void cfg_files(ge::console::Console& con, const std::string& text) {
   con.set_files(
+      // A callback held in a std::function: what it throws (a string out of memory)
+      // reaches its caller, as any call's does.
+      // NOLINTNEXTLINE(bugprone-exception-escape)
       [text](std::string_view name, std::string& out) {
         if (name != "base/server.cfg") return false;
         out = text;

@@ -18,8 +18,7 @@ TEST(the_presets_are_every_feature_or_none_and_a_novice_does_not_glance) {
     CHECK(!sh::features_none()[x]);
   }
   sh::Features skilled = sh::features_all();
-  skilled.set(sh::Feature::eye, false);     // no preset reads a turn a reaction late
-  skilled.set(sh::Feature::liphop, false);  // nor hops along a lip yet (it costs sightings)
+  skilled.set(sh::Feature::eye, false);  // no preset reads a turn a reaction late
   for (sh::AimSkill s : {sh::AimSkill::average, sh::AimSkill::expert, sh::AimSkill::perfect})
     CHECK(sh::features_of(s) == skilled);
   sh::Features novice = skilled;

@@ -114,7 +114,8 @@ struct PilotSettings {
   bool hop_headroom = false;
   // THE LIPS HOPPED (`liphop`): a hop's stretch runs on along a lip over lava or slime (a `brink`
   // link) instead of ending there: the brink guard holds the feet off it in the air as on the
-  // ground, so the hop needs no stop of its own (hops along dm2's pits: share 9-11 % -> 14-15 %).
+  // ground, so the hop needs no stop of its own (hops along dm2's pits: share 9-11 % -> 14-15 %;
+  // head to head ~50 frags a set: kept for the speed, which passes for a person more than frags).
   bool hop_lips = false;
   // THE CIRCLE JUMP (`circlejump`, circle_jump.hpp): a hop's first jump taken out of a curve on
   // the ground, forward and a side key, the view on the velocity, as people's are (their standing

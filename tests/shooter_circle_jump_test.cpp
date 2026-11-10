@@ -1,6 +1,10 @@
 // The circle jump (shooter/circle_jump.hpp) flown through the move on a flat floor: a run held
 // along its velocity stays at 320; the curve's keys and view lift it past 420 before its jump, the
 // side turning toward the aim, as people's standing jumps do.
+//
+// ge:summary Test: the circle jump flown through the move lifts a run past 420 before its jump
+// ge:keywords circle-jump ground-strafe prestrafe circle_step circle_angle takeoff-speed
+// ge:skill shooter bots
 #include <vector>
 
 #include "check.hpp"
