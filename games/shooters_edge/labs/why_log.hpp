@@ -123,7 +123,7 @@ inline bool read_why_log(const std::string& text, std::vector<WhyEntry>& out, st
   std::istringstream in(text);
   std::string line;
   if (!std::getline(in, line) || line.rfind("t\tbot\tkind", 0) != 0) {
-    error = "not a bots' decision log (its first line is not the t, bot, kind header)";
+    error = "not a bots' decision log: its first line is not the t, bot, kind header";
     return false;
   }
   while (std::getline(in, line)) {
