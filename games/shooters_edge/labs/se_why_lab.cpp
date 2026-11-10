@@ -149,7 +149,7 @@ const gl::LabSpec kSpec{
     "se-why",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "the bots' decision log (games/shooters_edge/labs/why_log.hpp, written by se-team --why)",
+    "the bots' decision log: games/shooters_edge/labs/why_log.hpp, written by se-team --why",
     "bots",
     "Why did that bot do that at that moment of the match: which decisions changed, what settled "
     "them, and how often do the bots change their minds?",
