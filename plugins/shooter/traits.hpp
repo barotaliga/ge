@@ -18,6 +18,7 @@
 // - COMMUNICATION: saying what he sees and does, and reading what his team says.
 // - TEAMPLAY: the team's score over his own: holding an area, leaving an item to a mate.
 // - AGGRESSION: which fights he takes (`temper_of`).
+// - DODGE: the side steps across an enemy's line in a fight (dodge.hpp's `dodge_skill`).
 //
 // THE PRESETS (`traits_of`): every trait 2 for a novice, 5 for an average player, 8 for an expert,
 // 10 for the perfect measuring stick; the temperament sets aggression (9, 5 or 2) and an aggressive
@@ -27,7 +28,7 @@
 //
 // ge:summary A player's personality: traits 1 to 10 (aim per weapon, reaction, timing, teamplay)
 // ge:keywords traits personality preset tier_of aim-per-weapon reaction timing knowledge
-// ge:keywords camping discipline moves hearing communication teamplay aggression
+// ge:keywords camping discipline moves hearing communication teamplay aggression dodge
 // ge:skill shooter bots
 // ge:test tests/shooter_traits_test.cpp
 #pragma once
@@ -58,8 +59,9 @@ enum class Trait : uint8_t {
   comms,
   teamplay,
   aggression,
+  dodge,
 };
-constexpr size_t kTraits = 15;
+constexpr size_t kTraits = 16;
 // The trait's name as a lab or a config writes it ("aim_rl", "reaction").
 const char* trait_name(Trait t);
 

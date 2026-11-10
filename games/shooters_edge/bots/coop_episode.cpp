@@ -97,6 +97,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
   for (int k = 0; k < n; k++) {
     Fighter& f = m.players[static_cast<size_t>(k)];
     const sh::AimSkill skill = k == 0 ? opt.leader : opt.skills[static_cast<size_t>(k) - 1];
+    f.features = sh::features_of(skill);
     fighter_init(
         f, nav.graph, s, k, c.map.entities.c_str(), skill,
         sh::traits_of(skill, sh::Temper::balanced), kHz,
@@ -104,7 +105,10 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
     f.bot.pilot.world = &nav.world;
     if (nav.swim.leading > 0) f.swim = &nav.swim;
+    f.trap = &nav.trap;
     if (k == 0) {
+      // The way through keeps its own doors and buttons (way_through.hpp), not `locked`'s.
+      f.features.set(sh::Feature::locked, false);
       hunt_init(f, s);
       way_init(m.way, f, nav, s, c.map);
       if (opt.plan) m.way.log = &em.plan;

@@ -16,8 +16,11 @@
 //
 // THE PROFILES (`aim_profile`): `perfect` passes its hands untouched (the measuring stick);
 // `novice`, `average` and `expert` react in 0.30, 0.22 and 0.17 s, wander 3, 1.5 and 0.6 degrees,
-// turn at most 360, 600 and 1000 degrees a second and lead 0, 0.1 and 0.2 s. They are stated, not
-// yet fitted to people's logs (docs/goals.md M16b's corpus replaces them).
+// turn at most 360, 600 and 1000 degrees a second and lead 0, 0.1 and 0.14 s (a lead covers the
+// hands' own lag; the expert's was 0.2 until the senses took the velocity the server sends, and
+// with it in full from the first sighting it measured between its hands' lag, 0.12, and 0.15,
+// where a fighter's shots pass a dodging player within a few units). They are stated, not yet
+// fitted to people's logs (docs/goals.md M16b's corpus replaces them).
 //
 // ge:summary The bot's aim: yaw and pitch at a contact through skill hands; axes under the view
 // ge:keywords aim aiming skill profile novice average expert perfect lead reaction yaw pitch
@@ -30,6 +33,7 @@
 #include <vector>
 
 #include "ai/hands.hpp"
+#include "ai/mouse.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooter/vec.hpp"
 
@@ -48,6 +52,13 @@ struct AimProfile {
   // draws under `react_med`, the rest thinning out to `react_hi` (a person's reaction times are
   // skewed to the slow side). The hands' own delay is the tracking lag inside it. All 0: none.
   float react_lo = 0, react_med = 0, react_hi = 0;
+  // THE MOUSE HAND and its finger (ai/mouse.hpp), used when the bot's `mouse` switch is on and
+  // `mouse` is set here (every skill but the perfect aim): how fast and how close a stroke lands
+  // (a 180-degree flip lands within about 5 degrees for an expert, 15 for an average player, 45
+  // for a novice), the pad, the eye's loop, and how fast the finger clicks.
+  bool mouse = false;
+  ai::MouseHand hand;
+  ai::FingerSpec finger;
 };
 AimProfile aim_profile(AimSkill s);
 // The hands of an aim trait `aim` and a reaction trait `reaction` (traits.hpp, 1 to 10): the
@@ -64,5 +75,9 @@ void aim_angles(Vec3f eye, Vec3f at, float& yaw, float& pitch);
 // The forward and side axes `forward`, `side` meant from a view at `from_yaw`, pressed from a view
 // at `to_yaw` so the wish in the world is the same, on the protocol's grid.
 void turn_axes(int16_t& forward, int16_t& side, float from_yaw, float to_yaw);
+// The same in the water, where the move takes forward and side along the view's pitch too and up
+// straight up: the wish pressed under the view `from` (pitch, yaw) pressed again under `to`, what
+// forward and side leave of its height on up.
+void turn_axes_swim(int16_t& forward, int16_t& side, int16_t& up, Vec3f from, Vec3f to);
 
 }  // namespace ge::shooter

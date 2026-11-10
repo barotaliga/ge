@@ -68,61 +68,14 @@ void start(Remote& r, const ClientConfig& cfg) {
   r.frame_old_s = r.frame_new_s = -1;
 }
 
-sh::MoveSettings settings_of(const ClassicClientEnd& c) {
-  sh::MoveSettings m;
-  const float* v = c.movevars;
-  m.gravity = v[0];
-  m.stopspeed = v[1];
-  m.maxspeed = v[2];
-  m.spectatormaxspeed = v[3];
-  m.accelerate = v[4];
-  m.airaccelerate = v[5];
-  m.wateraccelerate = v[6];
-  m.friction = v[7];
-  m.waterfriction = v[8];
-  // The easy jump is predicted only where the server says it allows it (its pm_speedjump in the
-  // server info) and the player asked for it; a server that never heard of it says nothing.
-  if (c.cfg.speedjump)
-    m.speedjump = static_cast<float>(std::atof(info_get(c.serverinfo, "pm_speedjump").c_str()));
-  return m;
-}
+sh::MoveSettings settings_of(const ClassicClientEnd& c) { return client_move_settings(c); }
 
 // Whether the server says it steps the original move (its sv_playermove in the server info).
 bool original_move(const ClassicClientEnd& c) {
   return info_get(c.serverinfo, "sv_playermove") == "original";
 }
 
-sh::MoveType move_type_of(const PlayerState& p) {
-  switch (p.pm) {
-    case PmType::spectator:
-      return sh::MoveType::spectator;
-    case PmType::old_spectator:
-      return sh::MoveType::old_spectator;
-    case PmType::fly:
-      return sh::MoveType::fly;
-    case PmType::none:
-      return sh::MoveType::none;
-    case PmType::lock:
-      return sh::MoveType::lock;
-    default:
-      return p.dead ? sh::MoveType::dead : sh::MoveType::normal;
-  }
-}
-
-// A player's record as the protocol carried it, the form the prediction starts from.
-sh::NetPlayer net_of(const PlayerState& p) {
-  sh::NetPlayer n;
-  const float at[3] = {p.origin.x, p.origin.y, p.origin.z};
-  const float speed[3] = {p.velocity.x, p.velocity.y, p.velocity.z};
-  for (int i = 0; i < 3; i++) {
-    n.origin8[i] = static_cast<int32_t>(at[i] * 8);
-    n.velocity[i] = static_cast<int16_t>(speed[i]);
-  }
-  n.type = move_type_of(p);
-  n.onground = p.onground;
-  n.jump_held = p.pm == PmType::normal_jump_held;
-  return n;
-}
+sh::NetPlayer net_of(const PlayerState& p) { return client_net_player(p); }
 
 // Whether the level's solids are there to predict over (a level loaded, playing).
 bool can_predict(const Remote& r) {

@@ -99,6 +99,11 @@ files alone. When a search misses, add the word you tried to the right file's `g
   rule would live in two places, it belongs in one function that both call.
   `AGENTS.md` § Stated once lists the big ones.
 - **Only what the game needs.** No speculative parameters, options or abstractions.
+- **A float gets float literals.** `w.forward = flip ? 0.0f : 1.0f`, never `flip ? 0 : 1`, and
+  the same for an argument (`arc(p, seen ? 9.0f : 7.0f, ...)`) and a braced pair (`{0.0f, v}`):
+  MSVC's `/W4 /WX` reads an int ternary into a float as C4244 and fails the Windows row, while
+  GCC and Clang pass it (both arms fit a float exactly), so precheck never sees it. It has
+  ejected bot PRs from the queue twice.
 - **Errors are prompts.** A message names what failed, where, and the next action
   (`docs/architecture.md` § Diagnostics).
 

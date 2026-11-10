@@ -92,6 +92,7 @@ struct DemoTracks {
   int64_t frames = 0;
   std::array<std::vector<sh::TrackPoint>, 32> tracks;
   std::array<std::string, 32> names;
+  std::array<std::string, 32> teams;  // "" none
   std::array<int32_t, 32> frags{};
 };
 
@@ -115,6 +116,7 @@ inline bool read_demo_tracks(std::vector<uint8_t> bytes, DemoTracks& out, std::s
   out.map = d.state.map;
   out.seconds = d.state.time;
   out.names = d.state.names;
+  out.teams = d.state.teams;
   out.frags = d.state.frags;
   return true;
 }

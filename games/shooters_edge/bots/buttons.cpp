@@ -1,9 +1,10 @@
 // The map's buttons (buttons.hpp): read and linked once, and a novice's pokes.
 //
 // ge:summary The map's buttons linked to doors and items; a novice's random shots and touches
-// ge:keywords buttons_init button_poke button_poke_cmd button_node door-keeps
+// ge:keywords buttons_init button_poke button_poke_cmd button_node door-keeps trigger_relay
+// ge:keywords relayed-button button_fires
 // ge:skill shooter bots
-// ge:test tests/shooters_edge_team_test.cpp
+// ge:test tests/shooters_edge_footwork_test.cpp
 #include "shooters_edge/bots/buttons.hpp"
 
 #include "core/prng.hpp"
@@ -73,6 +74,30 @@ bool near_box(sh::Vec3f p, sh::Vec3f lo, sh::Vec3f hi, float r) {
 
 }  // namespace
 
+std::vector<std::string> button_fires(const std::vector<pg::EntityBlock>& blocks,
+                                      const char* target) {
+  std::vector<std::string> names;
+  if (!target || !target[0]) return names;
+  names.emplace_back(target);
+  for (size_t from = 0, depth = 0; from < names.size() && depth < kRelayDepth; depth++) {
+    const size_t to = names.size();
+    for (; from < to; from++)
+      for (const pg::EntityBlock& b : blocks) {
+        const char* cn = pg::block_value(b, "classname");
+        const char* tn = pg::block_value(b, "targetname");
+        const char* next = pg::block_value(b, "target");
+        if (!cn || !tn || !next || !next[0] || names[from] != tn) continue;
+        if (std::strcmp(cn, "trigger_relay") != 0 && std::strcmp(cn, "trigger_once") != 0 &&
+            std::strcmp(cn, "trigger_multiple") != 0)
+          continue;
+        bool seen = false;
+        for (const std::string& n : names) seen |= n == next;
+        if (!seen) names.emplace_back(next);
+      }
+  }
+  return names;
+}
+
 void buttons_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s,
                   const char* entities) {
   f.button_spots.clear();
@@ -101,13 +126,15 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
     const char* health = pg::block_value(b, "health");
     bs.shoot = health && std::atof(health) > 0;
     bs.node = button_node(g, s, bs, bs.shoot ? 900.f : 256.f);
+    const std::vector<std::string> fired = button_fires(blocks, target);
     for (const pg::EntityBlock& d : blocks) {
       const char* dc = pg::block_value(d, "classname");
       const char* dn = pg::block_value(d, "targetname");
       const char* dm = pg::block_value(d, "model");
-      if (!target || !dc || std::strcmp(dc, "func_door") != 0 || !dn ||
-          std::strcmp(dn, target) != 0 || !dm)
-        continue;
+      if (!dc || std::strcmp(dc, "func_door") != 0 || !dn || !dm) continue;
+      bool opened = false;
+      for (const std::string& n : fired) opened |= n == dn;
+      if (!opened) continue;
       const int door = entity_on(dm);
       if (door < 0) continue;
       bs.doors.push_back(door);
@@ -227,6 +254,7 @@ void button_poke_cmd(Fighter& f, const server::RulesCommon& s, int me, double t,
   if (flat > 900) return;
   cmd.angles.y = static_cast<float>(ge::core::libm::atan2(d.y, d.x) * (180.0 / ge::core::kPi));
   cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(d.z, flat) * (180.0 / ge::core::kPi));
+  f.bot.set_by = "poke";
   if (flat < 200) {
     cmd.forward = 320;  // into it: a touch presses it
     cmd.side = 0;
