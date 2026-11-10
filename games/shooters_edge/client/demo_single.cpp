@@ -152,7 +152,7 @@ void client_data(DemoState& s, DemoMsg& m) {
     if ((bits & (kVelocity1 << i)) != 0) m.i8();
   }
   if ((bits & kItems) != 0) s.stats[kStatItems] = m.i32();
-  if ((bits & kWeaponFrame) != 0) m.u8();
+  s.weapon_frame = (bits & kWeaponFrame) != 0 ? m.u8() : 0;
   s.stats[kStatArmour] = (bits & kArmour) != 0 ? m.u8() : 0;
   s.stats[kStatWeapon] = (bits & kWeapon) != 0 ? m.u8() : 0;
   s.stats[kStatHealth] = m.i16();

@@ -116,6 +116,15 @@ relative mouse mode, which reads raw input on every desktop platform). Because e
 stamped with its time on the backend's clock, a game that wants mouse input sampled at its own
 rate (a usercmd per server tick) can split the frame's events by time; the log keeps the stamps.
 
+**Who has the mouse** (`input/mouse_capture.hpp`): the look takes the pointer the moment its
+window gets the focus (a click on the window or on the app's icon in the Dock or the taskbar, an
+alt-tab back), with no second click in the window, and gives it back only for what the game's
+`Release` bits name: the console, a menu, a demo's play bar. `follow_capture` is a pure function
+of the frame's facts (focused, console, menu, watching) that answers take, let go or nothing, and
+the backend acts on it. A lost focus always lets it go. While it is held, a menu that stays up
+reads the keys only, since a held pointer is frozen where it was. Shooter's Edge keeps the bits
+in `in_mouse_release` (default 5: the console and the play bar; 2 adds the menu).
+
 ## Wheels, pedals, shifters and flight controls
 
 A wheel reports raw axes and buttons, and nothing in the platform says which axis is the clutch
@@ -210,7 +219,7 @@ buttons and hats), plugs a touch screen when it first reports a finger, and unpl
 moment SDL does: a pad plugged in again is a new device with a new id. A device's `key` is its
 USB ids (`vvvv:pppp`), so the device database's rows match the same wheel on every OS.
 `set_relative_mouse` captures the pointer for a first-person look (the motion is then raw counts,
-SDL's system scale off) and `set_text_input` turns text events on. `play_feedback` sends each
+SDL's system scale off; `has_focus` says whether the window has the input focus) and `set_text_input` turns text events on. `play_feedback` sends each
 frame's rumble, trigger rumble, light and player lights when they change (a held rumble is resent
 before SDL's duration runs out) and streams the force to a force-feedback device.
 

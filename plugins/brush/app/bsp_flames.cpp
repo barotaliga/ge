@@ -111,59 +111,78 @@ void fire_air(const PointLight& l, const FireLook& look, double t, double out[3]
   out[2] = look.air[2] * open + look.draught * std::sin(0.47 * t + b);
 }
 
+namespace {
+
+// Light `l`'s flame (its main body, `k` 0, or a bonfire's lesser tongue `k`) at `base`, puffing at
+// its width's rate times the pace, its light's level unset.
+render::Flame fire_flame(const PointLight& l, const FireLook& look, const double base[3], int k) {
+  const auto pace = static_cast<float>(std::max(look.pace, 0.0));
+  const auto puffs = [&](render::Flame f) {
+    f.puff_hz = render::flame_puff_hz(2.0f * f.radius_m) * pace;
+    return f;
+  };
+  if (!is_bonfire(l, look)) {
+    render::Flame f = l.fire == Fire::wall_torch ? render::torch_flame(base, l.seed)
+                                                 : render::brazier_flame(base, l.seed);
+    const double tall = fire_height(l, look.bonfires);
+    const double h = tall * kUnitM;
+    // A lantern's flame grows fatter than it grows tall: it fills its cage.
+    const double fat = tall > kLargeHeight ? kLanternWidth * kLargeHeight / tall : 1.0;
+    f.radius_m = static_cast<float>(f.radius_m * h / f.height_m * fat);
+    f.height_m = static_cast<float>(h);
+    return puffs(f);
+  }
+  // The heap's main body, and four lesser tongues round its bed, turned by the seed: a heap
+  // burns in several flames, never one.
+  constexpr double kTongue[5] = {1.0, 0.62, 0.5, 0.7, 0.45};  // each one's height, a share
+  double at[3] = {base[0], base[1], base[2]};
+  if (k > 0) {
+    const double a = phase(l.seed, 3) + 1.5707963267948966 * k;
+    at[0] += kBonfireBed * std::cos(a);
+    at[2] += kBonfireBed * std::sin(a);
+  }
+  render::Flame f = render::bonfire_flame(at, l.seed * 5u + uint32_t(k));
+  f.radius_m = static_cast<float>(f.radius_m * (k == 0 ? 1.3 : 0.75 * kTongue[k]));
+  f.height_m = static_cast<float>(kTongue[k] * kBonfireHeight * kUnitM);
+  return puffs(f);
+}
+
+}  // namespace
+
+double fire_flicker(const PointLight& l, double t_s, const FireLook& look) {
+  if (l.fire == Fire::none) return flicker_at(l, t_s);
+  double base[3];
+  base_of(l, base);
+  return kFireFlickerMean * render::flame_puff_level(fire_flame(l, look, base, 0), t_s);
+}
+
 void bsp_fires(const Scene& scene, double t_s, double brightness, std::vector<render::Flame>& out,
                const FireLook& look) {
   out.clear();
+  const auto pace = static_cast<float>(std::max(look.pace, 0.0));
+  const auto relative = static_cast<float>(kFireGlow * brightness);
   for (size_t i = 0; i < scene.lights.size(); ++i) {
     const PointLight& l = scene.lights[i];
     if (l.fire == Fire::none) continue;
-    const bool torch = l.fire == Fire::wall_torch;
-    const bool bonfire = is_bonfire(l, look);
     double base[3];
     base_of(l, base);
-    // The map's light flickers about 0.72 of its value (flicker_at's candle): the gas at full
-    // height there.
-    const auto level = static_cast<float>(
-        std::clamp(flicker_at(l, fire_time(l, t_s, look.pace)) / 0.72, 0.0, 1.5));
-    // The gas carried up at the pace's share of the preset's rise; the air past it too, so it
-    // leans as far as before.
-    const auto pace = static_cast<float>(std::max(look.pace, 0.0));
-    const auto relative = static_cast<float>(kFireGlow * brightness);
-    if (!bonfire) {
-      render::Flame f =
-          torch ? render::torch_flame(base, l.seed) : render::brazier_flame(base, l.seed);
-      const double tall = fire_height(l, look.bonfires);
-      const double h = tall * kUnitM;
-      // A lantern's flame grows fatter than it grows tall: it fills its cage.
-      const double fat = tall > kLargeHeight ? kLanternWidth * kLargeHeight / tall : 1.0;
-      f.radius_m = static_cast<float>(f.radius_m * h / f.height_m * fat);
-      f.height_m = static_cast<float>(h);
-      f.level = level;
+    // The gas and the light it casts swell and dim with the main body's puffs as one.
+    const double level = render::flame_puff_level(fire_flame(l, look, base, 0), t_s);
+    if (!is_bonfire(l, look)) {
+      render::Flame f = fire_flame(l, look, base, 0);
+      f.level = static_cast<float>(level);
       f.relative = relative;
-      f.rise_mps *= pace;
       out.push_back(f);
       continue;
     }
     double air[3];
     fire_air(l, look, t_s, air);
-    // The heap's main body, and four lesser tongues round its bed, turned by the seed: a heap
-    // burns in several flames, never one.
-    constexpr double kTongue[5] = {1.0, 0.62, 0.5, 0.7, 0.45};  // each one's height, a share
-    const double turn = phase(l.seed, 3);
     for (int k = 0; k < 5; ++k) {
-      double at[3] = {base[0], base[1], base[2]};
-      if (k > 0) {
-        const double a = turn + 1.5707963267948966 * k;
-        at[0] += kBonfireBed * std::cos(a);
-        at[2] += kBonfireBed * std::sin(a);
-      }
-      render::Flame f = render::bonfire_flame(at, l.seed * 5u + uint32_t(k));
-      const double h = kTongue[k] * kBonfireHeight * kUnitM;
-      f.radius_m = static_cast<float>(f.radius_m * (k == 0 ? 1.3 : 0.75 * kTongue[k]));
-      f.height_m = static_cast<float>(h);
+      render::Flame f = fire_flame(l, look, base, k);
+      // Each tongue puffs on its own (its own seed), its body's glow the heap's light.
       for (int a = 0; a < 3; ++a) f.wind[a] = static_cast<float>(air[a]) * pace;
       f.rise_mps *= pace;
-      f.level = level;
+      f.level = k == 0 ? static_cast<float>(level) : render::flame_puff_level(f, t_s);
       f.relative = relative;
       out.push_back(f);
     }

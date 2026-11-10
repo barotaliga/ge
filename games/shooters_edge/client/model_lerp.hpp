@@ -54,6 +54,22 @@ inline constexpr double kMostFrameSpan = 0.15;   // the most; a longer gap was a
 inline constexpr float kSnapUnits = 128;         // a move farther in one state: not drawn between
 inline constexpr double kMostGap = 0.25;         // states further apart: not drawn between, s
 
+// The time a pace's gap says the next step takes: the gap itself when it is a pace
+// (`kLeastFrameSpan`..`kMostFrameSpan`), else `last` (a longer gap was a pause).
+inline double frame_pace(double gap, double last) {
+  return gap >= kLeastFrameSpan && gap <= kMostFrameSpan ? gap : last;
+}
+
+// One frame number drawn between its changes on a clock: a model's animation, a held weapon's
+// recorded frame. `track_frame` reads the frame at `t` s and says what to draw: `from` (-1: the
+// frame alone) and the share `f` of the way to `frame`. A clock run back starts over.
+struct FrameTrack {
+  int frame = -1, from = -1;  // the frame now (-1: none seen) and the one it left (-1: none)
+  double changed = -1;        // when `frame` came, s
+  double span = kFrameSpan;   // what its blend takes, s
+};
+void track_frame(FrameTrack& tr, int frame, double t, int& from, float& f);
+
 // The switches (r_lerpmodels, r_lerpmove): what is drawn between.
 struct ModelLerpSwitches {
   bool frames = false, moves = false;
@@ -85,10 +101,7 @@ struct LerpModel {
 struct ModelTrack {
   int modelindex = 0;
   uint32_t seen = 0;  // the last call's count it was in
-  // The animation (the picture's clock).
-  int frame = 0, from = -1;  // the frame group now and the one it left (-1: none)
-  double changed = -1;       // when `frame` came, s
-  double span = kFrameSpan;  // what its blend takes, s
+  FrameTrack anim;    // the animation (the picture's clock)
   // The place (the server's clock): the last two states and when they were.
   sh::Vec3f origin, angles, prev_origin, prev_angles;
   double now_s = -1, prev_s = -1;

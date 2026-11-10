@@ -23,8 +23,8 @@
 //
 // THE KEYS are binds (controls.hpp: W A S D, SPACE jumps, the left button fires, SHIFT walks, 1..8
 // and the wheel the weapons, F12 a screenshot; OPTIONS ▸ CUSTOMIZE CONTROLS); TAB held shows the
-// scores (client/scores.hpp; `scr_levelstats 0|1`); the mouse looks (captured while the window has
-// it; a click takes it back); ESCAPE opens the main menu (menu/game_menu.hpp: drawn in the pack's
+// scores (client/scores.hpp; `scr_levelstats 0|1`); the mouse looks (taken on focus;
+// `in_mouse_release` frees it); ESCAPE opens the main menu (menu/game_menu.hpp: drawn in the pack's
 // own pictures when the packs carry them, the rows the game cannot do yet dimmed), and ESCAPE again
 // goes back out of it; the key under ESCAPE drops the console, where `map <name>` changes the map,
 // `sv <line>` is a line for the server's console (`sv timelimit 10`), `save <name>` and `load
@@ -508,8 +508,10 @@ int run_main(int argc, char** argv) {
   std::unique_ptr<ge::platform::AudioIn> mic;
   bool mic_tried = false;
   std::vector<float> mic_samples(static_cast<size_t>(sn::kMicMostSamples));
-  ge::platform::set_relative_mouse(*window, true);
-  bool captured = true;
+  // Who has the mouse (input/mouse_capture.hpp): the look, whenever the window has the focus and
+  // nothing in `in_mouse_release` asks for the pointer. Taken below on the first frame.
+  ge::input::MouseCapture mouse;
+  bool focused = ge::platform::has_focus(*window);
   bool paused_before_menu = false;  // a played demo's pause when the menu opened over it
   bool vsync = true;  // false while a timedemo runs unlocked; the player's vid_vsync otherwise
   // The surface at the window's size, its present mode the player's vid_vsync (a timedemo's
@@ -756,11 +758,13 @@ int run_main(int argc, char** argv) {
         mi.back = input.tapped(Key::escape);
         mi.del = input.tapped(Key::del) || input.tapped(Key::backspace);  // a Mac's delete key
         mi.refresh = input.tapped(Key::r) || input.tapped(Key::f5);
-        mi.pointer_x = input.pointer_x * px_per_unit;
-        mi.pointer_y = input.pointer_y * px_per_unit;
-        mi.pointer_moved = mi.pointer_x != last_pointer.x || mi.pointer_y != last_pointer.y;
-        last_pointer = {mi.pointer_x, mi.pointer_y};
-        mi.click = held.mouse.buttons.went_up(0);
+        if (mouse.pointer()) {  // a held pointer is frozen: the menu then reads only the keys
+          mi.pointer_x = input.pointer_x * px_per_unit;
+          mi.pointer_y = input.pointer_y * px_per_unit;
+          mi.pointer_moved = mi.pointer_x != last_pointer.x || mi.pointer_y != last_pointer.y;
+          last_pointer = {mi.pointer_x, mi.pointer_y};
+          mi.click = held.mouse.buttons.went_up(0);
+        }
       }
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
       // A benchmark's Escape stops the run (below) and opens nothing.
@@ -800,19 +804,27 @@ int run_main(int argc, char** argv) {
       if (!end_bench("the player asked for something else", t, true)) return 1;
       game_menu.hide();
     }
-    // The mouse is the look's while captured: the console, the menu or the focus lost lets it go;
-    // the menu closing or a click in the window takes it again.
-    // A demo played at its pace frees it for its play bar.
-    const bool watching = bench.active && bench.paced;
-    const bool release = con_view.open() || input.focus_lost || game_menu.open() || watching;
-    if (captured && release) {
-      captured = false;
-      ge::platform::set_relative_mouse(*window, false);
-    } else if (!captured && !con_view.open() && !game_menu.open() && !watching &&
-               (was_open || held.mouse.buttons.went_down(0))) {
-      captured = true;
-      ge::platform::set_relative_mouse(*window, true);
+    // The mouse is the look's whenever the window has the focus: a click on the window or on the
+    // app's icon in the Dock takes it, no click in the window needed. Only what `in_mouse_release`
+    // names lets it go: the console by default, and a demo watched at its pace (its play bar); a
+    // menu keeps it and is driven by the keys unless the menu's bit is set.
+    if (input.focus_lost) focused = false;
+    if (input.focus_gained) focused = true;
+    const ge::input::CaptureFacts facts{.focused = focused,
+                                        .console = con_view.open(),
+                                        .menu = game_menu.open(),
+                                        .watching = bench.active && bench.paced};
+    switch (ge::input::follow_capture(mouse, facts, controls.mouse_release)) {
+      case ge::input::CaptureStep::take:
+        ge::platform::set_relative_mouse(*window, true);
+        break;
+      case ge::input::CaptureStep::let_go:
+        ge::platform::set_relative_mouse(*window, false);
+        break;
+      case ge::input::CaptureStep::none:
+        break;
     }
+    const bool captured = mouse.held;
     const bool playing = !(con_keys.held || !captured || was_open);
     const ge::input::InputState& played = playing ? held : idle;
     // The mouse's buttons and wheel to the game's binds (the keyboard's went with the console's
@@ -989,6 +1001,7 @@ int run_main(int argc, char** argv) {
     if (bench.active || drawn_remote) {
       std::vector<std::string> said;
       const bool paced = bench.paced || drawn_remote;  // every frame shown, nothing timed
+      bench.lerp.strides = picture.lerp_move;          // r_lerpmove: a monster's strides glide
       const cl::TimedemoStep step =
           drawn_remote ? (joined == decltype(joined)::new_level ? cl::TimedemoStep::new_level
                                                                 : cl::TimedemoStep::frame)
@@ -1188,6 +1201,7 @@ int run_main(int argc, char** argv) {
       hud.centre_until = hud.centre.empty() ? 0 : t + 2;
     }
     // The eyes on the player and what the world throws, then the overlay: the HUD, the console.
+    shown.lerp = picture.lerp_move;  // r_lerpmove: the eye between the server's frames too
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
     view.frame = static_cast<uint64_t>(presented);
     fx_state.models = world ? &cl::world_models(*world) : nullptr;

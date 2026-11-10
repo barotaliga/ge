@@ -1,7 +1,7 @@
 // THE MAP'S FIRES (docs/rendering.md § Flames): every light entity that stands for a fire (a wall
 // torch, a large flame) drawn as burning gas (render/flame.hpp) where its model's flame is, in
-// place of the model. The gas keeps step with the light the map casts for it: its level is the
-// light's `flicker_at`, so the fire and the wall it lights waver as one.
+// place of the model. The gas keeps step with the light the map casts for it: both follow the
+// flame's puffs (`fire_flicker`), so the fire and the wall it lights waver as one.
 //
 // BONFIRES (`FireLook::bonfires`, classic-enhance's ce_bonfires): a large flame standing on the
 // floor with room over it (a brazier's bowl, `place_fires`) burns as a bonfire rather than a big
@@ -16,7 +16,7 @@
 // ge:summary A map's torches and large flames as render::Flame gas synced to their lights; bonfires
 // ge:keywords brush bsp torch flame fire wall-torch light-entity flicker-sync bsp_fires bonfire
 // ge:keywords brazier sparks bonfire_sparks place_fires fire_air draught wind ce_bonfires lantern
-// ge:keywords fire-pace r_fire_pace slower-flames
+// ge:keywords fire-pace r_fire_speed fire_flicker flame-puffs
 // ge:skill brush render
 // ge:test tests/brush_bsp_flames_test.cpp
 #pragma once
@@ -50,8 +50,17 @@ struct FireLook {
   bool bonfires = false;      // a large flame burns as a bonfire, with sparks
   double air[3] = {0, 0, 0};  // m/s: the wind over the open map now (bsp_weather's wind_air)
   double draught = 0.15;      // m/s: the slow draught every fire wavers in, open sky or not
-  double pace = kFirePace;    // the fires' pace (draw_data.hpp): 1 the presets', lower slower
+  double pace = kFirePace;    // the fires' pace: 1 a real fire's puffing (render/flame.hpp)
 };
+
+// The share of the map's light a fire's flicker averages (the candle flicker's 0.72, which the
+// maps' fires were lit at).
+inline constexpr double kFireFlickerMean = 0.72;
+
+// Light `l`'s flicker at `t_s` (its share of the map's light, `flicker_at`'s scale): a fire's
+// swells and dims with its flame's puffs (render::flame_puff_level, the gas's level too), so the
+// wall and the fire waver as one; a light that is no fire keeps its own flicker.
+double fire_flicker(const PointLight& l, double t_s, const FireLook& look);
 
 // Whether a light's fire burns as a bonfire under `look`.
 bool is_bonfire(const PointLight& light, const FireLook& look);

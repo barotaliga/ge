@@ -189,6 +189,10 @@ void set_relative_mouse(Window& window, bool on) {
   SDL_SetWindowRelativeMouseMode(window.impl_->window, on);
 }
 
+bool has_focus(const Window& window) {
+  return (SDL_GetWindowFlags(window.impl_->window) & SDL_WINDOW_INPUT_FOCUS) != 0;
+}
+
 bool relative_mouse(const Window& window) {
   return SDL_GetWindowRelativeMouseMode(window.impl_->window);
 }

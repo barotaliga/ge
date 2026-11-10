@@ -392,6 +392,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.hits = picture.ce.hits;
   s.decals = picture.ce.decals;
   s.warps = picture.ce.warps;
+  s.arrival = picture.ce.warps ? std::clamp(picture.arrival, 0.0, 1.0) : 0;
   s.flares = picture.ce.flares;
   s.bubbles = picture.ce.bubbles;
   s.bolt = &fx::bolt_look(static_cast<int>(picture.beam_style));
@@ -948,6 +949,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     s.leaving.clear();
     s.seen.clear();
     out.held_shown = 1;
+    out.arrival_s = -1;
   } else {
     for (const Warp& w : s.began) {
       if (w.arriving) continue;
@@ -971,6 +973,20 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       m.warp.shown = float(shown);
     }
     out.held_shown = own > 0 ? float(arrival_shown(s.warps, own, t)) : 1;
+    // His own arrival's warp of the whole view, in the colour of the pack's teleport fog (its
+    // specks' brightest, 7..14), made as bright as a colour goes.
+    out.arrival_s = -1;
+    for (const Warp& w : s.warps.live)
+      if (w.arriving && own > 0 && w.entity == own) out.arrival_s = t - w.t0;
+    if (out.arrival_s >= 0) {
+      if (s.palette.size() >= 768) {
+        const size_t i = size_t{14} * 3;
+        const double hi = std::max({s.palette[i], s.palette[i + 1], s.palette[i + 2], uint8_t{1}});
+        for (int k = 0; k < 3; ++k) out.arrival_tint[k] = s.palette[i + size_t(k)] / hi;
+      } else {
+        for (double& c : out.arrival_tint) c = 1;
+      }
+    }
     for (const Warp& w : s.warps.live) {
       const double age = t - w.t0, was = w.t0 >= t ? -1 : std::max(t - dt - w.t0, 0.0);
       if (w.arriving) {

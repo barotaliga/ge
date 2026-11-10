@@ -62,7 +62,10 @@ inline PickupCounts pickups_table(ge::lab::Lab& lab, server::Campaign& c,
     s.sv.edicts[1].health = 10;  // the loop's copy is what the program is handed
     if (health >= 0) *pg::entity_field(s.q.vm, 1, health) = pg::as_word(10.0f);
     if (armor >= 0) *pg::entity_field(s.q.vm, 1, armor) = pg::as_word(0.0f);
+    // The touch as the loop runs it: the server's touch watch round it (the coop weapon rule).
+    if (s.sv.touch_watch != nullptr) s.sv.touch_watch(s.sv.touch_watch_ctx, s.sv, e, 1, false);
     call_as(s, f, word_at(s, e, f.touch), e);
+    if (s.sv.touch_watch != nullptr) s.sv.touch_watch(s.sv.touch_watch_ctx, s.sv, e, 1, true);
     hidden[e] = !server::model_shown(s, e);
     indexed[e] = s.sv.edicts[static_cast<size_t>(e)].modelindex > 0;
   }

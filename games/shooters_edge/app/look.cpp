@@ -62,6 +62,14 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
                    "monster's strides over their time (1), or where each frame puts them (0)",
            .kind = gc::CvarKind::boolean},
           &picture.lerp_move);
+  cv.bind({.name = "r_arrival",
+           .fallback = "1",
+           .flags = gc::kArchive,
+           .help = "how strongly your own arrival (a spawn, a teleporter's far end) sweeps the "
+                   "whole view in a flash and a warp, with ce_warps on in the modern look; 0 none",
+           .min = 0,
+           .max = 1},
+          &picture.arrival);
   cv.bind({.name = "r_slime_glow",
            .fallback = "1",
            .help = "how much the slime's green glow lights the walls round it in the modern look, "
@@ -94,12 +102,12 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .min = 0,
            .max = 1},
           &picture.fill_shadows);
-  cv.bind({.name = "r_fire_pace",
-           .fallback = "0.4",
+  cv.bind({.name = "r_fire_speed",
+           .fallback = "1",
            .flags = gc::kArchive,
-           .help = "how fast the torches', braziers' and bonfires' flames churn and flicker in the "
-                   "modern look, 1 the flame presets' own pace (two or three times a real fire's "
-                   "at the maps' scale)",
+           .help = "how fast the torches', braziers' and bonfires' flames puff, churn and flicker "
+                   "in the modern look, 1 a real fire's of their size (a torch puffs about three "
+                   "times a second, a bonfire about once), lower slower",
            .min = 0,
            .max = 2},
           &picture.fire_pace);

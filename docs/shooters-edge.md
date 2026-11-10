@@ -145,8 +145,12 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
   when the packs have it, else the arena. `--size=WxH` sets the window's size, `--frames=N`
   quits after N frames.
 - **The keys**: W A S D move, SPACE jumps, the left button fires, 1 to 8 pick a weapon (7 the
-  rocket launcher), the wheel the next one. The mouse looks while the window has it (raw
-  counts, captured); a click takes it back after the console; closing the window quits.
+  rocket launcher), the wheel the next one. The mouse looks (raw counts, captured) from the
+  moment the window gets the focus, by a click on it or on the app's icon in the Dock or the
+  taskbar, with no second click; only the console lets it go by default, and closing the console
+  takes it back. `in_mouse_release` names what frees it (bits: 1 the console, 2 a menu, whose
+  pointer then hovers and clicks; 4 a demo's play bar; default 5), so a menu is driven by the keys
+  unless it holds 2. Closing the window quits.
 - **The main menu** (ESCAPE; ESCAPE again goes back, and out of it at its root): the classic
   game's pages (§ The main menu), every row the game can do working and the rest dimmed.
 - **The console** (the key under ESCAPE): `map <name>` changes the map, `sv <line>` runs a line on
@@ -453,8 +457,11 @@ states the window saw (the server's 72 or 77 frames a second fall unevenly on 50
 pictures), and a walking monster, which the program moves a stride at a time, drawn over each
 stride's time rather than jumping. A first sight, a new model, a warp, a move over 128 units and a
 gap over a quarter second are not drawn across. The held weapon's frames flow too: a nailgun's shot
-frame from the last, and a played fire clip back to rest over a frame's time. `r_lerpmodels 0` and
-`r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
+frame from the last, and a played fire clip back to rest over a frame's time; in a demo or on a
+joined server a classic set's weapon plays the weapon frame the server sends, blended between its
+changes. Your own eye rides the same clock as the models: drawn one server frame behind, between
+the server's last two states. A played demo's walking monster glides over its strides too
+(`demo_lerp.hpp`'s stride rule). `r_lerpmodels 0` and `r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
 films a monster walking up to the player both ways side by side (a GIF) and measures the judder
 and the pose jumps.
 

@@ -118,6 +118,10 @@ struct LoopCounts {
   int64_t speed_cuts = 0, physics_frames = 0, sounds_dropped = 0, spawns_full = 0;
 };
 
+// A game's rule that reads what a trigger's touch did: called just before (`after` false) and just
+// after each trigger touch `touch_links` runs. A plain function and its context: nothing virtual.
+using TouchWatch = void (*)(void* ctx, struct Server& sv, int trigger, int toucher, bool after);
+
 struct Server {
   ServerSettings set;
   std::vector<Edict> edicts;  // reserved to set.max_edicts; [0] the world
@@ -140,6 +144,8 @@ struct Server {
   bool original_walk = false;
   std::vector<uint32_t> touched;  // per entity: the packet stamp it last touched a player in
   uint32_t touch_stamp = 0;
+  TouchWatch touch_watch = nullptr;  // a game's rule round each trigger touch; none when null
+  void* touch_watch_ctx = nullptr;
   LoopCounts counts;
 };
 

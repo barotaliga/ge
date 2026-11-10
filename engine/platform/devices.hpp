@@ -40,7 +40,7 @@
 // ge:keywords platform input-backend sdl gamepad joystick wheel flight-stick throttle hotas
 // ge:keywords keyboard mouse raw-mouse relative-mouse text-input touch hot-plug rumble haptic
 // ge:keywords force-feedback ffb lightbar player-lights gyro accelerometer touchpad battery
-// ge:keywords virtual-joystick attach_virtual pump_devices play_feedback open_devices
+// ge:keywords virtual-joystick attach_virtual pump_devices play_feedback open_devices has_focus
 // ge:skill input platform
 // ge:test tests/platform_devices_test.cpp
 #pragma once
@@ -89,11 +89,15 @@ void play_feedback(Devices& devices, const input::Feedback& feedback,
                    const input::DeviceDb* db = nullptr);
 
 // The pointer's motion as raw counts with the pointer hidden and held (a first-person look), or
-// the pointer back. Off by default.
+// the pointer back. Off by default. Asked without the focus, it waits for it: the OS holds it back
+// until then (input::follow_capture asks it on every focus gained).
 void set_relative_mouse(Window& window, bool on);
 // Whether relative mode is in force now. The OS can hold it back until the window has the focus,
 // and until then the motion is the pointer's (accelerated, not flagged raw).
 bool relative_mouse(const Window& window);
+// Whether the window has the keyboard's (the input) focus now: what `input::CaptureFacts::focused`
+// reads at start, before any focus event (a window opened behind a terminal starts without it).
+bool has_focus(const Window& window);
 // Text events (a console, a name field; on a phone, the on-screen keyboard). Off by default.
 void set_text_input(Window& window, bool on);
 
