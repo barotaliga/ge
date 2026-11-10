@@ -96,11 +96,17 @@ struct Picture {
   // r_arrival: how strongly your own arrival (a spawn, a teleport's far end) warps the whole view
   // in the modern look with ce_warps on (render/post.hpp's arrival), 0 none.
   double arrival = 1;
+  // ce_bubbles_share: the share of the bubbles the game blows under water that is drawn, either
+  // look (a map's air vents blow one a second each, a column of ten in the water at once).
+  double bubbles_share = 0.3;
+  // ce_water_specks: the specks floating in the water seen from under it, a share of the pool
+  // look's (render/underwater.hpp's `motes`); 0 by default: round a swimmer they read as bubbles.
+  double water_specks = 0;
 };
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
-// r_farland, r_farland_warm, r_lerpmodels, r_lerpmove, r_arrival, r_quality, r_budget, every ce_
-// switch, the three ce_<id>_quality levels and the weather's cvars over `picture` (it must outlive
-// `con`).
+// r_farland, r_farland_warm, r_lerpmodels, r_lerpmove, r_arrival, ce_bubbles_share,
+// ce_water_specks, r_quality, r_budget, every ce_ switch, the three ce_<id>_quality levels and the
+// weather's cvars over `picture` (it must outlive `con`).
 void add_cvars(ge::console::Console& con, Picture& picture);
 // r_look's look; modern for a word it does not know.
 Look look_of(const Picture& picture);

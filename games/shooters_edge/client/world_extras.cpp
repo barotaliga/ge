@@ -37,6 +37,7 @@ struct WorldExtras {
   ba::LiquidWorld world;
   gr::Water water;
   gr::Underwater under;              // the view from under the water's level
+  double motes = 0;                  // the pool look's own specks, before ce_water_specks
   ba::BspViews views;                // the map drawn again for the water: its mirror, the view up
   gr::WaterViews handed;             // what the water was last handed of them
   const ba::BspDraw* bsp = nullptr;  // this frame's (prepare_extras), for the views' pass
@@ -77,6 +78,7 @@ void create_extras_part(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines,
     // The maps' pools are indoors: the water lit by the room, rippled, caustics on its walls and
     // the ceiling over it.
     gr::underwater_look("pool", x.under.look);
+    x.motes = x.under.look.motes;
   } else if (part == 1) {
     gr::create_liquid(d, pipelines, x.liquids, frame);
     // A player dropped in the slime sees a few metres round them, not the two centimetres a toxic
@@ -244,6 +246,9 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
   }
   gr::set_water_up_view(x.water, handed.up_view_proj);
   gr::prepare_water(d, x.water, view, eye_in);
+  // The specks suspended in the water, as many as ce_water_specks keeps (round a swimmer they
+  // read as bubbles).
+  x.under.look.motes = x.motes * options.water_specks;
   gr::prepare_underwater(d, x.under, x.water, view, x.height);
   x.liquids.shimmer = on.heathaze;
   x.liquids.fumes = on.fumes;

@@ -201,6 +201,26 @@ TEST(the_picture_cvars_tune_the_modern_look_and_leave_the_classic) {
   CHECK(lk::look_of(pic) == lk::Look::modern);
 }
 
+TEST(ce_bubbles_share_draws_a_third_of_the_bubbles_by_default_and_none_at_0) {
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  CHECK(pic.bubbles_share == 0.3);
+  con.execute("ce_bubbles_share 0");
+  CHECK(pic.bubbles_share == 0);
+  con.execute("ce_bubbles_share 5");
+  CHECK(pic.bubbles_share == 1);  // clamped to the cvar's range
+}
+
+TEST(ce_water_specks_is_off_by_default_and_reaches_the_modern_worlds_options) {
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  CHECK(lk::world_options(lk::Look::modern, {}, pic).water_specks == 0);
+  con.execute("ce_water_specks 0.5");
+  CHECK(lk::world_options(lk::Look::modern, {}, pic).water_specks == 0.5);
+}
+
 TEST(ce_skies_picks_our_sky_or_the_packs_in_the_modern_look) {
   ge::console::Console con;
   lk::Picture pic;
