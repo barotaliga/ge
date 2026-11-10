@@ -29,7 +29,7 @@ struct HeldDraw {
   toward: vec4f,          // view, unit; the held lights' count
   right: vec4f,           // the view's right (camera-relative world); the lens ratio
   up: vec4f,              // and its up; the lift, in NDC (the gun raised over a status bar)
-  forward: vec4f,
+  forward: vec4f,         // and its forward; 1 - the opacity (a ghost's dither)
   lights: array<vec4f, 16>,  // a light: at (view), range; rgb, radius
   warp: Warp,                // the held frame's: its axis in the held frame
 }
@@ -47,6 +47,7 @@ struct HeldDraw {
 
 const kWrap = 0.25;  // viewmodel/light.cpp's
 const kKnee = 0.8;   // viewmodel/raster.cpp's resolve
+const kGhostGlow = vec3f(0.05, 0.065, 0.085);  // a ghost's own light, the held unit (a white's 1)
 
 fn place(m: array<vec4f, 3>, p: vec3f, w: f32) -> vec3f {
   let h = vec4f(p, w);
@@ -228,15 +229,32 @@ struct FragmentOut {
   @location(1) motion: vec4f,  // rg: the screen motion (uv), b: reactive (0: a solid surface)
 }
 
+// A ghost's screen door: interleaved gradient noise, moved each frame so the history averages it.
+fn ghost_cut(d: HeldDraw, pixel: vec2f) -> bool {
+  if (d.forward.w <= 0.0) {
+    return false;
+  }
+  let p = pixel + 5.588238 * (frame.time.y % 64.0);
+  let n = fract(52.9829189 * fract(dot(p, vec2f(0.06711056, 0.00583715))));
+  return n < d.forward.w;
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> FragmentOut {
   let d = draws[in.draw];
+  if (ghost_cut(d, in.position.xy)) {
+    discard;
+  }
   let burn = warp_burn(d.warp, in.held, dot(in.held, d.warp.b.xyz));
   if (burn < 0.0) {
     discard;
   }
   var out: FragmentOut;
-  out.colour = vec4f(warp_shade(d.warp, held_colour(in) * held_white(d), burn), 1.0);
+  var colour = held_colour(in);
+  if (d.forward.w > 0.0) {
+    colour += kGhostGlow;  // a ghost reads in the dark: a cool light of its own
+  }
+  out.colour = vec4f(warp_shade(d.warp, colour * held_white(d), burn), 1.0);
   // Where the point was a frame ago through the gun's lens, unjittered.
   let q = in.last_view;
   let was = vec2f(q.x * d.lens.x / q.z * 0.5 + 0.5, 0.5 - (q.y * d.lens.y / q.z + d.up.w) * 0.5);
@@ -248,7 +266,13 @@ fn fs_main(in: VertexOut) -> FragmentOut {
 // viewmodel::resolve at an exposure of 1: the roll-off past the knee, then the sRGB curve.
 @fragment
 fn fs_resolved(in: VertexOut) -> @location(0) vec4f {
+  if (ghost_cut(draws[in.draw], in.position.xy)) {
+    discard;
+  }
   var c = held_colour(in);
+  if (draws[in.draw].forward.w > 0.0) {
+    c += kGhostGlow;
+  }
   let e = max(c - kKnee, vec3f(0.0));
   c = select(c, kKnee + e / (1.0 + e / (1.0 - kKnee)), c > vec3f(kKnee));
   c = clamp(c, vec3f(0.0), vec3f(1.0));
