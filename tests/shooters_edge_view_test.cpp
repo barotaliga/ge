@@ -176,20 +176,55 @@ TEST(a_change_puts_the_weapon_away_then_raises_the_next) {
     if (f.weapon == se::Weapon::rocket_launcher && !f.switching) up_at = i;
   }
   CHECK(saw_old_lowering && saw_down);
-  CHECK(up_at > 0 && up_at * dt <= 2 * se::weapon_row().switch_s + 0.1);
+  CHECK(up_at > 0 && up_at * dt <= s.switch_s + 2 * dt);
 }
 
-TEST(a_shot_during_a_switch_snaps_the_new_weapon_up) {
+TEST(a_shot_during_a_switch_rushes_the_new_weapon_up) {
+  // The old weapon leaves the picture and the new one comes up from low in the picture firing,
+  // cl_gunswitch_fire times faster than an unhurried raise.
+  const se::ViewSettings s;
+  const double dt = 1.0 / 120;
+  const auto raise_s = [&](bool fire) {
+    se::Hand hand;
+    se::HandInput in;
+    in.weapon = se::Weapon::nailgun;
+    se::step_hand(hand, in, s, models(), eye(), dt);
+    in.weapon = se::Weapon::beam_gun;
+    se::HandFrame f;
+    for (int i = 0; i < 6; ++i) f = se::step_hand(hand, in, s, models(), eye(), dt);
+    const double was = f.lowered;
+    CHECK(f.weapon == se::Weapon::nailgun && was > 0.1 && was < 1);
+    in.fired = fire;
+    f = se::step_hand(hand, in, s, models(), eye(), dt);
+    if (fire) {
+      CHECK(f.weapon == se::Weapon::beam_gun && f.drawn && f.flashing && f.rushed);
+      CHECK(f.lowered > 0 &&
+            f.lowered < se::kRushFrom);  // on its way up from kRushFrom, already in view
+    }
+    in.fired = false;
+    int frames = 1;
+    while ((f.switching || f.weapon != se::Weapon::beam_gun) && frames < 200) {
+      f = se::step_hand(hand, in, s, models(), eye(), dt);
+      ++frames;
+    }
+    CHECK(!f.rushed && f.lowered == 0);
+    return frames * dt;
+  };
+  const double calm = raise_s(false), rushed = raise_s(true);
+  CHECK(rushed < 0.5 * calm);
+  CHECK(rushed <= s.switch_s * (1 - se::kSwitchDownShare) / s.switch_fire + 3 * dt);
+}
+
+TEST(cl_gunswitch_0_changes_the_weapon_at_once) {
+  se::ViewSettings s;
+  s.switch_s = 0;
   se::Hand hand;
   se::HandInput in;
-  in.weapon = se::Weapon::nailgun;
-  const se::ViewSettings s;
+  in.weapon = se::Weapon::shotgun;
   se::step_hand(hand, in, s, models(), eye(), 1.0 / 60);
-  in.weapon = se::Weapon::beam_gun;
-  se::step_hand(hand, in, s, models(), eye(), 1.0 / 60);
-  in.fired = true;
+  in.weapon = se::Weapon::rocket_launcher;
   const se::HandFrame f = se::step_hand(hand, in, s, models(), eye(), 1.0 / 60);
-  CHECK(f.weapon == se::Weapon::beam_gun && f.drawn && f.flashing);
+  CHECK(f.weapon == se::Weapon::rocket_launcher && f.drawn && !f.switching && f.lowered == 0);
 }
 
 TEST(a_shot_lights_the_muzzle_and_fades) {
@@ -257,6 +292,13 @@ TEST(the_cvars_move_the_row) {
   CHECK(std::fabs(breathing.breath_m - 2 * game.breath_m) < 1e-12 && game.breath_m > 0);
   CHECK(std::fabs(breathing.breath_hz - 0.5) < 1e-12);
   CHECK(breathing.exert_rate == 0 && breathing.exert_depth == 0);
+  // The change: cl_gunswitch its time, cl_gunswitch_fire a shot's speed-up.
+  CHECK(s.switch_s == 0.2 && s.switch_fire == 4);
+  CHECK(cvars.set("cl_gunswitch", "0.1", ge::console::Source::local) ==
+        ge::console::SetResult::changed);
+  CHECK(cvars.set("cl_gunswitch_fire", "2", ge::console::Source::local) ==
+        ge::console::SetResult::changed);
+  CHECK(s.switch_s == 0.1 && s.switch_fire == 2);
   // Not drawn: still switching and flashing, unseen.
   se::Hand hand;
   se::HandInput in;

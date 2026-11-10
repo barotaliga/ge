@@ -550,7 +550,9 @@ light per pixel and is held to that reference.
 **A game's own set** sits on top of these three answers. Shooter's Edge's (`games/shooters_edge/view`,
 M48d) is its eight free models, each with its own mount (held length, grip), offset from the eye,
 kick, refire and muzzle light. Its hand switches weapons by putting one away and raising the
-next, and lights the muzzle on every shot. The player moves it with `r_drawviewmodel`,
+next in `cl_gunswitch` s (0.2: 40% down, the rest up; 0 at once); a shot during the switch takes the old
+weapon out of the picture and raises the new one from low in the picture `cl_gunswitch_fire` times faster
+(4), firing as it comes up. It lights the muzzle on every shot. The player moves it with `r_drawviewmodel`,
 `r_viewmodel_fov`, `cl_gunx`/`cl_guny`/`cl_gunz` and `cl_gunsway`, the breath's `cl_gunidle` (its
 share, 0 off), `cl_gunidle_rate` (breaths a minute at rest) and `cl_gunidle_exertion` (how much a
 run quickens and deepens it), `r_viewmodel_center` (1, the
