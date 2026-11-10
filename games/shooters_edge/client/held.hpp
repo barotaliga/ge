@@ -40,6 +40,7 @@ struct HeldState {
   float attack_finished = 0;  // the last frame's
   double stride_s = 0;        // the stride's clock, s
   int shots = 0;              // shots seen
+  bool shown = false;         // the last frame drew a weapon (a dead recorder's sinks from it)
   // A recording's or a joined server's weapon frame (a classic set's), drawn between its changes.
   FrameTrack recorded;
   int recorded_weapon = -1;  // the weapon `recorded` is of
@@ -61,7 +62,7 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
 
 // The hand in a recorded game whose frame is `frame` (timedemo.hpp's demo_view): the weapon the
 // recording's HUD shows at the view's eye and look; not drawn while the recorder holds no view
-// model (a spectator), is dead or the level has ended.
+// model (a spectator) or the level has ended; when the recorder dies, the weapon sinks out of view.
 // shortcut: no shot and no stride (the recording's weapon frame and velocity are not read), so the
 // weapon neither kicks, flashes nor bobs; read them for that.
 view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::ViewSettings& settings,

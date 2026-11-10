@@ -144,6 +144,20 @@ void() player_body = {
   self.body_step = self.body_step + 1;
 };
 
+// --- the jump heard ---
+
+// A jump leaving the ground (the variant's player_jump calls it): its sound on the body.
+void() jump_sound = { sound(self, CHAN_BODY, "player/plyrjmp8.wav", 1, ATTN_NORM); };
+
+// Swimming up (the jump held deep in water, slime or lava): a splash, one of two, at most once a
+// second.
+void() swim_sound = {
+  if (time < self.splash_next) return;
+  self.splash_next = time + 1;
+  if (random() < 0.5) sound(self, CHAN_BODY, "misc/water1.wav", 1, ATTN_NORM);
+  else sound(self, CHAN_BODY, "misc/water2.wav", 1, ATTN_NORM);
+};
+
 // --- the frame around a command ---
 
 void() PlayerPreThink = {
@@ -201,5 +215,8 @@ void() player_precache = {
   precache_sound("player/death1.wav");
   precache_sound("player/udeath.wav");
   precache_sound("player/tornoff2.wav");
+  precache_sound("player/plyrjmp8.wav");
+  precache_sound("misc/water1.wav");
+  precache_sound("misc/water2.wav");
   precache_sound("items/r_item1.wav");
 };

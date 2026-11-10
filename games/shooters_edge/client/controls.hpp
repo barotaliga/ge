@@ -1,17 +1,18 @@
 // THE PLAYER'S HANDS: one frame's keys and mouse as the view's turn and the command the listen
 // server runs. The keys are the console's binds (`bind w +forward`): `add_cvars` registers the
-// moves as buttons (+forward, +back, +moveleft, +moveright, +jump, +attack, +speed, +strafe,
-// +left, +right) and `impulse <n>`, and `default_binds` gives every key the classic layout has
-// unbound (W A S D and the arrows move, SPACE jumps, the left button fires, SHIFT walks or runs,
-// ALT sidesteps with the mouse, 1..8 pick a weapon, the wheel the next one carried, F12 takes a
-// screenshot: engine/capture/screenshot.hpp), before the player's config rebinds them. OPTIONS ▸
-// CUSTOMIZE CONTROLS rebinds them too.
+// moves as buttons (+forward, +back, +moveleft, +moveright, +moveup, +movedown, +jump, +attack,
+// +speed, +strafe, +left, +right) and `impulse <n>`, and `default_binds` gives every key the
+// classic layout has unbound (W A S D and the arrows move, SPACE jumps, C crouches, the left button
+// fires, SHIFT the run key, ALT sidesteps with the mouse, 1..8 pick a weapon, the wheel the next
+// one carried, F12 takes a screenshot: engine/capture/screenshot.hpp), before the player's config
+// rebinds them. OPTIONS ▸ CUSTOMIZE CONTROLS rebinds them too.
 //
 // - `button_moves` reads the buttons (the window); `key_moves` reads the default keys straight off
 //   the input state (a scripted session, a test), so a session's frames make the same commands on
 //   any machine whatever the player bound.
-// - `read_controls` makes the command: forward at the run's speeds with `cl_run` on (the default)
-//   and +speed held to walk, or the other way round with it off; the left button fires.
+// - `read_controls` makes the command: every move at the run's speeds, always (the classic game
+//   has no walking: the speeds ask for more than the server's top speed, which holds them to it);
+//   +speed, the run key, doubles them inside the protocol's limit; the left button fires.
 // - `turn_view`: raw mouse counts turn the view (`sensitivity` degrees a count, `m_invert` flips
 //   the pitch), the pitch held within `pitch_limit`; +left and +right turn at `cl_yawspeed`; with
 //   +strafe held (or `lookstrafe` on) the mouse's sideways counts sidestep instead of turning.
@@ -22,8 +23,10 @@
 // ge:summary The player's keys and mouse as the view's turn and the server's command
 // ge:keywords controls keys mouse-look raw-mouse sensitivity invert wasd jump fire impulse
 // ge:keywords weapon-keys wheel read_controls turn_view move-cmd m_invert cvars
-// ge:keywords lookspring spring_view ideal-pitch centre-view cl_run always-run lookstrafe
+// ge:keywords lookspring spring_view ideal-pitch centre-view always-run no-walking run-key
+// ge:keywords lookstrafe
 // ge:keywords buttons binds default_binds forward attack speed strafe impulse key_moves
+// ge:keywords crouch duck movedown moveup swim-down
 // ge:keywords in_mouse_release mouse-capture
 // ge:skill input shooter
 // ge:test tests/shooters_edge_listen_test.cpp
@@ -39,8 +42,9 @@ namespace shooters_edge::client {
 // The console's buttons the moves are read from (null until `add_cvars` registers them).
 struct ControlButtons {
   ge::console::Button *forward = nullptr, *back = nullptr, *moveleft = nullptr,
-                      *moveright = nullptr, *jump = nullptr, *attack = nullptr, *speed = nullptr,
-                      *strafe = nullptr, *left = nullptr, *right = nullptr;
+                      *moveright = nullptr, *moveup = nullptr, *movedown = nullptr, *jump = nullptr,
+                      *attack = nullptr, *speed = nullptr, *strafe = nullptr, *left = nullptr,
+                      *right = nullptr;
   int impulse = 0;  // the last `impulse <n>` not yet sent (0 none)
 };
 
@@ -48,7 +52,6 @@ struct ControlSettings {
   double sensitivity = 0.066;  // degrees of turn a raw count
   bool invert = false;
   bool lookspring = false;
-  bool run = true;          // cl_run: run without +speed (+speed walks)
   bool lookstrafe = false;  // the mouse's sideways counts sidestep, not turn
   double yaw_speed = 140;   // cl_yawspeed: +left and +right, degrees a second
   float pitch_limit = 89;   // degrees up or down
@@ -64,6 +67,7 @@ struct ControlSettings {
 // One frame's moves: what is held, and the impulse asked for.
 struct Moves {
   bool forward = false, back = false, moveleft = false, moveright = false;
+  bool moveup = false, movedown = false;  // swim up and down; down crouches where the move ducks
   bool jump = false, attack = false, speed = false, strafe = false;
   bool left = false, right = false;  // turning
   int impulse = 0;
@@ -71,7 +75,7 @@ struct Moves {
 
 inline constexpr double kSpringSpeed = 90;  // degrees a second the lookspring drifts the pitch
 
-// The cvars `sensitivity`, `m_invert`, `lookspring`, `cl_run`, `lookstrafe` and `cl_yawspeed`
+// The cvars `sensitivity`, `m_invert`, `lookspring`, `lookstrafe` and `cl_yawspeed`
 // over `c`, the moves' buttons into `c.buttons` and the command `impulse` (`c` must outlive
 // `con`).
 void add_cvars(ge::console::Console& con, ControlSettings& c);

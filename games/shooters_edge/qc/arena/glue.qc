@@ -181,8 +181,24 @@ void() drop_on_death = { backpack_drop(); };
 
 // A taken item comes back after its wait: the arena is always a deathmatch.
 float() items_come_back = { return TRUE; };
-// The multiplayer form's move jumps for the program: nothing to do before it.
-void() player_jump = {};
+// The multiplayer form's move jumps for the program; the program only hears it. Before the move,
+// with the jump button down: deep in a liquid, the swimmer's splash; on the ground with the button
+// let go since the last jump, the jump's sound (the move makes the jump itself, by the same rule).
+void() jump_sound;
+void() swim_sound;
+void() player_jump = {
+  if (!self.button2) {
+    self.flags = self.flags | FL_JUMPRELEASED;
+    return;
+  }
+  if (self.waterlevel >= 2) {
+    swim_sound();
+    return;
+  }
+  if (!(self.flags & FL_ONGROUND) || !(self.flags & FL_JUMPRELEASED)) return;
+  self.flags = self.flags - FL_JUMPRELEASED;
+  jump_sound();
+};
 
 // --- spawn parms (kept by the server across a map change; deathmatch starts everyone fresh) ---
 
