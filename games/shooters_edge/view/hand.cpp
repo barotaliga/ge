@@ -57,6 +57,15 @@ void add_view_cvars(con::Cvars& c, ViewSettings& out) {
       {"r_viewmodel_hands", "1", con::kArchive,
        "draw the hands and arms holding the weapon (0: the weapon alone)", con::CvarKind::boolean},
       &out.hands);
+  c.bind({"cl_gunswitch", "0.2", con::kArchive,
+          "s a weapon change takes, the old one down and the new one up (0 at once)",
+          con::CvarKind::number, 0, 2},
+         &out.switch_s);
+  c.bind({"cl_gunswitch_fire", "4", con::kArchive,
+          "how many times faster a shot during a weapon change raises the new weapon (1 not at "
+          "all)",
+          con::CvarKind::number, 1, 20},
+         &out.switch_fire);
 }
 
 namespace {
@@ -95,6 +104,8 @@ vm::PlaceRow eye_row(const ViewSettings& s) {
   vm::PlaceRow r = vm::classic_row();
   const vm::PlaceRow base = r;
   for (int k = 0; k < 3; ++k) r.offset_m[k] = s.gun_m[k];
+  r.lower_m = kEyeLowerM;
+  r.lower_pitch = kEyeLowerPitch;
   r.fov_y = s.fov_deg * ge::core::kPi / 180;
   r.sway_max = base.sway_max * s.sway;
   r.sway_shift = base.sway_shift * s.sway;
@@ -129,13 +140,17 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   }
   hand.wanted = in.weapon;
   const Weapon before = hand.held;
-  if (in.fired && hand.held != hand.wanted) {
-    // The simulation fires the new weapon at once: it is in the hand, up.
+  if (in.fired && !in.dead && (hand.held != hand.wanted || hand.place.lowered > 0)) {
+    // The simulation fires the new weapon at once: the old one is gone, and the new one is rushed
+    // up from low in the picture (or from where it is, already on its way up), firing as it comes.
+    if (hand.held != hand.wanted && s.switch_s > 0)
+      hand.place.lowered = ge::core::num::max(hand.place.lowered, kRushFrom);
     hand.held = hand.wanted;
-    hand.place.lowered = 0;
+    hand.rushed = true;
   }
-  // Down at the bottom of a switch: the new weapon goes into the hand and comes up.
-  if (hand.held != hand.wanted && hand.place.lowered >= 1.0) hand.held = hand.wanted;
+  // Down at the bottom of a switch, or a switch at once: the new weapon goes into the hand.
+  if (hand.held != hand.wanted && (hand.place.lowered >= 1.0 || s.switch_s <= 0))
+    hand.held = hand.wanted;
   if (hand.held != before) {  // a new weapon comes up at rest
     hand.fire_t = -1;
     hand.shot_frame = -1;
@@ -145,14 +160,25 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
 
   const WeaponLook& look = weapon_look(hand.held);
   vm::PlaceRow row = hand.at_eye ? eye_row(s) : held_row(look, s);
-  if (in.dead) row.switch_s = kDeathLowerS;  // the death's slower sink
+  const bool down = hand.held != hand.wanted || in.dead;
+  if (in.dead)
+    row.switch_s = kDeathLowerS;  // the death's slower sink
+  else if (down)
+    row.switch_s = s.switch_s * kSwitchDownShare;
+  else
+    row.switch_s = s.switch_s * (1 - kSwitchDownShare) /
+                   (hand.rushed ? ge::core::num::max(s.switch_fire, 1.0) : 1.0);
+  if (row.switch_s <= 0) hand.place.lowered = down ? 1.0 : 0.0;  // at once: no frame between
   vm::PlaceInput pin = in.place;
-  pin.lowered = hand.held != hand.wanted || in.dead ? 1.0 : 0.0;
+  pin.lowered = down ? 1.0 : 0.0;
   pin.shot = in.fired ? look.kick : 0.0;
   HandFrame f;
   f.weapon = hand.held;
   f.placement = vm::frame_viewmodel(row, pin, hand.place, dt, motion);
+  if (hand.place.lowered <= 0 || down) hand.rushed = false;
   f.switching = hand.held != hand.wanted || hand.place.lowered > 0;
+  f.rushed = hand.rushed;
+  f.lowered = hand.place.lowered;
   f.drawn = s.draw && hand.place.lowered < 1.0;
   f.hands = s.hands;
   f.fired = in.fired;
