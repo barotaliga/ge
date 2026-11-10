@@ -23,7 +23,8 @@
 // 0"`: one switch's before and after). `--swings=<n>` then has the player take the axe and swing it
 // n times with the game's own held weapons in hand: a sheet, a GIF and which of the axe's two
 // swings each one played. `--death=1` has the player jump once (the sounds heard, the jump's among
-// them) and die, the weapon sinking out of view: a sheet and a GIF.
+// them) and die, the weapon sinking out of view: a sheet and a GIF. `--switch=1` has him change
+// weapons twice, calmly and with a shot during the change: sheets, a GIF and a chart.
 // `--film=<n> --hand=1` films the weapon in hand breathing at rest, `--exertion=1` as after a run.
 // `--say="vote fraglimit 30;vote rules"` has the player type those lines at the console first,
 // what the server prints back shown in the HUD's feed (a vote on the settings, say).
@@ -37,7 +38,8 @@
 // ge:keywords lab se-client listen-server window frame rocket-jump hud effects trail explosion
 // ge:keywords before-after relief parallax enhanced-textures fixture-cache
 // ge:keywords axe-swing swings two-swings weaponframe film_swings breath exertion film-hand
-// ge:keywords fire explobox film_death death jump-sound say vote notify-feed
+// ge:keywords fire explobox film_death death jump-sound film_switch weapon-change cl_gunswitch
+// ge:keywords say vote notify-feed
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
@@ -57,8 +59,10 @@
 #include "classicenhance/texture.hpp"
 #include "console/console.hpp"
 #include "core/math.hpp"
+#include "core/num_text.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
+#include "lab/chart.hpp"
 #include "lab/gif.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/explosion_scene.hpp"
@@ -349,6 +353,120 @@ void film_death(gl::Lab& lab, ge::gpu::Device& device, cl::WorldDraw& world,
   if (!gif.empty()) lab.attach("death.gif", gl::encode_gif_frames(gif, 4), gl::Det::measured);
 }
 
+// THE WEAPON CHANGE (`--switch=1`): from where the views left him, the player is handed every
+// weapon and changes twice, the world drawn in the enhanced look with the game's own weapons in
+// his hand at every server tic (a 77th of a second): the shotgun put away and the rocket launcher
+// raised (`cl_gunswitch`), then back to the shotgun with attack pressed a few tics into the change,
+// so the shotgun is rushed up firing (`cl_gunswitch_fire`). A sheet of each change, a GIF of
+// both and a chart of how far the weapon is put away against time.
+void film_switch(gl::Lab& lab, ge::gpu::Device& device, cl::WorldDraw& world,
+                 const ge::gpu::Target& out, cl::Listen& l, cl::ViewState& shown,
+                 cl::FxState& fx_state, cl::FxFrame& fx, cl::HeldState& held,
+                 const shooters_edge::view::ViewSettings& settings,
+                 std::span<const ge::viewmodel::HeldModel> weapons, double& t) {
+  constexpr double kTic = 0.013;
+  cl::set_field_named(l, 1, "items", 1 + 2 + 4 + 8 + 16 + 32 + 64 + 4096);
+  cl::set_field_named(l, 1, "ammo_shells", 100);
+  cl::set_field_named(l, 1, "ammo_rockets", 100);
+  sh::MoveCmd cmd;
+  cmd.msec = 13;
+  cmd.angles = {l.view.x, l.view.y, 0};
+  shooters_edge::view::HandFrame hand;
+  const auto tic = [&] {
+    cl::listen_frame(l, cmd);
+    cmd.impulse = 0;
+    t += kTic;
+    cl::frame_view(l, shown, 1, t, kTic);
+    cl::step_fx(l, shown, fx_state, t, kTic, fx);
+    hand = cl::step_held(l, shown, held, settings, weapons, t, kTic);
+  };
+  cmd.impulse = 2;  // the shotgun in hand, up, before the film starts
+  for (int i = 0; i < 80; ++i) tic();
+  std::vector<gl::Picture> gif;
+  gl::LineChart lc;
+  lc.frame = {"how far the weapon is put away through a change",
+              "cl_gunswitch " + ge::core::num::to_fixed(settings.switch_s, 2) +
+                  " s, cl_gunswitch_fire " + ge::core::num::to_fixed(settings.switch_fire, 0) + "x",
+              "t from the change (s)", "put away (0 up, 1 out of view)"};
+  lc.spikes = false;
+  struct Change {
+    const char* id;
+    const char* title;
+    int impulse;
+    int fire_at;  // the tic attack is pressed (-1: never)
+  };
+  const Change changes[2] = {{"switch", "shotgun to rocket launcher, no shot", 7, -1},
+                             {"switch-fire", "rocket launcher to shotgun, attack 3 tics in", 2, 3}};
+  for (const Change& c : changes) {
+    cmd.impulse = static_cast<uint8_t>(c.impulse);
+    gl::Trace trace{c.title, {}, {}};
+    std::vector<gl::Picture> sheet;
+    std::vector<std::string> names;
+    double done_s = -1, first_shot_s = -1, lowered_at_shot = -1;
+    for (int i = 0; i < 40; ++i) {
+      cmd.buttons = c.fire_at >= 0 && i >= c.fire_at && i < c.fire_at + 2 ? sh::kButtonAttack : 0;
+      tic();
+      const double at = (i + 1) * kTic;
+      trace.x.push_back(at);
+      trace.y.push_back(hand.lowered);
+      if (hand.fired && first_shot_s < 0) {
+        first_shot_s = at;
+        lowered_at_shot = hand.lowered;
+      }
+      if (done_s < 0 && i > 0 && !hand.switching) done_s = at;
+      if (i < 24) {
+        ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
+        cl::draw_world(device, world, view, fx, hand.drawn ? &hand : nullptr, kTic, {}, out.view);
+        const ge::gpu::Image img = ge::gpu::read_now(device, out);
+        const gl::Picture pic{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba};
+        gif.push_back(gl::shrink(pic, 480));
+        if (sheet.size() < 16 && (done_s < 0 || at <= done_s + kTic)) {
+          sheet.push_back(gl::shrink(pic, 320));
+          char name[64];
+          std::snprintf(name, sizeof name, "%.3f s%s%s", at, hand.fired ? ", fired" : "",
+                        hand.rushed ? ", rushed" : "");
+          names.push_back(name);
+        }
+      }
+    }
+    lab.metric(std::string(c.id) + ".done-s", done_s, "s");
+    if (first_shot_s >= 0) {
+      lab.metric(std::string(c.id) + ".shot-s", first_shot_s, "s");
+      lab.metric(std::string(c.id) + ".lowered-at-shot", lowered_at_shot, "share");
+      lc.marks.push_back({first_shot_s, "shot"});
+    }
+    lc.traces.push_back(trace);
+    for (int i = 0; i < 40; ++i) tic();  // settle between the two
+    if (!sheet.empty())
+      lab.shot(
+          {c.id,
+           std::string("the weapon change: ") + c.title,
+           c.fire_at < 0
+               ? "The player changes from the shotgun to the rocket launcher (impulse 7) and "
+                 "does nothing else, the game's own weapons in hand, a frame every server tic: "
+                 "the shotgun drops out of view and the launcher comes up."
+               : "The player changes back to the shotgun (impulse 2) and presses attack three "
+                 "tics later, while the launcher is on its way down: the launcher is gone and "
+                 "the shotgun is rushed up from low in the picture, firing as it comes.",
+           c.fire_at < 0 ? "the whole change in about a fifth of a second, no frame jumping"
+                         : "the shotgun up within a few tics of the shot, its flash low in the "
+                           "first frames",
+           {{"map", lab.arg("map")}}},
+          es::sheet_of(sheet, names, 4), gl::Det::measured);
+  }
+  const gl::Chart chart = gl::line_chart(lc);
+  lab.shot({"switch-chart",
+            chart.title,
+            "How far the weapon in hand is put away (0 up, 1 out of view) each tic from the "
+            "change: the calm change goes down and up in cl_gunswitch; the one fired during it "
+            "jumps to the new weapon low in the picture on the shot and comes up cl_gunswitch_fire "
+            "times faster.",
+            "the fired line back at 0 well before the calm one",
+            {{"map", lab.arg("map")}}},
+           gl::to_picture(chart.plot), gl::Det::measured);
+  if (!gif.empty()) lab.attach("switch.gif", gl::encode_gif_frames(gif, 4), gl::Det::measured);
+}
+
 // A game folder's map from its start, four ways, classic beside enhanced (private pictures), or
 // `--game=fixture`'s halls (pictures for anywhere).
 void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
@@ -437,12 +555,14 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   const int swings = std::max(0, static_cast<int>(lab.arg_num("swings")));
   // `--death`: the player jumps once and dies, the game's own held weapons in his hand.
   const bool death = lab.arg("death") == "1";
+  // `--switch`: the player changes weapons, calmly and firing, the game's own in his hand.
+  const bool change = lab.arg("switch") == "1";
   std::vector<ge::viewmodel::HeldModel> weapons;
   // `--hand`: the weapon in hand in every view, the game's own (client/held.hpp), raised over the
   // classic status bar as the window raises it.
   const bool in_hand = lab.arg("hand") == "1";
   cl::HeldState held;
-  if (swings > 0 || death || in_hand) {
+  if (swings > 0 || death || change || in_hand) {
     held.hand.at_eye = cl::load_held_set(cl::classic_adapter(), files, {}, weapons);
     if (!held.hand.at_eye) lab.note("no weapon is drawn: the game's held weapons did not load");
   } else if (warp && !shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error)) {
@@ -717,6 +837,9 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   if (death)
     film_death(lab, *device, *world[1], out, l, shown, fx_state, fx, held, view_settings, weapons,
                t);
+  if (change)
+    film_switch(lab, *device, *world[1], out, l, shown, fx_state, fx, held, view_settings, weapons,
+                t);
 }
 
 void run(gl::Lab& lab) {
@@ -926,6 +1049,9 @@ const gl::LabSpec kSpec{
      {"death", "0",
       "with --game: 1, after the views the player jumps once (the sounds heard) and dies, the "
       "game's own weapon in hand sinking out of view (a sheet and a GIF)"},
+     {"switch", "0",
+      "with --game: 1, after the views the player changes weapons twice, calmly and with a shot "
+      "during the change, the game's own weapons in hand (sheets, a GIF and a chart)"},
      {"say", "",
       "with --game: console lines the player types first, ';' between (`vote fraglimit 30`), "
       "the server's answers in the HUD's feed"}},
