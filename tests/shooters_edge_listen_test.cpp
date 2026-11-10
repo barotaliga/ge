@@ -320,17 +320,23 @@ TEST(the_binds_buttons_make_the_command_always_run_and_sidestep) {
   CHECK(cmd.buttons == sh::kButtonAttack);
   CHECK(cmd.impulse == 7);
   CHECK(cl::button_moves(c).impulse == 0);  // the impulse is sent once
-  // The classic game has no walking: there is no cl_run, and +speed (SHIFT) is the run key,
-  // doubling the moves inside the protocol's limit, never slower.
-  CHECK(con.cvars().find("cl_run") == nullptr);
+  // Nobody walks: cl_run is on by default and no key walks (+speed is bound to nothing); a config
+  // that binds it walks at half the run.
+  CHECK(con.cvars().find("cl_run") != nullptr);
+  CHECK(con.binds().get(ge::console::BindMode::game, "shift").empty());
   con.key("shift", true);
   con.run();
-  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -508);
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -400);
+  con.key("shift", false);
+  con.execute("bind shift +speed");
+  con.key("shift", true);
+  con.run();
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -200);
   con.key("shift", false);
   con.run();
-  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -400);
-  // C crouches: the up axis below 0 (a move that ducks: the sequel's; the classic swims down).
-  CHECK(con.binds().get(ge::console::BindMode::game, "c") == "+movedown");
+  // No crouch in the classic game: C is bound to nothing; +movedown swims down where bound.
+  CHECK(con.binds().get(ge::console::BindMode::game, "c").empty());
+  con.execute("bind c +movedown");
   con.key("c", true);
   con.run();
   CHECK(cl::read_controls(cl::button_moves(c), in, c).up == -200);
