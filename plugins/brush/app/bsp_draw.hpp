@@ -114,6 +114,9 @@ struct Options {
   double slime_glow = 1;    // the slime's faint green glow on the walls round it, 0 none
   double fire_glow = 1;     // the flames' own brightness, a share of kFireGlow's (bsp_flames.hpp)
   double fire_pace = kFirePace;  // how fast the fires puff, 1 a real fire's (draw_data.hpp)
+  // The specks suspended in the water seen from under it (render/underwater.hpp's `motes`), a
+  // share of the look's own: 0 none, 1 as the look has them.
+  double water_specks = 1;
   // The glowing texels' light under the real-time lights (a window's, a lamp's panel), a share of
   // a white face's as the map lights it (the classic's fullbright: 1; the lightmaps' paths keep 1).
   double glow = 1;

@@ -1,6 +1,6 @@
 // ge:summary Shooter's Edge's looks: the switch's options and the palette grade
 // ge:keywords look classic modern palette grade quantize r_look r_fx_lights r_fx_glow r_bloom
-// ge:keywords r_farland r_farland_warm far-land ce_bubbles_share bubbles
+// ge:keywords r_farland r_farland_warm far-land ce_bubbles_share bubbles ce_water_specks
 // ge:skill render shooter
 // ge:test tests/shooters_edge_effects_test.cpp
 #include "shooters_edge/app/look.hpp"
@@ -78,6 +78,14 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .min = 0,
            .max = 1},
           &picture.bubbles_share);
+  cv.bind({.name = "ce_water_specks",
+           .fallback = "0",
+           .flags = gc::kArchive,
+           .help = "the specks floating in the water round you while you swim under it in the "
+                   "modern look: 1 as many as the water's look has, 0 none",
+           .min = 0,
+           .max = 1},
+          &picture.water_specks);
   cv.bind({.name = "r_slime_glow",
            .fallback = "1",
            .help = "how much the slime's green glow lights the walls round it in the modern look, "
@@ -267,6 +275,7 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
     base.slime_glow = picture.slime_glow;
     base.fire_glow = picture.fire_glow;
     base.fire_pace = picture.fire_pace;
+    base.water_specks = picture.water_specks;
     base.fill_shadows = picture.fill_shadows > 0.5;
     base.glow = picture.glow;
     base.near_soft = kNearSoft;
