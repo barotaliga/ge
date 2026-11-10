@@ -6,13 +6,14 @@
 // - THE PROBE (`make_light_probe`): the world model's upward faces that carry a lightmap (no sky,
 //   no liquid), binned once on a grid seen from above, `kProbeCell` units a cell, so a ray tests
 //   only its cell's triangles.
+// - ON A FACE (`lightmap_at`): a surface's own lightmap read at a point's lightmap coordinates.
 // - THE READ (`light_below`): the highest of those faces under the point within `reach` units,
 //   its lightmap coordinates by the triangle's barycentric weights, the first style's luxels
 //   blended bilinearly; 0..1 a channel (a luxel's byte over 255).
 //
 // ge:summary The baked light on the floor under a point, off the map's lightmaps
 // ge:keywords light-probe lightmap light_below make_light_probe floor-light luxel ray-down
-// ge:keywords lightpoint held-weapon lighting grid bin
+// ge:keywords lightpoint held-weapon lighting grid bin lightmap_at face-light
 // ge:skill brush
 // ge:test tests/brush_light_probe_test.cpp
 #pragma once
@@ -41,5 +42,10 @@ LightProbe make_light_probe(const Map& map);
 // units, into `rgb` (0..1 a channel). False when there is none.
 bool light_below(const LightProbe& probe, const Map& map, const float p[3], float rgb[3],
                  float reach = 4096);
+
+// The first style's light of the lightmap `lightmap` (into Map::lightmaps) at `uv` (a vertex's
+// `lm`, 0..1 across it), bilinear, into `rgb` (0..1 a channel): the light on a face where a round
+// hit it, say. False for no such lightmap.
+bool lightmap_at(const Map& map, int32_t lightmap, const float uv[2], float rgb[3]);
 
 }  // namespace ge::brush
