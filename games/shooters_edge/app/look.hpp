@@ -71,7 +71,7 @@ struct Picture {
   double glow = 0.6;      // r_glow: the glowing texels' light (windows, lamps), 1 the classic's
   double slime_glow = 1;  // r_slime_glow: the slime's faint green light, 0 none
   double fire_glow = 1;   // r_fire_glow: the flames' own brightness, 1 as made
-  double fire_pace = ge::brush::app::kFirePace;  // r_fire_pace: the flames. pace, 1 the presets.
+  double fire_pace = ge::brush::app::kFirePace;  // r_fire_speed: the flames' pace, 1 a real fire's
   double gamma = 1;  // gamma: the picture's brightness, below 1 brighter
   // r_fill_shadows: 1 lets every map light throw a figure's shadow and dims the bounce round him,
   // 0 (the default) only the lights whose source shows (brush/app/bsp_draw.hpp's fill_shadows)

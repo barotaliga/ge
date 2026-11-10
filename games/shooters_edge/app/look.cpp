@@ -102,12 +102,12 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .min = 0,
            .max = 1},
           &picture.fill_shadows);
-  cv.bind({.name = "r_fire_pace",
-           .fallback = "0.4",
+  cv.bind({.name = "r_fire_speed",
+           .fallback = "1",
            .flags = gc::kArchive,
-           .help = "how fast the torches', braziers' and bonfires' flames churn and flicker in the "
-                   "modern look, 1 the flame presets' own pace (two or three times a real fire's "
-                   "at the maps' scale)",
+           .help = "how fast the torches', braziers' and bonfires' flames puff, churn and flicker "
+                   "in the modern look, 1 a real fire's of their size (a torch puffs about three "
+                   "times a second, a bonfire about once), lower slower",
            .min = 0,
            .max = 2},
           &picture.fire_pace);

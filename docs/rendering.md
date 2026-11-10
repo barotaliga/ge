@@ -1017,15 +1017,19 @@ the presets under the noon sun and under one lamp at night.
 a sprite or a model: one quad a flame facing the eye over its bounding sphere, and per pixel a
 march of 14 steps through the gas, stopped at the scene's depth so a bracket or a wall in front
 of it hides it (the `gpu-flames` lab holds a flame behind a wall to changing no byte). The steps
-start at a per-pixel offset that changes every frame, and the resolve averages them; 14 were 28
+start at a per-pixel offset (a fixed white hash a pixel, stepped by the golden ratio each frame, so
+each pixel covers its step evenly over a few frames; a fresh hash every frame left a grain that
+boiled at the frame rate, and interleaved gradient noise showed its diagonal lattice in the gas), and the resolve averages them over the two or so frames of history the gas keeps (its
+reactive mark is half, `kFlameReactive`: wholly reactive, the TAA threw every frame's grain on
+screen); 14 were 28
 until round 7 of the timedemo, which halved the noise drawn for 0.23 ms at 1440p on the M3 Max,
 at the price of a finer grain on a thin wind-torn tongue in a single still frame. A step
 no eddy can carry gas to (past the largest sway the noise gives at its height, and again once the
 sway is known) returns before any noise is drawn: those points' light is exactly zero, so the
 picture is the same and the gas costs about half (round 4 of the timedemo's price). The gas is
 a teardrop on its fuel (widest an eighth of the way up, a point at its tip), its edge a Gaussian
-in its radius so it fades over decades of light, torn by three octaves of value noise carried up
-at the gas's rise and growing toward the tip, where the tongues tear loose. Its temperature is
+in its radius so it fades over decades of light, torn by value noise that grows toward the tip,
+where the tongues tear loose. Its temperature is
 hottest on the axis low down and cools toward the rim and the tip; every temperature's colour
 and brightness come from Planck's law against the CIE 1931 observer (`render/blackbody.hpp`, a
 64-row table any glowing thing can read through `render/wgsl/blackbody.wgsl`), so a cooling gas dims by orders of magnitude, softened to the eye's 0.45 power. A candle
@@ -1043,11 +1047,36 @@ with the flame's seed), and
 its lights list. `Flame::wind` bends the flame downwind against its rise, and its light leans
 with it. The presets are a torch, a candle, a brazier, a camp fire and a bonfire.
 
+**The motion (M41q)** (`flame_puff_hz`, `flame_puff_phase`, `flame_puff_level`; the shader's
+`flame_age`, `flame_puff`). A still of the gas looked right while the gas in motion did not: its
+noise was a frozen volume slid up through a fixed teardrop at one speed, and the whole flame was
+scaled up and down at its light's flutter (13 times a second, then 5 at M41p's 0.4 pace), which
+reads as a picture pumping, not a fire. A real flame moves in three ways the pass now draws:
+
+1. **The gas accelerates.** Buoyant gas speeds up as the square root of its height (McCaffrey's
+   flame zone), so a parcel's time from the fuel grows as sqrt(height): the shader reads every
+   eddy at the moment its gas left the fuel (`flame_age`, `born`), so a parcel keeps its eddies as
+   it climbs, crawling round at the base and stretched into licks near the tip. `kFlameTransit`
+   (1.3) puff cycles carry the gas from the fuel to the tip.
+2. **It puffs.** A buoyant diffusion flame sheds a ring vortex at a frequency set by its width
+   alone, f = 1.5 / sqrt(D) (Cetegen and Ahmed's pool-fire law; Hamins' Strouhal-Froude form):
+   a wall torch of 20 cm about 3.4 times a second, a brazier 2.4, a bonfire 1.3. Each puff swells
+   the body low down, rides up with the gas and pinches the top off between two puffs as a pocket
+   that rises past the tip and burns out, so the tip's height swings with it. The rate drifts a
+   tenth either way on two slow beats (`flame_puff_phase`), so no two puffs are alike.
+3. **It snakes.** The sway at the fuel (smooth noise in time) is carried up the flame's spine at
+   the gas's speed, wider the higher (the spine of Lamorlette and Foster's production flames).
+
+The light follows the puffs (`flame_puff_level`: mean 1, about 13 % either way, read where the gas
+is half way up): as the gas swells it gives more light, as the top pinches off less. The gas's own
+size swings only 7 % with it; the puffs do the rest. In brush maps both the gas's level and the
+wall's light come from it (`fire_flicker`), so the wall wavers with the flame it sees.
+
 **In brush maps (M39g)** (`plugins/brush/app/bsp_flames.hpp`). A classic map's wall torches and
 large flames are light entities; `bsp_fires` stands a torch or a brazier flame where each one's
 model burns, scaled to the model's flame (a wall torch's from 6 to 29 units above its origin, a
-large flame's from 2 to 43), and drives its gas with the light's own `flicker_at`, so the fire and
-the wall it lights waver together. The light is lifted to the middle of the gas and softened over
+large flame's from 2 to 43), and drives its gas and the light it casts with the same puffs
+(`fire_flicker`), so the fire and the wall it lights waver together. The light is lifted to the middle of the gas and softened over
 the flame's height (`fire_light_lift`, `fire_light_size`), as `flame_light` does. A brush map is
 lit in its lightmaps' units rather than the sun's, so the gas's core is set by `Flame::relative`:
 `kFireGlow` (30) times a white face under the map's own light. The `gpu-bsp` lab draws them in
@@ -1069,13 +1098,12 @@ as tall (58 units) and 1.5 times as wide as the pack's flame, filling its cage, 
 times as bright (`fire_light_gain`), with no sparks. Wall torches and small flames stay as they
 were.
 
-**The fires' pace (M41p)** (`FireLook::pace`, `Options::fire_pace`, Shooter's Edge's
-`r_fire_pace`). A map's fires burn at `kFirePace` (0.4) of the presets' pace: each flame's gas is
-carried up at that share of its preset's rise (the air past it slowed alike, so it leans as far),
-and its light flickers on a clock slowed as much (`fire_time`), the gas and the wall it lights in
-step. At the presets' own pace a wall torch's tongues pass about three times a second and its light
-flutters thirteen; in a hall at the maps' scale that read two or three times a real fire's. The
-draught a fire wavers in under a roof is 0.15 m/s, a breath.
+**The fires' pace (M41p, M41q)** (`FireLook::pace`, `Options::fire_pace`, Shooter's Edge's
+`r_fire_speed`). A map's fires puff at `kFirePace` (1) times a real flame's rate for their width,
+the gas and the wall's light in step; lower is slower. (M41p slowed the old frozen-noise gas to
+0.4 of its presets' pace with `r_fire_pace`; M41q's motion made that a real fire's own pace and the
+setting was renamed, so a saved 0.4 does not carry over.) The draught a fire wavers in under a roof
+is 0.15 m/s, a breath.
 
 **Shadows use three techniques, one for each scale:**
 
