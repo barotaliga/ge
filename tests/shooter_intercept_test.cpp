@@ -26,7 +26,7 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 }  // namespace
 
 TEST(a_rocket_is_fired_where_its_target_will_be) {
-  sh::Mover m;
+  sh::MovingTarget m;
   m.at = {1000, 0, 0};
   m.velocity = {0, 320, 0};  // straight across
   sh::Shot rocket;
@@ -45,7 +45,7 @@ TEST(a_rocket_is_fired_where_its_target_will_be) {
 }
 
 TEST(a_player_in_the_air_comes_down_on_his_arc) {
-  sh::Mover m;
+  sh::MovingTarget m;
   m.at = {0, 0, 200};
   m.velocity = {100, 0, 270};  // a jump's rise
   m.airborne = true;

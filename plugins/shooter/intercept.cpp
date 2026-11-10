@@ -33,7 +33,7 @@ bool arc_at(double up_deg, double d, const Shot& s, double& z, double& t) {
 
 }  // namespace
 
-Vec3f mover_at(const Mover& m, double t) {
+Vec3f mover_at(const MovingTarget& m, double t) {
   Vec3f p{m.at.x + static_cast<float>(m.velocity.x * t),
           m.at.y + static_cast<float>(m.velocity.y * t), m.at.z};
   if (!m.airborne) {
@@ -77,7 +77,8 @@ bool lob_pitch(Vec3f from, Vec3f to, const Shot& s, float& pitch, double& flight
   return true;
 }
 
-Intercept intercept(Vec3f from, const Mover& m, double head_s, const Shot& s, int iterations) {
+Intercept intercept(Vec3f from, const MovingTarget& m, double head_s, const Shot& s,
+                    int iterations) {
   Intercept out;
   out.at = mover_at(m, head_s);
   for (int i = 0; i < (iterations < 1 ? 1 : iterations); i++) {
