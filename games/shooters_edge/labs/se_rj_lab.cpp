@@ -502,7 +502,8 @@ void run(gl::Lab& lab) {
           {std::string(sh::rocket_jump_kind_name(static_cast<sh::RocketJumpKind>(kind))) +
                (standing ? " standing" : " run at"),
            std::to_string(pitch.size()),
-           to_fixed(100.0 * static_cast<double>(pitch.size()) / std::max<size_t>(1, jumps.size()),
+           to_fixed(100.0 * static_cast<double>(pitch.size()) /
+                        static_cast<double>(std::max<size_t>(1, jumps.size())),
                     0) +
                "%",
            to_fixed(median(pitch), 0), to_fixed(median(run), 0), to_fixed(median(after), 0),
