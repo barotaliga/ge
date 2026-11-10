@@ -135,9 +135,13 @@ bool light_below(const LightProbe& probe, const Map& map, const float p[3], floa
     uv[0] = w0 * l[0][0] + w1 * l[1][0] + w2 * l[2][0];
     uv[1] = w0 * l[0][1] + w1 * l[1][1] + w2 * l[2][1];
   }
-  if (!found || best_map < 0 || static_cast<size_t>(best_map) >= map.lightmaps.size()) return false;
-  // `lm` is (luxel + 0.5) / size across the lightmap: back to luxels, then bilinear.
-  const Lightmap& lm = map.lightmaps[static_cast<size_t>(best_map)];
+  return found && lightmap_at(map, best_map, uv, rgb);
+}
+
+bool lightmap_at(const Map& map, int32_t lightmap, const float uv[2], float rgb[3]) {
+  if (lightmap < 0 || static_cast<size_t>(lightmap) >= map.lightmaps.size()) return false;
+  // `uv` is (luxel + 0.5) / size across the lightmap: back to luxels, then bilinear.
+  const Lightmap& lm = map.lightmaps[static_cast<size_t>(lightmap)];
   const float fx = uv[0] * static_cast<float>(lm.width) - 0.5f;
   const float fy = uv[1] * static_cast<float>(lm.height) - 0.5f;
   const int x0 = static_cast<int>(std::floor(fx)), y0 = static_cast<int>(std::floor(fy));

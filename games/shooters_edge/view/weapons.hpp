@@ -27,7 +27,8 @@
 // - THE SHOT: its KICK (the size handed to the placement: back and up), its REFIRE (s between
 //   shots while attack is held) and its FLASH: a point light at the muzzle (colour, intensity at
 //   1 m in the held unit, range, how long it lasts), none for the melee weapon; and its FIRE: the
-//   flame, smoke and sparks the engine throws from the muzzle (render/muzzle.hpp), named as a
+//   flame and sparks the engine throws from the muzzle (render/muzzle.hpp; the game leaves its
+//   smoke off, app/muzzle.hpp), named as a
 //   preset turned by a knob list at the weapon's true size (`muzzle`, `muzzle_knobs`; the drawing
 //   scales it by kBuiltScale with the gun). A real gun's flash is a few milliseconds of glowing
 //   gas, small and dim, and the smoke is what is left: the table is tuned to that, the shotguns a
