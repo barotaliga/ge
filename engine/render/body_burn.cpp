@@ -116,7 +116,8 @@ size_t body_burn_births(BodyBurn& s, const BodyBurnLook& look, const BurnShape& 
   const int smoke = owed(s.debt[0], look.smoke_per_s * std::max(heat, s.charred / 3.0), dt);
   for (int i = 0; i < smoke; ++i) {
     double p[3];
-    on_skin(b, rnd(r, 0.25, 1.0), rnd(r, 0, kTwoPi), p);
+    const double up = rnd(r, 0.25, 1.0);  // drawn one at a time: argument order is unspecified
+    on_skin(b, up, rnd(r, 0, kTwoPi), p);
     p[1] = std::max(p[1], floor_y);
     Particle q = base(p, b, 0.3);
     q.v[0] += static_cast<float>(rnd(r, -0.15, 0.15));
@@ -140,7 +141,8 @@ size_t body_burn_births(BodyBurn& s, const BodyBurnLook& look, const BurnShape& 
     spot(s.seed, k, up, angle, hz);
     if (heat < 0.15 + 0.1 * k / double(kSpots)) continue;  // the weakest spots go out first
     double p[3];
-    on_skin(b, up + rnd(r, -0.06, 0.06), angle + rnd(r, -0.35, 0.35), p);
+    const double at = up + rnd(r, -0.06, 0.06);
+    on_skin(b, at, angle + rnd(r, -0.35, 0.35), p);
     if (p[1] < floor_y) continue;
     Particle q = base(p, b, 0.6);
     q.v[0] += static_cast<float>(rnd(r, -0.2, 0.2));
@@ -163,7 +165,8 @@ size_t body_burn_births(BodyBurn& s, const BodyBurnLook& look, const BurnShape& 
   const int embers = owed(s.debt[2], look.ember_per_s * heat, dt);
   for (int i = 0; i < embers; ++i) {
     double p[3];
-    on_skin(b, rnd(r, 0.2, 0.9), rnd(r, 0, kTwoPi), p);
+    const double up = rnd(r, 0.2, 0.9);
+    on_skin(b, up, rnd(r, 0, kTwoPi), p);
     if (p[1] < floor_y) continue;
     Particle q = base(p, b, 0.5);
     q.v[0] += static_cast<float>(rnd(r, -0.5, 0.5));
@@ -185,7 +188,8 @@ size_t body_burn_births(BodyBurn& s, const BodyBurnLook& look, const BurnShape& 
   const int fumes = owed(s.debt[3], look.fume_per_s * s.acid, dt);
   for (int i = 0; i < fumes; ++i) {
     double p[3];
-    on_skin(b, rnd(r, 0.0, 0.8), rnd(r, 0, kTwoPi), p);
+    const double up = rnd(r, 0.0, 0.8);
+    on_skin(b, up, rnd(r, 0, kTwoPi), p);
     p[1] = std::max(p[1], floor_y);
     Particle q = base(p, b, 0.3);
     q.v[0] += static_cast<float>(rnd(r, -0.1, 0.1));
