@@ -79,7 +79,7 @@ void create_extras_part(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines,
   } else if (part == 1) {
     gr::create_liquid(d, pipelines, x.liquids, frame);
     // A player dropped in the slime sees a few metres round them, not the two centimetres a toxic
-    // ooze lets through.
+    // ooze lets through; in the lava a thick light-red glowing goo, not the opaque melt.
     x.liquids.under_reach = kUnderReach;
   } else if (part == 2) {
     const ba::WeatherCvars& weather = *x.weather;

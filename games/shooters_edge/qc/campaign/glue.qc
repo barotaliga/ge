@@ -18,15 +18,22 @@ string(string class_name, string fallback) name_of = { return fallback; };
 // A loaded game's own words: the form has no local info, so none (the mod's own words always).
 string(string key, string a, string b, string c, string d) game_words = { return ""; };
 float() game_quiet = { return FALSE; };
+// A blast's pellets on one body land as one blow, as the classic single-player game has them.
+float() pellets_as_one_blow = { return TRUE; };
 string(entity targ, entity attacker) death_words = { return ""; };
 
 void(vector org, float set) effect_send = {};
 
 // A puff where a shot hits: a burst of red particles on something that bleeds (the form has no
-// blood message), a chip of the wall elsewhere (its gunshot carries no count).
+// blood message), eight drops a pellet thrown back off the wound (along the shot, twice as hard
+// out of the body's side it struck, jittered across), a chip of the wall elsewhere (its gunshot
+// carries no count).
 void(vector org, float count, float bleeds) effect_impact = {
+  local vector way;
   if (bleeds) {
-    particle(org, '0 0 0', 73, count * 20);
+    way = 4 * v_forward + 8 * trace_plane_normal + (8 * random() - 4) * v_right +
+          (8 * random() - 4) * v_up;
+    particle(org, way, 73, count * 8);
     return;
   }
   WriteByte(MSG_BROADCAST, SVC_TEMPENTITY);

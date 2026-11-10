@@ -121,6 +121,8 @@ void() monster_demon1 = {
   self.fr_leap = '27 38 1';
   self.fr_pain = '39 44 1';
   self.fr_death = '45 53 1';
+  self.death_solid = 5;
+  self.gib_model = "progs/gib1.mdl";
   walkmonster_start("progs/demon.mdl", 300, '-32 -32 -24', '32 32 64');
 };
 
@@ -231,6 +233,7 @@ void() monster_shambler = {
   self.fr_missile = '65 76 1';
   self.fr_pain = '77 82 1';
   self.fr_death = '83 93 1';
+  self.death_solid = 2;
   walkmonster_start("progs/shambler.mdl", 600, '-32 -32 -24', '32 32 64');
 };
 

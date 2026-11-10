@@ -465,12 +465,17 @@ void run(gl::Lab& lab) {
     ls::make_scene(ds, small, kBasalt, static_cast<uint32_t>(tw), static_cast<uint32_t>(th));
     put(ds, small, "lava", look_of("lava"));
     std::vector<gl::Picture> pics;
-    for (const double pitch : {-0.1, 0.75}) {
-      gr::FrameView v =
-          ls::view_at(ls::kPitX - 2, ls::kLevel - 0.6, ls::kPitZ - 6, 0.1, pitch, -0.03, 2.4, t);
-      v.adapt_cd = gr::adapt_for(look_of("lava"), 1.5);
-      pics.push_back(ls::draw(ds, small, v));
+    // As thick as it is, then with a game's reach of 3 m: the goo a player sees round them.
+    for (const double reach : {0.0, 3.0}) {
+      small.liquids.under_reach = reach;
+      for (const double pitch : {-0.1, 0.75}) {
+        gr::FrameView v =
+            ls::view_at(ls::kPitX - 2, ls::kLevel - 0.6, ls::kPitZ - 6, 0.1, pitch, -0.03, 2.4, t);
+        v.adapt_cd = gr::adapt_for(look_of("lava"), 1.5);
+        pics.push_back(ls::draw(ds, small, v));
+      }
     }
+    small.liquids.under_reach = 0;
     gr::FrameView v =
         ls::view_at(ls::kPitX - 2, ls::kLevel - 0.6, ls::kPitZ - 6, 0.1, -0.1, -0.03, 2.4, t);
     v.adapt_cd = gr::adapt_for(look_of("lava"), 1.5);
@@ -484,11 +489,16 @@ void run(gl::Lab& lab) {
     lab.shot({"from-below",
               "FROM BELOW",
               "The eye 0.6 m under the molten lake's level at dusk, looking across and up: lava "
-              "is opaque, so its own glow fills the view, the eye keyed to the melt.",
-              "the whole view molten orange, darker streaks of cooler melt rising through it; "
-              "none of the pit's walls or the sky",
+              "as thick as it is (top), its own glow filling the view, the eye keyed to the "
+              "melt; then with a game's reach of 3 m (bottom), a thick light-red glowing goo the "
+              "eye sees a few metres into.",
+              "top: the whole view molten orange, darker streaks of cooler melt rising through "
+              "it, none of the pit's walls or the sky; bottom: the pit's near walls reddened "
+              "through a light-red glow, the far ones lost in it, the surface overhead the "
+              "opaque churning melt",
               {}},
-             strip(pics, {"ACROSS", "UP AT THE SURFACE"}, 2), Det::measured);
+             strip(pics, {"ACROSS", "UP AT THE SURFACE", "ACROSS, REACH 3 M", "UP, REACH 3 M"}, 2),
+             Det::measured);
   }
   // THE LOOKS.
   {
