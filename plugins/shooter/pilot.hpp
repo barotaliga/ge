@@ -68,6 +68,7 @@
 #include "ai/path.hpp"
 #include "ai/why.hpp"
 #include "core/prng.hpp"
+#include "shooter/circle_jump.hpp"
 #include "shooter/cmd_source.hpp"
 #include "shooter/nav.hpp"
 
@@ -115,6 +116,11 @@ struct PilotSettings {
   // link) instead of ending there: the brink guard holds the feet off it in the air as on the
   // ground, so the hop needs no stop of its own (hops along dm2's pits: share 9-11 % -> 14-15 %).
   bool hop_lips = false;
+  // THE CIRCLE JUMP (`circlejump`, circle_jump.hpp): a hop's first jump taken out of a curve on
+  // the ground, forward and a side key, the view on the velocity, as people's are (their standing
+  // jumps take off at ~430): until `circle.target` speed, `circle.most_s` or past the route's line.
+  bool hop_circle = false;
+  CircleSettings circle;
   // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while `jumper.rockets` is set (the
   // caller's say: the launcher in hand, its rockets, the health for the blast), those of its
   // level and at its price (`NavJumper`); played as a jump, the view
@@ -200,6 +206,8 @@ struct PilotStats {
   int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
   int32_t rides = 0, strafes = 0;
   int32_t hops = 0, hop_jumps = 0;  // hop stretches entered, jumps pressed on a landing in them
+  int32_t circles = 0;              // hops started by a circle jump
+  float circle_speed = 0;           // their takeoff speeds, summed, units/s
   int32_t rocket_jumps = 0;         // rocket jumps fired
   int32_t flips = 0;                // of them, taken as the flip
   int32_t grenade_jumps = 0;        // grenades fired for a grenade jump
@@ -224,6 +232,8 @@ struct Pilot {
   int32_t strafe_end_node = -1;  // the route index a strafe or hop stretch ends at
   int8_t strafe_side = 0;        // the side axis's sign in the air, -1 left, 1 right
   float side_s = 0;              // the hop's side held this long, s
+  float circle_s = -1;           // on the circle jump's curve this long, s (-1: not on it)
+  int8_t circle_side = 0;        // and the side key it curves on (0: not chosen yet)
   bool jump_pressed = false;     // the jump button in the last command
   bool airborne = false;         // left the ground on the current jump link
   float grenade_s = -1;          // a grenade jump's: since its shot, s (-1: not fired yet)

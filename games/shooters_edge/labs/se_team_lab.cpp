@@ -739,6 +739,13 @@ void run(gl::Lab& lab) {
       for (const cn::TeamPlayer& p : r.players) hs += p.hops, hj += p.hop_jumps;
       lab.metric("team.hops", static_cast<double>(hs), "count");
       lab.metric("team.hop-jumps", static_cast<double>(hj), "count");
+      // The circle jumps (`circlejump`): hops started out of a curve, and their takeoff speed
+      // (people's standing jumps: 433 at the median on dm2).
+      int64_t cj = 0;
+      double cs = 0;
+      for (const cn::TeamPlayer& p : r.players) cj += p.circles, cs += p.circle_speed;
+      lab.metric("team.circle-jumps", static_cast<double>(cj), "count");
+      lab.metric("team.circle-speed", cj > 0 ? cs / static_cast<double>(cj) : 0, "u/s");
     }
     lab.metric("team.dodge-share",
                fight > 0 ? static_cast<double>(dodging) / static_cast<double>(fight) : 0, "share");

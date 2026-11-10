@@ -378,6 +378,33 @@ bool jump_blocked(const Pilot& p, const MoveWorld& world, Vec3f o, float speed, 
   return false;
 }
 
+// THE CIRCLE JUMP (circle_jump.hpp): the hop's first jump from a curve on the ground. True while
+// still curving (the keys and view in `w`); false once due, the jump then taken as any landing's.
+bool circling(Pilot& p, const PilotSense& s, float vh, float speed, float err, float dt, int msec,
+              Want& w) {
+  if (p.circle_s < 0 || p.gap_k >= 0 || p.jump_pressed) return false;
+  MoveSettings move;
+  move.maxspeed = s.maxspeed;
+  const CircleStep c = circle_step(vh, speed, err, p.circle_s, static_cast<float>(msec) * 0.001f,
+                                   p.circle_side, move, p.set.circle);
+  if (c.jump) {
+    if (p.circle_s > 0) {  // a curve was run (not a straight way's jump at once)
+      p.stats.circles++;
+      p.stats.circle_speed += speed;
+    }
+    p.circle_s = -1;
+    return false;
+  }
+  p.circle_s += dt;
+  p.circle_side = c.side;
+  p.strafe_side = c.side;
+  w.forward = 1;
+  w.side = static_cast<float>(c.side);
+  w.yaw = unwrap(c.yaw, p.yaw);
+  w.jump = false;
+  return true;
+}
+
 // The most the velocity turns a second in the air with the wish across it (hops.hpp's rule:
 // 30 units/s across it a command), degrees/s.
 float hop_turn_rate(float speed, float dt) {
@@ -1077,6 +1104,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         p.strafe_end_node = j;
         p.gap_k = gap_in(p, j);
         p.strafe_side = 0;
+        p.circle_s = p.set.hop_circle ? 0.f : -1.f;
+        p.circle_side = 0;
         p.best = 1e30f;
         p.best_s = t;
         p.stats.hops++;
@@ -1236,7 +1265,9 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         const float err_abs = err < 0 ? -err : err;
         if (err_abs > p.set.hop_brake && speed > s.maxspeed) w.forward = -1;
       }
-      if (s.onground) {
+      if (s.onground && circling(p, s, vh, speed, err, dt, msec, w)) {
+        because = "a circle jump: curving into the hop";
+      } else if (s.onground) {
         // The landing's own command: jump (before friction) and strafe on; with a gap trick
         // ahead, only a jump the move says lands safe (gap_takeoff).
         w.jump = !p.jump_pressed;

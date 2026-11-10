@@ -1282,6 +1282,11 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   ps.hop_stairs_walked = f.features[sh::Feature::stairs];
   ps.hop_headroom = f.features[sh::Feature::headroom];
   ps.hop_lips = f.features[sh::Feature::liphop];
+  // The circle jump by skill: an expert curves up to 0.3 s for ~430 (people's standing jumps
+  // take off at 433, p50), an average player a shorter curve for less (people's p25: 377).
+  ps.hop_circle = f.features[sh::Feature::circlejump];
+  ps.circle.target = expert ? 430.f : 380.f;
+  ps.circle.most_s = expert ? 0.3f : 0.2f;
   ps.brink = f.features[sh::Feature::brink];
   // Its lane off the route's line (shooter/pilot.hpp): a person never walks the line; the less
   // practised wander wider. A perfect player keeps to it.
