@@ -55,7 +55,7 @@
 // ge:summary The pilot: a nav route played one command at a time through the player move
 // ge:keywords pilot bot route follow usercmd command jump run-up ride plat door wait strafe-jump
 // ge:keywords bunny-hop air-strafe stuck replan lost hands why pilot_step pilot_go pilot_source
-// ge:keywords rocket-jump flip back-rocket-jump strafe-turn flip_keys
+// ge:keywords rocket-jump flip back-rocket-jump strafe-turn flip_keys headroom lintel last-jump
 // ge:skill shooter bots
 // ge:test tests/shooter_pilot_test.cpp
 #pragma once
@@ -107,6 +107,10 @@ struct PilotSettings {
   // turns, the view kept 45 degrees outside the velocity so the two keys' wish lies across it;
   // no side switch to weave, no look ahead for walls, no brake.
   bool hop_simple = false;
+  // THE HEADROOM (`headroom`): a hop's jump not pressed when its flight would meet a ceiling over
+  // the route ahead (a lintel over a stair down): run on under it along the route, jump past it;
+  // and the stretch's last jump one whose flight lands before the stretch ends (a climb, a lip).
+  bool hop_headroom = false;
   // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while `jumper.rockets` is set (the
   // caller's say: the launcher in hand, its rockets, the health for the blast), those of its
   // level and at its price (`NavJumper`); played as a jump, the view

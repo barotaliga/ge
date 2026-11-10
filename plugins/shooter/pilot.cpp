@@ -44,7 +44,11 @@ constexpr float kJumpOver = 1.15f;  // and at most this share (and 16 u/s) of it
 constexpr float kJumpAim = 0.95f;   // with the velocity within this cosine of the jump's way
 constexpr float kPastStart = 24;    // past a jump's start this far without its speed: run up
 constexpr float kStrafeHold = 2;    // the strafe's side holds until the target is this far off, deg
-constexpr float kSimpleSide = 3;    // the simple hop takes the side the route is this far off, deg
+// The last jump of a hop's stretch (`headroom`): one whose flight lands before the stretch ends
+// (a climb, a mover, a lip, a jump of the route's), not on it: a flight's reach at the speed held.
+constexpr float kLastJump_s = 0.55f;
+constexpr float kHeadroom_s = 0.8f;  // a hop's jump's flight checked this far, or to its landing
+constexpr float kSimpleSide = 3;     // the simple hop takes the side the route is this far off, deg
 constexpr float kStrafeSpeed = 0.8f;  // a strafe starts moving at least this share of maxspeed
 // A gap trick (nav_gaps.hpp): a jump lands across when within this of its landing node; a gap
 // flight come down within this of it landed; the next commands' places tried for its takeoff;
@@ -278,6 +282,11 @@ int32_t hop_stretch(const Pilot& p, Vec3f at) {
   const NavGraph& g = *p.g;
   int32_t best = -1;
   float along = across(at, node(g, p.route[p.k + 1]).origin);
+  // Still on the stair: the link's ends a climb over the player's own feet (the climbs below are
+  // node to node, and a link's first node is passed across before it is stood level with).
+  if (p.set.hop_stairs_walked && (node(g, p.route[p.k]).origin.z - at.z >= p.set.hop_climb ||
+                                  node(g, p.route[p.k + 1]).origin.z - at.z >= p.set.hop_climb))
+    return -1;
   for (size_t j = p.k + 1; j < p.route.size(); j++) {
     const NavLink* l = link_of(g, p.route[j - 1], p.route[j]);
     if (l != nullptr && l->gap && p.set.jumper.gaps) {
@@ -334,6 +343,39 @@ Vec3f hop_aim(const Pilot& p, Vec3f at, float look, int32_t end) {
     from = b;
   }
   return node(g, p.route[static_cast<size_t>(end)]).origin;
+}
+
+// THE HEADROOM: a hop's jump pressed now meets a ceiling over the route ahead (a lintel over a
+// stair down): at each node of the route within the flight's reach (`horizon` s at the speed held)
+// and halfway between, the player's box raised from standing there to the height the flight has
+// by then (the jump's 270 units/s against gravity, from the takeoff) hits solid. People time the
+// jump past it. Walls are not read (the route runs between them); the read ends where the flight
+// falls back past the takeoff's height (the landing's business).
+bool jump_blocked(const Pilot& p, const MoveWorld& world, Vec3f o, float speed, float horizon) {
+  constexpr float kRise = 270, kGravity = 800;
+  if (speed < 1) return false;
+  const NavGraph& g = *p.g;
+  auto low = [&](Vec3f at, float d) {
+    const float t = d / speed;
+    if (t > horizon) return false;
+    const float z = o.z + kRise * t - 0.5f * kGravity * t * t;
+    if (z <= at.z) return false;
+    const HullTrace tr = player_trace(world, at, {at.x, at.y, z});
+    return !tr.startsolid && tr.fraction < 1;
+  };
+  float d = 0;
+  Vec3f from = o;
+  for (size_t j = p.k + 1; j <= static_cast<size_t>(p.strafe_end_node) && j < p.route.size(); j++) {
+    const Vec3f b = node(g, p.route[j]).origin;
+    const float leg = across(from, b);
+    const Vec3f mid{(from.x + b.x) * 0.5f, (from.y + b.y) * 0.5f, from.z > b.z ? from.z : b.z};
+    if (j > p.k + 1 && low(mid, d + leg * 0.5f)) return true;
+    d += leg;
+    if (d / speed > horizon) break;
+    if (low(b, d)) return true;
+    from = b;
+  }
+  return false;
 }
 
 // The most the velocity turns a second in the air with the wish across it (hops.hpp's rule:
@@ -1065,7 +1107,9 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       const float off =
           off_segment(s.origin, node(g, p.route[p.k]).origin, node(g, p.route[p.k + 1]).origin);
       if (hop_left <= p.set.hop_end ||
-          (s.onground && speed < p.set.hop_slow * s.maxspeed && !p.jump_pressed)) {
+          (s.onground && speed < p.set.hop_slow * s.maxspeed && !p.jump_pressed) ||
+          (p.set.hop_headroom && s.onground && !p.jump_pressed && p.gap_k < 0 &&
+           hop_left <= speed * kLastJump_s)) {
         restart(p, s);
         p.mode = PilotMode::walk;
       } else if (off > p.set.lost) {
@@ -1127,7 +1171,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       const float vh = speed > kSlow ? heading(s.velocity.x, s.velocity.y) : p.yaw;
       const float look = speed * p.set.hop_look_s > 64 ? speed * p.set.hop_look_s : 64;
       const Vec3f aim = hop_aim(p, s.origin, look, p.strafe_end_node);
-      const float err = wrap(yaw_at(s.origin, aim) - vh);
+      const float aim_yaw = yaw_at(s.origin, aim);
+      const float err = wrap(aim_yaw - vh);
       // The side the aim lies on (the right side turns the velocity clockwise), held until the
       // aim lies `hop_hold` the other way: arcs that weave round the route.
       p.side_s += dt;
@@ -1199,6 +1244,15 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         p.safe_flight = false;
         if (w.jump && p.gap_k >= 0 && static_cast<size_t>(p.gap_k) >= p.k)
           w.jump = gap_takeoff(p, s, msec, because, replanned);
+        if (w.jump && p.set.hop_headroom && s.world != nullptr &&
+            jump_blocked(p, *s.world, s.origin, speed, kHeadroom_s)) {
+          // A ceiling in the jump's way: run on under it along the route, jump later.
+          w.jump = false;
+          w.forward = 1;
+          w.side = 0;
+          w.yaw = unwrap(aim_yaw, p.yaw);
+          because = "the jump's way is low: run on";
+        }
         if (w.jump) p.stats.hop_jumps++;
       } else {
         w.jump = false;  // let go in the air, so the landing's press is a fresh one

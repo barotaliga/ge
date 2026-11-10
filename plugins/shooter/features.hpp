@@ -5,10 +5,8 @@
 // trait as well), and a feature off is that behaviour gone, the bot playing on without it.
 //
 // THE FEATURES (`Feature`, by the name a command line or a console writes):
-// - `calm`: the calm view: walking with nobody to aim at, the view a hand on a mouse looking along
-//   the route (bot.hpp `calm`); off, the view is the route's heading.
-// - `pace`: the view at a person's pace: back from a lost enemy and while swimming, turned at a
-//   hand's speed rather than the aim's flick.
+// - `calm`: with nobody to aim at, the view a hand on a mouse looking along the route (bot.hpp).
+// - `pace`: the view at a hand's pace, not the aim's flick, back from a lost enemy and swimming.
 // - `swimaim`: fighting in water with the view on the enemy, the swim's way pressed under it.
 // - `screen`: a 120-degree screen of sight (16:9); off, a round cone 100 degrees across.
 // - `keep`: the target in hand kept unless another in sight is half as far.
@@ -42,6 +40,7 @@
 // - `escape`: out of a pit's lava, slime or water by a rocket fired down (shooter/escape.hpp).
 // - `brink`: no lip of lava or slime walked, hopped or strafed over (shooter/brink.hpp).
 // - `gapjump`: a hopper takes people's speed jumps over a pit, out of a hop (shooter/nav_gaps.hpp).
+// - `headroom`: no hop's jump into a lintel, nor its last one onto a stair (pilot.hpp).
 // - `trial`: read by an A/B now; off in every preset (`all` too): `--features-red=+trial`.
 //
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: every one but what that
@@ -56,7 +55,7 @@
 // ge:keywords packs talk plan rocket-jump grenade-jump airsteer surface glance plain-bot ab-test
 // ge:keywords trial eye selfaim course-change own-motion pools pool-floor swim-under-view corner
 // ge:keywords lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen sound-swipe
-// ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump
+// ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -105,9 +104,10 @@ enum class Feature : uint8_t {
   escape,
   brink,
   gapjump,
+  headroom,
   trial,
 };
-constexpr size_t kFeatures = 36;
+constexpr size_t kFeatures = 37;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
