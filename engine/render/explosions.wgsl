@@ -1,7 +1,9 @@
 // THE EXPLOSIONS DRAWN (render/explosions.hpp): one quad round each staged blast's ball on the
 // screen (the whole screen when the eye is inside it); a pixel's ray cut by the ball and by the
 // scene's depth and marched front to back through hot gas that glows by its temperature and
-// smoke that the sun, the sky and the fire light. A muzzle's flame is the same ball stretched
+// smoke that the sun, the sky and the fire light, each through the smoke between it and the
+// point (a short march toward the key light and one read toward the core): the lit side bright,
+// the far side and the underside in its own shade. A muzzle's flame is the same ball stretched
 // along the barrel and carved into prongs round it. Premultiplied over the picture; the motion
 // target's reactive channel only.
 #include "render/wgsl/frame.wgsl"
@@ -34,6 +36,9 @@ override kSteps: u32 = 10u;
 // noise is kFine times finer than the billows'.
 const kExtinction = 4.0;
 const kFine = 3.0;
+// How sharply the gas's edge rises from clear air to full density: the billows read as crisp
+// lobes rather than a soft blur.
+const kEdge = 4.0;
 
 struct VertexOut {
   @builtin(position) position: vec4f,
@@ -95,6 +100,53 @@ fn squeeze(v: vec3f, axis: vec3f, stretch: f32) -> vec3f {
   return v - along * axis + axis * (along / stretch);
 }
 
+// The gas at `q` (radii from the centre): the ball's edge carved into billows (the cells' tops
+// bulge, the fbm frays them), squeezed along the axis by the stretch (a flame's length over its
+// width; 1 for a ball) and cut into prongs round it. `fine` adds the fray's finer read; a shadow's
+// reads take the billows alone.
+struct Gas {
+  shape: f32,  // over 0 inside the gas
+  r: f32,      // the squeezed distance from the centre, radii
+  along: f32,  // along the axis, radii
+  n: f32,      // the billows' noise
+  m: f32,      // the fray's noise
+}
+
+fn gas_at(b: Blast, q: vec3f, axis: vec3f, stretch: f32, flow: vec3f, side_a: vec3f,
+          side_b: vec3f, fine: bool) -> Gas {
+  var g: Gas;
+  g.along = dot(q, axis);
+  let across = q - g.along * axis;
+  let qs = across + axis * (g.along / stretch);
+  g.r = length(qs);
+  let n = textureSampleLevel(cloud_noise, linear_repeat, qs * b.shape.z + flow, 0.0).rg;
+  g.n = n.r;
+  g.m = 0.5;
+  if (fine) {
+    g.m = textureSampleLevel(cloud_noise, linear_repeat, qs.zxy * (b.shape.z * kFine) - flow * 1.7,
+                             0.0).r;
+  }
+  g.shape = 1.0 - g.r + b.shape.x * (n.g - 0.5) + b.shape.y * (1.4 * (n.r - 0.5) + (g.m - 0.5));
+  // A flame's prongs: petals round the axis, cut deeper away from it.
+  if (b.side.w > 0.5) {
+    let phi = atan2(dot(across, side_b), dot(across, side_a));
+    let petal = 0.5 + 0.5 * cos(b.side.w * phi);
+    g.shape -= b.more.y * (1.0 - petal) * smoothstep(0.05, 0.5, length(across));
+  }
+  return g;
+}
+
+// How far from `q` (radii, inside or outside the ball) along the unit `dir` to the ball's edge.
+fn chord(q: vec3f, dir: vec3f) -> f32 {
+  let qd = dot(q, dir);
+  let c = dot(q, q) - 1.0;
+  let disc = qd * qd - c;
+  if (disc <= 0.0) {
+    return 0.0;
+  }
+  return max(-qd + sqrt(disc), 0.0);
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> FragmentOut {
   let b = blasts[in.blast];
@@ -138,7 +190,6 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let age = b.state.w;
   let presence = fire + 0.7 * smoke;
   let flow = b.look.xyz + vec3f(0.0, -age * b.shape.w * b.shape.z, 0.0);
-  let prongs = b.side.w;
   let side_a = b.side.xyz;
   let side_b = cross(axis, side_a);
   let dt = (t1 - t0) / f32(kSteps);
@@ -152,43 +203,55 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let sky_in = sky_irradiance(vec3f(0.0, 1.0, 0.0)) * b.light.w +
                b.light.rgb * (PI * white_luminance());
   let fire_in = fire_light(mix(kBlackbodyLoK, core_k, 0.85)) * fire * 0.35;
+  // The way the gas is lit from: the sun as far as it reaches, else straight down from above (a
+  // room's lamps and the open sky). The smoke between a point and its light shades it, so the
+  // cloud's underside and far side go dark and its lit tops stand out: a volume, not a disc.
+  let key = normalize(vec3f(0.0, 1.0, 0.0) + sun * (2.0 * b.light.w));
 
   var trans = 1.0;
   var light = vec3f(0.0);
   var t = t0 + dt * jitter(in.position.xy);
   for (var i = 0u; i < kSteps; i++) {
     let q = (ray * t - centre) * inv;
-    // Squeezed along the axis by the stretch (a flame's length over its width; 1 for a ball).
-    let along = dot(q, axis);
-    let across = q - along * axis;
-    let qs = across + axis * (along / stretch);
-    let r = length(qs);
-    // Two reads of the noise: the big billows, and a finer fray turned across them.
-    let n = textureSampleLevel(cloud_noise, linear_repeat, qs * b.shape.z + flow, 0.0).rg;
-    let m = textureSampleLevel(cloud_noise, linear_repeat, qs.zxy * (b.shape.z * kFine) -
-                               flow * 1.7, 0.0).r;
-    // The ball's edge carved into billows: the cells' tops bulge, the fbm frays them.
-    var shape = 1.0 - r + b.shape.x * (n.g - 0.5) + b.shape.y * (1.4 * (n.r - 0.5) + (m - 0.5));
-    // A flame's prongs: petals round the axis, cut deeper away from it.
-    if (prongs > 0.5) {
-      let phi = atan2(dot(across, side_b), dot(across, side_a));
-      let petal = 0.5 + 0.5 * cos(prongs * phi);
-      shape -= b.more.y * (1.0 - petal) * smoothstep(0.05, 0.5, length(across));
-    }
-    let density = clamp(shape * 2.5, 0.0, 1.0) * presence;
+    let g = gas_at(b, q, axis, stretch, flow, side_a, side_b, true);
+    let density = clamp(g.shape * kEdge, 0.0, 1.0) * presence;
     if (density > 0.0) {
       let sigma = density * kExtinction * inv;
       let a = 1.0 - exp(-sigma * dt);
-      // Hot deep inside and while it burns, cooler toward the billows' tips.
-      // (A flame is hotter at its base, by the muzzle.)
-      let base = 1.0 - 0.45 * clamp(along / stretch, 0.0, 1.0) * step(1.001, stretch);
-      let heat = clamp(shape * 2.2 + 0.9 * (n.r - 0.5) + 0.6 * (m - 0.5), 0.0, 1.0) * fire * base;
+      // Hot deep inside and while it burns, cooler toward the billows' tips; the noise cuts dark
+      // lanes of soot through it. (A flame is hotter at its base, by the muzzle.)
+      let base = 1.0 - 0.45 * clamp(g.along / stretch, 0.0, 1.0) * step(1.001, stretch);
+      let heat = clamp(g.shape * 2.0 + 1.4 * (g.n - 0.5) + 0.9 * (g.m - 0.5), 0.0, 1.0) * fire *
+                 base;
       let kelvin = kBlackbodyLoK + (core_k - kBlackbodyLoK) * heat;
       let burning = fire / max(presence, 1e-4);
-      let sunlit = mix(0.3, 1.0, clamp(0.5 + 0.5 * dot(q, sun) / max(r, 1e-3), 0.0, 1.0));
-      let scatter = b.soot.rgb / PI * (sun_in * sunlit + sky_in) +
-                    b.soot.rgb * fire_in * clamp(1.0 - r, 0.0, 1.0);
-      let source = fire_light(kelvin) * b.more.z * burning * heat + scatter * (1.0 - burning * heat);
+      let smoky = 1.0 - burning * heat;
+      var scatter = vec3f(0.0);
+      if (smoky > 0.02) {
+        // The smoke toward the key light: the ball's own chord that way (the big shade: the side
+        // away from the light dark, the side toward it bright) and two reads of the billows at
+        // 0.25 and 0.6 radii (the lobes' own shade on each other); toward the up sky the chord
+        // alone; toward the fire at the centre one read half way in.
+        let k1 = gas_at(b, q + key * 0.25, axis, stretch, flow, side_a, side_b, false).shape;
+        let k2 = gas_at(b, q + key * 0.6, axis, stretch, flow, side_a, side_b, false).shape;
+        let thick = presence * kExtinction;
+        let to_key = thick * (0.3 * chord(q, key) + 0.2 * clamp(k1 * kEdge, 0.0, 1.0) +
+                              0.25 * clamp(k2 * kEdge, 0.0, 1.0));
+        let to_sky = thick * 0.3 * chord(q, vec3f(0.0, 1.0, 0.0));
+        var to_core = 0.0;
+        if (fire > 0.01) {
+          let c1 = gas_at(b, q * 0.5, axis, stretch, flow, side_a, side_b, false).shape;
+          to_core = clamp(c1 * kEdge, 0.0, 1.0) * thick * 0.5 * g.r;
+        }
+        // Beer's law for the first scattering, and a softer one for the light scattered on through
+        // the rest (the later orders reach in further: the shade never goes black).
+        let lit = 0.7 * exp(-to_key) + 0.3 * exp(-0.25 * to_key);
+        let skylit = 0.6 * exp(-to_sky) + 0.4 * exp(-0.25 * to_sky);
+        let glow = exp(-to_core);
+        scatter = b.soot.rgb / PI * (sun_in * lit + sky_in * skylit) +
+                  b.soot.rgb * fire_in * glow * clamp(1.2 - g.r, 0.0, 1.0);
+      }
+      let source = fire_light(kelvin) * b.more.z * burning * heat + scatter * smoky;
       light += trans * a * source;
       trans *= 1.0 - a;
       if (trans < 0.01) {
