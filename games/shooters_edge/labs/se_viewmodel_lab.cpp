@@ -300,7 +300,7 @@ void run(ge::lab::Lab& lab) {
       }
     }
     lab.metric("switch-s", up_at, "s");
-    const double most = 2 * se::weapon_row().switch_s + 0.1;
+    const double most = game.switch_s + 2 * kDt;  // cl_gunswitch, down and up
     if (up_at < 0 || up_at > most) {
       ++problems;
       lab.note("the switch took " + std::to_string(up_at) + " s (stated at most " +
@@ -308,7 +308,9 @@ void run(ge::lab::Lab& lab) {
     }
     lab.shot({"switch", "SHOTGUN TO ROCKET LAUNCHER",
               "The game changes the weapon at 0 s: the shotgun goes down and out of the picture, "
-              "the rocket launcher comes up in its place; a frame each 1/20 s by the torch.",
+              "the rocket launcher comes up in its place, the whole in cl_gunswitch (0.2 s); a "
+              "frame each "
+              "1/20 s by the torch.",
               "the old weapon leaves downward and pitched down, the new one rises the same way; "
               "no frame shows both or a weapon popping in at rest",
               inputs},
