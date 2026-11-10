@@ -137,12 +137,44 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
               "what a player who floods the chat is told (empty: how long the silence is)",
               CvarKind::text},
              &c.floodprot_msg);
+  const std::string vote = std::to_string(c.vote);
+  const std::string vote_time = core::num::to_string(c.vote_time_s);
+  const std::string vote_wait = core::num::to_string(c.vote_wait_s);
+  const std::string vote_allow = c.vote_allow, vote_deny = c.vote_deny;
+  cvars.bind({"sv_vote", vote, cn::kServer,
+              "1: players may vote on settings for the map (vote <name> <value>)",
+              CvarKind::integer, 0, 1},
+             &c.vote);
+  cvars.bind({"sv_vote_time", vote_time, cn::kServer, "seconds a vote stays open", CvarKind::number,
+              5, 600},
+             &c.vote_time_s);
+  cvars.bind({"sv_vote_wait", vote_wait, cn::kServer,
+              "seconds a player whose vote failed waits before calling another", CvarKind::number,
+              0, 3600},
+             &c.vote_wait_s);
+  cvars.bind({"sv_vote_allow", vote_allow, cn::kServer,
+              "settings players may vote on, * for any characters (empty: all but sv_vote_deny)",
+              CvarKind::text},
+             &c.vote_allow);
+  cvars.bind({"sv_vote_deny", vote_deny, cn::kServer,
+              "settings no vote may change, * for any characters", CvarKind::text},
+             &c.vote_deny);
   for (int i = 0; i < game.rule_count; i++) {
     const GameRule& r = game.rules[i];
     std::string& field = c.rules[r.name];  // a map's node: its address outlives the inserts
     const std::string fallback = field;
     cvars.bind({r.name, fallback, info, r.help, CvarKind::text}, &field);
   }
+}
+
+VoteSettings vote_settings(const ServerConfig& c) {
+  VoteSettings v;
+  v.enabled = c.vote != 0;
+  v.time_s = c.vote_time_s;
+  v.wait_s = c.vote_wait_s;
+  v.allow = c.vote_allow;
+  v.deny = c.vote_deny;
+  return v;
 }
 
 bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,

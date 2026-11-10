@@ -71,6 +71,9 @@ struct Game {
   // A dedicated server with `sv_coop 1`: the campaign in coop in place of the match (every call
   // below hands over to it; the match's own members stay empty).
   std::unique_ptr<CoopGame> coop;
+  // The players' votes on the settings for this map (engine/server/vote.hpp): a passed one is
+  // written into `settings.rules`, so a restart keeps it, and put back when the map changes.
+  gs::VoteBook vote;
   ~Game() {
     coop.reset();
     classic.reset();
@@ -377,6 +380,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   }
   if (!open_map(*g, c.map, g->map, g->rules, error)) return nullptr;
   if (!open_room(*g, error)) return nullptr;
+  g->vote.settings = gs::vote_settings(c);
   if (g->host != nullptr) host_bind(*g);
   g->cfg.hostname = c.hostname;
   g->cfg.password = c.password;
@@ -408,11 +412,116 @@ std::string next_map(const gs::ServerConfig& c, const std::string& current,
   return rotation.front();
 }
 
+// ---- The players' votes on the settings (engine/server/vote.hpp) ----
+//
+// What may be voted on here: the mod's rules (`fraglimit`, `teamplay`) and the move's and the
+// loop's settings (`sv_gravity`, `pm_speedjump`), past the vote's lists; never the endpoint's own
+// (read when the server starts). A passed change is written into `settings.rules`, which every map
+// is made from: a mod's rule is set in the running rules at once (a limit the warmup holds waits
+// for the match), and a setting the players' own moves are predicted with restarts the map, so
+// every client is told it as it signs on again. A restart keeps the change; the next map puts it
+// back.
+
+// A rule the warmup holds at 0 (hold_limits) while the lobby waits for its match.
+bool held_now(const Game& g, std::string_view name) {
+  return g.room && g.settings.lobby != 0 && g.room->lobby.phase != gs::LobbyPhase::match &&
+         (name == "fraglimit" || name == "timelimit");
+}
+
+bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::VoteCheck& out) {
+  const Game& g = *static_cast<const Game*>(ctx);
+  const std::string rule(name), text(value);
+  bool known = false;
+  for (const gs::GameRule& r : all_rules()) known = known || rule == r.name;
+  if (!known) {
+    out.error = rule +
+                " is not a setting of this server; next: `vote rules` says what may be "
+                "voted on (fraglimit, timelimit, teamplay, sv_gravity, pm_speedjump...)";
+    return false;
+  }
+  if (is_endpoint_rule(rule)) {
+    out.error = rule + " is read when the server starts; next: ask the server's owner";
+    return false;
+  }
+  if (const sh::Setting* setting = sh::find_setting(rule); setting != nullptr) {
+    sh::ServerSettings check;
+    std::string error;
+    if (!sh::set_setting(check, rule, text, error)) {
+      out.error = error;
+      return false;
+    }
+  } else {
+    char* end = nullptr;
+    std::strtod(text.c_str(), &end);
+    if (end == text.c_str() || *end != '\0') {
+      out.error = rule + " \"" + text + "\" is not a number; next: `vote " + rule + " <number>`";
+      return false;
+    }
+  }
+  const auto it = g.settings.rules.find(rule);
+  out.before = it == g.settings.rules.end() ? std::string() : it->second;
+  return true;
+}
+
+// The vote's lines printed (each to everyone, or to the one player), and its passed changes made.
+void vote_turn(Game& g) {
+  gs::VoteBook& b = g.vote;
+  if (g.classic)
+    for (size_t i = 0; i < b.said.size(); i++) {
+      const gs::VoteNote& n = b.notes[i];
+      const std::string line = b.said[i] + "\n";
+      if (n.to < 0)
+        classic_print_all(*g.classic, line);
+      else if (n.to < sh::kMaxClients)
+        client_print(*g.classic, n.to, 2, line);
+    }
+  b.said.clear();
+  b.notes.clear();
+  bool restart = false;
+  for (const gs::VoteChange& c : gs::vote_take(b)) {
+    g.settings.rules[c.name] = c.value;
+    if (sh::find_setting(c.name) != nullptr)
+      restart = true;
+    else if (!held_now(g, c.name))
+      g.rules.console(c.name + " \"" + c.value + "\"");
+  }
+  if (restart && g.classic) {
+    classic_print_all(*g.classic, "The map restarts so everyone moves by the new setting\n");
+    sv::RulesCommon& now = *g.rules;
+    now.pending_map = g.map->name;
+    now.pending_change = sv::MapChange::restart;
+  }
+}
+
+// The voters kept to the endpoint: every person on the server (players and spectators who have
+// signed on, a listen server's own player), never a bot; an open vote's time checked.
+void vote_sync(Game& g) {
+  if (!g.classic) return;
+  const double now = g.rules->sv.time;
+  for (int i = 0; i < sh::kMaxClients && i < gs::kVoteSeats; i++) {
+    const ClassicClient& c = g.classic->clients[i];
+    const bool person =
+        c.state == ConnState::spawned && (!c.local || (i == 0 && g.host != nullptr));
+    gs::vote_seat(g.vote, i, person ? std::string_view(c.name) : std::string_view(), now);
+  }
+  gs::vote_tick(g.vote, now);
+  vote_turn(g);
+}
+
+// A map change: every change a vote made goes back in the settings the next map is made from.
+// Their lines go out at once, while the players are still on the map that is ending.
+void vote_map_over(Game& g) {
+  for (const gs::VoteChange& c : gs::vote_map_over(g.vote)) g.settings.rules[c.name] = c.value;
+  vote_turn(g);
+}
+
 // The game moved onto the map `name` (`supplied`: a listen server's, read by its window): the
 // next map's server made, the endpoint moved onto it, the old one let go. A map that does not load
 // leaves the game on the one it was playing (`failed` says why, `error` too).
 bool move_to(Game& g, const std::string& name, bool match_over, std::string& error,
              std::shared_ptr<cl::LoadedMap> supplied = nullptr) {
+  // A vote lasts the map: put back before the next map is made (a restart keeps it).
+  if (match_over) vote_map_over(g);
   std::shared_ptr<cl::LoadedMap> map;
   sv::RulesRunner next;
   if (!open_map(g, name, map, next, error, std::move(supplied))) {
@@ -576,10 +685,18 @@ void lobby_words(Game& g) {
   sv::announce_flush(g.room->announcer, g.rules->out, g.rules->sv.time);
 }
 
-// A client's words the room takes before the mod: `addbot [skill]` and `removebot` from the
-// leader, and with sv_lobby the lobby's own (ready, break, team, start, lobby).
+// A client's words the server takes before the mod: the vote's (`vote ...`, and `yes` and `no`
+// while one is open) from anyone; with a room, `addbot [skill]` and `removebot` from the leader,
+// and with sv_lobby the lobby's own (ready, break, team, start, lobby).
 bool room_words(void* ctx, int slot, const std::string& line) {
   Game& g = *static_cast<Game*>(ctx);
+  if (g.classic) {
+    const gs::VoteTarget target{&g, vote_check};
+    if (gs::vote_command(g.vote, target, slot, line, g.rules->sv.time)) {
+      vote_turn(g);
+      return true;
+    }
+  }
   if (!g.room) return false;
   cl::Room& r = *g.room;
   ClassicServer& cs = *g.classic;
@@ -680,6 +797,7 @@ void net_frame(void* g, int64_t now_us) {
   classic_frame(*game.classic, now_us);
   sync_host(game);
   sync_seats(game);
+  vote_sync(game);
   lobby_turn(game);
   change_if_asked(game);
   lobby_words(game);
