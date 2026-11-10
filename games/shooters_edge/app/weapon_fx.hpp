@@ -21,10 +21,14 @@
 //   lights the world round it as it flies (`motor_light`): a warm flame's colour at the nozzle, a
 //   little behind the rocket, wavering as a flame does, where the classic rocket's light is a
 //   steady white one on it. A GRENADE trails thinner, paler smoke alone (`smoke_trail`).
-// - THE BOLT (`bolt_look`): render/beam.hpp's lightning channel in the style the player picks
-//   (the engine's jagged bolt by default, its plasma arc or its braid, or a finer-forked bolt),
-//   its lights a cold blue-white glow that does not wash the room out.
-//   Where it lands, blue-white sparks (`bolt_hit`).
+// - THE BOLT (`bolt_look`): one look, the same for every player: render/beam.hpp's lightning
+//   channel as thin as the classic's bolt (a hair-thin white-hot core in a narrow blue sheath,
+//   kinked every few centimetres and wandering a hand's width off its line, struck afresh thirty
+//   times a second with short crackling forks), its brightness keyed to the eye so it reads the
+//   same by day and in a dark room at night. It is the brightest light in the room
+//   (`bolt_lights`): a hard blue-white light at the gun, along the beam and where it lands,
+//   flickering with every strike and reaching as far as the classic's. Where it lands, blue-white
+//   sparks (`bolt_hit`) and a scorch.
 // - THE HITS (`hit`): a pellet's or a nail's hit throws, subtly, the burst of what it hit
 //   (`impact_look_for` with engine/detail's surface word): a small puff of dust, chips and grit in
 //   the wall's own colour, flakes that fall and hop on the floor below, a thin wisp of smoke; a
@@ -61,14 +65,11 @@ namespace gr = ge::render;
 const gr::BlastLook& blast_look();     // the main fireball
 const gr::BlastLook& billow_look();    // a later, smaller billow round it
 const gr::MuzzleLook& exhaust_look();  // a rocket's motor
-// The arc gun's bolt in each style a player picks by number (r_beam_style): 1 forked (finer
-// kinks, wider forks, a bluer sheath), then the engine's three presets as it makes them
-// (render/beam.hpp): 2 arc (a thick plasma arc), 3 bolt (jagged and forking, the default),
-// 4 braid (a spinning rope of three); each with its light on the room turned down to a cold glow.
-// A number out of range is the default's.
-inline constexpr std::string_view kBoltStyles[] = {"forked", "arc", "bolt", "braid"};
-inline constexpr int kDefaultBoltStyle = 3;
-const gr::BeamLook& bolt_look(int style = kDefaultBoltStyle);
+// The arc gun's bolt: the one look every player sees.
+const gr::BeamLook& bolt_look();
+// The same bolt across the gun's prongs while it fires: finer (kinked every 3 cm over the
+// prongs' 30 cm) and thinner, as it is a hand's breadth from the eye.
+const gr::BeamLook& prong_arc_look();
 
 // Billows round a blast's main ball, and when the last is born after it, s.
 inline constexpr int kBillows = 3;
@@ -143,7 +144,13 @@ bool spark_light(const double at[3], double age, Light* out);
 // Where the bolt lands on `normal`'s face (unit): blue-white sparks.
 void bolt_hit(const double at[3], const double normal[3], uint32_t seed, Particles* out);
 
-// A local light of the engine (a beam's) as the brush world's dynamic light.
-Light dynamic_light(const gr::LocalLight& l);
+// THE BOLT'S LIGHTS for `shot` at `t_s` into `out` (at most gr::kBeamLights; returns how many):
+// render/beam.hpp's lights at the gun, along the beam and at the hit as the brush world's dynamic
+// lights, each reaching kBoltReachM, at the beam's level this strike, and boosted by
+// kBoltBoost over the other effects' lights so at the default r_fx_lights it lights the room
+// brighter than the classic's bolt (a level of 1.6 at its middle) and more where it lands.
+inline constexpr double kBoltReachM = 7;  // the classic's bolt reaches about 215 units
+inline constexpr double kBoltBoost = 8;   // 1.6 / r_fx_lights' default
+int bolt_lights(const gr::BeamShot& shot, double t_s, Light* out);
 
 }  // namespace shooters_edge::effects

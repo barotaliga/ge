@@ -133,15 +133,6 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .min = 0.3,
            .max = 1.5},
           &picture.gamma);
-  cv.bind({.name = "r_beam_style",
-           .fallback = "3",
-           .flags = gc::kArchive,
-           .help = "the arc gun's bolt in the modern look (ce_beams): 1 forked (fine kinks), 2 arc "
-                   "(a thick plasma arc), 3 bolt (jagged, forking), 4 braid (a spinning rope of "
-                   "three)",
-           .min = 1,
-           .max = 4},
-          &picture.beam_style);
   cv.bind({.name = "r_quality",
            .fallback = "custom",
            .flags = gc::kArchive,

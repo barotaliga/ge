@@ -76,9 +76,6 @@ struct Picture {
   // r_fill_shadows: 1 lets every map light throw a figure's shadow and dims the bounce round him,
   // 0 (the default) only the lights whose source shows (brush/app/bsp_draw.hpp's fill_shadows)
   double fill_shadows = 0;
-  // r_beam_style: the arc gun's bolt in the modern look under ce_beams, by number
-  // (app/weapon_fx.hpp's kBoltStyles: 1 forked, 2 arc, 3 bolt, 4 braid)
-  double beam_style = 3;
   // The ce_ switches: each enhancement the modern look draws over the pack, on or off.
   ge::classicenhance::Switches ce;
   // ce_shadows_quality, ce_water_quality, ce_skies_quality: low, medium or high, each its
@@ -101,9 +98,9 @@ struct Picture {
   double arrival = 1;
 };
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
-// r_beam_style, r_farland, r_farland_warm, r_lerpmodels, r_lerpmove, r_arrival, r_quality,
-// r_budget, every ce_ switch, the three ce_<id>_quality levels and the weather's cvars over
-// `picture` (it must outlive `con`).
+// r_farland, r_farland_warm, r_lerpmodels, r_lerpmove, r_arrival, r_quality, r_budget, every ce_
+// switch, the three ce_<id>_quality levels and the weather's cvars over `picture` (it must outlive
+// `con`).
 void add_cvars(ge::console::Console& con, Picture& picture);
 // r_look's look; modern for a word it does not know.
 Look look_of(const Picture& picture);

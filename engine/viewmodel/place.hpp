@@ -167,5 +167,9 @@ void held_dir_to_world(const Placement& p, double gun_fov_y, const camera::Pose&
 void muzzle_to_world(const HeldModel& model, int a, int b, double t, const Placement& p,
                      double gun_fov_y, const camera::Pose& view, double at[3], double dir[3],
                      double up[3], int barrel = -1);
+// The ends of the model's arc (`arc_at`) in the world, through the same lens; false for a model
+// with no arc.
+bool arc_to_world(const HeldModel& model, int a, int b, double t, const Placement& p,
+                  double gun_fov_y, const camera::Pose& view, double end0[3], double end1[3]);
 
 }  // namespace ge::viewmodel

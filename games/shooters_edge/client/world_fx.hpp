@@ -40,10 +40,10 @@
 //   classic's ember ball, its light white-hot then orange), drawn by the explosions' pass.
 // - ce_trails: a rocket burns a short flame out of its motor and lays fire into smoke that spreads;
 //   a grenade trails pale smoke.
-// - ce_beams: the arc gun's beam is the engine's bolt (render/beam.hpp) in r_beam_style's
-//   style, held while the program
-//   keeps sending it, lighting the walls along it, its root on the gun's own muzzle for the
-//   player's own; blue-white sparks where it lands.
+// - ce_beams: the arc gun's beam is the engine's bolt (render/beam.hpp) in the game's one look
+//   (app/weapon_fx.hpp's bolt_look), held while the program keeps sending it, the brightest light
+//   in the room along it (bolt_lights), its root on the gun's own muzzle for the player's own;
+//   blue-white sparks and a scorch where it lands.
 // - ce_hits: a pellet's or a nail's hit throws the burst of the face it hit (the map's triangle
 //   the round's line crosses there: its normal and its texture's surface class, engine/detail).
 //
@@ -103,11 +103,10 @@ struct FxSwitches {
   // ce_flares, ce_bubbles: the pack's flare and bubble sprites drawn as the engine's (the models'
   // `prepare_models`, through classic-enhance's replacement table).
   bool flares = false, bubbles = false;
-  const ge::render::BeamLook* bolt = nullptr;  // r_beam_style's (null: the default style)
   // r_lerpmodels, r_lerpmove (either look): the models drawn between their frames (model_lerp.hpp)
   ModelLerpSwitches lerp;
 };
-// The switches `picture` asks for: each ce_ switch, in the modern look only, and its bolt's style.
+// The switches `picture` asks for: each ce_ switch, in the modern look only.
 // The explosion is the engine's where classic-enhance's replacement table names `explosion` for the
 // pack's explosion sprite (classicenhance/replace.hpp), so the table, not this code, says so.
 FxSwitches fx_switches(const look::Picture& picture);
@@ -118,8 +117,8 @@ struct HeldBeam {
   ge::render::BeamShot shot;   // engine metres
   sh::Vec3f map_from, map_to;  // map units (the classic bolt's segments)
   EffectModel model = EffectModel::bolt2;
-  const ge::render::BeamLook* look = nullptr;  // its enhanced bolt's (FxSwitches::bolt)
-  ge::render::BurnTrail trail;                 // where it last burnt the wall it lands on
+  ge::render::BurnTrail trail;  // where it last burnt the wall it lands on
+  bool across = false;          // the arc across the player's gun's prongs (fx::prong_arc_look)
   double seen = 0;
 };
 

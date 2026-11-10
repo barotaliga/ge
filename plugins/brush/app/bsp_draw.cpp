@@ -582,7 +582,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       l.value = std::max(dl.radius, 0.01) / kUnitM;
       l.reach = dl.radius / 1.5;
       for (int k = 0; k < 3; ++k)
-        l.colour[k] = 0.5 * dl.colour[k] * 256 / l.value * o.dynamic_strength;
+        l.colour[k] = 0.5 * dl.colour[k] * 256 / l.value * o.dynamic_strength * dl.boost;
       d.dynamic_points.push_back(l);
     }
     for (const PointLight& l : d.dynamic_points) consider(l);
@@ -747,7 +747,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       const DynamicLight& dl = d.dynamic[i];
       GpuLight g{};
       set4(g.pos, dl.pos[0], dl.pos[1], dl.pos[2], std::max(dl.radius, 0.01));
-      const double k = o.dynamic_strength;
+      const double k = o.dynamic_strength * dl.boost;
       set4(g.colour, dl.colour[0] * k, dl.colour[1] * k, dl.colour[2] * k, 0);
       set4(g.info, -1, 0, 1, 0);
       set4(g.spot, 0, -1, 0, -2);

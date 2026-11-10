@@ -226,7 +226,7 @@ void dynamic_light_at(std::span<const Light> lights, const double w[3], double s
     const double v[3] = {l.pos[0] - w[0], l.pos[1] - w[1], l.pos[2] - w[2]};
     const double dist = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
     if (l.radius <= 0 || dist >= l.radius) continue;
-    const double f = (1 - dist / l.radius) * strength * kLevelLuxel;
+    const double f = (1 - dist / l.radius) * strength * l.boost * kLevelLuxel;
     double lum = 0;
     for (int c = 0; c < 3; c++) {
       rgb[c] += l.colour[c] * f;
