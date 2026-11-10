@@ -590,6 +590,10 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     if (picks.size() > size_t(std::min(o.most, 512))) picks.resize(size_t(std::min(o.most, 512)));
   }
   d.frame_lights.clear();
+  // The fires' lights swell and dim with their flames' puffs (bsp_flames.hpp's fire_flicker).
+  FireLook look;
+  look.bonfires = o.bonfires;
+  look.pace = o.fire_pace;
   d.frame_jobs.assign(size_t(kMaxShadowed) * 6 + kOrthos + size_t(kCasterLights) * 6 + 1, GpuJob{});
   // The nearest lights that cast shadows, by their index in frame_lights.
   std::vector<size_t> casters;
@@ -605,8 +609,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       // the strength a metre off is that times the half reach squared.
       const double half = l.value * kUnitM / 2;
       const double at1 = l.value / 256.0 * half * half * l.gain * o.strength *
-                         flicker_at(l, fire_time(l, view.time_s, o.fire_pace)) *
-                         fire_light_gain(l, o.bonfires);
+                         fire_flicker(l, view.time_s, look) * fire_light_gain(l, o.bonfires);
       set4(g.pos, l.pos[0], l.pos[1] + fire_light_lift(l, o.bonfires), l.pos[2], l.reach * 1.5);
       set4(g.colour, l.colour[0] * at1, l.colour[1] * at1, l.colour[2] * at1, 0);
       near = o.near_soft * half;
