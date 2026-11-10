@@ -61,6 +61,7 @@ namespace gl = ge::lab;
 namespace cl = shooters_edge::client;
 namespace sh = ge::shooter;
 namespace br = ge::brush;
+namespace ba = ge::brush::app;
 namespace ls = ge::lab::liquid_scene;
 namespace es = ge::lab::explosion_scene;
 namespace lm = ge::core::libm;
@@ -308,6 +309,14 @@ void run(gl::Lab& lab) {
       return;
     }
     out = ge::gpu::create_target(*device, "se-models.final", w, h);
+    // The map's lights, and those whose source shows (draw_data.hpp's PointLight::seen): only
+    // they throw a figure's shadow.
+    const auto lights = cl::world_lights(*frame);
+    lab.metric("map-lights", double(lights.size()), "count", gl::Det::measured);
+    lab.metric("map-lights-seen",
+               double(std::count_if(lights.begin(), lights.end(),
+                                    [](const ba::PointLight& pl) { return pl.seen; })),
+               "count", gl::Det::measured);
   } else {
     lab.note("No GPU adapter on this machine: no pictures.");
   }
@@ -574,8 +583,9 @@ void run(gl::Lab& lab) {
       caption += place;
       caption +=
           ", his back to it, his own eyes looking down at the floor ahead: his body is never drawn "
-          "in his own eyes, but it casts his shadow from every light near him (the moving "
-          "casters' cubes), as soft as the light is big.";
+          "in his own eyes, but it casts his shadow from every light near him whose source "
+          "shows (the moving casters' cubes), as soft as the light is big; a fill light hanging "
+          "unseen in the air throws none.";
       shoot(id, "THE PLAYER'S SHADOW FROM " + what, caption,
             "his shadow on the floor ahead of him, from his feet outward, sharper near his feet "
             "and softer further off; none in the classic look",
@@ -631,8 +641,9 @@ void run(gl::Lab& lab) {
         lab.shot({id + "-shade",
                   "WHERE HIS SHADOW FALLS: " + what,
                   "The eyes' picture above, greyed, and in red how much darker each pixel is with "
-                  "him there than with him gone (eight times over): his shadow from every light, "
-                  "the casters' cubes' and the capsules'.",
+                  "him there than with him gone (eight times over): his shadow from every light "
+                  "whose source shows, the casters' cubes' and the capsules'; the light bounced "
+                  "round the room never darkened.",
                   "a red shadow on the floor ahead from his feet outward, the strongest where "
                   "the light he stands before falls; nothing red elsewhere",
                   {{"map", map_name}, {"look", "modern"}, {"size", lab.arg("size")}}},
@@ -731,8 +742,8 @@ void run(gl::Lab& lab) {
       fx.models.pop_back();
     };
     for (const Lamp& lamp : lamps) {
-      // The light's places: the fires the server placed, or the map's plain lights, brightest
-      // first.
+      // The light's places: the fires the server placed, or the map's plain lights, those whose
+      // source shows first, then the brightest.
       std::vector<std::pair<float, sh::Vec3f>> at;
       for (const cl::Placed& p : placed)
         if (l.server->models[size_t(p.modelindex)] == lamp.source) at.push_back({0.0f, p.origin});
@@ -740,8 +751,18 @@ void run(gl::Lab& lab) {
         if (e.get("classname") != lamp.source) continue;
         float o[3];
         if (std::sscanf(e.get("origin").c_str(), "%f %f %f", &o[0], &o[1], &o[2]) != 3) continue;
-        const float bright =
-            e.get("light").empty() ? 300 : std::strtof(e.get("light").c_str(), nullptr);
+        float bright = e.get("light").empty() ? 300 : std::strtof(e.get("light").c_str(), nullptr);
+        // A lamp whose source shows first (draw_data.hpp's PointLight::seen): a fill light hanging
+        // unseen in the air throws no figure's shadow (bsp_draw.hpp's fill_shadows).
+        if (frame) {
+          const float om[3] = {o[0], o[1], o[2]};
+          double oe[3];
+          br::to_engine(om, oe);
+          for (const ba::PointLight& pl : cl::world_lights(*frame)) {
+            const double dx = pl.pos[0] - oe[0], dy = pl.pos[1] - oe[1], dz = pl.pos[2] - oe[2];
+            if (pl.seen && dx * dx + dy * dy + dz * dz < 1e-6) bright += 1e6f;
+          }
+        }
         at.push_back({-bright, {o[0], o[1], o[2]}});
       }
       std::stable_sort(at.begin(), at.end(),

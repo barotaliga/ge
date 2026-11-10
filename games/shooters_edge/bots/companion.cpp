@@ -519,12 +519,15 @@ void escort_think(Fighter& f, const server::RulesCommon& s, int me, const Stats&
     next = EscortMode::follow;
     because = "at the leader's shoulder";
   }
-  // Boredom ends a human moment after its reason does (sooner for a fight).
+  // Boredom ends a human moment after its reason does (sooner for a fight), at once when it is out
+  // on a hop past its shoulder distance and the leader walks off: the moment would cost the hop's
+  // length again and leave it past its catch-up.
   if (e.mode == EscortMode::bored && next != EscortMode::bored) {
     if (e.break_at < 0)
       e.break_at =
           t + (fight ? ge::core::range(f.rng, 0.1, 0.3) : ge::core::range(f.rng, 0.3, 0.8));
-    if (t < e.break_at) {
+    const bool left = !leader_still && d > kEscortFar;
+    if (t < e.break_at && !left) {
       next = EscortMode::bored;
       because = "taking it in";
     } else {

@@ -81,6 +81,10 @@ string(string stem, string a, string b, string c, string d) game_variant = {
 
 // Before the match starts (the lobby's warmup and countdown, the host's `ge_phase`) a game that
 // asks for it (`quiet_warmup`) tells no death and no leaving, and scores none.
+// A blast's pellets on one body: each its own blow here (the matches the bots and their goldens
+// record play so); the campaign sums them into one.
+float() pellets_as_one_blow = { return FALSE; };
+
 float() game_quiet = {
   local string phase;
   if (words("quiet_warmup", "", "", "", "") == "") return FALSE;

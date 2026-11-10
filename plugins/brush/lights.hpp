@@ -46,6 +46,7 @@ struct LightEntity {
   bool flame = false;  // a torch or a flame
   bool torch = false;  // a wall torch (a flame too)
   bool large = false;  // a large flame: a brazier's on the floor (a flame too)
+  bool globe = false;  // a globe: a lamp the game draws as a glowing sprite at it
   int style = 0;       // the entity's light style number
   // The light a metre off over a straight fall-off's of the same value (1 for a straight one).
   double gain = 1;

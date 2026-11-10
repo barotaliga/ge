@@ -39,7 +39,7 @@ run\:%:
 # build puts them back for the next container (in the background, at most every half hour).
 build:
 	@tools/ccache-share.sh restore
-	cmake --preset $(PRESET)
+	tools/configure.sh $(PRESET)
 	cmake --build --preset $(PRESET)
 	@tools/ccache-share.sh save
 
@@ -48,7 +48,7 @@ build:
 T ?=
 test:
 	@tools/ccache-share.sh restore
-	cmake --preset $(PRESET)
+	tools/configure.sh $(PRESET)
 	@if [ -n "$(T)" ]; then \
 	  targets=$$(ctest --preset $(PRESET) -N -R "$(T)" | sed -n 's/^ *Test *#[0-9]*: *//p' | sed 's/^labs_smoke.*/labs/' | sort -u); \
 	  [ -n "$$targets" ] || { echo "make test: no test matches T=$(T); ctest --preset $(PRESET) -N lists them." >&2; exit 1; }; \
@@ -72,7 +72,7 @@ lint: build
 # Every embedded WGSL shader compiled by Tint offline, every entry point (cmake/Wgsl.cmake): a
 # shader error fails here with its file and line, no GPU needed. Needs GE_GPU (Dawn's tint).
 shaders-check:
-	cmake --preset $(PRESET)
+	tools/configure.sh $(PRESET)
 	cmake --build --preset $(PRESET) --target shaders_check
 
 agents-check:
