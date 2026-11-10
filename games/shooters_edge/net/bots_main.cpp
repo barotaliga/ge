@@ -12,11 +12,6 @@
 // ge:summary The bot team headless: N bots join a classic server, a stdin console, a match folder
 // ge:keywords shooters_edge_bots bots-cli headless-bots live-server stdin-console match-folder
 // ge:skill bots net
-#ifndef _WIN32
-#include <poll.h>
-#include <unistd.h>
-#endif
-
 #include <algorithm>
 #include <chrono>
 #include <csignal>
@@ -24,9 +19,12 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <iostream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "lab/png.hpp"
 #include "shooters_edge/bots/handles.hpp"
@@ -40,6 +38,36 @@ namespace {
 
 volatile std::sig_atomic_t g_stop = 0;
 void on_signal(int) { g_stop = 1; }
+
+// The console's lines from stdin, read on a thread of their own so the tick never blocks on them
+// and no OS header is needed (Windows has no poll on a console handle). The thread is detached:
+// it may sit in a read until the process exits.
+struct StdinLines {
+  std::mutex m;
+  std::vector<std::string> lines;
+};
+StdinLines& stdin_lines() {
+  static StdinLines* s = [] {
+    auto* in = new StdinLines;
+    std::thread([in] {
+      std::string line;
+      while (std::getline(std::cin, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        const std::lock_guard<std::mutex> lock(in->m);
+        in->lines.push_back(line);
+      }
+    }).detach();
+    return in;
+  }();
+  return *s;
+}
+std::vector<std::string> take_stdin_lines() {
+  StdinLines& in = stdin_lines();
+  const std::lock_guard<std::mutex> lock(in.m);
+  std::vector<std::string> out;
+  out.swap(in.lines);
+  return out;
+}
 
 bool flag(const std::string& a, const char* name, std::string& out) {
   const std::string p = std::string("--") + name + "=";
@@ -205,7 +233,6 @@ int run(int argc, char** argv) {
   const auto start = std::chrono::steady_clock::now();
   int64_t next_tick = 0;
   double next_report = report_s;
-  std::string pending;  // stdin not yet a whole line
   bool ended = false;
   while (!g_stop) {
     const int64_t now = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -218,25 +245,13 @@ int run(int argc, char** argv) {
     next_tick += 13000;
     if (now - next_tick > 200000) next_tick = now;  // a stall: never a flood of ticks after it
     sn::bot_team_tick(team, now);
-    // The console, typed on stdin (a POSIX terminal; on Windows the control channel alone).
-#ifndef _WIN32
-    pollfd p{0, POLLIN, 0};
-    while (poll(&p, 1, 0) > 0 && (p.revents & POLLIN)) {
-      char buf[512];
-      const ssize_t n = read(0, buf, sizeof buf);
-      if (n <= 0) break;
-      pending.append(buf, static_cast<size_t>(n));
-      size_t nl;
-      while ((nl = pending.find('\n')) != std::string::npos) {
-        const std::string line = pending.substr(0, nl);
-        pending.erase(0, nl + 1);
-        if (line == "quit" || line == "/quit")
-          g_stop = 1;
-        else
-          sn::bot_team_command(team, line);
-      }
+    // The console.
+    for (const std::string& line : take_stdin_lines()) {
+      if (line == "quit" || line == "/quit")
+        g_stop = 1;
+      else
+        sn::bot_team_command(team, line);
     }
-#endif
     const double now_s = static_cast<double>(now) / 1e6;
     if (!control.path.empty() && team.ticks % 8 == 0)
       for (const std::string& line : sn::control_poll(control)) {
