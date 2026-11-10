@@ -145,8 +145,12 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
   when the packs have it, else the arena. `--size=WxH` sets the window's size, `--frames=N`
   quits after N frames.
 - **The keys**: W A S D move, SPACE jumps, the left button fires, 1 to 8 pick a weapon (7 the
-  rocket launcher), the wheel the next one. The mouse looks while the window has it (raw
-  counts, captured); a click takes it back after the console; closing the window quits.
+  rocket launcher), the wheel the next one. The mouse looks (raw counts, captured) from the
+  moment the window gets the focus, by a click on it or on the app's icon in the Dock or the
+  taskbar, with no second click; only the console lets it go by default, and closing the console
+  takes it back. `in_mouse_release` names what frees it (bits: 1 the console, 2 a menu, whose
+  pointer then hovers and clicks; 4 a demo's play bar; default 5), so a menu is driven by the keys
+  unless it holds 2. Closing the window quits.
 - **The main menu** (ESCAPE; ESCAPE again goes back, and out of it at its root): the classic
   game's pages (§ The main menu), every row the game can do working and the rest dimmed.
 - **The console** (the key under ESCAPE): `map <name>` changes the map, `sv <line>` runs a line on

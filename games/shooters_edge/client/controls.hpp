@@ -24,11 +24,13 @@
 // ge:keywords weapon-keys wheel read_controls turn_view move-cmd m_invert cvars
 // ge:keywords lookspring spring_view ideal-pitch centre-view cl_run always-run lookstrafe
 // ge:keywords buttons binds default_binds forward attack speed strafe impulse key_moves
+// ge:keywords in_mouse_release mouse-capture
 // ge:skill input shooter
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
 
 #include "console/console.hpp"
+#include "input/mouse_capture.hpp"
 #include "input/state.hpp"
 #include "shooter/pmove.hpp"
 
@@ -54,6 +56,8 @@ struct ControlSettings {
   int side_speed = 350;
   int up_speed = 200;
   double strafe_scale = 36;  // units/s of sidestep a degree the mouse's counts would have turned
+  // in_mouse_release: what takes the pointer back from the look (input::Release's bits)
+  uint32_t mouse_release = ge::input::kReleaseDefault;
   ControlButtons buttons;
 };
 
