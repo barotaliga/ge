@@ -69,6 +69,7 @@ struct NetEvent {
   int ent = 0;      // the entity it is about (a sound's source, a static's model index, ...)
   int level = 0;    // a print's level; a sound's or a light style's channel or style
   sh::Vec3f origin;
+  sh::Vec3f dir;                   // a particle burst's way (the program's, units/s / 15)
   float values[4] = {0, 0, 0, 0};  // a sound's volume and attenuation, a particle's numbers
   std::string text;                // the print, the command, the sample, the pattern
   std::vector<uint8_t> bytes;      // a multicast's buffer

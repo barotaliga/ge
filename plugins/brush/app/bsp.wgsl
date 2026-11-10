@@ -72,8 +72,9 @@ struct Bsp {
   // the 64 light styles' levels now, four a vector
   styles: array<vec4f, 16>,
   // the moving casters as capsules (bsp_draw.hpp's kShadowCapsules): x how many, y 1 for the
-  // casters' cubes' hard edges, z a second view's shadows (Options::view_shadows); then each
-  // one's two ends, the radius in the first's w
+  // casters' cubes' hard edges, z a second view's shadows (Options::view_shadows), w the share
+  // of the bounce a figure's shadow dims (Options::fill_shadows); then each one's two ends, the
+  // radius in the first's w
   capsule_info: vec4f,
   capsules: array<vec4f, 8>,
   // the moving casters along the sun: their atlas's last row's first tile (info.z 1: drawn)
@@ -680,8 +681,9 @@ fn spot_edge(l: Light, c: f32) -> f32 {
 // THE MOVING CASTERS' SHARE OF THE ROOM'S OWN LIGHT: a body standing in the light hides the light
 // bounced round the room from what is under it too (the light reaching the floor from the
 // hemisphere he stands in), most of it from the way the nearest lights come. So the bounce and the
-// floor of light are dimmed by kIndirectShadow of the share of the casters' lights he hides here.
-const kIndirectShadow = 0.8;
+// floor of light are dimmed by capsule_info.w of the share of the casters' lights he hides here:
+// 0 unless bsp_draw.hpp's Options::fill_shadows asks for it, since a shadow in the bounce reads as
+// one cast by no light.
 // A figure's capsule shadows nothing further than this from its middle (squared, m^2).
 const kCapsuleReach2 = 36.0;
 
@@ -1094,7 +1096,8 @@ fn shade(in: VsOut) -> FsOut {
     }
     // A light with no cube of the moving casters: their capsules shadow it instead (none at a
     // point kCapsuleReachM past them: a figure's shadow is near him).
-    if (l.more.x < 0.0 && bsp.capsule_info.x > 0.5 && view_cut > 1.5) {
+    // Only a light whose source he can see throws it (more.z; bsp_draw.hpp's fill_shadows).
+    if (l.more.x < 0.0 && l.more.z > 0.5 && bsp.capsule_info.x > 0.5 && view_cut > 1.5) {
       var seen = 1.0;
       let lr = max(l.more.y, 0.04);
       for (var c = 0u; near_capsules != 0u && c < u32(bsp.capsule_info.x); c++) {
@@ -1126,7 +1129,7 @@ fn shade(in: VsOut) -> FsOut {
   // The light bounced round the room: the rebake's own where it has one, else the map's baked
   // light (its light probes) at a share; dimmed where a moving caster hides the nearest lights.
   let hidden = select(0.0, 1.0 - cast_lit / cast_full, cast_full > 1e-6);
-  let indirect = cavity * (1.0 - kIndirectShadow * hidden);
+  let indirect = cavity * (1.0 - bsp.capsule_info.w * hidden);
   if (bsp.info3.y < 0.0 && in.lm2.x >= 0.0) {
     e += textureSampleLevel(rebake_bounce, light_sampler, in.lm2, 0.0).rgb * indirect;
   } else {

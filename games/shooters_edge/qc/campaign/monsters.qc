@@ -73,6 +73,9 @@ void() monster_army = {
   self.fr_missile = '81 89 1';
   self.fr_pain = '40 45 1';
   self.fr_death = '8 17 1';
+  self.fr_death2 = '18 28 1';
+  self.death_solid = 2;
+  self.drop_ammo = DROP_SHELLS;
   walkmonster_start("progs/soldier.mdl", 30, '-16 -16 -24', '16 16 40');
 };
 
@@ -199,5 +202,8 @@ void() monster_dog = {
   self.fr_leap = '60 68 1';
   self.fr_pain = '26 31 1';
   self.fr_death = '8 16 1';
+  self.fr_death2 = '17 25 1';
+  self.gib_model = "progs/gib3.mdl";
+  self.gib_first = TRUE;
   walkmonster_start("progs/dog.mdl", 25, '-32 -32 -24', '32 32 40');
 };

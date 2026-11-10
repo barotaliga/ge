@@ -194,6 +194,14 @@ struct FxState {
     sh::Vec3f at, dir;
   };
   std::unordered_map<int, Flight> flights, flights_next;
+  // Each bleeding piece (a gib, a head: its model's trail flag) as it was a frame ago: its place
+  // (m), its model, and how far into the next step of its trail it had flown (m).
+  struct Bleeding {
+    ge::camera::Vec3 at;
+    int modelindex = 0;
+    double carry = 0;
+  };
+  std::unordered_map<int, Bleeding> bleeding, bleeding_next;
   std::unordered_map<uint32_t, std::array<float, 3>> wall_colours;  // each texture's, as hit
   std::vector<Wound> wounds;
   std::unordered_map<int, float> wound_health;  // each wounded body's health a frame ago

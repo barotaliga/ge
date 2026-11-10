@@ -87,6 +87,14 @@ struct Options {
   int caster_lights = kCasterLights;
   bool soft_casters = true;
   bool capsules = true;
+  // Which lights throw a figure's shadow: false those whose source the player can see alone
+  // (draw_data.hpp's PointLight::seen: a flame, a globe, a lamp at its glowing fitting; and the
+  // dynamic lights), so no shadow falls from a fill light hanging unseen in the air, nor from a
+  // pool's or a teleporter's glow, and the light bounced round the room is never shadowed by him.
+  // True: every light's, and the bounce dimmed by the share of their light he hides (the look
+  // before). The walls' own shadows are every shadowed light's either way: they keep its light in
+  // its room, as the map's own lightmaps do.
+  bool fill_shadows = false;
   // THE SHADOWS IN THE MAP DRAWN AGAIN FOR ITS WATER (bsp_views.hpp: the mirror, the view up):
   // 2 as the frame's own, 1 the walls' kept cubes alone, 0 none. The views draw no model, so a
   // figure's shadow there would be cast by nothing: 1 by default (the same price as 2, measured
@@ -177,6 +185,9 @@ struct Options {
 inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side
 inline constexpr uint32_t kOrthoSize = 2048;  // the sun's and the zenith's maps
 inline constexpr int kMaxShadowed = 48;
+// The share of the light bounced round the room a figure dims by the share of the lights he hides
+// at a point, under Options::fill_shadows alone (bsp.wgsl's `indirect`).
+inline constexpr double kIndirectShadow = 0.8;
 inline constexpr uint32_t kOrthos = 3;  // the sun's, the zenith's and the fall's
 // THE MOVING CASTERS' CUBES (v2 lit in real time; `set_shadow_casters`): the models a frame hands
 // over (players, monsters, the first-person player who is not drawn), drawn each frame into a cube
@@ -233,7 +244,8 @@ struct GpuBsp {
   float styles[kLightStyles];  // each light style's level now (draw_data.hpp)
   // The moving casters as capsules for the lights without their cube: how many (x), their cubes'
   // edges hard (y 1: Options::soft_casters off), a second view's shadows (z:
-  // Options::view_shadows), then each capsule's two ends (xyz, the radius in the first's w), the
+  // Options::view_shadows), the bounce's share a figure dims (w: Options::fill_shadows), then
+  // each capsule's two ends (xyz, the radius in the first's w), the
   // nearest the eye.
   float capsule_info[4];
   float capsules[kShadowCapsules * 2][4];
