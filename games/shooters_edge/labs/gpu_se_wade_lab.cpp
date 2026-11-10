@@ -229,8 +229,12 @@ bool find_walk(const br::Map& m, int c, float a[3], float b[3]) {
   float best = 0;
   for (const br::Leaf& leaf : m.leaves) {
     if (leaf.contents != c) continue;
-    for (float x = leaf.mins[0] + 16; x < leaf.maxs[0]; x += 32)
-      for (float y = leaf.mins[1] + 16; y < leaf.maxs[1]; y += 32) {
+    const int nx = static_cast<int>((leaf.maxs[0] - leaf.mins[0]) / 32);
+    const int ny = static_cast<int>((leaf.maxs[1] - leaf.mins[1]) / 32);
+    for (int i = 0; i < nx; ++i)
+      for (int j = 0; j < ny; ++j) {
+        const float x = leaf.mins[0] + 16 + 32.f * static_cast<float>(i);
+        const float y = leaf.mins[1] + 16 + 32.f * static_cast<float>(j);
         // The surface over this point of the leaf.
         float z = leaf.maxs[2] - 1;
         if (contents(m, x, y, z) != c) {
@@ -244,7 +248,8 @@ bool find_walk(const br::Map& m, int c, float a[3], float b[3]) {
           const float dx = static_cast<float>(libm::cos(ang)),
                       dy = static_cast<float>(libm::sin(ang));
           float len = 0;
-          for (float s = 8; s <= 320; s += 8) {
+          for (int step = 1; step <= 40; ++step) {
+            const float s = 8.f * static_cast<float>(step);
             const float px = x + dx * s, py = y + dy * s;
             // Liquid a body's width and more either side, so the furrow lies in open liquid.
             const float sx = -dy * 40, sy = dx * 40;
@@ -290,7 +295,7 @@ bool find_eye(const br::Map& m, const float target[3], const float a[3], const f
   for (const bool both_ends : {true, false})
     for (int d = near; d <= far; d += 16)
       for (int k = 0; k < 16; ++k) {
-        const double off = (k % 2 == 0 ? 1 : -1) * (0.5 - 0.0625 * (k / 2));
+        const double off = (k % 2 == 0 ? 1 : -1) * (0.5 - 0.03125 * static_cast<double>(k - k % 2));
         const double ang = along + off * kPi;
         for (const float rise : {lift, lift * 0.6f, lift * 1.5f}) {
           const float e[3] = {target[0] + static_cast<float>(d * libm::cos(ang)),
@@ -439,6 +444,7 @@ void run_pool(gl::Lab& lab, const cl::SearchPath& files, const std::string& map_
   };
   const int moments = std::max(2, static_cast<int>(lab.arg_num("moments")));
   std::vector<double> at_s;
+  at_s.reserve(static_cast<size_t>(moments));
   for (int k = 0; k < moments; k++)
     at_s.push_back(walk_s * 0.6 + (total_s - walk_s * 0.6) * k / std::max(1, moments - 1) * 0.9);
   const int frames = static_cast<int>(total_s / kDt);
@@ -473,18 +479,20 @@ void run_pool(gl::Lab& lab, const cl::SearchPath& files, const std::string& map_
     const double share = changed_share(still[k], waded[k]);
     lab.metric(std::string(name) + ".changed-share." + std::to_string(k), share, "ratio",
                gl::Det::measured);
+    const std::string where = std::string(name).append(" on ").append(map_name);
     lab.shot({std::string(name) + "-" + std::to_string(k) + "-still",
-              std::string(name) + " on " + map_name + ", ce_wade 0: " + when,
-              "A player walking waist deep through the " + std::string(name) +
-                  " at 3 m/s, then "
-                  "standing; ce_wade 0, the surface still round him.",
+              std::string(where).append(", ce_wade 0: ").append(when),
+              std::string("A player walking waist deep through the ")
+                  .append(name)
+                  .append(" at 3 m/s, then standing; ce_wade 0, the surface still round him."),
               "the surface as if nobody were in it", inputs},
              still[k], gl::Det::measured);
     lab.shot({std::string(name) + "-" + std::to_string(k) + "-waded",
-              std::string(name) + " on " + map_name + ", ce_wade 1: " + when,
-              "The same moment with ce_wade 1: the furrow behind him, the bow ahead, the rings "
-              "(changes " +
-                  fixed(share * 100, 1) + "% of the picture).",
+              std::string(where).append(", ce_wade 1: ").append(when),
+              std::string("The same moment with ce_wade 1: the furrow behind him, the bow ahead, "
+                          "the rings (changes ")
+                  .append(fixed(share * 100, 1))
+                  .append("% of the picture)."),
               kind == kLava ? "the crust torn open behind him, glowing, closing slowly over "
                               "seconds; slow broad folds round his legs"
                             : "a furrow parting the slime behind him, its lips raised, closing "
