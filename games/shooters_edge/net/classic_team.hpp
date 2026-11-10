@@ -183,6 +183,7 @@ struct TeamPlayer {
   int64_t escapes = 0, escapes_out = 0;       // rockets out of a pit's liquid, and those landed out
   int64_t gap_jumps = 0, gap_landed = 0;      // gap tricks jumped out of a hop, and landed across
   int64_t gap_refused = 0;                    // gap tricks given up (no jump lands across)
+  int64_t hops = 0, hop_jumps = 0;            // hop stretches entered, and jumps pressed in them
   int64_t watching = 0;  // commands standing with the view on a way in (bots/watch.hpp)
   double speed_sum = 0;  // its speed across the floor, summed over its commands alive
   double mode_speed[sh::kPilotModes + 1] = {};  // and by the pilot's mode, with each mode's count

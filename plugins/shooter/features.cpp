@@ -15,7 +15,7 @@ constexpr const char* kNames[kFeatures] = {
     "shortgoals", "commit", "danger",  "dodge",    "watch",     "spam",   "packs",  "talk",
     "plan",       "rj",     "gj",      "airsteer", "surface",   "glance", "eye",    "selfaim",
     "pools",      "routes", "corner",  "mouse",    "packinfer", "listen", "stairs", "locked",
-    "escape",     "brink",  "gapjump", "headroom", "trial"};
+    "escape",     "brink",  "gapjump", "headroom", "liphop",    "trial"};
 
 // Every switch but `trial` (the last).
 constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);
@@ -34,6 +34,11 @@ Features features_of(AimSkill skill) {
   // No skill reads a turn a whole reaction late (`eye`): it held every level's aim under people's
   // (e1m2, six seeds: average players' scattergun 34 % with it, 40 % without; people 42 %).
   f.set(Feature::eye, false);
+  // Nor does any hop along a lip of lava yet (`liphop`): it raised dm2's hop share 9 -> 14 %
+  // (people 36 %) with no more lava deaths, but head to head the side with it lost ~50 frags a
+  // six-match set (the hop's view rides the velocity, so the side hopping more sights fewer
+  // enemies). On once the hop's view sweeps the room as people's weave does.
+  f.set(Feature::liphop, false);
   // A novice looks where he goes: he does not check the open ground beside him.
   if (skill == AimSkill::novice) f.set(Feature::glance, false);
   return f;

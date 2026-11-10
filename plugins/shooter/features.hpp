@@ -41,11 +41,11 @@
 // - `brink`: no lip of lava or slime walked, hopped or strafed over (shooter/brink.hpp).
 // - `gapjump`: a hopper takes people's speed jumps over a pit, out of a hop (shooter/nav_gaps.hpp).
 // - `headroom`: no hop's jump into a lintel, nor its last one onto a stair (pilot.hpp).
+// - `liphop`: a hop runs on along a lava lip, the brink guard on its feet; in no skill's preset.
 // - `trial`: read by an A/B now; off in every preset (`all` too): `--features-red=+trial`.
-//
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: every one but what that
-// level of player does not do: none `eye`, a novice no `glance`; the rest of a skill's differences
-// are its traits'), `features_none` (a plain bot: it still roams, fights, heals and takes items).
+// level of player does not do: none `eye` or `liphop`, a novice no `glance`; the rest of a skill's
+// differences are its traits'), `features_none` (a plain bot: it roams, fights, heals and takes).
 // The text form (`apply_features`) reads `all`, `none` (`plain`), `+name` or `name` (on), `-name`
 // (off), separated by commas, spaces or '/', applied in order: "plain,+dodge,-swimaim".
 //
@@ -56,6 +56,7 @@
 // ge:keywords trial eye selfaim course-change own-motion pools pool-floor swim-under-view corner
 // ge:keywords lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen sound-swipe
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
+// ge:keywords liphop
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -105,9 +106,10 @@ enum class Feature : uint8_t {
   brink,
   gapjump,
   headroom,
+  liphop,
   trial,
 };
-constexpr size_t kFeatures = 37;
+constexpr size_t kFeatures = 38;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

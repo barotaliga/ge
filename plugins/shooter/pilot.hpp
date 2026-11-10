@@ -111,6 +111,10 @@ struct PilotSettings {
   // the route ahead (a lintel over a stair down): run on under it along the route, jump past it;
   // and the stretch's last jump one whose flight lands before the stretch ends (a climb, a lip).
   bool hop_headroom = false;
+  // THE LIPS HOPPED (`liphop`): a hop's stretch runs on along a lip over lava or slime (a `brink`
+  // link) instead of ending there: the brink guard holds the feet off it in the air as on the
+  // ground, so the hop needs no stop of its own (hops along dm2's pits: share 9-11 % -> 14-15 %).
+  bool hop_lips = false;
   // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while `jumper.rockets` is set (the
   // caller's say: the launcher in hand, its rockets, the health for the blast), those of its
   // level and at its price (`NavJumper`); played as a jump, the view

@@ -294,7 +294,7 @@ int32_t hop_stretch(const Pilot& p, Vec3f at) {
       break;
     }
     if (l == nullptr || (l->kind != NavKind::walk && l->kind != NavKind::drop) || l->mover >= 0 ||
-        l->teleport || (p.set.brink && l->brink))
+        l->teleport || (p.set.brink && l->brink && !p.set.hop_lips))
       break;
     const NavLink* l2 = j + 1 < p.route.size() ? link_of(g, p.route[j], p.route[j + 1]) : nullptr;
     if (l2 != nullptr && leaps(l2->kind) && !(l2->gap && p.set.jumper.gaps)) break;

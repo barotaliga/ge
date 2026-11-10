@@ -30,6 +30,7 @@
 #include <cctype>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -202,6 +203,15 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
   };
   std::vector<Kept> kept;
   int32_t read = 0;
+  // THE TRACK (`--track=<tsv>`): every player's every frame of the first `--track-demos`
+  // recordings as a row, for the questions the tables do not answer (the bot plan's scripts).
+  std::ofstream track;
+  if (!lab.arg("track").empty()) {
+    track.open(lab.arg("track"));
+    track << "demo\tslot\tname\tteam\tt\tx\ty\tz\tspeed\tyaw\tpitch\theading\tphase\ttakeoff"
+             "\tblast\n";
+  }
+  const int32_t track_demos = static_cast<int32_t>(lab.arg_num("track-demos"));
   for (const std::string& path : paths) {
     std::string error;
     la::DemoTracks dt;
@@ -227,6 +237,22 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
           on = true;
         if (on && f.phase == sh::HopPhase::ground && f.speed < kRun) on = false;
         blast[i] = on;
+      }
+      if (track.is_open() && read <= track_demos) {
+        const bool same = r.frames.size() == dt.tracks[k].size();
+        for (size_t i = 0; i < r.frames.size(); i++) {
+          const sh::HopFrame& f = r.frames[i];
+          track << read << '\t' << k << '\t' << dt.names[k] << '\t' << dt.teams[k] << '\t'
+                << to_fixed(f.t, 3) << '\t' << to_fixed(f.origin.x, 1) << '\t'
+                << to_fixed(f.origin.y, 1) << '\t' << to_fixed(f.origin.z, 1) << '\t'
+                << to_fixed(f.speed, 1) << '\t' << to_fixed(f.yaw, 2) << '\t'
+                << to_fixed(same ? dt.tracks[k][i].pitch : 0.f, 2) << '\t' << to_fixed(f.heading, 2)
+                << '\t'
+                << (f.phase == sh::HopPhase::cut      ? 'c'
+                    : f.phase == sh::HopPhase::ground ? 'g'
+                                                      : 'a')
+                << '\t' << (f.takeoff ? 1 : 0) << '\t' << static_cast<int>(blast[i]) << '\n';
+        }
       }
       size_t who = players.size();
       for (size_t j = 0; j < players.size(); j++)
@@ -734,6 +760,10 @@ const gl::LabSpec kSpec{
         {"player", "", "the player followed: a name or a slot (empty: the top fragger)"},
         {"hz", "77", "the commands a second the air's most turn is read at"},
         {"yaw", "30", "the angled view's turn about z, degrees"},
+        {"track", "",
+         "with --dir: every player's every frame as a TSV row (place, view, speed, the velocity's "
+         "heading, ground or air, takeoffs, blasts)"},
+        {"track-demos", "8", "--track's recordings: the first this many"},
     },
     "",
     run,

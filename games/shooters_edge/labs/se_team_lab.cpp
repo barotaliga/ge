@@ -734,6 +734,11 @@ void run(gl::Lab& lab) {
       lab.metric("team.gap-jumps", static_cast<double>(gj), "count");
       lab.metric("team.gap-landed", static_cast<double>(gl), "count");
       lab.metric("team.gap-refused", static_cast<double>(gr), "count");
+      // The hops (shooter/pilot.hpp): stretches entered, and jumps pressed on their landings.
+      int64_t hs = 0, hj = 0;
+      for (const cn::TeamPlayer& p : r.players) hs += p.hops, hj += p.hop_jumps;
+      lab.metric("team.hops", static_cast<double>(hs), "count");
+      lab.metric("team.hop-jumps", static_cast<double>(hj), "count");
     }
     lab.metric("team.dodge-share",
                fight > 0 ? static_cast<double>(dodging) / static_cast<double>(fight) : 0, "share");
