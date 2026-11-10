@@ -259,6 +259,11 @@ Any player may ask everyone on the server to change a setting until the map chan
   (`fraglimit`, `teamplay`) takes effect at once (a limit the warmup holds, at the match), and a
   setting the players' moves are predicted with (`sv_gravity`, `pm_speedjump`) restarts the map so
   every client is told it. The endpoint's own settings (read when the server starts) are refused.
+- **The easy jump for one player.** Shooter's Edge takes `vote speedjump <id|name> on|off|<share>`:
+  the administrator's grant (`speedjump`, disclosed in the player's user info) made for this map
+  by the players. Its key is `speedjump:<user id>`, so each player is his own change; the next map
+  puts back what he had (an administrator's grant comes back, a voted one goes). A player who has
+  left is passed over. `sv_vote_deny speedjump` keeps it to the administrator.
 
 ## Open for extension
 

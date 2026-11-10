@@ -21,12 +21,8 @@ namespace shooters_edge::net {
 
 namespace pg = ge::progs;
 
-namespace {
-
-constexpr const char* kGrantKey = "*speedjump";
-
 // A share as the key and the tables show it: at most two decimals, no trailing zeros.
-std::string share_text(float share) {
+std::string speedjump_share_text(float share) {
   std::string t = ge::core::num::to_fixed(static_cast<double>(share), 2);
   while (!t.empty() && t.back() == '0') t.pop_back();
   if (!t.empty() && t.back() == '.') t.pop_back();
@@ -34,7 +30,7 @@ std::string share_text(float share) {
 }
 
 // `text` read whole as a share 0..1, rounded to hundredths; false when it is not one.
-bool parse_share(const std::string& text, float& out) {
+bool speedjump_parse_share(const std::string& text, float& out) {
   if (text.empty()) return false;
   char* end = nullptr;
   const double v = std::strtod(text.c_str(), &end);
@@ -42,6 +38,10 @@ bool parse_share(const std::string& text, float& out) {
   out = static_cast<float>(ge::core::num::round(v * 100)) / 100.0f;
   return true;
 }
+
+namespace {
+
+constexpr const char* kGrantKey = "*speedjump";
 
 std::string pad(std::string s, size_t width) {
   if (s.size() < width) s.append(width - s.size(), ' ');
@@ -65,7 +65,7 @@ std::string easy_jump_column(const ClassicServer& s, int slot) {
   const std::string granted = info_get(c.userinfo, kGrantKey);
   if (!granted.empty()) return granted + " granted";
   if (info_get(c.userinfo, "cl_speedjump") != "1") return "-";
-  return server_share(s) > 0 ? share_text(server_share(s)) : "asks";
+  return server_share(s) > 0 ? speedjump_share_text(server_share(s)) : "asks";
 }
 
 std::string address_column(const ClassicClient& c) {
@@ -84,8 +84,8 @@ std::string speedjump_list(const ClassicServer& s) {
     t += "  " + std::to_string(c.userid) + " " + c.name + ": " + granted + "\n";
     n++;
   }
-  const std::string head =
-      "easy jump: pm_speedjump " + share_text(server_share(s)) + " for everyone who asks; ";
+  const std::string head = "easy jump: pm_speedjump " + speedjump_share_text(server_share(s)) +
+                           " for everyone who asks; ";
   if (n == 0) return head + "granted to nobody; next: `users`, then `speedjump <id> on`\n";
   return head + "granted to " + std::to_string(n) + ":\n" + t;
 }
@@ -111,7 +111,7 @@ std::string classic_status_table(const ClassicServer& s) {
     if (c.state != ConnState::free) players++;
   std::string t = s.cfg.hostname + " on " + s.game->map_name + ", " + std::to_string(players) +
                   " player" + (players == 1 ? "" : "s") + ", pm_speedjump " +
-                  share_text(server_share(s)) + "\n";
+                  speedjump_share_text(server_share(s)) + "\n";
   t += "slot id  name             frags ping loss min address               easy jump\n";
   for (int i = 0; i < sh::kMaxClients; i++) {
     const ClassicClient& c = s.clients[i];
@@ -156,7 +156,7 @@ bool classic_speedjump(ClassicServer& s, int userid, float share, std::string& e
     return false;
   }
   if (share > 1) share = 1;
-  const std::string value = share < 0 ? std::string() : share_text(share);
+  const std::string value = share < 0 ? std::string() : speedjump_share_text(share);
   if (info_get(s.clients[slot].userinfo, kGrantKey) == value) return true;
   classic_set_info(s, slot, kGrantKey, value);
   const std::string& name = s.clients[slot].name;
@@ -195,7 +195,7 @@ bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) 
   float share = -1;
   if (what == "on")
     share = kGrantShare;
-  else if (what != "off" && !parse_share(what, share)) {
+  else if (what != "off" && !speedjump_parse_share(what, share)) {
     out =
         "speedjump: " + what + " is not on, off or a share 0..1; next: speedjump " + who + " on\n";
     return true;
@@ -208,7 +208,7 @@ bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) 
   const ClassicClient& c = s.clients[slot];
   out = share < 0 ? c.name + " (id " + std::to_string(c.userid) + "): easy jump not granted\n"
                   : c.name + " (id " + std::to_string(c.userid) + "): easy jump granted at " +
-                        share_text(share) +
+                        speedjump_share_text(share) +
                         (info_get(c.userinfo, "cl_speedjump") == "1"
                              ? "\n"
                              : "; it acts once he sets cl_speedjump 1\n");
