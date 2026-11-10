@@ -134,9 +134,19 @@ bool answers(const Ctx& ctx, int port, int wait_ms) {
   uint8_t q[256], buf[gn::kMaxDatagram];
   const size_t n = ctx.spec.query.status(q, sizeof q);
   const gn::Address to = gn::loopback_v4(static_cast<uint16_t>(port));
+  // Timed by the clock, not by counting sleeps: a loaded machine sleeps longer than asked.
+  const auto start = std::chrono::steady_clock::now();
+  const auto elapsed_ms = [&] {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() -
+                                                                 start)
+        .count();
+  };
   bool ok = false;
-  for (int waited = 0; waited < wait_ms && !ok; waited += 20) {
-    if (waited % 400 == 0) gn::transport_send(t, to, q, n, 0);
+  for (long long sent_at = -400; elapsed_ms() < wait_ms && !ok;) {
+    if (elapsed_ms() - sent_at >= 400) {
+      gn::transport_send(t, to, q, n, 0);
+      sent_at = elapsed_ms();
+    }
     gn::Address from;
     for (int got; (got = gn::transport_receive(t, buf, sizeof buf, from, 0)) > 0;) {
       gn::ServerInfo info;

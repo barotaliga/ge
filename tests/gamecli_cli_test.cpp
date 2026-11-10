@@ -219,7 +219,7 @@ TEST(a_started_program_is_kept_listed_and_stopped) {
   // A stand-in for the dedicated server: it runs and never answers, so `host` says it started
   // but does not answer yet, `host list` sees it run and `host stop` ends it.
   const fs::path server = root / "bin" / "shooters_edge_server";
-  std::ofstream(server) << "#!/bin/sh\necho \"serving $*\"\nexec sleep 30\n";
+  std::ofstream(server) << "#!/bin/sh\necho \"serving $*\"\nexec sleep 600\n";
   fs::permissions(server, fs::perms::owner_all);
   std::string out;
   CHECK_MSG(run({"host", "--dedicated", "--port=27931", "--json"}, out, root) == 0, out);
