@@ -10,6 +10,7 @@
 #include <array>
 #include <cmath>
 
+#include "brush/light_probe.hpp"
 #include "brush/map.hpp"
 #include "classicenhance/replace.hpp"
 #include "classicenhance/weapons.hpp"
@@ -81,9 +82,10 @@ void engine_dir(const sh::Vec3f& d, double out[3]) {
 
 // THE FACE A ROUND HIT: the map's triangle the line from `from` through `at` (map units) crosses
 // within a few units of `at`, among the surfaces marked in the leaf just before it: its normal
-// toward `from` (map axes, unit) and its texture's surface class. False when no triangle is near.
+// toward `from` (map axes, unit), its texture's surface class and its baked light there (its own
+// lightmap's first style, 0..1 a channel; all -1 when it has none). False when no triangle is near.
 bool face_hit(const ge::brush::Map& m, const sh::Vec3f& from, const sh::Vec3f& at,
-              uint32_t* texture, sh::Vec3f* n, ge::detail::SurfaceClass* surface) {
+              uint32_t* texture, sh::Vec3f* n, ge::detail::SurfaceClass* surface, float light[3]) {
   const double d[3] = {at.x - from.x, at.y - from.y, at.z - from.z};
   const double len = ge::core::hypot3(d[0], d[1], d[2]);
   if (len < 1e-3 || m.leaves.empty()) return false;
@@ -130,6 +132,15 @@ bool face_hit(const ge::brush::Map& m, const sh::Vec3f& from, const sh::Vec3f& a
       *n = {static_cast<float>(sign * nn[0] / nl), static_cast<float>(sign * nn[1] / nl),
             static_cast<float>(sign * nn[2] / nl)};
       *texture = sf.texture;
+      // The face's own baked light where the line crossed it (first style; -1: none).
+      const float* la = m.vertices[m.indices[sf.first + t]].lm;
+      const float* lb = m.vertices[m.indices[sf.first + t + 1]].lm;
+      const float* lc = m.vertices[m.indices[sf.first + t + 2]].lm;
+      const float wa = static_cast<float>(1 - bu - bv), wb = static_cast<float>(bu),
+                  wc = static_cast<float>(bv);
+      const float uv[2] = {wa * la[0] + wb * lb[0] + wc * lc[0],
+                           wa * la[1] + wb * lb[1] + wc * lc[1]};
+      if (!ge::brush::lightmap_at(m, sf.lightmap, uv, light)) light[0] = light[1] = light[2] = -1;
       const ge::brush::Texture* tex =
           sf.texture < m.textures.size() ? &m.textures[sf.texture] : nullptr;
       *surface = tex == nullptr                           ? ge::detail::SurfaceClass::unknown
@@ -1039,14 +1050,15 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     for (double& c : to_eye) c = n > 0 ? c / n : 0;
     if (n == 0) to_eye[1] = 1;
     // The face it landed on, seen along the line from the eye (a beam's from its root).
-    bool on_face = false;       // `face` found the map's triangle
-    uint32_t face_texture = 0;  // and its texture
+    bool on_face = false;                // `face` found the map's triangle
+    uint32_t face_texture = 0;           // and its texture
+    float face_light[3] = {-1, -1, -1};  // and its baked light there
     const auto face = [&](const sh::Vec3f& from, double normal[3], double dir[3]) {
       sh::Vec3f fn{};
       ge::detail::SurfaceClass sc = ge::detail::SurfaceClass::unknown;
       const sh::Vec3f hit = e.kind == EffectKind::beam ? e.end : e.at;
       engine_dir({hit.x - from.x, hit.y - from.y, hit.z - from.z}, dir);
-      on_face = map != nullptr && face_hit(*map, from, hit, &face_texture, &fn, &sc);
+      on_face = map != nullptr && face_hit(*map, from, hit, &face_texture, &fn, &sc, face_light);
       if (on_face) {
         engine_dir(fn, normal);
       } else {
@@ -1093,9 +1105,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           w.surface = ge::detail::surface_name(sc);
           w.nail = nail;
           if (on_face && map != nullptr) wall_colour(s, *map, face_texture, w.colour);
+          // The light on the face where it hit (its own lightmap there).
+          for (int k = 0; k < 3; ++k) w.light[k] = face_light[k] >= 0 ? 2 * face_light[k] : -1;
           if (l.map) w.floor_y = floor_under(*l.map, e.at, eye_map);
           const int hits = nail ? 1 : std::clamp(e.count, 1, 4);
-          for (int i = 0; i < hits; ++i) fx::hit(w, s.seed++, t, &s.blasts, &out.births);
+          for (int i = 0; i < hits; ++i) fx::hit(w, s.seed++, &out.births);
           // A nail off metal strikes sparks, and their flick lights the face round it.
           if (nail && sc == ge::detail::SurfaceClass::metal) {
             const double off[3] = {p[0] + normal[0] * 0.1, p[1] + normal[1] * 0.1,

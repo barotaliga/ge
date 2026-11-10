@@ -36,11 +36,13 @@ void start(Remote& r, const ClientConfig& cfg) {
     sh::MoveCmd m = r.hands;
     m.angles = r.view;
     r.hands.impulse = 0;  // an impulse goes once
-    // The easy jump on a server that does not run it: the client strafes for the player, off
-    // its newest prediction (shooter/speedjump_assist.hpp). Our servers run it themselves
-    // (`pm_speedjump` in the server info: any value, 0 included, turns the client's help off).
-    if (r.end.cfg.speedjump && r.predicted && info_get(r.end.serverinfo, "pm_speedjump").empty())
-      m = sh::assisted_command(m, r.ahead, kStockShare);
+    // The easy jump: the client strafes for the player off its newest prediction
+    // (shooter/speedjump_assist.hpp), at the server's stated pm_speedjump or kStockShare.
+    if (r.end.cfg.speedjump && r.predicted) {
+      const std::string said = info_get(r.end.serverinfo, "pm_speedjump");
+      const float share = said.empty() ? kStockShare : static_cast<float>(std::atof(said.c_str()));
+      m = sh::assisted_command(m, r.ahead, share, r.speedjump_view, r.jump_aid);
+    }
     return m;
   };
   client_start(r.end, *r.transport, r.server, c, 0);
@@ -364,6 +366,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   d.bytes.erase(d.bytes.begin(), d.bytes.begin() + static_cast<std::ptrdiff_t>(d.pos));
   d.pos = 0;
   d.state.angles = r.view;  // the drawn view is the hands', never a tick behind
+  d.state.angles.y = d.state.angles.y + r.jump_aid.shown;  // and the easy jump's swing as shown
   // The other players run forward to the drawn time, then the player's own place predicted round
   // them (the last correction decaying over it), then the other entities drawn between frames.
   const double draw_s = static_cast<double>(r.now_us) * 1e-6 + r.owed_s;

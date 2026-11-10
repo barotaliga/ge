@@ -4,8 +4,8 @@
 // render/impact.hpp; the particle pool, render/particles.hpp). The classic game's character is
 // kept: a blast is still a ball of orange embers flung out and falling, the rocket still trails
 // fire into grey smoke, the arc gun's bolt is still a jagged blue-white line struck again many
-// times a second, a pellet still kicks a puff of grit. The engine adds what the classic could not
-// draw: a fireball of hot gas that swells, rolls and turns to smoke, its light white-hot then
+// times a second, a pellet still kicks grit off the wall. The engine adds what the classic could
+// not draw: a fireball of hot gas that swells, rolls and turns to smoke, its light white-hot then
 // orange, smoke that spreads as it thins, a burst that answers what was hit.
 //
 // - THE BLAST (`blast`): a LAYERED fireball, as a film's explosion is: the main ball, then two or
@@ -29,10 +29,12 @@
 //   (`bolt_lights`): a hard blue-white light at the gun, along the beam and where it lands,
 //   flickering with every strike and reaching as far as the classic's. Where it lands, blue-white
 //   sparks (`bolt_hit`) and a scorch.
-// - THE HITS (`hit`): a pellet's or a nail's hit throws, subtly, the burst of what it hit
-//   (`impact_look_for` with engine/detail's surface word): a small puff of dust, chips and grit in
-//   the wall's own colour, flakes that fall and hop on the floor below, a thin wisp of smoke; a
-//   nail strikes more sparks than a pellet. The hole it leaves is the client's mark.
+// - THE HITS (`hit`): a pellet's or a nail's hit TEARS DEBRIS off what it hit, and leaves no smoke
+//   or dust in the air: a few big chunks and more small chips of the face, and a spray of dirt,
+//   all in the wall's own colour, flung out of the hole and falling on their arcs, the pieces
+//   hopping on the floor below before they lie still; how much and how fast is the surface's
+//   (`impact_look_for` with engine/detail's surface word): sand sprays dirt alone, metal sheds
+//   little, water splashes. A nail off metal strikes sparks. The hole is the client's mark.
 //
 // Each is a pure function of where, when and a seed (ge::core::Rng, the engine's pure looks), so a
 // replay throws the same fire. Every number is our own, in metres, seconds and kelvin.
@@ -41,7 +43,7 @@
 // ge:keywords weapon-fx enhanced effects explosion fireball layered secondary embers ember-ball
 // ge:keywords rocket-trail exhaust grenade-trail fire_trail smoke_trail smoke lightning bolt
 // ge:keywords beam arc-gun impact hit
-// ge:keywords pellet nail surface classic-soul blast_light
+// ge:keywords pellet nail surface classic-soul blast_light debris chunks dirt no-smoke
 // ge:skill render shooter
 // ge:test tests/shooters_edge_weapon_fx_test.cpp
 #pragma once
@@ -126,15 +128,23 @@ struct WallHit {
   std::string_view surface = "stone";
   float colour[3] = {-1, -1, -1};
   double floor_y = -1e9;
+  // The map's baked light on the face where it hit (its lightmap there, 1 a channel as painted);
+  // all below 0: not known, the debris lit as any particle is (the lamps and the sky).
+  float light[3] = {-1, -1, -1};
   bool nail = false;  // a nail's (more sparks, a deeper bite), else a pellet's
 };
-// THE HIT, kept subtle and MONOTONE: the engine's burst for its surface at about a round's own
-// size (its puff of dust through the explosions' pass, a few sparks from a nail off metal only,
-// chips and grit), all of it in the wall's own brightness in greys (a hint of its hue at most);
-// FLAKES that peel off the face, fall and hop once or twice on the floor before they lie still; and
-// one thin wisp of smoke that drifts up and spreads. Nothing for the sky.
-void hit(const WallHit& h, uint32_t seed, double now_s, std::vector<gr::Blast>* blasts,
-         Particles* births);
+// THE HIT, in the WALL'S COLOUR and with NO SMOKE: debris torn out of the hole along the burst's
+// axis (the face's normal leaning toward the round's glance): CHUNKS (two or three, 2.4 to 3.6
+// times a chip of the surface across, slow, hopping on the floor and lying a few seconds), CHIPS
+// (the surface's count, smaller and faster) and DIRT (fine grains, the fastest, raining down); all
+// in the wall's own colour, a little muted (a fresh break paler than the face) and, where the hit's
+// baked light is known, shining in it as the wall does (unlit by the particles' lamps and sky,
+// which indoors are a dim blue), all falling, none growing. Every solid face breaks: at least two
+// chunks, six chips and twenty grains, more where the surface's look throws more. Of the engine's
+// burst for the surface (render/impact.hpp) only a nail's sparks off metal and a splash's beads;
+// its dust puff and its grit are not thrown. A liquid splashes and throws no debris; the sky,
+// nothing.
+void hit(const WallHit& h, uint32_t seed, Particles* births);
 
 // The light of a nail's sparks off metal at `at` (world m), `age` s after the hit: a warm white
 // flick a metre and a half round, gone in kSparkLightS; false once it is.
