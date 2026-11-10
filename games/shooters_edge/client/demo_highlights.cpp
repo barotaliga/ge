@@ -48,7 +48,8 @@ const std::vector<gr::HighlightKind>& demo_kinds() {
 }
 
 std::vector<DemoRule> demo_rules(const std::array<std::string, 32>& names) {
-  const auto who = [names](int slot) { return player_name(names, slot); };
+  // Built in the capture, not const: a closure holding a const copy copies it when it moves.
+  auto who = [n = names](int slot) { return player_name(n, slot); };
   std::vector<DemoRule> rules;
   rules.push_back(
       {"multi-kill", [who](std::span<const DemoKill> ks, std::vector<gr::Highlight>& out) {

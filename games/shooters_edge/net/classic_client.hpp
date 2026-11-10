@@ -32,7 +32,7 @@
 // ge:keywords classic-client scripted-client signon getchallenge connect pext skins download
 // ge:keywords nextdl chunked frames delta-request playerinfo packetentities client_tick
 // ge:keywords voice talk speech team record client-recording map-checksum stuffed color setinfo
-// ge:keywords read_file pmodel emodel
+// ge:keywords read_file pmodel emodel heard svc-sound client_move_settings client_net_player
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_server_test.cpp
 #pragma once
@@ -46,6 +46,7 @@
 
 #include "net/transport.hpp"
 #include "net/voice_codec.hpp"
+#include "shooter/predict.hpp"
 #include "shooters_edge/client/voice_out.hpp"
 #include "shooters_edge/net/classic_channel.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
@@ -105,6 +106,14 @@ struct ClientConfig {
   uint16_t qport = 1;
 };
 
+// A sound the server started, as the packet carried it (svc_sound or its extended form).
+struct ClientSound {
+  int ent = 0, channel = 0;
+  int sound = 0;  // the sound list's index
+  float volume = 1, attenuation = 1;
+  sh::Vec3f origin;
+};
+
 struct ClientFrame {
   uint32_t sequence = 0;
   bool valid = false;
@@ -156,13 +165,15 @@ struct ClassicClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): 
   int frags[32] = {};
   int32_t stats[kStats] = {};
   std::vector<std::string> prints, centerprints;
-  float set_angles[3] = {};  // the server's last turn of the player (setangle), degrees
+  std::vector<ClientSound> heard;  // the sounds read this tick (cleared as the tick starts)
+  float set_angles[3] = {};        // the server's last turn of the player (setangle), degrees
   float movevars[10] = {800, 100, 320, 500, 10, 10, 10, 4, 4, 1};  // serverdata's, in its order
   sh::MoveCmd sent[64];        // each move's newest command, by its packet's sequence mod 64
   uint32_t sent_seq[64] = {};  // the sequence each `sent` slot holds (0: none)
   double sent_at[64] = {};     // the network's time each `sent` slot went, s
   double player_at[32] = {};   // the network's time each player's newest record arrived, s
   double latency = 0;          // s: the newest acknowledged move's round trip
+  double latency_avg = 0;      // s: the round trip smoothed over about the last 16 acknowledged
   int64_t setangles = 0;       // turns read
   int lightstyles = 0, statics = 0, static_sounds = 0;
   int valid_frame = -1;  // the newest frame's sequence held (-1: none)
@@ -194,5 +205,10 @@ void client_start(ClassicClientEnd& c, gn::Transport& t, const gn::Address& serv
 void client_tick(ClassicClientEnd& c, int64_t now_us);
 // Queues a string command on the reliable stream (a client's console line to the server).
 void client_command(ClassicClientEnd& c, const std::string& line);
+
+// The move settings serverdata carried (and the easy jump where the server allows it), and a
+// player's record as the protocol carried it: what a prediction starts from.
+sh::MoveSettings client_move_settings(const ClassicClientEnd& c);
+sh::NetPlayer client_net_player(const PlayerState& p);
 
 }  // namespace shooters_edge::net

@@ -478,7 +478,8 @@ std::vector<uint8_t> write_multiview_match(const MatchScript& s) {
       const int health = held(p.health, f, 100);
       const int bits =
           1 | 2 | 4 | 8 | 16 | 32 | 2048 | (health <= 0 ? 256 : 0) | (health <= -40 ? 512 : 0);
-      multiview_player(m, static_cast<int>(k), at(p.origins, f), {0, p.yaw, 0}, bits);
+      multiview_player(m, static_cast<int>(k), at(p.origins, f),
+                       p.angles.empty() ? ge::shooter::Vec3f{0, p.yaw, 0} : at(p.angles, f), bits);
     }
     m.u8(47);  // packetentities: the rockets in flight, the whole list
     for (size_t r = 0; r < s.rockets.size(); r++) {

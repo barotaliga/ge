@@ -73,6 +73,9 @@ void live(gl::Lab& lab, const std::string& server) {
   auto files = std::make_shared<shooters_edge::client::SearchPath>();
   auto mounted = std::make_shared<std::string>();
   if (!basedir.empty())
+    // A callback held in a std::function: what it throws (a string out of memory)
+    // reaches its caller, as any call's does.
+    // NOLINTNEXTLINE(bugprone-exception-escape)
     cfg.read_file = [basedir, files, mounted](const std::string& gamedir, const std::string& path) {
       std::vector<uint8_t> store;
       if (*mounted != gamedir) {

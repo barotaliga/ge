@@ -285,6 +285,7 @@ CoopReport run_coop(const CoopOptions& opt) {
     Fighter& f = fighters[static_cast<size_t>(k)];
     const std::string ents =
         std::string(kCoopHallEntities) + (opt.exit ? kCoopHallExitEntities : "");
+    f.features = sh::features_of(m.skill);
     fighter_init(f, graph, s, k + 1, ents.c_str(), m.skill, m.traits, 1000.0 / kMsec,
                  opt.seed + 31u * static_cast<uint32_t>(k + 1));
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 2].view_angles.y;

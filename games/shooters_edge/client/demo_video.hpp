@@ -37,6 +37,7 @@
 // ge:keywords sound voice qwdv mvdv capture h264 av1 opus offscreen readback
 // ge:keywords clip gif animated-gif highlight from-to start-end excerpt caption text conchars
 // ge:keywords demo_placed demo-players other-players player-colours smooth lerp between-frames
+// ge:keywords autotrack hottest-player
 // ge:skill shooter replay render
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -52,6 +53,7 @@
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_autotrack.hpp"
 #include "shooters_edge/client/demo_fx.hpp"
 #include "shooters_edge/client/demo_lerp.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
@@ -79,6 +81,10 @@ struct DemoVideoOptions {
   bool gif = false;     // an animated GIF (also when `file` ends in .gif)
   int gif_width = 480;  // a GIF's width, px (the height in proportion)
   int track = -1;       // a multiview recording's player (-1: the lowest playing)
+  // A multiview recording's camera on the hottest player, cut by cut (demo_autotrack.hpp); `track`
+  // is then ignored.
+  bool autotrack = false;
+  AutotrackSettings autotrack_set;
   bool hud = true;
   bool text = true;      // the words in the upper left (demo_caption.hpp: the packs' console font)
   bool messages = true;  // the prints, the chat and the centre prints the recorded player read
@@ -108,6 +114,7 @@ struct DemoVideoReport {
   std::string highlight;        // the highlight that made it ("": none)
   std::string text_font;        // the words' type: cache, packs or charset ("": no words)
   std::string hud_art;          // the status bar's pictures: packs or free
+  AutotrackPlan autotrack;      // with `autotrack`: the cuts the camera followed
 };
 
 // Called with each picture as it goes into the file (a lab's strip): its index and its time on

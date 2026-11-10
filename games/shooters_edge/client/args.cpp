@@ -96,6 +96,26 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       (arg[2] == 'f' ? a.from : a.to) = t;
     } else if (arg.rfind("--highlight=", 0) == 0) {
       a.highlight = static_cast<int>(std::strtol(argv[i] + 12, nullptr, 10));
+    } else if (arg.rfind("--bots=", 0) == 0) {
+      a.bots = static_cast<int>(std::strtol(argv[i] + 7, nullptr, 10));
+    } else if (arg.rfind("--server=", 0) == 0) {
+      a.server = std::string(arg.substr(9));
+    } else if (arg.rfind("--team=", 0) == 0) {
+      a.team = std::string(arg.substr(7));
+    } else if (arg.rfind("--colour=", 0) == 0 || arg.rfind("--color=", 0) == 0) {
+      a.colour = static_cast<int>(std::strtol(argv[i] + arg.find('=') + 1, nullptr, 10));
+    } else if (arg.rfind("--skills=", 0) == 0) {
+      a.skills = std::string(arg.substr(9));
+    } else if (arg.rfind("--bot-features=", 0) == 0) {
+      a.bot_features = std::string(arg.substr(15));
+    } else if (arg.rfind("--bots-paths=", 0) == 0) {
+      a.bots_paths = arg.substr(13) != "0";
+    } else if (arg.rfind("--bots-out=", 0) == 0) {
+      a.bots_out = expand_home(std::string(arg.substr(11)));
+    } else if (arg.rfind("--bots-view=", 0) == 0) {
+      a.bots_view = expand_home(std::string(arg.substr(12)));
+    } else if (arg == "--autotrack" || arg == "-autotrack") {
+      a.autotrack = true;
     } else if (arg.rfind("--gif-width=", 0) == 0) {
       a.gif_width = static_cast<int>(std::strtol(argv[i] + 12, nullptr, 10));
     } else if (arg.rfind("--codec=", 0) == 0) {

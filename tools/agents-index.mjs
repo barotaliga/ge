@@ -112,9 +112,11 @@ function readPortingMap() {
   return rows;
 }
 
+// A skill directory named `<name>-private` is a person's own (git-ignored: it holds their paths),
+// never routed or indexed.
 function skillNames() {
   return readdirSync(join(ROOT, SKILLS), { withFileTypes: true })
-    .filter((d) => d.isDirectory())
+    .filter((d) => d.isDirectory() && !d.name.endsWith("-private"))
     .map((d) => d.name)
     .sort();
 }

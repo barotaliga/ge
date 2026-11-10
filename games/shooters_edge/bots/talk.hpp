@@ -12,12 +12,15 @@
 // - POINT `ra at [ra]`: "that item is there: you take it"; ENEMY `enemy at [quad]`
 // - ENEMY POWER `enemy quad [ra]`; HAVE `have quad [rl]`; GET `get quad`; OVER `quad over`
 // - TIMER `quad in 15`, `ra in 10`, `quad delayed 15 secs` (seconds until it is back)
+// - ATTACK `attack ya [gl]` (or `push`): "we take X back together: gather on me here"
+// - PLAN `lets take quad`, `camp ra and rl`, `free play` (the team's strategy, below); ACK `ok`
+// - PACK `rl pack [mh]` (a backpack with a launcher in it lies there: come and get it)
 //
 // Pure text: deterministic, no state.
 //
 // ge:summary The team's words: team messages written and read, for bots and players alike
 // ge:keywords team-message say_team teamplay callout report took safe lost help coming point
-// ge:keywords enemy powerup timer quad-in parse_say say_text status-report colour-codes
+// ge:keywords enemy powerup timer quad-in parse_say say_text status-report colour-codes attack push
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_talk_test.cpp
 #pragma once
@@ -43,8 +46,19 @@ enum class SayKind : uint8_t {
   get,
   over,
   timer,
+  attack,
+  plan,  // the team's strategy (`Strategy`)
+  pack,  // a backpack worth having lies there ("rl pack [mh]": an enemy's launcher, or one dropped)
+  ack,   // "ok", "k", "np": a line taken in
 };
 const char* say_kind_name(SayKind k);
+
+// THE TEAM'S STRATEGY, said by its leader as a person types it and followed by every member who
+// reads it: TAKE an item together (`lets take quad`, `all quad`, `rush ra`), CAMP one or two key
+// areas (`camp ra and rl`, `hold ra rl`, `control ra`: the team split between them), or FREE
+// (`free play`, `go free`: each his own way again).
+enum class Strategy : uint8_t { none, take, camp, free };
+const char* strategy_name(Strategy s);
 
 // A player's status as a message carries it (-1: not said).
 struct SayStatus {
@@ -60,6 +74,9 @@ struct Said {
   SayStatus status;
   int secs = -1;  // a timer's seconds
   SayKind kind = SayKind::none;
+  Strategy strategy = Strategy::none;  // a plan's
+  std::string item2;                   // a plan's second item ("" none)
+  int variant = 0;                     // which of a plan's or an ack's wordings it is said in
 };
 
 // The item words (in a message's own spelling), as the item kinds' callouts name them.
