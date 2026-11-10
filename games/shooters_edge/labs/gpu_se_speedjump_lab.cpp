@@ -327,7 +327,8 @@ void to_open_run(cl::Listen& l) {
       const sh::HullTrace t = sh::player_trace(world, a, {a.x + cx * 3000, a.y + cy * 3000, a.z});
       most = std::min(most, t.fraction * 3000);
     }
-    for (float d = 128; d < most; d += 128) {
+    for (int step = 1; static_cast<float>(step) * 128 < most; step++) {
+      const float d = static_cast<float>(step) * 128;
       const sh::Vec3f p{from.x + cx * d, from.y + cy * d, from.z};
       if (sh::player_trace(world, p, {p.x, p.y, p.z - 96}).fraction == 1) return d;
     }
