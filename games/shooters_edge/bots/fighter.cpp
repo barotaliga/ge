@@ -1735,14 +1735,16 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     if (sh::bot_hand_override(f.bot, cmd, msec, wet) > kHandThere)
       cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonAttack);
   }
-  // THE BRINK: on the ground with the feet free, no key carries it into lava or slime.
+  // THE BRINK: with the feet free, on the ground or in the air between a stair's steps, a hop's
+  // landings or a knock, no key carries it into lava or slime (in the air a wish against the
+  // run still brakes at the full acceleration: the air's cap is on the speed gained, not lost).
   if (!dead && f.features[sh::Feature::brink]) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(me)];
     const sh::PilotMode pm = f.bot.pilot.pilot.mode;
     const bool free_feet = pm == sh::PilotMode::walk || pm == sh::PilotMode::strafe ||
                            pm == sh::PilotMode::hop || pm == sh::PilotMode::idle ||
                            pm == sh::PilotMode::arrived || pm == sh::PilotMode::wait;
-    if (free_feet && (d.flags & sh::kFlagOnGround) != 0 && d.waterlevel == 0 &&
+    if (free_feet && d.waterlevel == 0 &&
         sh::brink_guard(s.sv, *f.bot.pilot.pilot.g, me, d.origin, d.velocity, cmd).changed)
       f.stats.brink++;
   }

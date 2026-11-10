@@ -3,7 +3,9 @@
 // an enemy, a side step), the keys that would carry him over the lip are let go of, and a run
 // heading into it is braked. A rocket out of the pit, or a jump the nav proved over it, is not
 // this guard's: the caller runs it only while the feet are free (walking, strafing, hopping or
-// standing) and on the ground.
+// standing), on the ground and in the air alike: a run down a stair is airborne from step to step,
+// and a wish against the run brakes in the air at the full acceleration (the air's cap is on the
+// speed gained along the wish, not on the speed lost).
 //
 // The check (`brink_guard`): only near a floor node in lava or slime (`nav_harm_near`), the
 // player's box is swept a step each way round (eight ways) and along its own run a quarter second
@@ -35,7 +37,7 @@ struct BrinkGuard {
   bool changed = false;  // the keys were changed
 };
 
-// Keeps player `me` (at `origin`, moving `velocity`, on the ground) out of the harm `g` knows
+// Keeps player `me` (at `origin`, moving `velocity`, its feet free) out of the harm `g` knows
 // (`NavGraph::harm`): `cmd`'s forward and side keys (under its view's yaw) lose their share along
 // every way into a pit, a run into one is braked, and the jump is let go of.
 BrinkGuard brink_guard(const Server& sv, const NavGraph& g, int me, Vec3f origin, Vec3f velocity,
