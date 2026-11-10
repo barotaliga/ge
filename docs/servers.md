@@ -179,6 +179,9 @@ so an agent or an owner can answer "why is this server set like this" without re
 | `sv_admin` | how to reach the server's owner, shown in its info | server info |
 | `sv_timeout` | seconds a client may go unheard before it is dropped (65): a dead link, not an idle player | server |
 | `sv_floodprot`, `sv_floodprotmsg` | the chat flood rule, `"N S T"`: N lines in any S seconds, else silent for T (`10 1 1`), and what a flooder is told (`engine/server/guards.hpp`) | server |
+| `sv_vote` | 1: players may vote on the settings for the map (`vote <setting> <value>`, § Votes) | server |
+| `sv_vote_time`, `sv_vote_wait` | seconds a vote stays open (30); seconds a player whose vote failed waits before calling another (30) | server |
+| `sv_vote_allow`, `sv_vote_deny` | the settings a vote may change (empty: every one but the deny list's), and those it never may (`*` any characters; the default keeps passwords, rcon, the name, the slots, the address, the vote's own, the mod, the seed, the rotation and the frame rate out) | server |
 
 and the flags `--port`, `--ip`, `--maxclients`, `--name`, `--description`, `--cfg`, `--mod`,
 `--map`, `--bots`, `--lobby`, which are the same cvars set at layer 6. The game adds its own (`fraglimit`, a mountain's
@@ -232,6 +235,31 @@ from the lobby Shooter's Edge lands first:
   lobby shows. A free ride (Fall Line's pilot) skips the match and stays in an endless warmup with
   the lobby's picks.
 
+## Votes: the players change a setting for one map
+
+Any player may ask everyone on the server to change a setting until the map changes
+(`engine/server/vote.hpp`, every game's): `vote fraglimit 30` calls the vote, `vote yes` and
+`vote no` (or `yes` and `no` alone while one is open) answer, `vote` says what is open and
+`vote rules` what may be voted on.
+
+- **More than half say yes.** The voters are the people on the server, players and spectators,
+  never bots. A vote passes the moment its yes are more than half of them, fails the moment half
+  say no, or runs out after `sv_vote_time`. The caller's own ballot is yes, so a player alone
+  passes one at once; someone leaving takes their ballot along and the vote is weighed again
+  among those left. One vote at a time; a player whose vote failed waits `sv_vote_wait`.
+- **For this map.** A passed change lasts until the map changes: then every change goes back to
+  what the server had (newest first, each to its value before the map's first vote on it). A
+  restart of the same map (the lobby's match starting) keeps it.
+- **Which settings.** A name on `sv_vote_deny` never; with `sv_vote_allow` empty every other one,
+  else only those it names (`*` any characters). Past the lists the game decides: a setting it has,
+  a value in its range. A game names what a change touches (`key`), so a per-player grant (the
+  easy jump for one player) is voted on like a setting.
+- **The game makes the change.** `vote_take` hands it the passed change and `vote_map_over` what
+  to put back. Shooter's Edge writes it into the rules every map is made from: a mod's rule
+  (`fraglimit`, `teamplay`) takes effect at once (a limit the warmup holds, at the match), and a
+  setting the players' moves are predicted with (`sv_gravity`, `pm_speedjump`) restarts the map so
+  every client is told it. The endpoint's own settings (read when the server starts) are refused.
+
 ## Open for extension
 
 What a server will grow is a lot: everything a mature classic server offers and match mods on top.
@@ -278,4 +306,5 @@ What maps onto which classic feature is kept in the working area
 | `server-core` | M53a | A dedicated server and a listen server running the same game program on the simulated network, clients joining both, digests equal |
 | `server-cfg` | M53b, M53e | A base, a mod and a profile `server.cfg` with the explained table drawn as an image; meta-cvars on and off |
 | `server-lobby` | M53c | Warmup, ready and break, countdown, match, intermission, rotation, charted per phase, for both games |
+| `server-vote` | M53h | People coming and going while votes are called and answered: each vote's count over time against the yes needed, how each ended, every change put back at the map's end, replayed to the bit |
 | `server-launch` | M53d | The game spawning a dedicated server, joining it, leaving, finding it again and stopping it |
