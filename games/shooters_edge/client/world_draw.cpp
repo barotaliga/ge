@@ -4,6 +4,7 @@
 // ge:keywords world-draw bsp frame create_world_draw draw_world resize_world particles
 // ge:keywords enhanced-textures texture-cache relief normal-map parallax
 // ge:keywords muzzle-fire explosions-pass hide-hands beams-pass lightning-bolt heat-haze
+// ge:keywords burning body-burn ce_burning
 // ge:skill render brush shooter
 #include "shooters_edge/client/world_draw.hpp"
 
@@ -33,6 +34,7 @@
 #include "render/viewmodel.hpp"
 #include "shooters_edge/app/ladder.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
+#include "shooters_edge/client/burning.hpp"
 #include "shooters_edge/client/world_extras.hpp"
 #include "viewmodel/light.hpp"
 
@@ -91,6 +93,7 @@ struct WorldDraw {
   bool own_sky = false;  // the view's sky as the caller dressed it (the title's)
   ge::brush::LightProbe probe;
   WorldExtrasPtr extras;  // the modern look's water, liquids, flames and weather (a map's only)
+  Burning burning;        // the bodies burning in lava or fuming in slime (ce_burning)
   std::vector<gr::Particle> fire_births;  // this frame's sparks off the bonfires
   gr::UiPass ui;
   gr::FrameRecorder rec;
@@ -589,6 +592,15 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     f.rec.after_submit(d);
     return;
   }
+  {
+    // Who is burning in lava or fuming in slime (ce_burning, the modern look's): their plumes over
+    // the liquid go to the extras before they are prepared.
+    GE_ZONE("world.burning");
+    const bool on = f.has_map && o.mode == ba::Mode::v2 && f.on.burning;
+    step_burning(f.burning, f.scene.map, fx.models, view.time_s, on,
+                 f.extras ? extras_level_at : nullptr, f.extras.get());
+    if (f.extras) stir_extras(*f.extras, f.burning.stirs, f.burning.fell_in, view.time_s);
+  }
   if (f.extras) {
     GE_ZONE("world.extras");
     prepare_extras(d, *f.extras, f.bsp, view, o, f.staged);
@@ -598,6 +610,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // The smoke lit as the room round it is: a puff (a particle that spreads) shines the light
     // where it was born, the blasts' and the flames' smoke the light where they are.
     f.lit_births.assign(fx.births.begin(), fx.births.end());
+    f.lit_births.insert(f.lit_births.end(), f.burning.births.begin(), f.burning.births.end());
     for (gr::Particle& q : f.lit_births) {
       if (q.grow <= 0 || q.kelvin != 0) continue;
       const double at[3] = {q.p[0], q.p[1], q.p[2]};
@@ -639,7 +652,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .flares = on.flares,
                            .bubbles = on.bubbles};
     prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
-                   in_place, fx.lights, o.dynamic_strength);
+                   in_place, fx.lights, o.dynamic_strength, &f.burning);
   }
   // Under a lava's or a slime's level the modern look draws the liquid round the eye itself.
   const bool round = f.extras && liquid_round_eye(*f.extras);
@@ -702,6 +715,12 @@ bool warm_world(ge::gpu::Device& d, WorldDraw& f, const gr::FrameView& view, int
   draw_world(d, f, view, FxFrame{}, nullptr, 0, ge::ui::DrawList{}, {});
   f.warm_cubes = -1;
   return !f.has_map || f.bsp.shadows_waiting == 0;
+}
+
+gr::MorphBurn world_burn(const WorldDraw& f, int entity) { return burn_skin_of(f.burning, entity); }
+
+void set_air_draws(WorldDraw& f, int n) {
+  if (f.extras) set_extras_air_draws(*f.extras, n);
 }
 
 void record_span(const WorldDraw& f, PassTimes& p) {

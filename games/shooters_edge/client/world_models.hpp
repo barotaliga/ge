@@ -58,6 +58,8 @@
 
 namespace shooters_edge::client {
 
+struct Burning;  // client/burning.hpp: each body's burn, drawn on its skin
+
 // One entity as the server holds it, map units and degrees.
 struct Placed {
   int entity = 0;  // a static: -1 - its index
@@ -184,7 +186,7 @@ void prepare_models(ge::gpu::Device& device, WorldModels& m, const ge::brush::Ma
                     std::span<const Placed> placed, const ge::render::FrameView& view,
                     double brightness, double minlight, bool smooth, const InPlace& in_place,
                     std::span<const ge::brush::app::DynamicLight> dynamic = {},
-                    double dynamic_strength = 1);
+                    double dynamic_strength = 1, const Burning* burning = nullptr);
 
 // The triangles of `p`'s model as `prepare_models` draws it at `time_s` (its frame and skin
 // group): nine floats a triangle, its model's own frame (m). False for a sprite, a brush or none.
