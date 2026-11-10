@@ -16,11 +16,12 @@ constexpr const char* kNames[kFeatures] = {
     "packs",     "talk",       "plan",       "rj",     "gj",     "airsteer", "surface",
     "glance",    "eye",        "selfaim",    "pools",  "routes", "corner",   "mouse",
     "packinfer", "listen",     "stairs",     "locked", "escape", "brink",    "gapjump",
-    "headroom",  "liphop",     "circlejump", "ahead",  "bodies", "trial"};
+    "headroom",  "liphop",     "circlejump", "ahead",  "bodies", "beat",     "trial"};
 
-// Every switch but `trial` (the last).
+// Every switch but `trial` (the last) and one not yet judged (`beat`).
 constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);
-constexpr uint64_t kAll = kTrial - 1;
+constexpr uint64_t kBeat = uint64_t{1} << static_cast<uint64_t>(Feature::beat);
+constexpr uint64_t kAll = (kTrial - 1) & ~kBeat;
 
 bool separator(char c) { return c == ',' || c == ' ' || c == '/' || c == '\t'; }
 

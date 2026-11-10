@@ -13,6 +13,7 @@
 #include "shooter/look_ahead.hpp"
 #include "shooter/nav_gaps.hpp"
 #include "shooter/nav_script.hpp"
+#include "shooter/pilot_movers.hpp"
 #include "shooter/server.hpp"
 #include "shooter/swim.hpp"
 #include "shooter/usercmd.hpp"
@@ -20,6 +21,8 @@
 namespace ge::shooter {
 
 namespace {
+
+using namespace pilot_parts;
 
 constexpr float kRideArrive = 2;  // a ride is over within this of the top node's height, units
 // Out of a pit (escape.hpp): the takeoff reached within this across, units; the rise to the
@@ -38,13 +41,11 @@ constexpr double kScriptFacing = 0.97;
 constexpr float kScriptFell = 40;  // standing this far under a script's lowest step: fallen off
 constexpr float kOffFloor = 12;    // a pool's floor swum over this far above its standing height
 constexpr float kLaneSettle_s = 0.4f;  // a lane's offset follows the room ahead this fast, s
-constexpr float kRideRest = 12;     // a ridden mover this near its rest may be stepped onto, units
-constexpr float kStandUp = 8;       // a node is arrived at within this up or down, units
-constexpr float kJumpAlong = 0.9f;  // a jump goes moving at least this share of its speed
-constexpr float kJumpOver = 1.15f;  // and at most this share (and 16 u/s) of it
-constexpr float kJumpAim = 0.95f;   // with the velocity within this cosine of the jump's way
-constexpr float kPastStart = 24;    // past a jump's start this far without its speed: run up
-constexpr float kStrafeHold = 2;    // the strafe's side holds until the target is this far off, deg
+constexpr float kJumpAlong = 0.9f;     // a jump goes moving at least this share of its speed
+constexpr float kJumpOver = 1.15f;     // and at most this share (and 16 u/s) of it
+constexpr float kJumpAim = 0.95f;      // with the velocity within this cosine of the jump's way
+constexpr float kPastStart = 24;       // past a jump's start this far without its speed: run up
+constexpr float kStrafeHold = 2;  // the strafe's side holds until the target is this far off, deg
 // The last jump of a hop's stretch (`headroom`): one whose flight lands before the stretch ends
 // (a climb, a mover, a lip, a jump of the route's), not on it: a flight's reach at the speed held.
 constexpr float kLastJump_s = 0.55f;
@@ -64,7 +65,6 @@ constexpr double kGapOff_s = 10;  // a gap given up stays off the routes this lo
 constexpr float kLevel = 2;       // a strafe stretch's nodes lie within this of one height
 constexpr float kJumpKin = 72;    // a jump given up takes those beside it, start and end this near
 constexpr int kRunUpTries = 4;    // a jump lined up for this many times and never made is given up
-constexpr float kStepOver = 18;   // a mover's top this near a player's feet is a step up, units
 constexpr float kClear = 4;       // a player waits this far clear of a mover's box, units
 constexpr float kLanded = 32;     // a jump has landed on its target within this, units
 constexpr float kSlow = 50;       // under this a velocity's way is not read, units/s
@@ -86,7 +86,6 @@ constexpr float kGrenadeNear = 32;   // and within this of its start, units
 constexpr float kGrenadeSlow = 160;  // slowing into the start from this far, units
 constexpr float kGrenadeStep = 4;    // the step to its stand: this times the way off, units/s
 constexpr float kOnLine = 10;        // a jump is run at on its line within this across, units
-constexpr float kStepHeight = 18;    // the move's step
 
 float across(Vec3f a, Vec3f b) {
   const float dx = b.x - a.x, dy = b.y - a.y;
@@ -118,8 +117,6 @@ float facing(float want, float now) {
   return c >= 0.5 ? 1.0f : c > -0.5 ? static_cast<float>(c + 0.5) : 0.0f;
 }
 
-const NavNode& node(const NavGraph& g, int32_t n) { return g.nodes[static_cast<size_t>(n)]; }
-
 const NavLink* link_of(const NavGraph& g, int32_t a, int32_t b) {
   const NavNode& n = node(g, a);
   for (int32_t k = 0; k < n.links; k++) {
@@ -127,17 +124,6 @@ const NavLink* link_of(const NavGraph& g, int32_t a, int32_t b) {
     if (l.to == b) return &l;
   }
   return nullptr;
-}
-
-const NavMover* mover_of(std::span<const NavMover> movers, int32_t ent) {
-  for (const NavMover& m : movers)
-    if (m.ent == ent) return &m;
-  return nullptr;
-}
-
-bool boxes_meet(Vec3f alo, Vec3f ahi, Vec3f blo, Vec3f bhi) {
-  return alo.x < bhi.x && alo.y < bhi.y && alo.z < bhi.z && blo.x < ahi.x && blo.y < ahi.y &&
-         blo.z < ahi.z;
 }
 
 // Across from `p` to the segment a..b, and how far along it (0..1) the nearest point lies.
@@ -204,54 +190,14 @@ bool reached(const Pilot& p, const PilotSense& s, int32_t n) {
   if (b.ride >= 0) return s.origin.z >= b.origin.z - kRideArrive;
   if (across(s.origin, b.origin) > p.set.arrive) return false;
   const float dz = s.origin.z - b.origin.z;
-  return b.mover >= 0 || (dz <= kStandUp && dz >= -kStandUp);
+  if (b.mover >= 0) return on_mover_top(p, s, b.mover);  // on a plat: on its top as it is now
+  return dz <= kStandUp && dz >= -kStandUp;
 }
 
 bool is_barred(const Pilot& p, int32_t m) {
   for (const int32_t b : p.barred)
     if (b == m) return true;
   return false;
-}
-
-// Whether the link's mover keeps the pilot at its start now. A ride's plat away from its rest
-// with a swimmer under its top (`floor_swim`: on a pool's floor under a raised plat, which a plat
-// coming down onto him sends back up, so it would never come for him) is in his way too.
-bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t a, int32_t b) {
-  if (l.mover < 0) return false;
-  const NavMover* rest = mover_of(p.g->movers, l.mover);
-  const NavMover* now = mover_of(s.movers, l.mover);
-  if (rest == nullptr || now == nullptr) return false;
-  if (l.kind == NavKind::ride) {
-    const float up = now->absmin.z - rest->absmin.z;
-    return p.set.floor_swim && s.waterlevel >= 2 && (up > kRideRest || up < -kRideRest) &&
-           s.origin.z + kPlayerMins.z < now->absmax.z - kStandUp;
-  }
-  const NavNode& na = node(*p.g, a);
-  const NavNode& nb = node(*p.g, b);
-  if (rest->model != nullptr) {
-    // A ridden mover is stepped onto only near its rest; stepped off any time, unless it hangs
-    // over the player (raised over the shaft he walked into: out from under it first).
-    const float up = now->absmin.z - rest->absmin.z;
-    const bool away = up > kRideRest || up < -kRideRest;
-    if (nb.mover != l.mover || na.mover == l.mover)
-      return away && s.onground && now->absmin.z > s.origin.z + kPlayerMins.z &&
-             s.origin.x + kPlayerMaxs.x > now->absmin.x &&
-             s.origin.x + kPlayerMins.x < now->absmax.x &&
-             s.origin.y + kPlayerMaxs.y > now->absmin.y &&
-             s.origin.y + kPlayerMins.y < now->absmax.y;
-    if (away) return true;
-    // Its top already more than a step over the feet (rising off its rest under another rider):
-    // walked on, the player goes in under it, and standing in its field holds it up for good.
-    return s.onground && now->absmax.z > s.origin.z + kPlayerMins.z + kStepHeight;
-  }
-  Vec3f lo = na.origin, hi = na.origin;
-  for (int i = 0; i < 3; i++) {
-    if (nb.origin[i] < lo[i]) lo[i] = nb.origin[i];
-    if (nb.origin[i] > hi[i]) hi[i] = nb.origin[i];
-  }
-  // A door sunk to within a step of the floor (one that opens downward) is walked over.
-  return boxes_meet(lo + kPlayerMins + Vec3f{0, 0, kStepOver}, hi + kPlayerMaxs, now->absmin,
-                    now->absmax);
 }
 
 // The end of a strafe stretch from route[k]: the furthest route index j whose links from k are
@@ -1013,7 +959,7 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
   p.strafe_side = 0;
   p.stats.plans++;
   restart(p, s);
-  const int32_t from = nav_nearest(*p.g, s.origin);
+  const int32_t from = plan_from(p, s);
   int32_t barred[4 + 60];
   int nb = 0;
   for (const int32_t b : p.barred)
@@ -1046,6 +992,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   const float t = static_cast<float>(p.stats.time_s);
   p.stats.time_s += static_cast<double>(dt);
   p.clock_s += static_cast<double>(dt);
+  see_movers(p, s);
   const NavGraph& g = *p.g;
   Want w;
   w.yaw = p.yaw;
@@ -1555,6 +1502,13 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         w.forward = 1;
         because = "swimming down onto the plat";
       }
+    } else if (l.mover >= 0 && node(g, a).mover == l.mover && p.mode != PilotMode::air &&
+               under_raised(p, s, l.mover) && plan_from(p, s) != a) {
+      // A link across a raised plat's top with the player under it (carried past the node he
+      // waited at): planned again from off it, never walked into its legs again and again.
+      replanned = true;
+      replan(p, s);
+      because = "under a raised plat: plan again from off it";
     } else if (mover_in_way(p, s, l, a, b) && p.mode != PilotMode::air) {
       if (p.mode != PilotMode::wait) {
         p.mode = PilotMode::wait;

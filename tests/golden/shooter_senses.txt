@@ -1,2 +1,2 @@
 # plugins/shooter/bot.hpp watched on the arena, novice and expert aim, seed 3, 1200 frames: both players' origins, the seer's view and its sight folded (tests/shooter_senses_test.cpp)
-b4335647b6c491a2
+0b6827ab8e9e8ce8

@@ -45,7 +45,7 @@
 // - `circlejump`: a hop's first jump out of a curve on the ground, past a run's 320 (pilot.hpp).
 // - `ahead`: the walk's keys flown through the move before a bump (pilot.hpp).
 // - `bodies`: with `ahead`, the other players near flown as boxes in it too (pilot.hpp).
-// - `trial`: read by an A/B now; off in every preset (`all` too): `--features-red=+trial`.
+// - `beat`: a fight mode held a person's beat (through a peek). `trial`: an A/B's, in no preset.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: all but what that level
 // does not do: none `eye`, a novice no `glance`), `features_none` (a plain bot).
 // The text form (`apply_features`): `all`, `none` (`plain`), `+name`/`name`, `-name`, in order.
@@ -56,7 +56,7 @@
 // ge:keywords trial eye selfaim course-change own-motion pools pool-floor swim-under-view corner
 // ge:keywords lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen sound-swipe
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
-// ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies
+// ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -110,9 +110,10 @@ enum class Feature : uint8_t {
   circlejump,
   ahead,
   bodies,
+  beat,
   trial,
 };
-constexpr size_t kFeatures = 41;
+constexpr size_t kFeatures = 42;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

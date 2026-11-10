@@ -295,6 +295,14 @@ struct Pilot {
   std::vector<NavExtraLink> gaps_off;  // gap tricks given up, off every route until `gaps_off_s`
   std::vector<double> gaps_off_s;      // (the pilot's own clock, `clock_s`)
   double clock_s = 0;                  // the commands' time, never reset
+  // Each ridden mover's height at the last command and when it last moved (`clock_s`): a plat is
+  // stepped onto only at its rest and silent, still a beat (pilot.cpp `mover_in_way`).
+  struct MoverSeen {
+    int32_t ent = -1;
+    float z = 0;
+    double moved_at = -1e9;
+  };
+  MoverSeen movers_seen[8];
   bool gap_flight = false;
   bool safe_flight = false;
   bool brink_free = false;    // this command's keys are a flight the move proved: no brink guard
