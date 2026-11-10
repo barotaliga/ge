@@ -40,9 +40,7 @@ constexpr const char* kDefaults[][2] = {
     {"mouse1", "+attack"},
     {"ctrl", "+attack"},
     {"mouse2", "+jump"},
-    {"shift", "+speed"},
     {"alt", "+strafe"},
-    {"c", "+movedown"},
     {"1", "impulse 1"},
     {"2", "impulse 2"},
     {"3", "impulse 3"},
@@ -79,6 +77,12 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
                     .help = "1: the view's pitch centres (follows the slope) as you move",
                     .kind = ge::console::CvarKind::boolean},
                    &c.lookspring);
+  con.cvars().bind({.name = "cl_run",
+                    .fallback = "1",
+                    .flags = ge::console::kArchive,
+                    .help = "1: always run (+speed walks), 0: walk (+speed runs)",
+                    .kind = ge::console::CvarKind::boolean},
+                   &c.run);
   con.cvars().bind({.name = "lookstrafe",
                     .fallback = "0",
                     .flags = ge::console::kArchive,
@@ -115,12 +119,9 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
       "attack2", "+attack2: fire the best of cl_quickweapon_prio2 while held, then switch back");
   add_quick_cvars(con, c.quick);
   b.moveup = &con.add_button("moveup", "+moveup: swim up while held");
-  b.movedown =
-      &con.add_button("movedown", "+movedown: crouch (a move that ducks) or swim down while held");
-  b.speed = &con.add_button(
-      "speed",
-      "+speed: the run key: the moves x2 while held (no faster than the server's top speed, which "
-      "the moves already reach: there is no walking)");
+  b.movedown = &con.add_button("movedown",
+                               "+movedown: swim down while held (crouches in a move that ducks)");
+  b.speed = &con.add_button("speed", "+speed: walk while held (run with cl_run 0); unbound");
   b.strafe = &con.add_button("strafe", "+strafe: the mouse and the turn keys sidestep while held");
   b.left = &con.add_button("left", "+left: turn left while held (cl_yawspeed)");
   b.right = &con.add_button("right", "+right: turn right while held (cl_yawspeed)");
@@ -215,12 +216,11 @@ void turn_view(const ge::input::InputState& in, const ControlSettings& c,
 ge::shooter::MoveCmd read_controls(const Moves& m, const ge::input::InputState& in,
                                    const ControlSettings& c) {
   ge::shooter::MoveCmd cmd;
-  // Always at the run: the speeds already ask for more than the server's top speed (320), which
-  // the move holds them to, so there is no walking. The run key (+speed) doubles them as the
-  // classic client does, inside the protocol's limit: no faster, kept for the configs that bind it.
-  const int k = m.speed ? 2 : 1;
-  const int fs = std::min(c.forward_speed * k, ge::shooter::kAxisMax);
-  const int ss = std::min(c.side_speed * k, ge::shooter::kAxisMax);
+  // cl_run on (the default): run, +speed (bound to no key) walks; off: walk, +speed runs. Walking
+  // is half the run. Nobody walks: no key is bound to +speed.
+  const bool run = c.run != m.speed;
+  const int fs = run ? c.forward_speed : c.forward_speed / 2;
+  const int ss = run ? c.side_speed : c.side_speed / 2;
   int f = 0, s = 0;
   if (m.forward) f += fs;
   if (m.back) f -= fs;
@@ -234,9 +234,9 @@ ge::shooter::MoveCmd read_controls(const Moves& m, const ge::input::InputState& 
     const double side = in.mouse.dx * c.sensitivity * c.strafe_scale;
     s = std::clamp(s + static_cast<int>(side), -c.side_speed, c.side_speed);
   }
-  // Up and down: swimming in the classic move; down crouches in a move that ducks (the sequel's,
-  // plugins/shooter/sequel_move.hpp: up below 0 on the ground).
-  const int us = std::min(c.up_speed * k, ge::shooter::kAxisMax);
+  // Up and down: swimming in the classic move (bound to no key; SPACE swims up); down crouches in
+  // a move that ducks (the sequel's, plugins/shooter/sequel_move.hpp: up below 0 on the ground).
+  const int us = run ? c.up_speed : c.up_speed / 2;
   const int u = (m.moveup ? us : 0) - (m.movedown ? us : 0);
   cmd.forward = static_cast<int16_t>(f);
   cmd.side = static_cast<int16_t>(s);
