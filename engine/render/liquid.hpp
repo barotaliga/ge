@@ -41,12 +41,10 @@
 // - THE CRUST BROKEN (`break_liquid_crust`): a hole of open melt where something fell in, opening
 //   at once and skinning over from its edge, the plates round it cracked and glowing, a crest
 //   running out in the first second; carried by the flow.
-// - WADED THROUGH (render/liquid_wade.hpp, `LiquidLook::wade`): a furrow, a bow and rings, as
-//   thick as the look's viscosity (water 1, slime 2, lava 4); lava's crust torn, scum parted.
+// - WADED THROUGH (render/liquid_wade.hpp): a furrow, a bow and rings, by `LiquidLook::wade`.
 // - SEEN FROM BELOW (`Liquids::eye_under`, docs/liquids.md § From below): a slime a fog of its
 //   colour with Snell's window overhead, a lava its melt all round; `under_reach` a least view
 //   (a lava with one a thick light-red glowing goo the eye sees a few metres into).
-//
 // Not yet: a flow region's surface; the waterline split for an eye at the level.
 //
 // ge:summary Lava and slime drawn: crust plates, cracks and blackbody glow; turbid slime, bubbles
@@ -57,7 +55,7 @@
 // ge:keywords glowing-body lava-goo area-light reflections ssr heat-shimmer crust-broken
 // ge:keywords break_liquid_crust splash under-lava under-slime from-below eye_under under_reach
 // ge:keywords fumes fume_look smoke gas acid-vapour heat-haze stir liquid_stir set_liquid_stirs
-// ge:keywords plume warm-air bends-light
+// ge:keywords plume warm-air bends-light wade
 // ge:skill render water
 // ge:test tests/render_liquid_test.cpp
 #pragma once
