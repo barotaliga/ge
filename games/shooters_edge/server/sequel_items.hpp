@@ -20,7 +20,7 @@
 //
 // ge:summary The sequel's items as data: the table, the body and inventory, the pickup rule
 // ge:keywords sequel items pickup armour armor health ammo weapon powerup key carry-limit
-// ge:keywords inventory respawn sq_item sq_pick_up kSqItems armour-share mega-health
+// ge:keywords inventory respawn sq_item sq_pick_up item-table armour-share mega-health
 // ge:skill shooter
 // ge:test tests/shooters_edge_sequel_items_test.cpp
 #pragma once
