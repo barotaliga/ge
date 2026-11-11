@@ -31,6 +31,7 @@
 #include <string>
 
 #include "gpu/device.hpp"
+#include "render/morph.hpp"
 #include "render/view.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -118,5 +119,12 @@ void world_sun(const WorldDraw& w, ge::render::FrameView view, double out[3]);
 // The last GPU reading of the frame's span (a frame or more late) into `p`; nothing when the GPU
 // has no timestamp queries.
 void record_span(const WorldDraw& w, PassTimes& p);
+
+// The burn entity `entity` shows this frame (client/burning.hpp; all 0 when none).
+ge::render::MorphBurn world_burn(const WorldDraw& w, int entity);
+
+// A bench's: the air over the map's lava and slime drawn `n` times a frame, so its cost stands
+// out of the frame's own noise (the se-burn lab's --air-draws).
+void set_air_draws(WorldDraw& w, int n);
 
 }  // namespace shooters_edge::client

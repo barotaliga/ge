@@ -57,8 +57,9 @@ void add_coop_cvars(con::Console& c, CoopMode& m) {
   m.episodes = &v.add({.name = "sv_episodes_done",
                        .fallback = "0",
                        .flags = con::kArchive,
-                       .help = "coop: the episodes you have finished, a bit each (1, 2, 4, 8); the "
-                               "start map opens each next one once the one before is done",
+                       .help = "the episodes you have finished, a bit each (1, 2, 4, 8), kept "
+                               "from game to game; the start map opens each next one once the one "
+                               "before is done and shuts a done one (0 opens episode 1 again)",
                        .kind = con::CvarKind::integer,
                        .min = 0,
                        .max = 15});
@@ -85,14 +86,14 @@ void coop_frame(CoopMode& m, Listen& l, bool has_campaign, const std::string& st
     }
   }
   const con::Cvar* coop = server_cvar(l, "coop");
-  if (coop == nullptr || !coop->on()) return;
-  // The window's friendly-fire settings are the game's.
-  for (con::Cvar* mine : {m.friendly_fire, m.friendly_push})
-    if (con::Cvar* there = server_cvar(l, mine->name.c_str());
-        there != nullptr && there->value != mine->value)
-      l.server->cvars.set(*there, mine->value, con::Source::local);
-  // The episodes done: either side's bits are both's.
-  if (con::Cvar* there = server_cvar(l, "sv_episodes_done")) {
+  // The window's friendly-fire settings are a coop game's.
+  if (coop != nullptr && coop->on())
+    for (con::Cvar* mine : {m.friendly_fire, m.friendly_push})
+      if (con::Cvar* there = server_cvar(l, mine->name.c_str());
+          there != nullptr && there->value != mine->value)
+        l.server->cvars.set(*there, mine->value, con::Source::local);
+  // The episodes done, in any campaign (single player or coop): either side's bits are both's.
+  if (con::Cvar* there = l.campaign_host ? server_cvar(l, "sv_episodes_done") : nullptr) {
     const uint32_t mine = static_cast<uint32_t>(m.episodes->integer());
     const uint32_t theirs = static_cast<uint32_t>(there->integer());
     const uint32_t both = (mine | theirs) & 15u;

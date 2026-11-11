@@ -5,15 +5,16 @@
 // (messages.hpp) becomes svc messages.
 //
 // ONE FRAME (`classic_frame`, called once a server frame with the network's time): every datagram
-// waiting is read (out of band: ping, status, getchallenge, connect, the rest answered or ignored
-// as docs/shooters-edge.md § The network says; in band: the channel by address and qport, then
-// its clc messages in order, a client that sends an unknown one dropped); the spawned clients'
-// moves run as one packet each in the runner's `frame`; what the mod wrote is routed (prints,
-// sounds, stuffed text, light styles, effects as temporary entities, static entities and sounds,
-// multicasts, the Write buffers, pauses); then every client the server heard from since its last
-// reply gets one packet when its rate allows (else its choke count grows): the reliable stream's
-// next message, and, once spawned, the choke count, the players it can see, the entities as a delta
-// against the frame it acknowledged (or from the baselines), and the frame's unreliable messages.
+// waiting is read (out of band: ping, status, getchallenge, connect, rcon (classic_admin.hpp), the
+// rest answered or ignored as docs/shooters-edge.md § The network says; in band: the channel by
+// address and qport, then its clc messages in order, a client that sends an unknown one dropped);
+// the spawned clients' moves run as one packet each in the runner's `frame`; what the mod wrote is
+// routed (prints, sounds, stuffed text, light styles, effects as temporary entities, static
+// entities and sounds, multicasts, the Write buffers, pauses); then every client the server heard
+// from since its last reply gets one packet when its rate allows (else its choke count grows): the
+// reliable stream's next message, and, once spawned, the choke count, the players it can see, the
+// entities as a delta against the frame it acknowledged (or from the baselines), and the frame's
+// unreliable messages.
 //
 // THE SIGNON (classic_signon.cpp): `new` (the `pext` step first when the connect named no
 // extension families), `soundlist` and `modellist` in pages, `prespawn` (static entities,
@@ -92,6 +93,7 @@ struct ServerConfig {
   std::string hostname = "Shooter's Edge";
   std::string gamedir = "edge";  // the game directory serverdata names
   std::string password, spectator_password;
+  std::string rcon_password;  // the remote console's (classic_admin.hpp; empty: none offered)
   bool verify_move_checksum = true;  // false: moves are accepted unchecked (and counted)
   int maxrate = 0;                   // sv_maxrate: a client's rate cap, bytes/s (0: none)
   int maxfps = 77;                   // maxfps: the moves a second clients are told they may send
@@ -171,7 +173,8 @@ struct ServerCounts {
   int64_t effects_dropped = 0, events = 0;
   int64_t mod_bytes_dropped = 0;  // a mod's raw bytes that did not read as whole messages
   int64_t voice_in = 0, voice_out = 0, voice_refused = 0, voice_dropped = 0;
-  int64_t chat_flooded = 0;  // say and say_team lines dropped by the flood rule
+  int64_t chat_flooded = 0;                // say and say_team lines dropped by the flood rule
+  int64_t rcon_run = 0, rcon_refused = 0;  // remote console lines run; refused or not answered
 };
 
 struct Challenge {
@@ -191,6 +194,8 @@ struct ClassicServer {
   ge::core::Rng rng{1};
   int spawncount = 1;
   int next_userid = 1;
+  int64_t rcon_second = -1;  // the second (network time) the rcon tries are counted in
+  int rcon_tries = 0;
   std::string serverinfo;
   std::vector<EntityState> baselines;  // by entity number
   struct StaticSound {

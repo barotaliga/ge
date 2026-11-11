@@ -165,8 +165,9 @@ struct ClassicClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): 
   int frags[32] = {};
   int32_t stats[kStats] = {};
   std::vector<std::string> prints, centerprints;
-  std::vector<ClientSound> heard;  // the sounds read this tick (cleared as the tick starts)
-  float set_angles[3] = {};        // the server's last turn of the player (setangle), degrees
+  std::vector<std::string> oob_prints;  // out-of-band prints after the connect (rcon's answers)
+  std::vector<ClientSound> heard;       // the sounds read this tick (cleared as the tick starts)
+  float set_angles[3] = {};             // the server's last turn of the player (setangle), degrees
   float movevars[10] = {800, 100, 320, 500, 10, 10, 10, 4, 4, 1};  // serverdata's, in its order
   sh::MoveCmd sent[64];        // each move's newest command, by its packet's sequence mod 64
   uint32_t sent_seq[64] = {};  // the sequence each `sent` slot holds (0: none)
@@ -205,6 +206,9 @@ void client_start(ClassicClientEnd& c, gn::Transport& t, const gn::Address& serv
 void client_tick(ClassicClientEnd& c, int64_t now_us);
 // Queues a string command on the reliable stream (a client's console line to the server).
 void client_command(ClassicClientEnd& c, const std::string& line);
+// A remote console line (`rcon <password> <line>`) sent out of band to the server; its answer
+// arrives in `oob_prints`.
+void client_rcon(ClassicClientEnd& c, const std::string& password, const std::string& line);
 
 // The move settings serverdata carried (and the easy jump where the server allows it), and a
 // player's record as the protocol carried it: what a prediction starts from.

@@ -21,6 +21,7 @@
 // - **The fallback map**: where the window starts when the content holds no start map (the
 //   content row's `start_map`): the built-in arena.
 // - **The full game** is the content row's `full_game` file being in the packs.
+// - **The episodes**: each one's first map, in the order the start map opens them.
 // - **Items, their words and the sounds** a bot reads (items.hpp).
 // - **The server's words** (words.hpp): the obituaries, the clock, the lobby and its countdown in
 //   the game's own words; empty: the mod's and the lobby's own.
@@ -86,6 +87,9 @@ struct GameProfile {
   std::span<const std::string_view> held_weapons;
   Arsenal arsenal;  // its weapons and armour as data, which our programs read (arsenal.hpp)
   std::span<const WordRow> words;  // what its server prints (words.hpp)
+  // Each episode's first map, in order: the start map opens them one at a time, each once the
+  // one before is done (server/campaign_episodes.hpp).
+  std::span<const std::string_view> episode_maps;
 };
 
 inline constexpr ProgramFile kClassicMultiplayer[] = {{.name = "qwprogs.dat"},
@@ -98,6 +102,8 @@ inline constexpr std::string_view kClassicHeld[] = {
     "progs/v_axe.mdl",   "progs/v_shot.mdl", "progs/v_shot2.mdl", "progs/v_nail.mdl",
     "progs/v_nail2.mdl", "progs/v_rock.mdl", "progs/v_rock2.mdl", "progs/v_light.mdl"};
 
+inline constexpr std::string_view kClassicEpisodes[] = {"e1m1", "e2m1", "e3m1", "e4m1"};
+
 inline constexpr GameProfile kGameProfiles[] = {
     {.id = "classic",
      .multiplayer_programs = kClassicMultiplayer,
@@ -107,7 +113,8 @@ inline constexpr GameProfile kGameProfiles[] = {
      .tables = kClassicTables,
      .held_weapons = kClassicHeld,
      .arsenal = kClassicArsenal,
-     .words = kClassicServerWords},
+     .words = kClassicServerWords,
+     .episode_maps = kClassicEpisodes},
 };
 
 // The first row: the classic game, the one every reader uses until a choice of game is made.

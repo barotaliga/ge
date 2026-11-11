@@ -26,6 +26,8 @@
 // them) and die, the weapon sinking out of view: a sheet and a GIF. `--switch=1` has him change
 // weapons twice, calmly and with a shot during the change: sheets, a GIF and a chart.
 // `--film=<n> --hand=1` films the weapon in hand breathing at rest, `--exertion=1` as after a run.
+// `--episodes=<done>` plays the campaign as the full game with those episodes done (a bit each),
+// so the start map's bars stand shut in front of the episodes not yet open and open for the next.
 // `--say="vote fraglimit 30;vote rules"` has the player type those lines at the console first,
 // what the server prints back shown in the HUD's feed (a vote on the settings, say).
 //
@@ -39,7 +41,7 @@
 // ge:keywords before-after relief parallax enhanced-textures fixture-cache
 // ge:keywords axe-swing swings two-swings weaponframe film_swings breath exertion film-hand
 // ge:keywords fire explobox film_death death jump-sound film_switch weapon-change cl_gunswitch
-// ge:keywords say vote notify-feed
+// ge:keywords say vote notify-feed episodes bars sv_episodes_done start-map
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
@@ -83,6 +85,7 @@
 #include "shooters_edge/labs/staged.hpp"
 #include "shooters_edge/labs/warp_film.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -529,11 +532,23 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   cl::ListenOptions lo = shooters_edge::net::listen_options();
   lo.files = &files;  // as the window: the next map, and a brush model file's bounds
   if (cl::single_player(progs)) lo.console.emplace_back("deathmatch 0");  // as NEW GAME starts it
+  // `--episodes=<done>`: a campaign as the full game, the episodes done that many bits
+  // (sv_episodes_done), the start map's bars shut in front of the ones not open yet.
+  if (const std::string& done = lab.arg("episodes"); !done.empty()) {
+    const shooters_edge::profiles::GameProfile& game = shooters_edge::profiles::classic_game();
+    lo.registered = true;
+    lo.episodes.start_map = std::string(shooters_edge::profiles::content_of(game).start_map);
+    lo.episodes.first_maps.assign(game.episode_maps.begin(), game.episode_maps.end());
+    lo.console.emplace_back("sv_episodes_done " + done);
+  }
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, lab.arg("map"), error);
   if (!map || !cl::listen_start(l, progs, std::move(map), lo, error)) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
     return;
   }
+  if (!lab.arg("episodes").empty() && l.campaign_host)
+    lab.metric("episodes.bars_shut", static_cast<double>(l.campaign_host->bars.shut.size()),
+               "the start map's bars kept shut in front of episodes not open");
   auto device = ge::gpu::create_device({.label = "se-client", .validation = 1});
   if (!device) {
     lab.fail("no GPU device", "Install Mesa's Vulkan drivers. Skill: gpu.");
@@ -1052,6 +1067,9 @@ const gl::LabSpec kSpec{
      {"switch", "0",
       "with --game: 1, after the views the player changes weapons twice, calmly and with a shot "
       "during the change, the game's own weapons in hand (sheets, a GIF and a chart)"},
+     {"episodes", "",
+      "with --game and --progs: the full game's campaign with these episodes done (a bit each: "
+      "0 none, 1 the first...), the start map's bars shut in front of those not open"},
      {"say", "",
       "with --game: console lines the player types first, ';' between (`vote fraglimit 30`), "
       "the server's answers in the HUD's feed"}},

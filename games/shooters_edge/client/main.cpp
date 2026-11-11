@@ -125,6 +125,7 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
+#include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_bot_team.hpp"
 #include "shooters_edge/net/classic_browse.hpp"
 #include "shooters_edge/net/classic_game.hpp"
@@ -193,7 +194,16 @@ int run_main(int argc, char** argv) {
                           next_map = a[1];
                       });
   console.add_command("sv", "sv <line>: a line for the server's console",
-                      [&](Con&, const CArgs& a) {
+                      [&](Con& c, const CArgs& a) {
+                        std::string out;  // the administrator's words first (users, speedjump)
+                        if (cl::listen_admin(listen, a.rest(0), out)) {
+                          for (size_t at = 0; at < out.size();) {
+                            const size_t end = std::min(out.find('\n', at), out.size());
+                            c.print(out.substr(at, end - at));
+                            at = end + 1;
+                          }
+                          return;
+                        }
                         listen.opt.console.push_back(a.rest(0));
                         if (listen.server) listen.rules->console(a.rest(0));
                       });
@@ -219,6 +229,7 @@ int run_main(int argc, char** argv) {
   cl::Timedemo bench;
   sn::Remote remote;  // `connect`: the window on a server elsewhere
   sn::add_remote_commands(console, remote);
+  sn::add_admin_commands(console, listen, remote);  // users, status, speedjump, rcon
   // The vote on a setting (engine/server/vote.hpp): to the server joined, else the window's own.
   for (const char* word : {"vote", "yes", "no"})
     console.add_command(word,
@@ -456,6 +467,7 @@ int run_main(int argc, char** argv) {
   listen_opt.port = listen.opt.port;  // others join on it (sv_port)
   listen_opt.maxclients = listen.opt.maxclients;
   listen_opt.registered = game_content.registered;
+  listen_opt.episodes = game_content.episodes;
   listen_opt.item_names = game_content.item_names;
   listen_opt.arsenal = game_content.arsenal;
   listen_opt.voice = remote.voip;  // cl_voip: the window's match relays its players' voices
@@ -675,6 +687,7 @@ int run_main(int argc, char** argv) {
     console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
     if (!cl::load_programs(adapter, files, args.progs, game_content, error)) return false;
     listen.opt.registered = game_content.registered;
+    listen.opt.episodes = game_content.episodes;
     listen.opt.item_names = game_content.item_names;
     listen.opt.arsenal = game_content.arsenal;
     cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);

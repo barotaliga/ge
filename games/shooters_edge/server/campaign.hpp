@@ -9,8 +9,10 @@
 // A MAP'S START (`start_level`): the settings carried from the last map; `skill` rounded to the
 // nearest whole number, clamped to 0..3 and written back; `registered` from the content (the
 // host's `CampaignOptions::registered`: the packs carry the full game); `coop` on forces
-// `deathmatch` 0; the program's `serverflags`, `deathmatch`, `coop` and `teamplay` written before
-// the world spawns (qc_server.hpp's `load_map`); the loop on the single-player clock
+// `deathmatch` 0; the episodes in order (campaign_episodes.hpp: `sv_episodes_done` gains the
+// runes carried in, the start map's `serverflags` every done episode's, its bars shut in front of
+// episodes not yet open); the program's `serverflags`, `deathmatch`, `coop` and `teamplay` written
+// before the world spawns (qc_server.hpp's `load_map`); the loop on the single-player clock
 // (shooter/frame.hpp), the server's time 1.0, and two physics frames of 0.1 s run before anyone
 // joins; then every player enters: with SetNewParms on a new game, with the parms SetChangeParms
 // left on a level change, with the parms the map was entered with on a restart.
@@ -36,6 +38,7 @@
 #include <string>
 #include <vector>
 
+#include "shooters_edge/server/campaign_episodes.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
 namespace shooters_edge::server {
@@ -54,6 +57,7 @@ struct CampaignOptions {
   void* load_ctx = nullptr;
   bool registered = false;            // the content is the full game (the packs carry gfx/pop.lmp)
   std::vector<std::string> settings;  // console lines run before the first map (skill 2, coop 1)
+  EpisodeOrder episodes;  // the episodes in order (campaign_episodes.hpp); empty: none kept
 };
 
 // A player the campaign carries across maps (slot k is entity k + 1).
@@ -89,6 +93,7 @@ struct Campaign {
   std::vector<std::pair<std::string, std::string>> settings;  // carried: every changed cvar
   std::vector<std::string> history;  // every map started, in order: "new e1m1", "change e1m2"
   CoopWeapons coop_weapons;          // this map's coop weapon rule (its server's touch watch)
+  EpisodeBars bars;                  // what this map's start did to the start map's bars
 };
 
 // The coop weapon rule: a taken weapon vanishes (CoopWeapons). Public for its test.

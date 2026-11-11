@@ -151,6 +151,10 @@ struct ListenHost {
   void (*set_info)(void* game, const std::string& key, const std::string& value) = nullptr;
   // The player's voice message (voice_out.hpp's frames), relayed to those who hear him.
   void (*speak)(void* game, int gen, int seq, const std::vector<uint8_t>& data) = nullptr;
+  // The administrator's words on the window's own server (net/classic_admin.hpp: `users`,
+  // `status`, `speedjump <id> on|off|<share>`): false when the line is none of them, the answer
+  // in `out`.
+  bool (*admin)(void* game, const std::string& line, std::string& out) = nullptr;
 };
 
 // THE CAMPAIGN'S DOOR: a coop campaign served to others over the classic protocol, so they join
@@ -189,6 +193,7 @@ struct ListenOptions {
   std::string player = "player";
   const SearchPath* files = nullptr;  // where a campaign's next map is read (outlives the listen)
   bool registered = false;            // a campaign's content is the full game (gfx/pop.lmp)
+  sv::EpisodeOrder episodes;          // a campaign's episodes in order (GameContent's)
   // A match opens every map in the lobby's warmup (lobby_room.hpp): ready, teams, bots, the
   // countdown, then the map restarted for the match. Off: the match starts with the map.
   bool lobby = false;
@@ -343,6 +348,9 @@ double listen_tic(const Listen& l);
 // a campaign the last two seat and let go a companion (coop on: `coopgame` starts one so). False
 // when the line is none of them, or when no lobby runs (a line saying so is printed).
 bool listen_lobby(Listen& l, std::string_view line);
+// An administrator's line on the window's own server (`users`, `status`, `speedjump`: ListenHost's
+// `admin`): false when no match is hosted or the line is none of them, the answer in `out`.
+bool listen_admin(Listen& l, const std::string& line, std::string& out);
 
 // What the lobby's banner and screen show (lobby_room.hpp's `lobby_view` for the player), each
 // seat's frags read off the server when it is on the map, and the map's name. A view with no rows

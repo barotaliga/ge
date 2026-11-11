@@ -7,9 +7,11 @@
 // - `sv_friendlyfire` (0: teammates are spared) and `sv_friendlypush` (0: a spared teammate's blow
 //   does not push either, so no rocket boost off a friend) are the window's, kept in its settings
 //   and written to the campaign's server whenever they differ there;
-// - `sv_episodes_done` (a bit an episode, as its rune's) is what the player has finished in coop:
-//   the start map opens each next episode once the one before is done (qc/campaign/world.qc), the
-//   program sets the bit when the rune is taken, and the window keeps it from game to game.
+// - `sv_episodes_done` (a bit an episode, as its rune's) is what the player has finished, alone or
+//   in coop: the start map opens each next episode once the one before is done and shuts a done
+//   one (server/campaign_episodes.hpp), the host sets the bit when an episode is left with its
+//   rune, and the window keeps it from game to game (and new game to new game). A new single-
+//   player game starts with it too.
 //
 // ge:summary Co-op as a window mode: sv_coop, the bots, friendly fire and push, episodes unlocked
 // ge:keywords coop co-op sv_coop sv_coopbots sv_friendlyfire sv_friendlypush sv_episodes_done
@@ -47,7 +49,7 @@ void coop_game_lines(const CoopMode& m, ListenOptions& opt);
 
 // Once a frame: `sv_coop` turned on starts a coop game on `start_map` (`next_map` set) when the
 // game has a campaign; the window's friendly-fire settings written to the campaign's server where
-// they differ; the episodes done merged both ways.
+// they differ; the episodes done merged both ways in any campaign.
 void coop_frame(CoopMode& m, Listen& listen, bool has_campaign, const std::string& start_map,
                 std::string& next_map);
 

@@ -29,6 +29,7 @@ struct Draw {
   shade: vec4f,
   shade_dir: vec4f,
   warp: Warp,  // render/wgsl/warp.wgsl (MorphWarp)
+  burn: vec4f,  // charred, embers, etched, seed (MorphBurn)
 }
 
 const kTintSteps = 16u;
@@ -137,6 +138,39 @@ fn hole_at(uv: vec2f, m: Model) -> bool {
   return u32(round(textureLoad(atlas, p, 0).a * 255.0)) == 2u;
 }
 
+// THE BURN (MorphBurn) on a texel's albedo `a` at the model-frame point `p` (m): the char's soot
+// in patches spreading as it grows, the etch's bleach in pits; and the embers' own light in the
+// char's cracks (w: 1 where a crack glows, its light added by the caller).
+const kCharSoot = 0.05;  // the albedo the char leaves of the skin's
+fn morph_burn(b: vec4f, a: vec3f, p: vec3f, t: f32) -> vec4f {
+  let q = p * 9.0 + b.w * 37.0;
+  let n = warp_noise(q) * 0.65 + warp_noise(q * 2.7 + 5.3) * 0.35;
+  var c = a;
+  var glow = 0.0;
+  if (b.z > 0.0) {
+    // The acid: the skin bleached toward a sick yellow and pitted, where its patches reach.
+    let e = smoothstep(1.05 - b.z, 1.25 - b.z, n);
+    let pits = smoothstep(0.55, 0.75, warp_noise(q * 4.1 + 1.7));
+    let bleach = mix(vec3f(dot(c, vec3f(0.3, 0.6, 0.1))), vec3f(0.55, 0.52, 0.22), 0.5);
+    c = mix(c, bleach * (1.0 - 0.6 * pits), e * min(b.z * 1.3, 1.0));
+  }
+  if (b.x > 0.0) {
+    // The char: soot over the patches its level reaches, edged by a brown scorch.
+    let reach = 1.15 - 1.1 * b.x;
+    let soot = smoothstep(reach - 0.05, reach + 0.08, n);
+    let scorch = smoothstep(reach - 0.2, reach, n) * (1.0 - soot);
+    c = mix(c, c * vec3f(0.45, 0.32, 0.22), scorch * 0.8);
+    c = mix(c, c * kCharSoot, soot);
+    // The embers: the cracks of the char glowing while it is hot, flickering.
+    if (b.y > 0.0) {
+      let crack = 1.0 - abs(warp_noise(q * 3.3 + vec3f(0.0, t * 0.7, 0.0)) * 2.0 - 1.0);
+      let flicker = 0.6 + 0.4 * warp_noise(q * 0.8 + vec3f(t * 3.0));
+      glow = soot * smoothstep(0.82, 0.97, crack) * b.y * flicker;
+    }
+  }
+  return vec4f(c, glow);
+}
+
 struct FragmentOut {
   @location(0) colour: vec4f,
   @location(1) motion: vec4f,  // rg: the screen motion (uv), b: reactive (0: a solid surface)
@@ -157,7 +191,13 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   if (burn < 0.0) {
     discard;
   }
-  let s = skin_at(in.uv, m, d);
+  var s = skin_at(in.uv, m, d);
+  var ember = 0.0;
+  if (any(d.burn.xyz > vec3f(0.0))) {
+    let burnt = morph_burn(d.burn, s.rgb, in.local.xyz, frame.time.x);
+    s = vec4f(burnt.rgb, s.w);
+    ember = burnt.w;
+  }
   let y = in.rel.y + frame.eye.y;
   let outdoor = d.blends.w;
   let sun = sun_light_open(y) * max(dot(n, frame.sun.xyz), 0.0);
@@ -169,6 +209,8 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   var c = s.rgb / PI * light + s.rgb * (s.w * d.blends.z * white_luminance());
   // The lamps on its skin (a torch carried past, a muzzle's flash), on a matte face.
   c += local_lights(matte(s.rgb), in.rel, n, -normalize(in.rel), in.position.xyz);
+  // The embers' light: a deep orange-red, a few times the picture's white at their brightest.
+  c += vec3f(1.0, 0.32, 0.06) * (ember * 3.0 * white_luminance());
   c = warp_shade(d.warp, c, burn);
   let gone = 1.0 - clamp(d.warp.a.x, 0.0, 1.0);
   var out: FragmentOut;
