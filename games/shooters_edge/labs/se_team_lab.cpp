@@ -575,7 +575,7 @@ void run(gl::Lab& lab) {
       return;
     }
     trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
-             "\tscript_step\tbecause\tyaw\tpitch\tview\n";
+             "\tscript_step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -647,7 +647,9 @@ void run(gl::Lab& lab) {
         << shooters_edge::bots::fight_mode_name(f.mode) << '\t' << goal << '\t' << f.goal_node
         << '\t' << (f.unlocking ? 1 : 0) << '\t' << sh::pilot_mode_name(p.mode) << '\t' << link
         << '\t' << p.script_step << '\t' << p.because << '\t' << to_fixed(cmd.angles.y, 2) << '\t'
-        << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by << '\n';
+        << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by << '\t' << cmd.forward << '\t'
+        << cmd.side << '\t' << to_fixed(e.velocity.x, 0) << '\t' << to_fixed(e.velocity.y, 0)
+        << '\n';
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
