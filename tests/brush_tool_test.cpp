@@ -1,9 +1,9 @@
 // The brush tool (plugins/brush/tool.hpp): `info` counts a fixture map, `ents` lists its entity
-// blocks (or one class's), `check` reads every map on a search path and names a damaged one, and a
-// usage mistake exits 2 with what to do.
+// blocks (or one class's, or those near a point), `liquids` and `slice` survey it, `check` reads
+// every map on a search path and names a damaged one, and a usage mistake exits 2 with what to do.
 //
 // ge:summary Test: the brush tool's info, ents and check answers, a refusal named, usage errors
-// ge:keywords test brush tool info ents check search-path json usage
+// ge:keywords test brush tool info ents check search-path json usage near liquids slice
 // ge:skill brush testing
 #include <filesystem>
 #include <fstream>
@@ -91,4 +91,30 @@ TEST(check_names_a_damaged_map_and_usage_mistakes_exit_2) {
   CHECK(run({"check"}, &out) == 2);
   CHECK(run({"info", "x.bsp", "--bogus"}, &out) == 2);
   CHECK(run({"info", (root / "missing.bsp").string()}, &out) == 1 && has(out, "cannot open"));
+}
+
+TEST(ents_near_a_point_liquids_and_a_slice_answer) {
+  const fs::path root = fs::temp_directory_path() / "ge_brush_tool_test_map";
+  fs::remove_all(root);
+  put(root / "one.bsp", fixture_map());
+  const std::string map = (root / "one.bsp").string();
+  std::string out;
+  // The first light hangs at (256, 192, 200); the player starts below it at (256, 192, 24).
+  CHECK(run({"ents", map, "--near=256,192,200", "--radius=8"}, &out) == 0);
+  CHECK(has(out, "\"radius\":8") && has(out, "\"distance\":0") && has(out, "\"light\""));
+  CHECK(!has(out, "info_player_start") && !has(out, "worldspawn"));
+  CHECK(run({"ents", map, "--near=256,192,200", "--radius=500"}, &out) == 0);
+  CHECK(has(out, "info_player_start") && out.find("\"light\"") < out.find("info_player_start"));
+  CHECK(run({"ents", map, "--class=info_*"}, &out) == 0 && has(out, "info_player_start"));
+  CHECK(!has(out, "\"light\""));
+  CHECK(run({"liquids", map, "--deepest"}, &out) == 0);
+  CHECK(has(out, "\"liquids\":[]") && has(out, "no leaf holds"));
+  CHECK(run({"slice", map, "--z=64", "--step=32"}, &out) == 0);
+  CHECK(has(out, "\"plane\":\"z=64\"") && has(out, "\"grid\":[") && has(out, "#") &&
+        has(out, "..."));
+  CHECK(run({"slice", map}, &out) == 2 && has(out, "--x="));
+  CHECK(run({"slice", map, "--z=99999"}, &out) == 1 && has(out, "outside"));
+  CHECK(run({"slice", map, "--x=1", "--y=2"}, &out) == 2);
+  CHECK(run({"ents", map, "--near=1,2"}, &out) == 2 && has(out, "x,y,z"));
+  CHECK(run({"help"}, &out) == 0 && has(out, "liquids") && has(out, "slice"));
 }
