@@ -229,11 +229,13 @@ struct FoeRead {
 struct MapPlan;
 
 // The hand on the keys (feature `keys`, keyboard.hpp): the keyboard, the key set wanted last (-1
-// none) and whether feathering has the keys on.
+// none), whether feathering has the keys on, and the steering's tally (the way wished less the
+// way pressed, summed over time, in sets times seconds).
 struct KeyHand {
   ge::ai::Keyboard board;
   int set = -1;
   bool feather = true;
+  double steer = 0;
 };
 
 struct Fighter {

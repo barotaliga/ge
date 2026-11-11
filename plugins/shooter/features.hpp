@@ -45,7 +45,7 @@
 // - `circlejump`: a hop's first jump out of a curve on the ground, past a run's 320 (pilot.hpp).
 // - `ahead`: the walk's keys flown through the move before a bump; `bodies`: players near too.
 // - `beat`: a fight mode held a person's beat (through a peek). `trial`: an A/B's, in no preset.
-// - `keys`: the keys pressed by a hand on a keyboard (ai/keys.hpp); in no preset until judged.
+// - `keys`: a hand on a keyboard presses the keys; `keysteer`: it taps between two sets; unjudged.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: all but what that level
 // does not do: none `eye`, a novice no `glance`), `features_none` (a plain bot).
 // The text form (`apply_features`): `all`, `none` (`plain`), `+name`/`name`, `-name`, in order.
@@ -112,9 +112,10 @@ enum class Feature : uint8_t {
   bodies,
   beat,
   keys,
+  keysteer,
   trial,
 };
-constexpr size_t kFeatures = 43;
+constexpr size_t kFeatures = 44;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

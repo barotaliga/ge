@@ -14,8 +14,9 @@ namespace sh = ge::shooter;
 TEST(the_presets_are_every_feature_or_none_and_a_novice_does_not_glance) {
   for (size_t k = 0; k < sh::kFeatures; k++) {
     const auto x = static_cast<sh::Feature>(k);
-    // A trial is never on by default, nor a feature not yet judged (`keys`).
-    CHECK(sh::features_all()[x] == (x != sh::Feature::trial && x != sh::Feature::keys));
+    // A trial is never on by default, nor a feature not yet judged (`keys`, `keysteer`).
+    CHECK(sh::features_all()[x] ==
+          (x != sh::Feature::trial && x != sh::Feature::keys && x != sh::Feature::keysteer));
     CHECK(!sh::features_none()[x]);
   }
   sh::Features skilled = sh::features_all();
