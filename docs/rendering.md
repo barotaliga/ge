@@ -640,6 +640,12 @@ frame a list of `MorphDraw`s.
 - **The game's own light.** `outdoor` is the share of the frame's sun and sky. `ambient` and a
   `shade` from one direction are what a game samples where the model stands: an indoor map's
   light at its feet. Glowing texels add `glow` times the scene's white, whatever the light.
+- **See-through** (`MorphDraw::alpha`, 1 solid): a draw under 1 leaves out a share `1 - alpha` of
+  its pixels by a 4 × 4 ordered pattern shifted every frame (`see_through_gone` in `morph.wgsl`),
+  and TAA-U averages the frames into a see-through body. It needs no sort and no blend: the drawn
+  pixels keep their depth and motion, and the pass's single pipeline is unchanged. A game hands a
+  mod's or a map's `alpha` straight through (Shooter's Edge's `Placed::alpha`). The price is a
+  faint shimmer on a body that moves fast across the screen, where the history is thin.
 - **The warp** (`MorphWarp`, `wgsl/warp.wgsl`, shared with the view-model pass): a draw coming
   into being or going out of it, a spawn or a teleport, as one share `shown` (1 whole, 0 gone). A
   fragment is drawn where a field lies under `shown`. The field is two octaves of value noise,
