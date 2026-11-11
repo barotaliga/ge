@@ -146,9 +146,9 @@ std::vector<uint8_t> write_input_log(const InputLog& log) {
 bool read_input_log(const std::vector<uint8_t>& bytes, InputLog& log, std::string& error) {
   log = InputLog{};
   Reader r{bytes};
-  char magic[4] = {};
-  for (char& c : magic) c = static_cast<char>(r.u8());
-  if (r.short_read || std::memcmp(magic, kMagic, 4) != 0) {
+  bool magic = true;  // each byte read even after a mismatch, so short_read says what it should
+  for (int i = 0; i < 4; i++) magic = static_cast<char>(r.u8()) == kMagic[i] && magic;
+  if (r.short_read || !magic) {
     error = "not a server input log; shooters_edge_server --log=<path> writes those";
     return false;
   }
