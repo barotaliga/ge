@@ -219,6 +219,9 @@ struct ListenOptions {
   // A campaign in coop starts with this many companions beside the player (coop_party.hpp).
   int companions = 0;
   sh::AimSkill companion_skill = sh::AimSkill::average;
+  // The next map starts a new campaign on these options (`newgame`, `coopgame`, `sv_coop 1`),
+  // not the running one's change of map; cleared once it has started.
+  bool new_game = false;
 };
 
 // A blow the player took (a single-player program's damage record, client_data.hpp): its armour
