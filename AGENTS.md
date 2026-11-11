@@ -57,6 +57,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/mods.md`](docs/mods.md) | The engine's own mods (M52): the C ABI each way and how it grows, determinism (the state block, the game's stream, the libm), the sandbox, the loader, the platforms and the store form, the package, `ge mod` |
 | [`docs/servers.md`](docs/servers.md) | Servers for every multiplayer game (M53): the one core a game plugs into, listen and dedicated, `server.cfg` in layers, meta-cvars, the lobby and the match's phases, the feature seam for admin tools, recording and match mods |
 | [`docs/gamecli.md`](docs/gamecli.md) | A player's game CLI (M55): `<game>_cli` for players' agents, its layers (engine, plugin, game), the answer, settings and the catalog, servers, hosting and joining, places, the lab |
+| [`docs/hub.md`](docs/hub.md) | The hub (M56): a community's website of every live game and demo; the master, the status record, the poller, the JSON API, the pages, the archive by hash, watching in a browser, the plan |
 
 **The working area.** `porting/` holds everything that only matters while modules are
 being carried over from their reference sources: the porting guide (`porting/README.md`),
@@ -81,7 +82,8 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   `tests/golden/` and fails on a reference name (`tools/agents-index.mjs`, `LEGACY`).
 - **C++ ONLY, AND NO INHERITED ARCHITECTURE.** The engine and every game on it are written in
   C++. The only other languages allowed are the thinnest platform glue a store demands
-  (Swift or Objective-C for Apple's app shell, Java or Kotlin for Android's), kept as small as
+  (Swift or Objective-C for Apple's app shell, Java or Kotlin for Android's, and the few lines
+  of script a hub page needs to start a game's web viewer, `docs/hub.md`), kept as small as
   the platform allows, the small Node scripts under `tools/` that check the
   repository's structure and ship in no game, and Blender Python asset builders: offline
   sources of a model, run headless by `ge asset` (docs/goals.md M8g), whose output (a .glb)
