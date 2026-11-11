@@ -68,6 +68,7 @@
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/labs/keys_read.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 #include "shooters_edge/net/classic_team.hpp"
 
@@ -211,7 +212,8 @@ struct Read {
   std::array<ItemControl, kItemKinds> items{};
   std::map<std::string, int64_t> shots;  // the players' weapon sounds, by the sound's name
   HandRead hand;
-  HandRead hop;  // the hand while hopping alone (past kHopSpeed across)
+  HandRead hop;       // the hand while hopping alone (past kHopSpeed across)
+  la::KeysRead keys;  // the movement keys read off the body (keys_read.hpp)
   // Backpacks: how many fell, how many went before they ran out (taken), the time each lay
   // until taken summed, and those taken within 10 s.
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -316,6 +318,32 @@ void hand_metrics(gl::Lab& lab, const std::string& key, const HandRead& hand) {
              ratio(static_cast<double>(hand.flat), static_cast<double>(hand.turning)), "share");
 }
 
+// The keys read off the bodies (keys_read.hpp): each key set's share of the ground's reads (no key
+// among them) and of the air's, the wish's angle off its key set on the ground (a keyboard's sits
+// on the eight), the key set's changes a second, a side key's hold, and the part-way share of the
+// steady ground speeds (a key is down or up).
+void keys_metrics(gl::Lab& lab, la::KeysRead& k) {
+  const auto ratio = [](double a, double b) { return b > 0 ? a / b : 0; };
+  int64_t ground = 0, air = 0;
+  for (size_t i = 0; i < 8; i++) ground += k.ground[i];
+  for (size_t i = 0; i < 3; i++) air += k.air[i];
+  const double g = static_cast<double>(ground), a = static_cast<double>(air);
+  for (size_t i = 0; i < 8; i++)
+    lab.metric(std::string("people.keys.ground.") + la::kKeySets[i],
+               ratio(static_cast<double>(k.ground[i]), g), "share");
+  lab.metric("people.keys.air.left", ratio(static_cast<double>(k.air[0]), a), "share");
+  lab.metric("people.keys.air.none", ratio(static_cast<double>(k.air[1]), a), "share");
+  lab.metric("people.keys.air.right", ratio(static_cast<double>(k.air[2]), a), "share");
+  lab.metric("people.keys.off-p50", la::keys_quantile(k.off, 0.5), "deg");
+  lab.metric("people.keys.off-p90", la::keys_quantile(k.off, 0.9), "deg");
+  lab.metric("people.keys.side-changes-per-s", ratio(static_cast<double>(k.changes), k.read_s),
+             "per-s");
+  lab.metric("people.keys.side-run-p50", la::keys_quantile(k.side_runs, 0.5), "s");
+  lab.metric("people.keys.side-run-p90", la::keys_quantile(k.side_runs, 0.9), "s");
+  lab.metric("people.keys.part-share",
+             ratio(static_cast<double>(k.part), static_cast<double>(k.steady)), "share");
+}
+
 // A slot's team: its user info's `team`, else its shirt's colour (a recording without the key).
 std::string team_of(const cl::DemoState& s, int i) {
   const std::string& t = s.teams[static_cast<size_t>(i)];
@@ -354,6 +382,8 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<HandState> hands(32), hops(32);
   std::vector<sh::Vec3f> hand_was(32);
   double hand_next = 0, hand_at = -1;
+  std::vector<la::KeysState> keys(32);
+  const sh::Hull& body = m.bsp.models[0].hulls[1];
   for (;;) {
     const cl::DemoRead rd = cl::next_frame(d, out.error);
     if (rd == cl::DemoRead::error) return;
@@ -374,6 +404,29 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
           out.shots[s.sounds[static_cast<size_t>(snd.sound)]]++;
       }
     if (t0 < 0) t0 = s.time;
+    // The keys, at every update of a live player (his origin moved: a multiview recording keeps
+    // a player's last state between his updates).
+    for (int i = 0; i < 32; i++) {
+      const cl::DemoEntity& p = s.players[static_cast<size_t>(i)];
+      la::KeysState& k = keys[static_cast<size_t>(i)];
+      const bool live = p.present && !p.dead && !s.names[static_cast<size_t>(i)].empty();
+      if (!live) {
+        if (k.n > 0) la::keys_reset(k, out.keys);
+        continue;
+      }
+      if (k.n > 0) {
+        const sh::Vec3f last = la::keys_back(k, 0).at;
+        if (last.x == p.origin.x && last.y == p.origin.y && last.z == p.origin.z) continue;
+      }
+      const sh::HullTrace down =
+          sh::trace_hull(body, p.origin, {p.origin.x, p.origin.y, p.origin.z - 2});
+      const bool ground = down.startsolid || down.fraction < 1;
+      const bool wet = sh::point_contents(world, p.origin) <= sh::kContentsWater;
+      if (wet)
+        la::keys_reset(k, out.keys);
+      else
+        la::keys_update(k, out.keys, s.time, p.origin, p.angles.y, ground);
+    }
     // The hand, every kHandEvery of the match for every live player.
     if (s.time >= hand_next) {
       const double dt = hand_at < 0 ? 0 : s.time - hand_at;
@@ -678,6 +731,7 @@ void run(gl::Lab& lab) {
   std::array<ItemControl, kItemKinds> items{};
   std::map<std::string, int64_t> shots;
   HandRead hand, hop;
+  la::KeysRead keys;
   int used = 0, skipped = 0;
   double seconds = 0;
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -706,6 +760,7 @@ void run(gl::Lab& lab) {
     pack_wait += r.pack_wait;
     add(hand, r.hand);
     add(hop, r.hop);
+    la::add(keys, r.keys);
     Player sum;
     for (const Player& p : r.players) {
       sum.alive += p.alive;
@@ -850,6 +905,7 @@ void run(gl::Lab& lab) {
   hand_metrics(lab, "people.hand.", hand);
   hand_metrics(lab, "people.hop.", hop);
   lab.metric("people.hop.share", hand.secs > 0 ? hop.secs / hand.secs : 0, "share");
+  keys_metrics(lab, keys);
   if (used == 0)
     lab.fail("se-people: no recording of " + m.name + " read",
              "next: pass --mapname=<the recordings' map> with --basedir, or --dir of that map's");
