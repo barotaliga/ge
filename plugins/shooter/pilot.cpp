@@ -141,10 +141,13 @@ float off_segment(Vec3f p, Vec3f a, Vec3f b, float* along = nullptr) {
 // A walk passed through on the run (a teleporter's is not: it is stood in until it sends).
 bool through(const NavLink& l) { return l.kind == NavKind::walk && l.mover < 0 && !l.teleport; }
 
-// Two nodes within a step of one height (a stair is a level walk; a drop is not).
-bool level(const NavGraph& g, int32_t a, int32_t b) {
+// Two nodes within a step of one height (a stair is a level walk; a drop is not); with `slopes`
+// within the run between them too (a stair of 20 a tread between nodes 32 apart).
+bool level(const NavGraph& g, int32_t a, int32_t b, bool slopes) {
   const float dz = node(g, a).origin.z - node(g, b).origin.z;
-  return dz <= kStepHeight && dz >= -kStepHeight;
+  const float rise =
+      slopes ? std::max(kStepHeight, across(node(g, a).origin, node(g, b).origin)) : kStepHeight;
+  return dz <= rise && dz >= -rise;
 }
 
 // The player stands at the height of the segment a..b where it lies `f` along it (a stair's step
@@ -413,7 +416,8 @@ bool passed(const Pilot& p, const PilotSense& s, size_t k) {
   }
   if (l && l2 && leaps(l2->kind) && l2->escape < 0 && l->mover < 0 && l->kind != NavKind::drop)
     return false;
-  if (l && l2 && through(*l) && through(*l2) && level(g, a, b) && level(g, b, p.route[k + 2])) {
+  if (l && l2 && through(*l) && through(*l2) && level(g, a, b, p.set.slopes) &&
+      level(g, b, p.route[k + 2], p.set.slopes)) {
     float f = 0;
     const float off = off_segment(s.origin, node(g, a).origin, node(g, b).origin, &f);
     const bool swum =
@@ -439,8 +443,8 @@ bool nearer_on(const Pilot& p, const PilotSense& s) {
   if (!s.onground && !swum) return false;
   const NavLink* l = link_of(g, a, b);
   const NavLink* l2 = link_of(g, b, c);
-  if (!l || !l2 || l->mover >= 0 || !through(*l2) || !level(g, b, c) || leaps(l->kind) ||
-      l->kind == NavKind::script)
+  if (!l || !l2 || l->mover >= 0 || !through(*l2) || !level(g, b, c, p.set.slopes) ||
+      leaps(l->kind) || l->kind == NavKind::script)
     return false;
   const float here = off_segment(s.origin, node(g, a).origin, node(g, b).origin);
   float f = 0;
@@ -465,7 +469,7 @@ Vec3f lane_target(Pilot& p, float dt, float t, Vec3f target) {
   float room = 1e9f;
   for (size_t k = p.k; k + 1 < p.route.size() && k < p.k + 3; k++) {
     const NavLink* l = link_of(g, p.route[k], p.route[k + 1]);
-    if (l == nullptr || !through(*l) || !level(g, p.route[k], p.route[k + 1])) {
+    if (l == nullptr || !through(*l) || !level(g, p.route[k], p.route[k + 1], p.set.slopes)) {
       room = 0;
       break;
     }
@@ -503,8 +507,9 @@ Vec3f pursue(const Pilot& p, Vec3f at, float look) {
     if (k + 2 >= p.route.size()) return b;
     const NavLink* l = link_of(g, p.route[k], p.route[k + 1]);
     const NavLink* l2 = link_of(g, p.route[k + 1], p.route[k + 2]);
-    if (!l || !l2 || !through(*l) || !through(*l2) || !level(g, p.route[k], p.route[k + 1]) ||
-        !level(g, p.route[k + 1], p.route[k + 2]))
+    if (!l || !l2 || !through(*l) || !through(*l2) ||
+        !level(g, p.route[k], p.route[k + 1], p.set.slopes) ||
+        !level(g, p.route[k + 1], p.route[k + 2], p.set.slopes))
       return b;
   }
 }
@@ -1898,7 +1903,8 @@ std::vector<Vec3f> pilot_path(const Pilot& p, Vec3f at, std::vector<uint8_t>* br
   for (size_t k = p.k; k + 1 < p.route.size(); k++) {
     const Vec3f a = node(g, p.route[k]).origin, b = node(g, p.route[k + 1]).origin;
     const NavLink* l = link_of(g, p.route[k], p.route[k + 1]);
-    lane = lane && l != nullptr && through(*l) && level(g, p.route[k], p.route[k + 1]);
+    lane =
+        lane && l != nullptr && through(*l) && level(g, p.route[k], p.route[k + 1], p.set.slopes);
     // A teleporter's link: far across and next to no time.
     if (breaks)
       breaks->push_back(l != nullptr &&

@@ -93,6 +93,10 @@ struct PilotSettings {
   float hop_min = 256;  // the shortest stretch hopped, along the route, units
   // STAIRS WALKED (`stairs`): a hop's stretch ends at a walk that climbs `hop_climb` units or more
   // (a stair, a steep ramp): a jump up a stair loses speed; people walk up and hop from the top.
+  // STAIR CORNERS (`slopes`): a walk link up or down a stair no steeper than 45 degrees is level
+  // to the walk (its nodes passed and looked past as on the flat), not only one within a step
+  // (a stair of 20 a tread between nodes 32 apart was reached node by node, overshot at a turn).
+  bool slopes = false;
   bool hop_stairs_walked = false;
   float hop_climb = 10;
   // THE BRINK (`brink`): a hop's or a strafe's stretch ends at a link along a lip over lava or
