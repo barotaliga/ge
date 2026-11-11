@@ -58,6 +58,8 @@
 
 namespace shooters_edge::client {
 
+struct Burning;  // client/burning.hpp: each body's burn, drawn on its skin
+
 // One entity as the server holds it, map units and degrees.
 struct Placed {
   int entity = 0;  // a static: -1 - its index
@@ -172,9 +174,11 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed,
 // brightness and minlight), `smooth` texels; with `in_place` the pack's effects the engine draws
 // instead: a torch's flame drawn bare (the modern look's burning gas, `ce_flames`, is the flame),
 // a flare a soft added glow (`ce_flares`), a bubble a clear ball with a bright rim that wobbles as
-// it rises (`ce_bubbles`).
+// it rises (`ce_bubbles`); of the bubbles the game blows only `bubbles_share` is drawn, the pack's
+// sprites and the made ones alike (`ce_bubbles_share`).
 struct InPlace {
   bool flames = false, flares = false, bubbles = false;
+  double bubbles_share = 1;
 };
 // `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a
 // power's glow: what bsp_draw adds to the walls' lightmaps), at `dynamic_strength`: each adds to
@@ -184,7 +188,7 @@ void prepare_models(ge::gpu::Device& device, WorldModels& m, const ge::brush::Ma
                     std::span<const Placed> placed, const ge::render::FrameView& view,
                     double brightness, double minlight, bool smooth, const InPlace& in_place,
                     std::span<const ge::brush::app::DynamicLight> dynamic = {},
-                    double dynamic_strength = 1);
+                    double dynamic_strength = 1, const Burning* burning = nullptr);
 
 // The triangles of `p`'s model as `prepare_models` draws it at `time_s` (its frame and skin
 // group): nine floats a triangle, its model's own frame (m). False for a sprite, a brush or none.

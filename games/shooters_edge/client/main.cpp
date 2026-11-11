@@ -127,6 +127,7 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
+#include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_bot_team.hpp"
 #include "shooters_edge/net/classic_browse.hpp"
 #include "shooters_edge/net/classic_game.hpp"
@@ -204,7 +205,16 @@ int run_main(int argc, char** argv) {
                           next_map = a[1];
                       });
   console.add_command("sv", "sv <line>: a line for the server's console",
-                      [&](Con&, const CArgs& a) {
+                      [&](Con& c, const CArgs& a) {
+                        std::string out;  // the administrator's words first (users, speedjump)
+                        if (cl::listen_admin(listen, a.rest(0), out)) {
+                          for (size_t at = 0; at < out.size();) {
+                            const size_t end = std::min(out.find('\n', at), out.size());
+                            c.print(out.substr(at, end - at));
+                            at = end + 1;
+                          }
+                          return;
+                        }
                         listen.opt.console.push_back(a.rest(0));
                         if (listen.server) listen.rules->console(a.rest(0));
                       });
@@ -230,6 +240,7 @@ int run_main(int argc, char** argv) {
   cl::Timedemo bench;
   sn::Remote remote;  // `connect`: the window on a server elsewhere
   sn::add_remote_commands(console, remote);
+  sn::add_admin_commands(console, listen, remote);  // users, status, speedjump, rcon
   // The vote on a setting (engine/server/vote.hpp): to the server joined, else the window's own.
   for (const char* word : {"vote", "yes", "no"})
     console.add_command(word,
@@ -469,6 +480,7 @@ int run_main(int argc, char** argv) {
   listen_opt.port = listen.opt.port;  // others join on it (sv_port)
   listen_opt.maxclients = listen.opt.maxclients;
   listen_opt.registered = game_content.registered;
+  listen_opt.episodes = game_content.episodes;
   listen_opt.item_names = game_content.item_names;
   listen_opt.arsenal = game_content.arsenal;
   listen_opt.voice = remote.voip;  // cl_voip: the window's match relays its players' voices
@@ -688,6 +700,7 @@ int run_main(int argc, char** argv) {
     console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
     if (!cl::load_programs(adapter, files, args.progs, game_content, error)) return false;
     listen.opt.registered = game_content.registered;
+    listen.opt.episodes = game_content.episodes;
     listen.opt.item_names = game_content.item_names;
     listen.opt.arsenal = game_content.arsenal;
     cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);
@@ -1167,8 +1180,10 @@ int run_main(int argc, char** argv) {
     if (remote.active || (bench_map && !bench.active)) {
       const bool hands = playing && !game_menu.open();
       remote.speedjump_view = user_info.speedjump_view;  // cl_speedjump_view, live
-      sn::remote_hands(remote, hands ? cl::button_moves(controls) : cl::Moves{}, played, controls,
-                       wall);
+      cl::Moves moves = hands ? cl::button_moves(controls) : cl::Moves{};
+      if (remote.active)  // the quick weapon off what the server last said (quick_fire.hpp)
+        cl::quick_moves(controls.quick, cl::demo_status(remote.demo.state, t), t, moves);
+      sn::remote_hands(remote, moves, played, controls, wall);
       std::vector<std::string> lines;
       joined = sn::remote_step(remote, wall, lines);
       for (const std::string& line : lines) tell(line, t);
@@ -1281,7 +1296,10 @@ int run_main(int argc, char** argv) {
       bench_fx_state.models = &cl::world_models(*world);
       bench_fx_state.on = cl::fx_switches(picture);
       cl::demo_fx_step(ds, bench_demo_fx, bench_map.get(), view, bench_fx_state, t, wall, bench_fx);
+      // The quick weapon's preview held in place of the game's weapon (quick_fire.hpp).
+      in_hand.show = drawn_remote ? cl::quick_show(controls.quick, cl::demo_status(ds, t), t) : -1;
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
+      if (drawn_remote) cl::quick_hand(controls.quick, hand);
       hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
       cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
@@ -1347,7 +1365,10 @@ int run_main(int argc, char** argv) {
       ++presented;
       continue;
     }
-    const cl::Moves moves = playing ? cl::button_moves(controls) : cl::Moves{};
+    cl::Moves moves = playing ? cl::button_moves(controls) : cl::Moves{};
+    // The quick weapon (quick_fire.hpp): the fire keys as the weapon to ask for and the attack.
+    if (listen.server != nullptr)
+      cl::quick_moves(controls.quick, cl::status_of(listen, t), t, moves);
     cl::turn_view(played, moves, controls, wall, listen.view);
     const ge::shooter::MoveCmd cmd = cl::read_controls(moves, played, controls);
     if (listen.server != nullptr) {
@@ -1396,8 +1417,12 @@ int run_main(int argc, char** argv) {
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
     view_settings.lerp = picture.lerp_models;  // r_lerpmodels: the held weapon's frames too
+    // The quick weapon's preview held in place of the game's weapon (quick_fire.hpp).
+    in_hand.show =
+        listen.server != nullptr ? cl::quick_show(controls.quick, cl::status_of(listen, t), t) : -1;
     shooters_edge::view::HandFrame hand =
         cl::step_held(listen, shown, in_hand, view_settings, weapons, t, wall);
+    if (listen.server != nullptr) cl::quick_hand(controls.quick, hand);
     if (hand.flashing)
       fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
     // ce_muzzles in the modern look: each shot's flame, smoke and sparks from the barrel (off, or

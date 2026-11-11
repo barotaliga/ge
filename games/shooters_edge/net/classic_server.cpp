@@ -19,6 +19,7 @@
 #include "progs/text.hpp"
 #include "shooter/client.hpp"
 #include "shooter/settings.hpp"
+#include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -197,6 +198,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   const std::string ge = info_get(userinfo, "*ge_ext");
   asked[ExtFamily::ge] = ge.empty() ? 0u : static_cast<uint32_t>(std::atoi(ge.c_str()));
   info_remove(userinfo, "*ge_ext");
+  info_remove(userinfo, "*speedjump");  // the easy jump's grant is the server's to give
   c.ext = agree(s.cfg.offered, asked);
   c.coords = coords_of(c.ext);
   const bool proxy = !info_get(userinfo, "Qizmo").empty() || !info_get(userinfo, "*qtv").empty();
@@ -237,7 +239,7 @@ void handle_oob(ClassicServer& s, const gn::Address& from, const uint8_t* data, 
   } else if (cmd == "connect") {
     handle_connect(s, from, text);
   } else if (cmd == "rcon") {
-    send_oob_print(s, from, "Remote console is not offered by this server.\n");
+    classic_rcon(s, from, text.substr(0, text.find('\n')));
   }
   // `ip`, `log` and the server extras are not answered.
 }

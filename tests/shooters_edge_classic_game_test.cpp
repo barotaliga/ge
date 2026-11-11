@@ -431,6 +431,26 @@ TEST(classic_game_a_vote_on_the_move_restarts_the_map_and_is_kept) {
   CHECK(printed(refused.client, "sv_coop may not be voted on"));
 }
 
+TEST(classic_game_a_vote_grants_one_player_the_easy_jump_for_the_map) {
+  ServerConfig c = arena();
+  c.rules["timelimit"] = "0.05";  // the match ends at 3 s, the map changes at about 8 s
+  Session r;
+  run_session(r, c, 900, "", -1,
+              {{120, "vote speedjump nobody on"},
+               {130, "vote speedjump visitor sometimes"},
+               {140, "vote speedjump visitor on"}});
+  CHECK_MSG(r.opened, r.error);
+  CHECK(printed(r.client, "speedjump: no player is nobody; next: `users`"));
+  CHECK(printed(r.client, "speedjump: sometimes is not on, off or a share 0..1"));
+  CHECK(printed(r.client, "visitor calls speedjump visitor on (now visitor off): vote yes/no"));
+  CHECK(printed(r.client, "Vote passed: speedjump visitor on for this map"));
+  CHECK(printed(r.client, "visitor is granted the easy jump (share 0.8, cl_speedjump 1)"));
+  // The map changed: the grant went back with it.
+  CHECK_MSG(r.client.spawncount == 2, "spawncount " + std::to_string(r.client.spawncount));
+  CHECK(printed(r.client, "speedjump back to visitor off for the new map"));
+  CHECK(printed(r.client, "visitor's easy jump is no longer granted"));
+}
+
 TEST(classic_game_sv_intermission_holds_the_next_map) {
   ServerConfig c = arena();
   c.lobby = 1;

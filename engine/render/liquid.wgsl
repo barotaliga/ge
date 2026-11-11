@@ -22,8 +22,8 @@
 // scene's depth copy and the colour copy read where it meets it, the sky's light where it meets
 // nothing). LAVA: the heat shimmer (`bend`: the hot air's rising cells bending a ray, summed
 // through a layer kShimmerHeight deep; the surface looked up where its bent ray lands, and what
-// is seen across the lake drawn again through the bent rays by `fs_shimmer`, a box over the
-// body), and the crust broken where something fell in (`broken_at`). FROM BELOW (`fs_under`, one
+// is seen across the lake drawn again through the bent rays by `fs_air`, a box over the body,
+// which lays any gas over it too), and the crust broken where something fell in (`broken_at`). FROM BELOW (`fs_under`, one
 // triangle over the screen for the body the eye is under): the slime's fog, its surface's window
 // and mirror and its scum's shadow; the lava's melt all round.
 #include "render/wgsl/frame.wgsl"
@@ -232,29 +232,66 @@ fn lava_here(p: vec2f, t: f32, foot: f32) -> vec3f {
   return vec3f(temp, (s.y + b.z) * (1.0 - b.x), max(s.z, b.x));
 }
 
-// THE HEAT SHIMMER: the hot air's rising cells at world point `w`, two components in -1..1.
-fn shimmer_cell(w: vec3f, t: f32) -> vec2f {
-  let a = vec2f(w.x * 2.1 + w.z * 1.3, w.y * 2.6 - t * 3.0);
-  let b = vec2f(w.z * 2.1 - w.x * 1.1 + 17.3, w.y * 2.6 - t * 3.0 + 4.1);
-  let x = value_noise(a) + 0.5 * value_noise(a * 2.3 + 7.7);
-  let y = value_noise(b) + 0.5 * value_noise(b * 2.3 + 3.1);
-  return vec2f(x, y) / 1.5 * 2.0 - 1.0;
+// THE AIR OVER THE BODY, in closed form (render/liquid.hpp § The air over it).
+//
+// The layer's weight along the camera-relative ray `dir` over [t0, t1] (m): the integral of
+// exp(-h / scale), h the height over the level, which is exact for a straight ray.
+fn air_layer(dir: vec3f, t0: f32, t1: f32, scale: f32) -> f32 {
+  let h0 = max(frame.eye.y + dir.y * t0 - body.info.x, 0.0);
+  let h1 = max(frame.eye.y + dir.y * t1 - body.info.x, 0.0);
+  let e0 = exp(-h0 / scale);
+  let e1 = exp(-h1 / scale);
+  if (abs(dir.y) < 1e-3) {
+    return 0.5 * (e0 + e1) * (t1 - t0);
+  }
+  return scale * abs(e0 - e1) / abs(dir.y);
 }
 
-// The bend (rad, across and up the view) of the camera-relative ray `dir` over [t0, t1] through
-// the hot layer: six samples, each weighted by its height over the melt (e-folding over 1 m).
-fn bend(dir: vec3f, t0: f32, t1: f32, t: f32) -> vec2f {
-  var sum = vec2f(0.0);
-  let dl = (t1 - t0) / 6.0;
-  for (var i = 0; i < 6; i++) {
-    let w = frame.eye.xyz + dir * (t0 + (f32(i) + 0.5) * dl);
-    let over = w.y - body.info.x;
-    if (over < 0.0 || over > kShimmerHeight) {
-      continue;
-    }
-    sum += shimmer_cell(w, t) * exp(-over) * dl;
+// Stir `k`'s plume's weight along the ray: its Gaussian across the axis (radius r) integrated
+// through the closest approach, times exp(-h / kStirScale) there, the stretch clipped to [t0, t1].
+fn air_plume(dir: vec3f, t0: f32, t1: f32, k: u32) -> f32 {
+  let s = body.stirs[k];
+  let r = s.z;
+  let o = frame.eye.xz - s.xy;
+  let d = dir.xz;
+  let dd = dot(d, d);
+  if (dd < 1e-6) {  // straight down or up: the axis's own column
+    return exp(-dot(o, o) / (r * r)) * air_layer(dir, t0, t1, kStirScale);
   }
-  return sum * body.fx.y;
+  let tc = clamp(-dot(o, d) / dd, t0, t1);
+  let q = o + d * tc;
+  let h = max(frame.eye.y + dir.y * tc - body.info.x, 0.0);
+  let across = min(1.7725 * r / sqrt(dd), t1 - t0);  // sqrt(pi) r over the plan's share
+  return exp(-dot(q, q) / (r * r) - h / kStirScale) * across;
+}
+
+// The heat's weight along the ray: the layer (e-folding over a metre) and the plumes' heat, a
+// burning body's plume as hot as kStirHeat m of the layer at the melt.
+const kStirHeat = 4.0;
+const kStirSmoke = 1.2;  // 1/m: a plume's gas at its axis, at full smoke
+fn air_heat(dir: vec3f, t0: f32, t1: f32) -> f32 {
+  var w = air_layer(dir, t0, t1, 1.0);
+  let n = u32(body.fume.w);
+  for (var k = 0u; k < n; k++) {
+    w += kStirHeat * body.stirs[k].w * air_plume(dir, t0, t1, k);
+  }
+  return w;
+}
+
+// THE HEAT SHIMMER: the hot air's rising cells at world point `w`, two components in -1..1: two
+// octaves of a two-channel value noise (each lattice hash gives both components at once).
+fn shimmer_cell(w: vec3f, t: f32) -> vec2f {
+  let a = vec2f(w.x * 2.1 + w.z * 1.3, w.y * 2.6 - t * 3.0);
+  let c = value_noise2(a) + 0.5 * value_noise2(a * 2.3 + 7.7);
+  return c / 1.5 * 2.0 - 1.0;
+}
+
+// The bend (rad, across and up the view) of the ray over [t0, t1] through the hot layer: the hot
+// air's weight times the cells' push at the ray's lowest stretch (where the most of it is), once.
+fn bend(dir: vec3f, t0: f32, t1: f32, t: f32) -> vec2f {
+  let low = mix(t0, t1, select(0.3, 0.7, dir.y < 0.0));
+  let w = frame.eye.xyz + dir * low;
+  return shimmer_cell(w, t) * air_heat(dir, t0, t1) * body.fx.y;
 }
 
 // `dir` turned by the bend `th` (rad) across and up the view.
@@ -605,7 +642,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   return out;
 }
 
-// THE SHIMMER'S BOX: the hot layer over the body, 36 corners of its six faces.
+// THE AIR'S BOX: the layer over the body, 36 corners of its six faces.
 struct ShimmerOut {
   @builtin(position) position: vec4f,
   @location(0) rel: vec3f,
@@ -613,8 +650,10 @@ struct ShimmerOut {
 
 @vertex
 fn vs_shimmer(@builtin(vertex_index) vid: u32) -> ShimmerOut {
-  let quads = array<vec4u, 6>(vec4u(0u, 2u, 6u, 4u), vec4u(1u, 3u, 7u, 5u), vec4u(0u, 1u, 5u, 4u),
-                              vec4u(2u, 3u, 7u, 6u), vec4u(0u, 1u, 3u, 2u), vec4u(4u, 5u, 7u, 6u));
+  // Each face wound the same way seen from outside, so the pipeline draws only the far ones: one
+  // fragment a pixel, from outside the box or in it.
+  let quads = array<vec4u, 6>(vec4u(0u, 4u, 6u, 2u), vec4u(1u, 3u, 7u, 5u), vec4u(0u, 1u, 5u, 4u),
+                              vec4u(2u, 6u, 7u, 3u), vec4u(0u, 2u, 3u, 1u), vec4u(4u, 5u, 7u, 6u));
   let q = quads[vid / 6u];
   let k = array<u32, 6>(q.x, q.y, q.z, q.x, q.z, q.w)[vid % 6u];
   let bit = vec3f(f32(k & 1u), f32((k >> 1u) & 1u), f32((k >> 2u) & 1u));
@@ -636,11 +675,21 @@ fn meets_melt(dir: vec3f, lo: vec3f, hi: vec3f, d: f32) -> bool {
   return tl < d && q.x > lo.x && q.x < hi.x && q.z > lo.z && q.z < hi.z;
 }
 
-// What is seen across the lake, again, through the ray bent by the hot air it crossed. A pixel
-// where the ray meets the melt is the surface's own (fs_main bends its own ray); a bent ray that
-// lands on the melt or on something nearer than the layer keeps the pixel as it was.
+// THE AIR OVER IT, one fragment a pixel. The gas along the ray, from where it enters the box to
+// the scene or the surface: its wisps a slow noise drifting over the surface read once at the
+// ray's lowest stretch, the plumes of the stirs adding their own; lit by the room and the open sky
+// as a face of its albedo is, and from below by the body's own glow. Then, over lava, what is seen
+// across the lake again through the ray bent by the hot air it crossed, the gas over it, opaque. A
+// pixel where the ray meets the melt is the surface's own (fs_main bends its own ray) and takes
+// the gas alone; a bent ray that lands on the melt or on something nearer than the layer keeps the
+// pixel as it was.
+struct AirOut {
+  @location(0) colour: vec4f,
+  @location(1) motion: vec4f,
+}
+
 @fragment
-fn fs_shimmer(in: ShimmerOut) -> FragmentOut {
+fn fs_air(in: ShimmerOut) -> AirOut {
   let pixel = vec2i(in.position.xy);
   let uv = in.position.xy * frame.size.zw;
   let dir = normalize(in.rel);
@@ -654,24 +703,66 @@ fn fs_shimmer(in: ShimmerOut) -> FragmentOut {
   let t0 = max(max(max(near.x, near.y), near.z), 0.0);
   let d = behind_distance(pixel, uv);
   let t1 = min(min(min(far.x, far.y), far.z), d);
-  if (t1 <= t0 || meets_melt(dir, lo, hi, d)) {
+  if (t1 <= t0) {
     discard;
   }
-  let dir2 = bent(dir, bend(dir, t0, t1, frame.time.x));
-  let clip = frame.view_proj * vec4f(dir2 * min(d, 1e4), 1.0);
-  var pick = pixel;
-  if (clip.w > 1e-4) {
-    let uv2 = vec2f(clip.x / clip.w * 0.5 + 0.5, 0.5 - clip.y / clip.w * 0.5);
-    if (all(uv2 >= vec2f(0.0)) && all(uv2 < vec2f(1.0))) {
-      let p2 = vec2i(uv2 * frame.size.xy);
-      let d2 = behind_distance(p2, uv2);
-      if (d2 > t0 && !meets_melt(dir2, lo, hi, d2)) {
-        pick = p2;
+  let t = frame.time.x;
+  let low = mix(t0, t1, select(0.3, 0.7, dir.y < 0.0));
+  let w = frame.eye.xyz + dir * low;
+  // The plumes once: their heat for the haze, their smoke for the gas.
+  var heat = air_layer(dir, t0, t1, 1.0);
+  var tau_stirs = 0.0;
+  let stirs = u32(body.fume.w);
+  for (var k = 0u; k < stirs; k++) {
+    let plume = air_plume(dir, t0, t1, k);
+    heat += kStirHeat * body.stirs[k].w * plume;
+    tau_stirs += kStirSmoke * body.stir_smoke[k].x * plume;
+  }
+  var alpha = 0.0;
+  var c = vec3f(0.0);
+  // The gas's most along the ray (its wisps at their thickest): under a 512th of cover it is not
+  // lit or drawn.
+  let thick = body.fume.x * air_layer(dir, t0, t1, body.fume.y) * 2.4 +
+              body.fume_light.w * tau_stirs * 1.55;
+  if (thick > 1.0 / 512.0) {
+    let drift = body.fume.z * t;
+    let n = value_noise(w.xz * 0.7 + vec2f(drift, 0.31 * drift)) *
+            (0.5 + value_noise(w.xz * 1.9 - vec2f(0.6 * drift, drift) + w.y * 0.8));
+    let tau = body.fume.x * air_layer(dir, t0, t1, body.fume.y) * (0.2 + 2.2 * n) +
+              body.fume_light.w * tau_stirs * (0.55 + n);
+    alpha = 1.0 - exp(-tau);
+    let over = max(w.y - body.info.x, 0.0);
+    let room = white_luminance() * (body.flow.w + 0.6 * body.flow.z);
+    let light = vec3f(room) + body.fume_light.rgb * (body.fume_albedo.w * exp(-over / 1.5));
+    c = min(body.fume_albedo.rgb * light, vec3f(60000.0));
+  }
+  var out: AirOut;
+  out.motion = vec4f(0.0);
+  // A bend under a third of a pixel moves nothing: such a pixel (the air thin, high over the melt)
+  // reads no noise and no scene. The cells push at most 1 rad per rad of bend.
+  let px_per_rad = length(vec3f(frame.view_proj[0].y, frame.view_proj[1].y, frame.view_proj[2].y)) *
+                   0.5 * frame.size.y;
+  let bends = heat * body.fx.y * px_per_rad > 0.33;
+  if (bends && body.fx.y > 0.0 && body.info.y == 0.0 && !meets_melt(dir, lo, hi, d)) {
+    let dir2 = bent(dir, shimmer_cell(w, t) * heat * body.fx.y);
+    let clip = frame.view_proj * vec4f(dir2 * min(d, 1e4), 1.0);
+    var pick = pixel;
+    if (clip.w > 1e-4) {
+      let uv2 = vec2f(clip.x / clip.w * 0.5 + 0.5, 0.5 - clip.y / clip.w * 0.5);
+      if (all(uv2 >= vec2f(0.0)) && all(uv2 < vec2f(1.0))) {
+        let p2 = vec2i(uv2 * frame.size.xy);
+        let d2 = behind_distance(p2, uv2);
+        if (d2 > t0 && !meets_melt(dir2, lo, hi, d2)) {
+          pick = p2;
+        }
       }
     }
+    out.colour = vec4f(textureLoad(scene_colour, pick, 0).rgb * (1.0 - alpha) + c * alpha, 1.0);
+    return out;
   }
-  var out: FragmentOut;
-  out.colour = vec4f(textureLoad(scene_colour, pick, 0).rgb, 1.0);
-  out.motion = vec4f(0.0);
+  if (alpha < 1.0 / 512.0) {
+    discard;
+  }
+  out.colour = vec4f(c * alpha, alpha);
   return out;
 }

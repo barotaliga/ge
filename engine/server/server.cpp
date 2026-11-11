@@ -60,6 +60,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   const std::string motd = c.motd, admin = c.admin, rotation = c.maprotation;
   const std::string spectators = std::to_string(c.max_spectators);
   const std::string spec_password = c.spectator_password, rendezvous = c.rendezvous, mod = c.mod;
+  const std::string rcon = c.rcon_password;
   cvars.bind(
       {"sv_hostname", name, info, "the server's name in the browser and the lobby", CvarKind::text},
       &c.hostname);
@@ -103,6 +104,11 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   cvars.bind({"sv_spectatorpassword", spec_password, cn::kServer,
               "a password to watch (empty: none)", CvarKind::text},
              &c.spectator_password);
+  cvars.bind({"rcon_password", rcon, cn::kServer,
+              "the remote console's password: `rcon <password> <line>` runs a server console line "
+              "from afar (empty: no remote console)",
+              CvarKind::text},
+             &c.rcon_password);
   cvars.bind({"sv_rendezvous", rendezvous, latched, "the rendezvous to list with (empty: none)",
               CvarKind::text},
              &c.rendezvous);

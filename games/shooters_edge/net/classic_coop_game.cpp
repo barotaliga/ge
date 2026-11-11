@@ -109,6 +109,7 @@ std::unique_ptr<CoopGame> coop_open(const gs::ServerConfig& c, std::string& erro
   co.server.model_ctx = &g->files;
   co.server.localized = cl::localized_text(g->files);
   co.registered = registered;
+  co.episodes = g->content.episodes;
   co.settings = {"deathmatch 0",
                  "coop 1",
                  "skill " + rule(c, "skill", "1"),

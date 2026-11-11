@@ -596,11 +596,31 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   look.pace = o.fire_pace;
   d.frame_jobs.assign(size_t(kMaxShadowed) * 6 + kOrthos + size_t(kCasterLights) * 6 + 1, GpuJob{});
   // The lights that cast shadows, by their index in frame_lights: the nearest of those the eye's
-  // cluster can see first, then the nearest of the rest. Nearness alone (the distance less the
+  // cluster can see whose reach comes into the view first, then the nearest of the others it can
+  // see (behind the eye), then the nearest of the rest. Nearness alone (the distance less the
   // reach) let a map's big lights behind walls take the shadowed few from the room in view: on a
-  // map of a few score lights, the room ahead lit flat, its shadows popping in a few steps on.
-  std::vector<size_t> casters, unseen;
+  // map of a few score lights, the room ahead lit flat, its shadows popping in a few steps on. And
+  // a light left without a slot shines through the walls and frames in front of it: start's
+  // corridor sees 57 lights ahead, so the two lamps before the NORMAL hall's slipgate went
+  // unshadowed from there and its frame's shadow on the wall behind (the map's own lightmap has
+  // it) appeared only once the player walked in.
+  std::vector<size_t> casters, aside, unseen;
   const Map& map = s.map;
+  // Whether a light's reach comes into the view: its sphere against the cone round the look that
+  // holds the whole picture at the widest screen a window has (kWidestAspect).
+  double ahead[3];
+  r::look_dir(view.heading, view.pitch, ahead);
+  const double half_y = std::tan(view.fov_y / 2);
+  const double cone = std::atan(half_y * std::sqrt(1 + kWidestAspect * kWidestAspect));
+  const auto in_view = [&](const GpuLight& g) {
+    const double to[3] = {g.pos[0] - view.eye[0], g.pos[1] - view.eye[1], g.pos[2] - view.eye[2]};
+    const double dist = std::sqrt(to[0] * to[0] + to[1] * to[1] + to[2] * to[2]);
+    const double reach = g.pos[3];
+    if (dist <= reach) return true;
+    const double along = (to[0] * ahead[0] + to[1] * ahead[1] + to[2] * ahead[2]) / dist;
+    const double off = std::acos(std::clamp(along, -1.0, 1.0));
+    return off - std::asin(reach / dist) <= cone;
+  };
   const auto cluster_of = [&](const double p[3]) {
     const float f[3] = {float(p[0] / kUnitM), float(p[2] / kUnitM), float(p[1] / kUnitM)};
     return map.leaves.empty() ? -1 : map.leaves[leaf_at(map, f)].cluster;
@@ -645,10 +665,11 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       // A light in solid or outside the map (no cluster) counts as seen: nothing says it is not.
       const int32_t at = cluster_of(l.pos);
       const bool seen = eye_cluster < 0 || at < 0 || cluster_sees(map, eye_cluster, at);
-      (seen ? casters : unseen).push_back(d.frame_lights.size());
+      (!seen ? unseen : in_view(g) ? casters : aside).push_back(d.frame_lights.size());
     }
     d.frame_lights.push_back(g);
   }
+  casters.insert(casters.end(), aside.begin(), aside.end());
   casters.insert(casters.end(), unseen.begin(), unseen.end());
   if (int(casters.size()) > d.options.shadowed) casters.resize(size_t(d.options.shadowed));
   // Each caster keeps the slot that already holds its cube; the rest, nearest first, take the

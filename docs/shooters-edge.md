@@ -341,10 +341,15 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
   or getting busier over the minutes reads as no saving), and the largest gap between neighbouring
   all-on runs is the noise. The lab charts each run's frames as a box and lists what each switch
   saved off the median frame, the most first.
-- **The shadow maps** (the modern look): the shadowed few (32) are the nearest lights in the
-  eye's potentially visible set first, then the nearest of the rest; by nearness alone the map's
-  big lights behind walls took half the slots on an open map (a dm4 doorway: 14 of the 30 lights
-  in view lit unshadowed, their shadows popping in a few steps on). A light's cube is drawn when
+- **The shadow maps** (the modern look): the shadowed few (48) are the nearest lights in the
+  eye's potentially visible set whose reach comes into the view first (the cone round the look
+  that holds a 32:9 picture), then the nearest of the others in that set, then the nearest of the
+  rest; by nearness alone the map's big lights behind walls took half the slots on an open map (a
+  dm4 doorway: 14 of the 30 lights in view lit unshadowed, their shadows popping in a few steps
+  on). A light with no slot shines through what stands before it: with 32 slots, start's corridor
+  (57 lights in view) left the lamps before the NORMAL hall's slipgate unshadowed, and the frame's
+  shadow on the wall behind it (in the map's own lightmap too) came only once the player walked in.
+  48 cost about 5% of a frame on llvmpipe over 32 (demo1, the modern look: 358 -> 375 ms median). A light's cube is drawn when
   it joins the few and kept while it stays; at most two new cubes a frame (`Options::fresh_cubes`), the rest of a
   room's torches unshadowed for the frames until their turn, so walking into a room costs no
   frame more than two cubes; a dynamic light (a flash, a rocket) lights without a shadow.
@@ -990,9 +995,10 @@ inventory when he dies, the map going on, on a coop start no one stands on. Team
 one player's blows never harm another unless `sv_friendlyfire 1`, and a spared teammate's blow
 does not push him either unless `sv_friendlypush 1` (then a rocket at a friend boosts him without
 harm); his own blast still harms himself. Monsters choose among the players. On the start map the
-episodes open one at a time: the first always, each next once the one before is done
-(`sv_episodes_done`, a rune's bit each, set by the program when the rune is taken and kept by the
-window from game to game).
+episodes open one at a time, alone or in coop: the first always, each next once the one before
+is done, and a done one shuts (`sv_episodes_done`, a rune's bit each, recorded by the campaign
+host when an episode is left with its rune and archived by the window from game to game; the
+host keeps the bars of an episode not yet open shut, `server/campaign_episodes.hpp`).
 
 A COMPANION (`bots/companion.hpp`) is a fighter that plays beside the player rather than for
 him, an enabler: it keeps at his shoulder, steps out of his way, kills only what has come for him
@@ -1374,6 +1380,21 @@ lobby and bots, the player a seat of it. With `sv_port <port>` set before `map <
 it over UDP with a classic client (`connect <address>:<port>`) as they would `shooters_edge_server`;
 `sv_maxclients` is its slots (32). `sv_port 0`, the default, keeps the match the window's alone.
 
+**Who is on, and the easy jump for one player (M53f).** `users` lists every player on the
+server by user id (`userid frags name`); any client may ask it, so a player can tell the
+administrator his id. `status` is the administrator's table: slot, id, name, frags, ping, loss,
+minutes on, address (`bot`, `local` for the window's player) and the easy jump (`-`, `asks`, the
+share `pm_speedjump` allows, or `<share> granted`). `speedjump <id|name> on|off|<share 0..1>`
+grants the easy jump to one player (a player whose disability makes strafing hard) while
+`pm_speedjump` stays as it is for everyone else, `speedjump` alone lists who has it. The grant is
+the server-only key `*speedjump <share>` in that player's user info: every client sees it and
+everyone is told, a client cannot set it (one sent in a connect is removed), it stays across map
+changes and goes when the player leaves; the player still turns it on with `cl_speedjump 1`. In
+the window these are console commands for the match it hosts (`sv <line>` too); on a dedicated
+server set `rcon_password` and send `rcon <password> <line>` from a joined window (`rcon secret
+speedjump 3 on`) or any classic client. Without a password the remote console is refused. The
+words and the remote console are `net/classic_admin.hpp`.
+
 **The lobby (M18q).** Before the match, on M17d's sessions: the players and their pings, teams,
 ready, chat to all or the team, a map vote, kick, and the host's start; at the end of the match
 everyone returns to it. Joining is from the server browser, an invite (M17j's friends), or an
@@ -1638,7 +1659,35 @@ list is in `porting/shooters-edge/survey.md`.
 | Later | Client-side QC (a mod drawing its own HUD and predicting its own entities) | M18m |
 | Later | Single-player campaigns and co-op on the single-player `progs` | M18s |
 | Better | The easy jump: `cl_speedjump 1` hops and gains on forward and jump alone where the server's `pm_speedjump` allows it, and on any other server by the client strafing for the player, disclosed in the user info (`docs/movement.md`) | M18e |
+| Better | The quick weapon: `cl_quickweapon 1` makes +attack fire the best weapon carried of `cl_quickweapon_prio` and put `cl_quickweapon_default` back; +attack2 the same off `cl_quickweapon_prio2`; `cl_quickweapon_preview` shows the weapon a press would fire see-through in hand, `cl_quickweapon_hide` hides the hand instead (§ The quick weapon) | M48i |
 | Later | Splitscreen; touch controls for phones and tablets | M18m |
+
+### The quick weapon
+
+A fire key that fires the best weapon carried, then puts the usual one back, all on the client
+(`plugins/shooter/quick_weapon.hpp` for any shooter, `client/quick_fire.hpp` the game's wiring),
+so it works in the window's own match and on any server joined: it asks only for what a player
+could, a weapon by its key (`impulse`) and the attack.
+
+| Cvar | Default | What it does |
+| --- | --- | --- |
+| `cl_quickweapon` | 0 | 1: +attack is a quick fire off `cl_quickweapon_prio` |
+| `cl_quickweapon_prio` | `7 8 5 6 3 2 4 1` | +attack's weapons, best first, by weapon key |
+| `cl_quickweapon_prio2` | `8 3 2` | +attack2's (the hitscan guns); empty: +attack2 fires what is in hand |
+| `cl_quickweapon_default` | `2 1` | the weapon put back: the first carried with ammunition |
+| `cl_quickweapon_preview` | 1 | the weapon +attack would fire held see-through in hand, turning solid as it fires and back |
+| `cl_quickweapon_hide` | 0 | with the preview off: no weapon drawn while +attack would switch |
+
++attack2 is bound to no key: `bind mouse2 +attack2` (MOUSE2 jumps by default). A press asks for
+the weapon with the attack in every command until it is in hand, so a server that keeps an ask
+only for the command it came in still switches and fires the moment the weapon in hand is free; a
+tap holds the attack until the shot shows (the ammunition fell) or a second passes; the way back
+is asked every 0.2 s for 1.5 s; a weapon key the player presses wins. The preview is the held
+weapon drawn with `HeldDraw::opacity` below 1: a screen door that moves each frame, which the
+frame's TAA-U averages to a see-through gun. Through a tap of +attack the hand keeps holding the
+quick weapon: the ghost turns solid in 0.06 s, fires, stays solid 0.15 s more and eases back to the
+ghost over 0.25 s while the kept weapon comes back unseen, so no weapon switch is drawn. +attack2
+switches as any weapon key does. Lab: `se-quickweapon` (its `tap-chart`).
 
 ## Labs
 

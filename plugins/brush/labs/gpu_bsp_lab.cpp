@@ -979,7 +979,7 @@ const gl::LabSpec kSpec{
       "times to shoot each view at too, s, comma separated: v2 lit in real time, a sequence"},
      {"time", "20", "the views' time, s (the flicker, the liquids, the clouds)"},
      {"strength", "1", "the point lights' strength against the classic's"},
-     {"shadowed", "32", "the nearest lights that cast shadows"},
+     {"shadowed", "48", "the lights that cast shadows (those in view first, nearest first)"},
      {"most", "160", "the lights a frame draws at most"},
      {"only", "", "draw only the views whose id holds this"},
      {"brightness", "2.0", "a lightmap's 1 against a white face under the open day"},

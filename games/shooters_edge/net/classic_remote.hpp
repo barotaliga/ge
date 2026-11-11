@@ -29,7 +29,8 @@
 // The drawn eye and the player's own place are the prediction; `cl_nopred 1` draws the server's.
 // THE EASY JUMP: with `cl_speedjump 1` when joining, the user info says so (the server, its admins
 // and the players see the help is on), and the client strafes for the player on every server
-// (shooter/speedjump_assist.hpp) off its newest prediction: at the server's `pm_speedjump` where
+// (shooter/speedjump_assist.hpp) off its newest prediction: at the share the server granted him
+// alone (his own `*speedjump`, net/classic_admin.hpp), else at the server's `pm_speedjump` where
 // its server info states one (ours always do; 0 turns it off), else at `kStockShare` of the best
 // strafe's gain. The drawn view turns by `Remote::speedjump_view` of the swing
 // (`cl_speedjump_view`). It needs `cl_nopred 0`. Changed later, `cl_speedjump` acts next join.

@@ -58,12 +58,26 @@ std::array<Named, 7> build() {
   LiquidLook crusted = lava(0.93, 0.035, 2.4, 0.3, 300, 0.008);
   crusted.lava.core = 1100;
   crusted.lava.crust_hot = 720;
+  // Over lava a thin soot hangs, its underside lit orange by the melt.
+  for (LiquidLook* l : {&molten, &crusted}) {
+    l->fume.density = 0.025;
+    l->fume.scale_m = 1.0;
+    l->fume.albedo = {0.16, 0.15, 0.14};
+    l->fume.drift_mps = 0.25;
+    l->fume.glow_lit = 0.0015;
+  }
   // Toxic: an opaque green, faintly glowing, bubbling.
   LiquidLook toxic = slime({150, 6, 240}, {30, 60, 30}, 0.12);
   toxic.slime.glow = {6, 60, 4};
   toxic.slime.pulse = 0.3;
   toxic.slime.bubbles = 1.5;
   toxic.slime.bubble_size = 0.08;
+  // Its acid fumes: a pale yellow-green vapour clinging to the surface, lit by its own glow.
+  toxic.fume.density = 0.12;
+  toxic.fume.scale_m = 0.3;
+  toxic.fume.albedo = {0.6, 0.68, 0.45};
+  toxic.fume.drift_mps = 0.12;
+  toxic.fume.glow_lit = 0.01;
   // A clear gel: little scattering, a green-cyan tint over what lies in it, glassy.
   LiquidLook gel = slime({0.45, 0.08, 0.25}, {0.06, 0.06, 0.06}, 0.03);
   // A pale mucus: milky, yellow-green, very glossy, a few small bubbles.
@@ -77,6 +91,10 @@ std::array<Named, 7> build() {
   sludge.slime.bubbles = 3;
   sludge.slime.bubble_size = 0.05;
   sludge.slime.film = 320;
+  sludge.fume.density = 0.15;  // a sewer's damp haze
+  sludge.fume.scale_m = 0.4;
+  sludge.fume.albedo = {0.5, 0.52, 0.42};
+  sludge.fume.drift_mps = 0.08;
   // Tar: black glass with an oil's rainbow, a rare slow bubble.
   LiquidLook tar = slime({5000, 5000, 5000}, {0.5, 0.5, 0.5}, 0.05);
   tar.slime.film = 420;
@@ -135,6 +153,12 @@ void stage_body(Liquids::Slot& slot, const water::Body& body, const LiquidLook& 
   put(b.slime1, s.bubble_size, s.grime, s.debris, 0);
   put(b.scum, s.scum_albedo);
   b.fx[1] = static_cast<float>(look.kind == LiquidKind::lava ? l.shimmer : 0);
+  const FumeLook& f = look.fume;
+  put(b.fume, f.density, std::max(f.scale_m, 0.05), f.drift_mps, 0);
+  put(b.fume_albedo, f.albedo, f.glow_lit);
+  put(b.fume_light, liquid_glow(look));
+  slot.shimmer = b.fx[1];  // staged each frame as the switches say (prepare_liquid)
+  slot.fume_density = b.fume[0];
   const std::vector<water::Rgb> table = water::glow_table(kGlowLo, kGlowHi, kGlowEntries, 1.0);
   for (int i = 0; i < kGlowEntries; ++i) put(b.table[i], table[static_cast<size_t>(i)]);
 }
@@ -292,18 +316,27 @@ void create_liquid(gpu::Device& device, gpu::PipelineSet& pipelines, Liquids& li
     desc.depthStencil = &depth;
     desc.fragment = &fragment;
     liquids.p_draw = pipelines.add_render(device, desc);
-    // The shimmer: the box of hot air over a body, both its faces (a pixel's colour is the same
-    // from either, so an eye inside it draws it too), no depth test (the fragment clips its ray by
-    // the scene's depth copy), the motion kept.
-    fragment.entryPoint = "fs_shimmer";
+    // The air over a body: the box of hot air and gas over it, its far faces only (one fragment a
+    // pixel; they are wound so the back-face cull keeps them, from outside and inside alike), no
+    // depth test (the fragment clips its ray by the scene's depth copy), the motion kept, laid over
+    // the picture premultiplied (the haze's bent pixel opaque, the gas alone over the melt).
+    wgpu::BlendState over{};
+    over.color = {wgpu::BlendOperation::Add, wgpu::BlendFactor::One,
+                  wgpu::BlendFactor::OneMinusSrcAlpha};
+    over.alpha = over.color;
+    colours[0].blend = &over;
     colours[1].writeMask = wgpu::ColorWriteMask::None;
     depth.depthWriteEnabled = false;
     depth.depthCompare = wgpu::CompareFunction::Always;
     fragment.constantCount = 0;
-    desc.label = "liquid.shimmer";
+    fragment.entryPoint = "fs_air";
+    desc.label = "liquid.air";
     desc.vertex.entryPoint = "vs_shimmer";
     desc.vertex.constantCount = 0;
-    liquids.p_shimmer = pipelines.add_render(device, desc);
+    desc.primitive.cullMode = wgpu::CullMode::Back;
+    liquids.p_air = pipelines.add_render(device, desc);
+    colours[0].blend = nullptr;
+    desc.primitive.cullMode = wgpu::CullMode::None;
     // The view from under a body: one triangle over the screen, the same targets and depth, a
     // shader of its own (one string literal stays under 64 KB).
     const wgpu::ShaderModule under = gpu::create_shader(device, wgsl::liquid_under, "liquid.under");
@@ -381,8 +414,46 @@ void prepare_liquid(gpu::Device& device, Liquids& liquids, const FrameView& view
     if (!slot.hidden && !slot.shown && inside && liquids.eye_under < 0)
       liquids.eye_under = static_cast<int>(&slot - liquids.bodies.data());
     slot.staged.fx[0] = liquids.reflections ? 1.0f : 0.0f;
+    slot.staged.fx[1] = liquids.shimmer ? slot.shimmer : 0.0f;
+    slot.staged.fume[0] = liquids.fumes ? slot.fume_density : 0.0f;
+    slot.staged.fume_light[3] = liquids.fumes ? 1.0f : 0.0f;
     slot.staged.fx[3] = static_cast<float>(liquids.under_reach);
     device.queue.WriteBuffer(slot.uniform, 0, &slot.staged, sizeof slot.staged);
+  }
+}
+
+int liquid_body_at(const Liquids& liquids, double x, double y, double z, double reach) {
+  for (size_t i = 0; i < liquids.bodies.size(); ++i) {
+    const LiquidGpuBody& b = liquids.bodies[i].staged;
+    if (x > b.box[0] && x < b.box[2] && z > b.box[1] && z < b.box[3] &&
+        std::abs(y - b.info[0]) < reach)
+      return static_cast<int>(i);
+  }
+  return -1;
+}
+
+void set_liquid_stirs(Liquids& liquids, std::span<const LiquidStir> stirs) {
+  for (Liquids::Slot& slot : liquids.bodies) slot.staged.fume[3] = 0;
+  for (const LiquidStir& st : stirs) {
+    if (st.heat <= 0 && st.smoke <= 0) continue;
+    const int at = liquid_body_at(liquids, st.x, st.y, st.z);
+    if (at < 0) continue;
+    LiquidGpuBody& b = liquids.bodies[static_cast<size_t>(at)].staged;
+    const auto strength = [](const float* s, const float* m) { return s[3] + m[0]; };
+    int k = static_cast<int>(b.fume[3]);
+    if (k == kLiquidStirs) {  // full: the weakest gives way if this one is stronger
+      int weakest = 0;
+      for (int i = 1; i < kLiquidStirs; ++i)
+        if (strength(b.stirs[i], b.stir_smoke[i]) <
+            strength(b.stirs[weakest], b.stir_smoke[weakest]))
+          weakest = i;
+      if (st.heat + st.smoke <= strength(b.stirs[weakest], b.stir_smoke[weakest])) continue;
+      k = weakest;
+    } else {
+      b.fume[3] = static_cast<float>(k + 1);
+    }
+    put(b.stirs[k], st.x, st.z, std::max(st.radius_m, 0.05), st.heat);
+    put(b.stir_smoke[k], st.smoke, 0, 0, 0);
   }
 }
 
@@ -402,6 +473,7 @@ void encode_liquid(const Liquids& liquids, const gpu::PipelineSet& pipelines, Fr
   if (!drawn) {
     rec.compute(encoder, "liquid.copy").End();
     rec.compute(encoder, "liquid").End();
+    rec.compute(encoder, "liquid.air").End();
     return;
   }
   {
@@ -447,21 +519,31 @@ void encode_liquid(const Liquids& liquids, const gpu::PipelineSet& pipelines, Fr
     pass.DrawIndexed(kLiquidGrid * kLiquidGrid * 6);
     ++rec.current().draws;
   }
-  // The shimmer over lava: the scene across it seen again through the bent rays.
-  pass.SetPipeline(pipelines.render(liquids.p_shimmer));
+  pass.End();
+  // The air over each body with any (the heat haze over lava, the gas, a stir's plume): the scene
+  // across it seen again through the bent rays, the gas over that, in one box; a pass of its own,
+  // so its cost is read apart from the surfaces'. Then the view from under a body, over it all.
+  wgpu::RenderPassEncoder air = rec.render(encoder, desc, "liquid.air");
+  air.SetPipeline(pipelines.render(liquids.p_air));
+  air.SetBindGroup(0, frame);
   for (const Liquids::Slot& slot : liquids.bodies) {
-    if (!slot.shown || slot.staged.info[1] != 0 || !(slot.staged.fx[1] > 0)) continue;
-    pass.SetBindGroup(1, slot.group);
-    pass.Draw(36);
-    ++rec.current().draws;
+    const LiquidGpuBody& b = slot.staged;
+    const bool haze = b.info[1] == 0 && b.fx[1] > 0;
+    const bool gas = b.fume[0] > 0 || (b.fume_light[3] > 0 && b.fume[3] > 0);
+    if (!slot.shown || !(haze || gas)) continue;
+    air.SetBindGroup(1, slot.group);
+    for (int i = 0; i < std::max(liquids.air_draws, 1); ++i) {
+      air.Draw(36);
+      ++rec.current().draws;
+    }
   }
   if (liquids.eye_under >= 0) {
-    pass.SetPipeline(pipelines.render(liquids.p_under));
-    pass.SetBindGroup(1, liquids.bodies[static_cast<size_t>(liquids.eye_under)].group);
-    pass.Draw(3);
+    air.SetPipeline(pipelines.render(liquids.p_under));
+    air.SetBindGroup(1, liquids.bodies[static_cast<size_t>(liquids.eye_under)].group);
+    air.Draw(3);
     ++rec.current().draws;
   }
-  pass.End();
+  air.End();
 }
 
 }  // namespace ge::render

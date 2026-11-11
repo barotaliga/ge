@@ -85,7 +85,8 @@ struct GameContent {
   const ge::progs::Progs* campaign = nullptr;  // what NEW GAME runs; null: no campaign
   bool registered = false;                     // the packs are the full game
   std::string start_map;                       // the profile's start map
-  std::string first_map;  // the start map when the packs hold it, else the game's fallback
+  sv::EpisodeOrder episodes;  // the start map and each episode's first map (the profile's)
+  std::string first_map;      // the start map when the packs hold it, else the game's fallback
   // The game's item names and its server's words as server lines (profiles/items.hpp's
   // `item_name_lines`, profiles/words.hpp's `word_lines`) when the baseline mod plays the game's
   // packs, so its pickups, obituaries, clock and lobby speak the game's words; empty when the
