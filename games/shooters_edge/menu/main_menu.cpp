@@ -40,6 +40,7 @@ constexpr Choice kHudGuns[] = {{"LOOK'S OWN", "look"},
 constexpr Choice kWorldLook[] = {{"CLASSIC", "classic"}, {"MODERN", "modern"}};
 constexpr Choice kMenuLook[] = {{"AUTO", "auto"}, {"CLASSIC", "classic"}, {"MODERN", "modern"}};
 constexpr Choice kOnOff[] = {{"OFF", "0"}, {"ON", "1"}};
+constexpr Choice kSides[] = {{"LEFT", "left"}, {"RIGHT", "right"}};
 constexpr Choice kFall[] = {{"SNOW", "0"}, {"SLEET", "0.5"}, {"RAIN", "1"}};
 
 // The menu, page by page. A row's `needs` dims it while the console knows no such name.
@@ -334,13 +335,13 @@ constexpr Entry kEntries[] = {
      .target = Target::client,
      .choices = kOnOff},
     {.page = "video",
-     .id = "hud_swap",
-     .text = "HUD SIDE",
+     .id = "hud_vitals",
+     .text = "HUD VITALS",
      .kind = ItemKind::choice,
-     .hint = "ON puts each modern layout's left side on the right and its right side on the left.",
-     .needs = "hud_swap",
+     .hint = "The side health and armour stand on in the modern layouts; the rest takes the other.",
+     .needs = "hud_vitals",
      .target = Target::client,
-     .choices = kOnOff},
+     .choices = kSides},
     {.page = "video",
      .id = "hud_guns",
      .text = "HUD GUNS",

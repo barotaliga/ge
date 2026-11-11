@@ -125,7 +125,7 @@ classic bar, the modern corners, the compact arch at the bottom centre, and thre
 today's shooters (`arena`: big figures at the bottom centre and the guns down the right edge;
 `tactical`: a shield bar over the health bar and the loadout bottom right; `minimal`: small figures
 only), one table picked by `hud_style`. Its options are cvars over every look: `hud_sbar 0` the
-classic pieces without their panels, `hud_swap 1` the mirrored layout, `hud_guns ammo|pairs|row`
+classic pieces without their panels, `hud_vitals right` the mirrored layout (health and armour on the right), `hud_guns ammo|pairs|row`
 the guns two to a line by their ammunition (2-2-2-1, the beam gun alone since its picture is two
 wide), each line led by its count or the counts apart, `hud_guns_all` and `hud_ammo_all` every slot
 or only what is held; while the classic bars show, `status_lift` raises the weapon in hand over
