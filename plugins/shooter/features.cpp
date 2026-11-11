@@ -18,12 +18,11 @@ constexpr const char* kNames[kFeatures] = {
     "escape",     "brink",  "gapjump",  "headroom", "liphop",    "circlejump", "ahead",  "bodies",
     "beat",       "keys",   "keysteer", "lookway",  "press",     "trial"};
 
-// Every switch but `trial` (the last) and those not yet judged (`keys`, `keysteer`, `lookway`,
-// `press`).
+// Every switch but `trial` (the last) and those not judged or dropped (`lookway`, `press`). The
+// keyboard (`keys`, `keysteer`) is on: a person's hands are on keys (realism first; the frags it
+// costs, -3.8 a match head to head, won back by fixing movement and strategy).
 constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);
-constexpr uint64_t kKeys = (uint64_t{1} << static_cast<uint64_t>(Feature::keys)) |
-                           (uint64_t{1} << static_cast<uint64_t>(Feature::keysteer)) |
-                           (uint64_t{1} << static_cast<uint64_t>(Feature::lookway)) |
+constexpr uint64_t kKeys = (uint64_t{1} << static_cast<uint64_t>(Feature::lookway)) |
                            (uint64_t{1} << static_cast<uint64_t>(Feature::press));
 constexpr uint64_t kAll = (kTrial - 1) & ~kKeys;
 

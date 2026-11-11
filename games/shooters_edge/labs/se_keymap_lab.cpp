@@ -257,7 +257,7 @@ void run(gl::Lab& lab) {
     const char* id;
     const char* words;
     std::string features;
-  } variants[2] = {{"analog", "ANALOG AXES", lab.arg("features")},
+  } variants[2] = {{"analog", "ANALOG AXES", lab.arg("features") + ",-keys,-keysteer"},
                    {"keys", "A HAND ON THE KEYS", lab.arg("features") + ",+keys"}};
   for (const auto& var : variants) {
     cn::TeamMatchOptions o;
