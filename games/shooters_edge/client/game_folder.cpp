@@ -94,6 +94,18 @@ bool check_game_folder(const std::string& folder, std::string* basedir, std::str
   return true;
 }
 
+const ge::classicenhance::Profile* install_of(const std::string& folder, std::string* basedir,
+                                              std::string* error) {
+  std::string first_why;
+  for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles) {
+    std::string why;
+    if (check_game_folder(folder, basedir, &why, p)) return &p;
+    if (first_why.empty()) first_why = std::move(why);
+  }
+  *error = first_why + " (the games known: " + ge::classicenhance::profile_ids() + ")";
+  return nullptr;
+}
+
 std::string game_of(const std::string& basedir, const ge::classicenhance::Profile& content) {
   std::error_code ec;
   if (!content.multiplayer_dir.empty()) {
@@ -117,12 +129,20 @@ void choose_folder(Args& args, const std::string& prefs) {
       out::status("shooters_edge: the game loaded last, " + std::string(content->what) + " in " +
                   basedir + " (-basedir names another)");
       args.basedir = basedir;
+      args.profile = std::string(content->id);
       if (!args.game_set) args.game = game_of(basedir, *content);
       return;
     } else if (content != nullptr) {
       out::warn("shooters_edge: the game loaded last no longer opens: " + why +
                 "; so the folder the game runs in; next: OPTIONS > CLASSIC ENHANCED > LOAD GAME");
     }
+  }
+  // The install named or the folder the game runs in: whichever game its folders say it is.
+  std::string basedir, why;
+  if (const ge::classicenhance::Profile* content = install_of(args.basedir, &basedir, &why)) {
+    args.profile = std::string(content->id);
+    if (!args.game_set) args.game = game_of(args.basedir, *content);
+    return;
   }
   if (!args.game_set) args.game = game_of(args.basedir);
 }

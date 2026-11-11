@@ -9,6 +9,7 @@
 // ge:test tests/shooters_edge_sequel_server_test.cpp
 #include "shooters_edge/server/sequel_server.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <utility>
@@ -128,6 +129,8 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   // The delta angles turn the player's own view to the spot's yaw.
   const int16_t want[3] = {0, to_short_angle(yaw), 0};
   for (int i = 0; i < 3; i++) st.delta_angles[i] = int16_t(want[i] - p.cmd_angles[i]);
+  p.forced = true;
+  for (int i = 0; i < 3; i++) p.forced_angles[i] = want[i];
   if (respawn && deathmatch(s)) {
     st.flags |= sh::kSqTimeTeleport;
     st.time = kRespawnHold;
@@ -166,6 +169,11 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   pm.cmd.angles[0] = to_short_angle(c.angles.x);
   pm.cmd.angles[1] = to_short_angle(c.angles.y);
   pm.cmd.angles[2] = to_short_angle(c.angles.z);
+  if (s.opt.clients_take_view && p.forced && pm.cmd.angles[0] == p.forced_angles[0] &&
+      pm.cmd.angles[1] == p.forced_angles[1] && pm.cmd.angles[2] == p.forced_angles[2]) {
+    for (int16_t& d : pm.s.delta_angles) d = 0;  // the client took the turn as its own
+    p.forced = false;
+  }
   pm.cmd.forward = c.forward;
   pm.cmd.side = c.side;
   pm.cmd.up = c.up;
@@ -211,6 +219,8 @@ void rules_frame(SequelServer& s) {
   }
 }
 
+void mirror_pool(SequelServer& s);
+
 void fill_rows(SequelServer& s) {
   RulesWorld& w = s.world;
   w.time = s.level_time;
@@ -249,6 +259,43 @@ void fill_rows(SequelServer& s) {
     e.waterlevel = p.water_level;
     e.health = p.health;
     e.modelindex = c.spectator ? 0 : static_cast<int>(s.models.size()) - 1;
+  }
+  mirror_pool(s);
+}
+
+// The world's rows mirrored into the loop's pool (`sv.edicts`), which the classic endpoint, the
+// listen's view and the hit tests still read by slot: the same entities, as the world shows them.
+void mirror_pool(SequelServer& s) {
+  const RulesWorld& w = s.world;
+  if (s.sv.edicts.size() < w.entities.size()) return;  // sized at the map's start
+  s.sv.time = s.host_time;
+  s.sv.num_edicts = static_cast<int>(w.entities.size());
+  for (size_t i = 0; i < w.entities.size(); i++) {
+    const WorldEntity& row = w.entities[i];
+    sh::Edict& e = s.sv.edicts[i];
+    e.free = row.free;
+    e.origin = row.origin;
+    e.velocity = row.velocity;
+    e.angles = row.angles;
+    e.v_angle = row.view_angles;
+    e.mins = row.mins;
+    e.maxs = row.maxs;
+    e.size = row.maxs - row.mins;
+    e.absmin = row.absmin;
+    e.absmax = row.absmax;
+    e.flags = row.flags;
+    e.waterlevel = row.waterlevel;
+    e.health = row.health;
+    e.modelindex = row.modelindex;
+  }
+  if (s.sv.clients.size() < size_t(sh::kMaxClients)) s.sv.clients.resize(sh::kMaxClients);
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    s.sv.edicts[size_t(i) + 1].view_ofs = {0, 0, s.players[i].view_height};
+    sh::ClientSlot& slot = s.sv.clients[size_t(i)];
+    slot.active = s.clients[i].active;
+    slot.spectator = s.clients[i].spectator;
+    slot.bot = s.clients[i].bot;
+    slot.last_sequence = s.players[i].last_sequence;
   }
 }
 
@@ -313,6 +360,9 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   s.map_stopped = false;
   s.pending_map.clear();
   fill_lists(s);
+  // The pool the world is mirrored into: every row the world has, and room past them.
+  s.sv.set.max_edicts = std::max(s.sv.set.max_edicts, int(s.world.entities.size()) + 8);
+  s.sv.edicts.assign(size_t(s.sv.set.max_edicts), sh::Edict{});
   for (int i = 0; i < sh::kMaxClients; i++)
     if (s.clients[i].active) spawn_player(s, i, false);
   fill_rows(s);
