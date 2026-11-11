@@ -38,6 +38,8 @@
 // - THE KEYS (keys_read.hpp, `keys.*`): the movement keys read off the body, and the same split by
 //   an enemy in view at the last sample (`keys.fight.*`) or not (`keys.calm.*`): people's W on a
 //   steady run 48 % calm, 28 % in a fight; `keys.fight-share` the fight's part of the reads.
+// - THE BUMPS (bumps_read.hpp, `bumps.*`): a run stopped by a wall or a player, a minute alive and
+//   a minute at speed (e1m2: people's walls 1.9 and 2.5, the bots' 2.4-2.8 and 4.4-5.2).
 //
 // `--samples=<file.tsv>` writes every sample alive as a row (the recording, the clock, the slot,
 // the team, the place, wet, the eyes under, the speed, an enemy faced) for a question the
@@ -51,7 +53,7 @@
 // ge:keywords lab se-people people realism yardstick in-view line-of-sight engagement contact
 // ge:keywords speed mvd multiview recordings real-matches bots-against-people positioning
 // ge:keywords dodge strafe fight-across wet water swimming hand mouse sweep tilt lift jitter
-// ge:keywords fight-along closing keys-fight keys-calm fight-feet-by-range
+// ge:keywords fight-along closing keys-fight keys-calm fight-feet-by-range bumps wall-bumps
 // ge:keywords weapons-owned shots-per-min firepower launcher health armour
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
@@ -75,6 +77,7 @@
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/labs/bumps_read.hpp"
 #include "shooters_edge/labs/keys_read.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 #include "shooters_edge/net/classic_team.hpp"
@@ -231,6 +234,7 @@ struct Read {
   // The same reads split by whether an enemy was in his line of sight at the last sample (within
   // kFightAfter of it): the fight's footwork against the rest.
   la::KeysRead keys_fight, keys_calm;
+  la::BumpsRead bumps;  // the wall and player bumps read off the body (bumps_read.hpp)
   // Backpacks: how many fell, how many went before they ran out (taken), the time each lay
   // until taken summed, and those taken within 10 s.
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -399,6 +403,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<sh::Vec3f> hand_was(32);
   double hand_next = 0, hand_at = -1;
   std::vector<la::KeysState> keys(32);
+  std::vector<la::BumpState> bumps(32);
   std::vector<double> seen_at(32, -1e9);  // by slot: the last sample with an enemy in view
   const sh::Hull& body = m.bsp.models[0].hulls[1];
   for (;;) {
@@ -428,6 +433,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
       la::KeysState& k = keys[static_cast<size_t>(i)];
       const bool live = p.present && !p.dead && !s.names[static_cast<size_t>(i)].empty();
       if (!live) {
+        la::bumps_reset(bumps[static_cast<size_t>(i)]);
         if (k.n > 0) {
           la::KeysRead one;
           la::keys_reset(k, one);
@@ -450,6 +456,25 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         la::keys_reset(k, one);
       else
         la::keys_update(k, one, s.time, p.origin, p.angles.y, ground);
+      // The bumps: a wall's or another player's (bumps_read.hpp), dry only.
+      la::BumpState& bs = bumps[static_cast<size_t>(i)];
+      if (wet) {
+        la::bumps_reset(bs);
+      } else {
+        bool near_other = false;
+        for (int j = 0; j < 32 && !near_other; j++) {
+          const cl::DemoEntity& e = s.players[static_cast<size_t>(j)];
+          if (j == i || !e.present || e.dead || s.names[static_cast<size_t>(j)].empty()) continue;
+          near_other = std::fabs(e.origin.x - p.origin.x) < la::kBumpTouch &&
+                       std::fabs(e.origin.y - p.origin.y) < la::kBumpTouch &&
+                       std::fabs(e.origin.z - p.origin.z) < 64;
+        }
+        const float health =
+            static_cast<size_t>(i) < d.player_stats.size()
+                ? static_cast<float>(d.player_stats[static_cast<size_t>(i)][cl::kStatHealth])
+                : 0.f;
+        la::bumps_update(bs, out.bumps, body, s.time, p.origin, ground, health, near_other);
+      }
       la::add(out.keys, one);
       const bool fight = s.time - seen_at[static_cast<size_t>(i)] <= every + kFightAfter;
       la::add(fight ? out.keys_fight : out.keys_calm, one);
@@ -774,6 +799,7 @@ void run(gl::Lab& lab) {
   std::map<std::string, int64_t> shots;
   HandRead hand, hop;
   la::KeysRead keys, keys_fight, keys_calm;
+  la::BumpsRead bumps;
   int used = 0, skipped = 0;
   double seconds = 0;
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -805,6 +831,7 @@ void run(gl::Lab& lab) {
     la::add(keys, r.keys);
     la::add(keys_fight, r.keys_fight);
     la::add(keys_calm, r.keys_calm);
+    la::add(bumps, r.bumps);
     Player sum;
     for (const Player& p : r.players) {
       sum.alive += p.alive;
@@ -929,7 +956,9 @@ void run(gl::Lab& lab) {
   lab.metric("people.fight-wide", of_fight(static_cast<double>(all.fight_wide)), "share");
   // On dry feet, by the distance to him and by a loaded rocket launcher: each part's share of the
   // dry samples, its speed across and along (closing positive).
-  const auto per_n = [](double k, int64_t n) { return n > 0 ? k / static_cast<double>(n) : 0; };
+  const auto per_n = [](double k, int64_t count) {
+    return count > 0 ? k / static_cast<double>(count) : 0;
+  };
   const int64_t dry_n = all.rl_n[0] + all.rl_n[1];
   double dry_across = 0, dry_along = 0;
   for (int b = 0; b < 2; b++) dry_across += all.rl_across[b], dry_along += all.rl_along[b];
@@ -990,6 +1019,20 @@ void run(gl::Lab& lab) {
     fight_reads += keys_fight.ground[i];
     all_reads += keys.ground[i];
   }
+  // The bumps off the body (bumps_read.hpp), a minute of the dry, live time read.
+  const double bump_min = bumps.live_s / 60;
+  const auto per_min = [&](int64_t k) {
+    return bump_min > 0 ? static_cast<double>(k) / bump_min : 0;
+  };
+  lab.metric("people.bumps.read-min", bump_min, "min");
+  lab.metric("people.bumps.wall-per-min", per_min(bumps.wall), "per-min");
+  lab.metric("people.bumps.wall-air-per-min", per_min(bumps.wall_air), "per-min");
+  lab.metric("people.bumps.player-per-min", per_min(bumps.player), "per-min");
+  // and a minute run at a bump's speed (a slower player meets fewer chances)
+  lab.metric("people.bumps.fast-share", bumps.live_s > 0 ? bumps.fast_s / bumps.live_s : 0,
+             "share");
+  lab.metric("people.bumps.wall-per-fast-min",
+             bumps.fast_s > 0 ? static_cast<double>(bumps.wall) * 60 / bumps.fast_s : 0, "per-min");
   lab.metric("people.keys.fight-share",
              all_reads > 0 ? static_cast<double>(fight_reads) / static_cast<double>(all_reads) : 0,
              "share");

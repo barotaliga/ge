@@ -415,6 +415,18 @@ const char* link_of(const sh::Pilot& p) {
   return "-";
 }
 
+// The kind of the link after the current one (`end`: the next node is the route's last).
+const char* link2_of(const sh::Pilot& p) {
+  if (p.g == nullptr || p.k + 1 >= p.route.size()) return "-";
+  if (p.k + 2 >= p.route.size()) return "end";
+  const sh::NavNode& b = p.g->nodes[static_cast<size_t>(p.route[p.k + 1])];
+  for (int32_t q = 0; q < b.links; q++) {
+    const sh::NavLink& l = p.g->links[static_cast<size_t>(b.first_link) + static_cast<size_t>(q)];
+    if (l.to == p.route[p.k + 2]) return sh::nav_kind_name(l.kind);
+  }
+  return "-";
+}
+
 // The decision log written (`--why`): the bots' names, the deaths as entries beside the rest.
 void write_why(gl::Lab& lab, shooters_edge::labs::WhyLog& log, const cn::TeamMatchReport& r) {
   for (size_t k = 0; k < r.players.size() && k < log.names.size(); k++)
@@ -580,7 +592,7 @@ void run(gl::Lab& lab) {
     trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
              "\tscript_"
              "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
-             "x\tnext_y\twish_f\twish_s\tkey_set\n";
+             "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -664,7 +676,12 @@ void run(gl::Lab& lab) {
       out << "-\t-\t";
     }
     out << to_fixed(f.keys.wish_forward, 0) << '\t' << to_fixed(f.keys.wish_side, 0) << '\t'
-        << f.keys.set << '\n';
+        << f.keys.set << '\t' << link2_of(p) << '\t'
+        << (p.g != nullptr && p.k + 1 < p.route.size() &&
+                    p.g->nodes[static_cast<size_t>(p.route[p.k + 1])].wet
+                ? 1
+                : 0)
+        << '\n';
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);

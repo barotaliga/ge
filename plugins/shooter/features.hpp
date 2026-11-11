@@ -43,7 +43,8 @@
 //   `lookway` (neutral), `press` (dropped, -2.7 frags) and `counter` (keys against a slide across
 //   the wish; dropped, speed 194 -> 185) in no preset. `slopes`: a walk up a stair to 45 degrees
 //   is level to the walk (pilot.hpp; on: +3.6 frags head to head). `jumpkey`: a jump asked for
-//   is held until its key lands (bots/keyboard.hpp; on).
+//   is held until its key lands (bots/keyboard.hpp; on). `backstep`: a run-up stepped back facing
+//   the jump (pilot.hpp; on).
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). The text (`apply_features`): `all`, `none` (`plain`),
 // `+name`/`name`, `-name`, in order.
@@ -55,7 +56,7 @@
 // ge:keywords lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen sound-swipe
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
-// ge:keywords slopes stair-corner counter
+// ge:keywords slopes stair-corner counter backstep run-up line-up
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -117,9 +118,10 @@ enum class Feature : uint8_t {
   slopes,
   counter,
   jumpkey,
+  backstep,
   trial,
 };
-constexpr size_t kFeatures = 49;
+constexpr size_t kFeatures = 50;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
