@@ -43,14 +43,14 @@
 // - `headroom`: no hop's jump into a lintel, nor its last one onto a stair (pilot.hpp).
 // - `liphop`: a hop runs on along a lava lip, the brink guard on its feet (pilot.hpp).
 // - `circlejump`: a hop's first jump out of a curve on the ground, past a run's 320 (pilot.hpp).
-// - `ahead`: the walk's keys flown through the move before a bump (pilot.hpp).
-// - `bodies`: with `ahead`, the other players near flown as boxes in it too (pilot.hpp).
+// - `ahead`: the walk's keys flown through the move before a bump; `bodies`: players near too.
 // - `beat`: a fight mode held a person's beat (through a peek). `trial`: an A/B's, in no preset.
+// - `keys`: the keys pressed by a hand on a keyboard (ai/keys.hpp); in no preset until judged.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: all but what that level
 // does not do: none `eye`, a novice no `glance`), `features_none` (a plain bot).
 // The text form (`apply_features`): `all`, `none` (`plain`), `+name`/`name`, `-name`, in order.
 // ge:summary A bot's features: each behaviour switched on or off by name, and the presets
-// ge:keywords features feature-switch bot-features apply_features features_text presets routes calm
+// ge:keywords features feature-switch bot-features apply_features features_text presets keys calm
 // ge:keywords pace swimaim screen keep lead lane hop shortgoals commit danger dodge watch spam
 // ge:keywords packs talk plan rocket-jump grenade-jump airsteer surface glance plain-bot ab-test
 // ge:keywords trial eye selfaim course-change own-motion pools pool-floor swim-under-view corner
@@ -111,9 +111,10 @@ enum class Feature : uint8_t {
   ahead,
   bodies,
   beat,
+  keys,
   trial,
 };
-constexpr size_t kFeatures = 42;
+constexpr size_t kFeatures = 43;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
