@@ -1,6 +1,6 @@
 ---
 name: brush
-description: "Use for plugins/brush in gameengine2: maps in the classic BSP families (version 29, BSP2, 38, 46) read into one view (surfaces, lightmaps, the tree, clusters, visibility and the PHS, clip hulls, entities, patches), refusing damage; the fixture writers that make test maps of each family; texture sequences and BSPX lumps; the `brush` tool (`ge tool brush -- info|ents|check`); the content scan and asset map (`ge content scan`); the bsp and content-scan labs; the brush fuzz and read tests."
+description: "Use for plugins/brush in gameengine2: maps in the classic BSP families (version 29, BSP2, 38, 46) read into one view (surfaces, lightmaps, the tree, clusters, visibility and the PHS, clip hulls, entities, patches), refusing damage; the fixture writers that make test maps of each family; texture sequences and BSPX lumps; the `brush` tool (`ge tool brush -- info|ents|liquids|slice|check`) and the map survey behind it (leaf cells, liquid bodies, slices, entities near a point); the content scan and asset map (`ge content scan`); the bsp and content-scan labs; the brush fuzz and read tests."
 ---
 
 # The brush plugin
@@ -17,7 +17,8 @@ format notes (the clean-room rules there say what may be written where).
 | `read.hpp/.cpp`, `read_parts.hpp` | The front door (family by the first bytes), lumps, refusals, rle rows, polygons, extents, tree checks, entities, `.lit` (BSPX lumps are read at the end of `read_v29.cpp`) |
 | `read_v29.cpp`, `read_v38.cpp`, `read_v46.cpp` | One reader a family (29 also reads BSP2) |
 | `anim.hpp/.cpp` | Texture sequences: `+` cycles and their alternates, `-` random sets, `texture_at` |
-| `tool.hpp/.cpp`, `tool/main.cpp` | The `brush` tool behind `ge tool brush`: `info`, `ents`, `check` over a search path, as JSON |
+| `tool.hpp/.cpp`, `tool/main.cpp` | The `brush` tool behind `ge tool brush`: `info`, `ents` (a class glob, `--near` a point), `liquids`, `slice`, `check` over a search path, as JSON |
+| `survey.hpp/.cpp` | A map surveyed: `leaf_cell` by family, `liquid_bodies` (deepest first, `narrowest`), `slice_map`, `entity_place`, `glob_match` |
 | `bytes.hpp` | The little-endian cursor and writer |
 | `trace.hpp/.cpp` | The brush trace (38): `BrushTracer::trace` (position test, sweep, brush clip; its precision rules), `contents` |
 | `world_writer.cpp` | `write_brush_world`: hand-built brushes (`box_brush`, `add_side`) as a 38 map with no faces, its tree cut along their axial sides |
