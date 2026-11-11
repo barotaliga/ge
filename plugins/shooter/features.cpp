@@ -11,19 +11,23 @@ namespace ge::shooter {
 namespace {
 
 constexpr const char* kNames[kFeatures] = {
-    "calm",       "pace",   "swimaim",  "screen",   "keep",      "lead",       "lane",   "hop",
-    "shortgoals", "commit", "danger",   "dodge",    "watch",     "spam",       "packs",  "talk",
-    "plan",       "rj",     "gj",       "airsteer", "surface",   "glance",     "eye",    "selfaim",
-    "pools",      "routes", "corner",   "mouse",    "packinfer", "listen",     "stairs", "locked",
-    "escape",     "brink",  "gapjump",  "headroom", "liphop",    "circlejump", "ahead",  "bodies",
-    "beat",       "keys",   "keysteer", "lookway",  "press",     "trial"};
+    "calm",       "pace",   "swimaim",  "screen",   "keep",      "lead",       "lane",    "hop",
+    "shortgoals", "commit", "danger",   "dodge",    "watch",     "spam",       "packs",   "talk",
+    "plan",       "rj",     "gj",       "airsteer", "surface",   "glance",     "eye",     "selfaim",
+    "pools",      "routes", "corner",   "mouse",    "packinfer", "listen",     "stairs",  "locked",
+    "escape",     "brink",  "gapjump",  "headroom", "liphop",    "circlejump", "ahead",   "bodies",
+    "beat",       "keys",   "keysteer", "lookway",  "press",     "slopes",     "counter", "trial"};
+// A name for every feature: one missing leaves the last null (and `feature_name` crashing).
+static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
-// Every switch but `trial` (the last) and those not judged or dropped (`lookway`, `press`). The
-// keyboard (`keys`, `keysteer`) is on: a person's hands are on keys (realism first; the frags it
-// costs, -3.8 a match head to head, won back by fixing movement and strategy).
+// Every switch but `trial` (the last) and those not judged or dropped (`lookway`, `press`,
+// `counter`). The keyboard (`keys`, `keysteer`) is on: a person's hands are on keys
+// (realism first; the frags it costs, -3.8 a match head to head, won back by fixing movement and
+// strategy).
 constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);
 constexpr uint64_t kKeys = (uint64_t{1} << static_cast<uint64_t>(Feature::lookway)) |
-                           (uint64_t{1} << static_cast<uint64_t>(Feature::press));
+                           (uint64_t{1} << static_cast<uint64_t>(Feature::press)) |
+                           (uint64_t{1} << static_cast<uint64_t>(Feature::counter));
 constexpr uint64_t kAll = (kTrial - 1) & ~kKeys;
 
 bool separator(char c) { return c == ',' || c == ' ' || c == '/' || c == '\t'; }

@@ -30,6 +30,8 @@ constexpr float kKeySpeed = 400;     // a key's axis, units/s (cl_forwardspeed)
 constexpr double kFull = 0.9;        // a wish of this share of a run or more is held, not feathered
 constexpr double kBand = 12;         // feathering's band round the speed wished, units/s
 constexpr double kSlide = 40;        // and the whole speed past the wished by this lets go, units/s
+constexpr double kCounterOn = 60;    // `counter`: the body this far off the velocity wished presses
+constexpr double kCounterOff = 25;   // and this near it lets go, units/s
 constexpr double kSteer = 0.02;      // the steering's tally past this changes the set, set-seconds
 constexpr double kSteerEdge = 0.08;  // a wish this near a set (a share of 45 degrees) is that set
 
@@ -130,9 +132,33 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
     // it) the speed along it stays low while the body runs on, past the point it slows into.
     const double flat = std::sqrt(static_cast<double>(velocity.x) * velocity.x +
                                   static_cast<double>(velocity.y) * velocity.y);
-    if (along < wished - kBand && flat < wished + kSlide) f.keys.feather = true;
-    if (along > wished + kBand || flat > wished + kSlide) f.keys.feather = false;
-    if (!f.keys.feather) set = -1;
+    if (f.features[sh::Feature::counter]) {
+      // COUNTERED: the keys toward the velocity wished while the body is off it by `kCounterOn`,
+      // let go within `kCounterOff`: under the speed along the wish, the set along it; sliding
+      // across it, the set back against the slide, as a person taps the keys against a slide to
+      // stop on a point. Never braked along the wish (over the speed wished it coasts): the
+      // walk's slowings are a person's easing off, not a stop.
+      const double ux = wx / (m * 320.0), uy = wy / (m * 320.0);
+      const double px = velocity.x - along * ux, py = velocity.y - along * uy;  // across it
+      const double short_by = std::fmax(0.0, wished - along);
+      const double cx = short_by * ux - px, cy2 = short_by * uy - py;
+      const double miss = std::sqrt(cx * cx + cy2 * cy2);
+      if (miss > kCounterOn) f.keys.feather = true;
+      if (miss < kCounterOff) f.keys.feather = false;
+      if (f.keys.feather) {
+        // The correction under the view: forward along the yaw, right a quarter turn clockwise.
+        const double cf = cx * cy + cy2 * sy, cs = cx * sy - cy2 * cy;
+        double ang = ge::core::libm::atan2(cs, cf) * (180.0 / ge::core::kPi);
+        if (ang < 0) ang += 360;
+        set = static_cast<int>(std::floor(ang / 45 + 0.5)) % 8;
+      } else {
+        set = -1;
+      }
+    } else {
+      if (along < wished - kBand && flat < wished + kSlide) f.keys.feather = true;
+      if (along > wished + kBand || flat > wished + kSlide) f.keys.feather = false;
+      if (!f.keys.feather) set = -1;
+    }
   } else {
     f.keys.feather = true;
   }

@@ -9,28 +9,24 @@
 // - `pace`: the view at a hand's pace, not the aim's flick, back from a lost enemy and swimming.
 // - `swimaim`: fighting in water with the view on the enemy, the swim's way pressed under it.
 // - `screen`: a 120-degree screen of sight (16:9); off, a round cone 100 degrees across.
-// - `keep`: the target in hand kept unless another in sight is half as far.
-// - `lead`: shots led at where the target will be and along his arc in the air.
+// - `keep`: the target kept unless another in sight is half as far; `lead`: shots led on him.
 // - `lane`: walking a lane beside the route's line, as a person does; off, on the line.
 // - `hop`: the bunny hop (an expert's) or the simple hop (an average player's).
 // - `shortgoals`: health, armour, a missing weapon, the mega or rockets ahead taken on the way.
 // - `commit`: an item goal held until news (a sighting, a pickup, a blow).
 // - `danger`: where it or a mate died, and areas called lost, kept from healing at for a while.
-// - `dodge`: side steps across an enemy's line in a fight; `watch`: the view on the ways in.
-// - `spam`: rockets fired at the spots enemies come in by, and at news of one coming.
+// - `dodge`: side steps across an enemy's line in a fight; `watch`: the view on the ways in;
+//   `spam`: rockets fired at the spots enemies come in by, and at news of one coming.
 // - `packs`: launchers in backpacks called and fetched by who needs one; the bore for a quad mate.
-// - `talk`: team lines said and read (status, calls, help, plans).
-// - `plan`: the map's team plan: roles, areas held, the opening, the quad's rush.
-// - `rj`: rocket jumps (the nav's rocket links and tricks); `gj`: grenade jumps.
-// - `airsteer`: flights steered by the side key, the view on the velocity (off: at the target).
-// - `surface`: up for air under open water before the air runs out.
+// - `talk`: team lines said and read; `plan`: the map's team plan (roles, areas, the quad's rush).
+// - `rj`, `gj`: rocket and grenade jumps; `airsteer`: flights steered by the side key.
+// - `surface`: up for air under open water before the air runs out. `eye`: a strafer's turn read
+//   a reaction late (senses.hpp `course_s`; off in every preset).
 // - `glance`: the calm walker's swipe aside now and then, to the longest open line (bot.hpp).
-// - `eye`: a strafer's turn read a reaction late (senses.hpp `course_s`); off in every preset.
 // - `selfaim`: the aim worked out from where its own eye will be as the hands catch up.
-// - `pools`: pool floors swum over, the swim's wish pressed in 3D (pilot.hpp, bot.hpp `pools`).
-// - `routes`: a map's scripted ways to key items taken (nav_script.hpp, bots/item_routes).
-// - `corner`: an enemy lost from sight followed a reaction's worth, then held where he went.
-// - `mouse`: the view a hand's strokes on a mouse, shots timed, fire clicked (bot.hpp).
+// - `pools`: pool floors swum over (pilot.hpp); `routes`: a map's scripted ways (nav_script.hpp).
+// - `corner`: an enemy lost from sight followed a reaction's worth, then held where he went;
+//   `mouse`: the view a hand's strokes on a mouse, shots timed, fire clicked (bot.hpp).
 // - `packinfer`: every death's pack known, its weapon guessed by level (bots/packs.hpp).
 // - `listen`: a calm bot swipes its view at an enemy heard where none was known (bot.hpp).
 // - `stairs`: a hop's stretch ends at a climb: stairs walked, the hop taken up at the top.
@@ -44,11 +40,12 @@
 // - `ahead`: the walk's keys flown through the move before a bump; `bodies`: players near too.
 // - `beat`: a fight mode held a person's beat (through a peek). `trial`: an A/B's, in no preset.
 // - `keys`: a hand on a keyboard presses the keys; `keysteer`: it taps between two sets (on);
-//   `lookway`: the calm view on the route's point in sight (neutral); `press`: the forward key
-//   with the dodge's side (dropped, -2.7 frags): these two in no preset.
-// THE PRESETS: `features_all` (every one), each skill's (`features_of`: all but what that level
-// does not do: none `eye`, a novice no `glance`), `features_none` (a plain bot).
-// The text form (`apply_features`): `all`, `none` (`plain`), `+name`/`name`, `-name`, in order.
+//   `lookway` (neutral), `press` (dropped, -2.7 frags) and `counter` (keys against a slide across
+//   the wish; dropped, speed 194 -> 185) in no preset. `slopes`: a walk up a stair to 45 degrees
+//   is level to the walk (pilot.hpp; on: +3.6 frags head to head).
+// THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
+// `glance`), `features_none` (a plain bot). The text (`apply_features`): `all`, `none` (`plain`),
+// `+name`/`name`, `-name`, in order.
 // ge:summary A bot's features: each behaviour switched on or off by name, and the presets
 // ge:keywords features feature-switch bot-features apply_features features_text presets keys calm
 // ge:keywords pace swimaim screen keep lead lane hop shortgoals commit danger dodge watch spam
@@ -57,6 +54,7 @@
 // ge:keywords lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen sound-swipe
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
+// ge:keywords slopes stair-corner counter
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -115,9 +113,11 @@ enum class Feature : uint8_t {
   keysteer,
   lookway,
   press,
+  slopes,
+  counter,
   trial,
 };
-constexpr size_t kFeatures = 46;
+constexpr size_t kFeatures = 48;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
