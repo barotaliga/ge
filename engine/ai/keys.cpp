@@ -139,7 +139,7 @@ Keyboard::Keyboard(const KeyLayout& layout, const KeyTiming& timing, uint32_t se
       const float d = key_dist(home, k);
       if (d < best) {
         best = d;
-        finger_[static_cast<size_t>(a)] = static_cast<int8_t>(i);
+        finger_[static_cast<size_t>(a)] = i;
       }
     }
     far_[static_cast<size_t>(a)] = best > layout.reach;
@@ -216,7 +216,7 @@ void Keyboard::finger_step(int i, uint32_t want, uint32_t* tapped) {
     const double travel =
         fs.on == Key::none || fs.on == k ? 0 : key_dist(fs.on, k) * timing_.travel_s;
     const double lag = t_ + draw(timing_.press_lo, timing_.press_hi);
-    fs.next = static_cast<int8_t>(desired);
+    fs.next = desired;
     fs.next_tap = tap;
     fs.press_at = start + travel > lag ? start + travel : lag;
   }
@@ -260,7 +260,7 @@ uint32_t Keyboard::step(double dt, uint32_t want, uint32_t tap, uint32_t* tapped
     for (int a = 0; a < kKeyActions; a++)
       if ((taps_ & bit(a)) && far_[static_cast<size_t>(a)]) {
         shift_phase_ = 1;
-        shift_action_ = static_cast<int8_t>(a);
+        shift_action_ = a;
         shift_until_ = t_ + timing_.shift_s;
         stats.shifts++;
         for (FingerState& fs : fingers_) {

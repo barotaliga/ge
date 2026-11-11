@@ -135,8 +135,8 @@ class Keyboard {
  private:
   struct FingerState {
     Key on = Key::none;      // the key it rests on or last pressed
-    int8_t held = -1;        // the action it holds
-    int8_t next = -1;        // the action it is on its way to press
+    int held = -1;           // the action it holds
+    int next = -1;           // the action it is on its way to press
     bool next_tap = false;   // that press is a tap
     bool held_tap = false;   // the key held is a tap
     double press_at = -1;    // when that press lands, s
@@ -149,14 +149,14 @@ class Keyboard {
   KeyLayout layout_;
   KeyTiming timing_;
   core::Rng rng_{0};
-  std::array<int8_t, kKeyActions> finger_{};
+  std::array<int, kKeyActions> finger_{};
   std::array<bool, kKeyActions> far_{};
   std::array<FingerState, kKeyFingers> fingers_{};
   uint32_t mouse_held_ = 0;                     // the other hand's buttons held
   std::array<double, kKeyActions> mouse_at_{};  // a mouse button's change lands then (-1 none)
   uint32_t taps_ = 0;                           // taps asked for and not yet done
   int shift_phase_ = 0;                         // 0 home, 1 going, 2 tapping, 3 coming back
-  int8_t shift_action_ = -1;
+  int shift_action_ = -1;
   double shift_until_ = 0;
   double t_ = 0;
 };

@@ -22,7 +22,7 @@ namespace {
 namespace ai = ge::ai;
 
 // The actions: the four move keys, the jump, the weapons 1 to 8 (impulse = action - kWeapon1 + 1).
-enum Act : int { kFwd, kBack, kLeft, kRight, kJump, kWeapon1 };
+enum Act : uint8_t { kFwd, kBack, kLeft, kRight, kJump, kWeapon1 };
 constexpr float kPressMin = 0.3f;  // in the air, a wish under this share of a run: no key
 constexpr float kCreep = 0.03f;    // on the ground, a wish under this share: no key
 constexpr double kHold = 4;        // the set held until the wish is this far past its edge, deg
@@ -42,7 +42,7 @@ ai::KeyLayout layout_of(sh::AimSkill tier) {
   l.home = {ai::Key::shift, ai::Key::a, ai::Key::w, ai::Key::d, ai::Key::space};
   constexpr ai::Key kRow[8] = {ai::Key::n1, ai::Key::n2, ai::Key::n3, ai::Key::n4,
                                ai::Key::n5, ai::Key::n6, ai::Key::n7, ai::Key::n8};
-  for (int w = 0; w < 8; w++) l.bind[static_cast<size_t>(kWeapon1 + w)] = kRow[w];
+  for (size_t w = 0; w < 8; w++) l.bind[kWeapon1 + w] = kRow[w];
   if (tier == sh::AimSkill::novice) return l;
   // The nailguns, the launchers and the arc on the keys round the hand: 5 F, 6 R, 7 Q, 8 E.
   l.bind[kWeapon1 + 4] = ai::Key::f;
@@ -77,9 +77,9 @@ double wrap(double deg) {
 }  // namespace
 
 void fighter_keyboard_init(Fighter& f, uint8_t moves, uint32_t seed) {
-  f.keyboard =
+  f.keys.board =
       ai::Keyboard(layout_of(sh::tier_of(moves)), timing_of(moves), seed * 2654435789u + 4242u);
-  f.key_set = -1;
+  f.keys.set = -1;
 }
 
 void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool onground) {
@@ -91,9 +91,10 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
     double ang = ge::core::libm::atan2(sd, fw) * (180.0 / ge::core::kPi);
     if (ang < 0) ang += 360;
     set = static_cast<int>(std::floor(ang / 45 + 0.5)) % 8;
-    if (f.key_set >= 0 && std::fabs(wrap(ang - f.key_set * 45.0)) <= 22.5 + kHold) set = f.key_set;
+    if (f.keys.set >= 0 && std::fabs(wrap(ang - f.keys.set * 45.0)) <= 22.5 + kHold)
+      set = f.keys.set;
   }
-  f.key_set = static_cast<int8_t>(set);
+  f.keys.set = set;
   // Feathering a wish short of a run on the ground: on under the speed wished, off over it.
   if (set >= 0 && onground && m < kFull) {
     const double yaw = cmd.angles.y * (ge::core::kPi / 180.0);
@@ -102,11 +103,11 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
     const double wx = fw * cy + sd * sy, wy = fw * sy - sd * cy;
     const double along = (velocity.x * wx + velocity.y * wy) / (m * 320.0);
     const double wished = m * 320.0;
-    if (along < wished - kBand) f.key_feather = true;
-    if (along > wished + kBand) f.key_feather = false;
-    if (!f.key_feather) set = -1;
+    if (along < wished - kBand) f.keys.feather = true;
+    if (along > wished + kBand) f.keys.feather = false;
+    if (!f.keys.feather) set = -1;
   } else {
-    f.key_feather = true;
+    f.keys.feather = true;
   }
   uint32_t want = 0;
   if (set == 7 || set == 0 || set == 1) want |= bit(kFwd);
@@ -117,7 +118,7 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
   uint32_t tap = 0;
   if (cmd.impulse >= 1 && cmd.impulse <= 8) tap = bit(kWeapon1 + cmd.impulse - 1);
   uint32_t tapped = 0;
-  const uint32_t held = f.keyboard.step(cmd.msec / 1000.0, want, tap, &tapped);
+  const uint32_t held = f.keys.board.step(cmd.msec / 1000.0, want, tap, &tapped);
   const auto axis = [&](int plus, int minus) {
     return sh::quantize_axis(
         kKeySpeed * static_cast<float>(((held & bit(plus)) != 0) - ((held & bit(minus)) != 0)));
