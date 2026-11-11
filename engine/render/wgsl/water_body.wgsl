@@ -25,7 +25,8 @@ struct WaterBody {
   wake: vec4f,       // rings, their life (s), the shortest wave kept (m), 0
   air: vec4f,        // the day's share on the water, the stir's slope, the gusts, their drift (m/s)
   sun: vec4f,        // the share of the surface the sun reaches (the caustics, the shafts), the
-                     // water's pace (its waves' own frequencies are already scaled by it), 0, 0
+                     // water's pace (its waves' own frequencies are already scaled by it), the
+                     // floor (world m: the underside's level), 0
   view: vec4f,       // the mirror (0 none, 1 over, 2 under, -1 no reflection), the view up (1), the
                      // wind's heading (sin, cos)
   foam: vec4f,       // the fold's threshold on the Jacobian, the whitecap cover, its drift (x, z)
