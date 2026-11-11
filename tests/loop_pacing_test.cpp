@@ -42,7 +42,7 @@ TEST(frames_start_on_an_even_grid) {
 
 TEST(the_summary_finds_the_hitches_and_the_one_percent_low) {
   FrameTimes t;
-  for (int i = 0; i < 990; i++) t.add(1.0 / 120, 0.002, 0.001);
+  for (int i = 0; i < 990; i++) t.add(1.0 / 120, 0.002, 0.001, 0.004);
   for (int i = 0; i < 10; i++) t.add(2.0 / 120);  // ten refreshes missed
   const FrameSummary s = t.summarize();
   CHECK(s.frames == 1000);
@@ -54,6 +54,8 @@ TEST(the_summary_finds_the_hitches_and_the_one_percent_low) {
   CHECK(s.cap_wait_ms > 1.97 && s.cap_wait_ms < 1.99);
   CHECK(t.recent(0) == 2.0 / 120);
   CHECK(summary_text(s).find("10 hitches") != std::string::npos);
+  CHECK(s.image_wait_ms > 3.95 && s.image_wait_ms < 3.97);  // the display's hold, shown apart
+  CHECK(summary_text(s).find("image 3.96") != std::string::npos);
   // The ring keeps the newest kFrameTimes.
   for (size_t i = 0; i < kFrameTimes; i++) t.add(0.004);
   CHECK(t.size() == kFrameTimes);

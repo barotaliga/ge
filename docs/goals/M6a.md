@@ -12,6 +12,13 @@ frames in flight, steady) takes the input-to-picture lag from ~25 ms to ~16.6 ms
 under 0.05 ms, under both loads. `vid_vsync_lag_fix` (off by default) starts each frame just in time for its
 refresh: ~8.8 ms under the light load.
 
-**Open:** the Mac's measurement (`framestats` on the ProMotion display, windowed and fullscreen,
-at each vid_framelatency, the issue labelled `needs-mac`); Fall Line's window wired the same way
+**The Mac's first numbers (#625, 2026-11-10, demo playback):** the window holds 60 fps on the
+120 Hz panel at every setting but `vid_framelatency 1`, which reaches 82 fps with ~11 ms a frame
+waiting on the GPU: the GPU's frame is past a refresh, so vsync shows each frame for two. Fullscreen
+at the panel's native size halves it again. The lag fix read a 0 ms frame because demos and joined
+games presented outside the pacing; every present path now goes through it, and `framestats`
+names the wait for a free image apart from the GPU's.
+
+**Open:** the Mac's measurement again on a map (`framestats` windowed and fullscreen, with
+`r_quality auto` so the GPU's frame fits `r_budget` 8.3 ms, the issue labelled `needs-mac`); Fall Line's window wired the same way
 (its `vid_vsync` is latched today); the lag fix's margin measured on the Mac (`vid_vsync_lag_tweak` 0.5 to 2).

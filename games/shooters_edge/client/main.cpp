@@ -362,6 +362,24 @@ int run_main(int argc, char** argv) {
   surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync_applied);
   ge::platform::set_swap_images(*window, ge::platform::swap_images(pacing.settings));
   pacing.present = surface.present_mode();
+  // Every frame the player watches is acquired and presented through these two, so the pacing
+  // sees each one: the acquire timed (framestats' image wait; one that blocked marks a refresh
+  // for vid_vsync_lag_fix), and after the present the gate told and, while the lag fix is on,
+  // the frame's cost to its GPU's last work measured.
+  const auto acquire_frame = [&] {
+    const uint64_t before = ge::platform::now_ns();
+    wgpu::TextureView view = surface.acquire(*device);
+    ge::platform::acquired(pacing, before, ge::platform::now_ns());
+    return view;
+  };
+  const auto present_frame = [&] {
+    surface.present();
+    gate.submitted(*device);
+    if (ge::platform::late_start_on(pacing)) {
+      gate.wait(*device, 1);
+      ge::platform::frame_done(pacing, ge::platform::now_ns());
+    }
+  };
   cl::WorldDrawPtr title =
       cl::make_title_world(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h),
                            surface.format(), picture, error);
@@ -390,12 +408,11 @@ int run_main(int argc, char** argv) {
     if (!caption.empty())
       ge::hud::draw_spinner(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(), t,
                             caption, t - since);
-    const wgpu::TextureView target = surface.acquire(*device);
+    const wgpu::TextureView target = acquire_frame();
     if (!target) return;
     cl::draw_world(*device, *title, cl::title_view(t), {}, nullptr, dt, overlay, target);
     shot_copy.frame(*device, surface.frame_target(), shots, console);
-    surface.present();
-    gate.submitted(*device);
+    present_frame();
   };
   title_frame(0, 0, "LOADING", 0);
   // The main menu's maps, its classic pictures when the packs carry them, and the packs classic
@@ -855,12 +872,12 @@ int run_main(int argc, char** argv) {
       }
       con_view.frame(dt);
       ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
-      const wgpu::TextureView target = surface.acquire(*device);
+      const wgpu::TextureView target = acquire_frame();
       if (!target) continue;
       cl::draw_world(*device, bot_world ? *bot_world : *title, view, {}, nullptr, dt, overlay,
                      target);
       shot_copy.frame(*device, surface.frame_target(), shots, console);
-      surface.present();
+      present_frame();
       // `--seconds=N`: a screenshot a second before the end, then quit (a run that leaves a
       // picture behind).
       if (args.seconds > 0 && t >= args.seconds - 1 && !shot_asked) {
@@ -1263,7 +1280,7 @@ int run_main(int argc, char** argv) {
       const uint64_t frame_ns = ge::platform::now_ns();
       wgpu::TextureView target;
       const bool show = paced || frame_ns - bench_shown_ns >= kBenchShowNs;
-      if (show) target = surface.acquire(*device);
+      if (show) target = paced ? acquire_frame() : surface.acquire(*device);
       if (target) {
         bench_shown_ns = frame_ns;
       } else {
@@ -1292,8 +1309,11 @@ int run_main(int argc, char** argv) {
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
         shot_copy.frame(*device, surface.frame_target(), shots, console);
-        surface.present();
-        if (paced) gate.submitted(*device);
+        if (paced) {
+          present_frame();
+        } else {
+          surface.present();  // a timedemo's shown frame: unpaced, untimed
+        }
       }
       if (paced) {  // playback: every frame shown, nothing timed
         ++presented;
@@ -1444,18 +1464,11 @@ int run_main(int argc, char** argv) {
       ge::hud::draw_spinner(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(), t,
                             cl::load_caption(loader), t - loader.since_s);
 
-    const uint64_t acquiring = ge::platform::now_ns();
-    wgpu::TextureView target = surface.acquire(*device);
-    ge::platform::acquired(pacing, acquiring, ge::platform::now_ns());
+    wgpu::TextureView target = acquire_frame();
     if (!target) continue;
     cl::draw_world(*device, *world, view, fx, &hand, wall, overlay, target);
     shot_copy.frame(*device, surface.frame_target(), shots, console);
-    surface.present();
-    gate.submitted(*device);
-    if (ge::platform::late_start_on(pacing)) {  // the frame's cost, to its GPU's last work
-      gate.wait(*device, 1);
-      ge::platform::frame_done(pacing, ge::platform::now_ns());
-    }
+    present_frame();
     ++presented;
   }
   if (quit) save_settings();
