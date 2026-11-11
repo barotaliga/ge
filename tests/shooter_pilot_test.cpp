@@ -9,7 +9,7 @@
 //
 // ge:summary Tests: the pilot's routes on the nav course and the arena, hands, strafe, bits
 // ge:keywords test pilot route jump run-up ride plat door wait barred strafe-jump hands golden
-// ge:keywords rocket-jump flip standing-flip
+// ge:keywords rocket-jump flip standing-flip look-ahead foresee other-players
 // ge:skill shooter bots testing
 #include <cstdio>
 #include <cstdlib>
@@ -20,6 +20,7 @@
 #include "check.hpp"
 #include "golden.hpp"
 #include "shooter/brush_hull.hpp"
+#include "shooter/look_ahead.hpp"
 #include "shooter/nav.hpp"
 #include "shooter/pilot.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
@@ -262,4 +263,61 @@ TEST(a_grenade_jump_climbs_a_block_for_a_player_with_no_rocket_launcher) {
                              std::to_string(r.shots) + " shots)");
     CHECK_MSG(r.stats.grenade_jumps >= 1 && r.blast > 0, who + ": no grenade burst by the jumper");
   }
+}
+
+TEST(the_walk_foreseen_flies_round_a_player_standing_on_its_line) {
+  // An open floor: running east at 320 u/s toward a point 600 on, nothing in the way. A player
+  // standing 100 units ahead on the line: the pursuit's flight runs into his box, and a way that
+  // bumps less (or not at all) is pressed instead; without him in the flight nothing is flown.
+  FlipRoom room({FlipRoom::box({-512, -512, -64}, {1024, 512, 0})}, {-512, -512, -64},
+                {1024, 512, 256}, {0, 0, 24});
+  sh::WalkStart st;
+  st.origin = {0, 0, 24};
+  st.velocity = {320, 0, 0};
+  st.pressed = {0, 1, 0};
+  st.delay = 0.1f;
+  st.horizon = 0.35f;
+  const sh::Vec3f aim{600, 0, 24}, near{300, 160, 24};
+  sh::WalkKeys keys;
+  sh::WalkSeen seen[sh::kWalkWays];
+  bool flown = true;
+  sh::WalkWay way = sh::foresee_walk(room.world, st, aim, near, keys, seen, flown);
+  CHECK_MSG(!flown && way == sh::WalkWay::pursue,
+            "an open floor was flown: the walk foresaw a bump with nobody in the way");
+  const sh::OtherBox him{{100, 0, 24}, {0, 0, 0}};
+  st.others = std::span<const sh::OtherBox>(&him, 1);
+  way = sh::foresee_walk(room.world, st, aim, near, keys, seen, flown);
+  CHECK_MSG(flown && seen[0].bump > 0,
+            "the pursuit's flight did not meet the player standing on its line (bump " +
+                std::to_string(seen[0].bump) + ")");
+  CHECK_MSG(way != sh::WalkWay::pursue && seen[static_cast<int>(way)].bump < seen[0].bump,
+            std::string("the walk pressed ") + sh::walk_way_name(way) +
+                " into the player: a way that bumps less was not chosen");
+}
+
+TEST(a_player_standing_on_the_way_is_walked_round_or_waited_for) {
+  // A player standing 100 units along the walk's line on an open floor: the walk aims beside him
+  // and just past him. In a corridor no wider than two boxes there is no room: it waits.
+  FlipRoom open({FlipRoom::box({-512, -512, -64}, {1024, 512, 0})}, {-512, -512, -64},
+                {1024, 512, 256}, {0, 0, 24});
+  const sh::OtherBox him{{100, 4, 24}, {0, 0, 0}};
+  const std::span<const sh::OtherBox> others(&him, 1);
+  sh::Vec3f round;
+  CHECK_MSG(sh::body_on_way(open.world, {0, 0, 24}, {400, 0, 24}, others, round),
+            "a player standing on the line was not seen in the way");
+  CHECK_MSG(round.x > 100 && round.y < -40,
+            "the way round him is not beside and past him on the open side (" +
+                std::to_string(round.x) + ", " + std::to_string(round.y) + ")");
+  CHECK_MSG(!sh::body_on_way(open.world, {0, 0, 24}, {400, 0, 24}, std::span<const sh::OtherBox>(),
+                             round),
+            "nobody stands there, yet the way was put round someone");
+  const sh::OtherBox runner{{100, 4, 24}, {300, 0, 0}};
+  CHECK_MSG(!sh::body_on_way(open.world, {0, 0, 24}, {400, 0, 24},
+                             std::span<const sh::OtherBox>(&runner, 1), round),
+            "a player running on was taken for one standing in the way");
+  FlipRoom corridor({FlipRoom::box({-512, -48, -64}, {1024, 48, 0})}, {-512, -48, -64},
+                    {1024, 48, 256}, {0, 0, 24});
+  CHECK_MSG(sh::body_on_way(corridor.world, {0, 0, 24}, {400, 0, 24}, others, round) &&
+                round.x == 0 && round.y == 0,
+            "no room round him in a corridor, yet the walk did not wait");
 }

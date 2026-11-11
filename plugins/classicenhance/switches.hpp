@@ -19,6 +19,7 @@
 // ge:keywords muzzle teleports rubble fog bloom reflections sounds models upscaler options menu
 // ge:keywords relief parallax bonfires ce_bonfires ce_pictures pictures hud-art ce_trails ce_hits
 // ge:keywords trails hits heathaze heat-haze fumes burning ce_heathaze ce_fumes ce_burning
+// ge:keywords wade wading ce_wade
 // ge:skill classicenhance
 // ge:test tests/classicenhance_switches_test.cpp
 #pragma once
@@ -41,8 +42,8 @@ struct Switches {
   // World
   bool arches = true, bevels = true, rubble = true, clutter = true, decals = true;
   // Liquids and sky
-  bool water = true, lava = true, slime = true, heathaze = true, fumes = true, teleports = true,
-       skies = true;
+  bool water = true, lava = true, slime = true, heathaze = true, fumes = true, wade = true,
+       teleports = true, skies = true;
   // Effects
   bool flames = true, bonfires = true, muzzles = true, explosions = true, trails = true,
        hits = true, flares = true, bubbles = true, beams = true, warps = true, burning = true;

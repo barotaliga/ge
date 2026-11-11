@@ -25,9 +25,10 @@ bool save_settings(ge::console::Console& con) {
     return true;
   const std::filesystem::path dir =
       con.search_path().empty() ? std::filesystem::path(".") : con.search_path()[0];
-  ge::core::output::status(
-      "shooters_edge: the settings were not saved: " + (dir / ge::console::kConfigFile).string() +
-      " cannot be written; next: check the game folder's permissions");
+  const std::filesystem::path file =
+      con.config_file().empty() ? dir / ge::console::kConfigFile : con.config_file();
+  ge::core::output::status("shooters_edge: the settings were not saved: " + file.string() +
+                           " cannot be written; next: check the game folder's permissions");
   return false;
 }
 

@@ -5,6 +5,7 @@ PRESET ?= debug
 SOURCES := $(shell git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' 2>/dev/null)
 
 .PHONY: setup run build test fmt fmt-check lint agents-check index find lessons labs lab sim play labs-smoke \
+	bot-video bot-why \
 	labs-digests libm-check release-check shaders-check precheck ge clean
 
 # A new machine, once: the platform's setup script installs every tool the build needs
@@ -101,6 +102,16 @@ lab: build
 SEEDS ?=
 sim: build
 	$(LABS) sim $(if $(SEEDS),--seeds=$(SEEDS)) $(ARGS)
+
+# A 4on4 of Shooter's Edge's bots played, recorded and rendered as an .mkv (~/Downloads by
+# default): make bot-video ARGS="--map=e1m2 --seed=2 --features-red=-hop" (tools/bot-match-video.sh).
+bot-video:
+	tools/bot-match-video.sh $(ARGS)
+
+# Why a bot did something at a moment of a match video, from its decision log (the newest one by
+# default): make bot-why ARGS="--bot=red2 --at=4:12 [--video=<name>]" (tools/bot-why.sh).
+bot-why:
+	tools/bot-why.sh $(ARGS)
 
 # The play protocol on stdio (Fall Line's `play` executable, engine/play/main.hpp): the build's
 # output goes to stderr, so stdout is the protocol alone. ARGS="--seed=38 --rivals=3", or a

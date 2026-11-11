@@ -102,6 +102,9 @@ struct TeamMatchOptions {
   void (*on_command)(void* ctx, int k, const bots::Fighter& f, const server::RulesCommon& w,
                      const sh::MoveCmd& cmd) = nullptr;
   void* on_command_ctx = nullptr;
+  // Every fighter's decisions recorded on this (`follow` by its slot; engine/ai/why.hpp), for a
+  // lab's decision log (labs/why_log.hpp); recording decides nothing. Null: none.
+  ge::ai::Why* why = nullptr;
 };
 
 struct TeamPlayer {

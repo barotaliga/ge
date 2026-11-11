@@ -60,6 +60,7 @@
 // ge:test tests/shooter_pilot_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -70,6 +71,7 @@
 #include "core/prng.hpp"
 #include "shooter/circle_jump.hpp"
 #include "shooter/cmd_source.hpp"
+#include "shooter/look_ahead.hpp"
 #include "shooter/nav.hpp"
 
 namespace ge::shooter {
@@ -150,6 +152,25 @@ struct PilotSettings {
   // over `lane_ease_s`, back to the line before a jump, a drop, a mover, water or a narrow place.
   float lane = 0;  // 0: on the line
   float lane_min_s = 1.2f, lane_max_s = 3.0f, lane_ease_s = 0.8f;
+  // THE WALK'S LOOK AHEAD (`ahead`, with a world): a proven link is clear, the line a walker runs
+  // round a corner at 320 u/s is not. Two halves: the AIM pulled back along the route (the look
+  // halved, its lane kept and then dropped) until the player's box reaches it straight; and THE
+  // WALK FORESEEN: where the box swept along the velocity meets a wall within the hands' delay and
+  // `ahead_s`, the keys are flown through the move itself (player_move over the map's solids: the
+  // keys already pressed for the delay, then the pursuit's, the turn braked, the next node, or no
+  // keys) and a way that does not bump is pressed, the nearest to the aim (a person knows how
+  // their body meets the room). dm2, 24 ten-minute seeds, one side with it: its wall bumps 12.0 ->
+  // 9.8 a bot-minute, its speed no lower, head to head even (+0.4 frags a match over both sides).
+  bool ahead = false;
+  float ahead_s = 0.25f;  // the walk's flights foreseen this long past the hands' delay, s
+  // OTHER PLAYERS' BOXES in the walk foreseen (`bodies`, with `ahead`): the players the sense
+  // hands over (`PilotSense::others`) flown as boxes along their velocities, so a way that runs
+  // into a mate or an enemy is a bump, and one standing on the walk's line is walked round
+  // (look_ahead.hpp `body_on_way`), or waited for where there is no room; off, the walk knows the
+  // map's solids alone. dm2, 24 ten-minute seeds, one side with it: its player bumps 5.4 -> 4.4 a
+  // bot-minute, its speed +6 u/s, head to head +1.6 frags a match over both sides; on both sides
+  // player bumps 5.5 -> 4.1 and speed 174 -> 182.
+  bool ahead_bodies = false;
 };
 
 // `swim`: on a swim link (nav.hpp), the view pitched at the next node, forward held, jump to rise;
@@ -201,6 +222,9 @@ struct PilotSense {
   const MoveWorld* world = nullptr;
   bool grenade_ready = true;  // the grenade launcher in hand: a grenade jump fires only then
   bool rocket_ready = true;   // the rocket launcher in hand: a rocket out of a pit fires only then
+  // The other players alive near, as the client was sent them (look_ahead.hpp `OtherBox`): the
+  // walk foreseen flies them as boxes (`ahead_bodies`).
+  std::span<const OtherBox> others;
 };
 
 struct PilotStats {
@@ -271,6 +295,14 @@ struct Pilot {
   std::vector<NavExtraLink> gaps_off;  // gap tricks given up, off every route until `gaps_off_s`
   std::vector<double> gaps_off_s;      // (the pilot's own clock, `clock_s`)
   double clock_s = 0;                  // the commands' time, never reset
+  // Each ridden mover's height at the last command and when it last moved (`clock_s`): a plat is
+  // stepped onto only at its rest and silent, still a beat (pilot.cpp `mover_in_way`).
+  struct MoverSeen {
+    int32_t ent = -1;
+    float z = 0;
+    double moved_at = -1e9;
+  };
+  MoverSeen movers_seen[8];
   bool gap_flight = false;
   bool safe_flight = false;
   bool brink_free = false;    // this command's keys are a flight the move proved: no brink guard
@@ -310,7 +342,8 @@ struct PilotBot {
   Pilot pilot;
   std::vector<int32_t> goals;
   size_t next_goal = 0;
-  std::vector<NavMover> now;   // the movers as they stand (reused)
+  std::vector<NavMover> now;                   // the movers as they stand (reused)
+  std::array<OtherBox, kWalkOthers> others{};  // the players near (`PilotSense::others`)
   MoveWorld* world = nullptr;  // the map's solids the hop looks ahead through (null: none)
   bool grenade_ready = true;   // the grenade launcher in hand (the caller's say, each command)
   bool rocket_ready = true;    // the rocket launcher in hand (the caller's say, each command)

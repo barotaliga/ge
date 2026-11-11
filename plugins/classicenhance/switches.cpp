@@ -66,6 +66,11 @@ const SwitchSpec kSwitches[] = {
      "Acid fumes hang over slime and smoke over lava, thick round anything in them. Off: clear "
      "air.",
      &S::fumes, false},
+    {"wade", "LIQUIDS AND SKY", "WADING",
+     "Lava and slime part round a player wading through them and close slowly behind him, thick "
+     "as they are; lava's crust tears open. A ball of lava hurled out heaves it, and coming down "
+     "splashes. Off: a still surface.",
+     &S::wade, false},
     {"teleports", "LIQUIDS AND SKY", "TELEPORTERS",
      "Teleporters drawn as a shimmering field. Off: the pack's warped picture.", &S::teleports,
      false},

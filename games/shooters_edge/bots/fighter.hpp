@@ -278,7 +278,8 @@ struct Fighter {
   sh::HearSkill ears;  // what it takes in of the sounds it is sent (hearing.hpp)
   // Its team messages (team.hpp's `team_say`), sent as `say_team` by whoever drives its client.
   std::vector<std::string> outbox;
-  double held = 0;             // in the mode this long
+  double held = 0;             // in the mode this long (worked out when it changes)
+  double mode_at = 0;          // server time it entered the mode
   double heard_t = -1;         // the server time whose sounds were last taken in
   double spam_fired = -1e9;    // its last rocket at a spot
   double poke_until = -1e9;    // a novice on a button until then (buttons.hpp)
