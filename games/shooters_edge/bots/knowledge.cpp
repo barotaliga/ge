@@ -20,7 +20,10 @@ namespace pf = shooters_edge::profiles;
 
 namespace {
 
-constexpr float kOwnPickup = 64;    // an item gone this near the player is its own pickup, units
+constexpr float kOwnPickup = 64;   // an item gone this near the player is its own pickup, units
+constexpr double kOwnLag_s = 0.3;  // a view this old may still send the item it took
+constexpr float kOwnReach =
+    112;  // a gain on the bar is an item this near (a think at a run), units
 constexpr float kExploreFar = 600;  // a novice explores to a node at least this far, units
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
@@ -177,9 +180,80 @@ void map_weights(Fighter& f) {
 }
 
 ItemNews knowledge_update(Fighter& f, const server::RulesCommon& s, int me, sh::Vec3f eye,
-                          double t) {
+                          const Stats& st, double t) {
   ItemNews news;
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
+  // ITS OWN PICKUP, off the status bar: what rose since the last think (not across a respawn).
+  const Stats was = f.bar;
+  f.bar = st;
+  if (was.health > 0 && st.health > 0) {
+    // The item bits gained, less the held ammunition's icon (256..2048: it moves with the weapon).
+    const int32_t new_bits = st.items & ~was.items & ~0xf00;
+    const bool ammo = st.shells > was.shells || st.nails > was.nails || st.rockets > was.rockets ||
+                      st.cells > was.cells;
+    // An item gives what the bar shows: its own amount (a box's, a pack's is any), or up to the
+    // cap; a weapon its bit (or, held already, ammunition and no new bit).
+    const auto rose_by = [](float was_v, float now, float amount, float cap) {
+      if (now <= was_v) return false;
+      if (amount <= 0) return true;  // no amount read off the map: any gain
+      return std::fabs(now - was_v - amount) < 0.5f || now >= cap - 0.5f;
+    };
+    const auto gives = [&](const ItemSpot& it) {
+      switch (it.kind) {
+        case ItemKind::health:
+          return rose_by(was.health, st.health, it.amount, 100);
+        case ItemKind::mega:
+          return rose_by(was.health, st.health, it.amount, 250);
+        case ItemKind::armor1:
+        case ItemKind::armor2:
+        case ItemKind::armor3:
+          return st.armor > was.armor;
+        case ItemKind::shells:
+          return rose_by(was.shells, st.shells, it.amount, 100);
+        case ItemKind::nails:
+          return rose_by(was.nails, st.nails, it.amount, 200);
+        case ItemKind::rockets:
+          return rose_by(was.rockets, st.rockets, it.amount, 100);
+        case ItemKind::cells:
+          return rose_by(was.cells, st.cells, it.amount, 100);
+        case ItemKind::weapon:
+          return (new_bits & it.weapon) != 0 || (new_bits == 0 && ammo);
+        case ItemKind::quad:
+        case ItemKind::pent:
+          return new_bits != 0;
+      }
+      return false;
+    };
+    int32_t mine = -1;
+    float best = kOwnReach;
+    for (size_t i = 0; i < f.items.size(); i++) {
+      const ItemSpot& it = f.items[i];
+      if (it.ent < 0 || t - it.mine_at < kOwnLag_s || !gives(it)) continue;
+      // One believed gone (a novice's guess, a sighting the view undid) only underfoot: a
+      // dead player's pack dropped beside an item gives too.
+      const float d = dist(it.at, self);
+      if (!it.present && d >= kOwnPickup) continue;
+      if (d < best) {
+        best = d;
+        mine = static_cast<int32_t>(i);
+      }
+    }
+    if (mine >= 0) {
+      ItemSpot& it = f.items[static_cast<size_t>(mine)];
+      const bool times =
+          f.timing == MapSense::expert || (f.timing == MapSense::average && !key_item(it));
+      it.present = it.confirmed = it.watched = false;
+      it.mine_at = t;
+      it.timed = times;
+      it.back_at = t + it.respawn_s * (times ? 1.f : kGuessLate);
+      f.stats.taken++;
+      f.stats.pickups++;
+      f.stats.took[static_cast<size_t>(it.kind)]++;
+      news.taken = mine;
+      news.by_me = true;
+      mega_taken(f, mine, t, true);
+    }
+  }
   sh::SenseSettings look = f.bot.senses.set;
   look.range = kItemSight;
   const sh::Vec3f angles{f.bot.pitch, f.bot.yaw, 0};
@@ -188,6 +262,8 @@ ItemNews knowledge_update(Fighter& f, const server::RulesCommon& s, int me, sh::
     if (it.ent < 0) continue;
     bool sent = false;
     for (const sh::ViewEntity& v : f.bot.view.entities) sent |= v.ent == it.ent;
+    // Its own pickup is not undone by the view still sending it a frame or two after the bar rose.
+    if (t - it.mine_at < kOwnLag_s) sent = false;
     // The spot in sight (as a player's middle, a little over the floor), or underfoot.
     const bool underfoot = dist(it.at, self) < kOwnPickup;
     const sh::Vec3f spot{it.at.x, it.at.y, it.at.z + 8};

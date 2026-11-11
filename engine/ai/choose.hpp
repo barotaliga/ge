@@ -26,17 +26,19 @@
 namespace ge::ai {
 
 // THE BEST OF OPTIONS 0..n-1 by `score(i)` (-1 with none): recorded on `why` (when not null) as
-// decision `decision`, option i named `name(i)`, the choice settled by `because`.
+// decision `decision`, option i named `name(i)`, the choice settled by `because`. Only an option
+// scoring over `above` is taken: a caller that scores what it cannot have 0 passes 0, or with
+// nothing to have it is handed option 0 (-1 and "none" then).
 template <class Score, class Name>
 int32_t pick_best(int32_t n, const Score& score, Why* why, const char* decision, const Name& name,
-                  const char* because) {
+                  const char* because, double above = -1e300) {
   if (why) why->decide(decision);
   int32_t best = -1;
   double top = 0;
   for (int32_t i = 0; i < n; i++) {
     const double v = score(i);
     if (why) why->option(name(i), v);
-    if (best < 0 || v > top) {
+    if (v > above && (best < 0 || v > top)) {
       best = i;
       top = v;
     }
