@@ -215,7 +215,18 @@ void run(gl::Lab& lab) {
       lab.fail(name + " has no player start", "Check the map's entities. Skill: brush.");
     }
     at.z += kEyeHeight;
-    if (!device) continue;
+    if (!device) {
+      // No GPU adapter: a placeholder by each shot's id, in order, so the digest (which holds the
+      // ids) is the same on every row.
+      for (const char* way : kWays) {
+        gl::Picture none = gl::create_picture(160, 90, {40, 40, 48});
+        gl::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
+        lab.shot(
+            {name + "-" + way, "NO GPU ADAPTER", "This machine has no GPU adapter.", "nothing", {}},
+            none, gl::Det::measured);
+      }
+      continue;
+    }
     cl::WorldDrawPtr world = cl::create_world_draw(
         *device, files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm, look, {}, error, {}, adapter);
     if (!world) {
@@ -258,7 +269,7 @@ void run(gl::Lab& lab) {
     errors = static_cast<int>(device->errors.load());
     late = static_cast<int>(device->pipelines_after_load);
   } else {
-    ls::placeholders(lab, {});
+    ls::placeholders(lab, {});  // each map's shots stood in above
   }
   ls::checked(lab, errors, late);
 }
