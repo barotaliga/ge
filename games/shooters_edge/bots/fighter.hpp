@@ -228,6 +228,14 @@ struct FoeRead {
 
 struct MapPlan;
 
+// The hand on the keys (feature `keys`, keyboard.hpp): the keyboard, the key set wanted last (-1
+// none) and whether feathering has the keys on.
+struct KeyHand {
+  ge::ai::Keyboard board;
+  int set = -1;
+  bool feather = true;
+};
+
 struct Fighter {
   // Ordered by size, largest first, so the struct packs tight.
   sh::Bot bot;
@@ -271,6 +279,7 @@ struct Fighter {
   bool bridges_seen = false;
   Mind mind;         // what it believes of its team, its claim, its calls (mind.hpp)
   Escort escort;     // a co-op companion's own state (companion.hpp; leader -1: none)
+  KeyHand keys;      // the hand on the keys (feature `keys`, keyboard.hpp)
   std::string name;  // its player name, as its teammates see it in their team lines
   std::string pack_call_item = "rl";  // what the pending pack call says is in it ("rl", "lg")
   ge::ai::Search reach;               // every node it can get to from where it stood at `reach_at`
@@ -404,15 +413,12 @@ struct Fighter {
   // thought of where a sound puts him on top (100 ms for a quick player, 200 for a slow one).
   float hear_react_s = 0;
   bool was_dead = false;
-  bool unlocking = false;     // on the way to the goal item's button
-  bool swimming = false;      // in water no route leaves: following the swim field
-  bool surfacing = false;     // short of air under open water: up for a breath (water.hpp)
-  int8_t side_was = 0;        // the side key's sign last sent (footwork.hpp `fighter_keys`)
-  int8_t side_gap = 0;        // commands still held with no side key
-  int8_t key_set = -1;        // the key set wanted last (keyboard.hpp; -1 none)
-  bool key_feather = true;    // feathering: the keys on (keyboard.hpp)
-  ge::ai::Keyboard keyboard;  // the hand on the keys (feature `keys`, keyboard.hpp)
-  bool hunts = false;         // every monster a foe (companion.hpp `hunt_init`)
+  bool unlocking = false;  // on the way to the goal item's button
+  bool swimming = false;   // in water no route leaves: following the swim field
+  bool surfacing = false;  // short of air under open water: up for a breath (water.hpp)
+  int8_t side_was = 0;     // the side key's sign last sent (footwork.hpp `fighter_keys`)
+  int8_t side_gap = 0;     // commands still held with no side key
+  bool hunts = false;      // every monster a foe (companion.hpp `hunt_init`)
 };
 
 // The fighter's strength: health and armour's protection, a launcher counted on top.

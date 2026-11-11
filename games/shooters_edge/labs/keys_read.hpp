@@ -219,7 +219,7 @@ inline void keys_update(KeysState& k, KeysRead& r, double t, ge::shooter::Vec3f 
     const double curve = keys_wrap(h1 - h0) / (span / 2);  // leftward positive, deg/s
     if (std::fabs(keys_wrap(m.yaw - h1)) > kKeyAirView) return;
     const int side = curve > kKeyCurveMin ? -1 : curve < -kKeyCurveMin ? 1 : 0;
-    r.air[static_cast<size_t>(side + 1)]++;
+    r.air[side < 0 ? 0 : side == 0 ? 1 : 2]++;
     keys_side(k, r, b.t, side);
   }
 }
