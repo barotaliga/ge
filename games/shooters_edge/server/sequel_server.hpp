@@ -38,8 +38,17 @@
 //   the rebreather and the suit; drowning after 12 s under, lava and slime each frame, falling
 //   from the change of the fall speed; `fraglimit` and `timelimit` end the level.
 //
-// The hand grenade, dropping at death, movers and monsters are the next rows
-// (docs/goals/M18v.md, M18v7); the rules' numbers are in the clean-room notes. Held by
+// - **The hand grenade, drops and the level's end**: the hand grenade is lit at frame 11, cooked
+//   while attack is held and thrown faster the longer it was held (exploding in the hand at the
+//   fuse's end); at death in deathmatch the weapon in hand and (`dmflags` 16384) the quad are
+//   dropped, and `drop <name>` throws a weapon, ammo or a powerup, the dropper's again only after
+//   1 s, gone after 30 s in deathmatch; a body under −40 is thrown apart; a level's end starts the
+//   intermission (everyone frozen at its spot, a button after 5 s leaves for the next map); the
+//   `dmflags` bits 1, 2, 2048 and 8192 leave items out, 4 keeps weapons, 32 repeats the level, 512
+//   spawns farthest, 1024 respawns at once.
+//
+// Movers and monsters are the next rows (docs/goals/M18v.md, M18v7); the rules' numbers are in the
+// clean-room notes. Held by
 // tests/shooters_edge_sequel_server_test.cpp.
 //
 // ge:summary The sequel's rules as a second runner: its maps' brushes, spawns and the 10 Hz frame
@@ -119,6 +128,7 @@ struct SequelPlayer {
   double air_until = 0, drown_at = 0;
   int drown_damage = 2;
   float old_fall = 0;
+  bool gibbed = false;  // died under −40: his body is gone (no model)
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.
@@ -135,6 +145,20 @@ struct SequelMissile {
   bool resting = false;  // a grenade come to rest on a floor
 };
 inline constexpr int kSequelMissiles = 64;  // the rows the world keeps for shots in flight
+
+// An item a player dropped (by `drop`, or at death): thrown, falling to rest, taken on touch.
+struct SequelDrop {
+  bool live = false;
+  int item = -1;   // sequel_items.hpp's row
+  int count = 0;   // ammo's: how much it gives (0 the item's own amount)
+  int owner = -1;  // the dropper's slot, who may take it back only after `takeable_at`
+  sh::Vec3f origin, velocity;
+  double takeable_at = 0;
+  double dies_at = 0;    // level time it vanishes; 0 never
+  double quad_left = 0;  // a dropped quad's time left, s
+  bool resting = false;  // come to rest on a floor
+};
+inline constexpr int kSequelDrops = 32;  // the rows the world keeps for dropped items
 
 struct SequelServerOptions {
   uint32_t seed = 1;
@@ -161,8 +185,14 @@ struct SequelServer : RulesCommon {
   int next_userid = 1;
   SequelMissile missiles[kSequelMissiles];
   int weapon_models[kSqWeaponCount] = {};  // each weapon's view model in the model list
-  int missile_models[7] = {};              // by `SqShot`
+  int missile_models[kSqShotKinds] = {};   // by `SqShot`
   std::vector<std::string> obituaries;     // every death's line, in order (the tests, the lab)
+  SequelDrop drops[kSequelDrops];
+  std::vector<int> item_models;  // each item row's world model in the model list (the drops')
+  // The intermission: level time it began (0 none) and the map it leads to; everyone stands frozen
+  // at its spot, and after 5 s any button leaves.
+  double intermission_at = 0;
+  std::string next_map;
 
   SequelServer();
   ~SequelServer();
