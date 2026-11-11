@@ -142,12 +142,14 @@ FightReport run_fight(const FightOptions& opt) {
   std::vector<Recent> recent(static_cast<size_t>(n));
   std::vector<sh::Packet> packets(static_cast<size_t>(n));
   std::vector<bool> alive(static_cast<size_t>(n), true);
+  std::vector<int> item_model(fighters[0].items.size(), 0);
   for (int frame = 0; frame < opt.frames; frame++) {
     for (int k = 0; k < n; k++) {
       Recent& rc = recent[static_cast<size_t>(k)];
       rc.cmds[0] = rc.cmds[1];
       rc.cmds[1] = rc.cmds[2];
       rc.cmds[2] = fighter_command(fighters[static_cast<size_t>(k)], s, k, kPilotMsec);
+      if (opt.watch) opt.watch(frame, k, fighters[static_cast<size_t>(k)], s, rc.cmds[2]);
       sh::Packet& p = packets[static_cast<size_t>(k)];
       p.client = k;
       p.sequence = ++rc.sequence;
@@ -166,6 +168,24 @@ FightReport run_fight(const FightOptions& opt) {
       p.frags_at.push_back(s.world.clients[static_cast<size_t>(k)].numbers.frags);
       if (alive[static_cast<size_t>(k)] && !live) r.deaths.push_back({frame, k, d.origin});
       alive[static_cast<size_t>(k)] = live;
+    }
+    for (size_t i = 0; i < item_model.size(); i++) {  // the server's pickups
+      const ItemSpot& it = fighters[0].items[i];
+      if (it.ent < 0) continue;
+      const int model = s.world.entities[static_cast<size_t>(it.ent)].modelindex;
+      if (item_model[i] > 0 && model <= 0) {
+        int best = -1;
+        float best_d = 96 * 96;
+        for (int k = 0; k < n; k++) {
+          const sh::Vec3f d = s.world.entities[static_cast<size_t>(k) + 1].origin - it.at;
+          if (d.x * d.x + d.y * d.y < best_d) {
+            best_d = d.x * d.x + d.y * d.y;
+            best = k;
+          }
+        }
+        if (best >= 0) r.players[static_cast<size_t>(best)].took++;
+      }
+      item_model[i] = model;
     }
     r.digests.push_back(frame_digest(s, n));
     if (s.map_stopped) {

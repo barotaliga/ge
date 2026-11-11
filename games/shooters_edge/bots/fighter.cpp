@@ -395,7 +395,7 @@ int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& s
   };
   const auto name = [&](int32_t i) { return f.items[static_cast<size_t>(i)].name.c_str(); };
   return ai::pick_best(static_cast<int32_t>(f.items.size()), score, why,
-                       heal ? "heal_goal" : "item_goal", name, "worth over the time to have it");
+                       heal ? "heal_goal" : "item_goal", name, "worth over the time to have it", 0);
 }
 
 // A SHORT GOAL ON THE WAY: an item there now that a person turns aside for, on its own floor within
@@ -895,7 +895,7 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   }
 
   // The items, as far as it can see them (knowledge.hpp); a key item taken is called out.
-  ItemNews news = knowledge_update(f, s, me, eye, t);
+  ItemNews news = knowledge_update(f, s, me, eye, st, t);
   // And as far as it can hear them (ears.hpp): a pickup heard is an item taken, its taker placed.
   const EarNews ears = fighter_hear(f, s, me, eye, t, f.mode == FightMode::fight);
   if (news.taken < 0) news.taken = ears.taken;
@@ -1375,8 +1375,10 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     w[10] += f.role == Role::hold;
     w[11] += g && pl.goal >= 0 && !g->nodes[static_cast<size_t>(pl.goal)].wet;  // passing through
   }
-  if (!f.was_dead && dead)  // where it died: a danger spot (`best_item` heals away from it)
+  if (!f.was_dead && dead) {  // where it died: a danger spot (`best_item` heals away from it)
     mind_danger(f, s.world.entities[static_cast<size_t>(me)].origin, t);
+    f.bar = Stats{};  // the respawn's full bar is no pickup
+  }
   if (f.was_dead && !dead) {
     f.stats.respawns++;
     f.goal_node = -1;

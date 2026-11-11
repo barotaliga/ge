@@ -116,6 +116,9 @@ TEST(the_selector_takes_the_best_and_records_every_option_and_a_mode_change_its_
   };
   CHECK(ai::pick_best(4, score, nullptr, "pick", name, "best") == 1);
   CHECK(ai::pick_best(0, score, nullptr, "pick", name, "best") == -1);
+  // Over a floor: the options at or under it are never taken, none at all when every one is.
+  CHECK(ai::pick_best(4, score, nullptr, "pick", name, "best", 2.5) == 1);
+  CHECK(ai::pick_best(4, score, nullptr, "pick", name, "best", 3) == -1);
   ai::Why why;
   ai::Why* w = why.follow(3, 10);
   CHECK(ai::pick_best(4, score, w, "pick", name, "best") == 1);

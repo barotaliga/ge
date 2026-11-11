@@ -88,6 +88,8 @@ void fighter_keyboard_init(Fighter& f, uint8_t moves, uint32_t seed) {
 void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool onground) {
   // The wish's key set: 0 forward, clockwise by 45 degrees (side positive is right).
   const double fw = cmd.forward, sd = cmd.side;
+  f.keys.wish_forward = cmd.forward;
+  f.keys.wish_side = cmd.side;
   const double m = std::sqrt(fw * fw + sd * sd) / 320.0;
   int set = -1;
   if (m >= (onground ? kCreep : kPressMin)) {
