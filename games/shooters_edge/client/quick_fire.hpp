@@ -8,12 +8,13 @@
 //   +attack would fire drawn see-through in hand) and `cl_quickweapon_hide 0|1` (no weapon drawn
 //   instead, with the preview off). +attack2 is bound to no key: `bind mouse2 +attack2`.
 // - `quick_moves` turns this frame's +attack, +attack2 and weapon key into the attack and the
-//   `impulse` (the weapon's key) the command carries; `quick_hand` lays the look over the hand,
-//   leaving it alone while it brings a weapon down or up after a shot (the preview comes back once
-//   the kept weapon is up).
+//   `impulse` (the weapon's key) the command carries.
+// - THE PREVIEW keeps the weapon +attack would fire in the hand through a tap: `quick_show` names
+//   it for the hand to hold before the hand steps (so the hand never switches to the kept weapon
+//   and back: the ghost turns solid, fires, and fades back), and `quick_hand` lays the look on
+//   the frame the hand made: its opacity, at rest while it is not the weapon in hand, or hidden.
 // - The weapons by key: 1 the melee weapon .. 8 the beam gun (the HUD's order); one ready is
-// carried
-//   with the ammunition for a shot (two for the double shotgun and the heavy nailgun).
+//   carried with the ammunition for a shot (two for the double shotgun and the heavy nailgun).
 //
 // ge:summary Shooter's Edge's quick weapon: the plugin's quick fire on the game's keys, cvars
 // ge:summary and hand
@@ -45,6 +46,7 @@ struct QuickFire {
   ge::shooter::QuickSettings settings;
   std::array<std::string, 3> parsed{"\x01", "\x01", "\x01"};
   ge::shooter::QuickState state;
+  ge::shooter::QuickLook look;  // `quick_show`'s, for `quick_hand`
 };
 
 // The cvars over `q` (`q` must outlive `con`).
@@ -55,7 +57,11 @@ const ge::shooter::QuickSettings& quick_settings(QuickFire& q);
 ge::shooter::QuickArmed quick_armed(const hud::Status& s);
 // `m`'s attack keys and weapon key made into the command's attack and impulse at `t` s.
 void quick_moves(QuickFire& q, const hud::Status& s, double t, Moves& m);
-// The look laid over the hand: hidden, or the weapon +attack would fire as a see-through ghost.
-void quick_hand(QuickFire& q, const hud::Status& s, double t, view::HandFrame& hand);
+// Once a drawn frame at `t` s, before the hand steps: the look worked out, and the weapon the hand
+// holds in place of the game's (its `view::Weapon` index; -1 the game's own).
+int quick_show(QuickFire& q, const hud::Status& s, double t);
+// The look laid on the hand's frame: hidden, or the shown weapon's opacity (at rest when it is
+// not the weapon in hand).
+void quick_hand(const QuickFire& q, view::HandFrame& hand);
 
 }  // namespace shooters_edge::client

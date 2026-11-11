@@ -229,6 +229,12 @@ struct FragmentOut {
   @location(1) motion: vec4f,  // rg: the screen motion (uv), b: reactive (0: a solid surface)
 }
 
+// A ghost's own light, in step with how see-through it is (full from half see-through), so a
+// ghost fading to solid loses it smoothly.
+fn ghost_glow(d: HeldDraw) -> vec3f {
+  return kGhostGlow * clamp(d.forward.w * 2.0, 0.0, 1.0);
+}
+
 // A ghost's screen door: interleaved gradient noise, moved each frame so the history averages it.
 fn ghost_cut(d: HeldDraw, pixel: vec2f) -> bool {
   if (d.forward.w <= 0.0) {
@@ -251,9 +257,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   }
   var out: FragmentOut;
   var colour = held_colour(in);
-  if (d.forward.w > 0.0) {
-    colour += kGhostGlow;  // a ghost reads in the dark: a cool light of its own
-  }
+  colour += ghost_glow(d);  // a ghost reads in the dark: a cool light of its own
   out.colour = vec4f(warp_shade(d.warp, colour * held_white(d), burn), 1.0);
   // Where the point was a frame ago through the gun's lens, unjittered.
   let q = in.last_view;
@@ -270,9 +274,7 @@ fn fs_resolved(in: VertexOut) -> @location(0) vec4f {
     discard;
   }
   var c = held_colour(in);
-  if (draws[in.draw].forward.w > 0.0) {
-    c += kGhostGlow;
-  }
+  c += ghost_glow(draws[in.draw]);
   let e = max(c - kKnee, vec3f(0.0));
   c = select(c, kKnee + e / (1.0 + e / (1.0 - kKnee)), c > vec3f(kKnee));
   c = clamp(c, vec3f(0.0), vec3f(1.0));

@@ -2,12 +2,14 @@
 // HUD's status read as the plugin's weapons (the double guns ready only with two rounds); and the
 // listen server on the fixture halls, the player on his shotgun with a launcher carried: a tap of
 // +attack under `cl_quickweapon 1` fires ONE rocket and puts the shotgun back in hand, +attack2
-// fires the shotgun's list, and the hand shows the launcher's see-through ghost at rest.
+// fires the shotgun's list, and the hand holds the launcher throughout: a see-through ghost at
+// rest, solid as it fires, a ghost again after.
 //
 // ge:summary Tests: Shooter's Edge's quick weapon: cvars, the status read, a tap on the listen
 // ge:summary server
 // ge:keywords test quick-weapon quick_fire cl_quickweapon attack2 ghost listen-server
 // ge:skill shooter testing
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -129,12 +131,28 @@ TEST(a_tap_fires_one_rocket_and_puts_the_shotgun_back_on_the_listen_server) {
   hud::Status s = cl::status_of(l, t);
   CHECK(s.weapon == hud::Weapon::shotgun && s.has(hud::Weapon::rocket_launcher));
   const int rockets = s.ammo[2], shells = s.ammo[0];
-  // At rest: the hand shows the launcher +attack would fire, see-through.
+  // At rest: the hand holds the launcher +attack would fire, see-through.
+  const auto launcher = static_cast<int>(shooters_edge::view::Weapon::rocket_launcher);
+  CHECK(cl::quick_show(q, s, t) == launcher);
   shooters_edge::view::HandFrame hand;
-  cl::quick_hand(q, s, t, hand);
-  CHECK(hand.weapon == shooters_edge::view::Weapon::rocket_launcher && hand.opacity < 1);
-  frame(l, q, t, true);  // the tap: one frame
-  for (int i = 0; i < 200; i++) frame(l, q, t, false);
+  cl::quick_hand(q, hand);
+  CHECK(hand.opacity < 1);
+  // The tap: one frame. The launcher stays in the hand throughout, solid as it fires, and is a
+  // ghost again once the shotgun is back.
+  int other_shown = 0;
+  float most = 0;
+  for (int i = 0; i < 200; i++) {
+    frame(l, q, t, i == 0);
+    const hud::Status now = cl::status_of(l, t);
+    const int show = cl::quick_show(q, now, t);
+    hand = {};
+    cl::quick_hand(q, hand);
+    if ((show >= 0 ? show : static_cast<int>(now.weapon)) != launcher) ++other_shown;
+    most = std::max(most, hand.opacity);
+  }
+  CHECK(other_shown == 0);
+  CHECK(most == 1);
+  CHECK(hand.opacity < 1);
   s = cl::status_of(l, t);
   CHECK(s.ammo[2] == rockets - 1);  // one rocket
   CHECK(s.ammo[0] == shells);       // no shell spent by mistake

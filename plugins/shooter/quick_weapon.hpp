@@ -20,10 +20,14 @@
 // - The way back is asked every `kResend` until the weapon is in hand, so one lost or refused does
 //   not strand it; it gives up after `kReturnMax`. A weapon the player picks
 //   himself (`QuickKeys::own_select`) wins: the way back is dropped. A dead player is let be.
-// - THE LOOK (`quick_look`), for key 0: while pressing it would switch weapons, `preview` draws
-//   the weapon it would fire in place of the one in hand, see-through (`kGhost` of it drawn);
-//   pressed, the ghost turns solid over `kSolidS` until the server has it in hand. `hide` (the
-//   preview off) draws no weapon instead.
+// - THE LOOK (`quick_look`), for key 0: `preview` keeps the weapon it would fire in the hand the
+//   whole time, a see-through ghost (`kGhost` of it drawn) while another is in hand: pressed, it
+//   turns solid over `kSolidS` and fires, stays solid at least `kHoldS` more (a tap's shot is seen
+//   on a solid weapon); let go, it fades back to the ghost over `kGhostS` while
+//   the weapon kept in hand comes back unseen. So a tap never shows a weapon switch, only the ghost
+//   turning solid and back. `hide` (the preview off) draws no weapon while the weapon in hand is
+//   not the one it would fire. While key 1 owns the attack (and its way back) the hand shows the
+//   weapon in hand as it is.
 //
 // Pure and allocation-free per frame (the lists are parsed when a setting changes). Held by
 // tests/shooter_quick_weapon_test.cpp and the `se-quickweapon` lab.
@@ -49,7 +53,9 @@ inline constexpr double kLatchMax = 1.0;   // s a tap's attack is held at most, 
 inline constexpr double kReturnMax = 1.5;  // s the way back is asked for at most
 inline constexpr double kMeleeHold = 0.1;  // s a weapon that spends nothing is fired once in hand
 inline constexpr float kGhost = 0.5f;      // the preview's share drawn
-inline constexpr double kSolidS = 0.08;    // s the preview takes to turn solid once pressed
+inline constexpr double kSolidS = 0.06;    // s the preview takes to turn solid once pressed
+inline constexpr double kHoldS = 0.15;     // s it stays solid after that, however short the tap
+inline constexpr double kGhostS = 0.25;    // s it takes to fade back to the ghost once let go
 inline constexpr int kMaxWeapon = 31;
 
 // What the client knows of the player's weapons (a game fills it from its status).
@@ -85,13 +91,17 @@ struct QuickCommand {
 struct QuickState {
   int key = -1;  // the fire key firing (-1 none)
   int target = 0;
-  double pressed_at = 0, sent_at = -1e9;
+  double pressed_at = -1e9, sent_at = -1e9;
   int target_ammo = 0;  // the target's ammunition when it was chosen (the most since)
   bool seen = false;    // the target was in hand
   double seen_at = 0;
   bool returning = false;  // asking for the weapon kept in hand
   double return_at = 0;
   std::array<bool, 2> held{false, false};  // the keys the last frame
+  int last_key = -1;                       // the fire key pressed last
+  // The look: how solid the weapon shown is (0 the ghost .. 1 solid) at `look_at` s (-1 never).
+  float solid = 0;
+  double look_at = -1;
 };
 
 // The weapon numbers in `text` ("7 8 5 6 3 2 4 1": any run of digits is one, 1..kMaxWeapon kept,
@@ -107,10 +117,12 @@ QuickCommand quick_step(QuickState& q, const QuickSettings& s, const QuickArmed&
 // How the weapon in hand looks this frame.
 struct QuickLook {
   bool hide = false;   // draw no weapon
-  bool ghost = false;  // draw `weapon` at `opacity` in its place, at rest
+  bool ghost = false;  // draw `weapon` at `opacity` in place of the one in hand
+  bool rest = false;   // ... and it is not the one in hand: drawn at rest, no shot of its own
   int weapon = 0;
   float opacity = 1;
 };
-QuickLook quick_look(const QuickState& q, const QuickSettings& s, const QuickArmed& a, double t);
+// The look at `t` s, the fade stepped on from the last call's (call it once a drawn frame).
+QuickLook quick_look(QuickState& q, const QuickSettings& s, const QuickArmed& a, double t);
 
 }  // namespace ge::shooter

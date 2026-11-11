@@ -44,6 +44,10 @@ struct HeldState {
   // A recording's or a joined server's weapon frame (a classic set's), drawn between its changes.
   FrameTrack recorded;
   int recorded_weapon = -1;  // the weapon `recorded` is of
+  // A weapon the hand holds in place of the game's (a `view::Weapon` index; -1 the game's): the
+  // quick weapon's preview (quick_fire.hpp). Its shots are the game's weapon's only when the two
+  // are the same.
+  int show = -1;
 };
 
 // The held weapons the window draws into `out`. With a classic game's folder open (`files`), only

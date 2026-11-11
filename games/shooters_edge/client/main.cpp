@@ -1283,8 +1283,10 @@ int run_main(int argc, char** argv) {
       bench_fx_state.models = &cl::world_models(*world);
       bench_fx_state.on = cl::fx_switches(picture);
       cl::demo_fx_step(ds, bench_demo_fx, bench_map.get(), view, bench_fx_state, t, wall, bench_fx);
+      // The quick weapon's preview held in place of the game's weapon (quick_fire.hpp).
+      in_hand.show = drawn_remote ? cl::quick_show(controls.quick, cl::demo_status(ds, t), t) : -1;
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
-      if (drawn_remote) cl::quick_hand(controls.quick, cl::demo_status(ds, t), t, hand);
+      if (drawn_remote) cl::quick_hand(controls.quick, hand);
       hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
       cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
@@ -1402,9 +1404,12 @@ int run_main(int argc, char** argv) {
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
     view_settings.lerp = picture.lerp_models;  // r_lerpmodels: the held weapon's frames too
+    // The quick weapon's preview held in place of the game's weapon (quick_fire.hpp).
+    in_hand.show =
+        listen.server != nullptr ? cl::quick_show(controls.quick, cl::status_of(listen, t), t) : -1;
     shooters_edge::view::HandFrame hand =
         cl::step_held(listen, shown, in_hand, view_settings, weapons, t, wall);
-    if (listen.server != nullptr) cl::quick_hand(controls.quick, cl::status_of(listen, t), t, hand);
+    if (listen.server != nullptr) cl::quick_hand(controls.quick, hand);
     if (hand.flashing)
       fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
     // ce_muzzles in the modern look: each shot's flame, smoke and sparks from the barrel (off, or

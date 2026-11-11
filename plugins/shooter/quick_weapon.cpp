@@ -79,6 +79,7 @@ QuickCommand quick_step(QuickState& q, const QuickSettings& s, const QuickArmed&
     const auto i = static_cast<size_t>(k);
     if (keys.fire[i] && !was[i] && quick(s, k)) {
       q.key = k;
+      q.last_key = k;
       q.target = 0;
       q.pressed_at = t;
       q.sent_at = -1e9;
@@ -126,26 +127,33 @@ QuickCommand quick_step(QuickState& q, const QuickSettings& s, const QuickArmed&
   return out;
 }
 
-QuickLook quick_look(const QuickState& q, const QuickSettings& s, const QuickArmed& a, double t) {
+QuickLook quick_look(QuickState& q, const QuickSettings& s, const QuickArmed& a, double t) {
   QuickLook look;
-  if (!a.alive || !quick(s, 0) || (!s.preview && !s.hide)) return look;
-  int w = 0;
-  float opacity = kGhost;
-  if (q.key == 0) {  // pressed: the ghost turns solid until the server has it in hand
-    w = q.target;
-    opacity = kGhost +
-              (1 - kGhost) * static_cast<float>(std::clamp((t - q.pressed_at) / kSolidS, 0.0, 1.0));
-  } else if (q.key < 0) {
-    w = best_ready(a, s.prio[0]);
+  const double dt = q.look_at < 0 ? 1e9 : std::max(0.0, t - q.look_at);
+  q.look_at = t;
+  // Key 1 owns the attack, or is bringing its weapon back: the weapon in hand, as it is.
+  const bool second = q.key == 1 || (q.key < 0 && q.returning && q.last_key == 1);
+  const int w = q.key == 0 ? q.target : best_ready(a, s.prio[0]);
+  if (!a.alive || !quick(s, 0) || (!s.preview && !s.hide) || second || w == 0) {
+    q.solid = 1;  // when it comes back, it fades in from the weapon as it was
+    return look;
   }
-  if (w == 0 || w == a.in_hand) return look;
-  if (s.preview) {
-    look.ghost = true;
-    look.weapon = w;
-    look.opacity = opacity;
-  } else {
-    look.hide = true;
+  if (!s.preview) {
+    look.hide = w != a.in_hand;
+    return look;
   }
+  // Solid while pressed and a while after, and while it is the weapon kept in hand; a ghost again
+  // once let go.
+  const bool solid =
+      q.key == 0 || t < q.pressed_at + kSolidS + kHoldS || (a.in_hand == w && !q.returning);
+  const auto step = static_cast<float>(std::min(1.0, dt / (solid ? kSolidS : kGhostS)));
+  q.solid = solid ? std::min(1.0f, q.solid + step) : std::max(0.0f, q.solid - step);
+  if (q.solid >= 1 && a.in_hand == w) return look;        // the weapon in hand, as it is
+  const float u = q.solid * q.solid * (3 - 2 * q.solid);  // eased at both ends
+  look.ghost = true;
+  look.rest = a.in_hand != w;
+  look.weapon = w;
+  look.opacity = kGhost + (1 - kGhost) * u;
   return look;
 }
 
