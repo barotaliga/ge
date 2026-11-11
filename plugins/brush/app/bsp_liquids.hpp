@@ -22,6 +22,7 @@
 // ge:summary A classic map's water, lava and slime tops made bodies of our water and liquids
 // ge:keywords bsp brush liquids water lava slime body volume hull v2 add_bsp_liquids
 // ge:keywords pool-site pool_site wind-exposure shelter still-pool depth room-light light_rooms
+// ge:keywords water-pace pool-pace r_water_speed relay_liquid_pace slow-water
 // ge:skill brush water render
 #pragma once
 
@@ -118,6 +119,9 @@ LiquidWorld liquid_world(const Scene& scene, const LiquidRows& rows, double wind
 // The waves laid again under another wind (the weather's cvars changed), into the passes.
 void relay_liquid_wind(gpu::Device& device, render::Water& water, LiquidWorld& world, double wind,
                        double from);
+// The pools' pace changed (Options::water_pace, r_water_speed): every water body restaged at it.
+void relay_liquid_pace(gpu::Device& device, render::Water& water, const LiquidWorld& world,
+                       double pace);
 // The room's light round the pools (each its bed's light off the lightmaps, else `rows.room`),
 // floored like the walls (bsp_draw.hpp's `minlight`, in the lightmaps' units, times the
 // renderer's brightness): sqrt(light^2 + (minlight brightness)^2).

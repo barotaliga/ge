@@ -127,6 +127,14 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .min = 0,
            .max = 2},
           &picture.fire_pace);
+  cv.bind({.name = "r_water_speed",
+           .fallback = "0.7",
+           .flags = gc::kArchive,
+           .help = "how fast the pools' water moves (its swell, its chop, its ripples) in the "
+                   "modern look, 1 a real water's, lower slower",
+           .min = 0,
+           .max = 2},
+          &picture.water_pace);
   cv.bind({.name = "r_farland",
            .fallback = "auto",
            .help = "the land round the map seen over its walls from high up: auto (one to suit "
@@ -275,6 +283,7 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
     base.slime_glow = picture.slime_glow;
     base.fire_glow = picture.fire_glow;
     base.fire_pace = picture.fire_pace;
+    base.water_pace = picture.water_pace;
     base.water_specks = picture.water_specks;
     base.fill_shadows = picture.fill_shadows > 0.5;
     base.glow = picture.glow;

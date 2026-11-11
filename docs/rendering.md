@@ -305,7 +305,7 @@ input read, the game stepped by the STEADY time, the frame drawn and presented, 
 | `vid_vsync_lag_fix` | 0 | With vsync, each frame starts just in time to finish before its refresh (`loop::VsyncPhase`): the refresh's phase from the acquires that block, the frame's cost the worst of the last 8 (start to the GPU's last work, less the acquire's wait), the start the next refresh less the cost and `vid_vsync_lag_tweak`. The window waits for its GPU after each present to measure the cost, so a frame that takes more than a refresh runs as at `vid_framelatency 1` |
 | `vid_vsync_lag_tweak` | 1 | The ms the lag fix leaves spare before the refresh: lower is less lag, too low misses refreshes |
 | `scr_showfps` | 0 | 1 the rate in the top-right corner; 2 with the last 120 frames' times as bars, the refresh's interval dashed, a missed refresh red |
-| `framestats` | | One line: the rate, the 1% low, the percentiles, the jitter, the hitches, the waits, the display's refresh, the cap, the present mode |
+| `framestats` | | One line: the rate, the 1% low, the percentiles, the jitter, the hitches, the waits (the cap's, the GPU's queue's, and the swap chain's for a free image: a frame that waits there is held by the display, one that waits on the GPU is held by its own cost), the display's refresh, the cap, the present mode |
 
 **Why these defaults** (the `pacing` lab, 120 Hz, a light and a heavy load): the old loop (vsync,
 Metal's three images, nothing else) held every frame ~25 ms from input to picture. Two images and
@@ -640,6 +640,12 @@ frame a list of `MorphDraw`s.
 - **The game's own light.** `outdoor` is the share of the frame's sun and sky. `ambient` and a
   `shade` from one direction are what a game samples where the model stands: an indoor map's
   light at its feet. Glowing texels add `glow` times the scene's white, whatever the light.
+- **See-through** (`MorphDraw::alpha`, 1 solid): a draw under 1 leaves out a share `1 - alpha` of
+  its pixels by a 4 × 4 ordered pattern shifted every frame (`see_through_gone` in `morph.wgsl`),
+  and TAA-U averages the frames into a see-through body. It needs no sort and no blend: the drawn
+  pixels keep their depth and motion, and the pass's single pipeline is unchanged. A game hands a
+  mod's or a map's `alpha` straight through (Shooter's Edge's `Placed::alpha`). The price is a
+  faint shimmer on a body that moves fast across the screen, where the history is thin.
 - **The warp** (`MorphWarp`, `wgsl/warp.wgsl`, shared with the view-model pass): a draw coming
   into being or going out of it, a spawn or a teleport, as one share `shown` (1 whole, 0 gone). A
   fragment is drawn where a field lies under `shown`. The field is two octaves of value noise,

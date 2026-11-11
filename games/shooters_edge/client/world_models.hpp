@@ -73,6 +73,7 @@ struct Placed {
   float frame_f = 1;
   bool lerp = false;
   int effects = 0;  // the entity's effect bits (kGlow...)
+  float alpha = 1;  // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
   sh::Vec3f origin, angles;
   uint32_t top = models::kShirtRow, bottom = models::kPantsRow;  // palette rows for the tints
   // Its warp (world_fx.hpp, warps.hpp): short of whole an alias model is drawn dissolving to ash

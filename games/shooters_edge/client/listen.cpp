@@ -418,9 +418,8 @@ bool coop_on(const Listen& l) {
 // A companion seated now (in a campaign in coop); false with the line printed when it cannot be.
 bool seat_companion(Listen& l, sh::AimSkill skill) {
   if (!coop_on(l)) {
-    l.prints.push_back(
-        "addbot: coop is off; next: `coopgame` (a new coop game), or `coop 1` "
-        "then `restart`");
+    l.prints.push_back("Bots join a cooperative game only.");
+    l.prints.push_back("Start one with coopgame.");
     return false;
   }
   if (!l.party) {

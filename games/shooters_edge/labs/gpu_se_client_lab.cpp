@@ -30,6 +30,8 @@
 // so the start map's bars stand shut in front of the episodes not yet open and open for the next.
 // `--say="vote fraglimit 30;vote rules"` has the player type those lines at the console first,
 // what the server prints back shown in the HUD's feed (a vote on the settings, say).
+// `--server="coop 1"` gives the server those lines before the map starts: with the packs' own
+// program, a coop game in which `--say="addbot"` seats a companion beside the player.
 //
 // `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
 // two wall torches, their textures enhanced into a cache of the lab's own (classic-enhance's
@@ -42,6 +44,7 @@
 // ge:keywords axe-swing swings two-swings weaponframe film_swings breath exertion film-hand
 // ge:keywords fire explobox film_death death jump-sound film_switch weapon-change cl_gunswitch
 // ge:keywords say vote notify-feed episodes bars sv_episodes_done start-map
+// ge:keywords coop-server-lines addbot
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
@@ -540,6 +543,14 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     lo.episodes.start_map = std::string(shooters_edge::profiles::content_of(game).start_map);
     lo.episodes.first_maps.assign(game.episode_maps.begin(), game.episode_maps.end());
     lo.console.emplace_back("sv_episodes_done " + done);
+  }
+  // `--server`: the server's lines before the map starts (`coop 1`: the campaign as a coop game,
+  // as MULTIPLAYER > NEW GAME's COOPERATIVE and `coopgame` start it).
+  const std::string server_lines = lab.arg("server");
+  for (size_t a = 0; a < server_lines.size();) {
+    const size_t b = std::min(server_lines.find(';', a), server_lines.size());
+    if (b > a) lo.console.push_back(server_lines.substr(a, b - a));
+    a = b + 1;
   }
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, lab.arg("map"), error);
   if (!map || !cl::listen_start(l, progs, std::move(map), lo, error)) {
@@ -1072,7 +1083,10 @@ const gl::LabSpec kSpec{
       "0 none, 1 the first...), the start map's bars shut in front of those not open"},
      {"say", "",
       "with --game: console lines the player types first, ';' between (`vote fraglimit 30`), "
-      "the server's answers in the HUD's feed"}},
+      "the server's answers in the HUD's feed"},
+     {"server", "",
+      "with --game: the server's lines before the map starts, ';' between (`coop 1`: a coop "
+      "game, where `--say=addbot` seats a companion)"}},
     "--size=480,270",
     run,
 };

@@ -18,12 +18,12 @@
 // bar's own scale. With `--classic=<folder>` every look is drawn again in the player's own
 // classic pictures from classic-enhance's local cache (classic_art.hpp): `<cache>/pictures` as
 // the pack has them, `<cache>/pictures/enhanced` upscaled (`ce_pictures`). Then every look again
-// under each option (`kOptions`: hud_swap, hud_sbar, hud_guns, hud_guns_all and hud_ammo_all),
+// under each option (`kOptions`: hud_vitals, hud_sbar, hud_guns, hud_guns_all and hud_ammo_all),
 // checked at every size and pictured at the first.
 //
 // ge:summary Lab: Shooter's Edge's six HUD looks and their options at five screen sizes
 // ge:keywords lab hud se-hud shooter status-bar classic modern compact looks viewports
-// ge:keywords hud_sbar hud_swap hud_guns arena tactical minimal
+// ge:keywords hud_sbar hud_vitals hud_guns arena tactical minimal
 // ge:keywords free-art layout-problems screenshot
 // ge:skill ui labs
 // ge:test tests/shooters_edge_hud_test.cpp
@@ -221,8 +221,8 @@ struct Option {
 };
 
 constexpr Option kOptions[] = {
-    {"swap", "hud_swap 1", "hud_swap 0", "",
-     "hud_swap 1: the look's left side on the right and its right side on the left; the classic "
+    {"vitals-right", "hud_vitals right", "hud_vitals left", "",
+     "hud_vitals right: health and armour on the right, the rest on the left; the classic "
      "bars stay put."},
     {"bare", "hud_sbar 0", "hud_sbar 1", "classic",
      "hud_sbar 0: the classic bars' pieces at their places with neither panel drawn."},
@@ -333,7 +333,7 @@ void run(ge::lab::Lab& lab) {
       }
     }
   }
-  // THE OPTIONS: every look again under each option (hud_swap, hud_guns, hud_guns_all,
+  // THE OPTIONS: every look again under each option (hud_vitals, hud_guns, hud_guns_all,
   // hud_ammo_all, hud_sbar), checked at every size and pictured at the first, in the free art.
   const se::HudArt& free = sets.front().second;
   const Viewport& shown = viewports.front();
