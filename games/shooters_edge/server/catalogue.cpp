@@ -145,6 +145,8 @@ const int kCatalogueCount = static_cast<int>(sizeof kCatalogue / sizeof kCatalog
 const char* const kExtensionNames[] = {
     "DP_CON_SET",
     "DP_ENT_ALPHA",
+    "DP_ENT_COLORMOD",
+    "DP_ENT_SCALE",
     "DP_QC_ASINACOSATANATAN2TAN",
     "DP_QC_COPYENTITY",
     "DP_QC_CVAR_STRING",
@@ -190,6 +192,8 @@ pg::Builtin resolve(const CatalogueRow& r) {
 // The fields and hooks an extension brings with it (beyond its builtins).
 void extras_of(pg::Extension& e) {
   if (e.name == "DP_ENT_ALPHA") e.fields = {"alpha"};
+  if (e.name == "DP_ENT_COLORMOD") e.fields = {"colormod"};
+  if (e.name == "DP_ENT_SCALE") e.fields = {"scale"};
   if (e.name == "ZQ_CLIENTCOMMAND") e.hooks = {"GE_ClientCommand"};
   if (e.name == "ZQ_ITEMS2") e.fields = {"items2"};
   if (e.name == "ZQ_PAUSE") e.hooks = {"GE_ShouldPause", "GE_PausedTic"};
