@@ -1,8 +1,8 @@
 // A CLASSIC GAME'S ADAPTER: the one set of calls the shell asks a classic game's files through,
 // each implemented once per game, so the window, the console, the menus and the labs never know
 // how a game lays out its mods, names its programs, stores its maps' textures or records its
-// demos. The first game's are `classic_adapter()` (client/classic_adapter.cpp); a later game is a
-// second table of the same calls in a file of its own, and nothing of the first game's is in it.
+// demos. Each game's adapter (`classic_adapter()`, `sequel_adapter()`) is a table of the shared
+// calls (client/adapter_parts.hpp: a file read by its kind) and the few that are its own.
 // The data that is only names (folders, packs, file names, extensions) stays in the profile rows
 // (profiles/game_profile.hpp, classicenhance/profile.hpp) the calls read; the readers a family of
 // files shares stay below (engine/vfs: folders, packs and zips; plugins/brush: every map family).
@@ -51,12 +51,11 @@
 // ge:summary A classic game's adapter: mods, programs by form and side, maps, textures, demos
 // ge:keywords game-adapter adapter classic-game list_mods find_program list_maps map_info
 // ge:keywords map_textures list_demos find_demo open_demo mod-folder program-form program-side
-// ge:keywords per-game sequel add_adapter_commands console-mods console-maps console-demos
+// ge:keywords per-game sequel sequel_adapter add_adapter_commands console-mods console-maps
 // ge:keywords replacement-texture png tga alpha open_model open_sound model-form skin-stand-in
-// ge:keywords replacement-skin pictures hud-pictures menu-pictures replacement-picture
-// ge:keywords find_config config-file cfg exec open_locations loc-file place-names
-// ge:keywords read_configs_from held_weapons first-person view-model menu-table game-modes
-// ge:keywords single-player multiplayer
+// ge:keywords replacement-skin pictures hud-pictures menu-pictures replacement-picture find_config
+// ge:keywords config-file cfg exec open_locations loc-file place-names read_configs_from
+// ge:keywords held_weapons first-person view-model menu-table game-modes single-player multiplayer
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #pragma once
@@ -190,6 +189,8 @@ struct GameAdapter {
 
 // The first game's adapter.
 const GameAdapter& classic_adapter();
+// The sequel's (client/sequel_adapter.cpp).
+const GameAdapter& sequel_adapter();
 // The adapter of a game row (the first game's for a row with none of its own).
 const GameAdapter& adapter_of(const profiles::GameProfile& game);
 
