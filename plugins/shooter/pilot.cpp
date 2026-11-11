@@ -45,6 +45,7 @@ constexpr float kJumpAlong = 0.9f;     // a jump goes moving at least this share
 constexpr float kJumpOver = 1.15f;     // and at most this share (and 16 u/s) of it
 constexpr float kJumpAim = 0.95f;      // with the velocity within this cosine of the jump's way
 constexpr float kPastStart = 24;       // past a jump's start this far without its speed: run up
+constexpr float kRunOnFrom = 8;   // `backstep`: a run-up this far behind the start or more runs on
 constexpr float kStrafeHold = 2;  // the strafe's side holds until the target is this far off, deg
 // The last jump of a hop's stretch (`headroom`): one whose flight lands before the stretch ends
 // (a climb, a mover, a lip, a jump of the route's), not on it: a flight's reach at the speed held.
@@ -800,12 +801,27 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
       p.best = 1e30f;
     }
   }
+  // THE RUN ON (`backstep`): moving down the jump's line behind its start, it runs on from here.
+  if (p.mode == PilotMode::run_up && p.set.backstep && !flip && s.onground && along < -kRunOnFrom &&
+      along > -(back_up + p.set.look) && lat_abs <= kOnLine && speed > kSlow && cosv >= kJumpAim &&
+      along_v <= kJumpOver * v + 16) {
+    p.mode = PilotMode::jump;
+    p.best = 1e30f;
+  }
   if (p.mode == PilotMode::run_up) {
     target = P;
     const float d = across(s.origin, P);
     p.shot_in_s = 1e9f;                        // lining up: no shot soon
     const float down = heading(dir.x, dir.y);  // the view down the jump
-    if (d > p.set.look * 0.25f) {
+    if (p.set.backstep && !flip && d > p.set.arrive) {
+      // STEPPED BACK: the view kept down the jump, the keys toward the point under it.
+      w.yaw = unwrap(down, p.yaw);
+      const float go = d > 2 * p.set.look ? 1 : d / (2 * p.set.look);
+      const Vec3f to{(P.x - s.origin.x) / d, (P.y - s.origin.y) / d, 0};
+      const ViewAxes ax = angle_vectors({0, down, 0});
+      w.forward = dot(to, ax.forward) * go;
+      w.side = dot(to, ax.right) * go;
+    } else if (d > p.set.look * 0.25f) {
       // Slowing into the run-up point, so the run at the start is a run, not a turn.
       w.yaw = unwrap(yaw_at(s.origin, P), p.yaw);
       w.forward = d > 2 * p.set.look ? 1 : d / (2 * p.set.look);

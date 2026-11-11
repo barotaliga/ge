@@ -97,6 +97,10 @@ struct PilotSettings {
   // to the walk (its nodes passed and looked past as on the flat), not only one within a step
   // (a stair of 20 a tread between nodes 32 apart was reached node by node, overshot at a turn).
   bool slopes = false;
+  // THE RUN-UP STEPPED BACK (`backstep`): a jump's run-up point is gone to with the view kept down
+  // the jump (the back and side keys, as a person steps back into line), and a run-up already
+  // moving down the jump's line behind its start runs on from there, not from a stop.
+  bool backstep = false;
   bool hop_stairs_walked = false;
   float hop_climb = 10;
   // THE BRINK (`brink`): a hop's or a strafe's stretch ends at a link along a lip over lava or
