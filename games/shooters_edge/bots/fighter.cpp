@@ -1348,6 +1348,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   f.clean_keys = static_cast<float>(sh::scale(traits[sh::Trait::moves], {0.08, 0.2, 0.4, 0.5}));
   fighter_keyboard_init(f, traits[sh::Trait::moves], seed);
   sh::dodge_init(f.dodge, seed);
+  f.press_rng = ge::core::make_rng(seed ^ 0x2545f491u);
   f.dodge_k = sh::dodge_skill(traits[sh::Trait::dodge]);
   const int me = slot + 1;
   sh::client_view(s.sv, me, f.bot.view);
@@ -1413,6 +1414,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   f.bot.selfaim = f.features[sh::Feature::selfaim];
   f.bot.corner = f.features[sh::Feature::corner];
   f.bot.glance = f.features[sh::Feature::glance];
+  f.bot.lookway = f.features[sh::Feature::lookway];
   f.bot.listen = f.features[sh::Feature::listen];
   f.bot.pools = f.bot.pilot.pilot.set.floor_swim = f.features[sh::Feature::pools];
 }

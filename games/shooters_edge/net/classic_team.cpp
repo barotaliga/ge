@@ -744,6 +744,11 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].sound_chases = fi.stats.sound_chases;
     r.players[k].dodging = fi.stats.dodging;
     r.players[k].dodge_turns = fi.stats.dodge_turns;
+    r.players[k].press_weighed = fi.stats.press_weighed;
+    r.players[k].press_on = fi.stats.press_on;
+    r.players[k].press_back = fi.stats.press_back;
+    r.players[k].press_near = fi.stats.press_near;
+    r.players[k].press_blocked = fi.stats.press_blocked;
     r.players[k].rocket_jumps = fi.bot.pilot.pilot.stats.rocket_jumps;
     r.players[k].flips = fi.bot.pilot.pilot.stats.flips;
     r.players[k].escapes = fi.bot.pilot.pilot.stats.escapes;
