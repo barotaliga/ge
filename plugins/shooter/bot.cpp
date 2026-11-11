@@ -346,7 +346,31 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       // Where it looks: the route's point about `kCalmAhead` units on, so the view turns before a
       // corner to see round it and holds still on a straight; else the way it walks.
       float look_yaw = pilot_yaw;
-      {
+      if (b.lookway) {
+        // The way in sight (bot.hpp `lookway`): the furthest point on that the eye still sees.
+        const Edict& me_ent = sv.edicts[static_cast<size_t>(me)];
+        std::vector<uint8_t> breaks;
+        const std::vector<Vec3f> path = pilot_path(b.pilot.pilot, me_ent.origin, &breaks);
+        const float vh = b.senses.set.view_height;
+        const Vec3f eye_at{me_ent.origin.x, me_ent.origin.y, me_ent.origin.z + vh};
+        float run = 0;
+        size_t best = 0;
+        for (size_t k = 1; k < path.size() && k < breaks.size() && !breaks[k]; k++) {
+          const Vec3f d = path[k] - path[k - 1];
+          run += std::sqrt(d.x * d.x + d.y * d.y);
+          const Vec3f to_eye{path[k].x, path[k].y, path[k].z + vh};
+          if (trace_move(sv, eye_at, {}, {}, to_eye, kTraceNoMonsters, me).fraction < 1) break;
+          best = k;
+          if (run >= kCalmAhead) break;
+        }
+        const Vec3f to = path[best] - me_ent.origin;
+        if (best > 0 && to.x * to.x + to.y * to.y > 64 * 64) {
+          float py = 0, pp = 0;
+          aim_angles(me_ent.origin, path[best], py, pp);
+          // A point behind the walk (a node just passed): the walk's heading instead.
+          if (std::fabs(wrap(py - pilot_yaw)) <= 90) look_yaw = py;
+        }
+      } else {
         const Edict& me_ent = sv.edicts[static_cast<size_t>(me)];
         const std::vector<Vec3f> path = pilot_path(b.pilot.pilot, me_ent.origin, nullptr);
         float run = 0;
@@ -446,11 +470,13 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
           b.glance_back_until = b.glance_until + 0.6;
         }
       }
+      b.walk_yaw = pilot_yaw;
+      b.look_yaw = look_yaw;
       const double off = wrap(look_yaw - b.yaw);
       // A swipe there and back at a turn meant's pace (the glance, the sound's).
       const bool swipe =
           (b.glance && sv.time < b.glance_back_until) || (b.listen && sv.time < b.sound_back_until);
-      b.view_by = "calm";
+      b.view_by = !swipe ? "calm" : (b.listen && sv.time < b.sound_back_until) ? "sound" : "glance";
       if (b.mouse && b.aim.mouse) {
         // The hand's strokes onto the look, at ease (an about-face at a turn meant's pace); the
         // pitch let lie within kCalmPitchTol of level.
