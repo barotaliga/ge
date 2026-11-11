@@ -20,7 +20,7 @@ namespace ai = ge::ai;
 namespace {
 
 constexpr double kDt = 1.0 / 77;
-enum Act { fwd, back, left, right, jump, w1, w2, w5, w7, attack2 };
+enum Act : uint8_t { fwd, back, left, right, jump, w1, w2, w5, w7, attack2 };
 uint32_t b(int a) { return 1u << a; }
 
 ai::KeyLayout wasd() {
