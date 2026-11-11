@@ -144,7 +144,7 @@ is possible for us later, but it is a decision about G5 for the maintainer, not 
 | 7 | M56g | The live map: the RADAR track, the hub's SVG view, live updates | `hub-radar` lab: a bot match drawn frame by frame |
 | 8 | M56h | Video for featured matches, or the engine in the browser (§ Decisions waiting) | Its lab |
 
-Phases 1 and 2 depend on the TV layer's header and meta track (the TV thread's first rows); the
+Phase 2 and later depend on the TV layer's header and meta track (M57a, the replay file v2, and M57b, the native TV node); the
 master can land before them, since a dedicated server's heartbeat needs nothing of TV.
 
 ## Decisions
