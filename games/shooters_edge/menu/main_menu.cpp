@@ -71,7 +71,7 @@ constexpr Entry kEntries[] = {
     {.page = "single",
      .id = "new",
      .text = "NEW GAME",
-     .hint = "The campaign from its first map, `start`. Needs a single-player program: the "
+     .hint = "The campaign from its first map, start. Needs a single-player program: the "
              "packs' own progs.dat.",
      .line = "newgame",
      .needs = "newgame",
@@ -173,7 +173,7 @@ constexpr Entry kEntries[] = {
     {.page = "setup",
      .id = "name",
      .text = "NAME",
-     .hint = "Your name, from the next map. Type `name <yours>` in the console.",
+     .hint = "Your name, from the next map. Type \"name <yours>\" in the console.",
      .line = "toggleconsole",
      .needs = "name",
      .closes = true},

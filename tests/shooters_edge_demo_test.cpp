@@ -469,7 +469,7 @@ TEST(a_demo_plays_from_the_game_folder_its_server_ran_unless_another_was_asked) 
   CHECK(cl::demo_game_dir(base, "id1", "", note) == "id1" && note.empty());
   // A folder that is not there: the window's, with a line saying what to do.
   CHECK(cl::demo_game_dir(base, "id1", "ctf", note) == "id1");
-  CHECK(note.find("ctf") != std::string::npos && note.find("next:") != std::string::npos);
+  CHECK(note.find("ctf") != std::string::npos && note.find("-game ctf") != std::string::npos);
   // A recording naming a path is never followed out of the base folder.
   CHECK(cl::demo_game_dir(base, "id1", "../fortress", note) == "id1");
   CHECK(cl::demo_game_dir(base, "id1", "..", note) == "id1");

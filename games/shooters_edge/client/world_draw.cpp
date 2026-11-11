@@ -384,9 +384,7 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
       if (gr::create_viewmodel(d, f.pipelines, f.held, f.layout, f.weapons))
         f.has_held = true;
       else
-        f.build_error =
-            "the weapons did not upload (their skins do not fit the atlas); next: check "
-            "games/shooters_edge/content/models/view";
+        f.build_error = "the weapons did not upload: their skins do not fit the atlas";
     }
     if (f.has_map) f.probe = std::move(read.probe);
     gr::create_ui_pass(d, f.pipelines, f.ui, f.format);
@@ -454,7 +452,7 @@ bool finish_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t hei
     return false;
   }
   if (!f.pipelines.finish(d)) {
-    error = "the world's pipelines did not build; next: read the gpu: lines above";
+    error = "the world's pipelines did not build (the log's gpu: lines say why)";
     return false;
   }
   ge::gpu::end_load(d);

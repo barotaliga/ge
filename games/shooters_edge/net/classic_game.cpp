@@ -116,7 +116,7 @@ constexpr gs::GameRule kModRules[] = {
 };
 
 constexpr gs::GameRule kEndpointRules[] = {
-    {"sv_maxrate", "the most bytes/s a client may ask for with its `rate` (0 no cap; 0)"},
+    {"sv_maxrate", "the most bytes/s a client may ask for with its rate (0 no cap; 0)"},
     {"sv_antilag", "1: a shot sees the others where the shooter saw them (0)"},
     {"sv_voip", "1: players' voice is relayed to their team (0)"},
     {"maxfps", "the most moves a second a client sends, told in the server info (77)"},
@@ -164,8 +164,8 @@ bool endpoint_int(const gs::ServerConfig& c, const char* name, int low, int high
   const long v = std::strtol(it->second.c_str(), &end, 10);
   if (end == it->second.c_str() || *end != '\0' || v < low || v > high) {
     error = std::string(name) + " \"" + it->second + "\" is not a whole number in " +
-            std::to_string(low) + ".." + std::to_string(high) +
-            "; next: set it in range (--explain=" + name + " shows where it was set)";
+            std::to_string(low) + ".." + std::to_string(high) + " (--explain=" + name +
+            " shows where it was set)";
     return false;
   }
   out = static_cast<int>(v);
@@ -274,7 +274,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     line.append(" \"").append(value).append("\"");
     if (end == value.c_str() || *end != '\0' || !rules.console(line)) {
       error = line;
-      error.append(" is not a number; next: set ").append(rule).append(" to one (--explain=");
+      error.append(" is not a number (--explain=");
       error.append(rule).append(" shows where it was set)");
       return false;
     }
@@ -311,7 +311,7 @@ bool open_room(Game& g, std::string& error) {
   for (int i = 0; i < c.bots; i++)
     if (cl::room_add_bot(r, g.rules, g.map->spec, sh::AimSkill::average, error) < 0) {
       std::string why = "sv_bots " + std::to_string(c.bots) + ": ";
-      why.append(error).append("; next: lower sv_bots under sv_maxclients");
+      why.append(error).append(" (keep sv_bots under sv_maxclients)");
       error = std::move(why);
       return false;
     }
@@ -339,9 +339,8 @@ bool open_program(Game& g, const std::string& mod, std::string& error) {
   std::string why;
   if (game.find_program == nullptr || !game.find_program(game, g.files, false, found, why)) {
     error = "the mod folder " + mod + " holds no multiplayer program this server runs" +
-            (why.empty() ? std::string() : " (" + why + ")") +
-            "; next: put the mod's qwprogs.dat in " + g.files.folder +
-            ", or leave sv_mod empty for the baseline mod";
+            (why.empty() ? std::string() : " (" + why + ")") + ". Put the mod's qwprogs.dat in " +
+            g.files.folder + ", or leave sv_mod empty for the baseline mod.";
     return false;
   }
   g.progs = std::move(found.progs);
@@ -451,7 +450,7 @@ bool speedjump_vote_check(const Game& g, std::string_view value, gs::VoteCheck& 
   const std::string text(value);
   const size_t space = text.find_last_of(' ');
   if (!g.classic || space == std::string::npos) {
-    out.error = "speedjump needs a player and on or off; next: `vote speedjump <id|name> on`";
+    out.error = "usage: vote speedjump <id|name> on|off";
     return false;
   }
   const std::string who = text.substr(0, text.find_last_not_of(' ', space) + 1);
@@ -460,14 +459,13 @@ bool speedjump_vote_check(const Game& g, std::string_view value, gs::VoteCheck& 
   if (what == "on")
     share = kGrantShare;
   else if (what != "off" && !speedjump_parse_share(what, share)) {
-    out.error = "speedjump: " + what + " is not on, off or a share 0..1; next: `vote speedjump " +
-                who + " on`";
+    out.error = "speedjump: \"" + what + "\" is not on, off or a share 0..1";
     return false;
   }
   const ClassicServer& cs = *g.classic;
   const int slot = classic_find_seat(cs, who);
   if (slot < 0) {
-    out.error = "speedjump: no player is " + who + "; next: `users` lists the ids and names";
+    out.error = "speedjump: no player called " + who + " (type \"users\" for the ids and names)";
     return false;
   }
   const ClassicClient& c = cs.clients[slot];
@@ -500,13 +498,13 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
   for (const gs::GameRule& r : all_rules()) known = known || rule == r.name;
   if (!known) {
     out.error = rule +
-                " is not a setting of this server; next: `vote rules` says what may be "
+                " is not a setting of this server. Type \"vote rules\" to see what may be "
                 "voted on (fraglimit, timelimit, teamplay, sv_gravity, pm_speedjump, "
-                "speedjump <player> on...)";
+                "speedjump <player> on...).";
     return false;
   }
   if (is_endpoint_rule(rule)) {
-    out.error = rule + " is read when the server starts; next: ask the server's owner";
+    out.error = rule + " is set when the server starts, so it can't be voted on";
     return false;
   }
   if (const sh::Setting* setting = sh::find_setting(rule); setting != nullptr) {
@@ -520,7 +518,7 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
     char* end = nullptr;
     std::strtod(text.c_str(), &end);
     if (end == text.c_str() || *end != '\0') {
-      out.error = rule + " \"" + text + "\" is not a number; next: `vote " + rule + " <number>`";
+      out.error = rule + " \"" + text + "\" is not a number";
       return false;
     }
   }
@@ -793,7 +791,7 @@ bool room_words(void* ctx, int slot, const std::string& line) {
           break;
         }
       if (!cl::room_remove_bot(r, g.rules))
-        client_print(cs, slot, 2, "removebot: no bot is seated; next: `addbot`\n");
+        client_print(cs, slot, 2, "There are no bots to remove.\n");
       sync_seats(g);
       return true;
     }
@@ -801,7 +799,7 @@ bool room_words(void* ctx, int slot, const std::string& line) {
     const std::string named = space == std::string::npos ? "" : line.substr(space + 1);
     if (!named.empty() && !cl::skill_named(named, skill)) {
       client_print(cs, slot, 2,
-                   "addbot " + named + ": no such skill; next: novice, average or expert\n");
+                   "addbot: unknown skill \"" + named + "\" (use novice, average or expert)\n");
       return true;
     }
     r.held = 0;

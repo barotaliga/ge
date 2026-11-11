@@ -62,9 +62,9 @@ bool check_game_folder(const std::string& folder, std::string* basedir, std::str
       std::string(content.base_dir) + "/" + ge::classicenhance::pack_name(content, 0);
   if (!fs::is_directory(root, ec)) {
     *error = folder +
-             " is not a folder; next: pick the folder your game is installed in (the "
+             " is not a folder. Pick the folder your game is installed in (the "
              "one holding " +
-             first + ")";
+             first + ").";
     return false;
   }
   // The base folder itself picked: the install is its parent.
@@ -77,17 +77,17 @@ bool check_game_folder(const std::string& folder, std::string* basedir, std::str
              " folder, so it is "
              "not " +
              std::string(content.what) +
-             "'s install (only that game is played); next: "
-             "pick the folder your game is installed in, the one holding " +
-             first;
+             "'s install (only that game is played). "
+             "Pick the folder your game is installed in, the one holding " +
+             first + ".";
     return false;
   }
   if (!holds_first_pack(base, content)) {
     *error = base.string() + " holds no " + ge::classicenhance::pack_name(content, 0) + " (nor " +
              ge::classicenhance::zip_name(content, 0) +
-             "); next: pick an install with its "
+             "). Pick an install with its "
              "packs in place, or copy them from your game's media into " +
-             base.string();
+             base.string() + ".";
     return false;
   }
   *basedir = root.string();
@@ -244,7 +244,7 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
       "coopgame",
       "coopgame [bots] [novice|average|expert] [map]: a new coop game (teammates spared unless "
       "sv_friendlyfire 1) with that many companion bots beside you, 1 by default, from the start "
-      "map or the map named; `addbot` and `removebot` change the party during the game",
+      "map or the map named; addbot and removebot change the party during the game",
       [&listen, &next_map, &content](Con& c, const CArgs& a) {
         int bots = 1;
         sh::AimSkill skill = sh::AimSkill::average;

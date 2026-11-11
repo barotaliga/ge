@@ -452,9 +452,7 @@ void client_print(ClassicServer& s, int slot, int level, const std::string& text
 // map's static sounds and signon writes, the baselines and the server info.
 bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error) {
   if (!rules || rules->models.empty()) {
-    error =
-        "classic_start: the rules have no map; next: start a map on the runner before "
-        "classic_start";
+    error = "the server has no map running";
     return false;
   }
   s.rules = &rules;
@@ -478,7 +476,7 @@ bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error
     if (qc.out.init.size() > kMaxMsgLen / 2) {
       error = "classic_start: the map's signon writes are " + std::to_string(qc.out.init.size()) +
               " bytes, more than one signon buffer carries (" + std::to_string(kMaxMsgLen / 2) +
-              "); next: split the signon at message boundaries in messages.hpp";
+              ")";
       return false;
     }
     s.signon.push_back(qc.out.init);
@@ -610,7 +608,7 @@ void classic_drop(ClassicServer& s, int slot, const std::string& why) {
 bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std::string& error,
                        bool bot) {
   if (slot < 0 || slot >= sh::kMaxClients || s.clients[slot].state != ConnState::free) {
-    error = "slot " + std::to_string(slot) + " is a client's; next: seat the bot in a free slot";
+    error = "slot " + std::to_string(slot) + " is taken by a player";
     return false;
   }
   ClassicClient& c = s.clients[slot];

@@ -59,12 +59,12 @@ bool ends_with(std::string_view s, std::string_view tail) {
 bool write_file(const std::string& path, const std::vector<uint8_t>& bytes, std::string& error) {
   std::FILE* f = std::fopen(path.c_str(), "wb");
   if (f == nullptr) {
-    error = "cannot write " + path + "; next: check the folder exists and is writable";
+    error = "Can't write " + path + ". Check that the folder exists and is writable.";
     return false;
   }
   const bool ok = std::fwrite(bytes.data(), 1, bytes.size(), f) == bytes.size();
   if (std::fclose(f) != 0 || !ok) {
-    error = "writing " + path + " failed part way; next: check the disk has room";
+    error = "Writing " + path + " failed part way. Check that the disk has room.";
     return false;
   }
   return true;
@@ -198,8 +198,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     char fps[32];
     std::snprintf(fps, sizeof fps, "%g", o.fps);
     error = "the video's size must be even on both sides and its frame rate over 0 (asked " +
-            std::to_string(o.width) + "x" + std::to_string(o.height) + " at " + fps +
-            " fps); next: pass --size=WxH with even sides and --fps=N, N over 0";
+            std::to_string(o.width) + "x" + std::to_string(o.height) + " at " + fps + " fps)";
     return false;
   }
   Timedemo t;
@@ -212,8 +211,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
       std::string(format_name(t.demo.state.format)) + (t.demo.state.voice_format ? " + voice" : "");
   const bool gif = o.gif || ends_with(o.file, ".gif");
   if (gif && !(o.gif_width >= 16)) {
-    error = "a GIF's width must be 16 px or more (asked " + std::to_string(o.gif_width) +
-            "); next: pass --gif-width=N";
+    error = "a GIF's width must be 16 px or more (asked " + std::to_string(o.gif_width) + ")";
     return false;
   }
 
@@ -341,7 +339,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     if (static_cast<size_t>(o.highlight) > found.list.size()) {
       error = "the demo has " + std::to_string(found.list.size()) + " highlights for " +
               player_name(scan.names, subject) + ", not " + std::to_string(o.highlight) +
-              "; next: list them with `demo_highlights` while it plays, or pick another --track";
+              " (demo_highlights lists them while it plays)";
       return false;
     }
     const ge::replay::Highlight& pick = found.list[static_cast<size_t>(o.highlight - 1)];
@@ -412,7 +410,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   if (gif) {
     if (gif_frames.empty()) {
       error = "the clip from " + std::to_string(from) + " s has no pictures (the demo is " +
-              std::to_string(vt) + " s); next: pick a start inside the demo";
+              std::to_string(vt) + " s long); pick a start inside the demo";
       return false;
     }
     const int delay_cs = std::max(2, static_cast<int>(std::lround(100.0 / o.fps)));

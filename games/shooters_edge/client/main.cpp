@@ -197,7 +197,7 @@ int run_main(int argc, char** argv) {
   cl::Listen listen;
   using CArgs = ge::console::Args;
   using Con = ge::console::Console;
-  console.add_command("map", "map <name>: play the map (`map arena` is built in)",
+  console.add_command("map", "map <name>: play the map (\"map arena\" is built in)",
                       [&](Con& c, const CArgs& a) {
                         if (a.size() < 2)
                           c.print(listen.map ? "map: " + listen.map->name : "map: none");
@@ -1044,7 +1044,8 @@ int run_main(int argc, char** argv) {
     if (game_menu.take_load())
       ge::platform::pick_folder(*window, "Load game: the folder holding id1", args.basedir);
     if (std::string picked, why; ge::platform::folder_picked(*window, &picked, &why)) {
-      if (!why.empty()) game_menu.load_refused(why + "; next: basedir <folder> in the console");
+      if (!why.empty())
+        game_menu.load_refused(why + ". You can also type \"basedir <folder>\" in the console.");
       folder_ask = picked;  // "" when the player cancelled
     }
     if (!folder_ask.empty() && !bench.active) {
@@ -1163,8 +1164,8 @@ int run_main(int argc, char** argv) {
       mic_tried = true;
       mic = ge::platform::open_audio_in(ge::net::kVoiceRate);
       tell(mic ? "voice: the microphone is on while +voip is held"
-               : "voice: no microphone opened (none, or the system's permission refused); next: "
-                 "allow the microphone for shooters_edge and restart",
+               : "voice: no microphone (there is none, or the system refused permission). Allow "
+                 "the microphone for Shooter's Edge and restart the game.",
            t);
     }
     if (mic) {

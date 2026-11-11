@@ -236,7 +236,7 @@ TEST(a_model_is_read_into_its_form_with_a_picture_standing_in_for_a_skin) {
   // Not there: false with no reason. A kind the game does not draw: the reason, and what next.
   CHECK(!a.open_model(a, files, "progs/missing.mdl", m, error) && error.empty());
   CHECK(!a.open_model(a, files, "progs/odd.md9", m, error) &&
-        error.find("next:") != std::string::npos);
+        error.find("use a .mdl, .iqm, .spr or .bsp") != std::string::npos);
 }
 
 TEST(a_mods_skeletal_model_is_baked_into_frames_with_its_materials_pictures_in_one_skin) {

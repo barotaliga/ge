@@ -119,7 +119,7 @@ DemoRead next_single(Demo& d, std::string& error) {
   const int32_t len = static_cast<int32_t>(u32_at(b, d.pos));
   if (len < 0 || static_cast<size_t>(len) > kMostMessage) {
     error = "the block length " + std::to_string(len) + at_offset(d.pos) +
-            " is not a block's; next: the file is damaged, or not a demo";
+            " is not a block's: the file is damaged, or not a demo";
     return DemoRead::error;
   }
   if (d.pos + 16 + static_cast<size_t>(len) > b.size()) return DemoRead::end;  // cut short
@@ -158,7 +158,7 @@ DemoRead next_client(Demo& d, std::string& error) {
       const int32_t len = static_cast<int32_t>(u32_at(b, at));
       if (len < 8 || static_cast<size_t>(len) > kMostMessage) {
         error = "the packet length " + std::to_string(len) + at_offset(rec) +
-                " is not a packet's; next: the file is damaged, or not a client recording";
+                " is not a packet's: the file is damaged, or not a client recording";
         return DemoRead::error;
       }
       at += 4;
@@ -177,7 +177,7 @@ DemoRead next_client(Demo& d, std::string& error) {
       return d.ended ? DemoRead::end : DemoRead::frame;
     } else {
       error = "the record type " + std::to_string(type) + at_offset(rec) +
-              " is none of command, packet or sequences; next: the file is damaged";
+              " is none of command, packet or sequences: the file is damaged";
       return DemoRead::error;
     }
   }
@@ -299,7 +299,7 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
               ", base format " + std::to_string(bytes[5]) + " and codec " +
               std::to_string(bytes[6]) +
               "; only version 1 of a client (1) or multiview (2) recording with Opus (2) is "
-              "read; next: re-record it with this build";
+              "read, so record it again with this version of the game";
       return false;
     }
     voice_base = bytes[5];
@@ -321,8 +321,7 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
     error =
         "the file is not a single-player demo (it opens with the music track: digits and a "
         "newline), a client recording (a time and a record type 0..2) or a multiview recording "
-        "(a milliseconds byte, a record type and the server data); next: check the file, or "
-        "name another";
+        "(a milliseconds byte, a record type and the server data)";
     return false;
   }
   if (voice_base != 0) {
@@ -330,7 +329,7 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
     if (out.state.format != said) {
       error = std::string("the voice recording's header says a ") +
               (said == DemoFormat::multiview ? "multiview" : "client") +
-              " recording follows, and the records are not one; next: the file is damaged";
+              " recording follows, and the records are not one: the file is damaged";
       return false;
     }
     out.state.voice_format = true;

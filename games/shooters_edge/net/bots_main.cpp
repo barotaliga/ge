@@ -9,6 +9,9 @@
 // (classic_team_view.hpp: the map, the bots, their routes, goals, beliefs and plans) as a video at
 // `--view-fps`; `--snapshot=<file.png>` rewrites one picture of it every `--snapshot-every` s.
 //
+// voice: agent (a command-line tool's main: its errors are for whoever scripts it;
+// docs/architecture.md § Player text).
+//
 // ge:summary The bot team headless: N bots join a classic server, a stdin console, a match folder
 // ge:keywords shooters_edge_bots bots-cli headless-bots live-server stdin-console match-folder
 // ge:skill bots net

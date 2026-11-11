@@ -142,7 +142,9 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   `--compare=before`) and puts both in the PR. A milestone row is done only when the labs
   in its `Labs:` line run in `make labs-smoke` (`labs` skill).
 - **AGENT-ACTIONABLE OUTPUT** (G6). Every error, assert and log line says what failed,
-  where, and the next action to take (`docs/architecture.md` § Diagnostics).
+  where, and the next action to take (`docs/architecture.md` § Diagnostics). **Players are
+  people:** a line a player reads in the game (console, chat, menus, a server's refusal) reads
+  like a game's words, never `next:` or backticks (§ Player text, held by a test).
 - **GREEN, THEN MERGE** (G7). CI must pass on every row. A PR you open is yours to drive
   to green, and you merge it (squash) once it is green. Never skip or weaken a test to
   get there.

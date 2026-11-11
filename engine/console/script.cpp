@@ -52,7 +52,7 @@ void if_cmd(Console& c, const Args& a) {
     if (then != 0 && els == 0 && i > then && lower(a[i]) == "else") els = i;
   }
   if (then == 0) {
-    c.error("if needs `then`", "write `if <a> <op> <b> then <commands> [else <commands>]`");
+    c.error("if needs \"then\"", "usage: if <a> <op> <b> then <commands> [else <commands>]");
     return;
   }
   std::vector<std::string> cond;
@@ -69,7 +69,7 @@ void if_cmd(Console& c, const Args& a) {
     yes = r == 1;
   } else {
     c.error("if: the condition is " + std::to_string(cond.size()) + " words",
-            "write `if <a> then ...` or `if <a> <op> <b> then ...`; quote a value with spaces");
+            "usage: if <a> then ... or if <a> <op> <b> then ...; quote a value with spaces");
     return;
   }
   auto join = [&](size_t from, size_t to) {
@@ -95,7 +95,7 @@ std::string value_of(Console& c, const std::string& name) {
 
 void set_calc(Console& c, const Args& a) {
   if (a.size() < 3) {
-    c.error("set_calc needs a name and an expression", "write `set_calc <name> <a> <op> <b>`");
+    c.error("set_calc needs a name and an expression", "usage: set_calc <name> <a> <op> <b>");
     return;
   }
   const std::string fn = lower(a[2]);
@@ -124,7 +124,7 @@ void set_calc(Console& c, const Args& a) {
   if (a.size() == 3) return store(c, a, a[1], a[2]);
   if (a.size() != 5) {
     c.error("set_calc: cannot read '" + a.rest(1) + "'",
-            "write `<a> <op> <b>`, or strlen, substr, strstr or int");
+            "usage: set_calc <name> <a> <op> <b>, or strlen, substr, strstr or int");
     return;
   }
   const std::string& op = a[3];
@@ -177,7 +177,7 @@ void register_script(Console& con) {
                   [](Console& c, const Args& a) { step(c, a, -1); });
   con.add_command("toggle", "toggle <name>: a cvar between 0 and 1", [](Console& c, const Args& a) {
     if (a.size() < 2) {
-      c.error("toggle needs a cvar", "write `toggle <name>`");
+      c.error("toggle needs a cvar", "usage: toggle <name>");
       return;
     }
     store(c, a, a[1], truthy(value_of(c, a[1])) ? "0" : "1");
@@ -185,7 +185,7 @@ void register_script(Console& con) {
   con.add_command("cycle", "cycle <name> <v1> <v2> ...: a cvar to the value after its own",
                   [](Console& c, const Args& a) {
                     if (a.size() < 3) {
-                      c.error("cycle needs a cvar and values", "write `cycle <name> <v1> <v2>`");
+                      c.error("cycle needs a cvar and values", "usage: cycle <name> <v1> <v2>");
                       return;
                     }
                     const std::string now = value_of(c, a[1]);
@@ -224,7 +224,7 @@ void register_script(Console& con) {
                     std::erase_if(
                         t, [&](const Console::Trigger& tr) { return tr.alias == lower(a[1]); });
                     if (t.size() == before)
-                      c.error("no trigger '" + lower(a[1]) + "'", "see `msg_trigger`");
+                      c.error("no trigger '" + lower(a[1]) + "'", "type msg_trigger to list them");
                   });
 }
 

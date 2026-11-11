@@ -135,7 +135,7 @@ TEST(a_damaged_input_log_is_refused) {
   std::vector<uint8_t> bad = bytes;
   bad[0] = 'X';
   CHECK(!se::read_input_log(bad, out, error));
-  CHECK(error.find("magic") != std::string::npos);
+  CHECK(error.find("not a server input log") != std::string::npos);
   bad = bytes;
   bad[4] = 99;  // the version
   CHECK(!se::read_input_log(bad, out, error));
@@ -179,7 +179,7 @@ TEST(a_full_server_refuses_a_slot_and_a_freed_one_is_taken_again) {
   s.maxclients = 8;
   s.map = "nowhere";
   CHECK(!se::host_create(other, s, error));
-  CHECK(error.find("next:") != std::string::npos);
+  CHECK(error.find("use --map=arena") != std::string::npos);
 }
 
 TEST(a_packet_for_a_slot_that_is_not_a_client_is_ignored) {

@@ -135,7 +135,7 @@ bool map_info(const GameAdapter& self, const SearchPath& files, std::string_view
   std::vector<uint8_t> store;
   const std::span<const uint8_t> bytes = find_file(files, path, store);
   if (bytes.empty()) {
-    error = "no " + path + " in the game's files; next: `maps` lists the maps there are";
+    error = "There is no " + path + " in the game's files. Type \"maps\" to list the maps.";
     return false;
   }
   ge::brush::Map m;
@@ -270,8 +270,8 @@ bool open_model(const GameAdapter&, const SearchPath& files, const std::string& 
     out.form = ModelForm::brush;
     return true;
   }
-  error = "a model of a kind this game does not draw (" + kind +
-          "); next: name a .mdl, .iqm, .spr or .bsp";
+  error =
+      "a model of a kind this game does not draw (" + kind + "); use a .mdl, .iqm, .spr or .bsp";
   return false;
 }
 
@@ -412,7 +412,7 @@ ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhan
                                std::to_string(own->width) + " x " + std::to_string(own->height) +
                                ", not a whole multiple of the pack's " + std::to_string(w) + " x " +
                                std::to_string(h) +
-                               "; next: save it at that size or a "
+                               "; save it at that size or a "
                                "multiple of it");
     }
     if (dir.empty()) return uint32_t{0};

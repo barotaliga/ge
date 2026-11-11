@@ -151,7 +151,7 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
   c.add_command("whisper", "whisper <nick> <text>: a chat line to one player",
                 [this](Console& con, const Args& a) {
                   if (a.size() < 3) {
-                    con.error("whisper needs a nick and a text", "write `whisper <nick> <text>`");
+                    con.error("whisper needs a nick and a text", "usage: whisper <nick> <text>");
                     return;
                   }
                   say(ChatTo::one, a[1], a.rest(1));

@@ -1,5 +1,8 @@
 // The co-op run (coop_run.hpp): the campaign on the coop hall, the leader's tour, the companions.
 //
+// voice: agent (a lab's harness: its errors land in the lab's report; docs/architecture.md § Player
+// text).
+//
 // ge:summary The co-op run: run_coop on the coop hall, the leader's tour, the companions' record
 // ge:keywords run_coop coop-hall tour leader companions digest kills button door
 // ge:skill shooter bots
