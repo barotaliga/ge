@@ -5,6 +5,7 @@
 //
 // ge:summary Tests: the side key's change held off as a hand's is; a button's doors through relays
 // ge:keywords test fighter_keys key-change socd perfect-strafe button_fires trigger_relay
+// ge:keywords fighter_keyboard key-set feathering weapon-key
 // ge:skill bots testing
 #include <memory>
 #include <string>
@@ -14,6 +15,7 @@
 #include "progs/entity_text.hpp"
 #include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/footwork.hpp"
+#include "shooters_edge/bots/keyboard.hpp"
 
 namespace sh = ge::shooter;
 namespace fb = shooters_edge::bots;
@@ -72,6 +74,48 @@ TEST(a_side_key_turned_round_passes_through_no_side_key_unless_clean) {
   f->clean_keys = 0;
   f->bot.pilot.pilot.mode = sh::PilotMode::air;
   CHECK(sent(*f, turn) == turn);
+}
+
+TEST(the_keyboard_presses_a_key_set_late_feathers_and_taps_weapons) {
+  for (const uint8_t moves : {uint8_t{20}, uint8_t{90}}) {
+    auto f = std::make_unique<fb::Fighter>();
+    fb::fighter_keyboard_init(*f, moves, 3);
+    // A wish ahead and a little right: W alone, 400, never on the first command.
+    int first = -1;
+    for (int n = 0; n < 20; n++) {
+      sh::MoveCmd c;
+      c.msec = 13;
+      c.forward = 320;
+      c.side = 60;
+      fb::fighter_keyboard(*f, c, {}, true);
+      CHECK(c.side == 0);
+      if (c.forward == 400 && first < 0) first = n;
+    }
+    CHECK(first >= 1 && first <= 6);
+    // A slow wish on the ground: on under its speed, off over it.
+    sh::MoveCmd c;
+    for (int n = 0; n < 20; n++) {
+      c = {};
+      c.msec = 13;
+      c.forward = 96;  // 0.3 of a run: 96 units/s wished, running at 300
+      fb::fighter_keyboard(*f, c, {300, 0, 0}, true);
+    }
+    CHECK(c.forward == 0);
+    // Weapon 7: no impulse on the command it was asked for; it goes on a later one, once.
+    sh::MoveCmd w;
+    w.msec = 13;
+    w.impulse = 7;
+    fb::fighter_keyboard(*f, w, {}, true);
+    CHECK(w.impulse == 0);
+    int sent = 0;
+    for (int n = 0; n < 60; n++) {
+      sh::MoveCmd x;
+      x.msec = 13;
+      fb::fighter_keyboard(*f, x, {}, true);
+      sent += x.impulse == 7;
+    }
+    CHECK(sent == 1);
+  }
 }
 
 TEST(a_buttons_doors_are_found_through_the_relays_it_fires) {
