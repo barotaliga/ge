@@ -84,6 +84,12 @@ int sq_weapon_named(std::string_view name) {
   return -1;
 }
 
+int sq_item_named(std::string_view name) {
+  for (int i = 0; i < kSqItemCount; i++)
+    if (fold_equal(name, kSqItems[i].pickup)) return i;
+  return -1;
+}
+
 bool sq_holds(const SqBody& body, int w) {
   if (w < 0 || w >= kSqWeaponCount) return false;
   if (kSqWeapons[w].item == nullptr) return body.blaster;
