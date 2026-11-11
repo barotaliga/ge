@@ -79,6 +79,7 @@ TEST(a_side_key_turned_round_passes_through_no_side_key_unless_clean) {
 TEST(the_keyboard_presses_a_key_set_late_feathers_and_taps_weapons) {
   for (const uint8_t moves : {uint8_t{20}, uint8_t{90}}) {
     auto f = std::make_unique<fb::Fighter>();
+    f->features.set(sh::Feature::keysteer, false);  // the nearest key set (keysteer: below)
     fb::fighter_keyboard_init(*f, moves, 3);
     // A wish ahead and a little right: W alone, 400, never on the first command.
     int first = -1;

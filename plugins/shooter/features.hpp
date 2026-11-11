@@ -43,9 +43,9 @@
 // - `circlejump`: a hop's first jump out of a curve on the ground, past a run's 320 (pilot.hpp).
 // - `ahead`: the walk's keys flown through the move before a bump; `bodies`: players near too.
 // - `beat`: a fight mode held a person's beat (through a peek). `trial`: an A/B's, in no preset.
-// - `keys`: a hand on a keyboard presses the keys; `keysteer`: it taps between two sets;
-//   `lookway`: the calm view on the route's point in sight; `press`: the forward key with the
-//   dodge's side (on at him): these four unjudged, in no preset.
+// - `keys`: a hand on a keyboard presses the keys; `keysteer`: it taps between two sets (on);
+//   `lookway`: the calm view on the route's point in sight (neutral); `press`: the forward key
+//   with the dodge's side (dropped, -2.7 frags): these two in no preset.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: all but what that level
 // does not do: none `eye`, a novice no `glance`), `features_none` (a plain bot).
 // The text form (`apply_features`): `all`, `none` (`plain`), `+name`/`name`, `-name`, in order.
