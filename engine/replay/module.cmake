@@ -3,6 +3,6 @@
 # ge::replay.
 file(GLOB GE_REPLAY_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/replay/*.cpp)
 add_library(ge_replay STATIC ${GE_REPLAY_SOURCES})
-target_link_libraries(ge_replay PUBLIC ge_core ge_play)
+target_link_libraries(ge_replay PUBLIC ge_core ge_play ge_vfs)
 
 ge_module(ge_replay EXPORT replay)
