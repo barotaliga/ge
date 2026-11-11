@@ -118,6 +118,38 @@ TEST(the_keyboard_presses_a_key_set_late_feathers_and_taps_weapons) {
   }
 }
 
+TEST(the_keyboard_steers_between_two_sets_by_tapping_the_further_in) {
+  // `keysteer`: a wish 15 degrees right of the view (a third of the way from W to W+D) is W held
+  // with D tapped in about a third of the time, in short taps; without it, W alone.
+  for (const bool steer : {false, true}) {
+    auto f = std::make_unique<fb::Fighter>();
+    f->features.set(sh::Feature::keysteer, steer);
+    fb::fighter_keyboard_init(*f, 90, 3);
+    int side = 0, taps = 0, n = 0;
+    bool was = false;
+    for (; n < 400; n++) {
+      sh::MoveCmd c;
+      c.msec = 13;
+      c.forward = 309;  // 320 at 15 degrees right of the view: cos and sin
+      c.side = 83;
+      fb::fighter_keyboard(*f, c, {}, true);
+      CHECK(c.side >= 0 && (c.forward == 400 || n < 10));
+      side += c.side > 0;
+      taps += c.side > 0 && !was;
+      was = c.side > 0;
+    }
+    const double share = static_cast<double>(side) / n;
+    if (!steer) {
+      CHECK_MSG(side == 0, "without keysteer the right key was pressed " + std::to_string(side) +
+                               " commands of " + std::to_string(n));
+    } else {
+      CHECK_MSG(share > 0.2 && share < 0.45,
+                "the right key held " + std::to_string(share) + " of the time, not about a third");
+      CHECK_MSG(taps >= 8, "the right key went down only " + std::to_string(taps) + " times");
+    }
+  }
+}
+
 TEST(a_buttons_doors_are_found_through_the_relays_it_fires) {
   const char* text =
       "{ \"classname\" \"func_button\" \"target\" \"t65\" \"model\" \"*16\" }\n"

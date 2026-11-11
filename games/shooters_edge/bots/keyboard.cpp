@@ -23,12 +23,15 @@ namespace ai = ge::ai;
 
 // The actions: the four move keys, the jump, the weapons 1 to 8 (impulse = action - kWeapon1 + 1).
 enum Act : uint8_t { kFwd, kBack, kLeft, kRight, kJump, kWeapon1 };
-constexpr float kPressMin = 0.3f;  // in the air, a wish under this share of a run: no key
-constexpr float kCreep = 0.03f;    // on the ground, a wish under this share: no key
-constexpr double kHold = 4;        // the set held until the wish is this far past its edge, deg
-constexpr float kKeySpeed = 400;   // a key's axis, units/s (cl_forwardspeed)
-constexpr double kFull = 0.9;      // a wish of this share of a run or more is held, not feathered
-constexpr double kBand = 12;       // feathering's band round the speed wished, units/s
+constexpr float kPressMin = 0.3f;    // in the air, a wish under this share of a run: no key
+constexpr float kCreep = 0.03f;      // on the ground, a wish under this share: no key
+constexpr double kHold = 4;          // the set held until the wish is this far past its edge, deg
+constexpr float kKeySpeed = 400;     // a key's axis, units/s (cl_forwardspeed)
+constexpr double kFull = 0.9;        // a wish of this share of a run or more is held, not feathered
+constexpr double kBand = 12;         // feathering's band round the speed wished, units/s
+constexpr double kSlide = 40;        // and the whole speed past the wished by this lets go, units/s
+constexpr double kSteer = 0.02;      // the steering's tally past this changes the set, set-seconds
+constexpr double kSteerEdge = 0.08;  // a wish this near a set (a share of 45 degrees) is that set
 
 uint32_t bit(int a) { return 1u << static_cast<uint32_t>(a); }
 
@@ -90,9 +93,27 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
   if (m >= (onground ? kCreep : kPressMin)) {
     double ang = ge::core::libm::atan2(sd, fw) * (180.0 / ge::core::kPi);
     if (ang < 0) ang += 360;
-    set = static_cast<int>(std::floor(ang / 45 + 0.5)) % 8;
-    if (f.keys.set >= 0 && std::fabs(wrap(ang - f.keys.set * 45.0)) <= 22.5 + kHold)
-      set = f.keys.set;
+    if (f.features[sh::Feature::keysteer]) {
+      // STEERED BY TAPS: the two sets either side of the wish, the further one tapped in for its
+      // share of the time (a tally of the way wished less the way pressed: past `kSteer` the other
+      // set), so the way pressed over a few taps is the wish's, as a person nudges W with D.
+      const double lo_f = std::floor(ang / 45);
+      const int lo = static_cast<int>(lo_f) % 8, hi = (lo + 1) % 8;
+      double part = ang / 45 - lo_f;
+      if (part < kSteerEdge) part = 0;
+      if (part > 1 - kSteerEdge) part = 1;
+      bool on_hi = f.keys.set == hi || (f.keys.set != lo && part >= 0.5);
+      if (f.keys.set != lo && f.keys.set != hi) f.keys.steer = 0;
+      f.keys.steer += (part - (on_hi ? 1.0 : 0.0)) * (cmd.msec / 1000.0);
+      if (f.keys.steer > kSteer) on_hi = true;
+      if (f.keys.steer < -kSteer) on_hi = false;
+      f.keys.steer = std::fmax(-2 * kSteer, std::fmin(2 * kSteer, f.keys.steer));
+      set = on_hi ? hi : lo;
+    } else {
+      set = static_cast<int>(std::floor(ang / 45 + 0.5)) % 8;
+      if (f.keys.set >= 0 && std::fabs(wrap(ang - f.keys.set * 45.0)) <= 22.5 + kHold)
+        set = f.keys.set;
+    }
   }
   f.keys.set = set;
   // Feathering a wish short of a run on the ground: on under the speed wished, off over it.
@@ -103,8 +124,12 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
     const double wx = fw * cy + sd * sy, wy = fw * sy - sd * cy;
     const double along = (velocity.x * wx + velocity.y * wy) / (m * 320.0);
     const double wished = m * 320.0;
-    if (along < wished - kBand) f.keys.feather = true;
-    if (along > wished + kBand) f.keys.feather = false;
+    // The body's whole speed too: sliding off the wish (a set off the velocity gains speed across
+    // it) the speed along it stays low while the body runs on, past the point it slows into.
+    const double flat = std::sqrt(static_cast<double>(velocity.x) * velocity.x +
+                                  static_cast<double>(velocity.y) * velocity.y);
+    if (along < wished - kBand && flat < wished + kSlide) f.keys.feather = true;
+    if (along > wished + kBand || flat > wished + kSlide) f.keys.feather = false;
     if (!f.keys.feather) set = -1;
   } else {
     f.keys.feather = true;
