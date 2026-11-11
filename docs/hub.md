@@ -5,7 +5,8 @@ shows each match's scoreboard as it changes, lets a visitor watch a live match o
 and keeps a searchable archive of demos. Servers and broadcast nodes announce themselves to a
 MASTER; the hub reads the masters, asks every server for its state, follows the broadcasts and
 indexes the demos they keep. Row M56 ([`goals/M56.md`](goals/M56.md)). This page is the design;
-nothing is built yet, and the plan waits on the maintainer's decision (§ Decisions waiting).
+nothing is built yet. The maintainer chose the engine in the browser as the way a page shows a
+match (2026-11-11; § Watching in a browser).
 
 The classic game's community runs such a site; what it does, measured and read in its public
 sources, is the working note `porting/shooters-edge/hub.md`. This design takes its shape (the
@@ -17,7 +18,7 @@ generic: one hub program for every game on the engine, the game supplying only i
 | Page | What it shows | Refreshed |
 | --- | --- | --- |
 | Servers | A card per server with anyone on it: the map's picture, the mode, the phase and time left, the scoreboard (players or teams), spectators and broadcast viewers, the address, the country, and buttons: Join, Spectate, Watch | Every 5 s while the page is open |
-| Watch | One live match: the picture (§ Decisions waiting), its scoreboard, the other live matches beside it sorted by interest | The broadcast's own pace |
+| Watch | One live match: the game's own picture in the page (the web viewer), its scoreboard, the other live matches beside it sorted by interest | The broadcast's own pace |
 | Players | Every person on every server: name, playing or watching, where, and the links | Every 5 s |
 | Demos | The archive: filters by mode, map, player, team, tag, server and age; 15 a page; scores hidden until asked; Play, Download, Share | On demand |
 | Demo | One demo: the picture, the scoreboard and the game's stats behind a spoiler, the seek bar, the speed, whom to follow, clips by time range in the link | On demand |
@@ -116,19 +117,24 @@ master and a TV node can share one small machine. The labs run all of it on the 
 
 ## Watching in a browser
 
-Seeing a match is the part that does not fit the engine's rules as they stand: the engine has no
-web build (G5) and its games are written in C++ only. The ways to see a match from a hub page:
+A hub page shows a match with the ENGINE ITSELF: a viewer built from the same C++ as the game,
+compiled to WebAssembly, drawing through WebGPU, loaded by the Watch and Demo pages. It is the one
+web build the engine has (G5): a viewer, never the game, and nothing in it plays.
 
-| Way | What a visitor sees | Cost |
-| --- | --- | --- |
-| **Open in the game** | Watch and Play buttons open the installed game spectating that broadcast or playing that demo, through a link the game registers (`<game>://tv/<node>/<stream>`, `<game>://demo/<sha256>`) | Each client registers its link scheme (`engine/platform`) and takes a `+tv` or `+demo` start; no web code |
-| **The live map** | The match drawn from above by the hub: the level's outline, each player a dot with a name and a heading, the scoreboard beside it, a few frames a second | A small RADAR track in the broadcast (positions at 4 Hz); the hub draws SVG in C++; the page needs a few lines of script to move the dots, or a picture refreshed by the browser alone |
-| **Video** | The match as a film in the page's `<video>`, from a camera client the hub runs headless, encoded by `engine/capture` (AV1 in fragmented MP4, which it already writes) and served as low-latency HLS | One CPU-rendered client per watched stream: a featured match or two, not every match |
-| **The engine in the browser** | The real game's picture in the page, every camera, seek and speed, like the classic hub's | A WebAssembly and WebGPU build of a viewer: lifts G5's "no web build" for a viewer, and pages that load it need script |
+| Piece | What it is |
+| --- | --- |
+| The web viewer | A game's viewer target, `ge_add_web_viewer(<game>)`: its renderer, its demo reader and the TV client, nothing of input beyond the camera and the transport. Built by Emscripten, drawing through the browser's WebGPU with the same WGSL the native renderer uses (Dawn ships the browser's binding) |
+| Its stream | The TV node's stream carried over a WebSocket (the TV layer's browser carriage), the same chunks a native spectator reads; a demo fetched by its hash from the archive, decoded in the viewer |
+| Its content | The level and the models from the hub's content folder, compressed, named by hash, cached by the browser for a year; the first visit's download kept small by sending the level being watched first |
+| Its controls | Seek, speed, pause, whom to follow and free camera, through the transport the native replay player already has (`engine/replay`); clip links (`?t=from-to:who`) |
+| The page glue | The few lines of script a page needs to start the viewer, hand it the stream's address and wire the buttons: platform glue, kept as small as the platform allows, as Apple's and Android's app shells are |
+| Content rights | A hub serves only content its operator may share. For the classic game that is the free pack and the operator's own; a level whose content the hub may not serve is shown in the installed game instead |
 
-The classic hub does the last: it runs the classic client compiled to WebAssembly and reaches the
-broadcaster over a WebSocket. Our TV layer will carry its stream over a WebSocket too, so the same
-is possible for us later, but it is a decision about G5 for the maintainer, not a step of the plan.
+Two cheaper ways stay in the plan beside it: Watch and Play buttons that open the installed game
+(`<game>://tv/<node>/<stream>`, `<game>://demo/<sha256>`, a link each client registers), and the
+live overhead map (a RADAR track the hub draws), for phones and slow machines. Video from a hub
+camera was considered and not taken: a CPU-rendered client per stream costs more than the
+browser's own GPU.
 
 ## The plan
 
@@ -141,8 +147,8 @@ is possible for us later, but it is a decision about G5 for the maintainer, not 
 | 4 | M56d | The archive: pulled from TV nodes, SHA-256 names, the SQLite index and search, the Demos page, downloads, retention | `hub-archive` lab: 500 generated demos, searches answered and timed |
 | 5 | M56e | Open in the game: each client's link scheme and `+tv`/`+demo` start; Watch and Play buttons | A Shooter's Edge client opened from a hub link, watching a bot match |
 | 6 | M56f | The classic adapter: the classic masters, status queries and broadcasters read into the records; Shooter's Edge's hub lists the internet's classic servers | `se-hub` lab against the simulated classic servers, and once by hand against the real masters |
-| 7 | M56g | The live map: the RADAR track, the hub's SVG view, live updates | `hub-radar` lab: a bot match drawn frame by frame |
-| 8 | M56h | Video for featured matches, or the engine in the browser (§ Decisions waiting) | Its lab |
+| 7 | M56g | The web viewer: `ge_add_web_viewer`, the Emscripten and WebGPU build, the stream over a WebSocket, demos by hash, the content folder, the transport; the Watch and Demo pages; Shooter's Edge's and Fall Line's viewers | `hub-viewer` lab: the viewer in headless Chromium on a software WebGPU adapter, a live bot match and a demo screenshotted, seek checked, first-visit bytes measured |
+| 8 | M56h | The live map for phones and slow machines: the RADAR track, the hub's SVG view, live updates | `hub-radar` lab: a bot match drawn frame by frame |
 
 Phase 2 and later depend on the TV layer's header and meta track (M57a, the replay file v2, and M57b, the native TV node); the
 master can land before them, since a dedicated server's heartbeat needs nothing of TV.
@@ -157,15 +163,7 @@ master can land before them, since a dedicated server's heartbeat needs nothing 
 | Demo metadata | Read from the file's header and closing summary | File names, as the classic hub's older list did: they hold no durations, no points of view, and break when renamed |
 | Demo names | SHA-256 of the bytes, a fan-out directory | Names by date and players: two nodes' copies differ, and a URL is not stable |
 | The index | SQLite with full-text search, one file | A database server: one more process for a community to run |
-| Pages | HTML rendered by the hub from templates, CSS, a few lines of script only where a page moves | A single-page app with a build step: a second language and toolchain in the tree |
+| Pages | HTML rendered by the hub from templates, CSS, a few lines of script only where a page moves or starts the viewer | A single-page app with a build step: a second language and toolchain in the tree |
+| A match in the browser | The engine's own viewer in WebAssembly and WebGPU (the maintainer's choice, 2026-11-11) | Only a link to the installed game: no picture without installing. Video from a hub camera: one CPU-rendered client per stream. The live map alone: no real picture |
 | TLS | The operator's reverse proxy | TLS in the hub: certificates are an operator's job and every proxy already does it |
 | Locations | An operator's IP-to-country table file, or the server's own word | A lookup service called at run time: a dependency and a privacy leak |
-
-## Decisions waiting
-
-- **How a browser shows a match** (§ Watching in a browser). The plan builds Open in the game
-  first and the live map next, both within the rules; video or the engine in the browser is
-  phase 8, chosen by the maintainer.
-- **How much script a page may carry.** A hub page is HTML and CSS; the live updates need a few
-  lines of script. The tree allows only C++ and its listed exceptions, so the hub's pages would be
-  a new one, kept as small as the platform demands, like an app shell.

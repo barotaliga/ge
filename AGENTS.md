@@ -82,7 +82,8 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   `tests/golden/` and fails on a reference name (`tools/agents-index.mjs`, `LEGACY`).
 - **C++ ONLY, AND NO INHERITED ARCHITECTURE.** The engine and every game on it are written in
   C++. The only other languages allowed are the thinnest platform glue a store demands
-  (Swift or Objective-C for Apple's app shell, Java or Kotlin for Android's), kept as small as
+  (Swift or Objective-C for Apple's app shell, Java or Kotlin for Android's, and the few lines
+  of script a hub page needs to start a game's web viewer, `docs/hub.md`), kept as small as
   the platform allows, the small Node scripts under `tools/` that check the
   repository's structure and ship in no game, and Blender Python asset builders: offline
   sources of a model, run headless by `ge asset` (docs/goals.md M8g), whose output (a .glb)
