@@ -104,6 +104,7 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
     p.frame = e.frame;
     p.skin = e.skin;
     p.effects = e.effects;
+    p.alpha = e.alpha;
     p.origin = e.origin;
     p.angles = e.angles;
     out.push_back(p);
@@ -171,6 +172,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
     p.frame = d.frame;
     p.skin = d.skin;
     p.effects = d.effects;
+    p.alpha = d.alpha;
     p.origin = d.origin;
     p.angles = d.angles;
     return p;

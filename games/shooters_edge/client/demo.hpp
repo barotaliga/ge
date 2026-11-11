@@ -113,6 +113,7 @@ struct DemoEntity {
   sh::Vec3f origin, angles;  // units, degrees
   int model = 0, frame = 0, skin = 0, effects = 0;
   int weapon_frame = 0;  // a player's held weapon's frame (client, multiview; single: DemoState's)
+  float alpha = 1;       // how much of it shows (the transparency byte; 1 solid)
   bool present = false;  // updated this frame (single) or in the last entity list (client)
   bool dead = false, gib = false;  // a multiview player's state this frame (its dead and gib bits)
 };
@@ -127,6 +128,11 @@ struct DemoSound {
 };
 
 // The protocol's volume byte (255 full) and attenuation byte (64 a normal sound) as factors.
+// The protocol's transparency byte as a share shown: 0 (never sent) and 254 up solid.
+inline float byte_alpha(int b) {
+  return b <= 0 || b >= 254 ? 1.0f : static_cast<float>(b) / 254.0f;
+}
+
 inline float byte_volume(int b) { return static_cast<float>(b) / 255.0f; }
 inline float byte_attenuation(int b) { return static_cast<float>(b) / 64.0f; }
 

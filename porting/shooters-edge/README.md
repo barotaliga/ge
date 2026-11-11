@@ -16,6 +16,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `formats.md` | The file formats: pak, pk3, the search order, BSP29 lump by lump, BSP2, MDL, SPR, WAD2, LMP, WAV |
 | `progs.md` | QuakeC bytecode for the VM (M18c): the file and its checks, memory and value encodings, calls, every opcode's semantics, the engine-side globals and fields, the map's entity text, allocating and freeing entities |
 | `builtins.md` | The modern server's builtins by number, its extension builtins and list, the monster moves, the hooks and when they are called, client commands, the extension fields (M18p) |
+| `qc-strings.md` | The extended string builtins (the string set: stov, strstrofs, str2chr, chr2str, strconv, strpad, infoadd, infoget, the comparisons) and sprintf, each edge case, from a clean-room reader (M18l) |
 | `movement.md` | The player's movement at the modern server's defaults: the settings, every step of the move, the clip hulls and the trace, the test vectors' format (M18o1) |
 | `gameloop.md` | The game loop: the game program's hooks, entities, the area tree, the server frame, thinking, tossing, pushers, touching, the player's packet and command, client prediction (M18o2) |
 | `vectors/` | Measured test vectors: `pmove.txt` (the player's move in hand-built worlds), `framemove.txt` (the original move in the same worlds), `hulltrace.txt` (single traces by the original single-player trace in the same worlds: where the end point lands at corners and slants) and `entity.txt` (tossed, bounced and flying entities), for `se-parity` |
@@ -36,6 +37,10 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `sequel-rules.md` | The sequel's rules: the 10 Hz frame, entities and physics, items, armour, damage, every weapon and projectile, a player's life, deathmatch and `dmflags`, the demo maps' entities |
 | `sequel-monsters.md` | The sequel's monsters on the demo maps: life, senses, the attack choice, the roster's numbers |
 | `localization.md` | The re-release's text keys (clean-room answers): which prints carry `$` keys, how arguments fill `{}`/`{N}`, its extra builtins by number and by name, the words file's place and format, where an engine resolves them |
+| `television.md` | The classic match broadcaster (clean-room answers): its stream protocol, handshake and auth, the delay, catch-up, chat and viewer lists, the server's side, discovery, HTTP and files (M57) |
+| `forward.md` | The classic packet forwarder (clean-room answers): the route in the userinfo, the connect hop by hop, forwarding and timeouts, its queries, the client's route finder (M57) |
+| `proxy.md` | The classic proxy and its compressed client demos, from public documents and demo bytes only: features, commands, link compression, recording, observers, what is known of .qwz (M57) |
+| `hub.md` | The classic community's live-game and demo website (clean-room answers): its pages and API, the master and status queries, modes and match state, the broadcaster's advert, watching in a browser, the demo index (M56, `docs/hub.md`) |
 
 The recorded-game formats are built (M18h, `games/shooters_edge/client/demo.hpp`) and their note
 retired. Every fact marked `verify` is checked by a lab before code depends on it.
