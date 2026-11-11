@@ -11,16 +11,17 @@ namespace ge::shooter {
 namespace {
 
 constexpr const char* kNames[kFeatures] = {
-    "calm",      "pace",       "swimaim",    "screen", "keep",   "lead",     "lane",
-    "hop",       "shortgoals", "commit",     "danger", "dodge",  "watch",    "spam",
-    "packs",     "talk",       "plan",       "rj",     "gj",     "airsteer", "surface",
-    "glance",    "eye",        "selfaim",    "pools",  "routes", "corner",   "mouse",
-    "packinfer", "listen",     "stairs",     "locked", "escape", "brink",    "gapjump",
-    "headroom",  "liphop",     "circlejump", "ahead",  "bodies", "beat",     "trial"};
+    "calm",       "pace",   "swimaim", "screen",   "keep",      "lead",       "lane",   "hop",
+    "shortgoals", "commit", "danger",  "dodge",    "watch",     "spam",       "packs",  "talk",
+    "plan",       "rj",     "gj",      "airsteer", "surface",   "glance",     "eye",    "selfaim",
+    "pools",      "routes", "corner",  "mouse",    "packinfer", "listen",     "stairs", "locked",
+    "escape",     "brink",  "gapjump", "headroom", "liphop",    "circlejump", "ahead",  "bodies",
+    "beat",       "keys",   "trial"};
 
-// Every switch but `trial` (the last).
+// Every switch but `trial` (the last) and those not yet judged (`keys`).
 constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);
-constexpr uint64_t kAll = kTrial - 1;
+constexpr uint64_t kKeys = uint64_t{1} << static_cast<uint64_t>(Feature::keys);
+constexpr uint64_t kAll = (kTrial - 1) & ~kKeys;
 
 bool separator(char c) { return c == ',' || c == ' ' || c == '/' || c == '\t'; }
 
