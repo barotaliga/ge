@@ -170,6 +170,7 @@ so an agent or an owner can answer "why is this server set like this" without re
 | `sv_password`, `sv_spectatorpassword` | a password to play, to watch; the advert says locked | server |
 | `sv_visibility` | `lan`, `invite` or `listed` (M17r) | server |
 | `sv_rendezvous` | the rendezvous to register and list with | server, latched |
+| `sv_master` | the masters a community's hub reads (`docs/hub.md`), space-separated, port 27900 when none is given; the server beats to each and answers status asks on its own port | server, latched |
 | `sv_map`, `sv_maprotation` | the first map and the rotation | server info |
 | `sv_bots` | seats the game's bots fill at the start | server, latched |
 | `sv_lobby` | 1: every map warms up until everyone is ready, then the countdown and the match | server info, latched |
