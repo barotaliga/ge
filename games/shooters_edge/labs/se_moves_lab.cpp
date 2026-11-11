@@ -18,11 +18,14 @@
 // out, ranked by its 95th percentile, with his jumps' weave and gain by speed; and THE WEAVE BY
 // SPEED for every player and for the fastest tenth: each jump's flight by its takeoff speed, how
 // far the velocity's heading swept, how far the view swept, the speed gained (fastest(), below).
+// And THE GROUND BETWEEN JUMPS: what each landing costs by the time on the ground, how long the
+// chains run, how fast they start.
 //
 // ge:summary Lab: a recorded player's movement read as hops and drawn over the map's wireframe
 // ge:keywords lab se-moves movement bunny-hop demo mvd wireframe path speed chain turn-share
 // ge:keywords view-lag ground-frames players compare study fastest who-moves-fastest weave
 // ge:keywords weave-by-speed hop-gain speed-percentile blast-cut strafe-jumpers
+// ge:keywords ground-time ground-cost chain-length chain-start
 // ge:skill shooter labs
 // ge:test tests/shooter_hops_test.cpp
 #include <algorithm>
@@ -178,6 +181,106 @@ void hop_cells(const sh::HopReading& r, const std::vector<uint8_t>& blast,
   }
 }
 
+// THE GROUND BETWEEN JUMPS: each jump after a flight (both 0.3-1 s in the air, out of a blast)
+// with under 0.5 s on the ground between them, by that ground time: the landing's speed, the
+// takeoff's, what the ground cost (takeoff less landing) and the next flight's gain; and the
+// CHAINS (jumps with under 0.05 s on the ground between): how long, and the first takeoff's speed
+// (how fast a chain starts). People and bots read by the one rule.
+constexpr int kGroundTimeBins = 7;
+constexpr float kGroundEdge[kGroundTimeBins + 1] = {0,    0.02f, 0.04f, 0.07f,
+                                                    0.1f, 0.15f, 0.25f, 0.5f};
+constexpr float kChainGap_s = 0.05f;
+
+// A ground-time bin's jumps: the landing before, the takeoff, the ground's cost, the flight's gain.
+struct GroundCell {
+  std::vector<float> land, off, cost, gain;
+};
+
+struct GroundCells {
+  std::array<GroundCell, kGroundTimeBins> by_ground{};
+  std::vector<float> ground, cost, first_off;
+  std::vector<int32_t> chain_len;
+};
+
+void ground_cells(const sh::HopReading& r, const std::vector<uint8_t>& blast, GroundCells& g) {
+  const sh::Hop* prev = nullptr;
+  int32_t len = 0;
+  const auto close = [&] {
+    if (len > 0) g.chain_len.push_back(len);
+    len = 0;
+  };
+  for (const sh::Hop& h : r.hops) {
+    const bool flight = h.air_s >= 0.3f && h.air_s <= 1.0f &&
+                        !blast[static_cast<size_t>(h.takeoff)] &&
+                        !blast[static_cast<size_t>(h.land)];
+    if (!flight) {
+      close();
+      prev = nullptr;
+      continue;
+    }
+    float gap = 1e9f;
+    if (prev != nullptr)
+      gap = static_cast<float>(r.frames[static_cast<size_t>(h.takeoff)].t -
+                               r.frames[static_cast<size_t>(prev->land)].t);
+    if (gap < kChainGap_s) {
+      len++;
+    } else {
+      close();
+      len = 1;
+      g.first_off.push_back(h.speed_off);
+    }
+    if (prev != nullptr && gap < kGroundEdge[kGroundTimeBins]) {
+      g.ground.push_back(gap);
+      if (prev->speed_land > 300) {
+        int b = 0;
+        while (b + 1 < kGroundTimeBins && gap >= kGroundEdge[b + 1]) b++;
+        GroundCell& c = g.by_ground[static_cast<size_t>(b)];
+        c.land.push_back(prev->speed_land);
+        c.off.push_back(h.speed_off);
+        c.cost.push_back(h.speed_off - prev->speed_land);
+        c.gain.push_back(h.speed_land - h.speed_off);
+        g.cost.push_back(h.speed_off - prev->speed_land);
+      }
+    }
+    prev = &h;
+  }
+  close();
+}
+
+void ground_report(gl::Lab& lab, GroundCells g) {
+  gl::LabTable t{"the ground between jumps (after a flight, under 0.5 s; landing over 300 u/s)",
+                 {"ground s", "jumps", "landing p50", "takeoff p50", "the ground's cost p50",
+                  "the flight's gain p50"},
+                 {}};
+  for (int b = 0; b < kGroundTimeBins; b++) {
+    GroundCell& c = g.by_ground[static_cast<size_t>(b)];
+    t.rows.push_back({to_fixed(kGroundEdge[b], 2) + "-" + to_fixed(kGroundEdge[b + 1], 2),
+                      std::to_string(c.off.size()), to_fixed(pct(c.land, 0.5), 0),
+                      to_fixed(pct(c.off, 0.5), 0), to_fixed(pct(c.cost, 0.5), 1),
+                      to_fixed(pct(c.gain, 0.5), 1)});
+  }
+  lab.table(t);
+  std::array<int32_t, 9> lens{};  // 1..7, 8 and more
+  int32_t long_chains = 0;
+  for (const int32_t n : g.chain_len) {
+    lens[static_cast<size_t>(std::min(n, 8))]++;
+    if (n >= 3) long_chains++;
+  }
+  gl::LabTable tc{"the chains (jumps under 0.05 s apart on the ground): how many of each length",
+                  {"length", "1", "2", "3", "4", "5", "6", "7", "8+"},
+                  {{"chains"}}};
+  for (size_t n = 1; n < lens.size(); n++) tc.rows[0].push_back(std::to_string(lens[n]));
+  lab.table(tc);
+  const double chains = static_cast<double>(g.chain_len.size());
+  lab.metric("jumps.ground-p25", pct(g.ground, 0.25), "s");
+  lab.metric("jumps.ground-p50", pct(g.ground, 0.5), "s");
+  lab.metric("jumps.ground-cost-p50", pct(g.cost, 0.5), "u/s");
+  lab.metric("jumps.chains", chains, "count");
+  lab.metric("jumps.chain-3plus-share", chains > 0 ? long_chains / chains : 0, "share");
+  lab.metric("jumps.chain-first-off-p25", pct(g.first_off, 0.25), "u/s");
+  lab.metric("jumps.chain-first-off-p50", pct(g.first_off, 0.5), "u/s");
+}
+
 void fastest(gl::Lab& lab, const la::StudyMap& m) {
   const std::string dir = lab.arg("dir");
   std::vector<std::string> paths;
@@ -196,6 +299,7 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
   std::vector<Fast> players;
   std::array<HopCell, kSpeedBins> all_speed{}, top_speed{};
   std::array<HopCell, kChainBins> all_k{}, top_k{};
+  GroundCells ground;
   struct Kept {
     size_t player;
     sh::HopReading read;
@@ -273,6 +377,7 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
       }
       p.hops += static_cast<int32_t>(r.hops.size());
       hop_cells(r, blast, all_speed, all_k);
+      ground_cells(r, blast, ground);
       hop_cells(r, blast, p.by_speed, p.by_k);
       kept.push_back({who, std::move(r), std::move(blast)});
     }
@@ -378,6 +483,7 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
   lab.metric("fast.p75", pct(every, 0.75), "u/s");
   lab.metric("fast.p95", pct(every, 0.95), "u/s");
   lab.metric("fast.p99", pct(every, 0.99), "u/s");
+  ground_report(lab, std::move(ground));
 }
 
 void run(gl::Lab& lab) {

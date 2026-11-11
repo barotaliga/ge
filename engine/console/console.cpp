@@ -11,6 +11,7 @@
 #include <fstream>
 #include <sstream>
 
+#include "console/cfg.hpp"
 #include "console/lex.hpp"
 
 namespace ge::console {
@@ -248,6 +249,14 @@ void Console::set_files(Reader read, Writer write) {
 void Console::set_fallback_reader(Reader read) { fallback_ = std::move(read); }
 
 bool Console::read_file(std::string_view name, std::string& text) const {
+  if (!config_.empty() && name == kConfigFile) {
+    std::ifstream in(config_, std::ios::binary);
+    if (!in) return false;
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    text = ss.str();
+    return true;
+  }
   if (reader_) return reader_(name, text);
   std::vector<std::filesystem::path> dirs = search_;
   if (dirs.empty()) dirs.emplace_back(".");
@@ -263,6 +272,14 @@ bool Console::read_file(std::string_view name, std::string& text) const {
 }
 
 bool Console::write_file(std::string_view name, std::string_view text) const {
+  if (!config_.empty() && name == kConfigFile) {
+    std::error_code ec;
+    if (config_.has_parent_path()) std::filesystem::create_directories(config_.parent_path(), ec);
+    std::ofstream out(config_, std::ios::binary);
+    if (!out) return false;
+    out << text;
+    return static_cast<bool>(out);
+  }
   if (writer_) return writer_(name, text);
   const std::filesystem::path dir = search_.empty() ? std::filesystem::path(".") : search_[0];
   std::error_code ec;

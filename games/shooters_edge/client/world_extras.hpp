@@ -28,6 +28,7 @@
 // ge:summary The modern look's water, lava, slime, flames and weather in the window, by ce_ switch
 // ge:keywords world-extras water lava slime liquids flames torches weather rain snow precip
 // ge:keywords underwater warped-liquids planar-mirror bsp-views pool-wind
+// ge:keywords wade_extras wading ce_wade plunge splash fireball lava-ball
 // ge:keywords classicenhance switches ce_water ce_lava ce_slime ce_flames ce_weather ce_shadows
 // ge:keywords bonfires ce_bonfires sparks extras_births ce_water_quality water-stop
 // ge:keywords ce_heathaze ce_fumes stir_extras extras_level_at heat-haze fumes
@@ -48,6 +49,7 @@
 #include "render/sky.hpp"
 #include "render/view.hpp"
 #include "shooters_edge/app/look.hpp"
+#include "shooters_edge/client/world_models.hpp"
 
 namespace shooters_edge::client {
 
@@ -90,6 +92,12 @@ void dress_extras(WorldExtras& x, ge::render::FrameView& view, ge::brush::app::O
 void prepare_extras(ge::gpu::Device& device, WorldExtras& x, const ge::brush::app::BspDraw& bsp,
                     const ge::render::FrameView& view, const ge::brush::app::Options& options,
                     const ge::render::FrameUniforms& uniforms);
+// Before prepare_extras: the players wading in lava or slime this frame (`models`' players and
+// `self`, the local player, when not null) stamped onto the surface they stand in (ce_wade,
+// render/liquid_wade.hpp), at the frame's time `t_s`; and every other thing in `models` that
+// crossed a lava's or a slime's surface since the frame before (a ball of lava hurled out of it)
+// a plunge: a heave going out, a crater and a splash coming down.
+void wade_extras(WorldExtras& x, std::span<const Placed> models, const Placed* self, double t_s);
 // Before prepare_extras: this frame's stirs over the liquids round the bodies burning or fuming in
 // them (client/burning.hpp), and where one has just fallen into lava (its crust broken there at
 // `t_s`).
@@ -101,7 +109,8 @@ void set_extras_air_draws(WorldExtras& x, int n);
 // `x` a WorldExtras (burning.hpp's LevelAt).
 double extras_level_at(const void* x, const double at[3]);
 // After prepare_extras: the bonfires' sparks since the last call, to `t_s`, appended to `out` for
-// the frame's particle pool (none when ce_bonfires is off, or on the first call).
+// the frame's particle pool (none when ce_bonfires is off, or on the first call), and the drops
+// of this frame's splashes (wade_extras).
 void extras_births(WorldExtras& x, double t_s, std::vector<ge::render::Particle>& out);
 // After prepare_extras: whether the eye is under a lava's or a slime's level and the liquid is
 // drawn round it (render/liquid.hpp's view from below), so the screen's blend leaves it out.

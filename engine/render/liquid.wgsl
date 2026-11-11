@@ -28,6 +28,7 @@
 // and mirror and its scum's shadow; the lava's melt all round.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/liquid_body.wgsl"
+#include "render/wgsl/liquid_wade.wgsl"
 
 override kGrid: u32 = 96u;
 
@@ -52,7 +53,7 @@ fn vs_main(@builtin(vertex_index) vid: u32) -> VertexOut {
   let n = kGrid + 1u;
   let g = vec2f(f32(vid % n), f32(vid / n)) / f32(kGrid);
   let xz = mix(body.box.xy, body.box.zw, g);
-  let y = body.info.x + ripple_height(xz, frame.time.x);
+  let y = body.info.x + ripple_height(xz, frame.time.x) + wade_at(xz, frame.time.x, 0.0, false).x;
   var out: VertexOut;
   out.rel = vec3f(xz.x, y, xz.y) - frame.eye.xyz;
   out.position = frame.view_proj * vec4f(out.rel, 1.0);
@@ -216,20 +217,29 @@ fn broken_at(p: vec2f, t: f32) -> vec3f {
   return out;
 }
 
-// The lava's surface at plan point `p`, the breaks over the flowing crust.
+// The lava's surface at plan point `p`: the breaks and the waders' furrows over the flowing crust.
 fn lava_here(p: vec2f, t: f32, foot: f32) -> vec3f {
-  let s = lava_flowing(p, t, foot);
-  if (body.fx.z < 0.5) {
-    return s;
-  }
-  let b = broken_at(p, t);
+  var s = lava_flowing(p, t, foot);
   let core = body.lava0.x;
   let cracked = core - 120.0;
-  var temp = mix(s.x, max(s.x, core - 40.0), b.x);
-  // The glow climbs steeply with the temperature, so the shards' heat is laid on in kelvin under
-  // the cracks' (700 K cooler where b.y is 0, under any crust's), never a blend toward it.
-  temp = max(temp, cracked - 700.0 * (1.0 - b.y));
-  return vec3f(temp, (s.y + b.z) * (1.0 - b.x), max(s.z, b.x));
+  if (body.fx.z >= 0.5) {
+    let b = broken_at(p, t);
+    var temp = mix(s.x, max(s.x, core - 40.0), b.x);
+    // The glow climbs steeply with the temperature, so the shards' heat is laid on in kelvin under
+    // the cracks' (700 K cooler where b.y is 0, under any crust's), never a blend toward it.
+    temp = max(temp, cracked - 700.0 * (1.0 - b.y));
+    s = vec3f(temp, (s.y + b.z) * (1.0 - b.x), max(s.z, b.x));
+  }
+  if (body.wade0.x >= 0.5) {
+    // A wader's furrow: the crust torn open to the melt, skinning over from its edge (the share's
+    // threshold climbs as it fades), the crust either side cracked hot while the furrow is fresh.
+    let w = wade_at(p, t, foot, true);
+    let torn = smoothstep(0.2, 0.55, w.y);
+    var temp = mix(s.x, max(s.x, core - 40.0), torn);
+    temp = max(temp, cracked - 700.0 * (1.0 - min(1.0, 1.4 * w.z)));
+    s = vec3f(temp, s.y * (1.0 - torn) + w.x, max(s.z, torn));
+  }
+  return s;
 }
 
 // THE AIR OVER THE BODY, in closed form (render/liquid.hpp § The air over it).
@@ -535,6 +545,22 @@ fn fs_main(in: VertexOut) -> FragmentOut {
       dome = max(step(1e-6, b1.x) * seen1, step(1e-6, b2.x) * seen2);
       rim = max(b1.w * seen1, b2.w * seen2);
     }
+    // The waders' furrows, bows and rings: their slope from the height's change across the pixel's
+    // quad (as lava's), never steeper than a footprint's relief allows.
+    let wade = wade_at(in.xz, t, foot, true);
+    var wade_slope = vec2f(0.0);
+    let ax = dpdx(in.xz);
+    let ay = dpdy(in.xz);
+    let hx = dpdx(wade.x);
+    let hy = dpdy(wade.x);
+    let det = ax.x * ay.y - ax.y * ay.x;
+    if (abs(det) > 1e-12) {
+      let g = vec2f(hx * ay.y - hy * ax.y, hy * ax.x - hx * ay.x) / det;
+      wade_slope = g * min(1.0, 2.0 / max(length(g), 1e-6));
+      slope += wade_slope;
+    }
+    // What floats is pushed off the furrow.
+    let parted = 1.0 - 0.9 * wade.z;
     let n0 = vec3f(0.0, 1.0, 0.0);
     let n = normalize(vec3f(-slope.x, 1.0, -slope.y));
     let cos_v = max(dot(n, v), 1e-3);
@@ -553,6 +579,13 @@ fn fs_main(in: VertexOut) -> FragmentOut {
                 room * PI;
     let body_colour = own * (1.0 - through) * light / PI;
     var into = seen * through + body_colour;
+    // A wader's furrow and its lips shaded as a room's light from overhead sees them (the turbid
+    // stuff scatters what the tilt sends it), the trough darker where the layer is churned.
+    if (body.wade0.x >= 0.5) {
+      let up = normalize(vec3f(0.35, 1.0, 0.25));
+      let tilt = dot(normalize(vec3f(-wade_slope.x, 1.0, -wade_slope.y)), up) / dot(n0, up);
+      into *= clamp(1.0 + 4.0 * (tilt - 1.0), 0.35, 1.8) * (1.0 - 0.45 * wade.z);
+    }
     // A bubble's skin is thinner than the pool, so its dome is a little lighter, and darker where
     // it meets the surface.
     into *= 1.0 + dome * (0.5 - 1.1 * rim);
@@ -560,7 +593,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let scum_field = fbm(drift * 0.9) * 0.7 + fbm(drift * 4.0) * 0.3;
     let scum = body.slime0.z * smoothstep(1.0 - body.slime0.z - 0.05, 1.0 - body.slime0.z + 0.1,
                                           scum_field) / max(body.slime0.z, 1e-3);
-    let scum_share = clamp(scum, 0.0, 1.0) * step(1e-3, body.slime0.z);
+    let scum_share = clamp(scum, 0.0, 1.0) * step(1e-3, body.slime0.z) * parted;
     let scum_lit = body.scum.rgb *
                    (sun * max(dot(n0, frame.sun.xyz), 0.0) + sky_irradiance(n0) * open_sky + room * PI) /
                    PI;
@@ -572,7 +605,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let grime = body.slime1.y;
     if (grime > 0.0) {
       let g = fbm(drift * 2.3 + vec2f(5.1, 7.7)) * 0.6 + fbm(drift * 11.0) * 0.4;
-      let dirt = grime * smoothstep(0.55 - 0.5 * grime, 0.85 - 0.3 * grime, g);
+      let dirt = grime * smoothstep(0.55 - 0.5 * grime, 0.85 - 0.3 * grime, g) * parted;
       let grime_albedo = mix(kGrimeAlbedo, body.scum.rgb, 0.3 * g);
       into = mix(into, grime_albedo * light_flat, dirt * 0.95);
       cover = max(cover, dirt * 0.8);
@@ -607,11 +640,14 @@ fn fs_main(in: VertexOut) -> FragmentOut {
         }
       }
       let debris_albedo = mix(vec3f(0.035, 0.03, 0.02), vec3f(0.16, 0.12, 0.06), fleck_shade);
+      fleck *= parted;
       into = mix(into, debris_albedo * light_flat, fleck);
       cover = max(cover, fleck);
     }
     // The glow: its own light, pulsing slowly, brighter in the bubbles.
-    let pulse = 1.0 + body.glow.w * (sin(t * 0.7 + fbm(in.xz * 0.3) * 6.0) * 0.5 + 0.6 * dome);
+    // Stirred by a wader, it glows brighter along the furrow.
+    let pulse = (1.0 + body.glow.w * (sin(t * 0.7 + fbm(in.xz * 0.3) * 6.0) * 0.5 + 0.6 * dome)) *
+                (1.0 + 0.5 * wade.z);
     into += body.glow.rgb * pulse * (1.0 - cover) * frame.world.y / kSunLuxCd;
     // The reflection: the sky's, tinted by the film's interference where an oily film lies.
     let rough = mix(body.slime0.x, 0.8, cover);

@@ -113,16 +113,17 @@ void quick_moves(QuickFire& q, const hud::Status& s, double t, Moves& m) {
   if (m.impulse == 0 && c.select != 0) m.impulse = c.select;
 }
 
-void quick_hand(QuickFire& q, const hud::Status& s, double t, view::HandFrame& hand) {
-  // The hand bringing a weapon up or down after a shot is left to it: the shot and the way back
-  // are seen as they are, and the preview comes back once the kept weapon is up.
-  if (hand.switching && q.state.key != 0) return;
-  const sh::QuickLook look = sh::quick_look(q.state, quick_settings(q), quick_armed(s), t);
-  if (look.hide) hand.drawn = false;
-  if (!look.ghost) return;
-  hand.weapon = static_cast<view::Weapon>(look.weapon - 1);
-  hand.opacity = look.opacity;
-  hand.frame_a = hand.frame_b = 0;  // at rest: it has not fired
+int quick_show(QuickFire& q, const hud::Status& s, double t) {
+  q.look = sh::quick_look(q.state, quick_settings(q), quick_armed(s), t);
+  return q.look.ghost ? q.look.weapon - 1 : -1;
+}
+
+void quick_hand(const QuickFire& q, view::HandFrame& hand) {
+  if (q.look.hide) hand.drawn = false;
+  if (!q.look.ghost) return;
+  hand.opacity = q.look.opacity;
+  if (!q.look.rest) return;
+  hand.frame_a = hand.frame_b = 0;  // not the weapon in hand: at rest, it has not fired
   hand.frame_t = 0;
   hand.flashing = hand.fired = hand.arc = false;
 }

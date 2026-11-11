@@ -109,6 +109,8 @@
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
 #include "play/inputs.hpp"
+#include "play/session_flags.hpp"
+#include "play/window_output.hpp"
 #include "render/screenshot_copy.hpp"
 #include "ui/console.hpp"
 #include "ui/console_keys.hpp"
@@ -117,11 +119,6 @@
 namespace {
 
 namespace out = ge::core::output;
-
-void print_line(const ge::core::output::LogLine& line, void*) {
-  std::FILE* to = line.level == ge::core::output::Level::error ? stderr : stdout;
-  std::fprintf(to, "%.*s\n", static_cast<int>(line.message.size()), line.message.data());
-}
 
 struct Args {
   long frames = 0;                     // 0: until quit
@@ -245,11 +242,24 @@ bool parse(int argc, char** argv, Args& a) {
 }  // namespace
 
 static int run_main(int argc, char** argv) {
-  out::set_output_sink(print_line);
+  // The flags every game takes (play/session_flags.hpp): -config and -logfile, off first; every
+  // line on the terminal, and in the log file too when one is named.
+  ge::play::SessionFlags flags;
+  std::string session_error;
+  if (!ge::play::take_session_flags(argc, argv, flags, session_error)) {
+    ge::play::attach_window_output("", session_error);
+    out::error("fall_line: the command line was refused: " + session_error +
+               "; next: -config <file> and -logfile <file> each take a file");
+    return 2;
+  }
+  if (!ge::play::apply_session_flags(flags, nullptr, session_error))
+    out::error("fall_line: the log file was not opened, the terminal only: " + session_error +
+               "; next: name a file in a folder you can write");
   Args args;
   if (!parse(argc, argv, args)) {
     out::error(
-        "fall_line: unknown flag. Usage: fall_line [--frames=N] [--size=WxH] [--no-vsync] "
+        "fall_line: unknown flag. Usage: fall_line [-config <file>] [-logfile <file>] [--frames=N] "
+        "[--size=WxH] [--no-vsync] "
         "[--seed=N] [--rivals=N] "
         "[--view=tips|helmet|chase|far|high|orbit|start|piste|lookback|vista|aerial] "
         "[--hour=H] [--mute] [--bot] [--bindings=PATH] [--inputs=PATH] [--events=PATH] "
@@ -259,6 +269,7 @@ static int run_main(int argc, char** argv) {
   }
   // The settings: the cfgs, the --flags, the command line, then every latched value applied.
   ge::console::Console console;
+  if (!flags.config.empty()) console.set_config_file(flags.config);
   // The drop-down console over the run (its con_ cvars before the cfgs set them): every line the
   // console prints is kept in its scrollback and printed to the terminal too.
   ge::console::ConsoleView con_view(console);

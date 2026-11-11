@@ -2,16 +2,18 @@
 // server on a map, the player handed the shotgun, the double shotgun, the rocket launcher and the
 // beam gun with their ammunition, the shotgun in hand and `cl_quickweapon 1`
 // (client/quick_fire.hpp over shooter/quick_weapon.hpp). Each frame goes through the quick weapon
-// as the window's does: the fire keys into the command's attack and weapon impulse, the hand's look
-// laid over the weapon in hand.
+// as the window's does: the fire keys into the command's attack and weapon impulse, the weapon the
+// preview holds handed to the hand before it steps, the look laid on the frame it made.
 //
 // What it shows: AT REST, the launcher +attack would fire drawn see-through in hand
 // (`cl_quickweapon_preview 1`), the hand hidden (`cl_quickweapon_hide 1`, the preview off) and the
 // plain hand (`cl_quickweapon 0`); then a TAP of +attack filmed a thirtieth of a second at a time,
-// the ghost turning solid, one rocket fired and the shotgun back in hand; then a tap of +attack2
-// (`cl_quickweapon_prio2 "8 3 2"`): the beam gun fired and the shotgun back. A table times each
-// tap (the shot, the way back) and counts what each weapon spent; those are deterministic metrics,
-// the pictures measured.
+// the ghost turning solid, one rocket fired and the ghost fading back while the shotgun comes back
+// unseen (the launcher never leaves the hand: no switch is drawn); then a tap of +attack2
+// (`cl_quickweapon_prio2 "8 3 2"`): the beam gun fired and the shotgun back, the hand switching as
+// it always does. A chart follows the +attack tap's opacity and how far the hand is put away; a
+// table times each tap (the shot, the way back) and counts what each weapon spent. Those are
+// deterministic metrics, the pictures measured.
 //
 // The default map is the fixture halls (plugins/brush's sample), so its pictures may go anywhere.
 // `--game=<folder>` (a game folder of packs, `--map=<name>`) draws the player's own maps with the
@@ -20,7 +22,7 @@
 // ge:summary Lab: the quick weapon in the game's frame: the preview, a tap's switch, shot and
 // ge:summary way back
 // ge:keywords lab se-quickweapon quick-weapon cl_quickweapon preview ghost-weapon hide attack2
-// ge:keywords tap switch-back film
+// ge:keywords tap switch-back film ghost-fade opacity-chart
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
@@ -33,6 +35,7 @@
 #include "console/console.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
+#include "lab/chart.hpp"
 #include "lab/gif.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/explosion_scene.hpp"
@@ -203,10 +206,11 @@ void run(gl::Lab& lab) {
     cl::frame_view(l, shown, 1, t, kTic);
     fx_state.models = device ? &cl::world_models(*world) : nullptr;
     cl::step_fx(l, shown, fx_state, t, kTic, fx);
+    held.show = cl::quick_show(quick, cl::status_of(l, t), t);
     hand = cl::step_held(l, shown, held, view_settings, weapons, t, kTic);
     if (hand.flashing)
       fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
-    cl::quick_hand(quick, cl::status_of(l, t), t, hand);
+    cl::quick_hand(quick, hand);
   };
   uint64_t drawn = 0;  // the frames drawn: each its own (the ghost's pattern moves with it)
   const auto picture = [&]() -> gl::Picture {
@@ -262,6 +266,11 @@ void run(gl::Lab& lab) {
   con.execute(lab.arg("quick"));
   for (int i = 0; i < 40; i++) frame(false, false);
 
+  gl::LineChart lc;
+  lc.frame = {"a tap of +attack: the preview's opacity and the hand put away",
+              "cl_quickweapon_preview 1, one frame of +attack", "t from the press (s)",
+              "share (opacity: 1 solid; put away: 1 out of view)"};
+  lc.spikes = false;
   gl::LabTable table{
       "each tap", {"key", "fired", "shot after (ms)", "back in hand after (ms)", "spent"}, {}};
   // A TAP of `key` (0: +attack, 1: +attack2): one frame held, then filmed until the weapon kept
@@ -273,10 +282,21 @@ void run(gl::Lab& lab) {
     const double start = t;
     double shot_ms = -1, back_ms = -1, next_draw = t;
     hud::Weapon fired = before.weapon;
+    gl::Trace opacity{"opacity", {}, {}}, lowered{"put away", {}, {}};
+    double lowered_max = 0;
+    int shown_changes = 0;
+    auto shown_was = hand.weapon;
     for (int i = 0; i < 160; ++i) {
       frame(i == 0 && key == 0, i == 0 && key == 1);
       const hud::Status s = cl::status_of(l, t);
       const int ms = static_cast<int>(std::lround((t - start) * 1000));
+      opacity.x.push_back(t - start);
+      opacity.y.push_back(hand.opacity);
+      lowered.x.push_back(t - start);
+      lowered.y.push_back(hand.lowered);
+      lowered_max = std::max(lowered_max, hand.lowered);
+      shown_changes += hand.weapon != shown_was ? 1 : 0;
+      shown_was = hand.weapon;
       if (shot_ms < 0 && s.ammo != before.ammo) {
         shot_ms = ms;
         fired = s.weapon;
@@ -309,17 +329,28 @@ void run(gl::Lab& lab) {
     lab.metric(id + ".back-ms", back_ms, "ms");
     lab.metric(id + ".fired", static_cast<double>(static_cast<int>(fired) + 1), "weapon");
     lab.metric(id + ".kept", after.weapon == before.weapon ? 1 : 0, "bool");
+    // The hand: how far it was put away, and how often the weapon drawn changed (+attack: never).
+    lab.metric(id + ".lowered-max", lowered_max, "share");
+    lab.metric(id + ".shown-changes", shown_changes, "count");
+    if (key == 0) {
+      lc.traces.push_back(opacity);
+      lc.traces.push_back(lowered);
+      if (shot_ms >= 0) lc.marks.push_back({shot_ms / 1000, "shot"});
+      if (back_ms >= 0) lc.marks.push_back({back_ms / 1000, "shotgun back"});
+    }
     for (size_t k = 0; k < 4; ++k)
       lab.metric(id + "." + kAmmo[k], before.ammo[k] - after.ammo[k], "spent");
     lab.shot({id,
-              key == 0 ? "a tap of +attack: the launcher fired, the shotgun back"
+              key == 0 ? "a tap of +attack: the ghost turns solid, fires, and fades back"
                        : "a tap of +attack2: the beam gun fired, the shotgun back",
               key == 0 ? "One frame of +attack under cl_quickweapon 1: the see-through launcher "
                          "turns solid, the server brings it up and fires one rocket, and the "
-                         "shotgun (cl_quickweapon_default \"2 1\") is asked for back."
+                         "shotgun (cl_quickweapon_default \"2 1\") is asked for back while the "
+                         "launcher fades back to its ghost; no weapon switch is drawn."
                        : "One frame of +attack2 (cl_quickweapon_prio2 \"8 3 2\"): the beam gun "
                          "brought up and fired once, the shotgun back.",
-              "the quick weapon solid as it fires, one shot, then the shotgun in hand again",
+              key == 0 ? "the launcher in every frame, solid as it fires, then see-through again"
+                       : "the beam gun brought up, one shot, then the shotgun in hand again",
               {{"map", map_name}}},
              es::sheet_of(sheet, names, 4), gl::Det::measured);
     lab.attach(id + ".gif", gl::encode_gif_frames(gif, 3), gl::Det::measured);
@@ -328,6 +359,16 @@ void run(gl::Lab& lab) {
   tap(0, "tap-attack");
   tap(1, "tap-attack2");
   lab.table(table);
+  const gl::Chart chart = gl::line_chart(lc);
+  lab.shot({"tap-chart",
+            chart.title,
+            "The +attack tap frame by frame: the preview's opacity (0.5 the ghost, 1 solid) rises "
+            "to solid as the key is pressed, holds through the shot and eases back to the ghost "
+            "once let go; how far the hand is put away stays at 0, since the launcher never leaves "
+            "it while the shotgun is brought back.",
+            "opacity smooth both ways; put away flat at 0",
+            {{"map", map_name}}},
+           gl::to_picture(chart.plot), gl::Det::measured);
   lab.metric("weapons.pack", at_eye ? 1 : 0, "");
   if (device)
     ls::checked(lab, static_cast<int>(device->errors.load()),

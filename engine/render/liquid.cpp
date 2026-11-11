@@ -100,6 +100,15 @@ std::array<Named, 7> build() {
   tar.slime.film = 420;
   tar.slime.bubbles = 0.08;
   tar.slime.bubble_size = 0.14;
+  // How thick each surface moves when a body wades through it (render/liquid_wade.hpp): lava
+  // four times water, a slime twice, a gel and a sludge a little more, tar the thickest.
+  molten.wade.viscosity = 4;
+  crusted.wade.viscosity = 5;
+  toxic.wade.viscosity = 2;
+  gel.wade.viscosity = 3;
+  mucus.wade.viscosity = 2;
+  sludge.wade.viscosity = 2.5;
+  tar.wade.viscosity = 8;
   return {{{"lava", molten},
            {"lava-crusted", crusted},
            {"slime", toxic},
@@ -159,6 +168,11 @@ void stage_body(Liquids::Slot& slot, const water::Body& body, const LiquidLook& 
   put(b.fume_light, liquid_glow(look));
   slot.shimmer = b.fx[1];  // staged each frame as the switches say (prepare_liquid)
   slot.fume_density = b.fume[0];
+  slot.wade = look.wade;
+  const WadeWaves w = wade_waves(look.wade);
+  put(b.wade0, b.wade0[0], look.wade.leg_m, w.depth_m, w.amp_m);
+  put(b.wade1, w.speed_mps, w.wavelength_m, w.ring_s, w.furrow_s);
+  put(b.wade2, w.heal_s, w.life_s, 0, 0);
   const std::vector<water::Rgb> table = water::glow_table(kGlowLo, kGlowHi, kGlowEntries, 1.0);
   for (int i = 0; i < kGlowEntries; ++i) put(b.table[i], table[static_cast<size_t>(i)]);
 }

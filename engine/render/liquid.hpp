@@ -41,10 +41,10 @@
 // - THE CRUST BROKEN (`break_liquid_crust`): a hole of open melt where something fell in, opening
 //   at once and skinning over from its edge, the plates round it cracked and glowing, a crest
 //   running out in the first second; carried by the flow.
+// - WADED THROUGH (render/liquid_wade.hpp): a furrow, a bow and rings, by `LiquidLook::wade`.
 // - SEEN FROM BELOW (`Liquids::eye_under`, docs/liquids.md § From below): a slime a fog of its
 //   colour with Snell's window overhead, a lava its melt all round; `under_reach` a least view
 //   (a lava with one a thick light-red glowing goo the eye sees a few metres into).
-//
 // Not yet: a flow region's surface; the waterline split for an eye at the level.
 //
 // ge:summary Lava and slime drawn: crust plates, cracks and blackbody glow; turbid slime, bubbles
@@ -55,7 +55,7 @@
 // ge:keywords glowing-body lava-goo area-light reflections ssr heat-shimmer crust-broken
 // ge:keywords break_liquid_crust splash under-lava under-slime from-below eye_under under_reach
 // ge:keywords fumes fume_look smoke gas acid-vapour heat-haze stir liquid_stir set_liquid_stirs
-// ge:keywords plume warm-air bends-light
+// ge:keywords plume warm-air bends-light wade
 // ge:skill render water
 // ge:test tests/render_liquid_test.cpp
 #pragma once
@@ -69,6 +69,7 @@
 #include "gpu/pipeline.hpp"
 #include "render/frame.hpp"
 #include "render/lights.hpp"
+#include "render/liquid_wade.hpp"
 #include "water/optics.hpp"
 #include "water/world.hpp"
 
@@ -148,6 +149,7 @@ struct LiquidLook {
   // open day, over the rest.
   double open_sky = 1;
   double room = 0;
+  WadeLook wade;  // how it takes a body wading through it (render/liquid_wade.hpp)
 };
 
 // The named looks: "lava", "lava-crusted", "slime", "slime-gel", "slime-mucus", "slime-sludge",
@@ -177,6 +179,12 @@ struct LiquidGpuBody {
   float stirs[kLiquidStirs][4];       // x, z (m), radius (m), heat
   float stir_smoke[kLiquidStirs][4];  // smoke, 0, 0, 0
   float table[kGlowEntries][4];       // the glow table, cd/m^2 rgb (water/glow.hpp)
+  // Wading (render/liquid_wade.hpp): the stamps held, the furrow's half width (m), its depth (m),
+  // a ring's height (m); the rings' speed (m/s), wavelength (m), life (s), the furrow's closing
+  // (s); the crust's healing (s), a stamp's life (s), 0, 0.
+  float wade0[4], wade1[4], wade2[4];
+  float wades[kLiquidWades][4];   // x, z (m), the time (s), the strength (0..1)
+  float wade_v[kLiquidWades][4];  // vx, vz (m/s), the span to the stamp before (s), head (1)
 };
 
 struct Liquids {
@@ -201,6 +209,7 @@ struct Liquids {
     bool shown = true;
     int next_break = 0;
     double floor = 0;  // m: the lowest its liquid reaches (an eye under it is not in it)
+    WadeLook wade;     // its look's (wade_liquids' spacing)
     float shimmer = 0, fume_density = 0;  // its look's, staged each frame as the switches say
   };
   std::vector<Slot> bodies;

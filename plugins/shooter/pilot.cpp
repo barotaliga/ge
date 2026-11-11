@@ -1,5 +1,5 @@
 // ge:summary The pilot's step: the link's mode, the run-up, the jump, waits, rides, strafe jumps
-// ge:keywords pilot pilot_step pilot_go pilot_source run-up strafe-jump wait ride stuck replan
+// ge:keywords pilot pilot_step pilot_go run-up strafe-jump wait ride stuck replan
 // ge:skill shooter bots
 // ge:test tests/shooter_pilot_test.cpp
 #include "shooter/pilot.hpp"
@@ -10,8 +10,10 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "shooter/escape.hpp"
+#include "shooter/look_ahead.hpp"
 #include "shooter/nav_gaps.hpp"
 #include "shooter/nav_script.hpp"
+#include "shooter/pilot_movers.hpp"
 #include "shooter/server.hpp"
 #include "shooter/swim.hpp"
 #include "shooter/usercmd.hpp"
@@ -19,6 +21,8 @@
 namespace ge::shooter {
 
 namespace {
+
+using namespace pilot_parts;
 
 constexpr float kRideArrive = 2;  // a ride is over within this of the top node's height, units
 // Out of a pit (escape.hpp): the takeoff reached within this across, units; the rise to the
@@ -37,13 +41,11 @@ constexpr double kScriptFacing = 0.97;
 constexpr float kScriptFell = 40;  // standing this far under a script's lowest step: fallen off
 constexpr float kOffFloor = 12;    // a pool's floor swum over this far above its standing height
 constexpr float kLaneSettle_s = 0.4f;  // a lane's offset follows the room ahead this fast, s
-constexpr float kRideRest = 12;     // a ridden mover this near its rest may be stepped onto, units
-constexpr float kStandUp = 8;       // a node is arrived at within this up or down, units
-constexpr float kJumpAlong = 0.9f;  // a jump goes moving at least this share of its speed
-constexpr float kJumpOver = 1.15f;  // and at most this share (and 16 u/s) of it
-constexpr float kJumpAim = 0.95f;   // with the velocity within this cosine of the jump's way
-constexpr float kPastStart = 24;    // past a jump's start this far without its speed: run up
-constexpr float kStrafeHold = 2;    // the strafe's side holds until the target is this far off, deg
+constexpr float kJumpAlong = 0.9f;     // a jump goes moving at least this share of its speed
+constexpr float kJumpOver = 1.15f;     // and at most this share (and 16 u/s) of it
+constexpr float kJumpAim = 0.95f;      // with the velocity within this cosine of the jump's way
+constexpr float kPastStart = 24;       // past a jump's start this far without its speed: run up
+constexpr float kStrafeHold = 2;  // the strafe's side holds until the target is this far off, deg
 // The last jump of a hop's stretch (`headroom`): one whose flight lands before the stretch ends
 // (a climb, a mover, a lip, a jump of the route's), not on it: a flight's reach at the speed held.
 constexpr float kLastJump_s = 0.55f;
@@ -63,7 +65,6 @@ constexpr double kGapOff_s = 10;  // a gap given up stays off the routes this lo
 constexpr float kLevel = 2;       // a strafe stretch's nodes lie within this of one height
 constexpr float kJumpKin = 72;    // a jump given up takes those beside it, start and end this near
 constexpr int kRunUpTries = 4;    // a jump lined up for this many times and never made is given up
-constexpr float kStepOver = 18;   // a mover's top this near a player's feet is a step up, units
 constexpr float kClear = 4;       // a player waits this far clear of a mover's box, units
 constexpr float kLanded = 32;     // a jump has landed on its target within this, units
 constexpr float kSlow = 50;       // under this a velocity's way is not read, units/s
@@ -85,7 +86,6 @@ constexpr float kGrenadeNear = 32;   // and within this of its start, units
 constexpr float kGrenadeSlow = 160;  // slowing into the start from this far, units
 constexpr float kGrenadeStep = 4;    // the step to its stand: this times the way off, units/s
 constexpr float kOnLine = 10;        // a jump is run at on its line within this across, units
-constexpr float kStepHeight = 18;    // the move's step
 
 float across(Vec3f a, Vec3f b) {
   const float dx = b.x - a.x, dy = b.y - a.y;
@@ -117,8 +117,6 @@ float facing(float want, float now) {
   return c >= 0.5 ? 1.0f : c > -0.5 ? static_cast<float>(c + 0.5) : 0.0f;
 }
 
-const NavNode& node(const NavGraph& g, int32_t n) { return g.nodes[static_cast<size_t>(n)]; }
-
 const NavLink* link_of(const NavGraph& g, int32_t a, int32_t b) {
   const NavNode& n = node(g, a);
   for (int32_t k = 0; k < n.links; k++) {
@@ -126,17 +124,6 @@ const NavLink* link_of(const NavGraph& g, int32_t a, int32_t b) {
     if (l.to == b) return &l;
   }
   return nullptr;
-}
-
-const NavMover* mover_of(std::span<const NavMover> movers, int32_t ent) {
-  for (const NavMover& m : movers)
-    if (m.ent == ent) return &m;
-  return nullptr;
-}
-
-bool boxes_meet(Vec3f alo, Vec3f ahi, Vec3f blo, Vec3f bhi) {
-  return alo.x < bhi.x && alo.y < bhi.y && alo.z < bhi.z && blo.x < ahi.x && blo.y < ahi.y &&
-         blo.z < ahi.z;
 }
 
 // Across from `p` to the segment a..b, and how far along it (0..1) the nearest point lies.
@@ -201,56 +188,19 @@ bool reached(const Pilot& p, const PilotSense& s, int32_t n) {
   if (!s.onground) return false;
   // A ride's top is wherever on the mover the player boarded: arrived by height alone.
   if (b.ride >= 0) return s.origin.z >= b.origin.z - kRideArrive;
+  // A node on a plat: anywhere on its top (stepped onto, the player is on it; late hands
+  // circling its node let it leave without him); a door's, near it.
+  if (b.mover >= 0 && aboard(p, s, b.mover)) return true;
   if (across(s.origin, b.origin) > p.set.arrive) return false;
   const float dz = s.origin.z - b.origin.z;
-  return b.mover >= 0 || (dz <= kStandUp && dz >= -kStandUp);
+  if (b.mover >= 0) return on_mover_top(p, s, b.mover);
+  return dz <= kStandUp && dz >= -kStandUp;
 }
 
 bool is_barred(const Pilot& p, int32_t m) {
   for (const int32_t b : p.barred)
     if (b == m) return true;
   return false;
-}
-
-// Whether the link's mover keeps the pilot at its start now. A ride's plat away from its rest
-// with a swimmer under its top (`floor_swim`: on a pool's floor under a raised plat, which a plat
-// coming down onto him sends back up, so it would never come for him) is in his way too.
-bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t a, int32_t b) {
-  if (l.mover < 0) return false;
-  const NavMover* rest = mover_of(p.g->movers, l.mover);
-  const NavMover* now = mover_of(s.movers, l.mover);
-  if (rest == nullptr || now == nullptr) return false;
-  if (l.kind == NavKind::ride) {
-    const float up = now->absmin.z - rest->absmin.z;
-    return p.set.floor_swim && s.waterlevel >= 2 && (up > kRideRest || up < -kRideRest) &&
-           s.origin.z + kPlayerMins.z < now->absmax.z - kStandUp;
-  }
-  const NavNode& na = node(*p.g, a);
-  const NavNode& nb = node(*p.g, b);
-  if (rest->model != nullptr) {
-    // A ridden mover is stepped onto only near its rest; stepped off any time, unless it hangs
-    // over the player (raised over the shaft he walked into: out from under it first).
-    const float up = now->absmin.z - rest->absmin.z;
-    const bool away = up > kRideRest || up < -kRideRest;
-    if (nb.mover != l.mover || na.mover == l.mover)
-      return away && s.onground && now->absmin.z > s.origin.z + kPlayerMins.z &&
-             s.origin.x + kPlayerMaxs.x > now->absmin.x &&
-             s.origin.x + kPlayerMins.x < now->absmax.x &&
-             s.origin.y + kPlayerMaxs.y > now->absmin.y &&
-             s.origin.y + kPlayerMins.y < now->absmax.y;
-    if (away) return true;
-    // Its top already more than a step over the feet (rising off its rest under another rider):
-    // walked on, the player goes in under it, and standing in its field holds it up for good.
-    return s.onground && now->absmax.z > s.origin.z + kPlayerMins.z + kStepHeight;
-  }
-  Vec3f lo = na.origin, hi = na.origin;
-  for (int i = 0; i < 3; i++) {
-    if (nb.origin[i] < lo[i]) lo[i] = nb.origin[i];
-    if (nb.origin[i] > hi[i]) hi[i] = nb.origin[i];
-  }
-  // A door sunk to within a step of the floor (one that opens downward) is walked over.
-  return boxes_meet(lo + kPlayerMins + Vec3f{0, 0, kStepOver}, hi + kPlayerMaxs, now->absmin,
-                    now->absmax);
 }
 
 // The end of a strafe stretch from route[k]: the furthest route index j whose links from k are
@@ -405,43 +355,6 @@ bool circling(Pilot& p, const PilotSense& s, float vh, float speed, float err, f
   return true;
 }
 
-// The most the velocity turns a second in the air with the wish across it (hops.hpp's rule:
-// 30 units/s across it a command), degrees/s.
-float hop_turn_rate(float speed, float dt) {
-  if (speed <= 1 || dt <= 0) return 0;
-  const double r = core::libm::atan2(30.0, static_cast<double>(speed));
-  return static_cast<float>(r * (180.0 / core::kPi)) / dt;
-}
-
-// How long the hop's arc on `side` (-1 left, 1 right) stays clear of walls, up to `horizon`: the
-// velocity turned at the move's most each command, the player's box traced along it a step up
-// (so a stair's riser is not a wall). Floors and ramps it meets do not count.
-float arc_clear(const MoveWorld& world, Vec3f o, Vec3f v, int side, float dt, float horizon) {
-  const float speed = root_of(v.x * v.x + v.y * v.y);
-  if (speed < 1 || dt <= 0) return horizon;
-  const double step =
-      -static_cast<double>(side) * hop_turn_rate(speed, dt) * dt * (core::kPi / 180.0);
-  const auto c = static_cast<float>(core::libm::cos(step)),
-             sn = static_cast<float>(core::libm::sin(step));
-  Vec3f at{o.x, o.y, o.z + kStepHeight};
-  if (!box_free(world, at)) at = o;
-  Vec3f vel{v.x, v.y, 0};
-  constexpr int kChunk = 4;  // commands a trace covers
-  for (float t = 0; t < horizon;) {
-    Vec3f to = at;
-    for (int i = 0; i < kChunk; i++) {
-      vel = {vel.x * c - vel.y * sn, vel.x * sn + vel.y * c, 0};
-      to = to + vel * dt;
-    }
-    const HullTrace tr = player_trace(world, at, to);
-    if (tr.startsolid) return t;
-    if (tr.fraction < 1 && tr.plane.normal.z < 0.7f) return t + tr.fraction * dt * kChunk;
-    at = to;
-    t += dt * kChunk;
-  }
-  return horizon;
-}
-
 // Out of a pit (escape.hpp): standing out of the liquid near the escape's ledge (not respawned
 // elsewhere after dying in its flight).
 bool landed_out(const Pilot& p, const PilotSense& s) {
@@ -571,13 +484,13 @@ Vec3f lane_target(Pilot& p, float dt, float t, Vec3f target) {
 
 // The point `look` units along the route from where `at` stands on the current link, carried
 // through the nodes a walk passes through (passed() above) and stopped at any other.
-Vec3f pursue(const Pilot& p, Vec3f at) {
+Vec3f pursue(const Pilot& p, Vec3f at, float look) {
   const NavGraph& g = *p.g;
   float f = 0;
   Vec3f a = node(g, p.route[p.k]).origin, b = node(g, p.route[p.k + 1]).origin;
   off_segment(at, a, b, &f);
   Vec3f from{a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, b.z};
-  float left = p.set.look;
+  float left = look;
   for (size_t k = p.k;; k++) {
     b = node(g, p.route[k + 1]).origin;
     const float d = across(from, b);
@@ -594,6 +507,49 @@ Vec3f pursue(const Pilot& p, Vec3f at) {
         !level(g, p.route[k + 1], p.route[k + 2]))
       return b;
   }
+}
+
+Vec3f pursue(const Pilot& p, Vec3f at) { return pursue(p, at, p.set.look); }
+
+// The walk's aim `target` (the pursuit point `aim` with the lane's offset) pulled back along the
+// route until the box reaches it straight from `o`: the look halved, the lane's offset kept while
+// it clears and then dropped; unchanged when nothing nearer clears either (a door shut ahead is
+// the mover's wait to handle).
+Vec3f aim_clear(const Pilot& p, const MoveWorld& world, Vec3f o, Vec3f at, Vec3f aim,
+                Vec3f target) {
+  if (walk_clear(world, o, target)) return target;
+  const Vec3f lane = target - aim;
+  for (int div = 2; p.set.look / static_cast<float>(div) >= 8; div *= 2) {
+    const Vec3f a = pursue(p, at, p.set.look / static_cast<float>(div));
+    if (walk_clear(world, o, a + lane)) return a + lane;
+    if (walk_clear(world, o, a)) return a;
+  }
+  return target;
+}
+
+// THE WALK FORESEEN (look_ahead.hpp `foresee_walk`): the way the walk presses now; `w` keeps the
+// pursuit's keys or takes another way's.
+WalkWay foresee(const Pilot& p, const PilotSense& s, Vec3f aim, Vec3f near, Want& w, ai::Why* why) {
+  const WalkStart st{s.origin,
+                     s.velocity,
+                     s.onground,
+                     s.waterlevel,
+                     s.maxspeed,
+                     {static_cast<float>(p.pressed[0]), static_cast<float>(p.pressed[1]),
+                      static_cast<float>(p.pressed[2])},
+                     p.set.lead_s,
+                     p.set.lead_s + p.set.ahead_s,
+                     p.set.ahead_bodies ? s.others : std::span<const OtherBox>{}};
+  WalkKeys keys;
+  WalkSeen seen[kWalkWays];
+  bool flown = false;
+  const WalkWay way = foresee_walk(*s.world, st, aim, near, keys, seen, flown);
+  if (flown) record_walk(why, across({}, s.velocity), way, seen);
+  if (way == WalkWay::pursue) return way;
+  w.yaw = unwrap(keys.yaw, p.yaw);
+  w.forward = keys.forward * facing(w.yaw, p.yaw);
+  w.side = keys.side;
+  return way;
 }
 
 // A jump missed (landed short, or no nearer its start): the second miss of the same one is not a
@@ -1006,7 +962,7 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
   p.strafe_side = 0;
   p.stats.plans++;
   restart(p, s);
-  const int32_t from = nav_nearest(*p.g, s.origin);
+  const int32_t from = plan_from(p, s);
   int32_t barred[4 + 60];
   int nb = 0;
   for (const int32_t b : p.barred)
@@ -1039,6 +995,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   const float t = static_cast<float>(p.stats.time_s);
   p.stats.time_s += static_cast<double>(dt);
   p.clock_s += static_cast<double>(dt);
+  see_movers(p, s);
   const NavGraph& g = *p.g;
   Want w;
   w.yaw = p.yaw;
@@ -1548,6 +1505,13 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         w.forward = 1;
         because = "swimming down onto the plat";
       }
+    } else if (l.mover >= 0 && node(g, a).mover == l.mover && p.mode != PilotMode::air &&
+               under_raised(p, s, l.mover) && plan_from(p, s) != a) {
+      // A link across a raised plat's top with the player under it (carried past the node he
+      // waited at): planned again from off it, never walked into its legs again and again.
+      replanned = true;
+      replan(p, s);
+      because = "under a raised plat: plan again from off it";
     } else if (mover_in_way(p, s, l, a, b) && p.mode != PilotMode::air) {
       if (p.mode != PilotMode::wait) {
         p.mode = PilotMode::wait;
@@ -1818,13 +1782,27 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       if (p.mode == PilotMode::wait || p.mode == PilotMode::run_up || p.mode == PilotMode::jump ||
           p.mode == PilotMode::swim)
         p.mode = PilotMode::walk;
-      target = lane_target(p, dt, t, pursue(p, ahead));
+      const Vec3f aim = pursue(p, ahead);
+      target = lane_target(p, dt, t, aim);
+      const bool foreseeing = p.set.ahead && s.world != nullptr && s.onground;
+      if (foreseeing) target = aim_clear(p, *s.world, s.origin, ahead, aim, target);
+      // A player standing on the way (`ahead_bodies`): round him, or wait where there is no room.
+      Vec3f round;
+      const bool body = foreseeing && p.set.ahead_bodies &&
+                        body_on_way(*s.world, s.origin, target, s.others, round);
+      const bool wait_body = body && across(round, s.origin) < 1;
+      if (body && !wait_body) target = round;
       if (across(ahead, target) > 1) w.yaw = unwrap(yaw_at(ahead, target), p.yaw);
-      w.forward = facing(w.yaw, p.yaw);
+      w.forward = wait_body ? 0.f : facing(w.yaw, p.yaw);
+      const WalkWay seen = foreseeing ? foresee(p, s, target, B, w, why) : WalkWay::pursue;
       // Slowing into the goal (late hands run past a small top and off it, or orbit it).
       const float d = across(ahead, node(*p.g, p.route.back()).origin);
       if (d < p.set.look) w.forward *= d < p.set.look * kBrake ? kBrake : d / p.set.look;
-      because = l.kind == NavKind::drop ? "walking off the edge" : "walking the route";
+      because = wait_body                 ? "a player standing in the way: waiting for him"
+                : body                    ? "a player standing in the way: round him"
+                : seen != WalkWay::pursue ? walk_way_because(seen)
+                : l.kind == NavKind::drop ? "walking off the edge"
+                                          : "walking the route";
       // A flip ahead within its turn: turning round into it already, strafing along the route.
       float back = 0;
       float flip_v = 0;
@@ -1937,52 +1915,5 @@ std::vector<Vec3f> pilot_path(const Pilot& p, Vec3f at, std::vector<uint8_t>* br
   }
   return out;
 }
-
-namespace {
-
-MoveCmd pilot_next(void* ctx, const Server& sv, int slot, int msec) {
-  PilotBot& b = *static_cast<PilotBot*>(ctx);
-  Pilot& p = b.pilot;
-  const Edict& me = sv.edicts[static_cast<size_t>(slot) + 1];
-  PilotSense s;
-  s.origin = me.origin;
-  s.velocity = me.velocity;
-  s.onground = (me.flags & kFlagOnGround) != 0;
-  s.waterlevel = me.waterlevel;
-  s.maxspeed = me.maxspeed > 0 ? me.maxspeed : 320;
-  b.now.resize(p.g->movers.size());
-  for (size_t i = 0; i < b.now.size(); i++) {
-    const NavMover& m = p.g->movers[i];
-    const Edict& e = sv.edicts[static_cast<size_t>(m.ent)];
-    b.now[i] = m;
-    // Where the mover stands now; one the player's client was not sent this frame (outside its
-    // visibility set: a free slot in a client's world) is taken as the graph planned it.
-    if (!e.free) {
-      b.now[i].absmin = e.absmin;
-      b.now[i].absmax = e.absmax;
-    }
-  }
-  s.movers = b.now;
-  s.world = b.world;
-  s.grenade_ready = b.grenade_ready;
-  s.rocket_ready = b.rocket_ready;
-  if ((p.mode == PilotMode::idle || p.mode == PilotMode::arrived) && !b.goals.empty()) {
-    if (p.mode == PilotMode::arrived) b.arrivals++;
-    for (int32_t& d : p.barred) d = -1;
-    p.cut = p.failed;
-    for (size_t tries = 0; tries < b.goals.size(); tries++) {
-      const int32_t goal = b.goals[b.next_goal];
-      b.next_goal = (b.next_goal + 1) % b.goals.size();
-      if (pilot_go(p, goal, s)) break;
-    }
-  }
-  ai::Why* why = b.why ? b.why->follow(slot, b.command) : nullptr;
-  b.command++;
-  return pilot_step(p, s, msec, why);
-}
-
-}  // namespace
-
-CmdSource pilot_source(PilotBot& b) { return {&b, pilot_next}; }
 
 }  // namespace ge::shooter

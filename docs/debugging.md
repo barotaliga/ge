@@ -50,6 +50,13 @@ Fall Line's channels: `course` (gates taken and missed, the finish, resets), `sk
 landings, wipeouts, glances at debug; every racer's state every step at trace), `field` (racers
 meeting).
 
+
+**A window's log file.** Every game window takes `-logfile <file>` (and `-config <file>`, a session's
+own settings; `engine/play/session_flags.hpp`): each output line (the console's `console: ...`
+lines, status, warnings, errors) is appended to the file as a dump writes it, flushed as written,
+beside the terminal (`engine/play/window_output.hpp`). Read a run's output from the file; never
+parse a terminal.
+
 ## Series and spans files
 
 Every measurement over time is one text format, so every one can be charted, diffed and grepped
