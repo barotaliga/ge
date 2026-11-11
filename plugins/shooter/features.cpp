@@ -11,12 +11,13 @@ namespace ge::shooter {
 namespace {
 
 constexpr const char* kNames[kFeatures] = {
-    "calm",       "pace",   "swimaim",  "screen",   "keep",      "lead",       "lane",    "hop",
-    "shortgoals", "commit", "danger",   "dodge",    "watch",     "spam",       "packs",   "talk",
-    "plan",       "rj",     "gj",       "airsteer", "surface",   "glance",     "eye",     "selfaim",
-    "pools",      "routes", "corner",   "mouse",    "packinfer", "listen",     "stairs",  "locked",
-    "escape",     "brink",  "gapjump",  "headroom", "liphop",    "circlejump", "ahead",   "bodies",
-    "beat",       "keys",   "keysteer", "lookway",  "press",     "slopes",     "counter", "trial"};
+    "calm",      "pace",       "swimaim",    "screen", "keep",    "lead",     "lane",
+    "hop",       "shortgoals", "commit",     "danger", "dodge",   "watch",    "spam",
+    "packs",     "talk",       "plan",       "rj",     "gj",      "airsteer", "surface",
+    "glance",    "eye",        "selfaim",    "pools",  "routes",  "corner",   "mouse",
+    "packinfer", "listen",     "stairs",     "locked", "escape",  "brink",    "gapjump",
+    "headroom",  "liphop",     "circlejump", "ahead",  "bodies",  "beat",     "keys",
+    "keysteer",  "lookway",    "press",      "slopes", "counter", "jumpkey",  "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 

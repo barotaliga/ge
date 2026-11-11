@@ -42,7 +42,8 @@
 // - `keys`: a hand on a keyboard presses the keys; `keysteer`: it taps between two sets (on);
 //   `lookway` (neutral), `press` (dropped, -2.7 frags) and `counter` (keys against a slide across
 //   the wish; dropped, speed 194 -> 185) in no preset. `slopes`: a walk up a stair to 45 degrees
-//   is level to the walk (pilot.hpp; on: +3.6 frags head to head).
+//   is level to the walk (pilot.hpp; on: +3.6 frags head to head). `jumpkey`: a jump asked for
+//   is held until its key lands (bots/keyboard.hpp; on).
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). The text (`apply_features`): `all`, `none` (`plain`),
 // `+name`/`name`, `-name`, in order.
@@ -115,9 +116,10 @@ enum class Feature : uint8_t {
   press,
   slopes,
   counter,
+  jumpkey,
   trial,
 };
-constexpr size_t kFeatures = 48;
+constexpr size_t kFeatures = 49;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

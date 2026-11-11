@@ -241,6 +241,8 @@ struct KeyHand {
   bool feather = true;
   double steer = 0;
   float wish_forward = 0, wish_side = 0;  // the last wish it pressed (for a lab's trace)
+  double clock = 0;                       // its own time, s
+  double jump_until = -1;                 // the jump key wanted until then (a jump asked for)
 };
 
 struct Fighter {

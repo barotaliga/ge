@@ -9,8 +9,9 @@
 //   the further one tapped in for its share of the time (a tally of the way wished less the way
 //   pressed, a set past `kSteer`), as a person holds W and taps D to bear right: the way pressed
 //   over a few taps is the wish's, so a turn short of a set's 45 degrees is made. The jump is the
-//   jump key, a weapon's impulse a TAP of its key: the impulse goes out on the command whose key
-//   goes down, not on the command it was asked for.
+//   jump key (held from a jump asked for until it lands, `jumpkey`: a pilot lets go between two
+//   asks, shorter than a finger's press), a weapon's impulse a TAP of its key: the impulse goes out
+//   on the command whose key goes down, not on the command it was asked for.
 // - FEATHERING: on the ground a wish short of a run (a run at a jump at the speed it was proven
 //   at, slowing into a point) is held by tapping: the keys pressed while the speed along the wish
 //   is under the speed wished less `kBand` (a few units crept by a tap), let go once it is over it
