@@ -119,8 +119,9 @@ TEST(a_glowing_body_lights_its_surroundings_with_a_few_lamps_as_bright_as_its_fa
 
 TEST(the_bodys_uniform_is_laid_out_in_vec4s) {
   CHECK(sizeof(r::LiquidGpuBody) % 16 == 0);
-  CHECK(sizeof(r::LiquidGpuBody) ==
-        size_t{17 + r::kLiquidBreaks + 2 * r::kLiquidStirs + r::kGlowEntries} * 16);
+  CHECK(sizeof(r::LiquidGpuBody) == size_t{17 + r::kLiquidBreaks + 2 * r::kLiquidStirs +
+                                           r::kGlowEntries + 3 + 2 * r::kLiquidWades} *
+                                        16);
 }
 
 TEST(a_lava_pool_glows_at_night) {

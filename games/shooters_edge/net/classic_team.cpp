@@ -305,6 +305,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
                          r.players[static_cast<size_t>(k)].traits, kHz,
                          opt.seed + 31u * static_cast<uint32_t>(k),
                          r.players[static_cast<size_t>(k)].name);
+      seat.fighter.bot.pilot.why = opt.why;
       seat.ready = true;
       if (r.locs_from.empty()) {
         r.locs_from = tn.locs.from;

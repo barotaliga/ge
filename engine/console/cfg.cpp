@@ -43,8 +43,8 @@ std::string range_text(const Cvar& v) {
 
 void start(Console& c, const std::vector<std::string>& args) {
   exec_if_there(c, kDefaultFile);
-  exec_if_there(c, kConfigFile);
-  exec_if_there(c, kAutoexecFile);
+  exec_if_there(c, kConfigFile);  // a session's own file when one is set (set_config_file)
+  if (c.config_file().empty()) exec_if_there(c, kAutoexecFile);
   c.append_command_line(args);
   c.run();
 }

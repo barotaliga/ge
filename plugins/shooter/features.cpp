@@ -11,11 +11,12 @@ namespace ge::shooter {
 namespace {
 
 constexpr const char* kNames[kFeatures] = {
-    "calm",       "pace",   "swimaim", "screen",   "keep",      "lead",       "lane",   "hop",
-    "shortgoals", "commit", "danger",  "dodge",    "watch",     "spam",       "packs",  "talk",
-    "plan",       "rj",     "gj",      "airsteer", "surface",   "glance",     "eye",    "selfaim",
-    "pools",      "routes", "corner",  "mouse",    "packinfer", "listen",     "stairs", "locked",
-    "escape",     "brink",  "gapjump", "headroom", "liphop",    "circlejump", "trial"};
+    "calm",      "pace",       "swimaim",    "screen", "keep",   "lead",     "lane",
+    "hop",       "shortgoals", "commit",     "danger", "dodge",  "watch",    "spam",
+    "packs",     "talk",       "plan",       "rj",     "gj",     "airsteer", "surface",
+    "glance",    "eye",        "selfaim",    "pools",  "routes", "corner",   "mouse",
+    "packinfer", "listen",     "stairs",     "locked", "escape", "brink",    "gapjump",
+    "headroom",  "liphop",     "circlejump", "ahead",  "bodies", "beat",     "trial"};
 
 // Every switch but `trial` (the last).
 constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);
@@ -76,18 +77,23 @@ bool apply_features(std::string_view text, Features& f, std::string& error) {
 }
 
 std::string features_text(const Features& f) {
-  const std::string trial = (f.bits & kTrial) ? ",+trial" : "";
+  // What no preset holds (`trial`, `ahead`) is written after the preset's part, when on.
+  constexpr uint64_t kExtra = ~kAll & ((kTrial << 1) - 1);
+  std::string extra;
+  for (size_t k = 0; k < kFeatures; k++)
+    if (((kExtra >> k) & 1u) && f[static_cast<Feature>(k)]) extra += std::string(",+") + kNames[k];
   const uint64_t bits = f.bits & kAll;
-  if (bits == kAll) return "all" + trial;
-  if (bits == 0) return "none" + trial;
+  if (bits == kAll) return "all" + extra;
+  if (bits == 0) return "none" + extra;
   std::string off = "all", on = "none";
-  for (size_t k = 0; k + 1 < kFeatures; k++) {
+  for (size_t k = 0; k < kFeatures; k++) {
+    if ((kExtra >> k) & 1u) continue;
     if (f[static_cast<Feature>(k)])
       on += std::string(",+") + kNames[k];
     else
       off += std::string(",-") + kNames[k];
   }
-  return (off.size() <= on.size() ? off : on) + trial;
+  return (off.size() <= on.size() ? off : on) + extra;
 }
 
 }  // namespace ge::shooter

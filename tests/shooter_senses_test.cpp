@@ -168,11 +168,13 @@ TEST(axes_turned_under_another_view_keep_the_wish_in_the_world) {
 TEST(the_seer_sees_aims_by_skill_and_keeps_its_route) {
   const sh::AimSkill order[4] = {sh::AimSkill::perfect, sh::AimSkill::expert, sh::AimSkill::average,
                                  sh::AimSkill::novice};
-  // Each skill's aim error and reactions pooled over three runs: one run's path can keep a
-  // better hand out of sight (a single seed does not order the skills; three do).
+  // Each skill's aim error and reactions pooled over six runs: one run's path can keep a better
+  // hand out of sight (a single seed does not order the skills; since the runner rides the
+  // arena's plat, an average seer's two runs of six take him out of sight half the time and three
+  // seeds did not either).
   std::vector<float> errors[4], reactions[4];
   int64_t seen[4] = {}, lines[4] = {};
-  for (uint32_t seed = 1; seed <= 3; seed++) {
+  for (uint32_t seed = 1; seed <= 6; seed++) {
     for (const sh::AimSkill k : order) {
       pr::Duel d;
       CHECK(pr::make_duel(d, k, seed));

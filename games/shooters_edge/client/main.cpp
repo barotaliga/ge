@@ -8,9 +8,9 @@
 // switched, kicked and flashing as the mod fires it), the HUD (hud/layout.hpp) and the console.
 //
 //   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [-models <dir>]
-//                 [-timedemo <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH]
+//                 [-timedemo <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH] [-config <f>]
 //                 [-demovideo <demo> <file> [--from=m:ss --to=m:ss | --highlight=N] ...]
-//                 [+<command> ...]
+//                 [-logfile <file>] [+<command> ...]
 //
 // `-basedir` holds the game folder (`id1`, the multiplayer client's folder over it when present;
 // `-game` names another); `~` is home. Without it, the game loaded last, however it was picked;
@@ -36,7 +36,7 @@
 // `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, `vid_fullscreen 0|1` the
 // window over the whole screen (`vid_display n` which one, of those `vid_displays` lists), `gamma`
 // the brightness, `topcolor` and `bottomcolor` the player's colours, and `quit` quits; the settings
-// are kept in `<game folder>/settings/config.cfg` (client/settings.hpp).
+// are kept in `<game folder>/settings/config.cfg` (`-config <f>`: a session's own; settings.hpp).
 //
 // THE LOBBY: its own screen over the title's night until F4 joins the warmup (lobby_console).
 //
@@ -89,6 +89,8 @@
 #include "platform/devices.hpp"
 #include "platform/pacing.hpp"
 #include "platform/window.hpp"
+#include "play/session_flags.hpp"
+#include "play/window_output.hpp"
 #include "render/screenshot_copy.hpp"
 #include "shooters_edge/bots/handles.hpp"
 #include "shooters_edge/client/args.hpp"
@@ -151,26 +153,35 @@ namespace sn = shooters_edge::net;
 // A timedemo shows one frame in this many ns (30 a second) and draws the rest offscreen.
 constexpr uint64_t kBenchShowNs = 33'333'333;
 
-void print_line(const out::LogLine& line, void*) {
-  std::FILE* to = line.level == out::Level::error ? stderr : stdout;
-  std::fprintf(to, "%.*s\n", static_cast<int>(line.message.size()), line.message.data());
-}
-
 }  // namespace
 
 int run_main(int argc, char** argv) {
-  out::set_output_sink(print_line);
   cl::Args args;
+  std::string log_error;
+  // The flags every game takes (play/session_flags.hpp): -config and -logfile, off first.
+  ge::play::SessionFlags session;
+  if (std::string why; !ge::play::take_session_flags(argc, argv, session, why)) {
+    ge::play::attach_window_output("", log_error);
+    out::error("shooters_edge: the command line was refused: " + why +
+               "; next: -config <file> and -logfile <file> each take a file");
+    return 2;
+  }
   if (std::string why; !cl::parse(argc, argv, args, why)) {
+    ge::play::attach_window_output("", log_error);
     out::error("shooters_edge: the command line was refused: " + why +
                " Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
-               "[-progs <file>] [-models <dir>] [-timedemo <demo>] [-playdemo <demo>] "
+               "[-config <file>] [-logfile <file>] [-progs <file>] [-models <dir>] [-timedemo "
+               "<demo>] [-playdemo <demo>] "
                "[--frames=N] [--size=WxH] [-demovideo <demo> <file> [--fps=N] "
                "[--resolution=<WxH|720p|1080p|1440p|4k>] [--from=m:ss] [--to=m:ss] [--highlight=N] "
                "[--gif-width=N] [--codec=<c>] [--seconds=S]] "
                "[+<command> ...]; next: rerun with only those flags.");
     return 2;
   }
+  // Every line on the terminal, and in `-logfile <file>` too when it is named.
+  if (!ge::play::apply_session_flags(session, nullptr, log_error))
+    out::error("shooters_edge: the log file was not opened, the terminal only: " + log_error +
+               "; next: name a file in a folder you can write");
 
   // The console: its lines on the terminal and in its scrollback; the client's commands.
   ge::console::Console console;
@@ -271,6 +282,8 @@ int run_main(int argc, char** argv) {
   cl::choose_folder(args, prefs);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
   console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
+  // A session's own config (`-config <file>`): read and saved there, the player's left alone.
+  if (!session.config.empty()) console.set_config_file(session.config);
   // F12's screenshots (engine/capture/screenshot.hpp), in <game folder>/screenshots/ beside its
   // recordings, saves/ and settings/; made before the + lines so `+screenshot` takes the first.
   ge::capture::ScreenshotSettings shot_settings;  // scr_format, scr_quality, scr_chroma
@@ -1283,8 +1296,10 @@ int run_main(int argc, char** argv) {
       bench_fx_state.models = &cl::world_models(*world);
       bench_fx_state.on = cl::fx_switches(picture);
       cl::demo_fx_step(ds, bench_demo_fx, bench_map.get(), view, bench_fx_state, t, wall, bench_fx);
+      // The quick weapon's preview held in place of the game's weapon (quick_fire.hpp).
+      in_hand.show = drawn_remote ? cl::quick_show(controls.quick, cl::demo_status(ds, t), t) : -1;
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
-      if (drawn_remote) cl::quick_hand(controls.quick, cl::demo_status(ds, t), t, hand);
+      if (drawn_remote) cl::quick_hand(controls.quick, hand);
       hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
       cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
@@ -1402,9 +1417,12 @@ int run_main(int argc, char** argv) {
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
     view_settings.lerp = picture.lerp_models;  // r_lerpmodels: the held weapon's frames too
+    // The quick weapon's preview held in place of the game's weapon (quick_fire.hpp).
+    in_hand.show =
+        listen.server != nullptr ? cl::quick_show(controls.quick, cl::status_of(listen, t), t) : -1;
     shooters_edge::view::HandFrame hand =
         cl::step_held(listen, shown, in_hand, view_settings, weapons, t, wall);
-    if (listen.server != nullptr) cl::quick_hand(controls.quick, cl::status_of(listen, t), t, hand);
+    if (listen.server != nullptr) cl::quick_hand(controls.quick, hand);
     if (hand.flashing)
       fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
     // ce_muzzles in the modern look: each shot's flame, smoke and sparks from the barrel (off, or
