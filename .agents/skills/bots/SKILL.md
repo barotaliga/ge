@@ -1,6 +1,6 @@
 ---
 name: bots
-description: "Use for anything a bot DECIDES in gameengine2 or a game on it: engine/ai (the decision record ai::Why every bot writes, and the pieces bots share as they land: the hands, thinking on a schedule, sight and memory, paths, steering, choosing), a game's Run::trace hook, ge why and the play protocol's why op, the loop that makes a bot behave more like a person, and Shooter's Edge's bot plan worked headless (docs/goals/M18r.md § M18r14g, the locations in a git-ignored .bots/local.md, how a change is judged, the labs). Load it before writing or changing a bot, a pilot, a rival or a pursuer, and to find out why one did what it did."
+description: "Use for anything a bot DECIDES in gameengine2 or a game on it: engine/ai (the decision record ai::Why every bot writes, and the pieces bots share as they land: the hands, thinking on a schedule, sight and memory, paths, steering, choosing), a game's Run::trace hook, ge why and the play protocol's why op, the loop that makes a bot behave more like a person, a match video or demo of the bots on request (make bot-video), why a bot did something at a moment of one (make bot-why, the se-why lab, the decision log), and Shooter's Edge's bot plan worked headless (docs/goals/M18r.md § M18r14g, the locations in a git-ignored .bots/local.md, how a change is judged, the labs). Load it before writing or changing a bot, a pilot, a rival or a pursuer, and to find out why one did what it did."
 ---
 
 # Bots
@@ -144,7 +144,13 @@ The traits say how WELL a bot does a thing; a feature says WHETHER it does it.
 The shooter bots' plan is a checklist in `docs/goals/M18r.md` § M18r14g: what is done with its
 numbers, what is open in order with its yardstick, and what was tried and dropped (never tried
 again blind). "Continue the bot work" means: the first open item there, built, judged as below,
-its entry updated with the before and after, in the same pull request.
+its entry updated with the before and after.
+
+**A SESSION KEEPS GOING.** One checkpoint is not a session: after each one (pushed and its
+entry updated), take the next open item and go on, checkpoint after checkpoint, until about 70 %
+of the context window is used. Only then stop: the plan's entries current, the branch pushed, and
+a short handoff of where the next session starts. Stop earlier only for a question that is the
+maintainer's to answer.
 
 **The locations: `.bots/local.md`.** Nothing about a machine is in the tree. The game's packs,
 people's recordings and the scratch output live where `.bots/local.md` says (git-ignored, one per
@@ -159,6 +165,48 @@ work: .bots/work       # traces, A/B runs, samples: anything a run writes
 A path in it is absolute or relative to the checkout. A machine without the full game plays the
 shareware pack's maps (e1m2 is one); dm2 to dm6 and povdmm4 need the player's own full game.
 
+**A MATCH VIDEO OR A DEMO, ON REQUEST.** When the maintainer asks for a video, a demo or "a match
+to watch", play one with `make bot-video` (`tools/bot-match-video.sh`) in the background (a
+10-minute match takes about 10-20 minutes on the Mac) and answer with the file's path and the
+score. It plays a 4on4 with this build's bots on our server, keeps the recording (the demo,
+`<work>/videos/<name>.mvd`) and renders it with the camera on the hottest player as
+`~/Downloads/bots_<commit>_<map>_s<seed>[_<features>].mkv`. Map the ask onto its flags:
+
+| Asked for | Flags (`make bot-video ARGS="..."`) |
+| --- | --- |
+| a map, a seed, a length | `--map=dm2 --seed=3 --minutes=5` (defaults e1m2, 1, 10) |
+| a feature shown off, or the bots without it | `--features=-hop` (every bot), `--features=+trial` |
+| one team with it, one without (a head to head) | `--features-red=-hop` (or `--features-blue=`) |
+| the video somewhere else | `--out=<folder>` |
+| the demo alone, no video | `--no-video`: the `.mvd` only, played in the window with `-playdemo <mvd>` |
+
+Rendering needs a GPU adapter, so on a machine without one say so and offer the demo alone.
+
+Every match `make bot-video` plays also writes the bots' DECISION LOG beside the demo
+(`<work>/videos/<name>.why.tsv`, `se-team --why=<file>`; `games/shooters_edge/labs/why_log.hpp`).
+
+**WHY DID THAT BOT DO THAT, THEN?** When the maintainer asks why a bot did (or stopped doing)
+something at a moment of a video or a demo, ANSWER FROM THE LOG, never by guessing: `make bot-why
+ARGS="--bot=red2 --at=4:12 [--around=10] [--video=<name>] [--name=mode,trigger]"`
+(`tools/bot-why.sh`, the `se-why` lab; the newest log by default). It lists every decision that
+bot changed within the window (the fight mode, the trigger, the aim, the pilot's link, the role's
+goal, sight, hearing...: each with what settled it, the margin and the facts it read) and the
+events (a speed lost to a wall or a player, a death), on the video's clock, and how often each
+decision is made and changes a bot-minute (several changes a second is jitter, not a mind). Quote
+the rows that answer, then say what to change. A question the log cannot answer is a decision
+not yet recorded: add it where the bot chooses (§ The rule) so the next match can.
+
+**THE LOG AND ITS TOOLS ARE OURS TO KEEP RIGHT.** The decision log (`games/shooters_edge/labs/
+why_log.hpp`), its reader (`se-why`), `tools/bot-why.sh`, `tools/bot-match-video.sh` and what
+`se-team` records are young and imperfect. Whenever one gets in the way (a question it cannot
+answer, a row that misleads, a moment that will not line up with the video, a decision missing,
+the log too big or too thin, a flag that reads wrong), fix it in the same session, before the
+answer, and record a lesson: a missing event or column, a filter, a better count, a clock fixed.
+Keep its output honest: when a number is a client's guess and not the server's (the bots
+lesson on client-fed state), say so in the row or measure it off the server. A tool fixed once
+saves every later question; a tool worked round is asked again. A
+video is never a checkpoint's step: checkpoints are judged headless (below).
+
 **A checkpoint** is `make precheck` green (a golden or digest a change moves on purpose
 rewritten, and the commit says why), a commit, a push, and the plan's entry updated. No video and
 no live server: every match runs on our own server, in process (`se-team`), headless.
@@ -171,13 +219,21 @@ no live server: every match runs on our own server, in process (`se-team`), head
   costly and no more human, or when it moves a human measure away from people's. For movement,
   SPEED decides first: a person moves fast, a bot that crawls is spotted at once.
 - **Head to head is the verdict**: one team with the feature, the other without, in the same 4on4
-  (`se-team --features-red=all,-<name> --sides=1`), read against the same build's full-against-
-  full set (the sides are not even), on seeds 1-6 and then 7-12 (a set swings about +-35). Both
-  sides with it only says whether the game got faster or more violent.
-- **Six seeds, never one**: six `se-team --seed=<n>` runs in parallel (`--client-fed=1
-  --minutes=10 --basedir=<basedir> --map=e1m2`), each written under `<work>/<tag>/`, read only
-  once all six are done; a single match swings by more than most changes move it. A quick read:
-  six 3-minute seeds with `--trace=<work>/<tag>/t<n>.tsv --trace-every=1` first.
+  (`se-team --features-red=-<name> --sides=1`), AND AGAIN WITH THE SIDES SWAPPED
+  (`--features-blue=-<name>`), each read against the same build's full-against-full set (the
+  sides are not even, and their skew moves with the seeds); the effect is the mean of the two.
+  One side alone is a draw (dm2: -7.4 on blue, -0.3 on red, for a change even over 24 seeds).
+  10-minute matches, 12 seeds. Both sides with it only says whether the game got faster or more
+  violent. Each side's speed and bumps: `team.side.<side>.*`.
+- **Six seeds, never one, in one call**: `se-team --seeds=1-6 --variants="on:--sides=1;off:
+  --features=-<name> --sides=1;h2h:--features-red=-<name> --sides=1" --client-fed=1 --minutes=10
+  --basedir=<basedir> --map=e1m2` plays every variant on every seed in parallel (`--jobs`, one a
+  hardware thread) and reports the A/B table (red-blue, frags a minute, damage, accuracy, the key
+  items lying, speed, wet, stuck, waits), a row a run, and every metric's mean as
+  `<variant>.<metric>`; a match in a set gives the same numbers as alone. A single match swings
+  by more than most changes move it. A quick read first: `--minutes=3` with
+  `--trace=<work>/<tag>/t-{variant}-{seed}.tsv --trace-every=1` (`{variant}` and `{seed}` are
+  replaced per run).
 - **People and bots by one rule**: `se-team --save=<file>.mvd` records the bots' match and
   `se-people --file=<it>` measures it exactly as it measures people's (`--dir=<demos>/<map>`).
 - **What it newly triggers**: a change that should help and hurts is read for what it set off;
@@ -190,9 +246,9 @@ no live server: every match runs on our own server, in process (`se-team`), head
 
 | Lab | What it answers |
 | --- | --- |
-| `se-team` | a 4on4 of our bots on our server: `--map`, `--seed`, `--minutes`, `--client-fed=1`, `--sides=1` (each side's numbers), `--features`, `--features-red`, `--features-blue`, `--trace=<tsv>` (`--trace-every`: every bot's command as a row: feet, speed, mode, goal, pilot mode, link kind, the view and who turned it), `--save=<mvd>` |
+| `se-team` | a 4on4 of our bots on our server (a set: `--seeds`, `--variants`, `--jobs`): `--map`, `--seed`, `--minutes`, `--client-fed=1`, `--sides=1` (each side's numbers), `--features`, `--features-red`, `--features-blue`, `--trace=<tsv>` (`--trace-every`: every bot's command as a row: feet, speed, mode, goal, pilot mode, link kind, the view and who turned it), `--save=<mvd>`; the hop by skill always (`team.hop.<skill>.share`, `speed-p50`, `fast-share`, `flights`, `crash-share`, `gain-p50`, `takeoffs-360`, `chained-share`), the deaths in lava or slime (`team.deaths-in.*`); why and where they stand still (`team.still.mover-share`, `no-route-share`, `walk-share` and the top spots); the view's reversals by what turned it (`team.view.<writer>.*`, `team.view.reversals-per-s`, people 0.09); on a real map, every fast flight (380-460 at takeoff) read off the recording by se-moves' rule and put down to the pilot mode that flew it (`team.air.s380.<mode>.gain-p50`, `crash-share`) |
 | `se-people` | people and bots measured alike off recordings: in view, faced, speed, the hand's sweeps (`hand.*`, `hop.*`), fire in view, item control, wet; `--samples=<tsv>` every sample alive |
-| `se-moves` | who moves fastest and the weave by speed, per player, off a folder of recordings |
+| `se-moves` | who moves fastest and the weave by speed, per player, off a folder of recordings (`--dir`); the ground between jumps (`jumps.ground-p50`, what a landing costs) and the chains (`jumps.chain-3plus-share`, `jumps.chain-first-off-p50`) |
 | `se-rj` | rocket, grenade and gap jumps read off recordings and clustered into tricks |
 | `se-reach` | a map's nav asked: `--route` node by node, `--floors`, `--escapes=fly` |
 | `se-spot` | a place drawn every way (top, cuts, inside views, a route) |

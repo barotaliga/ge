@@ -179,19 +179,23 @@ inline constexpr size_t kFrameTimes = 1024;
 struct FrameSummary {
   size_t frames = 0;
   double mean_ms = 0, p50_ms = 0, p99_ms = 0, p999_ms = 0, max_ms = 0;
-  double fps = 0;          // 1000 / mean
-  double low1_fps = 0;     // the frame rate of the slowest 1% of frames (their mean interval)
-  double jitter_ms = 0;    // the mean |interval - median|
-  size_t hitches = 0;      // intervals over 1.5 x the median
-  double cap_wait_ms = 0;  // the mean time a frame waited on the cap
-  double gpu_wait_ms = 0;  // the mean time a frame waited on the GPU's queue
+  double fps = 0;            // 1000 / mean
+  double low1_fps = 0;       // the frame rate of the slowest 1% of frames (their mean interval)
+  double jitter_ms = 0;      // the mean |interval - median|
+  size_t hitches = 0;        // intervals over 1.5 x the median
+  double cap_wait_ms = 0;    // the mean time a frame waited on the cap
+  double gpu_wait_ms = 0;    // the mean time a frame waited on the GPU's queue
+  double image_wait_ms = 0;  // the mean time a frame waited for a free swap-chain image (display)
 };
 
 class FrameTimes {
  public:
-  // One frame: its interval since the last, and what the pacing made it wait, s.
-  void add(double interval_s, double cap_wait_s = 0, double gpu_wait_s = 0) {
-    ring_[head_] = {interval_s, cap_wait_s, gpu_wait_s};
+  // One frame: its interval since the last, and what it waited on, s: the cap, the GPU's queue,
+  // and the swap chain for a free image (the display handing one back: a frame that waits there
+  // every time is held to the display's pace, not the GPU's).
+  void add(double interval_s, double cap_wait_s = 0, double gpu_wait_s = 0,
+           double image_wait_s = 0) {
+    ring_[head_] = {interval_s, cap_wait_s, gpu_wait_s, image_wait_s};
     head_ = (head_ + 1) % kFrameTimes;
     count_ = std::min(count_ + 1, kFrameTimes);
   }
@@ -205,18 +209,20 @@ class FrameTimes {
     s.frames = count_;
     if (count_ == 0) return s;
     std::vector<double> ms(count_);
-    double sum = 0, cap = 0, gpu = 0;
+    double sum = 0, cap = 0, gpu = 0, image = 0;
     for (size_t i = 0; i < count_; i++) {
       const Entry& e = ring_[i];
       ms[i] = e.dt * 1e3;
       sum += ms[i];
       cap += e.cap * 1e3;
       gpu += e.gpu * 1e3;
+      image += e.image * 1e3;
     }
     const double n = static_cast<double>(count_);
     s.mean_ms = sum / n;
     s.cap_wait_ms = cap / n;
     s.gpu_wait_ms = gpu / n;
+    s.image_wait_ms = image / n;
     s.fps = s.mean_ms > 0 ? 1e3 / s.mean_ms : 0;
     std::sort(ms.begin(), ms.end());
     const auto at = [&](double q) {
@@ -242,14 +248,15 @@ class FrameTimes {
 
  private:
   struct Entry {
-    double dt = 0, cap = 0, gpu = 0;
+    double dt = 0, cap = 0, gpu = 0, image = 0;
   };
   std::array<Entry, kFrameTimes> ring_{};
   size_t head_ = 0, count_ = 0;
 };
 
 // The summary as one line a player pastes back: "frames 1024: 120.0 fps (1% low 117.6), ms mean
-// 8.33 p50 8.33 p99 8.61 p99.9 9.02 max 9.10, jitter 0.05 ms, 0 hitches; waits cap 2.10 gpu 0.40".
+// 8.33 p50 8.33 p99 8.61 p99.9 9.02 max 9.10, jitter 0.05 ms, 0 hitches; waits cap 2.10 gpu 0.40
+// image 0.10".
 inline std::string summary_text(const FrameSummary& s) {
   using core::num::to_fixed;
   return "frames " + std::to_string(s.frames) + ": " + to_fixed(s.fps, 1) + " fps (1% low " +
@@ -257,7 +264,8 @@ inline std::string summary_text(const FrameSummary& s) {
          to_fixed(s.p50_ms, 2) + " p99 " + to_fixed(s.p99_ms, 2) + " p99.9 " +
          to_fixed(s.p999_ms, 2) + " max " + to_fixed(s.max_ms, 2) + ", jitter " +
          to_fixed(s.jitter_ms, 2) + " ms, " + std::to_string(s.hitches) + " hitches; waits cap " +
-         to_fixed(s.cap_wait_ms, 2) + " gpu " + to_fixed(s.gpu_wait_ms, 2);
+         to_fixed(s.cap_wait_ms, 2) + " gpu " + to_fixed(s.gpu_wait_ms, 2) + " image " +
+         to_fixed(s.image_wait_ms, 2);
 }
 
 }  // namespace ge::loop

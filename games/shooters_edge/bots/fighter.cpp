@@ -49,6 +49,7 @@ constexpr int32_t kItPent = 1048576;  // the shield's
 constexpr float kRetreatBelow = 50;   // health plus armour's protection: weak under this
 constexpr float kStrongAgain = 80;    // and strong again at this
 constexpr double kChase_s = 3;        // a contact lost this long ago is still chased
+constexpr double kModeBeat_s = 0.5;   // a person's beat: a mode held this long (`beat`)
 constexpr double kGoalTire_s = 30;    // one goal item held this long in vain is let go of
 constexpr double kHealTire_s = 8;     // and sooner by a weak player, who cannot wait for it
 constexpr double kTired_s = 20;       // for this long
@@ -363,9 +364,11 @@ sh::Vec3f at_of(const ai::Memory& m) {
   return {static_cast<float>(m.x), static_cast<float>(m.y), static_cast<float>(m.z)};
 }
 
-void set_mode(Fighter& f, FightMode next, ai::Why* why, const char* because) {
+void set_mode(Fighter& f, FightMode next, double t, ai::Why* why, const char* because) {
   if (f.mode == next) return;
   f.stats.modes++;
+  f.held = t - f.mode_at;
+  f.mode_at = t;
   ai::enter(f.mode, f.held, next, why, fight_mode_name, because);
 }
 
@@ -1053,19 +1056,33 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   const bool backs_off =
       (heal_at >= 0 && item_value(f.items[static_cast<size_t>(heal_at)], st) > 0) ||
       (c && weak && f.temper == sh::Temper::coward);
-  if (backs_off && !cornered) {
-    set_mode(f, FightMode::retreat, why, "weak with someone about: health or armour first");
+  // A PERSON'S BEAT (`beat`): a fight is held through a peek (the contact out of sight no longer
+  // than a beat, and nothing calls for a retreat), and any mode a beat after it is entered unless
+  // a sighting calls for a fight. Without it a contact lost for a frame turned a fight into a
+  // chase and back: dm2, 3 ten-minute seeds, the mode's changes 0.76 -> 0.46 a bot-second, its
+  // median hold 0.42 -> 1.04 s (under 0.2 s: 20 -> 5 %); 12 seeds head to head +1.5 frags a
+  // match, speed even.
+  const bool beat = f.features[sh::Feature::beat];
+  const bool peek = beat && f.mode == FightMode::fight && !seen_now && !backs_off && c &&
+                    ai::known(c->seen) && ai::age(c->seen, t) <= kModeBeat_s;
+  const bool fresh = beat && t - f.mode_at < kModeBeat_s;
+  if (peek) {
+    // the fight held: the enemy out of sight a moment
+  } else if (backs_off && !cornered) {
+    if (!fresh || f.mode == FightMode::roam)
+      set_mode(f, FightMode::retreat, t, why, "weak with someone about: health or armour first");
   } else if (seen_now && !engage) {
     f.outmatched = true;
     f.stats.outmatched++;
-    set_mode(f, FightMode::retreat, why, "outmatched: armour, a weapon or the team first");
+    if (!fresh || f.mode == FightMode::roam)
+      set_mode(f, FightMode::retreat, t, why, "outmatched: armour, a weapon or the team first");
   } else if (seen_now) {
-    set_mode(f, FightMode::fight, why, "a contact in sight");
+    set_mode(f, FightMode::fight, t, why, "a contact in sight");
   } else if (recent) {
     if (!seen_now && by_ear) f.stats.sound_chases++;
-    set_mode(f, FightMode::chase, why, "lost from sight or heard a moment ago");
-  } else {
-    set_mode(f, FightMode::roam, why, "no one known");
+    if (!fresh) set_mode(f, FightMode::chase, t, why, "lost from sight or heard a moment ago");
+  } else if (!fresh) {
+    set_mode(f, FightMode::roam, t, why, "no one known");
   }
 
   // A sighting is the team's once it is called out (where, by its place's name), unless it was
@@ -1288,6 +1305,8 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   ps.circle.target = expert ? 430.f : 380.f;
   ps.circle.most_s = expert ? 0.3f : 0.2f;
   ps.brink = f.features[sh::Feature::brink];
+  ps.ahead = f.features[sh::Feature::ahead];
+  ps.ahead_bodies = f.features[sh::Feature::bodies];
   // Its lane off the route's line (shooter/pilot.hpp): a person never walks the line; the less
   // practised wander wider. A perfect player keeps to it.
   ps.lane = skill == sh::AimSkill::perfect || !f.features[sh::Feature::lane] ? 0.f

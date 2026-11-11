@@ -8,9 +8,9 @@
 // switched, kicked and flashing as the mod fires it), the HUD (hud/layout.hpp) and the console.
 //
 //   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [-models <dir>]
-//                 [-timedemo <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH]
+//                 [-timedemo <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH] [-config <f>]
 //                 [-demovideo <demo> <file> [--from=m:ss --to=m:ss | --highlight=N] ...]
-//                 [+<command> ...]
+//                 [-logfile <file>] [+<command> ...]
 //
 // `-basedir` holds the game folder (`id1`, the multiplayer client's folder over it when present;
 // `-game` names another); `~` is home. Without it, the game loaded last, however it was picked;
@@ -36,7 +36,7 @@
 // `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, `vid_fullscreen 0|1` the
 // window over the whole screen (`vid_display n` which one, of those `vid_displays` lists), `gamma`
 // the brightness, `topcolor` and `bottomcolor` the player's colours, and `quit` quits; the settings
-// are kept in `<game folder>/settings/config.cfg` (client/settings.hpp).
+// are kept in `<game folder>/settings/config.cfg` (`-config <f>`: a session's own; settings.hpp).
 //
 // THE LOBBY: its own screen over the title's night until F4 joins the warmup (lobby_console).
 //
@@ -89,6 +89,8 @@
 #include "platform/devices.hpp"
 #include "platform/pacing.hpp"
 #include "platform/window.hpp"
+#include "play/session_flags.hpp"
+#include "play/window_output.hpp"
 #include "render/screenshot_copy.hpp"
 #include "shooters_edge/bots/handles.hpp"
 #include "shooters_edge/client/args.hpp"
@@ -151,26 +153,35 @@ namespace sn = shooters_edge::net;
 // A timedemo shows one frame in this many ns (30 a second) and draws the rest offscreen.
 constexpr uint64_t kBenchShowNs = 33'333'333;
 
-void print_line(const out::LogLine& line, void*) {
-  std::FILE* to = line.level == out::Level::error ? stderr : stdout;
-  std::fprintf(to, "%.*s\n", static_cast<int>(line.message.size()), line.message.data());
-}
-
 }  // namespace
 
 int run_main(int argc, char** argv) {
-  out::set_output_sink(print_line);
   cl::Args args;
+  std::string log_error;
+  // The flags every game takes (play/session_flags.hpp): -config and -logfile, off first.
+  ge::play::SessionFlags session;
+  if (std::string why; !ge::play::take_session_flags(argc, argv, session, why)) {
+    ge::play::attach_window_output("", log_error);
+    out::error("shooters_edge: the command line was refused: " + why +
+               "; next: -config <file> and -logfile <file> each take a file");
+    return 2;
+  }
   if (std::string why; !cl::parse(argc, argv, args, why)) {
+    ge::play::attach_window_output("", log_error);
     out::error("shooters_edge: the command line was refused: " + why +
                " Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
-               "[-progs <file>] [-models <dir>] [-timedemo <demo>] [-playdemo <demo>] "
+               "[-config <file>] [-logfile <file>] [-progs <file>] [-models <dir>] [-timedemo "
+               "<demo>] [-playdemo <demo>] "
                "[--frames=N] [--size=WxH] [-demovideo <demo> <file> [--fps=N] "
                "[--resolution=<WxH|720p|1080p|1440p|4k>] [--from=m:ss] [--to=m:ss] [--highlight=N] "
                "[--gif-width=N] [--codec=<c>] [--seconds=S]] "
                "[+<command> ...]; next: rerun with only those flags.");
     return 2;
   }
+  // Every line on the terminal, and in `-logfile <file>` too when it is named.
+  if (!ge::play::apply_session_flags(session, nullptr, log_error))
+    out::error("shooters_edge: the log file was not opened, the terminal only: " + log_error +
+               "; next: name a file in a folder you can write");
 
   // The console: its lines on the terminal and in its scrollback; the client's commands.
   ge::console::Console console;
@@ -271,6 +282,8 @@ int run_main(int argc, char** argv) {
   cl::choose_folder(args, prefs);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
   console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
+  // A session's own config (`-config <file>`): read and saved there, the player's left alone.
+  if (!session.config.empty()) console.set_config_file(session.config);
   // F12's screenshots (engine/capture/screenshot.hpp), in <game folder>/screenshots/ beside its
   // recordings, saves/ and settings/; made before the + lines so `+screenshot` takes the first.
   ge::capture::ScreenshotSettings shot_settings;  // scr_format, scr_quality, scr_chroma
@@ -362,6 +375,24 @@ int run_main(int argc, char** argv) {
   surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync_applied);
   ge::platform::set_swap_images(*window, ge::platform::swap_images(pacing.settings));
   pacing.present = surface.present_mode();
+  // Every frame the player watches is acquired and presented through these two, so the pacing
+  // sees each one: the acquire timed (framestats' image wait; one that blocked marks a refresh
+  // for vid_vsync_lag_fix), and after the present the gate told and, while the lag fix is on,
+  // the frame's cost to its GPU's last work measured.
+  const auto acquire_frame = [&] {
+    const uint64_t before = ge::platform::now_ns();
+    wgpu::TextureView view = surface.acquire(*device);
+    ge::platform::acquired(pacing, before, ge::platform::now_ns());
+    return view;
+  };
+  const auto present_frame = [&] {
+    surface.present();
+    gate.submitted(*device);
+    if (ge::platform::late_start_on(pacing)) {
+      gate.wait(*device, 1);
+      ge::platform::frame_done(pacing, ge::platform::now_ns());
+    }
+  };
   cl::WorldDrawPtr title =
       cl::make_title_world(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h),
                            surface.format(), picture, error);
@@ -390,12 +421,11 @@ int run_main(int argc, char** argv) {
     if (!caption.empty())
       ge::hud::draw_spinner(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(), t,
                             caption, t - since);
-    const wgpu::TextureView target = surface.acquire(*device);
+    const wgpu::TextureView target = acquire_frame();
     if (!target) return;
     cl::draw_world(*device, *title, cl::title_view(t), {}, nullptr, dt, overlay, target);
     shot_copy.frame(*device, surface.frame_target(), shots, console);
-    surface.present();
-    gate.submitted(*device);
+    present_frame();
   };
   title_frame(0, 0, "LOADING", 0);
   // The main menu's maps, its classic pictures when the packs carry them, and the packs classic
@@ -855,12 +885,12 @@ int run_main(int argc, char** argv) {
       }
       con_view.frame(dt);
       ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
-      const wgpu::TextureView target = surface.acquire(*device);
+      const wgpu::TextureView target = acquire_frame();
       if (!target) continue;
       cl::draw_world(*device, bot_world ? *bot_world : *title, view, {}, nullptr, dt, overlay,
                      target);
       shot_copy.frame(*device, surface.frame_target(), shots, console);
-      surface.present();
+      present_frame();
       // `--seconds=N`: a screenshot a second before the end, then quit (a run that leaves a
       // picture behind).
       if (args.seconds > 0 && t >= args.seconds - 1 && !shot_asked) {
@@ -1263,7 +1293,7 @@ int run_main(int argc, char** argv) {
       const uint64_t frame_ns = ge::platform::now_ns();
       wgpu::TextureView target;
       const bool show = paced || frame_ns - bench_shown_ns >= kBenchShowNs;
-      if (show) target = surface.acquire(*device);
+      if (show) target = paced ? acquire_frame() : surface.acquire(*device);
       if (target) {
         bench_shown_ns = frame_ns;
       } else {
@@ -1292,8 +1322,11 @@ int run_main(int argc, char** argv) {
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
         shot_copy.frame(*device, surface.frame_target(), shots, console);
-        surface.present();
-        if (paced) gate.submitted(*device);
+        if (paced) {
+          present_frame();
+        } else {
+          surface.present();  // a timedemo's shown frame: unpaced, untimed
+        }
       }
       if (paced) {  // playback: every frame shown, nothing timed
         ++presented;
@@ -1444,18 +1477,11 @@ int run_main(int argc, char** argv) {
       ge::hud::draw_spinner(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(), t,
                             cl::load_caption(loader), t - loader.since_s);
 
-    const uint64_t acquiring = ge::platform::now_ns();
-    wgpu::TextureView target = surface.acquire(*device);
-    ge::platform::acquired(pacing, acquiring, ge::platform::now_ns());
+    wgpu::TextureView target = acquire_frame();
     if (!target) continue;
     cl::draw_world(*device, *world, view, fx, &hand, wall, overlay, target);
     shot_copy.frame(*device, surface.frame_target(), shots, console);
-    surface.present();
-    gate.submitted(*device);
-    if (ge::platform::late_start_on(pacing)) {  // the frame's cost, to its GPU's last work
-      gate.wait(*device, 1);
-      ge::platform::frame_done(pacing, ge::platform::now_ns());
-    }
+    present_frame();
     ++presented;
   }
   if (quit) save_settings();

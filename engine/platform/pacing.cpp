@@ -112,8 +112,10 @@ uint64_t pace(const Window& window, Pacing& p, double gpu_wait_s) {
   const uint64_t start = now_ns();
   if (p.last_ns != 0)
     p.times.add(static_cast<double>(start - p.last_ns) * 1e-9,
-                static_cast<double>(start - before) * 1e-9, gpu_wait_s);
+                static_cast<double>(start - before) * 1e-9, gpu_wait_s,
+                static_cast<double>(p.acquire_ns) * 1e-9);  // the last frame's acquire
   p.last_ns = start;
+  p.acquire_ns = 0;  // this frame's, when it acquires
   return start;
 }
 
@@ -146,7 +148,10 @@ std::string pacing_text(const Pacing& p) {
   if (!p.present.empty()) line += " (" + p.present + ")";
   line += ", framelatency " + std::to_string(p.settings.latency);
   line += ", steady " + std::string(p.settings.steady ? "on" : "off");
-  if (late_start_on(p))
+  if (late_start_on(p) && p.phase.count < loop::VsyncPhase::kCosts)
+    line +=
+        ", lag fix (still measuring: a frame's cost and the refresh come from presented frames)";
+  else if (late_start_on(p))
     line += ", lag fix (frame " + to_fixed(static_cast<double>(p.phase.worst()) / 1e6, 2) +
             " ms + " + to_fixed(p.settings.late_margin_ms, 2) + " ms spare)";
   return line;

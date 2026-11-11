@@ -24,6 +24,11 @@ struct LiquidBody {
   stirs: array<vec4f, 8>,       // x, z, radius (m), heat (render/liquid.hpp's kLiquidStirs)
   stir_smoke: array<vec4f, 8>,  // smoke, 0, 0, 0
   table: array<vec4f, 32>,
+  wade0: vec4f,  // stamps held, the furrow's half width, its depth, a ring's height (m)
+  wade1: vec4f,  // the rings' speed (m/s), wavelength (m), life (s); the furrow's closing (s)
+  wade2: vec4f,  // the crust's healing (s), a stamp's life (s)
+  wades: array<vec4f, 48>,   // x, z, time, strength (render/liquid_wade.hpp)
+  wade_v: array<vec4f, 48>,  // vx, vz, the span to the stamp before (s), head
 }
 
 struct Ripple {

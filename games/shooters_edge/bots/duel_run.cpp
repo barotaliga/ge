@@ -73,6 +73,7 @@ DuelResult run_duel(Duel& d, int frames) {
   const float vh = d.seer.senses.set.view_height;
   bool was_seen = false, reacting = false;
   double acquired_at = 0, last_seen = -1e9;
+  float err_at = 0, yaw_at = 0, pitch_at = 0;  // the error and the view when a sighting is timed
   for (int f = 0; f < frames; f++) {
     server::host_frame(d.host, nullptr, 0);
     r.frames++;
@@ -100,10 +101,17 @@ DuelResult run_duel(Duel& d, int frames) {
       if (!was_seen && sv.time - last_seen > 0.3 && err > kOnTarget) {
         reacting = true;
         acquired_at = sv.time;
+        err_at = err;
+        yaw_at = d.seer.yaw;
+        pitch_at = d.seer.pitch;
       }
       last_seen = sv.time;
       if (reacting && err <= kOnTarget) {
-        r.reaction_s.push_back(static_cast<float>(sv.time - acquired_at));
+        // Timed only when the view turned onto him: a runner who walks or rides into the
+        // crosshair (up the arena's plat) was not reacted to, whatever the clock says.
+        const float ty = wrap(d.seer.yaw - yaw_at), tp = d.seer.pitch - pitch_at;
+        if (std::sqrt(ty * ty + tp * tp) >= (err_at - kOnTarget) * 0.5f)
+          r.reaction_s.push_back(static_cast<float>(sv.time - acquired_at));
         reacting = false;
       }
     } else {

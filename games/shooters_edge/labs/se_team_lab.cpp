@@ -17,6 +17,9 @@
 // there, nobody wanted it, the one who wanted it was fighting, one on his way (far, within 400
 // units, standing on it). People take the yellow armour within 4 s of its showing (se-people).
 //
+// THE SET (`--seeds=1-6`, `--variants=...`): the A/B a bot change is judged by, every variant on
+// every seed in parallel and one table of means (below, `run_set`).
+//
 // ge:summary Lab: a recorded 4on4 of bots on teamplay: roles, key areas, frags by team, the MVD
 // ge:keywords lab se-team team-game 4on4 teamplay roles hold rush carry quad key-area mvd record
 // ge:keywords item-control lying untaken armour-control
@@ -24,11 +27,16 @@
 // ge:test tests/shooters_edge_team_test.cpp
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <map>
 #include <string>
+#include <string_view>
+#include <thread>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -39,12 +47,16 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "shooter/nav.hpp"
+#include "shooter/trace.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/labs/move_study.hpp"
+#include "shooters_edge/labs/why_log.hpp"
 #include "shooters_edge/net/classic_team.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
@@ -75,6 +87,360 @@ struct View {
   double px(double x) const { return margin + (x - lo.x) * scale; }
   double py(double y) const { return margin + (hi.y - y) * scale; }
 };
+
+// THE HOP, measured on every command of every bot, by skill (`team.hop.<skill>.*`): its share of
+// the time alive, its speed's median, the time alive past 340 u/s across; and every FLIGHT (a
+// hop's landing jump through the hopping commands after it, five or more): the takeoff speed,
+// the air's gain (the last hopping command's speed less the takeoff's), a crash (80 u/s or more
+// lost), a takeoff past 360, chained (the next command jumps again off a landing) or the
+// stretch ended. People hop 36 % of their time; the bots' gap jumps need 420-500 at takeoff.
+// WHY AND WHERE THEY STAND STILL: the share of every bot's commands that wait for a mover in the
+// way, have no route, or walk the route under 20 u/s, and the top spots of each (64-unit cells,
+// with the goal and the fight mode: feed one to se-spot). THE VIEW BY WHAT TURNED IT: each view
+// writer's (aim, look, calm, air, swim, pilot and the game's overrides: shooter/bot.hpp `view_by`)
+// share of the time and its reversals a second (the yaw's turn flipping between two commands,
+// both past 60 degrees a second; people 0.09 a second in se-people's `hand.reversals-per-s`).
+constexpr int kStillKinds = 3;
+constexpr const char* kStillNames[kStillKinds] = {"mover", "no-route", "walk"};
+
+struct HopSkill {
+  int64_t alive = 0, hop = 0, fast = 0;
+  int flights = 0, crashes = 0, takeoffs_360 = 0, chained = 0;
+  std::vector<float> hop_speed, gain;
+};
+struct Watch {
+  std::ofstream* out = nullptr;                // the trace, when asked for
+  shooters_edge::labs::WhyLog* log = nullptr;  // the decision log, when asked for (--why)
+  int every = 4;
+  std::array<int, 64> count{};
+  struct Flight {
+    bool on = false;
+    float v0 = 0, last = 0;
+    int n = 0;
+  };
+  std::array<Flight, 64> flight{};
+  std::array<HopSkill, 4> skill{};  // by sh::AimSkill
+  // Why and where they stand (`team.still.*`): a mover in the way, no route, walking under 20 u/s.
+  int64_t commands = 0;
+  std::array<int64_t, kStillKinds> still{};
+  std::array<std::map<std::tuple<int, int, int, std::string, std::string>, int>, kStillKinds> spots;
+  // The view's turn by what turned it (`team.view.*`): each bot's last yaw and rate.
+  struct View {
+    double t = -1;
+    float yaw = 0, rate = 0;
+  };
+  std::array<View, 64> view{};
+  // Each bot's pilot mode over the match, a row a change (the time, the mode's name): the
+  // flights read off the recording afterwards are put down to the mode at their takeoff.
+  std::array<std::vector<std::pair<double, const char*>>, 64> modes;
+  // The bumps (`team.bumps.*`): a speed lost in one command, 120 u/s or more (a wall, a corner,
+  // a player met; the move brakes at most ~40 a command), hard when it ends under 100 u/s.
+  // Each is put down to what took the speed (bump_by: a wall, a mover, a player, open) and its
+  // spot kept (64-unit cells, the pilot's mode): the corners a look ahead must see.
+  std::array<float, 64> last_speed{};
+  std::array<sh::Vec3f, 64> last_vel{};
+  std::array<float, 64> last_health{};
+  std::array<bool, 64> moved{};
+  int64_t bumps = 0, hard_bumps = 0, alive_commands = 0;
+  // Each side's (red 0, blue 1) commands alive and its bumps by walls and by players, for an A/B
+  // by team (`--sides=1`): which side the feature under test slowed or sped.
+  std::array<int64_t, 2> side_alive{}, side_wall{}, side_player{};
+  std::map<std::string, int64_t> bumps_by_mode, bumps_by;
+  std::map<std::tuple<int, int, int, std::string, std::string>, int> bump_spots;
+  double t_last = 0;
+  std::map<std::string, std::pair<double, int64_t>> writers;  // time, reversals
+};
+
+// What took a bumped player's speed: the box swept 16 units on along its velocity before the bump
+// meets the world (`wall`), another player (`player`) or a brush entity (`mover`: a door, a plat);
+// nothing there is `open` (a landing, water, a push). A bump in a command that took health is put
+// down to the hit's knockback (`hit`) before this is asked.
+const char* bump_by(const sh::Server& sv, int ent, sh::Vec3f origin, sh::Vec3f vel) {
+  const float len = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+  if (len < 1) return "open";
+  const sh::Vec3f to{origin.x + vel.x * 16 / len, origin.y + vel.y * 16 / len, origin.z};
+  const sh::HullTrace tr =
+      sh::trace_move(sv, origin, {-16, -16, -24}, {16, 16, 32}, to, sh::kTraceNormal, ent);
+  // Another player's box within 8 units of this one's (the move clips against players its own
+  // way: the server's sweep does not always meet them).
+  for (int c = 1; c <= static_cast<int>(sv.clients.size()); c++) {
+    if (c == ent || static_cast<size_t>(c) >= sv.edicts.size()) continue;
+    const sh::Edict& o = sv.edicts[static_cast<size_t>(c)];
+    if (o.free || o.health <= 0) continue;
+    const float dx = o.origin.x - origin.x, dy = o.origin.y - origin.y, dz = o.origin.z - origin.z;
+    if (std::fabs(dx) < 40 && std::fabs(dy) < 40 && std::fabs(dz) < 64) return "player";
+  }
+  if (tr.fraction >= 1 && !tr.startsolid) return "open";
+  if (tr.ent <= 0) return tr.plane.normal.z >= 0.7f ? "open" : "wall";
+  if (tr.ent <= static_cast<int>(sv.clients.size())) return "player";
+  return "mover";
+}
+
+void watch_hop(Watch& w, int k, sh::AimSkill skill, bool alive, bool hop, const char* because,
+               float speed) {
+  HopSkill& s = w.skill[static_cast<size_t>(skill)];
+  if (alive) {
+    s.alive++;
+    if (speed > 340) s.fast++;
+    if (hop) {
+      s.hop++;
+      s.hop_speed.push_back(speed);
+    }
+  }
+  const std::string_view why = because != nullptr ? because : "";
+  const bool landing = hop && why.starts_with("a landing");
+  Watch::Flight& f = w.flight[static_cast<size_t>(k)];
+  if (f.on && hop && why.starts_with("hopping")) {
+    f.last = speed;
+    f.n++;
+    return;
+  }
+  if (f.on) {
+    if (f.n >= 5) {
+      const float gain = f.last - f.v0;
+      s.flights++;
+      s.gain.push_back(gain);
+      if (gain < -80) s.crashes++;
+      if (f.v0 > 360) s.takeoffs_360++;
+      if (landing) s.chained++;
+    }
+    f.on = false;
+  }
+  if (landing) f = {true, speed, speed, 0};
+}
+
+float median(std::vector<float> v) {
+  if (v.empty()) return 0;
+  std::sort(v.begin(), v.end());
+  return v[v.size() / 2];
+}
+
+void watch_still(Watch& w, const shooters_edge::bots::Fighter& f, const sh::Pilot& p, float speed,
+                 float x, float y, float z) {
+  w.commands++;
+  const std::string_view why = p.because != nullptr ? p.because : "";
+  int kind = -1;
+  if (why == "a mover in the way")
+    kind = 0;
+  else if (why == "no route")
+    kind = 1;
+  else if (p.mode == sh::PilotMode::walk && speed < 20)
+    kind = 2;
+  if (kind < 0) return;
+  w.still[static_cast<size_t>(kind)]++;
+  const auto cell = [](float v, int g) {
+    return static_cast<int>(std::lround(v / static_cast<float>(g))) * g;
+  };
+  const char* goal = f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
+                         ? shooters_edge::bots::item_call(f.items[static_cast<size_t>(f.goal_item)])
+                         : "-";
+  w.spots[static_cast<size_t>(kind)][{cell(x, 64), cell(y, 64), cell(z, 32), goal,
+                                      shooters_edge::bots::fight_mode_name(f.mode)}]++;
+}
+
+void watch_view(Watch& w, int k, double t, float yaw, const char* by) {
+  Watch::View& v = w.view[static_cast<size_t>(k)];
+  const double dt = t - v.t;
+  if (v.t < 0 || dt <= 0 || dt > 0.05) {
+    v = {t, yaw, 0};
+    return;
+  }
+  float d = yaw - v.yaw;
+  while (d > 180) d -= 360;
+  while (d < -180) d += 360;
+  const auto rate = static_cast<float>(-d / dt);
+  auto& wr = w.writers[by != nullptr ? by : "-"];
+  wr.first += dt;
+  if (std::fabs(rate) > 60 && std::fabs(v.rate) > 60 && rate * v.rate < 0) wr.second++;
+  v = {t, yaw, rate};
+}
+
+void still_view_metrics(gl::Lab& lab, const Watch& w) {
+  // A bot-minute is 77 * 60 of its commands alive.
+  const double bot_min = std::max(1.0, static_cast<double>(w.alive_commands) / (77.0 * 60));
+  lab.metric("team.bumps.per-bot-min", static_cast<double>(w.bumps) / bot_min, "per-min");
+  lab.metric("team.bumps.hard-per-bot-min", static_cast<double>(w.hard_bumps) / bot_min, "per-min");
+  for (const auto& [mode, n] : w.bumps_by_mode)
+    lab.metric("team.bumps." + mode + "-per-bot-min", static_cast<double>(n) / bot_min, "per-min");
+  for (const auto& [by, n] : w.bumps_by)
+    lab.metric("team.bumps.by-" + by + "-per-bot-min", static_cast<double>(n) / bot_min, "per-min");
+  for (size_t side = 0; side < 2 && lab.arg("sides") == "1"; side++) {
+    const double side_min = std::max(1.0, static_cast<double>(w.side_alive[side]) / (77.0 * 60));
+    const std::string k = std::string("team.side.") + (side == 0 ? "red." : "blue.");
+    lab.metric(k + "bumps.by-wall-per-bot-min", static_cast<double>(w.side_wall[side]) / side_min,
+               "per-min");
+    lab.metric(k + "bumps.by-player-per-bot-min",
+               static_cast<double>(w.side_player[side]) / side_min, "per-min");
+  }
+  {
+    gl::LabTable bt{"where they bump (a bot-minute's count; 64-unit cells)",
+                    {"by", "per bot-min", "at", "mode"},
+                    {}};
+    std::vector<std::pair<int, std::tuple<int, int, int, std::string, std::string>>> top;
+    top.reserve(w.bump_spots.size());
+    for (const auto& [spot, c] : w.bump_spots) top.push_back({-c, spot});
+    std::sort(top.begin(), top.end());
+    for (size_t i = 0; i < top.size() && i < 10; i++) {
+      const auto& [x, y, z, by, mode] = top[i].second;
+      bt.rows.push_back({by, to_fixed(-top[i].first / bot_min, 2),
+                         std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(z),
+                         mode});
+    }
+    lab.table(bt);
+  }
+  const double n = static_cast<double>(std::max<int64_t>(1, w.commands));
+  gl::LabTable st{"where they stand still (share of every command; 64-unit cells)",
+                  {"why", "share %", "at", "goal", "mode"},
+                  {}};
+  for (int k = 0; k < kStillKinds; k++) {
+    lab.metric(std::string("team.still.") + kStillNames[k] + "-share",
+               static_cast<double>(w.still[static_cast<size_t>(k)]) / n, "share");
+    std::vector<std::pair<int, std::tuple<int, int, int, std::string, std::string>>> top;
+    for (const auto& [spot, c] : w.spots[static_cast<size_t>(k)]) top.push_back({-c, spot});
+    std::sort(top.begin(), top.end());
+    for (size_t i = 0; i < top.size() && i < 5; i++) {
+      const auto& [x, y, z, goal, mode] = top[i].second;
+      st.rows.push_back({kStillNames[k], to_fixed(100.0 * -top[i].first / n, 1),
+                         std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(z),
+                         goal, mode});
+    }
+  }
+  lab.table(st);
+  double all_t = 0;
+  int64_t all_r = 0;
+  for (const auto& [by, tr] : w.writers) {
+    all_t += tr.first;
+    all_r += tr.second;
+  }
+  gl::LabTable vt{"the view by what turned it", {"writer", "time %", "reversals/s"}, {}};
+  for (const auto& [by, tr] : w.writers) {
+    const double share = all_t > 0 ? tr.first / all_t : 0;
+    const double rev = tr.first > 0 ? static_cast<double>(tr.second) / tr.first : 0;
+    vt.rows.push_back({by, to_fixed(100 * share, 1), to_fixed(rev, 2)});
+    lab.metric("team.view." + by + ".share", share, "share");
+    lab.metric("team.view." + by + ".reversals-per-s", rev, "per-s");
+  }
+  lab.table(vt);
+  lab.metric("team.view.reversals-per-s", all_t > 0 ? static_cast<double>(all_r) / all_t : 0,
+             "per-s");
+}
+
+void hop_metrics(gl::Lab& lab, const Watch& w) {
+  for (const sh::AimSkill k :
+       {sh::AimSkill::expert, sh::AimSkill::average, sh::AimSkill::novice, sh::AimSkill::perfect}) {
+    const HopSkill& s = w.skill[static_cast<size_t>(k)];
+    if (s.alive == 0) continue;
+    const std::string key = std::string("team.hop.") + sh::aim_skill_name(k) + ".";
+    const auto share = [](int64_t n, int64_t of) {
+      return of > 0 ? static_cast<double>(n) / static_cast<double>(of) : 0.0;
+    };
+    lab.metric(key + "share", share(s.hop, s.alive), "share");
+    lab.metric(key + "speed-p50", median(s.hop_speed), "units/s");
+    lab.metric(key + "fast-share", share(s.fast, s.alive), "share");
+    lab.metric(key + "flights", s.flights, "count");
+    lab.metric(key + "crash-share", share(s.crashes, s.flights), "share");
+    lab.metric(key + "gain-p50", median(s.gain), "units/s");
+    lab.metric(key + "takeoffs-360", s.takeoffs_360, "count");
+    lab.metric(key + "chained-share", share(s.chained, s.flights), "share");
+  }
+}
+
+// EVERY FLIGHT BY WHAT FLEW IT (`team.air.s380.<mode>.*`, a real map's match only): the match's
+// own recording read as se-moves reads people's (move_study.hpp, shooter/hops.hpp: each player's
+// track off the server's frames, its hops traced on the map's hulls), each flight of 0.3-1 s
+// taking off at 380-460 u/s put down to its bot's pilot mode at the takeoff: how many, the air's
+// gain (landing less takeoff speed) and the crashes (80 u/s or more lost). People hold their
+// speed there (gain -1 to +5 on dm2); the mode says which of the bots' ways loses it.
+void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
+                     const std::string& basedir, const std::string& game, const std::string& map,
+                     bool packed) {
+  if (basedir.empty() || r.mvd.empty() || packed) return;
+  namespace la = shooters_edge::labs;
+  std::string error;
+  la::StudyMap m;
+  la::DemoTracks dt;
+  if (!la::load_study_map("", basedir, game, map, m, error) ||
+      !la::read_demo_tracks(r.mvd, dt, error)) {
+    lab.note("flights by mode: not read: " + error);
+    return;
+  }
+  // The recording's clock against the fighters' (the server's): both end with the match.
+  const double offset = w.t_last - dt.seconds;
+  lab.note("flights by mode: the recording's clock + " + to_fixed(offset, 2) + " s = the server's");
+  std::map<std::string, std::vector<float>> gain;
+  const sh::HopSettings hs;
+  for (size_t slot = 0; slot < dt.tracks.size(); slot++) {
+    size_t k = r.players.size();
+    for (size_t j = 0; j < r.players.size(); j++)
+      if (r.players[j].name == dt.names[slot]) k = j;
+    if (k >= r.players.size() || k >= w.modes.size() || dt.tracks[slot].size() < 3) continue;
+    sh::HopReading hr;
+    sh::read_hops(dt.tracks[slot], *m.world, hs, hr);
+    const auto& ml = w.modes[k];
+    for (const sh::Hop& h : hr.hops) {
+      if (h.air_s < 0.3f || h.air_s > 1.0f || h.speed_off < 380 || h.speed_off >= 460) continue;
+      const double t = hr.frames[static_cast<size_t>(h.takeoff)].t + offset;
+      const char* mode = "-";
+      for (const auto& [at, name] : ml) {
+        if (at > t) break;
+        mode = name;
+      }
+      gain[mode].push_back(h.speed_land - h.speed_off);
+    }
+  }
+  gl::LabTable at{"flights taking off at 380-460 u/s (0.3-1 s up), by the pilot's mode then",
+                  {"mode", "flights", "gain p50", "crash %"},
+                  {}};
+  for (const auto& [mode, g] : gain) {
+    int crashes = 0;
+    for (const float x : g) crashes += x < -80 ? 1 : 0;
+    const double crash = static_cast<double>(crashes) / static_cast<double>(g.size());
+    at.rows.push_back(
+        {mode, std::to_string(g.size()), to_fixed(median(g), 1), to_fixed(100 * crash, 1)});
+    lab.metric("team.air.s380." + mode + ".flights", static_cast<double>(g.size()), "count");
+    lab.metric("team.air.s380." + mode + ".gain-p50", median(g), "units/s");
+    lab.metric("team.air.s380." + mode + ".crash-share", crash, "share");
+  }
+  lab.table(at);
+}
+
+// The pilot's link toward its route's next node, by kind ("walk", "jump"...), or "-".
+const char* link_of(const sh::Pilot& p) {
+  if (p.g == nullptr || p.k + 1 >= p.route.size()) return "-";
+  const sh::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
+  for (int32_t q = 0; q < a.links; q++) {
+    const sh::NavLink& l = p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
+    if (l.to == p.route[p.k + 1]) return sh::nav_kind_name(l.kind);
+  }
+  return "-";
+}
+
+// The decision log written (`--why`): the bots' names, the deaths as entries beside the rest.
+void write_why(gl::Lab& lab, shooters_edge::labs::WhyLog& log, const cn::TeamMatchReport& r) {
+  for (size_t k = 0; k < r.players.size() && k < log.names.size(); k++)
+    log.names[k] = r.players[k].name;
+  std::vector<shooters_edge::labs::WhyEntry> deaths;
+  for (const std::string& l : r.deaths) {
+    // t, player, at, liquid, mode, link, ... (classic_team.cpp)
+    std::vector<std::string> f;
+    for (size_t i = 0, j; i <= l.size() && f.size() < 6; i = j + 1) {
+      j = std::min(l.find('\t', i), l.size());
+      f.push_back(l.substr(i, j - i));
+    }
+    if (f.size() < 6) continue;
+    deaths.push_back({std::strtod(f[0].c_str(), nullptr), f[1], "death", "died", f[3], f[4],
+                      std::nan(""), "at=" + f[2] + " link=" + f[5]});
+  }
+  if (!shooters_edge::labs::write_why_log(lab.arg("why"), log, deaths)) {
+    lab.fail("se-team: cannot write --why=" + lab.arg("why"),
+             "next: pass a path in a folder that exists");
+    return;
+  }
+  lab.note("se-team: the decision log is " + lab.arg("why") + " (" +
+           std::to_string(log.entries.size() + deaths.size()) +
+           " entries); read it with: labs se-why --file=" + lab.arg("why") +
+           " --bot=<name> --at=<m:ss>");
+}
 
 void run(gl::Lab& lab) {
   const auto seed = static_cast<uint32_t>(lab.arg_num("seed"));
@@ -195,9 +561,12 @@ void run(gl::Lab& lab) {
   }
   const std::string save = lab.arg("save");
   o.packed = save.ends_with("z");  // a `.mvdz`: recorded packed as it goes
-  // THE TRACE (`--trace=<file>`): a TSV row per bot every `--trace-every` commands: where it is,
-  // how fast, what it means to do and what its pilot did and why. Read by the bot plan's scripts.
+  // EVERY COMMAND OF EVERY BOT, watched: the hop measured by skill (below, `team.hop.*`), and THE
+  // TRACE (`--trace=<file>`): a TSV row per bot every `--trace-every` commands: where it is, how
+  // fast, what it means to do and what its pilot did and why. Both this run's own: a set
+  // (--seeds) runs several matches at once.
   std::ofstream trace;
+  Watch watch;
   if (!lab.arg("trace").empty()) {
     trace.open(lab.arg("trace"));
     if (!trace) {
@@ -207,48 +576,79 @@ void run(gl::Lab& lab) {
     }
     trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
              "\tscript_step\tbecause\tyaw\tpitch\tview\n";
-    const int every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
-    static struct Tracer {
-      std::ofstream* out = nullptr;
-      int every = 4;
-      std::array<int, 64> count{};
-    } tracer;
-    tracer = Tracer{&trace, every, {}};
-    o.on_command_ctx = &tracer;
-    o.on_command = [](void* ctx, int k, const shooters_edge::bots::Fighter& f,
-                      const shooters_edge::server::RulesCommon& w, const sh::MoveCmd& cmd) {
-      Tracer& tr = *static_cast<Tracer*>(ctx);
-      if (k < 0 || k >= 64 || (tr.count[static_cast<size_t>(k)]++ % tr.every) != 0) return;
-      std::ofstream& out = *tr.out;
-      // The fighter's own entity is its slot's (not the client's player number).
-      const auto& e = w.world.entities[static_cast<size_t>(f.slot) + 1];
-      const sh::Pilot& p = f.bot.pilot.pilot;
-      const char* link = "-";
-      if (p.g != nullptr && p.k + 1 < p.route.size()) {
-        const sh::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
-        for (int32_t q = 0; q < a.links; q++) {
-          const sh::NavLink& l =
-              p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
-          if (l.to == p.route[p.k + 1]) {
-            link = sh::nav_kind_name(l.kind);
-            break;
-          }
-        }
-      }
-      const char* goal =
-          f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
-              ? shooters_edge::bots::item_call(f.items[static_cast<size_t>(f.goal_item)])
-              : "-";
-      const float sp = std::sqrt(e.velocity.x * e.velocity.x + e.velocity.y * e.velocity.y);
-      out << to_fixed(w.sv.time, 2) << '\t' << k << '\t' << to_fixed(e.origin.x, 0) << '\t'
-          << to_fixed(e.origin.y, 0) << '\t' << to_fixed(e.origin.z - 24, 0) << '\t'
-          << to_fixed(sp, 0) << '\t' << to_fixed(e.health, 0) << '\t'
-          << shooters_edge::bots::fight_mode_name(f.mode) << '\t' << goal << '\t' << f.goal_node
-          << '\t' << (f.unlocking ? 1 : 0) << '\t' << sh::pilot_mode_name(p.mode) << '\t' << link
-          << '\t' << p.script_step << '\t' << p.because << '\t' << to_fixed(cmd.angles.y, 2) << '\t'
-          << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by << '\n';
-    };
+    watch.out = &trace;
+    watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
+  // THE DECISION LOG (`--why=<file>`, labs/why_log.hpp): every fighter's decisions recorded, kept
+  // when they change, with the speed lost to walls and players and the deaths, on the
+  // recording's clock; written at the match's end, read with the se-why lab.
+  shooters_edge::labs::WhyLog why_log;
+  if (!lab.arg("why").empty()) {
+    o.why = &why_log.why;
+    watch.log = &why_log;
+  }
+  o.on_command_ctx = &watch;
+  o.on_command = [](void* ctx, int k, const shooters_edge::bots::Fighter& f,
+                    const shooters_edge::server::RulesCommon& w, const sh::MoveCmd& cmd) {
+    Watch& tr = *static_cast<Watch*>(ctx);
+    if (k < 0 || k >= 64) return;
+    // The fighter's own entity is its slot's (not the client's player number).
+    const auto& e = w.world.entities[static_cast<size_t>(f.slot) + 1];
+    const sh::Pilot& p = f.bot.pilot.pilot;
+    const float sp = std::sqrt(e.velocity.x * e.velocity.x + e.velocity.y * e.velocity.y);
+    watch_hop(tr, k, f.skill, e.health > 0, p.mode == sh::PilotMode::hop, p.because, sp);
+    watch_still(tr, f, p, sp, e.origin.x, e.origin.y, e.origin.z - 24);
+    const auto i = static_cast<size_t>(k);
+    const bool bumped = e.health > 0 && tr.moved[i] && tr.last_speed[i] - sp >= 120;
+    const char* by = !bumped ? ""
+                     : e.health < tr.last_health[i]
+                         ? "hit"
+                         : bump_by(w.sv, f.slot + 1, e.origin, tr.last_vel[i]);
+    if (tr.log != nullptr)
+      tr.log->take(k, w.sv.time, sp, sh::pilot_mode_name(p.mode), link_of(p), e.origin.x,
+                   e.origin.y, e.origin.z - 24, by);
+    watch_view(tr, k, w.sv.time, cmd.angles.y, f.bot.view_by);
+    if (e.health > 0) {
+      tr.alive_commands++;
+      const size_t side = f.team != nullptr && f.team->name == "blue" ? 1 : 0;
+      tr.side_alive[side]++;
+      if (bumped && std::string_view(by) == "wall") tr.side_wall[side]++;
+      if (bumped && std::string_view(by) == "player") tr.side_player[side]++;
+      if (bumped) {
+        tr.bumps++;
+        if (sp < 100) tr.hard_bumps++;
+        tr.bumps_by_mode[sh::pilot_mode_name(p.mode)]++;
+        tr.bumps_by[by]++;
+        const auto cell = [](float v, int g) {
+          return static_cast<int>(std::lround(v / static_cast<float>(g))) * g;
+        };
+        tr.bump_spots[{cell(e.origin.x, 64), cell(e.origin.y, 64), cell(e.origin.z - 24, 32), by,
+                       sh::pilot_mode_name(p.mode)}]++;
+      }
+    }
+    tr.last_speed[i] = sp;
+    tr.last_vel[i] = {e.velocity.x, e.velocity.y, 0};
+    tr.last_health[i] = e.health;
+    tr.moved[i] = e.health > 0;
+    auto& ml = tr.modes[static_cast<size_t>(k)];
+    const char* mode = sh::pilot_mode_name(p.mode);
+    if (ml.empty() || ml.back().second != mode) ml.push_back({w.sv.time, mode});
+    tr.t_last = std::max(tr.t_last, w.sv.time);
+    if (tr.out == nullptr || (tr.count[static_cast<size_t>(k)]++ % tr.every) != 0) return;
+    std::ofstream& out = *tr.out;
+    const char* link = link_of(p);
+    const char* goal =
+        f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
+            ? shooters_edge::bots::item_call(f.items[static_cast<size_t>(f.goal_item)])
+            : "-";
+    out << to_fixed(w.sv.time, 2) << '\t' << k << '\t' << to_fixed(e.origin.x, 0) << '\t'
+        << to_fixed(e.origin.y, 0) << '\t' << to_fixed(e.origin.z - 24, 0) << '\t'
+        << to_fixed(sp, 0) << '\t' << to_fixed(e.health, 0) << '\t'
+        << shooters_edge::bots::fight_mode_name(f.mode) << '\t' << goal << '\t' << f.goal_node
+        << '\t' << (f.unlocking ? 1 : 0) << '\t' << sh::pilot_mode_name(p.mode) << '\t' << link
+        << '\t' << p.script_step << '\t' << p.because << '\t' << to_fixed(cmd.angles.y, 2) << '\t'
+        << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by << '\n';
+  };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
   if (!r.ok) {
@@ -256,6 +656,10 @@ void run(gl::Lab& lab) {
     return;
   }
   const double secs = r.seconds;
+  hop_metrics(lab, watch);
+  still_view_metrics(lab, watch);
+  flights_by_mode(lab, watch, r, basedir, lab.arg("game"), name, o.packed);
+  if (watch.log != nullptr) write_why(lab, why_log, r);
 
   // The table.
   static const char* kWeapon[9] = {
@@ -407,6 +811,16 @@ void run(gl::Lab& lab) {
          std::to_string(p.off_graph), share(1), share(5), share(8), share(0), share(4), share(9)});
   }
   lab.table(pt);
+  {
+    // The pilots' stuck and waits over every player: how often the legs failed the plan.
+    int64_t stuck = 0, waits = 0;
+    for (const cn::TeamPlayer& p : r.players) {
+      stuck += p.stuck;
+      waits += p.waits;
+    }
+    lab.metric("team.stuck", static_cast<double>(stuck), "count");
+    lab.metric("team.waits", static_cast<double>(waits), "count");
+  }
   gl::LabTable tt{
       "each team",
       {"team", "frags", "deaths", "quads taken", "rushes", "shots held", "callouts", "messages"},
@@ -674,6 +1088,21 @@ void run(gl::Lab& lab) {
         "before)\n";
     for (const std::string& l : r.deaths) dl += l + "\n";
     lab.attach("deaths.tsv", std::vector<uint8_t>(dl.begin(), dl.end()), gl::Det::deterministic);
+    // The deaths in a liquid (a row's fourth field): in lava or slime, the legs' fault.
+    for (const std::string_view liquid : {"lava", "slime", "water"}) {
+      int n = 0;
+      for (const std::string& l : r.deaths) {
+        size_t from = 0;
+        for (int field = 0; field < 3 && from != std::string::npos; field++) {
+          from = l.find('\t', from);
+          if (from != std::string::npos) from++;
+        }
+        if (from == std::string::npos) continue;
+        const size_t to = l.find('\t', from);
+        if (std::string_view(l).substr(from, to - from) == liquid) n++;
+      }
+      lab.metric("team.deaths-in." + std::string(liquid), n, "count");
+    }
     std::vector<std::pair<int, std::string>> by;
     by.reserve(how.size());
     for (const auto& [k, v] : how) by.push_back({-v, k});
@@ -795,7 +1224,7 @@ void run(gl::Lab& lab) {
     bool differ = lab.arg("sides") == "1";
     for (const cn::TeamPlayer& p : r.players) differ |= p.features != r.players.front().features;
     for (int side = 0; side < 2 && differ; side++) {
-      double dmg = 0, react = 0, s_fired = 0, s_hit = 0;
+      double dmg = 0, react = 0, s_fired = 0, s_hit = 0, s_speed = 0;
       int64_t n = 0, reactions = 0, s_pre = 0, view_n = 0, in_view = 0, seen = 0, checks = 0,
               off = 0, shots = 0, deaths = 0, s_wet = 0, s_alive = 0;
       for (const cn::TeamPlayer& p : r.players) {
@@ -814,6 +1243,7 @@ void run(gl::Lab& lab) {
         deaths += p.deaths;
         s_wet += p.wet;
         for (int m = 0; m < 4; m++) s_alive += p.mode_commands[m];
+        s_speed += p.speed_sum;
         for (const cn::HitCount& h : p.hits) {
           s_fired += static_cast<double>(h.fired);
           s_hit += static_cast<double>(h.hit);
@@ -822,6 +1252,7 @@ void run(gl::Lab& lab) {
       const auto ratio = [](double a, double b) { return b > 0 ? a / b : 0; };
       const std::string k = std::string("team.side.") + (side == 0 ? "red." : "blue.");
       lab.metric(k + "deaths", static_cast<double>(deaths), "count");
+      lab.metric(k + "speed-avg", ratio(s_speed, static_cast<double>(s_alive)), "units/s");
       lab.metric(k + "wet", ratio(static_cast<double>(s_wet), static_cast<double>(s_alive)),
                  "share");
       lab.metric(k + "damage-per-min", ratio(dmg, secs / 60 * static_cast<double>(n)), "per-min");
@@ -1137,6 +1568,232 @@ void run(gl::Lab& lab) {
   }
 }
 
+// THE SET (`--seeds=1-6`, `--variants="name:flags;name:flags"`): the A/B a bot change is judged by
+// (the bots skill, § Shooter's Edge's bot plan). Every variant's match on every seed, each a child
+// run of this lab with its own flags (the variant's over this run's, `--seed` the seed's), all in
+// parallel on `--jobs` threads (a match is one thread; matches share nothing), read only once
+// every one is done. Reported: each variant's means over its seeds as `<variant>.<metric>` (the
+// metric's own key when there are no variants), the A/B table (frags by side, red-blue, frags a
+// minute, damage, accuracy, the key items lying, speed, wet, the pilots' stuck and waits), and a
+// row a seed. `{seed}` and `{variant}` in any flag's value (`--trace=<work>/t{variant}{seed}.tsv`,
+// `--save`) are replaced per run. A head to head reads red-blue against the both-with variant's
+// red-blue: the sides are not even.
+struct SetRun {
+  std::string variant;
+  int seed = 0;
+  std::vector<std::pair<std::string, std::string>> args;
+  std::vector<gl::Metric> metrics;
+  std::vector<std::string> failures;
+};
+
+// "1-6", "1,3,5" or "7-9,12" as the seeds, in order; empty when it does not read.
+std::vector<int> parse_seeds(const std::string& text) {
+  std::vector<int> out;
+  size_t at = 0;
+  while (at < text.size()) {
+    const size_t end = std::min(text.find(',', at), text.size());
+    const std::string part = text.substr(at, end - at);
+    const size_t dash = part.find('-');
+    const int lo = std::atoi(part.substr(0, dash).c_str());
+    const int hi = dash == std::string::npos ? lo : std::atoi(part.substr(dash + 1).c_str());
+    if (lo <= 0 || hi < lo || hi - lo > 1000) return {};
+    for (int s = lo; s <= hi; s++) out.push_back(s);
+    at = end + 1;
+  }
+  return out;
+}
+
+// A variant's flags ("--features=-hop --sides=1") as name/value pairs; false on a word that is no
+// `--name=value` or `--name`.
+bool parse_flags(const std::string& text, std::vector<std::pair<std::string, std::string>>& out) {
+  size_t at = 0;
+  while (at < text.size()) {
+    if (text[at] == ' ') {
+      at++;
+      continue;
+    }
+    const size_t end = std::min(text.find(' ', at), text.size());
+    const std::string word = text.substr(at, end - at);
+    if (!word.starts_with("--") || word.size() < 3) return false;
+    const size_t eq = word.find('=');
+    out.emplace_back(word.substr(2, eq == std::string::npos ? std::string::npos : eq - 2),
+                     eq == std::string::npos ? "1" : word.substr(eq + 1));
+    at = end;
+  }
+  return true;
+}
+
+std::string replaced(std::string v, const std::string& variant, int seed) {
+  for (const auto& [from, to] :
+       {std::pair<std::string, std::string>{"{seed}", std::to_string(seed)},
+        {"{variant}", variant}}) {
+    for (size_t at = v.find(from); at != std::string::npos; at = v.find(from, at + to.size()))
+      v.replace(at, from.size(), to);
+  }
+  return v;
+}
+
+void run_set(gl::Lab& lab) {
+  const std::vector<int> seeds =
+      parse_seeds(lab.arg("seeds").empty() ? lab.arg("seed") : lab.arg("seeds"));
+  if (seeds.empty()) {
+    lab.fail("se-team: --seeds=" + lab.arg("seeds") + " reads as no seeds",
+             "next: --seeds=1-6, --seeds=1,3,5 or --seeds=7-12 (seeds from 1)");
+    return;
+  }
+  // The variants, in the order given; none: one variant of this run's own flags.
+  std::vector<std::pair<std::string, std::vector<std::pair<std::string, std::string>>>> variants;
+  const std::string& list = lab.arg("variants");
+  for (size_t at = 0; at < list.size();) {
+    const size_t end = std::min(list.find(';', at), list.size());
+    const std::string item = list.substr(at, end - at);
+    const size_t colon = item.find(':');
+    std::vector<std::pair<std::string, std::string>> flags;
+    if (colon == 0 || colon == std::string::npos || !parse_flags(item.substr(colon + 1), flags)) {
+      lab.fail("se-team: --variants: '" + item + "' is no name:flags",
+               "next: --variants=\"on:--sides=1;off:--features=-hop --sides=1\" (a name, a colon, "
+               "then the flags the variant changes; variants apart by ';')");
+      return;
+    }
+    variants.emplace_back(item.substr(0, colon), std::move(flags));
+    at = end + 1;
+  }
+  const bool named = !variants.empty();
+  if (!named) variants.emplace_back("set", std::vector<std::pair<std::string, std::string>>{});
+
+  std::vector<SetRun> runs;
+  for (const auto& [name, flags] : variants) {
+    for (const int seed : seeds) {
+      SetRun s{name, seed, {}, {}, {}};
+      for (const auto& [k, v] : lab.args()) {
+        if (k == "seeds" || k == "variants" || k == "jobs") continue;
+        s.args.emplace_back(k, k == "seed" ? std::to_string(seed) : v);
+      }
+      for (const auto& [k, v] : flags) {
+        bool found = false;
+        for (auto& [ak, av] : s.args)
+          if (ak == k) {
+            av = v;
+            found = true;
+          }
+        if (!found) s.args.emplace_back(k, v);
+      }
+      for (auto& [k, v] : s.args) v = replaced(v, name, seed);
+      runs.push_back(std::move(s));
+    }
+  }
+  // Each run on the next free thread; a child draws no pictures (only_shots of none).
+  const int jobs =
+      std::max(1, lab.arg_num("jobs") > 0 ? static_cast<int>(lab.arg_num("jobs"))
+                                          : static_cast<int>(std::thread::hardware_concurrency()));
+  std::atomic<size_t> next{0};
+  const auto work = [&] {
+    for (size_t i = next++; i < runs.size(); i = next++) {
+      SetRun& s = runs[i];
+      gl::Lab child(lab.spec(), s.args);
+      child.only_shots({"-"});
+      run(child);
+      s.metrics = child.metrics();
+      s.failures = child.failures();
+    }
+  };
+  {
+    std::vector<std::thread> pool;
+    for (int k = 1; k < std::min<int>(jobs, static_cast<int>(runs.size())); k++)
+      pool.emplace_back(work);
+    work();
+    for (std::thread& t : pool) t.join();
+  }
+  for (const SetRun& s : runs)
+    for (const std::string& f : s.failures)
+      lab.fail("se-team: variant " + s.variant + ", seed " + std::to_string(s.seed) + ": " + f,
+               "next: run that one alone: se-team --seed=" + std::to_string(s.seed) +
+                   " with the variant's flags");
+
+  // Each variant's mean of every metric all its seeds report, in the first run's order.
+  const auto value = [](const SetRun& s, const std::string& key, double& out) {
+    for (const gl::Metric& m : s.metrics)
+      if (m.key == key) {
+        out = m.value;
+        return true;
+      }
+    return false;
+  };
+  std::map<std::string, std::map<std::string, double>> means;
+  for (const auto& [name, flags] : variants) {
+    const SetRun* first = nullptr;
+    for (const SetRun& s : runs)
+      if (s.variant == name && first == nullptr) first = &s;
+    for (const gl::Metric& m : first->metrics) {
+      double sum = 0;
+      int n = 0;
+      for (const SetRun& s : runs) {
+        double v = 0;
+        if (s.variant == name && value(s, m.key, v)) {
+          sum += v;
+          n++;
+        }
+      }
+      if (n != static_cast<int>(seeds.size())) continue;
+      const double mean = sum / n;
+      means[name][m.key] = mean;
+      lab.metric(named ? name + "." + m.key : m.key, mean, m.unit, m.det);
+    }
+  }
+  // THE A/B TABLE: a row a variant.
+  static constexpr std::pair<const char*, const char*> kCols[] = {
+      {"red", "team.red.frags"},
+      {"blue", "team.blue.frags"},
+      {"fpm", "team.frags-per-minute"},
+      {"dmg", "team.damage-per-min"},
+      {"acc", "team.accuracy"},
+      {"ya", "team.lying.ya"},
+      {"ya.going", "team.lying.ya.going"},
+      {"ya.near", "team.lying.ya.near"},
+      {"mh", "team.lying.mh"},
+      {"rl", "team.lying.rl"},
+      {"speed", "team.speed-avg"},
+      {"wet", "team.wet"},
+      {"stuck", "team.stuck"},
+      {"waits", "team.waits"}};
+  gl::LabTable ab{
+      "the set: each variant's means over seeds " + lab.arg("seeds"), {"variant", "red-blue"}, {}};
+  for (const auto& [label, key] : kCols) ab.columns.emplace_back(label);
+  for (const auto& [name, flags] : variants) {
+    const std::map<std::string, double>& m = means[name];
+    const auto get = [&](const char* key) {
+      const auto it = m.find(key);
+      return it == m.end() ? std::string("-") : to_fixed(it->second, 2);
+    };
+    std::vector<std::string> row{name};
+    const auto r = m.find("team.red.frags"), b = m.find("team.blue.frags");
+    row.push_back(r == m.end() || b == m.end() ? "-" : to_fixed(r->second - b->second, 1));
+    for (const auto& [label, key] : kCols) row.push_back(get(key));
+    ab.rows.push_back(std::move(row));
+  }
+  lab.table(ab);
+  // A row a run: the frags by side and a minute, so a seed that swings the mean is seen.
+  gl::LabTable each{"the set: each run", {"variant", "seed", "red", "blue", "fpm", "speed"}, {}};
+  for (const SetRun& s : runs) {
+    std::vector<std::string> row{s.variant, std::to_string(s.seed)};
+    for (const char* key :
+         {"team.red.frags", "team.blue.frags", "team.frags-per-minute", "team.speed-avg"}) {
+      double v = 0;
+      row.push_back(value(s, key, v) ? to_fixed(v, 2) : "-");
+    }
+    each.rows.push_back(std::move(row));
+  }
+  lab.table(each);
+}
+
+// One match, or a set when `--seeds` or `--variants` asks for one.
+void run_entry(gl::Lab& lab) {
+  if (!lab.arg("seeds").empty() || !lab.arg("variants").empty())
+    run_set(lab);
+  else
+    run(lab);
+}
+
 const gl::LabSpec kSpec{
     "se-team",
     gl::LabKind::scenario,
@@ -1150,6 +1807,14 @@ const gl::LabSpec kSpec{
     {
         {"minutes", "10", "the match's length"},
         {"seed", "1", "the mod's and the fighters' seed"},
+        {"seeds", "",
+         "a set: a match a seed (1-6, 1,3,5), in parallel, their means and the A/B table; empty: "
+         "one match on --seed"},
+        {"variants", "",
+         "a set's variants, name:flags apart by ';' (\"on:--sides=1;off:--features=-hop "
+         "--sides=1\"): every seed played by each; {seed} and {variant} in a flag's value are "
+         "replaced per run"},
+        {"jobs", "0", "a set's matches at once (0: one a hardware thread)"},
         {"basedir", "", "a folder holding a game folder: play one of its maps"},
         {"game", ge::classicenhance::kProfiles[0].base_dir.data(),
          "the game folder under --basedir"},
@@ -1171,6 +1836,8 @@ const gl::LabSpec kSpec{
         {"features-blue", "", "blue's features over --features"},
         {"trace", "",
          "a TSV of every bot's state each --trace-every commands (the bot plan's scripts)"},
+        {"why", "",
+         "write the bots' decision log here (labs/why_log.hpp; read it with the se-why lab)"},
         {"trace-every", "4", "--trace's row every this many commands of a bot (77 a second)"},
         {"sides", "0",
          "1: each side's fight apart (damage, accuracy, sightings, what it did not see), as when "
@@ -1191,7 +1858,7 @@ const gl::LabSpec kSpec{
          "(scattergun, double, spiker, heavy, grenades, rockets, arc); empty: a normal match"},
     },
     "--minutes=0.5",
-    run,
+    run_entry,
 };
 GE_LAB(kSpec);
 

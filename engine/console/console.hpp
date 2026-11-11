@@ -147,6 +147,13 @@ class Console {
   // A host's reader tried after the directories find nothing (a game's packs, say); the
   // directories still come first and writes still go to the first of them.
   void set_fallback_reader(Reader read);
+  // A SESSION'S OWN CONFIG (a game's `-config <file>`): `config.cfg` is read from and written to
+  // this file in place of the search directories' (startup, `cfg_save`, `cfg_load`, a game's
+  // save of its settings), and the startup skips `autoexec.cfg`, so a session (a measurement, a
+  // test) neither reads nor touches the player's own. A file not there yet starts from the
+  // defaults and is made by the first save. Empty: the player's, as always.
+  void set_config_file(std::filesystem::path file) { config_ = std::move(file); }
+  const std::filesystem::path& config_file() const { return config_; }
   // A host's own command set past the console's: a line whose first word is no command, cvar or
   // alias goes to `run` (the whole line, as typed) and is not refused when it returns true (a
   // window driving bots takes `skill expert` and `bot1 skill expert`). Null: refused as unknown.
@@ -254,6 +261,7 @@ class Console {
   std::map<std::string, Origin> created_;
   std::deque<Entry> buffer_;
   std::vector<std::filesystem::path> search_;
+  std::filesystem::path config_;  // the session's config.cfg, or empty
   Reader reader_;
   Reader fallback_;
   std::function<bool(const Args&)> unknown_;

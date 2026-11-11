@@ -18,6 +18,7 @@
 #include <set>
 #include <string>
 
+#include "ai/why.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "golden.hpp"
@@ -53,8 +54,10 @@ const Halls& halls() {
   return h;
 }
 
-cn::TeamMatchReport match(int frames, uint32_t seed, bool record, int32_t drill = 0) {
+cn::TeamMatchReport match(int frames, uint32_t seed, bool record, int32_t drill = 0,
+                          ge::ai::Why* why = nullptr) {
   cn::TeamMatchOptions o;
+  o.why = why;
   o.drill = drill;
   o.map = halls().bsp;
   o.map_name = "halls";
@@ -189,6 +192,20 @@ TEST(a_weapon_drill_fires_only_its_weapon) {
       }
     }
   CHECK_MSG(doubles > 0, "no double was fired in its drill");
+}
+
+// The decision record decides nothing (engine/ai/why.hpp): a match with every fighter's decisions
+// recorded (se-team --why's decision log) plays to the same bits as one without.
+TEST(a_team_game_recorded_for_its_decisions_plays_the_same) {
+  CHECK_MSG(halls().ok, halls().error);
+  if (!halls().ok) return;
+  ge::ai::Why why;
+  const cn::TeamMatchReport off = match(600, 5, false), on = match(600, 5, false, 0, &why);
+  CHECK_MSG(off.ok && on.ok, off.error + on.error);
+  CHECK_MSG(off.digest == on.digest,
+            "a team game with its decisions recorded played differently: a fighter branches on "
+            "its Why; compute the choice first, record it after (the bots skill, the rule)");
+  CHECK_MSG(!why.decisions().empty(), "no fighter recorded a decision on the Why it was handed");
 }
 
 TEST(a_team_game_replays_to_the_bit_and_matches_its_golden) {

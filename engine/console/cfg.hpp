@@ -2,7 +2,9 @@
 //
 // STARTUP (`start`): `default.cfg` (the game's shipped defaults and binds), then `config.cfg`
 // (what `cfg_save` last wrote), then `autoexec.cfg` (the player's own, never written by the game),
-// then the command line's `+commands`. A file that is not there is skipped silently; every other
+// then the command line's `+commands`; with a session's own config (`Console::set_config_file`)
+// that file is the config.cfg read and written, and autoexec.cfg is skipped. A file that is not
+// there is skipped silently; every other
 // problem is the console's (file and line). A dedicated server reads `server.cfg` in place of the
 // first three (`start_server`).
 //
