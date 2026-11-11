@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <string_view>
 #include <vector>
 
@@ -126,6 +127,19 @@ void print_to(SequelServer& s, int slot, std::string text) {
   event(s, std::move(ev));
 }
 
+// A body thrown apart at `at`: its sound from entity `ent` and the blood.
+void gib(SequelServer& s, int ent, sh::Vec3f at) {
+  sound(s, ent, at, kGib);
+  NetEvent ev;
+  ev.kind = EventKind::point_effect;
+  ev.to = kEveryone;
+  ev.origin = at;
+  ev.values[1] = 1;
+  ev.values[3] = 32;
+  ev.text = "te_blood";
+  event(s, std::move(ev));
+}
+
 void print_all(SequelServer& s, std::string text) {
   NetEvent ev;
   ev.kind = EventKind::print;
@@ -228,6 +242,9 @@ int power_save(SequelPlayer& p, sh::Vec3f dir, int damage) {
 void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, int knockback,
           bool energy, int weapon, bool no_armour = false, bool past_invulnerable = false) {
   if (!fightable(s, target) || damage <= 0) return;
+  // A teammate's blow does nothing with `dmflags` 256 (no friendly fire) but push.
+  if (attacker >= 0 && attacker != target && fight_teammates(s, attacker, target) && dmflag(s, 256))
+    damage = 0;
   SequelPlayer& p = s.players[target];
   if (!deathmatch(s) && skill(s) == 0) damage = std::max(1, damage / 2);
   const bool along = sh::normalize(dir) > 0;
@@ -235,6 +252,7 @@ void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, 
     const float push = sq_knockback(knockback, kMass, attacker == target);
     pack(p.move.velocity, unpack(p.move.velocity) + dir * push);
   }
+  if (damage == 0) return;                                                // the push lands
   if (p.invulnerable_until > s.level_time && !past_invulnerable) return;  // the push lands
   int saved = 0;
   if (!no_armour) {
@@ -275,6 +293,17 @@ void blast(SequelServer& s, sh::Vec3f at, int attacker, int damage, float radius
     const float d = sh::length(mid - at);
     const float points = float(damage) - 0.5f * d;
     if (points > 0) map_damage(s, static_cast<int>(e), attacker, static_cast<int>(points));
+  }
+  // The bodies left behind: thrown apart under −40.
+  for (SequelBody& b : s.bodies) {
+    if (!b.live) continue;
+    const float points = float(damage) - 0.5f * sh::length(b.origin - at);
+    if (points <= 0) continue;
+    b.health -= points;
+    if (b.health < kGibHealth) {
+      b.live = false;
+      gib(s, 0, b.origin);
+    }
   }
 }
 
@@ -687,6 +716,8 @@ bool fight_limits(SequelServer& s) {
 void fight_clear(SequelServer& s) {
   for (SequelMissile& m : s.missiles) m = SequelMissile{};
   for (SequelDrop& d : s.drops) d = SequelDrop{};
+  for (SequelBody& b : s.bodies) b = SequelBody{};
+  s.next_body = 0;
   s.obituaries.clear();
 }
 
@@ -839,7 +870,7 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
   const std::string& victim = name_of(s, slot);
   std::string line;
   if (killer >= 0 && killer != slot) {
-    s.players[killer].frags += 1;
+    s.players[killer].frags += fight_teammates(s, killer, slot) ? -1.0f : 1.0f;
     std::string words = obituary(weapon);
     words.replace(words.find('%'), 1, name_of(s, killer));
     line = victim + words;
@@ -876,15 +907,7 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
   const sh::Vec3f at = unpack(p.move.origin);
   if (p.health < kGibHealth) {  // thrown apart: the body is gone
     p.gibbed = true;
-    sound(s, slot + 1, at, kGib);
-    NetEvent ev;
-    ev.kind = EventKind::point_effect;
-    ev.to = kEveryone;
-    ev.origin = at;
-    ev.values[1] = 1;
-    ev.values[3] = 32;
-    ev.text = "te_blood";
-    event(s, std::move(ev));
+    gib(s, slot + 1, at);
   }
   // In deathmatch the weapon in hand (not the blaster, only with its ammo) is dropped, and the quad
   // with more than 1 s left when `dmflags` 16384 says so, the two thrown 22.5 degrees apart.
@@ -1036,7 +1059,22 @@ void fight_rows(SequelServer& s) {
     n.current_ammo = r.ammo == SqAmmo::none ? 0 : float(p.body.ammo[static_cast<int>(r.ammo)]);
   }
   const size_t first = fight_first_row(s);
-  if (w.entities.size() < first + kSequelMissiles + kSequelDrops) return;
+  if (w.entities.size() < first + kSequelMissiles + kSequelDrops + kSequelBodies) return;
+  for (int k = 0; k < kSequelBodies; k++) {
+    const SequelBody& b = s.bodies[k];
+    WorldEntity& e = w.entities[first + kSequelMissiles + kSequelDrops + size_t(k)];
+    e = WorldEntity{};
+    if (!b.live) continue;
+    e.free = false;
+    e.origin = b.origin;
+    e.angles = {0, b.yaw, 0};
+    e.mins = {-16, -16, -24};
+    e.maxs = {16, 16, -8};
+    e.absmin = e.origin + e.mins;
+    e.absmax = e.origin + e.maxs;
+    e.health = b.health;
+    e.modelindex = static_cast<int>(s.models.size()) - 1;  // the player's model, last
+  }
   for (int k = 0; k < kSequelDrops; k++) {
     const SequelDrop& d = s.drops[k];
     WorldEntity& e = w.entities[first + kSequelMissiles + size_t(k)];
@@ -1063,6 +1101,73 @@ void fight_rows(SequelServer& s) {
                 0};
     e.modelindex = s.missile_models[static_cast<int>(m.kind)];
   }
+}
+
+namespace {
+
+// The part of `skin` ("model/skin") that names a team: the skin after the slash, or the model.
+std::string team_part(const std::string& skin, bool by_model) {
+  const size_t slash = skin.find('/');
+  if (by_model) return slash == std::string::npos ? skin : skin.substr(0, slash);
+  return slash == std::string::npos ? std::string() : skin.substr(slash + 1);
+}
+
+std::string info(const SequelServer& s, int slot, const char* key) {
+  for (const auto& [k, v] : s.clients[slot].userinfo)
+    if (k == key) return v;
+  return {};
+}
+
+}  // namespace
+
+bool fight_teammates(const SequelServer& s, int a, int b) {
+  if (a < 0 || b < 0 || a >= sh::kMaxClients || b >= sh::kMaxClients) return false;
+  if (s.cvars.find("coop")->on()) return true;
+  if (!deathmatch(s) || !(dmflag(s, 64) || dmflag(s, 128))) return false;
+  const bool by_model = dmflag(s, 128);
+  const std::string ta = team_part(info(s, a, "skin"), by_model);
+  return !ta.empty() && ta == team_part(info(s, b, "skin"), by_model);
+}
+
+float fight_fov(const SequelServer& s, int slot) {
+  if (deathmatch(s) && dmflag(s, 32768)) return 90;
+  const std::string text = info(s, slot, "fov");
+  if (text.empty()) return 90;
+  const float fov = std::strtof(text.c_str(), nullptr);
+  return fov < 1 ? 1 : fov > 160 ? 160 : fov;
+}
+
+void fight_bury(SequelServer& s, int slot) {
+  const SequelPlayer& p = s.players[slot];
+  if (p.alive || p.gibbed || p.died_at <= 0) return;
+  SequelBody& b = s.bodies[s.next_body];
+  s.next_body = (s.next_body + 1) % kSequelBodies;
+  b.live = true;
+  b.origin = unpack(p.move.origin);
+  b.yaw = p.view_angles.y;
+  b.health = p.health;
+}
+
+std::vector<std::string> fight_scores(const SequelServer& s) {
+  std::vector<int> order;
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (s.clients[i].active && !s.clients[i].spectator) order.push_back(i);
+  std::stable_sort(order.begin(), order.end(),
+                   [&](int a, int b) { return s.players[a].frags > s.players[b].frags; });
+  std::vector<std::string> lines;
+  for (const int i : order) {
+    std::string n = std::to_string(static_cast<int>(s.players[i].frags));
+    while (n.size() < 4) n.insert(n.begin(), ' ');
+    lines.push_back(n + "  " + name_of(s, i));
+  }
+  return lines;
+}
+
+void fight_print(SequelServer& s, int slot, const std::string& text) {
+  if (slot < 0)
+    print_all(s, text);
+  else
+    print_to(s, slot, text);
 }
 
 }  // namespace shooters_edge::server
