@@ -1217,6 +1217,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   ps.hop_simple = average;
   ps.hop_stairs_walked = f.features[sh::Feature::stairs];
   ps.slopes = f.features[sh::Feature::slopes];
+  ps.backstep = f.features[sh::Feature::backstep];
   ps.hop_headroom = f.features[sh::Feature::headroom];
   ps.hop_lips = f.features[sh::Feature::liphop];
   // The circle jump by skill: an expert curves up to 0.3 s for ~430 (people's standing jumps
