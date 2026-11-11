@@ -22,5 +22,9 @@ concepts: [keys, keyboard, keysteer, key-set, look-ahead, foresee, bumps, tappin
   velocity gains speed across it): along stays low, the keys stay down, and the bot runs past
   its run-up point into the wall at 360. Let go on the whole speed too (`kSlide`): run-up bumps
   2.0 -> 1.55 a bot-minute.
+- Judge a key change on people's yardstick off the RECORDING (se-people `keys.*`), not the
+  trace's keys: the calm view put along the walk raised W while walking 25 -> 32 % in the trace
+  yet lowered W on steady runs off the recording 26.7 -> 23.7 % (people 40). The trace's
+  `forward`/`side` split by mode (fights press W 10 %) says where to look.
 - One seed's bump count swings by more than these changes (a single match diverges after
   seconds): judge on the six-seed set, read single traced seeds only for the causes.
