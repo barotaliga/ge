@@ -80,12 +80,14 @@ void stage_body(Water::Slot& slot, const water::Body& body) {
   const WaterDraw& d = slot.draw;
   b.air[0] = static_cast<float>(d.daylight < 0 ? d.open_sky : d.daylight);
   b.sun[0] = static_cast<float>(d.sunlit < 0 ? b.air[0] : d.sunlit);
+  b.sun[1] = static_cast<float>(d.pace);
   b.air[1] = static_cast<float>(d.stir);
   b.air[2] = static_cast<float>(d.gusts);
   // The gusts drift downwind at about the speed of the waves the wind grows most (the peak's
   // phase speed, g Tp / 2 pi, is a little over the wind's own at these fetches; take most of it).
   const water::Sea& sea = body.waves.sea;
-  b.air[3] = static_cast<float>(sea.tp > 0 ? 0.8 * water::kGravity * sea.tp / (2 * kPi) : 0.0);
+  b.air[3] =
+      static_cast<float>(sea.tp > 0 ? d.pace * 0.8 * water::kGravity * sea.tp / (2 * kPi) : 0.0);
   b.view[2] = static_cast<float>(lm::sin(sea.toward));
   b.view[3] = static_cast<float>(lm::cos(sea.toward));
 }
@@ -105,8 +107,9 @@ void upload_waves(gpu::Device& device, Water::Slot& slot, const water::Body& bod
   if (!slot.draw.wet_band) foam.runup = -1;
   slot.staged.foam[0] = static_cast<float>(foam.fold);
   slot.staged.foam[1] = static_cast<float>(foam.cover);
-  slot.staged.foam[2] = static_cast<float>(foam.drift * lm::sin(body.waves.sea.toward));
-  slot.staged.foam[3] = static_cast<float>(foam.drift * lm::cos(body.waves.sea.toward));
+  const double pace = slot.draw.pace;
+  slot.staged.foam[2] = static_cast<float>(pace * foam.drift * lm::sin(body.waves.sea.toward));
+  slot.staged.foam[3] = static_cast<float>(pace * foam.drift * lm::cos(body.waves.sea.toward));
   slot.staged.surf[0] = static_cast<float>(foam.hs);
   slot.staged.surf[1] = static_cast<float>(foam.runup);
   slot.staged.surf[2] = static_cast<float>(foam.fold_length);
@@ -118,7 +121,7 @@ void upload_waves(gpu::Device& device, Water::Slot& slot, const water::Body& bod
     w[0] = static_cast<float>(c.kx);
     w[1] = static_cast<float>(c.kz);
     w[2] = static_cast<float>(c.a);
-    w[3] = static_cast<float>(c.w);
+    w[3] = static_cast<float>(pace * c.w);  // the water's pace: every phase runs at its share
     // The phase taken round once, so a float keeps its bits of it.
     w[4] = static_cast<float>(std::fmod(c.phase, 2 * kPi));
     w[5] = static_cast<float>(c.k);
@@ -619,6 +622,13 @@ void set_water_body(gpu::Device& device, Water& water, int index, const water::B
   Water::Slot& slot = water.bodies[static_cast<size_t>(index)];
   stage_body(slot, body);
   upload_waves(device, slot, body);
+}
+
+void set_water_pace(gpu::Device& device, Water& water, int index, const water::Body& body,
+                    double pace) {
+  Water::Slot& slot = water.bodies[static_cast<size_t>(index)];
+  slot.draw.pace = pace;
+  set_water_body(device, water, index, body);
 }
 
 void set_water_wakes(gpu::Device& device, Water& water, int index, const water::Wakes& wakes,

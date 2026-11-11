@@ -42,6 +42,7 @@ struct WorldExtras {
   gr::WaterViews handed;             // what the water was last handed of them
   const ba::BspDraw* bsp = nullptr;  // this frame's (prepare_extras), for the views' pass
   double wind = -1, from = 0;        // the air the waves were last laid under (m/s, rad)
+  double pace = ba::kPoolPace;       // the pace the pools were last staged at (r_water_speed)
   uint32_t height = 1;               // the targets' rows
   gr::Liquids liquids;
   std::vector<ba::Kind> liquid_kinds;  // each liquid slot's: kLava or kSlime
@@ -218,6 +219,11 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
     x.wind = wind;
     x.from = from;
     ba::relay_liquid_wind(d, x.water, x.world, wind, from);
+  }
+  // The pools' pace changed (r_water_speed): their waves staged again at it.
+  if (options.water_pace != x.pace) {
+    x.pace = options.water_pace;
+    ba::relay_liquid_pace(d, x.water, x.world, x.pace);
   }
   ba::light_rooms(x.water, x.liquids, x.world, x.rows, options.minlight, options.brightness);
   // The caustics and the shafts only where the sun reaches the water (found again as it moves).
