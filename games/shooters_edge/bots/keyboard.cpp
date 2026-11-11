@@ -23,13 +23,14 @@ namespace ai = ge::ai;
 
 // The actions: the four move keys, the jump, the weapons 1 to 8 (impulse = action - kWeapon1 + 1).
 enum Act : uint8_t { kFwd, kBack, kLeft, kRight, kJump, kWeapon1 };
-constexpr float kPressMin = 0.3f;    // in the air, a wish under this share of a run: no key
-constexpr float kCreep = 0.03f;      // on the ground, a wish under this share: no key
-constexpr double kHold = 4;          // the set held until the wish is this far past its edge, deg
-constexpr float kKeySpeed = 400;     // a key's axis, units/s (cl_forwardspeed)
-constexpr double kFull = 0.9;        // a wish of this share of a run or more is held, not feathered
-constexpr double kBand = 12;         // feathering's band round the speed wished, units/s
-constexpr double kSlide = 40;        // and the whole speed past the wished by this lets go, units/s
+constexpr float kPressMin = 0.3f;  // in the air, a wish under this share of a run: no key
+constexpr float kCreep = 0.03f;    // on the ground, a wish under this share: no key
+constexpr double kHold = 4;        // the set held until the wish is this far past its edge, deg
+constexpr float kKeySpeed = 400;   // a key's axis, units/s (cl_forwardspeed)
+constexpr double kFull = 0.9;      // a wish of this share of a run or more is held, not feathered
+constexpr double kBand = 12;       // feathering's band round the speed wished, units/s
+constexpr double kSlide = 40;      // and the whole speed past the wished by this lets go, units/s
+constexpr double kJumpLatch_s = 0.15;  // a jump asked for is wanted this long until its key lands
 constexpr double kCounterOn = 60;    // `counter`: the body this far off the velocity wished presses
 constexpr double kCounterOff = 25;   // and this near it lets go, units/s
 constexpr double kSteer = 0.02;      // the steering's tally past this changes the set, set-seconds
@@ -167,11 +168,19 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
   if (set >= 1 && set <= 3) want |= bit(kRight);
   if (set >= 3 && set <= 5) want |= bit(kBack);
   if (set >= 5 && set <= 7) want |= bit(kLeft);
-  if (cmd.buttons & sh::kButtonJump) want |= bit(kJump);
+  // A JUMP ASKED FOR is pressed (`jumpkey`): wanted until its key goes down (`kJumpLatch_s` at
+  // most), not only on the commands that ask (a pilot lets go between two asks, and a press
+  // cancelled before the finger lands, ai/keys.hpp, never landed a jump under a novice's hand).
+  f.keys.clock += cmd.msec / 1000.0;
+  const bool jump_asked = (cmd.buttons & sh::kButtonJump) != 0;
+  if (jump_asked) f.keys.jump_until = f.keys.clock + kJumpLatch_s;
+  if (jump_asked || (f.features[sh::Feature::jumpkey] && f.keys.clock < f.keys.jump_until))
+    want |= bit(kJump);
   uint32_t tap = 0;
   if (cmd.impulse >= 1 && cmd.impulse <= 8) tap = bit(kWeapon1 + cmd.impulse - 1);
   uint32_t tapped = 0;
   const uint32_t held = f.keys.board.step(cmd.msec / 1000.0, want, tap, &tapped);
+  if ((held & bit(kJump)) && !jump_asked) f.keys.jump_until = -1;  // down: let go
   const auto axis = [&](int plus, int minus) {
     return sh::quantize_axis(
         kKeySpeed * static_cast<float>(((held & bit(plus)) != 0) - ((held & bit(minus)) != 0)));
