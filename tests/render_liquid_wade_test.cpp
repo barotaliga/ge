@@ -28,7 +28,7 @@ r::Liquids pool(const r::LiquidLook& look) {
   r::Liquids liquids;
   r::Liquids::Slot slot;
   slot.staged.info[0] = 1;
-  slot.staged.info[1] = look.kind == r::LiquidKind::lava ? 0 : 1;
+  slot.staged.info[1] = look.kind == r::LiquidKind::lava ? 0.0f : 1.0f;
   slot.staged.box[0] = -5;
   slot.staged.box[1] = -5;
   slot.staged.box[2] = 5;
