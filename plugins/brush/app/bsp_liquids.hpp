@@ -85,6 +85,9 @@ struct PoolSite {
   double upwind = 0;    // 0..1: the share of the low rays toward the wind that reach the sky
   double exposure = 0;  // 0..1: the share of the open map's wind on the water
   double light[3] = {0, 0, 0};  // the lightmaps' light on its bed (0..1 a channel); < 0: none
+  // Open air under its water somewhere (no bed: a pool a player drops through to a room below),
+  // so its underside is seen from there (render/water.hpp's WaterDraw::open_below).
+  bool open_below = false;
 };
 
 struct LiquidWorld {
@@ -100,8 +103,8 @@ struct LiquidWorld {
 // The share of the points over a pool's top from which straight up is the sky (a leaf of sky
 // before any wall), on a grid of up to 8 x 8 over its box.
 double open_sky_of(const Map& map, const LiquidPatch& patch);
-// The pool's depth, its sky, its share of the wind from `from` (rad, the bearing it blows from)
-// and its bed's light, read off `map`.
+// The pool's depth, whether open air lies under it, its sky, its share of the wind from `from`
+// (rad, the bearing it blows from) and its bed's light, read off `map`.
 PoolSite pool_site(const Map& map, const LiquidPatch& patch, double from);
 
 // The share of a pool's top the sun reaches along `sun` (unit, toward it): points on a grid over
