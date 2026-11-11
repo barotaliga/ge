@@ -17,7 +17,12 @@ struct LiquidBody {
   slime1: vec4f,  // bubble size, grime, debris a m^2
   scum: vec4f,
   fx: vec4f,      // reflections on, the shimmer (rad/m), the breaks held, 0
+  fume: vec4f,         // density (1/m), its e-folding height (m), drift (m/s), stirs
+  fume_albedo: vec4f,  // rgb; the share of the glow its underside catches
+  fume_light: vec4f,   // the body's own glow under it, cd/m^2 rgb; the stirs' smoke on (1)
   breaks: array<vec4f, 8>,  // x, z, radius (m), the time it fell in (s)
+  stirs: array<vec4f, 8>,       // x, z, radius (m), heat (render/liquid.hpp's kLiquidStirs)
+  stir_smoke: array<vec4f, 8>,  // smoke, 0, 0, 0
   table: array<vec4f, 32>,
   wade0: vec4f,  // stamps held, the furrow's half width, its depth, a ring's height (m)
   wade1: vec4f,  // the rings' speed (m/s), wavelength (m), life (s); the furrow's closing (s)
@@ -40,6 +45,7 @@ const kGlowLo = 600.0;
 const kGlowHi = 1700.0;
 const kSunLuxCd = 128000.0;
 const kShimmerHeight = 3.0;  // m: render/liquid.hpp's
+const kStirScale = 1.2;      // m: render/liquid.hpp's
 
 // HASHES AND NOISE.
 fn hash2(p: vec2i) -> vec2f {
@@ -62,6 +68,18 @@ fn value_noise(p: vec2f) -> f32 {
   let b = hash2(i + vec2i(1, 0)).x;
   let c = hash2(i + vec2i(0, 1)).x;
   let d = hash2(i + vec2i(1, 1)).x;
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+// Two independent value noises at once, from both of each lattice point's hashes.
+fn value_noise2(p: vec2f) -> vec2f {
+  let i = vec2i(floor(p));
+  let f = fract(p);
+  let u = f * f * (3.0 - 2.0 * f);
+  let a = hash2(i);
+  let b = hash2(i + vec2i(1, 0));
+  let c = hash2(i + vec2i(0, 1));
+  let d = hash2(i + vec2i(1, 1));
   return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 

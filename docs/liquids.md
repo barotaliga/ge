@@ -41,7 +41,8 @@ Only a game's own tuning (Shooter's Edge's ticks, M30g) lives in its plugin.
 | The named liquids (water, sea, two lavas, five slimes) | `engine/water/liquids.hpp` | `liquids` | `tests/water_liquids_test.cpp` |
 | The body's liquid in the query, waves damped, drift, `lay_waves` for a volume | `engine/water/world.hpp` | `liquids` | `tests/water_world_test.cpp` (golden) |
 | The swimmer in a liquid (both regimes) | `engine/water/swim.hpp` | `swim`, `liquids` | `tests/water_liquids_test.cpp` |
-| Lava and slime drawn, the looks, the eye's key | `engine/render/liquid.hpp`, `liquid.wgsl` | `gpu-lava`, `gpu-slime` | `tests/render_liquid_test.cpp` |
+| Lava and slime drawn, the looks, the eye's key, the air over them (shimmer, fumes, stirs) | `engine/render/liquid.hpp`, `liquid.wgsl` | `gpu-lava`, `gpu-slime`, `se-burn` | `tests/render_liquid_test.cpp` |
+| A body burned by lava or eaten by slime: its levels, what it throws, its skin, its stir | `engine/render/body_burn.hpp` | `se-burn` | `tests/render_body_burn_test.cpp` |
 
 ## A liquid (`engine/water/liquid.hpp`, M30a)
 
@@ -278,6 +279,65 @@ sees the liquid all round it. One full-screen triangle is drawn after the surfac
 Not yet: the waterline split for an eye at the level (the water's lens plate,
 `render/underwater.hpp`).
 
+## The air over it and bodies in it (M30j)
+
+The air over a body is drawn in a pass of its own, `liquid.air`, after the surfaces: one box
+`kShimmerHeight` (3 m) deep over the body's plan for the haze, the gas and the plumes together,
+only its far faces, so each pixel is shaded once whether the eye is outside the box or in it. Nothing is marched. A layer whose density falls off
+as exp(-h / s) with the height h over the level has an exact weight along a straight ray,
+s |e^(-h0/s) - e^(-h1/s)| / |dir_y| between the ray's entry and its end (the scene, or the
+surface), so a pixel pays two exponentials for the whole layer and reads its noise once. A pixel
+whose bend would be under a third of a pixel reads no noise and no scene, and gas under a 512th of
+cover is not lit.
+
+- **Lava's heat haze** (`LavaLook::shimmer`, rad a metre at the melt). The hot cells rising over
+  the melt bend a ray by the hot air's weight along it times the cells' push (two octaves of a
+  two-channel value noise, both components from each lattice hash, rising with the air at about a metre a second) read once at the ray's lowest stretch.
+  4 mrad a metre at the melt: across a lake from 1.6 m over it the walls beyond waver by a few
+  pixels, most just over the melt. What lies across the lake is drawn again through the bent ray,
+  and the lava's own surface is looked up where its bent ray lands. The gas is laid over the bent
+  scene in the same fragment (opaque there), or alone over the melt (premultiplied).
+- **The gas over it** (`FumeLook`). Lava has a thin soot (0.025 per metre at the surface, a metre's
+  scale height) lit orange from below by the melt (`glow_lit` of its glow); the toxic slime an
+  acid vapour (0.12 per metre, 0.3 m) a pale yellow-green lit by the room and its own glow; the
+  sludge a damp haze. A slow noise drifting over the surface thins and thickens it into wisps.
+  Its optical depth is its weight times its density; it is laid over the picture premultiplied.
+- **Stirred round a body in it** (`LiquidStir`, `set_liquid_stirs`). A body burning in lava throws
+  up a plume of hotter air and smoke, one wet with acid in slime a plume of fumes. A plume is a
+  column over the stir whose density falls off as a Gaussian of the distance to its axis and
+  exp(-h / 1.2 m) up it. Its weight along a ray is taken at the ray's closest approach to the axis
+  (the Gaussian's integral across it, sqrt(pi) r over the ray's share across the plan), clipped to
+  the ray's stretch in the box. At most `kLiquidStirs` (8) a body, the strongest kept.
+
+### A body burned or eaten (`engine/render/body_burn.hpp`)
+
+What a figure in lava or slime shows is a game's presentation, stepped a frame at a time from how
+deep it stands in which liquid (1/3 its feet, 2/3 its waist, 1 all in):
+
+| Level | In | Out |
+| --- | --- | --- |
+| heat | up with a time constant of 0.35 s, to its depth | down over 0.9 s, then at least 0.1 a second |
+| charred | up toward 1 at 0.5 s over the heat | worn off evenly, a whole char in 4 s |
+| acid | up over 0.4 s, to its depth | down over 1 s |
+| etched | up toward the acid over 0.9 s | worn off evenly, a whole etch in 3.5 s |
+
+Waist deep in lava for two seconds and out, the flames are out within about a second, the smoke
+thins over two, and the char is gone about three seconds after it is out.
+
+- **What it throws** (`body_burn_births`, particles for the pool): smoke off the skin, black and
+  thick while it burns and greyer as it cools (34 puffs a second at full heat); small flames off
+  six spots on the body fixed by its seed, the weakest going out first as it cools (licks of
+  1500 K that cool as they rise, 70 a second at full heat); a few embers; pale yellow-green fumes
+  off acid-wet skin. Nothing is born under the liquid's level.
+- **What its skin shows** (`MorphBurn` on a morph draw): soot in patches of value noise fixed to
+  the model's frame that spread over it as the char grows, a brown scorch at their edge, embers
+  glowing deep orange in the char's cracks while it is hot, and the acid's bleach and pits.
+- **The crust broken** where it fell in (`break_liquid_crust`).
+
+Shooter's Edge keeps one a body by entity (`client/burning.hpp`), under the switches `ce_burning`
+(the body), `ce_heathaze` (the shimmer) and `ce_fumes` (the gas, base and stirred). The `se-burn`
+lab shows all of it on the shareware maps' lava and slime with the passes' cost.
+
 ## Wading (M30k)
 
 A body moving through a lava or a slime leaves its mark on the surface, and how the surface moves
@@ -339,6 +399,7 @@ mispredict on every server).
 | --- | --- | --- | --- |
 | `liquids` | picture | M30a | The share of a gale's input each liquid keeps by wavelength, the drift, the swim each gives (stroke speed, the scales, metres in 10 s), the damage over time at each immersion (lava's burns, the slimes' ticks), the radiant heat over a lava pool by height |
 | `gpu-lava` | picture | M30b | A lava pool in a quarry by day, at dusk and at night; the crust's cover from 15 to 97 %; the plates close up by day and night; the flow at four moments; the heat shimmer across the lake (off, on, a moment later); three stones breaking the crust at four moments; the view from under the level; both lavas; the glow table |
+| `se-burn` | scenario | M30j | Start's lava pit and e1m1's slime pool from the bank: the air off and on and a tenth of a second on; a player waist deep in each and then out, at six moments and as a film; its levels as drawn; the `liquid`, `liquid.air` and `particles` passes' GPU cost with the air off, on, the haze alone, the gas alone and stirred by a burning body; the levels of the CPU half alone |
 | `se-wade` | scenario | M30k | Water, slime and lava waded through, from above (the CPU twin), the furrow closing at each viscosity; on real maps a player walking through the lava and the slime with `ce_wade` off and on, a film and the pass's cost |
 | `gpu-slime` | picture | M30c | The five slimes from the rim and close up; the toxic slime glowing by day, at dusk and at night; the gel seen into; one gale over three slimes; three crags mirrored in the tar, reflections off and on; the toxic slime and the gel from under the level |
 

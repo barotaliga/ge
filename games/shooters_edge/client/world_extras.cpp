@@ -40,6 +40,7 @@ struct WorldExtras {
   ba::LiquidWorld world;
   gr::Water water;
   gr::Underwater under;              // the view from under the water's level
+  double motes = 0;                  // the pool look's own specks, before ce_water_specks
   ba::BspViews views;                // the map drawn again for the water: its mirror, the view up
   gr::WaterViews handed;             // what the water was last handed of them
   const ba::BspDraw* bsp = nullptr;  // this frame's (prepare_extras), for the views' pass
@@ -71,7 +72,8 @@ struct WorldExtras {
   gr::Precip precip;
   ba::WeatherState state;
   ba::WeatherFrame now;
-  bool raining = false;  // this frame's weather is on and switched on
+  bool raining = false;               // this frame's weather is on and switched on
+  std::vector<gr::LiquidStir> stirs;  // this frame's (stir_extras)
 };
 
 void WorldExtrasDeleter::operator()(WorldExtras* x) const { delete x; }
@@ -96,6 +98,7 @@ void create_extras_part(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines,
     // The maps' pools are indoors: the water lit by the room, rippled, caustics on its walls and
     // the ceiling over it.
     gr::underwater_look("pool", x.under.look);
+    x.motes = x.under.look.motes;
   } else if (part == 1) {
     gr::create_liquid(d, pipelines, x.liquids, frame);
     // A player dropped in the slime sees a few metres round them, not the two centimetres a toxic
@@ -263,7 +266,13 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
   }
   gr::set_water_up_view(x.water, handed.up_view_proj);
   gr::prepare_water(d, x.water, view, eye_in);
+  // The specks suspended in the water, as many as ce_water_specks keeps (round a swimmer they
+  // read as bubbles).
+  x.under.look.motes = x.motes * options.water_specks;
   gr::prepare_underwater(d, x.under, x.water, view, x.height);
+  x.liquids.shimmer = on.heathaze;
+  x.liquids.fumes = on.fumes;
+  gr::set_liquid_stirs(x.liquids, x.stirs);
   gr::prepare_liquid(d, x.liquids, view);
   x.fires.clear();
   if (v2 && on.flames)
@@ -342,6 +351,24 @@ void wade_extras(WorldExtras& x, std::span<const Placed> models, const Placed* s
   }
   std::erase_if(x.thrown, [](const WorldExtras::Thrown& h) { return !h.seen; });
   gr::wade_liquids(x.liquids, x.wading, x.waders, t_s, on);
+}
+
+void set_extras_air_draws(WorldExtras& x, int n) { x.liquids.air_draws = n; }
+
+void stir_extras(WorldExtras& x, std::span<const gr::LiquidStir> stirs,
+                 std::span<const gr::LiquidStir> fell_in, double t_s) {
+  x.stirs.assign(stirs.begin(), stirs.end());
+  for (const gr::LiquidStir& f : fell_in) {
+    const int at = gr::liquid_body_at(x.liquids, f.x, f.y, f.z);
+    if (at >= 0 && !x.liquids.bodies[size_t(at)].hidden)
+      gr::break_liquid_crust(x.liquids, at, f.x, f.z, f.radius_m, t_s);
+  }
+}
+
+double extras_level_at(const void* p, const double at[3]) {
+  const WorldExtras& x = *static_cast<const WorldExtras*>(p);
+  const int i = gr::liquid_body_at(x.liquids, at[0], at[1], at[2], 3);
+  return i < 0 ? -1e9 : double(x.liquids.bodies[size_t(i)].staged.info[0]);
 }
 
 void extras_births(WorldExtras& x, double t_s, std::vector<gr::Particle>& out) {

@@ -150,6 +150,42 @@ reserves for big things.
 - **Coop**: monsters choose among players as above; players do not hurt each other with
   `teamplay 1`; keys are shared (a key picked up is not removed).
 
+## Brush model sizes and doors
+
+Read by a clean-room reader (2026-11-10) from the GPL single-player engine and program 1.06;
+`measured` from the shareware pack's start map.
+
+- The single-player engine widens every model record's stored bounds by 1 unit on every side
+  when it loads a map (the world and each inline `*N` model), and `setmodel` gives a brush
+  entity those widened bounds as its size, unrotated. Linking it into the world pads its
+  collision bounds by another unit; the program's door grouping does not use that padding. `read`
+- **Door groups**: every `func_door` without spawn flag 4 is grouped about 0.1 s in. Two doors
+  join when their sizes overlap on every axis, equal faces counting (a gap of 0 links, any
+  positive gap does not). The walk tests each next door only against the one that joined last.
+  The group's `health`, `targetname` and `message` are copied onto its master. `read`
+- **The touch field**: a group with no `health`, no `targetname` and no key gets one invisible
+  field, the union of its members' sizes grown 60 units in x and y and 8 in z; anything alive
+  touching it opens the group (1 s cooldown). A group with a `targetname` opens only when fired;
+  firing the name opens every member. `read`
+- **The start map's bars**: each of the halls of episodes 2 and 3 is barred by two doors whose
+  records stand 2 units apart (models 6 and 7, 4 and 5); one door carries the name the hall's
+  full-game-only trigger fires, the other none. Widened, they touch and join, so neither opens on
+  approach: both wait for the trigger. Episode 4's bars are one named door (model 26). `measured`
+  Our engine sizes an inline model at the record's bounds, unwidened (`bi_setmodel`), so there
+  the two halves do not join and the unnamed one opens on approach; the campaign host names it
+  while its episode is shut (`server/campaign_episodes.hpp`). Widening moves our campaign's set
+  pieces and the coop goldens, so it is its own change. `measured`
+- **The full-game-only trigger** (`trigger_onlyregistered`): players only, a 2 s cooldown; with
+  the full game it clears its message, fires its targets once and removes itself; on the
+  shareware packs it centre-prints its message with `misc/talk.wav`. `read`
+- **No order**: the classic program opens episodes 2 to 4 together with the full game; nothing
+  makes them follow one another (that is our host's rule, `server/campaign_episodes.hpp`).
+  `serverflags` is the only record of a done episode: a new game (`map`) zeroes it, a level
+  change keeps it, a death restart returns it to what the map was entered with, and only a save
+  file keeps it across runs. `read`
+- **Returning with runes**: with any rune set and outside coop and deathmatch, the player starts
+  at `info_player_start2` (the hub) with a new game's inventory. `read`
+
 ## The exploding boxes
 
 Read by a clean-room reader (2026-11-09) from the GPL single-player program, the multiplayer

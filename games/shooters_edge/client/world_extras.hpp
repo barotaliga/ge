@@ -6,6 +6,9 @@
 // switch (plugins/classicenhance's `Switches`, the `ce_` cvars) every frame, so `ce_water 0` in the
 // console shows the pack's own warped water on the next frame; the classic look draws none of them.
 //
+// The lava's heat haze and the gas over lava and slime are the liquids' own (ce_heathaze,
+// ce_fumes), stirred into plumes round the bodies burning or fuming in them (`stir_extras`).
+//
 // The switches that change the BSP renderer's own options (the teleporters' and the pools' light)
 // are applied by `dress_extras`, with the weather's wet, puddles and fog. THE WATER'S STOP
 // (app/look.hpp's Stops, read every frame): low a still surface lit by the room (no chop, no
@@ -28,6 +31,7 @@
 // ge:keywords wade_extras wading ce_wade plunge splash fireball lava-ball
 // ge:keywords classicenhance switches ce_water ce_lava ce_slime ce_flames ce_weather ce_shadows
 // ge:keywords bonfires ce_bonfires sparks extras_births ce_water_quality water-stop
+// ge:keywords ce_heathaze ce_fumes stir_extras extras_level_at heat-haze fumes
 // ge:skill render shooter classicenhance
 #pragma once
 
@@ -40,6 +44,7 @@
 #include "classicenhance/switches.hpp"
 #include "gpu/device.hpp"
 #include "render/frame.hpp"
+#include "render/liquid.hpp"
 #include "render/particles.hpp"
 #include "render/sky.hpp"
 #include "render/view.hpp"
@@ -93,6 +98,16 @@ void prepare_extras(ge::gpu::Device& device, WorldExtras& x, const ge::brush::ap
 // crossed a lava's or a slime's surface since the frame before (a ball of lava hurled out of it)
 // a plunge: a heave going out, a crater and a splash coming down.
 void wade_extras(WorldExtras& x, std::span<const Placed> models, const Placed* self, double t_s);
+// Before prepare_extras: this frame's stirs over the liquids round the bodies burning or fuming in
+// them (client/burning.hpp), and where one has just fallen into lava (its crust broken there at
+// `t_s`).
+void stir_extras(WorldExtras& x, std::span<const ge::render::LiquidStir> stirs,
+                 std::span<const ge::render::LiquidStir> fell_in, double t_s);
+// A bench's: the air over the liquids drawn `n` times a frame (render/liquid.hpp's air_draws).
+void set_extras_air_draws(WorldExtras& x, int n);
+// The level (m) of the drawn lava or slime body whose box holds `at` (m), or -1e9 when none does;
+// `x` a WorldExtras (burning.hpp's LevelAt).
+double extras_level_at(const void* x, const double at[3]);
 // After prepare_extras: the bonfires' sparks since the last call, to `t_s`, appended to `out` for
 // the frame's particle pool (none when ce_bonfires is off, or on the first call), and the drops
 // of this frame's splashes (wade_extras).

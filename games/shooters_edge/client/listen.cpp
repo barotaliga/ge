@@ -457,6 +457,7 @@ sv::CampaignOptions campaign_options(Listen& l, const ListenOptions& opt) {
     co.server.localized = localized_text(*opt.files);
   }
   co.registered = opt.registered;
+  co.episodes = opt.episodes;
   co.settings = opt.arsenal;
   co.settings.insert(co.settings.end(), opt.console.begin(), opt.console.end());
   return co;
@@ -833,8 +834,11 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     s.ground = (me.flags & sh::kFlagOnGround) != 0 ? 0 : -1;
     s.type = sh::move_type_of(me, false);
     s.waterlevel = me.waterlevel;
-    cmd =
-        sh::assisted_command(cmd, s, l.server->sv.set.move.speedjump, l.speedjump_view, l.jump_aid);
+    // His own share when the server granted him one (`*speedjump`, net/classic_admin.hpp).
+    const std::string granted = sv::info_value(l.server->clients[0].userinfo, "*speedjump");
+    const float share = granted.empty() ? l.server->sv.set.move.speedjump
+                                        : static_cast<float>(std::atof(granted.c_str()));
+    cmd = sh::assisted_command(cmd, s, share, l.speedjump_view, l.jump_aid);
   } else {
     l.jump_aid = {};
   }
@@ -951,6 +955,12 @@ bool listen_lobby(Listen& l, std::string_view line) {
   const bool taken = l.host->words(l.host->game, std::string(line));
   catch_up(l);
   return taken;
+}
+
+bool listen_admin(Listen& l, const std::string& line, std::string& out) {
+  if (!l.host || l.host->admin == nullptr || l.host->game == nullptr || l.match == nullptr)
+    return false;
+  return l.host->admin(l.host->game, line, out);
 }
 
 hud::LobbyView listen_lobby_view(const Listen& l) {

@@ -707,7 +707,9 @@ effect sprites, made once at load, pure functions of their size. `flare_frame` i
 a warm core and a soft halo fading to nothing at the frame's edge, drawn `add`ed. `bubble_frame` is
 a ball of air in water: nearly clear, a Fresnel rim, a highlight up and to the left and a darker
 ring just inside the rim, drawn `over`. Shooter's Edge draws them for the pack's light globe and
-bubble sprites under `ce_flares` and `ce_bubbles` (classic-enhance's replacement table names them).
+bubble sprites under `ce_flares` and `ce_bubbles` (classic-enhance's replacement table names them),
+one ball a bubble, and of the bubbles the game blows only `ce_bubbles_share` (0.3) is drawn in
+either look: a map's air vents blow one a second each, ten in a column at once.
 
 ## Terrain
 
