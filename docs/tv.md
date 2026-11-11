@@ -67,6 +67,38 @@ a demo.
 - **Version 1** (the text replay file of M23b) still loads; a game's classic formats convert to
   version 2 and back byte for byte.
 
+## The TV node
+
+`engine/tv` (`node.hpp`, `net_link.hpp`). A node takes a source's replay file bytes in any pieces
+(a game's server writing them, a file read out, or the node above it), splits them into the header
+and whole blocks, and sends them on:
+
+- **The delay** is in game time: the first block anchors the source's clock to the node's, and a
+  block goes out once its start plus the delay has come, so a source that runs ahead (a file) is
+  paced to the match. With no delay a block goes out as soon as it is whole.
+- **A viewer** says hello, gets the header, then the blocks from the newest keyframe block out,
+  then each block as it goes out, then `ended`. A link that will take no more keeps the viewer's
+  place, so a slow viewer slows no one else. Blocks before the newest keyframe that no viewer still
+  needs are let go.
+- **A relay** is a viewer of the node above that feeds a node of its own. Chat goes up to the first
+  node and comes back down to every viewer; each relay reports how many watch under it, and every
+  node tells its viewers the whole tree's count.
+- **The wire** is one reliable, ordered channel of engine/net: hello, header, block (in pieces under
+  engine/net's biggest message), chat, viewers, ended, refused.
+
+The `tv` lab runs a source, a relay and six viewers under every simulated network preset:
+
+| Preset | Viewers whole | Lag p50 / p95 / max (ms) | Down a viewer (kB a match second) |
+| --- | --- | --- | --- |
+| lan | 6 of 6 | 20 / 20 / 20 | 2.1 |
+| wifi | 6 of 6 | 80 / 90 / 180 | 2.1 |
+| mobile | 6 of 6 | 140 / 302 / 500 | 2.1 |
+| bad | 6 of 6 | 280 / 590 / 1040 | 1.8 |
+| awful | 6 of 6 | 1145 / 3425 / 4320 | 1.6 |
+
+On the bad and awful links some viewers connect late and start at a later keyframe block, so they
+take fewer bytes.
+
 ## The field codec
 
 The coder (`engine/replay/codec.hpp`) is an adaptive binary range coder: integers only, so it

@@ -7,6 +7,7 @@
 // ge:test tests/replay_stream_test.cpp
 #include "replay/stream.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 #include "vfs/zstd.hpp"
@@ -119,6 +120,36 @@ const TrackInfo* track_of(const StreamHeader& h, uint32_t id) {
 }
 
 }  // namespace
+
+int peek_block(std::span<const uint8_t> bytes, size_t at, BlockPeek& out, std::string& error) {
+  error.clear();
+  if (at >= bytes.size()) return 0;
+  const size_t have = bytes.size() - at;
+  if (std::memcmp(bytes.data() + at, kEnd, std::min<size_t>(have, 4)) == 0)
+    return have < 4 ? 0 : -1;
+  if (std::memcmp(bytes.data() + at, kSync, std::min<size_t>(have, 4)) != 0) {
+    error = "no block at offset " + std::to_string(at) + "; next: the stream is damaged there";
+    return -1;
+  }
+  In in{bytes, at + 4};
+  const auto body = in.bytes();
+  const auto sum_bytes = in.take(4);
+  if (in.bad) return 0;  // the bytes end inside the block: wait for the rest
+  uint32_t sum = 0;
+  for (int i = 0; i < 4; i++)
+    sum |= static_cast<uint32_t>(sum_bytes[static_cast<size_t>(i)]) << (8 * i);
+  if (sum != fnv1a32(body)) {
+    error =
+        "the block at offset " + std::to_string(at) + " fails its sum; next: the stream is damaged";
+    return -1;
+  }
+  In bi{body};
+  out.size = in.at - at;
+  out.index = static_cast<int64_t>(bi.u());
+  out.time_ms = bi.s();
+  out.keyframe = (bi.byte() & 1) != 0;
+  return 1;
+}
 
 bool is_stream(std::span<const uint8_t> bytes) {
   return bytes.size() >= 8 && std::memcmp(bytes.data(), kMagic, 8) == 0;
