@@ -42,7 +42,7 @@ No accounts and no login: everything a hub shows is public, read-only, and cache
 
 | Part | Home | What it is |
 | --- | --- | --- |
-| The status record | `engine/server` | What any server says about itself, generic: name, game and version, map, mode, phase and time left, slots, players (name, team, score, ping, minutes, bot, colours), teams, spectators, its broadcast streams, location, every key. A game adds a blob of its own (its stats line, its extra columns) |
+| The status record | `engine/net` (`status.hpp`), filled by `engine/server` | What any server says about itself, generic: name, game and version, map, mode, phase and time left, slots, players (name, team, score, ping, minutes, bot, colours), teams, spectators, its broadcast streams, location, every key. A game adds a blob of its own (its stats line, its extra columns) |
 | The master | `engine/net` (beside the rendezvous) | One master for every kind of node: game servers, TV nodes and forwarders heartbeat the same service, told apart by a kind field. Forgets a silent one after three missed beats, answers a list query by game id, paged. The rendezvous already lists hosted sessions (`rendezvous.hpp`); the master is its list made public for a dedicated server and a TV node, one executable a community runs |
 | The broadcast and the demo | `engine/tv`, `engine/replay` (the TV thread's design) | A broadcast is a replay file being written; every stream and file opens with a generic header (game, version, map, mode, players, teams, scores, start) and carries a small META track (scores and roster as they change); a finished file ends with an index and a final summary. The hub reads the header and the meta track only: it never simulates a game |
 | The hub | `engine/hub`, built per game by `ge_add_hub` | One process: the poller, the index in memory, the demo archive, and an HTTP server for the pages, the JSON API and live updates. A game's hub binary links the game's `HubSpec` (its words) and nothing of its simulation |
@@ -149,6 +149,19 @@ browser's own GPU.
 | 6 | M56f | The classic adapter: the classic masters, status queries and broadcasters read into the records; Shooter's Edge's hub lists the internet's classic servers | `se-hub` lab against the simulated classic servers, and once by hand against the real masters |
 | 7 | M56g | The web viewer: `ge_add_web_viewer`, the Emscripten and WebGPU build, the stream over a WebSocket, demos by hash, the content folder, the transport; the Watch and Demo pages; Shooter's Edge's and Fall Line's viewers | `hub-viewer` lab: the viewer in headless Chromium on a software WebGPU adapter, a live bot match and a demo screenshotted, seek checked, first-visit bytes measured |
 | 8 | M56h | The live map for phones and slow machines: the RADAR track, the hub's SVG view, live updates | `hub-radar` lab: a bot match drawn frame by frame |
+
+### Built so far
+
+- **M56a** (`hub-master`): `engine/net/status.hpp` is the record (version 1, rows left out from
+  the end with a `truncated` flag when it outgrows the datagram) and its ask: a padded 64-byte ask,
+  answered first with an 8-byte-heavy cookie (a keyed hash of the asker's address and a 10 s
+  bucket) and only then with the record, so a forged source address gets nothing bigger than its
+  ask. `engine/net/master.hpp` is the master (`master_init`, `master_update`), the beat a node
+  sends (`MasterBeat`: every 30 s, an ack, three byes on close) and the paged list query
+  (`MasterQuery`: 20 entries a page, the ask padded to 512 bytes, at most 64 entries per host).
+  A dedicated server beats to every master in `sv_master` (a list, default port 27900) and
+  answers status asks on its own port with `server_public_status` plus the game's
+  `ServerGame::fill_status`.
 
 Phase 2 and later depend on the TV layer's header and meta track (M57a, the replay file v2, and M57b, the native TV node); the
 master can land before them, since a dedicated server's heartbeat needs nothing of TV.
