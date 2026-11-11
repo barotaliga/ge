@@ -14,6 +14,14 @@ namespace shooters_edge::bots {
 namespace {
 
 constexpr double kLandingNear = 12;  // the exit node walked onto until this near it, units
+// THE PRESS (`press`): the forward key's draw in a fight, on at him or back off, by whether a
+// loaded rocket launcher is in hand (its splash keeps people back). People's e1m2 recordings, an
+// enemy faced: across the line 174 units/s, toward him +76 without the launcher and +37 with it,
+// the fight's ground keys forward 55 %, back 20 % (se-people `fight.*`, `keys.fight.*`).
+constexpr double kPressOn = 0.8, kPressBack = 0.1;
+constexpr double kPressOnRl = 0.4, kPressBackRl = 0.3;
+constexpr float kPressNear = 96;   // nearer than this, never on at him (the bodies would meet)
+constexpr int32_t kWRockets = 32;  // the rocket launcher's W_ bit
 
 }  // namespace
 
@@ -21,8 +29,28 @@ void fighter_dodge(Fighter& f, const server::RulesCommon& s, int me, double t, g
                    sh::MoveCmd& cmd) {
   // In a fight, the side key across the line to him (the view is on him, so the side is across):
   // the dodge (shooter/dodge.hpp), not on a jump the route proved, a lift, a door, or in water.
+  // With `press`, whenever the one aimed at is in sight (a chase that sees him, a roam that has
+  // not turned to the fight yet): people's feet are measured with an enemy faced, whatever the
+  // mind calls it.
+  const bool pressing = f.features[sh::Feature::press];
+  f.press_note = "-";
+  if (f.bot.aiming) {
+    const sh::PilotMode pm = f.bot.pilot.pilot.mode;
+    bool seen = false;
+    for (const sh::Contact& k : f.bot.senses.contacts)
+      if (k.ent == f.bot.target && k.visible) seen = true;
+    f.press_note =
+        f.unlocking || f.lost_to >= 0 || f.escort.leader >= 0       ? "errand"
+        : s.world.entities[static_cast<size_t>(me)].waterlevel >= 2 ? "wet"
+        : !seen && !pressing                                        ? "unseen"
+        : !(pm == sh::PilotMode::walk || pm == sh::PilotMode::strafe || pm == sh::PilotMode::hop ||
+            pm == sh::PilotMode::idle || pm == sh::PilotMode::arrived)
+            ? "feet"
+        : f.mode == FightMode::retreat ? "retreat"
+                                       : "route";
+  }
   if (f.bot.aiming && !f.unlocking && f.lost_to < 0 && f.escort.leader < 0 &&
-      (f.mode == FightMode::fight || f.mode == FightMode::retreat) &&
+      (pressing || f.mode == FightMode::fight || f.mode == FightMode::retreat) &&
       s.world.entities[static_cast<size_t>(me)].waterlevel < 2) {
     const sh::PilotMode pm = f.bot.pilot.pilot.mode;
     const bool free_feet = pm == sh::PilotMode::walk || pm == sh::PilotMode::strafe ||
@@ -31,7 +59,9 @@ void fighter_dodge(Fighter& f, const server::RulesCommon& s, int me, double t, g
     bool in_sight = false;
     for (const sh::Contact& k : f.bot.senses.contacts)
       if (k.ent == f.bot.target && k.visible) in_sight = true;
-    if (free_feet && in_sight) {
+    // With `press` the feet go on while the aim holds where he was (a peek, a corner): people's
+    // do not stop for an enemy out of sight a moment.
+    if (free_feet && (in_sight || pressing)) {
       const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
       const float yaw = f.bot.yaw;
       const int was = f.dodge.dir;
@@ -43,9 +73,39 @@ void fighter_dodge(Fighter& f, const server::RulesCommon& s, int me, double t, g
         cmd.side = sh::quantize_axis(static_cast<float>(dir) * 320 * f.dodge_k.press);
         f.stats.dodging++;
       }
+      // The press: the forward key drawn for a stretch with the side (`press`), in a fight only.
+      int32_t press = 0;
+      if (pressing && f.mode != FightMode::retreat) {
+        if (t >= f.press_until) {
+          const Stats st = read_stats(s, me);
+          const bool rl = st.weapon == kWRockets && st.rockets > 0;
+          const double u = ge::core::next(f.press_rng);
+          const double on = rl ? kPressOnRl : kPressOn, back = rl ? kPressBackRl : kPressBack;
+          f.press = u < on ? 1 : u < on + back ? -1 : 0;
+          f.press_until = t + f.dodge_k.hold_s * ge::core::range(f.press_rng, 0.5, 1.5);
+        }
+        press = f.press;
+        f.stats.press_weighed++;
+        if (press > 0 && f.bot.aim_dist < kPressNear) {
+          press = 0;
+          f.stats.press_near++;
+          f.press_note = "near";
+        }
+        // Forward is the right of a view a quarter turn left of it: the dodge's own check.
+        if (press != 0 && !sh::dodge_clear(s.sv, me_at, yaw + 90, press, me)) {
+          press = 0;
+          f.stats.press_blocked++;
+          f.press_note = "blocked";
+        }
+        if (press != 0) cmd.forward = sh::quantize_axis(static_cast<float>(press) * 320);
+        if (press != 0) f.press_note = press > 0 ? "on" : "back";
+        f.stats.press_on += press > 0;
+        f.stats.press_back += press < 0;
+      }
       if (why) {
         why->decide("dodge");
         why->fact("dir", dir);
+        why->fact("press", press);
         why->choose(dir < 0 ? "left" : dir > 0 ? "right" : "straight", "across his line");
       }
     }

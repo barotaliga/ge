@@ -37,6 +37,7 @@
 //
 // ge:summary The bot: the pilot with senses and aim, a server slot's command source
 // ge:keywords bot pilot senses aim view look contact track hold release bot_source
+// ge:keywords lookway calm-view
 // ge:skill shooter bots
 // ge:test tests/shooter_senses_test.cpp
 #pragma once
@@ -117,6 +118,9 @@ struct Bot {
   // What turned the view this command ("aim", "look", "calm", "air", "swim", "pilot"): read by
   // se-team's trace.
   const char* view_by = "pilot";
+  // For the trace alone (nothing reads them): the heading the pilot's wish runs along and the
+  // calm view's target this command, degrees.
+  float walk_yaw = 0, look_yaw = 0;
   // Which of the game's views was set on the command after the step (`bot_hand_override`), for
   // the trace: "button", "swimway", "swimexit", ...; null: "game".
   const char* set_by = nullptr;
@@ -131,6 +135,12 @@ struct Bot {
   // six-seed set to the side that glances, its view still turning 104 degrees a second (people
   // 107).
   bool glance = true;
+  // THE WAY IN SIGHT (`lookway`): the calm view on the route's furthest point up to `kCalmAhead`
+  // on that the eye still sees, and never past a teleporter: the point that far along the route
+  // lay behind the run round a switchback or across a teleporter (e1m2, calm walkers: the look
+  // point over 120 degrees off the run 17 % of their time; people's view within 15 degrees of
+  // their run 48 %, the bots' 23 %).
+  bool lookway = false;
   double glance_next = 0, glance_until = -1;
   float glance_off = 0;
   // The glance is a SWIPE (a turn meant's pace there and back), held `kGlanceHold_s` from when

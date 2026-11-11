@@ -16,14 +16,12 @@
 // - `shortgoals`: health, armour, a missing weapon, the mega or rockets ahead taken on the way.
 // - `commit`: an item goal held until news (a sighting, a pickup, a blow).
 // - `danger`: where it or a mate died, and areas called lost, kept from healing at for a while.
-// - `dodge`: the side steps across an enemy's line in a fight.
-// - `watch`: the view on the ways in where it stands, nobody in sight.
+// - `dodge`: side steps across an enemy's line in a fight; `watch`: the view on the ways in.
 // - `spam`: rockets fired at the spots enemies come in by, and at news of one coming.
 // - `packs`: launchers in backpacks called and fetched by who needs one; the bore for a quad mate.
 // - `talk`: team lines said and read (status, calls, help, plans).
 // - `plan`: the map's team plan: roles, areas held, the opening, the quad's rush.
-// - `rj`: rocket jumps (the nav's rocket links and tricks).
-// - `gj`: grenade jumps.
+// - `rj`: rocket jumps (the nav's rocket links and tricks); `gj`: grenade jumps.
 // - `airsteer`: flights steered by the side key, the view on the velocity (off: at the target).
 // - `surface`: up for air under open water before the air runs out.
 // - `glance`: the calm walker's swipe aside now and then, to the longest open line (bot.hpp).
@@ -45,7 +43,9 @@
 // - `circlejump`: a hop's first jump out of a curve on the ground, past a run's 320 (pilot.hpp).
 // - `ahead`: the walk's keys flown through the move before a bump; `bodies`: players near too.
 // - `beat`: a fight mode held a person's beat (through a peek). `trial`: an A/B's, in no preset.
-// - `keys`: a hand on a keyboard presses the keys; `keysteer`: it taps between two sets; unjudged.
+// - `keys`: a hand on a keyboard presses the keys; `keysteer`: it taps between two sets;
+//   `lookway`: the calm view on the route's point in sight; `press`: the forward key with the
+//   dodge's side (on at him): these four unjudged, in no preset.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: all but what that level
 // does not do: none `eye`, a novice no `glance`), `features_none` (a plain bot).
 // The text form (`apply_features`): `all`, `none` (`plain`), `+name`/`name`, `-name`, in order.
@@ -113,9 +113,11 @@ enum class Feature : uint8_t {
   beat,
   keys,
   keysteer,
+  lookway,
+  press,
   trial,
 };
-constexpr size_t kFeatures = 44;
+constexpr size_t kFeatures = 46;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

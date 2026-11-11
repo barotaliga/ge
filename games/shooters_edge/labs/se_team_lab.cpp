@@ -563,8 +563,11 @@ void run(gl::Lab& lab) {
   o.packed = save.ends_with("z");  // a `.mvdz`: recorded packed as it goes
   // EVERY COMMAND OF EVERY BOT, watched: the hop measured by skill (below, `team.hop.*`), and THE
   // TRACE (`--trace=<file>`): a TSV row per bot every `--trace-every` commands: where it is, how
-  // fast, what it means to do and what its pilot did and why. Both this run's own: a set
-  // (--seeds) runs several matches at once.
+  // fast, what it means to do and what its pilot did and why, the view and what turned it (the
+  // calm view's `glance` and `sound` swipes named apart), the keys sent and the velocity, the
+  // heading the pilot's wish runs along (`walk`) and the calm view's target (`look`), and what the
+  // feet did with the aim (`press`: footwork.hpp's note). Both this run's own: a set (--seeds) runs
+  // several matches at once.
   std::ofstream trace;
   Watch watch;
   if (!lab.arg("trace").empty()) {
@@ -575,7 +578,7 @@ void run(gl::Lab& lab) {
       return;
     }
     trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
-             "\tscript_step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\n";
+             "\tscript_step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -649,7 +652,8 @@ void run(gl::Lab& lab) {
         << '\t' << p.script_step << '\t' << p.because << '\t' << to_fixed(cmd.angles.y, 2) << '\t'
         << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by << '\t' << cmd.forward << '\t'
         << cmd.side << '\t' << to_fixed(e.velocity.x, 0) << '\t' << to_fixed(e.velocity.y, 0)
-        << '\n';
+        << '\t' << to_fixed(f.bot.walk_yaw, 1) << '\t' << to_fixed(f.bot.look_yaw, 1) << '\t'
+        << f.press_note << '\n';
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
@@ -1180,6 +1184,27 @@ void run(gl::Lab& lab) {
     }
     lab.metric("team.dodge-share",
                fight > 0 ? static_cast<double>(dodging) / static_cast<double>(fight) : 0, "share");
+    // The press (footwork.hpp `press`): of the commands it was weighed, the shares pressed on at
+    // him, back, and held off by his nearness or a step not clear.
+    {
+      int64_t w = 0, on = 0, back = 0, near = 0, blocked = 0;
+      for (const cn::TeamPlayer& p : r.players) {
+        w += p.press_weighed;
+        on += p.press_on;
+        back += p.press_back;
+        near += p.press_near;
+        blocked += p.press_blocked;
+      }
+      if (w > 0) {
+        const auto of = [&](int64_t k) { return static_cast<double>(k) / static_cast<double>(w); };
+        lab.metric("team.press.fight-share",
+                   fight > 0 ? static_cast<double>(w) / static_cast<double>(fight) : 0, "share");
+        lab.metric("team.press.on-share", of(on), "share");
+        lab.metric("team.press.back-share", of(back), "share");
+        lab.metric("team.press.near-share", of(near), "share");
+        lab.metric("team.press.blocked-share", of(blocked), "share");
+      }
+    }
     lab.metric("team.dodge-turns-per-min",
                static_cast<double>(turns) / (secs / 60) / static_cast<double>(r.players.size()),
                "per-min");
