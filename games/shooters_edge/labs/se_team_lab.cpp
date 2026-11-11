@@ -578,7 +578,9 @@ void run(gl::Lab& lab) {
       return;
     }
     trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
-             "\tscript_step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\n";
+             "\tscript_"
+             "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
+             "x\tnext_y\twish_f\twish_s\tkey_set\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -653,7 +655,16 @@ void run(gl::Lab& lab) {
         << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by << '\t' << cmd.forward << '\t'
         << cmd.side << '\t' << to_fixed(e.velocity.x, 0) << '\t' << to_fixed(e.velocity.y, 0)
         << '\t' << to_fixed(f.bot.walk_yaw, 1) << '\t' << to_fixed(f.bot.look_yaw, 1) << '\t'
-        << f.press_note << '\n';
+        << f.press_note << '\t' << p.k << '\t';
+    // The route's next node (where the pilot heads), '-' with no route.
+    if (p.g != nullptr && p.k + 1 < p.route.size()) {
+      const sh::Vec3f nx = p.g->nodes[static_cast<size_t>(p.route[p.k + 1])].origin;
+      out << to_fixed(nx.x, 0) << '\t' << to_fixed(nx.y, 0) << '\t';
+    } else {
+      out << "-\t-\t";
+    }
+    out << to_fixed(f.keys.wish_forward, 0) << '\t' << to_fixed(f.keys.wish_side, 0) << '\t'
+        << f.keys.set << '\n';
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);

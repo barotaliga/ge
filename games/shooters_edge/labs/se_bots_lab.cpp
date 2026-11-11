@@ -11,6 +11,8 @@
 // ge:skill shooter bots labs
 // ge:test tests/shooters_edge_fight_test.cpp
 #include <algorithm>
+#include <cmath>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -20,6 +22,7 @@
 #include "lab/raster.hpp"
 #include "nav_top.hpp"
 #include "shooters_edge/bots/fight_run.hpp"
+#include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
@@ -95,6 +98,48 @@ void run(gl::Lab& lab) {
     o.tempers.push_back(tp);
   }
   for (const std::string& w : split(lab.arg("traits"))) o.traits.push_back(w);
+  // TRACE (`--trace=<file>`): a TSV row per fighter every `--trace-every` commands: where it is,
+  // its speed and health, its mode and goal, the pilot's mode and why, the view, the axes sent,
+  // the velocity and the keyboard's set (-1 none) and feathering (the bot plan's scripts).
+  std::ofstream trace;
+  const int every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
+  o.watch = [&](int frame, int k, const fb::Fighter& f, const shooters_edge::server::QcServer& s,
+                const sh::MoveCmd& cmd) {
+    if (!trace.is_open() || frame % every != 0) return;
+    {
+      const auto& e = s.world.entities[static_cast<size_t>(k) + 1];
+      const sh::Pilot& p = f.bot.pilot.pilot;
+      const float sp = std::sqrt(e.velocity.x * e.velocity.x + e.velocity.y * e.velocity.y);
+      const char* goal = f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
+                             ? fb::item_call(f.items[static_cast<size_t>(f.goal_item)])
+                             : "-";
+      trace << to_fixed(s.sv.time, 2) << '\t' << k << '\t' << to_fixed(e.origin.x, 0) << '\t'
+            << to_fixed(e.origin.y, 0) << '\t' << to_fixed(e.origin.z - 24, 0) << '\t'
+            << to_fixed(sp, 0) << '\t' << to_fixed(e.health, 0) << '\t'
+            << fb::fight_mode_name(f.mode) << '\t' << goal << '\t' << f.goal_node << '\t'
+            << sh::pilot_mode_name(p.mode) << '\t' << p.because << '\t' << to_fixed(cmd.angles.y, 1)
+            << '\t' << cmd.forward << '\t' << cmd.side << '\t' << to_fixed(e.velocity.x, 0) << '\t'
+            << to_fixed(e.velocity.y, 0) << '\t' << to_fixed(f.bot.walk_yaw, 1) << '\t'
+            << f.keys.set << '\t' << (f.keys.feather ? 1 : 0) << '\t' << f.stats.pickups << '\t';
+      if (f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()) {
+        const sh::Vec3f d = f.items[static_cast<size_t>(f.goal_item)].at - e.origin;
+        trace << to_fixed(std::sqrt(d.x * d.x + d.y * d.y), 0);
+      } else {
+        trace << '-';
+      }
+      trace << '\n';
+    }
+  };
+  if (!lab.arg("trace").empty()) {
+    trace.open(lab.arg("trace"));
+    if (!trace) {
+      lab.fail("se-bots: cannot write --trace=" + lab.arg("trace"),
+               "next: pass a path in a folder that exists");
+      return;
+    }
+    trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tpilot\tbecause\tyaw"
+             "\tforward\tside\tvx\tvy\twalk_yaw\tkey_set\tfeather\tpickups\tgoal_d\n";
+  }
   const fb::FightReport r = fb::run_fight(o);
   if (!r.ok) {
     lab.fail("se-bots: " + r.error, "next: run tests/shooters_edge_fight_test.cpp");
@@ -130,6 +175,7 @@ void run(gl::Lab& lab) {
     lab.metric(key + ".deaths", p.deaths, "count");
     lab.metric(key + ".pickups", static_cast<double>(s.pickups), "count");
     lab.metric(key + ".taken-seen", static_cast<double>(s.taken), "count");
+    lab.metric(key + ".took", p.took, "count");
     total += p.frags;
   }
   lab.metric("fight.frags-per-minute", total / (secs / 60), "per-min");
@@ -268,6 +314,8 @@ const gl::LabSpec kSpec{
         {"traits", "",
          "the fighters' traits over their presets, comma separated, each name=value joined by / "
          "(aim_rl=9/timing=3); empty: the preset"},
+        {"trace", "", "a TSV of every fighter's state each --trace-every frames (the bot plan's)"},
+        {"trace-every", "4", "--trace's row every this many frames (77 a second)"},
     },
     "--frames=2000",
     run,

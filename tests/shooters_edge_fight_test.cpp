@@ -1,6 +1,7 @@
 // FIGHTERS ON THE BASELINE MOD (games/shooters_edge/bots/fighter.hpp, fight_run.hpp): four
 // fighters (two expert aims, two novice) play the baseline mod's deathmatch on the arena for two
-// minutes, on six seeds. Every one scores and dies, picks items up, switches weapons and holds one
+// minutes, on six seeds. Every one dies (and an expert scores, the novices as a pair), believes
+// it took the items the server saw it take, picks items up, switches weapons and holds one
 // better than the starting scattergun for a while, and over the six seeds spends time in each of
 // its four modes; the mod never faults; the experts outscore the novices over the six seeds (one
 // seed is a coin toss); aggressive novices fight more than cowardly ones, who back off
@@ -61,14 +62,24 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
     CHECK_MSG(r.ok, r.error);
     if (!r.ok) return;
     CHECK_MSG(r.faults == 0, "the baseline mod faulted under the fighters");
+    float novices_seed = 0;
     for (const fb::FightPlayer& p : r.players) {
       const std::string name = p.name + " seed " + std::to_string(seed);
       const fb::FighterStats& s = p.stats;
-      // Every seed he scores and dies; three frags a seed is held over the six (a novice's one
-      // two-minute match is a coin toss: 2 frags in one seed is no fault).
-      CHECK_MSG(p.frags >= 1 && p.deaths >= 3, name + " scored " + std::to_string(p.frags) +
-                                                   " and died " + std::to_string(p.deaths) +
-                                                   " times in two minutes");
+      // Every seed he dies, and an expert scores; the novices score as a pair every seed (one
+      // novice's two-minute match against two experts is a coin toss: about 4 frags a match,
+      // so one of the twelve novice matches at 0 about one run in six, 51 frags over the six
+      // seeds either way); three frags a seed is held for each over the six.
+      CHECK_MSG((p.frags >= 1 || p.skill == sh::AimSkill::novice) && p.deaths >= 3,
+                name + " scored " + std::to_string(p.frags) + " and died " +
+                    std::to_string(p.deaths) + " times in two minutes");
+      if (p.skill == sh::AimSkill::novice) novices_seed += p.frags;
+      // What his client believes he took is what the server saw him take, give or take two (an
+      // own pickup is read off the status bar, knowledge.hpp; a box at the edge of the server's
+      // 96 units is the slack).
+      CHECK_MSG(s.pickups >= p.took - 2 && s.pickups <= p.took + 2,
+                name + " believes he took " + std::to_string(s.pickups) + " items, the server " +
+                    std::to_string(p.took));
       frags[p.name] += p.frags;
       // Every seed he picks something up; two a seed is held over the six (an expert in a
       // fight most of a two-minute match took 1 to 8 a seed, 36 to 50 in four).
@@ -85,6 +96,7 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
       for (int m = 0; m < 4; m++) modes[p.name][static_cast<size_t>(m)] += s.mode_commands[m];
       (p.skill == sh::AimSkill::expert ? expert : novice) += p.frags;
     }
+    CHECK_MSG(novices_seed >= 1, "the novices scored nothing on seed " + std::to_string(seed));
     std::printf("seed %u: experts %.0f novices %.0f so far\n", seed, expert, novice);
   }
   for (const auto& [name, n] : frags)

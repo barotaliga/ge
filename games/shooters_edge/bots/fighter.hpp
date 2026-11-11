@@ -84,6 +84,7 @@ struct ItemSpot {
   // What this player believes of it (knowledge.hpp), not what the server holds.
   double back_at = 0;       // when it is expected back (while believed gone)
   double last_seen = -1e9;  // when it was last seen there
+  double mine_at = -1e9;    // when its own bar said it took it (the view sent lags behind)
   sh::Vec3f at;             // where it stands (the middle of its box on the floor)
   // Behind a door a button opens (the map's text: a button whose target is the door's name): the
   // button touched first while the door stands shut.
@@ -239,6 +240,7 @@ struct KeyHand {
   int set = -1;
   bool feather = true;
   double steer = 0;
+  float wish_forward = 0, wish_side = 0;  // the last wish it pressed (for a lab's trace)
 };
 
 struct Fighter {
@@ -426,6 +428,8 @@ struct Fighter {
   // thought of where a sound puts him on top (100 ms for a quick player, 200 for a slow one).
   float hear_react_s = 0;
   bool was_dead = false;
+  // Its status bar at the last think (knowledge.hpp: a gain there is its own pickup).
+  Stats bar;
   bool unlocking = false;  // on the way to the goal item's button
   bool swimming = false;   // in water no route leaves: following the swim field
   bool surfacing = false;  // short of air under open water: up for a breath (water.hpp)

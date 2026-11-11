@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -36,6 +37,9 @@ struct FightOptions {
   uint32_t seed = 1;           // the mod's generator; fighter k's hands seed + 31 k
   std::string root = ".";      // the repository's root (the mod's sources)
   ge::ai::Why* why = nullptr;  // decisions recorded for one fighter (its slot is the agent)
+  // Called after each fighter's command is made (`frame`, the slot, the fighter, the server
+  // before the frame runs, the command): a lab's trace (se-bots --trace). Reads only.
+  std::function<void(int, int, const Fighter&, const server::QcServer&, const sh::MoveCmd&)> watch;
 };
 
 struct FightPlayer {
@@ -48,6 +52,10 @@ struct FightPlayer {
   std::vector<float> frags_at;  // a frame its frags
   float frags = 0;
   int deaths = 0;
+  // The items the SERVER saw it take: an item's model gone in a frame, put down to the player
+  // nearest it within 96 units (a box's corner and a frame at a run). `stats.pickups` is what
+  // its client believes it took, read against this.
+  int took = 0;
   FighterStats stats;
 };
 

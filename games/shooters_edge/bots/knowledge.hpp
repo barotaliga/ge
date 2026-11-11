@@ -79,9 +79,13 @@ struct ItemNews {
 };
 
 // One think's look at the items from `eye` (the player's entity `me`, its view `pitch`/`yaw`), at
-// time `t`; returns the news a team calls out.
+// time `t`; returns the news a team calls out. Its OWN pickup it reads off its status bar `st`, as
+// a person does: a gain since the last think that an item gives (a box's own amount or up to the
+// cap, an armour, a weapon's bit) is the nearest such item believed there within `kOwnReach` (or
+// believed gone and underfoot), taken now; an item gone between two thinks at a run is past the
+// sight's own-pickup radius by the next, and the view still sends it a frame or two after.
 ItemNews knowledge_update(Fighter& f, const server::RulesCommon& s, int me, sh::Vec3f eye,
-                          double t);
+                          const Stats& st, double t);
 
 // Whether item `i` may be a goal: known, or in sight now.
 bool item_in_mind(const Fighter& f, int32_t i);
