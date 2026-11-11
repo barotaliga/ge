@@ -42,6 +42,7 @@ sv::SqHand ready(sv::SqWeapon w, sv::SqBody& b) {
 // The steps that fired over `steps` steps of attack held, and the shots of each.
 std::vector<int> held(sv::SqHand& h, sv::SqBody& b, int steps) {
   std::vector<int> shots;
+  shots.reserve(size_t(steps));
   for (int i = 0; i < steps; i++) shots.push_back(sv::sq_hand_step(h, b, true, i * 0.1).shots);
   return shots;
 }
