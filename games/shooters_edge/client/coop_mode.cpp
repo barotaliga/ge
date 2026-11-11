@@ -82,6 +82,7 @@ void coop_frame(CoopMode& m, Listen& l, bool has_campaign, const std::string& st
     if (m.coop->on() && has_campaign) {
       coop_game_lines(m, l.opt);
       l.opt.companions = m.bots->integer();
+      l.opt.new_game = true;
       next_map = start_map;
     }
   }

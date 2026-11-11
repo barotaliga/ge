@@ -141,7 +141,7 @@ void delta_fields(DemoMsg& m, int bits, const Wire& w, DemoEntity& e) {
   if ((bits & kAngle2) != 0) e.angles.y = angle(m, w);
   if ((bits & kOrigin3) != 0) e.origin.z = origin(m, w);
   if ((bits & kAngle3) != 0) e.angles.z = angle(m, w);
-  if ((bits & kTrans) != 0) m.u8();
+  if ((bits & kTrans) != 0) e.alpha = byte_alpha(m.u8());
   if ((bits & kColourMod) != 0) m.skip(3);
 }
 
@@ -242,7 +242,7 @@ void player_info(Demo& d, DemoMsg& m) {
   if ((flags & 0x40) != 0) p.skin = m.u8();
   if ((flags & 0x80) != 0) p.effects = m.u8();
   if ((flags & 0x100) != 0) p.weapon_frame = m.u8();
-  if ((flags & (1 << 17)) != 0) m.u8();  // transparency
+  p.alpha = (flags & (1 << 17)) != 0 ? byte_alpha(m.u8()) : 1.0f;  // transparency
   p.dead = (flags & 0x200) != 0;
   p.gib = (flags & 0x400) != 0;
   p.present = true;

@@ -169,7 +169,7 @@ TEST(the_classic_bar_sits_flush_on_the_bottom_and_lifts_the_gun_only_while_drawn
   CHECK(se::status_lift(hud, 720) == 0.0f);
 }
 
-TEST(hud_swap_mirrors_every_look_but_the_classic_bars) {
+TEST(hud_vitals_right_mirrors_every_look_but_the_classic_bars) {
   for (const char* look : {"classic", "modern", "arena", "tactical", "minimal"}) {
     se::Hud hud = se::make_hud();
     ge::console::Console con;
@@ -177,7 +177,8 @@ TEST(hud_swap_mirrors_every_look_but_the_classic_bars) {
     con.execute(std::string("hud_style ") + look);
     se::fill_hud(hud, armed(), art());
     const auto before = draw(hud, 1280, 720);
-    con.execute("hud_swap 1");
+    CHECK(hud.vitals == "left");
+    con.execute("hud_vitals right");
     se::fill_hud(hud, armed(), art());
     const auto after = draw(hud, 1280, 720);
     CHECK(before.size() == after.size());

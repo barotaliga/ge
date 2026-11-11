@@ -108,6 +108,10 @@ struct QcServer;
 // setting the text again brings it back), and such an entity is drawn and sent by no one.
 bool model_shown(const QcServer& s, int e);
 
+// How much of entity `e` shows, 0..1 (1 solid): the mod's `alpha` field when it sets one above 0
+// (DP_ENT_ALPHA), else the map's `alpha` key, else 1.
+float entity_alpha(const QcServer& s, int e);
+
 // The runner's half for the QC server: the lists, then the clients and every entity row. The lists
 // are copied only at the map's start (`full`); a frame's fill rewrites the rest in place.
 void fill_world(const QcServer& s, RulesWorld& w, bool full);

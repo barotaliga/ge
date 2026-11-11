@@ -5,6 +5,7 @@
 //
 // ge:summary Tests: the rules' world filled by the QC server at the start and every frame
 // ge:keywords test rules-world fill_world entity-rows client-rows player-numbers model-shown
+// ge:keywords alpha entity_alpha
 // ge:skill progs shooter testing
 #include <string>
 
@@ -103,6 +104,29 @@ TEST(an_entity_whose_model_text_is_emptied_is_not_shown) {
   CHECK(fx.s->world.entities[static_cast<size_t>(p)].modelindex ==
         static_cast<int>(fx.f(p, fx.s->q.layout->f.modelindex)));
   check_rows(fx);
+}
+
+// How much of an entity shows: a mod's `alpha` field above 0 wins, else the map's `alpha` key,
+// else solid. The test mod has no `alpha` field, so a float it leaves alone (`frags`) stands in.
+TEST(an_entitys_alpha_comes_from_the_mods_field_then_the_maps_key) {
+  Fixture fx;
+  const int p = fx.join(0, "runner");
+  CHECK(fx.s->world_fields.alpha == -1);  // no field: the map's key or solid
+  CHECK(sv::entity_alpha(*fx.s, p) == 1.0f);
+  pg::EntityExtras& x = fx.s->extras[static_cast<size_t>(p)];
+  x.has_alpha = true;
+  x.alpha = 0.25f;
+  CHECK(sv::entity_alpha(*fx.s, p) == 0.25f);
+  const int frags = fx.s->q.layout->f.frags;
+  fx.s->world_fields.alpha = frags;
+  uint32_t& field = pg::entity_field(fx.vm(), p, frags)[0];
+  field = pg::as_word(0);  // unset: the map's key still holds
+  CHECK(sv::entity_alpha(*fx.s, p) == 0.25f);
+  field = pg::as_word(0.5f);
+  sv::fill_world(*fx.s, fx.s->world, false);
+  CHECK(fx.s->world.entities[static_cast<size_t>(p)].alpha == 0.5f);
+  field = pg::as_word(3);  // past whole: solid
+  CHECK(sv::entity_alpha(*fx.s, p) == 1.0f);
 }
 
 TEST(a_client_that_leaves_empties_its_slot) {

@@ -222,6 +222,17 @@ void relay_liquid_wind(gpu::Device& device, render::Water& water, LiquidWorld& l
   }
 }
 
+void relay_liquid_pace(gpu::Device& device, render::Water& water, const LiquidWorld& lw,
+                       double pace) {
+  int slot = 0;
+  for (size_t i = 0; i < lw.world.bodies.size(); ++i) {
+    if (lw.kinds[i] != kWater) continue;
+    if (slot < int(water.bodies.size()))
+      render::set_water_pace(device, water, slot, lw.world.bodies[i], pace);
+    ++slot;
+  }
+}
+
 void light_rooms(render::Water& water, render::Liquids& liquids, const LiquidWorld& lw,
                  const LiquidRows& rows, double minlight, double brightness) {
   const double m = minlight * brightness;
@@ -299,6 +310,7 @@ void add_bsp_liquids(gpu::Device& device, render::Water& water, render::Liquids&
       draw.stir = rows.stir;
       draw.chop = rows.chop;
       draw.chop_shortest = rows.chop_shortest;
+      draw.pace = kPoolPace;  // the game's own (Options::water_pace) by relay_liquid_pace
       // The wind's gusts break the water into patches of ripples and calm as it reaches it.
       draw.gusts = lw.sites[i].exposure > 0 ? 1 : 0;
       render::add_water_body(device, water, b, draw);

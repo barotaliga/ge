@@ -49,8 +49,8 @@
 //
 // ge:summary The water's surface drawn: the snapped rings, the waves, Fresnel, refraction, glitter
 // ge:keywords render water surface ocean lake rings clipmap snapped morph fresnel reflection
-// ge:keywords refraction ssr screen-space-reflection glitter beckmann slope-variance
-// ge:keywords detail-waves water-copy create_water add_water_body set_water_body
+// ge:keywords refraction ssr screen-space-reflection glitter beckmann slope-variance water-pace
+// ge:keywords detail-waves water-copy create_water add_water_body set_water_body set_water_pace
 // ge:keywords prepare_water encode_water detail_waves hidden wake rings set_water_wakes kelvin
 // ge:keywords shore-mask shore_mask gusts cats-paws stir still-pool planar-mirror planar-reflection
 // ge:keywords water-below underside snell-window total-internal-reflection fresnel-exit daylight
@@ -133,6 +133,11 @@ struct WaterDraw {
   // them run (a 5 cm ripple about 6 times a second, a 20 cm one under 3). A pool left alone keeps
   // only the longer, slower swell of what was stirred in it.
   double chop_shortest = 0.05;
+  // The water's own pace (`set_water_pace`): its waves, chop, stir and gusts run at this share of
+  // their real speed, 1 a real water's. The wakes and the rain's rings keep the real clock (they
+  // start at a moment the game hands in). A game whose rooms are small slows a hall's pool, whose
+  // real swell reads hurried at that scale.
+  double pace = 1;
 };
 
 // A game's own pictures of the world for one body (`set_water_views`): THE MIRROR, the world
@@ -195,7 +200,8 @@ struct WaterGpuBody {
   float c[4], kd[4], deep[4], emission[4];
   float wake[4];  // rings, their life (s), the shortest wave kept (m), 0
   float air[4];   // the day's share on the water, the stir's slope, the gusts, the wind (m/s)
-  float sun[4];   // the share of the surface the sun reaches (the caustics, the shafts), 0, 0, 0
+  float sun[4];   // the share of the surface the sun reaches (the caustics, the shafts), the pace,
+                  // 0, 0
   float view[4];  // the mirror (0 none, 1 over, 2 under), the view up (1), its heading's cos, sin
   // The foam (`foam_of`): the fold's threshold on the Jacobian, the whitecap cover, its drift x, z
   float foam[4];
@@ -284,6 +290,9 @@ int add_water_body(gpu::Device& device, Water& water, const water::Body& body,
 void set_water_sunlit(Water& water, int index, double share);
 // The body read again (a lake whose waves were laid again, a new look).
 void set_water_body(gpu::Device& device, Water& water, int index, const water::Body& body);
+// The body's pace (`WaterDraw::pace`) changed: its waves staged again at it (a phase jump once).
+void set_water_pace(gpu::Device& device, Water& water, int index, const water::Body& body,
+                    double pace);
 // The body's wake rings (water/wake.hpp: the rings of `body` in the world's `wakes`, the newest
 // kWaterRings of them), drawn as the simulation sums them; again whenever rings are set off.
 void set_water_wakes(gpu::Device& device, Water& water, int index, const water::Wakes& wakes,

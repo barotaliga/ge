@@ -40,6 +40,7 @@ constexpr Choice kHudGuns[] = {{"LOOK'S OWN", "look"},
 constexpr Choice kWorldLook[] = {{"CLASSIC", "classic"}, {"MODERN", "modern"}};
 constexpr Choice kMenuLook[] = {{"AUTO", "auto"}, {"CLASSIC", "classic"}, {"MODERN", "modern"}};
 constexpr Choice kOnOff[] = {{"OFF", "0"}, {"ON", "1"}};
+constexpr Choice kSides[] = {{"LEFT", "left"}, {"RIGHT", "right"}};
 constexpr Choice kFall[] = {{"SNOW", "0"}, {"SLEET", "0.5"}, {"RAIN", "1"}};
 
 // The menu, page by page. A row's `needs` dims it while the console knows no such name.
@@ -334,13 +335,13 @@ constexpr Entry kEntries[] = {
      .target = Target::client,
      .choices = kOnOff},
     {.page = "video",
-     .id = "hud_swap",
-     .text = "HUD SIDE",
+     .id = "hud_vitals",
+     .text = "HUD VITALS",
      .kind = ItemKind::choice,
-     .hint = "ON puts each modern layout's left side on the right and its right side on the left.",
-     .needs = "hud_swap",
+     .hint = "The side health and armour stand on in the modern layouts; the rest takes the other.",
+     .needs = "hud_vitals",
      .target = Target::client,
-     .choices = kOnOff},
+     .choices = kSides},
     {.page = "video",
      .id = "hud_guns",
      .text = "HUD GUNS",
@@ -1054,8 +1055,15 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
       con.execute("sv " + std::string(r->id) + " " + item_text(*r, row));
     }
     const ge::ui::Item* map = page->find("map");
-    if (map != nullptr && !map->disabled && !map->choices.empty())
-      con.execute("map " + map->choices[static_cast<size_t>(map->choice)]);
+    if (map == nullptr || map->disabled || map->choices.empty()) return Outcome::close;
+    const std::string name = map->choices[static_cast<size_t>(map->choice)];
+    // COOPERATIVE with a campaign to play: a new coop game on that map (coop on, so `addbot`
+    // seats companions), not the map alone, which would be the single-player game.
+    const ge::ui::Item* type = page->find("deathmatch");
+    const Entry* type_entry = find_entry("host", "deathmatch", table_of(host));
+    const bool coop = type != nullptr && !type->disabled && type_entry != nullptr &&
+                      item_text(*type_entry, *type) == "0" && con.has_command("coopgame");
+    con.execute(coop ? "coopgame 0 " + name : "map " + name);
     return Outcome::close;
   }
   if (!entry->line.empty()) con.execute(entry->line);

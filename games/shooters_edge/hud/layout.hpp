@@ -29,8 +29,9 @@
 //     bottom right, the keys and the powerups only while held.
 //
 // THE OPTIONS, each a cvar: `hud_sbar 0` draws the classic look's pieces without its two panels
-// (the see-through bar); `hud_swap 1` puts every look but the classic one on the other side of the
-// screen (the engine's mirrored layout); `hud_guns ammo|pairs|row` groups the guns (Grouping;
+// (the see-through bar); `hud_vitals left|right` puts the health and armour of every look but the
+// classic one on that side of the screen, the rest on the other (`right` is the engine's mirrored
+// layout); `hud_guns ammo|pairs|row` groups the guns (Grouping;
 // `look`, the default, each look's own); `hud_guns_all 0` shows only the guns owned and
 // `hud_ammo_all 0` only the ammunition in hand. The armour's icon shows its type in every look.
 // While the classic bars show, the weapon in hand is raised over them (`status_lift`).
@@ -49,7 +50,7 @@
 //
 // ge:summary Shooter's Edge's HUDs: the classic status bar and five other looks, hud_style
 // ge:keywords hud shooter status-bar inventory-bar classic modern compact hud_style looks hud_sbar
-// ge:keywords sbar-background transparent arena tactical minimal shield-bar loadout hud_swap
+// ge:keywords sbar-background transparent arena tactical minimal shield-bar loadout hud_vitals
 // ge:keywords hud_guns hud_guns_all hud_ammo_all grouping pairs status_lift lift health armour ammo
 // ge:keywords face portrait weapons keys powerups runes frags crosshair notify centre-message ring
 // ge:keywords arcs fill_hud add_cvars layout elements viewsize
@@ -93,11 +94,11 @@ struct Hud {
   ge::hud::Layout layout;
   std::string look = "classic";  // bound to hud_style
   int32_t viewsize = 100;        // bound to viewsize: 110 drops the inventory bar, 120 every bar
-  int32_t sbar = 1;           // hud_sbar: the classic look's two panels drawn (0: its pieces alone)
-  int32_t swap = 0;           // hud_swap: every look but the classic one on the other side
-  std::string guns = "look";  // hud_guns: ammo, pairs or row; look: each look's own
-  int32_t guns_all = 1;       // hud_guns_all: every gun, those not owned dim (0: owned ones)
-  int32_t ammo_all = 1;       // hud_ammo_all: all four counts (0: the kind in hand alone)
+  int32_t sbar = 1;  // hud_sbar: the classic look's two panels drawn (0: its pieces alone)
+  std::string vitals = "left";  // hud_vitals: the side health and armour stand on (right: mirrored)
+  std::string guns = "look";    // hud_guns: ammo, pairs or row; look: each look's own
+  int32_t guns_all = 1;         // hud_guns_all: every gun, those not owned dim (0: owned ones)
+  int32_t ammo_all = 1;         // hud_ammo_all: all four counts (0: the kind in hand alone)
   ge::hud::Feed notify{4, 4.0, 0.8, 0.15};
   std::string centre;  // the centre message; empty for none
   double centre_until = 0;

@@ -705,11 +705,12 @@ void add_cvars(ge::console::Console& con, Hud& hud) {
                             "pieces alone over the world)",
                     .kind = ge::console::CvarKind::boolean},
                    &hud.sbar);
-  con.cvars().bind({.name = "hud_swap",
-                    .fallback = "0",
-                    .help = "every look but the classic one on the other side of the screen",
-                    .kind = ge::console::CvarKind::boolean},
-                   &hud.swap);
+  con.cvars().bind({.name = "hud_vitals",
+                    .fallback = "left",
+                    .help = "the side of the screen health and armour stand on in every look but "
+                            "the classic one: left, or right (the whole look mirrored)",
+                    .kind = ge::console::CvarKind::text},
+                   &hud.vitals);
   con.cvars().bind({.name = "hud_guns",
                     .fallback = "look",
                     .help = "the guns: ammo (two to a line by ammunition, each line led by its "
@@ -733,7 +734,7 @@ void add_cvars(ge::console::Console& con, Hud& hud) {
 void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   const gh::Style st = hud_style();
   const Look look = look_from(hud.look);
-  hud.layout.mirror = hud.swap != 0;
+  hud.layout.mirror = hud.vitals == "right";
   const uint8_t mine = bit(look);
   gh::Layout& L = hud.layout;
   for (size_t i = 0; i < L.size(); ++i) {
