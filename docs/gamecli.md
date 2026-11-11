@@ -19,7 +19,7 @@ The CLI is built in the three homes every feature lives in (docs/architecture.md
 | --- | --- | --- |
 | Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset`, `server settings/set`, `servers`, `server info`, `players`, `rcon`, `host`, `host list`, `host stop`, `join`, `logs` |
 | Plugin | `plugins/<name>/cli/` (built into `ge_<name>_cli`) | A group of rows any game linking the plugin adds: classic enhance's `content` (the install's packs, their release by SHA-256, the enhanced cache) |
-| Game | `games/<game>/cli/` | The game's `Spec` (its programs, ports, protocol, places, launch words, the settings it registers) and its own rows: Shooter's Edge's `demos`, `demos play` |
+| Game | `games/<game>/cli/` | The game's `Spec` (its programs, ports, protocol, places, launch words, the settings it registers) and its own rows: Shooter's Edge's `demos`, `demos play`, `demos pack`, `demos unpack` |
 
 A generic command works for a game through its `Spec`; a field it leaves null makes the
 commands that need it say the game lacks it. A game's main is one line:
