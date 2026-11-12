@@ -51,8 +51,8 @@
 // - `retarget`: a new goal run on to from the route under way, the walk or the hop kept (pilot.hpp
 //   `pilot_retarget`), not planned again from a stop's state: dropped, in no preset.
 // - `uturn`: a turn back at a run pressed across the velocity, curved through at speed, not run
-//   through a stop (fighter.cpp `turn_back_round`).
-// - `runupkeys`, `underway`, `uturn`: judging, in no preset. The numbers: docs/goals/M18r.md.
+//   through a stop (fighter.cpp `turn_back_round`; on).
+// - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
 // ge:summary A bot's features: each behaviour switched on or off by name, and the presets
