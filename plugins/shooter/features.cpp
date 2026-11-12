@@ -57,12 +57,14 @@ constexpr Features kKeys =
 // faster, a chained hop's landing 176 -> 257 units/s on dm2; `hopjump` and `hopside` on: +2.3 on
 // dm2 and +0.3 on e1m2 a match head to head, faster, the landing's jump on its first ground frame
 // 2 -> 33 %, no forward key in a hop: a player's bunny hop; `noback` and `levelview` on: +0.8 on
-// dm2 and +1.0 on e1m2 a match head to head, looks past 45 degrees down 4.6 -> 1.9 %, people's).
+// dm2 and +1.0 on e1m2 a match head to head, looks past 45 degrees down 4.6 -> 1.9 %, people's;
+// `paceback` on: -2.9 on dm2 and +4.3 on e1m2 a match head to head, a lost aim back on the way by
+// the hand's stroke, not creeping: backwards 20.6 -> 18.4 % by one rule, people 13.8).
 constexpr Features kJudging =
     of({Feature::runupkeys, Feature::underway, Feature::gappast, Feature::airgap,
         Feature::pilotcast, Feature::landwall, Feature::circlekeys, Feature::circleview,
         Feature::circleaim, Feature::leadmean, Feature::leadarc, Feature::airarc, Feature::hopopen,
-        Feature::fightway, Feature::letgo, Feature::paceback, Feature::retreatrun});
+        Feature::fightway, Feature::letgo, Feature::retreatrun});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
