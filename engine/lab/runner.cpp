@@ -258,6 +258,23 @@ Args lab_args(const LabSpec& spec, bool smoke, const Args& typed, std::string& e
   return args;
 }
 
+// On a CI machine (CI set, or GE_DIGEST_LEDGER=1), a moved digest prints what it hashed
+// (digest.tsv's lines), so a digest that moves on one platform only can be compared with this
+// machine's own `previews/<lab>/digest.tsv` without the other platform at hand.
+void print_ledger_on_ci(const char* id, const std::vector<std::string>& ledger) {
+  const char* ci = std::getenv("CI");
+  const char* asked = std::getenv("GE_DIGEST_LEDGER");
+  if (!((ci && *ci) || (asked && std::string(asked) == "1"))) return;
+  constexpr size_t kMostLines = 120, kMostWidth = 160;
+  std::fprintf(stderr, "    %s's digest hashed (compare with digest.tsv from a run elsewhere):\n",
+               id);
+  for (size_t i = 0; i < ledger.size() && i < kMostLines; i++) {
+    std::fprintf(stderr, "      %s\n", ledger[i].substr(0, kMostWidth).c_str());
+  }
+  if (ledger.size() > kMostLines)
+    std::fprintf(stderr, "      ... %zu more lines\n", ledger.size() - kMostLines);
+}
+
 }  // namespace
 
 int run_labs(int argc, const char* const* argv) {
@@ -421,6 +438,7 @@ int run_labs(int argc, const char* const* argv) {
     }
     const std::string dir = out + "/" + s->id + (tag.empty() ? "" : "@" + tag);
     uint64_t first = 0;
+    std::vector<std::string> first_ledger;  // run 1's digest inputs (printed on a CI mismatch)
     bool ok = true;
     for (int r = 0; r < repeat; r++) {
       Lab lab(*s, args);
@@ -458,6 +476,7 @@ int run_labs(int argc, const char* const* argv) {
       }
       if (r == 0) {
         first = lab.digest();
+        first_ledger = lab.ledger();
         if (!write_report(lab, dir, error)) {
           lab.fail(error, "next: fix the path, or rerun with --out=DIR.");
           error.clear();
@@ -512,6 +531,7 @@ int run_labs(int argc, const char* const* argv) {
                      "it with --tag/--compare against main to see what. Skill: labs, "
                      "determinism.\n",
                      s->id, hex64(first).c_str(), check.c_str(), it->second.c_str(), s->id);
+        print_ledger_on_ci(s->id, first_ledger);
         ok = false;
       }
     }

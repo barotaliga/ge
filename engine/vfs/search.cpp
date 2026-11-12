@@ -127,7 +127,21 @@ bool read_disk(const std::string& path, std::vector<uint8_t>* out, std::string* 
     if (error) *error = "vfs: " + path + " cannot be opened; next: check it exists and is readable";
     return false;
   }
-  out->assign(std::istreambuf_iterator<char>(in), {});
+  // Sized once and read in one call: a pack of tens of megabytes byte by byte through a stream
+  // iterator takes seconds (minutes under the sanitizers).
+  in.seekg(0, std::ios::end);
+  const std::streamoff size = in.tellg();
+  in.seekg(0, std::ios::beg);
+  if (size < 0) {
+    out->assign(std::istreambuf_iterator<char>(in), {});
+    return true;
+  }
+  out->resize(static_cast<size_t>(size));
+  if (size > 0 && !in.read(reinterpret_cast<char*>(out->data()), size)) {
+    if (error)
+      *error = "vfs: " + path + " could not be read whole; next: check the disk and the file";
+    return false;
+  }
   return true;
 }
 
