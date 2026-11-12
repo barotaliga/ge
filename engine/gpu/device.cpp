@@ -108,19 +108,21 @@ std::string system32_dir() {
 }
 #endif
 
-// Whether an environment variable is "1" (MSVC deprecates std::getenv in favour of its own).
-bool env_on(const char* name) {
+// Whether an environment variable holds `want` (MSVC deprecates std::getenv for its own).
+bool env_is(const char* name, const char* want) {
 #ifdef _MSC_VER
   char* v = nullptr;
   size_t n = 0;
-  const bool on = _dupenv_s(&v, &n, name) == 0 && v != nullptr && std::strcmp(v, "1") == 0;
+  const bool on = _dupenv_s(&v, &n, name) == 0 && v != nullptr && std::strcmp(v, want) == 0;
   std::free(v);
   return on;
 #else
   const char* v = std::getenv(name);
-  return v && std::strcmp(v, "1") == 0;
+  return v && std::strcmp(v, want) == 0;
 #endif
 }
+
+bool env_on(const char* name) { return env_is(name, "1"); }
 
 }  // namespace
 
@@ -203,7 +205,11 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
     dev->features.on[i] = true;
   }
 
-  dev->validation = options.validation < 0
+  // The browser's own limits or the adapter's best (a null below asks for WebGPU's defaults);
+  // a run on the browser's limits is a check, so its validation is always on.
+  const bool default_limits = options.default_limits || env_is("GE_GPU_LIMITS", "default");
+  dev->validation = default_limits ? true
+                    : options.validation < 0
 #ifdef NDEBUG
                         ? false
 #else
@@ -233,7 +239,7 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
   desc.label = wgpu::StringView(label.data(), label.size());
   desc.requiredFeatureCount = wanted.size();
   desc.requiredFeatures = wanted.data();
-  desc.requiredLimits = &dev->limits;
+  desc.requiredLimits = default_limits ? nullptr : &dev->limits;
   Device* self = dev.get();
   desc.SetUncapturedErrorCallback(
       [](const wgpu::Device&, wgpu::ErrorType type, wgpu::StringView message, Device* d) {
@@ -279,6 +285,7 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
     }
   });
 #endif
+  if (default_limits) dev->device.GetLimits(&dev->limits);  // what the device really has
   dev->queue = dev->device.GetQueue();
   out::info("gpu: adapter " + adapter_line(*dev));
   return dev;

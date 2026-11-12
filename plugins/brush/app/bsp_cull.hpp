@@ -47,7 +47,7 @@ struct BspCull {
   // `set_movers`); `moved` until prepare_bsp_cull has moved the chunks' boxes with them.
   std::vector<std::array<float, 4>> moves;
   bool moved = false;
-  wgpu::Buffer src, chunk_buf, pvs, dst, sizes, state, args, params;
+  wgpu::Buffer src, chunk_buf, pvs, dst, words, args, params;  // words: size, state a chunk
   std::vector<uint32_t> args_reset;
   render::Hiz hiz;
   wgpu::BindGroupLayout layout;
