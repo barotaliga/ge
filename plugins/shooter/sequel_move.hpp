@@ -34,12 +34,14 @@
 // ge:keywords sequel sequel-move player-move packed-state eighths snap jitter ladder current
 // ge:keywords conveyor duck landing water-jump step-slide clip-velocity air-accelerate gib
 // ge:keywords freeze teleport-hold delta-angles view-height sequel_move sequel_world
+// ge:keywords sequel_command jump-up-move
 // ge:skill shooter
 // ge:test tests/shooter_sequel_move_test.cpp
 #pragma once
 
 #include <cstdint>
 
+#include "shooter/pmove.hpp"
 #include "shooter/vec.hpp"
 
 namespace ge::brush {
@@ -90,6 +92,15 @@ struct SequelCmd {
   uint8_t impulse = 0;
   uint8_t light = 0;
 };
+
+// The up move the classic protocol's jump button is (the sequel's jump: an up move of 10 or more).
+inline constexpr int16_t kSqJumpUp = 200;
+
+// A classic protocol's command (`MoveCmd`, degrees) as the sequel's move reads it: each angle in
+// 65536ths of a turn (degrees × 65536 / 360 in double, wrapped to 16 bits), the moves, buttons and
+// impulse as they are, and the jump button as the up move (`kSqJumpUp`, never below a held up
+// move), so a let-go jump button lets the next jump come.
+SequelCmd sequel_command(const MoveCmd& c);
 
 // One trace's answer, as the world gives it.
 struct SequelTrace {
