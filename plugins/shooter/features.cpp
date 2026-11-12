@@ -36,10 +36,10 @@ constexpr uint64_t kKeys = (uint64_t{1} << static_cast<uint64_t>(Feature::lookwa
 // `runupkeys` and `underway` wait for their judgment (`gapbuild` and `curvekeys` on: together
 // +7.0 frags a match head to head on e1m2, the gap jumps landed 2.5 a match; `recipes` on: even
 // head to head over 12 seeds, people's hop starts taking off at ~405 against the bots' 341;
-// `uturn` on: +4.5 frags a match head to head on dm2, stops 18.8 -> 14.8 a bot-minute).
+// `uturn` on: +4.5 frags a match head to head on dm2, stops 18.8 -> 14.8 a bot-minute; `jumpfly`
+// on: +1.6 on dm2 and +2.4 on e1m2 a match head to head, run-ups 147 -> 86 a match).
 constexpr uint64_t kJudging = (uint64_t{1} << static_cast<uint64_t>(Feature::runupkeys)) |
-                              (uint64_t{1} << static_cast<uint64_t>(Feature::underway)) |
-                              (uint64_t{1} << static_cast<uint64_t>(Feature::jumpfly));
+                              (uint64_t{1} << static_cast<uint64_t>(Feature::underway));
 constexpr uint64_t kAll = (kTrial - 1) & ~kKeys & ~kJudging;
 
 bool separator(char c) { return c == ',' || c == ' ' || c == '/' || c == '\t'; }
