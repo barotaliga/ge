@@ -72,7 +72,7 @@ void map_started(PlaceNames& p, const GameAdapter& adapter, const SearchPath& fi
 }
 
 void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& adapter,
-                        const SearchPath& files, WhereAmI where) {
+                        const SearchPath& files, const WhereAmI& where) {
   con::Cvars& v = con.cvars();
   p.load = &v.add({.name = "tp_loadlocs",
                    .fallback = "1",

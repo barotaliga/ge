@@ -55,6 +55,6 @@ void map_started(PlaceNames& p, const GameAdapter& adapter, const SearchPath& fi
 
 // The place commands and cvars above (`p`, `adapter`, `files` and `where` outlive `con`).
 void add_place_commands(ge::console::Console& con, PlaceNames& p, const GameAdapter& adapter,
-                        const SearchPath& files, WhereAmI where);
+                        const SearchPath& files, const WhereAmI& where);
 
 }  // namespace shooters_edge::client

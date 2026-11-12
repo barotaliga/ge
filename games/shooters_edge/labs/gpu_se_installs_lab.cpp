@@ -144,7 +144,8 @@ void run(gl::Lab& lab) {
     std::string error;
     if (!cl::open_game_dir(f.basedir, cl::game_of(f.basedir, *f.content), files, error,
                            *f.content)) {
-      lab.fail(folder + ": " + error, "Read the reason above. Skill: shooter.");
+      lab.fail(std::string(folder).append(": ").append(error),
+               "Read the reason above. Skill: shooter.");
       continue;
     }
     lab.metric(folder + ".archives", double(cl::archive_paths(files).size()), "count", det);
@@ -158,13 +159,15 @@ void run(gl::Lab& lab) {
     map->file.assign(bytes.begin(), bytes.end());
     ge::brush::Map read;
     if (map->file.empty() || !ge::brush::read_bsp(map->file, &read, &error)) {
-      lab.fail(folder + ": " + name + " did not read: " + error,
-               "Check the install's packs. Skill: brush.");
+      lab.fail(
+          std::string(folder).append(": ").append(name).append(" did not read: ").append(error),
+          "Check the install's packs. Skill: brush.");
       continue;
     }
     sh::Locs locs;
     adapter.open_locations(adapter, files, name, locs);
-    lab.metric(folder + "." + name + ".places", double(locs.points.size()), "count", det);
+    lab.metric(std::string(folder).append(".").append(name).append(".places"),
+               double(locs.points.size()), "count", det);
     sh::Vec3f at{0, 0, 0};
     float yaw = 0;
     player_start(read, at, yaw);
@@ -173,7 +176,8 @@ void run(gl::Lab& lab) {
     cl::WorldDrawPtr world = cl::create_world_draw(
         *device, files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm, look, {}, error, {}, adapter);
     if (!world) {
-      lab.fail(folder + ": " + error, "Read the gpu: lines above. Skill: render.");
+      lab.fail(std::string(folder).append(": ").append(error),
+               "Read the gpu: lines above. Skill: render.");
       continue;
     }
     ge::render::FrameView view;
@@ -188,8 +192,14 @@ void run(gl::Lab& lab) {
     const ge::gpu::Image img = ge::gpu::read_now(*device, out);
     gl::Picture p = gl::create_picture(int(img.width), int(img.height), {0, 0, 0});
     p.rgba = img.rgba;
-    lab.shot({folder + "-" + name,
-              folder + ": " + std::string(f.content->what) + " (" + f.release + "), " + name,
+    lab.shot({std::string(folder).append("-").append(name),
+              std::string(folder)
+                  .append(": ")
+                  .append(f.content->what)
+                  .append(" (")
+                  .append(f.release)
+                  .append("), ")
+                  .append(name),
               "The start map of the install in " + folder +
                   ", found beside the game and opened with its own search path (the bundled "
                   "client's folder in it), drawn from the player's start in the modern look.",
