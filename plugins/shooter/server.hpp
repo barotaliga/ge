@@ -131,12 +131,19 @@ struct LoopCounts {
 // after each trigger touch `touch_links` runs. A plain function and its context: nothing virtual.
 using TouchWatch = void (*)(void* ctx, struct Server& sv, int trigger, int toucher, bool after);
 
+struct Solid;
+
 struct Server {
   ServerSettings set;
   std::vector<Edict> edicts;  // reserved to set.max_edicts; [0] the world
   int num_edicts = 1;         // slots in use (free ones included)
   AreaTree area;
   std::vector<BrushModel> models;  // by modelindex; [0] none, [1] the world
+  // A map of the version 38 family, which has no clip hulls: when set, the world is traced and
+  // its contents read through its brushes (`trace_move`, `world_contents`; world.hpp's
+  // `brushes` solid) and nothing else in the pool is traced. The rules that keep such a map set
+  // it on the pool they mirror their world into (the sequel's).
+  const Solid* brushes = nullptr;
   Program program;
   Globals g;
   double time = 0;          // the server's time, s

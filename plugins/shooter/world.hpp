@@ -68,6 +68,11 @@ int water_contents(const MoveWorld& world, Vec3f p);
 int brush_contents(const MoveWorld& world, Vec3f p);
 // A point (a line, no box) traced through the world alone: sight and the floor under a point.
 HullTrace point_trace(const MoveWorld& world, Vec3f start, Vec3f end);
+// A box (`mins`..`maxs` about the line) swept from `start` to `end` through a `brushes` solid,
+// colliding with what a shot does (solid and windows, not the player clip); world positions.
+HullTrace solid_box_trace(const Solid& s, Vec3f start, Vec3f mins, Vec3f maxs, Vec3f end);
+// What is at `p` in a solid of any brush kind, as the hull family's contents number.
+int solid_point_contents(const Solid& s, Vec3f p);
 // The world solid of a version 38 map: its model 0 traced by `tracer`, bounds from `mins`/`maxs`.
 Solid brushes_solid(ge::brush::BrushTracer& tracer, uint32_t model, Vec3f origin, Vec3f mins,
                     Vec3f maxs);
