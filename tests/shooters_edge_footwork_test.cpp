@@ -174,8 +174,8 @@ TEST(a_pilots_curve_is_held_on_its_keys_not_tapped) {
       CHECK_MSG(both == n - 3, "W and D held " + std::to_string(both) + " commands of " +
                                    std::to_string(n - 3) + " once down");
     else
-      CHECK_MSG(both < (n - 3) / 2, "without curvekeys W and D were held " +
-                                        std::to_string(both) + " commands: the axes not read");
+      CHECK_MSG(both < (n - 3) / 2, "without curvekeys W and D were held " + std::to_string(both) +
+                                        " commands: the axes not read");
   }
 }
 

@@ -337,16 +337,16 @@ struct Pilot {
   int32_t gap_way = -1;      // the run to a gap's lip under way (pilot_gaps.hpp `gap_run`; -1 none)
   int32_t gap_way_i = 0;     // and its commands so far
   bool safe_flight = false;
-  bool brink_free = false;    // this command's keys are a flight the move proved: no brink guard
+  bool brink_free = false;  // this command's keys are a flight the move proved: no brink guard
   // A CURVE ON THE GROUND this command (a circle jump's, a run to a gap's lip): the keys it means,
   // forward and the side key (-1 left, 1 right, 0 forward alone); `kNoCurveKeys` none. A keyboard
   // holds them (`curvekeys`) rather than reading a key set off the hands' slewed side axis.
   int8_t curve_keys = kNoCurveKeys;
-  int8_t curve_keys_last = kNoCurveKeys;  // and the last command's
-  std::vector<int32_t> shut;  // doors the caller knows are shut: never planned through
-  std::vector<NavExtraLink> shut_links;           // and links it knows are (onto a bridge still in)
-  std::vector<NavExtraLink> cut_all;              // cut and shut_links together, for the route
-  double wanted[3] = {}, pressed[3] = {};         // the last command's yaw, forward, side
+  int8_t curve_keys_last = kNoCurveKeys;   // and the last command's
+  std::vector<int32_t> shut;               // doors the caller knows are shut: never planned through
+  std::vector<NavExtraLink> shut_links;    // and links it knows are (onto a bridge still in)
+  std::vector<NavExtraLink> cut_all;       // cut and shut_links together, for the route
+  double wanted[3] = {}, pressed[3] = {};  // the last command's yaw, forward, side
   float lane = 0, lane_want = 0, lane_until = 0;  // the lane now, wanted, and until when (s)
   float offset = 0;                               // units off the line now (signed, left +)
   core::Rng lane_rng{1};

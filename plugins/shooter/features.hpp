@@ -39,22 +39,14 @@
 // - `circlejump`: a hop's first jump out of a curve on the ground, past a run's 320 (pilot.hpp).
 // - `ahead`: the walk's keys flown through the move before a bump; `bodies`: players near too.
 // - `beat`: a fight mode held a person's beat (through a peek). `trial`: an A/B's, in no preset.
-// - `keys`: a hand on a keyboard presses the keys; `keysteer`: it taps between two sets (on);
-//   `lookway` (neutral), `press` (dropped, -2.7 frags) and `counter` (keys against a slide across
-//   the wish; dropped, speed 194 -> 185) in no preset. `slopes`: a walk up a stair to 45 degrees
-//   is level to the walk (pilot.hpp; on: +3.6 frags head to head). `jumpkey`: a jump asked for
-//   is held until its key lands (bots/keyboard.hpp; on). `backstep`: a run-up stepped back facing
-//   the jump (pilot.hpp; on). `runupkeys` (pilot.hpp): judging, in no preset. `gapbuild`
-//   (pilot.hpp): a gap over water curved and run into at a hopper's speed (on). `curvekeys`: a
-//   hop's curve on the ground (a circle jump's, a gap's run to its lip) held on its keys, W and the
-//   side key, not tapped (bots/keyboard.hpp; on: with `gapbuild` +7.0 frags a match head to
-//   head on e1m2). `underway`: a
-//   walker on the ground fallen under its way (a hop off a ledge) plans again at once, as a
-//   swimmer does, not circling under the node until the stuck check, and a run-up fallen under
-//   its jump's start or into water (pilot.hpp); judging.
+// - `keys`: a keyboard's hand presses the keys; `keysteer`: taps between two sets; `jumpkey`: a
+//   jump held until its key lands; `curvekeys`: a hop's curve on the ground held on W and its side
+//   key (bots/keyboard.hpp; all on). `lookway`, `press`, `counter`: dropped, in no preset.
+// - `slopes`: a stair to 45 degrees level to the walk; `backstep`: a run-up stepped back facing
+//   the jump; `gapbuild`: a gap over water curved and run into (pilot.hpp; all on).
+// - `runupkeys`, `underway` (pilot.hpp): judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
-// `glance`), `features_none` (a plain bot). The text (`apply_features`): `all`, `none` (`plain`),
-// `+name`/`name`, `-name`, in order.
+// `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
 // ge:summary A bot's features: each behaviour switched on or off by name, and the presets
 // ge:keywords features feature-switch bot-features apply_features features_text presets keys calm
 // ge:keywords pace swimaim screen keep lead lane hop shortgoals commit danger dodge watch spam
@@ -63,8 +55,7 @@
 // ge:keywords lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen sound-swipe
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
-// ge:keywords slopes stair-corner counter backstep run-up line-up runupkeys gapbuild curvekeys
-// ge:keywords underway fallen-under-the-way
+// ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
