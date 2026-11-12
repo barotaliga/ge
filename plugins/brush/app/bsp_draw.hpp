@@ -385,7 +385,7 @@ void encode_bsp_shadows(const BspDraw& draw, const gpu::PipelineSet& pipelines,
 // "bsp.shadows", "bsp" and "bsp.sky": the map into the cleared targets.
 void encode_bsp(const BspDraw& draw, const gpu::PipelineSet& pipelines, render::FrameRecorder& rec,
                 wgpu::CommandEncoder& encoder, const render::FrameTargets& targets,
-                const wgpu::BindGroup& frame);
+                const render::FrameGroup& frame);
 // "bsp.veil", after the sky and the clouds: the sky faces' pixels times the options' sky light
 // and tint (nothing when both are 1, or in the classic mode).
 void encode_bsp_veil(const BspDraw& draw, const gpu::PipelineSet& pipelines,

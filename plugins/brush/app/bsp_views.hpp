@@ -46,7 +46,7 @@ struct BspView {
   wgpu::Texture colour, motion, mask, depth;
   wgpu::TextureView colour_view, motion_view, mask_view, depth_view;
   wgpu::Buffer uniforms;
-  wgpu::BindGroup frame;
+  ::ge::render::FrameGroup frame;  // group 0, and its parts for the passes that read few
   render::FrameUniforms staged{};
   bool on = false;  // this frame's: drawn
 };

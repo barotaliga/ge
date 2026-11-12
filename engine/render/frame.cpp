@@ -360,7 +360,7 @@ wgpu::RenderPassEncoder FrameRecorder::render(wgpu::CommandEncoder& encoder,
   open_stat(stats, mark_ns, name);
   desc.label = wgpu::StringView(name.data(), name.size());
   desc.timestampWrites = timed ? timer.writes(i) : nullptr;
-  return encoder.BeginRenderPass(&desc);
+  return gpu::begin_render_pass(encoder, desc);
 }
 
 wgpu::RenderPassEncoder FrameRecorder::render_part(wgpu::CommandEncoder& encoder,
@@ -378,7 +378,7 @@ wgpu::RenderPassEncoder FrameRecorder::render_part(wgpu::CommandEncoder& encoder
   desc.label = wgpu::StringView(name.data(), name.size());
   const bool stamps = all && (part == 0 || part == parts - 1);
   desc.timestampWrites = stamps ? &w : nullptr;
-  return encoder.BeginRenderPass(&desc);
+  return gpu::begin_render_pass(encoder, desc);
 }
 
 void FrameRecorder::end_frame(wgpu::CommandEncoder& encoder) {
@@ -401,12 +401,15 @@ void FrameRecorder::wait(gpu::Device& device) {
 }
 
 wgpu::BindGroupLayout make_layout(gpu::Device& device, std::string_view label,
-                                  std::initializer_list<Slot> slots, wgpu::ShaderStage visibility) {
+                                  std::initializer_list<Slot> slots, wgpu::ShaderStage visibility,
+                                  uint32_t only) {
   std::vector<wgpu::BindGroupLayoutEntry> entries;
   uint32_t i = 0;
   for (Slot s : slots) {
+    const uint32_t at = i++;
+    if (at < 32 && !(only >> at & 1u)) continue;
     wgpu::BindGroupLayoutEntry e{};
-    e.binding = i++;
+    e.binding = at;
     e.visibility = visibility;
     switch (s) {
       case Slot::uniform:
@@ -490,12 +493,15 @@ wgpu::PipelineLayout make_pipeline_layout(gpu::Device& device, std::string_view 
 }
 
 wgpu::BindGroup make_group(gpu::Device& device, std::string_view label,
-                           const wgpu::BindGroupLayout& layout, std::initializer_list<Bind> binds) {
+                           const wgpu::BindGroupLayout& layout, std::initializer_list<Bind> binds,
+                           uint32_t only) {
   std::vector<wgpu::BindGroupEntry> entries;
   uint32_t i = 0;
   for (const Bind& b : binds) {
+    const uint32_t at = i++;
+    if (at < 32 && !(only >> at & 1u)) continue;
     wgpu::BindGroupEntry e{};
-    e.binding = i++;
+    e.binding = at;
     e.buffer = b.buffer;
     e.textureView = b.view;
     e.sampler = b.sampler;

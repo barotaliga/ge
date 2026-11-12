@@ -235,10 +235,39 @@ enum class Slot : uint8_t {
   texture_array,  // a filterable float 2D-array texture
 };
 
+// `only` (a bit a binding) keeps just those bindings, each at its own number: a pass that reads
+// a few of a shared group's bindings gets a layout (and a group, `make_group`'s) of those alone.
 wgpu::BindGroupLayout make_layout(gpu::Device& device, std::string_view label,
-                                  std::initializer_list<Slot> slots, wgpu::ShaderStage visibility);
+                                  std::initializer_list<Slot> slots, wgpu::ShaderStage visibility,
+                                  uint32_t only = ~0u);
 wgpu::PipelineLayout make_pipeline_layout(gpu::Device& device, std::string_view label,
                                           std::initializer_list<wgpu::BindGroupLayout> groups);
+
+// WHAT A PASS READS OF GROUP 0, a bit a binding of frame.wgsl's (`frame_layout`'s `reads`). A
+// layout holds every binding it lists against the stage's limits whether the shader reads it or
+// not, and a browser allows 16 sampled textures a stage by default: a pass whose own group is
+// big takes group 0 with only what its shaders read (Tint's `--dump-inspector-bindings` lists it).
+constexpr uint32_t frame_bits(std::initializer_list<uint32_t> bindings) {
+  uint32_t m = 0;
+  for (const uint32_t b : bindings) m |= 1u << b;
+  return m;
+}
+inline constexpr uint32_t kFrameAll = (1u << 17) - 1;  // every binding (most passes)
+// The frame block and the sky's light: a screen pass that reads no texture of the world's.
+inline constexpr uint32_t kFrameBlock = frame_bits({0, 6});
+// A lit surface: the block, the sun through the air, the sky's two views, the clouds, the fog.
+inline constexpr uint32_t kFrameSurface = frame_bits({0, 1, 2, 4, 6, 7, 8, 9, 11});
+// Water: a surface's, and the aerial volume, the local lights, the lamps' atlas, the shafts.
+inline constexpr uint32_t kFrameWater = kFrameSurface | frame_bits({5, 10, 13, 14, 16});
+
+// Group 0 made over one set of inputs: `all` for most passes, and the same inputs as a pass that
+// reads a few of them binds them (`kFrameBlock`, `kFrameSurface`, `kFrameWater`). Passes that take
+// a plain group take `all`.
+struct FrameGroup {
+  wgpu::BindGroup all, block, surface, water;
+  operator const wgpu::BindGroup&() const { return all; }  // NOLINT(google-explicit-constructor)
+  explicit operator bool() const { return bool(all); }
+};
 
 // One entry of a bind group: a buffer, a texture view or a sampler, at binding = its position.
 struct Bind {
@@ -250,7 +279,8 @@ struct Bind {
   Bind(wgpu::Sampler s) : sampler(std::move(s)) {}   // NOLINT(google-explicit-constructor)
 };
 wgpu::BindGroup make_group(gpu::Device& device, std::string_view label,
-                           const wgpu::BindGroupLayout& layout, std::initializer_list<Bind> binds);
+                           const wgpu::BindGroupLayout& layout, std::initializer_list<Bind> binds,
+                           uint32_t only = ~0u);
 
 // A texture, labelled; `depth` > 1 makes it 3D, `mips` > 1 gives it a mip chain.
 wgpu::Texture make_texture(gpu::Device& device, std::string_view label, uint32_t width,

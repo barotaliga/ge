@@ -46,7 +46,8 @@ struct Scene {
   wgpu::Buffer uniforms;
   r::FrameUniforms staged{};
   wgpu::BindGroupLayout layout;
-  wgpu::BindGroup frame, clear_frame, post_group;
+  ::ge::render::FrameGroup frame, clear_frame;
+  wgpu::BindGroup post_group;
   r::Sky sky;
   r::Terrain terrain;
   r::Post post;
@@ -119,7 +120,7 @@ ge::gpu::Image frame(ge::gpu::Device& d, Scene& s, const ge::gpu::Target& out,
   d.queue.WriteBuffer(s.uniforms, 0, &s.staged, sizeof s.staged);
   r::prepare_sky(s.sky, v);
   r::prepare_terrain(d, s.terrain, v);
-  const wgpu::BindGroup& g = clear ? s.clear_frame : s.frame;
+  const r::FrameGroup& g = clear ? s.clear_frame : s.frame;
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   r::encode_sky_tables(s.sky, s.pipelines, s.rec, e);
   r::encode_terrain_cull(s.terrain, s.pipelines, s.rec, e, g);

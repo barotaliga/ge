@@ -9,6 +9,7 @@
 // ge:test tests/gpu_device_test.cpp
 #include "gpu/device.hpp"
 
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -201,6 +202,11 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
         !dev->adapter.HasFeature(kFeatureNames[i])) {
       continue;
     }
+#if defined(__EMSCRIPTEN__)
+    // A page's timers are coarse by design, and a split pass's "no write" index does not cross
+    // into the browser's API: the web build times nothing.
+    if (static_cast<Feature>(i) == Feature::timestamp_query) continue;
+#endif
     wanted.push_back(kFeatureNames[i]);
     dev->features.on[i] = true;
   }
@@ -294,6 +300,18 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
 void end_load(Device& device) { device.loading = false; }
 
 void wait(Device& device, wgpu::Future future) { device.instance.WaitAny(future, UINT64_MAX); }
+
+wgpu::RenderPassEncoder begin_render_pass(wgpu::CommandEncoder& encoder,
+                                          const wgpu::RenderPassDescriptor& desc) {
+  if (!desc.depthStencilAttachment || !std::isnan(desc.depthStencilAttachment->depthClearValue)) {
+    return encoder.BeginRenderPass(&desc);
+  }
+  wgpu::RenderPassDepthStencilAttachment depth = *desc.depthStencilAttachment;
+  depth.depthClearValue = 0.0f;  // read only when it clears, and then it was set
+  wgpu::RenderPassDescriptor d = desc;
+  d.depthStencilAttachment = &depth;
+  return encoder.BeginRenderPass(&d);
+}
 
 std::string adapter_line(const Device& d) {
   std::string line = d.report.name + " / " + d.report.driver + " / " + d.report.backend;

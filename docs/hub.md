@@ -151,15 +151,19 @@ writes `<game>_viewer.js` and `.wasm` into `build/web/<game>_viewer/`, the folde
 (`.pak`, `.pk3`), and the Demo and Watch pages hand them to the viewer by name order.
 
 THE LIMITS. A browser offers WebGPU's default limits unless the machine's GPU earns it more:
-16 sampled textures a shader stage and 256 layers an array texture, among others. The software
-adapter in the container offers exactly those. The renderer asks for more today (the frame's
-bind group alone holds 11 textures), so the viewer loads, fetches and plays but its world's
-pipelines do not build there; fitting the renderer within the defaults is row M56g2. A native
-run asks for exactly those defaults with `GE_GPU_LIMITS=default` (validation on), so every
-pipeline over them names itself in the log without a browser. The shadow cubes already fit (as
-many as the device's array layers hold: 42 in a browser, 48 elsewhere) and the cull reads its
-chunks' sizes and states from one buffer (8 storage buffers a stage); the frame's textures are
-what is left.
+16 sampled textures a shader stage, 8 storage buffers and 256 layers an array texture, among
+others. The software adapter in the container offers exactly those. A pipeline layout counts every
+entry its stages can see, used or not, so the frame's group 0 (17 entries, 11 of them textures)
+is built whole for the passes that read most of it and in lean parts for the rest
+(`render::FrameGroup`: `block` for post, `surface` for the classic map, `water` for the water),
+each keeping its bindings' own numbers so one WGSL source serves both; the parts come from what
+each entry point statically reads (Tint's binding inspector). The shadow cubes are as many as the
+device's array layers hold (42 in a browser, 48 elsewhere), and the cull reads its chunks' sizes
+and states from one buffer. Two browser refusals the native device lets pass are taken out at the
+source: a render pass's NaN depth clear value (`gpu::begin_render_pass` gives it 0) and timestamp
+queries (not asked for on the web). A native run asks for exactly the defaults with
+`GE_GPU_LIMITS=default` (validation on), so a pipeline over them names itself in the log without
+a browser.
 
 Two cheaper ways stay in the plan beside it: Watch and Play buttons that open the installed game
 (`<game>://tv/<node>/<stream>`, `<game>://demo/<sha256>`, a link each client registers), and the

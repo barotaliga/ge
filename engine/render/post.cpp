@@ -6,6 +6,7 @@
 // ge:skill render
 // ge:test tests/render_post_test.cpp
 #include "render/post.hpp"
+#include "render/sky.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -38,8 +39,8 @@ struct LookBlock {
 }  // namespace
 
 void create_post(gpu::Device& device, gpu::PipelineSet& pipelines, Post& post,
-                 const wgpu::BindGroupLayout& frame, wgpu::TextureFormat output,
-                 const PostSettings& settings) {
+                 const wgpu::BindGroupLayout& /*frame: post reads only kFrameBlock of group 0*/,
+                 wgpu::TextureFormat output, const PostSettings& settings) {
   post.settings = settings;
   post.output = output;
   post.layout = make_layout(
@@ -119,7 +120,8 @@ void create_post(gpu::Device& device, gpu::PipelineSet& pipelines, Post& post,
     fragment.targets = &colour;
     wgpu::RenderPipelineDescriptor desc{};
     desc.label = label;
-    desc.layout = make_pipeline_layout(device, "post.draw", {frame, post.layout});
+    desc.layout =
+        make_pipeline_layout(device, "post.draw", {frame_layout(device, kFrameBlock), post.layout});
     desc.vertex.module = module;
     desc.vertex.entryPoint = "vs_main";
     desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
@@ -252,7 +254,7 @@ std::vector<uint8_t> lens_dirt(uint32_t w, uint32_t h, uint32_t seed) {
 }
 
 void encode_post(const Post& post, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
-                 wgpu::CommandEncoder& encoder, const wgpu::BindGroup& frame,
+                 wgpu::CommandEncoder& encoder, const FrameGroup& frame,
                  const wgpu::BindGroup& group, const wgpu::TextureView& output) {
   wgpu::RenderPassColorAttachment colour{};
   colour.view = output;
@@ -264,7 +266,7 @@ void encode_post(const Post& post, const gpu::PipelineSet& pipelines, FrameRecor
   desc.colorAttachments = &colour;
   wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "post");
   pass.SetPipeline(pipelines.render(post.bloom_on ? post.p_draw : post.p_dry));
-  pass.SetBindGroup(0, frame);
+  pass.SetBindGroup(0, frame.block);
   pass.SetBindGroup(1, group);
   pass.Draw(3);
   ++rec.current().draws;

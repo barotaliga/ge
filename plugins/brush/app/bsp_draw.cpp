@@ -16,6 +16,7 @@
 #include "brush/app/bsp_fix.wgsl.hpp"
 #include "brush/app/bsp_flames.hpp"
 #include "brush/app/bsp_shadow.wgsl.hpp"
+#include "render/sky.hpp"
 #include "render/view.hpp"
 #include "water/glow.hpp"
 
@@ -384,7 +385,8 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     depth.depthCompare = wgpu::CompareFunction::Greater;
     wgpu::RenderPipelineDescriptor desc{};
     desc.label = "bsp.draw";
-    desc.layout = r::make_pipeline_layout(device, "bsp.draw", {frame, d.layout});
+    desc.layout = r::make_pipeline_layout(device, "bsp.draw",
+                                          {r::frame_layout(device, r::kFrameSurface), d.layout});
     desc.vertex.module = module;
     desc.vertex.entryPoint = "vs_main";
     desc.vertex.bufferCount = 1;
@@ -1045,7 +1047,7 @@ void encode_bsp_shadows(const BspDraw& d, const gpu::PipelineSet& pipelines, r::
 
 void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRecorder& rec,
                 wgpu::CommandEncoder& encoder, const r::FrameTargets& targets,
-                const wgpu::BindGroup& frame) {
+                const r::FrameGroup& frame) {
   const bool v2 = d.options.mode == Mode::v2;
   encode_bsp_shadows(d, pipelines, rec, encoder);
   // The map: every kind's faces, or (culled) a phase's, drawn into the targets; the late phase
@@ -1076,7 +1078,7 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
     const bool lit_only =
         d.staged.info[0] > 0.5f && d.staged.info[1] == 1.0f && d.staged.weather[0] < 0.5f;
     pass.SetPipeline(pipelines.render(lit_only ? d.p_draw_lit : d.p_draw));
-    pass.SetBindGroup(0, frame);
+    pass.SetBindGroup(0, frame.surface);
     pass.SetBindGroup(1, d.group);
     pass.SetVertexBuffer(0, d.vertices);
     pass.SetIndexBuffer(culled ? d.cull.dst : d.indices, wgpu::IndexFormat::Uint32);
