@@ -175,10 +175,10 @@ void run(gl::Lab& lab) {
   lab.metric("cards_in_order", in_order, "of 6");
   if (servers.find("Night Arena <EU>") != std::string::npos) {
     lab.fail("a server's name reached the page unescaped",
-             "escape it with html_escape (pages.cpp)");
+             "next: escape it with html_escape (pages.cpp)");
   }
   if (servers.find("<script") != std::string::npos) {
-    lab.fail("the Servers page carries script", "the pages are plain HTML; drop the script");
+    lab.fail("the Servers page carries script", "next: the pages are plain HTML; drop the script");
   }
 
   const std::string browser = lab.arg("browser") == "0" ? "" : ge::lab::hub_browser::find_browser();
