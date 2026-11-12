@@ -59,15 +59,25 @@ std::vector<const vfs::PakEntry*> assets_of(const vfs::Pak& pak, const AssetKind
   return out;
 }
 
+std::span<const uint8_t> palette_of(const Profile& p, std::span<const uint8_t> file) {
+  const std::string_view name = p.palette;
+  const bool pcx = name.size() >= 4 && name.substr(name.size() - 4) == ".pcx";
+  if (!pcx) return file.size() >= 768 ? file.first(768) : std::span<const uint8_t>{};
+  if (file.size() < 128 + 769 || file[0] != 10 || file[file.size() - 769] != 0x0C) return {};
+  return file.last(768);
+}
+
 bool read_palette(const Profile& p, const vfs::Pak& pak, std::span<const uint8_t> bytes,
                   Palette* out, std::string* error) {
   const vfs::PakEntry* pal = vfs::pak_find(pak, p.palette);
-  if (pal == nullptr || pal->size < out->rgb.size()) {
-    *error = "the pack has no " + std::string(p.palette) + " of 768 bytes; it is not " +
+  const std::span<const uint8_t> rgb =
+      pal == nullptr ? std::span<const uint8_t>{} : palette_of(p, vfs::pak_file(bytes, *pal));
+  if (rgb.size() < out->rgb.size()) {
+    *error = "the pack has no palette in " + std::string(p.palette) + "; it is not " +
              std::string(p.what) + "'s pack (profile " + std::string(p.id) + ")";
     return false;
   }
-  std::memcpy(out->rgb.data(), vfs::pak_file(bytes, *pal).data(), out->rgb.size());
+  std::memcpy(out->rgb.data(), rgb.data(), out->rgb.size());
   return true;
 }
 

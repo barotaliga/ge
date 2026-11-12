@@ -1,8 +1,8 @@
 // A MAP FILE UNDER THE MOD SERVER: the 29 fixture map read into a MapSpec (its world's hulls, its
 // entity lump) and loaded by the test mod; a player spawned on a deathmatch spot in the hall falls
 // onto its floor and stands there; the server's visibility hook answers from the map's PVS and
-// hearing from its PHS (the hall hears the vault it cannot see); a 38 map is refused with its
-// family named.
+// hearing from its PHS (the hall hears the vault it cannot see); a 38 map builds no hulls and hands
+// its brushes over for the rules that trace them.
 //
 // ge:summary Test: a fixture map file loaded by the mod server: a player stands, the PVS and PHS
 // ge:keywords test shooters-edge bsp map read_bsp_map use_map_sets pvs phs vis load_map fixture
@@ -86,11 +86,12 @@ TEST(the_server_s_sets_are_the_map_s_pvs_and_phs) {
   CHECK(!s->vis(s->vis_ctx, {-100, -100, -100}, hall, true));
 }
 
-TEST(a_map_that_sweeps_through_brushes_is_refused) {
+TEST(a_map_that_sweeps_through_brushes_hands_its_brushes_over_and_builds_no_hulls) {
   sv::BspMap map;
   sv::MapSpec spec;
   std::string error;
-  CHECK(!sv::read_bsp_map(written(br::Family::v38), "halls", &map, &spec, error));
-  CHECK(error.find("maps/halls.bsp") != std::string::npos);
-  CHECK(error.find("next:") != std::string::npos);
+  CHECK_MSG(sv::read_bsp_map(written(br::Family::v38), "halls", &map, &spec, error), error);
+  CHECK(spec.name == "halls" && spec.models.empty() && !spec.entities.empty());
+  CHECK(spec.brushes.get() == &map.map);  // a view of the map read, kept alive by the caller
+  CHECK(map.world.models.empty());
 }
