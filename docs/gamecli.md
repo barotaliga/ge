@@ -17,7 +17,7 @@ The CLI is built in the three homes every feature lives in (docs/architecture.md
 
 | Layer | Where | What it gives |
 | --- | --- | --- |
-| Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset`, `server settings/set`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `join`, `logs`, `account signup/signin/code/recover/show` |
+| Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset/check/format`, `server settings/set/check/format`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `join`, `logs`, `account signup/signin/code/recover/show` |
 | Plugin | `plugins/<name>/cli/` (built into `ge_<name>_cli`) | A group of rows any game linking the plugin adds: classic enhance's `content` (the install's packs, their release by SHA-256, the enhanced cache) |
 | Game | `games/<game>/cli/` | The game's `Spec` (its programs, ports, protocol, places, launch words, the settings it registers) and its own rows: Shooter's Edge's `demos`, `demos play`, `demos pack`, `demos unpack` |
 
@@ -63,6 +63,14 @@ player's agent installs it with `shooters_edge_cli skill > ~/.claude/skills/shoo
   written by `server set` into the base game directory's `server.cfg`, the line that sets it
   rewritten in place. `server settings` works them out exactly as the dedicated process does
   (`engine/server/config.hpp`'s layers, in this process) and says where each value came from.
+- **Checked and tidied** without running (`engine/console/cfg_tidy.hpp`): `settings check` and
+  `server check` read a cfg (the player's `config.cfg`, the install's `server.cfg`, or a file
+  named) and list each line that sets a setting the game lacks (with the nearest name), a value
+  none of the setting's own values fit (with what it takes, from the catalog's `values`) or a
+  setting set twice; they exit 1 when they find one. `settings format` and `server format` write
+  it back tidy: `--comments` puts each setting's one sentence above it, `--pretty` groups the
+  settings into sections in one fixed order with their values in one column, binds by key, then
+  aliases and the other commands as written; `--write` rewrites the file in place.
 
 ## Servers
 

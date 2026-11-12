@@ -102,8 +102,10 @@ Cvars::Cvars(bool is_server) : is_server_(is_server) {
   sv_cheats_ = &add({.name = "sv_cheats",
                      .fallback = "0",
                      .flags = kServer | kServerInfo,
-                     .help = "1 lets the cheat-flagged cvars change (development, experiments)",
-                     .kind = CvarKind::boolean});
+                     .help = "Whether the settings and commands marked as cheats may be used.",
+                     .kind = CvarKind::boolean,
+                     .values = "0: no cheats (the default); 1: cheats allowed, for development "
+                               "and experiments"});
 }
 
 Cvar* Cvars::find(std::string_view name) {
@@ -178,6 +180,7 @@ Cvar& Cvars::make(const CvarSpec& spec, CvarTarget target) {
   c->name = lower(spec.name);
   c->fallback = std::string(spec.fallback);
   c->help = std::string(spec.help);
+  c->values = std::string(spec.values);
   c->flags = spec.flags | (kept ? (c->flags & kArchive) : 0u);
   c->kind = spec.kind;
   c->min = spec.min;
