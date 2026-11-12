@@ -214,8 +214,9 @@ std::unique_ptr<cl::LoadedMap> stub_map(const std::string& name) {
 }  // namespace
 
 // The campaign running as a game without coop (MULTIPLAYER > NEW GAME's COOPERATIVE once ran it
-// so): `addbot` is refused, and `coopgame` starts a new game in coop, not a change of map, so the
-// companions it asks for sit beside the player and `addbot` seats more.
+// so): `addbot` seats a companion and turns it cooperative, `removebot` makes it single player
+// again, and `coopgame` starts a new game in coop, not a change of map, so the companions it asks
+// for sit beside the player and `addbot` seats more.
 TEST(coopgame_in_a_running_campaign_starts_a_coop_game_that_takes_bots) {
   ge::console::Console con;
   cl::Listen listen;
@@ -230,10 +231,10 @@ TEST(coopgame_in_a_running_campaign_starts_a_coop_game_that_takes_bots) {
   CHECK_MSG(cl::start_map(listen, c, stub_map("first"), error), error);
   CHECK(listen.campaign_host != nullptr);
   CHECK(cl::listen_lobby(listen, "addbot"));
-  CHECK(!listen.party || cl::party_size(*listen.party) == 0);
-  CHECK(listen.prints.size() >= 2 &&
-        listen.prints[listen.prints.size() - 2].find("cooperative") != std::string::npos);
-  CHECK(listen.prints.back().find("coopgame") != std::string::npos);
+  CHECK(listen.party != nullptr && cl::party_size(*listen.party) == 1);
+  CHECK(listen.server->cvars.find("coop")->on());
+  CHECK(cl::listen_lobby(listen, "removebot"));
+  CHECK(cl::party_size(*listen.party) == 0 && !listen.server->cvars.find("coop")->on());
 
   con.execute("coopgame 2 first");
   CHECK(next_map == "first" && listen.opt.new_game);
@@ -248,10 +249,12 @@ TEST(coopgame_in_a_running_campaign_starts_a_coop_game_that_takes_bots) {
   CHECK_MSG(cl::start_map(listen, c, stub_map("second"), error), error);
   CHECK(cl::party_size(*listen.party) == 3);
 
-  // `newgame` is a new single-player game: coop off, the companions let go.
+  // `newgame` is a new single-player game: coop off, the companions let go; `addbot` then seats
+  // one in it as in any single-player game.
   con.execute("newgame");
   CHECK_MSG(cl::start_map(listen, c, stub_map("start"), error), error);
   CHECK(!listen.party || cl::party_size(*listen.party) == 0);
+  CHECK(!listen.server->cvars.find("coop")->on());
   CHECK(cl::listen_lobby(listen, "addbot"));
-  CHECK(!listen.party || cl::party_size(*listen.party) == 0);
+  CHECK(cl::party_size(*listen.party) == 1 && listen.companion_coop);
 }

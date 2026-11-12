@@ -32,10 +32,8 @@
 // THE PARTY (a campaign in coop: coop_party.hpp): companions seated by `addbot` or
 // `ListenOptions::companions`, carried from map to map by the campaign host, their packets in each
 // frame after the player's; `removebot` lets one go. With a port, others join it (`CampaignDoor`).
-// A COMPANION IN SINGLE PLAYER: `addbot` at any time in a single-player game turns it cooperative
-// there and then (server/campaign.hpp's `campaign_set_coop`: a dead player respawns instead of
-// restarting the map, nobody spawns on the player) and seats the companion; when the last one
-// leaves, the game is single player again (`companion_coop`). Saving waits until it has gone.
+// In single player `addbot` turns the game cooperative until the last companion leaves
+// (`companion_coop`, server/campaign.hpp's `campaign_set_coop`); saving waits until then.
 //
 // THE LOBBY (`ListenOptions::lobby`, a match only): the server's (net/classic_game.hpp). Every
 // map opens in warmup with the player and the bots seated in `room` (lobby_room.hpp); the player is
@@ -59,8 +57,7 @@
 // ge:keywords match-restart restarted listen_lobby_view on_lobby_screen lobby-screen
 // ge:keywords listen_campaign campaign single-player map_changed level-change
 // ge:keywords listen_save listen_load savegame listen_save_text listen_load_text classic-save
-// ge:keywords coop party companions campaign-door coop-join coop-over-network
-// ge:keywords companion-coop single-player-companion
+// ge:keywords coop party companions campaign-door coop-join coop-over-network companion-coop
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
