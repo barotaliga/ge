@@ -68,6 +68,7 @@
 #include "core/prng.hpp"
 #include "net/status.hpp"
 #include "net/transport.hpp"
+#include "server/bans.hpp"
 #include "server/guards.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
 #include "shooters_edge/net/classic_channel.hpp"
@@ -104,6 +105,12 @@ struct ServerConfig {
   int rcon_time_s = 60;     // sv_rcontime
   int rcon_rate = 10;       // sv_rconrate
   int64_t (*unix_time)() = nullptr;
+  // THE BAN LIST (engine/server/bans.hpp, `ClassicServer::bans`): a connect or remote console
+  // line from an address it refuses under `ban_mode` (sv_banmode: 1 the list bans, 0 only the list
+  // joins) is refused: "You are banned from this server."; `writeip` saves it to `ban_file`
+  // (empty: it only answers the lines), which the game reads back at start.
+  int ban_mode = 1;
+  std::string ban_file;
   // Keys the server info carries beside the rules' (the place, the public address, the owner):
   // browsers list them; an empty value is left out.
   std::vector<std::pair<std::string, std::string>> info;
@@ -187,6 +194,9 @@ struct StrafeGuard {
   uint32_t seq = 0;     // the last packet's sequence (0: none yet)
   sh::MoveCmd last[2];  // the last packet's two newest commands, as guarded
 };
+// The server's clock in Unix seconds (`ServerConfig::unix_time`; 0 without one).
+struct ClassicServer;
+int64_t classic_unix_time(const ClassicServer& s);
 // One command's side move through the guard: what the loop gets.
 int16_t safe_strafe(StrafeGuard& g, int16_t side, int n);
 
@@ -253,6 +263,7 @@ struct Challenge {
 
 struct ClassicServer {
   ServerConfig cfg;
+  gs::BanList bans;
   const sv::RulesRunner* rules = nullptr;  // the rules served (their map started)
   sv::RulesCommon* game = nullptr;         // what every runner keeps: `*rules`'s
   gn::Transport* transport = nullptr;

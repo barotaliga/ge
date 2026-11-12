@@ -11,6 +11,8 @@
 // ge:keywords test users status speedjump grant rcon rcon_password classic_admin easy-jump
 // ge:keywords aimhelp aim-help player-aids join-line
 // ge:skill net shooter testing
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -345,4 +347,41 @@ TEST(rcon_takes_a_hashed_password_and_sv_rconcrypt_requires_it) {
   CHECK(any_has(rig.answers(), "Bad rcon_password."));
   CHECK(rig.server.counts.rcon_run == 1);
   CHECK(rig.server.counts.rcon_refused == 3);
+}
+
+// The ban list over the remote console: `addip` bans bert's address (a simulated node counts as
+// 198.18.0.<node>), so he is refused at connect and anna plays; `writeip` saves the list as
+// `addip` lines; an address the list bans gets no rcon answer; sv_banmode 0 turns the list round.
+TEST(the_ban_list_refuses_its_addresses_and_saves_itself) {
+  const std::string file =
+      (std::filesystem::temp_directory_path() / "se_admin_listip.cfg").string();
+  std::filesystem::remove(file);
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.rcon_password = "secret";
+  cfg.ban_file = file;
+  CHECK(rig.start(cfg));
+  rig.oob("rcon secret addip 198.18.0.2\n");
+  CHECK(any_has(rig.answers(), "added 198.18.0.2"));
+  rig.oob("rcon secret listip\n");
+  CHECK(any_has(rig.answers(), "1 addresses listed"));
+  for (int i = 0; i < 2; i++) rig.begin(i);
+  rig.frames(600);
+  CHECK(rig.c[0].stage == cn::ClientStage::active);
+  CHECK(rig.c[1].stage != cn::ClientStage::active);
+  CHECK_MSG(rig.c[1].refused.find("banned") != std::string::npos, rig.c[1].refused);
+  rig.oob("rcon secret writeip\n");
+  CHECK(any_has(rig.answers(), "Saved 1 addresses"));
+  std::ifstream f(file);
+  std::string line;
+  CHECK(std::getline(f, line) && line == "addip 198.18.0.2");
+  rig.oob("rcon secret addip 198.18.0.9\n");  // the console's own address
+  CHECK(any_has(rig.answers(), "added"));
+  rig.oob("rcon secret listip\n");
+  CHECK(rig.answers().empty());  // banned: no answer
+  rig.server.cfg.ban_mode = 0;   // only the list joins: the console's address again
+  rig.oob("rcon secret listip\n");
+  CHECK(any_has(rig.answers(), "2 addresses listed"));
+  std::filesystem::remove(file);
 }

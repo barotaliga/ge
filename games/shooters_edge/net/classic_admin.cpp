@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <fstream>
 #include <utility>
 #include <vector>
 
@@ -255,6 +256,17 @@ bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) 
     out = classic_status_table(s);
     return true;
   }
+  if (gsv::ban_command(s.bans, line, classic_unix_time(s), out)) {
+    if (cmd == "writeip" && !s.cfg.ban_file.empty()) {
+      std::ofstream f(s.cfg.ban_file, std::ios::binary | std::ios::trunc);
+      f << out;
+      out =
+          f ? "Saved " + std::to_string(s.bans.entries.size()) + " addresses to " + s.cfg.ban_file +
+                  "\n"
+            : "writeip: could not write " + s.cfg.ban_file + "; check the folder can be written\n";
+    }
+    return true;
+  }
   gsv::AidOrder order;
   std::string error;
   if (!gsv::aid_parse(kAids, line, order, error)) return false;
@@ -349,6 +361,10 @@ std::string rcon_digest_field(const std::string& password, const std::string& li
 void classic_rcon(ClassicServer& s, const gn::Address& from, const std::string& text) {
   if (s.cfg.rcon_password.empty()) {
     send_oob_print(s, from, "Remote console is not offered by this server.\n");
+    return;
+  }
+  if (gsv::ban_refuses(s.bans, s.cfg.ban_mode, from, classic_unix_time(s))) {
+    s.counts.rcon_refused++;  // a banned address is not answered
     return;
   }
   const int64_t second = static_cast<int64_t>(s.now);

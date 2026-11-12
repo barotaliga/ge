@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
+#include <fstream>
 #include <iterator>
 #include <memory>
 #include <span>
@@ -157,6 +158,8 @@ constexpr gs::GameRule kEndpointRules[] = {
      "1: the remote console takes only a hashed password, never the password itself (0)"},
     {"sv_rcontime", "seconds a hashed remote console line's time may be off, 0..3600 (0: any; 60)"},
     {"sv_rconrate", "remote console tries answered a second, 0..1000 (0: no limit; 10)"},
+    {"sv_banmode",
+     "1: addresses on the ban list (addip) are refused; 0: only those on it may join (1)"},
     {"maxfps", "the most moves a second a client sends, told in the server info (77)"},
     {"sv_download", "0: no file is offered to a client that lacks one (1)"},
     {"sv_download_skins", "0: no skins/ file is offered (1)"},
@@ -253,6 +256,7 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_crypt_rcon", "sv_rconcrypt"},
     {"sv_timestamplen", "sv_rcontime"},
     {"sv_rconlim", "sv_rconrate"},
+    {"filterban", "sv_banmode"},
 };
 
 // The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
@@ -364,6 +368,7 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
       !endpoint_flag(c, "sv_rconcrypt", cfg.rcon_crypt, error) ||
       !endpoint_int(c, "sv_rcontime", 0, 3600, cfg.rcon_time_s, error) ||
       !endpoint_int(c, "sv_rconrate", 0, 1000, cfg.rcon_rate, error) ||
+      !endpoint_int(c, "sv_banmode", 0, 1, cfg.ban_mode, error) ||
       !endpoint_int(c, "maxfps", 20, 1000, cfg.maxfps, error) ||
       !endpoint_int(c, "sv_download", 0, 1, all, error) ||
       !endpoint_int(c, "sv_download_skins", 0, 1, skins, error) ||
@@ -674,7 +679,10 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
   g->cfg.rcon_password = c.rcon_password;
-  g->cfg.unix_time = [] { return static_cast<int64_t>(std::time(nullptr)); };  // hashed rcon
+  g->cfg.unix_time = [] { return static_cast<int64_t>(std::time(nullptr)); };  // rcon, bans
+  // The ban list beside the game's files, where a dedicated server keeps its own (writeip).
+  if (g->host == nullptr && !g->files.folder.empty())
+    g->cfg.ban_file = (std::filesystem::path(g->files.folder) / "listip.cfg").string();
   g->cfg.seed = c.seed;
   g->cfg.timeout_s = c.timeout_s;
   g->cfg.flood_msg = c.floodprot_msg;
@@ -1164,11 +1172,21 @@ void frame(void* g) {
   lobby_words(game);
 }
 
+// The ban list `writeip` saved, read back at start (a line it does not take is left out).
+void load_bans(ClassicServer& s) {
+  if (s.cfg.ban_file.empty()) return;
+  std::ifstream f(s.cfg.ban_file);
+  std::string line, out;
+  while (std::getline(f, line))
+    if (line.rfind("addip ", 0) == 0) gs::ban_command(s.bans, line, classic_unix_time(s), out);
+}
+
 bool serve(void* g, ge::net::Transport& port, std::string& error) {
   Game& game = *static_cast<Game*>(g);
   if (game.coop) return coop_serve(*game.coop, port, error);
   game.classic = std::make_unique<ClassicServer>();
   if (!classic_start(*game.classic, game.rules, port, game.cfg, error)) return false;
+  load_bans(*game.classic);
   game.classic->game_command = room_words;
   game.classic->game_ctx = &game;
   if (game.host != nullptr) {  // the window's player: slot 0, a local seat the window moves
