@@ -1251,6 +1251,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   p.shot_pitch = 0;
   p.shot_in_s = 0;
   p.brink_free = false;
+  p.walk_air = false;
   p.curve_keys_last = p.curve_keys;
   p.curve_keys = kNoCurveKeys;
   if (p.gap_flight && !s.onground) p.gap_aloft = true;
@@ -2207,6 +2208,10 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // Slowing into the goal (late hands run past a small top and off it, or orbit it).
       const float d = across(ahead, node(*p.g, p.route.back()).origin);
       if (d < p.set.look) w.forward *= d < p.set.look * kBrake ? kBrake : d / p.set.look;
+      if (!s.onground && s.waterlevel == 0 && !p.airborne) {
+        p.walk_air = true;
+        p.walk_air_yaw = yaw_at(s.origin, target);
+      }
       because = wait_body                 ? "a player standing in the way: waiting for him"
                 : body                    ? "a player standing in the way: round him"
                 : seen != WalkWay::pursue ? walk_way_because(seen)
