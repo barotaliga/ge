@@ -30,6 +30,7 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
+#include "shooters_edge/client/sequel_party.hpp"
 #include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_coop.hpp"
 #include "shooters_edge/net/classic_coop_game.hpp"
@@ -70,6 +71,8 @@ struct Game {
   // The lobby and the bots (sv_lobby, sv_bots; null: neither). Without sv_lobby it stays in its
   // match: the bots play every map as it comes.
   std::unique_ptr<cl::Room> room;
+  // The sequel's companions outside deathmatch (`addbot` on its own rules; null: none ever).
+  std::unique_ptr<cl::SequelParty> mates;
   std::array<const sv::RulesCommon*, gs::kLobbySeats> applied{};  // the rules a seat's team is on
   std::array<gs::Team, gs::kLobbySeats> shown{};                  // the team its user info says
   int said = 0;                                                   // the lobby's lines printed
@@ -938,6 +941,27 @@ void vote_map_over(Game& g) {
 // the cross-level bits: server/sequel_campaign.hpp) in their own server, so a level change starts
 // the next map on the same server rather than a new one; the players stay seated through it. A
 // lobby's game and a map without brushes make new rules as before.
+// The sequel's companions follow the game onto the next level of its campaign (the same rules):
+// they stay seated and are made afresh on the new map's nav. New rules (a new game, deathmatch)
+// send them away, as a map no companion can walk does.
+void mates_follow(Game& g, bool same_rules) {
+  if (!g.mates || cl::sequel_party_size(*g.mates) == 0) return;
+  cl::SequelParty& p = *g.mates;
+  std::vector<int> gone;
+  std::string error;
+  if (same_rules) cl::sequel_party_enter(p, g.rules, g.map->spec, false, gone, error);
+  for (int i = cl::sequel_party_last(p); !same_rules && i > 0; i = cl::sequel_party_last(p)) {
+    if (g.classic) g.classic->clients[i].rules_active = false;  // never on the new rules
+    gone.push_back(i);
+    cl::sequel_party_forget(p, i);
+  }
+  for (const int i : gone)
+    if (g.classic) classic_drop(*g.classic, i, "left the game");
+  if (cl::sequel_party_size(p) == 0) p.turned_coop = false;
+  if (same_rules && !gone.empty() && g.classic)
+    client_print(*g.classic, 0, 2, error + " Your companions leave.\n");
+}
+
 bool keeps_campaign(const Game& g, const cl::LoadedMap& next) {
   if (g.room || next.spec.brushes == nullptr) return false;
   const sv::SequelServer* sq = sv::sequel_of(g.rules);
@@ -958,6 +982,7 @@ bool next_level_on_same_rules(Game& g, std::shared_ptr<cl::LoadedMap> map, std::
   g.map = std::move(map);
   g.changes++;
   g.failed.clear();
+  mates_follow(g, true);
   host_bind(g);
   return true;
 }
@@ -995,6 +1020,7 @@ bool move_to(Game& g, const std::string& name, bool match_over, std::string& err
     cl::room_enter(*g.room, g.rules, g.map->spec);
     g.applied.fill(nullptr);
   }
+  mates_follow(g, false);
   host_bind(g);
   return true;
 }
@@ -1133,6 +1159,70 @@ void lobby_words(Game& g) {
   sv::announce_flush(g.room->announcer, g.rules->out, g.rules->sv.time);
 }
 
+// The sequel's companions outside deathmatch: `addbot [skill]` and `removebot` from the window's
+// player (slot 0), the leader they escort. A single-player game turns cooperative for the first and
+// back for the last one leaving. False when the line is not theirs.
+bool mate_words(Game& g, int slot, const std::string& line) {
+  const size_t space = line.find(' ');
+  const std::string word = line.substr(0, space);
+  if ((word != "addbot" && word != "removebot") || !g.classic || g.host == nullptr || slot != 0)
+    return false;
+  const ge::console::Cvar* dm = g.rules->cvars.find("deathmatch");
+  if (sv::sequel_of(g.rules) == nullptr || (dm != nullptr && dm->on())) return false;
+  ClassicServer& cs = *g.classic;
+  if (!g.mates) {
+    g.mates = std::make_unique<cl::SequelParty>();
+    g.mates->seed = g.settings.seed;
+  }
+  cl::SequelParty& p = *g.mates;
+  const ge::console::Cvar* coop = g.rules->cvars.find("coop");
+  if (word == "removebot") {
+    const int last = cl::sequel_party_last(p);
+    if (last < 0) {
+      client_print(cs, slot, 2, "There is no companion to send away.\n");
+      return true;
+    }
+    classic_drop(cs, last, "left the game");  // off the rules too
+    cl::sequel_party_forget(p, last);
+    if (p.turned_coop && cl::sequel_party_size(p) == 0) {
+      g.rules.console("coop 0");
+      p.turned_coop = false;
+      client_print(cs, slot, 2, "You play alone again.\n");
+    }
+    return true;
+  }
+  sh::AimSkill skill = sh::AimSkill::average;
+  const std::string named = space == std::string::npos ? "" : line.substr(space + 1);
+  if (!named.empty() && !cl::skill_named(named, skill)) {
+    client_print(cs, slot, 2,
+                 "addbot: unknown skill \"" + named + "\" (use novice, average or expert)\n");
+    return true;
+  }
+  const bool turned = coop == nullptr || !coop->on();
+  if (turned) g.rules.console("coop 1");
+  uint32_t held = 0;
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (cs.clients[i].state != ConnState::free) held |= 1u << i;
+  std::string error;
+  const int at = cl::sequel_party_add(p, g.rules, g.map->spec, skill, held, error);
+  if (at < 0 || !classic_add_local(cs, at, p.mates[static_cast<size_t>(at)]->name, error)) {
+    if (at > 0) {
+      g.rules.drop(at);
+      cl::sequel_party_forget(p, at);
+    }
+    if (turned) g.rules.console("coop 0");
+    client_print(cs, slot, 2, "addbot: " + error + "\n");
+    return true;
+  }
+  if (turned) {
+    p.turned_coop = true;
+    client_print(cs, slot, 2, "The game is cooperative while you have company.\n");
+  }
+  const cl::SequelMate& m = *p.mates[static_cast<size_t>(at)];
+  client_print(cs, slot, 2, m.name + " (" + sh::aim_skill_name(skill) + ") joins the game\n");
+  return true;
+}
+
 // A client's words the server takes before the mod: the vote's (`vote ...`, and `yes` and `no`
 // while one is open) from anyone; with a room, `addbot [skill]` and `removebot` from the leader,
 // and with sv_lobby the lobby's own (ready, break, team, start, lobby).
@@ -1145,7 +1235,7 @@ bool room_words(void* ctx, int slot, const std::string& line) {
       return true;
     }
   }
-  if (!g.room) return false;
+  if (!g.room) return mate_words(g, slot, line);
   cl::Room& r = *g.room;
   ClassicServer& cs = *g.classic;
   const size_t space = line.find(' ');
@@ -1207,6 +1297,7 @@ void frame(void* g) {
   if (game.coop) return coop_frame(*game.coop);
   std::vector<sh::Packet> moves;
   if (game.room) cl::room_packets(*game.room, *game.rules, frame_msec(game), moves);
+  if (game.mates) cl::sequel_party_packets(*game.mates, game.rules, frame_msec(game), moves);
   game.rules.frame(moves.data(), static_cast<int>(moves.size()));
   sv::RulesCommon& now = *game.rules;
   now.out.all.clear();
@@ -1266,6 +1357,8 @@ void net_frame(void* g, int64_t now_us) {
   if (game.coop) return coop_net_frame(*game.coop, now_us);
   if (game.room)
     cl::room_packets(*game.room, *game.rules, frame_msec(game), game.classic->local_moves);
+  if (game.mates)
+    cl::sequel_party_packets(*game.mates, game.rules, frame_msec(game), game.classic->local_moves);
   const gs::LobbyPhase phase = game.room ? game.room->lobby.phase : gs::LobbyPhase::warmup;
   game.classic->match_on = game.settings.lobby != 0 &&
                            (phase == gs::LobbyPhase::countdown || phase == gs::LobbyPhase::match);
