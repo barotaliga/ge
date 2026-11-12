@@ -2,6 +2,7 @@
 // the sequel's rules. A hall split by a wall with a doorway, a plat up to a ledge, and a teleporter
 // pad with its destination: the world is the brushes kind, the doorway joins both halves, the pad
 // links to its destination, and the plat is a ridden mover traced through the nav's own tracer.
+// The sequel's arsenal: its rows, its items and a player's numbers read through it (M18v8b).
 //
 // ge:summary Test: the bots' nav on a version 38 map under the sequel's rules (M18v8)
 // ge:keywords test map-nav sequel version-38 brushes plat teleporter-pad either-family
@@ -15,6 +16,9 @@
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "shooter/sequel_move.hpp"
+#include "shooters_edge/bots/bot_arsenal.hpp"
+#include "shooters_edge/bots/fighter.hpp"
+#include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
@@ -101,4 +105,45 @@ TEST(the_nav_builds_on_a_version_38_map) {
   CHECK(ledge >= 0);
   CHECK(nav->graph.nodes[static_cast<size_t>(ledge)].origin.z > 96);
   CHECK(nav->main.reached(ledge));
+}
+
+TEST(the_sequel_arsenal_reads_a_players_numbers_and_the_maps_items) {
+  const bt::BotArsenal& a = bt::sequel_arsenal();
+  CHECK(a.weapons.size() == 10 && a.ammo_count == 6);
+  // The rows: a weapon's bit is 1 << its index, the impulse that asks for it its index + 1.
+  const bt::BotWeapon* rail = bt::weapon_row(a, 1 << 8);
+  CHECK(rail != nullptr);
+  if (rail == nullptr) return;
+  CHECK(rail->number == 9 && rail->ammo == 5);
+  CHECK(bt::role_of(a, a.launcher) == bt::WeaponRole::launcher && bt::launcher_number(a) == 7);
+  CHECK(bt::role_of(a, a.lob) == bt::WeaponRole::lob &&
+        bt::role_of(a, 1 << 8) == bt::WeaponRole::none);
+  // The map's items: the launcher's part set, the slugs an ammunition the railgun spends.
+  bt::ItemSpot rl, slugs, body;
+  CHECK(bt::item_of("weapon_rocketlauncher", 0, rl, a));
+  CHECK(rl.weapon == a.launcher && rl.role == bt::WeaponRole::launcher);
+  CHECK(bt::item_of("ammo_slugs", 0, slugs, a) && a.item_ammo(slugs.kind) == rail->ammo);
+  CHECK(bt::item_of("item_armor_body", 0, body, a) && body.kind == bt::ItemKind::armor3);
+  CHECK(!bt::item_of("info_player_start", 0, body, a));
+  // A player's numbers off the sequel's server: the railgun taken with its slugs, then read.
+  sv::RulesRunner r = sv::sequel_runner(sv::make_sequel_server({}));
+  r.console("deathmatch 1");
+  sv::MapSpec spec;
+  spec.name = "hall";
+  spec.brushes = hall();
+  std::string error;
+  CHECK_MSG(r.start(spec, error), error);
+  r.connect(0, "one", false, false);
+  sv::SequelServer* s = sv::sequel_of(r);
+  CHECK(s != nullptr);
+  if (s == nullptr) return;
+  CHECK(sv::sq_pick_up(sv::sq_item("weapon_railgun"), s->players[0].body, true, 1, 0));
+  r.frame(nullptr, 0);
+  const bt::Stats st = bt::read_stats(*r, 1, a);
+  CHECK(st.arsenal == &a);
+  CHECK(st.health == 100);
+  CHECK((st.items & (1 << 8)) && (st.items & 1));  // the railgun and the blaster
+  CHECK(st.weapon == 1);                           // the blaster in hand
+  CHECK(st.ammo[5] == 10 && bt::loaded(st, *rail));
+  CHECK(!bt::has_launcher(st) && bt::launcher_rounds(st) == 0);
 }

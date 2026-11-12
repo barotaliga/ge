@@ -20,8 +20,6 @@ namespace pf = shooters_edge::profiles;
 
 namespace {
 
-constexpr int32_t kWRockets = 32;  // the rocket launcher's W_ bit (games/shooters_edge/qc)
-constexpr int32_t kWGrenades = 16, kWArc = 64;  // the grenade launcher's and the arc's
 constexpr float kOwnPickup = 64;    // an item gone this near the player is its own pickup, units
 constexpr float kExploreFar = 600;  // a novice explores to a node at least this far, units
 
@@ -42,13 +40,14 @@ bool parse_vec(const char* text, sh::Vec3f& out) {
 }
 
 // The map's item from its classname, by the game profile's rows (profiles/items.hpp), or false.
-bool item_of(const char* cn, int spawnflags, ItemSpot& it) {
-  const pf::ItemRow* r = pf::item_row(pf::kClassicTables.items, cn, spawnflags);
+bool item_of(const char* cn, int spawnflags, ItemSpot& it, const BotArsenal& a) {
+  const pf::ItemRow* r = pf::item_row(a.tables->items, cn, spawnflags);
   if (r == nullptr) return false;
   if (r->sets_kind) it.kind = r->kind;
   if (r->amount >= 0) it.amount = r->amount * (r->doubles && (spawnflags & 1) != 0 ? 2.f : 1.f);
   if (r->respawn_s >= 0) it.respawn_s = r->respawn_s;
   if (r->weapon != 0) it.weapon = r->weapon;
+  it.role = role_of(a, it.weapon);
   it.name = r->name.empty() ? std::string(cn) : std::string(r->name);
   return true;
 }
@@ -97,7 +96,7 @@ const char* map_sense_name(MapSense s) {
 bool key_item(const ItemSpot& it) {
   return it.kind == ItemKind::armor2 || it.kind == ItemKind::armor3 || it.kind == ItemKind::mega ||
          it.kind == ItemKind::quad || it.kind == ItemKind::pent ||
-         (it.kind == ItemKind::weapon && it.weapon == kWRockets);
+         (it.kind == ItemKind::weapon && it.role == WeaponRole::launcher);
 }
 
 const char* item_call(const ItemSpot& it) {
@@ -143,13 +142,13 @@ void mega_watch(Fighter& f, float health, double t) {
 void map_weights(Fighter& f) {
   for (ItemSpot& it : f.items) it.weight = 1;
   if (f.sense != MapSense::expert) return;  // the rest rate an item the same on every map
-  int n[13] = {};
+  int n[profiles::kItemKinds] = {};
   int launchers = 0;
   bool lg = false;
   for (const ItemSpot& it : f.items) {
     n[static_cast<int>(it.kind)]++;
-    launchers += it.kind == ItemKind::weapon && it.weapon == kWRockets;
-    lg |= it.kind == ItemKind::weapon && it.weapon == kWArc;
+    launchers += it.kind == ItemKind::weapon && it.role == WeaponRole::launcher;
+    lg |= it.kind == ItemKind::weapon && it.role == WeaponRole::beam;
   }
   const bool rl = launchers > 0;
   const int ra = n[static_cast<int>(ItemKind::armor3)], ya = n[static_cast<int>(ItemKind::armor2)];
@@ -166,9 +165,10 @@ void map_weights(Fighter& f) {
         if (ra + ya == 0) it.weight = 1.5f;  // no big armour: the mega is the stack
         break;
       case ItemKind::weapon:
-        if (!rl && it.weapon == kWGrenades) it.weight = 2.f;  // the splash there is
-        if (!rl && it.weapon == kWArc) it.weight = 1.4f;
-        if (it.weapon == kWRockets) it.weight = (lg ? 1.f : 1.2f) * (launchers == 1 ? 1.2f : 1.f);
+        if (!rl && it.role == WeaponRole::lob) it.weight = 2.f;  // the splash there is
+        if (!rl && it.role == WeaponRole::beam) it.weight = 1.4f;
+        if (it.role == WeaponRole::launcher)
+          it.weight = (lg ? 1.f : 1.2f) * (launchers == 1 ? 1.2f : 1.f);
         break;
       default:
         break;

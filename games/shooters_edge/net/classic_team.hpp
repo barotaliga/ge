@@ -38,6 +38,7 @@
 #include "shooter/traits.hpp"
 #include "shooter/vec.hpp"
 #include "shooters_edge/net/classic_hits.hpp"
+#include "shooters_edge/profiles/items.hpp"
 
 namespace shooters_edge::bots {
 struct Fighter;
@@ -157,7 +158,7 @@ struct TeamPlayer {
   int64_t goal_changes = 0;  // its item goal changed (bots/fighter.hpp's commitment)
   int64_t surfaced = 0, surface_failed = 0;  // up for air, rises given up (bots/water.hpp)
   int64_t on_the_way = 0;                    // short goals taken up on the way (bots/fighter.hpp)
-  int64_t took[12] = {};                     // pickups by the item's kind (bots/fighter.hpp)
+  int64_t took[profiles::kItemKinds] = {};   // pickups by the item's kind (bots/fighter.hpp)
   int64_t swim_fights = 0;                   // commands swum with the view on an enemy in sight
   // Every death's pack it came to know of, by how its place was known (bots/packs.hpp
   // `PackFrom`); its guesses of the weapon in them, right, launchers guessed and truly in them;

@@ -16,7 +16,6 @@ namespace shooters_edge::bots {
 
 namespace {
 
-constexpr int32_t kWHeavySpiker = 8, kWGrenades = 16, kWRockets = 32, kWArc = 64;
 constexpr float kPowerHorizon_s = 30;  // a power's run, about
 constexpr float kSpam_s = 5;           // a way in spammed this long at a time
 constexpr float kPack_s = 20;          // a pointed pack lies about this long
@@ -32,8 +31,7 @@ bool goal_item(const ItemSpot& it) {
     case ItemKind::pent:
       return true;
     case ItemKind::weapon:
-      return it.weapon == kWRockets || it.weapon == kWArc || it.weapon == kWGrenades ||
-             it.weapon == kWHeavySpiker;
+      return it.role != WeaponRole::none;
     default:
       return false;
   }
@@ -42,7 +40,7 @@ bool goal_item(const ItemSpot& it) {
 bool timed_item(const ItemSpot& it) {
   return it.kind == ItemKind::armor2 || it.kind == ItemKind::armor3 || it.kind == ItemKind::mega ||
          it.kind == ItemKind::quad || it.kind == ItemKind::pent ||
-         (it.kind == ItemKind::weapon && it.weapon == kWRockets);
+         (it.kind == ItemKind::weapon && it.role == WeaponRole::launcher);
 }
 
 // An area's name: its place's, numbered when another area has the same ("ya", "ya 2").
