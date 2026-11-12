@@ -50,6 +50,7 @@ constexpr float kJumpAim = 0.95f;      // with the velocity within this cosine o
 constexpr float kPastStart = 24;       // past a jump's start this far without its speed: run up
 constexpr float kFlyFrom = 24;         // `jumpfly`: a jump flown from this far before its start
 constexpr float kLipSpeed = 200;       // `lipjump`: a hop at this speed or more jumps at a lip
+constexpr float kLipAhead = 4;         // and looks this many commands ahead for it
 constexpr float kRunUpFallen = 40;  // `underway`: a run-up this far under its jump's start fell off
 constexpr float kRunOnFrom = 8;   // `backstep`: a run-up this far behind the start or more runs on
 constexpr float kStrafeHold = 2;  // the strafe's side holds until the target is this far off, deg
@@ -709,10 +710,10 @@ float d_to_flip(const Pilot& p, const PilotSense& s) {
 // A rocket jump's shot may go: none ahead, no hand flying the view, or the hand there.
 bool shot_view_ready(const Pilot& p) { return p.shot_pitch == 0 || !p.shot_hand || p.shot_ready; }
 
-// `lipjump`: the player's box two commands on at `v` has no floor within a step under it (in a
-// wall there is no lip: false).
+// `lipjump`: the player's box `kLipAhead` commands on at `v` (a keyboard's jump key goes down a
+// command or two late) has no floor within a step under it (in a wall there is no lip: false).
 bool lip_ahead(const MoveWorld& world, Vec3f o, Vec3f v, int msec) {
-  const float dt = 2 * static_cast<float>(msec) * 0.001f;
+  const float dt = kLipAhead * static_cast<float>(msec) * 0.001f;
   const Vec3f at{o.x + v.x * dt, o.y + v.y * dt, o.z};
   const HullTrace tr = player_trace(world, at, {at.x, at.y, at.z - kStepHeight - 2});
   return !tr.startsolid && !tr.allsolid && tr.fraction >= 1;
@@ -2122,6 +2123,19 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     w.jump = true;
     because = "at a lip: jump";
     p.stats.lip_jumps++;
+  } else if (p.set.lip_jump && p.mode == PilotMode::hop && s.onground && w.jump &&
+             !p.jump_pressed && !p.gap_flight && s.world != nullptr && speed > kSlow) {
+    // A HOP THAT FALLS: a hop's jump whose flight (forward along the run) comes down under the
+    // floor it leaves, into a pit beside the way, is not pressed: run on (unless the lip is here).
+    MoveSettings move;
+    move.maxspeed = s.maxspeed;
+    const Vec3f aim{s.origin.x + s.velocity.x, s.origin.y + s.velocity.y, s.origin.z};
+    const JumpFlight f = fly_jump(*s.world, move, s.origin, s.velocity, aim, msec);
+    if ((!f.landed || f.end.z < s.origin.z - kStepHeight - 8) &&
+        !lip_ahead(*s.world, s.origin, s.velocity, msec)) {
+      w.jump = false;
+      because = "a hop that falls in a pit: run on";
+    }
   }
   p.because = because;
 

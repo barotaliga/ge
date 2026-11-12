@@ -2,7 +2,9 @@
 // where the bots' nav falls short of it: a tread it misses, a door a button opens, a teleporter).
 // Given `--at="x y z"` (a player's feet) and `--r` (the box round it, units), the lab draws:
 //
-// - TOP: the floor from above (the map's point hull traced down every pixel), coloured by height
+// - TOP: the floor from above (the map's point hull traced down every pixel; `--clip-top=<z>` cuts
+//   the map away over a height and steps through every roof under it, so a level under another
+//   is seen), coloured by height
 //   with a contour every 16 units, water tinted blue, solid dark; over it the nav's nodes and links
 //   by kind, the items by their call ("ya", "mh"), the doors, plats, buttons (a SHOT button ringed)
 //   and teleporters as boxes with each teleporter's destination, the spawns, and `--route`;
@@ -25,11 +27,12 @@
 // ge:summary Lab: one spot on a map from above, wireframes, inside views, depth, slopes, cuts, nav
 // ge:keywords lab se-spot spot location photo pictures depth normals floors slope wireframe
 // ge:keywords section cut top-view nav-overlay route-overlay scripted-route item-route button
-// ge:keywords teleporter door inside-view contact-sheet map-study
+// ge:keywords teleporter door inside-view contact-sheet map-study clip-top cut-away roof
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <cstdlib>
 #include <memory>
 #include <sstream>
@@ -199,6 +202,9 @@ struct Scene {
   std::vector<sh::Vec3f> spawns;
   sh::Vec3f at;                // the spot (feet)
   float r = 384;               // the box's half side
+  // `--clip-top`: the top view cut away over this height and every roof under it stepped through
+  // (nav_top.hpp `floor_below`), a level under another seen; NaN: from the spot's eye height.
+  float clip_top = std::numeric_limits<float>::quiet_NaN();
   std::vector<int32_t> route;  // --route's nodes
   bool swim = false;           // the swim nodes and links drawn too
 };
@@ -339,11 +345,19 @@ gl::Picture top_picture(const Scene& s, int px_size) {
       // From the spot's eye height (a room's floor under its ceiling), or from the first open
       // space above it within the box, down to the box's floor; solid all the way: dark.
       float from = std::min(ztop, s.at.z + 64);
-      while (from < ztop && sh::point_contents(hull, {X, Y, from}) == sh::kContentsSolid) from += 8;
-      if (sh::point_contents(hull, {X, Y, from}) == sh::kContentsSolid) {
-        from = std::min(ztop, s.at.z + 64);
+      if (!std::isnan(s.clip_top)) {
+        // Cut away over the clip: down from it through any roof to the first open space.
+        from = std::min(ztop, s.clip_top);
         while (from > zlo && sh::point_contents(hull, {X, Y, from}) == sh::kContentsSolid)
-          from -= 8;
+          from -= 4;
+      } else {
+        while (from < ztop && sh::point_contents(hull, {X, Y, from}) == sh::kContentsSolid)
+          from += 8;
+        if (sh::point_contents(hull, {X, Y, from}) == sh::kContentsSolid) {
+          from = std::min(ztop, s.at.z + 64);
+          while (from > zlo && sh::point_contents(hull, {X, Y, from}) == sh::kContentsSolid)
+            from -= 8;
+        }
       }
       const sh::HullTrace tr = sh::trace_hull(hull, {X, Y, from}, {X, Y, zlo});
       if (tr.startsolid || from <= zlo) {
@@ -769,6 +783,7 @@ void run(gl::Lab& lab) {
     return;
   }
   s.r = static_cast<float>(lab.arg_num("r"));
+  if (!lab.arg("clip-top").empty()) s.clip_top = static_cast<float>(lab.arg_num("clip-top"));
   s.swim = lab.arg_bool("swim");
   if (!vec_of(lab.arg("at"), s.at)) {
     // No spot: the map's first item.
@@ -795,7 +810,8 @@ void run(gl::Lab& lab) {
   const std::string where =
       to_fixed(s.at.x, 0) + " " + to_fixed(s.at.y, 0) + " " + to_fixed(s.at.z, 0);
   const std::vector<std::pair<std::string, std::string>> inputs = {
-      {"map", s.name}, {"at", where}, {"r", to_fixed(s.r, 0)}, {"route", lab.arg("route")}};
+      {"map", s.name},           {"at", where}, {"r", to_fixed(s.r, 0)}, {"route", lab.arg("route")},
+      {"clip-top", lab.arg("clip-top")}};
   const std::string id0 = lab.arg("id");
   auto id = [&](const std::string& v) { return id0.empty() ? v : id0 + "-" + v; };
   const int top_px = static_cast<int>(lab.arg_num("px"));
@@ -953,6 +969,9 @@ const gl::LabSpec kSpec{
         {"map", "e1m2", "the map under --basedir"},
         {"at", "", "the spot, a player's feet: 'x y z' (empty: the map's first item)"},
         {"r", "256", "the box round the spot, units each way"},
+        {"clip-top", "",
+         "the top view cut away over this height, every roof under it stepped through (a level "
+         "under another); empty: from the spot's eye height"},
         {"route", "", "a nav route drawn: 'x y z > x y z' (feet; the nearest nodes)"},
         {"eye", "", "one more inside view: 'x y z yaw pitch' (degrees)"},
         {"eye-up", "96", "the four inside eyes stand this far over the spot, units"},
