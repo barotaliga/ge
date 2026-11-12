@@ -482,8 +482,8 @@ sh::Vec3f led_velocity(SequelServer& s, int slot, int w, sh::Vec3f start, sh::Ve
     if (i == slot || !fightable(s, i) || fight_teammates(s, slot, i)) continue;
     const SequelPlayer& o = s.players[i];
     const sh::Vec3f at = unpack(o.move.origin);
-    targets[n++] = sh::AimMover{i, at + o.mins, at + o.maxs, unpack(o.move.velocity),
-                                (o.move.flags & sh::kSqOnGround) == 0};
+    targets[n++] = sh::lead_mover(i, at + o.mins, at + o.maxs, unpack(o.move.velocity),
+                                  (o.move.flags & sh::kSqOnGround) == 0, -1e30f);
   }
   sh::LeadShot shot;
   shot.origin = start;

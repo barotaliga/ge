@@ -14,6 +14,7 @@
 // ge:summary The network's cryptography: XChaCha20-Poly1305 seal and open, BLAKE2b key derivation
 // ge:keywords net crypto cryptography aead xchacha20 poly1305 seal open encrypt decrypt mac tag
 // ge:keywords blake2b kdf derive key nonce monocypher wipe hex environment secret
+// ge:keywords argon2 argon2id password_hash password-hash salt digest
 // ge:skill net
 // ge:test tests/net_crypto_test.cpp
 #pragma once
@@ -53,6 +54,18 @@ std::string key_to_hex(const Key& key);
 // The key in the environment variable `name` (64 hex digits); false with `error` naming the
 // variable and what to set it to when it is unset or malformed.
 bool key_from_env(const char* name, Key& out, std::string& error);
+
+// A password's slow hash: Argon2id over `secret` and `salt` (kSaltBytes) into 32 bytes, costing
+// `kib` KiB of `work` (the caller's, at least kib * 1024 bytes, so a store hashes without
+// allocating) and `passes` passes over it. The cost is what makes a stolen store slow to guess
+// from; the `accounts` lab times it at 19 and 64 MiB.
+constexpr size_t kSaltBytes = 16;
+void password_hash(uint8_t out[32], std::string_view secret, const uint8_t* salt, uint32_t kib,
+                   uint32_t passes, void* work);
+
+// A fast hash: BLAKE2b of `data` into 32 bytes. For a secret that is already long and random (a
+// one-time code, a recovery code), where a slow hash buys nothing.
+Key digest(std::string_view data);
 
 // Overwrite a secret before its memory is let go.
 void wipe(void* secret, size_t size);

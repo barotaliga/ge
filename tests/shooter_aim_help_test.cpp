@@ -112,3 +112,15 @@ TEST(a_grenade_is_thrown_on_an_arc_that_lands_on_him) {
                     kEye.z + b.velocity.z * t - 0.5f * 800 * t * t};
   CHECK(std::abs(lands.x - 500) < 1 && std::abs(lands.y) < 1 && std::abs(lands.z - 28) < 1);
 }
+
+TEST(the_lead_keeps_a_runners_velocity_and_arc_and_reads_a_walker_as_standing) {
+  // A walker below the running speed is led as standing, his rise or fall kept.
+  const AimMover walker =
+      lead_mover(1, Vec3f{0, 0, 0}, Vec3f{32, 32, 56}, Vec3f{120, 0, -40}, false, -1e30f);
+  CHECK(walker.velocity.x == 0 && walker.velocity.y == 0 && walker.velocity.z == -40);
+  // A runner in the air: his velocity and his arc kept, his run foreseen kLeadReach ahead.
+  const AimMover jumper =
+      lead_mover(2, Vec3f{0, 0, 0}, Vec3f{32, 32, 56}, Vec3f{320, 0, 270}, true, -24);
+  CHECK(jumper.velocity.x == 320 && jumper.velocity.z == 270 && jumper.airborne);
+  CHECK(jumper.floor == -24 && jumper.reach == kLeadReach);
+}
