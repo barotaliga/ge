@@ -75,7 +75,7 @@ void draw_view(const BspDraw& d, const BspView& v, const gpu::PipelineSet& pipel
   const bool lit_only =
       d.staged.info[0] > 0.5f && d.staged.info[1] == 1.0f && d.staged.weather[0] < 0.5f;
   pass.SetPipeline(pipelines.render(lit_only ? d.p_draw_lit : d.p_draw));
-  pass.SetBindGroup(0, v.frame);
+  pass.SetBindGroup(0, v.frame.surface);  // the lean part bsp.draw is laid out for
   pass.SetBindGroup(1, d.group);
   pass.SetVertexBuffer(0, d.vertices);
   pass.SetIndexBuffer(d.indices, wgpu::IndexFormat::Uint32);
