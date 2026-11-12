@@ -10,6 +10,7 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <iterator>
 #include <memory>
 #include <span>
@@ -17,8 +18,10 @@
 #include <vector>
 
 #include "core/num.hpp"
+#include "mod/loader.hpp"
 #include "net/packet.hpp"
 #include "progs/file.hpp"
+#include "shooter/midair.hpp"
 #include "shooter/settings.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
@@ -46,6 +49,8 @@ namespace cl = shooters_edge::client;
 namespace sh = ge::shooter;
 
 struct Game {
+  // The C++ mod packages named in sv_mod (docs/mods.md § On the server), open while any rules run.
+  std::vector<std::unique_ptr<ge::mod::LoadedMod>> packages;
   ge::progs::Progs progs;
   const ge::progs::Progs* program = &progs;  // the one played: `progs`, or a listen's own
   std::vector<uint8_t> module;               // the mod's compiled module (a .qvm); empty: `program`
@@ -121,6 +126,9 @@ constexpr gs::GameRule kModRules[] = {
     {"timelimit", "the match's length, minutes (0 none)"},
     {"samelevel", "1: the map does not change at the end"},
     {"pausable", "1: a player may pause the game (0: only unpausing)"},
+    {"k_midair",
+     "1: midair, rockets count only on a player in the air (the sequel's maps; restarts)"},
+    {"k_midair_minheight", "midair: the least height a hit counts at, 0..4 (64..1024 units; 1)"},
 };
 
 constexpr gs::GameRule kEndpointRules[] = {
@@ -264,9 +272,9 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     sv::SequelServerOptions so;
     so.seed = c.seed;
     so.clients_take_view = true;  // the classic protocol's clients take the server's view
+    so.speedjump = speedjump;
     std::unique_ptr<sv::SequelServer> sq = sv::make_sequel_server(so);
     sq->sv.set.maxclients = c.maxclients;
-    sq->sv.set.move.speedjump = speedjump;
     rules = sv::sequel_runner(std::move(sq));
   } else if (!g.module.empty()) {
     sv::QvmServerOptions so;
@@ -324,6 +332,11 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
       return false;
     }
   }
+  for (const auto& p : g.packages) {  // the C++ mods, laid over the rules as the map starts
+    rules->mods.tables.push_back(p->table);
+    rules->mods.names.push_back(p->manifest.name);
+  }
+  rules->mods.seed = c.seed;
   if (!rules.start(map->spec, error)) {
     error = "the map " + name + " did not load: " + error;
     return false;
@@ -378,6 +391,40 @@ std::string top_mod(const std::string& mods) {
   return top;
 }
 
+// The C++ mod packages among `sv_mod`'s comma-separated folders (a folder holding a
+// `mod.manifest`, under `--root` or as given), loaded in order into `g.packages`; the other folders
+// are left in `folders` for the game folder. False with `error` when a package is refused.
+bool load_packages(Game& g, const gs::ServerConfig& c, std::string& folders, std::string& error) {
+  std::string rest;
+  size_t at = 0;
+  while (at <= c.mod.size()) {
+    size_t comma = c.mod.find(',', at);
+    if (comma == std::string::npos) comma = c.mod.size();
+    std::string folder = c.mod.substr(at, comma - at);
+    at = comma + 1;
+    while (!folder.empty() && folder.back() == ' ') folder.pop_back();
+    while (!folder.empty() && folder.front() == ' ') folder.erase(0, 1);
+    if (folder.empty()) continue;
+    std::filesystem::path dir = std::filesystem::path(c.root) / folder;
+    std::error_code ec;
+    if (!std::filesystem::exists(dir / "mod.manifest", ec)) dir = folder;
+    if (!std::filesystem::exists(dir / "mod.manifest", ec)) {
+      if (!rest.empty()) rest += ',';
+      rest += folder;
+      continue;
+    }
+    auto loaded = std::make_unique<ge::mod::LoadedMod>();
+    const ge::mod::LoadResult r = ge::mod::load_mod(dir, {SE_MOD_GAME, SE_MOD_API}, *loaded);
+    if (!r.ok()) {
+      error = "the mod package " + folder + " was refused: " + r.errors.front();
+      return false;
+    }
+    g.packages.push_back(std::move(loaded));
+  }
+  folders = std::move(rest);
+  return true;
+}
+
 // The program: a named mod's own (its compiled module `qwprogs.qvm` when it has one, else its
 // folder's program files through the game's adapter, the base game's under it), else the
 // baseline mod.
@@ -400,7 +447,15 @@ bool open_program(Game& g, const std::string& mod, std::string& error) {
 void* create(const gs::ServerConfig& c, std::string& error) {
   auto g = std::make_unique<Game>();
   g->settings = c;
+  std::string folders;  // sv_mod's game folders, the packages taken out
+  if (!load_packages(*g, c, folders, error)) return nullptr;
   if (c.host == nullptr && coop_asked(c)) {
+    if (!g->packages.empty()) {
+      error =
+          "C++ mods can't run in a coop campaign yet. Take the package out of sv_mod, or set "
+          "sv_coop to 0.";
+      return nullptr;
+    }
     g->coop = coop_open(c, error);
     return g->coop ? g.release() : nullptr;
   }
@@ -410,7 +465,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     if (g->host->files != nullptr) g->files = *g->host->files;
     g->map = g->host->map;
   } else {
-    const std::string mod = top_mod(c.mod);
+    const std::string mod = top_mod(folders);
     const std::string folder = mod.empty() ? std::string(kGameFolder) : mod;
     // The built-in arena needs no game folder; any other map, a rotation's or a mod's, is read
     // from one (the mod's over the base game's).
@@ -469,8 +524,9 @@ std::string next_map(const gs::ServerConfig& c, const std::string& current,
 // (read when the server starts). A passed change is written into `settings.rules`, which every map
 // is made from: a mod's rule is set in the running rules at once (a limit the warmup holds waits
 // for the match), and a setting the players' own moves are predicted with restarts the map, so
-// every client is told it as it signs on again. A restart keeps the change; the next map puts it
-// back.
+// every client is told it as it signs on again, as does midair (`k_midair`, which takes the items
+// off the map); `k_midair_minheight` is told in the mode's words. A restart keeps the change; the
+// next map puts it back.
 //
 // `vote speedjump <id|name> on|off|<share>` grants one player the easy jump for this map, or takes
 // it back (classic_admin.hpp's grant: disclosed, `*speedjump` in his user info). The change is
@@ -558,6 +614,12 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
     out.error = rule + " is set when the server starts, so it can't be voted on";
     return false;
   }
+  // Midair is the sequel's rules' own (and a loaded match mod's that has it); the classic arena's
+  // comes with its rules' move to C++ (plugins/shooter/midair.hpp holds the shared rules).
+  if (rule.rfind("k_midair", 0) == 0 && g.module.empty() && sv::sequel_of(g.rules) == nullptr) {
+    out.error = "Midair can't be played on this map yet";
+    return false;
+  }
   if (const sh::Setting* setting = sh::find_setting(rule); setting != nullptr) {
     sh::ServerSettings check;
     std::string error;
@@ -593,19 +655,28 @@ void vote_turn(Game& g) {
   b.said.clear();
   b.notes.clear();
   bool restart = false;
+  const char* why = "The map restarts so everyone moves by the new setting\n";
   for (const gs::VoteChange& c : gs::vote_take(b)) {
     if (c.name == kSpeedjumpVote) {
       speedjump_vote_apply(g, c);
       continue;
     }
     g.settings.rules[c.name] = c.value;
-    if (sh::find_setting(c.name) != nullptr)
+    if (sh::find_setting(c.name) != nullptr) {
       restart = true;
-    else if (!held_now(g, c.name))
+    } else if (c.name == "k_midair") {
+      // Midair takes the items off the map and arms every spawn: a new start.
       g.rules.console(c.name + " \"" + c.value + "\"");
+      restart = true;
+      why = c.value == "0" ? "The map restarts without midair\n" : "The map restarts for midair\n";
+    } else if (!held_now(g, c.name)) {
+      g.rules.console(c.name + " \"" + c.value + "\"");
+    }
+    if (c.name == "k_midair_minheight" && g.classic)
+      classic_print_all(*g.classic, sh::midair_level_line(sh::midair_level(c.value)));
   }
   if (restart && g.classic) {
-    classic_print_all(*g.classic, "The map restarts so everyone moves by the new setting\n");
+    classic_print_all(*g.classic, why);
     sv::RulesCommon& now = *g.rules;
     now.pending_map = g.map->name;
     now.pending_change = sv::MapChange::restart;
@@ -642,10 +713,42 @@ void vote_map_over(Game& g) {
 // The game moved onto the map `name` (`supplied`: a listen server's, read by its window): the
 // next map's server made, the endpoint moved onto it, the old one let go. A map that does not load
 // leaves the game on the one it was playing (`failed` says why, `error` too).
+// The sequel's rules outside deathmatch keep the campaign (the bodies carried, the help computer,
+// the cross-level bits: server/sequel_campaign.hpp) in their own server, so a level change starts
+// the next map on the same server rather than a new one; the players stay seated through it. A
+// lobby's game and a map without brushes make new rules as before.
+bool keeps_campaign(const Game& g, const cl::LoadedMap& next) {
+  if (g.room || next.spec.brushes == nullptr) return false;
+  const sv::SequelServer* sq = sv::sequel_of(g.rules);
+  return sq != nullptr && !sq->cvars.find("deathmatch")->on();
+}
+
+bool next_level_on_same_rules(Game& g, std::shared_ptr<cl::LoadedMap> map, std::string& error) {
+  if (!g.rules.start(map->spec, error)) {
+    error = "the map " + map->name + " did not load: " + error;
+    g.failed = error;
+    return false;
+  }
+  if (map->from_file) sv::use_map_sets(*g.rules, map->bsp);
+  if (g.classic && !classic_change(*g.classic, g.rules, error)) {
+    g.failed = error;
+    return false;
+  }
+  g.map = std::move(map);
+  g.changes++;
+  g.failed.clear();
+  host_bind(g);
+  return true;
+}
+
 bool move_to(Game& g, const std::string& name, bool match_over, std::string& error,
              std::shared_ptr<cl::LoadedMap> supplied = nullptr) {
   // A vote lasts the map: put back before the next map is made (a restart keeps it).
   if (match_over) vote_map_over(g);
+  if (supplied && keeps_campaign(g, *supplied))
+    return next_level_on_same_rules(g, std::move(supplied), error);
+  if (!supplied && g.map && g.map->name == name && keeps_campaign(g, *g.map))
+    return next_level_on_same_rules(g, g.map, error);  // a restart: as each player came in
   std::shared_ptr<cl::LoadedMap> map;
   sv::RulesRunner next;
   if (!open_map(g, name, map, next, error, std::move(supplied))) {
@@ -944,7 +1047,7 @@ int seated(const void* g) {
 
 uint64_t hash(const void* g) {
   const Game& game = *static_cast<const Game*>(g);
-  return game.coop ? coop_hash(*game.coop) : ge::shooter::server_hash(game.rules->sv);
+  return game.coop ? coop_hash(*game.coop) : sv::rules_hash(*game.rules);
 }
 
 // The hub's record (docs/hub.md): the map, the mode the rules make, the phase, every client.

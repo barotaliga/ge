@@ -373,9 +373,10 @@ void run_hook(ModHost& h, Hook hook, A... args) {
   hook(state_of(h), &h.host, args...);
 }
 
-void mod_hook(ModHost& h, sh::Server& sv, int slot) {
+// `self` is the hook's own, as the loop set it before the game's function ran (a bytecode function
+// may leave its `self` global elsewhere).
+void mod_hook(ModHost& h, int32_t self, int slot) {
   const se_mod_hooks_v1* k = h.hooks;
-  const int32_t self = sv.g.self;
   switch (slot) {
     case kStartFrame:
       if (GE_MOD_HAS(se_mod_hooks_v1, k, start_frame)) run_hook(h, k->start_frame);
@@ -429,8 +430,9 @@ void composite_call(void* ctx, sh::Server& sv, sh::Func fn) {
   if (fn >= kModHookBase) {
     const int slot = fn - kModHookBase;
     const sh::Func own = base_hook(h.base, slot);
+    const int32_t self = sv.g.self;
     if (own != sh::kNoFunc && h.base.call) h.base.call(h.base.ctx, sv, own);
-    mod_hook(h, sv, slot);
+    mod_hook(h, self, slot);
   } else if (fn >= kModFuncBase) {
     const se_mod_hooks_v1* k = h.hooks;
     if (GE_MOD_HAS(se_mod_hooks_v1, k, call) && k->call)

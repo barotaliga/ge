@@ -154,7 +154,9 @@ struct QcServer : RulesCommon {
   struct {
     int currentammo = -1, armorvalue = -1, ammo[4] = {-1, -1, -1, -1}, weapon = -1;
     int weaponframe = -1;
-    int alpha = -1;  // a mod's see-through field (DP_ENT_ALPHA): 0 unset, else 0..1
+    int alpha = -1;     // a mod's see-through field (DP_ENT_ALPHA): 0 unset, else 0..1
+    int scale = -1;     // its size (DP_ENT_SCALE): 0 unset
+    int colormod = -1;  // its tint, a vector (DP_ENT_COLORMOD): '0 0 0' unset
   } world_fields;
 
   std::vector<HookCall> hook_log;
@@ -218,5 +220,9 @@ bool set_info_value(std::vector<std::pair<std::string, std::string>>& info, cons
                     const std::string& value, std::string& old);
 // The cvars' values the loop reads (sv_gravity, sv_maxspeed, ...) copied into its settings.
 void apply_settings(QcServer& s);
+// The game's kind the single-player form reads (`deathmatch`, `coop`, `teamplay`) written into the
+// program's globals from the cvars now, `serverflags` left as the program keeps it: what a game
+// that turns cooperative mid-map does (a companion seated in single player).
+void write_game_kind(QcServer& s);
 
 }  // namespace shooters_edge::server

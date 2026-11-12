@@ -129,9 +129,14 @@ void run(gl::Lab& lab) {
   const fs::path built = lab.arg("viewer");
   const bool have_viewer = fs::is_regular_file(built / "shooters_edge_viewer.js", ec) &&
                            fs::is_regular_file(built / "shooters_edge_viewer.wasm", ec);
-  if (have_viewer) {
-    for (const char* f : {"shooters_edge_viewer.js", "shooters_edge_viewer.wasm"})
+  for (const char* f : {"shooters_edge_viewer.js", "shooters_edge_viewer.wasm"}) {
+    if (have_viewer) {
       fs::copy_file(built / f, viewer / f, fs::copy_options::overwrite_existing, ec);
+    } else {
+      // Stand-ins, so the Demo page (digested) is the one a hub with the viewer serves, whether
+      // or not this machine has the web build.
+      std::ofstream(viewer / f) << "stand-in\n";
+    }
   }
   gh::Archive archive;
   gh::DemoRow row;

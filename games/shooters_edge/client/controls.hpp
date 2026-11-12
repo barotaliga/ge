@@ -37,6 +37,7 @@
 #include "input/state.hpp"
 #include "shooter/pmove.hpp"
 #include "shooters_edge/client/quick_fire.hpp"
+#include "shooters_edge/client/weapon_groups.hpp"
 
 namespace shooters_edge::client {
 
@@ -64,7 +65,8 @@ struct ControlSettings {
   // in_mouse_release: what takes the pointer back from the look (input::Release's bits)
   uint32_t mouse_release = ge::input::kReleaseDefault;
   ControlButtons buttons;
-  QuickFire quick;  // the quick weapon's cvars and state (quick_fire.hpp)
+  QuickFire quick;      // the quick weapon's cvars and state (quick_fire.hpp)
+  WeaponGroups groups;  // the number keys' weapon groups (weapon_groups.hpp)
 };
 
 // One frame's moves: what is held, and the impulse asked for.

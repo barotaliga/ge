@@ -112,6 +112,12 @@ gr::MuzzleFire exhaust(const double at[3], const double dir[3], uint32_t seed, d
 // 8 to 12 Hz between 0.8 and 1 of kMotorLevel, off the rocket's own seed so two never waver as one.
 inline constexpr double kNozzleM = 0.3, kMotorLightM = 6.5, kMotorLevel = 1.7;
 Light motor_light(const double at[3], const double dir[3], uint32_t seed, double now_s);
+// A grenade's painted ends glowing (ce_trails; a classic grenade gives no light): `rgb` the colour
+// its skin's glowing texels paint (world_models' ModelKind::glow_rgb), at kGrenadeGlowLevel,
+// reaching kGrenadeGlowM, a faint red on the floor and the wall it passes; it rides on `entity`,
+// so the grenade's own body is not lit by it and only its ends show the glow.
+inline constexpr double kGrenadeGlowM = 1.6, kGrenadeGlowLevel = 0.45;
+Light grenade_glow(const double at[3], const float rgb[3], int entity);
 // The trails over the stretch `from` .. `to` (m) flown this frame.
 inline constexpr double kRocketStep = 0.06, kGrenadeStep = 0.08;
 void fire_trail(const double from[3], const double to[3], uint32_t seed, Particles* out);

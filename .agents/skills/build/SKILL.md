@@ -113,24 +113,26 @@ webgpu only by `ge_gpu`.
 ## CI (`.github/workflows/ci.yml`)
 
 Jobs: `gates` (clang-format, `tools/check-agents.sh`, libm, release-check, the changeset rule,
-and the decision what else runs), `lint` (clang-tidy), `test` (macOS Clang; under `full-ci` also
-Linux x64 GCC debug, GCC release and Clang release, and Linux arm64 GCC), `windows` (MSVC), `packaging`
+and the decision what else runs), `linux-gcc` (the queue's compile), `lint` (clang-tidy), `test`
+(macOS Clang and Linux GCC release; in the daily run and under `full-ci` also Linux x64 GCC debug
+and Clang release, and Linux arm64 GCC), `windows` (MSVC), `packaging`
 (`packaging.yml`, called), and `required`, the ONE check the ruleset requires. `fail-fast:
 false`, so one row's golden failure shows alongside the others.
 
-- **Only what can differ across platforms**: Linux is `make precheck`'s, run in the container
-  before every push, so a pull request runs `gates`, `windows` and the macOS row; the merge
-  queue adds `packaging` (the package on Windows and macOS, `scaffold` only when the change
-  reaches `engine/cli`, `engine/play`, `engine/lab`, the templates or the build); a push to main
-  builds the macOS row only (to save its cache). A change to prose alone runs `gates` only.
-  `full-ci` on a pull request adds the Linux rows, `lint` and the whole packaging. `required` passes when every job passed or was
+- **The matrix runs on main, not on pull requests** (Niclas, 2026-11-12): Linux is `make
+  precheck`'s, run in the container before every push, so a pull request runs `gates` only and the
+  merge queue adds `linux-gcc`; a push to main runs `windows`, the macOS and Linux GCC release
+  rows (that row saves the cache `linux-gcc` restores) and `packaging` when the push reaches
+  `engine/cli`, `engine/play`, `engine/lab`, the templates or the build. A change to prose alone
+  runs `gates` only. `full-ci` on a pull request runs everything the daily run does. `required` passes when every job passed or was
   skipped by the rules, so a skipped row never leaves a check pending: a new job joins its
   `needs:`, never the ruleset. A failure only the queue sees ejects the pull request from the
   queue; fix it, push, and auto-merge queues it again.
 - **Kept off the runners when it cannot change the answer** (`ci.yml`'s header): a newer push
-  cancels the older run, a PR's and main's alike; a push to main runs at all only while the
-  merge queue is empty (else its gates cancel the run, which says nothing to `main-red`: the
-  queue's next run answers for that tree), so on a busy day `main-red` may wait for the DAILY RUN (`ci.yml`'s schedule, 05:00 in Stockholm:
+  to a PR cancels its older run; main's push runs are NEVER cancelled, because a cancelled main
+  run tells `main-red` nothing and, with main landing faster than the matrix runs, none ever
+  finished (Windows and macOS breaks piled up unseen for a day, #730): they run one behind
+  another, a later push replacing the one pending. The DAILY RUN (`ci.yml`'s schedule, 05:00 in Stockholm:
   both 03:00 and 04:00 UTC fire and the one that is 05:00 there that day runs while the other
   cancels itself; every row, the whole-tree lint, the whole packaging, in a concurrency group of
   its own that nothing cancels); a draft runs nothing until it is marked ready; a label other than

@@ -43,6 +43,7 @@
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/server/sequel_items.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge_campaign_fixture.hpp"
 #include "vfs/pak.hpp"
@@ -667,6 +668,74 @@ TEST(the_campaign_s_looping_sounds_set_off_at_the_map_s_load_are_heard) {
   const cl::DemoStaticSound& drip = l.static_sounds[0];
   CHECK(l.server->sounds[static_cast<size_t>(drip.sound)].find("drip") != std::string::npos);
   CHECK(drip.origin.x == -300.0f && drip.volume > 0 && drip.attenuation > 0);
+}
+
+// A floored hall of brushes walled round with a start in the middle and a co-op start beside it.
+std::vector<uint8_t> brush_hall() {
+  br::BrushWorld world;
+  world.models.resize(1);
+  const auto box = [&](float x0, float y0, float z0, float x1, float y1, float z1) {
+    const float lo[3] = {x0, y0, z0}, hi[3] = {x1, y1, z1};
+    world.models[0].push_back(br::box_brush(lo, hi, sh::kSqSolid, "world/wall"));
+  };
+  box(-512, -512, -16, 512, 512, 0);
+  box(-528, -512, -16, -512, 512, 256);
+  box(512, -512, -16, 528, 512, 256);
+  box(-528, 512, -16, 528, 528, 256);
+  box(-528, -528, -16, 528, -512, 256);
+  world.entities.push_back(
+      entity({{"classname", "info_player_start"}, {"origin", "0 0 24"}, {"angle", "90"}}));
+  world.entities.push_back(
+      entity({{"classname", "info_player_coop"}, {"origin", "96 0 24"}, {"angle", "90"}}));
+  std::vector<uint8_t> bsp;
+  std::string error;
+  CHECK_MSG(br::write_brush_world(world, &bsp, &error), error);
+  return bsp;
+}
+
+// On the sequel's rules outside deathmatch (a single-player or coop game) a level change keeps the
+// server, so the body the player leaves with is the one he enters the next level with; in
+// deathmatch every map's rules are new and the body starts afresh.
+TEST(a_coop_level_change_on_brush_maps_carries_the_players_body) {
+  std::string error;
+  cl::SearchPath files;
+  const std::vector<uint8_t> hall = brush_hall();
+  CHECK(cl::add_archive(files, "pak0.pak", pack({{"maps/hall.bsp", hall}, {"maps/next.bsp", hall}}),
+                        error));
+  const int shotgun = shooters_edge::server::sq_item("weapon_shotgun");
+  for (const bool coop : {true, false}) {
+    cl::ListenOptions opt = shooters_edge::net::listen_options();
+    opt.console = coop ? std::vector<std::string>{"deathmatch 0", "coop 1"}
+                       : std::vector<std::string>{"deathmatch 1"};
+    cl::Listen l;
+    std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "hall", error);
+    CHECK_MSG(map != nullptr, error);
+    if (!map) return;
+    CHECK_MSG(cl::listen_start(l, baseline(), std::move(map), opt, error), error);
+    if (l.rules == nullptr) return;
+    for (int i = 0; i < 30; i++) cl::listen_frame(l, {});
+    shooters_edge::server::SequelServer* before = shooters_edge::server::sequel_of(*l.rules);
+    CHECK(before != nullptr);
+    if (before == nullptr) return;
+    before->players[0].body.counts[shotgun] = 1;
+    CHECK(l.rules->console("changelevel next"));
+    for (int i = 0; i < 30 && l.pending_map.empty(); i++) cl::listen_frame(l, {});
+    CHECK(l.pending_map == "next");
+    std::unique_ptr<cl::LoadedMap> next = cl::load_named_map(files, "next", error);
+    CHECK_MSG(next != nullptr, error);
+    if (!next) return;
+    CHECK_MSG(cl::listen_change(l, std::move(next), error), error);
+    for (int i = 0; i < 30; i++) cl::listen_frame(l, {});
+    CHECK(l.map->name == "next");
+    shooters_edge::server::SequelServer* after = shooters_edge::server::sequel_of(*l.rules);
+    CHECK(after != nullptr);
+    if (after == nullptr) return;
+    CHECK_MSG((after == before) == coop, coop ? "coop: new rules" : "deathmatch: rules kept");
+    CHECK(l.server->clients[0].active && after->players[0].alive);
+    CHECK_MSG(after->players[0].body.counts[shotgun] == (coop ? 1 : 0),
+              std::string(coop ? "coop" : "deathmatch") + ": shotguns " +
+                  std::to_string(after->players[0].body.counts[shotgun]));
+  }
 }
 
 // A map of the family that carries brushes (version 38) plays on the rules that trace them: the

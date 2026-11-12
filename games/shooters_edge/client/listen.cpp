@@ -27,6 +27,7 @@
 #include "shooters_edge/server/classic_save.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 
 // The baseline mod's sources, built into the game (CMakeLists.txt: ge_embed_binary), in the
 // order its project file compiles them.
@@ -412,12 +413,16 @@ bool coop_on(const Listen& l) {
   return v != nullptr && v->on();
 }
 
-// A companion seated now (in a campaign in coop); false with the line printed when it cannot be.
+// A companion seated now (in a campaign; a single-player one turns cooperative for it); false with
+// the line printed when it cannot be.
 bool seat_companion(Listen& l, sh::AimSkill skill) {
-  if (!coop_on(l)) {
-    l.prints.push_back("Bots join a cooperative game only.");
-    l.prints.push_back("Start one with coopgame.");
-    return false;
+  const bool turned = !coop_on(l);
+  if (turned) {
+    sv::campaign_set_coop(*l.campaign_host, true);
+    if (!coop_on(l)) {
+      l.prints.push_back("This game has no room for a companion.");
+      return false;
+    }
   }
   if (!l.party) {
     l.party = std::make_unique<Party>();
@@ -426,17 +431,41 @@ bool seat_companion(Listen& l, sh::AimSkill skill) {
   std::string error;
   const int slot = party_add(*l.party, *l.campaign_host, l.map->spec, skill, error);
   if (slot < 0) {
+    if (turned) sv::campaign_set_coop(*l.campaign_host, false);
     l.prints.push_back("addbot: " + error);
     return false;
   }
   const std::string& name = l.party->mates[static_cast<size_t>(slot)]->name;
   if (l.door != nullptr && !l.door_calls->seat(l.door, slot, name, true, error)) {
     party_remove(*l.party, *l.campaign_host);
+    if (turned) sv::campaign_set_coop(*l.campaign_host, false);
     l.prints.push_back("addbot: " + error);
     return false;
   }
+  if (turned) {
+    l.companion_coop = true;
+    l.prints.push_back("The game is cooperative while you have company.");
+  }
   l.prints.push_back(name + " (" + sh::aim_skill_name(skill) + ") joins the game");
   return true;
+}
+
+// A companion let go (`removebot`); the last one leaving a game that turned cooperative for the
+// companions makes it single player again.
+void let_companion_go(Listen& l) {
+  int last = 0;
+  for (int i = 1; l.party && i < sh::kMaxClients; i++)
+    if (l.party->mates[static_cast<size_t>(i)]) last = i;
+  if (!l.party || !party_remove(*l.party, *l.campaign_host)) {
+    l.prints.push_back("removebot: no companion is seated");
+    return;
+  }
+  if (l.door != nullptr) l.door_calls->unseat(l.door, last);
+  if (l.companion_coop && party_size(*l.party) == 0) {
+    sv::campaign_set_coop(*l.campaign_host, false);
+    l.companion_coop = false;
+    l.prints.push_back("You play alone again.");
+  }
 }
 
 // The campaign host's options for the listen's settings (its loader the listen's).
@@ -607,6 +636,7 @@ bool listen_start(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMap> 
                   const ListenOptions& opt, std::string& error) {
   if (single_player(progs)) return listen_campaign(l, progs, std::move(map), opt, error);
   l.party.reset();
+  l.companion_coop = false;
   close_match(l);  // a campaign's door first: it reads the campaign
   l.campaign_host.reset();
   l.progs = &progs;
@@ -672,6 +702,7 @@ bool listen_campaign(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMa
   }
   sv::campaign_join(*l.campaign_host, 0, opt.player);
   l.party.reset();
+  l.companion_coop = false;
   campaign_entered(l);
   for (int k = 0; k < opt.companions && k < kPartyMost; k++)
     if (!seat_companion(l, opt.companion_skill)) break;
@@ -683,6 +714,8 @@ bool listen_campaign(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMa
 std::string listen_save_problem(const Listen& l) {
   if (!l.campaign_host || l.server == nullptr) return "Only a single-player game can be saved.";
   if (l.campaign.end != LevelEnd::none) return "Can't save now: the level is over.";
+  if (l.companion_coop && l.party && party_size(*l.party) > 0)
+    return "Can't save while a companion is with you. Send it away with removebot, then save.";
   return sv::campaign_save_problem(*l.campaign_host);
 }
 
@@ -743,6 +776,7 @@ bool load_game(Listen& l, const pg::Progs& progs, const ListenOptions& opt,
   l.next.reset();
   l.map = std::move(ahead.map);
   l.party.reset();  // a save carries no companions (a coop game is never saved)
+  l.companion_coop = false;
   campaign_entered(l);
   l.map_changed = true;  // the window draws the save's map
   // The player's commands go on from the saved sequence.
@@ -829,11 +863,17 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     s.ground = (me.flags & sh::kFlagOnGround) != 0 ? 0 : -1;
     s.type = sh::move_type_of(me, false);
     s.waterlevel = me.waterlevel;
+    // The move's air law: the sequel's on its rules (a map of brushes), else the classic one.
+    sh::SpeedJumpRules air = sh::kClassicJumpRules;
+    if (const sv::SequelServer* sq = sv::sequel_of(*l.rules)) {
+      s = sv::sequel_aid_state(*sq, 0);
+      air = sh::sequel_jump_rules(sv::sequel_air_accelerate(*sq));
+    }
     // His own share when the server granted him one (`*speedjump`, net/classic_admin.hpp).
     const std::string granted = sv::info_value(l.server->clients[0].userinfo, "*speedjump");
     const float share = granted.empty() ? l.server->sv.set.move.speedjump
                                         : static_cast<float>(std::atof(granted.c_str()));
-    cmd = sh::assisted_command(cmd, s, share, l.speedjump_view, l.jump_aid);
+    cmd = sh::assisted_command(cmd, s, share, l.speedjump_view, l.jump_aid, air);
   } else {
     l.jump_aid = {};
   }
@@ -892,9 +932,18 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     l.view = {l.campaign.angles.x, l.campaign.angles.y, 0};
     l.campaign.turned = false;
   }
-  // The mod's forced view (a spawn, a teleport) leaves the player's angles off the ones sent.
+  // The mod's forced view (a spawn, a teleport) leaves the player's angles off the ones sent: by
+  // more than the sequel's rules round a sent angle to (65536ths of a turn, kept within -180..180),
+  // so a view they only rounded stays the player's own (and his easy jump's aim with it).
   const sh::Edict& me = s.sv.edicts[1];
-  l.forced = s.clients[0].active && (me.v_angle.x != cmd.angles.x || me.v_angle.y != cmd.angles.y);
+  const auto moved = [](float a, float b) {
+    double d = static_cast<double>(a) - b;
+    while (d > 180) d -= 360;
+    while (d < -180) d += 360;
+    return d > 0.01 || d < -0.01;
+  };
+  l.forced = s.clients[0].active &&
+             (moved(me.v_angle.x, cmd.angles.x) || moved(me.v_angle.y, cmd.angles.y));
   if (l.forced) l.view = {me.v_angle.x, me.v_angle.y, 0};
 }
 
@@ -903,13 +952,7 @@ bool listen_lobby(Listen& l, std::string_view line) {
   const bool bot_word = word == "addbot" || word == "removebot";
   if (bot_word && l.campaign_host && l.server != nullptr) {  // a campaign: the coop party
     if (word == "removebot") {
-      int last = 0;
-      for (int i = 1; l.party && i < sh::kMaxClients; i++)
-        if (l.party->mates[static_cast<size_t>(i)]) last = i;
-      if (!l.party || !party_remove(*l.party, *l.campaign_host))
-        l.prints.push_back("removebot: no companion is seated");
-      else if (l.door != nullptr)
-        l.door_calls->unseat(l.door, last);
+      let_companion_go(l);
       return true;
     }
     const size_t sp = line.find(' ');
@@ -930,6 +973,11 @@ bool listen_lobby(Listen& l, std::string_view line) {
     const bool taken = l.host->words(l.host->game, std::string(line));
     catch_up(l);
     return taken;
+  }
+  // The sequel's rules have no bots on their maps yet (docs/goals/M18v.md, M18v8).
+  if (bot_word && !l.room && l.rules != nullptr && sv::sequel_of(*l.rules) != nullptr) {
+    l.prints.push_back("Companions can't join this game yet.");
+    return true;
   }
   if (!l.room || l.server == nullptr) {
     if (bot_word || word == "ready" || word == "break" || word == "notready" ||

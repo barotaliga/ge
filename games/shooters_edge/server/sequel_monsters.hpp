@@ -18,7 +18,11 @@
 // - **Attack**: at melee range its melee (at skill 0 three frames in four nothing), else a chance a
 //   frame of 0.4 holding its ground, 0.2 melee, 0.1 near, 0.02 mid (halved at skill 0, doubled at
 //   2 and 3) once its last attack's wait (2 × random s) is spent; it follows the last sighting and
-//   gives up 20 s after it last saw its enemy. Pain at most every 3 s.
+//   gives up 20 s after it last saw its enemy. Pain at most every 3 s (5 s at skill 3).
+// - **The full game's** (sequel-monsters-full.md, the roster in sequel_monster_kinds.hpp): the
+// medic
+//   raises the corpse it sees with the most health; a power screen; bosses with their own attack
+//   test that burn down to a wreck; Jorg's death brings out the Makron; swimmers; two figures.
 //
 // ge:summary The sequel's monsters: roster, senses, choosing to attack, the step move, pain, death
 // ge:keywords sequel monsters monster-ai senses sight-entity noise ambush path-corner point-combat
@@ -26,6 +30,8 @@
 // ge:skill shooter
 // ge:test tests/shooters_edge_sequel_monsters_test.cpp
 #pragma once
+
+#include <string_view>
 
 #include "shooter/sequel_move.hpp"
 
@@ -52,6 +58,12 @@ void monster_noise(SequelServer& s, int slot);
 void monster_rows(SequelServer& s);
 // The monster of map entity `e` (its index in `SequelServer::monsters`), or -1.
 int monster_index(const SequelServer& s, int e);
+// Whether `classname` is a monster's (one of the roster's rows).
+bool monster_class(std::string_view classname);
+// A spare monster of a spawner (its entities' `block`, below -1) brought out at `at`, facing
+// `angles`, thrown at `velocity`; whoever stands there dies. False when no spare is left.
+bool monster_bring_spare(SequelServer& s, int block, sh::Vec3f at, sh::Vec3f angles,
+                         sh::Vec3f velocity, int activator);
 // The words of a death by a monster's attack (`cause` from `kSqByMonster`), or null.
 const char* monster_obituary(int cause);
 

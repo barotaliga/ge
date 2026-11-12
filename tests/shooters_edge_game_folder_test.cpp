@@ -200,6 +200,31 @@ TEST(the_campaign_commands_go_with_the_campaign) {
   for (const char* name : {"newgame", "save", "load"}) CHECK_MSG(!con.has_command(name), name);
 }
 
+// A game whose own rules keep the campaign (the sequel's runner) and no single-player program:
+// NEW GAME and COOPERATIVE start its game with deathmatch 0, coop off or on, from its first map;
+// there is nothing to save yet, and companions can't join it yet.
+TEST(a_game_whose_rules_keep_the_campaign_has_new_game_and_coopgame) {
+  ge::console::Console con;
+  cl::Listen listen;
+  cl::SearchPath files;
+  cl::GameContent c;
+  std::string next_map, load_ask;
+  c.rules_campaign = true;
+  c.first_map = "demo1";
+  cl::campaign_commands(con, listen, files, c, next_map, load_ask);
+  for (const char* name : {"newgame", "coopgame"}) CHECK_MSG(con.has_command(name), name);
+  for (const char* name : {"save", "load"}) CHECK_MSG(!con.has_command(name), name);
+  con.execute("newgame");
+  CHECK(next_map == "demo1" && listen.opt.new_game);
+  CHECK(cl::wants_campaign(listen.opt) && listen.opt.console.back() == "coop 0");
+  next_map.clear();
+  listen.opt.new_game = false;
+  con.execute("coopgame 2 demo2");
+  CHECK(next_map == "demo2" && listen.opt.new_game && listen.opt.companions == 0);
+  CHECK(listen.opt.console.back() == "coop 1");
+  CHECK(!con.output().empty() && con.output().back().find("Companions") != std::string::npos);
+}
+
 namespace {
 
 std::unique_ptr<cl::LoadedMap> stub_map(const std::string& name) {
@@ -214,8 +239,9 @@ std::unique_ptr<cl::LoadedMap> stub_map(const std::string& name) {
 }  // namespace
 
 // The campaign running as a game without coop (MULTIPLAYER > NEW GAME's COOPERATIVE once ran it
-// so): `addbot` is refused, and `coopgame` starts a new game in coop, not a change of map, so the
-// companions it asks for sit beside the player and `addbot` seats more.
+// so): `addbot` seats a companion and turns it cooperative, `removebot` makes it single player
+// again, and `coopgame` starts a new game in coop, not a change of map, so the companions it asks
+// for sit beside the player and `addbot` seats more.
 TEST(coopgame_in_a_running_campaign_starts_a_coop_game_that_takes_bots) {
   ge::console::Console con;
   cl::Listen listen;
@@ -230,10 +256,10 @@ TEST(coopgame_in_a_running_campaign_starts_a_coop_game_that_takes_bots) {
   CHECK_MSG(cl::start_map(listen, c, stub_map("first"), error), error);
   CHECK(listen.campaign_host != nullptr);
   CHECK(cl::listen_lobby(listen, "addbot"));
-  CHECK(!listen.party || cl::party_size(*listen.party) == 0);
-  CHECK(listen.prints.size() >= 2 &&
-        listen.prints[listen.prints.size() - 2].find("cooperative") != std::string::npos);
-  CHECK(listen.prints.back().find("coopgame") != std::string::npos);
+  CHECK(listen.party != nullptr && cl::party_size(*listen.party) == 1);
+  CHECK(listen.server->cvars.find("coop")->on());
+  CHECK(cl::listen_lobby(listen, "removebot"));
+  CHECK(cl::party_size(*listen.party) == 0 && !listen.server->cvars.find("coop")->on());
 
   con.execute("coopgame 2 first");
   CHECK(next_map == "first" && listen.opt.new_game);
@@ -248,10 +274,12 @@ TEST(coopgame_in_a_running_campaign_starts_a_coop_game_that_takes_bots) {
   CHECK_MSG(cl::start_map(listen, c, stub_map("second"), error), error);
   CHECK(cl::party_size(*listen.party) == 3);
 
-  // `newgame` is a new single-player game: coop off, the companions let go.
+  // `newgame` is a new single-player game: coop off, the companions let go; `addbot` then seats
+  // one in it as in any single-player game.
   con.execute("newgame");
   CHECK_MSG(cl::start_map(listen, c, stub_map("start"), error), error);
   CHECK(!listen.party || cl::party_size(*listen.party) == 0);
+  CHECK(!listen.server->cvars.find("coop")->on());
   CHECK(cl::listen_lobby(listen, "addbot"));
-  CHECK(!listen.party || cl::party_size(*listen.party) == 0);
+  CHECK(cl::party_size(*listen.party) == 1 && listen.companion_coop);
 }

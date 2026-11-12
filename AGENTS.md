@@ -89,14 +89,17 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   repository's structure and ship in no game, and Blender Python asset builders: offline
   sources of a model, run headless by `ge asset` (docs/goals.md M8g), whose output (a .glb)
   is committed and loaded by the engine in C++; they never run in a game, CI never needs
-  Blender, and no other scripting enters the tree. The one runtime exception is
-  Shooter's Edge's QC VM and compiled-module VM (`plugins/progs`, `docs/shooters-edge.md`), which
-  execute existing mods' bytecode (a `.dat` or a `.qvm`) for compatibility; the tree's own QC is limited to that game's baseline mod and its test mod. Nothing about the reference sources'
-  architecture (their layers, module split, file layout, state shape, names or data
-  formats) is assumed to carry over: each design decision is made here, for this engine,
-  and recorded in `docs/architecture.md`. Where a carried-over module keeps a behaviour (a
-  golden pins its bits), that is a decision about the result, not about the structure
-  around it.
+  Blender, and no other scripting enters the tree. The one runtime exception is Shooter's
+  Edge's QC VM and compiled-module VM (`plugins/progs`, `docs/shooters-edge.md`), which execute
+  existing mods' bytecode (a `.dat` or a `.qvm`) for compatibility ONLY: **no QC of our own.**
+  Our own game rules are C++ (`engine/mod` packages, `docs/mods.md`); the baseline mod's QC
+  sources (`games/shooters_edge/qc/`) take no new code and are being carried to C++ packages
+  and deleted (M52h); the only QC left is the VMs' own test fixtures, built inside their tests.
+  Nothing about the reference sources' architecture (their layers, module split, file layout,
+  state shape, names or data formats) is assumed to carry over: each design decision is made
+  here, for this engine, and recorded in `docs/architecture.md`. Where a carried-over module
+  keeps a behaviour (a golden pins its bits), that is a decision about the result, not about
+  the structure around it.
 - **WRITE ONLY TO THIS REPOSITORY.** The reference sources (`porting/README.md` names
   them) are read-only: clone them beside this checkout, read them and run them, but never
   commit, push, open issues or comment there. If a reference has a bug, the engine
@@ -252,16 +255,17 @@ a good build saves them back.
 **Linux is checked here, before the push; CI runs only what can differ elsewhere.** `make
 precheck` is the Linux gate (GCC debug+ASan on Mesa's lavapipe: the build, the lint, the shaders,
 the tests and the labs' digests the change reaches), and CI (`.github/workflows/ci.yml`) runs no
-Linux build, test or lint on a pull request or in the queue. A pull request runs the gates
+Linux test or lint on a pull request or in the queue. A pull request runs the gates only
 (fmt-check, agents-check, libm-check, release-check, the changeset rule: cheap, and the queue's
-combined tree needs them), Windows (MSVC: its warnings, its CRT) and macOS (Apple Clang on arm64:
-another compiler and ISA), each building everything and running the whole suite, so the goldens
-and the labs' digests are held on both; the merge queue runs the same on the tree that lands plus
-`packaging.yml` (the installed package consumed on Windows and macOS, and `ge new` growing a repo
-when the change reaches `engine/cli`, `engine/play`, `engine/lab`, the templates or the build). A
-change to prose alone (docs, skills, lessons, root Markdown, fragments) runs the gates only; the
-label `full-ci` adds the Linux rows (GCC debug+ASan, GCC and Clang release, arm64), the lint and
-the shaders' check, and the whole packaging. The ruleset requires one check, `required`, which
+combined tree needs them); the merge queue adds the Linux GCC release compile (`linux-gcc`). THE
+MATRIX RUNS ON MAIN: every push to main runs Windows (MSVC: its warnings, its CRT) and macOS (Apple
+Clang on arm64: another compiler and ISA), each building everything and running the whole suite,
+so the goldens and the labs' digests are held on both, plus the Linux GCC release row and
+`packaging.yml` when the push reaches `engine/cli`, `engine/play`, `engine/lab`, the templates or
+the build; main's runs are never cancelled (they queue one behind another), so each one answers
+the `main-red` issue, and the PR that broke main fixes it first. The daily run adds the other
+Linux rows (GCC debug+ASan, Clang release, arm64), the whole-tree lint and the whole packaging; the
+label `full-ci` runs all of that on a pull request that fears another platform. The ruleset requires one check, `required`, which
 passes when every job passed or was skipped by those rules. A golden failure on one row points at
 that row's compiler or libm. GPU and window tests run where there is an adapter and skip (CTest's
 exit 77) where not; the Linux rows under `full-ci` run them on lavapipe with `GE_GPU_REQUIRE=1`,

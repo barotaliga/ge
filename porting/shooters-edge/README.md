@@ -28,6 +28,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `campaign-rules.md` | What a campaign program does (monsters' senses and states, the roster, the level flow), for our own campaign variant mod (M18s7) |
 | `deaths.md` | Monster deaths, gibs and blood: each kind's death sequences, gib health and pieces, the gib and head throw, blood at hits, the client's bursts and model-flag trails, bouncing, the zombie, the player (M18s7) |
 | `deathmatch4.md` | Deathmatch 4 in the classic match mod: the armed spawn, spawn invincibility, the items stripped and kept, backpacks and bonus powers, OctaPower, its settings and commands, spawns and scoring |
+| `midair.md` | Midair in the classic match mod (clean-room answers): the toggle and the minimum height, the rockets-only spawn, when a rocket kills, the height trace, knockback, the score bands, the messages and statistics |
 | `weapon-switch.md` | The weapon after a shot in the classic match mod: refire times, the switch held until the refire ends, what a dropped pack holds, what onlookers can tell, the client's switch-after-fire settings |
 | `demo-smoothing.md` | Recorded games drawn between their frames: the client's one-frame-behind playback, the rules for players, the tracked view and entities, where it snaps |
 | `held-weapons.md` | The first-person weapon's frames: the axe's two swings, how a swing is picked, when the frame is set, what the client draws |
@@ -37,8 +38,10 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `sequel-movement.md` | The sequel's player move (the packed state, the command, every step, snapping) and the brush trace and point contents it moves through |
 | `sequel-rules.md` | The sequel's rules: the 10 Hz frame, entities and physics, items, armour, damage, every weapon and projectile, a player's life, deathmatch and `dmflags`, the demo maps' entities |
 | `sequel-monsters.md` | The sequel's monsters on the demo maps: life, senses, the attack choice, the roster's numbers |
+| `sequel-monsters-full.md` | The full sequel's other monsters (M18v7d3): the medic and its revival, the brains, iron maiden, gladiator, mutant, technician, icarus, shark, super tank, hornet, Jorg and the Makron; the step move; the demo roster's speeds |
 | `sequel-movers.md` | The sequel's map movers and triggers (M18v7c): the plain and accelerated moves frame by frame, doors, buttons, plats, trains, rotators, walls, timers, the triggers, teleporters, riders, the exit and the targets |
 | `sequel-demo.md` | The sequel's client recording (.dm2) and protocol 34's server messages: the framing, every message's layout, the entity and player deltas, the signon, the encodings; the demo's recording measured (M57f) |
+| `sequel-campaign.md` | The sequel's single-player campaign (M18v7d2): the help computer and its counters, what carries across levels and units, cross-level bits, revisited levels, saves and the autosave, the remaining single-player entities, co-op, the end of the game |
 | `localization.md` | The re-release's text keys (clean-room answers): which prints carry `$` keys, how arguments fill `{}`/`{N}`, its extra builtins by number and by name, the words file's place and format, where an engine resolves them |
 | `television.md` | The classic match broadcaster (clean-room answers): its stream protocol, handshake and auth, the delay, catch-up, chat and viewer lists, the server's side, discovery, HTTP and files (M57) |
 | `forward.md` | The classic packet forwarder (clean-room answers): the route in the userinfo, the connect hop by hop, forwarding and timeouts, its queries, the client's route finder (M57) |
