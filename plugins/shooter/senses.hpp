@@ -96,11 +96,19 @@ struct SenseSettings {
   bool water_opaque = true;
 };
 
+// A contact's drift (`Contact::drift`, `leadmean`) follows its course this slowly, s.
+inline constexpr float kDrift_s = 0.5f;
+// A contact's turn rate (`Contact::turn`, `leadarc`) averaged this long, s, read only past this
+// speed across, units/s.
+inline constexpr float kTurn_s = 0.15f, kTurnSpeed = 200;
+
 struct Contact {
   int ent = -1;     // a player's entity; -1 a free contact
   ai::Memory seen;  // where and when it was last seen
   Vec3f velocity;   // a player's as sent; else off the last two sightings a frame apart
   Vec3f course;     // the velocity as the eye takes it in: `velocity` caught up over `course_s`
+  Vec3f drift;      // and his drift: `course` averaged over `kDrift_s` (a dodger's swing's middle)
+  float turn = 0;   // his course's turn, degrees a second (+ counter-clockwise), over `kTurn_s`
   bool visible = false;      // seen this frame
   bool was_visible = false;  // seen the frame before
   ai::Memory heard;          // where and when it was last heard

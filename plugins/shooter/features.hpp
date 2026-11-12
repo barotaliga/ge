@@ -88,6 +88,10 @@
 //   (watch.cpp); dropped with `circleview`, in no preset.
 // - `leadwall`: a target's predicted way slid along the walls it meets (bot.cpp `lead_slide`),
 //   not run on through them (M18r.md 0s); judging.
+// - `leadmean`: a projectile led on the target's drift (his course averaged over 0.5 s) as the
+//   flight lengthens, his swing's middle (bot.cpp); judging.
+// - `leadarc`: a projectile led along the target's curve at his turn rate (intercept.hpp
+//   `MovingTarget::turn`), a hopper's bend; judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
@@ -100,7 +104,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -186,9 +190,11 @@ enum class Feature : uint8_t {
   circleview,
   circleaim,
   leadwall,
+  leadmean,
+  leadarc,
   trial,
 };
-constexpr size_t kFeatures = 73;
+constexpr size_t kFeatures = 75;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

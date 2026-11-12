@@ -6,6 +6,8 @@
 //   across; in the AIR (`airborne`: off the floor under him) he follows his own arc under the
 //   server's gravity and lands on `floor_z`, where he goes on across: a player knocked up by a
 //   blast comes down where his arc does, which is where a midair shot is fired.
+// - THE CURVE (`MovingTarget::turn`, `leadarc`): a hopper bends his way 100-200 degrees a second;
+//   given his turn rate, his way across follows the arc (at most `kArcMost` degrees of it).
 // - THE WALLS (`MovingTarget::slide`, `leadwall`): a player cannot run on through a wall; given
 //   the caller's world, his way across is slid along what it meets, as the move slides him.
 // - THE INTERCEPT (`intercept`): the shot's flight time is from the muzzle to where the target
@@ -33,6 +35,7 @@
 namespace ge::shooter {
 
 inline constexpr float kServerGravity = 800;  // units/s/s
+inline constexpr double kArcMost = 90;        // a target's curve followed this far at most, deg
 
 // `leadwall`: the place a player moving from `from` toward `to` across reaches, slid along the
 // walls on the way (the caller's world; `to`'s height is only carried).
@@ -43,6 +46,9 @@ struct MovingTarget {
   bool airborne = false;  // on his own arc until `floor_z`
   float floor_z = -1e9f;  // the height his origin lands at
   float gravity = kServerGravity;
+  // His way across turning this fast, degrees a second (+ counter-clockwise from above), at most
+  // `kArcMost` degrees in all (`leadarc`: a hopper's curve); 0: a straight line.
+  float turn = 0;
   // His way across slid along the walls it meets (null: on in a straight line, through them).
   SlideAcross slide = nullptr;
   const void* slide_ctx = nullptr;

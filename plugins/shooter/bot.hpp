@@ -95,6 +95,12 @@ struct Bot {
   // THE LEAD ALONG THE WALLS (`leadwall`): a player's predicted way slid along the walls it meets
   // (intercept.hpp `MovingTarget::slide`), not run on through them.
   bool leadwall = false;
+  // THE DODGER'S MIDDLE (`leadmean`): a projectile led on the target's drift (senses.hpp
+  // `Contact::drift`) as its flight lengthens, not on his course of the moment.
+  bool leadmean = false;
+  // THE HOPPER'S CURVE (`leadarc`): a projectile led along the target's arc at his turn rate
+  // (senses.hpp `Contact::turn`), not a straight line.
+  bool leadarc = false;
   int32_t target = -1;       // the contact's entity the view is on
   float yaw = 0, pitch = 0;  // the view last pressed, degrees (yaw unwrapped)
   double wanted[2] = {}, pressed[2] = {};  // the aim's last yaw and pitch, wanted and pressed
