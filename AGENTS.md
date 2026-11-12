@@ -301,6 +301,7 @@ characters.
 | `engine/save/` | Saves (`ge::save`, `docs/saves.md`): the save file (header, meta, tagged versioned chunks, directory, XXH64), the state described once for its writer and reader | `save` |
 | `engine/capture/` | Video with sound (`ge::capture`, in `ge_play`; `docs/replays.md`): the Matroska and fragmented MP4 muxers and readers, I420, the encoders, the export's A/V clock, the live capture, the sync fixture | `replay` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |
+| `engine/forward/` | Forward (`ge::forward`, `docs/tv.md`): an opaque hop for any game's datagrams, chained by a route set up before the game's handshake; the dial, the allow list, alive, NAT rebinding, capped answers | `net` |
 | `engine/gamecli/` | A player's game CLI (`ge::gamecli`, `docs/gamecli.md`): the command table and answer, settings through the catalog, servers, players, rcon, hosting, joining, logs; `ge_add_game_cli` | `agent-interface` |
 | `engine/server/` | The server core (`ge::server`, `docs/servers.md`): `ServerGame` a game plugs in, the frame, the node, session and hosting round it, the dedicated process (`ge_add_server`), the sample game and trial | `net` |
 | `engine/hub/` | The hub (`ge::hub`, `docs/hub.md`): a game's `HubSpec`, the poller of masters and status records, the index, the JSON API, HTTP with server-sent events, the process (`ge_add_hub`) | `net` |
