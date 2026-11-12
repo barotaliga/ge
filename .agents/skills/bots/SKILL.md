@@ -207,9 +207,12 @@ lesson on client-fed state), say so in the row or measure it off the server. A t
 saves every later question; a tool worked round is asked again. A
 video is never a checkpoint's step: checkpoints are judged headless (below).
 
-**A checkpoint** is `make precheck` green (a golden or digest a change moves on purpose
-rewritten, and the commit says why), a commit, a push, and the plan's entry updated. No video and
-no live server: every match runs on our own server, in process (`se-team`), headless.
+**A checkpoint** is a commit, a push, and the plan's entry updated, judged by the simulations
+(the sets, head to head, the staging). The build gates (`make precheck`, the lint, every lab's
+smoke digests) are NOT run at a checkpoint: the handoff names the last commit they ran on, and the
+agent asked for a pull request runs them first (a golden or digest a change moves on purpose
+rewritten then, and the commit says why). No video and no live server: every match runs on our
+own server, in process (`se-team`), headless.
 
 **How a change is judged.**
 
