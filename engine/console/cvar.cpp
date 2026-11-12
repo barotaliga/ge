@@ -80,8 +80,8 @@ std::string set_result_text(SetResult r, std::string_view name) {
     case SetResult::latched:
       return {};
     case SetResult::unknown:
-      return "unknown cvar '" + n + "': see `cvarlist " + n.substr(0, 3) +
-             "` for the names, or `set` to create one";
+      return "unknown cvar '" + n + "' (type \"cvarlist " + n.substr(0, 3) +
+             "\" for the names, or use set to create one)";
     case SetResult::read_only:
       return n + " is read-only: only the game sets it";
     case SetResult::server:

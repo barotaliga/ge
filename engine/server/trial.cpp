@@ -1,6 +1,9 @@
 // The server trial, defined: the dedicated, listen and networked runs, the LAN browser, the
 // joining players.
 //
+// voice: agent (the server trial's report, read by its lab and tests; docs/architecture.md § Player
+// text).
+//
 // ge:summary The server trial's definitions: three runs, the browser, the joins, the fold
 // ge:keywords server trial run_server_trial lan-browser joins fold
 // ge:skill net

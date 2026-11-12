@@ -297,7 +297,7 @@ bool bind_game_data(QvmProgram& q, int32_t addr, int max_edicts, std::string& er
   if (addr == 0 || pg::qvm_ptr(q.vm, addr, 24, "the game data block") == nullptr) {
     pg::qvm_clear_fault(q.vm);
     error = "the module's init returned no game data block (address " + std::to_string(addr) +
-            "); next: the module refused to start (its console lines say why)";
+            "): the module refused to start (its console lines say why)";
     return false;
   }
   QvmGameData& d = q.data;
@@ -309,13 +309,13 @@ bool bind_game_data(QvmProgram& q, int32_t addr, int max_edicts, std::string& er
   d.max_entities = word_at(q, addr + 20);
   if (d.api < 16 || d.api > 17) {
     error = "the module's interface version " + std::to_string(d.api) +
-            " is not 16 or 17; next: run a module built for this server's interface";
+            " is not 16 or 17, so this server can't run it";
     return false;
   }
   if (d.entity_size < kEngineBytes || d.max_entities < 1) {
     error = "the module's entity records (" + std::to_string(d.entity_size) + " bytes, " +
             std::to_string(d.max_entities) + " of them) cannot hold the engine fields (" +
-            std::to_string(kEngineBytes) + " bytes); next: check the module's game data block";
+            std::to_string(kEngineBytes) + " bytes)";
     return false;
   }
   q.max_edicts = max_edicts < d.max_entities ? max_edicts : d.max_entities;
@@ -323,9 +323,7 @@ bool bind_game_data(QvmProgram& q, int32_t addr, int max_edicts, std::string& er
   const int64_t ents_end = int64_t{d.ents} + int64_t{d.entity_size} * q.max_edicts;
   if (d.ents <= 0 || ents_end > mem || d.globals <= 0 ||
       int64_t{d.globals} + kQvmGlobalBytes > mem) {
-    error =
-        "the module's entity records or globals lie outside its memory; next: check the "
-        "module's game data block";
+    error = "the module's entity records or globals lie outside its memory";
     return false;
   }
   q.live.assign(static_cast<size_t>(q.max_edicts), 0);

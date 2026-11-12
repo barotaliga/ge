@@ -182,15 +182,14 @@ bool load_mod(const std::string& path, ge::progs::Progs& out, std::string& sourc
   std::ifstream f(path, std::ios::binary);
   if (!f) {
     error = "load_mod: cannot read the progs " + path +
-            "; next: check the path (relative to where the game runs), or leave --progs and "
-            "sv_progs empty for the test mod";
+            ". Check the path (relative to where the game runs), or leave --progs and "
+            "sv_progs empty for the test mod.";
     return false;
   }
   const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
                                    std::istreambuf_iterator<char>());
   if (!ge::progs::load_progs(bytes.data(), bytes.size(), out, error)) {
-    error = "load_mod: " + path + ": " + error + "; next: `ge qc disasm " + path +
-            "` names what the checker refused";
+    error = "the mod " + path + " can't be loaded: " + error;
     return false;
   }
   std::ifstream lf(path + ".lines");
@@ -201,7 +200,7 @@ bool load_mod(const std::string& path, ge::progs::Progs& out, std::string& sourc
     if (!ge::progs::parse_lines(ss.str(), lines, error) ||
         !ge::progs::set_lines(out, std::move(lines), error)) {
       error = "load_mod: " + path + ".lines: " + error +
-              "; next: write the line table again beside the progs, or delete it";
+              " (write the line table again beside the progs, or delete it)";
       return false;
     }
   }
@@ -211,7 +210,7 @@ bool load_mod(const std::string& path, ge::progs::Progs& out, std::string& sourc
 ModMatchReport run_mod_match(const ModMatchOptions& opt) {
   ModMatchReport r;
   if (opt.bots < 1 || opt.bots > sh::kMaxClients) {
-    r.error = "run_mod_match: bots must be 1..32; next: pass --bots=4";
+    r.error = "run_mod_match: bots must be 1..32";
     return r;
   }
   std::string path = opt.progs.empty() ? progs_from_console(opt.console) : opt.progs;
@@ -241,8 +240,8 @@ ModMatchReport run_mod_match(const ModMatchOptions& opt) {
   map.models = arena_models(!opt.entities.empty());
   map.entities = opt.entities.empty() ? kArenaEntities : opt.entities;
   if (!load_map(s, map, error)) {
-    r.error = error + "; next: read the map's messages (" + std::to_string(s.map_messages.size()) +
-              ") and the console";
+    r.error = error + " (the map's " + std::to_string(s.map_messages.size()) +
+              " messages and the console say more)";
     r.console = s.console;
     r.map_messages = s.map_messages;
     return r;
@@ -317,7 +316,7 @@ ModMatchReport run_mod_match(const ModMatchOptions& opt) {
     r.digests.push_back(digest(s));
     if (s.map_stopped) {
       r.error = "the mod stopped the map: " + s.stop_reason +
-                "; next: read the console's last lines and the fault's QC stack";
+                " (the console's last lines and the fault's QC stack say more)";
       break;
     }
     if (!s.pending_map.empty()) {

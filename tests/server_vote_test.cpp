@@ -27,7 +27,7 @@ bool fake_check(void* ctx, std::string_view name, std::string_view value, VoteCh
   auto& f = *static_cast<Fake*>(ctx);
   const auto it = f.values.find(std::string(name));
   if (it == f.values.end()) {
-    out.error = std::string(name) + " is no setting here; next: `vote rules`";
+    out.error = std::string(name) + " is no setting here";
     return false;
   }
   const int v = std::atoi(std::string(value).c_str());
@@ -172,7 +172,7 @@ TEST(refusals_say_why_and_what_next) {
   const VoteTarget t{&f, fake_check};
   VoteBook b = seated(3);
   vote_command(b, t, 0, "vote rcon_password x", 0);
-  CHECK(b.notes.back().why == VoteWhy::denied && said(b, "next: `vote rules`"));
+  CHECK(b.notes.back().why == VoteWhy::denied && said(b, "Type \"vote rules\""));
   vote_command(b, t, 0, "vote gravity 5", 0);
   CHECK(b.notes.back().why == VoteWhy::refused && said(b, "gravity is no setting here"));
   vote_command(b, t, 0, "vote fraglimit 500", 0);

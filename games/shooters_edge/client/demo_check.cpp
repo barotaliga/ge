@@ -44,7 +44,7 @@ bool check_demo_bytes(std::vector<uint8_t> bytes, const GameAdapter& game, DemoF
   }
   if (d.state.map.empty()) {
     error = "the demo names no level in its first " + std::to_string(kCheckFrames) +
-            " frames: nothing to draw; next: pick another file";
+            " frames, so there is nothing to show. Pick another file.";
     return false;
   }
   // The players come in the frames just after the level's start: a second's worth read on.
@@ -64,7 +64,7 @@ bool check_demo_file(const std::string& path, const GameAdapter& game, DemoFacts
   std::error_code ec;
   const uintmax_t size = std::filesystem::file_size(path, ec);
   if (ec) {
-    error = "the file " + path + " does not read: " + ec.message() + "; next: pick another file";
+    error = "Can't read " + path + ": " + ec.message();
     return false;
   }
   if (size > ge::vfs::kUnpackLimit) {
@@ -74,13 +74,13 @@ bool check_demo_file(const std::string& path, const GameAdapter& game, DemoFacts
   }
   std::ifstream f(path, std::ios::binary);
   if (!f) {
-    error = "the file " + path + " does not open; next: check that the game may read it";
+    error = "Can't open " + path + ". Check that the game may read it.";
     return false;
   }
   std::vector<uint8_t> bytes(static_cast<size_t>(size));
   f.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(size));
   if (static_cast<uintmax_t>(f.gcount()) != size) {
-    error = "the file " + path + " ended while it was read; next: copy it again";
+    error = path + " ended early; the file may be damaged. Try copying it again.";
     return false;
   }
   return check_demo_bytes(std::move(bytes), game, out, error);

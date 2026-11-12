@@ -328,7 +328,7 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   s.protocol = v;
   if (v != 28) {
     error = "the server data names protocol " + std::to_string(v) +
-            "; next: only protocol 28 recordings are read";
+            ", and only protocol 28 recordings can be played";
     return false;
   }
   m.i32();  // the spawn count
@@ -736,7 +736,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
     if (!ok || m.bad) {
       if (ok) error = "message id " + std::to_string(id) + " runs past the packet's end";
       error += " (message at offset " + std::to_string(at) +
-               "); next: the recording is damaged or uses an extension not read yet";
+               "): the recording is damaged or uses an extension the game cannot play yet";
       return false;
     }
   }

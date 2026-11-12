@@ -125,7 +125,7 @@ bool load_map(BotTeam& t, const ClassicClientEnd& c, const std::string& file) {
       t.cfg.read_file ? t.cfg.read_file(c.gamedir, file) : read_from(m, c.gamedir, file);
   if (bytes.empty()) {
     t.map_error = "no " + file + " in " + t.cfg.basedir + " (game folder " + c.gamedir +
-                  " over the base game's); next: pass the folder holding the player's own packs";
+                  " over the base game's)";
     say(t, "bots: " + t.map_error);
     return false;
   }
@@ -297,7 +297,8 @@ bool seat_command(BotTeam& t, BotSeat& s, const std::string& line) {
   if (cmd == "skill") {
     sh::AimSkill k;
     if (!aim_skill_named(arg, k)) {
-      say(t, s.name + ": no skill '" + arg + "'; next: expert, average, novice or perfect");
+      say(t,
+          s.name + ": I don't know the skill '" + arg + "' (expert, average, novice or perfect)");
       return false;
     }
     s.skill = k;
@@ -306,7 +307,8 @@ bool seat_command(BotTeam& t, BotSeat& s, const std::string& line) {
   } else if (cmd == "temper") {
     sh::Temper tp;
     if (!sh::temper_of(arg, tp)) {
-      say(t, s.name + ": no temperament '" + arg + "'; next: aggressive, balanced or coward");
+      say(t,
+          s.name + ": I don't know the temperament '" + arg + "' (aggressive, balanced or coward)");
       return false;
     }
     s.traits = sh::traits_of(s.skill, tp);
@@ -386,11 +388,11 @@ bool bot_team_start(BotTeam& t, const BotTeamConfig& cfg, std::string& error) {
   if (cfg.address) {
     t.server = *cfg.address;
   } else if (!gn::parse_address(text, t.server)) {
-    error = "bots: '" + cfg.server + "' is not host:port; next: 127.0.0.1:27500";
+    error = "bots: '" + cfg.server + "' is not host:port (such as 127.0.0.1:27500)";
     return false;
   }
   if (cfg.bots < 1 || cfg.bots > 16) {
-    error = "bots: " + std::to_string(cfg.bots) + " bots; next: 1 to 16";
+    error = "bots: " + std::to_string(cfg.bots) + " bots; there can be 1 to 16";
     return false;
   }
   std::shared_ptr<Mount> mount = mount_of(t);
@@ -404,7 +406,7 @@ bool bot_team_start(BotTeam& t, const BotTeamConfig& cfg, std::string& error) {
                                 ? std::string("average")
                                 : cfg.skills[static_cast<size_t>(k) % cfg.skills.size()];
     if (!aim_skill_named(sk, s->skill)) {
-      error = "bots: no skill '" + sk + "'; next: expert, average, novice or perfect";
+      error = "bots: unknown skill '" + sk + "' (expert, average, novice or perfect)";
       return false;
     }
     s->traits = sh::traits_of(s->skill, sh::Temper::balanced);
@@ -559,8 +561,8 @@ void bot_team_command(BotTeam& t, const std::string& line_in) {
   if (line.rfind("leader ", 0) == 0) {
     const int n = std::atoi(line.c_str() + 7);
     if (n < 1 || n > static_cast<int>(t.seats.size())) {
-      say(t, "bots: no bot" + std::to_string(n) + " to lead; next: leader 1 to leader " +
-                 std::to_string(t.seats.size()));
+      say(t, "bots: there is no bot" + std::to_string(n) + " to lead (leader 1 to leader " +
+                 std::to_string(t.seats.size()) + ")");
       return;
     }
     t.leader = n - 1;
@@ -573,9 +575,9 @@ void bot_team_command(BotTeam& t, const std::string& line_in) {
       words = words.substr(1, words.size() - 2);
     const bt::Said said = bt::parse_say(words);
     if (said.kind != bt::SayKind::plan) {
-      say(t,
-          "bots: '" + words +
-              "' reads as no plan; next: plan lets take quad, plan camp ra and rl, plan free play");
+      say(t, "bots: '" + words +
+                 "' is not a plan I know (try: plan lets take quad, plan camp ra and rl, plan free "
+                 "play)");
       return;
     }
     if (t.seats.empty()) return;
@@ -599,8 +601,8 @@ void bot_team_command(BotTeam& t, const std::string& line_in) {
     while (at < line.size() && line[at] >= '0' && line[at] <= '9') n = n * 10 + (line[at++] - '0');
     if (at < line.size() && line[at] == ' ') {
       if (n < 1 || n > static_cast<int>(t.seats.size())) {
-        say(t, "bots: no bot" + std::to_string(n) + "; next: bot1 to bot" +
-                   std::to_string(t.seats.size()));
+        say(t, "bots: there is no bot" + std::to_string(n) + " (bot1 to bot" +
+                   std::to_string(t.seats.size()) + ")");
         return;
       }
       seat_command(t, *t.seats[static_cast<size_t>(n - 1)], line.substr(at + 1));
@@ -622,7 +624,7 @@ bool bot_team_stop(BotTeam& t, std::string& error) {
     out.write(reinterpret_cast<const char*>(s->recording.bytes.data()),
               static_cast<std::streamsize>(s->recording.bytes.size()));
     if (!out) {
-      error = "bots: could not write " + path + "; next: make the folder " + t.cfg.out;
+      error = "bots: could not write " + path + " (does the folder " + t.cfg.out + " exist?)";
       return false;
     }
   }

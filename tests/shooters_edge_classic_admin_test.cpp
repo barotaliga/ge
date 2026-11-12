@@ -180,7 +180,7 @@ TEST(speedjump_grants_one_player_disclosed_and_takes_it_back) {
   rig.frames(40);
   CHECK(cn::info_get(rig.c[0].userinfos[bert], "*speedjump").empty());
   // Mistakes say what to do next.
-  CHECK(has(rig.admin("speedjump 77 on"), "next: `users`"));
+  CHECK(has(rig.admin("speedjump 77 on"), "type \"users\""));
   CHECK(has(rig.admin("speedjump bert 2"), "not on, off or a share"));
   std::string error;
   CHECK(!cn::classic_speedjump(rig.server, 77, 0.5f, error));
