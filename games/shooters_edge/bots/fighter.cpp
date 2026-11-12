@@ -1418,6 +1418,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   // take off at 433, p50), an average player a shorter curve for less (people's p25: 377).
   ps.hop_circle = features[sh::Feature::circlejump];
   ps.hop_chain = features[sh::Feature::chainhop];
+  ps.hop_land_wall_s = features[sh::Feature::landwall] ? 0.15f : 0.f;
   ps.circle.target = expert ? 430.f : 380.f;
   ps.circle.most_s = expert ? 0.3f : 0.2f;
   // People's hop starts (`recipes`): a hopper copies its level's out of the book.

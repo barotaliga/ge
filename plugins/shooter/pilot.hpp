@@ -161,6 +161,12 @@ struct PilotSettings {
   // THE CHAIN (`chainhop`): a hop's landing with a hop stretch ahead jumps again at once, with no
   // walk's start between (its speed check, a circle jump, a copied start).
   bool hop_chain = false;
+  // THE LANDING'S WALL (`landwall`): a hop's landing whose jump would fly into a wall within this
+  // long, s, on every curve the air can give it (straight, and the side keys either way), runs on
+  // instead, the ground's keys along the route, and jumps once the way is clear: a flight that
+  // meets a wall lands at ~100 units/s and ends the hop, a run that meets one slides along it at
+  // a run's speed. 0: off.
+  float hop_land_wall_s = 0;
   CircleSettings circle;
   // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while `jumper.rockets` is set (the
   // caller's say: the launcher in hand, its rockets, the health for the blast), those of its
@@ -292,6 +298,7 @@ struct PilotStats {
   int32_t jumps_flown = 0;  // of the jumps, taken off the line or the speed as flown (`jumpfly`)
   int32_t lip_jumps = 0;    // a hop's jumps pressed at a lip (`lipjump`)
   int32_t hops = 0, hop_jumps = 0;  // hop stretches entered, jumps pressed on a landing in them
+  int32_t land_walls = 0;           // landings' commands run on for a wall in the jump (`landwall`)
   int32_t circles = 0;              // hops started by a circle jump
   float circle_speed = 0;           // their takeoff speeds, summed, units/s
   int32_t rocket_jumps = 0;         // rocket jumps fired

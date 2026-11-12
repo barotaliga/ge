@@ -330,6 +330,14 @@ bool jump_blocked(const Pilot& p, const MoveWorld& world, Vec3f o, float speed, 
   return false;
 }
 
+// `landwall`: a jump from `o` at `v` meets a wall within `horizon` on every curve the air can give
+// it (straight, and the most turn either way).
+bool land_walled(const MoveWorld& world, Vec3f o, Vec3f v, float dt, float horizon) {
+  for (int side = -1; side <= 1; side++)
+    if (arc_clear(world, o, v, side, dt, horizon) >= horizon) return false;
+  return true;
+}
+
 // THE CIRCLE JUMP (circle_jump.hpp): the hop's first jump from a curve on the ground. True while
 // still curving (the keys and view in `w`); false once due, the jump then taken as any landing's.
 bool circling(Pilot& p, const PilotSense& s, float vh, float speed, float err, float dt, int msec,
@@ -1585,6 +1593,18 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           w.side = 0;
           w.yaw = unwrap(aim_yaw, p.yaw);
           because = "the jump's way is low: run on";
+        }
+        if (w.jump && p.set.hop_land_wall_s > 0 && s.world != nullptr && !p.gap_flight &&
+            land_walled(*s.world, s.origin, s.velocity, dt, p.set.hop_land_wall_s)) {
+          // A wall in the jump's way on every curve the air gives: run on along the route (the
+          // ground slides along a wall at a run's speed; a flight into it lands at ~100), jump
+          // once clear.
+          w.jump = false;
+          w.forward = 1;
+          w.side = 0;
+          w.yaw = unwrap(aim_yaw, p.yaw);
+          because = "a wall in the jump's way: run on";
+          p.stats.land_walls++;
         }
         if (w.jump) p.stats.hop_jumps++;
       } else if (p.gap_flight) {
