@@ -634,7 +634,8 @@ void run(gl::Lab& lab) {
     trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
              "\tscript_"
              "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
-             "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway\n";
+             "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
+             "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -727,11 +728,26 @@ void run(gl::Lab& lab) {
         << ((cmd.buttons & sh::kButtonJump) != 0 ? 1 : 0) << '\t';
     // The heading the air steers for: a hop's aim, a walk's target in the air (`airwalk`).
     if (p.mode == sh::PilotMode::hop)
-      out << to_fixed(p.hop_aim_yaw, 1) << '\n';
+      out << to_fixed(p.hop_aim_yaw, 1) << '\t';
     else if (p.walk_air)
-      out << to_fixed(p.walk_air_yaw, 1) << '\n';
+      out << to_fixed(p.walk_air_yaw, 1) << '\t';
     else
-      out << "-\n";
+      out << "-\t";
+    // Who the aim is on, where he is and how he moves ('-' with no aim): a fight's way read
+    // against him (is he chasing?).
+    const int32_t tg = f.bot.aiming ? f.bot.target : -1;
+    if (tg >= 1 && static_cast<size_t>(tg) < w.world.entities.size()) {
+      const auto& te = w.world.entities[static_cast<size_t>(tg)];
+      out << tg << '\t' << to_fixed(te.origin.x, 0) << '\t' << to_fixed(te.origin.y, 0) << '\t'
+          << to_fixed(te.velocity.x, 0) << '\t' << to_fixed(te.velocity.y, 0) << '\t';
+    } else {
+      out << "-\t-\t-\t-\t-\t";
+    }
+    out << (w.sv.time < f.face_until ? 1 : 0) << '\t';  // (`fightway`) the way toward him
+    int vis = -1;  // the aimed contact in sight (1), lost (0); -1 with no aim
+    for (const sh::Contact& ct : f.bot.senses.contacts)
+      if (tg >= 1 && ct.ent == tg) vis = ct.visible ? 1 : 0;
+    out << vis << '\n';
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
@@ -1293,7 +1309,8 @@ void run(gl::Lab& lab) {
       // lined up behind it once more), the jumps pressed, and of them those flown from off the
       // line or the speed (`jumpfly`), a match.
       int64_t ups = 0, jumps = 0, flown = 0;
-      for (const cn::TeamPlayer& p : r.players) ups += p.run_ups, jumps += p.jumps, flown += p.jumps_flown;
+      for (const cn::TeamPlayer& p : r.players)
+        ups += p.run_ups, jumps += p.jumps, flown += p.jumps_flown;
       lab.metric("team.jump.run-ups", static_cast<double>(ups), "count");
       lab.metric("team.jump.jumps", static_cast<double>(jumps), "count");
       lab.metric("team.jump.flown", static_cast<double>(flown), "count");
