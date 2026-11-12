@@ -1262,6 +1262,13 @@ void run(gl::Lab& lab) {
       lab.metric("team.chain.through", static_cast<double>(ct), "count");
       lab.metric("team.chain.missed", static_cast<double>(cm), "count");
       lab.metric("team.chain.speed", ct > 0 ? cvs / static_cast<double>(ct) : 0, "u/s");
+      // New goals run on to from the route under way (`retarget`), a match.
+      int64_t aims = 0;
+      for (const cn::TeamPlayer& p : r.players) aims += p.retargets;
+      lab.metric("team.retargets", static_cast<double>(aims), "count");
+      int64_t rounds = 0;
+      for (const cn::TeamPlayer& p : r.players) rounds += p.turned_round;
+      lab.metric("team.turned-round", static_cast<double>(rounds), "count");
     }
     lab.metric("team.dodge-share",
                fight > 0 ? static_cast<double>(dodging) / static_cast<double>(fight) : 0, "share");

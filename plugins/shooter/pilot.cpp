@@ -75,6 +75,9 @@ constexpr float kBrake = 0.25f;      // the least share of maxspeed walked into 
 // A chain's pickup (`pilot_chain`): run through with the player's box over the item's (each 32
 // across: centres within 32 across, the feet from 24 under the item's floor to 72 over it), or
 // left behind once past its node and this far from it.
+// A goal retargeted (`pilot_retarget`) runs on through the node ahead when that way is no more
+// than this slower than a fresh plan from where the player stands, s.
+constexpr float kRetargetSlack_s = 0.25f;
 constexpr float kViaTouch = 32, kViaUnder = 24, kViaOver = 72, kViaPast = 64;
 constexpr float kFacing = 10;        // a run-up goes when the view is this near the jump's way, deg
 constexpr float kTurnRate = 400;     // a hand turning round on the spot, degrees a second
@@ -930,7 +933,7 @@ namespace {
 
 // The nodes from `from` to `goal` round the doors barred and shut and the links cut, missed and
 // given up; empty when there is no way.
-std::vector<int32_t> plan_way(Pilot& p, int32_t from, int32_t goal) {
+NavRoute plan_way(Pilot& p, int32_t from, int32_t goal) {
   int32_t barred[4 + 60];
   int nb = 0;
   for (const int32_t b : p.barred)
@@ -948,8 +951,7 @@ std::vector<int32_t> plan_way(Pilot& p, int32_t from, int32_t goal) {
     cut = p.cut_all;
   }
   return nav_route(*p.g, from, goal, p.search, 1,
-                   std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut, p.set.jumper)
-      .nodes;
+                   std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut, p.set.jumper);
 }
 
 }  // namespace
@@ -980,7 +982,7 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
   p.stats.plans++;
   restart(p, s);
   p.via_k = -1;
-  p.route = plan_way(p, plan_from(p, s), goal);
+  p.route = plan_way(p, plan_from(p, s), goal).nodes;
   if (p.route.empty()) {
     p.mode = PilotMode::idle;
     return false;
@@ -992,7 +994,7 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
 bool pilot_chain(Pilot& p, int32_t next, Vec3f at) {
   if (p.route.empty() || next < 0 || next == p.goal || p.route.back() != p.goal) return false;
   if (p.mode == PilotMode::idle) return false;
-  const std::vector<int32_t> on = plan_way(p, p.goal, next);
+  const std::vector<int32_t> on = plan_way(p, p.goal, next).nodes;
   if (on.size() < 2) return false;
   p.via_k = static_cast<int32_t>(p.route.size()) - 1;
   p.via_at = at;
@@ -1001,6 +1003,60 @@ bool pilot_chain(Pilot& p, int32_t next, Vec3f at) {
   p.goal = next;
   if (p.mode == PilotMode::arrived) p.mode = PilotMode::walk;
   p.stats.vias++;
+  return true;
+}
+
+bool pilot_retarget(Pilot& p, int32_t goal, const PilotSense& s) {
+  // Only a walk or a hop on a walk's link: anything else (a jump, a mover, a swim, a hop start
+  // being played, a gap's run) is planned again as it always was.
+  const bool moving = p.mode == PilotMode::walk || p.mode == PilotMode::hop ||
+                      p.mode == PilotMode::strafe;
+  if (!moving || p.k + 1 >= p.route.size() || p.recipe >= 0 || p.gap_way >= 0 || p.gap_flight ||
+      p.escape_on >= 0 || p.plan_on_landing || (s.waterlevel >= 2 && !s.onground))
+    return pilot_go(p, goal, s);
+  const NavLink* l = link_of(*p.g, p.route[p.k], p.route[p.k + 1]);
+  if (l == nullptr || (l->kind != NavKind::walk && l->kind != NavKind::drop) || l->mover >= 0)
+    return pilot_go(p, goal, s);
+  const int32_t ahead = p.route[p.k + 1];
+  if (goal == ahead) return pilot_go(p, goal, s);
+  const NavRoute on = plan_way(p, ahead, goal);
+  const NavRoute fresh = plan_way(p, plan_from(p, s), goal);
+  if (on.nodes.size() < 2 || fresh.nodes.empty()) return pilot_go(p, goal, s);
+  // The node ahead first: at the speed held (a walk's at the least), no slower than from here.
+  const float speed = std::max(across({}, s.velocity), 0.5f * s.maxspeed);
+  const float to_ahead = across(s.origin, node(*p.g, ahead).origin) / speed;
+  if (to_ahead + on.time_s > fresh.time_s + kRetargetSlack_s) return pilot_go(p, goal, s);
+  p.route.resize(p.k + 2);
+  p.route.insert(p.route.end(), on.nodes.begin() + 1, on.nodes.end());
+  p.goal = goal;
+  p.via_k = -1;
+  p.plan_on_landing = false;
+  p.stats.retargets++;
+  // The stretch read again on the new way ahead (its nodes past the one ahead are new).
+  if (p.mode == PilotMode::hop) {
+    const int32_t j = hop_stretch(p, s.origin);
+    if (j < 0) {
+      if (s.onground) {
+        restart(p, s);
+        p.mode = PilotMode::walk;
+      } else {
+        p.strafe_end_node = static_cast<int32_t>(p.k) + 1;  // landed, it walks on from there
+      }
+    } else {
+      p.strafe_end_node = j;
+      p.gap_k = gap_in(p, j);
+    }
+  } else if (p.mode == PilotMode::strafe) {
+    const int32_t j = strafe_stretch(p, s.origin);
+    if (j < 0) {
+      restart(p, s);
+      p.mode = PilotMode::walk;
+    } else {
+      p.strafe_end_node = j;
+    }
+  }
+  p.best = 1e30f;
+  p.best_s = static_cast<float>(p.stats.time_s);
   return true;
 }
 
