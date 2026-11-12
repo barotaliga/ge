@@ -122,7 +122,7 @@
 //   (under 100 units/s) is not aimed at: the run faces its way (bot.cpp, M18r.md 0w); judging.
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
-//   hung where the enemy was lost); judging.
+//   hung where the enemy was lost); on.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
