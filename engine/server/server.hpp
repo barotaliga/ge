@@ -129,6 +129,17 @@ struct GameRule {
   const char* help;  // what it does, with its unit
 };
 
+// A GAME'S OWN NAME for one of the core's settings (`ServerGame::names`): the name its configs,
+// its admins and its mods use, such as a classic game's `maxclients` for `sv_maxclients`. It is a
+// synonym on the server's console (console/cvar.hpp): a server.cfg line, `+set`, rcon or a vote by
+// either name sets the one setting. `part` >= 0 names one word of a setting that holds several
+// (`sv_floodprot`'s "N S T").
+struct SettingName {
+  const char* name;
+  const char* setting;
+  int part = -1;
+};
+
 // A game's server, as functions over its own state (`void*`, made by `create`). Called once a
 // frame, so the indirection costs nothing that matters; nothing is registered at run time.
 struct ServerGame {
@@ -142,6 +153,8 @@ struct ServerGame {
   const char* base_dir = "base";    // the base game directory, whose server.cfg is read first
   const GameRule* rules = nullptr;  // the game's own rules, `rule_count` of them
   int rule_count = 0;
+  const SettingName* names = nullptr;  // the game's names for the core's settings, `name_count`
+  int name_count = 0;
 
   // The game on `config`'s map with its bots; null with `error` (what and the next action).
   void* (*create)(const ServerConfig& config, std::string& error) = nullptr;
