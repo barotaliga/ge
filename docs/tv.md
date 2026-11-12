@@ -124,6 +124,11 @@ Fall Line through a source node and a relay reaches the player's digest under ev
 (the `spectate` lab). Its inputs cost about 230 bytes a second; a whole save every 10 s is about
 10 kB a second packed, so the keyframes are what is left to make small.
 
+A run's input log and its stream are the same run: `spectate_pack` steps the run through a log and
+writes the stream its broadcast would have been, and `spectate_inputs` reads a stream from its
+first block back into the log, text for text, so a kept broadcast is a replay `ge replay`,
+`ge diverge` and `ge why` can read once it is turned back.
+
 ## The field codec
 
 The coder (`engine/replay/codec.hpp`) is an adaptive binary range coder: integers only, so it

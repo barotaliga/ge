@@ -14,6 +14,7 @@
 #include "fall_line/sim/play.hpp"
 #include "net/conditions.hpp"
 #include "play/game.hpp"
+#include "play/inputs.hpp"
 #include "play/session.hpp"
 #include "replay/spectate.hpp"
 #include "replay/stream.hpp"
@@ -119,4 +120,39 @@ TEST(viewers_through_a_tv_tree_reach_the_players_digest_under_every_preset) {
           name + ": viewer at step " + std::to_string(s.step) + " of " + std::to_string(p.steps));
     }
   }
+}
+
+TEST(a_runs_input_log_and_its_replay_file_are_the_same_run) {
+  gp::Setup setup;
+  std::string error;
+  CHECK_MSG(gp::make_setup(fs::kGame, 38, {}, setup, error), error);
+  gp::Session session(fs::kGame, setup);
+  CHECK_MSG(session.ok(), session.error());
+  gp::InputRecorder rec(gp::new_log(fs::kGame, setup));
+  std::vector<double> input(fs::kGame.axes.size(), 0), snapped(input.size(), 0);
+  for (int64_t s = 0; s < 20 * static_cast<int64_t>(fs::kGame.hz) && !session.done(); s++) {
+    std::fill(input.begin(), input.end(), 0);
+    session.run().pilot(input);
+    for (size_t i = 0; i < input.size(); i++)
+      snapped[i] = gp::snap_axis(input[i], fs::kGame.axes[i].kind);
+    session.step(input);
+    rec.record(snapped);
+  }
+  gp::InputLog log = rec.log();
+  log.digest = session.run().digest();
+  std::vector<uint8_t> file;
+  CHECK_MSG(rp::spectate_pack(fs::kGame, log, file, error), error);
+  gp::InputLog back;
+  CHECK_MSG(rp::spectate_inputs(fs::kGame, file, back, error), error);
+  CHECK(gp::to_text(back) == gp::to_text(log));
+  // A viewer's stream that began after the first block holds no whole run.
+  const auto t = rp::read_trailer(file);
+  CHECK(t.has_value() && t->index.size() > 12);
+  if (!t || t->index.size() <= 12) return;
+  rp::StreamReader r;
+  CHECK(rp::read_stream_header(file, r, error));
+  std::vector<uint8_t> late(file.begin(), file.begin() + static_cast<std::ptrdiff_t>(r.at));
+  late.insert(late.end(), file.begin() + t->index[10].offset, file.end());
+  CHECK(!rp::spectate_inputs(fs::kGame, late, back, error));
+  CHECK_MSG(error.find("not its first") != std::string::npos, error);
 }

@@ -6,9 +6,14 @@
 // ge:test tests/fall_line_spectate_test.cpp
 #include "replay/spectate.hpp"
 
+#include <map>
+#include <string>
+#include <utility>
+
 #include "core/num.hpp"
 #include "play/inputs.hpp"
 #include "play/saves.hpp"
+#include "play/session.hpp"
 
 namespace ge::replay {
 
@@ -153,6 +158,95 @@ void SpectateWriter::finish(const play::Run& run) {
   if (steps_ > block_first_ || block_keyframe_) close_block(run);
   stream_finish(writer_,
                 {{"steps", std::to_string(steps_)}, {"digest", play::hex64(run.digest())}});
+}
+
+bool spectate_pack(const play::GameSpec& spec, const play::InputLog& log, std::vector<uint8_t>& out,
+                   std::string& error, const SpectateOptions& options) {
+  if (!play::fits(log, spec, error)) return false;
+  std::map<std::string, std::string> given(log.options.begin(), log.options.end());
+  play::Setup setup;
+  if (!play::make_setup(spec, log.seed, given, setup, error)) return false;
+  play::Session session(spec, setup);
+  if (!session.ok()) {
+    error = "the run does not open: " + session.error();
+    return false;
+  }
+  out.clear();
+  SpectateWriter writer(spec, setup, out, options);
+  if (!writer.start(session.run(), error)) return false;
+  for (const play::InputRun& r : log.runs) {
+    for (int64_t k = 0; k < r.count; k++) {
+      session.step(r.values);
+      if (!writer.step(r.values, session.run(), error)) return false;
+    }
+  }
+  writer.finish(session.run());
+  return true;
+}
+
+bool spectate_inputs(const play::GameSpec& spec, std::span<const uint8_t> stream,
+                     play::InputLog& out, std::string& error) {
+  StreamReader r;
+  if (!read_stream_header(stream, r, error)) return false;
+  const StreamHeader& h = r.header;
+  if (h.game != spec.name) {
+    error = "the stream is a " + h.game + " run, not " + spec.name;
+    return false;
+  }
+  play::InputLog log;
+  log.game = spec.name;
+  log.hz = spec.hz;
+  for (const play::Axis& a : spec.axes) log.axes.emplace_back(a.name);
+  for (const auto& [k, v] : h.meta) {
+    if (k == "seed") {
+      const auto seed = play::parse_hex64(v);
+      if (!seed) {
+        error = "the stream's seed '" + v + "' is not sixteen hex digits";
+        return false;
+      }
+      log.seed = static_cast<double>(*seed);
+    } else if (k.starts_with("option.")) {
+      log.options.emplace_back(k.substr(7), v);
+    }
+  }
+  play::InputRecorder rec(std::move(log));
+  int64_t step = 0;
+  Block b;
+  while (next_block(r, b, error)) {
+    for (const Chunk& c : b.chunks) {
+      if (c.track != kInputsTrack) continue;
+      In in{c.bytes};
+      const auto first = static_cast<int64_t>(in.u());
+      if (first != step) {
+        error = step == 0 ? "the stream starts at step " + std::to_string(first) +
+                                ", not its first: a viewer's late stream holds no whole run"
+                          : "block " + std::to_string(b.index) + " starts at step " +
+                                std::to_string(first) + " after " + std::to_string(step);
+        return false;
+      }
+      const uint64_t runs = in.u();
+      std::vector<double> values(spec.axes.size(), 0);
+      for (uint64_t k = 0; k < runs && !in.bad; k++) {
+        const uint64_t count = in.u();
+        for (size_t i = 0; i < values.size(); i++) values[i] = value_of(in.s(), spec.axes[i].kind);
+        if (in.bad || count > (uint64_t{1} << 24)) break;
+        for (uint64_t n = 0; n < count; n++) rec.record(values);
+        step += static_cast<int64_t>(count);
+      }
+      in.u64();
+      if (in.bad) {
+        error = "block " + std::to_string(b.index) + "'s inputs are damaged";
+        return false;
+      }
+    }
+  }
+  if (!error.empty()) return false;
+  out = rec.log();
+  if (const auto t = read_trailer(stream)) {
+    for (const auto& [k, v] : t->meta)
+      if (k == "digest") out.digest = play::parse_hex64(v);
+  }
+  return true;
 }
 
 bool spectate_follow(Spectator& s, const play::GameSpec& spec, std::span<const uint8_t> stream) {
