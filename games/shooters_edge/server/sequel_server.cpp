@@ -583,6 +583,12 @@ void mirror_pool(SequelServer& s) {
   const RulesWorld& w = s.world;
   if (s.sv.edicts.size() < w.entities.size()) return;  // sized at the map's start
   s.sv.time = s.host_time;
+  if (s.tracer != nullptr) {
+    const ge::brush::Model& m = s.map->models[0];
+    s.world_solid = sh::brushes_solid(*s.tracer, 0, {}, {m.mins[0], m.mins[1], m.mins[2]},
+                                      {m.maxs[0], m.maxs[1], m.maxs[2]});
+    s.sv.brushes = &s.world_solid;
+  }
   s.sv.num_edicts = static_cast<int>(w.entities.size());
   for (size_t i = 0; i < w.entities.size(); i++) {
     const WorldEntity& row = w.entities[i];

@@ -41,8 +41,8 @@ gives each game) and says three things through its `ServerGame`:
 | Where the login is shown | The game's own scoreboard can show it | the `*auth` user info key, which the community's client draws as the login name with a marker | the name alone | to be read |
 
 An account's name is checked against every game the master serves: 2 to 15 characters of letters,
-digits, space, `_`, `-` and `.`, so it fits the strictest game's list as it is. Nothing in the
-account, the ticket or the report is shaped by one game: adding a game is a game id, a folding rule
+digits, `_`, `-` and `.` (no space: a console line splits on it), so it fits the strictest game's
+list as it is. Nothing in the account, the ticket or the report is shaped by one game: adding a game is a game id, a folding rule
 and its prompt.
 
 ## The parts
@@ -50,7 +50,7 @@ and its prompt.
 ```text
  our client ──sign in (sealed)──▶ MASTER + accounts ◀──login ask, reports (sealed)── SERVER
       │                              │      ▲                                      ▲   │
-      │ ticket (signed)              │      └── sign up, codes, game password ── browser
+      │ ticket (signed)              │      └── sign up, codes ─────────────── browser
       └──────── connect + ticket ──────────────────────────────────────────────────┘   │
  classic client ── "login niclas K7QF-29MD" (console line, plain) ─────────────────────┘
                                      │ reports, totals
@@ -60,9 +60,9 @@ and its prompt.
 
 | Part | Home | What it is |
 | --- | --- | --- |
-| The account store | `engine/account` (new module) | Accounts, names and their folded keys, Argon2id hashes, game passwords, one-time codes, the throttle; an append-only log on disk replayed at start, compacted into a snapshot. Pure functions over a clock passed in, so a lab runs it on the simulated network |
+| The account store | `engine/account` (new module) | Accounts, names and their folded keys, Argon2id hashes, one-time codes, the throttle; an append-only log on disk replayed at start, compacted into a snapshot. Pure functions over a clock passed in, so a lab runs it on the simulated network |
 | The ticket | `engine/account` | What a logged-in player carries: account id, name, the games it may be used for, issued and expiry (24 h), the master's id; signed with the master's Ed25519 key. Any server checks it with the master's public key, offline |
-| The account service | `engine/account`, run by the master's process (the hub's `--master`, or a master alone) | Sign up, sign in, tickets, a server's login ask, codes and game passwords, the reports and each account's totals, over a sealed channel (X25519 to the master's published key, then the network's XChaCha20-Poly1305) |
+| The account service | `engine/account`, run by the master's process (the hub's `--master`, or a master alone), or by a server that is its own master | Sign up, sign in, tickets, a server's login ask, codes, the reports and each account's totals, over a sealed channel (X25519 to the master's published key, then the network's XChaCha20-Poly1305) |
 | The login seam | `engine/server` | A seat's login state (guest, asked, logged in as an account), the prompt's timer, the reserved-name rule, the settings below; the game supplies its words and how its clients answer |
 | The match report | `engine/net/report.hpp` | The record of one finished match, generic (§ The match report); the replay file's closing summary carries the same record |
 | The pages | `engine/hub` | Player, Match, Leaders and Account; the JSON API beside them |
@@ -74,7 +74,6 @@ and its prompt.
 | id | 64 bits, never reused |
 | name, folded name | as the player wrote it; the key the reservation is held by |
 | password | Argon2id (Monocypher), 64 MiB, 3 passes, a 16-byte salt; only the hash is kept |
-| game password | a second, optional secret, only good for logging in to a game server (§ Logging in from a classic client); Argon2id too |
 | recovery code | shown once at sign-up, kept as a hash: the way back to an account with no e-mail |
 | created, last seen, blocked | |
 
@@ -119,12 +118,10 @@ servers set it only for logins through their central web site.
 
 **The secret travels in plain text**: the classic protocols encrypt nothing, so the line can be
 read on the path and is seen by the server's operator. That is why a classic client never logs in
-with the account's PASSWORD. It uses one of:
-
-| Secret | Got from | Good for | If it is read on the path |
-| --- | --- | --- | --- |
-| A one-time CODE, `K7QF-29MD` | The hub's Account page, our client, or the game CLI (`account code`) | One login, within 15 minutes | Nothing: it is spent |
-| The GAME PASSWORD | Set on the Account page | Logging in to game servers, again and again, so it can go in a config's `login` line | Someone plays under the name until it is changed; they cannot change the password, make codes, read or delete the account |
+with the account's PASSWORD, nor with any secret it could use twice: it logs in with a ONE-TIME
+CODE (`K7QF-29MD`), got from the hub's Account page, our client or the game CLI (`account code`),
+good for one login within 15 minutes. A code read on the path is already spent (the maintainer's
+choice, 2026-11-12: codes only, no reusable game password).
 
 The community's client of the first classic game can log in without a secret on the wire: it
 answers a challenge through its central web site with a token file. That site's address is fixed in
@@ -137,6 +134,17 @@ player reads like a game's (`docs/architecture.md` § Player text). The line is 
 logs, demos and broadcasts: the server takes it before anything prints or records it, and the
 player's own console does not echo a line it sent as chat. A login line still counts toward the
 chat flood guard.
+
+### A server is its own master
+
+A server whose `sv_accountmaster` is empty is its OWN master (the maintainer, 2026-11-12): it keeps
+the store itself (`accounts.log` in its game folder, the same store and file a master keeps), signs
+its own tickets with a key of its own (made at the first start and kept beside the store, never in
+the tree), and answers the account service on its own port: sign-up, sign-in, tickets and codes,
+over the same sealed channel. Our client and the game CLI reach it by the server's address, as
+they would a master, and a hub pointed at it shows its stats; the console's `account` commands
+manage it. Its accounts are its own: a player who also wants them elsewhere signs up with a
+community's master, and a server joins that master by setting `sv_accountmaster`.
 
 ## Names
 
@@ -156,13 +164,13 @@ classic names as synonyms (`docs/servers.md` § A game's own names):
 | `sv_logintime` | | seconds a seat that must log in has before it is dropped (60) |
 | `sv_loginname` | `sv_forcenick` | 1: a logged-in player's name is the account's, and a rename is refused |
 | `sv_loginwelcome` | `sv_registrationinfo` | the line shown before the prompt (where to get a code) |
-| `sv_accounts` | `sv_login_web` (0 local, 1 master, 2 both) | where accounts are kept: 0 the server's own store (`accounts.log` in the game folder), 1 the master, 2 the master, with the local store able to block |
-| `sv_accountkey` | | the master's public key tickets are checked with |
+| `sv_accountmaster` | covers `sv_login_web` | the account master's address; empty (the default): the server is its own master (§ A server is its own master) |
+| `sv_accountkey` | | the master's public key tickets are checked with; with no master, the server's own |
 | `sv_reservednames` | | 1: guests may not use an account's name |
 | `sv_stats` | | 1: send each finished match's report to the master |
 | covered | `sv_hashpasswords` | secrets are always Argon2id; nothing is stored in the clear |
 | covered | `sv_www_address`, `sv_www_authkey` | the master the server beats to and the server's key |
-| `account create/remove/list/block/unblock` | `acc_create`, `acc_remove`, `acc_list`, `acc_block`, `acc_unblock` | the local store's commands (`sv_accounts 0`) |
+| `account create/remove/list/block/unblock` | `acc_create`, `acc_remove`, `acc_list`, `acc_block`, `acc_unblock` | the console's commands on the server's own store, when it is its own master |
 
 ## The match report
 
@@ -201,7 +209,7 @@ their recent-stats answer into the same record, best effort and without accounts
 | Player | An account: totals per game and mode, the game's columns, the recent matches with their demos |
 | Match | One report: the scoreboard, each player's columns, the demo |
 | Leaders | Per game, mode and column, over a period |
-| Account | Sign up, sign in, the one-time code, the game password, the recovery code, delete. Plain HTML forms, no script; the only pages that take input, so the hub must sit behind the operator's TLS proxy for them, and says so on the page when it is reached without TLS |
+| Account | Sign up, sign in, a one-time code, the recovery code, delete. Plain HTML forms, no script; the only pages that take input, so the hub must sit behind the operator's TLS proxy for them, and says so on the page when it is reached without TLS |
 
 The JSON API: `/v1/players/{name}`, `/v1/matches?game=&mode=&player=&page=`, `/v1/matches/{id}`,
 `/v1/leaders?game=&mode=&stat=&days=`. The hub's line that it has no accounts and no login
@@ -211,7 +219,7 @@ The JSON API: `/v1/players/{name}`, `/v1/matches?game=&mode=&player=&page=`, `/v
 
 | Row | What | Labs |
 | --- | --- | --- |
-| M59a | `engine/account`: the store, names and folding per game, Argon2id, the throttle, codes and game passwords, the log and its snapshot | `accounts` |
+| M59a | `engine/account`: the store, names and folding per game, Argon2id, the throttle, codes, the log and its snapshot | `accounts` |
 | M59b | The account service in the master's process: sign up, sign in, tickets, the server's login ask, over the sealed channel; the hub's Account page | `accounts` |
 | M59c | The login seam in `engine/server`, the settings above, our client's ticket; the first classic game's prompt and `login` line | `se-login` |
 | M59d | The sequel's prompt and `login` line, one account logged in on both games' servers | `se-login` |
@@ -226,9 +234,10 @@ an account comes with M20c.
 | Decision | Taken | Considered and not taken |
 | --- | --- | --- |
 | Where accounts live | With the master, which every server and hub already talks to | A separate account service (M17j's first plan): one more process to run; each server's own accounts file only: no account across servers |
+| A server with no master | Its own master: the same store and service in the server's process (the maintainer, 2026-11-12) | No accounts without a master: a server alone could not keep names or stats |
 | One account or one per game | One, with the game in every stat's key | One per game: the person asked for one across games |
 | How a server trusts our player | A ticket signed by the master, checked offline | Asking the master at every connect: a server could not log anyone in while the master is down |
-| A classic client's secret | One-time codes and a game password, never the account's password | The password typed in the console: the classic link is plain text, and a server's operator would see it. The first game's client's challenge through a token file: its web site's address is fixed in the client |
+| A classic client's secret | One-time codes only (the maintainer, 2026-11-12) | The password typed in the console: the classic link is plain text, and a server's operator would see it. A reusable game password for a config's `login` line: read once on the path, it logs anyone in until changed. The first game's client's challenge through a token file: its web site's address is fixed in the client |
 | Failed logins | A hold that doubles to 15 minutes | Blocked for good after 10, as the classic servers do: anyone could lock anyone out |
 | Whose stats count | Servers the master's owner trusts | Every server: anyone could post a match that never happened |
 | The report's format | One generic record, the game's columns named in its `HubSpec`, the same as the demo's closing summary | The classic mod's stats file: one game's shape |

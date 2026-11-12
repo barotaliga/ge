@@ -22,6 +22,7 @@
 #include "replay/codec.hpp"
 #include "replay/stream.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_caption.hpp"
 
 namespace shooters_edge::client {
 
@@ -1328,9 +1329,13 @@ void demo_hub_meta(std::span<const uint8_t> recording, gr::Meta& header, gr::Met
   const DemoState& s = d.state;
   const auto info = [&](const char* key) {
     for (const auto& [k, v] : s.serverinfo)
-      if (k == key) return v;
+      if (k == key) return plain_text(v);  // a page shows them: the font's bytes as ASCII
     return std::string();
   };
+  for (Seen& p : seen) {
+    p.name = plain_text(p.name);
+    p.team = plain_text(p.team);
+  }
   const auto on = [&](const char* key) { return std::atoi(info(key).c_str()) != 0; };
   const size_t players = seen.size();
   std::string mode;
