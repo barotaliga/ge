@@ -22,10 +22,18 @@
 //   (`speed`, and `height` up when on the ground); `trigger_gravity` sets a toucher's gravity.
 // - **Still figures**: the still ships and poses, a black hole a use removes; `func_conveyor`'s
 //   switch; `target_temp_entity` sends its effect.
+// - **Set pieces that move**: `func_object` (with any flag hidden until a use; it falls when
+//   nothing holds it and crushes by `dmg`, 100 by default, what it lands on); `target_spawner`
+//   (a monster from four spares waiting unseen, counted when they come out, or an item);
+//   `misc_viper_bomb` (thrown on at the first ship's speed, nose down over a second, blowing on
+//   whatever it touches: radius damage `dmg`, 1000 by default, within `dmg` + 40). The fly-by
+//   ships (`misc_viper`, `misc_strogg_ship`) are the map's trains (sequel_map.cpp), hidden and
+//   passable until used.
 //
 // ge:summary The sequel's other entities: keys, counters, lasers, shakes, blasts, barrels, ramps
 // ge:keywords sequel trigger-key trigger-counter target-laser earthquake func-explosive explobox
-// ge:keywords lightramp killbox monsterjump target-string deadsoldier
+// ge:keywords lightramp killbox monsterjump target-string deadsoldier func-object target-spawner
+// ge:keywords viper-bomb fly-by-ship
 // ge:skill shooter
 // ge:test tests/shooters_edge_sequel_targets_test.cpp
 #pragma once

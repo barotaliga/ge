@@ -201,6 +201,8 @@ Class class_of(std::string_view c) {
       {"func_button", kButton},
       {"func_plat", kPlat},
       {"func_train", kTrain},
+      {"misc_viper", kTrain},  // the fly-by ships run their path as a train
+      {"misc_strogg_ship", kTrain},
       {"func_wall", kWall},
       {"func_timer", kTimer},
       {"trigger_once", kTriggerOnce},
@@ -233,6 +235,9 @@ Class class_of(std::string_view c) {
 Class class_of(const SequelEntity& e) { return class_of(e.classname); }
 
 bool is_door(Class c) { return c == kDoor || c == kDoorRotating; }
+bool is_ship(const SequelEntity& e) {
+  return e.classname == "misc_viper" || e.classname == "misc_strogg_ship";
+}
 
 // A door's start or end sample; null when it moves quietly. A door of water sounds of water,
 // and only when it has `sounds`.
@@ -760,7 +765,7 @@ void think(SequelServer& s, SequelEntity& e) {
       e.origin = corner.origin - e.mins;
       e.target = corner.target;
       e.owner = c;
-      if ((e.spawnflags & 1) != 0 || e.targetname.empty()) {
+      if (!is_ship(e) && ((e.spawnflags & 1) != 0 || e.targetname.empty())) {
         e.think_at = s.level_time + kStep;
         e.think = kTrainNext;
         e.activator = -1;
@@ -951,6 +956,12 @@ void use(SequelServer& s, int target, int activator, int depth) {
       if (!e.moved && e.state == kGoing && e.arrive == kNoAct) plat_go_down(s, e);
       return;
     case kTrain:
+      if (e.hidden) {  // a ship shows itself and sets off
+        e.hidden = false;
+        e.activator = activator;
+        train_next(s, e);
+        return;
+      }
       if (e.arrive != kNoAct || e.think == kTrainNext) {
         if ((e.spawnflags & 2) != 0) {  // a toggle train stops where it is
           e.velocity = {};
@@ -1270,6 +1281,29 @@ void spawn_one(SequelServer& s, SequelEntity& e, Class c) {
       return;
     }
     case kTrain:
+      if (is_ship(e)) {  // hidden and passable until used, then off along its path
+        if (e.target.empty()) {
+          s.console.push_back("A ship at " + std::to_string(int(e.origin.x)) + " " +
+                              std::to_string(int(e.origin.y)) +
+                              " has no path to fly; it is left out.");
+          e.gone = true;
+          return;
+        }
+        const char* model = e.classname == "misc_viper" ? "models/ships/viper/tris.md2"
+                                                        : "models/ships/strogg1/tris.md2";
+        const auto found = std::find(s.models.begin(), s.models.end(), model);
+        e.modelindex = static_cast<int>(found - s.models.begin());
+        if (found == s.models.end()) s.models.emplace_back(model);
+        e.hidden = true;
+        e.mins = {-16, -16, 0};
+        e.maxs = {16, 16, 32};
+        e.speed = number(s, e, "speed", 300);
+        e.accel = e.decel = e.speed;
+        e.dmg = 0;
+        e.think_at = s.level_time + kStep;
+        e.think = kTrainFind;
+        return;
+      }
       e.solid = true;
       e.speed = number(s, e, "speed", 100);
       e.accel = e.decel = e.speed;
@@ -1455,7 +1489,13 @@ void map_frame(SequelServer& s) {
     const bool still = e.velocity.x == 0 && e.velocity.y == 0 && e.velocity.z == 0 &&
                        e.avelocity.x == 0 && e.avelocity.y == 0 && e.avelocity.z == 0;
     if (e.gone || !e.solid || still) {
-      if (!e.gone && e.arrive != kNoAct) step_move(s, s.entities[i]);
+      if (!e.gone && e.arrive != kNoAct) {
+        if (!e.solid) {  // a passable mover (a ship) goes through everything
+          e.origin = e.origin + e.velocity * kStep;
+          e.angles = e.angles + e.avelocity * kStep;
+        }
+        step_move(s, s.entities[i]);
+      }
       continue;
     }
     const bool stop_type =
