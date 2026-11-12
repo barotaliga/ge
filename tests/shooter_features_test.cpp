@@ -15,10 +15,11 @@ TEST(the_presets_are_every_feature_or_none_and_a_novice_does_not_glance) {
   for (size_t k = 0; k < sh::kFeatures; k++) {
     const auto x = static_cast<sh::Feature>(k);
     // A trial is never on by default, nor a feature not judged or dropped (`lookway`, `press`,
-    // `counter`, `runupkeys`, `underway`).
+    // `counter`, `runupkeys`, `underway`, `recipes`).
     CHECK(sh::features_all()[x] ==
           (x != sh::Feature::trial && x != sh::Feature::lookway && x != sh::Feature::press &&
-           x != sh::Feature::counter && x != sh::Feature::runupkeys && x != sh::Feature::underway));
+           x != sh::Feature::counter && x != sh::Feature::runupkeys && x != sh::Feature::underway &&
+           x != sh::Feature::recipes));
     CHECK(!sh::features_none()[x]);
   }
   sh::Features skilled = sh::features_all();

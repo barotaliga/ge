@@ -192,8 +192,10 @@ struct TeamPlayer {
   int64_t hops = 0, hop_jumps = 0;        // hop stretches entered, and jumps pressed in them
   int64_t circles = 0;                    // hops started by a circle jump
   double circle_speed = 0;                // and their takeoff speeds, summed
-  int64_t watching = 0;  // commands standing with the view on a way in (bots/watch.hpp)
-  double speed_sum = 0;  // its speed across the floor, summed over its commands alive
+  int32_t recipe_asks = 0, recipe_commits = 0, recipe_aborts = 0, recipe_takeoffs = 0;
+  double recipe_speed = 0;  // people's hop starts played (`recipes`): their takeoffs' speeds
+  int64_t watching = 0;     // commands standing with the view on a way in (bots/watch.hpp)
+  double speed_sum = 0;     // its speed across the floor, summed over its commands alive
   double mode_speed[sh::kPilotModes + 1] = {};  // and by the pilot's mode, with each mode's count
   int64_t mode_n[sh::kPilotModes + 1] = {};
   int64_t mirrored = 0, predicted = 0;  // client-fed: commands on its client's world, predicted
