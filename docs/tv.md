@@ -67,6 +67,63 @@ a demo.
 - **Version 1** (the text replay file of M23b) still loads; a game's classic formats convert to
   version 2 and back byte for byte.
 
+## The TV node
+
+`engine/tv` (`node.hpp`, `net_link.hpp`). A node takes a source's replay file bytes in any pieces
+(a game's server writing them, a file read out, or the node above it), splits them into the header
+and whole blocks, and sends them on:
+
+- **The delay** is in game time: the first block anchors the source's clock to the node's, and a
+  block goes out once its start plus the delay has come, so a source that runs ahead (a file) is
+  paced to the match. With no delay a block goes out as soon as it is whole.
+- **A viewer** says hello, gets the header, then the blocks from the newest keyframe block out,
+  then each block as it goes out, then `ended`. A link that will take no more keeps the viewer's
+  place, so a slow viewer slows no one else. Blocks before the newest keyframe that no viewer still
+  needs are let go.
+- **A relay** is a viewer of the node above that feeds a node of its own. Chat goes up to the first
+  node and comes back down to every viewer; each relay reports how many watch under it, and every
+  node tells its viewers the whole tree's count.
+- **The wire** is one reliable, ordered channel of engine/net: hello, header, block (in pieces under
+  engine/net's biggest message), chat, viewers, ended, refused.
+
+The `tv` lab runs a source, a relay and six viewers under every simulated network preset:
+
+| Preset | Viewers whole | Lag p50 / p95 / max (ms) | Down a viewer (kB a match second) |
+| --- | --- | --- | --- |
+| lan | 6 of 6 | 20 / 20 / 20 | 2.1 |
+| wifi | 6 of 6 | 80 / 90 / 180 | 2.1 |
+| mobile | 6 of 6 | 140 / 302 / 500 | 2.1 |
+| bad | 6 of 6 | 280 / 590 / 1040 | 1.8 |
+| awful | 6 of 6 | 1145 / 3425 / 4320 | 1.6 |
+
+On the bad and awful links some viewers connect late and start at a later keyframe block, so they
+take fewer bytes.
+
+### Browsers, finished files and the master
+
+- **WebSocket viewers** (`websocket.hpp`): a host's `TvWeb` listens on TCP, takes the HTTP upgrade
+  and carries every TV message as one binary frame each way, beside the net node's viewers in the
+  same node (link numbers from `kWebLinks` up). Pings are answered, a close is answered and the link
+  dropped, and a broken handshake or a frame over 1 MiB drops the link. This is the wire the hub's
+  web viewer watches by (`docs/hub.md`).
+- **Finished files** (`library.hpp`): `library_scan` lists a folder's `.ger` files by the SHA-256
+  of their bytes, with name, size, game and header meta. A viewer sends `list` and gets `files`, and
+  sends `get` with a hash and gets the file in pieces, or a "not here". A viewer whose hello says
+  *files* gets no live stream and is not counted as watching (the hub's archive fetching a file).
+- **The master** (`tv_host_list`): the host beats to masters as a TV node from its own socket and
+  answers status asks there with its name, the match's game and map, its viewers and the delay.
+
+## Spectating by inputs
+
+`engine/replay/spectate.hpp`. A deterministic game on the play contract (Fall Line) broadcasts
+what its player holds, not the world: each one-second block holds the block's runs of held inputs
+(each axis's grid index) and the run's digest after it, and every few seconds a keyframe block also
+holds the run saved (`save_run`). A viewer loads the first keyframe it gets and steps its own run
+through every block, checking the digest at each; a run that parts stops there with the step.
+Fall Line through a source node and a relay reaches the player's digest under every network preset
+(the `spectate` lab). Its inputs cost about 230 bytes a second; a whole save every 10 s is about
+10 kB a second packed, so the keyframes are what is left to make small.
+
 ## The field codec
 
 The coder (`engine/replay/codec.hpp`) is an adaptive binary range coder: integers only, so it
@@ -113,6 +170,39 @@ Every recording came back byte for byte. Where the bytes go in a 4on4: the playe
 own noise at 1/65536 of a turn, which no prediction removes. A 4on4 broadcast is about 48 kbit/s
 raw, 25 as today's packed demo and 13 as `.ger`.
 
+## Forward
+
+`engine/forward` (`forward.hpp`). An opaque hop between a game's client and its server, for a
+player whose own path to the server is worse than a path through a forwarder near them. It knows
+nothing of the game: once a route is up it copies datagrams both ways, byte for byte.
+
+- **The route is set up first**, by the forward's own datagrams, before the game's handshake: the
+  client asks the first hop with the rest of the route ("hop@hop@server"), gets a cookie only that
+  hop can make from the client's address, asks again with it, and is told `routed` (or why not).
+  Each hop takes the next entry off the route; a hop with more after it dials the next forwarder
+  from a socket of its own for this client and answers only when the whole chain is up, so a
+  refusal anywhere comes back to the client in words. Then the game's client connects to the first
+  hop as if it were the server, and the game's own handshake runs end to end.
+- **Allow list on by default**: a hop forwards only to the destinations it lists (a host, or one
+  of its ports); `open` is an operator's explicit choice.
+- **Alive both ways**: the client sends an alive every second and the hop echoes it, so the client
+  knows its round trip to the hop; a client whose NAT gives it a new port is followed by the salt in
+  its alive. A client silent both ways for 15 s is dropped.
+- **No answer bigger than its ask**: the route request is padded past every answer, status asks go
+  through `net/status.hpp`'s cookie, and STUN is answered only when the request is as big as its
+  answer.
+
+The `forward` lab gives the player's direct path each preset and puts the forwarders on good legs:
+
+| Direct path | Direct rtt p50 / p95 (ms), lost | One forwarder | Two forwarders | Route set up (one / two) |
+| --- | --- | --- | --- | --- |
+| broadband | 34 / 36, 0.2% | 36 / 36, 0% | 62 / 62, 0% | 36 / 88 ms |
+| mobile | 111 / 125, 2.4% | 36 / 36, 0% | 62 / 62, 0% | 36 / 88 ms |
+| bad | 224 / 253, 3.0% | 36 / 36, 0% | 62 / 62, 0% | 36 / 88 ms |
+| awful | 459 / 504, 18.8% | 36 / 36, 0% | 62 / 62, 0% | 36 / 88 ms |
+
+A stranger's asks of every kind draw answers of at most a third of their size.
+
 ## Proxy
 
 `engine/proxy` (`proxy.hpp`, `trial.hpp`). Two hops that understand the slow link between them:
@@ -153,5 +243,6 @@ three copies packed cost less than one plain.
 | The demo format's name | Version 2 of the replay file | A new name: the engine already calls a kept run a replay |
 | The classic compressed client demo | Not read; the field codec replaces it | Running the player's own installed program to unpack it (a later, opt-in choice); studying third-party reconstructions of unknown origin |
 | Teamplay helpers | In Shooter's Edge's client | In the proxy, as the classic proxy did: they need no place on the network path |
+| Forward's route | Set up by the forward's own datagrams before the game's handshake, so any game on any wire goes through unchanged | Carried in the game's connect (the classic way): every game's handshake would have to carry it; the classic face reads it there |
 | The proxy's packing | XOR against the newest datagram the other end confirmed, zero runs counted: generic, a lost frame costs only itself | A stream compressor across frames (the classic "quality line"): smaller, but one loss damages what follows; the field codec on the link: needs the game's schema, a later face |
 | The browser viewer | The WebSocket downstream lands with TV (M57b), for the hub's web viewer (M56) | Later: the hub needs it first |

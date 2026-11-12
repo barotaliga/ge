@@ -23,7 +23,7 @@
 // ge:keywords replay-v2 replay-file stream container track block keyframe trailer index sync
 // ge:keywords meta chunk tv wire broadcast live late-joiner seek stream_writer stream_reader
 // ge:keywords stream_begin stream_add stream_end_block stream_finish read_stream_header
-// ge:keywords next_block read_trailer
+// ge:keywords next_block read_trailer peek_block
 // ge:skill replay
 // ge:test tests/replay_stream_test.cpp
 #pragma once
@@ -129,5 +129,16 @@ bool next_block(StreamReader& r, Block& b, std::string& error);
 std::optional<Trailer> read_trailer(std::span<const uint8_t> bytes);
 // Whether `bytes` opens as a version 2 replay file.
 bool is_stream(std::span<const uint8_t> bytes);
+
+// A block's place in a growing stream, read without unpacking it (a TV node splits its source so).
+struct BlockPeek {
+  size_t size = 0;  // the block's bytes, its sync to its sum
+  int64_t index = 0;
+  int64_t time_ms = 0;
+  bool keyframe = false;
+};
+// 1: a whole block at `at` whose sum holds, in `out`; 0: the bytes end inside it (wait for more);
+// -1: no block there: the trailer (`error` empty) or damage (`error` says where).
+int peek_block(std::span<const uint8_t> bytes, size_t at, BlockPeek& out, std::string& error);
 
 }  // namespace ge::replay

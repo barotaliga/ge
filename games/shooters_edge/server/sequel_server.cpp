@@ -9,8 +9,10 @@
 // ge:test tests/shooters_edge_sequel_server_test.cpp
 #include "shooters_edge/server/sequel_server.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <string_view>
 #include <utility>
 
 #include "brush/map.hpp"
@@ -56,6 +58,11 @@ void register_cvars(SequelServer& s) {
                .fallback = "800",
                .flags = con::kServer,
                .help = "the pull down on players, units/s^2"});
+  s.cvars.add(
+      {.name = "skill",
+       .fallback = "1",
+       .flags = con::kServer,
+       .help = "0 easy .. 3 hard: which entities a map spawns, how many powerups are held"});
   s.cvars.add({.name = "sv_airaccelerate",
                .fallback = "0",
                .flags = con::kServer,
@@ -128,6 +135,8 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   // The delta angles turn the player's own view to the spot's yaw.
   const int16_t want[3] = {0, to_short_angle(yaw), 0};
   for (int i = 0; i < 3; i++) st.delta_angles[i] = int16_t(want[i] - p.cmd_angles[i]);
+  p.forced = true;
+  for (int i = 0; i < 3; i++) p.forced_angles[i] = want[i];
   if (respawn && deathmatch(s)) {
     st.flags |= sh::kSqTimeTeleport;
     st.time = kRespawnHold;
@@ -138,6 +147,10 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   p.health = p.alive ? kSpawnHealth : 0;
   p.spawned_at = s.level_time;
   p.view_angles = {0, yaw, 0};
+  p.body = sq_new_body();
+  p.body.health = static_cast<int>(p.health);
+  p.mega = -1;
+  p.taken.clear();
   p.mins = {-16, -16, -24};
   p.maxs = {16, 16, 32};
   p.view_height = 22;
@@ -154,6 +167,93 @@ void kill_player(SequelServer& s, int slot) {
   p.move.type = sh::SequelType::dead;
 }
 
+int skill(const SequelServer& s) {
+  return std::clamp(static_cast<int>(s.cvars.find("skill")->number), 0, 3);
+}
+
+// Whether the map's entity is left out in this mode by its spawn flags.
+bool left_out(const SequelServer& s, int flags) {
+  if (deathmatch(s)) return (flags & 0x800) != 0;
+  const int k = skill(s);
+  return (k == 0 && (flags & 0x100) != 0) || (k == 1 && (flags & 0x200) != 0) ||
+         (k >= 2 && (flags & 0x400) != 0);
+}
+
+constexpr float kItemHalf = 15;  // an item's box, ±15 each way
+
+// Each item dropped up to 128 units onto the floor; one that starts in a solid is removed.
+void drop_items(SequelServer& s) {
+  const float mins[3] = {-kItemHalf, -kItemHalf, -kItemHalf};
+  const float maxs[3] = {kItemHalf, kItemHalf, kItemHalf};
+  for (SequelEntity& e : s.entities) {
+    if (e.item < 0 || e.gone) continue;
+    const float from[3] = {e.origin.x, e.origin.y, e.origin.z};
+    const float to[3] = {e.origin.x, e.origin.y, e.origin.z - 128};
+    const ge::brush::Trace t = s.tracer->trace(from, to, mins, maxs, sh::kSqSolid | sh::kSqWindow);
+    if (t.start_solid) {
+      e.gone = true;
+      continue;
+    }
+    e.origin = {t.end[0], t.end[1], t.end[2]};
+  }
+}
+
+// The items a living player's box touches, taken by their rule.
+void touch_items(SequelServer& s, int slot) {
+  SequelPlayer& p = s.players[slot];
+  const sh::Vec3f at = unpack(p.move.origin);
+  const sh::Vec3f lo = at + p.mins, hi = at + p.maxs;
+  for (size_t i = 0; i < s.entities.size(); i++) {
+    SequelEntity& e = s.entities[i];
+    if (e.item < 0 || e.hidden || e.gone) continue;
+    if (lo.x > e.origin.x + kItemHalf || hi.x < e.origin.x - kItemHalf ||
+        lo.y > e.origin.y + kItemHalf || hi.y < e.origin.y - kItemHalf ||
+        lo.z > e.origin.z + kItemHalf || hi.z < e.origin.z - kItemHalf)
+      continue;
+    p.body.health = static_cast<int>(p.health);
+    if (!sq_pick_up(e.item, p.body, deathmatch(s), skill(s), s.level_time)) continue;
+    p.health = static_cast<float>(p.body.health);
+    p.taken.push_back(e.item);
+    const SqItem& it = kSqItems[e.item];
+    if (std::string_view(it.classname) == "item_health_mega") {
+      e.hidden = true;  // shows again 20 s after its taker is back to his maximum
+      e.respawn_at = 0;
+      p.mega = static_cast<int>(i);
+      p.drained_at = s.level_time + 4;  // the first point goes 5 s after
+    } else if (deathmatch(s) && it.respawn_s > 0) {
+      e.hidden = true;
+      e.respawn_at = s.level_time + it.respawn_s;
+    } else {
+      e.gone = true;
+    }
+  }
+}
+
+// The frame's items: those whose time came show again; a mega counts its taker down.
+void item_frame(SequelServer& s) {
+  for (SequelEntity& e : s.entities)
+    if (e.hidden && e.respawn_at > 0 && s.level_time + 0.001 >= e.respawn_at) {
+      e.hidden = false;
+      e.respawn_at = 0;
+    }
+  for (SequelPlayer& p : s.players) {
+    if (p.mega < 0) continue;
+    SequelEntity& mega = s.entities[size_t(p.mega)];
+    if (p.alive && p.health > float(p.body.max_health)) {
+      if (s.level_time + 0.001 >= p.drained_at + 1) {
+        p.health -= 1;
+        p.drained_at = s.level_time;
+      }
+      continue;
+    }
+    if (deathmatch(s))
+      mega.respawn_at = s.level_time + 20;
+    else
+      mega.gone = true;
+    p.mega = -1;
+  }
+}
+
 void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   SequelPlayer& p = s.players[slot];
   sh::SequelMove pm;
@@ -166,6 +266,11 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   pm.cmd.angles[0] = to_short_angle(c.angles.x);
   pm.cmd.angles[1] = to_short_angle(c.angles.y);
   pm.cmd.angles[2] = to_short_angle(c.angles.z);
+  if (s.opt.clients_take_view && p.forced && pm.cmd.angles[0] == p.forced_angles[0] &&
+      pm.cmd.angles[1] == p.forced_angles[1] && pm.cmd.angles[2] == p.forced_angles[2]) {
+    for (int16_t& d : pm.s.delta_angles) d = 0;  // the client took the turn as its own
+    p.forced = false;
+  }
   pm.cmd.forward = c.forward;
   pm.cmd.side = c.side;
   pm.cmd.up = c.up;
@@ -185,6 +290,7 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   p.view_height = pm.view_height;
   p.water_level = pm.water_level;
   p.on_ground = pm.ground_entity >= 0;
+  if (p.alive && !s.clients[slot].spectator) touch_items(s, slot);
 }
 
 // The commands a packet brings: those a lost packet left unrun (up to the two it carries), then
@@ -203,6 +309,7 @@ void take_packet(SequelServer& s, const sh::Packet& pk) {
 void rules_frame(SequelServer& s) {
   s.frame_number++;
   s.level_time = double(s.frame_number) * kFrameSeconds;
+  item_frame(s);
   for (int i = 0; i < sh::kMaxClients; i++) {
     SequelPlayer& p = s.players[i];
     if (!s.clients[i].active || s.clients[i].spectator || p.alive) continue;
@@ -210,6 +317,8 @@ void rules_frame(SequelServer& s) {
     if (deathmatch(s) && (p.buttons & sh::kButtonAttack) != 0) spawn_player(s, i, true);
   }
 }
+
+void mirror_pool(SequelServer& s);
 
 void fill_rows(SequelServer& s) {
   RulesWorld& w = s.world;
@@ -234,6 +343,11 @@ void fill_rows(SequelServer& s) {
     e = {};
     if (!c.active) continue;
     wc.numbers.health = p.health;
+    wc.numbers.armour = float(p.body.armour_count);
+    wc.numbers.armour_type = kSqArmours[static_cast<int>(p.body.armour)].normal;
+    // The HUD's four counters: shells, bullets, rockets, cells.
+    const SqAmmo shown[4] = {SqAmmo::shells, SqAmmo::bullets, SqAmmo::rockets, SqAmmo::cells};
+    for (int k = 0; k < 4; k++) wc.numbers.ammo[k] = float(p.body.ammo[static_cast<int>(shown[k])]);
     wc.numbers.frags = p.frags;
     wc.numbers.view_z = p.view_height;
     e.free = false;
@@ -249,6 +363,47 @@ void fill_rows(SequelServer& s) {
     e.waterlevel = p.water_level;
     e.health = p.health;
     e.modelindex = c.spectator ? 0 : static_cast<int>(s.models.size()) - 1;
+  }
+  for (size_t i = 0; i < s.entities.size(); i++) {  // the items shown or hidden
+    const SequelEntity& m = s.entities[i];
+    if (m.item >= 0) w.entities[1 + sh::kMaxClients + i].free = m.gone || m.hidden;
+  }
+  mirror_pool(s);
+}
+
+// The world's rows mirrored into the loop's pool (`sv.edicts`), which the classic endpoint, the
+// listen's view and the hit tests still read by slot: the same entities, as the world shows them.
+void mirror_pool(SequelServer& s) {
+  const RulesWorld& w = s.world;
+  if (s.sv.edicts.size() < w.entities.size()) return;  // sized at the map's start
+  s.sv.time = s.host_time;
+  s.sv.num_edicts = static_cast<int>(w.entities.size());
+  for (size_t i = 0; i < w.entities.size(); i++) {
+    const WorldEntity& row = w.entities[i];
+    sh::Edict& e = s.sv.edicts[i];
+    e.free = row.free;
+    e.origin = row.origin;
+    e.velocity = row.velocity;
+    e.angles = row.angles;
+    e.v_angle = row.view_angles;
+    e.mins = row.mins;
+    e.maxs = row.maxs;
+    e.size = row.maxs - row.mins;
+    e.absmin = row.absmin;
+    e.absmax = row.absmax;
+    e.flags = row.flags;
+    e.waterlevel = row.waterlevel;
+    e.health = row.health;
+    e.modelindex = row.modelindex;
+  }
+  if (s.sv.clients.size() < size_t(sh::kMaxClients)) s.sv.clients.resize(sh::kMaxClients);
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    s.sv.edicts[size_t(i) + 1].view_ofs = {0, 0, s.players[i].view_height};
+    sh::ClientSlot& slot = s.sv.clients[size_t(i)];
+    slot.active = s.clients[i].active;
+    slot.spectator = s.clients[i].spectator;
+    slot.bot = s.clients[i].bot;
+    slot.last_sequence = s.players[i].last_sequence;
   }
 }
 
@@ -269,7 +424,7 @@ void fill_lists(SequelServer& s) {
   for (size_t i = 0; i < s.entities.size(); i++) {
     const SequelEntity& m = s.entities[i];
     WorldEntity& e = w.entities[1 + sh::kMaxClients + i];
-    e.free = false;
+    e.free = m.gone || m.hidden;
     e.origin = m.origin;
     e.angles = m.angles;
     e.modelindex = m.modelindex;
@@ -301,11 +456,22 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     else if (!b.get("angle").empty())
       e.angles.y = std::strtof(b.get("angle").c_str(), nullptr);
     if (e.model.size() > 1 && e.model[0] == '*') e.modelindex = std::atoi(e.model.c_str() + 1);
+    e.spawnflags = std::atoi(b.get("spawnflags").c_str());
+    e.item = sq_item(e.classname);
+    e.gone = left_out(s, e.spawnflags);
     s.entities.push_back(std::move(e));
   }
   s.models.assign(1, "");
   for (size_t i = 1; i < s.map->models.size(); i++) s.models.push_back("*" + std::to_string(i));
+  for (SequelEntity& e : s.entities) {  // each item's model, once
+    if (e.item < 0) continue;
+    const std::string model = kSqItems[e.item].model;
+    const auto found = std::find(s.models.begin(), s.models.end(), model);
+    e.modelindex = static_cast<int>(found - s.models.begin());
+    if (found == s.models.end()) s.models.push_back(model);
+  }
   s.models.push_back(kSequelPlayerModel);
+  drop_items(s);
   s.sounds.assign(1, "");
   s.frame_number = 0;
   s.level_time = 0;
@@ -313,6 +479,9 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   s.map_stopped = false;
   s.pending_map.clear();
   fill_lists(s);
+  // The pool the world is mirrored into: every row the world has, and room past them.
+  s.sv.set.max_edicts = std::max(s.sv.set.max_edicts, int(s.world.entities.size()) + 8);
+  s.sv.edicts.assign(size_t(s.sv.set.max_edicts), sh::Edict{});
   for (int i = 0; i < sh::kMaxClients; i++)
     if (s.clients[i].active) spawn_player(s, i, false);
   fill_rows(s);

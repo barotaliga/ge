@@ -46,9 +46,7 @@ bool held_weapons(const GameAdapter&, const SearchPath&, std::vector<ge::viewmod
 bool open_demo(const GameAdapter&,
                std::vector<uint8_t>,  // NOLINT(performance-unnecessary-value-param)
                Demo&, std::string& error) {
-  error =
-      "the sequel's recordings do not play yet; next: play one of its maps with `map <name>` "
-      "(`maps` lists them)";
+  error = "This game's recordings can't be played yet.";
   return false;
 }
 
