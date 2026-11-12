@@ -28,6 +28,8 @@
 #include "assets/tga.hpp"
 #include "audio/wav.hpp"
 #include "brush/pictures.hpp"
+#include "brush/read.hpp"
+#include "brush/wal.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "classicenhance/profile.hpp"
@@ -180,10 +182,30 @@ TEST(a_maps_info_and_textures_are_read_off_its_file) {
   CHECK(swapped[1].rgba.empty());  // a file that does not read: the map's own is drawn
   CHECK(a.map_textures(a, files, "other", map, store)[0].rgba == tga.rgba);
 
-  // A family that keeps its pictures in other files gives none from the map.
+  // A family that keeps its pictures in other files: one entry a texture, its pixels from its wall
+  // texture file wherever the open files hold one (a map of that family copied into the first
+  // game's folder draws too), a texture with no file a check (no pixels); the sequel's adapter
+  // reads it the same.
   std::vector<uint8_t> v38;
   CHECK(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v38, &v38, &error));
-  CHECK(a.map_textures(a, files, "room", v38, store).empty());
+  ge::brush::Map m38;
+  CHECK_MSG(ge::brush::read_bsp(v38, &m38, &error), error);
+  const std::vector<ge::brush::MapPicture> none = a.map_textures(a, files, "room", v38, store);
+  CHECK(none.size() == m38.textures.size() && none[0].width == 0);
+  ge::brush::WalHead head;
+  head.name = m38.textures[0].name;
+  std::vector<uint8_t> wal_pak;
+  CHECK(ge::vfs::write_pak({{ge::brush::wal_path(m38.textures[0].name),
+                             ge::brush::write_wal(head, 16, 8, std::vector<uint8_t>(128, 5))}},
+                           &wal_pak, &error));
+  CHECK_MSG(cl::add_archive(files, "pak2.pak", std::move(wal_pak), error), error);
+  for (const cl::GameAdapter* g : {&a, &cl::sequel_adapter()}) {
+    const std::vector<ge::brush::MapPicture> walls = g->map_textures(*g, files, "room", v38, store);
+    CHECK(walls.size() == m38.textures.size());
+    CHECK(walls[0].width == 16 && walls[0].height == 8 && walls[0].level[0][0] == 5);
+    CHECK(walls[0].name == m38.textures[0].name);
+    if (walls.size() > 1) CHECK(walls[1].width == 0 && walls[1].name == m38.textures[1].name);
+  }
 }
 
 TEST(the_demos_are_listed_and_found_by_a_bare_name) {
@@ -451,4 +473,26 @@ TEST(a_games_menu_modes_and_hud_are_its_own) {
   open.folder = "base";
   CHECK(&cl::hud_art_of(none, game, own) == &own);
   CHECK(&cl::hud_art_of(open, game, own) == &game);
+}
+
+TEST(the_sequel_s_row_has_its_own_adapter_which_names_its_native_rules_and_passes_them_over) {
+  const pf::GameProfile* q = pf::find_game("sequel");
+  CHECK(q != nullptr);
+  const cl::GameAdapter& a = cl::adapter_of(*q);
+  CHECK(&a == &cl::sequel_adapter() && a.game == q);
+  CHECK(&cl::adapter_of(pf::classic_game()) == &cl::classic_adapter());
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"gamex86.dll", {1, 2, 3}}, {"maps/demo1.bsp", {4}}}, &pak, &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  cl::FoundProgram found;
+  std::string why;
+  CHECK(!a.find_program(a, files, false, found, why));
+  CHECK(why.find("gamex86.dll") != std::string::npos);
+  CHECK(why.find("native game library") != std::string::npos);
+  const std::vector<std::string> maps = a.list_maps(a, files);
+  CHECK(maps.size() == 1 && maps[0] == "demo1");
+  const cl::GameModes m = a.modes(a);
+  CHECK(m.single && m.multi);
 }

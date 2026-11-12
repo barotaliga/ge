@@ -104,6 +104,14 @@ inline constexpr std::string_view kClassicHeld[] = {
 
 inline constexpr std::string_view kClassicEpisodes[] = {"e1m1", "e2m1", "e3m1", "e4m1"};
 
+// The sequel's rules are a native library for one platform, which this build never loads: each
+// is named when found and passed over (our own runner plays its maps: server/sequel_server.hpp).
+inline constexpr ProgramFile kSequelPrograms[] = {
+    {.name = "gamex86.dll", .form = ProgramForm::game_library},
+    {.name = "gamex86_64.so", .form = ProgramForm::game_library},
+    {.name = "gamei386.so", .form = ProgramForm::game_library}};
+inline constexpr std::string_view kSequelDemos[] = {".dm2"};
+
 inline constexpr GameProfile kGameProfiles[] = {
     {.id = "classic",
      .multiplayer_programs = kClassicMultiplayer,
@@ -115,6 +123,17 @@ inline constexpr GameProfile kGameProfiles[] = {
      .arsenal = kClassicArsenal,
      .words = kClassicServerWords,
      .episode_maps = kClassicEpisodes},
+    // The sequel: the demo's packs have no start map of the full game, so its first map.
+    {.id = "sequel",
+     .multiplayer_programs = kSequelPrograms,
+     .single_player_programs = kSequelPrograms,
+     .fallback_map = "demo1",
+     .demo_extensions = kSequelDemos,
+     .tables = {},
+     .held_weapons = {},
+     .arsenal = {},
+     .words = {},
+     .episode_maps = {}},
 };
 
 // The first row: the classic game, the one every reader uses until a choice of game is made.
