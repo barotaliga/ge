@@ -8,10 +8,12 @@
 // JSON message ending in a NUL each way), the page is opened, the lab waits the given wall-clock
 // time, and the screenshot is asked for then. The command line's `--screenshot` cannot do that:
 // `--timeout` cuts the page's loads short and `--virtual-time-budget` runs ahead of the GPU.
+// A `LiveAct` list plays the page's input after the wait (a click, a key, a pointer move, each a
+// DevTools `Input` call), then waits again before the shot, so a lab can show a page's controls.
 //
 // ge:summary Hub labs' headless Chromium: a hub page drawn at a width into a lab picture
 // ge:keywords lab hub browser chromium headless screenshot page width dark-mode stylesheet
-// ge:keywords devtools cdp pipe live-page
+// ge:keywords devtools cdp pipe live-page input dispatch-key dispatch-mouse live-act
 // ge:skill net labs
 #pragma once
 
@@ -161,6 +163,34 @@ struct Pipe {
 
 }  // namespace detail
 
+// One input to a live page: a DevTools `Input` method and its parameters as JSON, then how long
+// to wait after it, ms. `click`, `key` and `move` make the common ones.
+struct LiveAct {
+  std::string method, params;
+  int after_ms = 0;
+};
+inline std::vector<LiveAct> click(int x, int y, int after_ms = 0) {
+  const std::string at = "\"x\":" + std::to_string(x) + ",\"y\":" + std::to_string(y);
+  return {
+      {"Input.dispatchMouseEvent",
+       "{\"type\":\"mousePressed\",\"button\":\"left\",\"clickCount\":1," + at + "}", 0},
+      {"Input.dispatchMouseEvent",
+       "{\"type\":\"mouseReleased\",\"button\":\"left\",\"clickCount\":1," + at + "}", after_ms}};
+}
+inline LiveAct move(int x, int y, int after_ms = 0) {
+  return {
+      "Input.dispatchMouseEvent",
+      "{\"type\":\"mouseMoved\",\"x\":" + std::to_string(x) + ",\"y\":" + std::to_string(y) + "}",
+      after_ms};
+}
+// `code` is the key's `KeyboardEvent.code` ("Space", "ArrowRight"), `key` what it types.
+inline std::vector<LiveAct> key(const std::string& code, const std::string& key_name,
+                                int after_ms = 0) {
+  const std::string k = "\"code\":\"" + code + "\",\"key\":\"" + key_name + "\"";
+  return {{"Input.dispatchKeyEvent", "{\"type\":\"keyDown\"," + k + "}", 0},
+          {"Input.dispatchKeyEvent", "{\"type\":\"keyUp\"," + k + "}", after_ms}};
+}
+
 // A live page drawn after `wait_ms` of wall-clock time at width x height: the browser started
 // with `flags` (its WebGPU switches, say) and driven over its DevTools pipe; its output goes to
 // `log`. Empty where the browser failed, answered nothing in time, or on Windows (no pipe here).
@@ -168,10 +198,11 @@ inline std::optional<ge::lab::Picture> live_draw(const std::string& browser,
                                                  const std::vector<std::string>& flags,
                                                  const std::string& url, int width, int height,
                                                  int wait_ms, const std::filesystem::path& png,
-                                                 const std::filesystem::path& log) {
+                                                 const std::filesystem::path& log,
+                                                 const std::vector<LiveAct>& acts = {}) {
 #ifdef _WIN32
   (void)browser, (void)flags, (void)url, (void)width, (void)height, (void)wait_ms, (void)png,
-      (void)log;
+      (void)log, (void)acts;
   return std::nullopt;
 #else
   int down[2], up[2];
@@ -222,6 +253,14 @@ inline std::optional<ge::lab::Picture> live_draw(const std::string& browser,
   }
   if (!session.empty()) {
     pipe.until(0, clock::now() + std::chrono::milliseconds(wait_ms));
+    int id = 10;
+    for (const LiveAct& a : acts) {
+      if (!pipe.send("{\"id\":" + std::to_string(id) + R"(,"sessionId":")" + session +
+                     R"(","method":")" + a.method + R"(","params":)" + a.params + "}"))
+        break;
+      pipe.until(id++, soon());
+      pipe.until(0, clock::now() + std::chrono::milliseconds(a.after_ms));
+    }
     if (pipe.send(R"({"id":3,"sessionId":")" + session +
                   R"(","method":"Page.captureScreenshot","params":{"format":"png"}})")) {
       // A software GPU may still be building the page's first frame: give the shot two minutes.

@@ -25,7 +25,9 @@
 // server's `hostname`), a `player` for each one who played (`name`, or `name<TAB>team`, in the
 // order first seen; spectators left out); the trailer's `duration_ms`, a `score` for each player
 // (`name<TAB>frags`, the last count seen) and, with teams, a `team_score` for each team (the sum of
-// its players'). `DemoPackOptions::meta` adds the caller's own (`start`, `title`, `tag`).
+// its players'). Names, teams and the server's name are written as plain ASCII (demo_caption.hpp's
+// `plain_text`: the classic font's gold and bracket bytes folded). `DemoPackOptions::meta` adds the
+// caller's own (`start`, `title`, `tag`).
 //
 // ge:summary Shooter's Edge's face on replay file v2: classic recordings packed and back exactly
 // ge:keywords replay-v2 face field-codec multiview client-recording single-player-recording

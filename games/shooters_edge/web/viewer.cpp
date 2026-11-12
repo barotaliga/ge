@@ -2,7 +2,10 @@
 // compiled to WebAssembly, on the hub page's canvas through the browser's WebGPU. The page hands
 // it its arguments (web/viewer_args.hpp): the content packs it fetches and mounts in order, and the
 // demo it fetches by hash and plays at its own pace, drawn between frames, with the effects the
-// window draws. The page's status line says what is loading, or why there is no picture.
+// window draws. A demo is watched like a video with the window's own controls (demo_playback.hpp):
+// the play bar with its highlights over the picture, and on the canvas's keys Space or K pause,
+// Left and Right skip, Up and Down change the speed, Page Up and Page Down jump between highlights.
+// The page's status line says what is loading, or why there is no picture.
 //
 // A LIVE BROADCAST (`--tv=ws://...`) is read off the TV node's WebSocket (tv/websocket.hpp): the
 // viewer says hello as a viewer, the node's messages are turned back into the replay file as it
@@ -12,9 +15,10 @@
 //
 // ge:summary Shooter's Edge's web viewer: packs and a demo fetched, the world drawn on the canvas
 // ge:keywords web viewer browser wasm webgpu canvas demo playdemo hub watch shooters_edge_viewer
-// ge:keywords live broadcast tv websocket
+// ge:keywords live broadcast tv websocket transport seek pause speed play-bar
 // ge:skill net shooter
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <memory>
 #include <string>
@@ -27,6 +31,7 @@
 #include "platform/window.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/demo_fx.hpp"
+#include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -156,6 +161,10 @@ int main(int argc, char** argv) {
     t.start = t.demo;
   }
   t.active = t.paced = t.smooth = true;
+  cl::DemoPlayback playback;
+  playback.speed = args.speed;
+  if (!live && !cl::playback_begin(playback, t, error))
+    std::fprintf(stderr, "shooters_edge_viewer: no highlights: %s\n", error.c_str());
 
   ge::web::say("Starting the picture...");
   std::unique_ptr<ge::gpu::Device> device = ge::gpu::create_device();
@@ -210,7 +219,18 @@ int main(int argc, char** argv) {
         continue;
       }
     }
-    const cl::TimedemoStep st = cl::playdemo_step(t, dt, live ? 1.0 : args.speed, error);
+    ge::web::PageInput page;
+    ge::web::take_input(kCanvas, page);
+    std::array<bool, 512> keys{};  // went down this paint, by scancode
+    for (const int k : page.pressed)
+      if (k >= 0 && k < static_cast<int>(keys.size())) keys[static_cast<size_t>(k)] = true;
+    std::vector<std::string> lines;
+    const cl::PlaybackInput in{keys, page.x, page.y, page.button};
+    const cl::TimedemoStep st =
+        live ? cl::playdemo_step(t, dt, 1.0, error)
+             : cl::playback_step(playback, t, in, static_cast<int>(w), static_cast<int>(h), dt,
+                                 now_ms / 1000.0, lines, error);
+    for (const std::string& l : lines) std::fprintf(stderr, "%s\n", l.c_str());
     if (st == cl::TimedemoStep::error)
       return fail(live ? "The broadcast stopped part way. Open it in the game below."
                        : "The demo stopped part way. Download it and play it in the game.",
@@ -266,6 +286,9 @@ int main(int argc, char** argv) {
     if (!target) continue;
     ge::ui::DrawList overlay;
     overlay.begin(static_cast<int>(w), static_cast<int>(h));
+    if (!live)
+      cl::playback_draw(overlay, playback, t, static_cast<int>(w), static_cast<int>(h),
+                        now_ms / 1000.0);
     cl::draw_world(*device, *world, view, fx, nullptr, dt, overlay, target);
     surface.present();
   }
