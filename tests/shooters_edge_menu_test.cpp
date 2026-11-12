@@ -228,6 +228,46 @@ TEST(escape_opens_the_menu_and_backs_out_of_it) {
   CHECK(!w.ran.empty() && w.ran.back() == "quit");
 }
 
+TEST(every_press_leaves_the_sound_it_makes) {
+  using ge::ui::MenuCue;
+  World w;
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .maps = {"start"}};
+  g.update({}, false, host, 0.016);
+  CHECK(g.take_cue() == MenuCue::none);  // closed, nothing pressed: silent
+  g.update({}, true, host, 0.016);       // Escape opens it
+  CHECK(g.take_cue() == MenuCue::enter);
+  CHECK(g.take_cue() == MenuCue::none);  // taken once
+  MenuInput down;
+  down.down = true;
+  g.update(down, false, host, 0.016);  // the cursor moves
+  CHECK(g.take_cue() == MenuCue::move);
+  MenuInput up;
+  up.up = true;
+  g.update(up, false, host, 0.016);
+  CHECK(g.take_cue() == MenuCue::move);
+  MenuInput accept;
+  accept.accept = true;
+  g.update(accept, false, host, 0.016);  // into SINGLE PLAYER
+  CHECK(g.main().top().id == "single");
+  CHECK(g.take_cue() == MenuCue::enter);
+  MenuInput back;
+  back.back = true;
+  g.update(back, false, host, 0.016);  // out to the main menu
+  CHECK(g.main().top().id == "main");
+  CHECK(g.take_cue() == MenuCue::back);
+  g.update(back, false, host, 0.016);  // the menu closed
+  CHECK(!g.open());
+  CHECK(g.take_cue() == MenuCue::back);
+  w.con.execute("togglemenu");  // the console's Escape opens it, and closes it again
+  g.update({}, false, host, 0.016);
+  CHECK(g.open() && g.take_cue() == MenuCue::enter);
+  w.con.execute("togglemenu");
+  g.update({}, false, host, 0.016);
+  CHECK(!g.open() && g.take_cue() == MenuCue::back);
+}
+
 TEST(customize_controls_shows_the_binds_and_binds_the_next_key) {
   World w;
   w.con.add_button("forward", "");
