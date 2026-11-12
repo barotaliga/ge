@@ -96,6 +96,9 @@ struct Bot {
   // a player out of sight (where he was, carried along) is let go once he lies off behind the way
   // walked, rather than walked away from backwards.
   bool hold_front_only = false;
+  // BACKING OFF, NO AIM BEHIND BUT AT A CHASER (`retreatrun`): set by the game while it backs off;
+  // one off behind the way walked who is not coming on is not aimed at.
+  bool run_front_only = false;
   // THE VIEW BACK TO LEVEL (`levelview`): a look let go comes back level under the hand.
   bool levelview = false;
   // THE VIEW BACK BY THE HAND'S OWN STROKE (`paceback`): under the mouse hand, an aim lost or a
