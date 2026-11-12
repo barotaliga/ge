@@ -112,7 +112,9 @@ TEST(the_sequel_arsenal_reads_a_players_numbers_and_the_maps_items) {
   CHECK(a.weapons.size() == 10 && a.ammo_count == 6);
   // The rows: a weapon's bit is 1 << its index, the impulse that asks for it its index + 1.
   const bt::BotWeapon* rail = bt::weapon_row(a, 1 << 8);
-  CHECK(rail != nullptr && rail->number == 9 && rail->ammo == 5);
+  CHECK(rail != nullptr);
+  if (rail == nullptr) return;
+  CHECK(rail->number == 9 && rail->ammo == 5);
   CHECK(bt::role_of(a, a.launcher) == bt::WeaponRole::launcher && bt::launcher_number(a) == 7);
   CHECK(bt::role_of(a, a.lob) == bt::WeaponRole::lob &&
         bt::role_of(a, 1 << 8) == bt::WeaponRole::none);
@@ -134,6 +136,7 @@ TEST(the_sequel_arsenal_reads_a_players_numbers_and_the_maps_items) {
   r.connect(0, "one", false, false);
   sv::SequelServer* s = sv::sequel_of(r);
   CHECK(s != nullptr);
+  if (s == nullptr) return;
   CHECK(sv::sq_pick_up(sv::sq_item("weapon_railgun"), s->players[0].body, true, 1, 0));
   r.frame(nullptr, 0);
   const bt::Stats st = bt::read_stats(*r, 1, a);
