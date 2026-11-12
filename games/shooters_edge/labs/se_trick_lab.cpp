@@ -54,6 +54,7 @@
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/labs/nav_top.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
@@ -348,7 +349,8 @@ void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<T
 // pits' proven jumps in blue, the start ringed and the exit's trigger in black.
 void draw_reach(gl::Lab& lab, const std::string& name, const sh::MoveWorld& world,
                 const sh::NavGraph& g, const ge::ai::Search& reach,
-                const std::vector<uint8_t>& dead, const std::vector<Trigger>& triggers, sh::Vec3f start, const Trigger& exit) {
+                const std::vector<uint8_t>& dead, const std::vector<Trigger>& triggers,
+                sh::Vec3f start, const Trigger& exit, float clip) {
   sh::Vec3f lo{1e9f, 1e9f, 1e9f}, hi{-1e9f, -1e9f, -1e9f};
   for (const sh::NavNode& n : g.nodes) {
     lo = {std::min(lo.x, n.origin.x), std::min(lo.y, n.origin.y), std::min(lo.z, n.origin.z)};
@@ -367,9 +369,10 @@ void draw_reach(gl::Lab& lab, const std::string& name, const sh::MoveWorld& worl
     for (int x = 0; x < kSide; x += 2) {
       const float wx = lo.x + (static_cast<float>(x) + 1) / sc;
       const float wy = lo.y + span - (static_cast<float>(y) + 1) / sc;
-      const sh::HullTrace tr = sh::trace_hull(hull, {wx, wy, hi.z}, {wx, wy, lo.z});
-      const float f = tr.startsolid || tr.fraction >= 1 ? 0 : (tr.endpos.z - lo.z) / (hi.z - lo.z);
-      const auto v = static_cast<uint8_t>(tr.startsolid ? 70 : 140 + 105 * std::clamp(f, 0.0f, 1.0f));
+      const shooters_edge::labs::ClippedFloor fl =
+          shooters_edge::labs::floor_below(hull, wx, wy, std::min(clip, hi.z), lo.z);
+      const float f = !fl.found || fl.open ? 0 : (fl.z - lo.z) / (hi.z - lo.z);
+      const auto v = static_cast<uint8_t>(!fl.found ? 70 : 140 + 105 * std::clamp(f, 0.0f, 1.0f));
       gl::fill_rect(p, x, y, 2, 2, {static_cast<uint8_t>(v - 10), v, static_cast<uint8_t>(v - 20), 255});
     }
   for (const Trigger& t : triggers) {
@@ -436,6 +439,10 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
   nset.spacing = static_cast<float>(lab.arg_num("spacing"));
   if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, out.error, nset)) return;
   sh::NavGraph& g = nav.graph;
+  // The pictures from above: the map over `--clip-top` cut away, every roof under it stepped
+  // through (nav_top.hpp `floor_below`); empty: from the top, the roofs stepped through.
+  const float clip = lab.arg("clip-top").empty() ? 1e9f
+                                                 : static_cast<float>(lab.arg_num("clip-top"));
 
   // The map's teleporters and their destinations, and the spawn.
   std::vector<pg::EntityBlock> blocks;
@@ -514,6 +521,11 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
     if (d < near) near = d, own = dn;
   }
   std::set<std::string> visited{own};
+  const auto doorways = [&](const std::string& dest) {
+    int n = 0;
+    for (const Trigger& t : triggers) n += t.target == dest && !flat(t);
+    return n;
+  };
   sh::Vec3f start = spawn;
   ge::ai::Search search;
   bool drew_reach = false;
@@ -524,6 +536,7 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
     sec.own = own;
     sec.start = start;
     int pick = -1;
+    int best_ways = 0;
     sh::NavRoute best;
     float nearest = 1e30f;
     int near_pick = -1;
@@ -533,13 +546,39 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
       sh::Vec3f at;
       if (!dest_at(tr.target, at)) continue;
       const sh::NavRoute r = route_into(g, a, tr, search, ps.jumper);
-      if (!r.nodes.empty() && (best.nodes.empty() || r.time_s < best.time_s)) {
+      // The course's next: the destination fewest doorways lead to first (a hub's doors lead to
+      // every section, a section's end to the next as well: the first section has its door
+      // alone), then the quickest.
+      const int ways = doorways(tr.target);
+      if (!r.nodes.empty() && (best.nodes.empty() || ways < best_ways ||
+                               (ways == best_ways && r.time_s < best.time_s))) {
         best = r;
+        best_ways = ways;
         pick = static_cast<int>(t);
       }
       const sh::Vec3f c{(tr.lo.x + tr.hi.x) / 2, (tr.lo.y + tr.hi.y) / 2, (tr.lo.z + tr.hi.z) / 2};
       const float d = std::hypot(c.x - start.x, c.y - start.y, c.z - start.z);
       if (d < nearest) nearest = d, near_pick = static_cast<int>(t);
+    }
+    if (pick < 0) {
+      // No route to any: the trigger nearest what the start reaches (a section's own end lies
+      // past its pits, the hub's doors elsewhere), else the nearest to the start.
+      ge::ai::Search reach;
+      sh::nav_reach(g, a, reach, ps.jumper);
+      float nearest_reach = 1e30f;
+      for (size_t t = 0; t < triggers.size(); t++) {
+        const Trigger& tr = triggers[t];
+        sh::Vec3f at;
+        if (tr.target == own || visited.count(tr.target) != 0 || flat(tr) || !dest_at(tr.target, at))
+          continue;
+        const sh::Vec3f c{(tr.lo.x + tr.hi.x) / 2, (tr.lo.y + tr.hi.y) / 2, (tr.lo.z + tr.hi.z) / 2};
+        for (size_t k = 0; k < g.nodes.size(); k++) {
+          if (!reach.reached(static_cast<int32_t>(k)) || dead[k] != 0) continue;
+          const sh::Vec3f o = g.nodes[k].origin;
+          const float d = std::hypot(o.x - c.x, o.y - c.y, o.z - c.z);
+          if (d < nearest_reach) nearest_reach = d, pick = static_cast<int>(t);
+        }
+      }
     }
     if (pick < 0) pick = near_pick;
     if (pick < 0) break;
@@ -574,7 +613,7 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
                         (exit.lo.z + exit.hi.z) / 2};
       if (!drew_reach) {
         drew_reach = true;
-        draw_reach(lab, name, nav.world, g, reach, dead, triggers, sec.start, exit);
+        draw_reach(lab, name, nav.world, g, reach, dead, triggers, sec.start, exit, clip);
       }
       sec.reach_left = 1e30f;
       for (size_t k = 0; k < g.nodes.size(); k++) {
@@ -697,12 +736,13 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
       for (int x = 10; x < kCell - 10; x++) {
         const float wx = lo.x + (static_cast<float>(x - 10) + 0.5f) / scale;
         const float wy = lo.y + span - (static_cast<float>(y - 10) + 0.5f) / scale;
-        const sh::HullTrace tr = sh::trace_hull(hull, {wx, wy, hi.z}, {wx, wy, lo.z});
-        if (tr.startsolid) {
+        const shooters_edge::labs::ClippedFloor fl =
+            shooters_edge::labs::floor_below(hull, wx, wy, std::min(clip, hi.z), lo.z);
+        if (!fl.found) {
           gl::set_pixel(cell, x, y, {70, 74, 72, 255});
           continue;
         }
-        const float f = tr.fraction >= 1 ? 0 : (tr.endpos.z - lo.z) / (hi.z - lo.z);
+        const float f = fl.open ? 0 : (fl.z - lo.z) / (hi.z - lo.z);
         const auto v = static_cast<uint8_t>(120 + 125 * std::clamp(f, 0.0f, 1.0f));
         gl::set_pixel(cell, x, y, {static_cast<uint8_t>(v - 20), v, static_cast<uint8_t>(v - 35), 255});
       }
@@ -930,6 +970,9 @@ const gl::LabSpec kSpec{
          "a gap's landing on past its node, a jump at a lip)"},
         {"trace", "", "every command of every try to this TSV (map, section, try, t, feet, speed, "
                       "mode, link, view, keys, the pilot's reason)"},
+        {"clip-top", "",
+         "the pictures from above cut away over this height (a level under another); empty: "
+         "from the top, every roof stepped through"},
         {"backup", "0", "1: each try starts from the floor's far end behind its start (room for a "
                         "run-up)"},
         {"harm", "0", "1: the pits' floors marked as harm, their lips' links brinks (tried: a hop's stretch then ends short of every lip, ztrain 10 -> 3 through)"},
