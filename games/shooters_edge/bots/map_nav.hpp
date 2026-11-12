@@ -1,13 +1,17 @@
 // A REAL MAP'S NAV FOR THE BOTS: the graph a map's fighters plan on, built off its world model and
 // what its entity text says of the rest, one way for every caller (the team game, the co-op party,
-// the campaign's run-through):
+// the campaign's run-through) and either map family (clip hulls, or a version 38 map's brushes
+// traced through one tracer the nav keeps), off what every rules runner keeps alike (the edicts,
+// the model list: `RulesCommon`), so the first game's rules and the sequel's build it the same:
 // - a door that starts open (spawnflags 1) is a solid of the nav's world where it stands (a wall
 //   drawn aside, a trap's bars); one that is a plate (thin, wide: a BRIDGE that a button slides
 //   out) stands where the map drew it, out, and the nodes on it are kept so a caller can shut them
 //   while the bridge is still in; every other door (a secret one too) and every plat is a MOVER
 //   (shooter/nav.hpp), a plat ridden from its foot to its top;
 // - a teleporter is a link from every node its trigger holds to the node at its destination (one
-//   another entity switches on, by its name, is left out: nothing says when it works);
+//   another entity switches on, by its name, is left out: nothing says when it works); a trigger
+//   brush and its destination lifted 27 units, or the sequel's pad (its touch box 16 units square
+//   over the pad's centre) and its destination lifted 10;
 // - lava and slime: no way leads into a floor node standing in them (`harm`), nor onto a bridge
 //   that moves when touched (a trap over its pit), no swim node is
 //   made in them and no bridge or trick lands there; a jump over them or landing at an edge
@@ -34,20 +38,24 @@
 // ge:keywords map-nav build_map_nav movers doors plats teleporters water swim-field nav-graph
 // ge:keywords open-doors-as-floor start-open real-map bridge swim-nodes water-in-graph
 // ge:keywords rocket-tricks tricks-in-nav escapes lava-escape gap-tricks speed-jump
+// ge:keywords either-family version-38 rules-common teleporter-pad brushes-nav
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "ai/path.hpp"
+#include "brush/map.hpp"
+#include "brush/trace.hpp"
 #include "shooter/escape.hpp"
 #include "shooter/nav.hpp"
 #include "shooter/nav_gaps.hpp"
 #include "shooter/swim.hpp"
-#include "shooters_edge/server/qc_server.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::bots {
 
@@ -63,6 +71,10 @@ struct NavBridge {
 };
 
 struct MapNav {
+  // A version 38 map's: the map the world's solids trace and the tracer they share (single
+  // threaded: the nav and the bots that read it trace on one thread).
+  std::shared_ptr<const ge::brush::Map> brushes;
+  std::unique_ptr<ge::brush::BrushTracer> tracer;
   ge::shooter::MoveWorld world;
   ge::shooter::NavGraph graph;
   ge::shooter::SwimField swim;
@@ -95,11 +107,14 @@ struct MapNav {
 };
 
 // The doors and plats of `spec` as movers, off its entity text and the edicts `s` made of them.
-std::vector<ge::shooter::NavMover> map_movers(const server::QcServer& s,
-                                              const server::MapSpec& spec);
+// A version 38 map's plats ride on `tracer` (the nav's own; null: none ridden).
+std::vector<ge::shooter::NavMover> map_movers(const server::RulesCommon& s,
+                                              const server::MapSpec& spec,
+                                              ge::brush::BrushTracer* tracer = nullptr);
 // The map's nav built into `out` (whose world and graph the movers point into: keep it where it
-// is). False with `error` when no floor holds a node.
-bool build_map_nav(const server::QcServer& s, const server::MapSpec& spec, const char* start_class,
-                   MapNav& out, std::string& error);
+// is), on either map family: the clip hulls of `spec.models` or the brushes of `spec.brushes`.
+// False with `error` when no floor holds a node.
+bool build_map_nav(const server::RulesCommon& s, const server::MapSpec& spec,
+                   const char* start_class, MapNav& out, std::string& error);
 
 }  // namespace shooters_edge::bots

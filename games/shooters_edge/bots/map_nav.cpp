@@ -25,6 +25,49 @@ namespace sh = ge::shooter;
 namespace pg = ge::progs;
 namespace sv = shooters_edge::server;
 
+// A model's box, either family: [0] the world, then the inline models ("*N").
+struct ModelBox {
+  bool ok = false;
+  sh::Vec3f mins, maxs;
+};
+
+size_t model_count(const sv::MapSpec& spec) {
+  return spec.brushes ? spec.brushes->models.size() : spec.models.size();
+}
+
+ModelBox model_box(const sv::MapSpec& spec, int m) {
+  ModelBox b;
+  if (m < 0 || static_cast<size_t>(m) >= model_count(spec)) return b;
+  b.ok = true;
+  if (spec.brushes) {
+    const ge::brush::Model& bm = spec.brushes->models[static_cast<size_t>(m)];
+    b.mins = {bm.mins[0], bm.mins[1], bm.mins[2]};
+    b.maxs = {bm.maxs[0], bm.maxs[1], bm.maxs[2]};
+  } else {
+    b.mins = spec.models[static_cast<size_t>(m)].mins;
+    b.maxs = spec.models[static_cast<size_t>(m)].maxs;
+  }
+  return b;
+}
+
+// Inline model `m` as a solid of the nav's world standing at `origin`.
+sh::Solid model_solid(const sv::MapSpec& spec, ge::brush::BrushTracer* tracer, int m,
+                      sh::Vec3f origin) {
+  const ModelBox box = model_box(spec, m);
+  if (spec.brushes && tracer != nullptr)
+    return sh::brushes_solid(*tracer, static_cast<uint32_t>(m), origin, box.mins, box.maxs);
+  sh::Solid so;
+  so.kind = sh::SolidKind::brush;
+  so.origin = origin;
+  if (spec.brushes) return so;  // no tracer: nothing to trace (never built so)
+  const sh::BrushModel& bm = spec.models[static_cast<size_t>(m)];
+  so.point_hull = bm.hulls[0];
+  so.clip_hull = bm.hulls[1];
+  so.mins = bm.mins;
+  so.maxs = bm.maxs;
+  return so;
+}
+
 // A door that starts open (spawnflags 1) stays where it spawned until a button moves it: a plate
 // over a pit, a wall drawn aside.
 bool start_open(const pg::EntityBlock& b) {
@@ -33,7 +76,7 @@ bool start_open(const pg::EntityBlock& b) {
 }
 
 // The edict the mod made of inline model `model`, or -1.
-int edict_of(const sv::QcServer& s, const char* model) {
+int edict_of(const sv::RulesCommon& s, const char* model) {
   for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
     if (d.free || d.modelindex <= 0 || static_cast<size_t>(d.modelindex) >= s.models.size())
@@ -43,10 +86,26 @@ int edict_of(const sv::QcServer& s, const char* model) {
   return -1;
 }
 
+// Edict `e`'s box in the world: its own, else (a runner whose rows carry no box for a brush
+// entity: the sequel's) inline model `model`'s box where the edict stands.
+struct AbsBox {
+  sh::Vec3f min, max;
+};
+
+AbsBox abs_box(const sv::RulesCommon& s, const sv::MapSpec& spec, int e, const char* model) {
+  const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+  if (d.absmax.x > d.absmin.x || d.absmax.y > d.absmin.y || d.absmax.z > d.absmin.z || !model ||
+      model[0] != '*')
+    return {d.absmin, d.absmax};
+  const ModelBox m = model_box(spec, std::atoi(model + 1));
+  if (!m.ok) return {d.absmin, d.absmax};
+  return {d.origin + m.mins, d.origin + m.maxs};
+}
+
 // Those doors as solids of the nav's world, where they stand (the rest of the movers are left
 // out of it and tagged on the links they close).
 // A plate: no thicker than a step's height, wider than a player both ways.
-bool plate(const sh::BrushModel& bm) {
+bool plate(const ModelBox& bm) {
   const sh::Vec3f d = bm.maxs - bm.mins;
   return d.z <= 32 && d.x >= 48 && d.y >= 48;
 }
@@ -54,11 +113,12 @@ bool plate(const sh::BrushModel& bm) {
 // The doors (not starting open) whose chain a name or a shot moves: a door with no name of its own
 // moves with every door its box touches (unless one of them keeps apart, spawnflags 4), and the
 // chain opens only by its name when any door in it has one. Edicts, by edict number.
-std::vector<uint8_t> named_doors(const sv::QcServer& s,
+std::vector<uint8_t> named_doors(const sv::RulesCommon& s, const sv::MapSpec& spec,
                                  const std::vector<pg::EntityBlock>& blocks) {
   struct D {
     int e;
     bool named, apart;
+    AbsBox box;
   };
   std::vector<D> ds;
   for (const pg::EntityBlock& b : blocks) {
@@ -70,7 +130,7 @@ std::vector<uint8_t> named_doors(const sv::QcServer& s,
     if (e < 0) continue;
     const char* sf = pg::block_value(b, "spawnflags");
     ds.push_back({e, pg::block_value(b, "targetname") != nullptr || pg::block_value(b, "health"),
-                  sf && (std::atoi(sf) & 4) != 0});
+                  sf && (std::atoi(sf) & 4) != 0, abs_box(s, spec, e, model)});
   }
   std::vector<uint8_t> out(static_cast<size_t>(s.sv.num_edicts), 0);
   // Spread the name along touching boxes until nothing changes (chains are a few doors long).
@@ -79,10 +139,10 @@ std::vector<uint8_t> named_doors(const sv::QcServer& s,
     for (D& a : ds)
       for (const D& b : ds) {
         if (a.named || !b.named || a.apart || b.apart) continue;
-        const sh::Edict& x = s.sv.edicts[static_cast<size_t>(a.e)];
-        const sh::Edict& y = s.sv.edicts[static_cast<size_t>(b.e)];
-        if (x.absmin.x <= y.absmax.x && y.absmin.x <= x.absmax.x && x.absmin.y <= y.absmax.y &&
-            y.absmin.y <= x.absmax.y && x.absmin.z <= y.absmax.z && y.absmin.z <= x.absmax.z) {
+        const AbsBox& x = a.box;
+        const AbsBox& y = b.box;
+        if (x.min.x <= y.max.x && y.min.x <= x.max.x && x.min.y <= y.max.y && y.min.y <= x.max.y &&
+            x.min.z <= y.max.z && y.min.z <= x.max.z) {
           a.named = true;
           grew = true;
         }
@@ -95,34 +155,28 @@ std::vector<uint8_t> named_doors(const sv::QcServer& s,
 
 // A FLOOR DOOR: a plate resting shut that only a button (or a shot) moves: a floor to the nav at
 // rest, its nodes shut while it is away (dm2's big room and its entries, slid out by t1).
-bool floor_door(const pg::EntityBlock& b, const sh::BrushModel& bm,
-                const std::vector<uint8_t>& named, int e) {
+bool floor_door(const pg::EntityBlock& b, const ModelBox& bm, const std::vector<uint8_t>& named,
+                int e) {
   const char* cn = pg::block_value(b, "classname");
   return cn && std::strcmp(cn, "func_door") == 0 && !start_open(b) && plate(bm) && e >= 0 &&
          static_cast<size_t>(e) < named.size() && named[static_cast<size_t>(e)];
 }
 
-void open_doors_as_floor(const sv::QcServer& s, const sv::MapSpec& spec,
-                         const std::vector<pg::EntityBlock>& blocks, sh::MoveWorld& world,
-                         std::vector<NavBridge>& bridges) {
-  const std::vector<uint8_t> named = named_doors(s, blocks);
+void open_doors_as_floor(const sv::RulesCommon& s, const sv::MapSpec& spec,
+                         ge::brush::BrushTracer* tracer, const std::vector<pg::EntityBlock>& blocks,
+                         sh::MoveWorld& world, std::vector<NavBridge>& bridges) {
+  const std::vector<uint8_t> named = named_doors(s, spec, blocks);
   for (const pg::EntityBlock& b : blocks) {
     const char* model = pg::block_value(b, "model");
     if (!model || model[0] != '*') continue;
     const int m = std::atoi(model + 1);
-    if (m <= 0 || static_cast<size_t>(m) >= spec.models.size() || world.count >= sh::kMaxSolids)
+    if (m <= 0 || static_cast<size_t>(m) >= model_count(spec) || world.count >= sh::kMaxSolids)
       continue;
     const int e = edict_of(s, model);
-    const sh::BrushModel& bm = spec.models[static_cast<size_t>(m)];
+    const ModelBox bm = model_box(spec, m);
     if (!floor_door(b, bm, named, e)) continue;
     sh::Solid& so = world.solids[world.count++];
-    so = sh::Solid{};
-    so.kind = sh::SolidKind::brush;
-    so.origin = s.sv.edicts[static_cast<size_t>(e)].origin;  // at rest
-    so.point_hull = bm.hulls[0];
-    so.clip_hull = bm.hulls[1];
-    so.mins = bm.mins;
-    so.maxs = bm.maxs;
+    so = model_solid(spec, tracer, m, s.sv.edicts[static_cast<size_t>(e)].origin);  // at rest
     NavBridge br;
     br.ent = e;
     br.spawn = so.origin;
@@ -135,15 +189,13 @@ void open_doors_as_floor(const sv::QcServer& s, const sv::MapSpec& spec,
     if (!cn || !model || model[0] != '*' || std::strcmp(cn, "func_door") != 0 || !start_open(b))
       continue;
     const int m = std::atoi(model + 1);
-    if (m <= 0 || static_cast<size_t>(m) >= spec.models.size() || world.count >= sh::kMaxSolids)
+    if (m <= 0 || static_cast<size_t>(m) >= model_count(spec) || world.count >= sh::kMaxSolids)
       continue;
     const int e = edict_of(s, model);
     if (e < 0) continue;
-    const sh::BrushModel& bm = spec.models[static_cast<size_t>(m)];
+    const ModelBox bm = model_box(spec, m);
     sh::Solid& so = world.solids[world.count++];
-    so = sh::Solid{};
-    so.kind = sh::SolidKind::brush;
-    so.origin = s.sv.edicts[static_cast<size_t>(e)].origin;
+    so = model_solid(spec, tracer, m, s.sv.edicts[static_cast<size_t>(e)].origin);
     if (plate(bm)) {
       NavBridge br;
       br.ent = e;
@@ -154,17 +206,14 @@ void open_doors_as_floor(const sv::QcServer& s, const sv::MapSpec& spec,
       bridges.push_back(br);
       so.origin = {};  // out, where the map drew it
     }
-    so.point_hull = bm.hulls[0];
-    so.clip_hull = bm.hulls[1];
-    so.mins = bm.mins;
-    so.maxs = bm.maxs;
   }
 }
 
-std::vector<sh::NavMover> movers_of(const sv::QcServer& s, const sv::MapSpec& spec,
+std::vector<sh::NavMover> movers_of(const sv::RulesCommon& s, const sv::MapSpec& spec,
+                                    ge::brush::BrushTracer* tracer,
                                     const std::vector<pg::EntityBlock>& blocks) {
   std::vector<sh::NavMover> out;
-  const std::vector<uint8_t> named = named_doors(s, blocks);
+  const std::vector<uint8_t> named = named_doors(s, spec, blocks);
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
     const char* model = pg::block_value(b, "model");
@@ -174,24 +223,33 @@ std::vector<sh::NavMover> movers_of(const sv::QcServer& s, const sv::MapSpec& sp
     if (!door && !plat) continue;
     if (door && start_open(b)) continue;  // a floor to the nav (open_doors_as_floor)
     const int m = std::atoi(model + 1);
-    if (m <= 0 || static_cast<size_t>(m) >= spec.models.size()) continue;
+    if (m <= 0 || static_cast<size_t>(m) >= model_count(spec)) continue;
     const int ent = edict_of(s, model);
-    if (door && floor_door(b, spec.models[static_cast<size_t>(m)], named, ent)) continue;  // too
+    const ModelBox bm = model_box(spec, m);
+    if (door && floor_door(b, bm, named, ent)) continue;  // too
     if (ent < 0) continue;
     sh::NavMover mv;
     mv.ent = ent;
-    mv.absmin = s.sv.edicts[static_cast<size_t>(ent)].absmin;
-    mv.absmax = s.sv.edicts[static_cast<size_t>(ent)].absmax;
-    if (plat) {
-      const sh::BrushModel& bm = spec.models[static_cast<size_t>(m)];
+    const AbsBox ab = abs_box(s, spec, ent, model);
+    mv.absmin = ab.min;
+    mv.absmax = ab.max;
+    if (plat && (!spec.brushes || tracer != nullptr)) {
+      // Drawn raised and lowered by its height (else its own height less an 8-unit lip); the
+      // sequel's default speed is 200 units/s, the first game's 150.
       const char* h = pg::block_value(b, "height");
       const char* sp = pg::block_value(b, "speed");
       const float rise = h ? static_cast<float>(std::atof(h)) : (bm.maxs.z - bm.mins.z) - 8;
-      const float speed = sp ? static_cast<float>(std::atof(sp)) : 150;
-      mv.model = &bm;
+      const float fallback = spec.brushes ? 200.f : 150.f;
+      const float speed = sp ? static_cast<float>(std::atof(sp)) : fallback;
+      if (spec.brushes) {
+        mv.tracer = tracer;
+        mv.brush_model = static_cast<uint32_t>(m);
+      } else {
+        mv.model = &spec.models[static_cast<size_t>(m)];
+      }
       mv.rest = s.sv.edicts[static_cast<size_t>(ent)].origin;  // lowered from where it was built
       mv.travel = {0, 0, rise};
-      mv.ride_s = 1 + rise / (speed > 0 ? speed : 150);
+      mv.ride_s = 1 + rise / (speed > 0 ? speed : fallback);
     }
     out.push_back(mv);
   }
@@ -207,34 +265,51 @@ sh::Vec3f origin_of(const char* org) {
   return o;
 }
 
+// A teleporter's destination: the first block named `target` of a destination's class, lifted as
+// its rules lift it (the first game's 27 units, the sequel's pad 10).
+bool teleport_dest(const std::vector<pg::EntityBlock>& blocks, const char* target,
+                   sh::Vec3f& dest) {
+  for (const pg::EntityBlock& d : blocks) {
+    const char* dn = pg::block_value(d, "targetname");
+    const char* dc = pg::block_value(d, "classname");
+    const char* org = pg::block_value(d, "origin");
+    if (!dn || !dc || !org || std::strcmp(dn, target) != 0) continue;
+    const bool first = std::strcmp(dc, "info_teleport_destination") == 0;
+    const bool pad = std::strcmp(dc, "misc_teleporter_dest") == 0;
+    if (!first && !pad) continue;
+    dest = origin_of(org);
+    dest.z += first ? 27.f : 10.f;
+    return true;
+  }
+  return false;
+}
+
 std::vector<sh::NavExtraLink> teleport_links(const sh::NavGraph& g, const sv::MapSpec& spec,
                                              const std::vector<pg::EntityBlock>& blocks) {
   std::vector<sh::NavExtraLink> out;
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
-    const char* model = pg::block_value(b, "model");
     const char* target = pg::block_value(b, "target");
-    if (!cn || std::strcmp(cn, "trigger_teleport") != 0 || !model || model[0] != '*' || !target ||
-        pg::block_value(b, "targetname"))
+    if (!cn || !target || pg::block_value(b, "targetname")) continue;
+    // Where it is touched: a trigger brush's box, or the box over a pad's centre.
+    ModelBox box;
+    if (std::strcmp(cn, "trigger_teleport") == 0) {
+      const char* model = pg::block_value(b, "model");
+      if (!model || model[0] != '*' || std::atoi(model + 1) <= 0) continue;
+      box = model_box(spec, std::atoi(model + 1));
+      if (!box.ok) continue;
+    } else if (std::strcmp(cn, "misc_teleporter") == 0) {
+      const char* org = pg::block_value(b, "origin");
+      if (!org) continue;
+      const sh::Vec3f o = origin_of(org);
+      box.ok = true;
+      box.mins = o + sh::Vec3f{-8, -8, 8};
+      box.maxs = o + sh::Vec3f{8, 8, 24};
+    } else {
       continue;
-    const int m = std::atoi(model + 1);
-    if (m <= 0 || static_cast<size_t>(m) >= spec.models.size()) continue;
-    const sh::BrushModel& box = spec.models[static_cast<size_t>(m)];
-    sh::Vec3f dest;
-    bool found = false;
-    for (const pg::EntityBlock& d : blocks) {
-      const char* dn = pg::block_value(d, "targetname");
-      const char* dc = pg::block_value(d, "classname");
-      const char* org = pg::block_value(d, "origin");
-      if (!dn || !dc || !org || std::strcmp(dn, target) != 0 ||
-          std::strcmp(dc, "info_teleport_destination") != 0)
-        continue;
-      dest = origin_of(org);
-      dest.z += 27;  // the mod lifts a destination 27 units
-      found = true;
-      break;
     }
-    if (!found) continue;
+    sh::Vec3f dest;
+    if (!teleport_dest(blocks, target, dest)) continue;
     const int32_t to = sh::nav_nearest(g, dest);
     if (to < 0) continue;
     for (size_t a = 0; a < g.nodes.size(); a++) {
@@ -250,39 +325,66 @@ std::vector<sh::NavExtraLink> teleport_links(const sh::NavGraph& g, const sv::Ma
   return out;
 }
 
-}  // namespace
-
-std::vector<sh::NavMover> map_movers(const sv::QcServer& s, const sv::MapSpec& spec) {
+// The map's entity blocks: its text (the first family), else the version 38 map's own entities.
+std::vector<pg::EntityBlock> entity_blocks(const sv::MapSpec& spec) {
   std::vector<pg::EntityBlock> blocks;
-  std::string error;
-  if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) return {};
-  return movers_of(s, spec, blocks);
+  if (!spec.entities.empty() || !spec.brushes) {
+    std::string error;
+    if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) blocks.clear();
+    return blocks;
+  }
+  blocks.reserve(spec.brushes->entities.size());
+  for (const ge::brush::Entity& e : spec.brushes->entities) {
+    pg::EntityBlock b;
+    b.pairs = e.pairs;
+    blocks.push_back(std::move(b));
+  }
+  return blocks;
 }
 
-bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* start_class,
+}  // namespace
+
+std::vector<sh::NavMover> map_movers(const sv::RulesCommon& s, const sv::MapSpec& spec,
+                                     ge::brush::BrushTracer* tracer) {
+  return movers_of(s, spec, tracer, entity_blocks(spec));
+}
+
+bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char* start_class,
                    MapNav& out, std::string& error) {
-  if (spec.models.empty()) {
+  if (model_count(spec) == 0) {
     error = "the map " + spec.name + " has no world for bots to walk on";
     return false;
   }
-  std::vector<pg::EntityBlock> blocks;
-  std::string perr;
-  if (!pg::parse_entity_text(spec.entities.c_str(), blocks, perr)) blocks.clear();
+  const std::vector<pg::EntityBlock> blocks = entity_blocks(spec);
   const auto t0 = std::chrono::steady_clock::now();
-  sh::map_world(spec.models[0], out.world);
+  out.tracer.reset();
+  out.brushes = spec.brushes;
+  if (spec.brushes) {
+    out.tracer = std::make_unique<ge::brush::BrushTracer>(*spec.brushes);
+    const ModelBox world = model_box(spec, 0);
+    out.world.count = 1;
+    out.world.solids[0] = sh::brushes_solid(*out.tracer, 0, {}, world.mins, world.maxs);
+  } else {
+    sh::map_world(spec.models[0], out.world);
+  }
   out.bridges.clear();
-  open_doors_as_floor(s, spec, blocks, out.world, out.bridges);
-  out.movers = movers_of(s, spec, blocks);
+  open_doors_as_floor(s, spec, out.tracer.get(), blocks, out.world, out.bridges);
+  out.movers = movers_of(s, spec, out.tracer.get(), blocks);
   sh::build_nav(out.world, out.movers, sh::MoveSettings{}, sh::NavSettings{}, out.graph);
   const std::vector<sh::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
   sh::nav_add_links(out.graph, teleports);
   for (NavBridge& br : out.bridges) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(br.ent)];
+    const int mi = d.modelindex;
+    const char* model = mi > 0 && static_cast<size_t>(mi) < s.models.size()
+                            ? s.models[static_cast<size_t>(mi)].c_str()
+                            : nullptr;
+    const AbsBox ab = abs_box(s, spec, br.ent, model);
     // Out, and a player's half-width beyond its edge (a node there stands on it too).
     // A floor door's nodes stand on it where it rests; a bridge's where the map drew it.
     const sh::Vec3f shift = br.floor ? sh::Vec3f{} : br.spawn;
-    const sh::Vec3f lo = d.absmin - shift - sh::Vec3f{16, 16, 0},
-                    hi = d.absmax - shift + sh::Vec3f{16, 16, 0};
+    const sh::Vec3f lo = ab.min - shift - sh::Vec3f{16, 16, 0},
+                    hi = ab.max - shift + sh::Vec3f{16, 16, 0};
     for (size_t n = 0; n < out.graph.nodes.size(); n++) {
       const sh::Vec3f o = out.graph.nodes[n].origin;
       if (o.x >= lo.x && o.x <= hi.x && o.y >= lo.y && o.y <= hi.y && o.z >= hi.z &&
