@@ -133,7 +133,7 @@ web build the engine has (G5): a viewer, never the game, and nothing in it plays
 | --- | --- |
 | The web viewer | A game's viewer target, `ge_add_web_viewer(<game>)`: its renderer, its demo reader and the TV client, nothing of input beyond the camera and the transport. Built by Emscripten, drawing through the browser's WebGPU with the same WGSL the native renderer uses (Dawn ships the browser's binding) |
 | Its stream | The TV node's stream carried over a WebSocket (the TV layer's browser carriage), the same messages a native spectator reads: the viewer says hello, turns the messages back into the replay file as it grows (`tv::Watch`) and unpacks each whole block into the recording as it comes (Shooter's Edge's `unpack_more`); it plays two blocks behind and holds its last frame when the next block is late. A demo is fetched by its hash from the archive, decoded in the viewer |
-| Its content | The level and the models from the hub's content folder, compressed, named by hash, cached by the browser for a year; the first visit's download kept small by sending the level being watched first |
+| Its content | A demo's own content pack (`engine/hub/content.hpp`): the game names the files the demo draws from (`HubSpec::demo_files`: Shooter's Edge's maps, precached models and sounds, and the basics every picture needs), the hub takes them out of the packs beside the viewer (a later pack wins, as a game folder's numbered packs), writes them as one pack, zstd-packs it and keeps it in the archive's `content/` named by its own SHA-256, served at `/content/<sha>.pak.zst` and cached by the browser for a year. It is made when the demo arrives, so no visitor waits; two demos that need the same files share one pack. A 20-minute 4on4 on the classic game's third level takes 1.6 MB instead of the two packs' 52 MB. A game that names no files hands the viewer every pack beside it |
 | Its controls | Seek, speed, pause, whom to follow and free camera, through the transport the native replay player already has (`engine/replay`); clip links (`?t=from-to:who`) |
 | The page glue | The few lines of script a page needs to start the viewer, hand it the stream's address and wire the buttons: platform glue, kept as small as the platform allows, as Apple's and Android's app shells are |
 | Content rights | A hub serves only content its operator may share. For the classic game that is the free pack and the operator's own; a level whose content the hub may not serve is shown in the installed game instead |
@@ -149,7 +149,7 @@ hub, the next paint, the canvas's size, the status line). Every wait (a fetch, a
 suspends the C++ stack through JSPI, so a viewer is a plain loop in `main`. `ge_add_web_viewer`
 writes `<game>_viewer.js` and `.wasm` into `build/web/<game>_viewer/`, the folder a hub's
 `--viewer=<dir>` serves; the hub's operator puts the content packs it may share beside them
-(`.pak`, `.pk3`), and the Demo and Watch pages hand them to the viewer by name order.
+(`.pak`, `.pk3`); the Watch page hands them to the viewer by name order, the Demo page the demo's own content pack.
 
 THE LIMITS. A browser offers WebGPU's default limits unless the machine's GPU earns it more:
 16 sampled textures a shader stage, 8 storage buffers and 256 layers an array texture, among

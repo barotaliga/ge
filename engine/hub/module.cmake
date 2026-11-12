@@ -4,7 +4,7 @@
 # Not simulation code: the process paces itself by the wall clock (the poller never reads it).
 file(GLOB GE_HUB_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/hub/*.cpp)
 add_library(ge_hub STATIC ${GE_HUB_SOURCES})
-target_link_libraries(ge_hub PUBLIC ge_core ge_net ge_replay ge_mod)
+target_link_libraries(ge_hub PUBLIC ge_core ge_net ge_replay ge_mod ge_vfs)
 
 ge_module(ge_hub EXPORT hub)
 include(cmake/Hub.cmake)
