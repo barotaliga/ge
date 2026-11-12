@@ -54,6 +54,17 @@ sentence, a saved cfg writes them as comments, and `value_fits` is what a cfg ch
 line. `words_fault` names what is wrong with a cvar's words; a game's test runs it over every
 cvar it has (Shooter's Edge's server: `classic_game_every_server_setting_explains_itself`).
 
+### A cfg checked and tidied
+
+`engine/console/cfg_tidy.hpp` reads a cfg without running it, against a console's settings:
+`check_cfg` finds a setting the game lacks, a value that fits none of a setting's values (above)
+and a setting set twice; `format_cfg` writes the same commands back one a line, a setting as
+`name "value"`, with `comments` each setting's help above it and with `pretty` (an ezQuake-style
+config) the settings in sections by their prefix (`cfg_section`) in one fixed order, by name,
+under banners, their values in one column, then binds by key, aliases and the other commands in
+the order written. Formatting a formatted cfg changes nothing. A player's CLI runs both
+(`settings check`, `settings format`, `server check`, `server format`: `docs/gamecli.md`).
+
 ## Tiers
 
 Each setting has one of three homes, set by its flags (`engine/console/cvar.hpp`):

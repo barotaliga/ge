@@ -21,6 +21,7 @@
 
 #include "console/catalog.hpp"
 #include "console/cfg.hpp"
+#include "console/cfg_tidy.hpp"
 #include "console/console.hpp"
 #include "core/json_write.hpp"
 #include "core/num_text.hpp"
@@ -57,7 +58,7 @@ struct Player {
   bool have_config = false;
 };
 
-bool load_player(Ctx& ctx, Player& p) {
+bool load_player(Ctx& ctx, Player& p, bool run_config = true) {
   if (!need_places(ctx)) return false;
   p.dir = ctx.places.settings;
   p.console->set_sink([](std::string_view) {});
@@ -74,7 +75,7 @@ bool load_player(Ctx& ctx, Player& p) {
   }
   p.console->set_search_path({p.dir});
   p.have_config = fs::exists(p.dir / con::kConfigFile);
-  if (p.have_config) p.console->exec_file(con::kConfigFile);
+  if (p.have_config && run_config) p.console->exec_file(con::kConfigFile);
   p.console->run();
   return true;
 }
@@ -415,6 +416,85 @@ int cmd_server_set(Ctx& ctx) {
                 std::string(ctx.spec.cli) +
                     " host stop <port>, then host --dedicated, restarts one "
                     "this CLI runs");
+}
+
+namespace {
+
+// A cfg checked against `console`'s settings: each finding a line, exit 1 when there is one.
+int check_file(Ctx& ctx, const con::Console& console, const fs::path& file,
+               const std::string& again) {
+  std::string text;
+  if (!read_text(file, text))
+    return refuse(ctx, 1, "no cfg file at " + file.string(), "check the path");
+  const std::vector<con::CfgFinding> found = con::check_cfg(console, text);
+  std::vector<std::string> rows;
+  std::string lines;
+  for (const con::CfgFinding& f : found) {
+    rows.push_back(json_obj({{"line", std::to_string(f.line)},
+                             {"what", json_str(f.what)},
+                             {"next", json_str(f.next)}}));
+    lines += file.string() + ":" + std::to_string(f.line) + ": " + f.what + " (" + f.next + ")\n";
+  }
+  const int rc = answer(
+      ctx, json_obj({{"file", json_str(file.string())}, {"findings", json_arr(rows)}}), lines,
+      found.empty() ? file.string() + " sets only settings this game has, each to one of its values"
+                    : std::to_string(found.size()) + " findings in " + file.string(),
+      found.empty() ? "" : "fix each line, then " + again);
+  return found.empty() ? rc : 1;
+}
+
+// A cfg written back tidy (--comments, --pretty), printed or with --write in place.
+int format_file(Ctx& ctx, const con::Console& console, const fs::path& file) {
+  std::string text;
+  if (!read_text(file, text))
+    return refuse(ctx, 1, "no cfg file at " + file.string(), "check the path");
+  const std::string tidy = con::format_cfg(
+      console, text, {.comments = ctx.has("comments"), .pretty = ctx.has("pretty")});
+  if (ctx.has("write") && tidy != text) {
+    std::ofstream f(file, std::ios::binary);
+    if (!(f << tidy))
+      return refuse(ctx, 1, file.string() + " cannot be written", "check the folder's permissions");
+  }
+  return answer(ctx,
+                json_obj({{"file", json_str(file.string())},
+                          {"changed", json_bool(tidy != text)},
+                          {"written", json_bool(ctx.has("write") && tidy != text)},
+                          {"text", json_str(tidy)}}),
+                ctx.has("write") ? "" : tidy,
+                tidy == text ? file.string() + " is already tidy"
+                             : (ctx.has("write") ? file.string() + " rewritten tidy"
+                                                 : file.string() + " tidied (not written)"),
+                tidy != text && !ctx.has("write") ? "--write rewrites the file in place" : "");
+}
+
+}  // namespace
+
+int cmd_settings_check(Ctx& ctx) {
+  Player p;
+  if (!load_player(ctx, p, false)) return 1;
+  const fs::path file = ctx.words.empty() ? p.dir / con::kConfigFile : fs::path(ctx.words[0]);
+  return check_file(ctx, *p.console, file, std::string(ctx.spec.cli) + " settings check");
+}
+
+int cmd_settings_format(Ctx& ctx) {
+  Player p;
+  if (!load_player(ctx, p, false)) return 1;
+  const fs::path file = ctx.words.empty() ? p.dir / con::kConfigFile : fs::path(ctx.words[0]);
+  return format_file(ctx, *p.console, file);
+}
+
+int cmd_server_check(Ctx& ctx) {
+  ServerSide s;
+  if (!load_server(ctx, s)) return 1;
+  const fs::path file = ctx.words.empty() ? server_cfg_path(ctx) : fs::path(ctx.words[0]);
+  return check_file(ctx, *s.console, file, std::string(ctx.spec.cli) + " server check");
+}
+
+int cmd_server_format(Ctx& ctx) {
+  ServerSide s;
+  if (!load_server(ctx, s)) return 1;
+  const fs::path file = ctx.words.empty() ? server_cfg_path(ctx) : fs::path(ctx.words[0]);
+  return format_file(ctx, *s.console, file);
 }
 
 }  // namespace ge::gamecli

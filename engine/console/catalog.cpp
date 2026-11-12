@@ -105,14 +105,14 @@ uint32_t flags_of(std::string_view letters) {
 
 std::string catalog_text(const Cvars& cvars) {
   std::string out =
-      "// every setting this program registers: name, kind, flags, default, min, max, help "
-      "(tab-split; console/catalog.hpp)\n";
+      "// every setting this program registers: name, kind, flags, default, min, max, help, "
+      "values (tab-split; console/catalog.hpp)\n";
   for (const Cvar* v : cvars.sorted()) {
     if ((v->flags & kCreated) != 0) continue;
     const bool ranged = v->kind == CvarKind::number || v->kind == CvarKind::integer;
     out += v->name + '\t' + kind_name(v->kind) + '\t' + flags_text(v->flags) + '\t' +
            flat(v->fallback) + '\t' + (ranged ? bound(v->min) : "-") + '\t' +
-           (ranged ? bound(v->max) : "-") + '\t' + flat(v->help) + '\n';
+           (ranged ? bound(v->max) : "-") + '\t' + flat(v->help) + '\t' + flat(v->values) + '\n';
   }
   return out;
 }
@@ -129,7 +129,7 @@ bool read_catalog(std::string_view text, std::vector<CatalogEntry>& out, std::st
     if (line.empty() || line.starts_with("//")) continue;
     std::vector<std::string_view> f;
     size_t at = 0;
-    while (f.size() < 6) {
+    while (f.size() < 7) {
       const size_t tab = line.find('\t', at);
       if (tab == std::string_view::npos) break;
       f.push_back(line.substr(at, tab - at));
@@ -142,7 +142,8 @@ bool read_catalog(std::string_view text, std::vector<CatalogEntry>& out, std::st
               "; next: start the game once so it writes its catalog again (console/catalog.hpp)";
       return false;
     };
-    if (f.size() != 7) return bad("has " + std::to_string(f.size()) + " fields, not 7");
+    if (f.size() != 7 && f.size() != 8)
+      return bad("has " + std::to_string(f.size()) + " fields, not 8");
     if (!valid_name(f[0])) return bad("names no cvar ('" + std::string(f[0]) + "')");
     if (!kind_of(f[1], e.kind)) return bad("has no kind ('" + std::string(f[1]) + "')");
     if (!read_bound(f[4], e.min, e.min) || !read_bound(f[5], e.max, e.max))
@@ -151,6 +152,7 @@ bool read_catalog(std::string_view text, std::vector<CatalogEntry>& out, std::st
     e.flags = flags_of(f[2]) & ~static_cast<uint32_t>(kCreated);
     e.fallback = std::string(f[3]);
     e.help = std::string(f[6]);
+    if (f.size() == 8) e.values = std::string(f[7]);  // a catalog written before values: none
     out.push_back(std::move(e));
   }
   return true;
@@ -164,7 +166,8 @@ void add_catalog(Cvars& cvars, const std::vector<CatalogEntry>& entries) {
                .help = e.help,
                .kind = e.kind,
                .min = e.min,
-               .max = e.max});
+               .max = e.max,
+               .values = e.values});
 }
 
 }  // namespace ge::console

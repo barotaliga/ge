@@ -8,12 +8,14 @@
 // THE FORMAT is text a diff can read: a comment line, then one cvar a line, fields split by a
 // tab, in name order:
 //
-//   name <TAB> kind <TAB> flags <TAB> default <TAB> min <TAB> max <TAB> help
+//   name <TAB> kind <TAB> flags <TAB> default <TAB> min <TAB> max <TAB> help <TAB> values
 //
 // `kind` is text, number, integer or boolean; `flags` cfg.hpp's `flags_text` (eight places, a
 // letter or a dot: `A.......` a player's archived setting); `min` and `max` the range as written by
-// the shortest round trip (`-` for none). A tab or a line break inside a default or a help is
-// written as a space. Created cvars (made by `set` at run time, no code reads them) are left out.
+// the shortest round trip (`-` for none); `values` what each value does (console/words.hpp), which
+// a catalog written before it lacks (seven fields, read as none). A tab or a line break inside a
+// default or a help is written as a space. Created cvars (made by `set` at run time, no code reads
+// them) are left out.
 //
 // ge:summary The cvar catalog: every registered cvar as text, read back to register them again
 // ge:keywords cvar catalog cvars-txt catalog_text read_catalog add_catalog settings describe
@@ -35,7 +37,7 @@ inline constexpr std::string_view kCatalogFile = "cvars.txt";
 
 // One cvar as the catalog keeps it (owning its text, unlike CvarSpec).
 struct CatalogEntry {
-  std::string name, fallback, help;
+  std::string name, fallback, help, values;
   uint32_t flags = 0;
   CvarKind kind = CvarKind::text;
   double min = -std::numeric_limits<double>::infinity();
