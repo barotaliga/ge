@@ -56,6 +56,10 @@ enum Class : uint8_t {
   kGoal,
   kDoorField,
   kPlatField,
+  kDoorRotating,
+  kRotating,
+  kAreaPortal,
+  kLight,
 };
 
 // A mover's states: at rest at its first place, going to its second, at its second, coming back.
@@ -206,6 +210,10 @@ Class class_of(std::string_view c) {
       {"target_goal", kGoal},
       {"door_field", kDoorField},
       {"plat_field", kPlatField},
+      {"func_door_rotating", kDoorRotating},
+      {"func_rotating", kRotating},
+      {"func_areaportal", kAreaPortal},
+      {"light", kLight},
   };
   for (const auto& [name, cls] : kClasses)
     if (c == name) return cls;
@@ -214,10 +222,37 @@ Class class_of(std::string_view c) {
 
 Class class_of(const SequelEntity& e) { return class_of(e.classname); }
 
+bool is_door(Class c) { return c == kDoor || c == kDoorRotating; }
+
 bool brush(const SequelEntity& e) { return !e.model.empty() && e.model[0] == '*'; }
 
-sh::Vec3f abs_min(const SequelEntity& e) { return e.origin + e.mins; }
-sh::Vec3f abs_max(const SequelEntity& e) { return e.origin + e.maxs; }
+// A turning mover's box is the cube round the sphere its corners sweep.
+float reach(const SequelEntity& e) {
+  const auto far = [](float a, float b) { return std::max(a < 0 ? -a : a, b < 0 ? -b : b); };
+  const float x = far(e.mins.x, e.maxs.x), y = far(e.mins.y, e.maxs.y), z = far(e.mins.z, e.maxs.z);
+  return sh::root_of(x * x + y * y + z * z);
+}
+sh::Vec3f abs_min(const SequelEntity& e) {
+  if (!e.turns) return e.origin + e.mins;
+  const float r = reach(e);
+  return e.origin - sh::Vec3f{r, r, r};
+}
+sh::Vec3f abs_max(const SequelEntity& e) {
+  if (!e.turns) return e.origin + e.maxs;
+  const float r = reach(e);
+  return e.origin + sh::Vec3f{r, r, r};
+}
+
+// A point `d` from a mover's origin, in the mover's own frame at `angles` (forward, left, up), and
+// back.
+sh::Vec3f to_local(sh::Vec3f d, sh::Vec3f angles) {
+  const sh::ViewAxes a = sh::angle_vectors(angles);
+  return {sh::dot(d, a.forward), -sh::dot(d, a.right), sh::dot(d, a.up)};
+}
+sh::Vec3f to_world(sh::Vec3f l, sh::Vec3f angles) {
+  const sh::ViewAxes a = sh::angle_vectors(angles);
+  return a.forward * l.x - a.right * l.y + a.up * l.z;
+}
 
 bool overlap(sh::Vec3f alo, sh::Vec3f ahi, sh::Vec3f blo, sh::Vec3f bhi) {
   return alo.x < bhi.x && ahi.x > blo.x && alo.y < bhi.y && ahi.y > blo.y && alo.z < bhi.z &&
@@ -287,6 +322,29 @@ void begin_move(SequelEntity& e, sh::Vec3f dest, int arrive) {
 
 void arrived(SequelServer& s, SequelEntity& e);
 
+// Sets turning mover `e` turning to `dest` (sequel-movers.md § The angular plain move): whole
+// frames at the angle over the travel time, then a last frame turning by what is left, measured
+// from where it stands, so a turn ends on its angles.
+void begin_turn(SequelEntity& e, sh::Vec3f dest, int arrive) {
+  e.adest = dest;
+  e.arrive = arrive;
+  e.moved = true;
+  e.velocity = {};
+  e.accelerated = false;
+  const sh::Vec3f delta = dest - e.angles;
+  const float time = sh::length(delta) / e.speed;
+  e.last = false;
+  if (time < kStep) {
+    e.frames = 0;
+    e.avelocity = delta * (1 / kStep);
+    e.last = true;
+    if (time == 0) e.avelocity = {};
+    return;
+  }
+  e.frames = static_cast<int>(time / kStep);
+  e.avelocity = delta * (1 / time);
+}
+
 // The accelerated move's planning: the top speed and the span it slows over.
 void plan(SequelEntity& e) {
   e.top = e.speed;
@@ -348,12 +406,23 @@ void step_move(SequelServer& s, SequelEntity& e) {
   if (e.arrive == kNoAct) return;
   if (e.last) {
     e.velocity = {};
+    e.avelocity = {};
     e.last = false;
     arrived(s, e);
     return;
   }
   if (e.accelerated) {
     accelerate(e);
+    return;
+  }
+  if (e.turns) {
+    if (--e.frames > 0) return;
+    e.avelocity = (e.adest - e.angles) * (1 / kStep);
+    e.last = true;
+    if (e.avelocity.x == 0 && e.avelocity.y == 0 && e.avelocity.z == 0) {
+      e.last = false;
+      arrived(s, e);
+    }
     return;
   }
   if (--e.frames > 0) return;
@@ -370,13 +439,16 @@ void step_move(SequelServer& s, SequelEntity& e) {
 
 // Pushes mover `e` by `move`: its riders and the players in its way move with it. Returns the
 // slot that blocked it (the push undone), or -1.
-int push(SequelServer& s, SequelEntity& e, sh::Vec3f move, bool stop_type) {
-  const sh::Vec3f from = e.origin;
+int push(SequelServer& s, SequelEntity& e, sh::Vec3f move, sh::Vec3f turn, bool stop_type) {
+  const sh::Vec3f from = e.origin, from_angles = e.angles;
+  const bool turning = turn.x != 0 || turn.y != 0 || turn.z != 0;
   e.origin = from + move;
+  e.angles = from_angles + turn;
   const sh::Vec3f lo = abs_min(e), hi = abs_max(e);
   const int row = map_row(index_of(s, e));
   int16_t before[sh::kMaxClients][3];
-  bool moved[sh::kMaxClients] = {};
+  bool moved[sh::kMaxClients] = {}, turned[sh::kMaxClients] = {};
+  const int16_t yaw = static_cast<int16_t>(num::to_int32(turn.y * (65536.0f / 360)));
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (!s.clients[i].active || s.clients[i].spectator) continue;
     SequelPlayer& p = s.players[i];
@@ -384,19 +456,32 @@ int push(SequelServer& s, SequelEntity& e, sh::Vec3f move, bool stop_type) {
     const bool rider = p.ground == row;
     if (!rider && !overlap(at + p.mins, at + p.maxs, lo, hi)) continue;
     const bool fit_after = !stop_type || rider;
-    const sh::Vec3f to = at + move;
+    sh::Vec3f to = at + move;
+    if (turning)  // carried round the origin
+      to = e.origin + to_world(to_local(at - from, from_angles), e.angles);
     if (fit_after && fits(s, p, to)) {
       for (int k = 0; k < 3; k++) before[i][k] = p.move.origin[k];
       pack(p.move.origin, to);
       moved[i] = true;
       if (!rider) p.ground = -1;
+      if (rider && turn.y != 0) {  // a rider's view turns with it
+        p.move.delta_angles[1] = int16_t(p.move.delta_angles[1] + yaw);
+        p.view_angles.y += turn.y;
+        turned[i] = true;
+      }
       continue;
     }
     if (fits(s, p, at)) continue;              // fits where he was: left there
     for (int j = 0; j < sh::kMaxClients; j++)  // blocked: everything back
       if (moved[j])
         for (int k = 0; k < 3; k++) s.players[j].move.origin[k] = before[j][k];
+    for (int j = 0; j < sh::kMaxClients; j++)
+      if (turned[j]) {
+        s.players[j].move.delta_angles[1] = int16_t(s.players[j].move.delta_angles[1] - yaw);
+        s.players[j].view_angles.y -= turn.y;
+      }
     e.origin = from;
+    e.angles = from_angles;
     return i;
   }
   return -1;
@@ -411,6 +496,10 @@ void use(SequelServer& s, int target, int activator, int depth);
 // What a mover does when a player blocks it: crush, then a door or plat turns back.
 void blocked(SequelServer& s, SequelEntity& e, int slot) {
   const Class c = class_of(e);
+  if (c == kRotating) {  // crushes every blocked frame and never turns back
+    if (e.dmg > 0) fight_hurt(s, slot, -1, {}, e.dmg, 1, kSqByCrush);
+    return;
+  }
   if (c == kTrain) {
     if (e.dmg > 0 && s.level_time + 0.001 >= e.touched_at + 0.5) {
       e.touched_at = s.level_time;
@@ -426,8 +515,8 @@ void blocked(SequelServer& s, SequelEntity& e, int slot) {
       plat_go_up(s, e);
     return;
   }
-  if (c != kDoor || e.wait < 0 || (e.spawnflags & 4) != 0) return;  // a crusher keeps pressing
-  for (SequelEntity& m : s.entities)                                // the whole team turns back
+  if (!is_door(c) || e.wait < 0 || (e.spawnflags & 4) != 0) return;  // a crusher keeps pressing
+  for (SequelEntity& m : s.entities)                                 // the whole team turns back
     if (&m == &e || (e.team_master >= 0 && m.team_master == e.team_master)) {
       if (m.state == kComing)
         door_go_up(s, m, m.activator);
@@ -437,6 +526,16 @@ void blocked(SequelServer& s, SequelEntity& e, int slot) {
 }
 
 // ---- Doors, buttons, plats, trains ----
+
+// The area portals door `e`'s target names, opened or shut.
+void door_portals(SequelServer& s, const SequelEntity& e, bool open) {
+  if (e.target.empty()) return;
+  for (const SequelEntity& p : s.entities) {
+    if (p.targetname != e.target || class_of(p) != kAreaPortal) continue;
+    const int n = p.state;
+    if (n >= 0 && size_t(n) < s.portals.size()) s.portals[size_t(n)] = open ? 1 : 0;
+  }
+}
 
 void door_go_up(SequelServer& s, SequelEntity& e, int activator) {
   if (e.state == kGoing) return;
@@ -449,7 +548,11 @@ void door_go_up(SequelServer& s, SequelEntity& e, int activator) {
     sound_at(s, map_row(index_of(s, e)), e.origin, kDoorStart);
   e.state = kGoing;
   e.think_at = 0;
-  begin_move(e, e.open, kDoorTop);
+  if (e.turns)
+    begin_turn(e, e.open_angles, kDoorTop);
+  else
+    begin_move(e, e.open, kDoorTop);
+  door_portals(s, e, true);
   map_use_targets(s, index_of(s, e), activator);
 }
 
@@ -458,7 +561,10 @@ void door_go_down(SequelServer& s, SequelEntity& e) {
   if (e.sounds != 1) sound_at(s, map_row(index_of(s, e)), e.origin, kDoorStart);
   e.state = kComing;
   e.think_at = 0;
-  begin_move(e, e.closed, kDoorBottom);
+  if (e.turns)
+    begin_turn(e, e.closed_angles, kDoorBottom);
+  else
+    begin_move(e, e.closed, kDoorBottom);
 }
 
 // A use of a door: the team opens (or, a toggle, closes when open or opening).
@@ -552,6 +658,7 @@ void arrived(SequelServer& s, SequelEntity& e) {
     case kDoorBottom:
       if (e.sounds != 1) sound_at(s, row, e.origin, kDoorEnd);
       e.state = kAtFirst;
+      door_portals(s, e, false);
       return;
     case kButtonIn:
       e.state = kAtSecond;
@@ -763,8 +870,15 @@ void touch(SequelServer& s, SequelEntity& e, int slot) {
         plat.think_at = s.level_time + 1;  // held up while someone stands there
       return;
     }
+    case kRotating:  // touch pain while it spins
+      if ((e.spawnflags & 16) == 0 || e.dmg <= 0) return;
+      if (e.avelocity.x == 0 && e.avelocity.y == 0 && e.avelocity.z == 0) return;
+      fight_hurt(s, slot, -1, {}, e.dmg, 1, kSqByCrush);
+      return;
     case kDoor:  // leaning on a named door with a message (shown until it is used)
-      if (e.message.empty() || e.targetname.empty() || e.max_health > 0) return;
+    case kDoorRotating:
+      if (e.message.empty() || e.targetname.empty()) return;
+      if (class_of(e) == kDoor && e.max_health > 0) return;
       if (s.level_time + 0.001 < e.touched_at + 5) return;
       e.touched_at = s.level_time;
       centre_to(s, slot, e.message);
@@ -785,10 +899,24 @@ void use(SequelServer& s, int target, int activator, int depth) {
   if (e.gone && class_of(e) != kWall) return;
   switch (class_of(e)) {
     case kDoor:
+    case kDoorRotating:
       door_use(s, e, activator);
       return;
     case kButton:
       button_press(s, e, activator);
+      return;
+    case kRotating:  // toggles: stops at once, or starts at full speed
+      if (e.avelocity.x != 0 || e.avelocity.y != 0 || e.avelocity.z != 0)
+        e.avelocity = {};
+      else
+        e.avelocity = e.axis * e.speed;
+      return;
+    case kAreaPortal:
+      if (e.state >= 0 && size_t(e.state) < s.portals.size()) s.portals[size_t(e.state)] ^= 1;
+      return;
+    case kLight:
+      e.spawnflags ^= 1;  // bit 1: off
+      s.world.lightstyles[e.state] = (e.spawnflags & 1) != 0 ? "a" : "m";
       return;
     case kPlat:
       if (!e.moved && e.state == kGoing && e.arrive == kNoAct) plat_go_down(s, e);
@@ -924,9 +1052,12 @@ void fire_targets(SequelServer& s, int ent, int activator, int depth) {
       }
   const std::string target = e.target;
   if (target.empty() || depth >= kMaxUseDepth) return;
-  for (size_t i = 0; i < s.entities.size(); i++)
-    if (s.entities[i].targetname == target && int(i) != ent)
-      use(s, static_cast<int>(i), activator, depth + 1);
+  const bool door = is_door(class_of(e));
+  for (size_t i = 0; i < s.entities.size(); i++) {
+    if (s.entities[i].targetname != target || int(i) == ent) continue;
+    if (door && class_of(s.entities[i]) == kAreaPortal) continue;  // the door sets those itself
+    use(s, static_cast<int>(i), activator, depth + 1);
+  }
 }
 
 // Sets up one entity of class `c` from its keys.
@@ -969,6 +1100,63 @@ void spawn_one(SequelServer& s, SequelEntity& e, Class c) {
         std::swap(e.closed, e.open);
         e.origin = e.closed;
       }
+      return;
+    }
+    case kDoorRotating: {
+      e.solid = true;
+      e.turns = true;
+      e.speed = number(s, e, "speed", 100);  // degrees/s, never doubled
+      e.accel = e.decel = e.speed;
+      if (e.wait == 0) e.wait = 3;
+      if (key(s, e, "dmg").empty()) e.dmg = 2;
+      float distance = number(s, e, "distance", 0);
+      if (distance == 0) {
+        distance = 90;
+        s.console.push_back("A turning door at " + std::to_string(int(e.origin.x)) + " " +
+                            std::to_string(int(e.origin.y)) + " has no distance; it turns 90.");
+      }
+      e.axis = (e.spawnflags & 64) != 0    ? sh::Vec3f{0, 0, 1}
+               : (e.spawnflags & 128) != 0 ? sh::Vec3f{1, 0, 0}
+                                           : sh::Vec3f{0, 1, 0};
+      if ((e.spawnflags & 2) != 0) e.axis = e.axis * -1;
+      e.angles = {};
+      e.closed = e.open = e.origin;
+      e.closed_angles = {};
+      e.open_angles = e.axis * distance;
+      if ((e.spawnflags & 1) != 0) {  // start open: the angles swap
+        std::swap(e.closed_angles, e.open_angles);
+        e.angles = e.closed_angles;
+      }
+      return;
+    }
+    case kRotating:
+      e.solid = true;
+      e.turns = true;
+      e.speed = number(s, e, "speed", 100);
+      if (key(s, e, "dmg").empty()) e.dmg = 2;
+      e.axis = (e.spawnflags & 4) != 0   ? sh::Vec3f{0, 0, 1}
+               : (e.spawnflags & 8) != 0 ? sh::Vec3f{1, 0, 0}
+                                         : sh::Vec3f{0, 1, 0};
+      if ((e.spawnflags & 2) != 0) e.axis = e.axis * -1;
+      e.angles = {};
+      if ((e.spawnflags & 1) != 0) e.avelocity = e.axis * e.speed;
+      return;
+    case kAreaPortal: {
+      e.hidden = true;  // never drawn, never solid
+      const int n = static_cast<int>(number(s, e, "style", 0));
+      e.state = n;
+      if (n >= 0 && n < 1024 && size_t(n) >= s.portals.size()) s.portals.resize(size_t(n) + 1, 0);
+      return;
+    }
+    case kLight: {
+      // Only a named light with a style of 32 or more switches; the rest are the compiler's.
+      const int style = static_cast<int>(number(s, e, "style", 0));
+      if (e.targetname.empty() || style < 32 || style >= kWorldLightStyles) {
+        e.gone = true;
+        return;
+      }
+      e.state = style;
+      s.world.lightstyles[style] = (e.spawnflags & 1) != 0 ? "a" : "m";
       return;
     }
     case kButton:
@@ -1103,20 +1291,21 @@ void link_doors(SequelServer& s) {
   const size_t count = s.entities.size();
   for (size_t i = 0; i < count; i++) {
     SequelEntity& e = s.entities[i];
-    if (e.gone || class_of(e) != kDoor || e.team_master >= 0) continue;
+    if (e.gone || !is_door(class_of(e)) || e.team_master >= 0) continue;
     e.team_master = static_cast<int>(i);
     sh::Vec3f lo = abs_min(e), hi = abs_max(e);
     bool field = e.targetname.empty() && e.max_health == 0;
     if (!e.team.empty())
       for (size_t j = i + 1; j < count; j++) {
         SequelEntity& m = s.entities[j];
-        if (m.gone || class_of(m) != kDoor || m.team != e.team) continue;
+        if (m.gone || !is_door(class_of(m)) || m.team != e.team) continue;
         m.team_master = static_cast<int>(i);
         const sh::Vec3f mlo = abs_min(m), mhi = abs_max(m);
         lo = {std::min(lo.x, mlo.x), std::min(lo.y, mlo.y), std::min(lo.z, mlo.z)};
         hi = {std::max(hi.x, mhi.x), std::max(hi.y, mhi.y), std::max(hi.z, mhi.z)};
       }
     if (!field) continue;
+    if ((e.spawnflags & 1) != 0) door_portals(s, e, true);  // a door that starts open
     SequelEntity f;
     f.classname = "door_field";
     f.trigger = true;
@@ -1138,6 +1327,8 @@ int map_entity_of_row(const SequelServer& s, int row) {
 
 void map_spawn(SequelServer& s) {
   s.delayed.clear();
+  s.portals.clear();
+  for (int i = 32; i < kWorldLightStyles; i++) s.world.lightstyles[i].clear();  // the switchable
   s.secrets = s.secrets_found = s.goals = s.goals_found = 0;
   const size_t count = s.entities.size();
   for (size_t i = 0; i < count; i++) {
@@ -1174,11 +1365,15 @@ void map_frame(SequelServer& s) {
   // Each mover pushes, then steps; a blocked push skips the step (its schedule slides).
   for (size_t i = 0; i < s.entities.size(); i++) {
     SequelEntity& e = s.entities[i];
-    if (e.gone || !e.solid || (e.velocity.x == 0 && e.velocity.y == 0 && e.velocity.z == 0)) {
+    const bool still = e.velocity.x == 0 && e.velocity.y == 0 && e.velocity.z == 0 &&
+                       e.avelocity.x == 0 && e.avelocity.y == 0 && e.avelocity.z == 0;
+    if (e.gone || !e.solid || still) {
       if (!e.gone && e.arrive != kNoAct) step_move(s, s.entities[i]);
       continue;
     }
-    const int by = push(s, e, eighths(e.velocity * kStep), class_of(e) == kButton);
+    const bool stop_type =
+        class_of(e) == kButton || (class_of(e) == kRotating && (e.spawnflags & 32) != 0);
+    const int by = push(s, e, eighths(e.velocity * kStep), e.avelocity * kStep, stop_type);
     if (by >= 0) {
       if (e.think_at > 0) e.think_at += kStep;
       blocked(s, s.entities[i], by);
@@ -1203,7 +1398,8 @@ void map_touch(SequelServer& s, int slot) {
     if (e.gone) continue;
     const bool in_field = e.trigger && overlap(lo, hi, abs_min(e), abs_max(e));
     const bool leaning = !e.trigger && e.solid &&
-                         (class_of(e) == kDoor || class_of(e) == kButton) &&
+                         (is_door(class_of(e)) || class_of(e) == kButton ||
+                          (class_of(e) == kRotating && (e.spawnflags & 16) != 0)) &&
                          overlap(lo - lean, hi + lean, abs_min(e), abs_max(e));
     if (in_field || leaning) touch(s, e, slot);
     if (!s.players[slot].alive) return;
@@ -1215,7 +1411,7 @@ bool map_damage(SequelServer& s, int e, int attacker, int damage) {
   SequelEntity& d = s.entities[size_t(e)];
   if (d.gone || d.health <= 0 || damage <= 0) return false;
   const Class c = class_of(d);
-  if (c != kDoor && c != kButton) return false;
+  if (!is_door(c) && c != kButton) return false;
   d.health -= damage;
   if (d.health > 0) return true;
   if (c == kButton) {
@@ -1232,13 +1428,19 @@ bool map_damage(SequelServer& s, int e, int attacker, int damage) {
 
 sh::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
                           sh::Vec3f end, int32_t mask) {
-  const auto one = [&](sh::Vec3f o, uint32_t model) {
-    const float a[3] = {start.x - o.x, start.y - o.y, start.z - o.z};
-    const float b[3] = {end.x - o.x, end.y - o.y, end.z - o.z};
+  // A turned mover is traced in its own frame: the line turned into it, the box kept upright.
+  const auto one = [&](sh::Vec3f o, uint32_t model, sh::Vec3f angles) {
+    sh::Vec3f from = start - o, to = end - o;
+    if (angles.x != 0 || angles.y != 0 || angles.z != 0) {
+      from = to_local(from, angles);
+      to = to_local(to, angles);
+    }
+    const float a[3] = {from.x, from.y, from.z};
+    const float b[3] = {to.x, to.y, to.z};
     const float lo[3] = {mins.x, mins.y, mins.z}, hi[3] = {maxs.x, maxs.y, maxs.z};
     return s.tracer->trace(a, b, lo, hi, mask, model);
   };
-  const ge::brush::Trace w = one({}, 0);
+  const ge::brush::Trace w = one({}, 0, {});
   sh::SequelTrace r;
   r.all_solid = w.all_solid;
   r.start_solid = w.start_solid;
@@ -1258,7 +1460,8 @@ sh::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::Vec3f mins
                         std::max(start.z, end.z) + maxs.z};
     if (!overlap(slo - sh::Vec3f{1, 1, 1}, shi + sh::Vec3f{1, 1, 1}, abs_min(e), abs_max(e)))
       continue;
-    const ge::brush::Trace t = one(e.origin, uint32_t(e.modelindex));
+    const ge::brush::Trace t = one(e.origin, uint32_t(e.modelindex), e.angles);
+    const bool turned = e.angles.x != 0 || e.angles.y != 0 || e.angles.z != 0;
     if (t.all_solid) r.all_solid = true;
     if (t.start_solid || t.fraction < r.fraction) {
       r.start_solid = r.start_solid || t.start_solid;
@@ -1266,6 +1469,10 @@ sh::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::Vec3f mins
         r.fraction = t.fraction;
         r.end = sh::Vec3f{t.end[0], t.end[1], t.end[2]} + e.origin;
         r.normal = {t.plane.n[0], t.plane.n[1], t.plane.n[2]};
+        if (turned) {
+          r.end = start + (end - start) * t.fraction;
+          r.normal = to_world(r.normal, e.angles);
+        }
         r.surface_flags = t.flags;
         r.contents = t.contents;
       }
@@ -1304,6 +1511,7 @@ void map_rows(SequelServer& s) {
     if (e.solid || e.gone || class_of(e) == kWall) {
       r.free = e.gone;
       r.origin = e.origin;
+      r.angles = e.angles;
       r.velocity = e.velocity;
     }
   }

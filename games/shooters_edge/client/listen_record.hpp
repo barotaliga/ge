@@ -37,6 +37,7 @@
 #include <array>
 #include <cstdint>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
+#include "shooters_edge/server/sequel_wire.hpp"
 #include "vfs/zstd.hpp"
 
 namespace shooters_edge::client {
@@ -70,6 +72,9 @@ struct ListenRecorder {
   std::string path;  // the file being written
   std::ofstream file;
   int64_t written = 0;  // bytes written to the file
+  // The sequel's rules playing: its own recording (server/sequel_wire.hpp) from the player's
+  // view, kept whole and written as a replay file (`.ged`) at the stop.
+  std::unique_ptr<sv::SequelRecorder> sequel;
   ~ListenRecorder();
 };
 

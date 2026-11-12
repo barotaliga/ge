@@ -24,12 +24,13 @@
 #include <span>
 #include <string_view>
 
+#include "shooters_edge/server/md4.hpp"
+
 namespace shooters_edge::net {
 
-// The MD4 digest of `bytes` (16 bytes, RFC 1320).
-void md4_digest(std::span<const uint8_t> bytes, uint8_t out[16]);
-// The digest's four little-endian words XORed: one lump's word.
-uint32_t md4_word(std::span<const uint8_t> bytes);
+// MD4 and one lump's word (server/md4.hpp).
+using server::md4_digest;
+using server::md4_word;
 
 struct MapChecksums {
   uint32_t all = 0;     // every lump but the entities
