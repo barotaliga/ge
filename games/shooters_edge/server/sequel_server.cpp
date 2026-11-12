@@ -57,6 +57,10 @@ void register_cvars(SequelServer& s) {
                .fallback = "1",
                .flags = con::kServer,
                .help = "the deathmatch rules: spawn points, respawns by attack"});
+  s.cvars.add({.name = "coop",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "co-op: everyone on one team"});
   s.cvars.add({.name = "sv_gravity",
                .fallback = "800",
                .flags = con::kServer,
@@ -154,6 +158,7 @@ const SequelEntity* spawn_spot(SequelServer& s, int slot) {
 
 void spawn_player(SequelServer& s, int slot, bool respawn) {
   SequelPlayer& p = s.players[slot];
+  if (respawn) fight_bury(s, slot);
   const SequelEntity* spot = spawn_spot(s, slot);
   const sh::Vec3f at = spot != nullptr ? spot->origin : sh::Vec3f{};
   const float yaw = spot != nullptr ? spot->angles.y : 0;
@@ -369,6 +374,8 @@ void take_packet(SequelServer& s, const sh::Packet& pk) {
 // weapon and no model, until a button is pressed 5 s on.
 void start_intermission(SequelServer& s) {
   s.intermission_at = s.level_time;
+  if (deathmatch(s) || s.cvars.find("coop")->on())  // the scores, for everyone
+    for (const std::string& l : fight_scores(s)) fight_print(s, -1, l + "\n");
   const SequelEntity* spot = nullptr;
   for (const char* name : {"info_player_intermission", "info_player_start"}) {
     for (const SequelEntity& e : s.entities)
@@ -478,6 +485,7 @@ void fill_rows(SequelServer& s) {
     for (int k = 0; k < 4; k++) wc.numbers.ammo[k] = float(p.body.ammo[static_cast<int>(shown[k])]);
     wc.numbers.frags = p.frags;
     wc.numbers.view_z = p.view_height;
+    wc.numbers.fov = fight_fov(s, i);
     e.free = false;
     e.origin = unpack(p.move.origin);
     e.velocity = unpack(p.move.velocity);
@@ -548,8 +556,9 @@ void fill_lists(SequelServer& s) {
   w.vwep.clear();
   w.statics.clear();
   w.max_clients = sh::kMaxClients;
-  w.entities.assign(1 + sh::kMaxClients + s.entities.size() + kSequelMissiles + kSequelDrops,
-                    WorldEntity{});
+  w.entities.assign(
+      1 + sh::kMaxClients + s.entities.size() + kSequelMissiles + kSequelDrops + kSequelBodies,
+      WorldEntity{});
   w.entity_count = static_cast<int>(w.entities.size());
   w.entities[0].free = false;
   w.entities[0].modelindex = 1;
@@ -685,6 +694,10 @@ CommandResult sq_client_command(void* r, int slot, const std::string& line) {
   ge::progs::tokenize_words(line.c_str(), w);
   if (w.count == 0) return CommandResult::bad;
   const std::string cmd = ge::progs::word(w, 0);
+  if (cmd == "score" || cmd == "players") {
+    for (const std::string& l : fight_scores(s)) fight_print(s, slot, l + "\n");
+    return CommandResult::mod;
+  }
   if (cmd == "kill") {
     SequelPlayer& p = s.players[slot];
     if (p.alive && s.level_time >= p.spawned_at + kKillAfter) fight_kill(s, slot, slot, -1);

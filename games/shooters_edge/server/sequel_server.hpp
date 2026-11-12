@@ -46,10 +46,11 @@
 //   intermission (everyone frozen at its spot, a button after 5 s leaves for the next map); the
 //   `dmflags` bits 1, 2, 2048 and 8192 leave items out, 4 keeps weapons, 32 repeats the level, 512
 //   spawns farthest, 1024 respawns at once.
-//
-// Movers and monsters are the next rows (docs/goals/M18v.md, M18v7); the rules' numbers are in the
-// clean-room notes. Held by
-// tests/shooters_edge_sequel_server_test.cpp.
+// - **Teams, bodies and scores**: with `dmflags` 64 (by skin) or 128 (by model), or in `coop`,
+//   teammates' blows do nothing with 256 but push, and a team kill scores −1; `fov` is held to
+//   1..160 (90 with 32768); a respawn leaves the body, up to 8, thrown apart by a blast under −40;
+//   `score` lists the scores, which the intermission prints to everyone.
+// - **The map's movers and triggers**: sequel_map.hpp. Monsters are the next row (M18v7d).
 //
 // ge:summary The sequel's rules as a second runner: its maps' brushes, spawns and the 10 Hz frame
 // ge:keywords sequel sequel-server sequel-runner runner-calls program-form spawn-point respawn
@@ -189,6 +190,16 @@ struct SequelDrop {
 };
 inline constexpr int kSequelDrops = 32;  // the rows the world keeps for dropped items
 
+// A body left where a player died, kept when he respawns: up to 8 stay, the oldest reused. A blow
+// that takes it under −40 throws it apart.
+struct SequelBody {
+  bool live = false;
+  sh::Vec3f origin;
+  float yaw = 0;
+  float health = 0;
+};
+inline constexpr int kSequelBodies = 8;
+
 struct SequelServerOptions {
   uint32_t seed = 1;
   // The clients take the server's view as their own when it turns them (the classic protocol's
@@ -217,6 +228,8 @@ struct SequelServer : RulesCommon {
   int missile_models[kSqShotKinds] = {};   // by `SqShot`
   std::vector<std::string> obituaries;     // every death's line, in order (the tests, the lab)
   SequelDrop drops[kSequelDrops];
+  SequelBody bodies[kSequelBodies];
+  int next_body = 0;             // the body slot the next respawn fills
   std::vector<int> item_models;  // each item row's world model in the model list (the drops')
   // The intermission: level time it began (0 none) and the map it leads to; everyone stands frozen
   // at its spot, and after 5 s any button leaves.
