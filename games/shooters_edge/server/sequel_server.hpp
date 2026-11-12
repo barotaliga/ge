@@ -231,6 +231,7 @@ struct SequelServer : RulesCommon {
   int weapon_models[kSqWeaponCount] = {};  // each weapon's view model in the model list
   int missile_models[kSqShotKinds] = {};   // by `SqShot`
   std::vector<std::string> obituaries;     // every death's line, in order (the tests, the lab)
+  std::vector<sh::Packet> rj_packets;      // a frame's packets as the rocket jump helper left them
   SequelDrop drops[kSequelDrops];
   SequelBody bodies[kSequelBodies];
   int next_body = 0;             // the body slot the next respawn fills

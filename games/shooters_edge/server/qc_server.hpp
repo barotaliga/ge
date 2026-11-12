@@ -154,8 +154,10 @@ struct QcServer : RulesCommon {
   struct {
     int currentammo = -1, armorvalue = -1, ammo[4] = {-1, -1, -1, -1}, weapon = -1;
     int weaponframe = -1;
-    int alpha = -1;  // a mod's see-through field (DP_ENT_ALPHA): 0 unset, else 0..1
+    int alpha = -1;            // a mod's see-through field (DP_ENT_ALPHA): 0 unset, else 0..1
+    int attack_finished = -1;  // the refire's end (the rocket jump helper waits for it)
   } world_fields;
+  std::vector<sh::Packet> rj_packets;  // a frame's packets as the rocket jump helper left them
 
   std::vector<HookCall> hook_log;
   int64_t hook_counts[static_cast<int>(HookId::count)] = {};

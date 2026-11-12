@@ -8,6 +8,7 @@
 // ge:test tests/shooters_edge_qc_server_test.cpp
 #include "shooters_edge/server/qc_server.hpp"
 
+#include <algorithm>
 #include <cstdio>
 
 #include "shooter/frame.hpp"
@@ -16,6 +17,7 @@
 #include "shooters_edge/server/catalogue.hpp"
 #include "shooters_edge/server/client_data.hpp"
 #include "shooters_edge/server/commands.hpp"
+#include "shooters_edge/server/rjump_rules.hpp"
 
 namespace shooters_edge::server {
 
@@ -278,6 +280,9 @@ bool create_qc_server(QcServer& s, const pg::Progs& progs, const QcServerOptions
   s.opt = opt;
   s.progs = &progs;
   if (s.cvars.find("deathmatch") == nullptr) add_mod_settings(s, s.opt.loop);
+  // The rocket jump helper (rjump_rules.hpp): the engine's for a QC program; a compiled module
+  // answers its own impulses.
+  if (s.cvars.find("sv_rjump") == nullptr) add_rjump_settings(s.cvars);
   if (pg::find_global(progs, "self") == nullptr) {
     error = "mod server: the progs has no engine-side globals; load a multiplayer progs";
     return false;
@@ -321,6 +326,7 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
     w.weapon = offset("weapon");
     w.weaponframe = offset("weaponframe");
     w.alpha = offset("alpha");
+    w.attack_finished = offset("attack_finished");
   }
   NamedHooks& n = s.named;
   n.user_cmd = named(progs, "UserCmd");
@@ -498,7 +504,54 @@ void save_change_parms(QcServer& s) {
   }
 }
 
+namespace {
+
+// The rocket jump helper's question of a classic program (rjump_rules.hpp): the launcher is the
+// item bit 32, chosen by impulse 7 in the same command it fires on; it waits out the refire
+// (`attack_finished`, when the program has one).
+constexpr float kRocketLauncherItem = 32;
+constexpr uint8_t kRocketLauncherImpulse = 7;
+
+sh::RjumpReady qc_rocket_ready(void* rules, int slot, sh::MoveCmd& cmd, std::string& why) {
+  const QcServer& s = *static_cast<const QcServer*>(rules);
+  const int e = slot + 1;
+  const auto& f = s.q.layout->f;
+  auto value = [&s, e](int offset) {
+    return offset < 0 ? 0.0f : pg::as_float(*pg::entity_field(s.q.vm, e, offset));
+  };
+  if (value(f.deadflag) != 0 || value(f.health) <= 0) return sh::RjumpReady::never;
+  const auto items = static_cast<int32_t>(value(f.items));
+  if ((items & static_cast<int32_t>(kRocketLauncherItem)) == 0) {
+    why = "You have no rocket launcher.\n";
+    return sh::RjumpReady::never;
+  }
+  if (value(f.ammo_rockets) < 1) {
+    why = "You have no rockets.\n";
+    return sh::RjumpReady::never;
+  }
+  if (s.world_fields.attack_finished >= 0 &&
+      value(s.world_fields.attack_finished) > static_cast<float>(s.sv.time))
+    return sh::RjumpReady::soon;
+  if (value(f.weapon) != kRocketLauncherItem) cmd.impulse = kRocketLauncherImpulse;
+  return sh::RjumpReady::now;
+}
+
+}  // namespace
+
 void qc_frame(QcServer& s, const sh::Packet* packets, int count) {
+  // The rocket jump helper rewrites the commands it acts on (rjump_rules.hpp).
+  // The view a shot turned is put back after the frame, so no one sees it a frame longer and the
+  // player's own view is never moved (his client keeps his angles).
+  s.rj_packets.assign(packets, packets + count);
+  uint32_t shots = 0;
+  sh::Vec3f own[sh::kMaxClients];
+  for (sh::Packet& p : s.rj_packets) {
+    const sh::Vec3f angles = p.cmds[2].angles;
+    if (!rjump_packet(s, p, &s, &qc_rocket_ready, s.sv.time)) continue;
+    shots |= 1u << p.client;
+    own[p.client] = angles;
+  }
+  packets = s.rj_packets.data();
   if (s.paused) {
     s.paused_seconds += s.sv.set.mintic;
     if (s.named.paused_tic > 0)
@@ -506,6 +559,12 @@ void qc_frame(QcServer& s, const sh::Packet* packets, int count) {
                 {static_cast<float>(s.paused_seconds)});
   } else {
     sh::server_frame(s.sv, packets, count);
+  }
+  for (int i = 0; shots != 0 && i < sh::kMaxClients; i++) {
+    if ((shots & (1u << i)) == 0) continue;
+    sh::Vec3f v = own[i];
+    v.x = std::clamp(v.x, s.sv.set.minpitch, s.sv.set.maxpitch);
+    s.sv.edicts[static_cast<size_t>(i) + 1].v_angle = v;
   }
   update_visclients(s);
   take_client_data(s);

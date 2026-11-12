@@ -331,6 +331,8 @@ bool start_map(Listen& l, std::string& error) {
   h->files = l.opt.files;
   h->lines = l.opt.item_names;
   h->lines.insert(h->lines.end(), l.opt.arsenal.begin(), l.opt.arsenal.end());
+  h->lines.push_back("sv_rjump 1");  // the window's own server offers the rocket jump helpers
+  h->lines.push_back("sv_rrjump 1");
   h->lines.insert(h->lines.end(), l.opt.console.begin(), l.opt.console.end());
   h->lobby = l.opt.lobby;
   h->lobby_settings = l.opt.lobby_settings;
@@ -455,6 +457,8 @@ sv::CampaignOptions campaign_options(Listen& l, const ListenOptions& opt) {
   co.registered = opt.registered;
   co.episodes = opt.episodes;
   co.settings = opt.arsenal;
+  co.settings.push_back("sv_rjump 1");  // the rocket jump helpers, as on the window's match
+  co.settings.push_back("sv_rrjump 1");
   co.settings.insert(co.settings.end(), opt.console.begin(), opt.console.end());
   return co;
 }

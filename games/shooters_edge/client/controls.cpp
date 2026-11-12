@@ -10,6 +10,7 @@
 #include <string>
 
 #include "console/cvar.hpp"
+#include "shooter/rjump_assist.hpp"
 #include "shooter/usercmd.hpp"
 
 namespace shooters_edge::client {
@@ -123,6 +124,12 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
                                "+movedown: swim down while held (crouches in a move that ducks)");
   b.speed = &con.add_button("speed", "+speed: walk while held (run with cl_run 0); unbound");
   b.strafe = &con.add_button("strafe", "+strafe: the mouse and the turn keys sidestep while held");
+  b.rjump = &con.add_button("rjump",
+                            "+rjump: a rocket jump for you: the rocket fired straight down as you "
+                            "jump, where the server allows it (sv_rjump)");
+  b.rrjump = &con.add_button("rrjump",
+                             "+rrjump: a reverse rocket jump: the rocket fired behind you as you "
+                             "jump, where the server allows it (sv_rrjump)");
   b.left = &con.add_button("left", "+left: turn left while held (cl_yawspeed)");
   b.right = &con.add_button("right", "+right: turn right while held (cl_yawspeed)");
   con.add_command("impulse", "impulse <n>: send the mod impulse n (1..8 a weapon, 10 the next)",
@@ -159,14 +166,22 @@ Moves button_moves(ControlSettings& c) {
   m.right = down(b.right);
   m.impulse = b.impulse;
   c.buttons.impulse = 0;
+  // A rocket jump helper's press: its request and the jump in this one command.
+  for (ge::console::Button* h : {b.rjump, b.rrjump}) {
+    if (h == nullptr || !h->pressed) continue;
+    h->pressed = false;
+    m.impulse = h == b.rjump ? ge::shooter::kRjumpImpulse : ge::shooter::kBackRjumpImpulse;
+    m.jump = true;
+  }
   return m;
 }
 
 void release_buttons(ControlSettings& c) {
   ControlButtons& b = c.buttons;
-  for (ge::console::Button* p : {b.forward, b.back, b.moveleft, b.moveright, b.moveup, b.movedown,
-                                 b.jump, b.attack, b.speed, b.strafe, b.left, b.right, b.attack2})
-    if (p != nullptr) p->held = 0;
+  for (ge::console::Button* p :
+       {b.forward, b.back, b.moveleft, b.moveright, b.moveup, b.movedown, b.jump, b.attack, b.speed,
+        b.strafe, b.left, b.right, b.attack2, b.rjump, b.rrjump})
+    if (p != nullptr) p->held = 0, p->pressed = false;
   b.impulse = 0;
 }
 

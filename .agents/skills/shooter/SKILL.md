@@ -29,6 +29,8 @@ edges. `docs/shooters-edge.md` is the design;
 | `shooter/row_recording.hpp/.cpp` | The row against the recordings, one command at a time and as runs (`replay_row`, `row_covers`) |
 | `labs/pmove_lab.cpp` | The `pmove` lab: every scenario's worst error, paths from above and the side |
 | `plugins/shooter/speedjump_assist.hpp` | `assisted_command`: the command a client sends for forward and jump on a server without `pm_speedjump` (the jump let go in the air, the side key and a sent yaw) |
+| `plugins/shooter/rjump_assist.hpp` | The rocket jump helpers' command: `rjump_command` (the shot 80 down or turned half round, attack and jump), the request a seat keeps (`rjump_take`, `rjump_apply` by the launcher's readiness) |
+| `games/shooters_edge/server/rjump_rules.hpp` | The helpers on every runner: `sv_rjump`, `sv_rrjump`, the `*rjump` grant, `rjump_packet` before the QC and sequel runners' frames; the `se-rjump` lab (`labs/gpu_se_rjump_lab.cpp`) |
 | `games/shooters_edge/labs/gpu_se_speedjump_lab.cpp` | The `se-speedjump` lab: the easy jump (`pm_speedjump`, `cl_speedjump`) against the classic move and the best strafe, alone and on the listen server |
 | `shooter/program.hpp` | The game-program seam: hooks and functions by number, the globals |
 | `shooter/entity.hpp`, `server.hpp/.cpp` | The entity record and pool, linking, trigger and impact touches, sounds, `server_hash` |
