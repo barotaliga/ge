@@ -218,11 +218,12 @@ bool explosion_light(const double p[3], double age, Light* out) {
 }
 
 void dynamic_light_at(std::span<const Light> lights, const double w[3], double strength,
-                      double rgb[3], double toward[3]) {
+                      double rgb[3], double toward[3], int self) {
   for (int c = 0; c < 3; c++) rgb[c] = toward[c] = 0;
   constexpr double kLevelLuxel = 128.0 / 255.0;  // a light's level of 1, in the probe's units
   double way[3] = {0, 0, 0};
   for (const Light& l : lights) {
+    if (self != 0 && l.entity == self) continue;
     const double v[3] = {l.pos[0] - w[0], l.pos[1] - w[1], l.pos[2] - w[2]};
     const double dist = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
     if (l.radius <= 0 || dist >= l.radius) continue;

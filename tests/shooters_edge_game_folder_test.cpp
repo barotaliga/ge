@@ -200,6 +200,31 @@ TEST(the_campaign_commands_go_with_the_campaign) {
   for (const char* name : {"newgame", "save", "load"}) CHECK_MSG(!con.has_command(name), name);
 }
 
+// A game whose own rules keep the campaign (the sequel's runner) and no single-player program:
+// NEW GAME and COOPERATIVE start its game with deathmatch 0, coop off or on, from its first map;
+// there is nothing to save yet, and companions can't join it yet.
+TEST(a_game_whose_rules_keep_the_campaign_has_new_game_and_coopgame) {
+  ge::console::Console con;
+  cl::Listen listen;
+  cl::SearchPath files;
+  cl::GameContent c;
+  std::string next_map, load_ask;
+  c.rules_campaign = true;
+  c.first_map = "demo1";
+  cl::campaign_commands(con, listen, files, c, next_map, load_ask);
+  for (const char* name : {"newgame", "coopgame"}) CHECK_MSG(con.has_command(name), name);
+  for (const char* name : {"save", "load"}) CHECK_MSG(!con.has_command(name), name);
+  con.execute("newgame");
+  CHECK(next_map == "demo1" && listen.opt.new_game);
+  CHECK(cl::wants_campaign(listen.opt) && listen.opt.console.back() == "coop 0");
+  next_map.clear();
+  listen.opt.new_game = false;
+  con.execute("coopgame 2 demo2");
+  CHECK(next_map == "demo2" && listen.opt.new_game && listen.opt.companions == 0);
+  CHECK(listen.opt.console.back() == "coop 1");
+  CHECK(!con.output().empty() && con.output().back().find("Companions") != std::string::npos);
+}
+
 namespace {
 
 std::unique_ptr<cl::LoadedMap> stub_map(const std::string& name) {

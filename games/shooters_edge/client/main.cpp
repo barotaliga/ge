@@ -1223,8 +1223,13 @@ int run_main(int argc, char** argv) {
       const bool hands = playing && !game_menu.open();
       remote.speedjump_view = user_info.speedjump_view;  // cl_speedjump_view, live
       cl::Moves moves = hands ? cl::button_moves(controls) : cl::Moves{};
-      if (remote.active)  // the quick weapon off what the server last said (quick_fire.hpp)
-        cl::quick_moves(controls.quick, cl::demo_status(remote.demo.state, t), t, moves);
+      if (remote.active) {  // the weapon groups and the quick weapon off what the server last
+                            // said (weapon_groups.hpp, quick_fire.hpp)
+        const se::Status said = cl::demo_status(remote.demo.state, t);
+        controls.groups.game = adapter.game->weapon_groups;
+        cl::group_moves(controls.groups, said, t, moves);
+        cl::quick_moves(controls.quick, said, t, moves);
+      }
       sn::remote_hands(remote, moves, played, controls, wall);
       std::vector<std::string> lines;
       joined = sn::remote_step(remote, wall, lines);
@@ -1299,7 +1304,9 @@ int run_main(int argc, char** argv) {
       ge::render::FrameView view = cl::demo_view(ds, ge::camera::FirstPersonRow{}.fov_y, t);
       view.frame = static_cast<uint64_t>(presented);
       overlay.begin(w, h);
-      se::fill_hud(hud, cl::demo_status(ds, t), cl::hud_art_of(files, classic_art, free_art));
+      se::Status hud_status = cl::demo_status(ds, t);
+      if (drawn_remote) cl::group_status(controls.groups, hud_status, t);  // the weapon group
+      se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
       const auto placed =
           hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style());
       playback.bar_bottom_px = cl::hud_inset(placed, h);
@@ -1412,8 +1419,12 @@ int run_main(int argc, char** argv) {
     }
     cl::Moves moves = playing ? cl::button_moves(controls) : cl::Moves{};
     // The quick weapon (quick_fire.hpp): the fire keys as the weapon to ask for and the attack.
-    if (listen.server != nullptr)
-      cl::quick_moves(controls.quick, cl::status_of(listen, t), t, moves);
+    if (listen.server != nullptr) {  // the weapon groups first (weapon_groups.hpp)
+      const se::Status said = cl::status_of(listen, t);
+      controls.groups.game = adapter.game->weapon_groups;
+      cl::group_moves(controls.groups, said, t, moves);
+      cl::quick_moves(controls.quick, said, t, moves);
+    }
     cl::turn_view(played, moves, controls, wall, listen.view);
     const ge::shooter::MoveCmd cmd = cl::read_controls(moves, played, controls);
     if (listen.server != nullptr) {
@@ -1475,7 +1486,9 @@ int run_main(int argc, char** argv) {
     cl::fire_held(held_fire, hand, fx_state.on.muzzles, view.time_s, fx);
     overlay.begin(w, h);
     if (listen.campaign.end == cl::LevelEnd::none) {
-      se::fill_hud(hud, cl::status_of(listen, t), cl::hud_art_of(files, classic_art, free_art));
+      se::Status hud_status = cl::status_of(listen, t);
+      cl::group_status(controls.groups, hud_status, t);  // the weapon group (weapon_groups.hpp)
+      se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
       const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
       hud.layout.draw(overlay, hf, se::hud_style());
       hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar

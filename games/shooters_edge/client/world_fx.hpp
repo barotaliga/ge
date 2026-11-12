@@ -39,7 +39,7 @@
 // - ce_explosions: an explosion is a layered fireball of the engine's (its billows, its smoke, the
 //   classic's ember ball, its light white-hot then orange), drawn by the explosions' pass.
 // - ce_trails: a rocket burns a short flame out of its motor and lays fire into smoke that spreads;
-//   a grenade trails pale smoke.
+//   a grenade trails pale smoke and its painted ends light the room a faint red (grenade_glow).
 // - ce_beams: the arc gun's beam is the engine's bolt (render/beam.hpp) in the game's one look
 //   (app/weapon_fx.hpp's bolt_look), held while the program keeps sending it, the brightest light
 //   in the room along it (bolt_lights), its root on the gun's own muzzle for the player's own;

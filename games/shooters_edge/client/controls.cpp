@@ -119,6 +119,7 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
   b.attack2 = &con.add_button(
       "attack2", "+attack2: fire the best of cl_quickweapon_prio2 while held, then switch back");
   add_quick_cvars(con, c.quick);
+  add_group_cvars(con, c.groups);
   b.moveup = &con.add_button("moveup", "+moveup: swim up while held");
   b.movedown = &con.add_button("movedown",
                                "+movedown: swim down while held (crouches in a move that ducks)");

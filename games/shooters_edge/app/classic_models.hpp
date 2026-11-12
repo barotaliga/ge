@@ -79,6 +79,10 @@ void frames_between(const Groups& groups, int group, double t, uint32_t& a, uint
 // the engine's frame. `alias`: a vertex-animated model, whose pitch the classic draws reversed.
 void rotation_of(const float angles[3], bool alias, float out[4]);
 
+// The colour a skin's glowing texels paint (linear, its brightest channel 1: a grenade's ends a
+// pure red), and their share of the skin; 0 (and black) when nothing in it glows.
+float glow_colour(const ge::render::MorphSkin& skin, float rgb[3]);
+
 struct LightProbe {
   float cell = 64;  // map units
   int32_t x0 = 0, y0 = 0, nx = 0, ny = 0;
