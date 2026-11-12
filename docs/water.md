@@ -607,6 +607,25 @@ always leaves a level top, so there is no window's rim to see through a flat sla
 waves tilt it past the critical angle, the top mirrors the water's inside back down. Judged on the
 start map's drop to its fourth episode through `se-client`, before and after.
 
+**Built (M41t, the underside drawn as water; `render/water_underside.wgsl`).** Played, the physical
+underside read as a brown pane of glass: a hall's pool lies nearly still, the air's Fresnel off its
+bottom is a few per cent, and through a flat slab the room over it just shows, dimmed. So the
+underside now draws two surfaces a player knows, each as it looks in a pool the right way up. THE
+BOTTOM, as water seen from over it (its "over" the hall): its slopes shown `kShowWaves` (4) times
+steeper (the look only; the geometry and what floats keep the true waves), the hall mirrored by the
+Fresnel reflectance off water but never under `kSheen` (0.3, a pool seen from its side at a low
+angle), the hall's lamps glinting on it, and what is seen into it bent by its waves. THE TOP, as
+water seen from under it: the eye's ray goes on into the water at its OWN angle (as if the eye were
+in the water), bent only by the bottom's waves (`kBend` times their refraction), to the top, where
+Snell's law takes it out within the 48.6 degree window through the top's waves (the view up, else
+the screen where the view up does not reach: never smeared from the view's edge) and the exact
+Fresnel terms for light leaving water mirror the inside past it (marched from the top along the
+mirrored ray, else the water's own light). The window's light is n^2 the air's and flickers with
+the top's caustics. The room over the pool is warped twice, once by each surface. The cost: only the
+underside's pixels pay; one caustic sum, the lamps' loop over the pixel's cluster, a three-tap
+Fresnel and a screen-space march only where the top reflects totally or the view up misses, the
+same class of work as the surface seen from below (`water.below`), which marches every pixel.
+
 **Built (M24h3, the caustics and the shafts; `render/wgsl/water_body.wgsl`).** THE CAUSTICS are the
 real surface's: a ray through it is bent by its slope (by 1 - 1/n, about a quarter), so the patch of
 surface over a point maps onto the bed with the Jacobian I + s H (H the height's curvature summed
