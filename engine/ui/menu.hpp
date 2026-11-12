@@ -23,10 +23,15 @@
 // or closed, and `back` on the root page (the game decides: nothing, a quit prompt, resume).
 // The menu never calls the game, so the game's state stays the game's and a menu replays.
 //
+// THE SOUND A FRAME MAKES (`menu_cue`): the one click a game plays for a frame's presses, by what
+// they did: the focus moved, a value changed, a page or an action entered, a page left or the menu
+// closed. One a frame, the strongest (`louder`), so a press that opens a page does not also click
+// as a move. The menu plays nothing itself: the game maps each cue to its own recording.
+//
 // ge:summary Menus as a model: pages, items (action toggle choice slider label back), focus, events
 // ge:keywords ui menu main-menu front-door title page item button action toggle choice slider
 // ge:keywords label back focus navigation cursor keyboard gamepad pointer mouse event options
-// ge:keywords pause settings
+// ge:keywords pause settings menu-sound menu-cue click navigate-sound
 // ge:skill ui
 // ge:test tests/ui_menu_test.cpp
 #pragma once
@@ -123,6 +128,13 @@ class Menu {
   std::deque<Page> pages_;  // a deque: a page added keeps the others where they are
   std::vector<std::string> stack_;
 };
+
+// The sound a frame's presses make (the header), weakest first: a later one wins a frame.
+enum class MenuCue : uint8_t { none, move, change, enter, back };
+inline MenuCue louder(MenuCue a, MenuCue b) { return a > b ? a : b; }
+// The cue of a frame's `events` (opened and activated: enter; changed: change; closed and
+// back_at_root: back), else `move` when the focus moved (`moved`), else none.
+MenuCue menu_cue(const std::vector<MenuEvent>& events, bool moved);
 
 // The value an item shows on its right: "ON"/"OFF", the choice, the slider's number with its unit.
 std::string item_value(const Item& item, std::string_view on = "ON", std::string_view off = "OFF");
