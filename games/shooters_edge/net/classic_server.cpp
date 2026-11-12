@@ -306,6 +306,7 @@ void relay_voice(ClassicServer& s, int slot, const ClcMsg& m) {
     s.counts.voice_out++;
   }
   if (s.mvd) mvd_voice(*s.mvd, v);
+  for (MultiviewRecorder* r : s.streams) mvd_voice(*r, v);
 }
 
 void handle_packet(ClassicServer& s, int slot, const uint8_t* data, size_t size) {
@@ -720,6 +721,27 @@ std::string status_text(const ClassicServer& s, int opt) {
   return t;
 }
 
+void status_players(const ClassicServer& s, std::vector<gn::StatusPlayer>& out) {
+  out.clear();
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    const ClassicClient& c = s.clients[i];
+    if (c.state == ConnState::free) continue;
+    gn::StatusPlayer p;
+    p.name = c.name;
+    p.team = info_get(c.userinfo, "team");
+    p.score = c.rules_active ? static_cast<int32_t>(s.game->world.clients[i].numbers.frags) : 0;
+    const int ping = c.state != ConnState::spawned || c.ping_samples == 0
+                         ? 0
+                         : static_cast<int>(c.ping_s * 1000);
+    p.ping_ms = static_cast<uint16_t>(ping < 0 ? 0 : ping > 9999 ? 9999 : ping);
+    const double minutes = (s.game->sv.time - c.connect_time) / 60;
+    p.minutes = static_cast<uint16_t>(minutes < 0 ? 0 : minutes > 65535 ? 65535 : minutes);
+    p.flags = static_cast<uint8_t>((c.local ? gn::kPlayerBot : 0) |
+                                   (c.spectator ? gn::kPlayerSpectator : 0));
+    out.push_back(std::move(p));
+  }
+}
+
 EntityState entity_state(const ClassicServer& s, int e) {
   EntityState st;
   st.number = e;
@@ -803,6 +825,7 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
   route_events(s);
   tell_frags(s);
   if (s.mvd) mvd_frame(s, *s.mvd);
+  for (MultiviewRecorder* r : s.streams) mvd_frame(s, *r);
 
   for (int i = 0; i < sh::kMaxClients; i++) {
     ClassicClient& c = s.clients[i];
