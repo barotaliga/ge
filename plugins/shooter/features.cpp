@@ -49,12 +49,13 @@ constexpr Features kKeys = of({Feature::lookway, Feature::press, Feature::counte
 // -2.9 on dm2 and +1.3 on e1m2 a match head to head, the air share 0.33 -> 0.44 (people 0.46);
 // `airview` on: +1.7 on dm2 and +4.8 on e1m2 a match head to head; `airwall` on: even head to
 // head, +0.05 on dm2 and -0.4 on e1m2, hop flights colliding 36 -> 31 %; `chainhop` on: +4.5 on
-// dm2 and +2.4 on e1m2 a match head to head, the side with it faster).
+// dm2 and +2.4 on e1m2 a match head to head, the side with it faster; `leadwall` on: even head
+// to head, +0.4 on dm2 and 0.0 on e1m2, the rocket drill's direct hits on dm2 11.8 -> 12.5 %).
 constexpr Features kJudging = of({Feature::runupkeys, Feature::underway, Feature::gappast,
                                   Feature::airgap, Feature::pilotcast, Feature::landwall,
                                   Feature::circlekeys, Feature::circleview,
-                                  Feature::circleaim, Feature::leadwall,
-                                  Feature::leadmean, Feature::leadarc});
+                                  Feature::circleaim, Feature::leadmean,
+                                  Feature::leadarc});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

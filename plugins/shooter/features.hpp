@@ -87,7 +87,7 @@
 //   goes at once (pilot.cpp `no_circle`), and a holder's spot watched gives way to a curve
 //   (watch.cpp); dropped with `circleview`, in no preset.
 // - `leadwall`: a target's predicted way slid along the walls it meets (bot.cpp `lead_slide`),
-//   not run on through them (M18r.md 0s); judging.
+//   not run on through them (M18r.md 0s); on.
 // - `leadmean`: a projectile led on the target's drift (his course averaged over 0.5 s) as the
 //   flight lengthens, his swing's middle (bot.cpp); not kept (an expert's direct hits fell),
 //   in no preset.
