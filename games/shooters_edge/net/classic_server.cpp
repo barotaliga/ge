@@ -131,6 +131,21 @@ int rate_of(const ClassicServer& s, const std::string& info) {
   return rate < 500 ? 500 : rate > 300000 ? 300000 : rate;
 }
 
+// A connecting client's VIP level (ServerConfig's notes): by a password word, by the address.
+int vip_level(const ClassicServer& s, const gn::Address& from, const std::string& spec,
+              const std::string& password) {
+  int level = 0;
+  for (size_t i = 0; i < s.cfg.vip_passwords.size(); i++) {
+    const std::string& word = s.cfg.vip_passwords[i];
+    if (word.empty() || word == "none" || (word != spec && word != password)) continue;
+    level = i < s.cfg.vip_values.size() ? s.cfg.vip_values[i] : static_cast<int>(i) + 1;
+    break;
+  }
+  if (const gs::BanEntry* e = gs::ban_match(s.vips, from, classic_unix_time(s)))
+    level = std::max(level, e->level);
+  return level;
+}
+
 void handle_connect(ClassicServer& s, const gn::Address& from, const std::string& text) {
   if (gs::ban_refuses(s.bans, s.cfg.ban_mode, from, classic_unix_time(s))) {
     reject(s, from, "You are banned from this server.");
@@ -164,18 +179,22 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   }
   bool spectator = false;
   const std::string spec = info_get(userinfo, "spectator");
-  if (!spec.empty() && spec != "0") {
-    if (!s.cfg.spectator_password.empty() && s.cfg.spectator_password != "none" &&
+  const bool watching = !spec.empty() && spec != "0";
+  const int vip = vip_level(s, from, watching ? spec : "", info_get(userinfo, "password"));
+  if (watching) {
+    if (vip == 0 && !s.cfg.spectator_password.empty() && s.cfg.spectator_password != "none" &&
         spec != s.cfg.spectator_password) {
       reject(s, from, "requires a spectator password");
       return;
     }
     spectator = true;
-  } else if (!s.cfg.password.empty() && s.cfg.password != "none" &&
+  } else if (vip == 0 && !s.cfg.password.empty() && s.cfg.password != "none" &&
              info_get(userinfo, "password") != s.cfg.password) {
     reject(s, from, "server requires a password");
     return;
   }
+  info_remove(userinfo, "*VIP");
+  if (vip > 0) info_set(userinfo, "*VIP", std::to_string(vip));
   info_remove(userinfo, "spectator");
   info_remove(userinfo, "password");
   if (spectator) info_set(userinfo, "*spectator", "1");
@@ -196,7 +215,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   }
   const int maxclients = s.game->sv.set.maxclients;
   // Spectators in their own slots (sv_maxspectators): the players' and theirs counted apart.
-  if (s.cfg.max_spectators > 0) {
+  if (s.cfg.max_spectators > 0 || s.cfg.max_vip_spectators > 0) {
     int players = 0, watchers = 0;
     for (int i = 0; i < maxclients && i < sh::kMaxClients; i++) {
       const ClassicClient& c = s.clients[i];
@@ -205,12 +224,14 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
       else if (s.game->clients[i].active)
         players++;
     }
-    const int most = maxclients - s.cfg.max_spectators;
+    // A VIP may watch from the VIP spectator slots too (sv_maxvipspectators).
+    const int vip_seats = std::max(0, s.cfg.max_vip_spectators);
+    const int most = maxclients - s.cfg.max_spectators - vip_seats;
+    const int watch_seats = s.cfg.max_spectators + (vip > 0 ? vip_seats : 0);
     if (!spectator && players >= most) {
       const int svf = std::atoi(info_get(userinfo, "svf").c_str());
-      const bool forced =
-          watchers < s.cfg.max_spectators && ((s.cfg.full_spectate == 1 && (svf & 2) == 0) ||
-                                              (s.cfg.full_spectate == 2 && (svf & 1) != 0));
+      const bool forced = watchers < watch_seats && ((s.cfg.full_spectate == 1 && (svf & 2) == 0) ||
+                                                     (s.cfg.full_spectate == 2 && (svf & 1) != 0));
       if (!forced) {
         reject(s, from, "server is full");
         return;
@@ -218,7 +239,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
       send_oob_print(s, from, "server is full: connecting as spectator\n");
       spectator = true;
       info_set(userinfo, "*spectator", "1");
-    } else if (spectator && watchers >= s.cfg.max_spectators) {
+    } else if (spectator && watchers >= watch_seats) {
       reject(s, from, "server is full");
       return;
     }

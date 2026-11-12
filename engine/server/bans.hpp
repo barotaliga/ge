@@ -15,12 +15,17 @@
 // `removeip <pattern>`, `listip`, `writeip` (the list as `addip` lines, for a cfg the server runs
 // at start). Entries past their time are dropped when the list is next checked.
 //
+// A VIP LIST is the same list with a level in place of ban or safe (`vip_command`):
+// `vip_addip <pattern> [level]` (1 when left out), `vip_removeip`, `vip_listip`, `vip_writeip`;
+// `ban_match` finds the entry whose level an address gets.
+//
 // The clock is the caller's (`now`, Unix seconds), so a list never reads one itself. A simulated
 // address counts as the IPv4 address net/address.hpp maps it to.
 //
 // ge:summary A server's ban list by address: patterns, ban or safe, times, the mode, the words
 // ge:keywords ban banlist addip removeip listip writeip filterban sv_banmode ban-mode safe-entry
-// ge:keywords address-filter subnet ip-ban banned ban_command ban_refuses
+// ge:keywords address-filter subnet ip-ban banned ban_command ban_refuses vip vip_addip vip-list
+// ge:keywords vip_command vip-level
 // ge:skill net
 // ge:test tests/server_bans_test.cpp
 #pragma once
@@ -36,10 +41,11 @@ namespace ge::server {
 
 struct BanEntry {
   std::string text;   // the pattern as written
+  int64_t until = 0;  // Unix seconds it ends at (0: never)
+  int level = 0;      // a VIP list's level (at least 1)
   uint32_t ip = 0;    // the pattern's address, most significant byte first
   uint32_t mask = 0;  // the bits that must match
   bool safe = false;  // never refused; a vote may not ban it
-  int64_t until = 0;  // Unix seconds it ends at (0: never)
 };
 
 struct BanList {
@@ -55,5 +61,7 @@ bool ban_refuses(const BanList& list, int ban_mode, const net::Address& a, int64
 // A console line when it is one of the list's words: true, its answer in `out` (`writeip`'s is
 // the cfg lines). Expired entries are dropped first.
 bool ban_command(BanList& list, std::string_view line, int64_t now, std::string& out);
+// The same for a VIP list's words (above).
+bool vip_command(BanList& list, std::string_view line, int64_t now, std::string& out);
 
 }  // namespace ge::server

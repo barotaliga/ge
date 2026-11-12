@@ -101,6 +101,12 @@ struct ServedFile {
 // from an address it refuses under `ban_mode` (sv_banmode: 1 the list bans, 0 only the list joins)
 // is refused: "You are banned from this server."; `writeip` saves it to `ban_file` (empty: it only
 // answers the lines), which the game reads back at start.
+// THE VIPS: a client whose `password` (a spectator's `spectator` value, then `password`) is a
+// word of `vip_passwords`, or whose address is on `ClassicServer::vips`, is a VIP: its level is
+// the word's place counted from 1 (or `vip_values`' number at that place; 0 is no VIP) or the
+// address's, the higher one; it skips both passwords, may watch from `max_vip_spectators` extra
+// spectator slots, and carries `*VIP <level>` in its user info for the mod. `vip_writeip` saves
+// the address list to `vip_file`.
 // THE GUARDS (never on a local seat): a client unheard for `timeout_s` is dropped and everyone
 // told "<name> timed out"; a `say` or `say_team` past the flood rule (engine/server/guards.hpp)
 // is dropped and only its sender told why.
@@ -135,6 +141,9 @@ struct ServerConfig {
   std::string password, spectator_password;
   std::string rcon_password;  // the remote console's (classic_admin.hpp; empty: none offered)
   std::string ban_file;
+  std::vector<std::string> vip_passwords;  // sv_vippassword's words
+  std::vector<int> vip_values;             // sv_vipvalues' numbers
+  std::string vip_file;
   std::string flood_msg;                // sv_floodprotmsg: what a flooder is told ("": the silence)
   std::string default_name = "player";  // sv_defaultname
   int rcon_time_s = 60;                 // sv_rcontime
@@ -148,10 +157,11 @@ struct ServerConfig {
   uint32_t seed = 1;                    // the challenges' stream
   // Players at most, the game's local seats counted (0: the loop's slots): a coop game's eight.
   int most_players = 0;
-  int max_spectators = 0;  // sv_maxspectators
-  int full_spectate = 2;   // sv_fullspectate
-  int max_ping_ms = 0;     // sv_maxping
-  int min_ping_ms = 0;     // sv_minping
+  int max_spectators = 0;      // sv_maxspectators
+  int max_vip_spectators = 0;  // sv_maxvipspectators
+  int full_spectate = 2;       // sv_fullspectate
+  int max_ping_ms = 0;         // sv_maxping
+  int min_ping_ms = 0;         // sv_minping
   Ext offered = first_tier();
   bool rcon_crypt = false;           // sv_rconcrypt
   bool verify_move_checksum = true;  // false: moves are accepted unchecked (and counted)
@@ -266,6 +276,7 @@ struct Challenge {
 struct ClassicServer {
   ServerConfig cfg;
   gs::BanList bans;
+  gs::BanList vips;
   const sv::RulesRunner* rules = nullptr;  // the rules served (their map started)
   sv::RulesCommon* game = nullptr;         // what every runner keeps: `*rules`'s
   gn::Transport* transport = nullptr;

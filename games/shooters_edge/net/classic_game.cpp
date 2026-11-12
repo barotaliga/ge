@@ -158,6 +158,12 @@ constexpr gs::GameRule kEndpointRules[] = {
      "1: the remote console takes only a hashed password, never the password itself (0)"},
     {"sv_rcontime", "seconds a hashed remote console line's time may be off, 0..3600 (0: any; 60)"},
     {"sv_rconrate", "remote console tries answered a second, 0..1000 (0: no limit; 10)"},
+    {"sv_vippassword",
+     "passwords, spaces between, any of which makes a client a VIP: no passwords asked, the VIP "
+     "spectator slots (empty: none)"},
+    {"sv_vipvalues",
+     "the VIP level each sv_vippassword word gives, spaces between (empty: 1, 2, ..)"},
+    {"sv_maxvipspectators", "spectator slots only a VIP may take, 0..32 (0)"},
     {"sv_banmode",
      "1: addresses on the ban list (addip) are refused; 0: only those on it may join (1)"},
     {"maxfps", "the most moves a second a client sends, told in the server info (77)"},
@@ -257,6 +263,9 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_timestamplen", "sv_rcontime"},
     {"sv_rconlim", "sv_rconrate"},
     {"filterban", "sv_banmode"},
+    {"vip_password", "sv_vippassword"},
+    {"vip_values", "sv_vipvalues"},
+    {"maxvip_spectators", "sv_maxvipspectators"},
 };
 
 // The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
@@ -352,6 +361,36 @@ bool info_flood(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error
   return true;
 }
 
+// sv_vippassword's words and sv_vipvalues' numbers.
+bool vip_words(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
+  auto words = [](const std::string& text) {
+    std::vector<std::string> out;
+    for (size_t at = 0; at < text.size();) {
+      const size_t end = std::min(text.find(' ', at), text.size());
+      if (end > at) out.push_back(text.substr(at, end - at));
+      at = end + 1;
+    }
+    return out;
+  };
+  if (const auto p = c.rules.find("sv_vippassword"); p != c.rules.end())
+    cfg.vip_passwords = words(p->second);
+  if (const auto v = c.rules.find("sv_vipvalues"); v != c.rules.end()) {
+    cfg.vip_values.clear();
+    for (const std::string& n : words(v->second)) {
+      char* end = nullptr;
+      const long level = std::strtol(n.c_str(), &end, 10);
+      if (end == n.c_str() || *end != '\0' || level < 0 || level > 1000000) {
+        error = "sv_vipvalues \"" + v->second + "\": \"" + n +
+                "\" is not a level; give whole numbers 0 or more, spaces between "
+                "(--explain=sv_vipvalues shows where it was set)";
+        return false;
+      }
+      cfg.vip_values.push_back(static_cast<int>(level));
+    }
+  }
+  return true;
+}
+
 bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
   int watervis = 0, reconnect_wait = static_cast<int>(cfg.reconnect_wait_s);
   int antilag = cfg.antilag ? 1 : 0, voice = cfg.voice ? 1 : 0;
@@ -369,7 +408,8 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
       !endpoint_int(c, "sv_rcontime", 0, 3600, cfg.rcon_time_s, error) ||
       !endpoint_int(c, "sv_rconrate", 0, 1000, cfg.rcon_rate, error) ||
       !endpoint_int(c, "sv_banmode", 0, 1, cfg.ban_mode, error) ||
-      !endpoint_int(c, "maxfps", 20, 1000, cfg.maxfps, error) ||
+      !endpoint_int(c, "sv_maxvipspectators", 0, 32, cfg.max_vip_spectators, error) ||
+      !vip_words(c, cfg, error) || !endpoint_int(c, "maxfps", 20, 1000, cfg.maxfps, error) ||
       !endpoint_int(c, "sv_download", 0, 1, all, error) ||
       !endpoint_int(c, "sv_download_skins", 0, 1, skins, error) ||
       !endpoint_int(c, "sv_download_models", 0, 1, models, error) ||
@@ -423,7 +463,10 @@ bool read_game_file(void* ctx, const std::string& name, std::vector<uint8_t>& by
 
 // The loop's client slots: the players' and, when spectators have their own, theirs.
 int slots(const gs::ServerConfig& c) {
-  return std::min(sh::kMaxClients, c.maxclients + std::max(0, c.max_spectators));
+  int vip = 0;
+  if (const auto v = c.rules.find("sv_maxvipspectators"); v != c.rules.end())
+    vip = std::max(0, std::atoi(v->second.c_str()));
+  return std::min(sh::kMaxClients, c.maxclients + std::max(0, c.max_spectators) + vip);
 }
 
 // The mod's rules on the map `name`, set from the settings: into `map` and `rules`.
@@ -681,8 +724,10 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.rcon_password = c.rcon_password;
   g->cfg.unix_time = [] { return static_cast<int64_t>(std::time(nullptr)); };  // rcon, bans
   // The ban list beside the game's files, where a dedicated server keeps its own (writeip).
-  if (g->host == nullptr && !g->files.folder.empty())
+  if (g->host == nullptr && !g->files.folder.empty()) {
     g->cfg.ban_file = (std::filesystem::path(g->files.folder) / "listip.cfg").string();
+    g->cfg.vip_file = (std::filesystem::path(g->files.folder) / "vip_ip.cfg").string();
+  }
   g->cfg.seed = c.seed;
   g->cfg.timeout_s = c.timeout_s;
   g->cfg.flood_msg = c.floodprot_msg;
@@ -1172,13 +1217,21 @@ void frame(void* g) {
   lobby_words(game);
 }
 
-// The ban list `writeip` saved, read back at start (a line it does not take is left out).
+// The ban and VIP lists `writeip` and `vip_writeip` saved, read back at start (a line they do not
+// take is left out).
 void load_bans(ClassicServer& s) {
-  if (s.cfg.ban_file.empty()) return;
-  std::ifstream f(s.cfg.ban_file);
   std::string line, out;
-  while (std::getline(f, line))
-    if (line.rfind("addip ", 0) == 0) gs::ban_command(s.bans, line, classic_unix_time(s), out);
+  if (!s.cfg.ban_file.empty()) {
+    std::ifstream f(s.cfg.ban_file);
+    while (std::getline(f, line))
+      if (line.rfind("addip ", 0) == 0) gs::ban_command(s.bans, line, classic_unix_time(s), out);
+  }
+  if (!s.cfg.vip_file.empty()) {
+    std::ifstream f(s.cfg.vip_file);
+    while (std::getline(f, line))
+      if (line.rfind("vip_addip ", 0) == 0)
+        gs::vip_command(s.vips, line, classic_unix_time(s), out);
+  }
 }
 
 bool serve(void* g, ge::net::Transport& port, std::string& error) {

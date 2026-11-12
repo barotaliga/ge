@@ -57,3 +57,18 @@ TEST(entries_end_at_their_time_and_the_words_list_and_write_them) {
   CHECK(out.find("neither ban, safe") != std::string::npos);
   CHECK(!gs::ban_command(list, "status", 0, out));
 }
+
+TEST(a_vip_list_gives_its_addresses_a_level) {
+  gs::BanList vips;
+  std::string out;
+  CHECK(gs::vip_command(vips, "vip_addip 10.1 4", 0, out) && out == "added 10.1 4\n");
+  CHECK(gs::vip_command(vips, "vip_addip 10.2", 0, out) && out == "added 10.2 1\n");
+  const gs::BanEntry* e = gs::ban_match(vips, gn::ipv4(10, 1, 7, 7, 1), 0);
+  CHECK(e != nullptr && e->level == 4);
+  CHECK(gs::vip_command(vips, "vip_writeip", 0, out) &&
+        out == "vip_addip 10.1 4\nvip_addip 10.2 1\n");
+  CHECK(gs::vip_command(vips, "vip_addip 10.3 safe", 0, out));
+  CHECK(out.find("is not a level") != std::string::npos);
+  CHECK(!gs::vip_command(vips, "addip 10.3", 0, out));  // a ban list's word
+  CHECK(!gs::ban_command(vips, "vip_listip", 0, out));
+}
