@@ -20,6 +20,7 @@
 #include "core/num.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
+#include "shooters_edge/server/sequel_monsters.hpp"
 
 namespace shooters_edge::server {
 
@@ -31,6 +32,7 @@ constexpr float kMass = 200;    // a player's
 constexpr float kRange = 8192;  // a line shot's reach
 constexpr float kStep = 0.1f;   // a rules frame, s
 constexpr int32_t kWorldMask = sh::kSqSolid | sh::kSqWindow;
+constexpr int32_t kShotMask = kWorldMask | sh::kSqMonster;  // a shot stops at a monster too
 constexpr int32_t kSurfSky = 0x4;  // a sky surface: a shot that reaches it is gone
 constexpr uint32_t kEveryone = 0xffffffffu;
 constexpr const char* kMissileModels[kSqShotKinds] = {"models/objects/laser/tris.md2",
@@ -182,9 +184,10 @@ float enter_box(sh::Vec3f from, sh::Vec3f to, sh::Vec3f lo, sh::Vec3f hi) {
 
 // A line from `from` to `to` through the walls and the living players (not those in `skip`, a
 // bit per slot).
-Line shoot_line(SequelServer& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip) {
+Line shoot_line(SequelServer& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip,
+                int skip_entity = -1) {
   Line out;
-  const sh::SequelTrace t = map_trace(s, from, {}, {}, to, kWorldMask);
+  const sh::SequelTrace t = map_trace(s, from, {}, {}, to, kShotMask, skip_entity);
   out.fraction = t.start_solid ? 0 : t.fraction;
   out.normal = t.normal;
   out.sky = t.fraction < 1 && (t.surface_flags & kSurfSky) != 0;
@@ -463,6 +466,7 @@ void throw_grenade(SequelServer& s, int slot, float speed, double fuse) {
 
 void fire(SequelServer& s, int slot, int shots) {
   SequelPlayer& p = s.players[slot];
+  if (p.silencer_shots <= 0) monster_noise(s, slot);
   const int w = p.hand.weapon;
   const SqWeaponRow& r = kSqWeapons[w];
   const sh::Vec3f origin = unpack(p.move.origin);
@@ -748,7 +752,15 @@ void fight_missiles(SequelServer& s) {
     if (grenade(m.kind)) m.velocity.z -= gravity * kStep;
     const sh::Vec3f to = m.origin + m.velocity * kStep;
     const uint32_t owner = m.owner >= 0 ? 1u << m.owner : 0u;
-    const Line l = shoot_line(s, m.origin, to, owner);
+    const Line l = shoot_line(s, m.origin, to, owner, m.from);
+    // A direct hit on a monster: its blow, then as against a wall (a grenade bursts on it).
+    if (l.player < 0 && l.fraction < 1 && l.mover >= 0 && monster_index(s, l.mover) >= 0) {
+      monster_damage(s, l.mover, m.owner, m.damage, m.velocity);
+      if (grenade(m.kind)) {
+        explode(s, m, l.end, -1);
+        continue;
+      }
+    }
     if (l.player >= 0) {
       const int hit = l.player;
       switch (m.kind) {
@@ -876,7 +888,9 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
     line = victim + words;
   } else {
     p.frags -= 1;
-    if (killer == slot && weapon == kSqByHeldGrenade)
+    if (monster_obituary(weapon) != nullptr)
+      line = victim + " was killed by " + monster_obituary(weapon) + ".";
+    else if (killer == slot && weapon == kSqByHeldGrenade)
       line = victim + " held on to a grenade too long.";
     else if (killer == slot &&
              (weapon == int(SqWeapon::rocket_launcher) ||
@@ -1169,5 +1183,62 @@ void fight_print(SequelServer& s, int slot, const std::string& text) {
   else
     print_to(s, slot, text);
 }
+
+void fight_monster_bullet(SequelServer& s, int from, sh::Vec3f start, sh::Vec3f end, int damage,
+                          int kick, int cause) {
+  const Line l = shoot_line(s, start, end, 0, from);
+  sh::Vec3f dir = end - start;
+  sh::normalize(dir);
+  if (l.player >= 0) {
+    hurt(s, l.player, -1, dir, damage, kick, false, cause);
+    effect(s, "te_blood", l.end);
+  } else if (l.fraction < 1 && !l.sky) {
+    if (l.mover >= 0 && monster_index(s, l.mover) >= 0)
+      monster_damage(s, l.mover, -1, damage, dir);
+    else
+      map_damage(s, l.mover, -1, damage);
+    effect(s, "te_gunshot", l.end);
+  }
+}
+
+void fight_monster_launch(SequelServer& s, int from, SqShot kind, sh::Vec3f start, sh::Vec3f dir,
+                          int damage, float speed, int cause) {
+  SequelMissile* m = new_missile(s);
+  if (m == nullptr) return;
+  *m = SequelMissile{};
+  m->live = true;
+  m->kind = kind;
+  m->owner = -1;
+  m->from = from;
+  m->weapon = cause;
+  m->origin = start;
+  m->damage = damage;
+  m->velocity = dir * speed;
+  m->dies_at = s.level_time + (kind == SqShot::grenade ? 2.5 : 8000.0 / double(speed));
+  if (kind == SqShot::grenade) {
+    m->velocity.z += 200;
+    m->radius_damage = damage;
+    m->radius = 160;
+  } else if (kind == SqShot::rocket) {
+    m->radius_damage = damage + 20;
+    m->radius = float(damage + 40);
+  }
+}
+
+void fight_drop_at(SequelServer& s, sh::Vec3f at, const std::string& classname) {
+  const int item = sq_item(classname);
+  if (item < 0) return;
+  for (SequelDrop& d : s.drops) {
+    if (d.live) continue;
+    d = SequelDrop{};
+    d.live = true;
+    d.item = item;
+    d.origin = at;
+    d.velocity = {0, 0, 300};
+    return;
+  }
+}
+
+void fight_gib(SequelServer& s, int ent, sh::Vec3f at) { gib(s, ent, at); }
 
 }  // namespace shooters_edge::server

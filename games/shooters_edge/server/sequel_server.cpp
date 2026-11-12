@@ -21,6 +21,7 @@
 #include "progs/text.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
+#include "shooters_edge/server/sequel_monsters.hpp"
 
 namespace shooters_edge::server {
 
@@ -430,6 +431,7 @@ void rules_frame(SequelServer& s) {
     return;
   }
   map_frame(s);
+  monster_frame(s);
   fight_missiles(s);
   fight_drops(s);
   for (int i = 0; i < sh::kMaxClients; i++) {  // the hands no command stepped this frame
@@ -506,6 +508,7 @@ void fill_rows(SequelServer& s) {
     if (m.item >= 0) w.entities[1 + sh::kMaxClients + i].free = m.gone || m.hidden;
   }
   map_rows(s);
+  monster_rows(s);
   fight_rows(s);
   mirror_pool(s);
 }
@@ -621,6 +624,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   }
   s.sounds.assign(1, "");
   fight_precache(s);
+  monster_precache(s);
   fight_clear(s);
   s.models.push_back(kSequelPlayerModel);
   drop_items(s);
@@ -628,6 +632,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   s.level_time = 0;
   s.exit_now = false;
   map_spawn(s);
+  monster_spawn(s);
   s.host_time = 0;
   s.map_stopped = false;
   s.pending_map.clear();

@@ -119,6 +119,32 @@ struct SequelEntity {
   // is turning to, a door's two angles, and the axis it turns about (a unit vector of angles).
   bool turns = false;
   sh::Vec3f avelocity, adest, closed_angles, open_angles, axis;
+  bool box = false;  // a box that stops what is traced against monsters (a living monster)
+};
+
+// A monster of the single player (sequel_monsters.hpp): its map entity and its mind.
+struct SequelMonster {
+  int entity = -1;
+  int kind = 0;    // its row in the roster
+  int enemy = -1;  // the slot it hunts; -1 none
+  float ideal_yaw = 0;
+  sh::Vec3f velocity;  // its fall, a blow's push
+  bool on_ground = false;
+  sh::Vec3f last_sight;  // where it last saw (or heard) its enemy
+  double seen_at = -100;
+  double attack_finished = 0;  // the next missile attack's earliest time
+  double busy_until = 0;       // an attack's wind-up, shots and recovery
+  double fire_at = 0, burst_until = 0;
+  int attack = 0;  // the attack in progress: 0 the melee, n the n-th missile attack
+  int burst_frame = 0;
+  double pain_at = -100, pain_hold = 0;
+  int corner = -1;       // the `path_corner` it walks to
+  int combat = -1;       // the `point_combat` it runs to on finding an enemy
+  bool hold = false;     // holds its ground (at its combat point)
+  bool ambush = false;   // wakes only by seeing or being hurt
+  bool waiting = false;  // hidden until used
+  bool dead = false;
+  std::string item;  // dropped at death
 };
 
 struct SequelPlayer {
@@ -160,9 +186,11 @@ struct SequelPlayer {
   double air_until = 0, drown_at = 0;
   int drown_damage = 2;
   float old_fall = 0;
-  bool gibbed = false;      // died under −40: his body is gone (no model)
-  int ground = -1;          // the world row he stands on (0 the world, a mover's row), -1 none
-  double windfly_at = -10;  // the last push's sound
+  bool gibbed = false;        // died under −40: his body is gone (no model)
+  int ground = -1;            // the world row he stands on (0 the world, a mover's row), -1 none
+  double windfly_at = -10;    // the last push's sound
+  int64_t noise_frame = -10;  // the rules frame of his last noise a monster may hear (his weapon)
+  sh::Vec3f noise_at;
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.
@@ -177,6 +205,7 @@ struct SequelMissile {
   int radius_damage = 0;
   float radius = 0;
   bool resting = false;  // a grenade come to rest on a floor
+  int from = -1;         // the map entity that fired it (a monster); -1 a player
 };
 inline constexpr int kSequelMissiles = 64;  // the rows the world keeps for shots in flight
 
@@ -251,6 +280,13 @@ struct SequelServer : RulesCommon {
   // The area portals by number, open or shut (a door opens those its target names); what is sent
   // to a client is cut at a shut one once the map's areas are read.
   std::vector<uint8_t> portals;
+  // The monsters (sequel_monsters.hpp), the level's count, and who saw a player last: the map
+  // entity and its frame, and the player the monsters look at this frame.
+  std::vector<SequelMonster> monsters;
+  int monsters_total = 0, monsters_killed = 0;
+  int sight_entity = -1;
+  int64_t sight_frame = -10;
+  int sight_client = -1;
 
   SequelServer();
   ~SequelServer();

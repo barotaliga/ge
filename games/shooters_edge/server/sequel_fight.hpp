@@ -45,6 +45,8 @@ inline constexpr int kSqByFall = 100, kSqByLava = 101, kSqBySlime = 102, kSqByWa
 inline constexpr int kSqByHeldGrenade = 104;
 // A mover's crush, a hurting trigger, a teleport onto someone, a map's explosion.
 inline constexpr int kSqByCrush = 105, kSqByHurt = 106, kSqByTelefrag = 107, kSqByExplosion = 108;
+// A monster's attack: this plus its row in the roster (sequel_monsters.cpp).
+inline constexpr int kSqByMonster = 200;
 
 // A blow to player `target` from `attacker` (a slot or -1) along `dir` (zero: no push), by
 // `weapon` (a weapon or a `kSqBy*`); `flags` 1 passes armour by, 2 passes invulnerability by.
@@ -95,6 +97,17 @@ float fight_fov(const SequelServer& s, int slot);
 void fight_bury(SequelServer& s, int slot);
 // The scores, best first: one line a player ("  12  Ana").
 std::vector<std::string> fight_scores(const SequelServer& s);
+// A monster's (map entity `from`'s) bullet from `start` to `end`: players, monsters and walls;
+// `cause` names it in an obituary.
+void fight_monster_bullet(SequelServer& s, int from, sh::Vec3f start, sh::Vec3f end, int damage,
+                          int kick, int cause);
+// A monster's missile of `kind` from `start` along `dir` at `speed`.
+void fight_monster_launch(SequelServer& s, int from, SqShot kind, sh::Vec3f start, sh::Vec3f dir,
+                          int damage, float speed, int cause);
+// An item (`classname`) thrown up from `at`, as a monster drops it at death.
+void fight_drop_at(SequelServer& s, sh::Vec3f at, const std::string& classname);
+// A body thrown apart at `at`: entity row `ent`'s sound and the blood.
+void fight_gib(SequelServer& s, int ent, sh::Vec3f at);
 // A line printed to player `slot`, or to everyone with -1.
 void fight_print(SequelServer& s, int slot, const std::string& text);
 
