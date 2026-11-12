@@ -71,7 +71,7 @@ struct Frame {
   wgpu::Buffer uniforms;
   gr::FrameUniforms staged{};
   wgpu::BindGroupLayout layout;
-  wgpu::BindGroup frame;
+  ::ge::render::FrameGroup frame;  // group 0, and its parts for the passes that read few
   gr::Sky sky;
   gr::CloudPass clouds;
   gr::Bloom bloom;

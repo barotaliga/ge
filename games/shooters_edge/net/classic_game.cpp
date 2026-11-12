@@ -7,6 +7,7 @@
 // ge:test tests/shooters_edge_classic_game_test.cpp
 #include "shooters_edge/net/classic_game.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -30,6 +31,7 @@
 #include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_coop.hpp"
 #include "shooters_edge/net/classic_coop_game.hpp"
+#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_qtv.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
@@ -144,13 +146,30 @@ constexpr gs::GameRule kEndpointRules[] = {
     {"sv_antilag", "1: a shot sees the others where the shooter saw them (0)"},
     {"sv_voip", "1: players' voice is relayed to their team (0)"},
     {"maxfps", "the most moves a second a client sends, told in the server info (77)"},
-    {"allow_download", "0: no file is offered to a client that lacks one (1)"},
-    {"allow_download_skins", "0: no skins/ file is offered (1)"},
-    {"allow_download_models", "0: no progs/ model is offered (1)"},
-    {"allow_download_sounds", "0: no sound/ file is offered (1)"},
-    {"allow_download_maps", "0: no maps/ file is offered (1)"},
-    {"allow_download_other", "1: files outside those folders are offered too (0)"},
-    {"sv_downloadchunksperframe", "chunks of 1 KB a downloading client gets a frame, 1..30 (30)"},
+    {"sv_download", "0: no file is offered to a client that lacks one (1)"},
+    {"sv_download_skins", "0: no skins/ file is offered (1)"},
+    {"sv_download_models", "0: no progs/ model is offered (1)"},
+    {"sv_download_sounds", "0: no sound/ file is offered (1)"},
+    {"sv_download_maps", "0: no maps/ file is offered (1)"},
+    {"sv_download_other", "1: files outside those folders are offered too (0)"},
+    {"sv_downloadchunks", "chunks of 1 KB a downloading client gets a frame, 1..30 (30)"},
+    {"sv_watervis", "1: clients are told they may see through water (0)"},
+    {"sv_fullspectate",
+     "a player joining a full server while a spectator slot is free: 0 refused, 1 seated as a "
+     "spectator unless its user info's svf has bit 2, 2 only if it has bit 1 (2)"},
+    {"sv_reconnectwait",
+     "seconds a slot must have been connected before its address may connect again (0: no wait)"},
+    {"sv_maxping", "a player above this ping in ms on entering plays as a spectator (0: no most)"},
+    {"sv_minping", "each player's packets are held until its ping is at least this, ms (0: off)"},
+    {"sv_minpingcmd", "1: players may set the minimum ping with minping before a match (1)"},
+    {"sv_defaultname", "the name a client with an empty or unusable name gets (player)"},
+    {"sv_unfake",
+     "1: carriage returns in a public chat line become #, so no line fakes another (1)"},
+    {"sv_colorkick", "1: a client changing its top colour more than 6 times in 8 s is kicked (1)"},
+    {"sv_infoflood",
+     "\"N S\": a client changing its user info more than N times in S s is kicked; "
+     "0 in either: no limit",
+     "300 3"},
     // The stream port for classic relays (classic_qtv.hpp).
     {"qtv_streamport", "the TCP port classic relays take the match from, 0..65534 (0: none)"},
     {"qtv_maxstreams", "relays streamed at once (0 or less: no limit; 1)"},
@@ -197,6 +216,26 @@ constexpr gs::SettingName kSettingNames[] = {
     {"flood_msgs", "sv_floodprot", 0},
     {"flood_persecond", "sv_floodprot", 1},
     {"flood_waitdelay", "sv_floodprot", 2},
+    {"allow_download", "sv_download"},
+    {"allow_download_skins", "sv_download_skins"},
+    {"allow_download_models", "sv_download_models"},
+    {"allow_download_sounds", "sv_download_sounds"},
+    {"allow_download_maps", "sv_download_maps"},
+    {"allow_download_other", "sv_download_other"},
+    {"sv_downloadchunksperframe", "sv_downloadchunks"},
+    {"sv_default_name", "sv_defaultname"},
+    {"sv_forcespec_onfull", "sv_fullspectate"},
+    {"sv_reconnectlimit", "sv_reconnectwait"},
+    {"sv_enable_cmd_minping", "sv_minpingcmd"},
+    {"countrycode", "sv_country"},
+    {"city", "sv_city"},
+    {"coords", "sv_coords"},
+    {"hostport", "sv_publicaddr"},
+    {"sv_admininfo", "sv_admin"},
+    {"watervis", "sv_watervis"},
+    {"sv_kicktop", "sv_colorkick"},
+    {"sv_kickuserinfospamcount", "sv_infoflood", 0},
+    {"sv_kickuserinfospamtime", "sv_infoflood", 1},
 };
 
 // The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
@@ -260,7 +299,40 @@ bool qtv_settings(const gs::ServerConfig& c, int& port, QtvConfig& q, std::strin
   return true;
 }
 
+// A 0 or 1 endpoint rule into `on` (unset: left as it is).
+bool endpoint_flag(const gs::ServerConfig& c, const char* name, bool& on, std::string& error) {
+  int v = on ? 1 : 0;
+  if (!endpoint_int(c, name, 0, 1, v, error)) return false;
+  on = v != 0;
+  return true;
+}
+
+// sv_infoflood's "N S": the most user info changes in a window of S seconds.
+bool info_flood(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
+  const auto it = c.rules.find("sv_infoflood");
+  if (it == c.rules.end() || it->second.empty()) return true;
+  int count = 0;
+  double seconds = 0;
+  char* end = nullptr;
+  const char* p = it->second.c_str();
+  count = static_cast<int>(std::strtol(p, &end, 10));
+  const bool first = end != p;
+  p = end;
+  seconds = std::strtod(p, &end);
+  while (*end == ' ') end++;
+  if (!first || end == p || *end != '\0' || count < 0 || seconds < 0) {
+    error = "sv_infoflood \"" + it->second +
+            "\" is not two numbers \"N S\" of 0 or more (--explain=sv_infoflood shows where it was "
+            "set)";
+    return false;
+  }
+  cfg.info_flood_count = count;
+  cfg.info_flood_s = seconds;
+  return true;
+}
+
 bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
+  int watervis = 0, reconnect_wait = static_cast<int>(cfg.reconnect_wait_s);
   int antilag = cfg.antilag ? 1 : 0, voice = cfg.voice ? 1 : 0;
   int all = cfg.allow_download ? 1 : 0, skins = cfg.allow_skins ? 1 : 0;
   int models = cfg.allow_models ? 1 : 0, sounds = cfg.allow_sounds ? 1 : 0;
@@ -269,14 +341,35 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
       !endpoint_int(c, "sv_antilag", 0, 1, antilag, error) ||
       !endpoint_int(c, "sv_voip", 0, 1, voice, error) ||
       !endpoint_int(c, "maxfps", 20, 1000, cfg.maxfps, error) ||
-      !endpoint_int(c, "allow_download", 0, 1, all, error) ||
-      !endpoint_int(c, "allow_download_skins", 0, 1, skins, error) ||
-      !endpoint_int(c, "allow_download_models", 0, 1, models, error) ||
-      !endpoint_int(c, "allow_download_sounds", 0, 1, sounds, error) ||
-      !endpoint_int(c, "allow_download_maps", 0, 1, maps, error) ||
-      !endpoint_int(c, "allow_download_other", 0, 1, other, error) ||
-      !endpoint_int(c, "sv_downloadchunksperframe", 1, 30, cfg.chunks_per_frame, error))
+      !endpoint_int(c, "sv_download", 0, 1, all, error) ||
+      !endpoint_int(c, "sv_download_skins", 0, 1, skins, error) ||
+      !endpoint_int(c, "sv_download_models", 0, 1, models, error) ||
+      !endpoint_int(c, "sv_download_sounds", 0, 1, sounds, error) ||
+      !endpoint_int(c, "sv_download_maps", 0, 1, maps, error) ||
+      !endpoint_int(c, "sv_download_other", 0, 1, other, error) ||
+      !endpoint_int(c, "sv_downloadchunks", 1, 30, cfg.chunks_per_frame, error) ||
+      !endpoint_flag(c, "sv_unfake", cfg.unfake, error) ||
+      !endpoint_flag(c, "sv_colorkick", cfg.colour_kick, error) ||
+      !endpoint_int(c, "sv_watervis", 0, 1, watervis, error) ||
+      !endpoint_int(c, "sv_fullspectate", 0, 2, cfg.full_spectate, error) ||
+      !endpoint_int(c, "sv_maxping", 0, 10000, cfg.max_ping_ms, error) ||
+      !endpoint_int(c, "sv_minping", 0, 1000, cfg.min_ping_ms, error) ||
+      !endpoint_flag(c, "sv_minpingcmd", cfg.min_ping_cmd, error) ||
+      !endpoint_int(c, "sv_reconnectwait", 0, 3600, reconnect_wait, error) ||
+      !info_flood(c, cfg, error))
     return false;
+  if (const auto n = c.rules.find("sv_defaultname"); n != c.rules.end() && !n->second.empty()) {
+    if (sanitize_name(n->second, "") != n->second) {
+      error =
+          "sv_defaultname \"" + n->second +
+          "\" can't be a name: it holds \\ $ # \" ; or a line break, starts or ends with a space, "
+          "or is console (--explain=sv_defaultname shows where it was set)";
+      return false;
+    }
+    cfg.default_name = n->second;
+  }
+  cfg.reconnect_wait_s = reconnect_wait;
+  cfg.max_spectators = c.max_spectators;
   cfg.antilag = antilag != 0;
   cfg.voice = voice != 0;
   cfg.allow_download = all != 0;
@@ -296,6 +389,11 @@ bool read_game_file(void* ctx, const std::string& name, std::vector<uint8_t>& by
   if (found.empty()) return false;
   bytes.assign(found.begin(), found.end());
   return true;
+}
+
+// The loop's client slots: the players' and, when spectators have their own, theirs.
+int slots(const gs::ServerConfig& c) {
+  return std::min(sh::kMaxClients, c.maxclients + std::max(0, c.max_spectators));
 }
 
 // The mod's rules on the map `name`, set from the settings: into `map` and `rules`.
@@ -321,12 +419,12 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     so.clients_take_view = true;  // the classic protocol's clients take the server's view
     so.speedjump = speedjump;
     std::unique_ptr<sv::SequelServer> sq = sv::make_sequel_server(so);
-    sq->sv.set.maxclients = c.maxclients;
+    sq->sv.set.maxclients = slots(c);
     rules = sv::sequel_runner(std::move(sq));
   } else if (!g.module.empty()) {
     sv::QvmServerOptions so;
     so.seed = c.seed;
-    so.loop.maxclients = c.maxclients;
+    so.loop.maxclients = slots(c);
     so.loop.max_edicts = 1024;
     so.loop.move.speedjump = speedjump;
     so.read_file = &read_game_file;
@@ -340,7 +438,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
   } else {
     sv::QcServerOptions so;
     so.seed = c.seed;
-    so.loop.maxclients = c.maxclients;
+    so.loop.maxclients = slots(c);
     so.loop.max_edicts = 1024;
     so.loop.move.speedjump = speedjump;
     std::unique_ptr<sv::QcServer> qc = sv::make_qc_server(*g.program, so, error);
@@ -537,6 +635,13 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->vote.settings = gs::vote_settings(c);
   if (g->host != nullptr) host_bind(*g);
   g->cfg.hostname = c.hostname;
+  g->cfg.info = {{"countrycode", c.country},
+                 {"city", c.city},
+                 {"coords", c.coords},
+                 {"hostport", c.public_addr},
+                 {"*admin", c.admin}};
+  if (const auto w = c.rules.find("sv_watervis"); w != c.rules.end() && w->second == "1")
+    g->cfg.info.emplace_back("watervis", "1");
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
   g->cfg.rcon_password = c.rcon_password;
@@ -1060,6 +1165,9 @@ void net_frame(void* g, int64_t now_us) {
   if (game.coop) return coop_net_frame(*game.coop, now_us);
   if (game.room)
     cl::room_packets(*game.room, *game.rules, frame_msec(game), game.classic->local_moves);
+  const gs::LobbyPhase phase = game.room ? game.room->lobby.phase : gs::LobbyPhase::warmup;
+  game.classic->match_on = game.settings.lobby != 0 &&
+                           (phase == gs::LobbyPhase::countdown || phase == gs::LobbyPhase::match);
   classic_frame(*game.classic, now_us);
   if (game.qtv) qtv_update(*game.qtv, *game.classic);
   sync_host(game);

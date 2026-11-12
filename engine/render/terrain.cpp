@@ -470,7 +470,7 @@ void encode_terrain_overdraw(const Terrain& t, const gpu::PipelineSet& pipelines
   desc.colorAttachmentCount = 1;
   desc.colorAttachments = &colour;
   desc.depthStencilAttachment = &depth;
-  wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&desc);
+  wgpu::RenderPassEncoder pass = gpu::begin_render_pass(encoder, desc);
   draw_tiles(t, pass, after_prepass ? t.p_count_equal : t.p_count_greater, pipelines, frame);
   pass.End();
 }
@@ -493,7 +493,7 @@ void encode_terrain_wire(const Terrain& t, const gpu::PipelineSet& pipelines,
   desc.colorAttachmentCount = 1;
   desc.colorAttachments = &c;
   desc.depthStencilAttachment = &depth;
-  wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&desc);
+  wgpu::RenderPassEncoder pass = gpu::begin_render_pass(encoder, desc);
   pass.SetPipeline(pipelines.render(t.p_wire));
   pass.SetBindGroup(0, frame);
   pass.SetBindGroup(1, t.group);

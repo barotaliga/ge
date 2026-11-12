@@ -3,9 +3,11 @@
 // version 2 and taken by the hub's archive; the halls go in a content pack beside the web viewer
 // (`--viewer=<dir>`, the web build's `shooters_edge_viewer/`). The hub serves its Demo page, the
 // viewer's files, the pack and the demo over loopback HTTP, and a headless Chromium with WebGPU
-// (on its software adapter) opens the page: the viewer fetches the pack and the demo and draws the
-// match on the canvas. It answers whether the page starts the viewer with the right words, what a
-// visitor downloads (the viewer, the pack, the demo), and whether the picture is there.
+// (on its software adapter) opens the page, driven over its DevTools pipe so the picture is taken
+// after a wall-clock wait (hub_browser.hpp's `live_draw`): the viewer fetches the pack and the
+// demo and draws the match on the canvas. It answers whether the page starts the viewer with the
+// right words, what a visitor downloads (the viewer, the pack, the demo), and whether the picture
+// is there.
 //
 // The demo, the pack and the page are deterministic. The viewer's size is the web build's, and the
 // pictures are a browser's (GE_CHROMIUM or the container's), so both are measured. Without a built
@@ -25,6 +27,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "brush/write.hpp"
@@ -69,17 +72,10 @@ int64_t file_bytes(const fs::path& p) {
 }
 
 // The browser's flags for WebGPU on its software adapter (SwiftShader over Vulkan).
-std::string chromium_line(const std::string& browser, const std::string& url, const fs::path& png,
-                          int w, int h, int wait_ms) {
-  return "\"" + browser +
-         "\" --headless=new --no-sandbox --hide-scrollbars --enable-unsafe-webgpu "
-         "--enable-unsafe-swiftshader --use-webgpu-adapter=swiftshader --enable-features=Vulkan "
-         "--use-vulkan=swiftshader --use-angle=swiftshader --force-device-scale-factor=1 "
-         "--window-size=" +
-         std::to_string(w) + "," + std::to_string(h) + " --timeout=" + std::to_string(wait_ms) +
-         " --enable-logging=stderr --screenshot=\"" + png.string() + "\" \"" + url + "\" > \"" +
-         png.string() + ".log\" 2>&1";
-}
+const std::vector<std::string> kWebGpuFlags = {
+    "--enable-unsafe-webgpu",   "--enable-unsafe-swiftshader", "--use-webgpu-adapter=swiftshader",
+    "--enable-features=Vulkan", "--use-vulkan=swiftshader",    "--use-angle=swiftshader",
+    "--enable-logging=stderr"};
 
 void run(gl::Lab& lab) {
   std::string error;
@@ -200,10 +196,11 @@ void run(gl::Lab& lab) {
        {static_cast<int>(lab.arg_num("wait")), 2 * static_cast<int>(lab.arg_num("wait"))}) {
     const fs::path png = root / ("at-" + std::to_string(wait_s) + "s.png");
     std::atomic<bool> done{false};
+    std::optional<gl::Picture> pic;
     std::thread t([&] {
-      // A browser that fails leaves no picture, which the check after the loop reports.
-      [[maybe_unused]] const int rc = std::system(
-          chromium_line(browser, base + "/demo/" + row.sha, png, w, h, wait_s * 1000).c_str());
+      // A browser that fails leaves no picture, which the check below reports.
+      pic = gl::hub_browser::live_draw(browser, kWebGpuFlags, base + "/demo/" + row.sha, w, h,
+                                       wait_s * 1000, png, png.string() + ".log");
       done = true;
     });
     const gh::Poller none;
@@ -212,8 +209,8 @@ void run(gl::Lab& lab) {
       std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     t.join();
-    const std::optional<gl::Picture> pic = gl::read_png(png.string());
-    if (!pic) {
+    const std::optional<gl::Picture> got = std::move(pic);
+    if (!got) {
       lab.note("Chromium drew no picture after " + std::to_string(wait_s) + " s");
       continue;
     }
@@ -227,7 +224,7 @@ void run(gl::Lab& lab) {
               "the halls from a player's eye on the canvas; else the status line's reason (a "
               "renderer over the browser's limits names the world).",
               {{"wait_s", std::to_string(wait_s)}}},
-             *pic, gl::Det::measured);
+             *got, gl::Det::measured);
   }
   lab.metric("pages_drawn", drawn, "pictures", gl::Det::measured);
   gh::http_close(http);
@@ -251,8 +248,9 @@ const gl::LabSpec kSpec{
         {"minutes", "0.5", "the bots' match's length"},
         {"viewer", "build/web/shooters_edge_viewer", "the web build's viewer folder"},
         {"browser", "1", "open the page in a headless Chromium when one is found (0: never)"},
-        {"wait", "8",
-         "seconds the browser waits before its first picture (the second waits twice)"},
+        {"wait", "25",
+         "wall-clock seconds from opening the page to its first picture (the second waits twice); "
+         "a software GPU takes about 20 s to the first frame"},
         {"width", "1280", "the browser's window width, px"},
         {"height", "900", "the browser's window height, px"},
         {"keep", "0", "1: keep the hub's folders (the viewer, the pack, the archive) after a run"},
