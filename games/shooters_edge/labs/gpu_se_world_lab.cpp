@@ -362,7 +362,7 @@ void run(gl::Lab& lab) {
       lab.fail(paths[i] + ": " + err, "Check the map's name in the pack (--maps). Skill: brush.");
       return;
     }
-    if (!refused.empty()) lab.note(lit_path + ": " + refused);
+    if (!refused.empty()) lab.note(lit_path.append(": ").append(refused));
     lab.metric(names[i] + ".coloured-light", lit.empty() || !refused.empty() ? 0 : 1, "bool");
     const ba::Scene& s = m->scene;
     lab.metric(names[i] + ".light-layers", double(s.light_layers), "count");
