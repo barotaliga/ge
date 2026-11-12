@@ -60,6 +60,25 @@ std::string status_key(const gn::Status& s, std::string_view key) {
   return {};
 }
 
+bool is_pack(std::string_view name) {
+  const size_t dot = name.rfind('.');
+  const std::string_view ext = dot == std::string_view::npos ? "" : name.substr(dot);
+  return ext == ".pak" || ext == ".pk3";
+}
+
+// The content packs beside the viewer, by name: the order the viewer mounts them (a later one
+// searched first, as a game folder's numbered packs).
+std::vector<std::string> viewer_packs(const Site& site) {
+  std::vector<std::string> out;
+  std::error_code ec;
+  for (fs::directory_iterator it(site.viewer_dir, ec), end; !ec && it != end; it.increment(ec)) {
+    const std::string name = it->path().filename().string();
+    if (it->is_regular_file(ec) && is_pack(name)) out.push_back(name);
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
 // The picture's place: the viewer started with `args`, or the reason there is none.
 std::string viewer_slot(const Site& site, const HubSpec& spec, const std::vector<std::string>& args,
                         const std::string& no_viewer) {
@@ -72,7 +91,10 @@ std::string viewer_slot(const Site& site, const HubSpec& spec, const std::vector
   }
   std::string list;
   for (const std::string& a : args) list += (list.empty() ? "" : ",") + script_str(a);
+  for (const std::string& pack : viewer_packs(site))
+    list += "," + script_str("--pack=/viewer/" + pack);
   h += "<canvas id=\"view\" width=\"1280\" height=\"720\"></canvas>";
+  h += "<p class=\"small\" id=\"viewer-status\">Loading the viewer...</p>";
   h += "<noscript><p class=\"none\">The viewer needs script; open it in the game "
        "instead.</p></noscript>";
   h += "<script>var Module={canvas:document.getElementById(\"view\"),arguments:[" + list +
@@ -220,11 +242,12 @@ Answer viewer_file(const HubSpec& spec, std::string_view name, const Site& site)
                      : ext == ".wasm" ? "application/wasm"
                      : ext == ".data" ? "application/octet-stream"
                      : ext == ".json" ? "application/json"
+                     : is_pack(name)  ? "application/octet-stream"
                                       : nullptr;
   if (!plain || type == nullptr) {
     return refuse(
         "the viewer's files are names of letters, digits, '_', '-' and '.', ending .js, "
-        ".wasm, .data or .json");
+        ".wasm, .data, .json, .pak or .pk3");
   }
   if (site.viewer_dir.empty()) {
     return refuse("this hub serves no viewer: start it with --viewer=<dir>, the build's " +

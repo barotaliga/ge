@@ -17,6 +17,18 @@ namespace out = core::output;
 bool Surface::create(Device& device, const platform::NativeWindow& w) {
   using Kind = platform::NativeWindow::Kind;
   wgpu::SurfaceDescriptor desc{};
+#if defined(__EMSCRIPTEN__)
+  // The browser's only surface is a canvas on the page.
+  wgpu::EmscriptenSurfaceSourceCanvasHTMLSelector canvas{};
+  if (w.kind != Kind::canvas || w.canvas == nullptr) {
+    out::error(
+        "gpu: a web build draws only to a canvas; pass NativeWindow{Kind::canvas, ... "
+        "canvas = \"#view\"}; skill: gpu.");
+    return false;
+  }
+  canvas.selector = w.canvas;
+  desc.nextInChain = &canvas;
+#else
   wgpu::SurfaceSourceXlibWindow xlib{};
   wgpu::SurfaceSourceWaylandSurface wayland{};
   wgpu::SurfaceSourceMetalLayer metal{};
@@ -41,12 +53,15 @@ bool Surface::create(Device& device, const platform::NativeWindow& w) {
       hwnd.hwnd = w.surface;
       desc.nextInChain = &hwnd;
       break;
+    case Kind::canvas:
     case Kind::none:
       out::error(
-          "gpu: a surface for a window with no native handles (Kind::none); the "
-          "platform layer could not read them, see its error line; skill: platform.");
+          "gpu: a surface for a window with no native handles (Kind::none, or a canvas "
+          "outside a web build); the platform layer could not read them, see its error "
+          "line; skill: platform.");
       return false;
   }
+#endif
   desc.label = "ge.surface";
   surface_ = device.instance.CreateSurface(&desc);
   if (!surface_) {
@@ -135,7 +150,9 @@ wgpu::TextureView Surface::acquire(Device& device) {
 }
 
 void Surface::present() {
-  surface_.Present();
+#if !defined(__EMSCRIPTEN__)
+  surface_.Present();  // the browser shows the canvas itself when the frame's task returns
+#endif
   current_ = nullptr;
 }
 

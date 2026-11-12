@@ -61,6 +61,8 @@ struct HttpConn {
   uint64_t sent_changes = 0;
   int64_t sent_us = 0;
   uint64_t event_id = 0;
+  std::string out;    // the answer's bytes the stream's backlog has not taken yet
+  size_t out_at = 0;  // ... from here
 };
 
 struct HttpStats {

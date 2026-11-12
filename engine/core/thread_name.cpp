@@ -9,7 +9,7 @@
 #if defined(_WIN32)
 #define NOMINMAX
 #include <windows.h>
-#elif defined(__APPLE__)
+#elif defined(__APPLE__) || defined(__EMSCRIPTEN__)
 #include <pthread.h>
 #else
 #include <pthread.h>
@@ -51,6 +51,8 @@ void name_this_thread(std::string_view name, bool tell_os) {
   }
 #elif defined(__APPLE__)
   pthread_setname_np(os.c_str());
+#elif defined(__EMSCRIPTEN__)
+  // A browser's worker carries no name the page could read.
 #else
   pthread_setname_np(pthread_self(), os.c_str());
 #endif
@@ -65,6 +67,8 @@ uint64_t this_thread_os_id() {
   uint64_t id = 0;
   pthread_threadid_np(nullptr, &id);
   return id;
+#elif defined(__EMSCRIPTEN__)
+  return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(pthread_self()));
 #else
   return static_cast<uint64_t>(syscall(SYS_gettid));
 #endif

@@ -30,6 +30,8 @@ namespace sv = shooters_edge::server;
 
 namespace {
 
+// A Rig holds a whole server (some 650 KB), so every test keeps it on the heap: on the stack it
+// overflows Windows' 1 MB main thread.
 // Node 0 the server, nodes 1 and 2 forwarders, node 3 the client, node 4 a stranger.
 struct Rig {
   ge::progs::Progs progs;
@@ -128,7 +130,8 @@ struct Rig {
 }  // namespace
 
 TEST(a_classic_client_plays_through_one_of_our_forwarders) {
-  Rig r;
+  auto owned = std::make_unique<Rig>();
+  Rig& r = *owned;
   std::string error;
   CHECK_MSG(r.start(error), error);
   r.connect(gn::to_string(r.server_at()));
@@ -144,7 +147,8 @@ TEST(a_classic_client_plays_through_one_of_our_forwarders) {
 }
 
 TEST(a_classic_client_plays_through_a_chain_of_two) {
-  Rig r;
+  auto owned = std::make_unique<Rig>();
+  Rig& r = *owned;
   std::string error;
   CHECK_MSG(r.start(error), error);
   r.connect(gn::to_string(r.hop_at(1)) + "@" + gn::to_string(r.server_at()));
@@ -158,7 +162,8 @@ TEST(a_classic_client_plays_through_a_chain_of_two) {
 
 TEST(refusals_come_back_in_words) {
   {
-    Rig r;
+    auto owned = std::make_unique<Rig>();
+    Rig& r = *owned;
     std::string error;
     CHECK_MSG(r.start(error), error);
     r.connect("");
@@ -166,7 +171,8 @@ TEST(refusals_come_back_in_words) {
     CHECK_MSG(r.client.refused.find("set prx") != std::string::npos, r.client.refused);
   }
   {
-    Rig r;
+    auto owned = std::make_unique<Rig>();
+    Rig& r = *owned;
     std::string error;
     CHECK_MSG(r.start(error), error);
     r.connect("sim:0:27999");
@@ -174,7 +180,8 @@ TEST(refusals_come_back_in_words) {
     CHECK_MSG(r.client.refused.find("does not forward to") != std::string::npos, r.client.refused);
   }
   {
-    Rig r;
+    auto owned = std::make_unique<Rig>();
+    Rig& r = *owned;
     std::string error;
     CHECK_MSG(r.start(error), error);
     r.fwd[0].config.allow.push_back(gn::sim_address(9, cn::kPortServer));
@@ -186,7 +193,8 @@ TEST(refusals_come_back_in_words) {
 }
 
 TEST(ping_status_and_pingstatus_are_answered_once_a_second_a_host) {
-  Rig r;
+  auto owned = std::make_unique<Rig>();
+  Rig& r = *owned;
   std::string error;
   CHECK_MSG(r.start(error), error);
   r.run(100);  // the probes have reached the server
@@ -221,7 +229,8 @@ TEST(ping_status_and_pingstatus_are_answered_once_a_second_a_host) {
 }
 
 TEST(a_clients_drop_frees_it) {
-  Rig r;
+  auto owned = std::make_unique<Rig>();
+  Rig& r = *owned;
   std::string error;
   CHECK_MSG(r.start(error), error);
   r.connect(gn::to_string(r.server_at()));
