@@ -113,14 +113,14 @@
 // - `hopopen`: a hop's side away from a wall for every skill, and a circle jump curved out to the
 //   side whose arc stays clear (pilot.cpp, M18r.md 0v); not kept (slower, no fewer hits), in no
 //   preset.
-// - `fightway`: in a fight, an enemy in sight who is not chasing and lies behind the way walked
-//   (more than 120 degrees off it) turns the way toward him for a moment, rather than walking
-//   the route away from him under the aim, backwards (games/shooters_edge/bots/fighter.cpp,
+// - `fightway`: in a fight, an enemy in sight who is not chasing (coming on under 100 units/s):
+//   the route's back key let go, the dodge's side key alone (games/shooters_edge/bots/footwork.cpp,
 //   M18r.md 0w); judging.
 // - `letgo`: the aim's hold on a player lost from sight let go once he lies more than 100
 //   degrees off the way walked (bot.cpp, M18r.md 0w); judging.
-// - `paceback`: an aim lost goes back to the way under the hand at the pace's step (the hand's
-//   tolerance under it: the view hung where the enemy was lost); judging.
+// - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
+//   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
+//   hung where the enemy was lost); judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.

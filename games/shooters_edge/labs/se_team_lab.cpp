@@ -743,7 +743,8 @@ void run(gl::Lab& lab) {
     } else {
       out << "-\t-\t-\t-\t-\t";
     }
-    out << (w.sv.time < f.face_until ? 1 : 0) << '\t';  // (`fightway`) the way toward him
+    // (`fightway`) the route's back key let go: stood and dodged
+    out << (std::string_view(f.press_note) == "stand" ? 1 : 0) << '\t';
     int vis = -1;  // the aimed contact in sight (1), lost (0); -1 with no aim
     for (const sh::Contact& ct : f.bot.senses.contacts)
       if (tg >= 1 && ct.ent == tg) vis = ct.visible ? 1 : 0;
