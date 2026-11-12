@@ -170,6 +170,51 @@ Every recording came back byte for byte. Where the bytes go in a 4on4: the playe
 own noise at 1/65536 of a turn, which no prediction removes. A 4on4 broadcast is about 48 kbit/s
 raw, 25 as today's packed demo and 13 as `.ger`.
 
+## The classic face
+
+Shooter's Edge's server offers the classic broadcaster's stream port
+(`games/shooters_edge/net/classic_qtv.hpp`, M57c). A classic relay connects over TCP, asks in a few
+lines of text (`QTV`, `VERSION: 1`, `RECEIVE`, its user info, its auth offers) and is answered
+`QTVSV 1` and `BEGIN`, a challenge, or an error with the classic words; then the match follows as
+a multiview recording written as it is played. Each relay has its own recorder hung on the server's
+`streams`, started when it is let in, so its first frame is the whole signon (its catch-up) and
+every map change another; a stream's signon also stuffs the full server info and the `skins` line a
+relay waits for. With `qtv_password` set the server asks for the strongest method both sides know:
+SHA3-512 of the challenge and the password (written here from FIPS 202), or the plain password.
+Up from a relay come chat (`say`, `say_team`, `say_game`, printed to the spectators, or everyone with
+`qtv_sayenabled`, and into every relay's stream) and its viewer list (`qul`: joins, renames and
+leaves told to the players, and stuffed to clients with `qul 1`). A relay that takes nothing for
+`qtv_streamtimeout` seconds, or lets 16 MiB pile up, is dropped.
+
+| Setting | Default | What |
+| --- | --- | --- |
+| `qtv_streamport` | 0 | The TCP port (0: none) |
+| `qtv_maxstreams` | 1 | Relays at once (0 or less: no limit); three over it are told so and closed |
+| `qtv_password` | empty | The password a relay gives |
+| `qtv_pendingtimeout` | 5 | Seconds to finish the request |
+| `qtv_streamtimeout` | 45 | Seconds a relay may take nothing |
+| `qtv_sayenabled` | 0 | 1: viewers' chat reaches the players too |
+
+The `se-tv` lab serves a two-player match to relays that join at 0, 4 and 8 seconds: a relay's
+catch-up on the test arena is under 1 KB and the match about 4.5 KB a second, and every stream
+plays to its end in the demo reader with the viewer's chat and join in it. A stream's signon is
+cut into records under 8000 bytes, which is what a relay takes.
+
+Our TV node's classic face (`games/shooters_edge/net/classic_tv.hpp`) is a relay of its own: it
+dials a stream port (ours or any server's), answers its challenge, reads the records after `BEGIN`
+and holds each for the delay (7 s by default) before it goes to the viewers, who ask the node as a
+relay asks a server, with the node's own password. A connection that falls is dialled again after
+2 s, doubling to an hour. A viewer who joins mid-match is caught up from the match as the node keeps
+it (`classic_mv_state.hpp`): the level's signon as it came, the state messages since (light styles,
+server info, user info, frags, pings, statics), every player in the recorder's form with all his
+fields, each one's stats and a full entity list from the baselines, so the next record forwarded
+reads on from it. A viewer's `say` stays on the node; its `say_game` goes up to the server, and
+the viewer list goes up as `qul` lines. The `se-tv-node` lab relays a two-player match with a 2 s
+delay to viewers who join at 0, 4 and 8 seconds: a late viewer's catch-up is 0.7 KB, and every
+viewer's stream plays to the same end (every player, his frags and name, every entity) with the
+chat in it. Still to come in M57c: our client watching a classic stream, and the node rewriting
+the server's name as its own.
+
 ## Forward
 
 `engine/forward` (`forward.hpp`). An opaque hop between a game's client and its server, for a
@@ -212,5 +257,7 @@ A stranger's asks of every kind draw answers of at most a third of their size.
 | The demo format's name | Version 2 of the replay file | A new name: the engine already calls a kept run a replay |
 | The classic compressed client demo | Not read; the field codec replaces it | Running the player's own installed program to unpack it (a later, opt-in choice); studying third-party reconstructions of unknown origin |
 | Teamplay helpers | In Shooter's Edge's client | In the proxy, as the classic proxy did: they need no place on the network path |
+| A late viewer's catch-up | Written from the match the node keeps, record by record | Replaying everything since the level began: it grows with the match and plays the past at once |
+| A relay's auth | NONE, PLAIN and SHA3-512 | The older 16-bit check and MD4: weaker, and every current relay offers SHA3-512 |
 | Forward's route | Set up by the forward's own datagrams before the game's handshake, so any game on any wire goes through unchanged | Carried in the game's connect (the classic way): every game's handshake would have to carry it; the classic face reads it there |
 | The browser viewer | The WebSocket downstream lands with TV (M57b), for the hub's web viewer (M56) | Later: the hub needs it first |
