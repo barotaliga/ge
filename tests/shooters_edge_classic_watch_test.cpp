@@ -100,6 +100,9 @@ TEST(the_client_watches_a_broadcast_frame_by_frame_to_its_end) {
   bool dropped = false;
   for (int i = 0; i < 20000 && !dropped; i++) {
     pump(port, match, 997);  // pieces that cut records in two
+    // Every piece sent has arrived before the step, so the frames a step reads do not depend on
+    // how the loopback batches bytes (macOS's held them back and merged steps).
+    if (r.watch && port.tcp.handle >= 0) gn::tcp_settle_pairs({&port.tcp, &r.watch->tcp});
     std::vector<std::string> said;
     switch (cn::remote_step(r, 0.013, said)) {
       case cn::RemoteStep::new_level:
