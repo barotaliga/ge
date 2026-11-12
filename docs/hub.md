@@ -154,7 +154,12 @@ THE LIMITS. A browser offers WebGPU's default limits unless the machine's GPU ea
 16 sampled textures a shader stage and 256 layers an array texture, among others. The software
 adapter in the container offers exactly those. The renderer asks for more today (the frame's
 bind group alone holds 11 textures), so the viewer loads, fetches and plays but its world's
-pipelines do not build there; fitting the renderer within the defaults is row M56g2.
+pipelines do not build there; fitting the renderer within the defaults is row M56g2. A native
+run asks for exactly those defaults with `GE_GPU_LIMITS=default` (validation on), so every
+pipeline over them names itself in the log without a browser. The shadow cubes already fit (as
+many as the device's array layers hold: 42 in a browser, 48 elsewhere) and the cull reads its
+chunks' sizes and states from one buffer (8 storage buffers a stage); the frame's textures are
+what is left.
 
 Two cheaper ways stay in the plan beside it: Watch and Play buttons that open the installed game
 (`<game>://tv/<node>/<stream>`, `<game>://demo/<sha256>`, a link each client registers), and the
