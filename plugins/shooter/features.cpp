@@ -47,10 +47,10 @@ constexpr Features kKeys = of({Feature::lookway, Feature::press, Feature::counte
 // `airkeys` on: +4.6 on dm2 and +1.0 on e1m2 a match head to head, the hop's air no longer
 // braking: -1.5 -> -0.3 units/s a command, the expert's hop gain p50 -105 -> -0.7; `aimhop` on:
 // -2.9 on dm2 and +1.3 on e1m2 a match head to head, the air share 0.33 -> 0.44 (people 0.46);
-// `airview` on: +1.7 on dm2 and +4.8 on e1m2 a match head to head).
+// `airview` on: +1.7 on dm2 and +4.8 on e1m2 a match head to head; `airwall` on: even head to
+// head, +0.05 on dm2 and -0.4 on e1m2, hop flights colliding 36 -> 31 %).
 constexpr Features kJudging = of({Feature::runupkeys, Feature::underway, Feature::gappast,
-                                  Feature::airgap, Feature::pilotcast, Feature::chainhop,
-                                  Feature::airwall});
+                                  Feature::airgap, Feature::pilotcast, Feature::chainhop});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
