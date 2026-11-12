@@ -58,6 +58,7 @@ struct PlayerNumbers {
   float weapon_frame = 0;
   float items = 0;   // the program's item bits
   float view_z = 0;  // the eye above the origin
+  float fov = 0;     // the field of view the rules hold him to, degrees; 0 his own
   float frags = 0;
 };
 
