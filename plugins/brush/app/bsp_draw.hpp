@@ -322,7 +322,10 @@ struct BspDraw {
   std::array<std::array<float, 4>, kMaxShadowed> slot_key{};
   std::array<bool, kMaxShadowed> slot_held{};      // a slot's cube holds its key's light
   std::array<uint64_t, kMaxShadowed> slot_used{};  // the shadow_frame a light last read it
-  uint64_t shadow_frame = 0;                       // prepare_bsp's count
+  // The cubes this device holds: kMaxShadowed, or fewer where its texture array is shorter
+  // (a browser's default limit is 256 layers: 42 cubes).
+  int cube_slots = kMaxShadowed;
+  uint64_t shadow_frame = 0;     // prepare_bsp's count
   int shadows_waiting = 0;       // this frame's casters over the budget, unshadowed (prepare_bsp)
   std::vector<int> fresh_slots;  // this frame's slots to draw (prepare_bsp)
   std::array<GpuJob, kOrthos> ortho_drawn{};  // what each orthographic map holds

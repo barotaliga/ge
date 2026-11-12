@@ -73,6 +73,10 @@ struct DeviceOptions {
   int validation = -1;
   // Features to leave off even when the adapter has them (a test of the fallback path).
   std::array<bool, kFeatureCount> force_off{};
+  // Ask for WebGPU's default limits instead of the adapter's best (16 sampled textures a
+  // stage, 256 array layers, ...): what a browser grants a page, so a native run shows where
+  // the renderer would not fit there. GE_GPU_LIMITS=default sets it too.
+  bool default_limits = false;
 };
 
 // What drew the frames: printed once at creation, and stamped on lab captures.
