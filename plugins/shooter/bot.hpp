@@ -89,6 +89,11 @@ struct Bot {
   bool airarc = false;
   // NO FORWARD IN A HOP (`hopside`): the air's sets the strafe key alone, the side the view turns.
   bool hopside = false;
+  // ROAMING, NO VIEW BEHIND (`noback`): set by the game while it roams; a player newly seen off
+  // behind the way walked is not turned to.
+  bool aim_front_only = false;
+  // THE VIEW BACK TO LEVEL (`levelview`): a look let go comes back level under the hand.
+  bool levelview = false;
   int walk_air_set = -1;
   // A CIRCLE JUMP'S CURVE UNDER THE HAND (`circlekeys`): on the ground, the key set the ground move
   // carries furthest on round the way under the view the keys land under, as the air's above.
