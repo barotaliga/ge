@@ -113,6 +113,18 @@ take fewer bytes.
 - **The master** (`tv_host_list`): the host beats to masters as a TV node from its own socket and
   answers status asks there with its name, the match's game and map, its viewers and the delay.
 
+## The server as a source
+
+`engine/tv/server_source.hpp`. Any game on the server core (`engine/server`) that fills
+`ServerGame::tv_frame` (the last frame as its viewers need it) and `tv_keyframe` (its whole state)
+is broadcast as it runs: after each server frame the frame's bytes go into the stream's `frames`
+track, a block holds a second of frames, and every few seconds a block opens with the state on the
+`keyframe` track and is where a TV node starts a late viewer. Its new bytes feed a TV node as the
+server writes them, and the whole is the match's file. The core's sample game sends each bot's
+step in two bits and its ring as the keyframe, and `SampleWatch` keeps the ring off a stream: in
+the `tv` lab (`--source=sample`) every viewer through a source and a relay reaches the server's
+digest at its last frame under every network preset, at about 300 bytes a second.
+
 ## Spectating by inputs
 
 `engine/replay/spectate.hpp`. A deterministic game on the play contract (Fall Line) broadcasts
