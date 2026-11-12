@@ -37,14 +37,20 @@ const char* rjump_setting(sh::Rjump kind) {
 
 void add_rjump_settings(con::Cvars& cvars) {
   const uint32_t info = con::kServer | con::kServerInfo;
-  cvars.add({"sv_rjump", "0", info,
-             "1: players may use the rocket jump helper (+rjump: a rocket fired straight down "
-             "with a jump); a player granted it (*rjump) may anyway",
-             con::CvarKind::boolean});
-  cvars.add({"sv_rrjump", "0", info,
-             "1: players may use the reverse rocket jump helper (+rrjump: a rocket fired behind "
-             "with a jump); a player granted it (*rjump) may anyway",
-             con::CvarKind::boolean});
+  cvars.add({.name = "sv_rjump",
+             .fallback = "0",
+             .flags = info,
+             .help = "Whether players may use the rocket jump helper, +rjump, a rocket fired "
+                     "straight down with a jump.",
+             .kind = con::CvarKind::boolean,
+             .values = "0: only a player granted it (the default); 1: every player"});
+  cvars.add({.name = "sv_rrjump",
+             .fallback = "0",
+             .flags = info,
+             .help = "Whether players may use the reverse rocket jump helper, +rrjump, a rocket "
+                     "fired behind with a jump.",
+             .kind = con::CvarKind::boolean,
+             .values = "0: only a player granted it (the default); 1: every player"});
 }
 
 bool rjump_allowed(const RulesCommon& s, int slot, sh::Rjump kind) {

@@ -156,20 +156,48 @@ const SwitchSpec* find_switch(std::string_view id) {
   return nullptr;
 }
 
+SwitchWords switch_words(const SwitchSpec& s, bool on_by_default) {
+  // The hint is the menu's: what the switch does on, then " Off: " and what is left off. The
+  // help is its first sentence; the rest of what it does on (a second sentence) goes with 1.
+  const std::string_view hint = s.hint;
+  const size_t off_at = hint.find(" Off: ");
+  const std::string_view on = hint.substr(0, off_at);
+  std::string_view off =
+      off_at == std::string_view::npos ? std::string_view{} : hint.substr(off_at + 6);
+  if (!off.empty() && off.back() == '.') off.remove_suffix(1);
+  const size_t stop = on.find(". ");
+  SwitchWords w;
+  w.help = std::string(stop == std::string_view::npos ? on : on.substr(0, stop + 1));
+  std::string more;
+  if (stop != std::string_view::npos) {
+    more = std::string(on.substr(stop + 2));
+    if (!more.empty() && more.back() == '.') more.pop_back();
+    if (!more.empty() && more[0] >= 'A' && more[0] <= 'Z') more[0] = char(more[0] - 'A' + 'a');
+  }
+  std::string off_text = off.empty() ? std::string("off") : std::string(off);
+  if (!off_text.empty() && off_text[0] >= 'A' && off_text[0] <= 'Z')
+    off_text[0] = char(off_text[0] - 'A' + 'a');
+  w.values = "0: " + off_text + (on_by_default ? "" : " (the default)") +
+             "; 1: " + std::string(s.text) + " on" + (more.empty() ? "" : ", " + more) +
+             (on_by_default ? " (the default)" : "");
+  return w;
+}
+
 void bind_switches(console::Cvars& cvars, Switches* values) {
   static const Switches kDefaults;
   // The names and help must outlive the registry's copy of them only for this call.
   for (const SwitchSpec& s : switches()) {
     const std::string name = "ce_" + std::string(s.id);
-    const std::string help = std::string(s.text) + ": " + std::string(s.hint);
+    const SwitchWords words = switch_words(s, kDefaults.*s.field);
     console::CvarSpec spec;
     spec.name = name;
     spec.fallback = kDefaults.*s.field ? "1" : "0";
     spec.flags = console::kArchive;
-    spec.help = help;
+    spec.help = words.help;
     spec.kind = console::CvarKind::boolean;
     spec.min = 0;
     spec.max = 1;
+    spec.values = words.values;
     cvars.bind(spec, &(values->*s.field));
   }
 }

@@ -80,10 +80,11 @@ struct CvarSpec {
   std::string_view name = {};
   std::string_view fallback = {};  // the default, as text
   uint32_t flags = 0;
-  std::string_view help = {};  // what it does, a phrase, with its unit
+  std::string_view help = {};  // what it does: one sentence (console/words.hpp)
   CvarKind kind = CvarKind::number;
   double min = -std::numeric_limits<double>::infinity();
   double max = std::numeric_limits<double>::infinity();
+  std::string_view values = {};  // what each value does (console/words.hpp)
 };
 
 // The field a bound cvar writes, or none (the cvar owns its value).
@@ -95,6 +96,7 @@ struct Cvar {
   std::string value;     // as text, after clamping
   std::string fallback;  // the default
   std::string help;
+  std::string values;   // what each value does (console/words.hpp)
   std::string latched;  // a value waiting for apply_latched; empty when none
   double number = 0;    // the value read as a number (0 when it is not one)
   uint32_t flags = 0;

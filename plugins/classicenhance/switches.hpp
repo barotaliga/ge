@@ -26,6 +26,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
 #include <string_view>
 
 #include "classicenhance/pipeline.hpp"
@@ -76,6 +77,14 @@ extern const size_t kSwitchGroupCount;
 
 // The switch with that id; null when none.
 const SwitchSpec* find_switch(std::string_view id);
+
+// A switch's words as its cvar says them (console/words.hpp), from the menu's hint: the help its
+// first sentence, the values what 0 leaves and 1 turns on, the default marked.
+struct SwitchWords {
+  std::string help;
+  std::string values;
+};
+SwitchWords switch_words(const SwitchSpec& s, bool on_by_default);
 
 // Each switch as ce_<id> (boolean, archived), writing `values` on every change; the defaults are
 // the catalog's (a default `Switches`).

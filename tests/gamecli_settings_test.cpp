@@ -51,7 +51,8 @@ void game_cvars(Cvars& v) {
          .help = "mouse speed",
          .kind = CvarKind::number,
          .min = 0.1,
-         .max = 20});
+         .max = 20,
+         .values = "0.1..20: that much (3 the default)"});
   v.add({.name = "name",
          .fallback = "player",
          .flags = kArchive | kUserInfo,
@@ -132,6 +133,10 @@ TEST(catalog_round_trip) {
     CHECK_BITS(y->max, x->max);
   }
   CHECK(b.find("name")->help == "your name in the game");  // the tab kept on its line
+  CHECK(b.find("sensitivity")->values == "0.1..20: that much (3 the default)");
+  // A catalog written before the values (seven fields) still reads, with none.
+  CHECK_MSG(read_catalog("cl_run\tboolean\tA.......\t1\t-\t-\talways run\n", got, error), error);
+  CHECK(got.size() == 1 && got[0].values.empty());
   // A damaged line is refused with its number.
   CHECK(!read_catalog("// head\nsensitivity\tnumber\n", got, error));
   CHECK(error.find("line 2") != std::string::npos);
@@ -241,5 +246,30 @@ TEST(server_settings_and_set) {
             cfg);
   CHECK(run(s, {"server", "set", "sensitivity", "2"}, out) == 1);  // a player's, not the server's
   CHECK(run(s, {"server", "set", "sv_motd", "a\"b"}, out) == 2);
+  fs::remove_all(root);
+}
+
+TEST(settings_check_and_format) {
+  const fs::path root = with_catalog("ge_gamecli_cfg_tidy");
+  gc::Spec s = toy();
+  write(g_settings / kConfigFile,
+        "seta sensitivity \"50\"\nsensitvity 4\nbind w +forward\ncl_run 1\n");
+  std::string out;
+  CHECK_MSG(run(s, {"settings", "check", "--json"}, out) == 1, out);
+  ge::core::FlatJson j;
+  std::string error;
+  CHECK_MSG(ge::core::read_flat(out, j, error, true), error);
+  CHECK(j["result.findings.0.line"].text == "1");
+  CHECK(j["result.findings.0.next"].text.find("0.1..20") != std::string::npos);
+  CHECK(j["result.findings.1.next"].text.find("did you mean 'sensitivity'") != std::string::npos);
+  // Formatted pretty and written: the same settings, in sections, a fixed order, commented.
+  CHECK_MSG(run(s, {"settings", "format", "--pretty", "--write"}, out) == 0, out);
+  const std::string cfg = slurp(g_settings / kConfigFile);
+  CHECK_MSG(cfg.find("// always run\ncl_run           \"1\"\n") != std::string::npos,
+            cfg);  // aligned
+  CHECK(cfg.find("seta sensitivity \"50\"\n") != std::string::npos);
+  CHECK(cfg.find("// Binds") != std::string::npos);
+  CHECK_MSG(run(s, {"settings", "format", "--pretty", "--json"}, out) == 0, out);
+  CHECK(out.find("\"changed\":false") != std::string::npos);
   fs::remove_all(root);
 }

@@ -18,13 +18,15 @@ namespace sh = ge::shooter;
 void add_group_cvars(ge::console::Console& con, WeaponGroups& g) {
   using ge::console::CvarKind;
   using ge::console::kArchive;
-  con.cvars().bind({.name = "cl_weapongroups",
-                    .fallback = "0",
-                    .flags = kArchive,
-                    .help = "1: the number keys pick from weapon groups: the best weapon of the "
-                            "group you carry, pressed again the next (cl_weapongroup1 .. 9)",
-                    .kind = CvarKind::boolean},
-                   &g.on);
+  con.cvars().bind(
+      {.name = "cl_weapongroups",
+       .fallback = "0",
+       .flags = kArchive,
+       .help = "Whether the number keys pick from weapon groups, cl_weapongroup1 to 9.",
+       .kind = CvarKind::boolean,
+       .values = "0: each key picks its own weapon (the default); 1: the best of the group you "
+                 "carry, pressed again the next"},
+      &g.on);
   static constexpr const char* kNames[sh::kMaxGroups] = {
       "cl_weapongroup1", "cl_weapongroup2", "cl_weapongroup3", "cl_weapongroup4", "cl_weapongroup5",
       "cl_weapongroup6", "cl_weapongroup7", "cl_weapongroup8", "cl_weapongroup9"};
@@ -32,9 +34,11 @@ void add_group_cvars(ge::console::Console& con, WeaponGroups& g) {
     con.cvars().bind({.name = kNames[k],
                       .fallback = "",
                       .flags = kArchive,
-                      .help = "the weapons this number key picks with cl_weapongroups 1, best "
-                              "first, by weapon key (empty: the game's own group, 0: none)",
-                      .kind = CvarKind::text},
+                      .help = "The weapons this number key picks with weapon groups on, best "
+                              "first, by weapon key.",
+                      .kind = CvarKind::text,
+                      .values = "\"\": the game's own group (the default); 0: none; TEXT: weapon "
+                                "keys with spaces between"},
                      &g.text[k]);
 }
 

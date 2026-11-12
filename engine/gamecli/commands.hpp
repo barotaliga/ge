@@ -18,6 +18,10 @@ int cmd_settings_get(Ctx& ctx);
 int cmd_settings_set(Ctx& ctx);
 int cmd_settings_reset(Ctx& ctx);
 int cmd_server_settings(Ctx& ctx);
+int cmd_settings_check(Ctx& ctx);
+int cmd_settings_format(Ctx& ctx);
+int cmd_server_check(Ctx& ctx);
+int cmd_server_format(Ctx& ctx);
 int cmd_server_set(Ctx& ctx);
 
 int cmd_servers(Ctx& ctx);
