@@ -147,6 +147,11 @@ under a context of its own. Shooter's Edge's face for the classic multiview reco
 - text as a template (the text with its whole numbers taken out: a team's info line, a frag
   message) from the last 256 seen, and each number from the same template's last numbers.
 
+The face also writes the hub's words (`docs/hub.md` § The archive) into the meta, read off the
+recording before it is packed (`demo_hub_meta`): the map, the mode, the server's name and every
+player and team in the header; the length, each player's frags and each team's total in the
+trailer. A caller adds its own (`title`, `tag`, `start`).
+
 A record whose body does not walk whole is kept as its bytes, so every file comes back byte for
 byte. A keyframe every 30 seconds (each one starts the models and predictions over) costs about 5%
 against none and lets a late joiner start at most 30 seconds back; one every 10 seconds costs about

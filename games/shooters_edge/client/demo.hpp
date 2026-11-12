@@ -211,8 +211,12 @@ struct DemoState {
   std::array<int32_t, 32> frags{};          // client, multiview: each slot's frags (updatefrags)
   std::array<std::string, 32> names;        // client, multiview: each slot's name (its userinfo)
   std::array<std::string, 32> teams;        // client, multiview: each slot's team ("": none)
+  std::array<bool, 32> spectator{};         // client, multiview: the slot watches (`*spectator`)
   std::array<int, 32> top{}, bottom{};      // client, multiview: each slot's colours (0..13)
   std::string game;  // client, multiview: the game folder the server ran ("fortress"; "" unnamed)
+  // Client, multiview: the server's info keys in the order first seen (the signon's
+  // `fullserverinfo`, then each `serverinfo` change): `hostname`, `teamplay`, `maxclients` ...
+  std::vector<std::pair<std::string, std::string>> serverinfo;
   std::vector<DemoEntity> statics;             // the level's static entities, in order
   std::vector<DemoStaticSound> static_sounds;  // the level's looping sounds, in order
   // This frame's alone (emptied when the next one is read):

@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cstdlib>
 #include <memory>
 #include <unordered_map>
 
@@ -1297,6 +1298,77 @@ const char* demo_part_name(DemoPart part) {
   return i < std::size(kPartNames) ? kPartNames[i] : "?";
 }
 
+void demo_hub_meta(std::span<const uint8_t> recording, gr::Meta& header, gr::Meta& final_meta) {
+  Demo d;
+  std::string error;
+  if (!open_demo(std::vector<uint8_t>(recording.begin(), recording.end()), d, error)) return;
+  struct Seen {
+    std::string name, team;
+    int32_t frags = 0;
+  };
+  std::vector<Seen> seen;  // every player, in the order first seen
+  std::string map;
+  const auto look = [&] {
+    const DemoState& s = d.state;
+    if (map.empty()) map = s.map;
+    for (size_t slot = 0; slot < s.names.size(); slot++) {
+      if (s.names[slot].empty() || s.spectator[slot]) continue;
+      auto it = std::find_if(seen.begin(), seen.end(),
+                             [&](const Seen& p) { return p.name == s.names[slot]; });
+      if (it == seen.end()) it = seen.insert(seen.end(), {s.names[slot], s.teams[slot], 0});
+      it->team = s.teams[slot];
+      it->frags = s.frags[slot];
+    }
+  };
+  look();
+  while (next_frame(d, error) == DemoRead::frame) look();
+  const DemoState& s = d.state;
+  const auto info = [&](const char* key) {
+    for (const auto& [k, v] : s.serverinfo)
+      if (k == key) return v;
+    return std::string();
+  };
+  const auto on = [&](const char* key) { return std::atoi(info(key).c_str()) != 0; };
+  const size_t players = seen.size();
+  std::string mode;
+  if (s.format == DemoFormat::single)
+    mode = "single";
+  else if (on("coop"))
+    mode = "coop";
+  else if (on("teamplay"))
+    mode = players <= 4 ? "2on2" : "4on4";
+  else
+    mode = players <= 2 ? "1on1" : "ffa";
+  if (!map.empty()) header.emplace_back("map", map);
+  header.emplace_back("mode", mode);
+  if (!info("hostname").empty()) header.emplace_back("server", info("hostname"));
+  std::vector<std::pair<std::string, int64_t>> teams;  // in the order first seen
+  for (const Seen& p : seen) {
+    header.emplace_back("player", p.team.empty() ? p.name : p.name + "\t" + p.team);
+    if (p.team.empty()) continue;
+    auto t =
+        std::find_if(teams.begin(), teams.end(), [&](const auto& x) { return x.first == p.team; });
+    if (t == teams.end()) t = teams.insert(teams.end(), {p.team, 0});
+    t->second += p.frags;
+  }
+  for (const auto& t : teams) header.emplace_back("team", t.first);
+  final_meta.emplace_back("duration_ms",
+                          std::to_string(static_cast<int64_t>(s.time * 1000.0 + 0.5)));
+  if (s.format == DemoFormat::single) return;
+  for (const Seen& p : seen) {
+    std::string v = p.name;
+    v += '\t';
+    v += std::to_string(p.frags);
+    final_meta.emplace_back("score", std::move(v));
+  }
+  for (const auto& [team, frags] : teams) {
+    std::string v = team;
+    v += '\t';
+    v += std::to_string(frags);
+    final_meta.emplace_back("team_score", std::move(v));
+  }
+}
+
 bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, std::string& error,
                const DemoPackOptions& options, DemoPackReport* report) {
   DemoPackReport rep;
@@ -1307,6 +1379,9 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
   h.meta = {{"format", rep.format},
             {"bytes", std::to_string(recording.size())},
             {"keyframe_seconds", std::to_string(options.keyframe_seconds)}};
+  gr::Meta final_meta;
+  demo_hub_meta(recording, h.meta, final_meta);
+  h.meta.insert(h.meta.end(), options.meta.begin(), options.meta.end());
   if (multiview)
     h.tracks = {{kMultiviewTrack, gr::TrackKind::messages, gr::TrackCodec::field, "multiview"}};
   else
@@ -1329,8 +1404,11 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
       rep.blocks++;
       if (keyframe) rep.keyframes++;
     }
-    gr::stream_finish(
-        w, {{"duration_ms", std::to_string(time)}, {"records", std::to_string(rep.records)}});
+    // The records' own clock is the duration (the reader's may stop at a disconnect).
+    std::erase_if(final_meta, [](const auto& kv) { return kv.first == "duration_ms"; });
+    final_meta.insert(final_meta.begin(), {"duration_ms", std::to_string(time)});
+    final_meta.emplace_back("records", std::to_string(rep.records));
+    gr::stream_finish(w, final_meta);
   } else {
     for (size_t at = 0; at < recording.size(); at += kBytesBlock) {
       const size_t n = std::min(kBytesBlock, recording.size() - at);
@@ -1339,7 +1417,7 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
       rep.blocks++;
       rep.keyframes++;
     }
-    gr::stream_finish(w, {});
+    gr::stream_finish(w, final_meta);
   }
   error.clear();
   if (report != nullptr) *report = rep;
