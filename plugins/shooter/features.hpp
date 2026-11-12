@@ -53,7 +53,7 @@
 // - `uturn`: a turn back at a run pressed across the velocity, curved through at speed, not run
 //   through a stop (fighter.cpp `turn_back_round`; on).
 // - `jumpfly`: a run at a jump off its line or its speed jumps anyway when the jump, flown by the
-//   move from where it is, lands (pilot.cpp `approach_jump`), not lined up again; judging.
+//   move from where it is, lands (pilot.cpp `approach_jump`), not lined up again; on.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
