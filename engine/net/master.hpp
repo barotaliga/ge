@@ -42,6 +42,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "net/address.hpp"
@@ -89,6 +91,10 @@ struct Master {
   MasterStats stats;
   uint8_t buffer[kMaxDatagram];
 };
+
+// Masters written as text, separated by spaces or commas: "host:port", "1.2.3.4" (port 27900),
+// "sim:1:27900". False with `error` naming the word and the next action.
+bool master_list(std::string_view text, std::vector<Address>& out, std::string& error);
 
 void master_init(Master& m, const MasterConfig& config, Transport& transport);
 // Answer everything waiting on the master's port, then drop the silent.

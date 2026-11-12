@@ -163,6 +163,19 @@ browser's own GPU.
   answers status asks on its own port with `server_public_status` plus the game's
   `ServerGame::fill_status`.
 
+- **M56b** (`hub-api`): `engine/hub` is the hub. `poller.hpp` reads every master's list (each
+  60 s) and asks each listed node for its record (each 30 s, each 4 s while a human plays there),
+  keeping one `HubNode` a node with its last record and a count of its changes; a node no master
+  lists is dropped once its record is 90 s old. `spec.hpp` is a game's `HubSpec` (its name,
+  protocol, modes and their weights, the score's column) and the interest rule. `api.hpp` answers
+  `/v1`, `/v1/servers` (filters `mode`, `min_players`, `has_players`, `kind`), `/v1/servers/{address}`,
+  `/v1/servers/{address}/events`, `/v1/streams`, `/v1/nodes` and `/v1/masters` as JSON, a pure
+  function of the index. `http.hpp` carries it: HTTP/1.1 GET and HEAD, CORS open, the cache time
+  of the busy period, server-sent events for one node's record with a comment line every 15 s.
+  `main.hpp` is the process (`ge_add_hub`, cmake/Hub.cmake); `--serve-master` runs the master in
+  the same process, so one binary is a community's whole service. Shooter's Edge's is
+  `shooters_edge_hub`; Fall Line has no dedicated server yet, so no hub.
+
 Phase 2 and later depend on the TV layer's header and meta track (M57a, the replay file v2, and M57b, the native TV node); the
 master can land before them, since a dedicated server's heartbeat needs nothing of TV.
 
