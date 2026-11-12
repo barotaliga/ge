@@ -1,5 +1,5 @@
 // Tests: the account store (engine/account/store.hpp, store_text.hpp): sign-up and the name's
-// reservation, sign-in, the throttle's holds, login codes and the game password (and that a
+// reservation, sign-in, the throttle's holds, login codes (and that a
 // classic login never takes the password), recovery, blocking, removal and the name freed, and
 // the log and snapshot read back into the same store. A cheap hash cost keeps it fast.
 //

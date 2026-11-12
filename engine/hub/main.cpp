@@ -1,7 +1,7 @@
 // A hub's process, defined: the flags, the sockets, the wall-clock loop and its status lines.
 //
 // ge:summary A hub's process defined: flags, sockets, the wall-clock loop, status lines
-// ge:keywords hub hub_main flags loop wall-clock status archive inbox retention
+// ge:keywords hub hub_main flags loop wall-clock status archive inbox retention accounts-flag
 // ge:skill net
 // ge:test tests/hub_http_test.cpp
 #include "hub/main.hpp"
@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <thread>
 
+#include "account/host.hpp"
 #include "hub/archive.hpp"
 #include "hub/browse.hpp"
 #include "hub/http.hpp"
@@ -69,6 +70,12 @@ bool hub_options(const std::vector<std::string>& args, HubOptions& out, std::str
     } else if (key == "--archive") {
       out.archive = value;
       ok = !value.empty();
+    } else if (key == "--accounts") {
+      out.accounts = value;
+      ok = !value.empty();
+    } else if (key == "--accounts-port") {
+      ok = number(value, d) && d >= 1 && d <= 65535 && d == static_cast<int>(d);
+      out.accounts_port = static_cast<int>(d);
     } else if (key == "--viewer") {
       out.viewer = value;
       ok = !value.empty();
@@ -94,7 +101,7 @@ bool hub_options(const std::vector<std::string>& args, HubOptions& out, std::str
     }
   }
   if (out.masters.empty() && !out.help && out.serve_master == 0 && out.browse_masters.empty() &&
-      out.browse_servers.empty()) {
+      out.browse_servers.empty() && out.accounts.empty()) {
     error =
         "no master to read; next: pass --master=<host:port> (several: comma-separated), or "
         "--serve-master to run one here, or --browse-master for the game's own";
@@ -127,6 +134,9 @@ std::string hub_help(const HubSpec& spec) {
          "  --keep-gb=<n>             the archive's size cap, oldest untagged first (default "
          "none)\n"
          "  --keep-days=<n>           the archive's age cap for untagged demos (default none)\n"
+         "  --accounts=<dir>          run the account service here: the store and its key in "
+         "<dir> (docs/accounts.md)\n"
+         "  --accounts-port=<n>       the account service's UDP port (default 27901)\n"
          "  --viewer=<dir>            serve the game's web viewer from <dir> (the build's "
          "<game>_viewer folder) on the Watch and Demo pages\n"
          "  --status=<s>              a status line this often (default 60)\n"
@@ -216,8 +226,35 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     }
     gn::master_init(master, gn::MasterConfig{}, master_port);
   }
+  const auto unix_us = [] {
+    return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                    std::chrono::system_clock::now().time_since_epoch())
+                                    .count());
+  };
+  ge::account::Host accounts;
+  if (!o.accounts.empty()) {
+    gn::Address accounts_at;
+    const int port = o.accounts_port ? o.accounts_port : ge::account::kAccountPort;
+    if (!gn::parse_address(o.ip + ":" + std::to_string(port), accounts_at) ||
+        !ge::account::host_open(accounts, o.accounts, accounts_at, ge::account::HashCost{},
+                                unix_us(), error)) {
+      std::fprintf(stderr, "%s_hub: --accounts: %s\n", spec.id.c_str(), error.c_str());
+      close_udp();
+      if (o.serve_master) gn::close_transport(master_port);
+      return 1;
+    }
+    if (!accounts.warning.empty()) {
+      std::fprintf(stderr, "%s_hub: --accounts: %s\n", spec.id.c_str(), accounts.warning.c_str());
+    }
+    std::printf("%s_hub: accounts in %s, %zu held, service on %s, key %s\n", spec.id.c_str(),
+                o.accounts.c_str(), accounts.svc.store.accounts.size(),
+                gn::to_string(accounts_at).c_str(),
+                gn::key_to_hex(ge::account::service_key(accounts.svc)).c_str());
+  }
+  const auto close_accounts = [&] { ge::account::host_close(accounts); };
   HttpServer http;
   if (!http_open(http, http_at, error)) {
+    close_accounts();
     std::fprintf(stderr, "%s_hub: %s\n", spec.id.c_str(), error.c_str());
     close_udp();
     if (o.serve_master) gn::close_transport(master_port);
@@ -232,6 +269,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
   if (!o.archive.empty()) {
     if (!archive_open(archive, o.archive, error)) {
       std::fprintf(stderr, "%s_hub: %s\n", spec.id.c_str(), error.c_str());
+      close_accounts();
       http_close(http);
       close_udp();
       if (o.serve_master) gn::close_transport(master_port);
@@ -264,6 +302,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     const int64_t now = now_us();
     if (o.for_s > 0 && now >= static_cast<int64_t>(o.for_s * 1e6)) break;
     if (o.serve_master) gn::master_update(master, now);
+    ge::account::host_update(accounts, unix_us());
     gn::transport_pump(udp, now);
     poller_pump(p, udp, now);
     if (browsing) {
@@ -301,6 +340,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
+  close_accounts();
   http_close(http);
   close_udp();
   if (o.serve_master) gn::close_transport(master_port);
