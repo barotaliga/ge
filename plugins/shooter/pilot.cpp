@@ -1011,13 +1011,21 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     // as people curve into it from a walk.
     const bool near_gap = p.set.gap_circle && gap_curve_near(p, s);
     // People's hop start (`recipes`): slower than a run, a hop's stretch ahead with no gap in it.
-    if (!p.set.recipes.entries.empty() && p.set.hop && p.mode == PilotMode::walk && s.onground &&
-        p.recipe < 0 && p.clock_s >= p.recipe_retry_s && s.world != nullptr &&
-        (l.kind == NavKind::walk || l.kind == NavKind::drop) && l.mover < 0 &&
-        speed < kStrafeSpeed * s.maxspeed && !near_gap && !(l2 && leaps(l2->kind))) {
+    p.recipe_note = p.recipe >= 0                                           ? "playing"
+                    : p.set.recipes.entries.empty() || !p.set.hop           ? "-"
+                    : p.mode != PilotMode::walk                             ? "not walking"
+                    : !s.onground                                           ? "in the air"
+                    : speed >= kStrafeSpeed * s.maxspeed                    ? "running"
+                    : p.clock_s < p.recipe_retry_s                          ? "waiting"
+                    : !(l.kind == NavKind::walk || l.kind == NavKind::drop) ? "not a walk"
+                    : l.mover >= 0 || near_gap || (l2 && leaps(l2->kind))   ? "a mover, gap or jump"
+                                                                            : "looked";
+    if (p.recipe_note[0] == 'l' && s.world != nullptr) {
       const int32_t j = hop_stretch(p, s.origin);
+      p.recipe_note = j < 0 ? "no hop stretch" : gap_in(p, j) >= 0 ? "a gap in it" : "none proven";
       if (j >= 0 && gap_in(p, j) < 0 &&
           recipe_choose(p, s, yaw_at(s.origin, hop_aim(p, s.origin, kRecipeLook, j)), j)) {
+        p.recipe_note = "begun";
         p.mode = PilotMode::hop;
         p.strafe_end_node = j;
         p.gap_k = -1;
