@@ -362,7 +362,7 @@ void launch(SequelServer& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f 
       m->velocity = ax.forward * speed + ax.up * up + ax.right * across;
       m->dies_at = s.level_time + fuse;
       m->radius_damage = damage;
-      m->radius = kind == SqShot::grenade ? 160 : 165;  // the quad does not widen it
+      m->radius = kind == SqShot::grenade ? 160.0f : 165.0f;  // the quad does not widen it
       break;
     }
     case SqShot::rocket:
