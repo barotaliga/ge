@@ -113,6 +113,23 @@ Every recording came back byte for byte. Where the bytes go in a 4on4: the playe
 own noise at 1/65536 of a turn, which no prediction removes. A 4on4 broadcast is about 48 kbit/s
 raw, 25 as today's packed demo and 13 as `.ger`.
 
+## The sequel's recordings
+
+The sequel's client recording (a `.dm2`: blocks of a 32-bit length and one server packet's messages,
+ended by a length of -1) goes on the replay file through Shooter's Edge's face
+(`games/shooters_edge/client/sequel_demo.hpp`, M57f), on a `sequel` track of field-coded chunks, ten
+blocks (a second of its 10 Hz frames) a chunk and a keyframe every 30. Every message is walked and
+every field coded as the residual from its prediction: origins from the line through their last two,
+angles, frames and stats from their last, the entity number from the one before it in the list, the
+frame number from the last plus one, a sound's point from its entity's origin. An entity's flag bytes
+are coded after its number, under that entity's own last flags, so they are learned per entity while
+the bytes still come out in the file's order. A block that does not walk whole is kept as its bytes.
+
+The `se-sequel-pack` lab: the demo pack's own recording (640 blocks, 138 511 bytes) walks whole and
+comes back byte for byte at 40 418 bytes, 29% of the recording and 77% of zstd at level 19; a
+made-up one of a minute packs to 39% of zstd. The format's facts are in the working area
+(`porting/shooters-edge/sequel-demo.md`).
+
 ## Decisions
 
 | Decision | Taken | Considered and not taken |
