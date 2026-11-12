@@ -136,10 +136,10 @@ TEST(the_world_lists_the_brush_models_and_the_player) {
   const sv::RulesWorld& w = r->world;
   CHECK(std::string(r.calls->form) == "sequel");
   CHECK(w.map_name == "hall" && w.map_title == "The Hall");
-  CHECK(w.models.size() == 3 && w.models[0].empty() && w.models[1] == "*1");
-  CHECK(w.models[2] == sv::kSequelPlayerModel);
-  // Slot 0 the world, then the players, then the map's six entities.
-  CHECK(w.entities.size() == size_t(1 + sh::kMaxClients + 6));
+  CHECK(w.models.size() > 3 && w.models[0].empty() && w.models[1] == "*1");
+  CHECK(w.models.back() == sv::kSequelPlayerModel);  // after the weapons' and the shots' models
+  // Slot 0 the world, then the players, then the map's six entities, then the shots in flight.
+  CHECK(w.entities.size() == size_t(1 + sh::kMaxClients + 6 + sv::kSequelMissiles));
   CHECK(w.entities[1 + sh::kMaxClients].modelindex == 1);
   CHECK(w.entities[2 + sh::kMaxClients].origin.x == -400);
 }
@@ -151,7 +151,8 @@ TEST(a_player_spawns_ten_above_a_spot_facing_its_yaw_and_settles) {
   CHECK(p.alive && p.health == 100);
   CHECK(z_of(p) == 34);
   CHECK(r->world.clients[0].active && r->world.clients[0].name == "one");
-  CHECK(!r->world.entities[1].free && r->world.entities[1].modelindex == 2);
+  CHECK(!r->world.entities[1].free);
+  CHECK(r->world.models[size_t(r->world.entities[1].modelindex)] == sv::kSequelPlayerModel);
   Driver d{r};
   for (int i = 0; i < 60; i++) d.tick({{0, cmd()}});
   CHECK(z_of(p) == 24.125f);
