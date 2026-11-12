@@ -266,7 +266,7 @@ bool GameMenu::enhance_game(bool watch, std::string* error) {
     return false;
   };
   if (game_.empty())
-    return refuse("no game is loaded; next: OPTIONS > CLASSIC ENHANCED > LOAD GAME");
+    return refuse("No game is loaded. Load one in OPTIONS > CLASSIC ENHANCED > LOAD GAME.");
   if (job_ && job_->running()) {
     if (job_game_ == game_) {
       if (watch && open_) watch_enhancing();
@@ -282,7 +282,8 @@ bool GameMenu::enhance_game(bool watch, std::string* error) {
     if (!ce::open_source(game_, &src, &why)) return refuse(why);
   }
   const std::filesystem::path root = ce::default_cache_root();
-  if (root.empty()) return refuse("no cache folder on this machine; next: set GE_CLASSIC_CACHE");
+  if (root.empty())
+    return refuse("There is no folder on this computer to keep the enhanced files in.");
   ce::RunOptions opts;
   ce::apply_bakes(switches_, &opts);
   job_ = std::make_unique<ce::EnhanceJob>();

@@ -135,9 +135,7 @@ bool load_weapon_models(const std::string& dir, std::vector<vm::HeldModel>& out,
   for (const WeaponLook& look : kLooks) {
     vm::HeldModel m;
     if (!load_weapon_model(weapon_model_path(dir, look), look, m, error)) {
-      *error +=
-          "; next: run from the repository's root or pass the folder that holds the view "
-          "models (games/shooters_edge/content/models/view)";
+      *error += " (the game could not find its view models)";
       return false;
     }
     out.push_back(std::move(m));

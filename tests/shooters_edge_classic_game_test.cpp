@@ -157,7 +157,7 @@ TEST(classic_game_the_settings_reach_the_endpoint) {
     Server s;
     std::string error;
     CHECK(!server_open(s, se::classic_game(), c, nullptr, nullptr, error));
-    CHECK_MSG(error.find("next: lower sv_bots") != std::string::npos, error);
+    CHECK_MSG(error.find("keep sv_bots under sv_maxclients") != std::string::npos, error);
   }
   {
     ServerConfig c = arena();
@@ -166,7 +166,7 @@ TEST(classic_game_the_settings_reach_the_endpoint) {
     Server s;
     std::string error;
     CHECK(!server_open(s, se::classic_game(), c, nullptr, nullptr, error));
-    CHECK(error.find("next:") != std::string::npos);
+    CHECK_MSG(!error.empty() && error.find("next:") == std::string::npos, error);
   }
 }
 
@@ -198,7 +198,7 @@ TEST(classic_game_the_mod_s_rules_are_settings) {
   bad.rules["fraglimit"] = "lots";
   Server refused;
   CHECK(!server_open(refused, se::classic_game(), bad, nullptr, nullptr, error));
-  CHECK_MSG(error.find("next: set fraglimit") != std::string::npos, error);
+  CHECK_MSG(error.find("fraglimit \"lots\" is not a number") != std::string::npos, error);
 }
 
 TEST(classic_game_the_shooter_s_and_the_endpoint_s_settings) {
@@ -239,7 +239,7 @@ TEST(classic_game_the_shooter_s_and_the_endpoint_s_settings) {
     bad.rules[name] = value;
     Server refused;
     CHECK(!server_open(refused, se::classic_game(), bad, nullptr, nullptr, error));
-    CHECK_MSG(error.find(name) != std::string::npos && error.find("next:") != std::string::npos,
+    CHECK_MSG(error.find(name) != std::string::npos && error.find("--explain") != std::string::npos,
               error);
   }
   ServerConfig bad = arena();
@@ -399,7 +399,7 @@ TEST(classic_game_a_vote_changes_a_rule_for_the_map) {
   r.look_at = 200;
   run_session(r, c, 900, "", -1, {{120, "vote hostname mine"}, {140, "vote fraglimit 30"}});
   CHECK_MSG(r.opened, r.error);
-  CHECK(printed(r.client, "hostname may not be voted on (sv_vote_deny)"));
+  CHECK(printed(r.client, "hostname may not be voted on here"));
   CHECK(printed(r.client, "visitor calls fraglimit 30: vote yes/no"));
   CHECK(printed(r.client, "Vote passed: fraglimit 30 for this map"));
   CHECK_MSG(r.looked.find("fraglimit=30") != std::string::npos, r.looked);
@@ -440,8 +440,8 @@ TEST(classic_game_a_vote_grants_one_player_the_easy_jump_for_the_map) {
                {130, "vote speedjump visitor sometimes"},
                {140, "vote speedjump visitor on"}});
   CHECK_MSG(r.opened, r.error);
-  CHECK(printed(r.client, "speedjump: no player is nobody; next: `users`"));
-  CHECK(printed(r.client, "speedjump: sometimes is not on, off or a share 0..1"));
+  CHECK(printed(r.client, "speedjump: no player called nobody"));
+  CHECK(printed(r.client, "speedjump: \"sometimes\" is not on, off or a share 0..1"));
   CHECK(printed(r.client, "visitor calls speedjump visitor on (now visitor off): vote yes/no"));
   CHECK(printed(r.client, "Vote passed: speedjump visitor on for this map"));
   CHECK(printed(r.client, "visitor is granted the easy jump (share 0.8, cl_speedjump 1)"));

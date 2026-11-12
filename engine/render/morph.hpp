@@ -152,6 +152,10 @@ struct MorphDraw {
   // eye is adapted to, as a baked lightmap's 1 does) rather than in the sun's units: what a game
   // whose light is a map's lightmaps samples under a model.
   bool light_in_white = false;
+  // How much of it shows: 1 solid; under 1 a share of its pixels left out by an ordered pattern
+  // that moves every frame, so the temporal resolve reads it as see-through (no sorting, and it
+  // keeps its depth and motion); 0 or less: not drawn.
+  float alpha = 1;
   MorphWarp warp;
   MorphBurn burn;
 };

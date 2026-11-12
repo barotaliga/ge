@@ -86,7 +86,7 @@ std::string speedjump_list(const ClassicServer& s) {
   }
   const std::string head = "easy jump: pm_speedjump " + speedjump_share_text(server_share(s)) +
                            " for everyone who asks; ";
-  if (n == 0) return head + "granted to nobody; next: `users`, then `speedjump <id> on`\n";
+  if (n == 0) return head + "granted to nobody (type \"users\", then \"speedjump <id> on\")\n";
   return head + "granted to " + std::to_string(n) + ":\n" + t;
 }
 
@@ -152,7 +152,7 @@ bool classic_speedjump(ClassicServer& s, int userid, float share, std::string& e
   const int slot = classic_find_seat(s, std::to_string(userid));
   if (slot < 0) {
     error = "speedjump: no player has user id " + std::to_string(userid) +
-            "; next: `users` lists the ids";
+            " (type \"users\" for the ids)";
     return false;
   }
   if (share > 1) share = 1;
@@ -188,7 +188,7 @@ bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) 
   const std::string who = pg::word(w, 1);
   const int slot = classic_find_seat(s, who);
   if (slot < 0) {
-    out = "speedjump: no player is " + who + "; next: `users` lists the ids and names\n";
+    out = "speedjump: no player called " + who + " (type \"users\" for the ids and names)\n";
     return true;
   }
   const std::string what = w.count >= 3 ? pg::word(w, 2) : "on";
@@ -196,8 +196,7 @@ bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) 
   if (what == "on")
     share = kGrantShare;
   else if (what != "off" && !speedjump_parse_share(what, share)) {
-    out =
-        "speedjump: " + what + " is not on, off or a share 0..1; next: speedjump " + who + " on\n";
+    out = "speedjump: \"" + what + "\" is not on, off or a share 0..1\n";
     return true;
   }
   std::string error;
@@ -290,29 +289,29 @@ void add_admin_commands(ge::console::Console& con, client::Listen& l, Remote& r)
                       return;
                     }
                     if (!hosted(c, a))
-                      c.print("users: no match is hosted or joined; next: map <name> or connect");
+                      c.print("users: you are not in a match. Start one with map, or connect.");
                   });
   con.add_command("status",
                   "status: the match you host: every player's id, ping, address and easy jump",
                   [&r, hosted](Con& c, const Args& a) {
                     if (hosted(c, a)) return;
                     c.print(r.active ? "status: answers for the match you host; on a joined server "
-                                       "next: users, or rcon <password> status"
-                                     : "status: no match is hosted; next: map <name>");
+                                       "type users, or rcon <password> status"
+                                     : "status: you are not hosting a match");
                   });
   con.add_command("speedjump",
                   "speedjump <id|name> on|off|<share 0..1>: grant one player the easy jump on "
                   "the match you host (alone: who has it)",
                   [&r, hosted](Con& c, const Args& a) {
                     if (hosted(c, a)) return;
-                    c.print(r.active ? "speedjump: the server's administrator grants it; next: "
-                                       "rcon <password> speedjump <id> on"
-                                     : "speedjump: no match is hosted; next: map <name>");
+                    c.print(r.active ? "speedjump: the server's administrator grants it "
+                                       "(rcon <password> speedjump <id> on)"
+                                     : "speedjump: you are not hosting a match");
                   });
   con.add_command("rcon", "rcon <password> <line>: a line for the console of the server joined",
                   [&r](Con& c, const Args& a) {
                     if (!r.active) {
-                      c.print("rcon: not connected; next: connect <host>, then rcon again");
+                      c.print("rcon: not connected to a server");
                       return;
                     }
                     if (a.size() < 3) {

@@ -201,14 +201,14 @@ std::vector<std::string> classic_problems(const ui::Menu& menu, const ClassicLay
     if (r.w <= 0) continue;
     if (r.x < screen.x || r.y < screen.y || r.right() > screen.right() ||
         r.bottom() > screen.bottom())
-      out.push_back("page `" + page.id + "`, row `" + it.id + "` is off the screen");
+      out.push_back("page '" + page.id + "', row '" + it.id + "' is off the screen");
     if (layout.strip) continue;
     const size_t cap = it.kind == ui::ItemKind::label ? 40 : kLabelChars;
     if (it.text.size() > cap)
-      out.push_back("page `" + page.id + "`, row `" + it.id + "`: the label \"" + it.text +
+      out.push_back("page '" + page.id + "', row '" + it.id + "': the label \"" + it.text +
                     "\" is wider than its " + std::to_string(cap) + " glyphs; shorten it");
     if (value_of(it).size() > kValueChars)
-      out.push_back("page `" + page.id + "`, row `" + it.id + "`: the value \"" + value_of(it) +
+      out.push_back("page '" + page.id + "', row '" + it.id + "': the value \"" + value_of(it) +
                     "\" is wider than its 12 glyphs; shorten its choice");
   }
   return out;

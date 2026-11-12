@@ -38,7 +38,7 @@ TEST(an_unknown_flag_is_refused_with_the_console_line_it_followed) {
   CHECK(!parse_words({"+r_look", "modern", "-frobnicate", "1"}, a, why));
   CHECK(why.find("unknown flag -frobnicate") != std::string::npos);
   CHECK(why.find("+r_look") != std::string::npos);
-  CHECK(why.find("next:") != std::string::npos);
+  CHECK(why.find("next:") == std::string::npos);  // a player reads it
   cl::Args b;
   CHECK(!parse_words({"--frobs=2"}, b, why));
   CHECK(why.find("unknown flag --frobs=2") != std::string::npos);
@@ -53,14 +53,14 @@ TEST(a_clip_is_read_off_the_demos_clock) {
   CHECK(a.from == 271 && a.to == 279 && a.highlight == 3 && a.gif_width == 320);
   cl::Args b;
   CHECK(!parse_words({"--from=soon"}, b, why));
-  CHECK(why.find("--from=soon") != std::string::npos && why.find("next:") != std::string::npos);
+  CHECK(why.find("--from=soon") != std::string::npos && why.find("m:ss") != std::string::npos);
 }
 
 TEST(benchmark_names_its_new_name) {
   cl::Args a;
   std::string why;
   CHECK(!parse_words({"+r_look", "classic", "-benchmark", "demo1"}, a, why));
-  CHECK(why.find("renamed to -timedemo") != std::string::npos);
+  CHECK(why.find("renamed: use -timedemo") != std::string::npos);
 }
 
 TEST(a_negative_number_is_a_console_word) {
