@@ -63,10 +63,12 @@
 //   move (its hands, its strafe, its view: pilot_gaps.hpp `hop_cast`), not a forecast held forward;
 //   judging.
 // - `aimhop`: the hop kept while aiming (bot.cpp): the landings jumped, and in the air the key
-//   set under the aim's view that best carries the velocity on round the hop's way; judging.
+//   set under the aim's view that best carries the velocity on round the hop's way; on.
 // - `airkeys`: a hop's air under the hand's view (bot.cpp): the pilot's side key, alone or with
 //   forward, pressed only while it carries the velocity on under the view pressed, else let go;
 //   on.
+// - `airview`: in a hop's air the mouse hand aims at the velocity's heading, a little toward the
+//   turn (bot.cpp), not at the pilot's view, already late by the pilot's own hands; judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
@@ -79,7 +81,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -157,9 +159,10 @@ enum class Feature : uint8_t {
   pilotcast,
   aimhop,
   airkeys,
+  airview,
   trial,
 };
-constexpr size_t kFeatures = 65;
+constexpr size_t kFeatures = 66;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

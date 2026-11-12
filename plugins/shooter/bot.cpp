@@ -115,6 +115,9 @@ void hand_step(Bot& b, const double want[2], double dt, double tol_x, double tol
 // exactly; dm2 head to head: -5.6 a match without the curve, +4.6 with it). The set held last is
 // kept unless another beats it by `kAirKeep`.
 constexpr double kAirBand = 15, kAirTurnCost = 0.5, kAirKeep = 0.3, kAirCurve = 0.3;
+// `airview`: the hop's view in the air this far toward the turn off the velocity, degrees, once
+// the flight is past this speed, units/s.
+constexpr float kAirViewLead = 2, kAirViewSpeed = 100;
 
 int aim_air_set(Vec3f v, float view_yaw, float way_yaw, float maxspeed, float accel, double dt,
                 int held, uint8_t allowed = 0xff, int curve = 0) {
@@ -601,6 +604,22 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       // are the same); a blast jump's pitched view stays the pilot's. Under water it looks along
       // the swim within kSwimBand, at ease.
       double want_view[2] = {b.yaw + wrap(pilot_yaw - b.yaw), 0};
+      const Pilot& vp = b.pilot.pilot;
+      const float flat_v = std::sqrt(self.velocity.x * self.velocity.x +
+                                     self.velocity.y * self.velocity.y);
+      if (b.airview && !swim3d && vp.mode == PilotMode::hop &&
+          (self.flags & kFlagOnGround) == 0 && !vp.gap_flight && vp.lip_pressed_s < 0 &&
+          vp.recipe < 0 && vp.strafe_side != 0 && flat_v > kAirViewSpeed) {
+        // THE HOP'S VIEW IN THE AIR (`airview`): on the velocity, `kAirViewLead` toward the turn
+        // (the right side turns clockwise), as people's sits 2-4 degrees off it; the pilot's view
+        // is already a hand's lag late, and the mouse's strokes after it put it past the window
+        // where the side key gains.
+        const float vh = static_cast<float>(
+            core::libm::atan2(static_cast<double>(self.velocity.y),
+                              static_cast<double>(self.velocity.x)) *
+            (180 / core::kPi));
+        want_view[0] = b.yaw + wrap(vh - static_cast<float>(vp.strafe_side) * kAirViewLead - b.yaw);
+      }
       double out[2];
       b.view_by = swim3d ? "swim" : "air";
       if (shot_due) {  // the stroke onto the jump's view, timed to land with its shot
