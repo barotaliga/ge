@@ -31,19 +31,30 @@ constexpr float kStep = 0.1f;   // a rules frame, s
 constexpr int32_t kWorldMask = sh::kSqSolid | sh::kSqWindow;
 constexpr int32_t kSurfSky = 0x4;  // a sky surface: a shot that reaches it is gone
 constexpr uint32_t kEveryone = 0xffffffffu;
-constexpr const char* kMissileModels[7] = {"models/objects/laser/tris.md2",
-                                           "",
-                                           "",
-                                           "models/objects/grenade/tris.md2",
-                                           "models/objects/rocket/tris.md2",
-                                           "",
-                                           "sprites/s_bfg1.sp2"};
+constexpr const char* kMissileModels[kSqShotKinds] = {"models/objects/laser/tris.md2",
+                                                      "",
+                                                      "",
+                                                      "models/objects/grenade/tris.md2",
+                                                      "models/objects/rocket/tris.md2",
+                                                      "",
+                                                      "sprites/s_bfg1.sp2",
+                                                      "models/objects/grenade2/tris.md2"};
 constexpr const char* kClick = "weapons/noammo.wav";
 constexpr const char* kBoom = "weapons/rocklx1a.wav";
 constexpr const char* kGrenadeBoom = "weapons/grenlx1a.wav";
 constexpr const char* kBounce = "weapons/grenlb1b.wav";
+constexpr const char* kHandBounce = "weapons/hgrenb1a.wav";
+constexpr const char* kFuse = "weapons/hgrenc1b.wav";  // the hand grenade's fuse lit
+constexpr const char* kGib = "misc/udeath.wav";
+constexpr float kGibHealth = -40;  // a death under this throws the body apart
+constexpr float kItemHalf = 15;    // a dropped item's box, ±15 each way
+
+bool grenade(SqShot k) { return k == SqShot::grenade || k == SqShot::hand_grenade; }
 
 bool deathmatch(const SequelServer& s) { return s.cvars.find("deathmatch")->on(); }
+bool dmflag(const SequelServer& s, int bit) {
+  return deathmatch(s) && (s.cvars.find("dmflags")->integer() & bit) != 0;
+}
 int skill(const SequelServer& s) {
   return std::clamp(static_cast<int>(s.cvars.find("skill")->number), 0, 3);
 }
@@ -101,6 +112,16 @@ void effect(SequelServer& s, const char* name, sh::Vec3f at) {
   ev.origin = at;
   ev.values[1] = 1;
   ev.text = name;
+  event(s, std::move(ev));
+}
+
+void print_to(SequelServer& s, int slot, std::string text) {
+  NetEvent ev;
+  ev.kind = EventKind::print;
+  ev.to = 1u << slot;
+  ev.reliable = true;
+  ev.level = 2;
+  ev.text = std::move(text);
   event(s, std::move(ev));
 }
 
@@ -263,7 +284,7 @@ size_t missile_row(const SequelServer& s, const SequelMissile& m) {
 // the flash; the BFG's ball also strikes everything within 1000 it and its owner can both reach.
 void explode(SequelServer& s, SequelMissile& m, sh::Vec3f at, int ignore) {
   m.live = false;
-  sound(s, int(missile_row(s, m)), at, m.kind == SqShot::grenade ? kGrenadeBoom : kBoom);
+  sound(s, int(missile_row(s, m)), at, grenade(m.kind) ? kGrenadeBoom : kBoom);
   effect(s, m.kind == SqShot::bfg ? "te_bfg_bigexplosion" : "te_explosion", at);
   blast(s, at, m.owner, m.radius_damage, m.radius, ignore, m.weapon, m.kind == SqShot::bfg);
   if (m.kind != SqShot::bfg) return;
@@ -315,8 +336,10 @@ void rail(SequelServer& s, int slot, sh::Vec3f start, const sh::ViewAxes& ax, in
   }
 }
 
+// A missile from `start` along the axes; the hand grenade's `speed` and `fuse` are its throw's.
 void launch(SequelServer& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f start,
-            const sh::ViewAxes& ax, int damage, int quad, int weapon) {
+            const sh::ViewAxes& ax, int damage, int quad, int weapon, float speed = 600,
+            double fuse = 2.5) {
   const Line reach = shoot_line(s, origin, start, 1u << slot);
   SequelMissile* m = new_missile(s);
   if (m == nullptr) return;
@@ -332,13 +355,14 @@ void launch(SequelServer& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f 
       m->velocity = ax.forward * 1000;
       m->dies_at = s.level_time + 2;
       break;
-    case SqShot::grenade: {
+    case SqShot::grenade:
+    case SqShot::hand_grenade: {
       const float up = 200 + crandom(s) * 10;  // the draws in a fixed order (above)
       const float across = crandom(s) * 10;
-      m->velocity = ax.forward * 600 + ax.up * up + ax.right * across;
-      m->dies_at = s.level_time + 2.5;
+      m->velocity = ax.forward * speed + ax.up * up + ax.right * across;
+      m->dies_at = s.level_time + fuse;
       m->radius_damage = damage;
-      m->radius = 160;
+      m->radius = kind == SqShot::grenade ? 160 : 165;  // the quad does not widen it
       break;
     }
     case SqShot::rocket:
@@ -360,9 +384,42 @@ void launch(SequelServer& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f 
     if (reach.player >= 0) hurt(s, reach.player, slot, ax.forward, m->damage, 1, false, weapon);
     if (kind == SqShot::bolt)
       m->live = false;
-    else if (kind != SqShot::grenade)
+    else if (!grenade(kind))
       explode(s, *m, m->origin, reach.player);
   }
+}
+
+// The hand grenade let go at `speed` with `fuse` left, or (no speed) held to the end of its fuse:
+// it explodes in the hand.
+void throw_grenade(SequelServer& s, int slot, float speed, double fuse) {
+  SequelPlayer& p = s.players[slot];
+  const int w = int(SqWeapon::hand_grenade);
+  const SqWeaponRow& r = kSqWeapons[w];
+  const sh::Vec3f origin = unpack(p.move.origin);
+  const sh::ViewAxes ax = sh::angle_vectors(p.view_angles);
+  const sh::Vec3f eye = origin + sh::Vec3f{0, 0, p.view_height - 8};
+  const int quad = p.quad_until > s.level_time ? 4 : 1;
+  const int damage = r.damage_dm * quad;
+  if (speed <= 0) {
+    SequelMissile* m = new_missile(s);
+    if (m == nullptr) return;
+    *m = SequelMissile{};
+    m->live = true;
+    m->kind = SqShot::hand_grenade;
+    m->owner = slot;
+    m->weapon = kSqByHeldGrenade;
+    m->origin = origin;
+    m->radius_damage = damage;
+    m->radius = 165;
+    explode(s, *m, origin, -1);
+    return;
+  }
+  if (p.silencer_shots > 0)
+    p.silencer_shots--;
+  else
+    sound(s, slot + 1, origin, r.sound);
+  launch(s, slot, SqShot::hand_grenade, origin, eye + ax.forward * r.forward + ax.right * r.right,
+         ax, damage, quad, w, speed, fuse);
 }
 
 void fire(SequelServer& s, int slot, int shots) {
@@ -413,6 +470,38 @@ void fire(SequelServer& s, int slot, int shots) {
   }
 }
 
+// Item `item` thrown from player `slot`: 100 forward along his view turned `turn` degrees, 300
+// up, from 24 ahead and 16 below his eye (nearer when a wall is closer); his to take back after
+// 1 s, gone after 30 s in deathmatch. Null when every drop's row is in use.
+SequelDrop* toss(SequelServer& s, int slot, int item, float turn) {
+  SequelDrop* d = nullptr;
+  for (SequelDrop& free : s.drops)
+    if (!free.live) {
+      d = &free;
+      break;
+    }
+  if (d == nullptr) return nullptr;
+  const SequelPlayer& p = s.players[slot];
+  const sh::Vec3f origin = unpack(p.move.origin);
+  const sh::ViewAxes ax = sh::angle_vectors(p.view_angles + sh::Vec3f{0, turn, 0});
+  sh::Vec3f start = origin + sh::Vec3f{0, 0, p.view_height - 16} + ax.forward * 24;
+  const float a[3] = {origin.x, origin.y, origin.z}, b[3] = {start.x, start.y, start.z};
+  const float lo[3] = {-kItemHalf, -kItemHalf, -kItemHalf};
+  const float hi[3] = {kItemHalf, kItemHalf, kItemHalf};
+  const ge::brush::Trace t = s.tracer->trace(a, b, lo, hi, kWorldMask);
+  if (t.fraction < 1) start = {t.end[0], t.end[1], t.end[2]};
+  *d = SequelDrop{};
+  d->live = true;
+  d->item = item;
+  d->owner = slot;
+  d->origin = start;
+  d->velocity = ax.forward * 100;
+  d->velocity.z = 300;
+  d->takeable_at = s.level_time + 1;
+  d->dies_at = deathmatch(s) ? s.level_time + 30 : 0;
+  return d;
+}
+
 const char* obituary(int weapon) {
   switch (static_cast<SqWeapon>(weapon)) {
     case SqWeapon::blaster:
@@ -435,7 +524,10 @@ const char* obituary(int weapon) {
       return " was pierced by %'s rail.";
     case SqWeapon::bfg:
       return " vanished in %'s BFG blast.";
+    case SqWeapon::hand_grenade:
+      return " caught %'s hand grenade.";
   }
+  if (weapon == kSqByHeldGrenade) return " was too close to %'s last grenade.";
   return " was killed by %.";
 }
 
@@ -452,13 +544,14 @@ void fight_precache(SequelServer& s) {
     return static_cast<int>(s.models.size()) - 1;
   };
   for (int w = 0; w < kSqWeaponCount; w++) s.weapon_models[w] = model(kSqWeapons[w].view_model);
-  for (int k = 0; k < 7; k++) s.missile_models[k] = model(kMissileModels[k]);
+  for (int k = 0; k < kSqShotKinds; k++) s.missile_models[k] = model(kMissileModels[k]);
   const auto add_sound = [&s](const char* name) {
     if (std::find(s.sounds.begin(), s.sounds.end(), name) == s.sounds.end())
       s.sounds.emplace_back(name);
   };
   for (const SqWeaponRow& r : kSqWeapons) add_sound(r.sound);
-  for (const char* name : {kClick, kBoom, kGrenadeBoom, kBounce}) add_sound(name);
+  for (const char* name : {kClick, kBoom, kGrenadeBoom, kBounce, kHandBounce, kFuse, kGib})
+    add_sound(name);
 }
 
 void fight_spawn(SequelServer& s, int slot) {
@@ -473,6 +566,7 @@ void fight_spawn(SequelServer& s, int slot) {
   p.drown_at = 0;
   p.drown_damage = 2;
   p.old_fall = 0;
+  p.gibbed = false;
 }
 
 bool fight_use(SequelServer& s, int slot, int item) {
@@ -550,7 +644,7 @@ void fight_body_frame(SequelServer& s, int slot) {
 }
 
 bool fight_limits(SequelServer& s) {
-  if (!s.pending_map.empty()) return false;
+  if (!s.pending_map.empty() || s.intermission_at > 0) return false;
   const int frags = static_cast<int>(s.cvars.find("fraglimit")->number);
   const double minutes = s.cvars.find("timelimit")->number;
   std::string why;
@@ -574,23 +668,26 @@ bool fight_limits(SequelServer& s) {
   std::string next = list.empty() ? s.map_name : list[0];
   for (size_t i = 0; i < list.size(); i++)
     if (list[i] == s.map_name) next = list[(i + 1) % list.size()];
-  s.pending_map = next;
-  s.pending_change = MapChange::change_level;
+  s.next_map = dmflag(s, 32) ? s.map_name : next;  // the same level again
   return true;
 }
 
 void fight_clear(SequelServer& s) {
   for (SequelMissile& m : s.missiles) m = SequelMissile{};
+  for (SequelDrop& d : s.drops) d = SequelDrop{};
   s.obituaries.clear();
 }
 
 void fight_step(SequelServer& s, int slot, bool attack) {
   SequelPlayer& p = s.players[slot];
   if (!fightable(s, slot)) return;
-  const bool infinite = deathmatch(s) && (s.cvars.find("dmflags")->integer() & 8192) != 0;
-  const SqStep step = sq_hand_step(p.hand, p.body, attack, s.level_time, infinite);
+  const SqStep step = sq_hand_step(p.hand, p.body, attack, s.level_time, dmflag(s, 8192));
   if (step.click) sound(s, slot + 1, unpack(p.move.origin), kClick);
-  if (step.shots > 0) fire(s, slot, step.shots);
+  if (step.lit) sound(s, slot + 1, unpack(p.move.origin), kFuse);
+  if (step.shots > 0 && p.hand.weapon == int(SqWeapon::hand_grenade))
+    throw_grenade(s, slot, step.throw_speed, step.fuse_left);
+  else if (step.shots > 0)
+    fire(s, slot, step.shots);
 }
 
 void fight_missiles(SequelServer& s) {
@@ -598,14 +695,14 @@ void fight_missiles(SequelServer& s) {
   for (SequelMissile& m : s.missiles) {
     if (!m.live) continue;
     if (s.level_time + 0.001 >= m.dies_at) {
-      if (m.kind == SqShot::grenade)
+      if (grenade(m.kind))
         explode(s, m, m.origin, -1);
       else
         m.live = false;
       continue;
     }
     if (m.resting) continue;
-    if (m.kind == SqShot::grenade) m.velocity.z -= gravity * kStep;
+    if (grenade(m.kind)) m.velocity.z -= gravity * kStep;
     const sh::Vec3f to = m.origin + m.velocity * kStep;
     const uint32_t owner = m.owner >= 0 ? 1u << m.owner : 0u;
     const Line l = shoot_line(s, m.origin, to, owner);
@@ -616,7 +713,8 @@ void fight_missiles(SequelServer& s) {
           hurt(s, hit, m.owner, m.velocity, m.damage, 1, true, m.weapon);
           m.live = false;
           break;
-        case SqShot::grenade: {
+        case SqShot::grenade:
+        case SqShot::hand_grenade: {
           const float d = sh::length(l.end - centre_of(s.players[hit]));
           hurt(s, hit, m.owner, m.velocity, static_cast<int>(float(m.damage) - 0.5f * d),
                static_cast<int>(float(m.damage) - 0.5f * d), false, m.weapon);
@@ -640,14 +738,16 @@ void fight_missiles(SequelServer& s) {
           effect(s, "te_blaster", l.end);
           m.live = false;
           break;
-        case SqShot::grenade: {  // a bounce off the wall
+        case SqShot::grenade:
+        case SqShot::hand_grenade: {  // a bounce off the wall
           m.origin = l.end + l.normal * 0.1f;
           m.velocity = m.velocity - l.normal * (1.5f * sh::dot(m.velocity, l.normal));
           if (l.normal.z > 0.7f && sh::length(m.velocity) < 60) {
             m.velocity = {};
             m.resting = true;
           }
-          sound(s, int(missile_row(s, m)), m.origin, kBounce);
+          sound(s, int(missile_row(s, m)), m.origin,
+                m.kind == SqShot::hand_grenade ? kHandBounce : kBounce);
           break;
         }
         default:
@@ -696,6 +796,13 @@ bool fight_command(SequelServer& s, int slot, const std::string& cmd, const std:
       fight_use(s, slot, sq_item_named(arg));
     return true;
   }
+  if (cmd == "drop") {
+    const int item = sq_item_named(arg);
+    const int w = sq_weapon_named(arg);
+    fight_drop(s, slot,
+               w >= 0 && kSqWeapons[w].item != nullptr ? sq_item(kSqWeapons[w].item) : item);
+    return true;
+  }
   if (cmd != "weapnext" && cmd != "weapprev") return false;
   const int way = cmd == "weapnext" ? 1 : kSqWeaponCount - 1;
   const int from = p.hand.pending >= 0 ? p.hand.pending : p.hand.weapon;
@@ -726,9 +833,12 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
     line = victim + words;
   } else {
     p.frags -= 1;
-    if (killer == slot &&
-        (weapon == int(SqWeapon::rocket_launcher) || weapon == int(SqWeapon::grenade_launcher) ||
-         weapon == int(SqWeapon::bfg)))
+    if (killer == slot && weapon == kSqByHeldGrenade)
+      line = victim + " held on to a grenade too long.";
+    else if (killer == slot &&
+             (weapon == int(SqWeapon::rocket_launcher) ||
+              weapon == int(SqWeapon::grenade_launcher) || weapon == int(SqWeapon::bfg) ||
+              weapon == int(SqWeapon::hand_grenade)))
       line = victim + " blew themselves up.";
     else if (killer == slot)
       line = victim + " gave up.";
@@ -745,6 +855,142 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
   }
   s.obituaries.push_back(line);
   print_all(s, line + "\n");
+  const sh::Vec3f at = unpack(p.move.origin);
+  if (p.health < kGibHealth) {  // thrown apart: the body is gone
+    p.gibbed = true;
+    sound(s, slot + 1, at, kGib);
+    NetEvent ev;
+    ev.kind = EventKind::point_effect;
+    ev.to = kEveryone;
+    ev.origin = at;
+    ev.values[1] = 1;
+    ev.values[3] = 32;
+    ev.text = "te_blood";
+    event(s, std::move(ev));
+  }
+  // In deathmatch the weapon in hand (not the blaster, only with its ammo) is dropped, and the quad
+  // with more than 1 s left when `dmflags` 16384 says so, the two thrown 22.5 degrees apart.
+  if (deathmatch(s)) {
+    const SqWeaponRow& r = kSqWeapons[p.hand.weapon];
+    const bool drop_weapon =
+        r.item != nullptr && r.ammo != SqAmmo::none && p.body.ammo[static_cast<int>(r.ammo)] > 0;
+    const bool quad = dmflag(s, 16384) && p.quad_until > s.level_time + 1;
+    const float turn = drop_weapon && quad ? 11.25f : 0;
+    if (drop_weapon) toss(s, slot, sq_item(r.item), -turn);
+    if (quad) {
+      SequelDrop* d = toss(s, slot, sq_item("item_quad"), turn);
+      if (d != nullptr) d->quad_left = p.quad_until - s.level_time;
+    }
+  }
+  p.quad_until = p.invulnerable_until = p.breather_until = p.suit_until = 0;
+  p.silencer_shots = 0;
+}
+
+bool fight_dmflag(const SequelServer& s, int bit) { return dmflag(s, bit); }
+
+bool fight_drop(SequelServer& s, int slot, int item) {
+  if (item < 0 || item >= kSqItemCount || !fightable(s, slot)) return false;
+  SequelPlayer& p = s.players[slot];
+  const SqItem& it = kSqItems[item];
+  switch (it.kind) {
+    case SqKind::weapon: {
+      if (dmflag(s, 4)) {
+        print_to(s, slot, "Weapons stay in this match, so none can be dropped.\n");
+        return false;
+      }
+      if (p.body.counts[item] <= 0) return false;
+      if (sq_weapon_of_item(item) == p.hand.weapon && p.body.counts[item] == 1) {
+        print_to(s, slot, "You can't drop the weapon in your hand.\n");
+        return false;
+      }
+      if (toss(s, slot, item, 0) == nullptr) return false;
+      p.body.counts[item]--;
+      return true;
+    }
+    case SqKind::ammo: {
+      int& held = p.body.ammo[static_cast<int>(it.ammo)];
+      const int n = std::min(held, it.amount);
+      if (n <= 0) return false;
+      if (p.hand.weapon == int(SqWeapon::hand_grenade) && it.ammo == SqAmmo::grenades &&
+          held - n <= 0) {
+        print_to(s, slot, "You can't drop the weapon in your hand.\n");
+        return false;
+      }
+      SequelDrop* d = toss(s, slot, item, 0);
+      if (d == nullptr) return false;
+      d->count = n;
+      held -= n;
+      return true;
+    }
+    case SqKind::powerup:
+      if (p.body.counts[item] <= 0 || toss(s, slot, item, 0) == nullptr) return false;
+      p.body.counts[item]--;
+      return true;
+    default:
+      return false;
+  }
+}
+
+void fight_drops(SequelServer& s) {
+  const float gravity = static_cast<float>(s.cvars.find("sv_gravity")->number);
+  const float lo[3] = {-kItemHalf, -kItemHalf, -kItemHalf};
+  const float hi[3] = {kItemHalf, kItemHalf, kItemHalf};
+  for (SequelDrop& d : s.drops) {
+    if (!d.live) continue;
+    if (d.dies_at > 0 && s.level_time + 0.001 >= d.dies_at) {
+      d.live = false;
+      continue;
+    }
+    if (d.resting) continue;
+    d.velocity.z -= gravity * kStep;
+    const sh::Vec3f to = d.origin + d.velocity * kStep;
+    const float a[3] = {d.origin.x, d.origin.y, d.origin.z}, b[3] = {to.x, to.y, to.z};
+    const ge::brush::Trace t = s.tracer->trace(a, b, lo, hi, kWorldMask);
+    if (t.start_solid || t.all_solid) {
+      d.velocity = {};
+      d.resting = true;
+      continue;
+    }
+    d.origin = {t.end[0], t.end[1], t.end[2]};
+    if (t.fraction >= 1) continue;
+    const sh::Vec3f n{t.plane.n[0], t.plane.n[1], t.plane.n[2]};
+    if (n.z > 0.7f) {  // a floor: it lies there
+      d.velocity = {};
+      d.resting = true;
+    } else {  // a wall: it slides along
+      d.velocity = d.velocity - n * sh::dot(d.velocity, n);
+    }
+  }
+}
+
+void fight_touch_drops(SequelServer& s, int slot) {
+  if (!fightable(s, slot)) return;
+  SequelPlayer& p = s.players[slot];
+  const sh::Vec3f at = unpack(p.move.origin);
+  const sh::Vec3f lo = at + p.mins, hi = at + p.maxs;
+  for (SequelDrop& d : s.drops) {
+    if (!d.live || (d.owner == slot && s.level_time + 0.001 < d.takeable_at)) continue;
+    if (lo.x > d.origin.x + kItemHalf || hi.x < d.origin.x - kItemHalf ||
+        lo.y > d.origin.y + kItemHalf || hi.y < d.origin.y - kItemHalf ||
+        lo.z > d.origin.z + kItemHalf || hi.z < d.origin.z - kItemHalf)
+      continue;
+    const SqItem& it = kSqItems[d.item];
+    if (d.quad_left > 0) {  // a dropped quad is used at once with the time it had left
+      p.quad_until = std::max(p.quad_until, s.level_time) + d.quad_left;
+    } else if (it.kind == SqKind::ammo && d.count > 0) {
+      const int k = static_cast<int>(it.ammo);
+      if (p.body.ammo[k] >= p.body.max_ammo[k]) continue;
+      p.body.ammo[k] = std::min(p.body.ammo[k] + d.count, p.body.max_ammo[k]);
+    } else {
+      p.body.health = static_cast<int>(p.health);
+      if (!sq_pick_up(d.item, p.body, deathmatch(s), skill(s), s.level_time)) continue;
+      p.health = static_cast<float>(p.body.health);
+    }
+    d.live = false;
+    p.taken.push_back(d.item);
+    sound(s, slot + 1, at, it.sound);
+    if (d.quad_left <= 0) fight_took(s, slot, d.item);
+  }
 }
 
 void fight_rows(SequelServer& s) {
@@ -756,12 +1002,22 @@ void fight_rows(SequelServer& s) {
     PlayerNumbers& n = w.clients[i].numbers;
     const SqWeaponRow& r = kSqWeapons[p.hand.weapon];
     n.weapon = float(p.hand.weapon + 1);
-    n.weapon_model = p.alive ? s.weapon_models[p.hand.weapon] : 0;
+    n.weapon_model = p.alive && s.intermission_at <= 0 ? s.weapon_models[p.hand.weapon] : 0;
     n.weapon_frame = float(p.hand.frame);
     n.current_ammo = r.ammo == SqAmmo::none ? 0 : float(p.body.ammo[static_cast<int>(r.ammo)]);
   }
   const size_t first = fight_first_row(s);
-  if (w.entities.size() < first + kSequelMissiles) return;
+  if (w.entities.size() < first + kSequelMissiles + kSequelDrops) return;
+  for (int k = 0; k < kSequelDrops; k++) {
+    const SequelDrop& d = s.drops[k];
+    WorldEntity& e = w.entities[first + kSequelMissiles + size_t(k)];
+    e = WorldEntity{};
+    if (!d.live) continue;
+    e.free = false;
+    e.origin = d.origin;
+    e.velocity = d.velocity;
+    e.modelindex = s.item_models[size_t(d.item)];
+  }
   for (int k = 0; k < kSequelMissiles; k++) {
     const SequelMissile& m = s.missiles[k];
     WorldEntity& e = w.entities[first + size_t(k)];
