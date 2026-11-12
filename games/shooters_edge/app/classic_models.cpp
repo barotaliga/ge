@@ -416,4 +416,21 @@ bool light_under(const LightProbe& probe, const br::Map& map, const float at[3],
   return hit;
 }
 
+float glow_colour(const gr::MorphSkin& skin, float rgb[3]) {
+  rgb[0] = rgb[1] = rgb[2] = 0;
+  const size_t n = size_t(skin.width) * skin.height;
+  if (skin.marks.size() < n || skin.rgba.size() < n * 4 || n == 0) return 0;
+  double sum[3] = {0, 0, 0};
+  size_t glowing = 0;
+  for (size_t i = 0; i < n; i++) {
+    if (skin.marks[i] != gr::kMarkGlow) continue;
+    for (size_t c = 0; c < 3; c++) sum[c] += to_linear(skin.rgba[i * 4 + c]);
+    glowing++;
+  }
+  const double top = std::max({sum[0], sum[1], sum[2]});
+  if (glowing == 0 || top <= 0) return 0;
+  for (size_t c = 0; c < 3; c++) rgb[c] = float(sum[c] / top);
+  return float(double(glowing) / double(n));
+}
+
 }  // namespace shooters_edge::models

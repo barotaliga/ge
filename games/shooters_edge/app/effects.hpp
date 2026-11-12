@@ -130,9 +130,10 @@ bool explosion_light(const double at[3], double age, Light* out);
 // and a light's level of 1 is a luxel of 128 (`DynamicLight::colour`), times `strength` and
 // its own `boost`.
 // `toward` takes the unit way to where the added light comes from, each light weighted by its
-// share (all 0 when none reaches).
+// share (all 0 when none reaches). A light riding on entity `self` (its `entity`; 0: none) is
+// left out: a model is not lit by its own glow.
 void dynamic_light_at(std::span<const Light> lights, const double w[3], double strength,
-                      double rgb[3], double toward[3]);
+                      double rgb[3], double toward[3], int self = 0);
 
 // THE SCREEN'S BLEND: what surrounds the eye, how hurt the player is now, the powers held.
 enum class Medium : uint8_t { air, water, slime, lava };
