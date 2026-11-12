@@ -17,7 +17,7 @@ namespace ge::brush::app {
 namespace {
 
 constexpr double kPi = 3.14159265358979323846;
-constexpr int kSkyLeaf = -6, kSolidLeaf = -2;  // the leaves' contents (map.hpp)
+constexpr int kEmptyLeaf = -1, kSkyLeaf = -6, kSolidLeaf = -2;  // the leaves' contents (map.hpp)
 
 // The leaf at an engine point (x, up, z in metres).
 const Leaf& leaf_of(const Map& map, double x, double y, double z) {
@@ -79,6 +79,19 @@ PoolSite pool_site(const Map& map, const LiquidPatch& p, double from) {
       int k = 0;  // tenths of a metre down from 5 cm under the top
       while (k < 640 && liquid(leaf_of(map, x, p.level - 0.05 - 0.1 * k, z))) ++k;
       if (k > 0) site.depth = std::max(site.depth, 0.1 * k);
+    }
+  }
+  // THE AIR UNDER IT: on a finer grid (a shaft a player drops through may be a few metres across),
+  // down from the top to the liquid's end, and air there rather than a bed.
+  for (int i = 0; i < 16 && !site.open_below; ++i) {
+    for (int j = 0; j < 16 && !site.open_below; ++j) {
+      const double x = p.box[0] + (i + 0.5) / 16 * (p.box[2] - p.box[0]);
+      const double z = p.box[1] + (j + 0.5) / 16 * (p.box[3] - p.box[1]);
+      int k = 0;
+      while (k < 640 && liquid(leaf_of(map, x, p.level - 0.05 - 0.1 * k, z))) ++k;
+      if (k == 0) continue;
+      const Leaf& under = leaf_of(map, x, p.level - 0.05 - 0.1 * k, z);
+      site.open_below = !under.solid && under.contents == kEmptyLeaf;
     }
   }
   // THE AIR: rays from points over the pool (3 x 3, at a hand and at a man's height over the
@@ -311,6 +324,7 @@ void add_bsp_liquids(gpu::Device& device, render::Water& water, render::Liquids&
       draw.chop = rows.chop;
       draw.chop_shortest = rows.chop_shortest;
       draw.pace = kPoolPace;  // the game's own (Options::water_pace) by relay_liquid_pace
+      draw.open_below = lw.sites[i].open_below;
       // The wind's gusts break the water into patches of ripples and calm as it reaches it.
       draw.gusts = lw.sites[i].exposure > 0 ? 1 : 0;
       render::add_water_body(device, water, b, draw);

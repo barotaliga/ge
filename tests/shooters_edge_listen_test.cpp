@@ -33,6 +33,7 @@
 #include "golden.hpp"
 #include "progs/vm.hpp"
 #include "save/file.hpp"
+#include "shooter/sequel_move.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/held.hpp"
@@ -42,6 +43,7 @@
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge_campaign_fixture.hpp"
 #include "vfs/pak.hpp"
 
@@ -665,4 +667,56 @@ TEST(the_campaign_s_looping_sounds_set_off_at_the_map_s_load_are_heard) {
   const cl::DemoStaticSound& drip = l.static_sounds[0];
   CHECK(l.server->sounds[static_cast<size_t>(drip.sound)].find("drip") != std::string::npos);
   CHECK(drip.origin.x == -300.0f && drip.volume > 0 && drip.attenuation > 0);
+}
+
+// A map of the family that carries brushes (version 38) plays on the rules that trace them: the
+// window's listen server runs the sequel's runner on it whatever the program, the player spawns at
+// the map's start facing its way, stands on its floor and walks across it that way, the turn the
+// spawn gave him taken once by the window's view (docs/goals/M18v.md, M18v2).
+TEST(a_map_of_brushes_plays_on_the_rules_that_trace_brushes_and_the_player_walks_it) {
+  // A floored hall walled round, its brushes solid, a start in the middle.
+  br::BrushWorld world;
+  world.models.resize(1);
+  const auto box = [&](float x0, float y0, float z0, float x1, float y1, float z1) {
+    const float lo[3] = {x0, y0, z0}, hi[3] = {x1, y1, z1};
+    world.models[0].push_back(br::box_brush(lo, hi, sh::kSqSolid, "world/wall"));
+  };
+  box(-512, -512, -16, 512, 512, 0);
+  box(-528, -512, -16, -512, 512, 256);
+  box(512, -512, -16, 528, 512, 256);
+  box(-528, 512, -16, 528, 528, 256);
+  box(-528, -528, -16, 528, -512, 256);
+  br::Entity start;
+  start.pairs = {{"classname", "info_player_start"}, {"origin", "0 0 24"}, {"angle", "90"}};
+  world.entities.push_back(start);
+  std::vector<uint8_t> bsp;
+  std::string error;
+  CHECK_MSG(br::write_brush_world(world, &bsp, &error), error);
+  cl::SearchPath files;
+  CHECK(cl::add_archive(files, "pak0.pak", pack({{"maps/fixture.bsp", bsp}}), error));
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "fixture", error);
+  CHECK_MSG(map != nullptr, error);
+  if (!map) return;
+  CHECK(map->spec.brushes != nullptr && map->spec.models.empty());
+  cl::Listen l;
+  CHECK_MSG(
+      cl::listen_start(l, baseline(), std::move(map), shooters_edge::net::listen_options(), error),
+      error);
+  if (l.rules == nullptr) return;
+  CHECK(shooters_edge::server::sequel_of(*l.rules) != nullptr);
+  const auto me = [&] { return l.server->world.entities[1]; };
+  for (int i = 0; i < 120; i++) cl::listen_frame(l, {});  // spawned, fallen onto the floor
+  CHECK(!me().free);
+  const sh::Vec3f stood = me().origin;
+  CHECK((me().flags & sh::kFlagOnGround) != 0);
+  sh::MoveCmd walk;
+  walk.forward = 200;
+  for (int i = 0; i < 60; i++) cl::listen_frame(l, walk);
+  const sh::Vec3f walked = me().origin;
+  const float dx = walked.x - stood.x, dy = walked.y - stood.y;
+  // Along the start's facing (+y): the turn the spawn gave him is taken once, not every frame.
+  CHECK_MSG(
+      dy > 100.0f && std::fabs(dx) < 1.0f,
+      "the player did not walk the start's way: " + std::to_string(dx) + ", " + std::to_string(dy));
+  CHECK(std::fabs(walked.z - stood.z) < 1.0f);  // on the same floor
 }
