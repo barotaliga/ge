@@ -101,6 +101,12 @@ struct PilotSettings {
   // the jump (the back and side keys, as a person steps back into line), and a run-up already
   // moving down the jump's line behind its start runs on from there, not from a stop.
   bool backstep = false;
+  // `runupkeys`: the stepped-back run-up's keys pressed for the view as it will be when they land,
+  // and a run-up or a jump's run fallen well under its start (or into water) planned again.
+  bool runup_keys = false;
+  // `gapbuild`: a hop's first jump into a gap trick over water is a circle jump aimed across at
+  // its landing, taken as soon as a jump from there lands across.
+  bool gap_circle = false;
   bool hop_stairs_walked = false;
   float hop_climb = 10;
   // THE BRINK (`brink`): a hop's or a strafe's stretch ends at a link along a lip over lava or

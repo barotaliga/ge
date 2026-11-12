@@ -653,7 +653,8 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
           // (a link that crosses two doors carries one of them); a cut link (a door's leaf
           // across it, a gap trick given up) is not taken.
           if (is_barred(l.mover) || is_barred(g.nodes[static_cast<size_t>(l.to)].mover) ||
-              ((l.mover >= 0 || l.gap) && !cut.empty() && is_cut(a, l.to)) || !jumper.takes(l))
+              ((l.mover >= 0 || l.gap) && !cut.empty() && is_cut(a, l.to)) ||
+              !(jumper.takes(l) || jumper.builds_to(l, search.cost(a))))
             continue;
           const double cost =
               search.cost(a) + jumper.cost_s(l) + (l.mover >= 0 ? mover_penalty_s : 0);
