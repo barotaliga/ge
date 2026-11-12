@@ -58,6 +58,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/servers.md`](docs/servers.md) | Servers for every multiplayer game (M53): the one core a game plugs into, listen and dedicated, `server.cfg` in layers, meta-cvars, the lobby and the match's phases, the feature seam for admin tools, recording and match mods |
 | [`docs/gamecli.md`](docs/gamecli.md) | A player's game CLI (M55): `<game>_cli` for players' agents, its layers (engine, plugin, game), the answer, settings and the catalog, servers, hosting and joining, places, the lab |
 | [`docs/hub.md`](docs/hub.md) | The hub (M56): a community's website of every live game and demo; the master, the status record, the poller, the JSON API, the pages, the archive by hash, watching in a browser, the plan |
+| [`docs/tv.md`](docs/tv.md) | TV, proxy and forward for every game (M57): the four pieces and their names, the layers, the replay file version 2 and its tracks, the field codec and what it measured, the decisions |
 
 **The working area.** `porting/` holds everything that only matters while modules are
 being carried over from their reference sources: the porting guide (`porting/README.md`),
