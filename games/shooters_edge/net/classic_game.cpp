@@ -139,12 +139,19 @@ constexpr gs::GameRule kModRules[] = {
     {"k_midair",
      "1: midair, rockets count only on a player in the air (the sequel's maps; restarts)"},
     {"k_midair_minheight", "midair: the least height a hit counts at, 0..4 (64..1024 units; 1)"},
+    // The server's own chat when the mod leaves it to the server (server/chat_rules.hpp).
+    {"sv_spectalk", "0: a spectator's say reaches only the other spectators (1)"},
 };
 
 constexpr gs::GameRule kEndpointRules[] = {
     {"sv_maxrate", "the most bytes/s a client may ask for with its rate (0 no cap; 0)"},
     {"sv_antilag", "1: a shot sees the others where the shooter saw them (0)"},
+    {"sv_antilagexact",
+     "1: the rewind goes to exactly the frame the shooter saw, not a little further (0)"},
+    {"sv_safestrafe",
+     "N: a player reversing his sideways move gets N commands of none between (0: off)"},
     {"sv_voip", "1: players' voice is relayed to their team (0)"},
+    {"sv_voipecho", "1: a speaker hears his own voice back, to test it (0)"},
     {"maxfps", "the most moves a second a client sends, told in the server info (77)"},
     {"sv_download", "0: no file is offered to a client that lacks one (1)"},
     {"sv_download_skins", "0: no skins/ file is offered (1)"},
@@ -236,6 +243,8 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_kicktop", "sv_colorkick"},
     {"sv_kickuserinfospamcount", "sv_infoflood", 0},
     {"sv_kickuserinfospamtime", "sv_infoflood", 1},
+    {"sv_antilag_no_pred", "sv_antilagexact"},
+    {"sv_voip_echo", "sv_voipecho"},
 };
 
 // The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
@@ -334,12 +343,16 @@ bool info_flood(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error
 bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
   int watervis = 0, reconnect_wait = static_cast<int>(cfg.reconnect_wait_s);
   int antilag = cfg.antilag ? 1 : 0, voice = cfg.voice ? 1 : 0;
+  int safe_strafe = cfg.safe_strafe;
   int all = cfg.allow_download ? 1 : 0, skins = cfg.allow_skins ? 1 : 0;
   int models = cfg.allow_models ? 1 : 0, sounds = cfg.allow_sounds ? 1 : 0;
   int maps = cfg.allow_maps ? 1 : 0, other = cfg.allow_other ? 1 : 0;
   if (!endpoint_int(c, "sv_maxrate", 0, 1000000, cfg.maxrate, error) ||
       !endpoint_int(c, "sv_antilag", 0, 1, antilag, error) ||
       !endpoint_int(c, "sv_voip", 0, 1, voice, error) ||
+      !endpoint_flag(c, "sv_voipecho", cfg.voice_echo, error) ||
+      !endpoint_flag(c, "sv_antilagexact", cfg.antilag_exact, error) ||
+      !endpoint_int(c, "sv_safestrafe", 0, 100, safe_strafe, error) ||
       !endpoint_int(c, "maxfps", 20, 1000, cfg.maxfps, error) ||
       !endpoint_int(c, "sv_download", 0, 1, all, error) ||
       !endpoint_int(c, "sv_download_skins", 0, 1, skins, error) ||
@@ -371,6 +384,7 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
   cfg.reconnect_wait_s = reconnect_wait;
   cfg.max_spectators = c.max_spectators;
   cfg.antilag = antilag != 0;
+  cfg.safe_strafe = safe_strafe;
   cfg.voice = voice != 0;
   cfg.allow_download = all != 0;
   cfg.allow_skins = skins != 0;
@@ -642,6 +656,10 @@ void* create(const gs::ServerConfig& c, std::string& error) {
                  {"*admin", c.admin}};
   if (const auto w = c.rules.find("sv_watervis"); w != c.rules.end() && w->second == "1")
     g->cfg.info.emplace_back("watervis", "1");
+  // A client predicts its own move, so it is told when the server holds its strafes apart.
+  if (const auto w = c.rules.find("sv_safestrafe");
+      w != c.rules.end() && !w->second.empty() && w->second != "0")
+    g->cfg.info.emplace_back("sv_safestrafe", w->second);
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
   g->cfg.rcon_password = c.rcon_password;

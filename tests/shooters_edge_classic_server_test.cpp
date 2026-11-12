@@ -295,3 +295,23 @@ TEST(lag_compensation_moves_the_others_back_for_a_shot_and_restores_them) {
   CHECK(plain.start(cn::ServerConfig{}));
   CHECK(plain.qc->lag_rewind == nullptr);
 }
+
+// sv_safestrafe 3: a reversal is zeroed until three commands of none lie between; the player's own
+// zero commands count; the same direction again after a short stop passes; off, nothing changes.
+TEST(the_safe_strafe_keeps_reversals_apart) {
+  cn::StrafeGuard g;
+  CHECK(cn::safe_strafe(g, 400, 3) == 400);  // right
+  CHECK(cn::safe_strafe(g, -400, 3) == 0);   // left at once: zeroed
+  CHECK(cn::safe_strafe(g, -400, 3) == 0);   // two more
+  CHECK(cn::safe_strafe(g, -400, 3) == 0);
+  CHECK(cn::safe_strafe(g, -400, 3) == -400);  // three between: left
+  CHECK(cn::safe_strafe(g, 0, 3) == 0);        // one of his own
+  CHECK(cn::safe_strafe(g, 400, 3) == 0);      // right: two more to go
+  CHECK(cn::safe_strafe(g, 400, 3) == 0);
+  CHECK(cn::safe_strafe(g, 400, 3) == 400);
+  CHECK(cn::safe_strafe(g, 0, 3) == 0);
+  CHECK(cn::safe_strafe(g, 400, 3) == 400);  // the same way after a short stop
+  cn::StrafeGuard off;
+  CHECK(cn::safe_strafe(off, 400, 0) == 400);
+  CHECK(cn::safe_strafe(off, -400, 0) == -400);
+}

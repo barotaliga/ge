@@ -15,6 +15,7 @@
 #include "shooter/settings.hpp"
 #include "shooters_edge/server/builtins.hpp"
 #include "shooters_edge/server/catalogue.hpp"
+#include "shooters_edge/server/chat_rules.hpp"
 #include "shooters_edge/server/client_data.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/rjump_rules.hpp"
@@ -304,6 +305,7 @@ std::unique_ptr<QcServer> make_qc_server(const pg::Progs& progs, const QcServerO
   auto s = std::make_unique<QcServer>();
   if (!create_qc_server(*s, progs, opt, error)) return nullptr;
   add_aim_help(*s);
+  add_chat_settings(s->cvars);  // sv_spectalk (chat_rules.hpp)
   return s;
 }
 
