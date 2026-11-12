@@ -459,7 +459,7 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
   if (!pg::parse_entity_text(map->spec.entities.c_str(), blocks, out.error)) return;
   ge::ai::Search from, with_rockets;
   // What the main part reaches with rocket jumps too (from any one of its nodes).
-  for (size_t k = 0; k < g.nodes.size(); k++)
+  for (size_t k = 0; nav.main_n > 0 && k < g.nodes.size(); k++)
     if (nav.main.reached(static_cast<int32_t>(k))) {
       sh::nav_reach(g, static_cast<int32_t>(k), with_rockets, {.rockets = true});
       break;
@@ -484,7 +484,7 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
     if (n >= 0) {
       sh::nav_reach(g, n, from);
       for (size_t k = 0; k < g.nodes.size() && !back; k++)
-        back = nav.main.reached(static_cast<int32_t>(k)) && !nav.wet[k] &&
+        back = nav.main_n > 0 && nav.main.reached(static_cast<int32_t>(k)) && !nav.wet[k] &&
                from.reached(static_cast<int32_t>(k)) && static_cast<int32_t>(k) != n;
     }
     out.reached += to;
