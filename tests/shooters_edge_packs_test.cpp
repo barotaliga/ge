@@ -126,7 +126,7 @@ TEST(a_place_after_an_at_sign_reads_as_the_place) {
 // `coming` long after the call is an ordinary one.
 TEST(a_bare_coming_after_a_pack_call_claims_the_pack) {
   sh::Locs locs;
-  locs.points = {{"ya", {1340, -544, 376}}, {"ga", {784, 56, 304}}};
+  locs.points = {{"ya", {1340, -544, 376}, {}}, {"ga", {784, 56, 304}, {}}};
   bt::Fighter f;
   f.name = "me";
   f.locs = &locs;
