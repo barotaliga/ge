@@ -340,6 +340,13 @@ std::vector<Placed> Layout::draw(ui::DrawList& dl, const Frame& f, const Style& 
   return placed;
 }
 
+// What each anchor name means, for an element's anchor and attach.
+constexpr const char* kAnchorValues =
+    "top_left: the top left corner; top: the top edge's middle; top_right: the top right corner; "
+    "left: the left edge's middle; center: the middle; right: the right edge's middle; "
+    "bottom_left: the bottom left corner; bottom: the bottom edge's middle; bottom_right: the "
+    "bottom right corner";
+
 void add_hud_cvars(console::Console& con, Layout& layout) {
   using console::CvarKind;
   console::Cvars& cv = con.cvars();
@@ -354,18 +361,32 @@ void add_hud_cvars(console::Console& con, Layout& layout) {
                                   p + "scale", p + "alpha",  p + "parent", p + "attach"};
     const bool child = !e.parent.empty();
     const std::string helps[8] = {
-        "show " + what + " (0 hides it)",
-        "where " + what +
-            " hangs: top_left top top_right left center right bottom_left bottom "
-            "bottom_right",
-        child ? what + "'s offset across, in its parent's units"
-              : what + "'s offset across, a share of the safe area's width",
-        child ? what + "'s offset down, in its parent's units"
-              : what + "'s offset down, a share of the safe area's height",
-        what + "'s size, times the HUD's",
-        what + "'s opacity, 0..1",
-        "the element " + what + " hangs from (empty: none), one declared before it",
-        "the point of " + what + "'s own box set on its parent's anchor point"};
+        "Whether " + what + " is shown.",
+        "Where " + what + " hangs on the screen, or on its parent.",
+        child ? "How far " + what + " sits across from where it hangs, in its parent's units."
+              : "How far " + what +
+                    " sits across from where it hangs, a share of the safe "
+                    "area's width.",
+        child ? "How far " + what + " sits down from where it hangs, in its parent's units."
+              : "How far " + what +
+                    " sits down from where it hangs, a share of the safe "
+                    "area's height.",
+        "The size of " + what + ", times the HUD's.",
+        "How opaque " + what + " is.",
+        "The element " + what + " hangs from, one declared before it.",
+        "The point of " + what + "'s own box set on its parent's anchor point."};
+    const std::string across = child ? "-4096..4096: that many units, positive to the right"
+                                     : "-1..1: that share of the width, positive to the right";
+    const std::string down = child ? "-4096..4096: that many units, positive downwards"
+                                   : "-1..1: that share of the height, positive downwards";
+    const std::string values[8] = {"0: hidden; 1: shown",
+                                   kAnchorValues,
+                                   across,
+                                   down,
+                                   "0.25..4: that many times the HUD's size",
+                                   "0: unseen; 0..1: that opacity; 1: solid",
+                                   "\"\": none, it hangs on the screen; TEXT: that element's id",
+                                   kAnchorValues};
     const std::string fallbacks[8] = {e.spec.show ? "1" : "0",
                                       std::string(anchor_name(e.spec.anchor)),
                                       text(e.spec.x),
@@ -376,45 +397,81 @@ void add_hud_cvars(console::Console& con, Layout& layout) {
                                       std::string(anchor_name(e.spec.attach))};
     // A child's offsets are in its parent's units (picture px), a top-level one's shares.
     const double reach = child ? 4096 : 1;
-    cv.bind(
-        {.name = names[0], .fallback = fallbacks[0], .help = helps[0], .kind = CvarKind::boolean},
-        &e.place.show);
-    cv.bind({.name = names[1], .fallback = fallbacks[1], .help = helps[1], .kind = CvarKind::text},
+    cv.bind({.name = names[0],
+             .fallback = fallbacks[0],
+             .help = helps[0],
+             .kind = CvarKind::boolean,
+             .values = values[0]},
+            &e.place.show);
+    cv.bind({.name = names[1],
+             .fallback = fallbacks[1],
+             .help = helps[1],
+             .kind = CvarKind::text,
+             .values = values[1]},
             &e.place.anchor);
-    cv.bind(
-        {.name = names[2], .fallback = fallbacks[2], .help = helps[2], .min = -reach, .max = reach},
-        &e.place.x);
-    cv.bind(
-        {.name = names[3], .fallback = fallbacks[3], .help = helps[3], .min = -reach, .max = reach},
-        &e.place.y);
-    cv.bind({.name = names[4], .fallback = fallbacks[4], .help = helps[4], .min = 0.25, .max = 4},
+    cv.bind({.name = names[2],
+             .fallback = fallbacks[2],
+             .help = helps[2],
+             .min = -reach,
+             .max = reach,
+             .values = values[2]},
+            &e.place.x);
+    cv.bind({.name = names[3],
+             .fallback = fallbacks[3],
+             .help = helps[3],
+             .min = -reach,
+             .max = reach,
+             .values = values[3]},
+            &e.place.y);
+    cv.bind({.name = names[4],
+             .fallback = fallbacks[4],
+             .help = helps[4],
+             .min = 0.25,
+             .max = 4,
+             .values = values[4]},
             &e.place.scale);
-    cv.bind({.name = names[5], .fallback = fallbacks[5], .help = helps[5], .min = 0, .max = 1},
+    cv.bind({.name = names[5],
+             .fallback = fallbacks[5],
+             .help = helps[5],
+             .min = 0,
+             .max = 1,
+             .values = values[5]},
             &e.place.alpha);
-    cv.bind({.name = names[6], .fallback = fallbacks[6], .help = helps[6], .kind = CvarKind::text},
+    cv.bind({.name = names[6],
+             .fallback = fallbacks[6],
+             .help = helps[6],
+             .kind = CvarKind::text,
+             .values = values[6]},
             &e.place.parent);
-    cv.bind({.name = names[7], .fallback = fallbacks[7], .help = helps[7], .kind = CvarKind::text},
+    cv.bind({.name = names[7],
+             .fallback = fallbacks[7],
+             .help = helps[7],
+             .kind = CvarKind::text,
+             .values = values[7]},
             &e.place.attach);
     for (const std::string& n : names) owned->emplace_back(e.id, n);
   }
   cv.bind({.name = "hud_scale",
            .fallback = "1",
-           .help = "the whole HUD's size, times the frame's",
+           .help = "The whole HUD's size, times the frame's.",
            .min = 0.25,
-           .max = 4},
+           .max = 4,
+           .values = "0.25..4: that many times the frame's size (1 the default)"},
           &layout.scale);
   cv.bind({.name = "hud_alpha",
            .fallback = "1",
-           .help = "the whole HUD's opacity, 0..1",
+           .help = "How opaque the whole HUD is.",
            .min = 0,
-           .max = 1},
+           .max = 1,
+           .values = "0: unseen; 0..1: that opacity; 1: solid (the default)"},
           &layout.alpha);
   const std::string margin = text(layout.margin);
   cv.bind({.name = "hud_margin",
            .fallback = margin,
-           .help = "px at the reference size between the screen's safe edge and the HUD",
+           .help = "The pixels at the reference size between the screen's safe edge and the HUD.",
            .min = 0,
-           .max = 200},
+           .max = 200,
+           .values = "0..200: that many pixels"},
           &layout.margin);
   for (const char* n : {"hud_scale", "hud_alpha", "hud_margin"}) owned->emplace_back("", n);
   con.add_command("hud_reset",

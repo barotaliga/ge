@@ -738,6 +738,65 @@ TEST(a_coop_level_change_on_brush_maps_carries_the_players_body) {
   }
 }
 
+// In the sequel's single-player game `addbot` seats a companion beside the player: the game turns
+// cooperative for it, the companion keeps near him as he walks off, stays seated through a level
+// change (the same rules), and the last one sent away makes the game single player again.
+TEST(a_companion_joins_the_sequel_s_single_player_game_and_follows_through_a_level_change) {
+  std::string error;
+  cl::SearchPath files;
+  const std::vector<uint8_t> hall = brush_hall();
+  CHECK(cl::add_archive(files, "pak0.pak", pack({{"maps/hall.bsp", hall}, {"maps/next.bsp", hall}}),
+                        error));
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.console = {"deathmatch 0", "coop 0"};
+  cl::Listen l;
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "hall", error);
+  CHECK_MSG(map != nullptr, error);
+  if (!map) return;
+  CHECK_MSG(cl::listen_start(l, baseline(), std::move(map), opt, error), error);
+  if (l.rules == nullptr) return;
+  for (int i = 0; i < 10; i++) cl::listen_frame(l, {});
+  const auto said = [&](const std::string& part) {
+    for (const std::string& line : l.prints)
+      if (line.find(part) != std::string::npos) return true;
+    return false;
+  };
+  const auto coop = [&] { return l.server->cvars.find("coop")->on(); };
+  CHECK(!coop());
+  CHECK(cl::listen_lobby(l, "addbot expert"));
+  for (int i = 0; i < 4; i++) cl::listen_frame(l, {});
+  CHECK_MSG(said("cooperative while you have company"), "no word that the game turned coop");
+  CHECK_MSG(said("mate1 (expert) joins the game"), "no word of the companion joining");
+  CHECK(coop());
+  CHECK(l.server->clients[1].active);
+  // The player walks north a while; the companion keeps up.
+  sh::MoveCmd walk;
+  walk.forward = 400;
+  for (int i = 0; i < 160; i++) cl::listen_frame(l, walk);
+  for (int i = 0; i < 160; i++) cl::listen_frame(l, {});
+  const sh::Vec3f me = l.server->sv.edicts[1].origin, mate = l.server->sv.edicts[2].origin;
+  const sh::Vec3f start{0, 0, 24};
+  CHECK_MSG(me.y - start.y > 200, "the player walked " + std::to_string(me.y - start.y));
+  const float dx = me.x - mate.x, dy = me.y - mate.y;
+  const float apart = std::sqrt(dx * dx + dy * dy);
+  CHECK_MSG(apart < 300, "the companion is " + std::to_string(apart) + " units off");
+  // A level change on the same rules keeps it seated.
+  CHECK(l.rules->console("changelevel next"));
+  for (int i = 0; i < 30 && l.pending_map.empty(); i++) cl::listen_frame(l, {});
+  std::unique_ptr<cl::LoadedMap> next = cl::load_named_map(files, "next", error);
+  CHECK_MSG(next != nullptr, error);
+  if (!next) return;
+  CHECK_MSG(cl::listen_change(l, std::move(next), error), error);
+  for (int i = 0; i < 30; i++) cl::listen_frame(l, {});
+  CHECK(l.map->name == "next");
+  CHECK(l.server->clients[1].active);
+  CHECK(cl::listen_lobby(l, "removebot"));
+  for (int i = 0; i < 4; i++) cl::listen_frame(l, {});
+  CHECK(!l.server->clients[1].active);
+  CHECK(!coop());
+  CHECK_MSG(said("You play alone again."), "no word that the game is single player again");
+}
+
 // A map of the family that carries brushes (version 38) plays on the rules that trace them: the
 // window's listen server runs the sequel's runner on it whatever the program, the player spawns at
 // the map's start facing its way, stands on its floor and walks across it that way, the turn the

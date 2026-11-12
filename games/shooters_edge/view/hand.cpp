@@ -18,53 +18,109 @@ namespace con = ge::console;
 constexpr double kShotFrameHold = 1.5;
 
 void add_view_cvars(con::Cvars& c, ViewSettings& out) {
-  c.bind({"r_drawviewmodel", "1", con::kArchive, "draw the held weapon (0 off)",
-          con::CvarKind::boolean},
+  c.bind({.name = "r_drawviewmodel",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether the held weapon is drawn.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: not drawn; 1: drawn (the default)"},
          &out.draw);
-  c.bind({"r_viewmodel_fov", "0", con::kArchive,
-          "the held weapon's own lens, deg vertical; 0: the view's", con::CvarKind::number, 0, 150},
+  c.bind({.name = "r_viewmodel_fov",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "The held weapon's own lens, in degrees vertical.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 150,
+          .values = "0: the view's (the default); 1..150: that many degrees"},
          &out.fov_deg);
   const std::string_view names[3] = {"cl_gunx", "cl_guny", "cl_gunz"};
-  const std::string_view helps[3] = {"the held weapon moved right, m",
-                                     "the held weapon moved up, m",
-                                     "the held weapon moved forward, m"};
+  const std::string_view helps[3] = {"How far the held weapon is moved right, in metres.",
+                                     "How far the held weapon is moved up, in metres.",
+                                     "How far the held weapon is moved forward, in metres."};
+  const std::string_view values[3] = {"-0.5..0.5: that far, negative to the left (0 the default)",
+                                      "-0.5..0.5: that far, negative down (0 the default)",
+                                      "-0.5..0.5: that far, negative back (0 the default)"};
   for (int k = 0; k < 3; ++k)
-    c.bind({names[k], "0", con::kArchive, helps[k], con::CvarKind::number, -0.5, 0.5},
+    c.bind({.name = names[k],
+            .fallback = "0",
+            .flags = con::kArchive,
+            .help = helps[k],
+            .min = -0.5,
+            .max = 0.5,
+            .values = values[k]},
            &out.gun_m[k]);
-  c.bind({"cl_gunsway", "1", con::kArchive,
-          "the held weapon's sway, stride swing and breath, share of the game's (0 still)",
-          con::CvarKind::number, 0, 2},
+  c.bind({.name = "cl_gunsway",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "How much the held weapon sways, swings with your stride and breathes, a share "
+                  "of the game's.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 2,
+          .values = "0: still; 0..2: that share (1 the default)"},
          &out.sway);
-  c.bind({"cl_gunidle", "1", con::kArchive,
-          "the held weapon's breathing at rest, share of the game's (0 none)",
-          con::CvarKind::number, 0, 3},
+  c.bind({.name = "cl_gunidle",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "How much the held weapon breathes at rest, a share of the game's.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 3,
+          .values = "0: still; 0..3: that share (1 the default)"},
          &out.idle);
-  c.bind({"cl_gunidle_rate", "15", con::kArchive,
-          "the held weapon's breaths a minute at rest (a run quickens them)", con::CvarKind::number,
-          4, 40},
+  c.bind({.name = "cl_gunidle_rate",
+          .fallback = "15",
+          .flags = con::kArchive,
+          .help = "The held weapon's breaths a minute at rest, which a run quickens.",
+          .kind = con::CvarKind::number,
+          .min = 4,
+          .max = 40,
+          .values = "4..40: that many (15 the default)"},
          &out.idle_rate);
-  c.bind({"cl_gunidle_exertion", "1", con::kArchive,
-          "how much a run quickens and deepens the held weapon's breathing after it, share of "
-          "the game's (0 none)",
-          con::CvarKind::number, 0, 3},
+  c.bind({.name = "cl_gunidle_exertion",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "How much a run quickens and deepens the held weapon's breathing after it, a "
+                  "share of the game's.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 3,
+          .values = "0: not at all; 0..3: that share (1 the default)"},
          &out.idle_exertion);
-  c.bind({"r_viewmodel_center", "1", con::kArchive,
-          "hold the weapon in the middle under the crosshair, the classic arena way (0: to the "
-          "right)",
-          con::CvarKind::boolean},
-         &out.centre);
   c.bind(
-      {"r_viewmodel_hands", "1", con::kArchive,
-       "draw the hands and arms holding the weapon (0: the weapon alone)", con::CvarKind::boolean},
-      &out.hands);
-  c.bind({"cl_gunswitch", "0.2", con::kArchive,
-          "s a weapon change takes, the old one down and the new one up (0 at once)",
-          con::CvarKind::number, 0, 2},
+      {.name = "r_viewmodel_center",
+       .fallback = "1",
+       .flags = con::kArchive,
+       .help =
+           "Whether the weapon is held in the middle under the crosshair, the classic arena way.",
+       .kind = con::CvarKind::boolean,
+       .values = "0: to the right; 1: in the middle (the default)"},
+      &out.centre);
+  c.bind({.name = "r_viewmodel_hands",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether the hands and arms holding the weapon are drawn.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: the weapon alone; 1: hands and arms (the default)"},
+         &out.hands);
+  c.bind({.name = "cl_gunswitch",
+          .fallback = "0.2",
+          .flags = con::kArchive,
+          .help = "The seconds a weapon change takes, the old one down and the new one up.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 2,
+          .values = "0: at once; 0..2: that many seconds (0.2 the default)"},
          &out.switch_s);
-  c.bind({"cl_gunswitch_fire", "4", con::kArchive,
-          "how many times faster a shot during a weapon change raises the new weapon (1 not at "
-          "all)",
-          con::CvarKind::number, 1, 20},
+  c.bind({.name = "cl_gunswitch_fire",
+          .fallback = "4",
+          .flags = con::kArchive,
+          .help = "How many times faster a shot during a weapon change raises the new weapon.",
+          .kind = con::CvarKind::number,
+          .min = 1,
+          .max = 20,
+          .values = "1: no faster; 1..20: that many times (4 the default)"},
          &out.switch_fire);
 }
 
