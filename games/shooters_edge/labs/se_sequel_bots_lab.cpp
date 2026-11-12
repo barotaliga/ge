@@ -105,7 +105,13 @@ std::string entity_text(const br::Map& map) {
   std::string out;
   for (const br::Entity& e : map.entities) {
     out += "{\n";
-    for (const auto& [k, v] : e.pairs) out += "\"" + k + "\" \"" + v + "\"\n";
+    for (const auto& [k, v] : e.pairs) {
+      out += '"';
+      out += k;
+      out += "\" \"";
+      out += v;
+      out += "\"\n";
+    }
     out += "}\n";
   }
   return out;
