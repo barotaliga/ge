@@ -46,6 +46,8 @@ constexpr double kCalmAbout = 360;  // and for an about-face
 // recordings): the view turns 103 degrees a second on average, 7 % of it past 360 (people 107 and
 // 6 %; the aim's flick back gave 162 and 14 %); at 180 the bots fought less (frags -0.9 a minute).
 constexpr double kBackTurn = 360;
+// `paceback`: the hand's stroke back to the way this much slower than its aim's (Fitts time).
+constexpr double kBackPace = 2.0;
 // `noback`: roaming, a player more than this far off the way walked is not aimed at, degrees.
 constexpr float kFrontOnly = 100;
 
@@ -399,7 +401,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     if (std::fabs(wrap(static_cast<float>(to) - pilot_yaw)) > kFrontOnly) fresh = false;
   }
   double want[2];
-  bool paced_now = false;  // the view paced back this command (`kBackTurn`), not aimed
+  bool back_stroke = false;  // (`paceback`) the view back to the way by the hand's own stroke
   if (fresh) {
     // The lead for the hands' lag (`aim.lead_s`): the mouse hand leads its own strokes by the
     // target's motion over each stroke's time (ai/mouse.hpp), so none is added for it.
@@ -532,8 +534,11 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     }
     // A calm view goes back onto the way, or over to a spot watched, at a hand's pace
     // (`kBackTurn`), not the aim's flick: nothing is in sight to snap onto.
-    if (b.calm && b.paced) {
-      paced_now = true;
+    // (`paceback`) Under the mouse hand the hand's own stroke is the pace: a want paced from the
+    // view a few degrees a command gave the hand one small stroke a look (about 15 degrees a
+    // second back to the way, the bot walking it backwards meanwhile).
+    back_stroke = b.calm && b.paced && b.paceback && b.mouse && b.aim.mouse;
+    if (b.calm && b.paced && !back_stroke) {
       const double dt = msec / 1000.0;
       const double dy = want[0] - b.yaw, dp = want[1] - b.pitch;
       want[0] = b.yaw + std::fmax(-kBackTurn * dt, std::fmin(kBackTurn * dt, dy));
@@ -598,13 +603,10 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       // in pitch: inside a 3-degree tolerance the hand never strokes, and a look down at the feet
       // stayed there (79 degrees, 35 s on the run). The tolerance under the pace's step.
       if (b.levelview && !b.aiming && b.calm && b.paced) tol = 0.5;
-      // (`paceback`) And an aim lost (still `aiming` until the view is back on the way): its
-      // paced yaw, under 3 degrees a command, stayed inside the tolerance too, so the view hung
-      // where the enemy was lost while the bot walked its way backwards (M18r.md 0w).
-      if (b.paceback && paced_now) tol = 0.5;
       const double due = sighted && !b.beam ? b.shot_due_s : 0;
-      hand_step(b, want, msec / 1000.0, tol, tol, std::fmax(1.0, half * 2), due, b.aiming ? 1 : 1.3,
-                sighted, out);
+      const double pace = back_stroke ? kBackPace : b.aiming ? 1 : 1.3;
+      hand_step(b, want, msec / 1000.0, tol, tol, std::fmax(1.0, half * 2), due, pace, sighted,
+                out);
     } else {
       b.aim_hands.step(want, out);
     }
