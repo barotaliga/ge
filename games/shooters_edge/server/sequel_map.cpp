@@ -61,6 +61,9 @@ enum Class : uint8_t {
   kRotating,
   kAreaPortal,
   kLight,
+  kHelp,
+  kCrossTrigger,
+  kCrossTarget,
 };
 
 // A mover's states: at rest at its first place, going to its second, at its second, coming back.
@@ -84,6 +87,7 @@ enum Act : uint8_t {
   kTimerFire,
   kAlwaysFire,
   kRemove,
+  kCrossCheck,
 };
 
 struct Mover {
@@ -215,6 +219,9 @@ Class class_of(std::string_view c) {
       {"func_rotating", kRotating},
       {"func_areaportal", kAreaPortal},
       {"light", kLight},
+      {"target_help", kHelp},
+      {"target_crosslevel_trigger", kCrossTrigger},
+      {"target_crosslevel_target", kCrossTarget},
   };
   for (const auto& [name, cls] : kClasses)
     if (c == name) return cls;
@@ -760,6 +767,12 @@ void think(SequelServer& s, SequelEntity& e) {
       e.gone = true;
       e.trigger = false;
       return;
+    case kCrossCheck:  // once: every one of its bits set, its targets fire and it goes
+      if ((uint32_t(e.spawnflags) & 255u & ~s.cross_bits) != 0) return;
+      map_use_targets(s, index_of(s, e), -1);
+      e.think_at = s.level_time + double(e.delay) + kStep;
+      e.think = kRemove;
+      return;
     default:
       return;
   }
@@ -986,7 +999,12 @@ void use(SequelServer& s, int target, int activator, int depth) {
       if (s.intermission_at > 0 || !s.pending_map.empty()) return;
       std::string next = e.map;
       const size_t spot = next.find('$');
+      s.next_spawn = spot != std::string::npos ? next.substr(spot + 1) : std::string();
+      const size_t then = s.next_spawn.find('+');
+      if (then != std::string::npos) s.next_spawn.resize(then);
       if (spot != std::string::npos) next.resize(spot);
+      s.next_unit = e.map.find('*') != std::string::npos;
+      if (s.next_unit) s.cross_bits = 0;  // a new unit
       next.erase(std::remove(next.begin(), next.end(), '*'), next.end());
       if (deathmatch(s)) {
         if (!fight_dmflag(s, 4096)) return;  // no exit in this match
@@ -1015,6 +1033,14 @@ void use(SequelServer& s, int target, int activator, int depth) {
       return;
     case kNone:
       monster_use(s, target, activator);
+      return;
+    case kHelp:  // the first or the second help message, and the news of it
+      s.help[(e.spawnflags & 1) != 0 ? 0 : 1] = e.message.substr(0, 511);
+      s.help_changed++;
+      return;
+    case kCrossTrigger:
+      s.cross_bits |= uint32_t(e.spawnflags) & 255u;
+      e.gone = true;
       return;
     case kSecret:
     case kGoal: {
@@ -1275,6 +1301,22 @@ void spawn_one(SequelServer& s, SequelEntity& e, Class c) {
       return;
     case kSpeaker:
       if (!e.noise.empty() && e.noise.find(".wav") == std::string::npos) e.noise += ".wav";
+      return;
+    case kHelp:
+      if (deathmatch(s)) {
+        e.gone = true;
+        return;
+      }
+      if (e.message.empty()) {
+        s.console.push_back("A help computer at " + std::to_string(int(e.origin.x)) + " " +
+                            std::to_string(int(e.origin.y)) + " has no message; it is left out.");
+        e.gone = true;
+      }
+      return;
+    case kCrossTarget:
+      if (e.delay <= 0) e.delay = 1;
+      e.think_at = s.level_time + double(e.delay);
+      e.think = kCrossCheck;
       return;
     case kSecret:
     case kGoal:
