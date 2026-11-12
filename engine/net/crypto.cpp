@@ -2,7 +2,7 @@
 //
 // ge:summary The network's cryptography over Monocypher: seal, open, derive, hex keys, wipe
 // ge:keywords net crypto monocypher crypto_aead_lock crypto_aead_unlock crypto_blake2b_keyed
-// ge:keywords xchacha20 poly1305 blake2b getenv
+// ge:keywords xchacha20 poly1305 blake2b getenv crypto_argon2 argon2id crypto_blake2b
 // ge:skill net
 // ge:test tests/net_crypto_test.cpp
 #include "net/crypto.hpp"
@@ -32,6 +32,28 @@ Key derive_key(const Key& master, std::string_view context, uint64_t id) {
   Key out{};
   crypto_blake2b_keyed(out.data(), out.size(), master.data(), master.size(), message,
                        sizeof message);
+  return out;
+}
+
+void password_hash(uint8_t out[32], std::string_view secret, const uint8_t* salt, uint32_t kib,
+                   uint32_t passes, void* work) {
+  crypto_argon2_config config{};
+  config.algorithm = CRYPTO_ARGON2_ID;
+  config.nb_blocks = kib < 8 ? 8 : kib;  // a block is 1 KiB; Argon2 needs at least 8
+  config.nb_passes = passes < 1 ? 1 : passes;
+  config.nb_lanes = 1;
+  crypto_argon2_inputs inputs{};
+  inputs.pass = reinterpret_cast<const uint8_t*>(secret.data());
+  inputs.pass_size = static_cast<uint32_t>(secret.size());
+  inputs.salt = salt;
+  inputs.salt_size = static_cast<uint32_t>(kSaltBytes);
+  crypto_argon2(out, 32, work, config, inputs, crypto_argon2_no_extras);
+}
+
+Key digest(std::string_view data) {
+  Key out{};
+  crypto_blake2b(out.data(), out.size(), reinterpret_cast<const uint8_t*>(data.data()),
+                 data.size());
   return out;
 }
 
