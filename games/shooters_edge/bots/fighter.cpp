@@ -89,6 +89,9 @@ constexpr float kRocketJumpHealth = 70;  // the health a rocket jump is tried wi
 // A hopper plans the map's gap tricks only this fast or faster, units/s (people take off at
 // 420 to 500; a gap's jump is flown only when the move says it lands across).
 constexpr float kGapPlanSpeed = 380;
+// `gapbuild`: or slower, when the route reaches the takeoff this long after setting off, s (a hop
+// gains about 100 units/s a second from a run's 320).
+constexpr float kGapBuild_s = 1.2f;
 constexpr float kRocketJumpMoves = 4;  // and the moves trait (an amateur jumper's)
 // THE ROCKET JUMPER'S LEVEL by the moves trait (amateur from 4, intermediate from 6, expert from 8)
 // and what a rocket jump must save before he tries it, s: people's rates (the `se-rj` lab on dm2:
@@ -788,6 +791,11 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
         std::sqrt(self.velocity.x * self.velocity.x + self.velocity.y * self.velocity.y);
     jumper.gaps = f.bot.pilot.pilot.set.hop && f.features[sh::Feature::gapjump] &&
                   across_speed >= kGapPlanSpeed;
+    // Slower, one far enough along the route to hop up to its speed first (`gapbuild`).
+    jumper.gap_build_s = f.bot.pilot.pilot.set.hop && f.features[sh::Feature::gapjump] &&
+                                 f.features[sh::Feature::gapbuild]
+                             ? kGapBuild_s
+                             : -1;
     // Out of a pit by rocket (shooter/escape.hpp): the launcher and a rocket; in water the health
     // for the blast too (lava and slime kill whoever stays, so any health tries it there).
     int liquid = sh::kContentsEmpty;
@@ -1218,6 +1226,8 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   ps.hop_stairs_walked = f.features[sh::Feature::stairs];
   ps.slopes = f.features[sh::Feature::slopes];
   ps.backstep = f.features[sh::Feature::backstep];
+  ps.runup_keys = f.features[sh::Feature::runupkeys];
+  ps.gap_circle = f.features[sh::Feature::gapbuild];
   ps.hop_headroom = f.features[sh::Feature::headroom];
   ps.hop_lips = f.features[sh::Feature::liphop];
   // The circle jump by skill: an expert curves up to 0.3 s for ~430 (people's standing jumps

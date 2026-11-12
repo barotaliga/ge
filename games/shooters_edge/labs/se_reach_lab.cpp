@@ -95,7 +95,8 @@ struct MapReach {
 // it; and the floors down the grid's columns along a line (where the nav samples a stair).
 struct Probe {
   bool route = false, floors = false;
-  sh::Vec3f from, to;                                   // --route's ends
+  sh::Vec3f from, to;  // --route's ends
+  float wet = 1;       // --route-wet: every link into a wet node priced this many times its proof
   float fx0 = 0, fy0 = 0, fx1 = 0, fy1 = 0, fstep = 8;  // --floors' line and step
 };
 
@@ -127,7 +128,15 @@ void probe_map(const bt::MapNav& nav, const Probe& pr, MapReach& out) {
   if (pr.route) {
     const int32_t a = sh::nav_nearest(g, pr.from), b = sh::nav_nearest(g, pr.to);
     ge::ai::Search rs;
-    const sh::NavRoute r = a >= 0 && b >= 0 ? sh::nav_route(g, a, b, rs) : sh::NavRoute{};
+    sh::NavGraph priced;  // --route-wet: the water's links priced up (a copy; `g` as built)
+    if (pr.wet != 1) {
+      priced = g;
+      for (sh::NavLink& l : priced.links)
+        if (priced.nodes[static_cast<size_t>(l.to)].wet) l.time_s *= pr.wet;
+    }
+    const sh::NavGraph& rg = pr.wet != 1 ? priced : g;
+    const sh::NavRoute r = a >= 0 && b >= 0 ? sh::nav_route(rg, a, b, rs) : sh::NavRoute{};
+    float total = 0, wet = 0;  // the route's proof times (as built), and those into wet nodes
     if (r.nodes.empty())
       out.route_rows.push_back(
           {"-", "no route", std::to_string(a) + " -> " + std::to_string(b), "", "", ""});
@@ -142,6 +151,8 @@ void probe_map(const bt::MapNav& nav, const Probe& pr, MapReach& out) {
           if (l.to != r.nodes[k]) continue;
           kind = sh::nav_kind_name(l.kind);
           t = to_fixed(l.time_s, 2);
+          total += l.time_s;
+          if (n.wet) wet += l.time_s;
           speed = to_fixed(l.speed, 0);
           break;
         }
@@ -151,6 +162,9 @@ void probe_map(const bt::MapNav& nav, const Probe& pr, MapReach& out) {
                                     to_fixed(n.origin.z - 24, 0),
                                 kind, t, speed});
     }
+    if (!r.nodes.empty())
+      out.route_rows.push_back(
+          {"total", "", "wet " + to_fixed(wet, 2) + " s", "", to_fixed(total, 2), ""});
   }
   if (pr.floors) {
     const float dx = pr.fx1 - pr.fx0, dy = pr.fy1 - pr.fy0;
@@ -398,6 +412,7 @@ void run(gl::Lab& lab) {
     std::istringstream f(lab.arg("floors"));
     probe.floors = static_cast<bool>(f >> probe.fx0 >> probe.fy0 >> probe.fx1 >> probe.fy1);
     if (probe.floors && !(f >> probe.fstep)) probe.fstep = 8;
+    probe.wet = std::stof(lab.arg("route-wet"));
     // Each probe's point is a player's origin, its feet 24 under.
     probe.from.z += 24;
     probe.to.z += 24;
@@ -570,6 +585,8 @@ const gl::LabSpec kSpec{
         {"movers", "plats", "the movers tabled: plats (the ridden ones) or all"},
         {"route", "",
          "a route on the first map tabled node by node: 'x y z > x y z' (feet; nearest nodes)"},
+        {"route-wet", "1",
+         "--route's search prices each link into a wet node this many times (1000: the dry way)"},
         {"floors", "",
          "the floors along a line on the first map: 'x0 y0 x1 y1 [step]' (the nav's misses)"},
         {"escapes", "", "fly: every rocket out of a pit's liquid flown by the pilot, tabled"},
