@@ -974,6 +974,11 @@ bool listen_lobby(Listen& l, std::string_view line) {
     catch_up(l);
     return taken;
   }
+  // The sequel's rules have no bots on their maps yet (docs/goals/M18v.md, M18v8).
+  if (bot_word && !l.room && l.rules != nullptr && sv::sequel_of(*l.rules) != nullptr) {
+    l.prints.push_back("Companions can't join this game yet.");
+    return true;
+  }
   if (!l.room || l.server == nullptr) {
     if (bot_word || word == "ready" || word == "break" || word == "notready" ||
         word == "toggleready" || word == "team" || word == "start" || word == "lobby" ||

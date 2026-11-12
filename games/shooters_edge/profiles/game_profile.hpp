@@ -90,6 +90,10 @@ struct GameProfile {
   // Each episode's first map, in order: the start map opens them one at a time, each once the
   // one before is done (server/campaign_episodes.hpp).
   std::span<const std::string_view> episode_maps;
+  // Its maps carry their own single-player rules (the sequel's runner keeps the campaign: the
+  // body carried, the help computer): NEW GAME and `coopgame` start them with `deathmatch` 0, and
+  // the runner is kept from level to level, when no single-player program is found.
+  bool rules_campaign = false;
 };
 
 inline constexpr ProgramFile kClassicMultiplayer[] = {{.name = "qwprogs.dat"},
@@ -133,7 +137,8 @@ inline constexpr GameProfile kGameProfiles[] = {
      .held_weapons = {},
      .arsenal = {},
      .words = {},
-     .episode_maps = {}},
+     .episode_maps = {},
+     .rules_campaign = true},
 };
 
 // The first row: the classic game, the one every reader uses until a choice of game is made.
