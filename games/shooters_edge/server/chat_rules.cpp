@@ -14,10 +14,13 @@ namespace con = ge::console;
 
 void add_chat_settings(con::Cvars& cvars) {
   if (cvars.find("sv_spectalk") != nullptr) return;
-  cvars.add({"sv_spectalk", "1", con::kServer,
-             "whether players read what spectators say: 1 everyone reads a spectator's say; 0 "
-             "only the other spectators do (a spectator's say_team never reaches players)",
-             con::CvarKind::boolean});
+  cvars.add({.name = "sv_spectalk",
+             .fallback = "1",
+             .flags = con::kServer,
+             .help = "Whether players read what spectators say, a spectator's team chat never "
+                     "reaching them.",
+             .kind = con::CvarKind::boolean,
+             .values = "0: only the other spectators read it; 1: everyone reads it (the default)"});
 }
 
 ChatLine chat_route(const RulesCommon& s, int slot, bool team, const std::string& text) {

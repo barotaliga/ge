@@ -108,3 +108,30 @@ TEST(crypto_reads_keys_as_hex_and_from_the_environment) {
   CHECK(!key_from_env("GE_NET_TEST_KEY_THAT_IS_NEVER_SET", back, error));
   CHECK(error.find("GE_NET_TEST_KEY_THAT_IS_NEVER_SET is not set") != std::string::npos);
 }
+
+TEST(crypto_signs_and_checks) {
+  const SignKeys k = sign_keys(key_of(3));
+  CHECK(sign_keys(key_of(3)).pub == k.pub);  // a seed grows the same pair, and is not wiped
+  const uint8_t message[5] = {1, 2, 3, 4, 5};
+  Signature s = sign(k, message, sizeof message);
+  CHECK(sign_check(k.pub, s, message, sizeof message));
+  uint8_t changed[5] = {1, 2, 3, 4, 6};
+  CHECK(!sign_check(k.pub, s, changed, sizeof changed));
+  CHECK(!sign_check(sign_keys(key_of(4)).pub, s, message, sizeof message));
+  s[10] ^= 1;
+  CHECK(!sign_check(k.pub, s, message, sizeof message));
+}
+
+TEST(crypto_one_published_key_both_checks_and_seals) {
+  const Key seed = key_of(5);
+  const SignKeys k = sign_keys(seed);
+  const Key answerer_secret = box_secret(seed);
+  CHECK(box_public(answerer_secret) == box_public_of(k.pub));
+  const Key asker_secret = key_of(6);
+  const Key asker_public = box_public(asker_secret);
+  const Key answerer_public = box_public_of(k.pub);
+  const Key a = box_key(asker_secret, answerer_public, asker_public, answerer_public);
+  const Key b = box_key(answerer_secret, asker_public, asker_public, answerer_public);
+  CHECK(a == b);
+  CHECK(box_key(key_of(7), answerer_public, box_public(key_of(7)), answerer_public) != a);
+}
