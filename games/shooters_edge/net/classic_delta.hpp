@@ -5,14 +5,17 @@
 // AN ENTITY RECORD: a u16 word with the number in bits 0..8 and flags in bits 9..15 (origin x
 // 1<<9, origin y 1<<10, origin z 1<<11, angle y 1<<12, frame 1<<13, remove 1<<14, more bits
 // 1<<15); with more bits a byte (angle x 1, angle z 2, model 4, colormap 8, skin 0x10, effects
-// 0x20, solid 0x40, even more 0x80); with even more (x family) a byte (transparency 2,
-// model-double 8, number +512 0x20, number +1024 0x40, yet more 0x80); with yet more a byte. The
-// flags are kept here as one 32-bit word: the word's bits 9..15 as they are, the more byte in bits
-// 0..7, the even-more byte in 16..23, the yet-more byte in 24..31. Fields follow in the order
-// model, frame, colormap, skin, effects, origin x, angle x, origin y, angle y, origin z, angle z,
-// transparency. A model above 255 travels as a short under model-double with the model bit clear
-// (a record with both bits reads a byte plus 256). A removal is the word with the remove bit (and
-// the number's high bits for an entity above 511). A list ends with a u16 0.
+// 0x20, solid 0x40, even more 0x80); with even more (x family) a byte (scale 1, transparency 2,
+// model-double 8, number +512 0x20, number +1024 0x40, yet more 0x80); with yet more a byte
+// (colour-mod 4). The flags are kept here as one 32-bit word: the word's bits 9..15 as they are,
+// the more byte in bits 0..7, the even-more byte in 16..23, the yet-more byte in 24..31. Fields
+// follow in the order model, frame, colormap, skin, effects, origin x, angle x, origin y, angle y,
+// origin z, angle z, scale, transparency, colour-mod (three bytes). Each look byte travels only
+// under its agreed bit and only when it changed: scale as size x 16 (16 is 1), transparency as
+// the share x 254 (255 unset, solid), colour-mod as each channel x 32 (32 32 32 no tint). A model
+// above 255 travels as a short under model-double with the model bit clear (a record with both bits
+// reads a byte plus 256). A removal is the word with the remove bit (and the number's high bits for
+// an entity above 511). A list ends with a u16 0.
 //
 // A LIST (`write_packet_entities`): the visible entities by number, each a delta from the
 // client's acknowledged frame when there is one (svc 48 with that frame's sequence's low byte),
@@ -25,11 +28,14 @@
 // usercmd from the null command), velocity x, y, z 0x4, 0x8, 0x10 (shorts), model 0x20 (byte),
 // skin 0x40 (byte; bit 7 adds 256 to the model), effects 0x80, weapon frame 0x100, dead 0x200,
 // gib 0x400 (no field), the move type in bits 11..13, on ground and solid in bits 14 and 15 (22
-// and 23 in the extended form), transparency bit 17 (a byte, extended form only).
+// and 23 in the extended form), scale bit 16 (a byte, size x 50) and transparency bit 17 (a byte,
+// share x 255), extended form only. The extended form is the one agreed under scale or
+// transparency. A player's tint never travels here.
 //
 // ge:summary Entity and player states as the classic protocol deltas them, lists and records
 // ge:keywords packet-entities deltapacketentities entity-delta baseline remove playerinfo
 // ge:keywords player-state pflags u-origin u-morebits entity-number model-double transparency
+// ge:keywords entity-scale colour-mod u-yetmore
 // ge:keywords write_entity_delta read_entity_record write_packet_entities read_packet_entities
 // ge:keywords write_playerinfo read_playerinfo grid_entity
 // ge:skill net shooter
@@ -52,13 +58,18 @@ constexpr uint32_t kUMoreBits = 1u << 15;
 constexpr uint32_t kUAngle1 = 1, kUAngle3 = 2, kUModel = 4, kUColormap = 8, kUSkin = 0x10;
 constexpr uint32_t kUEffects = 0x20, kUSolid = 0x40, kUEvenMore = 0x80;
 // The even-more byte (bits 16..23).
-constexpr uint32_t kUTrans = 2u << 16, kUModelDbl = 8u << 16, kUEntityDbl = 0x20u << 16;
+constexpr uint32_t kUScale = 1u << 16, kUTrans = 2u << 16, kUModelDbl = 8u << 16,
+                   kUEntityDbl = 0x20u << 16;
 constexpr uint32_t kUEntityDbl2 = 0x40u << 16, kUYetMore = 0x80u << 16;
+// The yet-more byte (bits 24..31).
+constexpr uint32_t kUColourMod = 4u << 24;
 
 struct EntityState {
   int number = 0;
   int modelindex = 0, frame = 0, colormap = 0, skin = 0, effects = 0;
-  int alpha = 0;  // transparency 1..254 (x family); 0 opaque
+  int alpha = 0;                   // transparency 1..254 (x family); 0 opaque
+  int scale = 16;                  // size x 16, 1..255 (x family scale); 16 is 1
+  int colormod[3] = {32, 32, 32};  // tint x 32 a channel, 0..255 (x colour-mod); 32 none
   sh::Vec3f origin, angles;
 };
 
@@ -99,8 +110,9 @@ constexpr uint32_t kPfMsec = 0x1, kPfCommand = 0x2, kPfVelocity1 = 0x4, kPfVeloc
 constexpr uint32_t kPfVelocity3 = 0x10, kPfModel = 0x20, kPfSkin = 0x40, kPfEffects = 0x80;
 constexpr uint32_t kPfWeaponFrame = 0x100, kPfDead = 0x200, kPfGib = 0x400;
 constexpr int kPfPmTypeShift = 11;
-constexpr uint32_t kPfOnGround = 1u << 14, kPfSolid = 1u << 15;    // base form
-constexpr uint32_t kPfExtra = 1u << 15, kPfTrans = 1u << 17;       // extended form
+constexpr uint32_t kPfOnGround = 1u << 14, kPfSolid = 1u << 15;  // base form
+constexpr uint32_t kPfExtra = 1u << 15, kPfScale = 1u << 16;     // extended form
+constexpr uint32_t kPfTrans = 1u << 17;
 constexpr uint32_t kPfOnGroundX = 1u << 22, kPfSolidX = 1u << 23;  // extended form
 
 // The move types bits 11..13 carry.
@@ -122,10 +134,12 @@ struct PlayerState {
   bool dead = false, gib = false;
   PmType pm = PmType::normal;
   bool onground = false, solid = false;  // sent under the z set's on-ground and solid bits
-  int alpha = 0;                         // transparency 1..254 (x family)
+  int alpha = 255;                       // transparency share x 255 (x family); 255 not sent
+  int scale = 50;                        // size x 50 (x family scale); 50 not sent
 };
 
 // The flags as written (by the form the agreed bits make).
+bool player_extended(const Ext& ext);
 uint32_t playerinfo_flags(const PlayerState& p, const Ext& ext);
 void write_playerinfo(gn::Writer& w, const PlayerState& p, const Ext& ext);
 PlayerState read_playerinfo(gn::Reader& r, const Ext& ext, uint32_t* flags = nullptr);

@@ -157,3 +157,11 @@ mentioned only where its bytes match.
   replacement deltas, receives a static entity as a delta from the default state, carrying any of
   the three bytes that differ from the defaults. A client without either receives the plain
   static-entity message, which has none of them. [read]
+
+## 6. What we chose (not from the source)
+
+- Our server folds a mod's `alpha` and `colormod` fields into a static entity at makestatic, and
+  sends them under spawnstatic2. A static's scale is not sent yet (the saved static record has no
+  room for it).
+- A player's scale byte is clamped to 1..255 instead of keeping only the low byte.
+- A player byte that equals the "absent" meaning (255 transparency, 50 scale) is not sent.

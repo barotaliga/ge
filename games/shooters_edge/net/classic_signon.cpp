@@ -146,6 +146,8 @@ void cmd_prespawn(ClassicServer& s, int slot, int n) {
         r.state.skin = static_cast<int>(st.skin);
         r.state.origin = st.origin;
         r.state.angles = st.angles;
+        const sv::WorldStatic look = sv::world_static(st);
+        entity_look(r.state, look.alpha, 1, look.colormod);
         m.ents.push_back(r);
       } else {
         m.id = svc::spawnstatic;

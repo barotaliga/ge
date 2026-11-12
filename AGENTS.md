@@ -89,14 +89,17 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   repository's structure and ship in no game, and Blender Python asset builders: offline
   sources of a model, run headless by `ge asset` (docs/goals.md M8g), whose output (a .glb)
   is committed and loaded by the engine in C++; they never run in a game, CI never needs
-  Blender, and no other scripting enters the tree. The one runtime exception is
-  Shooter's Edge's QC VM and compiled-module VM (`plugins/progs`, `docs/shooters-edge.md`), which
-  execute existing mods' bytecode (a `.dat` or a `.qvm`) for compatibility; the tree's own QC is limited to that game's baseline mod and its test mod. Nothing about the reference sources'
-  architecture (their layers, module split, file layout, state shape, names or data
-  formats) is assumed to carry over: each design decision is made here, for this engine,
-  and recorded in `docs/architecture.md`. Where a carried-over module keeps a behaviour (a
-  golden pins its bits), that is a decision about the result, not about the structure
-  around it.
+  Blender, and no other scripting enters the tree. The one runtime exception is Shooter's
+  Edge's QC VM and compiled-module VM (`plugins/progs`, `docs/shooters-edge.md`), which execute
+  existing mods' bytecode (a `.dat` or a `.qvm`) for compatibility ONLY: **no QC of our own.**
+  Our own game rules are C++ (`engine/mod` packages, `docs/mods.md`); the baseline mod's QC
+  sources (`games/shooters_edge/qc/`) take no new code and are being carried to C++ packages
+  and deleted (M52h); the only QC left is the VMs' own test fixtures, built inside their tests.
+  Nothing about the reference sources' architecture (their layers, module split, file layout,
+  state shape, names or data formats) is assumed to carry over: each design decision is made
+  here, for this engine, and recorded in `docs/architecture.md`. Where a carried-over module
+  keeps a behaviour (a golden pins its bits), that is a decision about the result, not about
+  the structure around it.
 - **WRITE ONLY TO THIS REPOSITORY.** The reference sources (`porting/README.md` names
   them) are read-only: clone them beside this checkout, read them and run them, but never
   commit, push, open issues or comment there. If a reference has a bug, the engine

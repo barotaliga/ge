@@ -22,10 +22,23 @@
 //   (`speed`, and `height` up when on the ground); `trigger_gravity` sets a toucher's gravity.
 // - **Still figures**: the still ships and poses, a black hole a use removes; `func_conveyor`'s
 //   switch; `target_temp_entity` sends its effect.
+// - **Set pieces that move**: `func_object` (with any flag hidden until a use; it falls when
+//   nothing holds it and crushes by `dmg`, 100 by default, what it lands on); `target_spawner`
+//   (a monster from four spares waiting unseen, counted when they come out, or an item);
+//   `misc_viper_bomb` (thrown on at the first ship's speed, nose down over a second, blowing on
+//   whatever it touches: radius damage `dmg`, 1000 by default, within `dmg` + 40). The fly-by
+//   ships (`misc_viper`, `misc_strogg_ship`) are the map's trains (sequel_map.cpp), hidden and
+//   passable until used.
+// - **The turret**: `turret_breach` turns in pitch and yaw toward what its driver sees, at most
+//   `speed` (50) degrees a second, held within its limits, its `turret_base` turning with it; the
+//   `turret_driver` (a roster monster) rides it and fires a rocket from its muzzle marker once it
+//   has seen a player for 3 - skill seconds, then every 4 - skill. With its driver dead it levels.
+//   The prisoner (`misc_insane`) is a roster monster that never fights and is never counted.
 //
 // ge:summary The sequel's other entities: keys, counters, lasers, shakes, blasts, barrels, ramps
 // ge:keywords sequel trigger-key trigger-counter target-laser earthquake func-explosive explobox
-// ge:keywords lightramp killbox monsterjump target-string deadsoldier
+// ge:keywords lightramp killbox monsterjump target-string deadsoldier func-object target-spawner
+// ge:keywords viper-bomb fly-by-ship turret-breach turret-base turret-driver misc-insane
 // ge:skill shooter
 // ge:test tests/shooters_edge_sequel_targets_test.cpp
 #pragma once
@@ -49,6 +62,9 @@ bool targets_damage(SequelServer& s, int e, int attacker, int damage);
 void targets_frame(SequelServer& s);
 // A walking monster's touch of the monster triggers it stands in.
 void targets_monster_touch(SequelServer& s, SequelMonster& m);
+// A turret driver's frame: it rides its breach and aims it at `enemy` (a slot it sees, or -1),
+// firing once it has seen him for 3 - skill seconds.
+void targets_turret(SequelServer& s, SequelMonster& m, int enemy);
 // Their world rows: frames, models, what shows.
 void targets_rows(SequelServer& s);
 

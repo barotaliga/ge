@@ -13,6 +13,7 @@
 #include <string_view>
 
 #include "brush/map.hpp"
+#include "core/libm/libm.hpp"
 #include "core/prng.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
@@ -49,6 +50,12 @@ enum Kind : uint8_t {
   kFigure,
   kString,
   kCharacter,
+  kObject,
+  kSpawner,
+  kBomb,
+  kBreach,
+  kTurretBase,
+  kShip,  // a fly-by ship: the map runs it as a train; only its row is drawn here
 };
 
 Kind kind_of(std::string_view c) {
@@ -75,6 +82,13 @@ Kind kind_of(std::string_view c) {
       {"misc_blackhole", kFigure},
       {"target_string", kString},
       {"target_character", kCharacter},
+      {"func_object", kObject},
+      {"target_spawner", kSpawner},
+      {"misc_viper_bomb", kBomb},
+      {"turret_breach", kBreach},
+      {"turret_base", kTurretBase},
+      {"misc_viper", kShip},
+      {"misc_strogg_ship", kShip},
   };
   for (const auto& [name, k] : kKinds)
     if (c == name) return k;
@@ -129,6 +143,8 @@ const Figure* figure_of(std::string_view c) {
 
 const char* kBarrelModel = "models/objects/barrels/tris.md2";
 const char* kBodyModel = "models/deadbods/dude/tris.md2";
+const char* kBombModel = "models/objects/bomb/tris.md2";
+constexpr int kSpares = 4;  // the monsters a spawner can make
 const char* kShakeSound =
     "world/qua"
     "ke.wav";  // the rumble (the pack's own file name)
@@ -236,6 +252,112 @@ void blow(SequelServer& s, int i, int attacker, int cause) {
   }
   fight_effect(s, "te_debris", at);
   map_use_targets(s, i, attacker);
+}
+
+// The first living player whose box `lo`..`hi` overlaps, or -1.
+int player_in(const SequelServer& s, sh::Vec3f lo, sh::Vec3f hi) {
+  for (int p = 0; p < sh::kMaxClients; p++) {
+    if (!alive(s, p)) continue;
+    const sh::Vec3f at = unpack(s.players[p].move.origin);
+    if (overlap(at + s.players[p].mins, at + s.players[p].maxs, lo, hi)) return p;
+  }
+  return -1;
+}
+
+float gravity(const SequelServer& s) {
+  return static_cast<float>(s.cvars.find("sv_gravity")->number);
+}
+
+// A falling object's frame: straight down under gravity until something holds it up; landing on
+// a player or a monster from above deals its `dmg` (a crush).
+void fall_object(SequelServer& s, int i) {
+  SequelEntity& e = s.entities[size_t(i)];
+  e.now_speed += gravity(s) * kStep;  // its fall speed (units/s, down)
+  const sh::Vec3f to = e.origin - sh::Vec3f{0, 0, e.now_speed * kStep};
+  const sh::SequelTrace t = map_trace(s, e.origin, e.mins, e.maxs, to, kSolid | sh::kSqMonster, i);
+  const int p = player_in(s, t.end + e.mins, t.end + e.maxs);
+  // A landing after a fall of more than a frame; a settle of a few units is no blow.
+  const bool falling = e.count > 1;
+  if (p < 0) {
+    e.origin = t.end;
+  } else {  // down onto the player's head
+    const float head = float(s.players[p].move.origin[2]) * 0.125f + s.players[p].maxs.z;
+    e.origin.z = std::clamp(head - e.mins.z, t.end.z, e.origin.z);
+  }
+  if (t.fraction >= 1 && p < 0) {
+    e.count++;
+    return;
+  }
+  if (falling && p >= 0) {
+    fight_hurt(s, p, -1, {0, 0, -1}, e.dmg, 1, kSqByCrush);
+  } else if (falling && t.normal.z > 0.7f && t.entity > 0) {
+    const int hit = map_entity_of_row(s, t.entity);
+    if (hit >= 0 && monster_index(s, hit) >= 0) monster_damage(s, hit, -1, e.dmg, {0, 0, -1});
+  }
+  e.count = 0;  // at rest on what holds it
+  e.now_speed = 0;
+  e.until = s.level_time + kStep;  // rests, and falls again if what held it goes
+}
+
+// A bomb's frame: thrown on, falling, its nose down over its first second and rolling; anything
+// it touches sets it off.
+void fly_bomb(SequelServer& s, int i) {
+  SequelEntity& e = s.entities[size_t(i)];
+  e.velocity.z -= gravity(s) * kStep;
+  const float since = static_cast<float>(s.level_time - e.tick_at);
+  e.angles.x = std::min(since, 1.0f) * 90;
+  e.angles.z += 10;
+  const sh::Vec3f to = e.origin + e.velocity * kStep;
+  const sh::SequelTrace t = map_trace(s, e.origin, e.mins, e.maxs, to, kSolid | sh::kSqMonster, i);
+  e.origin = t.end;
+  if (t.fraction >= 1 && player_in(s, e.origin + e.mins, e.origin + e.maxs) < 0) return;
+  e.on = false;
+  e.gone = true;
+  map_use_targets(s, i, e.activator);
+  fight_blast(s, e.origin, e.activator, e.dmg, float(e.dmg) + 40, kSqByExplosion);
+  fight_effect(s, "te_explosion", e.origin);
+}
+
+constexpr double kDegrees = 180.0 / 3.14159265358979323846;
+
+// An angle brought into -180..180.
+float wrap180(float a) {
+  while (a > 180) a -= 360;
+  while (a < -180) a += 360;
+  return a;
+}
+
+// A breach's frame: once set up (its muzzle's place taken 0.1 s in), it turns toward the angles
+// its driver asks for (`open`), at most `speed` degrees a second on each axis, its base with it;
+// with its driver dead it levels.
+void turn_breach(SequelServer& s, int i) {
+  SequelEntity& e = s.entities[size_t(i)];
+  if (e.until > 0 && s.level_time + 0.001 >= e.until) {  // the muzzle, from its marker
+    e.until = 0;
+    e.aim = -1;
+    for (size_t t = 0; t < s.entities.size(); t++)
+      if (!e.target.empty() && s.entities[t].targetname == e.target) e.aim = static_cast<int>(t);
+    if (e.aim < 0) {
+      s.console.push_back("A turret's breach has no muzzle marker named '" + e.target + "'.");
+    } else {
+      SequelEntity& mark = s.entities[size_t(e.aim)];
+      const sh::Vec3f off = mark.origin - e.origin;
+      const auto ax = sh::angle_vectors(e.angles);
+      e.closed = {sh::dot(off, ax.forward), sh::dot(off, ax.right), sh::dot(off, ax.up)};
+      mark.gone = true;
+    }
+  }
+  if (e.count >= 0) {  // its driver's death levels the gun
+    const int m = monster_index(s, e.count);
+    if (m < 0 || s.monsters[size_t(m)].dead) e.open.x = 0;
+  }
+  const float step = e.speed * kStep;
+  sh::Vec3f turn{std::clamp(wrap180(e.open.x - e.angles.x), -step, step),
+                 std::clamp(wrap180(e.open.y - e.angles.y), -step, step), 0};
+  e.avelocity = turn * (1 / kStep);
+  for (SequelEntity& b : s.entities)
+    if (kind_of(b) == kTurretBase && !e.team.empty() && b.team == e.team)
+      b.avelocity = {0, e.avelocity.y, 0};
 }
 
 }  // namespace
@@ -386,6 +508,62 @@ bool targets_spawn(SequelServer& s, int i) {
       e.solid = true;
       e.frame = 12;  // blank
       return true;
+    case kObject:  // a box one unit inside the brush; with any flag, hidden until a use
+      e.mins = e.mins + sh::Vec3f{1, 1, 1};
+      e.maxs = e.maxs - sh::Vec3f{1, 1, 1};
+      if (key(s, e, "dmg").empty()) e.dmg = 100;
+      if (e.spawnflags == 0) {
+        e.solid = true;
+        e.until = s.level_time + 0.2;  // then it falls when nothing holds it
+      } else {
+        e.hidden = true;
+      }
+      return true;
+    case kSpawner: {
+      const std::string made = e.target;
+      if (monster_class(made)) {  // its monsters wait unseen, each a map entity of its own
+        if (deathmatch(s)) return true;
+        SequelEntity spare;
+        spare.classname = made;
+        spare.origin = e.origin;
+        spare.angles = e.angles;
+        spare.block = -2 - i;
+        for (int n = 0; n < kSpares; n++) s.entities.push_back(spare);  // `e` may move
+        return true;
+      }
+      if (sq_item(made) < 0)
+        s.console.push_back("A spawner makes '" + made +
+                            "', which is no monster or item it can make; it makes nothing.");
+      return true;
+    }
+    case kBomb:
+      add_model(s, e, kBombModel);
+      e.hidden = true;
+      e.mins = {-8, -8, -8};
+      e.maxs = {8, 8, 8};
+      if (e.dmg == 0) e.dmg = 1000;
+      return true;
+    case kBreach: {  // a gun that turns in pitch and yaw; 0 in a limit means its default
+      e.solid = true;
+      if (e.speed == 0) e.speed = 50;
+      if (e.dmg == 0) e.dmg = 10;
+      const float minpitch = number(s, e, "minpitch", 0), maxpitch = number(s, e, "maxpitch", 0);
+      const float maxyaw = number(s, e, "maxyaw", 0);
+      e.lip = minpitch == 0 ? -30 : minpitch;
+      e.wait = maxpitch == 0 ? 30 : maxpitch;
+      e.decel = number(s, e, "minyaw", 0);
+      e.random = maxyaw == 0 ? 360 : maxyaw;
+      e.open = e.angles;  // where it aims
+      e.until = s.level_time + kStep;
+      e.count = -1;  // its driver
+      if (e.target.empty())
+        s.console.push_back("A turret's breach has no muzzle marker; it fires from its middle.");
+      return true;
+    }
+    case kTurretBase:
+      e.solid = true;
+      return true;
+    case kShip:
     case kNone:
       return false;
   }
@@ -501,6 +679,38 @@ bool targets_use(SequelServer& s, int i, int activator) {
     case kFigure:
       if (e.classname == "misc_blackhole") e.gone = true;
       return true;
+    case kObject:
+      if (!e.hidden) return true;
+      e.hidden = false;
+      e.solid = true;
+      kill_inside(s, e);
+      e.until = s.level_time;  // and it falls
+      return true;
+    case kSpawner: {
+      const sh::Vec3f velocity = e.speed != 0 ? way(e.angles.y) * e.speed : sh::Vec3f{};
+      if (monster_class(e.target)) {
+        if (!monster_bring_spare(s, -2 - i, e.origin, e.angles, velocity, activator))
+          s.console.push_back("A spawner of '" + e.target + "' has made all " +
+                              std::to_string(kSpares) + " it can.");
+        return true;
+      }
+      if (sq_item(e.target) >= 0) fight_drop_at(s, e.origin, e.target);
+      return true;
+    }
+    case kBomb: {
+      if (!e.hidden || e.on) return true;
+      e.hidden = false;
+      e.on = true;  // falling
+      e.activator = activator;
+      e.angles = {};
+      for (const SequelEntity& v : s.entities)
+        if (v.classname == "misc_viper") {
+          e.velocity = v.velocity;
+          break;
+        }
+      e.tick_at = s.level_time;  // its fall began
+      return true;
+    }
     default:
       return true;
   }
@@ -598,6 +808,15 @@ void targets_frame(SequelServer& s) {
         event(s, std::move(ev));
         break;
       }
+      case kObject:
+        if (e.until > 0 && s.level_time + 0.001 >= e.until) fall_object(s, i);
+        break;
+      case kBreach:
+        turn_breach(s, i);
+        break;
+      case kBomb:
+        if (e.on) fly_bomb(s, i);
+        break;
       case kLightRamp: {
         if (e.tick_at <= 0 || s.level_time + 0.001 < e.tick_at) break;
         int light = -1;
@@ -651,12 +870,71 @@ void targets_monster_touch(SequelServer& s, SequelMonster& m) {
   }
 }
 
+void targets_turret(SequelServer& s, SequelMonster& m, int enemy) {
+  SequelEntity& d = s.entities[size_t(m.entity)];
+  int breach = -1;
+  for (size_t t = 0; t < s.entities.size(); t++)
+    if (!d.target.empty() && s.entities[t].targetname == d.target &&
+        kind_of(s.entities[t]) == kBreach)
+      breach = static_cast<int>(t);
+  if (breach < 0) return;
+  SequelEntity& b = s.entities[size_t(breach)];
+  if (b.count < 0) {  // first: its seat, kept at its offset as the breach turns
+    b.count = m.entity;
+    d.closed = d.origin - b.origin;
+    d.lip = b.angles.y;
+  }
+  // Ride: the seat turned with the breach's yaw, snapped to 1/8 unit.
+  const float yaw = static_cast<float>((b.angles.y - d.lip) / kDegrees);
+  const float c = static_cast<float>(ge::core::libm::cos(double(yaw)));
+  const float sn = static_cast<float>(ge::core::libm::sin(double(yaw)));
+  const sh::Vec3f seat{d.closed.x * c - d.closed.y * sn, d.closed.x * sn + d.closed.y * c,
+                       d.closed.z};
+  d.origin = b.origin + seat;
+  for (float* v : {&d.origin.x, &d.origin.y, &d.origin.z})
+    *v = static_cast<float>(static_cast<int>(*v * 8 + (*v < 0 ? -0.5f : 0.5f))) / 8;
+  d.angles.y = b.angles.y;
+  if (enemy < 0) {  // out of sight: the aim stops where it is
+    m.fire_at = -1;
+    b.open = b.angles;
+    return;
+  }
+  const auto ax = sh::angle_vectors(b.angles);
+  const sh::Vec3f muzzle =
+      b.origin + ax.forward * b.closed.x + ax.right * b.closed.y + ax.up * b.closed.z;
+  const SequelPlayer& p = s.players[enemy];
+  const sh::Vec3f eye = unpack(p.move.origin) + sh::Vec3f{0, 0, p.view_height};
+  const sh::Vec3f to = eye - muzzle;
+  const double flat = double(sh::length(sh::Vec3f{to.x, to.y, 0}));
+  float want_yaw = static_cast<float>(ge::core::libm::atan2(double(to.y), double(to.x)) * kDegrees);
+  if (want_yaw < 0) want_yaw += 360;
+  float want_pitch = static_cast<float>(-ge::core::libm::atan2(double(to.z), flat) * kDegrees);
+  want_pitch = std::clamp(want_pitch, b.lip, b.wait);
+  if (want_yaw < b.decel || want_yaw > b.random) {  // outside its arc: the nearer limit
+    const float to_min = std::abs(wrap180(want_yaw - b.decel));
+    const float to_max = std::abs(wrap180(want_yaw - b.random));
+    want_yaw = to_min < to_max ? b.decel : b.random;
+  }
+  b.open = {want_pitch, want_yaw, 0};
+  // Fire once it has seen him for (3 - skill) s, then every (3 - skill) + 1 s.
+  const int skill = std::clamp(static_cast<int>(s.cvars.find("skill")->number), 0, 3);
+  if (m.fire_at < 0) m.fire_at = s.level_time;
+  if (s.level_time + 0.001 < m.fire_at + (3 - skill) || s.level_time + 0.001 < m.attack_finished)
+    return;
+  m.attack_finished = s.level_time + (3 - skill) + 1;
+  const int damage = 100 + static_cast<int>(ge::core::next(s.rng) * 50);
+  sound_at(s, m.entity, muzzle, "weapons/rocklf1a.wav");
+  fight_monster_launch(s, m.entity, SqShot::rocket, muzzle, ax.forward, damage,
+                       550.0f + 50.0f * float(skill), kSqByMonster + m.kind);
+}
+
 void targets_rows(SequelServer& s) {
   RulesWorld& w = s.world;
   for (size_t n = 0; n < s.entities.size(); n++) {
     const SequelEntity& e = s.entities[n];
     const Kind k = kind_of(e);
-    if (k != kBarrel && k != kDeadSoldier && k != kFigure && k != kCharacter && k != kExplosive)
+    if (k != kBarrel && k != kDeadSoldier && k != kFigure && k != kCharacter && k != kExplosive &&
+        k != kObject && k != kBomb && k != kShip)
       continue;
     const size_t row = size_t(map_row(static_cast<int>(n)));
     if (row >= w.entities.size()) continue;
