@@ -118,6 +118,8 @@
 //   M18r.md 0w); judging.
 // - `letgo`: the aim's hold on a player lost from sight let go once he lies more than 100
 //   degrees off the way walked (bot.cpp, M18r.md 0w); judging.
+// - `retreatrun`: backing off, one more than 100 degrees off the way walked who is not coming on
+//   (under 100 units/s) is not aimed at: the run faces its way (bot.cpp, M18r.md 0w); judging.
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); judging.
@@ -133,7 +135,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -231,9 +233,10 @@ enum class Feature : uint8_t {
   fightway,
   letgo,
   paceback,
+  retreatrun,
   trial,
 };
-constexpr size_t kFeatures = 85;
+constexpr size_t kFeatures = 86;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
