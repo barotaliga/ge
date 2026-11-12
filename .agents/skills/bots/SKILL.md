@@ -245,6 +245,25 @@ own server, in process (`se-team`), headless.
 - **Ask people's recordings before guessing**: where the bots lag people, measure how people play
   that place, item or moment (se-people `--samples`, se-moves, se-rj) and copy it.
 
+**COPYING MOVEMENT OFF RECORDINGS** (M18r.md § 0r). A hard move is copied whole from people's
+recordings, never rebuilt by hand from their averages: `plugins/shooter/recipes.hpp` cuts a track
+into instances (`read_hop_starts`: frames from the low, the keys read off the move as rocket jumps
+read them), and `play_recipe` plays an instance's keys and view back through `player_move` (the
+PROOF: people's keys played on an open floor reach their recorded speed, or the reader is wrong).
+`se-recipes --dir=<demos>/<map> --basedir=<basedir>` tables them by level and spot, times every
+stop to 400 (people and bots by one rule: run it on `se-team --save` matches too), `--prove=N`
+checks the reader, `--book=<file>` writes the rows a game compiles in
+(`games/shooters_edge/bots/hop_start_book.cpp`; splice the rows into `kRows`, the format is in
+its header). The pilot (`pilot_recipes.hpp`) chooses the nearest entry to its state, turns it to
+its way, FLIES it by the move from where it stands on the map and commits only a proven one, then
+plays it closed loop against the proof. Three things learned getting it to fly in a match:
+- the recorded VIEW is already a person's mouse: play it as it is (`bot.cpp` `recipe_on`); a
+  watch or the mouse hand over it chased the sweep and lost the start (takeoff 341 -> 416);
+- the keyboard presses late, and W and S share a finger: ask keys a press early
+  (`recipe_keys_s`) and keep starts that press back on the ground out of the book;
+- keep the book to starts a bot can use on its way: off the ground soon (0.9 s), set off near the
+  way (75 degrees); people's loops away and back read as made starts too.
+
 **The labs it is worked with** (`build/release/labs <name> ...`, `--basedir=<basedir>`):
 
 | Lab | What it answers |
@@ -253,6 +272,7 @@ own server, in process (`se-team`), headless.
 | `se-people` | people and bots measured alike off recordings: in view, faced, speed, the hand's sweeps (`hand.*`, `hop.*`), fire in view, item control, wet, wall and player bumps (`bumps.*`, a minute and a minute at speed); `--samples=<tsv>` every sample alive |
 | `se-moves` | who moves fastest and the weave by speed, per player, off a folder of recordings (`--dir`); the ground between jumps (`jumps.ground-p50`, what a landing costs) and the chains (`jumps.chain-3plus-share`, `jumps.chain-first-off-p50`) |
 | `se-rj` | rocket, grenade and gap jumps read off recordings and clustered into tricks |
+| `se-recipes` | people's hop starts read off recordings (by level, the spots, `hop_starts.tsv`, `--frames`), every stop timed to 320 and 400 (`stop.*`: people's 35 % at 400 within 2.5 s), `--prove` the keys played back, `--book` the rows the bots copy |
 | `se-reach` | a map's nav asked: `--route` node by node, `--floors`, `--escapes=fly`; `--gaps=fly` stages every gap trick with an expert's pilot from 160-640 behind its lip (planned, jumped, takeoff speed, landed, refused; `--gap-trace=<tsv>` every command with the pilot's reason; pressed through an expert's keyboard as matches are while `keys` is in `--gap-features`, `-keys` the analog pilot): a gap jump judged in seconds, not in matches |
 | `se-spot` | a place drawn every way (top, cuts, inside views, a route) |
 | `se-duel` | 3-minute duels, deathmatch mode 4 on povdmm4 by default |
