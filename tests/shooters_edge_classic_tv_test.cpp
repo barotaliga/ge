@@ -387,8 +387,7 @@ TEST(a_node_names_the_match_after_itself) {
   CHECK_MSG(!s.broken, s.why);
   CHECK(s.levels == 1);
   const std::string t = text_of(passed);
-  CHECK(t.find("fullserverinfo \"\\maxfps\\77\\hostname\\tv.eu\\*qtv\\1\"\n") !=
-        std::string::npos);
+  CHECK(t.find("fullserverinfo \"\\maxfps\\77\\hostname\\tv.eu\\*qtv\\1\"\n") != std::string::npos);
   CHECK(t.find(std::string("hostname") + '\0' + "tv.eu (live: Night Arena)") != std::string::npos);
   CHECK(t.find("Night Arena") == t.find("tv.eu (live: Night Arena)") + 13);
   // The late viewer's catch-up carries the same names.

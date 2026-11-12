@@ -403,7 +403,8 @@ bool mv_apply(MvState& s, std::span<const uint8_t> record, std::vector<uint8_t>*
   }
   if (s.signon) {
     s.signon_records.insert(s.signon_records.end(), out.begin(), out.end());
-    s.signon_records[s.signon_records.size() - out.size()] = 0;  // its time: the catch-up is at once
+    s.signon_records[s.signon_records.size() - out.size()] =
+        0;  // its time: the catch-up is at once
   }
   if (sent) sent->assign(out.begin(), out.end());
   return ok;

@@ -81,10 +81,10 @@ struct MvPlayer {
 struct MvState {
   std::string name;          // a relay's own: the server's name rewritten (empty: left as it came)
   bool upstream_tv = false;  // this level's server info came through a relay already (`*qtv`)
-  bool level = false;   // a level's signon has begun
-  bool signon = false;  // still in it (no frame yet)
-  bool broken = false;  // a message could not be read: no catch-up past the signon
-  std::string why;      // what broke it
+  bool level = false;        // a level's signon has begun
+  bool signon = false;       // still in it (no frame yet)
+  bool broken = false;       // a message could not be read: no catch-up past the signon
+  std::string why;           // what broke it
   std::vector<uint8_t> signon_records;
   Ext ext;
   std::vector<EntityState> baselines;                 // by number
