@@ -365,9 +365,15 @@ std::string demos_page(const Archive* a, const HubSpec& spec, std::string_view t
       h += "<details><summary>scores</summary>" + scores + "</details>";
     }
     for (const std::string& t : r->tags) h += " <span class=\"tag\">" + html_escape(t) + "</span>";
-    h += "</td><td>" + length + "</td><td><div class=\"act\"><a class=\"btn\" href=\"" + scheme +
-         "://demo/" + r->sha + "\">Play</a><a class=\"small\" href=\"/" + archive_path(r->sha) +
-         "\" download>Download</a></div></td></tr>";
+    h += "</td><td>";
+    h += length;
+    h += "</td><td><div class=\"act\"><a class=\"btn\" href=\"";
+    h += scheme;
+    h += "://demo/";
+    h += r->sha;
+    h += "\">Play</a><a class=\"small\" href=\"/";
+    h += archive_path(r->sha);
+    h += "\" download>Download</a></div></td></tr>";
   }
   h += "</table>";
   if (page.rows.empty()) h += "<p class=\"none\">No demo matches.</p>";

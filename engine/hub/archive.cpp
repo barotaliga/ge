@@ -373,7 +373,7 @@ DemoPage archive_search(const Archive& a, const DemoQuery& q, int64_t now_s) {
   page.total = static_cast<int>(hits.size());
   page.pages = std::max(1, (page.total + kDemosPerPage - 1) / kDemosPerPage);
   page.page = std::min(q.page, page.pages);
-  const size_t from = static_cast<size_t>((page.page - 1) * kDemosPerPage);
+  const size_t from = static_cast<size_t>(page.page - 1) * kDemosPerPage;
   const size_t to = std::min(hits.size(), from + kDemosPerPage);
   if (from < to)
     page.rows.assign(hits.begin() + static_cast<std::ptrdiff_t>(from),

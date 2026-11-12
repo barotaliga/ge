@@ -35,13 +35,20 @@ struct DemoSpec {
   int salt = 0;  // makes the bytes differ
 };
 
+std::string tabbed(const std::string& a, const std::string& b) {
+  std::string s = a;
+  s += '\t';
+  s += b;
+  return s;
+}
+
 std::vector<uint8_t> demo(const DemoSpec& d) {
   gr::StreamHeader h;
   h.game = "test_game";
   h.meta = {{"map", d.map},       {"mode", d.mode},
             {"server", d.server}, {"start", std::to_string(d.start)},
             {"team", "red"},      {"team", "blue"}};
-  for (const auto& [name, team] : d.players) h.meta.emplace_back("player", name + "\t" + team);
+  for (const auto& [name, team] : d.players) h.meta.emplace_back("player", tabbed(name, team));
   for (const std::string& t : d.tags) h.meta.emplace_back("tag", t);
   h.tracks = {{1, gr::TrackKind::meta, gr::TrackCodec::stored, "meta"}};
   std::vector<uint8_t> out;
@@ -53,7 +60,7 @@ std::vector<uint8_t> demo(const DemoSpec& d) {
   if (d.finished) {
     gr::Meta fin = {{"duration_ms", "1200000"}, {"team_score", "red\t122"}};
     for (const auto& [name, s] : d.scores)
-      fin.emplace_back("score", name + "\t" + std::to_string(s));
+      fin.emplace_back("score", tabbed(name, std::to_string(s)));
     gr::stream_finish(w, fin);
   }
   return out;
@@ -137,7 +144,7 @@ TEST(search_filters_and_pages) {
   for (int i = 0; i < 40; i++) {
     DemoSpec d;
     d.salt = i;
-    d.start = 1794450000 - i * 3600;
+    d.start = 1794450000 - int64_t{i} * 3600;
     d.mode = i % 2 ? "ffa" : "4on4";
     d.map = i % 3 ? "tower" : "crypt";
     if (i == 7) d.players = {{"Quill", "red"}, {"brand", "blue"}};
@@ -154,7 +161,7 @@ TEST(search_filters_and_pages) {
   q = DemoQuery{};
   q.player = "QUI";
   p = archive_search(a, q, now);
-  CHECK(p.total == 1 && p.rows[0]->start_s == now - 7 * 3600);
+  CHECK(p.total == 1 && p.rows[0]->start_s == now - int64_t{7} * 3600);
   q = DemoQuery{};
   q.mode = "ffa";
   q.map = "crypt";
@@ -178,7 +185,7 @@ TEST(prune_drops_the_oldest_untagged) {
   for (int i = 0; i < 6; i++) {
     DemoSpec d;
     d.salt = i;
-    d.start = 1000 + i * 100;
+    d.start = 1000 + int64_t{i} * 100;
     if (i == 0) d.tags = {"league"};
     CHECK(archive_add(a, demo(d), 2000, {}, err) == AddResult::added);
   }

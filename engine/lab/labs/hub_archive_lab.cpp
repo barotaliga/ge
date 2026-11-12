@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -62,13 +63,20 @@ struct Made {
   bool tagged = false;
 };
 
+std::string tabbed(const std::string& a, const std::string& b) {
+  std::string s = a;
+  s += '\t';
+  s += b;
+  return s;
+}
+
 Made make_demo(uint64_t seed, int i) {
   const uint64_t r = mix(seed * 1000003u + static_cast<uint64_t>(i));
   const ModeDef& m = kModes[r % std::size(kModes)];
   Made d;
   d.mode = m.name;
   d.map = kMaps[(r >> 8) % std::size(kMaps)];
-  d.start = kNow - static_cast<int64_t>((r >> 16) % (30 * 86400));
+  d.start = kNow - static_cast<int64_t>((r >> 16) % (uint64_t{30} * 86400));
   d.tagged = (r >> 40) % 20 == 0;
   const bool cut = (r >> 45) % 33 == 0;
   gr::StreamHeader h;
@@ -86,7 +94,7 @@ Made make_demo(uint64_t seed, int i) {
   for (int k = 0; k < m.players; k++) {
     const std::string name = kNames[(first + static_cast<size_t>(k) * 7) % std::size(kNames)];
     d.players.push_back(name);
-    h.meta.emplace_back("player", name + (m.teams ? (k % 2 ? "\tblue" : "\tred") : ""));
+    h.meta.emplace_back("player", m.teams ? tabbed(name, k % 2 ? "blue" : "red") : name);
   }
   h.tracks = {{1, gr::TrackKind::meta, gr::TrackCodec::stored, "meta"},
               {2, gr::TrackKind::messages, gr::TrackCodec::zstd, "messages"}};
@@ -104,7 +112,7 @@ Made make_demo(uint64_t seed, int i) {
   if (!cut) {
     gr::Meta fin = {{"duration_ms", std::to_string(int64_t{seconds} * 1000)}};
     for (size_t k = 0; k < d.players.size(); k++) {
-      fin.emplace_back("score", d.players[k] + "\t" + std::to_string(mix(r + k) % 50));
+      fin.emplace_back("score", tabbed(d.players[k], std::to_string(mix(r + k) % 50)));
     }
     gr::stream_finish(w, fin);
   }
@@ -211,7 +219,7 @@ void run(gl::Lab& lab) {
         std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count() /
         kRuns;
     costs.rows.push_back(
-        {s.name, std::to_string(static_cast<int>(us + 0.5)) + (sink < 0 ? "?" : "")});
+        {s.name, std::to_string(static_cast<int64_t>(std::llround(us))) + (sink < 0 ? "?" : "")});
   }
   lab.table(found);
   lab.table(costs, gl::Det::measured);
@@ -233,7 +241,7 @@ void run(gl::Lab& lab) {
   // Two weeks kept: the league's demos stay.
   int tagged_before = 0;
   for (const gh::DemoRow& r : a.rows) tagged_before += r.tags.empty() ? 0 : 1;
-  const int dropped = gh::archive_prune(a, 0, 14 * 86400, kNow);
+  const int dropped = gh::archive_prune(a, 0, int64_t{14} * 86400, kNow);
   int tagged_after = 0;
   for (const gh::DemoRow& r : a.rows) tagged_after += r.tags.empty() ? 0 : 1;
   lab.metric("pruned_to_two_weeks", dropped, "demos");
