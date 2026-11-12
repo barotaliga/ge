@@ -369,6 +369,7 @@ void send_static_updates(ClassicServer& s) {
 void route_events(ClassicServer& s) {
   sv::MessageSink& out = s.game->out;
   if (s.mvd) mvd_events(s, *s.mvd);
+  for (MultiviewRecorder* r : s.streams) mvd_events(s, *r);
   for (const sv::NetEvent& ev : out.events) route_event(s, ev);
   s.counts.events += static_cast<int64_t>(out.events.size());
   send_static_updates(s);

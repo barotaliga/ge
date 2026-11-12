@@ -306,6 +306,7 @@ void relay_voice(ClassicServer& s, int slot, const ClcMsg& m) {
     s.counts.voice_out++;
   }
   if (s.mvd) mvd_voice(*s.mvd, v);
+  for (MultiviewRecorder* r : s.streams) mvd_voice(*r, v);
 }
 
 void handle_packet(ClassicServer& s, int slot, const uint8_t* data, size_t size) {
@@ -839,6 +840,7 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
   route_events(s);
   tell_frags(s);
   if (s.mvd) mvd_frame(s, *s.mvd);
+  for (MultiviewRecorder* r : s.streams) mvd_frame(s, *r);
 
   for (int i = 0; i < sh::kMaxClients; i++) {
     ClassicClient& c = s.clients[i];
