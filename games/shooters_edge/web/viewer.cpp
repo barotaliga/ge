@@ -4,11 +4,15 @@
 // demo it fetches by hash and plays at its own pace, drawn between frames, with the effects the
 // window draws. The page's status line says what is loading, or why there is no picture.
 //
-// A live broadcast (`--tv`) is read off the TV node's WebSocket in a later row; until then the
-// viewer says so and the page's Open in the game stands.
+// A LIVE BROADCAST (`--tv=ws://...`) is read off the TV node's WebSocket (tv/websocket.hpp): the
+// viewer says hello as a viewer, the node's messages are turned back into the replay file as it
+// grows (tv/node.hpp's `Watch`), and its whole blocks are unpacked into the recording as they come
+// (`unpack_more`). Play starts two blocks in, so a block's second of travel is already in hand;
+// when the recording runs out before the next block, the picture holds its last frame.
 //
 // ge:summary Shooter's Edge's web viewer: packs and a demo fetched, the world drawn on the canvas
 // ge:keywords web viewer browser wasm webgpu canvas demo playdemo hub watch shooters_edge_viewer
+// ge:keywords live broadcast tv websocket
 // ge:skill net shooter
 #include <algorithm>
 #include <cstdio>
@@ -23,6 +27,7 @@
 #include "platform/window.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/demo_fx.hpp"
+#include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
@@ -30,6 +35,7 @@
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
+#include "tv/node.hpp"
 #include "ui/draw.hpp"
 #include "web/browser.hpp"
 #include "web/viewer_args.hpp"
@@ -39,6 +45,10 @@ namespace cl = shooters_edge::client;
 namespace {
 
 constexpr const char* kCanvas = "#view";
+// Blocks in hand before a live broadcast starts playing (each one second of the match).
+constexpr int64_t kLiveLead = 2;
+// Paints a WebSocket has to open in (about ten seconds).
+constexpr int kOpenPaints = 600;
 
 // The page's line in a player's words; the detail goes to the browser's console only.
 int fail(const std::string& line, const std::string& detail = "") {
@@ -61,6 +71,50 @@ bool mount_packs(const ge::web::ViewerArgs& a, cl::SearchPath& files, std::strin
   return true;
 }
 
+// A live broadcast's end of the page: the node's socket, the stream as it grows, the recording.
+struct Live {
+  int socket = -1;
+  ge::tv::Watch watch;
+  cl::DemoUnpacker unpacker;
+  std::vector<uint8_t> opening;  // the recording before it opens (`kLiveLead` blocks)
+  bool open = false;             // the recording is `t.demo` and grows there
+};
+
+// What the node sent since the last paint taken in, and the blocks it completed unpacked. False
+// with the page's line in `line` and the detail in `error` when the broadcast cannot go on.
+bool pump(Live& live, cl::Timedemo& t, const cl::GameAdapter& game, std::string& line,
+          std::string& error) {
+  std::vector<uint8_t> msg;
+  while (ge::web::ws_take(live.socket, msg)) {
+    if (!ge::tv::watch_receive(live.watch, msg)) {
+      line = "The broadcast sent something this viewer cannot read.";
+      error = live.watch.error;
+      return false;
+    }
+  }
+  if (!live.watch.refused.empty()) {
+    line = "The broadcast turned this viewer away: " + live.watch.refused;
+    return false;
+  }
+  if (!live.watch.have_header) return true;
+  std::vector<uint8_t>& into = live.open ? t.demo.bytes : live.opening;
+  std::string cut;
+  if (!cl::unpack_more(live.unpacker, live.watch.stream, into, cut)) {
+    line = "This broadcast cannot be shown here. Open it in the game below.";
+    error = cut;
+    return false;
+  }
+  if (!live.open && live.unpacker.blocks >= kLiveLead && !live.opening.empty()) {
+    if (!game.open_demo(game, std::move(live.opening), t.demo, error)) {
+      line = "This broadcast cannot be shown here. Open it in the game below.";
+      return false;
+    }
+    t.start = t.demo;
+    live.open = true;
+  }
+  return true;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -69,23 +123,38 @@ int main(int argc, char** argv) {
   std::string error;
   if (!ge::web::parse_viewer_args(words, args, error))
     return fail("The page gave the viewer words it does not know.", error);
-  if (!args.tv.empty())
-    return fail("Live broadcasts are not shown here yet. Open it in the game below.");
 
   cl::SearchPath files;
   if (!mount_packs(args, files, error))
     return fail("The game's files did not load. Try again in a moment.", error);
-  ge::web::say("Loading the demo...");
-  std::vector<uint8_t> demo_bytes;
-  if (!ge::web::fetch_bytes(args.demo, demo_bytes, error))
-    return fail("The demo did not load. Try again in a moment.", error);
-
   cl::Timedemo t;
-  t.name = t.found = args.demo;
   const cl::GameAdapter& game = cl::classic_adapter();
-  if (!game.open_demo(game, std::move(demo_bytes), t.demo, error))
-    return fail("This demo cannot be played here. Download it and play it in the game.", error);
-  t.start = t.demo;
+  const bool live = !args.tv.empty();
+  Live broadcast;
+  if (live) {
+    ge::web::say("Joining the broadcast...");
+    t.name = t.found = args.tv;
+    broadcast.socket = ge::web::ws_open(args.tv);
+    for (int i = 0; broadcast.socket >= 0 &&
+                    ge::web::ws_state(broadcast.socket) == ge::web::WsState::connecting;
+         i++) {
+      if (i == kOpenPaints) break;
+      ge::web::next_frame();
+    }
+    if (broadcast.socket < 0 || ge::web::ws_state(broadcast.socket) != ge::web::WsState::open)
+      return fail("The broadcast did not answer. Open it in the game below.",
+                  "no WebSocket to " + args.tv);
+    ge::web::ws_send(broadcast.socket, ge::tv::tv_hello("web viewer", false));
+  } else {
+    ge::web::say("Loading the demo...");
+    std::vector<uint8_t> demo_bytes;
+    if (!ge::web::fetch_bytes(args.demo, demo_bytes, error))
+      return fail("The demo did not load. Try again in a moment.", error);
+    t.name = t.found = args.demo;
+    if (!game.open_demo(game, std::move(demo_bytes), t.demo, error))
+      return fail("This demo cannot be played here. Download it and play it in the game.", error);
+    t.start = t.demo;
+  }
   t.active = t.paced = t.smooth = true;
 
   ge::web::say("Starting the picture...");
@@ -123,17 +192,41 @@ int main(int argc, char** argv) {
   cl::FxFrame fx;
   cl::FxScene scene;
 
+  std::string waiting = "Joining the broadcast...";  // the status line while a broadcast starts
   double last_ms = ge::web::next_frame();
   for (uint64_t frame = 0;; frame++) {
     const double now_ms = ge::web::next_frame();
     const double dt = std::min((now_ms - last_ms) / 1000.0, cl::kMostPlayStep);
     last_ms = now_ms;
-    const cl::TimedemoStep st = cl::playdemo_step(t, dt, args.speed, error);
+    if (live) {
+      std::string line;
+      if (!pump(broadcast, t, game, line, error)) return fail(line, error);
+      if (!broadcast.open) {
+        if (ge::web::ws_state(broadcast.socket) == ge::web::WsState::closed)
+          return fail("The broadcast stopped before the match was shown.");
+        const char* line =
+            broadcast.watch.have_header ? "Waiting for the match..." : "Joining the broadcast...";
+        if (waiting != line) ge::web::say(waiting = line);
+        continue;
+      }
+    }
+    const cl::TimedemoStep st = cl::playdemo_step(t, dt, live ? 1.0 : args.speed, error);
     if (st == cl::TimedemoStep::error)
-      return fail("The demo stopped part way. Download it and play it in the game.", error);
+      return fail(live ? "The broadcast stopped part way. Open it in the game below."
+                       : "The demo stopped part way. Download it and play it in the game.",
+                  error);
     if (st == cl::TimedemoStep::end) {
-      ge::web::say("The demo is over.");
-      return 0;
+      if (!live) {
+        ge::web::say("The demo is over.");
+        return 0;
+      }
+      if (broadcast.watch.ended ||
+          ge::web::ws_state(broadcast.socket) == ge::web::WsState::closed) {
+        ge::web::say("The broadcast is over.");
+        ge::web::ws_close(broadcast.socket);
+        return 0;
+      }
+      t.clock = t.demo.state.time;  // ran out before the next block: hold the last frame
     }
     const cl::DemoState& read = t.demo.state;
     if (st == cl::TimedemoStep::new_level) {

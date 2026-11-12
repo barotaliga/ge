@@ -23,8 +23,10 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iterator>
 #include <optional>
+#include <span>
 #include <string>
 #include <thread>
 #include <utility>
@@ -38,10 +40,13 @@
 #include "lab/labs/hub_browser.hpp"
 #include "lab/png.hpp"
 #include "net/address.hpp"
+#include "net/status.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/classic_team.hpp"
+#include "tv/node.hpp"
+#include "tv/websocket.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -192,28 +197,34 @@ void run(gl::Lab& lab) {
   const int w = static_cast<int>(lab.arg_num("width"));
   const int h = static_cast<int>(lab.arg_num("height"));
   int drawn = 0;
-  for (const int wait_s :
-       {static_cast<int>(lab.arg_num("wait")), 2 * static_cast<int>(lab.arg_num("wait"))}) {
-    const fs::path png = root / ("at-" + std::to_string(wait_s) + "s.png");
+  // A page drawn after `wait_s` while the hub (and `pump`, when given) answers on this thread.
+  const auto draw = [&](const std::string& path, const std::string& name, int wait_s,
+                        const gh::Poller& nodes,
+                        const std::function<void()>& pump) -> std::optional<gl::Picture> {
+    const fs::path png = root / (name + ".png");
     std::atomic<bool> done{false};
     std::optional<gl::Picture> pic;
     std::thread t([&] {
-      // A browser that fails leaves no picture, which the check below reports.
-      pic = gl::hub_browser::live_draw(browser, kWebGpuFlags, base + "/demo/" + row.sha, w, h,
-                                       wait_s * 1000, png, png.string() + ".log");
+      // A browser that fails leaves no picture, which the caller reports.
+      pic = gl::hub_browser::live_draw(browser, kWebGpuFlags, base + path, w, h, wait_s * 1000, png,
+                                       png.string() + ".log");
       done = true;
     });
-    const gh::Poller none;
     while (!done) {
-      gh::http_update(http, none, spec(), 0);
+      gh::http_update(http, nodes, spec(), 0);
+      if (pump) pump();
       std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     t.join();
-    const std::optional<gl::Picture> got = std::move(pic);
-    if (!got) {
-      lab.note("Chromium drew no picture after " + std::to_string(wait_s) + " s");
-      continue;
-    }
+    if (!pic)
+      lab.note("Chromium drew no picture of " + path + " after " + std::to_string(wait_s) + " s");
+    return pic;
+  };
+  for (const int wait_s :
+       {static_cast<int>(lab.arg_num("wait")), 2 * static_cast<int>(lab.arg_num("wait"))}) {
+    const std::optional<gl::Picture> got =
+        draw("/demo/" + row.sha, "at-" + std::to_string(wait_s) + "s", wait_s, gh::Poller{}, {});
+    if (!got) continue;
     drawn++;
     lab.shot({"after-" + std::to_string(wait_s) + "s",
               "THE DEMO PAGE " + std::to_string(wait_s) + " S AFTER IT OPENED",
@@ -225,6 +236,72 @@ void run(gl::Lab& lab) {
               "renderer over the browser's limits names the world).",
               {{"wait_s", std::to_string(wait_s)}}},
              *got, gl::Det::measured);
+  }
+
+  // The same match live: a TV node fed the replay file, paced to the match's own clock by its
+  // delay, with WebSocket viewers; the hub's Watch page points the viewer at it.
+  if (lab.arg("live") != "0") {
+    ge::tv::Node node;
+    node.config.name = "hub-viewer";
+    node.config.delay_ms = 1000;
+    ge::tv::TvWeb web;
+    if (!ge::tv::tv_web_listen(web, ge::net::loopback_v4(0), error)) {
+      lab.note("no WebSocket listener here (" + error + "): the live page not drawn");
+    } else {
+      using clock = std::chrono::steady_clock;
+      const auto t0 = clock::now();
+      const auto now_ms = [&] {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - t0).count();
+      };
+      ge::tv::tv_feed(node, ger, now_ms());
+      ge::tv::tv_end(node);
+      gh::Poller nodes;
+      gh::HubNode tv;
+      tv.address = ge::net::ipv4(127, 0, 0, 1, 28000);
+      tv.kind = tv.status.kind = ge::net::NodeKind::tv;
+      tv.listed = tv.have = true;
+      tv.status.keys = {{"viewers", "1"},
+                        {"delay_s", "1"},
+                        {std::string(gh::kWebPortKey), std::to_string(web.listener.local.port)}};
+      gh::HubNode server;
+      server.address = ge::net::ipv4(127, 0, 0, 1, 27500);
+      server.listed = server.have = true;
+      server.status.name = "The halls, live";
+      server.status.map = "halls";
+      server.status.mode = "4on4";
+      server.status.phase = ge::net::StatusPhase::playing;
+      ge::net::StatusStream st;
+      st.node = tv.address;
+      st.stream = 1;
+      server.status.streams.push_back(st);
+      nodes.nodes = {tv, server};
+      const auto pump = [&] {
+        ge::tv::tv_web_receive(web, node);
+        ge::tv::tv_update(node, now_ms(), [&](int link, std::span<const uint8_t> msg) {
+          return ge::tv::tv_web_send(web, link, msg);
+        });
+        ge::tv::tv_web_flush(web);
+      };
+      const int wait_s = static_cast<int>(lab.arg_num("wait"));
+      const std::optional<gl::Picture> got =
+          draw(gh::watch_path(tv.address, 1), "live", wait_s, nodes, pump);
+      lab.metric("live_bytes_out", static_cast<double>(node.bytes_out) / 1024.0, "KiB",
+                 gl::Det::measured);
+      if (got) {
+        drawn++;
+        lab.shot({"live",
+                  "A LIVE BROADCAST ON THE WATCH PAGE " + std::to_string(wait_s) + " S IN",
+                  "GET /watch/{tv-node}/{stream}: the viewer opens the TV node's WebSocket, says "
+                  "hello, and plays the match as the node lets each one-second block go (a "
+                  "second behind the match), the replay file unpacked block by block as it "
+                  "comes.",
+                  "the halls on the canvas and a status line that is empty, or says it is "
+                  "waiting for the match.",
+                  {{"wait_s", std::to_string(wait_s)}}},
+                 *got, gl::Det::measured);
+      }
+      ge::tv::tv_web_close(web);
+    }
   }
   lab.metric("pages_drawn", drawn, "pictures", gl::Det::measured);
   gh::http_close(http);
@@ -253,6 +330,7 @@ const gl::LabSpec kSpec{
          "a software GPU takes about 20 s to the first frame"},
         {"width", "1280", "the browser's window width, px"},
         {"height", "900", "the browser's window height, px"},
+        {"live", "1", "also watch the match live through a TV node on the Watch page (0: not)"},
         {"keep", "0", "1: keep the hub's folders (the viewer, the pack, the archive) after a run"},
     },
     "--minutes=0.1 --browser=0",
