@@ -103,7 +103,7 @@ TEST(kept_by_hash_once_and_reopened_with_tags) {
   DemoRow row;
   CHECK(archive_add(a, bytes, 100, {}, err, &row) == AddResult::added);
   CHECK(row.sha.size() == 64 && fs::exists(dir / archive_path(row.sha)));
-  CHECK(archive_path(row.sha) == "d/" + row.sha.substr(0, 3) + "/" + row.sha + ".ger");
+  CHECK(archive_path(row.sha) == "d/" + row.sha.substr(0, 3) + "/" + row.sha + ".ged");
   CHECK(archive_add(a, bytes, 200, {"league"}, err) == AddResult::duplicate);
   CHECK(a.rows.size() == 1 && a.rows[0].tags == std::vector<std::string>{"league"});
   CHECK(a.rows[0].added_s == 100);
@@ -124,16 +124,16 @@ TEST(inbox_takes_demos_and_sets_aside_the_rest) {
   CHECK(archive_open(a, dir.string(), err));
   {
     const std::vector<uint8_t> b = demo(DemoSpec{});
-    std::ofstream(dir / "inbox" / "match.ger", std::ios::binary)
+    std::ofstream(dir / "inbox" / "match.ged", std::ios::binary)
         .write(reinterpret_cast<const char*>(b.data()), static_cast<std::streamsize>(b.size()));
-    std::ofstream(dir / "inbox" / "broken.ger") << "this is not a replay";
+    std::ofstream(dir / "inbox" / "broken.ged") << "this is not a replay";
     std::ofstream(dir / "inbox" / "notes.txt") << "left alone";
   }
   std::vector<std::string> refused;
   CHECK(archive_ingest(a, 50, refused) == 1);
-  CHECK(a.rows.size() == 1 && refused.size() == 1 && has(refused[0], "broken.ger"));
-  CHECK(!fs::exists(dir / "inbox" / "match.ger") &&
-        fs::exists(dir / "inbox" / "refused" / "broken.ger"));
+  CHECK(a.rows.size() == 1 && refused.size() == 1 && has(refused[0], "broken.ged"));
+  CHECK(!fs::exists(dir / "inbox" / "match.ged") &&
+        fs::exists(dir / "inbox" / "refused" / "broken.ged"));
   CHECK(fs::exists(dir / "inbox" / "notes.txt"));
   fs::remove_all(dir);
 }
@@ -220,7 +220,7 @@ TEST(paths_answer_json_and_the_file) {
   CHECK(out.body == std::string(bytes.begin(), bytes.end()));
   CHECK(archive_answer(&a, "/d/" + row.sha.substr(0, 3) + "/" + row.sha + ".json", 0, out));
   CHECK(out.code == 200 && has(out.body, "\"map\":\"tower\""));
-  CHECK(archive_answer(&a, "/d/abc/" + row.sha + ".ger", 0, out) && out.code == 404);
+  CHECK(archive_answer(&a, "/d/abc/" + row.sha + ".ged", 0, out) && out.code == 404);
   CHECK(archive_answer(&a, "/v1/demos/nothex", 0, out) && out.code == 404);
   CHECK(!archive_answer(&a, "/v1/servers", 0, out));
   CHECK(archive_answer(nullptr, "/v1/demos", 0, out) && out.code == 404 &&

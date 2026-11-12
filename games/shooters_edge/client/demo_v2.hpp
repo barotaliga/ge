@@ -29,7 +29,7 @@
 //
 // ge:summary Shooter's Edge's face on replay file v2: classic recordings packed and back exactly
 // ge:keywords replay-v2 face field-codec multiview client-recording single-player-recording
-// ge:keywords pack unpack residual prediction ger
+// ge:keywords pack unpack residual prediction ged
 // ge:keywords pack_demo unpack_demo keyframe round-trip compress
 // ge:keywords hub-meta archive map mode player score team-score demo_hub_meta
 // ge:skill replay shooter
