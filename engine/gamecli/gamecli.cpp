@@ -71,6 +71,12 @@ constexpr Command kEngine[] = {
      cmd_host_stop},
     {"join", "<host[:port]>", "start the game on a server (a friend's game)",
      "join 192.168.1.20:27500", "engine", cmd_join},
+    {"link open", "<link>",
+     "a hub's Join, Spectate, Watch or Play link opened in the game (a demo fetched first)",
+     "link open shooters_edge://join/192.168.1.20:27500", "engine", cmd_link_open},
+    {"link register", "",
+     "this game's links made to open in it: a hub's buttons then start the game",
+     "link register --dry-run", "engine", cmd_link_register},
     {"logs", "[<name>]", "the logs of what this CLI started, or the end of one",
      "logs dedicated-27500 --lines=40", "engine", cmd_logs},
 };
@@ -124,6 +130,8 @@ const std::vector<CommandFlags>& flag_table() {
         {"dry-run", "", "say what would be started, start nothing"}}},
       {"host stop", {{"all", "", "every server this CLI started"}}},
       {"join", {{"dry-run", "", "say what would be started, start nothing"}}},
+      {"link open", {{"dry-run", "", "say what would be fetched and started, do neither"}}},
+      {"link register", {{"dry-run", "", "say which files and commands it takes, do nothing"}}},
       {"logs", {{"lines", "<n>", "the last this many lines (default 30)"}}},
   };
   return table;

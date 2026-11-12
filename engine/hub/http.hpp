@@ -33,6 +33,7 @@ constexpr int kMaxConnections = 256;
 
 struct HttpRequest {
   std::string method, target, version;
+  std::string host;      // the Host header ("" when none): the address the reader used
   size_t head_size = 0;  // the bytes the head took, the blank line with it
 };
 
@@ -71,6 +72,7 @@ struct HttpServer {
   std::vector<HttpConn> conns;
   HttpStats stats;
   const Archive* archive = nullptr;  // the demo archive the pages read (null: none)
+  std::string viewer_dir;            // the web viewer's files (watch.hpp; "" none)
   int64_t unix_s = 0;                // the wall clock's time, set by the process each turn
 };
 

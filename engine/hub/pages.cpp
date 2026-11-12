@@ -11,6 +11,11 @@
 #include <utility>
 #include <vector>
 
+#include "hub/link.hpp"
+#include "hub/page_parts.hpp"
+#include "hub/radar.hpp"
+#include "hub/watch.hpp"
+
 namespace ge::hub {
 
 namespace gn = ge::net;
@@ -40,6 +45,8 @@ std::string clock(int32_t seconds) {
   return out;
 }
 
+}  // namespace
+
 std::string head(const HubSpec& spec, const std::string& title, bool refresh) {
   std::string h =
       "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
@@ -65,6 +72,8 @@ std::string foot() {
   return "<footer>Read-only and public. The same data as JSON: <a href=\"/v1/servers\">/v1/servers"
          "</a>.</footer>\n</body></html>\n";
 }
+
+namespace {
 
 struct Counts {
   int people = 0, bots = 0, spectators = 0, viewers = 0;
@@ -148,13 +157,18 @@ std::string card(const HubSpec& spec, const HubNode& n) {
        "\">Join</a><a class=\"btn\" href=\"" + scheme + "://spectate/" + html_escape(addr) +
        "\">Spectate</a>";
   for (const gn::StatusStream& st : s.streams) {
-    h += "<a class=\"btn watch\" href=\"" + scheme + "://tv/" +
-         html_escape(gn::to_string(st.node)) + "/" + std::to_string(st.stream) + "\">Watch</a>";
+    h += "<a class=\"btn watch\" href=\"" + watch_path(st.node, st.stream) + "\">Watch</a>";
     break;
   }
   h += "<a class=\"small\" href=\"/scoreboard/" + html_escape(addr) + "\">overlay</a></p>";
   h += "<p class=\"addr\"><code>" + html_escape(addr) + "</code></p></article>\n";
   return h;
+}
+
+}  // namespace
+
+std::string scoreboard_html(const HubSpec& spec, const gn::Status& s) {
+  return scoreboard(spec, s);
 }
 
 Answer html(int code, std::string body, int max_age_s) {
@@ -165,8 +179,6 @@ Answer html(int code, std::string body, int max_age_s) {
   a.max_age_s = max_age_s;
   return a;
 }
-
-}  // namespace
 
 std::string html_escape(std::string_view s) {
   std::string out;
@@ -310,8 +322,9 @@ std::string utc_text(int64_t unix_s) {
   return out;
 }
 
-std::string demos_page(const Archive* a, const HubSpec& spec, std::string_view target,
-                       int64_t unix_s) {
+std::string demos_page(const Site& site, const HubSpec& spec, std::string_view target) {
+  const Archive* a = site.archive;
+  const int64_t unix_s = site.unix_s;
   std::string h = head(spec, "Demos", false) + nav(spec, "Demos") + "<main>";
   if (!a) {
     return h + "<p class=\"none\">This hub keeps no demos.</p></main>" + foot();
@@ -371,9 +384,16 @@ std::string demos_page(const Archive* a, const HubSpec& spec, std::string_view t
     h += scheme;
     h += "://demo/";
     h += r->sha;
-    h += "\">Play</a><a class=\"small\" href=\"/";
+    if (link_host(site.host)) {
+      h += "?hub=";
+      h += site.host;
+    }
+    h += "\">Play</a><a class=\"small\" href=\"/demo/" + r->sha +
+         "\">Watch</a><a class=\"small\" href=\"/";
     h += archive_path(r->sha);
-    h += "\" download>Download</a></div></td></tr>";
+    h += "\" download>Download</a>";
+    if (r->radar) h += "<a class=\"small\" href=\"/radar/" + r->sha + "\">Map</a>";
+    h += "</div></td></tr>";
   }
   h += "</table>";
   if (page.rows.empty()) h += "<p class=\"none\">No demo matches.</p>";
@@ -441,20 +461,33 @@ padding:8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--lin
 table.demos th{color:var(--dim);font-weight:500}table.demos .act{margin:0;flex-wrap:nowrap}details{color:var(--dim);font-size:13px}summary{cursor:pointer}
 .tag{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--panel2);color:var(--hot)}
 .pager{display:flex;gap:16px}
+.radar figure{margin:12px 0}svg.radar{width:100%;max-width:760px;height:auto;display:block;
+border-radius:12px;background:var(--panel)}svg.radar .ground{fill:var(--panel)}svg.radar .outline{
+stroke:var(--dim)}svg.radar .who{font:600 22px system-ui,sans-serif;fill:var(--ink);paint-order:stroke;
+stroke:var(--bg);stroke-width:4px}ul.legend{display:flex;flex-wrap:wrap;gap:6px 16px;list-style:none;
+padding:0}.swatch{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px}
 @media (max-width:480px){main{padding:12px}.cards{grid-template-columns:1fr}
 table.demos th:nth-child(3),table.demos td:nth-child(3),table.demos th:nth-child(5),
 table.demos td:nth-child(5){display:none}table.demos .act{flex-direction:column;align-items:flex-start}}
+main.watch{display:grid;grid-template-columns:minmax(0,3fr) minmax(220px,1fr);gap:18px}
+main.watch h3{margin:8px 0}.viewer{background:#000;aspect-ratio:16/9;border-radius:8px;display:flex;
+align-items:center;justify-content:center;overflow:hidden}.viewer canvas{width:100%;height:100%;
+display:block}.viewer .none{color:#c8c8c8;padding:16px;text-align:center;max-width:36em}
+ul.also{list-style:none;padding:0;margin:0}ul.also li{margin:6px 0}
+@media(max-width:700px){main.watch{grid-template-columns:1fr}}
 )css";
   return css;
 }
 
 Answer hub_answer(const Poller& p, const HubSpec& spec, std::string_view target, int64_t now_us,
-                  const Archive* archive, int64_t unix_s) {
-  if (Answer a; archive_answer(archive, target, unix_s, a)) return a;
+                  const Site& site) {
+  if (Answer a; archive_answer(site.archive, target, site.unix_s, a)) return a;
+  if (Answer a; radar_answer(site.archive, spec, target, a)) return a;
+  if (Answer a; watch_answer(p, spec, target, now_us, site, a)) return a;
   std::string path = target_path(target);
   if (path == "/v1" || path.rfind("/v1/", 0) == 0) return api_answer(p, spec, target, now_us);
   while (path.size() > 1 && path.back() == '/') path.pop_back();
-  if (path == "/demos") return html(200, demos_page(archive, spec, target, unix_s), 30);
+  if (path == "/demos") return html(200, demos_page(site, spec, target), 30);
   if (path == "/" || path.empty()) {
     return html(200, servers_page(p, spec, query_param(target, "mode"), now_us), kPageRefreshS);
   }

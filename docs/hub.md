@@ -46,7 +46,7 @@ No accounts and no login: everything a hub shows is public, read-only, and cache
 | The master | `engine/net` (beside the rendezvous) | One master for every kind of node: game servers, TV nodes and forwarders heartbeat the same service, told apart by a kind field. Forgets a silent one after three missed beats, answers a list query by game id, paged. The rendezvous already lists hosted sessions (`rendezvous.hpp`); the master is its list made public for a dedicated server and a TV node, one executable a community runs |
 | The broadcast and the demo | `engine/tv`, `engine/replay` (the TV thread's design) | A broadcast is a replay file being written; every stream and file opens with a generic header (game, version, map, mode, players, teams, scores, start) and carries a small META track (scores and roster as they change); a finished file ends with an index and a final summary. The hub reads the header and the meta track only: it never simulates a game |
 | The hub | `engine/hub`, built per game by `ge_add_hub` | One process: the poller, the index in memory, the demo archive, and an HTTP server for the pages, the JSON API and live updates. A game's hub binary links the game's `HubSpec` (its words) and nothing of its simulation |
-| The classic adapter | `games/shooters_edge/hub` | The classic game's master and status queries and its broadcasters' pages read into the same records, so Shooter's Edge's hub lists the classic servers already on the internet beside its own |
+| The classic adapter | `engine/hub/browse.hpp`, `games/shooters_edge/hub` | A game's own masters and status queries (Shooter's Edge's: the classic ones) and later its broadcasters' pages read into the same records, so Shooter's Edge's hub lists the classic servers already on the internet beside its own |
 
 ### The status record and modes
 
@@ -210,6 +210,46 @@ browser's own GPU.
   `/v1/demos/{sha256}` is one demo's summary with them; `/d/abc/{sha256}.ger` is the file, cached a
   year. `/demos` is the page: a search form, Play (`<id>://demo/<sha256>`) and Download, the
   scores folded until asked. Pulling demos from TV nodes waits for the TV node (M57b).
+
+- **M56e**: the buttons open the game. `link.hpp` reads and writes the links (`<id>://join/`,
+  `spectate/`, `tv/<node>/<stream>`, `demo/<sha256>?hub=<host>`, the hub named from the request's
+  Host header), fetches a demo by its hash over HTTP and plans the scheme's registration per
+  system. The game CLI's `link register` and `link open` (docs/gamecli.md § A hub's links) carry
+  them out: Shooter's Edge joins, spectates (`set spectator 1`) and plays a hub's demo; Watch waits
+  for the game's TV client (M57b/M57c).
+
+- **M56f** (`se-hub`): the classic adapter. A game whose servers already speak a status protocol
+  of their own gives the hub its query (`HubSpec::browse`, the engine's `net::ServerQuery`), and
+  `browse.hpp` reads them the way the game's server browser does: `--browse-master` (the game's
+  masters) and `--browse-server` (servers by hand) are asked every 30 s on a second UDP socket,
+  and each answer becomes a record (`status_of`: the name, map, mode and slots, the roster with
+  spectators flagged, the teams' frags added up, the phase from what the server says of its match). A status query that says nothing of
+  bots (the classic one) lists a bot as a player; the engine's own record flags them.
+  Such a node is `browsed`: the poller never sends it the engine's ask, and it is dropped once no
+  refresh has heard it for 5 minutes; if the engine's master lists the same address it becomes the
+  poller's, and its own record wins. Shooter's Edge's hub hands it the classic query, so
+  `shooters_edge_hub --browse-master=<a classic master>` lists the classic servers on the internet
+  beside the game's own. The classic broadcasters' pages wait for the TV node (M57b).
+
+- **M56h** (`hub-radar`): the map. The radar track (`replay/radar.hpp`) holds a roster chunk,
+  every player's place, heading and death four times a second, and the level's outline when the
+  game has one; `stream_add_track` adds it to a finished file without touching its other tracks.
+  `/radar/{sha256}` (`hub/radar.hpp`) draws it as SVG: the outline, the faint trail of every player
+  over the whole match, and the dots in their team's colour, one minute animated by SVG's own
+  animation (no script) or still at a moment (`?at=`) with links a second and five seconds either
+  way; the Demos page links Map where the file has a radar. Shooter's Edge reads the radar off a
+  multiview recording (`client/demo_radar.hpp`), with the outline from the level's map sliced at the
+  height played most, and `shooters_edge_cli demos pack` writes it. A two-minute 4on4 of bots adds
+  26 KiB (11 %) to its file. A live match's map waits for the TV node to carry the track.
+
+- **M56g, the pages** (`hub/watch.hpp`, in `hub-pages`): `/watch/{tv-node}/{stream}` holds the
+  viewer's canvas fed by the TV node's WebSocket (its status record names the port, key `web`), the
+  match's scoreboard from the server whose record lists the stream, the other live broadcasts, and
+  Open in the game; `/demo/{sha256}` holds the viewer on the demo's `/d/...` file, with Play in the
+  game, Download and Map. The cards' Watch and the Demos page's Watch open them. `/viewer/{file}`
+  serves the viewer's `.js`, `.wasm` and data from `--viewer=<dir>`. A hub with no viewer, or a node
+  that takes no browser, shows the reason in the picture's place. The script is the few lines
+  that start the viewer. The viewer itself (the engine built by Emscripten) is next.
 
 Phase 2 and later depend on the TV layer's header and meta track (M57a, the replay file v2, and M57b, the native TV node); the
 master can land before them, since a dedicated server's heartbeat needs nothing of TV.

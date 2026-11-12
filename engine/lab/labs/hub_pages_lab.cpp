@@ -2,11 +2,12 @@
 // them. An index of a busy evening (a full team match with its teams and a broadcast, a duel, a
 // capture match, a public deathmatch half bots, a server of bots alone, a match on its score
 // screen, empty servers and a TV node) is written as the Servers page, the Players page, a filtered
-// page and one scoreboard overlay; their HTML is attached and hashed. When a headless Chromium is
-// on the machine (GE_CHROMIUM, or the container's /opt/pw-browsers/chromium), each page is drawn at
-// a desktop's and a phone's width and shown: those pictures are the browser's, so they are
-// measured, never hashed. It answers whether the pages say what the index holds, in the interest
-// rule's order, and whether they read at both widths.
+// page, one scoreboard overlay and the broadcast's Watch page; their HTML is attached and hashed.
+// When a headless Chromium is on the machine (GE_CHROMIUM, or the container's
+// /opt/pw-browsers/chromium), each page is drawn at a desktop's and a phone's width and shown:
+// those pictures are the browser's, so they are measured, never hashed. It answers whether the
+// pages say what the index holds, in the interest rule's order, and whether they read at both
+// widths.
 //
 // ge:summary Lab: the hub's HTML pages written from a sample index and drawn by headless Chromium
 // ge:keywords lab hub pages html browser chromium screenshot phone desktop cards overlay
@@ -24,6 +25,7 @@
 #include "hub/pages.hpp"
 #include "hub/poller.hpp"
 #include "hub/spec.hpp"
+#include "hub/watch.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/hub_browser.hpp"
 #include "lab/png.hpp"
@@ -102,6 +104,8 @@ gh::Poller sample_index() {
   tv.address = gn::sim_address(40, 28000);
   tv.kind = gn::NodeKind::tv;
   tv.listed = tv.have = true;
+  tv.status.kind = gn::NodeKind::tv;
+  tv.status.keys = {{"viewers", "23"}, {"delay_s", "30"}, {"web", "28080"}};
   gn::StatusStream st;
   st.node = tv.address;
   st.stream = 1;
@@ -150,14 +154,22 @@ void run(gl::Lab& lab) {
   const std::string players = gh::players_page(index, spec, now);
   const std::string ffa = gh::servers_page(index, spec, "ffa", now);
   const std::string overlay = gh::scoreboard_page(spec, index.nodes[0]);
+  // The Watch page of the team match's broadcast, on a hub that serves no viewer yet: the
+  // picture's place says so, the scoreboard and the other broadcasts beside it.
+  gh::Answer watch;
+  gh::watch_answer(index, spec, gh::watch_path(index.nodes[0].status.streams[0].node, 1), now, {},
+                   watch);
+  const std::string& watch_html = watch.body;
   lab.attach("servers.html", bytes(servers));
   lab.attach("players.html", bytes(players));
   lab.attach("servers-ffa.html", bytes(ffa));
   lab.attach("scoreboard.html", bytes(overlay));
+  lab.attach("watch.html", bytes(watch_html));
   lab.attach("style.css", bytes(gh::hub_stylesheet()));
   lab.metric("servers_page", static_cast<double>(servers.size()), "bytes");
   lab.metric("players_page", static_cast<double>(players.size()), "bytes");
   lab.metric("overlay_page", static_cast<double>(overlay.size()), "bytes");
+  lab.metric("watch_page", static_cast<double>(watch_html.size()), "bytes");
   lab.metric("stylesheet", static_cast<double>(gh::hub_stylesheet().size()), "bytes");
 
   // The cards' order on the page: the interest rule's (full human matches first, by humans; then
@@ -216,6 +228,12 @@ void run(gl::Lab& lab) {
       {"overlay", "ONE SERVER'S SCOREBOARD OVERLAY", &overlay, 460, 520, true,
        "GET /scoreboard/{address}: one server's scoreboard alone, sized for a streamer's overlay.",
        "the teams' totals above the players, highest frags first."},
+      {"watch", "THE WATCH PAGE OF A BROADCAST", &watch_html, 1280, 820, true,
+       "GET /watch/{node}/{stream}: one broadcast; the game's viewer goes in the black frame (a "
+       "hub started with --viewer serves it), here the reason it is not there; the match's "
+       "scoreboard and the other broadcasts beside it.",
+       "the frame at 16:9 with its words centred, the scoreboard to the right, Open in the game "
+       "below with 23 watching and 30 s behind."},
   };
   int drawn = 0;
   for (const View& v : views) {
@@ -229,7 +247,7 @@ void run(gl::Lab& lab) {
     lab.shot({v.id, v.title, v.what, v.look, {{"width", std::to_string(v.w)}}}, *pic,
              gl::Det::measured);
   }
-  lab.metric("pages_drawn", drawn, "of 5", gl::Det::measured);
+  lab.metric("pages_drawn", drawn, "of 6", gl::Det::measured);
   fs::remove_all(dir, ec);
 }
 

@@ -109,8 +109,8 @@ TEST(servers_page_orders_by_interest_and_escapes) {
   CHECK(at(h, "Empty servers") < at(h, "Empty Hall"));     // the empty ones after
   CHECK(at(h, "Bot Pit") < at(h, "Empty servers"));
   CHECK(has(h, "test_game://join/") && has(h, "test_game://spectate/"));
-  CHECK(has(h, "test_game://tv/") && has(h, "/3\">Watch</a>"));
-  CHECK(has(h, "2:05"));  // the time left
+  CHECK(has(h, "href=\"/watch/sim:20:28000/3\">Watch</a>"));  // the Watch page
+  CHECK(has(h, "2:05"));                                      // the time left
   CHECK(has(h, "4 servers") && has(h, "10 playing") && has(h, "1 broadcasts"));
   CHECK(has(h, "<th>frags</th>"));
 }

@@ -22,6 +22,8 @@ uint64_t draw64(uint64_t& state) {
   return x ? x : 1;
 }
 
+}  // namespace
+
 uint64_t record_hash(const gn::Status& s) {
   uint8_t buf[gn::kMaxDatagram];
   const size_t n = gn::status_write(s, buf, sizeof buf);
@@ -29,6 +31,8 @@ uint64_t record_hash(const gn::Status& s) {
   for (size_t i = 0; i < n; i++) h = (h ^ buf[i]) * 1099511628211ull;
   return h;
 }
+
+namespace {
 
 int64_t period(const Poller& p, const HubNode& n) {
   return n.have && humans(n.status) > 0 ? p.config.busy_us : p.config.status_us;
@@ -65,6 +69,11 @@ void take_list(Poller& p, int64_t now_us) {
       n->due_us = now_us;
       n->nonce = draw64(p.rng);
       p.stats.added++;
+      p.serial++;
+    } else if (n->browsed) {  // the engine's master lists it now: its own record from here on
+      n->browsed = false;
+      n->due_us = now_us;
+      n->nonce = draw64(p.rng);
       p.serial++;
     }
     n->kind = e.kind;
@@ -118,6 +127,7 @@ void poller_update(Poller& p, gn::Transport& t, int64_t now_us) {
   const size_t before = p.nodes.size();
   p.nodes.erase(std::remove_if(p.nodes.begin(), p.nodes.end(),
                                [&](const HubNode& n) {
+                                 if (n.browsed) return false;  // browse.hpp keeps its own
                                  const int64_t last = n.heard_us >= 0 ? n.heard_us : n.first_us;
                                  return !n.listed && now_us - last > p.config.drop_us;
                                }),
@@ -128,6 +138,7 @@ void poller_update(Poller& p, gn::Transport& t, int64_t now_us) {
   }
 
   for (HubNode& n : p.nodes) {
+    if (n.browsed) continue;
     if (n.asked_us >= 0) {
       if (now_us - n.asked_us < p.config.retry_us) continue;
       if (n.tries >= p.config.tries) {  // no answer: its next turn

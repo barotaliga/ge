@@ -59,7 +59,7 @@ a demo.
 | `keyframe` | What a seek or a late joiner starts from: `Run::clone` bytes, or a face's catch-up state | Every game |
 | `events` | Marks and highlights (`engine/replay/highlights`) | Every game |
 | `chat`, `voice` | Text lines; Opus frames | Every game |
-| `radar` | Low-rate positions and headings for an overhead map (reserved, M56) | Optional |
+| `radar` | Low-rate positions and headings for an overhead map (`engine/replay/radar.hpp`: rosters, positions, an outline) | Optional; Shooter's Edge's `demos pack` |
 
 - **Trailer.** An index of blocks by time and the final meta (duration, scores). Optional: a live
   stream has none until it ends. The file's SHA-256, which a TV node and the hub list files by, is
@@ -252,6 +252,21 @@ The `forward` lab gives the player's direct path each preset and puts the forwar
 | awful | 459 / 504, 18.8% | 36 / 36, 0% | 62 / 62, 0% | 36 / 88 ms |
 
 A stranger's asks of every kind draw answers of at most a third of their size.
+
+**The classic face** (`games/shooters_edge/net/classic_forward.hpp`) plugs into the forward's face
+seam (`ForwardFace`: the datagrams the forward does not take, a client admitted with
+`forward_admit` and connected when the face's handshake upstream is done) so classic clients and
+forwarders chain through ours. The route is the connect's `prx` user info key, the rest of the route
+after this hop with the server last; the hop takes its destination off it, writes the rest back,
+adds `*qwfwd` and runs the challenge and the connect upstream with the client's qport. It answers the
+client's `j` only once the destination has accepted, and passes a refusal on in its words, so a
+chain of classic hops connects end to end or says why not. It answers `ping`, `status` (with
+`*version` "qwfwd ge 1", which is how a classic browser tells a forwarder) and `pingstatus` (each
+server it knows with its ping, for a client's route finder) itself, once a second a host; it makes
+challenges from the client's address and a secret, so it keeps nothing before a good connect; and it
+follows a client whose NAT gives it a new port by its qport on the same host.
+`tests/shooters_edge_classic_forward_test.cpp`: our classic client plays through one hop and through
+a chain of two to our classic server.
 
 **The route finder** (`engine/forward/routes.hpp`) picks the path with the lowest summed round trip
 from what a server browser already measured: the player's own ping to every server and forwarder,

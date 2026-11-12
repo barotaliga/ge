@@ -114,6 +114,15 @@ struct Spec {
                      std::vector<std::string>& words) = nullptr;
   void (*listen_words)(const Ctx& ctx, const HostAsk& ask,
                        std::vector<std::string>& words) = nullptr;
+  // A hub's links (`link open`, hub/link.hpp): the window's command line to watch `address` as a
+  // spectator, to watch a TV node's stream, and to play a replay file (version 2) kept at
+  // `path` (false with `error` when the game cannot play it). Null: the game cannot.
+  void (*spectate_words)(const Ctx& ctx, const std::string& address,
+                         std::vector<std::string>& words) = nullptr;
+  void (*tv_words)(const Ctx& ctx, const std::string& node, uint32_t stream,
+                   std::vector<std::string>& words) = nullptr;
+  bool (*demo_words)(const Ctx& ctx, const std::string& path, std::vector<std::string>& words,
+                     std::string& error) = nullptr;
   std::vector<Command> commands;  // the plugins' and the game's rows, after the engine's
   std::vector<Flag> flags;        // the game's own flags (`--basedir`), every command takes them
   std::string notes;              // the game's paragraph in `skill`
