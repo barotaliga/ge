@@ -41,6 +41,16 @@ bool fight_command(SequelServer& s, int slot, const std::string& cmd, const std:
 inline constexpr int kSqByFall = 100, kSqByLava = 101, kSqBySlime = 102, kSqByWater = 103;
 // The hand grenade held to the end of its fuse.
 inline constexpr int kSqByHeldGrenade = 104;
+// A mover's crush, a hurting trigger, a teleport onto someone, a map's explosion.
+inline constexpr int kSqByCrush = 105, kSqByHurt = 106, kSqByTelefrag = 107, kSqByExplosion = 108;
+
+// A blow to player `target` from `attacker` (a slot or -1) along `dir` (zero: no push), by
+// `weapon` (a weapon or a `kSqBy*`); `flags` 1 passes armour by, 2 passes invulnerability by.
+void fight_hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, int knockback,
+                int weapon, int flags = 0);
+// Radius damage at `at`: `damage` less half the distance, within `radius` (the attacker's half),
+// to the players and the map's shootable movers it reaches.
+void fight_blast(SequelServer& s, sh::Vec3f at, int attacker, int damage, float radius, int weapon);
 
 // Player `slot` dies, killed by `killer` (a slot; his own for a suicide, -1 the world) with weapon
 // `weapon` (-1 none, or a `kSqBy*`); the obituary is scored and printed.
