@@ -18,6 +18,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "progs/entity_text.hpp"
+#include "shooter/aim.hpp"
 #include "shooter/trace.hpp"
 
 namespace shooters_edge::bots {
@@ -252,8 +253,12 @@ void button_poke_cmd(Fighter& f, const server::RulesCommon& s, int me, double t,
   const sh::Vec3f d = b.at - eye;
   const double flat = std::sqrt(static_cast<double>(d.x) * d.x + static_cast<double>(d.y) * d.y);
   if (flat > 900) return;
+  const float was_yaw = cmd.angles.y;
   cmd.angles.y = static_cast<float>(ge::core::libm::atan2(d.y, d.x) * (180.0 / ge::core::kPi));
   cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(d.z, flat) * (180.0 / ge::core::kPi));
+  // The route's wish kept on its way under the view turned to the button (the hand reads a game's
+  // view's wish as meant under that view: unturned, a hop's side key braked in the air).
+  sh::turn_axes(cmd.forward, cmd.side, was_yaw, cmd.angles.y);
   f.bot.set_by = "poke";
   if (flat < 200) {
     cmd.forward = 320;  // into it: a touch presses it
