@@ -190,6 +190,11 @@ void bot_init(Bot& b, const NavGraph& g, const PilotSettings& set, PilotHands ha
 CmdSource bot_source(Bot& b);
 // Sends the bot's pilot to node `goal` alone from its next command (the goals list replaced).
 void bot_goal(Bot& b, int32_t goal);
+// The goal `goal` planned, and on through it (the point `at`: an item beside its node) to `then`
+// (`pilot_chain`), so a pickup on the way is run through rather than stopped at.
+void bot_goal(Bot& b, int32_t goal, int32_t then, Vec3f at);
+// The route under way chained on from its goal to `then` (`pilot_chain`); false: unchanged.
+bool bot_chain(Bot& b, int32_t then, Vec3f at);
 // The aim's hands from now on as `aim` holds them (another weapon taken up), kept where they are.
 void bot_aim(Bot& b, const AimProfile& aim);
 // How far the view is off the aim's wanted angles, degrees (0 while not aiming).

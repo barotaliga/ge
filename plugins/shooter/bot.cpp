@@ -626,7 +626,21 @@ float bot_hand_override(Bot& b, MoveCmd& cmd, int msec, bool wet) {
 void bot_goal(Bot& b, int32_t goal) {
   b.pilot.goals.assign(1, goal);
   b.pilot.next_goal = 0;
+  b.pilot.then = -1;
   b.pilot.pilot.mode = PilotMode::idle;
+}
+
+void bot_goal(Bot& b, int32_t goal, int32_t then, Vec3f at) {
+  bot_goal(b, goal);
+  b.pilot.then = then;
+  b.pilot.then_at = at;
+}
+
+bool bot_chain(Bot& b, int32_t then, Vec3f at) {
+  if (!pilot_chain(b.pilot.pilot, then, at)) return false;
+  b.pilot.goals.assign(1, then);
+  b.pilot.next_goal = 0;
+  return true;
 }
 
 void bot_aim(Bot& b, const AimProfile& aim) {

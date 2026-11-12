@@ -285,6 +285,10 @@ struct PilotStats {
   int32_t recipe_aborts = 0;        // of them, left off the proof's way before the takeoff
   int32_t recipe_takeoffs = 0;      // and those that left the ground
   float recipe_speed = 0;           // their takeoff speeds across, summed, units/s
+  int32_t vias = 0;                 // goals chained on past a pickup (`pilot_chain`)
+  int32_t via_touched = 0;          // and of them, the pickup's point run through
+  int32_t via_missed = 0;           // and those run past it, not through it
+  float via_speed = 0;              // the speed through the touched ones, summed, units/s
   double time_s = 0;                // the commands' time since the last pilot_go
 };
 
@@ -372,6 +376,14 @@ struct Pilot {
   std::vector<Vec3f> recipe_trail;
   std::vector<float> recipe_trail_t;
   int8_t curve_keys_last = kNoCurveKeys;   // and the last command's
+  // A GOAL CHAINED ON PAST A PICKUP (`pilot_chain`): the route index of the item's node the route
+  // runs through to the next goal (-1: none), the point to run through (the item itself, beside
+  // its node), and the last one left behind (its node and when, `clock_s`).
+  int32_t via_k = -1;
+  Vec3f via_at;
+  float via_near = 1e30f;  // the nearest across the player has come to it
+  int32_t via_left = -1;
+  double via_left_at = -1e9;
   std::vector<int32_t> shut;               // doors the caller knows are shut: never planned through
   std::vector<NavExtraLink> shut_links;    // and links it knows are (onto a bridge still in)
   std::vector<NavExtraLink> cut_all;       // cut and shut_links together, for the route
@@ -392,6 +404,13 @@ void pilot_init(Pilot& p, const NavGraph& g, const PilotSettings& set,
 void pilot_face(Pilot& p, float yaw);
 // Plans the way to node `goal` from where the pilot stands; false when there is none.
 bool pilot_go(Pilot& p, int32_t goal, const PilotSense& sense);
+// THE CHAIN (`chains`): the route on from its goal to `next`, so the walk and the hop run on
+// through the goal (a pickup: through the point `at`, the item beside its node) instead of
+// slowing into it and planning again. The goal is `next` then; the old one is the VIA, aimed at
+// through `at` and dropped once run through or past. False (unchanged) with no route on, or none
+// planned. `pilot_unchain` cuts the route back at the via (the goal it was) while it is ahead.
+bool pilot_chain(Pilot& p, int32_t next, Vec3f at);
+void pilot_unchain(Pilot& p);
 // The next command, `msec` long.
 MoveCmd pilot_step(Pilot& p, const PilotSense& sense, int msec, ai::Why* why = nullptr);
 
@@ -408,6 +427,9 @@ struct PilotBot {
   Pilot pilot;
   std::vector<int32_t> goals;
   size_t next_goal = 0;
+  // Chained on past the goal planned next (`pilot_chain`) through the point `then_at`; -1: none.
+  int32_t then = -1;
+  Vec3f then_at;
   std::vector<NavMover> now;                   // the movers as they stand (reused)
   std::array<OtherBox, kWalkOthers> others{};  // the players near (`PilotSense::others`)
   MoveWorld* world = nullptr;  // the map's solids the hop looks ahead through (null: none)

@@ -65,6 +65,9 @@ constexpr double kWait_s = 20;      // an item back within this is worth going t
 constexpr double kHealWait_s = 3;   // but a retreat goes for health that is there
 constexpr double kKeepGoal = 1.5;   // the goal's score is held up by this against the others
 constexpr double kDecide_s = 4;     // with no news, its item goal is chosen again this often
+// A chain's pickup run through (`chains`): the item still believed there this long after is the
+// news of its taking still to come, not a miss to go back for, s.
+constexpr double kViaNews_s = 0.6;
 constexpr float kRun = 320;         // units/s, the run to an item
 constexpr double kCallAgain_s = 8;  // an enemy in sight is called out again after this
 constexpr double kTold_s = 10;      // a point at an item is followed this long
@@ -285,10 +288,63 @@ void set_mode(Fighter& f, FightMode next, double t, ai::Why* why, const char* be
   ai::enter(f.mode, f.held, next, why, fight_mode_name, because);
 }
 
-void go_to(Fighter& f, int32_t node) {
+// Goes to node `node`; with `then` (a node, `chains`) on through it (the point `at`) to `then`.
+void go_to(Fighter& f, int32_t node, int32_t then = -1, sh::Vec3f at = {}) {
   if (node < 0) return;
   if (f.reach_at >= 0 && !f.reach.reached(node)) return;  // no way there from here
-  const sh::PilotMode pm = f.bot.pilot.pilot.mode;
+  sh::Pilot& p = f.bot.pilot.pilot;
+  const sh::PilotMode pm = p.mode;
+  const bool active = pm != sh::PilotMode::idle && pm != sh::PilotMode::arrived;
+  if (f.features[sh::Feature::chains]) {
+    if (then == node) then = -1;
+    if (active && node == f.goal_node) {
+      if (p.via_k >= 0 && p.route[static_cast<size_t>(p.via_k)] == node) {
+        // Through it already: on to the chain's goal, or another, or none.
+        if (then == p.goal) return;
+        sh::pilot_unchain(p);
+        f.bot.pilot.goals.assign(1, p.goal);
+        f.chain_node = -1;
+        if (then >= 0 && sh::bot_chain(f.bot, then, at)) f.chain_node = then;
+        return;
+      }
+      if (p.goal == node) {  // on the way to it: chained on now, if asked
+        if (then >= 0 && sh::bot_chain(f.bot, then, at)) {
+          f.chain_node = then;
+          f.stats.chained++;
+        }
+        return;
+      }
+      // Just run through it on a chain: the pickup's news is a moment off.
+      if (node == p.via_left && p.clock_s - p.via_left_at < kViaNews_s) return;
+      // (otherwise the pilot is on to a goal the fighter has left: planned again below)
+    } else if (active && p.goal == node && node == f.chain_node) {
+      // The chain's goal is the goal now (its pickup run through, or taken): on, no plan again.
+      if (p.via_k >= 0) {
+        p.via_left = p.route[static_cast<size_t>(p.via_k)];
+        p.via_left_at = p.clock_s;
+        p.via_k = -1;
+      }
+      f.goal_node = node;
+      f.chain_node = -1;
+      if (then >= 0 && sh::bot_chain(f.bot, then, at)) {
+        f.chain_node = then;
+        f.stats.chained++;
+      }
+      return;
+    } else if (pm == sh::PilotMode::arrived && node == f.goal_node) {
+      // Standing on it (waiting for it): on to the next when there is one.
+      if (then >= 0 && sh::bot_chain(f.bot, then, at)) {
+        f.chain_node = then;
+        f.stats.chained++;
+      }
+      return;
+    }
+    f.goal_node = node;
+    f.chain_node = then;
+    if (then >= 0) f.stats.chained++;
+    sh::bot_goal(f.bot, node, then, at);
+    return;
+  }
   if (node == f.goal_node && pm != sh::PilotMode::idle && pm != sh::PilotMode::arrived) return;
   if (node == f.goal_node && pm == sh::PilotMode::arrived) return;  // standing on it
   f.goal_node = node;
@@ -301,8 +357,9 @@ bool door_shut(const server::RulesCommon& s, const ItemSpot& it) {
   return d.x * d.x + d.y * d.y + d.z * d.z < 1;
 }
 
-// Goes for item `i`: through its button first while its door is shut.
-void go_item(Fighter& f, const server::RulesCommon& s, int32_t i) {
+// Goes for item `i`: through its button first while its door is shut. With `then` (an item,
+// `chains`) and `i` there to take, on through it to `then` without a stop.
+void go_item(Fighter& f, const server::RulesCommon& s, int32_t i, int32_t then = -1) {
   const ItemSpot& it = f.items[static_cast<size_t>(i)];
   if (f.goal_item != i) f.stats.goal_changes++;
   f.goal_item = i;
@@ -319,16 +376,68 @@ void go_item(Fighter& f, const server::RulesCommon& s, int32_t i) {
   const bool unlock = door_shut(s, it) && it.button_node >= 0;
   if (unlock && !f.unlocking) f.buttons++;
   f.unlocking = unlock;
-  go_to(f, unlock ? it.button_node : it.node);
+  int32_t then_node = -1;
+  if (then >= 0 && then != i && !unlock && it.present) {
+    const ItemSpot& n = f.items[static_cast<size_t>(then)];
+    const bool by_dive = n.dive && f.reach_at >= 0 && !f.reach.reached(n.node);
+    if (n.node >= 0 && n.node != it.node && !by_dive && !door_shut(s, n)) then_node = n.node;
+  }
+  f.chain_item = then_node >= 0 ? then : -1;
+  go_to(f, unlock ? it.button_node : it.node, then_node, it.at);
+}
+
+// What the player holds once it has taken `it` (`chains`: the goal after it chosen as if taken).
+Stats after_taking(Stats st, const ItemSpot& it) {
+  switch (it.kind) {
+    case ItemKind::health:
+      if (st.health < 100) st.health = std::fmin(100.f, st.health + it.amount);
+      break;
+    case ItemKind::mega:
+      st.health = std::fmin(250.f, st.health + 100);
+      break;
+    case ItemKind::armor1:
+    case ItemKind::armor2:
+    case ItemKind::armor3: {
+      const float type = it.kind == ItemKind::armor1 ? 0.3f : it.kind == ItemKind::armor2 ? 0.6f : 0.8f;
+      const float value = it.kind == ItemKind::armor1 ? 100.f : it.kind == ItemKind::armor2 ? 150.f : 200.f;
+      if (protection(type, value) > protection(st.armortype, st.armor)) {
+        st.armortype = type;
+        st.armor = value;
+      }
+      break;
+    }
+    case ItemKind::quad:
+      st.items |= kItQuad;
+      break;
+    case ItemKind::pent:
+      st.items |= kItPent;
+      break;
+    case ItemKind::weapon:
+      st.items |= it.weapon;
+      break;
+    case ItemKind::shells:
+      st.shells += it.amount;
+      break;
+    case ItemKind::nails:
+      st.nails += it.amount;
+      break;
+    case ItemKind::rockets:
+      st.rockets += it.amount;
+      break;
+    case ItemKind::cells:
+      st.cells += it.amount;
+      break;
+  }
+  return st;
 }
 
 // The best item for the player at `me` with `st`: worth over time to have it, `away` from a known
 // enemy (when `heal`, health and armour alone, and never nearer the enemy than this player is).
 int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
-                  double t, bool heal, const sh::Vec3f* enemy, ai::Why* why) {
+                  double t, bool heal, const sh::Vec3f* enemy, ai::Why* why, int32_t skip = -1) {
   const auto score = [&](int32_t i) {
     const ItemSpot& it = f.items[static_cast<size_t>(i)];
-    if (it.node < 0 || (heal && !heals(it))) return 0.0;
+    if (i == skip || it.node < 0 || (heal && !heals(it))) return 0.0;
     // Only what it knows of (or sees). One gone is waited for at its time back as the player
     // knows it: exact when timed, a guess (late) when not (knowledge.hpp).
     if (!item_in_mind(f, i)) return 0.0;
@@ -397,6 +506,17 @@ int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& s
   const auto name = [&](int32_t i) { return f.items[static_cast<size_t>(i)].name.c_str(); };
   return ai::pick_best(static_cast<int32_t>(f.items.size()), score, why,
                        heal ? "heal_goal" : "item_goal", name, "worth over the time to have it", 0);
+}
+
+// THE GOAL AFTER (`chains`): the item the player would go for once it has item `i`, chosen as
+// it would choose then (from where `i` stands, holding what `i` gives); -1 with none, or `i` not
+// there to take now (it waits for it there).
+int32_t chain_after(const Fighter& f, const server::RulesCommon& s, const Stats& st, int32_t i,
+                    double t, bool heal, const sh::Vec3f* enemy) {
+  if (!f.features[sh::Feature::chains] || i < 0) return -1;
+  const ItemSpot& it = f.items[static_cast<size_t>(i)];
+  if (!it.present) return -1;
+  return best_item(f, s, after_taking(st, it), it.at, t, heal, enemy, nullptr, i);
 }
 
 // A SHORT GOAL ON THE WAY: an item there now that a person turns aside for, on its own floor within
@@ -1060,7 +1180,14 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   } else if (!escaping && f.door_button >= 0) {
     go_to(f, f.button_spots[static_cast<size_t>(f.door_button)].node);  // a shut door's button
   } else if (near >= 0) {
-    go_item(f, s, near);
+    // On to the long goal through it (`chains`), when that is there to take.
+    const int32_t long_goal = f.goal_item != near ? f.goal_item : f.chain_item;
+    const int32_t after = long_goal >= 0 && long_goal != near &&
+                                  f.items[static_cast<size_t>(long_goal)].present &&
+                                  f.features[sh::Feature::chains]
+                              ? long_goal
+                              : -1;
+    go_item(f, s, near, after);
     if (why) {
       why->decide("on_the_way");
       why->fact("item", near);
@@ -1097,7 +1224,7 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
       if (i < 0 && mate >= 0) {
         go_to(f, mate);  // nothing to take: to the team
       } else if (i >= 0) {
-        go_item(f, s, i);
+        go_item(f, s, i, chain_after(f, s, st, i, t, heal, c ? &enemy : nullptr));
       } else if (f.sense == MapSense::novice && (!f.team || f.mind.claim < 0)) {
         // Nothing in mind: a novice walks the map to learn it.
         go_to(f, explore_node(f, self.origin));

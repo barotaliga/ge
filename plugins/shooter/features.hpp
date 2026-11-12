@@ -46,7 +46,9 @@
 //   the jump; `gapbuild`: a gap over water curved and run into (pilot.hpp; all on).
 // - `recipes`: people's hop starts copied out of a book of their recordings (pilot_recipes.hpp;
 // on).
-// - `runupkeys`, `underway` (pilot.hpp): judging, in no preset. The numbers: docs/goals/M18r.md.
+// - `chains`: an item goal planned on through its pickup to the goal after it, so the walk and the
+//   hop run through the item (pilot.hpp `pilot_chain`; fighter.cpp).
+// - `runupkeys`, `underway`, `chains`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
 // ge:summary A bot's features: each behaviour switched on or off by name, and the presets
@@ -58,6 +60,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
+// ge:keywords chains goal-chain
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -125,9 +128,10 @@ enum class Feature : uint8_t {
   curvekeys,
   underway,
   recipes,
+  chains,
   trial,
 };
-constexpr size_t kFeatures = 55;
+constexpr size_t kFeatures = 56;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
