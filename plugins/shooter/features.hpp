@@ -110,7 +110,8 @@
 // - `levelview`: a spot watched looked at within 15 degrees of level, and a look let go brought
 //   back level under the hand (its tolerance under the pace's step); on.
 // - `hopopen`: a hop's side away from a wall for every skill, and a circle jump curved out to the
-//   side whose arc stays clear (pilot.cpp, M18r.md 0v); judging.
+//   side whose arc stays clear (pilot.cpp, M18r.md 0v); not kept (slower, no fewer hits), in no
+//   preset.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
