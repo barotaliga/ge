@@ -935,6 +935,11 @@ void monster_precache(SequelServer& s) {
     if (kKinds[k].prop && kKinds[k].keep)
       for (const char* name : {"tank/pain.wav", "tank/thud.wav"}) add_sound(name);
   }
+  for (const SequelEntity& e : s.entities) {  // what the spawners make
+    if (e.classname != "target_spawner" || e.gone) continue;
+    const int k = kind_of(e.target);
+    if (k >= 0 && !(deathmatch(s) && !kKinds[k].keep)) add_kind(k);
+  }
 }
 
 void monster_spawn(SequelServer& s) {
@@ -965,7 +970,7 @@ void monster_spawn(SequelServer& s) {
     SequelMonster m;
     m.entity = static_cast<int>(i);
     m.kind = k;
-    m.spare = i >= mapped;
+    m.spare = i >= mapped || e.block < -1;  // a boss's or a spawner's, waiting unseen
     e.health = kd.health;
     e.max_health = kd.health;
     e.mins = kd.mins;
@@ -978,7 +983,7 @@ void monster_spawn(SequelServer& s) {
     m.screen = kd.screen ? 100 : 0;
     m.ambush = (e.spawnflags & 5) != 0;
     if (!m.spare) m.item = s.map->entities[size_t(e.block)].get("item");
-    if ((e.spawnflags & 2) != 0 && !kd.prop) {  // waits hidden for a use
+    if (((e.spawnflags & 2) != 0 || m.spare) && !kd.prop) {  // waits hidden for a use
       e.hidden = true;
       e.box = false;
       m.waiting = true;
@@ -1112,6 +1117,39 @@ bool monster_use(SequelServer& s, int e, int activator) {
   }
   if (hunted(s, activator)) found(s, m, activator, false);
   return true;
+}
+
+bool monster_class(std::string_view classname) { return kind_of(classname) >= 0; }
+
+bool monster_bring_spare(SequelServer& s, int block, sh::Vec3f at, sh::Vec3f angles,
+                         sh::Vec3f velocity, int activator) {
+  for (SequelMonster& m : s.monsters) {
+    if (!m.spare || !m.waiting) continue;
+    SequelEntity& e = body(s, m);
+    if (e.block != block) continue;
+    m.spare = false;
+    m.waiting = false;
+    e.hidden = false;
+    e.box = true;
+    e.origin = at;
+    e.angles = angles;
+    m.ideal_yaw = angles.y;
+    m.velocity = velocity;
+    m.on_ground = velocity.z <= 0 && on_floor(s, m);
+    s.monsters_total++;
+    for (int p = 0; p < sh::kMaxClients; p++) {  // whoever stands there dies
+      if (!hunted(s, p)) continue;
+      const sh::Vec3f pa = unpack(s.players[p].move.origin);
+      const SequelPlayer& pl = s.players[p];
+      if (pa.x + pl.mins.x < at.x + e.maxs.x && pa.x + pl.maxs.x > at.x + e.mins.x &&
+          pa.y + pl.mins.y < at.y + e.maxs.y && pa.y + pl.maxs.y > at.y + e.mins.y &&
+          pa.z + pl.mins.z < at.z + e.maxs.z && pa.z + pl.maxs.z > at.z + e.mins.z)
+        fight_hurt(s, p, -1, {}, 100000, 0, kSqByTelefrag, 3);
+    }
+    if (hunted(s, activator)) found(s, m, activator, false);
+    return true;
+  }
+  return false;
 }
 
 void monster_noise(SequelServer& s, int slot) {

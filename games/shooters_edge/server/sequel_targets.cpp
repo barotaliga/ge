@@ -49,6 +49,10 @@ enum Kind : uint8_t {
   kFigure,
   kString,
   kCharacter,
+  kObject,
+  kSpawner,
+  kBomb,
+  kShip,  // a fly-by ship: the map runs it as a train; only its row is drawn here
 };
 
 Kind kind_of(std::string_view c) {
@@ -75,6 +79,11 @@ Kind kind_of(std::string_view c) {
       {"misc_blackhole", kFigure},
       {"target_string", kString},
       {"target_character", kCharacter},
+      {"func_object", kObject},
+      {"target_spawner", kSpawner},
+      {"misc_viper_bomb", kBomb},
+      {"misc_viper", kShip},
+      {"misc_strogg_ship", kShip},
   };
   for (const auto& [name, k] : kKinds)
     if (c == name) return k;
@@ -129,6 +138,8 @@ const Figure* figure_of(std::string_view c) {
 
 const char* kBarrelModel = "models/objects/barrels/tris.md2";
 const char* kBodyModel = "models/deadbods/dude/tris.md2";
+const char* kBombModel = "models/objects/bomb/tris.md2";
+constexpr int kSpares = 4;  // the monsters a spawner can make
 const char* kShakeSound =
     "world/qua"
     "ke.wav";  // the rumble (the pack's own file name)
@@ -236,6 +247,70 @@ void blow(SequelServer& s, int i, int attacker, int cause) {
   }
   fight_effect(s, "te_debris", at);
   map_use_targets(s, i, attacker);
+}
+
+// The first living player whose box `lo`..`hi` overlaps, or -1.
+int player_in(const SequelServer& s, sh::Vec3f lo, sh::Vec3f hi) {
+  for (int p = 0; p < sh::kMaxClients; p++) {
+    if (!alive(s, p)) continue;
+    const sh::Vec3f at = unpack(s.players[p].move.origin);
+    if (overlap(at + s.players[p].mins, at + s.players[p].maxs, lo, hi)) return p;
+  }
+  return -1;
+}
+
+float gravity(const SequelServer& s) {
+  return static_cast<float>(s.cvars.find("sv_gravity")->number);
+}
+
+// A falling object's frame: straight down under gravity until something holds it up; landing on
+// a player or a monster from above deals its `dmg` (a crush).
+void fall_object(SequelServer& s, int i) {
+  SequelEntity& e = s.entities[size_t(i)];
+  e.now_speed += gravity(s) * kStep;  // its fall speed (units/s, down)
+  const sh::Vec3f to = e.origin - sh::Vec3f{0, 0, e.now_speed * kStep};
+  const sh::SequelTrace t = map_trace(s, e.origin, e.mins, e.maxs, to, kSolid | sh::kSqMonster, i);
+  const int p = player_in(s, t.end + e.mins, t.end + e.maxs);
+  // A landing after a fall of more than a frame; a settle of a few units is no blow.
+  const bool falling = e.count > 1;
+  if (p < 0) {
+    e.origin = t.end;
+  } else {  // down onto the player's head
+    const float head = float(s.players[p].move.origin[2]) * 0.125f + s.players[p].maxs.z;
+    e.origin.z = std::clamp(head - e.mins.z, t.end.z, e.origin.z);
+  }
+  if (t.fraction >= 1 && p < 0) {
+    e.count++;
+    return;
+  }
+  if (falling && p >= 0) {
+    fight_hurt(s, p, -1, {0, 0, -1}, e.dmg, 1, kSqByCrush);
+  } else if (falling && t.normal.z > 0.7f && t.entity > 0) {
+    const int hit = map_entity_of_row(s, t.entity);
+    if (hit >= 0 && monster_index(s, hit) >= 0) monster_damage(s, hit, -1, e.dmg, {0, 0, -1});
+  }
+  e.count = 0;  // at rest on what holds it
+  e.now_speed = 0;
+  e.until = s.level_time + kStep;  // rests, and falls again if what held it goes
+}
+
+// A bomb's frame: thrown on, falling, its nose down over its first second and rolling; anything
+// it touches sets it off.
+void fly_bomb(SequelServer& s, int i) {
+  SequelEntity& e = s.entities[size_t(i)];
+  e.velocity.z -= gravity(s) * kStep;
+  const float since = static_cast<float>(s.level_time - e.tick_at);
+  e.angles.x = std::min(since, 1.0f) * 90;
+  e.angles.z += 10;
+  const sh::Vec3f to = e.origin + e.velocity * kStep;
+  const sh::SequelTrace t = map_trace(s, e.origin, e.mins, e.maxs, to, kSolid | sh::kSqMonster, i);
+  e.origin = t.end;
+  if (t.fraction >= 1 && player_in(s, e.origin + e.mins, e.origin + e.maxs) < 0) return;
+  e.on = false;
+  e.gone = true;
+  map_use_targets(s, i, e.activator);
+  fight_blast(s, e.origin, e.activator, e.dmg, float(e.dmg) + 40, kSqByExplosion);
+  fight_effect(s, "te_explosion", e.origin);
 }
 
 }  // namespace
@@ -386,6 +461,42 @@ bool targets_spawn(SequelServer& s, int i) {
       e.solid = true;
       e.frame = 12;  // blank
       return true;
+    case kObject:  // a box one unit inside the brush; with any flag, hidden until a use
+      e.mins = e.mins + sh::Vec3f{1, 1, 1};
+      e.maxs = e.maxs - sh::Vec3f{1, 1, 1};
+      if (key(s, e, "dmg").empty()) e.dmg = 100;
+      if (e.spawnflags == 0) {
+        e.solid = true;
+        e.until = s.level_time + 0.2;  // then it falls when nothing holds it
+      } else {
+        e.hidden = true;
+      }
+      return true;
+    case kSpawner: {
+      const std::string made = e.target;
+      if (monster_class(made)) {  // its monsters wait unseen, each a map entity of its own
+        if (deathmatch(s)) return true;
+        SequelEntity spare;
+        spare.classname = made;
+        spare.origin = e.origin;
+        spare.angles = e.angles;
+        spare.block = -2 - i;
+        for (int n = 0; n < kSpares; n++) s.entities.push_back(spare);  // `e` may move
+        return true;
+      }
+      if (sq_item(made) < 0)
+        s.console.push_back("A spawner makes '" + made +
+                            "', which is no monster or item it can make; it makes nothing.");
+      return true;
+    }
+    case kBomb:
+      add_model(s, e, kBombModel);
+      e.hidden = true;
+      e.mins = {-8, -8, -8};
+      e.maxs = {8, 8, 8};
+      if (e.dmg == 0) e.dmg = 1000;
+      return true;
+    case kShip:
     case kNone:
       return false;
   }
@@ -501,6 +612,38 @@ bool targets_use(SequelServer& s, int i, int activator) {
     case kFigure:
       if (e.classname == "misc_blackhole") e.gone = true;
       return true;
+    case kObject:
+      if (!e.hidden) return true;
+      e.hidden = false;
+      e.solid = true;
+      kill_inside(s, e);
+      e.until = s.level_time;  // and it falls
+      return true;
+    case kSpawner: {
+      const sh::Vec3f velocity = e.speed != 0 ? way(e.angles.y) * e.speed : sh::Vec3f{};
+      if (monster_class(e.target)) {
+        if (!monster_bring_spare(s, -2 - i, e.origin, e.angles, velocity, activator))
+          s.console.push_back("A spawner of '" + e.target + "' has made all " +
+                              std::to_string(kSpares) + " it can.");
+        return true;
+      }
+      if (sq_item(e.target) >= 0) fight_drop_at(s, e.origin, e.target);
+      return true;
+    }
+    case kBomb: {
+      if (!e.hidden || e.on) return true;
+      e.hidden = false;
+      e.on = true;  // falling
+      e.activator = activator;
+      e.angles = {};
+      for (const SequelEntity& v : s.entities)
+        if (v.classname == "misc_viper") {
+          e.velocity = v.velocity;
+          break;
+        }
+      e.tick_at = s.level_time;  // its fall began
+      return true;
+    }
     default:
       return true;
   }
@@ -598,6 +741,12 @@ void targets_frame(SequelServer& s) {
         event(s, std::move(ev));
         break;
       }
+      case kObject:
+        if (e.until > 0 && s.level_time + 0.001 >= e.until) fall_object(s, i);
+        break;
+      case kBomb:
+        if (e.on) fly_bomb(s, i);
+        break;
       case kLightRamp: {
         if (e.tick_at <= 0 || s.level_time + 0.001 < e.tick_at) break;
         int light = -1;
@@ -656,7 +805,8 @@ void targets_rows(SequelServer& s) {
   for (size_t n = 0; n < s.entities.size(); n++) {
     const SequelEntity& e = s.entities[n];
     const Kind k = kind_of(e);
-    if (k != kBarrel && k != kDeadSoldier && k != kFigure && k != kCharacter && k != kExplosive)
+    if (k != kBarrel && k != kDeadSoldier && k != kFigure && k != kCharacter && k != kExplosive &&
+        k != kObject && k != kBomb && k != kShip)
       continue;
     const size_t row = size_t(map_row(static_cast<int>(n)));
     if (row >= w.entities.size()) continue;
