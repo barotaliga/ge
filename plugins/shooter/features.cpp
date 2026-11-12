@@ -13,16 +13,18 @@ namespace ge::shooter {
 namespace {
 
 constexpr const char* kNames[kFeatures] = {
-    "calm",      "pace",       "swimaim",    "screen",   "keep",    "lead",      "lane",
-    "hop",       "shortgoals", "commit",     "danger",   "dodge",   "watch",     "spam",
-    "packs",     "talk",       "plan",       "rj",       "gj",      "airsteer",  "surface",
-    "glance",    "eye",        "selfaim",    "pools",    "routes",  "corner",    "mouse",
-    "packinfer", "listen",     "stairs",     "locked",   "escape",  "brink",     "gapjump",
-    "headroom",  "liphop",     "circlejump", "ahead",    "bodies",  "beat",      "keys",
-    "keysteer",  "lookway",    "press",      "slopes",   "counter", "jumpkey",   "backstep",
-    "runupkeys", "gapbuild",   "curvekeys",  "underway", "recipes", "chains",    "retarget",
-    "uturn",     "jumpfly",    "gappast",    "lipjump",  "airgap",  "pilotcast", "aimhop",
-    "airkeys",   "airview",   "chainhop",  "airwall",   "landwall", "circlekeys", "circleview", "circleaim", "leadwall", "leadmean", "leadarc", "airwalk", "airarc", "hopjump", "hopside", "noback", "levelview", "hopopen",
+    "calm",      "pace",       "swimaim",    "screen",   "keep",     "lead",       "lane",
+    "hop",       "shortgoals", "commit",     "danger",   "dodge",    "watch",      "spam",
+    "packs",     "talk",       "plan",       "rj",       "gj",       "airsteer",   "surface",
+    "glance",    "eye",        "selfaim",    "pools",    "routes",   "corner",     "mouse",
+    "packinfer", "listen",     "stairs",     "locked",   "escape",   "brink",      "gapjump",
+    "headroom",  "liphop",     "circlejump", "ahead",    "bodies",   "beat",       "keys",
+    "keysteer",  "lookway",    "press",      "slopes",   "counter",  "jumpkey",    "backstep",
+    "runupkeys", "gapbuild",   "curvekeys",  "underway", "recipes",  "chains",     "retarget",
+    "uturn",     "jumpfly",    "gappast",    "lipjump",  "airgap",   "pilotcast",  "aimhop",
+    "airkeys",   "airview",    "chainhop",   "airwall",  "landwall", "circlekeys", "circleview",
+    "circleaim", "leadwall",   "leadmean",   "leadarc",  "airwalk",  "airarc",     "hopjump",
+    "hopside",   "noback",     "levelview",  "hopopen",  "fightway", "letgo",      "paceback",
     "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
@@ -36,8 +38,8 @@ constexpr Features of(std::initializer_list<Feature> list) {
   for (Feature x : list) f.set(x, true);
   return f;
 }
-constexpr Features kKeys = of({Feature::lookway, Feature::press, Feature::counter, Feature::chains,
-                               Feature::retarget});
+constexpr Features kKeys =
+    of({Feature::lookway, Feature::press, Feature::counter, Feature::chains, Feature::retarget});
 // `runupkeys` and `underway` wait for their judgment (`gapbuild` and `curvekeys` on: together
 // +7.0 frags a match head to head on e1m2, the gap jumps landed 2.5 a match; `recipes` on: even
 // head to head over 12 seeds, people's hop starts taking off at ~405 against the bots' 341;
@@ -56,11 +58,11 @@ constexpr Features kKeys = of({Feature::lookway, Feature::press, Feature::counte
 // dm2 and +0.3 on e1m2 a match head to head, faster, the landing's jump on its first ground frame
 // 2 -> 33 %, no forward key in a hop: a player's bunny hop; `noback` and `levelview` on: +0.8 on
 // dm2 and +1.0 on e1m2 a match head to head, looks past 45 degrees down 4.6 -> 1.9 %, people's).
-constexpr Features kJudging = of({Feature::runupkeys, Feature::underway, Feature::gappast,
-                                  Feature::airgap, Feature::pilotcast, Feature::landwall,
-                                  Feature::circlekeys, Feature::circleview,
-                                  Feature::circleaim, Feature::leadmean,
-                                  Feature::leadarc, Feature::airarc, Feature::hopopen});
+constexpr Features kJudging =
+    of({Feature::runupkeys, Feature::underway, Feature::gappast, Feature::airgap,
+        Feature::pilotcast, Feature::landwall, Feature::circlekeys, Feature::circleview,
+        Feature::circleaim, Feature::leadmean, Feature::leadarc, Feature::airarc, Feature::hopopen,
+        Feature::fightway, Feature::letgo, Feature::paceback});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

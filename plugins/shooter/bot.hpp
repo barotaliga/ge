@@ -53,7 +53,7 @@ namespace ge::shooter {
 
 struct BotStats {
   int64_t commands = 0, aiming = 0, holding = 0;
-  int64_t looking = 0;                   // commands the view spent on a spot watched (`look`)
+  int64_t looking = 0;      // commands the view spent on a spot watched (`look`)
   int64_t aim_hop_air = 0;  // commands in a hop's air under the aim's view (`aimhop`)
   int64_t air_keys = 0;     // and under the hand's view (`airkeys`)
   int64_t circle_keys = 0;  // a circle jump's commands on the ground pressed by `circlekeys`
@@ -69,9 +69,9 @@ struct Bot {
   ClientView view;
   AimProfile aim;
   ai::Hands aim_hands;
-  bool aiming = false;       // the view is the aim's, not the pilot's
-  bool strafe = true;        // the pilot's own strafe setting, put back when the view is let go
-  bool hop = false;          // and its hop setting, the same
+  bool aiming = false;  // the view is the aim's, not the pilot's
+  bool strafe = true;   // the pilot's own strafe setting, put back when the view is let go
+  bool hop = false;     // and its hop setting, the same
   // THE HOP WHILE AIMING (`aimhop`): the pilot's hop is not turned off by the aim; its landings are
   // jumped, and in the air the key set under the aim's view (eight and none) that carries the
   // velocity furthest along the hop's way is pressed (`aim_air_keys`).
@@ -92,8 +92,15 @@ struct Bot {
   // ROAMING, NO VIEW BEHIND (`noback`): set by the game while it roams; a player newly seen off
   // behind the way walked is not turned to.
   bool aim_front_only = false;
+  // A LOST ONE BEHIND LET GO (`letgo`): the aim's hold on
+  // a player out of sight (where he was, carried along) is let go once he lies off behind the way
+  // walked, rather than walked away from backwards.
+  bool hold_front_only = false;
   // THE VIEW BACK TO LEVEL (`levelview`): a look let go comes back level under the hand.
   bool levelview = false;
+  // A LOST AIM PACED BACK UNDER THE HAND (`paceback`): the hand's tolerance under the pace's step
+  // while an aim lost goes back to the way.
+  bool paceback = false;
   int walk_air_set = -1;
   // A CIRCLE JUMP'S CURVE UNDER THE HAND (`circlekeys`): on the ground, the key set the ground move
   // carries furthest on round the way under the view the keys land under, as the air's above.
@@ -114,8 +121,8 @@ struct Bot {
   // THE HOPPER'S CURVE (`leadarc`): a projectile led along the target's arc at his turn rate
   // (senses.hpp `Contact::turn`), not a straight line.
   bool leadarc = false;
-  int32_t target = -1;       // the contact's entity the view is on
-  float yaw = 0, pitch = 0;  // the view last pressed, degrees (yaw unwrapped)
+  int32_t target = -1;                     // the contact's entity the view is on
+  float yaw = 0, pitch = 0;                // the view last pressed, degrees (yaw unwrapped)
   double wanted[2] = {}, pressed[2] = {};  // the aim's last yaw and pitch, wanted and pressed
   float shot_speed = 0;                    // the held weapon's projectile, units/s; 0 a hitscan
   float aim_dz = 0;                        // the aim point over the target's middle, units
