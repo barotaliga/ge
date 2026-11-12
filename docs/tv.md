@@ -377,6 +377,14 @@ bytes a second that is small. The `se-sequel-tv` lab plays the demo pack's recor
 through a node with a 2 s delay: it is broadcast at 617 bytes a second against the recording's
 2164, and a viewer who joins at 30 s gets the whole recording back byte for byte, as the first does.
 
+Games played on the sequel's rules record in the same form (`games/shooters_edge/server/sequel_wire.hpp`):
+the server side writes protocol 34's messages from the runner's rows for one viewpoint (the signon
+as the game's recorder writes it, then a frame each 100 ms whose player state and entity list are
+deltas against the frame before), and `record <name>` in the window writes them as `<name>.ged`.
+The map's checksum (configstring 31) is the MD4 of the whole map file with its four words XORed,
+measured against the demo pack's map. The same encoder is what the sequel's own server will send
+real clients (M18v9), so a hosted match broadcasts through TV from it.
+
 ## Decisions
 
 | Decision | Taken | Considered and not taken |
