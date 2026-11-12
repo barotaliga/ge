@@ -160,11 +160,12 @@ struct FighterStats {
   int64_t surface_failed = 0;  // and rises given up short of the surface
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
-  int64_t on_the_way = 0;   // short goals taken up on the way
-  int64_t chained = 0;      // item goals planned on to the next one (`chains`)
+  int64_t on_the_way = 0;    // short goals taken up on the way
+  int64_t faced = 0;         // (`fightway`) a fight's way turned toward an enemy behind it
+  int64_t chained = 0;       // item goals planned on to the next one (`chains`)
   int64_t turned_round = 0;  // commands a turn back was pressed across the run (`uturn`)
   int64_t took[profiles::kItemKinds] =
-      {};  // its own pickups by the item's kind (profiles/items.hpp ItemKind)
+      {};                   // its own pickups by the item's kind (profiles/items.hpp ItemKind)
   int64_t swim_fights = 0;  // commands swum under the aim, an enemy in sight
   int64_t wet = 0;          // commands alive with the waist in water (swimming or wading)
   // And the wet commands by what it was doing (`kWetWhy`): its mode, aiming, its goal in the
@@ -339,9 +340,10 @@ struct Fighter {
   int32_t goal_was = -1;    // the goal item held since `goal_since`
   int32_t tired_item = -1;  // an item gone for too long in vain, worth less until `tired_until`
   double goal_since = 0, tired_until = 0;
-  int32_t spam_for = -1;  // the claim `spam_from` was found for (-1: none yet)
-  sh::Vec3f news_spot;    // spam at news (spam.hpp): the way in fired at
-  double news_t = -1e9;   // the news it is fired at for (when it came), and the rockets spent
+  double face_until = -1;  // (`fightway`) the fight's way toward the enemy until then
+  int32_t spam_for = -1;   // the claim `spam_from` was found for (-1: none yet)
+  sh::Vec3f news_spot;     // spam at news (spam.hpp): the way in fired at
+  double news_t = -1e9;    // the news it is fired at for (when it came), and the rockets spent
   int32_t news_shots = 0;
   bool news_on = false;    // a way in turned to this command
   int32_t spam_node = -1;  // where it fires at a spot from now (-1: not out)

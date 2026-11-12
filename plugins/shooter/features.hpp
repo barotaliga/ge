@@ -75,8 +75,8 @@
 // - `airwall`: the air's keys under a view not the pilot's (`airkeys`, `aimhop`) charged for a
 //   wall or a body their velocity runs into within 0.4 s (bot.cpp); on.
 // - `landwall`: a hop's landing whose jump would fly into a wall on every curve the air gives runs
-//   on along the route and jumps once clear (pilot.cpp `land_walled`); dropped (even head to head, no
-//   faster), in no preset.
+//   on along the route and jumps once clear (pilot.cpp `land_walled`); dropped (even head to head,
+//   no faster), in no preset.
 // - `circlekeys`: a circle jump's curve on the ground under a view not the pilot's (the aim's, a
 //   spot watched, the hand's) pressed with the key set the ground move carries furthest on round
 //   the way (bot.cpp), not the curve's wish turned under that view; not kept, in no preset.
@@ -97,7 +97,8 @@
 //   pressed with the air's key set that carries the velocity on toward the walk's target under
 //   the view pressed (bot.cpp, as the hop's air), not the walk's forward key, which brakes;
 //   on.
-// - `airarc`: the air's key sets (`airkeys`, `aimhop`, `airwalk`) each flown held through the wall's
+// - `airarc`: the air's key sets (`airkeys`, `aimhop`, `airwalk`) each flown held through the
+// wall's
 //   look (bot.cpp: the air move a command, traced every 0.1 s, clipped along a wall met) and
 //   scored by the speed kept, not one command's velocity run straight on; judging.
 // - `hopjump`: in a hop's air the jump let go on the way up and held on the way down, so it goes
@@ -112,6 +113,14 @@
 // - `hopopen`: a hop's side away from a wall for every skill, and a circle jump curved out to the
 //   side whose arc stays clear (pilot.cpp, M18r.md 0v); not kept (slower, no fewer hits), in no
 //   preset.
+// - `fightway`: in a fight, an enemy in sight who is not chasing and lies behind the way walked
+//   (more than 120 degrees off it) turns the way toward him for a moment, rather than walking
+//   the route away from him under the aim, backwards (games/shooters_edge/bots/fighter.cpp,
+//   M18r.md 0w); judging.
+// - `letgo`: the aim's hold on a player lost from sight let go once he lies more than 100
+//   degrees off the way walked (bot.cpp, M18r.md 0w); judging.
+// - `paceback`: an aim lost goes back to the way under the hand at the pace's step (the hand's
+//   tolerance under it: the view hung where the enemy was lost); judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
@@ -124,7 +133,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -219,9 +228,12 @@ enum class Feature : uint8_t {
   noback,
   levelview,
   hopopen,
+  fightway,
+  letgo,
+  paceback,
   trial,
 };
-constexpr size_t kFeatures = 82;
+constexpr size_t kFeatures = 85;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
