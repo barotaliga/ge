@@ -83,6 +83,9 @@ struct ClientConfig {
   bool spectator = false;
   bool speedjump = false;  // cl_speedjump: the easy jump asked for (sent only when set)
   std::string password;
+  // Through forwarders (classic_forward.hpp): the route after the first one, the server last
+  // ("host:port@host:port"); `client_start`'s address is then the first forwarder's. "": direct.
+  std::string prx;
   ClientExtMode mode = ClientExtMode::lines;
   Ext ask = first_tier();          // what it understands
   std::vector<std::string> files;  // the files it already has ("skins/base.pcx")
