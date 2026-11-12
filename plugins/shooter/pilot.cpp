@@ -1357,20 +1357,26 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         p.stats.hops++;
       }
     }
-    if (p.set.hop && p.mode == PilotMode::walk && s.onground &&
+    // (`hopjump`) A hop given a new route in the air (off its way, a new goal) hops on along it
+    // from the flight, not from a walk's start once down.
+    const bool rejoin = p.set.hop_jump_held && !s.onground && s.waterlevel == 0 && !p.airborne &&
+                        p.hop_air_s >= 0 && p.clock_s - p.hop_air_s <= kChainLand_s &&
+                        speed >= p.set.hop_slow * s.maxspeed;
+    if (p.set.hop && p.mode == PilotMode::walk && (s.onground || rejoin) &&
         (l.kind == NavKind::walk || l.kind == NavKind::drop || (l.gap && hops_gaps(p))) &&
         l.mover < 0 &&
-        (speed >= kStrafeSpeed * s.maxspeed || near_gap || (chain && speed >= kChainSpeed)) &&
+        (speed >= kStrafeSpeed * s.maxspeed || near_gap || (chain && speed >= kChainSpeed) ||
+         rejoin) &&
         !(l2 && leaps(l2->kind) && !(l2->gap && hops_gaps(p)))) {
       const int32_t j = hop_stretch(p, s.origin);
       if (j >= 0 && (speed >= kStrafeSpeed * s.maxspeed || gap_in(p, j) >= 0 ||
-                     (chain && speed >= kChainSpeed))) {
+                     (chain && speed >= kChainSpeed) || rejoin)) {
         p.mode = PilotMode::hop;
         p.strafe_end_node = j;
         p.gap_k = gap_in(p, j);
         p.strafe_side = 0;
         // (A hop's landing chained: jumped again at once, no curve on the ground first.)
-        p.circle_s = p.set.hop_circle && !chain ? 0.f : -1.f;
+        p.circle_s = p.set.hop_circle && !chain && !rejoin ? 0.f : -1.f;
         p.circle_side = 0;
         p.best = 1e30f;
         p.best_s = t;
@@ -1641,7 +1647,20 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       } else {
         w.jump = false;  // let go in the air, so the landing's press is a fresh one
         because = "hopping: the side key, the view on the velocity";
+        // (`hopjump`) Held on the way down, so it goes off on the landing frame; not for a landing
+        // too slow to hop on (a run gains faster there), into a gap trick's lip (its takeoff is
+        // judged on the ground) or under a ceiling over the way.
+        if (p.set.hop_jump_held && s.velocity.z < 0 && speed >= p.set.hop_slow * s.maxspeed &&
+            !(p.gap_k >= 0 && static_cast<size_t>(p.gap_k) >= p.k) &&
+            !(p.set.hop_headroom && s.world != nullptr &&
+              jump_blocked(p, *s.world, s.origin, speed, kHeadroom_s))) {
+          w.jump = true;
+          because = "hopping: the jump held for the landing";
+        }
       }
+      if (p.set.hop_side_only && !p.gap_flight && p.lip_pressed_s < 0 && !run.found &&
+          p.recipe < 0 && !asked && !p.circling_now && (!s.onground || w.jump))
+        w.forward = 0;  // (`hopside`) the strafe key alone
     } else if (p.mode == PilotMode::strafe) {
       const float tb = yaw_at(s.origin, target);
       if (s.onground) {
