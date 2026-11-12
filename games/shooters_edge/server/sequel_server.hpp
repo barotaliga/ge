@@ -32,7 +32,13 @@
 //   and takes the rest from health; at 0 the player dies and the obituary scores (+1 the killer,
 //   −1 a suicide or the world's kill) and is printed to everyone.
 //
-// Power armour, the powerups' effects, the hand grenade, movers and monsters are the next rows
+// - **The rest of the fight**: power armour (the screen guards hits in front, a third of a blow at
+//   a cell a point; the shield all round, two thirds at two points a cell), the powerups used by
+//   `use <name>` (or at once with `dmflags` 16): quad damage ×4, invulnerability, the silencer,
+//   the rebreather and the suit; drowning after 12 s under, lava and slime each frame, falling
+//   from the change of the fall speed; `fraglimit` and `timelimit` end the level.
+//
+// The hand grenade, dropping at death, movers and monsters are the next rows
 // (docs/goals/M18v.md, M18v7); the rules' numbers are in the clean-room notes. Held by
 // tests/shooters_edge_sequel_server_test.cpp.
 //
@@ -97,12 +103,22 @@ struct SequelPlayer {
   sh::Vec3f mins, maxs;
   float view_height = 0;
   int water_level = 0;
+  int32_t water_type = 0;  // the liquid he is in (contents bits)
   bool on_ground = false;
   // The weapon in hand (sequel_combat.hpp), stepped once a rules frame: by the first command of the
   // frame that presses attack, else at the frame's end (`stepped` says which).
   SqHand hand;
   bool stepped = false;
   int killer = -1;  // the slot that killed him last; his own for a suicide, -1 the world
+  // The powerups in use (level time each ends; 0 none), the silencer's shots left, power armour
+  // switched on, and the body's state the frame reads: his air, the next drowning blow and its
+  // size, and his fall speed at the last frame's end.
+  double quad_until = 0, invulnerable_until = 0, breather_until = 0, suit_until = 0;
+  int silencer_shots = 0;
+  bool power_on = false;
+  double air_until = 0, drown_at = 0;
+  int drown_damage = 2;
+  float old_fall = 0;
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.

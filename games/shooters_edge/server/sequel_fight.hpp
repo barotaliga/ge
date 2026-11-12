@@ -35,9 +35,21 @@ void fight_took(SequelServer& s, int slot, int item);
 // The player's `use`, `weapnext` and `weapprev` commands; false when `cmd` is none of them.
 bool fight_command(SequelServer& s, int slot, const std::string& cmd, const std::string& arg);
 
+// What killed a player when no weapon did (`fight_kill`'s `weapon`).
+inline constexpr int kSqByFall = 100, kSqByLava = 101, kSqBySlime = 102, kSqByWater = 103;
+
 // Player `slot` dies, killed by `killer` (a slot; his own for a suicide, -1 the world) with weapon
-// `weapon` (-1 none); the obituary is scored and printed.
+// `weapon` (-1 none, or a `kSqBy*`); the obituary is scored and printed.
 void fight_kill(SequelServer& s, int slot, int killer, int weapon);
+
+// Item `item` used from the inventory (a powerup or power armour; `use <its name>`); false when
+// it is not one or none is held.
+bool fight_use(SequelServer& s, int slot, int item);
+// The end of player `slot`'s rules frame: the powerups' and the air's clocks, drowning, lava,
+// slime and falling damage.
+void fight_body_frame(SequelServer& s, int slot);
+// The level's limits: true when the frag or time limit ended it (the next map is pending).
+bool fight_limits(SequelServer& s);
 
 // The world's rows the fight writes: each live missile, and every player's held weapon numbers.
 void fight_rows(SequelServer& s);

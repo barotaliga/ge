@@ -217,8 +217,13 @@ reads on from it. A viewer's `say` stays on the node; its `say_game` goes up to 
 the viewer list goes up as `qul` lines. The `se-tv-node` lab relays a two-player match with a 2 s
 delay to viewers who join at 0, 4 and 8 seconds: a late viewer's catch-up is 0.7 KB, and every
 viewer's stream plays to the same end (every player, his frags and name, every entity) with the
-chat in it. Still to come in M57c: our client watching a classic stream, and the node rewriting
-the server's name as its own.
+chat in it.
+
+Our client watches a broadcast with `watch <host>:<port> [password]` in the console
+(`games/shooters_edge/net/classic_watch.hpp`): it asks as a relay asks, answers a challenge, and
+hands the records to the demo reader a whole frame at a time, so the window draws the match as it
+draws a game it joined (the same view, sounds and lines). Still to come in M57c: the node writing
+its own name into the server info.
 
 ## Forward
 
@@ -283,6 +288,23 @@ between them:
 
 Three copies cut the loss at 10% about eighty times; packing sends 30% of the plain bytes down, so
 three copies packed cost less than one plain.
+
+## The sequel's recordings
+
+The sequel's client recording (a `.dm2`: blocks of a 32-bit length and one server packet's messages,
+ended by a length of -1) goes on the replay file through Shooter's Edge's face
+(`games/shooters_edge/client/sequel_demo.hpp`, M57f), on a `sequel` track of field-coded chunks, ten
+blocks (a second of its 10 Hz frames) a chunk and a keyframe every 30. Every message is walked and
+every field coded as the residual from its prediction: origins from the line through their last two,
+angles, frames and stats from their last, the entity number from the one before it in the list, the
+frame number from the last plus one, a sound's point from its entity's origin. An entity's flag bytes
+are coded after its number, under that entity's own last flags, so they are learned per entity while
+the bytes still come out in the file's order. A block that does not walk whole is kept as its bytes.
+
+The `se-sequel-pack` lab: the demo pack's own recording (640 blocks, 138 511 bytes) walks whole and
+comes back byte for byte at 40 418 bytes, 29% of the recording and 77% of zstd at level 19; a
+made-up one of a minute packs to 39% of zstd. The format's facts are in the working area
+(`porting/shooters-edge/sequel-demo.md`).
 
 ## Decisions
 

@@ -7,6 +7,7 @@
 // ge:skill replay shooter
 // ge:test tests/shooters_edge_demo_v2_test.cpp
 #include "shooters_edge/client/demo_v2.hpp"
+#include "shooters_edge/client/sequel_demo.hpp"
 
 #include <algorithm>
 #include <array>
@@ -32,7 +33,7 @@ constexpr uint32_t kMostBody = 1u << 20;  // a record's body past this is damage
 constexpr uint32_t kFamilyFte = 0x58455446, kFamilyFte2 = 0x32455446, kFamilyMvd = 0x3144564D;
 constexpr uint32_t kFteFloatCoords = 0x8000, kFteChunkedDownloads = 0x20000000;
 constexpr uint32_t kMvdFloatCoords = 0x1, kMvdHighLagTeleport = 0x2;
-constexpr uint32_t kMultiviewTrack = 1, kBytesTrack = 2;
+constexpr uint32_t kMultiviewTrack = 1, kBytesTrack = 2, kSequelTrack = 3;
 constexpr size_t kBytesBlock = size_t{256} << 10;
 constexpr int64_t kBlockMs = 1000;
 constexpr const char* kGame = "shooters_edge";
@@ -1376,15 +1377,18 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
   gr::StreamHeader h;
   h.game = kGame;
   const bool multiview = is_multiview(recording);
-  rep.format = multiview ? "multiview" : "bytes";
+  const bool sequel = !multiview && is_sequel_recording(recording);
+  rep.format = multiview ? "multiview" : sequel ? "sequel" : "bytes";
   h.meta = {{"format", rep.format},
             {"bytes", std::to_string(recording.size())},
             {"keyframe_seconds", std::to_string(options.keyframe_seconds)}};
   gr::Meta final_meta;
-  demo_hub_meta(recording, h.meta, final_meta);
+  if (!sequel) demo_hub_meta(recording, h.meta, final_meta);  // the sequel's: its own face's
   h.meta.insert(h.meta.end(), options.meta.begin(), options.meta.end());
   if (multiview)
     h.tracks = {{kMultiviewTrack, gr::TrackKind::messages, gr::TrackCodec::field, "multiview"}};
+  else if (sequel)
+    h.tracks = {{kSequelTrack, gr::TrackKind::messages, gr::TrackCodec::field, "sequel"}};
   else
     h.tracks = {{kBytesTrack, gr::TrackKind::messages, gr::TrackCodec::zstd, "recording"}};
   out.clear();
@@ -1410,6 +1414,28 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
     final_meta.insert(final_meta.begin(), {"duration_ms", std::to_string(time)});
     final_meta.emplace_back("records", std::to_string(rep.records));
     gr::stream_finish(w, final_meta);
+  } else if (sequel) {
+    // Ten of the recording's blocks a chunk: a second of its 10 Hz frames.
+    const std::vector<std::span<const uint8_t>> blocks = sequel_blocks(recording);
+    SequelCoder coder;
+    SequelPackReport sr;
+    for (size_t at = 0, chunk_no = 0; at < blocks.size(); at += 10, chunk_no++) {
+      const bool keyframe = chunk_no % static_cast<size_t>(every) == 0;
+      const std::vector<std::span<const uint8_t>> some(
+          blocks.begin() + static_cast<std::ptrdiff_t>(at),
+          blocks.begin() + static_cast<std::ptrdiff_t>(std::min(at + 10, blocks.size())));
+      std::vector<uint8_t> chunk;
+      pack_sequel_chunk(coder, some, keyframe, chunk, &sr);
+      gr::stream_add(w, kSequelTrack, static_cast<int64_t>(chunk_no) * kBlockMs, chunk);
+      gr::stream_end_block(w, keyframe);
+    }
+    rep.records = sr.blocks;
+    rep.walked = sr.walked;
+    rep.kept = sr.kept;
+    rep.blocks = sr.chunks;
+    rep.keyframes = sr.keyframes;
+    gr::stream_finish(w, {{"duration_ms", std::to_string(blocks.size() * 100)},
+                          {"records", std::to_string(sr.blocks)}});
   } else {
     for (size_t at = 0; at < recording.size(); at += kBytesBlock) {
       const size_t n = std::min(kBytesBlock, recording.size() - at);
@@ -1434,11 +1460,19 @@ bool unpack_demo(std::span<const uint8_t> file, std::vector<uint8_t>& out, std::
     return false;
   }
   Face f;
-  bool started = false;
+  SequelCoder sequel;
+  bool started = false, sequel_seen = false;
   gr::Block b;
   while (gr::next_block(r, b, error)) {
     for (const gr::Chunk& c : b.chunks) {
-      if (c.track == kBytesTrack) {
+      if (c.track == kSequelTrack) {
+        if (!started && !b.keyframe) continue;
+        started = sequel_seen = true;
+        if (!unpack_sequel_chunk(sequel, c.bytes, b.keyframe, out, error)) {
+          error += " (the block at " + std::to_string(b.time_ms) + " ms)";
+          return false;
+        }
+      } else if (c.track == kBytesTrack) {
         out.insert(out.end(), c.bytes.begin(), c.bytes.end());
       } else if (c.track == kMultiviewTrack) {
         if (!started && !b.keyframe) continue;  // a stream joined late starts at a keyframe
@@ -1450,6 +1484,8 @@ bool unpack_demo(std::span<const uint8_t> file, std::vector<uint8_t>& out, std::
       }
     }
   }
+  // A sequel recording ends with a length of -1; a cut file stops at its last whole block.
+  if (sequel_seen && error.empty()) out.insert(out.end(), 4, 0xFF);
   return true;  // a cut file: what its whole blocks held, `error` naming the cut
 }
 
