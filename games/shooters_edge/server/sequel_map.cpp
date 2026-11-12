@@ -23,6 +23,7 @@
 #include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/sequel_targets.hpp"
 
 namespace shooters_edge::server {
 
@@ -61,6 +62,9 @@ enum Class : uint8_t {
   kRotating,
   kAreaPortal,
   kLight,
+  kHelp,
+  kCrossTrigger,
+  kCrossTarget,
 };
 
 // A mover's states: at rest at its first place, going to its second, at its second, coming back.
@@ -84,6 +88,7 @@ enum Act : uint8_t {
   kTimerFire,
   kAlwaysFire,
   kRemove,
+  kCrossCheck,
 };
 
 struct Mover {
@@ -192,6 +197,7 @@ std::string name_of(const SequelServer& s, int slot) {
 Class class_of(std::string_view c) {
   constexpr std::pair<std::string_view, Class> kClasses[] = {
       {"func_door", kDoor},
+      {"func_water", kDoor},  // a door of water
       {"func_button", kButton},
       {"func_plat", kPlat},
       {"func_train", kTrain},
@@ -215,6 +221,9 @@ Class class_of(std::string_view c) {
       {"func_rotating", kRotating},
       {"func_areaportal", kAreaPortal},
       {"light", kLight},
+      {"target_help", kHelp},
+      {"target_crosslevel_trigger", kCrossTrigger},
+      {"target_crosslevel_target", kCrossTarget},
   };
   for (const auto& [name, cls] : kClasses)
     if (c == name) return cls;
@@ -224,6 +233,17 @@ Class class_of(std::string_view c) {
 Class class_of(const SequelEntity& e) { return class_of(e.classname); }
 
 bool is_door(Class c) { return c == kDoor || c == kDoorRotating; }
+
+// A door's start or end sample; null when it moves quietly. A door of water sounds of water,
+// and only when it has `sounds`.
+const char* door_sample(const SequelEntity& e, bool start) {
+  if (e.classname == "func_water") {
+    if (e.sounds == 0) return nullptr;
+    return start ? "world/mov_watr.wav" : "world/stp_watr.wav";
+  }
+  if (e.sounds == 1) return nullptr;
+  return start ? kDoorStart : kDoorEnd;
+}
 
 bool brush(const SequelEntity& e) { return !e.model.empty() && e.model[0] == '*'; }
 
@@ -545,8 +565,9 @@ void door_go_up(SequelServer& s, SequelEntity& e, int activator) {
     return;
   }
   e.activator = activator;
-  if (e.sounds != 1 && index_of(s, e) == (e.team_master >= 0 ? e.team_master : index_of(s, e)))
-    sound_at(s, map_row(index_of(s, e)), e.origin, kDoorStart);
+  if (door_sample(e, true) != nullptr &&
+      index_of(s, e) == (e.team_master >= 0 ? e.team_master : index_of(s, e)))
+    sound_at(s, map_row(index_of(s, e)), e.origin, door_sample(e, true));
   e.state = kGoing;
   e.think_at = 0;
   if (e.turns)
@@ -559,7 +580,8 @@ void door_go_up(SequelServer& s, SequelEntity& e, int activator) {
 
 void door_go_down(SequelServer& s, SequelEntity& e) {
   if (e.max_health > 0) e.health = e.max_health;  // it can be shot again
-  if (e.sounds != 1) sound_at(s, map_row(index_of(s, e)), e.origin, kDoorStart);
+  if (door_sample(e, true) != nullptr)
+    sound_at(s, map_row(index_of(s, e)), e.origin, door_sample(e, true));
   e.state = kComing;
   e.think_at = 0;
   if (e.turns)
@@ -649,7 +671,7 @@ void arrived(SequelServer& s, SequelEntity& e) {
   const int row = map_row(index_of(s, e));
   switch (act) {
     case kDoorTop:
-      if (e.sounds != 1) sound_at(s, row, e.origin, kDoorEnd);
+      if (door_sample(e, false) != nullptr) sound_at(s, row, e.origin, door_sample(e, false));
       e.state = kAtSecond;
       if ((e.spawnflags & 32) == 0 && e.wait >= 0) {
         e.think_at = s.level_time + e.wait;
@@ -657,7 +679,7 @@ void arrived(SequelServer& s, SequelEntity& e) {
       }
       return;
     case kDoorBottom:
-      if (e.sounds != 1) sound_at(s, row, e.origin, kDoorEnd);
+      if (door_sample(e, false) != nullptr) sound_at(s, row, e.origin, door_sample(e, false));
       e.state = kAtFirst;
       door_portals(s, e, false);
       return;
@@ -759,6 +781,12 @@ void think(SequelServer& s, SequelEntity& e) {
     case kRemove:
       e.gone = true;
       e.trigger = false;
+      return;
+    case kCrossCheck:  // once: every one of its bits set, its targets fire and it goes
+      if ((uint32_t(e.spawnflags) & 255u & ~s.cross_bits) != 0) return;
+      map_use_targets(s, index_of(s, e), -1);
+      e.think_at = s.level_time + double(e.delay) + kStep;
+      e.think = kRemove;
       return;
     default:
       return;
@@ -986,7 +1014,12 @@ void use(SequelServer& s, int target, int activator, int depth) {
       if (s.intermission_at > 0 || !s.pending_map.empty()) return;
       std::string next = e.map;
       const size_t spot = next.find('$');
+      s.next_spawn = spot != std::string::npos ? next.substr(spot + 1) : std::string();
+      const size_t then = s.next_spawn.find('+');
+      if (then != std::string::npos) s.next_spawn.resize(then);
       if (spot != std::string::npos) next.resize(spot);
+      s.next_unit = e.map.find('*') != std::string::npos;
+      if (s.next_unit) s.cross_bits = 0;  // a new unit
       next.erase(std::remove(next.begin(), next.end(), '*'), next.end());
       if (deathmatch(s)) {
         if (!fight_dmflag(s, 4096)) return;  // no exit in this match
@@ -1014,7 +1047,16 @@ void use(SequelServer& s, int target, int activator, int depth) {
       if (depth < kMaxUseDepth) map_use_targets(s, target, activator);
       return;
     case kNone:
+      if (targets_use(s, target, activator)) return;
       monster_use(s, target, activator);
+      return;
+    case kHelp:  // the first or the second help message, and the news of it
+      s.help[(e.spawnflags & 1) != 0 ? 0 : 1] = e.message.substr(0, 511);
+      s.help_changed++;
+      return;
+    case kCrossTrigger:
+      s.cross_bits |= uint32_t(e.spawnflags) & 255u;
+      e.gone = true;
       return;
     case kSecret:
     case kGoal: {
@@ -1089,6 +1131,23 @@ void spawn_one(SequelServer& s, SequelEntity& e, Class c) {
   switch (c) {
     case kDoor: {
       e.solid = true;
+      if (e.classname == "func_water") {  // slow, toggled, flush, never doubled, never harms
+        e.speed = number(s, e, "speed", 25);
+        e.accel = number(s, e, "accel", e.speed);
+        e.decel = number(s, e, "decel", e.speed);
+        if (key(s, e, "wait").empty()) e.wait = -1;
+        if (e.wait < 0) e.spawnflags |= 32;
+        e.lip = number(s, e, "lip", 0);
+        e.dir = way_of(s, e);
+        e.angles = {};
+        e.closed = e.origin;
+        e.open = e.origin + e.dir * (span(e.dir) - e.lip);
+        if ((e.spawnflags & 1) != 0) {
+          std::swap(e.closed, e.open);
+          e.origin = e.closed;
+        }
+        return;
+      }
       e.speed = number(s, e, "speed", 100);
       if (deathmatch(s)) e.speed *= 2;
       e.accel = number(s, e, "accel", e.speed);
@@ -1276,6 +1335,22 @@ void spawn_one(SequelServer& s, SequelEntity& e, Class c) {
     case kSpeaker:
       if (!e.noise.empty() && e.noise.find(".wav") == std::string::npos) e.noise += ".wav";
       return;
+    case kHelp:
+      if (deathmatch(s)) {
+        e.gone = true;
+        return;
+      }
+      if (e.message.empty()) {
+        s.console.push_back("A help computer at " + std::to_string(int(e.origin.x)) + " " +
+                            std::to_string(int(e.origin.y)) + " has no message; it is left out.");
+        e.gone = true;
+      }
+      return;
+    case kCrossTarget:
+      if (e.delay <= 0) e.delay = 1;
+      e.think_at = s.level_time + double(e.delay);
+      e.think = kCrossCheck;
+      return;
     case kSecret:
     case kGoal:
       if (deathmatch(s)) {
@@ -1298,7 +1373,7 @@ void link_doors(SequelServer& s) {
     if (e.gone || !is_door(class_of(e)) || e.team_master >= 0) continue;
     e.team_master = static_cast<int>(i);
     sh::Vec3f lo = abs_min(e), hi = abs_max(e);
-    bool field = e.targetname.empty() && e.max_health == 0;
+    bool field = e.targetname.empty() && e.max_health == 0 && e.classname != "func_water";
     if (!e.team.empty())
       for (size_t j = i + 1; j < count; j++) {
         SequelEntity& m = s.entities[j];
@@ -1333,6 +1408,11 @@ void map_spawn(SequelServer& s) {
   s.delayed.clear();
   s.portals.clear();
   for (int i = 32; i < kWorldLightStyles; i++) s.world.lightstyles[i].clear();  // the switchable
+  // The steady light and the two that move, as the baseline mod's world sets them; a client that
+  // is sent no style 0 lights the map at nothing (measured: a stock client draws it dark).
+  s.world.lightstyles[0] = "m";
+  s.world.lightstyles[1] = "mmnmmommommnonmmonqnmmo";
+  s.world.lightstyles[2] = "abcdefghijklmnopqrstuvwxyzyxwvutsrqponmlkjihgfedcba";
   s.secrets = s.secrets_found = s.goals = s.goals_found = 0;
   const size_t count = s.entities.size();
   for (size_t i = 0; i < count; i++) {
@@ -1340,7 +1420,10 @@ void map_spawn(SequelServer& s) {
     e.block = static_cast<int>(i) + 1;  // the world's block is the first
     if (e.gone || e.item >= 0) continue;
     const Class c = class_of(e);
-    if (c != kNone) spawn_one(s, s.entities[i], c);
+    if (c != kNone)
+      spawn_one(s, s.entities[i], c);
+    else
+      targets_spawn(s, static_cast<int>(i));
   }
   link_doors(s);
 }
@@ -1389,6 +1472,7 @@ void map_frame(SequelServer& s) {
     SequelEntity& e = s.entities[i];
     if (e.think_at > 0 && s.level_time + 0.001 >= e.think_at) think(s, e);
   }
+  targets_frame(s);
 }
 
 void map_touch(SequelServer& s, int slot) {
@@ -1412,6 +1496,8 @@ void map_touch(SequelServer& s, int slot) {
 
 bool map_damage(SequelServer& s, int e, int attacker, int damage) {
   if (e < 0 || size_t(e) >= s.entities.size()) return false;
+  if (class_of(s.entities[size_t(e)]) == kNone && targets_damage(s, e, attacker, damage))
+    return true;
   if (s.entities[size_t(e)].box || monster_index(s, e) >= 0)
     return monster_damage(s, e, attacker, damage, {});
   SequelEntity& d = s.entities[size_t(e)];

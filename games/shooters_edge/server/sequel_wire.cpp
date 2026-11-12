@@ -24,7 +24,8 @@ constexpr uint8_t kPrint = 10, kStuffText = 11, kServerData = 12, kConfigString 
                   kFrame = 20, kSound = 9;
 
 // Configstring slots.
-constexpr int kCsName = 0, kCsMaxClients = 30, kCsChecksum = 31, kCsModels = 32, kCsSounds = 288,
+constexpr int kCsName = 0, kCsSky = 2, kCsSkyAxis = 3, kCsSkyRotate = 4, kCsStatusBar = 5,
+              kCsMaxClients = 30, kCsChecksum = 31, kCsModels = 32, kCsSounds = 288,
               kCsLights = 800, kCsSkins = 1312;
 
 // An entity delta's flag bits.
@@ -75,6 +76,11 @@ int8_t quarter(float v) { return static_cast<int8_t>(std::clamp(v * 4.0f, -128.0
 // The wire's model number for the runner's: the map itself is 1, so every other is one up.
 int wire_model(int ours) { return ours <= 0 ? 0 : ours + 1; }
 
+// The status bar, in the layout language a client draws (y from the bottom, x from the centre, the
+// big numbers of health, ammunition and armour by their stats 1, 3 and 5). Kept under the slot's
+// 64 bytes so it never runs on into the next configstring.
+constexpr const char* kStatusBar = "yb -24 xv 16 hnum xv 116 anum xv 216 rnum";
+
 // The configstrings the runner's state gives.
 void config_strings(const RulesCommon& c, const SequelWireOptions& opt,
                     std::vector<std::string>& cs) {
@@ -82,13 +88,18 @@ void config_strings(const RulesCommon& c, const SequelWireOptions& opt,
   cs[kCsName] = c.world.map_title.empty() ? c.map_name : c.world.map_title;
   cs[kCsMaxClients] = std::to_string(c.world.max_clients);
   cs[kCsChecksum] = std::to_string(opt.map_checksum);
+  cs[kCsSky] = opt.sky;
+  cs[kCsSkyAxis] = opt.sky_axis;
+  cs[kCsSkyRotate] = opt.sky_rotate;
+  cs[kCsStatusBar] = kStatusBar;
   cs[kCsModels + 1] = "maps/" + c.map_name + ".bsp";
   for (size_t i = 1; i < c.models.size(); i++) {
     const int at = wire_model(static_cast<int>(i));
     if (at < 256) cs[size_t(kCsModels) + size_t(at)] = c.models[i];
   }
   for (size_t i = 1; i < c.sounds.size() && i < 256; i++) cs[kCsSounds + i] = c.sounds[i];
-  for (int i = 0; i < kLightStyles; i++) cs[size_t(kCsLights) + size_t(i)] = c.lightstyles[i];
+  for (int i = 0; i < kLightStyles && i < kWorldLightStyles; i++)
+    cs[size_t(kCsLights) + size_t(i)] = c.world.lightstyles[i];
   for (int s = 0; s < sh::kMaxClients; s++)
     if (c.world.clients[s].active)
       cs[size_t(kCsSkins) + size_t(s)] = c.world.clients[s].name + "\\male/grunt";
@@ -305,6 +316,14 @@ bool to_slot(const NetEvent& e, int slot) { return (e.to >> slot) & 1u; }
 
 }  // namespace
 
+void sequel_sky(const ge::brush::Map& map, SequelWireOptions& opt) {
+  if (map.entities.empty()) return;
+  const ge::brush::Entity& world = map.entities[0];
+  opt.sky = world.get("sky");
+  opt.sky_axis = world.get("skyaxis");
+  opt.sky_rotate = world.get("skyrotate");
+}
+
 int32_t sequel_map_checksum(std::span<const uint8_t> bsp) {
   return static_cast<int32_t>(md4_word(bsp));
 }
@@ -388,9 +407,11 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
       o.str(e.text);
     }
   }
-  // The frame.
+  // The frame, numbered from 1: a stock client draws nothing from a frame numbered 0 (measured: it
+  // stops on a field of view of 0 before the first frame it keeps).
+  const int32_t number = frame_number + 1;
   o.u8(kFrame);
-  o.i32(frame_number);
+  o.i32(number);
   o.i32(w.last_frame);
   o.u8(0);
   o.u8(32);
@@ -423,7 +444,7 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
   }
   o.u8(0);
   o.u8(0);
-  w.last_frame = frame_number;
+  w.last_frame = number;
   // The unreliable part: the frame's sounds.
   for (size_t i = from; i < events.size(); i++) {
     const NetEvent& e = events[i];

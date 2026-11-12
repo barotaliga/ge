@@ -18,7 +18,11 @@
 // - **Attack**: at melee range its melee (at skill 0 three frames in four nothing), else a chance a
 //   frame of 0.4 holding its ground, 0.2 melee, 0.1 near, 0.02 mid (halved at skill 0, doubled at
 //   2 and 3) once its last attack's wait (2 × random s) is spent; it follows the last sighting and
-//   gives up 20 s after it last saw its enemy. Pain at most every 3 s.
+//   gives up 20 s after it last saw its enemy. Pain at most every 3 s (5 s at skill 3).
+// - **The full game's** (sequel-monsters-full.md, the roster in sequel_monster_kinds.hpp): the
+// medic
+//   raises the corpse it sees with the most health; a power screen; bosses with their own attack
+//   test that burn down to a wreck; Jorg's death brings out the Makron; swimmers; two figures.
 //
 // ge:summary The sequel's monsters: roster, senses, choosing to attack, the step move, pain, death
 // ge:keywords sequel monsters monster-ai senses sight-entity noise ambush path-corner point-combat

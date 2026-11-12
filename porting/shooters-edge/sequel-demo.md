@@ -572,3 +572,25 @@ merging recordings with other tools **[derived]** from the read facts.
   number of 256 or more has a two-byte header (remove, more bits; number is a short). What the 3.14
   writer did differently (the old origin flag on baselines, Q4) is known only from the measurement,
   not from source.
+
+## 11. What a stock client needs from a recording we write (measured, 2026-11-12)
+
+Measured black-box with an open-source client of the sequel, built beside the checkout and run on
+the demo pack (software renderer under a virtual display), playing recordings from
+`se-sequel-record`. Its source was not read.
+
+- **A frame numbered 0 is not drawn.** With the first frame numbered 0 the client stopped with
+  "Bad fov: 0" before drawing; numbered from 1, it played the whole match. The wire numbers frames
+  as the rules' frame plus one.
+- **Light style 0 must be sent.** With configstrings 800 and up empty, the world drew near black;
+  with style 0 "m" (and 1, 2 as the baseline mod's world sets them) it drew lit.
+- **The sky is configstring 2** (the world's `sky` key; `unit1_` on demo1): empty, the client
+  printed six "can't load" lines for the faces.
+- **The status bar program is configstring 5**, in a layout language of whitespace-separated
+  words: `yb <n>` (y from the bottom), `xv <n>` (x from the centre of a 320-wide screen),
+  `hnum`, `anum`, `rnum` (the big numbers of stats 1, 3 and 5), `pic <stat>`, `num <width> <stat>`,
+  `if <stat> … endif`, `stat_string <stat>` (measured from the demo pack's own recording's
+  configstring 5). Ours is our own short program: health, ammunition and armour.
+- The demo pack's own recording plays through in the same client (633 frames under timedemo), and
+  so does a match recorded by `se-sequel-record` on demo1 (60 s, 600 frames).
+

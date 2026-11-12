@@ -19,9 +19,11 @@
 #include "brush/trace.hpp"
 #include "core/num.hpp"
 #include "progs/text.hpp"
+#include "shooters_edge/server/sequel_campaign.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
+#include "shooters_edge/server/sequel_targets.hpp"
 #include "shooters_edge/server/shot_help.hpp"
 
 namespace shooters_edge::server {
@@ -163,9 +165,7 @@ const SequelEntity* spawn_spot(SequelServer& s, int slot) {
       return allowed[ge::core::pick_index(s.rng, allowed.size())];
     }
   }
-  for (const SequelEntity& e : s.entities)
-    if (e.classname == "info_player_start") return &e;
-  return nullptr;
+  return campaign_spot(s, slot);
 }
 
 void spawn_player(SequelServer& s, int slot, bool respawn) {
@@ -206,6 +206,7 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   p.on_ground = false;
   p.ground = -1;
   fight_spawn(s, slot);
+  campaign_body(s, slot, respawn);
 }
 
 int skill(const SequelServer& s) {
@@ -443,6 +444,7 @@ void rules_frame(SequelServer& s) {
   }
   map_frame(s);
   monster_frame(s);
+  campaign_frame(s);
   fight_missiles(s);
   fight_drops(s);
   for (int i = 0; i < sh::kMaxClients; i++) {  // the hands no command stepped this frame
@@ -520,6 +522,7 @@ void fill_rows(SequelServer& s) {
   }
   map_rows(s);
   monster_rows(s);
+  targets_rows(s);
   fight_rows(s);
   mirror_pool(s);
 }
@@ -636,6 +639,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   s.sounds.assign(1, "");
   fight_precache(s);
   monster_precache(s);
+  campaign_start(s);
   fight_clear(s);
   s.models.push_back(kSequelPlayerModel);
   drop_items(s);
@@ -710,7 +714,8 @@ CommandResult sq_client_command(void* r, int slot, const std::string& line) {
   ge::progs::tokenize_words(line.c_str(), w);
   if (w.count == 0) return CommandResult::bad;
   const std::string cmd = ge::progs::word(w, 0);
-  if (cmd == "score" || cmd == "players") {
+  if (campaign_command(s, slot, cmd)) return CommandResult::mod;
+  if (cmd == "score" || cmd == "players" || cmd == "help") {
     for (const std::string& l : fight_scores(s)) fight_print(s, slot, l + "\n");
     return CommandResult::mod;
   }

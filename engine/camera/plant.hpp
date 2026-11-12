@@ -36,6 +36,7 @@
 // ge:test tests/camera_plant_test.cpp
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <span>
 

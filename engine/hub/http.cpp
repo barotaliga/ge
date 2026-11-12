@@ -37,11 +37,31 @@ const char* reason(int code) {
   }
 }
 
-void send(HttpConn& c, const std::string& bytes) {
-  gn::tcp_send_bytes(c.stream, reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
+constexpr size_t kFeedPiece = size_t{64} * 1024;  // an answer goes to the stream this much at once
+
+// As much of the answer's bytes as the stream's backlog takes now (a viewer's file or a pack is
+// megabytes: the rest goes as the client reads it, over the next updates).
+void feed(HttpConn& c) {
+  while (c.out_at < c.out.size()) {
+    const size_t n = std::min(kFeedPiece, c.out.size() - c.out_at);
+    if (!gn::tcp_send_bytes(c.stream, reinterpret_cast<const uint8_t*>(c.out.data() + c.out_at), n))
+      break;
+    c.out_at += n;
+  }
+  if (c.out_at >= c.out.size()) {
+    c.out.clear();
+    c.out_at = 0;
+  }
 }
 
-bool drained(const HttpConn& c) { return c.stream.out_head >= c.stream.out.size(); }
+void send(HttpConn& c, const std::string& bytes) {
+  c.out += bytes;
+  feed(c);
+}
+
+bool drained(const HttpConn& c) {
+  return c.out_at >= c.out.size() && c.stream.out_head >= c.stream.out.size();
+}
 
 }  // namespace
 
@@ -153,6 +173,7 @@ void http_update(HttpServer& s, const Poller& p, const HubSpec& spec, int64_t no
 
   for (HttpConn& c : s.conns) {
     gn::tcp_pump(c.stream);
+    feed(c);
     std::vector<uint8_t> bytes;
     if (gn::tcp_take_bytes(c.stream, bytes) > 0 && !c.answered && !c.events) {
       c.in.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
