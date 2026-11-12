@@ -141,3 +141,34 @@ TEST(numbers_as_text) {
   CHECK(number_text(0.1) == "0.1");
   CHECK(valid_name("r_bloom") && valid_name("+jump") && !valid_name("1a") && !valid_name(""));
 }
+
+TEST(synonyms_name_a_setting_or_one_word_of_it) {
+  Cvars cv(true);
+  int32_t players = 8;
+  std::string flood = "10 1 1";
+  cv.bind({.name = "sv_maxclients", .fallback = "8", .flags = kServer, .kind = CvarKind::integer},
+          &players);
+  cv.bind({.name = "sv_floodprot", .fallback = "10 1 1", .flags = kServer, .kind = CvarKind::text},
+          &flood);
+  // A whole synonym is the setting by another name: find and set reach the one cvar.
+  CHECK(cv.add_synonym("maxclients", "sv_maxclients"));
+  CHECK(cv.find("maxclients") == cv.find("sv_maxclients"));
+  CHECK(cv.set("maxclients", "16", Source::local) == SetResult::changed);
+  CHECK(players == 16 && cv.find("sv_maxclients")->value == "16");
+  // A part synonym is one word of a setting that holds several.
+  CHECK(cv.add_synonym("flood_persecond", "sv_floodprot", 1));
+  CHECK(cv.find("flood_persecond") == nullptr);  // not a cvar of its own
+  const Synonym* s = cv.synonym("flood_persecond");
+  CHECK(s != nullptr && cv.synonym_value(*s) == "1");
+  CHECK(cv.set("flood_persecond", "7", Source::local) == SetResult::changed);
+  CHECK_MSG(flood == "10 7 1", flood);
+  CHECK(cv.add_synonym("flood_waitdelay", "sv_floodprot", 4));  // past the end: padded with 0
+  CHECK(cv.set("flood_waitdelay", "3", Source::local) == SetResult::changed);
+  CHECK_MSG(flood == "10 7 1 0 3", flood);
+  // Refused: a name that is a setting of its own, no such setting, a name taken for another.
+  CHECK(!cv.add_synonym("sv_floodprot", "sv_maxclients"));
+  CHECK(!cv.add_synonym("players", "sv_nothing"));
+  CHECK(!cv.add_synonym("maxclients", "sv_floodprot"));
+  CHECK(cv.add_synonym("maxclients", "sv_maxclients"));  // the same again is no conflict
+  CHECK(cv.synonyms().size() == 3);
+}

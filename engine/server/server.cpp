@@ -226,6 +226,14 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
     const std::string fallback = field;
     cvars.bind({r.name, fallback, info, r.help, CvarKind::text}, &field);
   }
+  for (int i = 0; i < game.name_count; i++) {
+    const SettingName& n = game.names[i];
+    if (!cvars.add_synonym(n.name, n.setting, n.part))
+      std::fprintf(stderr,
+                   "error: the game's name %s for %s is refused: it is a setting of its own, or "
+                   "there is no such setting. Fix its row in the game's ServerGame::names.\n",
+                   n.name, n.setting);
+  }
 }
 
 VoteSettings vote_settings(const ServerConfig& c) {
