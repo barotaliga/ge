@@ -78,6 +78,36 @@ float entity_alpha(const QcServer& s, int e) {
   return x.has_alpha ? x.alpha : 1.0f;
 }
 
+WorldStatic world_static(const StaticEntity& st) {
+  WorldStatic w{st.modelindex,
+                static_cast<int>(st.frame),
+                static_cast<int>(st.colormap),
+                static_cast<int>(st.skin),
+                st.origin,
+                st.angles,
+                st.extras.has_alpha ? st.extras.alpha : 1.0f};
+  if (st.extras.has_colormod)
+    for (int i = 0; i < 3; i++) w.colormod[i] = st.extras.colormod[i];
+  return w;
+}
+
+float entity_scale(const QcServer& s, int e) {
+  const float k = field(s, e, s.world_fields.scale);
+  return k != 0 ? k : 1.0f;
+}
+
+void entity_colormod(const QcServer& s, int e, float out[3]) {
+  const int at = s.world_fields.colormod;
+  const float c[3] = {field(s, e, at), at < 0 ? 0 : field(s, e, at + 1),
+                      at < 0 ? 0 : field(s, e, at + 2)};
+  if (c[0] != 0 || c[1] != 0 || c[2] != 0) {
+    for (int i = 0; i < 3; i++) out[i] = c[i];
+    return;
+  }
+  const pg::EntityExtras& x = s.extras[static_cast<size_t>(e)];
+  for (int i = 0; i < 3; i++) out[i] = x.has_colormod ? x.colormod[i] : 1.0f;
+}
+
 void fill_world(const QcServer& s, RulesWorld& w, bool full) {
   // Before the first map there is no program running and nothing to show.
   if (s.q.layout == nullptr || s.q.vm.globals.empty() || s.sv.edicts.empty()) return;
@@ -87,10 +117,7 @@ void fill_world(const QcServer& s, RulesWorld& w, bool full) {
     w.sounds = s.sounds;
     w.vwep = s.vwep;
     w.statics.clear();
-    for (const StaticEntity& st : s.statics)
-      w.statics.push_back({st.modelindex, static_cast<int>(st.frame), static_cast<int>(st.colormap),
-                           static_cast<int>(st.skin), st.origin, st.angles,
-                           st.extras.has_alpha ? st.extras.alpha : 1.0f});
+    for (const StaticEntity& st : s.statics) w.statics.push_back(world_static(st));
     w.max_clients = s.sv.set.maxclients;
     w.weapon_frames = s.world_fields.weaponframe >= 0;
     w.map_title.clear();
@@ -157,6 +184,8 @@ void fill_world(const QcServer& s, RulesWorld& w, bool full) {
     r.skin = static_cast<int>(field(s, e, f.skin));
     r.effects = static_cast<int>(field(s, e, f.effects));
     r.alpha = entity_alpha(s, e);
+    r.scale = entity_scale(s, e);
+    entity_colormod(s, e, r.colormod);
   }
 }
 

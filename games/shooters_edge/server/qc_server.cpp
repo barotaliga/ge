@@ -321,6 +321,8 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
     w.weapon = offset("weapon");
     w.weaponframe = offset("weaponframe");
     w.alpha = offset("alpha");
+    w.scale = offset("scale");
+    w.colormod = offset("colormod");
   }
   NamedHooks& n = s.named;
   n.user_cmd = named(progs, "UserCmd");

@@ -283,6 +283,9 @@ void route_events(ClassicServer& s);
 void send_frames(ClassicServer& s);
 void send_download_chunks(ClassicServer& s, int slot, gn::Writer& dgram);
 EntityState entity_state(const ClassicServer& s, int e);
+// The look bytes of a state: see-through as share x 254 (0 when solid), size x 16 (1..255, 16
+// for 1), each tint channel x 32 (0..255), the fraction dropped.
+void entity_look(EntityState& st, float alpha, float scale, const float colormod[3]);
 // A player's stats as the server sends them (`view_height`: the z set's view height in 16).
 void player_stats(const ClassicServer& s, int slot, int32_t out[kStats], bool view_height);
 

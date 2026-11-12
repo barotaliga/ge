@@ -9,15 +9,16 @@
 // and server info (`*z_ext`), with no handshake, and the game's own `ge` set likewise (`*ge_ext`):
 // a classic client never asks for it, so never gets a message it does not know.
 //
-// THE FIRST TIER we offer: every z bit (511), the ge set's named effects; x transparency,
-// sound-double, model-double, entity-double and entity-double2, spawnstatic2, 256 packet entities
-// and chunked downloads; mvd float coords and the teleport kind on setangle. Everything else is
-// refused. x float coords (only with sv_bigcoords) and the rest exist in the table so they can be
-// named, never offered.
+// THE FIRST TIER we offer: every z bit (511), the ge set's named effects; x scale, transparency,
+// colour-mod, sound-double, model-double, entity-double and entity-double2, spawnstatic2, 256
+// packet entities and chunked downloads; mvd float coords and the teleport kind on setangle.
+// Everything else is refused. x float coords (only with sv_bigcoords) and the rest exist in the
+// table so they can be named, never offered.
 //
 // ge:summary The classic protocol's extension families and bits as a table; the first tier
 // ge:keywords extensions pext z_ext fte-bits mvd-bits negotiate offered first-tier transparency
 // ge:keywords model-double entity-double chunked-downloads float-coords spawnstatic2 sound-double
+// ge:keywords scale colour-mod
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_wire_test.cpp
 #pragma once
@@ -33,7 +34,8 @@ enum class ExtFamily : uint8_t { x, x2, mvd, z, ge, count };
 constexpr uint32_t kMagicX = 0x58455446, kMagicX2 = 0x32455446, kMagicMvd = 0x3144564d;
 
 // The x family's bits.
-constexpr uint32_t kXTrans = 0x8, kXSoundDbl = 0x80, kXModelDbl = 0x1000, kXEntityDbl = 0x2000;
+constexpr uint32_t kXScale = 0x2, kXTrans = 0x8, kXSoundDbl = 0x80, kXModelDbl = 0x1000,
+                   kXEntityDbl = 0x2000;
 constexpr uint32_t kXEntityDbl2 = 0x4000, kXFloatCoords = 0x8000, kXColourMod = 0x80000;
 constexpr uint32_t kXSpawnStatic2 = 0x400000, kX256Entities = 0x1000000;
 constexpr uint32_t kXChunkedDl = 0x20000000, kXClientProgs = 0x40000000;

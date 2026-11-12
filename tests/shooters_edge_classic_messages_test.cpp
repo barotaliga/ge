@@ -22,6 +22,7 @@
 
 #include "check.hpp"
 #include "golden.hpp"
+#include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
 
 namespace cn = shooters_edge::net;
@@ -380,4 +381,55 @@ TEST(player_records_use_the_base_and_the_extended_flags) {
     CHECK(remaining(r) == 0);
     CHECK(back.onground && back.solid && back.slot == 1 && back.origin.z == 3);
   }
+}
+
+TEST(the_look_bytes_travel_under_their_bits_and_encode_as_shares) {
+  // Encoding: size x 16 (16 for 1, clamped 1..255), tint x 32 a channel (0..255), see-through x
+  // 254 (0 when solid), every fraction dropped.
+  cn::EntityState st;
+  const float plain[3] = {1, 1, 1}, tint[3] = {2, 0.5f, -1};
+  cn::entity_look(st, 1, 1, plain);
+  CHECK(st.alpha == 0 && st.scale == 16 && st.colormod[0] == 32 && st.colormod[2] == 32);
+  cn::entity_look(st, 0.5f, 2.5f, tint);
+  CHECK(st.alpha == 127 && st.scale == 40);
+  CHECK(st.colormod[0] == 64 && st.colormod[1] == 16 && st.colormod[2] == 0);
+  cn::entity_look(st, 1, 0.01f, plain);
+  CHECK(st.scale == 1);
+  cn::entity_look(st, 1, 100, plain);
+  CHECK(st.scale == 255);
+
+  // A big red entity against its baseline: the scale byte under even-more, the tint under
+  // yet-more, read back the same.
+  const cn::Ext ext = cn::first_tier();
+  const cn::EntityState base = entity(7, 1);
+  cn::EntityState big = base;
+  big.scale = 32;
+  big.colormod[0] = 96;
+  uint8_t buf[256];
+  gn::Writer w = gn::make_writer(buf, sizeof buf);
+  CHECK(cn::write_entity_delta(w, base, big, false, ext));
+  gn::Reader r = gn::make_reader(buf, w.size);
+  const cn::EntityRecord rec = cn::read_entity_record(r, gn::read_u16(r), base, ext);
+  CHECK(remaining(r) == 0);
+  CHECK((rec.bits & cn::kUScale) && (rec.bits & cn::kUColourMod) && (rec.bits & cn::kUYetMore));
+  CHECK(rec.state.scale == 32 && rec.state.colormod[0] == 96 && rec.state.colormod[1] == 32);
+  // A client that agreed neither gets nothing for them: nothing changed it can see.
+  cn::Ext plain_ext;
+  w = gn::make_writer(buf, sizeof buf);
+  CHECK(!cn::write_entity_delta(w, base, big, false, plain_ext));
+
+  // A player at half size under scale alone: the extra flags byte comes with it.
+  cn::PlayerState p;
+  p.slot = 2;
+  p.scale = 25;
+  cn::Ext scale_only;
+  scale_only[cn::ExtFamily::x] = cn::kXScale;
+  const uint32_t f = cn::playerinfo_flags(p, scale_only);
+  CHECK((f & cn::kPfScale) && (f & cn::kPfExtra) && !(f & cn::kPfTrans));
+  w = gn::make_writer(buf, sizeof buf);
+  cn::write_playerinfo(w, p, scale_only);
+  r = gn::make_reader(buf, w.size);
+  const cn::PlayerState back = cn::read_playerinfo(r, scale_only);
+  CHECK(remaining(r) == 0);
+  CHECK(back.scale == 25 && back.alpha == 255);
 }
