@@ -6,12 +6,13 @@
 //
 // ge:summary Tests the game CLI: catalog, skill, refusals, servers, players, rcon, host, join
 // ge:keywords test gamecli shooters_edge_cli help catalog skill servers players rcon host join
-// ge:keywords spawn_detached process_alive process_stop demos content logs
+// ge:keywords spawn_detached process_alive process_stop demos content logs demos-pack ger
 // ge:skill agent-interface testing
 #include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <thread>
 
 #include "check.hpp"
@@ -20,6 +21,7 @@
 #include "gamecli/process.hpp"
 #include "net/udp_socket.hpp"
 #include "shooters_edge/cli/spec.hpp"
+#include "shooters_edge/client/demo_write.hpp"
 
 namespace fs = std::filesystem;
 namespace gc = ge::gamecli;
@@ -107,7 +109,7 @@ TEST(help_catalog_and_skill_cover_every_row) {
   for (int i = 0; j.count("result.commands." + std::to_string(i) + ".name") != 0; i++)
     names.push_back(j.at("result.commands." + std::to_string(i) + ".name").text);
   for (const char* want : {"settings set", "servers", "players", "rcon", "host", "host stop",
-                           "join", "logs", "content", "demos play"})
+                           "join", "logs", "content", "demos play", "demos pack", "demos unpack"})
     CHECK_MSG(std::find(names.begin(), names.end(), want) != names.end(), want);
   CHECK(run({"skill"}, out, root) == 0);
   CHECK(out.rfind("---\nname: shooters-edge\n", 0) == 0);
@@ -259,5 +261,31 @@ TEST(where_demos_and_content) {
   // No packs in the folder: refused with the next step.
   CHECK(run({"content", "--json"}, out, root) == 1);
   CHECK(parse(out)["ok"].boolean == false);
+  fs::remove_all(root);
+}
+
+TEST(demos_pack_and_unpack_a_replay_file) {
+  const fs::path root = fresh("ge_gamecli_pack");
+  fs::create_directories(root / "id1");
+  namespace sc = shooters_edge::client;
+  const auto rec = sc::write_multiview_demo(sc::loop_script("halls", {64, 32, 24}, 160, 600));
+  std::ofstream(root / "id1" / "final.mvd", std::ios::binary)
+      .write(reinterpret_cast<const char*>(rec.data()), static_cast<std::streamsize>(rec.size()));
+  std::string out;
+  CHECK_MSG(run({"demos", "pack", "final", "--json"}, out, root) == 0, out);
+  ge::core::FlatJson j = parse(out);
+  CHECK(j["result.format"].text == "multiview");
+  CHECK(fs::exists(root / "id1" / "final.ger"));
+  CHECK(run({"demos", "pack", "final"}, out, root) == 1);  // final.ger is already there
+  fs::rename(root / "id1" / "final.mvd", root / "id1" / "kept.mvd");
+  CHECK_MSG(run({"demos", "unpack", "final", "--json"}, out, root) == 0, out);
+  {
+    // Closed before the folder is removed: Windows refuses to delete a file that is open.
+    std::ifstream in(root / "id1" / "final.mvd", std::ios::binary);
+    const std::vector<uint8_t> back((std::istreambuf_iterator<char>(in)),
+                                    std::istreambuf_iterator<char>());
+    CHECK(back == rec);
+  }
+  CHECK(run({"demos", "unpack", "kept"}, out, root) == 1);  // not a replay file
   fs::remove_all(root);
 }

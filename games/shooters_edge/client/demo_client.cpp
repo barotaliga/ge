@@ -79,6 +79,7 @@ enum : int {
   kSkin = 1 << 4,
   kEffects = 1 << 5,
   kEvenMore = 1 << 7,
+  kScale = 1 << 16,
   kTrans = 1 << 17,
   kModelDbl = 1 << 19,
   kEntityPlus512 = 1 << 21,
@@ -141,8 +142,10 @@ void delta_fields(DemoMsg& m, int bits, const Wire& w, DemoEntity& e) {
   if ((bits & kAngle2) != 0) e.angles.y = angle(m, w);
   if ((bits & kOrigin3) != 0) e.origin.z = origin(m, w);
   if ((bits & kAngle3) != 0) e.angles.z = angle(m, w);
-  if ((bits & kTrans) != 0) m.u8();
-  if ((bits & kColourMod) != 0) m.skip(3);
+  if ((bits & kScale) != 0) e.scale = byte_scale(m.u8());
+  if ((bits & kTrans) != 0) e.alpha = byte_alpha(m.u8());
+  if ((bits & kColourMod) != 0)
+    for (float& c : e.colormod) c = byte_colormod(m.u8());
 }
 
 DemoEntity read_spawn(DemoMsg& m, const Wire& w) {
@@ -242,7 +245,13 @@ void player_info(Demo& d, DemoMsg& m) {
   if ((flags & 0x40) != 0) p.skin = m.u8();
   if ((flags & 0x80) != 0) p.effects = m.u8();
   if ((flags & 0x100) != 0) p.weapon_frame = m.u8();
-  if ((flags & (1 << 17)) != 0) m.u8();  // transparency
+  // The extra byte's look: scale (bit 16), transparency (17), fatness (18, not drawn), the tint
+  // (19; no server sends it for a player, but it is read).
+  p.scale = (flags & (1 << 16)) != 0 ? player_byte_scale(m.u8()) : 1.0f;
+  p.alpha = (flags & (1 << 17)) != 0 ? player_byte_alpha(m.u8()) : 1.0f;
+  if ((flags & (1 << 18)) != 0) m.u8();
+  if ((flags & (1 << 19)) != 0)
+    for (float& c : p.colormod) c = byte_colormod(m.u8());
   p.dead = (flags & 0x200) != 0;
   p.gib = (flags & 0x400) != 0;
   p.present = true;

@@ -21,9 +21,10 @@
 //   sin, cos, sqrt, pow   in double through core/libm (sqrt exact), rounded to float
 //   min, max          of two or more arguments (fewer: a fault); bound(lo, v, hi) = max(lo, min(v,
 //   hi)) ftos, vtos, stof  text.hpp's rules; the text in the builtins' ring of 64 strlen, strcat
-//   (2047 bytes at most), substr (start and length truncated; empty when start is
-//                     at or past the end, the length is 0 or the string empty; **ours**: a negative
-//                     start is 0 and a negative length runs to the end), strzone (the size argument
+//   (2047 bytes at most), substr (start and length truncated; a negative start counts from
+//                     the end, a negative length too: -1 to the end, -2 all but the last byte; a
+//                     start still negative is 0; empty when start is at or past the end or the
+//                     length 0 or less), strzone (the size argument
 //                     ignored beyond the copy), strunzone (a string that is not a zone one faults;
 //                     freeing twice is allowed)
 //   tokenize, argc, argv   text.hpp's words in `vm.words` (argv out of range: empty)
@@ -32,6 +33,7 @@
 //                     letters only; strreplace (search, with, subject) every occurrence left to
 //                     right, never inside a replacement, an empty search the subject unchanged;
 //                     strireplace the same, the search matched in any case
+//   the string set and sprintf   qc_strings.hpp
 //
 // ge:summary The standard builtins over the VM alone: math, vectors, text, strings, words, random
 // ge:keywords qc progs builtins stdlib normalize vlen vectoyaw vectoangles random randomvec rint

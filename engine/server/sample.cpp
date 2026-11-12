@@ -7,6 +7,7 @@
 #include "server/sample.hpp"
 
 #include <cstdio>
+#include <string>
 #include <vector>
 
 #include "core/prng.hpp"
@@ -55,6 +56,21 @@ uint64_t hash(const void* g) {
   return h;
 }
 
+// Its public status: a walker per bot, scored by its cell, in the mode "walk".
+void fill_status(const void* g, net::Status& st) {
+  const auto* s = static_cast<const Sample*>(g);
+  st.mode = "walk";
+  for (size_t i = 0; i < s->at.size(); i++) {
+    net::StatusPlayer p;
+    p.name = "walker" + std::to_string(i + 1);
+    p.score = s->at[i];
+    p.minutes = static_cast<uint16_t>(s->frames / 3600);
+    p.flags = net::kPlayerBot;
+    st.players.push_back(p);
+  }
+  st.keys.push_back({"frames", std::to_string(s->frames)});
+}
+
 std::string status(const void* g) {
   const auto* s = static_cast<const Sample*>(g);
   char out[48];
@@ -78,6 +94,8 @@ ServerGame make() {
   g.seated = seated;
   g.hash = hash;
   g.status = status;
+  g.fill_status = fill_status;
+  g.version = 1;
   return g;
 }
 

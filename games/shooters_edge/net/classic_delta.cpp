@@ -89,7 +89,7 @@ bool write_entity_delta(gn::Writer& w, const EntityState& from, const EntityStat
   if (bits & kUAngle2) write_angle(w, to.angles.y, coords);
   if (bits & kUOrigin3) write_origin(w, to.origin.z, coords);
   if (bits & kUAngle3) write_angle(w, to.angles.z, coords);
-  if (bits & kUTrans) write_byte(w, to.alpha);
+  if (bits & kUTrans) write_byte(w, to.alpha == 0 ? 255 : to.alpha);  // 255: unset (solid)
   return true;
 }
 
@@ -124,7 +124,10 @@ EntityRecord read_entity_record(gn::Reader& r, uint16_t word, const EntityState&
   if (bits & kUAngle2) s.angles.y = read_angle(r, coords);
   if (bits & kUOrigin3) s.origin.z = read_origin(r, coords);
   if (bits & kUAngle3) s.angles.z = read_angle(r, coords);
-  if (bits & kUTrans) s.alpha = read_byte(r);
+  if (bits & kUTrans) {
+    const int a = read_byte(r);
+    s.alpha = a == 255 ? 0 : a;
+  }
   rec.state = s;
   return rec;
 }

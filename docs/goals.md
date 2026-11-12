@@ -37,7 +37,8 @@ Line Fall Line is in `games/fall_line/` (G8).
    built.
 5. **G5: Native on desktop and mobile.** The engine runs as a native app on macOS, Linux
    and Windows, and in the stores on iOS, iPadOS, the Mac App Store and Android, from
-   one codebase. There is no web build.
+   one codebase. The one web build is a game's VIEWER for its hub's pages (WebAssembly and
+   WebGPU, `docs/hub.md`): it watches broadcasts and demos and plays nothing.
 6. **G6: Consumed by agents.** Downstream game repos that use the engine are also
    built by agents, so the engine is a product for agents too. Every error, assert
    and log line says what went wrong, where, and the next action to take, so it reads
@@ -71,7 +72,7 @@ Line Fall Line is in `games/fall_line/` (G8).
   is the game's own.
 - Music. Fall Line has none by design: its sound is its effects.
 - Changes to the reference sources used while porting. They are read-only from here.
-- A web build. The engine is native only.
+- A web build of a game. The engine's games are native only; the web viewer (G5) only watches.
 
 ## Milestones
 
