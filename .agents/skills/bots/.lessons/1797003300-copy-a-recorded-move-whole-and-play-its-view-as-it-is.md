@@ -2,7 +2,7 @@
 title: Copy a recorded move whole, prove its keys by the move first, and play its view as it is
 date: 2026-11-12
 scope: plugins/shooter/recipes.cpp, plugins/shooter/pilot_recipes.cpp, plugins/shooter/bot.cpp, games/shooters_edge/labs/se_recipes_lab.cpp, games/shooters_edge/bots/hop_start_book.cpp
-concepts: [recipe, recipes, hop-start, copy-movement, play_recipe, proof, keys-read, view-writer, look, mouse-hand, keyboard, book, se-recipes, ground-strafe, time-to-400]
+concepts: [recipe, recipes, hop-start, copy-movement, play-recipe, proof, keys-read, view-writer, look, mouse-hand, keyboard, book, se-recipes, ground-strafe, time-to-400]
 ---
 
 - Measure people and bots by ONE rule before copying: `se-recipes` on people's folder and on

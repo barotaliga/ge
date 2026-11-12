@@ -2,7 +2,7 @@
 title: Measure a hop's air a command at a time, by who turned the view, before tuning the hop
 date: 2026-11-12
 scope: plugins/shooter/bot.cpp, games/shooters_edge/bots/keyboard.cpp, games/shooters_edge/bots/buttons.cpp
-concepts: [hop, air, airkeys, aimhop, airview, keys, mouse-hand, view-lag, double-lag, air-accelerate, speed-gain, se-team, trace, view_by]
+concepts: [hop, air, airkeys, aimhop, airview, keys, mouse-hand, view-lag, double-lag, air-accelerate, speed-gain, se-team, trace, view-by]
 ---
 
 - Every hop measure (hop share, takeoff speed, gain p50) said the bots' hop was weak; none said
