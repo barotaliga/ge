@@ -19,24 +19,26 @@ constexpr const char* kNames[kFeatures] = {
     "headroom",  "liphop",     "circlejump", "ahead",    "bodies",  "beat",     "keys",
     "keysteer",  "lookway",    "press",      "slopes",   "counter", "jumpkey",  "backstep",
     "runupkeys", "gapbuild",   "curvekeys",  "underway", "recipes", "chains",
-    "trial"};
+    "retarget",  "uturn",     "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
 // Every switch but `trial` (the last) and those not judged or dropped (`lookway`, `press`,
-// `counter`). The keyboard (`keys`, `keysteer`) is on: a person's hands are on keys
+// `counter`, `chains`, `retarget`). The keyboard (`keys`, `keysteer`) is on: a person's hands are on keys
 // (realism first; the frags it costs, -3.8 a match head to head, won back by fixing movement and
 // strategy).
 constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);
 constexpr uint64_t kKeys = (uint64_t{1} << static_cast<uint64_t>(Feature::lookway)) |
                            (uint64_t{1} << static_cast<uint64_t>(Feature::press)) |
-                           (uint64_t{1} << static_cast<uint64_t>(Feature::counter));
+                           (uint64_t{1} << static_cast<uint64_t>(Feature::counter)) |
+                           (uint64_t{1} << static_cast<uint64_t>(Feature::chains)) |
+                           (uint64_t{1} << static_cast<uint64_t>(Feature::retarget));
 // `runupkeys` and `underway` wait for their judgment (`gapbuild` and `curvekeys` on: together
 // +7.0 frags a match head to head on e1m2, the gap jumps landed 2.5 a match; `recipes` on: even
 // head to head over 12 seeds, people's hop starts taking off at ~405 against the bots' 341).
 constexpr uint64_t kJudging = (uint64_t{1} << static_cast<uint64_t>(Feature::runupkeys)) |
                               (uint64_t{1} << static_cast<uint64_t>(Feature::underway)) |
-                              (uint64_t{1} << static_cast<uint64_t>(Feature::chains));
+                              (uint64_t{1} << static_cast<uint64_t>(Feature::uturn));
 constexpr uint64_t kAll = (kTrial - 1) & ~kKeys & ~kJudging;
 
 bool separator(char c) { return c == ',' || c == ' ' || c == '/' || c == '\t'; }

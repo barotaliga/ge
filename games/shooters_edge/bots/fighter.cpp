@@ -68,6 +68,11 @@ constexpr double kDecide_s = 4;     // with no news, its item goal is chosen aga
 // A chain's pickup run through (`chains`): the item still believed there this long after is the
 // news of its taking still to come, not a miss to go back for, s.
 constexpr double kViaNews_s = 0.6;
+// The turn back taken round (`uturn`): at this speed or more on the ground, a wish this far off the
+// velocity is pressed this far across it instead (degrees); past `kTurnStraight` (straight back)
+// the view's side is the side.
+constexpr double kTurnBackSpeed = 150, kTurnBack = 110, kTurnAcross = 95, kTurnStraight = 170;
+constexpr double kTurnRoom = 48;  // and the room it needs across, units (the circle's ~32 and a box)
 constexpr float kRun = 320;         // units/s, the run to an item
 constexpr double kCallAgain_s = 8;  // an enemy in sight is called out again after this
 constexpr double kTold_s = 10;      // a point at an item is followed this long
@@ -506,6 +511,47 @@ int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& s
   const auto name = [&](int32_t i) { return f.items[static_cast<size_t>(i)].name.c_str(); };
   return ai::pick_best(static_cast<int32_t>(f.items.size()), score, why,
                        heal ? "heal_goal" : "item_goal", name, "worth over the time to have it", 0);
+}
+
+// THE TURN BACK TAKEN ROUND (fighter_command, `uturn`): `cmd`'s wish turned across `velocity`
+// when it lies more than kTurnBack off it at a run; false (unchanged) otherwise.
+bool turn_back_round(sh::MoveCmd& cmd, sh::Vec3f origin, sh::Vec3f velocity,
+                     const sh::MoveWorld* world) {
+  const double vx = velocity.x, vy = velocity.y;
+  const double speed = std::sqrt(vx * vx + vy * vy);
+  const double fw = cmd.forward, sd = cmd.side;
+  const double wish = std::sqrt(fw * fw + sd * sd);
+  if (speed < kTurnBackSpeed || wish < 1) return false;
+  constexpr double kRad = ge::core::kPi / 180.0;
+  const double view = cmd.angles.y * kRad;
+  const double vh = ge::core::libm::atan2(vy, vx);
+  const auto wrap_rad = [](double a) {
+    while (a > ge::core::kPi) a -= 2 * ge::core::kPi;
+    while (a < -ge::core::kPi) a += 2 * ge::core::kPi;
+    return a;
+  };
+  const double off = wrap_rad(view + ge::core::libm::atan2(-sd, fw) - vh);
+  const double abs_off = off < 0 ? -off : off;
+  if (abs_off < kTurnBack * kRad) return false;
+  // The side the wish lies on; straight back, the side the view is turned to.
+  double side = off > 0 ? 1 : -1;
+  if (abs_off > kTurnStraight * kRad) side = wrap_rad(view - vh) >= 0 ? 1 : -1;
+  // The circle needs room on its side (the map's solids, when known): the other side, or none.
+  const auto room = [&](double sgn) {
+    if (world == nullptr) return true;
+    const double a = vh + sgn * kTurnAcross * kRad;
+    const sh::Vec3f to{origin.x + static_cast<float>(ge::core::libm::cos(a) * kTurnRoom),
+                       origin.y + static_cast<float>(ge::core::libm::sin(a) * kTurnRoom), origin.z};
+    return sh::walk_clear(*world, origin, to);
+  };
+  if (!room(side)) {
+    if (!room(-side)) return false;
+    side = -side;
+  }
+  const double rel = vh + side * kTurnAcross * kRad - view;
+  cmd.forward = sh::quantize_axis(static_cast<float>(ge::core::libm::cos(rel) * wish));
+  cmd.side = sh::quantize_axis(static_cast<float>(-ge::core::libm::sin(rel) * wish));
+  return true;
 }
 
 // THE GOAL AFTER (`chains`): the item the player would go for once it has item `i`, chosen as
@@ -1354,6 +1400,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.gap_circle = features[sh::Feature::gapbuild];
   ps.curve_keys = features[sh::Feature::keys] && features[sh::Feature::curvekeys];
   ps.under_way = features[sh::Feature::underway];
+  ps.retarget = features[sh::Feature::retarget];
   ps.hop_headroom = features[sh::Feature::headroom];
   ps.hop_lips = features[sh::Feature::liphop];
   // The circle jump by skill: an expert curves up to 0.3 s for ~430 (people's standing jumps
@@ -1846,6 +1893,20 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     const bool wet = s.world.entities[static_cast<size_t>(me)].waterlevel >= 2;
     if (sh::bot_hand_override(f.bot, cmd, msec, wet) > kHandThere)
       cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonAttack);
+  }
+  // THE TURN BACK TAKEN ROUND (`uturn`): on the ground at a run, a wish more than `kTurnBack`
+  // off the velocity is pressed across it instead (`kTurnAcross` on the side the wish lies, or the
+  // view leads), until the velocity has come round: a person turning back curves through it at
+  // speed (the ground's acceleration across 300 u/s turns it ~570 degrees a second, a circle of
+  // ~32 units) where a straight press back runs through a stop.
+  if (!dead && f.features[sh::Feature::uturn]) {
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(me)];
+    const sh::PilotMode pm = f.bot.pilot.pilot.mode;
+    const bool feet = pm == sh::PilotMode::walk || pm == sh::PilotMode::arrived ||
+                      pm == sh::PilotMode::idle || pm == sh::PilotMode::wait;
+    if (feet && d.waterlevel == 0 && (d.flags & sh::kFlagOnGround) != 0 &&
+        turn_back_round(cmd, d.origin, d.velocity, f.bot.pilot.world))
+      f.stats.turned_round++;
   }
   // THE BRINK: with the feet free, on the ground or in the air between a stair's steps, a hop's
   // landings or a knock, no key carries it into lava or slime (in the air a wish against the

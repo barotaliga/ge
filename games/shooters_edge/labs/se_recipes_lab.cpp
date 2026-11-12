@@ -26,6 +26,7 @@
 // ge:skill bots labs
 // ge:test tests/shooter_recipes_test.cpp
 #include <algorithm>
+#include <cmath>
 #include <array>
 #include <cstdio>
 #include <filesystem>
@@ -75,11 +76,30 @@ struct Player {
 // A STOP: frames on the ground slower than `stood`; from its last, how long to 320 and to the
 // target however he gets there (a run, a hop start, a curve), within `within_s`, -1 never (cut by
 // a death or a teleport: not kept).
+// Its KIND, by the motion across it (where he went in the 0.4 s after against the 0.3 s before):
+// `still` (moved under 24 units after), `reversed` (back past 120 degrees), `turned` (45-120) or
+// `on`; how long he was under `stood`, and his fastest in the 1.5 s before it (a stop from a run,
+// or from a walk or a stand).
+enum StopKind : uint8_t { kStill, kReversed, kTurned, kOn, kStopKinds };
+constexpr const char* kStopKindName[kStopKinds] = {"still", "reversed", "turned", "on"};
 struct Stop {
   int player = 0;
   float to320 = -1, to_target = -1;
   int takeoffs = 0;  // jumps before the target (or within the window)
+  StopKind kind = kStill;
+  float still_s = 0;   // under `stood` this long
+  float from = 0;      // the fastest in the 1.5 s before it, units/s
 };
+
+// The frame `dt` seconds from frame i (back when negative), within the track.
+size_t frame_at(const std::vector<sh::HopFrame>& f, size_t i, double dt) {
+  size_t j = i;
+  if (dt < 0)
+    while (j > 0 && f[i].t - f[j - 1].t <= -dt) j--;
+  else
+    while (j + 1 < f.size() && f[j + 1].t - f[i].t <= dt) j++;
+  return j;
+}
 
 void read_stops(const sh::HopReading& r, int player, const sh::HopStartSettings& set,
                 std::vector<Stop>& out) {
@@ -91,6 +111,28 @@ void read_stops(const sh::HopReading& r, int player, const sh::HopStartSettings&
     if (next_still) continue;  // the stop's last frame only
     Stop st;
     st.player = player;
+    size_t first = i;  // the stop's first still frame
+    while (first > 0 && f[first - 1].phase == sh::HopPhase::ground &&
+           f[first - 1].speed < set.stood)
+      first--;
+    st.still_s = static_cast<float>(f[i].t - f[first].t);
+    for (size_t j = frame_at(f, first, -1.5); j <= first; j++)
+      if (f[j].phase != sh::HopPhase::cut && f[j].speed > st.from) st.from = f[j].speed;
+    {
+      const sh::HopFrame& b = f[frame_at(f, first, -0.3)];
+      const sh::HopFrame& a = f[frame_at(f, i, 0.4)];
+      const float bx = f[first].origin.x - b.origin.x, by = f[first].origin.y - b.origin.y;
+      const float ax = a.origin.x - f[i].origin.x, ay = a.origin.y - f[i].origin.y;
+      const float after = std::sqrt(ax * ax + ay * ay), before = std::sqrt(bx * bx + by * by);
+      if (after < 24) {
+        st.kind = kStill;
+      } else if (before < 1) {
+        st.kind = kOn;
+      } else {
+        const float c = (ax * bx + ay * by) / (after * before);
+        st.kind = c < -0.5f ? kReversed : c < 0.7071f ? kTurned : kOn;
+      }
+    }
     bool cut = false;
     for (size_t j = i + 1; j < f.size() && f[j].t - f[i].t <= set.within_s; j++) {
       if (f[j].phase == sh::HopPhase::cut) {
@@ -424,6 +466,38 @@ void run(gl::Lab& lab) {
       lab.metric(key + "to320-p50", quantile(t320, 0.5f), "s");
       lab.metric(key + "to-target-share", share(nt, n), "share");
       lab.metric(key + "to-target-p50", quantile(tt, 0.5f), "s");
+    }
+    lab.table(tb);
+  }
+
+  // Every stop by its kind, by level: a minute, and how many were brief (under 0.05 s still: a
+  // reversal through nothing, not a stand) and from a run (200+ in the 1.5 s before).
+  {
+    gl::LabTable tb{"every stop by its kind (the motion's turn across it), a minute",
+                    {"level", "all", "from a run", "brief", "still", "reversed", "turned", "on",
+                     "reversed brief"},
+                    {}};
+    for (int lv = 0; lv <= kLevels; lv++) {
+      int n = 0, run = 0, brief = 0, rev_brief = 0;
+      int kinds[kStopKinds] = {};
+      for (const Stop& st : stops) {
+        if (lv < kLevels && players[static_cast<size_t>(st.player)].level != lv) continue;
+        n++;
+        run += st.from >= 200 ? 1 : 0;
+        brief += st.still_s < 0.05f ? 1 : 0;
+        kinds[st.kind]++;
+        rev_brief += st.kind == kReversed && st.still_s < 0.05f ? 1 : 0;
+      }
+      const double mins = minutes[static_cast<size_t>(lv)];
+      const auto pm = [&](int k) { return to_fixed(mins > 0 ? k / mins : 0, 2); };
+      tb.rows.push_back({lv == kLevels ? "every player" : kLevelName[lv], pm(n), pm(run),
+                         pm(brief), pm(kinds[kStill]), pm(kinds[kReversed]), pm(kinds[kTurned]),
+                         pm(kinds[kOn]), pm(rev_brief)});
+      const std::string key = std::string("stop.") + (lv == kLevels ? "all" : kLevelName[lv]) + ".";
+      lab.metric(key + "from-run-per-min", mins > 0 ? run / mins : 0, "1/min");
+      lab.metric(key + "brief-per-min", mins > 0 ? brief / mins : 0, "1/min");
+      for (int k = 0; k < kStopKinds; k++)
+        lab.metric(key + kStopKindName[k] + "-per-min", mins > 0 ? kinds[k] / mins : 0, "1/min");
     }
     lab.table(tb);
   }
