@@ -21,6 +21,7 @@
 // ge:keywords lab se-weapongroups weapon-groups cl_weapongroups wgroup group-column fold mark
 // ge:skill shooter ui labs
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <utility>
@@ -342,7 +343,7 @@ void run(gl::Lab& lab) {
       gif.push_back(gl::shrink(pic, 480));
       if (sheet.size() < 8) {
         sheet.push_back(column_close_up(pic));
-        names.push_back(std::to_string(static_cast<int>((t - start) * 1000 + 0.5)) +
+        names.push_back(std::to_string(std::lround((t - start) * 1000)) +
                         " ms: " + column_words(status().group));
       }
     }
