@@ -2,6 +2,6 @@
 # out to viewers and to other TV nodes, over engine/net. Published as ge::tv.
 file(GLOB GE_TV_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/tv/*.cpp)
 add_library(ge_tv STATIC ${GE_TV_SOURCES})
-target_link_libraries(ge_tv PUBLIC ge_replay ge_net ge_mod)
+target_link_libraries(ge_tv PUBLIC ge_replay ge_net ge_mod ge_server)
 
 ge_module(ge_tv EXPORT tv)
