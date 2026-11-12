@@ -1,7 +1,7 @@
 // The browser's side of a web viewer, defined (browser.hpp). Built only for Emscripten.
 //
 // ge:summary The web viewer's page calls defined: fetch, the paint, the canvas, the status line
-// ge:keywords web browser emscripten em-async-js fetch request-animation-frame
+// ge:keywords web browser emscripten em-async-js fetch request-animation-frame websocket
 // ge:skill net
 #include "web/browser.hpp"
 
@@ -39,9 +39,79 @@ EM_JS(void, ge_web_say, (const char* line), {
   if (t) console.log(t);
 });
 
+// The page's WebSockets, by number: each one's messages queued as they come, taken in order.
+EM_JS(int, ge_web_ws_open, (const char* url), {
+  if (!Module.geSockets) Module.geSockets = [];
+  const s = {queue : [], state : 0};
+  try {
+    s.ws = new WebSocket(UTF8ToString(url));
+  } catch (e) {
+    return -1;
+  }
+  s.ws.binaryType = "arraybuffer";
+  s.ws.onopen = function() { s.state = 1; };
+  s.ws.onclose = function() { s.state = 2; };
+  s.ws.onerror = function() { s.state = 2; };
+  s.ws.onmessage = function(m) {
+    if (m.data instanceof ArrayBuffer) s.queue.push(new Uint8Array(m.data));
+  };
+  Module.geSockets.push(s);
+  return Module.geSockets.length - 1;
+});
+
+EM_JS(int, ge_web_ws_state, (int id), {
+  const s = Module.geSockets && Module.geSockets[id];
+  return s ? s.state : 2;
+});
+
+EM_JS(int, ge_web_ws_send, (int id, const uint8_t* data, int len), {
+  const s = Module.geSockets && Module.geSockets[id];
+  if (!s || s.state != 1) return 0;
+  s.ws.send(HEAPU8.slice(data, data + len));
+  return 1;
+});
+
+// The next message's length, or -1 when none is queued.
+EM_JS(int, ge_web_ws_peek, (int id), {
+  const s = Module.geSockets && Module.geSockets[id];
+  return s && s.queue.length ? s.queue[0].length : -1;
+});
+
+EM_JS(void, ge_web_ws_take, (int id, uint8_t* out), {
+  const s = Module.geSockets[id];
+  HEAPU8.set(s.queue.shift(), out);
+});
+
+EM_JS(void, ge_web_ws_close, (int id), {
+  const s = Module.geSockets && Module.geSockets[id];
+  if (s && s.ws) s.ws.close();
+  if (s) s.state = 2;
+});
+
 }  // namespace
 
 namespace ge::web {
+
+int ws_open(const std::string& url) { return ge_web_ws_open(url.c_str()); }
+
+WsState ws_state(int socket) {
+  const int s = ge_web_ws_state(socket);
+  return s == 0 ? WsState::connecting : s == 1 ? WsState::open : WsState::closed;
+}
+
+bool ws_send(int socket, std::span<const uint8_t> msg) {
+  return ge_web_ws_send(socket, msg.data(), static_cast<int>(msg.size())) != 0;
+}
+
+bool ws_take(int socket, std::vector<uint8_t>& msg) {
+  const int n = ge_web_ws_peek(socket);
+  if (n < 0) return false;
+  msg.resize(static_cast<size_t>(n));
+  ge_web_ws_take(socket, msg.data());
+  return true;
+}
+
+void ws_close(int socket) { ge_web_ws_close(socket); }
 
 bool fetch_bytes(const std::string& url, std::vector<uint8_t>& out, std::string& error) {
   uint8_t* data = nullptr;
