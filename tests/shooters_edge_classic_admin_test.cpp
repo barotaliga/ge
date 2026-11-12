@@ -2,12 +2,14 @@
 // classic_admin.hpp) over engine/net's simulated network: `users` and `status` list every seat by
 // user id; `speedjump <id> on|off|<share>` grants one player the easy jump as the server-only
 // `*speedjump` key every client sees, tells everyone and takes it back; a client cannot give it to
-// itself in its connect; a client asks `users` itself; and the remote console refuses without a
+// itself in its connect; `aimhelp <name> on` grants the aim help, `users` shows it and a player
+// who joins is told; a client asks `users` itself; and the remote console refuses without a
 // password, refuses a wrong one, runs a right one's line (the words above, then the rules'
 // console) and answers the scripted client's `client_rcon`.
 //
 // ge:summary Tests: users, status, the easy jump granted per player, rcon on the classic endpoint
 // ge:keywords test users status speedjump grant rcon rcon_password classic_admin easy-jump
+// ge:keywords aimhelp aim-help player-aids join-line
 // ge:skill net shooter testing
 #include <memory>
 #include <string>
@@ -71,18 +73,21 @@ struct Rig {
   void frames(int n) {
     for (int i = 0; i < n; i++) frame();
   }
-  // Two scripted clients in play, the second asking for the easy jump (cl_speedjump 1).
+  // Scripted client `i` started: anna (0), or bert (1) asking for the easy jump (cl_speedjump 1).
+  void begin(int i) {
+    gn::open_sim_transport(ct[i], net,
+                           gn::sim_address(static_cast<uint32_t>(i + 1), cn::kPortClient));
+    cn::ClientConfig cc;
+    cc.name = i == 0 ? "anna" : "bert";
+    cc.qport = static_cast<uint16_t>(100 + i);
+    cc.seed = i + 1;
+    cc.speedjump = i == 1;
+    cn::client_start(c[i], ct[i], gn::sim_address(0, cn::kPortServer), cc,
+                     static_cast<double>(now) / 1e6);
+  }
+  // Both scripted clients in play.
   bool play() {
-    for (int i = 0; i < 2; i++) {
-      gn::open_sim_transport(ct[i], net,
-                             gn::sim_address(static_cast<uint32_t>(i + 1), cn::kPortClient));
-      cn::ClientConfig cc;
-      cc.name = i == 0 ? "anna" : "bert";
-      cc.qport = static_cast<uint16_t>(100 + i);
-      cc.seed = i + 1;
-      cc.speedjump = i == 1;
-      cn::client_start(c[i], ct[i], gn::sim_address(0, cn::kPortServer), cc, 0);
-    }
+    for (int i = 0; i < 2; i++) begin(i);
     frames(600);
     return c[0].stage == cn::ClientStage::active && c[1].stage == cn::ClientStage::active;
   }
@@ -137,14 +142,16 @@ TEST(users_and_status_list_every_seat_by_user_id) {
   const std::string status = rig.admin("status");
   CHECK(has(status, "2 players, pm_speedjump 0"));
   CHECK(has(status, "anna"));
-  // bert asked for the easy jump and the server allows nobody: `asks`; anna did not: `-`.
-  for (size_t at = 0; at < status.size();) {
-    const size_t end = status.find('\n', at);
-    const std::string row = status.substr(at, end - at);
-    if (has(row, "bert")) CHECK(row.substr(row.size() - 4) == "asks");
-    if (has(row, "anna")) CHECK(row.back() == '-');
-    at = end + 1;
-  }
+  // bert asked for the easy jump and the server allows nobody: used, not allowed; anna did not:
+  // `-`. `users` shows the same column.
+  for (const std::string& table : {status, users})
+    for (size_t at = 0; at < table.size();) {
+      const size_t end = table.find('\n', at);
+      const std::string row = table.substr(at, end - at);
+      if (has(row, "bert")) CHECK(has(row, "easy jump (not allowed, cl_speedjump 1)"));
+      if (has(row, "anna")) CHECK(row.back() == '-');
+      at = end + 1;
+    }
   std::string out;
   CHECK(!cn::classic_admin(rig.server, "fraglimit 10", out));  // not an administrator's word
 }
@@ -170,7 +177,8 @@ TEST(speedjump_grants_one_player_disclosed_and_takes_it_back) {
     for (const std::string& p : e.prints) told = told || has(p, "bert is granted the easy jump");
     CHECK(told);
   }
-  CHECK(has(rig.admin("status"), "0.8 granted"));
+  CHECK(has(rig.admin("status"), "easy jump (granted 0.8, cl_speedjump 1)"));
+  CHECK(has(rig.admin("users"), "easy jump (granted 0.8, cl_speedjump 1)"));
   CHECK(has(rig.admin("speedjump"), "granted to 1:"));
   // By name, at a share of its own; then taken back.
   CHECK(has(rig.admin("speedjump bert 0.6"), "granted at 0.6"));
@@ -180,11 +188,48 @@ TEST(speedjump_grants_one_player_disclosed_and_takes_it_back) {
   rig.frames(40);
   CHECK(cn::info_get(rig.c[0].userinfos[bert], "*speedjump").empty());
   // Mistakes say what to do next.
-  CHECK(has(rig.admin("speedjump 77 on"), "type \"users\""));
-  CHECK(has(rig.admin("speedjump bert 2"), "not on, off or a share"));
+  CHECK(has(rig.admin("speedjump 77 on"), "Type \"users\""));
+  CHECK(has(rig.admin("speedjump bert 2"), "\"on\" or \"off\" or given a share"));
   std::string error;
   CHECK(!cn::classic_speedjump(rig.server, 77, 0.5f, error));
   CHECK(has(error, "user id 77"));
+}
+
+TEST(aimhelp_is_granted_by_name_shown_in_users_and_told_to_who_joins) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  rig.begin(1);  // bert first, alone
+  rig.frames(600);
+  CHECK(rig.c[1].stage == cn::ClientStage::active);
+  const int bert = rig.c[1].playernum;
+  CHECK(bert >= 0);
+  CHECK(has(rig.admin("aimhelp"), "granted to nobody"));
+  CHECK(cn::classic_aids_join_line(rig.server).empty());
+  const std::string answer = rig.admin("aimhelp bert on");
+  CHECK(has(answer, "aim help granted (24 across, 48 up and down)"));
+  CHECK(cn::info_get(rig.server.clients[bert].userinfo, "*aimhelp") == "1");
+  CHECK(rig.server.game->sv.clients[bert].aimhelp);  // the rules read the grant
+  CHECK(has(rig.admin("users"), "aim help (granted, 24 across, 48 up and down, not used)"));
+  CHECK(has(rig.admin("aimhelp"), "granted to 1:"));
+  CHECK(has(rig.admin("aimhelp bert 0.5"), "\"on\" or \"off\", not \"0.5\""));
+  // anna joins and is told, in a game's words.
+  rig.begin(0);
+  rig.frames(600);
+  CHECK(rig.c[0].stage == cn::ClientStage::active);
+  bool told = false;
+  for (const std::string& p : rig.c[0].prints)
+    told = told || has(p,
+                       "Player aids on this server: bert has aim help (24 across, 48 up and "
+                       "down) and easy jump");
+  CHECK(!told);  // bert's easy jump is asked for, not granted: only the aim help is told
+  for (const std::string& p : rig.c[0].prints)
+    told = told || has(p,
+                       "Player aids on this server: bert has aim help (24 across, 48 up and "
+                       "down).");
+  CHECK(told);
+  CHECK(has(rig.admin("aimhelp bert off"), "aim help not granted"));
+  CHECK(!rig.server.game->sv.clients[bert].aimhelp);
 }
 
 TEST(a_client_cannot_grant_itself_the_easy_jump) {
@@ -196,7 +241,7 @@ TEST(a_client_cannot_grant_itself_the_easy_jump) {
   CHECK(a.size() == 1);
   const std::string challenge = a.empty() ? std::string() : a[0];
   CHECK(!challenge.empty());
-  rig.oob("connect 28 1 " + challenge + " \"\\name\\x\\*speedjump\\1\"\n");
+  rig.oob("connect 28 1 " + challenge + " \"\\name\\x\\*speedjump\\1\\*aimhelp\\1\"\n");
   rig.frames(20);
   int slot = -1;
   for (int i = 0; i < 32; i++)
@@ -204,6 +249,7 @@ TEST(a_client_cannot_grant_itself_the_easy_jump) {
   CHECK(slot >= 0);
   CHECK(cn::info_get(rig.server.clients[slot].userinfo, "*speedjump").empty());
   CHECK(cn::classic_speedjump_granted(rig.server, slot) < 0);
+  CHECK(cn::info_get(rig.server.clients[slot].userinfo, "*aimhelp").empty());
 }
 
 TEST(a_client_asks_users_itself) {

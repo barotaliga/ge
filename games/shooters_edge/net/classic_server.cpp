@@ -234,7 +234,8 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   const std::string ge = info_get(userinfo, "*ge_ext");
   asked[ExtFamily::ge] = ge.empty() ? 0u : static_cast<uint32_t>(std::atoi(ge.c_str()));
   info_remove(userinfo, "*ge_ext");
-  info_remove(userinfo, "*speedjump");  // the easy jump's grant is the server's to give
+  // A player aid's grant (classic_admin.hpp) is the server's to give.
+  for (const ge::server::AidKind& k : classic_aids()) info_remove(userinfo, k.key);
   c.ext = agree(s.cfg.offered, asked);
   c.coords = coords_of(c.ext);
   const bool proxy = !info_get(userinfo, "Qizmo").empty() || !info_get(userinfo, "*qtv").empty();

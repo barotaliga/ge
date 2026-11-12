@@ -26,6 +26,7 @@
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
 #include "shooters_edge/server/sequel_targets.hpp"
+#include "shooters_edge/server/shot_help.hpp"
 
 namespace shooters_edge::server {
 
@@ -103,6 +104,16 @@ void register_cvars(SequelServer& s) {
                .fallback = "0",
                .flags = con::kServer,
                .help = "the air move's acceleration in deathmatch; 0 the walking rule"});
+  s.cvars.add({.name = "sv_aimhelp_x",
+               .fallback = "24",
+               .flags = con::kServer,
+               .help = "the aim help's leeway sideways, units at the target, for a player granted "
+                       "it (0: no sideways help)"});
+  s.cvars.add({.name = "sv_aimhelp_y",
+               .fallback = "48",
+               .flags = con::kServer,
+               .help = "the aim help's leeway up and down, units at the target, for a player "
+                       "granted it (0: no vertical help)"});
   add_rjump_settings(s.cvars);  // sv_rjump, sv_rrjump (rjump_rules.hpp)
   const std::string share =
       ge::core::num::to_string(num::round(double(s.opt.speedjump) * 1000) / 1000);
@@ -814,6 +825,8 @@ void sq_user_info(void* r, int slot, const std::string& key, const std::string& 
   if (slot < 0 || slot >= sh::kMaxClients || !s.clients[slot].active) return;
   set_info(s.clients[slot].userinfo, key, value);
   if (key == "cl_speedjump") pool_slot(s, slot).speedjump = value == "1";  // the easy jump's ask
+  if (key == kAimHelpKey) pool_slot(s, slot);  // the grant lands on a seat the pool keeps
+  note_aim_help_info(s, slot, key, value);
   if (s.map != nullptr) fill_rows(s);
 }
 
@@ -843,6 +856,7 @@ std::unique_ptr<SequelServer> make_sequel_server(const SequelServerOptions& opt)
   s->opt = opt;
   s->rng = ge::core::make_rng(opt.seed);
   register_cvars(*s);
+  add_aim_help(*s);
   return s;
 }
 

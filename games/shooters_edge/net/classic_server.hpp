@@ -171,6 +171,7 @@ struct ClassicClient {
   int userid = 0;
   bool spectator = false;
   bool rules_active = false;  // the mod placed the player (after `begin`)
+  bool aids_told = false;     // told the player aids on the server, at his first `begin`
   Ext ext;
   Coords coords = Coords::shorts;
   bool need_pext = false;
