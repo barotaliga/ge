@@ -189,8 +189,8 @@ ItemNews knowledge_update(Fighter& f, const server::RulesCommon& s, int me, sh::
   if (was.health > 0 && st.health > 0) {
     // The item bits gained, less the held ammunition's icon (256..2048: it moves with the weapon).
     const int32_t new_bits = st.items & ~was.items & ~0xf00;
-    const bool ammo = st.shells > was.shells || st.nails > was.nails || st.rockets > was.rockets ||
-                      st.cells > was.cells;
+    bool ammo = false;
+    for (int a = 0; a < st.arsenal->ammo_count && a < kMaxAmmo; a++) ammo |= st.ammo[a] > was.ammo[a];
     // An item gives what the bar shows: its own amount (a box's, a pack's is any), or up to the
     // cap; a weapon its bit (or, held already, ammunition and no new bit).
     const auto rose_by = [](float was_v, float now, float amount, float cap) {
@@ -208,21 +208,18 @@ ItemNews knowledge_update(Fighter& f, const server::RulesCommon& s, int me, sh::
         case ItemKind::armor2:
         case ItemKind::armor3:
           return st.armor > was.armor;
-        case ItemKind::shells:
-          return rose_by(was.shells, st.shells, it.amount, 100);
-        case ItemKind::nails:
-          return rose_by(was.nails, st.nails, it.amount, 200);
-        case ItemKind::rockets:
-          return rose_by(was.rockets, st.rockets, it.amount, 100);
-        case ItemKind::cells:
-          return rose_by(was.cells, st.cells, it.amount, 100);
         case ItemKind::weapon:
           return (new_bits & it.weapon) != 0 || (new_bits == 0 && ammo);
         case ItemKind::quad:
         case ItemKind::pent:
           return new_bits != 0;
+        default: {
+          // Ammunition, by the arsenal's index of it and its cap.
+          const int a = st.arsenal->item_ammo ? st.arsenal->item_ammo(it.kind) : -1;
+          if (a < 0 || a >= kMaxAmmo) return false;
+          return rose_by(was.ammo[a], st.ammo[a], it.amount, st.arsenal->ammo_max[a]);
+        }
       }
-      return false;
     };
     int32_t mine = -1;
     float best = kOwnReach;

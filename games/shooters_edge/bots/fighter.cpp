@@ -426,18 +426,12 @@ Stats after_taking(Stats st, const ItemSpot& it) {
     case ItemKind::weapon:
       st.items |= it.weapon;
       break;
-    case ItemKind::shells:
-      st.shells += it.amount;
+    default: {
+      // Ammunition: the arsenal's index of it.
+      const int a = st.arsenal->item_ammo ? st.arsenal->item_ammo(it.kind) : -1;
+      if (a >= 0 && a < kMaxAmmo) st.ammo[a] += it.amount;
       break;
-    case ItemKind::nails:
-      st.nails += it.amount;
-      break;
-    case ItemKind::rockets:
-      st.rockets += it.amount;
-      break;
-    case ItemKind::cells:
-      st.cells += it.amount;
-      break;
+    }
   }
   return st;
 }

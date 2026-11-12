@@ -288,9 +288,9 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
   for (const auto& e : std::filesystem::directory_iterator(dir, ec))
     if (la::is_recording(e.path())) paths.push_back(e.path().string());
   if (ec || paths.empty()) {
-    lab.fail("se-moves: the folder " + dir + " lists no recordings (.mvd or .ger)" +
+    lab.fail("se-moves: the folder " + dir + " lists no recordings (.mvd or .ged)" +
                  (ec ? ": " + ec.message() : ""),
-             "next: pass --dir=<a folder of one map's recordings (.mvd or .ger)>");
+             "next: pass --dir=<a folder of one map's recordings (.mvd or .ged)>");
     return;
   }
   std::sort(paths.begin(), paths.end());
@@ -884,7 +884,7 @@ const gl::LabSpec kSpec{
     {
         {"file", "", "a demo's path (plain or gzip); empty: a walk written in code"},
         {"dir", "",
-         "a folder of one map's recordings (.mvd or .ger): who moves fastest and the weave by speed"},
+         "a folder of one map's recordings (.mvd or .ged): who moves fastest and the weave by speed"},
         {"map", "", "the map's .bsp path (the demo's map); empty: --basedir, else the fixture"},
         {"basedir", "", "a folder holding a game folder, to read --mapname from"},
         {"game", "id1", "the game folder under --basedir"},

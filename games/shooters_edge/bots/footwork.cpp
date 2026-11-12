@@ -21,7 +21,6 @@ constexpr double kLandingNear = 12;  // the exit node walked onto until this nea
 constexpr double kPressOn = 0.8, kPressBack = 0.1;
 constexpr double kPressOnRl = 0.4, kPressBackRl = 0.3;
 constexpr float kPressNear = 96;   // nearer than this, never on at him (the bodies would meet)
-constexpr int32_t kWRockets = 32;  // the rocket launcher's W_ bit
 
 }  // namespace
 
@@ -77,8 +76,9 @@ void fighter_dodge(Fighter& f, const server::RulesCommon& s, int me, double t, g
       int32_t press = 0;
       if (pressing && f.mode != FightMode::retreat) {
         if (t >= f.press_until) {
-          const Stats st = read_stats(s, me);
-          const bool rl = st.weapon == kWRockets && st.rockets > 0;
+          const Stats st = read_stats(s, me, *f.arsenal);
+          const bool rl = st.weapon != 0 && st.weapon == f.arsenal->launcher &&
+                          ammo_of(st, f.arsenal->launcher_ammo) > 0;
           const double u = ge::core::next(f.press_rng);
           const double on = rl ? kPressOnRl : kPressOn, back = rl ? kPressBackRl : kPressBack;
           f.press = u < on ? 1 : u < on + back ? -1 : 0;
