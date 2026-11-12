@@ -1333,6 +1333,11 @@ void map_spawn(SequelServer& s) {
   s.delayed.clear();
   s.portals.clear();
   for (int i = 32; i < kWorldLightStyles; i++) s.world.lightstyles[i].clear();  // the switchable
+  // The steady light and the two that move, as the baseline mod's world sets them; a client that
+  // is sent no style 0 lights the map at nothing (measured: a stock client draws it dark).
+  s.world.lightstyles[0] = "m";
+  s.world.lightstyles[1] = "mmnmmommommnonmmonqnmmo";
+  s.world.lightstyles[2] = "abcdefghijklmnopqrstuvwxyzyxwvutsrqponmlkjihgfedcba";
   s.secrets = s.secrets_found = s.goals = s.goals_found = 0;
   const size_t count = s.entities.size();
   for (size_t i = 0; i < count; i++) {
