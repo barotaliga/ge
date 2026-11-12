@@ -88,6 +88,14 @@ void register_cvars(SequelServer& s) {
                .fallback = "",
                .flags = con::kServer,
                .help = "the maps a level's end goes through in turn (spaces or commas)"});
+  s.cvars.add({.name = "k_midair",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "1: midair in deathmatch, rockets that count only on a player in the air"});
+  s.cvars.add({.name = "k_midair_minheight",
+               .fallback = "1",
+               .flags = con::kServer,
+               .help = "midair: the least height a hit counts at, 0..4 (64, 128, 256, 512, 1024)"});
   s.cvars.add({.name = "sv_airaccelerate",
                .fallback = "0",
                .flags = con::kServer,
@@ -195,6 +203,7 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   p.ground = -1;
   fight_spawn(s, slot);
   campaign_body(s, slot, respawn);
+  fight_midair_kit(s, slot);
 }
 
 int skill(const SequelServer& s) {
@@ -205,6 +214,7 @@ int skill(const SequelServer& s) {
 // with infinite ammo (8192) the ammo and the BFG.
 bool dm_left_out(const SequelServer& s, int item) {
   if (item < 0 || !deathmatch(s)) return false;
+  if (fight_midair(s)) return true;  // nothing lies on the map in midair
   const SqItem& it = kSqItems[item];
   const std::string_view name = it.classname;
   return (fight_dmflag(s, 1) && it.kind == SqKind::health) ||
@@ -377,6 +387,7 @@ void start_intermission(SequelServer& s) {
   s.intermission_at = s.level_time;
   if (deathmatch(s) || s.cvars.find("coop")->on())  // the scores, for everyone
     for (const std::string& l : fight_scores(s)) fight_print(s, -1, l + "\n");
+  for (const std::string& l : fight_midair_report(s)) fight_print(s, -1, l);
   const SequelEntity* spot = nullptr;
   for (const char* name : {"info_player_intermission", "info_player_start"}) {
     for (const SequelEntity& e : s.entities)
@@ -450,8 +461,12 @@ void rules_frame(SequelServer& s) {
     SequelPlayer& p = s.players[i];
     if (!s.clients[i].active || s.clients[i].spectator || p.alive) continue;
     if (s.level_time < p.died_at + kRespawnAfter - 0.001) continue;
-    // By pressing attack, or at once with `dmflags` 1024 (forced respawn).
-    if (deathmatch(s) && ((p.buttons & sh::kButtonAttack) != 0 || fight_dmflag(s, 1024)))
+    // By pressing attack, or at once with `dmflags` 1024 (forced respawn); by himself after 2 s in
+    // midair.
+    const bool by_himself =
+        fight_midair(s) && s.level_time >= p.died_at + sh::kMidairRespawn - 0.001;
+    if (deathmatch(s) &&
+        ((p.buttons & sh::kButtonAttack) != 0 || fight_dmflag(s, 1024) || by_himself))
       spawn_player(s, i, true);
   }
 }

@@ -19,6 +19,7 @@
 #include "core/num.hpp"
 #include "net/packet.hpp"
 #include "progs/file.hpp"
+#include "shooter/midair.hpp"
 #include "shooter/settings.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
@@ -121,6 +122,9 @@ constexpr gs::GameRule kModRules[] = {
     {"timelimit", "the match's length, minutes (0 none)"},
     {"samelevel", "1: the map does not change at the end"},
     {"pausable", "1: a player may pause the game (0: only unpausing)"},
+    {"k_midair",
+     "1: midair, rockets count only on a player in the air (the sequel's maps; restarts)"},
+    {"k_midair_minheight", "midair: the least height a hit counts at, 0..4 (64..1024 units; 1)"},
 };
 
 constexpr gs::GameRule kEndpointRules[] = {
@@ -469,8 +473,9 @@ std::string next_map(const gs::ServerConfig& c, const std::string& current,
 // (read when the server starts). A passed change is written into `settings.rules`, which every map
 // is made from: a mod's rule is set in the running rules at once (a limit the warmup holds waits
 // for the match), and a setting the players' own moves are predicted with restarts the map, so
-// every client is told it as it signs on again. A restart keeps the change; the next map puts it
-// back.
+// every client is told it as it signs on again, as does midair (`k_midair`, which takes the items
+// off the map); `k_midair_minheight` is told in the mode's words. A restart keeps the change; the
+// next map puts it back.
 //
 // `vote speedjump <id|name> on|off|<share>` grants one player the easy jump for this map, or takes
 // it back (classic_admin.hpp's grant: disclosed, `*speedjump` in his user info). The change is
@@ -558,6 +563,12 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
     out.error = rule + " is set when the server starts, so it can't be voted on";
     return false;
   }
+  // Midair is the sequel's rules' own (and a loaded match mod's that has it); the classic arena's
+  // comes with its rules' move to C++ (plugins/shooter/midair.hpp holds the shared rules).
+  if (rule.rfind("k_midair", 0) == 0 && g.module.empty() && sv::sequel_of(g.rules) == nullptr) {
+    out.error = "Midair can't be played on this map yet";
+    return false;
+  }
   if (const sh::Setting* setting = sh::find_setting(rule); setting != nullptr) {
     sh::ServerSettings check;
     std::string error;
@@ -593,19 +604,28 @@ void vote_turn(Game& g) {
   b.said.clear();
   b.notes.clear();
   bool restart = false;
+  const char* why = "The map restarts so everyone moves by the new setting\n";
   for (const gs::VoteChange& c : gs::vote_take(b)) {
     if (c.name == kSpeedjumpVote) {
       speedjump_vote_apply(g, c);
       continue;
     }
     g.settings.rules[c.name] = c.value;
-    if (sh::find_setting(c.name) != nullptr)
+    if (sh::find_setting(c.name) != nullptr) {
       restart = true;
-    else if (!held_now(g, c.name))
+    } else if (c.name == "k_midair") {
+      // Midair takes the items off the map and arms every spawn: a new start.
       g.rules.console(c.name + " \"" + c.value + "\"");
+      restart = true;
+      why = c.value == "0" ? "The map restarts without midair\n" : "The map restarts for midair\n";
+    } else if (!held_now(g, c.name)) {
+      g.rules.console(c.name + " \"" + c.value + "\"");
+    }
+    if (c.name == "k_midair_minheight" && g.classic)
+      classic_print_all(*g.classic, sh::midair_level_line(sh::midair_level(c.value)));
   }
   if (restart && g.classic) {
-    classic_print_all(*g.classic, "The map restarts so everyone moves by the new setting\n");
+    classic_print_all(*g.classic, why);
     sv::RulesCommon& now = *g.rules;
     now.pending_map = g.map->name;
     now.pending_change = sv::MapChange::restart;
