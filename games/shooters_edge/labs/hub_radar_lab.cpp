@@ -77,8 +77,8 @@ void run(gl::Lab& lab) {
   }
 
   // Packed, then the radar and the outline added.
-  std::vector<uint8_t> ger, with;
-  if (!cl::pack_demo(match.mvd, ger, error) || !cl::add_radar(match.mvd, ger, with, error, halls)) {
+  std::vector<uint8_t> ged, with;
+  if (!cl::pack_demo(match.mvd, ged, error) || !cl::add_radar(match.mvd, ged, with, error, halls)) {
     lab.fail("hub-radar: " + error, "run tests/shooters_edge_demo_radar_test.cpp");
     return;
   }
@@ -109,11 +109,11 @@ void run(gl::Lab& lab) {
              "%");
   lab.metric("dots", static_cast<double>(dots), "dots");
   lab.metric("outline_lines", static_cast<double>(r.outline.size()), "lines");
-  lab.metric("file_kb", static_cast<double>(ger.size()) / 1024.0, "KiB");
-  lab.metric("radar_kb", static_cast<double>(with.size() - ger.size()) / 1024.0, "KiB");
+  lab.metric("file_kb", static_cast<double>(ged.size()) / 1024.0, "KiB");
+  lab.metric("radar_kb", static_cast<double>(with.size() - ged.size()) / 1024.0, "KiB");
   lab.metric(
       "radar_share",
-      100.0 * static_cast<double>(with.size() - ger.size()) / static_cast<double>(ger.size()),
+      100.0 * static_cast<double>(with.size() - ged.size()) / static_cast<double>(ged.size()),
       "% of the file");
   if (r.roster.size() != 8) {
     lab.fail("the radar's roster has " + std::to_string(r.roster.size()) + " of the 8 bots",

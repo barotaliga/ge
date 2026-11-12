@@ -2,7 +2,7 @@
 // walked, the message reader both formats' messages are read with.
 //
 // ge:summary The demo file's records: the format detected, blocks and records walked, the reader
-// ge:keywords open_demo next_frame demo-msg detect block record usercmd-size gzip track ger
+// ge:keywords open_demo next_frame demo-msg detect block record usercmd-size gzip track ged
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo.hpp"
@@ -295,7 +295,7 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
     out.inner_name = std::move(u.name);
     out.truncated = u.truncated;
   }
-  if (ge::replay::is_stream(bytes)) {  // the replay file version 2 (.ger): back to the recording
+  if (ge::replay::is_stream(bytes)) {  // the replay file version 2 (.ged): back to the recording
     std::vector<uint8_t> plain;
     std::string cut;
     if (!unpack_demo(bytes, plain, cut)) {
