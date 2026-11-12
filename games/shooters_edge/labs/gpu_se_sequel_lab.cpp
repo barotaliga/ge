@@ -7,6 +7,9 @@
 // player's start looking four ways, each view the classic look on the left and the modern look
 // (every classic-enhance switch at its default) on the right. The counts (maps, textures, textures
 // found in their files, entities, starts) are deterministic metrics; the pictures are measured.
+// A map with brushes is then played on the window's own listen server (the sequel's rules on its
+// brushes): the player stands at his spawn and walks forward for two seconds, and the view from
+// his eye where he stopped is drawn (`<map>-walked`).
 //
 // Without `--game` the map is our own: the brush plugin's fixture halls written as a version 38 map
 // with a wall texture file for each of its textures and a palette picture of our own, in a pack, so
@@ -16,7 +19,7 @@
 //
 // ge:summary Lab: the sequel's maps entered: its packs, wall textures and palette, drawn four ways
 // ge:keywords lab se-sequel sequel second-game v38 wal wall-texture pcx palette colormap demo-pack
-// ge:keywords enter-map player-start classic modern look sequel-adapter content-row
+// ge:keywords enter-map player-start classic modern look sequel-adapter content-row walk listen
 // ge:skill shooter brush labs
 #include <algorithm>
 #include <cmath>
@@ -44,6 +47,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "vfs/pak.hpp"
 
@@ -106,6 +110,46 @@ bool fixture_pack(std::vector<uint8_t>& out, std::string& error) {
 }
 
 // The two looks side by side, a gap between.
+// The walk: the window's listen server on the map (a map of brushes plays on the sequel's rules,
+// net/classic_game.cpp), the player stood for a second at his spawn, then turned `turn` degrees
+// left of the spawn's facing and walked forward for two seconds. Where he ended, his facing,
+// whether he stood.
+struct Walk {
+  bool started = false, stood = false;
+  sh::Vec3f from, to;
+  float facing = 0, eye = 0;  // degrees; the eye over the origin, units
+};
+
+Walk walk(const std::vector<uint8_t>& file, const std::string& name, float turn,
+          std::string& error) {
+  Walk out;
+  static const ge::progs::Progs progs = [] {
+    ge::progs::Progs p;
+    std::string why;
+    cl::baseline_progs(p, why);
+    return p;
+  }();
+  std::unique_ptr<cl::LoadedMap> map = cl::map_from_bytes(file, name, error);
+  if (!map) return out;
+  cl::Listen l;
+  if (!cl::listen_start(l, progs, std::move(map), shooters_edge::net::listen_options(), error))
+    return out;
+  out.started = true;
+  const auto me = [&] { return l.server->world.entities[1]; };
+  for (int i = 0; i < 80; i++) cl::listen_frame(l, {});  // about a second: spawned, landed
+  out.stood = (me().flags & sh::kFlagOnGround) != 0;
+  out.from = me().origin;
+  l.view.y = turn;
+  sh::MoveCmd ahead;
+  ahead.forward = 200;
+  for (int i = 0; i < 154; i++) cl::listen_frame(l, ahead);  // about two seconds
+  out.to = me().origin;
+  out.facing = me().view_angles.y;
+  out.eye = l.server->world.clients[0].numbers.view_z;
+  cl::listen_stop(l);
+  return out;
+}
+
 gl::Picture side_by_side(const ge::gpu::Image& a, const ge::gpu::Image& b) {
   const int w = int(a.width), h = int(a.height), gap = 4;
   gl::Picture out = gl::create_picture(2 * w + gap, h, {0, 0, 0});
@@ -215,15 +259,46 @@ void run(gl::Lab& lab) {
       lab.fail(name + " has no player start", "Check the map's entities. Skill: brush.");
     }
     at.z += kEyeHeight;
+    // Played: a map with brushes is walked on the window's own server (our fixture's has faces
+    // and no brushes, so it is only drawn).
+    Walk walked;
+    if (!read.brushes.empty()) {
+      // Four tries from the spawn, a quarter turn apart; the one that went furthest is kept (a
+      // spawn may face a wall).
+      float best = -1;
+      for (int k = 0; k < 4; k++) {
+        const Walk tried = walk(map->file, name, 90.0f * float(k), error);
+        if (!tried.started) break;
+        const float tx = tried.to.x - tried.from.x, ty = tried.to.y - tried.from.y;
+        if (tx * tx + ty * ty > best) {
+          best = tx * tx + ty * ty;
+          walked = tried;
+        }
+      }
+      if (!walked.started) {
+        lab.fail(std::string(name).append(" did not start: ").append(error),
+                 "Read the reason above. Skill: shooter.");
+      } else {
+        const float dx = walked.to.x - walked.from.x, dy = walked.to.y - walked.from.y;
+        const float units = std::sqrt(dx * dx + dy * dy);
+        lab.metric(name + ".walk.stood", walked.stood ? 1 : 0, "bool");
+        lab.metric(name + ".walk.units", units, "units", gl::Det::measured);
+        if (!walked.stood)
+          lab.fail(name + ": the player did not land on the floor at his spawn",
+                   "Trace the spawn spot down through the brushes. Skill: shooter.");
+      }
+    }
     if (!device) {
       // No GPU adapter: a placeholder by each shot's id, in order, so the digest (which holds the
       // ids) is the same on every row.
-      for (const char* way : kWays) {
+      std::vector<std::string> ids;
+      for (const char* way : kWays) ids.push_back(name + "-" + way);
+      if (walked.started) ids.push_back(name + "-walked");
+      for (const std::string& id : ids) {
         gl::Picture none = gl::create_picture(160, 90, {40, 40, 48});
         gl::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
-        lab.shot(
-            {name + "-" + way, "NO GPU ADAPTER", "This machine has no GPU adapter.", "nothing", {}},
-            none, gl::Det::measured);
+        lab.shot({id, "NO GPU ADAPTER", "This machine has no GPU adapter.", "nothing", {}}, none,
+                 gl::Det::measured);
       }
       continue;
     }
@@ -260,6 +335,33 @@ void run(gl::Lab& lab) {
                     "lightmaps), the modern look on the right.",
                 "every wall textured (no checks), the light as the map was lit, the sky where it "
                 "shows",
+                {{"map", name}, {"game", own ? "fixture" : "local packs"}}},
+               side_by_side(looks[0], looks[1]), gl::Det::measured);
+    }
+    if (walked.started) {
+      ge::render::FrameView view;
+      const ge::camera::Vec3 eye =
+          cl::engine_point({walked.to.x, walked.to.y, walked.to.z + walked.eye});
+      view.eye[0] = eye.x;
+      view.eye[1] = eye.y;
+      view.eye[2] = eye.z;
+      view.heading = cl::engine_heading(walked.facing);
+      view.fov_y = 1.2;
+      view.time_s = 1;
+      ge::gpu::Image looks[2];
+      for (int side = 0; side < 2; side++) {
+        look.look = side == 0 ? "classic" : "modern";
+        const cl::FxFrame fx;
+        cl::draw_world(*device, *world, view, fx, nullptr, 0, {}, out.view);
+        looks[side] = ge::gpu::read_now(*device, out);
+      }
+      lab.shot({name + "-walked",
+                (info.title.empty() ? name : info.title) + ", walked",
+                "The player on " + name +
+                    " after two seconds walking forward from his spawn on the window's own "
+                    "server (the sequel's rules on the map's brushes), seen from his eye.",
+                "the view moved on from the start, at standing height, not in a wall or under "
+                "the floor",
                 {{"map", name}, {"game", own ? "fixture" : "local packs"}}},
                side_by_side(looks[0], looks[1]), gl::Det::measured);
     }
