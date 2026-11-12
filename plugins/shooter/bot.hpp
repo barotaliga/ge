@@ -98,8 +98,8 @@ struct Bot {
   bool hold_front_only = false;
   // THE VIEW BACK TO LEVEL (`levelview`): a look let go comes back level under the hand.
   bool levelview = false;
-  // A LOST AIM PACED BACK UNDER THE HAND (`paceback`): the hand's tolerance under the pace's step
-  // while an aim lost goes back to the way.
+  // THE VIEW BACK BY THE HAND'S OWN STROKE (`paceback`): under the mouse hand, an aim lost or a
+  // look let go goes back to the way by the hand's stroke onto it, not a want paced from the view.
   bool paceback = false;
   int walk_air_set = -1;
   // A CIRCLE JUMP'S CURVE UNDER THE HAND (`circlekeys`): on the ground, the key set the ground move

@@ -57,15 +57,8 @@ constexpr double kTired = 0.2;        // its worth meanwhile, as a share
 constexpr float kRetakeStrong = 120;  // strength (a launcher counted) to go and take an area back
 constexpr double kRetake_s = 20;      // a key area believed lost this long ago is still retaken
 constexpr double kHeardChase_s = 2;   // and one heard this long ago is gone after
-// (`fightway`) A fight's way toward the enemy: taken while it walks at this speed or more away
-// from him (the way more than 120 degrees off his bearing: cosine under this), he not chasing
-// (coming on under this, units/s), and held while he is in sight and this long after.
-constexpr float kFaceSpeed = 150;
-constexpr float kFaceBehind = -0.5f;
-constexpr float kFaceChasing = 100;
-constexpr double kFace_s = 1.0;
-constexpr float kCornered = 350;  // units: an enemy in sight this near is fought (the double's
-                                  // range: a back turned on him this close is shot)
+constexpr float kCornered = 350;      // units: an enemy in sight this near is fought (the double's
+                                      // range: a back turned on him this close is shot)
 constexpr float kCowardCornered = 192;  // a coward still runs from one farther than this
 constexpr double kImpulseGap_s = 0.5;
 constexpr double kWait_s = 20;     // an item back within this is worth going to wait for
@@ -1183,33 +1176,6 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     set_mode(f, FightMode::roam, t, why, "no one known");
   }
 
-  // THE FIGHT'S WAY TOWARD HIM (`fightway`, M18r.md 0w): a person walks backwards only when
-  // chased, firing at the chaser. In a fight, walking away from an enemy in sight who is not
-  // coming on (the item's route behind him under the aim, the back key held) turns the way
-  // toward him for a moment.
-  bool face = false;
-  if (f.features[sh::Feature::fightway] && f.mode == FightMode::fight && c && !escaping) {
-    if (t < f.face_until) {
-      face = true;  // held while he stays in sight, and a moment after
-      if (seen_now) f.face_until = t + kFace_s;
-    } else if (seen_now) {
-      const sh::Vec3f to = at_of(c->seen) - self.origin;
-      const float d = std::sqrt(to.x * to.x + to.y * to.y);
-      const float sp =
-          std::sqrt(self.velocity.x * self.velocity.x + self.velocity.y * self.velocity.y);
-      if (d > 1 && sp >= kFaceSpeed) {
-        const float coming = -(c->course.x * to.x + c->course.y * to.y) / d;
-        const float off = (self.velocity.x * to.x + self.velocity.y * to.y) / (sp * d);
-        if (coming < kFaceChasing && off < kFaceBehind) {
-          face = true;
-          f.face_until = t + kFace_s;
-          f.stats.faced++;
-        }
-      }
-    }
-  }
-  if (!face) f.face_until = -1;
-
   // A sighting is the team's once it is called out (where, by its place's name), unless it was
   // called lately, or a mate's line just said so.
   if (f.team && seen_now && t - f.called_at >= kCallAgain_s) {
@@ -1259,12 +1225,6 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     f.unlocking = false;
   } else if (!escaping && f.door_button >= 0) {
     go_to(f, f.button_spots[static_cast<size_t>(f.door_button)].node);  // a shut door's button
-  } else if (face) {
-    go_to(f, sh::nav_nearest(*f.bot.pilot.pilot.g, enemy));  // toward him, not away under the aim
-    if (why) {
-      why->decide("fightway");
-      why->choose("toward", "walking away from an enemy in sight who is not chasing");
-    }
   } else if (near >= 0) {
     // On to the long goal through it (`chains`), when that is there to take.
     const int32_t long_goal = f.goal_item != near ? f.goal_item : f.chain_item;

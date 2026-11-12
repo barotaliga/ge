@@ -20,7 +20,9 @@ constexpr double kLandingNear = 12;  // the exit node walked onto until this nea
 // the fight's ground keys forward 55 %, back 20 % (se-people `fight.*`, `keys.fight.*`).
 constexpr double kPressOn = 0.8, kPressBack = 0.1;
 constexpr double kPressOnRl = 0.4, kPressBackRl = 0.3;
-constexpr float kPressNear = 96;   // nearer than this, never on at him (the bodies would meet)
+constexpr float kPressNear = 96;  // nearer than this, never on at him (the bodies would meet)
+// (`fightway`) He is chasing when coming on faster than this, units/s.
+constexpr float kStandChasing = 100;
 
 }  // namespace
 
@@ -101,6 +103,25 @@ void fighter_dodge(Fighter& f, const server::RulesCommon& s, int me, double t, g
         if (press != 0) f.press_note = press > 0 ? "on" : "back";
         f.stats.press_on += press > 0;
         f.stats.press_back += press < 0;
+      }
+      // (`fightway`, M18r.md 0w) A person walks backwards only when chased, firing at the
+      // chaser: in a fight with him in sight and not coming on, the route's back key is let go
+      // and he stands and dodges (the side key alone) until the fight is over.
+      if (f.features[sh::Feature::fightway] && f.mode == FightMode::fight && in_sight &&
+          press >= 0 && cmd.forward < 0) {
+        float coming = 0;
+        for (const sh::Contact& k : f.bot.senses.contacts) {
+          if (k.ent != f.bot.target) continue;
+          const float dx = me_at.x - static_cast<float>(k.seen.x);
+          const float dy = me_at.y - static_cast<float>(k.seen.y);
+          const float d = std::sqrt(dx * dx + dy * dy);
+          if (d > 1) coming = (k.course.x * dx + k.course.y * dy) / d;
+        }
+        if (coming < kStandChasing) {
+          cmd.forward = 0;
+          f.stats.stood++;
+          f.press_note = "stand";
+        }
       }
       if (why) {
         why->decide("dodge");
