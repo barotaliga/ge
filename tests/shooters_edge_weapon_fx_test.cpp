@@ -262,3 +262,21 @@ TEST(a_rocket_pops_drops_and_settles_onto_its_line) {
   fx::launch_offset(0.12, dir, swayed, b);
   CHECK(b[0] - a[0] > 0.3);
 }
+
+TEST(a_grenades_glow_is_faint_its_skins_colour_and_never_lights_its_own_body) {
+  const double at[3] = {1, 2, 3};
+  const float red[3] = {1, 0, 0};
+  const fx::Light g = fx::grenade_glow(at, red, 42);
+  CHECK(g.pos[0] == 1 && g.pos[1] == 2 && g.pos[2] == 3);
+  CHECK(g.radius == fx::kGrenadeGlowM && g.radius < fx::kMotorLightM);
+  CHECK(g.colour[0] == fx::kGrenadeGlowLevel && g.colour[1] == 0 && g.colour[2] == 0);
+  CHECK(g.colour[0] < fx::kMotorLevel);  // well under a rocket's motor
+  CHECK(g.entity == 42);
+  // It lights a model beside it, but not the grenade it rides on.
+  const fx::Light lights[1] = {g};
+  double rgb[3], toward[3];
+  fx::dynamic_light_at(lights, at, 1, rgb, toward, 7);
+  CHECK(rgb[0] > 0 && rgb[1] == 0 && rgb[2] == 0);
+  fx::dynamic_light_at(lights, at, 1, rgb, toward, 42);
+  CHECK(rgb[0] == 0 && rgb[1] == 0 && rgb[2] == 0);
+}
