@@ -6,16 +6,20 @@
 // grenade bounces, explosions, hurts, the mod's calls and refusals, the final hashes), and the
 // mod's log. Pictures: the arena from above and from the side with both matches' missiles, a
 // rocket's distance from where it was fired against the clock, and the grenade's height against
-// the clock. The lab fails when the mod is refused, when the two modded runs part on any frame, or
-// when the mod changed nothing.
+// the clock. ON THE SERVER: the same package stacked on a server's rules runner (the bytecode test
+// program on its arena), its first rocket's flight and the runner's digests beside the plain
+// runner's. The lab fails when the mod is refused, when the two modded runs part on any frame (or
+// on the server, at the end), or when the mod changed nothing.
 //
 // ge:summary Lab: a C++ mod's match beside the plain one: the loader, missiles, bounces, replay
 // ge:keywords lab mod mods cpp-mod rocket-bounce loader match compare replay missiles grenade
-// ge:keywords bounce digest mod-log
+// ge:keywords bounce digest mod-log rules-runner on-the-server
 // ge:skill mod shooter labs
 // ge:test tests/shooters_edge_mod_test.cpp tests/mod_loader_test.cpp
+// ge:test tests/shooters_edge_rules_mod_test.cpp
 #include <algorithm>
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -25,6 +29,10 @@
 #include "lab/lab.hpp"
 #include "mod/loader.hpp"
 #include "shooters_edge/labs/arena_chart.hpp"
+#include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/qc_server.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
+#include "shooters_edge/server/test_mod.hpp"
 #include "shooters_edge/sim/match.hpp"
 #include "shooters_edge/sim/mod_api.hpp"
 
@@ -34,6 +42,7 @@ namespace gl = ge::lab;
 namespace gm = ge::mod;
 namespace sh = ge::shooter;
 namespace se = shooters_edge::sim;
+namespace sv = shooters_edge::server;
 using ge::core::num::to_fixed;
 
 using shooters_edge::labs::brush_bounds;
@@ -170,6 +179,119 @@ void draw_grenade(gl::Lab& lab, const se::MatchReport& plain, const se::MatchRep
         in);
 }
 
+// ON THE SERVER (docs/mods.md § On the server): the same package stacked on a server's rules
+// runner, the bytecode test program on its arena, a player holding attack. The first rocket's
+// distance against the clock, with and without the package, and the runner's digests.
+struct ServerRun {
+  std::vector<double> t, d;  // the first rocket's flight
+  uint64_t hash = 0;         // rules_hash after the last frame
+  std::string error;
+  std::vector<std::string> console;  // the server console's lines from the mod
+};
+
+ServerRun server_run(const ge_mod_v1* table, int frames) {
+  ServerRun run;
+  ge::progs::Progs progs;
+  if (!sv::build_test_mod(progs, run.error)) return run;
+  sv::QcServerOptions o;
+  o.loop.max_edicts = 1024;
+  std::unique_ptr<sv::QcServer> made = sv::make_qc_server(progs, o, run.error);
+  if (!made) return run;
+  const sv::RulesRunner r = sv::qc_runner(std::move(made));
+  if (table != nullptr) {
+    r->mods.tables.push_back(table);
+    r->mods.names.push_back(table->name);
+  }
+  r.console("deathmatch 1");
+  sv::MapSpec map;
+  map.models = sv::arena_models();
+  map.entities = sv::kArenaEntities;
+  if (!r.start(map, run.error)) return run;
+  r.connect(0, "gunner", false, true);
+  int rocket = 0;
+  sh::Vec3f from;
+  for (int f = 0; f < frames; f++) {
+    sh::Packet p;
+    p.client = 0;
+    p.sequence = static_cast<uint32_t>(f + 1);
+    for (sh::MoveCmd& c : p.cmds) {
+      c.msec = 13;
+      c.buttons = 1;
+    }
+    r.frame(&p, 1);
+    if (rocket == 0)
+      for (int e = 1; e < r->sv.num_edicts && rocket == 0; e++) {
+        const sh::Edict& ed = r->sv.edicts[static_cast<size_t>(e)];
+        if (!ed.free && ed.movetype == sh::kMovetypeFlyMissile) {
+          rocket = e;
+          from = ed.origin;
+        }
+      }
+    if (rocket > 0) {
+      const sh::Edict& ed = r->sv.edicts[static_cast<size_t>(rocket)];
+      if (ed.free || ed.movetype != sh::kMovetypeFlyMissile) {
+        rocket = -1;  // it met a wall
+      } else {
+        run.t.push_back(static_cast<double>(run.t.size()) * 0.013);
+        run.d.push_back(sh::length(ed.origin - from));
+      }
+    }
+  }
+  run.hash = sv::rules_hash(*r);
+  for (const std::string& line : r->console)
+    if (line.rfind("mod ", 0) == 0) run.console.push_back(line);
+  return run;
+}
+
+void on_the_server(gl::Lab& lab, const ge_mod_v1* table, const Inputs& in) {
+  const int frames = 400;
+  const ServerRun plain = server_run(nullptr, frames);
+  const ServerRun modded = server_run(table, frames);
+  const ServerRun again = server_run(table, frames);
+  for (const ServerRun* r : {&plain, &modded})
+    if (!r->error.empty()) {
+      lab.fail("mod: the server's runner did not start: " + r->error,
+               "next: make test T=shooters_edge_rules_mod");
+      return;
+    }
+  auto speed = [](const ServerRun& r) { return r.d.size() >= 3 ? (r.d[2] - r.d[1]) / 0.013 : 0.0; };
+  gl::LabTable t{"on the server: the package stacked on a rules runner (the bytecode test program)",
+                 {"", "plain", "with the package"},
+                 {}};
+  t.rows.push_back(
+      {"first rocket's speed (u/s)", to_fixed(speed(plain), 1), to_fixed(speed(modded), 1)});
+  t.rows.push_back(
+      {"frames it flew", std::to_string(plain.d.size()), std::to_string(modded.d.size())});
+  t.rows.push_back({"digest after " + std::to_string(frames) + " frames", hex64(plain.hash),
+                    hex64(modded.hash)});
+  t.rows.push_back({"a second modded run", "", modded.hash == again.hash ? "the same" : "PARTED"});
+  t.rows.push_back({"the mod's console lines", std::to_string(plain.console.size()),
+                    std::to_string(modded.console.size())});
+  lab.table(t);
+  lab.metric("server.plain.rocket-speed", speed(plain), "u/s");
+  lab.metric("server.modded.rocket-speed", speed(modded), "u/s");
+  if (modded.hash != again.hash)
+    lab.fail("mod: the modded server did not replay: two runs end on different digests",
+             "next: make test T=shooters_edge_rules_mod");
+  if (speed(modded) <= speed(plain))
+    lab.fail("mod: the package stacked on the server's runner did not speed its rockets",
+             "next: make test T=shooters_edge_rules_mod");
+
+  gl::LineChart c;
+  c.spikes = false;
+  c.frame = {"ON THE SERVER: THE FIRST ROCKET", "its distance from where it was first seen",
+             "time since fired (s)", "distance (units)"};
+  c.traces.push_back({"plain runner", plain.t, plain.d});
+  c.traces.push_back({"runner + package", modded.t, modded.d});
+  shoot(lab, "server-rocket", gl::line_chart(c),
+        "The same package on the real server's rules runner (the bytecode test program on its "
+        "arena, one player holding attack), stacked by the runner's start as a server does from "
+        "sv_mod: the first rocket's distance a server frame at a time, without and with it.",
+        "two straight lines from 0, the one with the package 1.5 times as steep and ending sooner "
+        "at the wall",
+        in);
+}
+
 void run(gl::Lab& lab) {
   const int frames = static_cast<int>(lab.arg_num("frames"));
   const int seed = static_cast<int>(lab.arg_num("seed"));
@@ -285,6 +407,7 @@ void run(gl::Lab& lab) {
   draw_arena(lab, arena, plain, modded, 0, 2, in);
   draw_rocket(lab, plain, modded, in);
   draw_grenade(lab, plain, modded, in);
+  on_the_server(lab, mod.table, in);
 }
 
 const gl::LabSpec kSpec{
@@ -292,7 +415,8 @@ const gl::LabSpec kSpec{
     gl::LabKind::scenario,
     "game:shooters_edge",
     "engine/mod's loader and games/shooters_edge/sim/mod_host.hpp's seam, with the sample mod "
-    "games/shooters_edge/mods/rocket_bounce on the scripted match",
+    "games/shooters_edge/mods/rocket_bounce on the scripted match and stacked on the server's "
+    "rules runner (rules_runner.hpp)",
     "mod",
     "Does a C++ mod load, change Shooter's Edge's match the way it says and only that way, and "
     "does the match with it replay to the bit?",
