@@ -18,7 +18,7 @@ bool name_char(char c) {
 }  // namespace
 
 std::string check_account_name(std::string_view name) {
-  const std::string what =
+  std::string what =
       "A name is 2 to 15 letters, digits, dashes, dots or underscores, with no spaces.";
   if (name.size() < kNameMin || name.size() > kNameMax) return what;
   bool alnum = false;

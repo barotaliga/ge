@@ -22,7 +22,7 @@ constexpr int64_t kT0 = 1794500000ll * kSecond;
 
 ga::Fresh fresh(uint8_t seed) {
   ga::Fresh f{};
-  for (size_t i = 0; i < f.size(); i++) f[i] = static_cast<uint8_t>(seed * 31 + i * 7);
+  for (size_t i = 0; i < f.size(); i++) f[i] = static_cast<uint8_t>(size_t{seed} * 31 + i * 7);
   return f;
 }
 

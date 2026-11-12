@@ -224,7 +224,7 @@ void run(gl::Lab& lab) {
   const Player& victim = made.front();
   gl::Trace checked{"guesses checked", {}, {}}, sent{"guesses sent", {}, {}};
   int64_t t = now, checked_n = 0, sent_n = 0;
-  const int64_t end = now + hours * 3600 * kSecond;
+  const int64_t end = now + int64_t{hours} * 3600 * kSecond;
   int next_mark = 0;
   while (t < end) {
     const ga::Answer a = ga::sign_in(
@@ -232,7 +232,7 @@ void run(gl::Lab& lab) {
         "203.0.113." + std::to_string(sent_n % 250) + ":" + std::to_string(sent_n / 250), t);
     sent_n++;
     if (a.refusal != ga::Refusal::held) checked_n++;
-    if (t >= now + next_mark * 600 * kSecond) {
+    if (t >= now + int64_t{next_mark} * 600 * kSecond) {
       const double hrs = static_cast<double>(t - now) / (3600.0 * kSecond);
       checked.x.push_back(hrs);
       checked.y.push_back(static_cast<double>(checked_n));
