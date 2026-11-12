@@ -1251,6 +1251,17 @@ void run(gl::Lab& lab) {
       lab.metric("team.recipe.aborts", static_cast<double>(rb), "count");
       lab.metric("team.recipe.takeoffs", static_cast<double>(rto), "count");
       lab.metric("team.recipe.speed", rto > 0 ? rs / static_cast<double>(rto) : 0, "u/s");
+      // Goals chained on past a pickup (`chains`): asked, planned, the pickups run through (and
+      // the speed through them) and run past.
+      int64_t ch = 0, cv = 0, ct = 0, cm = 0;
+      double cvs = 0;
+      for (const cn::TeamPlayer& p : r.players)
+        ch += p.chained, cv += p.vias, ct += p.via_touched, cm += p.via_missed, cvs += p.via_speed;
+      lab.metric("team.chain.asked", static_cast<double>(ch), "count");
+      lab.metric("team.chain.planned", static_cast<double>(cv), "count");
+      lab.metric("team.chain.through", static_cast<double>(ct), "count");
+      lab.metric("team.chain.missed", static_cast<double>(cm), "count");
+      lab.metric("team.chain.speed", ct > 0 ? cvs / static_cast<double>(ct) : 0, "u/s");
     }
     lab.metric("team.dodge-share",
                fight > 0 ? static_cast<double>(dodging) / static_cast<double>(fight) : 0, "share");
