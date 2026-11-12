@@ -298,6 +298,7 @@ characters.
 | `games/*/mods/` | A game's sample mods for its mod seam (`docs/mods.md`), each built as a package by `ge_add_mod` into `build/<preset>/mods/` | `mod` |
 | `engine/console/` | The console (`ge::console`, `docs/console.md`): cvars and their tiers, the console language, aliases, binds, cfg files, the drop-down console's model | `console` |
 | `engine/replay/` | Replays (`ge::replay`, `docs/replays.md`): a run watched again off its input log, the keyframes a seek starts from (the game's `Run::clone`), the player's seek in a step budget, the transport | `replay` |
+| `engine/tv/` | TV (`ge::tv`, `docs/tv.md`): a match's replay file stream from a source, held by a delay in game time, fanned out to viewers and relays; chat up, the tree's count; over engine/net; the trial | `replay`, `net` |
 | `engine/save/` | Saves (`ge::save`, `docs/saves.md`): the save file (header, meta, tagged versioned chunks, directory, XXH64), the state described once for its writer and reader | `save` |
 | `engine/capture/` | Video with sound (`ge::capture`, in `ge_play`; `docs/replays.md`): the Matroska and fragmented MP4 muxers and readers, I420, the encoders, the export's A/V clock, the live capture, the sync fixture | `replay` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |

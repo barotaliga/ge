@@ -231,6 +231,7 @@ struct Demo {
   std::vector<ge::vfs::Wrapping> layers;  // what open_demo peeled, outermost first
   std::string inner_name;                 // the recording's name inside an archive ("": none)
   bool truncated = false;                 // a packed recording cut short: plays to its last flush
+  bool replay_v2 = false;                 // it came out of a replay file version 2 (.ger)
   size_t pos = 0;
   DemoState state;
   std::vector<DemoEntity> baselines;  // by entity number
