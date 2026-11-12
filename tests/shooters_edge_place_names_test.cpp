@@ -75,3 +75,27 @@ TEST(places_are_made_in_the_game_saved_and_read_when_the_map_starts) {
   cl::map_started(p, cl::classic_adapter(), files, "dm2");
   CHECK(p.locs.points.empty());
 }
+
+TEST(the_sequel_s_loc_sub_commands_edit_the_same_places) {
+  const fs::path game = fs::temp_directory_path() / "ge_se_place_names_two";
+  fs::remove_all(game);
+  ge::console::Console con;
+  cl::PlaceNames p;
+  p.game_dir = game;
+  cl::SearchPath files;
+  ge::shooter::Vec3f here{0, 0, 0};
+  cl::add_place_commands(con, p, cl::sequel_adapter(), files, [&](ge::shooter::Vec3f& at) {
+    at = here;
+    return true;
+  });
+  cl::map_started(p, cl::sequel_adapter(), files, "q2dm1");
+  con.execute("loc add red armor");
+  CHECK(p.locs.points.size() == 1 && p.locs.points[0].raw == "red armor");
+  here = {10, 0, 0};
+  con.execute("loc set mega health");
+  CHECK(p.locs.points.size() == 1 && p.locs.points[0].raw == "mega health");
+  con.execute("loc save");
+  CHECK(fs::exists(game / "locs" / "q2dm1.loc"));
+  con.execute("loc del");
+  CHECK(p.locs.points.empty());
+}

@@ -3,7 +3,9 @@
 // and the client folder's configs/config.cfg, autoexec.cfg again, the window's own saved config,
 // the command line's +set pairs, then its other + commands; `exec configs/config.cfg` reaching the
 // client folder; the settings this game lacks passed over and counted; and the engine's order
-// (default, the window's config, autoexec) when the install has no main config.
+// (default, the window's config, autoexec) when the install has no main config. The sequel's:
+// its config.cfg (q2config.cfg on Windows), autoexec.cfg of the base folder then the mod's,
+// postexec.cfg, the window's config, the command line, then postinit.cfg.
 //
 // ge:summary Tests a classic install's configs run in its order, unknown settings counted
 // ge:keywords test shooters-edge install-configs start_configs config_dirs autoexec config-order
@@ -75,6 +77,36 @@ TEST(an_install_s_configs_run_in_its_bundled_client_s_order) {
   again.con.set_search_path(cl::config_dirs(root.string(), kGame, first()));
   cl::start_configs(again.con, root.string(), kGame, first(), {});
   CHECK_MSG(joined(again.seen) == "default,preset,main,preset,own", joined(again.seen));
+}
+
+TEST(the_sequel_s_install_runs_its_client_s_order) {
+  const ge::classicenhance::Profile& two = ge::classicenhance::kProfiles[1];
+  const std::string base(two.base_dir);
+  const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_two";
+  fs::remove_all(root);
+  write(root / base / "pak0.pak", "");
+#ifdef _WIN32
+  write(root / base / "q2config.cfg", "mark main\n");
+  write(root / base / "config.cfg", "mark other\n");
+#else
+  write(root / base / "config.cfg", "mark main\n");
+  write(root / base / "q2config.cfg", "mark other\n");
+#endif
+  write(root / base / "autoexec.cfg", "mark autoexec\n");
+  write(root / base / "postexec.cfg", "mark postexec\n");
+  write(root / base / "postinit.cfg", "mark postinit\n");
+  write(root / "ctf" / "autoexec.cfg", "mark mod\n");
+  write(cl::settings_dir(root.string(), base) / "config.cfg", "mark own\n");
+  Marks m;
+  m.con.set_search_path(cl::config_dirs(root.string(), base, two));
+  cl::start_configs(m.con, root.string(), base, two, {"+mark", "plus"});
+  CHECK_MSG(joined(m.seen) == "main,autoexec,postexec,own,plus,postinit", joined(m.seen));
+  // A mod: its main config before the base folder's, the base folder's autoexec.cfg then its own.
+  write(root / "ctf" / "config.cfg", "mark modmain\n");
+  Marks mod;
+  mod.con.set_search_path(cl::config_dirs(root.string(), "ctf", two));
+  cl::start_configs(mod.con, root.string(), "ctf", two, {});
+  CHECK_MSG(joined(mod.seen) == "modmain,autoexec,mod,postexec,postinit", joined(mod.seen));
 }
 
 TEST(with_no_main_config_the_engine_s_order_runs) {

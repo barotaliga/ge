@@ -9,11 +9,15 @@
 //   `read_configs_from`). So `exec configs/config.cfg` in the game folder's `autoexec.cfg` finds
 //   the client folder's `configs/config.cfg`, as the bundled client finds it.
 // - **The order** (`start_configs`): `default.cfg` (a copy on disk; the one inside the base
-//   folder's first pack is the game's own and is not run); then the install's main config (the
-//   first game: `<client folder>/configs/config.cfg`; the sequel: `<base>/q2config.cfg`, then
-//   `<base>/config.cfg`), with `autoexec.cfg` run just before it when there is one, as the bundled
-//   client does; then `autoexec.cfg`; then the window's own saved `config.cfg`, so a change made in
-//   this game sticks; then the command line's `+set` pairs; then its other `+` commands.
+//   folder's first pack is the game's own and is not run); then the install's main config and
+//   the files its client runs after it (below); then the window's own saved `config.cfg`, so a
+//   change made in this game sticks; then the command line's `+set` pairs, then its other `+`
+//   commands.
+//   - the first game: `<client folder>/configs/config.cfg`, with `autoexec.cfg` run just before
+//     it and again after it, as the bundled client does;
+//   - the sequel: `config.cfg` (`q2config.cfg` on Windows, each tried after the other), the mod
+//     folder's before the base folder's; after it the base folder's `autoexec.cfg`, then the
+//     mod's, then `postexec.cfg`; and `postinit.cfg` last, after the command line.
 // - **Settings this game does not have** (the bundled client's own HUD, its renderer's), met in
 //   the install's configs, are passed over quietly and counted: one line says how many.
 //
@@ -24,6 +28,7 @@
 // ge:summary A classic install's configs run in its own order: default, main config, autoexec
 // ge:keywords install-configs config-order startup-order autoexec default-cfg config-cfg
 // ge:keywords client-folder configs-folder start_configs config_dirs unknown-settings q2config
+// ge:keywords postexec postinit
 // ge:keywords plus-set command-line nquake
 // ge:skill shooter console
 // ge:test tests/shooters_edge_install_configs_test.cpp

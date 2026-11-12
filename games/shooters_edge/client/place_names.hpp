@@ -6,14 +6,16 @@
 //   player saved under the game folder on disk (`<game folder>/locs/<map>.loc`) first, else the
 //   game's own (the adapter's `open_locations`, archives too). The same map started again keeps the
 //   points, so edits not yet saved survive a restart of the map.
-// - **Made** (the console, each with its older short name): `locations_add <name>` (`addloc`) puts
-// a
-//   point where the player stands (the middle of the player's box), `locations_remove`
+// - **Made** (the console, each with its older short name): `locations_add <name>` (`addloc`)
+//   puts a point where the player stands (the middle of the player's box), `locations_remove`
 //   (`removeloc`) takes away the point nearest the player, `locations_clearall` (`clearlocs`)
 //   forgets every point, `locations_savefile <name>` (`saveloc`) writes them to
 //   `<game folder>/locs/<name>.loc` (`.loc` added when the name has none; `saveloc $mapname`), and
 //   `locations_loadfile <name>` (`loadloc`) reads a file in their place. `loc` says where the
 //   player is: the nearest point's name, or `tp_name_someplace` ("someplace") with none.
+// - **The sequel's spelling**: `loc add <name>` (the rest of the line), `loc del`, `loc set
+//   <name>` (renames the nearest point in place), `loc list` and `loc save [name]` (the map's name
+//   by default) do the same, so a player used to the sequel's client finds them.
 // - The file's text is the shared format's (`locs_text`): eighths of a unit, the names as typed,
 //   their `$loc_name_<key>` words kept.
 //
@@ -22,7 +24,7 @@
 // ge:summary The window's place names: read at map start, added, removed and saved in the game
 // ge:keywords place-names loc locations loc-editing locations_add locations_remove addloc
 // ge:keywords removeloc locations_savefile saveloc locations_loadfile loadloc locations_clearall
-// ge:keywords clearlocs tp_loadlocs tp_name_someplace map_started where-am-i
+// ge:keywords clearlocs loc-add loc-set loc-list loc-save tp_loadlocs tp_name_someplace map_started where-am-i
 // ge:skill shooter console
 // ge:test tests/shooters_edge_place_names_test.cpp
 #pragma once

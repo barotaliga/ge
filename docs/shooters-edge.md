@@ -125,15 +125,18 @@ saved settings (so a change made here sticks), then the command line's `+set` pa
 `+` commands. `exec` finds a file in the window's settings folder, the game folder, the bundled
 client's folder and the base folder, then in the archives, which include the bundled client's
 folder's own (its place names and fonts). Settings the window does not have are passed over and
-counted on one line. The sequel's install reads `q2config.cfg` (else `config.cfg`) as its main
-config. Maps' coloured light is also read from `maps/lits/<map>.lit`.
+counted on one line. The sequel's install runs its bundled client's order: `config.cfg`
+(`q2config.cfg` on Windows, each tried after the other; a mod folder's before the base folder's),
+then the base folder's `autoexec.cfg` and the mod's, `postexec.cfg`, the window's own settings, the
+command line, and `postinit.cfg` last. Maps' coloured light is also read from `maps/lits/<map>.lit`.
 
 **Place names, made in the game** (`client/place_names.hpp`). Each map's place names are read as
 it starts (`tp_loadlocs`): the file saved under the game folder first, else the game's own.
 Stand in a place and `addloc <name>`; `removeloc` forgets the nearest, `clearlocs` all of them,
 `saveloc <name>` (or `saveloc $mapname`) writes `<game folder>/locs/<name>.loc` in the shared
 format, `loadloc <name>` reads one, and `loc` says where you are. The long names
-(`locations_add` and so on) work too.
+(`locations_add` and so on) work too, and so does the sequel's spelling: `loc add <name>`,
+`loc del`, `loc set <name>` (renames the nearest), `loc list` and `loc save`.
 
 **The title and the loads.** With no `+map` the window opens at once on the title
 (`client/title.hpp`: a night with the full moon low in a total eclipse, blood red, cloud carried

@@ -9,8 +9,9 @@ release, github.com/QW-Group) and its shipped help files. Each fact is marked **
 the source or help), **derived** (follows from read facts put together) or **open** (not
 settled). Nothing was run. What `configs.md` § Team messaging 4 already says (the file, x y z
 in eighths, `//` comments, 63-character names, nearest point, `$loc_name_<x>`) is not repeated
-except where it is sharpened. The Quake 2 client's equivalent (Q2PRO) could not be read in that
-session: it is **open** (§ 7).
+except where it is sharpened. The Quake 2 client's equivalent (Q2PRO) was read in a second
+clean-room session (2026-11-12, commit 601a8df8433b0c50dbbe37c0716c3793fff140a7 of
+github.com/q2pro/q2pro, 2025-12-11): § 7.
 
 ---
 ## 1. Commands and cvars
@@ -111,5 +112,85 @@ changed) decides the second file tried at map start (read).
 
 ## 7. The Quake 2 client (Q2PRO)
 
-Open: its source was not reachable in that session. Its commands, file folder, units, layout
-and display are not described here.
+Every fact here is read unless marked otherwise.
+
+**The file.**
+- The path is `locs/<map>.loc`, where `<map>` is the map's name without `maps/` and `.bsp`. It
+  is found through the whole search path: packs included, the mod's folders first.
+- Each line is `x y z name`, and lines are split at LF.
+- **Coordinates are eighths of a unit**: the file's value times 0.125 on reading, times 8 on
+  writing. Each is read as a single-precision decimal number, so a fraction or an exponent is
+  accepted, and text that is not a number counts as 0 [derived].
+- Fields are separated by any run of characters at or below the space, tabs included.
+- The name is the raw rest of the line from the fourth field: inner blanks kept, trailing
+  blanks and a CR dropped, double quotes kept as characters [derived].
+- **No comment syntax.** A line with 1 to 3 fields warns "Line <n> is incomplete in
+  locs/<map>.loc" and is skipped. So a `// note` line of four or more words becomes a point at
+  0 0 0 [derived]. Blank lines are skipped.
+- A line of 1,024 characters or more prints "Line exceeded 1024 chars, discarded.".
+- At most 256 fields are read from a line, so a longer name is cut [derived].
+- There is no other limit on the name or the number of points.
+
+**Loading.**
+- The file is read once per map, after the downloads and just before the client reports ready.
+- Every new map's connection data clears all points, and so does a disconnect. So unsaved
+  edits are lost on any map change or reconnect, even to the same map [derived].
+- No command reloads the file.
+- **Demos do not read the file.** Their precache path skips it, but the commands work during
+  playback.
+- Locations are client-side, so they work on any server.
+- The only message on success is at developer level: "Loaded <n> location(s) from <path>".
+
+**The command.** There are no `loc_add`, `loc_delete`, `loc_update` or `loc_write` commands.
+There is one command, `loc`, with sub-commands. A bad or missing sub-command prints "Usage: loc
+<add|del|set|list|save>". Every sub-command needs an active game, and prints "Must be in a
+level." otherwise.
+
+| Sub-command | Does | Prints |
+| --- | --- | --- |
+| `loc add <name>` | appends a point at the player; the name is the remaining words joined by single spaces, quotes removed | "Added location <name> at (x y z)"; "Usage: loc add <name>" |
+| `loc del` | removes the nearest point | "Deleted location <name> at (x y z)"; "No closest location." |
+| `loc set <name>` | renames the nearest point in place (same position, same list slot) | "Renamed location at (x y z) to <name>"; "No closest location."; "Usage: loc set <name>" |
+| `loc list` | lists all points in order | "<name> at (x y z)" each, then "<n> location(s) listed"; "No locations to list." |
+| `loc save [file]` | writes every point; the file name defaults to the map's | "Wrote <n> location(s) to locs/<file>.loc"; "No locations to write."; "Couldn't open <path>: <reason>"; "Error writing <path>" |
+
+Positions in messages are whole units, not padded.
+
+**The point added.**
+- It is the player's entity origin as the view is computed that frame (interpolated and
+  predicted), taken **before** the eye offset is added. That is the centre of the player box,
+  not the eyes [derived from the game's player box].
+- It is kept at full precision until saved.
+- There is no check for duplicates or for nearness.
+
+**Nearest** (used by del, set, the macros and the drawing):
+- Straight-line 3D distance.
+- Points beyond `loc_dist` (default 500 units) are ignored; exactly 500 still counts.
+- With `loc_trace 1` (default 0), a point whose straight line from the position is blocked by
+  solid world geometry is ignored.
+- The smallest distance wins. On a tie, the earlier point in the list wins.
+
+**Saving.**
+- The name is cleaned (`..` and doubled slashes removed, invalid path characters turned into
+  `_`). `.loc` is added unless the name already ends with it.
+- It is written under `locs/` in the **write folder**: the user folder's game folder when one
+  is set, else the base folder's, and the mod's folder when a mod is active.
+- Folders are created and an existing file is overwritten.
+- `locs/<file>.loc` must fit 63 characters, so the name can have at most 54 [derived].
+- **Layout**: one line per point in list order: the three values times 8 as whole numbers, then
+  the name, with single spaces between and no padding.
+- Rounding sends halves to the even neighbour, and a small negative value is written as `-0`.
+  Both were measured with glibc's printf. Windows was not measured.
+- Line ends are LF on Linux and macOS and CRLF on Windows (text mode) [derived]. Every line
+  ends, the last one too.
+
+**Display.**
+- `$loc_here` is the nearest point to the player's position.
+- `$loc_there` traces 8,192 units from the player's position (not the eyes) along the view
+  direction, against solid world geometry, and takes the nearest point to where the trace
+  stops.
+- Both give **`unknown`** when nothing qualifies or the client is not in a game.
+- The forms `$loc_here`, `$loc_here$`, `${loc_here}` and `${$loc_here}` all expand.
+- `loc_draw 1` (default 0) draws the item model `models/items/c_head/tris.md2` at every point
+  within `loc_dist`. The nearest point's model bobs 10 units with a period of about 0.63 s
+  [derived] and carries a white light of radius 200.

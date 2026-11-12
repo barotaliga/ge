@@ -47,6 +47,11 @@ bool read_file(const PlaceNames& p, const SearchPath& files, const std::string& 
   return true;
 }
 
+std::string lower(std::string s) {
+  for (char& ch : s) ch = ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch;
+  return s;
+}
+
 std::string at_text(sh::Vec3f v) {
   char s[64];
   std::snprintf(s, sizeof s, "(%4.0f, %4.0f, %4.0f)", static_cast<double>(v.x),
@@ -90,66 +95,66 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
     con.add_command(name, help, fn);
     con.add_command(old_name, help, fn);
   };
-  both("locations_add", "addloc", "locations_add <name>: name the place where you stand",
-       [&p, where](con::Console& c, const CArgs& a) {
-         if (a.size() != 2) {
-           c.print("Usage: addloc <name>");
-           return;
-         }
-         sh::Vec3f at;
-         if (!where || !where(at)) {
-           c.print("You need to be in a game to add a place.");
-           return;
-         }
-         sh::add_loc(p.locs, at, a[1]);
-         c.print("Added place \"" + a[1] + "\" at " + at_text(at));
-       });
-  both("locations_remove", "removeloc", "locations_remove: forget the place nearest you",
-       [&p, where](con::Console& c, const CArgs&) {
-         sh::Vec3f at{0, 0, 0};
-         if (where) where(at);
-         sh::Loc gone;
-         if (!sh::remove_nearest_loc(p.locs, at, &gone)) {
-           c.print("There are no places left to remove.");
-           return;
-         }
-         c.print("Removed place \"" + (gone.raw.empty() ? gone.name : gone.raw) + "\" at " +
-                 at_text(gone.at));
-       });
+  const con::CommandFn add = [&p, where](con::Console& c, const CArgs& a) {
+    if (a.size() != 2) {
+      c.print("Usage: addloc <name>");
+      return;
+    }
+    sh::Vec3f at;
+    if (!where || !where(at)) {
+      c.print("You need to be in a game to add a place.");
+      return;
+    }
+    sh::add_loc(p.locs, at, a[1]);
+    c.print("Added place \"" + a[1] + "\" at " + at_text(at));
+  };
+  both("locations_add", "addloc", "locations_add <name>: name the place where you stand", add);
+  const con::CommandFn remove = [&p, where](con::Console& c, const CArgs&) {
+    sh::Vec3f at{0, 0, 0};
+    if (where) where(at);
+    sh::Loc gone;
+    if (!sh::remove_nearest_loc(p.locs, at, &gone)) {
+      c.print("There are no places left to remove.");
+      return;
+    }
+    c.print("Removed place \"" + (gone.raw.empty() ? gone.name : gone.raw) + "\" at " +
+            at_text(gone.at));
+  };
+  both("locations_remove", "removeloc", "locations_remove: forget the place nearest you", remove);
   both("locations_clearall", "clearlocs", "locations_clearall: forget every place on this map",
        [&p](con::Console& c, const CArgs&) {
          const size_t n = p.locs.points.size();
          p.locs.points.clear();
          c.print("Cleared " + std::to_string(n) + " places.");
        });
+  const con::CommandFn save = [&p](con::Console& c, const CArgs& a) {
+    if (a.size() != 2) {
+      c.print("Usage: saveloc <name>");
+      return;
+    }
+    const std::string file = file_name(a[1]);
+    if (file.empty() || file.size() > 64) {
+      c.print("That is not a name a place file can have.");
+      return;
+    }
+    if (p.locs.points.empty()) {
+      c.print("There are no places to save.");
+      return;
+    }
+    std::error_code ec;
+    const fs::path dir = (p.game_dir.empty() ? fs::path(".") : p.game_dir) / "locs";
+    fs::create_directories(dir, ec);
+    std::ofstream f(dir / file, std::ios::binary | std::ios::trunc);
+    const std::string text = sh::locs_text(p.locs);
+    f.write(text.data(), static_cast<std::streamsize>(text.size()));
+    if (!f) {
+      c.print("Couldn't save locs/" + file + ".");
+      return;
+    }
+    c.print("Saved " + std::to_string(p.locs.points.size()) + " places in locs/" + file + ".");
+  };
   both("locations_savefile", "saveloc",
-       "locations_savefile <name>: save this map's places (saveloc $mapname)",
-       [&p](con::Console& c, const CArgs& a) {
-         if (a.size() != 2) {
-           c.print("Usage: saveloc <name>");
-           return;
-         }
-         const std::string file = file_name(a[1]);
-         if (file.empty() || file.size() > 64) {
-           c.print("That is not a name a place file can have.");
-           return;
-         }
-         if (p.locs.points.empty()) {
-           c.print("There are no places to save.");
-           return;
-         }
-         std::error_code ec;
-         const fs::path dir = (p.game_dir.empty() ? fs::path(".") : p.game_dir) / "locs";
-         fs::create_directories(dir, ec);
-         std::ofstream f(dir / file, std::ios::binary | std::ios::trunc);
-         const std::string text = sh::locs_text(p.locs);
-         f.write(text.data(), static_cast<std::streamsize>(text.size()));
-         if (!f) {
-           c.print("Couldn't save locs/" + file + ".");
-           return;
-         }
-         c.print("Saved " + std::to_string(p.locs.points.size()) + " places in locs/" + file + ".");
-       });
+       "locations_savefile <name>: save this map's places (saveloc $mapname)", save);
   both("locations_loadfile", "loadloc", "locations_loadfile <name>: read a place file",
        [&p, &files](con::Console& c, const CArgs& a) {
          if (a.size() != 2) {
@@ -169,15 +174,64 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
          c.print(n == 0 ? "locs/" + file + " has no places."
                         : "Loaded locs/" + file + " (" + std::to_string(n) + " places).");
        });
-  con.add_command("loc", "loc: the place you are in", [&p, where](con::Console& c, const CArgs&) {
-    sh::Vec3f at;
-    if (!where || !where(at)) {
-      c.print("You need to be in a game.");
-      return;
-    }
-    const std::string name = sh::loc_name_at(p.locs, at);
-    c.print(name.empty() ? (p.someplace != nullptr ? p.someplace->value : "someplace") : name);
-  });
+  // `loc` alone says where you are; `loc add|del|set|list|save` edits the places as the sequel's
+  // client spells it.
+  const auto in_game = [where](con::Console& c, sh::Vec3f& at) {
+    if (where && where(at)) return true;
+    c.print("You need to be in a game.");
+    return false;
+  };
+  con.add_command(
+      "loc", "loc: the place you are in; loc add|del|set|list|save edits the places",
+      [&p, in_game, add, remove, save](con::Console& c, const CArgs& a) {
+        const std::string sub = a.size() > 1 ? lower(a[1]) : "";
+        const auto shifted = [&a](const char* name, bool joined) {
+          CArgs b = a;
+          b.words = {name};
+          std::string rest;
+          for (size_t i = 2; i < a.size(); ++i) rest += (rest.empty() ? "" : " ") + a[i];
+          if (joined && !rest.empty()) b.words.push_back(rest);
+          if (!joined && a.size() > 2) b.words.push_back(a[2]);
+          return b;
+        };
+        sh::Vec3f at;
+        if (sub.empty()) {
+          if (!in_game(c, at)) return;
+          const std::string name = sh::loc_name_at(p.locs, at);
+          c.print(name.empty() ? (p.someplace != nullptr ? p.someplace->value : "someplace")
+                               : name);
+        } else if (sub == "add") {
+          add(c, shifted("addloc", true));
+        } else if (sub == "del") {
+          remove(c, shifted("removeloc", false));
+        } else if (sub == "set") {
+          if (a.size() < 3) {
+            c.print("Usage: loc set <name>");
+            return;
+          }
+          if (!in_game(c, at)) return;
+          const sh::Loc* near = sh::nearest_loc(p.locs, at);
+          if (near == nullptr) {
+            c.print("There is no place near you to rename.");
+            return;
+          }
+          sh::Loc& l = p.locs.points[static_cast<size_t>(near - p.locs.points.data())];
+          l.raw = shifted("", true).words[1];
+          l.name = sh::expand_loc_name(l.raw);
+          c.print("Renamed the place at " + at_text(l.at) + " to \"" + l.raw + "\"");
+        } else if (sub == "list") {
+          for (const sh::Loc& l : p.locs.points)
+            c.print((l.raw.empty() ? l.name : l.raw) + " at " + at_text(l.at));
+          c.print(p.locs.points.empty() ? "There are no places on this map."
+                                        : std::to_string(p.locs.points.size()) + " places.");
+        } else if (sub == "save") {
+          CArgs b = shifted("saveloc", false);
+          if (b.size() < 2) b.words.push_back(p.map);
+          save(c, b);
+        } else {
+          c.print("Usage: loc, or loc add|del|set|list|save");
+        }
+      });
   (void)adapter;
 }
 

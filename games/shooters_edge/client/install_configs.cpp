@@ -8,6 +8,7 @@
 
 #include <fstream>
 #include <iterator>
+#include <ranges>
 #include <string_view>
 #include <system_error>
 
@@ -27,6 +28,10 @@ constexpr std::string_view kClientDir =
     "ezqu"
     "ake";
 
+// The files the sequel's client runs after autoexec.cfg and after the command line.
+constexpr std::string_view kPostexecFile = "postexec.cfg";
+constexpr std::string_view kPostinitFile = "postinit.cfg";
+
 std::string lower(std::string s) {
   for (char& c : s) c = c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
   return s;
@@ -44,17 +49,37 @@ bool is_first_game(const ge::classicenhance::Profile& content) {
   return content.id == ge::classicenhance::kProfiles[0].id;
 }
 
+// The sequel's folders a config is looked for in, the mod's first: `game` when it is a mod (not
+// the base folder in any case), then the base folder.
+std::vector<std::string_view> sequel_folders(const std::string& game,
+                                             const ge::classicenhance::Profile& content) {
+  std::vector<std::string_view> out;
+  if (!game.empty() && lower(game) != lower(std::string(content.base_dir))) out.emplace_back(game);
+  out.push_back(content.base_dir);
+  return out;
+}
+
 // The install's main configs, in the order its client tries them; the first that is there runs.
-std::vector<fs::path> main_configs(const fs::path& root,
+// The sequel's client reads `config.cfg` on Linux and macOS and `q2config.cfg` on Windows; the
+// other is tried after, so an install carried from one system to another keeps its settings.
+std::vector<fs::path> main_configs(const fs::path& root, const std::string& game,
                                    const ge::classicenhance::Profile& content) {
   std::vector<fs::path> out;
   if (is_first_game(content)) {
     if (const fs::path client = entry_named(root, kClientDir); !client.empty())
       if (const fs::path configs = entry_named(client, "configs"); !configs.empty())
         out.push_back(configs / "config.cfg");
-  } else if (const fs::path base = entry_named(root, content.base_dir); !base.empty()) {
-    out.push_back(base / "q2config.cfg");
-    out.push_back(base / "config.cfg");
+    return out;
+  }
+#ifdef _WIN32
+  const std::string_view names[] = {"q2config.cfg", "config.cfg"};
+#else
+  const std::string_view names[] = {"config.cfg", "q2config.cfg"};
+#endif
+  for (const std::string_view folder : sequel_folders(game, content)) {
+    const fs::path dir = entry_named(root, folder);
+    if (dir.empty()) continue;
+    for (const std::string_view n : names) out.push_back(dir / std::string(n));
   }
   return out;
 }
@@ -135,25 +160,43 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
     return out;
   }
   const fs::path root = basedir.empty() ? fs::path(".") : fs::path(basedir);
-  c.set_unknown([&out](const con::Args&) {
-    out.passed_over++;
-    return true;
-  });
+  const auto count_unknown = [&c, &out] {
+    c.set_unknown([&out](const con::Args&) {
+      out.passed_over++;
+      return true;
+    });
+  };
+  count_unknown();
   run_named(c, con::kDefaultFile, out);
+  const fs::path own = settings_dir(basedir, game) / con::kConfigFile;
+  const bool first = is_first_game(content);
   bool installed = false;
-  for (const fs::path& main : main_configs(root, content)) {
+  for (const fs::path& main : main_configs(root, game, content)) {
     std::error_code ec;
     if (!fs::is_regular_file(main, ec)) continue;
-    run_named(c, con::kAutoexecFile, out);  // the bundled client runs it just before
+    if (first) run_named(c, con::kAutoexecFile, out);  // the bundled client runs it just before
     if (run_path(c, main)) out.files.push_back(main.string());
     installed = true;
     break;
   }
   // The window's own saved settings: after the install's (so what the player changed here sticks),
   // else where the engine's order has them, before autoexec.cfg.
-  const fs::path own = settings_dir(basedir, game) / con::kConfigFile;
   if (!installed && run_path(c, own)) out.files.push_back(own.string());
-  run_named(c, con::kAutoexecFile, out);
+  if (first || !installed) {
+    run_named(c, con::kAutoexecFile, out);
+  } else {
+    // The sequel's client: the base folder's autoexec.cfg, then the mod's, then postexec.cfg.
+    // With neither, the window's own autoexec.cfg runs in their place.
+    bool ran = false;
+    for (const std::string_view folder : sequel_folders(game, content) | std::views::reverse) {
+      const fs::path dir = entry_named(root, folder);
+      if (dir.empty() || !run_path(c, dir / con::kAutoexecFile)) continue;
+      out.files.push_back((dir / con::kAutoexecFile).string());
+      ran = true;
+    }
+    if (!ran) run_named(c, con::kAutoexecFile, out);
+    run_named(c, kPostexecFile, out);
+  }
   if (installed && run_path(c, own)) out.files.push_back(own.string());
   c.set_unknown(nullptr);
   std::vector<std::string> sets, rest;
@@ -162,6 +205,11 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
   c.run();
   c.append_command_line(rest);
   c.run();
+  if (installed && !first) {  // the sequel's client runs postinit.cfg after the command line
+    count_unknown();
+    run_named(c, kPostinitFile, out);
+    c.set_unknown(nullptr);
+  }
   return out;
 }
 
