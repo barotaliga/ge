@@ -45,6 +45,8 @@ inline constexpr int kSqByFall = 100, kSqByLava = 101, kSqBySlime = 102, kSqByWa
 inline constexpr int kSqByHeldGrenade = 104;
 // A mover's crush, a hurting trigger, a teleport onto someone, a map's explosion.
 inline constexpr int kSqByCrush = 105, kSqByHurt = 106, kSqByTelefrag = 107, kSqByExplosion = 108;
+// A map's laser, an exploding barrel.
+inline constexpr int kSqByLaser = 109, kSqByBarrel = 110;
 // A monster's attack: this plus its row in the roster (sequel_monsters.cpp).
 inline constexpr int kSqByMonster = 200;
 
@@ -112,6 +114,10 @@ void fight_monster_rail(SequelServer& s, int from, sh::Vec3f start, sh::Vec3f en
                         int kick, int cause);
 // A push added straight to player `slot`'s velocity (a monster's blow; not by mass).
 void fight_kick(SequelServer& s, int slot, sh::Vec3f push);
+// A laser's line from `start` to `end`: `damage` to every player on it and to the first monster,
+// mover or wall that stops it (an energy blow, `attacker` a slot or -1). Where it stopped.
+sh::Vec3f fight_laser(SequelServer& s, sh::Vec3f start, sh::Vec3f end, int damage, int attacker,
+                      int skip_entity);
 // A point effect (`te_*`) at `at` for everyone.
 void fight_effect(SequelServer& s, const char* name, sh::Vec3f at);
 // An item (`classname`) thrown up from `at`, as a monster drops it at death.
