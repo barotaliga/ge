@@ -286,6 +286,16 @@ The session opens like forward's route (a padded open, a cookie, then opened or 
 words), and the far proxy reaches only the servers on its allow list. Lag and loss for practice are
 the transport's own fake conditions.
 
+**Recording** (`engine/proxy/record.hpp`): either proxy hands every game datagram it passes on to
+`ProxyConfig::tap`, with its session and direction, and `proxy_record` keeps them as a replay file:
+the client's datagrams in a `to_server` track and the server's in `to_client`, each a `messages`
+chunk stamped with its milliseconds, zstd-packed a block a second, `recorder=proxy` in the meta. The
+proxy never reads the game; a game that knows its own datagrams reads them back in order
+(`proxy_read_recording`) and plays them as it plays its own demos. A player behind a near proxy so
+has every match without the game recording it. `tests/proxy_test.cpp`: through 10% loss, the near
+proxy's file reads back to exactly what the client got, the far one's to exactly what the server
+got, at under a third of the game's bytes.
+
 The `proxy` lab runs a 60 Hz client and a 20 Hz server through the pair at each loss on the link
 between them:
 

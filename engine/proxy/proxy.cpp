@@ -316,7 +316,8 @@ void proxy_near_update(ProxyNear& n, int64_t now_us) {
     c->last_us = now_us;
     if (!c->opened) continue;  // the game's resend brings it again once the session is up
     if (n.config.tap)
-      n.config.tap({c->link.session, c->from, n.server, true, {buf, static_cast<size_t>(got)}, now_us});
+      n.config.tap(
+          {c->link.session, c->from, n.server, true, {buf, static_cast<size_t>(got)}, now_us});
     link_send(c->link, {buf, static_cast<size_t>(got)}, now_us, [&](std::span<const uint8_t> f) {
       net::transport_send(*n.link_port, n.far, f.data(), f.size(), now_us);
     });
@@ -501,7 +502,8 @@ void proxy_far_update(ProxyFar& f, int64_t now_us) {
     while ((got = net::transport_receive(*s.up, buf, sizeof buf, from, now_us)) >= 0) {
       if (from != s.server) continue;
       if (f.config.tap)
-        f.config.tap({s.link.session, s.near, s.server, false, {buf, static_cast<size_t>(got)}, now_us});
+        f.config.tap(
+            {s.link.session, s.near, s.server, false, {buf, static_cast<size_t>(got)}, now_us});
       link_send(s.link, {buf, static_cast<size_t>(got)}, now_us, out);
       s.last_us = now_us;
     }
