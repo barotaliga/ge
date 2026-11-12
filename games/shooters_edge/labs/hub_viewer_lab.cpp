@@ -196,7 +196,8 @@ void run(gl::Lab& lab) {
     const fs::path png = root / ("at-" + std::to_string(wait_s) + "s.png");
     std::atomic<bool> done{false};
     std::thread t([&] {
-      std::system(
+      // A browser that fails leaves no picture, which the check after the loop reports.
+      [[maybe_unused]] const int rc = std::system(
           chromium_line(browser, base + "/demo/" + row.sha, png, w, h, wait_s * 1000).c_str());
       done = true;
     });
