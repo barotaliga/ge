@@ -914,6 +914,10 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
       line = victim + " was in the wrong place.";
     else if (weapon == kSqByExplosion)
       line = victim + " was caught in an explosion.";
+    else if (weapon == kSqByLaser)
+      line = victim + " saw the light.";
+    else if (weapon == kSqByBarrel)
+      line = victim + " was blown up by a barrel.";
     else
       line = victim + " died.";
   }
@@ -1265,6 +1269,28 @@ void fight_kick(SequelServer& s, int slot, sh::Vec3f push) {
 }
 
 void fight_effect(SequelServer& s, const char* name, sh::Vec3f at) { effect(s, name, at); }
+
+sh::Vec3f fight_laser(SequelServer& s, sh::Vec3f start, sh::Vec3f end, int damage, int attacker,
+                      int skip_entity) {
+  sh::Vec3f dir = end - start;
+  sh::normalize(dir);
+  uint32_t skip = 0;
+  for (int n = 0; n <= sh::kMaxClients; n++) {  // through every player on it
+    const Line l = shoot_line(s, start, end, skip, skip_entity);
+    if (l.player < 0) {
+      if (l.fraction < 1 && !l.sky) {
+        if (l.mover >= 0 && monster_index(s, l.mover) >= 0)
+          monster_damage(s, l.mover, attacker, damage, dir);
+        else
+          map_damage(s, l.mover, attacker, damage);
+      }
+      return l.end;
+    }
+    hurt(s, l.player, attacker, dir, damage, 1, true, kSqByLaser);
+    skip |= 1u << l.player;
+  }
+  return end;
+}
 
 void fight_drop_at(SequelServer& s, sh::Vec3f at, const std::string& classname) {
   const int item = sq_item(classname);

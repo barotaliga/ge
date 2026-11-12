@@ -23,6 +23,7 @@
 #include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/sequel_targets.hpp"
 
 namespace shooters_edge::server {
 
@@ -196,6 +197,7 @@ std::string name_of(const SequelServer& s, int slot) {
 Class class_of(std::string_view c) {
   constexpr std::pair<std::string_view, Class> kClasses[] = {
       {"func_door", kDoor},
+      {"func_water", kDoor},  // a door of water
       {"func_button", kButton},
       {"func_plat", kPlat},
       {"func_train", kTrain},
@@ -231,6 +233,17 @@ Class class_of(std::string_view c) {
 Class class_of(const SequelEntity& e) { return class_of(e.classname); }
 
 bool is_door(Class c) { return c == kDoor || c == kDoorRotating; }
+
+// A door's start or end sample; null when it moves quietly. A door of water sounds of water,
+// and only when it has `sounds`.
+const char* door_sample(const SequelEntity& e, bool start) {
+  if (e.classname == "func_water") {
+    if (e.sounds == 0) return nullptr;
+    return start ? "world/mov_watr.wav" : "world/stp_watr.wav";
+  }
+  if (e.sounds == 1) return nullptr;
+  return start ? kDoorStart : kDoorEnd;
+}
 
 bool brush(const SequelEntity& e) { return !e.model.empty() && e.model[0] == '*'; }
 
@@ -552,8 +565,9 @@ void door_go_up(SequelServer& s, SequelEntity& e, int activator) {
     return;
   }
   e.activator = activator;
-  if (e.sounds != 1 && index_of(s, e) == (e.team_master >= 0 ? e.team_master : index_of(s, e)))
-    sound_at(s, map_row(index_of(s, e)), e.origin, kDoorStart);
+  if (door_sample(e, true) != nullptr &&
+      index_of(s, e) == (e.team_master >= 0 ? e.team_master : index_of(s, e)))
+    sound_at(s, map_row(index_of(s, e)), e.origin, door_sample(e, true));
   e.state = kGoing;
   e.think_at = 0;
   if (e.turns)
@@ -566,7 +580,8 @@ void door_go_up(SequelServer& s, SequelEntity& e, int activator) {
 
 void door_go_down(SequelServer& s, SequelEntity& e) {
   if (e.max_health > 0) e.health = e.max_health;  // it can be shot again
-  if (e.sounds != 1) sound_at(s, map_row(index_of(s, e)), e.origin, kDoorStart);
+  if (door_sample(e, true) != nullptr)
+    sound_at(s, map_row(index_of(s, e)), e.origin, door_sample(e, true));
   e.state = kComing;
   e.think_at = 0;
   if (e.turns)
@@ -656,7 +671,7 @@ void arrived(SequelServer& s, SequelEntity& e) {
   const int row = map_row(index_of(s, e));
   switch (act) {
     case kDoorTop:
-      if (e.sounds != 1) sound_at(s, row, e.origin, kDoorEnd);
+      if (door_sample(e, false) != nullptr) sound_at(s, row, e.origin, door_sample(e, false));
       e.state = kAtSecond;
       if ((e.spawnflags & 32) == 0 && e.wait >= 0) {
         e.think_at = s.level_time + e.wait;
@@ -664,7 +679,7 @@ void arrived(SequelServer& s, SequelEntity& e) {
       }
       return;
     case kDoorBottom:
-      if (e.sounds != 1) sound_at(s, row, e.origin, kDoorEnd);
+      if (door_sample(e, false) != nullptr) sound_at(s, row, e.origin, door_sample(e, false));
       e.state = kAtFirst;
       door_portals(s, e, false);
       return;
@@ -1032,6 +1047,7 @@ void use(SequelServer& s, int target, int activator, int depth) {
       if (depth < kMaxUseDepth) map_use_targets(s, target, activator);
       return;
     case kNone:
+      if (targets_use(s, target, activator)) return;
       monster_use(s, target, activator);
       return;
     case kHelp:  // the first or the second help message, and the news of it
@@ -1115,6 +1131,23 @@ void spawn_one(SequelServer& s, SequelEntity& e, Class c) {
   switch (c) {
     case kDoor: {
       e.solid = true;
+      if (e.classname == "func_water") {  // slow, toggled, flush, never doubled, never harms
+        e.speed = number(s, e, "speed", 25);
+        e.accel = number(s, e, "accel", e.speed);
+        e.decel = number(s, e, "decel", e.speed);
+        if (key(s, e, "wait").empty()) e.wait = -1;
+        if (e.wait < 0) e.spawnflags |= 32;
+        e.lip = number(s, e, "lip", 0);
+        e.dir = way_of(s, e);
+        e.angles = {};
+        e.closed = e.origin;
+        e.open = e.origin + e.dir * (span(e.dir) - e.lip);
+        if ((e.spawnflags & 1) != 0) {
+          std::swap(e.closed, e.open);
+          e.origin = e.closed;
+        }
+        return;
+      }
       e.speed = number(s, e, "speed", 100);
       if (deathmatch(s)) e.speed *= 2;
       e.accel = number(s, e, "accel", e.speed);
@@ -1340,7 +1373,7 @@ void link_doors(SequelServer& s) {
     if (e.gone || !is_door(class_of(e)) || e.team_master >= 0) continue;
     e.team_master = static_cast<int>(i);
     sh::Vec3f lo = abs_min(e), hi = abs_max(e);
-    bool field = e.targetname.empty() && e.max_health == 0;
+    bool field = e.targetname.empty() && e.max_health == 0 && e.classname != "func_water";
     if (!e.team.empty())
       for (size_t j = i + 1; j < count; j++) {
         SequelEntity& m = s.entities[j];
@@ -1387,7 +1420,10 @@ void map_spawn(SequelServer& s) {
     e.block = static_cast<int>(i) + 1;  // the world's block is the first
     if (e.gone || e.item >= 0) continue;
     const Class c = class_of(e);
-    if (c != kNone) spawn_one(s, s.entities[i], c);
+    if (c != kNone)
+      spawn_one(s, s.entities[i], c);
+    else
+      targets_spawn(s, static_cast<int>(i));
   }
   link_doors(s);
 }
@@ -1436,6 +1472,7 @@ void map_frame(SequelServer& s) {
     SequelEntity& e = s.entities[i];
     if (e.think_at > 0 && s.level_time + 0.001 >= e.think_at) think(s, e);
   }
+  targets_frame(s);
 }
 
 void map_touch(SequelServer& s, int slot) {
@@ -1459,6 +1496,8 @@ void map_touch(SequelServer& s, int slot) {
 
 bool map_damage(SequelServer& s, int e, int attacker, int damage) {
   if (e < 0 || size_t(e) >= s.entities.size()) return false;
+  if (class_of(s.entities[size_t(e)]) == kNone && targets_damage(s, e, attacker, damage))
+    return true;
   if (s.entities[size_t(e)].box || monster_index(s, e) >= 0)
     return monster_damage(s, e, attacker, damage, {});
   SequelEntity& d = s.entities[size_t(e)];
