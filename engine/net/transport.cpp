@@ -208,9 +208,9 @@ bool transport_send(Transport& t, const Address& to, const uint8_t* data, size_t
   return true;
 }
 
-int transport_receive(Transport& t, uint8_t* buffer, size_t capacity, Address& from,
-                      int64_t now_us) {
-  transport_pump(t, now_us);
+namespace {
+
+int receive_one(Transport& t, uint8_t* buffer, size_t capacity, Address& from, int64_t now_us) {
   int n = -1;
   switch (t.kind) {
     case TransportKind::udp:
@@ -230,6 +230,20 @@ int transport_receive(Transport& t, uint8_t* buffer, size_t capacity, Address& f
     capture_datagram(*t.capture, now_us, from, t.local, buffer, static_cast<size_t>(n));
   }
   return n;
+}
+
+}  // namespace
+
+int transport_receive(Transport& t, uint8_t* buffer, size_t capacity, Address& from,
+                      int64_t now_us) {
+  transport_pump(t, now_us);
+  for (;;) {
+    const int n = receive_one(t, buffer, capacity, from, now_us);
+    if (n < 0 || !t.on_public ||
+        !t.on_public(t.public_ctx, buffer, static_cast<size_t>(n), from, now_us)) {
+      return n;
+    }
+  }
 }
 
 }  // namespace ge::net

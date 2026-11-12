@@ -9,6 +9,9 @@
 //   sky faces left with an alpha of 0, for the water to fill with the sky's model. With the eye
 //   under the level the mirror is of the water below instead: what the surface's total internal
 //   reflection shows from under it.
+// - THE UNDERSIDE (an eye in the air under a pool hung over open air): the mirror in the floor's
+//   plane of what lies under it, and the view up from the pool's top, which the underside is seen
+//   through.
 // - THE VIEW UP (the eye under the level): the map over the water drawn from the surface straight
 //   over the eye, looking straight up across 150 degrees, so the world bent through Snell's window
 //   (the whole sky squeezed into a cone 97 degrees across) can be read along each pixel's refracted
@@ -62,11 +65,13 @@ void create_bsp_views(gpu::Device& device, BspViews& views, const wgpu::BindGrou
 // Their targets for a render of `width` x `height` (again when it changes).
 void create_bsp_view_targets(gpu::Device& device, BspViews& views, uint32_t width, uint32_t height);
 // This frame's: the mirror in the plane y = `level` m of body `body` (-1: no view this frame), of
-// the water under it when `below`, and then the view up too, from the point of the body's top
-// `box` (x0, z0, x1, z1, m) nearest the eye; `main` the frame's own uniforms as filled for this
-// frame.
+// what lies under the plane when `below`, and then the view up too, from the point of the body's
+// top `box` (x0, z0, x1, z1, m) nearest the eye at `up_level` (m; the default: `level`); `main` the
+// frame's own uniforms as filled for this frame. An eye in the air under a body's underside asks
+// for the mirror at its floor, `below`, and the view up from its top.
 void prepare_bsp_views(gpu::Device& device, BspViews& views, const render::FrameUniforms& main,
-                       int body, double level, bool below, const float box[4]);
+                       int body, double level, bool below, const float box[4],
+                       double up_level = -1e300);
 // "bsp.views": the map into the views prepared (an empty row when none is).
 void encode_bsp_views(const BspDraw& draw, const BspViews& views, const gpu::PipelineSet& pipelines,
                       render::FrameRecorder& rec, wgpu::CommandEncoder& encoder);
