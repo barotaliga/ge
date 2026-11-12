@@ -142,13 +142,14 @@ constexpr gs::GameRule kEndpointRules[] = {
     {"sv_antilag", "1: a shot sees the others where the shooter saw them (0)"},
     {"sv_voip", "1: players' voice is relayed to their team (0)"},
     {"maxfps", "the most moves a second a client sends, told in the server info (77)"},
-    {"allow_download", "0: no file is offered to a client that lacks one (1)"},
-    {"allow_download_skins", "0: no skins/ file is offered (1)"},
-    {"allow_download_models", "0: no progs/ model is offered (1)"},
-    {"allow_download_sounds", "0: no sound/ file is offered (1)"},
-    {"allow_download_maps", "0: no maps/ file is offered (1)"},
-    {"allow_download_other", "1: files outside those folders are offered too (0)"},
-    {"sv_downloadchunksperframe", "chunks of 1 KB a downloading client gets a frame, 1..30 (30)"},
+    {"sv_download", "0: no file is offered to a client that lacks one (1)"},
+    {"sv_download_skins", "0: no skins/ file is offered (1)"},
+    {"sv_download_models", "0: no progs/ model is offered (1)"},
+    {"sv_download_sounds", "0: no sound/ file is offered (1)"},
+    {"sv_download_maps", "0: no maps/ file is offered (1)"},
+    {"sv_download_other", "1: files outside those folders are offered too (0)"},
+    {"sv_downloadchunks", "chunks of 1 KB a downloading client gets a frame, 1..30 (30)"},
+    {"sv_watervis", "1: clients are told they may see through water (0)"},
     {"sv_defaultname", "the name a client with an empty or unusable name gets (player)"},
     {"sv_unfake",
      "1: carriage returns in a public chat line become #, so no line fakes another (1)"},
@@ -203,7 +204,20 @@ constexpr gs::SettingName kSettingNames[] = {
     {"flood_msgs", "sv_floodprot", 0},
     {"flood_persecond", "sv_floodprot", 1},
     {"flood_waitdelay", "sv_floodprot", 2},
+    {"allow_download", "sv_download"},
+    {"allow_download_skins", "sv_download_skins"},
+    {"allow_download_models", "sv_download_models"},
+    {"allow_download_sounds", "sv_download_sounds"},
+    {"allow_download_maps", "sv_download_maps"},
+    {"allow_download_other", "sv_download_other"},
+    {"sv_downloadchunksperframe", "sv_downloadchunks"},
     {"sv_default_name", "sv_defaultname"},
+    {"countrycode", "sv_country"},
+    {"city", "sv_city"},
+    {"coords", "sv_coords"},
+    {"hostport", "sv_publicaddr"},
+    {"sv_admininfo", "sv_admin"},
+    {"watervis", "sv_watervis"},
     {"sv_kicktop", "sv_colorkick"},
     {"sv_kickuserinfospamcount", "sv_infoflood", 0},
     {"sv_kickuserinfospamtime", "sv_infoflood", 1},
@@ -303,6 +317,7 @@ bool info_flood(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error
 }
 
 bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
+  int watervis = 0;
   int antilag = cfg.antilag ? 1 : 0, voice = cfg.voice ? 1 : 0;
   int all = cfg.allow_download ? 1 : 0, skins = cfg.allow_skins ? 1 : 0;
   int models = cfg.allow_models ? 1 : 0, sounds = cfg.allow_sounds ? 1 : 0;
@@ -311,15 +326,16 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
       !endpoint_int(c, "sv_antilag", 0, 1, antilag, error) ||
       !endpoint_int(c, "sv_voip", 0, 1, voice, error) ||
       !endpoint_int(c, "maxfps", 20, 1000, cfg.maxfps, error) ||
-      !endpoint_int(c, "allow_download", 0, 1, all, error) ||
-      !endpoint_int(c, "allow_download_skins", 0, 1, skins, error) ||
-      !endpoint_int(c, "allow_download_models", 0, 1, models, error) ||
-      !endpoint_int(c, "allow_download_sounds", 0, 1, sounds, error) ||
-      !endpoint_int(c, "allow_download_maps", 0, 1, maps, error) ||
-      !endpoint_int(c, "allow_download_other", 0, 1, other, error) ||
-      !endpoint_int(c, "sv_downloadchunksperframe", 1, 30, cfg.chunks_per_frame, error) ||
+      !endpoint_int(c, "sv_download", 0, 1, all, error) ||
+      !endpoint_int(c, "sv_download_skins", 0, 1, skins, error) ||
+      !endpoint_int(c, "sv_download_models", 0, 1, models, error) ||
+      !endpoint_int(c, "sv_download_sounds", 0, 1, sounds, error) ||
+      !endpoint_int(c, "sv_download_maps", 0, 1, maps, error) ||
+      !endpoint_int(c, "sv_download_other", 0, 1, other, error) ||
+      !endpoint_int(c, "sv_downloadchunks", 1, 30, cfg.chunks_per_frame, error) ||
       !endpoint_flag(c, "sv_unfake", cfg.unfake, error) ||
-      !endpoint_flag(c, "sv_colorkick", cfg.colour_kick, error) || !info_flood(c, cfg, error))
+      !endpoint_flag(c, "sv_colorkick", cfg.colour_kick, error) ||
+      !endpoint_int(c, "sv_watervis", 0, 1, watervis, error) || !info_flood(c, cfg, error))
     return false;
   if (const auto n = c.rules.find("sv_defaultname"); n != c.rules.end() && !n->second.empty()) {
     if (sanitize_name(n->second, "") != n->second) {
@@ -590,6 +606,13 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->vote.settings = gs::vote_settings(c);
   if (g->host != nullptr) host_bind(*g);
   g->cfg.hostname = c.hostname;
+  g->cfg.info = {{"countrycode", c.country},
+                 {"city", c.city},
+                 {"coords", c.coords},
+                 {"hostport", c.public_addr},
+                 {"*admin", c.admin}};
+  if (const auto w = c.rules.find("sv_watervis"); w != c.rules.end() && w->second == "1")
+    g->cfg.info.emplace_back("watervis", "1");
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
   g->cfg.rcon_password = c.rcon_password;

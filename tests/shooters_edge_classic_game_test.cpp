@@ -235,7 +235,7 @@ TEST(classic_game_the_shooter_s_and_the_endpoint_s_settings) {
   // Out of range: refused with the range and the next step.
   for (const auto& [name, value] : {std::pair<std::string, std::string>{"sv_mintic", "0.5"},
                                     {"pm_airstep", "2"},
-                                    {"sv_downloadchunksperframe", "99"}}) {
+                                    {"sv_downloadchunks", "99"}}) {
     ServerConfig bad = arena();
     bad.rules[name] = value;
     Server refused;
@@ -279,7 +279,7 @@ TEST(classic_game_each_game_s_names_for_the_server_s_settings) {
   // Every game name is a synonym, none a setting of its own: the two never disagree.
   for (const ge::console::Synonym& n : con.cvars().synonyms())
     CHECK_MSG(n.target != nullptr && n.target->name != n.name, n.name);
-  CHECK(con.cvars().synonyms().size() == 16);
+  CHECK(con.cvars().synonyms().size() == 29);
   Server s;  // a classic map leaves the sequel's dmflags alone
   CHECK_MSG(server_open(s, se::classic_game(), c, nullptr, nullptr, error), error);
 }
@@ -287,6 +287,29 @@ TEST(classic_game_each_game_s_names_for_the_server_s_settings) {
 // The name and chat guards: a public line's carriage returns turn into '#', a client changing its
 // top colour too often is kicked, as is one changing its user info past sv_infoflood; each one's
 // classic name sets it, and a bad value is refused naming the setting.
+// Where the server is, by its classic names too, reaches the server info a browser lists.
+TEST(classic_game_the_server_s_place_is_in_its_info) {
+  ge::console::Console con{true};
+  ServerConfig c;
+  ServerCfg cfg;
+  std::string error;
+  CHECK_MSG(server_configure(con,
+                             {"--map=arena", "+set", "countrycode", "se", "+set", "sv_city", "Lund",
+                              "+set", "coords", "55.7,13.2", "+set", "hostport",
+                              "edge.example:27500", "+set", "watervis", "1"},
+                             c, cfg, se::classic_game(), error),
+            error);
+  CHECK(c.country == "se" && c.city == "Lund" && c.public_addr == "edge.example:27500");
+  Session r;
+  run_session(r, c, 400);
+  const std::string& info = r.client.serverinfo;
+  CHECK_MSG(info.find("\\countrycode\\se") != std::string::npos, info);
+  CHECK_MSG(info.find("\\city\\Lund") != std::string::npos, info);
+  CHECK_MSG(info.find("\\coords\\55.7,13.2") != std::string::npos, info);
+  CHECK_MSG(info.find("\\hostport\\edge.example:27500") != std::string::npos, info);
+  CHECK_MSG(info.find("\\watervis\\1") != std::string::npos, info);
+}
+
 TEST(classic_game_the_name_and_chat_guards) {
   auto kicked = [](const Session& r, const std::string& why) {
     for (const std::string& p : r.client.prints)

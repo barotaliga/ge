@@ -95,6 +95,9 @@ struct ServerConfig {
   std::string gamedir = "edge";  // the game directory serverdata names
   std::string password, spectator_password;
   std::string rcon_password;  // the remote console's (classic_admin.hpp; empty: none offered)
+  // Keys the server info carries beside the rules' (the place, the public address, the owner):
+  // browsers list them; an empty value is left out.
+  std::vector<std::pair<std::string, std::string>> info;
   bool verify_move_checksum = true;  // false: moves are accepted unchecked (and counted)
   int maxrate = 0;                   // sv_maxrate: a client's rate cap, bytes/s (0: none)
   int maxfps = 77;                   // maxfps: the moves a second clients are told they may send

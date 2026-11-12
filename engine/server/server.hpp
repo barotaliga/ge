@@ -78,6 +78,10 @@ struct ServerConfig {
   std::string visibility = "lan";    // sv_visibility: lan, invite or listed (net/hosting.hpp)
   std::string motd;                  // sv_motd: the message a player sees on joining
   std::string admin;                 // sv_admin: how to reach the server's owner
+  std::string country;               // sv_country: where the server is, a two-letter code ("se")
+  std::string city;                  // sv_city: its city, for browsers and the hub
+  std::string coords;                // sv_coords: "latitude,longitude", for maps of servers
+  std::string public_addr;           // sv_publicaddr: the "host:port" a browser should show
   std::string maprotation;           // sv_maprotation: the maps after the first, space-separated
   int32_t max_spectators = 0;        // sv_maxspectators: spectators beside the players
   std::string spectator_password;    // sv_spectatorpassword: watching takes it

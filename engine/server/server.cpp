@@ -150,6 +150,23 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
              &c.motd);
   cvars.bind({"sv_admin", admin, info, "how to reach the server's owner", CvarKind::text},
              &c.admin);
+  const std::string country = c.country, city = c.city, coords = c.coords, addr = c.public_addr;
+  cvars.bind(
+      {"sv_country", country, info,
+       "the country the server is in, as a two-letter code (empty: not said)", CvarKind::text},
+      &c.country);
+  cvars.bind({"sv_city", city, info, "the city the server is in (empty: not said)", CvarKind::text},
+             &c.city);
+  cvars.bind({"sv_coords", coords, info,
+              "where the server is as \"latitude,longitude\", for maps of servers (empty: not "
+              "said)",
+              CvarKind::text},
+             &c.coords);
+  cvars.bind({"sv_publicaddr", addr, info,
+              "the \"host:port\" a browser should show for this server (empty: the address "
+              "it is reached at)",
+              CvarKind::text},
+             &c.public_addr);
   cvars.bind({"sv_maprotation", rotation, info, "the maps after the first, space-separated",
               CvarKind::text},
              &c.maprotation);

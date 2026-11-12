@@ -527,6 +527,8 @@ bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error
   for (const auto& [k, v] : sh::changed_info(qc.sv.set))
     info_set(s.serverinfo, k, v, kServerInfoBytes);
   for (const auto& [k, v] : qc.serverinfo) info_set(s.serverinfo, k, v, kServerInfoBytes);
+  for (const auto& [k, v] : s.cfg.info)
+    if (!v.empty()) info_set(s.serverinfo, k, v, kServerInfoBytes);
   if (s.cfg.antilag) {
     qc.lag_rewind = &lag_rewind;
     qc.lag_ctx = &s;
