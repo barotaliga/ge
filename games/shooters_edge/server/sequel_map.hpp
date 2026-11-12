@@ -69,10 +69,16 @@ void map_use_targets(SequelServer& s, int e, int activator);
 // opened or pressed when it reaches 0. False when the entity takes no damage.
 bool map_damage(SequelServer& s, int e, int attacker, int damage);
 
-// A box swept from `start` to `end` through the map and every solid mover (`mask` the contents that
-// stop it). The hit entity is the world row (0 the world, a mover's row) or -1 for none.
+// A box swept from `start` to `end` through the map, every solid mover and, when `mask` has the
+// monster bit, every living monster but map entity `skip` (`mask` the contents that stop it). The
+// hit entity is the world row (0 the world, a mover's or monster's row) or -1 for none.
 sh::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
-                          sh::Vec3f end, int32_t mask);
+                          sh::Vec3f end, int32_t mask, int skip = -1);
+
+// Box (`mins`, `maxs`) swept from `start` to `end` into the box `lo`..`hi`: the fraction it enters
+// at (0 when it starts inside) and the face's normal, or -1 when it misses.
+float sweep_box(sh::Vec3f start, sh::Vec3f end, sh::Vec3f mins, sh::Vec3f maxs, sh::Vec3f lo,
+                sh::Vec3f hi, sh::Vec3f& normal);
 
 // The world a player's move collides through: the map and the movers.
 struct MapWorld {

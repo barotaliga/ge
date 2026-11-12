@@ -35,13 +35,14 @@ namespace ge::platform {
 
 // What the GPU's surface is made from. Exactly the handles of `kind` are set.
 struct NativeWindow {
-  enum class Kind : uint8_t { none, x11, wayland, metal, win32 };
+  enum class Kind : uint8_t { none, x11, wayland, metal, win32, canvas };
   Kind kind = Kind::none;
-  void* display = nullptr;      // x11: Display*; wayland: wl_display*
-  uint64_t x11_window = 0;      // x11: the Window id
-  void* surface = nullptr;      // wayland: wl_surface*; win32: HWND
-  void* instance = nullptr;     // win32: HINSTANCE
-  void* metal_layer = nullptr;  // metal: CAMetalLayer*
+  void* display = nullptr;       // x11: Display*; wayland: wl_display*
+  uint64_t x11_window = 0;       // x11: the Window id
+  void* surface = nullptr;       // wayland: wl_surface*; win32: HWND
+  void* instance = nullptr;      // win32: HINSTANCE
+  void* metal_layer = nullptr;   // metal: CAMetalLayer*
+  const char* canvas = nullptr;  // canvas (the web): the page's canvas by CSS selector, "#view"
 };
 
 // A key, numbered by its USB HID usage (the physical key, whatever the layout): the index into

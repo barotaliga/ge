@@ -471,8 +471,10 @@ table.demos th:nth-child(3),table.demos td:nth-child(3),table.demos th:nth-child
 table.demos td:nth-child(5){display:none}table.demos .act{flex-direction:column;align-items:flex-start}}
 main.watch{display:grid;grid-template-columns:minmax(0,3fr) minmax(220px,1fr);gap:18px}
 main.watch h3{margin:8px 0}.viewer{background:#000;aspect-ratio:16/9;border-radius:8px;display:flex;
-align-items:center;justify-content:center;overflow:hidden}.viewer canvas{width:100%;height:100%;
-display:block}.viewer .none{color:#c8c8c8;padding:16px;text-align:center;max-width:36em}
+align-items:center;justify-content:center;overflow:hidden;position:relative}.viewer canvas{width:100%;
+height:100%;display:block}.viewer .none{color:#c8c8c8;padding:16px;text-align:center;max-width:36em}
+#viewer-status{position:absolute;left:0;right:0;bottom:0;margin:0;padding:8px 12px;color:#e8e8e8;
+background:rgba(0,0,0,.6)}#viewer-status:empty{display:none}
 ul.also{list-style:none;padding:0;margin:0}ul.also li{margin:6px 0}
 @media(max-width:700px){main.watch{grid-template-columns:1fr}}
 )css";

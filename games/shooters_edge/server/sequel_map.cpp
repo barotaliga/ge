@@ -21,6 +21,7 @@
 #include "core/prng.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
+#include "shooters_edge/server/sequel_monsters.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::server {
@@ -1012,6 +1013,9 @@ void use(SequelServer& s, int target, int activator, int depth) {
       fight_blast(s, e.origin, activator, e.dmg, float(e.dmg) + 40, kSqByExplosion);
       if (depth < kMaxUseDepth) map_use_targets(s, target, activator);
       return;
+    case kNone:
+      monster_use(s, target, activator);
+      return;
     case kSecret:
     case kGoal: {
       const bool secret = class_of(e) == kSecret;
@@ -1329,6 +1333,11 @@ void map_spawn(SequelServer& s) {
   s.delayed.clear();
   s.portals.clear();
   for (int i = 32; i < kWorldLightStyles; i++) s.world.lightstyles[i].clear();  // the switchable
+  // The steady light and the two that move, as the baseline mod's world sets them; a client that
+  // is sent no style 0 lights the map at nothing (measured: a stock client draws it dark).
+  s.world.lightstyles[0] = "m";
+  s.world.lightstyles[1] = "mmnmmommommnonmmonqnmmo";
+  s.world.lightstyles[2] = "abcdefghijklmnopqrstuvwxyzyxwvutsrqponmlkjihgfedcba";
   s.secrets = s.secrets_found = s.goals = s.goals_found = 0;
   const size_t count = s.entities.size();
   for (size_t i = 0; i < count; i++) {
@@ -1408,6 +1417,8 @@ void map_touch(SequelServer& s, int slot) {
 
 bool map_damage(SequelServer& s, int e, int attacker, int damage) {
   if (e < 0 || size_t(e) >= s.entities.size()) return false;
+  if (s.entities[size_t(e)].box || monster_index(s, e) >= 0)
+    return monster_damage(s, e, attacker, damage, {});
   SequelEntity& d = s.entities[size_t(e)];
   if (d.gone || d.health <= 0 || damage <= 0) return false;
   const Class c = class_of(d);
@@ -1426,8 +1437,44 @@ bool map_damage(SequelServer& s, int e, int attacker, int damage) {
   return true;
 }
 
+float sweep_box(sh::Vec3f start, sh::Vec3f end, sh::Vec3f mins, sh::Vec3f maxs, sh::Vec3f lo,
+                sh::Vec3f hi, sh::Vec3f& normal) {
+  // The point's path against the box grown by the moving one.
+  const float a[3] = {start.x, start.y, start.z}, b[3] = {end.x, end.y, end.z};
+  const float l[3] = {lo.x - maxs.x, lo.y - maxs.y, lo.z - maxs.z};
+  const float h[3] = {hi.x - mins.x, hi.y - mins.y, hi.z - mins.z};
+  float t0 = 0, t1 = 1;
+  int axis = -1;
+  float side = 0;
+  for (int k = 0; k < 3; k++) {
+    const float d = b[k] - a[k];
+    if (d == 0) {
+      if (a[k] <= l[k] || a[k] >= h[k]) return -1;
+      continue;
+    }
+    float near = (l[k] - a[k]) / d, far = (h[k] - a[k]) / d;
+    float face = -1;
+    if (near > far) {
+      std::swap(near, far);
+      face = 1;
+    }
+    if (near > t0) {
+      t0 = near;
+      axis = k;
+      side = face;
+    }
+    t1 = std::min(t1, far);
+    if (t0 >= t1) return -1;
+  }
+  normal = {};
+  if (axis == 0) normal.x = side;
+  if (axis == 1) normal.y = side;
+  if (axis == 2) normal.z = side;
+  return t0;
+}
+
 sh::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
-                          sh::Vec3f end, int32_t mask) {
+                          sh::Vec3f end, int32_t mask, int skip) {
   // A turned mover is traced in its own frame: the line turned into it, the box kept upright.
   const auto one = [&](sh::Vec3f o, uint32_t model, sh::Vec3f angles) {
     sh::Vec3f from = start - o, to = end - o;
@@ -1452,6 +1499,20 @@ sh::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::Vec3f mins
   r.entity = w.fraction < 1 || w.start_solid ? 0 : -1;
   for (size_t i = 0; i < s.entities.size(); i++) {
     const SequelEntity& e = s.entities[i];
+    if (e.box && !e.gone && (mask & sh::kSqMonster) != 0 && int(i) != skip) {  // a monster
+      sh::Vec3f n;
+      const float f = sweep_box(start, end, mins, maxs, e.origin + e.mins, e.origin + e.maxs, n);
+      if (f >= 0 && (f < r.fraction || (f == 0 && !r.start_solid))) {
+        if (f == 0) r.start_solid = true;
+        r.fraction = f;
+        r.end = start + (end - start) * f;
+        r.normal = n;
+        r.surface_flags = 0;
+        r.contents = sh::kSqMonster;
+        r.entity = map_row(static_cast<int>(i));
+      }
+      continue;
+    }
     if (e.gone || !e.solid || e.modelindex <= 0 || !brush(e)) continue;
     // Only when the sweep's box can reach the mover's.
     const sh::Vec3f slo{std::min(start.x, end.x) + mins.x, std::min(start.y, end.y) + mins.y,

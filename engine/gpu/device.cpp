@@ -39,7 +39,11 @@ constexpr std::array<wgpu::FeatureName, kFeatureCount> kFeatureNames = {
     wgpu::FeatureName::TextureCompressionBC,
     wgpu::FeatureName::TextureCompressionASTC,
     wgpu::FeatureName::TextureCompressionETC2,
+#if defined(__EMSCRIPTEN__)
+    wgpu::FeatureName{},  // the browser's WebGPU has no transient attachments: never asked
+#else
     wgpu::FeatureName::TransientAttachments,
+#endif
 };
 
 std::string_view backend_name(wgpu::BackendType b) {
@@ -191,7 +195,10 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
 
   std::vector<wgpu::FeatureName> wanted;
   for (int i = 0; i < kFeatureCount; ++i) {
-    if (options.force_off[i] || !dev->adapter.HasFeature(kFeatureNames[i])) continue;
+    if (options.force_off[i] || kFeatureNames[i] == wgpu::FeatureName{} ||
+        !dev->adapter.HasFeature(kFeatureNames[i])) {
+      continue;
+    }
     wanted.push_back(kFeatureNames[i]);
     dev->features.on[i] = true;
   }
@@ -203,6 +210,7 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
                         ? true
 #endif
                         : options.validation != 0;
+#if !defined(__EMSCRIPTEN__)
   static constexpr const char* kNoChecks[] = {"skip_validation", "disable_robustness"};
   // Dawn rounds every timestamp down to 2^16 ns by default (a browser's guard against timing
   // attacks), which leaves a pass's GPU time in steps of 0.0655 ms: the engine times its own
@@ -215,10 +223,13 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
   }
   toggles.disabledToggleCount = 1;
   toggles.disabledToggles = kFullTimers;
+#endif
 
   const std::string label(options.label);
   wgpu::DeviceDescriptor desc{};
-  desc.nextInChain = &toggles;
+#if !defined(__EMSCRIPTEN__)
+  desc.nextInChain = &toggles;  // the browser takes no toggles: its own checks always run
+#endif
   desc.label = wgpu::StringView(label.data(), label.size());
   desc.requiredFeatureCount = wanted.size();
   desc.requiredFeatures = wanted.data();
@@ -259,6 +270,7 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
           }),
       UINT64_MAX);
   if (!dev->device) return nullptr;
+#if !defined(__EMSCRIPTEN__)
   dev->device.SetLoggingCallback([](wgpu::LoggingType type, wgpu::StringView message) {
     if (type == wgpu::LoggingType::Warning || type == wgpu::LoggingType::Error) {
       out::warn("gpu: dawn: " + to_string(message) + " (skill: gpu)");
@@ -266,6 +278,7 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
       out::debug("gpu: dawn: " + to_string(message));
     }
   });
+#endif
   dev->queue = dev->device.GetQueue();
   out::info("gpu: adapter " + adapter_line(*dev));
   return dev;

@@ -1,0 +1,35 @@
+// THE BROWSER'S SIDE OF A WEB VIEWER (Emscripten builds only, GE_WEB): the few calls a game's
+// viewer makes on the page that holds it (engine/hub/watch.hpp writes that page).
+//
+// - `fetch_bytes`: a file from the hub (a demo by its `/d/...` path, a content pack) read whole.
+// - `next_frame`: waits for the page's next paint and answers its time, ms; the viewer's loop
+//   draws one frame a paint, so a hidden tab costs nothing.
+// - `canvas_size`: the canvas's pixel size (the page sets it; 1280 x 720 by default).
+// - `say`: a line in the page's status line (`#viewer-status`) and the console: what is loading,
+//   or why there is no picture, in a viewer's words.
+//
+// Each wait (`fetch_bytes`, `next_frame`, and the GPU's own waits) suspends the C++ stack through
+// JSPI (`-sJSPI`, cmake/Web.cmake), so a viewer is written as a plain loop in `main`.
+//
+// ge:summary The web viewer's calls on its page: fetch a file, wait for a paint, the canvas, say
+// ge:keywords web browser emscripten jspi fetch_bytes next_frame request-animation-frame canvas
+// ge:keywords canvas_size say viewer-status
+// ge:skill net
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+namespace ge::web {
+
+// `url`'s bytes into `out`. False with the URL and the HTTP status (or that it did not answer).
+bool fetch_bytes(const std::string& url, std::vector<uint8_t>& out, std::string& error);
+// Waits for the page's next paint; its time, ms.
+double next_frame();
+// The canvas `selector` names: its pixel size.
+void canvas_size(const char* selector, uint32_t& width, uint32_t& height);
+// `line` in the page's status line and the console ("" clears the status line).
+void say(const std::string& line);
+
+}  // namespace ge::web
