@@ -20,7 +20,7 @@ constexpr const char* kNames[kFeatures] = {
     "keysteer",  "lookway",    "press",      "slopes",   "counter", "jumpkey",  "backstep",
     "runupkeys", "gapbuild",   "curvekeys",  "underway", "recipes", "chains",
     "retarget",  "uturn",     "jumpfly",    "gappast",  "lipjump",
-    "trial"};
+    "airgap",    "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -42,7 +42,8 @@ constexpr uint64_t kKeys = (uint64_t{1} << static_cast<uint64_t>(Feature::lookwa
 constexpr uint64_t kJudging = (uint64_t{1} << static_cast<uint64_t>(Feature::runupkeys)) |
                               (uint64_t{1} << static_cast<uint64_t>(Feature::underway)) |
                               (uint64_t{1} << static_cast<uint64_t>(Feature::gappast)) |
-                              (uint64_t{1} << static_cast<uint64_t>(Feature::lipjump));
+                              (uint64_t{1} << static_cast<uint64_t>(Feature::lipjump)) |
+                              (uint64_t{1} << static_cast<uint64_t>(Feature::airgap));
 constexpr uint64_t kAll = (kTrial - 1) & ~kKeys & ~kJudging;
 
 bool separator(char c) { return c == ',' || c == ' ' || c == '/' || c == '\t'; }

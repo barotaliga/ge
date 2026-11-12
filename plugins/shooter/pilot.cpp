@@ -724,7 +724,7 @@ bool jump_flies(const Pilot& p, const PilotSense& s, int msec, Vec3f T) {
   if (s.world == nullptr) return false;
   MoveSettings move;
   move.maxspeed = s.maxspeed;
-  if (!gap_lands(*s.world, move, s.origin, s.velocity, T, msec, p.set.gap_past)) return false;
+  if (!gap_lands(*s.world, move, s.origin, s.velocity, T, msec, p.set.gap_past, p.set.gap_strafe)) return false;
   return !p.set.curve_keys || gap_lands_late(p, s, msec, T);
 }
 
@@ -1464,6 +1464,18 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         w.side = 0;
         w.yaw = unwrap(yaw_at(s.origin, node(g, p.gap_link.to).origin), p.yaw);
         because = "a gap trick: flying at its landing";
+        if (p.set.gap_strafe && speed > 1) {
+          // `airgap`: strafed across as its forecast flew it (the view on the velocity, the side
+          // key toward the landing).
+          const float off_land = wrap(yaw_at(s.origin, node(g, p.gap_link.to).origin) - vh);
+          w.yaw = unwrap(vh, p.yaw);
+          w.forward = 0;
+          w.side = off_land < -1  ? 1.0f
+                   : off_land > 1 ? -1.0f
+                                  : (p.strafe_side >= 0 ? -1.0f : 1.0f);
+          p.strafe_side = static_cast<int8_t>(w.side > 0 ? 1 : -1);
+          because = "a gap trick: strafing across to its landing";
+        }
       } else {
         w.jump = false;  // let go in the air, so the landing's press is a fresh one
         because = "hopping: the side key, the view on the velocity";
