@@ -57,8 +57,8 @@ std::string nav(const HubSpec& spec, const char* on) {
            (std::string(word) == on ? " class=\"on\"" : "") + ">" + word + "</a>";
   };
   return "<header><a class=\"brand\" href=\"/\">" + html_escape(spec.game) + "</a><nav>" +
-         link("/", "Servers") + link("/players", "Players") + link("/v1", "API") +
-         "</nav></header>\n";
+         link("/", "Servers") + link("/players", "Players") + link("/demos", "Demos") +
+         link("/v1", "API") + "</nav></header>\n";
 }
 
 std::string foot() {
@@ -290,6 +290,105 @@ std::string scoreboard_page(const HubSpec& spec, const HubNode& n) {
   return h + "</main></body></html>\n";
 }
 
+std::string utc_text(int64_t unix_s) {
+  // Days to a civil date (the proleptic Gregorian calendar), integers only.
+  const int64_t days = unix_s >= 0 ? unix_s / 86400 : (unix_s - 86399) / 86400;
+  const int64_t secs = unix_s - days * 86400;
+  const int64_t z = days + 719468;
+  const int64_t era = (z >= 0 ? z : z - 146096) / 146097;
+  const int64_t doe = z - era * 146097;
+  const int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+  const int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  const int64_t mp = (5 * doy + 2) / 153;
+  const int64_t d = doy - (153 * mp + 2) / 5 + 1;
+  const int64_t m = mp < 10 ? mp + 3 : mp - 9;
+  const int64_t y = yoe + era * 400 + (m <= 2 ? 1 : 0);
+  char out[96];
+  std::snprintf(out, sizeof out, "%04lld-%02lld-%02lld %02lld:%02lld", static_cast<long long>(y),
+                static_cast<long long>(m), static_cast<long long>(d),
+                static_cast<long long>(secs / 3600), static_cast<long long>(secs / 60 % 60));
+  return out;
+}
+
+std::string demos_page(const Archive* a, const HubSpec& spec, std::string_view target,
+                       int64_t unix_s) {
+  std::string h = head(spec, "Demos", false) + nav(spec, "Demos") + "<main>";
+  if (!a) {
+    return h + "<p class=\"none\">This hub keeps no demos.</p></main>" + foot();
+  }
+  const DemoQuery q = demo_query(target);
+  const DemoPage page = archive_search(*a, q, unix_s);
+  h += "<form class=\"search\" action=\"/demos\" method=\"get\">";
+  h += "<input name=\"player\" placeholder=\"player\" value=\"" + html_escape(q.player) + "\">";
+  h += "<input name=\"map\" placeholder=\"map\" value=\"" + html_escape(q.map) + "\">";
+  h += "<select name=\"mode\"><option value=\"\">any mode</option>";
+  for (const HubMode& m : spec.modes) {
+    h += "<option" + std::string(m.name == q.mode ? " selected" : "") + ">" + html_escape(m.name) +
+         "</option>";
+  }
+  h += "</select><input name=\"tag\" placeholder=\"tag\" value=\"" + html_escape(q.tag) +
+       "\"><button>Search</button></form>";
+  h += "<p class=\"sum\">" + std::to_string(page.total) + " demos";
+  if (page.pages > 1) {
+    h += " · page " + std::to_string(page.page) + " of " + std::to_string(page.pages);
+  }
+  h += "</p>";
+  const std::string scheme = spec.id.empty() ? "game" : spec.id;
+  h += "<table class=\"demos\"><tr><th>when</th><th>mode</th><th>map</th><th>players</th>"
+       "<th>length</th><th></th></tr>";
+  for (const DemoRow* r : page.rows) {
+    std::string who;
+    if (!r->teams.empty()) {
+      for (size_t i = 0; i < r->teams.size(); i++) {
+        who += (i ? " vs " : "") + html_escape(r->teams[i].name);
+      }
+      who += ": ";
+    }
+    for (size_t i = 0; i < r->players.size(); i++) {
+      who += (i ? ", " : "") + html_escape(r->players[i].name);
+    }
+    std::string scores;
+    for (const DemoTeam& t : r->teams) {
+      if (t.scored) scores += html_escape(t.name) + " " + std::to_string(t.score) + " · ";
+    }
+    for (const DemoPlayer& p : r->players) {
+      if (p.scored) scores += html_escape(p.name) + " " + std::to_string(p.score) + " · ";
+    }
+    if (scores.size() >= 4) scores.resize(scores.size() - 4);  // the last " · "
+    const std::string length = r->duration_ms >= 0
+                                   ? clock(static_cast<int32_t>(r->duration_ms / 1000))
+                                   : std::string("cut short");
+    h += "<tr><td>" + utc_text(r->start_s) + "<br><small>" + html_escape(r->server) +
+         "</small></td><td>" + html_escape(r->mode) + "</td><td>" + html_escape(r->map) +
+         "</td><td>" + who;
+    if (!scores.empty()) {
+      h += "<details><summary>scores</summary>" + scores + "</details>";
+    }
+    for (const std::string& t : r->tags) h += " <span class=\"tag\">" + html_escape(t) + "</span>";
+    h += "</td><td>" + length + "</td><td><div class=\"act\"><a class=\"btn\" href=\"" + scheme +
+         "://demo/" + r->sha + "\">Play</a><a class=\"small\" href=\"/" + archive_path(r->sha) +
+         "\" download>Download</a></div></td></tr>";
+  }
+  h += "</table>";
+  if (page.rows.empty()) h += "<p class=\"none\">No demo matches.</p>";
+  if (page.pages > 1) {
+    auto with_page = [&](int n) {
+      std::string link = "/demos?page=" + std::to_string(n);
+      const std::pair<const char*, const std::string*> keep[] = {
+          {"player", &q.player}, {"map", &q.map}, {"mode", &q.mode}, {"tag", &q.tag}};
+      for (const auto& [k, v] : keep) {
+        if (!v->empty()) link += std::string("&amp;") + k + "=" + html_escape(*v);
+      }
+      return link;
+    };
+    h += "<p class=\"pager\">";
+    if (page.page > 1) h += "<a href=\"" + with_page(page.page - 1) + "\">newer</a>";
+    if (page.page < page.pages) h += "<a href=\"" + with_page(page.page + 1) + "\">older</a>";
+    h += "</p>";
+  }
+  return h + "</main>" + foot();
+}
+
 const std::string& hub_stylesheet() {
   static const std::string css =
       R"css(:root{--bg:#101513;--panel:#18201d;--panel2:#1f2925;--ink:#e8f1ec;--dim:#8fa59c;
@@ -328,15 +427,28 @@ text-align:left;border-bottom:1px solid var(--line)}table.players th{color:var(-
 td.bot{color:var(--hot)}td.spectating,td.watching{color:var(--dim)}
 .overlay{max-width:420px;background:var(--panel);border-radius:12px;margin:16px}
 footer{color:var(--dim);font-size:13px;padding:24px 16px;text-align:center}.none{color:var(--dim)}
-@media (max-width:480px){main{padding:12px}.cards{grid-template-columns:1fr}}
+form.search{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}form.search input,form.search select,
+form.search button{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid var(--line);
+background:var(--panel);color:var(--ink)}form.search button{background:var(--accent);color:var(--bg);
+border-color:var(--accent)}table.demos{width:100%;border-collapse:collapse}table.demos td,table.demos th{
+padding:8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+table.demos th{color:var(--dim);font-weight:500}table.demos .act{margin:0;flex-wrap:nowrap}details{color:var(--dim);font-size:13px}summary{cursor:pointer}
+.tag{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--panel2);color:var(--hot)}
+.pager{display:flex;gap:16px}
+@media (max-width:480px){main{padding:12px}.cards{grid-template-columns:1fr}
+table.demos th:nth-child(3),table.demos td:nth-child(3),table.demos th:nth-child(5),
+table.demos td:nth-child(5){display:none}table.demos .act{flex-direction:column;align-items:flex-start}}
 )css";
   return css;
 }
 
-Answer hub_answer(const Poller& p, const HubSpec& spec, std::string_view target, int64_t now_us) {
+Answer hub_answer(const Poller& p, const HubSpec& spec, std::string_view target, int64_t now_us,
+                  const Archive* archive, int64_t unix_s) {
+  if (Answer a; archive_answer(archive, target, unix_s, a)) return a;
   std::string path = target_path(target);
   if (path == "/v1" || path.rfind("/v1/", 0) == 0) return api_answer(p, spec, target, now_us);
   while (path.size() > 1 && path.back() == '/') path.pop_back();
+  if (path == "/demos") return html(200, demos_page(archive, spec, target, unix_s), 30);
   if (path == "/" || path.empty()) {
     return html(200, servers_page(p, spec, query_param(target, "mode"), now_us), kPageRefreshS);
   }

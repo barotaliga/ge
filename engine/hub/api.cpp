@@ -71,8 +71,15 @@ Answer json_answer(int code, std::string body, int max_age_s) {
 }
 
 const char* const kPaths[] = {
-    "/v1",         "/v1/servers", "/v1/servers/{address}", "/v1/servers/{address}/events",
-    "/v1/streams", "/v1/nodes",   "/v1/masters",
+    "/v1",
+    "/v1/servers",
+    "/v1/servers/{address}",
+    "/v1/servers/{address}/events",
+    "/v1/streams",
+    "/v1/nodes",
+    "/v1/masters",
+    "/v1/demos",
+    "/v1/demos/{sha256}",
 };
 
 std::string paths_json() {

@@ -67,7 +67,8 @@ HttpParse http_parse(std::string_view data, HttpRequest& out) {
 
 std::string http_response(const Answer& a, bool head_only) {
   std::string r = "HTTP/1.1 " + std::to_string(a.code) + " " + reason(a.code) + "\r\n";
-  r += "Content-Type: " + a.type + "; charset=utf-8\r\n";
+  const bool text = a.type.rfind("text/", 0) == 0 || a.type == "application/json";
+  r += "Content-Type: " + a.type + (text ? "; charset=utf-8\r\n" : "\r\n");
   r += "Content-Length: " + std::to_string(a.body.size()) + "\r\n";
   r += a.max_age_s > 0 ? "Cache-Control: public, max-age=" + std::to_string(a.max_age_s) + "\r\n"
                        : std::string("Cache-Control: no-store\r\n");
@@ -159,7 +160,7 @@ void http_update(HttpServer& s, const Poller& p, const HubSpec& spec, int64_t no
         s.stats.errors++;
         send(c, http_error(405, "the hub answers GET and HEAD only", "send a GET"));
       } else {
-        const Answer a = hub_answer(p, spec, req.target, now_us);
+        const Answer a = hub_answer(p, spec, req.target, now_us, s.archive, s.unix_s);
         if (a.events && a.code == 200) {
           const HubNode* n = poller_find(p, a.node);
           c.answered = false;

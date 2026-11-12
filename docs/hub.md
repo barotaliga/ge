@@ -97,10 +97,17 @@ so another community's tools can too.
 
 Demos are stored by the SHA-256 of their bytes under a three-character fan-out
 (`d/abc/abc…`), so a demo has one name everywhere, the same demo from two nodes is stored once, and
-every file is immutable and cacheable for ever. The index is an SQLite database (public domain, a
-single C file) with full-text search on player names; its rows are what the header and the summary
-say, never what a file name says. A hub keeps demos for a time its operator sets (a size or an age),
-older ones first, a tagged match (a league's) kept until removed by hand.
+every file is immutable and cacheable for ever. The index is held in memory and rebuilt from the
+files when the hub starts; the operator's own facts (when a demo came, its tags) are one text file
+beside them, `archive.tsv`. Its rows are what the header and the trailer say, never what a file name
+says. A hub keeps demos for a time its operator sets (a size or an age), older ones first, a tagged
+match (a league's) kept until removed by hand.
+
+**The hub's meta words.** A recorder that wants its demos found writes these keys in the replay
+file's header meta (`engine/replay/stream.hpp`; a key may repeat): `map`, `mode`, `server` (its
+name), `start` (Unix seconds), `title`, `team` (a team's name), `player` (`name` or `name<TAB>team`),
+`tag`; and in the trailer's final meta: `duration_ms`, `score` (`name<TAB>score`) and `team_score`
+(`team<TAB>score`). Anything else is the game's own and the hub leaves it unread.
 
 ### Locations
 
@@ -194,6 +201,16 @@ browser's own GPU.
   `/style.css` is dark by default and light when the reader's system asks. Every text a server sends
   is escaped. `hub_answer` routes a path to the API or a page.
 
+- **M56d** (`hub-archive`): `archive.hpp` is the demo archive: replay files kept by SHA-256 under
+  `d/abc/`, each row read from the hub's meta words, the same file from two places kept once,
+  `archive.tsv` for the operator's tags. `--archive=<dir>` turns it on; a recorder drops `.ger`
+  files in `<dir>/inbox/` (a refused one goes to `inbox/refused/`), and `--keep-gb` and
+  `--keep-days` prune the oldest untagged demos. `/v1/demos` searches by player (any part, any
+  case), mode, map, team, tag, server and age, newest first, 15 a page, with the scores left out;
+  `/v1/demos/{sha256}` is one demo's summary with them; `/d/abc/{sha256}.ger` is the file, cached a
+  year. `/demos` is the page: a search form, Play (`<id>://demo/<sha256>`) and Download, the
+  scores folded until asked. Pulling demos from TV nodes waits for the TV node (M57b).
+
 Phase 2 and later depend on the TV layer's header and meta track (M57a, the replay file v2, and M57b, the native TV node); the
 master can land before them, since a dedicated server's heartbeat needs nothing of TV.
 
@@ -206,7 +223,7 @@ master can land before them, since a dedicated server's heartbeat needs nothing 
 | The master | Its own small heartbeat and list protocol next to the rendezvous, plus the classic adapter for the classic game | Only the classic master protocol: a list of addresses with nothing of game, version or streams |
 | Demo metadata | Read from the file's header and closing summary | File names, as the classic hub's older list did: they hold no durations, no points of view, and break when renamed |
 | Demo names | SHA-256 of the bytes, a fan-out directory | Names by date and players: two nodes' copies differ, and a URL is not stable |
-| The index | SQLite with full-text search, one file | A database server: one more process for a community to run |
+| The index | In memory, rebuilt from the files at start (M56d measured 500 demos searched in under a millisecond); SQLite with full-text search when an archive outgrows memory | A database server: one more process for a community to run; SQLite from the start: a dependency before an archive needs it |
 | Pages | HTML rendered by the hub from templates, CSS, a few lines of script only where a page moves or starts the viewer | A single-page app with a build step: a second language and toolchain in the tree |
 | A match in the browser | The engine's own viewer in WebAssembly and WebGPU (the maintainer's choice, 2026-11-11) | Only a link to the installed game: no picture without installing. Video from a hub camera: one CPU-rendered client per stream. The live map alone: no real picture |
 | TLS | The operator's reverse proxy | TLS in the hub: certificates are an operator's job and every proxy already does it |

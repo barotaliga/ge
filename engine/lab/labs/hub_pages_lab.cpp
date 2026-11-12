@@ -25,6 +25,7 @@
 #include "hub/poller.hpp"
 #include "hub/spec.hpp"
 #include "lab/lab.hpp"
+#include "lab/labs/hub_browser.hpp"
 #include "lab/png.hpp"
 #include "net/packet.hpp"
 #include "net/status.hpp"
@@ -141,43 +142,6 @@ gh::Poller sample_index() {
 
 std::vector<uint8_t> bytes(const std::string& s) { return {s.begin(), s.end()}; }
 
-// The page with its stylesheet inlined, so a file:// load draws it as the hub serves it.
-std::string standalone(const std::string& page) {
-  const std::string link = "<link rel=\"stylesheet\" href=\"/style.css\">";
-  std::string out = page;
-  const size_t at = out.find(link);
-  if (at != std::string::npos)
-    out.replace(at, link.size(), "<style>" + gh::hub_stylesheet() + "</style>");
-  return out;
-}
-
-std::string chromium() {
-  if (const char* env = std::getenv("GE_CHROMIUM"); env && *env) return env;
-  std::error_code ec;
-  if (fs::exists("/opt/pw-browsers/chromium", ec)) return "/opt/pw-browsers/chromium";
-  return "";
-}
-
-// One page drawn by the browser at width x height (in the dark scheme when `dark`); empty when it
-// failed.
-std::optional<gl::Picture> draw(const std::string& browser, const fs::path& dir,
-                                const std::string& name, const std::string& page, int width,
-                                int height, bool dark) {
-  const fs::path html = dir / (name + ".html"), png = dir / (name + ".png");
-  {
-    std::ofstream f(html, std::ios::binary);
-    f << standalone(page);
-  }
-  const std::string cmd = "\"" + browser +
-                          "\" --headless --no-sandbox --disable-gpu --hide-scrollbars " +
-                          (dark ? "--force-dark-mode " : "") +
-                          "--force-device-scale-factor=1 --window-size=" + std::to_string(width) +
-                          "," + std::to_string(height) + " --screenshot=\"" + png.string() +
-                          "\" \"file://" + html.string() + "\" > /dev/null 2>&1";
-  if (std::system(cmd.c_str()) != 0) return std::nullopt;
-  return gl::read_png(png.string());
-}
-
 void run(gl::Lab& lab) {
   const gh::HubSpec spec = sample_spec();
   const gh::Poller index = sample_index();
@@ -217,7 +181,7 @@ void run(gl::Lab& lab) {
     lab.fail("the Servers page carries script", "the pages are plain HTML; drop the script");
   }
 
-  const std::string browser = lab.arg("browser") == "0" ? "" : chromium();
+  const std::string browser = lab.arg("browser") == "0" ? "" : ge::lab::hub_browser::find_browser();
   if (browser.empty()) {
     lab.note("no headless Chromium (GE_CHROMIUM, /opt/pw-browsers/chromium): pages not drawn");
     return;
@@ -255,7 +219,8 @@ void run(gl::Lab& lab) {
   };
   int drawn = 0;
   for (const View& v : views) {
-    const std::optional<gl::Picture> pic = draw(browser, dir, v.id, *v.page, v.w, v.h, v.dark);
+    const std::optional<gl::Picture> pic =
+        ge::lab::hub_browser::hub_draw(browser, dir, v.id, *v.page, v.w, v.h, v.dark);
     if (!pic) {
       lab.note(std::string("Chromium did not draw ") + v.id);
       continue;

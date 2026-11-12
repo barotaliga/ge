@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "hub/api.hpp"
+#include "hub/archive.hpp"
 #include "net/tcp_socket.hpp"
 
 namespace ge::hub {
@@ -69,6 +70,8 @@ struct HttpServer {
   net::TcpListener listener;
   std::vector<HttpConn> conns;
   HttpStats stats;
+  const Archive* archive = nullptr;  // the demo archive the pages read (null: none)
+  int64_t unix_s = 0;                // the wall clock's time, set by the process each turn
 };
 
 // Listen on `bind`; false with `error` (the address, the OS's reason, the next action).
