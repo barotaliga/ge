@@ -218,5 +218,9 @@ bool set_info_value(std::vector<std::pair<std::string, std::string>>& info, cons
                     const std::string& value, std::string& old);
 // The cvars' values the loop reads (sv_gravity, sv_maxspeed, ...) copied into its settings.
 void apply_settings(QcServer& s);
+// The game's kind the single-player form reads (`deathmatch`, `coop`, `teamplay`) written into the
+// program's globals from the cvars now, `serverflags` left as the program keeps it: what a game
+// that turns cooperative mid-map does (a companion seated in single player).
+void write_game_kind(QcServer& s);
 
 }  // namespace shooters_edge::server
