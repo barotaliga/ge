@@ -126,15 +126,14 @@ void run(gl::Lab& lab) {
   std::vector<Made> made;
   made.reserve(static_cast<size_t>(count));
   int sent = 0;
-  int64_t sent_bytes = 0;
   for (int i = 0; i < count; i++) {
     made.push_back(make_demo(seed, i));
     std::string error;
     const gh::AddResult got = gh::archive_add(a, made.back().bytes, kNow, {}, error);
     if (got != gh::AddResult::added)
-      lab.fail("demo " + std::to_string(i) + " not kept: " + error, "read archive_add's refusal");
+      lab.fail("demo " + std::to_string(i) + " not kept: " + error,
+               "next: read archive_add's refusal (engine/hub/archive.cpp)");
     sent++;
-    sent_bytes += static_cast<int64_t>(made.back().bytes.size());
     if (i % 25 == 0) {  // the same demo from a second TV node
       gh::archive_add(a, made.back().bytes, kNow, {}, error);
       sent++;
@@ -147,7 +146,7 @@ void run(gl::Lab& lab) {
   if (static_cast<int>(a.rows.size()) != count) {
     lab.fail(
         "the archive keeps " + std::to_string(a.rows.size()) + " demos of " + std::to_string(count),
-        "a duplicate was kept twice or a demo lost: check archive_add's hash match");
+        "next: a duplicate was kept twice or a demo lost; check archive_add's hash match");
   }
 
   // Each search against the script's own count.
@@ -209,7 +208,7 @@ void run(gl::Lab& lab) {
     if (page.total != expected) {
       lab.fail(std::string("search ") + s.name + " found " + std::to_string(page.total) +
                    ", the script has " + std::to_string(expected),
-               "check archive_search's filter for that field");
+               "next: check archive_search's filter for that field");
     }
     constexpr int kRuns = 200;
     const auto t0 = std::chrono::steady_clock::now();
@@ -247,7 +246,8 @@ void run(gl::Lab& lab) {
   lab.metric("pruned_to_two_weeks", dropped, "demos");
   lab.metric("kept_after_prune", static_cast<double>(a.rows.size()), "demos");
   if (tagged_after != tagged_before) {
-    lab.fail("the prune dropped a tagged demo", "archive_prune keeps every demo with a tag");
+    lab.fail("the prune dropped a tagged demo",
+             "next: make archive_prune keep every demo with a tag");
   }
 
   const std::string browser = lab.arg("browser") == "0" ? "" : ge::lab::hub_browser::find_browser();
