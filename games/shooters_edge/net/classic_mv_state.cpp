@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "shooters_edge/net/classic_delta.hpp"
+#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
 
 namespace shooters_edge::net {
@@ -58,9 +59,41 @@ struct Records {
 
 void forget_level(MvState& s) {
   const int64_t records = s.records, levels = s.levels;
+  std::string name = std::move(s.name);
   s = MvState{};
   s.records = records;
   s.levels = levels;
+  s.name = std::move(name);
+}
+
+// A message as a relay passes it on: the server's name in the server info rewritten to the
+// relay's own. True when `out` holds a changed message.
+bool renamed(MvState& s, const SvcMsg& m, std::vector<uint8_t>& out) {
+  std::string text;
+  if (m.id == svc::serverinfo && m.strings.size() == 2 && m.strings[0] == "hostname") {
+    const std::string name = mv_hostname(s.name, m.strings[1], s.upstream_tv);
+    if (name.size() >= kServerInfoBytes) return false;
+    out.push_back(svc::serverinfo);
+    text = std::string("hostname") + '\0' + name;
+  } else if (m.id == svc::stufftext && m.strings.size() == 1 &&
+             m.strings[0].starts_with("fullserverinfo \"")) {
+    const std::string& t = m.strings[0];
+    const size_t open = t.find('"'), close = t.find('"', open + 1);
+    if (close == std::string::npos) return false;
+    std::string info = t.substr(open + 1, close - open - 1);
+    s.upstream_tv = !info_get(info, "*qtv").empty();
+    if (!info_set(info, "hostname", mv_hostname(s.name, info_get(info, "hostname"), s.upstream_tv),
+                  kServerInfoBytes - 1) ||
+        !info_set(info, "*qtv", "1", kServerInfoBytes - 1))
+      return false;
+    out.push_back(svc::stufftext);
+    text = t.substr(0, open + 1) + info + t.substr(close);
+  } else {
+    return false;
+  }
+  out.insert(out.end(), text.begin(), text.end());
+  out.push_back(0);
+  return true;
 }
 
 bool server_data(MvState& s, gn::Reader& r) {
@@ -217,7 +250,10 @@ void note(MvState& s, const SvcMsg& m, std::span<const uint8_t> bytes, int kind,
 }
 
 // A record's messages walked into the state.
-bool walk(MvState& s, std::span<const uint8_t> body, int kind, int target) {
+// `sent`, when not null, gathers the messages as a relay passes them on (`renamed`).
+bool walk(MvState& s, std::span<const uint8_t> body, int kind, int target,
+          std::vector<uint8_t>* sent) {
+  size_t copied = 0;  // body bytes already in `sent`
   gn::Reader r = gn::make_reader(body.data(), body.size());
   WireCtx ctx;
   ctx.ext = s.ext;
@@ -260,8 +296,19 @@ bool walk(MvState& s, std::span<const uint8_t> body, int kind, int target) {
       s.why = error;
       return false;
     }
-    note(s, m, body.subspan(start, r.at - start), kind, target);
+    std::span<const uint8_t> bytes = body.subspan(start, r.at - start);
+    std::vector<uint8_t> changed;
+    if (sent && renamed(s, m, changed)) {
+      sent->insert(sent->end(), body.begin() + static_cast<std::ptrdiff_t>(copied),
+                   body.begin() + static_cast<std::ptrdiff_t>(start));
+      sent->insert(sent->end(), changed.begin(), changed.end());
+      copied = r.at;
+      bytes = changed;
+    }
+    note(s, m, bytes, kind, target);
   }
+  if (sent && copied > 0)
+    sent->insert(sent->end(), body.begin() + static_cast<std::ptrdiff_t>(copied), body.end());
   return true;
 }
 
@@ -305,8 +352,20 @@ void mv_put_record(std::vector<uint8_t>& out, int ms, int kind, int target, uint
   out.insert(out.end(), body.begin(), body.end());
 }
 
-bool mv_apply(MvState& s, std::span<const uint8_t> record) {
+std::string mv_hostname(const std::string& own, const std::string& theirs, bool upstream_tv) {
+  if (own.empty()) return theirs;
+  std::string server = theirs;
+  // A relay before this one named itself; the server's own name is the part it kept.
+  const std::string live = " (live: ";
+  const size_t at = server.find(live);
+  if (upstream_tv && at != std::string::npos && server.ends_with(")"))
+    server = server.substr(at + live.size(), server.size() - at - live.size() - 1);
+  return server.empty() ? own : own + live + server + ")";
+}
+
+bool mv_apply(MvState& s, std::span<const uint8_t> record, std::vector<uint8_t>* sent) {
   MvRecord h;
+  if (sent) sent->assign(record.begin(), record.end());
   if (mv_record(record, h) != MvSplit::ok) {
     s.broken = true;
     s.why = "a record was not whole";
@@ -324,20 +383,31 @@ bool mv_apply(MvState& s, std::span<const uint8_t> record) {
   if (!s.level) return true;  // joined mid-level: nothing is known until the next one
   if (s.signon && h.ms != 0 && !level) s.signon = false;
   if (!s.signon && h.ms != 0) s.frames++;
-  if (s.signon) {
-    s.signon_records.insert(s.signon_records.end(), record.begin(), record.begin() + h.whole);
-    s.signon_records[s.signon_records.size() - h.whole] = 0;  // its time: the catch-up is at once
-  }
-  if (s.broken) return true;
   // A record to some players is their own business, but for the stats one alone is sent.
   const bool read =
       h.kind == kMvRead || h.kind == kMvAll || h.kind == kMvStats || h.kind == kMvSingle;
-  if (!read) return true;
-  if (!walk(s, body, h.kind, h.target)) {
-    s.broken = true;
-    return false;
+  bool ok = true;
+  std::vector<uint8_t> passed;  // the body renamed (empty: as it came)
+  if (!s.broken && read) {
+    if (!walk(s, body, h.kind, h.target, s.name.empty() ? nullptr : &passed)) {
+      s.broken = true;
+      ok = false;
+      passed.clear();
+    }
   }
-  return true;
+  std::vector<uint8_t> rewritten;
+  std::span<const uint8_t> out = record.first(h.whole);
+  if (!passed.empty() && passed.size() <= kMostRecordBody) {
+    mv_put_record(rewritten, h.ms, h.kind, h.target, h.mask, passed);
+    out = rewritten;
+  }
+  if (s.signon) {
+    s.signon_records.insert(s.signon_records.end(), out.begin(), out.end());
+    s.signon_records[s.signon_records.size() - out.size()] =
+        0;  // its time: the catch-up is at once
+  }
+  if (sent) sent->assign(out.begin(), out.end());
+  return ok;
 }
 
 std::vector<uint8_t> mv_catch_up(const MvState& s) {

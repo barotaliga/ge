@@ -214,7 +214,10 @@ it (`classic_mv_state.hpp`): the level's signon as it came, the state messages s
 server info, user info, frags, pings, statics), every player in the recorder's form with all his
 fields, each one's stats and a full entity list from the baselines, so the next record forwarded
 reads on from it. A viewer's `say` stays on the node; its `say_game` goes up to the server, and
-the viewer list goes up as `qul` lines. The `se-tv-node` lab relays a two-player match with a 2 s
+the viewer list goes up as `qul` lines. Viewers see the match under the node's name: the server
+info's `hostname` becomes `<node> (live: <server>)`, in the signon and in every later change, and
+`*qtv` is 1, so a browser tells the node from the server and a node downstream of another replaces
+that one's name with its own. The `se-tv-node` lab relays a two-player match with a 2 s
 delay to viewers who join at 0, 4 and 8 seconds: a late viewer's catch-up is 0.7 KB, and every
 viewer's stream plays to the same end (every player, his frags and name, every entity) with the
 chat in it.
