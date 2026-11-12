@@ -16,6 +16,7 @@
 #include "shooter/pilot_gaps.hpp"
 #include "shooter/pilot_movers.hpp"
 #include "shooter/pilot_parts.hpp"
+#include "shooter/pilot_recipes.hpp"
 #include "shooter/server.hpp"
 #include "shooter/swim.hpp"
 #include "shooter/usercmd.hpp"
@@ -361,6 +362,7 @@ bool landed_out(const Pilot& p, const PilotSense& s) {
 }
 
 void restart(Pilot& p, const PilotSense& s) {
+  p.recipe = -1;
   p.best = 1e30f;
   p.best_s = static_cast<float>(p.stats.time_s);
   p.wait_s = 0;
@@ -958,6 +960,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   }
   if (p.mode != PilotMode::hop) {
     p.gap_k = -1;
+    p.recipe = -1;  // a start under way belongs to a hop (planned again: off)
     p.safe_flight = false;
   } else if (!s.onground && p.safe_flight) {
     p.brink_free = true;  // a flight the move proved lands safe: nothing brakes it
@@ -1006,6 +1009,25 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     // Near a gap trick over water (`gap_circle`), slower: the hop's curve begun out from the lip,
     // as people curve into it from a walk.
     const bool near_gap = p.set.gap_circle && gap_curve_near(p, s);
+    // People's hop start (`recipes`): slower than a run, a hop's stretch ahead with no gap in it.
+    if (!p.set.recipes.entries.empty() && p.set.hop && p.mode == PilotMode::walk && s.onground &&
+        p.recipe < 0 && p.clock_s >= p.recipe_retry_s && s.world != nullptr &&
+        (l.kind == NavKind::walk || l.kind == NavKind::drop) && l.mover < 0 &&
+        speed < kStrafeSpeed * s.maxspeed && !near_gap && !(l2 && leaps(l2->kind))) {
+      const int32_t j = hop_stretch(p, s.origin);
+      if (j >= 0 && gap_in(p, j) < 0 &&
+          recipe_choose(p, s, yaw_at(s.origin, hop_aim(p, s.origin, kRecipeLook, j)), j)) {
+        p.mode = PilotMode::hop;
+        p.strafe_end_node = j;
+        p.gap_k = -1;
+        p.strafe_side = 0;
+        p.circle_s = -1;
+        p.circle_side = 0;
+        p.best = 1e30f;
+        p.best_s = t;
+        p.stats.hops++;
+      }
+    }
     if (p.set.hop && p.mode == PilotMode::walk && s.onground &&
         (l.kind == NavKind::walk || l.kind == NavKind::drop || (l.gap && hops_gaps(p))) &&
         l.mover < 0 && (speed >= kStrafeSpeed * s.maxspeed || near_gap) &&
@@ -1035,7 +1057,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       const float off =
           off_segment(s.origin, node(g, p.route[p.k]).origin, node(g, p.route[p.k + 1]).origin);
       if ((hop_left <= p.set.hop_end && !p.gap_flight) ||
-          (s.onground && speed < p.set.hop_slow * s.maxspeed && !p.jump_pressed) ||
+          (s.onground && speed < p.set.hop_slow * s.maxspeed && !p.jump_pressed && p.recipe < 0) ||
           (p.set.hop_headroom && s.onground && !p.jump_pressed && p.gap_k < 0 &&
            hop_left <= speed * kLastJump_s)) {
         restart(p, s);
@@ -1165,6 +1187,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         if (err_abs > p.set.hop_brake && speed > s.maxspeed) w.forward = -1;
       }
       GapRun run;
+      RecipeWant rw;
       // A gap's jump asked under a keyboard (`curve_keys`), its key not down yet: the keys and the
       // view held as it was asked with (a run re-planned meanwhile turned the takeoff away).
       const bool asked = p.set.curve_keys && s.onground && p.gap_flight && !p.gap_aloft;
@@ -1198,6 +1221,14 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         because = run.side == 0  ? "a gap trick: running at its lip"
                   : run.flip > 0 ? "a gap trick: strafing side to side to its lip"
                                  : "a gap trick: curving on the ground to its lip";
+      } else if (p.recipe >= 0 && recipe_play(p, s, dt, rw)) {
+        w.yaw = unwrap(rw.yaw, p.yaw);
+        w.forward = rw.forward;
+        w.side = rw.side;
+        w.jump = rw.jump;
+        p.curve_keys = rw.curve;
+        p.strafe_side = static_cast<int8_t>(rw.side > 0 ? 1 : rw.side < 0 ? -1 : p.strafe_side);
+        because = rw.jump ? "a hop start copied: its jump" : "a hop start copied: its run";
       } else if (s.onground && circling(p, s, vh, speed, err, dt, msec, w)) {
         because = "a circle jump: curving into the hop";
       } else if (s.onground) {

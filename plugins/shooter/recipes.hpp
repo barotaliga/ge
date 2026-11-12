@@ -15,7 +15,8 @@
 //   on past it to the first frame at `target` when that comes later in the chain; a chain of
 //   fewer than `least_takeoffs` jumps is a single jump (up a ledge, onto a lift), no start;
 // - its LOW is the slowest frame on the ground before the first takeoff, looked for as the entry
-//   is (back over the ground within `back_s`): under `stood` it started from a stand;
+//   is (back over the ground within `back_s`), or the last one under `stood` met on the way back
+//   (a stand: the move starts from its last still frame, however long he stood before);
 // - MADE when the speed across reaches `target` within `within_s` of the entry; a start that
 //   stalled is kept too, unmade (a novice's recipe draws them at people's rate);
 // - a blast in its air (the speed up `blast_rise` within 0.1 s, a rocket's or a grenade's) is no
@@ -109,10 +110,44 @@ struct RecipePlay {
 };
 
 // `frames` played from `origin` with the first frame's velocity (both turned by `turn` degrees
-// counter-clockwise), under `move` on `world`; every origin after each command appended to
-// `trail` when given.
+// counter-clockwise; `velocity`, when given, instead: a bot's own, unturned), under `move` on
+// `world`; every origin after each command appended to `trail` when given, its clock to
+// `trail_t`.
 void play_recipe(std::span<const RecipeFrame> frames, const MoveWorld& world,
                  const MoveSettings& move, Vec3f origin, float turn, int lead, RecipePlay& out,
-                 std::vector<Vec3f>* trail = nullptr);
+                 std::vector<Vec3f>* trail = nullptr, const Vec3f* velocity = nullptr,
+                 std::vector<float>* trail_t = nullptr);
+
+// A BOOK OF RECIPES as a bot carries it (a game's data, rows a lab wrote): each entry a run of
+// compact steps from its low, the view and the start's velocity relative to its WAY (the heading
+// from its low's feet to its last frame's, the way a bot lines it up with).
+struct RecipeStep {
+  uint16_t ms = 0;    // since the low, ms
+  int16_t yaw10 = 0;  // the view off the way, tenths of a degree (+ left)
+  uint8_t keys = 0;   // kKeyForward ...
+  uint8_t flags = 0;  // kStepJump, kStepGround
+};
+inline constexpr uint8_t kStepJump = 1, kStepGround = 2;
+enum class RecipeKind : uint8_t { hop_start };
+struct RecipeEntry {
+  RecipeKind kind = RecipeKind::hop_start;
+  uint8_t level = 0;      // 0 amateur, 1 intermediate, 2 expert: whose it was
+  int16_t speed = 0;      // across at the low, units/s
+  int16_t heading10 = 0;  // the low's velocity off the way, tenths of a degree (+ left)
+  uint16_t reach = 0;     // its feet's distance along the way at its end, units
+  int16_t swing = 0;      // the most its feet lie off the way's line, units (+ left)
+  uint16_t takeoff = 0;   // its speed across at the first takeoff, units/s
+  uint32_t first = 0;     // its steps in the book
+  uint16_t count = 0;
+};
+struct RecipeBook {
+  std::span<const RecipeEntry> entries;
+  std::span<const RecipeStep> steps;
+};
+
+// Entry `i` of `book` as frames with its way at `way` degrees (yaw counter-clockwise from +x),
+// its feet from `origin` along the way (a straight guess: the proof plays the real move).
+void recipe_frames(const RecipeBook& book, size_t i, float way, Vec3f origin,
+                   std::vector<RecipeFrame>& out);
 
 }  // namespace ge::shooter
