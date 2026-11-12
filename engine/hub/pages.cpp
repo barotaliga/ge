@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include "hub/link.hpp"
+
 namespace ge::hub {
 
 namespace gn = ge::net;
@@ -310,8 +312,9 @@ std::string utc_text(int64_t unix_s) {
   return out;
 }
 
-std::string demos_page(const Archive* a, const HubSpec& spec, std::string_view target,
-                       int64_t unix_s) {
+std::string demos_page(const Site& site, const HubSpec& spec, std::string_view target) {
+  const Archive* a = site.archive;
+  const int64_t unix_s = site.unix_s;
   std::string h = head(spec, "Demos", false) + nav(spec, "Demos") + "<main>";
   if (!a) {
     return h + "<p class=\"none\">This hub keeps no demos.</p></main>" + foot();
@@ -371,6 +374,10 @@ std::string demos_page(const Archive* a, const HubSpec& spec, std::string_view t
     h += scheme;
     h += "://demo/";
     h += r->sha;
+    if (link_host(site.host)) {
+      h += "?hub=";
+      h += site.host;
+    }
     h += "\">Play</a><a class=\"small\" href=\"/";
     h += archive_path(r->sha);
     h += "\" download>Download</a></div></td></tr>";
@@ -449,12 +456,12 @@ table.demos td:nth-child(5){display:none}table.demos .act{flex-direction:column;
 }
 
 Answer hub_answer(const Poller& p, const HubSpec& spec, std::string_view target, int64_t now_us,
-                  const Archive* archive, int64_t unix_s) {
-  if (Answer a; archive_answer(archive, target, unix_s, a)) return a;
+                  const Site& site) {
+  if (Answer a; archive_answer(site.archive, target, site.unix_s, a)) return a;
   std::string path = target_path(target);
   if (path == "/v1" || path.rfind("/v1/", 0) == 0) return api_answer(p, spec, target, now_us);
   while (path.size() > 1 && path.back() == '/') path.pop_back();
-  if (path == "/demos") return html(200, demos_page(archive, spec, target, unix_s), 30);
+  if (path == "/demos") return html(200, demos_page(site, spec, target), 30);
   if (path == "/" || path.empty()) {
     return html(200, servers_page(p, spec, query_param(target, "mode"), now_us), kPageRefreshS);
   }

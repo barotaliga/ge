@@ -233,8 +233,11 @@ void run(gl::Lab& lab) {
   spec.id = "shooters_edge";
   for (const ModeDef& m : kModes) spec.modes.push_back({m.name, 1});
   gh::Poller none;
-  const std::string page = gh::hub_answer(none, spec, "/demos", 0, &a, kNow).body;
-  const std::string searched = gh::hub_answer(none, spec, "/demos?player=quill", 0, &a, kNow).body;
+  const std::string page =
+      gh::hub_answer(none, spec, "/demos", 0, gh::Site{&a, kNow, "hub.example:28080"}).body;
+  const std::string searched =
+      gh::hub_answer(none, spec, "/demos?player=quill", 0, gh::Site{&a, kNow, "hub.example:28080"})
+          .body;
   lab.attach("demos.html", std::vector<uint8_t>(page.begin(), page.end()));
   lab.metric("demos_page", static_cast<double>(page.size()), "bytes");
 

@@ -211,6 +211,13 @@ browser's own GPU.
   year. `/demos` is the page: a search form, Play (`<id>://demo/<sha256>`) and Download, the
   scores folded until asked. Pulling demos from TV nodes waits for the TV node (M57b).
 
+- **M56e**: the buttons open the game. `link.hpp` reads and writes the links (`<id>://join/`,
+  `spectate/`, `tv/<node>/<stream>`, `demo/<sha256>?hub=<host>`, the hub named from the request's
+  Host header), fetches a demo by its hash over HTTP and plans the scheme's registration per
+  system. The game CLI's `link register` and `link open` (docs/gamecli.md § A hub's links) carry
+  them out: Shooter's Edge joins, spectates (`set spectator 1`) and plays a hub's demo; Watch waits
+  for the game's TV client (M57b/M57c).
+
 Phase 2 and later depend on the TV layer's header and meta track (M57a, the replay file v2, and M57b, the native TV node); the
 master can land before them, since a dedicated server's heartbeat needs nothing of TV.
 

@@ -33,6 +33,7 @@ constexpr int kMaxConnections = 256;
 
 struct HttpRequest {
   std::string method, target, version;
+  std::string host;      // the Host header ("" when none): the address the reader used
   size_t head_size = 0;  // the bytes the head took, the blank line with it
 };
 

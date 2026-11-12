@@ -62,6 +62,21 @@ HttpParse http_parse(std::string_view data, HttpRequest& out) {
   if (out.target.empty() || out.target[0] != '/' || out.version.rfind("HTTP/1.", 0) != 0) {
     return HttpParse::bad;
   }
+  out.host.clear();
+  const std::string_view head = data.substr(0, end);
+  for (size_t at = head.find("\r\n"); at != std::string_view::npos && at < head.size();) {
+    const size_t from = at + 2;
+    const size_t eol = std::min(head.find("\r\n", from), head.size());
+    const std::string_view h = head.substr(from, eol - from);
+    if (h.size() > 5 && (h[0] == 'H' || h[0] == 'h') &&
+        (h.substr(1, 4) == "ost:" || h.substr(1, 4) == "OST:")) {
+      std::string_view v = h.substr(5);
+      while (!v.empty() && v.front() == ' ') v.remove_prefix(1);
+      while (!v.empty() && v.back() == ' ') v.remove_suffix(1);
+      out.host = std::string(v);
+    }
+    at = eol;
+  }
   return HttpParse::ok;
 }
 
@@ -160,7 +175,8 @@ void http_update(HttpServer& s, const Poller& p, const HubSpec& spec, int64_t no
         s.stats.errors++;
         send(c, http_error(405, "the hub answers GET and HEAD only", "send a GET"));
       } else {
-        const Answer a = hub_answer(p, spec, req.target, now_us, s.archive, s.unix_s);
+        const Answer a =
+            hub_answer(p, spec, req.target, now_us, Site{s.archive, s.unix_s, req.host});
         if (a.events && a.code == 200) {
           const HubNode* n = poller_find(p, a.node);
           c.answered = false;
