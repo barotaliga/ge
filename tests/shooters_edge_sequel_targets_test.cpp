@@ -4,11 +4,13 @@
 // stands in its beam, a killbox kills who is in it, a light ramp steps a light's letter, a string
 // sets the frames of its characters, a door of water toggles between its ends, a ship flies its
 // path once used, its bomb falls and blows, a falling object crushes who is under it, and a
-// spawner brings out its monsters until it has made all it can.
+// spawner brings out its monsters until it has made all it can, a prisoner never fights back
+// nor counts, a crucified one hangs where it is, and a turret's driver aims its gun and fires.
 //
 // ge:summary Tests: the sequel's keys, counters, barrels, lasers, killboxes, ramps, strings, water
 // ge:keywords test sequel trigger-key trigger-counter explobox target-laser killbox lightramp
 // ge:keywords target-string func-water misc-viper viper-bomb func-object target-spawner
+// ge:keywords misc-insane turret-breach turret-driver
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_sequel_targets_test.cpp
 #include <memory>
@@ -21,6 +23,7 @@
 #include "shooter/sequel_move.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
+#include "shooters_edge/server/sequel_monsters.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace {
@@ -38,11 +41,11 @@ br::Entity entity(Pairs pairs) {
 }
 
 // A floored hall with a start at the west end, a killbox's box round it (model 1), a door of
-// water's block at x 300 (model 2), an object's block high over the start (model 3), and `extra`
-// entities.
+// water's block at x 300 (model 2), an object's block high over the start (model 3), a turret's
+// gun about the middle (model 4), and `extra` entities.
 std::shared_ptr<const br::Map> hall(const std::vector<Pairs>& extra) {
   br::BrushWorld w;
-  w.models.resize(4);
+  w.models.resize(5);
   const float lo[3] = {-1024, -256, -16}, hi[3] = {1024, 256, 0};
   w.models[0].push_back(br::box_brush(lo, hi, sh::kSqSolid, "world/floor"));
   const float klo[3] = {-640, -40, 0}, khi[3] = {-560, 40, 80};
@@ -51,6 +54,8 @@ std::shared_ptr<const br::Map> hall(const std::vector<Pairs>& extra) {
   w.models[2].push_back(br::box_brush(wlo, whi, sh::kSqWater, "world/water"));
   const float olo[3] = {-632, -24, 200}, ohi[3] = {-568, 24, 232};
   w.models[3].push_back(br::box_brush(olo, ohi, sh::kSqSolid, "world/crate"));
+  const float glo[3] = {-16, -8, 40}, ghi[3] = {16, 8, 56};
+  w.models[4].push_back(br::box_brush(glo, ghi, sh::kSqSolid, "world/gun"));
   w.entities.push_back(
       entity({{"classname", "info_player_start"}, {"origin", "-600 0 24"}, {"angle", "0"}}));
   for (const Pairs& m : extra) w.entities.push_back(entity(m));
@@ -314,4 +319,48 @@ TEST(a_spawner_brings_out_its_monsters_until_it_has_made_all_it_can) {
   for (const std::string& line : g->s().console)
     if (line.find("has made all 4") != std::string::npos) told = true;
   CHECK(told);
+}
+
+TEST(a_prisoner_never_fights_back_nor_counts_and_a_crucified_one_hangs) {
+  auto g = open_game({{{"classname", "misc_insane"}, {"origin", "-400 0 24"}, {"angle", "180"}},
+                      {{"classname", "misc_insane"},
+                       {"origin", "-300 0 100"},
+                       {"spawnflags", "8"},
+                       {"angle", "180"}}});
+  run(*g, 3 * kSecond);
+  CHECK(g->s().monsters_total == 0);
+  CHECK(g->p().health == 100);
+  int walker = -1, hung = -1;
+  for (size_t i = 0; i < g->s().entities.size(); i++)
+    if (g->s().entities[i].classname == "misc_insane")
+      (walker < 0 ? walker : hung) = static_cast<int>(i);
+  CHECK_MSG(g->at(hung).origin.z == 100, std::to_string(g->at(hung).origin.z));
+  CHECK(sv::monster_damage(g->s(), walker, 0, 60, {1, 0, 0}));
+  run(*g, kSecond);
+  CHECK(g->p().health == 100);  // hurt, and still no fight in it
+  CHECK(sv::monster_damage(g->s(), walker, 0, 200, {1, 0, 0}));
+  CHECK(g->s().monsters_killed == 0);
+}
+
+TEST(a_turret_driver_aims_its_gun_and_fires) {
+  auto g =
+      open_game({{{"classname", "turret_breach"},
+                  {"targetname", "gun"},
+                  {"target", "muzzle"},
+                  {"model", "*4"},
+                  {"angle", "140"}},
+                 {{"classname", "info_notnull"}, {"targetname", "muzzle"}, {"origin", "24 0 48"}},
+                 {{"classname", "turret_driver"},
+                  {"target", "gun"},
+                  {"origin", "40 48 24"},
+                  {"angle", "180"}}});
+  CHECK(g->s().monsters_total == 1);
+  const int gun = g->find("turret_breach");
+  run(*g, 2 * kSecond);
+  // Turned from 140 toward the player in the west, at up to 50 degrees a second.
+  CHECK_MSG(g->at(gun).angles.y > 160, std::to_string(g->at(gun).angles.y));
+  run(*g, 6 * kSecond);
+  CHECK_MSG(g->at(gun).angles.y > 175 && g->at(gun).angles.y < 185,
+            std::to_string(g->at(gun).angles.y));
+  CHECK_MSG(g->p().health < 100, std::to_string(g->p().health));
 }

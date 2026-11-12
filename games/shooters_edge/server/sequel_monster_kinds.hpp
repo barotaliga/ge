@@ -102,6 +102,8 @@ struct Kind {
   bool medic = false;   // raises the dead
   bool prop = false;    // not a monster: a figure that only answers a use
   bool keep = false;    // kept in deathmatch
+  bool good = false;    // a good guy: never hunts, never counted, never angered
+  bool turret = false;  // rides and aims a turret (sequel_targets.cpp) instead of walking
 };
 
 constexpr int kNoGib = -100000;  // a kind that is never thrown apart
@@ -645,6 +647,26 @@ inline constexpr Kind kKinds[] = {
      .maxs = {32, 32, 48},
      .prop = true,
      .keep = true},
+    // A prisoner (sequel-campaign.md § misc_insane): never fights back; spawnflag 8 hangs it.
+    {.classname = "misc_insane",
+     .name = "a prisoner",
+     .model = "models/monsters/insane/tris.md2",
+     .pain = "player/male/pain50_1.wav",
+     .death = "player/male/death1.wav",
+     .health = 100,
+     .gib = -50,
+     .mass = 300,
+     .good = true},
+    // A turret's driver (sequel-campaign.md § turret_breach): rides the breach and aims it.
+    {.classname = "turret_driver",
+     .name = "a turret",
+     .model = "models/monsters/infantry/tris.md2",
+     .pain = "infantry/infpain1.wav",
+     .death = "infantry/infdeth1.wav",
+     .health = 100,
+     .gib = 0,
+     .mass = 200,
+     .turret = true},
 };
 inline constexpr int kKindCount = int(sizeof(kKinds) / sizeof(kKinds[0]));
 
