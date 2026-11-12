@@ -73,6 +73,9 @@ constexpr float kSimpleSide = 3;     // the simple hop takes the side the route 
 constexpr float kStrafeSpeed = 0.8f;  // a strafe starts moving at least this share of maxspeed
 // `hop_chain`: a landing within this of a hop's air (s) chains into a hop at this speed or more.
 constexpr double kChainLand_s = 0.05;
+// `hopopen`: a circle's side chosen for the open within this of the way, degrees, its arcs looked
+// along this long, s.
+constexpr float kOpenErr = 30, kOpenLook_s = 0.4f;
 constexpr float kChainSpeed = 250;
 // A gap trick (nav_gaps.hpp): a jump lands across when within this of its landing node; a gap
 // flight come down within this of it landed.
@@ -356,6 +359,17 @@ bool circling(Pilot& p, const PilotSense& s, float vh, float speed, float err, f
     if (now) {
       p.circle_s = -1;
       return false;  // a jump now lands across: gap_takeoff takes it
+    }
+  }
+  if (p.set.hop_open && p.circle_side == 0 && p.gap_k < 0 && s.world != nullptr &&
+      err < kOpenErr && err > -kOpenErr) {
+    // (`hopopen`) The way near straight ahead: the curve out to the side whose arc stays clear
+    // of a wall (a start run up along a wall circles out into the corridor's space).
+    const int8_t mine = err > 0 ? int8_t{-1} : int8_t{1};
+    const float a = arc_clear(*s.world, s.origin, s.velocity, mine, dt, kOpenLook_s);
+    if (a < kOpenLook_s) {
+      const float b = arc_clear(*s.world, s.origin, s.velocity, -mine, dt, kOpenLook_s);
+      if (b > a) p.circle_side = static_cast<int8_t>(-mine);
     }
   }
   CircleSettings cs = p.set.circle;
@@ -1484,7 +1498,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         if (p.strafe_side == 0) p.strafe_side = 1;
       }
       // A wall in the arc: the other side at once, when its arc is the clearer.
-      if (!p.set.hop_simple && s.world != nullptr && !s.onground) {
+      if ((!p.set.hop_simple || p.set.hop_open) && s.world != nullptr && !s.onground) {
         const float mine =
             arc_clear(*s.world, s.origin, s.velocity, p.strafe_side, dt, p.set.hop_see_s);
         if (mine < p.set.hop_see_s) {

@@ -174,6 +174,9 @@ struct PilotSettings {
   bool hop_jump_held = false;
   // NO FORWARD IN A HOP (`hopside`): its air and its landing pressed with the strafe key alone.
   bool hop_side_only = false;
+  // TOWARD THE OPEN (`hopopen`): the hop's side away from a wall for every skill (its air), and a
+  // circle jump's curve, the way near straight ahead, out to the side whose arc stays clear.
+  bool hop_open = false;
   CircleSettings circle;
   // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while `jumper.rockets` is set (the
   // caller's say: the launcher in hand, its rockets, the health for the blast), those of its
