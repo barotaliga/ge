@@ -24,12 +24,18 @@
 //   deathmatch only with `dmflags` 4096), `target_speaker`, `target_explosion`, `target_secret`
 //   and `target_goal`.
 //
-// Rotating doors and rotators, area portals and the light switches are later rows (M18v7c2).
+// - **Turning movers**: `func_door_rotating` turns `distance` degrees (90) about its origin by the
+//   angular plain move (whole frames, then what is left, so it ends on its angles), on its yaw,
+//   roll (64) or pitch (128); `func_rotating` spins at `speed` while on, carrying its riders round
+//   and turning their view, crushing what blocks it. A turned brush is traced in its own frame.
+// - **Area portals** (`func_areaportal`, by `style`) open while the door that targets them is open;
+//   a named `light` with a style of 32 or more switches it on and off by a use.
 //
 // ge:summary The sequel's movers and triggers: doors, buttons, plats, trains, triggers, targets
 // ge:keywords sequel func-door func-button func-plat func-train trigger-multiple trigger-push
 // ge:keywords trigger-hurt teleporter target-changelevel use-targets plain-move accelerated-move
-// ge:keywords mover-push riders crush killtarget
+// ge:keywords mover-push riders crush killtarget func-door-rotating func-rotating angular-move
+// ge:keywords area-portal light-switch light-style
 // ge:skill shooter
 // ge:test tests/shooters_edge_sequel_map_test.cpp
 #pragma once
