@@ -106,6 +106,35 @@ is kept (`game_folder.txt` in the platform's per-user folder) and opened at the 
 `-basedir` names none and the folder the game runs in holds no game. `basedir <folder>` in the
 console does the same as LOAD GAME (`client/game_folder.hpp`). Then `map dm3` plays that map.
 
+**Dropped into an install, or beside several** (`client/installs.hpp`). Started inside a
+classic install (the folder the game runs in, or the folder its executable or app was placed in,
+is an install or lies inside one: its base folder, its multiplayer folder, the bundled client's
+folder), the game plays that install at once, ahead of the one kept. Placed in a folder ABOVE
+installs, it finds each folder right under it that is one: the folders named like a classic
+install first, in any case (the two games' own names, with or without a space or a 2, their
+multiplayer client's names, the bundles' names, the sequel's short name), then any other folder
+that holds a game. Each one's release is told by its packs' sizes (the first game's shareware or
+registered packs, the sequel's demo or full game; any other size is your own copy); the game
+loaded last is played when it is one of them, else the first full game. `games` in the console
+lists them and `games <n>` loads one.
+
+**An install's configs, in its own order** (`client/install_configs.hpp`). The bundled client's
+configs come with the install: `default.cfg` on disk, then, when the bundled client's folder holds
+`configs/config.cfg`, `autoexec.cfg` and that config, then `autoexec.cfg`, then the window's own
+saved settings (so a change made here sticks), then the command line's `+set` pairs and its other
+`+` commands. `exec` finds a file in the window's settings folder, the game folder, the bundled
+client's folder and the base folder, then in the archives, which include the bundled client's
+folder's own (its place names and fonts). Settings the window does not have are passed over and
+counted on one line. The sequel's install reads `q2config.cfg` (else `config.cfg`) as its main
+config. Maps' coloured light is also read from `maps/lits/<map>.lit`.
+
+**Place names, made in the game** (`client/place_names.hpp`). Each map's place names are read as
+it starts (`tp_loadlocs`): the file saved under the game folder first, else the game's own.
+Stand in a place and `addloc <name>`; `removeloc` forgets the nearest, `clearlocs` all of them,
+`saveloc <name>` (or `saveloc $mapname`) writes `<game folder>/locs/<name>.loc` in the shared
+format, `loadloc <name>` reads one, and `loc` says where you are. The long names
+(`locations_add` and so on) work too.
+
 **The title and the loads.** With no `+map` the window opens at once on the title
 (`client/title.hpp`: a night with the full moon low in a total eclipse, blood red, cloud carried
 across it) with the main menu up, the start map loading behind it; ESCAPE out of the menu plays it
