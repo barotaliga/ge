@@ -70,6 +70,10 @@
 // - `airview`: in a hop's air the mouse hand aims at the velocity's heading, a little toward the
 //   turn (bot.cpp), not at the pilot's view, already late by the pilot's own hands; and the air's
 //   keys chosen for the view when they land; on.
+// - `chainhop`: a hop's landing with a hop stretch ahead jumps again at once (pilot.cpp), not a
+//   walk's start (its speed check, a circle jump, a copied start); judging.
+// - `airwall`: the air's keys under a view not the pilot's (`airkeys`, `aimhop`) charged for a
+//   wall or a body their velocity runs into within 0.4 s (bot.cpp); judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
@@ -82,7 +86,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -161,9 +165,11 @@ enum class Feature : uint8_t {
   aimhop,
   airkeys,
   airview,
+  chainhop,
+  airwall,
   trial,
 };
-constexpr size_t kFeatures = 66;
+constexpr size_t kFeatures = 68;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
