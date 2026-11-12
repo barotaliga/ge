@@ -9,9 +9,13 @@
 // built at read; a point in a leaf with no cluster (solid, outside the map) sees and hears
 // nothing, as the map's compiler left it.
 //
+// A map of a family that carries brushes instead of clip hulls (version 38) builds no hulls: the
+// spec's `brushes` views the map in the BspMap, and the rules that trace brushes (the sequel's
+// runner, server/sequel_server.hpp) play it.
+//
 // ge:summary A map file as the mod server plays it: read, its hulls and entities, its PVS and PHS
 // ge:keywords bsp map load read_bsp_map use_map_sets pvs phs vis hearing entity-text models
-// ge:keywords mapspec cluster leaf bsp_file_bounds model-bounds
+// ge:keywords mapspec cluster leaf bsp_file_bounds model-bounds brushes version-38
 // ge:skill shooter progs brush
 // ge:test tests/shooters_edge_bsp_map_test.cpp
 #pragma once
