@@ -54,6 +54,8 @@ namespace ge::shooter {
 struct BotStats {
   int64_t commands = 0, aiming = 0, holding = 0;
   int64_t looking = 0;                   // commands the view spent on a spot watched (`look`)
+  int64_t aim_hop_air = 0;  // commands in a hop's air under the aim's view (`aimhop`)
+  int64_t air_keys = 0;     // and under the hand's view (`airkeys`)
   int64_t reactions = 0, pre_aimed = 0;  // sightings reacted to, and of them, ones pre-aimed at
   double react_s = 0;                    // the reaction times drawn, summed
   int64_t kept = 0;          // commands the one in hand was kept over a nearer one in sight
@@ -69,6 +71,14 @@ struct Bot {
   bool aiming = false;       // the view is the aim's, not the pilot's
   bool strafe = true;        // the pilot's own strafe setting, put back when the view is let go
   bool hop = false;          // and its hop setting, the same
+  // THE HOP WHILE AIMING (`aimhop`): the pilot's hop is not turned off by the aim; its landings are
+  // jumped, and in the air the key set under the aim's view (eight and none) that carries the
+  // velocity furthest along the hop's way is pressed (`aim_air_keys`).
+  bool aimhop = false;
+  int air_set = -1;  // and the set pressed in the air last command (-1 none)
+  // A HOP'S AIR UNDER THE HAND (`airkeys`): the pilot's side key (alone or with forward) pressed
+  // only while it carries the velocity on under the view the hand has pressed.
+  bool airkeys = false;
   int32_t target = -1;       // the contact's entity the view is on
   float yaw = 0, pitch = 0;  // the view last pressed, degrees (yaw unwrapped)
   double wanted[2] = {}, pressed[2] = {};  // the aim's last yaw and pitch, wanted and pressed

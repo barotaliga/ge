@@ -62,6 +62,11 @@
 // - `pilotcast`: a hop's jump at a gap judged by a COPY of the pilot flying it on a copy of the
 //   move (its hands, its strafe, its view: pilot_gaps.hpp `hop_cast`), not a forecast held forward;
 //   judging.
+// - `aimhop`: the hop kept while aiming (bot.cpp): the landings jumped, and in the air the key
+//   set under the aim's view that best carries the velocity on round the hop's way; judging.
+// - `airkeys`: a hop's air under the hand's view (bot.cpp): the pilot's side key, alone or with
+//   forward, pressed only while it carries the velocity on under the view pressed, else let go;
+//   on.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
@@ -74,7 +79,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -150,18 +155,24 @@ enum class Feature : uint8_t {
   lipjump,
   airgap,
   pilotcast,
+  aimhop,
+  airkeys,
   trial,
 };
-constexpr size_t kFeatures = 63;
+constexpr size_t kFeatures = 65;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
 struct Features {
-  uint64_t bits = 0;  // room for 64 (8 bytes: a fighter's struct packs tight with it)
-  bool operator[](Feature f) const { return (bits >> static_cast<uint64_t>(f)) & 1u; }
-  void set(Feature f, bool on) {
-    const uint64_t b = uint64_t{1} << static_cast<uint64_t>(f);
-    bits = on ? bits | b : bits & ~b;
+  uint64_t bits[2] = {0, 0};  // room for 128, a bit a feature by its number
+  constexpr bool operator[](Feature f) const {
+    const auto k = static_cast<uint64_t>(f);
+    return (bits[k >> 6] >> (k & 63)) & 1u;
+  }
+  constexpr void set(Feature f, bool on) {
+    const auto k = static_cast<uint64_t>(f);
+    const uint64_t b = uint64_t{1} << (k & 63);
+    bits[k >> 6] = on ? bits[k >> 6] | b : bits[k >> 6] & ~b;
   }
   bool operator==(const Features&) const = default;
 };
