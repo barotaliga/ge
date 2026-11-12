@@ -1,13 +1,17 @@
 // Shooter's Edge's player CLI's Spec and its own commands (spec.hpp).
 //
 // ge:summary Shooter's Edge's player CLI: the Spec's functions and the demos commands
-// ge:keywords shooters_edge_cli locate join_words listen_words demos demos-play
+// ge:keywords shooters_edge_cli locate join_words listen_words demos demos-play demos-pack
+// ge:keywords demos-unpack ged replay-v2
 // ge:skill shooter agent-interface
 // ge:test tests/gamecli_cli_test.cpp
 #include "shooters_edge/cli/spec.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
 
 #include "capture/screenshot.hpp"
@@ -16,8 +20,13 @@
 #include "console/view.hpp"
 #include "core/json_write.hpp"
 #include "gamecli/process.hpp"
+#include "replay/stream.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
+#include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_pack.hpp"
+#include "shooters_edge/client/demo_radar.hpp"
+#include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/hud/layout.hpp"
@@ -26,6 +35,7 @@
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/view/hand.hpp"
+#include "vfs/unpack.hpp"
 
 namespace shooters_edge::cli {
 
@@ -100,6 +110,46 @@ bool locate(const gc::Ctx& ctx, gc::Places& out, std::string& error) {
 void join_words(const gc::Ctx& ctx, const std::string& address, std::vector<std::string>& w) {
   const cl::Args a = folders(ctx);
   w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "+connect", address});
+}
+
+// A hub's Spectate link: the window joins as a spectator (the `spectator` setting it sends).
+void spectate_words(const gc::Ctx& ctx, const std::string& address, std::vector<std::string>& w) {
+  const cl::Args a = folders(ctx);
+  w.insert(w.end(),
+           {"-basedir", a.basedir, "-game", a.game, "+set", "spectator", "1", "+connect", address});
+}
+
+// A hub's Play link: the replay file (version 2) the CLI fetched, unpacked beside it into the
+// recording the demo player reads (client/demo_v2.hpp), then played.
+bool demo_words(const gc::Ctx& ctx, const std::string& path, std::vector<std::string>& w,
+                std::string& error) {
+  std::vector<uint8_t> file;
+  {
+    std::ifstream f(path, std::ios::binary);
+    file.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+  }
+  std::vector<uint8_t> recording;
+  if (!cl::unpack_demo(file, recording, error)) {
+    error = "the demo is not one this game plays: " + error;
+    return false;
+  }
+  cl::Demo demo;
+  if (!cl::open_demo(recording, demo, error)) {
+    error = "the demo does not open: " + error;
+    return false;
+  }
+  fs::path out = path;
+  out.replace_extension(cl::plain_extension(demo.state.format));
+  std::ofstream f(out, std::ios::binary);
+  f.write(reinterpret_cast<const char*>(recording.data()),
+          static_cast<std::streamsize>(recording.size()));
+  if (!f) {
+    error = "the demo cannot be written to " + out.string();
+    return false;
+  }
+  const cl::Args a = folders(ctx);
+  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "-playdemo", out.string()});
+  return true;
 }
 
 void listen_words(const gc::Ctx& ctx, const gc::HostAsk& ask, std::vector<std::string>& w) {
@@ -182,6 +232,130 @@ int cmd_demos_play(gc::Ctx& ctx) {
                     "playing " + file.string(), "", "shooters_edge_cli logs demo says what it did");
 }
 
+// The recording a name or a file names: one of `demos`' list, else a path.
+fs::path find_demo_file(const gc::Ctx& ctx, const std::string& word) {
+  for (const fs::path& f : demo_files(folders(ctx)))
+    if (f.stem() == word || f.filename() == word) return f;
+  std::error_code ec;
+  return fs::is_regular_file(word, ec) ? fs::path(word) : fs::path();
+}
+
+bool read_bytes(const fs::path& f, std::vector<uint8_t>& out) {
+  std::ifstream in(f, std::ios::binary);
+  if (!in) return false;
+  out.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+  return true;
+}
+
+bool write_bytes(const fs::path& f, std::span<const uint8_t> bytes) {
+  std::ofstream o(f, std::ios::binary);
+  o.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  return static_cast<bool>(o);
+}
+
+std::string kib(size_t bytes) { return std::to_string((bytes + 512) / 1024) + " KiB"; }
+
+// `demos pack <name>`: the recording (unpacked first if it is packed) as a replay file version 2
+// beside it, `<name>.ged`, read back to check it gives the same bytes.
+int cmd_demos_pack(gc::Ctx& ctx) {
+  if (ctx.words.size() != 1)
+    return gc::refuse(ctx, 2, "demos pack takes one recording's name or file",
+                      "shooters_edge_cli demos (lists them)");
+  if (!gc::need_places(ctx)) return 1;
+  const fs::path file = find_demo_file(ctx, ctx.words[0]);
+  if (file.empty())
+    return gc::refuse(ctx, 1, "no recording is called '" + ctx.words[0] + "'",
+                      "shooters_edge_cli demos");
+  std::vector<uint8_t> bytes;
+  if (!read_bytes(file, bytes))
+    return gc::refuse(ctx, 1, "cannot read " + file.string(), "check the file's permissions");
+  const size_t on_disk = bytes.size();
+  if (ge::vfs::wrapping_of(bytes) != ge::vfs::Wrapping::none) {
+    ge::vfs::Unpacked u;
+    std::string error;
+    if (!ge::vfs::unpack_one(std::move(bytes), u, error))
+      return gc::refuse(ctx, 1, file.string() + " does not unpack: " + error,
+                        "shooters_edge_cli demos (pick another)");
+    bytes = std::move(u.bytes);
+  }
+  if (ge::replay::is_stream(bytes))
+    return gc::refuse(ctx, 1, file.string() + " is already a replay file",
+                      "shooters_edge_cli demos unpack " + ctx.words[0]);
+  const fs::path out = fs::path(file).replace_extension(".ged");
+  if (fs::exists(out))
+    return gc::refuse(ctx, 1, out.string() + " is already there",
+                      "delete or rename it, then pack again");
+  std::vector<uint8_t> packed, back;
+  std::string error;
+  client::DemoPackReport rep;
+  if (!client::pack_demo(bytes, packed, error, {}, &rep))
+    return gc::refuse(ctx, 1, "the recording does not pack: " + error, "report it with the file");
+  if (!client::unpack_demo(packed, back, error) || back != bytes)
+    return gc::refuse(ctx, 1, "the packed file does not give back the recording's bytes",
+                      "report it with the file; nothing was written");
+  // A multiview recording also carries its radar, so a hub can draw the match as a map.
+  bool radar = false;
+  if (rep.format == "multiview") {
+    std::vector<uint8_t> with;
+    if (client::add_radar(bytes, packed, with, error)) {
+      packed = std::move(with);
+      radar = true;
+    }
+  }
+  if (!write_bytes(out, packed))
+    return gc::refuse(ctx, 1, "cannot write " + out.string(), "check the folder's permissions");
+  const double share =
+      on_disk > 0 ? static_cast<double>(packed.size()) / static_cast<double>(on_disk) : 0;
+  return gc::answer(
+      ctx,
+      json_obj({{"file", json_str(out.string())},
+                {"from", json_str(file.string())},
+                {"format", json_str(rep.format)},
+                {"plain_bytes", json_num(static_cast<long long>(bytes.size()))},
+                {"from_bytes", json_num(static_cast<long long>(on_disk))},
+                {"bytes", json_num(static_cast<long long>(packed.size()))},
+                {"blocks", json_num(static_cast<long long>(rep.blocks))},
+                {"keyframes", json_num(static_cast<long long>(rep.keyframes))},
+                {"radar", ge::core::json_bool(radar)}}),
+      out.string() + "  " + kib(packed.size()) + " (" + file.filename().string() + " " +
+          kib(on_disk) + ", plain " + kib(bytes.size()) + ")\n",
+      "packed " + std::to_string(std::lround(share * 100)) + "% of " + file.filename().string(),
+      "shooters_edge_cli demos play " + out.filename().string());
+}
+
+// `demos unpack <name>`: a replay file version 2 back to the recording's own bytes beside it.
+int cmd_demos_unpack(gc::Ctx& ctx) {
+  if (ctx.words.size() != 1)
+    return gc::refuse(ctx, 2, "demos unpack takes one replay file's name or file",
+                      "shooters_edge_cli demos (lists them)");
+  if (!gc::need_places(ctx)) return 1;
+  fs::path file = find_demo_file(ctx, ctx.words[0] + ".ged");
+  if (file.empty()) file = find_demo_file(ctx, ctx.words[0]);
+  std::vector<uint8_t> bytes;
+  if (file.empty() || !read_bytes(file, bytes) || !ge::replay::is_stream(bytes))
+    return gc::refuse(ctx, 1, "no replay file is called '" + ctx.words[0] + "'",
+                      "shooters_edge_cli demos");
+  std::vector<uint8_t> plain;
+  std::string cut;
+  if (!client::unpack_demo(bytes, plain, cut))
+    return gc::refuse(ctx, 1, file.string() + " does not open: " + cut, "pack the recording again");
+  const char* ext = client::is_multiview(plain) ? ".mvd" : ".dem";
+  const fs::path out = fs::path(file).replace_extension(ext);
+  if (fs::exists(out))
+    return gc::refuse(ctx, 1, out.string() + " is already there",
+                      "delete or rename it, then unpack again");
+  if (!write_bytes(out, plain))
+    return gc::refuse(ctx, 1, "cannot write " + out.string(), "check the folder's permissions");
+  return gc::answer(
+      ctx,
+      json_obj({{"file", json_str(out.string())},
+                {"bytes", json_num(static_cast<long long>(plain.size()))},
+                {"cut", json_str(cut)}}),
+      out.string() + "  " + kib(plain.size()) + "\n",
+      cut.empty() ? "unpacked " + file.filename().string() : "unpacked what was whole: " + cut,
+      "shooters_edge_cli demos play " + out.filename().string());
+}
+
 gc::Spec make() {
   gc::Spec s;
   s.game = "shooters_edge";
@@ -195,6 +369,7 @@ gc::Spec make() {
   s.lan_last = shooters_edge::net::kLanLastPort;
   s.master_port = 27000;
   s.query = shooters_edge::net::classic_query();
+  s.routes = shooters_edge::net::classic_route_query();
   s.server_game = &shooters_edge::net::classic_game();
   s.rcon = shooters_edge::net::classic_rcon;
   s.read_rcon = shooters_edge::net::classic_read_print;
@@ -202,11 +377,19 @@ gc::Spec make() {
   s.locate = locate;
   s.join_words = join_words;
   s.listen_words = listen_words;
+  s.spectate_words = spectate_words;
+  s.demo_words = demo_words;
   s.commands = ge::classicenhance::cli::commands();
   s.commands.push_back({"demos", "", "the recordings in the game folder: name, size, file",
                         "demos --json", "shooters_edge", cmd_demos});
   s.commands.push_back({"demos play", "<name>", "watch a recording in the window",
                         "demos play final", "shooters_edge", cmd_demos_play});
+  s.commands.push_back(
+      {"demos pack", "<name>",
+       "a recording packed as a replay file (.ged) beside it, checked to come back",
+       "demos pack final", "shooters_edge", cmd_demos_pack});
+  s.commands.push_back({"demos unpack", "<name>", "a replay file (.ged) back to the recording",
+                        "demos unpack final.ged", "shooters_edge", cmd_demos_unpack});
   s.flags = {{"basedir", "<dir>", "the classic game's install (default: the one loaded last)"},
              {"game", "<folder>", "the game folder over it (default: the multiplayer one)"}};
   s.notes =
@@ -216,7 +399,8 @@ gc::Spec make() {
       "game's servers and the classic ones already on the internet alike; a classic server's "
       "address is usually `host:27500`. The player's name is the setting `name`, the colours "
       "`topcolor` and `bottomcolor`; `cl_speedjump 1` asks a server for the easy jump. "
-      "`demos` lists recordings and `demos play <name>` watches one.";
+      "`demos` lists recordings and `demos play <name>` watches one; `demos pack <name>` writes "
+      "the replay file (.ged), about half the size of a packed recording.";
   return s;
 }
 

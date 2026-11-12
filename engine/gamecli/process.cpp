@@ -2,11 +2,12 @@
 //
 // ge:summary Detached processes per platform: posix_spawn or CreateProcess, alive, stop
 // ge:keywords gamecli process spawn_detached process_alive process_stop self_dir posix-spawn
-// ge:keywords createprocess waitpid sigterm
+// ge:keywords createprocess waitpid sigterm run_wait posix-spawnp
 // ge:skill agent-interface
 // ge:test tests/gamecli_cli_test.cpp
 #include "gamecli/process.hpp"
 
+#include <cerrno>
 #include <chrono>
 #include <filesystem>
 #include <thread>
@@ -95,6 +96,43 @@ bool spawn_detached(const std::vector<std::string>& argv, const std::string& cwd
   return true;
 }
 
+bool run_wait(const std::vector<std::string>& argv, const std::string& log, int& code,
+              std::string& error) {
+  if (argv.empty()) {
+    error = "nothing to run; next: name the program";
+    return false;
+  }
+  std::string line;
+  for (const std::string& a : argv) line += (line.empty() ? "" : " ") + quoted(a);
+  SECURITY_ATTRIBUTES sa{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+  HANDLE out = CreateFileA(log.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa,
+                           OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (out == INVALID_HANDLE_VALUE) {
+    error = "the log " + log + " cannot be written; next: check the folder's permissions";
+    return false;
+  }
+  STARTUPINFOA si{};
+  si.cb = sizeof si;
+  si.dwFlags = STARTF_USESTDHANDLES;
+  si.hStdOutput = out;
+  si.hStdError = out;
+  PROCESS_INFORMATION pi{};
+  const BOOL ok = CreateProcessA(nullptr, line.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
+                                 nullptr, nullptr, &si, &pi);
+  CloseHandle(out);
+  if (!ok) {
+    error = argv[0] + " did not start (error " + std::to_string(GetLastError()) + ")";
+    return false;
+  }
+  WaitForSingleObject(pi.hProcess, INFINITE);
+  DWORD exit_code = 1;
+  GetExitCodeProcess(pi.hProcess, &exit_code);
+  code = static_cast<int>(exit_code);
+  CloseHandle(pi.hThread);
+  CloseHandle(pi.hProcess);
+  return true;
+}
+
 bool process_alive(long pid) {
   HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, static_cast<DWORD>(pid));
   if (h == nullptr) return false;
@@ -176,6 +214,35 @@ bool spawn_detached(const std::vector<std::string>& argv, const std::string& cwd
     return false;
   }
   pid = static_cast<long>(child);
+  return true;
+}
+
+bool run_wait(const std::vector<std::string>& argv, const std::string& log, int& code,
+              std::string& error) {
+  if (argv.empty()) {
+    error = "nothing to run; next: name the program";
+    return false;
+  }
+  posix_spawn_file_actions_t actions;
+  posix_spawn_file_actions_init(&actions);
+  posix_spawn_file_actions_addopen(&actions, 0, "/dev/null", O_RDONLY, 0);
+  posix_spawn_file_actions_addopen(&actions, 1, log.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
+  posix_spawn_file_actions_adddup2(&actions, 1, 2);
+  std::vector<char*> args;
+  args.reserve(argv.size() + 1);
+  for (const std::string& a : argv) args.push_back(const_cast<char*>(a.c_str()));
+  args.push_back(nullptr);
+  pid_t child = 0;
+  const int rc = posix_spawnp(&child, args[0], &actions, nullptr, args.data(), environ);
+  posix_spawn_file_actions_destroy(&actions);
+  if (rc != 0) {
+    error = argv[0] + " did not start (error " + std::to_string(rc) + ")";
+    return false;
+  }
+  int status = 0;
+  while (::waitpid(child, &status, 0) < 0 && errno == EINTR) {
+  }
+  code = WIFEXITED(status) ? WEXITSTATUS(status) : 128;
   return true;
 }
 

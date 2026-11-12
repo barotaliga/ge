@@ -4,14 +4,16 @@
 // folder played over the base when the install has one; the folder kept and read back, and chosen
 // at start only when -basedir names none; the programs of a folder with no game (the baseline mod,
 // no campaign, the fallback map) and of one whose packs hold the start map; the campaign's
-// commands taken away with no campaign.
+// commands taken away with no campaign; `coopgame` asked for in a campaign already running starts
+// a new one in coop, where `addbot` seats companions.
 //
 // ge:summary Tests the game folder a player loads: the install checked, kept, its programs
 // ge:keywords test shooters-edge game-folder load-game check_game_folder game_of remember_game
-// ge:keywords choose_folder load_programs campaign_commands
+// ge:keywords choose_folder load_programs campaign_commands coopgame addbot new_game
 // ge:skill shooter classicenhance testing
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -19,7 +21,10 @@
 #include "check.hpp"
 #include "classicenhance/profile.hpp"
 #include "console/console.hpp"
+#include "shooters_edge/client/coop_party.hpp"
 #include "shooters_edge/client/game_folder.hpp"
+#include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/test_mod.hpp"
 #include "vfs/pak.hpp"
 
 namespace cl = shooters_edge::client;
@@ -193,4 +198,60 @@ TEST(the_campaign_commands_go_with_the_campaign) {
   c.campaign = nullptr;
   cl::campaign_commands(con, listen, files, c, next_map, load_ask);
   for (const char* name : {"newgame", "save", "load"}) CHECK_MSG(!con.has_command(name), name);
+}
+
+namespace {
+
+std::unique_ptr<cl::LoadedMap> stub_map(const std::string& name) {
+  auto m = std::make_unique<cl::LoadedMap>();
+  m->name = name;
+  m->spec.name = name;
+  m->spec.models = shooters_edge::server::arena_models();
+  m->spec.entities = shooters_edge::server::kStubEntities;
+  return m;
+}
+
+}  // namespace
+
+// The campaign running as a game without coop (MULTIPLAYER > NEW GAME's COOPERATIVE once ran it
+// so): `addbot` is refused, and `coopgame` starts a new game in coop, not a change of map, so the
+// companions it asks for sit beside the player and `addbot` seats more.
+TEST(coopgame_in_a_running_campaign_starts_a_coop_game_that_takes_bots) {
+  ge::console::Console con;
+  cl::Listen listen;
+  cl::SearchPath files;
+  cl::GameContent c;
+  std::string next_map, load_ask, error;
+  CHECK_MSG(shooters_edge::server::build_campaign_stub(c.progs, error), error);
+  c.campaign = &c.progs;
+  c.start_map = "start";
+  cl::campaign_commands(con, listen, files, c, next_map, load_ask);
+  listen.opt.console = {"deathmatch 0"};
+  CHECK_MSG(cl::start_map(listen, c, stub_map("first"), error), error);
+  CHECK(listen.campaign_host != nullptr);
+  CHECK(cl::listen_lobby(listen, "addbot"));
+  CHECK(!listen.party || cl::party_size(*listen.party) == 0);
+  CHECK(listen.prints.size() >= 2 &&
+        listen.prints[listen.prints.size() - 2].find("cooperative") != std::string::npos);
+  CHECK(listen.prints.back().find("coopgame") != std::string::npos);
+
+  con.execute("coopgame 2 first");
+  CHECK(next_map == "first" && listen.opt.new_game);
+  CHECK_MSG(cl::start_map(listen, c, stub_map("first"), error), error);
+  CHECK(!listen.opt.new_game);
+  CHECK(listen.party != nullptr && cl::party_size(*listen.party) == 2);
+  CHECK(listen.server->clients[1].active && listen.server->clients[2].active);
+  CHECK(cl::listen_lobby(listen, "addbot expert"));
+  CHECK(cl::party_size(*listen.party) == 3);
+
+  // A map asked for in the coop game is a change of map: the party comes along.
+  CHECK_MSG(cl::start_map(listen, c, stub_map("second"), error), error);
+  CHECK(cl::party_size(*listen.party) == 3);
+
+  // `newgame` is a new single-player game: coop off, the companions let go.
+  con.execute("newgame");
+  CHECK_MSG(cl::start_map(listen, c, stub_map("start"), error), error);
+  CHECK(!listen.party || cl::party_size(*listen.party) == 0);
+  CHECK(cl::listen_lobby(listen, "addbot"));
+  CHECK(!listen.party || cl::party_size(*listen.party) == 0);
 }

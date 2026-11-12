@@ -175,8 +175,8 @@ void bi_setmodel(pg::Vm& vm) {
   sh::Vec3f lo, hi;
   if (!s.opt.model_bounds(s.opt.model_ctx, m, lo, hi)) {
     console_print(s, std::string("setmodel: no bounds for ") + m +
-                         ": the entity stays pointlike, so shots pass through it; next: check "
-                         "the file is in the game folder's packs\n");
+                         ": the entity stays pointlike, so shots pass through it (is the "
+                         "file missing from the game folder's packs?)\n");
     return;
   }
   flush_to_world(qc_of(vm));

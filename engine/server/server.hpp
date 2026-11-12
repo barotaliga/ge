@@ -22,15 +22,14 @@
 // and `sv_intermission`, `sv_seed`, `sv_password`,
 // `sv_visibility`; and those kept for what reads them as it lands:
 // `sv_motd`, `sv_admin`, `sv_maprotation`, `sv_maxspectators`, `sv_spectatorpassword`,
-// `sv_rendezvous`, `sv_mod` (read-only: the mods the server was started with), `rcon_password`
-// (the remote console's password; empty, a game offers none). The guards a game's
-// endpoint holds its clients to: `sv_timeout` (a client nothing was heard from for that long is
-// dropped: a dead link, not an idle player, who still sends moves) and `sv_floodprot`,
-// `sv_floodprotmsg` (the chat flood rule, guards.hpp). Players' votes on the settings for a map
-// (vote.hpp): `sv_vote`, `sv_vote_time`, `sv_vote_wait`, `sv_vote_allow`, `sv_vote_deny`, read by
-// the game that runs them (`vote_settings`). A dedicated server
-// reads them from the game directories' `server.cfg` in layers and its command line (config.hpp,
-// main.hpp).
+// `sv_rendezvous`, `sv_master` (the masters a server beats to, docs/hub.md), `sv_mod` (read-only:
+// the mods the server was started with), `rcon_password` (the remote console's password; empty, a
+// game offers none). The guards a game's endpoint holds its clients to: `sv_timeout` (a client
+// nothing was heard from for that long is dropped: a dead link, not an idle player, who still sends
+// moves) and `sv_floodprot`, `sv_floodprotmsg` (the chat flood rule, guards.hpp). Players' votes on
+// the settings for a map (vote.hpp): `sv_vote`, `sv_vote_time`, `sv_vote_wait`, `sv_vote_allow`,
+// `sv_vote_deny`, read by the game that runs them (`vote_settings`). A dedicated server reads them
+// from the game directories' `server.cfg` in layers and its command line (config.hpp, main.hpp).
 //
 // ge:summary The server core: ServerGame's table, the frame, the node, session and hosting round it
 // ge:keywords server dedicated-server listen-server server-core servergame server_frame
@@ -53,6 +52,7 @@
 
 #include "console/cvar.hpp"
 #include "net/hosting.hpp"
+#include "net/master.hpp"
 #include "net/node.hpp"
 #include "net/session.hpp"
 #include "net/transport.hpp"
@@ -83,6 +83,7 @@ struct ServerConfig {
   std::string spectator_password;    // sv_spectatorpassword: watching takes it
   std::string rcon_password;         // rcon_password: the remote console's (empty: none offered)
   std::string rendezvous;            // sv_rendezvous: the rendezvous to list with (M17r)
+  std::string masters;               // sv_master: the masters to beat to, space-separated
   std::string mod;                   // sv_mod: the mods' directories, lowest first (read-only)
   double timeout_s = 65;             // sv_timeout: a client silent this long is dropped
   double countdown_s = 5;            // sv_countdown: everyone ready to the match, s (sv_lobby)
@@ -154,6 +155,11 @@ struct ServerGame {
   uint64_t (*hash)(const void* game) = nullptr;
   // The game's part of a status line (`players=8 commands=…`); may be null.
   std::string (*status)(const void* game) = nullptr;
+  // The game's part of the public status record (net/status.hpp) a hub or a browser asks for: its
+  // mode, phase, players, teams and keys over what the core fills (name, map, slots, the lock);
+  // may be null.
+  void (*fill_status)(const void* game, net::Status& status) = nullptr;
+  uint32_t version = 0;  // the game's build in the status record and the master's list
   // The run's input log as bytes; false with `error` when there is none (may be null: no logs).
   bool (*save_log)(const void* game, std::vector<uint8_t>& bytes, std::string& error) = nullptr;
   // A log's frames run again; false with `error` when it cannot be read (may be null).
@@ -167,6 +173,12 @@ struct ServerGame {
   // offline. Both null: the core's own node, session and hosting round `frame`.
   bool (*serve)(void* game, net::Transport& port, std::string& error) = nullptr;
   void (*net_frame)(void* game, int64_t now_us) = nullptr;
+
+  // A game a TV node can broadcast (engine/tv/server_source.hpp): the last frame as the game's
+  // viewers need it (what changed: its moves, its events), appended to `out`, and the whole state
+  // a viewer who joins starts from. Both null: no broadcast.
+  void (*tv_frame)(const void* game, std::vector<uint8_t>& out) = nullptr;
+  void (*tv_keyframe)(const void* game, std::vector<uint8_t>& out) = nullptr;
 };
 
 struct Server {
@@ -187,6 +199,9 @@ struct Server {
   net::Node node;
   net::SessionHost session;
   net::Hosting hosting;
+  net::MasterBeat beat;  // sv_master's masters (none: no beat)
+  uint64_t status_answers = 0;
+  uint64_t public_secret = 0;  // an own-protocol game's status cookies (the node's otherwise)
 };
 
 // The settings' cvars bound to `config` (which must outlive `cvars`), its values the fallbacks;
@@ -212,6 +227,9 @@ uint64_t server_digest(const Server& s);
 double server_time(const Server& s);
 // The clock at the end of the next frame, us (a simulated network is advanced to it first).
 int64_t server_next_us(const Server& s);
+// The public status record as the server answers it (net/status.hpp): the core's half, then the
+// game's `fill_status`.
+net::Status server_public_status(const Server& s);
 // `t=12.0 s frame=924 seated=8 clients=0 <the game's>`.
 std::string server_status(const Server& s);
 // What the server is: name, map, slots, address; the banner a dedicated server prints.

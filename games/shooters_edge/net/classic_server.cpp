@@ -229,7 +229,8 @@ void handle_oob(ClassicServer& s, const gn::Address& from, const uint8_t* data, 
   pg::Words w;
   pg::tokenize_words(text.substr(0, text.find('\n')).c_str(), w);
   const std::string cmd = pg::word(w, 0);
-  if (cmd == "ping" || (size == 5 && data[4] == 'k')) {
+  // A ping: "ping", or `k` alone or before a newline (a forwarder's probe).
+  if (cmd == "ping" || cmd == "k") {
     const uint8_t l = 'l';
     send_oob(s, from, &l, 1);
   } else if (cmd == "status") {
@@ -306,6 +307,7 @@ void relay_voice(ClassicServer& s, int slot, const ClcMsg& m) {
     s.counts.voice_out++;
   }
   if (s.mvd) mvd_voice(*s.mvd, v);
+  for (MultiviewRecorder* r : s.streams) mvd_voice(*r, v);
 }
 
 void handle_packet(ClassicServer& s, int slot, const uint8_t* data, size_t size) {
@@ -452,9 +454,7 @@ void client_print(ClassicServer& s, int slot, int level, const std::string& text
 // map's static sounds and signon writes, the baselines and the server info.
 bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error) {
   if (!rules || rules->models.empty()) {
-    error =
-        "classic_start: the rules have no map; next: start a map on the runner before "
-        "classic_start";
+    error = "the server has no map running";
     return false;
   }
   s.rules = &rules;
@@ -478,7 +478,7 @@ bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error
     if (qc.out.init.size() > kMaxMsgLen / 2) {
       error = "classic_start: the map's signon writes are " + std::to_string(qc.out.init.size()) +
               " bytes, more than one signon buffer carries (" + std::to_string(kMaxMsgLen / 2) +
-              "); next: split the signon at message boundaries in messages.hpp";
+              ")";
       return false;
     }
     s.signon.push_back(qc.out.init);
@@ -610,7 +610,7 @@ void classic_drop(ClassicServer& s, int slot, const std::string& why) {
 bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std::string& error,
                        bool bot) {
   if (slot < 0 || slot >= sh::kMaxClients || s.clients[slot].state != ConnState::free) {
-    error = "slot " + std::to_string(slot) + " is a client's; next: seat the bot in a free slot";
+    error = "slot " + std::to_string(slot) + " is taken by a player";
     return false;
   }
   ClassicClient& c = s.clients[slot];
@@ -720,6 +720,27 @@ std::string status_text(const ClassicServer& s, int opt) {
   return t;
 }
 
+void status_players(const ClassicServer& s, std::vector<gn::StatusPlayer>& out) {
+  out.clear();
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    const ClassicClient& c = s.clients[i];
+    if (c.state == ConnState::free) continue;
+    gn::StatusPlayer p;
+    p.name = c.name;
+    p.team = info_get(c.userinfo, "team");
+    p.score = c.rules_active ? static_cast<int32_t>(s.game->world.clients[i].numbers.frags) : 0;
+    const int ping = c.state != ConnState::spawned || c.ping_samples == 0
+                         ? 0
+                         : static_cast<int>(c.ping_s * 1000);
+    p.ping_ms = static_cast<uint16_t>(ping < 0 ? 0 : ping > 9999 ? 9999 : ping);
+    const double minutes = (s.game->sv.time - c.connect_time) / 60;
+    p.minutes = static_cast<uint16_t>(minutes < 0 ? 0 : minutes > 65535 ? 65535 : minutes);
+    p.flags = static_cast<uint8_t>((c.local ? gn::kPlayerBot : 0) |
+                                   (c.spectator ? gn::kPlayerSpectator : 0));
+    out.push_back(std::move(p));
+  }
+}
+
 EntityState entity_state(const ClassicServer& s, int e) {
   EntityState st;
   st.number = e;
@@ -803,6 +824,7 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
   route_events(s);
   tell_frags(s);
   if (s.mvd) mvd_frame(s, *s.mvd);
+  for (MultiviewRecorder* r : s.streams) mvd_frame(s, *r);
 
   for (int i = 0; i < sh::kMaxClients; i++) {
     ClassicClient& c = s.clients[i];

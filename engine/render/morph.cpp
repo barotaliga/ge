@@ -357,6 +357,7 @@ void prepare_morph(gpu::Device& device, Morph& morph, std::span<const MorphDraw>
       g.shade[k] = d.shade[k];
       g.shade_dir[k] = d.shade_dir[k];
     }
+    g.shade_dir[3] = d.alpha >= 1 ? 0.0f : 1.0f - (d.alpha > 0 ? d.alpha : 0.0f);  // see-through
     pack_warp(d.warp, g.warp);
     g.burn[0] = d.burn.charred;
     g.burn[1] = d.burn.embers;

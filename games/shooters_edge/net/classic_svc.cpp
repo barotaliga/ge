@@ -351,8 +351,7 @@ bool read_svc(gn::Reader& r, SvcMsg& m, const WireCtx& ctx, std::string& error) 
   }
   if (d == nullptr) {
     error = "read_svc: unknown message id " + std::to_string(m.id) + " at byte " +
-            std::to_string(r.at - 1) +
-            "; next: the stream cannot be resynced; check the agreed extensions (classic_ext.hpp)";
+            std::to_string(r.at - 1) + "; the connection cannot recover";
     return false;
   }
   const Coords coords = coords_of(ctx.ext);
@@ -417,8 +416,7 @@ bool read_svc(gn::Reader& r, SvcMsg& m, const WireCtx& ctx, std::string& error) 
         const auto kind = static_cast<uint8_t>(read_byte(r));
         const char* layout = temp_entity_layout(kind);
         if (layout == nullptr) {
-          error = "read_svc: unknown temporary entity kind " + std::to_string(kind) +
-                  "; next: the te:: table in classic_svc.hpp";
+          error = "read_svc: unknown temporary entity kind " + std::to_string(kind);
           return false;
         }
         m.ints.push_back(kind);
@@ -470,7 +468,7 @@ bool read_svc(gn::Reader& r, SvcMsg& m, const WireCtx& ctx, std::string& error) 
         std::vector<EntityState> out;
         const std::vector<EntityState> none;
         if (!read_packet_entities(r, nullptr, none, ctx.ext, out, &m.ents)) {
-          error = "read_svc: a damaged entity list; next: compare the agreed extensions";
+          error = "read_svc: a damaged entity list";
           return false;
         }
         break;
@@ -633,7 +631,7 @@ bool read_clc(gn::Reader& r, ClcMsg& m, std::string& error) {
     }
     default:
       error = "read_clc: unknown client message id " + std::to_string(m.id) +
-              "; next: the client is dropped (the stream cannot be resynced)";
+              "; the client is dropped (the connection cannot recover)";
       return false;
   }
   if (r.bad) {

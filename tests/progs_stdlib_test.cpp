@@ -102,7 +102,10 @@ TEST(every_stdlib_builtin_has_its_standard_number) {
       {97, "pow"},         {114, "strlen"},     {115, "strcat"},       {116, "substr"},
       {118, "strzone"},    {119, "strunzone"},  {65, "etos"},          {471, "asin"},
       {472, "acos"},       {473, "atan"},       {474, "atan2"},        {475, "tan"},
-      {480, "strtolower"}, {481, "strtoupper"}, {484, "strreplace"},   {485, "strireplace"}};
+      {480, "strtolower"}, {481, "strtoupper"}, {484, "strreplace"},   {485, "strireplace"},
+      {117, "stov"},       {221, "strstrofs"},  {222, "str2chr"},      {223, "chr2str"},
+      {224, "strconv"},    {225, "strpad"},     {226, "infoadd"},      {227, "infoget"},
+      {228, "strncmp"},    {229, "strcasecmp"}, {230, "strncasecmp"},  {627, "sprintf"}};
   CHECK(pg::kStdlibCount == static_cast<int>(sizeof want / sizeof want[0]));
   for (const auto& [n, name] : want) {
     const pg::StdBuiltin* b = pg::stdlib_builtin(name);
@@ -199,7 +202,11 @@ TEST(the_string_builtins) {
   m.call("substr", {"hello", 9, 1});
   CHECK(m.s().empty());
   m.call("substr", {"hello", -2, -1});
-  CHECK(m.s() == "hello");  // ours: a negative start is 0 and a negative length runs to the end
+  CHECK(m.s() == "lo");  // a negative start and length count from the end
+  m.call("substr", {"hello", 0, -2});
+  CHECK(m.s() == "hell");
+  m.call("substr", {"hello", -9, 2});
+  CHECK(m.s() == "he");
   m.call("substr", {"", 0, 3});
   CHECK(m.s().empty());
   m.call("precache_file", {"maps/x.bsp"});

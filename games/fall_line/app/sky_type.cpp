@@ -13,7 +13,7 @@ std::string sky_style_of(const cfg::Settings& s, ge::render::SkyStyle& out) {
   out = ge::render::SkyStyle{};
   if (!ge::render::sky_style_named(s.sky_type, out)) {
     problem = "sv_skytype '" + s.sky_type +
-              "' names no sky type; the Earth's is drawn. next: set sv_skytype to one of " +
+              "' is not a sky type, so the Earth's is drawn. The sky types are " +
               std::string(ge::render::sky_type_list()) + ".";
   }
   ge::render::SkyKnobs k;
@@ -38,8 +38,8 @@ std::string moon_set_of(const cfg::Settings& s, ge::render::MoonSet& out) {
   std::string problem;
   if (ge::render::moon_set_named(words, out, problem)) return {};
   out = ge::render::MoonSet{};
-  return "sv_moons: " + problem + "; the Earth's moon is drawn. next: set sv_moons to names " +
-         "such as `phobos deimos` or `moon io:2`, or type for the sky type's own.";
+  return "sv_moons: " + problem + ", so the Earth's moon is drawn. Name moons such as " +
+         "\"phobos deimos\" or \"moon io:2\", or use type for the sky type's own.";
 }
 
 std::string cloud_stack_of(const cfg::Settings& s, FrameOptions& o) {
@@ -48,8 +48,8 @@ std::string cloud_stack_of(const cfg::Settings& s, FrameOptions& o) {
   const std::string problem =
       ge::render::cloud_stack_named(s.cloud_kinds, o.cloud_kinds, o.cloud_count);
   if (problem.empty()) return {};
-  return "sv_clouds: " + problem + ". next: set sv_clouds to kinds joined by '+' (such as " +
-         "cumulus+cirrus), or map for the map's own.";
+  return "sv_clouds: " + problem + ". Join cloud kinds with '+' (such as " +
+         "cumulus+cirrus), or use map for the map's own.";
 }
 
 }  // namespace fall_line::app

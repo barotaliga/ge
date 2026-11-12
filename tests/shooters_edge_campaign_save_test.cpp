@@ -145,7 +145,7 @@ TEST(a_save_is_refused_when_the_game_cannot_be_saved) {
   std::string error;
   sv::Campaign none;
   CHECK(!sv::campaign_save(none, file, error));
-  CHECK(error.find("no map") != std::string::npos);
+  CHECK(error.find("no game is running") != std::string::npos);
   Game dead;
   dead.c.server->sv.edicts[1].health = 0;
   CHECK(!sv::campaign_save(dead.c, file, error));
@@ -171,7 +171,7 @@ TEST(a_damaged_or_foreign_file_is_refused_on_load) {
   pg::Progs other = campaign_mod();
   other.globals.back() ^= 1;
   CHECK(!sv::campaign_load(b.c, other, options({}), file, "other", error));
-  CHECK_MSG(error.find("another program") != std::string::npos, error);
+  CHECK_MSG(error.find("another game program") != std::string::npos, error);
   // The right one still loads.
   CHECK_MSG(sv::campaign_load(b.c, b.mod, options({}), file, "good", error), error);
   CHECK(sv::campaign_digest(*sv::qc_of(b.c.server)) == sv::campaign_digest(*sv::qc_of(a.c.server)));

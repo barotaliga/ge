@@ -39,6 +39,60 @@ int game_seated(const void* ctx) {
   return s->game->seated ? s->game->seated(s->state) : 0;
 }
 
+// The node's foreign datagrams this frame: status asks answered, the masters' acks taken.
+void answer_public(Server& s) {
+  bool asked = false;
+  gn::Status status;
+  uint8_t out[gn::kMaxDatagram];
+  for (const gn::Foreign& f : s.node.foreign) {
+    const uint8_t* data = s.node.foreign_bytes.data() + f.offset;
+    if (gn::master_beat_read(s.beat, data, f.size, f.from, s.now_us)) continue;
+    if (!gn::is_status_ask(data, f.size)) continue;
+    if (!asked) {
+      status = server_public_status(s);
+      asked = true;
+    }
+    const size_t n = gn::status_answer(data, f.size, f.from, s.game->protocol, s.node.secret,
+                                       s.now_us, status, out, sizeof out);
+    if (n) {
+      gn::transport_send(*s.port, f.from, out, n, s.now_us);
+      s.status_answers++;
+    }
+  }
+}
+
+// A datagram on an own-protocol game's socket offered first to the core (Transport::on_public):
+// a master's ack taken, a hub's status ask answered; anything else left to the game.
+bool own_public(void* ctx, const uint8_t* data, size_t size, const gn::Address& from,
+                int64_t now_us) {
+  Server& s = *static_cast<Server*>(ctx);
+  if (gn::master_beat_read(s.beat, data, size, from, now_us)) return true;
+  if (!gn::is_status_ask(data, size)) return false;
+  uint8_t out[gn::kMaxDatagram];
+  const size_t n = gn::status_answer(data, size, from, s.game->protocol, s.public_secret, now_us,
+                                     server_public_status(s), out, sizeof out);
+  if (n) {
+    gn::transport_send(*s.port, from, out, n, now_us);
+    s.status_answers++;
+  }
+  return true;
+}
+
+// The beat to sv_master's masters; false with `error` when one is not an address.
+bool start_beat(Server& s, const ServerGame& game, const ServerConfig& config, std::string& error) {
+  gn::MasterBeatConfig bc;
+  if (!gn::master_list(config.masters, bc.masters, error)) {
+    error = "sv_master: " + error;
+    return false;
+  }
+  bc.protocol = game.protocol;
+  bc.kind = gn::NodeKind::game;
+  bc.version = game.version;
+  bc.seed = uint64_t{config.seed} * 6151u + 5u;
+  gn::master_beat_init(s.beat, bc);
+  return true;
+}
+
 }  // namespace
 
 Server::~Server() { server_close(*this); }
@@ -60,6 +114,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   const std::string motd = c.motd, admin = c.admin, rotation = c.maprotation;
   const std::string spectators = std::to_string(c.max_spectators);
   const std::string spec_password = c.spectator_password, rendezvous = c.rendezvous, mod = c.mod;
+  const std::string masters = c.masters;
   const std::string rcon = c.rcon_password;
   cvars.bind(
       {"sv_hostname", name, info, "the server's name in the browser and the lobby", CvarKind::text},
@@ -104,14 +159,20 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   cvars.bind({"sv_spectatorpassword", spec_password, cn::kServer,
               "a password to watch (empty: none)", CvarKind::text},
              &c.spectator_password);
-  cvars.bind({"rcon_password", rcon, cn::kServer,
-              "the remote console's password: `rcon <password> <line>` runs a server console line "
-              "from afar (empty: no remote console)",
-              CvarKind::text},
-             &c.rcon_password);
+  cvars.bind(
+      {"rcon_password", rcon, cn::kServer,
+       "the remote console's password: \"rcon <password> <line>\" runs a server console line "
+       "from afar (empty: no remote console)",
+       CvarKind::text},
+      &c.rcon_password);
   cvars.bind({"sv_rendezvous", rendezvous, latched, "the rendezvous to list with (empty: none)",
               CvarKind::text},
              &c.rendezvous);
+  cvars.bind({"sv_master", masters, latched,
+              "the masters to beat to, space-separated host:port (port 27900 when unsaid; empty: "
+              "listed by none)",
+              CvarKind::text},
+             &c.masters);
   cvars.bind({"sv_mod", mod, cn::kServer | cn::kServerInfo | cn::kReadOnly,
               "the mods' directories over the base, lowest first (--mod)", CvarKind::text},
              &c.mod);
@@ -182,27 +243,25 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   server_close(s);
   if (!game.create || !game.frame || !game.frame_seconds || !game.hash) {
     error = std::string(game.binary) +
-            "'s ServerGame lacks create, frame, frame_seconds or hash; next: fill them "
-            "(engine/server/server.hpp)";
+            " is built wrong: its ServerGame lacks create, frame, frame_seconds or hash";
     return false;
   }
   const int most = game.max_clients < kMaxClients ? game.max_clients : kMaxClients;
   if (config.maxclients < 1 || config.maxclients > most) {
     error = "sv_maxclients " + std::to_string(config.maxclients) + " is outside 1.." +
-            std::to_string(most) + "; next: set it in range";
+            std::to_string(most);
     return false;
   }
   if (config.bots < 0 || config.bots > config.maxclients) {
     error = std::to_string(config.bots) + " bots do not fit " + std::to_string(config.maxclients) +
-            " slots; next: raise sv_maxclients or lower sv_bots";
+            " slots: raise sv_maxclients or lower sv_bots";
     return false;
   }
   FloodRule flood;
   if (!parse_flood_rule(config.floodprot, flood, error)) return false;
   gn::Visibility vis{};
   if (!gn::visibility_of(config.visibility, vis)) {
-    error =
-        "sv_visibility '" + config.visibility + "' is not lan, invite or listed; next: pick one";
+    error = "sv_visibility '" + config.visibility + "' must be lan, invite or listed";
     return false;
   }
   s.game = &game;
@@ -216,21 +275,31 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   if (game.serve) {
     if (!game.net_frame) {
       error = std::string(game.binary) +
-              "'s ServerGame serves its own protocol without net_frame; next: fill it "
-              "(engine/server/server.hpp)";
+              " is built wrong: its ServerGame serves its own protocol without net_frame";
       server_close(s);
       return false;
     }
-    if (!game.serve(s.state, *transport, error)) {
+    if (!start_beat(s, game, config, error) || !game.serve(s.state, *transport, error)) {
       server_close(s);
       return false;
     }
     s.networked = s.own_protocol = true;
     s.port = transport;
+    // Only with masters to beat to: the hook and the bye touch the socket, which must then outlive
+    // the server (a dedicated process's does; a listen game may free its socket first).
+    if (!s.beat.config.masters.empty()) {
+      s.public_secret = (uint64_t{config.seed} + 0x51a7u) * 0x9e3779b97f4a7c15ull;
+      transport->on_public = own_public;
+      transport->public_ctx = &s;
+    }
     return true;
   }
   s.networked = true;
   s.port = transport;
+  if (!start_beat(s, game, config, error)) {
+    server_close(s);
+    return false;
+  }
 
   gn::node_init(s.node, node_config(game, config), *transport);
   gn::SessionConfig sc;
@@ -256,6 +325,7 @@ void server_frame(Server& s) {
   if (!s.state) return;
   if (s.own_protocol) {
     s.game->net_frame(s.state, s.now_us);
+    if (!s.beat.config.masters.empty()) gn::master_beat_update(s.beat, *s.port, s.now_us);
     s.now_us = server_next_us(s);
     s.frame++;
     return;
@@ -265,21 +335,46 @@ void server_frame(Server& s) {
   s.frame++;
   if (!s.networked) return;
   gn::node_update(s.node, s.now_us);
+  answer_public(s);
   gn::session_host_update(s.session, s.now_us);
   gn::hosting_update(s.hosting, s.now_us);
+  gn::master_beat_update(s.beat, *s.port, s.now_us);
   gn::node_flush(s.node, s.now_us);
 }
 
 void server_close(Server& s) {
   if (s.networked && !s.own_protocol) {
     gn::hosting_stop(s.hosting, s.now_us);
+    gn::master_beat_stop(s.beat, *s.port, s.now_us);
     gn::node_flush(s.node, s.now_us);
+  }
+  if (s.networked && s.own_protocol && !s.beat.config.masters.empty()) {
+    gn::master_beat_stop(s.beat, *s.port, s.now_us);
+    s.port->on_public = nullptr;
+    s.port->public_ctx = nullptr;
   }
   s.networked = false;
   s.own_protocol = false;
   s.port = nullptr;
   if (s.state && s.game && s.game->destroy) s.game->destroy(s.state);
   s.state = nullptr;
+}
+
+gn::Status server_public_status(const Server& s) {
+  gn::Status st;
+  st.kind = gn::NodeKind::game;
+  st.protocol = s.game ? s.game->protocol : 0;
+  st.version = s.game ? s.game->version : 0;
+  st.name = s.config.hostname;
+  st.map = s.config.map;
+  st.max_players = s.config.maxclients;
+  st.max_spectators = s.config.max_spectators;
+  st.locked = !s.config.password.empty();
+  st.phase = s.own_protocol ? gn::StatusPhase::playing  // the game's fill_status may say more
+             : s.session.phase == gn::SessionPhase::playing ? gn::StatusPhase::playing
+                                                            : gn::StatusPhase::lobby;
+  if (s.game && s.game->fill_status && s.state) s.game->fill_status(s.state, st);
+  return st;
 }
 
 uint64_t server_digest(const Server& s) { return s.state && s.game ? s.game->hash(s.state) : 0; }
