@@ -80,14 +80,6 @@ bool secret_matches(Store& s, const SecretHash& h, std::string_view secret) {
 
 bool password_ok(std::string_view p) { return p.size() >= 8 && p.size() <= 128; }
 
-bool game_password_ok(std::string_view p) {
-  if (p.size() < 6 || p.size() > 64) return false;
-  for (const char c : p) {
-    if (c == ' ' || c == '\t' || static_cast<uint8_t>(c) < 0x20) return false;
-  }
-  return true;
-}
-
 Account* live(Store& s, uint64_t id) {
   if (id == 0 || id > s.accounts.size()) return nullptr;
   Account& a = s.accounts[id - 1];
@@ -210,7 +202,7 @@ Answer login_game(Store& s, std::string_view name, std::string_view secret, std:
         return true;
       }
     }
-    return secret_matches(s, a.game_password, secret);
+    return false;
   });
 }
 
@@ -244,19 +236,6 @@ Refusal set_password(Store& s, uint64_t id, std::string_view password, const Fre
   return Refusal::none;
 }
 
-Refusal set_game_password(Store& s, uint64_t id, std::string_view secret, const Fresh& fresh) {
-  Account* a = live(s, id);
-  if (!a) return Refusal::unknown;
-  if (secret.empty()) {
-    a->game_password = SecretHash{};
-  } else {
-    if (!game_password_ok(secret)) return Refusal::bad_secret;
-    hash_secret(s, a->game_password, secret, fresh.data());
-  }
-  s.log += line_secret("gamepass", id, a->game_password);
-  return Refusal::none;
-}
-
 Answer recover(Store& s, std::string_view name, std::string_view recovery_code,
                std::string_view password, std::string_view from, int64_t now_us,
                const Fresh& fresh) {
@@ -287,7 +266,7 @@ Refusal remove(Store& s, uint64_t id, int64_t now_us) {
   if (!a) return Refusal::unknown;
   a->removed_s = now_us / 1000000;
   a->codes.clear();
-  a->password = a->game_password = SecretHash{};
+  a->password = SecretHash{};
   s.log += line_number("removed", id, a->removed_s);
   return Refusal::none;
 }
@@ -307,10 +286,10 @@ std::string refusal_words(Refusal r, int64_t wait_us) {
     case Refusal::name_taken:
       return "That name belongs to another player.";
     case Refusal::bad_secret:
-      return "A password is 8 to 128 characters; a game password 6 to 64, with no spaces.";
+      return "A password is 8 to 128 characters.";
     case Refusal::unknown:
     case Refusal::wrong:
-      return "That name and password do not match.";
+      return "That name and password, or that code, do not match.";
     case Refusal::held: {
       const int64_t s = (wait_us + 999999) / 1000000;
       char line[96];

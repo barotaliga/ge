@@ -1,15 +1,15 @@
 // LAB `accounts`: a master's account store through a busy month (docs/accounts.md, M59a).
 // Players sign up from a seeded list of names, and a share of them try a name another already
 // holds, spelled alike (a digit for a letter, a dash, capitals, coloured text); every refusal is
-// counted and a sample shown. Players sign in, and log in to game servers with one-time codes and
-// game passwords, some with a typing slip; a classic login is tried with the account's password
-// and must be refused. An attacker guesses one account's password from many addresses for a day:
+// counted and a sample shown. Players sign in, some after a typing slip, and log in to game servers
+// with one-time codes; a code typed a second time and a classic login with the account's password
+// must both be refused. An attacker guesses one account's password from many addresses for a day:
 // the throttle's holds say how many of its guesses were ever checked. The store's log and its
 // snapshot are read back into a new store, which must be the same. A bench half times one
 // Argon2id hash at the store's cost and at the master's default (measured, never in the digest).
 //
 // ge:summary Lab: accounts signed up, look-alike names refused, logins, codes, a brute force held
-// ge:keywords lab accounts account sign-up sign-in login-code game-password throttle brute-force
+// ge:keywords lab accounts account sign-up sign-in login-code one-time-code throttle brute-force
 // ge:keywords look-alike reserved-name argon2id cost log snapshot
 // ge:skill net labs
 // ge:test tests/account_store_test.cpp
@@ -109,7 +109,7 @@ void run(gl::Lab& lab) {
 
   // 1. Sign-ups, and the copycats.
   struct Player {
-    std::string name, password, game_password;
+    std::string name, password;
     uint64_t id = 0;
   };
   std::vector<Player> made;
@@ -168,7 +168,7 @@ void run(gl::Lab& lab) {
   }
 
   // 2. An evening of logins: passwords, codes, game passwords, slips.
-  int signed_in = 0, coded = 0, game_pw = 0, slips = 0, slip_refused = 0, password_classic = 0;
+  int signed_in = 0, coded = 0, reused = 0, slips = 0, slip_refused = 0, password_classic = 0;
   for (size_t i = 0; i < made.size(); i++) {
     Player& p = made[i];
     now += 3 * kSecond;
@@ -187,12 +187,14 @@ void run(gl::Lab& lab) {
       const ga::Answer code = ga::make_code(store, p.id, now, draw(rng));
       now += 30 * kSecond;  // typed into the game's console half a minute later
       if (ga::login_game(store, p.name, code.code, from, now).refusal == ga::Refusal::none) coded++;
-    } else if (i % 3 == 1) {
-      p.game_password = "gp" + std::to_string(i * 7919 % 100000);
-      ga::set_game_password(store, p.id, p.game_password, draw(rng));
-      if (ga::login_game(store, p.name, p.game_password, from, now).refusal == ga::Refusal::none) {
-        game_pw++;
+    } else if (i % 3 == 1) {  // a code typed a second time: spent
+      const ga::Answer code = ga::make_code(store, p.id, now, draw(rng));
+      ga::login_game(store, p.name, code.code, from, now + 20 * kSecond);
+      if (ga::login_game(store, p.name, code.code, from, now + 40 * kSecond).refusal ==
+          ga::Refusal::none) {
+        reused++;  // must never happen
       }
+      now += 41 * kSecond;
     } else if (ga::login_game(store, p.name, p.password, from, now + 5 * kSecond).refusal ==
                ga::Refusal::none) {
       password_classic++;  // must never happen
@@ -201,7 +203,7 @@ void run(gl::Lab& lab) {
   lab.metric("signed_in", signed_in, "count");
   lab.metric("slips_refused", slip_refused, "count");
   lab.metric("logged_in_by_code", coded, "count");
-  lab.metric("logged_in_by_game_password", game_pw, "count");
+  lab.metric("a_code_used_twice", reused, "count");
   lab.metric("password_taken_by_a_classic_login", password_classic, "count");
   if (signed_in != static_cast<int>(made.size()) || slip_refused != slips) {
     lab.fail("of " + std::to_string(made.size()) + " players " + std::to_string(signed_in) +
@@ -209,9 +211,13 @@ void run(gl::Lab& lab) {
                  std::to_string(slips) + " slips were refused",
              "sign_in in account/store.cpp; skill: net.");
   }
+  if (reused) {
+    lab.fail("a login code logged a player in twice",
+             "login_game spends a code as it takes it (account/store.cpp); skill: net.");
+  }
   if (password_classic) {
     lab.fail("a classic login took an account's password",
-             "login_game takes only a code or the game password (account/store.hpp); skill: net.");
+             "login_game takes only a login code (account/store.hpp); skill: net.");
   }
 
   // 3. A brute force on one account from fresh addresses, one guess a second for a day.
@@ -298,7 +304,7 @@ void run(gl::Lab& lab) {
                          std::to_string(tries_alike) + " (all)"});
   totals.rows.push_back({"signed in", std::to_string(signed_in), "every account"});
   totals.rows.push_back({"logged in to a server by code", std::to_string(coded), "every third"});
-  totals.rows.push_back({"logged in by game password", std::to_string(game_pw), "every third"});
+  totals.rows.push_back({"a code typed again that let a player in", std::to_string(reused), "0"});
   totals.rows.push_back(
       {"classic logins that took the account's password", std::to_string(password_classic), "0"});
   totals.rows.push_back({"attacker's guesses sent / checked",
@@ -366,8 +372,8 @@ const gl::LabSpec kSpec{
     "engine/account (store, names, store_text), engine/net/crypto.hpp (password_hash)",
     "net",
     "Does a master's account store keep names to one player however they are spelled, let players "
-    "in with the right secret and the right kind of secret only, hold back a brute force, and read "
-    "its own log back?",
+    "in with the right secret and the right kind of secret only (a code once), hold back a brute "
+    "force, and read its own log back?",
     {
         {"players", "400", "sign-ups"},
         {"copycats", "0.25", "the share of sign-ups followed by a look-alike of a held name"},

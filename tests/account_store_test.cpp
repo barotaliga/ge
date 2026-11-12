@@ -3,7 +3,7 @@
 // classic login never takes the password), recovery, blocking, removal and the name freed, and
 // the log and snapshot read back into the same store. A cheap hash cost keeps it fast.
 //
-// ge:summary Tests: account sign-up, sign-in, throttle, codes, game password, recovery, the log
+// ge:summary Tests: account sign-up, sign-in, throttle, codes, recovery, the log
 // ge:keywords test account store create sign_in login_game make_code recover throttle hold
 // ge:keywords store_text store_read log snapshot
 // ge:skill net testing
@@ -81,7 +81,7 @@ TEST(the_hold_tops_out_at_fifteen_minutes_and_an_unknown_name_holds_only_the_add
   CHECK(ga::refusal_words(ga::Refusal::unknown, 0) == ga::refusal_words(ga::Refusal::wrong, 0));
 }
 
-TEST(a_classic_login_takes_a_code_once_or_the_game_password_never_the_password) {
+TEST(a_classic_login_takes_a_code_once_and_never_the_password) {
   ga::Store s = small_store();
   const uint64_t id = ga::create(s, "Niclas", "correct horse", kT0, fresh(1)).id;
   CHECK(ga::login_game(s, "niclas", "correct horse", "a", kT0).refusal == ga::Refusal::wrong);
@@ -96,13 +96,10 @@ TEST(a_classic_login_takes_a_code_once_or_the_game_password_never_the_password) 
   const ga::Answer late = ga::make_code(s, id, t, fresh(6));
   CHECK(ga::login_game(s, "Niclas", late.code, "d", t + ga::kCodeLife_us + 4 * kSecond).refusal ==
         ga::Refusal::wrong);
-  CHECK(ga::set_game_password(s, id, "has space", fresh(7)) == ga::Refusal::bad_secret);
-  CHECK(ga::set_game_password(s, id, "fraggin", fresh(7)) == ga::Refusal::none);
   const int64_t later = t + 3600 * kSecond;
-  CHECK(ga::login_game(s, "niclas", "fraggin", "e", later).refusal == ga::Refusal::none);
-  CHECK(ga::sign_in(s, "niclas", "fraggin", "f", later).refusal == ga::Refusal::wrong);
   for (int i = 0; i < 4; i++) ga::make_code(s, id, later, fresh(static_cast<uint8_t>(10 + i)));
   CHECK(ga::make_code(s, id, later, fresh(20)).refusal == ga::Refusal::too_many_codes);
+  CHECK(ga::sign_in(s, "niclas", "correct horse", "e", later).refusal == ga::Refusal::none);
 }
 
 TEST(recovery_sets_a_new_password_and_a_new_code_and_removal_frees_the_name_later) {
@@ -128,7 +125,7 @@ TEST(the_log_and_the_snapshot_read_back_into_the_same_store) {
   ga::Store s = small_store();
   const uint64_t a = ga::create(s, "Niclas", "correct horse", kT0, fresh(1)).id;
   const uint64_t b = ga::create(s, "Rocket", "rocket jump", kT0, fresh(2)).id;
-  ga::set_game_password(s, a, "fraggin", fresh(3));
+  const ga::Answer mine = ga::make_code(s, a, kT0, fresh(3));
   const ga::Answer code = ga::make_code(s, b, kT0, fresh(4));
   ga::make_code(s, b, kT0, fresh(5));
   ga::login_game(s, "rocket", code.code, "x", kT0 + kSecond);
@@ -139,7 +136,7 @@ TEST(the_log_and_the_snapshot_read_back_into_the_same_store) {
     std::string error;
     CHECK_MSG(ga::store_read(r, text, error), error.c_str());
     CHECK(ga::store_text(r, now) == ga::store_text(s, now));
-    CHECK(ga::login_game(r, "niclas", "fraggin", "y", now).refusal == ga::Refusal::none);
+    CHECK(ga::login_game(r, "niclas", mine.code, "y", now).refusal == ga::Refusal::none);
     CHECK(ga::find(r, b)->codes.size() == 1 && ga::find(r, b)->blocked);
   }
   ga::Store bad = small_store();

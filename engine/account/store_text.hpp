@@ -4,7 +4,6 @@
 //
 //   account <id> <name> <created_s>
 //   password <id> <kib> <passes> <salt hex> <hash hex>
-//   gamepass <id> <kib> <passes> <salt hex> <hash hex>      gamepass <id> -     (cleared)
 //   recovery <id> <digest hex>
 //   code <id> <expires_us> <digest hex>                      spent <id> <digest hex>
 //   blocked <id> 0|1        removed <id> <s>        seen <id> <s>

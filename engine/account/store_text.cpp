@@ -100,9 +100,9 @@ std::string apply(Store& s, std::string_view line) {
   }
   if (at > s.accounts.size()) return "names an account no earlier line created";
   Account& a = s.accounts[at - 1];
-  if (w[0] == "password" || w[0] == "gamepass") {
-    if (!read_secret(w, w[0] == "password" ? a.password : a.game_password)) {
-      return "want: " + std::string(w[0]) + " <id> <kib> <passes> <salt hex> <hash hex>";
+  if (w[0] == "password") {
+    if (!read_secret(w, a.password)) {
+      return "want: password <id> <kib> <passes> <salt hex> <hash hex>";
     }
     return "";
   }
@@ -137,7 +137,7 @@ std::string apply(Store& s, std::string_view line) {
   else if (w[0] == "removed") {
     a.removed_s = v;
     a.codes.clear();
-    a.password = a.game_password = SecretHash{};
+    a.password = SecretHash{};
   } else {
     return "an unknown word: " + std::string(w[0]);
   }
@@ -180,7 +180,6 @@ std::string store_text(const Store& s, int64_t now_us) {
       continue;
     }
     out += line_secret("password", a.id, a.password);
-    if (a.game_password.set) out += line_secret("gamepass", a.id, a.game_password);
     out += line_digest("recovery", a.id, a.recovery);
     for (const LoginCode& c : a.codes) {
       if (c.expires_us > now_us) out += line_code(a.id, c);
