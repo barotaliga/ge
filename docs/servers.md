@@ -237,6 +237,8 @@ rules unless marked engine:
 | `sv_rcontime` | `sv_timestamplen` | seconds a hashed line's time may be off the server's clock (0: not checked; 60) |
 | `sv_rconrate` | `sv_rconlim` | remote console tries answered a second (0: no limit; 10) |
 | `sv_banmode` | `filterban` | 1: the ban list refuses its addresses; 0: only its addresses may join. The list is the engine's (`engine/server/bans.hpp`): `addip <pattern> [ban\|safe] [+seconds\|time]`, `removeip`, `listip`, `writeip`, saved to the game folder's `listip.cfg` and read back at start |
+| `sv_vippassword`, `sv_vipvalues` | `vip_password`, `vip_values` | words that make a client a VIP, and the level each gives; a VIP skips the passwords and carries `*VIP <level>`. The VIP address list is `vip_addip <pattern> [level]`, `vip_removeip`, `vip_listip`, `vip_writeip` (saved to `vip_ip.cfg`) |
+| `sv_maxvipspectators` | `maxvip_spectators` | spectator slots only a VIP may take |
 
 With `sv_maxspectators` above 0 the spectators have their own slots beside `sv_maxclients`'s
 players (the loop's slots are both, at most 32); at 0 a spectator takes a free player slot.

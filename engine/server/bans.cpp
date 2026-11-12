@@ -47,8 +47,9 @@ void drop_expired(BanList& list, int64_t now) {
   std::erase_if(list.entries, [now](const BanEntry& e) { return e.until != 0 && e.until <= now; });
 }
 
-std::string entry_line(const BanEntry& e) {
+std::string entry_line(const BanEntry& e, bool vip) {
   std::string s = e.text;
+  if (vip) s += " " + std::to_string(e.level);
   if (e.safe) s += " safe";
   if (e.until != 0) s += " " + std::to_string(e.until);
   return s;
@@ -110,29 +111,39 @@ bool ban_refuses(const BanList& list, int ban_mode, const net::Address& a, int64
   return banned;
 }
 
-bool ban_command(BanList& list, std::string_view line, int64_t now, std::string& out) {
+namespace {
+
+// The list's words: `prefix` "" for a ban list, "vip_" for a VIP list.
+bool list_command(BanList& list, std::string_view line, int64_t now, std::string& out, bool vip) {
   const std::vector<std::string_view> w = words(line);
   if (w.empty()) return false;
-  const std::string_view cmd = w[0];
+  const std::string_view prefix = vip ? "vip_" : "";
+  if (w[0].substr(0, prefix.size()) != prefix) return false;
+  const std::string_view cmd = w[0].substr(prefix.size());
+  const std::string name(w[0]);
   if (cmd != "addip" && cmd != "removeip" && cmd != "listip" && cmd != "writeip") return false;
   drop_expired(list, now);
   if (cmd == "listip" || cmd == "writeip") {
     const bool cfg = cmd == "writeip";
     out.clear();
-    for (const BanEntry& e : list.entries) out += (cfg ? "addip " : "") + entry_line(e) + "\n";
+    for (const BanEntry& e : list.entries)
+      out += (cfg ? std::string(prefix) + "addip " : "") + entry_line(e, vip) + "\n";
     if (!cfg) out += std::to_string(list.entries.size()) + " addresses listed\n";
     return true;
   }
   if (w.size() < 2) {
-    out = cmd == "addip" ? "usage: addip <address> [ban|safe] [+seconds|time]\n"
-                         : "usage: removeip <address>\n";
+    out = cmd == "addip"
+              ? "usage: " + name +
+                    (vip ? " <address> [level]\n" : " <address> [ban|safe] [+seconds|time]\n")
+              : "usage: " + name + " <address>\n";
     return true;
   }
   if (cmd == "removeip") {
     const auto it = std::find_if(list.entries.begin(), list.entries.end(),
                                  [&](const BanEntry& e) { return e.text == w[1]; });
     if (it == list.entries.end()) {
-      out = "removeip: " + std::string(w[1]) + " is not on the list; listip shows it as written\n";
+      out = name + ": " + std::string(w[1]) + " is not on the list; " + std::string(prefix) +
+            "listip shows it as written\n";
       return true;
     }
     list.entries.erase(it);
@@ -141,13 +152,20 @@ bool ban_command(BanList& list, std::string_view line, int64_t now, std::string&
   }
   BanEntry e;
   if (!parse_ban_pattern(w[1], e)) {
-    out = "addip: " + std::string(w[1]) +
+    out = name + ": " + std::string(w[1]) +
           " is not an address pattern; write up to four numbers 0..255 with dots, * for any\n";
     return true;
   }
+  e.level = vip ? 1 : 0;
   for (size_t i = 2; i < w.size(); i++) {
     int64_t t = 0;
-    if (w[i] == "safe") {
+    if (vip) {
+      if (i > 2 || !parse_int(w[i], t) || t < 1 || t > 1000000) {
+        out = name + ": " + std::string(w[i]) + " is not a level; give a number 1 or more\n";
+        return true;
+      }
+      e.level = static_cast<int>(t);
+    } else if (w[i] == "safe") {
       e.safe = true;
     } else if (w[i] == "ban") {
       e.safe = false;
@@ -156,15 +174,25 @@ bool ban_command(BanList& list, std::string_view line, int64_t now, std::string&
     } else if (parse_int(w[i], t) && t > 0) {
       e.until = t;
     } else {
-      out = "addip: " + std::string(w[i]) +
+      out = name + ": " + std::string(w[i]) +
             " is neither ban, safe, +seconds nor a time in seconds since 1970\n";
       return true;
     }
   }
   std::erase_if(list.entries, [&](const BanEntry& x) { return x.text == e.text; });
   list.entries.push_back(e);
-  out = "added " + entry_line(e) + "\n";
+  out = "added " + entry_line(e, vip) + "\n";
   return true;
+}
+
+}  // namespace
+
+bool ban_command(BanList& list, std::string_view line, int64_t now, std::string& out) {
+  return list_command(list, line, now, out, false);
+}
+
+bool vip_command(BanList& list, std::string_view line, int64_t now, std::string& out) {
+  return list_command(list, line, now, out, true);
 }
 
 }  // namespace ge::server

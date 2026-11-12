@@ -256,14 +256,16 @@ bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) 
     out = classic_status_table(s);
     return true;
   }
-  if (gsv::ban_command(s.bans, line, classic_unix_time(s), out)) {
-    if (cmd == "writeip" && !s.cfg.ban_file.empty()) {
-      std::ofstream f(s.cfg.ban_file, std::ios::binary | std::ios::trunc);
+  // The ban and VIP lists (engine/server/bans.hpp); `writeip` and `vip_writeip` save theirs.
+  const bool vip = gsv::vip_command(s.vips, line, classic_unix_time(s), out);
+  if (vip || gsv::ban_command(s.bans, line, classic_unix_time(s), out)) {
+    const std::string& file = vip ? s.cfg.vip_file : s.cfg.ban_file;
+    if (cmd == (vip ? "vip_writeip" : "writeip") && !file.empty()) {
+      std::ofstream f(file, std::ios::binary | std::ios::trunc);
       f << out;
-      out =
-          f ? "Saved " + std::to_string(s.bans.entries.size()) + " addresses to " + s.cfg.ban_file +
-                  "\n"
-            : "writeip: could not write " + s.cfg.ban_file + "; check the folder can be written\n";
+      const size_t n = (vip ? s.vips : s.bans).entries.size();
+      out = f ? "Saved " + std::to_string(n) + " addresses to " + file + "\n"
+              : cmd + ": could not write " + file + "; check the folder can be written\n";
     }
     return true;
   }

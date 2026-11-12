@@ -385,3 +385,27 @@ TEST(the_ban_list_refuses_its_addresses_and_saves_itself) {
   CHECK(any_has(rig.answers(), "2 addresses listed"));
   std::filesystem::remove(file);
 }
+
+// VIPs: a client whose password is a word of sv_vippassword skips the server's password and
+// carries `*VIP <level>` (sv_vipvalues' number); one on the VIP address list gets its level too.
+TEST(a_vip_skips_the_password_and_carries_its_level) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.password = "door";
+  cfg.vip_passwords = {"silver", "gold"};
+  cfg.vip_values = {2, 7};
+  cfg.rcon_password = "secret";
+  CHECK(rig.start(cfg));
+  rig.oob("rcon secret vip_addip 198.18.0.2 3\n");  // bert's address
+  CHECK(any_has(rig.answers(), "added 198.18.0.2 3"));
+  for (int i = 0; i < 2; i++) rig.begin(i);
+  rig.c[0].cfg.password = "gold";  // anna: a VIP word; bert: no password, but a VIP address
+  rig.frames(600);
+  CHECK(rig.c[0].stage == cn::ClientStage::active);
+  CHECK(rig.c[1].stage == cn::ClientStage::active);
+  const int anna = rig.c[0].playernum, bert = rig.c[1].playernum;
+  CHECK(cn::info_get(rig.server.clients[anna].userinfo, "*VIP") == "7");
+  CHECK(cn::info_get(rig.server.clients[bert].userinfo, "*VIP") == "3");
+  CHECK(cn::info_get(rig.server.clients[anna].userinfo, "password").empty());
+}
