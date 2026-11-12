@@ -15,6 +15,7 @@
 #include "shooter/client.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/classic_mv_state.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 
 namespace shooters_edge::net {
@@ -111,6 +112,9 @@ void signon(ClassicServer& s, MultiviewRecorder& r) {
   const sv::RulesCommon& q = *s.game;
   Scratch o;
   gn::Writer& w = o.w;
+  // Where each message (or run of baselines) ends: a stream's signon is cut there into records a
+  // relay takes (classic_mv_state.hpp's kMostCatchUpBody).
+  std::vector<size_t> ends;
   write_byte(w, svc::serverdata);  // no extension families: shorts for coordinates
   write_long(w, kProtocolVersion);
   write_long(w, s.spawncount);
@@ -121,6 +125,7 @@ void signon(ClassicServer& s, MultiviewRecorder& r) {
   for (const float f : {mv.gravity, mv.stopspeed, mv.maxspeed, mv.spectatormaxspeed, mv.accelerate,
                         mv.airaccelerate, mv.wateraccelerate, mv.friction, mv.waterfriction, 1.0f})
     write_float(w, f);
+  ends.push_back(w.size);
   for (const bool models : {true, false}) {
     const std::vector<std::string>& names = models ? q.models : q.sounds;
     write_byte(w, models ? svc::modellist : svc::soundlist);
@@ -128,6 +133,7 @@ void signon(ClassicServer& s, MultiviewRecorder& r) {
     for (size_t i = 1; i < names.size() && i < 256; i++) write_string(w, names[i].c_str());
     write_byte(w, 0);
     write_byte(w, 0);
+    ends.push_back(w.size);
   }
   for (const EntityState& b : s.baselines) {
     if (b.modelindex == 0) continue;
@@ -136,6 +142,7 @@ void signon(ClassicServer& s, MultiviewRecorder& r) {
     m.ints = {b.number, b.modelindex, b.frame, b.colormap, b.skin};
     m.floats = {b.origin.x, b.angles.x, b.origin.y, b.angles.y, b.origin.z, b.angles.z};
     write_svc(w, m, WireCtx{});
+    ends.push_back(w.size);
   }
   if (r.stream) {
     for (const std::string& line :
@@ -144,9 +151,23 @@ void signon(ClassicServer& s, MultiviewRecorder& r) {
       m.id = svc::stufftext;
       m.strings = {line};
       write_svc(w, m, WireCtx{});
+      ends.push_back(w.size);
     }
   }
-  put_record(r.bytes, 0, kRecAll, 0, 0, o.bytes());
+  const std::span<const uint8_t> all = o.bytes();
+  if (!r.stream) {
+    put_record(r.bytes, 0, kRecAll, 0, 0, all);
+  } else {
+    size_t from = 0, last = 0;
+    for (const size_t end : ends) {
+      if (end - from > kMostCatchUpBody && last > from) {
+        put_record(r.bytes, 0, kRecAll, 0, 0, all.subspan(from, last - from));
+        from = last;
+      }
+      last = end;
+    }
+    if (last > from) put_record(r.bytes, 0, kRecAll, 0, 0, all.subspan(from, last - from));
+  }
   r.spawncount = s.spawncount;
   r.statics = r.static_sounds = 0;
   r.start_time = q.sv.time;

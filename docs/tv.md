@@ -140,8 +140,23 @@ leaves told to the players, and stuffed to clients with `qul 1`). A relay that t
 
 The `se-tv` lab serves a two-player match to relays that join at 0, 4 and 8 seconds: a relay's
 catch-up on the test arena is under 1 KB and the match about 4.5 KB a second, and every stream
-plays to its end in the demo reader with the viewer's chat and join in it. Still to come in M57c:
-our TV node pulling a classic stream and serving classic viewers, and our client watching one.
+plays to its end in the demo reader with the viewer's chat and join in it. A stream's signon is
+cut into records under 8000 bytes, which is what a relay takes.
+
+Our TV node's classic face (`games/shooters_edge/net/classic_tv.hpp`) is a relay of its own: it
+dials a stream port (ours or any server's), answers its challenge, reads the records after `BEGIN`
+and holds each for the delay (7 s by default) before it goes to the viewers, who ask the node as a
+relay asks a server, with the node's own password. A connection that falls is dialled again after
+2 s, doubling to an hour. A viewer who joins mid-match is caught up from the match as the node keeps
+it (`classic_mv_state.hpp`): the level's signon as it came, the state messages since (light styles,
+server info, user info, frags, pings, statics), every player in the recorder's form with all his
+fields, each one's stats and a full entity list from the baselines, so the next record forwarded
+reads on from it. A viewer's `say` stays on the node; its `say_game` goes up to the server, and
+the viewer list goes up as `qul` lines. The `se-tv-node` lab relays a two-player match with a 2 s
+delay to viewers who join at 0, 4 and 8 seconds: a late viewer's catch-up is 0.7 KB, and every
+viewer's stream plays to the same end (every player, his frags and name, every entity) with the
+chat in it. Still to come in M57c: our client watching a classic stream, and the node rewriting
+the server's name as its own.
 
 ## Decisions
 
@@ -152,5 +167,6 @@ our TV node pulling a classic stream and serving classic viewers, and our client
 | The demo format's name | Version 2 of the replay file | A new name: the engine already calls a kept run a replay |
 | The classic compressed client demo | Not read; the field codec replaces it | Running the player's own installed program to unpack it (a later, opt-in choice); studying third-party reconstructions of unknown origin |
 | Teamplay helpers | In Shooter's Edge's client | In the proxy, as the classic proxy did: they need no place on the network path |
+| A late viewer's catch-up | Written from the match the node keeps, record by record | Replaying everything since the level began: it grows with the match and plays the past at once |
 | A relay's auth | NONE, PLAIN and SHA3-512 | The older 16-bit check and MD4: weaker, and every current relay offers SHA3-512 |
 | The browser viewer | The WebSocket downstream lands with TV (M57b), for the hub's web viewer (M56) | Later: the hub needs it first |

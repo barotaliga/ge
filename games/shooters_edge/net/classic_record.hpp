@@ -94,7 +94,8 @@ struct MultiviewRecorder {
   bool voice = false;   // the voice format: the header and every voice relayed
   bool packed = false;  // the packed form (above)
   // A live stream to a relay (classic_qtv.hpp): the signon also stuffs the full server info and
-  // the `skins` line a relay waits for before it feeds its viewers.
+  // the `skins` line a relay waits for before it feeds its viewers, and is cut into records under
+  // the 8000 bytes a relay takes.
   bool stream = false;
   std::vector<uint8_t> bytes;          // the file so far (packed: as ClientRecorder's)
   ge::vfs::ZstdStream pack;            // packed: the stream and its output
