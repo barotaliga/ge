@@ -153,6 +153,29 @@ void not_drawn(std::string_view kind, const std::string& name, const std::string
   ge::core::output::status(line);
 }
 
+// How much of entity `e` shows: the mod's `alpha` field above 0, else the map's `alpha` key.
+float entity_alpha(const Listen& l, int e) {
+  const float a = field_named(l, e, "alpha");
+  if (a > 0) return a > 1 ? 1.0f : a;
+  const std::vector<ge::progs::EntityExtras>& x = l.server->extras;
+  return size_t(e) < x.size() && x[size_t(e)].has_alpha ? x[size_t(e)].alpha : 1.0f;
+}
+
+// Its size and tint: the mod's `scale` (0: whole) and `colormod` ('0 0 0': none), else the map's
+// `colormod` key.
+void entity_look(const Listen& l, int e, Placed& p) {
+  const float s = field_named(l, e, "scale");
+  if (s > 0) p.scale = s;
+  float c[3];
+  if (vector_field_named(l, e, "colormod", c) && (c[0] != 0 || c[1] != 0 || c[2] != 0)) {
+    for (int k = 0; k < 3; k++) p.colormod[k] = c[k] > 0 ? c[k] : 0;
+    return;
+  }
+  const std::vector<ge::progs::EntityExtras>& x = l.server->extras;
+  if (size_t(e) < x.size() && x[size_t(e)].has_colormod)
+    for (int k = 0; k < 3; k++) p.colormod[k] = x[size_t(e)].colormod[k];
+}
+
 }  // namespace
 
 void place_models(const Listen& l, std::vector<Placed>& out) {
@@ -171,6 +194,8 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
     p.frame = int(field_named(l, e, "frame"));
     p.skin = int(field_named(l, e, "skin"));
     p.effects = int(field_named(l, e, "effects"));
+    p.alpha = entity_alpha(l, e);
+    entity_look(l, e, p);
     p.origin = ed.origin;
     p.angles = ed.angles;
     if (e <= sh::kMaxClients) {
@@ -188,6 +213,9 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
     p.modelindex = st.modelindex;
     p.frame = int(st.frame);
     p.skin = int(st.skin);
+    p.alpha = st.extras.has_alpha ? st.extras.alpha : 1.0f;
+    if (st.extras.has_colormod)
+      for (int c = 0; c < 3; c++) p.colormod[c] = st.extras.colormod[c];
     p.origin = st.origin;
     p.angles = st.angles;
     out.push_back(p);
@@ -426,6 +454,7 @@ void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const 
     const ModelKind& k = m.kinds[size_t(p.modelindex)];
     if (k.is != ModelKind::Is::alias || k.effect.starts_with("fire")) return;
     if (p.warp.shown < 1) return;  // half ash: its shadow would be whole
+    if (p.alpha < 0.5f) return;    // mostly see-through: a whole shadow would give it away
     double w[3];
     to_world(p.origin, w);
     const double dx = w[0] - view.eye[0], dy = w[1] - view.eye[1], dz = w[2] - view.eye[2];
@@ -547,9 +576,11 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     g.now.frame_a = frame_a;
     g.now.frame_b = frame_b;
     g.now.blend = blend;
+    g.now.scale = p.scale;
     const auto last = m.last_pose.find(p.entity);
     g.last = last == m.last_pose.end() || p.warp.shown < 1 ? g.now : last->second;
     g.warp = p.warp;
+    g.alpha = p.alpha;
     if (burning != nullptr) g.burn = burn_skin_of(*burning, p.entity);
     m.last_pose[p.entity] = g.now;
     g.tint[0] = p.top;
@@ -577,8 +608,8 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       const double raw = lit.rgb[c];
       const double floor = std::sqrt(raw * raw + minlight * minlight);
       const float l = float((floor + dyn[c]) * brightness);
-      g.ambient[c] = kAmbientShare * l;
-      g.shade[c] = kShadeShare * l;
+      g.ambient[c] = kAmbientShare * l * p.colormod[c];  // the tint on its light, not its glow
+      g.shade[c] = kShadeShare * l * p.colormod[c];
       floor_lum += floor;
       dyn_lum += dyn[c];
     }

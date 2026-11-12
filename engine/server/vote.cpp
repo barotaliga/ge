@@ -160,28 +160,27 @@ void call(VoteBook& b, const VoteTarget& target, int slot, std::string_view rest
     return (void)refuse(b, slot, VoteWhy::busy,
                         "a vote is open (" + change_text(b.asked) + ", " +
                             std::to_string(vote_seconds_left(b, now)) +
-                            " s left); next: `vote yes` or `vote no`, then call yours");
+                            " s left). Vote yes or no on it first, then call yours.");
   const double failed_at = b.failed_at[static_cast<size_t>(slot)];
   if (failed_at > 0 && now - failed_at < b.settings.wait_s) {
     const int left = static_cast<int>(std::ceil(b.settings.wait_s - (now - failed_at) - 1e-9));
-    return (void)refuse(b, slot, VoteWhy::waiting,
-                        "your last vote failed; next: call another in " + std::to_string(left) +
-                            " s (sv_vote_wait)");
+    return (void)refuse(
+        b, slot, VoteWhy::waiting,
+        "Your last vote failed. You can call another in " + std::to_string(left) + " s.");
   }
   if (value.empty())
     return (void)refuse(b, slot, VoteWhy::no_value,
-                        "`vote " + std::string(name) + "` needs a value; next: `vote " +
-                            std::string(name) + " <value>`");
+                        "vote " + std::string(name) + " needs a value (usage: vote " +
+                            std::string(name) + " <value>)");
   const VoteWhy listed_why = vote_permitted(b.settings, name);
   if (listed_why == VoteWhy::denied)
     return (void)refuse(
         b, slot, listed_why,
-        std::string(name) +
-            " may not be voted on (sv_vote_deny); next: `vote rules` says what may");
+        std::string(name) + " may not be voted on here. Type \"vote rules\" to see what may.");
   if (listed_why == VoteWhy::not_allowed)
     return (void)refuse(
         b, slot, listed_why,
-        std::string(name) + " is not on sv_vote_allow; next: `vote rules` says what may");
+        std::string(name) + " may not be voted on here. Type \"vote rules\" to see what may.");
   VoteCheck check;
   if (target.check == nullptr || !target.check(target.ctx, name, value, check))
     return (void)refuse(
@@ -207,7 +206,7 @@ void call(VoteBook& b, const VoteTarget& target, int slot, std::string_view rest
 void answer(VoteBook& b, int slot, Ballot ballot, double now) {
   if (!b.open)
     return (void)refuse(b, slot, VoteWhy::none_open,
-                        "no vote is open; next: `vote <setting> <value>` calls one");
+                        "No vote is open. Type \"vote <setting> <value>\" to call one.");
   if (!is_voter(b, slot)) return (void)refuse(b, slot, VoteWhy::not_voter);
   Ballot& mine = b.ballots[static_cast<size_t>(slot)];
   if (mine == ballot)
@@ -231,17 +230,17 @@ const char* vote_why_text(VoteWhy w) {
     case VoteWhy::not_voter:
       return "only the people on the server vote; join, then vote";
     case VoteWhy::busy:
-      return "a vote is open; next: answer it, then call yours";
+      return "a vote is open; vote on it first, then call yours";
     case VoteWhy::none_open:
-      return "no vote is open; next: `vote <setting> <value>` calls one";
+      return "no vote is open; type \"vote <setting> <value>\" to call one";
     case VoteWhy::waiting:
-      return "your last vote failed; next: wait sv_vote_wait seconds";
+      return "your last vote failed; wait a little before calling another";
     case VoteWhy::denied:
-      return "that setting may not be voted on; next: `vote rules`";
+      return "that setting may not be voted on; type \"vote rules\" to see what may";
     case VoteWhy::not_allowed:
-      return "that setting is not on sv_vote_allow; next: `vote rules`";
+      return "that setting may not be voted on here; type \"vote rules\" to see what may";
     case VoteWhy::no_value:
-      return "a vote needs a value; next: `vote <setting> <value>`";
+      return "a vote needs a value (usage: vote <setting> <value>)";
     case VoteWhy::refused:
       return "the server cannot make that change";
     case VoteWhy::not_caller:
@@ -324,8 +323,8 @@ bool vote_command(VoteBook& b, const VoteTarget& target, int slot, std::string_v
   if (rest.empty()) {
     if (!b.open) {
       tell(b, slot,
-           "vote: no vote is open; next: `vote <setting> <value>` calls one, "
-           "`vote rules` says which may");
+           "No vote is open. Type \"vote <setting> <value>\" to call one, or \"vote rules\" to "
+           "see what may be voted on.");
       return true;
     }
     tell(b, slot,

@@ -21,8 +21,8 @@ std::string server_sky(const cfg::Settings& s, mg::Level& level) {
     pick.kind = mg::weather_named(s.sky);
     if (!pick.kind) {
       problem = "sv_weather '" + s.sky +
-                "' names no sky; the map's own is kept. next: set sv_weather to clear, fair, "
-                "flurries, high, overcast, snow, storm, fog or map.";
+                "' is not a sky, so the map's own is kept. The skies are clear, fair, "
+                "flurries, high, overcast, snow, storm, fog and map.";
     }
   }
   pick.snowfall = s.fall;

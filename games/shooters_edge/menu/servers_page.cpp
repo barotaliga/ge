@@ -102,7 +102,7 @@ bool ServersPage::open(std::string* why) {
       std::string error;
       if (!gn::open_udp_transport(own_, gn::ipv4(0, 0, 0, 0, 0), &error)) {
         note_ = "the browser's socket did not open: " + error +
-                "; next: check that the machine has a network";
+                ". Check that the computer is on a network.";
         if (why) *why = note_;
         return false;
       }

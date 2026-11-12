@@ -27,6 +27,7 @@
 #include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_coop.hpp"
 #include "shooters_edge/net/classic_coop_game.hpp"
+#include "shooters_edge/net/classic_qtv.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/announce.hpp"
@@ -75,7 +76,13 @@ struct Game {
   // The players' votes on the settings for this map (engine/server/vote.hpp): a passed one is
   // written into `settings.rules`, so a restart keeps it, and put back when the map changes.
   gs::VoteBook vote;
+  // The stream port for classic relays (classic_qtv.hpp; qtv_streamport 0: none).
+  int qtv_port = 0;
+  QtvConfig qtv_cfg;
+  std::unique_ptr<QtvPort> qtv;
   ~Game() {
+    if (qtv && classic) qtv_close(*qtv, *classic);
+    qtv.reset();
     coop.reset();
     classic.reset();
     rules = {};  // its views into the map go before the map does
@@ -117,7 +124,7 @@ constexpr gs::GameRule kModRules[] = {
 };
 
 constexpr gs::GameRule kEndpointRules[] = {
-    {"sv_maxrate", "the most bytes/s a client may ask for with its `rate` (0 no cap; 0)"},
+    {"sv_maxrate", "the most bytes/s a client may ask for with its rate (0 no cap; 0)"},
     {"sv_antilag", "1: a shot sees the others where the shooter saw them (0)"},
     {"sv_voip", "1: players' voice is relayed to their team (0)"},
     {"maxfps", "the most moves a second a client sends, told in the server info (77)"},
@@ -128,6 +135,13 @@ constexpr gs::GameRule kEndpointRules[] = {
     {"allow_download_maps", "0: no maps/ file is offered (1)"},
     {"allow_download_other", "1: files outside those folders are offered too (0)"},
     {"sv_downloadchunksperframe", "chunks of 1 KB a downloading client gets a frame, 1..30 (30)"},
+    // The stream port for classic relays (classic_qtv.hpp).
+    {"qtv_streamport", "the TCP port classic relays take the match from, 0..65534 (0: none)"},
+    {"qtv_maxstreams", "relays streamed at once (0 or less: no limit; 1)"},
+    {"qtv_password", "the password a relay must give (empty: none)"},
+    {"qtv_pendingtimeout", "seconds a relay has to finish its request, 1..60 (5)"},
+    {"qtv_streamtimeout", "seconds a relay may take nothing before it is dropped, 5..600 (45)"},
+    {"qtv_sayenabled", "1: a relay's viewers' chat reaches the players, not just spectators (0)"},
     // The coop campaign in place of a match (classic_coop_game.hpp): the endpoint's, never a mod's.
     {"sv_coop", "1: the game folder's campaign in coop, not a match (0)"},
     {"sv_coopbots", "coop: companion bots playing beside the players, 0..7 (0)"},
@@ -165,8 +179,8 @@ bool endpoint_int(const gs::ServerConfig& c, const char* name, int low, int high
   const long v = std::strtol(it->second.c_str(), &end, 10);
   if (end == it->second.c_str() || *end != '\0' || v < low || v > high) {
     error = std::string(name) + " \"" + it->second + "\" is not a whole number in " +
-            std::to_string(low) + ".." + std::to_string(high) +
-            "; next: set it in range (--explain=" + name + " shows where it was set)";
+            std::to_string(low) + ".." + std::to_string(high) + " (--explain=" + name +
+            " shows where it was set)";
     return false;
   }
   out = static_cast<int>(v);
@@ -174,6 +188,23 @@ bool endpoint_int(const gs::ServerConfig& c, const char* name, int low, int high
 }
 
 // The endpoint's own settings from the rules: false with `error` on a value out of range.
+// The stream port's settings from the rules: false with `error` on a value out of range.
+bool qtv_settings(const gs::ServerConfig& c, int& port, QtvConfig& q, std::string& error) {
+  int pending = static_cast<int>(q.pending_s), timeout = static_cast<int>(q.stream_timeout_s);
+  int say = q.say_enabled ? 1 : 0;
+  if (!endpoint_int(c, "qtv_streamport", 0, 65534, port, error) ||
+      !endpoint_int(c, "qtv_maxstreams", -1, 1024, q.max_streams, error) ||
+      !endpoint_int(c, "qtv_pendingtimeout", 1, 60, pending, error) ||
+      !endpoint_int(c, "qtv_streamtimeout", 5, 600, timeout, error) ||
+      !endpoint_int(c, "qtv_sayenabled", 0, 1, say, error))
+    return false;
+  if (const auto it = c.rules.find("qtv_password"); it != c.rules.end()) q.password = it->second;
+  q.pending_s = pending;
+  q.stream_timeout_s = timeout;
+  q.say_enabled = say != 0;
+  return true;
+}
+
 bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
   int antilag = cfg.antilag ? 1 : 0, voice = cfg.voice ? 1 : 0;
   int all = cfg.allow_download ? 1 : 0, skins = cfg.allow_skins ? 1 : 0;
@@ -288,7 +319,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     const bool taken = rules.console(line) || brushes;
     if (end == value.c_str() || *end != '\0' || !taken) {
       error = line;
-      error.append(" is not a number; next: set ").append(rule).append(" to one (--explain=");
+      error.append(" is not a number (--explain=");
       error.append(rule).append(" shows where it was set)");
       return false;
     }
@@ -330,7 +361,7 @@ bool open_room(Game& g, std::string& error) {
   for (int i = 0; i < bots; i++)
     if (cl::room_add_bot(r, g.rules, g.map->spec, sh::AimSkill::average, error) < 0) {
       std::string why = "sv_bots " + std::to_string(c.bots) + ": ";
-      why.append(error).append("; next: lower sv_bots under sv_maxclients");
+      why.append(error).append(" (keep sv_bots under sv_maxclients)");
       error = std::move(why);
       return false;
     }
@@ -358,9 +389,8 @@ bool open_program(Game& g, const std::string& mod, std::string& error) {
   std::string why;
   if (game.find_program == nullptr || !game.find_program(game, g.files, false, found, why)) {
     error = "the mod folder " + mod + " holds no multiplayer program this server runs" +
-            (why.empty() ? std::string() : " (" + why + ")") +
-            "; next: put the mod's qwprogs.dat in " + g.files.folder +
-            ", or leave sv_mod empty for the baseline mod";
+            (why.empty() ? std::string() : " (" + why + ")") + ". Put the mod's qwprogs.dat in " +
+            g.files.folder + ", or leave sv_mod empty for the baseline mod.";
     return false;
   }
   g.progs = std::move(found.progs);
@@ -410,6 +440,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.flood_msg = c.floodprot_msg;
   if (!gs::parse_flood_rule(c.floodprot, g->cfg.flood, error)) return nullptr;
   if (!endpoint_settings(c, g->cfg, error)) return nullptr;
+  if (!qtv_settings(c, g->qtv_port, g->qtv_cfg, error)) return nullptr;
   return g.release();
 }
 
@@ -470,7 +501,7 @@ bool speedjump_vote_check(const Game& g, std::string_view value, gs::VoteCheck& 
   const std::string text(value);
   const size_t space = text.find_last_of(' ');
   if (!g.classic || space == std::string::npos) {
-    out.error = "speedjump needs a player and on or off; next: `vote speedjump <id|name> on`";
+    out.error = "usage: vote speedjump <id|name> on|off";
     return false;
   }
   const std::string who = text.substr(0, text.find_last_not_of(' ', space) + 1);
@@ -479,14 +510,13 @@ bool speedjump_vote_check(const Game& g, std::string_view value, gs::VoteCheck& 
   if (what == "on")
     share = kGrantShare;
   else if (what != "off" && !speedjump_parse_share(what, share)) {
-    out.error = "speedjump: " + what + " is not on, off or a share 0..1; next: `vote speedjump " +
-                who + " on`";
+    out.error = "speedjump: \"" + what + "\" is not on, off or a share 0..1";
     return false;
   }
   const ClassicServer& cs = *g.classic;
   const int slot = classic_find_seat(cs, who);
   if (slot < 0) {
-    out.error = "speedjump: no player is " + who + "; next: `users` lists the ids and names";
+    out.error = "speedjump: no player called " + who + " (type \"users\" for the ids and names)";
     return false;
   }
   const ClassicClient& c = cs.clients[slot];
@@ -519,13 +549,13 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
   for (const gs::GameRule& r : all_rules()) known = known || rule == r.name;
   if (!known) {
     out.error = rule +
-                " is not a setting of this server; next: `vote rules` says what may be "
+                " is not a setting of this server. Type \"vote rules\" to see what may be "
                 "voted on (fraglimit, timelimit, teamplay, sv_gravity, pm_speedjump, "
-                "speedjump <player> on...)";
+                "speedjump <player> on...).";
     return false;
   }
   if (is_endpoint_rule(rule)) {
-    out.error = rule + " is read when the server starts; next: ask the server's owner";
+    out.error = rule + " is set when the server starts, so it can't be voted on";
     return false;
   }
   if (const sh::Setting* setting = sh::find_setting(rule); setting != nullptr) {
@@ -539,7 +569,7 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
     char* end = nullptr;
     std::strtod(text.c_str(), &end);
     if (end == text.c_str() || *end != '\0') {
-      out.error = rule + " \"" + text + "\" is not a number; next: `vote " + rule + " <number>`";
+      out.error = rule + " \"" + text + "\" is not a number";
       return false;
     }
   }
@@ -812,7 +842,7 @@ bool room_words(void* ctx, int slot, const std::string& line) {
           break;
         }
       if (!cl::room_remove_bot(r, g.rules))
-        client_print(cs, slot, 2, "removebot: no bot is seated; next: `addbot`\n");
+        client_print(cs, slot, 2, "There are no bots to remove.\n");
       sync_seats(g);
       return true;
     }
@@ -820,7 +850,7 @@ bool room_words(void* ctx, int slot, const std::string& line) {
     const std::string named = space == std::string::npos ? "" : line.substr(space + 1);
     if (!named.empty() && !cl::skill_named(named, skill)) {
       client_print(cs, slot, 2,
-                   "addbot " + named + ": no such skill; next: novice, average or expert\n");
+                   "addbot: unknown skill \"" + named + "\" (use novice, average or expert)\n");
       return true;
     }
     r.held = 0;
@@ -878,6 +908,12 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
     game.classic->local_voice = host_voice;
     game.classic->local_ctx = game.host;
   }
+  if (game.qtv_port > 0) {
+    game.qtv = std::make_unique<QtvPort>();
+    if (!qtv_open(*game.qtv, ge::net::ipv4(0, 0, 0, 0, static_cast<uint16_t>(game.qtv_port)),
+                  game.qtv_cfg, error))
+      return false;
+  }
   sync_host(game);
   sync_seats(game);
   return true;
@@ -889,6 +925,7 @@ void net_frame(void* g, int64_t now_us) {
   if (game.room)
     cl::room_packets(*game.room, *game.rules, frame_msec(game), game.classic->local_moves);
   classic_frame(*game.classic, now_us);
+  if (game.qtv) qtv_update(*game.qtv, *game.classic);
   sync_host(game);
   sync_seats(game);
   vote_sync(game);
@@ -908,6 +945,29 @@ int seated(const void* g) {
 uint64_t hash(const void* g) {
   const Game& game = *static_cast<const Game*>(g);
   return game.coop ? coop_hash(*game.coop) : ge::shooter::server_hash(game.rules->sv);
+}
+
+// The hub's record (docs/hub.md): the map, the mode the rules make, the phase, every client.
+void fill_status(const void* g, ge::net::Status& st) {
+  const Game& game = *static_cast<const Game*>(g);
+  if (game.map) st.map = game.map->name;
+  auto number = [&](const char* name) {
+    const ge::console::Cvar* v = game.rules ? game.rules->cvars.find(name) : nullptr;
+    return v ? std::atoi(v->value.c_str()) : 0;
+  };
+  const int seats = game.settings.maxclients;
+  if (game.coop || number("coop") != 0) {
+    st.mode = "coop";
+  } else if (number("teamplay") != 0) {
+    st.mode = seats <= 4 ? "2on2" : "4on4";
+  } else {
+    st.mode = seats <= 2 ? "1on1" : "ffa";
+  }
+  if (!game.held_map.empty()) st.phase = ge::net::StatusPhase::intermission;
+  for (const char* name : {"fraglimit", "timelimit"}) {
+    st.keys.emplace_back(name, std::to_string(number(name)));
+  }
+  if (game.classic) status_players(*game.classic, st.players);
 }
 
 // The rules the mod is playing by, then the endpoint's counts.
@@ -1028,6 +1088,8 @@ gs::ServerGame make() {
   g.seated = seated;
   g.hash = hash;
   g.status = status;
+  g.fill_status = fill_status;
+  g.version = 1;
   g.serve = serve;
   g.net_frame = net_frame;
   return g;

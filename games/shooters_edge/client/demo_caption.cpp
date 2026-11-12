@@ -122,7 +122,7 @@ bool caption_glyphs_from_packs(const CaptionFind& find, ge::ui::Image* out, std:
   ge::vfs::IndexedPicture p;
   if (e == nullptr ||
       !ge::vfs::read_raw_picture(ge::vfs::wad_lump(wad_bytes, *e), 128, 128, &p, &bad)) {
-    if (why != nullptr) *why = "gfx.wad has no 128 x 128 glyph sheet `conchars`";
+    if (why != nullptr) *why = "gfx.wad has no 128 x 128 glyph sheet \"conchars\"";
     return false;
   }
   out->width = p.width;

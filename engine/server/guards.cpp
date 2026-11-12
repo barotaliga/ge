@@ -33,7 +33,7 @@ bool parse_flood_rule(std::string_view text, FloodRule& rule, std::string& error
   if (!read || at != text.size() || n < 1 || n > kMostFloodLines || s < 1 || t < 1) {
     error = "sv_floodprot \"" + std::string(text) +
             "\" is not \"N S T\" (N lines, 1..10, in S seconds, else silent T seconds; S and T at "
-            "least 1); next: set it like \"10 1 1\"";
+            "least 1), for example \"10 1 1\"";
     return false;
   }
   rule.lines = static_cast<int>(n);

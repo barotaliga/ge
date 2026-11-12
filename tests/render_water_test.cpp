@@ -3,13 +3,17 @@
 // same components for the same seed); the chop runs every way with the slope asked; the surface
 // over a flooded passage (render/underwater.hpp's level_over) slides from one pool's to the
 // other's; and on a device, a sea drawn over a sea floor fills the lower half of the frame with
-// water, darker than the sky over it, with no GPU error and no pipeline after the load.
+// water, darker than the sky over it, with no GPU error and no pipeline after the load; and the
+// water's pace puts its motion on a slower clock (a sea at 0.7 of it ten seconds in is the sea
+// seven seconds in); a pool hung over open air shows its underside to an eye under it.
 //
 // ge:summary Tests for the water's surface drawn: the detail band, a sea on a device
 // ge:keywords test render water detail-waves spectrum-tail slope-variance gpu sea chop level_over
+// ge:keywords water-pace set_water_pace
 // ge:skill render water testing
 #include <algorithm>
 #include <cmath>
+#include <utility>
 #include <vector>
 
 #include "check.hpp"
@@ -252,4 +256,166 @@ TEST(a_sea_draws_under_the_sky) {
   const std::vector<float> dist = r::read_distance(d, targets, v);
   const float near = dist[size_t{kH - 4} * kW + kW / 2];
   CHECK(near < 60);
+}
+
+// The water's pace (WaterDraw::pace) puts its own motion on a slower clock: a sea at 0.7 of its
+// pace ten seconds in is the sea at its real pace seven seconds in (the waves' phases, the gusts'
+// and the stir's drift all scaled alike), and not the sea at its real pace ten seconds in.
+TEST(the_waters_pace_puts_its_motion_on_a_slower_clock) {
+  auto device = ge::test::test_device();
+  if (!device) return;
+  ge::gpu::Device& d = *device;
+  constexpr uint32_t kW = 64, kH = 48;
+  ge::gpu::PipelineSet pipelines;
+  r::FrameTargets targets = r::create_targets(d, "test", kW, kH);
+  wgpu::Buffer uniforms =
+      r::make_buffer(d, "test.uniforms", sizeof(r::FrameUniforms), wgpu::BufferUsage::Uniform);
+  wgpu::BindGroupLayout layout = r::frame_layout(d);
+  r::Sky sky;
+  r::create_sky(d, pipelines, sky, uniforms, layout);
+  r::Water water;
+  r::create_water(d, pipelines, water, layout);
+  r::Post post;
+  r::create_post(d, pipelines, post, layout, wgpu::TextureFormat::RGBA8Unorm);
+  CHECK(pipelines.finish(d));
+  ge::gpu::end_load(d);
+  wgpu::BindGroup frame = r::frame_group(d, layout, uniforms, sky);
+  r::create_water_targets(d, water, targets);
+  const gw::World world = sea(8);
+  r::WaterDraw draw;
+  draw.stir = 0.02;
+  draw.gusts = 1;
+  r::add_water_body(d, water, world.bodies[0], draw);
+  wgpu::BindGroup pg = r::post_group(d, post, targets.hdr_view);
+  r::FrameRecorder rec;
+  rec.init(d, "test.timer", 9);
+  const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
+  const auto shot = [&](double pace, double time) {
+    r::set_water_pace(d, water, 0, world.bodies[0], pace);
+    r::FrameView v;
+    v.eye[0] = 256;
+    v.eye[1] = 4;
+    v.eye[2] = 256;
+    v.pitch = -0.5;
+    v.sun_elevation = 0.5;
+    v.time_s = time;
+    r::FrameUniforms staged{};
+    rec.begin_frame(d);
+    r::fill_uniforms(staged, v, kW, kH);
+    d.queue.WriteBuffer(uniforms, 0, &staged, sizeof staged);
+    r::prepare_sky(sky, v);
+    r::prepare_water(d, water, v);
+    wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
+    r::encode_sky_tables(sky, pipelines, rec, e);
+    r::encode_sky(sky, pipelines, rec, e, targets, frame);
+    r::encode_water(water, pipelines, rec, e, targets, frame);
+    r::encode_post(post, pipelines, rec, e, frame, pg, out.view);
+    rec.end_frame(e);
+    wgpu::CommandBuffer c = e.Finish();
+    d.queue.Submit(1, &c);
+    rec.after_submit(d);
+    return ge::gpu::read_now(d, out).rgba;
+  };
+  const std::vector<uint8_t> slow = shot(0.7, 10), early = shot(1, 7), real = shot(1, 10);
+  if (slow.size() != size_t{kW} * kH * 4 || early.size() != slow.size()) return;
+  const auto apart = [&](const std::vector<uint8_t>& a, const std::vector<uint8_t>& b) {
+    long sum = 0;
+    for (size_t i = 0; i < a.size(); ++i) sum += std::abs(int{a[i]} - int{b[i]});
+    return sum;
+  };
+  // What the sky's own clock moves between 7 s and 10 s (the water held still at pace 0) is in
+  // both differences; past it, the slowed sea is the early one and far from the real one.
+  const long frozen = apart(shot(0, 7), shot(0, 10));
+  const long same = apart(slow, early) - frozen, other = apart(slow, real) - frozen;
+  CHECK(other > 0);
+  CHECK(same * 8 < other);
+  CHECK(d.errors.load() == 0);
+}
+
+// A pool hung over open air (WaterDraw::open_below) seen from the air under it: its underside is
+// drawn at its floor, so the view straight up from under it is not the sky it shows with no
+// underside, and the pass runs with no GPU error.
+TEST(a_pool_over_open_air_shows_its_underside_from_below) {
+  auto device = ge::test::test_device();
+  if (!device) return;
+  ge::gpu::Device& d = *device;
+  constexpr uint32_t kW = 48, kH = 48;
+  ge::gpu::PipelineSet pipelines;
+  r::FrameTargets targets = r::create_targets(d, "test", kW, kH);
+  wgpu::Buffer uniforms =
+      r::make_buffer(d, "test.uniforms", sizeof(r::FrameUniforms), wgpu::BufferUsage::Uniform);
+  wgpu::BindGroupLayout layout = r::frame_layout(d);
+  r::Sky sky;
+  r::create_sky(d, pipelines, sky, uniforms, layout);
+  r::Water water;
+  r::create_water(d, pipelines, water, layout);
+  r::Post post;
+  r::create_post(d, pipelines, post, layout, wgpu::TextureFormat::RGBA8Unorm);
+  CHECK(pipelines.finish(d));
+  ge::gpu::end_load(d);
+  wgpu::BindGroup frame = r::frame_group(d, layout, uniforms, sky);
+  r::create_water_targets(d, water, targets);
+  // A box of water 20 m across round (256, 256), from 2 m down up to its top at 1 m.
+  gw::World world(ge::wind::Field{});
+  gw::Hull h;
+  h.planes = {{0, 1, 0, 1},     {0, -1, 0, 2},  {1, 0, 0, 266},
+              {-1, 0, 0, -246}, {0, 0, 1, 266}, {0, 0, -1, -246}};
+  const std::vector<gw::Hull> hulls{h};
+  const int i = gw::add_volume(world, hulls);
+  gw::Body& b = world.bodies[static_cast<size_t>(i)];
+  b.level = 1;
+  b.box[0] = 246;
+  b.box[1] = 246;
+  b.box[2] = 266;
+  b.box[3] = 266;
+  r::WaterDraw draw;
+  draw.room = 0.3;
+  draw.open_sky = 0;
+  r::add_water_body(d, water, b, draw);
+  r::WaterDraw open = draw;
+  open.open_below = true;
+  r::add_water_body(d, water, b, open);
+  wgpu::BindGroup pg = r::post_group(d, post, targets.hdr_view);
+  r::FrameRecorder rec;
+  rec.init(d, "test.timer", 9);
+  const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
+  const auto shot = [&](int shown) {
+    for (size_t k = 0; k < water.bodies.size(); ++k)
+      water.bodies[k].hidden = static_cast<int>(k) != shown;
+    r::FrameView v;
+    v.eye[0] = 256;
+    v.eye[1] = -6;
+    v.eye[2] = 256;
+    v.pitch = 1.4;
+    v.sun_elevation = 0.5;
+    v.time_s = 3;
+    r::FrameUniforms staged{};
+    rec.begin_frame(d);
+    r::fill_uniforms(staged, v, kW, kH);
+    d.queue.WriteBuffer(uniforms, 0, &staged, sizeof staged);
+    r::prepare_sky(sky, v);
+    r::prepare_water(d, water, v);
+    const bool drawn = water.bodies[static_cast<size_t>(shown)].from_under;
+    wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
+    r::encode_sky_tables(sky, pipelines, rec, e);
+    r::encode_sky(sky, pipelines, rec, e, targets, frame);
+    r::encode_water(water, pipelines, rec, e, targets, frame);
+    r::encode_post(post, pipelines, rec, e, frame, pg, out.view);
+    rec.end_frame(e);
+    wgpu::CommandBuffer c = e.Finish();
+    d.queue.Submit(1, &c);
+    rec.after_submit(d);
+    const ge::gpu::Image img = ge::gpu::read_now(d, out);
+    return std::pair{drawn, img.rgba};
+  };
+  const auto [closed_drawn, closed] = shot(0);
+  const auto [open_drawn, under] = shot(1);
+  CHECK(!closed_drawn);
+  CHECK(open_drawn);
+  CHECK(d.errors.load() == 0);
+  if (closed.size() != size_t{kW} * kH * 4 || under.size() != closed.size()) return;
+  const size_t mid = (size_t{kH / 2} * kW + kW / 2) * 4;
+  int apart = 0;
+  for (int k = 0; k < 3; ++k) apart += std::abs(int{closed[mid + k]} - int{under[mid + k]});
+  CHECK(apart > 6);
 }

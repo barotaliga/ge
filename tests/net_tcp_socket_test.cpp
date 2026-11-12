@@ -61,6 +61,40 @@ TEST(tcp_frames_round_trip_on_loopback) {
   tcp_close_listener(l);
 }
 
+TEST(tcp_settle_waits_until_every_byte_sent_has_arrived) {
+  TcpListener l;
+  std::string err;
+  if (!tcp_listen(l, loopback_v4(0), &err)) {
+    ge::test::skip("no loopback TCP socket here: " + err);
+    return;
+  }
+  TcpStream c, s;
+  CHECK(!tcp_waiting(l));
+  CHECK_MSG(tcp_connect(c, l.local, &err), err);
+  bool waiting = false;
+  for (int i = 0; i < 1000000 && !waiting; i++) {
+    tcp_pump(c);
+    waiting = tcp_waiting(l);
+  }
+  CHECK(waiting && tcp_accept(l, s));
+  // More than one read's worth each way, then settled: the other end holds every byte at once.
+  std::vector<uint8_t> bytes(100000);
+  for (size_t i = 0; i < bytes.size(); i++) bytes[i] = static_cast<uint8_t>(i * 13);
+  CHECK(tcp_send_bytes(c, bytes.data(), bytes.size()));
+  CHECK(tcp_settle(c, s));
+  CHECK(c.sent == bytes.size() && s.received == bytes.size());
+  std::vector<uint8_t> got;
+  CHECK(tcp_take_bytes(s, got) == bytes.size() && got == bytes);
+  CHECK(tcp_send_bytes(s, bytes.data(), 5));
+  CHECK(tcp_settle(s, c) && c.received == 5);
+  // A closed end cannot settle.
+  tcp_close(c);
+  for (int i = 0; i < 100000 && !s.closed; i++) tcp_pump(s);
+  CHECK(!tcp_settle(s, c));
+  tcp_close(s);
+  tcp_close_listener(l);
+}
+
 TEST(tcp_two_nodes_trade_a_big_message) {
   Transport ht, ct;
   std::string err;

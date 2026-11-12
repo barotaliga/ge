@@ -591,6 +591,22 @@ window is a few times brighter than the water rather than a lamp in a black sea.
 the surface's coarse rings lift the vertices a finer ring covers (from above they sink): sunk, they
 hung between the eye and the bed and hid it.
 
+**Built (M41s, the underside from the air under it; `render/water_underside.wgsl`).** A body whose
+water hangs over open air (`WaterDraw::open_below`: a classic map's pool with no bed, which a player
+drops through to the room under it; `brush::app::pool_site` finds air where its liquid ends) shows
+an eye in the air under its floor its underside: the shared geometry at the floor (`sun.z`) under the
+top's own waves, laid past the top's box (a pool's bottom may be wider than its top) and kept where
+the opaque map does not stand at or in front of the floor's plane (the ceiling round the hole is
+flush with the water's bottom, so it is drawn with no depth test and the undisturbed plane's
+distance is weighed against the scene's). It is lit as the top is, turned over: the air's Fresnel
+mirrors what lies under it (the game's planar mirror in the floor's plane, else marched), and the
+rest is the view up through the water: the ray bent in by Snell's law, carried to the top, bent out
+through the top's waves there, the world over the pool read along it (the view up from the top),
+dimmed by exp(-c L) and filled with the water's own light. Light that came in through the bottom
+always leaves a level top, so there is no window's rim to see through a flat slab; where the top's
+waves tilt it past the critical angle, the top mirrors the water's inside back down. Judged on the
+start map's drop to its fourth episode through `se-client`, before and after.
+
 **Built (M24h3, the caustics and the shafts; `render/wgsl/water_body.wgsl`).** THE CAUSTICS are the
 real surface's: a ray through it is bent by its slope (by 1 - 1/n, about a quarter), so the patch of
 surface over a point maps onto the bed with the Jacobian I + s H (H the height's curvature summed

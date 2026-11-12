@@ -24,11 +24,20 @@ int cmd_servers(Ctx& ctx);
 int cmd_server_info(Ctx& ctx);
 int cmd_players(Ctx& ctx);
 int cmd_rcon(Ctx& ctx);
+int cmd_route(Ctx& ctx);
 
 int cmd_host(Ctx& ctx);
 int cmd_host_list(Ctx& ctx);
 int cmd_host_stop(Ctx& ctx);
 int cmd_join(Ctx& ctx);
+int cmd_link_open(Ctx& ctx);
+int cmd_link_register(Ctx& ctx);
+
+// The window's program, and the window started with `argv` (its output in `<logs>/<log_name>.log`;
+// `--dry-run` shows the command only); `what` finishes "the game is starting ...".
+std::string window_path(const Ctx& ctx);
+int start_window(Ctx& ctx, const std::vector<std::string>& argv, const std::string& log_name,
+                 const std::string& what, const std::string& address);
 int cmd_logs(Ctx& ctx);
 int cmd_where(Ctx& ctx);
 

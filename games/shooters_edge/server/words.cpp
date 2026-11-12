@@ -131,7 +131,7 @@ std::string words_fault(std::string_view t) {
     const auto u = static_cast<uint8_t>(t[i]);
     if (u == '"' || u == '\\' || u < 32 || u > 126)
       return "byte " + std::to_string(u) + " at " + std::to_string(i) +
-             " cannot travel in a server line; next: write it with the template's marks (%n, ^, "
+             " cannot travel in a server line (write it with the template's marks: %n, ^, "
              "%[, %g1)";
   }
   return {};

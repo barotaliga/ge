@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "shooter/vec.hpp"
@@ -54,6 +55,7 @@ std::vector<uint8_t> write_multiview_demo(const DemoScript& script);
 // the players and the entity list every frame (a full list).
 struct MatchPlayer {
   std::string name;
+  std::string team = "red";
   std::vector<ge::shooter::Vec3f> origins;
   std::vector<int> health, armour, weapon, frags;
   float yaw = 0;  // where he looks, degrees
@@ -70,6 +72,8 @@ struct MatchScript {
   int frames = 0;
   std::vector<MatchPlayer> players;  // by slot
   std::vector<MatchRocket> rockets;
+  // The server's info keys, each sent as a `serverinfo` message after the lists (none: none sent).
+  std::vector<std::pair<std::string, std::string>> serverinfo;
 };
 std::vector<uint8_t> write_multiview_match(const MatchScript& script);
 // The highlight finder's match: 30 s at 20 frames a second on `map` (laid out in the fixture

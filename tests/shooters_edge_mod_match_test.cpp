@@ -232,5 +232,5 @@ TEST(a_missing_progs_says_what_to_do) {
   const sv::ModMatchReport r = sv::run_mod_match(o);
   CHECK(!r.ok);
   CHECK(r.error.find("cannot read the progs no/such/progs.dat") != std::string::npos);
-  CHECK(r.error.find("next:") != std::string::npos);
+  CHECK(r.error.find("Check the path") != std::string::npos);
 }
