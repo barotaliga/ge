@@ -1355,7 +1355,8 @@ void demo_hub_meta(std::span<const uint8_t> recording, gr::Meta& header, gr::Met
     t->second += p.frags;
   }
   for (const auto& t : teams) header.emplace_back("team", t.first);
-  final_meta.emplace_back("duration_ms", std::to_string(std::llround(s.time * 1000.0)));
+  final_meta.emplace_back("duration_ms",
+                          std::to_string(std::llround(s.time * 1000.0)));
   if (s.format == DemoFormat::single) return;
   for (const Seen& p : seen) {
     std::string v = p.name;
