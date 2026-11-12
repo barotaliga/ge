@@ -382,6 +382,7 @@ struct Pilot {
   // A LIP'S JUMP in the air (`lipjump`): pressed at a lip (`clock_s`, -1 none), flown across at
   // the far side (pilot.cpp `strafe_across`), not woven as a hop.
   double lip_pressed_s = -1;
+  float hop_aim_yaw = 0;  // a hop's way this command: the heading to its aim point, degrees
   float lip_yaw = 0;  // and the heading across to the nearest floor beyond (`lip_crossing`)
   // A COPY flying a forecast (`hop_cast`): its own forecasts off, its first landing's jump pressed.
   bool forecasting = false;

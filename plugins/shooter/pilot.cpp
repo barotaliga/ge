@@ -1429,6 +1429,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       const Vec3f aim =
           via_aim(p, s, s.origin, look, hop_aim(p, s.origin, look, p.strafe_end_node));
       const float aim_yaw = yaw_at(s.origin, aim);
+      p.hop_aim_yaw = aim_yaw;
       const float err = wrap(aim_yaw - vh);
       // The side the aim lies on (the right side turns the velocity clockwise), held until the
       // aim lies `hop_hold` the other way: arcs that weave round the route.

@@ -1536,6 +1536,8 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
     f.bot.senses.set.fov_y = kViewHigh;
   }
   f.bot.keep = f.features[sh::Feature::keep];
+  f.bot.aimhop = f.features[sh::Feature::aimhop];
+  f.bot.airkeys = f.features[sh::Feature::airkeys];
   f.bot.paced = f.features[sh::Feature::pace];
   f.bot.trial = f.features[sh::Feature::trial];
   // A change of course read a reaction late (`eye`), and the aim from its eye ahead (`selfaim`).

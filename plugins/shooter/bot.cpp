@@ -106,6 +106,65 @@ void hand_step(Bot& b, const double want[2], double dt, double tol_x, double tol
   out[1] = std::fmax(-70.0, std::fmin(80.0, -y));
 }
 
+// A HOP'S KEYS IN THE AIR under a view the pilot did not press (the aim's `aimhop`, the hand's or
+// a spot watched `airkeys`): of the key sets allowed (0 forward, clockwise by 45 degrees; -1 none),
+// the one whose air move (pmove's air accelerate: the wish's share along the velocity capped at
+// 30) leaves the velocity best: the most speed, less `kAirTurnCost` a degree it lies past
+// `kAirBand` off the hop's way, plus `kAirCurve` a degree it bends toward `curve` (the side the
+// pilot holds: a flight kept curving, not let go into a plain arc, which an enemy's aim reads
+// exactly; dm2 head to head: -5.6 a match without the curve, +4.6 with it). The set held last is
+// kept unless another beats it by `kAirKeep`.
+constexpr double kAirBand = 15, kAirTurnCost = 0.5, kAirKeep = 0.3, kAirCurve = 0.3;
+
+int aim_air_set(Vec3f v, float view_yaw, float way_yaw, float maxspeed, float accel, double dt,
+                int held, uint8_t allowed = 0xff, int curve = 0) {
+  const double h0 = core::libm::atan2(static_cast<double>(v.y), static_cast<double>(v.x)) *
+                    (180 / core::kPi);
+  const auto off_way = [&](double vx, double vy) {
+    const double h = core::libm::atan2(vy, vx) * (180 / core::kPi);
+    double e = h - way_yaw;
+    while (e > 180) e -= 360;
+    while (e < -180) e += 360;
+    e = std::fabs(e) - kAirBand;
+    return e > 0 ? e : 0.0;
+  };
+  const auto score = [&](double vx, double vy) {
+    double sc = std::sqrt(vx * vx + vy * vy) - kAirTurnCost * off_way(vx, vy);
+    if (curve != 0) {
+      // The curve the side held turns (the right side clockwise), worth `kAirCurve` a degree: a
+      // flight kept bending, not let go into a plain arc.
+      double d = core::libm::atan2(vy, vx) * (180 / core::kPi) - h0;
+      while (d > 180) d -= 360;
+      while (d < -180) d += 360;
+      sc += kAirCurve * (-d * curve);
+    }
+    return sc;
+  };
+  const double reach = static_cast<double>(accel) * maxspeed * dt;
+  int best = -1;
+  double best_score = score(v.x, v.y);
+  double held_score = held < 0 ? best_score : -1e30;
+  for (int k = 0; k < 8; k++) {
+    if (((allowed >> k) & 1u) == 0) continue;
+    const double a = (view_yaw - 45.0 * k) * (core::kPi / 180);
+    const double wx = core::libm::cos(a), wy = core::libm::sin(a);
+    const double add = 30 - (v.x * wx + v.y * wy);
+    double vx = v.x, vy = v.y;
+    if (add > 0) {
+      const double sp = add < reach ? add : reach;
+      vx += sp * wx;
+      vy += sp * wy;
+    }
+    const double sc = score(vx, vy);
+    if (k == held) held_score = sc;
+    if (sc > best_score) {
+      best_score = sc;
+      best = k;
+    }
+  }
+  return held_score + kAirKeep >= best_score ? held : best;
+}
+
 MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   Bot& b = *static_cast<Bot*>(ctx);
   const int me = slot + 1;
@@ -204,7 +263,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       b.strafe = b.pilot.pilot.set.strafe;
       b.hop = b.pilot.pilot.set.hop;
       b.pilot.pilot.set.strafe = false;
-      b.pilot.pilot.set.hop = false;
+      if (!b.aimhop) b.pilot.pilot.set.hop = false;  // (`aimhop`: the hop goes on under the aim)
     }
     const bool resight = c->ent == b.target && sv.time - b.target_seen_at > kResight_s;
     if (c->visible && (!b.aiming || c->ent != b.target || resight) && b.aim.react_med > 0) {
@@ -341,6 +400,32 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     else
       turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
     cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
+    const Pilot& hp = b.pilot.pilot;
+    // (`airkeys`: a spot watched in a hop's air is pressed for the same way.)
+    if (((b.aimhop && b.aiming) || (b.airkeys && !b.aiming)) && !swim3d &&
+        hp.mode == PilotMode::hop &&
+        (self.flags & kFlagOnGround) == 0 && !hp.gap_flight && hp.lip_pressed_s < 0 &&
+        hp.recipe < 0) {
+      // The hop while aiming, in the air: the set that carries the velocity on round the way.
+      const float ms = self.maxspeed > 0 ? self.maxspeed : sv.set.move.maxspeed;
+      b.air_set = aim_air_set(self.velocity, wrap(cmd.angles.y), hp.hop_aim_yaw, ms,
+                              sv.set.move.accelerate, msec / 1000.0, b.air_set);
+      const int k = b.air_set;
+      cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
+      cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
+      if (b.aiming)
+        b.stats.aim_hop_air++;
+      else
+        b.stats.air_keys++;
+      if (why) {
+        why->decide("aimhop");
+        why->fact("way_yaw", hp.hop_aim_yaw);
+        why->fact("set", k);
+        why->choose(k < 0 ? "none" : "keys", "the hop in the air under the aim's view");
+      }
+    } else {
+      b.air_set = -1;
+    }
   } else {
     if (recipe_on) {
       b.view_by = "recipe";
@@ -537,6 +622,26 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       else
         turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
       cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
+      const Pilot& hp = b.pilot.pilot;
+      if (b.airkeys && !swim3d && !shot_due && hp.mode == PilotMode::hop &&
+          (self.flags & kFlagOnGround) == 0 && !hp.gap_flight && hp.lip_pressed_s < 0 &&
+          hp.recipe < 0 && hp.strafe_side != 0) {
+        // THE HOP'S AIR UNDER THE HAND (`airkeys`): the hand's view runs a little behind the
+        // pilot's, and the side key turned under it brakes past 90 degrees off the velocity: the
+        // pilot's side key, alone or with forward, pressed while it carries the velocity on, else
+        // let go (as a person lets go of a key the mouse has not caught up with).
+        const uint8_t sides = hp.strafe_side > 0 ? (1u << 1) | (1u << 2) : (1u << 6) | (1u << 7);
+        const float ms = self.maxspeed > 0 ? self.maxspeed : sv.set.move.maxspeed;
+        b.air_set = aim_air_set(self.velocity, wrap(cmd.angles.y), hp.hop_aim_yaw, ms,
+                                sv.set.move.accelerate, msec / 1000.0, b.air_set, sides,
+                                hp.strafe_side);
+        const int k = b.air_set;
+        cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
+        cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
+        b.stats.air_keys++;
+      } else if (!b.aiming) {
+        b.air_set = -1;
+      }
     } else if (b.mouse && b.aim.mouse) {
       // The pilot's pitched view (a grenade jump's throw, a rocket jump's shot): the hand's
       // strokes there; the command that fires takes the view exactly (the stroke timed to land
