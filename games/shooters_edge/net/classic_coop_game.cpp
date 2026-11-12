@@ -39,7 +39,7 @@ bool load_map(void* ctx, const std::string& name, sv::MapSpec& out, std::string&
   std::unique_ptr<cl::LoadedMap> m;
   if (g.supply != nullptr) {
     m = g.supply(name);
-    if (!m) error = "no map " + name + "; next: name a map the game holds";
+    if (!m) error = "There is no map called " + name + ".";
   } else {
     m = cl::load_named_map(g.files, name, error);
   }
@@ -85,8 +85,8 @@ std::unique_ptr<CoopGame> coop_open(const gs::ServerConfig& c, std::string& erro
     if (!cl::load_programs(cl::classic_adapter(), g->files, "", g->content, error)) return nullptr;
     if (g->content.campaign == nullptr) {
       error = "sv_coop: the game folder " + g->files.folder +
-              " holds no single-player program; next: put the game's packs there (--root), or "
-              "set sv_coop 0 for a match";
+              " holds no single-player program. Put the game's packs there (--root), or "
+              "set sv_coop 0 for a match.";
       return nullptr;
     }
     g->program = g->content.campaign;
@@ -96,7 +96,7 @@ std::unique_ptr<CoopGame> coop_open(const gs::ServerConfig& c, std::string& erro
   g->bots = std::atoi(rule(c, "sv_coopbots", "0").c_str());
   if (g->bots < 0 || g->bots > cl::kPartyMost) {
     error = "sv_coopbots " + std::to_string(g->bots) + ": 0 to " + std::to_string(cl::kPartyMost) +
-            " companions; next: set one of those";
+            " companions";
     return nullptr;
   }
   sv::CampaignOptions co;

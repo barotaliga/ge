@@ -125,7 +125,7 @@ ListenRecorder::~ListenRecorder() {
   } catch (const std::exception& e) {
     std::fprintf(stderr,
                  "listen record: the recording was not finished on close (%s): its last frames "
-                 "are missing. Next: stop the recording (`stop`) before quitting.\n",
+                 "are missing. Type \"stop\" to end a recording before quitting.\n",
                  e.what());
   }
 }
@@ -312,7 +312,7 @@ void write_ready(ListenRecorder& r) {
 bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
                  const std::string& name, const RecordSettings& s, std::string& error) {
   if (r.on) {
-    error = "record: already recording " + r.path + "; next: `stop` first";
+    error = "Already recording " + r.path + ". Type \"stop\" to end it first.";
     return false;
   }
   bool ok = !name.empty() && name.size() <= 64;
@@ -320,16 +320,16 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
     ok = ok && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
                 c == '_' || c == '-');
   if (!ok) {
-    error = "record: the name `" + name +
-            "` is not 1..64 letters, digits, _ or -; next: `record match1`";
+    error =
+        "record: \"" + name + "\" can't be a recording's name: use 1 to 64 letters, digits, _ or -";
     return false;
   }
   if (files.folder.empty()) {
-    error = "record: no game folder to keep recordings in; next: start the game with -basedir";
+    error = "record: there is no game folder to keep recordings in (start the game with -basedir)";
     return false;
   }
   if (l.server == nullptr || l.campaign_host) {
-    error = "record: only a match records (a campaign keeps saves); next: start a match with `map`";
+    error = "record: only a match can be recorded (a campaign keeps saves instead)";
     return false;
   }
   const int level = record_pack_level(s);
@@ -339,7 +339,7 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
   r.file.open(file, std::ios::binary | std::ios::trunc);
   if (!r.file) {
     error = "record: could not write " + file.string() +
-            "; next: check the folder is writable and the disk has room";
+            ". Check that the folder is writable and the disk has room.";
     return false;
   }
   r.path = file.string();
@@ -385,7 +385,7 @@ void add_record_commands(ge::console::Console& console, ListenRecorder& r, const
   console.add_command(
       "record",
       "record <name>: the match recorded as <game folder>/<name>.mvdz (packed: demo_pack) until "
-      "`stop`",
+      "stop",
       [&r, &listen, &files, &s](Con& c, const CArgs& a) {
         if (a.size() < 2) {
           c.print("record: name the recording (record match1)");
@@ -397,7 +397,7 @@ void add_record_commands(ge::console::Console& console, ListenRecorder& r, const
         else
           c.print("recording " + r.path);
       });
-  console.add_command("stop", "stop: the recording `record` began ended and its file closed",
+  console.add_command("stop", "stop: ends the recording and closes its file",
                       [&r](Con& c, const CArgs&) {
                         const std::string line = record_close(r);
                         c.print(line.empty() ? "stop: not recording" : line);

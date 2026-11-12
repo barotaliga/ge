@@ -262,7 +262,7 @@ std::vector<sh::NavMover> map_movers(const sv::QcServer& s, const sv::MapSpec& s
 bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* start_class,
                    MapNav& out, std::string& error) {
   if (spec.models.empty()) {
-    error = "the map " + spec.name + " has no world model; next: load a map first";
+    error = "the map " + spec.name + " has no world for bots to walk on";
     return false;
   }
   std::vector<pg::EntityBlock> blocks;
@@ -503,7 +503,7 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
   out.build_ms =
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
   if (graph.nodes.empty()) {
-    error = "no floor a bot can walk on " + spec.name + "; next: run the se-nav lab on the map";
+    error = "Bots can't play on " + spec.name + ": there is no floor they can walk on.";
     return false;
   }
   return true;

@@ -37,7 +37,7 @@ bool add_archive(SearchPath& path, const std::string& name, std::vector<uint8_t>
   std::string why;
   if (!ge::vfs::add_archive(&path.vfs, name, std::move(bytes), "", &why)) {
     error = name + " is not an archive the game can read: " + why +
-            "; next: replace it with an undamaged copy, or move it out of the game folder";
+            ". Replace it with an undamaged copy, or move it out of the game folder.";
     return false;
   }
   return true;
@@ -51,8 +51,8 @@ bool open_game_dir(const std::string& basedir, const std::string& game, SearchPa
   std::error_code ec;
   if (!fs::is_directory(root / game, ec)) {
     error = "the game folder " + (root / game).string() +
-            " does not exist; next: pass -basedir <the folder that holds " + base + "/" +
-            ge::classicenhance::pack_name(content, 0) + ">";
+            " does not exist. Start the game with -basedir <the folder that holds " + base + "/" +
+            ge::classicenhance::pack_name(content, 0) + ">.";
     return false;
   }
   std::string why;
@@ -60,12 +60,12 @@ bool open_game_dir(const std::string& basedir, const std::string& game, SearchPa
   if (game != base && fs::is_directory(root / base, ec) &&
       !ge::vfs::add_game(&out.vfs, root.string(), base, &why)) {
     error =
-        why + "; next: replace the damaged archive, or move it out of " + (root / base).string();
+        why + ". Replace the damaged archive, or move it out of " + (root / base).string() + ".";
     return false;
   }
   if (!ge::vfs::add_game(&out.vfs, root.string(), game, &why)) {
     error =
-        why + "; next: replace the damaged archive, or move it out of " + (root / game).string();
+        why + ". Replace the damaged archive, or move it out of " + (root / game).string() + ".";
     return false;
   }
   out.folder = (root / game).string();
@@ -164,11 +164,11 @@ fs::path save_file(const SearchPath& path, const std::string& name, bool classic
     ok = ok && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
                 c == '_' || c == '-');
   if (!ok) {
-    error = "the save's name `" + name + "` is not 1..64 letters, digits, _ or -; next: `save s1`";
+    error = "\"" + name + "\" can't be a save's name: use 1 to 64 letters, digits, _ or -";
     return {};
   }
   if (path.folder.empty()) {
-    error = "no game folder to keep saves in; next: start the game with -basedir";
+    error = "There is no game folder to keep saves in (start the game with -basedir).";
     return {};
   }
   return classic ? fs::path(path.folder) / (name + ".sav")
@@ -192,15 +192,14 @@ bool write_save(const SearchPath& path, const std::string& name, std::span<const
     f.flush();
     if (!f) {
       error = "could not write " + tmp.string() +
-              "; next: check the folder is writable and the "
-              "disk has room";
+              ". Check that the folder is writable and the disk has room.";
       return false;
     }
   }
   fs::rename(tmp, file, ec);
   if (ec) {
     error = "could not put the save at " + file.string() + ": " + ec.message() +
-            "; next: check the folder is writable";
+            ". Check that the folder is writable.";
     return false;
   }
   return true;
@@ -211,7 +210,7 @@ bool read_save(const SearchPath& path, const std::string& name, std::vector<uint
   const fs::path file = save_file(path, name, classic, error);
   if (file.empty()) return false;
   if (!read_whole(file, out)) {
-    error = "no save " + file.string() + "; next: `save " + name + "` first, or check the name";
+    error = "There is no save called \"" + name + "\" (" + file.string() + ").";
     return false;
   }
   return true;

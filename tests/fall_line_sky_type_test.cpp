@@ -49,7 +49,7 @@ TEST(an_unknown_type_keeps_the_earth_and_says_so) {
   ge::render::SkyStyle style;
   const std::string problem = fall_line::app::sky_style_of(s, style);
   CHECK(problem.find("mordor") != std::string::npos);
-  CHECK(problem.find("next:") != std::string::npos);
+  CHECK(problem.find("next:") == std::string::npos);  // a player reads it: no agent syntax
   CHECK(problem.find("hell") != std::string::npos);
   CHECK(style.rayleigh[0] == 1);
 }

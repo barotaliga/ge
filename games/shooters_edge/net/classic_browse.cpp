@@ -206,4 +206,40 @@ std::vector<std::string> classic_install_masters(const std::string& basedir) {
   return out;
 }
 
+bool classic_is_forwarder(const gn::ServerInfo& info) {
+  for (const auto& [k, v] : info.keys)
+    if (k == "*version") return v.rfind("qwfwd", 0) == 0;
+  return false;
+}
+
+size_t classic_pingstatus_query(uint8_t* out, size_t cap) {
+  static constexpr char kAsk[] = "\xff\xff\xff\xffpingstatus";
+  const size_t n = sizeof kAsk - 1;
+  if (cap < n) return 0;
+  std::memcpy(out, kAsk, n);
+  return n;
+}
+
+bool classic_read_pingstatus(const uint8_t* data, size_t size,
+                             std::vector<std::pair<gn::Address, int>>& out) {
+  out.clear();
+  if (size < 5 || data[0] != 0xff || data[1] != 0xff || data[2] != 0xff || data[3] != 0xff ||
+      data[4] != 'n' || (size - 5) % 8 != 0)
+    return false;
+  for (size_t at = 5; at + 8 <= size; at += 8) {
+    const auto port = static_cast<uint16_t>(data[at + 4] | (data[at + 5] << 8));
+    const int ping = data[at + 6] | (data[at + 7] << 8);
+    out.emplace_back(gn::ipv4_or_sim(data + at, port), ping);
+  }
+  return true;
+}
+
+ge::forward::RouteQuery classic_route_query() {
+  ge::forward::RouteQuery q;
+  q.is_forwarder = classic_is_forwarder;
+  q.ask = classic_pingstatus_query;
+  q.read = classic_read_pingstatus;
+  return q;
+}
+
 }  // namespace shooters_edge::net

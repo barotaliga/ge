@@ -229,13 +229,13 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
   if (std::string why;
       !gn::parse_address(text, to) && !gn::resolve_ipv4(text, kPortServer, to, &why)) {
     error = "'" + address + "' is not an address the client reads (" + why +
-            "); next: give a host name or an IPv4 address with an optional port (connect "
-            "192.168.1.20, connect 192.168.1.20:27500, connect example.org:27500) or localhost";
+            "). Give a host name or an IPv4 address with an optional port (connect "
+            "192.168.1.20, connect 192.168.1.20:27500, connect example.org:27500) or localhost.";
     return false;
   }
   if (!gn::open_udp_transport(r.own, gn::ipv4(0, 0, 0, 0, 0), &error)) {
-    error = "the client's socket did not open: " + error +
-            "; next: check that the machine has a network";
+    error =
+        "the client's socket did not open: " + error + ". Check that the computer is on a network.";
     return false;
   }
   r.transport = &r.own;
@@ -260,6 +260,12 @@ void remote_world(Remote& r, const std::vector<sh::BrushModel>* models) {
 
 void remote_disconnect(Remote& r) {
   if (!r.active) return;
+  if (r.watch) {
+    watch_close(*r.watch);
+    r.watch.reset();
+    r.active = false;
+    return;
+  }
   if (r.end.stage == ClientStage::signon || r.end.stage == ClientStage::active) {
     client_command(r.end, "drop");
     for (int i = 0; i < 3; i++) {  // the reliable drop, sent until it is surely out
@@ -285,8 +291,90 @@ bool remote_talking(const Remote& r) {
   return r.active && r.end.cfg.voice && r.voip_key != nullptr && r.voip_key->down();
 }
 
+namespace {
+
+// A broadcast watched: its whole frames read, their news kept together, nothing predicted.
+RemoteStep watch_step(Remote& r, std::vector<std::string>& said) {
+  client::Demo& d = r.demo;
+  const bool live = watch_take(*r.watch, d);
+  std::string error;
+  bool any = false;
+  std::vector<client::DemoSound> started;
+  std::vector<std::pair<int, int>> stopped;
+  std::vector<client::DemoVoice> voice;
+  std::vector<client::DemoPrint> prints;
+  std::vector<client::DemoEffect> effects;
+  std::string centre;
+  for (;;) {
+    const client::DemoRead got = client::next_frame(d, error);
+    if (got == client::DemoRead::error) {
+      r.why = "the broadcast's match did not read: " + error;
+      said.push_back(r.why);
+      remote_disconnect(r);
+      return RemoteStep::dropped;
+    }
+    if (got != client::DemoRead::frame) break;
+    any = true;
+    const client::DemoState& st = d.state;
+    started.insert(started.end(), st.started.begin(), st.started.end());
+    stopped.insert(stopped.end(), st.stopped.begin(), st.stopped.end());
+    voice.insert(voice.end(), st.voice.begin(), st.voice.end());
+    prints.insert(prints.end(), st.prints.begin(), st.prints.end());
+    effects.insert(effects.end(), st.effects.begin(), st.effects.end());
+    if (!st.centre.empty()) centre = st.centre;
+  }
+  d.state.started = std::move(started);
+  d.state.stopped = std::move(stopped);
+  d.state.voice = std::move(voice);
+  d.state.prints = std::move(prints);
+  d.state.effects = std::move(effects);
+  d.state.centre = std::move(centre);
+  d.bytes.erase(d.bytes.begin(), d.bytes.begin() + static_cast<std::ptrdiff_t>(d.pos));
+  d.pos = 0;
+  if (!live || d.ended) {
+    r.why = live ? std::string("the broadcast ended") : r.watch->why;
+    said.push_back(r.why);
+    remote_disconnect(r);
+    return RemoteStep::dropped;
+  }
+  if (!any || d.state.map.empty()) return RemoteStep::waiting;
+  if (d.state.levels != r.levels) {
+    r.levels = d.state.levels;
+    return RemoteStep::new_level;
+  }
+  return RemoteStep::frame;
+}
+
+}  // namespace
+
+bool remote_watch(Remote& r, const std::string& address, const std::string& name,
+                  const std::string& password, std::string& error) {
+  remote_disconnect(r);
+  std::string text = address;
+  if (text.rfind("localhost", 0) == 0) text = "127.0.0.1" + text.substr(9);
+  gn::Address to;
+  if (std::string why; text.find(':') == std::string::npos ||
+                       (!gn::parse_address(text, to) && !gn::resolve_ipv4(text, 0, to, &why))) {
+    error = "'" + address +
+            "' is not a broadcast's address: give its host and port, as in "
+            "watch 192.168.1.20:28000";
+    return false;
+  }
+  auto w = std::make_unique<StreamWatch>();
+  if (!watch_open(*w, to, name, password, error)) return false;
+  r.watch = std::move(w);
+  watch_demo(r.demo);
+  r.server = to;
+  r.server_name = text;
+  r.active = true;
+  r.levels = 0;
+  r.why.clear();
+  return true;
+}
+
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
   if (!r.active) return RemoteStep::waiting;
+  if (r.watch) return watch_step(r, said);
   if (r.end.cfg.live_mic) r.end.mic_talking = remote_talking(r);
   r.owed_s += wall_s;
   // What the player's place was before this frame's packets, for the correction they make.
@@ -415,6 +503,9 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
 
 std::string remote_status(const Remote& r) {
   if (!r.active) return "not connected";
+  if (r.watch)
+    return (r.watch->state == WatchState::watching ? "watching " : "asking to watch ") +
+           r.server_name;
   return stage_words(r.end.stage) + r.server_name;
 }
 
@@ -439,6 +530,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.topcolor = std::atoi(cvar("topcolor", "0").c_str());
     cfg.bottomcolor = std::atoi(cvar("bottomcolor", "0").c_str());
     cfg.speedjump = cvar("cl_speedjump", "0") == "1";
+    cfg.spectator = cvar("spectator", "0") == "1";  // `set spectator 1`: join to watch
     cfg.voice = r.voip;
     cfg.live_mic = true;  // the window's microphone (remote_mic), while +voip is held
     cfg.qport = static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
@@ -456,10 +548,25 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                     else
                       join(c, a[1]);
                   });
+  con.add_command(
+      "watch", "watch <host>:<port> [password]: watch a broadcast (a server's stream port or a TV)",
+      [&r](Con& c, const Args& a) {
+        if (a.size() < 2) {
+          c.print("watch: name a broadcast (watch 192.168.1.20:28000)");
+          return;
+        }
+        const ge::console::Cvar* v = c.cvars().find("name");
+        const std::string name = v != nullptr && !v->value.empty() ? v->value : "viewer";
+        std::string error;
+        if (!remote_watch(r, a[1], name, a.size() >= 3 ? a[2] : std::string(), error))
+          c.print("watch: " + error);
+        else
+          c.print(remote_status(r));
+      });
   con.add_command("reconnect", "reconnect: join the last server again",
                   [&r, join](Con& c, const Args&) {
                     if (r.server_name.empty())
-                      c.print("reconnect: no server joined yet; next: connect <host>");
+                      c.print("reconnect: you haven't joined a server yet (use connect <host>)");
                     else
                       join(c, r.server_name);
                   });

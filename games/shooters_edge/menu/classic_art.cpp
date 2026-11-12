@@ -221,7 +221,7 @@ bool load_classic_art(const FindFile& find, ClassicArt* out, std::string* error,
   vfs::IndexedPicture glyphs;
   if (sheet == nullptr ||
       !vfs::read_raw_picture(vfs::wad_lump(wad_bytes, *sheet), 128, 128, &glyphs, &why)) {
-    *error = "gfx.wad has no 128 x 128 glyph sheet `conchars`";
+    *error = "gfx.wad has no 128 x 128 glyph sheet \"conchars\"";
     return false;
   }
   // Each picture as the pack has it, or its enhanced copy at the glyph sheet's density.

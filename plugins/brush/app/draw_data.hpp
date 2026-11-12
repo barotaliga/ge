@@ -141,6 +141,10 @@ double flicker_at(const PointLight& light, double t);
 // bonfire's 1.3), lower slower; a game's setting (r_fire_speed); bsp_flames.hpp's fire_flicker and
 // bsp_fires.
 inline constexpr double kFirePace = 1.0;
+// THE POOLS' PACE: how fast a map's water moves (its swell, chop, stir and gusts) against a real
+// water's (render/water.hpp's WaterDraw::pace); a game's setting (r_water_speed). Under 1: a hall's
+// pool is metres across, and real waves on it read hurried at the classic rooms' scale.
+inline constexpr double kPoolPace = 0.7;
 
 struct Atlas {
   uint32_t width = 0, height = 0, mips = 1;

@@ -145,7 +145,7 @@ template <class Io>
 bool same_count(Io& io, uint32_t n, size_t expected, const char* what) {
   if (n == expected) return true;
   io.fail("the save holds " + std::to_string(n) + " of " + what + ", this server " +
-          std::to_string(expected) + "; next: load it with the build and map it was saved on");
+          std::to_string(expected) + ": it was saved by another version of the game or map");
   return false;
 }
 
@@ -154,8 +154,7 @@ template <class Io>
 bool at_most(Io& io, int32_t n, int32_t least, int32_t most, const char* what) {
   if (n >= least && n <= most) return true;
   io.fail("the save's " + std::string(what) + " is " + std::to_string(n) + ", outside " +
-          std::to_string(least) + ".." + std::to_string(most) +
-          "; next: the file is damaged, load another save");
+          std::to_string(least) + ".." + std::to_string(most) + ": the file is damaged");
   return false;
 }
 
@@ -296,7 +295,7 @@ void text_in(Io& io, char* buf, size_t size) {
   if constexpr (Io::kReading) {
     if (t.size() >= size) {
       io.fail("the save's temporary string is " + std::to_string(t.size()) + " bytes, too long" +
-              "; next: the file is damaged, load another save");
+              ": the file is damaged");
       return;
     }
     std::memset(buf, 0, size);
@@ -376,18 +375,18 @@ std::string title_of(const QcServer& s) {
 }  // namespace
 
 std::string campaign_save_problem(const Campaign& c) {
-  if (!c.server) return "no map is running; next: start a game with `map <name>` first";
+  if (!c.server) return "Can't save: no game is running.";
   const QcServer& s = *qc_of(c.server);
   if (!s.q.layout->single_player)
-    return "the program is not a single-player one; next: save a campaign, not a match";
+    return "Can't save a match; only a single-player game can be saved.";
   for (const char* rule : {"deathmatch", "coop"})
     if (s.cvars.find(rule)->on())
       return std::string("a game with ") + rule +
-             " on does not save; next: save a single-player game (`" + rule + " 0`)";
+             " on can't be saved; only a single-player game can.";
   for (int i = 1; i < sh::kMaxClients; i++)
-    if (s.clients[i].active) return "another player is in the game; next: save alone";
-  if (!s.clients[0].active) return "nobody is in the game; next: join it first";
-  if (s.sv.edicts[1].health <= 0) return "the player is dead; next: respawn, then save";
+    if (s.clients[i].active) return "Can't save while another player is in the game.";
+  if (!s.clients[0].active) return "Can't save: you are not in the game.";
+  if (s.sv.edicts[1].health <= 0) return "Can't save while you are dead.";
   return "";
 }
 
@@ -441,7 +440,7 @@ bool campaign_load(Campaign& c, const pg::Progs& progs, const CampaignOptions& o
   }
   if (f.meta().game_version > kSaveVersion) {
     error = std::string(name) + ": written by a newer game (save version " +
-            std::to_string(f.meta().game_version) + "); next: load it with that build";
+            std::to_string(f.meta().game_version) + ")";
     return false;
   }
   // Each chunk is read where it belongs, in this order, and every one must read to its end.
@@ -450,18 +449,16 @@ bool campaign_load(Campaign& c, const pg::Progs& progs, const CampaignOptions& o
     if (info == nullptr || info->version > kChunkVersion) {
       error = std::string(name) + ": chunk " + save::tag_name(tag) +
               (info == nullptr ? " missing" : " newer than this build reads") +
-              "; next: load a save this build wrote";
+              ": it was saved by another version of the game";
       return false;
     }
     save::Reader r = f.reader(*info);
     walk(r);
-    if (r.ok() && !r.at_end())
-      r.fail("the chunk has bytes left over once read; next: load a save this build wrote");
+    if (r.ok() && !r.at_end()) r.fail("the chunk has bytes left over once read");
     if (!r.ok()) {
       error = std::string(name) + ": chunk " + save::tag_name(tag) + " at byte " +
               std::to_string(r.offset()) + ": " + r.problem();
-      if (r.problem().find("next:") == std::string::npos)
-        error += "; next: the file is damaged or of another build, load another save";
+      error += " (the file is damaged or from another version of the game)";
       return false;
     }
     return true;
@@ -472,8 +469,7 @@ bool campaign_load(Campaign& c, const pg::Progs& progs, const CampaignOptions& o
   if (!chunk(kCamp, [&](save::Reader& r) { campaign(r, c, id); })) return false;
   if (!(id == progs_id(progs))) {
     error = std::string(name) +
-            ": written by another program (its code differs from the one loaded); next: load it "
-            "with the program it was saved with";
+            ": it was saved with another game program (its code differs from the one loaded)";
     return false;
   }
   const std::string map = c.map.name;

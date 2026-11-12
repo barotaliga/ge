@@ -2,6 +2,8 @@
 // state, the report, the bot as the pilot and the views `ge shot` draws: the map from above with
 // the field on it, and the piste round the player.
 //
+// voice: agent (the play contract an agent drives; docs/architecture.md § Player text).
+//
 // ge:summary FallLineRun: the Driver behind the play contract; observation, state, report, pilot
 // ge:keywords play run observation state report pilot driver events shoot views map near
 // ge:skill sim agent-interface

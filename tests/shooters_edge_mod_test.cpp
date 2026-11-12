@@ -264,7 +264,7 @@ TEST(hooks_of_another_api_are_refused) {
   hooks.api = SE_MOD_API + 1;
   const ge_mod_v1 table = table_of(&hooks);
   const std::vector<std::string> e = se::check_hooks(&table);
-  CHECK(e.size() == 1 && e[0].find("next:") != std::string::npos);
+  CHECK(e.size() == 1 && e[0].find("must be rebuilt") != std::string::npos);
   se::MatchOptions opt;
   opt.frames = 10;
   opt.mod = &table;
