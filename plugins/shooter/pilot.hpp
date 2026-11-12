@@ -108,6 +108,9 @@ struct PilotSettings {
   // `kFlyFrom` behind) jumps anyway when the jump, flown by the move from where it is (and a command
   // or two late under a keyboard), lands by the far end; it lines up again only when none does.
   bool jump_fly = false;
+  // `gappast`: a gap's jump that comes down on past its far node, on its floor and line, lands
+  // (pilot_gaps.hpp `gap_lands`): this far past, units (0: within the landing's 48 only).
+  float gap_past = 0;
   // `gapbuild`: a hop's first jump into a gap trick over water is a circle jump aimed across at
   // its landing, taken as soon as a jump from there lands across; short of the lip a landing runs
   // on along the ground (straight, curving or side to side, rolled through the hands:

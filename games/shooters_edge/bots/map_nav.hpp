@@ -116,9 +116,11 @@ std::vector<ge::shooter::NavMover> map_movers(const server::RulesCommon& s,
                                               ge::brush::BrushTracer* tracer = nullptr);
 // The map's nav built into `out` (whose world and graph the movers point into: keep it where it
 // is), on either map family: the clip hulls of `spec.models` or the brushes of `spec.brushes`.
-// False with `error` when no floor holds a node.
+// False with `error` when no floor holds a node. `set`: the grid's (a trick map's narrow
+// platforms need a finer one than the default 32 units: the `se-trick` lab's --spacing).
 bool build_map_nav(const server::RulesCommon& s, const server::MapSpec& spec,
-                   const char* start_class, MapNav& out, std::string& error);
+                   const char* start_class, MapNav& out, std::string& error,
+                   const ge::shooter::NavSettings& set = ge::shooter::NavSettings{});
 // The sequel's move as the nav and the pilot read it: its top speed (300) and friction (6) (its
 // stop speed, acceleration and gravity are the first game's already), and its air: with the
 // server's air acceleration `air_accelerate` 0 (`sequel_air_accelerate`, its default) a plain

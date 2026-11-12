@@ -54,6 +54,8 @@
 //   through a stop (fighter.cpp `turn_back_round`; on).
 // - `jumpfly`: a run at a jump off its line or its speed jumps anyway when the jump, flown by the
 //   move from where it is, lands (pilot.cpp `approach_jump`), not lined up again; on.
+// - `gappast`: a gap's jump that comes down on past its far node, on its floor, lands
+//   (pilot_gaps.hpp `gap_lands`); judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
@@ -66,7 +68,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -138,9 +140,10 @@ enum class Feature : uint8_t {
   retarget,
   uturn,
   jumpfly,
+  gappast,
   trial,
 };
-constexpr size_t kFeatures = 59;
+constexpr size_t kFeatures = 60;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

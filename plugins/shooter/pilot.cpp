@@ -715,7 +715,7 @@ bool jump_flies(const Pilot& p, const PilotSense& s, int msec, Vec3f T) {
   if (s.world == nullptr) return false;
   MoveSettings move;
   move.maxspeed = s.maxspeed;
-  if (!gap_lands(*s.world, move, s.origin, s.velocity, T, msec)) return false;
+  if (!gap_lands(*s.world, move, s.origin, s.velocity, T, msec, p.set.gap_past)) return false;
   return !p.set.curve_keys || gap_lands_late(p, s, msec, T);
 }
 
