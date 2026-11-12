@@ -440,6 +440,16 @@ struct Fighter {
   bool hunts = false;      // every monster a foe (companion.hpp `hunt_init`)
 };
 
+// `gapbuild`: a hopper plans a gap trick slower than a gap's speed when the route reaches the
+// takeoff this long after setting off, s (a hop gains about 100 units/s a second from a run's 320).
+constexpr float kGapBuild_s = 0.3f;
+
+// The pilot's settings and hands for a fighter with these behaviours and moves (`traits`' moves
+// tier: an expert hops on practised hands, an average player the simple hop on steady ones, a
+// novice walks on a person's); `fighter_init` uses them, and a lab flies a route with the same.
+sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& traits,
+                                sh::AimSkill skill, sh::PilotHands& hands);
+
 // The fighter's strength: health and armour's protection, a launcher counted on top.
 float fighter_strength(const Stats& st);
 

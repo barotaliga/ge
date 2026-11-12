@@ -105,7 +105,9 @@ struct PilotSettings {
   // and a run-up or a jump's run fallen well under its start (or into water) planned again.
   bool runup_keys = false;
   // `gapbuild`: a hop's first jump into a gap trick over water is a circle jump aimed across at
-  // its landing, taken as soon as a jump from there lands across.
+  // its landing, taken as soon as a jump from there lands across; short of the lip a landing runs
+  // on along the ground (straight, curving or side to side, rolled through the hands:
+  // pilot_gaps.hpp `gap_run`) to where a jump does, and far out it runs on rather than gives up.
   bool gap_circle = false;
   bool hop_stairs_walked = false;
   float hop_climb = 10;
@@ -255,6 +257,7 @@ struct PilotStats {
   int32_t gap_jumps = 0;            // gap tricks jumped out of a hop (nav_gaps.hpp)
   int32_t gap_landed = 0;           // and of them, landed by their landing node
   int32_t gap_refused = 0;          // gaps given up at the lip: no jump from there lands across
+  float gap_speed = 0;              // the gap jumps' takeoff speeds across, summed, units/s
   double time_s = 0;                // the commands' time since the last pilot_go
 };
 
@@ -318,6 +321,11 @@ struct Pilot {
   };
   MoverSeen movers_seen[8];
   bool gap_flight = false;
+  NavExtraLink gap_link;     // the gap jumped (`gap_flight`): judged where it comes down
+  bool gap_aloft = false;    // and its flight has left the ground (a bot's keys may press late)
+  double gap_pressed_s = 0;  // when its jump was pressed (`clock_s`)
+  int32_t gap_way = -1;      // the run to a gap's lip under way (pilot_gaps.hpp `gap_run`; -1 none)
+  int32_t gap_way_i = 0;     // and its commands so far
   bool safe_flight = false;
   bool brink_free = false;    // this command's keys are a flight the move proved: no brink guard
   std::vector<int32_t> shut;  // doors the caller knows are shut: never planned through

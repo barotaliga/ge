@@ -65,6 +65,8 @@ constexpr int kGapRunOn = 4;
 constexpr float kGapPastStart = 24;
 constexpr float kGapCurveTop = 560;      // the curve's speed is not what ends it
 constexpr float kGapCurveMost_s = 0.6f;  // it runs this long at most
+constexpr double kGapLiftOff_s = 0.3;    // a gap's jump not off the ground this long after: none
+constexpr float kGapCurveCorner = 5;     // and begins with the landing this far off the velocity
 constexpr float kGroundFriction = 4;
 constexpr double kGapOff_s = 10;  // a gap given up stays off the routes this long
 constexpr float kLevel = 2;       // a strafe stretch's nodes lie within this of one height
@@ -221,8 +223,8 @@ int32_t hop_stretch(const Pilot& p, Vec3f at) {
   for (size_t j = p.k + 1; j < p.route.size(); j++) {
     const NavLink* l = link_of(g, p.route[j - 1], p.route[j]);
     if (l != nullptr && l->gap && hops_gaps(p)) {
-      best = static_cast<int32_t>(j);  // a gap trick: the hop runs into it and ends across it
-      break;
+      best = static_cast<int32_t>(j);  // a gap trick: the hop runs into it and on across it
+      continue;
     }
     if (l == nullptr || (l->kind != NavKind::walk && l->kind != NavKind::drop) || l->mover >= 0 ||
         l->teleport || (p.set.brink && l->brink && !p.set.hop_lips))
@@ -329,6 +331,7 @@ bool circling(Pilot& p, const PilotSense& s, float vh, float speed, float err, f
   if (p.gap_k >= 0) {
     cs.target = kGapCurveTop;  // the jump goes when one lands across, not at a speed
     cs.most_s = kGapCurveMost_s;
+    cs.corner = kGapCurveCorner;
   }
   const CircleStep c = circle_step(vh, speed, err, p.circle_s, static_cast<float>(msec) * 0.001f,
                                    p.circle_side, move, cs);
@@ -607,10 +610,6 @@ bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, 
   move.maxspeed = s.maxspeed;
   Vec3f dir{T.x - S.x, T.y - S.y, 0};
   normalize(dir);
-  const auto across_T = [&](const JumpFlight& f) {
-    const float dz = f.end.z - T.z;
-    return f.landed && across(f.end, T) <= kGapLand && dz <= kGapUp && dz >= -kGapUp;
-  };
   if (s.world != nullptr && gl != nullptr) {
     const float dt = static_cast<float>(msec) * 0.001f;
     const float keep = 1 - kGroundFriction * dt;  // a command's run on the ground keeps this
@@ -622,13 +621,16 @@ bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, 
       }
       const float along = dot(Vec3f{at.x - S.x, at.y - S.y, 0}, dir);
       if (along > kGapPastStart) break;  // past the lip
-      const JumpFlight f = fly_jump(*s.world, move, at, v, T, msec);
-      if (!across_T(f)) continue;
+      if (!gap_lands(*s.world, move, at, v, T, msec)) continue;
       if (k == 0) {
         p.gap_flight = true;
+        p.gap_aloft = false;
+        p.gap_pressed_s = p.clock_s;
+        p.gap_link = {p.route[gk], p.route[gk + 1], NavKind::jump, gl->time_s};
         p.safe_flight = true;
         p.brink_free = true;
         p.stats.gap_jumps++;
+        p.stats.gap_speed += across({}, s.velocity);
         because = "a gap trick: the jump from here lands across";
         return true;
       }
@@ -644,6 +646,12 @@ bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, 
       because = "a gap trick ahead: a hop that lands this side";
       return true;
     }
+  }
+  if (p.set.gap_circle && across(s.origin, S) > kGapCurveFrom) {
+    // Short of the lip and too far out to curve into it yet: run on along the ground to where
+    // the curve begins (a hop from here would come down past it).
+    because = "a gap trick ahead: running on to its lip";
+    return false;
   }
   p.stats.gap_refused++;
   if (gl != nullptr) gap_off(p, {p.route[gk], p.route[gk + 1], NavKind::jump, gl->time_s});
@@ -1010,9 +1018,29 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   p.shot_pitch = 0;
   p.shot_in_s = 0;
   p.brink_free = false;
+  if (p.gap_flight && !s.onground) p.gap_aloft = true;
+  if (p.gap_flight && s.onground && !p.gap_aloft && p.clock_s - p.gap_pressed_s > kGapLiftOff_s) {
+    p.gap_flight = false;  // the jump never left the ground (a key held off): no flight to judge
+  } else if (p.gap_flight && s.onground && p.gap_aloft) {
+    // A gap trick's jump come down (whatever the mode now: the hop's stretch may end in its
+    // flight): by its landing, or short (a miss: twice, never again).
+    p.gap_flight = false;
+    const Vec3f T = node(g, p.gap_link.to).origin;
+    const float dz = s.origin.z - T.z;
+    if (across(s.origin, T) <= kGapLanded && dz <= kGapUp && dz >= -kGapUp)
+      p.stats.gap_landed++;
+    else
+      missed_jump(p, p.gap_link);
+    // The gap is behind: the next in the hop's stretch, if any, is the one ahead now.
+    p.gap_k = -1;
+    for (size_t j = p.k; p.mode == PilotMode::hop && j + 1 < p.route.size(); j++) {
+      if (p.route[j] != p.gap_link.from || p.route[j + 1] != p.gap_link.to) continue;
+      p.gap_k = gap_in(p, p.strafe_end_node, j + 1);
+      break;
+    }
+  }
   if (p.mode != PilotMode::hop) {
     p.gap_k = -1;
-    p.gap_flight = false;
     p.safe_flight = false;
   } else if (!s.onground && p.safe_flight) {
     p.brink_free = true;  // a flight the move proved lands safe: nothing brakes it
@@ -1062,8 +1090,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     // as people curve into it from a walk.
     const bool near_gap = p.set.gap_circle && gap_curve_near(p, s);
     if (p.set.hop && p.mode == PilotMode::walk && s.onground &&
-        (l.kind == NavKind::walk || l.kind == NavKind::drop) && l.mover < 0 &&
-        (speed >= kStrafeSpeed * s.maxspeed || near_gap) &&
+        (l.kind == NavKind::walk || l.kind == NavKind::drop || (l.gap && hops_gaps(p))) &&
+        l.mover < 0 && (speed >= kStrafeSpeed * s.maxspeed || near_gap) &&
         !(l2 && leaps(l2->kind) && !(l2->gap && hops_gaps(p)))) {
       const int32_t j = hop_stretch(p, s.origin);
       if (j >= 0 && (speed >= kStrafeSpeed * s.maxspeed || gap_in(p, j) >= 0)) {
@@ -1084,25 +1112,12 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       restart(p, s);
       p.mode = PilotMode::walk;
     }
-    if (p.mode == PilotMode::hop && p.gap_flight && s.onground && p.gap_k >= 0) {
-      // A gap trick's jump come down: by its landing, or short (a miss: twice, never again).
-      p.gap_flight = false;
-      const size_t gk = static_cast<size_t>(p.gap_k);
-      const Vec3f T = node(g, p.route[gk + 1]).origin;
-      const float dz = s.origin.z - T.z;
-      if (across(s.origin, T) <= kGapLanded && dz <= kGapUp && dz >= -kGapUp) {
-        p.stats.gap_landed++;
-      } else if (const NavLink* gl = link_of(g, p.route[gk], p.route[gk + 1])) {
-        missed_jump(p, {p.route[gk], p.route[gk + 1], NavKind::jump, gl->time_s});
-      }
-      p.gap_k = -1;
-    }
     if (p.mode == PilotMode::hop) {
       hop_left = hop_follow(p, s.origin, p.strafe_end_node);
       target = node(g, p.route[static_cast<size_t>(p.strafe_end_node)]).origin;
       const float off =
           off_segment(s.origin, node(g, p.route[p.k]).origin, node(g, p.route[p.k + 1]).origin);
-      if (hop_left <= p.set.hop_end ||
+      if ((hop_left <= p.set.hop_end && !p.gap_flight) ||
           (s.onground && speed < p.set.hop_slow * s.maxspeed && !p.jump_pressed) ||
           (p.set.hop_headroom && s.onground && !p.jump_pressed && p.gap_k < 0 &&
            hop_left <= speed * kLastJump_s)) {
@@ -1150,7 +1165,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
 
     // A gap trick reached on foot, not out of a hop (nav_gaps.hpp): no run makes it. Round it
     // until the next goal.
-    if (!replanned && p.mode != PilotMode::hop && !p.airborne &&
+    if (!replanned && p.mode != PilotMode::hop && !p.airborne && s.onground &&
         ((leaps(l.kind) && l.gap) || (l2 && l2->gap && leaps(l2->kind)))) {
       p.stats.gap_refused++;
       gap_off(p, l.gap ? NavExtraLink{a, b, l.kind, l.time_s}
@@ -1232,7 +1247,28 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         const float err_abs = err < 0 ? -err : err;
         if (err_abs > p.set.hop_brake && speed > s.maxspeed) w.forward = -1;
       }
-      if (s.onground && circling(p, s, vh, speed, err, dt, msec, w)) {
+      GapRun run;
+      if (s.onground && p.gap_k >= 0 && static_cast<size_t>(p.gap_k) >= p.k && !p.jump_pressed) {
+        // Near a gap's lip with no jump from here landing across: run on to where one does,
+        // straight or curving on the ground for speed (people's last steps into a gap).
+        float e = 0;
+        bool now = false;
+        if (gap_curve(p, s, msec, e, now) && !now) run = gap_run(p, s, msec);
+      }
+      if (!run.found) p.gap_way = -1;
+      if (run.found) {
+        p.gap_way_i = run.way == p.gap_way ? p.gap_way_i + 1 : 1;
+        p.gap_way = run.way;
+        p.circle_s = -1;
+        w.forward = 1;
+        w.side = static_cast<float>(run.side);
+        w.yaw = unwrap(run.yaw, p.yaw);
+        w.jump = false;
+        p.brink_free = true;
+        because = run.side == 0  ? "a gap trick: running at its lip"
+                  : run.flip > 0 ? "a gap trick: strafing side to side to its lip"
+                                 : "a gap trick: curving on the ground to its lip";
+      } else if (s.onground && circling(p, s, vh, speed, err, dt, msec, w)) {
         because = "a circle jump: curving into the hop";
       } else if (s.onground) {
         // The landing's own command: jump (before friction) and strafe on; with a gap trick
@@ -1240,8 +1276,15 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         w.jump = !p.jump_pressed;
         because = "a landing: jump on it";
         p.safe_flight = false;
-        if (w.jump && p.gap_k >= 0 && static_cast<size_t>(p.gap_k) >= p.k)
+        if (w.jump && p.gap_k >= 0 && static_cast<size_t>(p.gap_k) >= p.k) {
           w.jump = gap_takeoff(p, s, msec, because, replanned);
+          if (!w.jump && !replanned) {
+            // Running on to the lip: a run's keys along the route, not the air's side key.
+            w.forward = 1;
+            w.side = 0;
+            w.yaw = unwrap(aim_yaw, p.yaw);
+          }
+        }
         if (w.jump && p.set.hop_headroom && s.world != nullptr &&
             jump_blocked(p, *s.world, s.origin, speed, kHeadroom_s)) {
           // A ceiling in the jump's way: run on under it along the route, jump later.
@@ -1252,6 +1295,14 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           because = "the jump's way is low: run on";
         }
         if (w.jump) p.stats.hop_jumps++;
+      } else if (p.gap_flight) {
+        // A gap trick's jump in the air: flown as its takeoff's look flew it (nav_gaps.hpp
+        // `fly_jump`), forward at the landing, so it comes down where that said.
+        w.jump = false;
+        w.forward = 1;
+        w.side = 0;
+        w.yaw = unwrap(yaw_at(s.origin, node(g, p.gap_link.to).origin), p.yaw);
+        because = "a gap trick: flying at its landing";
       } else {
         w.jump = false;  // let go in the air, so the landing's press is a fresh one
         because = "hopping: the side key, the view on the velocity";

@@ -164,6 +164,8 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
     r.side.push_back(p.pressed[2]);
     r.side_wanted.push_back(p.wanted[2]);
     r.pitch.push_back(cmd.angles.x);
+    r.velocity.push_back(st.velocity);
+    r.because.push_back(p.because);
     const float v = across(st.velocity);
     if (v > r.top_speed) r.top_speed = v;
   }
