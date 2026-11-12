@@ -24,6 +24,7 @@
 #include "check.hpp"
 #include "core/num.hpp"
 #include "shooter/sequel_move.hpp"
+#include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace {
@@ -406,4 +407,64 @@ TEST(a_weapon_stays_when_taken_and_infinite_ammo_fills_the_stock) {
   CHECK(e.item == rail && !e.hidden && !e.gone);  // it stays for the next player
   run(*a, 8 * 20, sh::kButtonAttack);             // and her shots take none
   CHECK(a->p(0).body.ammo[int(sv::SqAmmo::slugs)] == 50);
+}
+
+TEST(teammates_by_skin_take_no_damage_without_friendly_fire_and_a_team_kill_scores_minus_one) {
+  auto a = facing(300);
+  a->r.user_info(0, "skin", "male/red");
+  a->r.user_info(1, "skin", "female/red");
+  a->r.console("dmflags 320");  // skin teams, no friendly fire
+  CHECK(sv::fight_teammates(a->s(), 0, 1));
+  give(*a, sv::SqWeapon::railgun, 10);
+  run(*a, 8, sh::kButtonAttack);
+  CHECK(a->p(1).alive && a->p(1).health == 100);
+  a->r.console("dmflags 128");  // model teams: male and female are not one team
+  CHECK(!sv::fight_teammates(a->s(), 0, 1));
+  a->r.console("dmflags 64");  // skin teams with friendly fire
+  a->p(1).health = 10;
+  run(*a, 16 * 8, sh::kButtonAttack);
+  CHECK(!a->p(1).alive && a->p(0).frags == -1);
+}
+
+TEST(the_field_of_view_is_held_to_its_range_and_fixed_by_the_flag) {
+  auto a = arena();
+  run(*a, 8);
+  CHECK(a->r->world.clients[0].numbers.fov == 90);
+  a->r.user_info(0, "fov", "200");
+  CHECK(a->r->world.clients[0].numbers.fov == 160);
+  a->r.user_info(0, "fov", "110");
+  CHECK(a->r->world.clients[0].numbers.fov == 110);
+  a->r.console("dmflags 32768");
+  run(*a, 8);
+  CHECK(a->r->world.clients[0].numbers.fov == 90);
+}
+
+TEST(a_respawn_leaves_the_body_which_a_blast_throws_apart) {
+  auto a = facing(300);
+  a->r.console("dmflags 1024");  // the dead respawn at once
+  give(*a, sv::SqWeapon::railgun, 10);
+  a->p(1).health = 80;
+  run(*a, 8, sh::kButtonAttack);  // 100 on 80: −20, a body knocked back, not a gib
+  CHECK(!a->p(1).alive && !a->p(1).gibbed);
+  run(*a, 8 * 12);  // a second on: he stands up elsewhere
+  CHECK(a->p(1).alive);
+  const sv::SequelBody& b = a->s().bodies[0];
+  CHECK_MSG(b.live && b.origin.x > 300 && b.health == -20,
+            std::to_string(b.origin.x) + " " + std::to_string(b.health));
+  const size_t row = sv::fight_first_row(a->s()) + sv::kSequelMissiles + sv::kSequelDrops;
+  CHECK(!a->r->world.entities[row].free && a->r->world.entities[row].modelindex > 0);
+  sv::fight_blast(a->s(), b.origin, 0, 100, 120, int(sv::SqWeapon::rocket_launcher));
+  CHECK(!b.live);
+  run(*a, 1);
+  CHECK(a->r->world.entities[row].free);
+}
+
+TEST(the_scores_list_the_best_first) {
+  auto a = arena();
+  run(*a, 8);
+  a->p(1).frags = 3;
+  a->p(0).frags = -1;
+  const std::vector<std::string> lines = sv::fight_scores(a->s());
+  CHECK(lines.size() == 2 && lines[0] == "   3  Ben" && lines[1] == "  -1  Ana");
+  CHECK(a->r.client_command(0, "score") == sv::CommandResult::mod);
 }

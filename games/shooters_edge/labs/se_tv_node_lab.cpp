@@ -81,6 +81,21 @@ struct Match {
   cn::TvNode node;
 };
 
+// Loopback is not instant everywhere (macOS queues it): before a side reads, every byte the other
+// side has sent is in, so a run reads the same bytes on the same step on every machine.
+void settle(Match& m, std::vector<Viewer>& viewers) {
+  std::vector<gn::TcpStream*> all{&m.node.up};
+  for (const auto& r : m.port.relays) all.push_back(&r->tcp);
+  for (const auto& v : m.node.viewers) all.push_back(&v->tcp);
+  for (Viewer& v : viewers) all.push_back(&v.tcp);
+  gn::tcp_settle_pairs(all);
+}
+
+// Until `l` holds the connection just made, so it is accepted on the next look on every machine.
+void until_waiting(const gn::TcpListener& l, gn::TcpStream& dialed) {
+  for (int i = 0; i < 1000000 && !gn::tcp_waiting(l) && !dialed.closed; i++) gn::tcp_pump(dialed);
+}
+
 void take(Viewer& v) {
   gn::tcp_pump(v.tcp);
   gn::tcp_take_bytes(v.tcp, v.got);
@@ -185,14 +200,19 @@ void run(gl::Lab& lab) {
       gn::sim_advance(m.net, now);
       cn::classic_frame(m.server, now);
       for (cn::ClassicClientEnd& k : m.c) cn::client_tick(k, now);
+      settle(m, viewers);
       cn::qtv_update(m.port, m.server);
     }
+    settle(m, viewers);
     const bool dialling = m.node.state == cn::TvUpState::idle;
     cn::tv_update(m.node, at);
     // Loopback: the node's connection up and its request with the server before its next look.
-    if (dialling)
+    if (dialling) {
       for (int i = 0; i < 100000 && m.node.up.connecting; i++) gn::tcp_pump(m.node.up);
+      until_waiting(m.port.listener, m.node.up);
+    }
     gn::tcp_pump(m.node.up);
+    settle(m, viewers);
     for (Viewer& v : viewers) {
       if (!v.dialed && at >= v.join_s && playing) {
         cn::QtvRequest q;
@@ -202,6 +222,7 @@ void run(gl::Lab& lab) {
         const std::string text = cn::qtv_request_text(q);
         v.dialed = gn::tcp_connect(v.tcp, m.node.listener.local, &error);
         for (int i = 0; i < 100000 && v.tcp.connecting; i++) gn::tcp_pump(v.tcp);
+        until_waiting(m.node.listener, v.tcp);
         gn::tcp_send_bytes(v.tcp, reinterpret_cast<const uint8_t*>(text.data()), text.size());
       }
       if (!v.dialed) continue;
@@ -221,7 +242,11 @@ void run(gl::Lab& lab) {
   };
   for (int t = 0; t < ticks; t++) step(true);
   // The match ends: its last records wait out the delay, then go to every viewer.
+  settle(m, viewers);
   cn::qtv_close(m.port, m.server);
+  // The server's end is gone: the node holds all it sent, and the close, before its next look.
+  for (int i = 0; i < 1000000 && m.node.up.handle != -1 && !m.node.up.closed; i++)
+    gn::tcp_pump(m.node.up);
   const int tail = static_cast<int>((delay + 1) * 1e6 / kTickUs);
   for (int t = 0; t < tail; t++) step(false);
   const std::vector<int64_t> catch_up = [&] {

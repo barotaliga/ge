@@ -100,7 +100,7 @@ commands). `link open <link>` reads a link strictly (a host, a port, a stream nu
 nothing else reaches a command line) and starts the window: `Spec::join_words` for Join,
 `Spec::spectate_words` for Spectate (Shooter's Edge: `+set spectator 1 +connect`),
 `Spec::tv_words` for Watch, and for Play the demo fetched from the hub into
-`<state>/demos/<sha256>.ger`, checked against its hash, kept for the next time, and handed to
+`<state>/demos/<sha256>.ged`, checked against its hash, kept for the next time, and handed to
 `Spec::demo_words` (Shooter's Edge unpacks it into the recording its demo player reads and adds
 `-playdemo`). A game without a row's words is refused with what it cannot open yet.
 

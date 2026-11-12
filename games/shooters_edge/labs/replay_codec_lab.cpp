@@ -1,17 +1,17 @@
 // LAB `replay-codec`: THE REPLAY FILE VERSION 2 AND THE FIELD CODEC ON CLASSIC RECORDINGS. A team
 // match of bots on the fixture halls (net/classic_team.hpp), recorded as a multiview recording,
 // and every recording `--corpus` and `--file` name (any wrapper, unpacked first) are each packed by
-// this game's face into a version 2 file (`.ger`, client/demo_v2.hpp) and unpacked again: each must
+// this game's face into a version 2 file (`.ged`, client/demo_v2.hpp) and unpacked again: each must
 // come back byte for byte. Beside it the same recording packed as today's packed demo (zstd 19,
 // `.mvdz`) and by xz 6, with the sizes, the ratios and the face's pack and unpack times. The row's
 // bar (docs/goals/M57a.md): a multiview recording at most half its `.mvdz`, a 20-minute 4on4
 // unpacked in under a second.
 //
-// The round trips and the `.ger` sizes are deterministic (the coder writes the same bytes
+// The round trips and the `.ged` sizes are deterministic (the coder writes the same bytes
 // everywhere); zstd's and xz's sizes are the libraries' and the times are measured.
 //
 // ge:summary Lab: classic recordings packed into replay v2 by the field codec, sizes and speeds
-// ge:keywords lab replay-codec replay-v2 ger field-codec mvdz zstd xz ratio round-trip corpus
+// ge:keywords lab replay-codec replay-v2 ged field-codec mvdz zstd xz ratio round-trip corpus
 // ge:keywords pack unpack speed multiview
 // ge:skill replay shooter labs
 #include <algorithm>
@@ -128,8 +128,8 @@ void run(gl::Lab& lab) {
   }
 
   gl::LabTable table{"each recording as a replay file version 2, against today's packed demo",
-                     {"recording", "format", "MB plain", "MB .mvdz", "MB xz", "MB .ger",
-                      ".ger / .mvdz", "ratio", "kept as bytes", "pack s", "unpack s", "same"},
+                     {"recording", "format", "MB plain", "MB .mvdz", "MB xz", "MB .ged",
+                      ".ged / .mvdz", "ratio", "kept as bytes", "pack s", "unpack s", "same"},
                      {}};
   gl::LineChart chart;
   chart.frame = {"HOW MANY TIMES SMALLER", "each recording by each packer", "plain size (MB)",
@@ -137,7 +137,7 @@ void run(gl::Lab& lab) {
   chart.points = true;
   chart.spikes = false;
   std::vector<gl::Trace> traces = {
-      {"zstd 19 (.mvdz)", {}, {}}, {"xz 6", {}, {}}, {"field codec (.ger)", {}, {}}};
+      {"zstd 19 (.mvdz)", {}, {}}, {"xz 6", {}, {}}, {"field codec (.ged)", {}, {}}};
   std::array<double, 256> spent{};  // the packed bytes by message id, every multiview recording
   double spent_total = 0;
   std::array<double, static_cast<size_t>(cl::DemoPart::count)> parts{};
@@ -146,15 +146,15 @@ void run(gl::Lab& lab) {
   for (size_t k = 0; k < inputs.size(); k++) {
     const Input& in = inputs[k];
     const double mb = static_cast<double>(in.bytes.size()) / 1e6;
-    std::vector<uint8_t> ger, back;
+    std::vector<uint8_t> ged, back;
     cl::DemoPackReport rep;
     const auto t0 = std::chrono::steady_clock::now();
     cl::DemoPackOptions options;
     options.keyframe_seconds = static_cast<int>(lab.arg_num("keyframe-seconds"));
-    const bool packed = cl::pack_demo(in.bytes, ger, error, options, &rep);
+    const bool packed = cl::pack_demo(in.bytes, ged, error, options, &rep);
     const double pack_s = seconds_since(t0);
     const auto t1 = std::chrono::steady_clock::now();
-    const bool unpacked = packed && cl::unpack_demo(ger, back, error) && error.empty();
+    const bool unpacked = packed && cl::unpack_demo(ged, back, error) && error.empty();
     const double unpack_s = seconds_since(t1);
     const bool same = unpacked && back == in.bytes;
     if (same) same_count++;
@@ -165,11 +165,11 @@ void run(gl::Lab& lab) {
                "writes differently in client/demo_v2.cpp. Skill: replay.");
     const size_t mvdz = vfs::zstd_pack(in.bytes).size();
     const size_t xz = vfs::xz_pack(in.bytes, 6).size();
-    const double half = static_cast<double>(ger.size()) / static_cast<double>(mvdz);
+    const double half = static_cast<double>(ged.size()) / static_cast<double>(mvdz);
     if (rep.format == "multiview") {
       for (size_t id = 0; id < 256; id++) spent[id] += rep.message_bytes[id];
       for (size_t p = 0; p < parts.size(); p++) parts[p] += rep.part_bytes[p];
-      spent_total += static_cast<double>(ger.size());
+      spent_total += static_cast<double>(ged.size());
       worst_half = std::max(worst_half, half);
       slowest_unpack_per_mb = std::max(slowest_unpack_per_mb, unpack_s / mb);
     }
@@ -179,8 +179,8 @@ void run(gl::Lab& lab) {
     table.rows.push_back({in.name, rep.format, to_fixed(mb, 2),
                           to_fixed(static_cast<double>(mvdz) / 1e6, 3),
                           to_fixed(static_cast<double>(xz) / 1e6, 3),
-                          to_fixed(static_cast<double>(ger.size()) / 1e6, 3), to_fixed(half, 2),
-                          to_fixed(ratio(ger.size()), 2),
+                          to_fixed(static_cast<double>(ged.size()) / 1e6, 3), to_fixed(half, 2),
+                          to_fixed(ratio(ged.size()), 2),
                           std::to_string(rep.kept) + " of " + std::to_string(rep.records),
                           to_fixed(pack_s, 2), to_fixed(unpack_s, 2), same ? "yes" : "NO"});
     traces[0].x.push_back(mb);
@@ -188,16 +188,16 @@ void run(gl::Lab& lab) {
     traces[1].x.push_back(mb);
     traces[1].y.push_back(ratio(xz));
     traces[2].x.push_back(mb);
-    traces[2].y.push_back(ratio(ger.size()));
+    traces[2].y.push_back(ratio(ged.size()));
     if (k == 0) {
       lab.metric("match.plain-bytes", static_cast<double>(in.bytes.size()), "bytes");
-      lab.metric("match.ger-bytes", static_cast<double>(ger.size()), "bytes");
+      lab.metric("match.ged-bytes", static_cast<double>(ged.size()), "bytes");
       lab.metric("match.records-kept", static_cast<double>(rep.kept), "count");
-      lab.metric("match.ger-per-mvdz", half, "x", gl::Det::measured);
+      lab.metric("match.ged-per-mvdz", half, "x", gl::Det::measured);
     }
   }
   lab.table(table, gl::Det::measured);
-  gl::LabTable where{"where the packed bytes go: each message id's share of every multiview .ger",
+  gl::LabTable where{"where the packed bytes go: each message id's share of every multiview .ged",
                      {"message id", "KB packed", "share"},
                      {}};
   std::vector<size_t> ids;
@@ -214,7 +214,7 @@ void run(gl::Lab& lab) {
       {"records' heads, kept bodies, framing", to_fixed((spent_total - listed) / 1e3, 1),
        to_fixed(100 * (spent_total - listed) / std::max(1.0, spent_total), 1) + "%"});
   lab.table(where, gl::Det::measured);
-  gl::LabTable by_part{"where the packed bytes go: the parts of every multiview .ger",
+  gl::LabTable by_part{"where the packed bytes go: the parts of every multiview .ged",
                        {"part", "KB packed", "share"},
                        {}};
   double parted = 0;
@@ -231,7 +231,7 @@ void run(gl::Lab& lab) {
   lab.table(by_part, gl::Det::measured);
   lab.metric("round-trips", same_count, "count");
   lab.metric("recordings", static_cast<double>(inputs.size()), "count");
-  lab.metric("worst.ger-per-mvdz", worst_half, "x", gl::Det::measured);
+  lab.metric("worst.ged-per-mvdz", worst_half, "x", gl::Det::measured);
   lab.metric("slowest.unpack-s-per-mb", slowest_unpack_per_mb, "s/MB", gl::Det::measured);
   chart.traces = traces;
   chart.rules = {};

@@ -138,10 +138,10 @@ TEST(the_world_lists_the_brush_models_and_the_player) {
   CHECK(w.map_name == "hall" && w.map_title == "The Hall");
   CHECK(w.models.size() > 3 && w.models[0].empty() && w.models[1] == "*1");
   CHECK(w.models.back() == sv::kSequelPlayerModel);  // after the weapons' and the shots' models
-  // Slot 0 the world, then the players, then the map's six entities, then the shots in flight and
-  // the items players dropped.
-  CHECK(w.entities.size() ==
-        size_t(1 + sh::kMaxClients + 6 + sv::kSequelMissiles + sv::kSequelDrops));
+  // Slot 0 the world, then the players, then the map's six entities and the plat's field, then the
+  // shots in flight and the items players dropped.
+  CHECK(w.entities.size() == size_t(1 + sh::kMaxClients + 6 + 1 + sv::kSequelMissiles +
+                                    sv::kSequelDrops + sv::kSequelBodies));
   CHECK(w.entities[1 + sh::kMaxClients].modelindex == 1);
   CHECK(w.entities[2 + sh::kMaxClients].origin.x == -400);
 }

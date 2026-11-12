@@ -38,7 +38,7 @@ and no command is smuggled through chat.
 
 ## The replay file, version 2
 
-Its files end in `.ger`. A file and a live stream are the same bytes, so a viewer joining a
+Its files end in `.ged`. A file and a live stream are the same bytes, so a viewer joining a
 broadcast and a player opening a file run the same code, and a broadcast saved to disk is already
 a demo.
 
@@ -106,12 +106,24 @@ take fewer bytes.
   same node (link numbers from `kWebLinks` up). Pings are answered, a close is answered and the link
   dropped, and a broken handshake or a frame over 1 MiB drops the link. This is the wire the hub's
   web viewer watches by (`docs/hub.md`).
-- **Finished files** (`library.hpp`): `library_scan` lists a folder's `.ger` files by the SHA-256
+- **Finished files** (`library.hpp`): `library_scan` lists a folder's `.ged` files by the SHA-256
   of their bytes, with name, size, game and header meta. A viewer sends `list` and gets `files`, and
   sends `get` with a hash and gets the file in pieces, or a "not here". A viewer whose hello says
   *files* gets no live stream and is not counted as watching (the hub's archive fetching a file).
 - **The master** (`tv_host_list`): the host beats to masters as a TV node from its own socket and
   answers status asks there with its name, the match's game and map, its viewers and the delay.
+
+## The server as a source
+
+`engine/tv/server_source.hpp`. Any game on the server core (`engine/server`) that fills
+`ServerGame::tv_frame` (the last frame as its viewers need it) and `tv_keyframe` (its whole state)
+is broadcast as it runs: after each server frame the frame's bytes go into the stream's `frames`
+track, a block holds a second of frames, and every few seconds a block opens with the state on the
+`keyframe` track and is where a TV node starts a late viewer. Its new bytes feed a TV node as the
+server writes them, and the whole is the match's file. The core's sample game sends each bot's
+step in two bits and its ring as the keyframe, and `SampleWatch` keeps the ring off a stream: in
+the `tv` lab (`--source=sample`) every viewer through a source and a relay reaches the server's
+digest at its last frame under every network preset, at about 300 bytes a second.
 
 ## Spectating by inputs
 
@@ -168,7 +180,7 @@ against none and lets a late joiner start at most 30 seconds back; one every 10 
 Measured by the `replay-codec` lab on 13 real classic match recordings (sizes in KB; unpacking
 with the release flags):
 
-| Recording | Raw | zstd 19 (today's `.mvdz`) | xz 6 | `.ger` | `.ger` / `.mvdz` | Unpack |
+| Recording | Raw | zstd 19 (today's `.mvdz`) | xz 6 | `.ged` | `.ged` / `.mvdz` | Unpack |
 | --- | --- | --- | --- | --- | --- | --- |
 | 4on4, dm2, 20 min | 7,354 | 3,876 | 3,465 | 1,947 | 0.50 | 0.34 s |
 | 4on4, e1m2, 20 min | 7,125 | 3,763 | 3,366 | 1,908 | 0.51 | |
@@ -181,7 +193,7 @@ with the release flags):
 Every recording came back byte for byte. Where the bytes go in a 4on4: the players' view angles
 (about 27%) and origins (21%), the entities' origins (13%), text (7%); the angles are the mouse's
 own noise at 1/65536 of a turn, which no prediction removes. A 4on4 broadcast is about 48 kbit/s
-raw, 25 as today's packed demo and 13 as `.ger`.
+raw, 25 as today's packed demo and 13 as `.ged`.
 
 ## The classic face
 

@@ -117,7 +117,7 @@ bool archive_answer(const Archive* a, std::string_view target, int64_t now_s, An
                       "GET /v1/demos lists the demos; a demo is named by its SHA-256");
     return true;
   }
-  // /d/{abc}/{sha}.ger or .json
+  // /d/{abc}/{sha}.ged or .json
   const size_t slash = path.find('/', 3);
   const size_t dot = path.rfind('.');
   const std::string sha = slash != std::string::npos && dot != std::string::npos && dot > slash
@@ -127,7 +127,7 @@ bool archive_answer(const Archive* a, std::string_view target, int64_t now_s, An
   const DemoRow* r = is_sha(sha) && path == "/" + archive_path(sha).substr(0, 6) + sha + ext
                          ? archive_find(*a, sha)
                          : nullptr;
-  if (!r || (ext != ".ger" && ext != ".json")) {
+  if (!r || (ext != ".ged" && ext != ".json")) {
     out = missing("no file " + path + " in this archive",
                   "GET /v1/demos lists the demos and each one's file");
     return true;

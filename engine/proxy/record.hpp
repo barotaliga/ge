@@ -1,5 +1,5 @@
 // RECORDING ON THE PROXY (docs/tv.md § Proxy): every game datagram a proxy passes on, both ways,
-// kept as a replay file (`.ger`, engine/replay/stream.hpp), so a player who plays through a near
+// kept as a replay file (`.ged`, engine/replay/stream.hpp), so a player who plays through a near
 // proxy has the match without the game recording it. The proxy does not read the game: the file
 // holds the datagrams as they went, the client's in track 1 ("to_server") and the server's in
 // track 2 ("to_client"), each a `messages` chunk stamped with its milliseconds since the start,
@@ -19,7 +19,7 @@
 // Within a millisecond the file keeps each direction's order, not the order between the two.
 //
 // ge:summary Recording on the proxy: the game datagrams it passes, both ways, as a replay file
-// ge:keywords proxy record recording replay-file ger datagrams to_server to_client messages-track
+// ge:keywords proxy record recording replay-file ged datagrams to_server to_client messages-track
 // ge:keywords proxy_record_begin proxy_record proxy_record_finish proxy_read_recording
 // ge:keywords proxy_record_fresh observers tv-source
 // ge:skill net replay

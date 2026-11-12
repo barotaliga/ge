@@ -25,7 +25,7 @@ bool library_scan(const std::string& dir, std::vector<LibraryFile>& out, std::st
     return false;
   }
   for (const auto& e : it) {
-    if (!e.is_regular_file(ec) || e.path().extension() != ".ger") continue;
+    if (!e.is_regular_file(ec) || e.path().extension() != ".ged") continue;
     std::ifstream f(e.path(), std::ios::binary);
     std::vector<uint8_t> head(size_t{64} * 1024);
     f.read(reinterpret_cast<char*>(head.data()), static_cast<std::streamsize>(head.size()));
