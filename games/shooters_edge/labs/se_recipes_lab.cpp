@@ -40,6 +40,7 @@
 #include "core/num_text.hpp"
 #include "core/parallel.hpp"
 #include "lab/lab.hpp"
+#include "shooter/brush_hull.hpp"
 #include "shooter/hops.hpp"
 #include "shooter/recipes.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -67,6 +68,44 @@ struct Player {
   float speed = 0;  // his median speed across, units/s
   int level = -1;   // -1: too short a track to grade
 };
+
+// A STOP: frames on the ground slower than `stood`; from its last, how long to 320 and to the
+// target however he gets there (a run, a hop start, a curve), within `within_s`, -1 never (cut by
+// a death or a teleport: not kept).
+struct Stop {
+  int player = 0;
+  float to320 = -1, to_target = -1;
+  int takeoffs = 0;  // jumps before the target (or within the window)
+};
+
+void read_stops(const sh::HopReading& r, int player, const sh::HopStartSettings& set,
+                std::vector<Stop>& out) {
+  const std::vector<sh::HopFrame>& f = r.frames;
+  for (size_t i = 0; i + 1 < f.size(); i++) {
+    const bool still = f[i].phase == sh::HopPhase::ground && f[i].speed < set.stood;
+    if (!still) continue;
+    const bool next_still = f[i + 1].phase == sh::HopPhase::ground && f[i + 1].speed < set.stood;
+    if (next_still) continue;  // the stop's last frame only
+    Stop st;
+    st.player = player;
+    bool cut = false;
+    for (size_t j = i + 1; j < f.size() && f[j].t - f[i].t <= set.within_s; j++) {
+      if (f[j].phase == sh::HopPhase::cut) {
+        cut = true;
+        break;
+      }
+      if (f[j].phase == sh::HopPhase::ground && f[j].speed < set.stood) break;  // stopped again
+      if (f[j].takeoff && st.to_target < 0) st.takeoffs++;
+      const float t = static_cast<float>(f[j].t - f[i].t);
+      if (st.to320 < 0 && f[j].speed >= 320) st.to320 = t;
+      if (f[j].speed >= set.target) {
+        st.to_target = t;
+        break;
+      }
+    }
+    if (!cut) out.push_back(st);
+  }
+}
 
 struct Start {
   int demo = 0, player = 0;
@@ -137,6 +176,25 @@ std::vector<std::vector<uint8_t>> written_matches(int count) {
   }
   return out;
 }
+
+// An open floor (z 0, 8192 across) for a recipe's proof away from any wall.
+struct OpenFloor {
+  sh::HullData point, clip;
+  sh::MoveWorld world;
+  OpenFloor() {
+    sh::Brush b;
+    b.planes = {{{1, 0, 0}, 4096},  {{-1, 0, 0}, 4096}, {{0, 1, 0}, 4096},
+                {{0, -1, 0}, 4096}, {{0, 0, 1}, 0},     {{0, 0, -1}, 64}};
+    const std::vector<sh::Brush> brushes = {b};
+    point = sh::build_point_hull(brushes);
+    clip = sh::build_box_hull(brushes, sh::kPlayerMins, sh::kPlayerMaxs);
+    world.solids[0].point_hull = point.hull();
+    world.solids[0].clip_hull = clip.hull();
+    world.solids[0].mins = {-4096, -4096, -64};
+    world.solids[0].maxs = {4096, 4096, 0};
+    world.count = 1;
+  }
+};
 
 // A map read once for every demo of it.
 struct Maps {
@@ -226,6 +284,7 @@ void run(gl::Lab& lab) {
   Maps maps{lab.arg("basedir"), lab.arg("game"), {}};
   std::vector<Player> players;
   std::vector<Start> starts;
+  std::vector<Stop> stops;
   int read = 0, broken = 0, no_map = 0;
   for (size_t i = 0; i < demo_count; i++) {
     Scanned& sc = scans[i];
@@ -263,6 +322,7 @@ void run(gl::Lab& lab) {
       const int at = static_cast<int>(players.size());
       players.push_back(p);
       for (sh::HopStart& s : found[k]) starts.push_back({static_cast<int>(i), at, scan.map, s});
+      read_stops(hops[k], at, set, stops);
     }
   }
   if (read == 0) {
@@ -330,6 +390,40 @@ void run(gl::Lab& lab) {
                  share(t.keys[static_cast<size_t>(c)], t.starts), "share");
   }
   lab.table(lt);
+
+  // Every stop, by level: how soon he is fast again, however he does it.
+  {
+    gl::LabTable tb{"after every stop (on the ground under " + to_fixed(set.stood, 0) +
+                        " u/s): the time to 320 and to " + to_fixed(set.target, 0) +
+                        " however it is done, within " + to_fixed(set.within_s, 1) + " s",
+                    {"level", "stops", "a minute", "to 320 %", "to 320 p50 s", "to target %",
+                     "to target p25 s", "p50 s", "p75 s", "jumps before it p50"},
+                    {}};
+    for (int lv = 0; lv <= kLevels; lv++) {
+      std::vector<float> t320, tt, jumps;
+      int n = 0, n320 = 0, nt = 0;
+      for (const Stop& st : stops) {
+        if (lv < kLevels && players[static_cast<size_t>(st.player)].level != lv) continue;
+        n++;
+        if (st.to320 >= 0) n320++, t320.push_back(st.to320);
+        if (st.to_target >= 0)
+          nt++, tt.push_back(st.to_target), jumps.push_back(static_cast<float>(st.takeoffs));
+      }
+      const double mins = minutes[static_cast<size_t>(lv)];
+      tb.rows.push_back({lv == kLevels ? "every player" : kLevelName[lv], std::to_string(n),
+                         to_fixed(mins > 0 ? n / mins : 0, 2), to_fixed(100 * share(n320, n), 0),
+                         to_fixed(quantile(t320, 0.5f), 2), to_fixed(100 * share(nt, n), 0),
+                         to_fixed(quantile(tt, 0.25f), 2), to_fixed(quantile(tt, 0.5f), 2),
+                         to_fixed(quantile(tt, 0.75f), 2), to_fixed(quantile(jumps, 0.5f), 0)});
+      const std::string key = std::string("stop.") + (lv == kLevels ? "all" : kLevelName[lv]) + ".";
+      lab.metric(key + "per-min", mins > 0 ? n / mins : 0, "1/min");
+      lab.metric(key + "to320-share", share(n320, n), "share");
+      lab.metric(key + "to320-p50", quantile(t320, 0.5f), "s");
+      lab.metric(key + "to-target-share", share(nt, n), "share");
+      lab.metric(key + "to-target-p50", quantile(tt, 0.5f), "s");
+    }
+    lab.table(tb);
+  }
 
   // The time to the target by the entry: from a stand, from a walk.
   {
@@ -501,6 +595,57 @@ void run(gl::Lab& lab) {
              p);
   }
 
+  // THE PROOF (`--prove=N`): the first N made starts from a stand played back through the move
+  // (shooter/recipes.hpp play_recipe) on an open floor and at home (their own spot on their map),
+  // with the keys and view of the frame itself (lead 0) and of the next (lead 1).
+  const int prove = static_cast<int>(lab.arg_num("prove"));
+  if (prove > 0) {
+    OpenFloor open;
+    sh::MoveSettings move;
+    gl::LabTable pt{"the proof: made stand starts played back through the move (" +
+                        std::to_string(prove) + " at most)",
+                    {"where", "lead", "starts", "recorded takeoff p50", "played takeoff p50",
+                     "played top p50", "reached " + to_fixed(set.target, 0) + " %", "jumped %",
+                     "blocked p50", "end off recorded p50"},
+                    {}};
+    for (int where = 0; where < 2; where++)
+      for (int lead = 0; lead <= 1; lead++) {
+        std::vector<float> rec, off, top, blocked, miss;
+        int n = 0, reached = 0, jumped = 0;
+        for (const Start& one : starts) {
+          if (n >= prove) break;
+          if (!one.s.made || !one.s.stood || one.s.frames.size() < 4) continue;
+          n++;
+          const sh::RecipeFrame& f0 = one.s.frames.front();
+          const sh::MoveWorld& w = where == 0 ? open.world : *maps.by_name[one.map]->world;
+          const sh::Vec3f from = where == 0 ? sh::Vec3f{0, 0, 24} : f0.feet;
+          sh::RecipePlay r;
+          sh::play_recipe(one.s.frames, w, move, from, 0, lead, r);
+          rec.push_back(one.s.speed_off);
+          if (r.takeoff >= 0) jumped++, off.push_back(r.speed_takeoff);
+          top.push_back(r.top);
+          reached += r.top >= set.target ? 1 : 0;
+          blocked.push_back(static_cast<float>(r.blocked));
+          const sh::Vec3f want = one.s.frames.back().feet - f0.feet;
+          const sh::Vec3f got = r.end - from;
+          const sh::Vec3f d = got - want;
+          miss.push_back(sh::root_of(d.x * d.x + d.y * d.y));
+        }
+        pt.rows.push_back(
+            {where == 0 ? "open floor" : "at home", std::to_string(lead), std::to_string(n),
+             to_fixed(quantile(rec, 0.5f), 0), to_fixed(quantile(off, 0.5f), 0),
+             to_fixed(quantile(top, 0.5f), 0), to_fixed(100 * share(reached, n), 0),
+             to_fixed(100 * share(jumped, n), 0), to_fixed(quantile(blocked, 0.5f), 0),
+             to_fixed(quantile(miss, 0.5f), 0)});
+        const std::string key = std::string("prove.") + (where == 0 ? "open" : "home") + ".lead" +
+                                std::to_string(lead) + ".";
+        lab.metric(key + "reached-share", share(reached, n), "share");
+        lab.metric(key + "takeoff-p50", quantile(off, 0.5f), "u/s");
+        lab.metric(key + "miss-p50", quantile(miss, 0.5f), "units");
+      }
+    lab.table(pt);
+  }
+
   // Every start as a row.
   std::string tsv =
       "map\tdemo\tplayer\tlevel\tt\tx\ty\tz\tspeed_in\tstood\tyaw_in\theading\trun_s\tspeed_off"
@@ -565,6 +710,7 @@ const gl::LabSpec kSpec{
         {"cell", "96", "starts gather into a spot with entries within 1.5 of this, units"},
         {"gold", "4", "a gathering started this often or more, by two players or more, is a spot"},
         {"rows", "20", "the spots tabled and numbered"},
+        {"prove", "0", "the first this many made stand starts played back through the move"},
         {"frames", "",
          "a TSV path: every start's every frame as a row (feet, velocity, view, keys)"},
     },

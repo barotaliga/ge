@@ -20,6 +20,13 @@
 //   stalled is kept too, unmade (a novice's recipe draws them at people's rate);
 // - a blast in its air (the speed up `blast_rise` within 0.1 s, a rocket's or a grenade's) is no
 //   hop start: left out.
+// THE PLAY (`play_recipe`): an instance's frames played back through the move (pmove.hpp) from any
+// spot, its view turned by any angle: each frame's keys as the classic client builds its axes (400
+// a key), the view as recorded (turned), the jump pressed on the command that leaves the ground,
+// each command as long as the recording's frame. `lead` shifts which frame's keys and view drive
+// the command from frame i to i + 1 (the recording's view at a frame is the command's that moved
+// the player there: lead 1). The proof of a recipe: played on an open floor it reaches the speed
+// the person reached; played on the map from a bot's spot it shows where the move takes it.
 // What a lab tables off it: the entry's speed and whether he stood, the run before the first jump
 // and its keys, the takeoff's speed and the view's lag there, the time to `target`.
 //
@@ -38,6 +45,7 @@
 #include <vector>
 
 #include "shooter/hops.hpp"
+#include "shooter/pmove.hpp"
 #include "shooter/rocket_jumps.hpp"
 
 namespace ge::shooter {
@@ -91,5 +99,20 @@ struct HopStart {
 // `out` in time order.
 void read_hop_starts(std::span<const TrackPoint> track, const HopReading& hops,
                      const HopStartSettings& set, std::vector<HopStart>& out);
+
+struct RecipePlay {
+  float speed_takeoff = 0;       // across on the command after the first jump, units/s
+  float top = 0, speed_end = 0;  // the most and at the end, units/s
+  int32_t takeoff = -1;          // the frame it first left the ground (-1 never)
+  int32_t blocked = 0;           // commands a wall or a step stopped
+  Vec3f end;                     // the origin at the end
+};
+
+// `frames` played from `origin` with the first frame's velocity (both turned by `turn` degrees
+// counter-clockwise), under `move` on `world`; every origin after each command appended to
+// `trail` when given.
+void play_recipe(std::span<const RecipeFrame> frames, const MoveWorld& world,
+                 const MoveSettings& move, Vec3f origin, float turn, int lead, RecipePlay& out,
+                 std::vector<Vec3f>* trail = nullptr);
 
 }  // namespace ge::shooter

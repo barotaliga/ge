@@ -10,11 +10,22 @@
 #include <algorithm>
 #include <array>
 
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
+
 namespace ge::shooter {
 
 namespace {
 
 constexpr double kBlastWindow_s = 0.1;
+constexpr float kKeyAxis = 400;  // a key's axis, as the classic client builds it
+constexpr double kRad = core::kPi / 180;
+
+Vec3f turned(Vec3f v, float turn) {
+  const float c = static_cast<float>(core::libm::cos(turn * kRad));
+  const float s = static_cast<float>(core::libm::sin(turn * kRad));
+  return {v.x * c - v.y * s, v.x * s + v.y * c, v.z};
+}
 
 // A blast in frames [a, b]: an air frame's speed up `rise` or more over the last 0.1 s.
 bool blast_in(const HopReading& hops, size_t a, size_t b, float rise) {
@@ -117,6 +128,45 @@ void read_hop_starts(std::span<const TrackPoint> track, const HopReading& hops,
     s.speed_out = f[end].speed;
     out.push_back(std::move(s));
   }
+}
+
+void play_recipe(std::span<const RecipeFrame> frames, const MoveWorld& world,
+                 const MoveSettings& move, Vec3f origin, float turn, int lead, RecipePlay& out,
+                 std::vector<Vec3f>* trail) {
+  out = RecipePlay{};
+  if (frames.size() < 2) return;
+  MoveState st;
+  st.origin = origin;
+  st.velocity = turned(frames[0].velocity, turn);
+  st.angles = {frames[0].pitch, frames[0].yaw + turn, 0};
+  st.maxspeed = move.maxspeed;
+  bool was_ground = true;
+  const size_t n = frames.size();
+  for (size_t i = 0; i + 1 < n; i++) {
+    const RecipeFrame& d = frames[std::min(n - 1, i + static_cast<size_t>(std::max(0, lead)))];
+    MoveCmd cmd;
+    const float ms = (frames[i + 1].t - frames[i].t) * 1000.f;
+    cmd.msec = static_cast<uint8_t>(std::clamp(ms + 0.5f, 1.f, 250.f));
+    cmd.angles = {d.pitch, d.yaw + turn, 0};
+    cmd.forward = static_cast<int16_t>(((d.keys & kKeyForward) ? kKeyAxis : 0.f) -
+                                       ((d.keys & kKeyBack) ? kKeyAxis : 0.f));
+    cmd.side = static_cast<int16_t>(((d.keys & kKeyRight) ? kKeyAxis : 0.f) -
+                                    ((d.keys & kKeyLeft) ? kKeyAxis : 0.f));
+    if (frames[i + 1].jump) cmd.buttons |= kButtonJump;
+    const MoveResult r = run_command(st, cmd, move, world);
+    if (r.blocked != 0) out.blocked++;
+    const float sp = root_of(st.velocity.x * st.velocity.x + st.velocity.y * st.velocity.y);
+    const bool ground = st.ground >= 0;
+    if (out.takeoff < 0 && was_ground && !ground && st.velocity.z > 0) {
+      out.takeoff = static_cast<int32_t>(i + 1);
+      out.speed_takeoff = sp;
+    }
+    was_ground = ground;
+    out.top = std::max(out.top, sp);
+    out.speed_end = sp;
+    if (trail) trail->push_back(st.origin);
+  }
+  out.end = st.origin;
 }
 
 }  // namespace ge::shooter
