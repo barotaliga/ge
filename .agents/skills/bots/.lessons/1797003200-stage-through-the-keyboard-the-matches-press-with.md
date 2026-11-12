@@ -2,7 +2,7 @@
 title: Stage a move through the keyboard the matches press with; a jump the keyboard presses late must land when it goes down late
 date: 2026-11-12
 scope: games/shooters_edge/bots/keyboard.cpp, games/shooters_edge/bots/pilot_run.cpp, games/shooters_edge/labs/se_reach_lab.cpp, plugins/shooter/pilot.cpp, plugins/shooter/pilot_gaps.cpp
-concepts: [keys, keyboard, curvekeys, press_keys, se-reach, gaps-fly, key-chatter, jump-key-late, gap-run, underway, fallen-under-the-way]
+concepts: [keys, keyboard, curvekeys, press-keys, se-reach, gaps-fly, key-chatter, jump-key-late, gap-run, underway, fallen-under-the-way]
 ---
 
 - A staged lab that presses the pilot's analog axes straight into the move judges a different

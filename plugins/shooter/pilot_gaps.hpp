@@ -6,7 +6,8 @@
 //
 // ge:summary The pilot at a gap trick: the gap in the stretch, the curve and the run to its lip
 // ge:keywords pilot gap-trick gap_in gap_curve_near gap_curve gap-circle curve-into-gap gapbuild
-// ge:keywords gap_run gap_lands run-to-the-lip ground-strafe side-to-side rollout
+// ge:keywords gap_run gap_lands run-to-the-lip ground-strafe side-to-side rollout gap_takeoff
+// ge:keywords gap_off gap_lands_late jump-key-late
 // ge:skill shooter bots
 // ge:test tests/shooter_nav_gaps_test.cpp
 #pragma once
@@ -29,6 +30,13 @@ bool gap_lands(const MoveWorld& world, const MoveSettings& move, Vec3f at, Vec3f
 // Under a keyboard (`curve_keys`): whether a jump asked now still lands across by `T` when its key
 // goes down one or two commands late, the keys held now (the curve's side key) and the view still.
 bool gap_lands_late(const Pilot& p, const PilotSense& s, int msec, Vec3f T);
+
+// A gap trick given up: off every route this player plans for a while.
+void gap_off(Pilot& p, NavExtraLink l);
+
+// The gap's takeoff on a hop's landing (pilot_gaps.cpp): true to jump now; `replanned` when the
+// gap was given up and the caller must plan the goal again.
+bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, bool& replanned);
 
 // The route index of the gap trick's start in the hop's stretch [max(k, from), end), or -1.
 int32_t gap_in(const Pilot& p, int32_t end, size_t from = 0);
