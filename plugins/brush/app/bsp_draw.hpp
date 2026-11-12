@@ -234,6 +234,9 @@ struct DynamicLight {
   // Its share against the frame's dynamic_strength: a light brighter than the rest of the effects'
   // (a lightning bolt beside a muzzle's flash) stays that much brighter whatever the player sets.
   double boost = 1;
+  // The entity it rides on (0: none): that entity's own model is not lit by it, so a glow that
+  // comes off part of a model (a grenade's painted ends) lights the room, not the rest of it.
+  int entity = 0;
 };
 
 struct GpuJob {

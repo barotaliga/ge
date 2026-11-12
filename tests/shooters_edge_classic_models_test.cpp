@@ -160,3 +160,19 @@ TEST(a_looping_group_flows_between_its_frames) {
   shooters_edge::models::frames_between(g, 0, 0.3, a, b, f);  // a lone frame
   CHECK(a == 0 && b == 0 && f == 0);
 }
+
+TEST(a_skins_glow_colour_is_its_glowing_texels_brightest_channel_one) {
+  // Four texels: two glow, one a bright red and one a darker red; two plain greys that never
+  // count, however bright.
+  gr::MorphSkin skin;
+  skin.width = 2, skin.height = 2;
+  skin.rgba = {255, 0, 0, 255, 128, 0, 0, 255, 250, 250, 250, 255, 30, 30, 30, 255};
+  skin.marks = {gr::kMarkGlow, gr::kMarkGlow, gr::kMarkPlain, gr::kMarkPlain};
+  float rgb[3];
+  CHECK(md::glow_colour(skin, rgb) == 0.5f);
+  CHECK(rgb[0] == 1.0f && rgb[1] == 0.0f && rgb[2] == 0.0f);
+  // Nothing glowing: no share, black.
+  skin.marks.assign(4, gr::kMarkPlain);
+  CHECK(md::glow_colour(skin, rgb) == 0.0f);
+  CHECK(rgb[0] == 0.0f && rgb[1] == 0.0f && rgb[2] == 0.0f);
+}
