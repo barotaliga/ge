@@ -49,8 +49,8 @@
 //
 // ge:summary The water's surface drawn: the snapped rings, the waves, Fresnel, refraction, glitter
 // ge:keywords render water surface ocean lake rings clipmap snapped morph fresnel reflection
-// ge:keywords refraction ssr screen-space-reflection glitter beckmann slope-variance
-// ge:keywords detail-waves water-copy create_water add_water_body set_water_body
+// ge:keywords refraction ssr screen-space-reflection glitter beckmann slope-variance water-pace
+// ge:keywords detail-waves water-copy create_water add_water_body set_water_body set_water_pace
 // ge:keywords prepare_water encode_water detail_waves hidden wake rings set_water_wakes kelvin
 // ge:keywords shore-mask shore_mask gusts cats-paws stir still-pool planar-mirror planar-reflection
 // ge:keywords water-below underside snell-window total-internal-reflection fresnel-exit daylight
@@ -133,6 +133,16 @@ struct WaterDraw {
   // them run (a 5 cm ripple about 6 times a second, a 20 cm one under 3). A pool left alone keeps
   // only the longer, slower swell of what was stirred in it.
   double chop_shortest = 0.05;
+  // The water's own pace (`set_water_pace`): its waves, chop, stir and gusts run at this share of
+  // their real speed, 1 a real water's. The wakes and the rain's rings keep the real clock (they
+  // start at a moment the game hands in). A game whose rooms are small slows a hall's pool, whose
+  // real swell reads hurried at that scale.
+  double pace = 1;
+  // The water hangs over open air somewhere under its floor (a pool with no bed a player drops
+  // through): seen from under its floor its underside is drawn ("water.underside",
+  // render/water_underside.wgsl), the same waves at the floor, mirroring what lies under it and
+  // seen through up to its top.
+  bool open_below = false;
 };
 
 // A game's own pictures of the world for one body (`set_water_views`): THE MIRROR, the world
@@ -195,7 +205,8 @@ struct WaterGpuBody {
   float c[4], kd[4], deep[4], emission[4];
   float wake[4];  // rings, their life (s), the shortest wave kept (m), 0
   float air[4];   // the day's share on the water, the stir's slope, the gusts, the wind (m/s)
-  float sun[4];   // the share of the surface the sun reaches (the caustics, the shafts), 0, 0, 0
+  float sun[4];   // the share of the surface the sun reaches (the caustics, the shafts), the pace,
+                  // the floor (world m: the underside's level), 0
   float view[4];  // the mirror (0 none, 1 over, 2 under), the view up (1), its heading's cos, sin
   // The foam (`foam_of`): the fold's threshold on the Jacobian, the whitecap cover, its drift x, z
   float foam[4];
@@ -238,9 +249,10 @@ struct Water {
     // rectangle (x, y, width, height in pixels; a width of 0 draws none: no band, or none seen).
     double shore_grow = 0;
     uint32_t shore_rect[4] = {0, 0, 0, 0};
-    bool hidden = false;  // the caller's switch: not drawn (a lab's dry picture)
-    bool shown = true;    // this frame's: not hidden and seen from over its level
-    bool under = false;   // this frame's: the eye is in the water and under this body's level
+    bool hidden = false;      // the caller's switch: not drawn (a lab's dry picture)
+    bool shown = true;        // this frame's: not hidden and seen from over its level
+    bool under = false;       // this frame's: the eye is in the water and under this body's level
+    bool from_under = false;  // this frame's: its underside is drawn, the eye in the air under it
     // m: a volume's lowest hull floor (an eye under it is not in it); open water has none
     double floor = -1e300;
     float veil[4] = {0, 0, 0, 0};  // the fog a view under it looks through (water::Optics)
@@ -261,6 +273,7 @@ struct Water {
   // and the share of it that is the water's own light (total internal reflection with nothing to
   // mirror), which the view under water fills with its veil.
   uint32_t p_below = 0;
+  uint32_t p_underside = 0;  // a body's underside from the air under it (WaterDraw::open_below)
   wgpu::Texture below, below_veil;
   wgpu::TextureView below_view, below_veil_view;
   WaterViews views;                         // the game's (set_water_views)
@@ -284,6 +297,9 @@ int add_water_body(gpu::Device& device, Water& water, const water::Body& body,
 void set_water_sunlit(Water& water, int index, double share);
 // The body read again (a lake whose waves were laid again, a new look).
 void set_water_body(gpu::Device& device, Water& water, int index, const water::Body& body);
+// The body's pace (`WaterDraw::pace`) changed: its waves staged again at it (a phase jump once).
+void set_water_pace(gpu::Device& device, Water& water, int index, const water::Body& body,
+                    double pace);
 // The body's wake rings (water/wake.hpp: the rings of `body` in the world's `wakes`, the newest
 // kWaterRings of them), drawn as the simulation sums them; again whenever rings are set off.
 void set_water_wakes(gpu::Device& device, Water& water, int index, const water::Wakes& wakes,

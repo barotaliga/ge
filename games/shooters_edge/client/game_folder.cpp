@@ -258,6 +258,7 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
                     if (const ge::console::Cvar* done = c.cvars().find("sv_episodes_done"))
                       listen.opt.console.emplace_back("sv_episodes_done " + done->value);
                     listen.opt.companions = 0;
+                    listen.opt.new_game = true;
                     next_map = content.start_map;
                   });
   con.add_command(
@@ -287,6 +288,7 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
           listen.opt.console.emplace_back("sv_episodes_done " + done->value);
         listen.opt.companions = bots;
         listen.opt.companion_skill = skill;
+        listen.opt.new_game = true;  // even with a campaign running: coop on, the bots seated
         next_map = map;
       });
   con.add_command("save",
@@ -322,10 +324,13 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
 
 bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<LoadedMap> map,
                std::string& error) {
-  if (content.campaign != nullptr && wants_campaign(listen.opt))
-    return listen.campaign_host
-               ? listen_change(listen, std::move(map), error)
-               : listen_campaign(listen, *content.campaign, std::move(map), listen.opt, error);
+  if (content.campaign != nullptr && wants_campaign(listen.opt)) {
+    if (listen.campaign_host && !listen.opt.new_game)
+      return listen_change(listen, std::move(map), error);
+    listen.opt.new_game = false;
+    return listen_campaign(listen, *content.campaign, std::move(map), listen.opt, error);
+  }
+  listen.opt.new_game = false;
   if (listen.campaign_host || listen.progs != &content.progs)
     return listen_start(listen, content.progs, std::move(map), listen.opt, error);
   return listen_change(listen, std::move(map), error);

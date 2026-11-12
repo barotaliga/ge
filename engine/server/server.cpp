@@ -39,6 +39,30 @@ int game_seated(const void* ctx) {
   return s->game->seated ? s->game->seated(s->state) : 0;
 }
 
+// sv_master's words as addresses: host:port, a bare host on the master's port, or `sim:N:P`.
+
+// The node's foreign datagrams this frame: status asks answered, the masters' acks taken.
+void answer_public(Server& s) {
+  bool asked = false;
+  gn::Status status;
+  uint8_t out[gn::kMaxDatagram];
+  for (const gn::Foreign& f : s.node.foreign) {
+    const uint8_t* data = s.node.foreign_bytes.data() + f.offset;
+    if (gn::master_beat_read(s.beat, data, f.size, f.from, s.now_us)) continue;
+    if (!gn::is_status_ask(data, f.size)) continue;
+    if (!asked) {
+      status = server_public_status(s);
+      asked = true;
+    }
+    const size_t n = gn::status_answer(data, f.size, f.from, s.game->protocol, s.node.secret,
+                                       s.now_us, status, out, sizeof out);
+    if (n) {
+      gn::transport_send(*s.port, f.from, out, n, s.now_us);
+      s.status_answers++;
+    }
+  }
+}
+
 }  // namespace
 
 Server::~Server() { server_close(*this); }
@@ -60,6 +84,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   const std::string motd = c.motd, admin = c.admin, rotation = c.maprotation;
   const std::string spectators = std::to_string(c.max_spectators);
   const std::string spec_password = c.spectator_password, rendezvous = c.rendezvous, mod = c.mod;
+  const std::string masters = c.masters;
   const std::string rcon = c.rcon_password;
   cvars.bind(
       {"sv_hostname", name, info, "the server's name in the browser and the lobby", CvarKind::text},
@@ -112,6 +137,11 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   cvars.bind({"sv_rendezvous", rendezvous, latched, "the rendezvous to list with (empty: none)",
               CvarKind::text},
              &c.rendezvous);
+  cvars.bind({"sv_master", masters, latched,
+              "the masters to beat to, space-separated host:port (port 27900 when unsaid; empty: "
+              "listed by none)",
+              CvarKind::text},
+             &c.masters);
   cvars.bind({"sv_mod", mod, cn::kServer | cn::kServerInfo | cn::kReadOnly,
               "the mods' directories over the base, lowest first (--mod)", CvarKind::text},
              &c.mod);
@@ -231,6 +261,17 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   }
   s.networked = true;
   s.port = transport;
+  gn::MasterBeatConfig bc;
+  if (!gn::master_list(config.masters, bc.masters, error)) {
+    error = "sv_master: " + error;
+    server_close(s);
+    return false;
+  }
+  bc.protocol = game.protocol;
+  bc.kind = gn::NodeKind::game;
+  bc.version = game.version;
+  bc.seed = uint64_t{config.seed} * 6151u + 5u;
+  gn::master_beat_init(s.beat, bc);
 
   gn::node_init(s.node, node_config(game, config), *transport);
   gn::SessionConfig sc;
@@ -265,14 +306,17 @@ void server_frame(Server& s) {
   s.frame++;
   if (!s.networked) return;
   gn::node_update(s.node, s.now_us);
+  answer_public(s);
   gn::session_host_update(s.session, s.now_us);
   gn::hosting_update(s.hosting, s.now_us);
+  gn::master_beat_update(s.beat, *s.port, s.now_us);
   gn::node_flush(s.node, s.now_us);
 }
 
 void server_close(Server& s) {
   if (s.networked && !s.own_protocol) {
     gn::hosting_stop(s.hosting, s.now_us);
+    gn::master_beat_stop(s.beat, *s.port, s.now_us);
     gn::node_flush(s.node, s.now_us);
   }
   s.networked = false;
@@ -280,6 +324,22 @@ void server_close(Server& s) {
   s.port = nullptr;
   if (s.state && s.game && s.game->destroy) s.game->destroy(s.state);
   s.state = nullptr;
+}
+
+gn::Status server_public_status(const Server& s) {
+  gn::Status st;
+  st.kind = gn::NodeKind::game;
+  st.protocol = s.game ? s.game->protocol : 0;
+  st.version = s.game ? s.game->version : 0;
+  st.name = s.config.hostname;
+  st.map = s.config.map;
+  st.max_players = s.config.maxclients;
+  st.max_spectators = s.config.max_spectators;
+  st.locked = !s.config.password.empty();
+  st.phase = s.session.phase == gn::SessionPhase::playing ? gn::StatusPhase::playing
+                                                          : gn::StatusPhase::lobby;
+  if (s.game && s.game->fill_status && s.state) s.game->fill_status(s.state, st);
+  return st;
 }
 
 uint64_t server_digest(const Server& s) { return s.state && s.game ? s.game->hash(s.state) : 0; }
