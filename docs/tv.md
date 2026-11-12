@@ -220,6 +220,16 @@ comes back byte for byte at 40 418 bytes, 29% of the recording and 77% of zstd a
 made-up one of a minute packs to 39% of zstd. The format's facts are in the working area
 (`porting/shooters-edge/sequel-demo.md`).
 
+The sequel's TV is built here on the native format, since the sequel has no broadcaster of its own
+(`games/shooters_edge/client/sequel_tv.hpp`): a broadcast takes the recording's blocks as they are
+played and writes the replay file as it goes, the same bytes `pack_demo` writes for the finished
+recording (it is built on the broadcast). A TV node takes it as any game's stream. The sequel's
+frames are deltas against the frames before them and its level starts once, so a broadcast
+keyframes only its first block and a late viewer is sent the match from its start; at a few hundred
+bytes a second that is small. The `se-sequel-tv` lab plays the demo pack's recording as if live
+through a node with a 2 s delay: it is broadcast at 617 bytes a second against the recording's
+2164, and a viewer who joins at 30 s gets the whole recording back byte for byte, as the first does.
+
 ## Decisions
 
 | Decision | Taken | Considered and not taken |
@@ -230,4 +240,5 @@ made-up one of a minute packs to 39% of zstd. The format's facts are in the work
 | The classic compressed client demo | Not read; the field codec replaces it | Running the player's own installed program to unpack it (a later, opt-in choice); studying third-party reconstructions of unknown origin |
 | Teamplay helpers | In Shooter's Edge's client | In the proxy, as the classic proxy did: they need no place on the network path |
 | Forward's route | Set up by the forward's own datagrams before the game's handshake, so any game on any wire goes through unchanged | Carried in the game's connect (the classic way): every game's handshake would have to carry it; the classic face reads it there |
+| The sequel's late viewer | The match from its start (the broadcast keyframes once): small, and its frames need what came before | A keyframe that repeats the level's start: the frames after it are deltas against frames the viewer never had |
 | The browser viewer | The WebSocket downstream lands with TV (M57b), for the hub's web viewer (M56) | Later: the hub needs it first |
