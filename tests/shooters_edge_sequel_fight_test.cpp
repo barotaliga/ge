@@ -5,10 +5,14 @@
 // the machinegun's bullets take 8 each; a number key changes the weapon; a taken weapon is raised
 // at once over the blaster; `kill` scores −1; the HUD shows the weapon's model, frame and ammo.
 // Then the rest of the fight: quad damage ×4, invulnerability, the power shield and the screen
-// (only from in front), a fall's damage, lava each frame, and the frag limit ending the level.
+// (only from in front), a fall's damage, lava each frame, and the frag limit ending the level
+// after the intermission. Then the hand grenade (thrown faster the longer it is held, exploding
+// in the hand at the fuse's end), the weapon and the quad dropped at death and taken back, gibs,
+// and `drop`.
 //
 // ge:summary Tests: the sequel's fight: rail, rocket, rocket jump, bullets, changing, obituaries
 // ge:keywords test sequel fight railgun rocket rocket-jump machinegun obituary frags use-weapon
+// ge:keywords hand-grenade drop-item gibs intermission
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_sequel_fight_test.cpp
 #include <memory>
@@ -64,10 +68,11 @@ struct Arena {
   sv::SequelPlayer& p(int i) const { return s().players[i]; }
 };
 
-std::unique_ptr<Arena> arena(const char* deathmatch = "1") {
+std::unique_ptr<Arena> arena(const char* deathmatch = "1", const char* dmflags = "0") {
   auto a = std::make_unique<Arena>();
   a->r = sv::sequel_runner(sv::make_sequel_server({}));
   a->r.console(std::string("deathmatch ") + deathmatch);
+  a->r.console(std::string("dmflags ") + dmflags);
   sv::MapSpec map;
   map.name = "hall";
   map.brushes = hall();
@@ -123,6 +128,17 @@ void give(Arena& a, sv::SqWeapon w, int ammo) {
   CHECK(a.r.client_command(0, std::string("use ") + r.name) == sv::CommandResult::mod);
   run(a, 100);  // the blaster dropped, the new one raised
   CHECK(a.p(0).hand.weapon == int(w) && a.p(0).hand.state == sv::SqHandState::ready);
+}
+
+// The hand grenade in flight, if any (`found` says).
+const sv::SequelMissile* thrown(sv::SequelServer& s, bool& found) {
+  found = false;
+  for (const sv::SequelMissile& m : s.missiles)
+    if (m.live && m.kind == sv::SqShot::hand_grenade) {
+      found = true;
+      return &m;
+    }
+  return nullptr;
 }
 
 }  // namespace
@@ -272,13 +288,122 @@ TEST(a_long_fall_hurts_and_lava_burns_each_frame) {
   CHECK(a->p(1).frags == -1);
 }
 
-TEST(the_frag_limit_ends_the_level) {
+TEST(the_frag_limit_ends_the_level_after_the_intermission) {
   auto a = facing(300);
   a->r.console("fraglimit 1");
   give(*a, sv::SqWeapon::railgun, 10);
   a->p(1).health = 50;
   run(*a, 8, sh::kButtonAttack);
-  CHECK(!a->p(1).alive && a->p(0).frags == 1);
-  run(*a, 8);
+  CHECK(a->p(0).frags == 1);
+  // The intermission: Ben stands up again, both frozen at the start with no weapon shown.
+  CHECK(a->s().intermission_at > 0 && a->s().next_map == "hall");
+  CHECK(a->p(1).alive && a->r->pending_map.empty());
+  CHECK(a->r->world.clients[0].numbers.weapon_model == 0);
+  CHECK(a->p(0).move.origin[0] == -300 * 8 && a->p(1).move.origin[0] == -300 * 8);
+  run(*a, 8 * 40);  // 4 s more, no button: nothing
+  CHECK(a->r->pending_map.empty());
+  run(*a, 8 * 10, sh::kButtonAttack);  // past 5 s, a button leaves
   CHECK(a->r->pending_map == "hall");
+}
+
+TEST(a_hand_grenade_held_longer_flies_faster_and_held_to_the_end_explodes_in_the_hand) {
+  auto a = facing(900);
+  give(*a, sv::SqWeapon::hand_grenade, 5);
+  bool found = false;
+  run(*a, 8, sh::kButtonAttack);  // a tap: thrown when the fuse is lit, at the least speed
+  run(*a, 8 * 11);
+  const sv::SequelMissile* m = thrown(a->s(), found);
+  CHECK(found && a->p(0).body.ammo[int(sv::SqAmmo::grenades)] == 4);
+  const float slow = found ? m->velocity.x : 0;
+  CHECK_MSG(slow > 395 && slow < 405, std::to_string(slow));
+  run(*a, 8 * 40);  // its fuse ends, the hand is ready again
+  CHECK(a->p(0).hand.state == sv::SqHandState::ready);
+  run(*a, 8 * 11 + 8 * 20, sh::kButtonAttack);  // lit, then held 2 s more
+  run(*a, 16);  // let go: the frame after the last one held throws it
+  m = thrown(a->s(), found);
+  const float fast = found ? m->velocity.x : 0;
+  CHECK_MSG(fast > 640 && fast < 700, std::to_string(fast));
+  run(*a, 8 * 40);
+  // Held to the end of the fuse: it goes off in her hand, half its blow to her.
+  a->p(0).health = 30;
+  run(*a, 8 * 45, sh::kButtonAttack);  // 1.1 s to light it, 3.2 s to its end
+  CHECK(!a->p(0).alive && a->p(0).frags == -1);
+  CHECK(!a->s().obituaries.empty() &&
+        a->s().obituaries.back() == "Ana held on to a grenade too long.");
+}
+
+TEST(a_death_drops_the_weapon_and_the_quad_and_a_big_blow_gibs) {
+  auto a = facing(300);
+  a->r.console("dmflags 16384");  // the quad is dropped at death
+  give(*a, sv::SqWeapon::railgun, 10);
+  sv::SequelPlayer& ben = a->p(1);
+  const int rl = sv::sq_item("weapon_rocketlauncher");
+  ben.body.counts[rl] = 1;
+  ben.body.ammo[int(sv::SqAmmo::rockets)] = 5;
+  CHECK(a->r.client_command(1, "use Rocket Launcher") == sv::CommandResult::mod);
+  run(*a, 100);
+  ben.quad_until = a->s().level_time + 20;
+  ben.health = 10;
+  run(*a, 8, sh::kButtonAttack);  // the rail: 100 on 10 health leaves −90
+  CHECK(!ben.alive && ben.gibbed);
+  CHECK(a->r->world.entities[2].modelindex == 0);  // his body is gone
+  int weapon = -1, quad = -1;
+  for (int k = 0; k < sv::kSequelDrops; k++) {
+    const sv::SequelDrop& d = a->s().drops[k];
+    if (d.live && d.item == rl) weapon = k;
+    if (d.live && d.item == sv::sq_item("item_quad")) quad = k;
+  }
+  CHECK(weapon >= 0 && quad >= 0);
+  if (weapon < 0 || quad < 0) return;
+  CHECK(a->s().drops[quad].quad_left > 19);
+  run(*a, 8 * 20);  // they fall to rest on the floor
+  const sv::SequelDrop& d = a->s().drops[quad];
+  CHECK_MSG(d.resting && d.origin.z > 14 && d.origin.z < 16, std::to_string(d.origin.z));
+  // Ana walks onto them: the quad is used at once with the time it had left.
+  for (int k : {weapon, quad}) {
+    int16_t* o = a->p(0).move.origin;
+    o[0] = static_cast<int16_t>(a->s().drops[k].origin.x * 8);
+    o[1] = static_cast<int16_t>(a->s().drops[k].origin.y * 8);
+    run(*a, 2);
+  }
+  CHECK(!a->s().drops[weapon].live && !a->s().drops[quad].live);
+  CHECK(a->p(0).body.counts[rl] == 1);
+  const double left = a->p(0).quad_until - a->s().level_time;
+  CHECK_MSG(left > 19 && left <= 20, std::to_string(left));
+}
+
+TEST(drop_throws_a_weapon_but_not_the_one_in_hand_nor_while_weapons_stay) {
+  auto a = facing(300);
+  give(*a, sv::SqWeapon::railgun, 10);
+  const int sg = sv::sq_item("weapon_shotgun");
+  a->p(0).body.counts[sg] = 1;
+  a->r.client_command(0, "drop Railgun");
+  CHECK(a->p(0).body.counts[sv::sq_item("weapon_railgun")] == 1);  // in hand: refused
+  a->r.console("dmflags 4");
+  a->r.client_command(0, "drop Shotgun");
+  CHECK(a->p(0).body.counts[sg] == 1);  // weapons stay: refused
+  a->r.console("dmflags 0");
+  a->r.client_command(0, "drop Shotgun");
+  CHECK(a->p(0).body.counts[sg] == 0);
+  a->r.client_command(0, "drop Slugs");
+  CHECK(a->p(0).body.ammo[int(sv::SqAmmo::slugs)] == 0);
+  int live = 0;
+  for (const sv::SequelDrop& d : a->s().drops) live += d.live ? 1 : 0;
+  CHECK(live == 2);
+  run(*a, 8 * 3);  // her own drop is not hers again within the second
+  for (const sv::SequelDrop& d : a->s().drops) CHECK(!d.live || d.owner == 0);
+}
+
+TEST(a_weapon_stays_when_taken_and_infinite_ammo_fills_the_stock) {
+  auto a = arena("1", "8196");  // weapons stay (4) and infinite ammo (8192)
+  run(*a, 80);
+  place(*a, 0, -260);  // onto the railgun
+  run(*a, 8);
+  const int rail = sv::sq_item("weapon_railgun");
+  CHECK(a->p(0).body.counts[rail] == 1);
+  CHECK(a->p(0).body.ammo[int(sv::SqAmmo::slugs)] == 50);  // to the carry limit
+  const sv::SequelEntity& e = a->s().entities[1];
+  CHECK(e.item == rail && !e.hidden && !e.gone);  // it stays for the next player
+  run(*a, 8 * 20, sh::kButtonAttack);             // and her shots take none
+  CHECK(a->p(0).body.ammo[int(sv::SqAmmo::slugs)] == 50);
 }

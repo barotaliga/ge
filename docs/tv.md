@@ -212,8 +212,13 @@ reads on from it. A viewer's `say` stays on the node; its `say_game` goes up to 
 the viewer list goes up as `qul` lines. The `se-tv-node` lab relays a two-player match with a 2 s
 delay to viewers who join at 0, 4 and 8 seconds: a late viewer's catch-up is 0.7 KB, and every
 viewer's stream plays to the same end (every player, his frags and name, every entity) with the
-chat in it. Still to come in M57c: our client watching a classic stream, and the node rewriting
-the server's name as its own.
+chat in it.
+
+Our client watches a broadcast with `watch <host>:<port> [password]` in the console
+(`games/shooters_edge/net/classic_watch.hpp`): it asks as a relay asks, answers a challenge, and
+hands the records to the demo reader a whole frame at a time, so the window draws the match as it
+draws a game it joined (the same view, sounds and lines). Still to come in M57c: the node writing
+its own name into the server info.
 
 ## Forward
 

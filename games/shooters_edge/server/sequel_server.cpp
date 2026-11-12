@@ -33,6 +33,7 @@ constexpr double kKillAfter = 5;      // `kill` is refused this long after a spa
 constexpr double kRespawnAfter = 1;   // the dead may respawn this long after dying, s
 constexpr uint8_t kRespawnHold = 14;  // the deathmatch respawn's teleport hold, in 8 ms
 constexpr float kSpawnHealth = 100;
+constexpr double kIntermissionHold = 5;  // the intermission's least time before a button leaves, s
 
 SequelServer& sq(void* rules) { return *static_cast<SequelServer*>(rules); }
 
@@ -109,6 +110,18 @@ const SequelEntity* spawn_spot(SequelServer& s, int slot) {
     std::vector<const SequelEntity*> spots;
     for (const SequelEntity& e : s.entities)
       if (e.classname == "info_player_deathmatch") spots.push_back(&e);
+    if (!spots.empty() && fight_dmflag(s, 512)) {  // spawn farthest from every living player
+      const SequelEntity* best = spots[0];
+      double far = -1;
+      for (const SequelEntity* e : spots) {
+        const double d = nearest_player(s, e->origin, slot);
+        if (d > far) {
+          far = d;
+          best = e;
+        }
+      }
+      return best;
+    }
     if (!spots.empty()) {
       const SequelEntity* near1 = nullptr;
       const SequelEntity* near2 = nullptr;
@@ -180,6 +193,19 @@ int skill(const SequelServer& s) {
   return std::clamp(static_cast<int>(s.cvars.find("skill")->number), 0, 3);
 }
 
+// Whether item row `item` is left out by `dmflags`: health (1), powerups (2), armour (2048), and
+// with infinite ammo (8192) the ammo and the BFG.
+bool dm_left_out(const SequelServer& s, int item) {
+  if (item < 0 || !deathmatch(s)) return false;
+  const SqItem& it = kSqItems[item];
+  const std::string_view name = it.classname;
+  return (fight_dmflag(s, 1) && it.kind == SqKind::health) ||
+         (fight_dmflag(s, 2) && it.kind == SqKind::powerup) ||
+         (fight_dmflag(s, 2048) &&
+          (it.kind == SqKind::armour || it.kind == SqKind::power_armour)) ||
+         (fight_dmflag(s, 8192) && (it.kind == SqKind::ammo || name == "weapon_bfg"));
+}
+
 // Whether the map's entity is left out in this mode by its spawn flags.
 bool left_out(const SequelServer& s, int flags) {
   if (deathmatch(s)) return (flags & 0x800) != 0;
@@ -219,12 +245,20 @@ void touch_items(SequelServer& s, int slot) {
         lo.y > e.origin.y + kItemHalf || hi.y < e.origin.y - kItemHalf ||
         lo.z > e.origin.z + kItemHalf || hi.z < e.origin.z - kItemHalf)
       continue;
+    const SqItem& it = kSqItems[e.item];
+    // A weapon that stays (`dmflags` 4) is refused to one who holds it, and stays when taken.
+    const bool stays = it.kind == SqKind::weapon && fight_dmflag(s, 4);
+    if (stays && p.body.counts[e.item] > 0) continue;
     p.body.health = static_cast<int>(p.health);
     if (!sq_pick_up(e.item, p.body, deathmatch(s), skill(s), s.level_time)) continue;
     p.health = static_cast<float>(p.body.health);
+    if (it.kind == SqKind::weapon && fight_dmflag(s, 8192)) {  // infinite ammo: a full stock
+      const int k = static_cast<int>(it.ammo);
+      p.body.ammo[k] = std::max(p.body.ammo[k], std::min(1000, p.body.max_ammo[k]));
+    }
     p.taken.push_back(e.item);
     fight_took(s, slot, e.item);
-    const SqItem& it = kSqItems[e.item];
+    if (stays) continue;
     if (std::string_view(it.classname) == "item_health_mega") {
       e.hidden = true;  // shows again 20 s after its taker is back to his maximum
       e.respawn_at = 0;
@@ -237,6 +271,7 @@ void touch_items(SequelServer& s, int slot) {
       e.gone = true;
     }
   }
+  fight_touch_drops(s, slot);
 }
 
 // The frame's items: those whose time came show again; a mega counts its taker down.
@@ -268,7 +303,9 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   SequelPlayer& p = s.players[slot];
   sh::SequelMove pm;
   pm.s = p.move;
-  if (pm.s.type != sh::SequelType::spectator)
+  if (s.intermission_at > 0)
+    pm.s.type = sh::SequelType::freeze;
+  else if (pm.s.type != sh::SequelType::spectator)
     pm.s.type = p.alive ? sh::SequelType::normal : sh::SequelType::dead;
   pm.s.gravity = static_cast<int16_t>(s.cvars.find("sv_gravity")->integer());
   pm.cmd.msec = c.msec;
@@ -301,7 +338,7 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   p.water_level = pm.water_level;
   p.water_type = pm.water_type;
   p.on_ground = pm.ground_entity >= 0;
-  if (!p.alive || s.clients[slot].spectator) return;
+  if (!p.alive || s.clients[slot].spectator || s.intermission_at > 0) return;
   touch_items(s, slot);
   if (c.impulse >= 1 && c.impulse <= kSqWeaponCount) fight_choose(s, slot, c.impulse - 1);
   // The first command of the frame that presses attack steps the hand at once.
@@ -323,24 +360,83 @@ void take_packet(SequelServer& s, const sh::Packet& pk) {
   p.last_sequence = pk.sequence;
 }
 
+// The intermission begins: the dead stand up, and everyone is moved to its spot (the first
+// `info_player_intermission`, else the first start) and frozen there facing its angles, with no
+// weapon and no model, until a button is pressed 5 s on.
+void start_intermission(SequelServer& s) {
+  s.intermission_at = s.level_time;
+  const SequelEntity* spot = nullptr;
+  for (const char* name : {"info_player_intermission", "info_player_start"}) {
+    for (const SequelEntity& e : s.entities)
+      if (e.classname == name) {
+        spot = &e;
+        break;
+      }
+    if (spot != nullptr) break;
+  }
+  const sh::Vec3f at = spot != nullptr ? spot->origin : sh::Vec3f{};
+  const sh::Vec3f look = spot != nullptr ? spot->angles : sh::Vec3f{};
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    if (!s.clients[i].active) continue;
+    SequelPlayer& p = s.players[i];
+    if (!p.alive && !s.clients[i].spectator) spawn_player(s, i, false);
+    const float pos[3] = {at.x, at.y, at.z};
+    for (int k = 0; k < 3; k++) {
+      p.move.origin[k] = static_cast<int16_t>(num::to_int32(pos[k] * 8));
+      p.move.velocity[k] = 0;
+    }
+    p.move.type = sh::SequelType::freeze;
+    const int16_t want[3] = {to_short_angle(look.x), to_short_angle(look.y), 0};
+    for (int k = 0; k < 3; k++) {
+      p.move.delta_angles[k] = int16_t(want[k] - p.cmd_angles[k]);
+      p.forced_angles[k] = want[k];
+    }
+    p.forced = true;
+    p.changed = true;
+    p.view_angles = {look.x, look.y, 0};
+  }
+}
+
+// The intermission's frame: 5 s on, any button pressed leaves for the next map.
+void intermission_frame(SequelServer& s) {
+  if (!s.pending_map.empty() || s.level_time + 0.001 < s.intermission_at + kIntermissionHold)
+    return;
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (s.clients[i].active && s.players[i].buttons != 0) {
+      s.pending_map = s.next_map;
+      s.pending_change = MapChange::change_level;
+      return;
+    }
+}
+
 // One rules frame: the time advances, the dead who press attack a second after dying respawn.
 void rules_frame(SequelServer& s) {
   s.frame_number++;
   s.level_time = double(s.frame_number) * kFrameSeconds;
   item_frame(s);
+  if (s.intermission_at > 0) {
+    intermission_frame(s);
+    return;
+  }
   fight_missiles(s);
+  fight_drops(s);
   for (int i = 0; i < sh::kMaxClients; i++) {  // the hands no command stepped this frame
     SequelPlayer& p = s.players[i];
     if (s.clients[i].active && !p.stepped) fight_step(s, i, (p.buttons & sh::kButtonAttack) != 0);
     p.stepped = false;
     if (s.clients[i].active) fight_body_frame(s, i);
   }
-  fight_limits(s);
+  if (fight_limits(s)) {
+    start_intermission(s);
+    return;
+  }
   for (int i = 0; i < sh::kMaxClients; i++) {
     SequelPlayer& p = s.players[i];
     if (!s.clients[i].active || s.clients[i].spectator || p.alive) continue;
     if (s.level_time < p.died_at + kRespawnAfter - 0.001) continue;
-    if (deathmatch(s) && (p.buttons & sh::kButtonAttack) != 0) spawn_player(s, i, true);
+    // By pressing attack, or at once with `dmflags` 1024 (forced respawn).
+    if (deathmatch(s) && ((p.buttons & sh::kButtonAttack) != 0 || fight_dmflag(s, 1024)))
+      spawn_player(s, i, true);
   }
 }
 
@@ -388,7 +484,8 @@ void fill_rows(SequelServer& s) {
     e.flags = p.on_ground ? sh::kFlagOnGround : 0;
     e.waterlevel = p.water_level;
     e.health = p.health;
-    e.modelindex = c.spectator ? 0 : static_cast<int>(s.models.size()) - 1;
+    const bool unseen = c.spectator || p.gibbed || s.intermission_at > 0;
+    e.modelindex = unseen ? 0 : static_cast<int>(s.models.size()) - 1;
   }
   for (size_t i = 0; i < s.entities.size(); i++) {  // the items shown or hidden
     const SequelEntity& m = s.entities[i];
@@ -444,7 +541,8 @@ void fill_lists(SequelServer& s) {
   w.vwep.clear();
   w.statics.clear();
   w.max_clients = sh::kMaxClients;
-  w.entities.assign(1 + sh::kMaxClients + s.entities.size() + kSequelMissiles, WorldEntity{});
+  w.entities.assign(1 + sh::kMaxClients + s.entities.size() + kSequelMissiles + kSequelDrops,
+                    WorldEntity{});
   w.entity_count = static_cast<int>(w.entities.size());
   w.entities[0].free = false;
   w.entities[0].modelindex = 1;
@@ -485,7 +583,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     if (e.model.size() > 1 && e.model[0] == '*') e.modelindex = std::atoi(e.model.c_str() + 1);
     e.spawnflags = std::atoi(b.get("spawnflags").c_str());
     e.item = sq_item(e.classname);
-    e.gone = left_out(s, e.spawnflags);
+    e.gone = left_out(s, e.spawnflags) || dm_left_out(s, e.item);
     s.entities.push_back(std::move(e));
   }
   s.models.assign(1, "");
@@ -495,6 +593,13 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     const std::string model = kSqItems[e.item].model;
     const auto found = std::find(s.models.begin(), s.models.end(), model);
     e.modelindex = static_cast<int>(found - s.models.begin());
+    if (found == s.models.end()) s.models.push_back(model);
+  }
+  s.item_models.assign(size_t(kSqItemCount), 0);  // every item's, for those a player drops
+  for (int i = 0; i < kSqItemCount; i++) {
+    const std::string model = kSqItems[i].model;
+    const auto found = std::find(s.models.begin(), s.models.end(), model);
+    s.item_models[size_t(i)] = static_cast<int>(found - s.models.begin());
     if (found == s.models.end()) s.models.push_back(model);
   }
   s.sounds.assign(1, "");
@@ -507,6 +612,8 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   s.host_time = 0;
   s.map_stopped = false;
   s.pending_map.clear();
+  s.intermission_at = 0;
+  s.next_map.clear();
   fill_lists(s);
   // The pool the world is mirrored into: every row the world has, and room past them.
   s.sv.set.max_edicts = std::max(s.sv.set.max_edicts, int(s.world.entities.size()) + 8);
