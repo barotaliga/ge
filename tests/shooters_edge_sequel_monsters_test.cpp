@@ -2,10 +2,13 @@
 // here: removed in deathmatch; a guard facing a player sees him, turns on him and shoots him; one
 // facing away does not, until the player's weapon is heard; shot dead it leaves a corpse shots
 // pass, counts as killed, fires its targets and drops its item; a big blow throws it apart; one
-// with a path walks it; one waiting hidden appears on a use and turns on the user.
+// with a path walks it; one waiting hidden appears on a use and turns on the user. The full game's:
+// a medic raises a corpse, a brain's screen, a technician's and a super tank's ends, Jorg's death
+// bringing out the Makron, a gladiator's rail, the commander's body.
 //
 // ge:summary Tests: the sequel's monsters: sight, noise, attack, death, corpse, gibs, path, waiting
 // ge:keywords test sequel monsters monster-ai sight noise corpse gib path-corner triggered-spawn
+// ge:keywords medic power-screen boss makron
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_sequel_monsters_test.cpp
 #include <memory>
@@ -179,4 +182,88 @@ TEST(a_waiting_monster_appears_on_a_use_and_turns_on_the_user) {
   CHECK(!h->m().waiting && h->e().box && h->m().enemy == 0);
   run(*h, 1);
   CHECK(!h->r->world.entities[size_t(sv::map_row(h->m().entity))].free);
+}
+
+// ---- The full game's (sequel-monsters-full.md) ----
+
+namespace {
+
+Pairs monster(const char* classname, const char* origin, const char* angle) {
+  return {{"classname", classname}, {"origin", origin}, {"angle", angle}};
+}
+
+int find(const Hall& h, const char* classname) {
+  for (size_t i = 0; i < h.s().monsters.size(); i++)
+    if (h.s().entities[size_t(h.s().monsters[i].entity)].classname == classname)
+      return static_cast<int>(i);
+  return -1;
+}
+
+}  // namespace
+
+TEST(a_medic_raises_a_dead_guard_who_counts_again) {
+  // Both face away from Ana, 800 off: neither sees her.
+  auto h = open_hall({guard("100 0 24", "0"), monster("monster_medic", "250 0 24", "0")});
+  run(*h, 10);
+  CHECK(h->s().monsters_total == 2);
+  CHECK(sv::map_damage(h->s(), h->m(0).entity, 0, 25));  // dead, not thrown apart
+  CHECK(h->m(0).dead && !h->e(0).gone);
+  for (int i = 0; i < 10 && h->m(0).dead; i++) run(*h, kSecond);
+  CHECK_MSG(!h->m(0).dead, "the medic never raised the guard");
+  CHECK(h->e(0).health == 20 && h->e(0).box);
+  CHECK(h->s().monsters_total == 3 && h->s().monsters_killed == 1);
+}
+
+TEST(a_brains_screen_takes_a_third_of_a_blow_from_in_front) {
+  auto h = open_hall({monster("monster_brain", "0 0 24", "180")});
+  run(*h, 2);
+  CHECK(sv::monster_damage(h->s(), h->m().entity, -1, 30, {1, 0, 0}));  // into its face
+  CHECK_MSG(h->e().health == 280, std::to_string(h->e().health));
+  CHECK(sv::monster_damage(h->s(), h->m().entity, -1, 30, {-1, 0, 0}));  // into its back
+  CHECK_MSG(h->e().health == 250, std::to_string(h->e().health));
+}
+
+TEST(a_technician_explodes_and_a_super_tank_burns_down_to_a_wreck) {
+  auto h = open_hall(
+      {monster("monster_floater", "0 100 60", "0"), monster("monster_supertank", "300 0 24", "0")});
+  run(*h, 2);
+  CHECK(sv::map_damage(h->s(), h->m(0).entity, 0, 500));
+  CHECK(h->m(0).dead && h->e(0).gone);  // nothing left
+  CHECK(sv::map_damage(h->s(), h->m(1).entity, 0, 5000));
+  CHECK(h->m(1).dead && !h->e(1).gone);  // dying
+  run(*h, 2 * kSecond);
+  CHECK(!h->e(1).gone);
+  run(*h, 2 * kSecond);
+  CHECK(h->e(1).gone);  // blown apart after its death and eight blasts
+}
+
+TEST(jorgs_death_brings_out_the_makron) {
+  auto h = open_hall({monster("monster_jorg", "300 0 24", "0")});
+  run(*h, 2);
+  CHECK(h->s().monsters_total == 1);
+  const int makron = find(*h, "monster_makron");
+  CHECK(makron >= 0 && h->m(makron).waiting && h->e(makron).hidden);
+  CHECK(sv::map_damage(h->s(), h->m(0).entity, 0, 5000));
+  run(*h, 4 * kSecond);
+  CHECK(h->m(makron).waiting);
+  run(*h, 2 * kSecond);
+  CHECK(!h->m(makron).waiting && !h->e(makron).hidden && h->e(0).gone);
+  CHECK(h->s().monsters_total == 2);
+}
+
+TEST(a_gladiators_rail_hits_for_fifty) {
+  auto h = open_hall({monster("monster_gladiator", "-300 0 24", "180")});
+  for (int i = 0; i < 30 && h->p().alive && h->p().health == 100; i++) run(*h, kSecond / 2);
+  CHECK_MSG(h->p().health == 50 || !h->p().alive, std::to_string(h->p().health));
+}
+
+TEST(the_commanders_body_stays_in_deathmatch_uncounted_and_slumps_when_used) {
+  auto h = open_hall({monster("monster_commander_body", "0 0 24", "0")}, "1");
+  run(*h, 10);
+  CHECK(h->s().monsters.size() == 1 && h->s().monsters_total == 0 && !h->e().gone);
+  sv::monster_use(h->s(), h->m().entity, 0);
+  run(*h, 3 * kSecond);
+  CHECK(h->r->world.entities[size_t(sv::map_row(h->m().entity))].frame == 24);
+  CHECK(sv::map_damage(h->s(), h->m().entity, 0, 500));  // a figure: never hurt
+  CHECK(!h->e().gone && !h->m().dead);
 }

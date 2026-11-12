@@ -331,9 +331,10 @@ void explode(SequelServer& s, SequelMissile& m, sh::Vec3f at, int ignore) {
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (i == m.owner || !fightable(s, i)) continue;
     const float d = sh::length(unpack(s.players[i].move.origin) - at);
-    if (d > 1000 || !can_damage(s, at, i)) continue;
+    if (d > m.reach || !can_damage(s, at, i)) continue;
     if (m.owner >= 0 && !can_damage(s, unpack(s.players[m.owner].move.origin), i)) continue;
-    const float points = float(m.damage) * (1 - sh::root_of(d / 1000));
+    const float strength = float(m.burst > 0 ? m.burst : m.damage);
+    const float points = strength * (1 - sh::root_of(d / m.reach));
     hurt(s, i, m.owner, unpack(s.players[i].move.origin) - at, static_cast<int>(points), 0, true,
          m.weapon);
   }
@@ -1215,15 +1216,55 @@ void fight_monster_launch(SequelServer& s, int from, SqShot kind, sh::Vec3f star
   m->damage = damage;
   m->velocity = dir * speed;
   m->dies_at = s.level_time + (kind == SqShot::grenade ? 2.5 : 8000.0 / double(speed));
-  if (kind == SqShot::grenade) {
+  if (kind == SqShot::grenade) {  // a radius of its damage and 40
     m->velocity.z += 200;
     m->radius_damage = damage;
-    m->radius = 160;
-  } else if (kind == SqShot::rocket) {
-    m->radius_damage = damage + 20;
     m->radius = float(damage + 40);
+  } else if (kind == SqShot::rocket) {  // a splash of its damage within its damage and 20
+    m->radius_damage = damage;
+    m->radius = float(damage + 20);
   }
 }
+
+void fight_monster_bfg(SequelServer& s, int from, sh::Vec3f start, sh::Vec3f dir, float speed,
+                       int burst, float reach, int cause) {
+  fight_monster_launch(s, from, SqShot::bfg, start, dir, 200, speed, cause);
+  for (SequelMissile& m : s.missiles) {  // the one just launched: the player's ball's blast
+    if (!m.live || m.from != from || m.kind != SqShot::bfg || m.burst != 0) continue;
+    m.radius_damage = 200;
+    m.radius = 100;
+    m.burst = burst;
+    m.reach = reach;
+  }
+}
+
+void fight_monster_rail(SequelServer& s, int from, sh::Vec3f start, sh::Vec3f end, int damage,
+                        int kick, int cause) {
+  sh::Vec3f dir = end - start;
+  sh::normalize(dir);
+  const sh::Vec3f far = start + dir * kRange;
+  uint32_t skip = 0;
+  for (int n = 0; n <= sh::kMaxClients; n++) {
+    const Line l = shoot_line(s, start, far, skip, from);
+    if (l.player < 0) {
+      if (l.mover >= 0 && monster_index(s, l.mover) >= 0)
+        monster_damage(s, l.mover, -1, damage, dir);
+      else
+        map_damage(s, l.mover, -1, damage);
+      effect(s, "te_railtrail", l.end);
+      return;
+    }
+    hurt(s, l.player, -1, dir, damage, kick, false, cause);
+    skip |= 1u << l.player;
+  }
+}
+
+void fight_kick(SequelServer& s, int slot, sh::Vec3f push) {
+  SequelPlayer& p = s.players[slot];
+  pack(p.move.velocity, unpack(p.move.velocity) + push);
+}
+
+void fight_effect(SequelServer& s, const char* name, sh::Vec3f at) { effect(s, name, at); }
 
 void fight_drop_at(SequelServer& s, sh::Vec3f at, const std::string& classname) {
   const int item = sq_item(classname);
