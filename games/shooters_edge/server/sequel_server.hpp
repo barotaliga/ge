@@ -115,6 +115,10 @@ struct SequelEntity {
   bool accelerated = false;
   float now_speed = 0, next_speed = 0, top = 0, decel_span = 0;  // per frame
   int arrive = 0;  // what arriving does (sequel_map.cpp)
+  // A turning mover (a rotating door, a rotator): its turn in progress (degrees/s), the angles it
+  // is turning to, a door's two angles, and the axis it turns about (a unit vector of angles).
+  bool turns = false;
+  sh::Vec3f avelocity, adest, closed_angles, open_angles, axis;
 };
 
 struct SequelPlayer {
@@ -244,6 +248,9 @@ struct SequelServer : RulesCommon {
   std::vector<Delayed> delayed;
   int secrets = 0, secrets_found = 0, goals = 0, goals_found = 0;
   bool exit_now = false;  // an exit was used: the intermission starts at the frame's end
+  // The area portals by number, open or shut (a door opens those its target names); what is sent
+  // to a client is cut at a shut one once the map's areas are read.
+  std::vector<uint8_t> portals;
 
   SequelServer();
   ~SequelServer();

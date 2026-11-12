@@ -44,13 +44,15 @@ br::WorldBrush box(float x0, float y0, float z0, float x1, float y1, float z1) {
 // ends the level.
 std::shared_ptr<const br::Map> hall() {
   br::BrushWorld w;
-  w.models.resize(6);
+  w.models.resize(8);
   w.models[0].push_back(box(-1024, -256, -16, 1024, 256, 0));
   w.models[1].push_back(box(400, -48, 0, 496, 48, 136));      // the plat, raised
   w.models[2].push_back(box(-300, -256, 0, -290, 256, 128));  // the door
   w.models[3].push_back(box(600, -64, 0, 700, 64, 64));       // the push
   w.models[4].push_back(box(800, -64, 0, 900, 64, 64));       // the hurt
   w.models[5].push_back(box(-1000, -64, 0, -950, 64, 64));    // the exit's trigger
+  w.models[6].push_back(box(0, -4, 0, 64, 4, 96));            // the swing door, about its hinge
+  w.models[7].push_back(box(-32, -32, 0, 32, 32, 16));        // the turntable, about its middle
   w.entities.push_back(
       entity({{"classname", "info_player_start"}, {"origin", "-600 0 24"}, {"angle", "0"}}));
   w.entities.push_back(
@@ -70,6 +72,28 @@ std::shared_ptr<const br::Map> hall() {
   w.entities.push_back(entity({{"classname", "trigger_once"}, {"model", "*5"}, {"target", "out"}}));
   w.entities.push_back(
       entity({{"classname", "target_changelevel"}, {"targetname", "out"}, {"map", "next"}}));
+  w.entities.push_back(entity({{"classname", "func_door_rotating"},
+                               {"model", "*6"},
+                               {"origin", "0 -200 0"},
+                               {"targetname", "swing"},
+                               {"target", "portal"},
+                               {"distance", "90"}}));
+  w.entities.push_back(
+      entity({{"classname", "trigger_relay"}, {"targetname", "go_swing"}, {"target", "swing"}}));
+  w.entities.push_back(
+      entity({{"classname", "func_areaportal"}, {"targetname", "portal"}, {"style", "1"}}));
+  w.entities.push_back(entity({{"classname", "func_rotating"},
+                               {"model", "*7"},
+                               {"origin", "200 -200 0"},
+                               {"targetname", "table"},
+                               {"speed", "90"},
+                               {"spawnflags", "1"}}));
+  w.entities.push_back(
+      entity({{"classname", "trigger_relay"}, {"targetname", "stop_table"}, {"target", "table"}}));
+  w.entities.push_back(entity(
+      {{"classname", "light"}, {"targetname", "lamp"}, {"style", "33"}, {"origin", "0 0 100"}}));
+  w.entities.push_back(
+      entity({{"classname", "trigger_relay"}, {"targetname", "switch"}, {"target", "lamp"}}));
   std::vector<uint8_t> bytes;
   std::string error;
   CHECK_MSG(br::write_brush_world(w, &bytes, &error), error);
@@ -83,6 +107,11 @@ struct Hall {
   uint32_t sequence = 0;
   sv::SequelServer& s() const { return *sv::sequel_of(r); }
   sv::SequelPlayer& p() const { return s().players[0]; }
+  int called(const char* targetname) const {
+    for (size_t i = 0; i < s().entities.size(); i++)
+      if (s().entities[i].targetname == targetname) return static_cast<int>(i);
+    return -1;
+  }
   int named(const char* classname) const {
     for (size_t i = 0; i < s().entities.size(); i++)
       if (s().entities[i].classname == classname) return static_cast<int>(i);
@@ -211,4 +240,61 @@ TEST(a_trigger_once_fires_the_level_change_outside_deathmatch) {
   place(*h, -975, 0, 24);
   run(*h, 2);
   CHECK(h->r->pending_map == "next");
+}
+
+TEST(a_swing_door_turns_in_nine_frames_opens_its_portal_and_stops_a_line_where_it_points) {
+  auto h = open_hall();
+  run(*h, 40);
+  place(*h, -600, 0, 24);
+  sv::SequelEntity& door = h->e("func_door_rotating");
+  const auto across = [&] {  // a line across where the open door stands
+    return sv::map_trace(h->s(), {-50, -170, 40}, {}, {}, {50, -170, 40}, sh::kSqSolid);
+  };
+  CHECK(across().fraction == 1);
+  CHECK(h->s().portals.size() == 2 && h->s().portals[1] == 0);
+  sv::map_use_targets(h->s(), h->called("go_swing"), -1);
+  for (int f = 1; f <= 9; f++) {
+    frames(*h, 1);
+    if (f < 9) CHECK_MSG(door.angles.y > 0 && door.angles.y < 90, std::to_string(door.angles.y));
+  }
+  frames(*h, 1);
+  CHECK_MSG(door.angles.y == 90 && door.state == 2, std::to_string(door.angles.y));
+  CHECK(h->s().portals[1] == 1);
+  const sh::SequelTrace t = across();
+  CHECK_MSG(t.fraction < 1 && t.entity == sv::map_row(h->named("func_door_rotating")),
+            std::to_string(t.fraction));
+  CHECK_MSG(t.end.x > -6 && t.end.x < -3,
+            std::to_string(t.end.x));  // its near face, 4 from the hinge
+  run(*h, 8 * 50);                     // 3 s, then back
+  CHECK(door.angles.y == 0 && door.state == 0 && h->s().portals[1] == 0);
+}
+
+TEST(a_turntable_spins_from_the_start_carries_its_rider_round_and_stops_when_used) {
+  auto h = open_hall();
+  run(*h, 40);
+  sv::SequelEntity& table = h->e("func_rotating");
+  place(*h, 224, -200, 16 + 24 + 1);
+  run(*h, 8 * 2);  // landed on it
+  const float at = table.angles.y;
+  frames(*h, 10);  // 90 degrees at 90 a second
+  CHECK_MSG(table.angles.y - at > 89.9f && table.angles.y - at < 90.1f,
+            std::to_string(table.angles.y - at));
+  const float x = float(h->p().move.origin[0]) / 8, y = float(h->p().move.origin[1]) / 8;
+  // A quarter turn round (200, −200): from 24 out on +x to about 24 out on +y.
+  CHECK_MSG(x > 190 && x < 210 && y > -185 && y < -170,
+            std::to_string(x) + " " + std::to_string(y));
+  sv::map_use_targets(h->s(), h->called("stop_table"), -1);
+  const float stopped = table.angles.y;
+  frames(*h, 3);
+  CHECK(table.angles.y == stopped);
+}
+
+TEST(a_named_light_switches_its_style) {
+  auto h = open_hall();
+  run(*h, 8);
+  CHECK(h->r->world.lightstyles[33] == "m");
+  sv::map_use_targets(h->s(), h->called("switch"), -1);
+  CHECK(h->r->world.lightstyles[33] == "a");
+  sv::map_use_targets(h->s(), h->called("switch"), -1);
+  CHECK(h->r->world.lightstyles[33] == "m");
 }
