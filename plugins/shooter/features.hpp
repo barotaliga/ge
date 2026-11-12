@@ -104,6 +104,11 @@
 //   off on the landing frame (pilot.cpp), a landing fast enough to hop on (M18r.md 0v); judging.
 // - `hopside`: no forward key in a hop: its air and its landing the strafe key alone, the one the
 //   view turns toward (pilot.cpp, bot.cpp); judging.
+// - `noback`: moving, no spot watched or fired at (the game's watch, its rockets at news) and,
+//   roaming, no player newly seen more than 100 degrees off the way walked: no back key under
+//   them (M18r.md 0w); judging.
+// - `levelview`: a spot watched looked at within 15 degrees of level, and a look let go brought
+//   back level under the hand (its tolerance under the pace's step); judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
@@ -116,7 +121,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -208,9 +213,11 @@ enum class Feature : uint8_t {
   airarc,
   hopjump,
   hopside,
+  noback,
+  levelview,
   trial,
 };
-constexpr size_t kFeatures = 79;
+constexpr size_t kFeatures = 81;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

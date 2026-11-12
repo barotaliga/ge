@@ -1541,6 +1541,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   f.bot.airwalk = f.features[sh::Feature::airwalk];
   f.bot.airarc = f.features[sh::Feature::airarc];
   f.bot.hopside = f.features[sh::Feature::hopside];
+  f.bot.levelview = f.features[sh::Feature::levelview];
   f.bot.circlekeys = f.features[sh::Feature::circlekeys];
   f.bot.circleview = f.features[sh::Feature::circleview];
   f.bot.circleaim = f.features[sh::Feature::circleaim];
@@ -1680,6 +1681,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   }
   f.bot.shot_due_s = std::fmax(0.0, f.ready_at - t);
   f.bot.beam = held && held->bit == f.arsenal->beam;
+  f.bot.aim_front_only = f.features[sh::Feature::noback] && f.mode == FightMode::roam;
   sh::MoveCmd cmd = sh::bot_source(f.bot).next(&f.bot, s.sv, slot, msec);
   f.stats.mode_commands[static_cast<int>(f.mode)]++;
   if (held) f.stats.weapon_commands[held->number]++;

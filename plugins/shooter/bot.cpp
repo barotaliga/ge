@@ -46,6 +46,8 @@ constexpr double kCalmAbout = 360;  // and for an about-face
 // recordings): the view turns 103 degrees a second on average, 7 % of it past 360 (people 107 and
 // 6 %; the aim's flick back gave 162 and 14 %); at 180 the bots fought less (frags -0.9 a minute).
 constexpr double kBackTurn = 360;
+// `noback`: roaming, a player more than this far off the way walked is not aimed at, degrees.
+constexpr float kFrontOnly = 100;
 
 bool walking_mode(PilotMode pm) {
   return pm == PilotMode::walk || pm == PilotMode::idle || pm == PilotMode::wait ||
@@ -379,8 +381,15 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       }
     }
   }
-  const bool fresh =
+  bool fresh =
       c && ai::known(c->seen) && (c->visible || ai::age(c->seen, sv.time) <= b.aim.hold_s);
+  // (`noback`, M18r.md 0w) Roaming on its way, a player off behind it is not turned to: the view
+  // stays on the way walked (the back key is a chased fight's, not a walk's).
+  if (fresh && b.aim_front_only && !b.aiming && walking_mode(b.pilot.pilot.mode)) {
+    const double dx = c->seen.x - eye.x, dy = c->seen.y - eye.y;
+    const double to = core::libm::atan2(dy, dx) * (180 / core::kPi);
+    if (std::fabs(wrap(static_cast<float>(to) - pilot_yaw)) > kFrontOnly) fresh = false;
+  }
   double want[2];
   if (fresh) {
     // The lead for the hands' lag (`aim.lead_s`): the mouse hand leads its own strokes by the
@@ -573,7 +582,11 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       const bool sighted = b.aiming && c && c->visible;
       const double half = core::libm::atan2(16.0, std::fmax(1.0, static_cast<double>(b.aim_dist))) *
                           (180 / core::kPi);
-      const double tol = sighted ? std::fmax(0.4, half * 0.7) : 3;
+      double tol = sighted ? std::fmax(0.4, half * 0.7) : 3;
+      // (`levelview`) A view paced back from a look (`kBackTurn`) moves under 3 degrees a command
+      // in pitch: inside a 3-degree tolerance the hand never strokes, and a look down at the feet
+      // stayed there (79 degrees, 35 s on the run). The tolerance under the pace's step.
+      if (b.levelview && !b.aiming && b.calm && b.paced) tol = 0.5;
       const double due = sighted && !b.beam ? b.shot_due_s : 0;
       hand_step(b, want, msec / 1000.0, tol, tol, std::fmax(1.0, half * 2), due, b.aiming ? 1 : 1.3,
                 sighted, out);
