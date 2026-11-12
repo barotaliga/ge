@@ -28,6 +28,7 @@ struct Near {
 }  // namespace
 
 constexpr float kStrafeOn = 1;  // `strafe`: the aim this far off the velocity: its side, degrees
+constexpr int kStrafeLate = 8;  // and the strafe begun this many commands into the flight (hands)
 
 JumpFlight fly_jump(const MoveWorld& world, const MoveSettings& move, Vec3f origin, Vec3f velocity,
                     Vec3f aim, int msec, float limit_s, bool strafe) {
@@ -47,7 +48,7 @@ JumpFlight fly_jump(const MoveWorld& world, const MoveSettings& move, Vec3f orig
     c.angles = {0, yaw, 0};
     c.forward = static_cast<int16_t>(move.maxspeed);
     c.buttons = i == 0 ? kButtonJump : 0;
-    if (strafe && i > 0 && (s.velocity.x != 0 || s.velocity.y != 0)) {
+    if (strafe && i > kStrafeLate && (s.velocity.x != 0 || s.velocity.y != 0)) {
       const float vh = static_cast<float>(
           core::libm::atan2(s.velocity.y, s.velocity.x) * (180.0 / core::kPi));
       float err = yaw - vh;  // the aim's way off the velocity, counter-clockwise positive
