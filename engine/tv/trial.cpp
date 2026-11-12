@@ -6,6 +6,7 @@
 // ge:test tests/tv_net_test.cpp
 #include "tv/trial.hpp"
 
+#include <algorithm>
 #include <memory>
 
 #include "net/sim_network.hpp"
@@ -20,7 +21,26 @@ namespace {
 struct Match {
   std::vector<uint8_t> file;
   std::vector<size_t> ends;  // where the header and each block end
+  std::vector<bool> key;     // each block a keyframe
 };
+
+// A whole stream split at its header and blocks.
+Match split_source(const std::vector<uint8_t>& file) {
+  Match m;
+  m.file = file;
+  replay::StreamReader r;
+  std::string error;
+  if (!replay::read_stream_header(file, r, error)) return m;
+  m.ends.push_back(r.at);
+  size_t at = r.at;
+  replay::BlockPeek p;
+  while (replay::peek_block(file, at, p, error) == 1) {
+    at += p.size;
+    m.ends.push_back(at);
+    m.key.push_back(p.keyframe);
+  }
+  return m;
+}
 
 Match make_match(const TrialConfig& c) {
   Match m;
@@ -42,6 +62,7 @@ Match make_match(const TrialConfig& c) {
     }
     replay::stream_end_block(w, b % c.keyframe_every == 0);
     m.ends.push_back(m.file.size());
+    m.key.push_back(b % c.keyframe_every == 0);
   }
   replay::stream_finish(w, {});
   return m;
@@ -52,7 +73,8 @@ Match make_match(const TrialConfig& c) {
 TrialResult run_tv_trial(const TrialConfig& c) {
   TrialResult out;
   net::SimNetwork sim = net::make_sim_network(c.seed, c.link);
-  const Match m = make_match(c);
+  const Match m = c.source != nullptr ? split_source(*c.source) : make_match(c);
+  const int blocks = static_cast<int>(m.key.size());
   std::vector<std::unique_ptr<net::Transport>> ts;
   auto transport = [&](uint32_t node, uint16_t port) {
     ts.push_back(std::make_unique<net::Transport>());
@@ -86,7 +108,7 @@ TrialResult run_tv_trial(const TrialConfig& c) {
   bool said = false;
   size_t fed = 0;
   const int64_t step_us = 10000;
-  const int64_t most_steps = (int64_t{c.blocks} * c.block_ms + c.delay_ms + 60000) * 1000 / step_us;
+  const int64_t most_steps = (int64_t{blocks} * c.block_ms + c.delay_ms + 60000) * 1000 / step_us;
   for (int64_t s = 0; s < most_steps; s++) {
     now += step_us;
     net::sim_advance(sim, now);
@@ -127,7 +149,7 @@ TrialResult run_tv_trial(const TrialConfig& c) {
   }
   out.seconds = static_cast<double>(now) / 1e6;
   out.all_whole = true;
-  const double match_s = static_cast<double>(c.blocks);  // a block is a second of the match
+  const double match_s = std::max(1.0, static_cast<double>(blocks));  // a block is a second
   for (int i = 0; i < count; i++) {
     const Watch& w = clients[static_cast<size_t>(i)]->watch;
     TrialViewer& v = out.viewers[static_cast<size_t>(i)];
@@ -139,12 +161,13 @@ TrialResult run_tv_trial(const TrialConfig& c) {
     // Whole: the header, then every block from the one it started at (a keyframe) to the end.
     std::vector<uint8_t> want(m.file.begin(),
                               m.file.begin() + static_cast<std::ptrdiff_t>(m.ends[0]));
-    if (v.first >= 0 && v.first % c.keyframe_every == 0)
+    if (v.first >= 0 && v.first < blocks && m.key[static_cast<size_t>(v.first)])
       want.insert(
           want.end(),
           m.file.begin() + static_cast<std::ptrdiff_t>(m.ends[static_cast<size_t>(v.first)]),
           m.file.begin() + static_cast<std::ptrdiff_t>(m.ends.back()));
     v.whole = w.ended && w.stream == want;
+    if (c.keep_streams) v.stream = w.stream;
     if (!v.whole) {
       out.all_whole = false;
       out.why += "viewer" + std::to_string(i) + ": from block " + std::to_string(v.first) + ", " +

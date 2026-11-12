@@ -2,7 +2,9 @@
 // it and viewers on both, over the simulated network under one link condition, on a virtual clock
 // off one seed. What the `tv` lab measures and the tests hold: every viewer's stream whole from
 // the block it started at, chat up and down, the tree's count, each block's lag from the source to
-// each viewer, and the bytes a second each viewer took.
+// each viewer, and the bytes a second each viewer took. A game's own stream may be broadcast
+// instead of the made-up match (a deterministic game's spectating by inputs,
+// engine/replay/spectate.hpp).
 //
 // ge:summary A TV trial: a source, a relay and viewers on the simulated network, measured
 // ge:keywords tv trial relay viewers lag bytes-per-second simulated-network preset run_tv_trial
@@ -28,6 +30,10 @@ struct TrialConfig {
   size_t chunk_bytes = 200;  // ten chunks a block, this many bytes each
   int64_t delay_ms = 0;      // the source node's delay
   uint32_t seed = 7;
+  // A real stream to broadcast instead of the made-up match (a game's replay stream, whole); its
+  // blocks are fed one every `block_ms`.
+  const std::vector<uint8_t>* source = nullptr;
+  bool keep_streams = false;  // keep each viewer's stream in its result (a test follows it)
 };
 
 struct TrialViewer {
@@ -40,6 +46,7 @@ struct TrialViewer {
   std::vector<double> lag_ms;  // each block's arrival after the source wrote it
   double bytes_per_s = 0;      // what its link carried down a second of the match
   std::string error;
+  std::vector<uint8_t> stream;  // its stream, when `keep_streams`
 };
 
 struct TrialResult {

@@ -99,6 +99,17 @@ The `tv` lab runs a source, a relay and six viewers under every simulated networ
 On the bad and awful links some viewers connect late and start at a later keyframe block, so they
 take fewer bytes.
 
+## Spectating by inputs
+
+`engine/replay/spectate.hpp`. A deterministic game on the play contract (Fall Line) broadcasts
+what its player holds, not the world: each one-second block holds the block's runs of held inputs
+(each axis's grid index) and the run's digest after it, and every few seconds a keyframe block also
+holds the run saved (`save_run`). A viewer loads the first keyframe it gets and steps its own run
+through every block, checking the digest at each; a run that parts stops there with the step.
+Fall Line through a source node and a relay reaches the player's digest under every network preset
+(the `spectate` lab). Its inputs cost about 230 bytes a second; a whole save every 10 s is about
+10 kB a second packed, so the keyframes are what is left to make small.
+
 ## The field codec
 
 The coder (`engine/replay/codec.hpp`) is an adaptive binary range coder: integers only, so it
