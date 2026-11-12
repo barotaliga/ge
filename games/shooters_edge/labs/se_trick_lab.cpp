@@ -31,6 +31,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <memory>
 #include <set>
@@ -399,12 +400,13 @@ struct Course {
   std::string name, error;
   int pit_pairs = 0, pit_jumps = 0;  // the fail triggers' pits: crossings tried, jumps kept
   int closed = 0;                    // links into a pit's floor closed (close_pits)
+  int brinks = 0;                    // links along the pits' lips marked brinks
   std::vector<Section> sections;
   sh::Vec3f lo{1e9f, 1e9f, 1e9f}, hi{-1e9f, -1e9f, -1e9f};
 };
 
 void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::string& name,
-                    const pg::Progs& progs, Course& out) {
+                    const pg::Progs& progs, Course& out, std::ostream* trace) {
   out.name = name;
   std::unique_ptr<cl::LoadedMap> map = cl::map_from_bytes(bytes, name, out.error);
   if (!map) return;
@@ -418,7 +420,9 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
   if (!rules.start(map->spec, out.error)) return;
   sv::use_map_sets(q, map->bsp);
   bt::MapNav nav;
-  if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, out.error)) return;
+  sh::NavSettings nset;
+  nset.spacing = static_cast<float>(lab.arg_num("spacing"));
+  if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, out.error, nset)) return;
   sh::NavGraph& g = nav.graph;
 
   // The map's teleporters and their destinations, and the spawn.
@@ -479,6 +483,14 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
 
   std::vector<uint8_t> dead;
   out.closed = close_pits(g, triggers, dead);
+  // The pits' floors as harm, as lava's are: the walks along their lips are brinks, where a
+  // hop's stretch ends (pilot.hpp `brink`) rather than running on over the lip.
+  if (lab.arg("harm") == "1") {
+    std::vector<uint8_t> harm = nav.harm;
+    harm.resize(g.nodes.size(), 0);
+    for (size_t k = 0; k < g.nodes.size(); k++) harm[k] = harm[k] | dead[k];
+    out.brinks = static_cast<int>(sh::nav_mark_harm(g, harm));
+  }
   if (lab.arg("pits") != "line") prove_pits(nav.world, g, triggers, ps.jumper, out.pit_pairs, out.pit_jumps);
 
   // The sections, one after another.
@@ -606,6 +618,17 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
         out.lo = {std::min(out.lo.x, o.x), std::min(out.lo.y, o.y), std::min(out.lo.z, o.z)};
         out.hi = {std::max(out.hi.x, o.x), std::max(out.hi.y, o.y), std::max(out.hi.z, o.z)};
       }
+      if (trace != nullptr)
+        for (size_t i = 0; i < n; i++) {
+          const sh::Vec3f o = r.trail[i], v = r.velocity[i];
+          *trace << name << '\t' << s + 1 << '\t' << k + 1 << '\t' << to_fixed(0.013 * static_cast<double>(i + 1), 3)
+                 << '\t' << to_fixed(o.x, 0) << '\t' << to_fixed(o.y, 0) << '\t'
+                 << to_fixed(o.z - kHullDown, 0) << '\t' << to_fixed(std::hypot(v.x, v.y), 0) << '\t'
+                 << to_fixed(v.z, 0) << '\t' << sh::pilot_mode_name(static_cast<sh::PilotMode>(r.modes[i]))
+                 << '\t' << r.links[i] << '\t' << to_fixed(r.yaw[i], 1) << '\t'
+                 << to_fixed(r.forward[i], 2) << '\t' << to_fixed(r.side[i], 2) << '\t'
+                 << (r.because[i] != nullptr ? r.because[i] : "-") << '\n';
+        }
       const bool through = tr.through;
       sec.tries.push_back(std::move(tr));
       if (through) break;
@@ -766,6 +789,15 @@ void run(gl::Lab& lab) {
                       {"map", "#", "try", "ran s", "ended at", "mode", "because", "plans",
                        "arrived"},
                       {}};
+  // THE TRACE (`--trace=<tsv>`): every command of every try, a row.
+  std::ofstream trace;
+  if (!lab.arg("trace").empty()) {
+    std::error_code ec;
+    const auto dir = std::filesystem::path(lab.arg("trace")).parent_path();
+    if (!dir.empty()) std::filesystem::create_directories(dir, ec);
+    trace.open(lab.arg("trace"));
+    trace << "map\tsection\ttry\tt\tx\ty\tz\tspeed\tvz\tmode\tlink\tyaw\tforward\tside\tbecause\n";
+  }
   std::istringstream list(lab.arg("maps"));
   std::string name;
   while (std::getline(list, name, ',')) {
@@ -777,7 +809,7 @@ void run(gl::Lab& lab) {
       continue;
     }
     Course c;
-    run_course_map(lab, f, name, progs, c);
+    run_course_map(lab, f, name, progs, c, trace.is_open() ? &trace : nullptr);
     if (!c.error.empty()) {
       lab.fail("se-trick: " + name + ": " + c.error, "next: run se-reach --maps=" + name);
       continue;
@@ -842,6 +874,7 @@ void run(gl::Lab& lab) {
     lab.metric(m + "pit-crossings", c.pit_pairs, "count");
     lab.metric(m + "pit-jumps", c.pit_jumps, "count");
     lab.metric(m + "pit-links-closed", c.closed, "count");
+    lab.metric(m + "brink-links", c.brinks, "count");
   }
   lab.table(sections);
   lab.table(fails);
@@ -863,6 +896,10 @@ const gl::LabSpec kSpec{
         {"tries", "5", "each section tried at most this many times (a new seed each)"},
         {"limit", "20", "each try given this long, s"},
         {"features", "", "the bot's switches over an expert's preset, as se-team's --features"},
+        {"trace", "", "every command of every try to this TSV (map, section, try, t, feet, speed, "
+                      "mode, link, view, keys, the pilot's reason)"},
+        {"harm", "0", "1: the pits' floors marked as harm, their lips' links brinks (tried: a hop's stretch then ends short of every lip, ztrain 10 -> 3 through)"},
+        {"spacing", "32", "the nav's grid, units (16: a trick map's narrow platforms get nodes)"},
         {"pits", "triggers", "the pits' jumps: triggers (every fail trigger's rim, and the line) or "
                              "line (only the straight way of a section no route crosses)"},
     },
