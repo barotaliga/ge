@@ -64,7 +64,7 @@ bool master_addresses(const std::string& text, std::vector<gn::Address>& out, st
     if (port <= 0 || port > 65535 ||
         !gn::resolve_ipv4(host, static_cast<uint16_t>(port), a, &why)) {
       error = "sv_master '" + word + "' is not an address (" + (why.empty() ? "bad port" : why) +
-              "); next: write host:port, or empty sv_master to be listed by none";
+              "). Write it as host:port, or leave sv_master empty to be listed nowhere.";
       return false;
     }
     out.push_back(a);
