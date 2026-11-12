@@ -39,8 +39,6 @@ int game_seated(const void* ctx) {
   return s->game->seated ? s->game->seated(s->state) : 0;
 }
 
-// sv_master's words as addresses: host:port, a bare host on the master's port, or `sim:N:P`.
-
 // The node's foreign datagrams this frame: status asks answered, the masters' acks taken.
 void answer_public(Server& s) {
   bool asked = false;
@@ -61,6 +59,38 @@ void answer_public(Server& s) {
       s.status_answers++;
     }
   }
+}
+
+// A datagram on an own-protocol game's socket offered first to the core (Transport::on_public):
+// a master's ack taken, a hub's status ask answered; anything else left to the game.
+bool own_public(void* ctx, const uint8_t* data, size_t size, const gn::Address& from,
+                int64_t now_us) {
+  Server& s = *static_cast<Server*>(ctx);
+  if (gn::master_beat_read(s.beat, data, size, from, now_us)) return true;
+  if (!gn::is_status_ask(data, size)) return false;
+  uint8_t out[gn::kMaxDatagram];
+  const size_t n = gn::status_answer(data, size, from, s.game->protocol, s.public_secret, now_us,
+                                     server_public_status(s), out, sizeof out);
+  if (n) {
+    gn::transport_send(*s.port, from, out, n, now_us);
+    s.status_answers++;
+  }
+  return true;
+}
+
+// The beat to sv_master's masters; false with `error` when one is not an address.
+bool start_beat(Server& s, const ServerGame& game, const ServerConfig& config, std::string& error) {
+  gn::MasterBeatConfig bc;
+  if (!gn::master_list(config.masters, bc.masters, error)) {
+    error = "sv_master: " + error;
+    return false;
+  }
+  bc.protocol = game.protocol;
+  bc.kind = gn::NodeKind::game;
+  bc.version = game.version;
+  bc.seed = uint64_t{config.seed} * 6151u + 5u;
+  gn::master_beat_init(s.beat, bc);
+  return true;
 }
 
 }  // namespace
@@ -249,27 +279,27 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
       server_close(s);
       return false;
     }
-    if (!game.serve(s.state, *transport, error)) {
+    if (!start_beat(s, game, config, error) || !game.serve(s.state, *transport, error)) {
       server_close(s);
       return false;
     }
     s.networked = s.own_protocol = true;
     s.port = transport;
+    // Only with masters to beat to: the hook and the bye touch the socket, which must then outlive
+    // the server (a dedicated process's does; a listen game may free its socket first).
+    if (!s.beat.config.masters.empty()) {
+      s.public_secret = (uint64_t{config.seed} + 0x51a7u) * 0x9e3779b97f4a7c15ull;
+      transport->on_public = own_public;
+      transport->public_ctx = &s;
+    }
     return true;
   }
   s.networked = true;
   s.port = transport;
-  gn::MasterBeatConfig bc;
-  if (!gn::master_list(config.masters, bc.masters, error)) {
-    error = "sv_master: " + error;
+  if (!start_beat(s, game, config, error)) {
     server_close(s);
     return false;
   }
-  bc.protocol = game.protocol;
-  bc.kind = gn::NodeKind::game;
-  bc.version = game.version;
-  bc.seed = uint64_t{config.seed} * 6151u + 5u;
-  gn::master_beat_init(s.beat, bc);
 
   gn::node_init(s.node, node_config(game, config), *transport);
   gn::SessionConfig sc;
@@ -295,6 +325,7 @@ void server_frame(Server& s) {
   if (!s.state) return;
   if (s.own_protocol) {
     s.game->net_frame(s.state, s.now_us);
+    if (!s.beat.config.masters.empty()) gn::master_beat_update(s.beat, *s.port, s.now_us);
     s.now_us = server_next_us(s);
     s.frame++;
     return;
@@ -317,6 +348,11 @@ void server_close(Server& s) {
     gn::master_beat_stop(s.beat, *s.port, s.now_us);
     gn::node_flush(s.node, s.now_us);
   }
+  if (s.networked && s.own_protocol && !s.beat.config.masters.empty()) {
+    gn::master_beat_stop(s.beat, *s.port, s.now_us);
+    s.port->on_public = nullptr;
+    s.port->public_ctx = nullptr;
+  }
   s.networked = false;
   s.own_protocol = false;
   s.port = nullptr;
@@ -334,8 +370,9 @@ gn::Status server_public_status(const Server& s) {
   st.max_players = s.config.maxclients;
   st.max_spectators = s.config.max_spectators;
   st.locked = !s.config.password.empty();
-  st.phase = s.session.phase == gn::SessionPhase::playing ? gn::StatusPhase::playing
-                                                          : gn::StatusPhase::lobby;
+  st.phase = s.own_protocol ? gn::StatusPhase::playing  // the game's fill_status may say more
+             : s.session.phase == gn::SessionPhase::playing ? gn::StatusPhase::playing
+                                                            : gn::StatusPhase::lobby;
   if (s.game && s.game->fill_status && s.state) s.game->fill_status(s.state, st);
   return st;
 }

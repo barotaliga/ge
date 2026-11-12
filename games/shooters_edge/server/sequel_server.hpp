@@ -24,8 +24,17 @@
 //   removed otherwise. A mega health counts its taker down a point a second above his maximum,
 //   from 5 s after, and shows again 20 s after he is back to it.
 //
-// Weapons, damage, movers and monsters are the next rows (docs/goals/M18v.md, M18v7); the rules'
-// numbers are in the clean-room notes. Held by tests/shooters_edge_sequel_server_test.cpp.
+// - **Weapons and damage** (sequel_combat.hpp, sequel_fight.cpp): each player holds a weapon whose
+//   frames step once a rules frame; a number key (impulse 1..10) or `use <name>` chooses one, and
+//   a newly owned weapon is taken up at once when the blaster is in hand (always outside
+//   deathmatch). Bullets, pellets and the rail are lines; bolts, grenades, rockets and the BFG's
+//   ball fly, moved each rules frame. A blow pushes (the rocket jump), is shared with the armour
+//   and takes the rest from health; at 0 the player dies and the obituary scores (+1 the killer,
+//   −1 a suicide or the world's kill) and is printed to everyone.
+//
+// Power armour, the powerups' effects, the hand grenade, movers and monsters are the next rows
+// (docs/goals/M18v.md, M18v7); the rules' numbers are in the clean-room notes. Held by
+// tests/shooters_edge_sequel_server_test.cpp.
 //
 // ge:summary The sequel's rules as a second runner: its maps' brushes, spawns and the 10 Hz frame
 // ge:keywords sequel sequel-server sequel-runner runner-calls program-form spawn-point respawn
@@ -42,6 +51,7 @@
 #include "core/prng.hpp"
 #include "shooter/sequel_move.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
+#include "shooters_edge/server/sequel_combat.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
 
 namespace ge::brush {
@@ -88,7 +98,27 @@ struct SequelPlayer {
   float view_height = 0;
   int water_level = 0;
   bool on_ground = false;
+  // The weapon in hand (sequel_combat.hpp), stepped once a rules frame: by the first command of the
+  // frame that presses attack, else at the frame's end (`stepped` says which).
+  SqHand hand;
+  bool stepped = false;
+  int killer = -1;  // the slot that killed him last; his own for a suicide, -1 the world
 };
+
+// A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.
+struct SequelMissile {
+  bool live = false;
+  SqShot kind = SqShot::bolt;
+  int owner = -1;  // the shooter's slot
+  int weapon = 0;  // the weapon that fired it (the obituary's words)
+  sh::Vec3f origin, velocity;
+  double dies_at = 0;  // level time it goes (a grenade's fuse explodes it)
+  int damage = 0;      // a direct hit's
+  int radius_damage = 0;
+  float radius = 0;
+  bool resting = false;  // a grenade come to rest on a floor
+};
+inline constexpr int kSequelMissiles = 64;  // the rows the world keeps for shots in flight
 
 struct SequelServerOptions {
   uint32_t seed = 1;
@@ -113,6 +143,10 @@ struct SequelServer : RulesCommon {
   double level_time = 0;  // frame_number × 0.1, s
   double host_time = 0;   // the host's clock, s
   int next_userid = 1;
+  SequelMissile missiles[kSequelMissiles];
+  int weapon_models[kSqWeaponCount] = {};  // each weapon's view model in the model list
+  int missile_models[7] = {};              // by `SqShot`
+  std::vector<std::string> obituaries;     // every death's line, in order (the tests, the lab)
 
   SequelServer();
   ~SequelServer();
