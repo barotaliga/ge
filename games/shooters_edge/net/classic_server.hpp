@@ -216,7 +216,8 @@ struct ClassicServer {
   sh::Vec3f lag_saved[sh::kMaxClients];  // a lagged trace's moved players' own origins
   bool lag_moved[sh::kMaxClients] = {};
   int64_t lag_rewinds = 0;
-  MultiviewRecorder* mvd = nullptr;  // a multiview recording running (classic_record.hpp)
+  MultiviewRecorder* mvd = nullptr;         // a multiview recording running (classic_record.hpp)
+  std::vector<MultiviewRecorder*> streams;  // the relays' live streams (classic_qtv.hpp)
   // A client's string command the game sees before the rules (a lobby's words): true takes it.
   bool (*game_command)(void* ctx, int slot, const std::string& line) = nullptr;
   void* game_ctx = nullptr;

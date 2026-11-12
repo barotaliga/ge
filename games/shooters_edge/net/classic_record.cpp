@@ -137,6 +137,15 @@ void signon(ClassicServer& s, MultiviewRecorder& r) {
     m.floats = {b.origin.x, b.angles.x, b.origin.y, b.angles.y, b.origin.z, b.angles.z};
     write_svc(w, m, WireCtx{});
   }
+  if (r.stream) {
+    for (const std::string& line :
+         {"fullserverinfo \"" + s.serverinfo + "\"\n", std::string("skins\n")}) {
+      SvcMsg m;
+      m.id = svc::stufftext;
+      m.strings = {line};
+      write_svc(w, m, WireCtx{});
+    }
+  }
   put_record(r.bytes, 0, kRecAll, 0, 0, o.bytes());
   r.spawncount = s.spawncount;
   r.statics = r.static_sounds = 0;
@@ -394,6 +403,15 @@ void mvd_voice(MultiviewRecorder& r, const SvcMsg& m) {
   h.msg.assign(b.begin(), b.end());
   r.held.push_back(std::move(h));
   r.voice_messages++;
+}
+
+void mvd_print(MultiviewRecorder& r, int level, const std::string& text) {
+  if (r.spawncount < 0) return;
+  SvcMsg m;
+  m.id = svc::print;
+  m.ints = {level};
+  m.strings = {text};
+  hold_svc(r, 1, 1, m);
 }
 
 void mvd_frame(ClassicServer& s, MultiviewRecorder& r) {
