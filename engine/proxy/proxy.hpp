@@ -25,6 +25,9 @@
 //   now) proxy_far_init(f, config, link_port, open_upstream)        every frame:
 //   proxy_far_update(f, now)
 //
+// RECORDING: `ProxyConfig::tap` sees every game datagram either proxy passes on, with its
+// session and direction; `record.hpp` keeps them as a replay file.
+//
 // Lag and loss for practice are the transport's own (`net::transport_fake` on the client socket).
 // The clock is the caller's: a pair on the simulated network replays to the bit (the `proxy` lab).
 //
@@ -114,6 +117,18 @@ uint32_t frame_session(std::span<const uint8_t> frame);
 
 using OpenUpstream = std::function<bool(net::Transport& out)>;
 
+// A game datagram as a proxy passes it on, for a recorder (record.hpp) or an observer: a near
+// proxy's from its client and to it, a far proxy's to its server and from it.
+struct Passed {
+  uint32_t session = 0;
+  net::Address client;  // near: the game's client; far: the near proxy
+  net::Address server;  // far: the server; near: the server its sessions go to
+  bool to_server = false;
+  std::span<const uint8_t> datagram;
+  int64_t now_us = 0;
+};
+using Tap = std::function<void(const Passed& p)>;
+
 struct ProxyConfig {
   std::string name = "proxy";
   LinkConfig link;                  // this end's sending choices
@@ -123,6 +138,7 @@ struct ProxyConfig {
   int64_t idle_us = 15000000;
   int64_t retry_us = 500000, open_timeout_us = 10000000;
   uint64_t seed = 0;
+  Tap tap;  // every game datagram passed on, when set
 };
 
 // THE NEAR PROXY: the game's client on one socket, the far proxy on another.

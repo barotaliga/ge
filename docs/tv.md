@@ -117,12 +117,20 @@ take fewer bytes.
 
 `engine/replay/spectate.hpp`. A deterministic game on the play contract (Fall Line) broadcasts
 what its player holds, not the world: each one-second block holds the block's runs of held inputs
-(each axis's grid index) and the run's digest after it, and every few seconds a keyframe block also
-holds the run saved (`save_run`). A viewer loads the first keyframe it gets and steps its own run
-through every block, checking the digest at each; a run that parts stops there with the step.
+(each axis's grid index) and the run's digest after it, and every 10 s the run saved (`save_run`).
+Every 30th save is whole and makes its block the stream's keyframe; the others are deltas, the
+save XORed with the one before it. Two saves 10 s apart differ in a few hundred bytes of their
+120-odd kB, so a delta's block packs to about 1.5 kB where a whole save's takes about 80 kB. A
+viewer that joins rebuilds the newest save from the whole one and the deltas after it and steps its
+own run from there, checking the digest at each block; a run that parts stops there with the step.
 Fall Line through a source node and a relay reaches the player's digest under every network preset
-(the `spectate` lab). Its inputs cost about 230 bytes a second; a whole save every 10 s is about
-10 kB a second packed, so the keyframes are what is left to make small.
+(the `spectate` lab). Its inputs cost about 230 bytes a second, and the whole broadcast over two
+minutes 1.2 kB a second, against 9.2 kB with a whole save every 10 s:
+
+| Keyframes | 30 s | 120 s |
+| --- | --- | --- |
+| Whole every 10 s | 10.7 kB/s | 9.2 kB/s |
+| Whole once, then deltas every 10 s | 2.9 kB/s | 1.2 kB/s |
 
 ## The field codec
 
@@ -214,7 +222,10 @@ it (`classic_mv_state.hpp`): the level's signon as it came, the state messages s
 server info, user info, frags, pings, statics), every player in the recorder's form with all his
 fields, each one's stats and a full entity list from the baselines, so the next record forwarded
 reads on from it. A viewer's `say` stays on the node; its `say_game` goes up to the server, and
-the viewer list goes up as `qul` lines. The `se-tv-node` lab relays a two-player match with a 2 s
+the viewer list goes up as `qul` lines. Viewers see the match under the node's name: the server
+info's `hostname` becomes `<node> (live: <server>)`, in the signon and in every later change, and
+`*qtv` is 1, so a browser tells the node from the server and a node downstream of another replaces
+that one's name with its own. The `se-tv-node` lab relays a two-player match with a 2 s
 delay to viewers who join at 0, 4 and 8 seconds: a late viewer's catch-up is 0.7 KB, and every
 viewer's stream plays to the same end (every player, his frags and name, every entity) with the
 chat in it.
@@ -273,6 +284,13 @@ follows a client whose NAT gives it a new port by its qport on the same host.
 `tests/shooters_edge_classic_forward_test.cpp`: our classic client plays through one hop and through
 a chain of two to our classic server.
 
+**The route finder** (`engine/forward/routes.hpp`) picks the path with the lowest summed round trip
+from what a server browser already measured: the player's own ping to every server and forwarder,
+and each forwarder's list of the servers it reaches with its own ping (the game's `RouteQuery`
+asks for it; Shooter's Edge's is the classic `pingstatus`). Hosts are matched without their ports,
+so a forwarder beside a server is that host, and ties go to the fewer hops. `<game>_cli route
+<address>` answers the route and the chain to give the game.
+
 ## Proxy
 
 `engine/proxy` (`proxy.hpp`, `trial.hpp`). Two hops that understand the slow link between them:
@@ -290,6 +308,22 @@ proxies each datagram travels in a link frame that each sending end may:
 The session opens like forward's route (a padded open, a cookie, then opened or a refusal in
 words), and the far proxy reaches only the servers on its allow list. Lag and loss for practice are
 the transport's own fake conditions.
+
+**Recording** (`engine/proxy/record.hpp`): either proxy hands every game datagram it passes on to
+`ProxyConfig::tap`, with its session and direction, and `proxy_record` keeps them as a replay file:
+the client's datagrams in a `to_server` track and the server's in `to_client`, each a `messages`
+chunk stamped with its milliseconds, zstd-packed a block a second, `recorder=proxy` in the meta. The
+proxy never reads the game; a game that knows its own datagrams reads them back in order
+(`proxy_read_recording`) and plays them as it plays its own demos. A player behind a near proxy so
+has every match without the game recording it. `tests/proxy_test.cpp`: through 10% loss, the near
+proxy's file reads back to exactly what the client got, the far one's to exactly what the server
+got, at under a third of the game's bytes.
+
+**Observers**: the recording grows a whole block at a time, so its new bytes
+(`proxy_record_fresh`) are a TV node's source as they come (`tv_feed`): the player's friends watch
+through a TV node beside the proxy, with its delay. The file's only keyframe is its first block (an
+opaque stream reads from its start alone), so a friend who joins mid-match is sent the match from
+its start. `tests/proxy_test.cpp`: an observer who joins half way holds every datagram when it ends.
 
 The `proxy` lab runs a 60 Hz client and a 20 Hz server through the pair at each loss on the link
 between them:
