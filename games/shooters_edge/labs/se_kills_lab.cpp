@@ -17,7 +17,8 @@
 // one small map per weapon with its gold shots; where players die and where rockets land as heat
 // over the plan; every rocket's flight; the top gold shot seen from inside the map from behind the
 // killer; each weapon's distances. kills.tsv and gold.tsv beside the report hold every kill's and
-// gold shot's xyz for a bot's tables. Deterministic: the digest holds the counts.
+// gold shot's xyz for a bot's tables. THE HIDE (`hide.*`): of the victims who owned the rocket
+// launcher, the share killed with it in hand. Deterministic: the digest holds the counts.
 //
 // ge:summary Lab: kills and rocket flights from many demos over a map's wireframe, gold shots
 // ge:keywords lab se-kills kills deaths shots gold-shots kill-map heatmap rockets grenades weapon
@@ -437,6 +438,25 @@ void run(gl::Lab& lab) {
   lab.metric("flights.rockets", static_cast<double>(rockets), "count");
   lab.metric("flights.grenades", static_cast<double>(grenades), "count");
   lab.metric("flights.with-shooter", static_cast<double>(owned), "count");
+  // THE HIDE (M18r.md 0k2): of the victims who owned the rocket launcher (his weapon in hand
+  // known), the share killed with it in hand (the pack drops it) and with each scattergun.
+  {
+    int64_t owners = 0, in_hand = 0, sg = 0, ssg = 0;
+    for (const Kill& k : kills) {
+      if (!k.k.victim_launcher || k.k.victim_weapon == hud::Weapon::melee) continue;
+      owners++;
+      in_hand += k.k.victim_weapon == hud::Weapon::rocket_launcher;
+      sg += k.k.victim_weapon == hud::Weapon::shotgun;
+      ssg += k.k.victim_weapon == hud::Weapon::double_shotgun;
+    }
+    const auto of = [&](int64_t n) {
+      return owners > 0 ? static_cast<double>(n) / static_cast<double>(owners) : 0;
+    };
+    lab.metric("hide.owners-killed", static_cast<double>(owners), "count");
+    lab.metric("hide.launcher-in-hand", of(in_hand), "share");
+    lab.metric("hide.shotgun-in-hand", of(sg), "share");
+    lab.metric("hide.double-in-hand", of(ssg), "share");
+  }
   lab.metric("gold.shots", static_cast<double>(golds.size()), "count");
   lab.metric("gold.kills-share",
              keep.empty() ? 0 : static_cast<double>(gold_kills) / static_cast<double>(keep.size()),

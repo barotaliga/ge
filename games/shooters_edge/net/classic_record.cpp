@@ -208,9 +208,13 @@ void player(const ClassicServer& s, int k, gn::Writer& w) {
   const sv::RulesWorld& world = s.game->world;
   const sv::WorldEntity& row = world.entities[static_cast<size_t>(k) + 1];
   constexpr int kAllFields = 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 1024 | 2048;
+  constexpr int kDead = 256, kGib = 512;  // a player dead, and gibbed (his box shrunk to a head)
+  int fields = kAllFields;
+  if (e.health <= 0) fields |= kDead;
+  if (e.mins.z != -24) fields |= kGib;
   write_byte(w, svc::playerinfo);
   write_byte(w, k);
-  write_short(w, kAllFields);
+  write_short(w, fields);
   write_byte(w, row.frame);
   for (int i = 0; i < 3; i++) write_coord(w, e.origin[i]);
   for (int i = 0; i < 3; i++) write_angle16(w, cmd.angles[i]);
@@ -473,6 +477,21 @@ void mvd_frame(ClassicServer& s, MultiviewRecorder& r) {
       r.stats_known[k][i] = true;
     }
     if (so.w.size > 0) put_record(r.bytes, 0, kRecStats, k, 0, so.bytes());
+  }
+  // Each player's frags when they change, to everyone: the scoreboard, and a kill's killer (the
+  // recording's scan gives each death the frag that went up beside it).
+  for (int k = 0; k < sh::kMaxClients; k++) {
+    if (!playing(s, k)) continue;
+    const int frags = static_cast<int>(s.game->world.clients[k].numbers.frags);
+    if (r.frags_known[k] && r.frags[k] == frags) continue;
+    SvcMsg m;
+    m.id = svc::updatefrags;
+    m.ints = {k, frags};
+    Scratch fr;
+    write_svc(fr.w, m, WireCtx{});
+    put_record(r.bytes, 0, kRecAll, 0, 0, fr.bytes());
+    r.frags[k] = frags;
+    r.frags_known[k] = true;
   }
   // Each player's public user info (his name, team and colours) when it is new or changed, so a
   // viewer names him and knows his side.
