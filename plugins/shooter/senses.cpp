@@ -4,6 +4,9 @@
 // ge:test tests/shooter_senses_test.cpp
 #include "shooter/senses.hpp"
 
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
+
 #include <cmath>
 #include <limits>
 
@@ -174,6 +177,7 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
     // A player's velocity is what the server sent with him: across a network the sightings come
     // as the packets do, bunched, so two of them a tick apart read 0 or twice the speed.
     if (is_player(sv, v.ent)) c.velocity = sv.edicts[static_cast<size_t>(v.ent)].velocity;
+    const Vec3f course_was = c.course;
     // The course as the eye takes it in: a new sighting's as it is, then caught up on a change.
     if (!follows || s.set.course_s <= 0)
       c.course = c.velocity;
@@ -181,6 +185,28 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
       c.course =
           c.course + (c.velocity - c.course) *
                          static_cast<float>(gap >= s.set.course_s ? 1 : gap / s.set.course_s);
+    {
+      // The course's turn rate, over `kTurn_s` (`leadarc`), read only at a run's speed.
+      const double h0 = core::libm::atan2(static_cast<double>(course_was.y), course_was.x);
+      const double h1 = core::libm::atan2(static_cast<double>(c.course.y), c.course.x);
+      const double fast = static_cast<double>(kTurnSpeed) * kTurnSpeed;
+      const bool both = course_was.x * course_was.x + course_was.y * course_was.y > fast &&
+                        c.course.x * c.course.x + c.course.y * c.course.y > fast;
+      if (!follows || !both || gap <= 0) {
+        c.turn = 0;
+      } else {
+        double d = (h1 - h0) * (180 / core::kPi);
+        while (d > 180) d -= 360;
+        while (d < -180) d += 360;
+        const double rate = d / gap;
+        c.turn += static_cast<float>((rate - c.turn) * (gap >= kTurn_s ? 1 : gap / kTurn_s));
+      }
+    }
+    if (!follows)
+      c.drift = c.course;
+    else
+      c.drift = c.drift + (c.course - c.drift) *
+                              static_cast<float>(gap >= kDrift_s ? 1 : gap / kDrift_s);
     ai::see(c.seen, v.origin.x, v.origin.y, v.origin.z, t);
     c.visible = true;
     c.since = t;
