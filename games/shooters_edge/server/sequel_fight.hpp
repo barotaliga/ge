@@ -58,6 +58,13 @@ void fight_hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int da
 // to the players and the map's shootable movers it reaches.
 void fight_blast(SequelServer& s, sh::Vec3f at, int attacker, int damage, float radius, int weapon);
 
+// Midair (`k_midair` in deathmatch; plugins/shooter/midair.hpp): whether it is on; a spawn's kit
+// (250 health, 200 body armour, the rocket launcher in hand, 255 rockets that never run out); the
+// tally lines told at the level's end.
+bool fight_midair(const SequelServer& s);
+void fight_midair_kit(SequelServer& s, int slot);
+std::vector<std::string> fight_midair_report(const SequelServer& s);
+
 // Player `slot` dies, killed by `killer` (a slot; his own for a suicide, -1 the world) with weapon
 // `weapon` (-1 none, or a `kSqBy*`); the obituary is scored and printed.
 void fight_kill(SequelServer& s, int slot, int killer, int weapon);
