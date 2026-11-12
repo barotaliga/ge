@@ -252,16 +252,17 @@ a good build saves them back.
 **Linux is checked here, before the push; CI runs only what can differ elsewhere.** `make
 precheck` is the Linux gate (GCC debug+ASan on Mesa's lavapipe: the build, the lint, the shaders,
 the tests and the labs' digests the change reaches), and CI (`.github/workflows/ci.yml`) runs no
-Linux build, test or lint on a pull request or in the queue. A pull request runs the gates
+Linux test or lint on a pull request or in the queue. A pull request runs the gates only
 (fmt-check, agents-check, libm-check, release-check, the changeset rule: cheap, and the queue's
-combined tree needs them), Windows (MSVC: its warnings, its CRT) and macOS (Apple Clang on arm64:
-another compiler and ISA), each building everything and running the whole suite, so the goldens
-and the labs' digests are held on both; the merge queue runs the same on the tree that lands plus
-`packaging.yml` (the installed package consumed on Windows and macOS, and `ge new` growing a repo
-when the change reaches `engine/cli`, `engine/play`, `engine/lab`, the templates or the build). A
-change to prose alone (docs, skills, lessons, root Markdown, fragments) runs the gates only; the
-label `full-ci` adds the Linux rows (GCC debug+ASan, GCC and Clang release, arm64), the lint and
-the shaders' check, and the whole packaging. The ruleset requires one check, `required`, which
+combined tree needs them); the merge queue adds the Linux GCC release compile (`linux-gcc`). THE
+MATRIX RUNS ON MAIN: every push to main runs Windows (MSVC: its warnings, its CRT) and macOS (Apple
+Clang on arm64: another compiler and ISA), each building everything and running the whole suite,
+so the goldens and the labs' digests are held on both, plus the Linux GCC release row and
+`packaging.yml` when the push reaches `engine/cli`, `engine/play`, `engine/lab`, the templates or
+the build; main's runs are never cancelled (they queue one behind another), so each one answers
+the `main-red` issue, and the PR that broke main fixes it first. The daily run adds the other
+Linux rows (GCC debug+ASan, Clang release, arm64), the whole-tree lint and the whole packaging; the
+label `full-ci` runs all of that on a pull request that fears another platform. The ruleset requires one check, `required`, which
 passes when every job passed or was skipped by those rules. A golden failure on one row points at
 that row's compiler or libm. GPU and window tests run where there is an adapter and skip (CTest's
 exit 77) where not; the Linux rows under `full-ci` run them on lavapipe with `GE_GPU_REQUIRE=1`,
