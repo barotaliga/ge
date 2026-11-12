@@ -458,7 +458,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         r.deaths.push_back(b);
       }
       seat.alive = live;
-      const bt::Stats rst = bt::read_stats(s, p.slot + 1);
+      const bt::Stats rst = bt::read_stats(s, p.slot + 1, bt::first_arsenal());
       const bool quad = (rst.items & kItQuad) != 0;
       if (quad && !seat.had_quad) r.teams[seat.team].quad_pickups++;
       seat.had_quad = quad;
@@ -468,7 +468,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       seat.had_rl = rl;
       if (live && frame % 4 == 0) {
         p.rl_samples += rl;
-        p.rl_loaded += rl && rst.rockets > 0;
+        p.rl_loaded += rl && bt::launcher_rounds(rst) > 0;
       }
       if (frame % opt.path_every == 0) {
         p.path.push_back(d.origin);
@@ -699,7 +699,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       p.wet_still[w] = seat.fighter.stats.wet_still[w];
     }
     p.on_the_way = seat.fighter.stats.on_the_way;
-    for (size_t w = 0; w < 12; w++) p.took[w] = seat.fighter.stats.took[w];
+    for (size_t w = 0; w < size_t(profiles::kItemKinds); w++)
+      p.took[w] = seat.fighter.stats.took[w];
     p.stuck = ps.stuck;
     p.lost = ps.lost;
     p.waits = ps.waits;
