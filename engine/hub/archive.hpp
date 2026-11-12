@@ -60,6 +60,7 @@ struct DemoRow {
   std::vector<DemoPlayer> players;
   std::vector<DemoTeam> teams;
   std::vector<std::string> tags;  // the header's and the operator's
+  bool radar = false;             // the file has a radar track: the hub can draw its map
 };
 
 struct ArchiveStats {

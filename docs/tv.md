@@ -59,7 +59,7 @@ a demo.
 | `keyframe` | What a seek or a late joiner starts from: `Run::clone` bytes, or a face's catch-up state | Every game |
 | `events` | Marks and highlights (`engine/replay/highlights`) | Every game |
 | `chat`, `voice` | Text lines; Opus frames | Every game |
-| `radar` | Low-rate positions and headings for an overhead map (reserved, M56) | Optional |
+| `radar` | Low-rate positions and headings for an overhead map (`engine/replay/radar.hpp`: rosters, positions, an outline) | Optional; Shooter's Edge's `demos pack` |
 
 - **Trailer.** An index of blocks by time and the final meta (duration, scores). Optional: a live
   stream has none until it ends. The file's SHA-256, which a TV node and the hub list files by, is

@@ -231,6 +231,17 @@ browser's own GPU.
   `shooters_edge_hub --browse-master=<a classic master>` lists the classic servers on the internet
   beside the game's own. The classic broadcasters' pages wait for the TV node (M57b).
 
+- **M56h** (`hub-radar`): the map. The radar track (`replay/radar.hpp`) holds a roster chunk,
+  every player's place, heading and death four times a second, and the level's outline when the
+  game has one; `stream_add_track` adds it to a finished file without touching its other tracks.
+  `/radar/{sha256}` (`hub/radar.hpp`) draws it as SVG: the outline, the faint trail of every player
+  over the whole match, and the dots in their team's colour, one minute animated by SVG's own
+  animation (no script) or still at a moment (`?at=`) with links a second and five seconds either
+  way; the Demos page links Map where the file has a radar. Shooter's Edge reads the radar off a
+  multiview recording (`client/demo_radar.hpp`), with the outline from the level's map sliced at the
+  height played most, and `shooters_edge_cli demos pack` writes it. A two-minute 4on4 of bots adds
+  26 KiB (11 %) to its file. A live match's map waits for the TV node to carry the track.
+
 Phase 2 and later depend on the TV layer's header and meta track (M57a, the replay file v2, and M57b, the native TV node); the
 master can land before them, since a dedicated server's heartbeat needs nothing of TV.
 

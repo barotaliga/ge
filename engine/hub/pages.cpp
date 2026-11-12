@@ -12,6 +12,8 @@
 #include <vector>
 
 #include "hub/link.hpp"
+#include "hub/page_parts.hpp"
+#include "hub/radar.hpp"
 
 namespace ge::hub {
 
@@ -42,6 +44,8 @@ std::string clock(int32_t seconds) {
   return out;
 }
 
+}  // namespace
+
 std::string head(const HubSpec& spec, const std::string& title, bool refresh) {
   std::string h =
       "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
@@ -67,6 +71,8 @@ std::string foot() {
   return "<footer>Read-only and public. The same data as JSON: <a href=\"/v1/servers\">/v1/servers"
          "</a>.</footer>\n</body></html>\n";
 }
+
+namespace {
 
 struct Counts {
   int people = 0, bots = 0, spectators = 0, viewers = 0;
@@ -159,6 +165,8 @@ std::string card(const HubSpec& spec, const HubNode& n) {
   return h;
 }
 
+}  // namespace
+
 Answer html(int code, std::string body, int max_age_s) {
   Answer a;
   a.code = code;
@@ -167,8 +175,6 @@ Answer html(int code, std::string body, int max_age_s) {
   a.max_age_s = max_age_s;
   return a;
 }
-
-}  // namespace
 
 std::string html_escape(std::string_view s) {
   std::string out;
@@ -380,7 +386,9 @@ std::string demos_page(const Site& site, const HubSpec& spec, std::string_view t
     }
     h += "\">Play</a><a class=\"small\" href=\"/";
     h += archive_path(r->sha);
-    h += "\" download>Download</a></div></td></tr>";
+    h += "\" download>Download</a>";
+    if (r->radar) h += "<a class=\"small\" href=\"/radar/" + r->sha + "\">Map</a>";
+    h += "</div></td></tr>";
   }
   h += "</table>";
   if (page.rows.empty()) h += "<p class=\"none\">No demo matches.</p>";
@@ -448,6 +456,11 @@ padding:8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--lin
 table.demos th{color:var(--dim);font-weight:500}table.demos .act{margin:0;flex-wrap:nowrap}details{color:var(--dim);font-size:13px}summary{cursor:pointer}
 .tag{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--panel2);color:var(--hot)}
 .pager{display:flex;gap:16px}
+.radar figure{margin:12px 0}svg.radar{width:100%;max-width:760px;height:auto;display:block;
+border-radius:12px;background:var(--panel)}svg.radar .ground{fill:var(--panel)}svg.radar .outline{
+stroke:var(--dim)}svg.radar .who{font:600 22px system-ui,sans-serif;fill:var(--ink);paint-order:stroke;
+stroke:var(--bg);stroke-width:4px}ul.legend{display:flex;flex-wrap:wrap;gap:6px 16px;list-style:none;
+padding:0}.swatch{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px}
 @media (max-width:480px){main{padding:12px}.cards{grid-template-columns:1fr}
 table.demos th:nth-child(3),table.demos td:nth-child(3),table.demos th:nth-child(5),
 table.demos td:nth-child(5){display:none}table.demos .act{flex-direction:column;align-items:flex-start}}
@@ -458,6 +471,7 @@ table.demos td:nth-child(5){display:none}table.demos .act{flex-direction:column;
 Answer hub_answer(const Poller& p, const HubSpec& spec, std::string_view target, int64_t now_us,
                   const Site& site) {
   if (Answer a; archive_answer(site.archive, target, site.unix_s, a)) return a;
+  if (Answer a; radar_answer(site.archive, spec, target, a)) return a;
   std::string path = target_path(target);
   if (path == "/v1" || path.rfind("/v1/", 0) == 0) return api_answer(p, spec, target, now_us);
   while (path.size() > 1 && path.back() == '/') path.pop_back();
