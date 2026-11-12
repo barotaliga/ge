@@ -250,7 +250,7 @@ no live server: every match runs on our own server, in process (`se-team`), head
 | `se-people` | people and bots measured alike off recordings: in view, faced, speed, the hand's sweeps (`hand.*`, `hop.*`), fire in view, item control, wet, wall and player bumps (`bumps.*`, a minute and a minute at speed); `--samples=<tsv>` every sample alive |
 | `se-moves` | who moves fastest and the weave by speed, per player, off a folder of recordings (`--dir`); the ground between jumps (`jumps.ground-p50`, what a landing costs) and the chains (`jumps.chain-3plus-share`, `jumps.chain-first-off-p50`) |
 | `se-rj` | rocket, grenade and gap jumps read off recordings and clustered into tricks |
-| `se-reach` | a map's nav asked: `--route` node by node, `--floors`, `--escapes=fly` |
+| `se-reach` | a map's nav asked: `--route` node by node, `--floors`, `--escapes=fly`; `--gaps=fly` stages every gap trick with an expert's pilot from 160-640 behind its lip (planned, jumped, takeoff speed, landed, refused; `--gap-trace=<tsv>` every command with the pilot's reason): a gap jump judged in seconds, not in matches |
 | `se-spot` | a place drawn every way (top, cuts, inside views, a route) |
 | `se-duel` | 3-minute duels, deathmatch mode 4 on povdmm4 by default |
 

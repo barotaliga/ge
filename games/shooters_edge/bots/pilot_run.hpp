@@ -67,7 +67,9 @@ struct RunResult {
   std::vector<std::vector<int32_t>> plans;  // every route planned, the first included
   // What was pressed and wanted at each command, for the humanness metrics.
   std::vector<double> yaw, yaw_wanted, forward, forward_wanted, side, side_wanted;
-  std::vector<float> pitch;  // the view's pitch pressed, down positive
+  std::vector<float> pitch;          // the view's pitch pressed, down positive
+  std::vector<sh::Vec3f> velocity;   // the velocity after each command
+  std::vector<const char*> because;  // the pilot's reason for each command
 };
 RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sh::PilotHands hands,
                      uint32_t seed, const sh::PilotSettings& set = sh::PilotSettings{},

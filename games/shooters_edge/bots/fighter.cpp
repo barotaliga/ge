@@ -89,9 +89,6 @@ constexpr float kRocketJumpHealth = 70;  // the health a rocket jump is tried wi
 // A hopper plans the map's gap tricks only this fast or faster, units/s (people take off at
 // 420 to 500; a gap's jump is flown only when the move says it lands across).
 constexpr float kGapPlanSpeed = 380;
-// `gapbuild`: or slower, when the route reaches the takeoff this long after setting off, s (a hop
-// gains about 100 units/s a second from a run's 320).
-constexpr float kGapBuild_s = 1.2f;
 constexpr float kRocketJumpMoves = 4;  // and the moves trait (an amateur jumper's)
 // THE ROCKET JUMPER'S LEVEL by the moves trait (amateur from 4, intermediate from 6, expert from 8)
 // and what a rocket jump must save before he tries it, s: people's rates (the `se-rj` lab on dm2:
@@ -1211,9 +1208,8 @@ Stats read_stats(const server::RulesCommon& s, int ent, const BotArsenal& arsena
   return st;
 }
 
-void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s, int slot,
-                  const char* entities, sh::AimSkill skill, const sh::Traits& traits, double hz,
-                  uint32_t seed) {
+sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& traits,
+                                sh::AimSkill skill, sh::PilotHands& hands) {
   // Moves: an expert's the bunny hop on practised hands (shooter/pilot.hpp); an average player's
   // the simple hop (forward and the side key of the turn) on steady hands; a novice's a walk and a
   // strafe on a person's hands.
@@ -1221,33 +1217,41 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   const bool expert = moves == sh::AimSkill::expert;
   const bool average = moves == sh::AimSkill::average;
   sh::PilotSettings ps;
-  ps.hop = (expert || average) && f.features[sh::Feature::hop];
+  ps.hop = (expert || average) && features[sh::Feature::hop];
   ps.hop_simple = average;
-  ps.hop_stairs_walked = f.features[sh::Feature::stairs];
-  ps.slopes = f.features[sh::Feature::slopes];
-  ps.backstep = f.features[sh::Feature::backstep];
-  ps.runup_keys = f.features[sh::Feature::runupkeys];
-  ps.gap_circle = f.features[sh::Feature::gapbuild];
-  ps.hop_headroom = f.features[sh::Feature::headroom];
-  ps.hop_lips = f.features[sh::Feature::liphop];
+  ps.hop_stairs_walked = features[sh::Feature::stairs];
+  ps.slopes = features[sh::Feature::slopes];
+  ps.backstep = features[sh::Feature::backstep];
+  ps.runup_keys = features[sh::Feature::runupkeys];
+  ps.gap_circle = features[sh::Feature::gapbuild];
+  ps.hop_headroom = features[sh::Feature::headroom];
+  ps.hop_lips = features[sh::Feature::liphop];
   // The circle jump by skill: an expert curves up to 0.3 s for ~430 (people's standing jumps
   // take off at 433, p50), an average player a shorter curve for less (people's p25: 377).
-  ps.hop_circle = f.features[sh::Feature::circlejump];
+  ps.hop_circle = features[sh::Feature::circlejump];
   ps.circle.target = expert ? 430.f : 380.f;
   ps.circle.most_s = expert ? 0.3f : 0.2f;
-  ps.brink = f.features[sh::Feature::brink];
-  ps.ahead = f.features[sh::Feature::ahead];
-  ps.ahead_bodies = f.features[sh::Feature::bodies];
+  ps.brink = features[sh::Feature::brink];
+  ps.ahead = features[sh::Feature::ahead];
+  ps.ahead_bodies = features[sh::Feature::bodies];
   // Its lane off the route's line (shooter/pilot.hpp): a person never walks the line; the less
   // practised wander wider. A perfect player keeps to it.
-  ps.lane = skill == sh::AimSkill::perfect || !f.features[sh::Feature::lane] ? 0.f
-            : expert                                                         ? 0.45f
-            : average                                                        ? 0.6f
-                                                                             : 0.75f;
-  ps.air_steer = f.features[sh::Feature::airsteer];
-  const sh::PilotHands hands = expert    ? sh::PilotHands::practised
-                               : average ? sh::PilotHands::steady
-                                         : sh::PilotHands::human;
+  ps.lane = skill == sh::AimSkill::perfect || !features[sh::Feature::lane] ? 0.f
+            : expert                                                       ? 0.45f
+            : average                                                      ? 0.6f
+                                                                           : 0.75f;
+  ps.air_steer = features[sh::Feature::airsteer];
+  hands = expert    ? sh::PilotHands::practised
+          : average ? sh::PilotHands::steady
+                    : sh::PilotHands::human;
+  return ps;
+}
+
+void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s, int slot,
+                  const char* entities, sh::AimSkill skill, const sh::Traits& traits, double hz,
+                  uint32_t seed) {
+  sh::PilotHands hands = sh::PilotHands::none;
+  const sh::PilotSettings ps = fighter_pilot(f.features, traits, skill, hands);
   // The aim: the scattergun's to start with, another weapon's taken up as it is
   // (`fighter_command`).
   f.aim_slot = 0;
