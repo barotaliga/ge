@@ -32,8 +32,6 @@
 // THE PARTY (a campaign in coop: coop_party.hpp): companions seated by `addbot` or
 // `ListenOptions::companions`, carried from map to map by the campaign host, their packets in each
 // frame after the player's; `removebot` lets one go. With a port, others join it (`CampaignDoor`).
-// In single player `addbot` turns the game cooperative until the last companion leaves
-// (`companion_coop`, server/campaign.hpp's `campaign_set_coop`); saving waits until then.
 //
 // THE LOBBY (`ListenOptions::lobby`, a match only): the server's (net/classic_game.hpp). Every
 // map opens in warmup with the player and the bots seated in `room` (lobby_room.hpp); the player is
@@ -291,8 +289,9 @@ struct Listen {
   int entries = 0;           // maps entered (a new one, the next level, a restart, a load), ever
   // A campaign's companions (coop_party.hpp; null when none was ever seated).
   std::unique_ptr<Party> party;
-  // The game was single player and turned cooperative for a companion (`addbot`): the last
-  // companion's leaving turns it back.
+  // The game was single player and turned cooperative for a companion (`addbot`; server/
+  // campaign.hpp's `campaign_set_coop`): the last companion's leaving turns it back, and saving
+  // waits until then.
   bool companion_coop = false;
   // A coop campaign's door open to others (`ListenOptions::door`; null: nobody joins) and the
   // network's time it runs on, s.
