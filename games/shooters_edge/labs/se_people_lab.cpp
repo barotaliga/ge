@@ -734,7 +734,7 @@ void run(gl::Lab& lab) {
       if (e.is_regular_file() && la::is_recording(e.path())) paths.push_back(e.path().string());
     if (ec) {
       lab.fail("se-people: the folder " + dir + " does not list: " + ec.message(),
-               "next: pass --dir=<a folder of recordings (.mvd or .ger)>");
+               "next: pass --dir=<a folder of recordings (.mvd or .ged)>");
       return;
     }
     std::sort(paths.begin() + (file.empty() ? 0 : 1), paths.end());
@@ -1051,7 +1051,7 @@ const gl::LabSpec kSpec{
     "How much of a team match do players spend with an enemy in plain view, near one, and how "
     "fast do they move: people's recordings and our bots' measured by the same rules?",
     {
-        {"dir", "", "a folder of recordings (.mvd or .ger) of one map (people's, or se-team --save's)"},
+        {"dir", "", "a folder of recordings (.mvd or .ged) of one map (people's, or se-team --save's)"},
         {"file", "", "one recording's path (with --dir: read too)"},
         {"basedir", "", "a folder holding the game folder the recordings' map is read from"},
         {"game", "id1", "the game folder under --basedir"},

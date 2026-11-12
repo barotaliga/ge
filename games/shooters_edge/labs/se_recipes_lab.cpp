@@ -300,7 +300,7 @@ void run(gl::Lab& lab) {
       if (e.is_regular_file() && la::is_recording(e.path())) paths.push_back(e.path().string());
     if (ec) {
       lab.fail("se-recipes: the folder " + dir + " does not list: " + ec.message(),
-               "next: pass --dir=<a folder of recordings (.mvd or .ger)>");
+               "next: pass --dir=<a folder of recordings (.mvd or .ged)>");
       return;
     }
     std::sort(paths.begin() + (file.empty() ? 0 : 1), paths.end());
