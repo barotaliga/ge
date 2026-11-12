@@ -75,7 +75,8 @@ std::string row_json(const DemoRow& r, bool scores) {
                    {"tags", json_strs(r.tags)},
                    {"players", json_arr(players)},
                    {"teams", json_arr(teams)},
-                   {"file", json_str("/" + archive_path(r.sha))}});
+                   {"file", json_str("/" + archive_path(r.sha))},
+                   {"map_page", json_str(r.radar ? "/radar/" + r.sha : "")}});
 }
 
 }  // namespace

@@ -64,6 +64,10 @@ net::Status tv_host_status(const TvHost& h) {
             {"viewers", std::to_string(tv_viewer_count(h.tv))},
             {"delay_s", std::to_string(h.tv.config.delay_ms / 1000)},
             {"files", std::to_string(h.tv.library.size())}};
+  // The WebSocket port a browser's viewer connects to (the hub's Watch page reads it).
+  if (h.web != nullptr && h.web->listener.handle >= 0) {
+    s.keys.emplace_back("web", std::to_string(h.web->listener.local.port));
+  }
   return s;
 }
 

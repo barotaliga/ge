@@ -159,6 +159,7 @@ bool demo_row(std::span<const uint8_t> bytes, DemoRow& out, std::string& error) 
   out.game_version = r.header.game_version;
   out.size = static_cast<int64_t>(bytes.size());
   out.start_s = 0;
+  for (const gr::TrackInfo& t : r.header.tracks) out.radar |= t.kind == gr::TrackKind::radar;
   for (const auto& [k, v] : r.header.meta) {
     if (k == "map") {
       out.map = v;

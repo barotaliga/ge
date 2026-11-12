@@ -24,6 +24,8 @@
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_pack.hpp"
+#include "shooters_edge/client/demo_radar.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/settings.hpp"
@@ -108,6 +110,46 @@ bool locate(const gc::Ctx& ctx, gc::Places& out, std::string& error) {
 void join_words(const gc::Ctx& ctx, const std::string& address, std::vector<std::string>& w) {
   const cl::Args a = folders(ctx);
   w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "+connect", address});
+}
+
+// A hub's Spectate link: the window joins as a spectator (the `spectator` setting it sends).
+void spectate_words(const gc::Ctx& ctx, const std::string& address, std::vector<std::string>& w) {
+  const cl::Args a = folders(ctx);
+  w.insert(w.end(),
+           {"-basedir", a.basedir, "-game", a.game, "+set", "spectator", "1", "+connect", address});
+}
+
+// A hub's Play link: the replay file (version 2) the CLI fetched, unpacked beside it into the
+// recording the demo player reads (client/demo_v2.hpp), then played.
+bool demo_words(const gc::Ctx& ctx, const std::string& path, std::vector<std::string>& w,
+                std::string& error) {
+  std::vector<uint8_t> file;
+  {
+    std::ifstream f(path, std::ios::binary);
+    file.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+  }
+  std::vector<uint8_t> recording;
+  if (!cl::unpack_demo(file, recording, error)) {
+    error = "the demo is not one this game plays: " + error;
+    return false;
+  }
+  cl::Demo demo;
+  if (!cl::open_demo(recording, demo, error)) {
+    error = "the demo does not open: " + error;
+    return false;
+  }
+  fs::path out = path;
+  out.replace_extension(cl::plain_extension(demo.state.format));
+  std::ofstream f(out, std::ios::binary);
+  f.write(reinterpret_cast<const char*>(recording.data()),
+          static_cast<std::streamsize>(recording.size()));
+  if (!f) {
+    error = "the demo cannot be written to " + out.string();
+    return false;
+  }
+  const cl::Args a = folders(ctx);
+  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "-playdemo", out.string()});
+  return true;
 }
 
 void listen_words(const gc::Ctx& ctx, const gc::HostAsk& ask, std::vector<std::string>& w) {
@@ -251,6 +293,15 @@ int cmd_demos_pack(gc::Ctx& ctx) {
   if (!client::unpack_demo(packed, back, error) || back != bytes)
     return gc::refuse(ctx, 1, "the packed file does not give back the recording's bytes",
                       "report it with the file; nothing was written");
+  // A multiview recording also carries its radar, so a hub can draw the match as a map.
+  bool radar = false;
+  if (rep.format == "multiview") {
+    std::vector<uint8_t> with;
+    if (client::add_radar(bytes, packed, with, error)) {
+      packed = std::move(with);
+      radar = true;
+    }
+  }
   if (!write_bytes(out, packed))
     return gc::refuse(ctx, 1, "cannot write " + out.string(), "check the folder's permissions");
   const double share =
@@ -264,7 +315,8 @@ int cmd_demos_pack(gc::Ctx& ctx) {
                 {"from_bytes", json_num(static_cast<long long>(on_disk))},
                 {"bytes", json_num(static_cast<long long>(packed.size()))},
                 {"blocks", json_num(static_cast<long long>(rep.blocks))},
-                {"keyframes", json_num(static_cast<long long>(rep.keyframes))}}),
+                {"keyframes", json_num(static_cast<long long>(rep.keyframes))},
+                {"radar", ge::core::json_bool(radar)}}),
       out.string() + "  " + kib(packed.size()) + " (" + file.filename().string() + " " +
           kib(on_disk) + ", plain " + kib(bytes.size()) + ")\n",
       "packed " + std::to_string(std::lround(share * 100)) + "% of " + file.filename().string(),
@@ -324,6 +376,8 @@ gc::Spec make() {
   s.locate = locate;
   s.join_words = join_words;
   s.listen_words = listen_words;
+  s.spectate_words = spectate_words;
+  s.demo_words = demo_words;
   s.commands = ge::classicenhance::cli::commands();
   s.commands.push_back({"demos", "", "the recordings in the game folder: name, size, file",
                         "demos --json", "shooters_edge", cmd_demos});

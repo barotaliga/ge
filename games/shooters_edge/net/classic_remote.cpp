@@ -530,6 +530,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.topcolor = std::atoi(cvar("topcolor", "0").c_str());
     cfg.bottomcolor = std::atoi(cvar("bottomcolor", "0").c_str());
     cfg.speedjump = cvar("cl_speedjump", "0") == "1";
+    cfg.spectator = cvar("spectator", "0") == "1";  // `set spectator 1`: join to watch
     cfg.voice = r.voip;
     cfg.live_mic = true;  // the window's microphone (remote_mic), while +voip is held
     cfg.qport = static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
