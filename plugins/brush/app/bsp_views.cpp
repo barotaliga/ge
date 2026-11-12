@@ -148,7 +148,7 @@ void create_bsp_view_targets(gpu::Device& device, BspViews& views, uint32_t widt
 }
 
 void prepare_bsp_views(gpu::Device& device, BspViews& views, const r::FrameUniforms& main, int body,
-                       double level, bool below, const float box[4]) {
+                       double level, bool below, const float box[4], double up_level) {
   views.body = body;
   views.below = below;
   views.level = level;
@@ -169,7 +169,8 @@ void prepare_bsp_views(gpu::Device& device, BspViews& views, const r::FrameUnifo
   if (views.up.on) {
     float vp[16], inv[16];
     up_matrices(kUpFov, 0.05, vp, inv);
-    const float plane[4] = {0, 1, 0, -h};
+    const auto top = static_cast<float>(up_level > -1e299 ? up_level : level);
+    const float plane[4] = {0, 1, 0, -top};
     // From the surface straight over the eye, so the rays the surface bends out start about where
     // the view's do (a deep eye's own place would look through the pool's walls); from a flooded
     // passage, the nearest point of the pool's top.
@@ -177,7 +178,7 @@ void prepare_bsp_views(gpu::Device& device, BspViews& views, const r::FrameUnifo
     up_place(box, main.eye[0], main.eye[2], at);
     views.up_shift[0] = main.eye[0] - at[0];
     views.up_shift[1] = main.eye[2] - at[1];
-    const float eye[3] = {at[0], h, at[1]};
+    const float eye[3] = {at[0], top, at[1]};
     stage(views.up, main, vp, inv, eye, plane);
     device.queue.WriteBuffer(views.up.uniforms, 0, &views.up.staged, sizeof views.up.staged);
   }

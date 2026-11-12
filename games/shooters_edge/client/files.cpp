@@ -44,15 +44,15 @@ bool add_archive(SearchPath& path, const std::string& name, std::vector<uint8_t>
 }
 
 bool open_game_dir(const std::string& basedir, const std::string& game, SearchPath& out,
-                   std::string& error) {
+                   std::string& error, const ge::classicenhance::Profile& content) {
   out = SearchPath{};
   const fs::path root = basedir.empty() ? "." : basedir;
-  const std::string base(ge::classicenhance::classic_profile().base_dir);
+  const std::string base(content.base_dir);
   std::error_code ec;
   if (!fs::is_directory(root / game, ec)) {
     error = "the game folder " + (root / game).string() +
             " does not exist; next: pass -basedir <the folder that holds " + base + "/" +
-            ge::classicenhance::pack_name(ge::classicenhance::classic_profile(), 0) + ">";
+            ge::classicenhance::pack_name(content, 0) + ">";
     return false;
   }
   std::string why;
@@ -86,6 +86,11 @@ std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name
   std::string why;
   if (!ge::vfs::read(path.vfs, *ref, &store, &why)) return {};
   return store;
+}
+
+std::span<const uint8_t> game_palette(const SearchPath& path, std::vector<uint8_t>& store,
+                                      const ge::classicenhance::Profile& content) {
+  return ge::classicenhance::palette_of(content, find_file(path, content.palette, store));
 }
 
 std::vector<std::string> map_names(const SearchPath& path,

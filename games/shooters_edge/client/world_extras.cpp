@@ -180,9 +180,11 @@ void dress_extras(WorldExtras& x, gr::FrameView& view, ba::Options& options, dou
 }
 
 // The body the water's views are drawn for this frame: with the eye in the water, the nearest
-// surface over it; else the nearest over whose level the eye stands (-1: none drawn, or none
-// within reach).
-int view_body(const WorldExtras& x, const gr::FrameView& view, int eye_in) {
+// surface over it; else the nearest over whose level the eye stands or under whose underside it
+// stands (`underside`: a pool hung over open air, seen from the air under it; -1: none drawn, or
+// none within reach).
+int view_body(const WorldExtras& x, const gr::FrameView& view, int eye_in, bool& underside) {
+  underside = false;
   if (eye_in >= 0) {
     // In the water: the surface nearest the eye of those over it, its top's box at its level (in
     // a flooded passage, the pool the eye is swimming toward once it is the nearer surface,
@@ -217,6 +219,19 @@ int view_body(const WorldExtras& x, const gr::FrameView& view, int eye_in) {
     if (d < best_d) {
       best_d = d;
       best = int(i);
+    }
+  }
+  for (size_t i = 0; i < x.water.bodies.size(); ++i) {
+    const gr::Water::Slot& s = x.water.bodies[i];
+    if (s.hidden || !s.draw.open_below || view.eye[1] >= s.floor) continue;
+    const double dx = std::max({s.staged.box[0] - view.eye[0], 0.0, view.eye[0] - s.staged.box[2]});
+    const double dz = std::max({s.staged.box[1] - view.eye[2], 0.0, view.eye[2] - s.staged.box[3]});
+    const double dy = s.floor - view.eye[1];
+    const double d = dx * dx + dz * dz + dy * dy;
+    if (d < best_d) {
+      best_d = d;
+      best = int(i);
+      underside = true;
     }
   }
   return best;
@@ -259,11 +274,15 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
                      .reflect = stop >= Stop::medium,
                      .shore = stop >= Stop::medium};
   const bool planar = v2 && on.water && stop == Stop::high;
-  const int body = planar ? view_body(x, view, eye_in) : -1;
-  const double level = body >= 0 ? x.water.bodies[size_t(body)].staged.info[0] : 0;
+  bool underside = false;
+  const int body = planar ? view_body(x, view, eye_in, underside) : -1;
+  const double top = body >= 0 ? x.water.bodies[size_t(body)].staged.info[0] : 0;
+  // From under a pool's underside: the mirror in its floor's plane, the view up from its top.
+  const double level = underside ? x.water.bodies[size_t(body)].floor : top;
   const float no_box[4] = {0, 0, 0, 0};
   const float* box = body >= 0 ? x.water.bodies[size_t(body)].staged.box : no_box;
-  ba::prepare_bsp_views(d, x.views, uniforms, body, level, body >= 0 && eye_in >= 0, box);
+  ba::prepare_bsp_views(d, x.views, uniforms, body, level, body >= 0 && (eye_in >= 0 || underside),
+                        box, top);
   const gr::WaterViews handed = ba::water_views(x.views);
   if (handed.body != x.handed.body || handed.below != x.handed.below ||
       handed.has_up != x.handed.has_up || handed.level != x.handed.level) {
