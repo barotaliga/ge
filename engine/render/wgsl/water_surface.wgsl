@@ -76,6 +76,7 @@ struct VertexOut {
   @builtin(position) position: vec4f,
   @location(0) rel: vec3f,  // camera-relative world position, m
   @location(1) xz: vec2f,   // the undisplaced world plan position, m
+  @location(2) @interpolate(flat) level: u32,  // the clipmap level drawn (0 the finest)
 }
 
 const kMorphEnd = 0.95;
@@ -380,6 +381,7 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) level: u32)
   out.rel = vec3f(xz.x, y, xz.y) - frame.eye.xyz;
   out.position = frame.view_proj * vec4f(out.rel, 1.0);
   out.xz = xz;
+  out.level = level;
   return out;
 }
 
