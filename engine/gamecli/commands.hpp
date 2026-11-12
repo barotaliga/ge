@@ -24,6 +24,7 @@ int cmd_servers(Ctx& ctx);
 int cmd_server_info(Ctx& ctx);
 int cmd_players(Ctx& ctx);
 int cmd_rcon(Ctx& ctx);
+int cmd_route(Ctx& ctx);
 
 int cmd_host(Ctx& ctx);
 int cmd_host_list(Ctx& ctx);

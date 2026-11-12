@@ -112,3 +112,24 @@ TEST(classic_masters_in_an_install_list) {
   CHECK(m[0] == "one.example:27000");
   CHECK(m[1] == "192.0.2.4:27000");
 }
+
+TEST(classic_forwarders_lists_are_read_for_the_route_finder) {
+  gn::ServerInfo info;
+  info.keys = {{"*version", "qwfwd 1.2"}, {"hostname", "a forwarder"}};
+  CHECK(se::classic_is_forwarder(info));
+  info.keys = {{"*version", "2.40"}};
+  CHECK(!se::classic_is_forwarder(info));
+  uint8_t ask[32];
+  const size_t n = se::classic_pingstatus_query(ask, sizeof ask);
+  CHECK(n == 14 && std::memcmp(ask, "\xff\xff\xff\xffpingstatus", 14) == 0);
+  // Two servers: 10.0.0.1:27500 at 15 ms, 10.0.0.2:27501 with no answer yet.
+  const uint8_t reply[] = {0xff, 0xff, 0xff, 0xff, 'n', 10, 0,    0,    1,    0x6c, 0x6b,
+                           15,   0,    10,   0,    0,   2,  0x6d, 0x6b, 0xff, 0xff};
+  std::vector<std::pair<gn::Address, int>> reach;
+  CHECK(se::classic_read_pingstatus(reply, sizeof reply, reach));
+  CHECK(reach.size() == 2);
+  if (reach.size() != 2) return;
+  CHECK(gn::to_string(reach[0].first) == "10.0.0.1:27500" && reach[0].second == 15);
+  CHECK(reach[1].first.port == 27501 && reach[1].second == 65535);
+  CHECK(!se::classic_read_pingstatus(reply, sizeof reply - 1, reach));
+}
