@@ -158,6 +158,9 @@ struct PilotSettings {
   // the ground, forward and a side key, the view on the velocity, as people's are (their standing
   // jumps take off at ~430): until `circle.target` speed, `circle.most_s` or past the route's line.
   bool hop_circle = false;
+  // THE CHAIN (`chainhop`): a hop's landing with a hop stretch ahead jumps again at once, with no
+  // walk's start between (its speed check, a circle jump, a copied start).
+  bool hop_chain = false;
   CircleSettings circle;
   // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while `jumper.rockets` is set (the
   // caller's say: the launcher in hand, its rockets, the health for the blast), those of its
@@ -400,6 +403,7 @@ struct Pilot {
   bool recipe_jumped = false;
   float recipe_s = 0;
   double recipe_retry_s = 0;
+  double hop_air_s = -1;  // the last command a hop was in the air (`clock_s`): a landing's chain
   std::vector<RecipeFrame> recipe_frames;
   std::vector<Vec3f> recipe_trail;
   std::vector<float> recipe_trail_t;

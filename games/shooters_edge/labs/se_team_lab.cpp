@@ -633,7 +633,7 @@ void run(gl::Lab& lab) {
     trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
              "\tscript_"
              "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
-             "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\n";
+             "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -722,7 +722,8 @@ void run(gl::Lab& lab) {
                     p.g->nodes[static_cast<size_t>(p.route[p.k + 1])].wet
                 ? 1
                 : 0)
-        << '\t' << p.recipe_note << '\n';
+        << '\t' << p.recipe_note << '\t' << ((e.flags & sh::kFlagOnGround) != 0 ? 1 : 0) << '\t'
+        << ((cmd.buttons & sh::kButtonJump) != 0 ? 1 : 0) << '\n';
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);

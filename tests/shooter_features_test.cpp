@@ -19,7 +19,8 @@ TEST(the_presets_are_every_feature_or_none_and_a_novice_does_not_glance) {
     for (sh::Feature o : {sh::Feature::trial, sh::Feature::lookway, sh::Feature::press,
                           sh::Feature::counter, sh::Feature::chains, sh::Feature::retarget,
                           sh::Feature::runupkeys, sh::Feature::underway, sh::Feature::gappast,
-                          sh::Feature::airgap, sh::Feature::pilotcast})
+                          sh::Feature::airgap, sh::Feature::pilotcast,
+                          sh::Feature::chainhop, sh::Feature::airwall})
       off = off || x == o;
     CHECK(sh::features_all()[x] == !off);
     CHECK(!sh::features_none()[x]);

@@ -120,9 +120,19 @@ constexpr double kAirBand = 15, kAirTurnCost = 0.5, kAirKeep = 0.3, kAirCurve = 
 constexpr float kAirViewLead = 2, kAirViewSpeed = 100;
 // and the keys chosen for the view this many commands on, when a key pressed now goes down.
 constexpr float kKeyLand = 1.5f;
+// `airwall`: each set's velocity looked along this far ahead, s, and a look all walled charged this.
+constexpr double kWallLook_s = 0.4, kWallCost = 60;
+
+// `airwall`: where the flight is (its server, its origin, its slot), to charge a set whose velocity
+// runs into a wall or a player within `kWallLook_s`; null: no look.
+struct AirWall {
+  const Server* sv = nullptr;
+  Vec3f at;
+  int me = 0;
+};
 
 int aim_air_set(Vec3f v, float view_yaw, float way_yaw, float maxspeed, float accel, double dt,
-                int held, uint8_t allowed = 0xff, int curve = 0) {
+                int held, uint8_t allowed = 0xff, int curve = 0, const AirWall* wall = nullptr) {
   const double h0 = core::libm::atan2(static_cast<double>(v.y), static_cast<double>(v.x)) *
                     (180 / core::kPi);
   const auto off_way = [&](double vx, double vy) {
@@ -142,6 +152,14 @@ int aim_air_set(Vec3f v, float view_yaw, float way_yaw, float maxspeed, float ac
       while (d > 180) d -= 360;
       while (d < -180) d += 360;
       sc += kAirCurve * (-d * curve);
+    }
+    if (wall != nullptr) {
+      // The velocity flown on `kWallLook_s` (level: the arc's drop left out) with the player's box:
+      // the share of it short of a wall or a body, charged `kWallCost` a whole look.
+      const Vec3f to{wall->at.x + static_cast<float>(vx * kWallLook_s),
+                     wall->at.y + static_cast<float>(vy * kWallLook_s), wall->at.z};
+      const HullTrace tr = trace_move(*wall->sv, wall->at, kPlayerMins, kPlayerMaxs, to, 0, wall->me);
+      sc -= kWallCost * (1.0 - static_cast<double>(tr.fraction));
     }
     return sc;
   };
@@ -417,8 +435,10 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       const float land_yaw = b.airview
                                  ? wrap(cmd.angles.y + wrap(b.yaw - aim_yaw_was) * kKeyLand)
                                  : wrap(cmd.angles.y);
+      const AirWall wall{&sv, self.origin, me};
       b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms,
-                              sv.set.move.accelerate, msec / 1000.0, b.air_set);
+                              sv.set.move.accelerate, msec / 1000.0, b.air_set, 0xff, 0,
+                              b.airwall ? &wall : nullptr);
       const int k = b.air_set;
       cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
       cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
@@ -661,9 +681,10 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         // (`airview`: the view the keys will land under, the hand's turn carried on that long.)
         const float land_yaw =
             b.airview ? wrap(cmd.angles.y + wrap(b.yaw - yaw_was) * kKeyLand) : wrap(cmd.angles.y);
+        const AirWall wall{&sv, self.origin, me};
         b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms,
                                 sv.set.move.accelerate, msec / 1000.0, b.air_set, sides,
-                                hp.strafe_side);
+                                hp.strafe_side, b.airwall ? &wall : nullptr);
         const int k = b.air_set;
         cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
         cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
