@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cmath>
 #include <cstdlib>
 #include <memory>
 #include <unordered_map>
@@ -1353,7 +1354,7 @@ void demo_hub_meta(std::span<const uint8_t> recording, gr::Meta& header, gr::Met
   }
   for (const auto& t : teams) header.emplace_back("team", t.first);
   final_meta.emplace_back("duration_ms",
-                          std::to_string(static_cast<int64_t>(s.time * 1000.0 + 0.5)));
+                          std::to_string(std::llround(s.time * 1000.0)));
   if (s.format == DemoFormat::single) return;
   for (const Seen& p : seen) {
     std::string v = p.name;
