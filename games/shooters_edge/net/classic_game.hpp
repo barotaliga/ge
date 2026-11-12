@@ -17,6 +17,11 @@
 // adapter's `find_program`: `qwprogs.dat`, loose or in any of its packs) in place of the baseline
 // mod, serverdata names the folder, and the server info's `*gamedir` says it before the map loads
 // (a mod checks it). A mod folder without a program this server runs is refused, naming it.
+// A C++ MOD PACKAGE in the list (a folder holding a `mod.manifest`, under `--root` or as given:
+// docs/mods.md § On the server) is loaded instead and stacked on whatever rules play, in the
+// order named; the game folder is then the last of the others. A package refused by the loader,
+// or named for a map whose rules take no mods yet (the sequel's) or for a coop campaign, stops the
+// server with the reason.
 //
 // BOTS AND THE LOBBY: `sv_bots` seats the listen server's fighters (client/lobby_room.hpp) in the
 // slots after 0, each a local seat of the endpoint every client sees as a player. `sv_lobby 1`
@@ -42,7 +47,7 @@
 // ge:keywords dedicated-server classic-server servergame serve net_frame baseline-mod deathmatch
 // ge:keywords classic_game playable-server game-rules fraglimit timelimit map-change maprotation
 // ge:keywords sv_bots sv_lobby bots lobby warmup addbot removebot listen-server listen_options
-// ge:keywords sv_coop dedicated-coop
+// ge:keywords sv_coop dedicated-coop mod-package cpp-mod
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_game_test.cpp
 #pragma once

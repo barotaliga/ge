@@ -626,10 +626,10 @@ void r_destroy(void* r) { delete static_cast<QvmServer*>(r); }
 
 constexpr RunnerCalls kQvmCalls = {"qvm",    &r_start,   &r_connect, &r_drop,
                                    &r_frame, &r_command, &r_console, &r_user_info,
-                                   &r_pause, &r_carry,   &r_destroy};
+                                   &r_pause, &r_carry,   &r_destroy, true};
 constexpr RunnerCalls kQvmOverCalls = {"qvm",    &r_start,   &r_connect, &r_drop,
                                        &r_frame, &r_command, &r_console, &r_user_info,
-                                       &r_pause, &r_carry,   nullptr};
+                                       &r_pause, &r_carry,   nullptr,    true};
 
 }  // namespace
 

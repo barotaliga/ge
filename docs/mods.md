@@ -323,6 +323,35 @@ mod's log, both matches' missiles from above and from the side, the rocket's dis
 grenade's height against the clock. It fails when the mod is refused, when the two modded runs
 part, or when the mod changes nothing.
 
+## On the server
+
+A mod is not only the scripted match's: the real server stacks it on whatever rules a map plays
+(`games/shooters_edge/server/rules_runner.hpp`, `RulesMods`). The host puts the loaded tables in
+the runner's common part before a map starts; once the runner's own `start` has spawned the map,
+`start_mods` lays each mod's seam over the program the loop runs, the first named lowest, so each
+hook runs the rules' own function and then every mod's in the order named, and calls each mod's
+`match_start`. A mod's block and stream live for one map, as the rules' own globals do; its log
+lines reach the server console as `mod <name>: <line>`; `rules_hash` folds every mod's run into
+the loop's digest (with no mod it is the loop's own).
+
+- **Which rules take one.** The runners on the loop's program seam: the bytecode program and the
+  compiled module (`RunnerCalls::program_seam`). A function of the mod's stored in a field is
+  called by the loop, never by the bytecode: a bytecode program that calls an entity's think or
+  touch itself (`self.think()`) and finds a mod's number there faults. The sequel's rules keep
+  their own entities off that seam, so they refuse a mod at `start` until their own hooks land
+  (M52g).
+- **Where a server finds one.** `sv_mod` (`--mod=`) names folders, comma-separated: a folder
+  holding a `mod.manifest`, under `--root` or as given, is a package, loaded and stacked in that
+  order; the others are game folders as before. A package the loader refuses stops the server with
+  the loader's reason; so does one named for a coop campaign, which takes none yet.
+- **What it may change.** Everything the services reach, on every map, for every player, bots
+  included. A sound a mod starts reaches only the clients that have its name in the server's
+  sound list.
+
+`tests/shooters_edge_rules_mod_test.cpp` holds it: the sample stacked on a bytecode runner speeds
+its rockets, is in the digest and replays to the bit; the sequel's runner refuses; the playable
+server takes the package from `sv_mod` and replays, and refuses one built for ABI 2.0.
+
 ## Rows
 
 | Row | What |
@@ -332,3 +361,6 @@ part, or when the mod changes nothing.
 | M52c | The store form: the WebAssembly module and the engine's interpreter; the store builds; ahead-of-time linking |
 | M52d | Signing and distribution |
 | M52e | A second game (Fall Line's hooks), the replay's keyframes and the network's prediction carrying the block, ABI 1.1 adding entries |
+| M52f | Mods on the real server: a package stacked on the bytecode and compiled-module runners, from `sv_mod` |
+| M52g | Mods on the sequel's rules: the hooks and services where the rules keep their own entities |
+| M52h | Our own rules in C++: the classic server's calls as a typed services table, the arena and campaign as packages, the QC sources deleted |
