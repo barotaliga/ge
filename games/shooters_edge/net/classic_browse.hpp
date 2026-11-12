@@ -24,6 +24,7 @@
 // ge:keywords classic status-query master-server server-browser serverinfo hostname maxclients
 // ge:keywords needpass skill coop deathmatch teamplay mode players spectators team masters
 // ge:keywords rcon remote-console classic_rcon classic_read_print
+// ge:keywords pingstatus forwarder route-finder classic_route_query
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_browse_test.cpp
 #pragma once
@@ -32,8 +33,10 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
+#include "forward/routes.hpp"
 #include "net/server_list.hpp"
 
 namespace shooters_edge::net {
@@ -59,6 +62,17 @@ bool classic_read_print(const uint8_t* data, size_t size, std::string& text);
 
 // The four together.
 ge::net::ServerQuery classic_query();
+
+// THE FORWARDERS' LISTS, for the route finder (engine/forward/routes.hpp): a classic forwarder is
+// a server whose `*version` starts `qwfwd`; asked `pingstatus` (the header and the word, no
+// newline) it answers the header, `n`, then eight bytes a server: its IPv4 address in order, its
+// port and its ping in milliseconds each low byte first (65535: no answer yet).
+bool classic_is_forwarder(const ge::net::ServerInfo& info);
+size_t classic_pingstatus_query(uint8_t* out, size_t cap);
+bool classic_read_pingstatus(const uint8_t* data, size_t size,
+                             std::vector<std::pair<ge::net::Address, int>>& out);
+// The three together.
+ge::forward::RouteQuery classic_route_query();
 
 // The mode a server's info says (the rule above).
 std::string classic_mode(const std::vector<std::pair<std::string, std::string>>& keys);

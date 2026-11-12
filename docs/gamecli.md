@@ -17,7 +17,7 @@ The CLI is built in the three homes every feature lives in (docs/architecture.md
 
 | Layer | Where | What it gives |
 | --- | --- | --- |
-| Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset`, `server settings/set`, `servers`, `server info`, `players`, `rcon`, `host`, `host list`, `host stop`, `join`, `logs` |
+| Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset`, `server settings/set`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `join`, `logs` |
 | Plugin | `plugins/<name>/cli/` (built into `ge_<name>_cli`) | A group of rows any game linking the plugin adds: classic enhance's `content` (the install's packs, their release by SHA-256, the enhanced cache) |
 | Game | `games/<game>/cli/` | The game's `Spec` (its programs, ports, protocol, places, launch words, the settings it registers) and its own rows: Shooter's Edge's `demos`, `demos play`, `demos pack`, `demos unpack` |
 
@@ -71,7 +71,9 @@ own, driven by the wall clock until every reply is in or `--wait` passes: the LA
 masters (the player's `sb_masters`, the install's lists, `--master`) and the named servers
 (`sb_servers`, `--server`). `players` and `server info` ask one server; `rcon` sends the game's
 remote console request (`--password`, else the player's `rcon_password`) and gathers the reply's
-packets.
+packets. `route <address>` runs the same refresh, then asks every forwarder it found for its list
+and answers the lowest summed ping to the server (`engine/forward/routes.hpp`): straight, or the
+forwarders to go through, nearest first, with the chain the game's route setting takes.
 
 ## Hosting and joining
 

@@ -248,6 +248,13 @@ The `forward` lab gives the player's direct path each preset and puts the forwar
 
 A stranger's asks of every kind draw answers of at most a third of their size.
 
+**The route finder** (`engine/forward/routes.hpp`) picks the path with the lowest summed round trip
+from what a server browser already measured: the player's own ping to every server and forwarder,
+and each forwarder's list of the servers it reaches with its own ping (the game's `RouteQuery`
+asks for it; Shooter's Edge's is the classic `pingstatus`). Hosts are matched without their ports,
+so a forwarder beside a server is that host, and ties go to the fewer hops. `<game>_cli route
+<address>` answers the route and the chain to give the game.
+
 ## Proxy
 
 `engine/proxy` (`proxy.hpp`, `trial.hpp`). Two hops that understand the slow link between them:

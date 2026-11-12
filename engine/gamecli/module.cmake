@@ -8,7 +8,7 @@
 if(NOT DEFINED GE_HOST_TOOLS OR GE_HOST_TOOLS)
   file(GLOB GE_GAMECLI_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/gamecli/*.cpp)
   add_library(ge_gamecli STATIC ${GE_GAMECLI_SOURCES})
-  target_link_libraries(ge_gamecli PUBLIC ge_core ge_console ge_net ge_server)
+  target_link_libraries(ge_gamecli PUBLIC ge_core ge_console ge_net ge_server ge_forward)
 endif()
 
 ge_module(ge_gamecli EXPORT gamecli)
