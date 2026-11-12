@@ -138,6 +138,11 @@ struct WaterDraw {
   // start at a moment the game hands in). A game whose rooms are small slows a hall's pool, whose
   // real swell reads hurried at that scale.
   double pace = 1;
+  // The water hangs over open air somewhere under its floor (a pool with no bed a player drops
+  // through): seen from under its floor its underside is drawn ("water.underside",
+  // render/water_underside.wgsl), the same waves at the floor, mirroring what lies under it and
+  // seen through up to its top.
+  bool open_below = false;
 };
 
 // A game's own pictures of the world for one body (`set_water_views`): THE MIRROR, the world
@@ -201,7 +206,7 @@ struct WaterGpuBody {
   float wake[4];  // rings, their life (s), the shortest wave kept (m), 0
   float air[4];   // the day's share on the water, the stir's slope, the gusts, the wind (m/s)
   float sun[4];   // the share of the surface the sun reaches (the caustics, the shafts), the pace,
-                  // 0, 0
+                  // the floor (world m: the underside's level), 0
   float view[4];  // the mirror (0 none, 1 over, 2 under), the view up (1), its heading's cos, sin
   // The foam (`foam_of`): the fold's threshold on the Jacobian, the whitecap cover, its drift x, z
   float foam[4];
@@ -244,9 +249,10 @@ struct Water {
     // rectangle (x, y, width, height in pixels; a width of 0 draws none: no band, or none seen).
     double shore_grow = 0;
     uint32_t shore_rect[4] = {0, 0, 0, 0};
-    bool hidden = false;  // the caller's switch: not drawn (a lab's dry picture)
-    bool shown = true;    // this frame's: not hidden and seen from over its level
-    bool under = false;   // this frame's: the eye is in the water and under this body's level
+    bool hidden = false;      // the caller's switch: not drawn (a lab's dry picture)
+    bool shown = true;        // this frame's: not hidden and seen from over its level
+    bool under = false;       // this frame's: the eye is in the water and under this body's level
+    bool from_under = false;  // this frame's: its underside is drawn, the eye in the air under it
     // m: a volume's lowest hull floor (an eye under it is not in it); open water has none
     double floor = -1e300;
     float veil[4] = {0, 0, 0, 0};  // the fog a view under it looks through (water::Optics)
@@ -267,6 +273,7 @@ struct Water {
   // and the share of it that is the water's own light (total internal reflection with nothing to
   // mirror), which the view under water fills with its veil.
   uint32_t p_below = 0;
+  uint32_t p_underside = 0;  // a body's underside from the air under it (WaterDraw::open_below)
   wgpu::Texture below, below_veil;
   wgpu::TextureView below_view, below_veil_view;
   WaterViews views;                         // the game's (set_water_views)

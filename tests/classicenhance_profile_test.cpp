@@ -7,10 +7,12 @@
 // ge:summary Tests the content profile: rows, pack names, asset kinds, the palette
 // ge:keywords test classicenhance profile content-profile asset-kind pack-name palette
 // ge:skill classicenhance testing
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "assets/pcx.hpp"
 #include "check.hpp"
 #include "classicenhance/profile.hpp"
 #include "vfs/pak.hpp"
@@ -83,4 +85,29 @@ TEST(the_palette_comes_from_the_profiles_path) {
   CHECK(!ce::read_palette(p, pak, none, &palette, &error));
   CHECK(error.find(std::string(p.palette)) != std::string::npos);
   CHECK(error.find(std::string(p.id)) != std::string::npos);
+}
+
+TEST(the_sequel_s_palette_is_the_one_at_the_end_of_its_pcx_picture) {
+  const ce::Profile* q = ce::find_profile("sequel");
+  CHECK(q != nullptr && q != &ce::classic_profile());
+  ge::assets::IndexedImage pic;
+  pic.width = 16;
+  pic.height = 4;
+  pic.indices.assign(64, 3);
+  pic.palette.resize(768);
+  for (size_t i = 0; i < pic.palette.size(); i++) pic.palette[i] = uint8_t(i * 5);
+  const std::vector<uint8_t> pcx = ge::assets::encode_pcx(pic);
+  const std::span<const uint8_t> rgb = ce::palette_of(*q, pcx);
+  CHECK(rgb.size() == 768 && rgb[1] == 5 && rgb[767] == pic.palette[767]);
+  // A file that is no PCX picture holds none; the first game's palette file is the bytes.
+  CHECK(ce::palette_of(*q, std::vector<uint8_t>(900, 1)).empty());
+  CHECK(ce::palette_of(ce::classic_profile(), pcx).size() == 768);
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak({{std::string(q->palette), pcx}}, &bytes, &error), error);
+  ge::vfs::Pak pak;
+  CHECK_MSG(ge::vfs::read_pak(bytes, &pak, &error), error);
+  ce::Palette palette;
+  CHECK_MSG(ce::read_palette(*q, pak, bytes, &palette, &error), error);
+  CHECK(palette.rgb[2] == 10);
 }
