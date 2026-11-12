@@ -30,6 +30,7 @@
 #include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_coop.hpp"
 #include "shooters_edge/net/classic_coop_game.hpp"
+#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_qtv.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
@@ -148,6 +149,14 @@ constexpr gs::GameRule kEndpointRules[] = {
     {"allow_download_maps", "0: no maps/ file is offered (1)"},
     {"allow_download_other", "1: files outside those folders are offered too (0)"},
     {"sv_downloadchunksperframe", "chunks of 1 KB a downloading client gets a frame, 1..30 (30)"},
+    {"sv_defaultname", "the name a client with an empty or unusable name gets (player)"},
+    {"sv_unfake",
+     "1: carriage returns in a public chat line become #, so no line fakes another (1)"},
+    {"sv_colorkick", "1: a client changing its top colour more than 6 times in 8 s is kicked (1)"},
+    {"sv_infoflood",
+     "\"N S\": a client changing its user info more than N times in S s is kicked; "
+     "0 in either: no limit",
+     "300 3"},
     // The stream port for classic relays (classic_qtv.hpp).
     {"qtv_streamport", "the TCP port classic relays take the match from, 0..65534 (0: none)"},
     {"qtv_maxstreams", "relays streamed at once (0 or less: no limit; 1)"},
@@ -194,6 +203,10 @@ constexpr gs::SettingName kSettingNames[] = {
     {"flood_msgs", "sv_floodprot", 0},
     {"flood_persecond", "sv_floodprot", 1},
     {"flood_waitdelay", "sv_floodprot", 2},
+    {"sv_default_name", "sv_defaultname"},
+    {"sv_kicktop", "sv_colorkick"},
+    {"sv_kickuserinfospamcount", "sv_infoflood", 0},
+    {"sv_kickuserinfospamtime", "sv_infoflood", 1},
 };
 
 // The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
@@ -257,6 +270,38 @@ bool qtv_settings(const gs::ServerConfig& c, int& port, QtvConfig& q, std::strin
   return true;
 }
 
+// A 0 or 1 endpoint rule into `on` (unset: left as it is).
+bool endpoint_flag(const gs::ServerConfig& c, const char* name, bool& on, std::string& error) {
+  int v = on ? 1 : 0;
+  if (!endpoint_int(c, name, 0, 1, v, error)) return false;
+  on = v != 0;
+  return true;
+}
+
+// sv_infoflood's "N S": the most user info changes in a window of S seconds.
+bool info_flood(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
+  const auto it = c.rules.find("sv_infoflood");
+  if (it == c.rules.end() || it->second.empty()) return true;
+  int count = 0;
+  double seconds = 0;
+  char* end = nullptr;
+  const char* p = it->second.c_str();
+  count = static_cast<int>(std::strtol(p, &end, 10));
+  const bool first = end != p;
+  p = end;
+  seconds = std::strtod(p, &end);
+  while (*end == ' ') end++;
+  if (!first || end == p || *end != '\0' || count < 0 || seconds < 0) {
+    error = "sv_infoflood \"" + it->second +
+            "\" is not two numbers \"N S\" of 0 or more (--explain=sv_infoflood shows where it was "
+            "set)";
+    return false;
+  }
+  cfg.info_flood_count = count;
+  cfg.info_flood_s = seconds;
+  return true;
+}
+
 bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
   int antilag = cfg.antilag ? 1 : 0, voice = cfg.voice ? 1 : 0;
   int all = cfg.allow_download ? 1 : 0, skins = cfg.allow_skins ? 1 : 0;
@@ -272,8 +317,20 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
       !endpoint_int(c, "allow_download_sounds", 0, 1, sounds, error) ||
       !endpoint_int(c, "allow_download_maps", 0, 1, maps, error) ||
       !endpoint_int(c, "allow_download_other", 0, 1, other, error) ||
-      !endpoint_int(c, "sv_downloadchunksperframe", 1, 30, cfg.chunks_per_frame, error))
+      !endpoint_int(c, "sv_downloadchunksperframe", 1, 30, cfg.chunks_per_frame, error) ||
+      !endpoint_flag(c, "sv_unfake", cfg.unfake, error) ||
+      !endpoint_flag(c, "sv_colorkick", cfg.colour_kick, error) || !info_flood(c, cfg, error))
     return false;
+  if (const auto n = c.rules.find("sv_defaultname"); n != c.rules.end() && !n->second.empty()) {
+    if (sanitize_name(n->second, "") != n->second) {
+      error =
+          "sv_defaultname \"" + n->second +
+          "\" can't be a name: it holds \\ $ # \" ; or a line break, starts or ends with a space, "
+          "or is console (--explain=sv_defaultname shows where it was set)";
+      return false;
+    }
+    cfg.default_name = n->second;
+  }
   cfg.antilag = antilag != 0;
   cfg.voice = voice != 0;
   cfg.allow_download = all != 0;

@@ -223,6 +223,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   for (int i = 0; i < game.rule_count; i++) {
     const GameRule& r = game.rules[i];
     std::string& field = c.rules[r.name];  // a map's node: its address outlives the inserts
+    if (field.empty() && r.fallback != nullptr) field = r.fallback;
     const std::string fallback = field;
     cvars.bind({r.name, fallback, info, r.help, CvarKind::text}, &field);
   }

@@ -279,9 +279,70 @@ TEST(classic_game_each_game_s_names_for_the_server_s_settings) {
   // Every game name is a synonym, none a setting of its own: the two never disagree.
   for (const ge::console::Synonym& n : con.cvars().synonyms())
     CHECK_MSG(n.target != nullptr && n.target->name != n.name, n.name);
-  CHECK(con.cvars().synonyms().size() == 12);
+  CHECK(con.cvars().synonyms().size() == 16);
   Server s;  // a classic map leaves the sequel's dmflags alone
   CHECK_MSG(server_open(s, se::classic_game(), c, nullptr, nullptr, error), error);
+}
+
+// The name and chat guards: a public line's carriage returns turn into '#', a client changing its
+// top colour too often is kicked, as is one changing its user info past sv_infoflood; each one's
+// classic name sets it, and a bad value is refused naming the setting.
+TEST(classic_game_the_name_and_chat_guards) {
+  auto kicked = [](const Session& r, const std::string& why) {
+    for (const std::string& p : r.client.prints)
+      if (p.find("You were kicked from the game for " + why) != std::string::npos) return true;
+    return false;
+  };
+  {
+    Session r;
+    run_session(r, arena(), 700, "", -1, {{500, "say \"one\rtwo\""}});
+    bool unfaked = false;
+    for (const std::string& p : r.client.prints) unfaked |= p.find("one#two") != std::string::npos;
+    CHECK(unfaked);
+  }
+  {
+    std::vector<std::pair<int, std::string>> lines;
+    for (int i = 0; i < 8; i++)
+      lines.push_back({500 + i * 4, "setinfo topcolor " + std::to_string(i + 1)});
+    Session r;
+    run_session(r, arena(), 700, "", -1, lines);
+    CHECK(kicked(r, "topcolor spam"));
+    ServerConfig off = arena();
+    off.rules["sv_colorkick"] = "0";
+    Session spared;
+    run_session(spared, off, 700, "", -1, lines);
+    CHECK(!kicked(spared, "topcolor spam"));
+  }
+  {
+    ge::console::Console con{true};
+    ServerConfig c;
+    ServerCfg cfg;
+    std::string error;
+    CHECK_MSG(
+        server_configure(con,
+                         {"--map=arena", "+set", "sv_kickuserinfospamcount", "3", "+set",
+                          "sv_kickuserinfospamtime", "10", "+set", "sv_default_name", "guest"},
+                         c, cfg, se::classic_game(), error),
+        error);
+    CHECK_MSG(c.rules["sv_infoflood"] == "3 10", c.rules["sv_infoflood"]);
+    CHECK(c.rules["sv_defaultname"] == "guest");
+    std::vector<std::pair<int, std::string>> lines;
+    for (int i = 0; i < 5; i++)
+      lines.push_back({500 + i * 4, "setinfo skin s" + std::to_string(i)});
+    Session r;
+    run_session(r, c, 700, "", -1, lines);
+    CHECK(kicked(r, "userinfo spam"));
+  }
+  for (const auto& [name, value] : {std::pair<std::string, std::string>{"sv_infoflood", "lots"},
+                                    {"sv_defaultname", "a$b"},
+                                    {"sv_unfake", "2"}}) {
+    ServerConfig bad = arena();
+    bad.rules[name] = value;
+    Server refused;
+    std::string error;
+    CHECK(!server_open(refused, se::classic_game(), bad, nullptr, nullptr, error));
+    CHECK_MSG(error.find(name) != std::string::npos, error);
+  }
 }
 
 TEST(classic_game_a_map_from_the_game_folder_s_pack) {

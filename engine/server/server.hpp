@@ -123,10 +123,13 @@ struct ServerReplay {
 
 // A setting the game's own rules read (`fraglimit`, `timelimit`): a server cvar beside the core's,
 // set like them (every server.cfg layer, `+set`, the console; `--explain` shows where), and handed
-// to `create` in `ServerConfig::rules`. Its fallback is empty: unset leaves the game's own default.
+// to `create` in `ServerConfig::rules`. Its fallback is empty (unset leaves the game's own default)
+// unless the rule names one: a setting of several words wants one, so that a synonym for one word
+// (console/cvar.hpp) changes that word and keeps the others.
 struct GameRule {
   const char* name;
-  const char* help;  // what it does, with its unit
+  const char* help;                // what it does, with its unit
+  const char* fallback = nullptr;  // its default, when not empty
 };
 
 // A GAME'S OWN NAME for one of the core's settings (`ServerGame::names`): the name its configs,

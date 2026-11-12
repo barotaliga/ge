@@ -104,6 +104,16 @@ struct ServerConfig {
   double timeout_s = 65;  // sv_timeout
   gs::FloodRule flood;    // sv_floodprot
   std::string flood_msg;  // sv_floodprotmsg: what a flooder is told ("": the silence)
+  // THE NAMES AND THE CHAT: a client whose name is empty or holds a character a line could be
+  // faked with gets `default_name`; with `unfake` a public `say` has its carriage returns turned
+  // into '#' so no line can pass for another player's; `colour_kick` drops a client changing its
+  // top colour more than 6 times in 8 s; a client changing its user info more than
+  // `info_flood_count` times in `info_flood_s` seconds is dropped (either 0: no limit).
+  std::string default_name = "player";  // sv_defaultname
+  bool unfake = true;                   // sv_unfake
+  bool colour_kick = true;              // sv_colorkick
+  int info_flood_count = 300;           // sv_infoflood's first word
+  double info_flood_s = 3;              // sv_infoflood's second word
   bool allow_download = true, allow_skins = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true, allow_other = false;
   std::vector<ServedFile> files;
@@ -166,6 +176,10 @@ struct ClassicClient {
   bool local = false;    // a seat the game plays in its own process (a bot): no address, no packets
   int frags_told = 0;    // the frags every client was last sent
   gs::FloodGuard flood;  // its chat lines' times and its silence
+  double colour_since = -1;  // the top colour's window (sv_colorkick): its start, s (-1 none)
+  int colour_changes = 0;    // changes in it
+  double info_since = -1;    // the user info's window (sv_infoflood): its start, s (-1 none)
+  int info_changes = 0;      // changes in it
 };
 
 struct ServerCounts {

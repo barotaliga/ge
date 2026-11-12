@@ -206,7 +206,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   std::vector<std::string> taken;
   for (int i = 0; i < sh::kMaxClients; i++)
     if (i != slot && s.clients[i].state != ConnState::free) taken.push_back(s.clients[i].name);
-  c.name = unique_name(sanitize_name(info_get(userinfo, "name")), taken);
+  c.name = unique_name(sanitize_name(info_get(userinfo, "name"), s.cfg.default_name), taken);
   info_set(userinfo, "name", c.name);
   c.userinfo = userinfo;
   const std::string msg = info_get(userinfo, "msg");
