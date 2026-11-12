@@ -369,6 +369,7 @@ gc::Spec make() {
   s.lan_last = shooters_edge::net::kLanLastPort;
   s.master_port = 27000;
   s.query = shooters_edge::net::classic_query();
+  s.routes = shooters_edge::net::classic_route_query();
   s.server_game = &shooters_edge::net::classic_game();
   s.rcon = shooters_edge::net::classic_rcon;
   s.read_rcon = shooters_edge::net::classic_read_print;
