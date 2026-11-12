@@ -213,7 +213,7 @@ TEST(record_and_stop_write_a_file_that_plays_by_name) {
   CHECK(r.on);
   CHECK_MSG(r.path == (fs::path(files.folder) / "match1.mvdz").string(), r.path);
   con.execute("record again");
-  CHECK_MSG(con.output().back().find("already recording") != std::string::npos,
+  CHECK_MSG(con.output().back().find("Already recording") != std::string::npos,
             con.output().back());
   play(l, [&] { cl::record_tick(r, l, 1, con); });
   con.execute("stop");

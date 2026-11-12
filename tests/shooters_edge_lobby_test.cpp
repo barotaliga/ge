@@ -223,7 +223,7 @@ TEST(the_lobby_words_are_console_commands) {
   con.run_now("sv_countdown 7");
   CHECK(l.opt.lobby_settings.countdown_s == 7);
   con.run_now("ready");  // no lobby yet: said so, not an unknown command
-  CHECK(!l.prints.empty() && l.prints.back().find("no lobby runs") != std::string::npos);
+  CHECK(!l.prints.empty() && l.prints.back().find("there is no lobby") != std::string::npos);
 }
 
 TEST(the_banner_and_the_lobbys_screen_draw_at_both_viewports_and_not_in_the_match) {

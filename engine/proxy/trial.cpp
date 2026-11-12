@@ -7,10 +7,12 @@
 #include "proxy/trial.hpp"
 
 #include <algorithm>
+#include <utility>
 #include <vector>
 
 #include "net/sim_network.hpp"
 #include "proxy/proxy.hpp"
+#include "proxy/record.hpp"
 
 namespace ge::proxy {
 
@@ -54,10 +56,18 @@ TrialResult run_proxy_trial(const TrialConfig& c) {
   pc.link.repeat = c.repeat;
   pc.link.pack = c.pack;
   pc.seed = c.seed + 1;
+  ProxyRecording near_rec, far_rec;
+  if (c.record) {
+    proxy_record_begin(near_rec, "trial", {{"side", "near"}}, 0);
+    proxy_record_begin(far_rec, "trial", {{"side", "far"}}, 0);
+    pc.tap = [&](const Passed& p) { proxy_record(near_rec, p.to_server, p.datagram, p.now_us); };
+  }
   ProxyNear near;
   proxy_near_init(near, pc, near_client, near_link, far_at, server_at);
   pc.allow = {c.allowed ? server_at : net::sim_address(2, 1)};
   pc.seed = c.seed + 2;
+  if (c.record)
+    pc.tap = [&](const Passed& p) { proxy_record(far_rec, p.to_server, p.datagram, p.now_us); };
   ProxyFar far;
   uint16_t next_up = 40000;
   proxy_far_init(far, pc, far_link, [&](net::Transport& t) {
@@ -86,6 +96,7 @@ TrialResult run_proxy_trial(const TrialConfig& c) {
     if (counted && t % 50000 == 0 && client_seen.port != 0) {
       const auto snap = datagram(static_cast<int>(t / 50000), 400);
       net::transport_send(server, client_seen, snap.data(), snap.size(), now);
+      r.server_sent++;
       r.sent_down++;
       r.payload_down += snap.size();
     }
@@ -99,10 +110,12 @@ TrialResult run_proxy_trial(const TrialConfig& c) {
     const auto tick_of = [&] { return int64_t{buf[0]} | int64_t{buf[1]} << 8; };
     while ((n = net::transport_receive(server, buf, sizeof buf, from, now)) >= 0) {
       client_seen = from;
+      if (c.record) r.server_got.emplace_back(buf, buf + n);
       const int64_t at = tick_of() * 16000;
       if (n >= 2 && at >= start && at < end) r.got_up++;
     }
     while ((n = net::transport_receive(client, buf, sizeof buf, from, now)) >= 0) {
+      if (c.record) r.client_got.emplace_back(buf, buf + n);
       const int64_t at = tick_of() * 50000;
       if (n >= 2 && at >= start && at < end) r.got_down++;
     }
@@ -112,6 +125,12 @@ TrialResult run_proxy_trial(const TrialConfig& c) {
   r.link_up -= std::min(r.link_up, up0);
   r.link_down -= std::min(r.link_down, down0);
   r.refused = near.last_refusal;
+  if (c.record) {
+    proxy_record_finish(near_rec, now);
+    proxy_record_finish(far_rec, now);
+    r.near_file = std::move(near_rec.bytes);
+    r.far_file = std::move(far_rec.bytes);
+  }
   proxy_far_close(far);
   for (net::Transport* tr : {&client, &near_client, &near_link, &far_link, &server})
     net::close_transport(*tr);

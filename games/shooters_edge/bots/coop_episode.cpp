@@ -1,5 +1,8 @@
 // A co-op episode played through (coop_episode.hpp).
 //
+// voice: agent (a lab's harness: its errors land in the lab's report; docs/architecture.md § Player
+// text).
+//
 // ge:summary The co-op episode: maps chained, each one's nav and players made, the record kept
 // ge:keywords run_coop_episode episode intermission map-change leader companions kills digest
 // ge:skill shooter bots

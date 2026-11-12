@@ -78,12 +78,11 @@ bool read_bytes(const std::string& path, std::vector<uint8_t>& out) {
 int replay(const ServerGame& game, const ServerConfig& c) {
   std::vector<uint8_t> bytes;
   if (!read_bytes(c.replay, bytes)) {
-    std::fprintf(stderr, "%s: cannot read %s; next: check the path\n", game.binary,
-                 c.replay.c_str());
+    std::fprintf(stderr, "%s: cannot read %s: check the path\n", game.binary, c.replay.c_str());
     return 1;
   }
   if (!game.replay) {
-    std::fprintf(stderr, "%s: this game keeps no input logs; next: run without --replay\n",
+    std::fprintf(stderr, "%s: this game keeps no input logs, so --replay does nothing here\n",
                  game.binary);
     return 1;
   }
@@ -96,7 +95,7 @@ int replay(const ServerGame& game, const ServerConfig& c) {
   if (r.first_diverged >= 0) {
     std::printf(
         "replay: %s leaves the log at frame %d of %d; "
-        "next: diff the state there with the run that wrote it\n",
+        "compare the state there with the run that wrote it\n",
         c.replay.c_str(), r.first_diverged, r.frames);
     return 2;
   }
@@ -113,14 +112,14 @@ int run(const ServerGame& game, const ServerConfig& c) {
     gn::Address bind;
     const std::string where = (c.ip.empty() ? "0.0.0.0" : c.ip) + ":" + std::to_string(c.port);
     if (!gn::parse_address(where, bind)) {
-      std::fprintf(stderr, "%s: net_ip '%s' is not an address; next: give an IPv4 or IPv6 one\n",
-                   game.binary, c.ip.c_str());
+      std::fprintf(stderr, "%s: net_ip '%s' is not an IPv4 or IPv6 address\n", game.binary,
+                   c.ip.c_str());
       return 1;
     }
     if (!gn::open_udp_transport(sock, bind, &error)) {
       std::fprintf(stderr,
-                   "%s: cannot listen on %s: %s; next: pick another --port, or --offline to run "
-                   "without a socket\n",
+                   "%s: cannot listen on %s: %s. Pick another --port, or use --offline to run "
+                   "without a socket.\n",
                    game.binary, where.c_str(), error.c_str());
       return 1;
     }
@@ -132,7 +131,7 @@ int run(const ServerGame& game, const ServerConfig& c) {
       if (!have_lan)
         std::fprintf(stderr,
                      "%s: the LAN's discovery port %u is taken (%s): the LAN will not list this "
-                     "server, pings still answer; next: stop the other server on this machine\n",
+                     "server (pings still answer); is another server running on this machine?\n",
                      game.binary, static_cast<unsigned>(game.discovery_port), why.c_str());
     }
   }
@@ -178,7 +177,7 @@ int run(const ServerGame& game, const ServerConfig& c) {
       out.write(reinterpret_cast<const char*>(bytes.data()),
                 static_cast<std::streamsize>(bytes.size()));
       if (!out) {
-        std::fprintf(stderr, "%s: cannot write %s; next: check the directory\n", game.binary,
+        std::fprintf(stderr, "%s: cannot write %s: check the directory\n", game.binary,
                      c.log.c_str());
         code = 1;
       } else {
@@ -250,7 +249,7 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
       known = true;
       if (!has_val) {
         error = "flag ";
-        error.append(key).append(" needs a value (").append(key).append("=...); next: ");
+        error.append(key).append(" needs a value (").append(key).append("=...); see ");
         error.append(game.binary).append(" --help");
         return false;
       }
@@ -282,7 +281,7 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
       c.explain = true;
       c.explain_prefix = val;
     } else {
-      error = "unknown flag '" + a + "'; next: " + game.binary + " --help";
+      error = "unknown flag '" + a + "'; see " + game.binary + " --help";
       return false;
     }
   }
@@ -291,7 +290,7 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
     return false;
   }
   if (cfg.base.empty()) {
-    error = "--base needs a directory; next: " + std::string(game.binary) + " --help";
+    error = "--base needs a directory; see " + std::string(game.binary) + " --help";
     return false;
   }
   // Files are named from the root (the layers' own paths: `mymod/server.cfg`); a name the root does

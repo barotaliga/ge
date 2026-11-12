@@ -72,7 +72,7 @@ void alias_cmd(Console& c, const Args& a, bool temp) {
   if (a.size() == 2) {
     const auto it = c.aliases().find(name);
     if (it == c.aliases().end()) {
-      c.error("no alias '" + name + "'", "see `aliaslist`");
+      c.error("no alias '" + name + "'", "type aliaslist to list them");
     } else {
       c.print(name + " : " + it->second.body);
     }
@@ -175,13 +175,14 @@ void register_builtin_commands(Console& con) {
       "tempalias", "tempalias <name> \"<commands>\": an alias cfg_save does not keep",
       [](Console& c, const Args& a) { alias_cmd(c, a, true); }, kNoExpand);
   con.add_command("unalias", "unalias <name>: remove an alias", [](Console& c, const Args& a) {
-    if (!c.remove_alias(a[1])) c.error("no alias '" + lower(a[1]) + "'", "see `aliaslist`");
+    if (!c.remove_alias(a[1]))
+      c.error("no alias '" + lower(a[1]) + "'", "type aliaslist to list them");
   });
   con.add_command("unaliasall", "unaliasall: remove every alias",
                   [](Console& c, const Args&) { c.clear_aliases(); });
   con.add_command("exec", "exec <file>: run a cfg file's commands", [](Console& c, const Args& a) {
     if (a.size() < 2) {
-      c.error("exec needs a file", "write `exec <name>.cfg`");
+      c.error("exec needs a file", "usage: exec <name>.cfg");
       return;
     }
     c.exec_file(a[1], a.source, a.where);

@@ -44,6 +44,22 @@ bool is_cpp_diagnostic(std::string_view name) {
   return name == "GE_ASSERT";
 }
 
+// Whether the member call at `at` (just past its `.` or `->`) is on a lab: `lab` or `l`.
+bool is_lab_receiver(std::string_view s, size_t at) {
+  size_t end = at;
+  if (end >= 1 && s[end - 1] == '.') {
+    end -= 1;
+  } else if (end >= 2 && s.substr(end - 2, 2) == "->") {
+    end -= 2;
+  } else {
+    return false;
+  }
+  size_t begin = end;
+  while (begin > 0 && ident_char(s[begin - 1])) begin--;
+  const std::string_view who = s.substr(begin, end - begin);
+  return who == "lab" || who == "l";
+}
+
 // A C++ cursor that steps over comments and literals. `pos` always sits in code.
 struct CppLexer {
   std::string_view s;
@@ -124,7 +140,9 @@ void cpp_sites(std::string_view s, std::vector<DiagnosticSite>& sites) {
       break;
     }
     const std::string_view name = s.substr(start, end - start);
-    const bool member_fail = name == "fail" && (prev == '.' || prev == '>');
+    // A lab's fail: `lab.fail(` or `l.fail(` (a save reader's or a parser's `fail` is not one).
+    const bool member_fail =
+        name == "fail" && (prev == '.' || prev == '>') && is_lab_receiver(s, start);
     lx.advance(end - start);
     prev = 'a';
     if (!is_cpp_diagnostic(name) && !member_fail) continue;
@@ -226,6 +244,98 @@ std::string prompt_problem(std::string_view message) {
   }
   return "names no next action: end it with \"next: <what to do>\", \"skill: <name>\", a "
          "command (make ..., run ...) or a doc (see ..., docs/...)";
+}
+
+std::string player_text_problem(std::string_view literal) {
+  const std::string text = lower(literal);
+  for (const std::string_view word : {"next:", "skill:"}) {
+    for (size_t at = text.find(word); at != std::string::npos; at = text.find(word, at + 1)) {
+      if (at == 0 || !ident_char(text[at - 1])) {
+        return "says \"" + std::string(word) +
+               "\" like a prompt for an agent; say it as a game would (\"Type \"coopgame\" to "
+               "start one.\"), and keep the prompt shape for the log (out::error) and the CLIs";
+      }
+    }
+  }
+  const size_t open = literal.find('`');
+  if (open != std::string_view::npos && literal.find('`', open + 1) != std::string_view::npos) {
+    return "marks a word with backticks, which a player sees as they are; quote it "
+           "(Type \"ready\") or leave the marks out";
+  }
+  return "";
+}
+
+std::vector<TextSite> player_text_sites(std::string_view s) {
+  std::vector<TextSite> sites;
+  CppLexer lx{s};
+  while (!lx.done()) {
+    const char c = s[lx.pos];
+    if (c == '"' ||
+        (c == 'R' && s.substr(lx.pos, 2) == "R\"" && (lx.pos == 0 || !ident_char(s[lx.pos - 1])))) {
+      const int line = lx.line;
+      std::string text;
+      lx.skip_non_code(&text);
+      sites.push_back({line, std::move(text)});
+      continue;
+    }
+    if (lx.skip_non_code(nullptr)) continue;
+    if (!ident_char(c) || std::isdigit(static_cast<unsigned char>(c))) {
+      lx.advance(1);
+      continue;
+    }
+    const size_t start = lx.pos;
+    size_t end = start;
+    while (end < s.size()) {
+      while (end < s.size() && ident_char(s[end])) end++;
+      if (s.substr(end, 2) == "::" && end + 2 < s.size() && ident_char(s[end + 2])) {
+        end += 2;
+        continue;
+      }
+      break;
+    }
+    const std::string_view name = s.substr(start, end - start);
+    lx.advance(end - start);
+    // A log line, an assert or a lab's fail is the prompt rule's, not player text.
+    const bool log = name.starts_with("out::") || name.starts_with("out_::") ||
+                     name.starts_with("output::") ||
+                     name.find("::output::") != std::string_view::npos ||
+                     name.find("::out::") != std::string_view::npos;
+    const bool skip = log || name == "static_assert" || is_cpp_diagnostic(name) ||
+                      (name == "fail" && is_lab_receiver(s, start));
+    if (!skip) continue;
+    size_t k = lx.pos;
+    while (k < s.size() && std::isspace(static_cast<unsigned char>(s[k]))) k++;
+    if (k >= s.size() || s[k] != '(') continue;
+    lx.advance(k + 1 - lx.pos);
+    int depth = 1;
+    while (!lx.done() && depth > 0) {
+      if (lx.skip_non_code(nullptr)) continue;
+      depth += s[lx.pos] == '(' ? 1 : s[lx.pos] == ')' ? -1 : 0;
+      lx.advance(1);
+    }
+  }
+  return sites;
+}
+
+bool is_player_text_path(std::string_view path) {
+  for (const std::string_view dir : {"engine/console/", "engine/server/", "engine/hud/"}) {
+    if (path.starts_with(dir)) return true;
+  }
+  if (!path.starts_with("games/")) return false;
+  const size_t game_end = path.find('/', 6);
+  if (game_end == std::string_view::npos) return false;
+  // Any directory of the game's own that is not for agents or content.
+  for (size_t at = game_end + 1; at < path.size();) {
+    const size_t slash = path.find('/', at);
+    if (slash == std::string_view::npos) break;
+    const std::string_view part = path.substr(at, slash - at);
+    for (const std::string_view agent :
+         {"labs", "cli", "play", "assets", "content", "mods", "qc", "tests"}) {
+      if (part == agent) return false;
+    }
+    at = slash + 1;
+  }
+  return true;
 }
 
 std::vector<DiagnosticSite> diagnostic_sites(std::string_view source, SourceKind kind) {

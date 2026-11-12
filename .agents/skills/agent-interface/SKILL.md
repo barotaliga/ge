@@ -28,6 +28,25 @@ Example: see `docs/architecture.md` § Diagnostics. Do not write bare error code
 `cmake/` and the root `CMakeLists.txt`; `ge doctor` runs it over a game repo. Only a call's
 string literals are judged, so put the next action in a literal, not in a variable.
 
+## Player text (what a person reads while playing)
+
+The prompt shape is for agents: the log channels (`out::`), asserts, labs, `ge`, the play
+contract and a game's player CLI. **A line a player reads in the game is written like a game's
+own words**: the console's answers, chat and centre prints, the server's refusals, a menu's hint,
+a vote's or a lobby's no. A plain sentence that says what happened and, when it helps, what to
+type instead, the command in quotes: `Bots join only a coop game. Type "coopgame" to start one.`
+Never `next:`, `skill:`, backtick marks, a source path, a skill's name or a code identifier
+(`ListenOptions::files`); a bug only a developer can hit says "the game is built wrong: ...".
+A usage hint reads `usage: toggle <name>`. Players are people; only agents read prompts.
+
+**It is a test too.** `player_text_sites` and `player_text_problem` (`engine/cli/diagnostic.hpp`)
+judge every string literal outside the log and diagnostic calls in `games/<game>/` (bar `labs/`,
+`cli/`, `play/`, `assets/`, `content/`, `mods/`, `qc/`), `engine/console`, `engine/server` and
+`engine/hud`; `tests/cli_diagnostics_test.cpp` fails a line with `next:`, `skill:` or a pair of
+backticks. A file only agents read (a lab's harness, a tool's `main`) says `// voice: agent (why)`
+in its leading comment and is skipped. The `se-console-words` lab types a player's refusals into
+the window's console over a real map and counts `lines_in_agent_syntax`.
+
 ## The `ge` CLI (`engine/cli`, `cmake/Cli.cmake`)
 
 `ge` is the whole interface an agent has to a game repo: there is no editor. `commands.cpp`'s

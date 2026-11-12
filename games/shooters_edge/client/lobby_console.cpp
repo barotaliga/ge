@@ -64,7 +64,7 @@ void add_lobby_commands(ge::console::Console& con, Listen& l) {
   con.cvars().bind({.name = "sv_port",
                     .fallback = "0",
                     .help = "the UDP port others join the next match on (0: nobody joins); "
-                            "takes effect with the next `map`",
+                            "takes effect with the next map",
                     .kind = ge::console::CvarKind::integer},
                    &l.opt.port);
   con.cvars().bind({.name = "sv_maxclients",

@@ -1,5 +1,8 @@
 // One measured classic session (classic_trial.hpp).
 //
+// voice: agent (a lab's harness: its errors land in the lab's report; docs/architecture.md § Player
+// text).
+//
 // ge:summary The classic trial: the mod, the server, the scripted clients and the report
 // ge:keywords run_classic_trial trial_files digest server-kbps
 // ge:skill net shooter

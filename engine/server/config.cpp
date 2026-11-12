@@ -35,7 +35,7 @@ bool first_error(const cn::Console& con, std::string& error) {
     if (p.severity != cn::Problem::Severity::error) continue;
     error = (p.where.file.empty() ? std::string("the command line")
                                   : p.where.file + ":" + std::to_string(p.where.line)) +
-            ": " + p.what + (p.next.empty() ? "" : "; next: " + p.next);
+            ": " + p.what + (p.next.empty() ? "" : " (" + p.next + ")");
     return true;
   }
   return false;
@@ -117,7 +117,7 @@ bool load_server_cfg(cn::Console& con, ServerCfg& cfg, const std::vector<std::st
     if (found.empty()) {
       error = "profile '" + cfg.profile + "': no " + file + " in ";
       for (size_t i = 0; i < dirs.size(); i++) error.append(i ? ", " : "").append(dirs[i]);
-      error += "; next: check the name, or write " + cfg.base + "/" + file;
+      error += ". Check the name, or write " + cfg.base + "/" + file + ".";
       return false;
     }
     run_file(con, cfg, found, Layer::profile);

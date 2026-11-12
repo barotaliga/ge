@@ -258,7 +258,7 @@ TEST(a_campaigns_next_map_with_nowhere_to_read_it_from_fails_with_a_reason) {
       cl::listen_start(l, stub, stub_map("first"), shooters_edge::net::listen_options(), error),
       error);
   for (int i = 0; i < 400 && l.failed.empty(); i++) cl::listen_frame(l, {});
-  CHECK_MSG(l.failed.find("no search path") != std::string::npos, l.failed);
+  CHECK_MSG(l.failed.find("no files to read maps/") != std::string::npos, l.failed);
   CHECK(l.server == nullptr);
   CHECK(cl::listen_advance(l, 1, {}) == 0);  // nothing more runs
 }

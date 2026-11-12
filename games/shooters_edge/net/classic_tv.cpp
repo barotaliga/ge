@@ -406,11 +406,12 @@ void serve(TvNode& n, TvViewer& v, double now) {
 // The records whose wait is over, into the kept match and every viewer's stream.
 void release(TvNode& n, double now) {
   while (!n.pending.empty() && n.pending.front().release_at <= now) {
-    const std::vector<uint8_t> rec = std::move(n.pending.front().record);
+    const std::vector<uint8_t> got = std::move(n.pending.front().record);
     n.pending.pop_front();
     const int64_t levels = n.match.levels;
     const bool was_broken = n.match.broken;
-    mv_apply(n.match, rec);
+    std::vector<uint8_t> rec;
+    mv_apply(n.match, got, &rec);
     if (n.match.broken && !was_broken)
       log_line(n, "a late viewer gets no catch-up until the next level: " + n.match.why);
     const bool level = n.match.levels != levels;
@@ -453,6 +454,7 @@ bool tv_open(TvNode& n, const gn::Address& bind, const gn::Address& server, cons
              std::string& error) {
   n.cfg = cfg;
   n.server = server;
+  n.match.name = cfg.hostname.empty() ? cfg.name : cfg.hostname;
   n.retry_s = cfg.first_retry_s;
   if (!gn::tcp_listen(n.listener, bind, &error)) {
     error = "the broadcast port could not listen at " + gn::to_string(bind) + ": " + error +

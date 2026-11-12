@@ -322,9 +322,7 @@ bool catch_up(Listen& l) {
 bool start_map(Listen& l, std::string& error) {
   close_match(l);
   if (l.opt.game == nullptr) {
-    error =
-        "no server game for the match; next: set ListenOptions::game to "
-        "net/classic_game.hpp's classic_game()";
+    error = "the game is built wrong: it has no server game for the match";
     return false;
   }
   auto h = std::make_unique<ListenHost>();
@@ -356,7 +354,7 @@ bool start_map(Listen& l, std::string& error) {
     const auto at = static_cast<uint16_t>(l.opt.port);
     if (!ge::net::open_udp_transport(*port, ge::net::ipv4(0, 0, 0, 0, at), &error)) {
       error = "the match's port " + std::to_string(l.opt.port) + " did not open: " + error +
-              "; next: pick another port or 0 (nobody joins)";
+              ". Pick another port, or 0 to play alone.";
       return false;
     }
   }
@@ -365,8 +363,7 @@ bool start_map(Listen& l, std::string& error) {
   l.port = std::move(port);
   ge::net::Transport* socket = l.opt.transport != nullptr ? l.opt.transport : l.port.get();
   if (!ge::server::server_open(*server, *l.opt.game, c, socket, nullptr, error)) {
-    error = "the map " + l.map->name + " did not load: " + error +
-            "; next: read the console's lines above";
+    error = "the map " + l.map->name + " did not load: " + error;
     close_match(l);
     return false;
   }
@@ -384,7 +381,7 @@ bool campaign_map(void* ctx, const std::string& name, sv::MapSpec& out, std::str
   std::unique_ptr<LoadedMap> m = std::move(l.next);
   if (!m || m->name != name) {
     if (l.opt.files == nullptr) {
-      error = "no search path to read maps/" + name + ".bsp from; next: set ListenOptions::files";
+      error = "the game is built wrong: it has no files to read maps/" + name + ".bsp from";
       return false;
     }
     m = load_named_map(*l.opt.files, name, error);
@@ -522,7 +519,7 @@ void open_door(Listen& l) {
     const auto at = static_cast<uint16_t>(o.port);
     if (!ge::net::open_udp_transport(*port, ge::net::ipv4(0, 0, 0, 0, at), &error)) {
       l.prints.push_back("coop: the port " + std::to_string(o.port) + " did not open: " + error +
-                         "; next: pick another sv_port (0: nobody joins)");
+                         ". Pick another sv_port, or 0 to play alone.");
       return;
     }
   }
@@ -568,7 +565,7 @@ bool baseline_progs(pg::Progs& out, std::string& error) {
   if (!r.ok) {
     error = "the baseline mod did not compile:";
     for (const pg::QcDiagnostic& d : r.diagnostics) error += "\n  " + pg::diagnostic_text(d);
-    error += "\nnext: fix games/shooters_edge/qc at the lines named, then rebuild";
+    error += "\nThe game is built wrong: its mod's source has errors at the lines named.";
     return false;
   }
   out = std::move(r.progs);
@@ -600,7 +597,7 @@ std::unique_ptr<LoadedMap> load_named_map(const SearchPath& files, const std::st
   if (bytes.empty()) {
     error = "no map maps/" + name + ".bsp in " +
             (files.folder.empty() ? std::string("the search path") : files.folder) +
-            " or its packs; next: check the name (`map arena` is built in) and -basedir";
+            " or its packs. Check the name and the game folder (\"map arena\" is built in).";
     return nullptr;
   }
   return map_from_bytes(bytes, name, error);
@@ -684,9 +681,8 @@ bool listen_campaign(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMa
 }
 
 std::string listen_save_problem(const Listen& l) {
-  if (!l.campaign_host || l.server == nullptr)
-    return "only a single-player game saves; next: start one (SINGLE PLAYER > NEW GAME)";
-  if (l.campaign.end != LevelEnd::none) return "the level is over; next: save on the next map";
+  if (!l.campaign_host || l.server == nullptr) return "Only a single-player game can be saved.";
+  if (l.campaign.end != LevelEnd::none) return "Can't save now: the level is over.";
   return sv::campaign_save_problem(*l.campaign_host);
 }
 
@@ -712,7 +708,7 @@ bool load_ahead(void* ctx, const std::string& name, sv::MapSpec& out, std::strin
   LoadAhead& a = *static_cast<LoadAhead*>(ctx);
   if (!a.map || a.map->name != name) {
     if (a.files == nullptr) {
-      error = "no search path to read maps/" + name + ".bsp from; next: set ListenOptions::files";
+      error = "the game is built wrong: it has no files to read maps/" + name + ".bsp from";
       return false;
     }
     a.map = load_named_map(*a.files, name, error);
@@ -920,7 +916,7 @@ bool listen_lobby(Listen& l, std::string_view line) {
     const std::string arg = sp == std::string_view::npos ? "" : std::string(line.substr(sp + 1));
     sh::AimSkill skill = l.opt.companion_skill;
     if (!arg.empty() && !skill_named(arg, skill)) {
-      l.prints.push_back("addbot: no skill " + arg + "; next: addbot novice|average|expert");
+      l.prints.push_back("addbot: unknown skill \"" + arg + "\" (use novice, average or expert)");
       return true;
     }
     seat_companion(l, skill);
@@ -940,14 +936,13 @@ bool listen_lobby(Listen& l, std::string_view line) {
         word == "toggleready" || word == "team" || word == "start" || word == "lobby" ||
         word == "warmup" || word == "sitout" || word == "togglewarmup") {
       l.prints.push_back(std::string(word) +
-                         ": no lobby runs; next: play a match (`map <name>` with deathmatch 1) "
-                         "with `sv_lobby 1`");
+                         ": there is no lobby. Lobbies run in deathmatch with sv_lobby 1.");
       return true;
     }
     return false;
   }
   if (word == "addbot" && l.room->lobby.phase == sv::LobbyPhase::match) {
-    l.prints.push_back("addbot: the match is on; next: add bots in the warmup");
+    l.prints.push_back("addbot: the match has started. Add bots during the warmup.");
     return true;
   }
   l.host->ctx = &l;

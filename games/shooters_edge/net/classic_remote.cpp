@@ -229,13 +229,13 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
   if (std::string why;
       !gn::parse_address(text, to) && !gn::resolve_ipv4(text, kPortServer, to, &why)) {
     error = "'" + address + "' is not an address the client reads (" + why +
-            "); next: give a host name or an IPv4 address with an optional port (connect "
-            "192.168.1.20, connect 192.168.1.20:27500, connect example.org:27500) or localhost";
+            "). Give a host name or an IPv4 address with an optional port (connect "
+            "192.168.1.20, connect 192.168.1.20:27500, connect example.org:27500) or localhost.";
     return false;
   }
   if (!gn::open_udp_transport(r.own, gn::ipv4(0, 0, 0, 0, 0), &error)) {
-    error = "the client's socket did not open: " + error +
-            "; next: check that the machine has a network";
+    error =
+        "the client's socket did not open: " + error + ". Check that the computer is on a network.";
     return false;
   }
   r.transport = &r.own;
@@ -566,7 +566,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   con.add_command("reconnect", "reconnect: join the last server again",
                   [&r, join](Con& c, const Args&) {
                     if (r.server_name.empty())
-                      c.print("reconnect: no server joined yet; next: connect <host>");
+                      c.print("reconnect: you haven't joined a server yet (use connect <host>)");
                     else
                       join(c, r.server_name);
                   });

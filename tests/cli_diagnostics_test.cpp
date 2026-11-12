@@ -10,6 +10,8 @@
 // ge:test tests/cli_diagnostics_test.cpp
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 
 #include "check.hpp"
@@ -93,6 +95,83 @@ TEST(every_message_in_the_tree_reads_as_a_prompt) {
   scan(root / "CMakeLists.txt");
   CHECK_MSG(files > 100, "scanned only " + std::to_string(files) +
                              " files; next: check GE_SOURCE_DIR in tests/CMakeLists.txt");
+}
+
+// PLAYER TEXT: what a person reads while playing reads like a game, not like a prompt.
+TEST(player_text_reads_like_a_game) {
+  CHECK(player_text_problem("Bots join only a coop game. Type \"coopgame\" to start one.").empty());
+  CHECK(player_text_problem("demo_next: the next highlight").empty());  // a command's name
+  CHECK(!player_text_problem("addbot: coop is off; next: `coopgame`").empty());
+  CHECK(!player_text_problem("no lobby; Next: play a match").empty());
+  CHECK(!player_text_problem("see `cmdlist` for the names").empty());
+  CHECK(!player_text_problem("rebuild it (skill: assets)").empty());
+  CHECK(player_text_problem("the console key is `").empty());  // one backtick is the key
+}
+
+TEST(player_text_sites_skip_the_log_and_asserts) {
+  const std::string src =
+      "// \"in a comment; next: x\"\n"
+      "void f() {\n"
+      "  c.print(\"Type \\\"ready\\\".\");\n"
+      "  out::error(\"log; next: \" + a + \"b\");\n"
+      "  ge::core::output::status(\"status; next: y\");\n"
+      "  static_assert(true, \"walk `edict`\");\n"
+      "  lab.fail(\"what\", \"next: z\");\n"
+      "  io.fail(\"the save is damaged\");\n"
+      "  char k = '\"';\n"
+      "}\n";
+  const auto sites = player_text_sites(src);
+  CHECK_MSG(sites.size() == 2, "want 2 sites, got " + std::to_string(sites.size()) +
+                                   "; next: read player_text_sites in engine/cli/diagnostic.cpp");
+  if (sites.size() != 2) return;
+  CHECK(sites[0].line == 3 && sites[0].text == "Type \"ready\".");
+  CHECK(sites[1].line == 8 && sites[1].text == "the save is damaged");
+}
+
+TEST(player_text_lives_in_the_games_and_the_console) {
+  CHECK(is_player_text_path("games/shooters_edge/client/listen.cpp"));
+  CHECK(is_player_text_path("games/fall_line/app/sky_type.cpp"));
+  CHECK(is_player_text_path("engine/console/console.cpp"));
+  CHECK(is_player_text_path("engine/server/vote.cpp"));
+  CHECK(!is_player_text_path("games/shooters_edge/labs/se_duel_lab.cpp"));
+  CHECK(!is_player_text_path("games/shooters_edge/cli/main.cpp"));
+  CHECK(!is_player_text_path("engine/cli/doctor.cpp"));
+  CHECK(!is_player_text_path("plugins/progs/vm.cpp"));
+}
+
+// Every line a player can read, in every game and the engine's console and server, reads like a
+// game's own words; agent syntax stays in the log, the labs, `ge` and the player CLIs.
+TEST(every_player_line_in_the_tree_reads_like_a_game) {
+  const fs::path root = GE_SOURCE_DIR;
+  int files = 0;
+  for (const char* dir : {"games", "engine/console", "engine/server", "engine/hud"}) {
+    for (const auto& e : fs::recursive_directory_iterator(root / dir)) {
+      if (!e.is_regular_file()) continue;
+      const std::string ext = e.path().extension().string();
+      if (ext != ".cpp" && ext != ".hpp") continue;
+      const std::string rel = fs::relative(e.path(), root).generic_string();
+      if (!is_player_text_path(rel)) continue;
+      std::ifstream in(e.path(), std::ios::binary);
+      std::stringstream ss;
+      ss << in.rdbuf();
+      const std::string src = ss.str();
+      if (src.find(kAgentVoiceMarker) != std::string::npos) continue;
+      files++;
+      for (const TextSite& t : player_text_sites(src)) {
+        const std::string why = player_text_problem(t.text);
+        if (!why.empty()) {
+          std::string line = rel;
+          line += ":" + std::to_string(t.line);
+          line += ": a player reads \"" + t.text + "\", which " + why;
+          line += "; next: reword it, or mark a file only agents read with \"// ";
+          line += std::string(kAgentVoiceMarker) + "\" (skill: agent-interface)";
+          ::ge::test::fail(__FILE__, __LINE__, line);
+        }
+      }
+    }
+  }
+  CHECK_MSG(files > 100, "scanned only " + std::to_string(files) +
+                             " player files; next: check GE_SOURCE_DIR in tests/CMakeLists.txt");
 }
 
 // A finding always carries all three parts, and its printed shape says each one.

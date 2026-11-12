@@ -52,7 +52,7 @@ bool get_u(std::span<const uint8_t> b, size_t& at, uint64_t& v) {
 
 void* create(const ServerConfig& c, std::string& error) {
   if (c.map != "ring") {
-    error = "the sample game has one map, 'ring', not '" + c.map + "'; next: --map=ring";
+    error = "the sample game has one map, 'ring', not '" + c.map + "'";
     return nullptr;
   }
   auto* s = new Sample;

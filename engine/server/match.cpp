@@ -33,21 +33,21 @@ LobbyWhy refuse(Lobby& l, int slot, std::string_view what, LobbyWhy why) {
   std::string line = std::string(what) + ": " + why_text(why);
   switch (why) {
     case LobbyWhy::in_match:
-      line += "; next: play the match, the lobby comes back when the map changes";
+      line += ". The lobby comes back when the map changes.";
       break;
     case LobbyWhy::not_leader:
-      line += "; next: `ready`, the countdown starts when everyone is";
+      line += ". Type \"ready\": the countdown starts when everyone is ready.";
       break;
     case LobbyWhy::bad_team:
-      line += "; next: `team red`, `team blue`, `team auto` or `team switch`";
+      line += ". Use team red, team blue, team auto or team switch.";
       break;
     case LobbyWhy::no_seat:
-      line += " (slot " + std::to_string(slot) + "); next: join the game first";
+      line += ". Join the game first.";
       break;
     case LobbyWhy::too_few:
       line += " (" + std::to_string(lobby_seated(l)) + " seated, " +
               std::to_string(l.settings.min_players) +
-              " needed); next: wait for another player to join, or seat a bot";
+              " needed). Wait for another player to join, or add a bot.";
       break;
     default:
       break;

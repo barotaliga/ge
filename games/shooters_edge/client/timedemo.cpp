@@ -195,8 +195,8 @@ bool find_demo(const SearchPath& files, const std::string& name,
       found = name;
       return true;
     }
-    error = "no demo file at " + name + "; next: check the path, or name a demo the packs hold " +
-            "(demo1, demo1.dem)";
+    error = "There is no demo file at " + name + ". Check the path, or name a demo the packs " +
+            "hold (demo1, demo1.dem).";
     return false;
   }
   std::vector<uint8_t> store;
@@ -232,8 +232,8 @@ bool find_demo(const SearchPath& files, const std::string& name,
     }
   }
   error = "no demo named " + name +
-          " in the game's packs or folder, nor on disk; next: name a "
-          "demo the packs hold (demo1, demo1.dem) or a file's path";
+          " in the game's packs or folder, nor on disk. Name a "
+          "demo the packs hold (demo1, demo1.dem) or a file's path.";
   return false;
 }
 
@@ -249,9 +249,9 @@ std::string demo_game_dir(const std::string& basedir, const std::string& opened,
   std::error_code ec;
   if (fs::is_directory(dir, ec)) return recorded;
   note = "the demo was recorded in the game folder " + recorded + ", and " + dir.string() +
-         " is not there, so a model or sound of its own may be missing; next: put the mod's "
+         " is not there, so a model or sound of its own may be missing. Put the mod's "
          "folder beside " +
-         base + ", or pass -game " + recorded;
+         base + ", or start with -game " + recorded + ".";
   return opened;
 }
 
