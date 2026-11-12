@@ -79,7 +79,7 @@ bool gap_lands(const MoveWorld& world, const MoveSettings& move, Vec3f at, Vec3f
   const Vec3f rel{f.end.x - T.x, f.end.y - T.y, 0};
   const float on = dot(rel, dir);
   const float off = rel.x * dir.y - rel.y * dir.x;
-  return on >= 0 && on <= past && off <= kGapLand && off >= -kGapLand;
+  return on >= -kGapLand && on <= past && off <= past && off >= -past;
 }
 
 int32_t gap_in(const Pilot& p, int32_t end, size_t from) {

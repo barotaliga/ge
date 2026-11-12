@@ -160,20 +160,31 @@ int32_t nearest_node(const sh::NavGraph& g, sh::Vec3f p) {
 // The quickest route from `from` into trigger `t` with no teleporter on it; empty with none.
 sh::NavRoute route_into(const sh::NavGraph& g, int32_t from, const Trigger& t, ge::ai::Search& s,
                         const sh::NavJumper& jumper) {
+  // The nodes in the trigger first; only when none has a route, those a step short of a thin one
+  // (its slab between two rows of the grid).
   sh::NavRoute best;
-  for (size_t k = 0; k < g.nodes.size(); k++) {
-    if (!touches(t, g.nodes[k].origin)) continue;
-    sh::NavRoute r = sh::nav_route(g, from, static_cast<int32_t>(k), s, 1, {}, {}, jumper);
-    if (r.nodes.empty() || r.time_s >= kClosed_s ||
-        (!best.nodes.empty() && r.time_s >= best.time_s))
-      continue;
-    bool teleported = false;
-    for (size_t i = 0; i + 1 < r.nodes.size() && !teleported; i++) {
-      const sh::NavLink* l = link_between(g, r.nodes[i], r.nodes[i + 1]);
-      teleported = l != nullptr && l->teleport;
+  for (int pass = 0; pass < 2 && best.nodes.empty(); pass++)
+    for (size_t k = 0; k < g.nodes.size(); k++) {
+      const sh::Vec3f o = g.nodes[k].origin;
+      if (pass == 0 && !touches(t, o)) continue;
+      if (pass == 1) {
+        const float ox = std::max({t.lo.x - o.x, 0.0f, o.x - t.hi.x});
+        const float oy = std::max({t.lo.y - o.y, 0.0f, o.y - t.hi.y});
+        if (touches(t, o) || std::hypot(ox, oy) > kHullHalf + kExitNear ||
+            o.z + kHullUp < t.lo.z || o.z - kHullDown > t.hi.z)
+          continue;
+      }
+      sh::NavRoute r = sh::nav_route(g, from, static_cast<int32_t>(k), s, 1, {}, {}, jumper);
+      if (r.nodes.empty() || r.time_s >= kClosed_s ||
+          (!best.nodes.empty() && r.time_s >= best.time_s))
+        continue;
+      bool teleported = false;
+      for (size_t i = 0; i + 1 < r.nodes.size() && !teleported; i++) {
+        const sh::NavLink* l = link_between(g, r.nodes[i], r.nodes[i + 1]);
+        teleported = l != nullptr && l->teleport;
+      }
+      if (!teleported) best = std::move(r);
     }
-    if (!teleported) best = std::move(r);
-  }
   return best;
 }
 
