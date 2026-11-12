@@ -1,7 +1,8 @@
 // The server's stream port for classic relays (classic_qtv.hpp).
 //
 // ge:summary The classic relay handshake, SHA3-512 auth, up messages and the per-relay streams
-// ge:keywords qtv stream-port relay handshake auth challenge sha3-512 keccak up-message qul say_game
+// ge:keywords qtv stream-port relay handshake auth challenge sha3-512 keccak
+// ge:keywords up-message qul say_game
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_qtv_test.cpp
 #include "shooters_edge/net/classic_qtv.hpp"
