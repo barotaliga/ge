@@ -1,4 +1,8 @@
-// The route finder (routes.hpp).
+// The route finder (routes.hpp): the shortest path over the hosts, and the asks.
+//
+// ge:summary The route finder: Dijkstra over the browser's pings and the forwarders' lists
+// ge:keywords forward route-finder dijkstra shortest-path best_route
+// ge:skill net
 #include "forward/routes.hpp"
 
 #include <algorithm>

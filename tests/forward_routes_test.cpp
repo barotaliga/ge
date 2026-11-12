@@ -73,7 +73,9 @@ namespace {
 bool test_is_forwarder(const net::ServerInfo& info) { return info.mode == "forward"; }
 size_t test_ask(uint8_t* out, size_t cap) {
   if (cap < 3) return 0;
-  std::memcpy(out, "ASK", 3);
+  out[0] = 'A';
+  out[1] = 'S';
+  out[2] = 'K';
   return 3;
 }
 bool test_read(const uint8_t* data, size_t size, fw::Reach& out) {
