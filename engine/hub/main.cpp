@@ -9,13 +9,17 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 #include <thread>
+#include <unordered_set>
 
 #include "account/host.hpp"
 #include "hub/archive.hpp"
 #include "hub/browse.hpp"
+#include "hub/content.hpp"
 #include "hub/http.hpp"
 #include "hub/poller.hpp"
+#include "hub/watch.hpp"
 #include "net/address.hpp"
 #include "net/master.hpp"
 #include "net/transport.hpp"
@@ -298,6 +302,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
               gn::to_string(http_at).c_str());
   std::fflush(stdout);
   int64_t next_line = static_cast<int64_t>(o.status_line_s * 1e6);
+  std::unordered_set<std::string> packed;  // demos whose content pack is made or failed
   for (;;) {
     const int64_t now = now_us();
     if (o.for_s > 0 && now >= static_cast<int64_t>(o.for_s * 1e6)) break;
@@ -324,6 +329,23 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
         std::fflush(stdout);
       }
       next_archive = now + 5000000;  // the inbox every 5 s
+      // Each new demo's content pack made now, a few a pass, so no visitor waits on the first.
+      if (!http.viewer_dir.empty() && spec.demo_files) {
+        const Site site{&archive, http.unix_s, "", http.viewer_dir};
+        int made = 0;
+        for (const DemoRow& r : archive.rows) {
+          if (made == 4) break;
+          if (!packed.insert(r.sha).second) continue;
+          ContentPack pack;
+          std::string why;
+          if (!viewer_built(site, spec)) break;
+          if (!demo_content(site, spec, r.sha, pack, why)) {
+            std::fprintf(stderr, "%s_hub: content pack for %s: %s\n", spec.id.c_str(),
+                         r.sha.c_str(), why.c_str());
+          }
+          made++;
+        }
+      }
     }
     http_update(http, p, spec, now);
     if (now >= next_line) {
