@@ -218,6 +218,10 @@ void fall(SequelServer& s, SequelMonster& m) {
   const Kind& k = kind(m);
   if (k.flies && !m.dead) return;
   if (k.swims && wet(s, foot(e, e.origin))) return;
+  if (m.gravity == 0 && !m.dead && (k.good || k.turret)) {  // hung up, or riding a turret
+    m.velocity = {};
+    return;
+  }
   m.on_ground = m.velocity.z <= 0 && on_floor(s, m);
   if (m.on_ground) {
     m.velocity = {};
@@ -286,6 +290,7 @@ int corner_named(const SequelServer& s, const std::string& name, const char* cla
 
 // The monster turns on `slot` (seen when `saw`).
 void found(SequelServer& s, SequelMonster& m, int slot, bool saw) {
+  if (kind(m).good) return;  // a good guy hunts no one
   m.enemy = slot;
   m.seen_at = s.level_time;
   m.last_sight = unpack(s.players[slot].move.origin);
@@ -741,6 +746,11 @@ void think(SequelServer& s, SequelMonster& m) {
   fall(s, m);
   if (m.leaping) return;                                  // in the air
   if (m.enemy >= 0 && !hunted(s, m.enemy)) m.enemy = -1;  // dead or gone
+  if (k.turret) {  // sits its turret: aims it at whom it sees, fires once it has seen long enough
+    if (m.enemy < 0) notice(s, m);
+    targets_turret(s, m, m.enemy >= 0 && sees(s, m, m.enemy) ? m.enemy : -1);
+    return;
+  }
   if (k.medic && tend(s, m)) return;
   if (m.enemy < 0) notice(s, m);
   if (m.enemy < 0) {  // walks its path, or stands
@@ -867,7 +877,7 @@ void die(SequelServer& s, SequelMonster& m, int attacker) {
   m.leaping = false;
   m.screen = 0;
   e.box = false;  // shots pass a corpse
-  s.monsters_killed++;
+  if (!k.good) s.monsters_killed++;
   sound(s, m.entity, k.death);
   if (m.patient >= 0) {  // a medic's patient is free for another
     s.monsters[size_t(m.patient)].claimed = false;
@@ -993,11 +1003,17 @@ void monster_spawn(SequelServer& s) {
     m.combat = corner_named(s, e.target, "point_combat");
     if (m.corner >= 0)
       e.angles.y = m.ideal_yaw = yaw_to(s.entities[size_t(m.corner)].origin - e.origin);
+    if (kd.turret) m.gravity = 0;              // it rides its turret
+    if ((e.spawnflags & 8) != 0 && kd.good) {  // crucified: hung in place, never falls
+      e.mins = {-16, 0, 0};
+      e.maxs = {16, 8, 32};
+      m.gravity = 0;
+    }
     s.monsters.push_back(m);
-    if (!kd.prop && !m.spare) s.monsters_total++;
+    if (!kd.prop && !kd.good && !m.spare) s.monsters_total++;
   }
   for (SequelMonster& m : s.monsters) {  // walkers to the floor
-    if (afloat(kKinds[m.kind]) || m.waiting) continue;
+    if (afloat(kKinds[m.kind]) || m.waiting || m.gravity == 0) continue;
     SequelEntity& e = s.entities[size_t(m.entity)];
     const sh::SequelTrace t =
         sweep(s, m, e.origin + sh::Vec3f{0, 0, 1}, e.origin - sh::Vec3f{0, 0, 256});
