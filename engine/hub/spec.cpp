@@ -35,7 +35,8 @@ int64_t interest(const HubSpec& spec, const HubNode& node, int64_t now_us) {
   int64_t score = (full ? 1000000 : 0) + int64_t{humans_in} * 10000 + int64_t{people} * 100 +
                   int64_t{mode_weight(spec, s.mode)} * 10 + 2;
   // Divided down by the share of bots: a field of bots alone keeps a tenth of its place.
-  if (people > 0) score = score * (int64_t{10} * humans_in + (people - humans_in)) / (int64_t{10} * people);
+  if (people > 0)
+    score = score * (int64_t{10} * humans_in + (people - humans_in)) / (int64_t{10} * people);
   return score < 2 ? 2 : score;
 }
 

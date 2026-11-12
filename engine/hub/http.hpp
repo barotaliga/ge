@@ -7,7 +7,7 @@
 // bytes, tested without a socket; `HttpServer` is the thin loop that carries them.
 //
 // ge:summary The hub's HTTP/1.1: request parsing, responses, server-sent events, the server loop
-// ge:keywords hub http http1.1 get head request response cors cache-control sse event-stream
+// ge:keywords hub http http-1-1 get head request response cors cache-control sse event-stream
 // ge:keywords server-sent-events keepalive tcp listen
 // ge:skill net
 // ge:test tests/hub_http_test.cpp

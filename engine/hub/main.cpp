@@ -67,7 +67,11 @@ bool hub_options(const std::vector<std::string>& args, HubOptions& out, std::str
       return false;
     }
     if (!ok) {
-      error = "flag " + key + " needs a number in range, not '" + value + "'; next: --help";
+      error = "flag ";
+      error += key;
+      error += " needs a number in range, not '";
+      error += value;
+      error += "'; next: --help";
       return false;
     }
   }
