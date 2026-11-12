@@ -16,14 +16,20 @@
 // `--escapes=fly` flies every rocket out of a pit's liquid (shooter/escape.hpp) with the pilot
 // (bots/pilot_run.hpp `run_route`) from the liquid node at its takeoff, and tables which fired and
 // which landed: a staged run of a rare moment (a bot fallen into lava) a match seldom shows.
+// `--gaps=fly` runs every gap trick (shooter/nav_gaps.hpp) with an expert fighter's pilot
+// (`--gap-features`) from points 160-640 units behind its takeoff, walking in at people's 180, and
+// tables whether the route planned the gap, curved into it, jumped it (at what speed), landed or
+// gave it up: the gap jump staged, where a match would need minutes to show one.
 //
 // ge:summary Lab: every item of every map asked: a route to it from the spawns, and one back
 // ge:keywords lab se-reach reachability coverage nav-gaps items pockets unreachable route maps
 // ge:keywords dm1 dm2 dm3 dm4 dm5 dm6 e1m2 route-probe floors-probe nav-debug escapes-fly lava
+// ge:keywords gaps-fly gap-jump-staged
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -35,6 +41,7 @@
 #include "lab/lab.hpp"
 #include "progs/entity_text.hpp"
 #include "shooter/nav.hpp"
+#include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/gap_tricks.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
@@ -58,6 +65,12 @@ namespace cn = shooters_edge::net;
 using ge::core::num::to_fixed;
 
 constexpr float kEscapeLimit_s = 8;  // --escapes: a flight given this long to land
+// --gaps=fly: each gap trick run up to from these far back of its takeoff, units, at people's
+// walk into it (180 units/s), on these seeds, given this long.
+constexpr float kGapBack[] = {160, 320, 480, 640};
+constexpr float kGapWalk = 180;
+constexpr uint32_t kGapSeeds = 3;
+constexpr float kGapLimit_s = 6;
 
 struct Gap {
   std::string item, why;
@@ -87,6 +100,8 @@ struct MapReach {
   int64_t escapes = 0, escape_links = 0, escape_proofs = 0;  // rockets out of a pit's liquid
   int64_t escapes_flown = 0, escapes_fired = 0, escapes_landed = 0;  // --escapes: the pilot's
   std::vector<std::vector<std::string>> escape_rows;
+  std::vector<std::vector<std::string>> gap_rows;  // --gaps=fly: each trick run up to
+  int64_t gap_runs = 0, gap_planned = 0, gap_jumped = 0, gap_landed = 0, gap_refused = 0;
   std::vector<std::vector<std::string>> route_rows, floor_rows;  // --route's and --floors' rows
   std::vector<std::vector<std::string>> script_rows;  // the scripted routes, held or refused
 };
@@ -197,7 +212,8 @@ void probe_map(const bt::MapNav& nav, const Probe& pr, MapReach& out) {
 }
 
 void reach_map(std::span<const uint8_t> bytes, const std::string& name, const std::string& entities,
-               const ge::progs::Progs& progs, const Probe* probe, bool fly_escapes, MapReach& out) {
+               const ge::progs::Progs& progs, const Probe* probe, bool fly_escapes,
+               const sh::Features* fly_gaps, std::ostream* gap_trace, MapReach& out) {
   out.name = name;
   std::unique_ptr<cl::LoadedMap> map = cl::map_from_bytes(bytes, name, out.error);
   if (!map) return;
@@ -253,6 +269,95 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
     out.escape_rows.push_back({name, std::to_string(x), at(e.from), at(to), to_fixed(e.pitch, 0),
                                std::to_string(e.fire_level), fired ? "yes" : "no",
                                landed ? "yes" : "no", to_fixed(r.time_s, 2), to_fixed(r.blast, 0)});
+  }
+
+  // --gaps=fly: each gap trick run up to by an expert fighter's pilot (bots/fighter.hpp
+  // `fighter_pilot`, the features given), from the floor's node nearest each point `kGapBack`
+  // behind its takeoff, walking into it at people's 180: planned through the gap, curved into it
+  // (the circle), jumped, landed or given up, the takeoff's speed, and arrived across.
+  for (size_t k = 0; fly_gaps != nullptr && k < nav.gaps_made.from.size(); k++) {
+    const int32_t a = nav.gaps_made.from[k];
+    if (a < 0) continue;
+    const sh::NavNode& n = g.nodes[static_cast<size_t>(a)];
+    const sh::NavLink* gl = nullptr;
+    for (int32_t x = 0; x < n.links && gl == nullptr; x++) {
+      const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(x)];
+      if (l.gap) gl = &l;
+    }
+    if (gl == nullptr) continue;
+    const sh::Vec3f S = n.origin, T = g.nodes[static_cast<size_t>(gl->to)].origin;
+    sh::Vec3f dir{T.x - S.x, T.y - S.y, 0};
+    const float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+    if (len < 1) continue;
+    dir = dir * (1 / len);
+    for (const float back : kGapBack) {
+      // The start: the dry node on the takeoff's floor nearest the point behind it.
+      const sh::Vec3f want{S.x - dir.x * back, S.y - dir.y * back, S.z};
+      int32_t best = -1;
+      float best_d = 96;
+      for (size_t i = 0; i < g.nodes.size(); i++) {
+        const sh::Vec3f o = g.nodes[i].origin;
+        if (o.z > S.z + 20 || o.z < S.z - 20 || (i < nav.wet.size() && nav.wet[i] != 0)) continue;
+        const float d =
+            std::sqrt((o.x - want.x) * (o.x - want.x) + (o.y - want.y) * (o.y - want.y));
+        if (d < best_d) best_d = d, best = static_cast<int32_t>(i);
+      }
+      if (best < 0) continue;
+      const sh::Vec3f from = g.nodes[static_cast<size_t>(best)].origin;
+      sh::Vec3f v{S.x - from.x, S.y - from.y, 0};
+      const float vl = std::sqrt(v.x * v.x + v.y * v.y);
+      v = vl > 1 ? v * (kGapWalk / vl) : sh::Vec3f{};
+      sh::PilotHands hands = sh::PilotHands::none;
+      sh::PilotSettings ps =
+          bt::fighter_pilot(*fly_gaps, sh::traits_of(sh::AimSkill::expert, sh::Temper::balanced),
+                            sh::AimSkill::expert, hands);
+      ps.jumper.gap_build_s = (*fly_gaps)[sh::Feature::gapbuild] ? bt::kGapBuild_s : -1;
+      int planned = 0, jumped = 0, landed = 0, refused = 0, arrived = 0, circles = 0, jumps = 0;
+      float speed = 0, time = 0;
+      for (uint32_t seed = 1; seed <= kGapSeeds; seed++) {
+        const bt::RunResult r =
+            bt::run_route(nav.world, g, from, T, hands, seed, ps, kGapLimit_s, v);
+        if (gap_trace != nullptr && seed == 1) {
+          for (size_t i = 0; i < r.trail.size(); i++) {
+            const sh::Vec3f o = r.trail[i], vv = r.velocity[i];
+            *gap_trace << k + 1 << '\t' << back << '\t'
+                       << to_fixed(0.013 * static_cast<double>(i + 1), 3) << '\t'
+                       << to_fixed(o.x, 0) << '\t' << to_fixed(o.y, 0) << '\t'
+                       << to_fixed(o.z - 24, 0) << '\t'
+                       << to_fixed(std::sqrt(vv.x * vv.x + vv.y * vv.y), 0) << '\t'
+                       << to_fixed(vv.z, 0) << '\t'
+                       << sh::pilot_mode_name(static_cast<sh::PilotMode>(r.modes[i])) << '\t'
+                       << r.links[i] << '\t' << to_fixed(r.yaw[i], 1) << '\t'
+                       << to_fixed(r.forward[i], 2) << '\t' << to_fixed(r.side[i], 2) << '\t'
+                       << r.because[i] << '\n';
+          }
+        }
+        bool through = false;
+        for (size_t i = 0; i + 1 < r.route.size(); i++)
+          through = through || (r.route[i] == a && r.route[i + 1] == gl->to);
+        planned += through;
+        jumped += r.stats.gap_jumps > 0;
+        landed += r.stats.gap_landed > 0;
+        refused += r.stats.gap_refused > 0;
+        circles += r.stats.circles;
+        speed += r.stats.gap_speed;
+        jumps += r.stats.gap_jumps;
+        arrived += r.arrived;
+        if (r.arrived) time += r.time_s;
+        out.gap_runs++;
+      }
+      out.gap_planned += planned, out.gap_jumped += jumped, out.gap_landed += landed;
+      out.gap_refused += refused;
+      auto at = [](sh::Vec3f o) {
+        return to_fixed(o.x, 0) + " " + to_fixed(o.y, 0) + " " + to_fixed(o.z - 24, 0);
+      };
+      out.gap_rows.push_back(
+          {name, std::to_string(k + 1), at(S), at(T), to_fixed(gl->speed, 0), to_fixed(back, 0),
+           at(from), std::to_string(planned), std::to_string(circles), std::to_string(jumped),
+           jumps > 0 ? to_fixed(speed / static_cast<float>(jumps), 0) : "-", std::to_string(landed),
+           std::to_string(refused), std::to_string(arrived),
+           arrived > 0 ? to_fixed(time / static_cast<float>(arrived), 2) : "-"});
+    }
   }
 
   for (const sh::NavLink& l : g.links) {
@@ -419,6 +524,20 @@ void run(gl::Lab& lab) {
   }
   const std::string basedir = lab.arg("basedir");
   const bool fly = lab.arg("escapes") == "fly";
+  sh::Features gap_features = sh::features_all();
+  const sh::Features* fly_gaps = nullptr;
+  if (lab.arg("gaps") == "fly") {
+    if (!sh::apply_features(lab.arg("gap-features"), gap_features, error)) {
+      lab.fail("se-reach: --gap-features: " + error, "next: name switches as se-team's --features");
+      return;
+    }
+    fly_gaps = &gap_features;
+  }
+  std::ofstream gap_trace;
+  if (fly_gaps != nullptr && !lab.arg("gap-trace").empty()) {
+    gap_trace.open(lab.arg("gap-trace"));
+    gap_trace << "trick\tback\tt\tx\ty\tfeet\tspeed\tvz\tmode\tk\tyaw\tforward\tside\tbecause\n";
+  }
   if (basedir.empty()) {
     std::vector<uint8_t> bytes;
     if (!ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bytes,
@@ -427,7 +546,8 @@ void run(gl::Lab& lab) {
       return;
     }
     maps.emplace_back();
-    reach_map(bytes, "halls", cn::kTeamHallsEntities, progs, &probe, fly, maps.back());
+    reach_map(bytes, "halls", cn::kTeamHallsEntities, progs, &probe, fly, fly_gaps,
+              gap_trace.is_open() ? &gap_trace : nullptr, maps.back());
   } else {
     cl::SearchPath files;
     if (!cl::open_game_dir(basedir, lab.arg("game"), files, error)) {
@@ -445,7 +565,8 @@ void run(gl::Lab& lab) {
         maps.back().error = "no maps/" + name + ".bsp in the game folder";
         continue;
       }
-      reach_map(f, name, "", progs, maps.size() == 1 ? &probe : nullptr, fly, maps.back());
+      reach_map(f, name, "", progs, maps.size() == 1 ? &probe : nullptr, fly, fly_gaps,
+                gap_trace.is_open() ? &gap_trace : nullptr, maps.back());
     }
   }
 
@@ -558,6 +679,27 @@ void run(gl::Lab& lab) {
     lab.metric("reach.escapes-landed", static_cast<double>(landed), "count");
     lab.table(et);
   }
+  if (fly_gaps != nullptr) {
+    gl::LabTable gf{
+        "--gaps=fly: each gap trick run up to by an expert's pilot from the node nearest each "
+        "point behind its takeoff, walking in at 180, on 3 seeds: planned through the gap, circle "
+        "jumps, jumped (and the takeoff's mean speed), landed, given up, arrived (and its time)",
+        {"map", "#", "takeoff (feet)", "landing (feet)", "link u/s", "back", "start (feet)",
+         "planned", "circles", "jumped", "takeoff u/s", "landed", "refused", "arrived", "s"},
+        {}};
+    int64_t runs = 0, planned = 0, jumped = 0, landed = 0, refused = 0;
+    for (const MapReach& m : maps) {
+      for (const auto& row : m.gap_rows) gf.rows.push_back(row);
+      runs += m.gap_runs, planned += m.gap_planned, jumped += m.gap_jumped;
+      landed += m.gap_landed, refused += m.gap_refused;
+    }
+    lab.metric("reach.gap-runs", static_cast<double>(runs), "count");
+    lab.metric("reach.gap-planned", static_cast<double>(planned), "count");
+    lab.metric("reach.gap-jumped", static_cast<double>(jumped), "count");
+    lab.metric("reach.gap-landed", static_cast<double>(landed), "count");
+    lab.metric("reach.gap-refused", static_cast<double>(refused), "count");
+    lab.table(gf);
+  }
   if (probe.route && !maps.empty())
     lab.table({"--route on " + maps.front().name + ": each node (feet) and the link onto it",
                {"#", "node", "at (x y feet)", "link", "s", "jump speed"},
@@ -590,6 +732,9 @@ const gl::LabSpec kSpec{
         {"floors", "",
          "the floors along a line on the first map: 'x0 y0 x1 y1 [step]' (the nav's misses)"},
         {"escapes", "", "fly: every rocket out of a pit's liquid flown by the pilot, tabled"},
+        {"gaps", "", "fly: every gap trick run up to by an expert's pilot from behind, tabled"},
+        {"gap-features", "+gapbuild", "--gaps=fly: the pilot's switches, as se-team's --features"},
+        {"gap-trace", "", "--gaps=fly: every command of each first seed's run to this TSV"},
     },
     "",
     run,
