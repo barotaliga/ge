@@ -42,6 +42,29 @@ std::string info_field(const std::string& info, const std::string& key) {
   return "";
 }
 
+// `key` set to `value` in an ordered key list (added at its end when new).
+void set_key(std::vector<std::pair<std::string, std::string>>& keys, const std::string& key,
+             const std::string& value) {
+  for (auto& [k, v] : keys)
+    if (k == key) {
+      v = value;
+      return;
+    }
+  keys.emplace_back(key, value);
+}
+
+// Every key of a `\\key\\value...` info string set in `keys`.
+void set_info(std::vector<std::pair<std::string, std::string>>& keys, const std::string& info) {
+  size_t at = 0;
+  while (at < info.size() && info[at] == '\\') {
+    const size_t k_end = info.find('\\', at + 1);
+    if (k_end == std::string::npos) return;
+    const size_t v_end = std::min(info.find('\\', k_end + 1), info.size());
+    set_key(keys, info.substr(at + 1, k_end - at - 1), info.substr(k_end + 1, v_end - k_end - 1));
+    at = v_end;
+  }
+}
+
 // A colour key's value (`topcolor`, `bottomcolor`) as the palette's colour row, 0..13: its
 // leading digits, held to the rows a player can wear; 0 when it has none.
 int colour_of(const std::string& v) {
@@ -79,6 +102,7 @@ enum : int {
   kSkin = 1 << 4,
   kEffects = 1 << 5,
   kEvenMore = 1 << 7,
+  kScale = 1 << 16,
   kTrans = 1 << 17,
   kModelDbl = 1 << 19,
   kEntityPlus512 = 1 << 21,
@@ -141,8 +165,10 @@ void delta_fields(DemoMsg& m, int bits, const Wire& w, DemoEntity& e) {
   if ((bits & kAngle2) != 0) e.angles.y = angle(m, w);
   if ((bits & kOrigin3) != 0) e.origin.z = origin(m, w);
   if ((bits & kAngle3) != 0) e.angles.z = angle(m, w);
-  if ((bits & kTrans) != 0) m.u8();
-  if ((bits & kColourMod) != 0) m.skip(3);
+  if ((bits & kScale) != 0) e.scale = byte_scale(m.u8());
+  if ((bits & kTrans) != 0) e.alpha = byte_alpha(m.u8());
+  if ((bits & kColourMod) != 0)
+    for (float& c : e.colormod) c = byte_colormod(m.u8());
 }
 
 DemoEntity read_spawn(DemoMsg& m, const Wire& w) {
@@ -242,7 +268,13 @@ void player_info(Demo& d, DemoMsg& m) {
   if ((flags & 0x40) != 0) p.skin = m.u8();
   if ((flags & 0x80) != 0) p.effects = m.u8();
   if ((flags & 0x100) != 0) p.weapon_frame = m.u8();
-  if ((flags & (1 << 17)) != 0) m.u8();  // transparency
+  // The extra byte's look: scale (bit 16), transparency (17), fatness (18, not drawn), the tint
+  // (19; no server sends it for a player, but it is read).
+  p.scale = (flags & (1 << 16)) != 0 ? player_byte_scale(m.u8()) : 1.0f;
+  p.alpha = (flags & (1 << 17)) != 0 ? player_byte_alpha(m.u8()) : 1.0f;
+  if ((flags & (1 << 18)) != 0) m.u8();
+  if ((flags & (1 << 19)) != 0)
+    for (float& c : p.colormod) c = byte_colormod(m.u8());
   p.dead = (flags & 0x200) != 0;
   p.gib = (flags & 0x400) != 0;
   p.present = true;
@@ -452,9 +484,18 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         s.prints.push_back({level, m.str()});
         break;
       }
-      case 9:
-        m.str();
-        break;  // stufftext
+      case 9: {  // stufftext: the signon's `fullserverinfo "\\key\\value..."` read, the rest
+                 // skipped
+        const std::string text = m.str();
+        const std::string word = "fullserverinfo \"";
+        if (text.rfind(word, 0) == 0) {
+          const size_t end = text.find('"', word.size());
+          set_info(s.serverinfo,
+                   text.substr(word.size(),
+                               end == std::string::npos ? std::string::npos : end - word.size()));
+        }
+        break;
+      }
       case 26:
       case 31:  // centerprint, finale
         s.centre = m.str();
@@ -572,6 +613,8 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
           const size_t k = static_cast<size_t>(slot);
           s.names[k] = info_field(info, "name");
           s.teams[k] = info_field(info, "team");
+          s.spectator[k] =
+              !info_field(info, "*spectator").empty() && info_field(info, "*spectator") != "0";
           s.top[k] = colour_of(info_field(info, "topcolor"));
           s.bottom[k] = colour_of(info_field(info, "bottomcolor"));
         }
@@ -633,15 +676,17 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
           const size_t k = static_cast<size_t>(slot);
           if (key == "name") s.names[k] = value;
           if (key == "team") s.teams[k] = value;
+          if (key == "*spectator") s.spectator[k] = !value.empty() && value != "0";
           if (key == "topcolor") s.top[k] = colour_of(value);
           if (key == "bottomcolor") s.bottom[k] = colour_of(value);
         }
         break;
       }
-      case 52:
-        m.str();
-        m.str();
-        break;  // serverinfo
+      case 52: {  // serverinfo: one key of the server's info changed
+        const std::string key = m.str(), value = m.str();
+        set_key(s.serverinfo, key, value);
+        break;
+      }
       case 53:
         m.skip(2);
         break;  // updatepl

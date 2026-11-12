@@ -24,7 +24,9 @@ struct WaterBody {
   emission: vec4f,   // a body's own glow, rgb (white = a white face in daylight)
   wake: vec4f,       // rings, their life (s), the shortest wave kept (m), 0
   air: vec4f,        // the day's share on the water, the stir's slope, the gusts, their drift (m/s)
-  sun: vec4f,        // the share of the surface the sun reaches (the caustics, the shafts), 0, 0, 0
+  sun: vec4f,        // the share of the surface the sun reaches (the caustics, the shafts), the
+                     // water's pace (its waves' own frequencies are already scaled by it), the
+                     // floor (world m: the underside's level), 0
   view: vec4f,       // the mirror (0 none, 1 over, 2 under, -1 no reflection), the view up (1), the
                      // wind's heading (sin, cos)
   foam: vec4f,       // the fold's threshold on the Jacobian, the whitecap cover, its drift (x, z)
@@ -103,9 +105,10 @@ fn gust_at(xz: vec2f, t: f32) -> f32 {
     return 1.0;
   }
   let toward = body.view.zw;
-  let q = xz - toward * body.air.w * t;
-  let n = 0.65 * value_noise(vec3f(q / 9.0, t * 0.05)).x +
-          0.35 * value_noise(vec3f(q / 3.5 + 17.0, t * 0.12)).x;
+  let q = xz - toward * body.air.w * t;  // air.w is already at the water's pace
+  let tp = t * body.sun.y;
+  let n = 0.65 * value_noise(vec3f(q / 9.0, tp * 0.05)).x +
+          0.35 * value_noise(vec3f(q / 3.5 + 17.0, tp * 0.12)).x;
   let g = 0.15 + 1.85 * smoothstep(0.3, 0.72, n);
   return mix(1.0, g, body.air.z);
 }
@@ -116,8 +119,9 @@ fn stir_at(xz: vec2f, t: f32) -> vec2f {
   if (body.air.y <= 0.0) {
     return vec2f(0.0);
   }
-  let a = value_noise(vec3f(xz / 0.9, t * 0.21));
-  let b = value_noise(vec3f(xz / 0.31 + 5.3, t * 0.37));
+  let tp = t * body.sun.y;  // at the water's pace
+  let a = value_noise(vec3f(xz / 0.9, tp * 0.21));
+  let b = value_noise(vec3f(xz / 0.31 + 5.3, tp * 0.37));
   return body.air.y * 1.6 * (a.yz + 0.5 * b.yz);
 }
 

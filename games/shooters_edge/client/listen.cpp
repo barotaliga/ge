@@ -418,9 +418,8 @@ bool coop_on(const Listen& l) {
 // A companion seated now (in a campaign in coop); false with the line printed when it cannot be.
 bool seat_companion(Listen& l, sh::AimSkill skill) {
   if (!coop_on(l)) {
-    l.prints.push_back(
-        "addbot: coop is off; next: `coopgame` (a new coop game), or `coop 1` "
-        "then `restart`");
+    l.prints.push_back("Bots join a cooperative game only.");
+    l.prints.push_back("Start one with coopgame.");
     return false;
   }
   if (!l.party) {
@@ -1056,6 +1055,16 @@ float field_named(const Listen& l, int entity, const char* name) {
   const sv::QcServer* q = program(l);
   if (q == nullptr) return 0;
   return pg::as_float(*pg::entity_field(q->q.vm, entity, d->offset));
+}
+
+bool vector_field_named(const Listen& l, int entity, const char* name, float out[3]) {
+  const pg::Def* d = pg::find_field(*l.progs, name);
+  if (d == nullptr) return false;
+  const sv::QcServer* q = program(l);
+  if (q == nullptr) return false;
+  const uint32_t* v = pg::entity_field(q->q.vm, entity, d->offset);
+  for (int k = 0; k < 3; k++) out[k] = pg::as_float(v[k]);
+  return true;
 }
 
 void set_field_named(Listen& l, int entity, const char* name, float value) {

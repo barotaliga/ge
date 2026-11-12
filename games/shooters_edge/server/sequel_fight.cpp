@@ -313,8 +313,11 @@ void bullet(SequelServer& s, int slot, sh::Vec3f origin, sh::Vec3f start, const 
   const uint32_t me = 1u << slot;
   Line l = shoot_line(s, origin, start, me);  // the shooter's own reach to the start
   if (l.fraction >= 1) {
-    const sh::Vec3f end =
-        start + ax.forward * kRange + ax.right * (crandom(s) * h) + ax.up * (crandom(s) * v);
+    // The draws in a fixed order: operands of one expression are evaluated in an order the
+    // compiler picks, so two draws in one would differ from compiler to compiler.
+    const float across = crandom(s) * h;
+    const float up = crandom(s) * v;
+    const sh::Vec3f end = start + ax.forward * kRange + ax.right * across + ax.up * up;
     l = shoot_line(s, start, end, me);
   }
   if (l.player >= 0) {
@@ -363,13 +366,15 @@ void launch(SequelServer& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f 
       m->dies_at = s.level_time + 2;
       break;
     case SqShot::grenade:
-    case SqShot::hand_grenade:
-      m->velocity =
-          ax.forward * speed + ax.up * (200 + crandom(s) * 10) + ax.right * (crandom(s) * 10);
+    case SqShot::hand_grenade: {
+      const float up = 200 + crandom(s) * 10;  // the draws in a fixed order (above)
+      const float across = crandom(s) * 10;
+      m->velocity = ax.forward * speed + ax.up * up + ax.right * across;
       m->dies_at = s.level_time + fuse;
       m->radius_damage = damage;
       m->radius = kind == SqShot::grenade ? 160 : 165;  // the quad does not widen it
       break;
+    }
     case SqShot::rocket:
       m->velocity = ax.forward * 650;
       m->dies_at = s.level_time + 8000.0 / 650.0;
@@ -458,9 +463,11 @@ void fire(SequelServer& s, int slot, int shots) {
     case SqShot::bullet:
       for (int i = 0; i < shots; i++) {
         sh::Vec3f from = start;
-        if (w == int(SqWeapon::chaingun))
-          from = eye + ax.forward * r.forward + ax.right * (7 + crandom(s) * 4) +
-                 ax.up * (crandom(s) * 4);
+        if (w == int(SqWeapon::chaingun)) {
+          const float across = 7 + crandom(s) * 4;  // the draws in a fixed order (above)
+          const float up = crandom(s) * 4;
+          from = eye + ax.forward * r.forward + ax.right * across + ax.up * up;
+        }
         bullet(s, slot, origin, from, ax, 300, 500, damage, kick, w);
       }
       return;

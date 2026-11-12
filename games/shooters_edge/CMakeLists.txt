@@ -43,7 +43,8 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_bots)
 file(GLOB SHOOTERS_EDGE_CLASSIC_SOURCES CONFIGURE_DEPENDS
      ${CMAKE_CURRENT_SOURCE_DIR}/net/classic_*.cpp)
 add_library(shooters_edge_classic STATIC ${SHOOTERS_EDGE_CLASSIC_SOURCES})
-target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters_edge_client ge_net ge_play)
+target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters_edge_client ge_net ge_play
+                      ge_forward)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 
 # The headless dedicated server (server/bin/), named `shooters_edge_server` on disk, at the build's
@@ -52,6 +53,14 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 # protocol). `--help` lists its flags.
 ge_add_server(shooters_edge_dedicated OUTPUT_NAME shooters_edge_server SOURCES server/bin/main.cpp
               LINK shooters_edge_classic)
+
+# The hub (hub/), named `shooters_edge_hub` on disk at the build's root: the engine's hub
+# (engine/hub, docs/hub.md) with the game's modes and words. `--help` lists its flags.
+# The classic status query (net/classic_browse, net/classic_info) is built into it alone, so the
+# hub links none of the game's server.
+ge_add_hub(shooters_edge_hub_bin OUTPUT_NAME shooters_edge_hub
+           SOURCES hub/main.cpp net/classic_browse.cpp net/classic_info.cpp)
+target_include_directories(shooters_edge_hub_bin PRIVATE ${PROJECT_SOURCE_DIR}/games)
 
 # The bot team, headless (net/bots_main.cpp), named `shooters_edge_bots` on disk at the build's
 # root: a team of bots joins a classic server, any server (net/classic_bot_team.hpp). `--help`

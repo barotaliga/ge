@@ -54,6 +54,7 @@ TEST(sv_coop_starts_a_coop_game_on_the_start_map_with_its_bots) {
   CHECK(has_line(l.opt, "sv_friendlyfire 0") && has_line(l.opt, "sv_friendlypush 0"));
   CHECK(l.opt.companions == 3);
   CHECK(cl::wants_campaign(l.opt));
+  CHECK(l.opt.new_game);  // a new game even when a campaign runs: coop on, the bots seated
   // Once acted on, not again until it changes.
   next.clear();
   cl::coop_frame(m, l, true, "start", next);

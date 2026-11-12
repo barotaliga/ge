@@ -19,7 +19,7 @@ The CLI is built in the three homes every feature lives in (docs/architecture.md
 | --- | --- | --- |
 | Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset`, `server settings/set`, `servers`, `server info`, `players`, `rcon`, `host`, `host list`, `host stop`, `join`, `logs` |
 | Plugin | `plugins/<name>/cli/` (built into `ge_<name>_cli`) | A group of rows any game linking the plugin adds: classic enhance's `content` (the install's packs, their release by SHA-256, the enhanced cache) |
-| Game | `games/<game>/cli/` | The game's `Spec` (its programs, ports, protocol, places, launch words, the settings it registers) and its own rows: Shooter's Edge's `demos`, `demos play` |
+| Game | `games/<game>/cli/` | The game's `Spec` (its programs, ports, protocol, places, launch words, the settings it registers) and its own rows: Shooter's Edge's `demos`, `demos play`, `demos pack`, `demos unpack` |
 
 A generic command works for a game through its `Spec`; a field it leaves null makes the
 commands that need it say the game lacks it. A game's main is one line:
@@ -87,6 +87,20 @@ packets.
 - `join <address>` starts the window on a server (`Spec::join_words`: `+connect <address>`).
 - `--dry-run` says what would start and starts nothing. A password asked of a host is never
   printed back.
+
+## A hub's links
+
+A hub's Join, Spectate, Watch and Play buttons are links in the game's scheme (`<game>://join/...`,
+`engine/hub/link.hpp`, docs/hub.md § Open in the game). `link register` makes the system hand them
+to this CLI (a desktop entry and `xdg-mime` on Linux, a small handler app built by `osacompile` on
+macOS, the scheme's keys under HKEY_CURRENT_USER on Windows; `--dry-run` shows the files and the
+commands). `link open <link>` reads a link strictly (a host, a port, a stream number or a hash,
+nothing else reaches a command line) and starts the window: `Spec::join_words` for Join,
+`Spec::spectate_words` for Spectate (Shooter's Edge: `+set spectator 1 +connect`),
+`Spec::tv_words` for Watch, and for Play the demo fetched from the hub into
+`<state>/demos/<sha256>.ger`, checked against its hash, kept for the next time, and handed to
+`Spec::demo_words` (Shooter's Edge unpacks it into the recording its demo player reads and adds
+`-playdemo`). A game without a row's words is refused with what it cannot open yet.
 
 ## Places
 

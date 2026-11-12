@@ -22,6 +22,7 @@
 // ge:summary A classic map's water, lava and slime tops made bodies of our water and liquids
 // ge:keywords bsp brush liquids water lava slime body volume hull v2 add_bsp_liquids
 // ge:keywords pool-site pool_site wind-exposure shelter still-pool depth room-light light_rooms
+// ge:keywords water-pace pool-pace r_water_speed relay_liquid_pace slow-water
 // ge:skill brush water render
 #pragma once
 
@@ -84,6 +85,9 @@ struct PoolSite {
   double upwind = 0;    // 0..1: the share of the low rays toward the wind that reach the sky
   double exposure = 0;  // 0..1: the share of the open map's wind on the water
   double light[3] = {0, 0, 0};  // the lightmaps' light on its bed (0..1 a channel); < 0: none
+  // Open air under its water somewhere (no bed: a pool a player drops through to a room below),
+  // so its underside is seen from there (render/water.hpp's WaterDraw::open_below).
+  bool open_below = false;
 };
 
 struct LiquidWorld {
@@ -99,8 +103,8 @@ struct LiquidWorld {
 // The share of the points over a pool's top from which straight up is the sky (a leaf of sky
 // before any wall), on a grid of up to 8 x 8 over its box.
 double open_sky_of(const Map& map, const LiquidPatch& patch);
-// The pool's depth, its sky, its share of the wind from `from` (rad, the bearing it blows from)
-// and its bed's light, read off `map`.
+// The pool's depth, whether open air lies under it, its sky, its share of the wind from `from`
+// (rad, the bearing it blows from) and its bed's light, read off `map`.
 PoolSite pool_site(const Map& map, const LiquidPatch& patch, double from);
 
 // The share of a pool's top the sun reaches along `sun` (unit, toward it): points on a grid over
@@ -118,6 +122,9 @@ LiquidWorld liquid_world(const Scene& scene, const LiquidRows& rows, double wind
 // The waves laid again under another wind (the weather's cvars changed), into the passes.
 void relay_liquid_wind(gpu::Device& device, render::Water& water, LiquidWorld& world, double wind,
                        double from);
+// The pools' pace changed (Options::water_pace, r_water_speed): every water body restaged at it.
+void relay_liquid_pace(gpu::Device& device, render::Water& water, const LiquidWorld& world,
+                       double pace);
 // The room's light round the pools (each its bed's light off the lightmaps, else `rows.room`),
 // floored like the walls (bsp_draw.hpp's `minlight`, in the lightmaps' units, times the
 // renderer's brightness): sqrt(light^2 + (minlight brightness)^2).

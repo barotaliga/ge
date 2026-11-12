@@ -11,6 +11,7 @@
 // ge:summary Tests: every demo format read back frame by frame, demos found, the fps report
 // ge:keywords test demo timedemo benchmark single-player client-recording one-percent-low
 // ge:keywords find_demo bench_stats damaged multiview gzip track sound-events voice-format
+// ge:keywords transparency byte_alpha byte_scale byte_colormod
 // ge:skill shooter testing
 #include <algorithm>
 #include <cmath>
@@ -110,6 +111,20 @@ TEST(a_client_recording_reads_back_frame_for_frame) {
   CHECK(r.last.entities[40].origin.x == s.origins.back().x + 89);
   CHECK(r.last.players[0].model == 2);  // no model sent: progs/player.mdl, drawn when not the eye
   CHECK(cl::demo_status(r.last, 1.0).weapon == shooters_edge::hud::Weapon::rocket_launcher);
+}
+
+// The look bytes an extended server sends: an entity's transparency (254 and the unset 255 solid,
+// 0 gone), a player's (b / 255), the scales (b / 16, a player's b / 50) and the tint (b / 32).
+TEST(the_look_bytes_read_as_shares_sizes_and_tints) {
+  CHECK(cl::byte_alpha(254) == 1.0f && cl::byte_alpha(255) == 1.0f);
+  CHECK(cl::byte_alpha(127) == 0.5f);
+  CHECK(cl::byte_alpha(0) == 0.0f);
+  CHECK(cl::player_byte_alpha(255) == 1.0f && cl::player_byte_alpha(51) == 0.2f);
+  CHECK(cl::byte_scale(16) == 1.0f && cl::byte_scale(32) == 2.0f && cl::byte_scale(0) == 1.0f);
+  CHECK(cl::player_byte_scale(25) == 0.5f);
+  CHECK(cl::byte_colormod(32) == 1.0f && cl::byte_colormod(64) == 2.0f);
+  const cl::DemoEntity none;  // nothing sent: solid, whole, untinted
+  CHECK(none.alpha == 1.0f && none.scale == 1.0f && none.colormod[0] == 1.0f);
 }
 
 // The same angle, a 16-bit wire angle's step apart at most, whichever way round it is written.
