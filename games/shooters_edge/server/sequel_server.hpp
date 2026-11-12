@@ -135,7 +135,7 @@ struct SequelMonster {
   double attack_finished = 0;  // the next missile attack's earliest time
   double busy_until = 0;       // an attack's wind-up, shots and recovery
   double fire_at = 0, burst_until = 0;
-  int attack = 0;  // the attack in progress: 0 the melee, n the n-th missile attack
+  int attack = 0;  // the attack in progress: 0 and 1 the blows, 2.. the ranged ones
   int burst_frame = 0;
   double pain_at = -100, pain_hold = 0;
   int corner = -1;       // the `path_corner` it walks to
@@ -145,6 +145,22 @@ struct SequelMonster {
   bool waiting = false;  // hidden until used
   bool dead = false;
   std::string item;  // dropped at death
+  // The full game's (sequel-monsters-full.md):
+  int loops = 0;       // the attack's loops after its first
+  bool aimed = false;  // a rail's aim taken, at `aim_at`
+  sh::Vec3f aim_at;
+  bool leaping = false;  // in the air on a leap; `struck` once it has hurt
+  bool struck = false;
+  int screen = 0;        // a power screen's points left
+  double died_at = 0;    // level time
+  double end_at = 0;     // a boss's wreck, a crashed flier: when it ends
+  int boom_step = -1;    // a boss's blasts so far
+  int patient = -1;      // a medic's corpse (a monster row) it is raising
+  int old_enemy = -1;    // and the enemy it had
+  double revive_at = 0;  // the cable's moment
+  bool claimed = false;  // a corpse a medic is raising
+  bool spare = false;    // waits to come out at a boss's death (not yet counted)
+  double used_at = -1;   // a figure's use (the commander's body)
 };
 
 struct SequelPlayer {
@@ -206,6 +222,8 @@ struct SequelMissile {
   float radius = 0;
   bool resting = false;  // a grenade come to rest on a floor
   int from = -1;         // the map entity that fired it (a monster); -1 a player
+  int burst = 0;         // a BFG ball's final burst's strength (0: its direct hit's)
+  float reach = 1000;    // and its reach
 };
 inline constexpr int kSequelMissiles = 64;  // the rows the world keeps for shots in flight
 

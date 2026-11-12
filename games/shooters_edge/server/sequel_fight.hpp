@@ -104,6 +104,16 @@ void fight_monster_bullet(SequelServer& s, int from, sh::Vec3f start, sh::Vec3f 
 // A monster's missile of `kind` from `start` along `dir` at `speed`.
 void fight_monster_launch(SequelServer& s, int from, SqShot kind, sh::Vec3f start, sh::Vec3f dir,
                           int damage, float speed, int cause);
+// A monster's BFG ball: the player's ball, its final burst `burst` strong within `reach`.
+void fight_monster_bfg(SequelServer& s, int from, sh::Vec3f start, sh::Vec3f dir, float speed,
+                       int burst, float reach, int cause);
+// A monster's rail from `start` toward `end`: through every player to the first wall or monster.
+void fight_monster_rail(SequelServer& s, int from, sh::Vec3f start, sh::Vec3f end, int damage,
+                        int kick, int cause);
+// A push added straight to player `slot`'s velocity (a monster's blow; not by mass).
+void fight_kick(SequelServer& s, int slot, sh::Vec3f push);
+// A point effect (`te_*`) at `at` for everyone.
+void fight_effect(SequelServer& s, const char* name, sh::Vec3f at);
 // An item (`classname`) thrown up from `at`, as a monster drops it at death.
 void fight_drop_at(SequelServer& s, sh::Vec3f at, const std::string& classname);
 // A body thrown apart at `at`: entity row `ent`'s sound and the blood.

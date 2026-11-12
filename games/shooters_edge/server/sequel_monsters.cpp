@@ -13,10 +13,12 @@
 #include <string_view>
 
 #include "brush/map.hpp"
+#include "brush/trace.hpp"
 #include "core/libm/libm.hpp"
 #include "core/prng.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
+#include "shooters_edge/server/sequel_monster_kinds.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::server {
@@ -39,224 +41,13 @@ constexpr uint32_t kEveryone = 0xffffffffu;
 
 enum class Range : uint8_t { melee, near, mid, far };
 
-// What an attack fires.
-enum class Fire : uint8_t { none, bolt, pellets, burst, club, grenade, rockets, drain };
-
-struct Attack {
-  Fire fire = Fire::none;
-  int damage = 0, damage_max = 0;  // a club's range of blows
-  int kick = 0;
-  float speed = 0;                     // a bolt's, a grenade's, a rocket's
-  int count = 1;                       // pellets, bolts in a pair, rockets in a volley
-  float h = 0, v = 0;                  // the spread at 8192, right and up
-  float burst_min = 0, burst_max = 0;  // s
-};
-
-struct Kind {
-  const char* classname;
-  const char* name;  // the obituary's
-  const char* model;
-  int skin;
-  int health, gib, mass;
-  sh::Vec3f mins, maxs;
-  bool flies;
-  float walk, run;  // units/s
-  Attack melee;
-  Attack missile[3];
-  bool soldier_aim;  // the soldiers' wild aim
-  const char *sight, *pain, *death;
-};
-
-constexpr sh::Vec3f kLo{-16, -16, -24}, kHi{16, 16, 32};
-
-// The roster (sequel-monsters.md § The demo's roster).
-const Kind kKinds[] = {
-    {"monster_soldier_light",
-     "a light guard",
-     "models/monsters/soldier/tris.md2",
-     0,
-     20,
-     -30,
-     100,
-     kLo,
-     kHi,
-     false,
-     50,
-     150,
-     {},
-     {{Fire::bolt, 5, 5, 0, 600}},
-     true,
-     "soldier/solsght1.wav",
-     "soldier/solpain2.wav",
-     "soldier/soldeth1.wav"},
-    {"monster_soldier",
-     "a guard",
-     "models/monsters/soldier/tris.md2",
-     2,
-     30,
-     -30,
-     100,
-     kLo,
-     kHi,
-     false,
-     50,
-     150,
-     {},
-     {{Fire::pellets, 2, 2, 1, 0, 12, 1000, 500}},
-     true,
-     "soldier/solsght1.wav",
-     "soldier/solpain1.wav",
-     "soldier/soldeth2.wav"},
-    {"monster_soldier_ss",
-     "a heavy guard",
-     "models/monsters/soldier/tris.md2",
-     4,
-     40,
-     -30,
-     100,
-     kLo,
-     kHi,
-     false,
-     50,
-     150,
-     {},
-     {{Fire::burst, 2, 2, 4, 0, 1, 1000, 500, 0.3f, 1}},
-     true,
-     "soldier/solsght1.wav",
-     "soldier/solpain3.wav",
-     "soldier/soldeth3.wav"},
-    {"monster_infantry",
-     "a trooper",
-     "models/monsters/infantry/tris.md2",
-     0,
-     100,
-     -40,
-     200,
-     kLo,
-     kHi,
-     false,
-     50,
-     150,
-     {Fire::club, 5, 9, 50},
-     {{Fire::burst, 3, 3, 4, 0, 1, 300, 500, 0.5f, 1}},
-     false,
-     "infantry/infsght1.wav",
-     "infantry/infpain1.wav",
-     "infantry/infdeth1.wav"},
-    {"monster_gunner",
-     "a gunner",
-     "models/monsters/gunner/tris.md2",
-     0,
-     175,
-     -70,
-     200,
-     kLo,
-     kHi,
-     false,
-     50,
-     150,
-     {},
-     {{Fire::burst, 3, 3, 4, 0, 1, 300, 500, 0.5f, 1.5f}, {Fire::grenade, 50, 50, 0, 600}},
-     false,
-     "gunner/sight1.wav",
-     "gunner/gunpain1.wav",
-     "gunner/death1.wav"},
-    {"monster_berserk",
-     "a berserker",
-     "models/monsters/berserk/tris.md2",
-     0,
-     240,
-     -60,
-     250,
-     kLo,
-     kHi,
-     false,
-     50,
-     200,
-     {Fire::club, 15, 20, 400},
-     {},
-     false,
-     "berserk/sight.wav",
-     "berserk/berpain2.wav",
-     "berserk/berdeth2.wav"},
-    {"monster_parasite",
-     "a parasite",
-     "models/monsters/parasite/tris.md2",
-     0,
-     175,
-     -50,
-     250,
-     kLo,
-     sh::Vec3f{16, 16, 24},
-     false,
-     50,
-     150,
-     {},
-     {{Fire::drain, 5, 2, 0}},
-     false,
-     "parasite/parsght1.wav",
-     "parasite/parpain1.wav",
-     "parasite/pardeth1.wav"},
-    {"monster_flyer",
-     "a flyer",
-     "models/monsters/flyer/tris.md2",
-     0,
-     50,
-     0,
-     50,
-     kLo,
-     kHi,
-     true,
-     100,
-     200,
-     {Fire::club, 5, 5, 0},
-     {{Fire::bolt, 1, 1, 0, 1000, 2}},
-     false,
-     "flyer/flysght1.wav",
-     "flyer/flypain1.wav",
-     "flyer/flydeth1.wav"},
-    {"monster_tank",
-     "a tank",
-     "models/monsters/tank/tris.md2",
-     0,
-     750,
-     -200,
-     500,
-     sh::Vec3f{-32, -32, -16},
-     sh::Vec3f{32, 32, 72},
-     false,
-     40,
-     80,
-     {},
-     {{Fire::bolt, 30, 30, 0, 800},
-      {Fire::rockets, 50, 50, 0, 550, 3},
-      {Fire::burst, 20, 20, 4, 0, 1, 300, 500, 0.5f, 1}},
-     false,
-     "tank/sight1.wav",
-     "tank/tnkpain2.wav",
-     "tank/death.wav"},
-    {"monster_tank_commander",
-     "a tank commander",
-     "models/monsters/tank/tris.md2",
-     2,
-     1000,
-     -225,
-     500,
-     sh::Vec3f{-32, -32, -16},
-     sh::Vec3f{32, 32, 72},
-     false,
-     40,
-     80,
-     {},
-     {{Fire::bolt, 30, 30, 0, 800},
-      {Fire::rockets, 50, 50, 0, 550, 3},
-      {Fire::burst, 20, 20, 4, 0, 1, 300, 500, 0.5f, 1}},
-     false,
-     "tank/sight1.wav",
-     "tank/tnkpain2.wav",
-     "tank/death.wav"},
-};
-constexpr int kKindCount = int(sizeof(kKinds) / sizeof(kKinds[0]));
+using roster::Attack;
+using roster::End;
+using roster::Fire;
+using roster::Kind;
+using roster::kKindCount;
+using roster::kKinds;
+using roster::Test;
 
 int kind_of(std::string_view classname) {
   for (int k = 0; k < kKindCount; k++)
@@ -296,7 +87,7 @@ void sound(SequelServer& s, int e, const char* sample) {
 }
 
 sh::Vec3f eye(const SequelEntity& e, const Kind& k) {
-  return e.origin + sh::Vec3f{0, 0, k.flies ? 10.0f : 25.0f};
+  return e.origin + sh::Vec3f{0, 0, k.flies || k.swims ? 10.0f : 25.0f};
 }
 sh::Vec3f player_eye(const SequelPlayer& p) {
   return unpack(p.move.origin) + sh::Vec3f{0, 0, p.view_height};
@@ -329,6 +120,18 @@ float yaw_to(sh::Vec3f d) {
 
 const Kind& kind(const SequelMonster& m) { return kKinds[m.kind]; }
 SequelEntity& body(SequelServer& s, const SequelMonster& m) { return s.entities[size_t(m.entity)]; }
+bool afloat(const Kind& k) { return k.flies || k.swims; }
+
+// Water (or slime or lava) at `p`.
+bool wet(const SequelServer& s, sh::Vec3f p) {
+  if (!s.tracer) return false;
+  const float q[3] = {p.x, p.y, p.z};
+  return (s.tracer->contents(q) & sh::kSqMaskWater) != 0;
+}
+// The point 1 above the bottom of a box at `origin`.
+sh::Vec3f foot(const SequelEntity& e, sh::Vec3f origin) {
+  return origin + sh::Vec3f{0, 0, e.mins.z + 1};
+}
 
 // A box swept for monster `m` from `start` to `end`: the map, the movers, the other monsters and
 // the players.
@@ -367,12 +170,18 @@ bool on_floor(const SequelServer& s, const SequelMonster& m) {
 }
 
 // A walker's step of `move` along the floor: up a step of 18 when blocked, never off a ledge
-// higher than a step. False when it could not go.
+// higher than a step, never into water from dry land. A flier never flies into water; a swimmer
+// never swims out of it. False when it could not go.
 bool step(SequelServer& s, SequelMonster& m, sh::Vec3f move) {
   SequelEntity& e = body(s, m);
-  if (kind(m).flies) {
+  const Kind& k = kind(m);
+  const bool was_wet = wet(s, foot(e, e.origin));
+  if (afloat(k)) {
     const sh::SequelTrace t = sweep(s, m, e.origin, e.origin + move);
     if (t.start_solid || t.fraction < 1) return false;
+    const bool will_be_wet = wet(s, foot(e, t.end));
+    if (k.flies && !was_wet && will_be_wet) return false;
+    if (k.swims && was_wet && !will_be_wet) return false;
     e.origin = t.end;
     return true;
   }
@@ -396,31 +205,47 @@ bool step(SequelServer& s, SequelMonster& m, sh::Vec3f move) {
     if (below.fraction >= 1) return false;
     to = below.fraction > 0 ? below.end : to;
   }
+  if (!was_wet && wet(s, foot(e, to))) return false;
   e.origin = to;
   return true;
 }
 
-// The monster's fall under gravity (a walker off the floor).
+// The monster's fall under gravity (a walker off the floor, a leaper, a dead flier); a leaper's
+// strike on what it meets fast.
 void fall(SequelServer& s, SequelMonster& m) {
   SequelEntity& e = body(s, m);
-  if (kind(m).flies) return;
-  m.on_ground = on_floor(s, m);
+  const Kind& k = kind(m);
+  if (k.flies && !m.dead) return;
+  if (k.swims && wet(s, foot(e, e.origin))) return;
+  m.on_ground = m.velocity.z <= 0 && on_floor(s, m);
   if (m.on_ground) {
     m.velocity = {};
     return;
   }
   m.velocity.z -= static_cast<float>(s.cvars.find("sv_gravity")->number) * kStep;
   const sh::SequelTrace t = sweep(s, m, e.origin, e.origin + m.velocity * kStep);
+  if (m.leaping && !m.struck && t.fraction < 1 && t.entity >= 1 && t.entity <= sh::kMaxClients &&
+      sh::length(m.velocity) > 400) {  // the leap lands on someone
+    const Attack& a = k.missile[0];
+    const int dmg = a.damage + static_cast<int>(random01(s) * (a.damage_max - a.damage + 1));
+    fight_hurt(s, t.entity - 1, -1, m.velocity, dmg, dmg, kSqByMonster + m.kind);
+    m.struck = true;
+  }
   e.origin = t.end;
   if (t.fraction < 1 && t.normal.z > 0.7f) {
     m.on_ground = true;
     m.velocity = {};
+    if (m.leaping) {  // down again: the thud, and free to attack
+      m.leaping = false;
+      m.busy_until = s.level_time + double(k.missile[0].recover);
+      m.attack_finished = s.level_time;
+    }
   }
 }
 
 // Turns toward the ideal yaw by the kind's turning speed.
 void turn(SequelEntity& e, const Kind& k, float ideal) {
-  const float most = k.flies ? 10.0f : 20.0f;
+  const float most = afloat(k) ? 10.0f : 20.0f;
   float d = ideal - e.angles.y;
   while (d > 180) d -= 360;
   while (d < -180) d += 360;
@@ -434,7 +259,7 @@ void turn(SequelEntity& e, const Kind& k, float ideal) {
 void go_to(SequelServer& s, SequelMonster& m, sh::Vec3f goal, float speed) {
   SequelEntity& e = body(s, m);
   sh::Vec3f d = goal - e.origin;
-  if (!kind(m).flies) d.z = 0;
+  if (!afloat(kind(m))) d.z = 0;
   const float dist = sh::length(d);
   if (dist < 1) return;
   m.ideal_yaw = yaw_to(d);
@@ -511,9 +336,14 @@ void notice(SequelServer& s, SequelMonster& m) {
 
 // ---- Attacks ----
 
-// A shot from the monster's eye at its enemy's, with the kind's spread.
-sh::Vec3f aim(SequelServer& s, SequelMonster& m, const Attack& a, sh::Vec3f from) {
-  const sh::Vec3f target = player_eye(s.players[m.enemy]);
+// The enemy's eye, `lead` s along his motion.
+sh::Vec3f mark(const SequelServer& s, const SequelMonster& m, float lead) {
+  const SequelPlayer& p = s.players[m.enemy];
+  return player_eye(p) + unpack(p.move.velocity) * lead;
+}
+
+// A shot from `from` at `target`, with the attack's spread.
+sh::Vec3f aim_at(SequelServer& s, const Attack& a, sh::Vec3f from, sh::Vec3f target) {
   sh::Vec3f dir = target - from;
   sh::normalize(dir);
   if (a.h == 0 && a.v == 0) return dir;
@@ -523,16 +353,39 @@ sh::Vec3f aim(SequelServer& s, SequelMonster& m, const Attack& a, sh::Vec3f from
   sh::normalize(out);
   return out;
 }
+sh::Vec3f aim(SequelServer& s, SequelMonster& m, const Attack& a, sh::Vec3f from) {
+  return aim_at(s, a, from, mark(s, m, a.lead));
+}
 
 int cause_of(const SequelMonster& m) { return kSqByMonster + m.kind; }
 
-// One frame's shots of attack `a`.
-void shoot(SequelServer& s, SequelMonster& m, const Attack& a) {
+const Attack& attack_at(const SequelMonster& m, int i) {
+  return i < 2 ? kind(m).melee[i] : kind(m).missile[i - 2];
+}
+const Attack& attack_of(const SequelMonster& m) { return attack_at(m, m.attack); }
+
+// A blow within 80 of the monster's origin, by a clear line: the damage and a kick added straight
+// to the enemy's velocity (negative pulls). True when it landed.
+bool blow(SequelServer& s, SequelMonster& m, const Attack& a) {
+  const SequelEntity& e = body(s, m);
+  const sh::Vec3f at = unpack(s.players[m.enemy].move.origin);
+  if (sh::length(at - e.origin) > kMelee) return false;  // swung at the air
+  if (!reaches(s, m, m.enemy, kOpaque)) return false;
+  const int dmg = a.damage + static_cast<int>(random01(s) * (a.damage_max - a.damage + 1));
+  sh::Vec3f dir = at - e.origin;
+  sh::normalize(dir);
+  fight_hurt(s, m.enemy, -1, {}, dmg, 0, cause_of(m));
+  if (a.kick != 0 && hunted(s, m.enemy)) fight_kick(s, m.enemy, dir * float(a.kick));
+  return true;
+}
+
+// One frame's shots of attack `a` (`n` the shot's number in its loop).
+void shoot(SequelServer& s, SequelMonster& m, const Attack& a, int n) {
   if (!hunted(s, m.enemy)) return;
   SequelEntity& e = body(s, m);
   const sh::Vec3f from = eye(e, kind(m));
   m.ideal_yaw = yaw_to(unpack(s.players[m.enemy].move.origin) - e.origin);
-  e.angles.y = m.ideal_yaw;
+  if (a.fire != Fire::sweep) e.angles.y = m.ideal_yaw;
   switch (a.fire) {
     case Fire::bolt:
       for (int i = 0; i < a.count; i++)
@@ -543,38 +396,67 @@ void shoot(SequelServer& s, SequelMonster& m, const Attack& a) {
       fight_monster_launch(s, m.entity, SqShot::grenade, from, aim(s, m, a, from), a.damage,
                            a.speed, cause_of(m));
       return;
-    case Fire::rockets:
-      fight_monster_launch(s, m.entity, SqShot::rocket, from, aim(s, m, a, from), a.damage, a.speed,
-                           cause_of(m));
+    case Fire::rockets: {
+      const int volley = a.every > 0 ? a.count : 1;  // on a loop: all at once
+      for (int i = 0; i < volley; i++)
+        fight_monster_launch(s, m.entity, SqShot::rocket, from, aim(s, m, a, from), a.damage,
+                             a.speed, cause_of(m));
       return;
-    case Fire::pellets: {
-      const sh::Vec3f dir = aim(s, m, Attack{}, from);
+    }
+    case Fire::pellets:
       for (int i = 0; i < a.count; i++) {
-        Attack spread = a;
-        const sh::Vec3f d = aim(s, m, spread, from);
+        const sh::Vec3f d = aim(s, m, a, from);
         fight_monster_bullet(s, m.entity, from, from + d * 8192, a.damage, a.kick, cause_of(m));
       }
-      (void)dir;
       return;
-    }
-    case Fire::burst: {
-      const sh::Vec3f d = aim(s, m, a, from);
-      fight_monster_bullet(s, m.entity, from, from + d * 8192, a.damage, a.kick, cause_of(m));
+    case Fire::burst:
+    case Fire::guns:
+      for (int i = 0; i < (a.fire == Fire::guns ? a.count : 1); i++) {
+        const sh::Vec3f d = aim(s, m, a, from);
+        fight_monster_bullet(s, m.entity, from, from + d * 8192, a.damage, a.kick, cause_of(m));
+      }
       return;
-    }
     case Fire::drain: {  // a tongue that holds while the line is clear
       if (!reaches(s, m, m.enemy, kShotMask & ~sh::kSqMonster)) return;
       const int dmg = m.burst_frame == 0 ? a.damage : a.damage_max;
       fight_hurt(s, m.enemy, -1, {}, dmg, 0, cause_of(m));
       return;
     }
-    case Fire::club: {
-      const sh::Vec3f at = unpack(s.players[m.enemy].move.origin);
-      if (sh::length(at - e.origin) > kMelee + 16) return;  // swung at the air
+    case Fire::club:
+      if (blow(s, m, a)) m.struck = true;
+      return;
+    case Fire::zap: {  // wherever he is
       const int dmg = a.damage + static_cast<int>(random01(s) * (a.damage_max - a.damage + 1));
-      sh::Vec3f dir = at - e.origin;
-      sh::normalize(dir);
-      fight_hurt(s, m.enemy, -1, dir, dmg, a.kick, cause_of(m));
+      fight_effect(s, "te_sparks", e.origin + forward_of(e.angles.y) * 18.5f);
+      fight_hurt(s, m.enemy, -1, {}, dmg, 0, cause_of(m));
+      return;
+    }
+    case Fire::rail:
+      if (!m.aimed) m.aim_at = mark(s, m, 0);
+      fight_monster_rail(s, m.entity, from, m.aim_at, a.damage, a.kick, cause_of(m));
+      return;
+    case Fire::bfg:
+      fight_monster_bfg(s, m.entity, from, aim(s, m, a, from), a.speed, a.damage, a.reach,
+                        cause_of(m));
+      return;
+    case Fire::sweep: {  // from 80 to one side to 0, then from 70 to the other side to 0
+      const float offset = n < 9 ? 80.0f - 10.0f * float(n) : -70.0f + 10.0f * float(n - 9);
+      sh::Vec3f d = mark(s, m, 0) - from;
+      const float level = sh::length(sh::Vec3f{d.x, d.y, 0});
+      const sh::Vec3f across = forward_of(e.angles.y + offset) * level;
+      d = sh::Vec3f{across.x, across.y, d.z};
+      sh::normalize(d);
+      fight_monster_launch(s, m.entity, SqShot::bolt, from, d, a.damage, a.speed, cause_of(m));
+      return;
+    }
+    case Fire::leap: {  // off the ground at the enemy
+      const sh::Vec3f fwd = forward_of(e.angles.y);
+      e.origin.z += 1;
+      m.velocity = fwd * a.speed + sh::Vec3f{0, 0, 250};
+      m.on_ground = false;
+      m.leaping = true;
+      m.struck = false;
+      sound(s, m.entity, kind(m).sight);
       return;
     }
     default:
@@ -582,70 +464,280 @@ void shoot(SequelServer& s, SequelMonster& m, const Attack& a) {
   }
 }
 
-// Starts attack `a`: its shots on the next frames.
-void begin_attack(SequelServer& s, SequelMonster& m, const Attack& a) {
-  m.attack = &a - &kind(m).missile[0] >= 0 && &a - &kind(m).missile[0] < 3
-                 ? static_cast<int>(&a - &kind(m).missile[0]) + 1
-                 : 0;  // 0 the melee
+// Whole frames in `seconds` (the timings are whole tenths; the hundredth absorbs float error).
+int frames(float seconds) { return std::max(1, static_cast<int>(seconds * 10 + 0.01f)); }
+
+// Starts attack `i` (0 and 1 the blows, 2.. the ranged ones): its shots on the next frames.
+void begin_attack(SequelServer& s, SequelMonster& m, int i) {
+  const Attack& a = attack_at(m, i);
+  m.attack = i;
   m.burst_frame = 0;
-  m.fire_at = s.level_time + 0.3;  // the wind-up
+  m.loops = 0;
+  m.aimed = false;
+  m.struck = false;
+  m.fire_at = s.level_time + double(a.windup);
   double hold = 0.1;
-  if (a.fire == Fire::burst)
+  if (a.every > 0)
+    hold = double(frames(a.loop) - 1) * kStep + 0.1;
+  else if (a.fire == Fire::burst)
     hold = a.burst_min + random01(s) * double(a.burst_max - a.burst_min);
   else if (a.fire == Fire::rockets)
     hold = 0.2 * (a.count - 1) + 0.1;
   else if (a.fire == Fire::drain)
     hold = 1;
   m.burst_until = m.fire_at + hold;
-  m.busy_until = m.burst_until + 0.3;  // the recovery
+  m.busy_until = m.burst_until + double(a.recover);
+  if (a.fire == Fire::leap) m.busy_until = m.fire_at + 3;  // until it lands
+  if (a.fire == Fire::rail && a.remember >= a.windup) {    // the aim taken now
+    m.aim_at = mark(s, m, 0);
+    m.aimed = true;
+  }
 }
 
-const Attack& attack_of(const SequelMonster& m) {
-  return m.attack == 0 ? kind(m).melee : kind(m).missile[m.attack - 1];
+// Whether the attack in hand goes on for another loop.
+bool goes_on(SequelServer& s, SequelMonster& m, const Attack& a) {
+  if (a.again <= 0 || (a.again_max > 0 && m.loops >= a.again_max)) return false;
+  if (!hunted(s, m.enemy)) return false;
+  const SequelEntity& e = body(s, m);
+  const Range r = range_to(e.origin, unpack(s.players[m.enemy].move.origin));
+  if (m.attack < 2) {  // a blow: while he is within reach (at skill 3 the mutant's, by chance)
+    if (r != Range::melee && !(skill(s) == 3 && kind(m).test == Test::mutant)) return false;
+  } else if (!reaches(s, m, m.enemy, kOpaque)) {
+    return false;
+  }
+  return random01(s) < a.again;
 }
 
 // The attack in progress, this frame.
 void attacking(SequelServer& s, SequelMonster& m) {
-  if (s.level_time + 0.001 < m.fire_at || s.level_time > m.burst_until + 0.001) return;
   const Attack& a = attack_of(m);
-  const bool every_frame = a.fire == Fire::burst || a.fire == Fire::drain;
-  const bool volley = a.fire == Fire::rockets && m.burst_frame % 2 == 0;
-  if (m.burst_frame == 0 || every_frame || volley) shoot(s, m, a);
-  m.burst_frame++;
+  if (a.fire == Fire::rail && !m.aimed && hunted(s, m.enemy) &&
+      s.level_time + 0.001 >= m.fire_at - double(a.remember)) {
+    m.aim_at = mark(s, m, 0);
+    m.aimed = true;
+  }
+  if (s.level_time + 0.001 < m.fire_at || s.level_time > m.burst_until + 0.001) return;
+  if (a.every > 0) {
+    const bool later = m.loops > 0;
+    const int every = frames(later && a.again_every > 0 ? a.again_every : a.every);
+    const int n = m.burst_frame;
+    if (n % every == 0 && (a.shots == 0 || n / every < a.shots)) shoot(s, m, a, n / every);
+    m.burst_frame++;
+    if (s.level_time + kStep > m.burst_until + 0.001 && goes_on(s, m, a)) {
+      m.loops++;
+      const int more = frames(a.again_loop > 0 ? a.again_loop : a.loop);
+      m.burst_frame = 0;
+      m.fire_at = m.burst_until + kStep;
+      m.burst_until += double(more) * kStep;
+      m.busy_until = m.burst_until + double(a.recover);
+    }
+  } else {
+    const bool every_frame = a.fire == Fire::burst || a.fire == Fire::drain;
+    const bool volley = a.fire == Fire::rockets && m.burst_frame % 2 == 0;
+    if (m.burst_frame == 0 || every_frame || volley) shoot(s, m, a, m.burst_frame);
+    m.burst_frame++;
+  }
+  // A blow that landed and is followed by another (the brain's grab, then its claws).
+  if (m.attack < 2 && a.follow >= 0 && m.struck && skill(s) >= 1 &&
+      s.level_time + kStep > m.burst_until + 0.001)
+    begin_attack(s, m, a.follow);
 }
 
-// The attack chosen this frame, if any (sequel-monsters.md § Choosing to attack).
+int ranged_count(const Kind& k) {
+  int n = 0;
+  while (n < 3 && k.missile[n].fire != Fire::none) n++;
+  return n;
+}
+
+// The ranged attack chosen by weight (the first one nearer than the kind's `close`).
+int pick_ranged(SequelServer& s, const SequelMonster& m, float dist) {
+  const Kind& k = kind(m);
+  const int n = ranged_count(k);
+  if (k.close > 0 && dist < k.close) return 2;
+  float total = 0;
+  for (int i = 0; i < n; i++) total += k.missile[i].weight;
+  const float roll = float(random01(s)) * total;
+  float sum = 0;
+  for (int i = 0; i < n; i++) {
+    sum += k.missile[i].weight;
+    if (roll < sum) return 2 + i;
+  }
+  return 2 + n - 1;
+}
+
+// The mutant's leap test: the heights overlap and he is 100 or more away (then one time in ten).
+bool leap_test(SequelServer& s, const SequelMonster& m) {
+  const SequelEntity& e = body(s, m);
+  const SequelPlayer& p = s.players[m.enemy];
+  const sh::Vec3f at = unpack(p.move.origin);
+  const float height = p.maxs.z - p.mins.z;
+  const float bottom = at.z + p.mins.z;
+  if (e.origin.z + e.mins.z > bottom + 0.75f * height) return false;
+  if (e.origin.z + e.maxs.z < bottom + 0.25f * height) return false;
+  const sh::Vec3f d{at.x - e.origin.x, at.y - e.origin.y, 0};
+  if (sh::length(d) < 100) return false;
+  return random01(s) < 0.1;
+}
+
+// The attack chosen this frame, if any (sequel-monsters.md § Choosing to attack;
+// sequel-monsters-full.md for the kinds with their own test).
 void choose(SequelServer& s, SequelMonster& m) {
   if (s.level_time + 0.001 < m.busy_until) return;
   SequelEntity& e = body(s, m);
-  if (!reaches(s, m, m.enemy, kShotMask)) return;
   const Kind& k = kind(m);
-  const Range r = range_to(e.origin, unpack(s.players[m.enemy].move.origin));
+  const bool boss = k.test == Test::hover || k.test == Test::rider;
+  if (!reaches(s, m, m.enemy, boss ? kShotMask & ~sh::kSqWindow : kShotMask)) return;
+  const sh::Vec3f at = unpack(s.players[m.enemy].move.origin);
+  const float dist = sh::length(at - e.origin);
+  const Range r = range_to(e.origin, at);
   const bool has_missile = k.missile[0].fire != Fire::none;
+  const bool has_melee = k.melee[0].fire != Fire::none;
+  if (k.test == Test::mutant) {
+    if (r == Range::melee)
+      begin_attack(s, m, 0);
+    else if (leap_test(s, m))
+      begin_attack(s, m, 2);
+    return;
+  }
   if (r == Range::melee) {
-    if (skill(s) == 0 && random01(s) < 0.75) return;
-    if (k.melee.fire != Fire::none) {
-      begin_attack(s, m, k.melee);
+    if (!boss && skill(s) == 0 && random01(s) < 0.75) return;
+    if (has_melee) {
+      const bool second = k.melee[1].fire != Fire::none && random01(s) < 0.5;
+      begin_attack(s, m, second ? 1 : 0);
+      return;
+    }
+    if (has_missile) {  // no blow: the ranged attack, always
+      const int i = pick_ranged(s, m, dist);
+      if (dist >= attack_at(m, i).closest) begin_attack(s, m, i);
       return;
     }
   }
   if (!has_missile || r == Range::far || s.level_time + 0.001 < m.attack_finished) return;
-  double chance = m.hold ? 0.4 : r == Range::melee ? 0.2 : r == Range::near ? 0.1 : 0.02;
-  if (skill(s) == 0) chance *= 0.5;
-  if (skill(s) >= 2) chance *= 2;
+  double chance;
+  if (k.test == Test::hover) {
+    chance = m.hold ? 0.4 : 0.8;
+  } else if (k.test == Test::rider) {
+    chance = m.hold ? 0.4 : r == Range::melee ? 0.8 : r == Range::near ? 0.4 : 0.2;
+  } else {
+    chance = m.hold ? 0.4 : r == Range::melee ? 0.2 : r == Range::near ? 0.1 : 0.02;
+    if (skill(s) == 0) chance *= 0.5;
+    if (skill(s) >= 2) chance *= 2;
+  }
   if (random01(s) >= chance) return;
-  int n = 0;
-  while (n < 3 && k.missile[n].fire != Fire::none) n++;
-  begin_attack(s, m, k.missile[std::min(n - 1, static_cast<int>(random01(s) * n))]);
+  const int i = pick_ranged(s, m, dist);
   m.attack_finished = s.level_time + 2 * random01(s);
+  if (dist < attack_at(m, i).closest) return;  // too near for it: keeps closing
+  begin_attack(s, m, i);
+}
+
+// ---- The medic ----
+
+// Whether `medic` sees corpse `c` (eye to its middle).
+bool sees_body(const SequelServer& s, const SequelMonster& medic, const SequelMonster& c) {
+  const SequelEntity& e = s.entities[size_t(medic.entity)];
+  const SequelEntity& b = s.entities[size_t(c.entity)];
+  const sh::Vec3f mid = b.origin + (b.mins + b.maxs) * 0.5f;
+  return map_trace(s, eye(e, kind(medic)), {}, {}, mid, kOpaque, medic.entity).fraction >= 1;
+}
+
+// The corpse within 1024 it sees with the most health to come back to; -1 none.
+int find_patient(const SequelServer& s, const SequelMonster& medic) {
+  const SequelEntity& e = s.entities[size_t(medic.entity)];
+  int best = -1;
+  for (size_t i = 0; i < s.monsters.size(); i++) {
+    const SequelMonster& c = s.monsters[i];
+    const SequelEntity& b = s.entities[size_t(c.entity)];
+    if (!c.dead || c.claimed || b.gone || kind(c).end != End::corpse) continue;
+    if (s.level_time + 0.001 < c.died_at + double(kind(c).revive_after)) continue;
+    if (sh::length(b.origin - e.origin) > 1024 || !sees_body(s, medic, c)) continue;
+    if (best < 0 || kind(c).health > kind(s.monsters[size_t(best)]).health)
+      best = static_cast<int>(i);
+  }
+  return best;
+}
+
+// Corpse `c` comes back as its kind, with none of its map orders, full health, counted again.
+void revive(SequelServer& s, SequelMonster& c, int enemy) {
+  SequelEntity& b = body(s, c);
+  const Kind& k = kind(c);
+  SequelMonster fresh;
+  fresh.entity = c.entity;
+  fresh.kind = c.kind;
+  fresh.ideal_yaw = b.angles.y;
+  fresh.on_ground = c.on_ground;
+  fresh.screen = k.screen ? 100 : 0;
+  c = fresh;
+  b.health = b.max_health = k.health;
+  b.mins = k.mins;
+  b.maxs = k.maxs;
+  b.box = true;
+  b.target.clear();
+  b.targetname.clear();
+  b.spawnflags = 0;
+  s.monsters_total++;
+  if (hunted(s, enemy)) found(s, c, enemy, false);
+}
+
+// A medic's frame with a corpse to raise: the cable within 256, else toward it. True when it was
+// busy with one.
+bool tend(SequelServer& s, SequelMonster& m) {
+  if (m.patient < 0 && (s.frame_number % 10 == 0 || m.enemy < 0)) {
+    m.patient = find_patient(s, m);
+    if (m.patient >= 0) {
+      s.monsters[size_t(m.patient)].claimed = true;
+      m.old_enemy = m.enemy;
+      m.revive_at = 0;
+    }
+  }
+  if (m.patient < 0) return false;
+  SequelMonster& c = s.monsters[size_t(m.patient)];
+  SequelEntity& e = body(s, m);
+  const SequelEntity& b = body(s, c);
+  const auto release = [&] {
+    c.claimed = false;
+    m.patient = -1;
+    m.revive_at = 0;
+    m.enemy = hunted(s, m.old_enemy) ? m.old_enemy : -1;
+  };
+  if (!c.dead || b.gone) {
+    release();
+    return false;
+  }
+  const bool near = sh::length(b.origin - e.origin) <= 256 && sees_body(s, m, c);
+  if (m.revive_at > 0) {  // the cable is out
+    if (s.level_time + 0.001 < m.revive_at) return true;
+    if (near) {
+      fight_effect(s, "te_medic_cable", b.origin);
+      sound(s, m.entity, "medic/medatck4.wav");
+      const int enemy = m.old_enemy;
+      release();
+      revive(s, c, enemy);
+    } else {
+      m.revive_at = 0;
+    }
+    return true;
+  }
+  if (s.level_time + 0.001 < m.busy_until) return true;
+  turn(e, kind(m), yaw_to(b.origin - e.origin));
+  if (near) {  // the cable: launched, hooked, and 1.7 s on the corpse rises
+    sound(s, m.entity, "medic/medatck2.wav");
+    m.revive_at = s.level_time + 1.7;
+    m.busy_until = s.level_time + 2.8;
+    return true;
+  }
+  go_to(s, m, b.origin, kind(m).run);
+  return true;
 }
 
 // ---- The frame ----
 
 void think(SequelServer& s, SequelMonster& m) {
   SequelEntity& e = body(s, m);
+  const Kind& k = kind(m);
   fall(s, m);
+  if (m.leaping) return;                                  // in the air
   if (m.enemy >= 0 && !hunted(s, m.enemy)) m.enemy = -1;  // dead or gone
+  if (k.medic && tend(s, m)) return;
   if (m.enemy < 0) notice(s, m);
   if (m.enemy < 0) {  // walks its path, or stands
     if (m.corner >= 0) {
@@ -656,7 +748,7 @@ void think(SequelServer& s, SequelMonster& m) {
         m.corner = corner_named(s, c.target, "path_corner");
         return;
       }
-      go_to(s, m, c.origin, kind(m).walk);
+      go_to(s, m, c.origin, k.walk);
     }
     return;
   }
@@ -670,6 +762,7 @@ void think(SequelServer& s, SequelMonster& m) {
   if (s.level_time + 0.001 < m.pain_hold) return;  // flinching
   attacking(s, m);
   if (s.level_time + 0.001 < m.busy_until) return;
+  if (k.screen) m.screen = std::max(m.screen, 0);
   choose(s, m);
   if (s.level_time + 0.001 < m.busy_until) return;
   // The run: to its combat point first, then at the enemy (or where it was last seen).
@@ -682,36 +775,117 @@ void think(SequelServer& s, SequelMonster& m) {
       m.hold = true;  // holds there
       return;
     }
-    go_to(s, m, spot, kind(m).run);
+    go_to(s, m, spot, k.run);
     return;
   }
   if (m.hold) {
-    turn(e, kind(m), yaw_to(m.last_sight - e.origin));
+    turn(e, k, yaw_to(m.last_sight - e.origin));
     return;
   }
-  const sh::Vec3f goal = m.last_sight;
-  if (range_to(e.origin, goal) == Range::melee && kind(m).melee.fire == Fire::none) {
-    turn(e, kind(m), yaw_to(goal - e.origin));
+  sh::Vec3f goal = m.last_sight;
+  if (afloat(k)) goal.z += 35;  // a flier keeps 30 to 40 above him
+  if (range_to(e.origin, m.last_sight) == Range::melee && k.melee[0].fire == Fire::none) {
+    turn(e, k, yaw_to(goal - e.origin));
     return;
   }
   sh::Vec3f d = goal - e.origin;
   d.z = 0;
   if (sh::length(d) < 40) {  // close enough
-    turn(e, kind(m), yaw_to(d));
+    turn(e, k, yaw_to(d));
+    if (afloat(k)) go_to(s, m, goal, k.run);
     return;
   }
-  go_to(s, m, goal, kind(m).run);
+  go_to(s, m, goal, k.run);
+}
+
+// A boss's wreck thrown apart, or a flier's crash: the blast, and nothing left.
+void blow_up(SequelServer& s, SequelMonster& m) {
+  SequelEntity& e = body(s, m);
+  fight_effect(s, "te_explosion", e.origin);
+  e.gone = true;
+}
+
+// The spare Makron that waits inside boss `m` (Jorg) comes out and leaps at the frame's player.
+void bring_out(SequelServer& s, const SequelMonster& m) {
+  for (SequelMonster& o : s.monsters) {
+    if (!o.spare || !o.waiting) continue;
+    SequelEntity& e = body(s, o);
+    if (e.block != body(s, m).block) continue;
+    o.spare = false;
+    o.waiting = false;
+    e.hidden = false;
+    e.box = true;
+    e.origin = body(s, m).origin;
+    s.monsters_total++;
+    const int slot = s.sight_client;
+    if (!hunted(s, slot)) return;
+    sh::Vec3f d = unpack(s.players[slot].move.origin) - e.origin;
+    d.z = 0;
+    e.angles.y = o.ideal_yaw = yaw_to(d);
+    sh::normalize(d);
+    e.origin.z += 1;
+    o.velocity = d * 400 + sh::Vec3f{0, 0, 200};
+    o.on_ground = false;
+    found(s, o, slot, false);
+    return;
+  }
+}
+
+// A dead monster's frame: its fall, and a boss's or a crashed flier's end.
+void lie(SequelServer& s, SequelMonster& m) {
+  fall(s, m);
+  SequelEntity& e = body(s, m);
+  if (e.gone) return;
+  const End end = kind(m).end;
+  if (end == End::crash) {
+    if (m.on_ground || s.level_time + 0.001 >= m.end_at) blow_up(s, m);
+    return;
+  }
+  if (end != End::boss && end != End::launch) return;
+  if (s.level_time + 0.001 < m.end_at) return;
+  m.boom_step++;  // eight blasts round the wreck, 0.1 s apart, then its pieces
+  if (m.boom_step < 8) {
+    const float k = m.boom_step < 4 ? 24.0f : 48.0f;
+    const float sx = (m.boom_step & 1) != 0 ? k : -k, sy = (m.boom_step & 2) != 0 ? k : -k;
+    fight_effect(s, "te_explosion", e.origin + sh::Vec3f{sx, sy, 24 + float(m.boom_step * 2)});
+    if (end == End::launch && m.boom_step == 7) bring_out(s, m);
+    return;
+  }
+  e.gone = true;
+  fight_gib(s, map_row(m.entity), e.origin);
 }
 
 void die(SequelServer& s, SequelMonster& m, int attacker) {
   SequelEntity& e = body(s, m);
+  const Kind& k = kind(m);
   m.dead = true;
+  m.died_at = s.level_time;
+  m.leaping = false;
+  m.screen = 0;
   e.box = false;  // shots pass a corpse
   s.monsters_killed++;
-  sound(s, m.entity, kind(m).death);
+  sound(s, m.entity, k.death);
+  if (m.patient >= 0) {  // a medic's patient is free for another
+    s.monsters[size_t(m.patient)].claimed = false;
+    m.patient = -1;
+  }
   if (!m.item.empty()) fight_drop_at(s, e.origin, m.item);
   map_use_targets(s, m.entity, m.enemy >= 0 ? m.enemy : attacker);
-  if (e.health <= kind(m).gib) {
+  switch (k.end) {
+    case End::explode:
+      blow_up(s, m);
+      return;
+    case End::boss:
+    case End::launch:
+      m.end_at = s.level_time + double(k.death_time);
+      return;
+    case End::crash:
+      m.end_at = s.level_time + double(k.death_time) + 15;
+      break;
+    case End::corpse:
+      break;
+  }
+  if (e.health <= k.gib) {
     e.gone = true;
     fight_gib(s, map_row(m.entity), e.origin);
   }
@@ -740,14 +914,22 @@ void monster_precache(SequelServer& s) {
     return static_cast<int>(s.models.size()) - 1;
   };
   const auto add_sound = [&s](const char* name) {
-    if (std::find(s.sounds.begin(), s.sounds.end(), name) == s.sounds.end())
+    if (name != nullptr && std::find(s.sounds.begin(), s.sounds.end(), name) == s.sounds.end())
       s.sounds.emplace_back(name);
+  };
+  const auto add_kind = [&](int k) {
+    for (const char* name : {kKinds[k].sight, kKinds[k].pain, kKinds[k].death}) add_sound(name);
+    return model(kKinds[k].model);
   };
   for (SequelEntity& e : s.entities) {
     const int k = kind_of(e.classname);
-    if (k < 0 || e.gone || deathmatch(s)) continue;
-    e.modelindex = model(kKinds[k].model);
-    for (const char* name : {kKinds[k].sight, kKinds[k].pain, kKinds[k].death}) add_sound(name);
+    if (k < 0 || e.gone || (deathmatch(s) && !kKinds[k].keep)) continue;
+    e.modelindex = add_kind(k);
+    if (kKinds[k].medic)
+      for (const char* name : {"medic/medatck2.wav", "medic/medatck4.wav"}) add_sound(name);
+    if (kKinds[k].end == End::launch) add_kind(kind_of("monster_makron"));
+    if (kKinds[k].prop && kKinds[k].keep)
+      for (const char* name : {"tank/pain.wav", "tank/thud.wav"}) add_sound(name);
   }
 }
 
@@ -755,26 +937,44 @@ void monster_spawn(SequelServer& s) {
   s.monsters.clear();
   s.monsters_total = s.monsters_killed = 0;
   s.sight_entity = -1;
+  // A boss that brings out another at its death (Jorg) has it waiting inside, unseen: a map
+  // entity of its own, so it has its world row from the start.
+  const size_t mapped = s.entities.size();
+  for (size_t i = 0; i < mapped; i++) {
+    const int k = kind_of(s.entities[i].classname);
+    if (k < 0 || s.entities[i].gone || kKinds[k].end != End::launch || deathmatch(s)) continue;
+    SequelEntity spare = s.entities[i];
+    spare.classname = "monster_makron";
+    spare.targetname.clear();
+    spare.spawnflags = 2;
+    s.entities.push_back(spare);
+  }
   for (size_t i = 0; i < s.entities.size(); i++) {
     SequelEntity& e = s.entities[i];
     const int k = kind_of(e.classname);
     if (k < 0 || e.gone) continue;
-    if (deathmatch(s)) {
+    const Kind& kd = kKinds[k];
+    if (deathmatch(s) && !kd.keep) {
       e.gone = true;
       continue;
     }
     SequelMonster m;
     m.entity = static_cast<int>(i);
     m.kind = k;
-    const Kind& kd = kKinds[k];
+    m.spare = i >= mapped;
     e.health = kd.health;
     e.max_health = kd.health;
     e.mins = kd.mins;
     e.maxs = kd.maxs;
     e.box = true;
+    if (m.spare) {
+      const auto found = std::find(s.models.begin(), s.models.end(), kd.model);
+      e.modelindex = static_cast<int>(found - s.models.begin());
+    }
+    m.screen = kd.screen ? 100 : 0;
     m.ambush = (e.spawnflags & 5) != 0;
-    m.item = s.map->entities[size_t(e.block)].get("item");
-    if ((e.spawnflags & 2) != 0) {  // waits hidden for a use
+    if (!m.spare) m.item = s.map->entities[size_t(e.block)].get("item");
+    if ((e.spawnflags & 2) != 0 && !kd.prop) {  // waits hidden for a use
       e.hidden = true;
       e.box = false;
       m.waiting = true;
@@ -785,10 +985,10 @@ void monster_spawn(SequelServer& s) {
     if (m.corner >= 0)
       e.angles.y = m.ideal_yaw = yaw_to(s.entities[size_t(m.corner)].origin - e.origin);
     s.monsters.push_back(m);
-    s.monsters_total++;
+    if (!kd.prop && !m.spare) s.monsters_total++;
   }
   for (SequelMonster& m : s.monsters) {  // walkers to the floor
-    if (kKinds[m.kind].flies || m.waiting) continue;
+    if (afloat(kKinds[m.kind]) || m.waiting) continue;
     SequelEntity& e = s.entities[size_t(m.entity)];
     const sh::SequelTrace t =
         sweep(s, m, e.origin + sh::Vec3f{0, 0, 1}, e.origin - sh::Vec3f{0, 0, 256});
@@ -808,9 +1008,17 @@ void monster_frame(SequelServer& s) {
       break;
     }
   }
-  for (SequelMonster& m : s.monsters) {
+  for (size_t i = 0; i < s.monsters.size(); i++) {
+    SequelMonster& m = s.monsters[i];
+    if (kind(m).prop) {  // the commander's body: falls, and after a use slumps, frame by frame
+      if (kind(m).keep && m.used_at >= 0 && s.level_time + 0.001 >= m.used_at + 2.2 &&
+          s.level_time < m.used_at + 2.25)
+        sound(s, m.entity, "tank/thud.wav");
+      if (kind(m).keep && s.level_time >= 0.5) fall(s, m);
+      continue;
+    }
     if (m.dead) {
-      fall(s, m);
+      lie(s, m);
       continue;
     }
     if (m.waiting || body(s, m).gone) continue;
@@ -823,15 +1031,28 @@ bool monster_damage(SequelServer& s, int e, int attacker, int damage, sh::Vec3f 
   if (i < 0) return false;
   SequelMonster& m = s.monsters[size_t(i)];
   SequelEntity& ent = s.entities[size_t(e)];
+  const Kind& k = kind(m);
+  if (k.prop) return true;  // a figure: never hurt
   if (ent.gone || m.waiting || damage <= 0) return false;
+  if (m.dead && k.end != End::corpse && k.end != End::crash) return true;  // a dying boss
+  // A power screen takes a third of a blow from in front (but not while its chest is open).
+  const bool opened = m.attack == 1 && s.level_time + 0.001 < m.busy_until;
+  if (m.screen > 0 && !opened && sh::normalize(dir) > 0 &&
+      sh::dot(dir * -1.0f, forward_of(ent.angles.y)) > kInFront) {
+    const int saved = std::min(damage / 3, m.screen);
+    m.screen -= saved;
+    damage -= saved;
+    if (saved > 0) fight_effect(s, "te_screen_sparks", ent.origin + dir * -16.0f);
+    if (damage <= 0) return true;
+  }
   ent.health -= damage;
   // The knockback: 500 × damage / mass along the blow.
-  if (sh::normalize(dir) > 0 && !kind(m).flies) {
-    m.velocity = m.velocity + dir * (500.0f * float(damage) / float(std::max(50, kind(m).mass)));
+  if (sh::normalize(dir) > 0 && !afloat(k)) {
+    m.velocity = m.velocity + dir * (500.0f * float(damage) / float(std::max(50, k.mass)));
     m.on_ground = false;
   }
   if (m.dead) {  // a corpse thrown apart
-    if (ent.health <= kind(m).gib) {
+    if (ent.health <= k.gib) {
       ent.gone = true;
       fight_gib(s, map_row(e), ent.origin);
     }
@@ -841,12 +1062,12 @@ bool monster_damage(SequelServer& s, int e, int attacker, int damage, sh::Vec3f 
     die(s, m, attacker);
     return true;
   }
-  if (hunted(s, attacker) && attacker != m.enemy) found(s, m, attacker, false);
+  if (hunted(s, attacker) && attacker != m.enemy && m.patient < 0) found(s, m, attacker, false);
   if (hunted(s, attacker) && m.enemy < 0) found(s, m, attacker, false);
-  if (s.level_time + 0.001 >= m.pain_at + kPainEvery) {
-    m.pain_at = s.level_time;
-    m.pain_hold = s.level_time + 0.3;
-    sound(s, e, kind(m).pain);
+  if (s.level_time + 0.001 >= m.pain_at + kPainEvery && !m.leaping) {
+    m.pain_at = s.level_time + (skill(s) == 3 ? 2.0 : 0.0);  // a 5 s wait at skill 3
+    if (skill(s) < 3) m.pain_hold = s.level_time + 0.3;      // and no flinch
+    sound(s, e, k.pain);
   }
   return true;
 }
@@ -856,7 +1077,20 @@ bool monster_use(SequelServer& s, int e, int activator) {
   if (i < 0) return false;
   SequelMonster& m = s.monsters[size_t(i)];
   SequelEntity& ent = s.entities[size_t(e)];
-  if (!m.waiting) return true;
+  if (kind(m).prop) {
+    if (kind(m).keep) {  // the commander's body slumps
+      if (m.used_at < 0) {
+        m.used_at = s.level_time;
+        sound(s, e, "tank/pain.wav");
+      }
+    } else {  // the Makron's figure goes, in a flash
+      fight_effect(s, "te_boss_teleport", ent.origin);
+      ent.gone = true;
+      ent.box = false;
+    }
+    return true;
+  }
+  if (!m.waiting || m.spare) return true;
   m.waiting = false;
   ent.hidden = false;
   ent.box = true;
@@ -901,6 +1135,9 @@ void monster_rows(SequelServer& s) {
     r.modelindex = e.modelindex;
     // The damaged skin below half health.
     r.skin = kind(m).skin + (e.health < e.max_health / 2 ? 1 : 0);
+    // The commander's body slumps from frame 1 to 24, a frame every 0.1 s from 0.1 s after a use.
+    if (kind(m).prop && m.used_at >= 0)
+      r.frame = std::clamp(static_cast<int>((s.level_time - m.used_at) / 0.1), 0, 24);
   }
 }
 
