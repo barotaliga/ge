@@ -160,10 +160,11 @@ struct FighterStats {
   int64_t surface_failed = 0;  // and rises given up short of the surface
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
-  int64_t on_the_way = 0;  // short goals taken up on the way
-  int64_t chained = 0;     // item goals planned on to the next one (`chains`)
+  int64_t on_the_way = 0;   // short goals taken up on the way
+  int64_t chained = 0;      // item goals planned on to the next one (`chains`)
+  int64_t turned_round = 0;  // commands a turn back was pressed across the run (`uturn`)
   int64_t took[profiles::kItemKinds] =
-      {};                   // its own pickups by the item's kind (profiles/items.hpp ItemKind)
+      {};  // its own pickups by the item's kind (profiles/items.hpp ItemKind)
   int64_t swim_fights = 0;  // commands swum under the aim, an enemy in sight
   int64_t wet = 0;          // commands alive with the waist in water (swimming or wading)
   // And the wet commands by what it was doing (`kWetWhy`): its mode, aiming, its goal in the

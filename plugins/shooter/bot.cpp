@@ -627,6 +627,13 @@ void bot_goal(Bot& b, int32_t goal) {
   b.pilot.goals.assign(1, goal);
   b.pilot.next_goal = 0;
   b.pilot.then = -1;
+  b.pilot.retarget = -1;
+  const PilotMode m = b.pilot.pilot.mode;
+  if (b.pilot.pilot.set.retarget &&
+      (m == PilotMode::walk || m == PilotMode::hop || m == PilotMode::strafe)) {
+    b.pilot.retarget = goal;  // run on to it from the route under way (`pilot_retarget`)
+    return;
+  }
   b.pilot.pilot.mode = PilotMode::idle;
 }
 
