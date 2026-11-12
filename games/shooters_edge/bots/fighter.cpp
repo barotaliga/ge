@@ -61,10 +61,10 @@ constexpr float kCornered = 350;      // units: an enemy in sight this near is f
                                       // range: a back turned on him this close is shot)
 constexpr float kCowardCornered = 192;  // a coward still runs from one farther than this
 constexpr double kImpulseGap_s = 0.5;
-constexpr double kWait_s = 20;      // an item back within this is worth going to wait for
-constexpr double kHealWait_s = 3;   // but a retreat goes for health that is there
-constexpr double kKeepGoal = 1.5;   // the goal's score is held up by this against the others
-constexpr double kDecide_s = 4;     // with no news, its item goal is chosen again this often
+constexpr double kWait_s = 20;     // an item back within this is worth going to wait for
+constexpr double kHealWait_s = 3;  // but a retreat goes for health that is there
+constexpr double kKeepGoal = 1.5;  // the goal's score is held up by this against the others
+constexpr double kDecide_s = 4;    // with no news, its item goal is chosen again this often
 // A chain's pickup run through (`chains`): the item still believed there this long after is the
 // news of its taking still to come, not a miss to go back for, s.
 constexpr double kViaNews_s = 0.6;
@@ -73,8 +73,9 @@ constexpr double kViaNews_s = 0.6;
 // the view's side is the side.
 constexpr double kTurnBackSpeed = 30, kTurnBack = 110, kTurnAcross = 95, kTurnStraight = 170;
 constexpr float bt_gap_past = 160;  // `gappast`: a gap's jump lands this far on past its node
-constexpr double kTurnRoom = 48;  // and the room it needs across, units (the circle's ~32 and a box)
-constexpr float kRun = 320;         // units/s, the run to an item
+constexpr double kTurnRoom =
+    48;                      // and the room it needs across, units (the circle's ~32 and a box)
+constexpr float kRun = 320;  // units/s, the run to an item
 constexpr double kCallAgain_s = 8;  // an enemy in sight is called out again after this
 constexpr double kTold_s = 10;      // a point at an item is followed this long
 constexpr float kRocketNear = 400;  // a rocket at a man nearer than this is aimed at his middle
@@ -404,8 +405,12 @@ Stats after_taking(Stats st, const ItemSpot& it) {
     case ItemKind::armor1:
     case ItemKind::armor2:
     case ItemKind::armor3: {
-      const float type = it.kind == ItemKind::armor1 ? 0.3f : it.kind == ItemKind::armor2 ? 0.6f : 0.8f;
-      const float value = it.kind == ItemKind::armor1 ? 100.f : it.kind == ItemKind::armor2 ? 150.f : 200.f;
+      const float type = it.kind == ItemKind::armor1   ? 0.3f
+                         : it.kind == ItemKind::armor2 ? 0.6f
+                                                       : 0.8f;
+      const float value = it.kind == ItemKind::armor1   ? 100.f
+                          : it.kind == ItemKind::armor2 ? 150.f
+                                                        : 200.f;
       if (protection(type, value) > protection(st.armortype, st.armor)) {
         st.armortype = type;
         st.armor = value;
@@ -1402,6 +1407,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.gap_past = features[sh::Feature::gappast] ? bt_gap_past : 0;
   ps.lip_jump = features[sh::Feature::lipjump];
   ps.gap_strafe = features[sh::Feature::airgap];
+  ps.pilot_cast = features[sh::Feature::pilotcast];
   ps.gap_circle = features[sh::Feature::gapbuild];
   ps.curve_keys = features[sh::Feature::keys] && features[sh::Feature::curvekeys];
   ps.under_way = features[sh::Feature::underway];

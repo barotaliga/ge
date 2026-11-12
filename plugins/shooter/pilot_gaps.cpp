@@ -23,7 +23,8 @@ constexpr int kGapRunMost = 40;        // a run to the lip looked ahead this man
 constexpr float kGapRunWindow = 120;   // a jump tried from each place this near the lip, units
 constexpr float kGapRunPast = 24;      // and none this far past it along the jump
 constexpr size_t kGapCurveLinks = 12;  // the gap within this many links ahead (nodes ~32 apart)
-constexpr float kHopShort = 64;  // `lipjump`: a hop "this side" of a gap comes down this short of it
+constexpr float kHopShort =
+    64;                         // `lipjump`: a hop "this side" of a gap comes down this short of it
 constexpr int kGapKeyLate = 2;  // a keyboard's jump key goes down up to this many commands late
 // The takeoff: the next commands' places tried, a takeoff no further than this past its start (the
 // lip), the ground's friction a second; a gap given up stays off the routes this long.
@@ -31,6 +32,9 @@ constexpr int kGapRunOn = 4;
 constexpr float kGapPastStart = 24;
 constexpr float kGroundFriction = 4;
 constexpr double kGapOff_s = 10;
+constexpr int kCastMost = 160;        // `hop_cast`: a flight forecast this many commands at most
+constexpr float kKeyAxis = 400;       // a keyboard's key: the classic client's axis a key, units/s
+constexpr float kKeyPressMin = 0.3f;  // a wish under this share of a run presses no key in the air
 
 bool over_harm(const Pilot& p, Vec3f S, Vec3f T) {
   return nav_harm_near(*p.g, {(S.x + T.x) * 0.5f, (S.y + T.y) * 0.5f, S.z}, kGapCurveHarm);
@@ -62,7 +66,9 @@ bool gap_lands_late(const Pilot& p, const PilotSense& s, int msec, Vec3f T) {
     const float z0 = st.origin.z;
     player_move(st, c, move, *s.world);
     if (st.ground < 0 || st.origin.z < z0 - kStepHeight) return false;  // off the floor
-    if (!gap_lands(*s.world, move, st.origin, st.velocity, T, msec, p.set.gap_past, p.set.gap_strafe)) return false;
+    if (!gap_lands(*s.world, move, st.origin, st.velocity, T, msec, p.set.gap_past,
+                   p.set.gap_strafe))
+      return false;
   }
   return true;
 }
@@ -70,14 +76,18 @@ bool gap_lands_late(const Pilot& p, const PilotSense& s, int msec, Vec3f T) {
 bool gap_lands(const MoveWorld& world, const MoveSettings& move, Vec3f at, Vec3f velocity, Vec3f T,
                int msec, float past, bool strafe) {
   const JumpFlight f = fly_jump(world, move, at, velocity, T, msec, 1.5f, strafe);
-  const float dz = f.end.z - T.z;
-  if (!f.landed || dz > kGapUp || dz < -kGapUp) return false;
-  if (across(f.end, T) <= kGapLand) return true;
+  return f.landed && lands_by(at, f.end, T, past);
+}
+
+bool lands_by(Vec3f at, Vec3f end, Vec3f T, float past) {
+  const float dz = end.z - T.z;
+  if (dz > kGapUp || dz < -kGapUp) return false;
+  if (across(end, T) <= kGapLand) return true;
   if (past <= 0) return false;
   // On past T along the line from where it jumped: how far past, and how far off the line.
   Vec3f dir{T.x - at.x, T.y - at.y, 0};
   normalize(dir);
-  const Vec3f rel{f.end.x - T.x, f.end.y - T.y, 0};
+  const Vec3f rel{end.x - T.x, end.y - T.y, 0};
   const float on = dot(rel, dir);
   const float off = rel.x * dir.y - rel.y * dir.x;
   return on >= -kGapLand && on <= past && off <= past && off >= -past;
@@ -129,7 +139,8 @@ GapRun gap_run(const Pilot& p, const PilotSense& s, int msec) {
   move.maxspeed = s.maxspeed;
   const float dt = static_cast<float>(msec) * 0.001f;
   const auto lands = [&](const MoveState& st) {
-    return gap_lands(*s.world, move, st.origin, st.velocity, T, msec, p.set.gap_past, p.set.gap_strafe);
+    return gap_lands(*s.world, move, st.origin, st.velocity, T, msec, p.set.gap_past,
+                     p.set.gap_strafe);
   };
   // Each way on: straight on (side 0), or a curve on the ground to the left or the right, the
   // wish at the best angle for speed (circle_jump.hpp). The first that brings a place a jump
@@ -212,6 +223,62 @@ GapRun gap_run(const Pilot& p, const PilotSense& s, int msec) {
   return out;
 }
 
+JumpFlight hop_cast(const Pilot& p, const PilotSense& s, int msec) {
+  JumpFlight out;
+  if (s.world == nullptr || p.forecasting) return out;
+  Pilot c = p;
+  c.forecasting = true;
+  MoveSettings move;
+  move.maxspeed = s.maxspeed;
+  MoveState st;
+  st.origin = s.origin;
+  st.velocity = s.velocity;
+  st.maxspeed = s.maxspeed;
+  st.waterlevel = s.waterlevel;
+  st.ground = s.onground ? 0 : -1;
+  PilotSense cs = s;
+  cs.grenade_ready = false;
+  cs.rocket_ready = false;
+  const float dt = static_cast<float>(msec) * 0.001f;
+  bool aloft = false;
+  for (int i = 0; i < kCastMost; i++) {
+    cs.origin = st.origin;
+    cs.velocity = st.velocity;
+    cs.onground = st.ground >= 0;
+    cs.waterlevel = st.waterlevel;
+    MoveCmd cmd = pilot_step(c, cs, msec);
+    if (p.set.curve_keys) {
+      // A keyboard: the curve's keys held whole, else the wish's nearest of the eight key sets.
+      const float fw = cmd.forward, sd = cmd.side;
+      const float m = root_of(fw * fw + sd * sd) / move.maxspeed;
+      int set = -1;
+      if (c.curve_keys != kNoCurveKeys && cs.onground)
+        set = c.curve_keys > 0 ? 1 : c.curve_keys < 0 ? 7 : 0;
+      else if (m >= kKeyPressMin) {
+        float ang = heading(fw, sd);  // 0 forward, clockwise to the right
+        if (ang < 0) ang += 360;
+        set = static_cast<int>(ang / 45 + 0.5f) % 8;
+      }
+      constexpr int8_t kF[8] = {1, 1, 0, -1, -1, -1, 0, 1}, kS[8] = {0, 1, 1, 1, 0, -1, -1, -1};
+      cmd.forward = static_cast<int16_t>(set < 0 ? 0 : kF[set] * kKeyAxis);
+      cmd.side = static_cast<int16_t>(set < 0 ? 0 : kS[set] * kKeyAxis);
+    }
+    player_move(st, cmd, move, *s.world);
+    out.time_s += dt;
+    if (st.waterlevel > 0) return out;  // into a liquid: no landing
+    if (st.ground < 0) {
+      aloft = true;
+    } else if (aloft) {
+      out.landed = true;
+      out.end = st.origin;
+      return out;
+    } else if (i > 0) {
+      return out;  // never left the ground
+    }
+  }
+  return out;
+}
+
 // A gap trick given up: off every route this player plans for `kGapOff_s` (a goal chosen again
 // clears the pilot's cut, and the same spot would plan it again at once).
 void gap_off(Pilot& p, NavExtraLink l) {
@@ -232,6 +299,12 @@ void gap_off(Pilot& p, NavExtraLink l) {
 // ordinary hop. Else the gap is given up (cut until the next goal; `replanned`, and the caller
 // plans the goal round it), the brink guard braking the run at the lip.
 bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, bool& replanned) {
+  if (p.forecasting) {
+    // A copy flying `hop_cast`'s forecast: the hop's jump it was asked about.
+    p.safe_flight = true;
+    because = "a forecast: the hop's jump";
+    return true;
+  }
   const NavGraph& g = *p.g;
   const size_t gk = static_cast<size_t>(p.gap_k);
   const NavLink* gl = link_of(g, p.route[gk], p.route[gk + 1]);
@@ -269,10 +342,23 @@ bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, 
       because = "a gap trick: running on to where its jump lands across";
       return false;
     }
-    const JumpFlight hop = fly_jump(*s.world, move, s.origin, s.velocity, T, msec);
+    // `pilotcast`: the hop flown by a copy of the pilot as it will fly it (its strafe's gain,
+    // its hands' lag), not forward held at the landing.
+    const JumpFlight hop = p.set.pilot_cast
+                               ? hop_cast(p, s, msec)
+                               : fly_jump(*s.world, move, s.origin, s.velocity, T, msec);
+    if (p.set.pilot_cast && hop.landed && lands_by(s.origin, hop.end, T, p.set.gap_past)) {
+      // The hop itself comes down across: the gap hopped, strafing as a hop does.
+      p.safe_flight = true;
+      p.brink_free = true;
+      p.stats.gap_jumps++;
+      p.stats.gap_speed += across({}, s.velocity);
+      because = "a gap trick: the hop's jump, flown as the pilot flies it, lands across";
+      return true;
+    }
     // `lipjump`: short of the lip by a margin, the hop's strafe in the air gaining on the flight
-    // forecast here (forward at the landing).
-    const float short_by = p.set.lip_jump ? kHopShort : 0;
+    // forecast here (forward at the landing); none when the copy flew it.
+    const float short_by = p.set.lip_jump && !p.set.pilot_cast ? kHopShort : 0;
     if (hop.landed && hop.end.z >= S.z - kStepHeight &&
         dot(Vec3f{hop.end.x - S.x, hop.end.y - S.y, 0}, dir) <= -short_by) {
       p.safe_flight = true;

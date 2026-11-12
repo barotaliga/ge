@@ -7,13 +7,14 @@
 // ge:summary The pilot at a gap trick: the gap in the stretch, the curve and the run to its lip
 // ge:keywords pilot gap-trick gap_in gap_curve_near gap_curve gap-circle curve-into-gap gapbuild
 // ge:keywords gap_run gap_lands run-to-the-lip ground-strafe side-to-side rollout gap_takeoff
-// ge:keywords gap_off gap_lands_late jump-key-late
+// ge:keywords gap_off gap_lands_late jump-key-late hop_cast pilotcast pilot-copy forecast
 // ge:skill shooter bots
 // ge:test tests/shooter_nav_gaps_test.cpp
 #pragma once
 
 #include <cstdint>
 
+#include "shooter/nav_gaps.hpp"
 #include "shooter/pilot.hpp"
 
 namespace ge::shooter::pilot_parts {
@@ -31,9 +32,20 @@ inline constexpr float kGapCurveFrom = 160;  // a curve into a gap begun this ne
 bool gap_lands(const MoveWorld& world, const MoveSettings& move, Vec3f at, Vec3f velocity, Vec3f T,
                int msec, float past = 0, bool strafe = false);
 
+// Whether a jump from `at` that comes down at `end` lands by the gap's landing `T` (`gap_lands`'
+// test on a flight already flown).
+bool lands_by(Vec3f at, Vec3f end, Vec3f T, float past = 0);
+
 // Under a keyboard (`curve_keys`): whether a jump asked now still lands across by `T` when its key
 // goes down one or two commands late, the keys held now (the curve's side key) and the view still.
 bool gap_lands_late(const Pilot& p, const PilotSense& s, int msec, Vec3f T);
+
+// `pilotcast`: a hop's jump pressed now, flown by a COPY of the pilot (`forecasting`: its own
+// forecasts off, this landing's jump pressed; its hands, its strafe and its view as they will
+// press, the keys a keyboard's eight sets when `curve_keys`) on a copy of the move, until it comes
+// down: where (`landed` false when it does not within `kCastMost` commands, or comes down in a
+// liquid), and when.
+JumpFlight hop_cast(const Pilot& p, const PilotSense& s, int msec);
 
 // A gap trick given up: off every route this player plans for a while.
 void gap_off(Pilot& p, NavExtraLink l);

@@ -105,8 +105,9 @@ struct PilotSettings {
   // `runupkeys`: the stepped-back run-up's keys pressed for the view as it will be when they land.
   bool runup_keys = false;
   // `jumpfly`: a run at a jump that reaches its start off the line or the speed (or nears it from
-  // `kFlyFrom` behind) jumps anyway when the jump, flown by the move from where it is (and a command
-  // or two late under a keyboard), lands by the far end; it lines up again only when none does.
+  // `kFlyFrom` behind) jumps anyway when the jump, flown by the move from where it is (and a
+  // command or two late under a keyboard), lands by the far end; it lines up again only when none
+  // does.
   bool jump_fly = false;
   // `gappast`: a gap's jump that comes down on past its far node, on its floor and line, lands
   // (pilot_gaps.hpp `gap_lands`): this far past, units (0: within the landing's 48 only).
@@ -115,6 +116,9 @@ struct PilotSettings {
   bool lip_jump = false;
   // `airgap`: a gap's jump forecast and flown strafed across (the air's gain), not forward held.
   bool gap_strafe = false;
+  // `pilotcast`: a hop's jump at a gap judged by a copy of this pilot flying it on a copy of the
+  // move (pilot_gaps.hpp `hop_cast`), not by a flight held forward at the landing.
+  bool pilot_cast = false;
   // `gapbuild`: a hop's first jump into a gap trick over water is a circle jump aimed across at
   // its landing, taken as soon as a jump from there lands across; short of the lip a landing runs
   // on along the ground (straight, curving or side to side, rolled through the hands:
@@ -375,6 +379,12 @@ struct Pilot {
   int32_t gap_way = -1;      // the run to a gap's lip under way (pilot_gaps.hpp `gap_run`; -1 none)
   int32_t gap_way_i = 0;     // and its commands so far
   bool safe_flight = false;
+  // A LIP'S JUMP in the air (`lipjump`): pressed at a lip (`clock_s`, -1 none), flown across at
+  // the far side (pilot.cpp `strafe_across`), not woven as a hop.
+  double lip_pressed_s = -1;
+  float lip_yaw = 0;  // and the heading across to the nearest floor beyond (`lip_crossing`)
+  // A COPY flying a forecast (`hop_cast`): its own forecasts off, its first landing's jump pressed.
+  bool forecasting = false;
   bool brink_free = false;  // this command's keys are a flight the move proved: no brink guard
   // A CURVE ON THE GROUND this command (a circle jump's, a run to a gap's lip): the keys it means,
   // forward and the side key (-1 left, 1 right, 0 forward alone); `kNoCurveKeys` none. A keyboard
@@ -392,7 +402,7 @@ struct Pilot {
   std::vector<RecipeFrame> recipe_frames;
   std::vector<Vec3f> recipe_trail;
   std::vector<float> recipe_trail_t;
-  int8_t curve_keys_last = kNoCurveKeys;   // and the last command's
+  int8_t curve_keys_last = kNoCurveKeys;  // and the last command's
   // A GOAL CHAINED ON PAST A PICKUP (`pilot_chain`): the route index of the item's node the route
   // runs through to the next goal (-1: none), the point to run through (the item itself, beside
   // its node), and the last one left behind (its node and when, `clock_s`).
