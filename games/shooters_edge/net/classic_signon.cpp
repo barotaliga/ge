@@ -224,6 +224,16 @@ void cmd_begin(ClassicServer& s, int slot) {
   if (c.state == ConnState::spawned) return;
   c.state = ConnState::spawned;
   c.rules_active = true;
+  // A player whose ping is past the server's most (sv_maxping) watches instead.
+  const int ping_ms = static_cast<int>(c.ping_s * 1000);
+  if (!c.local && !c.spectator && s.cfg.max_ping_ms > 0 && c.ping_samples > 0 &&
+      ping_ms > s.cfg.max_ping_ms) {
+    c.spectator = true;
+    info_set(c.userinfo, "*spectator", "1");
+    client_print(s, slot, 2,
+                 "Your ping of " + std::to_string(ping_ms) + " ms is over this server's most (" +
+                     std::to_string(s.cfg.max_ping_ms) + " ms), so you join as a spectator.\n");
+  }
   if (s.seat != nullptr)
     s.seat(s.seat_ctx, slot, c.name, c.spectator);
   else
@@ -496,6 +506,24 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
     cmd_nextdl(s, slot, w);
   } else if (cmd == "stopdownload" || cmd == "stopdl") {
     c.dl = ServerDownload{};
+  } else if (cmd == "minping") {  // a player's own floor on everyone's ping (sv_minpingcmd)
+    if (w.count < 2) {
+      client_print(s, slot, 2,
+                   "The minimum ping is " + std::to_string(s.cfg.min_ping_ms) + " ms.\n");
+    } else if (!s.cfg.min_ping_cmd) {
+      client_print(s, slot, 2, "This server doesn't let players change the minimum ping.\n");
+    } else if (s.match_on) {
+      client_print(s, slot, 2, "The minimum ping can't change while a match is on.\n");
+    } else {
+      char* end = nullptr;
+      const long v = std::strtol(pg::word(w, 1), &end, 10);
+      if (end == pg::word(w, 1) || *end != '\0' || v < 0 || v > 300) {
+        client_print(s, slot, 2, "The minimum ping must be 0 to 300 ms.\n");
+      } else {
+        s.cfg.min_ping_ms = static_cast<int>(v);
+        client_print(s, slot, 2, "Minimum ping set to " + std::to_string(v) + " ms.\n");
+      }
+    }
   } else if (cmd == "users") {
     client_print(s, slot, 2, classic_users(s));  // who is on, by user id (classic_admin.hpp)
   } else if (cmd == "ptrack" || cmd == "snap" || cmd == "upload") {

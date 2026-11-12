@@ -128,6 +128,20 @@ struct ServerConfig {
   uint32_t seed = 1;  // the challenges' stream
   // Players at most, the game's local seats counted (0: the loop's slots): a coop game's eight.
   int most_players = 0;
+  // THE SLOTS AND THE PINGS (never a local seat). With `max_spectators` above 0, spectators have
+  // their own slots beside the players' `maxclients` (0: they take a player's free slot); a player
+  // joining a full server while a spectator slot is free is seated as a spectator by
+  // `full_spectate` (0 never, 1 unless the user info's `svf` has bit 2, 2 only if it has bit 1).
+  // A reconnect from a slot connected for less than `reconnect_wait_s` gets no answer. A player
+  // whose ping is above `max_ping_ms` on entering plays as a spectator; each player's packets are
+  // held back until its ping is at least `min_ping_ms`, which players may set themselves with
+  // `minping` before a match when `min_ping_cmd` allows (all 0: off).
+  int max_spectators = 0;       // sv_maxspectators
+  int full_spectate = 2;        // sv_fullspectate
+  double reconnect_wait_s = 0;  // sv_reconnectwait
+  int max_ping_ms = 0;          // sv_maxping
+  int min_ping_ms = 0;          // sv_minping
+  bool min_ping_cmd = true;     // sv_minpingcmd
 };
 
 enum class ConnState : uint8_t { free, connected, spawned };
@@ -183,6 +197,13 @@ struct ClassicClient {
   int colour_changes = 0;    // changes in it
   double info_since = -1;    // the user info's window (sv_infoflood): its start, s (-1 none)
   int info_changes = 0;      // changes in it
+  // Its packets held back for the minimum ping (sv_minping): each with the time it is let in.
+  struct Held {
+    double at = 0;
+    std::vector<uint8_t> bytes;
+  };
+  std::vector<Held> held;
+  double hold_s = 0;  // the hold, 0..1 s, moved by 1 ms a packet toward the minimum ping
 };
 
 struct ServerCounts {
@@ -226,6 +247,7 @@ struct ClassicServer {
   int statics_known = 0;                     // static entities routed so far
   double now = 0;                            // the network's time, s
   double last_ping_update = 0;
+  bool match_on = false;  // a match counts down or plays (the game's lobby): no `minping` then
   int64_t frames = 0;
   std::vector<sh::Packet> packets;
   std::vector<std::string> log;  // connects, rejects and drops, in order (the lab, the tests)

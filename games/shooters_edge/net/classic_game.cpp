@@ -7,6 +7,7 @@
 // ge:test tests/shooters_edge_classic_game_test.cpp
 #include "shooters_edge/net/classic_game.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -150,6 +151,14 @@ constexpr gs::GameRule kEndpointRules[] = {
     {"sv_download_other", "1: files outside those folders are offered too (0)"},
     {"sv_downloadchunks", "chunks of 1 KB a downloading client gets a frame, 1..30 (30)"},
     {"sv_watervis", "1: clients are told they may see through water (0)"},
+    {"sv_fullspectate",
+     "a player joining a full server while a spectator slot is free: 0 refused, 1 seated as a "
+     "spectator unless its user info's svf has bit 2, 2 only if it has bit 1 (2)"},
+    {"sv_reconnectwait",
+     "seconds a slot must have been connected before its address may connect again (0: no wait)"},
+    {"sv_maxping", "a player above this ping in ms on entering plays as a spectator (0: no most)"},
+    {"sv_minping", "each player's packets are held until its ping is at least this, ms (0: off)"},
+    {"sv_minpingcmd", "1: players may set the minimum ping with minping before a match (1)"},
     {"sv_defaultname", "the name a client with an empty or unusable name gets (player)"},
     {"sv_unfake",
      "1: carriage returns in a public chat line become #, so no line fakes another (1)"},
@@ -212,6 +221,9 @@ constexpr gs::SettingName kSettingNames[] = {
     {"allow_download_other", "sv_download_other"},
     {"sv_downloadchunksperframe", "sv_downloadchunks"},
     {"sv_default_name", "sv_defaultname"},
+    {"sv_forcespec_onfull", "sv_fullspectate"},
+    {"sv_reconnectlimit", "sv_reconnectwait"},
+    {"sv_enable_cmd_minping", "sv_minpingcmd"},
     {"countrycode", "sv_country"},
     {"city", "sv_city"},
     {"coords", "sv_coords"},
@@ -317,7 +329,7 @@ bool info_flood(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error
 }
 
 bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
-  int watervis = 0;
+  int watervis = 0, reconnect_wait = static_cast<int>(cfg.reconnect_wait_s);
   int antilag = cfg.antilag ? 1 : 0, voice = cfg.voice ? 1 : 0;
   int all = cfg.allow_download ? 1 : 0, skins = cfg.allow_skins ? 1 : 0;
   int models = cfg.allow_models ? 1 : 0, sounds = cfg.allow_sounds ? 1 : 0;
@@ -335,7 +347,13 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
       !endpoint_int(c, "sv_downloadchunks", 1, 30, cfg.chunks_per_frame, error) ||
       !endpoint_flag(c, "sv_unfake", cfg.unfake, error) ||
       !endpoint_flag(c, "sv_colorkick", cfg.colour_kick, error) ||
-      !endpoint_int(c, "sv_watervis", 0, 1, watervis, error) || !info_flood(c, cfg, error))
+      !endpoint_int(c, "sv_watervis", 0, 1, watervis, error) ||
+      !endpoint_int(c, "sv_fullspectate", 0, 2, cfg.full_spectate, error) ||
+      !endpoint_int(c, "sv_maxping", 0, 10000, cfg.max_ping_ms, error) ||
+      !endpoint_int(c, "sv_minping", 0, 1000, cfg.min_ping_ms, error) ||
+      !endpoint_flag(c, "sv_minpingcmd", cfg.min_ping_cmd, error) ||
+      !endpoint_int(c, "sv_reconnectwait", 0, 3600, reconnect_wait, error) ||
+      !info_flood(c, cfg, error))
     return false;
   if (const auto n = c.rules.find("sv_defaultname"); n != c.rules.end() && !n->second.empty()) {
     if (sanitize_name(n->second, "") != n->second) {
@@ -347,6 +365,8 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
     }
     cfg.default_name = n->second;
   }
+  cfg.reconnect_wait_s = reconnect_wait;
+  cfg.max_spectators = c.max_spectators;
   cfg.antilag = antilag != 0;
   cfg.voice = voice != 0;
   cfg.allow_download = all != 0;
@@ -366,6 +386,11 @@ bool read_game_file(void* ctx, const std::string& name, std::vector<uint8_t>& by
   if (found.empty()) return false;
   bytes.assign(found.begin(), found.end());
   return true;
+}
+
+// The loop's client slots: the players' and, when spectators have their own, theirs.
+int slots(const gs::ServerConfig& c) {
+  return std::min(sh::kMaxClients, c.maxclients + std::max(0, c.max_spectators));
 }
 
 // The mod's rules on the map `name`, set from the settings: into `map` and `rules`.
@@ -391,12 +416,12 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     so.clients_take_view = true;  // the classic protocol's clients take the server's view
     so.speedjump = speedjump;
     std::unique_ptr<sv::SequelServer> sq = sv::make_sequel_server(so);
-    sq->sv.set.maxclients = c.maxclients;
+    sq->sv.set.maxclients = slots(c);
     rules = sv::sequel_runner(std::move(sq));
   } else if (!g.module.empty()) {
     sv::QvmServerOptions so;
     so.seed = c.seed;
-    so.loop.maxclients = c.maxclients;
+    so.loop.maxclients = slots(c);
     so.loop.max_edicts = 1024;
     so.loop.move.speedjump = speedjump;
     so.read_file = &read_game_file;
@@ -410,7 +435,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
   } else {
     sv::QcServerOptions so;
     so.seed = c.seed;
-    so.loop.maxclients = c.maxclients;
+    so.loop.maxclients = slots(c);
     so.loop.max_edicts = 1024;
     so.loop.move.speedjump = speedjump;
     std::unique_ptr<sv::QcServer> qc = sv::make_qc_server(*g.program, so, error);
@@ -1153,6 +1178,9 @@ void net_frame(void* g, int64_t now_us) {
   if (game.coop) return coop_net_frame(*game.coop, now_us);
   if (game.room)
     cl::room_packets(*game.room, *game.rules, frame_msec(game), game.classic->local_moves);
+  const gs::LobbyPhase phase = game.room ? game.room->lobby.phase : gs::LobbyPhase::warmup;
+  game.classic->match_on = game.settings.lobby != 0 &&
+                           (phase == gs::LobbyPhase::countdown || phase == gs::LobbyPhase::match);
   classic_frame(*game.classic, now_us);
   if (game.qtv) qtv_update(*game.qtv, *game.classic);
   sync_host(game);

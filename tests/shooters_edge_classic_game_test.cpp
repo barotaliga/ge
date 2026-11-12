@@ -21,6 +21,7 @@
 // ge:keywords listen-server listen_options join-the-window listen_mic local-voice sv_voip
 // ge:keywords sv_mod mod-folder gamedir qwprogs misc-pak vote sv_vote per-map-vote
 // ge:skill net shooter testing
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -279,7 +280,7 @@ TEST(classic_game_each_game_s_names_for_the_server_s_settings) {
   // Every game name is a synonym, none a setting of its own: the two never disagree.
   for (const ge::console::Synonym& n : con.cvars().synonyms())
     CHECK_MSG(n.target != nullptr && n.target->name != n.name, n.name);
-  CHECK(con.cvars().synonyms().size() == 29);
+  CHECK(con.cvars().synonyms().size() == 32);
   Server s;  // a classic map leaves the sequel's dmflags alone
   CHECK_MSG(server_open(s, se::classic_game(), c, nullptr, nullptr, error), error);
 }
@@ -308,6 +309,68 @@ TEST(classic_game_the_server_s_place_is_in_its_info) {
   CHECK_MSG(info.find("\\coords\\55.7,13.2") != std::string::npos, info);
   CHECK_MSG(info.find("\\hostport\\edge.example:27500") != std::string::npos, info);
   CHECK_MSG(info.find("\\watervis\\1") != std::string::npos, info);
+}
+
+// The slots and the pings: a player joining a full server watches from a spectator slot; the
+// minimum ping holds a player's packets until its ping reaches it, and players may change it
+// with `minping` (in range); a player over the most ping watches instead; each by its classic
+// name too.
+TEST(classic_game_spectator_slots_and_the_pings) {
+  {
+    ServerConfig c = arena();
+    c.maxclients = 1;
+    c.max_spectators = 1;
+    c.bots = 1;  // the one player slot taken
+    c.rules["sv_fullspectate"] = "1";
+    Session r;
+    run_session(r, c, 500);
+    CHECK(r.client.stage == se::ClientStage::active);
+    bool told = false;
+    for (const std::string& p : r.client.oob_prints)
+      told |= p.find("connecting as spectator") != std::string::npos;
+    for (const std::string& p : r.client.prints)
+      told |= p.find("connecting as spectator") != std::string::npos;
+    CHECK(told);
+    c.rules["sv_fullspectate"] = "0";
+    Session refused;
+    run_session(refused, c, 300);
+    CHECK(refused.client.stage != se::ClientStage::active);
+  }
+  {
+    ge::console::Console con{true};
+    ServerConfig c;
+    ServerCfg cfg;
+    std::string error;
+    CHECK_MSG(server_configure(con,
+                               {"--map=arena", "+set", "sv_minping", "80", "+set",
+                                "sv_enable_cmd_minping", "1", "+set", "sv_reconnectlimit", "5"},
+                               c, cfg, se::classic_game(), error),
+              error);
+    CHECK(c.rules["sv_minpingcmd"] == "1" && c.rules["sv_reconnectwait"] == "5");
+    Session r;
+    run_session(r, c, 1500, "", -1, {{1300, "minping 500"}, {1310, "minping 120"}});
+    const ge::net::Status st = server_public_status(r.s);
+    int ping = -1;
+    for (const ge::net::StatusPlayer& p : st.players)
+      if (p.name == "visitor") ping = p.ping_ms;
+    CHECK_MSG(ping >= 70, std::to_string(ping));  // held toward 80 ms on a fast network
+    bool range = false, set = false;
+    for (const std::string& p : r.client.prints) {
+      range |= p.find("must be 0 to 300") != std::string::npos;
+      set |= p.find("Minimum ping set to 120 ms") != std::string::npos;
+    }
+    CHECK(range && set);
+  }
+  {
+    ServerConfig c = arena();
+    c.rules["sv_maxping"] = "1";
+    Session r;
+    run_session(r, c, 600);
+    bool watching = false;
+    for (const std::string& p : r.client.prints)
+      watching |= p.find("join as a spectator") != std::string::npos;
+    CHECK(watching);  // even a fast network's ping is over 1 ms
+  }
 }
 
 TEST(classic_game_the_name_and_chat_guards) {
