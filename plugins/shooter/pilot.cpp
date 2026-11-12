@@ -49,6 +49,7 @@ constexpr float kJumpOver = 1.15f;     // and at most this share (and 16 u/s) of
 constexpr float kJumpAim = 0.95f;      // with the velocity within this cosine of the jump's way
 constexpr float kPastStart = 24;       // past a jump's start this far without its speed: run up
 constexpr float kFlyFrom = 24;         // `jumpfly`: a jump flown from this far before its start
+constexpr float kLipSpeed = 200;       // `lipjump`: a hop at this speed or more jumps at a lip
 constexpr float kRunUpFallen = 40;  // `underway`: a run-up this far under its jump's start fell off
 constexpr float kRunOnFrom = 8;   // `backstep`: a run-up this far behind the start or more runs on
 constexpr float kStrafeHold = 2;  // the strafe's side holds until the target is this far off, deg
@@ -708,6 +709,15 @@ float d_to_flip(const Pilot& p, const PilotSense& s) {
 
 // A rocket jump's shot may go: none ahead, no hand flying the view, or the hand there.
 bool shot_view_ready(const Pilot& p) { return p.shot_pitch == 0 || !p.shot_hand || p.shot_ready; }
+
+// `lipjump`: the player's box two commands on at `v` has no floor within a step under it (in a
+// wall there is no lip: false).
+bool lip_ahead(const MoveWorld& world, Vec3f o, Vec3f v, int msec) {
+  const float dt = 2 * static_cast<float>(msec) * 0.001f;
+  const Vec3f at{o.x + v.x * dt, o.y + v.y * dt, o.z};
+  const HullTrace tr = player_trace(world, at, {at.x, at.y, at.z - kStepHeight - 2});
+  return !tr.startsolid && !tr.allsolid && tr.fraction >= 1;
+}
 
 // `jumpfly`: a jump pressed now lands by `T` (within a gap's landing, pilot_gaps.hpp), and under
 // a keyboard pressed a command or two late too, flown by the move from here.
@@ -2093,6 +2103,14 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       why->fact("dist", static_cast<double>(across(s.origin, node(g, p.route[p.k + 1]).origin)));
     }
     why->choose(pilot_mode_name(p.mode), because);
+  }
+  // AT A LIP (`lipjump`): a hop on the ground about to run off its floor jumps there: a person
+  // never runs off a lip without the jump (it carries him furthest; on a trick map, across).
+  if (p.set.lip_jump && p.mode == PilotMode::hop && s.onground && !w.jump && !p.jump_pressed &&
+      s.world != nullptr && speed > kLipSpeed && lip_ahead(*s.world, s.origin, s.velocity, msec)) {
+    w.jump = true;
+    because = "at a lip: jump";
+    p.stats.lip_jumps++;
   }
   p.because = because;
 

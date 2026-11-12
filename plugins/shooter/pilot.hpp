@@ -111,6 +111,8 @@ struct PilotSettings {
   // `gappast`: a gap's jump that comes down on past its far node, on its floor and line, lands
   // (pilot_gaps.hpp `gap_lands`): this far past, units (0: within the landing's 48 only).
   float gap_past = 0;
+  // `lipjump`: a hop on the ground about to run off its floor jumps there (pilot.cpp).
+  bool lip_jump = false;
   // `gapbuild`: a hop's first jump into a gap trick over water is a circle jump aimed across at
   // its landing, taken as soon as a jump from there lands across; short of the lip a landing runs
   // on along the ground (straight, curving or side to side, rolled through the hands:
@@ -279,6 +281,7 @@ struct PilotStats {
   int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
   int32_t rides = 0, strafes = 0;
   int32_t jumps_flown = 0;  // of the jumps, taken off the line or the speed as flown (`jumpfly`)
+  int32_t lip_jumps = 0;    // a hop's jumps pressed at a lip (`lipjump`)
   int32_t hops = 0, hop_jumps = 0;  // hop stretches entered, jumps pressed on a landing in them
   int32_t circles = 0;              // hops started by a circle jump
   float circle_speed = 0;           // their takeoff speeds, summed, units/s
