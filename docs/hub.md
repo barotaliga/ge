@@ -24,7 +24,8 @@ generic: one hub program for every game on the engine, the game supplying only i
 | Demo | One demo: the picture, the scoreboard and the game's stats behind a spoiler, the seek bar, the speed, whom to follow, clips by time range in the link | On demand |
 | Scoreboard | One server's scoreboard alone, sized for a streamer's overlay | Every 5 s |
 
-No accounts and no login: everything a hub shows is public, read-only, and cacheable for seconds.
+No login to read it: everything a hub shows is public, read-only, and cacheable for seconds. The one
+exception is the Account page a player signs up and gets a login code on ([`accounts.md`](accounts.md), M59).
 
 ## The parts
 

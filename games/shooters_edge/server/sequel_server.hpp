@@ -70,6 +70,7 @@
 #include "shooter/midair.hpp"
 #include "shooter/pmove.hpp"
 #include "shooter/sequel_move.hpp"
+#include "shooter/world.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
@@ -292,6 +293,8 @@ struct SequelServer : RulesCommon {
   SequelServerOptions opt;
   std::shared_ptr<const ge::brush::Map> map;
   std::unique_ptr<ge::brush::BrushTracer> tracer;
+  // The map's world as the pool's traces read it (`sv.brushes`, set as the world is mirrored).
+  sh::Solid world_solid;
   std::vector<SequelEntity> entities;
   SequelPlayer players[sh::kMaxClients];
   ge::core::Rng rng = ge::core::make_rng(1);

@@ -11,6 +11,8 @@
 // ge:keywords test users status speedjump grant rcon rcon_password classic_admin easy-jump
 // ge:keywords aimhelp aim-help player-aids join-line
 // ge:skill net shooter testing
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -308,10 +310,102 @@ TEST(rcon_answers_at_most_its_tries_a_second) {
   cn::ServerConfig cfg;
   cfg.rcon_password = "secret";
   CHECK(rig.start(cfg));
-  for (int i = 0; i < cn::kRconTriesPerSecond + 5; i++) rig.oob("rcon wrong users\n");
+  for (int i = 0; i < cfg.rcon_rate + 5; i++) rig.oob("rcon wrong users\n");
   const std::vector<std::string> a = rig.answers();
   int bad = 0;
   for (const std::string& s : a) bad += has(s, "Bad rcon_password.") ? 1 : 0;
-  CHECK(bad == cn::kRconTriesPerSecond);
-  CHECK(rig.server.counts.rcon_refused == cn::kRconTriesPerSecond + 5);
+  CHECK(bad == cfg.rcon_rate);
+  CHECK(rig.server.counts.rcon_refused == cfg.rcon_rate + 5);
+}
+
+// sv_rconcrypt: a hashed password field (the SHA-1 of the password, the time and the line's words,
+// then the time) runs the line without the password travelling; a stale time, a line other than
+// the one hashed, or with sv_rconcrypt 1 the plain password, are refused.
+namespace {
+int64_t fixed_clock() { return 1800000000; }
+}  // namespace
+
+TEST(rcon_takes_a_hashed_password_and_sv_rconcrypt_requires_it) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.rcon_password = "secret";
+  cfg.rcon_crypt = true;
+  cfg.unix_time = &fixed_clock;
+  CHECK(rig.start(cfg));
+  CHECK(rig.play());
+  rig.oob("rcon secret users\n");  // the plain password: refused
+  CHECK(any_has(rig.answers(), "Bad rcon_password."));
+  const std::string ok = cn::rcon_digest_field("secret", "users", fixed_clock() + 30);
+  CHECK(ok.size() == 56);
+  rig.oob("rcon " + ok + " users\n");
+  CHECK(any_has(rig.answers(), "2 total users"));
+  const std::string stale = cn::rcon_digest_field("secret", "users", fixed_clock() - 61);
+  rig.oob("rcon " + stale + " users\n");
+  CHECK(any_has(rig.answers(), "Bad rcon_password."));
+  rig.oob("rcon " + ok + " status\n");  // a line other than the one hashed
+  CHECK(any_has(rig.answers(), "Bad rcon_password."));
+  CHECK(rig.server.counts.rcon_run == 1);
+  CHECK(rig.server.counts.rcon_refused == 3);
+}
+
+// The ban list over the remote console: `addip` bans bert's address (a simulated node counts as
+// 198.18.0.<node>), so he is refused at connect and anna plays; `writeip` saves the list as
+// `addip` lines; an address the list bans gets no rcon answer; sv_banmode 0 turns the list round.
+TEST(the_ban_list_refuses_its_addresses_and_saves_itself) {
+  const std::string file =
+      (std::filesystem::temp_directory_path() / "se_admin_listip.cfg").string();
+  std::filesystem::remove(file);
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.rcon_password = "secret";
+  cfg.ban_file = file;
+  CHECK(rig.start(cfg));
+  rig.oob("rcon secret addip 198.18.0.2\n");
+  CHECK(any_has(rig.answers(), "added 198.18.0.2"));
+  rig.oob("rcon secret listip\n");
+  CHECK(any_has(rig.answers(), "1 addresses listed"));
+  for (int i = 0; i < 2; i++) rig.begin(i);
+  rig.frames(600);
+  CHECK(rig.c[0].stage == cn::ClientStage::active);
+  CHECK(rig.c[1].stage != cn::ClientStage::active);
+  CHECK_MSG(rig.c[1].refused.find("banned") != std::string::npos, rig.c[1].refused);
+  rig.oob("rcon secret writeip\n");
+  CHECK(any_has(rig.answers(), "Saved 1 addresses"));
+  std::ifstream f(file);
+  std::string line;
+  CHECK(std::getline(f, line) && line == "addip 198.18.0.2");
+  rig.oob("rcon secret addip 198.18.0.9\n");  // the console's own address
+  CHECK(any_has(rig.answers(), "added"));
+  rig.oob("rcon secret listip\n");
+  CHECK(rig.answers().empty());  // banned: no answer
+  rig.server.cfg.ban_mode = 0;   // only the list joins: the console's address again
+  rig.oob("rcon secret listip\n");
+  CHECK(any_has(rig.answers(), "2 addresses listed"));
+  std::filesystem::remove(file);
+}
+
+// VIPs: a client whose password is a word of sv_vippassword skips the server's password and
+// carries `*VIP <level>` (sv_vipvalues' number); one on the VIP address list gets its level too.
+TEST(a_vip_skips_the_password_and_carries_its_level) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.password = "door";
+  cfg.vip_passwords = {"silver", "gold"};
+  cfg.vip_values = {2, 7};
+  cfg.rcon_password = "secret";
+  CHECK(rig.start(cfg));
+  rig.oob("rcon secret vip_addip 198.18.0.2 3\n");  // bert's address
+  CHECK(any_has(rig.answers(), "added 198.18.0.2 3"));
+  for (int i = 0; i < 2; i++) rig.begin(i);
+  rig.c[0].cfg.password = "gold";  // anna: a VIP word; bert: no password, but a VIP address
+  rig.frames(600);
+  CHECK(rig.c[0].stage == cn::ClientStage::active);
+  CHECK(rig.c[1].stage == cn::ClientStage::active);
+  const int anna = rig.c[0].playernum, bert = rig.c[1].playernum;
+  CHECK(cn::info_get(rig.server.clients[anna].userinfo, "*VIP") == "7");
+  CHECK(cn::info_get(rig.server.clients[bert].userinfo, "*VIP") == "3");
+  CHECK(cn::info_get(rig.server.clients[anna].userinfo, "password").empty());
 }

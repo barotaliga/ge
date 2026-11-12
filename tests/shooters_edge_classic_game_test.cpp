@@ -280,7 +280,7 @@ TEST(classic_game_each_game_s_names_for_the_server_s_settings) {
   // Every game name is a synonym, none a setting of its own: the two never disagree.
   for (const ge::console::Synonym& n : con.cvars().synonyms())
     CHECK_MSG(n.target != nullptr && n.target->name != n.name, n.name);
-  CHECK(con.cvars().synonyms().size() == 34);
+  CHECK(con.cvars().synonyms().size() == 41);
   Server s;  // a classic map leaves the sequel's dmflags alone
   CHECK_MSG(server_open(s, se::classic_game(), c, nullptr, nullptr, error), error);
 }
@@ -356,6 +356,20 @@ TEST(classic_game_spectator_slots_and_the_pings) {
     Session refused;
     run_session(refused, c, 300);
     CHECK(refused.client.stage != se::ClientStage::active);
+  }
+  {  // A VIP slot (sv_maxvipspectators): a VIP word seats the visitor beside the full server.
+    ServerConfig c = arena();
+    c.maxclients = 1;
+    c.bots = 1;
+    c.rules["sv_maxvipspectators"] = "1";
+    c.rules["sv_vippassword"] = "gold";
+    c.rules["sv_fullspectate"] = "1";
+    Session vip;
+    run_session(vip, c, 500, "gold");
+    CHECK(vip.client.stage == se::ClientStage::active);
+    Session plain;
+    run_session(plain, c, 300);
+    CHECK(plain.client.stage != se::ClientStage::active);
   }
   {
     ge::console::Console con{true};
