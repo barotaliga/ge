@@ -85,13 +85,13 @@ class SpectateWriter {
   StreamWriter writer_;
   int64_t per_block_ = 1;
   int64_t steps_ = 0;
-  int64_t block_first_ = 0;      // the open block's first step
-  bool block_keyframe_ = false;  // the open block holds a whole keyframe
-  bool block_save_ = false;      // the open block holds a keyframe, whole or a delta
+  int64_t block_first_ = 0;         // the open block's first step
+  bool block_keyframe_ = false;     // the open block holds a whole keyframe
+  bool block_save_ = false;         // the open block holds a keyframe, whole or a delta
   std::vector<uint8_t> last_save_;  // the keyframe before, whole (what a delta is taken against)
   int64_t last_save_step_ = -1;
   int keys_since_full_ = 0;
-  std::vector<int64_t> held_;    // the open run's grid indices
+  std::vector<int64_t> held_;  // the open run's grid indices
   int64_t held_count_ = 0;
   std::vector<uint8_t> runs_;  // the open block's runs, encoded
   int64_t runs_n_ = 0;

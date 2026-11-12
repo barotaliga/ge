@@ -113,9 +113,9 @@ TEST(a_delta_keyframe_is_a_small_part_of_a_whole_one) {
   CHECK(t.has_value() && t->index.size() > 6);
   if (!t || t->index.size() <= 6) return;
   const auto bytes = [&](size_t i) { return t->index[i + 1].offset - t->index[i].offset; };
-  CHECK_MSG(bytes(5) * 20 < bytes(0),
-            std::to_string(bytes(5)) + " bytes for the delta's block against " +
-                std::to_string(bytes(0)) + " for the whole one's");
+  CHECK_MSG(bytes(5) * 20 < bytes(0), std::to_string(bytes(5)) +
+                                          " bytes for the delta's block against " +
+                                          std::to_string(bytes(0)) + " for the whole one's");
 }
 
 TEST(the_stream_fed_in_pieces_is_followed_as_it_grows) {

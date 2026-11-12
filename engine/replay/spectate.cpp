@@ -155,8 +155,8 @@ SpectateWriter::SpectateWriter(const play::GameSpec& spec, const play::Setup& se
 bool SpectateWriter::keyframe(const play::Run& run, std::string& error) {
   std::vector<uint8_t> save;
   if (!play::save_run(spec_, setup_, run, steps_, {}, save, error)) return false;
-  const bool whole = last_save_.empty() || options_.full_every <= 1 ||
-                     keys_since_full_ + 1 >= options_.full_every;
+  const bool whole =
+      last_save_.empty() || options_.full_every <= 1 || keys_since_full_ + 1 >= options_.full_every;
   if (whole) {
     stream_add(writer_, kKeyframeTrack, time_ms_of(steps_, spec_.hz), save);
     block_keyframe_ = true;
