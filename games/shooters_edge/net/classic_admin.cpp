@@ -383,9 +383,16 @@ void add_admin_commands(ge::console::Console& con, client::Listen& l, Remote& r)
     usage += " on the match you host (alone: who has it)";
     con.add_command(name, usage, [&r, hosted, name](Con& c, const Args& a) {
       if (hosted(c, a)) return;
-      c.print(r.active ? "The server's administrator grants it (rcon <password> " + name +
-                             " <id> on), or the players by a vote (vote " + name + " <player> on)."
-                       : "You are not hosting a match.");
+      if (!r.active) {
+        c.print("You are not hosting a match.");
+        return;
+      }
+      std::string how = "The server's administrator grants it (rcon <password> ";
+      how += name;
+      how += " <id> on), or the players by a vote (vote ";
+      how += name;
+      how += " <player> on).";
+      c.print(how);
     });
   }
   con.add_command("rcon", "rcon <password> <line>: a line for the console of the server joined",
