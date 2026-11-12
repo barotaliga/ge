@@ -191,6 +191,9 @@ struct NavJumper {
   bool scripts = true;   // the scripted ways taken (a game's switch)
   bool escapes = false;  // the rockets out of a pit's liquid (`NavLink::escape`) taken
   bool gaps = false;     // the jumps over a gap at a hopper's speed (`NavLink::gap`) taken
+  // A hopper not yet at a gap's speed takes a gap whose takeoff the route reaches this long or
+  // more after setting off (room to hop up to the speed on the way); negative: never.
+  float gap_build_s = -1;
   uint8_t level = 2;
   float extra_s = 0;
   // Whether he takes `l` at all (any link but a blast jump or a gap's: always).
@@ -200,6 +203,10 @@ struct NavJumper {
     if (l.gap) return gaps && l.level <= level;
     if (!nav_blast(l.kind)) return true;
     return (l.kind == NavKind::rocket ? rockets : grenades) && l.level <= level;
+  }
+  // Whether he takes the gap `l` reached `at_s` into the route, building the speed on the way.
+  bool builds_to(const NavLink& l, double at_s) const {
+    return l.gap && gap_build_s >= 0 && l.level <= level && at_s >= gap_build_s;
   }
   // What `l` costs him, s.
   float cost_s(const NavLink& l) const { return nav_blast(l.kind) ? l.time_s + extra_s : l.time_s; }
