@@ -19,6 +19,7 @@
 #include "brush/trace.hpp"
 #include "core/num.hpp"
 #include "progs/text.hpp"
+#include "shooters_edge/server/sequel_fight.hpp"
 
 namespace shooters_edge::server {
 
@@ -63,6 +64,10 @@ void register_cvars(SequelServer& s) {
        .fallback = "1",
        .flags = con::kServer,
        .help = "0 easy .. 3 hard: which entities a map spawns, how many powerups are held"});
+  s.cvars.add({.name = "dmflags",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "deathmatch's rule bits (8192: infinite ammo)"});
   s.cvars.add({.name = "sv_airaccelerate",
                .fallback = "0",
                .flags = con::kServer,
@@ -156,15 +161,7 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   p.view_height = 22;
   p.water_level = 0;
   p.on_ground = false;
-}
-
-void kill_player(SequelServer& s, int slot) {
-  SequelPlayer& p = s.players[slot];
-  p.alive = false;
-  p.health = 0;
-  p.died_at = s.level_time;
-  p.frags -= 1;  // a player killed by itself
-  p.move.type = sh::SequelType::dead;
+  fight_spawn(s, slot);
 }
 
 int skill(const SequelServer& s) {
@@ -214,6 +211,7 @@ void touch_items(SequelServer& s, int slot) {
     if (!sq_pick_up(e.item, p.body, deathmatch(s), skill(s), s.level_time)) continue;
     p.health = static_cast<float>(p.body.health);
     p.taken.push_back(e.item);
+    fight_took(s, slot, e.item);
     const SqItem& it = kSqItems[e.item];
     if (std::string_view(it.classname) == "item_health_mega") {
       e.hidden = true;  // shows again 20 s after its taker is back to his maximum
@@ -290,7 +288,14 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   p.view_height = pm.view_height;
   p.water_level = pm.water_level;
   p.on_ground = pm.ground_entity >= 0;
-  if (p.alive && !s.clients[slot].spectator) touch_items(s, slot);
+  if (!p.alive || s.clients[slot].spectator) return;
+  touch_items(s, slot);
+  if (c.impulse >= 1 && c.impulse <= kSqWeaponCount) fight_choose(s, slot, c.impulse - 1);
+  // The first command of the frame that presses attack steps the hand at once.
+  if ((c.buttons & sh::kButtonAttack) != 0 && !p.stepped) {
+    p.stepped = true;
+    fight_step(s, slot, true);
+  }
 }
 
 // The commands a packet brings: those a lost packet left unrun (up to the two it carries), then
@@ -310,6 +315,12 @@ void rules_frame(SequelServer& s) {
   s.frame_number++;
   s.level_time = double(s.frame_number) * kFrameSeconds;
   item_frame(s);
+  fight_missiles(s);
+  for (int i = 0; i < sh::kMaxClients; i++) {  // the hands no command stepped this frame
+    SequelPlayer& p = s.players[i];
+    if (s.clients[i].active && !p.stepped) fight_step(s, i, (p.buttons & sh::kButtonAttack) != 0);
+    p.stepped = false;
+  }
   for (int i = 0; i < sh::kMaxClients; i++) {
     SequelPlayer& p = s.players[i];
     if (!s.clients[i].active || s.clients[i].spectator || p.alive) continue;
@@ -368,6 +379,7 @@ void fill_rows(SequelServer& s) {
     const SequelEntity& m = s.entities[i];
     if (m.item >= 0) w.entities[1 + sh::kMaxClients + i].free = m.gone || m.hidden;
   }
+  fight_rows(s);
   mirror_pool(s);
 }
 
@@ -417,7 +429,7 @@ void fill_lists(SequelServer& s) {
   w.vwep.clear();
   w.statics.clear();
   w.max_clients = sh::kMaxClients;
-  w.entities.assign(1 + sh::kMaxClients + s.entities.size(), WorldEntity{});
+  w.entities.assign(1 + sh::kMaxClients + s.entities.size() + kSequelMissiles, WorldEntity{});
   w.entity_count = static_cast<int>(w.entities.size());
   w.entities[0].free = false;
   w.entities[0].modelindex = 1;
@@ -470,9 +482,11 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     e.modelindex = static_cast<int>(found - s.models.begin());
     if (found == s.models.end()) s.models.push_back(model);
   }
+  s.sounds.assign(1, "");
+  fight_precache(s);
+  fight_clear(s);
   s.models.push_back(kSequelPlayerModel);
   drop_items(s);
-  s.sounds.assign(1, "");
   s.frame_number = 0;
   s.level_time = 0;
   s.host_time = 0;
@@ -541,7 +555,13 @@ CommandResult sq_client_command(void* r, int slot, const std::string& line) {
   const std::string cmd = ge::progs::word(w, 0);
   if (cmd == "kill") {
     SequelPlayer& p = s.players[slot];
-    if (p.alive && s.level_time >= p.spawned_at + kKillAfter) kill_player(s, slot);
+    if (p.alive && s.level_time >= p.spawned_at + kKillAfter) fight_kill(s, slot, slot, -1);
+    fill_rows(s);
+    return CommandResult::mod;
+  }
+  std::string rest;
+  for (int i = 1; i < w.count; i++) rest.append(i > 1 ? " " : "").append(ge::progs::word(w, i));
+  if (fight_command(s, slot, cmd, rest)) {
     fill_rows(s);
     return CommandResult::mod;
   }
