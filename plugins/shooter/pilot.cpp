@@ -378,6 +378,7 @@ bool circling(Pilot& p, const PilotSense& s, float vh, float speed, float err, f
   w.side = static_cast<float>(c.side);
   w.yaw = unwrap(c.yaw, p.yaw);
   w.jump = false;
+  p.circling_now = true;
   return true;
 }
 
@@ -1231,6 +1232,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   const float t = static_cast<float>(p.stats.time_s);
   p.stats.time_s += static_cast<double>(dt);
   p.clock_s += static_cast<double>(dt);
+  p.circling_now = false;
   // A hop's landing this command (`hop_chain`): the hop was in the air on the last one.
   const bool chain = p.set.hop_chain && s.onground && p.hop_air_s >= 0 &&
                      p.clock_s - p.hop_air_s <= kChainLand_s;

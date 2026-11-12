@@ -22,7 +22,7 @@ constexpr const char* kNames[kFeatures] = {
     "keysteer",  "lookway",    "press",      "slopes",   "counter", "jumpkey",   "backstep",
     "runupkeys", "gapbuild",   "curvekeys",  "underway", "recipes", "chains",    "retarget",
     "uturn",     "jumpfly",    "gappast",    "lipjump",  "airgap",  "pilotcast", "aimhop",
-    "airkeys",   "airview",   "chainhop",  "airwall",   "landwall",
+    "airkeys",   "airview",   "chainhop",  "airwall",   "landwall", "circlekeys", "circleview",
     "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
@@ -48,10 +48,11 @@ constexpr Features kKeys = of({Feature::lookway, Feature::press, Feature::counte
 // braking: -1.5 -> -0.3 units/s a command, the expert's hop gain p50 -105 -> -0.7; `aimhop` on:
 // -2.9 on dm2 and +1.3 on e1m2 a match head to head, the air share 0.33 -> 0.44 (people 0.46);
 // `airview` on: +1.7 on dm2 and +4.8 on e1m2 a match head to head; `airwall` on: even head to
-// head, +0.05 on dm2 and -0.4 on e1m2, hop flights colliding 36 -> 31 %).
+// head, +0.05 on dm2 and -0.4 on e1m2, hop flights colliding 36 -> 31 %; `chainhop` on: +4.5 on
+// dm2 and +2.4 on e1m2 a match head to head, the side with it faster).
 constexpr Features kJudging = of({Feature::runupkeys, Feature::underway, Feature::gappast,
-                                  Feature::airgap, Feature::pilotcast, Feature::chainhop,
-                                  Feature::landwall});
+                                  Feature::airgap, Feature::pilotcast, Feature::landwall,
+                                  Feature::circlekeys, Feature::circleview});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

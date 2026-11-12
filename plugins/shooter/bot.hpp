@@ -56,6 +56,7 @@ struct BotStats {
   int64_t looking = 0;                   // commands the view spent on a spot watched (`look`)
   int64_t aim_hop_air = 0;  // commands in a hop's air under the aim's view (`aimhop`)
   int64_t air_keys = 0;     // and under the hand's view (`airkeys`)
+  int64_t circle_keys = 0;  // a circle jump's commands on the ground pressed by `circlekeys`
   int64_t reactions = 0, pre_aimed = 0;  // sightings reacted to, and of them, ones pre-aimed at
   double react_s = 0;                    // the reaction times drawn, summed
   int64_t kept = 0;          // commands the one in hand was kept over a nearer one in sight
@@ -81,6 +82,13 @@ struct Bot {
   bool airkeys = false;
   bool airview = false;  // and the hand's view on the velocity in a hop's air (`airview`)
   bool airwall = false;  // and the air's keys charged for a wall ahead (`airwall`)
+  // A CIRCLE JUMP'S CURVE UNDER THE HAND (`circlekeys`): on the ground, the key set the ground move
+  // carries furthest on round the way under the view the keys land under, as the air's above.
+  bool circlekeys = false;
+  // and under the mouse hand as people's (`circleview`): the hand on the velocity's heading,
+  // forward and the curve's side key held: the wish 45 degrees off the velocity gains in a wide
+  // window, and a hand behind the turn moves it toward the best angle, not off the gain.
+  bool circleview = false;
   int32_t target = -1;       // the contact's entity the view is on
   float yaw = 0, pitch = 0;  // the view last pressed, degrees (yaw unwrapped)
   double wanted[2] = {}, pressed[2] = {};  // the aim's last yaw and pitch, wanted and pressed
