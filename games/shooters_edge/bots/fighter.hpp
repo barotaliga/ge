@@ -54,6 +54,7 @@
 #include "shooter/swim.hpp"
 #include "shooter/temper.hpp"
 #include "shooter/traits.hpp"
+#include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/bots/companion.hpp"
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/profiles/items.hpp"
@@ -65,14 +66,8 @@ namespace sh = ge::shooter;
 
 constexpr double kThink_s = 0.1;  // how often the mode, the goal and the weapon are chosen
 
-// What a client is sent of its own player.
-struct Stats {
-  float health = 0, armor = 0, armortype = 0;
-  int32_t items = 0;   // the W_ and IT_ bits
-  int32_t weapon = 0;  // the W_ bit held
-  float shells = 0, nails = 0, rockets = 0, cells = 0;
-};
-Stats read_stats(const server::RulesCommon& s, int ent);
+// What a client is sent of its own player (`Stats`, bot_arsenal.hpp), read by the game's arsenal.
+Stats read_stats(const server::RulesCommon& s, int ent, const BotArsenal& arsenal);
 
 // What an item is, the game profile's vocabulary (profiles/items.hpp).
 using ItemKind = shooters_edge::profiles::ItemKind;
@@ -91,11 +86,12 @@ struct ItemSpot {
   sh::Vec3f at;             // where it stands (the middle of its box on the floor)
   // Behind a door a button opens (the map's text: a button whose target is the door's name): the
   // button touched first while the door stands shut.
-  sh::Vec3f door_rest;   // the door's origin while shut
-  sh::Vec3f button_at;   // the button's middle
-  int ent = -1;          // the server's entity for it, -1 when none matched
-  int32_t weapon = 0;    // a weapon's W_ bit
-  float amount = 0;      // health given, or ammunition (doubled by spawnflags 1)
+  sh::Vec3f door_rest;                 // the door's origin while shut
+  sh::Vec3f button_at;                 // the button's middle
+  int ent = -1;                        // the server's entity for it, -1 when none matched
+  int32_t weapon = 0;                  // a weapon's bit (the arsenal's)
+  WeaponRole role = WeaponRole::none;  // the part that weapon plays (bot_arsenal.hpp)
+  float amount = 0;                    // health given, or ammunition (doubled by spawnflags 1)
   float weight = 1;      // how much it matters on this map, as the player rates it (knowledge.hpp)
   float respawn_s = 20;  // gone this long once taken
   int32_t node = -1;     // the nav node nearest it
@@ -162,8 +158,9 @@ struct FighterStats {
   int64_t surface_failed = 0;  // and rises given up short of the surface
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
-  int64_t on_the_way = 0;   // short goals taken up on the way
-  int64_t took[12] = {};    // its own pickups by the item's kind (profiles/items.hpp ItemKind)
+  int64_t on_the_way = 0;  // short goals taken up on the way
+  int64_t took[profiles::kItemKinds] =
+      {};                   // its own pickups by the item's kind (profiles/items.hpp ItemKind)
   int64_t swim_fights = 0;  // commands swum under the aim, an enemy in sight
   int64_t wet = 0;          // commands alive with the waist in water (swimming or wading)
   // And the wet commands by what it was doing (`kWetWhy`): its mode, aiming, its goal in the
@@ -233,6 +230,9 @@ struct MapPlan;
 struct Fighter {
   // Ordered by size, largest first, so the struct packs tight.
   sh::Bot bot;
+  // The game's weapons as it reads them (bot_arsenal.hpp): the first game's unless its caller
+  // sets another (the sequel's) before `fighter_init`.
+  const BotArsenal* arsenal = &first_arsenal();
   std::vector<ItemSpot> items;
   std::vector<sh::Vec3f> spawns;                                // the map's spawn points (ears.hpp)
   std::vector<ShotsHeard> fired = std::vector<ShotsHeard>(33);  // by entity: weapons heard fired

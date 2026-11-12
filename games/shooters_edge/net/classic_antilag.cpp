@@ -20,9 +20,9 @@ void antilag_clear(AntilagHistory& h, int slot) {
   if (slot >= 0 && slot < kAntilagPlayers) h.players[slot] = AntilagRing{};
 }
 
-double antilag_target(double acked_frame_time, double ping_s, int maxfps, double now) {
+double antilag_target(double acked_frame_time, double ping_s, int maxfps, double now, bool exact) {
   if (maxfps < 20 || maxfps > 1000) maxfps = 77;
-  const double lead = ping_s < 0.02 ? 1.0 / maxfps : kAntilagLead;
+  const double lead = exact ? 0.0 : ping_s < 0.02 ? 1.0 / maxfps : kAntilagLead;
   const double t = acked_frame_time + lead;
   return t > now ? now : t;
 }

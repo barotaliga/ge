@@ -27,7 +27,6 @@ namespace {
 namespace sh = ge::shooter;
 namespace pg = ge::progs;
 
-constexpr int32_t kWRockets = 32;  // the rocket launcher's W_ bit (games/shooters_edge/qc)
 constexpr float kMateClear = 300;  // never a spot a teammate is believed this near, units
 constexpr float kNewsOn = 0.995f;  // the view this near the way in (the cosine: about 6 degrees)
 
@@ -91,7 +90,7 @@ bool spam_plan(Fighter& f, const server::RulesCommon& s, const Stats& st, double
   const int32_t area = f.mind.claim;
   if (!f.team || f.camp != MapSense::expert || f.role != Role::hold || area < 0) return false;
   if (f.mode != FightMode::roam || f.spam_spots.empty()) return false;
-  if (st.rockets < kSpamRockets || (st.items & kWRockets) == 0) return false;
+  if (launcher_rounds(st) < kSpamRockets || !has_launcher(st)) return false;
   const ItemSpot& it = f.items[static_cast<size_t>(area)];
   // Its item gone, timed, and not due for a while: a moment to spare.
   if (it.present || !it.timed || it.back_at - t < kSpamBack_s) return false;
@@ -121,8 +120,8 @@ bool spam_fire(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
   if (dist(self, g.nodes[static_cast<size_t>(f.spam_node)].origin) > 96) return false;
-  if (st.weapon != kWRockets) {
-    if (t - f.impulse_at >= 0.5) f.want_weapon = 7;  // the launcher's number
+  if (!holds_launcher(st)) {
+    if (t - f.impulse_at >= 0.5) f.want_weapon = launcher_number(*st.arsenal);
     return false;
   }
   const sh::Vec3f eye{self.x, self.y, self.z + 22};
@@ -145,9 +144,9 @@ void spam_news_look(Fighter& f, const server::RulesCommon& s, int me, const Stat
   f.news_on = false;
   if (!f.plan || f.mode != FightMode::roam || f.bot.aiming || f.escort.leader >= 0) return;
   const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
-  if (self.health <= 0 || self.waterlevel >= 2 || st.weapon != kWRockets) return;
+  if (self.health <= 0 || self.waterlevel >= 2 || !holds_launcher(st)) return;
   const float spare = kNewsRocketsMost - static_cast<float>(f.traits[sh::Trait::aggression]);
-  if (st.rockets < spare) return;
+  if (launcher_rounds(st) < spare) return;
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
   const sh::Vec3f me_at = self.origin;
   const int32_t area = plan_area_of(*f.plan, sh::nav_nearest(g, me_at));
@@ -211,7 +210,7 @@ void spam_news_look(Fighter& f, const server::RulesCommon& s, int me, const Stat
 
 bool spam_news_fire(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, double t,
                     sh::MoveCmd& cmd) {
-  if (!f.news_on || st.weapon != kWRockets || t - f.spam_fired < kSpamGap_s) return false;
+  if (!f.news_on || !holds_launcher(st) || t - f.spam_fired < kSpamGap_s) return false;
   const sh::Vec3f o = s.world.entities[static_cast<size_t>(me)].origin;
   const sh::Vec3f to = f.news_spot - sh::Vec3f{o.x, o.y, o.z + 22};
   const float d = std::sqrt(to.x * to.x + to.y * to.y + to.z * to.z);

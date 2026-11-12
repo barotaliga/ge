@@ -24,7 +24,6 @@ namespace {
 constexpr size_t kDangerKept = 12;  // the danger spots kept (mind_danger)
 
 constexpr int32_t kItQuad = 4194304;  // the quad's IT_ bit (games/shooters_edge/qc)
-constexpr int32_t kWRockets = 32, kWArc = 64;
 constexpr double kHelp_s = 6;         // a call for help holds this long
 constexpr double kHoldsFresh_s = 40;  // a mate's `safe` this old still says he holds his area
 constexpr double kPackClaim_s = 6;    // a bare `coming` this soon after a pack's call claims it
@@ -171,7 +170,7 @@ int32_t best_armour(const Fighter& f) {
 
 int32_t rocket_launcher(const Fighter& f) {
   for (size_t i = 0; i < f.items.size(); i++)
-    if (f.items[i].kind == ItemKind::weapon && f.items[i].weapon == kWRockets &&
+    if (f.items[i].kind == ItemKind::weapon && f.items[i].role == WeaponRole::launcher &&
         f.items[i].node >= 0)
       return static_cast<int32_t>(i);
   return -1;
@@ -268,8 +267,11 @@ SayStatus status_of(const Stats& st) {
                    : st.armortype >= 0.55f ? "ya"
                    : st.armortype > 0      ? "ga"
                                            : "";
-  out.weapon = (st.items & kWRockets) ? "rl" : (st.items & kWArc) ? "lg" : "";
-  if (out.weapon.empty()) out.weapon = (st.items & 16) ? "gl" : (st.items & 2) ? "ssg" : "sg";
+  const BotArsenal& a = *st.arsenal;
+  bool dbl = false;
+  for (const BotWeapon& w : a.weapons) dbl |= w.curve == WeaponCurve::double_ && (st.items & w.bit);
+  out.weapon = (st.items & a.launcher) ? "rl" : (st.items & a.beam) ? "lg" : "";
+  if (out.weapon.empty()) out.weapon = (st.items & a.lob) ? "gl" : dbl ? "ssg" : "sg";
   out.quad = (st.items & kItQuad) != 0;
   return out;
 }
@@ -614,13 +616,13 @@ bool gives_up(const Fighter& f, const server::RulesCommon& s, int me, int32_t i,
   } else if (it.kind == ItemKind::weapon) {
     spare = (st.items & it.weapon) != 0;
   } else if (it.kind == ItemKind::rockets) {
-    spare = st.rockets >= 50;
+    spare = ammo_of(st, st.arsenal->launcher_ammo) >= 50;
   }
   // The quad's carrier's due: the best armour, the launcher, the lightning gun.
-  const bool for_quad =
-      !mine_quad && mate_quad(f, t) &&
-      (it.kind == ItemKind::armor3 ||
-       (it.kind == ItemKind::weapon && (it.weapon == kWRockets || it.weapon == kWArc)));
+  const bool for_quad = !mine_quad && mate_quad(f, t) &&
+                        (it.kind == ItemKind::armor3 ||
+                         (it.kind == ItemKind::weapon &&
+                          (it.role == WeaponRole::launcher || it.role == WeaponRole::beam)));
   if (!spare && !for_quad) return false;
   // Left only to a teammate in sight near it (the carrier anywhere believed near).
   for (const Fighter* m : f.team->members) {

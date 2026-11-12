@@ -229,6 +229,10 @@ rules unless marked engine:
 | `sv_reconnectwait` | `sv_reconnectlimit` | seconds before a connected address may connect again; a storm gets no answer |
 | `sv_maxping` | `sv_maxping` | a player over this ping (ms) on entering plays as a spectator |
 | `sv_minping`, `sv_minpingcmd` | `sv_minping`, `sv_enable_cmd_minping` | each player's packets held until its ping reaches this; players may set it with `minping` before a match |
+| `sv_spectalk` (the mod's rule) | `sv_spectalk` | 0: a spectator's `say` reaches only spectators, as `[SPEC] <name>:`; his `say_team` always does. The server's own chat, when the mod leaves chat to it |
+| `sv_safestrafe` | `sv_safestrafe` | N: a reversed sideways move is zeroed until N commands of none lie between; in the server info |
+| `sv_antilagexact` | `sv_antilag_no_pred` | 1: the rewind goes to exactly the frame the shooter saw, no lead |
+| `sv_voipecho` | `sv_voip_echo` | 1: a speaker hears his own voice back |
 
 With `sv_maxspectators` above 0 the spectators have their own slots beside `sv_maxclients`'s
 players (the loop's slots are both, at most 32); at 0 a spectator takes a free player slot.

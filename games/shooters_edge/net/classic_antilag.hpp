@@ -5,7 +5,8 @@
 // recorded after each frame his commands ran in.
 // THE TARGET TIME (`antilag_target`): the server time of the frame the shooter's last packet
 // acknowledged, plus 0.02 s (or one of his command frames, 1 / maxfps, when his ping is under
-// 20 ms; a maxfps outside 20..1000 counts as 77), never later than now.
+// 20 ms; a maxfps outside 20..1000 counts as 77), never later than now; with `exact`
+// (sv_antilagexact) the acknowledged frame's own time, no lead.
 // A PLAYER AT THE TARGET TIME (`antilag_position`): later than his newest sample, extrapolated
 // from it by his velocity times min(gap, 0.02 s); with one sample, that sample; earlier than his
 // oldest, the oldest; otherwise interpolated between the samples on either side.
@@ -48,8 +49,9 @@ struct AntilagHistory {
 void antilag_record(AntilagHistory& h, int slot, double time, sh::Vec3f origin);
 void antilag_clear(AntilagHistory& h, int slot);
 
-// The time a shooter's shot is traced at.
-double antilag_target(double acked_frame_time, double ping_s, int maxfps, double now);
+// The time a shooter's shot is traced at (`exact`: the acknowledged frame's own, with no lead).
+double antilag_target(double acked_frame_time, double ping_s, int maxfps, double now,
+                      bool exact = false);
 
 // Where a player was at `t`; false when he has no sample.
 bool antilag_position(const AntilagRing& ring, double t, sh::Vec3f velocity, sh::Vec3f& out);

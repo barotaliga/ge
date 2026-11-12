@@ -123,7 +123,12 @@ struct ServerConfig {
   Ext offered = first_tier();
   int chunks_per_frame = 30;
   bool antilag = false;
-  bool voice = false;  // offer the voice bit and relay voice
+  bool antilag_exact = false;  // sv_antilagexact: rewind to the frame seen, with no lead
+  // sv_safestrafe: a player reversing his sideways move (or starting it the other way after a
+  // shorter stop) gets his side move zeroed until N commands of none lie between (0: off).
+  int safe_strafe = 0;
+  bool voice = false;       // offer the voice bit and relay voice
+  bool voice_echo = false;  // sv_voipecho: a speaker is sent his own voice back
   VoiceRoute voice_route = VoiceRoute::team;
   uint32_t seed = 1;  // the challenges' stream
   // Players at most, the game's local seats counted (0: the loop's slots): a coop game's eight.
@@ -162,6 +167,19 @@ struct ServerDownload {
   std::vector<int> want;  // chunk numbers asked for, oldest first
   int64_t blocks = 0;
 };
+
+// THE SAFE STRAFE (`ServerConfig::safe_strafe`): a player's sideways move kept to one direction
+// until N commands of none lie between: a command that turns it the other way is zeroed, with the
+// N - 1 after it, less the commands of none it already had. Its own zero commands count.
+struct StrafeGuard {
+  int force = 0;        // commands still to zero
+  int zeros = 0;        // commands of none since the last sideways one
+  int8_t dir = 0;       // the last sideways direction: -1, 0 (none yet) or 1
+  uint32_t seq = 0;     // the last packet's sequence (0: none yet)
+  sh::MoveCmd last[2];  // the last packet's two newest commands, as guarded
+};
+// One command's side move through the guard: what the loop gets.
+int16_t safe_strafe(StrafeGuard& g, int16_t side, int n);
 
 struct ClassicClient {
   ConnState state = ConnState::free;
@@ -203,6 +221,7 @@ struct ClassicClient {
     std::vector<uint8_t> bytes;
   };
   std::vector<Held> held;
+  StrafeGuard strafe;      // sv_safestrafe
   int colour_changes = 0;  // top colour changes in its window
   int info_changes = 0;    // user info changes in its window
 };

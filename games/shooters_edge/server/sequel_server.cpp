@@ -523,6 +523,12 @@ void fill_rows(SequelServer& s) {
     // The HUD's four counters: shells, bullets, rockets, cells.
     const SqAmmo shown[4] = {SqAmmo::shells, SqAmmo::bullets, SqAmmo::rockets, SqAmmo::cells};
     for (int k = 0; k < 4; k++) wc.numbers.ammo[k] = float(p.body.ammo[static_cast<int>(shown[k])]);
+    // The bots' numbers: the weapon in hand and those carried as bits (1 << the weapon's index),
+    // and every ammunition from shells on.
+    wc.numbers.held = int32_t(1) << p.hand.weapon;
+    for (int k = 0; k < kSqWeaponCount; k++)
+      if (sq_holds(p.body, k)) wc.numbers.carried |= int32_t(1) << k;
+    for (int k = 1; k < kSqAmmoKinds; k++) wc.numbers.stock[k - 1] = float(p.body.ammo[k]);
     wc.numbers.frags = p.frags;
     wc.numbers.view_z = p.view_height;
     wc.numbers.fov = fight_fov(s, i);
