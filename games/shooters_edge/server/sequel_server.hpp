@@ -46,10 +46,11 @@
 //   intermission (everyone frozen at its spot, a button after 5 s leaves for the next map); the
 //   `dmflags` bits 1, 2, 2048 and 8192 leave items out, 4 keeps weapons, 32 repeats the level, 512
 //   spawns farthest, 1024 respawns at once.
-//
-// Movers and monsters are the next rows (docs/goals/M18v.md, M18v7); the rules' numbers are in the
-// clean-room notes. Held by
-// tests/shooters_edge_sequel_server_test.cpp.
+// - **Teams, bodies and scores**: with `dmflags` 64 (by skin) or 128 (by model), or in `coop`,
+//   teammates' blows do nothing with 256 but push, and a team kill scores −1; `fov` is held to
+//   1..160 (90 with 32768); a respawn leaves the body, up to 8, thrown apart by a blast under −40;
+//   `score` lists the scores, which the intermission prints to everyone.
+// - **The map's movers and triggers**: sequel_map.hpp. Monsters are the next row (M18v7d).
 //
 // ge:summary The sequel's rules as a second runner: its maps' brushes, spawns and the 10 Hz frame
 // ge:keywords sequel sequel-server sequel-runner runner-calls program-form spawn-point respawn
@@ -87,6 +88,33 @@ struct SequelEntity {
   int item = -1;
   bool hidden = false, gone = false;
   double respawn_at = 0;  // level time it shows again; 0: not waiting
+
+  // The map's movers and triggers (sequel_map.hpp).
+  int block = -1;  // its block in the map's entity text; -1 one the rules made (a door's field)
+  int owner = -1;  // a field's or a trigger's mover
+  std::string message, killtarget, team, pathtarget, noise, map;
+  bool solid = false;      // a brush that stops moves and shots (a mover, a wall present)
+  bool trigger = false;    // touched when a living player's box overlaps it
+  sh::Vec3f mins, maxs;    // its box about its origin (a brush model's bounds, a field's box)
+  sh::Vec3f dir;           // a mover's or a push's way
+  sh::Vec3f closed, open;  // a door's or button's two places (a plat's top and bottom)
+  float speed = 0, accel = 0, decel = 0, wait = 0, lip = 0, delay = 0, random = 0;
+  int dmg = 0, health = 0, max_health = 0, sounds = 0;
+  int state = 0;             // a mover's: 0 at rest closed, 1 opening, 2 open, 3 closing
+  int team_master = -1;      // the first of its team; -1 none
+  double think_at = 0;       // level time its next action is due; 0 none
+  int think = 0;             // which action (sequel_map.cpp)
+  double touched_at = -100;  // the last touch that counted (a field's once a second)
+  bool moved = false;        // a plat: it has had a move (its use is spent)
+  int activator = -1;        // the slot that set it going (a train's, a delayed use's)
+  // The move in progress: its velocity (units/s), the place it is going to and what follows.
+  sh::Vec3f velocity, dest;
+  int frames = 0;     // the plain move's whole frames left
+  float rest = 0;     // the plain move's remainder; the accelerated move's distance left
+  bool last = false;  // the next push is the move's last
+  bool accelerated = false;
+  float now_speed = 0, next_speed = 0, top = 0, decel_span = 0;  // per frame
+  int arrive = 0;  // what arriving does (sequel_map.cpp)
 };
 
 struct SequelPlayer {
@@ -128,7 +156,9 @@ struct SequelPlayer {
   double air_until = 0, drown_at = 0;
   int drown_damage = 2;
   float old_fall = 0;
-  bool gibbed = false;  // died under −40: his body is gone (no model)
+  bool gibbed = false;      // died under −40: his body is gone (no model)
+  int ground = -1;          // the world row he stands on (0 the world, a mover's row), -1 none
+  double windfly_at = -10;  // the last push's sound
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.
@@ -160,6 +190,16 @@ struct SequelDrop {
 };
 inline constexpr int kSequelDrops = 32;  // the rows the world keeps for dropped items
 
+// A body left where a player died, kept when he respawns: up to 8 stay, the oldest reused. A blow
+// that takes it under −40 throws it apart.
+struct SequelBody {
+  bool live = false;
+  sh::Vec3f origin;
+  float yaw = 0;
+  float health = 0;
+};
+inline constexpr int kSequelBodies = 8;
+
 struct SequelServerOptions {
   uint32_t seed = 1;
   // The clients take the server's view as their own when it turns them (the classic protocol's
@@ -188,11 +228,22 @@ struct SequelServer : RulesCommon {
   int missile_models[kSqShotKinds] = {};   // by `SqShot`
   std::vector<std::string> obituaries;     // every death's line, in order (the tests, the lab)
   SequelDrop drops[kSequelDrops];
+  SequelBody bodies[kSequelBodies];
+  int next_body = 0;             // the body slot the next respawn fills
   std::vector<int> item_models;  // each item row's world model in the model list (the drops')
   // The intermission: level time it began (0 none) and the map it leads to; everyone stands frozen
   // at its spot, and after 5 s any button leaves.
   double intermission_at = 0;
   std::string next_map;
+  // A use put off by its `delay`: the entity whose targets fire, at a level time, by a slot.
+  struct Delayed {
+    int entity;
+    double at;
+    int activator;
+  };
+  std::vector<Delayed> delayed;
+  int secrets = 0, secrets_found = 0, goals = 0, goals_found = 0;
+  bool exit_now = false;  // an exit was used: the intermission starts at the frame's end
 
   SequelServer();
   ~SequelServer();

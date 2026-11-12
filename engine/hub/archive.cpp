@@ -148,7 +148,7 @@ bool is_hex_sha(std::string_view s) {
 }  // namespace
 
 std::string archive_path(std::string_view sha) {
-  return "d/" + std::string(sha.substr(0, 3)) + "/" + std::string(sha) + ".ger";
+  return "d/" + std::string(sha.substr(0, 3)) + "/" + std::string(sha) + ".ged";
 }
 
 bool demo_row(std::span<const uint8_t> bytes, DemoRow& out, std::string& error) {
@@ -222,7 +222,7 @@ bool archive_open(Archive& a, const std::string& dir, std::string& error) {
   const std::map<std::string, Kept> table = read_table(fs::path(dir) / "archive.tsv");
   for (fs::recursive_directory_iterator it(fs::path(dir) / "d", ec), end; !ec && it != end;
        it.increment(ec)) {
-    if (!it->is_regular_file(ec) || it->path().extension() != ".ger") continue;
+    if (!it->is_regular_file(ec) || it->path().extension() != ".ged") continue;
     const std::string sha = it->path().stem().string();
     if (!is_hex_sha(sha)) continue;
     const std::optional<std::vector<uint8_t>> bytes = read_file(it->path());
@@ -287,7 +287,7 @@ int archive_ingest(Archive& a, int64_t now_s, std::vector<std::string>& errors) 
   std::error_code ec;
   std::vector<fs::path> files;
   for (fs::directory_iterator it(inbox, ec), end; !ec && it != end; it.increment(ec)) {
-    if (it->is_regular_file(ec) && it->path().extension() == ".ger") files.push_back(it->path());
+    if (it->is_regular_file(ec) && it->path().extension() == ".ged") files.push_back(it->path());
   }
   std::sort(files.begin(), files.end());
   int taken = 0;

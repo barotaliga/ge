@@ -223,11 +223,11 @@ browser's own GPU.
 
 - **M56d** (`hub-archive`): `archive.hpp` is the demo archive: replay files kept by SHA-256 under
   `d/abc/`, each row read from the hub's meta words, the same file from two places kept once,
-  `archive.tsv` for the operator's tags. `--archive=<dir>` turns it on; a recorder drops `.ger`
+  `archive.tsv` for the operator's tags. `--archive=<dir>` turns it on; a recorder drops `.ged`
   files in `<dir>/inbox/` (a refused one goes to `inbox/refused/`), and `--keep-gb` and
   `--keep-days` prune the oldest untagged demos. `/v1/demos` searches by player (any part, any
   case), mode, map, team, tag, server and age, newest first, 15 a page, with the scores left out;
-  `/v1/demos/{sha256}` is one demo's summary with them; `/d/abc/{sha256}.ger` is the file, cached a
+  `/v1/demos/{sha256}` is one demo's summary with them; `/d/abc/{sha256}.ged` is the file, cached a
   year. `/demos` is the page: a search form, Play (`<id>://demo/<sha256>`) and Download, the
   scores folded until asked. Pulling demos from TV nodes waits for the TV node (M57b).
 

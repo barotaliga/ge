@@ -6,12 +6,14 @@
 //
 // ge:summary The sequel runner's fight: shots, missiles, damage, deaths, the chosen weapon
 // ge:keywords sequel fight shots hitscan missiles radius-damage obituary death frags use-weapon
-// ge:keywords hand-grenade drop-item gibs weapons-stay quad-drop
+// ge:keywords hand-grenade drop-item gibs weapons-stay quad-drop teams friendly-fire
+// ge:keywords corpse-queue scores fov
 // ge:skill shooter
 // ge:test tests/shooters_edge_sequel_fight_test.cpp
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "shooters_edge/server/sequel_server.hpp"
 
@@ -41,6 +43,16 @@ bool fight_command(SequelServer& s, int slot, const std::string& cmd, const std:
 inline constexpr int kSqByFall = 100, kSqByLava = 101, kSqBySlime = 102, kSqByWater = 103;
 // The hand grenade held to the end of its fuse.
 inline constexpr int kSqByHeldGrenade = 104;
+// A mover's crush, a hurting trigger, a teleport onto someone, a map's explosion.
+inline constexpr int kSqByCrush = 105, kSqByHurt = 106, kSqByTelefrag = 107, kSqByExplosion = 108;
+
+// A blow to player `target` from `attacker` (a slot or -1) along `dir` (zero: no push), by
+// `weapon` (a weapon or a `kSqBy*`); `flags` 1 passes armour by, 2 passes invulnerability by.
+void fight_hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, int knockback,
+                int weapon, int flags = 0);
+// Radius damage at `at`: `damage` less half the distance, within `radius` (the attacker's half),
+// to the players and the map's shootable movers it reaches.
+void fight_blast(SequelServer& s, sh::Vec3f at, int attacker, int damage, float radius, int weapon);
 
 // Player `slot` dies, killed by `killer` (a slot; his own for a suicide, -1 the world) with weapon
 // `weapon` (-1 none, or a `kSqBy*`); the obituary is scored and printed.
@@ -72,5 +84,18 @@ bool fight_dmflag(const SequelServer& s, int bit);
 void fight_rows(SequelServer& s);
 // The first world row of the missiles; the dropped items' follow them.
 size_t fight_first_row(const SequelServer& s);
+
+// True when players `a` and `b` (two slots) are on one team: in deathmatch with `dmflags` 64 (by
+// the skin of `skin`'s model/skin) or 128 (by the model), or in co-op (everyone).
+bool fight_teammates(const SequelServer& s, int a, int b);
+// Player `slot`'s field of view from his `fov` setting: 1..160, 90 when unset or with `dmflags`
+// 32768 in deathmatch.
+float fight_fov(const SequelServer& s, int slot);
+// A dead player about to respawn leaves his body (not when it was thrown apart).
+void fight_bury(SequelServer& s, int slot);
+// The scores, best first: one line a player ("  12  Ana").
+std::vector<std::string> fight_scores(const SequelServer& s);
+// A line printed to player `slot`, or to everyone with -1.
+void fight_print(SequelServer& s, int slot, const std::string& text);
 
 }  // namespace shooters_edge::server

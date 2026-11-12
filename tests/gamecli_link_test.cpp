@@ -108,7 +108,7 @@ TEST(a_kept_demo_is_unpacked_and_played) {
   // Kept (as a fetch leaves it): unpacked beside it and played.
   fs::create_directories(root / "state" / "demos");
   {
-    std::ofstream f(root / "state" / "demos" / (sha + ".ger"), std::ios::binary);
+    std::ofstream f(root / "state" / "demos" / (sha + ".ged"), std::ios::binary);
     f.write(reinterpret_cast<const char*>(file.data()), static_cast<std::streamsize>(file.size()));
   }
   CHECK(run({"link", "open", link, "--dry-run", "--json"}, out, root) == 0);
