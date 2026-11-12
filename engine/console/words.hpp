@@ -7,7 +7,8 @@
 //
 // THE VALUES say what each value does, entries separated by "; ", each "<pattern>: <meaning>":
 //   0: off; 1: on                     a literal value, then what it does
-//   0: no limit; 1..32: that many     a number range, both ends included
+//   0: no limit; 1..32: that many     a number range, both ends included; N for no bound that
+//                                     way ("1..N": one and up)
 //   lan: ...; invite: ...; listed: .. literal words
 //   "": none                          the empty value
 //   N: ...                            any number

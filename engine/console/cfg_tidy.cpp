@@ -111,7 +111,21 @@ struct Setting {
   std::string name, value, verb;
   bool has_value = false;
   bool is_setting = false;  // a set, or a word that names a cvar
+  int part = -1;            // a part synonym's word of its target (its value is one word)
+  bool synonym = false;     // the name is another name for the cvar
 };
+
+// The cvar a name sets: its own, or a synonym's target (a part synonym's too, which `find` does
+// not answer); null for none or for one created at run time, which nothing reads.
+const Cvar* cvar_named(const Console& c, std::string_view name, Setting& s) {
+  if (const Synonym* syn = c.cvars().synonym(name); syn != nullptr && syn->target != nullptr) {
+    s.synonym = true;
+    s.part = syn->part;
+    return syn->target;
+  }
+  const Cvar* v = c.cvars().find(name);
+  return v != nullptr && (v->flags & kCreated) == 0 ? v : nullptr;
+}
 
 Setting setting_of(const Console& c, const std::vector<std::string>& words) {
   Setting s;
@@ -120,17 +134,18 @@ Setting setting_of(const Console& c, const std::vector<std::string>& words) {
   if (is_set_word(head) && words.size() >= 2) {
     s.verb = head;
     s.name = words[1];
-    s.cvar = c.cvars().find(words[1]);
-    if (s.cvar != nullptr && (s.cvar->flags & kCreated) != 0) s.cvar = nullptr;  // nothing reads it
+    s.cvar = cvar_named(c, words[1], s);
     s.has_value = words.size() >= 3;
     s.value = join_from(words, 2);
     s.is_setting = true;
-  } else if (const Cvar* v = c.cvars().find(words[0]); v != nullptr && (v->flags & kCreated) == 0) {
+  } else if (const Cvar* v = cvar_named(c, words[0], s); v != nullptr) {
     s.name = words[0];
     s.cvar = v;
     s.has_value = words.size() >= 2;
     s.value = join_from(words, 1);
     s.is_setting = true;
+  } else {
+    s = Setting{};  // the synonym's marks, when the name was none
   }
   return s;
 }
@@ -180,15 +195,16 @@ std::vector<CfgFinding> check_cfg(const Console& c, std::string_view text) {
       continue;
     }
     if (!s.has_value) continue;
-    if (s.value.find('$') == std::string::npos && !value_fits(*s.cvar, s.value)) {
+    if (s.part < 0 && s.value.find('$') == std::string::npos && !value_fits(*s.cvar, s.value)) {
       out.push_back(
           {it.line, "'" + s.cvar->name + "' is \"" + s.value + "\", which is not one of its values",
            takes_text(*s.cvar)});
     }
-    const auto [at, fresh] = first.emplace(s.cvar->name, it.line);
+    const std::string key = s.part < 0 ? s.cvar->name : lower(s.name);  // a part: its own word
+    const auto [at, fresh] = first.emplace(key, it.line);
     if (!fresh) {
       out.push_back({at->second,
-                     "'" + s.cvar->name + "' is set again on line " + std::to_string(it.line) +
+                     "'" + key + "' is set again on line " + std::to_string(it.line) +
                          ", which overrides this one",
                      "keep one of the two lines"});
       at->second = it.line;
@@ -314,7 +330,7 @@ void put_comments(std::string& out, const std::vector<std::string>& lines) {
   for (const std::string& l : lines) out += l + "\n";
 }
 
-std::string with_beside(std::string line, const Item& it) {
+std::string with_beside(const std::string& line, const Item& it) {
   return it.beside.empty() ? line : line + " " + it.beside;
 }
 
@@ -352,6 +368,7 @@ std::string format_cfg(const Console& c, std::string_view text, const CfgFormat&
     const std::vector<std::string> words = tokenize(items[i].text);
     const std::string head = words.empty() ? "" : lower(words[0]);
     Placed p{&items[i], setting_of(c, words), i};
+    if (p.s.synonym && p.s.part < 0) p.s.name = p.s.cvar->name;  // the game's own name
     if (p.s.is_setting && p.s.cvar != nullptr) {
       const std::string_view sec = cfg_section(p.s.cvar->name);
       sections[section_rank(sec)].push_back(p);
@@ -368,7 +385,7 @@ std::string format_cfg(const Console& c, std::string_view text, const CfgFormat&
     }
   }
   const auto key = [](const Placed& p) {
-    return p.s.cvar != nullptr ? p.s.cvar->name : lower(p.s.name);
+    return p.s.cvar != nullptr && p.s.part < 0 ? p.s.cvar->name : lower(p.s.name);
   };
   // One column for every value in the file.
   size_t pad = 0;

@@ -18,6 +18,8 @@ TEST(the_values_grammar_parses_and_its_patterns_match) {
   CHECK(!con::parse_values("0 off", e));
   CHECK(!con::parse_values("", e));
   CHECK(con::pattern_fits("1..32", "7") && !con::pattern_fits("1..32", "33"));
+  CHECK(con::pattern_fits("1..N", "20") && !con::pattern_fits("1..N", "0"));  // one and up
+  CHECK(con::pattern_fits("N..0", "-5") && !con::pattern_fits("N..0", "1"));
   CHECK(con::pattern_fits("N", "-2.5") && !con::pattern_fits("N", "x"));
   CHECK(con::pattern_fits("lan", "lan") && !con::pattern_fits("lan", "listed"));
   CHECK(con::pattern_fits("\"\"", "") && !con::pattern_fits("\"\"", "a"));
@@ -65,4 +67,5 @@ TEST(words_fault_names_what_is_wrong) {
   CHECK(fault("f", "The slots.", "nothing", "").find("do not parse") != std::string::npos);
   CHECK(fault("g", "The slots.", "1: one", "2").find("default") != std::string::npos);
   CHECK(fault("h", "The slots.", "1: one; \"\": none", "").empty());
+  CHECK(fault("i", "The slots.", "1..M: some", "").find("no range") != std::string::npos);
 }

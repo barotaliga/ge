@@ -7,6 +7,8 @@
 //   - a value that fits none of the setting's own values (console/words.hpp's `value_fits`): a
 //     warning with what the setting takes;
 //   - a setting set twice: a warning on the first, which the later one overrides.
+// A part synonym (one word of a setting that holds several) is a setting of its own here, its
+// value left to the server, which checks the whole.
 // A value with a `$` is left alone (it is expanded when the cfg runs), and so is an alias defined
 // in the same text.
 //
@@ -14,7 +16,8 @@
 // `name "value"` (`set` and `seta` kept where written), a comment kept with the command it sits
 // above or beside. With `comments` each setting gets its one sentence of help as a `//` line above
 // it (written once: a cfg formatted again does not gather a second). With `pretty` (which implies
-// comments) the settings are grouped into sections by their name's prefix, in one fixed order and
+// comments) a setting written by another name (a synonym, console/cvar.hpp) takes its own, and
+// the settings are grouped into sections by their name's prefix, in one fixed order and
 // by name inside each, under a banner, their values aligned in a column; binds follow by key,
 // then aliases, then every other command in the order written (an `exec` still runs last). The
 // commands themselves are never changed, so a formatted cfg sets exactly what the original did.

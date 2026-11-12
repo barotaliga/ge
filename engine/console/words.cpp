@@ -7,6 +7,7 @@
 #include "console/words.hpp"
 
 #include <cctype>
+#include <limits>
 
 namespace ge::console {
 
@@ -30,16 +31,24 @@ std::vector<std::string_view> words_of(std::string_view s) {
   return out;
 }
 
+// A range word `a..b`, either end `N` for no bound that way ("1..N": one and up); false when the
+// word is no range.
+bool range_of(std::string_view word, double& lo, double& hi) {
+  const size_t dots = word.find("..");
+  if (dots == std::string_view::npos) return false;
+  const std::string_view a = word.substr(0, dots), b = word.substr(dots + 2);
+  lo = -std::numeric_limits<double>::infinity();
+  hi = std::numeric_limits<double>::infinity();
+  return (a == "N" || parse_number(a, lo)) && (b == "N" || parse_number(b, hi)) && lo <= hi;
+}
+
 // One pattern word against one value word.
 bool word_fits(std::string_view pattern, std::string_view value) {
   if (pattern == "TEXT") return true;
   double v = 0;
   if (pattern == "N") return parse_number(value, v);
-  if (const size_t dots = pattern.find(".."); dots != std::string_view::npos) {
-    double lo = 0, hi = 0;
-    if (parse_number(pattern.substr(0, dots), lo) && parse_number(pattern.substr(dots + 2), hi))
-      return parse_number(value, v) && v >= lo && v <= hi;
-  }
+  if (double lo = 0, hi = 0; range_of(pattern, lo, hi))
+    return parse_number(value, v) && v >= lo && v <= hi;
   return pattern == value;
 }
 
@@ -113,6 +122,14 @@ std::string words_fault(const Cvar& cvar) {
   if (!parse_values(cvar.values, entries))
     return "the values do not parse: write \"<value>: <what it does>\" entries with \"; \" "
            "between";
+  for (const ValueEntry& e : entries) {
+    for (const std::string_view w : words_of(e.pattern)) {
+      double lo = 0, hi = 0;
+      if (w.find("..") != std::string_view::npos && !range_of(w, lo, hi))
+        return "the pattern \"" + std::string(w) +
+               "\" is no range: write \"<low>..<high>\", N for no bound";
+    }
+  }
   if (!cvar.fallback.empty() && !value_fits(cvar, cvar.fallback))
     return "the default \"" + cvar.fallback + "\" is not one of its values";
   return "";

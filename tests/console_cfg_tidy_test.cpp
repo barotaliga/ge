@@ -34,6 +34,13 @@ void settings(con::Console& c) {
                  .min = 0.1,
                  .max = 20,
                  .values = "0.1..20: that much (3 the default)"});
+  c.cvars().add({.name = "sv_floodprot",
+                 .fallback = "4 8 10",
+                 .help = "How much a player may chat.",
+                 .kind = con::CvarKind::text,
+                 .values = "N N N: that many lines in that many seconds, then silence"});
+  c.cvars().add_synonym("maxclients", "sv_maxclients");
+  c.cvars().add_synonym("flood_msgs", "sv_floodprot", 0);
 }
 
 }  // namespace
@@ -96,4 +103,17 @@ TEST(the_pretty_format_sorts_into_sections_and_aligns) {
   CHECK(pretty.rfind("exec last\n") == pretty.size() - 10);
   CHECK(con::format_cfg(c, pretty, {.pretty = true}) == pretty);
   CHECK(con::check_cfg(c, pretty).empty());
+}
+
+TEST(classic_names_are_checked_and_the_pretty_format_writes_the_game_s_own) {
+  con::Console c{false};
+  settings(c);
+  const std::string text = "maxclients 16\nflood_msgs 6\nmaxclients 99\n";
+  const auto f = con::check_cfg(c, text);
+  CHECK(f.size() == 2);  // 99 is past 32; the first maxclients is set again; flood_msgs is a word
+  CHECK(f[0].line == 1 && f[0].what.find("set again on line 3") != std::string::npos);
+  CHECK(f[1].line == 3 && f[1].what.find("\"99\"") != std::string::npos);
+  const std::string pretty = con::format_cfg(c, "maxclients 16\nflood_msgs 6\n", {.pretty = true});
+  CHECK_MSG(pretty.find("sv_maxclients \"16\"") != std::string::npos, pretty);
+  CHECK(pretty.find("flood_msgs    \"6\"") != std::string::npos);  // a part keeps its name
 }
