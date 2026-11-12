@@ -74,6 +74,7 @@ constexpr int kCell = 360;           // each close-up's size, pixels
 constexpr float kPad = 96;           // round a section's trails in its close-up, units
 constexpr float kHullHalf = 16;      // the player's box across, half
 constexpr float kHullDown = 24, kHullUp = 32;
+constexpr float kBackup = 400;  // `--backup`: the far end looked for this near the start
 constexpr float kExitNear = 32;  // a try that arrives this near its exit's trigger is through
 constexpr float kPitDrop = 40;   // a floor this far under the start's is a pit to jump
 // A pit's jump proven from the slowest of these speeds up, the first that lands kept (a route
@@ -596,10 +597,27 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
     } else {
       sec.exit = {(exit.lo.x + exit.hi.x) / 2, (exit.lo.y + exit.hi.y) / 2, exit.lo.z + kHullDown};
     }
+    // `--backup=1`: each try starts from the floor's far end behind (the node at the start's
+    // height within kBackup of it farthest from the exit, not in a pit): the room a person steps
+    // back into before a long jump.
+    int32_t from = a;
+    if (lab.arg("backup") == "1") {
+      const sh::Vec3f s0 = g.nodes[static_cast<size_t>(a)].origin;
+      float far = -1;
+      for (size_t k = 0; k < g.nodes.size(); k++) {
+        const sh::Vec3f o = g.nodes[k].origin;
+        if (dead[k] != 0 || std::fabs(o.z - s0.z) > 8 || std::hypot(o.x - s0.x, o.y - s0.y) > kBackup)
+          continue;
+        const sh::NavRoute r = sh::nav_route(g, a, static_cast<int32_t>(k), search, 1, {}, {}, ps.jumper);
+        if (r.nodes.empty() || r.time_s > kBackup / 200) continue;
+        const float d = std::hypot(o.x - sec.exit.x, o.y - sec.exit.y);
+        if (d > far) far = d, from = static_cast<int32_t>(k);
+      }
+    }
     // The tries: each run to the first teleporter touched.
     for (int k = 0; k < tries; k++) {
       Try tr;
-      tr.run = bt::run_route(nav.world, g, g.nodes[static_cast<size_t>(a)].origin, sec.exit, hands, static_cast<uint32_t>(k + 1),
+      tr.run = bt::run_route(nav.world, g, g.nodes[static_cast<size_t>(from)].origin, sec.exit, hands, static_cast<uint32_t>(k + 1),
                              ps, limit, {}, keys, traits[sh::Trait::moves]);
       const bt::RunResult& r = tr.run;
       for (size_t i = 0; i < r.trail.size() && tr.end < 0; i++)
@@ -909,6 +927,8 @@ const gl::LabSpec kSpec{
         {"features", "", "the bot's switches over an expert's preset, as se-team's --features"},
         {"trace", "", "every command of every try to this TSV (map, section, try, t, feet, speed, "
                       "mode, link, view, keys, the pilot's reason)"},
+        {"backup", "0", "1: each try starts from the floor's far end behind its start (room for a "
+                        "run-up)"},
         {"harm", "0", "1: the pits' floors marked as harm, their lips' links brinks (tried: a hop's stretch then ends short of every lip, ztrain 10 -> 3 through)"},
         {"spacing", "32", "the nav's grid, units (16: a trick map's narrow platforms get nodes)"},
         {"pits", "triggers", "the pits' jumps: triggers (every fail trigger's rim, and the line) or "

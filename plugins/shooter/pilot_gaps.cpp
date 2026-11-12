@@ -23,6 +23,7 @@ constexpr int kGapRunMost = 40;        // a run to the lip looked ahead this man
 constexpr float kGapRunWindow = 120;   // a jump tried from each place this near the lip, units
 constexpr float kGapRunPast = 24;      // and none this far past it along the jump
 constexpr size_t kGapCurveLinks = 12;  // the gap within this many links ahead (nodes ~32 apart)
+constexpr float kHopShort = 64;  // `lipjump`: a hop "this side" of a gap comes down this short of it
 constexpr int kGapKeyLate = 2;  // a keyboard's jump key goes down up to this many commands late
 // The takeoff: the next commands' places tried, a takeoff no further than this past its start (the
 // lip), the ground's friction a second; a gap given up stays off the routes this long.
@@ -269,8 +270,11 @@ bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, 
       return false;
     }
     const JumpFlight hop = fly_jump(*s.world, move, s.origin, s.velocity, T, msec);
+    // `lipjump`: short of the lip by a margin, the hop's strafe in the air gaining on the flight
+    // forecast here (forward at the landing).
+    const float short_by = p.set.lip_jump ? kHopShort : 0;
     if (hop.landed && hop.end.z >= S.z - kStepHeight &&
-        dot(Vec3f{hop.end.x - S.x, hop.end.y - S.y, 0}, dir) <= 0) {
+        dot(Vec3f{hop.end.x - S.x, hop.end.y - S.y, 0}, dir) <= -short_by) {
       p.safe_flight = true;
       p.brink_free = true;
       because = "a gap trick ahead: a hop that lands this side";
