@@ -67,6 +67,63 @@ a demo.
 - **Version 1** (the text replay file of M23b) still loads; a game's classic formats convert to
   version 2 and back byte for byte.
 
+## The TV node
+
+`engine/tv` (`node.hpp`, `net_link.hpp`). A node takes a source's replay file bytes in any pieces
+(a game's server writing them, a file read out, or the node above it), splits them into the header
+and whole blocks, and sends them on:
+
+- **The delay** is in game time: the first block anchors the source's clock to the node's, and a
+  block goes out once its start plus the delay has come, so a source that runs ahead (a file) is
+  paced to the match. With no delay a block goes out as soon as it is whole.
+- **A viewer** says hello, gets the header, then the blocks from the newest keyframe block out,
+  then each block as it goes out, then `ended`. A link that will take no more keeps the viewer's
+  place, so a slow viewer slows no one else. Blocks before the newest keyframe that no viewer still
+  needs are let go.
+- **A relay** is a viewer of the node above that feeds a node of its own. Chat goes up to the first
+  node and comes back down to every viewer; each relay reports how many watch under it, and every
+  node tells its viewers the whole tree's count.
+- **The wire** is one reliable, ordered channel of engine/net: hello, header, block (in pieces under
+  engine/net's biggest message), chat, viewers, ended, refused.
+
+The `tv` lab runs a source, a relay and six viewers under every simulated network preset:
+
+| Preset | Viewers whole | Lag p50 / p95 / max (ms) | Down a viewer (kB a match second) |
+| --- | --- | --- | --- |
+| lan | 6 of 6 | 20 / 20 / 20 | 2.1 |
+| wifi | 6 of 6 | 80 / 90 / 180 | 2.1 |
+| mobile | 6 of 6 | 140 / 302 / 500 | 2.1 |
+| bad | 6 of 6 | 280 / 590 / 1040 | 1.8 |
+| awful | 6 of 6 | 1145 / 3425 / 4320 | 1.6 |
+
+On the bad and awful links some viewers connect late and start at a later keyframe block, so they
+take fewer bytes.
+
+### Browsers, finished files and the master
+
+- **WebSocket viewers** (`websocket.hpp`): a host's `TvWeb` listens on TCP, takes the HTTP upgrade
+  and carries every TV message as one binary frame each way, beside the net node's viewers in the
+  same node (link numbers from `kWebLinks` up). Pings are answered, a close is answered and the link
+  dropped, and a broken handshake or a frame over 1 MiB drops the link. This is the wire the hub's
+  web viewer watches by (`docs/hub.md`).
+- **Finished files** (`library.hpp`): `library_scan` lists a folder's `.ger` files by the SHA-256
+  of their bytes, with name, size, game and header meta. A viewer sends `list` and gets `files`, and
+  sends `get` with a hash and gets the file in pieces, or a "not here". A viewer whose hello says
+  *files* gets no live stream and is not counted as watching (the hub's archive fetching a file).
+- **The master** (`tv_host_list`): the host beats to masters as a TV node from its own socket and
+  answers status asks there with its name, the match's game and map, its viewers and the delay.
+
+## Spectating by inputs
+
+`engine/replay/spectate.hpp`. A deterministic game on the play contract (Fall Line) broadcasts
+what its player holds, not the world: each one-second block holds the block's runs of held inputs
+(each axis's grid index) and the run's digest after it, and every few seconds a keyframe block also
+holds the run saved (`save_run`). A viewer loads the first keyframe it gets and steps its own run
+through every block, checking the digest at each; a run that parts stops there with the step.
+Fall Line through a source node and a relay reaches the player's digest under every network preset
+(the `spectate` lab). Its inputs cost about 230 bytes a second; a whole save every 10 s is about
+10 kB a second packed, so the keyframes are what is left to make small.
+
 ## The field codec
 
 The coder (`engine/replay/codec.hpp`) is an adaptive binary range coder: integers only, so it
