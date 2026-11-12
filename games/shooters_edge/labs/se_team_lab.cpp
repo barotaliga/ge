@@ -534,6 +534,36 @@ void run(gl::Lab& lab) {
       return;
     }
   }
+  // The skills (`--skills`): one word for every player ("expert": people's level today, most
+  // players being experts), or one a player, red's then blue's, comma separated.
+  {
+    const std::string list = lab.arg("skills");
+    std::vector<sh::AimSkill> got;
+    size_t at = 0;
+    while (!list.empty() && at <= list.size()) {
+      const size_t end = std::min(list.find(',', at), list.size());
+      const std::string w = list.substr(at, end - at);
+      bool found = false;
+      for (const sh::AimSkill k : {sh::AimSkill::novice, sh::AimSkill::average,
+                                   sh::AimSkill::expert, sh::AimSkill::perfect})
+        if (w == sh::aim_skill_name(k)) got.push_back(k), found = true;
+      if (!found) {
+        lab.fail("se-team: --skills: '" + w + "' is no skill",
+                 "next: novice, average, expert or perfect; one for all, or one a player");
+        return;
+      }
+      at = end + 1;
+    }
+    if (got.size() == 1 || got.size() == o.teams[0].skills.size() + o.teams[1].skills.size()) {
+      size_t k = 0;
+      for (cn::TeamSide& side : o.teams)
+        for (sh::AimSkill& sk : side.skills) sk = got.size() == 1 ? got[0] : got[k++];
+    } else if (!got.empty()) {
+      lab.fail("se-team: --skills names " + std::to_string(got.size()) + " skills",
+               "next: one for every player, or one a player (red's then blue's)");
+      return;
+    }
+  }
   // The temperaments, red's then blue's, a letter or a word each (a, b, c), comma separated.
   {
     const std::string list = lab.arg("tempers");
@@ -1899,6 +1929,9 @@ const gl::LabSpec kSpec{
         {"features", "",
          "every bot's features over its skill's preset (shooter/features.hpp): +name, -name, all, "
          "none (plain), comma separated (-swimaim,+shortgoals); empty: the preset"},
+        {"skills", "",
+         "every player's skill (one word: expert, as most people are today) or one a player, red's "
+         "then blue's (empty: each side expert, average, average, novice)"},
         {"features-red", "", "red's features over --features (the A/B by team: one side without)"},
         {"features-blue", "", "blue's features over --features"},
         {"trace", "",
