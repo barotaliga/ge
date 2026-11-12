@@ -131,7 +131,7 @@ web build the engine has (G5): a viewer, never the game, and nothing in it plays
 | Piece | What it is |
 | --- | --- |
 | The web viewer | A game's viewer target, `ge_add_web_viewer(<game>)`: its renderer, its demo reader and the TV client, nothing of input beyond the camera and the transport. Built by Emscripten, drawing through the browser's WebGPU with the same WGSL the native renderer uses (Dawn ships the browser's binding) |
-| Its stream | The TV node's stream carried over a WebSocket (the TV layer's browser carriage), the same chunks a native spectator reads; a demo fetched by its hash from the archive, decoded in the viewer |
+| Its stream | The TV node's stream carried over a WebSocket (the TV layer's browser carriage), the same messages a native spectator reads: the viewer says hello, turns the messages back into the replay file as it grows (`tv::Watch`) and unpacks each whole block into the recording as it comes (Shooter's Edge's `unpack_more`); it plays two blocks behind and holds its last frame when the next block is late. A demo is fetched by its hash from the archive, decoded in the viewer |
 | Its content | The level and the models from the hub's content folder, compressed, named by hash, cached by the browser for a year; the first visit's download kept small by sending the level being watched first |
 | Its controls | Seek, speed, pause, whom to follow and free camera, through the transport the native replay player already has (`engine/replay`); clip links (`?t=from-to:who`) |
 | The page glue | The few lines of script a page needs to start the viewer, hand it the stream's address and wire the buttons: platform glue, kept as small as the platform allows, as Apple's and Android's app shells are |

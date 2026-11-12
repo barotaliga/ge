@@ -128,6 +128,28 @@ TEST(a_file_cut_short_gives_back_its_whole_blocks) {
   CHECK(std::equal(back.begin(), back.end(), rec.begin()));
 }
 
+TEST(a_growing_file_unpacks_as_it_comes) {
+  const auto rec = se::write_multiview_match(match());
+  std::vector<uint8_t> file, grown, back;
+  std::string error;
+  CHECK(se::pack_demo(rec, file, error));
+  se::DemoUnpacker u;
+  // The header first (a TV viewer's stream starts so), then the blocks in uneven pieces, a block
+  // often cut between two of them.
+  ge::replay::StreamReader r;
+  CHECK(ge::replay::read_stream_header(file, r, error));
+  grown.assign(file.begin(), file.begin() + static_cast<std::ptrdiff_t>(r.at));
+  for (size_t at = r.at, step = 97; at < file.size(); at += step, step = step * 3 % 1013 + 41) {
+    const size_t to = std::min(file.size(), at + step);
+    grown.insert(grown.end(), file.begin() + static_cast<std::ptrdiff_t>(at),
+                 file.begin() + static_cast<std::ptrdiff_t>(to));
+    CHECK_MSG(se::unpack_more(u, grown, back, error), error);
+    CHECK(back.size() <= rec.size() && std::equal(back.begin(), back.end(), rec.begin()));
+  }
+  CHECK(back == rec);
+  CHECK(u.blocks > 4);
+}
+
 TEST(another_games_file_is_refused) {
   std::vector<uint8_t> file, back;
   ge::replay::StreamWriter w;

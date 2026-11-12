@@ -30,7 +30,7 @@
 // ge:summary Shooter's Edge's face on replay file v2: classic recordings packed and back exactly
 // ge:keywords replay-v2 face field-codec multiview client-recording single-player-recording
 // ge:keywords pack unpack residual prediction ged
-// ge:keywords pack_demo unpack_demo keyframe round-trip compress
+// ge:keywords pack_demo unpack_demo keyframe round-trip compress unpack_more growing live
 // ge:keywords hub-meta archive map mode player score team-score demo_hub_meta
 // ge:skill replay shooter
 // ge:test tests/shooters_edge_demo_v2_test.cpp
@@ -39,6 +39,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <string>
 #include <vector>
@@ -95,5 +96,22 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
 // A version 2 file written by `pack_demo` back into the recording's bytes. False with the reason
 // in `error` (not this game's, damaged); a file cut short gives back what its whole blocks hold.
 bool unpack_demo(std::span<const uint8_t> file, std::vector<uint8_t>& out, std::string& error);
+
+// A GROWING FILE unpacked as it comes (a live broadcast: tv/node.hpp's `Watch::stream`): each call
+// takes the same file grown (its header whole from the first call), unpacks the whole blocks it has
+// not unpacked yet and appends their recording's bytes to `out`. A block not whole yet waits for
+// the next call. False with the reason when the file is not this game's or a block does not unpack;
+// a block cut short is no error.
+struct DemoUnpacker {
+  struct State;
+  std::unique_ptr<State> state;
+  int64_t blocks = 0;  // the blocks unpacked
+  DemoUnpacker();
+  ~DemoUnpacker();
+  DemoUnpacker(DemoUnpacker&&) noexcept;
+  DemoUnpacker& operator=(DemoUnpacker&&) noexcept;
+};
+bool unpack_more(DemoUnpacker& u, std::span<const uint8_t> file, std::vector<uint8_t>& out,
+                 std::string& error);
 
 }  // namespace shooters_edge::client

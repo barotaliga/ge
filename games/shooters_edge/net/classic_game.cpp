@@ -11,7 +11,9 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
+#include <fstream>
 #include <iterator>
 #include <memory>
 #include <span>
@@ -139,12 +141,25 @@ constexpr gs::GameRule kModRules[] = {
     {"k_midair",
      "1: midair, rockets count only on a player in the air (the sequel's maps; restarts)"},
     {"k_midair_minheight", "midair: the least height a hit counts at, 0..4 (64..1024 units; 1)"},
+    // The server's own chat when the mod leaves it to the server (server/chat_rules.hpp).
+    {"sv_spectalk", "0: a spectator's say reaches only the other spectators (1)"},
 };
 
 constexpr gs::GameRule kEndpointRules[] = {
     {"sv_maxrate", "the most bytes/s a client may ask for with its rate (0 no cap; 0)"},
     {"sv_antilag", "1: a shot sees the others where the shooter saw them (0)"},
+    {"sv_antilagexact",
+     "1: the rewind goes to exactly the frame the shooter saw, not a little further (0)"},
+    {"sv_safestrafe",
+     "N: a player reversing his sideways move gets N commands of none between (0: off)"},
     {"sv_voip", "1: players' voice is relayed to their team (0)"},
+    {"sv_voipecho", "1: a speaker hears his own voice back, to test it (0)"},
+    {"sv_rconcrypt",
+     "1: the remote console takes only a hashed password, never the password itself (0)"},
+    {"sv_rcontime", "seconds a hashed remote console line's time may be off, 0..3600 (0: any; 60)"},
+    {"sv_rconrate", "remote console tries answered a second, 0..1000 (0: no limit; 10)"},
+    {"sv_banmode",
+     "1: addresses on the ban list (addip) are refused; 0: only those on it may join (1)"},
     {"maxfps", "the most moves a second a client sends, told in the server info (77)"},
     {"sv_download", "0: no file is offered to a client that lacks one (1)"},
     {"sv_download_skins", "0: no skins/ file is offered (1)"},
@@ -236,6 +251,12 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_kicktop", "sv_colorkick"},
     {"sv_kickuserinfospamcount", "sv_infoflood", 0},
     {"sv_kickuserinfospamtime", "sv_infoflood", 1},
+    {"sv_antilag_no_pred", "sv_antilagexact"},
+    {"sv_voip_echo", "sv_voipecho"},
+    {"sv_crypt_rcon", "sv_rconcrypt"},
+    {"sv_timestamplen", "sv_rcontime"},
+    {"sv_rconlim", "sv_rconrate"},
+    {"filterban", "sv_banmode"},
 };
 
 // The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
@@ -334,12 +355,20 @@ bool info_flood(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error
 bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
   int watervis = 0, reconnect_wait = static_cast<int>(cfg.reconnect_wait_s);
   int antilag = cfg.antilag ? 1 : 0, voice = cfg.voice ? 1 : 0;
+  int safe_strafe = cfg.safe_strafe;
   int all = cfg.allow_download ? 1 : 0, skins = cfg.allow_skins ? 1 : 0;
   int models = cfg.allow_models ? 1 : 0, sounds = cfg.allow_sounds ? 1 : 0;
   int maps = cfg.allow_maps ? 1 : 0, other = cfg.allow_other ? 1 : 0;
   if (!endpoint_int(c, "sv_maxrate", 0, 1000000, cfg.maxrate, error) ||
       !endpoint_int(c, "sv_antilag", 0, 1, antilag, error) ||
       !endpoint_int(c, "sv_voip", 0, 1, voice, error) ||
+      !endpoint_flag(c, "sv_voipecho", cfg.voice_echo, error) ||
+      !endpoint_flag(c, "sv_antilagexact", cfg.antilag_exact, error) ||
+      !endpoint_int(c, "sv_safestrafe", 0, 100, safe_strafe, error) ||
+      !endpoint_flag(c, "sv_rconcrypt", cfg.rcon_crypt, error) ||
+      !endpoint_int(c, "sv_rcontime", 0, 3600, cfg.rcon_time_s, error) ||
+      !endpoint_int(c, "sv_rconrate", 0, 1000, cfg.rcon_rate, error) ||
+      !endpoint_int(c, "sv_banmode", 0, 1, cfg.ban_mode, error) ||
       !endpoint_int(c, "maxfps", 20, 1000, cfg.maxfps, error) ||
       !endpoint_int(c, "sv_download", 0, 1, all, error) ||
       !endpoint_int(c, "sv_download_skins", 0, 1, skins, error) ||
@@ -371,6 +400,7 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
   cfg.reconnect_wait_s = reconnect_wait;
   cfg.max_spectators = c.max_spectators;
   cfg.antilag = antilag != 0;
+  cfg.safe_strafe = safe_strafe;
   cfg.voice = voice != 0;
   cfg.allow_download = all != 0;
   cfg.allow_skins = skins != 0;
@@ -642,9 +672,17 @@ void* create(const gs::ServerConfig& c, std::string& error) {
                  {"*admin", c.admin}};
   if (const auto w = c.rules.find("sv_watervis"); w != c.rules.end() && w->second == "1")
     g->cfg.info.emplace_back("watervis", "1");
+  // A client predicts its own move, so it is told when the server holds its strafes apart.
+  if (const auto w = c.rules.find("sv_safestrafe");
+      w != c.rules.end() && !w->second.empty() && w->second != "0")
+    g->cfg.info.emplace_back("sv_safestrafe", w->second);
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
   g->cfg.rcon_password = c.rcon_password;
+  g->cfg.unix_time = [] { return static_cast<int64_t>(std::time(nullptr)); };  // rcon, bans
+  // The ban list beside the game's files, where a dedicated server keeps its own (writeip).
+  if (g->host == nullptr && !g->files.folder.empty())
+    g->cfg.ban_file = (std::filesystem::path(g->files.folder) / "listip.cfg").string();
   g->cfg.seed = c.seed;
   g->cfg.timeout_s = c.timeout_s;
   g->cfg.flood_msg = c.floodprot_msg;
@@ -1134,11 +1172,21 @@ void frame(void* g) {
   lobby_words(game);
 }
 
+// The ban list `writeip` saved, read back at start (a line it does not take is left out).
+void load_bans(ClassicServer& s) {
+  if (s.cfg.ban_file.empty()) return;
+  std::ifstream f(s.cfg.ban_file);
+  std::string line, out;
+  while (std::getline(f, line))
+    if (line.rfind("addip ", 0) == 0) gs::ban_command(s.bans, line, classic_unix_time(s), out);
+}
+
 bool serve(void* g, ge::net::Transport& port, std::string& error) {
   Game& game = *static_cast<Game*>(g);
   if (game.coop) return coop_serve(*game.coop, port, error);
   game.classic = std::make_unique<ClassicServer>();
   if (!classic_start(*game.classic, game.rules, port, game.cfg, error)) return false;
+  load_bans(*game.classic);
   game.classic->game_command = room_words;
   game.classic->game_ctx = &game;
   if (game.host != nullptr) {  // the window's player: slot 0, a local seat the window moves

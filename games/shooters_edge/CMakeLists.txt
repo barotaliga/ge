@@ -163,7 +163,7 @@ endif()
 # page's canvas, a demo played from the hub's archive; `shooters_edge_viewer.js` and `.wasm` in
 # the web build's `shooters_edge_viewer/`, the folder a hub's --viewer=<dir> serves.
 if(TARGET shooters_edge_client_gpu)
-  ge_add_web_viewer(shooters_edge SOURCES web/viewer.cpp LIBS shooters_edge_client_gpu)
+  ge_add_web_viewer(shooters_edge SOURCES web/viewer.cpp LIBS shooters_edge_client_gpu ge_tv)
 endif()
 if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
   add_executable(shooters_edge client/main.cpp client/window_cvars.cpp client/bot_view.cpp)

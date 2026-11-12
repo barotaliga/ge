@@ -280,7 +280,7 @@ TEST(classic_game_each_game_s_names_for_the_server_s_settings) {
   // Every game name is a synonym, none a setting of its own: the two never disagree.
   for (const ge::console::Synonym& n : con.cvars().synonyms())
     CHECK_MSG(n.target != nullptr && n.target->name != n.name, n.name);
-  CHECK(con.cvars().synonyms().size() == 32);
+  CHECK(con.cvars().synonyms().size() == 38);
   Server s;  // a classic map leaves the sequel's dmflags alone
   CHECK_MSG(server_open(s, se::classic_game(), c, nullptr, nullptr, error), error);
 }
@@ -295,12 +295,32 @@ TEST(classic_game_the_server_s_place_is_in_its_info) {
   ServerCfg cfg;
   std::string error;
   CHECK_MSG(server_configure(con,
-                             {"--map=arena", "+set", "countrycode", "se", "+set", "sv_city", "Lund",
-                              "+set", "coords", "55.7,13.2", "+set", "hostport",
-                              "edge.example:27500", "+set", "watervis", "1"},
+                             {"--map=arena",
+                              "+set",
+                              "countrycode",
+                              "se",
+                              "+set",
+                              "sv_city",
+                              "Lund",
+                              "+set",
+                              "coords",
+                              "55.7,13.2",
+                              "+set",
+                              "hostport",
+                              "edge.example:27500",
+                              "+set",
+                              "watervis",
+                              "1",
+                              "+set",
+                              "sv_safestrafe",
+                              "2",
+                              "+set",
+                              "sv_antilag_no_pred",
+                              "1"},
                              c, cfg, se::classic_game(), error),
             error);
   CHECK(c.country == "se" && c.city == "Lund" && c.public_addr == "edge.example:27500");
+  CHECK(c.rules["sv_antilagexact"] == "1");  // by its classic name
   Session r;
   run_session(r, c, 400);
   const std::string& info = r.client.serverinfo;
@@ -309,6 +329,7 @@ TEST(classic_game_the_server_s_place_is_in_its_info) {
   CHECK_MSG(info.find("\\coords\\55.7,13.2") != std::string::npos, info);
   CHECK_MSG(info.find("\\hostport\\edge.example:27500") != std::string::npos, info);
   CHECK_MSG(info.find("\\watervis\\1") != std::string::npos, info);
+  CHECK_MSG(info.find("\\sv_safestrafe\\2") != std::string::npos, info);  // the client predicts
 }
 
 // The slots and the pings: a player joining a full server watches from a spectator slot; the

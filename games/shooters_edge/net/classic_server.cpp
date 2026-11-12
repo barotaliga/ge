@@ -29,6 +29,24 @@ namespace shooters_edge::net {
 
 namespace pg = ge::progs;
 
+int64_t classic_unix_time(const ClassicServer& s) {
+  return s.cfg.unix_time != nullptr ? s.cfg.unix_time() : 0;
+}
+
+int16_t safe_strafe(StrafeGuard& g, int16_t side, int n) {
+  const int8_t dir = side > 0 ? 1 : side < 0 ? -1 : 0;
+  if (g.force == 0 && dir != 0 && g.dir != 0 && dir != g.dir && g.zeros < n) g.force = n - g.zeros;
+  if (dir != 0) g.dir = dir;
+  if (g.force > 0) {
+    g.force--;
+    if (g.zeros < n) g.zeros++;
+    return 0;
+  }
+  g.zeros = dir == 0 ? g.zeros + 1 : 0;
+  if (g.zeros > n) g.zeros = n;
+  return side;
+}
+
 namespace {
 
 bool same_host(const gn::Address& a, const gn::Address& b) {
@@ -114,6 +132,10 @@ int rate_of(const ClassicServer& s, const std::string& info) {
 }
 
 void handle_connect(ClassicServer& s, const gn::Address& from, const std::string& text) {
+  if (gs::ban_refuses(s.bans, s.cfg.ban_mode, from, classic_unix_time(s))) {
+    reject(s, from, "You are banned from this server.");
+    return;
+  }
   pg::Words w;
   pg::tokenize_words(text.substr(0, text.find('\n')).c_str(), w);
   const int version = std::atoi(pg::word(w, 1));
@@ -282,6 +304,23 @@ void handle_oob(ClassicServer& s, const gn::Address& from, const uint8_t* data, 
   // `ip`, `log` and the server extras are not answered.
 }
 
+// The packet's commands the loop will run (the lost ones' copies first, as it runs them) through
+// the safe strafe; the two it ran last packet stay as guarded, so the copies agree.
+void guard_strafes(int n, StrafeGuard& g, sh::Packet& p) {
+  const uint32_t lost = g.seq == 0 ? 0 : p.sequence - g.seq - 1;
+  if (lost == 0 && g.seq != 0) {
+    p.cmds[0] = g.last[0];
+    p.cmds[1] = g.last[1];
+  } else {
+    if (lost > 1) p.cmds[0].side = safe_strafe(g, p.cmds[0].side, n);
+    if (lost > 0) p.cmds[1].side = safe_strafe(g, p.cmds[1].side, n);
+  }
+  p.cmds[2].side = safe_strafe(g, p.cmds[2].side, n);
+  g.seq = p.sequence;
+  g.last[0] = p.cmds[1];
+  g.last[1] = p.cmds[2];
+}
+
 // A move: the checksum's verdict, then the loop's packet.
 void read_move(ClassicServer& s, int slot, const ClcMsg& m, const uint8_t* payload, bool& moved) {
   ClassicClient& c = s.clients[slot];
@@ -305,6 +344,7 @@ void read_move(ClassicServer& s, int slot, const ClcMsg& m, const uint8_t* paylo
   p.client = slot;
   p.sequence = c.ch.incoming_sequence;
   for (int i = 0; i < 3; i++) p.cmds[i] = m.cmds[i];
+  if (s.cfg.safe_strafe > 0 && !c.spectator) guard_strafes(s.cfg.safe_strafe, c.strafe, p);
   s.packets.push_back(p);
 }
 
@@ -327,9 +367,12 @@ void relay_voice(ClassicServer& s, int slot, const ClcMsg& m) {
   const std::string team = info_get(c.userinfo, "team");
   for (int j = 0; j < sh::kMaxClients && !w.overflow; j++) {
     ClassicClient& d = s.clients[j];
-    if (j == slot || d.state != ConnState::spawned || !d.ext.has(ExtFamily::x2, kX2Voice)) continue;
+    if ((j == slot && !s.cfg.voice_echo) || d.state != ConnState::spawned ||
+        !d.ext.has(ExtFamily::x2, kX2Voice))
+      continue;
     // By team: his team-mates; with no team (a free-for-all), the others with none.
-    if (s.cfg.voice_route == VoiceRoute::team && info_get(d.userinfo, "team") != team) continue;
+    if (s.cfg.voice_route == VoiceRoute::team && info_get(d.userinfo, "team") != team && j != slot)
+      continue;
     if (d.local) {  // the listen server's own player: handed over, no packet carries it
       if (s.local_voice == nullptr) continue;
       s.local_voice(s.local_ctx, j, v);
@@ -421,8 +464,9 @@ void lag_rewind(void* ctx, int shooter, bool begin) {
   const ServerFrame& f = sc.frames[sc.ch.incoming_acknowledged & 63];
   const double acked = f.sequence == sc.ch.incoming_acknowledged ? f.server_time : s.game->sv.time;
   const std::string maxfps = info_get(s.serverinfo, "maxfps");
-  const double target = antilag_target(
-      acked, sc.ping_s, maxfps.empty() ? 77 : std::atoi(maxfps.c_str()), s.game->sv.time);
+  const double target =
+      antilag_target(acked, sc.ping_s, maxfps.empty() ? 77 : std::atoi(maxfps.c_str()),
+                     s.game->sv.time, s.cfg.antilag_exact);
   s.lag_rewinds++;
   for (int j = 0; j < sh::kMaxClients; j++) {
     if (j == me || !s.clients[j].rules_active || s.clients[j].spectator) continue;

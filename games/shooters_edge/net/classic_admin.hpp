@@ -36,8 +36,13 @@
 // THE REMOTE CONSOLE (`classic_rcon`): `rcon <password> <line>` out of band; the line runs as the
 // server console's would (these words first, then the rules' console: `set`, `map`, a cvar) and
 // its answer returns as out-of-band prints. No password set: "Remote console is not offered by
-// this server."; a wrong one: "Bad rcon_password." (and counted); more than `kRconTriesPerSecond`
-// tries a second are not answered.
+// this server."; a wrong one: "Bad rcon_password." (and counted); more than `rcon_rate`
+// (sv_rconrate) tries a second are not answered.
+// THE HASHED PASSWORD: in place of the password a client may send 40 hex digits of the SHA-1 of
+// "rcon " + the password + the time's hex digits + " " + each word of the line and a space, then
+// the time's hex digits: at least 16, the 8 bytes of its Unix time least significant first. It is
+// taken when the time is within `rcon_time_s` of the server's clock; with `rcon_crypt`
+// (sv_rconcrypt) only it is taken. `rcon_digest_field` makes one.
 //
 // ge:summary The administrator's words on the classic endpoint: users, status, the easy jump
 // ge:summary granted per player, and the remote console
@@ -69,7 +74,6 @@ struct Remote;
 
 inline constexpr float kGrantShare =
     0.8f;  // `speedjump <id> on`: the share granted (the stock share)
-inline constexpr int kRconTriesPerSecond = 10;  // rcon tries answered a second, at most
 
 // The game's player aids: speedjump, aimhelp, rjump (above).
 std::span<const ge::server::AidKind> classic_aids();
@@ -99,6 +103,8 @@ bool classic_admin(ClassicServer& s, const std::string& line, std::string& out);
 // A remote console packet's text (`rcon <password> <line>`), from `from`: answered by out-of-band
 // prints.
 void classic_rcon(ClassicServer& s, const gn::Address& from, const std::string& text);
+// The hashed password field for `line` sent with `password` at Unix time `now` (above).
+std::string rcon_digest_field(const std::string& password, const std::string& line, int64_t now);
 
 // The window's `users`, `status`, `speedjump` and `rcon` (above), over the match `l` hosts or the
 // server `r` joined.
