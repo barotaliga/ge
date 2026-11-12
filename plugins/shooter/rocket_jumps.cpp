@@ -169,6 +169,10 @@ uint8_t keys_of_wish(Vec3f wish, float yaw, float least) {
   return k;
 }
 
+bool read_wish(const HopReading& hops, size_t i, const RocketJumpReadSettings& set, Vec3f& out) {
+  return wish_at(hops, i, set, out);
+}
+
 void read_rocket_jumps(std::span<const TrackPoint> track, const HopReading& hops,
                        std::span<const RocketShot> shots, const RocketJumpReadSettings& set,
                        std::vector<RocketJump>& out) {
