@@ -16,6 +16,9 @@
 // - **Held fire**: the machinegun alternates frames 4 and 5 while attack is held; the chaingun
 //   loops 15 to 21 (1, 2, then 3 bullets a step) and stops early at 14 on release; the
 //   hyperblaster loops 12 back to 6.
+// - **The hand grenade** steps 1 to 15: its fuse (3.2 s) is lit at 11, which holds while attack is
+//   held; let go, it is thrown at 400 + (3 − fuse left) × 400 / 3 units/s (400 to 800), and held
+//   to the fuse's end it explodes in the hand. Frame 15 waits for the fuse to end; 16 is ready.
 // - **Armour** saves the share of a blow (the energy share for energy hits), rounded up, at most
 //   its count; **knockback** pushes by 500 × knockback / mass (1600 when a player hits himself).
 //
@@ -33,7 +36,8 @@
 
 namespace shooters_edge::server {
 
-// The weapons a player can hold, in the order a number key picks them (1 the blaster).
+// The weapons a player can hold, in the order a number key picks them (1 the blaster); the hand
+// grenade, last, is chosen by `use Grenades`.
 enum class SqWeapon : uint8_t {
   blaster,
   shotgun,
@@ -45,11 +49,13 @@ enum class SqWeapon : uint8_t {
   hyperblaster,
   railgun,
   bfg,
+  hand_grenade,
 };
-inline constexpr int kSqWeaponCount = 10;
+inline constexpr int kSqWeaponCount = 11;
 
 // What one shot is.
-enum class SqShot : uint8_t { bolt, pellets, bullet, grenade, rocket, rail, bfg };
+enum class SqShot : uint8_t { bolt, pellets, bullet, grenade, rocket, rail, bfg, hand_grenade };
+inline constexpr int kSqShotKinds = 8;
 
 struct SqWeaponRow {
   const char* name;        // the name a player reads and `use` takes
@@ -92,7 +98,14 @@ inline constexpr SqWeaponRow kSqWeapons[kSqWeaponCount] = {
      SqAmmo::slugs, 1, 3, 18, 56, 61, 4, 4, SqShot::rail, 100, 150, 200, 0, 7},
     {"BFG10K", "weapon_bfg", "models/weapons/v_bfg/tris.md2", "weapons/bfg__f1y.wav", SqAmmo::cells,
      50, 8, 32, 55, 58, 17, 17, SqShot::bfg, 200, 500, 0, 8, 8},
+    {"Grenades", "ammo_grenades", "models/weapons/v_handgr/tris.md2", "weapons/hgrent1a.wav",
+     SqAmmo::grenades, 1, 0, 15, 48, 48, 11, 12, SqShot::hand_grenade, 125, 125, 0, 8, 8},
 };
+
+// The hand grenade's fuse, s, lit at frame 11; its throw's speed runs from the least (let go at
+// once) to the most (held 3 s), units/s.
+inline constexpr double kSqGrenadeFuse = 3.2;
+inline constexpr float kSqThrowLeast = 400, kSqThrowMost = 800;
 
 // The weapon `item` (an item row) gives, or -1 when it gives none.
 int sq_weapon_of_item(int item);
@@ -120,6 +133,7 @@ struct SqHand {
   int frame = 0;
   double click_at = -10;  // level time of the last no-ammo click
   int held_shots = 0;     // the machinegun's shots in a row (its climbing kick)
+  double fuse_at = 0;     // the hand grenade's: level time its fuse ends; 0 not lit
 };
 
 // What a step asks of the runner.
@@ -127,6 +141,11 @@ struct SqStep {
   int shots = 0;         // shots of the hand's weapon to make this step (ammo already taken)
   bool click = false;    // the no-ammo click
   bool changed = false;  // the weapon in hand changed (its view model)
+  // The hand grenade's: its fuse lit (the ticking), and a shot's throw speed and fuse left (a shot
+  // with no speed is the grenade held to the end of its fuse: it explodes in the hand).
+  bool lit = false;
+  float throw_speed = 0;
+  double fuse_left = 0;
 };
 
 // Steps the hand once (`attack` held this frame, `now` the level time); ammo is taken from `body`

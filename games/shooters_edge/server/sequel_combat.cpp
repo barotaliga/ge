@@ -67,6 +67,39 @@ int fire_frame(SqHand& h, const SqBody& b, bool attack, bool infinite) {
   }
 }
 
+// The hand grenade's step through 1..15 (sequel_combat.hpp states it); ammo taken at the throw.
+SqStep grenade_step(SqHand& h, SqBody& body, bool attack, double now, bool infinite) {
+  SqStep out;
+  constexpr double kEps = 1e-6;
+  if (h.frame < 11 || (h.frame > 11 && h.frame < 15)) {
+    h.frame++;
+    return out;
+  }
+  if (h.frame == 15) {  // waits for the fuse to end
+    if (now + kEps >= h.fuse_at) {
+      h.fuse_at = 0;
+      h.state = SqHandState::ready;
+      h.frame = 16;
+    }
+    return out;
+  }
+  if (h.fuse_at == 0) {
+    h.fuse_at = now + kSqGrenadeFuse;
+    out.lit = true;
+  }
+  const bool spent = now + kEps >= h.fuse_at;
+  if (attack && !spent) return out;  // cooked in the hand
+  out.shots = 1;
+  out.fuse_left = spent ? 0 : h.fuse_at - now;
+  out.throw_speed = spent ? 0
+                          : std::clamp(kSqThrowLeast + float(3 - out.fuse_left) *
+                                                           (kSqThrowMost - kSqThrowLeast) / 3,
+                                       kSqThrowLeast, kSqThrowMost);
+  if (!infinite) body.ammo[static_cast<int>(SqAmmo::grenades)] -= 1;
+  h.frame = 12;
+  return out;
+}
+
 }  // namespace
 
 int sq_weapon_of_item(int item) {
@@ -94,6 +127,8 @@ bool sq_holds(const SqBody& body, int w) {
   if (w < 0 || w >= kSqWeaponCount) return false;
   if (kSqWeapons[w].item == nullptr) return body.blaster;
   const int item = sq_item(kSqWeapons[w].item);
+  if (item >= 0 && kSqItems[item].kind == SqKind::ammo)  // the hand grenade: held while stocked
+    return ammo_of(body, kSqItems[item].ammo) > 0;
   return item >= 0 && body.counts[item] > 0;
 }
 
@@ -166,6 +201,8 @@ SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infin
       h.held_shots = 0;
       [[fallthrough]];
     case SqHandState::firing:
+      if (h.weapon == int(SqWeapon::hand_grenade))
+        return grenade_step(h, body, attack, now, infinite);
       if (h.frame > r.last_fire) {
         h.state = SqHandState::ready;
         return out;
