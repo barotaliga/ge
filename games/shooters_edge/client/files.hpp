@@ -35,11 +35,12 @@ struct SearchPath {
   ge::vfs::SearchPath vfs;  // every source mounted, the last winning
 };
 
-// The base folder `<basedir>/<the profile's base folder>` and, when `game` names another, the mod
-// folder `<basedir>/<game>` over it. False with the reason and the next step when the game folder
-// is missing or an archive does not read.
-bool open_game_dir(const std::string& basedir, const std::string& game, SearchPath& out,
-                   std::string& error);
+// The base folder `<basedir>/<the content profile's base folder>` and, when `game` names another,
+// the mod folder `<basedir>/<game>` over it. False with the reason and the next step when the game
+// folder is missing or an archive does not read.
+bool open_game_dir(
+    const std::string& basedir, const std::string& game, SearchPath& out, std::string& error,
+    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
 
 // Adds an archive held in memory (a pack or a zip: a test's, a lab's or a stand-in), searched
 // before the ones added earlier.
@@ -50,6 +51,13 @@ bool add_archive(SearchPath& path, const std::string& name, std::vector<uint8_t>
 // `store` and viewed, or a view into its pack. Empty when no place has it.
 std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name,
                                    std::vector<uint8_t>& store);
+
+// The game's palette (768 bytes) from its files, by the content row's palette file
+// (`gfx/palette.lmp`, or a PCX picture's palette: classicenhance/profile.hpp's `palette_of`),
+// viewing `store` or a pack. Empty when the files hold none.
+std::span<const uint8_t> game_palette(
+    const SearchPath& path, std::vector<uint8_t>& store,
+    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
 
 // The maps the search path holds (the content row's maps: `maps/<name>.bsp` for the first game),
 // loose or in an archive, by name, the row's start map first and the rest in order.

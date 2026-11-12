@@ -67,8 +67,10 @@ struct Profile {
   AssetKind sprites;   // the sprites
   AssetKind pictures;  // the loose 2D pictures
   // The named files.
-  std::string_view palette;    // 768 bytes: 256 RGB triples
-  std::string_view wad;        // the picture wad (the status bar's pictures, the font sheet)
+  // 768 bytes of 256 RGB triples, or a PCX picture whose palette (its last 768 bytes) is the
+  // game's: `palette_of` reads either.
+  std::string_view palette;
+  std::string_view wad;        // the picture wad (the status bar's pictures, the font sheet); ""
   std::string_view start_map;  // the map a new game starts on, by name
   std::string_view full_game;  // present only in the full game's packs
 };
@@ -95,6 +97,27 @@ inline constexpr Profile kProfiles[] = {
         .start_map = "start",
         .full_game = "gfx/pop.lmp",
     },
+    {
+        // The sequel: its maps keep their textures in wall texture files (`textures/*.wal`,
+        // plugins/brush/wal.hpp), its models are the second triangle-model family, its pictures
+        // are PCX files, and its palette is the one at the end of a PCX picture.
+        .id = "sequel",
+        .what = "the classic game's sequel",
+        .base_dir = "baseq2",
+        .multiplayer_dir = "",
+        .pack_stem = "pak",
+        .pack_ext = ".pak",
+        .zip_ext = ".pk3",
+        .maps = {"maps/", ".bsp"},
+        .sounds = {"sound/", ".wav"},
+        .models = {"models/", ".md2"},
+        .sprites = {"sprites/", ".sp2"},
+        .pictures = {"pics/", ".pcx"},
+        .palette = "pics/colormap.pcx",
+        .wad = "",
+        .start_map = "base1",
+        .full_game = "maps/base1.bsp",
+    },
 };
 
 // The first row: the profile used when none is named.
@@ -120,6 +143,10 @@ std::string asset_path(const AssetKind& kind, std::string_view name);
 
 // The entries of `pak` of `kind`, sorted by path.
 std::vector<const vfs::PakEntry*> assets_of(const vfs::Pak& pak, const AssetKind& kind);
+// The 768 bytes of the palette in `file`, the profile's palette file's bytes: the whole file, or a
+// PCX picture's trailing palette (behind its 0x0C marker). Empty when it holds none.
+std::span<const uint8_t> palette_of(const Profile& p, std::span<const uint8_t> file);
+
 // The profile's palette from the pack `bytes` (its directory `pak`); false with the reason when
 // the pack has none of 768 bytes.
 bool read_palette(const Profile& p, const vfs::Pak& pak, std::span<const uint8_t> bytes,

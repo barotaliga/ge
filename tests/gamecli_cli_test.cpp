@@ -279,10 +279,13 @@ TEST(demos_pack_and_unpack_a_replay_file) {
   CHECK(run({"demos", "pack", "final"}, out, root) == 1);  // final.ger is already there
   fs::rename(root / "id1" / "final.mvd", root / "id1" / "kept.mvd");
   CHECK_MSG(run({"demos", "unpack", "final", "--json"}, out, root) == 0, out);
-  std::ifstream in(root / "id1" / "final.mvd", std::ios::binary);
-  const std::vector<uint8_t> back((std::istreambuf_iterator<char>(in)),
-                                  std::istreambuf_iterator<char>());
-  CHECK(back == rec);
+  {
+    // Closed before the folder is removed: Windows refuses to delete a file that is open.
+    std::ifstream in(root / "id1" / "final.mvd", std::ios::binary);
+    const std::vector<uint8_t> back((std::istreambuf_iterator<char>(in)),
+                                    std::istreambuf_iterator<char>());
+    CHECK(back == rec);
+  }
   CHECK(run({"demos", "unpack", "kept"}, out, root) == 1);  // not a replay file
   fs::remove_all(root);
 }

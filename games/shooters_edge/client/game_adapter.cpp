@@ -9,8 +9,9 @@
 
 namespace shooters_edge::client {
 
-const GameAdapter& adapter_of(const profiles::GameProfile&) {
-  return classic_adapter();  // one game today; a second row's adapter is chosen here by its id
+const GameAdapter& adapter_of(const profiles::GameProfile& game) {
+  if (game.id == sequel_adapter().game->id) return sequel_adapter();
+  return classic_adapter();
 }
 
 bool runs_form(profiles::ProgramForm form) { return form == profiles::ProgramForm::qc; }
