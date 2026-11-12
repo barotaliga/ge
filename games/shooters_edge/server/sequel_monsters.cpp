@@ -20,6 +20,7 @@
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_monster_kinds.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/sequel_targets.hpp"
 
 namespace shooters_edge::server {
 
@@ -222,7 +223,7 @@ void fall(SequelServer& s, SequelMonster& m) {
     m.velocity = {};
     return;
   }
-  m.velocity.z -= static_cast<float>(s.cvars.find("sv_gravity")->number) * kStep;
+  m.velocity.z -= static_cast<float>(s.cvars.find("sv_gravity")->number) * m.gravity * kStep;
   const sh::SequelTrace t = sweep(s, m, e.origin, e.origin + m.velocity * kStep);
   if (m.leaping && !m.struck && t.fraction < 1 && t.entity >= 1 && t.entity <= sh::kMaxClients &&
       sh::length(m.velocity) > 400) {  // the leap lands on someone
@@ -734,6 +735,7 @@ bool tend(SequelServer& s, SequelMonster& m) {
 void think(SequelServer& s, SequelMonster& m) {
   SequelEntity& e = body(s, m);
   const Kind& k = kind(m);
+  if (!k.flies && !k.swims) targets_monster_touch(s, m);
   fall(s, m);
   if (m.leaping) return;                                  // in the air
   if (m.enemy >= 0 && !hunted(s, m.enemy)) m.enemy = -1;  // dead or gone
