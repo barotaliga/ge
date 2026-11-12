@@ -343,6 +343,10 @@ bool land_walled(const MoveWorld& world, Vec3f o, Vec3f v, float dt, float horiz
 bool circling(Pilot& p, const PilotSense& s, float vh, float speed, float err, float dt, int msec,
               Want& w) {
   if (p.circle_s < 0 || p.jump_pressed) return false;
+  if (p.no_circle && p.gap_k < 0) {
+    p.circle_s = -1;  // (`circleaim`: a view not the hand's own curves nothing: jump now)
+    return false;
+  }
   MoveSettings move;
   move.maxspeed = s.maxspeed;
   if (p.gap_k >= 0) {
