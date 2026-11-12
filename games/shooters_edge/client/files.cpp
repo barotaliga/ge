@@ -109,6 +109,40 @@ std::span<const uint8_t> map_lit(const SearchPath& path, std::string_view map,
   return {};
 }
 
+bool sky_box_files(const SearchPath& path, std::string_view name, SkyBoxFiles* out,
+                   std::string* missing) {
+  static constexpr const char* kSuffixes[6] = {"rt", "bk", "lf", "ft", "up", "dn"};
+  if (name.empty() || name.find_first_of("./\\") != std::string_view::npos) {
+    if (missing != nullptr) *missing = kSuffixes[0];
+    return false;
+  }
+  const std::string n(name);
+  for (size_t i = 0; i < 6; ++i) {
+    const std::string sfx = kSuffixes[i];
+    bool found = false;
+    for (const std::string& base :
+         {"env/" + n + sfx, "gfx/env/" + n + sfx, "env/" + n + "_" + sfx,
+          "gfx/env/" + n + "_" + sfx}) {
+      for (const char* ext : {".tga", ".png", ".jpg", ".pcx"}) {
+        std::vector<uint8_t> store;
+        const std::string at = base + ext;
+        const std::span<const uint8_t> bytes = find_file(path, at, store);
+        if (bytes.empty()) continue;
+        out->bytes[i].assign(bytes.begin(), bytes.end());
+        out->paths[i] = at;
+        found = true;
+        break;
+      }
+      if (found) break;
+    }
+    if (!found) {
+      if (missing != nullptr) *missing = sfx;
+      return false;
+    }
+  }
+  return true;
+}
+
 std::vector<std::string> map_names(const SearchPath& path,
                                    const ge::classicenhance::Profile& content) {
   const ge::classicenhance::AssetKind& maps = content.maps;

@@ -13,15 +13,17 @@
 // Without `--pak` the map is the lab's own arena (the brush plugin's sample fixture with a light
 // that flickers and a wall that animates), so CI needs no game data, and the arena again with a
 // `.lit` file of its own (`arena-lit`: its light tinted amber to blue across the map) for the
-// map's coloured light; with `--pak=<file>` and `--maps=<a>,<b>` the maps come out of a pack
+// map's coloured light, and with a sky box of its own (`arena-sky`, six pictures made here); with `--pak=<file>` and `--maps=<a>,<b>` the maps come out of a pack
 // (each with the pack's `maps/<name>.lit` when it holds one), for private pictures only.
 // `--cvars="r_lava_glow 0"` sets the picture's r_ cvars (look.hpp) as the console would.
 //
 // ge:summary Lab: Shooter's Edge's world in both looks, its light styles, effects, blends and cull
 // ge:keywords lab se-world shooter world classic modern look light-style animated-texture effects
 // ge:keywords explosion trail dynamic-light screen-blend cull pvs hi-z palette lit coloured-light
+// ge:keywords sky-box skybox
 // ge:skill shooter render labs
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -32,6 +34,7 @@
 #include "brush/app/bsp_draw.hpp"
 #include "brush/app/bsp_sky.hpp"
 #include "brush/app/draw_data.hpp"
+#include "brush/app/sky_box.hpp"
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "console/console.hpp"
@@ -142,6 +145,54 @@ std::vector<uint8_t> arena_lit(const br::Map& m) {
 }
 
 // A named view a room: from near its low corner, looking across it to the far one.
+// The arena's own sky box (`arena-sky`), the six pictures a map's `sky` key names, made here: a
+// sky darkening from a pale horizon to a deep zenith over a ring of peaks, each side's sky and
+// peaks tinted its own colour (rt red, bk green, lf blue, ft yellow) so a picture's place and turn
+// are seen; a sun in the up picture toward its top edge (the map's -x); the down picture grey.
+std::array<ge::assets::Image, 6> arena_sky_box(int n) {
+  std::array<ge::assets::Image, 6> set;
+  const double tint[4][3] = {{1.0, 0.35, 0.3}, {0.35, 0.9, 0.4}, {0.35, 0.5, 1.0}, {1.0, 0.85, 0.3}};
+  const double zenith[3] = {0.12, 0.24, 0.62}, horizon[3] = {0.82, 0.78, 0.7};
+  const auto put = [](ge::assets::Image& p, int x, int y, const double c[3]) {
+    uint8_t* t = &p.rgba[(size_t(y) * size_t(p.width) + size_t(x)) * 4];
+    for (int k = 0; k < 3; ++k) t[k] = uint8_t(std::clamp(c[k], 0.0, 1.0) * 255.0 + 0.5);
+    t[3] = 255;
+  };
+  for (int f = 0; f < 6; ++f) {
+    ge::assets::Image& p = set[size_t(f)];
+    p.width = p.height = n;
+    p.rgba.assign(size_t(n) * size_t(n) * 4, 0);
+    for (int y = 0; y < n; ++y) {
+      for (int x = 0; x < n; ++x) {
+        const double u = (x + 0.5) / n, v = (y + 0.5) / n;
+        double c[3];
+        if (f < 4) {
+          // How far up the sky this row is: 0 at the horizon (the middle row), 1 at the top.
+          const double rise = std::clamp((0.5 - v) * 2.0, 0.0, 1.0);
+          for (int k = 0; k < 3; ++k) {
+            c[k] = (horizon[k] + (zenith[k] - horizon[k]) * rise) * (0.6 + 0.4 * tint[f][k]);
+          }
+          const double peak = 0.5 - 0.06 -
+                              0.2 * (0.5 + 0.5 * ge::core::libm::sin(u * 6.2832 * 3 + f)) *
+                                  (0.6 + 0.4 * ge::core::libm::sin(u * 6.2832 * 7 + 2 * f));
+          if (v > peak) {
+            for (int k = 0; k < 3; ++k) c[k] = tint[f][k] * (v > 0.5 ? 0.25 : 0.55);
+          }
+        } else if (f == 4) {
+          // Straight up: the zenith, a sun a third of the way down from the top edge.
+          for (int k = 0; k < 3; ++k) c[k] = zenith[k];
+          const double dx = u - 0.5, dy = v - 0.32;
+          if (dx * dx + dy * dy < 0.004) c[0] = c[1] = c[2] = 1.0;
+        } else {
+          c[0] = c[1] = c[2] = 0.2;
+        }
+        put(p, x, y, c);
+      }
+    }
+  }
+  return set;
+}
+
 std::vector<View> room_views(const br::Fixture& f, const std::string& map) {
   std::vector<View> out;
   for (const br::FixtureRoom& r : f.rooms) {
@@ -330,7 +381,8 @@ void run(gl::Lab& lab) {
     pack.files.push_back({"maps/arena.bsp", 0, size});
     pack.files.push_back({"maps/arena-lit.bsp", 0, size});
     pack.files.push_back({"maps/arena-lit.lit", size, uint32_t(lit.size())});
-    for (const char* name : {"arena", "arena-lit"}) {
+    pack.files.push_back({"maps/arena-sky.bsp", 0, size});
+    for (const char* name : {"arena", "arena-lit", "arena-sky"}) {
       paths.push_back("maps/" + std::string(name) + ".bsp");
       names.push_back(name);
     }
@@ -369,7 +421,32 @@ void run(gl::Lab& lab) {
     lab.metric(names[i] + ".animated-frames", double(s.frames.size()), "count");
     m->sky = ba::pick_sky(s.sky_colours, names[i]);
     if (ba::dark_sky(m->sky)) ba::night_over(m->sky, names[i]);  // the game's own hour
-    if (own && names[i] == "arena-lit") {
+    if (own && names[i] == "arena-sky") {
+      // Its own sky box (arena_sky_box), seen up through the vault's open roof.
+      std::string why;
+      const bool built = ba::build_sky_box(arena_sky_box(128), &m->scene, &why);
+      if (!built) lab.note("arena-sky: " + why);
+      lab.metric("arena-sky.sky-box-face", double(m->scene.sky_box_face), "texels");
+      const std::vector<View> rooms = room_views(fixture, names[i]);
+      for (const View& r : rooms) {
+        if (r.id != "arena-sky-vault") continue;
+        View up = sky_view(m->scene, r);
+        up.id = "arena-sky-up";
+        up.pitch = 1.35;
+        up.caption =
+            "Nearly straight up through the vault's open roof at the map's own sky box: the sun "
+            "in the up picture toward the map's -x, each side's sky in its own tint (rt red, bk "
+            "green, lf blue, ft yellow). The classic look draws the box; the modern draws our sky.";
+        views.push_back(up);
+        View across = r;
+        across.id = "arena-sky-across";
+        across.title = "arena-sky: the vault's roof";
+        across.pitch = 0.55;
+        across.caption = "Across the vault and up at its roof: the box's sides meet the up "
+                         "picture with no seam.";
+        views.push_back(across);
+      }
+    } else if (own && names[i] == "arena-lit") {
       // Its first two rooms, beside the arena's own grey light in the same rooms.
       const std::vector<View> rooms = room_views(fixture, names[i]);
       for (size_t r = 0; r < rooms.size() && r < 2; ++r) {

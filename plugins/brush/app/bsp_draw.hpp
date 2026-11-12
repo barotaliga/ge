@@ -274,6 +274,8 @@ struct GpuBsp {
   // The moving casters under the sun: an orthographic map of them alone round the eye, a tile of
   // their atlas (info.z 1 when drawn this frame).
   GpuJob sun_caster;
+  // The map's sky box (Scene::sky_box): on (1), a face's texel in the atlas's uv (its inset).
+  float sky_box[4];
 };
 
 struct BspDraw {
@@ -284,6 +286,7 @@ struct BspDraw {
   wgpu::Texture atlas, light;
   wgpu::Texture surface;  // the textures' relief (Scene::surface), or a 1 x 1 flat stand-in
   wgpu::Texture cover;    // how solid each texel is (Scene::cover), or a 1 x 1 solid stand-in
+  wgpu::Texture sky_box;  // the map's sky box (Scene::sky_box), or a 1 x 1 stand-in unread
   // The scene's rebaked light (RGB9E5) and its direction (RGBA8), or 1 x 1 stand-ins.
   wgpu::Texture rebake_rgb, rebake_dir, rebake_bounce;
   wgpu::Buffer uniform, lights, jobs;
