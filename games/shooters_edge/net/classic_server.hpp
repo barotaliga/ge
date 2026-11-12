@@ -194,16 +194,16 @@ struct ClassicClient {
   int frags_told = 0;    // the frags every client was last sent
   gs::FloodGuard flood;  // its chat lines' times and its silence
   double colour_since = -1;  // the top colour's window (sv_colorkick): its start, s (-1 none)
-  int colour_changes = 0;    // changes in it
   double info_since = -1;    // the user info's window (sv_infoflood): its start, s (-1 none)
-  int info_changes = 0;      // changes in it
+  double hold_s = 0;         // the hold, 0..1 s, moved by 1 ms a packet toward the minimum ping
   // Its packets held back for the minimum ping (sv_minping): each with the time it is let in.
   struct Held {
     double at = 0;
     std::vector<uint8_t> bytes;
   };
   std::vector<Held> held;
-  double hold_s = 0;  // the hold, 0..1 s, moved by 1 ms a packet toward the minimum ping
+  int colour_changes = 0;  // top colour changes in its window
+  int info_changes = 0;    // user info changes in its window
 };
 
 struct ServerCounts {

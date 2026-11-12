@@ -388,6 +388,7 @@ TEST(classic_game_the_name_and_chat_guards) {
   }
   {
     std::vector<std::pair<int, std::string>> lines;
+    lines.reserve(8);
     for (int i = 0; i < 8; i++)
       lines.push_back({500 + i * 4, "setinfo topcolor " + std::to_string(i + 1)});
     Session r;
@@ -413,6 +414,7 @@ TEST(classic_game_the_name_and_chat_guards) {
     CHECK_MSG(c.rules["sv_infoflood"] == "3 10", c.rules["sv_infoflood"]);
     CHECK(c.rules["sv_defaultname"] == "guest");
     std::vector<std::pair<int, std::string>> lines;
+    lines.reserve(5);
     for (int i = 0; i < 5; i++)
       lines.push_back({500 + i * 4, "setinfo skin s" + std::to_string(i)});
     Session r;
