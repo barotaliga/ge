@@ -693,10 +693,42 @@ void vote_map_over(Game& g) {
 // The game moved onto the map `name` (`supplied`: a listen server's, read by its window): the
 // next map's server made, the endpoint moved onto it, the old one let go. A map that does not load
 // leaves the game on the one it was playing (`failed` says why, `error` too).
+// The sequel's rules outside deathmatch keep the campaign (the bodies carried, the help computer,
+// the cross-level bits: server/sequel_campaign.hpp) in their own server, so a level change starts
+// the next map on the same server rather than a new one; the players stay seated through it. A
+// lobby's game and a map without brushes make new rules as before.
+bool keeps_campaign(const Game& g, const cl::LoadedMap& next) {
+  if (g.room || next.spec.brushes == nullptr) return false;
+  const sv::SequelServer* sq = sv::sequel_of(g.rules);
+  return sq != nullptr && !sq->cvars.find("deathmatch")->on();
+}
+
+bool next_level_on_same_rules(Game& g, std::shared_ptr<cl::LoadedMap> map, std::string& error) {
+  if (!g.rules.start(map->spec, error)) {
+    error = "the map " + map->name + " did not load: " + error;
+    g.failed = error;
+    return false;
+  }
+  if (map->from_file) sv::use_map_sets(*g.rules, map->bsp);
+  if (g.classic && !classic_change(*g.classic, g.rules, error)) {
+    g.failed = error;
+    return false;
+  }
+  g.map = std::move(map);
+  g.changes++;
+  g.failed.clear();
+  host_bind(g);
+  return true;
+}
+
 bool move_to(Game& g, const std::string& name, bool match_over, std::string& error,
              std::shared_ptr<cl::LoadedMap> supplied = nullptr) {
   // A vote lasts the map: put back before the next map is made (a restart keeps it).
   if (match_over) vote_map_over(g);
+  if (supplied && keeps_campaign(g, *supplied))
+    return next_level_on_same_rules(g, std::move(supplied), error);
+  if (!supplied && g.map && g.map->name == name && keeps_campaign(g, *g.map))
+    return next_level_on_same_rules(g, g.map, error);  // a restart: as each player came in
   std::shared_ptr<cl::LoadedMap> map;
   sv::RulesRunner next;
   if (!open_map(g, name, map, next, error, std::move(supplied))) {

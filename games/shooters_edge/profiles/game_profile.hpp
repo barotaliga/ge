@@ -95,6 +95,10 @@ struct GameProfile {
   // The number keys' weapon groups with cl_weapongroups 1 (client/weapon_groups.hpp): key 1's
   // first, each the game's weapon keys best first ("7 6").
   std::span<const std::string_view> weapon_groups;
+  // Its maps carry their own single-player rules (the sequel's runner keeps the campaign: the
+  // body carried, the help computer): NEW GAME and `coopgame` start them with `deathmatch` 0, and
+  // the runner is kept from level to level, when no single-player program is found.
+  bool rules_campaign = false;
 };
 
 inline constexpr ProgramFile kClassicMultiplayer[] = {{.name = "qwprogs.dat"},
@@ -149,7 +153,8 @@ inline constexpr GameProfile kGameProfiles[] = {
      .arsenal = {},
      .words = {},
      .episode_maps = {},
-     .weapon_groups = kSequelGroups},
+     .weapon_groups = kSequelGroups,
+     .rules_campaign = true},
 };
 
 // The first row: the classic game, the one every reader uses until a choice of game is made.
