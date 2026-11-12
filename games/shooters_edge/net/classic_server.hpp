@@ -95,6 +95,9 @@ struct ServerConfig {
   std::string gamedir = "edge";  // the game directory serverdata names
   std::string password, spectator_password;
   std::string rcon_password;  // the remote console's (classic_admin.hpp; empty: none offered)
+  // Keys the server info carries beside the rules' (the place, the public address, the owner):
+  // browsers list them; an empty value is left out.
+  std::vector<std::pair<std::string, std::string>> info;
   bool verify_move_checksum = true;  // false: moves are accepted unchecked (and counted)
   int maxrate = 0;                   // sv_maxrate: a client's rate cap, bytes/s (0: none)
   int maxfps = 77;                   // maxfps: the moves a second clients are told they may send
@@ -104,6 +107,16 @@ struct ServerConfig {
   double timeout_s = 65;  // sv_timeout
   gs::FloodRule flood;    // sv_floodprot
   std::string flood_msg;  // sv_floodprotmsg: what a flooder is told ("": the silence)
+  // THE NAMES AND THE CHAT: a client whose name is empty or holds a character a line could be
+  // faked with gets `default_name`; with `unfake` a public `say` has its carriage returns turned
+  // into '#' so no line can pass for another player's; `colour_kick` drops a client changing its
+  // top colour more than 6 times in 8 s; a client changing its user info more than
+  // `info_flood_count` times in `info_flood_s` seconds is dropped (either 0: no limit).
+  std::string default_name = "player";  // sv_defaultname
+  bool unfake = true;                   // sv_unfake
+  bool colour_kick = true;              // sv_colorkick
+  int info_flood_count = 300;           // sv_infoflood's first word
+  double info_flood_s = 3;              // sv_infoflood's second word
   bool allow_download = true, allow_skins = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true, allow_other = false;
   std::vector<ServedFile> files;
@@ -115,6 +128,20 @@ struct ServerConfig {
   uint32_t seed = 1;  // the challenges' stream
   // Players at most, the game's local seats counted (0: the loop's slots): a coop game's eight.
   int most_players = 0;
+  // THE SLOTS AND THE PINGS (never a local seat). With `max_spectators` above 0, spectators have
+  // their own slots beside the players' `maxclients` (0: they take a player's free slot); a player
+  // joining a full server while a spectator slot is free is seated as a spectator by
+  // `full_spectate` (0 never, 1 unless the user info's `svf` has bit 2, 2 only if it has bit 1).
+  // A reconnect from a slot connected for less than `reconnect_wait_s` gets no answer. A player
+  // whose ping is above `max_ping_ms` on entering plays as a spectator; each player's packets are
+  // held back until its ping is at least `min_ping_ms`, which players may set themselves with
+  // `minping` before a match when `min_ping_cmd` allows (all 0: off).
+  int max_spectators = 0;       // sv_maxspectators
+  int full_spectate = 2;        // sv_fullspectate
+  double reconnect_wait_s = 0;  // sv_reconnectwait
+  int max_ping_ms = 0;          // sv_maxping
+  int min_ping_ms = 0;          // sv_minping
+  bool min_ping_cmd = true;     // sv_minpingcmd
 };
 
 enum class ConnState : uint8_t { free, connected, spawned };
@@ -167,6 +194,17 @@ struct ClassicClient {
   bool local = false;    // a seat the game plays in its own process (a bot): no address, no packets
   int frags_told = 0;    // the frags every client was last sent
   gs::FloodGuard flood;  // its chat lines' times and its silence
+  double colour_since = -1;  // the top colour's window (sv_colorkick): its start, s (-1 none)
+  double info_since = -1;    // the user info's window (sv_infoflood): its start, s (-1 none)
+  double hold_s = 0;         // the hold, 0..1 s, moved by 1 ms a packet toward the minimum ping
+  // Its packets held back for the minimum ping (sv_minping): each with the time it is let in.
+  struct Held {
+    double at = 0;
+    std::vector<uint8_t> bytes;
+  };
+  std::vector<Held> held;
+  int colour_changes = 0;  // top colour changes in its window
+  int info_changes = 0;    // user info changes in its window
 };
 
 struct ServerCounts {
@@ -210,6 +248,7 @@ struct ClassicServer {
   int statics_known = 0;                     // static entities routed so far
   double now = 0;                            // the network's time, s
   double last_ping_update = 0;
+  bool match_on = false;  // a match counts down or plays (the game's lobby): no `minping` then
   int64_t frames = 0;
   std::vector<sh::Packet> packets;
   std::vector<std::string> log;  // connects, rejects and drops, in order (the lab, the tests)

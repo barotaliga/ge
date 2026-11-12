@@ -9,6 +9,7 @@
 // ge:test tests/shooters_edge_classic_server_test.cpp
 #include "shooters_edge/net/classic_server.hpp"
 
+#include <algorithm>
 #include <charconv>
 #include <cstring>
 #include <iterator>
@@ -157,14 +158,49 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   info_remove(userinfo, "password");
   if (spectator) info_set(userinfo, "*spectator", "1");
 
-  // A reconnect from the same address and qport drops the old slot.
+  // A reconnect from the same address and qport drops the old slot, unless that slot connected
+  // too short a time ago (sv_reconnectwait): then the storm gets no answer at all.
   for (int i = 0; i < sh::kMaxClients; i++) {
     const ClassicClient& c = s.clients[i];
-    if (c.state != ConnState::free && same_host(c.address, from) &&
-        (c.ch.qport == qport || c.address.port == from.port))
-      classic_drop(s, i, "reconnected");
+    if (c.state == ConnState::free || c.local || !same_host(c.address, from) ||
+        (c.ch.qport != qport && c.address.port != from.port))
+      continue;
+    if (s.cfg.reconnect_wait_s > 0 && s.game->sv.time - c.connect_time < s.cfg.reconnect_wait_s) {
+      s.counts.rejects++;
+      s.log.push_back("reject " + gn::to_string(from) + ": reconnected too soon");
+      return;
+    }
+    classic_drop(s, i, "reconnected");
   }
   const int maxclients = s.game->sv.set.maxclients;
+  // Spectators in their own slots (sv_maxspectators): the players' and theirs counted apart.
+  if (s.cfg.max_spectators > 0) {
+    int players = 0, watchers = 0;
+    for (int i = 0; i < maxclients && i < sh::kMaxClients; i++) {
+      const ClassicClient& c = s.clients[i];
+      if (c.state != ConnState::free)
+        (c.spectator ? watchers : players)++;
+      else if (s.game->clients[i].active)
+        players++;
+    }
+    const int most = maxclients - s.cfg.max_spectators;
+    if (!spectator && players >= most) {
+      const int svf = std::atoi(info_get(userinfo, "svf").c_str());
+      const bool forced =
+          watchers < s.cfg.max_spectators && ((s.cfg.full_spectate == 1 && (svf & 2) == 0) ||
+                                              (s.cfg.full_spectate == 2 && (svf & 1) != 0));
+      if (!forced) {
+        reject(s, from, "server is full");
+        return;
+      }
+      send_oob_print(s, from, "server is full: connecting as spectator\n");
+      spectator = true;
+      info_set(userinfo, "*spectator", "1");
+    } else if (spectator && watchers >= s.cfg.max_spectators) {
+      reject(s, from, "server is full");
+      return;
+    }
+  }
   int slot = -1;
   for (int i = 0; i < maxclients && i < sh::kMaxClients; i++)
     if (s.clients[i].state == ConnState::free && !s.game->clients[i].active) {
@@ -207,7 +243,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   std::vector<std::string> taken;
   for (int i = 0; i < sh::kMaxClients; i++)
     if (i != slot && s.clients[i].state != ConnState::free) taken.push_back(s.clients[i].name);
-  c.name = unique_name(sanitize_name(info_get(userinfo, "name")), taken);
+  c.name = unique_name(sanitize_name(info_get(userinfo, "name"), s.cfg.default_name), taken);
   info_set(userinfo, "name", c.name);
   c.userinfo = userinfo;
   const std::string msg = info_get(userinfo, "msg");
@@ -322,6 +358,14 @@ void handle_packet(ClassicServer& s, int slot, const uint8_t* data, size_t size)
     c.ping_s = c.ping_samples == 0 ? ping : c.ping_s + (ping - c.ping_s) / 16.0;
     c.ping_samples++;
     acked.sent = -acked.sent;  // counted once
+  }
+  // The hold toward the minimum ping (sv_minping), 1 ms a packet; never for a spectator.
+  if (s.cfg.min_ping_ms > 0 && !c.spectator && !s.game->paused && c.ping_samples > 0) {
+    const double ms = c.ping_s * 1000;
+    if (ms < s.cfg.min_ping_ms) c.hold_s = std::min(1.0, c.hold_s + 0.001);
+    if (ms > s.cfg.min_ping_ms + 1) c.hold_s = std::max(0.0, c.hold_s - 0.001);
+  } else if (s.cfg.min_ping_ms <= 0 || c.spectator) {
+    c.hold_s = 0;
   }
   gn::Reader r = gn::make_reader(data, size);
   r.at = at;
@@ -528,6 +572,8 @@ bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error
   for (const auto& [k, v] : sh::changed_info(qc.sv.set))
     info_set(s.serverinfo, k, v, kServerInfoBytes);
   for (const auto& [k, v] : qc.serverinfo) info_set(s.serverinfo, k, v, kServerInfoBytes);
+  for (const auto& [k, v] : s.cfg.info)
+    if (!v.empty()) info_set(s.serverinfo, k, v, kServerInfoBytes);
   if (s.cfg.antilag) {
     qc.lag_rewind = &lag_rewind;
     qc.lag_ctx = &s;
@@ -823,7 +869,26 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
       slot = i;
       break;
     }
-    if (slot >= 0) handle_packet(s, slot, buf, size);
+    if (slot < 0) continue;
+    ClassicClient& c = s.clients[slot];
+    if (c.hold_s > 0 || !c.held.empty()) {  // held back for the minimum ping
+      c.held.push_back({s.now + c.hold_s, std::vector<uint8_t>(buf, buf + size)});
+      continue;
+    }
+    handle_packet(s, slot, buf, size);
+  }
+  for (int i = 0; i < sh::kMaxClients; i++) {  // the held packets whose time has come, in order
+    ClassicClient& c = s.clients[i];
+    size_t let = 0;
+    while (let < c.held.size() && c.held[let].at <= s.now) let++;
+    if (let == 0) continue;
+    std::vector<ClassicClient::Held> due(std::make_move_iterator(c.held.begin()),
+                                         std::make_move_iterator(c.held.begin() + let));
+    c.held.erase(c.held.begin(), c.held.begin() + static_cast<std::ptrdiff_t>(let));
+    for (const ClassicClient::Held& h : due) {
+      if (s.clients[i].state == ConnState::free) break;
+      handle_packet(s, i, h.bytes.data(), h.bytes.size());
+    }
   }
   for (const sh::Packet& p : s.local_moves)  // the game's own seats, after the network's
     if (p.client >= 0 && p.client < sh::kMaxClients && s.clients[p.client].local &&

@@ -78,6 +78,10 @@ struct ServerConfig {
   std::string visibility = "lan";    // sv_visibility: lan, invite or listed (net/hosting.hpp)
   std::string motd;                  // sv_motd: the message a player sees on joining
   std::string admin;                 // sv_admin: how to reach the server's owner
+  std::string country;               // sv_country: where the server is, a two-letter code ("se")
+  std::string city;                  // sv_city: its city, for browsers and the hub
+  std::string coords;                // sv_coords: "latitude,longitude", for maps of servers
+  std::string public_addr;           // sv_publicaddr: the "host:port" a browser should show
   std::string maprotation;           // sv_maprotation: the maps after the first, space-separated
   int32_t max_spectators = 0;        // sv_maxspectators: spectators beside the players
   std::string spectator_password;    // sv_spectatorpassword: watching takes it
@@ -123,10 +127,13 @@ struct ServerReplay {
 
 // A setting the game's own rules read (`fraglimit`, `timelimit`): a server cvar beside the core's,
 // set like them (every server.cfg layer, `+set`, the console; `--explain` shows where), and handed
-// to `create` in `ServerConfig::rules`. Its fallback is empty: unset leaves the game's own default.
+// to `create` in `ServerConfig::rules`. Its fallback is empty (unset leaves the game's own default)
+// unless the rule names one: a setting of several words wants one, so that a synonym for one word
+// (console/cvar.hpp) changes that word and keeps the others.
 struct GameRule {
   const char* name;
-  const char* help;  // what it does, with its unit
+  const char* help;                // what it does, with its unit
+  const char* fallback = nullptr;  // its default, when not empty
 };
 
 // A GAME'S OWN NAME for one of the core's settings (`ServerGame::names`): the name its configs,
