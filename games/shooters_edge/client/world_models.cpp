@@ -161,6 +161,21 @@ float entity_alpha(const Listen& l, int e) {
   return size_t(e) < x.size() && x[size_t(e)].has_alpha ? x[size_t(e)].alpha : 1.0f;
 }
 
+// Its size and tint: the mod's `scale` (0: whole) and `colormod` ('0 0 0': none), else the map's
+// `colormod` key.
+void entity_look(const Listen& l, int e, Placed& p) {
+  const float s = field_named(l, e, "scale");
+  if (s > 0) p.scale = s;
+  float c[3];
+  if (vector_field_named(l, e, "colormod", c) && (c[0] != 0 || c[1] != 0 || c[2] != 0)) {
+    for (int k = 0; k < 3; k++) p.colormod[k] = c[k] > 0 ? c[k] : 0;
+    return;
+  }
+  const std::vector<ge::progs::EntityExtras>& x = l.server->extras;
+  if (size_t(e) < x.size() && x[size_t(e)].has_colormod)
+    for (int k = 0; k < 3; k++) p.colormod[k] = x[size_t(e)].colormod[k];
+}
+
 }  // namespace
 
 void place_models(const Listen& l, std::vector<Placed>& out) {
@@ -180,6 +195,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
     p.skin = int(field_named(l, e, "skin"));
     p.effects = int(field_named(l, e, "effects"));
     p.alpha = entity_alpha(l, e);
+    entity_look(l, e, p);
     p.origin = ed.origin;
     p.angles = ed.angles;
     if (e <= sh::kMaxClients) {
@@ -198,6 +214,8 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
     p.frame = int(st.frame);
     p.skin = int(st.skin);
     p.alpha = st.extras.has_alpha ? st.extras.alpha : 1.0f;
+    if (st.extras.has_colormod)
+      for (int c = 0; c < 3; c++) p.colormod[c] = st.extras.colormod[c];
     p.origin = st.origin;
     p.angles = st.angles;
     out.push_back(p);
@@ -558,6 +576,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     g.now.frame_a = frame_a;
     g.now.frame_b = frame_b;
     g.now.blend = blend;
+    g.now.scale = p.scale;
     const auto last = m.last_pose.find(p.entity);
     g.last = last == m.last_pose.end() || p.warp.shown < 1 ? g.now : last->second;
     g.warp = p.warp;
@@ -589,8 +608,8 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       const double raw = lit.rgb[c];
       const double floor = std::sqrt(raw * raw + minlight * minlight);
       const float l = float((floor + dyn[c]) * brightness);
-      g.ambient[c] = kAmbientShare * l;
-      g.shade[c] = kShadeShare * l;
+      g.ambient[c] = kAmbientShare * l * p.colormod[c];  // the tint on its light, not its glow
+      g.shade[c] = kShadeShare * l * p.colormod[c];
       floor_lum += floor;
       dyn_lum += dyn[c];
     }
