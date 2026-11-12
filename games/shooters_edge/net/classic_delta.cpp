@@ -33,6 +33,7 @@ uint32_t number_bits(int number) {
 
 // The word, the more byte and the even-more byte for `bits` and the number.
 void write_flags(gn::Writer& w, int number, uint32_t bits) {
+  if (bits & 0xff000000u) bits |= kUYetMore;
   if (bits & 0xffff0000u) bits |= kUEvenMore;
   if (bits & 0xffu) bits |= kUMoreBits;
   gn::write_u16(w, static_cast<uint16_t>((number & 511) | (bits & 0xfe00u)));
@@ -67,6 +68,10 @@ uint32_t entity_bits(const EntityState& from, const EntityState& to, const Ext& 
   if (to.modelindex != from.modelindex)
     b |= to.modelindex > 255 && ext.has(ExtFamily::x, kXModelDbl) ? kUModelDbl : kUModel;
   if (to.alpha != from.alpha && ext.has(ExtFamily::x, kXTrans)) b |= kUTrans;
+  if (to.scale != from.scale && ext.has(ExtFamily::x, kXScale)) b |= kUScale;
+  const bool tint_moved = to.colormod[0] != from.colormod[0] ||
+                          to.colormod[1] != from.colormod[1] || to.colormod[2] != from.colormod[2];
+  if (tint_moved && ext.has(ExtFamily::x, kXColourMod)) b |= kUColourMod;
   return b;
 }
 
@@ -89,7 +94,10 @@ bool write_entity_delta(gn::Writer& w, const EntityState& from, const EntityStat
   if (bits & kUAngle2) write_angle(w, to.angles.y, coords);
   if (bits & kUOrigin3) write_origin(w, to.origin.z, coords);
   if (bits & kUAngle3) write_angle(w, to.angles.z, coords);
+  if (bits & kUScale) write_byte(w, to.scale);
   if (bits & kUTrans) write_byte(w, to.alpha == 0 ? 255 : to.alpha);  // 255: unset (solid)
+  if (bits & kUColourMod)
+    for (int c : to.colormod) write_byte(w, c);
   return true;
 }
 
@@ -124,10 +132,13 @@ EntityRecord read_entity_record(gn::Reader& r, uint16_t word, const EntityState&
   if (bits & kUAngle2) s.angles.y = read_angle(r, coords);
   if (bits & kUOrigin3) s.origin.z = read_origin(r, coords);
   if (bits & kUAngle3) s.angles.z = read_angle(r, coords);
+  if (bits & kUScale) s.scale = read_byte(r);
   if (bits & kUTrans) {
     const int a = read_byte(r);
     s.alpha = a == 255 ? 0 : a;
   }
+  if (bits & kUColourMod)
+    for (int& c : s.colormod) c = read_byte(r);
   rec.state = s;
   return rec;
 }
@@ -204,6 +215,10 @@ bool read_packet_entities(gn::Reader& r, const std::vector<EntityState>* from,
   return !r.bad;
 }
 
+bool player_extended(const Ext& ext) {
+  return ext.has(ExtFamily::x, kXTrans) || ext.has(ExtFamily::x, kXScale);
+}
+
 uint32_t playerinfo_flags(const PlayerState& p, const Ext& ext) {
   uint32_t f = 0;
   if (p.has_msec) f |= kPfMsec;
@@ -218,11 +233,11 @@ uint32_t playerinfo_flags(const PlayerState& p, const Ext& ext) {
   if (p.dead) f |= kPfDead;
   if (p.gib) f |= kPfGib;
   f |= static_cast<uint32_t>(p.pm) << kPfPmTypeShift;
-  const bool extended = ext.has(ExtFamily::x, kXTrans);
-  if (extended) {
+  if (player_extended(ext)) {
     if (p.onground && ext.has(ExtFamily::z, kZOnGround)) f |= kPfOnGroundX;
     if (p.solid && ext.has(ExtFamily::z, kZSolid)) f |= kPfSolidX;
-    if (p.alpha != 0) f |= kPfTrans;
+    if (p.scale != 50 && ext.has(ExtFamily::x, kXScale)) f |= kPfScale;
+    if (p.alpha != 255 && ext.has(ExtFamily::x, kXTrans)) f |= kPfTrans;
     if (f & 0xffff0000u) f |= kPfExtra;
   } else {
     if (p.onground && ext.has(ExtFamily::z, kZOnGround)) f |= kPfOnGround;
@@ -236,7 +251,7 @@ void write_playerinfo(gn::Writer& w, const PlayerState& p, const Ext& ext) {
   const Coords coords = coords_of(ext);
   write_byte(w, p.slot);
   write_short(w, static_cast<int>(f & 0xffff));
-  if (ext.has(ExtFamily::x, kXTrans) && (f & kPfExtra)) write_byte(w, static_cast<int>(f >> 16));
+  if (player_extended(ext) && (f & kPfExtra)) write_byte(w, static_cast<int>(f >> 16));
   for (int i = 0; i < 3; i++) write_origin(w, p.origin[i], coords);
   write_byte(w, p.frame);
   if (f & kPfMsec) write_byte(w, p.msec);
@@ -248,6 +263,7 @@ void write_playerinfo(gn::Writer& w, const PlayerState& p, const Ext& ext) {
   if (f & kPfSkin) write_byte(w, (p.skin & 127) | (p.modelindex > 255 ? 128 : 0));
   if (f & kPfEffects) write_byte(w, p.effects);
   if (f & kPfWeaponFrame) write_byte(w, p.weaponframe);
+  if (f & kPfScale) write_byte(w, p.scale);
   if (f & kPfTrans) write_byte(w, p.alpha);
 }
 
@@ -256,7 +272,7 @@ PlayerState read_playerinfo(gn::Reader& r, const Ext& ext, uint32_t* flags_out) 
   const Coords coords = coords_of(ext);
   p.slot = read_byte(r);
   uint32_t f = static_cast<uint16_t>(read_short(r));
-  const bool extended = ext.has(ExtFamily::x, kXTrans);
+  const bool extended = player_extended(ext);
   if (extended && (f & kPfExtra)) f |= static_cast<uint32_t>(read_byte(r)) << 16;
   if (flags_out) *flags_out = f;
   for (int i = 0; i < 3; i++) p.origin[i] = read_origin(r, coords);
@@ -283,6 +299,7 @@ PlayerState read_playerinfo(gn::Reader& r, const Ext& ext, uint32_t* flags_out) 
   if (extended) {
     p.onground = (f & kPfOnGroundX) != 0;
     p.solid = (f & kPfSolidX) != 0;
+    if (f & kPfScale) p.scale = read_byte(r);
     if (f & kPfTrans) p.alpha = read_byte(r);
   } else {
     p.onground = (f & kPfOnGround) != 0;

@@ -268,9 +268,9 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     sv::SequelServerOptions so;
     so.seed = c.seed;
     so.clients_take_view = true;  // the classic protocol's clients take the server's view
+    so.speedjump = speedjump;
     std::unique_ptr<sv::SequelServer> sq = sv::make_sequel_server(so);
     sq->sv.set.maxclients = c.maxclients;
-    sq->sv.set.move.speedjump = speedjump;
     rules = sv::sequel_runner(std::move(sq));
   } else if (!g.module.empty()) {
     sv::QvmServerOptions so;

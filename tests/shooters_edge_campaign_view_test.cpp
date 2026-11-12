@@ -236,7 +236,7 @@ TEST(a_coop_campaign_seats_companions_carries_them_and_lets_them_go) {
         l.party->mates[2]->skill == ge::shooter::AimSkill::expert);
 }
 
-TEST(a_companion_asked_for_without_coop_is_refused_with_the_next_step) {
+TEST(a_companion_in_single_player_turns_the_game_cooperative_until_it_leaves) {
   ge::progs::Progs stub;
   std::string error;
   CHECK_MSG(sv::build_campaign_stub(stub, error), error);
@@ -244,9 +244,30 @@ TEST(a_companion_asked_for_without_coop_is_refused_with_the_next_step) {
   cl::ListenOptions opt;
   opt.console = {"deathmatch 0"};
   CHECK_MSG(cl::listen_start(l, stub, stub_map("first"), opt, error), error);
+  const sv::QcServer& q = *sv::qc_of(l.campaign_host->server);
+  const int coop_global = q.q.layout->g.coop;
+  CHECK(!l.server->cvars.find("coop")->on());
+  const std::string alone = cl::listen_save_problem(l);
+
+  // `addbot` in single player: the companion seated, the game cooperative there and then.
   CHECK(cl::listen_lobby(l, "addbot"));
-  CHECK(!l.party || cl::party_size(*l.party) == 0);
-  CHECK(!l.prints.empty() && l.prints.back().find("coopgame") != std::string::npos);
+  CHECK(l.party != nullptr && cl::party_size(*l.party) == 1);
+  CHECK(l.server->clients[1].active && l.campaign_host->players[1].active);
+  CHECK(l.companion_coop);
+  CHECK(l.server->cvars.find("coop")->on() && !l.server->cvars.find("deathmatch")->on());
+  if (coop_global >= 0) CHECK(ge::progs::global_float(q.q.vm, coop_global) == 1.0f);
+  CHECK(l.server->sv.touch_watch == &sv::coop_weapon_touch);
+  CHECK(cl::listen_save_problem(l).find("companion") != std::string::npos);
+  cl::listen_frame(l, {});
+
+  // The last companion leaving: single player again, and the game can be saved.
+  CHECK(cl::listen_lobby(l, "removebot"));
+  CHECK(cl::party_size(*l.party) == 0 && !l.server->clients[1].active);
+  CHECK(!l.companion_coop && !l.server->cvars.find("coop")->on());
+  if (coop_global >= 0) CHECK(ge::progs::global_float(q.q.vm, coop_global) == 0.0f);
+  CHECK(l.server->sv.touch_watch == nullptr);
+  CHECK(cl::listen_save_problem(l) == alone);
+  CHECK(l.prints.back() == "You play alone again.");
 }
 
 TEST(a_campaigns_next_map_with_nowhere_to_read_it_from_fails_with_a_reason) {
