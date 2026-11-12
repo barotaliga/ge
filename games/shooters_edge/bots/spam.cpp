@@ -202,6 +202,20 @@ void spam_news_look(Fighter& f, const server::RulesCommon& s, int me, const Stat
     f.news_shots = 0;
   }
   if (f.news_shots >= kNewsShots) return;
+  if (f.features[sh::Feature::noback]) {
+    // (`noback`, M18r.md 0w) Walking, a way in off behind the way walked is not turned to: the
+    // back key is a chased fight's, not a walk's.
+    const sh::PilotMode pm = f.bot.pilot.pilot.mode;
+    if (pm == sh::PilotMode::walk || pm == sh::PilotMode::hop) {
+      double off = ge::core::libm::atan2(static_cast<double>(spot.y - eye.y),
+                                         static_cast<double>(spot.x - eye.x)) *
+                       (180 / ge::core::kPi) -
+                   static_cast<double>(f.bot.pilot.pilot.yaw);
+      while (off > 180) off -= 360;
+      while (off < -180) off += 360;
+      if (std::fabs(off) > 100) return;
+    }
+  }
   f.news_on = true;
   f.news_spot = spot;
   f.bot.look = true;

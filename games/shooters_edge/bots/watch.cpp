@@ -27,6 +27,12 @@ constexpr float kHead = 22;
 constexpr double kHeardTurn_s = 3;
 // The spots watched are worked out again at most this often, s.
 constexpr double kWatchAgain_s = 0.5;
+// `noback` (M18r.md 0w): moving, no spot watched more than this far off the way walked, degrees (a
+// person walks forward-facing; the back key only for a chaser he fires at).
+constexpr double kWatchBack_deg = 100;
+// `levelview`: a spot watched is looked at within this pitch of level (its tangent), the view
+// tending straight ahead.
+constexpr double kLevelTan = 0.2679;  // 15 degrees
 
 sh::Vec3f at_of(const ge::ai::Memory& m) {
   return {static_cast<float>(m.x), static_cast<float>(m.y), static_cast<float>(m.z)};
@@ -141,9 +147,29 @@ void watch_look(Fighter& f, const server::RulesCommon& s, int me, bool dead, dou
           heard = &sound;
         }
       const int32_t pick = watch_choose(f, eye, t, heard);
-      if (pick >= 0) {
+      sh::Vec3f spot = pick >= 0 ? f.watch[static_cast<size_t>(pick)] : sh::Vec3f{};
+      bool behind = false;
+      if (pick >= 0 && holding && f.features[sh::Feature::noback]) {
+        // Walking: a spot off behind the way is not watched (the view stays on the way).
+        const double dx = spot.x - eye.x, dy = spot.y - eye.y;
+        double off = ge::core::libm::atan2(dy, dx) * (180 / ge::core::kPi) -
+                     static_cast<double>(f.bot.pilot.pilot.yaw);
+        while (off > 180) off -= 360;
+        while (off < -180) off += 360;
+        behind = std::fabs(off) > kWatchBack_deg;
+      }
+      if (pick >= 0 && f.features[sh::Feature::levelview]) {
+        // Looked at near level: the spot raised or lowered to `kLevelTan` of the eye.
+        const double dx = spot.x - eye.x, dy = spot.y - eye.y;
+        const double flat = std::sqrt(dx * dx + dy * dy);
+        const double most = flat * kLevelTan;
+        const double dz = spot.z - eye.z;
+        if (dz < -most) spot.z = static_cast<float>(eye.z - most);
+        if (dz > most) spot.z = static_cast<float>(eye.z + most);
+      }
+      if (pick >= 0 && !behind) {
         f.bot.look = true;
-        f.bot.look_at = f.watch[static_cast<size_t>(pick)];
+        f.bot.look_at = spot;
         f.stats.watching++;
         if (why) {
           why->decide("watch");
