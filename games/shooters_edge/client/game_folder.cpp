@@ -229,6 +229,7 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
       out.campaign = &out.pack_progs;
     }
   }
+  out.rules_campaign = out.campaign == nullptr && game.rules_campaign;
   const ge::classicenhance::Profile& content = profiles::content_of(game);
   std::vector<uint8_t> store;
   out.registered = !find_file(files, content.full_game, store).empty();
@@ -242,12 +243,56 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
   return true;
 }
 
+namespace {
+
+// NEW GAME and `coopgame` for a game whose own rules keep the campaign (GameContent's
+// `rules_campaign`): the multiplayer program's game on the first map with `deathmatch` 0, `coop`
+// off or on; a new game each time (`ListenOptions::new_game`). Companions cannot play its maps
+// yet, so `coopgame` seats none.
+void rules_campaign_commands(ge::console::Console& con, Listen& listen, const GameContent& content,
+                             std::string& next_map) {
+  using CArgs = ge::console::Args;
+  using Con = ge::console::Console;
+  con.add_command("newgame", "newgame: a new single-player game from the first map",
+                  [&listen, &next_map, &content](Con&, const CArgs&) {
+                    listen.opt.console.emplace_back("deathmatch 0");
+                    listen.opt.console.emplace_back("coop 0");
+                    listen.opt.companions = 0;
+                    listen.opt.new_game = true;
+                    next_map = content.first_map;
+                  });
+  con.add_command("coopgame",
+                  "coopgame [map]: a new coop game from the first map or the map named (everyone "
+                  "on one team; each player comes back as he entered the level)",
+                  [&listen, &next_map, &content](Con& c, const CArgs& a) {
+                    std::string map = content.first_map;
+                    for (size_t i = 1; i < a.size(); i++) {
+                      const std::string& w = a[i];
+                      sh::AimSkill skill;
+                      if (!w.empty() && w[0] >= '0' && w[0] <= '9') {
+                        if (std::atoi(w.c_str()) > 0)
+                          c.print("Companions can't join this game yet, so you start alone.");
+                      } else if (!skill_named(w, skill)) {
+                        map = w;
+                      }
+                    }
+                    listen.opt.console.emplace_back("deathmatch 0");
+                    listen.opt.console.emplace_back("coop 1");
+                    listen.opt.companions = 0;
+                    listen.opt.new_game = true;
+                    next_map = map;
+                  });
+}
+
+}  // namespace
+
 void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPath& files,
                        const GameContent& content, std::string& next_map, std::string& load_ask) {
   using CArgs = ge::console::Args;
   using Con = ge::console::Console;
   if (content.campaign == nullptr) {
     for (const char* name : {"newgame", "coopgame", "save", "load"}) con.remove_command(name);
+    if (content.rules_campaign) rules_campaign_commands(con, listen, content, next_map);
     return;
   }
   con.add_command("newgame", "newgame: a new single-player game from the start map",
@@ -330,8 +375,11 @@ bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<Loade
     listen.opt.new_game = false;
     return listen_campaign(listen, *content.campaign, std::move(map), listen.opt, error);
   }
+  // A new game on rules that keep their own campaign starts their server afresh (its settings
+  // are the new game's); else a level change keeps it (net/classic_game.hpp).
+  const bool fresh = content.rules_campaign && listen.opt.new_game;
   listen.opt.new_game = false;
-  if (listen.campaign_host || listen.progs != &content.progs)
+  if (fresh || listen.campaign_host || listen.progs != &content.progs)
     return listen_start(listen, content.progs, std::move(map), listen.opt, error);
   return listen_change(listen, std::move(map), error);
 }

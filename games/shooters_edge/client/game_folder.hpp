@@ -93,8 +93,12 @@ struct GameContent {
   ge::progs::Progs progs;       // the multiplayer program
   ge::progs::Progs pack_progs;  // the packs' single-player program, when `progs` is not one
   const ge::progs::Progs* campaign = nullptr;  // what NEW GAME runs; null: no campaign
-  bool registered = false;                     // the packs are the full game
-  std::string start_map;                       // the profile's start map
+  // No campaign program, but the game's own rules keep one (profiles::GameProfile's
+  // `rules_campaign`): NEW GAME and `coopgame` start the multiplayer program's game with
+  // `deathmatch` 0 on the start map.
+  bool rules_campaign = false;
+  bool registered = false;    // the packs are the full game
+  std::string start_map;      // the profile's start map
   sv::EpisodeOrder episodes;  // the start map and each episode's first map (the profile's)
   std::string first_map;      // the start map when the packs hold it, else the game's fallback
   // The game's item names and its server's words as server lines (profiles/items.hpp's
