@@ -42,8 +42,11 @@
 // message.
 //
 // Every look also shows the crosshair, the notify feed (pickups and frags, top left) and the
-// centre message. A look draws with the HUD's ART (art.hpp): the free set, or the player's own
-// classic pictures (its digits, icons, portrait and guns), only placed and sized anew.
+// centre message, and with cl_weapongroups 1 the WEAPON GROUP (`hud_wgroup_*`): a column on the
+// right edge that opens on a number key to the group's weapons and folds down into the one in
+// hand, a gold `+` on it while its group holds another. A look draws with the HUD's ART (art.hpp):
+// the free set, or the player's own classic pictures (its digits, icons, portrait and guns), only
+// placed and sized anew.
 //
 // The figures' colours say what the classic bar said: a figure in the alarm colour is low
 // (health or armour 25 or under, ammunition 10 or under); the shield shows "666" over its disc.
@@ -53,7 +56,7 @@
 // ge:keywords sbar-background transparent arena tactical minimal shield-bar loadout hud_vitals
 // ge:keywords hud_guns hud_guns_all hud_ammo_all grouping pairs status_lift lift health armour ammo
 // ge:keywords face portrait weapons keys powerups runes frags crosshair notify centre-message ring
-// ge:keywords arcs fill_hud add_cvars layout elements viewsize
+// ge:keywords arcs fill_hud add_cvars layout elements viewsize wgroup weapon-group hud_wgroup
 // ge:skill ui console
 // ge:test tests/shooters_edge_hud_test.cpp
 #pragma once

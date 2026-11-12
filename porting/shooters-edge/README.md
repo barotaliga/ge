@@ -32,6 +32,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `weapon-switch.md` | The weapon after a shot in the classic match mod: refire times, the switch held until the refire ends, what a dropped pack holds, what onlookers can tell, the client's switch-after-fire settings |
 | `demo-smoothing.md` | Recorded games drawn between their frames: the client's one-frame-behind playback, the rules for players, the tracked view and entities, where it snaps |
 | `held-weapons.md` | The first-person weapon's frames: the axe's two swings, how a swing is picked, when the frame is set, what the client draws |
+| `rocket-jump-helper.md` | The classic match mod's rocket jump helpers (impulses 164 and 156): what they do in one command, their failures and settings, from a clean-room reader (M18e) |
 | `jump-walk-death.md` | The jump's and the swimmer's sounds, landing sounds, walking (there is none at the modern defaults: `+speed` is a run key), the view weapon and eye at death |
 | `sequel.md` | The sequel (M18t2, for M18t3 and M18t4): the index of its notes, the game's shape, the demo pack measured, the game library's calls as our rules runner's |
 | `sequel-formats.md` | The sequel's files: the search order, contents and surface flags, the collision lumps, WAL, PCX and the palette, MD2, SP2, the sky, player models, skins and sounds |

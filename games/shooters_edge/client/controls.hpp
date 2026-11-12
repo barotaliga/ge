@@ -1,12 +1,14 @@
 // THE PLAYER'S HANDS: one frame's keys and mouse as the view's turn and the command the listen
 // server runs. The keys are the console's binds (`bind w +forward`): `add_cvars` registers the
 // moves as buttons (+forward, +back, +moveleft, +moveright, +moveup, +movedown, +jump, +attack,
-// +speed, +strafe, +left, +right, +attack2: the quick weapon's second key, quick_fire.hpp) and
-// `impulse <n>`, and `default_binds` gives every key the classic layout has unbound (W A S D and
-// the arrows move, SPACE jumps, the left button fires, ALT sidesteps with the mouse, 1..8 pick a
-// weapon, the wheel the next one carried, F12 takes a screenshot: engine/capture/screenshot.hpp;
-// no key walks or crouches), before the player's config rebinds them. OPTIONS ▸ CUSTOMIZE CONTROLS
-// rebinds them too.
+// +speed, +strafe, +left, +right, +attack2: the quick weapon's second key, quick_fire.hpp; +rjump
+// and +rrjump: the rocket jump helpers, a press asking the server for one rocket jump, down or
+// back, with the jump in the same command: shooter/rjump_assist.hpp) and `impulse <n>`, and
+// `default_binds` gives every key the classic layout has unbound (W A S D and the arrows move,
+// SPACE jumps, the left button fires, ALT sidesteps with the mouse, 1..8 pick a weapon, the wheel
+// the next one carried, F12 takes a screenshot: engine/capture/screenshot.hpp; no key walks or
+// crouches), before the player's config rebinds them. OPTIONS ▸ CUSTOMIZE CONTROLS rebinds them
+// too.
 //
 // - `button_moves` reads the buttons (the window); `key_moves` reads the default keys straight off
 //   the input state (a scripted session, a test), so a session's frames make the same commands on
@@ -37,6 +39,7 @@
 #include "input/state.hpp"
 #include "shooter/pmove.hpp"
 #include "shooters_edge/client/quick_fire.hpp"
+#include "shooters_edge/client/weapon_groups.hpp"
 
 namespace shooters_edge::client {
 
@@ -46,6 +49,8 @@ struct ControlButtons {
                       *moveright = nullptr, *moveup = nullptr, *movedown = nullptr, *jump = nullptr,
                       *attack = nullptr, *speed = nullptr, *strafe = nullptr, *left = nullptr,
                       *right = nullptr, *attack2 = nullptr;
+  // The rocket jump helpers (server/rjump_rules.hpp): a press asks once, with a jump.
+  ge::console::Button *rjump = nullptr, *rrjump = nullptr;
   int impulse = 0;  // the last `impulse <n>` not yet sent (0 none)
 };
 
@@ -64,7 +69,8 @@ struct ControlSettings {
   // in_mouse_release: what takes the pointer back from the look (input::Release's bits)
   uint32_t mouse_release = ge::input::kReleaseDefault;
   ControlButtons buttons;
-  QuickFire quick;  // the quick weapon's cvars and state (quick_fire.hpp)
+  QuickFire quick;      // the quick weapon's cvars and state (quick_fire.hpp)
+  WeaponGroups groups;  // the number keys' weapon groups (weapon_groups.hpp)
 };
 
 // One frame's moves: what is held, and the impulse asked for.
