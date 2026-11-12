@@ -53,6 +53,8 @@ constexpr float kAcrossOn = 3;
 constexpr float kAcrossBeat_s = 0.04f;  // and on it the side keys swapped this often, s  //
                                         // `strafe_across`: on the crossing within this, degrees
 constexpr int kCrossFan = 60, kCrossStep = 5;
+constexpr float kCrossWay = 2;           // a crossing's cost a degree off the route's way, units
+constexpr float kWayAhead = 160;         // the route's way read at its node this far on, units
 constexpr double kCrossTurnFloor = 0.5;  // a turn within 60 degrees costs nothing (made in the air)
                                          // // `lip_crossing`: the headings tried, degrees
 constexpr float kCrossEvery = 8, kCrossMost = 640;  // and the places along each, units
@@ -723,8 +725,19 @@ bool shot_view_ready(const Pilot& p) { return p.shot_pitch == 0 || !p.shot_hand 
 // `lipjump`: the heading across the pit ahead of `o` (moving along `vh`) to the floor beyond,
 // within `kCrossFan` of the velocity: along each heading of the fan, the first place past a lip
 // with a floor within a step under the player's box; the one costing least as distance over the
-// share of the speed along it (a turn in the air loses the rest). `vh` itself when none is found.
-float lip_crossing(const MoveWorld& world, Vec3f o, float vh) {
+// share of the speed along it (a turn in the air loses the rest), and `kCrossWay` units a degree
+// off `way` (the route's heading on: a crossing off it, onto another floor, is not the way).
+// `vh` itself when none is found.
+// The route's heading on from `at`: at its first node `kWayAhead` or more away (the last else).
+float route_heading(const Pilot& p, Vec3f at, float fallback) {
+  for (size_t j = p.k + 1; j < p.route.size(); j++) {
+    const Vec3f n = node(*p.g, p.route[j]).origin;
+    if (across(at, n) >= kWayAhead || j + 1 == p.route.size()) return yaw_at(at, n);
+  }
+  return fallback;
+}
+
+float lip_crossing(const MoveWorld& world, Vec3f o, float vh, float way) {
   float best = vh, cost = 1e30f;
   for (int a = -kCrossFan; a <= kCrossFan; a += kCrossStep) {
     const float h = vh + static_cast<float>(a);
@@ -740,7 +753,9 @@ float lip_crossing(const MoveWorld& world, Vec3f o, float vh) {
       const bool floor = tr.fraction < 1;
       if (!floor) gap = true;
       if (gap && floor) {
-        const float c = d / static_cast<float>(turn > kCrossTurnFloor ? 1.0 : turn);
+        const float off = wrap(h - way);
+        const float c = d / static_cast<float>(turn > kCrossTurnFloor ? 1.0 : turn) +
+                        kCrossWay * (off < 0 ? -off : off);
         if (c < cost) cost = c, best = h;
         break;
       }
@@ -860,6 +875,20 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
     return false;
   }
   if (p.mode != PilotMode::run_up && p.mode != PilotMode::jump) p.mode = PilotMode::jump;
+  // AT A LIP ON A JUMP'S RUN (`lipjump`): about to run off its floor at a run (past the start, or
+  // turned to line up again with the momentum still on), a plain jump's run jumps there at T: a
+  // person never runs off a lip without the jump (a beam's end was run off lining up again).
+  if (plain && p.set.lip_jump && s.onground && !p.jump_pressed && speed > kLipSpeed &&
+      s.world != nullptr && shot_view_ready(p) && lip_ahead(*s.world, s.origin, s.velocity, msec)) {
+    p.mode = PilotMode::jump;
+    w.jump = true;
+    w.forward = 1;
+    w.side = 0;
+    w.yaw = unwrap(yaw_at(s.origin, T), p.yaw);
+    p.stats.lip_jumps++;
+    because = "a jump's run at a lip: jump";
+    return true;
+  }
   // FLOWN FROM HERE (`jumpfly`, a plain jump): near the start and not on its line at its speed, a
   // jump whose flight from here lands by T is taken as it is.
   bool flown = false;
@@ -1337,7 +1366,9 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
            hop_left <= speed * kLastJump_s)) {
         restart(p, s);
         p.mode = PilotMode::walk;
-      } else if (off > p.set.lost) {
+      } else if (off > p.set.lost && !(p.lip_pressed_s >= 0 && !s.onground)) {
+        // (A lip's jump flies the crossing, off the route's line: planned again once down, not
+        // from over the pit, where no way starts.)
         p.stats.lost++;
         replanned = true;
         replan(p, s);
@@ -2213,7 +2244,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     because = "at a lip: jump";
     p.stats.lip_jumps++;
     p.lip_pressed_s = p.clock_s;
-    p.lip_yaw = lip_crossing(*s.world, s.origin, heading(s.velocity.x, s.velocity.y));
+    p.lip_yaw = lip_crossing(*s.world, s.origin, heading(s.velocity.x, s.velocity.y),
+                             route_heading(p, s.origin, heading(s.velocity.x, s.velocity.y)));
   } else if (p.set.lip_jump && p.mode == PilotMode::hop && s.onground && w.jump &&
              !p.jump_pressed && !p.gap_flight && !p.forecasting && s.world != nullptr &&
              speed > kSlow) {
@@ -2233,7 +2265,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     } else if (lip && speed > kLipSpeed) {
       // A hop's own jump at a lip: flown across the pit as a lip's jump is.
       p.lip_pressed_s = p.clock_s;
-      p.lip_yaw = lip_crossing(*s.world, s.origin, heading(s.velocity.x, s.velocity.y));
+      p.lip_yaw = lip_crossing(*s.world, s.origin, heading(s.velocity.x, s.velocity.y),
+                               route_heading(p, s.origin, heading(s.velocity.x, s.velocity.y)));
     }
   }
   p.because = because;
