@@ -44,7 +44,8 @@
 //   key (bots/keyboard.hpp; all on). `lookway`, `press`, `counter`: dropped, in no preset.
 // - `slopes`: a stair to 45 degrees level to the walk; `backstep`: a run-up stepped back facing
 //   the jump; `gapbuild`: a gap over water curved and run into (pilot.hpp; all on).
-// - `runupkeys`, `underway` (pilot.hpp): judging, in no preset. The numbers: docs/goals/M18r.md.
+// - `runupkeys`, `underway` (pilot.hpp), `recipes` (people's hop starts played, pilot_recipes.hpp):
+//   judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
 // ge:summary A bot's features: each behaviour switched on or off by name, and the presets
@@ -55,7 +56,7 @@
 // ge:keywords lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen sound-swipe
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
-// ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway
+// ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -122,9 +123,10 @@ enum class Feature : uint8_t {
   gapbuild,
   curvekeys,
   underway,
+  recipes,
   trial,
 };
-constexpr size_t kFeatures = 54;
+constexpr size_t kFeatures = 55;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

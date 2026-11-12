@@ -307,7 +307,10 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       b.mouse && b.aim.mouse && !swim3d && jp.shot_pitch != 0 && !blast_shot &&
       jp.shot_in_s <=
           b.hand.fitts(std::sqrt(shot_dx * shot_dx + shot_dy * shot_dy), kShotWidth) + kShotSpare_s;
-  if ((b.aiming || b.looking) && !blast_shot && !shot_due) {
+  // People's hop start under way (pilot.hpp `recipes`): its view is the recording's, a person's
+  // own mouse already, so it is played as it is, with no watch over it (an aim still comes first).
+  const bool recipe_on = jp.recipe >= 0 && jp.mode == PilotMode::hop;
+  if ((b.aiming || (b.looking && !recipe_on)) && !blast_shot && !shot_due) {
     static constexpr const char* kNames[2] = {"aim_yaw", "aim_pitch"};
     ai::record_intent(why, kNames, want);
     double out[2];
@@ -339,7 +342,11 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
     cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
   } else {
-    if (b.calm && walking_mode(b.pilot.pilot.mode)) {
+    if (recipe_on) {
+      b.view_by = "recipe";
+      b.yaw = pilot_yaw;
+      cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
+    } else if (b.calm && walking_mode(b.pilot.pilot.mode)) {
       // The calm view (bot.hpp): still in the band, turned at a hand's pace past it, drifting.
       const double dt = msec / 1000.0;
       b.calm_t += dt;

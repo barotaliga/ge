@@ -73,6 +73,7 @@
 #include "shooter/cmd_source.hpp"
 #include "shooter/look_ahead.hpp"
 #include "shooter/nav.hpp"
+#include "shooter/recipes.hpp"
 
 namespace ge::shooter {
 
@@ -195,6 +196,17 @@ struct PilotSettings {
   // bot-minute, its speed +6 u/s, head to head +1.6 frags a match over both sides; on both sides
   // player bumps 5.5 -> 4.1 and speed 174 -> 182.
   bool ahead_bodies = false;
+  // PEOPLE'S HOP STARTS PLAYED (`recipes`, pilot_recipes.hpp): a hopper on the ground slower than
+  // a run, with a hop's stretch ahead, takes one of people's starts out of `recipes` (a game's
+  // book, recipes.hpp) of its `recipe_level`: the nearest to its own speed and heading, turned to
+  // its way and flown by the move from where it stands (no wall, its end on the route), then
+  // played key by key and view by view until it leaves the ground, the hop's after; off (or no
+  // book), it runs straight to a run's speed and hops from there.
+  // `recipe_keys_s`: each frame's keys asked this long early (a keyboard's press: the recording's
+  // keys are when they were down).
+  RecipeBook recipes;
+  uint8_t recipe_level = 2;
+  float recipe_keys_s = 0;
 };
 
 // `swim`: on a swim link (nav.hpp), the view pitched at the next node, forward held, jump to rise;
@@ -268,6 +280,11 @@ struct PilotStats {
   int32_t gap_landed = 0;           // and of them, landed by their landing node
   int32_t gap_refused = 0;          // gaps given up at the lip: no jump from there lands across
   float gap_speed = 0;              // the gap jumps' takeoff speeds across, summed, units/s
+  int32_t recipe_asks = 0;          // hop starts looked for in the book (`recipes`)
+  int32_t recipe_commits = 0;       // and one proven and begun
+  int32_t recipe_aborts = 0;        // of them, left off the proof's way before the takeoff
+  int32_t recipe_takeoffs = 0;      // and those that left the ground
+  float recipe_speed = 0;           // their takeoff speeds across, summed, units/s
   double time_s = 0;                // the commands' time since the last pilot_go
 };
 
@@ -342,6 +359,17 @@ struct Pilot {
   // forward and the side key (-1 left, 1 right, 0 forward alone); `kNoCurveKeys` none. A keyboard
   // holds them (`curvekeys`) rather than reading a key set off the hands' slewed side axis.
   int8_t curve_keys = kNoCurveKeys;
+  // A HOP START UNDER WAY (`recipes`, pilot_recipes.hpp): its entry in the book (-1 none), played
+  // mirrored or not, for this long; its frames turned to the way, and the proof's origins and
+  // their clock (the closed loop's yardstick); whether its jump has been pressed; the next look
+  // into the book not before `recipe_retry_s` (`clock_s`).
+  int32_t recipe = -1;
+  bool recipe_jumped = false;
+  float recipe_s = 0;
+  double recipe_retry_s = 0;
+  std::vector<RecipeFrame> recipe_frames;
+  std::vector<Vec3f> recipe_trail;
+  std::vector<float> recipe_trail_t;
   int8_t curve_keys_last = kNoCurveKeys;   // and the last command's
   std::vector<int32_t> shut;               // doors the caller knows are shut: never planned through
   std::vector<NavExtraLink> shut_links;    // and links it knows are (onto a bridge still in)

@@ -18,7 +18,7 @@ constexpr const char* kNames[kFeatures] = {
     "packinfer", "listen",     "stairs",     "locked",   "escape",  "brink",    "gapjump",
     "headroom",  "liphop",     "circlejump", "ahead",    "bodies",  "beat",     "keys",
     "keysteer",  "lookway",    "press",      "slopes",   "counter", "jumpkey",  "backstep",
-    "runupkeys", "gapbuild",   "curvekeys",  "underway", "trial"};
+    "runupkeys", "gapbuild",   "curvekeys",  "underway", "recipes", "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -30,10 +30,11 @@ constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);
 constexpr uint64_t kKeys = (uint64_t{1} << static_cast<uint64_t>(Feature::lookway)) |
                            (uint64_t{1} << static_cast<uint64_t>(Feature::press)) |
                            (uint64_t{1} << static_cast<uint64_t>(Feature::counter));
-// `runupkeys` and `underway` wait for their judgment (`gapbuild` and `curvekeys` on: together
-// +7.0 frags a match head to head on e1m2, the gap jumps landed 2.5 a match).
+// `runupkeys`, `underway` and `recipes` wait for their judgment (`gapbuild` and `curvekeys` on:
+// together +7.0 frags a match head to head on e1m2, the gap jumps landed 2.5 a match).
 constexpr uint64_t kJudging = (uint64_t{1} << static_cast<uint64_t>(Feature::runupkeys)) |
-                              (uint64_t{1} << static_cast<uint64_t>(Feature::underway));
+                              (uint64_t{1} << static_cast<uint64_t>(Feature::underway)) |
+                              (uint64_t{1} << static_cast<uint64_t>(Feature::recipes));
 constexpr uint64_t kAll = (kTrial - 1) & ~kKeys & ~kJudging;
 
 bool separator(char c) { return c == ',' || c == ' ' || c == '/' || c == '\t'; }

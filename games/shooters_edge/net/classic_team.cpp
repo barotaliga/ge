@@ -764,6 +764,14 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].hop_jumps = fi.bot.pilot.pilot.stats.hop_jumps;
     r.players[k].circles = fi.bot.pilot.pilot.stats.circles;
     r.players[k].circle_speed = fi.bot.pilot.pilot.stats.circle_speed;
+    {
+      const sh::PilotStats& ps = fi.bot.pilot.pilot.stats;
+      r.players[k].recipe_asks = ps.recipe_asks;
+      r.players[k].recipe_commits = ps.recipe_commits;
+      r.players[k].recipe_aborts = ps.recipe_aborts;
+      r.players[k].recipe_takeoffs = ps.recipe_takeoffs;
+      r.players[k].recipe_speed = ps.recipe_speed;
+    }
     r.players[k].watching = fi.stats.watching;
     r.players[k].speed_sum = fi.stats.speed_sum;
     for (int m = 0; m <= sh::kPilotModes; m++) {

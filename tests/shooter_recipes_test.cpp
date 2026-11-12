@@ -103,7 +103,7 @@ TEST(a_stand_a_run_and_three_gaining_hops_read_as_one_made_hop_start) {
   const sh::HopStart& h = s[0];
   CHECK(h.speed_in < 250);
   CHECK(h.stood);
-  CHECK(h.low < 1);
+  CHECK(h.low < 30);
   CHECK(h.made);
   CHECK(h.takeoffs >= 3);
   CHECK(h.to_target_s > 0.8f && h.to_target_s < 2.0f);

@@ -69,6 +69,7 @@ void read_hop_starts(std::span<const TrackPoint> track, const HopReading& hops,
     for (size_t i = first; i-- > 0;) {
       if (f[i].phase != HopPhase::ground || f[first].t - f[i].t > set.back_s) break;
       if (f[i].speed < low) low = f[i].speed, low_at = i;
+      if (f[i].speed < set.stood) break;  // a stand: the move starts from its last still frame
     }
     const size_t e0 = static_cast<size_t>(entry);
     const size_t chain_end = static_cast<size_t>(hs[last].land);
@@ -132,12 +133,12 @@ void read_hop_starts(std::span<const TrackPoint> track, const HopReading& hops,
 
 void play_recipe(std::span<const RecipeFrame> frames, const MoveWorld& world,
                  const MoveSettings& move, Vec3f origin, float turn, int lead, RecipePlay& out,
-                 std::vector<Vec3f>* trail) {
+                 std::vector<Vec3f>* trail, const Vec3f* velocity, std::vector<float>* trail_t) {
   out = RecipePlay{};
   if (frames.size() < 2) return;
   MoveState st;
   st.origin = origin;
-  st.velocity = turned(frames[0].velocity, turn);
+  st.velocity = velocity ? *velocity : turned(frames[0].velocity, turn);
   st.angles = {frames[0].pitch, frames[0].yaw + turn, 0};
   st.maxspeed = move.maxspeed;
   bool was_ground = true;
@@ -165,8 +166,36 @@ void play_recipe(std::span<const RecipeFrame> frames, const MoveWorld& world,
     out.top = std::max(out.top, sp);
     out.speed_end = sp;
     if (trail) trail->push_back(st.origin);
+    if (trail_t) trail_t->push_back(frames[i + 1].t - frames[0].t);
   }
   out.end = st.origin;
+}
+
+void recipe_frames(const RecipeBook& book, size_t i, float way, Vec3f origin,
+                   std::vector<RecipeFrame>& out) {
+  out.clear();
+  if (i >= book.entries.size()) return;
+  const RecipeEntry& e = book.entries[i];
+  const float h = (way + static_cast<float>(e.heading10) * 0.1f) * static_cast<float>(kRad);
+  const Vec3f v0{static_cast<float>(e.speed) * static_cast<float>(core::libm::cos(h)),
+                 static_cast<float>(e.speed) * static_cast<float>(core::libm::sin(h)), 0};
+  const float c = static_cast<float>(core::libm::cos(way * kRad));
+  const float sn = static_cast<float>(core::libm::sin(way * kRad));
+  const float last_ms = e.count > 0 ? static_cast<float>(book.steps[e.first + e.count - 1u].ms) : 1;
+  for (uint32_t k = 0; k < e.count && e.first + k < book.steps.size(); k++) {
+    const RecipeStep& st = book.steps[e.first + k];
+    RecipeFrame f;
+    f.t = static_cast<float>(st.ms) * 0.001f;
+    const float along =
+        static_cast<float>(e.reach) * static_cast<float>(st.ms) / std::max(1.f, last_ms);
+    f.feet = origin + Vec3f{c * along, sn * along, 0};
+    f.velocity = k == 0 ? v0 : Vec3f{};
+    f.yaw = way + static_cast<float>(st.yaw10) * 0.1f;
+    f.keys = st.keys;
+    f.jump = (st.flags & kStepJump) != 0;
+    f.ground = (st.flags & kStepGround) != 0;
+    out.push_back(f);
+  }
 }
 
 }  // namespace ge::shooter

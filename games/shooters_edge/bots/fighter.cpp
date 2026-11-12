@@ -21,6 +21,7 @@
 #include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/ears.hpp"
 #include "shooters_edge/bots/footwork.hpp"
+#include "shooters_edge/bots/hop_start_book.hpp"
 #include "shooters_edge/bots/item_routes.hpp"
 #include "shooters_edge/bots/keyboard.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
@@ -1233,6 +1234,10 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.hop_circle = features[sh::Feature::circlejump];
   ps.circle.target = expert ? 430.f : 380.f;
   ps.circle.most_s = expert ? 0.3f : 0.2f;
+  // People's hop starts (`recipes`): a hopper copies its level's out of the book.
+  if (ps.hop && features[sh::Feature::recipes]) ps.recipes = hop_start_book();
+  ps.recipe_level = expert ? 2 : average ? 1 : 0;
+  ps.recipe_keys_s = features[sh::Feature::keys] ? (expert ? 0.03f : average ? 0.04f : 0.05f) : 0.f;
   ps.brink = features[sh::Feature::brink];
   ps.ahead = features[sh::Feature::ahead];
   ps.ahead_bodies = features[sh::Feature::bodies];

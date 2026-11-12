@@ -61,6 +61,9 @@ using In = std::vector<std::pair<std::string, std::string>>;
 constexpr int kLevels = 3;
 constexpr const char* kLevelName[kLevels] = {"amateur", "intermediate", "expert"};
 constexpr float kDeg = static_cast<float>(180.0 / ge::core::kPi);
+constexpr float kBookTakeoff_s = 0.9f;  // the book's starts leave the ground this soon, s
+constexpr float kBookOff = 75;          // and set off this near their way, degrees
+constexpr float kBookPerSecond = 100;   // ranked by takeoff speed less this a second taken
 
 struct Player {
   std::string name, map;
@@ -646,6 +649,164 @@ void run(gl::Lab& lab) {
     lab.table(pt);
   }
 
+  // THE BOOK (`--book=<path>`): made starts cut at their first takeoff, off the ground within 0.9 s
+  // of the low, set off within 75 degrees of the way, no back key on the ground, proven on the
+  // open floor (the played takeoff within 5 % of the recorded), spread over their low (a stand, a
+  // slow walk, a walk), their start's angle off the way (30-degree bins) and their turn's side, at
+  // most
+  // `--book-per-level` a level, the best proof first in each cell; written as the rows of a
+  // RecipeBook (shooter/recipes.hpp) a game compiles in.
+  if (!lab.arg("book").empty()) {
+    OpenFloor open;
+    sh::MoveSettings move;
+    const int per = static_cast<int>(lab.arg_num("book-per-level"));
+    struct Cand {
+      int level = 0;
+      std::string cell;
+      float score = 0;
+      sh::RecipeEntry e;
+      std::vector<sh::RecipeStep> steps;
+    };
+    std::vector<Cand> cands;
+    for (const Start& one : starts) {
+      const int lv = players[static_cast<size_t>(one.player)].level;
+      if (lv < 0 || !one.s.made) continue;
+      std::vector<sh::RecipeFrame> fr = one.s.frames;
+      size_t cut = 0;
+      while (cut < fr.size() && !fr[cut].jump) cut++;
+      if (cut + 2 >= fr.size() || cut < 3) continue;
+      fr.resize(cut + 2);
+      // No back key on the ground: on a keyboard S and W share a finger, so a start that backs
+      // off first is late through every change after (and people's are few).
+      bool back = false;
+      for (size_t k = 0; k <= cut; k++)
+        back = back || (fr[k].ground && (fr[k].keys & sh::kKeyBack));
+      if (back) continue;
+      sh::RecipePlay r;
+      sh::play_recipe(fr, open.world, move, {0, 0, 24}, 0, 0, r);
+      const float rec = sh::root_of(fr[cut + 1].velocity.x * fr[cut + 1].velocity.x +
+                                    fr[cut + 1].velocity.y * fr[cut + 1].velocity.y);
+      if (r.takeoff < 0 || r.speed_takeoff < 0.95f * rec || r.speed_takeoff < 380) continue;
+      const sh::Vec3f d = fr.back().feet - fr.front().feet;
+      const float way = static_cast<float>(ge::core::libm::atan2(d.y, d.x)) * kDeg;
+      const float reach = sh::root_of(d.x * d.x + d.y * d.y);
+      if (reach < 32) continue;
+      Cand c;
+      c.level = lv;
+      c.e.level = static_cast<uint8_t>(lv);
+      const sh::Vec3f v0 = fr.front().velocity;
+      const float sp0 = sh::root_of(v0.x * v0.x + v0.y * v0.y);
+      c.e.speed = static_cast<int16_t>(sp0 + 0.5f);
+      float h0 = 0;
+      if (sp0 > 30) {
+        h0 = static_cast<float>(ge::core::libm::atan2(v0.y, v0.x)) * kDeg - way;
+        while (h0 > 180) h0 -= 360;
+        while (h0 < -180) h0 += 360;
+      }
+      c.e.heading10 = static_cast<int16_t>(h0 * 10);
+      c.e.reach = static_cast<uint16_t>(reach);
+      c.e.takeoff = static_cast<uint16_t>(r.speed_takeoff);
+      const float cw = static_cast<float>(ge::core::libm::cos(way / kDeg));
+      const float sw = static_cast<float>(ge::core::libm::sin(way / kDeg));
+      float swing = 0, turn = 0;
+      for (size_t k = 0; k < fr.size(); k++) {
+        const sh::Vec3f o = fr[k].feet - fr.front().feet;
+        const float side = -o.x * sw + o.y * cw;  // + left of the way
+        if ((side < 0 ? -side : side) > (swing < 0 ? -swing : swing)) swing = side;
+        float y = fr[k].yaw - way;
+        while (y > 180) y -= 360;
+        while (y < -180) y += 360;
+        sh::RecipeStep step;
+        step.ms = static_cast<uint16_t>((fr[k].t - fr.front().t) * 1000 + 0.5f);
+        step.yaw10 = static_cast<int16_t>(y * 10);
+        step.keys = fr[k].keys;
+        step.flags = static_cast<uint8_t>((fr[k].jump ? sh::kStepJump : 0) |
+                                          (fr[k].ground ? sh::kStepGround : 0));
+        c.steps.push_back(step);
+        if (k > 0) {
+          float dh = fr[k].yaw - fr[k - 1].yaw;
+          while (dh > 180) dh -= 360;
+          while (dh < -180) dh += 360;
+          turn += dh;
+        }
+      }
+      c.e.swing = static_cast<int16_t>(swing);
+      // The way it first moves off (the first frame past 100 u/s) against the way, in 30-degree
+      // bins: a stand's spread is where it sets off.
+      float off = h0;
+      for (const sh::RecipeFrame& q : fr) {
+        const float sp = sh::root_of(q.velocity.x * q.velocity.x + q.velocity.y * q.velocity.y);
+        if (sp <= 100) continue;
+        off = static_cast<float>(ge::core::libm::atan2(q.velocity.y, q.velocity.x)) * kDeg - way;
+        while (off > 180) off -= 360;
+        while (off < -180) off += 360;
+        break;
+      }
+      // A start a bot copies on its way: off the ground within `kBookTakeoff_s` of its low, set
+      // off within `kBookOff` degrees of its way (a loop away and back is a person's own errand).
+      if (fr[cut].t - fr.front().t > kBookTakeoff_s || off > kBookOff || off < -kBookOff) continue;
+      const int band = one.s.low < set.stood ? 0 : one.s.low < 150 ? 1 : 2;
+      c.cell = std::to_string(band) + "/" + std::to_string(static_cast<int>((off + 180) / 30)) +
+               "/" + (turn >= 0 ? "L" : "R");
+      c.score = r.speed_takeoff - kBookPerSecond * (fr[cut].t - fr.front().t);
+      cands.push_back(std::move(c));
+    }
+    // Each entry: a row of its numbers and its steps as one hex string (4 bytes a step: the ms
+    // since the last step, the view off the way in tenths of a degree, the keys and the flags).
+    std::string out =
+        "// Written by `se-recipes --book`: people's made hop starts, cut at their first takeoff "
+        "and\n// proven on an open floor (shooter/recipes.hpp RecipeBook). Do not edit by hand.\n"
+        "// {level, speed, heading10, reach, swing, takeoff, steps}\n";
+    uint32_t at = 0;
+    int in_book = 0;
+    const auto hex = [](uint32_t v, int digits) {
+      static const char* kHex = "0123456789abcdef";
+      std::string h;
+      for (int i = digits - 1; i >= 0; i--) h += kHex[(v >> (4 * i)) & 15u];
+      return h;
+    };
+    for (int lv = 0; lv < kLevels; lv++)
+      for (int band = 0; band < 3; band++) {
+        std::map<std::string, std::vector<const Cand*>> cells;
+        for (const Cand& c : cands)
+          if (c.level == lv && c.cell[0] == static_cast<char>('0' + band))
+            cells[c.cell].push_back(&c);
+        for (auto& [key, v] : cells)
+          std::stable_sort(v.begin(), v.end(),
+                           [](const Cand* x, const Cand* y) { return x->score > y->score; });
+        const int quota = per / 3;
+        int taken = 0;
+        for (size_t round = 0; taken < quota; round++) {
+          bool any = false;
+          for (auto& [key, v] : cells) {
+            if (round >= v.size() || taken >= quota) continue;
+            any = true;
+            const Cand& c = *v[round];
+            std::string steps;
+            uint16_t last = 0;
+            for (const sh::RecipeStep& q : c.steps) {
+              steps += hex(static_cast<uint32_t>(std::min(255, q.ms - last)), 2) +
+                       hex(static_cast<uint16_t>(q.yaw10), 4) +
+                       hex(static_cast<uint32_t>(q.keys | (q.flags << 4)), 2);
+              last = q.ms;
+            }
+            out += "    {" + std::to_string(c.e.level) + ", " + std::to_string(c.e.speed) + ", " +
+                   std::to_string(c.e.heading10) + ", " + std::to_string(c.e.reach) + ", " +
+                   std::to_string(c.e.swing) + ", " + std::to_string(c.e.takeoff) + ",\n     \"" +
+                   steps + "\"},\n";
+            at += static_cast<uint32_t>(c.steps.size());
+            taken++;
+            in_book++;
+          }
+          if (!any) break;
+        }
+      }
+    std::ofstream(lab.arg("book")) << out;
+    lab.metric("book.candidates", static_cast<double>(cands.size()), "count");
+    lab.metric("book.entries", in_book, "count");
+    lab.metric("book.steps", at, "count");
+  }
+
   // Every start as a row.
   std::string tsv =
       "map\tdemo\tplayer\tlevel\tt\tx\ty\tz\tspeed_in\tstood\tyaw_in\theading\trun_s\tspeed_off"
@@ -711,6 +872,9 @@ const gl::LabSpec kSpec{
         {"gold", "4", "a gathering started this often or more, by two players or more, is a spot"},
         {"rows", "20", "the spots tabled and numbered"},
         {"prove", "0", "the first this many made stand starts played back through the move"},
+        {"book", "", "a path: people's made starts written as a RecipeBook's rows (C++)"},
+        {"book-per-level", "36",
+         "the book's entries a level at most, a third for each low (stand, slow, walk)"},
         {"frames", "",
          "a TSV path: every start's every frame as a row (feet, velocity, view, keys)"},
     },

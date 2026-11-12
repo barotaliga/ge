@@ -1209,6 +1209,18 @@ void run(gl::Lab& lab) {
       for (const cn::TeamPlayer& p : r.players) cj += p.circles, cs += p.circle_speed;
       lab.metric("team.circle-jumps", static_cast<double>(cj), "count");
       lab.metric("team.circle-speed", cj > 0 ? cs / static_cast<double>(cj) : 0, "u/s");
+      // People's hop starts played (`recipes`): looked for, proven and begun, aborted off the
+      // proof's way, and those that left the ground (their takeoff speed: people's ~437).
+      int64_t ra = 0, rc = 0, rb = 0, rto = 0;
+      double rs = 0;
+      for (const cn::TeamPlayer& p : r.players)
+        ra += p.recipe_asks, rc += p.recipe_commits, rb += p.recipe_aborts,
+            rto += p.recipe_takeoffs, rs += p.recipe_speed;
+      lab.metric("team.recipe.asks", static_cast<double>(ra), "count");
+      lab.metric("team.recipe.commits", static_cast<double>(rc), "count");
+      lab.metric("team.recipe.aborts", static_cast<double>(rb), "count");
+      lab.metric("team.recipe.takeoffs", static_cast<double>(rto), "count");
+      lab.metric("team.recipe.speed", rto > 0 ? rs / static_cast<double>(rto) : 0, "u/s");
     }
     lab.metric("team.dodge-share",
                fight > 0 ? static_cast<double>(dodging) / static_cast<double>(fight) : 0, "share");
