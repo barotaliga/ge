@@ -1,13 +1,15 @@
 // engine/hub/http.hpp and main.hpp: a request's head parsed (whole, partial, bad, too big), the
 // response's headers (length, CORS, cache, HEAD without a body), events written line by line, the
-// flags read, and a hub's HTTP server answering a GET and an event stream on loopback (a sandbox
-// with no loopback socket skips that one).
+// flags read, and a hub's HTTP server answering a GET, an event stream and a file larger than the
+// stream's backlog on loopback (a sandbox with no loopback socket skips those).
 //
 // ge:summary Test: the hub's HTTP: parsing, responses, events, flags, a loopback GET and stream
 // ge:keywords test hub http parse response sse event flags loopback
 // ge:skill net testing
 #include "hub/http.hpp"
 
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -121,4 +123,46 @@ TEST(http_serves_a_get_and_an_event_stream_on_loopback) {
   CHECK(s.stats.answered == 1 && s.stats.streams == 1 && s.stats.events == 2);
   tcp_close(e);
   http_close(s);
+}
+
+TEST(http_serves_an_answer_larger_than_the_streams_backlog_whole) {
+  HttpServer s;
+  std::string err;
+  if (!http_open(s, loopback_v4(0), err)) {
+    ge::test::skip("no loopback TCP socket here: " + err);
+    return;
+  }
+  // A viewer's file four times the stream's backlog (a wasm is megabytes).
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "ge-hub-http-big";
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir);
+  std::string big(kStreamBacklog * 4, '\0');
+  for (size_t i = 0; i < big.size(); i++) big[i] = static_cast<char>('a' + i % 26);
+  std::ofstream(dir / "big.wasm", std::ios::binary) << big;
+  s.viewer_dir = dir.string();
+  HubSpec spec;
+  spec.game = "Test";
+  const Poller p;
+  TcpStream c;
+  CHECK(tcp_connect(c, s.listener.local, &err));
+  const std::string req = "GET /viewer/big.wasm HTTP/1.1\r\nHost: hub\r\n\r\n";
+  tcp_send_bytes(c, reinterpret_cast<const uint8_t*>(req.data()), req.size());
+  std::string got;
+  int64_t now = 0;
+  for (int i = 0; i < 5000 && (got.find("\r\n\r\n") == std::string::npos ||
+                               got.size() - got.find("\r\n\r\n") - 4 < big.size());
+       i++) {
+    now += 1000;
+    http_update(s, p, spec, now);
+    tcp_pump(c);
+    std::vector<uint8_t> bytes;
+    tcp_take_bytes(c, bytes);
+    got.append(bytes.begin(), bytes.end());
+  }
+  const size_t head = got.find("\r\n\r\n");
+  CHECK(got.rfind("HTTP/1.1 200 OK", 0) == 0 && head != std::string::npos);
+  CHECK(got.substr(head + 4) == big);
+  tcp_close(c);
+  http_close(s);
+  std::filesystem::remove_all(dir);
 }

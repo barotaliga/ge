@@ -356,6 +356,7 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
     sv::SequelWireOptions opt;
     opt.server_count = static_cast<int32_t>(l.maps_started) + 1;
     if (l.map) opt.map_checksum = sv::sequel_map_checksum(l.map->file);
+    if (l.map && l.map->spec.brushes) sv::sequel_sky(*l.map->spec.brushes, opt);
     r.sequel = std::make_unique<sv::SequelRecorder>();
     sv::sequel_record_start(*r.sequel, *l.server, 0, opt);
     r.on = true;

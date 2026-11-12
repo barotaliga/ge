@@ -9,13 +9,14 @@
 namespace shooters_edge::net {
 
 const ExtBit kExtBits[] = {
+    {ExtFamily::x, true, kXScale, "scale"},
     {ExtFamily::x, true, kXTrans, "transparency"},
     {ExtFamily::x, true, kXSoundDbl, "sound-double"},
     {ExtFamily::x, true, kXModelDbl, "model-double"},
     {ExtFamily::x, true, kXEntityDbl, "entity-double"},
     {ExtFamily::x, true, kXEntityDbl2, "entity-double2"},
     {ExtFamily::x, false, kXFloatCoords, "float-coords"},
-    {ExtFamily::x, false, kXColourMod, "colour-mod"},
+    {ExtFamily::x, true, kXColourMod, "colour-mod"},
     {ExtFamily::x, true, kXSpawnStatic2, "spawnstatic2"},
     {ExtFamily::x, true, kX256Entities, "256-entities"},
     {ExtFamily::x, true, kXChunkedDl, "chunked-downloads"},

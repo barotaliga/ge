@@ -37,6 +37,7 @@
 #include <string>
 #include <vector>
 
+#include "brush/map.hpp"
 #include "shooter/sequel_move.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
@@ -80,7 +81,13 @@ struct SequelWireOptions {
   int32_t server_count = 1;
   int32_t map_checksum = 0;  // configstring 31 (see above); a real client refuses another
   uint8_t attract_loop = 1;  // 1 a client's recording, 0 a live game
+  // The world's sky (configstrings 2, 3 and 4: its name, axis and turn a second, as text), from
+  // the map's world entity (`sequel_sky`); empty: none named.
+  std::string sky, sky_axis, sky_rotate;
 };
+
+// The sky the map's world entity names (its `sky`, `skyaxis` and `skyrotate` keys) into `opt`.
+void sequel_sky(const ge::brush::Map& map, SequelWireOptions& opt);
 
 // What the encoder keeps between frames for one viewpoint.
 struct SequelWire {

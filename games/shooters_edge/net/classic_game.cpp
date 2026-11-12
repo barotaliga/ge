@@ -10,6 +10,7 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <iterator>
 #include <memory>
 #include <span>
@@ -17,6 +18,7 @@
 #include <vector>
 
 #include "core/num.hpp"
+#include "mod/loader.hpp"
 #include "net/packet.hpp"
 #include "progs/file.hpp"
 #include "shooter/settings.hpp"
@@ -46,6 +48,8 @@ namespace cl = shooters_edge::client;
 namespace sh = ge::shooter;
 
 struct Game {
+  // The C++ mod packages named in sv_mod (docs/mods.md § On the server), open while any rules run.
+  std::vector<std::unique_ptr<ge::mod::LoadedMod>> packages;
   ge::progs::Progs progs;
   const ge::progs::Progs* program = &progs;  // the one played: `progs`, or a listen's own
   std::vector<uint8_t> module;               // the mod's compiled module (a .qvm); empty: `program`
@@ -267,9 +271,9 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     sv::SequelServerOptions so;
     so.seed = c.seed;
     so.clients_take_view = true;  // the classic protocol's clients take the server's view
+    so.speedjump = speedjump;
     std::unique_ptr<sv::SequelServer> sq = sv::make_sequel_server(so);
     sq->sv.set.maxclients = c.maxclients;
-    sq->sv.set.move.speedjump = speedjump;
     rules = sv::sequel_runner(std::move(sq));
   } else if (!g.module.empty()) {
     sv::QvmServerOptions so;
@@ -327,6 +331,11 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
       return false;
     }
   }
+  for (const auto& p : g.packages) {  // the C++ mods, laid over the rules as the map starts
+    rules->mods.tables.push_back(p->table);
+    rules->mods.names.push_back(p->manifest.name);
+  }
+  rules->mods.seed = c.seed;
   if (!rules.start(map->spec, error)) {
     error = "the map " + name + " did not load: " + error;
     return false;
@@ -381,6 +390,40 @@ std::string top_mod(const std::string& mods) {
   return top;
 }
 
+// The C++ mod packages among `sv_mod`'s comma-separated folders (a folder holding a
+// `mod.manifest`, under `--root` or as given), loaded in order into `g.packages`; the other folders
+// are left in `folders` for the game folder. False with `error` when a package is refused.
+bool load_packages(Game& g, const gs::ServerConfig& c, std::string& folders, std::string& error) {
+  std::string rest;
+  size_t at = 0;
+  while (at <= c.mod.size()) {
+    size_t comma = c.mod.find(',', at);
+    if (comma == std::string::npos) comma = c.mod.size();
+    std::string folder = c.mod.substr(at, comma - at);
+    at = comma + 1;
+    while (!folder.empty() && folder.back() == ' ') folder.pop_back();
+    while (!folder.empty() && folder.front() == ' ') folder.erase(0, 1);
+    if (folder.empty()) continue;
+    std::filesystem::path dir = std::filesystem::path(c.root) / folder;
+    std::error_code ec;
+    if (!std::filesystem::exists(dir / "mod.manifest", ec)) dir = folder;
+    if (!std::filesystem::exists(dir / "mod.manifest", ec)) {
+      if (!rest.empty()) rest += ',';
+      rest += folder;
+      continue;
+    }
+    auto loaded = std::make_unique<ge::mod::LoadedMod>();
+    const ge::mod::LoadResult r = ge::mod::load_mod(dir, {SE_MOD_GAME, SE_MOD_API}, *loaded);
+    if (!r.ok()) {
+      error = "the mod package " + folder + " was refused: " + r.errors.front();
+      return false;
+    }
+    g.packages.push_back(std::move(loaded));
+  }
+  folders = std::move(rest);
+  return true;
+}
+
 // The program: a named mod's own (its compiled module `qwprogs.qvm` when it has one, else its
 // folder's program files through the game's adapter, the base game's under it), else the
 // baseline mod.
@@ -403,7 +446,15 @@ bool open_program(Game& g, const std::string& mod, std::string& error) {
 void* create(const gs::ServerConfig& c, std::string& error) {
   auto g = std::make_unique<Game>();
   g->settings = c;
+  std::string folders;  // sv_mod's game folders, the packages taken out
+  if (!load_packages(*g, c, folders, error)) return nullptr;
   if (c.host == nullptr && coop_asked(c)) {
+    if (!g->packages.empty()) {
+      error =
+          "C++ mods can't run in a coop campaign yet. Take the package out of sv_mod, or set "
+          "sv_coop to 0.";
+      return nullptr;
+    }
     g->coop = coop_open(c, error);
     return g->coop ? g.release() : nullptr;
   }
@@ -413,7 +464,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     if (g->host->files != nullptr) g->files = *g->host->files;
     g->map = g->host->map;
   } else {
-    const std::string mod = top_mod(c.mod);
+    const std::string mod = top_mod(folders);
     const std::string folder = mod.empty() ? std::string(kGameFolder) : mod;
     // The built-in arena needs no game folder; any other map, a rotation's or a mod's, is read
     // from one (the mod's over the base game's).
@@ -947,7 +998,7 @@ int seated(const void* g) {
 
 uint64_t hash(const void* g) {
   const Game& game = *static_cast<const Game*>(g);
-  return game.coop ? coop_hash(*game.coop) : ge::shooter::server_hash(game.rules->sv);
+  return game.coop ? coop_hash(*game.coop) : sv::rules_hash(*game.rules);
 }
 
 // The hub's record (docs/hub.md): the map, the mode the rules make, the phase, every client.
