@@ -37,7 +37,7 @@
 // ge:summary Our client's and server's recordings, plain or with voice (.qwdv, .mvdv)
 // ge:keywords record recorder client-recording multiview mvd mvdv qwdv voice-format demo-record
 // ge:keywords own-voice team-voice signon packet command stats events mvd_frame mvd_stop
-// ge:keywords packed zstd qwdz mvdz qwdvz mvdvz record_stop flush
+// ge:keywords packed zstd qwdz mvdz qwdvz mvdvz record_stop flush live-stream mvd_print
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_record_test.cpp
 #pragma once
@@ -91,8 +91,12 @@ void record_command(ClientRecorder& r, double time, const sh::MoveCmd& cmd);
 void record_own_voice(ClientRecorder& r, int slot, const ClcMsg& m);
 
 struct MultiviewRecorder {
-  bool voice = false;                  // the voice format: the header and every voice relayed
-  bool packed = false;                 // the packed form (above)
+  bool voice = false;   // the voice format: the header and every voice relayed
+  bool packed = false;  // the packed form (above)
+  // A live stream to a relay (classic_qtv.hpp): the signon also stuffs the full server info and
+  // the `skins` line a relay waits for before it feeds its viewers, and is cut into records under
+  // the 8000 bytes a relay takes.
+  bool stream = false;
   std::vector<uint8_t> bytes;          // the file so far (packed: as ClientRecorder's)
   ge::vfs::ZstdStream pack;            // packed: the stream and its output
   int64_t plain = 0, flushed_at = 0;   // packed: plain bytes fed, and at the last flush
@@ -120,6 +124,8 @@ void mvd_start(MultiviewRecorder& r, bool voice, int pack_level = 0);
 void mvd_events(ClassicServer& s, MultiviewRecorder& r);
 // A voice message the server relayed (`m.ints`: the slot, the generation, the sequence).
 void mvd_voice(MultiviewRecorder& r, const SvcMsg& m);
+// A line printed to everyone, written with this frame's events (a relay's chat).
+void mvd_print(MultiviewRecorder& r, int level, const std::string& text);
 // The server frame just run: the signon when the level is new, then the frame.
 void mvd_frame(ClassicServer& s, MultiviewRecorder& r);
 // The recording ended with a disconnect (a packed one's stream ended, its whole file in `bytes`).
