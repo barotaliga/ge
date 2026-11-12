@@ -55,7 +55,7 @@
 // ge:keywords match-restart restarted listen_lobby_view on_lobby_screen lobby-screen
 // ge:keywords listen_campaign campaign single-player map_changed level-change
 // ge:keywords listen_save listen_load savegame listen_save_text listen_load_text classic-save
-// ge:keywords coop party companions campaign-door coop-join coop-over-network
+// ge:keywords coop party companions campaign-door coop-join coop-over-network companion-coop
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -289,6 +289,10 @@ struct Listen {
   int entries = 0;           // maps entered (a new one, the next level, a restart, a load), ever
   // A campaign's companions (coop_party.hpp; null when none was ever seated).
   std::unique_ptr<Party> party;
+  // The game was single player and turned cooperative for a companion (`addbot`; server/
+  // campaign.hpp's `campaign_set_coop`): the last companion's leaving turns it back, and saving
+  // waits until then.
+  bool companion_coop = false;
   // A coop campaign's door open to others (`ListenOptions::door`; null: nobody joins) and the
   // network's time it runs on, s.
   void* door = nullptr;
