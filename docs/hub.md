@@ -176,6 +176,14 @@ browser's own GPU.
   the same process, so one binary is a community's whole service. Shooter's Edge's is
   `shooters_edge_hub`; Fall Line has no dedicated server yet, so no hub.
 
+- **M56b, part two**: a server whose game speaks its own protocol (`ServerGame::serve`, Shooter's
+  Edge's classic one) beats and answers too. The core sets the socket's public hook
+  (`Transport::on_public`, net/transport.hpp): every datagram is offered to the core first, which
+  takes the master's acks and answers the hub's status asks, so the game never sees either.
+  Shooter's Edge's record has the map, the mode its rules make (coop, 2on2 or 4on4 with teamplay,
+  1on1 or ffa), the score screen, the frag and time limits and every client (bots and spectators
+  flagged). `shooters_edge_server +set sv_master <hub>` appears on `shooters_edge_hub`.
+
 Phase 2 and later depend on the TV layer's header and meta track (M57a, the replay file v2, and M57b, the native TV node); the
 master can land before them, since a dedicated server's heartbeat needs nothing of TV.
 
