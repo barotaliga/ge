@@ -61,16 +61,25 @@ bool gap_lands_late(const Pilot& p, const PilotSense& s, int msec, Vec3f T) {
     const float z0 = st.origin.z;
     player_move(st, c, move, *s.world);
     if (st.ground < 0 || st.origin.z < z0 - kStepHeight) return false;  // off the floor
-    if (!gap_lands(*s.world, move, st.origin, st.velocity, T, msec)) return false;
+    if (!gap_lands(*s.world, move, st.origin, st.velocity, T, msec, p.set.gap_past)) return false;
   }
   return true;
 }
 
 bool gap_lands(const MoveWorld& world, const MoveSettings& move, Vec3f at, Vec3f velocity, Vec3f T,
-               int msec) {
+               int msec, float past) {
   const JumpFlight f = fly_jump(world, move, at, velocity, T, msec);
   const float dz = f.end.z - T.z;
-  return f.landed && across(f.end, T) <= kGapLand && dz <= kGapUp && dz >= -kGapUp;
+  if (!f.landed || dz > kGapUp || dz < -kGapUp) return false;
+  if (across(f.end, T) <= kGapLand) return true;
+  if (past <= 0) return false;
+  // On past T along the line from where it jumped: how far past, and how far off the line.
+  Vec3f dir{T.x - at.x, T.y - at.y, 0};
+  normalize(dir);
+  const Vec3f rel{f.end.x - T.x, f.end.y - T.y, 0};
+  const float on = dot(rel, dir);
+  const float off = rel.x * dir.y - rel.y * dir.x;
+  return on >= 0 && on <= past && off <= kGapLand && off >= -kGapLand;
 }
 
 int32_t gap_in(const Pilot& p, int32_t end, size_t from) {
@@ -100,7 +109,7 @@ bool gap_curve(const Pilot& p, const PilotSense& s, int msec, float& err, bool& 
   if (across(s.origin, S) > kGapCurveFrom || over_harm(p, S, T)) return false;
   MoveSettings move;
   move.maxspeed = s.maxspeed;
-  now = gap_lands(*s.world, move, s.origin, s.velocity, T, msec);
+  now = gap_lands(*s.world, move, s.origin, s.velocity, T, msec, p.set.gap_past);
   const float vh = across({}, s.velocity) > 1 ? heading(s.velocity.x, s.velocity.y) : p.yaw;
   err = wrap(yaw_at(s.origin, T) - vh);
   return true;
@@ -119,7 +128,7 @@ GapRun gap_run(const Pilot& p, const PilotSense& s, int msec) {
   move.maxspeed = s.maxspeed;
   const float dt = static_cast<float>(msec) * 0.001f;
   const auto lands = [&](const MoveState& st) {
-    return gap_lands(*s.world, move, st.origin, st.velocity, T, msec);
+    return gap_lands(*s.world, move, st.origin, st.velocity, T, msec, p.set.gap_past);
   };
   // Each way on: straight on (side 0), or a curve on the ground to the left or the right, the
   // wish at the best angle for speed (circle_jump.hpp). The first that brings a place a jump
@@ -241,7 +250,7 @@ bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, 
       }
       const float along = dot(Vec3f{at.x - S.x, at.y - S.y, 0}, dir);
       if (along > kGapPastStart) break;  // past the lip
-      if (!gap_lands(*s.world, move, at, v, T, msec)) continue;
+      if (!gap_lands(*s.world, move, at, v, T, msec, p.set.gap_past)) continue;
       // Under a keyboard the jump's key goes down late: asked only where it lands either way.
       if (k == 0 && (!p.set.curve_keys || gap_lands_late(p, s, msec, T))) {
         p.gap_flight = true;

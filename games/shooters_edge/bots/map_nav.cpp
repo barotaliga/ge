@@ -350,7 +350,7 @@ std::vector<sh::NavMover> map_movers(const sv::RulesCommon& s, const sv::MapSpec
 }
 
 bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char* start_class,
-                   MapNav& out, std::string& error) {
+                   MapNav& out, std::string& error, const sh::NavSettings& set) {
   if (model_count(spec) == 0) {
     error = "the map " + spec.name + " has no world for bots to walk on";
     return false;
@@ -370,7 +370,7 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
   out.bridges.clear();
   open_doors_as_floor(s, spec, out.tracer.get(), blocks, out.world, out.bridges);
   out.movers = movers_of(s, spec, out.tracer.get(), blocks);
-  sh::build_nav(out.world, out.movers, sh::MoveSettings{}, sh::NavSettings{}, out.graph);
+  sh::build_nav(out.world, out.movers, sh::MoveSettings{}, set, out.graph);
   const std::vector<sh::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
   sh::nav_add_links(out.graph, teleports);
   for (NavBridge& br : out.bridges) {
