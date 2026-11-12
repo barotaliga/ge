@@ -6,11 +6,13 @@
 //
 // ge:summary The movement labs' loaders: a map as the move's world, a demo as players' tracks
 // ge:keywords lab map-load bsp basedir fixture demo tracks players names frags move-world
+// ge:keywords is_recording ger replay-v2 recording-scan
 // ge:skill shooter labs
 // ge:test tests/shooter_hops_test.cpp
 #pragma once
 
 #include <array>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <memory>
@@ -30,6 +32,12 @@ namespace shooters_edge::labs {
 
 namespace sh = ge::shooter;
 namespace cl = shooters_edge::client;
+
+// A file a folder's scan takes for a recording: a multiview recording (`.mvd`) or the replay file
+// version 2 (`.ger`, a packed recording); `open_demo` opens both.
+inline bool is_recording(const std::filesystem::path& p) {
+  return p.extension() == ".mvd" || p.extension() == ".ger";
+}
 
 inline std::vector<uint8_t> read_whole(const std::string& path) {
   std::ifstream in(path, std::ios::binary);
