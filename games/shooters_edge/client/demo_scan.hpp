@@ -8,7 +8,8 @@
 // above 0 to 0 or under; the KILLER is the other player whose frags went up within `kKillMatchS`
 // of that death (the nearest in time, each frag given once); a death with no such frag is the
 // world's or the victim's own (`killer` -1). For each kill the scan keeps:
-//   - the killer's weapon in hand at the death (his active-weapon stat), and the distance from
+//   - the killer's weapon in hand at the death (his active-weapon stat; the victim's too, and
+//     whether he owned the launcher: the hide), and the distance from
 //     him to his victim;
 //   - for a rocket kill, the ROCKET's flight: the projectile entities whose model is a missile are
 //     followed from the frame they appear to the frame they go, and the one that went nearest the
@@ -84,6 +85,10 @@ struct DemoKill {
   int stack = 0;          // the victim's health + armour at their most (0: unknown)
   double stack_s = 0;     // how long before the death the stack was at its most, s
   int stack_armour = 0;   // the armour part of it
+  // The victim's weapon in hand while last alive, and whether he owned the rocket launcher (the
+  // hide: an owner killed with another weapon in hand drops no launcher; melee: unknown).
+  hud::Weapon victim_weapon = hud::Weapon::melee;
+  bool victim_launcher = false;
 };
 
 // A rocket's or a grenade's flight.
