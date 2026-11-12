@@ -127,7 +127,7 @@ nothing of the game: once a route is up it copies datagrams both ways, byte for 
   refusal anywhere comes back to the client in words. Then the game's client connects to the first
   hop as if it were the server, and the game's own handshake runs end to end.
 - **Allow list on by default**: a hop forwards only to the destinations it lists (a host, or one
-  port of it); `open` is an operator's explicit choice.
+  of its ports); `open` is an operator's explicit choice.
 - **Alive both ways**: the client sends an alive every second and the hop echoes it, so the client
   knows its round trip to the hop; a client whose NAT gives it a new port is followed by the salt in
   its alive. A client silent both ways for 15 s is dropped.

@@ -99,7 +99,7 @@ bool dial_read(Dial& d, const uint8_t* data, size_t size, const net::Address& fr
 // THE HOP.
 struct ForwardConfig {
   std::string name = "forward";
-  std::vector<net::Address> allow;  // destinations it may reach (port 0: any port of that host)
+  std::vector<net::Address> allow;  // destinations it may reach (port 0: any port on that host)
   bool open = false;                // any destination (an operator's explicit choice)
   int max_clients = 128;
   int64_t idle_us = 15000000;  // nothing either way this long: the client is dropped
