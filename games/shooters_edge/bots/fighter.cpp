@@ -71,7 +71,7 @@ constexpr double kViaNews_s = 0.6;
 // The turn back taken round (`uturn`): at this speed or more on the ground, a wish this far off the
 // velocity is pressed this far across it instead (degrees); past `kTurnStraight` (straight back)
 // the view's side is the side.
-constexpr double kTurnBackSpeed = 150, kTurnBack = 110, kTurnAcross = 95, kTurnStraight = 170;
+constexpr double kTurnBackSpeed = 30, kTurnBack = 110, kTurnAcross = 95, kTurnStraight = 170;
 constexpr double kTurnRoom = 48;  // and the room it needs across, units (the circle's ~32 and a box)
 constexpr float kRun = 320;         // units/s, the run to an item
 constexpr double kCallAgain_s = 8;  // an enemy in sight is called out again after this
@@ -1397,6 +1397,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.slopes = features[sh::Feature::slopes];
   ps.backstep = features[sh::Feature::backstep];
   ps.runup_keys = features[sh::Feature::runupkeys];
+  ps.jump_fly = features[sh::Feature::jumpfly];
   ps.gap_circle = features[sh::Feature::gapbuild];
   ps.curve_keys = features[sh::Feature::keys] && features[sh::Feature::curvekeys];
   ps.under_way = features[sh::Feature::underway];

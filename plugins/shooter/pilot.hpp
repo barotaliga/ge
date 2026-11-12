@@ -104,6 +104,10 @@ struct PilotSettings {
   bool backstep = false;
   // `runupkeys`: the stepped-back run-up's keys pressed for the view as it will be when they land.
   bool runup_keys = false;
+  // `jumpfly`: a run at a jump that reaches its start off the line or the speed (or nears it from
+  // `kFlyFrom` behind) jumps anyway when the jump, flown by the move from where it is (and a command
+  // or two late under a keyboard), lands by the far end; it lines up again only when none does.
+  bool jump_fly = false;
   // `gapbuild`: a hop's first jump into a gap trick over water is a circle jump aimed across at
   // its landing, taken as soon as a jump from there lands across; short of the lip a landing runs
   // on along the ground (straight, curving or side to side, rolled through the hands:
@@ -271,6 +275,7 @@ struct PilotSense {
 struct PilotStats {
   int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
   int32_t rides = 0, strafes = 0;
+  int32_t jumps_flown = 0;  // of the jumps, taken off the line or the speed as flown (`jumpfly`)
   int32_t hops = 0, hop_jumps = 0;  // hop stretches entered, jumps pressed on a landing in them
   int32_t circles = 0;              // hops started by a circle jump
   float circle_speed = 0;           // their takeoff speeds, summed, units/s

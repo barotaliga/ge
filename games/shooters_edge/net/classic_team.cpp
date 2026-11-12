@@ -775,6 +775,9 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       r.players[k].vias = ps.vias;
       r.players[k].retargets = ps.retargets;
       r.players[k].turned_round = fi.stats.turned_round;
+      r.players[k].run_ups = ps.run_ups;
+      r.players[k].jumps = ps.jumps;
+      r.players[k].jumps_flown = ps.jumps_flown;
       r.players[k].via_touched = ps.via_touched;
       r.players[k].via_missed = ps.via_missed;
       r.players[k].via_speed = ps.via_speed;

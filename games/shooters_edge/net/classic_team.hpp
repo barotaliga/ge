@@ -199,6 +199,8 @@ struct TeamPlayer {
   int64_t chained = 0;
   int32_t retargets = 0;  // new goals run on to from the node ahead (`retarget`)
   int64_t turned_round = 0;  // commands a turn back was pressed across the run (`uturn`)
+  int32_t run_ups = 0, jumps = 0;  // the pilot's run-ups begun again and jumps pressed
+  int32_t jumps_flown = 0;         // of the jumps, taken as flown from off the line (`jumpfly`)
   int32_t vias = 0, via_touched = 0, via_missed = 0;
   double via_speed = 0;
   int64_t watching = 0;     // commands standing with the view on a way in (bots/watch.hpp)

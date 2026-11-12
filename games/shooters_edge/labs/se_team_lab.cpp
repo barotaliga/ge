@@ -31,6 +31,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <string>
@@ -69,6 +70,14 @@ namespace bt = shooters_edge::bots;
 namespace cl = shooters_edge::client;
 using ge::core::num::to_fixed;
 using In = std::vector<std::pair<std::string, std::string>>;
+
+// A file this run writes (--trace, --why, --save) gets its folder made first: a set's paths name a
+// folder a variant (`{variant}`) that nothing else creates.
+void make_folder_for(const std::string& path) {
+  std::error_code ec;
+  const auto dir = std::filesystem::path(path).parent_path();
+  if (!dir.empty()) std::filesystem::create_directories(dir, ec);
+}
 
 const gl::Rgba kTeam[2] = {{200, 50, 40, 255}, {40, 90, 210, 255}};
 const gl::Rgba kRole[6] = {{150, 160, 170, 255},  // free
@@ -443,9 +452,10 @@ void write_why(gl::Lab& lab, shooters_edge::labs::WhyLog& log, const cn::TeamMat
     deaths.push_back({std::strtod(f[0].c_str(), nullptr), f[1], "death", "died", f[3], f[4],
                       std::nan(""), "at=" + f[2] + " link=" + f[5]});
   }
+  make_folder_for(lab.arg("why"));
   if (!shooters_edge::labs::write_why_log(lab.arg("why"), log, deaths)) {
     lab.fail("se-team: cannot write --why=" + lab.arg("why"),
-             "next: pass a path in a folder that exists");
+             "next: pass a path this user may write");
     return;
   }
   lab.note("se-team: the decision log is " + lab.arg("why") + " (" +
@@ -613,10 +623,11 @@ void run(gl::Lab& lab) {
   std::ofstream trace;
   Watch watch;
   if (!lab.arg("trace").empty()) {
+    make_folder_for(lab.arg("trace"));
     trace.open(lab.arg("trace"));
     if (!trace) {
       lab.fail("se-team: cannot write --trace=" + lab.arg("trace"),
-               "next: pass a path in a folder that exists");
+               "next: pass a path this user may write");
       return;
     }
     trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
@@ -1269,6 +1280,14 @@ void run(gl::Lab& lab) {
       int64_t rounds = 0;
       for (const cn::TeamPlayer& p : r.players) rounds += p.turned_round;
       lab.metric("team.turned-round", static_cast<double>(rounds), "count");
+      // The jumps of the route (not the hop's): run-ups begun again (a run at a jump given up and
+      // lined up behind it once more), the jumps pressed, and of them those flown from off the
+      // line or the speed (`jumpfly`), a match.
+      int64_t ups = 0, jumps = 0, flown = 0;
+      for (const cn::TeamPlayer& p : r.players) ups += p.run_ups, jumps += p.jumps, flown += p.jumps_flown;
+      lab.metric("team.jump.run-ups", static_cast<double>(ups), "count");
+      lab.metric("team.jump.jumps", static_cast<double>(jumps), "count");
+      lab.metric("team.jump.flown", static_cast<double>(flown), "count");
     }
     lab.metric("team.dodge-share",
                fight > 0 ? static_cast<double>(dodging) / static_cast<double>(fight) : 0, "share");
@@ -1675,6 +1694,7 @@ void run(gl::Lab& lab) {
     lab.attach(o.packed ? "match.mvdz" : "match.mvd", r.mvd, gl::Det::deterministic);
     const std::string& out = save;
     if (!out.empty()) {
+      make_folder_for(out);
       std::ofstream f(out, std::ios::binary);
       f.write(reinterpret_cast<const char*>(r.mvd.data()),
               static_cast<std::streamsize>(r.mvd.size()));

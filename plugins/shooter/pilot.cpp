@@ -48,6 +48,7 @@ constexpr float kJumpAlong = 0.9f;     // a jump goes moving at least this share
 constexpr float kJumpOver = 1.15f;     // and at most this share (and 16 u/s) of it
 constexpr float kJumpAim = 0.95f;      // with the velocity within this cosine of the jump's way
 constexpr float kPastStart = 24;       // past a jump's start this far without its speed: run up
+constexpr float kFlyFrom = 24;         // `jumpfly`: a jump flown from this far before its start
 constexpr float kRunUpFallen = 40;  // `underway`: a run-up this far under its jump's start fell off
 constexpr float kRunOnFrom = 8;   // `backstep`: a run-up this far behind the start or more runs on
 constexpr float kStrafeHold = 2;  // the strafe's side holds until the target is this far off, deg
@@ -708,11 +709,21 @@ float d_to_flip(const Pilot& p, const PilotSense& s) {
 // A rocket jump's shot may go: none ahead, no hand flying the view, or the hand there.
 bool shot_view_ready(const Pilot& p) { return p.shot_pitch == 0 || !p.shot_hand || p.shot_ready; }
 
+// `jumpfly`: a jump pressed now lands by `T` (within a gap's landing, pilot_gaps.hpp), and under
+// a keyboard pressed a command or two late too, flown by the move from here.
+bool jump_flies(const Pilot& p, const PilotSense& s, int msec, Vec3f T) {
+  if (s.world == nullptr) return false;
+  MoveSettings move;
+  move.maxspeed = s.maxspeed;
+  if (!gap_lands(*s.world, move, s.origin, s.velocity, T, msec)) return false;
+  return !p.set.curve_keys || gap_lands_late(p, s, msec, T);
+}
+
 // `flip`: a rocket jump played as the flip (nav.hpp `RocketJumpSpec::back`): the view turned round
 // into the jump from `rocket_flip_lead_s` before its start, strafing through the turn (the keys a
 // hand presses nearest the way, `flip_keys`), and the shot only with the view behind.
 bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Want& w, Vec3f& target,
-                   const char*& because, bool flip = false, int msec = 13) {
+                   const char*& because, bool flip = false, int msec = 13, bool plain = false) {
   Vec3f dir{T.x - S.x, T.y - S.y, 0};
   normalize(dir);
   const Vec3f rel{s.origin.x - S.x, s.origin.y - S.y, 0};
@@ -758,7 +769,16 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
   const float back_up = run_up + (flip ? v * flip_lead_s(p) : 0);
   const Vec3f P = S - dir * back_up;
   if (p.mode != PilotMode::run_up && p.mode != PilotMode::jump) p.mode = PilotMode::jump;
-  if (p.mode == PilotMode::jump) {
+  // FLOWN FROM HERE (`jumpfly`, a plain jump): near the start and not on its line at its speed, a
+  // jump whose flight from here lands by T is taken as it is.
+  bool flown = false;
+  if (p.mode == PilotMode::jump && plain && p.set.jump_fly && s.onground && !p.jump_pressed &&
+      along >= -kFlyFrom && along <= kPastStart && shot_view_ready(p)) {
+    const bool strict = along >= -2 && lat_abs <= kOnLine && along_v >= kJumpAlong * v &&
+                        along_v <= kJumpOver * v + 16 && cosv >= kJumpAim;
+    flown = !strict && jump_flies(p, s, msec, T);
+  }
+  if (p.mode == PilotMode::jump && !flown) {
     // Off the line at the start (the run steers back onto it before), or past it without the
     // speed: run up again.
     const bool off_line = along > -2 && (lat_abs > kOnLine || (speed > kSlow && cosv < kJumpAim));
@@ -840,6 +860,13 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
       shot_view_ready(p)) {
     w.jump = true;
     because = "at the start at the jump's speed: jump";
+    return true;
+  }
+  if (flown) {
+    w.jump = true;
+    w.yaw = unwrap(yaw_at(s.origin, T), p.yaw);
+    because = "near the start, a jump from here lands: jump";
+    p.stats.jumps_flown++;
     return true;
   }
   because = flip && behind ? "running at the flip, the view behind"
@@ -1948,7 +1975,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
                                  : flip           ? p.set.rocket_back_pitch
                                                   : p.set.rocket_pitch;
         if (jumped.kind == NavKind::rocket) p.shot_pitch = shot_pitch;
-        const bool jumped_now = approach_jump(p, s, S, T, v, w, target, because, flip, msec);
+        const bool jumped_now = approach_jump(p, s, S, T, v, w, target, because, flip, msec,
+                                              jumped.kind == NavKind::jump);
         if (jumped_now) {
           // A rocket jump: the shot at the feet with the jump (its blast does the rest); the flip's
           // behind, down at the floor it runs off.
