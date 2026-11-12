@@ -30,6 +30,7 @@ constexpr std::array<std::string_view, kAmmoKinds> kAmmoWords = {"SHELLS", "NAIL
 constexpr std::string_view kFragsWord = "FRAGS";
 constexpr std::string_view kHealthWord = "HEALTH";
 constexpr std::string_view kArmourWord = "ARMOR";
+constexpr std::string_view kMeleeWord = "AXE";  // the weapon group's melee weapon (no picture)
 
 constexpr uint8_t kClassic = 1, kModern = 2, kCompact = 4, kArena = 8, kTactical = 16,
                   kMinimal = 32, kAll = 63;
@@ -104,6 +105,7 @@ enum Id : uint8_t {
   frags,
   notify,
   centre,
+  wgroup,
   kIdCount,
 };
 
@@ -476,6 +478,17 @@ std::vector<Row> table() {
        .help = "the centre message"};
   e.under_corners = true;
   put(centre, e, kAll);
+  // The weapon group a number key opens (cl_weapongroups 1): a column on the right edge over the
+  // corner's figures, best first, folding down into the weapon in hand.
+  e = {.id = "wgroup",
+       .kind = Kind::strip,
+       .anchor = Anchor::bottom_right,
+       .y = -0.3,
+       .help = "the weapon group a number key opens (cl_weapongroups 1)"};
+  e.unit = 3.5f, e.strip = lined(2, 3);
+  e.strip.vertical = true, e.strip.text_at = Anchor::top_right, e.strip.text_dx = 2;
+  e.strip.text_dy = -3;
+  put(wgroup, e, kAll);
   return t;
 }
 
@@ -594,6 +607,49 @@ void loadout_cells(gh::Content& c, Grouping g, bool column, const Status& s, con
       gun(k, first && a > 0);
       first = false;
     }
+  }
+}
+
+// THE WEAPON GROUP (status.hpp's GroupShow): its weapons down a column, best first, the one asked
+// for lit (framed while the group is open); one without a shot's ammunition faded. Folding, the
+// others shrink and fade into the lit one; folded, the lit one alone, a gold `+` on its corner
+// while its group holds another weapon carried. The melee weapon has no picture: its word.
+void group_cells(gh::Content& c, const Status& s, const HudArt& art, ui::Color ink) {
+  const GroupShow& g = s.group;
+  c.on &= g.on && g.count > 0 && !s.dead;
+  c.face = &art.count_face;
+  c.cells.clear();
+  if (!c.on) return;
+  for (int i = 0; i < g.count; ++i) {
+    const bool lit = i == g.lit;
+    if (!lit && g.open <= 0) continue;
+    const Weapon w = g.weapons[static_cast<size_t>(i)];
+    gh::Cell cell;
+    if (w == Weapon::melee) {
+      cell.w = 24, cell.h = 16;
+      cell.text = std::string(kMeleeWord);
+      cell.text_at = static_cast<int>(Anchor::center);
+      cell.text_color = ink;
+    } else {
+      const auto k = static_cast<size_t>(w) - 1;
+      cell.image = lit ? &art.gun_lit[k] : &art.gun[k];
+    }
+    cell.alpha = g.ready[static_cast<size_t>(i)] ? 1.0f : 0.4f;
+    if (!lit) {  // folding: shrinks to nothing and fades
+      cell.h = 16 * g.open;
+      cell.alpha *= g.open;
+    }
+    cell.framed = lit && g.open > 0 && g.count > 1;
+    cell.plate = cell.plate_low = {0, 0, 0, 0.45f};  // a dark backing so it reads on any wall
+    if (lit && g.more && g.open <= 0) {
+      if (w == Weapon::melee) {
+        cell.text += "+";
+      } else {
+        cell.text = "+";  // the second weapon's mark on the corner
+        cell.text_color = ui::hex(0xffd36a);
+      }
+    }
+    c.cells.push_back(cell);
   }
 }
 
@@ -984,6 +1040,8 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   if (hud.viewsize >= 120)
     for (size_t i = 0; i < L.size(); ++i)
       if (i != crosshair && i != notify && i != centre) L[i].content.on = false;
+
+  group_cells(at(wgroup), s, art, count_ink);
 
   at(centre).value = hud.centre;
   at(centre).on &= !hud.centre.empty() && s.t < hud.centre_until;

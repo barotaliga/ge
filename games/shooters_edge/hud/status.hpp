@@ -14,6 +14,7 @@
 //
 // ge:summary Shooter's Edge's HUD snapshot: health, armour, ammunition, weapons, keys, powerups
 // ge:keywords hud status snapshot health armour armor ammo shells nails rockets cells weapons
+// ge:keywords weapon-group group-show
 // ge:keywords keys powerups cloak shield suit damage runes frags scoreboard player-status
 // ge:skill ui
 // ge:test tests/shooters_edge_hud_test.cpp
@@ -51,6 +52,20 @@ inline constexpr int kPowers = 4;
 // The ammunition a weapon fires (none for the melee weapon).
 Ammo ammo_of(Weapon w);
 
+// The weapon group shown (client/weapon_groups.hpp, with cl_weapongroups 1): open, the group's
+// weapons carried, best first, the one asked for lit; folding (`open` falling to 0) into it;
+// folded, the weapon in hand alone, `more` marking that its group holds another carried.
+inline constexpr int kGroupShown = 4;
+struct GroupShow {
+  bool on = false;
+  int count = 0;
+  std::array<Weapon, kGroupShown> weapons{};
+  std::array<bool, kGroupShown> ready{};  // with a shot's ammunition
+  int lit = -1;
+  float open = 0;  // 1 open .. 0 folded
+  bool more = false;
+};
+
 // A row of the frag board the HUD shows beside its own figures.
 struct FragRow {
   int frags = 0;
@@ -74,6 +89,7 @@ struct Status {
   int frags = 0;
   std::vector<FragRow> board;  // sorted best first; the HUD shows at most four
   bool dead = false;
+  GroupShow group;
 
   bool has(Weapon w) const {
     return w == Weapon::melee || (owned >> (static_cast<int>(w) - 1) & 1) != 0;

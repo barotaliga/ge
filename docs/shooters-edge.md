@@ -1660,6 +1660,7 @@ list is in `porting/shooters-edge/survey.md`.
 | Later | Single-player campaigns and co-op on the single-player `progs` | M18s |
 | Better | The easy jump: `cl_speedjump 1` hops and gains on forward and jump alone where the server's `pm_speedjump` allows it, and on any other server by the client strafing for the player, disclosed in the user info (`docs/movement.md`) | M18e |
 | Better | The quick weapon: `cl_quickweapon 1` makes +attack fire the best weapon carried of `cl_quickweapon_prio` and put `cl_quickweapon_default` back; +attack2 the same off `cl_quickweapon_prio2`; `cl_quickweapon_preview` shows the weapon a press would fire see-through in hand, `cl_quickweapon_hide` hides the hand instead (§ The quick weapon) | M48i |
+| Better | Weapon groups: `cl_weapongroups 1` makes each number key pick the best weapon of its group (`cl_weapongroup<n>`, the game's own by default), the next on a second press, with a HUD column that opens on the key and folds into the weapon in hand (§ Weapon groups) | M48j |
 | Later | Splitscreen; touch controls for phones and tablets | M18m |
 
 ### The quick weapon
@@ -1688,6 +1689,31 @@ frame's TAA-U averages to a see-through gun. Through a tap of +attack the hand k
 quick weapon: the ghost turns solid in 0.06 s, fires, stays solid 0.15 s more and eases back to the
 ghost over 0.25 s while the kept weapon comes back unseen, so no weapon switch is drawn. +attack2
 switches as any weapon key does. Lab: `se-quickweapon` (its `tap-chart`).
+
+### Weapon groups
+
+The number keys pick from groups of weapons instead of one weapon each, on the client
+(`plugins/shooter/weapon_groups.hpp` for any shooter, `client/weapon_groups.hpp` the game's
+wiring), so it works in the window's own match and on any server joined.
+
+| Cvar | Default | What it does |
+| --- | --- | --- |
+| `cl_weapongroups` | 0 | 1: a number key whose group is set picks from it |
+| `cl_weapongroup1` .. `cl_weapongroup9` | empty | the key's weapons, best first, by weapon key; empty: the game's own group; `0`: no group (the key picks its own weapon) |
+
+The classic game's groups are 1 `7 6` (the rocket launcher, then the grenade launcher), 2 `8` (the
+beam gun), 3 `5 4` (the nailguns), 4 `3 2` (the shotguns), 5 `1` (the melee weapon); keys 6 to 8
+have none, so they still pick their own weapon. The sequel's, by its own keys, are 1 `8 7 6` (the
+explosives), 2 `10` (the railgun), 3 `9 5 4` (the rapid-fire guns), 4 `3 2` (the shotguns), 5 `1`
+(the blaster) and 6 `11` (the BFG). A key asks for the best weapon of its group carried with a
+shot's ammunition; pressed again within 2 s it asks for the next, round to the first. The number
+key's `impulse` (the default binds) is read as the group, before the quick weapon sees it.
+
+The HUD's `wgroup` element, in every look (moved and sized by its `hud_wgroup_*` cvars), is a column
+on the right edge: on a key it opens to the group's weapons carried, best first, the one asked for
+framed; the attack, or 2 s without a press, folds the others down into it over 0.2 s; folded it
+shows the weapon in hand alone, with a gold `+` while its group holds another weapon carried. A
+weapon without ammunition shows faded. Lab: `se-weapongroups`.
 
 ## Labs
 
