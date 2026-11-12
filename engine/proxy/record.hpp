@@ -11,11 +11,17 @@
 //   config.tap = [&](const Passed& p) { proxy_record(rec, p.to_server, p.datagram, p.now_us); };
 //   proxy_record_finish(rec, now)                       the last block and the trailer; rec.bytes
 //
+// OBSERVERS: the file grows a whole block at a time, so its new bytes (`proxy_record_fresh`) are
+// a TV node's source as they come (`tv::tv_feed`, engine/tv/node.hpp): a player's friends watch
+// the match through a TV node beside the proxy, from its start whenever they join (the only
+// keyframe), with the node's delay.
+//
 // Within a millisecond the file keeps each direction's order, not the order between the two.
 //
 // ge:summary Recording on the proxy: the game datagrams it passes, both ways, as a replay file
 // ge:keywords proxy record recording replay-file ger datagrams to_server to_client messages-track
 // ge:keywords proxy_record_begin proxy_record proxy_record_finish proxy_read_recording
+// ge:keywords proxy_record_fresh observers tv-source
 // ge:skill net replay
 // ge:test tests/proxy_test.cpp
 #pragma once
@@ -41,6 +47,7 @@ struct ProxyRecording {
   bool open = false, finished = false;
   uint64_t to_server = 0, to_client = 0;  // datagrams kept
   uint64_t payload = 0;                   // their bytes
+  size_t fresh_at = 0;                    // `bytes` already handed out by `proxy_record_fresh`
 };
 
 // The header: `game` and `meta` as the caller has them, the recorder's own keys added
@@ -52,6 +59,9 @@ void proxy_record(ProxyRecording& r, bool to_server, std::span<const uint8_t> da
                   int64_t now_us);
 // The last block and the trailer (`duration_ms`, `to_server`, `to_client`).
 void proxy_record_finish(ProxyRecording& r, int64_t now_us);
+
+// The file's bytes written since the last call: the header, then whole blocks, then the trailer.
+std::span<const uint8_t> proxy_record_fresh(ProxyRecording& r);
 
 struct Recorded {
   bool to_server = false;

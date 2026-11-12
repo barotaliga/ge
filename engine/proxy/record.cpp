@@ -62,6 +62,12 @@ void proxy_record_finish(ProxyRecording& r, int64_t now_us) {
   r.finished = true;
 }
 
+std::span<const uint8_t> proxy_record_fresh(ProxyRecording& r) {
+  const std::span<const uint8_t> out = std::span<const uint8_t>(r.bytes).subspan(r.fresh_at);
+  r.fresh_at = r.bytes.size();
+  return out;
+}
+
 bool proxy_read_recording(std::span<const uint8_t> file, std::vector<Recorded>& out,
                           std::string& error) {
   out.clear();

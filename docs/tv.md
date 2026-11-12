@@ -296,6 +296,12 @@ has every match without the game recording it. `tests/proxy_test.cpp`: through 1
 proxy's file reads back to exactly what the client got, the far one's to exactly what the server
 got, at under a third of the game's bytes.
 
+**Observers**: the recording grows a whole block at a time, so its new bytes
+(`proxy_record_fresh`) are a TV node's source as they come (`tv_feed`): the player's friends watch
+through a TV node beside the proxy, with its delay. The file's only keyframe is its first block (an
+opaque stream reads from its start alone), so a friend who joins mid-match is sent the match from
+its start. `tests/proxy_test.cpp`: an observer who joins half way holds every datagram when it ends.
+
 The `proxy` lab runs a 60 Hz client and a 20 Hz server through the pair at each loss on the link
 between them:
 

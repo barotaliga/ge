@@ -4,7 +4,8 @@
 // between the proxies, three copies each way cut the loss the game sees more than five times, and
 // packing at least halves the link's bytes for a game whose datagrams change little; a server off
 // the far proxy's allow list is refused with the reason; each proxy records what it passes as a
-// replay file that reads back to exactly what the game's ends got.
+// replay file that reads back to exactly what the game's ends got, and a TV node fed the file as
+// it grows serves an observer who joins mid-match the whole match from its start.
 //
 // ge:summary Tests the proxy: packing, repeats, the near and far pair under loss, the allow list
 // ge:keywords test proxy pack repeat loss link near far allow-list session
@@ -19,6 +20,7 @@
 #include "proxy/proxy.hpp"
 #include "proxy/record.hpp"
 #include "proxy/trial.hpp"
+#include "tv/node.hpp"
 
 namespace px = ge::proxy;
 namespace net = ge::net;
@@ -160,4 +162,44 @@ TEST(each_proxy_records_what_it_passes_as_a_replay_file) {
   ge::replay::stream_finish(w, {});
   CHECK(!px::proxy_read_recording(other, near, error));
   CHECK(error.find("not a proxy's recording") != std::string::npos);
+}
+
+TEST(an_observer_watches_the_recording_through_a_tv_node_as_it_grows) {
+  px::ProxyRecording rec;
+  rec.block_us = 500000;
+  proxy_record_begin(rec, "trial", {{"side", "near"}}, 0);
+  ge::tv::Node node;
+  ge::tv::Watch early, late;
+  const ge::tv::Send send = [&](int link, std::span<const uint8_t> m) {
+    return ge::tv::watch_receive(link == 1 ? early : late, m);
+  };
+  ge::tv::tv_join(node, 1);
+  CHECK(ge::tv::tv_receive(node, 1, ge::tv::tv_hello("early", false)));
+  for (int64_t t = 0; t <= 6000000; t += 10000) {
+    if (t % 20000 == 0) px::proxy_record(rec, true, snapshot(static_cast<int>(t / 20000), 24), t);
+    if (t % 50000 == 0) px::proxy_record(rec, false, snapshot(static_cast<int>(t / 50000), 400), t);
+    if (t == 3000000) {  // half way through
+      ge::tv::tv_join(node, 2);
+      CHECK(ge::tv::tv_receive(node, 2, ge::tv::tv_hello("late", false)));
+    }
+    if (t == 6000000) px::proxy_record_finish(rec, t);
+    CHECK(ge::tv::tv_feed(node, px::proxy_record_fresh(rec), t / 1000));
+    ge::tv::tv_update(node, t / 1000, send);
+  }
+  CHECK_MSG(node.finished, node.error);
+  ge::tv::tv_update(node, 7000, send);
+  CHECK(early.ended && late.ended);
+  // Both observers hold the whole match: the late one was sent it from the start.
+  std::vector<px::Recorded> got, want;
+  std::string error;
+  CHECK_MSG(px::proxy_read_recording(rec.bytes, want, error), error);
+  CHECK_MSG(px::proxy_read_recording(late.stream, got, error), error);
+  CHECK(want.size() == 300 + 120 + 2);
+  CHECK(got.size() == want.size());
+  bool same = got.size() == want.size();
+  for (size_t i = 0; same && i < got.size(); i++)
+    same = got[i].bytes == want[i].bytes && got[i].to_server == want[i].to_server;
+  CHECK(same);
+  CHECK_MSG(px::proxy_read_recording(early.stream, got, error), error);
+  CHECK(got.size() == want.size());
 }
