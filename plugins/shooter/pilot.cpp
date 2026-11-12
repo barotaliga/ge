@@ -71,6 +71,9 @@ constexpr float kLastJump_s = 0.55f;
 constexpr float kHeadroom_s = 0.8f;  // a hop's jump's flight checked this far, or to its landing
 constexpr float kSimpleSide = 3;     // the simple hop takes the side the route is this far off, deg
 constexpr float kStrafeSpeed = 0.8f;  // a strafe starts moving at least this share of maxspeed
+// `hop_chain`: a landing within this of a hop's air (s) chains into a hop at this speed or more.
+constexpr double kChainLand_s = 0.05;
+constexpr float kChainSpeed = 250;
 // A gap trick (nav_gaps.hpp): a jump lands across when within this of its landing node; a gap
 // flight come down within this of it landed.
 constexpr float kGapLanded = 96;
@@ -1220,6 +1223,13 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   const float t = static_cast<float>(p.stats.time_s);
   p.stats.time_s += static_cast<double>(dt);
   p.clock_s += static_cast<double>(dt);
+  // A hop's landing this command (`hop_chain`): the hop was in the air on the last one.
+  const bool chain = p.set.hop_chain && s.onground && p.hop_air_s >= 0 &&
+                     p.clock_s - p.hop_air_s <= kChainLand_s;
+  // (Carried through the whole flight: a hop's stretch that ended in the air still lands one.)
+  if (!s.onground && (p.mode == PilotMode::hop ||
+                      (p.hop_air_s >= 0 && p.clock_s - p.hop_air_s <= kChainLand_s)))
+    p.hop_air_s = p.clock_s;
   see_movers(p, s);
   const NavGraph& g = *p.g;
   Want w;
@@ -1312,6 +1322,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
                     : !s.onground                                           ? "in the air"
                     : speed >= kStrafeSpeed * s.maxspeed                    ? "running"
                     : p.clock_s < p.recipe_retry_s                          ? "waiting"
+                    : chain                                                 ? "chaining"
                     : !(l.kind == NavKind::walk || l.kind == NavKind::drop) ? "not a walk"
                     : l.mover >= 0 || near_gap || (l2 && leaps(l2->kind))   ? "a mover, gap or jump"
                                                                             : "looked";
@@ -1334,15 +1345,18 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     }
     if (p.set.hop && p.mode == PilotMode::walk && s.onground &&
         (l.kind == NavKind::walk || l.kind == NavKind::drop || (l.gap && hops_gaps(p))) &&
-        l.mover < 0 && (speed >= kStrafeSpeed * s.maxspeed || near_gap) &&
+        l.mover < 0 &&
+        (speed >= kStrafeSpeed * s.maxspeed || near_gap || (chain && speed >= kChainSpeed)) &&
         !(l2 && leaps(l2->kind) && !(l2->gap && hops_gaps(p)))) {
       const int32_t j = hop_stretch(p, s.origin);
-      if (j >= 0 && (speed >= kStrafeSpeed * s.maxspeed || gap_in(p, j) >= 0)) {
+      if (j >= 0 && (speed >= kStrafeSpeed * s.maxspeed || gap_in(p, j) >= 0 ||
+                     (chain && speed >= kChainSpeed))) {
         p.mode = PilotMode::hop;
         p.strafe_end_node = j;
         p.gap_k = gap_in(p, j);
         p.strafe_side = 0;
-        p.circle_s = p.set.hop_circle ? 0.f : -1.f;
+        // (A hop's landing chained: jumped again at once, no curve on the ground first.)
+        p.circle_s = p.set.hop_circle && !chain ? 0.f : -1.f;
         p.circle_side = 0;
         p.best = 1e30f;
         p.best_s = t;

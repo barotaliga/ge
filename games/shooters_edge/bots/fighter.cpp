@@ -1417,6 +1417,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   // The circle jump by skill: an expert curves up to 0.3 s for ~430 (people's standing jumps
   // take off at 433, p50), an average player a shorter curve for less (people's p25: 377).
   ps.hop_circle = features[sh::Feature::circlejump];
+  ps.hop_chain = features[sh::Feature::chainhop];
   ps.circle.target = expert ? 430.f : 380.f;
   ps.circle.most_s = expert ? 0.3f : 0.2f;
   // People's hop starts (`recipes`): a hopper copies its level's out of the book.
@@ -1539,6 +1540,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   f.bot.aimhop = f.features[sh::Feature::aimhop];
   f.bot.airkeys = f.features[sh::Feature::airkeys];
   f.bot.airview = f.features[sh::Feature::airview];
+  f.bot.airwall = f.features[sh::Feature::airwall];
   f.bot.paced = f.features[sh::Feature::pace];
   f.bot.trial = f.features[sh::Feature::trial];
   // A change of course read a reaction late (`eye`), and the aim from its eye ahead (`selfaim`).

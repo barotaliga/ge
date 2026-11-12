@@ -80,6 +80,7 @@ struct Bot {
   // only while it carries the velocity on under the view the hand has pressed.
   bool airkeys = false;
   bool airview = false;  // and the hand's view on the velocity in a hop's air (`airview`)
+  bool airwall = false;  // and the air's keys charged for a wall ahead (`airwall`)
   int32_t target = -1;       // the contact's entity the view is on
   float yaw = 0, pitch = 0;  // the view last pressed, degrees (yaw unwrapped)
   double wanted[2] = {}, pressed[2] = {};  // the aim's last yaw and pitch, wanted and pressed
