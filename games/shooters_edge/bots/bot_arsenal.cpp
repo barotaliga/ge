@@ -12,6 +12,7 @@
 
 #include "shooters_edge/server/sequel_combat.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
+#include "shooters_edge/server/sequel_monster_kinds.hpp"
 
 namespace shooters_edge::bots {
 
@@ -84,6 +85,25 @@ void first_read(const server::PlayerNumbers& n, Stats& st) {
   for (int k = 0; k < 4; k++) st.ammo[k] = n.ammo[k];
 }
 
+int first_monster(std::string_view model) {
+  namespace pf = shooters_edge::profiles;
+  for (std::string_view name : pf::kClassicNoWeapon)
+    if (model == name) return 3;
+  for (std::string_view name : pf::kClassicBlastOnly)
+    if (model == name) return 2;
+  for (std::string_view name : pf::kClassicMonsters)
+    if (model == name) return 1;
+  return 0;
+}
+
+// The sequel's roster: every kind that hunts (not a good guy, not a figure that only answers a
+// use) is one any weapon puts down.
+int sequel_monster(std::string_view model) {
+  for (const server::roster::Kind& k : server::roster::kKinds)
+    if (!k.good && !k.prop && model == k.model) return 1;
+  return 0;
+}
+
 BotArsenal make_first() {
   BotArsenal a;
   a.weapons = kFirstWeapons;
@@ -99,6 +119,7 @@ BotArsenal make_first() {
   a.ammo_max[2] = 100;  // rockets
   a.ammo_max[3] = 100;  // cells
   a.tables = &shooters_edge::profiles::kClassicTables;
+  a.monster = first_monster;
   a.short_of[0] = 40;  // shells
   a.short_of[1] = 60;  // nails
   a.short_of[2] = 20;  // rockets
@@ -245,6 +266,7 @@ SequelArsenal make_sequel() {
   const float shorts[6] = {20, 100, 10, 20, 100, 10};
   for (int k = 0; k < 6; k++) a.short_of[k] = shorts[k];
   a.read = sequel_read;
+  a.monster = sequel_monster;
   return out;
 }
 
