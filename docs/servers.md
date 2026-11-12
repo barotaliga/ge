@@ -288,6 +288,15 @@ Any player may ask everyone on the server to change a setting until the map chan
   by the players. Its key is `speedjump:<user id>`, so each player is his own change; the next map
   puts back what he had (an administrator's grant comes back, a voted one goes). A player who has
   left is passed over. `sv_vote_deny speedjump` keeps it to the administrator.
+- **Midair, a match mode.** `k_midair 1` (and `k_midair_minheight` 0..4) turns a deathmatch into
+  the rocket duel where only a hit on a player in the air counts: every spawn holds the rocket
+  launcher with rockets that never run out, 250 health and 200 armour, nothing lies on the map, a
+  rocket on another player at least the least height (64, 128, 256, 512 or 1024 units) above the
+  floor kills him and scores 1, 2, 4 or 8 by how far he was above where the shooter fired, and the
+  match's end tells each player's midairs. The rules are one C++ file every game's rules call
+  (`plugins/shooter/midair.hpp`); the sequel's rules play it today, the classic arena's with their
+  move to C++. A vote on `k_midair` restarts the map into or out of the mode; on rules that do not
+  play it the vote is refused.
 
 ## Open for extension
 
@@ -336,4 +345,5 @@ What maps onto which classic feature is kept in the working area
 | `server-cfg` | M53b, M53e | A base, a mod and a profile `server.cfg` with the explained table drawn as an image; meta-cvars on and off |
 | `server-lobby` | M53c | Warmup, ready and break, countdown, match, intermission, rotation, charted per phase, for both games |
 | `server-vote` | M53h | People coming and going while votes are called and answered: each vote's count over time against the yes needed, how each ended, every change put back at the map's end, replayed to the bit |
+| `se-midair` | M53h | Midair's shared rules charted, and one rocket at a target at each height on the sequel's rules: counted or not, the frags, the line, the lift; on a hall or a real map's slice |
 | `server-launch` | M53d | The game spawning a dedicated server, joining it, leaving, finding it again and stopping it |

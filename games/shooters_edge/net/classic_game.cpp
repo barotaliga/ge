@@ -21,6 +21,7 @@
 #include "mod/loader.hpp"
 #include "net/packet.hpp"
 #include "progs/file.hpp"
+#include "shooter/midair.hpp"
 #include "shooter/settings.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
@@ -127,6 +128,9 @@ constexpr gs::GameRule kModRules[] = {
     {"pausable", "1: a player may pause the game (0: only unpausing)"},
     // The sequel's rules only; a map without brushes plays by the mod's own and leaves it alone.
     {"dmflags", "the sequel's deathmatch rule bits (8192: infinite ammo); classic maps ignore it"},
+    {"k_midair",
+     "1: midair, rockets count only on a player in the air (the sequel's maps; restarts)"},
+    {"k_midair_minheight", "midair: the least height a hit counts at, 0..4 (64..1024 units; 1)"},
 };
 
 constexpr gs::GameRule kEndpointRules[] = {
@@ -563,8 +567,9 @@ std::string next_map(const gs::ServerConfig& c, const std::string& current,
 // (read when the server starts). A passed change is written into `settings.rules`, which every map
 // is made from: a mod's rule is set in the running rules at once (a limit the warmup holds waits
 // for the match), and a setting the players' own moves are predicted with restarts the map, so
-// every client is told it as it signs on again. A restart keeps the change; the next map puts it
-// back.
+// every client is told it as it signs on again, as does midair (`k_midair`, which takes the items
+// off the map); `k_midair_minheight` is told in the mode's words. A restart keeps the change; the
+// next map puts it back.
 //
 // `vote speedjump <id|name> on|off|<share>` grants one player the easy jump for this map, or takes
 // it back (classic_admin.hpp's grant: disclosed, `*speedjump` in his user info). The change is
@@ -652,6 +657,12 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
     out.error = rule + " is set when the server starts, so it can't be voted on";
     return false;
   }
+  // Midair is the sequel's rules' own (and a loaded match mod's that has it); the classic arena's
+  // comes with its rules' move to C++ (plugins/shooter/midair.hpp holds the shared rules).
+  if (rule.rfind("k_midair", 0) == 0 && g.module.empty() && sv::sequel_of(g.rules) == nullptr) {
+    out.error = "Midair can't be played on this map yet";
+    return false;
+  }
   if (const sh::Setting* setting = sh::find_setting(rule); setting != nullptr) {
     sh::ServerSettings check;
     std::string error;
@@ -687,19 +698,28 @@ void vote_turn(Game& g) {
   b.said.clear();
   b.notes.clear();
   bool restart = false;
+  const char* why = "The map restarts so everyone moves by the new setting\n";
   for (const gs::VoteChange& c : gs::vote_take(b)) {
     if (c.name == kSpeedjumpVote) {
       speedjump_vote_apply(g, c);
       continue;
     }
     g.settings.rules[c.name] = c.value;
-    if (sh::find_setting(c.name) != nullptr)
+    if (sh::find_setting(c.name) != nullptr) {
       restart = true;
-    else if (!held_now(g, c.name))
+    } else if (c.name == "k_midair") {
+      // Midair takes the items off the map and arms every spawn: a new start.
       g.rules.console(c.name + " \"" + c.value + "\"");
+      restart = true;
+      why = c.value == "0" ? "The map restarts without midair\n" : "The map restarts for midair\n";
+    } else if (!held_now(g, c.name)) {
+      g.rules.console(c.name + " \"" + c.value + "\"");
+    }
+    if (c.name == "k_midair_minheight" && g.classic)
+      classic_print_all(*g.classic, sh::midair_level_line(sh::midair_level(c.value)));
   }
   if (restart && g.classic) {
-    classic_print_all(*g.classic, "The map restarts so everyone moves by the new setting\n");
+    classic_print_all(*g.classic, why);
     sv::RulesCommon& now = *g.rules;
     now.pending_map = g.map->name;
     now.pending_change = sv::MapChange::restart;
@@ -736,10 +756,42 @@ void vote_map_over(Game& g) {
 // The game moved onto the map `name` (`supplied`: a listen server's, read by its window): the
 // next map's server made, the endpoint moved onto it, the old one let go. A map that does not load
 // leaves the game on the one it was playing (`failed` says why, `error` too).
+// The sequel's rules outside deathmatch keep the campaign (the bodies carried, the help computer,
+// the cross-level bits: server/sequel_campaign.hpp) in their own server, so a level change starts
+// the next map on the same server rather than a new one; the players stay seated through it. A
+// lobby's game and a map without brushes make new rules as before.
+bool keeps_campaign(const Game& g, const cl::LoadedMap& next) {
+  if (g.room || next.spec.brushes == nullptr) return false;
+  const sv::SequelServer* sq = sv::sequel_of(g.rules);
+  return sq != nullptr && !sq->cvars.find("deathmatch")->on();
+}
+
+bool next_level_on_same_rules(Game& g, std::shared_ptr<cl::LoadedMap> map, std::string& error) {
+  if (!g.rules.start(map->spec, error)) {
+    error = "the map " + map->name + " did not load: " + error;
+    g.failed = error;
+    return false;
+  }
+  if (map->from_file) sv::use_map_sets(*g.rules, map->bsp);
+  if (g.classic && !classic_change(*g.classic, g.rules, error)) {
+    g.failed = error;
+    return false;
+  }
+  g.map = std::move(map);
+  g.changes++;
+  g.failed.clear();
+  host_bind(g);
+  return true;
+}
+
 bool move_to(Game& g, const std::string& name, bool match_over, std::string& error,
              std::shared_ptr<cl::LoadedMap> supplied = nullptr) {
   // A vote lasts the map: put back before the next map is made (a restart keeps it).
   if (match_over) vote_map_over(g);
+  if (supplied && keeps_campaign(g, *supplied))
+    return next_level_on_same_rules(g, std::move(supplied), error);
+  if (!supplied && g.map && g.map->name == name && keeps_campaign(g, *g.map))
+    return next_level_on_same_rules(g, g.map, error);  // a restart: as each player came in
   std::shared_ptr<cl::LoadedMap> map;
   sv::RulesRunner next;
   if (!open_map(g, name, map, next, error, std::move(supplied))) {

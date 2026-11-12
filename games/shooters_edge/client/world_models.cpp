@@ -277,6 +277,7 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       bool any_stand_in = false;
       for (size_t s = 0; s < std::max<size_t>(1, model.skins.size()); s++) {
         morphs.push_back(models::morph_from_alias(model, palette, int(s)));
+        if (s == 0) k.glow_share = models::glow_colour(morphs.back().skin, k.glow_rgb);
         if (s < opened.skins.size() && opened.skins[s].width > 0) {
           stood_in.emplace_back(morphs.size() - 1, morphs.back().skin);
           stand_in_skin(morphs.back().skin, opened.skins[s]);
@@ -600,7 +601,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     // are to the floor under it.
     double dyn[3], toward[3];
     const double mid[3] = {w[0], w[1] + 16 * br::kUnitM, w[2]};
-    effects::dynamic_light_at(dynamic, mid, dynamic_strength, dyn, toward);
+    effects::dynamic_light_at(dynamic, mid, dynamic_strength, dyn, toward, p.entity);
     double floor_lum = 0, dyn_lum = 0;
     for (int c = 0; c < 3; c++) {
       // The world's own soft floor (bsp_draw's r_minlight), so a thing in a dark corner reads
