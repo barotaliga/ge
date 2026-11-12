@@ -278,8 +278,10 @@ int run_main(int argc, char** argv) {
   console.cvars().set("con_notifylines", "0", ge::console::Source::code);
   // The install (client/game_folder.hpp): -basedir, else the one loaded last; multiplayer over
   // `id1`.
+  // Started inside an install (or placed in one, or above several: client/installs.hpp), that one.
   const std::string prefs = ge::platform::prefs_dir("gameengine2", "shooters_edge");
-  cl::choose_folder(args, prefs);
+  std::vector<cl::FoundInstall> installs;  // the console's `games`
+  cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
   console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
   // A session's own config (`-config <file>`): read and saved there, the player's left alone.
@@ -714,6 +716,27 @@ int run_main(int argc, char** argv) {
                           c.print("basedir: " + args.basedir + " (basedir <folder> loads another)");
                         else
                           folder_ask = cl::expand_home(a.size() == 2 ? a[1] : a.rest(0));
+                      });
+  // The installs found where the game was started or placed (client/installs.hpp): `games`
+  // lists them, `games <n>` loads one as `basedir` does.
+  console.add_command("games",
+                      "games: the classic games found where this game was started or placed; "
+                      "games <number>: load one of them",
+                      [&](Con& c, const CArgs& a) {
+                        if (a.size() >= 2) {
+                          const int n = std::atoi(a[1].c_str());
+                          if (n >= 1 && n <= static_cast<int>(installs.size())) {
+                            folder_ask = installs[static_cast<size_t>(n) - 1].basedir;
+                            return;
+                          }
+                          c.print("There is no game " + a[1] + " in the list.");
+                        }
+                        if (installs.empty())
+                          c.print(
+                              "No classic games were found beside this game. Put it in your "
+                              "game's folder, or in the folder above it.");
+                        for (size_t i = 0; i < installs.size(); ++i)
+                          c.print(cl::install_line(installs[i], static_cast<int>(i) + 1));
                       });
   const auto open_folder = [&](const std::string& basedir) {
     // Whichever game the install is: its rows and its adapter from here on.
