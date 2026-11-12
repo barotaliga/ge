@@ -349,8 +349,7 @@ gl::Picture slice_picture(const Stage& d, const Spot& sp, const std::vector<Shot
                 {170, 170, 170}, 1);
   const double floor_y = py(sp.from.z - 24);
   const double min_y = py(sp.from.z - 24 + sh::midair_min_height(level));
-  for (double x = 20; x < w - 20; x += 8)
-    gl::draw_line(p, x, min_y, x + 4, min_y, {200, 80, 80}, 1);
+  for (int x = 20; x < w - 20; x += 8) gl::draw_line(p, x, min_y, x + 4, min_y, {200, 80, 80}, 1);
   gl::draw_text(p, 24, min_y - 12, "least height", {200, 80, 80}, 1);
   (void)floor_y;
   for (const Shot& s : shots) {
@@ -423,7 +422,7 @@ void sequel(gl::Lab& lab) {
   lab.metric("sequel.feet-lift", feet.up_speed, "units-per-s");
   lab.metric("sequel.room", sp.ceiling, "units");
   lab.shot({"sequel-shots",
-            "MIDAIR ON " + name + ": ONE ROCKET AT EACH HEIGHT",
+            "MIDAIR ON " + name + ": ROCKETS BY HEIGHT",
             "A slice of the map through the shooter's spot along the way he fires: each target "
             "held at its height above the floor, the rocket's line to it, and what the hit did.",
             "below the least height a hit only wears armour; above it the target dies and the "
