@@ -20,6 +20,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string_view>
 
 #include "shooters_edge/profiles/items.hpp"
 #include "shooters_edge/server/rules_world.hpp"
@@ -94,6 +95,9 @@ struct BotArsenal {
   float short_of[kMaxAmmo] = {};
   // The game's numbers for a player read into stats.
   void (*read)(const server::PlayerNumbers& n, Stats& st) = nullptr;
+  // What a model a client is sent is to a companion (bots/companion.hpp): 0 no monster, 1 a
+  // monster any weapon puts down, 2 one only a blast keeps down, 3 one no weapon kills.
+  int (*monster)(std::string_view model) = nullptr;
 };
 
 const BotArsenal& first_arsenal();

@@ -44,12 +44,13 @@
 namespace ge::shooter {
 
 struct Setting {
-  const char* name;  // the cvar's name: "sv_mintic"
-  const char* help;  // what it does, with its unit
-  double low, high;  // the range a value must be in (a switch: 0..1)
-  bool live;         // the move's: may change between frames; else read at map start
-  bool flag;         // a switch: 0 or 1
-  bool info;         // told to clients in the server info when not at its default
+  const char* name;    // the cvar's name: "sv_mintic"
+  const char* help;    // what it does, in one sentence with its unit
+  double low, high;    // the range a value must be in (a switch: 0..1)
+  bool live;           // the move's: may change between frames; else read at map start
+  bool flag;           // a switch: 0 or 1
+  bool info;           // told to clients in the server info when not at its default
+  const char* values;  // what each value does (console/words.hpp's form)
   double (*get)(const ServerSettings& set);
   void (*put)(ServerSettings& set, double value);
   bool always_info = false;  // told in the server info at every value (`pm_speedjump`)

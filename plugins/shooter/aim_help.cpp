@@ -7,6 +7,8 @@
 // ge:test tests/shooter_aim_help_test.cpp
 #include "shooter/aim_help.hpp"
 
+#include "core/libm/libm.hpp"
+
 #include <vector>
 
 #include "shooter/server.hpp"
@@ -85,6 +87,32 @@ namespace {
 // The box `lo`..`hi` at time `t` along a mover's own motion.
 void mover_at(const AimMover& m, float t, float target_gravity, Vec3f& lo, Vec3f& hi) {
   Vec3f d = m.velocity * t;
+  if (m.reach > 0 && t > m.reach) {
+    d.x = m.velocity.x * m.reach;
+    d.y = m.velocity.y * m.reach;
+  }
+  if (m.turn != 0) {
+    // Across the floor on an arc: the velocity turned at `turn`.
+    const double w = m.turn, a = w * double(t);
+    const double s = core::libm::sin(a), c = 1 - core::libm::cos(a);
+    d.x = float((double(m.velocity.x) * s - double(m.velocity.y) * c) / w);
+    d.y = float((double(m.velocity.y) * s + double(m.velocity.x) * c) / w);
+  } else if (m.accel.x != 0 || m.accel.y != 0) {
+    // Across the floor speeding up or bending: v t + a t^2 / 2, held to `top` on average.
+    d.x = m.velocity.x * t + 0.5f * m.accel.x * t * t;
+    d.y = m.velocity.y * t + 0.5f * m.accel.y * t * t;
+    const float across = d.x * d.x + d.y * d.y;
+    if (m.top > 0 && t > 0 && across > m.top * m.top * t * t) {
+      const float k = m.top * t / root_of(across);
+      d.x *= k;
+      d.y *= k;
+    }
+  } else if (m.fade > 0) {
+    // Across the floor, the run fading: he covers fade * (1 - e^-t/fade) of it.
+    const float k = m.fade * float(1 - core::libm::exp(-double(t) / double(m.fade)));
+    d.x = m.velocity.x * k;
+    d.y = m.velocity.y * k;
+  }
   if (m.airborne) d.z -= 0.5f * target_gravity * t * t;
   if (m.absmin.z + d.z < m.floor) d.z = m.floor - m.absmin.z;
   lo = m.absmin + d;
@@ -99,6 +127,22 @@ Vec3f flight_at(const LeadShot& s, float t) {
 }
 
 }  // namespace
+
+AimMover lead_mover(int ent, Vec3f absmin, Vec3f absmax, Vec3f velocity, bool airborne,
+                    float floor) {
+  AimMover m{.ent = ent,
+             .absmin = absmin,
+             .absmax = absmax,
+             .velocity = velocity,
+             .airborne = airborne,
+             .floor = floor,
+             .reach = kLeadReach};
+  if (velocity.x * velocity.x + velocity.y * velocity.y < kLeadRun * kLeadRun) {
+    m.velocity.x = 0;
+    m.velocity.y = 0;
+  }
+  return m;
+}
 
 LeadBend aim_lead(const LeadShot& shot, Vec3f view_forward, std::span<const AimMover> targets,
                   AimLeeway leeway, float target_gravity) {
@@ -226,13 +270,14 @@ int aim_help_missile(Server& sv, int missile, AimLeeway leeway, uint32_t friends
     if (!c.active || c.spectator || static_cast<size_t>(e) >= sv.edicts.size()) continue;
     const Edict& d = sv.edicts[static_cast<size_t>(e)];
     if (d.free || d.health <= 0 || d.solid == kSolidNot) continue;
-    AimMover m{e, d.absmin, d.absmax, d.velocity, (d.flags & kFlagOnGround) == 0};
-    if (m.airborne) {  // the ground under him: where his fall stops
+    const bool airborne = (d.flags & kFlagOnGround) == 0;
+    float floor = -1e30f;
+    if (airborne) {  // the ground under him: where his fall stops
       const HullTrace down = trace_move(sv, d.origin, d.mins, d.maxs, d.origin + Vec3f{0, 0, -4096},
                                         kTraceNoMonsters, e);
-      m.floor = down.endpos.z + d.mins.z;
+      floor = down.endpos.z + d.mins.z;
     }
-    targets[n++] = m;
+    targets[n++] = lead_mover(e, d.absmin, d.absmax, d.velocity, airborne, floor);
   }
   LeadShot shot;
   shot.origin = mis.origin;

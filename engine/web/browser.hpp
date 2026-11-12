@@ -8,6 +8,8 @@
 // - `ws_open`, `ws_send`, `ws_take`, `ws_close`: a WebSocket (a TV node's, tv/websocket.hpp),
 //   its binary messages queued as they come and taken whole in order, never waited for: the
 //   viewer's loop takes what has come each frame.
+// - `take_input`: the canvas's keys pressed since the last call (by scancode, the USB HID usage
+//   the platform layer uses) and its pointer in canvas pixels; a click focuses the canvas.
 // - `say`: a line in the page's status line (`#viewer-status`) and the console: what is loading,
 //   or why there is no picture, in a viewer's words.
 //
@@ -33,6 +35,13 @@ bool fetch_bytes(const std::string& url, std::vector<uint8_t>& out, std::string&
 double next_frame();
 // The canvas `selector` names: its pixel size.
 void canvas_size(const char* selector, uint32_t& width, uint32_t& height);
+struct PageInput {
+  std::vector<int> pressed;  // scancodes that went down since the last call, in order
+  float x = -1, y = -1;      // the pointer over the canvas, px (-1: not over it)
+  bool button = false;       // a button held
+};
+void take_input(const char* selector, PageInput& out);
+
 enum class WsState : uint8_t { connecting, open, closed };
 // A WebSocket to `url` (`ws://host:port/`): its number, or -1 when the browser refused the URL.
 int ws_open(const std::string& url);

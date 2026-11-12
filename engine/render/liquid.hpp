@@ -84,6 +84,7 @@ inline constexpr int kLiquidBreaks = 8;      // the crust's breaks a body rememb
 inline constexpr double kShimmerHeight = 3;  // m: the air's layer over a body, drawn as a box
 inline constexpr int kLiquidStirs = 8;       // the stirs a body draws a frame (the strongest)
 inline constexpr double kStirScale = 1.2;    // m: a plume's density's e-folding height
+inline constexpr double kHeatScale = 0.5;    // m: the heat haze's e-folding height over the melt
 
 enum class LiquidKind : uint8_t { lava, slime };
 
@@ -102,7 +103,7 @@ struct LavaLook {
   water::Rgb crust_albedo{0.045, 0.041, 0.038};
   double patch = 0;  // m: the open melt's patches' size (0: seven plates)
   // rad/m: the heat shimmer, how far a metre of the hot air at the melt bends a ray (0 none).
-  double shimmer = 0.004;
+  double shimmer = 0.002;
 };
 
 // The gas over a body: lava's smoke, a slime's fumes.

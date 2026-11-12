@@ -32,37 +32,41 @@ void add_coop_cvars(con::Console& c, CoopMode& m) {
   m.coop = &v.add({.name = "sv_coop",
                    .fallback = "0",
                    .flags = con::kArchive,
-                   .help = "1: the campaign is a coop game, started on the start map (at the "
-                           "game's start from a cfg, at once from the console)",
-                   .kind = con::CvarKind::boolean});
+                   .help = "Whether the campaign is a coop game, started on the start map.",
+                   .kind = con::CvarKind::boolean,
+                   .values = "0: on your own (the default); 1: coop, started at once from the "
+                             "console or at the game's start from a cfg"});
   m.bots = &v.add({.name = "sv_coopbots",
                    .fallback = "1",
                    .flags = con::kArchive,
-                   .help = "companion bots beside you when sv_coop starts a game (0 to 7)",
+                   .help = "The companion bots beside you when sv_coop starts a game.",
                    .kind = con::CvarKind::integer,
                    .min = 0,
-                   .max = kPartyMost});
+                   .max = kPartyMost,
+                   .values = "0: none; 1..7: that many (1 the default)"});
   m.friendly_fire = &v.add({.name = "sv_friendlyfire",
                             .fallback = "0",
                             .flags = con::kArchive,
-                            .help = "coop: 1 lets one player's shots harm another (0: teammates "
-                                    "are spared)",
-                            .kind = con::CvarKind::boolean});
+                            .help = "Whether one player's shots harm another in coop.",
+                            .kind = con::CvarKind::boolean,
+                            .values = "0: teammates are spared (the default); 1: harmed"});
   m.friendly_push = &v.add({.name = "sv_friendlypush",
                             .fallback = "0",
                             .flags = con::kArchive,
-                            .help = "coop with sv_friendlyfire 0: 1 lets a spared teammate's blow "
-                                    "still push you (a rocket boost off a friend); 0 no push",
-                            .kind = con::CvarKind::boolean});
-  m.episodes = &v.add({.name = "sv_episodes_done",
-                       .fallback = "0",
-                       .flags = con::kArchive,
-                       .help = "the episodes you have finished, a bit each (1, 2, 4, 8), kept "
-                               "from game to game; the start map opens each next one once the one "
-                               "before is done and shuts a done one (0 opens episode 1 again)",
-                       .kind = con::CvarKind::integer,
-                       .min = 0,
-                       .max = 15});
+                            .help = "Whether a spared teammate's blow still pushes you in coop, "
+                                    "such as a rocket boost off a friend.",
+                            .kind = con::CvarKind::boolean,
+                            .values = "0: no push (the default); 1: pushed"});
+  m.episodes =
+      &v.add({.name = "sv_episodes_done",
+              .fallback = "0",
+              .flags = con::kArchive,
+              .help = "The episodes you have finished, a bit each, kept from game to game.",
+              .kind = con::CvarKind::integer,
+              .min = 0,
+              .max = 15,
+              .values = "0: none, the start map opening episode 1 again (the default); 1..15: the "
+                        "sum of 1, 2, 4 and 8 for each done, the start map opening the next"});
   m.coop_seen = m.coop->revision;
   m.window = &v;
 }

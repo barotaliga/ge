@@ -16,6 +16,7 @@
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "shooter/sequel_move.hpp"
+#include "shooter/trace.hpp"
 #include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
@@ -146,4 +147,29 @@ TEST(the_sequel_arsenal_reads_a_players_numbers_and_the_maps_items) {
   CHECK(st.weapon == 1);                           // the blaster in hand
   CHECK(st.ammo[5] == 10 && bt::loaded(st, *rail));
   CHECK(!bt::has_launcher(st) && bt::launcher_rounds(st) == 0);
+}
+
+TEST(the_pools_trace_stops_at_a_mover_where_the_rules_put_it) {
+  sv::RulesRunner r = sv::sequel_runner(sv::make_sequel_server({}));
+  r.console("deathmatch 1");
+  sv::MapSpec spec;
+  spec.name = "hall";
+  spec.brushes = hall();
+  std::string error;
+  CHECK_MSG(r.start(spec, error), error);
+  r.frame(nullptr, 0);
+  const sh::Server& pool = r->sv;
+  CHECK(pool.world_trace != nullptr);
+  // The plat lowered to the floor: a line just over the floor across its place meets it, and
+  // the hit is the plat's row, not the world.
+  const sh::HullTrace low = sh::trace_move(pool, {250, 0, 4}, {}, {}, {380, 0, 4}, 0, 0);
+  CHECK(low.fraction < 1);
+  CHECK(low.ent > 0);
+  CHECK(low.endpos.x > 290 && low.endpos.x < 310);
+  // Above it (the plat down), the line goes on to the ledge's face.
+  const sh::HullTrace high = sh::trace_move(pool, {250, 0, 60}, {}, {}, {380, 0, 60}, 0, 0);
+  CHECK(high.fraction == 1);
+  // Through the dividing wall: the world.
+  const sh::HullTrace wall = sh::trace_move(pool, {-100, 150, 40}, {}, {}, {100, 150, 40}, 0, 0);
+  CHECK(wall.fraction < 1 && wall.ent == 0);
 }
