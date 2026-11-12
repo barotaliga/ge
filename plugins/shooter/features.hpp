@@ -93,6 +93,10 @@
 //   in no preset.
 // - `leadarc`: a projectile led along the target's curve at his turn rate (intercept.hpp
 //   `MovingTarget::turn`), a hopper's bend; not kept (even in the drill), in no preset.
+// - `airwalk`: a walk in the air at speed (a hop's stretch ended mid-flight, a drop off an edge)
+//   pressed with the air's key set that carries the velocity on toward the walk's target under
+//   the view pressed (bot.cpp, as the hop's air), not the walk's forward key, which brakes;
+//   on.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
@@ -105,7 +109,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -193,9 +197,10 @@ enum class Feature : uint8_t {
   leadwall,
   leadmean,
   leadarc,
+  airwalk,
   trial,
 };
-constexpr size_t kFeatures = 75;
+constexpr size_t kFeatures = 76;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

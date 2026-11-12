@@ -22,7 +22,7 @@ constexpr const char* kNames[kFeatures] = {
     "keysteer",  "lookway",    "press",      "slopes",   "counter", "jumpkey",   "backstep",
     "runupkeys", "gapbuild",   "curvekeys",  "underway", "recipes", "chains",    "retarget",
     "uturn",     "jumpfly",    "gappast",    "lipjump",  "airgap",  "pilotcast", "aimhop",
-    "airkeys",   "airview",   "chainhop",  "airwall",   "landwall", "circlekeys", "circleview", "circleaim", "leadwall", "leadmean", "leadarc",
+    "airkeys",   "airview",   "chainhop",  "airwall",   "landwall", "circlekeys", "circleview", "circleaim", "leadwall", "leadmean", "leadarc", "airwalk",
     "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
@@ -50,7 +50,9 @@ constexpr Features kKeys = of({Feature::lookway, Feature::press, Feature::counte
 // `airview` on: +1.7 on dm2 and +4.8 on e1m2 a match head to head; `airwall` on: even head to
 // head, +0.05 on dm2 and -0.4 on e1m2, hop flights colliding 36 -> 31 %; `chainhop` on: +4.5 on
 // dm2 and +2.4 on e1m2 a match head to head, the side with it faster; `leadwall` on: even head
-// to head, +0.4 on dm2 and 0.0 on e1m2, the rocket drill's direct hits on dm2 11.8 -> 12.5 %).
+// to head, +0.4 on dm2 and 0.0 on e1m2, the rocket drill's direct hits on dm2 11.8 -> 12.5 %;
+// `airwalk` on: +3.2 on dm2 and +1.4 on e1m2 a match head to head, the side with it 3-4 units/s
+// faster, a chained hop's landing 176 -> 257 units/s on dm2).
 constexpr Features kJudging = of({Feature::runupkeys, Feature::underway, Feature::gappast,
                                   Feature::airgap, Feature::pilotcast, Feature::landwall,
                                   Feature::circlekeys, Feature::circleview,
