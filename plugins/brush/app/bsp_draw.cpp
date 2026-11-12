@@ -242,8 +242,8 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     // The map's sky box (draw_data.hpp's Scene::sky_box), or a 1 x 1 stand-in the shader skips.
     const bool has = !scene.sky_box.levels.empty();
     const uint32_t w = has ? scene.sky_box.width : 1, h = has ? scene.sky_box.height : 1;
-    d.sky_box = r::make_texture(device, "bsp.sky_box", w, h, 1,
-                                wgpu::TextureFormat::RGBA8UnormSrgb, sampled, 1);
+    d.sky_box = r::make_texture(device, "bsp.sky_box", w, h, 1, wgpu::TextureFormat::RGBA8UnormSrgb,
+                                sampled, 1);
     if (has) {
       upload(device, d.sky_box, scene.sky_box);
     } else {

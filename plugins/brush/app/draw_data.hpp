@@ -205,17 +205,17 @@ struct Scene {
   // along +x, -x, +y, -y, +z, -z (kSkyBoxLook), each with its top edge toward kSkyBoxUp.
   Atlas sky_box;
   uint32_t sky_box_face = 0;
-  uint32_t counts[kKinds] = {};       // triangles of each kind
-  Rebaked rebaked;                    // the map's light rebaked (attach_rebake), or empty
+  uint32_t counts[kKinds] = {};  // triangles of each kind
+  Rebaked rebaked;               // the map's light rebaked (attach_rebake), or empty
 };
 
 // The sky box's six faces in their order (Scene::sky_box): the way each is looked along from
 // inside, and the way its top edge points (engine axes, y up); its right edge points
 // cross(up, look). The first three are the atlas's top row, the last three its bottom.
 inline constexpr int kSkyBoxLook[6][3] = {{1, 0, 0},  {-1, 0, 0}, {0, 1, 0},
-                                           {0, -1, 0}, {0, 0, 1},  {0, 0, -1}};
+                                          {0, -1, 0}, {0, 0, 1},  {0, 0, -1}};
 inline constexpr int kSkyBoxUp[6][3] = {{0, 1, 0}, {0, 1, 0}, {0, 0, 1},
-                                         {0, 0, 1}, {0, 1, 0}, {0, 1, 0}};
+                                        {0, 0, 1}, {0, 1, 0}, {0, 1, 0}};
 
 // THE TEXTURE SOURCE: where a texture's pixels come from. The map's own (its miptex through the
 // palette) unless `replace` is set and fills `rgba` (sRGB; alpha 255 a texel that glows) for the

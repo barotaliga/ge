@@ -13,13 +13,13 @@
 #include <filesystem>
 #include <vector>
 
+#include "assets/pcx.hpp"
+#include "assets/tga.hpp"
 #include "brush/app/bsp_draw.hpp"
 #include "brush/app/bsp_sky.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/app/sky_box.hpp"
 #include "brush/light_probe.hpp"
-#include "assets/pcx.hpp"
-#include "assets/tga.hpp"
 #include "camera/pose.hpp"
 #include "capture/jpeg.hpp"
 #include "classicenhance/cached.hpp"
@@ -242,7 +242,6 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
   return g;
 }
 
-
 // THE MAP'S OWN SKY BOX: the worldspawn's `sky` (or `_sky`, or `skyname`) names six pictures
 // (files.hpp's `sky_box_files`), read and built into the scene's box (brush/app/sky_box.hpp),
 // drawn where the pack's sky is drawn. A box with a picture missing or unreadable is not drawn:
@@ -280,10 +279,10 @@ void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba:
     } else {
       ge::assets::IndexedImage indexed;
       if (ge::assets::decode_pcx(bytes, at, &indexed, &why)) {
-        img = ge::assets::Image{indexed.width, indexed.height,
-                                ge::assets::pcx_rgba(indexed, indexed.palette.empty()
-                                                                  ? palette
-                                                                  : std::span<const uint8_t>{})};
+        img = ge::assets::Image{
+            indexed.width, indexed.height,
+            ge::assets::pcx_rgba(indexed,
+                                 indexed.palette.empty() ? palette : std::span<const uint8_t>{})};
       }
     }
     if (!img || img->width <= 0 || img->height <= 0) {

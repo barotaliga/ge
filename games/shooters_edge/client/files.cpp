@@ -120,12 +120,15 @@ bool sky_box_files(const SearchPath& path, std::string_view name, SkyBoxFiles* o
   for (size_t i = 0; i < 6; ++i) {
     const std::string sfx = kSuffixes[i];
     bool found = false;
-    for (const std::string& base :
-         {"env/" + n + sfx, "gfx/env/" + n + sfx, "env/" + n + "_" + sfx,
-          "gfx/env/" + n + "_" + sfx}) {
+    for (const char* form : {"env/@", "gfx/env/@", "env/@_", "gfx/env/@_"}) {
+      // The folder, the name, an underscore or none, then the suffix.
+      std::string base(form);
+      base.replace(base.find('@'), 1, n);
+      base.append(sfx);
       for (const char* ext : {".tga", ".png", ".jpg", ".pcx"}) {
         std::vector<uint8_t> store;
-        const std::string at = base + ext;
+        std::string at = base;
+        at.append(ext);
         const std::span<const uint8_t> bytes = find_file(path, at, store);
         if (bytes.empty()) continue;
         out->bytes[i].assign(bytes.begin(), bytes.end());

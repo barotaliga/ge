@@ -8,7 +8,8 @@
 // `lits/`.
 //
 // ge:summary Tests the client's search path: base and mod folders, packs, zips, loose files
-// ge:keywords test shooters-edge search-path mod gamedir pak pk3 loose-files content_packs sky_box_files
+// ge:keywords test shooters-edge search-path mod gamedir pak pk3 loose-files content_packs
+// ge:keywords sky_box_files sky-box
 // ge:skill vfs shooter testing
 #include <filesystem>
 #include <fstream>

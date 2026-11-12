@@ -41,8 +41,7 @@ bool build_sky_box(const std::array<assets::Image, 6>& pictures, Scene* scene, s
   scene->sky_box_face = 0;
   for (int i = 0; i < 6; ++i) {
     const assets::Image& p = pictures[size_t(i)];
-    if (p.width <= 0 || p.height <= 0 ||
-        p.rgba.size() < size_t(p.width) * size_t(p.height) * 4) {
+    if (p.width <= 0 || p.height <= 0 || p.rgba.size() < size_t(p.width) * size_t(p.height) * 4) {
       if (why != nullptr) {
         *why = std::string("the sky box's ") + kSkyBoxSuffixes[i] + " picture is empty";
       }

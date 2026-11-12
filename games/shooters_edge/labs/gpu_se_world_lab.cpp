@@ -13,8 +13,9 @@
 // Without `--pak` the map is the lab's own arena (the brush plugin's sample fixture with a light
 // that flickers and a wall that animates), so CI needs no game data, and the arena again with a
 // `.lit` file of its own (`arena-lit`: its light tinted amber to blue across the map) for the
-// map's coloured light, and with a sky box of its own (`arena-sky`, six pictures made here); with `--pak=<file>` and `--maps=<a>,<b>` the maps come out of a pack
-// (each with the pack's `maps/<name>.lit` when it holds one), for private pictures only.
+// map's coloured light, and with a sky box of its own (`arena-sky`, six pictures made here); with
+// `--pak=<file>` and `--maps=<a>,<b>` the maps come out of a pack (each with the pack's
+// `maps/<name>.lit` when it holds one), for private pictures only.
 // `--cvars="r_lava_glow 0"` sets the picture's r_ cvars (look.hpp) as the console would.
 //
 // ge:summary Lab: Shooter's Edge's world in both looks, its light styles, effects, blends and cull
@@ -151,11 +152,12 @@ std::vector<uint8_t> arena_lit(const br::Map& m) {
 // are seen; a sun in the up picture toward its top edge (the map's -x); the down picture grey.
 std::array<ge::assets::Image, 6> arena_sky_box(int n) {
   std::array<ge::assets::Image, 6> set;
-  const double tint[4][3] = {{1.0, 0.35, 0.3}, {0.35, 0.9, 0.4}, {0.35, 0.5, 1.0}, {1.0, 0.85, 0.3}};
+  const double tint[4][3] = {
+      {1.0, 0.35, 0.3}, {0.35, 0.9, 0.4}, {0.35, 0.5, 1.0}, {1.0, 0.85, 0.3}};
   const double zenith[3] = {0.12, 0.24, 0.62}, horizon[3] = {0.82, 0.78, 0.7};
   const auto put = [](ge::assets::Image& p, int x, int y, const double c[3]) {
     uint8_t* t = &p.rgba[(size_t(y) * size_t(p.width) + size_t(x)) * 4];
-    for (int k = 0; k < 3; ++k) t[k] = uint8_t(std::clamp(c[k], 0.0, 1.0) * 255.0 + 0.5);
+    for (int k = 0; k < 3; ++k) t[k] = uint8_t(std::lround(std::clamp(c[k], 0.0, 1.0) * 255.0));
     t[3] = 255;
   };
   for (int f = 0; f < 6; ++f) {
@@ -442,8 +444,9 @@ void run(gl::Lab& lab) {
         across.id = "arena-sky-across";
         across.title = "arena-sky: the vault's roof";
         across.pitch = 0.55;
-        across.caption = "Across the vault and up at its roof: the box's sides meet the up "
-                         "picture with no seam.";
+        across.caption =
+            "Across the vault and up at its roof: the box's sides meet the up "
+            "picture with no seam.";
         views.push_back(across);
       }
     } else if (own && names[i] == "arena-lit") {
