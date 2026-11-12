@@ -155,6 +155,22 @@ bool campaign_new_game(Campaign& c, const pg::Progs& progs, const CampaignOption
   return campaign_change(c, MapChange::new_game, map, error);
 }
 
+void campaign_set_coop(Campaign& c, bool on) {
+  QcServer* s = c.server ? qc_of(c.server) : nullptr;
+  if (s == nullptr) return;
+  set(*s, "coop", on ? "1" : "0");
+  if (on) set(*s, "deathmatch", "0");
+  write_game_kind(*s);
+  if (on) {
+    c.coop_weapons = CoopWeapons{s, 0};
+    s->sv.touch_watch = &coop_weapon_touch;
+    s->sv.touch_watch_ctx = &c.coop_weapons;
+  } else if (s->sv.touch_watch == &coop_weapon_touch) {
+    s->sv.touch_watch = nullptr;
+    s->sv.touch_watch_ctx = nullptr;
+  }
+}
+
 void campaign_join(Campaign& c, int slot, const std::string& name) {
   CampaignPlayer& p = c.players[slot];
   p = CampaignPlayer{};

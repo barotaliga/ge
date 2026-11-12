@@ -215,6 +215,25 @@ command's wish angle (the `se-speedjump` lab). It is disclosed,
 never hidden: the user info says `cl_speedjump 1`, so the server, its admins and the other
 players can see it. On a remote server it needs the prediction (`cl_nopred 0`).
 
+**On the sequel's move** (`plugins/shooter/sequel_move.hpp`, the window's own server on a map of
+brushes) the same aid runs by that move's own rules (`sequel_jump_rules`). Its air has two laws:
+with the server's air acceleration 0 (its default, and always in a single-player game) the air
+adds up to the whole wish speed (300) at an acceleration of 1, so the best wish lies near square
+to the way (a share along it of `W - A`, W the wish speed and A its step a command) and the hops
+gain fast but turn slowly; with `sv_airaccelerate` in deathmatch it is the classic cap of 30 at
+10. The aid's angle comes from one formula for every law (`along`: the share `c` that gains
+`share` of the best gain, `c = sqrt(W^2 - share x (W^2 - c*^2))` with `c* = max(0, W - A)`), which
+is the classic `30 x sqrt(1 - share)` wherever A passes 30. Its jump is the up move and needs the
+same let-go: the window's jump button reaches the move as an up move of 200
+(`sequel_command`), and the aid lets go of both in the air. Two rules serve a slow air (a command's
+step short of the air's cap, so a flight turns less than the swing; never the classic move): a takeoff near the aim turns the way the last takeoff did,
+so the hops go out to both sides in turn; and an aim more than 90 degrees off at a landing
+(`kSpeedJumpSteer`) is turned to on foot, the jump held back while the walk turns him, as a
+player lands and turns at speed. Over eight seconds from 300 it reaches about 866 units/s at
+0.5, 1077 at 0.8 and 1192 at 1 with the air acceleration 0, and 567, 688 and 761 with it 1 (the
+`se-sequel-speedjump` lab). `pm_speedjump` is a setting of the sequel's rules too, and the
+endpoint's grants and votes (`*speedjump`) reach a map of brushes as any other.
+
 The labs: `se-moves` (any demo, any player: the map as a wireframe from above and at an angle,
 the path coloured by speed, the longest chain close up with the view's ticks, a chase view from
 inside the map and its GIF, the lag and ground-frame histograms) and `se-hop` (the player's

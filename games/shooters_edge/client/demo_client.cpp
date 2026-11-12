@@ -79,7 +79,8 @@ int colour_of(const std::string& v) {
 // Extension families' tags, the four letters read little-endian.
 constexpr uint32_t kFamilyFte = 0x58455446, kFamilyFte2 = 0x32455446, kFamilyMvd = 0x3144564D;
 // Their bits that change how a message reads.
-constexpr uint32_t kFteTrans = 0x8, kFteFloatCoords = 0x8000, kFteChunkedDownloads = 0x20000000;
+constexpr uint32_t kFteScale = 0x2, kFteTrans = 0x8, kFteFloatCoords = 0x8000,
+                   kFteChunkedDownloads = 0x20000000;
 constexpr size_t kChunkBytes = 1024;  // a chunked download's chunk
 constexpr uint32_t kMvdFloatCoords = 0x1, kMvdHighLagTeleport = 0x2;
 
@@ -241,7 +242,8 @@ void player_info(Demo& d, DemoMsg& m) {
   const Wire w = wire_of(d);
   const int slot = m.u8();
   int flags = m.u16();
-  if ((d.ext_fte & kFteTrans) != 0 && (flags & 0x8000) != 0) flags |= m.u8() << 16;
+  // The extra flags byte follows under scale or transparency.
+  if ((d.ext_fte & (kFteScale | kFteTrans)) != 0 && (flags & 0x8000) != 0) flags |= m.u8() << 16;
   DemoEntity p;
   const float x = origin(m, w), y = origin(m, w), z = origin(m, w);
   p.origin = {x, y, z};

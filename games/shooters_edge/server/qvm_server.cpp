@@ -525,10 +525,7 @@ void fill_qvm_world(QvmServer& s, RulesWorld& w, bool full) {
     w.sounds = s.sounds;
     w.vwep = s.vwep;
     w.statics.clear();
-    for (const StaticEntity& st : s.statics)
-      w.statics.push_back({st.modelindex, static_cast<int>(st.frame), static_cast<int>(st.colormap),
-                           static_cast<int>(st.skin), st.origin, st.angles,
-                           st.extras.has_alpha ? st.extras.alpha : 1.0f});
+    for (const StaticEntity& st : s.statics) w.statics.push_back(world_static(st));
     w.max_clients = s.sv.set.maxclients;
     w.weapon_frames = true;
     w.map_title = std::string(sim::entity_text(q, 0, F.message));
@@ -599,6 +596,7 @@ void fill_qvm_world(QvmServer& s, RulesWorld& w, bool full) {
     r.effects = static_cast<int>(sim::field_f(q, e, F.effects));
     const pg::EntityExtras& x = s.extras[static_cast<size_t>(e)];
     r.alpha = x.has_alpha ? x.alpha : 1.0f;
+    for (int i = 0; i < 3; i++) r.colormod[i] = x.has_colormod ? x.colormod[i] : 1.0f;
   }
 }
 
@@ -628,10 +626,10 @@ void r_destroy(void* r) { delete static_cast<QvmServer*>(r); }
 
 constexpr RunnerCalls kQvmCalls = {"qvm",    &r_start,   &r_connect, &r_drop,
                                    &r_frame, &r_command, &r_console, &r_user_info,
-                                   &r_pause, &r_carry,   &r_destroy};
+                                   &r_pause, &r_carry,   &r_destroy, true};
 constexpr RunnerCalls kQvmOverCalls = {"qvm",    &r_start,   &r_connect, &r_drop,
                                        &r_frame, &r_command, &r_console, &r_user_info,
-                                       &r_pause, &r_carry,   nullptr};
+                                       &r_pause, &r_carry,   nullptr,    true};
 
 }  // namespace
 
