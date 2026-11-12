@@ -198,16 +198,17 @@ void run(gl::Lab& lab) {
   const int h = static_cast<int>(lab.arg_num("height"));
   int drawn = 0;
   // A page drawn after `wait_s` while the hub (and `pump`, when given) answers on this thread.
-  const auto draw = [&](const std::string& path, const std::string& name, int wait_s,
-                        const gh::Poller& nodes,
-                        const std::function<void()>& pump) -> std::optional<gl::Picture> {
+  const auto draw =
+      [&](const std::string& path, const std::string& name, int wait_s, const gh::Poller& nodes,
+          const std::function<void()>& pump,
+          const std::vector<gl::hub_browser::LiveAct>& acts = {}) -> std::optional<gl::Picture> {
     const fs::path png = root / (name + ".png");
     std::atomic<bool> done{false};
     std::optional<gl::Picture> pic;
     std::thread t([&] {
       // A browser that fails leaves no picture, which the caller reports.
       pic = gl::hub_browser::live_draw(browser, kWebGpuFlags, base + path, w, h, wait_s * 1000, png,
-                                       png.string() + ".log");
+                                       png.string() + ".log", acts);
       done = true;
     });
     while (!done) {
@@ -236,6 +237,68 @@ void run(gl::Lab& lab) {
               "renderer over the browser's limits names the world).",
               {{"wait_s", std::to_string(wait_s)}}},
              *got, gl::Det::measured);
+  }
+
+  // The controls: the canvas clicked (focused), Space pauses, the pointer over the picture shows
+  // the play bar with its highlights.
+  if (lab.arg("controls") != "0") {
+    namespace hb = gl::hub_browser;
+    const int wait_s = static_cast<int>(lab.arg_num("wait"));
+    std::vector<hb::LiveAct> acts = hb::click(w / 3, h / 2, 500);
+    for (hb::LiveAct& a : hb::key("Space", " ", 500)) acts.push_back(a);
+    acts.push_back(hb::move(w / 3 + 40, h / 2, 6000));
+    const std::optional<gl::Picture> got =
+        draw("/demo/" + row.sha, "controls", wait_s, gh::Poller{}, {}, acts);
+    if (got) {
+      drawn++;
+      lab.shot({"controls",
+                "THE DEMO PAUSED ON THE CANVAS'S KEYS",
+                "The Demo page " + std::to_string(wait_s) +
+                    " s in: the canvas clicked, Space pressed, the pointer moved over the picture. "
+                    "The viewer plays a demo with the window's own controls (demo_playback.hpp): "
+                    "pause, skips, speed and highlight jumps on the keys, the play bar over the "
+                    "picture.",
+                "the play bar along the picture's foot with the playhead stopped and the play "
+                "button shown; the picture still.",
+                {{"wait_s", std::to_string(wait_s)}}},
+               *got, gl::Det::measured);
+    }
+  }
+
+  // A player's own demo and packs (`--real-demo`, `--real-packs`): the recording packed into a
+  // replay file, taken by the archive, and its Demo page drawn from the packs beside the viewer.
+  // Nothing of them is kept or digested.
+  if (const std::string real = lab.arg("real-demo"); !real.empty()) {
+    std::ifstream f(real, std::ios::binary);
+    const std::vector<uint8_t> rec{std::istreambuf_iterator<char>(f), {}};
+    std::vector<uint8_t> real_ger;
+    gh::DemoRow real_row;
+    const fs::path packs = lab.arg("real-packs");
+    for (const char* name : {"pak0.pak", "pak1.pak"}) {
+      if (fs::is_regular_file(packs / name, ec))
+        fs::copy_file(packs / name, viewer / name, fs::copy_options::overwrite_existing, ec);
+    }
+    if (rec.empty() || !cl::pack_demo(rec, real_ger, error)) {
+      lab.note("the demo " + real + " did not pack: " + error);
+    } else if (gh::archive_add(archive, real_ger, 1794480100, {}, error, &real_row) !=
+               gh::AddResult::added) {
+      lab.note("the archive did not take " + real + ": " + error);
+    } else {
+      const int wait_s = 2 * static_cast<int>(lab.arg_num("wait"));
+      const std::optional<gl::Picture> got =
+          draw("/demo/" + real_row.sha, "real", wait_s, gh::Poller{}, {});
+      if (got) {
+        drawn++;
+        lab.shot({"real",
+                  "A PLAYER'S OWN DEMO ON THE DEMO PAGE " + std::to_string(wait_s) + " S IN",
+                  "The demo " + fs::path(real).filename().string() +
+                      " packed into a replay file and filed by the hub's archive, played by the "
+                      "web viewer from the player's own packs.",
+                  "the demo's map and players drawn on the canvas.",
+                  {{"wait_s", std::to_string(wait_s)}}},
+                 *got, gl::Det::measured);
+      }
+    }
   }
 
   // The same match live: a TV node fed the replay file, paced to the match's own clock by its
@@ -330,6 +393,9 @@ const gl::LabSpec kSpec{
          "a software GPU takes about 20 s to the first frame"},
         {"width", "1280", "the browser's window width, px"},
         {"height", "900", "the browser's window height, px"},
+        {"controls", "1", "also shoot the Demo page paused by its keys with the play bar (0: not)"},
+        {"real-demo", "", "a player's own recording to play too (measured, never kept)"},
+        {"real-packs", "", "the folder holding that recording's packs (pak0.pak, pak1.pak)"},
         {"live", "1", "also watch the match live through a TV node on the Watch page (0: not)"},
         {"keep", "0", "1: keep the hub's folders (the viewer, the pack, the archive) after a run"},
     },

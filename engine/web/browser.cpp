@@ -2,6 +2,7 @@
 //
 // ge:summary The web viewer's page calls defined: fetch, the paint, the canvas, the status line
 // ge:keywords web browser emscripten em-async-js fetch request-animation-frame websocket
+// ge:keywords keys pointer scancode take_input
 // ge:skill net
 #include "web/browser.hpp"
 
@@ -88,9 +89,77 @@ EM_JS(void, ge_web_ws_close, (int id), {
   if (s) s.state = 2;
 });
 
+// The canvas's keys and pointer, gathered by listeners set on the first call: keys by the
+// keyboard's scancode (the USB HID usage the platform layer uses too) as they go down, the pointer
+// in the canvas's pixels. A click focuses the canvas, so its keys never scroll the page. The JS
+// keeps to what the C++ formatter leaves alone: no `===`, no regular expressions, no `=>`.
+EM_JS(int, ge_web_input, (const char* selector, int* keys, int most, float* xyb), {
+  const c = document.querySelector(UTF8ToString(selector));
+  if (!c) return 0;
+  if (!c.geInput) {
+    const g = {keys : [], x : -1, y : -1, b : 0};
+    const codes = {
+      Space : 44,
+      ArrowRight : 79,
+      ArrowLeft : 80,
+      ArrowDown : 81,
+      ArrowUp : 82,
+      Home : 74,
+      PageUp : 75,
+      End : 77,
+      PageDown : 78
+    };
+    c.tabIndex = 0;
+    c.addEventListener(
+        "keydown", function(e) {
+          let k = codes[e.code];
+          if (!k && e.code.length == 4 && e.code.indexOf("Key") == 0) k = e.code.charCodeAt(3) - 61;
+          if (!k) return;
+          g.keys.push(k);
+          e.preventDefault();
+        });
+    const at = function(e) {
+      const r = c.getBoundingClientRect();
+      g.x = (e.clientX - r.left) * c.width / r.width;
+      g.y = (e.clientY - r.top) * c.height / r.height;
+    };
+    c.addEventListener("pointermove", at);
+    c.addEventListener(
+        "pointerdown", function(e) {
+          at(e);
+          g.b = 1;
+          c.focus();
+        });
+    window.addEventListener("pointerup", function() { g.b = 0; });
+    c.addEventListener(
+        "pointerleave", function() {
+          if (!g.b) g.x = g.y = -1;
+        });
+    c.geInput = g;
+  }
+  const g = c.geInput;
+  const n = Math.min(g.keys.length, most);
+  for (let i = 0; i < n; i++) HEAP32[(keys >> 2) + i] = g.keys[i];
+  g.keys = [];
+  HEAPF32[xyb >> 2] = g.x;
+  HEAPF32[(xyb >> 2) + 1] = g.y;
+  HEAPF32[(xyb >> 2) + 2] = g.b;
+  return n;
+});
+
 }  // namespace
 
 namespace ge::web {
+
+void take_input(const char* selector, PageInput& out) {
+  int keys[64];
+  float xyb[3] = {-1, -1, 0};
+  const int n = ge_web_input(selector, keys, 64, xyb);
+  out.pressed.assign(keys, keys + n);
+  out.x = xyb[0];
+  out.y = xyb[1];
+  out.button = xyb[2] != 0;
+}
 
 int ws_open(const std::string& url) { return ge_web_ws_open(url.c_str()); }
 
