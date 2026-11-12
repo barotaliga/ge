@@ -337,3 +337,79 @@ TEST(a_node_with_a_password_asks_for_sha3_and_refuses_a_wrong_one) {
   cn::tv_close(n);
   gn::tcp_close_listener(nowhere);
 }
+
+namespace {
+
+// A record of the stuffed server info and a later change of the server's name.
+std::vector<uint8_t> info_record(const std::string& text, bool stuffed) {
+  std::vector<uint8_t> body;
+  body.push_back(stuffed ? 9 : 52);  // stufftext, serverinfo
+  if (!stuffed) {
+    const std::string key = "hostname";
+    body.insert(body.end(), key.begin(), key.end());
+    body.push_back(0);
+  }
+  body.insert(body.end(), text.begin(), text.end());
+  body.push_back(0);
+  std::vector<uint8_t> rec;
+  cn::mv_put_record(rec, 0, cn::kMvRead, 0, 0, body);
+  return rec;
+}
+
+std::string text_of(const std::vector<uint8_t>& b) { return {b.begin(), b.end()}; }
+
+}  // namespace
+
+TEST(a_node_names_the_match_after_itself) {
+  CHECK(cn::mv_hostname("tv.eu", "Arena", false) == "tv.eu (live: Arena)");
+  CHECK(cn::mv_hostname("tv.eu", "", false) == "tv.eu");
+  CHECK(cn::mv_hostname("", "Arena", false) == "Arena");
+  // A relay before it gives way; a server that merely looks like one keeps its name.
+  CHECK(cn::mv_hostname("tv.eu", "tv.us (live: Arena)", true) == "tv.eu (live: Arena)");
+  CHECK(cn::mv_hostname("tv.eu", "tv.us (live: Arena)", false) ==
+        "tv.eu (live: tv.us (live: Arena))");
+
+  const std::vector<uint8_t> match = cl::write_multiview_match(cl::highlight_match());
+  std::vector<std::vector<uint8_t>> recs = records_of(match);
+  // The server's own info after its data, and its name changed mid-match. (The match's last
+  // record, its end, is left out: the kept match does not read it.)
+  recs.pop_back();
+  recs.insert(recs.begin() + 1, info_record("fullserverinfo \"\\maxfps\\77\"\n", true));
+  recs.insert(recs.begin() + static_cast<std::ptrdiff_t>(recs.size() / 2),
+              info_record("Night Arena", false));
+  cn::MvState s;
+  s.name = "tv.eu";
+  std::vector<uint8_t> passed, sent;
+  for (const auto& r : recs) {
+    CHECK(cn::mv_apply(s, r, &sent));
+    passed.insert(passed.end(), sent.begin(), sent.end());
+  }
+  CHECK_MSG(!s.broken, s.why);
+  CHECK(s.levels == 1);
+  const std::string t = text_of(passed);
+  CHECK(t.find("fullserverinfo \"\\maxfps\\77\\hostname\\tv.eu\\*qtv\\1\"\n") !=
+        std::string::npos);
+  CHECK(t.find(std::string("hostname") + '\0' + "tv.eu (live: Night Arena)") != std::string::npos);
+  CHECK(t.find("Night Arena") == t.find("tv.eu (live: Night Arena)") + 13);
+  // The late viewer's catch-up carries the same names.
+  const std::string c = text_of(cn::mv_catch_up(s));
+  CHECK(c.find("\\*qtv\\1") != std::string::npos);
+  CHECK(c.find("tv.eu (live: Night Arena)") != std::string::npos);
+  // The renamed stream still plays to the same end.
+  std::string error;
+  std::vector<uint8_t> plain;
+  for (const auto& r : recs) plain.insert(plain.end(), r.begin(), r.end());
+  CHECK(end_state(passed, error, nullptr) == end_state(plain, error, nullptr));
+
+  // Downstream of a relay: the stuffed info already has `*qtv`.
+  cn::MvState d;
+  d.name = "tv.us";
+  CHECK(cn::mv_apply(d, recs[0], &sent));
+  const std::string relayed = "fullserverinfo \"\\hostname\\tv.eu (live: Arena)\\*qtv\\1\"\n";
+  CHECK(cn::mv_apply(d, info_record(relayed, true), &sent));
+  CHECK(text_of(sent).find("\\hostname\\tv.us (live: Arena)\\*qtv\\1\"") != std::string::npos);
+  // Without a name, records pass as they came.
+  cn::MvState plain_state;
+  CHECK(cn::mv_apply(plain_state, info_record(relayed, true), &sent));
+  CHECK(sent == info_record(relayed, true));
+}

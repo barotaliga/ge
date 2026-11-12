@@ -10,6 +10,9 @@
 //   server data, the lists, the baselines, the statics, the stuffed `fullserverinfo` and `skins`).
 //   The baselines are read from it, and the extension words (float coordinates) the level's
 //   messages are read under.
+// - THE NAME: a relay that sets `name` passes the match on under its own: the server info's
+//   `hostname` becomes `<name> (live: <server's>)` and `*qtv` 1, so a viewer's browser and
+//   scoreboard tell the relay from the server and a relay downstream knows it is one.
 // - The state messages since, the last of each kind and key: light styles by index, the server
 //   info by key, each slot's user info (which drops the slot's `setinfo` keys), `setinfo` by slot
 //   and key, frags, ping, loss and entry time by slot, the music track, the pause; statics and
@@ -76,6 +79,8 @@ struct MvPlayer {
 };
 
 struct MvState {
+  std::string name;          // a relay's own: the server's name rewritten (empty: left as it came)
+  bool upstream_tv = false;  // this level's server info came through a relay already (`*qtv`)
   bool level = false;   // a level's signon has begun
   bool signon = false;  // still in it (no frame yet)
   bool broken = false;  // a message could not be read: no catch-up past the signon
@@ -94,8 +99,15 @@ struct MvState {
 };
 
 // One whole record (`mv_record` split it) applied. False, with `broken` set, when its messages
-// could not be read; the stream goes on (a relay forwards what it cannot read).
-bool mv_apply(MvState& s, std::span<const uint8_t> record);
+// could not be read; the stream goes on (a relay forwards what it cannot read). `sent`, when not
+// null, is the record as a relay passes it on: with `name` set, the server info's `hostname` in
+// the stuffed `fullserverinfo` and in every `serverinfo` change is `mv_hostname`'s, and `*qtv` is
+// 1; the kept match and its catch-up hold the same. A level that could not be read passes its
+// records as they came until the next level.
+bool mv_apply(MvState& s, std::span<const uint8_t> record, std::vector<uint8_t>* sent = nullptr);
+// A relay's server name: `own (live: theirs)`, `own` alone when the server has none. When the
+// stream came through a relay already (`upstream_tv`), that relay's name gives way to this one.
+std::string mv_hostname(const std::string& own, const std::string& theirs, bool upstream_tv);
 // The catch-up for a viewer who joins now (empty before the first level).
 std::vector<uint8_t> mv_catch_up(const MvState& s);
 

@@ -12,6 +12,9 @@
 // the match that long after the players (what a tournament's broadcast asks for: no viewer can
 // call positions to a player).
 //
+// ITS NAME: viewers see the match under the node's own: the server info's `hostname` becomes
+// `<hostname> (live: <the server's>)` and `*qtv` 1, a relay before it giving way (`mv_hostname`).
+//
 // DOWN: each viewer asks as a relay asks a server, with the node's own password; once let in it
 // is sent `BEGIN` (unless `RAW`), then the catch-up the node writes from the match as it stands
 // (classic_mv_state.hpp: the level's signon, what changed since, every player and entity), then
@@ -57,6 +60,7 @@ namespace shooters_edge::net {
 
 struct TvConfig {
   std::string name = "tv";       // what the node calls itself to the server
+  std::string hostname;          // its name to viewers, `<it> (live: <server's>)` (empty: `name`)
   std::string server_password;   // the server's stream password (empty: none)
   std::string password;          // the node's own, for its viewers (empty: none)
   double delay_s = 7;            // a record's wait between arriving and going out
