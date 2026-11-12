@@ -720,6 +720,24 @@ std::string status_text(const ClassicServer& s, int opt) {
   return t;
 }
 
+namespace {
+
+// A look value as a byte: below `lo` it is `lo`, above 255 it is 255, the fraction dropped.
+int look_byte(float v, int lo) {
+  return v < static_cast<float>(lo) ? lo : v > 255 ? 255 : static_cast<int>(v);
+}
+
+}  // namespace
+
+void entity_look(EntityState& st, float alpha, float scale, const float colormod[3]) {
+  if (alpha != 1) {
+    const int v = static_cast<int>(alpha * 254);
+    st.alpha = alpha >= 1 ? 0 : v < 1 ? 1 : v > 254 ? 254 : v;
+  }
+  st.scale = scale == 1 ? 16 : look_byte(scale * 16, 1);
+  for (int c = 0; c < 3; c++) st.colormod[c] = look_byte(colormod[c] * 32, 0);
+}
+
 void status_players(const ClassicServer& s, std::vector<gn::StatusPlayer>& out) {
   out.clear();
   for (int i = 0; i < sh::kMaxClients; i++) {
@@ -752,10 +770,7 @@ EntityState entity_state(const ClassicServer& s, int e) {
   st.effects = row.effects;
   st.origin = row.origin;
   st.angles = row.angles;
-  if (row.alpha != 1) {
-    const int v = static_cast<int>(row.alpha * 254);
-    st.alpha = row.alpha >= 1 ? 0 : v < 1 ? 1 : v > 254 ? 254 : v;
-  }
+  entity_look(st, row.alpha, row.scale, row.colormod);
   return st;
 }
 

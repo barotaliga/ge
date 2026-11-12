@@ -29,7 +29,7 @@
 // ge:summary The campaign host: a single-player program's maps in a chain, parms and runes kept
 // ge:keywords campaign single-player host changelevel restart new-game spawn-parms serverflags
 // ge:keywords runes skill coop deathmatch registered episodes settle single-player-clock
-// ge:keywords statistics secrets monsters map-loader
+// ge:keywords statistics secrets monsters map-loader campaign_set_coop companion-coop
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_campaign_test.cpp
 #pragma once
@@ -103,6 +103,11 @@ void coop_weapon_touch(void* ctx, sh::Server& sv, int trigger, int toucher, bool
 // False with `error` when the map does not load.
 bool campaign_new_game(Campaign& c, const pg::Progs& progs, const CampaignOptions& opt,
                        const std::string& map, std::string& error);
+// The game made cooperative (or single player again) now, mid-map: `coop` set (on forces
+// `deathmatch` 0), the program's globals written, the coop weapon rule set or taken off; the
+// setting is carried to the next maps like any other. What seating a companion in a single-player
+// game does. No-op without a map's server or with a program that keeps no globals of its own.
+void campaign_set_coop(Campaign& c, bool on);
 // A player joins this map now (SetNewParms, ClientConnect, PutClientInServer) and is carried on.
 void campaign_join(Campaign& c, int slot, const std::string& name);
 // The map `map` started for a saved game (campaign_save.hpp): the program and options taken, the

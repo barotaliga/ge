@@ -1029,7 +1029,11 @@ In the window, `sv_coop 1` makes the campaign a coop game (`client/coop_mode.hpp
 or on the command line the game starts as one on the start map, set in the console one starts at
 once, with `sv_coopbots` companions (1 by default, at most seven: eight players); `skill` is the
 monsters' for everyone. `coopgame [bots] [novice|average|expert] [map]` starts one by hand, and
-`addbot` and `removebot` change the party during it (`client/coop_party.hpp`). With `sv_port`
+`addbot` and `removebot` change the party during it (`client/coop_party.hpp`). `addbot` in a
+single-player game seats a companion too, at any time: the game turns cooperative there and then
+(`server/campaign.hpp`'s `campaign_set_coop`: a death respawns at a coop start instead of
+restarting the map, and the coop weapon rule holds) and turns back to single player when the last
+companion leaves; the game saves again once it has gone. With `sv_port`
 set, others join the coop game over the classic protocol as they would a server
 (`net/classic_coop.hpp`): the window's player and the companions are the endpoint's local seats, a
 client who joins enters the campaign and is carried from map to map with his parms as the player
