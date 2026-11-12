@@ -41,8 +41,8 @@ gives each game) and says three things through its `ServerGame`:
 | Where the login is shown | The game's own scoreboard can show it | the `*auth` user info key, which the community's client draws as the login name with a marker | the name alone | to be read |
 
 An account's name is checked against every game the master serves: 2 to 15 characters of letters,
-digits, space, `_`, `-` and `.`, so it fits the strictest game's list as it is. Nothing in the
-account, the ticket or the report is shaped by one game: adding a game is a game id, a folding rule
+digits, `_`, `-` and `.` (no space: a console line splits on it), so it fits the strictest game's
+list as it is. Nothing in the account, the ticket or the report is shaped by one game: adding a game is a game id, a folding rule
 and its prompt.
 
 ## The parts
