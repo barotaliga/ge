@@ -253,6 +253,37 @@ The `forward` lab gives the player's direct path each preset and puts the forwar
 
 A stranger's asks of every kind draw answers of at most a third of their size.
 
+## Proxy
+
+`engine/proxy` (`proxy.hpp`, `trial.hpp`). Two hops that understand the slow link between them:
+the player runs the near proxy beside the game's client and a far proxy runs near the server. The
+client connects to the near one as if it were the server; the far one opens a socket of its own to
+the server for that client. The game's hops to its proxies stay as the game sent them; between the
+proxies each datagram travels in a link frame that each sending end may:
+
+- **repeat**: send it up to five times, the copies a few milliseconds apart, the receiver passing
+  on the first copy only (a window by number);
+- **pack**: XOR it with the newest datagram the other end said it has, then write its runs of zero
+  bytes as counts. A lost frame costs only itself, because the reference is always one the other
+  end confirmed; a frame that would not get smaller goes plain.
+
+The session opens like forward's route (a padded open, a cookie, then opened or a refusal in
+words), and the far proxy reaches only the servers on its allow list. Lag and loss for practice are
+the transport's own fake conditions.
+
+The `proxy` lab runs a 60 Hz client and a 20 Hz server through the pair at each loss on the link
+between them:
+
+| Link loss | Plain | Twice | Three times | Packed | Three times packed |
+| --- | --- | --- | --- | --- | --- |
+| 2% | 1.45% lost | 0.06% | 0% | 1.45% | 0% |
+| 10% | 10.30% | 0.91% | 0.12% | 10.30% | 0.12% |
+| 20% | 21.03% | 4.42% | 0.91% | 21.03% | 0.91% |
+| Link bytes down a second | 8284 | 16564 | 24844 | 2514 | 7532 |
+
+Three copies cut the loss at 10% about eighty times; packing sends 30% of the plain bytes down, so
+three copies packed cost less than one plain.
+
 ## Decisions
 
 | Decision | Taken | Considered and not taken |
@@ -265,4 +296,5 @@ A stranger's asks of every kind draw answers of at most a third of their size.
 | A late viewer's catch-up | Written from the match the node keeps, record by record | Replaying everything since the level began: it grows with the match and plays the past at once |
 | A relay's auth | NONE, PLAIN and SHA3-512 | The older 16-bit check and MD4: weaker, and every current relay offers SHA3-512 |
 | Forward's route | Set up by the forward's own datagrams before the game's handshake, so any game on any wire goes through unchanged | Carried in the game's connect (the classic way): every game's handshake would have to carry it; the classic face reads it there |
+| The proxy's packing | XOR against the newest datagram the other end confirmed, zero runs counted: generic, a lost frame costs only itself | A stream compressor across frames (the classic "quality line"): smaller, but one loss damages what follows; the field codec on the link: needs the game's schema, a later face |
 | The browser viewer | The WebSocket downstream lands with TV (M57b), for the hub's web viewer (M56) | Later: the hub needs it first |

@@ -949,6 +949,29 @@ uint64_t hash(const void* g) {
   return game.coop ? coop_hash(*game.coop) : ge::shooter::server_hash(game.rules->sv);
 }
 
+// The hub's record (docs/hub.md): the map, the mode the rules make, the phase, every client.
+void fill_status(const void* g, ge::net::Status& st) {
+  const Game& game = *static_cast<const Game*>(g);
+  if (game.map) st.map = game.map->name;
+  auto number = [&](const char* name) {
+    const ge::console::Cvar* v = game.rules ? game.rules->cvars.find(name) : nullptr;
+    return v ? std::atoi(v->value.c_str()) : 0;
+  };
+  const int seats = game.settings.maxclients;
+  if (game.coop || number("coop") != 0) {
+    st.mode = "coop";
+  } else if (number("teamplay") != 0) {
+    st.mode = seats <= 4 ? "2on2" : "4on4";
+  } else {
+    st.mode = seats <= 2 ? "1on1" : "ffa";
+  }
+  if (!game.held_map.empty()) st.phase = ge::net::StatusPhase::intermission;
+  for (const char* name : {"fraglimit", "timelimit"}) {
+    st.keys.emplace_back(name, std::to_string(number(name)));
+  }
+  if (game.classic) status_players(*game.classic, st.players);
+}
+
 // The rules the mod is playing by, then the endpoint's counts.
 std::string status(const void* g) {
   const Game& game = *static_cast<const Game*>(g);
@@ -1067,6 +1090,8 @@ gs::ServerGame make() {
   g.seated = seated;
   g.hash = hash;
   g.status = status;
+  g.fill_status = fill_status;
+  g.version = 1;
   g.serve = serve;
   g.net_frame = net_frame;
   return g;
