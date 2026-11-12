@@ -102,6 +102,7 @@ struct Section {
   float pit = 0;  // the pit's width found on the way, units (0: none sought or found)
   sh::Vec3f reach;     // no route: the node the nav reaches nearest the exit
   float reach_left = 0;  // and how far it stands from it, units
+  int32_t reach_n = 0;   // the nodes it reaches
   sh::Vec3f lip;  // the pit's takeoff, when found
   std::vector<Try> tries;
 };
@@ -118,6 +119,11 @@ bool vec_of(const char* s, sh::Vec3f& out) {
   out.z = std::strtof(end, &end);
   return true;
 }
+
+// A pit's trigger: flat (a floor a fall passes through), not a wall's slab or a doorway.
+constexpr float kFlat = 48;
+constexpr float kClosed_s = 1e6f;  // a link into a pit's floor costs this (close_pits)
+bool flat(const Trigger& t) { return t.hi.z - t.lo.z < kFlat; }
 
 bool touches(const Trigger& t, sh::Vec3f o) {
   return o.x + kHullHalf >= t.lo.x && o.x - kHullHalf <= t.hi.x && o.y + kHullHalf >= t.lo.y &&
@@ -157,7 +163,9 @@ sh::NavRoute route_into(const sh::NavGraph& g, int32_t from, const Trigger& t, g
   for (size_t k = 0; k < g.nodes.size(); k++) {
     if (!touches(t, g.nodes[k].origin)) continue;
     sh::NavRoute r = sh::nav_route(g, from, static_cast<int32_t>(k), s, 1, {}, {}, jumper);
-    if (r.nodes.empty() || (!best.nodes.empty() && r.time_s >= best.time_s)) continue;
+    if (r.nodes.empty() || r.time_s >= kClosed_s ||
+        (!best.nodes.empty() && r.time_s >= best.time_s))
+      continue;
     bool teleported = false;
     for (size_t i = 0; i + 1 < r.nodes.size() && !teleported; i++) {
       const sh::NavLink* l = link_between(g, r.nodes[i], r.nodes[i + 1]);
@@ -204,68 +212,122 @@ bool pit_on_line(const sh::MoveWorld& w, sh::Vec3f from, sh::Vec3f to, sh::Vec3f
   return false;
 }
 
+// THE PITS CLOSED: a node under a teleporter's trigger (inside its box across, its feet under the
+// trigger's top) is never stood on: a player falling there is sent away on the way down (zjumps'
+// triggers hang 100 units over the pits' floors). Every link into one costs `kClosed_s`, so no
+// route runs through a pit's floor; `dead` marks them. Counts the links closed.
+int close_pits(sh::NavGraph& g, const std::vector<Trigger>& triggers, std::vector<uint8_t>& dead) {
+  dead.assign(g.nodes.size(), 0);
+  for (size_t k = 0; k < g.nodes.size(); k++) {
+    const sh::Vec3f o = g.nodes[k].origin;
+    for (const Trigger& t : triggers)
+      if (flat(t) && o.x + kHullHalf >= t.lo.x && o.x - kHullHalf <= t.hi.x && o.y + kHullHalf >= t.lo.y &&
+          o.y - kHullHalf <= t.hi.y && o.z - kHullDown <= t.hi.z)
+        dead[k] = 1;
+  }
+  int closed = 0;
+  for (sh::NavLink& l : g.links)
+    if (dead[static_cast<size_t>(l.to)] != 0 && !l.teleport) {
+      l.time_s = kClosed_s;
+      closed++;
+    }
+  return closed;
+}
+
 // THE PITS FROM THE FAIL TRIGGERS: a teleporter's trigger the floor drops into (a link from a
 // node outside it to a node in it) is a pit; its RIM the nodes with such a link. From each rim
 // node, the nearest rim nodes across the same pit (the jump's middle over the trigger, the two
 // within `kRimFar`, no walk between them as short as twice the jump's length) are proven as jumps
 // at the speed ladder, the slowest that lands kept. Counts the pairs tried and the jumps kept.
-constexpr float kRimNear = 64, kRimFar = 480;
-constexpr int kRimAcross = 3;  // each rim node's nearest crossings tried
+constexpr float kRimNear = 64, kRimFar = 600;
+constexpr int kRimAcross = 6;  // each rim node's nearest crossings tried, a landing spot each
+constexpr float kSpot = 96;     // landings this near one taken are the same spot
+constexpr float kHopLand = 48;     // a hop comes down within this across of its landing node
+constexpr float kHopCost_s = 0.2f; // and costs its flight and this (a miss is a fall)
+constexpr int kPilotMsec = 13;     // the pilot's command (bots/pilot_run.hpp)
 void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<Trigger>& triggers,
                 const sh::NavJumper& jumper, int& tried, int& kept) {
   ge::ai::Search search;
   std::vector<std::pair<int32_t, int32_t>> pairs;
-  for (const Trigger& t : triggers) {
-    std::vector<int32_t> rim;
-    for (size_t a = 0; a < g.nodes.size(); a++) {
-      const sh::NavNode& n = g.nodes[a];
-      if (touches(t, n.origin)) continue;
-      for (int32_t x = 0; x < n.links; x++) {
-        const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(x)];
-        if (!l.teleport && touches(t, g.nodes[static_cast<size_t>(l.to)].origin)) {
-          rim.push_back(static_cast<int32_t>(a));
-          break;
-        }
-      }
-    }
-    for (const int32_t a : rim) {
-      const sh::Vec3f A = g.nodes[static_cast<size_t>(a)].origin;
-      std::vector<std::pair<float, int32_t>> across;
-      for (const int32_t b : rim) {
-        const sh::Vec3f B = g.nodes[static_cast<size_t>(b)].origin;
-        const float d = std::hypot(B.x - A.x, B.y - A.y);
-        if (d < kRimNear || d > kRimFar || B.z > A.z + 40) continue;
-        const sh::Vec3f mid{(A.x + B.x) / 2, (A.y + B.y) / 2, t.hi.z};
-        if (mid.x < t.lo.x || mid.x > t.hi.x || mid.y < t.lo.y || mid.y > t.hi.y) continue;
-        across.emplace_back(d, b);
-      }
-      std::sort(across.begin(), across.end());
-      int taken = 0;
-      for (const auto& [d, b] : across) {
-        if (taken >= kRimAcross) break;
-        const sh::NavRoute r = sh::nav_route(g, a, b, search, 1, {}, {}, jumper);
-        if (!r.nodes.empty() && r.time_s < 2 * d / 320) continue;  // walked round as quickly
-        pairs.emplace_back(a, b);
-        taken++;
-      }
-    }
-  }
-  sh::MoveSettings move;
-  sh::NavGapSettings gs;
-  gs.faster = 1;
-  gs.takeoffs = 1;
-  gs.landings = 2;
-  for (const auto& [a, b] : pairs) {
-    tried++;
-    for (float v = kGapSlowest; v <= kGapFastest; v += kGapStep) {
-      const sh::NavGapTrick trick{g.nodes[static_cast<size_t>(a)].origin,
-                                  g.nodes[static_cast<size_t>(b)].origin, v, 0};
-      if (sh::nav_add_gap_tricks(world, move, g, {&trick, 1}, {}, gs).held > 0) {
-        kept++;
+  // The rim: nodes over a pit's trigger (64 round its box), above it, with the floor 32 units off
+  // in some way more than `kPitDrop` under their feet (a lip; the nav links no drop that deep).
+  const auto over = [&](const Trigger& t, sh::Vec3f o, float m) {
+    return o.x >= t.lo.x - m && o.x <= t.hi.x + m && o.y >= t.lo.y - m && o.y <= t.hi.y + m;
+  };
+  std::vector<int32_t> rim;
+  const sh::Hull& hull = world.solids[0].point_hull;
+  for (size_t a = 0; a < g.nodes.size(); a++) {
+    const sh::Vec3f o = g.nodes[a].origin;
+    bool near = false;
+    for (const Trigger& t : triggers)
+      near = near || (flat(t) && !touches(t, o) && o.z - kHullDown >= t.hi.z && over(t, o, 64));
+    if (!near) continue;
+    const float feet = o.z - kHullDown;
+    constexpr float kOff[4][2] = {{32, 0}, {-32, 0}, {0, 32}, {0, -32}};
+    for (const auto& d : kOff) {
+      const sh::HullTrace tr = sh::trace_hull(hull, {o.x + d[0], o.y + d[1], feet + 8},
+                                              {o.x + d[0], o.y + d[1], feet - 1024});
+      if (!tr.startsolid && tr.endpos.z < feet - kPitDrop) {
+        rim.push_back(static_cast<int32_t>(a));
         break;
       }
     }
   }
+  // Each rim node's nearest crossings: to a rim node no higher, its jump's middle over a pit.
+  for (const int32_t a : rim) {
+    const sh::Vec3f A = g.nodes[static_cast<size_t>(a)].origin;
+    std::vector<std::pair<float, int32_t>> across;
+    for (const int32_t b : rim) {
+      const sh::Vec3f B = g.nodes[static_cast<size_t>(b)].origin;
+      const float d = std::hypot(B.x - A.x, B.y - A.y);
+      if (d < kRimNear || d > kRimFar || B.z > A.z + 40) continue;
+      const sh::Vec3f mid{(A.x + B.x) / 2, (A.y + B.y) / 2, A.z};
+      bool pit = false;
+      for (const Trigger& t : triggers) pit = pit || (flat(t) && over(t, mid, 0));
+      if (pit) across.emplace_back(d, b);
+    }
+    std::sort(across.begin(), across.end());
+    int taken = 0;
+    std::vector<sh::Vec3f> spots;  // one crossing a landing spot: the nearest block's nodes do
+                                   // not crowd out the next block's
+    for (const auto& [d, b] : across) {
+      if (taken >= kRimAcross) break;
+      const sh::Vec3f B = g.nodes[static_cast<size_t>(b)].origin;
+      bool seen = false;
+      for (const sh::Vec3f& o : spots) seen = seen || std::hypot(o.x - B.x, o.y - B.y) < kSpot;
+      if (seen) continue;
+      const sh::NavRoute r = sh::nav_route(g, a, b, search, 1, {}, {}, jumper);
+      if (!r.nodes.empty() && r.time_s < 2 * d / 320) continue;  // walked round as quickly
+      pairs.emplace_back(a, b);
+      spots.push_back(B);
+      taken++;
+    }
+  }
+  sh::MoveSettings move;
+  std::vector<sh::NavExtraLink> hops;
+  for (const auto& [a, b] : pairs) {
+    tried++;
+    const sh::Vec3f A = g.nodes[static_cast<size_t>(a)].origin;
+    const sh::Vec3f B = g.nodes[static_cast<size_t>(b)].origin;
+    const float d = std::hypot(B.x - A.x, B.y - A.y);
+    for (float v = kGapSlowest; v <= kGapFastest; v += kGapStep) {
+      // A HOP'S PROOF: the jump flown at `v` toward B comes DOWN by it (the pilot's own test of a
+      // gap's jump, pilot_gaps.hpp `gap_lands`), not standing on it: a block too small to stop on
+      // at this speed is jumped from again on its landing (the pilot's hop does that).
+      const sh::Vec3f vel{(B.x - A.x) / d * v, (B.y - A.y) / d * v, 0};
+      const sh::JumpFlight f = sh::fly_jump(world, move, A, vel, B, kPilotMsec);
+      const float dz = f.end.z - B.z;
+      if (!f.landed || std::hypot(f.end.x - B.x, f.end.y - B.y) > kHopLand || dz > 32 || dz < -32)
+        continue;
+      sh::NavExtraLink l{a, b, sh::NavKind::jump, f.time_s + kHopCost_s};
+      l.speed = v;
+      l.gap = true;
+      hops.push_back(l);
+      kept++;
+      break;
+    }
+  }
+  sh::nav_add_links(g, hops);
 }
 
 // THE NAV'S REACH, the first section no route crosses: the whole map from above (the floor shaded
@@ -273,7 +335,7 @@ void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<T
 // pits' proven jumps in blue, the start ringed and the exit's trigger in black.
 void draw_reach(gl::Lab& lab, const std::string& name, const sh::MoveWorld& world,
                 const sh::NavGraph& g, const ge::ai::Search& reach,
-                const std::vector<Trigger>& triggers, sh::Vec3f start, const Trigger& exit) {
+                const std::vector<uint8_t>& dead, const std::vector<Trigger>& triggers, sh::Vec3f start, const Trigger& exit) {
   sh::Vec3f lo{1e9f, 1e9f, 1e9f}, hi{-1e9f, -1e9f, -1e9f};
   for (const sh::NavNode& n : g.nodes) {
     lo = {std::min(lo.x, n.origin.x), std::min(lo.y, n.origin.y), std::min(lo.z, n.origin.z)};
@@ -315,9 +377,11 @@ void draw_reach(gl::Lab& lab, const std::string& name, const sh::MoveWorld& worl
   }
   for (size_t k = 0; k < g.nodes.size(); k++) {
     const sh::Vec3f o = g.nodes[k].origin;
-    const bool in = reach.reached(static_cast<int32_t>(k));
-    gl::set_pixel(p, static_cast<int>(px(o.x)), static_cast<int>(py(o.y)),
-                  in ? gl::Rgba{20, 140, 50, 255} : gl::Rgba{150, 150, 150, 255});
+    if (dead[k] != 0) continue;
+    if (reach.reached(static_cast<int32_t>(k)))
+      gl::fill_rect(p, px(o.x) - 1, py(o.y) - 1, 3, 3, {20, 170, 50, 255});
+    else
+      gl::set_pixel(p, static_cast<int>(px(o.x)), static_cast<int>(py(o.y)), {150, 150, 150, 255});
   }
   gl::draw_ring(p, px(start.x), py(start.y), 10, {0, 0, 0, 255});
   gl::draw_ring(p, px(start.x), py(start.y), 11, {0, 0, 0, 255});
@@ -334,6 +398,7 @@ void draw_reach(gl::Lab& lab, const std::string& name, const sh::MoveWorld& worl
 struct Course {
   std::string name, error;
   int pit_pairs = 0, pit_jumps = 0;  // the fail triggers' pits: crossings tried, jumps kept
+  int closed = 0;                    // links into a pit's floor closed (close_pits)
   std::vector<Section> sections;
   sh::Vec3f lo{1e9f, 1e9f, 1e9f}, hi{-1e9f, -1e9f, -1e9f};
 };
@@ -412,11 +477,13 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
   const int tries = std::max(1, static_cast<int>(lab.arg_num("tries")));
   const auto limit = static_cast<float>(lab.arg_num("limit"));
 
+  std::vector<uint8_t> dead;
+  out.closed = close_pits(g, triggers, dead);
   if (lab.arg("pits") != "line") prove_pits(nav.world, g, triggers, ps.jumper, out.pit_pairs, out.pit_jumps);
 
   // The sections, one after another.
   std::string own;
-  float near = 256;
+  float near = 512;
   for (const auto& [dn, o] : dests) {
     const float d = std::hypot(o.x - spawn.x, o.y - spawn.y, o.z - spawn.z);
     if (d < near) near = d, own = dn;
@@ -477,16 +544,16 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
       // How far the nav gets: of what it reaches from the start (no teleporter), nearest the exit.
       sh::NavJumper walker = ps.jumper;
       ge::ai::Search reach;
-      sh::nav_reach(g, a, reach, walker);
+      sec.reach_n = sh::nav_reach(g, a, reach, walker);
       const sh::Vec3f c{(exit.lo.x + exit.hi.x) / 2, (exit.lo.y + exit.hi.y) / 2,
                         (exit.lo.z + exit.hi.z) / 2};
       if (!drew_reach) {
         drew_reach = true;
-        draw_reach(lab, name, nav.world, g, reach, triggers, sec.start, exit);
+        draw_reach(lab, name, nav.world, g, reach, dead, triggers, sec.start, exit);
       }
       sec.reach_left = 1e30f;
       for (size_t k = 0; k < g.nodes.size(); k++) {
-        if (!reach.reached(static_cast<int32_t>(k))) continue;
+        if (!reach.reached(static_cast<int32_t>(k)) || dead[k] != 0) continue;
         const sh::Vec3f o = g.nodes[k].origin;
         bool in_trigger = false;
         for (const Trigger& t : triggers) in_trigger = in_trigger || touches(t, o);
@@ -756,7 +823,9 @@ void run(gl::Lab& lab) {
       sections.rows.push_back(
           {name, std::to_string(s + 1), (sec.own.empty() ? "spawn" : sec.own) + " > " + sec.next,
            v3(sec.start), sec.planned ? "planned" : "no route",
-           sec.planned ? "-" : v3(sec.reach) + " (" + to_fixed(sec.reach_left, 0) + ")",
+           sec.planned ? "-"
+                       : v3(sec.reach) + " (" + to_fixed(sec.reach_left, 0) + ", " +
+                             std::to_string(sec.reach_n) + " nodes)",
            std::to_string(sec.links),
            std::to_string(sec.jumps), sec.planned ? to_fixed(sec.proven_s, 2) : "-",
            sec.pit > 0 ? to_fixed(sec.pit, 0) : "-", sec.gaps > 0 ? std::to_string(sec.gaps) : "-", lip_speed(sec),
@@ -772,6 +841,7 @@ void run(gl::Lab& lab) {
     lab.metric(m + "time", time, "s");
     lab.metric(m + "pit-crossings", c.pit_pairs, "count");
     lab.metric(m + "pit-jumps", c.pit_jumps, "count");
+    lab.metric(m + "pit-links-closed", c.closed, "count");
   }
   lab.table(sections);
   lab.table(fails);
