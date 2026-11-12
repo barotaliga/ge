@@ -10,6 +10,7 @@
 #include "shooter/sequel_move.hpp"
 
 #include "brush/trace.hpp"
+#include "core/num.hpp"
 
 namespace ge::shooter {
 
@@ -613,6 +614,24 @@ int32_t brush_contents(void* ctx, Vec3f p) {
 }
 
 }  // namespace
+
+SequelCmd sequel_command(const MoveCmd& c) {
+  const auto angle = [](float degrees) {
+    return static_cast<int16_t>(core::num::to_int32(double(degrees) * (65536.0 / 360.0)));
+  };
+  SequelCmd out;
+  out.msec = c.msec;
+  out.buttons = c.buttons;
+  out.angles[0] = angle(c.angles.x);
+  out.angles[1] = angle(c.angles.y);
+  out.angles[2] = angle(c.angles.z);
+  out.forward = c.forward;
+  out.side = c.side;
+  out.up = c.up;
+  if ((c.buttons & kButtonJump) != 0 && out.up < kSqJumpUp) out.up = kSqJumpUp;
+  out.impulse = c.impulse;
+  return out;
+}
 
 void sequel_move(SequelMove& pm, const SequelWorld& world) {
   Move m{pm, world};
