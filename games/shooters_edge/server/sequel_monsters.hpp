@@ -31,6 +31,8 @@
 // ge:test tests/shooters_edge_sequel_monsters_test.cpp
 #pragma once
 
+#include <string_view>
+
 #include "shooter/sequel_move.hpp"
 
 namespace shooters_edge::server {
@@ -56,6 +58,12 @@ void monster_noise(SequelServer& s, int slot);
 void monster_rows(SequelServer& s);
 // The monster of map entity `e` (its index in `SequelServer::monsters`), or -1.
 int monster_index(const SequelServer& s, int e);
+// Whether `classname` is a monster's (one of the roster's rows).
+bool monster_class(std::string_view classname);
+// A spare monster of a spawner (its entities' `block`, below -1) brought out at `at`, facing
+// `angles`, thrown at `velocity`; whoever stands there dies. False when no spare is left.
+bool monster_bring_spare(SequelServer& s, int block, sh::Vec3f at, sh::Vec3f angles,
+                         sh::Vec3f velocity, int activator);
 // The words of a death by a monster's attack (`cause` from `kSqByMonster`), or null.
 const char* monster_obituary(int cause);
 

@@ -2,11 +2,13 @@
 // in a hall built here: a key lock asks for its key and then spends it, a counter counts down to
 // its targets, a barrel shot blows a moment later and hurts who stands by, a laser burns who
 // stands in its beam, a killbox kills who is in it, a light ramp steps a light's letter, a string
-// sets the frames of its characters, and a door of water toggles between its ends.
+// sets the frames of its characters, a door of water toggles between its ends, a ship flies its
+// path once used, its bomb falls and blows, a falling object crushes who is under it, and a
+// spawner brings out its monsters until it has made all it can.
 //
 // ge:summary Tests: the sequel's keys, counters, barrels, lasers, killboxes, ramps, strings, water
 // ge:keywords test sequel trigger-key trigger-counter explobox target-laser killbox lightramp
-// ge:keywords target-string func-water
+// ge:keywords target-string func-water misc-viper viper-bomb func-object target-spawner
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_sequel_targets_test.cpp
 #include <memory>
@@ -36,16 +38,19 @@ br::Entity entity(Pairs pairs) {
 }
 
 // A floored hall with a start at the west end, a killbox's box round it (model 1), a door of
-// water's block at x 300 (model 2), and `extra` entities.
+// water's block at x 300 (model 2), an object's block high over the start (model 3), and `extra`
+// entities.
 std::shared_ptr<const br::Map> hall(const std::vector<Pairs>& extra) {
   br::BrushWorld w;
-  w.models.resize(3);
+  w.models.resize(4);
   const float lo[3] = {-1024, -256, -16}, hi[3] = {1024, 256, 0};
   w.models[0].push_back(br::box_brush(lo, hi, sh::kSqSolid, "world/floor"));
   const float klo[3] = {-640, -40, 0}, khi[3] = {-560, 40, 80};
   w.models[1].push_back(br::box_brush(klo, khi, sh::kSqSolid, "world/trigger"));
   const float wlo[3] = {280, -32, 0}, whi[3] = {344, 32, 64};
   w.models[2].push_back(br::box_brush(wlo, whi, sh::kSqWater, "world/water"));
+  const float olo[3] = {-632, -24, 200}, ohi[3] = {-568, 24, 232};
+  w.models[3].push_back(br::box_brush(olo, ohi, sh::kSqSolid, "world/crate"));
   w.entities.push_back(
       entity({{"classname", "info_player_start"}, {"origin", "-600 0 24"}, {"angle", "0"}}));
   for (const Pairs& m : extra) w.entities.push_back(entity(m));
@@ -241,4 +246,72 @@ TEST(a_door_of_water_toggles_between_its_ends) {
   sv::map_use_targets(g->s(), g->named("go"), 0);
   run(*g, 4 * kSecond);
   CHECK_MSG(g->at(water).origin.z == 0, std::to_string(g->at(water).origin.z));
+}
+
+TEST(a_ship_flies_its_path_once_used_and_its_bomb_falls_and_blows) {
+  auto g = open_game({relay("go", "ship"),
+                      relay("drop", "bomb"),
+                      {{"classname", "path_corner"},
+                       {"targetname", "c1"},
+                       {"origin", "0 0 300"},
+                       {"target", "c2"}},
+                      {{"classname", "path_corner"}, {"targetname", "c2"}, {"origin", "900 0 300"}},
+                      {{"classname", "misc_viper"},
+                       {"targetname", "ship"},
+                       {"target", "c1"},
+                       {"origin", "0 0 300"}},
+                      {{"classname", "misc_viper_bomb"},
+                       {"targetname", "bomb"},
+                       {"origin", "0 0 200"},
+                       {"target", "news"}},
+                      help("news", "The bomb fell.")});
+  run(*g, kSecond);
+  const int ship = g->find("misc_viper");
+  CHECK(ship >= 0 && g->at(ship).hidden);
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  run(*g, kSecond);
+  CHECK(!g->at(ship).hidden);
+  CHECK_MSG(g->at(ship).origin.x > 100, std::to_string(g->at(ship).origin.x));
+  const int bomb = g->find("misc_viper_bomb");
+  CHECK(bomb >= 0 && g->at(bomb).hidden);
+  sv::map_use_targets(g->s(), g->named("drop"), 0);
+  run(*g, 3 * kSecond);
+  CHECK(g->at(bomb).gone);
+  CHECK(g->s().help_changed == 1 && g->s().help[1] == "The bomb fell.");
+}
+
+TEST(a_falling_object_crushes_who_is_under_it) {
+  auto g = open_game({relay("go", "crate"),
+                      {{"classname", "func_object"},
+                       {"targetname", "crate"},
+                       {"spawnflags", "1"},
+                       {"model", "*3"},
+                       {"dmg", "40"}}});
+  run(*g, kSecond);
+  const int crate = g->find("func_object");
+  CHECK(crate >= 0 && g->at(crate).hidden && g->at(crate).origin.z == 0);
+  const float before = g->p().health;
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  run(*g, 3 * kSecond);
+  CHECK(!g->at(crate).hidden && g->at(crate).origin.z < -100);
+  CHECK_MSG(g->p().health == before - 40, std::to_string(g->p().health));
+}
+
+TEST(a_spawner_brings_out_its_monsters_until_it_has_made_all_it_can) {
+  auto g = open_game({relay("go", "make"),
+                      {{"classname", "target_spawner"},
+                       {"targetname", "make"},
+                       {"target", "monster_soldier_light"},
+                       {"origin", "400 0 24"},
+                       {"angle", "180"}}});
+  run(*g, kSecond);
+  CHECK(g->s().monsters_total == 0);
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  CHECK(g->s().monsters_total == 1);
+  for (int n = 0; n < 4; n++) sv::map_use_targets(g->s(), g->named("go"), 0);
+  CHECK(g->s().monsters_total == 4);
+  bool told = false;
+  for (const std::string& line : g->s().console)
+    if (line.find("has made all 4") != std::string::npos) told = true;
+  CHECK(told);
 }
