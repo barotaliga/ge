@@ -510,6 +510,11 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
   const sh::Traits traits = sh::traits_of(sh::AimSkill::expert, sh::Temper::balanced);
   sh::PilotHands hands = sh::PilotHands::none;
   sh::PilotSettings ps = bt::fighter_pilot(features, traits, sh::AimSkill::expert, hands);
+  // People's start off their runs (`--circle-target`, `--circle-s`; zjumps' racers curve ~0.6 s
+  // to ~480): the circle jump's target and its longest curve, over the expert's.
+  if (!lab.arg("circle-target").empty())
+    ps.circle.target = static_cast<float>(lab.arg_num("circle-target"));
+  if (!lab.arg("circle-s").empty()) ps.circle.most_s = static_cast<float>(lab.arg_num("circle-s"));
   ps.jumper.gap_build_s = features[sh::Feature::gapbuild] ? bt::kGapBuild_s : -1;
   ps.jumper.gaps = true;  // the pits' jumps proven at speed (below) are this course's way on
   const sh::Features* keys = features[sh::Feature::keys] ? &features : nullptr;
@@ -1021,6 +1026,8 @@ const gl::LabSpec kSpec{
         {"fastest", "720",
          "the pits' jumps proven up to this takeoff speed, u/s (the bot's own "
          "takeoffs reach ~450-470: faster crossings are planned and never made)"},
+        {"circle-target", "", "the circle jump jumps at this speed, u/s (empty: the expert's 430)"},
+        {"circle-s", "", "and curves at most this long, s (empty: the expert's 0.3)"},
         {"arrive", "1",
          "1: each try starts at the teleporter's throw, 300 u/s along its destination's "
          "facing, as a person arrives; 0: from a stand"},
