@@ -207,6 +207,12 @@ struct SequelPlayer {
   double windfly_at = -10;    // the last push's sound
   int64_t noise_frame = -10;  // the rules frame of his last noise a monster may hear (his weapon)
   sh::Vec3f noise_at;
+  // The campaign's (sequel_campaign.hpp): the help news seen and its beeps, the screen open; the
+  // body carried to the next level and the one he entered this level with.
+  int help_seen = 0, help_unread = 0;
+  bool help_open = false;
+  bool carried = false, has_entered = false;
+  SqBody carry, entered;
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.
@@ -294,6 +300,14 @@ struct SequelServer : RulesCommon {
   };
   std::vector<Delayed> delayed;
   int secrets = 0, secrets_found = 0, goals = 0, goals_found = 0;
+  // The game across its levels (sequel_campaign.hpp): the help computer's two messages and how
+  // often they changed, the spawn point this level was entered by and the one the exit names, the
+  // cross-level bits, whether the exit ends a unit.
+  std::string help[2];
+  int help_changed = 0;
+  std::string spawn_name, next_spawn;
+  uint32_t cross_bits = 0;
+  bool next_unit = false;
   bool exit_now = false;  // an exit was used: the intermission starts at the frame's end
   // The area portals by number, open or shut (a door opens those its target names); what is sent
   // to a client is cut at a shut one once the map's areas are read.
