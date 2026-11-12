@@ -713,7 +713,7 @@ void touch(SequelServer& s, SequelEntity& e, int slot) {
     case kTriggerOnce:
     case kTriggerMultiple:
       if ((e.spawnflags & 2) != 0) return;  // not by players
-      if (!e.dir.x && !e.dir.y && !e.dir.z) {
+      if (e.dir.x == 0 && e.dir.y == 0 && e.dir.z == 0) {
         trigger_fire(s, e, slot);
         return;
       }
