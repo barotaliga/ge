@@ -29,6 +29,10 @@ namespace shooters_edge::net {
 
 namespace pg = ge::progs;
 
+int64_t classic_unix_time(const ClassicServer& s) {
+  return s.cfg.unix_time != nullptr ? s.cfg.unix_time() : 0;
+}
+
 int16_t safe_strafe(StrafeGuard& g, int16_t side, int n) {
   const int8_t dir = side > 0 ? 1 : side < 0 ? -1 : 0;
   if (g.force == 0 && dir != 0 && g.dir != 0 && dir != g.dir && g.zeros < n) g.force = n - g.zeros;
@@ -128,6 +132,10 @@ int rate_of(const ClassicServer& s, const std::string& info) {
 }
 
 void handle_connect(ClassicServer& s, const gn::Address& from, const std::string& text) {
+  if (gs::ban_refuses(s.bans, s.cfg.ban_mode, from, classic_unix_time(s))) {
+    reject(s, from, "You are banned from this server.");
+    return;
+  }
   pg::Words w;
   pg::tokenize_words(text.substr(0, text.find('\n')).c_str(), w);
   const int version = std::atoi(pg::word(w, 1));

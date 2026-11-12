@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "net/address.hpp"
+#include "net/sha1.hpp"
 #include "net/tcp_socket.hpp"
 #include "tv/node.hpp"
 
@@ -33,7 +34,7 @@ inline constexpr int kWebLinks = 1 << 16;                // the first link numbe
 inline constexpr size_t kWsMostFrame = size_t{1} << 20;  // a bigger frame drops the link
 inline constexpr size_t kWsMostHandshake = 8192;
 
-std::array<uint8_t, 20> sha1(std::span<const uint8_t> bytes);
+using ge::net::sha1;  // the handshake's digest (net/sha1.hpp)
 std::string base64(std::span<const uint8_t> bytes);
 // The `Sec-WebSocket-Accept` for a client's `Sec-WebSocket-Key`.
 std::string ws_accept(std::string_view key);

@@ -8,12 +8,14 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <fstream>
 #include <utility>
 #include <vector>
 
 #include "console/console.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
+#include "net/sha1.hpp"
 #include "progs/text.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/classic_info.hpp"
@@ -254,6 +256,17 @@ bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) 
     out = classic_status_table(s);
     return true;
   }
+  if (gsv::ban_command(s.bans, line, classic_unix_time(s), out)) {
+    if (cmd == "writeip" && !s.cfg.ban_file.empty()) {
+      std::ofstream f(s.cfg.ban_file, std::ios::binary | std::ios::trunc);
+      f << out;
+      out =
+          f ? "Saved " + std::to_string(s.bans.entries.size()) + " addresses to " + s.cfg.ban_file +
+                  "\n"
+            : "writeip: could not write " + s.cfg.ban_file + "; check the folder can be written\n";
+    }
+    return true;
+  }
   gsv::AidOrder order;
   std::string error;
   if (!gsv::aid_parse(kAids, line, order, error)) return false;
@@ -289,9 +302,69 @@ bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) 
   return true;
 }
 
+namespace {
+
+// The words of `line` as the digest takes them: each followed by a space.
+std::string digest_words(const std::string& line) {
+  pg::Words w;
+  pg::tokenize_words(line.c_str(), w);
+  std::string out;
+  for (int i = 0; i < w.count; i++) out.append(pg::word(w, i)).append(" ");
+  return out;
+}
+
+int hex_digit(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+
+bool same_ignoring_case(std::string_view a, std::string_view b) {
+  if (a.size() != b.size()) return false;
+  for (size_t i = 0; i < a.size(); i++)
+    if (hex_digit(a[i]) < 0 || hex_digit(a[i]) != hex_digit(b[i])) return false;
+  return true;
+}
+
+// The hashed field's verdict for `line`: its digest and, when the server has a clock, its time.
+bool digest_ok(const ClassicServer& s, std::string_view field, const std::string& line) {
+  if (field.size() < 56) return false;
+  const std::string_view stamp = field.substr(40);
+  uint64_t t = 0;
+  for (size_t i = 0; i < 8; i++) {
+    const int hi = hex_digit(stamp[i * 2]), lo = hex_digit(stamp[i * 2 + 1]);
+    if (hi < 0 || lo < 0) return false;
+    t |= static_cast<uint64_t>(hi * 16 + lo) << (8 * i);
+  }
+  const std::string want =
+      gn::sha1_hex("rcon " + s.cfg.rcon_password + std::string(stamp) + " " + digest_words(line));
+  if (!same_ignoring_case(field.substr(0, 40), want)) return false;
+  if (s.cfg.rcon_time_s <= 0 || s.cfg.unix_time == nullptr) return true;
+  const int64_t gap = static_cast<int64_t>(t) - s.cfg.unix_time();
+  return gap <= s.cfg.rcon_time_s && gap >= -s.cfg.rcon_time_s;
+}
+
+}  // namespace
+
+std::string rcon_digest_field(const std::string& password, const std::string& line, int64_t now) {
+  static const char* k = "0123456789ABCDEF";
+  std::string stamp;
+  for (int i = 0; i < 8; i++) {
+    const auto b = static_cast<uint8_t>(static_cast<uint64_t>(now) >> (8 * i));
+    stamp += k[b >> 4];
+    stamp += k[b & 15];
+  }
+  return gn::sha1_hex("rcon " + password + stamp + " " + digest_words(line)) + stamp;
+}
+
 void classic_rcon(ClassicServer& s, const gn::Address& from, const std::string& text) {
   if (s.cfg.rcon_password.empty()) {
     send_oob_print(s, from, "Remote console is not offered by this server.\n");
+    return;
+  }
+  if (gsv::ban_refuses(s.bans, s.cfg.ban_mode, from, classic_unix_time(s))) {
+    s.counts.rcon_refused++;  // a banned address is not answered
     return;
   }
   const int64_t second = static_cast<int64_t>(s.now);
@@ -299,25 +372,29 @@ void classic_rcon(ClassicServer& s, const gn::Address& from, const std::string& 
     s.rcon_second = second;
     s.rcon_tries = 0;
   }
-  if (++s.rcon_tries > kRconTriesPerSecond) {
+  if (s.cfg.rcon_rate > 0 && ++s.rcon_tries > s.cfg.rcon_rate) {
     s.counts.rcon_refused++;
     return;
   }
   pg::Words w;
   pg::tokenize_words(text.c_str(), w);
-  if (w.count < 3 || pg::word(w, 1) != s.cfg.rcon_password) {
+  // The line: what follows the password field, as it was sent.
+  const std::string field = w.count >= 2 ? pg::word(w, 1) : "";
+  std::string line;
+  if (!field.empty()) {
+    size_t at = text.find(field, text.find("rcon") + 4) + field.size();
+    if (at < text.size() && text[at] == '"') at++;
+    while (at < text.size() && text[at] == ' ') at++;
+    line = text.substr(at);
+    while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
+  }
+  const bool plain = !s.cfg.rcon_crypt && field == s.cfg.rcon_password;
+  if (w.count < 3 || !(plain || digest_ok(s, field, line))) {
     s.counts.rcon_refused++;
     s.log.push_back("rcon refused " + gn::to_string(from));
     send_oob_print(s, from, "Bad rcon_password.\n");
     return;
   }
-  // The line: what follows the password, as it was sent.
-  const size_t pass_at = text.find(s.cfg.rcon_password, text.find("rcon") + 4);
-  size_t at = pass_at + s.cfg.rcon_password.size();
-  if (at < text.size() && text[at] == '"') at++;
-  while (at < text.size() && text[at] == ' ') at++;
-  std::string line = text.substr(at);
-  while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
   s.counts.rcon_run++;
   s.log.push_back("rcon " + gn::to_string(from) + " " + line);
   std::string answer;
