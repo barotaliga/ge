@@ -251,7 +251,7 @@ bool write_svc(gn::Writer& w, const SvcMsg& m, const WireCtx& ctx) {
       return true;
     }
     case svc::setangle:
-      if (ctx.ext.has(ExtFamily::mvd, kMvdTeleport)) write_byte(w, at(m.ints, 0));
+      if (ctx.mvd || ctx.ext.has(ExtFamily::mvd, kMvdTeleport)) write_byte(w, at(m.ints, 0));
       for (int i = 0; i < 3; i++) write_angle(w, atf(m.floats, static_cast<size_t>(i)), coords);
       return true;
     case svc::serverdata:
@@ -387,7 +387,7 @@ bool read_svc(gn::Reader& r, SvcMsg& m, const WireCtx& ctx, std::string& error) 
         break;
       }
       case svc::setangle:
-        m.ints.push_back(ctx.ext.has(ExtFamily::mvd, kMvdTeleport) ? read_byte(r) : -1);
+        m.ints.push_back(ctx.mvd || ctx.ext.has(ExtFamily::mvd, kMvdTeleport) ? read_byte(r) : -1);
         for (int i = 0; i < 3; i++) m.floats.push_back(read_angle(r, coords));
         break;
       case svc::serverdata: {

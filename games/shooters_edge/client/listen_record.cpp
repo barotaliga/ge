@@ -16,6 +16,9 @@
 #include <filesystem>
 #include <system_error>
 
+#include "shooters_edge/client/demo_v2.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
+
 namespace shooters_edge::client {
 
 namespace fs = std::filesystem;
@@ -333,7 +336,10 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
     return false;
   }
   const int level = record_pack_level(s);
-  const fs::path file = fs::path(files.folder) / (name + (level > 0 ? ".mvdz" : ".mvd"));
+  sv::SequelServer* sequel = l.rules ? sv::sequel_of(*l.rules) : nullptr;
+  const fs::path file = fs::path(files.folder) / (name + (sequel      ? ".ged"
+                                                          : level > 0 ? ".mvdz"
+                                                                      : ".mvd"));
   std::error_code ec;
   fs::create_directories(file.parent_path(), ec);
   r.file.open(file, std::ios::binary | std::ios::trunc);
@@ -345,6 +351,18 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
   r.path = file.string();
   r.game_dir = fs::path(files.folder).filename().string();
   r.written = 0;
+  if (sequel) {
+    // The sequel's own recording from the player's view (slot 0), packed at the stop.
+    sv::SequelWireOptions opt;
+    opt.server_count = static_cast<int32_t>(l.maps_started) + 1;
+    if (l.map) opt.map_checksum = sv::sequel_map_checksum(l.map->file);
+    if (l.map && l.map->spec.brushes) sv::sequel_sky(*l.map->spec.brushes, opt);
+    r.sequel = std::make_unique<sv::SequelRecorder>();
+    sv::sequel_record_start(*r.sequel, *l.server, 0, opt);
+    r.on = true;
+    r.frames = 0;
+    return true;
+  }
   record_listen_begin(r, l, level);
   write_ready(r);
   return true;
@@ -352,6 +370,22 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
 
 std::string record_close(ListenRecorder& r) {
   if (!r.on && !r.file.is_open()) return "";
+  if (r.sequel) {
+    sv::sequel_record_stop(*r.sequel);
+    std::vector<uint8_t> file;
+    std::string error;
+    const bool packed = pack_demo(r.sequel->bytes, file, error);
+    const std::vector<uint8_t>& out = packed ? file : r.sequel->bytes;
+    r.file.write(reinterpret_cast<const char*>(out.data()),
+                 static_cast<std::streamsize>(out.size()));
+    r.file.close();
+    const int64_t frames = r.sequel->frames;
+    r.sequel.reset();
+    r.on = false;
+    const long kib = std::lround(static_cast<double>(out.size()) / 1024);
+    return "recorded " + r.path + ": " + std::to_string(frames) + " frames, " +
+           std::to_string(kib) + " KiB";
+  }
   record_listen_end(r);
   write_ready(r);
   r.file.close();
@@ -374,6 +408,12 @@ void record_tick(ListenRecorder& r, const Listen& l, int frames, ge::console::Co
     return;
   }
   if (frames <= 0) return;
+  if (r.sequel) {
+    if (sv::SequelServer* sq = l.rules ? sv::sequel_of(*l.rules) : nullptr)
+      sv::sequel_record_frame(*r.sequel, *l.server, static_cast<int32_t>(sq->frame_number),
+                              &sq->players[0].move);
+    return;
+  }
   record_listen_frame(r, l);
   write_ready(r);
 }
@@ -384,7 +424,8 @@ void add_record_commands(ge::console::Console& console, ListenRecorder& r, const
   using CArgs = ge::console::Args;
   console.add_command(
       "record",
-      "record <name>: the match recorded as <game folder>/<name>.mvdz (packed: demo_pack) until "
+      "record <name>: the match recorded as <game folder>/<name>.mvdz (packed: demo_pack; the "
+      "sequel's maps: <name>.ged) until "
       "stop",
       [&r, &listen, &files, &s](Con& c, const CArgs& a) {
         if (a.size() < 2) {

@@ -7,7 +7,8 @@
 // char, `h` short, `l` long, `f` float, `C` coord, `O` an origin coord (a float under the demo
 // family's float coords), `A` angle, `s` string. A layout of `*` is a message with its own code:
 // sound (6, and 55 under sound-double: flags, then the fields they name), setangle (10: a kind
-// byte under the teleport bit, then three angles), serverdata (11: the agreed families' magic
+// byte under the teleport bit, or the player's number in a recording's
+// stream (`WireCtx::mvd`), then three angles), serverdata (11: the agreed families' magic
 // and bits, then the version, the spawn count, the game directory, the player number, the level's
 // name and ten movement floats), spawnstatic2 and spawnbaseline2 (21, 66: an entity record from
 // the null state, the entity's number in its own word), temp_entity (23: a kind byte, then the
@@ -100,6 +101,7 @@ const char* temp_entity_layout(uint8_t kind);
 struct WireCtx {
   Ext ext;
   bool chunked = false;  // downloads use the chunked form (the x family's chunked bit)
+  bool mvd = false;      // a recording's stream: setangle names the player it turns first
 };
 
 struct SvcMsg {
