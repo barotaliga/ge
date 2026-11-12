@@ -68,7 +68,8 @@
 //   forward, pressed only while it carries the velocity on under the view pressed, else let go;
 //   on.
 // - `airview`: in a hop's air the mouse hand aims at the velocity's heading, a little toward the
-//   turn (bot.cpp), not at the pilot's view, already late by the pilot's own hands; judging.
+//   turn (bot.cpp), not at the pilot's view, already late by the pilot's own hands; and the air's
+//   keys chosen for the view when they land; on.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.

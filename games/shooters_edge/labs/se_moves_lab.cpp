@@ -486,11 +486,37 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
   ground_report(lab, std::move(ground));
 }
 
+// The map a recording was played on ("dm2"), off `file` or the first .mvd in `dir` by name; ""
+// when it names none (a race server's recordings do not).
+std::string recorded_map(const std::string& file, const std::string& dir) {
+  std::string path = file;
+  if (path.empty() && !dir.empty()) {
+    std::vector<std::string> paths;
+    std::error_code ec;
+    for (const auto& e : std::filesystem::directory_iterator(dir, ec))
+      if (e.path().extension() == ".mvd") paths.push_back(e.path().string());
+    std::sort(paths.begin(), paths.end());
+    if (!paths.empty()) path = paths.front();
+  }
+  if (path.empty()) return "";
+  la::DemoTracks dt;
+  std::string error;
+  if (!la::read_demo_tracks(la::read_whole(path), dt, error)) return "";
+  std::string name = dt.map;
+  if (name.rfind("maps/", 0) == 0) name.erase(0, 5);
+  if (name.size() > 4 && name.substr(name.size() - 4) == ".bsp") name.resize(name.size() - 4);
+  return name;
+}
+
 void run(gl::Lab& lab) {
   std::string error;
   la::StudyMap m;
-  if (!la::load_study_map(lab.arg("map"), lab.arg("basedir"), lab.arg("game"), lab.arg("mapname"),
-                          m, error)) {
+  // With no map named, the one the recordings were played on (our own se-team --save's say).
+  std::string mapname = lab.arg("mapname");
+  if (mapname.empty() && lab.arg("map").empty() && !lab.arg("basedir").empty())
+    mapname = recorded_map(lab.arg("file"), lab.arg("dir"));
+  if (!la::load_study_map(lab.arg("map"), lab.arg("basedir"), lab.arg("game"), mapname, m,
+                          error)) {
     lab.fail("se-moves: " + error, "next: make lab LAB=se-moves ARGS=--help; skill: shooter");
     return;
   }
@@ -862,7 +888,7 @@ const gl::LabSpec kSpec{
         {"map", "", "the map's .bsp path (the demo's map); empty: --basedir, else the fixture"},
         {"basedir", "", "a folder holding a game folder, to read --mapname from"},
         {"game", "id1", "the game folder under --basedir"},
-        {"mapname", "", "with --basedir: the map's name"},
+        {"mapname", "", "with --basedir: the map's name (none: the one the first recording names)"},
         {"player", "", "the player followed: a name or a slot (empty: the top fragger)"},
         {"hz", "77", "the commands a second the air's most turn is read at"},
         {"yaw", "30", "the angled view's turn about z, degrees"},

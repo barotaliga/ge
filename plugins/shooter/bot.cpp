@@ -118,6 +118,8 @@ constexpr double kAirBand = 15, kAirTurnCost = 0.5, kAirKeep = 0.3, kAirCurve = 
 // `airview`: the hop's view in the air this far toward the turn off the velocity, degrees, once
 // the flight is past this speed, units/s.
 constexpr float kAirViewLead = 2, kAirViewSpeed = 100;
+// and the keys chosen for the view this many commands on, when a key pressed now goes down.
+constexpr float kKeyLand = 1.5f;
 
 int aim_air_set(Vec3f v, float view_yaw, float way_yaw, float maxspeed, float accel, double dt,
                 int held, uint8_t allowed = 0xff, int curve = 0) {
@@ -375,6 +377,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   if ((b.aiming || (b.looking && !recipe_on)) && !blast_shot && !shot_due) {
     static constexpr const char* kNames[2] = {"aim_yaw", "aim_pitch"};
     ai::record_intent(why, kNames, want);
+    const float aim_yaw_was = b.yaw;
     double out[2];
     if (b.mouse && b.aim.mouse) {
       // The hand: onto the enemy within his width (his middle's half width, 16 units, at his
@@ -411,7 +414,10 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         hp.recipe < 0) {
       // The hop while aiming, in the air: the set that carries the velocity on round the way.
       const float ms = self.maxspeed > 0 ? self.maxspeed : sv.set.move.maxspeed;
-      b.air_set = aim_air_set(self.velocity, wrap(cmd.angles.y), hp.hop_aim_yaw, ms,
+      const float land_yaw = b.airview
+                                 ? wrap(cmd.angles.y + wrap(b.yaw - aim_yaw_was) * kKeyLand)
+                                 : wrap(cmd.angles.y);
+      b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms,
                               sv.set.move.accelerate, msec / 1000.0, b.air_set);
       const int k = b.air_set;
       cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
@@ -620,6 +626,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
             (180 / core::kPi));
         want_view[0] = b.yaw + wrap(vh - static_cast<float>(vp.strafe_side) * kAirViewLead - b.yaw);
       }
+      const float yaw_was = b.yaw;
       double out[2];
       b.view_by = swim3d ? "swim" : "air";
       if (shot_due) {  // the stroke onto the jump's view, timed to land with its shot
@@ -651,7 +658,10 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         // let go (as a person lets go of a key the mouse has not caught up with).
         const uint8_t sides = hp.strafe_side > 0 ? (1u << 1) | (1u << 2) : (1u << 6) | (1u << 7);
         const float ms = self.maxspeed > 0 ? self.maxspeed : sv.set.move.maxspeed;
-        b.air_set = aim_air_set(self.velocity, wrap(cmd.angles.y), hp.hop_aim_yaw, ms,
+        // (`airview`: the view the keys will land under, the hand's turn carried on that long.)
+        const float land_yaw =
+            b.airview ? wrap(cmd.angles.y + wrap(b.yaw - yaw_was) * kKeyLand) : wrap(cmd.angles.y);
+        b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms,
                                 sv.set.move.accelerate, msec / 1000.0, b.air_set, sides,
                                 hp.strafe_side);
         const int k = b.air_set;
