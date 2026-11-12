@@ -273,6 +273,14 @@ void settings_from_cvars(const RulesCommon& s, sh::ServerSettings& set, bool liv
 
 void apply_settings(QcServer& s) { settings_from_cvars(s, s.sv.set, true); }
 
+void write_game_kind(QcServer& s) {
+  const float serverflags = s.serverflags;
+  if (s.q.layout->g.serverflags >= 0)
+    s.serverflags = pg::global_float(s.q.vm, s.q.layout->g.serverflags);
+  write_rules(s);
+  s.serverflags = serverflags;
+}
+
 bool create_qc_server(QcServer& s, const pg::Progs& progs, const QcServerOptions& opt,
                       std::string& error) {
   s.opt = opt;
@@ -321,6 +329,8 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
     w.weapon = offset("weapon");
     w.weaponframe = offset("weaponframe");
     w.alpha = offset("alpha");
+    w.scale = offset("scale");
+    w.colormod = offset("colormod");
   }
   NamedHooks& n = s.named;
   n.user_cmd = named(progs, "UserCmd");
