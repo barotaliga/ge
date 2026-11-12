@@ -256,7 +256,8 @@ void run(gl::Lab& lab) {
   const gh::HubNode* team = gh::poller_find(poller, listed_at(20));
   lab.metric("team_game.teams", team ? static_cast<double>(team->status.teams.size()) : 0, "teams");
   if (!team || team->status.teams.size() != 2) {
-    lab.fail("the 4on4's record has no two teams", "next: check status_of's team totals");
+    lab.fail("the 4on4's record has no two teams",
+             "next: check status_of's team totals (engine/hub/browse.cpp)");
   }
   // SILENT: nobody asked in the engine's protocol; the dead entry never listed.
   lab.metric("engine_asks", static_cast<double>(poller.stats.asks), "datagrams");
@@ -265,7 +266,8 @@ void run(gl::Lab& lab) {
              "next: skip browsed nodes in poller_update (engine/hub/poller.cpp)");
   }
   if (gh::poller_find(poller, listed_at(kSilent))) {
-    lab.fail("the master's dead entry reached the index", "next: merge only answered entries");
+    lab.fail("the master's dead entry reached the index",
+             "next: merge only answered entries in browse_update (engine/hub/browse.cpp)");
   }
 
   // The pages from that index.
@@ -289,7 +291,7 @@ void run(gl::Lab& lab) {
   lab.metric("gone.left", static_cast<double>(poller.nodes.size()), "servers");
   if (gone_us < 0 || poller.nodes.size() != kRunning - 1) {
     lab.fail("the stopped server stayed in the index",
-             "next: browse_update drops a browsed node no refresh heard for drop_us");
+             "next: make browse_update drop a browsed node no refresh heard for drop_us");
   }
 
   const std::string browser = lab.arg("browser") == "0" ? "" : gl::hub_browser::find_browser();

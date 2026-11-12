@@ -120,12 +120,13 @@ void run(gl::Lab& lab) {
              "next: check demo_radar's names against the recording's");
   }
   if (r.outline.empty()) {
-    lab.fail("the halls gave no outline", "next: check map_outline's slice height");
+    lab.fail("the halls gave no outline",
+             "next: check map_outline's slice height (client/demo_radar.cpp)");
   }
   std::vector<uint8_t> back;
   if (!cl::unpack_demo(with, back, error) || back != match.mvd) {
     lab.fail("the file with its radar no longer unpacks to the recording",
-             "next: stream_add_track must keep every other track's bytes");
+             "next: make stream_add_track keep every other track's bytes");
   }
 
   // The hub's archive takes it; its pages.
@@ -143,14 +144,15 @@ void run(gl::Lab& lab) {
   gh::radar_answer(&a, spec(), "/radar/" + row.sha, page);
   lab.metric("page_kb", static_cast<double>(page.body.size()) / 1024.0, "KiB");
   if (page.code != 200)
-    lab.fail("/radar/ answered " + std::to_string(page.code), "next: read radar.cpp");
+    lab.fail("/radar/ answered " + std::to_string(page.code),
+             "next: read radar_answer in engine/hub/radar.cpp");
   lab.attach("radar.html", {page.body.begin(), page.body.end()});
   gh::Site site;
   site.archive = &a;
   const std::string demos = gh::demos_page(site, spec(), "/demos");
   if (demos.find("/radar/" + row.sha) == std::string::npos) {
     lab.fail("the Demos page has no Map link for a demo with radar",
-             "next: read pages.cpp's demos_page");
+             "next: read demos_page in engine/hub/pages.cpp");
   }
 
   const std::string browser = lab.arg("browser") == "0" ? "" : gl::hub_browser::find_browser();
