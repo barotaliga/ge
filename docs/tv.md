@@ -248,6 +248,21 @@ The `forward` lab gives the player's direct path each preset and puts the forwar
 
 A stranger's asks of every kind draw answers of at most a third of their size.
 
+**The classic face** (`games/shooters_edge/net/classic_forward.hpp`) plugs into the forward's face
+seam (`ForwardFace`: the datagrams the forward does not take, a client admitted with
+`forward_admit` and connected when the face's handshake upstream is done) so classic clients and
+forwarders chain through ours. The route is the connect's `prx` user info key, the rest of the route
+after this hop with the server last; the hop takes its destination off it, writes the rest back,
+adds `*qwfwd` and runs the challenge and the connect upstream with the client's qport. It answers the
+client's `j` only once the destination has accepted, and passes a refusal on in its words, so a
+chain of classic hops connects end to end or says why not. It answers `ping`, `status` (with
+`*version` "qwfwd ge 1", which is how a classic browser tells a forwarder) and `pingstatus` (each
+server it knows with its ping, for a client's route finder) itself, once a second a host; it makes
+challenges from the client's address and a secret, so it keeps nothing before a good connect; and it
+follows a client whose NAT gives it a new port by its qport on the same host.
+`tests/shooters_edge_classic_forward_test.cpp`: our classic client plays through one hop and through
+a chain of two to our classic server.
+
 ## Proxy
 
 `engine/proxy` (`proxy.hpp`, `trial.hpp`). Two hops that understand the slow link between them:
