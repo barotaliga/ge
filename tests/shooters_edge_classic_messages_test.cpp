@@ -3,7 +3,8 @@
 // the same bytes under the base form and the agreed first tier (and float coordinates), every clc
 // message likewise, the move's checksum covering what was sent, entity deltas against a frame
 // (unchanged entities cost nothing, a removal, a new entity from its baseline, the number and
-// model doubles), the player record's base and extended flag forms, and an unknown id refused.
+// model doubles), the player record's base and extended flag forms, a recording's setangle naming
+// its player, and an unknown id refused.
 // tests/golden/shooters_edge_classic_messages.txt holds every message's bytes, written by this
 // test under GE_GOLDEN_WRITE=1 (a deliberate change to the wire rewrites it; the PR says why).
 //
@@ -248,6 +249,22 @@ TEST(an_unknown_id_is_refused_with_its_place) {
   CHECK(cn::read_svc(r, m, {}, error));
   CHECK(!cn::read_svc(r, m, {}, error));
   CHECK(error.find("unknown message id 200") != std::string::npos);
+}
+
+TEST(a_recordings_setangle_names_the_player_it_turns) {
+  // In a recording's stream a setangle carries the player's number before the angles, with or
+  // without the teleport bit; a client's stream carries it only under that bit.
+  const uint8_t raw[] = {cn::svc::setangle, 0, 0, 0xc0, 0, cn::svc::nop};
+  cn::WireCtx mvd;
+  mvd.mvd = true;
+  gn::Reader r = gn::make_reader(raw, sizeof raw);
+  cn::SvcMsg m;
+  std::string error;
+  CHECK_MSG(cn::read_svc(r, m, mvd, error), error);
+  CHECK(m.ints.size() == 1 && m.ints[0] == 0 && r.at == 5);
+  CHECK(written(m, mvd) == std::vector<uint8_t>(raw, raw + 5));
+  gn::Reader plain = gn::make_reader(raw, sizeof raw);
+  CHECK(cn::read_svc(plain, m, {}, error) && plain.at == 4);
 }
 
 TEST(every_clc_message_round_trips) {

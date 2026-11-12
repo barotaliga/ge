@@ -257,6 +257,7 @@ bool walk(MvState& s, std::span<const uint8_t> body, int kind, int target,
   gn::Reader r = gn::make_reader(body.data(), body.size());
   WireCtx ctx;
   ctx.ext = s.ext;
+  ctx.mvd = true;
   while (gn::remaining(r) > 0) {
     const size_t start = r.at;
     const uint8_t id = body[start];
@@ -421,6 +422,7 @@ std::vector<uint8_t> mv_catch_up(const MvState& s) {
     gn::Reader r = gn::make_reader(s.statics.data(), s.statics.size());
     WireCtx ctx;
     ctx.ext = s.ext;
+    ctx.mvd = true;
     while (gn::remaining(r) > 0) {
       const size_t start = r.at;
       SvcMsg m;
