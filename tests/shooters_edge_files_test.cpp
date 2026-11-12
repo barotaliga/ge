@@ -4,13 +4,15 @@
 // base's; a mod's zip read too; the maps listed with the start map first; a loose file written
 // after the mount found; the base game's numbered packs (and no stand-in) as the content packs,
 // whose cache key is the one classic-enhance's pipeline gives the same packs, a content zip
-// standing in for the first pack (`pak0.pk3`) among them.
+// standing in for the first pack (`pak0.pk3`) among them; a map's `.lit` beside it, else in
+// `lits/`.
 //
 // ge:summary Tests the client's search path: base and mod folders, packs, zips, loose files
 // ge:keywords test shooters-edge search-path mod gamedir pak pk3 loose-files content_packs
 // ge:skill vfs shooter testing
 #include <filesystem>
 #include <fstream>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -83,6 +85,29 @@ TEST(the_base_folder_layers_its_packs_and_loose_files) {
   CHECK(maps.size() == 2 && maps[0] == "start" && maps[1] == "a");
   CHECK(cl::archive_paths(sp).size() == 2);
   CHECK(cl::content_packs(sp).size() == 2);
+  fs::remove_all(root);
+}
+
+TEST(a_maps_coloured_light_is_found_beside_it_then_in_lits) {
+  const fs::path root = fs::temp_directory_path() / "ge_se_files_lit_test";
+  fs::remove_all(root);
+  const std::string base(ge::classicenhance::classic_profile().base_dir);
+  write_pack(root / base / "pak0.pak", {{"maps/a.bsp", bytes_of("A")},
+                                        {"maps/a.lit", bytes_of("beside")},
+                                        {"maps/b.bsp", bytes_of("B")}});
+  write(root / base / "lits" / "a.lit", bytes_of("kept"));
+  write(root / base / "lits" / "b.lit", bytes_of("kept b"));
+  cl::SearchPath sp;
+  std::string error;
+  CHECK_MSG(cl::open_game_dir(root.string(), base, sp, error), error);
+  std::vector<uint8_t> store;
+  std::string found;
+  std::span<const uint8_t> lit = cl::map_lit(sp, "a", store, &found);
+  CHECK(std::string(lit.begin(), lit.end()) == "beside" && found == "maps/a.lit");
+  lit = cl::map_lit(sp, "b", store, &found);
+  CHECK(std::string(lit.begin(), lit.end()) == "kept b" && found == "lits/b.lit");
+  found.clear();
+  CHECK(cl::map_lit(sp, "c", store, &found).empty() && found.empty());
   fs::remove_all(root);
 }
 

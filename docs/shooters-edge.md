@@ -1233,7 +1233,10 @@ every pass, and judged by captioned screenshots:
   to the same pixels as drawing everything. **Light styles**: every style a face stores is a
   layer of the lightmap atlas, and the 64 styles' levels are a uniform the frame fills from their
   letter patterns ('a' dark, 'm' as baked, ten letters a second; `set_light_style`), so animated
-  light costs no re-upload. Coloured light from `.lit` files when present (to come).
+  light costs no re-upload. Coloured light from a `.lit` file when the game's files hold one
+  (`maps/<name>.lit` beside the map, else `lits/<name>.lit`; `client/files.hpp`'s `map_lit`), over
+  the grey light the map carries; one made for another build of the map is refused and the map keeps
+  its own.
 - **Materials**: animated texture sequences ("+0" .. "+9", five frames a second, each texture
   starting at its own frame), warped liquids, the two-layer scrolling sky (a skybox to come),
   fullbright palette colours as emissive.

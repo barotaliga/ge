@@ -299,12 +299,24 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   const std::vector<ge::brush::MapPicture> pictures =
       game.map_textures(game, files, map.name, map.file, picture_store);
   source.pictures = &pictures;
+  // The map's coloured light, a .lit file beside it or in lits/, over the light it carries.
+  std::vector<uint8_t> lit_store;
+  std::string lit_path, lit_refused;
+  const std::span<const uint8_t> lit = map_lit(files, map.name, lit_store, &lit_path, content);
   ba::Pack pack;  // the map file alone, as the scene reader takes it
   pack.bytes = map.file;
   pack.files.push_back({"maps/" + map.name + ".bsp", 0, static_cast<uint32_t>(map.file.size())});
-  if (!ba::load_scene(pack, pack.files[0].name, palette_copy, &r->scene, &error, source)) {
+  if (!ba::load_scene(pack, pack.files[0].name, palette_copy, &r->scene, &error, source, lit,
+                      &lit_refused)) {
     error = "the map " + map.name + " cannot be drawn: " + error;
     return nullptr;
+  }
+  if (!lit.empty()) {
+    ge::core::output::status(
+        lit_refused.empty()
+            ? "shooters_edge: the coloured light of " + map.name + " from " + lit_path
+            : "shooters_edge: " + lit_path + " was made for another build of " + map.name +
+                  "; drawn with the map's own light");
   }
   // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
   // adds its bounce under the live lights (look.cpp).
