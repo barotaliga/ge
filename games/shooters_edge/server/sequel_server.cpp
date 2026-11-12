@@ -68,6 +68,18 @@ void register_cvars(SequelServer& s) {
                .fallback = "0",
                .flags = con::kServer,
                .help = "deathmatch's rule bits (8192: infinite ammo)"});
+  s.cvars.add({.name = "fraglimit",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "the frags that end the level; 0 none"});
+  s.cvars.add({.name = "timelimit",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "the minutes that end the level; 0 none"});
+  s.cvars.add({.name = "sv_maplist",
+               .fallback = "",
+               .flags = con::kServer,
+               .help = "the maps a level's end goes through in turn (spaces or commas)"});
   s.cvars.add({.name = "sv_airaccelerate",
                .fallback = "0",
                .flags = con::kServer,
@@ -287,6 +299,7 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   p.maxs = pm.maxs;
   p.view_height = pm.view_height;
   p.water_level = pm.water_level;
+  p.water_type = pm.water_type;
   p.on_ground = pm.ground_entity >= 0;
   if (!p.alive || s.clients[slot].spectator) return;
   touch_items(s, slot);
@@ -320,7 +333,9 @@ void rules_frame(SequelServer& s) {
     SequelPlayer& p = s.players[i];
     if (s.clients[i].active && !p.stepped) fight_step(s, i, (p.buttons & sh::kButtonAttack) != 0);
     p.stepped = false;
+    if (s.clients[i].active) fight_body_frame(s, i);
   }
+  fight_limits(s);
   for (int i = 0; i < sh::kMaxClients; i++) {
     SequelPlayer& p = s.players[i];
     if (!s.clients[i].active || s.clients[i].spectator || p.alive) continue;
