@@ -41,6 +41,7 @@ struct Site {
   const Archive* archive = nullptr;
   int64_t unix_s = 0;
   std::string host;
+  std::string viewer_dir;  // the web viewer's built files (watch.hpp; "" none)
 };
 
 // Any GET the hub answers: the API under /v1, the archive's paths, a page, the stylesheet, or a

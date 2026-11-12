@@ -72,6 +72,7 @@ struct HttpServer {
   std::vector<HttpConn> conns;
   HttpStats stats;
   const Archive* archive = nullptr;  // the demo archive the pages read (null: none)
+  std::string viewer_dir;            // the web viewer's files (watch.hpp; "" none)
   int64_t unix_s = 0;                // the wall clock's time, set by the process each turn
 };
 

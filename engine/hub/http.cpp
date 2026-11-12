@@ -175,8 +175,8 @@ void http_update(HttpServer& s, const Poller& p, const HubSpec& spec, int64_t no
         s.stats.errors++;
         send(c, http_error(405, "the hub answers GET and HEAD only", "send a GET"));
       } else {
-        const Answer a =
-            hub_answer(p, spec, req.target, now_us, Site{s.archive, s.unix_s, req.host});
+        const Answer a = hub_answer(p, spec, req.target, now_us,
+                                    Site{s.archive, s.unix_s, req.host, s.viewer_dir});
         if (a.events && a.code == 200) {
           const HubNode* n = poller_find(p, a.node);
           c.answered = false;

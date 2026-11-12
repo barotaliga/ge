@@ -41,6 +41,7 @@ struct HubOptions {
   double browse_s = 30;                        // the browse's refresh
   std::string archive;                         // the demo archive's directory ("" none)
   double keep_gb = 0, keep_days = 0;           // the archive's retention (0: no limit)
+  std::string viewer;                          // the web viewer's built files ("" none, watch.hpp)
   bool help = false;
 };
 

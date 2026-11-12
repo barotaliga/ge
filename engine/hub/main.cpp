@@ -69,6 +69,9 @@ bool hub_options(const std::vector<std::string>& args, HubOptions& out, std::str
     } else if (key == "--archive") {
       out.archive = value;
       ok = !value.empty();
+    } else if (key == "--viewer") {
+      out.viewer = value;
+      ok = !value.empty();
     } else if (key == "--keep-gb") {
       ok = number(value, out.keep_gb);
     } else if (key == "--keep-days") {
@@ -124,6 +127,8 @@ std::string hub_help(const HubSpec& spec) {
          "  --keep-gb=<n>             the archive's size cap, oldest untagged first (default "
          "none)\n"
          "  --keep-days=<n>           the archive's age cap for untagged demos (default none)\n"
+         "  --viewer=<dir>            serve the game's web viewer from <dir> (the build's "
+         "<game>_viewer folder) on the Watch and Demo pages\n"
          "  --status=<s>              a status line this often (default 60)\n"
          "  --for=<s>                 stop after this long (default 0: run until killed)\n"
          "Then open http://<ip>:<http>/ in a browser; GET /v1 lists the API's paths.\n";
@@ -235,6 +240,10 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     http.archive = &archive;
     std::printf("%s_hub: archive %s: %zu demos, %.1f MB\n", spec.id.c_str(), o.archive.c_str(),
                 archive.rows.size(), static_cast<double>(archive.bytes) / 1e6);
+  }
+  if (!o.viewer.empty()) {
+    http.viewer_dir = o.viewer;
+    std::printf("%s_hub: viewer files from %s\n", spec.id.c_str(), o.viewer.c_str());
   }
   const auto unix_s = [] {
     return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(

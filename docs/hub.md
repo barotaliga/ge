@@ -242,6 +242,15 @@ browser's own GPU.
   height played most, and `shooters_edge_cli demos pack` writes it. A two-minute 4on4 of bots adds
   26 KiB (11 %) to its file. A live match's map waits for the TV node to carry the track.
 
+- **M56g, the pages** (`hub/watch.hpp`, in `hub-pages`): `/watch/{tv-node}/{stream}` holds the
+  viewer's canvas fed by the TV node's WebSocket (its status record names the port, key `web`), the
+  match's scoreboard from the server whose record lists the stream, the other live broadcasts, and
+  Open in the game; `/demo/{sha256}` holds the viewer on the demo's `/d/...` file, with Play in the
+  game, Download and Map. The cards' Watch and the Demos page's Watch open them. `/viewer/{file}`
+  serves the viewer's `.js`, `.wasm` and data from `--viewer=<dir>`. A hub with no viewer, or a node
+  that takes no browser, shows the reason in the picture's place. The script is the few lines
+  that start the viewer. The viewer itself (the engine built by Emscripten) is next.
+
 Phase 2 and later depend on the TV layer's header and meta track (M57a, the replay file v2, and M57b, the native TV node); the
 master can land before them, since a dedicated server's heartbeat needs nothing of TV.
 
