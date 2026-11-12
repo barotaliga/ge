@@ -11,23 +11,22 @@ namespace ge::shooter {
 namespace {
 
 constexpr const char* kNames[kFeatures] = {
-    "calm",      "pace",       "swimaim",    "screen",   "keep",    "lead",     "lane",
-    "hop",       "shortgoals", "commit",     "danger",   "dodge",   "watch",    "spam",
-    "packs",     "talk",       "plan",       "rj",       "gj",      "airsteer", "surface",
-    "glance",    "eye",        "selfaim",    "pools",    "routes",  "corner",   "mouse",
-    "packinfer", "listen",     "stairs",     "locked",   "escape",  "brink",    "gapjump",
-    "headroom",  "liphop",     "circlejump", "ahead",    "bodies",  "beat",     "keys",
-    "keysteer",  "lookway",    "press",      "slopes",   "counter", "jumpkey",  "backstep",
-    "runupkeys", "gapbuild",   "curvekeys",  "underway", "recipes", "chains",
-    "retarget",  "uturn",     "jumpfly",    "gappast",  "lipjump",
-    "airgap",    "trial"};
+    "calm",      "pace",       "swimaim",    "screen",   "keep",    "lead",      "lane",
+    "hop",       "shortgoals", "commit",     "danger",   "dodge",   "watch",     "spam",
+    "packs",     "talk",       "plan",       "rj",       "gj",      "airsteer",  "surface",
+    "glance",    "eye",        "selfaim",    "pools",    "routes",  "corner",    "mouse",
+    "packinfer", "listen",     "stairs",     "locked",   "escape",  "brink",     "gapjump",
+    "headroom",  "liphop",     "circlejump", "ahead",    "bodies",  "beat",      "keys",
+    "keysteer",  "lookway",    "press",      "slopes",   "counter", "jumpkey",   "backstep",
+    "runupkeys", "gapbuild",   "curvekeys",  "underway", "recipes", "chains",    "retarget",
+    "uturn",     "jumpfly",    "gappast",    "lipjump",  "airgap",  "pilotcast", "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
 // Every switch but `trial` (the last) and those not judged or dropped (`lookway`, `press`,
-// `counter`, `chains`, `retarget`). The keyboard (`keys`, `keysteer`) is on: a person's hands are on keys
-// (realism first; the frags it costs, -3.8 a match head to head, won back by fixing movement and
-// strategy).
+// `counter`, `chains`, `retarget`). The keyboard (`keys`, `keysteer`) is on: a person's hands are
+// on keys (realism first; the frags it costs, -3.8 a match head to head, won back by fixing
+// movement and strategy).
 constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);
 constexpr uint64_t kKeys = (uint64_t{1} << static_cast<uint64_t>(Feature::lookway)) |
                            (uint64_t{1} << static_cast<uint64_t>(Feature::press)) |
@@ -43,7 +42,8 @@ constexpr uint64_t kJudging = (uint64_t{1} << static_cast<uint64_t>(Feature::run
                               (uint64_t{1} << static_cast<uint64_t>(Feature::underway)) |
                               (uint64_t{1} << static_cast<uint64_t>(Feature::gappast)) |
                               (uint64_t{1} << static_cast<uint64_t>(Feature::lipjump)) |
-                              (uint64_t{1} << static_cast<uint64_t>(Feature::airgap));
+                              (uint64_t{1} << static_cast<uint64_t>(Feature::airgap)) |
+                              (uint64_t{1} << static_cast<uint64_t>(Feature::pilotcast));
 constexpr uint64_t kAll = (kTrial - 1) & ~kKeys & ~kJudging;
 
 bool separator(char c) { return c == ',' || c == ' ' || c == '/' || c == '\t'; }

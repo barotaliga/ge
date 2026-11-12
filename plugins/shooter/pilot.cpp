@@ -49,8 +49,17 @@ constexpr float kJumpOver = 1.15f;     // and at most this share (and 16 u/s) of
 constexpr float kJumpAim = 0.95f;      // with the velocity within this cosine of the jump's way
 constexpr float kPastStart = 24;       // past a jump's start this far without its speed: run up
 constexpr float kFlyFrom = 24;         // `jumpfly`: a jump flown from this far before its start
-constexpr float kLipSpeed = 200;       // `lipjump`: a hop at this speed or more jumps at a lip
-constexpr float kLipAhead = 4;         // and looks this many commands ahead for it
+constexpr float kAcrossOn = 3;
+constexpr float kAcrossBeat_s = 0.04f;  // and on it the side keys swapped this often, s  //
+                                        // `strafe_across`: on the crossing within this, degrees
+constexpr int kCrossFan = 60, kCrossStep = 5;
+constexpr double kCrossTurnFloor = 0.5;  // a turn within 60 degrees costs nothing (made in the air)
+                                         // // `lip_crossing`: the headings tried, degrees
+constexpr float kCrossEvery = 8, kCrossMost = 640;  // and the places along each, units
+constexpr double kLipLiftOff_s = 0.05;  // a lip's jump is off the ground within this      //
+                                        // `lipjump`: a lip's landing looked for this many links on
+constexpr float kLipSpeed = 200;        // `lipjump`: a hop at this speed or more jumps at a lip
+constexpr float kLipAhead = 4;          // and looks this many commands ahead for it
 constexpr float kRunUpFallen = 40;  // `underway`: a run-up this far under its jump's start fell off
 constexpr float kRunOnFrom = 8;   // `backstep`: a run-up this far behind the start or more runs on
 constexpr float kStrafeHold = 2;  // the strafe's side holds until the target is this far off, deg
@@ -82,9 +91,9 @@ constexpr float kBrake = 0.25f;      // the least share of maxspeed walked into 
 // than this slower than a fresh plan from where the player stands, s.
 constexpr float kRetargetSlack_s = 0.25f;
 constexpr float kViaTouch = 32, kViaUnder = 24, kViaOver = 72, kViaPast = 64;
-constexpr float kFacing = 10;        // a run-up goes when the view is this near the jump's way, deg
-constexpr float kTurnRate = 400;     // a hand turning round on the spot, degrees a second
-constexpr float kFlipFacing = 25;    // a flip goes with the view this near straight behind, deg
+constexpr float kFacing = 10;      // a run-up goes when the view is this near the jump's way, deg
+constexpr float kTurnRate = 400;   // a hand turning round on the spot, degrees a second
+constexpr float kFlipFacing = 25;  // a flip goes with the view this near straight behind, deg
 constexpr float kFlipSpare_s = 0.05f;  // a flip's turn starts this much earlier than it takes, s
 // In the air (`air`): the aim kAirPast past the target toward the node after it within kAirCorner
 // of it, units; slower
@@ -710,6 +719,60 @@ float d_to_flip(const Pilot& p, const PilotSense& s) {
 // A rocket jump's shot may go: none ahead, no hand flying the view, or the hand there.
 bool shot_view_ready(const Pilot& p) { return p.shot_pitch == 0 || !p.shot_hand || p.shot_ready; }
 
+// `lipjump`: the heading across the pit ahead of `o` (moving along `vh`) to the floor beyond,
+// within `kCrossFan` of the velocity: along each heading of the fan, the first place past a lip
+// with a floor within a step under the player's box; the one costing least as distance over the
+// share of the speed along it (a turn in the air loses the rest). `vh` itself when none is found.
+float lip_crossing(const MoveWorld& world, Vec3f o, float vh) {
+  float best = vh, cost = 1e30f;
+  for (int a = -kCrossFan; a <= kCrossFan; a += kCrossStep) {
+    const float h = vh + static_cast<float>(a);
+    const double r = static_cast<double>(h) * (core::kPi / 180);
+    const Vec3f dir{static_cast<float>(core::libm::cos(r)), static_cast<float>(core::libm::sin(r)),
+                    0};
+    const double turn = core::libm::cos(static_cast<double>(a) * (core::kPi / 180));
+    bool gap = false;
+    for (float d = kCrossEvery; d <= kCrossMost; d += kCrossEvery) {
+      const Vec3f at = o + dir * d;
+      const HullTrace tr = player_trace(world, at, {at.x, at.y, at.z - kStepHeight - 2});
+      if (tr.startsolid || tr.allsolid) break;  // a wall (the far side higher): not this way
+      const bool floor = tr.fraction < 1;
+      if (!floor) gap = true;
+      if (gap && floor) {
+        const float c = d / static_cast<float>(turn > kCrossTurnFloor ? 1.0 : turn);
+        if (c < cost) cost = c, best = h;
+        break;
+      }
+    }
+  }
+  return best;
+}
+
+// A flight strafed across, `off` degrees off the velocity (+ left): the view on the velocity,
+// forward let go, the side key that turns the velocity toward it (the right one turns it
+// clockwise), no key once within `kAcrossOn` (a key swapped each command under late hands swung
+// the heading 30 degrees about the line): the heading brought onto the crossing and held.
+// `dt`: the time to add to the side's hold (0 where the caller has).
+void strafe_across(Pilot& p, float vh, float off, Want& w, float dt) {
+  p.side_s += dt;
+  w.yaw = unwrap(vh, p.yaw);
+  w.forward = 0;
+  w.side = off < -kAcrossOn ? 1.0f : off > kAcrossOn ? -1.0f : 0.0f;
+  if (w.side != 0) {
+    p.strafe_side = static_cast<int8_t>(w.side > 0 ? 1 : -1);
+    p.side_s = 0;
+    return;
+  }
+  // On the line: the view held on it and the side keys swapped every `kAcrossBeat_s`, the air's
+  // gain each way.
+  w.yaw = unwrap(vh + off, p.yaw);
+  if (p.side_s >= kAcrossBeat_s) {
+    p.strafe_side = static_cast<int8_t>(p.strafe_side >= 0 ? -1 : 1);
+    p.side_s = 0;
+  }
+  w.side = static_cast<float>(p.strafe_side);
+}
+
 // `lipjump`: the player's box `kLipAhead` commands on at `v` (a keyboard's jump key goes down a
 // command or two late) has no floor within a step under it (in a wall there is no lip: false).
 bool lip_ahead(const MoveWorld& world, Vec3f o, Vec3f v, int msec) {
@@ -725,7 +788,8 @@ bool jump_flies(const Pilot& p, const PilotSense& s, int msec, Vec3f T) {
   if (s.world == nullptr) return false;
   MoveSettings move;
   move.maxspeed = s.maxspeed;
-  if (!gap_lands(*s.world, move, s.origin, s.velocity, T, msec, p.set.gap_past, p.set.gap_strafe)) return false;
+  if (!gap_lands(*s.world, move, s.origin, s.velocity, T, msec, p.set.gap_past, p.set.gap_strafe))
+    return false;
   return !p.set.curve_keys || gap_lands_late(p, s, msec, T);
 }
 
@@ -778,6 +842,22 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
   // its turn at the speed).
   const float back_up = run_up + (flip ? v * flip_lead_s(p) : 0);
   const Vec3f P = S - dir * back_up;
+  if (p.set.lip_jump && !s.onground && !p.airborne && s.waterlevel == 0) {
+    // In the air from a jump of the walk's (a hop's, one at a lip): a person never lines up in
+    // the air (the back key there threw away a lip jump's flight across a pit, 450 -> 40 u/s);
+    // the flight kept, the view on it, no keys, until it is down.
+    target = S;
+    if (speed > 1) w.yaw = unwrap(heading(s.velocity.x, s.velocity.y), p.yaw);
+    w.forward = 0;
+    w.side = 0;
+    because = "in the air: lining up once down";
+    if (p.lip_pressed_s >= 0 && speed > 1) {
+      const float vh = heading(s.velocity.x, s.velocity.y);
+      strafe_across(p, vh, wrap(p.lip_yaw - vh), w, static_cast<float>(msec) * 0.001f);
+      because = "a lip's jump: strafing across the pit";
+    }
+    return false;
+  }
   if (p.mode != PilotMode::run_up && p.mode != PilotMode::jump) p.mode = PilotMode::jump;
   // FLOWN FROM HERE (`jumpfly`, a plain jump): near the start and not on its line at its speed, a
   // jump whose flight from here lands by T is taken as it is.
@@ -1046,8 +1126,8 @@ bool pilot_chain(Pilot& p, int32_t next, Vec3f at) {
 bool pilot_retarget(Pilot& p, int32_t goal, const PilotSense& s) {
   // Only a walk or a hop on a walk's link: anything else (a jump, a mover, a swim, a hop start
   // being played, a gap's run) is planned again as it always was.
-  const bool moving = p.mode == PilotMode::walk || p.mode == PilotMode::hop ||
-                      p.mode == PilotMode::strafe;
+  const bool moving =
+      p.mode == PilotMode::walk || p.mode == PilotMode::hop || p.mode == PilotMode::strafe;
   if (!moving || p.k + 1 >= p.route.size() || p.recipe >= 0 || p.gap_way >= 0 || p.gap_flight ||
       p.escape_on >= 0 || p.plan_on_landing || (s.waterlevel >= 2 && !s.onground))
     return pilot_go(p, goal, s);
@@ -1121,6 +1201,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   p.curve_keys_last = p.curve_keys;
   p.curve_keys = kNoCurveKeys;
   if (p.gap_flight && !s.onground) p.gap_aloft = true;
+  if (p.lip_pressed_s >= 0 && s.onground && p.clock_s - p.lip_pressed_s > kLipLiftOff_s)
+    p.lip_pressed_s = -1;  // a lip's jump come down (or never off)
   if (p.gap_flight && s.onground && !p.gap_aloft && p.clock_s - p.gap_pressed_s > kGapLiftOff_s) {
     p.gap_flight = false;  // the jump never left the ground (a key held off): no flight to judge
   } else if (p.gap_flight && s.onground && p.gap_aloft) {
@@ -1312,7 +1394,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     } else if (p.mode == PilotMode::hop) {
       const float vh = speed > kSlow ? heading(s.velocity.x, s.velocity.y) : p.yaw;
       const float look = speed * p.set.hop_look_s > 64 ? speed * p.set.hop_look_s : 64;
-      const Vec3f aim = via_aim(p, s, s.origin, look, hop_aim(p, s.origin, look, p.strafe_end_node));
+      const Vec3f aim =
+          via_aim(p, s, s.origin, look, hop_aim(p, s.origin, look, p.strafe_end_node));
       const float aim_yaw = yaw_at(s.origin, aim);
       const float err = wrap(aim_yaw - vh);
       // The side the aim lies on (the right side turns the velocity clockwise), held until the
@@ -1477,6 +1560,11 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           p.strafe_side = static_cast<int8_t>(w.side > 0 ? 1 : -1);
           because = "a gap trick: strafing across to its landing";
         }
+      } else if (p.lip_pressed_s >= 0 && speed > kSlow) {
+        // A lip's jump: flown across at the far side, not woven.
+        w.jump = false;
+        strafe_across(p, vh, wrap(p.lip_yaw - vh), w, 0);
+        because = "a lip's jump: strafing across the pit";
       } else {
         w.jump = false;  // let go in the air, so the landing's press is a fresh one
         because = "hopping: the side key, the view on the velocity";
@@ -2123,18 +2211,28 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     w.jump = true;
     because = "at a lip: jump";
     p.stats.lip_jumps++;
+    p.lip_pressed_s = p.clock_s;
+    p.lip_yaw = lip_crossing(*s.world, s.origin, heading(s.velocity.x, s.velocity.y));
   } else if (p.set.lip_jump && p.mode == PilotMode::hop && s.onground && w.jump &&
-             !p.jump_pressed && !p.gap_flight && s.world != nullptr && speed > kSlow) {
+             !p.jump_pressed && !p.gap_flight && !p.forecasting && s.world != nullptr &&
+             speed > kSlow) {
     // A HOP THAT FALLS: a hop's jump whose flight (forward along the run) comes down under the
     // floor it leaves, into a pit beside the way, is not pressed: run on (unless the lip is here).
     MoveSettings move;
     move.maxspeed = s.maxspeed;
     const Vec3f aim{s.origin.x + s.velocity.x, s.origin.y + s.velocity.y, s.origin.z};
-    const JumpFlight f = fly_jump(*s.world, move, s.origin, s.velocity, aim, msec);
-    if ((!f.landed || f.end.z < s.origin.z - kStepHeight - 8) &&
-        !lip_ahead(*s.world, s.origin, s.velocity, msec)) {
+    // `pilotcast`: flown by a copy of the pilot (its strafe, its view, its hands), not forward.
+    const JumpFlight f = p.set.pilot_cast
+                             ? hop_cast(p, s, msec)
+                             : fly_jump(*s.world, move, s.origin, s.velocity, aim, msec);
+    const bool lip = lip_ahead(*s.world, s.origin, s.velocity, msec);
+    if ((!f.landed || f.end.z < s.origin.z - kStepHeight - 8) && !lip) {
       w.jump = false;
       because = "a hop that falls in a pit: run on";
+    } else if (lip && speed > kLipSpeed) {
+      // A hop's own jump at a lip: flown across the pit as a lip's jump is.
+      p.lip_pressed_s = p.clock_s;
+      p.lip_yaw = lip_crossing(*s.world, s.origin, heading(s.velocity.x, s.velocity.y));
     }
   }
   p.because = because;
