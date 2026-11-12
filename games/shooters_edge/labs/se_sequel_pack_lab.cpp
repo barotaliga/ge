@@ -5,7 +5,7 @@
 // the recording and against zstd at its chosen level. The bytes are charted a second at a time as
 // the recording and as its packed chunks grow.
 //
-// ge:summary Lab: the sequel's recordings packed into .ger: walked, back exactly, size vs zstd
+// ge:summary Lab: the sequel's recordings packed into .ged: walked, back exactly, size vs zstd
 // ge:keywords lab sequel dm2 replay-v2 pack unpack zstd ratio round-trip field-codec
 // ge:skill replay shooter labs
 // ge:test tests/shooters_edge_sequel_demo_test.cpp
@@ -71,8 +71,8 @@ void run(gl::Lab& lab) {
   // A second at a time: the recording's bytes and its chunks' as they grow.
   const std::vector<std::span<const uint8_t>> blocks = cl::sequel_blocks(rec);
   cl::SequelCoder coder;
-  gl::Trace raw{"the recording", {}, {}}, ger{"its chunks on the replay file", {}, {}};
-  double raw_kb = 0, ger_kb = 0;
+  gl::Trace raw{"the recording", {}, {}}, ged{"its chunks on the replay file", {}, {}};
+  double raw_kb = 0, ged_kb = 0;
   for (size_t at = 0, n = 0; at < blocks.size(); at += 10, n++) {
     std::vector<std::span<const uint8_t>> some;
     for (size_t i = at; i < blocks.size() && i < at + 10; i++) {
@@ -81,11 +81,11 @@ void run(gl::Lab& lab) {
     }
     std::vector<uint8_t> chunk;
     cl::pack_sequel_chunk(coder, some, n % 30 == 0, chunk, nullptr);
-    ger_kb += static_cast<double>(chunk.size()) / 1024.0;
+    ged_kb += static_cast<double>(chunk.size()) / 1024.0;
     raw.x.push_back(static_cast<double>(n + 1));
     raw.y.push_back(raw_kb);
-    ger.x.push_back(static_cast<double>(n + 1));
-    ger.y.push_back(ger_kb);
+    ged.x.push_back(static_cast<double>(n + 1));
+    ged.y.push_back(ged_kb);
   }
 
   const double ratio = static_cast<double>(file.size()) / static_cast<double>(rec.size());
@@ -93,12 +93,12 @@ void run(gl::Lab& lab) {
   lab.metric("blocks", static_cast<double>(rep.records), "blocks");
   lab.metric("walked", static_cast<double>(rep.walked), "blocks");
   lab.metric("recording-bytes", static_cast<double>(rec.size()), "bytes");
-  lab.metric("ger-bytes", static_cast<double>(file.size()), "bytes");
+  lab.metric("ged-bytes", static_cast<double>(file.size()), "bytes");
   lab.metric("zstd-bytes", static_cast<double>(zstd), "bytes");
-  lab.metric("ger-over-zstd", vs_zstd, "ratio");
+  lab.metric("ged-over-zstd", vs_zstd, "ratio");
   lab.table({"the recording packed",
-             {"source", "blocks", "walked", "kept", "bytes", ".ger", "zstd", ".ger / bytes",
-              ".ger / zstd", "back exactly"},
+             {"source", "blocks", "walked", "kept", "bytes", ".ged", "zstd", ".ged / bytes",
+              ".ged / zstd", "back exactly"},
              {{source, std::to_string(rep.records), std::to_string(rep.walked),
                std::to_string(rep.kept), std::to_string(rec.size()), std::to_string(file.size()),
                std::to_string(zstd), fmt(ratio, 3), fmt(vs_zstd, 3), same ? "yes" : "no"}}});
@@ -113,7 +113,7 @@ void run(gl::Lab& lab) {
        "The recording's bytes and its packed chunks' as the play goes on, a second at a time.",
        "the packed line far under the recording's and rising evenly",
        {{"pak", pak_path}, {"seed", lab.arg("seed")}}},
-      gl::to_picture(gl::line_chart({frame, {raw, ger}, {}, {}, {}, false, false, false}).plot));
+      gl::to_picture(gl::line_chart({frame, {raw, ged}, {}, {}, {}, false, false, false}).plot));
   if (!same)
     lab.fail("the recording did not come back byte for byte" + (error.empty() ? "" : ": " + error),
              "next: run tests/shooters_edge_sequel_demo_test.cpp; skill: replay.");

@@ -6,7 +6,7 @@
 //
 // ge:summary Tests the game CLI: catalog, skill, refusals, servers, players, rcon, host, join
 // ge:keywords test gamecli shooters_edge_cli help catalog skill servers players rcon host join
-// ge:keywords spawn_detached process_alive process_stop demos content logs demos-pack ger
+// ge:keywords spawn_detached process_alive process_stop demos content logs demos-pack ged
 // ge:skill agent-interface testing
 #include <atomic>
 #include <chrono>
@@ -275,8 +275,8 @@ TEST(demos_pack_and_unpack_a_replay_file) {
   CHECK_MSG(run({"demos", "pack", "final", "--json"}, out, root) == 0, out);
   ge::core::FlatJson j = parse(out);
   CHECK(j["result.format"].text == "multiview");
-  CHECK(fs::exists(root / "id1" / "final.ger"));
-  CHECK(run({"demos", "pack", "final"}, out, root) == 1);  // final.ger is already there
+  CHECK(fs::exists(root / "id1" / "final.ged"));
+  CHECK(run({"demos", "pack", "final"}, out, root) == 1);  // final.ged is already there
   fs::rename(root / "id1" / "final.mvd", root / "id1" / "kept.mvd");
   CHECK_MSG(run({"demos", "unpack", "final", "--json"}, out, root) == 0, out);
   {

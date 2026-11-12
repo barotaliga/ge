@@ -1,6 +1,6 @@
 // The game CLI's hub links (docs/hub.md § Open in the game, engine/hub/link.hpp): `link open`
 // takes a link a hub's page hands the system (Join, Spectate, Watch, Play) and starts the window
-// on it, fetching a demo into `<state>/demos/<sha256>.ger` first (kept: a second Play starts at
+// on it, fetching a demo into `<state>/demos/<sha256>.ged` first (kept: a second Play starts at
 // once); `link register` makes the game's scheme open in this CLI, per system.
 //
 // ge:summary The game CLI's link commands: a hub link opened in the window, the scheme registered
@@ -76,7 +76,7 @@ int cmd_link_open(Ctx& ctx) {
                           link.address);
     case hub::LinkKind::demo: {
       if (ctx.spec.demo_words == nullptr) break;
-      const fs::path file = fs::path(ctx.places.state) / "demos" / (link.sha + ".ger");
+      const fs::path file = fs::path(ctx.places.state) / "demos" / (link.sha + ".ged");
       std::vector<uint8_t> bytes;
       const bool kept =
           read_file(file, bytes) && mod::sha256_hex(bytes.data(), bytes.size()) == link.sha;

@@ -4,7 +4,7 @@
 // walk does not know is kept as its bytes and still comes back; the framing check refuses what is
 // not a recording; with GE_SEQUEL_PAK naming the demo's pack, its own recording does the same.
 //
-// ge:summary Tests: the sequel's .dm2 recordings packed into .ger and back byte for byte
+// ge:summary Tests: the sequel's .dm2 recordings packed into .ged and back byte for byte
 // ge:keywords test sequel dm2 replay-v2 pack unpack round-trip field-codec fixture
 // ge:skill replay shooter testing
 #include <cstdlib>
