@@ -72,6 +72,10 @@ constexpr float kLanded = 32;   // a jump has landed on its target within this, 
 constexpr float kSlow = 50;     // under this a velocity's way is not read, units/s
 constexpr float kSlowing_s = 0.25f;  // a run slows to a jump's speed in about this, s
 constexpr float kBrake = 0.25f;      // the least share of maxspeed walked into the goal
+// A chain's pickup (`pilot_chain`): run through with the player's box over the item's (each 32
+// across: centres within 32 across, the feet from 24 under the item's floor to 72 over it), or
+// left behind once past its node and this far from it.
+constexpr float kViaTouch = 32, kViaUnder = 24, kViaOver = 72, kViaPast = 64;
 constexpr float kFacing = 10;        // a run-up goes when the view is this near the jump's way, deg
 constexpr float kTurnRate = 400;     // a hand turning round on the spot, degrees a second
 constexpr float kFlipFacing = 25;    // a flip goes with the view this near straight behind, deg
@@ -383,8 +387,21 @@ void advance(Pilot& p, const PilotSense& s) {
 bool replan(Pilot& p, const PilotSense& s) {
   const int32_t goal = p.goal;
   const PilotStats keep = p.stats;
-  const bool ok = pilot_go(p, goal, s);
+  // A chain's pickup still ahead is planned through again.
+  const int32_t via = p.via_k >= 0 ? p.route[static_cast<size_t>(p.via_k)] : -1;
+  const Vec3f via_at = p.via_at;
+  bool ok = false;
+  if (via >= 0 && pilot_go(p, via, s)) {
+    ok = true;
+    if (!pilot_chain(p, goal, via_at)) {  // no way on from it: the goal is the pickup
+      p.goal = goal;
+      ok = pilot_go(p, goal, s);
+    }
+  } else {
+    ok = pilot_go(p, goal, s);
+  }
   p.stats.plans = keep.plans + 1;
+  p.stats.vias = keep.vias;
   return ok;
 }
 
@@ -461,7 +478,8 @@ Vec3f lane_target(Pilot& p, float dt, float t, Vec3f target) {
   float room = 1e9f;
   for (size_t k = p.k; k + 1 < p.route.size() && k < p.k + 3; k++) {
     const NavLink* l = link_of(g, p.route[k], p.route[k + 1]);
-    if (l == nullptr || !through(*l) || !level(g, p.route[k], p.route[k + 1], p.set.slopes)) {
+    if (l == nullptr || !through(*l) || !level(g, p.route[k], p.route[k + 1], p.set.slopes) ||
+        p.via_k == static_cast<int32_t>(k + 1)) {  // (a chain's pickup ahead: on the line)
       room = 0;
       break;
     }
@@ -507,6 +525,44 @@ Vec3f pursue(const Pilot& p, Vec3f at, float look) {
 }
 
 Vec3f pursue(const Pilot& p, Vec3f at) { return pursue(p, at, p.set.look); }
+
+// A chain's pickup within `look` of `at`, or its node passed, and the box's way to it clear (the
+// map's solids, when the sense has them): the aim is the item itself (a walk or a hop runs through
+// it, not by its node); otherwise `aim`.
+Vec3f via_aim(const Pilot& p, const PilotSense& s, Vec3f at, float look, Vec3f aim) {
+  if (p.via_k < 0) return aim;
+  if (across(at, p.via_at) > look && p.k < static_cast<size_t>(p.via_k)) return aim;
+  const Vec3f to{p.via_at.x, p.via_at.y, s.origin.z};
+  if (s.world != nullptr && !walk_clear(*s.world, s.origin, to)) return aim;
+  return {p.via_at.x, p.via_at.y, aim.z};
+}
+
+// A chain's pickup run through (the boxes meet) or left behind: the via dropped, counted.
+void via_check(Pilot& p, const PilotSense& s, float speed) {
+  if (p.via_k < 0) return;
+  const float dx = s.origin.x - p.via_at.x, dy = s.origin.y - p.via_at.y;
+  const float dz = s.origin.z - p.via_at.z;
+  const bool touched = dx < kViaTouch && dx > -kViaTouch && dy < kViaTouch && dy > -kViaTouch &&
+                       dz > -kViaUnder && dz < kViaOver;
+  const float d = across(s.origin, p.via_at);
+  if (d < p.via_near) p.via_near = d;
+  // Past it: on a link beyond its node, and moving off it, or never as near as the move's step.
+  const bool past = p.k > static_cast<size_t>(p.via_k) && d > kViaPast && d > p.via_near + 32;
+  if (!touched && !past) return;
+  p.via_left = p.route[static_cast<size_t>(p.via_k)];
+  p.via_left_at = p.clock_s;
+  // Run through the item beside its node: the node is passed with it (the walk runs on from it).
+  const bool on_to_it = touched && p.k + 1 == static_cast<size_t>(p.via_k) &&
+                        p.k + 2 < p.route.size() && p.mode == PilotMode::walk;
+  p.via_k = -1;
+  if (on_to_it) advance(p, s);
+  if (touched) {
+    p.stats.via_touched++;
+    p.stats.via_speed += speed;
+  } else {
+    p.stats.via_missed++;
+  }
+}
 
 // The walk's aim `target` (the pursuit point `aim` with the lane's offset) pulled back along the
 // route until the box reaches it straight from `o`: the look halved, the lane's offset kept while
@@ -869,6 +925,34 @@ void pilot_face(Pilot& p, float yaw) {
   p.hands.reset(std::span<const double>(at, p.hands.axes() < 4 ? p.hands.axes() : 4));
 }
 
+namespace {
+
+// The nodes from `from` to `goal` round the doors barred and shut and the links cut, missed and
+// given up; empty when there is no way.
+std::vector<int32_t> plan_way(Pilot& p, int32_t from, int32_t goal) {
+  int32_t barred[4 + 60];
+  int nb = 0;
+  for (const int32_t b : p.barred)
+    if (b >= 0) barred[nb++] = b;
+  for (const int32_t b : p.shut)
+    if (b >= 0 && nb < 64) barred[nb++] = b;
+  std::span<const NavExtraLink> cut = p.cut;
+  bool gaps_off = false;
+  for (const double until : p.gaps_off_s) gaps_off = gaps_off || until > p.clock_s;
+  if (!p.shut_links.empty() || gaps_off) {
+    p.cut_all = p.cut;
+    p.cut_all.insert(p.cut_all.end(), p.shut_links.begin(), p.shut_links.end());
+    for (size_t i = 0; i < p.gaps_off.size(); i++)
+      if (p.gaps_off_s[i] > p.clock_s) p.cut_all.push_back(p.gaps_off[i]);
+    cut = p.cut_all;
+  }
+  return nav_route(*p.g, from, goal, p.search, 1,
+                   std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut, p.set.jumper)
+      .nodes;
+}
+
+}  // namespace
+
 bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
   // A rocket out of a pit in flight is flown to its ledge first: the new goal planned on landing.
   // (Dead or respawned, the player stands: the flight is over and he plans as anyone does. A
@@ -894,32 +978,37 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
   p.strafe_side = 0;
   p.stats.plans++;
   restart(p, s);
-  const int32_t from = plan_from(p, s);
-  int32_t barred[4 + 60];
-  int nb = 0;
-  for (const int32_t b : p.barred)
-    if (b >= 0) barred[nb++] = b;
-  for (const int32_t b : p.shut)
-    if (b >= 0 && nb < 64) barred[nb++] = b;
-  std::span<const NavExtraLink> cut = p.cut;
-  bool gaps_off = false;
-  for (const double until : p.gaps_off_s) gaps_off = gaps_off || until > p.clock_s;
-  if (!p.shut_links.empty() || gaps_off) {
-    p.cut_all = p.cut;
-    p.cut_all.insert(p.cut_all.end(), p.shut_links.begin(), p.shut_links.end());
-    for (size_t i = 0; i < p.gaps_off.size(); i++)
-      if (p.gaps_off_s[i] > p.clock_s) p.cut_all.push_back(p.gaps_off[i]);
-    cut = p.cut_all;
-  }
-  p.route = nav_route(*p.g, from, goal, p.search, 1,
-                      std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut, p.set.jumper)
-                .nodes;
+  p.via_k = -1;
+  p.route = plan_way(p, plan_from(p, s), goal);
   if (p.route.empty()) {
     p.mode = PilotMode::idle;
     return false;
   }
   p.mode = p.route.size() == 1 ? PilotMode::arrived : PilotMode::walk;
   return true;
+}
+
+bool pilot_chain(Pilot& p, int32_t next, Vec3f at) {
+  if (p.route.empty() || next < 0 || next == p.goal || p.route.back() != p.goal) return false;
+  if (p.mode == PilotMode::idle) return false;
+  const std::vector<int32_t> on = plan_way(p, p.goal, next);
+  if (on.size() < 2) return false;
+  p.via_k = static_cast<int32_t>(p.route.size()) - 1;
+  p.via_at = at;
+  p.via_near = 1e30f;
+  p.route.insert(p.route.end(), on.begin() + 1, on.end());
+  p.goal = next;
+  if (p.mode == PilotMode::arrived) p.mode = PilotMode::walk;
+  p.stats.vias++;
+  return true;
+}
+
+void pilot_unchain(Pilot& p) {
+  if (p.via_k < 0 || static_cast<size_t>(p.via_k) <= p.k) return;
+  p.route.resize(static_cast<size_t>(p.via_k) + 1);
+  p.goal = p.route.back();
+  if (p.strafe_end_node > p.via_k) p.strafe_end_node = p.via_k;
+  p.via_k = -1;
 }
 
 MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
@@ -968,6 +1057,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   p.shot_now = false;
   p.escaping = false;
   const float speed = across({}, s.velocity);
+  via_check(p, s, speed);
   // Where the player will be when the hands have caught up: the pilot steers from there.
   const Vec3f ahead = s.origin + s.velocity * p.set.lead_s;
 
@@ -1128,7 +1218,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     } else if (p.mode == PilotMode::hop) {
       const float vh = speed > kSlow ? heading(s.velocity.x, s.velocity.y) : p.yaw;
       const float look = speed * p.set.hop_look_s > 64 ? speed * p.set.hop_look_s : 64;
-      const Vec3f aim = hop_aim(p, s.origin, look, p.strafe_end_node);
+      const Vec3f aim = via_aim(p, s, s.origin, look, hop_aim(p, s.origin, look, p.strafe_end_node));
       const float aim_yaw = yaw_at(s.origin, aim);
       const float err = wrap(aim_yaw - vh);
       // The side the aim lies on (the right side turns the velocity clockwise), held until the
@@ -1834,7 +1924,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       if (p.mode == PilotMode::wait || p.mode == PilotMode::run_up || p.mode == PilotMode::jump ||
           p.mode == PilotMode::swim)
         p.mode = PilotMode::walk;
-      const Vec3f aim = pursue(p, ahead);
+      const Vec3f aim = via_aim(p, s, ahead, p.set.look, pursue(p, ahead));
       target = lane_target(p, dt, t, aim);
       const bool foreseeing = p.set.ahead && s.world != nullptr && s.onground;
       if (foreseeing) target = aim_clear(p, *s.world, s.origin, ahead, aim, target);

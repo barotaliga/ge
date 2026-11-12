@@ -161,6 +161,7 @@ struct FighterStats {
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
   int64_t on_the_way = 0;  // short goals taken up on the way
+  int64_t chained = 0;     // item goals planned on to the next one (`chains`)
   int64_t took[profiles::kItemKinds] =
       {};                   // its own pickups by the item's kind (profiles/items.hpp ItemKind)
   int64_t swim_fights = 0;  // commands swum under the aim, an enemy in sight
@@ -353,6 +354,8 @@ struct Fighter {
   int32_t objective = -1;   // a goal set from outside (way_through.hpp): taken before any item
   int32_t mega_watch = -1;  // the mega it took, its timer waiting on its health (knowledge.hpp)
   int32_t goal_node = -1;
+  int32_t chain_node = -1;  // the goal chained on past it (`chains`, pilot.hpp `pilot_chain`)
+  int32_t chain_item = -1;  // and its item, when an item's
   int32_t want_weapon = 0;  // the number (1..8) asked for; 0 none pending
   int slot = -1;
   int32_t pack_ent = -1;  // a backpack gone for

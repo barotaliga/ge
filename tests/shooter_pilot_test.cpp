@@ -321,3 +321,57 @@ TEST(a_player_standing_on_the_way_is_walked_round_or_waited_for) {
                 round.x == 0 && round.y == 0,
             "no room round him in a corridor, yet the walk did not wait");
 }
+
+TEST(a_goal_chained_past_a_pickup_is_run_through_not_stopped_at) {
+  // An open floor: from the west to an item 384 east, and on past it 384 north (`pilot_chain`).
+  // The route runs on through the item's node, the walk runs through the item itself (beside its
+  // node) at a run, and arrives at the chain's goal; cut back (`pilot_unchain`), the goal is the
+  // item again.
+  FlipRoom room({FlipRoom::box({-512, -512, -64}, {1024, 1024, 0})}, {-512, -512, -64},
+                {1024, 1024, 256}, {0, 0, 24});
+  const sh::NavGraph& g = room.g;
+  const int32_t start = sh::nav_nearest(g, {0, 0, 24}), item = sh::nav_nearest(g, {384, 0, 24});
+  const int32_t then = sh::nav_nearest(g, {384, 384, 24});
+  const sh::Vec3f item_at = g.nodes[static_cast<size_t>(item)].origin + sh::Vec3f{8, -12, -24};
+  sh::Pilot p;
+  sh::pilot_init(p, g, sh::PilotSettings{}, sh::pilot_hands(sh::PilotHands::none), 77, 1);
+  sh::MoveState st;
+  st.origin = g.nodes[static_cast<size_t>(start)].origin;
+  const sh::MoveSettings move;
+  st.maxspeed = move.maxspeed;
+  sh::MoveCmd still;
+  still.msec = pr::kPilotMsec;
+  sh::run_command(st, still, move, room.world);
+  sh::PilotSense s;
+  auto sense = [&] {
+    s.origin = st.origin;
+    s.velocity = st.velocity;
+    s.onground = st.ground >= 0;
+    s.maxspeed = st.maxspeed;
+    s.world = &room.world;
+  };
+  sense();
+  CHECK(sh::pilot_go(p, item, s));
+  const size_t to_item = p.route.size();
+  CHECK_MSG(sh::pilot_chain(p, then, item_at) && p.goal == then && p.route.back() == then &&
+                p.via_k == static_cast<int32_t>(to_item) - 1,
+            "the route was not chained on past the item to the next goal");
+  sh::pilot_unchain(p);
+  CHECK_MSG(p.goal == item && p.route.size() == to_item && p.via_k < 0,
+            "cut back, the route does not end at the item");
+  CHECK(sh::pilot_chain(p, then, item_at));
+  bool arrived = false;
+  for (int i = 0; i < 77 * 6 && !arrived; i++) {
+    const sh::MoveCmd cmd = sh::pilot_step(p, s, pr::kPilotMsec);
+    sh::run_command(st, cmd, move, room.world);
+    sense();
+    arrived = p.mode == sh::PilotMode::arrived;
+  }
+  CHECK_MSG(arrived, "the chain's goal was not reached: read pilot_step's mode on the way");
+  CHECK_MSG(p.stats.via_touched == 1 && p.stats.via_missed == 0,
+            "the item was not run through (" + std::to_string(p.stats.via_touched) +
+                " through, " + std::to_string(p.stats.via_missed) + " missed)");
+  CHECK_MSG(p.stats.via_speed > 200, "the item was run through at " +
+                                         std::to_string(p.stats.via_speed) +
+                                         " u/s: the walk slowed into it as into a goal");
+}
