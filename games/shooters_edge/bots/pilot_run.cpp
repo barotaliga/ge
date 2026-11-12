@@ -14,6 +14,7 @@
 #include <string>
 
 #include "shooter/usercmd.hpp"
+#include "shooters_edge/bots/keyboard.hpp"
 #include "shooters_edge/sim/arena.hpp"
 
 namespace shooters_edge::bots {
@@ -74,7 +75,8 @@ RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sh::PilotHan
 
 RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f from, sh::Vec3f to,
                     sh::PilotHands hands, uint32_t seed, const sh::PilotSettings& set,
-                    float limit_s, sh::Vec3f start_velocity) {
+                    float limit_s, sh::Vec3f start_velocity, const sh::Features* keys,
+                    uint8_t moves) {
   RunResult r;
   const int32_t a = sh::nav_nearest(g, from), b = sh::nav_nearest(g, to);
   if (a < 0 || b < 0) return r;
@@ -118,8 +120,13 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
   float burst_in = -1;
   const sh::GrenadeJumpSpec gj;
   bool grenade = false;
+  KeyHand hand;
+  if (keys != nullptr) key_hand_init(hand, moves, seed);
   for (int i = 0; i < most; i++) {
-    const sh::MoveCmd cmd = sh::pilot_step(p, s, kPilotMsec);
+    sh::MoveCmd cmd = sh::pilot_step(p, s, kPilotMsec);
+    if (keys != nullptr)
+      press_keys(hand, *keys, cmd, st.velocity, st.ground >= 0,
+                 p.mode == sh::PilotMode::hop ? p.curve_keys : sh::kNoCurveKeys);
     if (p.stats.plans != planned) {
       planned = p.stats.plans;
       r.plans.push_back(p.route);
@@ -159,9 +166,10 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
     r.links.push_back(static_cast<int32_t>(p.k));
     r.yaw.push_back(p.pressed[0]);
     r.yaw_wanted.push_back(p.wanted[0]);
-    r.forward.push_back(p.pressed[1]);
+    // Under a keyboard, the keys it held (a key's axis is 400: over 1).
+    r.forward.push_back(keys != nullptr ? cmd.forward / 320.0 : p.pressed[1]);
     r.forward_wanted.push_back(p.wanted[1]);
-    r.side.push_back(p.pressed[2]);
+    r.side.push_back(keys != nullptr ? cmd.side / 320.0 : p.pressed[2]);
     r.side_wanted.push_back(p.wanted[2]);
     r.pitch.push_back(cmd.angles.x);
     r.velocity.push_back(st.velocity);

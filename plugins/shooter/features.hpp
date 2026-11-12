@@ -44,7 +44,14 @@
 //   the wish; dropped, speed 194 -> 185) in no preset. `slopes`: a walk up a stair to 45 degrees
 //   is level to the walk (pilot.hpp; on: +3.6 frags head to head). `jumpkey`: a jump asked for
 //   is held until its key lands (bots/keyboard.hpp; on). `backstep`: a run-up stepped back facing
-//   the jump (pilot.hpp; on). `runupkeys`, `gapbuild` (pilot.hpp): judging, in no preset.
+//   the jump (pilot.hpp; on). `runupkeys` (pilot.hpp): judging, in no preset. `gapbuild`
+//   (pilot.hpp): a gap over water curved and run into at a hopper's speed (on). `curvekeys`: a
+//   hop's curve on the ground (a circle jump's, a gap's run to its lip) held on its keys, W and the
+//   side key, not tapped (bots/keyboard.hpp; on: with `gapbuild` +7.0 frags a match head to
+//   head on e1m2). `underway`: a
+//   walker on the ground fallen under its way (a hop off a ledge) plans again at once, as a
+//   swimmer does, not circling under the node until the stuck check, and a run-up fallen under
+//   its jump's start or into water (pilot.hpp); judging.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). The text (`apply_features`): `all`, `none` (`plain`),
 // `+name`/`name`, `-name`, in order.
@@ -56,7 +63,8 @@
 // ge:keywords lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen sound-swipe
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
-// ge:keywords slopes stair-corner counter backstep run-up line-up runupkeys gapbuild
+// ge:keywords slopes stair-corner counter backstep run-up line-up runupkeys gapbuild curvekeys
+// ge:keywords underway fallen-under-the-way
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -121,9 +129,11 @@ enum class Feature : uint8_t {
   backstep,
   runupkeys,
   gapbuild,
+  curvekeys,
+  underway,
   trial,
 };
-constexpr size_t kFeatures = 52;
+constexpr size_t kFeatures = 54;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

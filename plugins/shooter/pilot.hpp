@@ -101,14 +101,17 @@ struct PilotSettings {
   // the jump (the back and side keys, as a person steps back into line), and a run-up already
   // moving down the jump's line behind its start runs on from there, not from a stop.
   bool backstep = false;
-  // `runupkeys`: the stepped-back run-up's keys pressed for the view as it will be when they land,
-  // and a run-up or a jump's run fallen well under its start (or into water) planned again.
+  // `runupkeys`: the stepped-back run-up's keys pressed for the view as it will be when they land.
   bool runup_keys = false;
   // `gapbuild`: a hop's first jump into a gap trick over water is a circle jump aimed across at
   // its landing, taken as soon as a jump from there lands across; short of the lip a landing runs
   // on along the ground (straight, curving or side to side, rolled through the hands:
   // pilot_gaps.hpp `gap_run`) to where a jump does, and far out it runs on rather than gives up.
   bool gap_circle = false;
+  // `curvekeys`: the keys are a keyboard's (a caller's, held on `curve_keys`): the run to a gap's
+  // lip rolled out as keys, forward and the side key full at once a command late, not through the
+  // hands' slew of the side axis.
+  bool curve_keys = false;
   bool hop_stairs_walked = false;
   float hop_climb = 10;
   // THE BRINK (`brink`): a hop's or a strafe's stretch ends at a link along a lip over lava or
@@ -162,6 +165,11 @@ struct PilotSettings {
   bool floor_swim = true;
   float floor_swim_up = 96;
   float lost_under = 48;
+  // `underway`: the same on the ground: a walker whose link's ends both lie over `lost_under`
+  // above its feet fell under the way (a hop off a ledge) and plans again at once, and so does a
+  // run-up or a jump's run fallen well under its start or into water; off, a walker circles under
+  // the node until the stuck check (no nearer across for `stuck_s`).
+  bool under_way = false;
   // THE LANE: a person does not walk the route's line. On a level walk with room either side (the
   // graph's `nav_room`), the walker keeps `lane` of that room off the line, to one side or the
   // other: a side and an amount drawn every `lane_min_s`..`lane_max_s` off its own stream, eased in
@@ -227,6 +235,8 @@ std::vector<ai::AxisHands> pilot_hands(PilotHands profile);
 float pilot_lead_s(PilotHands profile);
 
 // What the pilot reads before each command: its own player and the movers' boxes now.
+inline constexpr int8_t kNoCurveKeys = -2;  // `Pilot::curve_keys`: no curve this command
+
 struct PilotSense {
   Vec3f origin, velocity;
   bool onground = false;
@@ -328,6 +338,11 @@ struct Pilot {
   int32_t gap_way_i = 0;     // and its commands so far
   bool safe_flight = false;
   bool brink_free = false;    // this command's keys are a flight the move proved: no brink guard
+  // A CURVE ON THE GROUND this command (a circle jump's, a run to a gap's lip): the keys it means,
+  // forward and the side key (-1 left, 1 right, 0 forward alone); `kNoCurveKeys` none. A keyboard
+  // holds them (`curvekeys`) rather than reading a key set off the hands' slewed side axis.
+  int8_t curve_keys = kNoCurveKeys;
+  int8_t curve_keys_last = kNoCurveKeys;  // and the last command's
   std::vector<int32_t> shut;  // doors the caller knows are shut: never planned through
   std::vector<NavExtraLink> shut_links;           // and links it knows are (onto a bridge still in)
   std::vector<NavExtraLink> cut_all;              // cut and shut_links together, for the route

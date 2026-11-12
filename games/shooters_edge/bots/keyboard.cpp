@@ -35,6 +35,7 @@ constexpr double kCounterOn = 60;    // `counter`: the body this far off the vel
 constexpr double kCounterOff = 25;   // and this near it lets go, units/s
 constexpr double kSteer = 0.02;      // the steering's tally past this changes the set, set-seconds
 constexpr double kSteerEdge = 0.08;  // a wish this near a set (a share of 45 degrees) is that set
+constexpr double kCurveView = 20;    // a pilot's curve held while the view is this near its, deg
 
 uint32_t bit(int a) { return 1u << static_cast<uint32_t>(a); }
 
@@ -82,23 +83,44 @@ double wrap(double deg) {
 
 }  // namespace
 
-void fighter_keyboard_init(Fighter& f, uint8_t moves, uint32_t seed) {
-  f.keys.board =
+void key_hand_init(KeyHand& k, uint8_t moves, uint32_t seed) {
+  k.board =
       ai::Keyboard(layout_of(sh::tier_of(moves)), timing_of(moves), seed * 2654435789u + 4242u);
-  f.keys.set = -1;
+  k.set = -1;
 }
 
-void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool onground) {
+void fighter_keyboard_init(Fighter& f, uint8_t moves, uint32_t seed) {
+  key_hand_init(f.keys, moves, seed);
+}
+
+void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool onground,
+                      bool brinked) {
+  const sh::Pilot& p = f.bot.pilot.pilot;
+  int8_t curve = sh::kNoCurveKeys;
+  // The pilot's curve, while the command is still the pilot's: a hop's (no aim takes the view in
+  // one), its view the pilot's heading followed within a hand's lag, the brink guard not in it.
+  if (p.curve_keys != sh::kNoCurveKeys && p.mode == sh::PilotMode::hop && !brinked &&
+      std::fabs(wrap(static_cast<double>(cmd.angles.y) - p.yaw)) < kCurveView)
+    curve = p.curve_keys;
+  press_keys(f.keys, f.features, cmd, velocity, onground, curve);
+}
+
+void press_keys(KeyHand& keys, const sh::Features& features, sh::MoveCmd& cmd, sh::Vec3f velocity,
+                bool onground, int8_t curve) {
   // The wish's key set: 0 forward, clockwise by 45 degrees (side positive is right).
   const double fw = cmd.forward, sd = cmd.side;
-  f.keys.wish_forward = cmd.forward;
-  f.keys.wish_side = cmd.side;
+  keys.wish_forward = cmd.forward;
+  keys.wish_side = cmd.side;
   const double m = std::sqrt(fw * fw + sd * sd) / 320.0;
   int set = -1;
-  if (m >= (onground ? kCreep : kPressMin)) {
+  const bool held_curve = features[sh::Feature::curvekeys] && curve != sh::kNoCurveKeys;
+  if (held_curve) {
+    set = curve > 0 ? 1 : curve < 0 ? 7 : 0;  // W+D, W+A, W
+    keys.steer = 0;
+  } else if (m >= (onground ? kCreep : kPressMin)) {
     double ang = ge::core::libm::atan2(sd, fw) * (180.0 / ge::core::kPi);
     if (ang < 0) ang += 360;
-    if (f.features[sh::Feature::keysteer]) {
+    if (features[sh::Feature::keysteer]) {
       // STEERED BY TAPS: the two sets either side of the wish, the further one tapped in for its
       // share of the time (a tally of the way wished less the way pressed: past `kSteer` the other
       // set), so the way pressed over a few taps is the wish's, as a person nudges W with D.
@@ -107,22 +129,22 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
       double part = ang / 45 - lo_f;
       if (part < kSteerEdge) part = 0;
       if (part > 1 - kSteerEdge) part = 1;
-      bool on_hi = f.keys.set == hi || (f.keys.set != lo && part >= 0.5);
-      if (f.keys.set != lo && f.keys.set != hi) f.keys.steer = 0;
-      f.keys.steer += (part - (on_hi ? 1.0 : 0.0)) * (cmd.msec / 1000.0);
-      if (f.keys.steer > kSteer) on_hi = true;
-      if (f.keys.steer < -kSteer) on_hi = false;
-      f.keys.steer = std::fmax(-2 * kSteer, std::fmin(2 * kSteer, f.keys.steer));
+      bool on_hi = keys.set == hi || (keys.set != lo && part >= 0.5);
+      if (keys.set != lo && keys.set != hi) keys.steer = 0;
+      keys.steer += (part - (on_hi ? 1.0 : 0.0)) * (cmd.msec / 1000.0);
+      if (keys.steer > kSteer) on_hi = true;
+      if (keys.steer < -kSteer) on_hi = false;
+      keys.steer = std::fmax(-2 * kSteer, std::fmin(2 * kSteer, keys.steer));
       set = on_hi ? hi : lo;
     } else {
       set = static_cast<int>(std::floor(ang / 45 + 0.5)) % 8;
-      if (f.keys.set >= 0 && std::fabs(wrap(ang - f.keys.set * 45.0)) <= 22.5 + kHold)
-        set = f.keys.set;
+      if (keys.set >= 0 && std::fabs(wrap(ang - keys.set * 45.0)) <= 22.5 + kHold)
+        set = keys.set;
     }
   }
-  f.keys.set = set;
+  keys.set = set;
   // Feathering a wish short of a run on the ground: on under the speed wished, off over it.
-  if (set >= 0 && onground && m < kFull) {
+  if (set >= 0 && onground && m < kFull && !held_curve) {
     const double yaw = cmd.angles.y * (ge::core::kPi / 180.0);
     const double cy = ge::core::libm::cos(yaw), sy = ge::core::libm::sin(yaw);
     // The wish in the world: forward along the yaw, right a quarter turn clockwise of it.
@@ -133,7 +155,7 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
     // it) the speed along it stays low while the body runs on, past the point it slows into.
     const double flat = std::sqrt(static_cast<double>(velocity.x) * velocity.x +
                                   static_cast<double>(velocity.y) * velocity.y);
-    if (f.features[sh::Feature::counter]) {
+    if (features[sh::Feature::counter]) {
       // COUNTERED: the keys toward the velocity wished while the body is off it by `kCounterOn`,
       // let go within `kCounterOff`: under the speed along the wish, the set along it; sliding
       // across it, the set back against the slide, as a person taps the keys against a slide to
@@ -144,9 +166,9 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
       const double short_by = std::fmax(0.0, wished - along);
       const double cx = short_by * ux - px, cy2 = short_by * uy - py;
       const double miss = std::sqrt(cx * cx + cy2 * cy2);
-      if (miss > kCounterOn) f.keys.feather = true;
-      if (miss < kCounterOff) f.keys.feather = false;
-      if (f.keys.feather) {
+      if (miss > kCounterOn) keys.feather = true;
+      if (miss < kCounterOff) keys.feather = false;
+      if (keys.feather) {
         // The correction under the view: forward along the yaw, right a quarter turn clockwise.
         const double cf = cx * cy + cy2 * sy, cs = cx * sy - cy2 * cy;
         double ang = ge::core::libm::atan2(cs, cf) * (180.0 / ge::core::kPi);
@@ -156,12 +178,12 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
         set = -1;
       }
     } else {
-      if (along < wished - kBand && flat < wished + kSlide) f.keys.feather = true;
-      if (along > wished + kBand || flat > wished + kSlide) f.keys.feather = false;
-      if (!f.keys.feather) set = -1;
+      if (along < wished - kBand && flat < wished + kSlide) keys.feather = true;
+      if (along > wished + kBand || flat > wished + kSlide) keys.feather = false;
+      if (!keys.feather) set = -1;
     }
   } else {
-    f.keys.feather = true;
+    keys.feather = true;
   }
   uint32_t want = 0;
   if (set == 7 || set == 0 || set == 1) want |= bit(kFwd);
@@ -171,16 +193,16 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
   // A JUMP ASKED FOR is pressed (`jumpkey`): wanted until its key goes down (`kJumpLatch_s` at
   // most), not only on the commands that ask (a pilot lets go between two asks, and a press
   // cancelled before the finger lands, ai/keys.hpp, never landed a jump under a novice's hand).
-  f.keys.clock += cmd.msec / 1000.0;
+  keys.clock += cmd.msec / 1000.0;
   const bool jump_asked = (cmd.buttons & sh::kButtonJump) != 0;
-  if (jump_asked) f.keys.jump_until = f.keys.clock + kJumpLatch_s;
-  if (jump_asked || (f.features[sh::Feature::jumpkey] && f.keys.clock < f.keys.jump_until))
+  if (jump_asked) keys.jump_until = keys.clock + kJumpLatch_s;
+  if (jump_asked || (features[sh::Feature::jumpkey] && keys.clock < keys.jump_until))
     want |= bit(kJump);
   uint32_t tap = 0;
   if (cmd.impulse >= 1 && cmd.impulse <= 8) tap = bit(kWeapon1 + cmd.impulse - 1);
   uint32_t tapped = 0;
-  const uint32_t held = f.keys.board.step(cmd.msec / 1000.0, want, tap, &tapped);
-  if ((held & bit(kJump)) && !jump_asked) f.keys.jump_until = -1;  // down: let go
+  const uint32_t held = keys.board.step(cmd.msec / 1000.0, want, tap, &tapped);
+  if ((held & bit(kJump)) && !jump_asked) keys.jump_until = -1;  // down: let go
   const auto axis = [&](int plus, int minus) {
     return sh::quantize_axis(
         kKeySpeed * static_cast<float>(((held & bit(plus)) != 0) - ((held & bit(minus)) != 0)));

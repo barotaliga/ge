@@ -272,9 +272,10 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
   }
 
   // --gaps=fly: each gap trick run up to by an expert fighter's pilot (bots/fighter.hpp
-  // `fighter_pilot`, the features given), from the floor's node nearest each point `kGapBack`
-  // behind its takeoff, walking into it at people's 180: planned through the gap, curved into it
-  // (the circle), jumped, landed or given up, the takeoff's speed, and arrived across.
+  // `fighter_pilot`, the features given; under `keys` on an expert's keyboard), from the floor's
+  // node nearest each point `kGapBack` behind its takeoff, walking into it at people's 180:
+  // planned through the gap, curved into it (the circle), jumped, landed or given up, the
+  // takeoff's speed, and arrived across.
   for (size_t k = 0; fly_gaps != nullptr && k < nav.gaps_made.from.size(); k++) {
     const int32_t a = nav.gaps_made.from[k];
     if (a < 0) continue;
@@ -308,15 +309,17 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
       const float vl = std::sqrt(v.x * v.x + v.y * v.y);
       v = vl > 1 ? v * (kGapWalk / vl) : sh::Vec3f{};
       sh::PilotHands hands = sh::PilotHands::none;
-      sh::PilotSettings ps =
-          bt::fighter_pilot(*fly_gaps, sh::traits_of(sh::AimSkill::expert, sh::Temper::balanced),
-                            sh::AimSkill::expert, hands);
+      const sh::Traits traits = sh::traits_of(sh::AimSkill::expert, sh::Temper::balanced);
+      sh::PilotSettings ps = bt::fighter_pilot(*fly_gaps, traits, sh::AimSkill::expert, hands);
+      // Under `keys` the commands go through an expert's keyboard, as a fighter's do.
+      const sh::Features* keys = (*fly_gaps)[sh::Feature::keys] ? fly_gaps : nullptr;
       ps.jumper.gap_build_s = (*fly_gaps)[sh::Feature::gapbuild] ? bt::kGapBuild_s : -1;
       int planned = 0, jumped = 0, landed = 0, refused = 0, arrived = 0, circles = 0, jumps = 0;
       float speed = 0, time = 0;
       for (uint32_t seed = 1; seed <= kGapSeeds; seed++) {
         const bt::RunResult r =
-            bt::run_route(nav.world, g, from, T, hands, seed, ps, kGapLimit_s, v);
+            bt::run_route(nav.world, g, from, T, hands, seed, ps, kGapLimit_s, v, keys,
+                          traits[sh::Trait::moves]);
         if (gap_trace != nullptr && seed == 1) {
           for (size_t i = 0; i < r.trail.size(); i++) {
             const sh::Vec3f o = r.trail[i], vv = r.velocity[i];
