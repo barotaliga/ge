@@ -23,6 +23,7 @@
 #include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
+#include "shooters_edge/server/sequel_targets.hpp"
 
 namespace shooters_edge::server {
 
@@ -525,6 +526,7 @@ void fill_rows(SequelServer& s) {
   }
   map_rows(s);
   monster_rows(s);
+  targets_rows(s);
   fight_rows(s);
   mirror_pool(s);
 }
