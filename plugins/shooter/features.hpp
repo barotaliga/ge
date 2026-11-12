@@ -73,7 +73,7 @@
 // - `chainhop`: a hop's landing with a hop stretch ahead jumps again at once (pilot.cpp), not a
 //   walk's start (its speed check, a circle jump, a copied start); judging.
 // - `airwall`: the air's keys under a view not the pilot's (`airkeys`, `aimhop`) charged for a
-//   wall or a body their velocity runs into within 0.4 s (bot.cpp); judging.
+//   wall or a body their velocity runs into within 0.4 s (bot.cpp); on.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
