@@ -137,6 +137,25 @@ web build the engine has (G5): a viewer, never the game, and nothing in it plays
 | The page glue | The few lines of script a page needs to start the viewer, hand it the stream's address and wire the buttons: platform glue, kept as small as the platform allows, as Apple's and Android's app shells are |
 | Content rights | A hub serves only content its operator may share. For the classic game that is the free pack and the operator's own; a level whose content the hub may not serve is shown in the installed game instead |
 
+THE BUILD. The `web` preset (`cmake --preset web`, with `EMSDK` set: Emscripten's toolchain)
+sets `GE_WEB` and builds only `GE_WEB_GAME`'s viewer (`shooters_edge` by default) and what it
+links: no host tools, no packaging, no encoders, no window layer. Dawn's own browser binding
+(Emscripten's `emdawnwebgpu` port) stands in for the native Dawn library, so `engine/gpu` and
+`engine/render` compile unchanged but for the surface, which a web build makes on the page's
+canvas (`NativeWindow::Kind::canvas`). `engine/web` holds what every viewer shares: its arguments
+(`viewer_args.hpp`, tested natively) and the page's calls (`browser.hpp`: a file fetched from the
+hub, the next paint, the canvas's size, the status line). Every wait (a fetch, a paint, the GPU's)
+suspends the C++ stack through JSPI, so a viewer is a plain loop in `main`. `ge_add_web_viewer`
+writes `<game>_viewer.js` and `.wasm` into `build/web/<game>_viewer/`, the folder a hub's
+`--viewer=<dir>` serves; the hub's operator puts the content packs it may share beside them
+(`.pak`, `.pk3`), and the Demo and Watch pages hand them to the viewer by name order.
+
+THE LIMITS. A browser offers WebGPU's default limits unless the machine's GPU earns it more:
+16 sampled textures a shader stage and 256 layers an array texture, among others. The software
+adapter in the container offers exactly those. The renderer asks for more today (the frame's
+bind group alone holds 11 textures), so the viewer loads, fetches and plays but its world's
+pipelines do not build there; fitting the renderer within the defaults is row M56g2.
+
 Two cheaper ways stay in the plan beside it: Watch and Play buttons that open the installed game
 (`<game>://tv/<node>/<stream>`, `<game>://demo/<sha256>`, a link each client registers), and the
 live overhead map (a RADAR track the hub draws), for phones and slow machines. Video from a hub
@@ -155,6 +174,7 @@ browser's own GPU.
 | 5 | M56e | Open in the game: each client's link scheme and `+tv`/`+demo` start; Watch and Play buttons | A Shooter's Edge client opened from a hub link, watching a bot match |
 | 6 | M56f | The classic adapter: the classic masters, status queries and broadcasters read into the records; Shooter's Edge's hub lists the internet's classic servers | `se-hub` lab against the simulated classic servers, and once by hand against the real masters |
 | 7 | M56g | The web viewer: `ge_add_web_viewer`, the Emscripten and WebGPU build, the stream over a WebSocket, demos by hash, the content folder, the transport; the Watch and Demo pages; Shooter's Edge's and Fall Line's viewers | `hub-viewer` lab: the viewer in headless Chromium on a software WebGPU adapter, a live bot match and a demo screenshotted, seek checked, first-visit bytes measured |
+| 7b | M56g2 | The renderer within WebGPU's default limits (16 sampled textures a stage, 256 array layers) on the web build: the frame's group split by what each stage reads, the shadow cubes capped by the device; the picture on the canvas | `hub-viewer` lab: the match drawn on the canvas in headless Chromium |
 | 8 | M56h | The live map for phones and slow machines: the RADAR track, the hub's SVG view, live updates | `hub-radar` lab: a bot match drawn frame by frame |
 
 ### Built so far

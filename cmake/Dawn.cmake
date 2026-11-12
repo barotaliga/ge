@@ -19,8 +19,11 @@
 # every preset and cached by CI) and checked against its SHA-256. GE_DAWN_DIR names an
 # unpacked Dawn install instead (a local source build, or a mirror), skipping the download.
 #
+# THE WEB (Emscripten) takes no archive: dawn::webgpu_dawn is Emscripten's binding of the same API
+# over the browser's WebGPU (`--use-port=emdawnwebgpu`).
+#
 # Defines, when GE_GPU is ON: the imported target dawn::webgpu_dawn, and GE_TINT (the path of
-# the tint executable).
+# the tint executable; empty on the web).
 include_guard(GLOBAL)
 
 # THE PIN. Moving it: pick a tag whose release has all three archives, update the tag, the
@@ -60,7 +63,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Android")
   set(ge_dawn_slice "dawn-android-${GE_DAWN_COMMIT}/${CMAKE_ANDROID_ARCH_ABI}")
 endif()
 
-if(ge_dawn_os OR ge_dawn_mobile OR GE_DAWN_DIR)
+if(ge_dawn_os OR ge_dawn_mobile OR GE_DAWN_DIR OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   set(ge_gpu_default ON)
 else()
   set(ge_gpu_default OFF)
@@ -78,6 +81,16 @@ if(MSVC AND CMAKE_BUILD_TYPE STREQUAL "Debug")
   message(FATAL_ERROR "ge: GE_GPU=ON with an MSVC Debug build: the prebuilt Dawn is a Release "
     "library and its C++ runtime does not mix with a Debug one. Build the release preset "
     "(PRESET=release), or configure with -DGE_GPU=OFF; skill: build.")
+endif()
+
+# THE WEB: the browser is the GPU. Emscripten's own binding of Dawn's API (emdawnwebgpu, the same
+# webgpu_cpp.h over the page's WebGPU) stands in for the library; there is no Tint to run here.
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+  add_library(dawn::webgpu_dawn INTERFACE IMPORTED GLOBAL)
+  target_compile_options(dawn::webgpu_dawn INTERFACE --use-port=emdawnwebgpu)
+  target_link_options(dawn::webgpu_dawn INTERFACE --use-port=emdawnwebgpu)
+  set(GE_TINT "")
+  return()
 endif()
 
 # One archive of the pinned release, downloaded into GE_DEPS_DIR, checked and unpacked there.
