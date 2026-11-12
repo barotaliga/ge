@@ -339,6 +339,7 @@ struct Pilot {
   float circle_s = -1;           // on the circle jump's curve this long, s (-1: not on it)
   int8_t circle_side = 0;        // and the side key it curves on (0: not chosen yet)
   bool circling_now = false;     // this command curves for a circle jump (bot.cpp `circlekeys`)
+  bool no_circle = false;        // the caller's: no curve now, the hop's jump at once (`circleaim`)
   bool jump_pressed = false;     // the jump button in the last command
   bool airborne = false;         // left the ground on the current jump link
   float grenade_s = -1;          // a grenade jump's: since its shot, s (-1: not fired yet)

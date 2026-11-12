@@ -112,9 +112,11 @@ void watch_look(Fighter& f, const server::RulesCommon& s, int me, bool dead, dou
   const sh::PilotMode pm = f.bot.pilot.pilot.mode;
   const bool standing = pm == sh::PilotMode::arrived || pm == sh::PilotMode::idle;
   // A holder walking about its own area watches the ways in as it goes.
+  // (`circleaim`: not while it curves into a hop: the circle's view is the hand's.)
   const bool holding = f.role == Role::hold &&
                        (pm == sh::PilotMode::walk || pm == sh::PilotMode::hop) && f.plan &&
-                       f.mind.claim >= 0;
+                       f.mind.claim >= 0 &&
+                       !(f.bot.circleaim && f.bot.pilot.pilot.circling_now);
   f.bot.look = false;
   if (!dead && (standing || holding) && f.mode == FightMode::roam && !f.unlocking &&
       f.escort.leader < 0 && s.world.entities[static_cast<size_t>(me)].waterlevel < 2) {

@@ -89,6 +89,12 @@ struct Bot {
   // forward and the curve's side key held: the wish 45 degrees off the velocity gains in a wide
   // window, and a hand behind the turn moves it toward the best angle, not off the gain.
   bool circleview = false;
+  // and only under the hand's own view (`circleaim`): none while aiming (the hop's first jump at
+  // once), a holder's spot watched given up while one curves (watch.cpp).
+  bool circleaim = false;
+  // THE LEAD ALONG THE WALLS (`leadwall`): a player's predicted way slid along the walls it meets
+  // (intercept.hpp `MovingTarget::slide`), not run on through them.
+  bool leadwall = false;
   int32_t target = -1;       // the contact's entity the view is on
   float yaw = 0, pitch = 0;  // the view last pressed, degrees (yaw unwrapped)
   double wanted[2] = {}, pressed[2] = {};  // the aim's last yaw and pitch, wanted and pressed
