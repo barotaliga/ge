@@ -154,7 +154,7 @@ void run(gl::Lab& lab) {
         !has(page.body, "\"--pack=/viewer/pak0.pak\"") ||
         !has(page.body, "\"--demo=/" + gh::archive_path(row.sha) + "\"")) {
       lab.fail("the Demo page does not start the viewer with the demo and the pack",
-               "read watch.cpp's viewer_slot and viewer_packs");
+               "run tests/hub_watch_test.cpp, then read watch.cpp's viewer_slot");
     }
     const double js = static_cast<double>(file_bytes(viewer / "shooters_edge_viewer.js"));
     const double wasm = static_cast<double>(file_bytes(viewer / "shooters_edge_viewer.wasm"));
