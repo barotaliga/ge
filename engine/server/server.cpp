@@ -8,12 +8,10 @@
 #include "server/server.hpp"
 
 #include <cstdio>
-#include <cstdlib>
 
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "net/packet.hpp"
-#include "net/udp_socket.hpp"
 #include "server/guards.hpp"
 
 namespace ge::server {
@@ -42,35 +40,6 @@ int game_seated(const void* ctx) {
 }
 
 // sv_master's words as addresses: host:port, a bare host on the master's port, or `sim:N:P`.
-bool master_addresses(const std::string& text, std::vector<gn::Address>& out, std::string& error) {
-  out.clear();
-  size_t at = 0;
-  while (at < text.size()) {
-    const size_t space = text.find(' ', at);
-    const std::string word =
-        text.substr(at, space == std::string::npos ? std::string::npos : space - at);
-    at = space == std::string::npos ? text.size() : space + 1;
-    if (word.empty()) continue;
-    gn::Address a;
-    if (gn::parse_address(word, a)) {
-      out.push_back(a);
-      continue;
-    }
-    const size_t colon = word.rfind(':');
-    const std::string host = colon == std::string::npos ? word : word.substr(0, colon);
-    const int port =
-        colon == std::string::npos ? gn::kMasterPort : std::atoi(word.c_str() + colon + 1);
-    std::string why;
-    if (port <= 0 || port > 65535 ||
-        !gn::resolve_ipv4(host, static_cast<uint16_t>(port), a, &why)) {
-      error = "sv_master '" + word + "' is not an address (" + (why.empty() ? "bad port" : why) +
-              "); next: write host:port, or empty sv_master to be listed by none";
-      return false;
-    }
-    out.push_back(a);
-  }
-  return true;
-}
 
 // The node's foreign datagrams this frame: status asks answered, the masters' acks taken.
 void answer_public(Server& s) {
@@ -293,7 +262,8 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   s.networked = true;
   s.port = transport;
   gn::MasterBeatConfig bc;
-  if (!master_addresses(config.masters, bc.masters, error)) {
+  if (!gn::master_list(config.masters, bc.masters, error)) {
+    error = "sv_master: " + error;
     server_close(s);
     return false;
   }

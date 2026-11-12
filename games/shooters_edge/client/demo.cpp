@@ -2,15 +2,18 @@
 // walked, the message reader both formats' messages are read with.
 //
 // ge:summary The demo file's records: the format detected, blocks and records walked, the reader
-// ge:keywords open_demo next_frame demo-msg detect block record usercmd-size gzip track
+// ge:keywords open_demo next_frame demo-msg detect block record usercmd-size gzip track ger
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
+#include "shooters_edge/client/demo_v2.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+
+#include "replay/stream.hpp"
 
 namespace shooters_edge::client {
 
@@ -291,6 +294,17 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
     out.layers = std::move(u.layers);
     out.inner_name = std::move(u.name);
     out.truncated = u.truncated;
+  }
+  if (ge::replay::is_stream(bytes)) {  // the replay file version 2 (.ger): back to the recording
+    std::vector<uint8_t> plain;
+    std::string cut;
+    if (!unpack_demo(bytes, plain, cut)) {
+      error = "the replay file does not open: " + cut;
+      return false;
+    }
+    bytes = std::move(plain);
+    out.replay_v2 = true;
+    out.truncated = out.truncated || !cut.empty();
   }
   int voice_base = 0;  // the voice header's base format (1 client, 2 multiview), 0: none
   if (bytes.size() >= kVoiceHeader && std::equal(kVoiceMagic, kVoiceMagic + 4, bytes.begin())) {
