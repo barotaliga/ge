@@ -66,7 +66,7 @@ int32_t mover_at(std::span<const NavMover> movers, Vec3f lo, Vec3f hi) {
 // player beside a plat is not on it), any other wherever its box meets the player's.
 int32_t mover_holding(std::span<const NavMover> movers, Vec3f p) {
   for (const NavMover& m : movers) {
-    if (m.model != nullptr) {
+    if (ridden(m)) {
       if (p.x > m.absmin.x && p.x < m.absmax.x && p.y > m.absmin.y && p.y < m.absmax.y &&
           p.z + kPlayerMins.z <= m.absmax.z + 1 && p.z + kPlayerMaxs.z >= m.absmin.z)
         return m.ent;
@@ -130,6 +130,20 @@ const char* nav_kind_name(NavKind k) {
       return "script";
   }
   return "?";
+}
+
+Solid mover_solid(const NavMover& m, Vec3f origin) {
+  if (m.tracer != nullptr)
+    return brushes_solid(*m.tracer, m.brush_model, origin, m.absmin - m.rest, m.absmax - m.rest);
+  Solid s;
+  s.kind = SolidKind::brush;
+  s.origin = origin;
+  if (m.model == nullptr) return s;
+  s.point_hull = m.model->hulls[0];
+  s.clip_hull = m.model->hulls[1];
+  s.mins = m.model->mins;
+  s.maxs = m.model->maxs;
+  return s;
 }
 
 void map_world(const BrushModel& map, MoveWorld& world) {
@@ -482,17 +496,10 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
   // traced again for the floor on its top, a ride up to each, and the ways off it proven there.
   g.movers.assign(movers.begin(), movers.end());
   for (const NavMover& m : movers) {
-    if (m.model == nullptr) continue;
+    if (!ridden(m)) continue;
     MoveWorld there = world;
     if (there.count >= kMaxSolids) continue;
-    Solid& s = there.solids[there.count++];
-    s = Solid{};
-    s.kind = SolidKind::brush;
-    s.origin = m.rest + m.travel;
-    s.point_hull = m.model->hulls[0];
-    s.clip_hull = m.model->hulls[1];
-    s.mins = m.model->mins;
-    s.maxs = m.model->maxs;
+    there.solids[there.count++] = mover_solid(m, m.rest + m.travel);
     const size_t rest = g.nodes.size();
     for (size_t a = 0; a < rest; a++) {
       const NavNode& na = g.nodes[a];

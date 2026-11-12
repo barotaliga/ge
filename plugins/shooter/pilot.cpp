@@ -1563,7 +1563,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         because = "a mover in the way: stepping clear of it";
       }
       const NavMover* rest = mover_of(g.movers, l.mover);
-      const bool door = rest == nullptr || rest->model == nullptr;
+      const bool door = rest == nullptr || !ridden(*rest);
       // A door away from its rest is open and still in the way: its leaf stands across this
       // link (a sliding door's half beside the doorway's middle). Every link through it its leaf
       // meets now is cut, and the way planned through the rest of the doorway.

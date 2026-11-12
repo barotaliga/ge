@@ -41,7 +41,7 @@ bool silent(const Pilot& p, int32_t m) {
 void see_movers(Pilot& p, const PilotSense& s) {
   for (const NavMover& now : s.movers) {
     const NavMover* rest = mover_of(p.g->movers, now.ent);
-    if (rest == nullptr || rest->model == nullptr) continue;
+    if (rest == nullptr || !ridden(*rest)) continue;
     Pilot::MoverSeen* slot = nullptr;  // its own, else the first free
     for (Pilot::MoverSeen& v : p.movers_seen) {
       if (v.ent == now.ent) {
@@ -60,7 +60,7 @@ void see_movers(Pilot& p, const PilotSense& s) {
 bool on_mover_top(const Pilot& p, const PilotSense& s, int32_t ent) {
   const NavMover* rest = mover_of(p.g->movers, ent);
   const NavMover* now = mover_of(s.movers, ent);
-  if (rest == nullptr || now == nullptr || rest->model == nullptr) return true;
+  if (rest == nullptr || now == nullptr || !ridden(*rest)) return true;
   // A player stepping on rises onto its top (not level with the floor); one under it raised has
   // not. A moving one's height as the client has it lags the rider's by up to a frame's travel.
   const float feet = s.origin.z + kPlayerMins.z;
@@ -71,7 +71,7 @@ bool on_mover_top(const Pilot& p, const PilotSense& s, int32_t ent) {
 bool aboard(const Pilot& p, const PilotSense& s, int32_t ent) {
   const NavMover* rest = mover_of(p.g->movers, ent);
   const NavMover* now = mover_of(s.movers, ent);
-  if (rest == nullptr || now == nullptr || rest->model == nullptr) return false;
+  if (rest == nullptr || now == nullptr || !ridden(*rest)) return false;
   // (Not `onground`: a plat starting up lifts its rider off it for a frame.)
   return on_mover_top(p, s, ent) && s.origin.x + kPlayerMaxs.x > now->absmin.x &&
          s.origin.x + kPlayerMins.x < now->absmax.x && s.origin.y + kPlayerMaxs.y > now->absmin.y &&
@@ -93,7 +93,7 @@ bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t
   }
   const NavNode& na = node(*p.g, a);
   const NavNode& nb = node(*p.g, b);
-  if (rest->model != nullptr) {
+  if (ridden(*rest)) {
     // A ridden mover is stepped onto only at its rest and silent (down, and still a beat: a plat
     // on its way or settling is waited for clear of it, as a person waits for it to come down and
     // stop); stepped off any time, unless it hangs over the player (raised over the shaft he
@@ -135,7 +135,7 @@ bool under_raised(const Pilot& p, const PilotSense& s, int32_t m) {
   if (m < 0) return false;
   const NavMover* rest = mover_of(p.g->movers, m);
   const NavMover* now = mover_of(s.movers, m);
-  if (rest == nullptr || now == nullptr || rest->model == nullptr) return false;
+  if (rest == nullptr || now == nullptr || !ridden(*rest)) return false;
   const float up = now->absmin.z - rest->absmin.z;
   const float feet = s.origin.z + kPlayerMins.z;
   return (up > kRideRest || up < -kRideRest) &&
