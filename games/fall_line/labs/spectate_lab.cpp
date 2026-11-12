@@ -68,6 +68,7 @@ void run(gl::Lab& lab) {
   std::vector<uint8_t> stream;
   rp::SpectateOptions options;
   options.keyframe_seconds = static_cast<int>(lab.arg_num("keyframe-seconds"));
+  options.full_every = static_cast<int>(lab.arg_num("full-every"));
   rp::SpectateWriter writer(fs::kGame, setup, stream, options);
   if (!writer.start(session.run(), error)) {
     lab.fail("the first keyframe does not save: " + error,
@@ -94,13 +95,13 @@ void run(gl::Lab& lab) {
   const double seconds = static_cast<double>(played) / fs::kGame.hz;
   // The bytes by track.
   rp::StreamReader r;
-  size_t inputs = 0, keys = 0, header = 0;
+  size_t inputs = 0, keys = 0, deltas = 0, header = 0;
   if (rp::read_stream_header(stream, r, error)) {
     header = r.at;
     rp::Block b;
     while (rp::next_block(r, b, error)) {
       for (const rp::Chunk& c : b.chunks)
-        (c.track == rp::kKeyframeTrack ? keys : inputs) += c.bytes.size();
+        (c.track != rp::kKeyframeTrack ? inputs : b.keyframe ? keys : deltas) += c.bytes.size();
     }
   }
   gl::LabTable bytes{"the broadcast's bytes (plain, before each block's zstd) and on the wire",
@@ -109,8 +110,10 @@ void run(gl::Lab& lab) {
   bytes.rows.push_back({"header", std::to_string(header), "-"});
   bytes.rows.push_back({"inputs and digests", std::to_string(inputs),
                         fmt(static_cast<double>(inputs) / seconds, 0)});
-  bytes.rows.push_back(
-      {"keyframes (saves)", std::to_string(keys), fmt(static_cast<double>(keys) / seconds, 0)});
+  bytes.rows.push_back({"whole keyframes (saves)", std::to_string(keys),
+                        fmt(static_cast<double>(keys) / seconds, 0)});
+  bytes.rows.push_back({"delta keyframes (XOR, plain)", std::to_string(deltas),
+                        fmt(static_cast<double>(deltas) / seconds, 0)});
   bytes.rows.push_back({"the stream (packed)", std::to_string(stream.size()),
                         fmt(static_cast<double>(stream.size()) / seconds, 0)});
   lab.table(bytes);
@@ -188,6 +191,7 @@ const gl::LabSpec kSpec{
         {"seed", "38", "the mountain"},
         {"seconds", "30", "how long the bot skis"},
         {"keyframe-seconds", "10", "a keyframe save every this many seconds"},
+        {"full-every", "30", "every this many keyframes is a whole save; the rest are deltas"},
         {"presets", "lan,broadband,wifi,mobile,bad,awful", "condition presets, comma-separated"},
         {"block-ms", "100", "the clock between blocks sent (1000: the run's own speed)"},
     },

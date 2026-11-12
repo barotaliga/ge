@@ -117,12 +117,20 @@ take fewer bytes.
 
 `engine/replay/spectate.hpp`. A deterministic game on the play contract (Fall Line) broadcasts
 what its player holds, not the world: each one-second block holds the block's runs of held inputs
-(each axis's grid index) and the run's digest after it, and every few seconds a keyframe block also
-holds the run saved (`save_run`). A viewer loads the first keyframe it gets and steps its own run
-through every block, checking the digest at each; a run that parts stops there with the step.
+(each axis's grid index) and the run's digest after it, and every 10 s the run saved (`save_run`).
+Every 30th save is whole and makes its block the stream's keyframe; the others are deltas, the
+save XORed with the one before it. Two saves 10 s apart differ in a few hundred bytes of their
+120-odd kB, so a delta's block packs to about 1.5 kB where a whole save's takes about 80 kB. A
+viewer that joins rebuilds the newest save from the whole one and the deltas after it and steps its
+own run from there, checking the digest at each block; a run that parts stops there with the step.
 Fall Line through a source node and a relay reaches the player's digest under every network preset
-(the `spectate` lab). Its inputs cost about 230 bytes a second; a whole save every 10 s is about
-10 kB a second packed, so the keyframes are what is left to make small.
+(the `spectate` lab). Its inputs cost about 230 bytes a second, and the whole broadcast over two
+minutes 1.2 kB a second, against 9.2 kB with a whole save every 10 s:
+
+| Keyframes | 30 s | 120 s |
+| --- | --- | --- |
+| Whole every 10 s | 10.7 kB/s | 9.2 kB/s |
+| Whole once, then deltas every 10 s | 2.9 kB/s | 1.2 kB/s |
 
 ## The field codec
 
