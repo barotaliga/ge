@@ -3,7 +3,8 @@
 // game's client and server through a near and a far proxy on the simulated network: with 10% loss
 // between the proxies, three copies each way cut the loss the game sees more than five times, and
 // packing at least halves the link's bytes for a game whose datagrams change little; a server off
-// the far proxy's allow list is refused with the reason.
+// the far proxy's allow list is refused with the reason; each proxy records what it passes as a
+// replay file that reads back to exactly what the game's ends got.
 //
 // ge:summary Tests the proxy: packing, repeats, the near and far pair under loss, the allow list
 // ge:keywords test proxy pack repeat loss link near far allow-list session
@@ -16,6 +17,7 @@
 #include "core/prng.hpp"
 #include "net/sim_network.hpp"
 #include "proxy/proxy.hpp"
+#include "proxy/record.hpp"
 #include "proxy/trial.hpp"
 
 namespace px = ge::proxy;
@@ -115,4 +117,47 @@ TEST(a_server_off_the_far_proxys_allow_list_is_refused_with_the_reason) {
   const px::TrialResult r = px::run_proxy_trial(c);
   CHECK(r.got_up == 0);
   CHECK(r.refused == "proxy does not reach sim:2:27500");
+}
+
+TEST(each_proxy_records_what_it_passes_as_a_replay_file) {
+  px::TrialConfig c;
+  c.seconds = 4;
+  c.loss = 0.10;
+  c.repeat = 2;
+  c.record = true;
+  const px::TrialResult r = px::run_proxy_trial(c);
+  std::string error;
+  std::vector<px::Recorded> near, far;
+  CHECK_MSG(px::proxy_read_recording(r.near_file, near, error), error);
+  CHECK_MSG(px::proxy_read_recording(r.far_file, far, error), error);
+  const auto pick = [](const std::vector<px::Recorded>& in, bool to_server) {
+    std::vector<std::vector<uint8_t>> out;
+    int64_t last = 0;
+    bool ordered = true;
+    for (const px::Recorded& d : in) {
+      ordered = ordered && d.time_ms >= last;
+      last = d.time_ms;
+      if (d.to_server == to_server) out.push_back(d.bytes);
+    }
+    CHECK(ordered);
+    return out;
+  };
+  // The near proxy gave the client exactly what it recorded; the far one gave the server so.
+  CHECK(!r.client_got.empty() && !r.server_got.empty());
+  CHECK(pick(near, false) == r.client_got);
+  CHECK(pick(far, true) == r.server_got);
+  // The far proxy took every snapshot from the server; the near one every command once open.
+  CHECK(static_cast<int>(pick(far, false).size()) == r.server_sent);
+  CHECK(pick(near, true).size() >= r.server_got.size());
+  // Packed: well under the game's bytes for datagrams that change little.
+  size_t payload = 0;
+  for (const auto& d : near) payload += d.bytes.size();
+  CHECK(r.near_file.size() * 3 < payload);
+  // A replay file that is not a proxy's is refused with the reason.
+  std::vector<uint8_t> other;
+  ge::replay::StreamWriter w;
+  ge::replay::stream_begin(w, {}, other);
+  ge::replay::stream_finish(w, {});
+  CHECK(!px::proxy_read_recording(other, near, error));
+  CHECK(error.find("not a proxy's recording") != std::string::npos);
 }
