@@ -99,6 +99,20 @@ The `tv` lab runs a source, a relay and six viewers under every simulated networ
 On the bad and awful links some viewers connect late and start at a later keyframe block, so they
 take fewer bytes.
 
+### Browsers, finished files and the master
+
+- **WebSocket viewers** (`websocket.hpp`): a host's `TvWeb` listens on TCP, takes the HTTP upgrade
+  and carries every TV message as one binary frame each way, beside the net node's viewers in the
+  same node (link numbers from `kWebLinks` up). Pings are answered, a close is answered and the link
+  dropped, and a broken handshake or a frame over 1 MiB drops the link. This is the wire the hub's
+  web viewer watches by (`docs/hub.md`).
+- **Finished files** (`library.hpp`): `library_scan` lists a folder's `.ger` files by the SHA-256
+  of their bytes, with name, size, game and header meta. A viewer sends `list` and gets `files`, and
+  sends `get` with a hash and gets the file in pieces, or a "not here". A viewer whose hello says
+  *files* gets no live stream and is not counted as watching (the hub's archive fetching a file).
+- **The master** (`tv_host_list`): the host beats to masters as a TV node from its own socket and
+  answers status asks there with its name, the match's game and map, its viewers and the delay.
+
 ## Spectating by inputs
 
 `engine/replay/spectate.hpp`. A deterministic game on the play contract (Fall Line) broadcasts

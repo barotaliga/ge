@@ -4,7 +4,10 @@
 //
 // One reliable channel carries the TV wire (node.hpp), its messages up to engine/net's biggest
 // (a block in pieces under it); a viewer whose window is full is sent the rest on a later update.
-// Every update: receive, hand the messages to the node or the watch, send what is due, flush.
+// Every update: receive, hand the messages to the node or the watch, send what is due, flush. A
+// host may also serve WebSocket viewers (`web`, websocket.hpp) from the same node, and be listed
+// on masters (`tv_host_list`, net/master.hpp) as a TV node, answering status asks
+// (net/status.hpp) with its name, the match's game and map, and how many watch.
 //
 // ge:summary TV over engine/net: a host viewers connect to, a viewer's end, and a relay of both
 // ge:keywords tv net host client relay tree fan-out tv_host tv_client tv_relay channel
@@ -16,7 +19,9 @@
 #include <memory>
 #include <string>
 
+#include "net/master.hpp"
 #include "net/node.hpp"
+#include "net/status.hpp"
 #include "tv/node.hpp"
 
 namespace ge::tv {
@@ -24,15 +29,28 @@ namespace ge::tv {
 // The net node's settings for a TV link: one reliable channel taking a block's piece.
 net::NodeConfig tv_node_config(bool host, int max_peers, uint64_t seed);
 
+struct TvWeb;  // websocket.hpp
+
 struct TvHost {
   net::Node net;
   Node tv;
+  TvWeb* web = nullptr;  // WebSocket viewers beside the net node's (the caller's; may be null)
+  net::MasterBeat beat;  // listed on these masters once `tv_host_list` named them
+  bool listed = false;
+  int64_t status_answers = 0;
 };
 
 // A host on an open transport (`max_peers` up to engine/net's 32).
 void tv_host_init(TvHost& h, const Config& config, net::Transport& transport, int max_peers,
                   uint64_t seed);
 void tv_host_update(TvHost& h, int64_t now_us);
+// Beat to `masters` as a TV node from the host's own socket (its status asks answered there too).
+void tv_host_list(TvHost& h, const std::vector<net::Address>& masters, uint32_t version,
+                  uint64_t seed);
+// The host's status record: a TV node, its name, the match's game and map, its viewers.
+net::Status tv_host_status(const TvHost& h);
+// Say bye to the masters (a stopping host).
+void tv_host_unlist(TvHost& h, int64_t now_us);
 
 struct TvClient {
   net::Node net;

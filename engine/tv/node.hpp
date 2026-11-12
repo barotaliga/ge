@@ -25,6 +25,10 @@
 // node sees is sent down to every viewer. THE VIEWER LIST: each relay reports how many watch under
 // it, so the first node knows the whole tree's count, and every node tells its viewers that count.
 //
+// FINISHED FILES: a node may hold a library of finished replay files (library.hpp). Any greeted
+// viewer may ask for the list and for a file by its SHA-256; a viewer that said hello for files
+// only (the hub's archive, a download) gets no live stream and is not counted as watching.
+//
 // ge:summary A TV node: a replay stream from a source, held by a delay, fanned out to viewers
 // ge:keywords tv television broadcast spectate relay fan-out delay catch-up late-joiner keyframe
 // ge:keywords viewer chat viewer-count tv_feed tv_join tv_receive tv_update watch
@@ -42,6 +46,7 @@
 #include <vector>
 
 #include "replay/stream.hpp"
+#include "tv/library.hpp"
 
 namespace ge::tv {
 
@@ -57,7 +62,15 @@ enum class Msg : uint8_t {
   viewers = 5,  // down: how many watch the whole tree; up (from a relay): how many under it
   ended = 6,    // down: the source finished and every block is out
   refused = 7,  // down: why the viewer was turned away
+  list = 8,     // up: the library's files, please
+  files = 9,    // down: how many, then each file's hash, name, bytes and game
+  get = 10,     // up: a file by its SHA-256
+  file = 11,    // down: a piece of that file; the byte after the kind is 1 while more follow, 0
+                // on the last, 2 when the node has no such file
 };
+
+// What a viewer's hello says it is.
+enum class Role : uint8_t { viewer = 0, relay = 1, files = 2 };
 
 // The largest piece of a block one message carries: under engine/net's biggest reliable message.
 inline constexpr size_t kPiece = size_t{60} * 1024;
@@ -80,13 +93,19 @@ struct Viewer {
   int link = -1;
   std::string name;
   bool relay = false;
-  bool greeted = false;  // its hello came
-  bool started = false;  // its header went
-  int64_t next = -1;     // the next block (by number) it is sent; -1: not placed yet
-  size_t piece = 0;      // of that block, the bytes already sent
-  int64_t under = 0;     // a relay's viewers under it
-  int64_t told = -1;     // the viewer count it was last sent
-  bool ended = false;    // `ended` went
+  bool files_only = false;     // it came for the library alone: no stream, not counted
+  bool greeted = false;        // its hello came
+  bool started = false;        // its header went
+  int64_t next = -1;           // the next block (by number) it is sent; -1: not placed yet
+  size_t piece = 0;            // of that block, the bytes already sent
+  int64_t under = 0;           // a relay's viewers under it
+  int64_t told = -1;           // the viewer count it was last sent
+  bool ended = false;          // `ended` went
+  bool want_list = false;      // a `list` came
+  std::vector<uint8_t> fetch;  // the file a `get` asked for, sent from `fetch_at`
+  size_t fetch_at = 0;
+  bool fetching = false;
+  bool fetch_missing = false;  // the asked file is not here: say so
 };
 
 struct ChatLine {
@@ -113,6 +132,7 @@ struct Node {
   std::vector<ChatLine> down;  // lines to send every viewer (the first node's echo)
   std::vector<ChatLine> up;    // lines a relay passes to its own source (net_link sends them)
   int64_t tree = -1;           // the whole tree's count a relay heard from above; -1: count its own
+  std::vector<LibraryFile> library;  // finished files a viewer may list and fetch
   // Counters.
   int64_t bytes_in = 0, bytes_out = 0, blocks_in = 0;
 };
@@ -134,6 +154,11 @@ int64_t tv_catch_up_blocks(const Node& node);
 // Everyone watching through this node: its viewers that do not relay and every relay's count.
 int64_t tv_viewer_count(const Node& node);
 
+struct WatchFile {
+  std::string sha256, name, game;
+  uint64_t bytes = 0;
+};
+
 // THE VIEWER'S END: the messages a node sends turned back into the replay file's bytes.
 struct Watch {
   bool keep = true;             // keep the stream (a relay passes it on instead)
@@ -147,9 +172,17 @@ struct Watch {
   std::vector<ChatLine> chat;
   std::string refused;  // why the node turned this viewer away
   std::string error;    // a message that broke the wire
+  bool have_list = false;
+  std::vector<WatchFile> files;  // the library, as the node last listed it
+  std::vector<uint8_t> fetched;  // the file asked for, so far
+  bool fetch_done = false;
+  bool fetch_missing = false;
 };
 
 std::vector<uint8_t> tv_hello(std::string_view name, bool relay);
+std::vector<uint8_t> tv_hello_files(std::string_view name);  // files only: no stream
+std::vector<uint8_t> tv_list();
+std::vector<uint8_t> tv_get(std::string_view sha256);
 std::vector<uint8_t> tv_chat(std::string_view who, std::string_view text);
 std::vector<uint8_t> tv_count(int64_t viewers);
 // A node's message taken in; `fresh` (may be null) gets the stream bytes it added (the header or

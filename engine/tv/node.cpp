@@ -8,6 +8,7 @@
 #include "tv/node.hpp"
 
 #include <algorithm>
+#include <fstream>
 
 namespace ge::tv {
 
@@ -166,6 +167,50 @@ bool send_blocks(Node& node, Viewer& v, const Send& send) {
   return true;
 }
 
+std::vector<uint8_t> files_msg(const Node& node) {
+  auto m = msg_of(Msg::files);
+  put_u(m, node.library.size());
+  for (const LibraryFile& f : node.library) {
+    put_text(m, f.sha256);
+    put_text(m, f.name);
+    put_u(m, f.bytes);
+    put_text(m, f.game);
+  }
+  return m;
+}
+
+// The library's list and the asked file, as far as the link takes them; false when it is full.
+bool send_files(Node& node, Viewer& v, const Send& send) {
+  if (v.want_list) {
+    const auto m = files_msg(node);
+    if (!send(v.link, m)) return false;
+    node.bytes_out += static_cast<int64_t>(m.size());
+    v.want_list = false;
+  }
+  if (!v.fetching) return true;
+  if (v.fetch_missing) {
+    auto m = msg_of(Msg::file);
+    m.push_back(2);
+    if (!send(v.link, m)) return false;
+    v.fetching = false;
+    return true;
+  }
+  do {
+    const size_t n = std::min(kPiece, v.fetch.size() - v.fetch_at);
+    auto m = msg_of(Msg::file);
+    m.push_back(v.fetch_at + n < v.fetch.size() ? 1 : 0);
+    m.insert(m.end(), v.fetch.begin() + static_cast<std::ptrdiff_t>(v.fetch_at),
+             v.fetch.begin() + static_cast<std::ptrdiff_t>(v.fetch_at + n));
+    if (!send(v.link, m)) return false;
+    node.bytes_out += static_cast<int64_t>(m.size());
+    v.fetch_at += n;
+  } while (v.fetch_at < v.fetch.size());
+  v.fetching = false;
+  v.fetch.clear();
+  v.fetch.shrink_to_fit();
+  return true;
+}
+
 }  // namespace
 
 bool tv_feed(Node& node, std::span<const uint8_t> bytes, int64_t now_ms) {
@@ -197,9 +242,12 @@ bool tv_receive(Node& node, int link, std::span<const uint8_t> msg) {
   switch (static_cast<Msg>(msg[0])) {
     case Msg::hello: {
       const uint8_t version = in.byte();
-      v->relay = in.byte() == 1;
+      const uint8_t role = in.byte();
+      v->relay = role == static_cast<uint8_t>(Role::relay);
+      v->files_only = role == static_cast<uint8_t>(Role::files);
       v->name = in.text();
-      if (in.bad || version != kWireVersion) return false;
+      if (in.bad || version != kWireVersion || role > static_cast<uint8_t>(Role::files))
+        return false;
       v->greeted = true;
       return true;
     }
@@ -215,6 +263,26 @@ bool tv_receive(Node& node, int link, std::span<const uint8_t> msg) {
         node.chat.push_back(line);
         node.down.push_back(std::move(line));
       }
+      return true;
+    }
+    case Msg::list:
+      if (!v->greeted) return false;
+      v->want_list = true;
+      return true;
+    case Msg::get: {
+      const std::string hash = in.text();
+      if (in.bad || !v->greeted || v->fetching) return false;
+      v->fetch.clear();
+      v->fetch_at = 0;
+      v->fetch_missing = true;
+      for (const LibraryFile& f : node.library) {
+        if (f.sha256 != hash) continue;
+        std::ifstream file(f.path, std::ios::binary);
+        v->fetch.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+        v->fetch_missing = !file.good() && !file.eof();
+        break;
+      }
+      v->fetching = true;
       return true;
     }
     case Msg::viewers: {
@@ -236,7 +304,7 @@ int64_t tv_catch_up_blocks(const Node& node) {
 int64_t tv_viewer_count(const Node& node) {
   int64_t n = 0;
   for (const Viewer& v : node.viewers)
-    if (v.greeted) n += v.relay ? v.under : 1;
+    if (v.greeted && !v.files_only) n += v.relay ? v.under : 1;
   return n;
 }
 
@@ -260,6 +328,8 @@ void tv_update(Node& node, int64_t now_ms, const Send& send) {
       v.greeted = false;
       continue;
     }
+    if (!send_files(node, v, send)) continue;
+    if (v.files_only) continue;
     if (!v.started) {
       if (!node.have_header) continue;
       auto m = msg_of(Msg::header);
@@ -287,7 +357,7 @@ void tv_update(Node& node, int64_t now_ms, const Send& send) {
   int64_t keep = start_block(node);
   if (keep < 0) keep = node.first;
   for (const Viewer& v : node.viewers) {
-    if (!v.greeted) continue;
+    if (!v.greeted || v.files_only) continue;
     keep = std::min(keep, v.next >= 0 ? v.next : node.first);
   }
   while (node.first < keep && !node.blocks.empty()) {
@@ -301,6 +371,22 @@ std::vector<uint8_t> tv_hello(std::string_view name, bool relay) {
   m.push_back(kWireVersion);
   m.push_back(relay ? 1 : 0);
   put_text(m, name);
+  return m;
+}
+
+std::vector<uint8_t> tv_hello_files(std::string_view name) {
+  auto m = msg_of(Msg::hello);
+  m.push_back(kWireVersion);
+  m.push_back(static_cast<uint8_t>(Role::files));
+  put_text(m, name);
+  return m;
+}
+
+std::vector<uint8_t> tv_list() { return msg_of(Msg::list); }
+
+std::vector<uint8_t> tv_get(std::string_view sha256) {
+  auto m = msg_of(Msg::get);
+  put_text(m, sha256);
   return m;
 }
 
@@ -362,6 +448,39 @@ bool watch_receive(Watch& w, std::span<const uint8_t> msg, std::vector<uint8_t>*
     case Msg::refused:
       w.refused = in.text();
       return !in.bad;
+    case Msg::files: {
+      const uint64_t n = in.u();
+      if (in.bad || n > (msg.size() - in.at)) break;
+      std::vector<WatchFile> files;
+      for (uint64_t i = 0; i < n && !in.bad; i++) {
+        WatchFile f;
+        f.sha256 = in.text();
+        f.name = in.text();
+        f.bytes = in.u();
+        f.game = in.text();
+        files.push_back(std::move(f));
+      }
+      if (in.bad) break;
+      w.files = std::move(files);
+      w.have_list = true;
+      return true;
+    }
+    case Msg::file: {
+      if (msg.size() < 2 || msg[1] > 2) break;
+      if (msg[1] == 2) {
+        w.fetch_missing = true;
+        w.fetch_done = true;
+        return true;
+      }
+      if (w.fetch_done) {
+        w.fetched.clear();
+        w.fetch_done = false;
+        w.fetch_missing = false;
+      }
+      w.fetched.insert(w.fetched.end(), msg.begin() + 2, msg.end());
+      if (msg[1] == 0) w.fetch_done = true;
+      return true;
+    }
     default:
       break;
   }

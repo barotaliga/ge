@@ -8,6 +8,8 @@
 
 #include <algorithm>
 
+#include "tv/websocket.hpp"
+
 namespace ge::tv {
 
 namespace {
@@ -27,6 +29,7 @@ net::NodeConfig tv_node_config(bool host, int max_peers, uint64_t seed) {
   c.channels.delivery[0] = net::Delivery::reliable;
   c.channels.largest[0] = static_cast<uint32_t>(net::kMaxBigMessage);
   c.seed = seed;
+  c.keep_foreign = host;  // status asks and the masters' acks arrive on the host's socket
   return c;
 }
 
@@ -37,8 +40,73 @@ void tv_host_init(TvHost& h, const Config& config, net::Transport& transport, in
   net::node_init(h.net, tv_node_config(true, max_peers, seed), transport);
 }
 
+net::Status tv_host_status(const TvHost& h) {
+  net::Status s;
+  s.kind = net::NodeKind::tv;
+  s.protocol = h.net.config.protocol;
+  s.version = h.beat.config.version;
+  s.name = h.tv.config.name;
+  for (const auto& [key, value] : h.tv.parsed.meta)
+    if (key == "map") s.map = value;
+  s.mode = h.tv.parsed.game;
+  s.phase = h.tv.finished      ? net::StatusPhase::intermission
+            : h.tv.have_header ? net::StatusPhase::playing
+                               : net::StatusPhase::lobby;
+  s.max_spectators = h.tv.config.max_viewers;
+  for (const Viewer& v : h.tv.viewers) {
+    if (!v.greeted || v.files_only || s.players.size() >= 64) continue;
+    net::StatusPlayer p;
+    p.name = v.name;
+    p.flags = net::kPlayerViewer;
+    s.players.push_back(std::move(p));
+  }
+  s.keys = {{"game", h.tv.parsed.game},
+            {"viewers", std::to_string(tv_viewer_count(h.tv))},
+            {"delay_s", std::to_string(h.tv.config.delay_ms / 1000)},
+            {"files", std::to_string(h.tv.library.size())}};
+  return s;
+}
+
+void tv_host_list(TvHost& h, const std::vector<net::Address>& masters, uint32_t version,
+                  uint64_t seed) {
+  net::MasterBeatConfig c;
+  c.masters = masters;
+  c.protocol = h.net.config.protocol;
+  c.kind = net::NodeKind::tv;
+  c.version = version;
+  c.seed = seed;
+  net::master_beat_init(h.beat, c);
+  h.listed = !masters.empty();
+}
+
+void tv_host_unlist(TvHost& h, int64_t now_us) {
+  if (h.listed && h.net.transport != nullptr)
+    net::master_beat_stop(h.beat, *h.net.transport, now_us);
+  h.listed = false;
+}
+
 void tv_host_update(TvHost& h, int64_t now_us) {
   net::node_update(h.net, now_us);
+  if (h.net.transport != nullptr) {
+    bool asked = false;
+    net::Status status;
+    uint8_t out[net::kMaxDatagram];
+    for (const net::Foreign& f : h.net.foreign) {
+      const uint8_t* data = h.net.foreign_bytes.data() + f.offset;
+      if (h.listed && net::master_beat_read(h.beat, data, f.size, f.from, now_us)) continue;
+      if (!net::is_status_ask(data, f.size)) continue;
+      if (!asked) {
+        status = tv_host_status(h);
+        asked = true;
+      }
+      const size_t n = net::status_answer(data, f.size, f.from, h.net.config.protocol, h.net.secret,
+                                          now_us, status, out, sizeof out);
+      if (n == 0) continue;
+      net::transport_send(*h.net.transport, f.from, out, n, now_us);
+      h.status_answers++;
+    }
+    if (h.listed) net::master_beat_update(h.beat, *h.net.transport, now_us);
+  }
   for (const net::Event& e : h.net.events) {
     if (e.type == net::EventType::connected) {
       tv_join(h.tv, e.peer);
@@ -52,10 +120,13 @@ void tv_host_update(TvHost& h, int64_t now_us) {
       }
     }
   }
+  if (h.web != nullptr) tv_web_receive(*h.web, h.tv);
   tv_update(h.tv, ms_of(now_us), [&](int link, std::span<const uint8_t> m) {
+    if (link >= kWebLinks) return h.web != nullptr && tv_web_send(*h.web, link, m);
     return net::node_send(h.net, link, kChannel, m.data(), m.size());
   });
   net::node_flush(h.net, now_us);
+  if (h.web != nullptr) tv_web_flush(*h.web);
 }
 
 void tv_client_init(TvClient& c, net::Transport& transport, const net::Address& to,
