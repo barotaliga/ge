@@ -37,6 +37,7 @@
 #include "console/cvar.hpp"
 #include "progs/entity_text.hpp"
 #include "shooter/client.hpp"
+#include "shooter/rjump_assist.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/rules_world.hpp"
 #include "shooters_edge/sim/mod_host.hpp"
@@ -148,6 +149,9 @@ struct RulesCommon {
   // What the rules show everyone else (rules_world.hpp): filled at the map's start and at the end
   // of each call that changes it.
   RulesWorld world;
+
+  // The rocket jump helper's waiting requests, a seat each (rjump_rules.hpp).
+  sh::RjumpSeat rjumps[sh::kMaxClients];
 
   bool map_stopped = false;  // error / objerror: the map is over (`stop_reason` says why)
   bool paused = false;

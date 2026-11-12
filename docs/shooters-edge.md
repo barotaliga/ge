@@ -1402,6 +1402,23 @@ server set `rcon_password` and send `rcon <password> <line>` from a joined windo
 speedjump 3 on`) or any classic client. Without a password the remote console is refused. The
 words and the remote console are `net/classic_admin.hpp`.
 
+**The rocket jump helpers (M18e).** `+rjump` does a rocket jump for the player: one press asks
+the server, and on the first command the rocket launcher can fire the server fires a real rocket
+80 degrees down at his own yaw as he jumps (the launcher chosen for it; a press inside the refire,
+or while the sequel raises the launcher, waits up to a second with his jump held back). `+rrjump`
+is the reverse rocket jump: the shot turned half round at his own pitch (look down to throw
+yourself forward). Nothing is added: the rocket, its ammo, the blast's damage and push are a
+hand-made rocket jump's, and his screen never turns. An aid for a player whose hands cannot turn,
+jump and fire at once. The request is impulse 164 (156 the reverse) sent with the jump, the
+numbers a classic match mod uses for its own helpers, so the buttons work on such servers too.
+The server decides: `sv_rjump` and `sv_rrjump` (0 or 1, in the server info, 0 on a dedicated
+server, on in the window's own match) are rules a vote may change for the map; a player granted
+the helpers (the server-only user info key `*rjump 1`, visible to all) may use both anyway. A
+refused press is told in a game's words ("The rocket jump helper is off on this server.", "You
+have no rocket launcher.", "You have no rockets."). One code for both games' rules
+(`server/rjump_rules.hpp` over `plugins/shooter/rjump_assist.hpp`); a compiled module answers its
+own impulses.
+
 **The lobby (M18q).** Before the match, on M17d's sessions: the players and their pings, teams,
 ready, chat to all or the team, a map vote, kick, and the host's start; at the end of the match
 everyone returns to it. Joining is from the server browser, an invite (M17j's friends), or an

@@ -126,6 +126,9 @@ constexpr gs::GameRule kModRules[] = {
     {"timelimit", "the match's length, minutes (0 none)"},
     {"samelevel", "1: the map does not change at the end"},
     {"pausable", "1: a player may pause the game (0: only unpausing)"},
+    // The rocket jump helpers (server/rjump_rules.hpp): a mod's rule, live and voted per map.
+    {"sv_rjump", "1: players may use the rocket jump helper, +rjump (0)"},
+    {"sv_rrjump", "1: players may use the reverse rocket jump helper, +rrjump (0)"},
     {"k_midair",
      "1: midair, rockets count only on a player in the air (the sequel's maps; restarts)"},
     {"k_midair_minheight", "midair: the least height a hit counts at, 0..4 (64..1024 units; 1)"},
@@ -606,7 +609,7 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
   if (!known) {
     out.error = rule +
                 " is not a setting of this server. Type \"vote rules\" to see what may be "
-                "voted on (fraglimit, timelimit, teamplay, sv_gravity, pm_speedjump, "
+                "voted on (fraglimit, timelimit, teamplay, sv_gravity, pm_speedjump, sv_rjump, "
                 "speedjump <player> on...).";
     return false;
   }
