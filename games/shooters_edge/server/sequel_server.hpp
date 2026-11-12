@@ -87,6 +87,33 @@ struct SequelEntity {
   int item = -1;
   bool hidden = false, gone = false;
   double respawn_at = 0;  // level time it shows again; 0: not waiting
+
+  // The map's movers and triggers (sequel_map.hpp).
+  int block = -1;  // its block in the map's entity text; -1 one the rules made (a door's field)
+  int owner = -1;  // a field's or a trigger's mover
+  std::string message, killtarget, team, pathtarget, noise, map;
+  bool solid = false;      // a brush that stops moves and shots (a mover, a wall present)
+  bool trigger = false;    // touched when a living player's box overlaps it
+  sh::Vec3f mins, maxs;    // its box about its origin (a brush model's bounds, a field's box)
+  sh::Vec3f dir;           // a mover's or a push's way
+  sh::Vec3f closed, open;  // a door's or button's two places (a plat's top and bottom)
+  float speed = 0, accel = 0, decel = 0, wait = 0, lip = 0, delay = 0, random = 0;
+  int dmg = 0, health = 0, max_health = 0, sounds = 0;
+  int state = 0;             // a mover's: 0 at rest closed, 1 opening, 2 open, 3 closing
+  int team_master = -1;      // the first of its team; -1 none
+  double think_at = 0;       // level time its next action is due; 0 none
+  int think = 0;             // which action (sequel_map.cpp)
+  double touched_at = -100;  // the last touch that counted (a field's once a second)
+  bool moved = false;        // a plat: it has had a move (its use is spent)
+  int activator = -1;        // the slot that set it going (a train's, a delayed use's)
+  // The move in progress: its velocity (units/s), the place it is going to and what follows.
+  sh::Vec3f velocity, dest;
+  int frames = 0;     // the plain move's whole frames left
+  float rest = 0;     // the plain move's remainder; the accelerated move's distance left
+  bool last = false;  // the next push is the move's last
+  bool accelerated = false;
+  float now_speed = 0, next_speed = 0, top = 0, decel_span = 0;  // per frame
+  int arrive = 0;  // what arriving does (sequel_map.cpp)
 };
 
 struct SequelPlayer {
@@ -128,7 +155,9 @@ struct SequelPlayer {
   double air_until = 0, drown_at = 0;
   int drown_damage = 2;
   float old_fall = 0;
-  bool gibbed = false;  // died under −40: his body is gone (no model)
+  bool gibbed = false;      // died under −40: his body is gone (no model)
+  int ground = -1;          // the world row he stands on (0 the world, a mover's row), -1 none
+  double windfly_at = -10;  // the last push's sound
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.
@@ -193,6 +222,15 @@ struct SequelServer : RulesCommon {
   // at its spot, and after 5 s any button leaves.
   double intermission_at = 0;
   std::string next_map;
+  // A use put off by its `delay`: the entity whose targets fire, at a level time, by a slot.
+  struct Delayed {
+    int entity;
+    double at;
+    int activator;
+  };
+  std::vector<Delayed> delayed;
+  int secrets = 0, secrets_found = 0, goals = 0, goals_found = 0;
+  bool exit_now = false;  // an exit was used: the intermission starts at the frame's end
 
   SequelServer();
   ~SequelServer();

@@ -18,6 +18,7 @@
 #include "core/libm/libm.hpp"
 #include "core/num.hpp"
 #include "shooters_edge/server/messages.hpp"
+#include "shooters_edge/server/sequel_map.hpp"
 
 namespace shooters_edge::server {
 
@@ -142,6 +143,7 @@ struct Line {
   sh::Vec3f normal;
   bool sky = false;
   int player = -1;
+  int mover = -1;  // the map's entity it met (a door, a plat), when it met one
 };
 
 // The entry of the segment into a box, 0..1, or -1 when it misses (or starts inside: 0).
@@ -168,12 +170,11 @@ float enter_box(sh::Vec3f from, sh::Vec3f to, sh::Vec3f lo, sh::Vec3f hi) {
 // bit per slot).
 Line shoot_line(SequelServer& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip) {
   Line out;
-  const float a[3] = {from.x, from.y, from.z}, b[3] = {to.x, to.y, to.z};
-  const float zero[3] = {0, 0, 0};
-  const ge::brush::Trace t = s.tracer->trace(a, b, zero, zero, kWorldMask);
+  const sh::SequelTrace t = map_trace(s, from, {}, {}, to, kWorldMask);
   out.fraction = t.start_solid ? 0 : t.fraction;
-  out.normal = {t.plane.n[0], t.plane.n[1], t.plane.n[2]};
-  out.sky = t.fraction < 1 && (t.flags & kSurfSky) != 0;
+  out.normal = t.normal;
+  out.sky = t.fraction < 1 && (t.surface_flags & kSurfSky) != 0;
+  if (t.fraction < 1) out.mover = map_entity_of_row(s, t.entity);
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (((skip >> i) & 1) != 0 || !fightable(s, i)) continue;
     const SequelPlayer& p = s.players[i];
@@ -185,6 +186,7 @@ Line shoot_line(SequelServer& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip) {
       out.sky = false;
     }
   }
+  if (out.player >= 0) out.mover = -1;
   out.end = from + (to - from) * out.fraction;
   return out;
 }
@@ -193,14 +195,10 @@ Line shoot_line(SequelServer& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip) {
 // way in x and y.
 bool can_damage(SequelServer& s, sh::Vec3f at, int i) {
   const sh::Vec3f o = unpack(s.players[i].move.origin);
-  const float zero[3] = {0, 0, 0};
-  const float from[3] = {at.x, at.y, at.z};
   const sh::Vec3f tries[5] = {o, o + sh::Vec3f{15, 15, 0}, o + sh::Vec3f{15, -15, 0},
                               o + sh::Vec3f{-15, 15, 0}, o + sh::Vec3f{-15, -15, 0}};
-  for (const sh::Vec3f& t : tries) {
-    const float to[3] = {t.x, t.y, t.z};
-    if (s.tracer->trace(from, to, zero, zero, kWorldMask).fraction >= 1) return true;
-  }
+  for (const sh::Vec3f& t : tries)
+    if (map_trace(s, at, {}, {}, t, kWorldMask).fraction >= 1) return true;
   return false;
 }
 
@@ -228,7 +226,7 @@ int power_save(SequelPlayer& p, sh::Vec3f dir, int damage) {
 }
 
 void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, int knockback,
-          bool energy, int weapon, bool no_armour = false) {
+          bool energy, int weapon, bool no_armour = false, bool past_invulnerable = false) {
   if (!fightable(s, target) || damage <= 0) return;
   SequelPlayer& p = s.players[target];
   if (!deathmatch(s) && skill(s) == 0) damage = std::max(1, damage / 2);
@@ -237,7 +235,7 @@ void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, 
     const float push = sq_knockback(knockback, kMass, attacker == target);
     pack(p.move.velocity, unpack(p.move.velocity) + dir * push);
   }
-  if (p.invulnerable_until > s.level_time) return;  // the push still lands
+  if (p.invulnerable_until > s.level_time && !past_invulnerable) return;  // the push lands
   int saved = 0;
   if (!no_armour) {
     if (along) saved += power_save(p, dir, damage);
@@ -267,6 +265,16 @@ void blast(SequelServer& s, sh::Vec3f at, int attacker, int damage, float radius
     if (points <= 0 || !can_damage(s, at, i)) continue;
     hurt(s, i, attacker, o - at, static_cast<int>(points), static_cast<int>(points), energy,
          weapon);
+  }
+  // The map's shootable movers (a door or button with health): less half the distance to the
+  // middle of its box, when within the radius.
+  for (size_t e = 0; e < s.entities.size(); e++) {
+    const SequelEntity& m = s.entities[e];
+    if (m.gone || m.health <= 0) continue;
+    const sh::Vec3f mid = m.origin + (m.mins + m.maxs) * 0.5f;
+    const float d = sh::length(mid - at);
+    const float points = float(damage) - 0.5f * d;
+    if (points > 0) map_damage(s, static_cast<int>(e), attacker, static_cast<int>(points));
   }
 }
 
@@ -316,6 +324,7 @@ void bullet(SequelServer& s, int slot, sh::Vec3f origin, sh::Vec3f start, const 
     hurt(s, l.player, slot, ax.forward, damage, kick, false, weapon);
     effect(s, "te_blood", l.end);
   } else if (l.fraction < 1 && !l.sky) {
+    map_damage(s, l.mover, slot, damage);
     effect(s, "te_gunshot", l.end);
   }
 }
@@ -328,6 +337,7 @@ void rail(SequelServer& s, int slot, sh::Vec3f start, const sh::ViewAxes& ax, in
   for (int n = 0; n <= sh::kMaxClients; n++) {
     const Line l = shoot_line(s, start, end, skip);
     if (l.player < 0) {
+      map_damage(s, l.mover, slot, damage);
       effect(s, "te_railtrail", l.end);
       return;
     }
@@ -528,6 +538,8 @@ const char* obituary(int weapon) {
       return " caught %'s hand grenade.";
   }
   if (weapon == kSqByHeldGrenade) return " was too close to %'s last grenade.";
+  if (weapon == kSqByTelefrag) return " was in the way of %'s teleport.";
+  if (weapon == kSqByExplosion) return " was caught in %'s explosion.";
   return " was killed by %.";
 }
 
@@ -850,6 +862,12 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
       line = victim + " melted in the slime.";
     else if (weapon == kSqByWater)
       line = victim + " ran out of air.";
+    else if (weapon == kSqByCrush)
+      line = victim + " was squashed.";
+    else if (weapon == kSqByHurt)
+      line = victim + " was in the wrong place.";
+    else if (weapon == kSqByExplosion)
+      line = victim + " was caught in an explosion.";
     else
       line = victim + " died.";
   }
@@ -887,6 +905,17 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
 }
 
 bool fight_dmflag(const SequelServer& s, int bit) { return dmflag(s, bit); }
+
+void fight_hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, int knockback,
+                int weapon, int flags) {
+  hurt(s, target, attacker, dir, damage, knockback, false, weapon, (flags & 1) != 0,
+       (flags & 2) != 0);
+}
+
+void fight_blast(SequelServer& s, sh::Vec3f at, int attacker, int damage, float radius,
+                 int weapon) {
+  blast(s, at, attacker, damage, radius, -1, weapon);
+}
 
 bool fight_drop(SequelServer& s, int slot, int item) {
   if (item < 0 || item >= kSqItemCount || !fightable(s, slot)) return false;

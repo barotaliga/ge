@@ -20,6 +20,7 @@
 #include "core/num.hpp"
 #include "progs/text.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
+#include "shooters_edge/server/sequel_map.hpp"
 
 namespace shooters_edge::server {
 
@@ -186,6 +187,7 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   p.view_height = 22;
   p.water_level = 0;
   p.on_ground = false;
+  p.ground = -1;
   fight_spawn(s, slot);
 }
 
@@ -325,8 +327,8 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   pm.changed = p.changed;
   pm.air_accelerate =
       deathmatch(s) ? static_cast<float>(s.cvars.find("sv_airaccelerate")->number) : 0;
-  sh::SequelBrushWorld bw{s.tracer.get(), p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
-  sh::sequel_move(pm, bw.world());
+  MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
+  sh::sequel_move(pm, mw.world());
   p.move = pm.s;
   p.changed = false;
   for (int i = 0; i < 3; i++) p.cmd_angles[i] = pm.cmd.angles[i];
@@ -338,8 +340,10 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   p.water_level = pm.water_level;
   p.water_type = pm.water_type;
   p.on_ground = pm.ground_entity >= 0;
+  p.ground = pm.ground_entity;
   if (!p.alive || s.clients[slot].spectator || s.intermission_at > 0) return;
   touch_items(s, slot);
+  map_touch(s, slot);
   if (c.impulse >= 1 && c.impulse <= kSqWeaponCount) fight_choose(s, slot, c.impulse - 1);
   // The first command of the frame that presses attack steps the hand at once.
   if ((c.buttons & sh::kButtonAttack) != 0 && !p.stepped) {
@@ -418,6 +422,7 @@ void rules_frame(SequelServer& s) {
     intermission_frame(s);
     return;
   }
+  map_frame(s);
   fight_missiles(s);
   fight_drops(s);
   for (int i = 0; i < sh::kMaxClients; i++) {  // the hands no command stepped this frame
@@ -426,7 +431,8 @@ void rules_frame(SequelServer& s) {
     p.stepped = false;
     if (s.clients[i].active) fight_body_frame(s, i);
   }
-  if (fight_limits(s)) {
+  if (fight_limits(s) || s.exit_now) {
+    s.exit_now = false;
     start_intermission(s);
     return;
   }
@@ -491,6 +497,7 @@ void fill_rows(SequelServer& s) {
     const SequelEntity& m = s.entities[i];
     if (m.item >= 0) w.entities[1 + sh::kMaxClients + i].free = m.gone || m.hidden;
   }
+  map_rows(s);
   fight_rows(s);
   mirror_pool(s);
 }
@@ -549,7 +556,8 @@ void fill_lists(SequelServer& s) {
   for (size_t i = 0; i < s.entities.size(); i++) {
     const SequelEntity& m = s.entities[i];
     WorldEntity& e = w.entities[1 + sh::kMaxClients + i];
-    e.free = m.gone || m.hidden;
+    // Triggers, fields and the map's points are never drawn.
+    e.free = m.gone || m.hidden || m.trigger || m.classname.rfind("trigger_", 0) == 0;
     e.origin = m.origin;
     e.angles = m.angles;
     e.modelindex = m.modelindex;
@@ -609,6 +617,8 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   drop_items(s);
   s.frame_number = 0;
   s.level_time = 0;
+  s.exit_now = false;
+  map_spawn(s);
   s.host_time = 0;
   s.map_stopped = false;
   s.pending_map.clear();
