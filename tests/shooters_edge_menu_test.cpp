@@ -169,6 +169,39 @@ TEST(new_game_start_runs_the_rules_then_the_map) {
   CHECK(!w.ran.empty() && w.ran.back() == "map dm1");
 }
 
+// GAME TYPE COOPERATIVE with a campaign to play starts a coop game on the map, so bots may join;
+// DEATHMATCH starts the map as a match.
+TEST(new_game_start_cooperative_starts_a_coop_game) {
+  World w;
+  w.con.add_command("coopgame", "", [&w](ge::console::Console&, const ge::console::Args& a) {
+    w.ran.push_back("coopgame " + a.rest(0));
+  });
+  Menu m = sm::build_menu();
+  ge::console::Cvars server(true);
+  for (const char* c : {"deathmatch", "fraglimit", "timelimit", "teamplay"})
+    server.add({.name = c, .fallback = "0"});
+  sm::Host host{.console = &w.con, .server = &server, .maps = {"start", "e1m1"}};
+  sm::refresh(m, host);
+  m.open("multi");
+  for (const MenuEvent& e : press(m, "host")) sm::apply_event(e, m, host);
+  CHECK(m.focus("map"));
+  MenuInput right;
+  right.right = true;
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  for (const MenuEvent& e : press(m, "start")) sm::apply_event(e, m, host);
+  CHECK(std::find(w.ran.begin(), w.ran.end(), "sv deathmatch 0") != w.ran.end());
+  CHECK_MSG(!w.ran.empty() && w.ran.back() == "coopgame 0 e1m1", w.ran.back());
+  // DEATHMATCH: the map as a match.
+  w.ran.clear();
+  m.open("multi");
+  for (const MenuEvent& e : press(m, "host")) sm::apply_event(e, m, host);
+  CHECK(m.focus("deathmatch"));
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  for (const MenuEvent& e : press(m, "start")) sm::apply_event(e, m, host);
+  CHECK(std::find(w.ran.begin(), w.ran.end(), "sv deathmatch 1") != w.ran.end());
+  CHECK_MSG(!w.ran.empty() && w.ran.back().rfind("map ", 0) == 0, w.ran.back());
+}
+
 TEST(escape_opens_the_menu_and_backs_out_of_it) {
   World w;
   sm::GameMenu g;

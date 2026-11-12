@@ -20,6 +20,7 @@
 #include "render/water_shore.wgsl.hpp"
 #include "render/water_stream.hpp"
 #include "render/water_stream.wgsl.hpp"
+#include "render/water_underside.wgsl.hpp"
 #include "water/spectrum.hpp"
 
 namespace ge::render {
@@ -80,12 +81,15 @@ void stage_body(Water::Slot& slot, const water::Body& body) {
   const WaterDraw& d = slot.draw;
   b.air[0] = static_cast<float>(d.daylight < 0 ? d.open_sky : d.daylight);
   b.sun[0] = static_cast<float>(d.sunlit < 0 ? b.air[0] : d.sunlit);
+  b.sun[1] = static_cast<float>(d.pace);
+  b.sun[2] = static_cast<float>(std::max(slot.floor, -1e6));
   b.air[1] = static_cast<float>(d.stir);
   b.air[2] = static_cast<float>(d.gusts);
   // The gusts drift downwind at about the speed of the waves the wind grows most (the peak's
   // phase speed, g Tp / 2 pi, is a little over the wind's own at these fetches; take most of it).
   const water::Sea& sea = body.waves.sea;
-  b.air[3] = static_cast<float>(sea.tp > 0 ? 0.8 * water::kGravity * sea.tp / (2 * kPi) : 0.0);
+  b.air[3] =
+      static_cast<float>(sea.tp > 0 ? d.pace * 0.8 * water::kGravity * sea.tp / (2 * kPi) : 0.0);
   b.view[2] = static_cast<float>(lm::sin(sea.toward));
   b.view[3] = static_cast<float>(lm::cos(sea.toward));
 }
@@ -105,8 +109,9 @@ void upload_waves(gpu::Device& device, Water::Slot& slot, const water::Body& bod
   if (!slot.draw.wet_band) foam.runup = -1;
   slot.staged.foam[0] = static_cast<float>(foam.fold);
   slot.staged.foam[1] = static_cast<float>(foam.cover);
-  slot.staged.foam[2] = static_cast<float>(foam.drift * lm::sin(body.waves.sea.toward));
-  slot.staged.foam[3] = static_cast<float>(foam.drift * lm::cos(body.waves.sea.toward));
+  const double pace = slot.draw.pace;
+  slot.staged.foam[2] = static_cast<float>(pace * foam.drift * lm::sin(body.waves.sea.toward));
+  slot.staged.foam[3] = static_cast<float>(pace * foam.drift * lm::cos(body.waves.sea.toward));
   slot.staged.surf[0] = static_cast<float>(foam.hs);
   slot.staged.surf[1] = static_cast<float>(foam.runup);
   slot.staged.surf[2] = static_cast<float>(foam.fold_length);
@@ -118,7 +123,7 @@ void upload_waves(gpu::Device& device, Water::Slot& slot, const water::Body& bod
     w[0] = static_cast<float>(c.kx);
     w[1] = static_cast<float>(c.kz);
     w[2] = static_cast<float>(c.a);
-    w[3] = static_cast<float>(c.w);
+    w[3] = static_cast<float>(pace * c.w);  // the water's pace: every phase runs at its share
     // The phase taken round once, so a float keeps its bits of it.
     w[4] = static_cast<float>(std::fmod(c.phase, 2 * kPi));
     w[5] = static_cast<float>(c.k);
@@ -370,6 +375,29 @@ void create_water(gpu::Device& device, gpu::PipelineSet& pipelines, Water& water
     desc.vertex.constants = below_grid;
     desc.label = "water.below";
     water.p_below = pipelines.add_render(device, desc);
+    // The underside from the air under it: the same geometry at the floor, into the frame's own
+    // colour and motion beside the top (its covered vertices rise, as seen from below).
+    const wgpu::ShaderModule underside_module =
+        gpu::create_shader(device, wgsl::water_underside, "water.underside");
+    fragment.module = underside_module;
+    fragment.entryPoint = "fs_underside";
+    fragment.targets = colours;
+    desc.vertex.module = underside_module;
+    wgpu::ConstantEntry underside_grid[3]{};
+    underside_grid[0].key = "kGrid";
+    underside_grid[0].value = kWaterGrid;
+    underside_grid[1].key = "kBelow";
+    underside_grid[1].value = 1;
+    underside_grid[2].key = "kUnderside";
+    underside_grid[2].value = 1;
+    desc.vertex.constantCount = 3;
+    desc.vertex.constants = underside_grid;
+    // No depth test: the fragment keeps the map where it stands at the floor's plane itself.
+    wgpu::DepthStencilState over = depth;
+    over.depthCompare = wgpu::CompareFunction::Always;
+    desc.depthStencil = &over;
+    desc.label = "water.underside";
+    water.p_underside = pipelines.add_render(device, desc);
   }
   {
     // THE SHORE'S WET BAND: a full-screen triangle over the body's group, darkening the ground the
@@ -621,6 +649,13 @@ void set_water_body(gpu::Device& device, Water& water, int index, const water::B
   upload_waves(device, slot, body);
 }
 
+void set_water_pace(gpu::Device& device, Water& water, int index, const water::Body& body,
+                    double pace) {
+  Water::Slot& slot = water.bodies[static_cast<size_t>(index)];
+  slot.draw.pace = pace;
+  set_water_body(device, water, index, body);
+}
+
 void set_water_wakes(gpu::Device& device, Water& water, int index, const water::Wakes& wakes,
                      int body) {
   Water::Slot& slot = water.bodies[static_cast<size_t>(index)];
@@ -749,6 +784,11 @@ void prepare_water(gpu::Device& device, Water& water, const FrameView& view, int
                  view.eye[1] > slot.floor;
   }
   if (water.eye_under >= 0) water.bodies[static_cast<size_t>(water.eye_under)].under = true;
+  // Every body hung over open air whose floor is over the eye, the eye in the air.
+  for (Water::Slot& slot : water.bodies) {
+    slot.from_under =
+        water.eye_under < 0 && !slot.hidden && slot.draw.open_below && view.eye[1] < slot.floor;
+  }
 }
 
 void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
@@ -757,7 +797,7 @@ void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRe
   // Nothing drawn and no eye under the water: the rows run empty (no copy), so every later pass
   // keeps its timing row.
   const bool drawn = std::any_of(water.bodies.begin(), water.bodies.end(),
-                                 [](const Water::Slot& s) { return s.shown; }) ||
+                                 [](const Water::Slot& s) { return s.shown || s.from_under; }) ||
                      water.streams.count > 0;
   if (!drawn && water.eye_under < 0) {
     rec.compute(encoder, "water.copy").End();
@@ -819,6 +859,16 @@ void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRe
     pass.SetBindGroup(1, slot.group);
     pass.DrawIndexed(kWaterGrid * kWaterGrid * 6, static_cast<uint32_t>(slot.staged.grid[0]));
     ++rec.current().draws;
+  }
+  if (std::any_of(water.bodies.begin(), water.bodies.end(),
+                  [](const Water::Slot& s) { return s.from_under; })) {
+    pass.SetPipeline(pipelines.render(water.p_underside));
+    for (const Water::Slot& slot : water.bodies) {
+      if (!slot.from_under) continue;
+      pass.SetBindGroup(1, slot.group);
+      pass.DrawIndexed(kWaterGrid * kWaterGrid * 6, static_cast<uint32_t>(slot.staged.grid[0]));
+      ++rec.current().draws;
+    }
   }
   if (water.streams.count > 0) {
     pass.SetPipeline(pipelines.render(water.streams.p_draw));

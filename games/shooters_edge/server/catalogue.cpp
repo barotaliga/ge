@@ -127,11 +127,24 @@ const CatalogueRow kCatalogue[] = {
     {481, "strtoupper", nullptr, "DP_QC_STRING_CASE_FUNCTIONS"},
     {484, "strreplace", nullptr, "DP_QC_STRREPLACE"},
     {485, "strireplace", nullptr, "DP_QC_STRREPLACE"},
+    {117, "stov", nullptr, "FTE_STRINGS"},
+    {221, "strstrofs", nullptr, "FTE_STRINGS"},
+    {222, "str2chr", nullptr, "FTE_STRINGS"},
+    {223, "chr2str", nullptr, "FTE_STRINGS"},
+    {224, "strconv", nullptr, "FTE_STRINGS"},
+    {225, "strpad", nullptr, "FTE_STRINGS"},
+    {226, "infoadd", nullptr, "FTE_STRINGS"},
+    {227, "infoget", nullptr, "FTE_STRINGS"},
+    {228, "strncmp", nullptr, "FTE_STRINGS"},
+    {229, "strcasecmp", nullptr, "FTE_STRINGS"},
+    {230, "strncasecmp", nullptr, "FTE_STRINGS"},
+    {627, "sprintf", nullptr, "DP_QC_SPRINTF"},
 };
 const int kCatalogueCount = static_cast<int>(sizeof kCatalogue / sizeof kCatalogue[0]);
 
 const char* const kExtensionNames[] = {
     "DP_CON_SET",
+    "DP_ENT_ALPHA",
     "DP_QC_ASINACOSATANATAN2TAN",
     "DP_QC_COPYENTITY",
     "DP_QC_CVAR_STRING",
@@ -142,6 +155,7 @@ const char* const kExtensionNames[] = {
     "DP_QC_MINMAXBOUND",
     "DP_QC_RANDOMVEC",
     "DP_QC_SINCOSSQRTPOW",
+    "DP_QC_SPRINTF",
     "DP_QC_STRING_CASE_FUNCTIONS",
     "DP_QC_STRREPLACE",
     "DP_QC_TRACEBOX",
@@ -149,6 +163,7 @@ const char* const kExtensionNames[] = {
     "DP_REGISTERCVAR",
     "DP_SV_POINTPARTICLES",
     "FTE_CALLTIMEOFDAY",
+    "FTE_STRINGS",
     "GE_QC_WORDS",
     "QSG_CVARSTRING",
     "ZQ_CLIENTCOMMAND",
@@ -174,6 +189,7 @@ pg::Builtin resolve(const CatalogueRow& r) {
 
 // The fields and hooks an extension brings with it (beyond its builtins).
 void extras_of(pg::Extension& e) {
+  if (e.name == "DP_ENT_ALPHA") e.fields = {"alpha"};
   if (e.name == "ZQ_CLIENTCOMMAND") e.hooks = {"GE_ClientCommand"};
   if (e.name == "ZQ_ITEMS2") e.fields = {"items2"};
   if (e.name == "ZQ_PAUSE") e.hooks = {"GE_ShouldPause", "GE_PausedTic"};

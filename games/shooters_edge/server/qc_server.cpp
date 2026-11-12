@@ -320,6 +320,7 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
     w.ammo[3] = offset("ammo_cells");
     w.weapon = offset("weapon");
     w.weaponframe = offset("weaponframe");
+    w.alpha = offset("alpha");
   }
   NamedHooks& n = s.named;
   n.user_cmd = named(progs, "UserCmd");
