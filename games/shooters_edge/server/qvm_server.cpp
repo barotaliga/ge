@@ -7,6 +7,7 @@
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_qvm_server_test.cpp
 #include "shooters_edge/server/qvm_server.hpp"
+#include "shooters_edge/server/chat_rules.hpp"
 #include "shooters_edge/server/shot_help.hpp"
 
 #include <cstring>
@@ -100,21 +101,13 @@ void send_forced_views(QvmServer& s) {
   }
 }
 
-// The chat a module left to the server: everyone (or the speaker's team) gets "<name>: <text>".
+// The chat a module left to the server: the server's own route (chat_rules.hpp).
 void server_say(QvmServer& s, int slot, bool team) {
   std::string text = s.words.args;
   if (text.size() >= 2 && text.front() == '"' && text.back() == '"')
     text = text.substr(1, text.size() - 2);
-  const ClientInfo& c = s.clients[slot];
-  uint32_t to = everyone(s);
-  if (team) {
-    const std::string mine = info_value(c.userinfo, "team");
-    to = 0;
-    for (int k = 0; k < sh::kMaxClients; k++)
-      if (s.clients[k].active && info_value(s.clients[k].userinfo, "team") == mine) to |= 1u << k;
-  }
-  const std::string who = info_value(c.userinfo, "name");
-  print_to(s, to, 3, (team ? "(" + who + ")" : who) + ": " + text + "\n");
+  const ChatLine line = chat_route(s, slot, team, text);
+  print_to(s, line.to, 3, line.text);
 }
 
 void run_server_command(QvmServer& s, int slot) {
@@ -272,6 +265,7 @@ std::unique_ptr<QvmServer> make_qvm_server(std::vector<uint8_t> module, const Qv
   auto s = std::make_unique<QvmServer>();
   if (!create_qvm_server(*s, std::move(module), opt, error)) return nullptr;
   add_aim_help(*s);
+  add_chat_settings(s->cvars);  // sv_spectalk (chat_rules.hpp)
   return s;
 }
 
