@@ -121,8 +121,7 @@ TEST(the_finder_asks_every_forwarder_and_builds_the_table) {
     fw::route_finder_update(rf, now);
     uint8_t buf[64];
     net::Address from;
-    int n;
-    while ((n = net::transport_receive(hop, buf, sizeof buf, from, now)) >= 0) {
+    while (net::transport_receive(hop, buf, sizeof buf, from, now) >= 0) {
       const uint8_t reply[9] = {'R', 1, 0, 0, 0, 0x6c, 0x6b, 15, 0};  // node 1:27500 at 15 ms
       net::transport_send(hop, from, reply, sizeof reply, now);
     }
