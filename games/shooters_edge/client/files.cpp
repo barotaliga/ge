@@ -15,6 +15,7 @@
 
 #include "classicenhance/profile.hpp"
 #include "save/file.hpp"
+#include "shooters_edge/client/install_configs.hpp"
 #include "vfs/zip.hpp"
 
 namespace shooters_edge::client {
@@ -63,6 +64,13 @@ bool open_game_dir(const std::string& basedir, const std::string& game, SearchPa
         why + ". Replace the damaged archive, or move it out of " + (root / base).string() + ".";
     return false;
   }
+  // The bundled client's folder between them, as its client plays it (install_configs.hpp).
+  if (const fs::path client = client_folder(root, content);
+      !client.empty() && client.filename() != game &&
+      !ge::vfs::add_game(&out.vfs, root.string(), client.filename().string(), &why)) {
+    error = why + ". Replace the damaged archive, or move it out of " + client.string() + ".";
+    return false;
+  }
   if (!ge::vfs::add_game(&out.vfs, root.string(), game, &why)) {
     error =
         why + ". Replace the damaged archive, or move it out of " + (root / game).string() + ".";
@@ -100,7 +108,8 @@ std::span<const uint8_t> map_lit(const SearchPath& path, std::string_view map,
   if (const size_t dot = beside.rfind('.'); dot != std::string::npos) beside.resize(dot);
   beside += ".lit";
   const std::string kept = "lits/" + std::string(map) + ".lit";
-  for (const std::string& at : {beside, kept}) {
+  const std::string under = "maps/lits/" + std::string(map) + ".lit";
+  for (const std::string& at : {under, beside, kept}) {
     const std::span<const uint8_t> bytes = find_file(path, at, store);
     if (bytes.empty()) continue;
     if (found != nullptr) *found = at;

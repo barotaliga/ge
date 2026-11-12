@@ -19,7 +19,7 @@ void locs_from_items(const std::vector<bt::ItemSpot>& items, sh::Locs& out) {
   for (const bt::ItemSpot& it : items) {
     if (!bt::key_item(it) && it.kind != bt::ItemKind::weapon && it.kind != bt::ItemKind::mega)
       continue;
-    out.points.push_back({bt::item_call(it), it.at});
+    out.points.push_back({bt::item_call(it), it.at, {}});
   }
   out.from = "the map's items";
 }

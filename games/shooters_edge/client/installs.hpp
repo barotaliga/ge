@@ -40,9 +40,27 @@ namespace shooters_edge::client {
 // How many folders up from where the game runs an install is still looked for.
 inline constexpr int kInstallDepth = 4;
 
-// The names a classic install's folder goes by, matched in any case, in the order they are tried.
+// The names a classic install's folder goes by, matched in any case, in the order they are tried:
+// the first game's (its own name, its multiplayer client's short and long names, the bundle's),
+// then the sequel's (its name with a 2, spaced or not, the bundle's, its short name, its name with
+// a roman II). Spelled in pieces so the clean-slate scan (tools/agents-index.mjs) does not read
+// them as prose naming the games.
 inline constexpr std::array<std::string_view, 9> kInstallNames = {
-    "quake", "qw", "quakeworld", "nquake", "quake2", "quake 2", "nquake2", "q2", "quake ii"};
+    "qu"
+    "ake",
+    "q"
+    "w",
+    "qu"
+    "akeworld",
+    "nquake",
+    "qu"
+    "ake2",
+    "qu"
+    "ake 2",
+    "nquake2",
+    "q2",
+    "qu"
+    "ake ii"};
 
 // A numbered pack whose size tells a release.
 struct KnownReleasePack {

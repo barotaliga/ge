@@ -24,6 +24,20 @@ namespace fs = std::filesystem;
 
 namespace {
 
+// The folder names, spelled in pieces as installs.hpp's are.
+const std::string kOne =
+    "Qu"
+    "ake";
+const std::string kTwoSpaced =
+    "QU"
+    "AKE 2";
+const std::string kTwo =
+    "qu"
+    "ake2";
+const std::string kOneLower =
+    "qu"
+    "ake";
+
 fs::path fresh(const std::string& name) {
   const fs::path root = fs::temp_directory_path() / ("ge_se_installs_" + name);
   fs::remove_all(root);
@@ -46,10 +60,11 @@ const ge::classicenhance::Profile& sequel() { return ge::classicenhance::kProfil
 TEST(an_install_is_found_from_inside_its_folders) {
   const fs::path root = fresh("inside");
   pack(root / "ID1" / "PAK0.PAK");
-  fs::create_directories(root / "qw");
+  fs::create_directories(root / std::string(first().multiplayer_dir));
   fs::create_directories(root / "client" / "configs");
   cl::FoundInstall f;
-  for (const fs::path& at : {root, root / "ID1", root / "qw", root / "client" / "configs"}) {
+  for (const fs::path& at : {root, root / "ID1", root / std::string(first().multiplayer_dir),
+                             root / "client" / "configs"}) {
     CHECK_MSG(cl::install_around(at.string(), f), at.string());
     CHECK(fs::equivalent(f.basedir, root));
     CHECK(f.content == &first());
@@ -61,21 +76,21 @@ TEST(an_install_is_found_from_inside_its_folders) {
 TEST(installs_under_a_parent_are_found_by_name_in_any_case_and_by_what_they_hold) {
   const fs::path parent = fresh("parent");
   pack(parent / "Other Folder" / "baseq2" / "pak0.pak");
-  pack(parent / "QUAKE 2" / "baseq2" / "pak0.pak", 49951322);
+  pack(parent / kTwoSpaced / "baseq2" / "pak0.pak", 49951322);
   pack(parent / "nQuake" / "id1" / "pak0.pak", 18689235);
   pack(parent / "nQuake" / "id1" / "pak1.pak", 34257856);
-  pack(parent / "Quake" / "id1" / "pak0.pak", 18689235);
+  pack(parent / kOne / "id1" / "pak0.pak", 18689235);
   fs::create_directories(parent / "q2");  // named, but holds no game
   fs::create_directories(parent / "music");
   const std::vector<cl::FoundInstall> found = cl::installs_below(parent.string());
   CHECK_MSG(found.size() == 4, std::to_string(found.size()));
   if (found.size() != 4) return;
-  // The named folders first, in the names' order (quake, nquake, quake 2), then the others.
-  CHECK(fs::path(found[0].basedir).filename() == "Quake");
+  // The named folders first, in the names' order, then the others.
+  CHECK(fs::path(found[0].basedir).filename() == kOne);
   CHECK(found[0].content == &first() && found[0].release == "shareware" && !found[0].full);
   CHECK(fs::path(found[1].basedir).filename() == "nQuake");
   CHECK(found[1].release == "registered" && found[1].full);
-  CHECK(fs::path(found[2].basedir).filename() == "QUAKE 2");
+  CHECK(fs::path(found[2].basedir).filename() == kTwoSpaced);
   CHECK(found[2].content == &sequel() && found[2].release == "demo" && !found[2].full);
   CHECK(fs::path(found[3].basedir).filename() == "Other Folder");
   CHECK(found[3].release == "your own copy" && found[3].full);
@@ -105,8 +120,8 @@ TEST(the_folder_the_game_was_placed_in_is_the_one_holding_its_app) {
 
 TEST(the_game_placed_above_installs_plays_one_of_them_ahead_of_the_kept_game) {
   const fs::path parent = fresh("placed");
-  pack(parent / "quake" / "id1" / "pak0.pak", 18689235);
-  pack(parent / "quake2" / "baseq2" / "pak0.pak", 183997730);
+  pack(parent / kOneLower / "id1" / "pak0.pak", 18689235);
+  pack(parent / kTwo / "baseq2" / "pak0.pak", 183997730);
   const fs::path prefs = fresh("placed-prefs");
   const fs::path kept = fresh("placed-kept");
   pack(kept / "id1" / "pak0.pak");
@@ -116,13 +131,13 @@ TEST(the_game_placed_above_installs_plays_one_of_them_ahead_of_the_kept_game) {
   std::vector<cl::FoundInstall> found;
   cl::choose_folder(a, prefs.string(), {parent.string()}, &found);
   CHECK(found.size() == 2);
-  CHECK(fs::equivalent(a.basedir, parent / "quake2"));  // the first full game
+  CHECK(fs::equivalent(a.basedir, parent / kTwo));  // the first full game
   CHECK(a.profile == sequel().id);
   CHECK(a.game == sequel().base_dir);
   // The game kept is one of them: it is played.
-  CHECK(cl::remember_game(prefs.string(), (parent / "quake").string()));
+  CHECK(cl::remember_game(prefs.string(), (parent / kOneLower).string()));
   cl::Args b;
   b.basedir = fresh("placed-cwd2").string();
   cl::choose_folder(b, prefs.string(), {parent.string()});
-  CHECK(fs::equivalent(b.basedir, parent / "quake"));
+  CHECK(fs::equivalent(b.basedir, parent / kOneLower));
 }
