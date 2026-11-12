@@ -1284,8 +1284,11 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
     for (const sh::ViewEntity& v : f.bot.view.entities) {
       if (v.ent <= s.sv.set.maxclients) continue;
       const server::WorldEntity& e = s.world.entities[static_cast<size_t>(v.ent)];
-      const sh::Vec3f mid{(e.absmin.x + e.absmax.x) * 0.5f, (e.absmin.y + e.absmax.y) * 0.5f,
-                          e.absmin.z};
+      // The middle of its box on the floor; its origin when its row carries no box (the sequel's).
+      const bool boxed = e.absmax.x > e.absmin.x || e.absmax.z > e.absmin.z;
+      const sh::Vec3f mid = boxed ? sh::Vec3f{(e.absmin.x + e.absmax.x) * 0.5f,
+                                              (e.absmin.y + e.absmax.y) * 0.5f, e.absmin.z}
+                                  : e.origin;
       const float dx = v.origin.x - origin.x, dy = v.origin.y - origin.y;
       const float d = std::sqrt(dx * dx + dy * dy);
       if (d < best) {
