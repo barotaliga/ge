@@ -925,7 +925,9 @@ const gl::LabSpec kSpec{
         {"maps", "ztrain", "the trick maps, comma separated: ztrain, zjumps, ztricks, hoppa2"},
         {"tries", "5", "each section tried at most this many times (a new seed each)"},
         {"limit", "20", "each try given this long, s"},
-        {"features", "", "the bot's switches over an expert's preset, as se-team's --features"},
+        {"features", "+gappast,+lipjump",
+         "the bot's switches over an expert's preset, as se-team's --features (the trick maps': "
+         "a gap's landing on past its node, a jump at a lip)"},
         {"trace", "", "every command of every try to this TSV (map, section, try, t, feet, speed, "
                       "mode, link, view, keys, the pilot's reason)"},
         {"backup", "0", "1: each try starts from the floor's far end behind its start (room for a "
