@@ -124,6 +124,8 @@ constexpr float kKeyLand = 1.5f;
 constexpr float kCircleViewLead = 12;
 // `airwall`: each set's velocity looked along this far ahead, s, and a look all walled charged this.
 constexpr double kWallLook_s = 0.4, kWallCost = 60;
+// `airwalk`: a walk in the air pressed by the air's sets past this speed, units/s.
+constexpr float kAirWalkSpeed = 100;
 
 // `airwall`: where the flight is (its server, its origin, its slot), to charge a set whose velocity
 // runs into a wall or a player within `kWallLook_s`; null: no look.
@@ -457,6 +459,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   // coming: under the hand, the stroke onto the jump's view starts its Fitts time before the
   // shot, so it lands as the jump goes (the aim and a look give way to it).
   Pilot& jp = b.pilot.pilot;
+  const float view_was = b.yaw;  // (`airwalk`: the view's turn this command, carried on as keys land)
   const bool blast_shot = jp.shot_now;
   const double shot_dx = wrap(jp.shot_yaw - b.yaw), shot_dy = jp.shot_pitch - b.pitch;
   const bool shot_due =
@@ -820,6 +823,32 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     }
     b.wanted[0] = b.pressed[0] = b.yaw;
     b.wanted[1] = b.pressed[1] = b.pitch;
+  }
+  // A WALK IN THE AIR (`airwalk`): a hop's stretch ended mid-flight or a drop off an edge, the
+  // walk's forward key turned under the view pressed brakes (37 units/s a chained hop's flight on
+  // dm2): the air's key set under the view the keys land under that carries the velocity on round
+  // toward the walk's target, as the hop's air (`aim_air_set`), charged for a wall (`airwall`).
+  if (b.airwalk && !swim3d && jp.walk_air && (self.flags & kFlagOnGround) == 0 &&
+      std::sqrt(self.velocity.x * self.velocity.x + self.velocity.y * self.velocity.y) >
+          kAirWalkSpeed) {
+    const float ms = self.maxspeed > 0 ? self.maxspeed : sv.set.move.maxspeed;
+    const float land_yaw = b.airview ? wrap(cmd.angles.y + wrap(b.yaw - view_was) * kKeyLand)
+                                     : wrap(cmd.angles.y);
+    const AirWall wall{&sv, self.origin, me};
+    b.walk_air_set =
+        aim_air_set(self.velocity, land_yaw, jp.walk_air_yaw, ms, sv.set.move.accelerate,
+                    msec / 1000.0, b.walk_air_set, 0xff, 0, b.airwall ? &wall : nullptr);
+    const int k = b.walk_air_set;
+    cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
+    cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
+    if (why) {
+      why->decide("airwalk");
+      why->fact("way_yaw", jp.walk_air_yaw);
+      why->fact("set", k);
+      why->choose(k < 0 ? "none" : "keys", "a walk in the air: the set that keeps the speed");
+    }
+  } else {
+    b.walk_air_set = -1;
   }
   // The view near enough the coming shot's for it to go (read by the pilot's next command).
   {

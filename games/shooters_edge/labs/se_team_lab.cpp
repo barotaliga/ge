@@ -618,7 +618,8 @@ void run(gl::Lab& lab) {
   // fast, what it means to do and what its pilot did and why, the view and what turned it (the
   // calm view's `glance` and `sound` swipes named apart), the keys sent and the velocity, the
   // heading the pilot's wish runs along (`walk`) and the calm view's target (`look`), and what the
-  // feet did with the aim (`press`: footwork.hpp's note). Both this run's own: a set (--seeds) runs
+  // feet did with the aim (`press`: footwork.hpp's note), and the heading the air steers for
+  // (`way`: a hop's aim, a walk's target in the air). Both this run's own: a set (--seeds) runs
   // several matches at once.
   std::ofstream trace;
   Watch watch;
@@ -633,7 +634,7 @@ void run(gl::Lab& lab) {
     trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
              "\tscript_"
              "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
-             "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\n";
+             "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -723,7 +724,14 @@ void run(gl::Lab& lab) {
                 ? 1
                 : 0)
         << '\t' << p.recipe_note << '\t' << ((e.flags & sh::kFlagOnGround) != 0 ? 1 : 0) << '\t'
-        << ((cmd.buttons & sh::kButtonJump) != 0 ? 1 : 0) << '\n';
+        << ((cmd.buttons & sh::kButtonJump) != 0 ? 1 : 0) << '\t';
+    // The heading the air steers for: a hop's aim, a walk's target in the air (`airwalk`).
+    if (p.mode == sh::PilotMode::hop)
+      out << to_fixed(p.hop_aim_yaw, 1) << '\n';
+    else if (p.walk_air)
+      out << to_fixed(p.walk_air_yaw, 1) << '\n';
+    else
+      out << "-\n";
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
