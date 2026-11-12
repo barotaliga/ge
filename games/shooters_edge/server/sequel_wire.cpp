@@ -85,13 +85,13 @@ void config_strings(const RulesCommon& c, const SequelWireOptions& opt,
   cs[kCsModels + 1] = "maps/" + c.map_name + ".bsp";
   for (size_t i = 1; i < c.models.size(); i++) {
     const int at = wire_model(static_cast<int>(i));
-    if (at < 256) cs[size_t(kCsModels + at)] = c.models[i];
+    if (at < 256) cs[size_t(kCsModels) + size_t(at)] = c.models[i];
   }
   for (size_t i = 1; i < c.sounds.size() && i < 256; i++) cs[kCsSounds + i] = c.sounds[i];
-  for (int i = 0; i < kLightStyles; i++) cs[size_t(kCsLights + i)] = c.lightstyles[i];
+  for (int i = 0; i < kLightStyles; i++) cs[size_t(kCsLights) + size_t(i)] = c.lightstyles[i];
   for (int s = 0; s < sh::kMaxClients; s++)
     if (c.world.clients[s].active)
-      cs[size_t(kCsSkins + s)] = c.world.clients[s].name + "\\male/grunt";
+      cs[size_t(kCsSkins) + size_t(s)] = c.world.clients[s].name + "\\male/grunt";
 }
 
 // The solid's packed box (a brush model's 31; a box by its half width, its depth and height).
