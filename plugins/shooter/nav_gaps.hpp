@@ -61,7 +61,10 @@ struct JumpFlight {
   Vec3f end;
   float time_s = 0;
 };
+// `strafe` (`airgap`): in the air the view on the velocity and the side key toward `aim` (the
+// other side each command when on it), forward let go: the air's gain a person strafes across a
+// gap with, not forward held (no gain past the air's 30 u/s).
 JumpFlight fly_jump(const MoveWorld& world, const MoveSettings& move, Vec3f origin, Vec3f velocity,
-                    Vec3f aim, int msec, float limit_s = 1.5f);
+                    Vec3f aim, int msec, float limit_s = 1.5f, bool strafe = false);
 
 }  // namespace ge::shooter

@@ -1401,6 +1401,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.jump_fly = features[sh::Feature::jumpfly];
   ps.gap_past = features[sh::Feature::gappast] ? bt_gap_past : 0;
   ps.lip_jump = features[sh::Feature::lipjump];
+  ps.gap_strafe = features[sh::Feature::airgap];
   ps.gap_circle = features[sh::Feature::gapbuild];
   ps.curve_keys = features[sh::Feature::keys] && features[sh::Feature::curvekeys];
   ps.under_way = features[sh::Feature::underway];

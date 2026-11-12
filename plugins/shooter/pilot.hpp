@@ -113,6 +113,8 @@ struct PilotSettings {
   float gap_past = 0;
   // `lipjump`: a hop on the ground about to run off its floor jumps there (pilot.cpp).
   bool lip_jump = false;
+  // `airgap`: a gap's jump forecast and flown strafed across (the air's gain), not forward held.
+  bool gap_strafe = false;
   // `gapbuild`: a hop's first jump into a gap trick over water is a circle jump aimed across at
   // its landing, taken as soon as a jump from there lands across; short of the lip a landing runs
   // on along the ground (straight, curving or side to side, rolled through the hands:

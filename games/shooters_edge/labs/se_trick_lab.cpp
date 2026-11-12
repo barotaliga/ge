@@ -259,7 +259,7 @@ constexpr float kHopLand = 48;     // a hop comes down within this across of its
 constexpr float kHopCost_s = 0.2f; // and costs its flight and this (a miss is a fall)
 constexpr int kPilotMsec = 13;     // the pilot's command (bots/pilot_run.hpp)
 void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<Trigger>& triggers,
-                const sh::NavJumper& jumper, int& tried, int& kept) {
+                const sh::NavJumper& jumper, int& tried, int& kept, bool strafed) {
   ge::ai::Search search;
   std::vector<std::pair<int32_t, int32_t>> pairs;
   // The rim: nodes over a pit's trigger (64 round its box), above it, with the floor 32 units off
@@ -328,7 +328,7 @@ void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<T
       // gap's jump, pilot_gaps.hpp `gap_lands`), not standing on it: a block too small to stop on
       // at this speed is jumped from again on its landing (the pilot's hop does that).
       const sh::Vec3f vel{(B.x - A.x) / d * v, (B.y - A.y) / d * v, 0};
-      const sh::JumpFlight f = sh::fly_jump(world, move, A, vel, B, kPilotMsec);
+      const sh::JumpFlight f = sh::fly_jump(world, move, A, vel, B, kPilotMsec, 1.5f, strafed);
       const float dz = f.end.z - B.z;
       if (!f.landed || std::hypot(f.end.x - B.x, f.end.y - B.y) > kHopLand || dz > 32 || dz < -32)
         continue;
@@ -503,7 +503,8 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
     for (size_t k = 0; k < g.nodes.size(); k++) harm[k] = harm[k] | dead[k];
     out.brinks = static_cast<int>(sh::nav_mark_harm(g, harm));
   }
-  if (lab.arg("pits") != "line") prove_pits(nav.world, g, triggers, ps.jumper, out.pit_pairs, out.pit_jumps);
+  if (lab.arg("pits") != "line") prove_pits(nav.world, g, triggers, ps.jumper, out.pit_pairs, out.pit_jumps,
+                                         ps.gap_strafe);
 
   // The sections, one after another.
   std::string own;

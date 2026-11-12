@@ -27,8 +27,10 @@ struct Near {
 
 }  // namespace
 
+constexpr float kStrafeOn = 1;  // `strafe`: the aim this far off the velocity: its side, degrees
+
 JumpFlight fly_jump(const MoveWorld& world, const MoveSettings& move, Vec3f origin, Vec3f velocity,
-                    Vec3f aim, int msec, float limit_s) {
+                    Vec3f aim, int msec, float limit_s, bool strafe) {
   JumpFlight out;
   MoveState s;
   s.origin = origin;
@@ -45,6 +47,18 @@ JumpFlight fly_jump(const MoveWorld& world, const MoveSettings& move, Vec3f orig
     c.angles = {0, yaw, 0};
     c.forward = static_cast<int16_t>(move.maxspeed);
     c.buttons = i == 0 ? kButtonJump : 0;
+    if (strafe && i > 0 && (s.velocity.x != 0 || s.velocity.y != 0)) {
+      const float vh = static_cast<float>(
+          core::libm::atan2(s.velocity.y, s.velocity.x) * (180.0 / core::kPi));
+      float err = yaw - vh;  // the aim's way off the velocity, counter-clockwise positive
+      while (err > 180) err -= 360;
+      while (err < -180) err += 360;
+      // The side key toward the aim: right (positive) turns the velocity clockwise.
+      const int side = err < -kStrafeOn ? 1 : err > kStrafeOn ? -1 : (i % 2 == 0 ? 1 : -1);
+      c.angles = {0, vh, 0};
+      c.forward = 0;
+      c.side = static_cast<int16_t>(static_cast<float>(side) * move.maxspeed);
+    }
     player_move(s, c, move, world);
     out.end = s.origin;
     out.time_s = static_cast<float>(i + 1) * step_s;

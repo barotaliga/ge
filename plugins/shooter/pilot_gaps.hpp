@@ -27,8 +27,9 @@ inline constexpr float kGapCurveFrom = 160;  // a curve into a gap begun this ne
 // `past` (`gappast`): a landing up to this far on past T along the jump's line, or beside it
 // across the line, on its floor (32 up or down), lands too: a jump a little too fast or off its
 // line still comes down on the floor across (a wider landing's: lower, it is refused by the 32).
+// `strafe` (`airgap`): flown strafed across (nav_gaps.hpp `fly_jump`).
 bool gap_lands(const MoveWorld& world, const MoveSettings& move, Vec3f at, Vec3f velocity, Vec3f T,
-               int msec, float past = 0);
+               int msec, float past = 0, bool strafe = false);
 
 // Under a keyboard (`curve_keys`): whether a jump asked now still lands across by `T` when its key
 // goes down one or two commands late, the keys held now (the curve's side key) and the view still.
