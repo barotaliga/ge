@@ -6,9 +6,11 @@
 // ge:test tests/net_master_test.cpp
 #include "net/master.hpp"
 
+#include <cstdlib>
 #include <cstring>
 
 #include "net/reach_wire.hpp"
+#include "net/udp_socket.hpp"
 #include "net/wire.hpp"
 
 namespace ge::net {
@@ -339,6 +341,34 @@ bool master_query_read(MasterQuery& q, const uint8_t* data, size_t size, const A
       }
       if (!seen) q.found.push_back(e);
     }
+  }
+  return true;
+}
+
+bool master_list(std::string_view text, std::vector<Address>& out, std::string& error) {
+  out.clear();
+  size_t at = 0;
+  while (at < text.size()) {
+    size_t end = text.find_first_of(" ,", at);
+    if (end == std::string_view::npos) end = text.size();
+    const std::string word(text.substr(at, end - at));
+    at = end + 1;
+    if (word.empty()) continue;
+    Address a;
+    if (parse_address(word, a)) {
+      out.push_back(a);
+      continue;
+    }
+    const size_t colon = word.rfind(':');
+    const std::string host = colon == std::string::npos ? word : word.substr(0, colon);
+    const int port = colon == std::string::npos ? kMasterPort : std::atoi(word.c_str() + colon + 1);
+    std::string why;
+    if (port <= 0 || port > 65535 || !resolve_ipv4(host, static_cast<uint16_t>(port), a, &why)) {
+      error = "'" + word + "' is not a master's address (" + (why.empty() ? "bad port" : why) +
+              "); next: write host:port, or leave the list empty to use no master";
+      return false;
+    }
+    out.push_back(a);
   }
   return true;
 }
