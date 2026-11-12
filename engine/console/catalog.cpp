@@ -1,5 +1,8 @@
 // The catalog written and read (catalog.hpp).
 //
+// voice: agent (the catalog is read by the player CLI, whose errors are for agents;
+// docs/architecture.md § Player text).
+//
 // ge:summary The cvar catalog's writer and reader: one tab-split line a cvar
 // ge:keywords cvar catalog catalog_text read_catalog add_catalog kind_name kind_of flags_of
 // ge:skill console agent-interface

@@ -68,7 +68,7 @@ bool start_level(Campaign& c, const std::string& name, const char* kind, bool jo
   c.server = {};  // it points into the old map: it goes before the loader is asked again
   c.map = MapSpec{};
   if (c.opt.load == nullptr) {
-    error = "campaign: no map loader; next: set CampaignOptions::load";
+    error = "the game is built wrong: the campaign has no map loader";
     return false;
   }
   if (!c.opt.load(c.opt.load_ctx, name, c.map, error)) return false;
@@ -212,7 +212,7 @@ bool campaign_reopen(Campaign& c, const pg::Progs& progs, const CampaignOptions&
 
 bool campaign_frame(Campaign& c, const sh::Packet* packets, int count, std::string& error) {
   if (!c.server) {
-    error = "campaign: no map is running; next: start a new game";
+    error = "No game is running.";
     return false;
   }
   c.server.frame(packets, count);

@@ -55,8 +55,8 @@ bool autotrack_plan(const Demo& opened, const DemoScan& scan, const AutotrackSet
   out = AutotrackPlan{};
   if (opened.state.format != DemoFormat::multiview) {
     error =
-        "autotrack needs a multiview recording (an .mvd), every player's stats in it; next: "
-        "pick one player with --track";
+        "autotrack needs a multiview recording (an .mvd) with every player's stats in it; "
+        "pick one player with --track instead";
     return false;
   }
   // Each slot's enemy kills and deaths, in time order, off the scan.

@@ -94,7 +94,7 @@ TEST(server_match_ready_counts_down_into_the_match_and_back) {
   CHECK(l.phase == LobbyPhase::match);
   CHECK(l.matches == 1);
   CHECK(lobby_ready(l, 0, false, 5) == LobbyWhy::in_match);
-  CHECK(said(l, "next: play the match"));
+  CHECK(said(l, "The lobby comes back when the map changes."));
   lobby_back(l);
   CHECK(l.phase == LobbyPhase::warmup);
   CHECK(!l.seats[0].ready);
@@ -139,7 +139,7 @@ TEST(server_match_only_the_leader_starts_and_too_few_wait) {
   CHECK(lobby_ready(l, 1, true, 0) == LobbyWhy::ok);
   CHECK(l.phase == LobbyPhase::warmup);  // two of the three it waits for
   CHECK(lobby_start(l, 1, 0) == LobbyWhy::not_leader);
-  CHECK(said(l, "next: `ready`"));
+  CHECK(said(l, "Type \"ready\""));
   CHECK(lobby_start(l, 0, 0) == LobbyWhy::too_few);  // the leader never starts with too few
   CHECK(said(l, "2 seated, 3 needed"));
   lobby_join(l, 2, "bot", true, 0);         // a bot counts
@@ -149,7 +149,7 @@ TEST(server_match_only_the_leader_starts_and_too_few_wait) {
   CHECK(l.phase == LobbyPhase::countdown);
   CHECK(!lobby_command(l, 0, "fraglimit 20", 0));  // not the lobby's
   CHECK(lobby_command(l, 0, "team purple", 0));
-  CHECK(said(l, "next: `team red`"));
+  CHECK(said(l, "Use team red, team blue"));
 }
 
 TEST(server_match_bots_alone_wait_for_a_player_who_leads) {

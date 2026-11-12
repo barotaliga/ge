@@ -19,7 +19,7 @@ namespace {
 
 // A thread's step that threw (out of memory, a file system's error): the step fails with it.
 std::string failed_on(const std::string& what, const std::exception& e) {
-  return what + " did not read: " + e.what() + "; next: read the lines above, then load it again";
+  return what + " did not read: " + e.what();
 }
 
 // The threads' steps: a throw is the step's failure, with its reason.

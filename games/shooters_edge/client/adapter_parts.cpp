@@ -126,7 +126,7 @@ bool map_info(const GameAdapter& self, const SearchPath& files, std::string_view
   std::vector<uint8_t> store;
   const std::span<const uint8_t> bytes = find_file(files, path, store);
   if (bytes.empty()) {
-    error = "no " + path + " in the game's files; next: `maps` lists the maps there are";
+    error = "There is no " + path + " in the game's files. Type \"maps\" to list the maps.";
     return false;
   }
   ge::brush::Map m;
@@ -265,8 +265,8 @@ bool open_model(const GameAdapter&, const SearchPath& files, const std::string& 
     out.form = ModelForm::brush;
     return true;
   }
-  error = "a model of a kind this game does not draw (" + kind +
-          "); next: name a .mdl, .iqm, .spr or .bsp";
+  error =
+      "a model of a kind this game does not draw (" + kind + "); use a .mdl, .iqm, .spr or .bsp";
   return false;
 }
 
@@ -347,7 +347,7 @@ std::vector<ge::brush::MapPicture> map_textures(const GameAdapter&, const Search
       ge::core::output::status("shooters_edge: " + std::to_string(faults.size()) + " of " +
                                std::to_string(m.textures.size()) + " textures of " +
                                std::string(map) + " are drawn as checks (the first: " + faults[0] +
-                               "); next: check the game's packs are whole");
+                               "); check that the game's packs are whole");
   }
   for (ge::brush::MapPicture& p : out)
     if (!p.name.empty()) replace_picture(files, map, p);

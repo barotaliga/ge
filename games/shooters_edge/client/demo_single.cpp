@@ -169,7 +169,7 @@ bool server_info(Demo& d, DemoMsg& m, std::string& error) {
   s.protocol = m.i32();
   if (s.protocol != 15) {
     error = "the level starts in protocol " + std::to_string(s.protocol) +
-            "; next: only protocol 15 is read (re-record the demo with a client that writes it)";
+            ", and only protocol 15 demos can be played";
     return false;
   }
   s.max_clients = m.u8();  // the most clients: the players' entities
@@ -392,7 +392,7 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
     if (!ok || m.bad) {
       if (ok) error = "message id " + std::to_string(id) + " runs past the block's end";
       error += " (message at offset " + std::to_string(at) +
-               "); next: the demo is damaged or in another protocol";
+               "): the demo is damaged or in another protocol";
       return false;
     }
   }

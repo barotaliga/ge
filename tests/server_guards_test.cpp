@@ -26,7 +26,7 @@ TEST(the_rule_is_read_and_a_bad_one_refused) {
     error.clear();
     CHECK(!parse_flood_rule(bad, r, error));
     CHECK(error.find("sv_floodprot") != std::string::npos);
-    CHECK(error.find("next:") != std::string::npos);
+    CHECK(error.find("for example \"10 1 1\"") != std::string::npos);
   }
   CHECK(flood_rule_text(r) == "10 1 1");  // a refused text leaves the rule
 }

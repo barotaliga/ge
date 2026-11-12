@@ -149,7 +149,7 @@ bool classic_load_text(Campaign& c, const pg::Progs& progs, const CampaignOption
   const std::string where(name);
   const auto refuse = [&](int line, const std::string& what) {
     error = where + ", line " + std::to_string(line) + ": " + what +
-            "; next: the file is damaged or not a save, load another";
+            ": the file is damaged or not a save";
     c.server = {};
     return false;
   };
