@@ -129,11 +129,12 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   cvars.bind({"sv_spectatorpassword", spec_password, cn::kServer,
               "a password to watch (empty: none)", CvarKind::text},
              &c.spectator_password);
-  cvars.bind({"rcon_password", rcon, cn::kServer,
-              "the remote console's password: `rcon <password> <line>` runs a server console line "
-              "from afar (empty: no remote console)",
-              CvarKind::text},
-             &c.rcon_password);
+  cvars.bind(
+      {"rcon_password", rcon, cn::kServer,
+       "the remote console's password: \"rcon <password> <line>\" runs a server console line "
+       "from afar (empty: no remote console)",
+       CvarKind::text},
+      &c.rcon_password);
   cvars.bind({"sv_rendezvous", rendezvous, latched, "the rendezvous to list with (empty: none)",
               CvarKind::text},
              &c.rendezvous);
@@ -212,27 +213,25 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   server_close(s);
   if (!game.create || !game.frame || !game.frame_seconds || !game.hash) {
     error = std::string(game.binary) +
-            "'s ServerGame lacks create, frame, frame_seconds or hash; next: fill them "
-            "(engine/server/server.hpp)";
+            " is built wrong: its ServerGame lacks create, frame, frame_seconds or hash";
     return false;
   }
   const int most = game.max_clients < kMaxClients ? game.max_clients : kMaxClients;
   if (config.maxclients < 1 || config.maxclients > most) {
     error = "sv_maxclients " + std::to_string(config.maxclients) + " is outside 1.." +
-            std::to_string(most) + "; next: set it in range";
+            std::to_string(most);
     return false;
   }
   if (config.bots < 0 || config.bots > config.maxclients) {
     error = std::to_string(config.bots) + " bots do not fit " + std::to_string(config.maxclients) +
-            " slots; next: raise sv_maxclients or lower sv_bots";
+            " slots: raise sv_maxclients or lower sv_bots";
     return false;
   }
   FloodRule flood;
   if (!parse_flood_rule(config.floodprot, flood, error)) return false;
   gn::Visibility vis{};
   if (!gn::visibility_of(config.visibility, vis)) {
-    error =
-        "sv_visibility '" + config.visibility + "' is not lan, invite or listed; next: pick one";
+    error = "sv_visibility '" + config.visibility + "' must be lan, invite or listed";
     return false;
   }
   s.game = &game;
@@ -246,8 +245,7 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   if (game.serve) {
     if (!game.net_frame) {
       error = std::string(game.binary) +
-              "'s ServerGame serves its own protocol without net_frame; next: fill it "
-              "(engine/server/server.hpp)";
+              " is built wrong: its ServerGame serves its own protocol without net_frame";
       server_close(s);
       return false;
     }
