@@ -1,7 +1,7 @@
 // engine/hub/watch.hpp: the Watch page (the viewer pointed at the TV node's WebSocket, the match's
 // scoreboard, the other broadcasts, the reason when there is no picture), the Demo page (the
-// viewer on the demo's file by hash), the viewer's files served and refused, and the TV node's
-// record naming its web port.
+// viewer on the demo's file by hash, the packs beside it handed over), the viewer's files and
+// packs served and refused, and the TV node's record naming its web port.
 //
 // ge:summary Test: the hub's Watch and Demo pages, the viewer's files, the TV node's web port
 // ge:keywords test hub watch demo web-viewer viewer-files websocket tv web-port
@@ -115,6 +115,8 @@ TEST(the_watch_page_points_the_viewer_at_the_nodes_websocket) {
   CHECK(has(a.body, "/watch/10.0.0.5:28000/3\">Other Match"));         // also live
   CHECK(has(a.body, "test_game://tv/10.0.0.5:28000/2\">Open in the game"));
   CHECK(has(a.body, "7 watching · 30 s behind"));
+  CHECK(has(a.body, "id=\"viewer-status\""));
+  CHECK(!has(a.body, "--pack="));  // no pack beside the viewer: none handed to it
   fs::remove_all(site.viewer_dir);
 }
 
@@ -148,8 +150,11 @@ TEST(the_demo_page_plays_the_file_by_hash) {
   site.archive = &archive;
   site.viewer_dir = viewer_dir(true).string();
   Answer a;
+  std::ofstream(fs::path(site.viewer_dir) / "pak1.pak") << "PACK";
+  std::ofstream(fs::path(site.viewer_dir) / "pak0.pak") << "PACK";
   CHECK(watch_answer(Poller{}, spec(), "/demo/" + row.sha, 0, site, a) && a.code == 200);
-  CHECK(has(a.body, "\"--demo=/" + archive_path(row.sha) + "\""));
+  CHECK(has(a.body, "\"--demo=/" + archive_path(row.sha) +
+                        "\",\"--pack=/viewer/pak0.pak\",\"--pack=/viewer/pak1.pak\""));
   CHECK(has(a.body, "test_game://demo/" + row.sha) && has(a.body, "Download"));
   CHECK(has(a.body, "Final") && has(a.body, "ann"));
   CHECK(!has(a.body, "/radar/"));  // no radar track, no Map link
@@ -167,6 +172,9 @@ TEST(the_viewer_files_are_served_and_names_refused) {
   CHECK(a.code == 200 && a.type == "application/wasm" && a.body.size() == 4);
   CHECK(watch_answer(Poller{}, spec(), "/viewer/test_game_viewer.js", 0, site, a));
   CHECK(a.code == 200 && a.type == "text/javascript" && a.max_age_s == kViewerMaxAgeS);
+  std::ofstream(fs::path(site.viewer_dir) / "pak0.pak") << "PACK";
+  CHECK(watch_answer(Poller{}, spec(), "/viewer/pak0.pak", 0, site, a));
+  CHECK(a.code == 200 && a.type == "application/octet-stream" && a.body == "PACK");
   for (const char* bad :
        {"/viewer/../secret.js", "/viewer/a/b.js", "/viewer/x.html", "/viewer/missing.js"}) {
     CHECK(watch_answer(Poller{}, spec(), bad, 0, site, a) && a.code == 404);
