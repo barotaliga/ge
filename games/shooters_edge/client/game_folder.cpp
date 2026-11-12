@@ -295,8 +295,8 @@ namespace {
 
 // NEW GAME and `coopgame` for a game whose own rules keep the campaign (GameContent's
 // `rules_campaign`): the multiplayer program's game on the first map with `deathmatch` 0, `coop`
-// off or on; a new game each time (`ListenOptions::new_game`). Companions cannot play its maps
-// yet, so `coopgame` seats none.
+// off or on; a new game each time (`ListenOptions::new_game`). `coopgame` seats its companions
+// once the game has started (client/sequel_party.hpp), `addbot` and `removebot` after.
 void rules_campaign_commands(ge::console::Console& con, Listen& listen, const GameContent& content,
                              std::string& next_map) {
   using CArgs = ge::console::Args;
@@ -310,23 +310,25 @@ void rules_campaign_commands(ge::console::Console& con, Listen& listen, const Ga
                     next_map = content.first_map;
                   });
   con.add_command("coopgame",
-                  "coopgame [map]: a new coop game from the first map or the map named (everyone "
-                  "on one team; each player comes back as he entered the level)",
-                  [&listen, &next_map, &content](Con& c, const CArgs& a) {
+                  "coopgame [bots] [novice|average|expert] [map]: a new coop game (everyone on "
+                  "one team; each player comes back as he entered the level) with that many "
+                  "companion bots beside you, 1 by default, from the first map or the map named; "
+                  "addbot and removebot change the party during the game",
+                  [&listen, &next_map, &content](Con&, const CArgs& a) {
                     std::string map = content.first_map;
+                    int bots = 1;
+                    sh::AimSkill skill = sh::AimSkill::average;
                     for (size_t i = 1; i < a.size(); i++) {
                       const std::string& w = a[i];
-                      sh::AimSkill skill;
-                      if (!w.empty() && w[0] >= '0' && w[0] <= '9') {
-                        if (std::atoi(w.c_str()) > 0)
-                          c.print("Companions can't join this game yet, so you start alone.");
-                      } else if (!skill_named(w, skill)) {
+                      if (!w.empty() && w[0] >= '0' && w[0] <= '9')
+                        bots = std::atoi(w.c_str());
+                      else if (!skill_named(w, skill))
                         map = w;
-                      }
                     }
                     listen.opt.console.emplace_back("deathmatch 0");
                     listen.opt.console.emplace_back("coop 1");
-                    listen.opt.companions = 0;
+                    listen.opt.companions = bots;
+                    listen.opt.companion_skill = skill;
                     listen.opt.new_game = true;
                     next_map = map;
                   });
@@ -427,7 +429,13 @@ bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<Loade
   // are the new game's); else a level change keeps it (net/classic_game.hpp).
   const bool fresh = content.rules_campaign && listen.opt.new_game;
   listen.opt.new_game = false;
-  if (fresh || listen.campaign_host || listen.progs != &content.progs)
+  if (fresh) {  // the new game's companions seated once it runs (`coopgame <bots>`)
+    if (!listen_start(listen, content.progs, std::move(map), listen.opt, error)) return false;
+    const std::string add = "addbot " + std::string(sh::aim_skill_name(listen.opt.companion_skill));
+    for (int k = 0; k < listen.opt.companions; k++) listen_lobby(listen, add);
+    return true;
+  }
+  if (listen.campaign_host || listen.progs != &content.progs)
     return listen_start(listen, content.progs, std::move(map), listen.opt, error);
   return listen_change(listen, std::move(map), error);
 }

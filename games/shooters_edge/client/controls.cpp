@@ -62,51 +62,59 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
   con.cvars().bind({.name = "sensitivity",
                     .fallback = "0.066",
                     .flags = ge::console::kArchive,
-                    .help = "the mouse's turn, degrees a count",
+                    .help = "The mouse's turn, in degrees a count.",
                     .min = 0.001,
-                    .max = 2},
+                    .max = 2,
+                    .values = "0.001..2: that many degrees (0.066 the default)"},
                    &c.sensitivity);
   con.cvars().bind({.name = "m_invert",
                     .fallback = "0",
                     .flags = ge::console::kArchive,
-                    .help = "the mouse's pitch upside down (0 or 1)",
-                    .kind = ge::console::CvarKind::boolean},
+                    .help = "Whether the mouse's pitch is upside down.",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: forward looks down (the default); 1: forward looks up"},
                    &c.invert);
   con.cvars().bind({.name = "lookspring",
                     .fallback = "0",
                     .flags = ge::console::kArchive,
-                    .help = "1: the view's pitch centres (follows the slope) as you move",
-                    .kind = ge::console::CvarKind::boolean},
+                    .help = "Whether the view's pitch centres, following the slope, as you move.",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: it stays (the default); 1: it centres"},
                    &c.lookspring);
   con.cvars().bind({.name = "cl_run",
                     .fallback = "1",
                     .flags = ge::console::kArchive,
-                    .help = "1: always run (+speed walks), 0: walk (+speed runs)",
-                    .kind = ge::console::CvarKind::boolean},
+                    .help = "Whether you always run.",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: walk, and +speed runs; 1: run, and +speed walks (the default)"},
                    &c.run);
-  con.cvars().bind({.name = "lookstrafe",
-                    .fallback = "0",
-                    .flags = ge::console::kArchive,
-                    .help = "1: the mouse's sideways moves sidestep instead of turning (as "
-                            "+strafe held does)",
-                    .kind = ge::console::CvarKind::boolean},
-                   &c.lookstrafe);
-  con.cvars().bind({.name = "in_mouse_release",
-                    .fallback = "5",
-                    .flags = ge::console::kArchive,
-                    .help = "what frees the mouse while the window has the focus (it is taken "
-                            "the moment the window gets it): 1 the console, 2 a menu (its pointer "
-                            "then hovers and clicks), 4 a demo's play bar; add them (0: never)",
-                    .kind = ge::console::CvarKind::integer,
-                    .min = 0,
-                    .max = 7},
-                   &c.mouse_release);
+  con.cvars().bind(
+      {.name = "lookstrafe",
+       .fallback = "0",
+       .flags = ge::console::kArchive,
+       .help =
+           "Whether the mouse's sideways moves sidestep instead of turning, as +strafe held does.",
+       .kind = ge::console::CvarKind::boolean,
+       .values = "0: they turn (the default); 1: they sidestep"},
+      &c.lookstrafe);
+  con.cvars().bind(
+      {.name = "in_mouse_release",
+       .fallback = "5",
+       .flags = ge::console::kArchive,
+       .help = "What frees the mouse while the window has the focus, as bits added together.",
+       .kind = ge::console::CvarKind::integer,
+       .min = 0,
+       .max = 7,
+       .values = "0: never; 1: the console; 2: a menu, its pointer then hovering and clicking; 4: "
+                 "a demo's play bar; 0..7: the sum of those (5 the default)"},
+      &c.mouse_release);
   con.cvars().bind({.name = "cl_yawspeed",
                     .fallback = "140",
                     .flags = ge::console::kArchive,
-                    .help = "how fast +left and +right turn, degrees a second",
+                    .help = "How fast +left and +right turn, in degrees a second.",
                     .min = 0,
-                    .max = 1000},
+                    .max = 1000,
+                    .values = "0..1000: that many degrees (140 the default)"},
                    &c.yaw_speed);
   ControlButtons& b = c.buttons;
   b.forward = &con.add_button("forward", "+forward: move forward while held");

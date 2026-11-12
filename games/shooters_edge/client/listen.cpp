@@ -978,10 +978,14 @@ bool listen_lobby(Listen& l, std::string_view line) {
     catch_up(l);
     return taken;
   }
-  // The sequel's rules have no bots on their maps yet (docs/goals/M18v.md, M18v8).
-  if (bot_word && !l.room && l.rules != nullptr && sv::sequel_of(*l.rules) != nullptr) {
-    l.prints.push_back("Companions can't join this game yet.");
-    return true;
+  // The sequel's own single-player or coop game: its companions (client/sequel_party.hpp), which
+  // the game seats on its rules.
+  if (bot_word && !l.room && l.rules != nullptr && sv::sequel_of(*l.rules) != nullptr &&
+      l.host != nullptr && l.host->words != nullptr && l.host->game != nullptr) {
+    l.host->ctx = &l;
+    const bool taken = l.host->words(l.host->game, std::string(line));
+    catch_up(l);
+    if (taken) return true;
   }
   if (!l.room || l.server == nullptr) {
     if (bot_word || word == "ready" || word == "break" || word == "notready" ||

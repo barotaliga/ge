@@ -62,68 +62,87 @@ void register_cvars(SequelServer& s) {
   s.cvars.add({.name = "deathmatch",
                .fallback = "1",
                .flags = con::kServer,
-               .help = "the deathmatch rules: spawn points, respawns by attack"});
+               .help = "The deathmatch rules, with spawn points and respawns by attack.",
+               .values = "0: the single-player or coop game; 1: deathmatch (the default)"});
   s.cvars.add({.name = "coop",
                .fallback = "0",
                .flags = con::kServer,
-               .help = "co-op: everyone on one team"});
+               .help = "Whether everyone plays on one team, cooperatively.",
+               .values = "0: not coop (the default); 1: coop"});
   s.cvars.add({.name = "sv_gravity",
                .fallback = "800",
                .flags = con::kServer,
-               .help = "the pull down on players, units/s^2"});
-  s.cvars.add(
-      {.name = "skill",
-       .fallback = "1",
-       .flags = con::kServer,
-       .help = "0 easy .. 3 hard: which entities a map spawns, how many powerups are held"});
-  s.cvars.add({.name = "dmflags",
-               .fallback = "0",
+               .help = "The pull down on players, in units a second a second.",
+               .values = "N: that pull (800 the default)"});
+  s.cvars.add({.name = "skill",
+               .fallback = "1",
                .flags = con::kServer,
-               .help = "deathmatch's rule bits (8192: infinite ammo)"});
+               .help = "Which entities a map spawns and how many powerups are held.",
+               .values = "0: easy; 1: normal (the default); 2: hard; 3: hardest"});
+  s.cvars.add(
+      {.name = "dmflags",
+       .fallback = "0",
+       .flags = con::kServer,
+       .help = "Deathmatch's rule bits.",
+       .values =
+           "0: none (the default); N: the sum of the bits, such as 8192 for infinite ammunition"});
   s.cvars.add({.name = "fraglimit",
                .fallback = "0",
                .flags = con::kServer,
-               .help = "the frags that end the level; 0 none"});
+               .help = "The frags that end the level.",
+               .values = "0: no limit (the default); 1..N: that many frags"});
   s.cvars.add({.name = "timelimit",
                .fallback = "0",
                .flags = con::kServer,
-               .help = "the minutes that end the level; 0 none"});
-  s.cvars.add({.name = "sv_maplist",
-               .fallback = "",
-               .flags = con::kServer,
-               .help = "the maps a level's end goes through in turn (spaces or commas)"});
+               .help = "The minutes that end the level.",
+               .values = "0: no limit (the default); 1..N: that many minutes"});
+  s.cvars.add(
+      {.name = "sv_maplist",
+       .fallback = "",
+       .flags = con::kServer,
+       .help = "The maps a level's end goes through in turn.",
+       .values =
+           "\"\": the same map again (the default); TEXT: these maps, spaces or commas between"});
   s.cvars.add({.name = "k_midair",
                .fallback = "0",
                .flags = con::kServer,
-               .help = "1: midair in deathmatch, rockets that count only on a player in the air"});
-  s.cvars.add({.name = "k_midair_minheight",
-               .fallback = "1",
-               .flags = con::kServer,
-               .help = "midair: the least height a hit counts at, 0..4 (64, 128, 256, 512, 1024)"});
+               .help = "Whether rockets count only on a player in the air, in deathmatch.",
+               .values = "0: every hit counts (the default); 1: midair only"});
+  s.cvars.add(
+      {.name = "k_midair_minheight",
+       .fallback = "1",
+       .flags = con::kServer,
+       .help = "The least height a midair hit counts at.",
+       .values =
+           "0: 64 units; 1: 128 units (the default); 2: 256 units; 3: 512 units; 4: 1024 units"});
   s.cvars.add({.name = "sv_airaccelerate",
                .fallback = "0",
                .flags = con::kServer,
-               .help = "the air move's acceleration in deathmatch; 0 the walking rule"});
-  s.cvars.add({.name = "sv_aimhelp_x",
-               .fallback = "24",
-               .flags = con::kServer,
-               .help = "the aim help's leeway sideways, units at the target, for a player granted "
-                       "it (0: no sideways help)"});
-  s.cvars.add({.name = "sv_aimhelp_y",
-               .fallback = "48",
-               .flags = con::kServer,
-               .help = "the aim help's leeway up and down, units at the target, for a player "
-                       "granted it (0: no vertical help)"});
+               .help = "The air move's acceleration in deathmatch.",
+               .values = "0: the walking rule (the default); N: that acceleration"});
+  s.cvars.add(
+      {.name = "sv_aimhelp_x",
+       .fallback = "24",
+       .flags = con::kServer,
+       .help = "The aim help's leeway sideways for a player granted it, in units at the target.",
+       .values = "0: no sideways help; N: that many units (24 the default)"});
+  s.cvars.add(
+      {.name = "sv_aimhelp_y",
+       .fallback = "48",
+       .flags = con::kServer,
+       .help = "The aim help's leeway up and down for a player granted it, in units at the target.",
+       .values = "0: no vertical help; N: that many units (48 the default)"});
   add_rjump_settings(s.cvars);  // sv_rjump, sv_rrjump (rjump_rules.hpp)
   const std::string share =
       ge::core::num::to_string(num::round(double(s.opt.speedjump) * 1000) / 1000);
   s.cvars.add({.name = "pm_speedjump",
                .fallback = share,
                .flags = con::kServer,
-               .help = "0..1: a client with cl_speedjump 1 strafes for its player at this share of "
-                       "the best strafe's gain (0 off)",
+               .help = "The share of the best strafe's gain a client with cl_speedjump 1 strafes "
+                       "at for its player.",
                .min = 0,
-               .max = 1});
+               .max = 1,
+               .values = "0: off; 0..1: that share"});
   s.sv.set.move.speedjump = s.opt.speedjump;
 }
 

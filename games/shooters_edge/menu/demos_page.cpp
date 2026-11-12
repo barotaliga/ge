@@ -44,14 +44,13 @@ std::string fit_left(const ui::Font& font, std::string_view text, float size, fl
 
 void DemosPage::add_cvars(ge::console::Console& con) {
   con_ = &con;
-  con.cvars().bind(
-      {.name = "menu_demo_dir",
-       .fallback = "",
-       .flags = ge::console::kArchive,
-       .help = "the folder DEMOS opens on: the one the last demo played from (\"\": the "
-               "game's folder)",
-       .kind = ge::console::CvarKind::text},
-      &last_dir_);
+  con.cvars().bind({.name = "menu_demo_dir",
+                    .fallback = "",
+                    .flags = ge::console::kArchive,
+                    .help = "The folder DEMOS opens on, the one the last demo played from.",
+                    .kind = ge::console::CvarKind::text,
+                    .values = "\"\": the game's folder (the default); TEXT: that folder"},
+                   &last_dir_);
 }
 
 void DemosPage::open() {
