@@ -34,6 +34,7 @@
 #include "shooters_edge/server/dedicated.hpp"
 #include "shooters_edge/server/lobby.hpp"
 #include "shooters_edge/server/qvm_server.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::net {
 
@@ -225,7 +226,18 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     map = cl::load_named_map(g.files, name, error);
   if (!map) return false;
   const float speedjump = g.host != nullptr ? g.host->speedjump : 0.0f;  // pm_speedjump
-  if (!g.module.empty()) {
+  // A map of the family that carries brushes runs on the rules that trace them (the sequel's),
+  // whatever the program: the programs' rules trace clip hulls (docs/goals/M18v.md, M18v2).
+  const bool brushes = map->spec.brushes != nullptr;
+  if (brushes) {
+    sv::SequelServerOptions so;
+    so.seed = c.seed;
+    so.clients_take_view = true;  // the classic protocol's clients take the server's view
+    std::unique_ptr<sv::SequelServer> sq = sv::make_sequel_server(so);
+    sq->sv.set.maxclients = c.maxclients;
+    sq->sv.set.move.speedjump = speedjump;
+    rules = sv::sequel_runner(std::move(sq));
+  } else if (!g.module.empty()) {
     sv::QvmServerOptions so;
     so.seed = c.seed;
     so.loop.maxclients = c.maxclients;
@@ -272,7 +284,9 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     std::strtod(value.c_str(), &end);  // every rule is a number
     std::string line = rule;
     line.append(" \"").append(value).append("\"");
-    if (end == value.c_str() || *end != '\0' || !rules.console(line)) {
+    // The sequel's rules keep their own few settings and leave the rest of a mod's alone.
+    const bool taken = rules.console(line) || brushes;
+    if (end == value.c_str() || *end != '\0' || !taken) {
       error = line;
       error.append(" is not a number; next: set ").append(rule).append(" to one (--explain=");
       error.append(rule).append(" shows where it was set)");
@@ -308,7 +322,12 @@ bool open_room(Game& g, std::string& error) {
     gs::lobby_join(r.lobby, 0, g.host->player, false, g.rules->sv.time);
   }
   if (c.lobby == 0) r.lobby.phase = gs::LobbyPhase::match;
-  for (int i = 0; i < c.bots; i++)
+  // The bots find their way on clip hulls; on a map of brushes they wait for their lift
+  // (docs/goals/M18v.md, M18v8), and the match plays without them.
+  const int bots = g.map->spec.brushes != nullptr ? 0 : c.bots;
+  if (bots < c.bots)
+    g.rules->console.push_back("The bots do not play this kind of map yet, so the match has none.");
+  for (int i = 0; i < bots; i++)
     if (cl::room_add_bot(r, g.rules, g.map->spec, sh::AimSkill::average, error) < 0) {
       std::string why = "sv_bots " + std::to_string(c.bots) + ": ";
       why.append(error).append("; next: lower sv_bots under sv_maxclients");
