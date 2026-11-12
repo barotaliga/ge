@@ -113,6 +113,39 @@ Every recording came back byte for byte. Where the bytes go in a 4on4: the playe
 own noise at 1/65536 of a turn, which no prediction removes. A 4on4 broadcast is about 48 kbit/s
 raw, 25 as today's packed demo and 13 as `.ger`.
 
+## Forward
+
+`engine/forward` (`forward.hpp`). An opaque hop between a game's client and its server, for a
+player whose own path to the server is worse than a path through a forwarder near them. It knows
+nothing of the game: once a route is up it copies datagrams both ways, byte for byte.
+
+- **The route is set up first**, by the forward's own datagrams, before the game's handshake: the
+  client asks the first hop with the rest of the route ("hop@hop@server"), gets a cookie only that
+  hop can make from the client's address, asks again with it, and is told `routed` (or why not).
+  Each hop takes the next entry off the route; a hop with more after it dials the next forwarder
+  from a socket of its own for this client and answers only when the whole chain is up, so a
+  refusal anywhere comes back to the client in words. Then the game's client connects to the first
+  hop as if it were the server, and the game's own handshake runs end to end.
+- **Allow list on by default**: a hop forwards only to the destinations it lists (a host, or one
+  of its ports); `open` is an operator's explicit choice.
+- **Alive both ways**: the client sends an alive every second and the hop echoes it, so the client
+  knows its round trip to the hop; a client whose NAT gives it a new port is followed by the salt in
+  its alive. A client silent both ways for 15 s is dropped.
+- **No answer bigger than its ask**: the route request is padded past every answer, status asks go
+  through `net/status.hpp`'s cookie, and STUN is answered only when the request is as big as its
+  answer.
+
+The `forward` lab gives the player's direct path each preset and puts the forwarders on good legs:
+
+| Direct path | Direct rtt p50 / p95 (ms), lost | One forwarder | Two forwarders | Route set up (one / two) |
+| --- | --- | --- | --- | --- |
+| broadband | 34 / 36, 0.2% | 36 / 36, 0% | 62 / 62, 0% | 36 / 88 ms |
+| mobile | 111 / 125, 2.4% | 36 / 36, 0% | 62 / 62, 0% | 36 / 88 ms |
+| bad | 224 / 253, 3.0% | 36 / 36, 0% | 62 / 62, 0% | 36 / 88 ms |
+| awful | 459 / 504, 18.8% | 36 / 36, 0% | 62 / 62, 0% | 36 / 88 ms |
+
+A stranger's asks of every kind draw answers of at most a third of their size.
+
 ## Decisions
 
 | Decision | Taken | Considered and not taken |
@@ -122,4 +155,5 @@ raw, 25 as today's packed demo and 13 as `.ger`.
 | The demo format's name | Version 2 of the replay file | A new name: the engine already calls a kept run a replay |
 | The classic compressed client demo | Not read; the field codec replaces it | Running the player's own installed program to unpack it (a later, opt-in choice); studying third-party reconstructions of unknown origin |
 | Teamplay helpers | In Shooter's Edge's client | In the proxy, as the classic proxy did: they need no place on the network path |
+| Forward's route | Set up by the forward's own datagrams before the game's handshake, so any game on any wire goes through unchanged | Carried in the game's connect (the classic way): every game's handshake would have to carry it; the classic face reads it there |
 | The browser viewer | The WebSocket downstream lands with TV (M57b), for the hub's web viewer (M56) | Later: the hub needs it first |

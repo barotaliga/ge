@@ -6,6 +6,8 @@
 //   profile's base folder with its first numbered pack (`id1/pak0.pak`, or the content zip standing
 //   in for it, names in any case). The base folder itself picked is taken as its parent. Any other
 //   folder is refused with what it lacks: only a game the content profiles know is played.
+// - **Which game** (`install_of`): the first content profile whose base folder and first pack the
+//   folder holds, so an install of the sequel plays as the sequel with no switch to set.
 // - **Which game folder over it** (`game_of`): the profile's multiplayer folder (`multiplayer_dir`:
 // its player
 //   skins and its multiplayer program) when the install has one, else the base folder, so the
@@ -25,6 +27,7 @@
 //
 // ge:summary The game folder a player loads: the install checked, its game folder, programs
 // ge:keywords game-folder load-game basedir install check_game_folder game_of multiplayer-dir
+// ge:keywords install_of which-game content-profile sequel
 // ge:keywords remembered_game remember_game kept-game last-game prefs load_programs first-map
 // ge:keywords campaign-program
 // ge:keywords choose_folder campaign_commands newgame coopgame save load
@@ -51,6 +54,13 @@ namespace shooters_edge::client {
 bool check_game_folder(
     const std::string& folder, std::string* basedir, std::string* error,
     const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+
+// Which classic game the install at `folder` (or its base folder picked) is: the first content
+// profile whose folders it holds, with the install's folder in `*basedir`; null when it is none
+// of them, with why in `*error` (what the first profile's install would hold, and the others
+// named).
+const ge::classicenhance::Profile* install_of(const std::string& folder, std::string* basedir,
+                                              std::string* error);
 
 // The game folder played over the install at `basedir`: the multiplayer folder when it has one,
 // else the base folder.

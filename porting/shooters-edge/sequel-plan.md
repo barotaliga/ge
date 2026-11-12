@@ -91,6 +91,13 @@ runner seam for rules (`server/rules_runner.hpp`, already holding the sequel's r
    (the host picks the runner by the program form: the native library passed over, our runner in
    its place), a map of the 38 family loads behind the window (brushes, not clip hulls), and the
    player walks the demo maps with the sequel's move. A Mac run command in the PR.
+   LANDED (stacked on M18v1): the runner is picked by the map's family for now (a map of brushes
+   plays on the sequel's runner whatever the program), since only that runner traces brushes;
+   M18v2c (one trace) lets the program form pick it. The spin found on the way: the classic
+   listen adopts the server's view, so the spawn's delta angles must be spent once adopted.
+   ORDER (Niclas 2026-11-11 18:46, "Should we not start there? Clean room copy of the game?"):
+   next is step 7, our own clean-room game (deathmatch rules, then the campaign and its monsters),
+   ahead of 2b-6. Packs for every thread: /mnt/project-files/paks/quake2/{demo,full}/ (README there).
 2b. **M18v2b, coloured light in the modern look** (Niclas, 2026-11-11 15:13): the sequel's maps
    are lit in colour (RGB lightmaps, `_color` on lights, faces with the light surface flag
    emitting by their texture's colour and value). The modern look must carry that colour (the
