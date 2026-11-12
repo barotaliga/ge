@@ -131,8 +131,21 @@ struct AirWall {
   int me = 0;
 };
 
+// On the GROUND (`ground`: `circlekeys`, a circle jump's curve), friction first (`friction` a second
+// of the speed, at least `stopspeed`'s) and the wish's share along the velocity capped at maxspeed.
 int aim_air_set(Vec3f v, float view_yaw, float way_yaw, float maxspeed, float accel, double dt,
-                int held, uint8_t allowed = 0xff, int curve = 0, const AirWall* wall = nullptr) {
+                int held, uint8_t allowed = 0xff, int curve = 0, const AirWall* wall = nullptr,
+                const MoveSettings* ground = nullptr) {
+  if (ground != nullptr) {
+    const double sp = std::sqrt(static_cast<double>(v.x) * v.x + static_cast<double>(v.y) * v.y);
+    if (sp > 1) {
+      const double drop = std::fmax(sp, static_cast<double>(ground->stopspeed)) *
+                          static_cast<double>(ground->friction) * dt;
+      const double k = std::fmax(0.0, sp - drop) / sp;
+      v = {static_cast<float>(v.x * k), static_cast<float>(v.y * k), v.z};
+    }
+  }
+  const double cap = ground != nullptr ? static_cast<double>(maxspeed) : 30.0;
   const double h0 = core::libm::atan2(static_cast<double>(v.y), static_cast<double>(v.x)) *
                     (180 / core::kPi);
   const auto off_way = [&](double vx, double vy) {
@@ -171,7 +184,7 @@ int aim_air_set(Vec3f v, float view_yaw, float way_yaw, float maxspeed, float ac
     if (((allowed >> k) & 1u) == 0) continue;
     const double a = (view_yaw - 45.0 * k) * (core::kPi / 180);
     const double wx = core::libm::cos(a), wy = core::libm::sin(a);
-    const double add = 30 - (v.x * wx + v.y * wy);
+    const double add = cap - (v.x * wx + v.y * wy);
     double vx = v.x, vy = v.y;
     if (add > 0) {
       const double sp = add < reach ? add : reach;
@@ -186,6 +199,23 @@ int aim_air_set(Vec3f v, float view_yaw, float way_yaw, float maxspeed, float ac
     }
   }
   return held_score + kAirKeep >= best_score ? held : best;
+}
+
+// `circlekeys`: a circle jump's curve on the ground pressed under the view the keys land under
+// (`land_yaw`): the set the ground move carries furthest on round the hop's way, bending to the
+// curve's side, charged for a wall as the air's (`airwall`); held as the air's set is.
+void circle_keys(Bot& b, const Server& sv, const Edict& self, int me, float land_yaw, int msec,
+                 MoveCmd& cmd) {
+  const Pilot& hp = b.pilot.pilot;
+  const float ms = self.maxspeed > 0 ? self.maxspeed : sv.set.move.maxspeed;
+  const AirWall wall{&sv, self.origin, me};
+  b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms, sv.set.move.accelerate,
+                          msec / 1000.0, b.air_set, 0xff, hp.circle_side,
+                          b.airwall ? &wall : nullptr, &sv.set.move);
+  const int k = b.air_set;
+  cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
+  cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
+  b.stats.circle_keys++;
 }
 
 MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
@@ -452,6 +482,11 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         why->fact("set", k);
         why->choose(k < 0 ? "none" : "keys", "the hop in the air under the aim's view");
       }
+    } else if (b.circlekeys && !swim3d && hp.circling_now && (self.flags & kFlagOnGround) != 0) {
+      circle_keys(b, sv, self, me,
+                  b.airview ? wrap(cmd.angles.y + wrap(b.yaw - aim_yaw_was) * kKeyLand)
+                            : wrap(cmd.angles.y),
+                  msec, cmd);
     } else {
       b.air_set = -1;
     }
@@ -633,6 +668,16 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       const Pilot& vp = b.pilot.pilot;
       const float flat_v = std::sqrt(self.velocity.x * self.velocity.x +
                                      self.velocity.y * self.velocity.y);
+      const bool circle_view = b.circleview && !swim3d && vp.circling_now &&
+                               (self.flags & kFlagOnGround) != 0 && flat_v > kAirViewSpeed;
+      if (circle_view) {
+        // A CIRCLE JUMP'S VIEW (`circleview`): on the velocity's heading, as people's.
+        const float vh = static_cast<float>(
+            core::libm::atan2(static_cast<double>(self.velocity.y),
+                              static_cast<double>(self.velocity.x)) *
+            (180 / core::kPi));
+        want_view[0] = b.yaw + wrap(vh - b.yaw);
+      }
       if (b.airview && !swim3d && vp.mode == PilotMode::hop &&
           (self.flags & kFlagOnGround) == 0 && !vp.gap_flight && vp.lip_pressed_s < 0 &&
           vp.recipe < 0 && vp.strafe_side != 0 && flat_v > kAirViewSpeed) {
@@ -689,6 +734,17 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
         cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
         b.stats.air_keys++;
+      } else if (circle_view && !shot_due) {
+        // (`circleview`: the keys held, the hand's view doing the turn.)
+        cmd.forward = 400;
+        cmd.side = hp.circle_side > 0 ? 400.f : hp.circle_side < 0 ? -400.f : 0.f;
+        b.stats.circle_keys++;
+      } else if (b.circlekeys && !swim3d && !shot_due && hp.circling_now &&
+                 (self.flags & kFlagOnGround) != 0) {
+        circle_keys(b, sv, self, me,
+                    b.airview ? wrap(cmd.angles.y + wrap(b.yaw - yaw_was) * kKeyLand)
+                              : wrap(cmd.angles.y),
+                    msec, cmd);
       } else if (!b.aiming) {
         b.air_set = -1;
       }
