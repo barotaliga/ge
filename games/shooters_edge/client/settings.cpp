@@ -35,34 +35,39 @@ bool save_settings(ge::console::Console& con) {
 void add_user_info_cvars(ge::console::Console& con, UserInfo& info) {
   for (const auto& [name, field, what] :
        {std::tuple{"topcolor", &info.top,
-                   "your shirt's colour, 0..13 (a team game sets the team's)"},
+                   "Your shirt's colour, which a team game sets to the team's."},
         std::tuple{"bottomcolor", &info.bottom,
-                   "your pants' colour, 0..13 (a team game sets the team's)"}})
+                   "Your pants' colour, which a team game sets to the team's."}})
     con.cvars().bind({.name = name,
                       .fallback = "0",
                       .flags = ge::console::kArchive | ge::console::kUserInfo,
                       .help = what,
                       .kind = ge::console::CvarKind::integer,
                       .min = 0,
-                      .max = 13},
+                      .max = 13,
+                      .values = "0..13: that colour of the palette's rows (0 the default)"},
                      field);
-  con.cvars().bind({.name = "cl_speedjump",
-                    .fallback = "0",
-                    .flags = ge::console::kArchive | ge::console::kUserInfo,
-                    .help = "1: the easy jump: hold forward and jump and the game strafes for "
-                            "you, weaving the hops for speed; the mouse steers; the server's "
-                            "pm_speedjump sets its share (0 off)",
-                    .kind = ge::console::CvarKind::boolean},
-                   &info.speedjump);
-  con.cvars().bind({.name = "cl_speedjump_view",
-                    .fallback = "0.5",
-                    .flags = ge::console::kArchive,
-                    .help = "0..1: how much of the easy jump's left and right swing your view "
-                            "shows (0 a still view, 1 all of it, as a strafer sees)",
-                    .kind = ge::console::CvarKind::number,
-                    .min = 0,
-                    .max = 1},
-                   &info.speedjump_view);
+  con.cvars().bind(
+      {.name = "cl_speedjump",
+       .fallback = "0",
+       .flags = ge::console::kArchive | ge::console::kUserInfo,
+       .help = "Whether the easy jump strafes for you when you hold forward and jump, at the share "
+               "the server's pm_speedjump sets.",
+       .kind = ge::console::CvarKind::boolean,
+       .values =
+           "0: off (the default); 1: the game weaves the hops for speed and the mouse steers"},
+      &info.speedjump);
+  con.cvars().bind(
+      {.name = "cl_speedjump_view",
+       .fallback = "0.5",
+       .flags = ge::console::kArchive,
+       .help = "How much of the easy jump's left and right swing your view shows.",
+       .kind = ge::console::CvarKind::number,
+       .min = 0,
+       .max = 1,
+       .values =
+           "0: a still view; 0..1: that share; 1: all of it, as a strafer sees (0.5 the default)"},
+      &info.speedjump_view);
 }
 
 void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) {

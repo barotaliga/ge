@@ -241,20 +241,31 @@ bool create_qvm_server(QvmServer& s, std::vector<uint8_t> module, const QvmServe
   }
   if (s.cvars.find("deathmatch") == nullptr) {
     add_mod_settings(s, s.opt.loop);
-    s.cvars.add({"sv_pr2references", "0", con::kServer,
-                 "1: the module's string fields are references (the module sets it at init)"});
-    s.cvars.add({"developer", "0", con::kServer, "1: the module's developer prints shown"});
+    s.cvars.add(
+        {.name = "sv_pr2references",
+         .fallback = "0",
+         .flags = con::kServer,
+         .help = "Whether the module's string fields are references, which it sets at init.",
+         .values = "0: offsets (the default); 1: references"});
+    s.cvars.add({.name = "developer",
+                 .fallback = "0",
+                 .flags = con::kServer,
+                 .help = "Whether the module's developer prints are shown.",
+                 .values = "0: hidden (the default); 1: shown"});
     // The rate cap as the module reads it (it checks each client's `rate` against it): the
     // endpoint's `sv_maxrate` when set, else the most the endpoint accepts.
-    s.cvars.add({"sv_maxrate", "300000", con::kServer,
-                 "the most bytes/s a client's rate may be, as the module reads it"});
+    s.cvars.add({.name = "sv_maxrate",
+                 .fallback = "300000",
+                 .flags = con::kServer,
+                 .help = "The most bytes a second a client's rate may be, as the module reads it.",
+                 .values = "N: that many bytes a second (300000 the default)"});
     // The server's name and version as a module shows them (its `about` page), and the cvars a
     // module sets at init to describe itself: a name the module sets is kept, never refused.
-    s.cvars.add({"version", s.opt.version, con::kServer, "the server's name and version",
+    s.cvars.add({"version", s.opt.version, con::kServer, "The server's name and version.",
                  con::CvarKind::text});
     for (const char* name : {"qwm_name", "qwm_fullname", "qwm_version", "qwm_buildnum",
                              "qwm_platform", "qwm_builddate", "qwm_homepage"})
-      s.cvars.add({name, "", con::kServer, "the module's own description, set at its init",
+      s.cvars.add({name, "", con::kServer, "The module's own description, which it sets at init.",
                    con::CvarKind::text});
   }
   return true;
