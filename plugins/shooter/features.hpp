@@ -44,8 +44,9 @@
 //   key (bots/keyboard.hpp; all on). `lookway`, `press`, `counter`: dropped, in no preset.
 // - `slopes`: a stair to 45 degrees level to the walk; `backstep`: a run-up stepped back facing
 //   the jump; `gapbuild`: a gap over water curved and run into (pilot.hpp; all on).
-// - `runupkeys`, `underway` (pilot.hpp), `recipes` (people's hop starts played, pilot_recipes.hpp):
-//   judging, in no preset. The numbers: docs/goals/M18r.md.
+// - `recipes`: people's hop starts copied out of a book of their recordings (pilot_recipes.hpp;
+// on).
+// - `runupkeys`, `underway` (pilot.hpp): judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
 // ge:summary A bot's features: each behaviour switched on or off by name, and the presets
