@@ -8,6 +8,7 @@
 // ge:test tests/shooters_edge_demo_v2_test.cpp
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/sequel_demo.hpp"
+#include "shooters_edge/client/sequel_tv.hpp"
 
 #include <algorithm>
 #include <array>
@@ -33,7 +34,7 @@ constexpr uint32_t kMostBody = 1u << 20;  // a record's body past this is damage
 constexpr uint32_t kFamilyFte = 0x58455446, kFamilyFte2 = 0x32455446, kFamilyMvd = 0x3144564D;
 constexpr uint32_t kFteFloatCoords = 0x8000, kFteChunkedDownloads = 0x20000000;
 constexpr uint32_t kMvdFloatCoords = 0x1, kMvdHighLagTeleport = 0x2;
-constexpr uint32_t kMultiviewTrack = 1, kBytesTrack = 2, kSequelTrack = 3;
+constexpr uint32_t kMultiviewTrack = 1, kBytesTrack = 2;  // kSequelTrack: sequel_tv.hpp
 constexpr size_t kBytesBlock = size_t{256} << 10;
 constexpr int64_t kBlockMs = 1000;
 constexpr const char* kGame = "shooters_edge";
@@ -1415,27 +1416,21 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
     final_meta.emplace_back("records", std::to_string(rep.records));
     gr::stream_finish(w, final_meta);
   } else if (sequel) {
-    // Ten of the recording's blocks a chunk: a second of its 10 Hz frames.
-    const std::vector<std::span<const uint8_t>> blocks = sequel_blocks(recording);
-    SequelCoder coder;
-    SequelPackReport sr;
-    for (size_t at = 0, chunk_no = 0; at < blocks.size(); at += 10, chunk_no++) {
-      const bool keyframe = chunk_no % static_cast<size_t>(every) == 0;
-      const std::vector<std::span<const uint8_t>> some(
-          blocks.begin() + static_cast<std::ptrdiff_t>(at),
-          blocks.begin() + static_cast<std::ptrdiff_t>(std::min(at + 10, blocks.size())));
-      std::vector<uint8_t> chunk;
-      pack_sequel_chunk(coder, some, keyframe, chunk, &sr);
-      gr::stream_add(w, kSequelTrack, static_cast<int64_t>(chunk_no) * kBlockMs, chunk);
-      gr::stream_end_block(w, keyframe);
-    }
-    rep.records = sr.blocks;
-    rep.walked = sr.walked;
-    rep.kept = sr.kept;
-    rep.blocks = sr.chunks;
-    rep.keyframes = sr.keyframes;
-    gr::stream_finish(w, {{"duration_ms", std::to_string(blocks.size() * 100)},
-                          {"records", std::to_string(sr.blocks)}});
+    // The broadcast's writer (sequel_tv.hpp), fed the finished recording: the same bytes.
+    SequelBroadcast b;
+    sequel_broadcast_begin(b, every, recording.size());
+    for (const std::span<const uint8_t> block : sequel_blocks(recording))
+      sequel_broadcast_block(b, block);
+    sequel_broadcast_end(b);
+    out = std::move(b.out);
+    rep.records = b.report.blocks;
+    rep.walked = b.report.walked;
+    rep.kept = b.report.kept;
+    rep.blocks = b.report.chunks;
+    rep.keyframes = b.report.keyframes;
+    error.clear();
+    if (report != nullptr) *report = rep;
+    return true;
   } else {
     for (size_t at = 0; at < recording.size(); at += kBytesBlock) {
       const size_t n = std::min(kBytesBlock, recording.size() - at);
