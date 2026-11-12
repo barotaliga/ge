@@ -1706,9 +1706,9 @@ wiring), so it works in the window's own match and on any server joined.
 | `cl_weapongroup1` .. `cl_weapongroup9` | empty | the key's weapons, best first, by weapon key; empty: the game's own group; `0`: no group (the key picks its own weapon) |
 
 The classic game's groups are 1 `7 6` (the rocket launcher, then the grenade launcher), 2 `8` (the
-beam gun), 3 `5 4` (the nailguns), 4 `3 2` (the shotguns), 5 `1` (the melee weapon); keys 6 to 8
+beam gun), 3 `3 2` (the shotguns), 4 `5 4` (the nailguns), 5 `1` (the melee weapon); keys 6 to 8
 have none, so they still pick their own weapon. The sequel's, by its own keys, are 1 `8 7 6` (the
-explosives), 2 `10` (the railgun), 3 `9 5 4` (the rapid-fire guns), 4 `3 2` (the shotguns), 5 `1`
+explosives), 2 `10` (the railgun), 3 `3 2` (the shotguns), 4 `9 5 4` (the rapid-fire guns), 5 `1`
 (the blaster) and 6 `11` (the BFG). A key asks for the best weapon of its group carried with a
 shot's ammunition; pressed again within 2 s it asks for the next, round to the first. The number
 key's `impulse` (the default binds) is read as the group, before the quick weapon sees it.

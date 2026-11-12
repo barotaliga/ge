@@ -17,11 +17,11 @@ namespace sh = ge::shooter;
 
 namespace {
 
-// The classic arena's groups: 1 explosives (7 6), 2 the beam gun (8), 3 the nailguns (5 4),
-// 4 the shotguns (3 2), 5 the melee weapon (1).
+// The classic arena's groups: 1 explosives (7 6), 2 the beam gun (8), 3 the shotguns (3 2),
+// 4 the nailguns (5 4), 5 the melee weapon (1).
 sh::WeaponGroups classic() {
   sh::WeaponGroups g;
-  const char* text[] = {"7 6", "8", "5 4", "3 2", "1"};
+  const char* text[] = {"7 6", "8", "3 2", "5 4", "1"};
   for (size_t k = 0; k < 5; ++k) g[k] = sh::weapon_list(text[k]);
   return g;
 }
@@ -43,7 +43,7 @@ TEST(weapon_groups) {
   CHECK(sh::is_group(g, 1) && sh::is_group(g, 5));
   CHECK(!sh::is_group(g, 6) && !sh::is_group(g, 0) && !sh::is_group(g, 10));
   CHECK(sh::group_of(g, 6) == 0);
-  CHECK(sh::group_of(g, 2) == 3);
+  CHECK(sh::group_of(g, 2) == 2);
   CHECK(sh::group_of(g, 0) == -1);
 
   // The best ready first, then the next, then round to the first.
@@ -55,7 +55,7 @@ TEST(weapon_groups) {
     CHECK(sh::group_press(s, g, a, 1, 0.3) == 6);
     CHECK(sh::group_press(s, g, a, 1, 0.6) == 7);
     // Another group's key starts at its own best.
-    CHECK(sh::group_press(s, g, a, 4, 0.7) == 2);
+    CHECK(sh::group_press(s, g, a, 3, 0.7) == 2);
     // A group with nothing ready asks for nothing.
     CHECK(sh::group_press(s, g, a, 2, 0.8) == 0);
     // A key that is no group is not taken.
@@ -106,10 +106,10 @@ TEST(weapon_groups) {
   {
     sh::GroupState s;
     const sh::GroupArmed a{.carried = bits({1, 2, 3}), .ready = bits({1, 2, 3}), .in_hand = 3};
-    CHECK(sh::group_press(s, g, a, 4, 0.0) == 3);
+    CHECK(sh::group_press(s, g, a, 3, 0.0) == 3);
     CHECK(near(sh::group_look(s, g, a, sh::kOpenS - 0.01).open, 1.0, 1e-6));
     CHECK(sh::group_look(s, g, a, sh::kOpenS + sh::kCloseS + 0.01).count == 1);
-    CHECK(sh::group_press(s, g, a, 4, sh::kOpenS + 1) == 3);  // the best, not the next
+    CHECK(sh::group_press(s, g, a, 3, sh::kOpenS + 1) == 3);  // the best, not the next
   }
 
   // Closed: the weapon in hand alone, marked only while its group holds another carried.

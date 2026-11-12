@@ -8,7 +8,7 @@
 // What it shows: FOLDED at rest, the shotgun alone in the HUD's group column with the gold mark
 // (the double shotgun is carried too); KEY 1, the launchers' group open with the rocket launcher
 // lit; KEY 1 AGAIN, the grenade launcher lit; the ATTACK, the group folding down into the grenade
-// launcher, filmed a thirtieth of a second at a time; then KEY 3 left alone, folding by itself
+// launcher, filmed a thirtieth of a second at a time; then KEY 4 left alone, folding by itself
 // kOpenS later. A table lists each step's weapon in hand and the column's cells; a chart follows
 // the column's open share through the sequence. Deterministic metrics, the pictures measured.
 //
@@ -285,7 +285,7 @@ void run(gl::Lab& lab) {
   gl::LabTable table{"each step", {"step", "t (s)", "in hand", "column (* lit, + mark)"}, {}};
   gl::Trace open_trace{"open", {}, {}};
   gl::LineChart lc;
-  lc.frame = {"the group column's open share", "cl_weapongroups 1: key 1, key 1, fire, key 3",
+  lc.frame = {"the group column's open share", "cl_weapongroups 1: key 1, key 1, fire, key 4",
               "t (s)", "open (1 open .. 0 folded)"};
   lc.spikes = false;
   double t0 = t;
@@ -307,13 +307,13 @@ void run(gl::Lab& lab) {
     lab.shot({id, title, caption, look_for, {{"map", map_name}}}, picture(), gl::Det::measured);
   };
 
-  frame(4, false);      // the shotguns' group: the shotgun
+  frame(3, false);      // the shotguns' group: the shotgun
   step(0, false, 260);  // in hand, the group folded (kOpenS and the fold)
   t0 = t;
   open_trace.x.clear(), open_trace.y.clear();
   record("folded", "folded: the shotgun alone, marked",
          "cl_weapongroups 1 at rest: the HUD's group column shows the weapon in hand alone, the "
-         "gold + saying its group (4: the shotguns) holds another weapon carried.",
+         "gold + saying its group (3: the shotguns) holds another weapon carried.",
          "one gun on the right edge with a small gold + on its corner");
   lc.marks.push_back({t - t0, "key 1"});
   step(1, false, 30);
@@ -361,13 +361,13 @@ void run(gl::Lab& lab) {
   record("fired", "after the shot: folded into the grenade launcher",
          "Folded: the weapon in hand alone, marked while its group holds another.",
          "one launcher, a gold + on its corner");
-  lc.marks.push_back({t - t0, "key 3"});
-  step(3, false, 40);
-  record("key3", "key 3: the nailguns, the heavy nailgun first",
-         "Key 3's group (\"5 4\"): the heavy nailgun taken and lit, the nailgun under it.",
+  lc.marks.push_back({t - t0, "key 4"});
+  step(4, false, 40);
+  record("key4", "key 4: the nailguns, the heavy nailgun first",
+         "Key 4's group (\"5 4\"): the heavy nailgun taken and lit, the nailgun under it.",
          "two nailguns on the right edge, the upper one framed");
   step(0, false, 160);
-  record("key3-later", "two seconds on: folded by itself",
+  record("key4-later", "two seconds on: folded by itself",
          "Without the attack the group folds kOpenS (2 s) after the last press.",
          "the heavy nailgun alone, marked");
   lc.traces.push_back(open_trace);
@@ -377,7 +377,7 @@ void run(gl::Lab& lab) {
             chart.title,
             "The column's open share through the steps: 1 while a group is open, falling to 0 over "
             "0.2 s on the attack or 2 s after the last press.",
-            "steps to 1 at each key, ramps to 0 after the fire and 2 s after key 3",
+            "steps to 1 at each key, ramps to 0 after the fire and 2 s after key 4",
             {{"map", map_name}}},
            gl::to_picture(chart.plot), gl::Det::measured);
   lab.metric("weapons.pack", at_eye ? 1 : 0, "");

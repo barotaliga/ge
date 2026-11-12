@@ -4,7 +4,7 @@
 // - The cvars (`add_group_cvars`): `cl_weapongroups 0|1` (off by default: each number key picks
 //   its own weapon) and `cl_weapongroup1` .. `cl_weapongroup9`, each a group's weapon keys best
 //   first ("7 6"); empty, the game's own group for that key (its profile's `weapon_groups`: the
-//   classic game's 1 rockets and grenades, 2 the beam gun, 3 the nailguns, 4 the shotguns, 5 the
+//   classic game's 1 rockets and grenades, 2 the beam gun, 3 the shotguns, 4 the nailguns, 5 the
 //   melee weapon); "0", no group (the key picks its own weapon).
 // - `group_moves`: with cl_weapongroups 1 a number key's `impulse` that names a group (the default
 //   binds' `impulse 1` .. `impulse 8`) becomes the weapon the group picks, and the attack folds the

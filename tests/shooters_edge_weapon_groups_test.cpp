@@ -97,8 +97,8 @@ TEST(the_cvars_take_the_games_groups_until_set) {
   const sh::WeaponGroups& d = cl::group_settings(c.groups);
   CHECK(d[0] == (std::vector<int>{7, 6}));
   CHECK(d[1] == std::vector<int>{8});
-  CHECK(d[2] == (std::vector<int>{5, 4}));
-  CHECK(d[3] == (std::vector<int>{3, 2}));
+  CHECK(d[2] == (std::vector<int>{3, 2}));
+  CHECK(d[3] == (std::vector<int>{5, 4}));
   CHECK(d[4] == std::vector<int>{1});
   CHECK(d[5].empty());
   con.execute("cl_weapongroups 1; cl_weapongroup1 \"6 7\"; cl_weapongroup2 0; cl_weapongroup6 8");
@@ -170,14 +170,14 @@ TEST(number_keys_pick_from_their_groups_on_the_listen_server) {
   g.game = shooters_edge::profiles::classic_game().weapon_groups;
   double t = 0;
   for (int i = 0; i < 80; i++) frame(l, g, t);  // the spawn, the launcher picked up
-  frame(l, g, t, 4);                            // the shotguns: the shotgun
+  frame(l, g, t, 3);                            // the shotguns: the shotgun
   for (int i = 0; i < 80; i++) frame(l, g, t);
   hud::Status s = cl::status_of(l, t);
   CHECK(s.weapon == hud::Weapon::shotgun && s.has(hud::Weapon::rocket_launcher));
   frame(l, g, t, 1);  // the launchers: the rocket launcher
   for (int i = 0; i < 80; i++) frame(l, g, t);
   CHECK(cl::status_of(l, t).weapon == hud::Weapon::rocket_launcher);
-  frame(l, g, t, 4);
+  frame(l, g, t, 3);
   for (int i = 0; i < 80; i++) frame(l, g, t);
   CHECK(cl::status_of(l, t).weapon == hud::Weapon::shotgun);
   frame(l, g, t, 7);  // no group: the launcher's own key

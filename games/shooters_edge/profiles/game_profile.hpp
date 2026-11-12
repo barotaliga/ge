@@ -107,9 +107,9 @@ inline constexpr std::string_view kClassicHeld[] = {
     "progs/v_axe.mdl",   "progs/v_shot.mdl", "progs/v_shot2.mdl", "progs/v_nail.mdl",
     "progs/v_nail2.mdl", "progs/v_rock.mdl", "progs/v_rock2.mdl", "progs/v_light.mdl"};
 
-// 1 the launchers (rockets, then grenades), 2 the beam gun, 3 the nailguns (heavy first), 4 the
-// shotguns (double first), 5 the melee weapon.
-inline constexpr std::string_view kClassicGroups[] = {"7 6", "8", "5 4", "3 2", "1"};
+// 1 the launchers (rockets, then grenades), 2 the beam gun, 3 the shotguns (double first, by the
+// movement keys: the shotguns are used more), 4 the nailguns (heavy first), 5 the melee weapon.
+inline constexpr std::string_view kClassicGroups[] = {"7 6", "8", "3 2", "5 4", "1"};
 
 inline constexpr std::string_view kClassicEpisodes[] = {"e1m1", "e2m1", "e3m1", "e4m1"};
 
@@ -122,9 +122,9 @@ inline constexpr ProgramFile kSequelPrograms[] = {
 inline constexpr std::string_view kSequelDemos[] = {".dm2"};
 // By the sequel's weapon keys (1 blaster, 2 shotgun, 3 super shotgun, 4 machinegun, 5 chaingun,
 // 6 hand grenades, 7 grenade launcher, 8 rocket launcher, 9 hyperblaster, 10 railgun, 11 BFG):
-// 1 the explosives (rockets, the grenade launcher, hand grenades), 2 the railgun, 3 the rapid fire
-// guns (hyperblaster, chaingun, machinegun), 4 the shotguns, 5 the blaster, 6 the BFG.
-inline constexpr std::string_view kSequelGroups[] = {"8 7 6", "10", "9 5 4", "3 2", "1", "11"};
+// 1 the explosives (rockets, the grenade launcher, hand grenades), 2 the railgun, 3 the shotguns,
+// 4 the rapid fire guns (hyperblaster, chaingun, machinegun), 5 the blaster, 6 the BFG.
+inline constexpr std::string_view kSequelGroups[] = {"8 7 6", "10", "3 2", "9 5 4", "1", "11"};
 
 inline constexpr GameProfile kGameProfiles[] = {
     {.id = "classic",
