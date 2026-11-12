@@ -364,6 +364,7 @@ struct Pilot {
   // their clock (the closed loop's yardstick); whether its jump has been pressed; the next look
   // into the book not before `recipe_retry_s` (`clock_s`).
   int32_t recipe = -1;
+  const char* recipe_note = "-";  // why this command took no start (`recipes`), for a trace
   bool recipe_jumped = false;
   float recipe_s = 0;
   double recipe_retry_s = 0;
