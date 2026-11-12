@@ -1224,6 +1224,8 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.backstep = features[sh::Feature::backstep];
   ps.runup_keys = features[sh::Feature::runupkeys];
   ps.gap_circle = features[sh::Feature::gapbuild];
+  ps.curve_keys = features[sh::Feature::keys] && features[sh::Feature::curvekeys];
+  ps.under_way = features[sh::Feature::underway];
   ps.hop_headroom = features[sh::Feature::headroom];
   ps.hop_lips = features[sh::Feature::liphop];
   // The circle jump by skill: an expert curves up to 0.3 s for ~430 (people's standing jumps
@@ -1716,6 +1718,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   // THE BRINK: with the feet free, on the ground or in the air between a stair's steps, a hop's
   // landings or a knock, no key carries it into lava or slime (in the air a wish against the
   // run still brakes at the full acceleration: the air's cap is on the speed gained, not lost).
+  bool brinked = false;
   if (!dead && f.features[sh::Feature::brink]) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(me)];
     const sh::PilotMode pm = f.bot.pilot.pilot.mode;
@@ -1724,14 +1727,16 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
                            pm == sh::PilotMode::arrived || pm == sh::PilotMode::wait;
     // A flight the pilot proved lands safe (a gap trick's, or a hop by one) is not braked.
     if (free_feet && d.waterlevel == 0 && !f.bot.pilot.pilot.brink_free &&
-        sh::brink_guard(s.sv, *f.bot.pilot.pilot.g, me, d.origin, d.velocity, cmd).changed)
+        sh::brink_guard(s.sv, *f.bot.pilot.pilot.g, me, d.origin, d.velocity, cmd).changed) {
       f.stats.brink++;
+      brinked = true;
+    }
   }
   // The keys: pressed by a hand on a keyboard (keyboard.hpp), or the side key turned round as a
   // person's hand turns it (footwork.hpp).
   if (f.features[sh::Feature::keys]) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(me)];
-    fighter_keyboard(f, cmd, d.velocity, (d.flags & sh::kFlagOnGround) != 0);
+    fighter_keyboard(f, cmd, d.velocity, (d.flags & sh::kFlagOnGround) != 0, brinked);
   } else {
     fighter_keys(f, cmd);
   }

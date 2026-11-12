@@ -1,11 +1,12 @@
 // A FIGHTER'S KEYS AND BUTTONS (games/shooters_edge/bots/footwork.hpp `fighter_keys`,
 // buttons.hpp `button_fires`): a side key turned round passes through 1 to 3 commands with no side
 // key unless the change is a clean one, never on a proven jump; and a button's doors are found
-// through the relays it fires (e1m2's plate: a delayed trigger_once opens the teleporters' doors).
+// through the relays it fires (e1m2's plate: a delayed trigger_once opens the teleporters' doors);
+// and a pilot's curve on the ground held on its keys, W and the side key (`curvekeys`).
 //
 // ge:summary Tests: the side key's change held off as a hand's is; a button's doors through relays
 // ge:keywords test fighter_keys key-change socd perfect-strafe button_fires trigger_relay
-// ge:keywords fighter_keyboard key-set feathering weapon-key
+// ge:keywords fighter_keyboard key-set feathering weapon-key press_keys curvekeys
 // ge:skill bots testing
 #include <memory>
 #include <string>
@@ -148,6 +149,33 @@ TEST(the_keyboard_steers_between_two_sets_by_tapping_the_further_in) {
                 "the right key held " + std::to_string(share) + " of the time, not about a third");
       CHECK_MSG(taps >= 8, "the right key went down only " + std::to_string(taps) + " times");
     }
+  }
+}
+
+TEST(a_pilots_curve_is_held_on_its_keys_not_tapped) {
+  // `curvekeys`: a curve on the ground the pilot means as W and D (`Pilot::curve_keys` 1), its
+  // side axis still slewing up (a third of the way) and the view a few degrees behind, is W and D
+  // held from the first press; without it the keys are read off the axes and D is tapped.
+  for (const bool hold : {false, true}) {
+    fb::KeyHand k;
+    fb::key_hand_init(k, 90, 3);
+    sh::Features features = sh::features_all();
+    features.set(sh::Feature::curvekeys, hold);
+    int both = 0, n = 0;
+    for (; n < 60; n++) {
+      sh::MoveCmd c;
+      c.msec = 13;
+      c.forward = 309;
+      c.side = 83;
+      fb::press_keys(k, features, c, {300, 0, 0}, true, 1);
+      if (n >= 3) both += c.forward == 400 && c.side == 400;
+    }
+    if (hold)
+      CHECK_MSG(both == n - 3, "W and D held " + std::to_string(both) + " commands of " +
+                                   std::to_string(n - 3) + " once down");
+    else
+      CHECK_MSG(both < (n - 3) / 2, "without curvekeys W and D were held " +
+                                        std::to_string(both) + " commands: the axes not read");
   }
 }
 

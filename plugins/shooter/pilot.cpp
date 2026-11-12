@@ -48,7 +48,7 @@ constexpr float kJumpOver = 1.15f;     // and at most this share (and 16 u/s) of
 constexpr float kJumpAim = 0.95f;      // with the velocity within this cosine of the jump's way
 constexpr float kPastStart = 24;       // past a jump's start this far without its speed: run up
 constexpr float kRunUpFallen =
-    40;                           // `runupkeys`: a run-up this far under its jump's start fell off
+    40;                           // `underway`: a run-up this far under its jump's start fell off
 constexpr float kRunOnFrom = 8;   // `backstep`: a run-up this far behind the start or more runs on
 constexpr float kStrafeHold = 2;  // the strafe's side holds until the target is this far off, deg
 // The last jump of a hop's stretch (`headroom`): one whose flight lands before the stretch ends
@@ -346,6 +346,7 @@ bool circling(Pilot& p, const PilotSense& s, float vh, float speed, float err, f
   p.circle_s += dt;
   p.circle_side = c.side;
   p.strafe_side = c.side;
+  p.curve_keys = c.side;
   w.forward = 1;
   w.side = static_cast<float>(c.side);
   w.yaw = unwrap(c.yaw, p.yaw);
@@ -622,7 +623,8 @@ bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, 
       const float along = dot(Vec3f{at.x - S.x, at.y - S.y, 0}, dir);
       if (along > kGapPastStart) break;  // past the lip
       if (!gap_lands(*s.world, move, at, v, T, msec)) continue;
-      if (k == 0) {
+      // Under a keyboard the jump's key goes down late: asked only where it lands either way.
+      if (k == 0 && (!p.set.curve_keys || gap_lands_late(p, s, msec, T))) {
         p.gap_flight = true;
         p.gap_aloft = false;
         p.gap_pressed_s = p.clock_s;
@@ -1018,6 +1020,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   p.shot_pitch = 0;
   p.shot_in_s = 0;
   p.brink_free = false;
+  p.curve_keys_last = p.curve_keys;
+  p.curve_keys = kNoCurveKeys;
   if (p.gap_flight && !s.onground) p.gap_aloft = true;
   if (p.gap_flight && s.onground && !p.gap_aloft && p.clock_s - p.gap_pressed_s > kGapLiftOff_s) {
     p.gap_flight = false;  // the jump never left the ground (a key held off): no flight to judge
@@ -1248,7 +1252,11 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         if (err_abs > p.set.hop_brake && speed > s.maxspeed) w.forward = -1;
       }
       GapRun run;
-      if (s.onground && p.gap_k >= 0 && static_cast<size_t>(p.gap_k) >= p.k && !p.jump_pressed) {
+      // A gap's jump asked under a keyboard (`curve_keys`), its key not down yet: the keys and the
+      // view held as it was asked with (a run re-planned meanwhile turned the takeoff away).
+      const bool asked = p.set.curve_keys && s.onground && p.gap_flight && !p.gap_aloft;
+      if (!asked && s.onground && p.gap_k >= 0 && static_cast<size_t>(p.gap_k) >= p.k &&
+          !p.jump_pressed) {
         // Near a gap's lip with no jump from here landing across: run on to where one does,
         // straight or curving on the ground for speed (people's last steps into a gap).
         float e = 0;
@@ -1256,7 +1264,15 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         if (gap_curve(p, s, msec, e, now) && !now) run = gap_run(p, s, msec);
       }
       if (!run.found) p.gap_way = -1;
-      if (run.found) {
+      if (asked) {
+        w.forward = static_cast<float>(p.wanted[1]);
+        w.side = static_cast<float>(p.wanted[2]);
+        w.yaw = p.yaw;
+        w.jump = true;
+        p.brink_free = true;
+        p.curve_keys = p.curve_keys_last;
+        because = "a gap trick: its jump asked, the key on the way";
+      } else if (run.found) {
         p.gap_way_i = run.way == p.gap_way ? p.gap_way_i + 1 : 1;
         p.gap_way = run.way;
         p.circle_s = -1;
@@ -1265,6 +1281,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         w.yaw = unwrap(run.yaw, p.yaw);
         w.jump = false;
         p.brink_free = true;
+        p.curve_keys = run.side;
         because = run.side == 0  ? "a gap trick: running at its lip"
                   : run.flip > 0 ? "a gap trick: strafing side to side to its lip"
                                  : "a gap trick: curving on the ground to its lip";
@@ -1278,6 +1295,14 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         p.safe_flight = false;
         if (w.jump && p.gap_k >= 0 && static_cast<size_t>(p.gap_k) >= p.k) {
           w.jump = gap_takeoff(p, s, msec, because, replanned);
+          if (w.jump && p.gap_flight && p.set.curve_keys && p.curve_keys_last != kNoCurveKeys) {
+            // Asked out of a curve under a keyboard: its keys and view held (`gap_lands_late`
+            // judged the jump on them).
+            w.forward = 1;
+            w.side = static_cast<float>(p.curve_keys_last);
+            w.yaw = p.yaw;
+            p.curve_keys = p.curve_keys_last;
+          }
           if (!w.jump && !replanned) {
             // Running on to the lip: a run's keys along the route, not the air's side key.
             w.forward = 1;
@@ -1799,11 +1824,11 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       const float v = on_it ? l.speed : l2->speed;
       const NavExtraLink jl = on_it ? NavExtraLink{a, b, l.kind, l.time_s}
                                     : NavExtraLink{b, p.route[p.k + 2], l2->kind, l2->time_s};
-      // FALLEN OFF THE RUN-UP (`runupkeys`): well under the jump's start, or in water, it is not
+      // FALLEN OFF THE RUN-UP (`underway`): well under the jump's start, or in water, it is not
       // made from here: plan again (the jump itself is not to blame).
       const bool dry_start = !node(g, on_it ? a : b).wet;
       const bool fallen =
-          p.set.runup_keys && (p.mode == PilotMode::run_up || p.mode == PilotMode::jump) &&
+          p.set.under_way && (p.mode == PilotMode::run_up || p.mode == PilotMode::jump) &&
           ((dry_start && s.waterlevel >= 2) || (s.onground && s.origin.z < S.z - kRunUpFallen));
       if (fallen) {
         p.stats.lost++;
@@ -1893,13 +1918,15 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     // STUCK and LOST, on the ground while moving under its own legs (or swimming a walk).
     const bool swimming_walk =
         p.set.floor_swim && s.waterlevel >= 2 && !s.onground && p.mode == PilotMode::walk;
-    if (!replanned && swimming_walk && p.k + 1 < p.route.size() &&
+    const bool fallen_walk = p.set.under_way && s.onground && p.mode == PilotMode::walk;
+    if (!replanned && (swimming_walk || fallen_walk) && p.k + 1 < p.route.size() &&
         std::min(node(g, p.route[p.k]).origin.z, node(g, p.route[p.k + 1]).origin.z) - s.origin.z >
             p.set.lost_under) {
       p.stats.lost++;
       replanned = true;
       replan(p, s);
-      because = "in the water under the way: plan again";
+      because = swimming_walk ? "in the water under the way: plan again"
+                              : "fallen under the way: plan again";
     }
     if (!replanned && (s.onground || swimming_walk) &&
         (p.mode == PilotMode::walk || p.mode == PilotMode::jump || p.mode == PilotMode::run_up)) {

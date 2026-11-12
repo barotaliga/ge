@@ -23,12 +23,42 @@ constexpr int kGapRunMost = 40;        // a run to the lip looked ahead this man
 constexpr float kGapRunWindow = 120;   // a jump tried from each place this near the lip, units
 constexpr float kGapRunPast = 24;      // and none this far past it along the jump
 constexpr size_t kGapCurveLinks = 12;  // the gap within this many links ahead (nodes ~32 apart)
+constexpr int kGapKeyLate = 2;  // a keyboard's jump key goes down up to this many commands late
 
 bool over_harm(const Pilot& p, Vec3f S, Vec3f T) {
   return nav_harm_near(*p.g, {(S.x + T.x) * 0.5f, (S.y + T.y) * 0.5f, S.z}, kGapCurveHarm);
 }
 
+// The side key a keyboard holds now: the last command's curve's, else the side axis's sign.
+int8_t held_side(const Pilot& p) {
+  if (p.curve_keys_last != kNoCurveKeys) return p.curve_keys_last;
+  return static_cast<int8_t>(p.pressed[2] > 0.5 ? 1 : p.pressed[2] < -0.5 ? -1 : 0);
+}
+
 }  // namespace
+
+bool gap_lands_late(const Pilot& p, const PilotSense& s, int msec, Vec3f T) {
+  if (s.world == nullptr) return false;
+  MoveSettings move;
+  move.maxspeed = s.maxspeed;
+  MoveState st;
+  st.origin = s.origin;
+  st.velocity = s.velocity;
+  st.maxspeed = s.maxspeed;
+  st.ground = 0;
+  MoveCmd c;
+  c.msec = static_cast<uint8_t>(msec);
+  c.angles = {0, wrap(p.yaw), 0};
+  c.forward = static_cast<int16_t>(move.maxspeed);
+  c.side = static_cast<int16_t>(static_cast<float>(held_side(p)) * move.maxspeed);
+  for (int k = 1; k <= kGapKeyLate; k++) {
+    const float z0 = st.origin.z;
+    player_move(st, c, move, *s.world);
+    if (st.ground < 0 || st.origin.z < z0 - kStepHeight) return false;  // off the floor
+    if (!gap_lands(*s.world, move, st.origin, st.velocity, T, msec)) return false;
+  }
+  return true;
+}
 
 bool gap_lands(const MoveWorld& world, const MoveSettings& move, Vec3f at, Vec3f velocity, Vec3f T,
                int msec) {
@@ -112,6 +142,10 @@ GapRun gap_run(const Pilot& p, const PilotSense& s, int msec) {
     // take commands: a side key swapped too often never gets there).
     ai::Hands hands = p.hands;
     float last_yaw = p.yaw;
+    // Under a keyboard (`curve_keys`) the keys go down whole, a command late: the side key the
+    // last command meant (the way under way's own, else the keys the last command held).
+    int8_t key_side = held_side(p);
+    bool prev_lands = false;  // a jump asked at the last place landed across
     for (int i = 0; i < kGapRunMost && (!out.found || i + 1 < out.n); i++) {
       const int8_t side = way.flip > 0 && ((i + from) / way.flip) % 2 == 1
                               ? static_cast<int8_t>(-way.side)
@@ -131,12 +165,22 @@ GapRun gap_run(const Pilot& p, const PilotSense& s, int msec) {
       c.angles = {0, wrap(last_yaw), 0};
       c.forward = static_cast<int16_t>(static_cast<float>(pressed[1]) * move.maxspeed);
       c.side = static_cast<int16_t>(static_cast<float>(pressed[2]) * move.maxspeed);
+      if (p.set.curve_keys) {
+        c.forward = static_cast<int16_t>(move.maxspeed);
+        c.side = static_cast<int16_t>(static_cast<float>(key_side) * move.maxspeed);
+        key_side = side;
+      }
       const float z0 = st.origin.z;
       player_move(st, c, move, *s.world);
       if (st.ground < 0 || st.origin.z < z0 - kStepHeight) break;  // off the floor
       const float along = dot(Vec3f{st.origin.x - S.x, st.origin.y - S.y, 0}, dir);
       if (along > kGapRunPast) break;
-      if (across(st.origin, S) <= kGapRunWindow && lands(st)) {
+      // Under a keyboard the jump's key goes down a command after it is asked: the place a jump
+      // is asked from and the next both land across.
+      const bool here = across(st.origin, S) <= kGapRunWindow && lands(st);
+      const bool late_ok = !p.set.curve_keys || prev_lands;
+      prev_lands = here;
+      if (here && late_ok) {
         if (!out.found || i + 1 < out.n) {
           out.found = true;
           out.n = i + 1;
