@@ -23,7 +23,7 @@ names them (`ServerGame::rules`, a `GameRule` each: Shooter's Edge's `deathmatch
 `fraglimit`, `timelimit`, `samelevel`, `pausable`; the move's and the loop's settings every
 shooter shares, `plugins/shooter/settings.hpp`: `sv_gravity`, `sv_maxspeed`, `sv_mintic`,
 `sv_maxvelocity`, `pm_ktjump`, …; and its endpoint's: `sv_maxrate`, `sv_antilag`, `sv_voip`, `maxfps`,
-`allow_download*`), the core makes each a server
+`sv_download*`), the core makes each a server
 cvar with an empty fallback (unset: the game's own default), every layer, `+set` and `--explain`
 reach it like the core's, and `create` gets the values in `ServerConfig::rules`. A map is read from
 the game folder's loose files or its packs, and when a match ends the server moves everyone to
@@ -205,6 +205,33 @@ do not clash with each other, only with ours:
 | `sv_maprotation` | | `sv_maplist` |
 | `sv_floodprot` | `floodprot` | `flood_msgs`, `flood_persecond`, `flood_waitdelay` (its three words) |
 | `sv_floodprotmsg` | `floodprotmsg` | |
+| `sv_admin` | `sv_admininfo` | |
+| `sv_country`, `sv_city`, `sv_coords` | `countrycode`, `city`, `coords` | |
+| `sv_publicaddr` | `hostport` | |
+
+**Every classic server setting under our names** (M58). The classic server program's own
+settings are sorted into three: ported under our names with the classic name as a synonym, covered
+by something of ours that does it better (not ported), and not ported (no use here). The working
+list is `porting/shooters-edge/server-inventory.md`. Ported so far, Shooter's Edge's endpoint
+rules unless marked engine:
+
+| Ours | Classic | What |
+| --- | --- | --- |
+| `sv_download`, `sv_download_skins`, `_models`, `_sounds`, `_maps`, `_other` | `allow_download*` | which folders a client may download |
+| `sv_downloadchunks` | `sv_downloadchunksperframe` | 1 KB chunks a downloading client gets a frame, 1..30 |
+| `sv_country`, `sv_city`, `sv_coords`, `sv_publicaddr` (engine) | `countrycode`, `city`, `coords`, `hostport` | where the server is and the address a browser shows, in the server info |
+| `sv_watervis` | `watervis` | 1: clients are told they may see through water |
+| `sv_defaultname` | `sv_default_name` | the name a client with an empty or unusable name gets (`player`) |
+| `sv_unfake` | `sv_unfake` | 1: carriage returns in a public chat line become `#` |
+| `sv_colorkick` | `sv_kicktop` | 1: more than 6 top colour changes in 8 s kicks |
+| `sv_infoflood` (`"N S"`) | `sv_kickuserinfospamcount`, `sv_kickuserinfospamtime` (one word each) | more than N user info changes in S s kicks (`300 3`) |
+| `sv_fullspectate` | `sv_forcespec_onfull` | a player joining a full server: 0 refused, 1 a spectator unless `svf` bit 2, 2 only with `svf` bit 1 |
+| `sv_reconnectwait` | `sv_reconnectlimit` | seconds before a connected address may connect again; a storm gets no answer |
+| `sv_maxping` | `sv_maxping` | a player over this ping (ms) on entering plays as a spectator |
+| `sv_minping`, `sv_minpingcmd` | `sv_minping`, `sv_enable_cmd_minping` | each player's packets held until its ping reaches this; players may set it with `minping` before a match |
+
+With `sv_maxspectators` above 0 the spectators have their own slots beside `sv_maxclients`'s
+players (the loop's slots are both, at most 32); at 0 a spectator takes a free player slot.
 
 A mod reads the server it runs on by its game's names too: before the rules start, the game puts
 `hostname`, `maxclients` and `maxspectators` in the rules' own table, so a bytecode or compiled

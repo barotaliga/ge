@@ -492,6 +492,216 @@ All of these are match-mod settings. Program defaults are 0. The mode presets se
 
 ---
 
+Sections 21 to 30 were read later, from MVDSV at commit `4e63928` and KTX at commit `b1b23a9`, under the same conventions. "(derived)" marks a fact that follows from several places read together rather than from one statement. Start-up order matters below. The server registers its own settings, then runs `server.cfg` and the command line, and only then loads the first map, which loads the mod. So every line of `server.cfg` runs before the mod exists.
+
+## 21. How `set` names reach the match mod
+
+- **`set <name> <value>`** on a name the server does not know creates a plain text variable. On a server setting it just sets it. On a command name it refuses with `"<name>" is a command`.
+- **The mod reads all its settings as variables.** That covers `k_*`, `dq`, `dr`, `dp`, `demo_*`, `allow_timing` and the rest. It never reads them from localinfo or serverinfo. A missing variable reads as 0 or empty.
+- **The mod registers defaults on the first frame of every map**, but only for names that do not exist yet.
+  - An existing name keeps its value, even an empty one. So a config value always beats the mod's default, and `set x ""` stays empty (derived).
+  - Defaults relevant here: `demo_tmp_record 0`, `demo_scoreslength 10`, `k_demotxt_format xml`, `maxfps 77`.
+  - These are registered empty: `dq`, `dr`, `dp`, `allow_timing`, `demo_skip_ktffa_record`, `k_demoname_date`, `k_demo_mintime`.
+- **A bare `k_x 1` without `set`** works only once the variable exists. The console tries commands, then variables, then aliases, then the mod (which declines), and otherwise prints `Unknown command "<name>"`. So in `server.cfg` a bare mod name fails, while in a mode config run later it works (derived).
+- **`localinfo k_x 1` is not an alternative.** The mod reads only these keys through its world-info lookup: `fpd`, `matchtag`, `*version`, `*cheats`, and its own numbered keys.
+  - The lookup returns the serverinfo value, or the localinfo value when the serverinfo one is empty. So `localinfo matchtag x` works too (derived).
+  - The numbered keys: `1` up to the highest user id holds the names of players who left mid-match, and `666` upward holds the match's team names. Both ranges are cleared at the real end of a match.
+
+## 22. `serverinfo` and `localinfo` as commands
+
+- **`serverinfo`**:
+  - With no arguments it lists the pairs and `[<used>/512]`. With a key it prints `Serverinfo <key>: "<value>"` or `No such key <key>`. With key and value it sets the key.
+  - A `*` key is refused with `Star variables cannot be changed.`
+  - `0` becomes empty, and empty removes the key. This holds even for `deathmatch` on these paths (derived).
+  - If the key is also a server setting published in serverinfo (`watervis`, `sv_safestrafe`, `maxfps`, ...), the setting changes too.
+  - Limits: key and value each under 64 characters, refused with `Keys and values must be < 64 characters.` No `\` or `"`. The whole string under 512 bytes, otherwise `Info string length exceeded (...)`. Characters 13 and below are dropped. Red text is kept.
+  - A real change during a map goes to every client at once on the reliable channel.
+  - Star keys the server owns include `*gamedir` (from `sv_gamedir`) and `*admin` (from `sv_admininfo`).
+- **`localinfo`**:
+  - It is the same command shape, with `[<used>/32768]` in the listing.
+  - It is never sent to clients and survives map changes.
+  - Limits: key and value each under 64 characters. Refused silently if either contains `\`, `"`, CR, LF, `$` or `;`. At most 10000 keys. Keys match without regard to case. Empty removes the key.
+  - A QC (`.dat`) mod can be told of each change (key, old value, new value). A native or bytecode mod such as KTX is not.
+
+## 23. Server-side demo recording
+
+- **Start** (mod): when the countdown starts, if `demo_tmp_record` is non-zero (nQuake 1). In matchless mode the countdown starts as soon as possible.
+  - Race is always recorded. Nothing is recorded with `deathmatch 0`.
+  - FFA is skipped when `demo_skip_ktffa_record` is non-zero (nQuake 0).
+  - A running recording is first cancelled (deleted). The mod then runs `sv_demoeasyrecord "<name>"`.
+- **Stop** (mod): `stop` once the intermission has lasted max(1, `demo_scoreslength`) seconds (nQuake 6). The level change is allowed one second later.
+- **Cancel** (mod): a match that is broken, or a countdown that is aborted, deletes the demo (and its text file) only if all of these hold:
+  - the match had not started, or it ran less than `k_demo_mintime` seconds,
+  - serverinfo has no `matchtag` (ignored when bots play),
+  - race rules agree.
+  - `k_demo_mintime` is bounded to 0..3600, and 0 means 120. nQuake gives 360, and the 1on1 mode gives 180.
+  - A kept broken match is saved by the normal stop after its intermission (derived).
+  - `map` while recording stops and saves first.
+- **The mod's name**, in this order:
+  - A mode prefix. For a duel: `duel[_race][_midair][_instagib]_<a>_vs_<b>`. For team play: the user mode's name (for example `2on2`, else `team`), or `ctf`, then `_<team>_vs_<team>`. Otherwise one of `ffa_<n>`, `ra_<n>`, `ca` or `wipeout` with team names, `race_<a>_<b>_others`, or `unknown_<n>`.
+  - Then `[<map>]`.
+  - Then the local time formatted by `k_demoname_date` as a strftime format, when it is set (nQuake `%Y%m%d-%H%M`).
+  - The whole name is cut at 59 characters (derived).
+- **The server's file**:
+  - The name is cleaned: lower case, red text made plain, a short set of punctuation kept (`! ' ( ) + - . @ [ ] { }`), everything else `_` with runs collapsed.
+  - If the name is taken, the server appends `_01`, `_02`, and so on. It counts a name as taken by `.mvd`, `.mvd.gz`, `.mvd.bz2`, `.mvd.rar` or `.mvd.zip`.
+  - The file is `<gamedir>/<sv_demodir>/<name>.mvd`, at most 196 characters.
+  - `easyrecord` with no name builds `<n>on<n>_<team>_vs_<team>_<map>` (player names too when `sv_demoExtraNames` is above 0), `duel_<a>_vs_<b>_<map>` or `ffa_<map>(<n>)`. The mod always gives a name.
+- **Messages**:
+  - `Server starts recording (disk):\n<file>` (or `(memory)`), unless `sv_silentrecord` is on.
+  - `Server recording completed` at the stop.
+  - `Server recording canceled, demo removed` at a cancel.
+  - The read-only setting `serverdemo` holds the file name while recording.
+- **`sv_demodir`**:
+  - Default and nQuake: `demos`.
+  - Empty is refused. A leading `..` is dropped. A value containing `/..` is refused.
+- **`sv_demoDirAlt`**: default and nQuake empty. It is never written to. It is a second place to look when a client downloads `demos/<file>`, and when the web site asks for an upload.
+- **`sv_demofps`**: default and nQuake 77; 0 means 20, and the floor is 4. That is the rate while anyone is in the game and the server is not paused. Otherwise `sv_demoIdlefps` applies (default 10, bounded 4..30).
+- **`sv_demotxt`** (default 1, nQuake 2): the text file is the demo's name with `mvd` replaced by `txt`.
+  - 0: an old text file is deleted.
+  - 1: the file is written at the start and rewritten at the stop. It holds a one-line result (`duel: <a> vs <b> @ <map> - <x>:<y>`, `ffa: ...` or `tp: ...`), then `date`, `map`, `teamplay`, `deathmatch` and `timelimit` lines, then players and frags.
+  - 2: an empty file is created and never overwritten. At the end-of-match stats the mod writes `demoinfo_<ip>_<port>.json` in the game directory, plus `.xml` when `k_demotxt_format` is not `json`. The formats are `xml` (also the fallback) and `json`. The server appends it (up to 200 KiB) to the text file. When the server supports it, the server also embeds it in the demo stream.
+  - A cancelled demo loses its text file.
+- **`sv_demoMaxSize`**: KiB; default 20480, nQuake 65536; 0 means no cap. Live streams are never capped.
+  - When a file passes the cap it is closed and kept, a little past the cap.
+  - If nothing else is being written, recording ends. Everyone then sees `QTV disconnected` (derived; the "max demo size exceeded" text is unreachable).
+  - Neither the text-file step nor `sv_onrecordfinish` runs. The mod's later `stop` and its stats find nothing recording (derived).
+- **`sv_demoMaxDirSize`**: KiB; default 102400, nQuake 4096000; 0 means no check. It is checked once per recording start, against the sum of everything in the demo directory.
+  - If over the limit and `sv_demoClearOld` is 0 or less: `Insufficient directory space, increase sv_demoMaxDirSize` on the console, and no recording. The mod is not told (derived).
+  - Otherwise: `Clearing <n> old demos`, and the server deletes the `sv_demoClearOld` oldest files by modification time (twice that many when `sv_demotxt` is on). That means any files, not only demos. It deletes once, and does not loop until under.
+  - `sv_demoClearOld`: default 0, nQuake 10.
+- **`sv_demoUseCache`** (default 0, nQuake 1): writes go to a memory buffer first. Its size is the read-only `sv_demoCacheSize`, set by `-democache <KB>` with a minimum and default of 16 MiB. The buffer is flushed when less than 64 KiB is free, at the stop, and at the size cap.
+- **`sv_onrecordfinish`** (default empty, nQuake `mvdfinish`): after a normal close, the server starts the program `./<first word>.qws` without waiting, from the game directory. The console shows `Running <name>.qws`. Arguments, in order:
+  - a redirect number, normally 0,
+  - the demo directory,
+  - the demo name without its extension,
+  - the setting's remaining words.
+
+## 24. Logs: `sv_logdir`, `logplayers`, `logrcon`
+
+- **`sv_logdir`**: default `.`, nQuake `logs`. It is relative to the process's working directory, not the game directory. A value containing `..` is refused. Setting it creates the directory but does not move open logs.
+- **The log commands toggle**: `logfile`, `logerrors`, `logrcon`, `logtelnet`, `fraglogfile`, `logplayers`, `modfraglogfile`.
+  - Opening prints `Logging <kind> to <path>`. Closing prints, for example, `Rcon logging off.`
+  - nQuake opens `logplayers` and `logrcon` once, in `server.cfg`.
+- **File**: `<sv_logdir>/<prefix><port>_<NNNN>.log`, with prefixes `qconsole_`, `qerror_`, `rcon_`, `qtelnet_`, `frag_`, `player_`, `modfrag_`.
+  - Player and rcon logs append to the highest existing index. Frag logs always start the next free index.
+  - Rotation is by size only: `sv_maxlogsize` in bytes, default 0 (never). Past it, the next index opens.
+- **Line prefix** (all but frag logs): `[<weekday> <month> <day>, <hh>:<mm>:<ss> <year>].[1] `, in local time.
+- **Player log**: `<event>\<name>\<userid>\<ip>\<real ip>\<port>` followed by the whole userinfo (starting with `\`).
+  - The events are `connect`, `disconnect`, `name change`, `name spam`, `dropped <n>` (section 27, `sv_getrealip`) and `kick<reason>`.
+- **Rcon log**:
+  - `Rcon from <ip:port> (<player>): <packet text>`, or without the parenthesis when no connected client matches.
+  - `Bad rcon from <ip:port> ...:` followed by a newline and the packet.
+  - `Rcon from banned IP: <ip:port>: <packet>`.
+  - With plain rcon the password is starred out. With encrypted rcon the digest is logged as sent.
+- **Frag log** (not used by nQuake): `\<killer>\<victim>\` per frag.
+  - With `frag_log_type 1` the line is instead `\frag\<killer>\<victim>\<team>\<team>\<y>-<m>-<d> <h>:<m>:<s>\`, and `\newmap\<map>\\\\<date>\` is written on each map change.
+
+## 25. `sv_loadentfiles` and `sv_loadentfiles_dir`
+
+- The server checks at every map load. Defaults: `1` and empty. nQuake: `1` and `ctf`. The mod also sets the directory when switching modes: empty for normal modes, `ctf` for CTF.
+- The entity name is the second argument of `map <level> [<entityfile>]`, else the map's name. The server takes the first that exists, through the normal search path:
+  1. `maps/<dir>/<name>.ent` (when the directory is set),
+  2. `maps/<name>.ent`,
+  3. the map's own entities.
+- The file replaces the whole entity list; it is not a merge. The geometry and map checksum are unchanged (derived).
+
+## 26. Remote console and accounts: `sv_crypt_rcon`, `sv_timestamplen`, `sv_rconlim`, `sv_hashpasswords`
+
+- **Rcon**: the packet is `rcon <password field> <command>`.
+  - The field is checked against the master password (`master_rcon_password`, accepted only from `server.cfg`), then against `rcon_password`.
+  - The plain `rcon_password` may not run, as its first word: `rm`, `rmdir`, `ls`, `chmod`, `sv_admininfo`, `if`, `localcommand`, `sv_crypt_rcon`, `sv_timestamplen`, `sys_command_line`, or anything starting with `log`. Those get `Command not valid.`
+  - A wrong field gets `Bad rcon_password.`
+- **`sv_crypt_rcon`** (default and nQuake 1): the field is 40 upper-case hex digits of a SHA-1 digest, then at least 16 hex digits of a timestamp.
+  - The digest covers: `rcon`, a space, the password, the timestamp digits, a space, then each command word followed by a space.
+  - The timestamp is the client's Unix time as 8 bytes, least significant first, two hex digits each.
+  - A field under 56 characters fails. With 0, the field is the plain password.
+- **`sv_timestamplen`** (default and nQuake 60 s): the most the timestamp may differ from the server's clock, either way; 0 turns the check off. There is no challenge, so a captured packet replays within the window (derived).
+- **`sv_rconlim`** (default 10, nQuake 3; 0 or less is off): one counter per second for the whole server.
+  - Every password check counts, which is two per packet unless the master password matches (derived). Over the limit, the check fails as a bad password.
+  - With nQuake's 3, only one rcon packet per second gets both checks (derived).
+- **`sv_hashpasswords`** (default and nQuake 1): applies to the account file `<gamedir>/accounts`, with lines `<login> <password> <state> [<failures>]`.
+  - With 1, `acc_create <login> <password>` stores the SHA-1 as 40 upper-case hex digits, and a login compares the hash, ignoring case. With 0, it stores and compares the plain password.
+  - IP accounts are never hashed. Changing the setting breaks existing accounts (derived).
+  - 10 failures block an account.
+  - It does not touch rcon.
+
+## 27. The rest (brief)
+
+- **`sv_forcenick`** (default and nQuake 0): with 1, on login the name is forced to the login, or to the web alias.
+  - Anyone else using that name is kicked with the reason ` (using authenticated user's name)`.
+  - Later renames away from the login (ignoring case and red text) are refused with `You can't change your name while logged in on this server.`
+- **`sv_reliable_sound`** (default 0, nQuake 1): with 1, sounds go on the reliable channel to every client whose userinfo `rsnd` is not exactly `0`. A client without the key gets them reliably too (derived).
+- **`sv_safestrafe`** (published in serverinfo; default and nQuake 0): with N above 0, the server forces at least N commands of zero side-movement between strafing one way and the other. The player's own zero commands count toward N, and spectators are exempt (derived from the rule).
+- **`watervis`** (published in serverinfo; default 0; nQuake 0, and 1 for CTF): the server only publishes it. What clients do with it is not in these sources.
+- **`sv_broadcast_enabled`** (default and nQuake 1; published in serverinfo as `broadcast`): a `say` starting with `.qw ` is also sent to every server the masters list. The chat still goes out locally.
+  - Refusals: `Broadcasting is not enabled on this server`, `Broadcasting is not available during games` (a game counts as started while a demo file records or serverinfo `status` is not `Standby`), `No broadcast servers configured`, `Wait <n> seconds before broadcasting again` (one per 30 s per server), `A broadcast is already in progress`.
+  - The list is refetched at most every 600 s, outside games: up to 4096 servers, at most 25 per address.
+  - Received broadcasts: each sender address may send 10 per 60 s, and must be on the list unless `sv_broadcast_sender_validation_enabled` is 0. They are shown as `[<host:port>] <name>: <message>`, or with a `[players/max]` part when the sender gave the counts. During a game only spectators see them, unless the mod is KTX with `k_spectalk` on. Up to 16 are replayed when the recording stops.
+- **`sv_enableprofile`**: not known to the server or the mod. The config line prints `Unknown command "sv_enableprofile"` (derived). Profiling is the console command `profile`.
+- **`sv_mapcheck`** (default and nQuake 1): at the first signon request the client's map checksum must match one of the server's two checksums. Otherwise the client sees `Map model file does not match (<maps/x.bsp>), ...` with the numbers, then `You may need a new version of the map, or the proper install files.`, and is dropped.
+- **`check_maps`** (command): lists `id1/maps/*.bsp`, then `qw/maps/*.bsp` (by name, relative to the working directory; a `qw` map with an `id1` name is skipped). It stores them in localinfo keys 1000..4999 and clears the rest. KTX does not read them; it lists `maps/*.bsp` itself.
+- **`sv_gamedir <name>`** (command): sets the serverinfo key `*gamedir`, which tells clients which game directory to use. The server's own paths do not change. It must be a single name, otherwise `*Gamedir should be a single filename, not a path`.
+- **`sv_progsname`** (default and nQuake `qwprogs`): the base name. It looks for `<name>.so`/`.dll`/`.dylib` in each search directory, then `<name>.qvm`, then `<name>.dat`, `qwprogs.dat`, `spprogs.dat`. Read at every map load.
+- **`sv_progtype`** (default 0, nQuake 1):
+  - 1 tries the native library, then `Failed to load dll, looking for qvm.` and the bytecode.
+  - 2 compiles the bytecode, or interprets it where it cannot compile.
+  - 0 still tries `<name>.qvm` (interpreted) before the `.dat` (derived), so "0 = .dat" holds only when no `.qvm` exists.
+  - `-progtype <n>` on the command line is overridden by a config line.
+- **`sv_getrealip`** (default 1; nQuake's `mvdsv.cfg` gives 2, but `server.cfg` then sets 0): with 1 or 2, a connecting client is told up to 10 times to send `ip <slot> <number>` straight to the server's address. This learns its real address behind a proxy, and a banned real address is dropped.
+  - After 3 s or 10 tries without it: with 2, `Failed to validate client's IP.` and a drop (player log `dropped 2`); with 1, the client carries on.
+  - A mismatch of private and public addresses, with `sv_serverip` empty, skips the check with a console warning.
+- **`sv_use_dns`** (default and nQuake 0): with 1, `status` shows resolved host names. Nothing else.
+- **`fs_cache`** (default 1, nQuake 0): with 1, file lookups use an index of the whole search path, rebuilt after map changes, demo starts and stops, and other writes. With 0, each lookup walks the search path. With 1, files added from outside may be missed until a rebuild, and each rebuild costs a full listing (derived).
+- **`sys_select_timeout`** (µs; default and nQuake 10000): the longest the main loop waits for input before running a frame. It is used in whole milliseconds. Values outside 1000..1000000 are refused with a warning.
+- **`sys_restart_on_error`** (default and nQuake 0): after a fatal error, with 1, the server re-executes itself with the same command line, printing `Restart failed: <reason>` if it cannot. With 0 it exits with status 1.
+
+## 28. VIPs: `maxvip_spectators`, `vip_values`
+
+- **A VIP** is a client who matches a word of `vip_password` (empty or `none` means none), or an address added with `vip_addip <ip/mask> [<level>]`.
+  - Spectators are matched by the `spectator` value, then `password`, then address. Players are matched by `password`, then address.
+  - The commands are `vip_removeip`, `vip_listip`, and `vip_writeip`, which writes `<gamedir>/vip_ip.cfg` as `vip_addip a.b.c.d <level>` lines. nQuake runs that file at start-up.
+- **Level**:
+  - By password, the word's position counted from 1, or, when `vip_values` is set, the number at that position (0 means not a VIP).
+  - By address, the given level (at least 1). The higher of the two wins once the real address is known.
+  - Shown to the mod as the userinfo key `*VIP`.
+- **What the server gives a VIP**:
+  - It skips the server and spectator passwords.
+  - It uses extra spectator slots, up to `maxvip_spectators` (default 0, nQuake 4). These are clamped so that `maxclients`, `maxspectators` and `maxvip_spectators` add up to at most 32.
+  - A spectator who asks with `spectator 2` on a full server is let in provisionally and dropped with `server is full` unless their real address is a VIP address. That needs `sv_getrealip`, so it is off in nQuake (derived).
+- **The mod** names rights bits: 1 normal, 2 not kickable by elected admins, 4 admin without a password, 8 demo admin, 16 judge, 32 rcon. But its VIP lookup always returns 0, so no VIP right takes effect in the current mod.
+- **nQuake's `vip_values "1 8 4 20 12 28"`** would give the first six VIP passwords those bit sets (derived). nQuake's configs set no `vip_password`, so as shipped it does nothing.
+
+## 29. The central web site: `sv_www_address`, `sv_www_authkey`; and `download_map_url`
+
+- **The `sv_www_*` settings exist only in a server built with libcurl.** Without curl the start-up line says `www authentication disabled (no curl support)`. nQuake's `set` lines still create the variables, so the mod tries `sv_web_post` and `sv_web_postfile` and gets `Unknown command` (derived).
+- **Values**: nQuake's `ktx.cfg` sets the address to `https://badplace.eu` and leaves the key empty.
+- **URL**: the address, plus `/` if missing, plus the path. Every request is a form POST carrying `authKey`. Replies are `Key:Value` lines.
+- **What is sent, when and where**:
+  - **Check-in**: `ServerApi/Checkin`, every max(60, `sv_www_checkin_period`) s while no game is started and nothing is pending.
+  - **Login**: `login <user>` (once per 5 s) posts `userName` and `status` to `Authentication/GenerateChallenge`. The client is sent `//challenge <c>` and the message `Challenge stored...`. `challenge-response <r>` posts `challenge` and `response` to `Authentication/VerifyResponse`. Success sets the userinfo keys `*auth` and `*flag` and broadcasts `<name> logged in as <login>`. Failures show `Error: <message>`. With no address set, the player sees `Remote logins not supported on this server`.
+  - **Stats** (mod, at the end of a match, with `sv_demotxt 2` and a demo recording): the JSON stats file to `ServerApi/UploadGameStats`, with `logins[i].name`, `logins[i].token` and `logincount`.
+  - **Race** (mod): `ServerApi/LogRaceAttempt` with `map`, `routeNumber`, `weap`, `fs`, `racer`, `time`, `complete`, the top-scores file to `ServerApi/UploadTopFile`.
+  - **Replies the server acts on**: `Broadcast:<text>` is shown to everyone. `Upload:demos/<file>` with `UploadPath:<path>` uploads that demo (from the demo directory, else `sv_demoDirAlt`). Other folders are refused.
+- **`download_map_url`** (default empty, not set by nQuake): when a client starts downloading `maps/<x>`, it sees `Map maps/<x> is <n>KB (<m>MB)`. If the URL is set, it then sees `Download this map faster:` and `<url><x>`. Nothing is sent elsewhere.
+
+## 30. `setmaster` and `fpd`
+
+- **`setmaster <addr> ...`** forgets all masters and takes up to 8, with port 27000 when none is given.
+  - Each master gets `Master server at <addr>`, `Sending a ping.` and a 2-byte packet: `k` and a zero byte.
+  - `none`, or an address that does not resolve, prints `Setting nomaster mode.` and stops. Earlier masters in the same list stay (derived).
+  - Heartbeats go out on the next frame with a map running, then every 300 s. Each is the text `a`, newline, a rising sequence number, newline, the number of connected clients (spectators included), newline, sent without the connectionless `0xFF` prefix. The console shows `Sending heartbeat to <addr>`.
+  - Shutdown sends `C` and a newline.
+  - The same list feeds the `.qw` broadcast server list.
+- **`fpd`** (serverinfo, nQuake 206): the server never reads it. The mod reads and rewrites it.
+  - Toggles, for players or spectating admins, outside a match only: `qlag` toggles 8 and broadcasts `QiZmo lag settings in effect` or `not in effect`, `qenemy` toggles 32 and broadcasts `QiZmo enemy reporting allowed` or `disallowed`, `qpoint` toggles 128 and broadcasts `QiZmo pointing enabled` or `disabled`.
+  - `status2` reports bits 8, 2, 32 and 128 as `on` or `off`.
+  - At the countdown, if any of 2, 8, 32, 128 is set, everyone sees `QiZmo:` with ` timer`, ` lag`, ` enemy`, ` point`, then ` disabled`.
+  - At match start the mod sets bit 64 when `k_spectalk` is 0 (clears it when 1), and clears it at match end.
+  - What the bits mean to clients is not in these sources. nQuake's config comment says: 1 no %-reporting, 2 no powerup timer, 4 no sound triggers, 8 no lag features, 16 report lag-setting changes, 32 silent %e, 64 no voice between spectators and players, 128 silent %x/%y, 256 no skin forcing, 512 no colour forcing. 206 is 2 + 4 + 8 + 64 + 128.
+
+---
+
 ## Rough cost to build (opinion)
 
 Ranked by value to a deathmatch server divided by the effort to build it, best first:
