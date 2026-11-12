@@ -286,11 +286,11 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
   std::vector<std::string> paths;
   std::error_code ec;
   for (const auto& e : std::filesystem::directory_iterator(dir, ec))
-    if (e.path().extension() == ".mvd") paths.push_back(e.path().string());
+    if (la::is_recording(e.path())) paths.push_back(e.path().string());
   if (ec || paths.empty()) {
-    lab.fail("se-moves: the folder " + dir + " lists no .mvd recordings" +
+    lab.fail("se-moves: the folder " + dir + " lists no recordings (.mvd or .ger)" +
                  (ec ? ": " + ec.message() : ""),
-             "next: pass --dir=<a folder of one map's .mvd recordings>");
+             "next: pass --dir=<a folder of one map's recordings (.mvd or .ger)>");
     return;
   }
   std::sort(paths.begin(), paths.end());
@@ -494,7 +494,7 @@ std::string recorded_map(const std::string& file, const std::string& dir) {
     std::vector<std::string> paths;
     std::error_code ec;
     for (const auto& e : std::filesystem::directory_iterator(dir, ec))
-      if (e.path().extension() == ".mvd") paths.push_back(e.path().string());
+      if (la::is_recording(e.path())) paths.push_back(e.path().string());
     std::sort(paths.begin(), paths.end());
     if (!paths.empty()) path = paths.front();
   }
@@ -884,7 +884,7 @@ const gl::LabSpec kSpec{
     {
         {"file", "", "a demo's path (plain or gzip); empty: a walk written in code"},
         {"dir", "",
-         "a folder of one map's .mvd recordings: who moves fastest and the weave by speed"},
+         "a folder of one map's recordings (.mvd or .ger): who moves fastest and the weave by speed"},
         {"map", "", "the map's .bsp path (the demo's map); empty: --basedir, else the fixture"},
         {"basedir", "", "a folder holding a game folder, to read --mapname from"},
         {"game", "id1", "the game folder under --basedir"},

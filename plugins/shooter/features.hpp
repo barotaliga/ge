@@ -89,9 +89,10 @@
 // - `leadwall`: a target's predicted way slid along the walls it meets (bot.cpp `lead_slide`),
 //   not run on through them (M18r.md 0s); judging.
 // - `leadmean`: a projectile led on the target's drift (his course averaged over 0.5 s) as the
-//   flight lengthens, his swing's middle (bot.cpp); judging.
+//   flight lengthens, his swing's middle (bot.cpp); not kept (an expert's direct hits fell),
+//   in no preset.
 // - `leadarc`: a projectile led along the target's curve at his turn rate (intercept.hpp
-//   `MovingTarget::turn`), a hopper's bend; judging.
+//   `MovingTarget::turn`), a hopper's bend; not kept (even in the drill), in no preset.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
