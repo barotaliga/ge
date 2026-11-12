@@ -173,6 +173,12 @@ struct ServerGame {
   // offline. Both null: the core's own node, session and hosting round `frame`.
   bool (*serve)(void* game, net::Transport& port, std::string& error) = nullptr;
   void (*net_frame)(void* game, int64_t now_us) = nullptr;
+
+  // A game a TV node can broadcast (engine/tv/server_source.hpp): the last frame as the game's
+  // viewers need it (what changed: its moves, its events), appended to `out`, and the whole state
+  // a viewer who joins starts from. Both null: no broadcast.
+  void (*tv_frame)(const void* game, std::vector<uint8_t>& out) = nullptr;
+  void (*tv_keyframe)(const void* game, std::vector<uint8_t>& out) = nullptr;
 };
 
 struct Server {

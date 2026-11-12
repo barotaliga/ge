@@ -193,20 +193,20 @@ TEST(a_nodes_library_is_listed_and_a_file_fetched_by_its_sha256) {
   fs::create_directories(dir);
   const std::vector<uint8_t> a = make_stream(40, 5, "hall");  // over two pieces
   const std::vector<uint8_t> b = make_stream(3, 1, "yard");
-  for (const auto& [name, bytes] : {std::pair{"a.ger", &a}, std::pair{"b.ger", &b}}) {
+  for (const auto& [name, bytes] : {std::pair{"a.ged", &a}, std::pair{"b.ged", &b}}) {
     std::ofstream f(dir / name, std::ios::binary);
     f.write(reinterpret_cast<const char*>(bytes->data()),
             static_cast<std::streamsize>(bytes->size()));
   }
   {
-    std::ofstream junk(dir / "notes.ger");
+    std::ofstream junk(dir / "notes.ged");
     junk << "not a replay";
   }
   tv::Node node;
   std::string error;
   CHECK(tv::library_scan(dir.string(), node.library, error));
   CHECK((node.library.size()) == (size_t{2}));
-  CHECK((node.library[0].name) == (std::string("a.ger")));
+  CHECK((node.library[0].name) == (std::string("a.ged")));
   CHECK((node.library[0].bytes) == (static_cast<uint64_t>(a.size())));
   CHECK((node.library[0].game) == (std::string("tv-test")));
   CHECK((node.library[1].meta[0].second) == (std::string("yard")));
@@ -223,7 +223,7 @@ TEST(a_nodes_library_is_listed_and_a_file_fetched_by_its_sha256) {
   tv::tv_update(node, 0, send);
   CHECK(w[1].have_list);
   CHECK((w[1].files.size()) == (size_t{2}));
-  CHECK((w[1].files[1].name) == (std::string("b.ger")));
+  CHECK((w[1].files[1].name) == (std::string("b.ged")));
   CHECK(w[1].fetch_done && !w[1].fetch_missing);
   CHECK(w[1].fetched == a);
   CHECK(!w[1].have_header);  // files only: no live stream

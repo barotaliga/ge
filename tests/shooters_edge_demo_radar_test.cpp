@@ -67,10 +67,10 @@ TEST(a_match_reads_into_radar_chunks) {
 
 TEST(the_track_rides_the_packed_file) {
   const std::vector<uint8_t> rec = cl::write_multiview_match(match());
-  std::vector<uint8_t> ger, with;
+  std::vector<uint8_t> ged, with;
   std::string error;
-  CHECK(cl::pack_demo(rec, ger, error));
-  CHECK_MSG(cl::add_radar(rec, ger, with, error), error);
+  CHECK(cl::pack_demo(rec, ged, error));
+  CHECK_MSG(cl::add_radar(rec, ged, with, error), error);
   std::vector<uint8_t> back;
   CHECK_MSG(cl::unpack_demo(with, back, error), error);
   CHECK(back == rec);  // the recording's own track untouched
