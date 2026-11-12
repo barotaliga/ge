@@ -106,9 +106,9 @@
 //   view turns toward (pilot.cpp, bot.cpp); on.
 // - `noback`: moving, no spot watched or fired at (the game's watch, its rockets at news) and,
 //   roaming, no player newly seen more than 100 degrees off the way walked: no back key under
-//   them (M18r.md 0w); judging.
+//   them (M18r.md 0w); on.
 // - `levelview`: a spot watched looked at within 15 degrees of level, and a look let go brought
-//   back level under the hand (its tolerance under the pace's step); judging.
+//   back level under the hand (its tolerance under the pace's step); on.
 // - `hopopen`: a hop's side away from a wall for every skill, and a circle jump curved out to the
 //   side whose arc stays clear (pilot.cpp, M18r.md 0v); judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
