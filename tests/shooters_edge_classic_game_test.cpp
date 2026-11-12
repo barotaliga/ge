@@ -21,6 +21,7 @@
 // ge:keywords listen-server listen_options join-the-window listen_mic local-voice sv_voip
 // ge:keywords sv_mod mod-folder gamedir qwprogs misc-pak vote sv_vote per-map-vote
 // ge:skill net shooter testing
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -247,6 +248,40 @@ TEST(classic_game_the_shooter_s_and_the_endpoint_s_settings) {
   Server refused;
   CHECK(!server_open(refused, se::classic_game(), bad, nullptr, nullptr, error));
   CHECK_MSG(error.find("sv_floodprot") != std::string::npos, error);
+}
+
+// Each classic game's names for the server's settings: a server.cfg in either game's words sets
+// ours, and the sequel's own rule is left alone on a classic map.
+TEST(classic_game_each_game_s_names_for_the_server_s_settings) {
+  ge::console::Console con{true};
+  ServerConfig c;
+  ServerCfg cfg;
+  std::string error;
+  CHECK_MSG(server_configure(con, {"--map=arena", "+set", "maxclients",
+                                   "12",          "+set", "hostname",
+                                   "Old Names",   "+set", "flood_persecond",
+                                   "7",           "+set", "sv_maplist",
+                                   "dm2 dm3",     "+set", "spectator_password",
+                                   "look",        "+set", "maxspectators",
+                                   "3",           "+set", "dmflags",
+                                   "16"},
+                             c, cfg, se::classic_game(), error),
+            error);
+  CHECK(c.maxclients == 12);
+  CHECK(c.hostname == "Old Names");
+  CHECK_MSG(c.floodprot == "10 7 1", c.floodprot);
+  CHECK(c.maprotation == "dm2 dm3");
+  CHECK(c.spectator_password == "look");
+  CHECK(c.max_spectators == 3);
+  CHECK(c.rules["dmflags"] == "16");
+  // Our names set the same settings, read back by the game's.
+  CHECK(con.cvars().find("maxclients") == con.cvars().find("sv_maxclients"));
+  // Every game name is a synonym, none a setting of its own: the two never disagree.
+  for (const ge::console::Synonym& n : con.cvars().synonyms())
+    CHECK_MSG(n.target != nullptr && n.target->name != n.name, n.name);
+  CHECK(con.cvars().synonyms().size() == 12);
+  Server s;  // a classic map leaves the sequel's dmflags alone
+  CHECK_MSG(server_open(s, se::classic_game(), c, nullptr, nullptr, error), error);
 }
 
 TEST(classic_game_a_map_from_the_game_folder_s_pack) {
@@ -508,6 +543,10 @@ TEST(classic_game_a_client_joins_the_window_s_own_match) {
   // The visitor sees the window's player as a player, not a bot.
   CHECK(se::info_get(visitor.userinfos[0], "name") == "host");
   CHECK(se::info_get(visitor.userinfos[0], "*bot").empty());
+  // A mod reads the server's settings by its game's names (`cvar("maxclients")`).
+  const ge::console::Cvar* most = l.server->cvars.find("maxclients");
+  CHECK(most != nullptr && std::atoi(most->value.c_str()) >= 2);
+  CHECK(l.server->cvars.find("hostname") != nullptr);
   shooters_edge::client::listen_stop(l);
 }
 

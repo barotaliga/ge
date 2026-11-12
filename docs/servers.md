@@ -188,6 +188,29 @@ and the flags `--port`, `--ip`, `--maxclients`, `--name`, `--description`, `--cf
 `--map`, `--bots`, `--lobby`, which are the same cvars set at layer 6. The game adds its own (`fraglimit`, a mountain's
 seed) the same way.
 
+**A game's own names for these settings** (M53i). A game whose configs, admins and mods already
+use other names lists them in `ServerGame::names` (`SettingName`): each is a synonym on the
+server's console (`docs/console.md` § Synonyms), so a `server.cfg` line, `+set`, rcon or a vote by
+either name sets the one setting, and the two can never disagree. A name may stand for one word of
+a setting that holds several. Shooter's Edge's table serves both classic games, since their names
+do not clash with each other, only with ours:
+
+| Ours | The first classic game's | The sequel's |
+| --- | --- | --- |
+| `sv_hostname` | `hostname` | `hostname` |
+| `sv_maxclients` | `maxclients` | `maxclients` |
+| `sv_maxspectators` | `maxspectators` | `maxspectators` |
+| `sv_password`, `sv_spectatorpassword` | `password`, `spectator_password` | the same |
+| `sv_timeout` | `timeout` | `timeout` |
+| `sv_maprotation` | | `sv_maplist` |
+| `sv_floodprot` | `floodprot` | `flood_msgs`, `flood_persecond`, `flood_waitdelay` (its three words) |
+| `sv_floodprotmsg` | `floodprotmsg` | |
+
+A mod reads the server it runs on by its game's names too: before the rules start, the game puts
+`hostname`, `maxclients` and `maxspectators` in the rules' own table, so a bytecode or compiled
+mod's `cvar("maxclients")` reads the real number, not a default of its own. A rule only one
+game's mods know (the sequel's `dmflags`) is left alone by a map of the other.
+
 ## Meta-cvars: one switch for a group
 
 Some settings are a bundle: "a modern server" means lag compensation on, a faster tick, the

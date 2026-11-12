@@ -125,6 +125,8 @@ constexpr gs::GameRule kModRules[] = {
     {"timelimit", "the match's length, minutes (0 none)"},
     {"samelevel", "1: the map does not change at the end"},
     {"pausable", "1: a player may pause the game (0: only unpausing)"},
+    // The sequel's rules only; a map without brushes plays by the mod's own and leaves it alone.
+    {"dmflags", "the sequel's deathmatch rule bits (8192: infinite ammo); classic maps ignore it"},
 };
 
 constexpr gs::GameRule kEndpointRules[] = {
@@ -166,6 +168,45 @@ const std::vector<gs::GameRule>& all_rules() {
     return out;
   }();
   return rules;
+}
+
+// Each classic game's own names for the server's settings (gs::SettingName): a server.cfg, `+set`,
+// rcon or vote line by either name sets the one setting. Both games share the names they have in
+// common, so one table serves both: the first game's alone (floodprot, floodprotmsg), the
+// sequel's alone (sv_maplist, the three flood words), and both (hostname, maxclients, ...).
+constexpr gs::SettingName kSettingNames[] = {
+    {"hostname", "sv_hostname"},
+    {"maxclients", "sv_maxclients"},
+    {"maxspectators", "sv_maxspectators"},
+    {"password", "sv_password"},
+    {"spectator_password", "sv_spectatorpassword"},
+    {"timeout", "sv_timeout"},
+    {"floodprot", "sv_floodprot"},
+    {"floodprotmsg", "sv_floodprotmsg"},
+    {"sv_maplist", "sv_maprotation"},
+    {"flood_msgs", "sv_floodprot", 0},
+    {"flood_persecond", "sv_floodprot", 1},
+    {"flood_waitdelay", "sv_floodprot", 2},
+};
+
+// The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
+// own table before they start: each mod sees the server it runs on, not a default of its own.
+void game_names(sv::RulesCommon& rules, const gs::ServerConfig& c) {
+  const struct {
+    const char* name;
+    std::string value;
+    const char* help;
+  } values[] = {
+      {"hostname", c.hostname, "the server's name (sv_hostname)"},
+      {"maxclients", std::to_string(c.maxclients), "the most players (sv_maxclients)"},
+      {"maxspectators", std::to_string(c.max_spectators), "the most spectators (sv_maxspectators)"},
+  };
+  for (const auto& v : values) {
+    if (rules.cvars.find(v.name) == nullptr)
+      rules.cvars.add({v.name, v.value, ge::console::kServer, v.help, ge::console::CvarKind::text});
+    else
+      rules.cvars.set(v.name, v.value, ge::console::Source::code);
+  }
 }
 
 bool is_endpoint_rule(const std::string& name) {
@@ -305,11 +346,13 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
       rules.console("serverinfo *gamedir \"" + g.cfg.gamedir + "\"");
     for (const std::string& line : g.info_lines) rules.console(line);
   }
+  game_names(*rules, c);
   for (const auto& [rule, value] : c.rules) {
     // A module checks a client's rate against the endpoint's cap, so it is told the cap.
     if (rule == "sv_maxrate" && !g.module.empty() && !value.empty() && value != "0")
       rules.console("sv_maxrate \"" + value + "\"");
     if (value.empty() || is_endpoint_rule(rule)) continue;
+    if (rule == "dmflags" && !brushes) continue;  // the sequel's alone
     sh::ServerSettings check;
     if (sh::find_setting(rule) && !sh::set_setting(check, rule, value, error)) {
       error.append(" (--explain=").append(rule).append(" shows where it was set)");
@@ -1132,6 +1175,8 @@ gs::ServerGame make() {
   g.base_dir = kGameFolder;
   g.rules = all_rules().data();
   g.rule_count = static_cast<int>(all_rules().size());
+  g.names = kSettingNames;
+  g.name_count = static_cast<int>(std::size(kSettingNames));
   g.create = create;
   g.destroy = destroy;
   g.frame_seconds = frame_seconds;

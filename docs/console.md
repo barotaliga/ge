@@ -31,6 +31,18 @@ prefix comes the thing in one word, abbreviated when it is long: `r_shadowsize`,
 `ge cvar ls <prefix>` lists a game's cvars with a prefix; a new name matches its neighbours'
 style.
 
+### Synonyms
+
+A setting other software already knows by another name (a classic game's `maxclients` for
+`sv_maxclients`) gets that name as a SYNONYM, never as a second cvar that could disagree:
+`Cvars::add_synonym(name, target)` makes `find`, `set` and the console's query and set by the
+synonym reach the target. `add_synonym(name, target, part)` names one word of a setting that
+holds several, space-separated (`flood_persecond` for the second word of `sv_floodprot`'s
+`"N S T"`): setting it replaces that word and sets the whole, and querying it shows the word and
+the setting it is part of. A synonym is refused when its name is a cvar of its own, the target
+does not exist, or the name already stands for another setting. A server game lists its names
+in `ServerGame::names` (`docs/servers.md`).
+
 ## Tiers
 
 Each setting has one of three homes, set by its flags (`engine/console/cvar.hpp`):
