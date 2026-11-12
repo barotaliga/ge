@@ -6,6 +6,8 @@
 // ge:test tests/shooter_features_test.cpp
 #include "shooter/features.hpp"
 
+#include <initializer_list>
+
 namespace ge::shooter {
 
 namespace {
@@ -19,7 +21,8 @@ constexpr const char* kNames[kFeatures] = {
     "headroom",  "liphop",     "circlejump", "ahead",    "bodies",  "beat",      "keys",
     "keysteer",  "lookway",    "press",      "slopes",   "counter", "jumpkey",   "backstep",
     "runupkeys", "gapbuild",   "curvekeys",  "underway", "recipes", "chains",    "retarget",
-    "uturn",     "jumpfly",    "gappast",    "lipjump",  "airgap",  "pilotcast", "trial"};
+    "uturn",     "jumpfly",    "gappast",    "lipjump",  "airgap",  "pilotcast", "aimhop",
+    "airkeys",   "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -27,24 +30,33 @@ static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames
 // `counter`, `chains`, `retarget`). The keyboard (`keys`, `keysteer`) is on: a person's hands are
 // on keys (realism first; the frags it costs, -3.8 a match head to head, won back by fixing
 // movement and strategy).
-constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);
-constexpr uint64_t kKeys = (uint64_t{1} << static_cast<uint64_t>(Feature::lookway)) |
-                           (uint64_t{1} << static_cast<uint64_t>(Feature::press)) |
-                           (uint64_t{1} << static_cast<uint64_t>(Feature::counter)) |
-                           (uint64_t{1} << static_cast<uint64_t>(Feature::chains)) |
-                           (uint64_t{1} << static_cast<uint64_t>(Feature::retarget));
+constexpr Features of(std::initializer_list<Feature> list) {
+  Features f;
+  for (Feature x : list) f.set(x, true);
+  return f;
+}
+constexpr Features kKeys = of({Feature::lookway, Feature::press, Feature::counter, Feature::chains,
+                               Feature::retarget});
 // `runupkeys` and `underway` wait for their judgment (`gapbuild` and `curvekeys` on: together
 // +7.0 frags a match head to head on e1m2, the gap jumps landed 2.5 a match; `recipes` on: even
 // head to head over 12 seeds, people's hop starts taking off at ~405 against the bots' 341;
 // `uturn` on: +4.5 frags a match head to head on dm2, stops 18.8 -> 14.8 a bot-minute; `jumpfly`
 // on: +1.6 on dm2 and +2.4 on e1m2 a match head to head, run-ups 147 -> 86 a match; `lipjump`
-// on: +0.4 on dm2 and +5.9 on e1m2 a match head to head, dm2's lava deaths 14.1 -> ~11 a match).
-constexpr uint64_t kJudging = (uint64_t{1} << static_cast<uint64_t>(Feature::runupkeys)) |
-                              (uint64_t{1} << static_cast<uint64_t>(Feature::underway)) |
-                              (uint64_t{1} << static_cast<uint64_t>(Feature::gappast)) |
-                              (uint64_t{1} << static_cast<uint64_t>(Feature::airgap)) |
-                              (uint64_t{1} << static_cast<uint64_t>(Feature::pilotcast));
-constexpr uint64_t kAll = (kTrial - 1) & ~kKeys & ~kJudging;
+// on: +0.4 on dm2 and +5.9 on e1m2 a match head to head, dm2's lava deaths 14.1 -> ~11 a match;
+// `airkeys` on: +4.6 on dm2 and +1.0 on e1m2 a match head to head, the hop's air no longer
+// braking: -1.5 -> -0.3 units/s a command, the expert's hop gain p50 -105 -> about -10).
+constexpr Features kJudging = of({Feature::runupkeys, Feature::underway, Feature::gappast,
+                                  Feature::airgap, Feature::pilotcast, Feature::aimhop});
+// Every feature below `trial`, less those two.
+constexpr Features all_bits() {
+  Features f;
+  for (size_t k = 0; k + 1 < kFeatures; k++) {
+    const auto x = static_cast<Feature>(k);
+    f.set(x, !kKeys[x] && !kJudging[x]);
+  }
+  return f;
+}
+constexpr Features kAll = all_bits();
 
 bool separator(char c) { return c == ',' || c == ' ' || c == '/' || c == '\t'; }
 
@@ -52,8 +64,8 @@ bool separator(char c) { return c == ',' || c == ' ' || c == '/' || c == '\t'; }
 
 const char* feature_name(Feature f) { return kNames[static_cast<size_t>(f)]; }
 
-Features features_all() { return {kAll}; }
-Features features_none() { return {0}; }
+Features features_all() { return kAll; }
+Features features_none() { return {}; }
 Features features_of(AimSkill skill) {
   Features f = features_all();
   // No skill reads a turn a whole reaction late (`eye`): it held every level's aim under people's
@@ -101,17 +113,23 @@ bool apply_features(std::string_view text, Features& f, std::string& error) {
 }
 
 std::string features_text(const Features& f) {
-  // What no preset holds (`trial`, `ahead`) is written after the preset's part, when on.
-  constexpr uint64_t kExtra = ~kAll & ((kTrial << 1) - 1);
+  // What no preset holds (`trial`, the ones judged) is written after the preset's part, when on.
   std::string extra;
-  for (size_t k = 0; k < kFeatures; k++)
-    if (((kExtra >> k) & 1u) && f[static_cast<Feature>(k)]) extra += std::string(",+") + kNames[k];
-  const uint64_t bits = f.bits & kAll;
-  if (bits == kAll) return "all" + extra;
-  if (bits == 0) return "none" + extra;
+  bool all = true, none = true;
+  for (size_t k = 0; k < kFeatures; k++) {
+    const auto x = static_cast<Feature>(k);
+    if (!kAll[x]) {
+      if (f[x]) extra += std::string(",+") + kNames[k];
+      continue;
+    }
+    all = all && f[x];
+    none = none && !f[x];
+  }
+  if (all) return "all" + extra;
+  if (none) return "none" + extra;
   std::string off = "all", on = "none";
   for (size_t k = 0; k < kFeatures; k++) {
-    if ((kExtra >> k) & 1u) continue;
+    if (!kAll[static_cast<Feature>(k)]) continue;
     if (f[static_cast<Feature>(k)])
       on += std::string(",+") + kNames[k];
     else
