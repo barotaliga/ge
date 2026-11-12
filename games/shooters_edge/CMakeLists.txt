@@ -53,6 +53,10 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 ge_add_server(shooters_edge_dedicated OUTPUT_NAME shooters_edge_server SOURCES server/bin/main.cpp
               LINK shooters_edge_classic)
 
+# The hub (hub/), named `shooters_edge_hub` on disk at the build's root: the engine's hub
+# (engine/hub, docs/hub.md) with the game's modes and words. `--help` lists its flags.
+ge_add_hub(shooters_edge_hub_bin OUTPUT_NAME shooters_edge_hub SOURCES hub/main.cpp)
+
 # The bot team, headless (net/bots_main.cpp), named `shooters_edge_bots` on disk at the build's
 # root: a team of bots joins a classic server, any server (net/classic_bot_team.hpp). `--help`
 # lists its flags.

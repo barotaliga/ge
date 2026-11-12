@@ -2,7 +2,7 @@
 // every recording comes back byte for byte (multiview walked and field-coded, client and
 // single-player kept as bytes); a multiview recording packs smaller than zstd alone; a recording
 // cut short keeps its last bytes; a file cut short gives back its whole blocks; another game's file
-// is refused.
+// is refused; the demo player opens a replay file as the recording it holds.
 //
 // ge:summary Tests: classic recordings to replay v2 and back byte exact, smaller, cut, refused
 // ge:keywords test replay-v2 face multiview round-trip pack unpack cut truncated
@@ -137,4 +137,14 @@ TEST(another_games_file_is_refused) {
   std::string error;
   CHECK(!se::unpack_demo(file, back, error));
   CHECK_MSG(error.find("fall_line") != std::string::npos, error);
+}
+
+TEST(the_demo_player_opens_a_replay_file) {
+  const auto rec = se::write_multiview_match(match());
+  std::vector<uint8_t> file;
+  std::string error;
+  CHECK(se::pack_demo(rec, file, error));
+  se::Demo d;
+  CHECK_MSG(se::open_demo(file, d, error), error);
+  CHECK(d.replay_v2 && d.state.format == se::DemoFormat::multiview && !d.truncated);
 }
