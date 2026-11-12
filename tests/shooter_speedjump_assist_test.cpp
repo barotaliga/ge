@@ -1,7 +1,10 @@
 // THE EASY JUMP: forward and jump held, sent through `assisted_command` to the classic move, hop on
 // and gain at the share asked (less than the best strafe at under 1); the way weaves across the
 // aim, follows the mouse, ignores the pitch; the screen shows the asked share of the swing; the
-// commands it leaves alone go out as held, a shot along the shown view.
+// commands it leaves alone go out as held, a shot along the shown view. The same aid on the
+// sequel's move (`sequel_jump_rules`: its air law, its jump the up move and its let-go): it hops
+// on, gains by its share under either air acceleration, and the jump button reaches the move as the
+// up move.
 //
 // ge:summary Tests: the easy jump's strafing commands gain, weave, steer and show their swing
 // ge:keywords test speedjump assist assisted_command easy-jump swing cl_speedjump_view
@@ -13,6 +16,7 @@
 #include "core/libm/libm.hpp"
 #include "shooter/pmove.hpp"
 #include "shooter/recording.hpp"
+#include "shooter/sequel_move.hpp"
 #include "shooter/speedjump_assist.hpp"
 
 namespace sh = ge::shooter;
@@ -99,7 +103,98 @@ float best_strafe(const Field& f, int seconds) {
   return plan(s.velocity);
 }
 
+// THE SEQUEL'S FIELD: an endless floor at z 0 (the box's bottom stops 1/32 above it).
+sh::SequelTrace floor_trace(void*, sh::Vec3f a, sh::Vec3f mins, sh::Vec3f, sh::Vec3f b) {
+  sh::SequelTrace t;
+  const float from = a.z + mins.z, to = b.z + mins.z;
+  t.end = b;
+  if (from < 0) {
+    t.start_solid = t.all_solid = true;
+    t.fraction = 0;
+    t.end = a;
+    return t;
+  }
+  if (to >= 0.03125f) return t;
+  t.fraction = std::max(0.0f, (from - 0.03125f) / (from - to));
+  t.end = a + (b - a) * t.fraction;
+  t.normal = {0, 0, 1};
+  t.entity = 0;
+  return t;
+}
+int32_t floor_contents(void*, sh::Vec3f) { return 0; }
+
+struct SqRun {
+  sh::SequelMove pm;
+  int jumps = 0;
+  float speed() const { return plan({pm.s.velocity[0] * 0.125f, pm.s.velocity[1] * 0.125f, 0}); }
+};
+
+// A second's run east on the sequel's move, then `seconds` of forward and jump held: through the
+// aid at `share` (0: the hands alone), the server's air acceleration `air`.
+SqRun sq_run(float share, int seconds, float air) {
+  const sh::SequelWorld world{nullptr, &floor_trace, &floor_contents};
+  SqRun r;
+  r.pm.s.origin[2] = 24 * 8;
+  r.pm.air_accelerate = air;
+  sh::MoveCmd cmd;
+  cmd.msec = 13;
+  cmd.forward = 400;
+  sh::SpeedJumpAid aid;
+  for (int i = 0; i < (1 + seconds) * kRate; i++) {
+    if (i == kRate) cmd.buttons = sh::kButtonJump;
+    sh::MoveState s;
+    s.velocity = {r.pm.s.velocity[0] * 0.125f, r.pm.s.velocity[1] * 0.125f,
+                  r.pm.s.velocity[2] * 0.125f};
+    s.ground = r.pm.ground_entity >= 0 ? 0 : -1;
+    const bool down = s.ground == 0;
+    const sh::MoveCmd sent =
+        share > 0 ? sh::assisted_command(cmd, s, share, 0.5f, aid, sh::sequel_jump_rules(air))
+                  : cmd;
+    r.pm.cmd = sh::sequel_command(sent);
+    sh::sequel_move(r.pm, world);
+    if (down && r.pm.ground_entity < 0 && r.pm.s.velocity[2] > 200 * 8) r.jumps++;
+  }
+  return r;
+}
+
 }  // namespace
+
+TEST(the_easy_jump_hops_on_and_gains_on_the_sequels_move) {
+  for (const float air : {0.0f, 1.0f}) {
+    const SqRun held = sq_run(0, 8, air), half = sq_run(0.5f, 8, air), most = sq_run(0.8f, 8, air),
+                all = sq_run(1, 8, air);
+    CHECK_MSG(held.jumps == 1, "the jump held without the aid jumps once (its let-go rule)");
+    CHECK_MSG(held.speed() < 301, "the hands alone run at the move's 300");
+    CHECK_MSG(most.jumps >= 10, "the aid lets the jump go in the air and hops on each landing");
+    CHECK_MSG(half.speed() > 450, "8 s at share 0.5 should pass 450 units/s");
+    CHECK_MSG(most.speed() > half.speed() + 30, "a larger share gains more");
+    CHECK_MSG(all.speed() > most.speed(), "share 1 gains the most");
+  }
+}
+
+TEST(the_jump_button_is_the_sequels_up_move) {
+  sh::MoveCmd c;
+  c.buttons = sh::kButtonJump;
+  c.angles = {0, 90, 0};
+  CHECK(sh::sequel_command(c).up == sh::kSqJumpUp);
+  CHECK(sh::sequel_command(c).angles[1] == 16384);
+  c.up = 400;  // a held up move kept when it is more
+  CHECK(sh::sequel_command(c).up == 400);
+  c.buttons = 0;
+  c.up = -200;  // a crouch stays one without the jump
+  CHECK(sh::sequel_command(c).up == -200);
+  // In the air the aid lets go of both the jump button and an up move.
+  sh::MoveState air;
+  air.ground = -1;
+  air.velocity = {400, 0, 0};
+  sh::MoveCmd jump;
+  jump.msec = 13;
+  jump.forward = 400;
+  jump.up = 200;
+  sh::SpeedJumpAid aid;
+  const sh::MoveCmd sent = sh::assisted_command(jump, air, 0.8f, 0, aid, sh::sequel_jump_rules(0));
+  CHECK(sent.up == 0 && sent.buttons == 0 && sent.forward == 0);
+}
 
 TEST(the_easy_jump_hops_on_and_gains_by_its_share) {
   Field f;

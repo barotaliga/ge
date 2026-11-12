@@ -30,6 +30,7 @@ edges. `docs/shooters-edge.md` is the design;
 | `labs/pmove_lab.cpp` | The `pmove` lab: every scenario's worst error, paths from above and the side |
 | `plugins/shooter/speedjump_assist.hpp` | `assisted_command`: the command a client sends for forward and jump on a server without `pm_speedjump` (the jump let go in the air, the side key and a sent yaw) |
 | `games/shooters_edge/labs/gpu_se_speedjump_lab.cpp` | The `se-speedjump` lab: the easy jump (`pm_speedjump`, `cl_speedjump`) against the classic move and the best strafe, alone and on the listen server |
+| `games/shooters_edge/labs/gpu_se_sequel_speedjump_lab.cpp` | The `se-sequel-speedjump` lab: the easy jump on the sequel's move (both air laws, the steer on foot) and on the window's own sequel server; `--game` draws the eyes on a real map |
 | `shooter/program.hpp` | The game-program seam: hooks and functions by number, the globals |
 | `shooter/entity.hpp`, `server.hpp/.cpp` | The entity record and pool, linking, trigger and impact touches, sounds, `server_hash` |
 | `shooter/area.hpp/.cpp`, `trace.hpp/.cpp` | The 31-node area tree and its listing; world traces and `test_entity_position` |
@@ -109,7 +110,9 @@ edges. `docs/shooters-edge.md` is the design;
   air) and every server runs it with its classic move; `pm_speedjump` is only the share a server
   states (ours always do, `Setting::always_info`; 0 turns the aid off). Its memory
   (`SpeedJumpAid`) lives in the client (`Listen::jump_aid`, `Remote::jump_aid`), never in
-  `MoveState`, so prediction stays exact; `cl_speedjump_view` turns only the drawn view.
+  `MoveState`, so prediction stays exact; `cl_speedjump_view` turns only the drawn view. Another
+  move passes its air law (`SpeedJumpRules`; the sequel's `sequel_jump_rules`), never a copy of
+  the aid.
 - Still to come: the cvars bound through `engine/console` (setting `pm_airstep` sets
   `pm_pground`), a map's compiled hulls (M18b) answering `MoveWorld`, and the other entities'
   interpolation on the client (M18h).
