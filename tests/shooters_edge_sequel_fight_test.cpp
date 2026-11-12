@@ -160,6 +160,55 @@ TEST(the_rail_kills_through_armour_and_the_obituary_scores) {
   CHECK(!a->s().obituaries.empty() && a->s().obituaries.back() == "Ben was pierced by Ana's rail.");
 }
 
+TEST(the_aim_help_bends_a_granted_players_rail_onto_a_head_it_passes_over) {
+  // Ana's slug passes some 20 over Ben's head at his distance: a miss.
+  auto a = facing(300);
+  give(*a, sv::SqWeapon::railgun, 10);
+  run(*a, 8, sh::kButtonAttack, -3.6f);
+  CHECK(a->p(0).body.ammo[int(sv::SqAmmo::slugs)] == 9);
+  CHECK(a->p(1).health == 100);
+  // Granted the aim help: the same shot is bent onto him, and counted.
+  auto b = facing(300);
+  b->r.user_info(0, "*aimhelp", "1");
+  CHECK(b->s().sv.clients[0].aimhelp);
+  give(*b, sv::SqWeapon::railgun, 10);
+  run(*b, 8, sh::kButtonAttack, -3.6f);
+  CHECK_MSG(b->p(1).health < 100, std::to_string(b->p(1).health));
+  CHECK(b->s().sv.clients[0].aim_helped == 1);
+  // No vertical leeway: missed again.
+  auto c = facing(300);
+  c->r.user_info(0, "*aimhelp", "1");
+  c->r.console("sv_aimhelp_y 0");
+  give(*c, sv::SqWeapon::railgun, 10);
+  run(*c, 8, sh::kButtonAttack, -3.6f);
+  CHECK(c->p(1).health == 100);
+}
+
+TEST(the_aim_help_leads_a_rocket_unless_the_weapon_is_denied) {
+  // Ana's rocket passes some 25 over Ben's head: it hits the far wall, and the blast is too far.
+  auto a = facing(300);
+  give(*a, sv::SqWeapon::rocket_launcher, 10);
+  run(*a, 8, sh::kButtonAttack, -4.0f);
+  run(*a, 120);
+  CHECK(a->p(1).health == 100);
+  auto b = facing(300);
+  b->r.user_info(0, "*aimhelp", "1");
+  give(*b, sv::SqWeapon::rocket_launcher, 10);
+  run(*b, 8, sh::kButtonAttack, -4.0f);
+  run(*b, 120);
+  CHECK_MSG(b->p(1).health < 100, std::to_string(b->p(1).health));
+  CHECK(b->s().sv.clients[0].aim_helped == 1);
+  // The server denies the help to the rocket launcher: missed again.
+  auto c = facing(300);
+  c->r.user_info(0, "*aimhelp", "1");
+  c->r.console("sv_aimhelp_deny \"rl lg\"");
+  give(*c, sv::SqWeapon::rocket_launcher, 10);
+  run(*c, 8, sh::kButtonAttack, -4.0f);
+  run(*c, 120);
+  CHECK(c->p(1).health == 100);
+  CHECK(c->s().sv.clients[0].aim_helped == 0);
+}
+
 TEST(a_rocket_flies_and_hits_for_its_direct_damage) {
   auto a = facing(300);
   a->p(1).health = 500;  // to read the whole blow

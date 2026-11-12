@@ -17,6 +17,7 @@
 #include "progs/stdlib.hpp"
 #include "shooter/trace.hpp"
 #include "shooters_edge/server/builtins.hpp"
+#include "shooters_edge/server/shot_help.hpp"
 
 namespace shooters_edge::server {
 
@@ -211,8 +212,10 @@ void bi_traceline(pg::Vm& vm) {
   flush_to_world(qc_of(vm));
   const int shooter = lag_shooter(s, pass);
   if (shooter) s.lag_rewind(s.lag_ctx, shooter, true);
-  const sh::HullTrace tr = sh::trace_move(s.sv, vec_arg(vm, 0), {}, {}, vec_arg(vm, 1),
-                                          trace_kind(pg::arg_float(vm, 2)), pass);
+  sh::Vec3f end = vec_arg(vm, 1);
+  help_traced_shot(s, pass, vec_arg(vm, 0), end);  // a granted player's shot (shot_help.hpp)
+  const sh::HullTrace tr =
+      sh::trace_move(s.sv, vec_arg(vm, 0), {}, {}, end, trace_kind(pg::arg_float(vm, 2)), pass);
   if (shooter) s.lag_rewind(s.lag_ctx, shooter, false);
   write_trace(vm, tr);
 }

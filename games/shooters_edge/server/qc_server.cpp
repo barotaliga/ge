@@ -16,6 +16,7 @@
 #include "shooters_edge/server/catalogue.hpp"
 #include "shooters_edge/server/client_data.hpp"
 #include "shooters_edge/server/commands.hpp"
+#include "shooters_edge/server/shot_help.hpp"
 
 namespace shooters_edge::server {
 
@@ -289,6 +290,7 @@ std::unique_ptr<QcServer> make_qc_server(const pg::Progs& progs, const QcServerO
                                          std::string& error) {
   auto s = std::make_unique<QcServer>();
   if (!create_qc_server(*s, progs, opt, error)) return nullptr;
+  add_aim_help(*s);
   return s;
 }
 

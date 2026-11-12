@@ -121,6 +121,9 @@ constexpr gs::GameRule kModRules[] = {
     {"timelimit", "the match's length, minutes (0 none)"},
     {"samelevel", "1: the map does not change at the end"},
     {"pausable", "1: a player may pause the game (0: only unpausing)"},
+    // The aim help's weapons (server/shot_help.hpp): names, spaces between, `*` any characters.
+    {"sv_aimhelp_allow", "the weapons the aim help may bend (empty: all but the denied)"},
+    {"sv_aimhelp_deny", "the weapons the aim help never bends (\"rl lg\")"},
 };
 
 constexpr gs::GameRule kEndpointRules[] = {
@@ -312,12 +315,13 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
       return false;
     }
     char* end = nullptr;
-    std::strtod(value.c_str(), &end);  // every rule is a number
+    std::strtod(value.c_str(), &end);  // every rule is a number but the aim help's lists
     std::string line = rule;
     line.append(" \"").append(value).append("\"");
     // The sequel's rules keep their own few settings and leave the rest of a mod's alone.
     const bool taken = rules.console(line) || brushes;
-    if (end == value.c_str() || *end != '\0' || !taken) {
+    const bool text = rule == "sv_aimhelp_allow" || rule == "sv_aimhelp_deny";  // names
+    if ((!text && (end == value.c_str() || *end != '\0')) || !taken) {
       error = line;
       error.append(" is not a number (--explain=");
       error.append(rule).append(" shows where it was set)");
@@ -472,11 +476,11 @@ std::string next_map(const gs::ServerConfig& c, const std::string& current,
 // every client is told it as it signs on again. A restart keeps the change; the next map puts it
 // back.
 //
-// `vote speedjump <id|name> on|off|<share>` grants one player the easy jump for this map, or takes
-// it back (classic_admin.hpp's grant: disclosed, `*speedjump` in his user info). The change is
-// keyed `speedjump:<user id>`, so two votes on one player are one change and two players are two;
-// its value names the player and the share (`Ann on`, `Ann 0.5`, `Ann off`), its `before` what he
-// had. The next map puts each back; a player who left is passed over.
+// `vote <aid> <id|name> on|off|<value>` grants one player an aid for this map (`speedjump`,
+// `aimhelp`, `rjump`: classic_admin.hpp's grants, engine/server/aids.hpp), or takes it back. The
+// change is keyed `<aid>:<user id>`, so two votes on one player are one change and two players are
+// two; its value names the player and the grant (`Ann on`, `Ann 0.5`, `Ann off`), its `before`
+// what he had. The next map puts each back; a player who left is passed over.
 
 // A rule the warmup holds at 0 (hold_limits) while the lobby waits for its match.
 bool held_now(const Game& g, std::string_view name) {
@@ -484,66 +488,46 @@ bool held_now(const Game& g, std::string_view name) {
          (name == "fraglimit" || name == "timelimit");
 }
 
-constexpr std::string_view kSpeedjumpVote = "speedjump";
-
-// The share a speedjump change's value ends in (`Ann on`, `Ann 0.5`): -1 for `off`.
-float speedjump_vote_share(std::string_view value) {
-  const size_t space = value.find_last_of(' ');
-  const std::string last(space == std::string_view::npos ? value : value.substr(space + 1));
-  float share = -1;
-  if (last == "on") return kGrantShare;
-  if (last != "off" && !speedjump_parse_share(last, share)) return -1;
-  return share;
-}
-
-// `vote speedjump <id|name> on|off|<share>`: the player named, and the grant asked for him.
-bool speedjump_vote_check(const Game& g, std::string_view value, gs::VoteCheck& out) {
-  const std::string text(value);
-  const size_t space = text.find_last_of(' ');
-  if (!g.classic || space == std::string::npos) {
-    out.error = "usage: vote speedjump <id|name> on|off";
+// `vote <aid> <id|name> on|off|<value>`: the player named, and the grant asked for him.
+bool aid_vote_check(const Game& g, const gs::AidKind& kind, std::string_view value,
+                    gs::VoteCheck& out) {
+  std::string who, grant;
+  if (!g.classic) {
+    out.error = std::string(kind.words) + " is granted only on a server players join.";
     return false;
   }
-  const std::string who = text.substr(0, text.find_last_not_of(' ', space) + 1);
-  const std::string what = text.substr(space + 1);
-  float share = -1;
-  if (what == "on")
-    share = kGrantShare;
-  else if (what != "off" && !speedjump_parse_share(what, share)) {
-    out.error = "speedjump: \"" + what + "\" is not on, off or a share 0..1";
-    return false;
-  }
+  if (!gs::aid_vote_split(kind, value, who, grant, out.error)) return false;
   const ClassicServer& cs = *g.classic;
   const int slot = classic_find_seat(cs, who);
   if (slot < 0) {
-    out.error = "speedjump: no player called " + who + " (type \"users\" for the ids and names)";
+    out.error = "No player is called " + who + ". Type \"users\" to see the ids and names.";
     return false;
   }
   const ClassicClient& c = cs.clients[slot];
-  const float had = classic_speedjump_granted(cs, slot);
-  const auto word = [](float s) {
-    return s < 0              ? std::string("off")
-           : s == kGrantShare ? std::string("on")
-                              : speedjump_share_text(s);
-  };
-  out.key = "speedjump:" + std::to_string(c.userid);
-  out.value = c.name + " " + word(share);
-  out.before = c.name + " " + word(had);
+  out.key = gs::aid_vote_key(kind, c.userid);
+  out.value = c.name + " " + gs::aid_vote_word(kind, grant);
+  out.before = c.name + " " + gs::aid_vote_word(kind, classic_aid_granted(cs, slot, kind));
   return true;
 }
 
-// A passed or put-back speedjump change made: the grant set on the user id its key names, while
-// he is on the server.
-void speedjump_vote_apply(Game& g, const gs::VoteChange& c) {
+// The aid a vote's change is about (its name), or null.
+const gs::AidKind* vote_aid(std::string_view name) { return gs::aid_find(classic_aids(), name); }
+
+// A passed or put-back aid change made: the grant set on the user id its key names, while he is on
+// the server.
+void aid_vote_apply(Game& g, const gs::AidKind& kind, const gs::VoteChange& c) {
   if (!g.classic) return;
-  const int userid = std::atoi(c.key.c_str() + kSpeedjumpVote.size() + 1);
-  std::string error;
-  classic_speedjump(*g.classic, userid, speedjump_vote_share(c.value), error);
+  const int userid = std::atoi(c.key.c_str() + std::string_view(kind.name).size() + 1);
+  const size_t space = c.value.find_last_of(' ');
+  std::string grant, error;
+  gs::aid_value(kind, space == std::string::npos ? c.value : c.value.substr(space + 1), grant,
+                error);
+  classic_grant(*g.classic, kind, userid, grant, error);
 }
 
 bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::VoteCheck& out) {
   const Game& g = *static_cast<const Game*>(ctx);
-  if (name == kSpeedjumpVote) return speedjump_vote_check(g, value, out);
+  if (const gs::AidKind* aid = vote_aid(name)) return aid_vote_check(g, *aid, value, out);
   const std::string rule(name), text(value);
   bool known = false;
   for (const gs::GameRule& r : all_rules()) known = known || rule == r.name;
@@ -551,7 +535,7 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
     out.error = rule +
                 " is not a setting of this server. Type \"vote rules\" to see what may be "
                 "voted on (fraglimit, timelimit, teamplay, sv_gravity, pm_speedjump, "
-                "speedjump <player> on...).";
+                "speedjump <player> on, aimhelp <player> on...).";
     return false;
   }
   if (is_endpoint_rule(rule)) {
@@ -565,6 +549,8 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
       out.error = error;
       return false;
     }
+  } else if (rule == "sv_aimhelp_allow" || rule == "sv_aimhelp_deny") {
+    // A list of weapons' names: any text.
   } else {
     char* end = nullptr;
     std::strtod(text.c_str(), &end);
@@ -594,12 +580,13 @@ void vote_turn(Game& g) {
   b.notes.clear();
   bool restart = false;
   for (const gs::VoteChange& c : gs::vote_take(b)) {
-    if (c.name == kSpeedjumpVote) {
-      speedjump_vote_apply(g, c);
+    if (const gs::AidKind* aid = vote_aid(c.name)) {
+      aid_vote_apply(g, *aid, c);
       continue;
     }
     g.settings.rules[c.name] = c.value;
-    if (sh::find_setting(c.name) != nullptr)
+    // The aim help's leeway is the server's alone: nobody predicts with it, so no restart.
+    if (sh::find_setting(c.name) != nullptr && !c.name.starts_with("sv_aimhelp"))
       restart = true;
     else if (!held_now(g, c.name))
       g.rules.console(c.name + " \"" + c.value + "\"");
@@ -631,8 +618,8 @@ void vote_sync(Game& g) {
 // Their lines go out at once, while the players are still on the map that is ending.
 void vote_map_over(Game& g) {
   for (const gs::VoteChange& c : gs::vote_map_over(g.vote)) {
-    if (c.name == kSpeedjumpVote)
-      speedjump_vote_apply(g, c);
+    if (const gs::AidKind* aid = vote_aid(c.name))
+      aid_vote_apply(g, *aid, c);
     else
       g.settings.rules[c.name] = c.value;
   }
