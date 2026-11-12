@@ -74,6 +74,9 @@
 //   walk's start (its speed check, a circle jump, a copied start); judging.
 // - `airwall`: the air's keys under a view not the pilot's (`airkeys`, `aimhop`) charged for a
 //   wall or a body their velocity runs into within 0.4 s (bot.cpp); on.
+// - `landwall`: a hop's landing whose jump would fly into a wall on every curve the air gives runs
+//   on along the route and jumps once clear (pilot.cpp `land_walled`); dropped (even head to head, no
+//   faster), in no preset.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
@@ -86,7 +89,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -167,9 +170,10 @@ enum class Feature : uint8_t {
   airview,
   chainhop,
   airwall,
+  landwall,
   trial,
 };
-constexpr size_t kFeatures = 68;
+constexpr size_t kFeatures = 69;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
