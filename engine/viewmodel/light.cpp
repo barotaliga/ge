@@ -8,6 +8,7 @@
 #include "viewmodel/light.hpp"
 
 #include <cmath>
+#include <cstddef>
 
 #include "core/quat.hpp"
 
