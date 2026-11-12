@@ -101,9 +101,9 @@
 //   look (bot.cpp: the air move a command, traced every 0.1 s, clipped along a wall met) and
 //   scored by the speed kept, not one command's velocity run straight on; judging.
 // - `hopjump`: in a hop's air the jump let go on the way up and held on the way down, so it goes
-//   off on the landing frame (pilot.cpp), a landing fast enough to hop on (M18r.md 0v); judging.
+//   off on the landing frame (pilot.cpp), a landing fast enough to hop on (M18r.md 0v); on.
 // - `hopside`: no forward key in a hop: its air and its landing the strafe key alone, the one the
-//   view turns toward (pilot.cpp, bot.cpp); judging.
+//   view turns toward (pilot.cpp, bot.cpp); on.
 // - `noback`: moving, no spot watched or fired at (the game's watch, its rockets at news) and,
 //   roaming, no player newly seen more than 100 degrees off the way walked: no back key under
 //   them (M18r.md 0w); judging.
