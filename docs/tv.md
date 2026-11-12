@@ -147,6 +147,11 @@ under a context of its own. Shooter's Edge's face for the classic multiview reco
 - text as a template (the text with its whole numbers taken out: a team's info line, a frag
   message) from the last 256 seen, and each number from the same template's last numbers.
 
+The face also writes the hub's words (`docs/hub.md` § The archive) into the meta, read off the
+recording before it is packed (`demo_hub_meta`): the map, the mode, the server's name and every
+player and team in the header; the length, each player's frags and each team's total in the
+trailer. A caller adds its own (`title`, `tag`, `start`).
+
 A record whose body does not walk whole is kept as its bytes, so every file comes back byte for
 byte. A keyframe every 30 seconds (each one starts the models and predictions over) costs about 5%
 against none and lets a late joiner start at most 30 seconds back; one every 10 seconds costs about
@@ -209,7 +214,10 @@ it (`classic_mv_state.hpp`): the level's signon as it came, the state messages s
 server info, user info, frags, pings, statics), every player in the recorder's form with all his
 fields, each one's stats and a full entity list from the baselines, so the next record forwarded
 reads on from it. A viewer's `say` stays on the node; its `say_game` goes up to the server, and
-the viewer list goes up as `qul` lines. The `se-tv-node` lab relays a two-player match with a 2 s
+the viewer list goes up as `qul` lines. Viewers see the match under the node's name: the server
+info's `hostname` becomes `<node> (live: <server>)`, in the signon and in every later change, and
+`*qtv` is 1, so a browser tells the node from the server and a node downstream of another replaces
+that one's name with its own. The `se-tv-node` lab relays a two-player match with a 2 s
 delay to viewers who join at 0, 4 and 8 seconds: a late viewer's catch-up is 0.7 KB, and every
 viewer's stream plays to the same end (every player, his frags and name, every entity) with the
 chat in it.
@@ -252,6 +260,21 @@ The `forward` lab gives the player's direct path each preset and puts the forwar
 | awful | 459 / 504, 18.8% | 36 / 36, 0% | 62 / 62, 0% | 36 / 88 ms |
 
 A stranger's asks of every kind draw answers of at most a third of their size.
+
+**The classic face** (`games/shooters_edge/net/classic_forward.hpp`) plugs into the forward's face
+seam (`ForwardFace`: the datagrams the forward does not take, a client admitted with
+`forward_admit` and connected when the face's handshake upstream is done) so classic clients and
+forwarders chain through ours. The route is the connect's `prx` user info key, the rest of the route
+after this hop with the server last; the hop takes its destination off it, writes the rest back,
+adds `*qwfwd` and runs the challenge and the connect upstream with the client's qport. It answers the
+client's `j` only once the destination has accepted, and passes a refusal on in its words, so a
+chain of classic hops connects end to end or says why not. It answers `ping`, `status` (with
+`*version` "qwfwd ge 1", which is how a classic browser tells a forwarder) and `pingstatus` (each
+server it knows with its ping, for a client's route finder) itself, once a second a host; it makes
+challenges from the client's address and a secret, so it keeps nothing before a good connect; and it
+follows a client whose NAT gives it a new port by its qport on the same host.
+`tests/shooters_edge_classic_forward_test.cpp`: our classic client plays through one hop and through
+a chain of two to our classic server.
 
 ## Proxy
 
@@ -301,6 +324,16 @@ comes back byte for byte at 40 418 bytes, 29% of the recording and 77% of zstd a
 made-up one of a minute packs to 39% of zstd. The format's facts are in the working area
 (`porting/shooters-edge/sequel-demo.md`).
 
+The sequel's TV is built here on the native format, since the sequel has no broadcaster of its own
+(`games/shooters_edge/client/sequel_tv.hpp`): a broadcast takes the recording's blocks as they are
+played and writes the replay file as it goes, the same bytes `pack_demo` writes for the finished
+recording (it is built on the broadcast). A TV node takes it as any game's stream. The sequel's
+frames are deltas against the frames before them and its level starts once, so a broadcast
+keyframes only its first block and a late viewer is sent the match from its start; at a few hundred
+bytes a second that is small. The `se-sequel-tv` lab plays the demo pack's recording as if live
+through a node with a 2 s delay: it is broadcast at 617 bytes a second against the recording's
+2164, and a viewer who joins at 30 s gets the whole recording back byte for byte, as the first does.
+
 ## Decisions
 
 | Decision | Taken | Considered and not taken |
@@ -314,4 +347,5 @@ made-up one of a minute packs to 39% of zstd. The format's facts are in the work
 | A relay's auth | NONE, PLAIN and SHA3-512 | The older 16-bit check and MD4: weaker, and every current relay offers SHA3-512 |
 | Forward's route | Set up by the forward's own datagrams before the game's handshake, so any game on any wire goes through unchanged | Carried in the game's connect (the classic way): every game's handshake would have to carry it; the classic face reads it there |
 | The proxy's packing | XOR against the newest datagram the other end confirmed, zero runs counted: generic, a lost frame costs only itself | A stream compressor across frames (the classic "quality line"): smaller, but one loss damages what follows; the field codec on the link: needs the game's schema, a later face |
+| The sequel's late viewer | The match from its start (the broadcast keyframes once): small, and its frames need what came before | A keyframe that repeats the level's start: the frames after it are deltas against frames the viewer never had |
 | The browser viewer | The WebSocket downstream lands with TV (M57b), for the hub's web viewer (M56) | Later: the hub needs it first |

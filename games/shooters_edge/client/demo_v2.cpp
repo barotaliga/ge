@@ -8,10 +8,13 @@
 // ge:test tests/shooters_edge_demo_v2_test.cpp
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/sequel_demo.hpp"
+#include "shooters_edge/client/sequel_tv.hpp"
 
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cmath>
+#include <cstdlib>
 #include <memory>
 #include <unordered_map>
 
@@ -31,7 +34,7 @@ constexpr uint32_t kMostBody = 1u << 20;  // a record's body past this is damage
 constexpr uint32_t kFamilyFte = 0x58455446, kFamilyFte2 = 0x32455446, kFamilyMvd = 0x3144564D;
 constexpr uint32_t kFteFloatCoords = 0x8000, kFteChunkedDownloads = 0x20000000;
 constexpr uint32_t kMvdFloatCoords = 0x1, kMvdHighLagTeleport = 0x2;
-constexpr uint32_t kMultiviewTrack = 1, kBytesTrack = 2, kSequelTrack = 3;
+constexpr uint32_t kMultiviewTrack = 1, kBytesTrack = 2;  // kSequelTrack: sequel_tv.hpp
 constexpr size_t kBytesBlock = size_t{256} << 10;
 constexpr int64_t kBlockMs = 1000;
 constexpr const char* kGame = "shooters_edge";
@@ -1234,7 +1237,7 @@ bool unpack_block(std::span<const uint8_t> chunk, Face& f, bool keyframe, std::v
     if (gr::get_bit(io.r, m.tail) != 0) {
       const int32_t n = gr::get_int(io.r, m.len);
       if (n < 0 || static_cast<uint32_t>(n) > kMostBody) {
-        error = "a block's tail is " + std::to_string(n) + " bytes; next: the file is damaged";
+        error = "a block's tail is " + std::to_string(n) + " bytes; the file is damaged";
         return false;
       }
       bytes(io, m.raw, static_cast<size_t>(n));
@@ -1255,7 +1258,7 @@ bool unpack_block(std::span<const uint8_t> chunk, Face& f, bool keyframe, std::v
       continue;
     }
     if (kind == 0 || kind > kAll) {
-      error = "a record of kind " + std::to_string(kind) + "; next: the file is damaged";
+      error = "a record of kind " + std::to_string(kind) + "; the file is damaged";
       return false;
     }
     if (kind == kMultiple) {
@@ -1269,14 +1272,14 @@ bool unpack_block(std::span<const uint8_t> chunk, Face& f, bool keyframe, std::v
     io.body = out.size();
     if (gr::get_bit(io.r, m.walked[static_cast<size_t>(kind)]) == 0) {
       if (!walk_body(io, f, f.type)) {
-        error = "a record at byte " + std::to_string(len_at) +
-                " does not decode; next: the file is damaged";
+        error =
+            "a record at byte " + std::to_string(len_at) + " does not decode; the file is damaged";
         return false;
       }
     } else {
       const int32_t n = gr::get_int(io.r, m.len);
       if (n < 0 || static_cast<uint32_t>(n) > kMostBody) {
-        error = "a record's body is " + std::to_string(n) + " bytes; next: the file is damaged";
+        error = "a record's body is " + std::to_string(n) + " bytes; the file is damaged";
         return false;
       }
       bytes(io, m.raw, static_cast<size_t>(n));
@@ -1285,7 +1288,7 @@ bool unpack_block(std::span<const uint8_t> chunk, Face& f, bool keyframe, std::v
     for (size_t i = 0; i < 4; i++) out[len_at + i] = static_cast<uint8_t>(len >> (8 * i));
   }
   if (io.r.bad || io.fault) {
-    error = "a block's field-coded bytes end early; next: the file is damaged";
+    error = "a block's field-coded bytes end early; the file is damaged";
     return false;
   }
   return true;
@@ -1296,6 +1299,77 @@ bool unpack_block(std::span<const uint8_t> chunk, Face& f, bool keyframe, std::v
 const char* demo_part_name(DemoPart part) {
   const auto i = static_cast<size_t>(part);
   return i < std::size(kPartNames) ? kPartNames[i] : "?";
+}
+
+void demo_hub_meta(std::span<const uint8_t> recording, gr::Meta& header, gr::Meta& final_meta) {
+  Demo d;
+  std::string error;
+  if (!open_demo(std::vector<uint8_t>(recording.begin(), recording.end()), d, error)) return;
+  struct Seen {
+    std::string name, team;
+    int32_t frags = 0;
+  };
+  std::vector<Seen> seen;  // every player, in the order first seen
+  std::string map;
+  const auto look = [&] {
+    const DemoState& s = d.state;
+    if (map.empty()) map = s.map;
+    for (size_t slot = 0; slot < s.names.size(); slot++) {
+      if (s.names[slot].empty() || s.spectator[slot]) continue;
+      auto it = std::find_if(seen.begin(), seen.end(),
+                             [&](const Seen& p) { return p.name == s.names[slot]; });
+      if (it == seen.end()) it = seen.insert(seen.end(), {s.names[slot], s.teams[slot], 0});
+      it->team = s.teams[slot];
+      it->frags = s.frags[slot];
+    }
+  };
+  look();
+  while (next_frame(d, error) == DemoRead::frame) look();
+  const DemoState& s = d.state;
+  const auto info = [&](const char* key) {
+    for (const auto& [k, v] : s.serverinfo)
+      if (k == key) return v;
+    return std::string();
+  };
+  const auto on = [&](const char* key) { return std::atoi(info(key).c_str()) != 0; };
+  const size_t players = seen.size();
+  std::string mode;
+  if (s.format == DemoFormat::single)
+    mode = "single";
+  else if (on("coop"))
+    mode = "coop";
+  else if (on("teamplay"))
+    mode = players <= 4 ? "2on2" : "4on4";
+  else
+    mode = players <= 2 ? "1on1" : "ffa";
+  if (!map.empty()) header.emplace_back("map", map);
+  header.emplace_back("mode", mode);
+  if (!info("hostname").empty()) header.emplace_back("server", info("hostname"));
+  std::vector<std::pair<std::string, int64_t>> teams;  // in the order first seen
+  for (const Seen& p : seen) {
+    header.emplace_back("player", p.team.empty() ? p.name : p.name + "\t" + p.team);
+    if (p.team.empty()) continue;
+    auto t =
+        std::find_if(teams.begin(), teams.end(), [&](const auto& x) { return x.first == p.team; });
+    if (t == teams.end()) t = teams.insert(teams.end(), {p.team, 0});
+    t->second += p.frags;
+  }
+  for (const auto& t : teams) header.emplace_back("team", t.first);
+  final_meta.emplace_back("duration_ms",
+                          std::to_string(std::llround(s.time * 1000.0)));
+  if (s.format == DemoFormat::single) return;
+  for (const Seen& p : seen) {
+    std::string v = p.name;
+    v += '\t';
+    v += std::to_string(p.frags);
+    final_meta.emplace_back("score", std::move(v));
+  }
+  for (const auto& [team, frags] : teams) {
+    std::string v = team;
+    v += '\t';
+    v += std::to_string(frags);
+    final_meta.emplace_back("team_score", std::move(v));
+  }
 }
 
 bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, std::string& error,
@@ -1309,6 +1383,9 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
   h.meta = {{"format", rep.format},
             {"bytes", std::to_string(recording.size())},
             {"keyframe_seconds", std::to_string(options.keyframe_seconds)}};
+  gr::Meta final_meta;
+  if (!sequel) demo_hub_meta(recording, h.meta, final_meta);  // the sequel's: its own face's
+  h.meta.insert(h.meta.end(), options.meta.begin(), options.meta.end());
   if (multiview)
     h.tracks = {{kMultiviewTrack, gr::TrackKind::messages, gr::TrackCodec::field, "multiview"}};
   else if (sequel)
@@ -1333,30 +1410,27 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
       rep.blocks++;
       if (keyframe) rep.keyframes++;
     }
-    gr::stream_finish(
-        w, {{"duration_ms", std::to_string(time)}, {"records", std::to_string(rep.records)}});
+    // The records' own clock is the duration (the reader's may stop at a disconnect).
+    std::erase_if(final_meta, [](const auto& kv) { return kv.first == "duration_ms"; });
+    final_meta.insert(final_meta.begin(), {"duration_ms", std::to_string(time)});
+    final_meta.emplace_back("records", std::to_string(rep.records));
+    gr::stream_finish(w, final_meta);
   } else if (sequel) {
-    // Ten of the recording's blocks a chunk: a second of its 10 Hz frames.
-    const std::vector<std::span<const uint8_t>> blocks = sequel_blocks(recording);
-    SequelCoder coder;
-    SequelPackReport sr;
-    for (size_t at = 0, chunk_no = 0; at < blocks.size(); at += 10, chunk_no++) {
-      const bool keyframe = chunk_no % static_cast<size_t>(every) == 0;
-      const std::vector<std::span<const uint8_t>> some(
-          blocks.begin() + static_cast<std::ptrdiff_t>(at),
-          blocks.begin() + static_cast<std::ptrdiff_t>(std::min(at + 10, blocks.size())));
-      std::vector<uint8_t> chunk;
-      pack_sequel_chunk(coder, some, keyframe, chunk, &sr);
-      gr::stream_add(w, kSequelTrack, static_cast<int64_t>(chunk_no) * kBlockMs, chunk);
-      gr::stream_end_block(w, keyframe);
-    }
-    rep.records = sr.blocks;
-    rep.walked = sr.walked;
-    rep.kept = sr.kept;
-    rep.blocks = sr.chunks;
-    rep.keyframes = sr.keyframes;
-    gr::stream_finish(w, {{"duration_ms", std::to_string(blocks.size() * 100)},
-                          {"records", std::to_string(sr.blocks)}});
+    // The broadcast's writer (sequel_tv.hpp), fed the finished recording: the same bytes.
+    SequelBroadcast b;
+    sequel_broadcast_begin(b, every, recording.size());
+    for (const std::span<const uint8_t> block : sequel_blocks(recording))
+      sequel_broadcast_block(b, block);
+    sequel_broadcast_end(b);
+    out = std::move(b.out);
+    rep.records = b.report.blocks;
+    rep.walked = b.report.walked;
+    rep.kept = b.report.kept;
+    rep.blocks = b.report.chunks;
+    rep.keyframes = b.report.keyframes;
+    error.clear();
+    if (report != nullptr) *report = rep;
+    return true;
   } else {
     for (size_t at = 0; at < recording.size(); at += kBytesBlock) {
       const size_t n = std::min(kBytesBlock, recording.size() - at);
@@ -1365,7 +1439,7 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
       rep.blocks++;
       rep.keyframes++;
     }
-    gr::stream_finish(w, {});
+    gr::stream_finish(w, final_meta);
   }
   error.clear();
   if (report != nullptr) *report = rep;

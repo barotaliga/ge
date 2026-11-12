@@ -123,8 +123,7 @@ bool shut_episode_bars(MapSpec& map, const EpisodeOrder& order, uint32_t done, b
   std::vector<ge::brush::Entity> ents;
   std::string why;
   if (!ge::brush::parse_entities(map.entities, &ents, &why)) {
-    error = "episodes: the start map's entities do not parse (" + why +
-            "); next: check the map with `ge tool brush -- ents " + map.name + "`";
+    error = "episodes: the start map's entities do not parse (" + why + ")";
     return false;
   }
   const int count = static_cast<int>(order.first_maps.size());

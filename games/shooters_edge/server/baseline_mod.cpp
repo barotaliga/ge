@@ -19,7 +19,8 @@ bool compile_baseline_mod(const std::filesystem::path& root, ge::progs::Progs& o
     for (const ge::progs::QcDiagnostic& d : project.result.diagnostics) {
       if (d.error) error += " " + ge::progs::diagnostic_text(d) + ";";
     }
-    error += " next: `ge qc build " + std::string(kBaselineSource) + "` from the repository root";
+    error += " The game is built wrong: its baseline mod (" + std::string(kBaselineSource) +
+             ") does not compile.";
     return false;
   }
   out = std::move(project.result.progs);

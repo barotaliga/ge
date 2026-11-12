@@ -63,7 +63,7 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
   for (int i = 1; i < argc; ++i) {
     const std::string_view arg = argv[i];
     if (arg == "-benchmark" || arg == "--benchmark") {
-      why = std::string(arg) + " was renamed to -timedemo; next: rerun with -timedemo <demo>.";
+      why = std::string(arg) + " was renamed: use -timedemo <demo>.";
       return false;
     }
     // The flags are read wherever they stand, a console line's words (`+r_look modern`) running
@@ -89,8 +89,7 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
     } else if (arg.rfind("--from=", 0) == 0 || arg.rfind("--to=", 0) == 0) {
       const double t = parse_clock(std::string(arg.substr(arg.find('=') + 1)));
       if (t < 0) {
-        why = "the time in " + std::string(arg) +
-              " is not m:ss, h:mm:ss or seconds; next: rerun with one of those.";
+        why = "the time in " + std::string(arg) + " is not m:ss, h:mm:ss or seconds.";
         return false;
       }
       (arg[2] == 'f' ? a.from : a.to) = t;
@@ -131,8 +130,7 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
     } else if (arg.rfind("--size=", 0) == 0 || arg.rfind("--resolution=", 0) == 0) {
       if (!size_named(arg.substr(arg.find('=') + 1), a.width, a.height)) {
         why = "the size in " + std::string(arg) +
-              " is not WxH (16 to 8192 a side) or 480p, 720p, 1080p, 1440p, 2160p, 4k; next: "
-              "rerun with one of those.";
+              " is not WxH (16 to 8192 a side) or 480p, 720p, 1080p, 1440p, 2160p, 4k.";
         return false;
       }
       a.size_given = true;
@@ -140,7 +138,7 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       why = "unknown flag " + std::string(arg) +
             (a.plus.empty() ? std::string()
                             : " (after the console line starting " + a.plus.front() + ")") +
-            "; next: rerun with the usage's flags only.";
+            ".";
       return false;
     } else {
       // A console line's word, or the first command, which needs no `+` (`coopgame 2 expert`).

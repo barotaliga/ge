@@ -106,7 +106,7 @@ int Console::run() {
     if (n >= kMaxPerRun) {
       error("the command buffer ran " + std::to_string(kMaxPerRun) +
                 " commands in one frame and stopped",
-            "an alias loop with no `wait` in it: break it, or add a wait");
+            "an alias loops with no wait in it: break the loop, or add a wait");
       buffer_.clear();
       break;
     }
@@ -159,7 +159,7 @@ void Console::dispatch(Entry& e) {
     current_ = &where;
     error("'" + e.via + "' calls itself more than " + std::to_string(kMaxDepth) +
               " times deep and was stopped",
-          "break the loop in '" + e.via + "', or put a `wait` in it to run once a frame");
+          "break the loop in '" + e.via + "', or put a wait in it to run once a frame");
     current_ = nullptr;
     // Drop what the runaway queued at this depth or deeper.
     while (!buffer_.empty() && buffer_.front().depth > kMaxDepth) buffer_.pop_front();
@@ -228,7 +228,7 @@ void Console::dispatch(Entry& e) {
   } else {
     const std::string near = suggest(name);
     error("unknown command '" + name + "'",
-          near.empty() ? "see `cmdlist` and `cvarlist`" : "did you mean '" + near + "'?");
+          near.empty() ? "type cmdlist or cvarlist for the names" : "did you mean '" + near + "'?");
   }
   current_ = outer;
   current_depth_ = outer_depth;

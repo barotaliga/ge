@@ -412,7 +412,7 @@ void bi_particleeffectnum(pg::Vm& vm) {
   while (n < s.effect_names.size() && s.effect_names[n] != name) n++;
   if (n == s.effect_names.size()) {
     if (s.effect_names.size() >= kMaxEffectNames) {
-      pg::vm_error(vm, "particleeffectnum: more than 1024 effect names; next: name fewer effects");
+      pg::vm_error(vm, "particleeffectnum: the mod names more than 1024 effects");
       return;
     }
     s.effect_names.push_back(name);

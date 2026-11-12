@@ -18,10 +18,20 @@
 // A CLIENT OR SINGLE-PLAYER RECORDING (and anything else) is kept as its bytes on the `recording`
 // track (codec zstd), 256 KiB a block: it comes back the same, smaller only by zstd.
 //
+// THE HUB'S WORDS (docs/hub.md § The archive): the recording is read through once first
+// (`demo_hub_meta`) and what a hub's archive files a demo by goes in the meta: the header's `map`
+// (the first level's), `mode` (`coop`; with teamplay `2on2` up to four players, else `4on4`;
+// without, `1on1` for two, else `ffa`; `single` for a single-player recording), `server` (the
+// server's `hostname`), a `player` for each one who played (`name`, or `name<TAB>team`, in the
+// order first seen; spectators left out); the trailer's `duration_ms`, a `score` for each player
+// (`name<TAB>frags`, the last count seen) and, with teams, a `team_score` for each team (the sum of
+// its players'). `DemoPackOptions::meta` adds the caller's own (`start`, `title`, `tag`).
+//
 // ge:summary Shooter's Edge's face on replay file v2: classic recordings packed and back exactly
 // ge:keywords replay-v2 face field-codec multiview client-recording single-player-recording
 // ge:keywords pack unpack residual prediction ger
 // ge:keywords pack_demo unpack_demo keyframe round-trip compress
+// ge:keywords hub-meta archive map mode player score team-score demo_hub_meta
 // ge:skill replay shooter
 // ge:test tests/shooters_edge_demo_v2_test.cpp
 #pragma once
@@ -33,11 +43,19 @@
 #include <string>
 #include <vector>
 
+#include "replay/stream.hpp"
+
 namespace shooters_edge::client {
 
 struct DemoPackOptions {
   int keyframe_seconds = 30;  // a keyframe block every this many one-second blocks
+  ge::replay::Meta meta;      // added to the header's after the game's (`start`, `title`, `tag`)
 };
+
+// The hub's words for `recording` (above): `header` and `final` appended to. Nothing when the
+// recording does not open; what it held up to a damaged frame when one does not read.
+void demo_hub_meta(std::span<const uint8_t> recording, ge::replay::Meta& header,
+                   ge::replay::Meta& final_meta);
 
 // The parts of a multiview recording the pack's bytes are counted by (inside the messages').
 enum class DemoPart : uint8_t {

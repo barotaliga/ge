@@ -42,6 +42,29 @@ std::string info_field(const std::string& info, const std::string& key) {
   return "";
 }
 
+// `key` set to `value` in an ordered key list (added at its end when new).
+void set_key(std::vector<std::pair<std::string, std::string>>& keys, const std::string& key,
+             const std::string& value) {
+  for (auto& [k, v] : keys)
+    if (k == key) {
+      v = value;
+      return;
+    }
+  keys.emplace_back(key, value);
+}
+
+// Every key of a `\\key\\value...` info string set in `keys`.
+void set_info(std::vector<std::pair<std::string, std::string>>& keys, const std::string& info) {
+  size_t at = 0;
+  while (at < info.size() && info[at] == '\\') {
+    const size_t k_end = info.find('\\', at + 1);
+    if (k_end == std::string::npos) return;
+    const size_t v_end = std::min(info.find('\\', k_end + 1), info.size());
+    set_key(keys, info.substr(at + 1, k_end - at - 1), info.substr(k_end + 1, v_end - k_end - 1));
+    at = v_end;
+  }
+}
+
 // A colour key's value (`topcolor`, `bottomcolor`) as the palette's colour row, 0..13: its
 // leading digits, held to the rows a player can wear; 0 when it has none.
 int colour_of(const std::string& v) {
@@ -305,7 +328,7 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   s.protocol = v;
   if (v != 28) {
     error = "the server data names protocol " + std::to_string(v) +
-            "; next: only protocol 28 recordings are read";
+            ", and only protocol 28 recordings can be played";
     return false;
   }
   m.i32();  // the spawn count
@@ -461,9 +484,18 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         s.prints.push_back({level, m.str()});
         break;
       }
-      case 9:
-        m.str();
-        break;  // stufftext
+      case 9: {  // stufftext: the signon's `fullserverinfo "\\key\\value..."` read, the rest
+                 // skipped
+        const std::string text = m.str();
+        const std::string word = "fullserverinfo \"";
+        if (text.rfind(word, 0) == 0) {
+          const size_t end = text.find('"', word.size());
+          set_info(s.serverinfo,
+                   text.substr(word.size(),
+                               end == std::string::npos ? std::string::npos : end - word.size()));
+        }
+        break;
+      }
       case 26:
       case 31:  // centerprint, finale
         s.centre = m.str();
@@ -581,6 +613,8 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
           const size_t k = static_cast<size_t>(slot);
           s.names[k] = info_field(info, "name");
           s.teams[k] = info_field(info, "team");
+          s.spectator[k] =
+              !info_field(info, "*spectator").empty() && info_field(info, "*spectator") != "0";
           s.top[k] = colour_of(info_field(info, "topcolor"));
           s.bottom[k] = colour_of(info_field(info, "bottomcolor"));
         }
@@ -642,15 +676,17 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
           const size_t k = static_cast<size_t>(slot);
           if (key == "name") s.names[k] = value;
           if (key == "team") s.teams[k] = value;
+          if (key == "*spectator") s.spectator[k] = !value.empty() && value != "0";
           if (key == "topcolor") s.top[k] = colour_of(value);
           if (key == "bottomcolor") s.bottom[k] = colour_of(value);
         }
         break;
       }
-      case 52:
-        m.str();
-        m.str();
-        break;  // serverinfo
+      case 52: {  // serverinfo: one key of the server's info changed
+        const std::string key = m.str(), value = m.str();
+        set_key(s.serverinfo, key, value);
+        break;
+      }
       case 53:
         m.skip(2);
         break;  // updatepl
@@ -700,7 +736,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
     if (!ok || m.bad) {
       if (ok) error = "message id " + std::to_string(id) + " runs past the packet's end";
       error += " (message at offset " + std::to_string(at) +
-               "); next: the recording is damaged or uses an extension not read yet";
+               "): the recording is damaged or uses an extension the game cannot play yet";
       return false;
     }
   }

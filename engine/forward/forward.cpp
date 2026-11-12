@@ -94,7 +94,7 @@ HopClient* by_salt(Forward& f, uint64_t salt) {
 
 HopClient* by_address(Forward& f, const net::Address& from) {
   for (auto& c : f.clients)
-    if (c->connected && c->from == from) return c.get();
+    if (c->connected && !c->dropped && c->from == from) return c.get();
   return nullptr;
 }
 
@@ -340,6 +340,7 @@ void forward_update(Forward& f, int64_t now_us) {
   int got = 0;
   bool asked = false;
   net::Status status;
+  if (f.face.frame) f.face.frame(f, now_us);
   while ((got = net::transport_receive(*f.port, buf, sizeof buf, from, now_us)) >= 0) {
     const auto size = static_cast<size_t>(got);
     f.stats.bytes_in += size;
@@ -389,7 +390,11 @@ void forward_update(Forward& f, int64_t now_us) {
     }
     HopClient* c = by_address(f, from);
     if (c == nullptr) {
-      f.stats.strays++;
+      if (!f.face.from_client || !f.face.from_client(f, buf, size, from, now_us)) f.stats.strays++;
+      continue;
+    }
+    if (c->face && f.face.client_packet && f.face.client_packet(f, *c, buf, size, now_us)) {
+      c->last_us = now_us;
       continue;
     }
     net::transport_send(*c->up, c->to, buf, size, now_us);
@@ -402,6 +407,10 @@ void forward_update(Forward& f, int64_t now_us) {
     while ((got = net::transport_receive(*c.up, buf, sizeof buf, from, now_us)) >= 0) {
       const auto size = static_cast<size_t>(got);
       if (c.chained && dial_read(c.dial, buf, size, from, now_us)) continue;
+      if (c.face && !c.connected && from == c.to && f.face.from_upstream) {
+        f.face.from_upstream(f, c, buf, size, now_us);
+        continue;
+      }
       if (!c.connected || from != c.to) {
         f.stats.strays++;
         continue;
@@ -425,6 +434,11 @@ void forward_update(Forward& f, int64_t now_us) {
         continue;
       }
     }
+    if (c.face && !c.connected && !c.dropped && f.face.tick) f.face.tick(f, c, now_us);
+    if (c.dropped) {
+      drop(f, i);
+      continue;
+    }
     if (now_us - c.last_us >= f.config.idle_us) {
       f.stats.idle_drops++;
       drop(f, i);
@@ -432,6 +446,63 @@ void forward_update(Forward& f, int64_t now_us) {
     }
     i++;
   }
+}
+
+HopClient* forward_admit(Forward& f, const net::Address& from, const net::Address& to,
+                         int64_t now_us, Answer& refused, std::string& why) {
+  HopClient* c = forward_client(f, from);
+  if (c == nullptr && static_cast<int>(f.clients.size()) >= f.config.max_clients) {
+    refused = Answer::full;
+    why = f.config.name + " is full";
+    return nullptr;
+  }
+  if (!allowed(f.config, to)) {
+    refused = Answer::not_allowed;
+    why = f.config.name + " does not forward to " + net::to_string(to);
+    return nullptr;
+  }
+  if (c == nullptr) {
+    auto made = std::make_unique<HopClient>();
+    made->up = std::make_unique<net::Transport>();
+    if (!f.open_upstream || !f.open_upstream(*made->up)) {
+      refused = Answer::unreachable;
+      why = f.config.name + " has no socket free";
+      return nullptr;
+    }
+    made->from = from;
+    made->name = net::to_string(from);
+    made->salt = mix(f.secret ^ net::address_hash(from) ^ ++f.draws) | 1;
+    made->since_us = now_us;
+    f.clients.push_back(std::move(made));
+    c = f.clients.back().get();
+  }
+  c->face = true;
+  c->to = to;
+  c->connected = false;
+  c->face_step = 0;
+  c->face_next_us = now_us;
+  c->face_number = 0;
+  c->face_text.clear();
+  c->last_us = now_us;
+  return c;
+}
+
+HopClient* forward_client(Forward& f, const net::Address& from) {
+  for (auto& c : f.clients)
+    if (!c->dropped && c->from == from) return c.get();
+  return nullptr;
+}
+
+void forward_drop(Forward& f, HopClient& c) {
+  (void)f;
+  c.dropped = true;
+}
+
+void forward_send(Forward& f, const net::Address& to, const uint8_t* data, size_t size,
+                  int64_t now_us) {
+  if (f.port == nullptr) return;
+  net::transport_send(*f.port, to, data, size, now_us);
+  f.stats.bytes_out += size;
 }
 
 }  // namespace ge::forward

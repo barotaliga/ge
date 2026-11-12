@@ -1,5 +1,8 @@
 // A recorded team game of bots over our server (classic_team.hpp).
 //
+// voice: agent (a lab's harness: its errors land in the lab's report; docs/architecture.md § Player
+// text).
+//
 // ge:summary The team game of bots: the map, the nav graph and its movers, the clients, the record
 // ge:keywords run_team_match team-match movers doors plats fighters clients mvd digest
 // ge:skill shooter bots net
