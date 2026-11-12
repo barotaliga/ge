@@ -167,6 +167,13 @@ struct PilotSettings {
   // meets a wall lands at ~100 units/s and ends the hop, a run that meets one slides along it at
   // a run's speed. 0: off.
   float hop_land_wall_s = 0;
+  // THE JUMP HELD FOR THE LANDING (`hopjump`, M18r.md 0v): in a hop's air the jump is let go on the
+  // way up and held on the way down, so it goes off on the landing frame, before any friction (a
+  // press on the ground lands 2-3 commands late under a keyboard); not for a landing under
+  // `hop_slow` (a run gains faster there: hopping on from one cost 23 units/s on dm2).
+  bool hop_jump_held = false;
+  // NO FORWARD IN A HOP (`hopside`): its air and its landing pressed with the strafe key alone.
+  bool hop_side_only = false;
   CircleSettings circle;
   // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while `jumper.rockets` is set (the
   // caller's say: the launcher in hand, its rockets, the health for the blast), those of its

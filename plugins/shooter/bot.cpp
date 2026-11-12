@@ -133,7 +133,17 @@ struct AirWall {
   const Server* sv = nullptr;
   Vec3f at;
   int me = 0;
+  // `airarc`: each set FLOWN held through the look (the air move a command, the way traced each
+  // `kArcTrace` commands, the velocity clipped along a wall it meets) and scored by the speed it
+  // keeps, not its velocity of one command run straight on: a set that turns the flight clear of a
+  // corner beats none, which meets the wall square.
+  bool arc = false;
 };
+// `airarc`: the look's way traced every this many commands, and the look, s (a set is judged as
+// held through it, which undervalues none now and a turn later: the shorter the look, the less;
+// 0.15-0.4 s all halved the wall hits on dm2, 0.15 kept the most speed).
+constexpr int kArcTrace = 4;
+constexpr double kArcLook_s = 0.15;
 
 // On the GROUND (`ground`: `circlekeys`, a circle jump's curve), friction first (`friction` a second
 // of the speed, at least `stopspeed`'s) and the wish's share along the velocity capped at maxspeed.
@@ -181,6 +191,77 @@ int aim_air_set(Vec3f v, float view_yaw, float way_yaw, float maxspeed, float ac
     return sc;
   };
   const double reach = static_cast<double>(accel) * maxspeed * dt;
+  if (wall != nullptr && wall->arc && ground == nullptr) {
+    // (`airarc`) The set held for the look: its wish fixed in the world (the view held), the
+    // velocity turning under it; a wall met takes the velocity's part into it.
+    const int steps = static_cast<int>(kArcLook_s / dt + 0.5);
+    const auto flown = [&](int k) {
+      double wx = 0, wy = 0;
+      if (k >= 0) {
+        const double a = (view_yaw - 45.0 * k) * (core::kPi / 180);
+        wx = core::libm::cos(a);
+        wy = core::libm::sin(a);
+      }
+      double vx = v.x, vy = v.y;
+      Vec3f from = wall->at;
+      double px = from.x, py = from.y;
+      double first_vx = 0, first_vy = 0;
+      for (int i = 1; i <= steps; i++) {
+        if (k >= 0) {
+          const double add = cap - (vx * wx + vy * wy);
+          if (add > 0) {
+            const double sp = add < reach ? add : reach;
+            vx += sp * wx;
+            vy += sp * wy;
+          }
+        }
+        if (i == 1) {
+          first_vx = vx;
+          first_vy = vy;
+        }
+        px += vx * dt;
+        py += vy * dt;
+        if (i % kArcTrace != 0 && i != steps) continue;
+        const Vec3f to{static_cast<float>(px), static_cast<float>(py), from.z};
+        const HullTrace tr =
+            trace_move(*wall->sv, from, kPlayerMins, kPlayerMaxs, to, 0, wall->me);
+        if (tr.fraction < 1 && !tr.startsolid) {
+          const double nx = tr.plane.normal.x, ny = tr.plane.normal.y;
+          const double into = vx * nx + vy * ny;
+          if (into < 0) {
+            vx -= into * nx;
+            vy -= into * ny;
+          }
+          px = tr.endpos.x;
+          py = tr.endpos.y;
+        }
+        from = {static_cast<float>(px), static_cast<float>(py), from.z};
+      }
+      // The speed kept, less the turn off the way at the look's end, and the curve of the
+      // command itself.
+      double sc = std::sqrt(vx * vx + vy * vy) - kAirTurnCost * off_way(vx, vy);
+      if (curve != 0) {
+        double d = core::libm::atan2(first_vy, first_vx) * (180 / core::kPi) - h0;
+        while (d > 180) d -= 360;
+        while (d < -180) d += 360;
+        sc += kAirCurve * (-d * curve);
+      }
+      return sc;
+    };
+    int best = -1;
+    double best_score = flown(-1);
+    double held_score = held < 0 ? best_score : -1e30;
+    for (int k = 0; k < 8; k++) {
+      if (((allowed >> k) & 1u) == 0) continue;
+      const double sc = flown(k);
+      if (k == held) held_score = sc;
+      if (sc > best_score) {
+        best_score = sc;
+        best = k;
+      }
+    }
+    return held_score + kAirKeep >= best_score ? held : best;
+  }
   int best = -1;
   double best_score = score(v.x, v.y);
   double held_score = held < 0 ? best_score : -1e30;
@@ -203,6 +284,17 @@ int aim_air_set(Vec3f v, float view_yaw, float way_yaw, float maxspeed, float ac
     }
   }
   return held_score + kAirKeep >= best_score ? held : best;
+}
+
+// `hopside`: the strafe key alone in a hop's air, the side the view turns toward (the mouse moving
+// right: the right key, set 2; left: set 6), past `kTurnSeen` degrees a command; a still view keeps
+// the side held (`held`), else the pilot's.
+constexpr float kTurnSeen = 0.05f;
+uint8_t side_by_turn(float turn, int held, int pilot_side) {
+  if (turn < -kTurnSeen) return 1u << 2;
+  if (turn > kTurnSeen) return 1u << 6;
+  if (held == 2 || held == 6) return static_cast<uint8_t>(1u << held);
+  return pilot_side > 0 ? 1u << 2 : pilot_side < 0 ? 1u << 6 : (1u << 2) | (1u << 6);
 }
 
 // `leadwall`: a target's way across slid along the walls (intercept.hpp `SlideAcross`): the
@@ -239,7 +331,7 @@ void circle_keys(Bot& b, const Server& sv, const Edict& self, int me, float land
                  MoveCmd& cmd) {
   const Pilot& hp = b.pilot.pilot;
   const float ms = self.maxspeed > 0 ? self.maxspeed : sv.set.move.maxspeed;
-  const AirWall wall{&sv, self.origin, me};
+  const AirWall wall{&sv, self.origin, me, b.airarc};
   b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms, sv.set.move.accelerate,
                           msec / 1000.0, b.air_set, 0xff, hp.circle_side,
                           b.airwall ? &wall : nullptr, &sv.set.move);
@@ -512,9 +604,11 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       const float land_yaw = b.airview
                                  ? wrap(cmd.angles.y + wrap(b.yaw - aim_yaw_was) * kKeyLand)
                                  : wrap(cmd.angles.y);
-      const AirWall wall{&sv, self.origin, me};
+      const AirWall wall{&sv, self.origin, me, b.airarc};
+      const uint8_t allowed =
+          b.hopside ? side_by_turn(wrap(b.yaw - aim_yaw_was), b.air_set, hp.strafe_side) : 0xff;
       b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms,
-                              sv.set.move.accelerate, msec / 1000.0, b.air_set, 0xff, 0,
+                              sv.set.move.accelerate, msec / 1000.0, b.air_set, allowed, 0,
                               b.airwall ? &wall : nullptr);
       const int k = b.air_set;
       cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
@@ -770,12 +864,15 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         // pilot's, and the side key turned under it brakes past 90 degrees off the velocity: the
         // pilot's side key, alone or with forward, pressed while it carries the velocity on, else
         // let go (as a person lets go of a key the mouse has not caught up with).
-        const uint8_t sides = hp.strafe_side > 0 ? (1u << 1) | (1u << 2) : (1u << 6) | (1u << 7);
+        const uint8_t sides =
+            b.hopside ? side_by_turn(wrap(b.yaw - yaw_was), b.air_set, hp.strafe_side)
+            : hp.strafe_side > 0 ? (1u << 1) | (1u << 2)
+                                 : (1u << 6) | (1u << 7);
         const float ms = self.maxspeed > 0 ? self.maxspeed : sv.set.move.maxspeed;
         // (`airview`: the view the keys will land under, the hand's turn carried on that long.)
         const float land_yaw =
             b.airview ? wrap(cmd.angles.y + wrap(b.yaw - yaw_was) * kKeyLand) : wrap(cmd.angles.y);
-        const AirWall wall{&sv, self.origin, me};
+        const AirWall wall{&sv, self.origin, me, b.airarc};
         b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms,
                                 sv.set.move.accelerate, msec / 1000.0, b.air_set, sides,
                                 hp.strafe_side, b.airwall ? &wall : nullptr);
@@ -834,7 +931,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     const float ms = self.maxspeed > 0 ? self.maxspeed : sv.set.move.maxspeed;
     const float land_yaw = b.airview ? wrap(cmd.angles.y + wrap(b.yaw - view_was) * kKeyLand)
                                      : wrap(cmd.angles.y);
-    const AirWall wall{&sv, self.origin, me};
+    const AirWall wall{&sv, self.origin, me, b.airarc};
     b.walk_air_set =
         aim_air_set(self.velocity, land_yaw, jp.walk_air_yaw, ms, sv.set.move.accelerate,
                     msec / 1000.0, b.walk_air_set, 0xff, 0, b.airwall ? &wall : nullptr);

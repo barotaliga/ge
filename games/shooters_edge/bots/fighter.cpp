@@ -1413,6 +1413,8 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.hop_circle = features[sh::Feature::circlejump];
   ps.hop_chain = features[sh::Feature::chainhop];
   ps.hop_land_wall_s = features[sh::Feature::landwall] ? 0.15f : 0.f;
+  ps.hop_jump_held = features[sh::Feature::hopjump];
+  ps.hop_side_only = features[sh::Feature::hopside];
   ps.circle.target = expert ? 430.f : 380.f;
   ps.circle.most_s = expert ? 0.3f : 0.2f;
   // People's hop starts (`recipes`): a hopper copies its level's out of the book.
@@ -1537,6 +1539,8 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   f.bot.airview = f.features[sh::Feature::airview];
   f.bot.airwall = f.features[sh::Feature::airwall];
   f.bot.airwalk = f.features[sh::Feature::airwalk];
+  f.bot.airarc = f.features[sh::Feature::airarc];
+  f.bot.hopside = f.features[sh::Feature::hopside];
   f.bot.circlekeys = f.features[sh::Feature::circlekeys];
   f.bot.circleview = f.features[sh::Feature::circleview];
   f.bot.circleaim = f.features[sh::Feature::circleaim];

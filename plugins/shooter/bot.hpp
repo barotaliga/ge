@@ -85,6 +85,10 @@ struct Bot {
   // A WALK IN THE AIR (`airwalk`): the air's key set toward the walk's target under the view
   // pressed, not the walk's forward key; and the set pressed last command (-1 none).
   bool airwalk = false;
+  // and each air set flown held through the wall's look, scored by the speed it keeps (`airarc`).
+  bool airarc = false;
+  // NO FORWARD IN A HOP (`hopside`): the air's sets the strafe key alone, the side the view turns.
+  bool hopside = false;
   int walk_air_set = -1;
   // A CIRCLE JUMP'S CURVE UNDER THE HAND (`circlekeys`): on the ground, the key set the ground move
   // carries furthest on round the way under the view the keys land under, as the air's above.
