@@ -32,6 +32,8 @@ struct HubOptions {
   int serve_master = 0;    // the master's own port (0: none run here)
   double list_s = 60, status_s = 30, busy_s = 4;
   double for_s = 0, status_line_s = 60;
+  std::string archive;                // the demo archive's directory ("" none)
+  double keep_gb = 0, keep_days = 0;  // the archive's retention (0: no limit)
   bool help = false;
 };
 
