@@ -375,3 +375,28 @@ TEST(a_goal_chained_past_a_pickup_is_run_through_not_stopped_at) {
                                          std::to_string(p.stats.via_speed) +
                                          " u/s: the walk slowed into it as into a goal");
 }
+
+// `jumpfly`: on human hands the run at the pit's jump reaches its start off the line or the speed,
+// and a jump that lands from there is taken as it is (flown by the move first): no more run-ups
+// than lining up again each time, and still across.
+TEST(a_jump_that_lands_from_off_its_line_is_taken_not_lined_up_again) {
+  const pr::Course& c = course();
+  int32_t ups_off = 0, ups_on = 0, flown = 0;
+  for (uint32_t seed = 1; seed <= 6; seed++) {
+    sh::PilotSettings set;
+    const pr::RunResult off =
+        pr::run_course(c, c.map.platform, c.map.east_ledge, sh::PilotHands::human, seed, set);
+    set.jump_fly = true;
+    const pr::RunResult on =
+        pr::run_course(c, c.map.platform, c.map.east_ledge, sh::PilotHands::human, seed, set);
+    CHECK_MSG(on.arrived, "seed " + std::to_string(seed) +
+                              ": with `jumpfly` the pilot did not cross the pit (a flown jump "
+                              "fell short: read jump_flies's landing check)");
+    ups_off += off.stats.run_ups;
+    ups_on += on.stats.run_ups;
+    flown += on.stats.jumps_flown;
+  }
+  std::printf("pit, human hands, 6 seeds: run-ups %d without jumpfly, %d with (%d flown)\n",
+              ups_off, ups_on, flown);
+  CHECK_MSG(ups_on <= ups_off, "jumpfly lined up more often than without it");
+}
