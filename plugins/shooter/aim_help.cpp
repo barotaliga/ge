@@ -106,10 +106,13 @@ LeadBend aim_lead(const LeadShot& shot, Vec3f view_forward, std::span<const AimM
   Vec3f right{view_forward.y, -view_forward.x, 0};
   if (normalize(right) < 1e-4f) return best;
   float best_turn = 0;
+  const AimMover* best_mover = nullptr;
+  const int steps = static_cast<int>(shot.max_time / kLeadStep);
   for (const AimMover& m : targets) {
     // Where the missile passes his depth along the view: the first sample past it.
     float prev = 0, t_hit = -1;
-    for (float t = 0; t <= shot.max_time; t += kLeadStep) {
+    for (int i = 0; i <= steps; i++) {
+      const float t = static_cast<float>(i) * kLeadStep;
       Vec3f lo, hi;
       mover_at(m, t, target_gravity, lo, hi);
       const float depth = dot(flight_at(shot, t) - (lo + hi) * 0.5f, view_forward);
@@ -137,11 +140,10 @@ LeadBend aim_lead(const LeadShot& shot, Vec3f view_forward, std::span<const AimM
     best.bent = true;
     best.target = m.ent;
     best.time = t_hit;
+    best_mover = &m;
   }
-  if (!best.bent) return best;
-  const AimMover* m = nullptr;
-  for (const AimMover& c : targets)
-    if (c.ent == best.target) m = &c;
+  if (!best.bent || best_mover == nullptr) return best;
+  const AimMover* m = best_mover;
   Vec3f lo, hi;
   if (shot.gravity == 0) {
     // A straight missile keeps its speed: the meeting time found again from where he will be.

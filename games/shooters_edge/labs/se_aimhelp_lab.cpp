@@ -28,6 +28,7 @@
 #include "arena_chart.hpp"
 #include "console/console.hpp"
 #include "console/view.hpp"
+#include "core/libm/libm.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/png.hpp"
@@ -78,8 +79,8 @@ bool hits(sv::QcServer& s, sh::Vec3f at, bool helped) {
   sh::normalize(dir);
   const double flat = std::sqrt(double(dir.x) * dir.x + double(dir.y) * dir.y);
   const double kDeg = 57.29577951308232;
-  ann.v_angle = {float(-std::atan2(double(dir.z), flat) * kDeg),
-                 float(std::atan2(double(dir.y), double(dir.x)) * kDeg), 0};
+  ann.v_angle = {float(-ge::core::libm::atan2(double(dir.z), flat) * kDeg),
+                 float(ge::core::libm::atan2(double(dir.y), double(dir.x)) * kDeg), 0};
   sh::Vec3f end = eye + sh::angle_vectors(ann.v_angle).forward * 2048;
   sv::help_traced_shot(s, 1, eye, end);
   const sh::HullTrace tr = sh::trace_move(s.sv, eye, {}, {}, end, sh::kTraceNormal, 1);
@@ -117,8 +118,10 @@ Zone sweep(gl::Lab& lab) {
   z.height = bob.absmax.z - bob.absmin.z;
   const auto reach = static_cast<float>(lab.arg_num("reach"));
   const auto step = static_cast<float>(lab.arg_num("step"));
-  for (float dy = -reach; dy <= reach; dy += step)
-    for (float dz = -reach; dz <= reach; dz += step) {
+  const int n = static_cast<int>(reach / step);
+  for (int iy = -n; iy <= n; iy++)
+    for (int iz = -n; iz <= n; iz++) {
+      const float dy = static_cast<float>(iy) * step, dz = static_cast<float>(iz) * step;
       const sh::Vec3f at = mid + sh::Vec3f{0, -dy, dz};  // dy + to ann's right (−y)
       const bool plain = hits(*s, at, false);
       const bool with = hits(*s, at, true);
