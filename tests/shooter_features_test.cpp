@@ -22,7 +22,7 @@ TEST(the_presets_are_every_feature_or_none_and_a_novice_does_not_glance) {
                           sh::Feature::airgap, sh::Feature::pilotcast,
                           sh::Feature::landwall, sh::Feature::circlekeys,
                           sh::Feature::circleview, sh::Feature::circleaim,
-                          sh::Feature::leadwall, sh::Feature::leadmean, sh::Feature::leadarc})
+                          sh::Feature::leadmean, sh::Feature::leadarc})
       off = off || x == o;
     CHECK(sh::features_all()[x] == !off);
     CHECK(!sh::features_none()[x]);
