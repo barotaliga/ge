@@ -47,16 +47,18 @@ void GameMenu::add_cvars(ge::console::Console& con) {
   con.cvars().bind({.name = "menu_look",
                     .fallback = "auto",
                     .flags = ge::console::kArchive,
-                    .help = "the main menu's look: auto (the pack's own pictures when the packs "
-                            "have them), classic or modern",
-                    .kind = ge::console::CvarKind::text},
+                    .help = "The main menu's look.",
+                    .kind = ge::console::CvarKind::text,
+                    .values = "auto: the pack's own pictures when the packs have them (the "
+                              "default); classic: the pack's; modern: ours"},
                    &look_);
   con.cvars().bind({.name = "ce_auto",
                     .fallback = "1",
                     .flags = ge::console::kArchive,
-                    .help = "1: a game loaded (LOAD GAME, basedir) is enhanced in the background "
-                            "at once; 0: only by CLASSIC ENHANCED > ENHANCE",
-                    .kind = ge::console::CvarKind::boolean},
+                    .help = "Whether a game loaded by LOAD GAME or basedir is enhanced in the "
+                            "background at once.",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: only by CLASSIC ENHANCED > ENHANCE; 1: at once (the default)"},
                    &auto_);
   ce::bind_switches(con.cvars(), &switches_);
   ce::sync_switches(enhance_, switches_);
