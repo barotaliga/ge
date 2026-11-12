@@ -832,8 +832,7 @@ RocketBurst rocket_burst(const MoveWorld& world, Vec3f origin, Vec3f angles,
   const Vec3f fwd = angle_vectors(angles).forward;
   const Vec3f start = origin + Vec3f{0, 0, rj.eye} + fwd * 8 - Vec3f{0, 0, 8};
   const Vec3f end = start + fwd * 4096;
-  const HullTrace tr = trace_hull(world.solids[0].point_hull, start - world.solids[0].origin,
-                                  end - world.solids[0].origin);
+  const HullTrace tr = point_trace(world, start, end);
   if (tr.fraction >= 1 || tr.startsolid) return out;
   out.ok = true;
   out.at = start + (end - start) * tr.fraction - fwd * rj.back_off;
@@ -948,13 +947,12 @@ Vec3f grenade_at(const MoveWorld& world, Vec3f origin, Vec3f angles, float t,
   Vec3f at = origin + Vec3f{0, 0, gj.blast.eye} + fwd * 8 - Vec3f{0, 0, 8};
   Vec3f v = fwd * gj.speed + Vec3f{0, 0, gj.up};
   const float dt = static_cast<float>(msec) * 0.001f;
-  const Solid& w = world.solids[0];
   bool rest = false;
   for (float done = 0; done + dt * 0.5f < t && !rest; done += dt) {
     // The toss: gravity first, then the move, then the bounce off what it met.
     v.z -= gj.gravity * dt;
     const Vec3f end = at + v * dt;
-    const HullTrace tr = trace_hull(w.point_hull, at - w.origin, end - w.origin);
+    const HullTrace tr = point_trace(world, at, end);
     if (tr.startsolid || tr.allsolid) break;
     at = at + (end - at) * tr.fraction;
     if (tr.fraction >= 1) continue;

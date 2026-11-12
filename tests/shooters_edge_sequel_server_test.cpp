@@ -177,6 +177,55 @@ TEST(a_player_walks_where_it_looks) {
   CHECK(p.move.origin[1] == 0);
 }
 
+TEST(the_jump_button_jumps_once_until_let_go) {
+  sv::RulesRunner r = start(7, "0");
+  r.connect(0, "one", false, false);
+  Driver d{r};
+  for (int i = 0; i < 40; i++) d.tick({{0, cmd()}});
+  const sv::SequelPlayer& p = server(r).players[0];
+  CHECK(p.on_ground);
+  d.tick({{0, cmd(0, 0, sh::kButtonJump)}});  // the classic jump button: the sequel's up move
+  CHECK(!p.on_ground && p.move.velocity[2] > 200 * 8);
+  for (int i = 0; i < 120 && !p.on_ground; i++) d.tick({{0, cmd(0, 0, sh::kButtonJump)}});
+  CHECK(p.on_ground);
+  for (int i = 0; i < 10; i++) d.tick({{0, cmd(0, 0, sh::kButtonJump)}});
+  CHECK_MSG(p.on_ground, "held down, the jump does not come again");
+  d.tick({{0, cmd()}});
+  d.tick({{0, cmd(0, 0, sh::kButtonJump)}});
+  CHECK_MSG(!p.on_ground, "let go and pressed again, it does");
+}
+
+TEST(the_easy_jump_is_asked_and_shared_as_on_the_classic_rules) {
+  sv::SequelServerOptions o;
+  o.speedjump = 0.8f;
+  sv::RulesRunner r = sv::sequel_runner(sv::make_sequel_server(o));
+  sv::MapSpec map;
+  map.name = "hall";
+  map.brushes = hall();
+  std::string error;
+  CHECK_MSG(r.start(map, error), error);
+  r.connect(0, "one", false, false);
+  sv::SequelServer& s = server(r);
+  CHECK(s.sv.set.move.speedjump == 0.8f && s.cvars.find("pm_speedjump")->value == "0.8");
+  CHECK(!s.sv.clients[0].speedjump);
+  r.user_info(0, "cl_speedjump", "1");
+  CHECK(s.sv.clients[0].speedjump);
+  CHECK(r.console("pm_speedjump 0.5") && s.sv.set.move.speedjump == 0.5f);
+  CHECK(r.console("pm_speedjump 0") && s.sv.set.move.speedjump == 0);
+  // The air law a client's aid picks: the walking rule but in deathmatch with sv_airaccelerate.
+  CHECK(sv::sequel_air_accelerate(s) == 0);
+  r.console("sv_airaccelerate 1");
+  CHECK(sv::sequel_air_accelerate(s) == 1);
+  // The state the aid reads: walking while he plays, his velocity and ground.
+  Driver d{r};
+  for (int i = 0; i < 40; i++) d.tick({{0, cmd(400)}});
+  const sh::MoveState m = sv::sequel_aid_state(s, 0);
+  CHECK(m.type == sh::MoveType::normal && m.ground == 0);
+  CHECK(m.velocity.x * m.velocity.x + m.velocity.y * m.velocity.y > 100 * 100);
+  r.drop(0);
+  CHECK(!s.sv.clients[0].speedjump);
+}
+
 TEST(the_rules_frame_runs_every_100_ms_of_host_time) {
   sv::RulesRunner r = start();
   Driver d{r};

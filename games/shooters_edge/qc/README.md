@@ -1,5 +1,10 @@
 # The baseline mod
 
+**Frozen: no new QC.** Our own rules are written in C++ now (`docs/mods.md`, AGENTS.md's C++
+rule). These sources are being carried over to C++ mod packages and deleted (row M52h,
+`docs/goals/M52h.md`); until then a fix here is a fix the C++ port must carry too, and new rules
+go in C++ only.
+
 Shooter's Edge's game logic as QC mods the game ships in source, for modders to copy and change.
 One set of sources builds two VARIANTS:
 

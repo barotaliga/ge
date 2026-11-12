@@ -10,10 +10,20 @@
 // A call through the table is one indirect call per entry point (a frame, a connect, a console
 // line), never per entity: the frame's path inside the runner is unchanged.
 //
+// C++ MODS ON TOP (`RulesMods`, docs/mods.md § On the server): the host puts loaded mod tables in
+// `RulesCommon::mods` before a map starts; `start` then lays each mod's seam (sim/mod_host.hpp)
+// over the program the runner made the loop with, the first named lowest, so every hook runs the
+// rules' own function first and each mod's after it in the order named, and runs each mod's
+// match_start once the map's entities are spawned. A mod's state lives for one map, as the
+// rules' own globals do. Its log lines go to the server console after each call. A runner whose
+// rules keep their own entities off the loop's program seam (the sequel's: `program_seam` false in
+// its calls) refuses a mod at `start` until its own hooks land (docs/goals/M52g.md).
+//
 // ge:summary The rules runner: the table of calls a host runs a game's rules through, and the
 // ge:summary common part every runner keeps (the loop, the lists, the sink, the world)
 // ge:keywords rules-runner runner runner-calls rules-common qc-runner host start connect drop
 // ge:keywords frame console-line client-command user-info pause carry map-change program-form
+// ge:keywords rules-mods mod-package mods_start rules_hash program-seam
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_rules_runner_test.cpp
 #pragma once
@@ -29,6 +39,7 @@
 #include "shooter/client.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/rules_world.hpp"
+#include "shooters_edge/sim/mod_host.hpp"
 
 namespace ge::brush {
 struct Map;
@@ -86,6 +97,15 @@ struct MapSpec {
   std::shared_ptr<const ge::brush::Map> brushes;
 };
 
+// The C++ mods on top of the rules: the tables the host loaded (it keeps each library open while
+// the runner lives), lowest first, and this map's host of each (made at `start`).
+struct RulesMods {
+  std::vector<const ge_mod_v1*> tables;
+  std::vector<std::string> names;  // each table's name, for the console's lines
+  uint32_t seed = 1;               // mod k's stream is seeded with seed + k
+  std::vector<std::unique_ptr<sim::ModHost>> hosts;
+};
+
 // What every runner keeps alike: what the host, the wire and the bots read, and the hooks the
 // host sets.
 struct RulesCommon {
@@ -131,6 +151,8 @@ struct RulesCommon {
 
   bool map_stopped = false;  // error / objerror: the map is over (`stop_reason` says why)
   bool paused = false;
+
+  RulesMods mods;  // C++ mods on top (none: the rules alone, every hash as before)
 };
 
 // The settings every runner of a classic mod registers (the match's rules, the move's and the
@@ -160,7 +182,17 @@ struct RunnerCalls {
   // The players' state kept across a level change (before the next `start`).
   void (*carry)(void* rules);
   void (*destroy)(void* rules);  // null: the runner does not own its state
+  // The rules run on the loop's program seam (sv.program), so C++ mods can stack on them.
+  bool program_seam = false;
 };
+
+// After a runner's own `start`: each mod's seam laid over the loop's program and its
+// match_start run. False with `error` when the runner takes no mods or a mod's hooks are refused.
+bool start_mods(RulesCommon& s, const RunnerCalls& calls, std::string& error);
+// The mods' new log lines put on the server console ("mod <name>: <line>").
+void log_mods(RulesCommon& s);
+// The loop's digest (`server_hash`), folded with each mod's run when mods play.
+uint64_t rules_hash(const RulesCommon& s);
 
 // A runner the host owns: the table, its state and the common part (inside the state). Moved,
 // never copied; destroying it destroys the state.
@@ -182,14 +214,18 @@ struct RulesRunner {
   RulesCommon* operator->() const { return common; }
 
   bool start(const MapSpec& map, std::string& error) const {
-    return calls->start(rules, map, error);
+    if (!calls->start(rules, map, error)) return false;
+    return common->mods.tables.empty() || start_mods(*common, *calls, error);
   }
   void connect(int slot, const std::string& name, bool spectator, bool bot,
                const float* parms = nullptr) const {
     calls->connect(rules, slot, name, spectator, bot, parms);
   }
   void drop(int slot) const { calls->drop(rules, slot); }
-  void frame(const sh::Packet* packets, int count) const { calls->frame(rules, packets, count); }
+  void frame(const sh::Packet* packets, int count) const {
+    calls->frame(rules, packets, count);
+    if (!common->mods.hosts.empty()) log_mods(*common);
+  }
   CommandResult client_command(int slot, const std::string& line) const {
     return calls->client_command(rules, slot, line);
   }
