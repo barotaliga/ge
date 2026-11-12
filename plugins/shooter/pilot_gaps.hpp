@@ -26,6 +26,10 @@ inline constexpr float kGapCurveFrom = 160;  // a curve into a gap begun this ne
 bool gap_lands(const MoveWorld& world, const MoveSettings& move, Vec3f at, Vec3f velocity, Vec3f T,
                int msec);
 
+// Under a keyboard (`curve_keys`): whether a jump asked now still lands across by `T` when its key
+// goes down one or two commands late, the keys held now (the curve's side key) and the view still.
+bool gap_lands_late(const Pilot& p, const PilotSense& s, int msec, Vec3f T);
+
 // The route index of the gap trick's start in the hop's stretch [max(k, from), end), or -1.
 int32_t gap_in(const Pilot& p, int32_t end, size_t from = 0);
 

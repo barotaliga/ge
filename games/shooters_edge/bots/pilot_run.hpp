@@ -21,6 +21,7 @@
 #include <memory>
 #include <vector>
 
+#include "shooter/features.hpp"
 #include "shooter/pilot.hpp"
 #include "shooter/rocket_jumps.hpp"
 #include "shooters_edge/server/host.hpp"
@@ -79,10 +80,13 @@ RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sh::PilotHan
 // `start_velocity` (a run that starts where a recorded player was, at his speed). A shot the
 // pilot fires (a rocket jump, with `set.jumper.rockets`) flies and bursts as the nav's proof has it
 // (shooter/nav.hpp `rocket_burst`, `rocket_blast`).
+// `keys`: the commands pressed through a hand on a keyboard with these features (keyboard.hpp
+// `press_keys`, the hand's times by the `moves` trait), as a fighter's are under `keys`.
 RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f from, sh::Vec3f to,
                     sh::PilotHands hands, uint32_t seed,
                     const sh::PilotSettings& set = sh::PilotSettings{}, float limit_s = 20,
-                    sh::Vec3f start_velocity = {});
+                    sh::Vec3f start_velocity = {}, const sh::Features* keys = nullptr,
+                    uint8_t moves = 0);
 
 struct Arena {
   server::Host host;

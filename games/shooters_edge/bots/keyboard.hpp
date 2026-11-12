@@ -5,13 +5,16 @@
 //   one of the eight key sets nearest its direction (W, W+D, D, ... the classic client's full
 //   speed), or none under `kPressMin` of a run's speed in the air (`kCreep` on the ground); the set
 //   held is kept until the wish lies `kHold` degrees past its edge, so a wish on the line between
-//   two sets does not flicker. STEERED (`keysteer`): instead the two sets either side of the wish,
-//   the further one tapped in for its share of the time (a tally of the way wished less the way
-//   pressed, a set past `kSteer`), as a person holds W and taps D to bear right: the way pressed
-//   over a few taps is the wish's, so a turn short of a set's 45 degrees is made. The jump is the
-//   jump key (held from a jump asked for until it lands, `jumpkey`: a pilot lets go between two
-//   asks, shorter than a finger's press), a weapon's impulse a TAP of its key: the impulse goes out
-//   on the command whose key goes down, not on the command it was asked for.
+//   two sets does not flicker. STEERED (`keysteer`): instead the two sets either side of the
+//   wish, the further one tapped in for its share of the time (a tally of the way wished less the
+//   way pressed, a set past `kSteer`), as a person holds W and taps D to bear right: the way
+//   pressed over a few taps is the wish's, so a turn short of a set's 45 degrees is made. A CURVE
+//   (`curvekeys`): a pilot's curve on the ground (a circle jump's, a run to a gap's lip) is its
+//   keys, W and the side key, held whole: read off the hands' slewed side axis, turned under a
+//   view a few degrees behind, it was tapped (the speed swung 320-375 instead of building). The
+//   jump is the jump key (held from a jump asked for until it lands, `jumpkey`: a pilot lets go
+//   between two asks, shorter than a finger's press), a weapon's impulse a TAP of its key: the
+//   impulse goes out on the command whose key goes down, not on the command it was asked for.
 // - FEATHERING: on the ground a wish short of a run (a run at a jump at the speed it was proven
 //   at, slowing into a point) is held by tapping: the keys pressed while the speed along the wish
 //   is under the speed wished less `kBand` (a few units crept by a tap), let go once it is over it
@@ -28,6 +31,7 @@
 //
 // ge:summary A fighter's keyboard: the wish as a key set, weapon impulses as key taps, by the hand
 // ge:keywords keyboard keys key-set wish octant bindings weapon-key tap impulse fighter_keyboard
+// ge:keywords press_keys curvekeys curve-keys key-chatter
 // ge:skill bots
 // ge:test tests/shooters_edge_footwork_test.cpp
 #pragma once
@@ -38,10 +42,18 @@
 namespace shooters_edge::bots {
 
 // The hand's bindings and times by `moves` (traits.hpp), seeded off `seed`.
+void key_hand_init(KeyHand& k, uint8_t moves, uint32_t seed);
 void fighter_keyboard_init(Fighter& f, uint8_t moves, uint32_t seed);
 
 // The finished `cmd` pressed through the hand: its axes, jump and impulse what the keys held.
-// `velocity` the player's own, `onground` whether he stands.
-void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool onground);
+// `velocity` the player's own, `onground` whether he stands. `curve`: a pilot's curve on the
+// ground meant as keys (shooter/pilot.hpp `Pilot::curve_keys`: forward and the side key, -1 left,
+// 1 right, 0 forward alone), held whole, not read off the axes (`curvekeys`); `kNoCurveKeys` none.
+void press_keys(KeyHand& k, const sh::Features& features, sh::MoveCmd& cmd, sh::Vec3f velocity,
+                bool onground, int8_t curve = sh::kNoCurveKeys);
+// The fighter's: its pilot's curve held when the command is still the pilot's (a hop on its
+// heading, the brink guard not in it: `brinked`).
+void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool onground,
+                      bool brinked = false);
 
 }  // namespace shooters_edge::bots
