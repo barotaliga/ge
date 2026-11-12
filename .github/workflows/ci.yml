@@ -54,7 +54,21 @@ env:
   # Every runner has four cores (three on macOS); ctest runs that many cases at once.
   CTEST_PARALLEL_LEVEL: "4"
 
-# Runners are a small shared pool, so nothing runs that cannot change the answer:
+# WHERE EACH CHECK RUNS. Linux is checked before every push by `make precheck` (GCC debug+ASan:
+# the build, the lint, the shaders, the tests and the digests the change reaches), so:
+#   - a pull request runs the cheap gates only (and the whole matrix if labelled `full-ci`);
+#   - the merge queue runs the gates and compiles Linux GCC release (`linux-gcc`), so a group
+#     lands in about ten minutes;
+#   - a PUSH TO MAIN runs the platforms precheck cannot: macOS (Apple Clang, arm64) and Windows
+#     (MSVC), each building everything and running the whole suite, plus the Linux GCC release
+#     row (whose compiler cache the queue's compile restores); the package when the push reaches
+#     what `ge new` grows or the build;
+#   - THE DAILY RUN (a schedule) runs everything: every Linux row, the lint over the whole tree,
+#     the whole packaging.
+# Main's push runs are never cancelled: they run one after another, and a push that lands while
+# one is running waits as the group's one pending run (a later push replaces it), so every run
+# finishes and answers for the tree it tested, and the `main-red` issue (flakes.yml) hears it.
+# Runners are a small shared pool, so nothing else runs that cannot change the answer:
 #   - a new push to a pull request cancels its older run (a queued merge has a ref of its own);
 #   - a draft runs nothing (marking it ready for review runs it);
 #   - a label runs only the gates (no-changelog changes their answer), in a group of its own so it
@@ -62,18 +76,10 @@ env:
 #   - each queue run's gates cancel the queue runs whose group GitHub has thrown away (a PR ahead
 #     failed or left, so the queue rebuilt its groups), which would otherwise run to the end;
 #   - every heavy job has a timeout near twice its usual time, so a hung runner frees up.
-# GitHub has no counting semaphore for jobs (a concurrency group holds one running and one
-# pending job and CANCELS the pending one a third arrival replaces), so the macOS and Windows
-# jobs are not capped by group: these rules keep their number down instead.
-# A push to main cancels the run already going, as every other event does: only the newest main is
-# worth a runner, and a run on a main a later push replaced holds the group and the runners while
-# the run that can turn main green waits. The price: while main lands faster than its matrix runs,
-# no main run finishes, so the `main-red` issue opens or closes only once the pushes pause.
-# The daily run (a schedule) has a group of its own and is never cancelled: a push to main cancels
-# only the push runs.
+# The daily run has a group of its own and is never cancelled either.
 concurrency:
   group: ${{ github.event_name == 'schedule' && format('ci-daily-{0}', github.run_id) || format('ci-{0}{1}', github.ref, (github.event.action == 'labeled' && github.event.label.name != 'full-ci') && format('-label-{0}', github.run_id) || '') }}
-  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' && github.event_name != 'push' }}
 
 jobs:
   # The cheap gates, on every run, and the decision what else runs.
@@ -88,6 +94,7 @@ jobs:
     outputs:
       code: ${{ steps.scope.outputs.code }}
       full: ${{ steps.scope.outputs.full }}
+      matrix: ${{ steps.scope.outputs.matrix }}
       package: ${{ steps.scope.outputs.package }}
       scaffold: ${{ steps.scope.outputs.scaffold }}
       rows: ${{ steps.scope.outputs.rows }}
@@ -144,26 +151,6 @@ jobs:
           # is 5 less the offset, +0100 in winter and +0200 in summer); the other cancels itself
           # (a cancelled run says nothing to the main-red issue, where a skipped one would read
           # green).
-          # A PUSH TO MAIN runs only while the merge queue is empty: a queued PR is about to land
-          # on top of it, and the queue's run on that tree answers for main (with the daily run for
-          # what the queue skips), so main's run would only take runners from it. With the queue
-          # busy the run cancels itself (a cancelled run says nothing to main-red; a skipped one
-          # would read green).
-          if [ "$EVENT" = push ]; then
-            # shellcheck disable=SC2016 # $owner and $name are the query's own variables
-            queued=$(gh api graphql -F owner="${GH_REPO%/*}" -F name="${GH_REPO#*/}" -f query='
-              query($owner: String!, $name: String!) {
-                repository(owner: $owner, name: $name) {
-                  mergeQueue(branch: "main") { entries(first: 1) { totalCount } }
-                }
-              }' --jq '.data.repository.mergeQueue.entries.totalCount // 0')
-            if [ "${queued:-0}" -gt 0 ]; then
-              echo "$queued pull request(s) in the merge queue: main's push run gives its runners to the queue and cancels itself"
-              gh api -X POST "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/cancel" > /dev/null
-              sleep 120
-              exit 1
-            fi
-          fi
           if [ "$EVENT" = schedule ]; then
             offset=$(TZ=Europe/Stockholm date +%z)
             want=$((5 - 10#${offset:1:2}))
@@ -202,6 +189,7 @@ jobs:
               echo "skip=true"
               echo "code=false"
               echo "full=false"
+              echo "matrix=false"
               echo "package=false"
               echo "scaffold=false"
               echo 'rows=[{"os":"macos-15","cxx":"clang++","preset":"release"}]'
@@ -227,8 +215,9 @@ jobs:
             CODE=true  # no base to diff against (a new branch, a forced push): run everything
             SCAFFOLD=true
           fi
-          # A push to main always runs: a newer push cancels the older run, so the commit before
-          # this one may never have been tested, and only a run of the whole tree answers for it.
+          # A push to main always runs: a push that waited behind a running one is replaced by the
+          # next, so the commit before this one may never have been tested, and only a run of the
+          # whole tree answers for it.
           if [ "$EVENT" = push ]; then CODE=true; fi
           # A label other than full-ci changes only the gates' answer: run them alone.
           if [ "$ACTION" = labeled ] && [ "$LABEL" != full-ci ]; then CODE=false; fi
@@ -236,19 +225,29 @@ jobs:
           if [ "$FULL_LABEL" = true ]; then FULL=true; SCAFFOLD=true; fi
           # The daily run: everything, on the whole tree.
           if [ "$EVENT" = schedule ]; then CODE=true; FULL=true; SCAFFOLD=true; fi
+          # The matrix (macOS, Windows, the test rows) runs on main and under `full-ci`, never on
+          # a plain pull request or in the queue: precheck answers for Linux before the push.
+          MATRIX=false
+          if [ "$EVENT" = push ] || [ "$FULL" = true ]; then MATRIX=true; fi
+          # The package: on main when the push reaches what `ge new` grows or the build, and
+          # always in the daily run and under `full-ci`.
           PACKAGE=false
-          if [ "$EVENT" = merge_group ] || [ "$FULL" = true ]; then PACKAGE=true; fi
+          if [ "$FULL" = true ] || { [ "$EVENT" = push ] && [ "$SCAFFOLD" = true ]; }; then PACKAGE=true; fi
           ROW_MAC='{"os":"macos-15","cxx":"clang++","preset":"release"}'
-          ROWS_LINUX='{"os":"ubuntu-24.04","cxx":"g++","preset":"debug"},{"os":"ubuntu-24.04","cxx":"g++","preset":"release"},{"os":"ubuntu-24.04","cxx":"clang++","preset":"release"},{"os":"ubuntu-24.04-arm","cxx":"g++","preset":"release"}'
-          if [ "$FULL" = true ] || [ "$EVENT" = push ]; then ROWS="[$ROW_MAC,$ROWS_LINUX]"; else ROWS="[$ROW_MAC]"; fi
+          ROW_GCC='{"os":"ubuntu-24.04","cxx":"g++","preset":"release"}'
+          ROWS_LINUX='{"os":"ubuntu-24.04","cxx":"g++","preset":"debug"},{"os":"ubuntu-24.04","cxx":"clang++","preset":"release"},{"os":"ubuntu-24.04-arm","cxx":"g++","preset":"release"}'
+          # Main's push: macOS and the GCC release row (it saves the cache the queue's compile
+          # reads). The daily run and `full-ci`: every row.
+          if [ "$FULL" = true ]; then ROWS="[$ROW_MAC,$ROW_GCC,$ROWS_LINUX]"; else ROWS="[$ROW_MAC,$ROW_GCC]"; fi
           {
             echo "code=$CODE"
+            echo "matrix=$MATRIX"
             echo "full=$FULL"
             echo "package=$PACKAGE"
             echo "scaffold=$SCAFFOLD"
             echo "rows=$ROWS"
           } >> "$GITHUB_OUTPUT"
-          echo "event $EVENT, code $CODE, full $FULL, package $PACKAGE, scaffold $SCAFFOLD, rows $ROWS"
+          echo "event $EVENT, code $CODE, full $FULL, matrix $MATRIX, package $PACKAGE, scaffold $SCAFFOLD, rows $ROWS"
       - if: steps.scope.outputs.skip != 'true'
         run: make fmt-check
       # tools/agents-index.mjs and tools/skill-lessons.mjs: plain Node, no npm install.
@@ -281,7 +280,7 @@ jobs:
   test:
     name: test (${{ matrix.os }}, ${{ matrix.cxx }}, ${{ matrix.preset }})
     needs: gates
-    if: needs.gates.outputs.code == 'true'
+    if: needs.gates.outputs.code == 'true' && needs.gates.outputs.matrix == 'true'
     runs-on: ${{ matrix.os }}
     # The debug+ASan row takes about an hour; the release rows a quarter of one.
     timeout-minutes: ${{ matrix.preset == 'debug' && 150 || 60 }}
@@ -395,12 +394,11 @@ jobs:
       - run: cmake --build --preset release
       - run: ccache --show-stats
 
-  # MSVC on every pull request too, not only in the queue: its warnings (/W4 /WX) and its CRT are
-  # where Linux-built changes break most, and a break first found at the head of the queue costs
-  # every PR queued behind it a full rebuild of the matrix. And on main, after every push.
+  # MSVC on main after every push (and under `full-ci`): its warnings (/W4 /WX) and its CRT are
+  # where Linux-built changes break most. A pull request that fears them labels itself `full-ci`.
   windows:
     needs: gates
-    if: needs.gates.outputs.code == 'true'
+    if: needs.gates.outputs.code == 'true' && needs.gates.outputs.matrix == 'true'
     runs-on: windows-2025
     timeout-minutes: 60
     env:
@@ -507,7 +505,7 @@ jobs:
       - run: make shaders-check PRESET=release
 
   # The installed package consumed on Windows and macOS (Linux too under `full-ci`), and ge
-  # growing a new repo when the change reaches it: the queue's.
+  # growing a new repo when the change reaches it: on main when a push reaches them, daily.
   packaging:
     needs: gates
     if: needs.gates.outputs.code == 'true' && needs.gates.outputs.package == 'true'
