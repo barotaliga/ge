@@ -13,6 +13,7 @@
 // ge:summary The client's search path: the base folder and a mod folder over it, packs, pk3s
 // ge:keywords search-path basedir game-folder mod gamedir pak pk3 pack archive find_file files
 // ge:keywords open_game_dir loose-files palette maps map_names content_packs archive_paths
+// ge:keywords map_lit lit coloured-light lits
 // ge:skill vfs shooter
 // ge:test tests/shooters_edge_files_test.cpp
 #pragma once
@@ -57,6 +58,13 @@ std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name
 // viewing `store` or a pack. Empty when the files hold none.
 std::span<const uint8_t> game_palette(
     const SearchPath& path, std::vector<uint8_t>& store,
+    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+
+// The map `map`'s coloured light: `<maps folder>/<map>.lit` beside the map (`maps/dm6.lit`),
+// else `lits/<map>.lit`, the folder players keep downloaded light files in; viewing `store` or a
+// pack, with its path in `found`. Empty when neither is there.
+std::span<const uint8_t> map_lit(
+    const SearchPath& path, std::string_view map, std::vector<uint8_t>& store, std::string* found,
     const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
 
 // The maps the search path holds (the content row's maps: `maps/<name>.bsp` for the first game),
