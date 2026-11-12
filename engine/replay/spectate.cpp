@@ -1,0 +1,242 @@
+// Spectating by inputs (spectate.hpp): the writer's blocks and keyframes, the spectator's follow.
+//
+// ge:summary Spectating by inputs: the writer's blocks and keyframes, the spectator's follow
+// ge:keywords spectate inputs-chunk grid-index keyframe follow digest
+// ge:skill replay
+// ge:test tests/fall_line_spectate_test.cpp
+#include "replay/spectate.hpp"
+
+#include "core/num.hpp"
+#include "play/inputs.hpp"
+#include "play/saves.hpp"
+
+namespace ge::replay {
+
+namespace {
+
+void put_u(std::vector<uint8_t>& o, uint64_t v) {
+  while (v >= 0x80) {
+    o.push_back(static_cast<uint8_t>(v | 0x80));
+    v >>= 7;
+  }
+  o.push_back(static_cast<uint8_t>(v));
+}
+void put_s(std::vector<uint8_t>& o, int64_t v) {
+  put_u(o, (static_cast<uint64_t>(v) << 1) ^ static_cast<uint64_t>(v >> 63));
+}
+
+struct In {
+  std::span<const uint8_t> b;
+  size_t at = 0;
+  bool bad = false;
+  uint64_t u() {
+    uint64_t v = 0;
+    for (int shift = 0; shift < 64; shift += 7) {
+      if (at >= b.size()) break;
+      const uint8_t c = b[at++];
+      v |= static_cast<uint64_t>(c & 0x7F) << shift;
+      if ((c & 0x80) == 0) return v;
+    }
+    bad = true;
+    return 0;
+  }
+  int64_t s() {
+    const uint64_t z = u();
+    return static_cast<int64_t>(z >> 1) ^ -static_cast<int64_t>(z & 1);
+  }
+  uint64_t u64() {
+    if (b.size() - at < 8 || at > b.size()) {
+      bad = true;
+      return 0;
+    }
+    uint64_t v = 0;
+    for (int i = 0; i < 8; i++)
+      v |= static_cast<uint64_t>(b[at + static_cast<size_t>(i)]) << (8 * i);
+    at += 8;
+    return v;
+  }
+};
+
+double grid_steps(play::AxisKind kind) {
+  if (kind == play::AxisKind::signed_unit) return play::kSignedSteps;
+  if (kind == play::AxisKind::lever) return play::kLeverSteps;
+  return 1;
+}
+
+int64_t index_of(double snapped, play::AxisKind kind) {
+  return static_cast<int64_t>(core::num::round(snapped * grid_steps(kind)));
+}
+
+double value_of(int64_t index, play::AxisKind kind) {
+  return index == 0 ? 0.0 : static_cast<double>(index) / grid_steps(kind);
+}
+
+int64_t time_ms_of(int64_t step, double hz) {
+  return static_cast<int64_t>(static_cast<double>(step) * 1000.0 / hz);
+}
+
+}  // namespace
+
+SpectateWriter::SpectateWriter(const play::GameSpec& spec, const play::Setup& setup,
+                               std::vector<uint8_t>& out, const SpectateOptions& options)
+    : spec_(spec), setup_(setup), options_(options) {
+  per_block_ = std::max<int64_t>(1, static_cast<int64_t>(core::num::round(spec.hz)));
+  StreamHeader h;
+  h.game = spec.name;
+  h.game_version = spec.version;
+  h.meta.emplace_back("seed", play::hex64(static_cast<uint64_t>(setup.seed)));
+  h.meta.emplace_back("hz", std::to_string(per_block_));
+  for (const auto& [k, v] : setup.options) h.meta.emplace_back("option." + k, v);
+  h.tracks = {{kInputsTrack, TrackKind::inputs, TrackCodec::zstd, "inputs"},
+              {kKeyframeTrack, TrackKind::keyframe, TrackCodec::zstd, "save"}};
+  stream_begin(writer_, h, out);
+  held_.assign(spec.axes.size(), 0);
+}
+
+bool SpectateWriter::keyframe(const play::Run& run, std::string& error) {
+  std::vector<uint8_t> save;
+  if (!play::save_run(spec_, setup_, run, steps_, {}, save, error)) return false;
+  stream_add(writer_, kKeyframeTrack, time_ms_of(steps_, spec_.hz), save);
+  block_keyframe_ = true;
+  return true;
+}
+
+void SpectateWriter::close_block(const play::Run& run) {
+  if (held_count_ > 0) {
+    put_u(runs_, static_cast<uint64_t>(held_count_));
+    for (const int64_t i : held_) put_s(runs_, i);
+    runs_n_++;
+    held_count_ = 0;
+  }
+  std::vector<uint8_t> chunk;
+  put_u(chunk, static_cast<uint64_t>(block_first_));
+  put_u(chunk, static_cast<uint64_t>(runs_n_));
+  chunk.insert(chunk.end(), runs_.begin(), runs_.end());
+  const uint64_t d = run.digest();
+  for (int i = 0; i < 8; i++) chunk.push_back(static_cast<uint8_t>(d >> (8 * i)));
+  stream_add(writer_, kInputsTrack, time_ms_of(block_first_, spec_.hz), chunk);
+  stream_end_block(writer_, block_keyframe_);
+  runs_.clear();
+  runs_n_ = 0;
+  block_keyframe_ = false;
+  block_first_ = steps_;
+}
+
+bool SpectateWriter::start(const play::Run& run, std::string& error) {
+  return options_.keyframe_seconds <= 0 || keyframe(run, error);
+}
+
+bool SpectateWriter::step(std::span<const double> snapped, const play::Run& run,
+                          std::string& error) {
+  std::vector<int64_t> now(spec_.axes.size(), 0);
+  for (size_t i = 0; i < now.size() && i < snapped.size(); i++)
+    now[i] = index_of(snapped[i], spec_.axes[i].kind);
+  if (held_count_ > 0 && now != held_) {
+    put_u(runs_, static_cast<uint64_t>(held_count_));
+    for (const int64_t i : held_) put_s(runs_, i);
+    runs_n_++;
+    held_count_ = 0;
+  }
+  held_ = now;
+  held_count_++;
+  steps_++;
+  if (steps_ - block_first_ >= per_block_) {
+    close_block(run);
+    const int64_t block = steps_ / per_block_;
+    if (options_.keyframe_seconds > 0 && block % options_.keyframe_seconds == 0)
+      return keyframe(run, error);
+  }
+  return true;
+}
+
+void SpectateWriter::finish(const play::Run& run) {
+  if (steps_ > block_first_ || block_keyframe_) close_block(run);
+  stream_finish(writer_,
+                {{"steps", std::to_string(steps_)}, {"digest", play::hex64(run.digest())}});
+}
+
+bool spectate_follow(Spectator& s, const play::GameSpec& spec, std::span<const uint8_t> stream) {
+  if (!s.error.empty()) return false;
+  s.spec = &spec;
+  if (!s.have_header) {
+    std::string error;
+    if (!read_stream_header(stream, s.reader, error)) return true;  // not whole yet
+    const StreamHeader& h = s.reader.header;
+    if (h.game != spec.name) {
+      s.error = "the stream is a " + h.game + " run, not " + spec.name;
+      return false;
+    }
+    if (h.game_version != spec.version) {
+      s.error = "the stream was played on version " + std::to_string(h.game_version) + " of " +
+                spec.name + "'s rules; this build has version " + std::to_string(spec.version);
+      return false;
+    }
+    s.have_header = true;
+  }
+  s.reader.bytes = stream;
+  for (;;) {
+    Block b;
+    std::string error;
+    const size_t at = s.reader.at;
+    if (!next_block(s.reader, b, error)) {
+      s.reader.at = at;
+      if (!error.empty() && error.find("cut short") == std::string::npos) {
+        s.error = error;
+        return false;
+      }
+      return true;
+    }
+    if (!s.run) {
+      if (!b.keyframe) continue;  // wait for a keyframe block
+      for (const Chunk& c : b.chunks) {
+        if (c.track != kKeyframeTrack) continue;
+        int64_t step = 0;
+        s.run = play::load_run(spec, c.bytes, step, error, "the stream's keyframe");
+        if (!s.run) {
+          s.error = error;
+          return false;
+        }
+        s.step = step;
+        s.started = step;
+      }
+      if (!s.run) {
+        s.error = "a keyframe block with no keyframe in it (block " + std::to_string(b.index) + ")";
+        return false;
+      }
+    }
+    for (const Chunk& c : b.chunks) {
+      if (c.track != kInputsTrack) continue;
+      In in{c.bytes};
+      const int64_t first = static_cast<int64_t>(in.u());
+      if (first != s.step) {
+        s.error = "block " + std::to_string(b.index) + " starts at step " + std::to_string(first) +
+                  " but the run is at step " + std::to_string(s.step);
+        return false;
+      }
+      const uint64_t runs = in.u();
+      std::vector<double> values(spec.axes.size(), 0);
+      for (uint64_t r = 0; r < runs && !in.bad; r++) {
+        const uint64_t count = in.u();
+        for (size_t i = 0; i < values.size(); i++) values[i] = value_of(in.s(), spec.axes[i].kind);
+        if (in.bad || count > (uint64_t{1} << 24)) break;
+        for (uint64_t k = 0; k < count; k++) s.run->step(values);
+        s.step += static_cast<int64_t>(count);
+      }
+      const uint64_t want = in.u64();
+      if (in.bad) {
+        s.error = "block " + std::to_string(b.index) + "'s inputs are damaged";
+        return false;
+      }
+      s.digest = s.run->digest();
+      s.blocks++;
+      if (s.digest != want) {
+        s.parted = b.index;
+        s.error = "the run parted from the player's after block " + std::to_string(b.index) +
+                  " (step " + std::to_string(s.step) + ")";
+        return false;
+      }
+    }
+  }
+}
+
+}  // namespace ge::replay
