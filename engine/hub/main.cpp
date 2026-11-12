@@ -12,6 +12,7 @@
 #include <thread>
 
 #include "hub/archive.hpp"
+#include "hub/browse.hpp"
 #include "hub/http.hpp"
 #include "hub/poller.hpp"
 #include "net/address.hpp"
@@ -59,6 +60,12 @@ bool hub_options(const std::vector<std::string>& args, HubOptions& out, std::str
       ok = number(value, out.status_s) && out.status_s > 0;
     } else if (key == "--busy-every") {
       ok = number(value, out.busy_s) && out.busy_s > 0;
+    } else if (key == "--browse-master") {
+      out.browse_masters = value;
+    } else if (key == "--browse-server") {
+      out.browse_servers = value;
+    } else if (key == "--browse-every") {
+      ok = number(value, out.browse_s) && out.browse_s > 0;
     } else if (key == "--archive") {
       out.archive = value;
       ok = !value.empty();
@@ -83,10 +90,11 @@ bool hub_options(const std::vector<std::string>& args, HubOptions& out, std::str
       return false;
     }
   }
-  if (out.masters.empty() && !out.help && out.serve_master == 0) {
+  if (out.masters.empty() && !out.help && out.serve_master == 0 && out.browse_masters.empty() &&
+      out.browse_servers.empty()) {
     error =
         "no master to read; next: pass --master=<host:port> (several: comma-separated), or "
-        "--serve-master to run one here";
+        "--serve-master to run one here, or --browse-master for the game's own";
     return false;
   }
   return true;
@@ -106,6 +114,11 @@ std::string hub_help(const HubSpec& spec) {
          "  --list-every=<s>          the masters' lists this often (default 60)\n"
          "  --status-every=<s>        each node's status this often (default 30)\n"
          "  --busy-every=<s>          ... while a human plays there (default 4)\n"
+         "  --browse-master=<h:p,...> the game's own masters, read by its own status query" +
+         std::string(spec.browse.status ? "" : " (this game has none)") +
+         "\n"
+         "  --browse-server=<h:p,...> servers on the game's own status query, named by hand\n"
+         "  --browse-every=<s>        the browse's refresh (default 30)\n"
          "  --archive=<dir>           keep demos there: replay files dropped in <dir>/inbox are "
          "taken\n"
          "  --keep-gb=<n>             the archive's size cap, oldest untagged first (default "
@@ -129,9 +142,27 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     return 0;
   }
   PollerConfig pc;
-  if (o.masters.empty()) o.masters = "127.0.0.1:" + std::to_string(o.serve_master);
+  if (o.masters.empty() && o.serve_master) {
+    o.masters = "127.0.0.1:" + std::to_string(o.serve_master);
+  }
   if (!gn::master_list(o.masters, pc.masters, error)) {
     std::fprintf(stderr, "%s_hub: --master: %s\n", spec.id.c_str(), error.c_str());
+    return 1;
+  }
+  BrowseConfig bc;
+  bc.refresh_us = static_cast<int64_t>(o.browse_s * 1e6);
+  if (!gn::master_list(o.browse_masters, bc.masters, error) ||
+      !gn::master_list(o.browse_servers, bc.servers, error)) {
+    std::fprintf(stderr, "%s_hub: --browse-master or --browse-server: %s\n", spec.id.c_str(),
+                 error.c_str());
+    return 1;
+  }
+  const bool browsing = !bc.masters.empty() || !bc.servers.empty();
+  if (browsing && !spec.browse.status) {
+    std::fprintf(stderr,
+                 "%s_hub: %s's servers have no status query of their own to browse; next: list "
+                 "them with --master\n",
+                 spec.id.c_str(), spec.game.c_str());
     return 1;
   }
   pc.protocol = spec.protocol;
@@ -152,6 +183,19 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
                  spec.id.c_str(), gn::to_string(udp_at).c_str(), error.c_str());
     return 1;
   }
+  gn::Transport browse_port;
+  gn::Address browse_at = udp_at;
+  browse_at.port = 0;
+  if (browsing && !gn::open_udp_transport(browse_port, browse_at, &error)) {
+    std::fprintf(stderr, "%s_hub: cannot open the browse's UDP socket: %s; next: check --ip\n",
+                 spec.id.c_str(), error.c_str());
+    gn::close_transport(udp);
+    return 1;
+  }
+  const auto close_udp = [&] {
+    gn::close_transport(udp);
+    if (browsing) gn::close_transport(browse_port);
+  };
   gn::Transport master_port;
   gn::Master master;
   if (o.serve_master) {
@@ -162,7 +206,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
                    "%s_hub: cannot run the master on port %d: %s; next: pass another "
                    "--serve-master port\n",
                    spec.id.c_str(), o.serve_master, error.c_str());
-      gn::close_transport(udp);
+      close_udp();
       return 1;
     }
     gn::master_init(master, gn::MasterConfig{}, master_port);
@@ -170,7 +214,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
   HttpServer http;
   if (!http_open(http, http_at, error)) {
     std::fprintf(stderr, "%s_hub: %s\n", spec.id.c_str(), error.c_str());
-    gn::close_transport(udp);
+    close_udp();
     if (o.serve_master) gn::close_transport(master_port);
     return 1;
   }
@@ -184,7 +228,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     if (!archive_open(archive, o.archive, error)) {
       std::fprintf(stderr, "%s_hub: %s\n", spec.id.c_str(), error.c_str());
       http_close(http);
-      gn::close_transport(udp);
+      close_udp();
       if (o.serve_master) gn::close_transport(master_port);
       return 1;
     }
@@ -200,8 +244,11 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
   int64_t next_archive = 0;
   Poller p;
   poller_init(p, pc, 0);
-  std::printf("%s_hub: reading %zu master(s), serving http://%s/\n", spec.id.c_str(),
-              pc.masters.size(), gn::to_string(http_at).c_str());
+  Browse browse;
+  if (browsing) browse_init(browse, bc, spec.browse, browse_port, 0);
+  std::printf("%s_hub: reading %zu master(s) and %zu of the game's own, serving http://%s/\n",
+              spec.id.c_str(), pc.masters.size(), bc.masters.size() + bc.servers.size(),
+              gn::to_string(http_at).c_str());
   std::fflush(stdout);
   int64_t next_line = static_cast<int64_t>(o.status_line_s * 1e6);
   for (;;) {
@@ -210,6 +257,10 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     if (o.serve_master) gn::master_update(master, now);
     gn::transport_pump(udp, now);
     poller_pump(p, udp, now);
+    if (browsing) {
+      gn::transport_pump(browse_port, now);
+      browse_update(browse, p, now);
+    }
     http.unix_s = unix_s();
     if (!o.archive.empty() && now >= next_archive) {
       std::vector<std::string> refused;
@@ -242,7 +293,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
   http_close(http);
-  gn::close_transport(udp);
+  close_udp();
   if (o.serve_master) gn::close_transport(master_port);
   return 0;
 }

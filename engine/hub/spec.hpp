@@ -1,8 +1,9 @@
 // A GAME'S HUB SPEC: the only thing a game gives the engine's hub (docs/hub.md § One hub for every
-// game). Its words (the title, the score's column), its protocol (which nodes are its own) and its
-// modes with the weight each carries in the order of the cards. Everything else, the poller, the
-// index, the API and later the pages and the archive, is the engine's. A game's hub binary is a
-// three-line main that calls `hub_main` with its spec (`ge_add_hub`, cmake/Hub.cmake).
+// game). Its words (the title, the score's column), its protocol (which nodes are its own), its
+// modes with the weight each carries in the order of the cards, and, for a game whose servers
+// already run a status protocol of their own, that protocol's query (the browse). Everything else,
+// the poller, the index, the API and later the pages and the archive, is the engine's. A game's hub
+// binary is a three-line main that calls `hub_main` with its spec (`ge_add_hub`, cmake/Hub.cmake).
 //
 // THE INTEREST RULE (§ The status record and modes): matches full of humans first, more humans
 // first, the mode's weight, divided down by the share of bots, and nothing for a match that has sat
@@ -20,6 +21,7 @@
 #include <vector>
 
 #include "hub/poller.hpp"
+#include "net/server_list.hpp"
 
 namespace ge::hub {
 
@@ -36,6 +38,10 @@ struct HubSpec {
   std::string score = "score";   // what a player's score column is called ("frags", "time")
   bool score_low_first = false;  // a time sorts lowest first
   uint16_t http_port = 28080;    // the hub's web port when none is given
+  // The game's own status protocol (net/server_list.hpp), when its servers speak one the engine's
+  // status record does not: `--browse-master` and `--browse-server` list them (browse.hpp). Empty:
+  // the hub reads only the engine's masters.
+  net::ServerQuery browse;
 };
 
 // How long a match may sit in its intermission before it drops to the bottom.

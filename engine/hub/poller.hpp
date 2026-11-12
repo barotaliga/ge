@@ -59,6 +59,7 @@ struct HubNode {
   uint64_t record_hash = 0;  // the last record's bytes, hashed: a change bumps `changes`
   uint64_t changes = 0;      // records that differed from the one before
   int64_t phase_us = -1;     // when the record's phase last changed
+  bool browsed = false;      // read by the game's own protocol (browse.hpp), never asked here
 };
 
 struct PollerStats {
@@ -94,6 +95,8 @@ const HubNode* poller_find(const Poller& p, const net::Address& address);
 // Nodes of these kinds that have answered.
 int poller_count(const Poller& p, uint8_t kinds);
 // Humans on a node's record: players who are neither bots, spectators nor viewers.
+// A record's bytes hashed (FNV-1a over status_write): equal records hash equal.
+uint64_t record_hash(const net::Status& s);
 int humans(const net::Status& s);
 
 }  // namespace ge::hub
