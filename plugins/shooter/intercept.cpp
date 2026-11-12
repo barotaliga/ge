@@ -36,6 +36,11 @@ bool arc_at(double up_deg, double d, const Shot& s, double& z, double& t) {
 Vec3f mover_at(const MovingTarget& m, double t) {
   Vec3f p{m.at.x + static_cast<float>(m.velocity.x * t),
           m.at.y + static_cast<float>(m.velocity.y * t), m.at.z};
+  if (m.slide != nullptr) {
+    const Vec3f s = m.slide(m.slide_ctx, m.at, p);
+    p.x = s.x;
+    p.y = s.y;
+  }
   if (!m.airborne) {
     p.z += static_cast<float>(m.velocity.z * t);
     return p;

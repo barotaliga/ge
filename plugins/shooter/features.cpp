@@ -22,7 +22,7 @@ constexpr const char* kNames[kFeatures] = {
     "keysteer",  "lookway",    "press",      "slopes",   "counter", "jumpkey",   "backstep",
     "runupkeys", "gapbuild",   "curvekeys",  "underway", "recipes", "chains",    "retarget",
     "uturn",     "jumpfly",    "gappast",    "lipjump",  "airgap",  "pilotcast", "aimhop",
-    "airkeys",   "airview",   "chainhop",  "airwall",   "landwall", "circlekeys", "circleview",
+    "airkeys",   "airview",   "chainhop",  "airwall",   "landwall", "circlekeys", "circleview", "circleaim", "leadwall",
     "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
@@ -52,7 +52,8 @@ constexpr Features kKeys = of({Feature::lookway, Feature::press, Feature::counte
 // dm2 and +2.4 on e1m2 a match head to head, the side with it faster).
 constexpr Features kJudging = of({Feature::runupkeys, Feature::underway, Feature::gappast,
                                   Feature::airgap, Feature::pilotcast, Feature::landwall,
-                                  Feature::circlekeys, Feature::circleview});
+                                  Feature::circlekeys, Feature::circleview,
+                                  Feature::circleaim, Feature::leadwall});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

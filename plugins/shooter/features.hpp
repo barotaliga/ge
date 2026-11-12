@@ -79,9 +79,15 @@
 //   faster), in no preset.
 // - `circlekeys`: a circle jump's curve on the ground under a view not the pilot's (the aim's, a
 //   spot watched, the hand's) pressed with the key set the ground move carries furthest on round
-//   the way (bot.cpp), not the curve's wish turned under that view; judging.
+//   the way (bot.cpp), not the curve's wish turned under that view; not kept, in no preset.
 // - `circleview`: a circle jump's curve under the mouse hand as people's: the hand on the
-//   velocity's heading, forward and the curve's side key held (bot.cpp); judging.
+//   velocity's heading, led into the turn, its keys the ground chooser's (bot.cpp); dropped
+//   (even head to head), in no preset.
+// - `circleaim`: a circle jump only under the hand's own view: while aiming the hop's first jump
+//   goes at once (pilot.cpp `no_circle`), and a holder's spot watched gives way to a curve
+//   (watch.cpp); dropped with `circleview`, in no preset.
+// - `leadwall`: a target's predicted way slid along the walls it meets (bot.cpp `lead_slide`),
+//   not run on through them (M18r.md 0s); judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
 // `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
@@ -94,7 +100,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -178,9 +184,11 @@ enum class Feature : uint8_t {
   landwall,
   circlekeys,
   circleview,
+  circleaim,
+  leadwall,
   trial,
 };
-constexpr size_t kFeatures = 71;
+constexpr size_t kFeatures = 73;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

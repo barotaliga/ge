@@ -120,6 +120,8 @@ constexpr double kAirBand = 15, kAirTurnCost = 0.5, kAirKeep = 0.3, kAirCurve = 
 constexpr float kAirViewLead = 2, kAirViewSpeed = 100;
 // and the keys chosen for the view this many commands on, when a key pressed now goes down.
 constexpr float kKeyLand = 1.5f;
+// `circleview`: a circle jump's view this far ahead of the velocity into the turn, degrees.
+constexpr float kCircleViewLead = 12;
 // `airwall`: each set's velocity looked along this far ahead, s, and a look all walled charged this.
 constexpr double kWallLook_s = 0.4, kWallCost = 60;
 
@@ -201,6 +203,33 @@ int aim_air_set(Vec3f v, float view_yaw, float way_yaw, float maxspeed, float ac
   return held_score + kAirKeep >= best_score ? held : best;
 }
 
+// `leadwall`: a target's way across slid along the walls (intercept.hpp `SlideAcross`): the
+// player's box traced a step up (stairs are climbed), and what is left past a wall projected along
+// it, twice, as the move bumps.
+struct LeadWall {
+  const Server* sv = nullptr;
+  int ent = 0;  // the target, passed through
+};
+Vec3f lead_slide(const void* ctx, Vec3f from, Vec3f to) {
+  const LeadWall& w = *static_cast<const LeadWall*>(ctx);
+  constexpr float kUp = 18;  // the move's step
+  Vec3f a{from.x, from.y, from.z + kUp};
+  Vec3f b{to.x, to.y, from.z + kUp};
+  for (int bump = 0; bump < 2; bump++) {
+    const HullTrace tr = trace_move(*w.sv, a, kPlayerMins, kPlayerMaxs, b, kTraceNoMonsters, w.ent);
+    if (tr.startsolid) return to;  // no room a step up: on as before
+    if (tr.fraction >= 1) return {b.x, b.y, to.z};
+    const Vec3f n = tr.plane.normal;
+    Vec3f left{b.x - tr.endpos.x, b.y - tr.endpos.y, 0};
+    const float into = left.x * n.x + left.y * n.y;
+    left = {left.x - n.x * into, left.y - n.y * into, 0};
+    a = tr.endpos;
+    b = {a.x + left.x, a.y + left.y, a.z};
+  }
+  const HullTrace tr = trace_move(*w.sv, a, kPlayerMins, kPlayerMaxs, b, kTraceNoMonsters, w.ent);
+  return {tr.endpos.x, tr.endpos.y, to.z};
+}
+
 // `circlekeys`: a circle jump's curve on the ground pressed under the view the keys land under
 // (`land_yaw`): the set the ground move carries furthest on round the hop's way, bending to the
 // curve's side, charged for a wall as the air's (`airwall`); held as the air's set is.
@@ -230,6 +259,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   // The pilot's command, with its own trace (pilot_next advances the command count). Under the
   // mouse hand a rocket jump's shot waits for the hand's view (pilot.hpp `shot_hand`).
   b.pilot.pilot.shot_hand = b.mouse && b.aim.mouse;
+  b.pilot.pilot.no_circle = b.circleaim && b.aiming;
   MoveCmd cmd = pilot_source(b.pilot).next(&b.pilot, sv, slot, msec);
   const float pilot_yaw = b.pilot.pilot.yaw;
   // Swimming (`pools`), the pilot's wish is pressed again under another view in three dimensions:
@@ -280,6 +310,11 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     m.at = {static_cast<float>(c->seen.x), static_cast<float>(c->seen.y),
             static_cast<float>(c->seen.z)};
     m.velocity = c->course;
+    const LeadWall lead_wall{&sv, c->ent};
+    if (b.leadwall && c->ent >= 1 && c->ent <= sv.set.maxclients) {
+      m.slide = lead_slide;
+      m.slide_ctx = &lead_wall;
+    }
     if (b.target_arc && c->ent >= 1 &&
         c->ent <= sv.set.maxclients) {  // a player falls; a monster flies
       const Vec3f down{m.at.x, m.at.y, m.at.z - 4096};
@@ -676,7 +711,9 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
             core::libm::atan2(static_cast<double>(self.velocity.y),
                               static_cast<double>(self.velocity.x)) *
             (180 / core::kPi));
-        want_view[0] = b.yaw + wrap(vh - b.yaw);
+        // (Led into the turn, the right side turning clockwise: the hand runs behind it.)
+        want_view[0] =
+            b.yaw + wrap(vh - static_cast<float>(vp.circle_side) * kCircleViewLead - b.yaw);
       }
       if (b.airview && !swim3d && vp.mode == PilotMode::hop &&
           (self.flags & kFlagOnGround) == 0 && !vp.gap_flight && vp.lip_pressed_s < 0 &&
@@ -735,10 +772,13 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
         b.stats.air_keys++;
       } else if (circle_view && !shot_due) {
-        // (`circleview`: the keys held, the hand's view doing the turn.)
-        cmd.forward = 400;
-        cmd.side = hp.circle_side > 0 ? 400.f : hp.circle_side < 0 ? -400.f : 0.f;
-        b.stats.circle_keys++;
+        // (`circleview`: the set the ground move carries furthest under the view the keys land
+        // under: forward and the side key once the hand is on the velocity; while it swings
+        // there, the set that does not brake.)
+        circle_keys(b, sv, self, me,
+                    b.airview ? wrap(cmd.angles.y + wrap(b.yaw - yaw_was) * kKeyLand)
+                              : wrap(cmd.angles.y),
+                    msec, cmd);
       } else if (b.circlekeys && !swim3d && !shot_due && hp.circling_now &&
                  (self.flags & kFlagOnGround) != 0) {
         circle_keys(b, sv, self, me,

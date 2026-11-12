@@ -6,6 +6,8 @@
 //   across; in the AIR (`airborne`: off the floor under him) he follows his own arc under the
 //   server's gravity and lands on `floor_z`, where he goes on across: a player knocked up by a
 //   blast comes down where his arc does, which is where a midair shot is fired.
+// - THE WALLS (`MovingTarget::slide`, `leadwall`): a player cannot run on through a wall; given
+//   the caller's world, his way across is slid along what it meets, as the move slides him.
 // - THE INTERCEPT (`intercept`): the shot's flight time is from the muzzle to where the target
 //   WILL be, not to where he is: the time and the place are worked out again from each other
 //   `iterations` times (two or three settle it; one is the plain distance over the speed). A
@@ -32,11 +34,18 @@ namespace ge::shooter {
 
 inline constexpr float kServerGravity = 800;  // units/s/s
 
+// `leadwall`: the place a player moving from `from` toward `to` across reaches, slid along the
+// walls on the way (the caller's world; `to`'s height is only carried).
+using SlideAcross = Vec3f (*)(const void* ctx, Vec3f from, Vec3f to);
+
 struct MovingTarget {
   Vec3f at, velocity;
   bool airborne = false;  // on his own arc until `floor_z`
   float floor_z = -1e9f;  // the height his origin lands at
   float gravity = kServerGravity;
+  // His way across slid along the walls it meets (null: on in a straight line, through them).
+  SlideAcross slide = nullptr;
+  const void* slide_ctx = nullptr;
 };
 
 // Where `m` is `t` seconds on.
