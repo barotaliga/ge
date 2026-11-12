@@ -252,16 +252,17 @@ a good build saves them back.
 **Linux is checked here, before the push; CI runs only what can differ elsewhere.** `make
 precheck` is the Linux gate (GCC debug+ASan on Mesa's lavapipe: the build, the lint, the shaders,
 the tests and the labs' digests the change reaches), and CI (`.github/workflows/ci.yml`) runs no
-Linux build, test or lint on a pull request or in the queue. A pull request runs the gates
+Linux test or lint on a pull request or in the queue. A pull request runs the gates only
 (fmt-check, agents-check, libm-check, release-check, the changeset rule: cheap, and the queue's
-combined tree needs them), Windows (MSVC: its warnings, its CRT) and macOS (Apple Clang on arm64:
-another compiler and ISA), each building everything and running the whole suite, so the goldens
-and the labs' digests are held on both; the merge queue runs the same on the tree that lands plus
-`packaging.yml` (the installed package consumed on Windows and macOS, and `ge new` growing a repo
-when the change reaches `engine/cli`, `engine/play`, `engine/lab`, the templates or the build). A
-change to prose alone (docs, skills, lessons, root Markdown, fragments) runs the gates only; the
-label `full-ci` adds the Linux rows (GCC debug+ASan, GCC and Clang release, arm64), the lint and
-the shaders' check, and the whole packaging. The ruleset requires one check, `required`, which
+combined tree needs them); the merge queue adds the Linux GCC release compile (`linux-gcc`). THE
+MATRIX RUNS ON MAIN: every push to main runs Windows (MSVC: its warnings, its CRT) and macOS (Apple
+Clang on arm64: another compiler and ISA), each building everything and running the whole suite,
+so the goldens and the labs' digests are held on both, plus the Linux GCC release row and
+`packaging.yml` when the push reaches `engine/cli`, `engine/play`, `engine/lab`, the templates or
+the build; main's runs are never cancelled (they queue one behind another), so each one answers
+the `main-red` issue, and the PR that broke main fixes it first. The daily run adds the other
+Linux rows (GCC debug+ASan, Clang release, arm64), the whole-tree lint and the whole packaging; the
+label `full-ci` runs all of that on a pull request that fears another platform. The ruleset requires one check, `required`, which
 passes when every job passed or was skipped by those rules. A golden failure on one row points at
 that row's compiler or libm. GPU and window tests run where there is an adapter and skip (CTest's
 exit 77) where not; the Linux rows under `full-ci` run them on lavapipe with `GE_GPU_REQUIRE=1`,
@@ -309,6 +310,7 @@ characters.
 | `engine/gamecli/` | A player's game CLI (`ge::gamecli`, `docs/gamecli.md`): the command table and answer, settings through the catalog, servers, players, rcon, hosting, joining, logs; `ge_add_game_cli` | `agent-interface` |
 | `engine/server/` | The server core (`ge::server`, `docs/servers.md`): `ServerGame` a game plugs in, the frame, the node, session and hosting round it, the dedicated process (`ge_add_server`), the sample game and trial | `net` |
 | `engine/hub/` | The hub (`ge::hub`, `docs/hub.md`): a game's `HubSpec`, the poller of masters and status records, the index, the JSON API, HTTP with server-sent events, the process (`ge_add_hub`) | `net` |
+| `engine/web/` | The web (`ge::web`, `docs/hub.md` § Watching in a browser): a game's viewer in the browser: its arguments from the hub's page, the page's calls (fetch, paint, canvas, status line); `ge_add_web_viewer` | `net` |
 | `engine/texgen/` | Procedural textures (`ge::texgen`, `docs/textures.md`): the `.tex` recipe, tileable noise, the layer kinds, the bake to maps and its disk cache; `library/` the specimens | `textures` |
 | `engine/snow/` | Snow over any ground (`ge::snow`, `docs/snow.md`): the layer and its cover, sparse fixed-point tiles, `sample`, `press` and imprint records, reference contacts, the snapshot | `snow` |
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
@@ -362,6 +364,7 @@ characters.
 | `games/shooters_edge/cli/` | Shooter's Edge's player CLI (`shooters_edge_cli`): its Spec over engine/gamecli (places, the classic protocol, launch words, settings), classic enhance's group, its demos | `agent-interface`, `shooter` |
 | `games/shooters_edge/server/` | Shooter's Edge's server: the host, its slots and input log, the dedicated binary; the mod server (QC builtins and extensions, hooks, the test and baseline mods, a progs from a path) | `shooter`, `progs` |
 | `games/shooters_edge/hub/` | Shooter's Edge's hub binary (`shooters_edge_hub`): the engine's hub with the game's modes and words | `net` |
+| `games/shooters_edge/web/` | Shooter's Edge's web viewer (`shooters_edge_viewer`, the `web` preset): the packs and a demo fetched from a hub, the match played on the page's canvas | `net` |
 | `games/shooters_edge/qc/` | Shooter's Edge's own QC mods modders start from: `common/` shared, `arena/` the deathmatch, `campaign/` the single-player game (built by `ge qc build`) | `progs` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (the harness), `golden.hpp`, `golden/` | `testing` |
 | `porting/` | The WORKING AREA (above): the porting guide, the porting map, the golden-table generators. Deleted when porting ends | `port` |

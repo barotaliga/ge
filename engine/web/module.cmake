@@ -1,0 +1,14 @@
+# The web (engine/web, docs/hub.md § Watching in a browser): what a game's viewer in the browser
+# shares. The viewer's arguments (the hub page's `Module.arguments`), read on every platform and
+# tested natively; in an Emscripten build (GE_WEB) the browser's side too: files fetched from the
+# hub, the frame the page paints, the canvas's size and the page's status line. A game's
+# `<id>_viewer` is made by `ge_add_web_viewer` (cmake/Web.cmake).
+set(GE_WEB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/engine/web/viewer_args.cpp)
+if(GE_WEB)
+  list(APPEND GE_WEB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/engine/web/browser.cpp)
+endif()
+add_library(ge_web STATIC ${GE_WEB_SOURCES})
+target_link_libraries(ge_web PUBLIC ge_core)
+
+ge_module(ge_web EXPORT web)
+include(cmake/Web.cmake)
