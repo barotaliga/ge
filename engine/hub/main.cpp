@@ -1,7 +1,7 @@
 // A hub's process, defined: the flags, the sockets, the wall-clock loop and its status lines.
 //
 // ge:summary A hub's process defined: flags, sockets, the wall-clock loop, status lines
-// ge:keywords hub hub_main flags loop wall-clock status
+// ge:keywords hub hub_main flags loop wall-clock status archive inbox retention
 // ge:skill net
 // ge:test tests/hub_http_test.cpp
 #include "hub/main.hpp"
@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <thread>
 
+#include "hub/archive.hpp"
 #include "hub/http.hpp"
 #include "hub/poller.hpp"
 #include "net/address.hpp"
@@ -58,6 +59,13 @@ bool hub_options(const std::vector<std::string>& args, HubOptions& out, std::str
       ok = number(value, out.status_s) && out.status_s > 0;
     } else if (key == "--busy-every") {
       ok = number(value, out.busy_s) && out.busy_s > 0;
+    } else if (key == "--archive") {
+      out.archive = value;
+      ok = !value.empty();
+    } else if (key == "--keep-gb") {
+      ok = number(value, out.keep_gb);
+    } else if (key == "--keep-days") {
+      ok = number(value, out.keep_days);
     } else if (key == "--for") {
       ok = number(value, out.for_s);
     } else if (key == "--status") {
@@ -86,7 +94,8 @@ bool hub_options(const std::vector<std::string>& args, HubOptions& out, std::str
 
 std::string hub_help(const HubSpec& spec) {
   return spec.game +
-         "'s hub: every live server and broadcast its masters list, as a JSON API.\n"
+         "'s hub: every live server and broadcast its masters list, and its demos, as web pages "
+         "and a JSON API.\n"
          "  --master=<host:port,...>  the masters to read (port 27900 when none is given)\n"
          "  --serve-master[=<port>]   run the master here too (port 27900 by default)\n"
          "  --ip=<address>            where both sockets bind (default 0.0.0.0)\n"
@@ -97,9 +106,14 @@ std::string hub_help(const HubSpec& spec) {
          "  --list-every=<s>          the masters' lists this often (default 60)\n"
          "  --status-every=<s>        each node's status this often (default 30)\n"
          "  --busy-every=<s>          ... while a human plays there (default 4)\n"
+         "  --archive=<dir>           keep demos there: replay files dropped in <dir>/inbox are "
+         "taken\n"
+         "  --keep-gb=<n>             the archive's size cap, oldest untagged first (default "
+         "none)\n"
+         "  --keep-days=<n>           the archive's age cap for untagged demos (default none)\n"
          "  --status=<s>              a status line this often (default 60)\n"
          "  --for=<s>                 stop after this long (default 0: run until killed)\n"
-         "Then GET http://<ip>:<http>/v1 lists the paths.\n";
+         "Then open http://<ip>:<http>/ in a browser; GET /v1 lists the API's paths.\n";
 }
 
 int hub_main(int argc, char** argv, const HubSpec& spec) {
@@ -165,9 +179,28 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
   const auto now_us = [&] {
     return std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start).count();
   };
+  Archive archive;
+  if (!o.archive.empty()) {
+    if (!archive_open(archive, o.archive, error)) {
+      std::fprintf(stderr, "%s_hub: %s\n", spec.id.c_str(), error.c_str());
+      http_close(http);
+      gn::close_transport(udp);
+      if (o.serve_master) gn::close_transport(master_port);
+      return 1;
+    }
+    http.archive = &archive;
+    std::printf("%s_hub: archive %s: %zu demos, %.1f MB\n", spec.id.c_str(), o.archive.c_str(),
+                archive.rows.size(), static_cast<double>(archive.bytes) / 1e6);
+  }
+  const auto unix_s = [] {
+    return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
+                                    std::chrono::system_clock::now().time_since_epoch())
+                                    .count());
+  };
+  int64_t next_archive = 0;
   Poller p;
   poller_init(p, pc, 0);
-  std::printf("%s_hub: reading %zu master(s), serving http://%s/v1\n", spec.id.c_str(),
+  std::printf("%s_hub: reading %zu master(s), serving http://%s/\n", spec.id.c_str(),
               pc.masters.size(), gn::to_string(http_at).c_str());
   std::fflush(stdout);
   int64_t next_line = static_cast<int64_t>(o.status_line_s * 1e6);
@@ -177,6 +210,22 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     if (o.serve_master) gn::master_update(master, now);
     gn::transport_pump(udp, now);
     poller_pump(p, udp, now);
+    http.unix_s = unix_s();
+    if (!o.archive.empty() && now >= next_archive) {
+      std::vector<std::string> refused;
+      const int taken = archive_ingest(archive, http.unix_s, refused);
+      for (const std::string& r : refused) {
+        std::fprintf(stderr, "%s_hub: inbox: refused %s\n", spec.id.c_str(), r.c_str());
+      }
+      const int dropped = archive_prune(archive, static_cast<int64_t>(o.keep_gb * 1e9),
+                                        static_cast<int64_t>(o.keep_days * 86400), http.unix_s);
+      if (taken || dropped) {
+        std::printf("%s_hub: archive: %d demos in, %d dropped, %zu kept\n", spec.id.c_str(), taken,
+                    dropped, archive.rows.size());
+        std::fflush(stdout);
+      }
+      next_archive = now + 5000000;  // the inbox every 5 s
+    }
     http_update(http, p, spec, now);
     if (now >= next_line) {
       std::printf(
