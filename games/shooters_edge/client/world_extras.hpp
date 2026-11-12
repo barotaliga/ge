@@ -124,6 +124,6 @@ void encode_extras_sim(const WorldExtras& x, const ge::gpu::PipelineSet& pipelin
 // fall.
 void encode_extras(const WorldExtras& x, const ge::gpu::PipelineSet& pipelines,
                    ge::render::FrameRecorder& rec, wgpu::CommandEncoder& encoder,
-                   const ge::render::FrameTargets& targets, const wgpu::BindGroup& frame);
+                   const ge::render::FrameTargets& targets, const ge::render::FrameGroup& frame);
 
 }  // namespace shooters_edge::client

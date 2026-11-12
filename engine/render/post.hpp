@@ -162,7 +162,7 @@ void set_post_focus(gpu::Device& device, const Post& post, const DofSettings& do
 std::vector<uint8_t> lens_dirt(uint32_t w, uint32_t h, uint32_t seed = 1);
 // The pass ("post"): the frame into `output` (cleared, then every pixel written).
 void encode_post(const Post& post, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
-                 wgpu::CommandEncoder& encoder, const wgpu::BindGroup& frame,
+                 wgpu::CommandEncoder& encoder, const FrameGroup& frame,
                  const wgpu::BindGroup& group, const wgpu::TextureView& output);
 
 // The grade's table: kGradeSize³ RGB triples, red fastest, then green, then blue; entry (r, g, b)

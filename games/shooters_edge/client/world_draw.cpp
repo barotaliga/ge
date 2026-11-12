@@ -62,7 +62,8 @@ struct WorldDraw {
   wgpu::Buffer uniforms;
   gr::FrameUniforms staged{};
   wgpu::BindGroupLayout layout;
-  wgpu::BindGroup frame, post_group[2];  // classic, modern
+  ::ge::render::FrameGroup frame;  // group 0, and its parts for the passes that read few
+  wgpu::BindGroup post_group[2];   // classic, modern
   gr::Sky skypass;
   gr::CloudPass clouds;
   gr::Bloom bloom;

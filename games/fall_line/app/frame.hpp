@@ -231,7 +231,7 @@ struct GameFrame {
   wgpu::Buffer uniforms;
   ge::render::FrameUniforms staged{};
   wgpu::BindGroupLayout frame_layout;
-  wgpu::BindGroup frame_group;
+  ::ge::render::FrameGroup frame_group;  // group 0, and its parts for the passes that read few
   wgpu::BindGroup post_groups[2];  // over TAA's histories; [0] over the HDR target without TAA
   ge::render::Sky sky;
   ge::render::Terrain terrain;

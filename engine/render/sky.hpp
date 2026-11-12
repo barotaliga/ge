@@ -52,8 +52,8 @@ inline constexpr uint64_t kSkyLightBytes = 80;  // frame.wgsl's SkyLight: five v
 inline constexpr double kSunTurnCos = 0.99996;  // about half a degree
 inline constexpr double kEyeMove = 50.0;
 
-// Group 0 of every draw (frame.wgsl's bindings): made once a device.
-wgpu::BindGroupLayout frame_layout(gpu::Device& device);
+// Group 0 of every draw (frame.wgsl's bindings), or only those `reads` names: made once a device.
+wgpu::BindGroupLayout frame_layout(gpu::Device& device, uint32_t reads = kFrameAll);
 
 struct Sky {
   wgpu::Texture transmittance, multiscatter, sky_view, moon_view, aerial, shafts, blank, no_fog;
@@ -110,13 +110,12 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
 // group the atlas's own passes read. `mirror` is the last frame's kept scene (render/mirror.hpp's
 // `Mirror::last_view`, binding 15), or none for the blank (nothing reflected); never bind it to
 // the group of a pass that keeps the scene.
-wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
-                            const wgpu::Buffer& uniforms, const Sky& sky,
-                            const wgpu::Buffer& lights = nullptr,
-                            const wgpu::TextureView& fog = nullptr,
-                            const wgpu::TextureView& ao = nullptr,
-                            const wgpu::TextureView& lamp_atlas = nullptr,
-                            const wgpu::TextureView& mirror = nullptr);
+FrameGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
+                       const wgpu::Buffer& uniforms, const Sky& sky,
+                       const wgpu::Buffer& lights = nullptr, const wgpu::TextureView& fog = nullptr,
+                       const wgpu::TextureView& ao = nullptr,
+                       const wgpu::TextureView& lamp_atlas = nullptr,
+                       const wgpu::TextureView& mirror = nullptr);
 
 // Decide which tables this frame rebuilds.
 void prepare_sky(Sky& sky, const FrameView& view);
