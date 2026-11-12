@@ -43,6 +43,17 @@ the setting it is part of. A synonym is refused when its name is a cvar of its o
 does not exist, or the name already stands for another setting. A server game lists its names
 in `ServerGame::names` (`docs/servers.md`).
 
+### A setting's words
+
+Every cvar says what it does in ONE SENTENCE (`help`: a capital first, a full stop last, no other
+sentence inside) and what each value does (`values`), in one grammar `engine/console/words.hpp`
+reads: entries `<pattern>: <meaning>` separated by `; `, a pattern a literal (`0`), a range
+(`1..32`), `""` (the empty value), `N` (any number), `TEXT` (any text) or several of them
+(`N N`), the default's meaning marked `(the default)`. `help <name>` prints the values under the
+sentence, a saved cfg writes them as comments, and `value_fits` is what a cfg check asks of each
+line. `words_fault` names what is wrong with a cvar's words; a game's test runs it over every
+cvar it has (Shooter's Edge's server: `classic_game_every_server_setting_explains_itself`).
+
 ## Tiers
 
 Each setting has one of three homes, set by its flags (`engine/console/cvar.hpp`):
