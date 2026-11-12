@@ -1237,7 +1237,7 @@ bool unpack_block(std::span<const uint8_t> chunk, Face& f, bool keyframe, std::v
     if (gr::get_bit(io.r, m.tail) != 0) {
       const int32_t n = gr::get_int(io.r, m.len);
       if (n < 0 || static_cast<uint32_t>(n) > kMostBody) {
-        error = "a block's tail is " + std::to_string(n) + " bytes; next: the file is damaged";
+        error = "a block's tail is " + std::to_string(n) + " bytes; the file is damaged";
         return false;
       }
       bytes(io, m.raw, static_cast<size_t>(n));
@@ -1258,7 +1258,7 @@ bool unpack_block(std::span<const uint8_t> chunk, Face& f, bool keyframe, std::v
       continue;
     }
     if (kind == 0 || kind > kAll) {
-      error = "a record of kind " + std::to_string(kind) + "; next: the file is damaged";
+      error = "a record of kind " + std::to_string(kind) + "; the file is damaged";
       return false;
     }
     if (kind == kMultiple) {
@@ -1272,14 +1272,14 @@ bool unpack_block(std::span<const uint8_t> chunk, Face& f, bool keyframe, std::v
     io.body = out.size();
     if (gr::get_bit(io.r, m.walked[static_cast<size_t>(kind)]) == 0) {
       if (!walk_body(io, f, f.type)) {
-        error = "a record at byte " + std::to_string(len_at) +
-                " does not decode; next: the file is damaged";
+        error =
+            "a record at byte " + std::to_string(len_at) + " does not decode; the file is damaged";
         return false;
       }
     } else {
       const int32_t n = gr::get_int(io.r, m.len);
       if (n < 0 || static_cast<uint32_t>(n) > kMostBody) {
-        error = "a record's body is " + std::to_string(n) + " bytes; next: the file is damaged";
+        error = "a record's body is " + std::to_string(n) + " bytes; the file is damaged";
         return false;
       }
       bytes(io, m.raw, static_cast<size_t>(n));
@@ -1288,7 +1288,7 @@ bool unpack_block(std::span<const uint8_t> chunk, Face& f, bool keyframe, std::v
     for (size_t i = 0; i < 4; i++) out[len_at + i] = static_cast<uint8_t>(len >> (8 * i));
   }
   if (io.r.bad || io.fault) {
-    error = "a block's field-coded bytes end early; next: the file is damaged";
+    error = "a block's field-coded bytes end early; the file is damaged";
     return false;
   }
   return true;

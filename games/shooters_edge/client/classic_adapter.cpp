@@ -137,7 +137,7 @@ ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhan
                                std::to_string(own->width) + " x " + std::to_string(own->height) +
                                ", not a whole multiple of the pack's " + std::to_string(w) + " x " +
                                std::to_string(h) +
-                               "; next: save it at that size or a "
+                               "; save it at that size or a "
                                "multiple of it");
     }
     if (dir.empty()) return uint32_t{0};

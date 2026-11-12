@@ -146,18 +146,16 @@ std::vector<uint8_t> write_input_log(const InputLog& log) {
 bool read_input_log(const std::vector<uint8_t>& bytes, InputLog& log, std::string& error) {
   log = InputLog{};
   Reader r{bytes};
-  char magic[4] = {};
-  for (char& c : magic) c = static_cast<char>(r.u8());
-  if (r.short_read || std::memcmp(magic, kMagic, 4) != 0) {
-    error =
-        "not a server input log: no GESL magic at byte 0; next: pass a file written by "
-        "shooters_edge_server --log=<path>";
+  bool magic = true;  // each byte read even after a mismatch, so short_read says what it should
+  for (int i = 0; i < 4; i++) magic = static_cast<char>(r.u8()) == kMagic[i] && magic;
+  if (r.short_read || !magic) {
+    error = "not a server input log; shooters_edge_server --log=<path> writes those";
     return false;
   }
   const uint32_t version = r.u32();
   if (version != kInputLogVersion) {
     error = "input log version " + std::to_string(version) + ", this build reads " +
-            std::to_string(kInputLogVersion) + "; next: record the run again with this build";
+            std::to_string(kInputLogVersion);
     return false;
   }
   log.settings.maxclients = r.u16();

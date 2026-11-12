@@ -46,4 +46,27 @@ struct DiagnosticSite {
 // insides of string literals are skipped, so a call quoted in a comment is not a site.
 std::vector<DiagnosticSite> diagnostic_sites(std::string_view source, SourceKind kind);
 
+// PLAYER TEXT (docs/architecture.md § Diagnostics, Player text). What a person reads while they
+// play (a console line, a chat or centre print, a menu's hint, a refusal from the server) reads
+// like a game's own words, never like a prompt for an agent: no "next:", no "skill:", no
+// `backtick` markup. The prompt shape above is for the log channels, labs, `ge` and a game's
+// player CLI. `player_text_sites` gives every string literal of a C++ source outside the log and
+// diagnostic calls (output::*, out::*, GE_ASSERT, a lab's fail, static_assert); a file whose
+// leading comment carries kAgentVoiceMarker (a lab's harness, a tool's main) is not player text.
+inline constexpr std::string_view kAgentVoiceMarker = "voice: agent";
+
+// Why `literal` does not read as a game's words, or "" when it does.
+std::string player_text_problem(std::string_view literal);
+
+struct TextSite {
+  int line;          // 1-based
+  std::string text;  // one string literal's contents, escapes resolved
+};
+std::vector<TextSite> player_text_sites(std::string_view source);
+
+// Whether `path` (relative to a game's or the engine's root, '/'-separated) holds player text:
+// any file under games/<game>/ outside its labs, cli, play, assets, content, mods and qc, and
+// engine/console, engine/server and engine/hud.
+bool is_player_text_path(std::string_view path);
+
 }  // namespace ge::cli

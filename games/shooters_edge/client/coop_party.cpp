@@ -16,12 +16,12 @@ bool ensure_graph(Party& p, const sv::Campaign& c, const sv::MapSpec& map, std::
   if (p.nav && p.graph_of == map.name && p.graph_at == c.history.size()) return true;
   const sv::QcServer* q = sv::qc_of(c.server);
   if (!q) {
-    error = "the campaign runs no QC server; next: start a coop game (`coopgame`)";
+    error = "Bots join only a coop game. Type \"coopgame\" to start one.";
     return false;
   }
   auto nav = std::make_unique<bots::MapNav>();
   if (!bots::build_map_nav(*q, map, "info_player_start", *nav, error)) {
-    error += "; next: play coop on another map";
+    error += ". Bots can't play on this map; try coop on another.";
     return false;
   }
   p.nav = std::move(nav);
@@ -57,11 +57,11 @@ int party_size(const Party& p) {
 int party_add(Party& p, sv::Campaign& c, const sv::MapSpec& map, sh::AimSkill skill,
               std::string& error) {
   if (!c.server) {
-    error = "no map is running; next: start a coop game (`coopgame`)";
+    error = "No game is running. Type \"coopgame\" to start a coop game.";
     return -1;
   }
   if (party_size(p) >= kPartyMost) {
-    error = "the party is full (" + std::to_string(kPartyMost) + "); next: `removebot` first";
+    error = "The party is full (" + std::to_string(kPartyMost) + " players).";
     return -1;
   }
   const sv::RulesCommon& s = *c.server;
@@ -72,7 +72,7 @@ int party_add(Party& p, sv::Campaign& c, const sv::MapSpec& map, sh::AimSkill sk
       break;
     }
   if (slot < 0) {
-    error = "the server is full; next: `removebot` first";
+    error = "The server is full.";
     return -1;
   }
   if (!ensure_graph(p, c, map, error)) return -1;
