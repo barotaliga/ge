@@ -19,9 +19,11 @@
 #include "brush/trace.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num.hpp"
+#include "shooter/aim_help.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
+#include "shooters_edge/server/shot_help.hpp"
 
 namespace shooters_edge::server {
 
@@ -453,6 +455,69 @@ void rail(SequelServer& s, int slot, sh::Vec3f start, const sh::ViewAxes& ax, in
   }
 }
 
+// The sequel's weapons by the names the aim help's lists use (shot_help.hpp).
+constexpr const char* kSqAimNames[kSqWeaponCount] = {"blaster", "sg", "ssg", "mg",  "cg", "gl",
+                                                     "rl",      "hb", "rg",  "bfg", "hg"};
+
+// Whether the aim help acts for `slot`'s shot of weapon `w`: granted, and the weapon allowed.
+bool aim_helped_weapon(const SequelServer& s, int slot, int w) {
+  return static_cast<size_t>(slot) < s.sv.clients.size() && s.sv.clients[slot].aimhelp && w >= 0 &&
+         w < kSqWeaponCount && aim_help_weapon_allowed(s, kSqAimNames[w]);
+}
+
+sh::AimLeeway aim_leeway(const SequelServer& s) {
+  return {float(s.cvars.find("sv_aimhelp_x")->number), float(s.cvars.find("sv_aimhelp_y")->number)};
+}
+
+// The aim help's lead for `slot`'s missile from `start` at `velocity` (falling by `gravity` when
+// thrown): the velocity that meets the player it would just miss where he will be (his run or his
+// fall foreseen), or `velocity` as it was.
+sh::Vec3f led_velocity(SequelServer& s, int slot, int w, sh::Vec3f start, sh::Vec3f velocity,
+                       float gravity, sh::Vec3f view_forward) {
+  if (!aim_helped_weapon(s, slot, w)) return velocity;
+  const float fall = float(s.cvars.find("sv_gravity")->number);
+  sh::AimMover targets[sh::kMaxClients];
+  int n = 0;
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    if (i == slot || !fightable(s, i) || fight_teammates(s, slot, i)) continue;
+    const SequelPlayer& o = s.players[i];
+    const sh::Vec3f at = unpack(o.move.origin);
+    targets[n++] = sh::AimMover{i, at + o.mins, at + o.maxs, unpack(o.move.velocity),
+                                (o.move.flags & sh::kSqOnGround) == 0};
+  }
+  sh::LeadShot shot;
+  shot.origin = start;
+  shot.velocity = velocity;
+  shot.gravity = gravity;
+  const sh::LeadBend b =
+      sh::aim_lead(shot, view_forward, {targets, size_t(n)}, aim_leeway(s), fall);
+  if (!b.bent) return velocity;
+  if (gravity == 0 && shoot_line(s, start, b.at, 1u << slot).player != b.target) return velocity;
+  s.sv.clients[slot].aim_helped++;
+  return b.velocity;
+}
+
+// The aim help (plugins/shooter/aim_help.hpp) for a player granted it: his view's forward bent
+// onto the nearest other living player (not a teammate) a line just misses within the server's
+// leeway, when nothing stands between; `forward` as it was otherwise. Hitscan shots only.
+sh::Vec3f helped_forward(SequelServer& s, int slot, int w, sh::Vec3f eye, sh::Vec3f forward) {
+  if (!aim_helped_weapon(s, slot, w)) return forward;
+  const sh::AimLeeway leeway = aim_leeway(s);
+  sh::AimTarget targets[sh::kMaxClients];
+  int n = 0;
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    if (i == slot || !fightable(s, i) || fight_teammates(s, slot, i)) continue;
+    const SequelPlayer& o = s.players[i];
+    const sh::Vec3f at = unpack(o.move.origin);
+    targets[n++] = sh::AimTarget{i, at + o.mins, at + o.maxs};
+  }
+  const sh::AimBend b = sh::aim_help(eye, forward, kRange, {targets, size_t(n)}, leeway);
+  if (!b.bent) return forward;
+  if (shoot_line(s, eye, b.aim + b.forward * 8, 1u << slot).player != b.target) return forward;
+  s.sv.clients[slot].aim_helped++;
+  return b.forward;
+}
+
 // A missile from `start` along the axes; the hand grenade's `speed` and `fuse` are its throw's.
 void launch(SequelServer& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f start,
             const sh::ViewAxes& ax, int damage, int quad, int weapon, float speed = 600,
@@ -497,6 +562,9 @@ void launch(SequelServer& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f 
       m->radius = 100;
       break;
   }
+  // The aim help's lead (a thrown grenade falls; the rest fly straight).
+  const float fall = grenade(kind) ? float(s.cvars.find("sv_gravity")->number) : 0.0f;
+  m->velocity = led_velocity(s, slot, weapon, start, m->velocity, fall, ax.forward);
   if (reach.fraction < 1) {  // the start is behind a wall: it meets it at once
     m->origin = reach.end - ax.forward * 10;
     if (reach.player >= 0) {
@@ -549,8 +617,11 @@ void fire(SequelServer& s, int slot, int shots) {
   const int w = p.hand.weapon;
   const SqWeaponRow& r = kSqWeapons[w];
   const sh::Vec3f origin = unpack(p.move.origin);
-  const sh::ViewAxes ax = sh::angle_vectors(p.view_angles);
+  sh::ViewAxes ax = sh::angle_vectors(p.view_angles);
   const sh::Vec3f eye = origin + sh::Vec3f{0, 0, p.view_height - 8};
+  const sh::Vec3f view_forward = ax.forward;
+  if (r.shot == SqShot::pellets || r.shot == SqShot::bullet || r.shot == SqShot::rail)
+    ax.forward = helped_forward(s, slot, w, eye, ax.forward);
   const sh::Vec3f start = eye + ax.forward * r.forward + ax.right * r.right;
   const bool dm = deathmatch(s);
   const int quad = p.quad_until > s.level_time ? 4 : 1;  // ×4 damage and kick
@@ -564,7 +635,8 @@ void fire(SequelServer& s, int slot, int shots) {
     case SqShot::pellets:
       if (w == int(SqWeapon::super_shotgun)) {
         for (const float turn : {-5.0f, 5.0f}) {
-          const sh::ViewAxes half = sh::angle_vectors(p.view_angles + sh::Vec3f{0, turn, 0});
+          sh::ViewAxes half = sh::angle_vectors(p.view_angles + sh::Vec3f{0, turn, 0});
+          half.forward = sh::aim_bend_dir(half.forward, view_forward, ax.forward);
           for (int i = 0; i < 10; i++)
             bullet(s, slot, origin, start, half, 1000, 500, damage, kick, w);
         }

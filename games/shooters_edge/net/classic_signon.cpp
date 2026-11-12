@@ -224,6 +224,16 @@ void cmd_begin(ClassicServer& s, int slot) {
   if (c.state == ConnState::spawned) return;
   c.state = ConnState::spawned;
   c.rules_active = true;
+  // A player whose ping is past the server's most (sv_maxping) watches instead.
+  const int ping_ms = static_cast<int>(c.ping_s * 1000);
+  if (!c.local && !c.spectator && s.cfg.max_ping_ms > 0 && c.ping_samples > 0 &&
+      ping_ms > s.cfg.max_ping_ms) {
+    c.spectator = true;
+    info_set(c.userinfo, "*spectator", "1");
+    client_print(s, slot, 2,
+                 "Your ping of " + std::to_string(ping_ms) + " ms is over this server's most (" +
+                     std::to_string(s.cfg.max_ping_ms) + " ms), so you join as a spectator.\n");
+  }
   if (s.seat != nullptr)
     s.seat(s.seat_ctx, slot, c.name, c.spectator);
   else
@@ -241,10 +251,45 @@ void cmd_begin(ClassicServer& s, int slot) {
   for (ServerFrame& f : c.frames) f = ServerFrame{};
   c.delta_byte = -1;
   s.log.push_back("begin " + std::to_string(slot) + " " + c.name);
+  if (!c.aids_told) {  // a player who joins is told every aid granted (classic_admin.hpp)
+    c.aids_told = true;
+    classic_tell_aids(s, slot);
+  }
+}
+
+// A window of changes that does not slide: one more change in it, true while there are at most
+// `most` (a change after `seconds` opens a new window).
+bool within(double& since, int& count, double now, double seconds, int most) {
+  if (since < 0 || now - since > seconds) {
+    since = now;
+    count = 0;
+  }
+  return ++count <= most;
+}
+
+// The guards on a client's user info (never a local seat): true when the client was dropped.
+bool info_guards(ClassicServer& s, int slot, const std::string& key, const std::string& value) {
+  ClassicClient& c = s.clients[slot];
+  if (c.local) return false;
+  const double now = s.game->sv.time;
+  std::string why;
+  if (s.cfg.info_flood_count > 0 && s.cfg.info_flood_s > 0 &&
+      !within(c.info_since, c.info_changes, now, s.cfg.info_flood_s, s.cfg.info_flood_count))
+    why = "userinfo spam";
+  else if (s.cfg.colour_kick && key == "topcolor" && value != info_get(c.userinfo, key) &&
+           !within(c.colour_since, c.colour_changes, now, 8, 7))
+    why = "topcolor spam";
+  if (why.empty()) return false;
+  const std::string name = c.name;
+  client_print(s, slot, 2, "You were kicked from the game for " + why + "\n");
+  classic_drop(s, slot, "was kicked for " + why);
+  classic_print_all(s, name + " was kicked for " + why + "\n");
+  return true;
 }
 
 void cmd_setinfo(ClassicServer& s, int slot, const std::string& key, const std::string& value) {
   ClassicClient& c = s.clients[slot];
+  if (info_guards(s, slot, key, value)) return;
   if (key.empty() || key[0] == '*' || value.find("&c") != std::string::npos ||
       value.find("&r") != std::string::npos || !info_set(c.userinfo, key, value)) {
     client_print(s, slot, 2, "Can't set " + key + ".\n");
@@ -255,7 +300,7 @@ void cmd_setinfo(ClassicServer& s, int slot, const std::string& key, const std::
     std::vector<std::string> taken;
     for (int i = 0; i < sh::kMaxClients; i++)
       if (i != slot && s.clients[i].state != ConnState::free) taken.push_back(s.clients[i].name);
-    v = unique_name(sanitize_name(value), taken);
+    v = unique_name(sanitize_name(value, s.cfg.default_name), taken);
     c.name = v;
     info_set(c.userinfo, "name", v);
   }
@@ -465,6 +510,24 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
     cmd_nextdl(s, slot, w);
   } else if (cmd == "stopdownload" || cmd == "stopdl") {
     c.dl = ServerDownload{};
+  } else if (cmd == "minping") {  // a player's own floor on everyone's ping (sv_minpingcmd)
+    if (w.count < 2) {
+      client_print(s, slot, 2,
+                   "The minimum ping is " + std::to_string(s.cfg.min_ping_ms) + " ms.\n");
+    } else if (!s.cfg.min_ping_cmd) {
+      client_print(s, slot, 2, "This server doesn't let players change the minimum ping.\n");
+    } else if (s.match_on) {
+      client_print(s, slot, 2, "The minimum ping can't change while a match is on.\n");
+    } else {
+      char* end = nullptr;
+      const long v = std::strtol(pg::word(w, 1), &end, 10);
+      if (end == pg::word(w, 1) || *end != '\0' || v < 0 || v > 300) {
+        client_print(s, slot, 2, "The minimum ping must be 0 to 300 ms.\n");
+      } else {
+        s.cfg.min_ping_ms = static_cast<int>(v);
+        client_print(s, slot, 2, "Minimum ping set to " + std::to_string(v) + " ms.\n");
+      }
+    }
   } else if (cmd == "users") {
     client_print(s, slot, 2, classic_users(s));  // who is on, by user id (classic_admin.hpp)
   } else if (cmd == "ptrack" || cmd == "snap" || cmd == "upload") {
@@ -480,9 +543,14 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
         return;
       }
     }
+    // A public line's carriage returns could make it pass for another player's (sv_unfake).
+    std::string said = line;
+    if (cmd == "say" && s.cfg.unfake)
+      for (char& ch : said)
+        if (ch == '\r') ch = '#';
     // The game's own words (a lobby's ready, team, start) first, then the rules'.
-    const bool taken = s.game_command != nullptr && s.game_command(s.game_ctx, slot, line);
-    if (!taken && c.rules_active) s.rules->client_command(slot, line);
+    const bool taken = s.game_command != nullptr && s.game_command(s.game_ctx, slot, said);
+    if (!taken && c.rules_active) s.rules->client_command(slot, said);
   }
 }
 

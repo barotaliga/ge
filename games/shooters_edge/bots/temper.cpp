@@ -15,9 +15,7 @@ namespace sh = ge::shooter;
 
 namespace {
 
-// The W_ and IT_ bits (games/shooters_edge/qc).
-constexpr int32_t kWDouble = 2, kWSpiker = 4, kWHeavy = 8, kWGrenades = 16, kWRockets = 32;
-constexpr int32_t kWArc = 64;
+// The first game's IT_ bits for the powers (games/shooters_edge/qc).
 constexpr int32_t kItQuad = 4194304, kItPent = 1048576;
 constexpr float kQuad = 3, kPent = 10;  // a power's multiplier on the might
 constexpr double kQuadFor_s = 30;
@@ -42,12 +40,8 @@ sh::Might own_might(const Stats& st) {
   sh::Might m;
   m.body = st.health + st.armortype * st.armor;
   float arms = 1;
-  if (st.items & kWDouble && st.shells >= 2) arms = std::max(arms, 1.3f);
-  if (st.items & kWSpiker && st.nails > 0) arms = std::max(arms, 1.2f);
-  if (st.items & kWHeavy && st.nails >= 2) arms = std::max(arms, 1.5f);
-  if (st.items & kWGrenades && st.rockets > 0) arms = std::max(arms, 1.5f);
-  if (st.items & kWRockets && st.rockets > 0) arms = std::max(arms, 2.f);
-  if (st.items & kWArc && st.cells > 0) arms = std::max(arms, 2.f);
+  for (const BotWeapon& w : st.arsenal->weapons)
+    if (loaded(st, w)) arms = std::max(arms, w.arms);
   if (st.items & kItQuad) arms *= kQuad;
   if (st.items & kItPent) arms *= kPent;
   m.arms = arms;

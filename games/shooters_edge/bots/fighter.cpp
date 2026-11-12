@@ -40,8 +40,6 @@ namespace ai = ge::ai;
 
 // The baseline mod's weapon bits (games/shooters_edge/qc/common/defs.qc) and ammunition maxima
 // (items.qc).
-constexpr int32_t kWScatter = 1, kWDouble = 2, kWSpiker = 4, kWHeavy = 8, kWGrenades = 16;
-constexpr int32_t kWRockets = 32, kWArc = 64, kWBlade = 4096;
 constexpr float kAmmoMax = 100;
 constexpr int32_t kItQuad = 4194304;  // the quad's IT_ bit
 constexpr int32_t kItPent = 1048576;  // the shield's
@@ -121,82 +119,6 @@ constexpr float kViewHigh = 88.5f;
 constexpr float kClickWide = 2.5f;
 // A view set for a shot (a button, a doorway) is fired at once the hand is this near it, degrees.
 constexpr float kHandThere = 3;
-
-enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
-
-struct WeaponRow {
-  int32_t bit;
-  int number;  // its impulse
-  const char* name;
-  Ammo ammo;
-  float cost;
-  float shot_speed;  // 0 a hitscan
-  float aim_dz;      // aimed over the middle
-  float width;       // the target's half width the trigger allows at range, units
-  float range;       // fired within this, units
-  float refire_s;    // from one shot to the next, s (the mod's weapon rows)
-  bool stream;       // fired as a stream: the finger holds it down
-};
-
-const WeaponRow kWeapons[8] = {
-    {kWBlade, 1, "blade", Ammo::none, 0, 0, 0, 24, 72, 0.5f, false},
-    {kWScatter, 2, "scattergun", Ammo::shells, 1, 0, 0, 24, 1200, 0.5f, false},
-    {kWDouble, 3, "double", Ammo::shells, 2, 0, 0, 32, 350, 0.7f, false},
-    {kWSpiker, 4, "spiker", Ammo::nails, 1, 1000, 0, 16, 1500, 0.1f, true},
-    {kWHeavy, 5, "heavy spiker", Ammo::nails, 2, 1000, 0, 20, 1500, 0.1f, true},
-    {kWGrenades, 6, "grenades", Ammo::rockets, 1, 600, -20, 40, 500, 0.6f, false},
-    // Fired as people fire it, loosely: near him is enough, the blast reaches the rest.
-    {kWRockets, 7, "rockets", Ammo::rockets, 1, 1000, -20, 96, 1200, 0.8f, false},
-    {kWArc, 8, "arc", Ammo::cells, 1, 0, 0, 20, 600, 0.1f, true},
-};
-
-float ammo_of(const Stats& st, Ammo a) {
-  switch (a) {
-    case Ammo::shells:
-      return st.shells;
-    case Ammo::nails:
-      return st.nails;
-    case Ammo::rockets:
-      return st.rockets;
-    case Ammo::cells:
-      return st.cells;
-    case Ammo::none:
-      break;
-  }
-  return 1;
-}
-
-bool loaded(const Stats& st, const WeaponRow& w) {
-  return (st.items & w.bit) != 0 && ammo_of(st, w.ammo) >= w.cost;
-}
-
-const WeaponRow* row_of(int32_t bit) {
-  for (const WeaponRow& w : kWeapons)
-    if (w.bit == bit) return &w;
-  return nullptr;
-}
-
-// How good weapon `w` is at range `d` (higher better).
-double weapon_score(const WeaponRow& w, float d) {
-  switch (w.number) {
-    case 1:
-      return d < 72 ? 30 : 0.1;
-    case 2:
-      return 20;
-    case 3:  // its spread is wider than a man past a few hundred units
-      return d < 250 ? 60 : d < 350 ? 30 : 3;
-    case 4:
-      return 35;
-    case 5:
-      return d < 600 ? 65 : 40;
-    case 6:  // indoors at a room's range the blast beats the spikes (its own splash too near)
-      return d > 120 && d < 450 ? 70 : d > 100 && d < 550 ? 40 : 5;
-    case 7:
-      return d > 130 ? 90 : 15;
-    default:
-      return d < 560 ? 85 : 5;
-  }
-}
 
 // How far, in degrees, the view command `cmd` carries is off the aim `b` wants.
 float view_off(const sh::Bot& b, const sh::MoveCmd& cmd) {
@@ -305,42 +227,31 @@ double raw_value(const ItemSpot& it, const Stats& st) {
       return (st.items & kItPent) ? 0 : 130;
     case ItemKind::weapon: {
       if (st.items & it.weapon) return 4;
-      switch (it.weapon) {
-        case kWRockets:  // the weapon that wins a team game (people take it 60 times in 20 min):
-          // worth a long run while it is there, not a long wait while it is away
-          return it.present ? kLauncherWorth : 120;
-        case kWArc:
-          return 90;
-        case kWHeavy:
-          return 60;
-        case kWDouble:
-          return 45;
-        case kWGrenades:
-          return 40;
-        default:
-          return 30;
-      }
+      // The launcher wins a team game (people take it 60 times in 20 min): worth a long run
+      // while it is there, not a long wait while it is away.
+      if (it.weapon == st.arsenal->launcher) return it.present ? kLauncherWorth : 120;
+      const BotWeapon* w = weapon_row(*st.arsenal, it.weapon);
+      return w ? w->worth : 30;
     }
     default:
       break;
   }
   // Ammunition: worth what it fills of a weapon carried that uses it.
-  Ammo a = Ammo::shells;
-  if (it.kind == ItemKind::nails) a = Ammo::nails;
-  if (it.kind == ItemKind::rockets) a = Ammo::rockets;
-  if (it.kind == ItemKind::cells) a = Ammo::cells;
+  const BotArsenal& arsenal = *st.arsenal;
+  int a = arsenal.item_ammo(it.kind);
+  if (a < 0) a = 0;
   bool uses = false;
-  for (const WeaponRow& w : kWeapons) uses |= w.ammo == a && (st.items & w.bit) != 0;
+  for (const BotWeapon& w : arsenal.weapons) uses |= w.ammo == a && (st.items & w.bit) != 0;
   const float have = ammo_of(st, a);
   // Rockets are stocked for the launcher still to come, as people stock them: worth something to
   // a player who has neither launcher yet.
-  if (a == Ammo::rockets && !uses)
+  if (a == arsenal.launcher_ammo && !uses)
     return have >= kRocketsStock ? 1
                                  : std::fmax(1.0, kRocketsStockWorth * (1 - have / kRocketsStock));
   if (!uses || have >= kAmmoMax) return 1;
   const double fill = 30.0 * (kAmmoMax - have) / kAmmoMax;
   // Rockets for a launcher in hand running dry are worth half the launcher: it is no use without.
-  if (a == Ammo::rockets && (st.items & kWRockets) != 0 && have < kRocketsLow)
+  if (a == arsenal.launcher_ammo && (st.items & arsenal.launcher) != 0 && have < kRocketsLow)
     return std::fmax(fill, 0.5 * kLauncherWorth * (1.0 - have / kRocketsLow));
   return fill;
 }
@@ -528,8 +439,10 @@ int32_t on_the_way(const Fighter& f, const server::RulesCommon& s, const Stats& 
 // while it lies there.
 int32_t pack_near(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
                   float reach) {
-  bool short_of = st.rockets < 20 || st.shells < 40 || st.nails < 60 || st.cells < 30;
-  short_of |= (st.items & (kWRockets | kWGrenades)) == 0;
+  const BotArsenal& arsenal = *f.arsenal;
+  bool short_of = false;
+  for (int k = 0; k < arsenal.ammo_count; k++) short_of |= st.ammo[k] < arsenal.short_of[k];
+  short_of |= (st.items & (arsenal.launcher | arsenal.lob)) == 0;
   // A novice wants every pack he sees (`packinfer`), whatever he carries.
   short_of |= f.sense == MapSense::novice && f.features[sh::Feature::packinfer];
   if (!short_of) return -1;
@@ -608,7 +521,8 @@ bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Ve
     const auto ii = static_cast<int32_t>(i);
     if (it.kind == ItemKind::quad && quad < 0) quad = ii;
     if (it.kind == ItemKind::armor3 || (it.kind == ItemKind::armor2 && armour < 0)) armour = ii;
-    if (it.kind == ItemKind::weapon && it.weapon == kWRockets && launcher < 0) launcher = ii;
+    if (it.kind == ItemKind::weapon && it.weapon == f.arsenal->launcher && launcher < 0)
+      launcher = ii;
   }
   switch (f.role) {
     case Role::hold: {
@@ -698,7 +612,7 @@ bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Ve
       }
       // A teammate's callout is chased when this player is strong and has nothing in sight.
       if (f.mode == FightMode::roam && t - mn.enemy_t < 3 && strength(st) >= 150 &&
-          (st.items & kWRockets) != 0 && dist(mn.enemy_at, me) < 1200) {
+          (st.items & f.arsenal->launcher) != 0 && dist(mn.enemy_at, me) < 1200) {
         go_to(f, sh::nav_nearest(g, mn.enemy_at));
         note("free", "a teammate's callout, strong enough to help");
         return true;
@@ -708,22 +622,24 @@ bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Ve
   return false;
 }
 
-bool blast_weapon(const WeaponRow& w) { return w.bit == kWGrenades || w.bit == kWRockets; }
-
 // The weapon: the best loaded at `range`, asked for by its impulse; a blast weapon only while
 // `blast_ok` (a companion's foe far enough from every player, companion.hpp).
 void choose_weapon(Fighter& f, const Stats& st, float range, double t, ai::Why* why,
                    bool blast_ok = true) {
   const auto score = [&](int32_t i) {
-    const WeaponRow& w = kWeapons[i];
-    if (!blast_ok && blast_weapon(w)) return -1.0;
+    const BotWeapon& w = f.arsenal->weapons[static_cast<size_t>(i)];
+    if (!blast_ok && w.blast) return -1.0;
     return loaded(st, w) ? weapon_score(w, range) : -1.0;
   };
-  const auto name = [](int32_t i) { return kWeapons[i].name; };
-  const int32_t w = ai::pick_best(8, score, why, "weapon", name, "the best loaded at the range");
-  if (w >= 0 && kWeapons[w].bit != st.weapon && loaded(st, kWeapons[w]) &&
-      t - f.impulse_at >= kImpulseGap_s)
-    f.want_weapon = kWeapons[w].number;
+  const std::span<const BotWeapon> weapons = f.arsenal->weapons;
+  const auto name = [&](int32_t i) { return weapons[static_cast<size_t>(i)].name; };
+  const int32_t w = ai::pick_best(static_cast<int32_t>(weapons.size()), score, why, "weapon", name,
+                                  "the best loaded at the range");
+  if (w >= 0) {
+    const BotWeapon& best = weapons[static_cast<size_t>(w)];
+    if (best.bit != st.weapon && loaded(st, best) && t - f.impulse_at >= kImpulseGap_s)
+      f.want_weapon = best.number;
+  }
 }
 
 // The bridges as seen now (fighter.hpp `Bridge`): on a change, the links onto those still in are
@@ -855,11 +771,13 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     // launcher on the team), on the same terms.
     sh::NavJumper& jumper = f.bot.pilot.pilot.set.jumper;
     const float moves = f.traits[sh::Trait::moves];
-    const bool afford = st.rockets >= 1 && st.health >= kRocketJumpHealth && f.escort.leader < 0 &&
+    const BotArsenal& arsenal = *f.arsenal;
+    const float rockets = ammo_of(st, arsenal.launcher_ammo);
+    const bool afford = rockets >= 1 && st.health >= kRocketJumpHealth && f.escort.leader < 0 &&
                         moves >= kRocketJumpMoves;
-    jumper.rockets = (st.items & kWRockets) != 0 && afford && f.features[sh::Feature::rj];
-    jumper.grenades = (st.items & kWGrenades) != 0 && (st.items & kWRockets) == 0 && afford &&
-                      f.features[sh::Feature::gj];
+    jumper.rockets = (st.items & arsenal.launcher) != 0 && afford && f.features[sh::Feature::rj];
+    jumper.grenades = (st.items & arsenal.lob) != 0 && (st.items & arsenal.launcher) == 0 &&
+                      afford && f.features[sh::Feature::gj];
     jumper.level = moves >= kRocketLevelMoves[2] ? 2 : moves >= kRocketLevelMoves[1] ? 1 : 0;
     jumper.extra_s = kRocketLevelExtra_s[jumper.level];
     jumper.scripts = f.features[sh::Feature::routes];  // the map's scripted ways to key items
@@ -875,7 +793,7 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     if (self.waterlevel >= 1 && f.bot.pilot.world != nullptr)
       sh::water_level(*f.bot.pilot.world, self.origin, &liquid);
     const bool burns = liquid == sh::kContentsLava || liquid == sh::kContentsSlime;
-    jumper.escapes = (st.items & kWRockets) != 0 && st.rockets >= 1 &&
+    jumper.escapes = (st.items & arsenal.launcher) != 0 && rockets >= 1 &&
                      (burns || st.health >= kRocketJumpHealth) && f.features[sh::Feature::escape];
     // The doors its own errands keep off the routes kept off the reach too (door_errand).
     const std::span<const int32_t> shut = locked_errands(f)
@@ -1222,8 +1140,11 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
         const sh::NavLink& l =
             pl.g->links[static_cast<size_t>(from.first_link) + static_cast<size_t>(q)];
         if (l.to != pl.route[k + 1]) continue;
-        if (l.kind == sh::NavKind::rocket && st.weapon != kWRockets) number = 7;
-        if (l.kind == sh::NavKind::grenade && st.weapon != kWGrenades) number = 6;
+        const BotArsenal& arsenal = *f.arsenal;
+        const BotWeapon* rl = weapon_row(arsenal, arsenal.launcher);
+        const BotWeapon* gl = weapon_row(arsenal, arsenal.lob);
+        if (l.kind == sh::NavKind::rocket && rl && st.weapon != rl->bit) number = rl->number;
+        if (l.kind == sh::NavKind::grenade && gl && st.weapon != gl->bit) number = gl->number;
       }
       if (number > 0) {
         f.want_weapon = number;
@@ -1266,21 +1187,18 @@ bool mate_near(const Fighter& f, const server::RulesCommon& s, sh::Vec3f at, flo
 void fighter_go(Fighter& f, int32_t node) { go_to(f, node); }
 
 float fighter_strength(const Stats& st) {
-  return st.health + protection(st.armortype, st.armor) + ((st.items & kWRockets) ? 50.f : 0.f);
+  return st.health + protection(st.armortype, st.armor) +
+         ((st.items & st.arsenal->launcher) ? 50.f : 0.f);
 }
 
-Stats read_stats(const server::RulesCommon& s, int ent) {
+Stats read_stats(const server::RulesCommon& s, int ent, const BotArsenal& arsenal) {
   const server::PlayerNumbers& n = s.world.clients[static_cast<size_t>(ent) - 1].numbers;
   Stats st;
+  st.arsenal = &arsenal;
   st.health = n.health;
   st.armor = n.armour;
   st.armortype = n.armour_type;
-  st.items = static_cast<int32_t>(n.items);
-  st.weapon = static_cast<int32_t>(n.weapon);
-  st.shells = n.ammo[0];
-  st.nails = n.ammo[1];
-  st.rockets = n.ammo[2];
-  st.cells = n.ammo[3];
+  arsenal.read(n, st);
   return st;
 }
 
@@ -1358,7 +1276,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
     if (!cn) continue;
     const char* flags = pg::block_value(b, "spawnflags");
     ItemSpot it;
-    if (!item_of(cn, flags ? std::atoi(flags) : 0, it)) continue;
+    if (!item_of(cn, flags ? std::atoi(flags) : 0, it, *f.arsenal)) continue;
     sh::Vec3f origin;
     parse_vec(pg::block_value(b, "origin"), origin);
     // The entity sent nearest the map's place, across the floor.
@@ -1366,8 +1284,11 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
     for (const sh::ViewEntity& v : f.bot.view.entities) {
       if (v.ent <= s.sv.set.maxclients) continue;
       const server::WorldEntity& e = s.world.entities[static_cast<size_t>(v.ent)];
-      const sh::Vec3f mid{(e.absmin.x + e.absmax.x) * 0.5f, (e.absmin.y + e.absmax.y) * 0.5f,
-                          e.absmin.z};
+      // The middle of its box on the floor; its origin when its row carries no box (the sequel's).
+      const bool boxed = e.absmax.x > e.absmin.x || e.absmax.z > e.absmin.z;
+      const sh::Vec3f mid = boxed ? sh::Vec3f{(e.absmin.x + e.absmax.x) * 0.5f,
+                                              (e.absmin.y + e.absmax.y) * 0.5f, e.absmin.z}
+                                  : e.origin;
       const float dx = v.origin.x - origin.x, dy = v.origin.y - origin.y;
       const float d = std::sqrt(dx * dx + dy * dy);
       if (d < best) {
@@ -1417,10 +1338,10 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
 
 sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, int msec) {
   const int me = slot + 1;
-  const Stats st = read_stats(s, me);
+  const Stats st = read_stats(s, me, *f.arsenal);
   const double t = s.sv.time;
-  f.bot.pilot.grenade_ready = st.weapon == kWGrenades;  // a grenade jump fires with it in hand
-  f.bot.pilot.rocket_ready = st.weapon == kWRockets;    // and a rocket out of a pit with this
+  f.bot.pilot.grenade_ready = st.weapon == f.arsenal->lob;  // a grenade jump fires with it in hand
+  f.bot.pilot.rocket_ready = st.weapon == f.arsenal->launcher;  // a rocket out of a pit with this
   // A companion's view is its own (it faces the leader).
   f.bot.calm = f.escort.leader < 0 && f.features[sh::Feature::calm];
   if (f.features[sh::Feature::packs] || f.features[sh::Feature::packinfer])
@@ -1489,7 +1410,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   }
   if (!dead && f.bot.pilot.pilot.mode == sh::PilotMode::arrived) f.next_think = 0;
 
-  const WeaponRow* held = row_of(st.weapon);
+  const BotWeapon* held = weapon_row(*f.arsenal, st.weapon);
   // Another kind of weapon taken up is held as its aim trait holds it.
   const int slot_of_aim = !held               ? f.aim_slot
                           : held->number <= 3 ? 0
@@ -1502,14 +1423,14 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   }
   f.bot.shot_speed = held ? held->shot_speed : 0;
   // A novice fires at the plain distance; the rest at where he will be, on his arc in the air.
-  f.bot.lob = held && held->bit == kWGrenades;
+  f.bot.lob = held && held->bit == f.arsenal->lob;
   const bool leads = f.skill != sh::AimSkill::novice && f.features[sh::Feature::lead];
   f.bot.intercepts = leads ? 3 : 1;
   f.bot.target_arc = leads;
   f.bot.aim_dz = held ? held->aim_dz : 0;
   // A rocket near at hand is aimed at his middle for the direct blow; farther off at his feet,
   // where the blast reaches him whichever way he steps.
-  if (held && held->bit == kWRockets) {
+  if (held && held->bit == f.arsenal->launcher) {
     for (const sh::Contact& k : f.bot.senses.contacts)
       if (k.ent == f.bot.target && ai::known(k.seen) &&
           dist(s.world.entities[static_cast<size_t>(me)].origin, at_of(k.seen)) < kRocketNear)
@@ -1533,7 +1454,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     f.shot_ammo = ammo;
   }
   f.bot.shot_due_s = std::fmax(0.0, f.ready_at - t);
-  f.bot.beam = held && held->bit == kWArc;
+  f.bot.beam = held && held->bit == f.arsenal->beam;
   sh::MoveCmd cmd = sh::bot_source(f.bot).next(&f.bot, s.sv, slot, msec);
   f.stats.mode_commands[static_cast<int>(f.mode)]++;
   if (held) f.stats.weapon_commands[held->number]++;
@@ -1699,7 +1620,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     // Past the width, how loose the finger is, degrees: a novice sprays at a view well off him,
     // an expert fires on him (the held weapon's aim trait, traits.hpp). The arc's beam is held
     // down longer and swept onto him, as a person holds it through the fight.
-    const bool beam = held->bit == kWArc;
+    const bool beam = held->bit == f.arsenal->beam;
     const double slack =
         f.skill == sh::AimSkill::perfect ? 1.5
         : beam ? sh::scale(f.traits.v[static_cast<size_t>(f.aim_slot)], {14, 9, 6, 4})
@@ -1717,7 +1638,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     f.stats.trigger_far += d > held->range;
     f.stats.trigger_off += d <= held->range && off > tol;
     if (fire && (mate_in_line(f, s, eye, at_of(c->seen)) ||
-                 (blast_weapon(*held) && mate_near(f, s, at_of(c->seen), kBlastClear)))) {
+                 (held->blast && mate_near(f, s, at_of(c->seen), kBlastClear)))) {
       fire = click = false;
       f.stats.held_fire++;
       if (f.team) f.team->stats.held_shots++;
@@ -1730,7 +1651,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     }
     // A companion's blast never goes off where it reaches a player: held, and another weapon
     // taken up at once.
-    if (f.escort.leader >= 0 && blast_weapon(*held) && !escort_blast_clear(f, s, at_of(c->seen))) {
+    if (f.escort.leader >= 0 && held->blast && !escort_blast_clear(f, s, at_of(c->seen))) {
       if (fire) {
         f.stats.held_fire++;
         f.escort.stats.blasts_held++;

@@ -34,9 +34,7 @@ constexpr float kTurnRate = 720;    // degrees/s the companion's own view turns 
 constexpr float kLookRate = 260;    // and a bored look's
 constexpr float kPressReach = 120;  // a touch button walked into from this near, units
 constexpr float kShootReach = 900;  // a shot button fired at from this near, units
-constexpr int32_t kWGrenades = 16,
-                  kWRockets = 32;         // the blast weapons' W_ bits (games/shooters_edge/qc)
-constexpr float kLookSight = 700;         // an item this near and in sight is worth a bored look
+constexpr float kLookSight = 700;   // an item this near and in sight is worth a bored look
 constexpr float kHopOut[2] = {180, 320};  // a bored hop's turn point from the leader, units
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
@@ -85,8 +83,9 @@ void monster_models(const server::RulesCommon& s, std::vector<uint8_t>& out) {
 // The kinds of monster player `ent` fights with what he holds: a blast's (the grenade or rocket
 // launcher, with its ammunition) puts down the second kind too.
 int fights_up_to(const server::RulesCommon& s, int ent) {
-  const Stats st = read_stats(s, ent);
-  return (st.weapon & (kWGrenades | kWRockets)) != 0 && st.rockets > 0 ? 2 : 1;
+  const BotArsenal& a = first_arsenal();
+  const Stats st = read_stats(s, ent, a);
+  return (st.weapon & (a.lob | a.launcher)) != 0 && ammo_of(st, a.launcher_ammo) > 0 ? 2 : 1;
 }
 
 bool alive_player(const server::RulesCommon& s, int slot) {

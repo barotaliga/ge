@@ -19,7 +19,6 @@ namespace shooters_edge::bots {
 namespace {
 
 constexpr double kFar = std::numeric_limits<double>::infinity();
-constexpr int32_t kWHeavySpiker = 8, kWGrenades = 16, kWRockets = 32, kWArc = 64;
 constexpr float kEntrySpot = 128;  // the outer ends of two links into an area this near: one way in
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
@@ -38,7 +37,8 @@ bool planned(const ItemSpot& it) {
     case ItemKind::pent:
       return true;
     case ItemKind::weapon:
-      return it.weapon == kWRockets || it.weapon == kWArc || it.weapon == kWGrenades;
+      return it.role == WeaponRole::launcher || it.role == WeaponRole::beam ||
+             it.role == WeaponRole::lob;
     default:
       return false;
   }
@@ -91,10 +91,10 @@ double plan_worth(const ItemSpot& it) {
     case ItemKind::pent:
       return 500;
     case ItemKind::weapon:
-      return it.weapon == kWRockets    ? 150
-             : it.weapon == kWArc      ? 120
-             : it.weapon == kWGrenades ? 40
-                                       : 10;
+      return it.role == WeaponRole::launcher ? 150
+             : it.role == WeaponRole::beam   ? 120
+             : it.role == WeaponRole::lob    ? 40
+                                             : 10;
     default:
       return 0;
   }
@@ -263,10 +263,10 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
       case ItemKind::armor1:
         return 8;
       case ItemKind::weapon:
-        return it.weapon == kWRockets       ? 2
-               : it.weapon == kWArc         ? 5
-               : it.weapon == kWHeavySpiker ? 6
-                                            : -1;
+        return it.role == WeaponRole::launcher ? 2
+               : it.role == WeaponRole::beam   ? 5
+               : it.role == WeaponRole::heavy  ? 6
+                                               : -1;
       default:
         return -1;
     }

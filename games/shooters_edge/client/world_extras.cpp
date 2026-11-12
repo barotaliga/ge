@@ -417,7 +417,7 @@ void encode_extras_sim(const WorldExtras& x, const ge::gpu::PipelineSet& pipelin
 
 void encode_extras(const WorldExtras& x, const ge::gpu::PipelineSet& pipelines,
                    gr::FrameRecorder& rec, wgpu::CommandEncoder& e, const gr::FrameTargets& targets,
-                   const wgpu::BindGroup& frame) {
+                   const gr::FrameGroup& frame) {
   if (x.bsp) ba::encode_bsp_views(*x.bsp, x.views, pipelines, rec, e);
   gr::encode_flames(x.flames, pipelines, rec, e, targets, frame);
   gr::encode_water(x.water, pipelines, rec, e, targets, frame);

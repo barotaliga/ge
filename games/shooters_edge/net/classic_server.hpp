@@ -68,6 +68,7 @@
 #include "core/prng.hpp"
 #include "net/status.hpp"
 #include "net/transport.hpp"
+#include "server/bans.hpp"
 #include "server/guards.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
 #include "shooters_edge/net/classic_channel.hpp"
@@ -90,31 +91,90 @@ struct ServedFile {
   std::vector<uint8_t> bytes;
 };
 
+// The endpoint's settings, ordered by size so the struct packs; grouped by subject in the notes:
+// THE REMOTE CONSOLE: a line may carry a digest of the password with the time instead of the
+// password itself (classic_admin.hpp): `rcon_crypt` refuses the plain password; a digest's time
+// may be `rcon_time_s` from the server's clock either way (0: not checked); at most `rcon_rate`
+// tries a second are answered (0: no limit). `unix_time` is the server's clock, seconds since 1970
+// (null: a digest's time is not checked, timed bans never end).
+// THE BAN LIST (engine/server/bans.hpp, `ClassicServer::bans`): a connect or remote console line
+// from an address it refuses under `ban_mode` (sv_banmode: 1 the list bans, 0 only the list joins)
+// is refused: "You are banned from this server."; `writeip` saves it to `ban_file` (empty: it only
+// answers the lines), which the game reads back at start.
+// THE VIPS: a client whose `password` (a spectator's `spectator` value, then `password`) is a
+// word of `vip_passwords`, or whose address is on `ClassicServer::vips`, is a VIP: its level is
+// the word's place counted from 1 (or `vip_values`' number at that place; 0 is no VIP) or the
+// address's, the higher one; it skips both passwords, may watch from `max_vip_spectators` extra
+// spectator slots, and carries `*VIP <level>` in its user info for the mod. `vip_writeip` saves
+// the address list to `vip_file`.
+// THE GUARDS (never on a local seat): a client unheard for `timeout_s` is dropped and everyone
+// told "<name> timed out"; a `say` or `say_team` past the flood rule (engine/server/guards.hpp)
+// is dropped and only its sender told why.
+// THE NAMES AND THE CHAT: a client whose name is empty or holds a character a line could be faked
+// with gets `default_name`; with `unfake` a public `say` has its carriage returns turned into '#'
+// so no line can pass for another player's; `colour_kick` drops a client changing its top colour
+// more than 6 times in 8 s; a client changing its user info more than `info_flood_count` times in
+// `info_flood_s` seconds is dropped (either 0: no limit).
+// THE SLOTS AND THE PINGS (never a local seat). With `max_spectators` above 0, spectators have
+// their own slots beside the players' `maxclients` (0: they take a player's free slot); a player
+// joining a full server while a spectator slot is free is seated as a spectator by
+// `full_spectate` (0 never, 1 unless the user info's `svf` has bit 2, 2 only if it has bit 1).
+// A reconnect from a slot connected for less than `reconnect_wait_s` gets no answer. A player
+// whose ping is above `max_ping_ms` on entering plays as a spectator; each player's packets are
+// held back until its ping is at least `min_ping_ms`, which players may set themselves with
+// `minping` before a match when `min_ping_cmd` allows (all 0: off).
+// THE SAFE STRAFE (`safe_strafe`, sv_safestrafe): a player reversing his sideways move (or
+// starting it the other way after a shorter stop) gets his side move zeroed until N commands of
+// none lie between (0: off).
 struct ServerConfig {
+  int64_t (*unix_time)() = nullptr;
+  double timeout_s = 65;        // sv_timeout
+  double info_flood_s = 3;      // sv_infoflood's second word
+  double reconnect_wait_s = 0;  // sv_reconnectwait
+  // Keys the server info carries beside the rules' (the place, the public address, the owner):
+  // browsers list them; an empty value is left out.
+  std::vector<std::pair<std::string, std::string>> info;
+  gs::FloodRule flood;  // sv_floodprot
+  std::vector<ServedFile> files;
   std::string hostname = "Shooter's Edge";
   std::string gamedir = "edge";  // the game directory serverdata names
   std::string password, spectator_password;
   std::string rcon_password;  // the remote console's (classic_admin.hpp; empty: none offered)
-  bool verify_move_checksum = true;  // false: moves are accepted unchecked (and counted)
-  int maxrate = 0;                   // sv_maxrate: a client's rate cap, bytes/s (0: none)
-  int maxfps = 77;                   // maxfps: the moves a second clients are told they may send
-  // THE GUARDS (never on a local seat): a client unheard for `timeout_s` is dropped and everyone
-  // told "<name> timed out"; a `say` or `say_team` past the flood rule (engine/server/guards.hpp)
-  // is dropped and only its sender told why.
-  double timeout_s = 65;  // sv_timeout
-  gs::FloodRule flood;    // sv_floodprot
-  std::string flood_msg;  // sv_floodprotmsg: what a flooder is told ("": the silence)
-  bool allow_download = true, allow_skins = true, allow_models = true, allow_sounds = true;
-  bool allow_maps = true, allow_other = false;
-  std::vector<ServedFile> files;
-  Ext offered = first_tier();
-  int chunks_per_frame = 30;
-  bool antilag = false;
-  bool voice = false;  // offer the voice bit and relay voice
-  VoiceRoute voice_route = VoiceRoute::team;
-  uint32_t seed = 1;  // the challenges' stream
+  std::string ban_file;
+  std::vector<std::string> vip_passwords;  // sv_vippassword's words
+  std::vector<int> vip_values;             // sv_vipvalues' numbers
+  std::string vip_file;
+  std::string flood_msg;                // sv_floodprotmsg: what a flooder is told ("": the silence)
+  std::string default_name = "player";  // sv_defaultname
+  int rcon_time_s = 60;                 // sv_rcontime
+  int rcon_rate = 10;                   // sv_rconrate
+  int ban_mode = 1;                     // sv_banmode
+  int maxrate = 0;                      // sv_maxrate: a client's rate cap, bytes/s (0: none)
+  int maxfps = 77;                      // maxfps: the moves a second clients are told they may send
+  int info_flood_count = 300;           // sv_infoflood's first word
+  int chunks_per_frame = 30;            // sv_downloadchunks
+  int safe_strafe = 0;                  // sv_safestrafe
+  uint32_t seed = 1;                    // the challenges' stream
   // Players at most, the game's local seats counted (0: the loop's slots): a coop game's eight.
   int most_players = 0;
+  int max_spectators = 0;      // sv_maxspectators
+  int max_vip_spectators = 0;  // sv_maxvipspectators
+  int full_spectate = 2;       // sv_fullspectate
+  int max_ping_ms = 0;         // sv_maxping
+  int min_ping_ms = 0;         // sv_minping
+  Ext offered = first_tier();
+  bool rcon_crypt = false;           // sv_rconcrypt
+  bool verify_move_checksum = true;  // false: moves are accepted unchecked (and counted)
+  bool unfake = true;                // sv_unfake
+  bool colour_kick = true;           // sv_colorkick
+  bool allow_download = true, allow_skins = true, allow_models = true, allow_sounds = true;
+  bool allow_maps = true, allow_other = false;
+  bool antilag = false;
+  bool antilag_exact = false;  // sv_antilagexact: rewind to the frame seen, with no lead
+  bool voice = false;          // offer the voice bit and relay voice
+  bool voice_echo = false;     // sv_voipecho: a speaker is sent his own voice back
+  VoiceRoute voice_route = VoiceRoute::team;
+  bool min_ping_cmd = true;  // sv_minpingcmd
 };
 
 enum class ConnState : uint8_t { free, connected, spawned };
@@ -136,6 +196,22 @@ struct ServerDownload {
   int64_t blocks = 0;
 };
 
+// THE SAFE STRAFE (`ServerConfig::safe_strafe`): a player's sideways move kept to one direction
+// until N commands of none lie between: a command that turns it the other way is zeroed, with the
+// N - 1 after it, less the commands of none it already had. Its own zero commands count.
+struct StrafeGuard {
+  int force = 0;        // commands still to zero
+  int zeros = 0;        // commands of none since the last sideways one
+  int8_t dir = 0;       // the last sideways direction: -1, 0 (none yet) or 1
+  uint32_t seq = 0;     // the last packet's sequence (0: none yet)
+  sh::MoveCmd last[2];  // the last packet's two newest commands, as guarded
+};
+// The server's clock in Unix seconds (`ServerConfig::unix_time`; 0 without one).
+struct ClassicServer;
+int64_t classic_unix_time(const ClassicServer& s);
+// One command's side move through the guard: what the loop gets.
+int16_t safe_strafe(StrafeGuard& g, int16_t side, int n);
+
 struct ClassicClient {
   ConnState state = ConnState::free;
   gn::Address address;
@@ -144,6 +220,7 @@ struct ClassicClient {
   int userid = 0;
   bool spectator = false;
   bool rules_active = false;  // the mod placed the player (after `begin`)
+  bool aids_told = false;     // told the player aids on the server, at his first `begin`
   Ext ext;
   Coords coords = Coords::shorts;
   bool need_pext = false;
@@ -166,6 +243,18 @@ struct ClassicClient {
   bool local = false;    // a seat the game plays in its own process (a bot): no address, no packets
   int frags_told = 0;    // the frags every client was last sent
   gs::FloodGuard flood;  // its chat lines' times and its silence
+  double colour_since = -1;  // the top colour's window (sv_colorkick): its start, s (-1 none)
+  double info_since = -1;    // the user info's window (sv_infoflood): its start, s (-1 none)
+  double hold_s = 0;         // the hold, 0..1 s, moved by 1 ms a packet toward the minimum ping
+  // Its packets held back for the minimum ping (sv_minping): each with the time it is let in.
+  struct Held {
+    double at = 0;
+    std::vector<uint8_t> bytes;
+  };
+  std::vector<Held> held;
+  StrafeGuard strafe;      // sv_safestrafe
+  int colour_changes = 0;  // top colour changes in its window
+  int info_changes = 0;    // user info changes in its window
 };
 
 struct ServerCounts {
@@ -186,6 +275,8 @@ struct Challenge {
 
 struct ClassicServer {
   ServerConfig cfg;
+  gs::BanList bans;
+  gs::BanList vips;
   const sv::RulesRunner* rules = nullptr;  // the rules served (their map started)
   sv::RulesCommon* game = nullptr;         // what every runner keeps: `*rules`'s
   gn::Transport* transport = nullptr;
@@ -209,6 +300,7 @@ struct ClassicServer {
   int statics_known = 0;                     // static entities routed so far
   double now = 0;                            // the network's time, s
   double last_ping_update = 0;
+  bool match_on = false;  // a match counts down or plays (the game's lobby): no `minping` then
   int64_t frames = 0;
   std::vector<sh::Packet> packets;
   std::vector<std::string> log;  // connects, rejects and drops, in order (the lab, the tests)

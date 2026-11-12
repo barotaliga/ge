@@ -24,7 +24,8 @@ generic: one hub program for every game on the engine, the game supplying only i
 | Demo | One demo: the picture, the scoreboard and the game's stats behind a spoiler, the seek bar, the speed, whom to follow, clips by time range in the link | On demand |
 | Scoreboard | One server's scoreboard alone, sized for a streamer's overlay | Every 5 s |
 
-No accounts and no login: everything a hub shows is public, read-only, and cacheable for seconds.
+No login to read it: everything a hub shows is public, read-only, and cacheable for seconds. The one
+exception is the Account page a player signs up and gets a login code on ([`accounts.md`](accounts.md), M59).
 
 ## The parts
 
@@ -131,7 +132,7 @@ web build the engine has (G5): a viewer, never the game, and nothing in it plays
 | Piece | What it is |
 | --- | --- |
 | The web viewer | A game's viewer target, `ge_add_web_viewer(<game>)`: its renderer, its demo reader and the TV client, nothing of input beyond the camera and the transport. Built by Emscripten, drawing through the browser's WebGPU with the same WGSL the native renderer uses (Dawn ships the browser's binding) |
-| Its stream | The TV node's stream carried over a WebSocket (the TV layer's browser carriage), the same chunks a native spectator reads; a demo fetched by its hash from the archive, decoded in the viewer |
+| Its stream | The TV node's stream carried over a WebSocket (the TV layer's browser carriage), the same messages a native spectator reads: the viewer says hello, turns the messages back into the replay file as it grows (`tv::Watch`) and unpacks each whole block into the recording as it comes (Shooter's Edge's `unpack_more`); it plays two blocks behind and holds its last frame when the next block is late. A demo is fetched by its hash from the archive, decoded in the viewer |
 | Its content | The level and the models from the hub's content folder, compressed, named by hash, cached by the browser for a year; the first visit's download kept small by sending the level being watched first |
 | Its controls | Seek, speed, pause, whom to follow and free camera, through the transport the native replay player already has (`engine/replay`); clip links (`?t=from-to:who`) |
 | The page glue | The few lines of script a page needs to start the viewer, hand it the stream's address and wire the buttons: platform glue, kept as small as the platform allows, as Apple's and Android's app shells are |
@@ -151,15 +152,19 @@ writes `<game>_viewer.js` and `.wasm` into `build/web/<game>_viewer/`, the folde
 (`.pak`, `.pk3`), and the Demo and Watch pages hand them to the viewer by name order.
 
 THE LIMITS. A browser offers WebGPU's default limits unless the machine's GPU earns it more:
-16 sampled textures a shader stage and 256 layers an array texture, among others. The software
-adapter in the container offers exactly those. The renderer asks for more today (the frame's
-bind group alone holds 11 textures), so the viewer loads, fetches and plays but its world's
-pipelines do not build there; fitting the renderer within the defaults is row M56g2. A native
-run asks for exactly those defaults with `GE_GPU_LIMITS=default` (validation on), so every
-pipeline over them names itself in the log without a browser. The shadow cubes already fit (as
-many as the device's array layers hold: 42 in a browser, 48 elsewhere) and the cull reads its
-chunks' sizes and states from one buffer (8 storage buffers a stage); the frame's textures are
-what is left.
+16 sampled textures a shader stage, 8 storage buffers and 256 layers an array texture, among
+others. The software adapter in the container offers exactly those. A pipeline layout counts every
+entry its stages can see, used or not, so the frame's group 0 (17 entries, 11 of them textures)
+is built whole for the passes that read most of it and in lean parts for the rest
+(`render::FrameGroup`: `block` for post, `surface` for the classic map, `water` for the water),
+each keeping its bindings' own numbers so one WGSL source serves both; the parts come from what
+each entry point statically reads (Tint's binding inspector). The shadow cubes are as many as the
+device's array layers hold (42 in a browser, 48 elsewhere), and the cull reads its chunks' sizes
+and states from one buffer. Two browser refusals the native device lets pass are taken out at the
+source: a render pass's NaN depth clear value (`gpu::begin_render_pass` gives it 0) and timestamp
+queries (not asked for on the web). A native run asks for exactly the defaults with
+`GE_GPU_LIMITS=default` (validation on), so a pipeline over them names itself in the log without
+a browser.
 
 Two cheaper ways stay in the plan beside it: Watch and Play buttons that open the installed game
 (`<game>://tv/<node>/<stream>`, `<game>://demo/<sha256>`, a link each client registers), and the

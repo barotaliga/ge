@@ -743,7 +743,7 @@ void encode_instances_overdraw(std::span<InstanceFamily* const> families,
   desc.colorAttachmentCount = 1;
   desc.colorAttachments = &colour;
   desc.depthStencilAttachment = &depth;
-  wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&desc);
+  wgpu::RenderPassEncoder pass = gpu::begin_render_pass(encoder, desc);
   pass.SetPipeline(pipelines.render(after_prepass ? ip.p_count_equal : ip.p_count_greater));
   pass.SetBindGroup(0, frame);
   pass.SetBindGroup(1, light);
@@ -777,7 +777,7 @@ void encode_instances_wire(std::span<InstanceFamily* const> families, const Inst
   desc.colorAttachmentCount = 1;
   desc.colorAttachments = &c;
   desc.depthStencilAttachment = &depth;
-  wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&desc);
+  wgpu::RenderPassEncoder pass = gpu::begin_render_pass(encoder, desc);
   pass.SetPipeline(pipelines.render(ip.p_wire));
   pass.SetBindGroup(0, frame);
   pass.SetBindGroup(1, light);

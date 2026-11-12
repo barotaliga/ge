@@ -35,7 +35,8 @@ struct Scene {
   wgpu::Buffer uniforms;
   r::FrameUniforms staged{};
   wgpu::BindGroupLayout layout;
-  wgpu::BindGroup plain, mirrored, post_group;
+  ::ge::render::FrameGroup plain, mirrored;
+  wgpu::BindGroup post_group;
   r::Sky sky;
   r::Terrain terrain;
   r::Mirror mirror;
@@ -91,7 +92,7 @@ r::FrameView ground_view(double wet) {
 
 // One frame drawn with `group` (the mirror bound or not), the scene kept after it when `keep`.
 ge::gpu::Image frame(ge::gpu::Device& d, Scene& s, const ge::gpu::Target& out, double wet,
-                     const wgpu::BindGroup& group, bool keep) {
+                     const r::FrameGroup& group, bool keep) {
   const r::FrameView v = ground_view(wet);
   s.rec.begin_frame(d);
   s.history.valid = false;

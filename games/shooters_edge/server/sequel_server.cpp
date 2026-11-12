@@ -26,6 +26,7 @@
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
 #include "shooters_edge/server/sequel_targets.hpp"
+#include "shooters_edge/server/shot_help.hpp"
 
 namespace shooters_edge::server {
 
@@ -103,6 +104,16 @@ void register_cvars(SequelServer& s) {
                .fallback = "0",
                .flags = con::kServer,
                .help = "the air move's acceleration in deathmatch; 0 the walking rule"});
+  s.cvars.add({.name = "sv_aimhelp_x",
+               .fallback = "24",
+               .flags = con::kServer,
+               .help = "the aim help's leeway sideways, units at the target, for a player granted "
+                       "it (0: no sideways help)"});
+  s.cvars.add({.name = "sv_aimhelp_y",
+               .fallback = "48",
+               .flags = con::kServer,
+               .help = "the aim help's leeway up and down, units at the target, for a player "
+                       "granted it (0: no vertical help)"});
   add_rjump_settings(s.cvars);  // sv_rjump, sv_rrjump (rjump_rules.hpp)
   const std::string share =
       ge::core::num::to_string(num::round(double(s.opt.speedjump) * 1000) / 1000);
@@ -512,6 +523,12 @@ void fill_rows(SequelServer& s) {
     // The HUD's four counters: shells, bullets, rockets, cells.
     const SqAmmo shown[4] = {SqAmmo::shells, SqAmmo::bullets, SqAmmo::rockets, SqAmmo::cells};
     for (int k = 0; k < 4; k++) wc.numbers.ammo[k] = float(p.body.ammo[static_cast<int>(shown[k])]);
+    // The bots' numbers: the weapon in hand and those carried as bits (1 << the weapon's index),
+    // and every ammunition from shells on.
+    wc.numbers.held = int32_t(1) << p.hand.weapon;
+    for (int k = 0; k < kSqWeaponCount; k++)
+      if (sq_holds(p.body, k)) wc.numbers.carried |= int32_t(1) << k;
+    for (int k = 1; k < kSqAmmoKinds; k++) wc.numbers.stock[k - 1] = float(p.body.ammo[k]);
     wc.numbers.frags = p.frags;
     wc.numbers.view_z = p.view_height;
     wc.numbers.fov = fight_fov(s, i);
@@ -547,6 +564,12 @@ void mirror_pool(SequelServer& s) {
   const RulesWorld& w = s.world;
   if (s.sv.edicts.size() < w.entities.size()) return;  // sized at the map's start
   s.sv.time = s.host_time;
+  if (s.tracer != nullptr) {
+    const ge::brush::Model& m = s.map->models[0];
+    s.world_solid = sh::brushes_solid(*s.tracer, 0, {}, {m.mins[0], m.mins[1], m.mins[2]},
+                                      {m.maxs[0], m.maxs[1], m.maxs[2]});
+    s.sv.brushes = &s.world_solid;
+  }
   s.sv.num_edicts = static_cast<int>(w.entities.size());
   for (size_t i = 0; i < w.entities.size(); i++) {
     const WorldEntity& row = w.entities[i];
@@ -814,6 +837,8 @@ void sq_user_info(void* r, int slot, const std::string& key, const std::string& 
   if (slot < 0 || slot >= sh::kMaxClients || !s.clients[slot].active) return;
   set_info(s.clients[slot].userinfo, key, value);
   if (key == "cl_speedjump") pool_slot(s, slot).speedjump = value == "1";  // the easy jump's ask
+  if (key == kAimHelpKey) pool_slot(s, slot);  // the grant lands on a seat the pool keeps
+  note_aim_help_info(s, slot, key, value);
   if (s.map != nullptr) fill_rows(s);
 }
 
@@ -843,6 +868,7 @@ std::unique_ptr<SequelServer> make_sequel_server(const SequelServerOptions& opt)
   s->opt = opt;
   s->rng = ge::core::make_rng(opt.seed);
   register_cvars(*s);
+  add_aim_help(*s);
   return s;
 }
 

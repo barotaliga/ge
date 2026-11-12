@@ -333,7 +333,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const server::RulesC
     if (!w.seen[n] && dist(g.nodes[n].origin, self) < kWaySeen) w.seen[n] = 1;
 
   // What is done.
-  const int items = read_stats(s, me).items;
+  const int items = read_stats(s, me, *f.arsenal).items;
   const auto door_open = [&](int ent) {
     for (size_t k = 0; k < w.locked.size(); k++)
       if (w.locked[k] == ent)

@@ -27,7 +27,7 @@ struct Scene {
   wgpu::Buffer uniforms;
   r::FrameUniforms staged{};
   wgpu::BindGroupLayout layout;
-  wgpu::BindGroup frame;
+  ::ge::render::FrameGroup frame;
   r::Sky sky;
   r::Dof dof;
   r::FrameTargets targets;

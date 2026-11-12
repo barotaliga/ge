@@ -16,6 +16,7 @@ TEST(the_target_time_leads_the_acknowledged_frame) {
   CHECK(cn::antilag_target(1.0, 0.1, 77, 2.0) == 1.0 + cn::kAntilagLead);
   CHECK(cn::antilag_target(1.0, 0.01, 100, 2.0) == 1.0 + 1.0 / 100);
   CHECK(cn::antilag_target(1.0, 0.01, 5, 2.0) == 1.0 + 1.0 / 77);  // a bad maxfps
+  CHECK(cn::antilag_target(1.0, 0.1, 77, 2.0, true) == 1.0);       // sv_antilagexact: no lead
   CHECK(cn::antilag_target(1.99, 0.1, 77, 2.0) == 2.0);            // never in the future
 }
 

@@ -39,7 +39,7 @@ void draw_test_scene(wgpu::CommandEncoder& encoder, const wgpu::RenderPipeline& 
   pass_desc.colorAttachmentCount = 1;
   pass_desc.colorAttachments = &attachment;
   pass_desc.timestampWrites = timestamps;
-  wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&pass_desc);
+  wgpu::RenderPassEncoder pass = begin_render_pass(encoder, pass_desc);
   pass.SetPipeline(pipeline);
   pass.Draw(6);
   pass.End();

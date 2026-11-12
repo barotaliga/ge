@@ -78,6 +78,10 @@ struct ServerConfig {
   std::string visibility = "lan";    // sv_visibility: lan, invite or listed (net/hosting.hpp)
   std::string motd;                  // sv_motd: the message a player sees on joining
   std::string admin;                 // sv_admin: how to reach the server's owner
+  std::string country;               // sv_country: where the server is, a two-letter code ("se")
+  std::string city;                  // sv_city: its city, for browsers and the hub
+  std::string coords;                // sv_coords: "latitude,longitude", for maps of servers
+  std::string public_addr;           // sv_publicaddr: the "host:port" a browser should show
   std::string maprotation;           // sv_maprotation: the maps after the first, space-separated
   int32_t max_spectators = 0;        // sv_maxspectators: spectators beside the players
   std::string spectator_password;    // sv_spectatorpassword: watching takes it
@@ -123,10 +127,24 @@ struct ServerReplay {
 
 // A setting the game's own rules read (`fraglimit`, `timelimit`): a server cvar beside the core's,
 // set like them (every server.cfg layer, `+set`, the console; `--explain` shows where), and handed
-// to `create` in `ServerConfig::rules`. Its fallback is empty: unset leaves the game's own default.
+// to `create` in `ServerConfig::rules`. Its fallback is empty (unset leaves the game's own default)
+// unless the rule names one: a setting of several words wants one, so that a synonym for one word
+// (console/cvar.hpp) changes that word and keeps the others.
 struct GameRule {
   const char* name;
-  const char* help;  // what it does, with its unit
+  const char* help;                // what it does, with its unit
+  const char* fallback = nullptr;  // its default, when not empty
+};
+
+// A GAME'S OWN NAME for one of the core's settings (`ServerGame::names`): the name its configs,
+// its admins and its mods use, such as a classic game's `maxclients` for `sv_maxclients`. It is a
+// synonym on the server's console (console/cvar.hpp): a server.cfg line, `+set`, rcon or a vote by
+// either name sets the one setting. `part` >= 0 names one word of a setting that holds several
+// (`sv_floodprot`'s "N S T").
+struct SettingName {
+  const char* name;
+  const char* setting;
+  int part = -1;
 };
 
 // A game's server, as functions over its own state (`void*`, made by `create`). Called once a
@@ -142,6 +160,8 @@ struct ServerGame {
   const char* base_dir = "base";    // the base game directory, whose server.cfg is read first
   const GameRule* rules = nullptr;  // the game's own rules, `rule_count` of them
   int rule_count = 0;
+  const SettingName* names = nullptr;  // the game's names for the core's settings, `name_count`
+  int name_count = 0;
 
   // The game on `config`'s map with its bots; null with `error` (what and the next action).
   void* (*create)(const ServerConfig& config, std::string& error) = nullptr;

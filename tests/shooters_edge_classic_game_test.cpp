@@ -21,6 +21,8 @@
 // ge:keywords listen-server listen_options join-the-window listen_mic local-voice sv_voip
 // ge:keywords sv_mod mod-folder gamedir qwprogs misc-pak vote sv_vote per-map-vote
 // ge:skill net shooter testing
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -234,7 +236,7 @@ TEST(classic_game_the_shooter_s_and_the_endpoint_s_settings) {
   // Out of range: refused with the range and the next step.
   for (const auto& [name, value] : {std::pair<std::string, std::string>{"sv_mintic", "0.5"},
                                     {"pm_airstep", "2"},
-                                    {"sv_downloadchunksperframe", "99"}}) {
+                                    {"sv_downloadchunks", "99"}}) {
     ServerConfig bad = arena();
     bad.rules[name] = value;
     Server refused;
@@ -247,6 +249,223 @@ TEST(classic_game_the_shooter_s_and_the_endpoint_s_settings) {
   Server refused;
   CHECK(!server_open(refused, se::classic_game(), bad, nullptr, nullptr, error));
   CHECK_MSG(error.find("sv_floodprot") != std::string::npos, error);
+}
+
+// Each classic game's names for the server's settings: a server.cfg in either game's words sets
+// ours, and the sequel's own rule is left alone on a classic map.
+TEST(classic_game_each_game_s_names_for_the_server_s_settings) {
+  ge::console::Console con{true};
+  ServerConfig c;
+  ServerCfg cfg;
+  std::string error;
+  CHECK_MSG(server_configure(con, {"--map=arena", "+set", "maxclients",
+                                   "12",          "+set", "hostname",
+                                   "Old Names",   "+set", "flood_persecond",
+                                   "7",           "+set", "sv_maplist",
+                                   "dm2 dm3",     "+set", "spectator_password",
+                                   "look",        "+set", "maxspectators",
+                                   "3",           "+set", "dmflags",
+                                   "16"},
+                             c, cfg, se::classic_game(), error),
+            error);
+  CHECK(c.maxclients == 12);
+  CHECK(c.hostname == "Old Names");
+  CHECK_MSG(c.floodprot == "10 7 1", c.floodprot);
+  CHECK(c.maprotation == "dm2 dm3");
+  CHECK(c.spectator_password == "look");
+  CHECK(c.max_spectators == 3);
+  CHECK(c.rules["dmflags"] == "16");
+  // Our names set the same settings, read back by the game's.
+  CHECK(con.cvars().find("maxclients") == con.cvars().find("sv_maxclients"));
+  // Every game name is a synonym, none a setting of its own: the two never disagree.
+  for (const ge::console::Synonym& n : con.cvars().synonyms())
+    CHECK_MSG(n.target != nullptr && n.target->name != n.name, n.name);
+  CHECK(con.cvars().synonyms().size() == 41);
+  Server s;  // a classic map leaves the sequel's dmflags alone
+  CHECK_MSG(server_open(s, se::classic_game(), c, nullptr, nullptr, error), error);
+}
+
+// The name and chat guards: a public line's carriage returns turn into '#', a client changing its
+// top colour too often is kicked, as is one changing its user info past sv_infoflood; each one's
+// classic name sets it, and a bad value is refused naming the setting.
+// Where the server is, by its classic names too, reaches the server info a browser lists.
+TEST(classic_game_the_server_s_place_is_in_its_info) {
+  ge::console::Console con{true};
+  ServerConfig c;
+  ServerCfg cfg;
+  std::string error;
+  CHECK_MSG(server_configure(con,
+                             {"--map=arena",
+                              "+set",
+                              "countrycode",
+                              "se",
+                              "+set",
+                              "sv_city",
+                              "Lund",
+                              "+set",
+                              "coords",
+                              "55.7,13.2",
+                              "+set",
+                              "hostport",
+                              "edge.example:27500",
+                              "+set",
+                              "watervis",
+                              "1",
+                              "+set",
+                              "sv_safestrafe",
+                              "2",
+                              "+set",
+                              "sv_antilag_no_pred",
+                              "1"},
+                             c, cfg, se::classic_game(), error),
+            error);
+  CHECK(c.country == "se" && c.city == "Lund" && c.public_addr == "edge.example:27500");
+  CHECK(c.rules["sv_antilagexact"] == "1");  // by its classic name
+  Session r;
+  run_session(r, c, 400);
+  const std::string& info = r.client.serverinfo;
+  CHECK_MSG(info.find("\\countrycode\\se") != std::string::npos, info);
+  CHECK_MSG(info.find("\\city\\Lund") != std::string::npos, info);
+  CHECK_MSG(info.find("\\coords\\55.7,13.2") != std::string::npos, info);
+  CHECK_MSG(info.find("\\hostport\\edge.example:27500") != std::string::npos, info);
+  CHECK_MSG(info.find("\\watervis\\1") != std::string::npos, info);
+  CHECK_MSG(info.find("\\sv_safestrafe\\2") != std::string::npos, info);  // the client predicts
+}
+
+// The slots and the pings: a player joining a full server watches from a spectator slot; the
+// minimum ping holds a player's packets until its ping reaches it, and players may change it
+// with `minping` (in range); a player over the most ping watches instead; each by its classic
+// name too.
+TEST(classic_game_spectator_slots_and_the_pings) {
+  {
+    ServerConfig c = arena();
+    c.maxclients = 1;
+    c.max_spectators = 1;
+    c.bots = 1;  // the one player slot taken
+    c.rules["sv_fullspectate"] = "1";
+    Session r;
+    run_session(r, c, 500);
+    CHECK(r.client.stage == se::ClientStage::active);
+    bool told = false;
+    for (const std::string& p : r.client.oob_prints)
+      told |= p.find("connecting as spectator") != std::string::npos;
+    for (const std::string& p : r.client.prints)
+      told |= p.find("connecting as spectator") != std::string::npos;
+    CHECK(told);
+    c.rules["sv_fullspectate"] = "0";
+    Session refused;
+    run_session(refused, c, 300);
+    CHECK(refused.client.stage != se::ClientStage::active);
+  }
+  {  // A VIP slot (sv_maxvipspectators): a VIP word seats the visitor beside the full server.
+    ServerConfig c = arena();
+    c.maxclients = 1;
+    c.bots = 1;
+    c.rules["sv_maxvipspectators"] = "1";
+    c.rules["sv_vippassword"] = "gold";
+    c.rules["sv_fullspectate"] = "1";
+    Session vip;
+    run_session(vip, c, 500, "gold");
+    CHECK(vip.client.stage == se::ClientStage::active);
+    Session plain;
+    run_session(plain, c, 300);
+    CHECK(plain.client.stage != se::ClientStage::active);
+  }
+  {
+    ge::console::Console con{true};
+    ServerConfig c;
+    ServerCfg cfg;
+    std::string error;
+    CHECK_MSG(server_configure(con,
+                               {"--map=arena", "+set", "sv_minping", "80", "+set",
+                                "sv_enable_cmd_minping", "1", "+set", "sv_reconnectlimit", "5"},
+                               c, cfg, se::classic_game(), error),
+              error);
+    CHECK(c.rules["sv_minpingcmd"] == "1" && c.rules["sv_reconnectwait"] == "5");
+    Session r;
+    run_session(r, c, 1500, "", -1, {{1300, "minping 500"}, {1310, "minping 120"}});
+    const ge::net::Status st = server_public_status(r.s);
+    int ping = -1;
+    for (const ge::net::StatusPlayer& p : st.players)
+      if (p.name == "visitor") ping = p.ping_ms;
+    CHECK_MSG(ping >= 70, std::to_string(ping));  // held toward 80 ms on a fast network
+    bool range = false, set = false;
+    for (const std::string& p : r.client.prints) {
+      range |= p.find("must be 0 to 300") != std::string::npos;
+      set |= p.find("Minimum ping set to 120 ms") != std::string::npos;
+    }
+    CHECK(range && set);
+  }
+  {
+    ServerConfig c = arena();
+    c.rules["sv_maxping"] = "1";
+    Session r;
+    run_session(r, c, 600);
+    bool watching = false;
+    for (const std::string& p : r.client.prints)
+      watching |= p.find("join as a spectator") != std::string::npos;
+    CHECK(watching);  // even a fast network's ping is over 1 ms
+  }
+}
+
+TEST(classic_game_the_name_and_chat_guards) {
+  auto kicked = [](const Session& r, const std::string& why) {
+    for (const std::string& p : r.client.prints)
+      if (p.find("You were kicked from the game for " + why) != std::string::npos) return true;
+    return false;
+  };
+  {
+    Session r;
+    run_session(r, arena(), 700, "", -1, {{500, "say \"one\rtwo\""}});
+    bool unfaked = false;
+    for (const std::string& p : r.client.prints) unfaked |= p.find("one#two") != std::string::npos;
+    CHECK(unfaked);
+  }
+  {
+    std::vector<std::pair<int, std::string>> lines;
+    lines.reserve(8);
+    for (int i = 0; i < 8; i++)
+      lines.push_back({500 + i * 4, "setinfo topcolor " + std::to_string(i + 1)});
+    Session r;
+    run_session(r, arena(), 700, "", -1, lines);
+    CHECK(kicked(r, "topcolor spam"));
+    ServerConfig off = arena();
+    off.rules["sv_colorkick"] = "0";
+    Session spared;
+    run_session(spared, off, 700, "", -1, lines);
+    CHECK(!kicked(spared, "topcolor spam"));
+  }
+  {
+    ge::console::Console con{true};
+    ServerConfig c;
+    ServerCfg cfg;
+    std::string error;
+    CHECK_MSG(
+        server_configure(con,
+                         {"--map=arena", "+set", "sv_kickuserinfospamcount", "3", "+set",
+                          "sv_kickuserinfospamtime", "10", "+set", "sv_default_name", "guest"},
+                         c, cfg, se::classic_game(), error),
+        error);
+    CHECK_MSG(c.rules["sv_infoflood"] == "3 10", c.rules["sv_infoflood"]);
+    CHECK(c.rules["sv_defaultname"] == "guest");
+    std::vector<std::pair<int, std::string>> lines;
+    lines.reserve(5);
+    for (int i = 0; i < 5; i++)
+      lines.push_back({500 + i * 4, "setinfo skin s" + std::to_string(i)});
+    Session r;
+    run_session(r, c, 700, "", -1, lines);
+    CHECK(kicked(r, "userinfo spam"));
+  }
+  for (const auto& [name, value] : {std::pair<std::string, std::string>{"sv_infoflood", "lots"},
+                                    {"sv_defaultname", "a$b"},
+                                    {"sv_unfake", "2"}}) {
+    ServerConfig bad = arena();
+    bad.rules[name] = value;
+    Server refused;
+    std::string error;
+    CHECK(!server_open(refused, se::classic_game(), bad, nullptr, nullptr, error));
+    CHECK_MSG(error.find(name) != std::string::npos, error);
+  }
 }
 
 TEST(classic_game_a_map_from_the_game_folder_s_pack) {
@@ -440,8 +659,10 @@ TEST(classic_game_a_vote_grants_one_player_the_easy_jump_for_the_map) {
                {130, "vote speedjump visitor sometimes"},
                {140, "vote speedjump visitor on"}});
   CHECK_MSG(r.opened, r.error);
-  CHECK(printed(r.client, "speedjump: no player called nobody"));
-  CHECK(printed(r.client, "speedjump: \"sometimes\" is not on, off or a share 0..1"));
+  CHECK(printed(r.client, "No player is called nobody. Type \"users\" to see the ids and names."));
+  CHECK(printed(r.client,
+                "easy jump is turned \"on\" or \"off\" or given a share from 0 to 1, "
+                "not \"sometimes\"."));
   CHECK(printed(r.client, "visitor calls speedjump visitor on (now visitor off): vote yes/no"));
   CHECK(printed(r.client, "Vote passed: speedjump visitor on for this map"));
   CHECK(printed(r.client, "visitor is granted the easy jump (share 0.8, cl_speedjump 1)"));
@@ -449,6 +670,22 @@ TEST(classic_game_a_vote_grants_one_player_the_easy_jump_for_the_map) {
   CHECK_MSG(r.client.spawncount == 2, "spawncount " + std::to_string(r.client.spawncount));
   CHECK(printed(r.client, "speedjump back to visitor off for the new map"));
   CHECK(printed(r.client, "visitor's easy jump is no longer granted"));
+}
+
+TEST(classic_game_a_vote_grants_one_player_the_aim_help_for_the_map) {
+  ServerConfig c = arena();
+  c.rules["timelimit"] = "0.05";  // the match ends at 3 s, the map changes at about 8 s
+  Session r;
+  run_session(r, c, 900, "", -1,
+              {{120, "vote aimhelp visitor 0.5"}, {140, "vote aimhelp visitor on"}});
+  CHECK_MSG(r.opened, r.error);
+  CHECK(printed(r.client, "aim help is turned \"on\" or \"off\", not \"0.5\"."));
+  CHECK(printed(r.client, "visitor calls aimhelp visitor on (now visitor off): vote yes/no"));
+  CHECK(printed(r.client, "Vote passed: aimhelp visitor on for this map"));
+  CHECK(printed(r.client, "visitor is granted the aim help (24 across, 48 up and down)"));
+  CHECK_MSG(r.client.spawncount == 2, "spawncount " + std::to_string(r.client.spawncount));
+  CHECK(printed(r.client, "aimhelp back to visitor off for the new map"));
+  CHECK(printed(r.client, "visitor's aim help is no longer granted"));
 }
 
 TEST(classic_game_sv_intermission_holds_the_next_map) {
@@ -508,6 +745,10 @@ TEST(classic_game_a_client_joins_the_window_s_own_match) {
   // The visitor sees the window's player as a player, not a bot.
   CHECK(se::info_get(visitor.userinfos[0], "name") == "host");
   CHECK(se::info_get(visitor.userinfos[0], "*bot").empty());
+  // A mod reads the server's settings by its game's names (`cvar("maxclients")`).
+  const ge::console::Cvar* most = l.server->cvars.find("maxclients");
+  CHECK(most != nullptr && std::atoi(most->value.c_str()) >= 2);
+  CHECK(l.server->cvars.find("hostname") != nullptr);
   shooters_edge::client::listen_stop(l);
 }
 

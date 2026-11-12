@@ -36,6 +36,7 @@
 #include "shooter/trace.hpp"
 #include "shooters_edge/server/builtins.hpp"
 #include "shooters_edge/server/qvm_server.hpp"
+#include "shooters_edge/server/shot_help.hpp"
 
 namespace shooters_edge::server {
 
@@ -551,6 +552,8 @@ void trace(QvmServer& s, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs, sh::Ve
   sim::qvm_flush(s.q);
   const int shooter = lag ? lag_shooter(s, pass) : 0;
   if (shooter) s.lag_rewind(s.lag_ctx, shooter, true);
+  if (lag && mins == sh::Vec3f{} && maxs == sh::Vec3f{})
+    help_traced_shot(s, pass, start, end);  // a granted player's shot (shot_help.hpp)
   const sh::HullTrace tr =
       sh::trace_move(s.sv, start, mins, maxs, end, trace_kind(nomonsters), pass);
   if (shooter) s.lag_rewind(s.lag_ctx, shooter, false);

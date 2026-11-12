@@ -83,7 +83,8 @@ struct Frame {
   gr::FrameUniforms staged{};
   gr::FrameHistory history;
   wgpu::BindGroupLayout layout;
-  wgpu::BindGroup frame, post_group;
+  ::ge::render::FrameGroup frame;  // group 0, and its parts for the passes that read few
+  wgpu::BindGroup post_group;
   gr::Sky sky;
   gr::CloudPass clouds;
   gr::Fog fog;

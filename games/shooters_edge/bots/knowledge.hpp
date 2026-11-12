@@ -49,8 +49,8 @@ const char* item_call(const ItemSpot& it);
 // A vector in a map's text ("x y z"); false on none.
 bool parse_vec(const char* text, sh::Vec3f& out);
 // The map's item from its classname and spawnflags, by the game profile's rows
-// (profiles/items.hpp), or false.
-bool item_of(const char* cn, int spawnflags, ItemSpot& it);
+// (profiles/items.hpp) as arsenal `a` holds them (a weapon's part set from its row), or false.
+bool item_of(const char* cn, int spawnflags, ItemSpot& it, const BotArsenal& a = first_arsenal());
 
 // The callout for an enemy at `there`: by the landmark nearest it that the player knows (a key item
 // or a weapon: "enemy at ra", "enemy at rl"), the key items counted nearer; empty with none near.
