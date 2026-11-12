@@ -1,8 +1,9 @@
 // THE NETWORK'S CRYPTOGRAPHY, the few calls security needs (docs/networking.md § Security): a
-// 32-byte key, sealing and opening bytes with XChaCha20-Poly1305 (authenticated encryption with
-// associated data: what is sealed cannot be read, and neither it nor the associated data can be
-// changed, without the key), and deriving a key from another with keyed BLAKE2b. Monocypher
-// (cmake/Crypto.cmake) does the work; crypto.cpp is the only file that includes it.
+// 32-byte key, signatures and key exchange, sealing and opening bytes with XChaCha20-Poly1305
+// (authenticated encryption with associated data: what is sealed cannot be read, and neither it nor
+// the associated data can be changed, without the key), and deriving a key from another with keyed
+// BLAKE2b. Monocypher (cmake/Crypto.cmake) does the work; crypto.cpp is the only file that includes
+// it.
 //
 // Every call is integer arithmetic on bytes: the same inputs seal to the same bytes on every
 // platform, so a secure session over the simulated network keeps its digest. Nothing here draws
@@ -15,6 +16,7 @@
 // ge:keywords net crypto cryptography aead xchacha20 poly1305 seal open encrypt decrypt mac tag
 // ge:keywords blake2b kdf derive key nonce monocypher wipe hex environment secret
 // ge:keywords argon2 argon2id password_hash password-hash salt digest
+// ge:keywords ed25519 eddsa signature sign sign_check x25519 key-exchange box_key
 // ge:skill net
 // ge:test tests/net_crypto_test.cpp
 #pragma once
@@ -66,6 +68,26 @@ void password_hash(uint8_t out[32], std::string_view secret, const uint8_t* salt
 // A fast hash: BLAKE2b of `data` into 32 bytes. For a secret that is already long and random (a
 // one-time code, a recovery code), where a slow hash buys nothing.
 Key digest(std::string_view data);
+
+// SIGNATURES (Ed25519 over BLAKE2b): a key pair grown from a 32-byte seed, a 64-byte signature
+// anyone holding the public key checks. A master signs its tickets with one (account/ticket.hpp).
+using Signature = std::array<uint8_t, 64>;
+struct SignKeys {
+  std::array<uint8_t, 64> secret{};  // the seed, then the public key
+  Key pub{};
+};
+SignKeys sign_keys(const Key& seed);
+Signature sign(const SignKeys& keys, const uint8_t* message, size_t size);
+bool sign_check(const Key& pub, const Signature& signature, const uint8_t* message, size_t size);
+
+// KEY EXCHANGE (X25519). The same seed's exchange secret pairs with `box_public_of(keys.pub)`, so
+// one published key both checks a master's signatures and seals a request to it. `box_key` is
+// the key two sides share: BLAKE2b of the raw exchange and both public keys, the asker's first.
+Key box_secret(const Key& seed);
+Key box_public(const Key& secret);          // the exchange public key of an exchange secret
+Key box_public_of(const Key& sign_public);  // the exchange public key of a signing key
+Key box_key(const Key& my_secret, const Key& their_public, const Key& asker_public,
+            const Key& answerer_public);
 
 // Overwrite a secret before its memory is let go.
 void wipe(void* secret, size_t size);

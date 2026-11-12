@@ -42,6 +42,7 @@
 #include "shooters_edge/client/world_fx.hpp"
 #include "tv/node.hpp"
 #include "ui/draw.hpp"
+#include "vfs/unpack.hpp"
 #include "web/browser.hpp"
 #include "web/viewer_args.hpp"
 
@@ -71,6 +72,11 @@ bool mount_packs(const ge::web::ViewerArgs& a, cl::SearchPath& files, std::strin
     if (!ge::web::fetch_bytes(a.packs[i], bytes, error)) return false;
     const std::string& url = a.packs[i];
     const std::string name = url.substr(url.rfind('/') + 1);
+    if (ge::vfs::wrapping_of(bytes) != ge::vfs::Wrapping::none) {  // a demo's zstd content pack
+      ge::vfs::Unpacked u;
+      if (!ge::vfs::unpack_one(std::move(bytes), u, error)) return false;
+      bytes = std::move(u.bytes);
+    }
     if (!cl::add_archive(files, name, std::move(bytes), error)) return false;
   }
   return true;

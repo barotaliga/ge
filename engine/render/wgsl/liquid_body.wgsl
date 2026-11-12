@@ -46,6 +46,7 @@ const kGlowHi = 1700.0;
 const kSunLuxCd = 128000.0;
 const kShimmerHeight = 3.0;  // m: render/liquid.hpp's
 const kStirScale = 1.2;      // m: render/liquid.hpp's
+const kHeatScale = 0.5;      // m: render/liquid.hpp's
 
 // HASHES AND NOISE.
 fn hash2(p: vec2i) -> vec2f {

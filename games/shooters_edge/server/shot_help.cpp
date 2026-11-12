@@ -71,14 +71,17 @@ void add_aim_help(RulesCommon& s) {
     s.cvars.add({.name = "sv_aimhelp_allow",
                  .fallback = "",
                  .flags = ge::console::kServer,
-                 .help = "the weapons the aim help may bend (empty: all but sv_aimhelp_deny's)",
-                 .kind = ge::console::CvarKind::text});
+                 .help = "The weapons the aim help may bend, by name with spaces between.",
+                 .kind = ge::console::CvarKind::text,
+                 .values = "\"\": every weapon but sv_aimhelp_deny's (the default); TEXT: only "
+                           "these, * matching any characters"});
     s.cvars.add({.name = "sv_aimhelp_deny",
                  .fallback = "",
                  .flags = ge::console::kServer,
-                 .help = "the weapons the aim help never bends (\"rl lg\": not the rocket "
-                         "launcher nor the lightning gun)",
-                 .kind = ge::console::CvarKind::text});
+                 .help = "The weapons the aim help never bends, by name with spaces between.",
+                 .kind = ge::console::CvarKind::text,
+                 .values = "\"\": none (the default); TEXT: these, such as rl lg for the rocket "
+                           "launcher and the lightning gun"});
   }
 }
 

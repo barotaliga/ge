@@ -3,6 +3,7 @@
 // ge:summary The network's cryptography over Monocypher: seal, open, derive, hex keys, wipe
 // ge:keywords net crypto monocypher crypto_aead_lock crypto_aead_unlock crypto_blake2b_keyed
 // ge:keywords xchacha20 poly1305 blake2b getenv crypto_argon2 argon2id crypto_blake2b
+// ge:keywords crypto_eddsa_sign crypto_eddsa_check crypto_x25519 crypto_eddsa_to_x25519
 // ge:skill net
 // ge:test tests/net_crypto_test.cpp
 #include "net/crypto.hpp"
@@ -119,5 +120,57 @@ bool key_from_env(const char* name, Key& out, std::string& error) {
 }
 
 void wipe(void* secret, size_t size) { crypto_wipe(secret, size); }
+
+SignKeys sign_keys(const Key& seed) {
+  SignKeys k;
+  Key copy = seed;  // the key pair wipes the seed it is given
+  crypto_eddsa_key_pair(k.secret.data(), k.pub.data(), copy.data());
+  return k;
+}
+
+Signature sign(const SignKeys& keys, const uint8_t* message, size_t size) {
+  Signature s{};
+  crypto_eddsa_sign(s.data(), keys.secret.data(), message, size);
+  return s;
+}
+
+bool sign_check(const Key& pub, const Signature& signature, const uint8_t* message, size_t size) {
+  return crypto_eddsa_check(signature.data(), pub.data(), message, size) == 0;
+}
+
+Key box_secret(const Key& seed) {
+  // The signing scalar is the first half of BLAKE2b-512 of the seed; X25519 trims it the same way,
+  // so this secret's public key is the signing key's, converted.
+  uint8_t wide[64];
+  crypto_blake2b(wide, sizeof wide, seed.data(), seed.size());
+  Key out{};
+  std::memcpy(out.data(), wide, 32);
+  crypto_wipe(wide, sizeof wide);
+  return out;
+}
+
+Key box_public(const Key& secret) {
+  Key out{};
+  crypto_x25519_public_key(out.data(), secret.data());
+  return out;
+}
+
+Key box_public_of(const Key& sign_public) {
+  Key out{};
+  crypto_eddsa_to_x25519(out.data(), sign_public.data());
+  return out;
+}
+
+Key box_key(const Key& my_secret, const Key& their_public, const Key& asker_public,
+            const Key& answerer_public) {
+  uint8_t mix[96];
+  crypto_x25519(mix, my_secret.data(), their_public.data());
+  std::memcpy(mix + 32, asker_public.data(), 32);
+  std::memcpy(mix + 64, answerer_public.data(), 32);
+  Key out{};
+  crypto_blake2b(out.data(), out.size(), mix, sizeof mix);
+  crypto_wipe(mix, sizeof mix);
+  return out;
+}
 
 }  // namespace ge::net
