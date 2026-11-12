@@ -66,6 +66,7 @@
 #include <vector>
 
 #include "core/prng.hpp"
+#include "net/status.hpp"
 #include "net/transport.hpp"
 #include "server/guards.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
@@ -268,6 +269,9 @@ int classic_count(const ClassicServer& s, ConnState at_least);
 
 // The status text (`status <opt>`): the server info, then a line a client.
 std::string status_text(const ClassicServer& s, int opt);
+// Every connected client as a hub's status record's players (net/status.hpp): name, team, frags,
+// ping, minutes; a local seat as a bot, a spectator as one.
+void status_players(const ClassicServer& s, std::vector<ge::net::StatusPlayer>& out);
 
 // ---- Shared by the endpoint's files (classic_server.cpp, classic_signon.cpp,
 //      classic_frame.cpp); not an API for a caller. ----

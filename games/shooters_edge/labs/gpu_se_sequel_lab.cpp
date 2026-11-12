@@ -49,6 +49,7 @@
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -117,8 +118,58 @@ bool fixture_pack(std::vector<uint8_t>& out, std::string& error) {
 struct Walk {
   bool started = false, stood = false;
   sh::Vec3f from, to;
-  float facing = 0, eye = 0;  // degrees; the eye over the origin, units
+  float facing = 0, eye = 0;   // degrees; the eye over the origin, units
+  int items = 0, removed = 0;  // the map's items standing, and those removed (in a solid, left out)
+  int taken = 0;               // the items the walk took
+  struct Dot {
+    sh::Vec3f at;
+    int kind;  // sequel_items.hpp's SqKind
+  };
+  std::vector<Dot> dots;        // the items standing
+  std::vector<sh::Vec3f> path;  // where the walk went, every 10 ticks
 };
+
+// The map from above: each item standing as a disc coloured by its kind, the walk's path, its
+// start ringed. Scaled to the world's bounds.
+gl::Picture overhead(const ge::brush::Map& map, const Walk& walk, const std::string& title) {
+  constexpr int kSize = 640, kPad = 24;
+  gl::Picture p = gl::create_picture(kSize, kSize + 64, {18, 18, 22});
+  if (map.models.empty()) return p;
+  const float* lo = map.models[0].mins;
+  const float* hi = map.models[0].maxs;
+  const float span = std::max({hi[0] - lo[0], hi[1] - lo[1], 1.0f});
+  const auto px = [&](sh::Vec3f v) {
+    return std::pair<double, double>{kPad + (v.x - lo[0]) / span * (kSize - 2 * kPad),
+                                     kPad + (hi[1] - v.y) / span * (kSize - 2 * kPad)};
+  };
+  for (int g = 0; g <= 8; g++) {  // a grid of the world's span in eighths
+    const double at = kPad + g * (kSize - 2 * kPad) / 8.0;
+    gl::draw_line(p, at, kPad, at, kSize - kPad, {40, 40, 48});
+    gl::draw_line(p, kPad, at, kSize - kPad, at, {40, 40, 48});
+  }
+  const gl::Rgba kinds[] = {{90, 160, 255}, {120, 200, 255}, {255, 150, 60},  {230, 200, 80},
+                            {90, 220, 110}, {220, 90, 230},  {255, 255, 255}, {200, 200, 200}};
+  for (const Walk::Dot& d : walk.dots) {
+    const auto [x, y] = px(d.at);
+    gl::fill_disc(p, x, y, 4, kinds[d.kind]);
+  }
+  for (size_t i = 1; i < walk.path.size(); i++) {
+    const auto [x0, y0] = px(walk.path[i - 1]);
+    const auto [x1, y1] = px(walk.path[i]);
+    gl::draw_line(p, x0, y0, x1, y1, {255, 80, 80});
+  }
+  if (!walk.path.empty()) {
+    const auto [x, y] = px(walk.path.front());
+    gl::draw_ring(p, x, y, 7, {255, 80, 80});
+  }
+  const char* names[] = {"ARMOUR", "POWER", "WEAPON", "AMMO", "HEALTH", "POWERUP", "KEY", "PACK"};
+  for (int k = 0; k < 8; k++) {
+    gl::fill_disc(p, 16 + k * 78, kSize + 14, 4, kinds[k]);
+    gl::draw_text(p, 24 + k * 78, kSize + 10, names[k], {220, 220, 220});
+  }
+  gl::draw_text(p, 12, kSize + 36, title + ": ITEMS FROM ABOVE, THE WALK IN RED", {230, 230, 230});
+  return p;
+}
 
 Walk walk(const std::vector<uint8_t>& file, const std::string& name, float turn,
           std::string& error) {
@@ -135,6 +186,15 @@ Walk walk(const std::vector<uint8_t>& file, const std::string& name, float turn,
   if (!cl::listen_start(l, progs, std::move(map), shooters_edge::net::listen_options(), error))
     return out;
   out.started = true;
+  if (const shooters_edge::server::SequelServer* sq = shooters_edge::server::sequel_of(*l.rules)) {
+    for (const shooters_edge::server::SequelEntity& e : sq->entities)
+      if (e.item >= 0) {
+        (e.gone ? out.removed : out.items)++;
+        if (!e.gone)
+          out.dots.push_back(
+              {e.origin, static_cast<int>(shooters_edge::server::kSqItems[e.item].kind)});
+      }
+  }
   const auto me = [&] { return l.server->world.entities[1]; };
   for (int i = 0; i < 80; i++) cl::listen_frame(l, {});  // about a second: spawned, landed
   out.stood = (me().flags & sh::kFlagOnGround) != 0;
@@ -142,10 +202,15 @@ Walk walk(const std::vector<uint8_t>& file, const std::string& name, float turn,
   l.view.y = turn;
   sh::MoveCmd ahead;
   ahead.forward = 200;
-  for (int i = 0; i < 154; i++) cl::listen_frame(l, ahead);  // about two seconds
+  for (int i = 0; i < 154; i++) {  // about two seconds
+    cl::listen_frame(l, ahead);
+    if (i % 10 == 0) out.path.push_back(me().origin);
+  }
   out.to = me().origin;
   out.facing = me().view_angles.y;
   out.eye = l.server->world.clients[0].numbers.view_z;
+  if (const shooters_edge::server::SequelServer* sq = shooters_edge::server::sequel_of(*l.rules))
+    out.taken = static_cast<int>(sq->players[0].taken.size());
   cl::listen_stop(l);
   return out;
 }
@@ -282,6 +347,18 @@ void run(gl::Lab& lab) {
         const float dx = walked.to.x - walked.from.x, dy = walked.to.y - walked.from.y;
         const float units = std::sqrt(dx * dx + dy * dy);
         lab.metric(name + ".walk.stood", walked.stood ? 1 : 0, "bool");
+        lab.metric(name + ".items", walked.items, "count");
+        lab.metric(name + ".items-removed", walked.removed, "count");
+        lab.metric(name + ".walk.taken", walked.taken, "count", gl::Det::measured);
+        lab.shot({name + "-items",
+                  (info.title.empty() ? name : info.title) + ", items from above",
+                  "Every item standing on " + name +
+                      " once the sequel's rules have dropped them to the floor (those in a solid "
+                      "or left out of this mode removed), coloured by kind, and the walk's path "
+                      "from the spawn in red.",
+                  "items along the map's rooms, none floating outside them",
+                  {{"map", name}, {"game", own ? "fixture" : "local packs"}}},
+                 overhead(read, walked, name), gl::Det::measured);
         lab.metric(name + ".walk.units", units, "units", gl::Det::measured);
         if (!walked.stood)
           lab.fail(name + ": the player did not land on the floor at his spawn",

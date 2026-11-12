@@ -195,6 +195,7 @@ struct Server {
   net::Hosting hosting;
   net::MasterBeat beat;  // sv_master's masters (none: no beat)
   uint64_t status_answers = 0;
+  uint64_t public_secret = 0;  // an own-protocol game's status cookies (the node's otherwise)
 };
 
 // The settings' cvars bound to `config` (which must outlive `cvars`), its values the fallbacks;
