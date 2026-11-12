@@ -20,6 +20,10 @@ namespace ge::gamecli {
 // errors appended to `log`; true with its process id in `pid`, false with `error`.
 bool spawn_detached(const std::vector<std::string>& argv, const std::string& cwd,
                     const std::string& log, long& pid, std::string& error);
+// `argv` run to its end (argv[0] found on the PATH when it names no folder), its output and errors
+// appended to `log`; true with its exit code in `code`, false with `error` when it did not start.
+bool run_wait(const std::vector<std::string>& argv, const std::string& log, int& code,
+              std::string& error);
 // Whether process `pid` still runs (a child of this process that ended is reaped).
 bool process_alive(long pid);
 // Process `pid` asked to stop, then made to after `grace_ms`; false with `error` when it cannot be.

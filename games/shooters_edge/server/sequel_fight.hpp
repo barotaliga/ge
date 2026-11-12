@@ -1,10 +1,12 @@
 // The sequel runner's fighting half (sequel_server.hpp states the rules): the weapons' models and
 // sounds listed at the map's start, the hand stepped and its shots made, missiles moved, damage
-// dealt, deaths and obituaries, the weapon chosen, and the world's rows for the shots in flight.
+// dealt, deaths, gibs and obituaries, the weapon chosen, items dropped and taken back, and the
+// world's rows for the shots in flight and the dropped items.
 // Only sequel_server.cpp calls these.
 //
 // ge:summary The sequel runner's fight: shots, missiles, damage, deaths, the chosen weapon
 // ge:keywords sequel fight shots hitscan missiles radius-damage obituary death frags use-weapon
+// ge:keywords hand-grenade drop-item gibs weapons-stay quad-drop
 // ge:skill shooter
 // ge:test tests/shooters_edge_sequel_fight_test.cpp
 #pragma once
@@ -37,10 +39,16 @@ bool fight_command(SequelServer& s, int slot, const std::string& cmd, const std:
 
 // What killed a player when no weapon did (`fight_kill`'s `weapon`).
 inline constexpr int kSqByFall = 100, kSqByLava = 101, kSqBySlime = 102, kSqByWater = 103;
+// The hand grenade held to the end of its fuse.
+inline constexpr int kSqByHeldGrenade = 104;
 
 // Player `slot` dies, killed by `killer` (a slot; his own for a suicide, -1 the world) with weapon
 // `weapon` (-1 none, or a `kSqBy*`); the obituary is scored and printed.
 void fight_kill(SequelServer& s, int slot, int killer, int weapon);
+
+// Item `item` (a weapon, an ammo or a powerup, by `drop <its name>`) thrown from player `slot`;
+// false, with a line to him, when it cannot be.
+bool fight_drop(SequelServer& s, int slot, int item);
 
 // Item `item` used from the inventory (a powerup or power armour; `use <its name>`); false when
 // it is not one or none is held.
@@ -48,12 +56,21 @@ bool fight_use(SequelServer& s, int slot, int item);
 // The end of player `slot`'s rules frame: the powerups' and the air's clocks, drowning, lava,
 // slime and falling damage.
 void fight_body_frame(SequelServer& s, int slot);
-// The level's limits: true when the frag or time limit ended it (the next map is pending).
+// The level's limits: true when the frag or time limit ended it (`next_map` named, the
+// intermission due).
 bool fight_limits(SequelServer& s);
 
-// The world's rows the fight writes: each live missile, and every player's held weapon numbers.
+// The items dropped (`drop`, or at death) falling to rest and vanishing when their time is up.
+void fight_drops(SequelServer& s);
+// The dropped items player `slot`'s box touches, taken by their rule.
+void fight_touch_drops(SequelServer& s, int slot);
+// Whether `dmflags` bit `bit` is set in deathmatch.
+bool fight_dmflag(const SequelServer& s, int bit);
+
+// The world's rows the fight writes: each live missile and dropped item, and every player's held
+// weapon numbers.
 void fight_rows(SequelServer& s);
-// The first world row of the missiles.
+// The first world row of the missiles; the dropped items' follow them.
 size_t fight_first_row(const SequelServer& s);
 
 }  // namespace shooters_edge::server

@@ -2,10 +2,11 @@
 // measured on the runner over a hall built here (no game files). Each weapon is held on a still
 // player 200 units away for ten seconds: the shots, the ammo, the damage dealt and its rate, and a
 // chart of the damage over time; then a rocket fired at the floor (the rocket jump): the
-// shooter's height and health through the second after. Every number is deterministic.
+// shooter's height and health through the second after; the hand grenade held longer and longer:
+// how fast it is thrown and how far away it goes off. Every number is deterministic.
 //
 // ge:summary Lab: the sequel's weapons on the runner: damage over time, periods, the rocket jump
-// ge:keywords lab sequel fight weapons damage-rate period rocket-jump se-sequel-fight
+// ge:keywords lab sequel fight weapons damage-rate period rocket-jump se-sequel-fight hand-grenade
 // ge:skill shooter labs
 // ge:test tests/shooters_edge_sequel_fight_test.cpp
 #include <memory>
@@ -118,6 +119,7 @@ void run(gl::Lab& lab) {
   held.frame = single.frame;
   held.frame.title = "DAMAGE DEALT, FIRING WHILE HELD, 200 UNITS AWAY";
   for (int w = 0; w < sv::kSqWeaponCount; w++) {
+    if (w == int(sv::SqWeapon::hand_grenade)) continue;  // thrown, not held: its own chart below
     std::unique_ptr<Duel> d = duel(map, error);
     if (d == nullptr) {
       lab.fail(error, "Read the reason above. Skill: shooter.");
@@ -173,6 +175,55 @@ void run(gl::Lab& lab) {
             "after the shots",
             {{"seconds", fixed(seconds, 0)}}},
            gl::to_picture(gl::line_chart(held).plot));
+
+  // The hand grenade: lit a second after the press, then held `h` s more and let go; where it
+  // goes off, from the thrower, for each hold.
+  gl::LineChart throws;
+  throws.spikes = false;
+  throws.frame = {"THE HAND GRENADE: HOLD IT LONGER, IT FLIES FASTER BUT BURNS ITS FUSE",
+                  "lit a second after the press, a 3.2 s fuse; thrown at 400 to 800 units/s",
+                  "held after lighting (s)", "units from the thrower"};
+  gl::Trace burst{"where it goes off", {}, {}}, speed{"throw speed / 4", {}, {}};
+  for (int k = 0; k <= 6; k++) {
+    const double h = 0.5 * k;
+    std::unique_ptr<Duel> g = duel(map, error);
+    if (g == nullptr) return;
+    place(*g, 0, -900);
+    place(*g, 1, -1000);  // behind her, out of the way
+    g->p(0).body.ammo[int(sv::SqAmmo::grenades)] = 5;
+    g->r.client_command(0, "use Grenades");
+    for (int i = 0; i < 40; i++) tick(*g, 0, 0);
+    const int held_ticks = static_cast<int>((1.0 + h) / 0.013);
+    for (int i = 0; i < held_ticks; i++) tick(*g, sh::kButtonAttack, 0);
+    float x = -900, thrown = 0;
+    for (int i = 0; i < 500; i++) {
+      tick(*g, 0, 0);
+      bool live = false;
+      for (const sv::SequelMissile& m : sv::sequel_of(g->r)->missiles)
+        if (m.live && m.kind == sv::SqShot::hand_grenade) {
+          live = true;
+          x = m.origin.x;
+          if (thrown == 0) thrown = m.velocity.x;
+        }
+      if (!live && thrown != 0) break;
+    }
+    const std::string key = "hand-grenade.hold-" + fixed(h, 1);
+    lab.metric(key + ".distance", x + 900, "units");
+    lab.metric(key + ".speed", thrown, "units/s");
+    burst.x.push_back(h);
+    burst.y.push_back(x + 900);
+    speed.x.push_back(h);
+    speed.y.push_back(thrown / 4);
+  }
+  throws.traces = {burst, speed};
+  lab.shot({"hand-grenade",
+            throws.frame.title,
+            "A hand grenade lit, held a while and let go on a flat floor: how far from the thrower "
+            "it goes off, and its throw speed.",
+            "farther as the hold grows, until the fuse left is too short to reach the floor far "
+            "away; the speed climbing from 400 to 800",
+            {}},
+           gl::to_picture(gl::line_chart(throws).plot));
 
   // The rocket jump: a rocket at the feet, the shooter's height and health after.
   std::unique_ptr<Duel> d = duel(map, error);

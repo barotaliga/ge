@@ -1,10 +1,11 @@
 // THE HUB'S HTTP: HTTP/1.1 over the OS's TCP (net/tcp_socket.hpp, raw bytes), enough for a hub
 // and no more (docs/hub.md § Hosting it). GET and HEAD, one request a connection then close,
-// answers from the JSON API (api.hpp) with CORS open and their cache time, and server-sent events
-// for a node's record (`/v1/servers/{address}/events`: one connection kept open, an event each
-// time the record changes, a comment line every 15 s so proxies keep it). No TLS: an operator's
-// reverse proxy does that. The request parser and the response writer are pure functions over
-// bytes, tested without a socket; `HttpServer` is the thin loop that carries them.
+// answers from the pages and the JSON API (pages.hpp, api.hpp) with CORS open and their cache
+// time, and server-sent events for a node's record (`/v1/servers/{address}/events`: one
+// connection kept open, an event each time the record changes, a comment line every 15 s so
+// proxies keep it). No TLS: an operator's reverse proxy does that. The request parser and the
+// response writer are pure functions over bytes, tested without a socket; `HttpServer` is the
+// thin loop that carries them.
 //
 // ge:summary The hub's HTTP/1.1: request parsing, responses, server-sent events, the server loop
 // ge:keywords hub http http-1-1 get head request response cors cache-control sse event-stream
@@ -20,6 +21,7 @@
 #include <vector>
 
 #include "hub/api.hpp"
+#include "hub/archive.hpp"
 #include "net/tcp_socket.hpp"
 
 namespace ge::hub {
@@ -31,6 +33,7 @@ constexpr int kMaxConnections = 256;
 
 struct HttpRequest {
   std::string method, target, version;
+  std::string host;      // the Host header ("" when none): the address the reader used
   size_t head_size = 0;  // the bytes the head took, the blank line with it
 };
 
@@ -68,6 +71,9 @@ struct HttpServer {
   net::TcpListener listener;
   std::vector<HttpConn> conns;
   HttpStats stats;
+  const Archive* archive = nullptr;  // the demo archive the pages read (null: none)
+  std::string viewer_dir;            // the web viewer's files (watch.hpp; "" none)
+  int64_t unix_s = 0;                // the wall clock's time, set by the process each turn
 };
 
 // Listen on `bind`; false with `error` (the address, the OS's reason, the next action).

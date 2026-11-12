@@ -165,3 +165,22 @@ TEST(poller_drops_a_node_gone_from_the_list) {
   CHECK(poller_find(w.poller, sim_address(11, 27500)) == nullptr);
   CHECK(w.poller.stats.dropped == 1 && w.poller.nodes.size() == 1);
 }
+
+TEST(the_engine_master_takes_a_browsed_node_over) {
+  // A node the browse found first (browse.hpp) that the engine's master then lists: from that list
+  // on it is the poller's, asked in the engine's protocol, and its own record replaces the
+  // browse's.
+  World w(quick());
+  w.add(30, NodeKind::game, 1, 0);
+  HubNode b;
+  b.address = sim_address(30, 27500);
+  b.browsed = true;
+  b.have = true;
+  b.status.name = "as browsed";
+  b.heard_us = 0;
+  w.poller.nodes.push_back(b);
+  w.run_s(4);
+  CHECK(w.poller.nodes.size() == 1);
+  const HubNode* n = poller_find(w.poller, sim_address(30, 27500));
+  CHECK(n && !n->browsed && n->listed && n->status.name == "node 30");
+}

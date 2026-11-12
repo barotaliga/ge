@@ -59,7 +59,7 @@ a demo.
 | `keyframe` | What a seek or a late joiner starts from: `Run::clone` bytes, or a face's catch-up state | Every game |
 | `events` | Marks and highlights (`engine/replay/highlights`) | Every game |
 | `chat`, `voice` | Text lines; Opus frames | Every game |
-| `radar` | Low-rate positions and headings for an overhead map (reserved, M56) | Optional |
+| `radar` | Low-rate positions and headings for an overhead map (`engine/replay/radar.hpp`: rosters, positions, an outline) | Optional; Shooter's Edge's `demos pack` |
 
 - **Trailer.** An index of blocks by time and the final meta (duration, scores). Optional: a live
   stream has none until it ends. The file's SHA-256, which a TV node and the hub list files by, is
@@ -147,6 +147,11 @@ under a context of its own. Shooter's Edge's face for the classic multiview reco
 - text as a template (the text with its whole numbers taken out: a team's info line, a frag
   message) from the last 256 seen, and each number from the same template's last numbers.
 
+The face also writes the hub's words (`docs/hub.md` § The archive) into the meta, read off the
+recording before it is packed (`demo_hub_meta`): the map, the mode, the server's name and every
+player and team in the header; the length, each player's frags and each team's total in the
+trailer. A caller adds its own (`title`, `tag`, `start`).
+
 A record whose body does not walk whole is kept as its bytes, so every file comes back byte for
 byte. A keyframe every 30 seconds (each one starts the models and predictions over) costs about 5%
 against none and lets a late joiner start at most 30 seconds back; one every 10 seconds costs about
@@ -212,8 +217,13 @@ reads on from it. A viewer's `say` stays on the node; its `say_game` goes up to 
 the viewer list goes up as `qul` lines. The `se-tv-node` lab relays a two-player match with a 2 s
 delay to viewers who join at 0, 4 and 8 seconds: a late viewer's catch-up is 0.7 KB, and every
 viewer's stream plays to the same end (every player, his frags and name, every entity) with the
-chat in it. Still to come in M57c: our client watching a classic stream, and the node rewriting
-the server's name as its own.
+chat in it.
+
+Our client watches a broadcast with `watch <host>:<port> [password]` in the console
+(`games/shooters_edge/net/classic_watch.hpp`): it asks as a relay asks, answers a challenge, and
+hands the records to the demo reader a whole frame at a time, so the window draws the match as it
+draws a game it joined (the same view, sounds and lines). Still to come in M57c: the node writing
+its own name into the server info.
 
 ## Forward
 
@@ -248,6 +258,21 @@ The `forward` lab gives the player's direct path each preset and puts the forwar
 
 A stranger's asks of every kind draw answers of at most a third of their size.
 
+**The classic face** (`games/shooters_edge/net/classic_forward.hpp`) plugs into the forward's face
+seam (`ForwardFace`: the datagrams the forward does not take, a client admitted with
+`forward_admit` and connected when the face's handshake upstream is done) so classic clients and
+forwarders chain through ours. The route is the connect's `prx` user info key, the rest of the route
+after this hop with the server last; the hop takes its destination off it, writes the rest back,
+adds `*qwfwd` and runs the challenge and the connect upstream with the client's qport. It answers the
+client's `j` only once the destination has accepted, and passes a refusal on in its words, so a
+chain of classic hops connects end to end or says why not. It answers `ping`, `status` (with
+`*version` "qwfwd ge 1", which is how a classic browser tells a forwarder) and `pingstatus` (each
+server it knows with its ping, for a client's route finder) itself, once a second a host; it makes
+challenges from the client's address and a secret, so it keeps nothing before a good connect; and it
+follows a client whose NAT gives it a new port by its qport on the same host.
+`tests/shooters_edge_classic_forward_test.cpp`: our classic client plays through one hop and through
+a chain of two to our classic server.
+
 ## Proxy
 
 `engine/proxy` (`proxy.hpp`, `trial.hpp`). Two hops that understand the slow link between them:
@@ -278,6 +303,23 @@ between them:
 
 Three copies cut the loss at 10% about eighty times; packing sends 30% of the plain bytes down, so
 three copies packed cost less than one plain.
+
+## The sequel's recordings
+
+The sequel's client recording (a `.dm2`: blocks of a 32-bit length and one server packet's messages,
+ended by a length of -1) goes on the replay file through Shooter's Edge's face
+(`games/shooters_edge/client/sequel_demo.hpp`, M57f), on a `sequel` track of field-coded chunks, ten
+blocks (a second of its 10 Hz frames) a chunk and a keyframe every 30. Every message is walked and
+every field coded as the residual from its prediction: origins from the line through their last two,
+angles, frames and stats from their last, the entity number from the one before it in the list, the
+frame number from the last plus one, a sound's point from its entity's origin. An entity's flag bytes
+are coded after its number, under that entity's own last flags, so they are learned per entity while
+the bytes still come out in the file's order. A block that does not walk whole is kept as its bytes.
+
+The `se-sequel-pack` lab: the demo pack's own recording (640 blocks, 138 511 bytes) walks whole and
+comes back byte for byte at 40 418 bytes, 29% of the recording and 77% of zstd at level 19; a
+made-up one of a minute packs to 39% of zstd. The format's facts are in the working area
+(`porting/shooters-edge/sequel-demo.md`).
 
 ## Decisions
 

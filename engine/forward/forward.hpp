@@ -31,12 +31,18 @@
 //   each datagram on that socket: dial_read(d, data, size, from, now)   (true: it was the hop's)
 //   once d.state is routed: connect the game to d.first
 //
+// A GAME'S FACE (`ForwardFace`): a game whose own clients and forwarders set a route up their
+// own way (Shooter's Edge's classic face: the route in the connect's user info) plugs its
+// handshake in. The forward still owns the clients, their upstream sockets, the allow list, the
+// limit, the copy and the idle drop; the face sees the datagrams the forward does not take and
+// admits a client with `forward_admit`, connecting it when its own handshake upstream is done.
+//
 // The clock is the caller's: a chain on the simulated network replays to the bit (the `forward`
 // lab).
 //
 // ge:summary Forward: an opaque hop for any game's datagrams, chained by the route in its setup
 // ge:keywords forward forwarder hop route chain proxy-chain better-path allow-list keepalive
-// ge:keywords nat-rebinding cookie amplification stun status dial
+// ge:keywords nat-rebinding cookie amplification stun status dial face forward_admit
 // ge:skill net
 // ge:test tests/forward_test.cpp
 #pragma once
@@ -112,6 +118,12 @@ using OpenUpstream = std::function<bool(net::Transport& out)>;
 
 struct HopClient {
   net::Address from;  // the client, as its datagrams come now
+  // A face's client (admitted by `forward_admit`): the face's handshake state, its own to use.
+  bool face = false;
+  int face_step = 0;
+  int64_t face_next_us = 0, face_number = 0;
+  std::string face_text;
+  bool dropped = false;  // `forward_drop`: freed at the end of the frame
   uint64_t salt = 0;
   net::Address to;   // the next hop or the game server
   std::string name;  // as `alive` and status show it: the client's address
@@ -129,8 +141,29 @@ struct ForwardStats {
   uint64_t bytes_in = 0, bytes_out = 0;  // the client socket's, every datagram
 };
 
+struct Forward;
+
+// The face's hooks (each may be empty). Every one runs inside `forward_update`.
+struct ForwardFace {
+  // A datagram on the client socket the forward does not take (not its own, not a status or STUN
+  // ask) from no connected client, or any connected client's when `client_packet` is empty. True:
+  // the face took it.
+  std::function<bool(Forward&, const uint8_t*, size_t, const net::Address& from, int64_t now_us)>
+      from_client;
+  // A connected client's datagram before it is copied up: true when the face took it (answered
+  // it, or copied it itself).
+  std::function<bool(Forward&, HopClient&, const uint8_t*, size_t, int64_t now_us)> client_packet;
+  // A datagram on a face client's upstream from its destination while it is not yet connected.
+  std::function<void(Forward&, HopClient&, const uint8_t*, size_t, int64_t now_us)> from_upstream;
+  // Every frame, each face client not yet connected: send what is due.
+  std::function<void(Forward&, HopClient&, int64_t now_us)> tick;
+  // Every frame, once, before anything is received.
+  std::function<void(Forward&, int64_t now_us)> frame;
+};
+
 struct Forward {
   ForwardConfig config;
+  ForwardFace face;
   net::Transport* port = nullptr;
   OpenUpstream open_upstream;
   uint64_t secret = 0;
@@ -146,6 +179,20 @@ void forward_init(Forward& f, const ForwardConfig& config, net::Transport& port,
 void forward_update(Forward& f, int64_t now_us);
 // Close every client's upstream socket.
 void forward_close(Forward& f);
+
+// A FACE'S CLIENTS. A client at `from` bound for `to`, not yet connected (the face sets
+// `connected` when its handshake upstream is done): a client already known at `from` is kept (its
+// upstream socket with it) and pointed at `to`. Null when refused: `refused` and `why` say why
+// (the forward full, `to` not allowed, no socket).
+HopClient* forward_admit(Forward& f, const net::Address& from, const net::Address& to,
+                         int64_t now_us, Answer& refused, std::string& why);
+// The client whose datagrams come from `from` (connected or not), or null.
+HopClient* forward_client(Forward& f, const net::Address& from);
+// The client freed at the end of this frame (its upstream socket closed).
+void forward_drop(Forward& f, HopClient& c);
+// `size` bytes to `to` from the client socket (a face's answers), counted.
+void forward_send(Forward& f, const net::Address& to, const uint8_t* data, size_t size,
+                  int64_t now_us);
 // The status protocol a forwarder answers on (net/status.hpp), every forwarder alike.
 uint32_t forward_protocol();
 

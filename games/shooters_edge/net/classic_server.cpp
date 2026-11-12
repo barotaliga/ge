@@ -229,7 +229,8 @@ void handle_oob(ClassicServer& s, const gn::Address& from, const uint8_t* data, 
   pg::Words w;
   pg::tokenize_words(text.substr(0, text.find('\n')).c_str(), w);
   const std::string cmd = pg::word(w, 0);
-  if (cmd == "ping" || (size == 5 && data[4] == 'k')) {
+  // A ping: "ping", or `k` alone or before a newline (a forwarder's probe).
+  if (cmd == "ping" || cmd == "k") {
     const uint8_t l = 'l';
     send_oob(s, from, &l, 1);
   } else if (cmd == "status") {

@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "core/json_write.hpp"
+#include "hub/pages.hpp"
 
 namespace ge::hub {
 
@@ -61,12 +62,28 @@ HttpParse http_parse(std::string_view data, HttpRequest& out) {
   if (out.target.empty() || out.target[0] != '/' || out.version.rfind("HTTP/1.", 0) != 0) {
     return HttpParse::bad;
   }
+  out.host.clear();
+  const std::string_view head = data.substr(0, end);
+  for (size_t at = head.find("\r\n"); at != std::string_view::npos && at < head.size();) {
+    const size_t from = at + 2;
+    const size_t eol = std::min(head.find("\r\n", from), head.size());
+    const std::string_view h = head.substr(from, eol - from);
+    if (h.size() > 5 && (h[0] == 'H' || h[0] == 'h') &&
+        (h.substr(1, 4) == "ost:" || h.substr(1, 4) == "OST:")) {
+      std::string_view v = h.substr(5);
+      while (!v.empty() && v.front() == ' ') v.remove_prefix(1);
+      while (!v.empty() && v.back() == ' ') v.remove_suffix(1);
+      out.host = std::string(v);
+    }
+    at = eol;
+  }
   return HttpParse::ok;
 }
 
 std::string http_response(const Answer& a, bool head_only) {
   std::string r = "HTTP/1.1 " + std::to_string(a.code) + " " + reason(a.code) + "\r\n";
-  r += "Content-Type: " + a.type + "; charset=utf-8\r\n";
+  const bool text = a.type.rfind("text/", 0) == 0 || a.type == "application/json";
+  r += "Content-Type: " + a.type + (text ? "; charset=utf-8\r\n" : "\r\n");
   r += "Content-Length: " + std::to_string(a.body.size()) + "\r\n";
   r += a.max_age_s > 0 ? "Cache-Control: public, max-age=" + std::to_string(a.max_age_s) + "\r\n"
                        : std::string("Cache-Control: no-store\r\n");
@@ -153,12 +170,13 @@ void http_update(HttpServer& s, const Poller& p, const HubSpec& spec, int64_t no
         send(c, r == HttpParse::too_big
                     ? http_error(431, "the request's head is over 8 KB", "send a shorter request")
                     : http_error(400, "the request line is not 'GET /path HTTP/1.1'",
-                                 "send a GET for a path under /v1"));
+                                 "send a GET for / or a path under /v1"));
       } else if (req.method != "GET" && req.method != "HEAD") {
         s.stats.errors++;
         send(c, http_error(405, "the hub answers GET and HEAD only", "send a GET"));
       } else {
-        const Answer a = api_answer(p, spec, req.target, now_us);
+        const Answer a = hub_answer(p, spec, req.target, now_us,
+                                    Site{s.archive, s.unix_s, req.host, s.viewer_dir});
         if (a.events && a.code == 200) {
           const HubNode* n = poller_find(p, a.node);
           c.answered = false;
