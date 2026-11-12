@@ -76,11 +76,25 @@ Vec3f aim_bend_dir(Vec3f dir, Vec3f forward, Vec3f bent);
 // meets a box.
 struct AimMover {
   int ent = 0;
-  Vec3f absmin, absmax;
-  Vec3f velocity;
+  Vec3f absmin{}, absmax{};
+  Vec3f velocity{};
   bool airborne = false;
   float floor = -1e30f;  // the lowest his box's bottom falls to (the ground under him)
+  float fade = 0;        // s: his run across fades by this time constant (0: kept); aim_path.hpp
+  float turn = 0;   // rad/s: his run across turns at this rate, anticlockwise from above (0: none)
+  Vec3f accel{};    // units/s^2 across: his run across speeds up or bends by this (aim_path.hpp)
+  float top = 0;    // units/s: with `accel`, the fastest across he averages (0: no cap)
+  float reach = 0;  // s: his run across is foreseen this far ahead and no further (0: no end)
 };
+// The mover the lead reads from a player's box, velocity and footing, by the rule recorded matches
+// chose (the se-aimlead lab, docs/servers.md § Player aids): his velocity as it is, his jump's arc
+// falling by the gravity to `floor` (the bottom of his box where the ground under him stops it),
+// no run across below `kLeadRun` (a player stepping about is not going anywhere), and his run
+// across foreseen at most `kLeadReach` ahead (on a long flight he turns before it gets there).
+constexpr float kLeadRun = 150;     // units/s across: slower than this is led as standing
+constexpr float kLeadReach = 0.6f;  // s: how far ahead his run across is foreseen
+AimMover lead_mover(int ent, Vec3f absmin, Vec3f absmax, Vec3f velocity, bool airborne,
+                    float floor);
 struct LeadShot {
   Vec3f origin, velocity;
   float gravity = 0;   // units/s^2 the missile falls by; 0 straight

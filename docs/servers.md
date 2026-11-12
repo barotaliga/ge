@@ -368,12 +368,23 @@ nobody else (`engine/server/aids.hpp`, every game's), and says so to everyone.
   under `teamplay` and a line that already hits are never bent onto. The classic mods' servers bend
   the line a mod traces for its shot (`shot_help.hpp`); the sequel's server bends its own lines.
 - **Missiles are led** (`aim_lead`): a rocket, a grenade or a nail he launches is flown ahead (a
-  step 1/128 s, gravity for a thrown one) beside each other player foreseen the same way (running
-  on at his velocity, or falling until the floor under him); when it would pass him by no more
+  step 1/128 s, gravity for a thrown one) beside each other player foreseen the same way; when it would pass him by no more
   than the leeway at the moment it reaches him, it is sent where he will be instead: a straight
   missile at its own speed, a thrown one on the arc that lands on him after the same flight. The
   classic mods' servers lead the missile the loop has just spawned (`Server::missile_watch`); the
   sequel's leads its own launch.
+- **How a player is foreseen** (`lead_mover`) was chosen on recorded matches: the `se-aimlead`
+  lab replays every player's real path in a folder of multiview recordings, fires a rocket, a
+  grenade and a nail at him from where the other players stood, leads each by one rule and flies
+  it against where he really went. Over 13 recordings (155,518 shots a rule) the winner takes his
+  velocity as it is and his jump's arc falling to the ground under him, leads nobody slower than
+  150 units/s across (`kLeadRun`) and foresees his run at most 0.6 s ahead (`kLeadReach`). A rocket
+  hits 23.4% against 19.0% unled (41.6% against 24.8% from 150 to 400 units); a target in the air
+  16.2% against 9.8%; a grenade 12.8% against 11.8%. Means over a window (0.1 s to 1 s), an
+  exponential mean, a fading run, acceleration and the sway's centre all scored lower; the lab
+  reads the air from the path alone (its steps falling by the gravity, the floor at the takeoff),
+  where the server knows his footing. Past 1000 units no lead still scores higher (16.8% against
+  15.3%): a player turns during a long flight.
 - **The weapons it may bend** are the server's (`sv_aimhelp_allow`, `sv_aimhelp_deny`: weapon
   names, spaces or commas between, `*` any characters; deny wins, an empty allow list allows the
   rest), named by the weapon held: `axe sg ssg ng sng gl rl lg` in the classic game, `blaster sg

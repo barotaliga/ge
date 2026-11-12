@@ -558,6 +558,25 @@ void fill_rows(SequelServer& s) {
   mirror_pool(s);
 }
 
+// The pool's trace (`sh::Server::world_trace`): the map and its solid movers as a shot meets them
+// (solid and windows), the hit as the world's row (0 the world, a mover's row) or -1.
+sh::HullTrace pool_trace(const void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
+                         sh::Vec3f end) {
+  const auto& s = *static_cast<const SequelServer*>(ctx);
+  const sh::SequelTrace t = map_trace(s, start, mins, maxs, end, sh::kSqSolid | sh::kSqWindow);
+  sh::HullTrace tr;
+  tr.allsolid = t.all_solid;
+  tr.startsolid = t.start_solid;
+  tr.inopen = !t.all_solid;
+  tr.fraction = t.fraction;
+  tr.endpos = t.all_solid ? start : t.end;
+  tr.plane.normal = t.normal;
+  tr.plane.dist = t.normal.x * t.end.x + t.normal.y * t.end.y + t.normal.z * t.end.z;
+  tr.plane.type = sh::plane_type(t.normal);
+  tr.ent = t.entity;
+  return tr;
+}
+
 // The world's rows mirrored into the loop's pool (`sv.edicts`), which the classic endpoint, the
 // listen's view and the hit tests still read by slot: the same entities, as the world shows them.
 void mirror_pool(SequelServer& s) {
@@ -569,6 +588,8 @@ void mirror_pool(SequelServer& s) {
     s.world_solid = sh::brushes_solid(*s.tracer, 0, {}, {m.mins[0], m.mins[1], m.mins[2]},
                                       {m.maxs[0], m.maxs[1], m.maxs[2]});
     s.sv.brushes = &s.world_solid;
+    s.sv.world_ctx = &s;
+    s.sv.world_trace = &pool_trace;
   }
   s.sv.num_edicts = static_cast<int>(w.entities.size());
   for (size_t i = 0; i < w.entities.size(); i++) {
