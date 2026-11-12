@@ -280,7 +280,7 @@ TEST(classic_game_each_game_s_names_for_the_server_s_settings) {
   // Every game name is a synonym, none a setting of its own: the two never disagree.
   for (const ge::console::Synonym& n : con.cvars().synonyms())
     CHECK_MSG(n.target != nullptr && n.target->name != n.name, n.name);
-  CHECK(con.cvars().synonyms().size() == 34);
+  CHECK(con.cvars().synonyms().size() == 37);
   Server s;  // a classic map leaves the sequel's dmflags alone
   CHECK_MSG(server_open(s, se::classic_game(), c, nullptr, nullptr, error), error);
 }

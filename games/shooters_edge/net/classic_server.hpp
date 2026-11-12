@@ -95,6 +95,15 @@ struct ServerConfig {
   std::string gamedir = "edge";  // the game directory serverdata names
   std::string password, spectator_password;
   std::string rcon_password;  // the remote console's (classic_admin.hpp; empty: none offered)
+  // A remote console line may carry a digest of the password with the time instead of the
+  // password itself (classic_admin.hpp): `rcon_crypt` refuses the plain password; a digest's time
+  // may be `rcon_time_s` from the server's clock either way (0: not checked); at most `rcon_rate`
+  // tries a second are answered (0: no limit). `unix_time` is the server's clock, seconds since
+  // 1970 (null: a digest's time is not checked).
+  bool rcon_crypt = false;  // sv_rconcrypt
+  int rcon_time_s = 60;     // sv_rcontime
+  int rcon_rate = 10;       // sv_rconrate
+  int64_t (*unix_time)() = nullptr;
   // Keys the server info carries beside the rules' (the place, the public address, the owner):
   // browsers list them; an empty value is left out.
   std::vector<std::pair<std::string, std::string>> info;

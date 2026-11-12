@@ -11,6 +11,7 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <iterator>
 #include <memory>
@@ -152,6 +153,10 @@ constexpr gs::GameRule kEndpointRules[] = {
      "N: a player reversing his sideways move gets N commands of none between (0: off)"},
     {"sv_voip", "1: players' voice is relayed to their team (0)"},
     {"sv_voipecho", "1: a speaker hears his own voice back, to test it (0)"},
+    {"sv_rconcrypt",
+     "1: the remote console takes only a hashed password, never the password itself (0)"},
+    {"sv_rcontime", "seconds a hashed remote console line's time may be off, 0..3600 (0: any; 60)"},
+    {"sv_rconrate", "remote console tries answered a second, 0..1000 (0: no limit; 10)"},
     {"maxfps", "the most moves a second a client sends, told in the server info (77)"},
     {"sv_download", "0: no file is offered to a client that lacks one (1)"},
     {"sv_download_skins", "0: no skins/ file is offered (1)"},
@@ -245,6 +250,9 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_kickuserinfospamtime", "sv_infoflood", 1},
     {"sv_antilag_no_pred", "sv_antilagexact"},
     {"sv_voip_echo", "sv_voipecho"},
+    {"sv_crypt_rcon", "sv_rconcrypt"},
+    {"sv_timestamplen", "sv_rcontime"},
+    {"sv_rconlim", "sv_rconrate"},
 };
 
 // The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
@@ -353,6 +361,9 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
       !endpoint_flag(c, "sv_voipecho", cfg.voice_echo, error) ||
       !endpoint_flag(c, "sv_antilagexact", cfg.antilag_exact, error) ||
       !endpoint_int(c, "sv_safestrafe", 0, 100, safe_strafe, error) ||
+      !endpoint_flag(c, "sv_rconcrypt", cfg.rcon_crypt, error) ||
+      !endpoint_int(c, "sv_rcontime", 0, 3600, cfg.rcon_time_s, error) ||
+      !endpoint_int(c, "sv_rconrate", 0, 1000, cfg.rcon_rate, error) ||
       !endpoint_int(c, "maxfps", 20, 1000, cfg.maxfps, error) ||
       !endpoint_int(c, "sv_download", 0, 1, all, error) ||
       !endpoint_int(c, "sv_download_skins", 0, 1, skins, error) ||
@@ -663,6 +674,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
   g->cfg.rcon_password = c.rcon_password;
+  g->cfg.unix_time = [] { return static_cast<int64_t>(std::time(nullptr)); };  // hashed rcon
   g->cfg.seed = c.seed;
   g->cfg.timeout_s = c.timeout_s;
   g->cfg.flood_msg = c.floodprot_msg;

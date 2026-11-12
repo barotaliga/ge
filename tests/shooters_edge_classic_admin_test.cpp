@@ -308,10 +308,41 @@ TEST(rcon_answers_at_most_its_tries_a_second) {
   cn::ServerConfig cfg;
   cfg.rcon_password = "secret";
   CHECK(rig.start(cfg));
-  for (int i = 0; i < cn::kRconTriesPerSecond + 5; i++) rig.oob("rcon wrong users\n");
+  for (int i = 0; i < cfg.rcon_rate + 5; i++) rig.oob("rcon wrong users\n");
   const std::vector<std::string> a = rig.answers();
   int bad = 0;
   for (const std::string& s : a) bad += has(s, "Bad rcon_password.") ? 1 : 0;
-  CHECK(bad == cn::kRconTriesPerSecond);
-  CHECK(rig.server.counts.rcon_refused == cn::kRconTriesPerSecond + 5);
+  CHECK(bad == cfg.rcon_rate);
+  CHECK(rig.server.counts.rcon_refused == cfg.rcon_rate + 5);
+}
+
+// sv_rconcrypt: a hashed password field (the SHA-1 of the password, the time and the line's words,
+// then the time) runs the line without the password travelling; a stale time, a line other than
+// the one hashed, or with sv_rconcrypt 1 the plain password, are refused.
+namespace {
+int64_t fixed_clock() { return 1800000000; }
+}  // namespace
+
+TEST(rcon_takes_a_hashed_password_and_sv_rconcrypt_requires_it) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.rcon_password = "secret";
+  cfg.rcon_crypt = true;
+  cfg.unix_time = &fixed_clock;
+  CHECK(rig.start(cfg));
+  CHECK(rig.play());
+  rig.oob("rcon secret users\n");  // the plain password: refused
+  CHECK(any_has(rig.answers(), "Bad rcon_password."));
+  const std::string ok = cn::rcon_digest_field("secret", "users", fixed_clock() + 30);
+  CHECK(ok.size() == 56);
+  rig.oob("rcon " + ok + " users\n");
+  CHECK(any_has(rig.answers(), "2 total users"));
+  const std::string stale = cn::rcon_digest_field("secret", "users", fixed_clock() - 61);
+  rig.oob("rcon " + stale + " users\n");
+  CHECK(any_has(rig.answers(), "Bad rcon_password."));
+  rig.oob("rcon " + ok + " status\n");  // a line other than the one hashed
+  CHECK(any_has(rig.answers(), "Bad rcon_password."));
+  CHECK(rig.server.counts.rcon_run == 1);
+  CHECK(rig.server.counts.rcon_refused == 3);
 }
