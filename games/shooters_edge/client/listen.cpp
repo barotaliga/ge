@@ -27,6 +27,7 @@
 #include "shooters_edge/server/classic_save.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 
 // The baseline mod's sources, built into the game (CMakeLists.txt: ge_embed_binary), in the
 // order its project file compiles them.
@@ -862,11 +863,17 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     s.ground = (me.flags & sh::kFlagOnGround) != 0 ? 0 : -1;
     s.type = sh::move_type_of(me, false);
     s.waterlevel = me.waterlevel;
+    // The move's air law: the sequel's on its rules (a map of brushes), else the classic one.
+    sh::SpeedJumpRules air = sh::kClassicJumpRules;
+    if (const sv::SequelServer* sq = sv::sequel_of(*l.rules)) {
+      s = sv::sequel_aid_state(*sq, 0);
+      air = sh::sequel_jump_rules(sv::sequel_air_accelerate(*sq));
+    }
     // His own share when the server granted him one (`*speedjump`, net/classic_admin.hpp).
     const std::string granted = sv::info_value(l.server->clients[0].userinfo, "*speedjump");
     const float share = granted.empty() ? l.server->sv.set.move.speedjump
                                         : static_cast<float>(std::atof(granted.c_str()));
-    cmd = sh::assisted_command(cmd, s, share, l.speedjump_view, l.jump_aid);
+    cmd = sh::assisted_command(cmd, s, share, l.speedjump_view, l.jump_aid, air);
   } else {
     l.jump_aid = {};
   }
@@ -925,9 +932,18 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     l.view = {l.campaign.angles.x, l.campaign.angles.y, 0};
     l.campaign.turned = false;
   }
-  // The mod's forced view (a spawn, a teleport) leaves the player's angles off the ones sent.
+  // The mod's forced view (a spawn, a teleport) leaves the player's angles off the ones sent: by
+  // more than the sequel's rules round a sent angle to (65536ths of a turn, kept within -180..180),
+  // so a view they only rounded stays the player's own (and his easy jump's aim with it).
   const sh::Edict& me = s.sv.edicts[1];
-  l.forced = s.clients[0].active && (me.v_angle.x != cmd.angles.x || me.v_angle.y != cmd.angles.y);
+  const auto moved = [](float a, float b) {
+    double d = static_cast<double>(a) - b;
+    while (d > 180) d -= 360;
+    while (d < -180) d += 360;
+    return d > 0.01 || d < -0.01;
+  };
+  l.forced = s.clients[0].active &&
+             (moved(me.v_angle.x, cmd.angles.x) || moved(me.v_angle.y, cmd.angles.y));
   if (l.forced) l.view = {me.v_angle.x, me.v_angle.y, 0};
 }
 
