@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "core/json_write.hpp"
+#include "hub/pages.hpp"
 
 namespace ge::hub {
 
@@ -153,12 +154,12 @@ void http_update(HttpServer& s, const Poller& p, const HubSpec& spec, int64_t no
         send(c, r == HttpParse::too_big
                     ? http_error(431, "the request's head is over 8 KB", "send a shorter request")
                     : http_error(400, "the request line is not 'GET /path HTTP/1.1'",
-                                 "send a GET for a path under /v1"));
+                                 "send a GET for / or a path under /v1"));
       } else if (req.method != "GET" && req.method != "HEAD") {
         s.stats.errors++;
         send(c, http_error(405, "the hub answers GET and HEAD only", "send a GET"));
       } else {
-        const Answer a = api_answer(p, spec, req.target, now_us);
+        const Answer a = hub_answer(p, spec, req.target, now_us);
         if (a.events && a.code == 200) {
           const HubNode* n = poller_find(p, a.node);
           c.answered = false;

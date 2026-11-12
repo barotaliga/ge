@@ -184,6 +184,16 @@ browser's own GPU.
   1on1 or ffa), the score screen, the frag and time limits and every client (bots and spectators
   flagged). `shooters_edge_server +set sv_master <hub>` appears on `shooters_edge_hub`.
 
+- **M56c** (`hub-pages`): `pages.hpp` writes the pages from the same index, as plain HTML with
+  one stylesheet and no script, refreshed every 5 s by a meta refresh. `/` is the Servers page: a
+  card for each server with anyone on it in the interest rule's order (the map and phase with the
+  time left, the name, mode, playing over slots, bots, country, the scoreboard with teams first,
+  spectators and watchers, and Join, Spectate and Watch links in the game's scheme), the mode
+  filters (`/?mode=`) above and the empty servers listed after. `/players` lists every person, people
+  before bots; `/scoreboard/{address}` is one server's scoreboard for a streamer's overlay;
+  `/style.css` is dark by default and light when the reader's system asks. Every text a server sends
+  is escaped. `hub_answer` routes a path to the API or a page.
+
 Phase 2 and later depend on the TV layer's header and meta track (M57a, the replay file v2, and M57b, the native TV node); the
 master can land before them, since a dedicated server's heartbeat needs nothing of TV.
 
