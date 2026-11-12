@@ -43,7 +43,7 @@ TEST(every_cue_plays_from_the_game_s_recordings) {
     CHECK_MSG(sounds.play(c, game, files, 0.7f), std::string(cl::menu_sound_name(c)));
   CHECK(sounds.stats().played == 5 && sounds.stats().missing == 0);
   CHECK(sounds.sounding());
-  std::vector<float> out(2 * 256);
+  std::vector<float> out(size_t{2} * 256);
   float peak = 0;
   for (int block = 0; block < 8; block++) {
     synth.render(out.data(), 256);
