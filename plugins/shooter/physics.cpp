@@ -272,6 +272,7 @@ void run_new_missile(Server& sv) {
   sv.g.newmis = 0;
   if (n < 0 || n >= sv.num_edicts || ent(sv, n).free) return;
   sv.counts.new_missiles++;
+  if (sv.missile_watch != nullptr) sv.missile_watch(sv.missile_watch_ctx, sv, n);
   run_entity(sv, n, kNewMissileDt);
 }
 

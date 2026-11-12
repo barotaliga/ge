@@ -241,6 +241,10 @@ void cmd_begin(ClassicServer& s, int slot) {
   for (ServerFrame& f : c.frames) f = ServerFrame{};
   c.delta_byte = -1;
   s.log.push_back("begin " + std::to_string(slot) + " " + c.name);
+  if (!c.aids_told) {  // a player who joins is told every aid granted (classic_admin.hpp)
+    c.aids_told = true;
+    classic_tell_aids(s, slot);
+  }
 }
 
 void cmd_setinfo(ClassicServer& s, int slot, const std::string& key, const std::string& value) {

@@ -185,7 +185,7 @@ void run(gl::Lab& lab) {
   for (const Said& s : r.said)
     for (const std::string& line : s.answer) {
       if (line.find("Bad rcon_password.") != std::string::npos) refused++;
-      if (line.find("0.8 granted") != std::string::npos) granted_rows++;
+      if (line.find("easy jump (granted 0.8") != std::string::npos) granted_rows++;
     }
   if (r.said.size() >= 2)
     for (const std::string& line : r.said[1].answer)
@@ -234,13 +234,13 @@ void run(gl::Lab& lab) {
   lab.shot({"console",
             "THE ADMINISTRATOR'S CONSOLE",
             "anna runs the server's remote console from her window: a wrong password refused, "
-            "`status` listing every player and bot by user id with their ping, address and easy "
-            "jump, `speedjump " +
+            "`status` listing every player and bot by user id with their ping, address and "
+            "aids, `speedjump " +
                 std::to_string(r.bert_id) +
                 " on` granting bert alone the easy jump (pm_speedjump stays 0 for everyone else), "
                 "and `status` again showing it granted. Everyone is told.",
-            "bert's row reads `asks` before the grant and `0.8 granted` after; the bots' "
-            "address column reads `bot`",
+            "bert's aids read easy jump (not allowed, cl_speedjump 1) before the grant and easy "
+            "jump (granted 0.8, cl_speedjump 1) after; the bots' address column reads bot",
             {{"map", lab.arg("map")}, {"bots", lab.arg("bots")}}},
            shot);
 }

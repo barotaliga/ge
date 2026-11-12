@@ -223,6 +223,14 @@ void Console::dispatch(Entry& e) {
       const std::string why = set_result_text(r, c->name);
       if (!why.empty()) error(why, "");
     }
+  } else if (const Synonym* syn = cvars_.synonym(name)) {  // a part of another setting
+    if (args.size() == 1) {
+      print("\"" + syn->name + "\" is \"" + cvars_.synonym_value(*syn) + "\" (part of " +
+            syn->target->name + " \"" + syn->target->value + "\")");
+    } else {
+      const std::string why = set_result_text(cvars_.set(name, args[1], e.source), syn->name);
+      if (!why.empty()) error(why, "");
+    }
   } else if (unknown_ && unknown_(args)) {
     // the host's own command
   } else {
