@@ -4,7 +4,7 @@
 //
 // - TOP: the floor from above (the map's point hull traced down every pixel; `--clip-top=<z>` cuts
 //   the map away over a height and steps through every roof under it, so a level under another
-//   is seen), coloured by height
+//   is seen; the WIRE drops the edges over it too), coloured by height
 //   with a contour every 16 units, water tinted blue, solid dark; over it the nav's nodes and links
 //   by kind, the items by their call ("ya", "mh"), the doors, plats, buttons (a SHOT button ringed)
 //   and teleporters as boxes with each teleporter's destination, the spawns, and `--route`;
@@ -485,7 +485,9 @@ gl::Picture top_picture(const Scene& s, int px_size) {
 gl::Picture wire_corner(const Scene& s, std::span<const la::WireEdge> all, double yaw) {
   std::vector<la::WireEdge> edges;
   for (const la::WireEdge& e : all)
-    if (inside_box(s, e.a) && inside_box(s, e.b)) edges.push_back(e);
+    if (inside_box(s, e.a) && inside_box(s, e.b) &&
+        (std::isnan(s.clip_top) || (e.a.z <= s.clip_top && e.b.z <= s.clip_top)))
+      edges.push_back(e);  // `--clip-top`: the edges over it cut away (a roof, a level above)
   la::WireView v;
   v.yaw = yaw;
   v.elevation = 35;
