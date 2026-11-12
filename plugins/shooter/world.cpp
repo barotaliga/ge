@@ -163,6 +163,18 @@ HullTrace point_trace(const MoveWorld& world, Vec3f start, Vec3f end) {
   return tr;
 }
 
+HullTrace solid_box_trace(const Solid& s, Vec3f start, Vec3f mins, Vec3f maxs, Vec3f end) {
+  HullTrace tr =
+      brushes_trace(s, start - s.origin, end - s.origin, mins, maxs, kSqSolid | kSqWindow);
+  if (tr.allsolid)
+    tr.endpos = start;
+  else
+    tr.endpos = tr.endpos + s.origin;
+  return tr;
+}
+
+int solid_point_contents(const Solid& s, Vec3f p) { return solid_contents(s, p); }
+
 Solid brushes_solid(ge::brush::BrushTracer& tracer, uint32_t model, Vec3f origin, Vec3f mins,
                     Vec3f maxs) {
   Solid s;
