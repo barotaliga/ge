@@ -48,6 +48,8 @@ constexpr double kCalmAbout = 360;  // and for an about-face
 constexpr double kBackTurn = 360;
 // `paceback`: the hand's stroke back to the way this much slower than its aim's (Fitts time).
 constexpr double kBackPace = 2.0;
+// `retreatrun`: a player coming on faster than this is chasing, units/s.
+constexpr double kChasing = 100;
 // `noback`: roaming, a player more than this far off the way walked is not aimed at, degrees.
 constexpr float kFrontOnly = 100;
 
@@ -392,6 +394,17 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     const double dx = c->seen.x - eye.x, dy = c->seen.y - eye.y;
     const double to = core::libm::atan2(dy, dx) * (180 / core::kPi);
     if (std::fabs(wrap(static_cast<float>(to) - pilot_yaw)) > kFrontOnly) fresh = false;
+  }
+  // (`retreatrun`, M18r.md 0w) Backing off, one off behind the way walked who is not coming on is
+  // not fired at: the bot runs for what it went for, facing its way (the back key is for a
+  // chaser).
+  if (fresh && b.run_front_only && walking_mode(b.pilot.pilot.mode)) {
+    const double dx = c->seen.x - eye.x, dy = c->seen.y - eye.y;
+    const double to = core::libm::atan2(dy, dx) * (180 / core::kPi);
+    const double d = std::sqrt(dx * dx + dy * dy);
+    const double coming = d > 1 ? -(c->course.x * dx + c->course.y * dy) / d : 0;
+    if (coming < kChasing && std::fabs(wrap(static_cast<float>(to) - pilot_yaw)) > kFrontOnly)
+      fresh = false;
   }
   // (`letgo`, M18r.md 0w) The hold on one lost from sight goes once he lies off behind
   // the way walked: a person turns back to his way, not walks it backwards watching a corner.
