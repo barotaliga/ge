@@ -132,8 +132,9 @@ struct ServerReplay {
 // (console/cvar.hpp) changes that word and keeps the others.
 struct GameRule {
   const char* name;
-  const char* help;                // what it does, with its unit
+  const char* help;                // what it does: one sentence (console/words.hpp)
   const char* fallback = nullptr;  // its default, when not empty
+  const char* values = nullptr;    // what each value does (console/words.hpp)
 };
 
 // A GAME'S OWN NAME for one of the core's settings (`ServerGame::names`): the name its configs,

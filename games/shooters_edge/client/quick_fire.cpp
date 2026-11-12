@@ -39,46 +39,54 @@ void add_quick_cvars(ge::console::Console& con, QuickFire& q) {
   con.cvars().bind({.name = "cl_quickweapon",
                     .fallback = "0",
                     .flags = kArchive,
-                    .help = "1: +attack fires the best weapon of cl_quickweapon_prio you carry, "
-                            "then switches back to cl_quickweapon_default",
-                    .kind = CvarKind::boolean},
+                    .help = "Whether +attack fires the best weapon of cl_quickweapon_prio you "
+                            "carry, then switches back.",
+                    .kind = CvarKind::boolean,
+                    .values = "0: +attack fires what is in hand (the default); 1: quick fire, "
+                              "switching back to cl_quickweapon_default"},
                    &q.on);
-  con.cvars().bind({.name = "cl_quickweapon_prio",
-                    .fallback = "7 8 5 6 3 2 4 1",
-                    .flags = kArchive,
-                    .help = "the weapons +attack fires with cl_quickweapon 1, best first, by "
-                            "weapon key (1 melee .. 8 beam gun)",
-                    .kind = CvarKind::text},
-                   &q.prio);
+  con.cvars().bind(
+      {.name = "cl_quickweapon_prio",
+       .fallback = "7 8 5 6 3 2 4 1",
+       .flags = kArchive,
+       .help = "The weapons +attack fires with quick fire on, best first, by weapon key.",
+       .kind = CvarKind::text,
+       .values = "TEXT: weapon keys with spaces between, 1 the melee weapon to 8 the beam gun (7 8 "
+                 "5 6 3 2 4 1 the default)"},
+      &q.prio);
   con.cvars().bind({.name = "cl_quickweapon_prio2",
                     .fallback = "8 3 2",
                     .flags = kArchive,
-                    .help = "the weapons +attack2 fires, best first, by weapon key (empty: "
-                            "+attack2 fires what is in hand)",
-                    .kind = CvarKind::text},
+                    .help = "The weapons +attack2 fires, best first, by weapon key.",
+                    .kind = CvarKind::text,
+                    .values = "\"\": +attack2 fires what is in hand; TEXT: weapon keys with spaces "
+                              "between (8 3 2 the default)"},
                    &q.prio2);
   con.cvars().bind({.name = "cl_quickweapon_default",
                     .fallback = "2 1",
                     .flags = kArchive,
-                    .help = "the weapon a quick fire switches back to: the first of these you "
-                            "carry with ammunition",
-                    .kind = CvarKind::text},
+                    .help = "The weapons a quick fire switches back to, by weapon key, the first "
+                            "you carry with ammunition.",
+                    .kind = CvarKind::text,
+                    .values = "TEXT: weapon keys with spaces between (2 1 the default)"},
                    &q.fallback);
-  con.cvars().bind({.name = "cl_quickweapon_preview",
-                    .fallback = "1",
-                    .flags = kArchive,
-                    .help = "1: with cl_quickweapon 1, the weapon +attack would fire is drawn "
-                            "see-through in hand, turning solid as it fires",
-                    .kind = CvarKind::boolean},
-                   &q.preview);
   con.cvars().bind(
-      {.name = "cl_quickweapon_hide",
-       .fallback = "0",
+      {.name = "cl_quickweapon_preview",
+       .fallback = "1",
        .flags = kArchive,
-       .help = "1: with cl_quickweapon 1 and the preview off, no weapon is drawn while "
-               "+attack would switch to another",
-       .kind = CvarKind::boolean},
-      &q.hide);
+       .help = "Whether the weapon +attack would fire is drawn see-through in hand, with quick "
+               "fire on.",
+       .kind = CvarKind::boolean,
+       .values = "0: not drawn; 1: drawn see-through, turning solid as it fires (the default)"},
+      &q.preview);
+  con.cvars().bind({.name = "cl_quickweapon_hide",
+                    .fallback = "0",
+                    .flags = kArchive,
+                    .help = "Whether no weapon is drawn while +attack would switch to another, "
+                            "with quick fire on and its preview off.",
+                    .kind = CvarKind::boolean,
+                    .values = "0: the weapon in hand is drawn (the default); 1: none is drawn"},
+                   &q.hide);
 }
 
 const sh::QuickSettings& quick_settings(QuickFire& q) {

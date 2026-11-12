@@ -51,32 +51,35 @@ std::string screenshot_stem(std::string_view prefix, const std::tm& t) {
 }
 
 void add_screenshot_cvars(console::Cvars& cvars, ScreenshotSettings& s) {
-  cvars.bind({.name = "scr_format",
-              .fallback = "jpg",
-              .flags = console::kArchive,
-              .help = "the screenshot's format: png (lossless, largest), jpg, avif (smallest; "
-                      "falls back to jpg without the encoders) or heic (the platform's encoder; "
-                      "falls back to avif)",
-              .kind = console::CvarKind::text},
-             &s.format);
+  cvars.bind(
+      {.name = "scr_format",
+       .fallback = "jpg",
+       .flags = console::kArchive,
+       .help = "The screenshot's format.",
+       .kind = console::CvarKind::text,
+       .values =
+           "png: lossless, the largest; jpg: smaller, a little lost (the default); avif: the "
+           "smallest, jpg without the encoders; heic: the platform's encoder, avif without it"},
+      &s.format);
   cvars.bind({.name = "scr_quality",
               .fallback = "90",
               .flags = console::kArchive,
-              .help = "the screenshot's quality for jpg, avif and heic: 1 smallest .. 100 best",
+              .help = "The screenshot's quality for jpg, avif and heic.",
               .kind = console::CvarKind::integer,
               .min = 1,
-              .max = 100},
+              .max = 100,
+              .values = "1..100: 1 the smallest to 100 the best (90 the default)"},
              &s.quality);
-  cvars.bind(
-      {.name = "scr_chroma",
-       .fallback = "444",
-       .flags = console::kArchive,
-       .help = "a jpg screenshot's colour detail: 444 full (sharp coloured text), 420 halved "
-               "each way (about a quarter smaller); avif and heic are always 420",
-       .kind = console::CvarKind::integer,
-       .min = 420,
-       .max = 444},
-      &s.chroma);
+  cvars.bind({.name = "scr_chroma",
+              .fallback = "444",
+              .flags = console::kArchive,
+              .help = "A jpg screenshot's colour detail, avif and heic always halving it.",
+              .kind = console::CvarKind::integer,
+              .min = 420,
+              .max = 444,
+              .values = "420: halved each way, about a quarter smaller; 444: full, sharp coloured "
+                        "text (the default)"},
+             &s.chroma);
 }
 
 void add_screenshot_command(console::Console& console, Screenshots& writer,
