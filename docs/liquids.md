@@ -231,8 +231,8 @@ Each slime is a turbid volume:
   farthest depth (the bound a cull needs), while a ray needs the nearest to skip empty space.
   `Liquids::reflections` turns it off.
 - **The heat shimmer.** The air over lava bends a ray through its rising cells
-  (`LavaLook::shimmer`, 0.8 mrad a metre of hot air by default). The bend is summed along the ray
-  through a layer 3 m deep, strongest at the surface, falling off over a metre. Lava's own surface
+  (`LavaLook::shimmer`, 2 mrad a metre of hot air by default). The bend is summed along the ray
+  through a layer 3 m deep, strongest at the surface, falling off over half a metre (`kHeatScale`). Lava's own surface
   is looked up where its bent ray lands. What is seen across the lake is drawn again through the
   bent rays by a box over the body, drawn after the surfaces.
 - **The crust broken.** `break_liquid_crust(liquids, body, x, z, radius, t)` records that
@@ -293,8 +293,8 @@ cover is not lit.
 - **Lava's heat haze** (`LavaLook::shimmer`, rad a metre at the melt). The hot cells rising over
   the melt bend a ray by the hot air's weight along it times the cells' push (two octaves of a
   two-channel value noise, both components from each lattice hash, rising with the air at about a metre a second) read once at the ray's lowest stretch.
-  4 mrad a metre at the melt: across a lake from 1.6 m over it the walls beyond waver by a few
-  pixels, most just over the melt. What lies across the lake is drawn again through the bent ray,
+  2 mrad a metre at the melt, the hot air e-folding over half a metre (`kHeatScale`): across a
+  lake from 1.6 m over it the walls beyond waver by a pixel or two, only just over the melt. What lies across the lake is drawn again through the bent ray,
   and the lava's own surface is looked up where its bent ray lands. The gas is laid over the bent
   scene in the same fragment (opaque there), or alone over the melt (premultiplied).
 - **The gas over it** (`FumeLook`). Lava has a thin soot (0.025 per metre at the surface, a metre's
