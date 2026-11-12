@@ -93,6 +93,22 @@ std::span<const uint8_t> game_palette(const SearchPath& path, std::vector<uint8_
   return ge::classicenhance::palette_of(content, find_file(path, content.palette, store));
 }
 
+std::span<const uint8_t> map_lit(const SearchPath& path, std::string_view map,
+                                 std::vector<uint8_t>& store, std::string* found,
+                                 const ge::classicenhance::Profile& content) {
+  std::string beside = ge::classicenhance::asset_path(content.maps, map);
+  if (const size_t dot = beside.rfind('.'); dot != std::string::npos) beside.resize(dot);
+  beside += ".lit";
+  const std::string kept = "lits/" + std::string(map) + ".lit";
+  for (const std::string& at : {beside, kept}) {
+    const std::span<const uint8_t> bytes = find_file(path, at, store);
+    if (bytes.empty()) continue;
+    if (found != nullptr) *found = at;
+    return bytes;
+  }
+  return {};
+}
+
 std::vector<std::string> map_names(const SearchPath& path,
                                    const ge::classicenhance::Profile& content) {
   const ge::classicenhance::AssetKind& maps = content.maps;

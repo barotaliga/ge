@@ -278,9 +278,11 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     }
   }
 
-  d.cubes = depth_array(device, "bsp.cubes", kCubeSize, kMaxShadowed * 6);
-  for (uint32_t k = 0; k < kMaxShadowed * 6; ++k) d.cube_layers.push_back(layer_view(d.cubes, k));
-  d.cubes_view = array_view(d.cubes, kMaxShadowed * 6);
+  d.cube_slots = std::min(kMaxShadowed, int(device.limits.maxTextureArrayLayers / 6));
+  const uint32_t cube_layers = uint32_t(d.cube_slots) * 6;
+  d.cubes = depth_array(device, "bsp.cubes", kCubeSize, cube_layers);
+  for (uint32_t k = 0; k < cube_layers; ++k) d.cube_layers.push_back(layer_view(d.cubes, k));
+  d.cubes_view = array_view(d.cubes, cube_layers);
   {
     // One atlas, a row a light and a column a face, so a frame draws them all in one pass.
     wgpu::TextureDescriptor desc{};
@@ -537,7 +539,7 @@ static bool same_job(const GpuJob& a, const GpuJob& b) {
 void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, const Options& o) {
   const Scene& s = *d.scene;
   d.options = o;
-  d.options.shadowed = std::clamp(o.shadowed, 0, kMaxShadowed);
+  d.options.shadowed = std::clamp(o.shadowed, 0, d.cube_slots);
   const bool lights = o.mode == Mode::v2 && o.lighting == Lighting::lights;
   // The lights near enough to the eye to reach what it sees, nearest first.
   struct Pick {
@@ -686,7 +688,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   for (const size_t c : casters) {
     const std::array<float, 4> key = key_of(d.frame_lights[c]);
     int slot = -1;
-    for (int k = 0; k < kMaxShadowed && slot < 0; ++k)
+    for (int k = 0; k < d.cube_slots && slot < 0; ++k)
       if (d.slot_held[size_t(k)] && !taken[size_t(k)] && d.slot_key[size_t(k)] == key) slot = k;
     if (slot < 0) {
       homeless.push_back(c);
@@ -700,7 +702,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   d.shadows_waiting = 0;
   // The first frame after the map is made draws every cube: it is the load's, not play's (unless
   // the caller warms the map up over frames of its own: `first_all` off).
-  const size_t budget = d.shadow_frame == 1 && o.first_all ? size_t(kMaxShadowed)
+  const size_t budget = d.shadow_frame == 1 && o.first_all ? size_t(d.cube_slots)
                                                            : size_t(std::max(o.fresh_cubes, 0));
   for (const size_t c : homeless) {
     if (d.fresh_slots.size() >= budget) {
@@ -708,11 +710,11 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       continue;
     }
     int slot = -1;
-    for (int k = 0; k < kMaxShadowed; ++k) {
+    for (int k = 0; k < d.cube_slots; ++k) {
       if (taken[size_t(k)]) continue;
       if (slot < 0 || d.slot_used[size_t(k)] < d.slot_used[size_t(slot)]) slot = k;
     }
-    taken[size_t(slot)] = true;  // casters <= kMaxShadowed: one is always free
+    taken[size_t(slot)] = true;  // casters <= cube_slots: one is always free
     d.slot_key[size_t(slot)] = key_of(d.frame_lights[c]);
     d.slot_held[size_t(slot)] = true;
     d.slot_used[size_t(slot)] = d.shadow_frame;
@@ -720,7 +722,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     d.frame_lights[c].info[0] = float(slot * 6);
   }
   // Every held slot's six faces, so the jobs buffer always says what its cubes hold.
-  for (int k = 0; k < kMaxShadowed; ++k) {
+  for (int k = 0; k < d.cube_slots; ++k) {
     if (!d.slot_held[size_t(k)]) continue;
     const std::array<float, 4>& key = d.slot_key[size_t(k)];
     for (int f = 0; f < 6; ++f) {

@@ -387,6 +387,15 @@ Light motor_light(const double at[3], const double dir[3], uint32_t seed, double
   return l;
 }
 
+Light grenade_glow(const double at[3], const float rgb[3], int entity) {
+  Light l;
+  for (int k = 0; k < 3; ++k) l.pos[k] = at[k];
+  l.radius = kGrenadeGlowM;
+  for (int k = 0; k < 3; ++k) l.colour[k] = kGrenadeGlowLevel * rgb[k];
+  l.entity = entity;
+  return l;
+}
+
 gr::MuzzleFire exhaust(const double p[3], const double dir[3], uint32_t seed, double now_s) {
   gr::MuzzleFire f;
   f.shot.look = &exhaust_look();

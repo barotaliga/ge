@@ -20,6 +20,7 @@
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "progs/text.hpp"
+#include "shooters_edge/server/rjump_rules.hpp"
 #include "shooters_edge/server/sequel_campaign.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
@@ -90,10 +91,19 @@ void register_cvars(SequelServer& s) {
                .fallback = "",
                .flags = con::kServer,
                .help = "the maps a level's end goes through in turn (spaces or commas)"});
+  s.cvars.add({.name = "k_midair",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "1: midair in deathmatch, rockets that count only on a player in the air"});
+  s.cvars.add({.name = "k_midair_minheight",
+               .fallback = "1",
+               .flags = con::kServer,
+               .help = "midair: the least height a hit counts at, 0..4 (64, 128, 256, 512, 1024)"});
   s.cvars.add({.name = "sv_airaccelerate",
                .fallback = "0",
                .flags = con::kServer,
                .help = "the air move's acceleration in deathmatch; 0 the walking rule"});
+  add_rjump_settings(s.cvars);  // sv_rjump, sv_rrjump (rjump_rules.hpp)
   const std::string share =
       ge::core::num::to_string(num::round(double(s.opt.speedjump) * 1000) / 1000);
   s.cvars.add({.name = "pm_speedjump",
@@ -213,6 +223,7 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   p.ground = -1;
   fight_spawn(s, slot);
   campaign_body(s, slot, respawn);
+  fight_midair_kit(s, slot);
 }
 
 int skill(const SequelServer& s) {
@@ -223,6 +234,7 @@ int skill(const SequelServer& s) {
 // with infinite ammo (8192) the ammo and the BFG.
 bool dm_left_out(const SequelServer& s, int item) {
   if (item < 0 || !deathmatch(s)) return false;
+  if (fight_midair(s)) return true;  // nothing lies on the map in midair
   const SqItem& it = kSqItems[item];
   const std::string_view name = it.classname;
   return (fight_dmflag(s, 1) && it.kind == SqKind::health) ||
@@ -386,6 +398,7 @@ void start_intermission(SequelServer& s) {
   s.intermission_at = s.level_time;
   if (deathmatch(s) || s.cvars.find("coop")->on())  // the scores, for everyone
     for (const std::string& l : fight_scores(s)) fight_print(s, -1, l + "\n");
+  for (const std::string& l : fight_midair_report(s)) fight_print(s, -1, l);
   const SequelEntity* spot = nullptr;
   for (const char* name : {"info_player_intermission", "info_player_start"}) {
     for (const SequelEntity& e : s.entities)
@@ -459,8 +472,12 @@ void rules_frame(SequelServer& s) {
     SequelPlayer& p = s.players[i];
     if (!s.clients[i].active || s.clients[i].spectator || p.alive) continue;
     if (s.level_time < p.died_at + kRespawnAfter - 0.001) continue;
-    // By pressing attack, or at once with `dmflags` 1024 (forced respawn).
-    if (deathmatch(s) && ((p.buttons & sh::kButtonAttack) != 0 || fight_dmflag(s, 1024)))
+    // By pressing attack, or at once with `dmflags` 1024 (forced respawn); by himself after 2 s in
+    // midair.
+    const bool by_himself =
+        fight_midair(s) && s.level_time >= p.died_at + sh::kMidairRespawn - 0.001;
+    if (deathmatch(s) &&
+        ((p.buttons & sh::kButtonAttack) != 0 || fight_dmflag(s, 1024) || by_himself))
       spawn_player(s, i, true);
   }
 }
@@ -697,10 +714,41 @@ void sq_drop(void* r, int slot) {
   if (s.map != nullptr) fill_rows(s);
 }
 
+// The rocket jump helper's question (rjump_rules.hpp): the launcher chosen when it is not in
+// hand (its raising is waited for), and fired by the first command of a frame with the hand ready.
+sh::RjumpReady sq_rocket_ready(void* r, int slot, sh::MoveCmd& /*cmd*/, std::string& why) {
+  SequelServer& s = sq(r);
+  SequelPlayer& p = s.players[slot];
+  const int rl = int(SqWeapon::rocket_launcher);
+  if (!p.alive || s.clients[slot].spectator || s.intermission_at > 0) return sh::RjumpReady::never;
+  if (!sq_holds(p.body, rl)) {
+    why = "You have no rocket launcher.\n";
+    return sh::RjumpReady::never;
+  }
+  if (!sq_can_fire(p.body, rl)) {
+    why = "You have no rockets.\n";
+    return sh::RjumpReady::never;
+  }
+  if (p.hand.weapon != rl || (p.hand.pending >= 0 && p.hand.pending != rl)) {
+    if (p.hand.pending != rl) fight_choose(s, slot, rl);
+    return sh::RjumpReady::soon;
+  }
+  if (p.hand.state != SqHandState::ready || p.stepped) return sh::RjumpReady::soon;
+  return sh::RjumpReady::now;
+}
+
 void sq_frame(void* r, const sh::Packet* packets, int count) {
   SequelServer& s = sq(r);
   if (s.map == nullptr || s.paused) return;
-  for (int i = 0; i < count; i++) take_packet(s, packets[i]);
+  s.rj_packets.assign(packets, packets + count);
+  for (sh::Packet& p : s.rj_packets) {
+    const bool shot = rjump_packet(s, p, &s, &sq_rocket_ready, s.level_time);
+    if (p.client < 0 || p.client >= sh::kMaxClients) continue;
+    // The view a shot turned is put back once it has fired: the view before it.
+    const sh::Vec3f before = s.players[p.client].view_angles;
+    take_packet(s, p);
+    if (shot) s.players[p.client].view_angles = before;
+  }
   s.host_time += s.sv.set.mintic;
   while (s.host_time + 1e-9 >= double(s.frame_number + 1) * kFrameSeconds) rules_frame(s);
   fill_rows(s);

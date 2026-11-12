@@ -229,8 +229,12 @@ struct TextureSource {
 inline constexpr uint8_t kFlatSurface[4] = {128, 128, 255, 191};
 
 // The map `path` in `pack` read and made ready, with `palette` (768 bytes) for its pixels.
+// `lit`, when not empty, is the map's coloured light, a `.lit` file's bytes (`read_lit`) found
+// beside it, over the light the file carries (grey, or its own RGB lump); one that does not fit
+// the map (another compile's, another family) is named in `lit_refused` and the map keeps its own.
 bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t> palette,
-                Scene* out, std::string* error, const TextureSource& source = {});
+                Scene* out, std::string* error, const TextureSource& source = {},
+                std::span<const uint8_t> lit = {}, std::string* lit_refused = nullptr);
 
 // THE SEEN LIGHTS: a light entity is a source the player can see when the game draws one at it (a
 // flame, a torch, a globe) or when a face whose texture glows (kFixtureGlow of its texels or more,

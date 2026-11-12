@@ -54,18 +54,20 @@
 //
 // ge:summary The sequel's rules as a second runner: its maps' brushes, spawns and the 10 Hz frame
 // ge:keywords sequel sequel-server sequel-runner runner-calls program-form spawn-point respawn
-// ge:keywords deathmatch level-time frame-100ms brush-map sequel_runner sequel_of
+// ge:keywords deathmatch level-time frame-100ms brush-map sequel_runner sequel_of midair
 // ge:keywords pm_speedjump cl_speedjump easy-jump jump-up-move
 // ge:skill shooter
 // ge:test tests/shooters_edge_sequel_server_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "core/prng.hpp"
+#include "shooter/midair.hpp"
 #include "shooter/pmove.hpp"
 #include "shooter/sequel_move.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
@@ -223,6 +225,7 @@ struct SequelPlayer {
   int help_seen = 0, help_unread = 0;
   bool help_open = false;
   bool carried = false, has_entered = false;
+  ge::shooter::MidairTally midair;  // his counted midairs this level (plugins/shooter/midair.hpp)
   SqBody carry, entered;
 };
 
@@ -241,6 +244,7 @@ struct SequelMissile {
   int from = -1;         // the map entity that fired it (a monster); -1 a player
   int burst = 0;         // a BFG ball's final burst's strength (0: its direct hit's)
   float reach = 1000;    // and its reach
+  float fired_z = 0;     // a rocket's: the height its shooter stood at when he fired (midair)
 };
 inline constexpr int kSequelMissiles = 64;  // the rows the world keeps for shots in flight
 
@@ -299,6 +303,7 @@ struct SequelServer : RulesCommon {
   int weapon_models[kSqWeaponCount] = {};  // each weapon's view model in the model list
   int missile_models[kSqShotKinds] = {};   // by `SqShot`
   std::vector<std::string> obituaries;     // every death's line, in order (the tests, the lab)
+  std::vector<sh::Packet> rj_packets;      // a frame's packets as the rocket jump helper left them
   SequelDrop drops[kSequelDrops];
   SequelBody bodies[kSequelBodies];
   int next_body = 0;             // the body slot the next respawn fills
@@ -334,6 +339,11 @@ struct SequelServer : RulesCommon {
   int sight_entity = -1;
   int64_t sight_frame = -10;
   int sight_client = -1;
+  // Midair (`k_midair`): the rocket whose blow is being dealt (its shooter's height when he fired;
+  // NaN none), and the frags and rise of the counted hit its kill scores.
+  float rocket_from_z = std::numeric_limits<float>::quiet_NaN();
+  int midair_frags = 0;
+  float midair_rise = 0;
 
   SequelServer();
   ~SequelServer();

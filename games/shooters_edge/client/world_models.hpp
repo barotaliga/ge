@@ -124,6 +124,10 @@ struct ModelKind {
   models::Groups frames, skins;
   bool spin = false, synced = true;
   uint32_t flags = 0;  // a model file's effect flags (effects.hpp's kTrailGib, ...)
+  // The colour its pack skin's glowing texels paint (linear, brightest channel 1) and their share
+  // of the skin (0: nothing glows): what a grenade's red ends light round it (world_fx).
+  float glow_rgb[3] = {0, 0, 0};
+  float glow_share = 0;
   ge::render::SpriteFacing facing = ge::render::SpriteFacing::parallel;
 };
 
