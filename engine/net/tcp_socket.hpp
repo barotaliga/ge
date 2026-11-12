@@ -40,6 +40,8 @@ struct TcpStream {
   size_t out_head = 0;
   std::vector<uint8_t> in;  // bytes read and not yet a whole frame, from in_head
   size_t in_head = 0;
+  uint64_t sent = 0;      // bytes the OS has taken from `out`, ever
+  uint64_t received = 0;  // bytes the OS has given into `in`, ever
 };
 
 // Listen at `bind` (port 0: any free port); false and `error` when the OS refuses.
@@ -47,6 +49,9 @@ bool tcp_listen(TcpListener& l, const Address& bind, std::string* error);
 void tcp_close_listener(TcpListener& l);
 // The next connection waiting on the listener, as a stream; false when none is.
 bool tcp_accept(TcpListener& l, TcpStream& out);
+// Whether a connection waits to be accepted, without accepting it (a lab that dials its own
+// listener waits on it so the accept falls on the same step on every machine).
+bool tcp_waiting(const TcpListener& l);
 
 // Start connecting to `to`; the stream is `connecting` until the OS says it is up.
 bool tcp_connect(TcpStream& s, const Address& to, std::string* error);
@@ -67,5 +72,14 @@ int tcp_next_frame(TcpStream& s, uint8_t* buffer, size_t capacity);
 bool tcp_send_bytes(TcpStream& s, const uint8_t* data, size_t size);
 // Every byte received so far appended to `into`, the stream's buffer emptied; how many.
 size_t tcp_take_bytes(TcpStream& s, std::vector<uint8_t>& into);
+
+// SETTLED, for a test or a lab holding both ends of a loopback stream: pumps the two until
+// every byte `from` has queued has reached `to`'s receive buffer, so what a step reads never
+// depends on when the OS delivers (loopback is not instant everywhere: macOS queues it). False
+// when one end closed or `spins` pumps went by first.
+bool tcp_settle(TcpStream& from, TcpStream& to, int spins = 1000000);
+// Every pair among `streams` that are the two ends of one connection (each one's local the
+// other's peer) settled both ways; the closed and the unopened are passed over.
+void tcp_settle_pairs(const std::vector<TcpStream*>& streams);
 
 }  // namespace ge::net

@@ -337,6 +337,19 @@ its text to say what failed in three words or more and to carry a next-action ma
 `skill:`, `make `, `run `, `rerun`, `see `, `docs/`). `tests/cli_diagnostics_test.cpp` holds the
 whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface` skill).
 
+### Player text
+
+The prompt shape is for agents. What a person reads while playing (a console's answer, a chat or
+centre print, a server's or a vote's refusal, a menu's hint) reads like a game's own words: a plain
+sentence, and when it helps what to type instead, quoted (`Type "coopgame" to start one.`). It
+never carries `next:`, `skill:`, backtick marks, source paths or code identifiers. The log
+channels keep the prompt shape, so a failure reaches an agent in both voices: the player's line in
+the console, the prompt in the log. `engine/cli/diagnostic.hpp`'s `player_text_problem` states the
+rule, `player_text_sites` finds the literals outside the log and diagnostic calls, and
+`tests/cli_diagnostics_test.cpp` holds every game's own directories (bar labs, cli, play, assets,
+content, mods, qc), `engine/console`, `engine/server` and `engine/hud` to it. A file only agents
+read (a lab's harness, a tool's `main`) marks itself `// voice: agent (why)`.
+
 ## Determinism contract
 
 - Only `core/libm` provides transcendentals to simulation code. `<cmath>`'s `sin`, `exp`,

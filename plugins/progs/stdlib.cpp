@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include "core/libm/libm.hpp"
+#include "progs/qc_strings.hpp"
 
 namespace ge::progs {
 
@@ -168,13 +169,15 @@ void bi_strcat(Vm& vm) {
 void bi_substr(Vm& vm) {
   const char* s = arg_string(vm, 0);
   const int32_t len_s = static_cast<int32_t>(std::strlen(s));
-  int32_t start = trunc_i32(arg_float(vm, 1));
-  int32_t len = trunc_i32(arg_float(vm, 2));
+  int64_t start = trunc_i32(arg_float(vm, 1));
+  int64_t len = trunc_i32(arg_float(vm, 2));
+  if (start < 0) start += len_s;
+  if (len < 0) len = len_s - start + len + 1;
   if (start < 0) start = 0;
   char buf[kTempStringBytes];
   buf[0] = 0;
-  if (start < len_s && len != 0 && len_s > 0) {
-    int32_t n = len < 0 ? len_s - start : len;
+  if (start < len_s && len > 0) {
+    int64_t n = len;
     if (n > len_s - start) n = len_s - start;
     if (n > kTempStringBytes - 1) n = kTempStringBytes - 1;
     std::memcpy(buf, s + start, static_cast<size_t>(n));
@@ -360,6 +363,18 @@ const StdBuiltin kStdlib[] = {
     {481, "strtoupper", bi_strtoupper},
     {484, "strreplace", bi_strreplace},
     {485, "strireplace", bi_strireplace},
+    {117, "stov", bi_stov},
+    {221, "strstrofs", bi_strstrofs},
+    {222, "str2chr", bi_str2chr},
+    {223, "chr2str", bi_chr2str},
+    {224, "strconv", bi_strconv},
+    {225, "strpad", bi_strpad},
+    {226, "infoadd", bi_infoadd},
+    {227, "infoget", bi_infoget},
+    {228, "strncmp", bi_strncmp},
+    {229, "strcasecmp", bi_strcasecmp},
+    {230, "strncasecmp", bi_strcasecmp},
+    {627, "sprintf", bi_sprintf},
 };
 const int kStdlibCount = static_cast<int>(sizeof kStdlib / sizeof kStdlib[0]);
 

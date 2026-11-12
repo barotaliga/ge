@@ -42,6 +42,11 @@ override kGrid: u32 = 64u;
 // instead of sinking (seen from under the water, a sunk one would hang between the eye and the
 // bed), and the depth test keeps the nearest, the true surface.
 override kBelow: bool = false;
+// The body's underside drawn from the air under it ("water.underside", render/water_underside.wgsl):
+// the same surface at the body's floor (`sun.z`) instead of its level, without the wakes' rings
+// (they run on the top).
+override kUnderside: bool = false;
+const kUnderReach = 6.0;  // m: how far past the top's box the underside is laid
 
 
 // A wake's ring (water/wake.hpp): x, z, the moment it was set off, its volume; its source's
@@ -356,9 +361,13 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) level: u32)
   if (last && edge) {
     xz = frame.eye.xz + (xz - frame.eye.xz) * body.grid.w;
   }
-  xz = clamp(xz, body.box.xy, body.box.zw);
-  var y = body.info.x + height_at(xz, frame.time.x, 4.0 * s);
-  y += wake_at(xz, frame.time.x, 4.0 * s).x;
+  // The underside reaches past the top's box: a pool's bottom may be wider than its top.
+  let reach = select(0.0, kUnderReach, kUnderside);
+  xz = clamp(xz, body.box.xy - reach, body.box.zw + reach);
+  var y = select(body.info.x, body.sun.z, kUnderside) + height_at(xz, frame.time.x, 4.0 * s);
+  if (!kUnderside) {
+    y += wake_at(xz, frame.time.x, 4.0 * s).x;
+  }
   if (level > 0u) {
     let f = body.levels[level - 1u];
     let lo = f.xy + vec2f(0.25 * s);

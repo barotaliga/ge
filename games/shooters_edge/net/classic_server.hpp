@@ -66,6 +66,7 @@
 #include <vector>
 
 #include "core/prng.hpp"
+#include "net/status.hpp"
 #include "net/transport.hpp"
 #include "server/guards.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
@@ -216,7 +217,8 @@ struct ClassicServer {
   sh::Vec3f lag_saved[sh::kMaxClients];  // a lagged trace's moved players' own origins
   bool lag_moved[sh::kMaxClients] = {};
   int64_t lag_rewinds = 0;
-  MultiviewRecorder* mvd = nullptr;  // a multiview recording running (classic_record.hpp)
+  MultiviewRecorder* mvd = nullptr;         // a multiview recording running (classic_record.hpp)
+  std::vector<MultiviewRecorder*> streams;  // the relays' live streams (classic_qtv.hpp)
   // A client's string command the game sees before the rules (a lobby's words): true takes it.
   bool (*game_command)(void* ctx, int slot, const std::string& line) = nullptr;
   void* game_ctx = nullptr;
@@ -268,6 +270,9 @@ int classic_count(const ClassicServer& s, ConnState at_least);
 
 // The status text (`status <opt>`): the server info, then a line a client.
 std::string status_text(const ClassicServer& s, int opt);
+// Every connected client as a hub's status record's players (net/status.hpp): name, team, frags,
+// ping, minutes; a local seat as a bot, a spectator as one.
+void status_players(const ClassicServer& s, std::vector<ge::net::StatusPlayer>& out);
 
 // ---- Shared by the endpoint's files (classic_server.cpp, classic_signon.cpp,
 //      classic_frame.cpp); not an API for a caller. ----

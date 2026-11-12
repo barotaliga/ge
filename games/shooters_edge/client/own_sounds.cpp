@@ -44,9 +44,8 @@ bool read_sound_map(std::string_view text, std::vector<std::pair<std::string, st
     std::string kind, classic, ours, more;
     if (!(words >> kind) || kind != "sound") continue;
     if (!(words >> classic >> ours) || (words >> more)) {
-      error =
-          "classic.assetmap line " + std::to_string(number) +
-          ": a sound row is `sound <classic path> <our name>`; fix the line (free-assets skill)";
+      error = "classic.assetmap line " + std::to_string(number) +
+              ": a sound row reads \"sound <classic path> <our name>\"";
       return false;
     }
     out.emplace_back(std::move(classic), std::move(ours));

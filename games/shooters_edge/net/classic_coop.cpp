@@ -40,7 +40,7 @@ void unseat_client(void* ctx, int slot) {
 void* open(sv::Campaign& c, gn::Transport& t, const std::string& hostname, uint32_t seed, int most,
            void (*tap)(void* ctx, const sv::RulesCommon& game), void* ctx, std::string& error) {
   if (!c.server) {
-    error = "the campaign runs no map; next: start a coop game";
+    error = "No game is running. Type \"coopgame\" to start a coop game.";
     return nullptr;
   }
   auto d = std::make_unique<Door>();

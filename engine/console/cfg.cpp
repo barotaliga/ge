@@ -95,7 +95,7 @@ std::string describe(const Console& c, std::string_view name) {
 std::string dump_text(const Console& c) {
   std::string out =
       "// every setting a player may change, at its default. Copy the lines you want into\n"
-      "// autoexec.cfg and make them yours; `help <name>` in the console says the same.\n";
+      "// autoexec.cfg and make them yours; \"help <name>\" in the console says the same.\n";
   for (const Cvar* v : c.cvars().sorted()) {
     if ((v->flags & (kServer | kReadOnly | kCreated | kCheat)) != 0) continue;
     out += "\n// " + (v->help.empty() ? std::string("(no help)") : v->help) + " [" +

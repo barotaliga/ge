@@ -125,8 +125,8 @@ void item_box(const std::string& model, sh::Vec3f& mins, sh::Vec3f& maxs) {
 bool mirror_start(ClientMirror& m, const std::vector<sh::BrushModel>& models,
                   const ClassicClientEnd& c, std::string& error) {
   if (models.empty()) {
-    error = "mirror_start: the map has no models; next: load the map the server named (" +
-            (c.models.size() > 1 ? c.models[1] : std::string("none yet")) + ")";
+    error = "the map the server named (" +
+            (c.models.size() > 1 ? c.models[1] : std::string("none yet")) + ") is not loaded";
     return false;
   }
   m.map_models = models;
@@ -142,20 +142,19 @@ bool mirror_start(ClientMirror& m, const std::vector<sh::BrushModel>& models,
   for (size_t i = 1; i < c.models.size(); i++) {
     const int k = submodel_of(c.models[i], i);
     if (i == 1 && !starts(c.models[i], "maps/")) {
-      error = "mirror_start: the model list's first model is '" + c.models[i] +
-              "', not a map; next: wait for the signon's model list";
+      error = "mirror_start: the model list's first model is '" + c.models[i] + "', not a map";
       return false;
     }
     if (k >= static_cast<int>(models.size())) {
       error = "mirror_start: the server names model " + c.models[i] + " but the map file has " +
-              std::to_string(models.size() - 1) +
-              " submodels; next: load the server's own copy of " + c.models[1];
+              std::to_string(models.size() - 1) + " submodels: your copy of " + c.models[1] +
+              " differs from the server's";
       return false;
     }
     by_index.push_back(k >= 0 ? models[static_cast<size_t>(k)] : sh::BrushModel{});
   }
   if (by_index.empty()) {
-    error = "mirror_start: no model list yet; next: start the mirror once the client is active";
+    error = "mirror_start: the server has not sent its model list yet";
     return false;
   }
   sh::ServerSettings set;

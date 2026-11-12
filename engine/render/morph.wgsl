@@ -5,7 +5,9 @@
 // (mark 2) is not drawn: the texel the point falls in decides, sharp or smooth. Sharp
 // (the texel the point falls in) or smooth (the four nearest, each resolved, blended).
 // A WARPED draw (MorphWarp: shown under 1) dissolves by render/wgsl/warp.wgsl's field, the band at
-// its cut turned to ash, pinched and shimmering as its knobs say.
+// its cut turned to ash, pinched and shimmering as its knobs say. A SEE-THROUGH draw (MorphDraw's
+// alpha under 1, `shade_dir.w` the share left out) drops that share of its pixels by a 4x4
+// ordered pattern shifted every frame (`see_through_gone`), which the temporal resolve blends.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/warp.wgsl"
 
@@ -131,6 +133,19 @@ fn skin_at(uv: vec2f, m: Model, d: Draw) -> vec4f {
 }
 
 // Whether the texel the point falls in is a hole (kMarkHole).
+// Whether this pixel is one of the share `gone` (0..1) a see-through draw leaves out this frame: a
+// 4x4 ordered threshold, the pattern shifted by the frame number so each pixel takes its turn.
+fn see_through_gone(gone: f32, pixel: vec2f, frame_number: f32) -> bool {
+  if (gone <= 0.0) {
+    return false;
+  }
+  let k = u32(frame_number) % 16u;
+  let p = (vec2u(pixel) + vec2u(k % 4u, k / 4u)) % 4u;
+  let bayer = array<f32, 16>(0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0,
+                             3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+  return (bayer[p.y * 4u + p.x] + 0.5) / 16.0 < gone;
+}
+
 fn hole_at(uv: vec2f, m: Model) -> bool {
   let lo = vec2i(m.rect.xy);
   let hi = vec2i(m.rect.xy + m.rect.zw) - 1;
@@ -184,7 +199,7 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   if (!front) {
     n = -n;
   }
-  if (hole_at(in.uv, m)) {
+  if (hole_at(in.uv, m) || see_through_gone(d.shade_dir.w, in.position.xy, frame.time.y)) {
     discard;
   }
   let burn = warp_burn(d.warp, in.local.xyz, in.local.w);

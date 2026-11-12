@@ -194,7 +194,7 @@ TEST(a_module_with_no_game_data_block_is_refused) {
   CHECK_MSG(s != nullptr, error);
   CHECK(!sv::qvm_load_map(*s, arena(), error));
   CHECK_MSG(error.find("no game data block") != std::string::npos, error);
-  CHECK(error.find("next:") != std::string::npos);
+  CHECK(error.find("refused to start") != std::string::npos);
 }
 
 TEST(a_file_that_is_not_a_module_is_refused) {

@@ -68,7 +68,7 @@ std::string status(const void* g) {
 bool save_log(const void* g, std::vector<uint8_t>& bytes, std::string& error) {
   const Host& h = static_cast<const Game*>(g)->host;
   if (!h.settings.record) {
-    error = "the run kept no log; next: pass --log=<path> when it starts";
+    error = "the server kept no input log; start it with --log=<path> to keep one";
     return false;
   }
   bytes = write_input_log(h.log);

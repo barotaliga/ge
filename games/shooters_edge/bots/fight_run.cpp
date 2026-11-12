@@ -1,6 +1,9 @@
 // The deathmatch of fighters (fight_run.hpp): the mod server over the arena with the baseline mod,
 // the nav graph off its world and movers, and a fighter in each client slot.
 //
+// voice: agent (a lab's harness: its errors land in the lab's report; docs/architecture.md § Player
+// text).
+//
 // ge:summary The deathmatch of fighters: run_fight on the baseline mod over the arena
 // ge:keywords run_fight fight-run deathmatch fighters packets digest deaths
 // ge:skill shooter bots

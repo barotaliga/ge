@@ -124,7 +124,10 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
 
 // `map` started on `listen` as the window changes a map: on the campaign's host when the folder has
 // a campaign and the options ask for one (`deathmatch 0`), else as a match of `content`'s program
-// (a new server when the last was a campaign's or another program's). False with the reason.
+// (a new server when the last was a campaign's or another program's). A running campaign changes
+// map, unless `newgame`, `coopgame` or `sv_coop 1` asked for a new game
+// (`ListenOptions::new_game`): then a new campaign starts on the options, coop and companions with
+// it. False with the reason.
 bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<LoadedMap> map,
                std::string& error);
 

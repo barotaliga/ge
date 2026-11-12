@@ -342,6 +342,18 @@ TEST(entity_lists_delta_against_the_frame) {
   const cn::EntityRecord rec = cn::read_entity_record(r, word, baselines[5], ext);
   CHECK(rec.state.modelindex == 300);
   CHECK((rec.bits & cn::kUModelDbl) != 0);
+  // See-through and back: the byte is the share times 254, and solid again goes as 255 (unset),
+  // never 0, which an extended client draws as gone.
+  cn::EntityState ghost = entity(5, 1);
+  ghost.alpha = 127;
+  cn::EntityState solid = ghost;
+  solid.alpha = 0;
+  w = gn::make_writer(buf, sizeof buf);
+  CHECK(cn::write_entity_delta(w, ghost, solid, false, ext));
+  CHECK(w.size >= 1 && buf[w.size - 1] == 255);
+  r = gn::make_reader(buf, w.size);
+  const cn::EntityRecord back = cn::read_entity_record(r, gn::read_u16(r), ghost, ext);
+  CHECK(back.state.alpha == 0);
 }
 
 TEST(player_records_use_the_base_and_the_extended_flags) {

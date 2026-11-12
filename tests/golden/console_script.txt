@@ -29,7 +29,7 @@ same
 truthy
 falsy
 if: '~' is not a comparison (use == != < <= > >= isin or !isin)
-if needs `then` (write `if <a> <op> <b> then <commands> [else <commands>]`)
+if needs "then" (usage: if <a> <op> <b> then <commands> [else <commands>])
 
 === set-calc
 set a 7
@@ -142,9 +142,9 @@ alias 9x y
 ---
 unknown command 'sett' (did you mean 'set'?)
 set needs a name and a value (write `set <name> <value>`)
-exec needs a file (write `exec <name>.cfg`)
+exec needs a file (usage: exec <name>.cfg)
 inc needs a cvar (write `inc <name> [<by>]`)
-cycle needs a cvar and values (write `cycle <name> <v1> <v2>`)
+cycle needs a cvar and values (usage: cycle <name> <v1> <v2>)
 bind needs a key (write `bind <key>`; key names are in docs/console.md)
 'nokey' is not a key (use a key's name (a, f1, space, mouse1, mwheelup, pad_a, ctrl+s): docs/console.md)
 '-nomode' is not a bind mode (use -game, -console, -menu or -demo)

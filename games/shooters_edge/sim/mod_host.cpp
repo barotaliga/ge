@@ -462,20 +462,18 @@ std::vector<std::string> check_hooks(const ge_mod_v1* t) {
   std::vector<std::string> e;
   const auto* k = static_cast<const se_mod_hooks_v1*>(t ? t->hooks : nullptr);
   if (!k) {
-    e.push_back(
-        "the mod has no hook table; next: point `hooks` at an se_mod_hooks_v1 "
-        "(games/shooters_edge/sim/mod_api.hpp)");
+    e.push_back("the mod has no hook table (it must point hooks at an se_mod_hooks_v1)");
     return e;
   }
   if (k->size < offsetof(se_mod_hooks_v1, match_start)) {
     e.push_back("the mod's hook table is " + std::to_string(k->size) +
-                " bytes, too short to be one; next: set `size` to sizeof(se_mod_hooks_v1)");
+                " bytes, too short to be one");
     return e;
   }
   if (k->api != SE_MOD_API)
     e.push_back("the mod's hooks were built against Shooter's Edge mod API " +
                 std::to_string(k->api) + ", and this game offers " + std::to_string(SE_MOD_API) +
-                "; next: rebuild the mod against this game's mod_api.hpp (ge mod build)");
+                ", so the mod must be rebuilt for this version of the game");
   return e;
 }
 
