@@ -300,11 +300,14 @@ characters.
 | `games/*/mods/` | A game's sample mods for its mod seam (`docs/mods.md`), each built as a package by `ge_add_mod` into `build/<preset>/mods/` | `mod` |
 | `engine/console/` | The console (`ge::console`, `docs/console.md`): cvars and their tiers, the console language, aliases, binds, cfg files, the drop-down console's model | `console` |
 | `engine/replay/` | Replays (`ge::replay`, `docs/replays.md`): a run watched again off its input log, the keyframes a seek starts from (the game's `Run::clone`), the player's seek in a step budget, the transport | `replay` |
+| `engine/tv/` | TV (`ge::tv`, `docs/tv.md`): a match's replay file stream from a source, held by a delay in game time, fanned out to viewers and relays; chat up, the tree's count; over engine/net; the trial | `replay`, `net` |
 | `engine/save/` | Saves (`ge::save`, `docs/saves.md`): the save file (header, meta, tagged versioned chunks, directory, XXH64), the state described once for its writer and reader | `save` |
 | `engine/capture/` | Video with sound (`ge::capture`, in `ge_play`; `docs/replays.md`): the Matroska and fragmented MP4 muxers and readers, I420, the encoders, the export's A/V clock, the live capture, the sync fixture | `replay` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |
+| `engine/forward/` | Forward (`ge::forward`, `docs/tv.md`): an opaque hop for any game's datagrams, chained by a route set up before the game's handshake; the dial, the allow list, alive, NAT rebinding, capped answers | `net` |
 | `engine/gamecli/` | A player's game CLI (`ge::gamecli`, `docs/gamecli.md`): the command table and answer, settings through the catalog, servers, players, rcon, hosting, joining, logs; `ge_add_game_cli` | `agent-interface` |
 | `engine/server/` | The server core (`ge::server`, `docs/servers.md`): `ServerGame` a game plugs in, the frame, the node, session and hosting round it, the dedicated process (`ge_add_server`), the sample game and trial | `net` |
+| `engine/hub/` | The hub (`ge::hub`, `docs/hub.md`): a game's `HubSpec`, the poller of masters and status records, the index, the JSON API, HTTP with server-sent events, the process (`ge_add_hub`) | `net` |
 | `engine/texgen/` | Procedural textures (`ge::texgen`, `docs/textures.md`): the `.tex` recipe, tileable noise, the layer kinds, the bake to maps and its disk cache; `library/` the specimens | `textures` |
 | `engine/snow/` | Snow over any ground (`ge::snow`, `docs/snow.md`): the layer and its cover, sparse fixed-point tiles, `sample`, `press` and imprint records, reference contacts, the snapshot | `snow` |
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
@@ -357,6 +360,7 @@ characters.
 | `games/shooters_edge/labs/` | Shooter's Edge's labs | `labs`, `ui` |
 | `games/shooters_edge/cli/` | Shooter's Edge's player CLI (`shooters_edge_cli`): its Spec over engine/gamecli (places, the classic protocol, launch words, settings), classic enhance's group, its demos | `agent-interface`, `shooter` |
 | `games/shooters_edge/server/` | Shooter's Edge's server: the host, its slots and input log, the dedicated binary; the mod server (QC builtins and extensions, hooks, the test and baseline mods, a progs from a path) | `shooter`, `progs` |
+| `games/shooters_edge/hub/` | Shooter's Edge's hub binary (`shooters_edge_hub`): the engine's hub with the game's modes and words | `net` |
 | `games/shooters_edge/qc/` | Shooter's Edge's own QC mods modders start from: `common/` shared, `arena/` the deathmatch, `campaign/` the single-player game (built by `ge qc build`) | `progs` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (the harness), `golden.hpp`, `golden/` | `testing` |
 | `porting/` | The WORKING AREA (above): the porting guide, the porting map, the golden-table generators. Deleted when porting ends | `port` |

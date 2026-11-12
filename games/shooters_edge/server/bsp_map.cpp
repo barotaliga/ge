@@ -36,14 +36,21 @@ bool read_bsp_map(std::span<const uint8_t> bytes, const std::string& name, BspMa
     error = "read_bsp_map: maps/" + name + ".bsp: " + why;
     return false;
   }
+  br::build_phs(&out->map);
+  spec->name = name;
+  spec->entities = out->map.entity_text;
+  if (out->map.family != br::Family::v29 && out->map.family != br::Family::bsp2) {
+    // A family whose maps carry brushes, not clip hulls: its rules trace the brushes of the map
+    // read whole. The spec views the map in `out` (no ownership): the caller keeps `out` alive and
+    // in place while the rules run, as it does for the hulls' models.
+    spec->brushes = std::shared_ptr<const br::Map>(std::shared_ptr<const br::Map>{}, &out->map);
+    return true;
+  }
   if (!sh::bsp_world(out->map, &out->world, &why)) {
     error = "read_bsp_map: maps/" + name + ".bsp: " + why;
     return false;
   }
-  br::build_phs(&out->map);
-  spec->name = name;
   spec->models = out->world.models;
-  spec->entities = out->map.entity_text;
   return true;
 }
 

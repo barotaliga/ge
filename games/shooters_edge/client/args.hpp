@@ -25,9 +25,12 @@ struct Args {
   std::string basedir = ".";
   std::string game{ge::classicenhance::classic_profile().base_dir};  // the base game's folder
   bool basedir_set = false, game_set = false;  // given on the command line (not the defaults)
-  std::string progs;                           // a mod's progs file ("": the baseline mod)
-  std::string models;                          // the held weapons' folder ("": the tree's)
-  std::string timedemo;                        // a demo to benchmark, then quit ("": none)
+  // The content profile the install is (classicenhance/profile.hpp's `kProfiles` row id), found
+  // by its folders (client/game_folder.hpp's `install_of`); the first row's until one is found.
+  std::string profile{ge::classicenhance::classic_profile().id};
+  std::string progs;             // a mod's progs file ("": the baseline mod)
+  std::string models;            // the held weapons' folder ("": the tree's)
+  std::string timedemo;          // a demo to benchmark, then quit ("": none)
   std::string demovideo, video;  // a demo to turn into the video file `video`, then quit
   double fps = 30, seconds = 0;
   double from = 0, to = -1;  // -demovideo's clip on the demo's timeline, s (to < 0: the end)

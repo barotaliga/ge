@@ -17,8 +17,15 @@
 //   the world, slots 1..max clients the players, then the map's entities; the model list is the
 //   map's brush models (`*1` ...) and the player's model.
 //
-// Items, weapons, damage, movers and monsters are the next rows (docs/goals/M18t.md, M18t4); the
-// rules' numbers are in the clean-room notes. Held by tests/shooters_edge_sequel_server_test.cpp.
+// - **Items** (sequel_items.hpp): spawned from their class names (an entity flagged 0x800 is not
+//   spawned in deathmatch; outside it 0x100, 0x200 and 0x400 leave it out at skill 0, 1 and 2-3),
+//   dropped up to 128 units to the floor (one that starts in a solid is removed), taken when a
+//   living player's box touches theirs (−15..15), hidden in deathmatch until their respawn time and
+//   removed otherwise. A mega health counts its taker down a point a second above his maximum,
+//   from 5 s after, and shows again 20 s after he is back to it.
+//
+// Weapons, damage, movers and monsters are the next rows (docs/goals/M18v.md, M18v7); the rules'
+// numbers are in the clean-room notes. Held by tests/shooters_edge_sequel_server_test.cpp.
 //
 // ge:summary The sequel's rules as a second runner: its maps' brushes, spawns and the 10 Hz frame
 // ge:keywords sequel sequel-server sequel-runner runner-calls program-form spawn-point respawn
@@ -35,6 +42,7 @@
 #include "core/prng.hpp"
 #include "shooter/sequel_move.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
+#include "shooters_edge/server/sequel_items.hpp"
 
 namespace ge::brush {
 struct Map;
@@ -47,7 +55,13 @@ namespace shooters_edge::server {
 struct SequelEntity {
   std::string classname, targetname, target, model;
   sh::Vec3f origin, angles;
-  int modelindex = 0;  // `*n` brush models
+  int modelindex = 0;  // `*n` brush models; an item's model in the model list
+  int spawnflags = 0;
+  // An item (sequel_items.hpp's row, -1 none): dropped to the floor at the start, taken by a
+  // player's touch, hidden until its respawn in deathmatch, gone otherwise.
+  int item = -1;
+  bool hidden = false, gone = false;
+  double respawn_at = 0;  // level time it shows again; 0: not waiting
 };
 
 struct SequelPlayer {
@@ -60,7 +74,16 @@ struct SequelPlayer {
   uint8_t buttons = 0;                 // the last command's
   int16_t cmd_angles[3] = {};          // the last command's view, 65536ths of a turn
   bool changed = false;                // placed by the rules since its last move (a spawn)
+  // The view the rules turned him to (a spawn), 65536ths of a turn, until his client sends it back
+  // as its own (with `SequelServerOptions::clients_take_view`): the delta angles that turned him
+  // are then spent (zeroed), so the turn is not added twice.
+  bool forced = false;
+  int16_t forced_angles[3] = {};
   sh::Vec3f view_angles;
+  SqBody body;             // health, armour, ammo and what he carries (sequel_items.hpp)
+  int mega = -1;           // the mega health's entity he took, while it counts down; -1 none
+  double drained_at = 0;   // level time the mega's count-down last took a point
+  std::vector<int> taken;  // the item rows he took, in order (the HUD's pickups, the tests)
   sh::Vec3f mins, maxs;
   float view_height = 0;
   int water_level = 0;
@@ -69,6 +92,11 @@ struct SequelPlayer {
 
 struct SequelServerOptions {
   uint32_t seed = 1;
+  // The clients take the server's view as their own when it turns them (the classic protocol's
+  // clients: the window's listen server and the classic endpoint), so a turn's delta angles are
+  // spent once a client sends the turned view back (`SequelPlayer::forced`). False: the sequel's
+  // own model, where a client keeps its angles and the delta stays.
+  bool clients_take_view = false;
 };
 
 // The player's model, last in the model list.

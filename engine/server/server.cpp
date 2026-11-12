@@ -8,12 +8,10 @@
 #include "server/server.hpp"
 
 #include <cstdio>
-#include <cstdlib>
 
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "net/packet.hpp"
-#include "net/udp_socket.hpp"
 #include "server/guards.hpp"
 
 namespace ge::server {
@@ -42,35 +40,6 @@ int game_seated(const void* ctx) {
 }
 
 // sv_master's words as addresses: host:port, a bare host on the master's port, or `sim:N:P`.
-bool master_addresses(const std::string& text, std::vector<gn::Address>& out, std::string& error) {
-  out.clear();
-  size_t at = 0;
-  while (at < text.size()) {
-    const size_t space = text.find(' ', at);
-    const std::string word =
-        text.substr(at, space == std::string::npos ? std::string::npos : space - at);
-    at = space == std::string::npos ? text.size() : space + 1;
-    if (word.empty()) continue;
-    gn::Address a;
-    if (gn::parse_address(word, a)) {
-      out.push_back(a);
-      continue;
-    }
-    const size_t colon = word.rfind(':');
-    const std::string host = colon == std::string::npos ? word : word.substr(0, colon);
-    const int port =
-        colon == std::string::npos ? gn::kMasterPort : std::atoi(word.c_str() + colon + 1);
-    std::string why;
-    if (port <= 0 || port > 65535 ||
-        !gn::resolve_ipv4(host, static_cast<uint16_t>(port), a, &why)) {
-      error = "sv_master '" + word + "' is not an address (" + (why.empty() ? "bad port" : why) +
-              "). Write it as host:port, or leave sv_master empty to be listed nowhere.";
-      return false;
-    }
-    out.push_back(a);
-  }
-  return true;
-}
 
 // The node's foreign datagrams this frame: status asks answered, the masters' acks taken.
 void answer_public(Server& s) {
@@ -160,12 +129,11 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   cvars.bind({"sv_spectatorpassword", spec_password, cn::kServer,
               "a password to watch (empty: none)", CvarKind::text},
              &c.spectator_password);
-  cvars.bind(
-      {"rcon_password", rcon, cn::kServer,
-       "the remote console's password: \"rcon <password> <line>\" runs a server console line "
-       "from afar (empty: no remote console)",
-       CvarKind::text},
-      &c.rcon_password);
+  cvars.bind({"rcon_password", rcon, cn::kServer,
+              "the remote console's password: `rcon <password> <line>` runs a server console line "
+              "from afar (empty: no remote console)",
+              CvarKind::text},
+             &c.rcon_password);
   cvars.bind({"sv_rendezvous", rendezvous, latched, "the rendezvous to list with (empty: none)",
               CvarKind::text},
              &c.rendezvous);
@@ -244,25 +212,27 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   server_close(s);
   if (!game.create || !game.frame || !game.frame_seconds || !game.hash) {
     error = std::string(game.binary) +
-            " is built wrong: its ServerGame lacks create, frame, frame_seconds or hash";
+            "'s ServerGame lacks create, frame, frame_seconds or hash; next: fill them "
+            "(engine/server/server.hpp)";
     return false;
   }
   const int most = game.max_clients < kMaxClients ? game.max_clients : kMaxClients;
   if (config.maxclients < 1 || config.maxclients > most) {
     error = "sv_maxclients " + std::to_string(config.maxclients) + " is outside 1.." +
-            std::to_string(most);
+            std::to_string(most) + "; next: set it in range";
     return false;
   }
   if (config.bots < 0 || config.bots > config.maxclients) {
     error = std::to_string(config.bots) + " bots do not fit " + std::to_string(config.maxclients) +
-            " slots: raise sv_maxclients or lower sv_bots";
+            " slots; next: raise sv_maxclients or lower sv_bots";
     return false;
   }
   FloodRule flood;
   if (!parse_flood_rule(config.floodprot, flood, error)) return false;
   gn::Visibility vis{};
   if (!gn::visibility_of(config.visibility, vis)) {
-    error = "sv_visibility '" + config.visibility + "' must be lan, invite or listed";
+    error =
+        "sv_visibility '" + config.visibility + "' is not lan, invite or listed; next: pick one";
     return false;
   }
   s.game = &game;
@@ -276,7 +246,8 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   if (game.serve) {
     if (!game.net_frame) {
       error = std::string(game.binary) +
-              " is built wrong: its ServerGame serves its own protocol without net_frame";
+              "'s ServerGame serves its own protocol without net_frame; next: fill it "
+              "(engine/server/server.hpp)";
       server_close(s);
       return false;
     }
@@ -291,7 +262,8 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   s.networked = true;
   s.port = transport;
   gn::MasterBeatConfig bc;
-  if (!master_addresses(config.masters, bc.masters, error)) {
+  if (!gn::master_list(config.masters, bc.masters, error)) {
+    error = "sv_master: " + error;
     server_close(s);
     return false;
   }

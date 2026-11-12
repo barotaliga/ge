@@ -298,12 +298,19 @@ int run_main(int argc, char** argv) {
   ge::console::start(console, args.plus);
   console.cvars().apply_latched();
 
+  // The game the install is (args.profile, found by its folders: client/game_folder.hpp).
+  const auto game_row = [](const std::string& id) -> const shooters_edge::profiles::GameProfile& {
+    const shooters_edge::profiles::GameProfile* g = shooters_edge::profiles::find_game(id);
+    return g != nullptr ? *g : shooters_edge::profiles::classic_game();
+  };
   cl::SearchPath files;
   cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
   cl::add_record_commands(console, recorder, listen, files, playback.record);
   std::string error;
   // No packs and no `+map`: the built-in arena (the start map below falls back to it).
-  const bool opened = cl::open_game_dir(args.basedir, args.game, files, error);
+  const bool opened =
+      cl::open_game_dir(args.basedir, args.game, files, error,
+                        shooters_edge::profiles::content_of(game_row(args.profile)));
   if (!opened) {
     if (!next_map.empty() && next_map != "arena") {
       out::error("shooters_edge: the game folder did not open: " + error +
@@ -334,17 +341,19 @@ int run_main(int argc, char** argv) {
   }
   // A server's game folder for `connect`: the window's own search path when it is the same game
   // (or the base), else that folder under the base folder, mounted once.
-  remote.read_file = [&files, &args,
+  remote.read_file = [&files, &args, game_row,
                       other = std::make_shared<std::pair<std::string, cl::SearchPath>>()](
                          const std::string& gamedir, const std::string& path) {
     std::vector<uint8_t> store;
     const cl::SearchPath* from = &files;
     if (!gamedir.empty() && gamedir != args.game &&
-        gamedir != ge::classicenhance::classic_profile().base_dir) {
+        gamedir != shooters_edge::profiles::content_of(game_row(args.profile)).base_dir) {
       if (other->first != gamedir) {
         std::string why;
         other->second = {};
-        if (!cl::open_game_dir(args.basedir, gamedir, other->second, why)) return store;
+        if (!cl::open_game_dir(args.basedir, gamedir, other->second, why,
+                               shooters_edge::profiles::content_of(game_row(args.profile))))
+          return store;
         other->first = gamedir;
       }
       from = &other->second;
@@ -430,7 +439,9 @@ int run_main(int argc, char** argv) {
   title_frame(0, 0, "LOADING", 0);
   // The main menu's maps, its classic pictures when the packs carry them, and the packs classic
   // enhance offers.
-  const cl::GameAdapter& adapter = cl::adapter_of(shooters_edge::profiles::classic_game());
+  // The install's game's adapter: copied here, so LOAD GAME of another game's install swaps it in
+  // place for every call that reads it.
+  cl::GameAdapter adapter = cl::adapter_of(game_row(args.profile));
   shooters_edge::menu::Host menu_host{.console = &console,
                                       .maps = adapter.list_maps(adapter, files)};
   cl::add_adapter_commands(console, adapter, files, args.basedir);
@@ -477,7 +488,7 @@ int run_main(int argc, char** argv) {
       });
   // The programs, the campaign and the first map the folder holds (client/game_folder.hpp).
   cl::GameContent game_content;
-  if (!cl::load_programs(adapter, files, args.progs, game_content, error)) {
+  if (!cl::load_programs(adapter, files, args.progs, game_content, error, *adapter.game)) {
     out::error("shooters_edge: the mod did not load: " + error +
                "; see docs/shooters-edge.md § Running your own mod");
     return 2;
@@ -505,11 +516,13 @@ int run_main(int argc, char** argv) {
   std::string load_ask;  // a save the console asked to load (loaded where a map change is made)
   cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);
   // The install's enhancing, in the background unless ce_auto is off or a run is measured.
-  if (std::string basedir, why; opened && cl::check_game_folder(args.basedir, &basedir, &why)) {
+  if (std::string basedir, why;
+      opened && cl::check_game_folder(args.basedir, &basedir, &why,
+                                      shooters_edge::profiles::content_of(*adapter.game))) {
     game_menu.set_game(basedir);
     game_menu.servers().set_masters(shooters_edge::net::classic_install_masters(basedir));
     // The game played is the one the next start opens, however it was picked (-basedir too).
-    cl::remember_game(prefs, basedir);
+    cl::remember_game(prefs, basedir, shooters_edge::profiles::content_of(*adapter.game));
     if (game_menu.auto_enhance() && !measured) {
       if (game_menu.enhance_game(false, &why))
         out::status("shooters_edge: enhancing " + basedir +
@@ -703,8 +716,13 @@ int run_main(int argc, char** argv) {
                           folder_ask = cl::expand_home(a.size() == 2 ? a[1] : a.rest(0));
                       });
   const auto open_folder = [&](const std::string& basedir) {
+    // Whichever game the install is: its rows and its adapter from here on.
+    std::string root;
+    const ge::classicenhance::Profile* content = cl::install_of(basedir, &root, &error);
+    if (content == nullptr) return false;
     cl::SearchPath fresh;
-    if (!cl::open_game_dir(basedir, cl::game_of(basedir), fresh, error)) return false;
+    if (!cl::open_game_dir(basedir, cl::game_of(basedir, *content), fresh, error, *content))
+      return false;
     cl::cancel_load(loader);  // its threads read the old packs
     if (first_pictures.valid()) first_pictures.wait();
     first_pictures = {};
@@ -713,9 +731,15 @@ int run_main(int argc, char** argv) {
     cl::listen_stop(listen);
     files = std::move(fresh);
     args.basedir = basedir;
-    args.game = cl::game_of(basedir);
+    args.profile = std::string(content->id);
+    args.game = cl::game_of(basedir, *content);
+    adapter = cl::adapter_of(game_row(args.profile));
+    game_menu.demos().set_extensions(cl::listed_extensions(adapter.game->demo_extensions));
+    menu_host.table = &adapter.menu(adapter);
+    game_menu.set_table(*menu_host.table);
     console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
-    if (!cl::load_programs(adapter, files, args.progs, game_content, error)) return false;
+    if (!cl::load_programs(adapter, files, args.progs, game_content, error, *adapter.game))
+      return false;
     listen.opt.registered = game_content.registered;
     listen.opt.episodes = game_content.episodes;
     listen.opt.item_names = game_content.item_names;
@@ -735,7 +759,7 @@ int run_main(int argc, char** argv) {
     game_menu.set_game(basedir);
     game_menu.servers().set_masters(shooters_edge::net::classic_install_masters(basedir));
     demo_places();
-    cl::remember_game(prefs, basedir);
+    cl::remember_game(prefs, basedir, *content);
     save_settings();  // the player's settings go on in the new folder
     out::status("shooters_edge: loaded " + basedir + " (" + files.folder + ")");
     if (std::string why; game_menu.auto_enhance() && !game_menu.enhance_game(true, &why))

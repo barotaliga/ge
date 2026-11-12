@@ -105,6 +105,8 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
     p.skin = e.skin;
     p.effects = e.effects;
     p.alpha = e.alpha;
+    p.scale = e.scale;
+    for (int c = 0; c < 3; c++) p.colormod[c] = e.colormod[c];
     p.origin = e.origin;
     p.angles = e.angles;
     out.push_back(p);
@@ -173,6 +175,8 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
     p.skin = d.skin;
     p.effects = d.effects;
     p.alpha = d.alpha;
+    p.scale = d.scale;
+    for (int c = 0; c < 3; c++) p.colormod[c] = d.colormod[c];
     p.origin = d.origin;
     p.angles = d.angles;
     return p;

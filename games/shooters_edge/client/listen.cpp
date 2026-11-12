@@ -1052,6 +1052,16 @@ float field_named(const Listen& l, int entity, const char* name) {
   return pg::as_float(*pg::entity_field(q->q.vm, entity, d->offset));
 }
 
+bool vector_field_named(const Listen& l, int entity, const char* name, float out[3]) {
+  const pg::Def* d = pg::find_field(*l.progs, name);
+  if (d == nullptr) return false;
+  const sv::QcServer* q = program(l);
+  if (q == nullptr) return false;
+  const uint32_t* v = pg::entity_field(q->q.vm, entity, d->offset);
+  for (int k = 0; k < 3; k++) out[k] = pg::as_float(v[k]);
+  return true;
+}
+
 void set_field_named(Listen& l, int entity, const char* name, float value) {
   const pg::Def* d = pg::find_field(*l.progs, name);
   if (d == nullptr || l.rules == nullptr) return;
