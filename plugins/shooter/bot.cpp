@@ -310,6 +310,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     m.at = {static_cast<float>(c->seen.x), static_cast<float>(c->seen.y),
             static_cast<float>(c->seen.z)};
     m.velocity = c->course;
+    if (b.leadarc && b.shot_speed > 0) m.turn = c->turn;  // (`leadarc`: a hopper's curve)
     const LeadWall lead_wall{&sv, c->ent};
     if (b.leadwall && c->ent >= 1 && c->ent <= sv.set.maxclients) {
       m.slide = lead_slide;
@@ -332,7 +333,15 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       shot.speed = b.shot_speed;
       shot.lob = b.lob;
       const Vec3f muzzle = b.lob ? self.origin : eye;
-      const Intercept ic = intercept(muzzle, m, lead, shot, b.intercepts);
+      Intercept ic = intercept(muzzle, m, lead, shot, b.intercepts);
+      if (b.leadmean && b.shot_speed > 0) {
+        // THE DODGER'S MIDDLE (`leadmean`): led on his course for a short flight, on his drift
+        // (the course averaged over `kDrift_s`) for one that long or more: a person dodging turns
+        // back every 0.3-0.5 s, so the course of now misses after his next turn.
+        const double w = std::fmin(1.0, (lead + ic.flight_s) / static_cast<double>(kDrift_s));
+        m.velocity = c->course + (c->drift - c->course) * static_cast<float>(w);
+        ic = intercept(muzzle, m, lead, shot, b.intercepts);
+      }
       at = ic.at;
       at.z += b.aim_dz;
       aim_angles(look_from, at, yaw, pitch);

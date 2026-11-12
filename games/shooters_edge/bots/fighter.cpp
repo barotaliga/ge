@@ -1546,6 +1546,8 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   f.bot.circleview = f.features[sh::Feature::circleview];
   f.bot.circleaim = f.features[sh::Feature::circleaim];
   f.bot.leadwall = f.features[sh::Feature::leadwall];
+  f.bot.leadmean = f.features[sh::Feature::leadmean];
+  f.bot.leadarc = f.features[sh::Feature::leadarc];
   f.bot.paced = f.features[sh::Feature::pace];
   f.bot.trial = f.features[sh::Feature::trial];
   // A change of course read a reaction late (`eye`), and the aim from its eye ahead (`selfaim`).

@@ -36,6 +36,19 @@ bool arc_at(double up_deg, double d, const Shot& s, double& z, double& t) {
 Vec3f mover_at(const MovingTarget& m, double t) {
   Vec3f p{m.at.x + static_cast<float>(m.velocity.x * t),
           m.at.y + static_cast<float>(m.velocity.y * t), m.at.z};
+  if (m.turn != 0 && t > 0) {
+    // On the arc: the velocity turned at `turn` for the time, held straight past `kArcMost`.
+    const double w = static_cast<double>(m.turn) * kDeg;  // rad/s
+    const double most = kArcMost * kDeg / (w < 0 ? -w : w);
+    const double ta = t < most ? t : most;
+    const double vx = m.velocity.x, vy = m.velocity.y;
+    const double c = core::libm::cos(w * ta), s = core::libm::sin(w * ta);
+    // The integral of the turned velocity over [0, ta], then on straight at the turned one.
+    const double ix = (vx * s - vy * (1 - c)) / w, iy = (vy * s + vx * (1 - c)) / w;
+    const double rest = t - ta;
+    p.x = m.at.x + static_cast<float>(ix + (vx * c - vy * s) * rest);
+    p.y = m.at.y + static_cast<float>(iy + (vx * s + vy * c) * rest);
+  }
   if (m.slide != nullptr) {
     const Vec3f s = m.slide(m.slide_ctx, m.at, p);
     p.x = s.x;
