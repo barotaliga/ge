@@ -165,6 +165,7 @@ void run(gl::Lab& lab) {
     // other side sent is in, so a run reads the same bytes on the same step on every machine.
     const auto settle = [&] {
       std::vector<gn::TcpStream*> all;
+      all.reserve(m.port.relays.size() + relays.size());
       for (const auto& pr : m.port.relays) all.push_back(&pr->tcp);
       for (Relay& r : relays) all.push_back(&r.tcp);
       gn::tcp_settle_pairs(all);
