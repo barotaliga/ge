@@ -114,7 +114,7 @@ DemoRead next_multiview(Demo& d, std::string& error) {
             "the record kind " + std::to_string(kind) + at_offset(rec) +
             (kind == kCommand ? " is a client's command, which a multiview recording has none of"
                               : " is not one of the format's 1..6") +
-            "; next: the file is damaged";
+            ": the file is damaged";
         return DemoRead::error;
       }
       if (d.pending == 0) return DemoRead::end;  // cut short inside a record

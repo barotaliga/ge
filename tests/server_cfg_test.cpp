@@ -161,7 +161,7 @@ TEST(server_cfg_refusals_name_where_and_next) {
     configure(r, {"--mod=ctf", "--cfg=sniper"});
     CHECK(!r.ok);
     CHECK(r.error.find("profile 'sniper': no sniper.cfg in ctf, base") != std::string::npos);
-    CHECK(r.error.find("next:") != std::string::npos);
+    CHECK(r.error.find("Check the name") != std::string::npos);
   }
   {
     // sv_mod is the command line's to say: a cfg cannot change which cfgs were read.

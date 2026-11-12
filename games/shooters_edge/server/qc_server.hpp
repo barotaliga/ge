@@ -154,6 +154,7 @@ struct QcServer : RulesCommon {
   struct {
     int currentammo = -1, armorvalue = -1, ammo[4] = {-1, -1, -1, -1}, weapon = -1;
     int weaponframe = -1;
+    int alpha = -1;  // a mod's see-through field (DP_ENT_ALPHA): 0 unset, else 0..1
   } world_fields;
 
   std::vector<HookCall> hook_log;

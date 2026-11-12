@@ -32,7 +32,7 @@ int entity_on(const sv::RulesCommon& s, const char* name) {
 bool ensure_graph(Room& r, const sv::RulesCommon& s, const sv::MapSpec& map, std::string& error) {
   if (r.graph && r.graph_of == map.name) return true;
   if (map.models.empty()) {
-    error = "the map " + map.name + " has no world model to walk on; next: load a map first";
+    error = "the map " + map.name + " has no world for bots to walk on";
     return false;
   }
   auto w = std::make_unique<sh::MoveWorld>();
@@ -58,7 +58,7 @@ bool ensure_graph(Room& r, const sv::RulesCommon& s, const sv::MapSpec& map, std
   auto g = std::make_unique<sh::NavGraph>();
   sh::build_nav(world, movers, sh::MoveSettings{}, sh::NavSettings{}, *g);
   if (g->nodes.empty()) {
-    error = "no floor a bot can walk on " + map.name + "; next: play bots on another map";
+    error = "Bots can't play on " + map.name + ": there is no floor they can walk on.";
     return false;
   }
   r.graph = std::move(g);
@@ -124,7 +124,7 @@ int room_add_bot(Room& r, const sv::RulesRunner& rules, const sv::MapSpec& map, 
       break;
     }
   if (slot < 0) {
-    error = "the server is full; next: `removebot` first";
+    error = "The server is full.";
     return -1;
   }
   if (!ensure_graph(r, s, map, error)) return -1;

@@ -7,16 +7,18 @@
 // between them at quarter steps; the team at dusk with their eyes glowing; and a runner lit
 // indoors by a game's own light (no sun or sky, an ambient and a shade from one side); and a
 // runner WARPING in (MorphWarp) at four shares, as dust (dissolving head first, the cut turned to
-// ash) and as a beam (pinched into a shimmering column, the cut burning). Checks: each team's shirt
+// ash) and as a beam (pinched into a shimmering column, the cut burning); and a runner SEE-THROUGH
+// (MorphDraw::alpha) at four shares, one frame and sixteen averaged. Checks: each team's shirt
 // reads as its colour, the eyes glow at dusk, the in-between frame lies between its two frames, a
-// warp gone draws nothing and one whole draws the plain runner, no GPU error, no pipeline after the
+// warp gone draws nothing and one whole draws the plain runner, alpha 0 draws nothing and 1 the
+// plain runner, no GPU error, no pipeline after the
 // load. Measured: the pass's GPU time for 64 runners. Without an adapter it notes that, with grey
 // cards.
 //
 // ge:summary Lab: morph meshes in team colours, sharp and smooth skins, frame blending, glow
 // ge:keywords lab gpu morph morph-mesh vertex-animation frames blend tint team-colours
 // ge:keywords player-colours skin sharp smooth glow indoor-light runner picture
-// ge:keywords warp dissolve materialize spawn teleport burning-edge
+// ge:keywords warp dissolve materialize spawn teleport burning-edge see-through alpha dither
 // ge:skill render labs
 // ge:test tests/render_morph_test.cpp
 #include <chrono>
@@ -350,7 +352,8 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    placeholders(lab, {"teams", "sharp-smooth", "frames", "dusk", "indoor", "warp"}, w, h);
+    placeholders(lab, {"teams", "sharp-smooth", "frames", "dusk", "indoor", "warp", "see-through"},
+                 w, h);
     return;
   }
   Scene s;
@@ -509,6 +512,69 @@ void run(gl::Lab& lab) {
     }
   }
 
+  // See-through: a runner by share shown, one frame's ordered pattern on top and sixteen frames
+  // averaged below (what the temporal resolve converges to; the pattern moves every frame).
+  {
+    const auto ghost = [&](float alpha) {
+      std::vector<gr::MorphDraw> one = {runner_at(0, 4.2, 3.141592653589793 - 0.3, 1.5, 2)};
+      one[0].alpha = alpha;
+      return one;
+    };
+    gr::FrameView v = eye(0, 1.1, 0, 0, 0.06, 0.5);
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> names;
+    const float kShares[] = {1.0f, 0.75f, 0.5f, 0.25f};
+    for (const float a : kShares) {
+      v.frame = 0;
+      pics.push_back(draw(*device, s, v, ghost(a)).pic);
+      names.push_back("ONE FRAME " + fixed(a, 2));
+    }
+    for (const float a : kShares) {
+      std::vector<uint32_t> sum;
+      gl::Picture mean;
+      for (int k = 0; k < 16; ++k) {
+        v.frame = static_cast<uint64_t>(k);
+        const gl::Picture p = draw(*device, s, v, ghost(a)).pic;
+        if (sum.empty()) {
+          sum.assign(p.rgba.size(), 0);
+          mean = p;
+        }
+        for (size_t i = 0; i < p.rgba.size(); ++i) sum[i] += p.rgba[i];
+      }
+      for (size_t i = 0; i < sum.size(); ++i)
+        mean.rgba[i] = static_cast<uint8_t>((sum[i] + 8) / 16);
+      pics.push_back(mean);
+      names.push_back("16 FRAMES " + fixed(a, 2));
+    }
+    v.frame = 0;
+    lab.shot({"see-through",
+              "A RUNNER SEE-THROUGH",
+              "MorphDraw::alpha falling from solid to a quarter: top, one frame, a share of the "
+              "pixels left out by a 4 x 4 ordered pattern; bottom, sixteen frames with the pattern "
+              "moved each frame, averaged as the temporal resolve does. Nothing is sorted or "
+              "blended: the pixels drawn keep their depth.",
+              "top: the runner solid, then finer and finer dotted screens of it; bottom: the "
+              "runner solid, then a smooth ghost fading to faint with the snow showing through",
+              {{"view", "4.2 m, day"}}},
+             es::sheet_of(pics, names, 4), Det::measured);
+    const auto changed = [](const gl::Picture& a, const gl::Picture& b) {
+      double n = 0;
+      for (size_t i = 0; i < a.rgba.size(); ++i) n += a.rgba[i] != b.rgba[i] ? 1 : 0;
+      return n;
+    };
+    std::vector<gr::MorphDraw> plain = ghost(1);
+    const double gone = changed(draw(*device, s, v, ghost(0)).pic, draw(*device, s, v, {}).pic);
+    const double solid = changed(draw(*device, s, v, ghost(1)).pic, draw(*device, s, v, plain).pic);
+    lab.metric("see-through.gone-changed", gone, "count", Det::measured);
+    lab.metric("see-through.solid-changed", solid, "count", Det::measured);
+    if (gone != 0 || solid != 0) {
+      lab.fail("alpha 0 changed " + fixed(gone, 0) + " channels or alpha 1 changed " +
+                   fixed(solid, 0) + " against the plain runner",
+               "see_through_gone in morph.wgsl draws nothing at alpha 0 and everything at 1; "
+               "check morph.cpp packs 1 - alpha into shade_dir[3]. Skill: render.");
+    }
+  }
+
   // The cost: 64 runners in a crowd.
   {
     std::vector<gr::MorphDraw> crowd;
@@ -544,7 +610,8 @@ const gl::LabSpec kSpec{
     "engine/render/morph.hpp",
     "render",
     "Do vertex-animated models draw in their teams' colours, sharp or smooth, blend smoothly "
-    "between their frames, glow where their skin says, take a game's own light, and warp in?",
+    "between their frames, glow where their skin says, take a game's own light, warp in, and "
+    "show see-through?",
     {
         {"width", "640", "each view's width, px"},
         {"height", "360", "each view's height, px"},

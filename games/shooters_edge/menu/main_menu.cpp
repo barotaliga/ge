@@ -72,7 +72,7 @@ constexpr Entry kEntries[] = {
     {.page = "single",
      .id = "new",
      .text = "NEW GAME",
-     .hint = "The campaign from its first map, `start`. Needs a single-player program: the "
+     .hint = "The campaign from its first map, start. Needs a single-player program: the "
              "packs' own progs.dat.",
      .line = "newgame",
      .needs = "newgame",
@@ -174,7 +174,7 @@ constexpr Entry kEntries[] = {
     {.page = "setup",
      .id = "name",
      .text = "NAME",
-     .hint = "Your name, from the next map. Type `name <yours>` in the console.",
+     .hint = "Your name, from the next map. Type \"name <yours>\" in the console.",
      .line = "toggleconsole",
      .needs = "name",
      .closes = true},
@@ -1055,8 +1055,15 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
       con.execute("sv " + std::string(r->id) + " " + item_text(*r, row));
     }
     const ge::ui::Item* map = page->find("map");
-    if (map != nullptr && !map->disabled && !map->choices.empty())
-      con.execute("map " + map->choices[static_cast<size_t>(map->choice)]);
+    if (map == nullptr || map->disabled || map->choices.empty()) return Outcome::close;
+    const std::string name = map->choices[static_cast<size_t>(map->choice)];
+    // COOPERATIVE with a campaign to play: a new coop game on that map (coop on, so `addbot`
+    // seats companions), not the map alone, which would be the single-player game.
+    const ge::ui::Item* type = page->find("deathmatch");
+    const Entry* type_entry = find_entry("host", "deathmatch", table_of(host));
+    const bool coop = type != nullptr && !type->disabled && type_entry != nullptr &&
+                      item_text(*type_entry, *type) == "0" && con.has_command("coopgame");
+    con.execute(coop ? "coopgame 0 " + name : "map " + name);
     return Outcome::close;
   }
   if (!entry->line.empty()) con.execute(entry->line);

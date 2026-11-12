@@ -69,6 +69,13 @@ struct Transport {
   Tap* tap = nullptr;          // when set, every datagram in and out is mirrored to it (tap.hpp)
   FakeLink* fake = nullptr;    // when set, every send goes through its conditions first
   uint64_t send_failures = 0;
+  // A PUBLIC HOOK for a socket a game's own protocol owns: when set, every datagram received is
+  // offered to it first, and one it takes (returns true: a master's ack, a hub's status ask) is
+  // never handed to the game. The server core sets it for `ServerGame::serve` games, so they beat
+  // to the masters and answer the hub without knowing either (engine/server/server.hpp).
+  bool (*on_public)(void* ctx, const uint8_t* data, size_t size, const Address& from,
+                    int64_t now_us) = nullptr;
+  void* public_ctx = nullptr;
 };
 
 // A socket on the simulated network at `local` (family sim); false when it is taken.

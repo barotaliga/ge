@@ -63,6 +63,7 @@ std::string userinfo_of(const ClassicClientEnd& c) {
   if (c.cfg.speedjump)
     info_set(u, "cl_speedjump", "1");  // a server that does not know it ignores it
   if (!c.cfg.password.empty()) info_set(u, "password", c.cfg.password);
+  if (!c.cfg.prx.empty()) info_set(u, "prx", c.cfg.prx);
   if (c.cfg.ask[ExtFamily::z]) info_set(u, "*z_ext", std::to_string(c.cfg.ask[ExtFamily::z]));
   if (c.cfg.ask[ExtFamily::ge]) info_set(u, "*ge_ext", std::to_string(c.cfg.ask[ExtFamily::ge]));
   return u;

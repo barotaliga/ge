@@ -348,7 +348,9 @@ sh::Vec3f aim_at(SequelServer& s, const Attack& a, sh::Vec3f from, sh::Vec3f tar
   sh::normalize(dir);
   if (a.h == 0 && a.v == 0) return dir;
   const sh::ViewAxes ax = sh::angle_vectors({0, yaw_to(dir), 0});
-  sh::Vec3f end = from + dir * 8192 + ax.right * (crandom(s) * a.h) + ax.up * (crandom(s) * a.v);
+  const float across = crandom(s) * a.h;  // the draws in a fixed order: one draw a statement
+  const float up = crandom(s) * a.v;
+  const sh::Vec3f end = from + dir * 8192 + ax.right * across + ax.up * up;
   sh::Vec3f out = end - from;
   sh::normalize(out);
   return out;

@@ -71,6 +71,13 @@ bool model_shown(const QcServer& s, int e) {
   return text != nullptr && text[0] != 0;
 }
 
+float entity_alpha(const QcServer& s, int e) {
+  const float a = field(s, e, s.world_fields.alpha);
+  if (a > 0) return a > 1 ? 1.0f : a;
+  const pg::EntityExtras& x = s.extras[static_cast<size_t>(e)];
+  return x.has_alpha ? x.alpha : 1.0f;
+}
+
 void fill_world(const QcServer& s, RulesWorld& w, bool full) {
   // Before the first map there is no program running and nothing to show.
   if (s.q.layout == nullptr || s.q.vm.globals.empty() || s.sv.edicts.empty()) return;
@@ -149,8 +156,7 @@ void fill_world(const QcServer& s, RulesWorld& w, bool full) {
     r.colormap = static_cast<int>(field(s, e, f.colormap));
     r.skin = static_cast<int>(field(s, e, f.skin));
     r.effects = static_cast<int>(field(s, e, f.effects));
-    const pg::EntityExtras& x = s.extras[static_cast<size_t>(e)];
-    r.alpha = x.has_alpha ? x.alpha : 1.0f;
+    r.alpha = entity_alpha(s, e);
   }
 }
 

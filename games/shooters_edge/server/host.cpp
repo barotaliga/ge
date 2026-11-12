@@ -14,19 +14,19 @@ namespace {
 
 bool create_world(Host& h, const HostSettings& s, std::string& error) {
   if (s.maxclients < 1 || s.maxclients > sh::kMaxClients) {
-    error = "maxclients " + std::to_string(s.maxclients) + " is out of range; next: pass 1.." +
-            std::to_string(sh::kMaxClients);
+    error = "maxclients " + std::to_string(s.maxclients) + " is out of range (1.." +
+            std::to_string(sh::kMaxClients) + ")";
     return false;
   }
   if (s.max_edicts < s.maxclients + 16 || s.max_edicts > sh::kMaxEdicts) {
-    error = "max_edicts " + std::to_string(s.max_edicts) + " is out of range; next: pass " +
-            std::to_string(s.maxclients + 16) + ".." + std::to_string(sh::kMaxEdicts);
+    error = "max_edicts " + std::to_string(s.max_edicts) + " is out of range (" +
+            std::to_string(s.maxclients + 16) + ".." + std::to_string(sh::kMaxEdicts) + ")";
     return false;
   }
   if (s.map != "arena") {
     error = "map '" + s.map +
             "' cannot load: only the test arena runs until compiled maps "
-            "load (M18b); next: pass --map=arena";
+            "load; use --map=arena";
     return false;
   }
   h.settings = s;

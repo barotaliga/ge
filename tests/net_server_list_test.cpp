@@ -149,6 +149,7 @@ void build(World& w, ServerListConfig& cfg) {
 
 std::vector<std::string> names(const ServerList& l, const std::vector<int>& rows) {
   std::vector<std::string> out;
+  out.reserve(rows.size());
   for (int i : rows) out.push_back(l.entries[static_cast<size_t>(i)].info.name);
   return out;
 }

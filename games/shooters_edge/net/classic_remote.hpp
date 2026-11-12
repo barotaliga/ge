@@ -76,6 +76,7 @@
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_record.hpp"
+#include "shooters_edge/net/classic_watch.hpp"
 
 namespace shooters_edge::net {
 
@@ -96,6 +97,7 @@ struct Remote {
   // In the order that packs it (the lint holds the padding).
   gn::Transport* transport = nullptr;             // what it talks over (`own`, or remote_start's)
   const ge::console::Button* voip_key = nullptr;  // `+voip` (add_remote_commands)
+  std::unique_ptr<StreamWatch> watch;             // watching a broadcast (`watch`), not playing
   int64_t now_us = 0;                             // the tick clock
   double owed_s = 0;                              // wall time not yet a tick
   int64_t setangles = 0;                          // the server's turns taken
@@ -139,6 +141,12 @@ struct Remote {
   bool nolerp = false;                        // cl_nolerp: entities at the newest frame's places
   bool voip = true;                           // cl_voip: ask for voice when joining
 };
+
+// Watches the broadcast at `address` ("host:port": a stream port, our TV node's or a relay's;
+// classic_watch.hpp) as `name`: drawn as a joined game is, its frames as they come, no hands.
+// False with the reason when the address does not read or cannot be reached.
+bool remote_watch(Remote& r, const std::string& address, const std::string& name,
+                  const std::string& password, std::string& error);
 
 // Joins `address` ("host", "host:port"; the classic server port when none) over a UDP socket of
 // its own. False with the reason when the address or the socket does not open.

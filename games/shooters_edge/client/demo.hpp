@@ -113,7 +113,10 @@ struct DemoEntity {
   sh::Vec3f origin, angles;  // units, degrees
   int model = 0, frame = 0, skin = 0, effects = 0;
   int weapon_frame = 0;  // a player's held weapon's frame (client, multiview; single: DemoState's)
-  bool present = false;  // updated this frame (single) or in the last entity list (client)
+  float alpha = 1;       // how much of it shows (the transparency byte; 1 solid)
+  float scale = 1;       // its size (the scale byte)
+  float colormod[3] = {1, 1, 1};  // its light's tint (the colour-mod bytes)
+  bool present = false;           // updated this frame (single) or in the last entity list (client)
   bool dead = false, gib = false;  // a multiview player's state this frame (its dead and gib bits)
 };
 
@@ -126,7 +129,17 @@ struct DemoSound {
   sh::Vec3f origin;       // units
 };
 
+// The extended protocol's look bytes. An entity's transparency: 254 and 255 (unset) solid, else
+// b / 254 (0 gone). A player's: b / 255 (255 solid). An entity's scale b / 16 (0 whole), a
+// player's b / 50. A colour-mod byte b / 32 (32 32 32: no tint).
+inline float byte_alpha(int b) { return b >= 254 ? 1.0f : static_cast<float>(b) / 254.0f; }
+inline float player_byte_alpha(int b) { return static_cast<float>(b) / 255.0f; }
+inline float byte_scale(int b) { return b <= 0 ? 1.0f : static_cast<float>(b) / 16.0f; }
+inline float player_byte_scale(int b) { return b <= 0 ? 1.0f : static_cast<float>(b) / 50.0f; }
+inline float byte_colormod(int b) { return static_cast<float>(b) / 32.0f; }
+
 // The protocol's volume byte (255 full) and attenuation byte (64 a normal sound) as factors.
+
 inline float byte_volume(int b) { return static_cast<float>(b) / 255.0f; }
 inline float byte_attenuation(int b) { return static_cast<float>(b) / 64.0f; }
 
@@ -198,8 +211,12 @@ struct DemoState {
   std::array<int32_t, 32> frags{};          // client, multiview: each slot's frags (updatefrags)
   std::array<std::string, 32> names;        // client, multiview: each slot's name (its userinfo)
   std::array<std::string, 32> teams;        // client, multiview: each slot's team ("": none)
+  std::array<bool, 32> spectator{};         // client, multiview: the slot watches (`*spectator`)
   std::array<int, 32> top{}, bottom{};      // client, multiview: each slot's colours (0..13)
   std::string game;  // client, multiview: the game folder the server ran ("fortress"; "" unnamed)
+  // Client, multiview: the server's info keys in the order first seen (the signon's
+  // `fullserverinfo`, then each `serverinfo` change): `hostname`, `teamplay`, `maxclients` ...
+  std::vector<std::pair<std::string, std::string>> serverinfo;
   std::vector<DemoEntity> statics;             // the level's static entities, in order
   std::vector<DemoStaticSound> static_sounds;  // the level's looping sounds, in order
   // This frame's alone (emptied when the next one is read):
@@ -218,6 +235,7 @@ struct Demo {
   std::vector<ge::vfs::Wrapping> layers;  // what open_demo peeled, outermost first
   std::string inner_name;                 // the recording's name inside an archive ("": none)
   bool truncated = false;                 // a packed recording cut short: plays to its last flush
+  bool replay_v2 = false;                 // it came out of a replay file version 2 (.ged)
   size_t pos = 0;
   DemoState state;
   std::vector<DemoEntity> baselines;  // by entity number

@@ -315,14 +315,20 @@ int cmd_join(Ctx& ctx) {
     return refuse(ctx, 1, std::string(ctx.spec.title) + " has no window to join with",
                   std::string(ctx.spec.cli) + " help");
   if (!need_places(ctx)) return 1;
-  std::vector<std::string> argv = {program_path(bin_dir(ctx), ctx.spec.window)};
+  std::vector<std::string> argv = {window_path(ctx)};
   ctx.spec.join_words(ctx, ctx.words[0], argv);
-  const std::string log = (fs::path(ctx.places.logs) / "join.log").string();
+  return start_window(ctx, argv, "join", "on " + ctx.words[0], ctx.words[0]);
+}
+
+std::string window_path(const Ctx& ctx) { return program_path(bin_dir(ctx), ctx.spec.window); }
+
+int start_window(Ctx& ctx, const std::vector<std::string>& argv, const std::string& log_name,
+                 const std::string& what, const std::string& address) {
+  const std::string log = (fs::path(ctx.places.logs) / (log_name + ".log")).string();
   const std::string shown = joined(argv);
   if (ctx.has("dry-run"))
-    return answer(
-        ctx, json_obj({{"address", json_str(ctx.words[0])}, {"command", json_str(shown)}}), shown,
-        "would start the game on " + ctx.words[0] + " (--dry-run: nothing started)");
+    return answer(ctx, json_obj({{"address", json_str(address)}, {"command", json_str(shown)}}),
+                  shown, "would start the game " + what + " (--dry-run: nothing started)");
   if (!fs::exists(argv[0]))
     return refuse(
         ctx, 1, argv[0] + " is not there",
@@ -332,14 +338,13 @@ int cmd_join(Ctx& ctx) {
   long pid = 0;
   std::string error;
   if (!spawn_detached(argv, "", log, pid, error)) return refuse(ctx, 1, error, "read " + log);
-  return answer(
-      ctx,
-      json_obj({{"address", json_str(ctx.words[0])},
-                {"pid", json_num(pid)},
-                {"log", json_str(log)},
-                {"command", json_str(shown)}}),
-      "the game is starting on " + ctx.words[0] + " (process " + std::to_string(pid) + ")", "",
-      std::string(ctx.spec.cli) + " logs join says what it did");
+  return answer(ctx,
+                json_obj({{"address", json_str(address)},
+                          {"pid", json_num(pid)},
+                          {"log", json_str(log)},
+                          {"command", json_str(shown)}}),
+                "the game is starting " + what + " (process " + std::to_string(pid) + ")", "",
+                std::string(ctx.spec.cli) + " logs " + log_name + " says what it did");
 }
 
 int cmd_logs(Ctx& ctx) {
