@@ -2,7 +2,7 @@
 //
 // ge:summary The pilot at a gap trick: the gap in the stretch, the curve and the run to its lip
 // ge:keywords pilot gap-trick gap_in gap_curve_near gap_curve gap-circle gap_run gap_lands
-// ge:keywords run-to-the-lip ground-strafe rollout
+// ge:keywords run-to-the-lip ground-strafe rollout gap_takeoff gap_off gap_lands_late
 // ge:skill shooter bots
 // ge:test tests/shooter_nav_gaps_test.cpp
 #include "shooter/pilot_gaps.hpp"
@@ -24,6 +24,12 @@ constexpr float kGapRunWindow = 120;   // a jump tried from each place this near
 constexpr float kGapRunPast = 24;      // and none this far past it along the jump
 constexpr size_t kGapCurveLinks = 12;  // the gap within this many links ahead (nodes ~32 apart)
 constexpr int kGapKeyLate = 2;  // a keyboard's jump key goes down up to this many commands late
+// The takeoff: the next commands' places tried, a takeoff no further than this past its start (the
+// lip), the ground's friction a second; a gap given up stays off the routes this long.
+constexpr int kGapRunOn = 4;
+constexpr float kGapPastStart = 24;
+constexpr float kGroundFriction = 4;
+constexpr double kGapOff_s = 10;
 
 bool over_harm(const Pilot& p, Vec3f S, Vec3f T) {
   return nav_harm_near(*p.g, {(S.x + T.x) * 0.5f, (S.y + T.y) * 0.5f, S.z}, kGapCurveHarm);
@@ -194,6 +200,85 @@ GapRun gap_run(const Pilot& p, const PilotSense& s, int msec) {
     }
   }
   return out;
+}
+
+// A gap trick given up: off every route this player plans for `kGapOff_s` (a goal chosen again
+// clears the pilot's cut, and the same spot would plan it again at once).
+void gap_off(Pilot& p, NavExtraLink l) {
+  for (size_t i = 0; i < p.gaps_off.size(); i++)
+    if (p.gaps_off[i].from == l.from && p.gaps_off[i].to == l.to) {
+      p.gaps_off_s[i] = p.clock_s + kGapOff_s;
+      return;
+    }
+  p.gaps_off.push_back(l);
+  p.gaps_off_s.push_back(p.clock_s + kGapOff_s);
+}
+
+// THE GAP'S TAKEOFF, on a hop's landing with a gap trick in its stretch (nav_gaps.hpp): the move
+// flies a jump pressed now, and from each of the next few commands' places (a run on at the
+// friction's loss). A jump now that lands across, by the gap's landing: the gap jumped. One a
+// little further on that does: run on, the brink guard stood aside (`brink_free`: the run is
+// heading at the lip on purpose). Else a hop now that comes down short and safe on this side: an
+// ordinary hop. Else the gap is given up (cut until the next goal; `replanned`, and the caller
+// plans the goal round it), the brink guard braking the run at the lip.
+bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, bool& replanned) {
+  const NavGraph& g = *p.g;
+  const size_t gk = static_cast<size_t>(p.gap_k);
+  const NavLink* gl = link_of(g, p.route[gk], p.route[gk + 1]);
+  const Vec3f S = node(g, p.route[gk]).origin, T = node(g, p.route[gk + 1]).origin;
+  MoveSettings move;
+  move.maxspeed = s.maxspeed;
+  Vec3f dir{T.x - S.x, T.y - S.y, 0};
+  normalize(dir);
+  if (s.world != nullptr && gl != nullptr) {
+    const float dt = static_cast<float>(msec) * 0.001f;
+    const float keep = 1 - kGroundFriction * dt;  // a command's run on the ground keeps this
+    Vec3f at = s.origin, v = s.velocity;
+    for (int k = 0; k <= kGapRunOn; k++) {
+      if (k > 0) {
+        at = at + v * dt;
+        v = v * keep;
+      }
+      const float along = dot(Vec3f{at.x - S.x, at.y - S.y, 0}, dir);
+      if (along > kGapPastStart) break;  // past the lip
+      if (!gap_lands(*s.world, move, at, v, T, msec)) continue;
+      // Under a keyboard the jump's key goes down late: asked only where it lands either way.
+      if (k == 0 && (!p.set.curve_keys || gap_lands_late(p, s, msec, T))) {
+        p.gap_flight = true;
+        p.gap_aloft = false;
+        p.gap_pressed_s = p.clock_s;
+        p.gap_link = {p.route[gk], p.route[gk + 1], NavKind::jump, gl->time_s};
+        p.safe_flight = true;
+        p.brink_free = true;
+        p.stats.gap_jumps++;
+        p.stats.gap_speed += across({}, s.velocity);
+        because = "a gap trick: the jump from here lands across";
+        return true;
+      }
+      p.brink_free = true;
+      because = "a gap trick: running on to where its jump lands across";
+      return false;
+    }
+    const JumpFlight hop = fly_jump(*s.world, move, s.origin, s.velocity, T, msec);
+    if (hop.landed && hop.end.z >= S.z - kStepHeight &&
+        dot(Vec3f{hop.end.x - S.x, hop.end.y - S.y, 0}, dir) <= 0) {
+      p.safe_flight = true;
+      p.brink_free = true;
+      because = "a gap trick ahead: a hop that lands this side";
+      return true;
+    }
+  }
+  if (p.set.gap_circle && across(s.origin, S) > kGapCurveFrom) {
+    // Short of the lip and too far out to curve into it yet: run on along the ground to where
+    // the curve begins (a hop from here would come down past it).
+    because = "a gap trick ahead: running on to its lip";
+    return false;
+  }
+  p.stats.gap_refused++;
+  if (gl != nullptr) gap_off(p, {p.route[gk], p.route[gk + 1], NavKind::jump, gl->time_s});
+  replanned = true;  // the caller plans again
+  because = "a gap trick too fast to reach: planned round it";
+  return false;
 }
 
 }  // namespace ge::shooter::pilot_parts

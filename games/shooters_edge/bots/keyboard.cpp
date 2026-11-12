@@ -138,8 +138,7 @@ void press_keys(KeyHand& keys, const sh::Features& features, sh::MoveCmd& cmd, s
       set = on_hi ? hi : lo;
     } else {
       set = static_cast<int>(std::floor(ang / 45 + 0.5)) % 8;
-      if (keys.set >= 0 && std::fabs(wrap(ang - keys.set * 45.0)) <= 22.5 + kHold)
-        set = keys.set;
+      if (keys.set >= 0 && std::fabs(wrap(ang - keys.set * 45.0)) <= 22.5 + kHold) set = keys.set;
     }
   }
   keys.set = set;

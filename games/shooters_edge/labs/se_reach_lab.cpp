@@ -317,9 +317,8 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
       int planned = 0, jumped = 0, landed = 0, refused = 0, arrived = 0, circles = 0, jumps = 0;
       float speed = 0, time = 0;
       for (uint32_t seed = 1; seed <= kGapSeeds; seed++) {
-        const bt::RunResult r =
-            bt::run_route(nav.world, g, from, T, hands, seed, ps, kGapLimit_s, v, keys,
-                          traits[sh::Trait::moves]);
+        const bt::RunResult r = bt::run_route(nav.world, g, from, T, hands, seed, ps, kGapLimit_s,
+                                              v, keys, traits[sh::Trait::moves]);
         if (gap_trace != nullptr && seed == 1) {
           for (size_t i = 0; i < r.trail.size(); i++) {
             const sh::Vec3f o = r.trail[i], vv = r.velocity[i];
