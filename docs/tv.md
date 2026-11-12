@@ -38,8 +38,9 @@ and no command is smuggled through chat.
 
 ## The replay file, version 2
 
-A file and a live stream are the same bytes, so a viewer joining a broadcast and a player opening
-a file run the same code, and a broadcast saved to disk is already a demo.
+Its files end in `.ger`. A file and a live stream are the same bytes, so a viewer joining a
+broadcast and a player opening a file run the same code, and a broadcast saved to disk is already
+a demo.
 
 - **Header.** Magic, version, the game and its behaviour version (`GameSpec::version`), the track
   table (kind, id, codec), the generic meta (map, mode, start time, players and teams) and an
@@ -60,27 +61,90 @@ a file run the same code, and a broadcast saved to disk is already a demo.
 | `chat`, `voice` | Text lines; Opus frames | Every game |
 | `radar` | Low-rate positions and headings for an overhead map (reserved, M56) | Optional |
 
-- **Trailer.** An index of blocks by time, the final meta (duration, scores) and the file's
-  SHA-256. Optional: a live stream has none until it ends.
+- **Trailer.** An index of blocks by time and the final meta (duration, scores). Optional: a live
+  stream has none until it ends. The file's SHA-256, which a TV node and the hub list files by, is
+  taken over the whole file by whoever lists it; it is not stored in the file.
 - **Version 1** (the text replay file of M23b) still loads; a game's classic formats convert to
   version 2 and back byte for byte.
 
 ## The field codec
 
-A game declares each field of a track once (its type, its quantum and its predictor: none, delta
-from the last value, linear from the last two, or an angle that wraps), and the codec writes each
-value as its residual from the prediction through an adaptive binary range coder with a context per
-field. Text, chat and anything without a schema go through zstd. Measured on 15 real classic match
-recordings with a throwaway prototype (residuals handed to xz instead of a range coder):
+The coder (`engine/replay/codec.hpp`) is an adaptive binary range coder: integers only, so it
+writes the same bytes everywhere. A probability starts even and moves toward each bit it sees by a
+share that shrinks as it sees more (half at first, 1/32 after fifteen bits), so a model started
+over at a keyframe learns again within a few dozen values. Over it sit two models: an integer (its
+bit length through a tree, its sign, the three bits under the top bit, the rest raw) and a byte
+(a tree under a context of the writer's choosing, usually the byte before).
 
-| Recording | Raw | zstd -19 (today's packed demo) | xz -9e | Prototype field model |
+A game's face writes each field as its residual from a prediction, through a model of its own,
+under a context of its own. Shooter's Edge's face for the classic multiview records
+(`games/shooters_edge/client/demo_v2.hpp`) predicts:
+
+- a player's origin and view angles from the line through the last two, carried on by the time
+  since; the frame, weapon frame, skin and effects from the last;
+- an entity list's words from the last list's (the same entities change the same fields frame
+  after frame), and each entity's origin from the line through its last two;
+- a sound's point from its entity's origin; a stat, a ping or a frag count from the last one
+  written for it; a delta list's sequence as one on from the last;
+- a record's kind as the one that came after the last kind last time;
+- text as a template (the text with its whole numbers taken out: a team's info line, a frag
+  message) from the last 256 seen, and each number from the same template's last numbers.
+
+A record whose body does not walk whole is kept as its bytes, so every file comes back byte for
+byte. A keyframe every 30 seconds (each one starts the models and predictions over) costs about 5%
+against none and lets a late joiner start at most 30 seconds back; one every 10 seconds costs about
+10%.
+
+Measured by the `replay-codec` lab on 13 real classic match recordings (sizes in KB; unpacking
+with the release flags):
+
+| Recording | Raw | zstd 19 (today's `.mvdz`) | xz 6 | `.ger` | `.ger` / `.mvdz` | Unpack |
+| --- | --- | --- | --- | --- | --- | --- |
+| 4on4, dm2, 20 min | 7,354 | 3,876 | 3,465 | 1,947 | 0.50 | 0.34 s |
+| 4on4, e1m2, 20 min | 7,125 | 3,763 | 3,366 | 1,908 | 0.51 | |
+| 4on4, dm6 | 5,767 | 3,309 | 3,068 | 1,851 | 0.56 | |
+| 4on4, dm3 | 4,300 | 2,493 | 2,272 | 1,392 | 0.56 | |
+| 2on2, dm6 | 1,408 | 807 | 751 | 473 | 0.59 | |
+| Duel, dm2 | 1,064 | 578 | 523 | 310 | 0.54 | |
+| Duel, dm6 | 1,045 | 515 | 479 | 338 | 0.66 | |
+
+Every recording came back byte for byte. Where the bytes go in a 4on4: the players' view angles
+(about 27%) and origins (21%), the entities' origins (13%), text (7%); the angles are the mouse's
+own noise at 1/65536 of a turn, which no prediction removes. A 4on4 broadcast is about 48 kbit/s
+raw, 25 as today's packed demo and 13 as `.ger`.
+
+## Forward
+
+`engine/forward` (`forward.hpp`). An opaque hop between a game's client and its server, for a
+player whose own path to the server is worse than a path through a forwarder near them. It knows
+nothing of the game: once a route is up it copies datagrams both ways, byte for byte.
+
+- **The route is set up first**, by the forward's own datagrams, before the game's handshake: the
+  client asks the first hop with the rest of the route ("hop@hop@server"), gets a cookie only that
+  hop can make from the client's address, asks again with it, and is told `routed` (or why not).
+  Each hop takes the next entry off the route; a hop with more after it dials the next forwarder
+  from a socket of its own for this client and answers only when the whole chain is up, so a
+  refusal anywhere comes back to the client in words. Then the game's client connects to the first
+  hop as if it were the server, and the game's own handshake runs end to end.
+- **Allow list on by default**: a hop forwards only to the destinations it lists (a host, or one
+  of its ports); `open` is an operator's explicit choice.
+- **Alive both ways**: the client sends an alive every second and the hop echoes it, so the client
+  knows its round trip to the hop; a client whose NAT gives it a new port is followed by the salt in
+  its alive. A client silent both ways for 15 s is dropped.
+- **No answer bigger than its ask**: the route request is padded past every answer, status asks go
+  through `net/status.hpp`'s cookie, and STUN is answered only when the request is as big as its
+  answer.
+
+The `forward` lab gives the player's direct path each preset and puts the forwarders on good legs:
+
+| Direct path | Direct rtt p50 / p95 (ms), lost | One forwarder | Two forwarders | Route set up (one / two) |
 | --- | --- | --- | --- | --- |
-| Duel, 10.3 min | 1,064 KB | 577 KB | 524 KB | 281 KB |
-| 4on4, 20.3 min | 7,354 KB | 3,869 KB | 3,461 KB | 1,929 KB |
-| 4on4, 20.2 min | 4,978 KB | 2,725 KB | 2,512 KB | 1,509 KB |
+| broadband | 34 / 36, 0.2% | 36 / 36, 0% | 62 / 62, 0% | 36 / 88 ms |
+| mobile | 111 / 125, 2.4% | 36 / 36, 0% | 62 / 62, 0% | 36 / 88 ms |
+| bad | 224 / 253, 3.0% | 36 / 36, 0% | 62 / 62, 0% | 36 / 88 ms |
+| awful | 459 / 504, 18.8% | 36 / 36, 0% | 62 / 62, 0% | 36 / 88 ms |
 
-So a 4on4 broadcast is about 48 kbit/s raw, 25 as today's packed demo and 12.7 with the model;
-M57a's `replay-codec` lab holds the real codec to at least half of today's packed size.
+A stranger's asks of every kind draw answers of at most a third of their size.
 
 ## Decisions
 
@@ -91,4 +155,5 @@ M57a's `replay-codec` lab holds the real codec to at least half of today's packe
 | The demo format's name | Version 2 of the replay file | A new name: the engine already calls a kept run a replay |
 | The classic compressed client demo | Not read; the field codec replaces it | Running the player's own installed program to unpack it (a later, opt-in choice); studying third-party reconstructions of unknown origin |
 | Teamplay helpers | In Shooter's Edge's client | In the proxy, as the classic proxy did: they need no place on the network path |
+| Forward's route | Set up by the forward's own datagrams before the game's handshake, so any game on any wire goes through unchanged | Carried in the game's connect (the classic way): every game's handshake would have to carry it; the classic face reads it there |
 | The browser viewer | The WebSocket downstream lands with TV (M57b), for the hub's web viewer (M56) | Later: the hub needs it first |

@@ -267,13 +267,15 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   r->classic_grade = look::palette_grade({});
   if (!map.from_file) return r;
   std::vector<uint8_t> store;
-  std::span<const uint8_t> palette = find_file(files, "gfx/palette.lmp", store);
+  const ge::classicenhance::Profile& content = profiles::content_of(*game.game);
+  std::span<const uint8_t> palette = game_palette(files, store, content);
   std::vector<uint8_t> grey;
   if (palette.size() < 768) {  // no palette in the packs: a grey ramp, so the map still shows
     grey.resize(768);
     for (size_t i = 0; i < 768; i++) grey[i] = static_cast<uint8_t>(i / 3);
     palette = grey;
-    ge::core::output::status("shooters_edge: no gfx/palette.lmp in the packs; drawing grey");
+    ge::core::output::status("shooters_edge: no palette in " + std::string(content.palette) +
+                             " in the game's files; drawing grey");
   }
   const std::vector<uint8_t> palette_copy(palette.begin(), palette.end());
   if (grey.empty()) r->grade_palette = palette_copy;

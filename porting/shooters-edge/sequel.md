@@ -31,9 +31,10 @@ match rules (`sequel-rules.md`), and the spirit, not the bits, for the monsters
   before relying on the count; the demo has `pak0.pak` alone).
 - **The rules are a native library** in the game folder (`gamex86.dll` on Windows, `gamei386.so`
   on Linux), loaded by the engine and called through one table of functions each way (§ The game
-  library). Shooter's Edge never loads it: it is code for one platform, unsigned, and not ours.
-  The adapter's `find_program` names it with the form "native game library, server side" and
-  passes over it (`runs_form`); our own rules runner (M18t4) plays its maps instead.
+  library). Until M18v10 the adapter's `find_program` names it with the form "native game
+  library, server side" and passes over it (`runs_form`); our own rules runner (M18t4) plays its
+  maps instead. From M18v10 (Niclas's choice, 2026-11-11) our servers load it where the platform
+  matches, so existing mods are hosted unchanged (`sequel-plan.md` step 10).
 - **The server runs at 10 frames a second** (100 ms a frame, `FRAMETIME` 0.1) while each player's
   move runs once a command, at the client's own rate (commands carry their length in
   milliseconds). This is the biggest difference from the first game's loop (`gameloop.md`): the
