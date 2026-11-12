@@ -75,7 +75,7 @@ struct Rig {
       fw::ForwardConfig fc;
       fc.name = "hop" + std::to_string(i + 1);
       fc.allow = {server_at(), hop_at(1)};
-      fc.seed = static_cast<uint64_t>(i + 7);
+      fc.seed = static_cast<uint64_t>(i) + 7;
       const auto node = static_cast<uint32_t>(i + 1);
       fw::forward_init(fwd[i], fc, port[i], [this, i, node](gn::Transport& out) {
         return gn::open_sim_transport(out, net, gn::sim_address(node, next_port[i]++));

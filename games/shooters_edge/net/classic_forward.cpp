@@ -1,4 +1,8 @@
-// The classic face of our forward (classic_forward.hpp).
+// The classic face of our forward (classic_forward.hpp): the handshake, the answers, the probes.
+//
+// ge:summary The classic face of our forward: prx handshake, ping, status, pingstatus, probes
+// ge:keywords forward classic-forward prx getchallenge pingstatus probe
+// ge:skill net shooter
 #include "shooters_edge/net/classic_forward.hpp"
 
 #include <algorithm>
