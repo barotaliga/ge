@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <string_view>
+#include <vector>
 
 #include "brush/trace.hpp"
 #include "core/libm/libm.hpp"
@@ -184,16 +185,43 @@ bool can_damage(SequelServer& s, sh::Vec3f at, int i) {
 
 // A blow on player `target` from `attacker` (a slot; -1 the world) along `dir`: pushed, shared
 // with the armour, the rest off his health; at 0 he dies.
+// Power armour's part of a blow along `dir` (the screen only from in front: the way back to where
+// it came from within ~73° of his facing), its cells taken.
+int power_save(SequelPlayer& p, sh::Vec3f dir, int damage) {
+  const int screen = p.body.counts[sq_item("item_power_screen")];
+  const int shield = p.body.counts[sq_item("item_power_shield")];
+  int& cells = p.body.ammo[static_cast<int>(SqAmmo::cells)];
+  if (!p.power_on || (screen == 0 && shield == 0) || cells <= 0) return 0;
+  int part = 0, per_cell = 1;
+  if (shield > 0) {
+    part = damage * 2 / 3;
+    per_cell = 2;
+  } else {
+    const sh::ViewAxes ax = sh::angle_vectors({0, p.view_angles.y, 0});
+    if (sh::dot(ax.forward, dir * -1.0f) <= 0.3f) return 0;  // a hit from the side or behind
+    part = damage / 3;
+  }
+  const int saved = std::min(part, cells * per_cell);
+  cells -= saved / per_cell;
+  return saved;
+}
+
 void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, int knockback,
-          bool energy, int weapon) {
+          bool energy, int weapon, bool no_armour = false) {
   if (!fightable(s, target) || damage <= 0) return;
   SequelPlayer& p = s.players[target];
   if (!deathmatch(s) && skill(s) == 0) damage = std::max(1, damage / 2);
-  if (knockback > 0 && sh::normalize(dir) > 0) {
+  const bool along = sh::normalize(dir) > 0;
+  if (knockback > 0 && along) {
     const float push = sq_knockback(knockback, kMass, attacker == target);
     pack(p.move.velocity, unpack(p.move.velocity) + dir * push);
   }
-  const int saved = sq_armour_save(p.body, damage, energy);
+  if (p.invulnerable_until > s.level_time) return;  // the push still lands
+  int saved = 0;
+  if (!no_armour) {
+    if (along) saved += power_save(p, dir, damage);
+    saved += sq_armour_save(p.body, damage - saved, energy);
+  }
   p.health -= float(damage - saved);
   if (p.health <= 0) {
     p.health = std::max(p.health, -999.0f);
@@ -285,7 +313,7 @@ void rail(SequelServer& s, int slot, sh::Vec3f start, const sh::ViewAxes& ax, in
 }
 
 void launch(SequelServer& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f start,
-            const sh::ViewAxes& ax, int damage, int weapon) {
+            const sh::ViewAxes& ax, int damage, int quad, int weapon) {
   const Line reach = shoot_line(s, origin, start, 1u << slot);
   SequelMissile* m = new_missile(s);
   if (m == nullptr) return;
@@ -311,14 +339,14 @@ void launch(SequelServer& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f 
     case SqShot::rocket:
       m->velocity = ax.forward * 650;
       m->dies_at = s.level_time + 8000.0 / 650.0;
-      m->damage = damage + ge::core::int_in(s.rng, 0, 20);
-      m->radius_damage = 120;
+      m->damage = damage + ge::core::int_in(s.rng, 0, 20) * quad;
+      m->radius_damage = 120 * quad;
       m->radius = 120;
       break;
     default:  // the BFG's ball
       m->velocity = ax.forward * 400;
       m->dies_at = s.level_time + 20;
-      m->radius_damage = 200;
+      m->radius_damage = 200 * quad;
       m->radius = 100;
       break;
   }
@@ -341,19 +369,23 @@ void fire(SequelServer& s, int slot, int shots) {
   const sh::Vec3f eye = origin + sh::Vec3f{0, 0, p.view_height - 8};
   const sh::Vec3f start = eye + ax.forward * r.forward + ax.right * r.right;
   const bool dm = deathmatch(s);
-  const int damage = dm ? r.damage_dm : r.damage_sp;
-  sound(s, slot + 1, origin, r.sound);
+  const int quad = p.quad_until > s.level_time ? 4 : 1;  // ×4 damage and kick
+  const int damage = (dm ? r.damage_dm : r.damage_sp) * quad;
+  const int kick = r.kick * quad;
+  if (p.silencer_shots > 0)
+    p.silencer_shots--;
+  else
+    sound(s, slot + 1, origin, r.sound);
   switch (r.shot) {
     case SqShot::pellets:
       if (w == int(SqWeapon::super_shotgun)) {
         for (const float turn : {-5.0f, 5.0f}) {
           const sh::ViewAxes half = sh::angle_vectors(p.view_angles + sh::Vec3f{0, turn, 0});
           for (int i = 0; i < 10; i++)
-            bullet(s, slot, origin, start, half, 1000, 500, damage, r.kick, w);
+            bullet(s, slot, origin, start, half, 1000, 500, damage, kick, w);
         }
       } else {
-        for (int i = 0; i < 12; i++)
-          bullet(s, slot, origin, start, ax, 500, 500, damage, r.kick, w);
+        for (int i = 0; i < 12; i++) bullet(s, slot, origin, start, ax, 500, 500, damage, kick, w);
       }
       return;
     case SqShot::bullet:
@@ -362,14 +394,14 @@ void fire(SequelServer& s, int slot, int shots) {
         if (w == int(SqWeapon::chaingun))
           from = eye + ax.forward * r.forward + ax.right * (7 + crandom(s) * 4) +
                  ax.up * (crandom(s) * 4);
-        bullet(s, slot, origin, from, ax, 300, 500, damage, r.kick, w);
+        bullet(s, slot, origin, from, ax, 300, 500, damage, kick, w);
       }
       return;
     case SqShot::rail:
-      rail(s, slot, start, ax, damage, dm ? 200 : 250, w);
+      rail(s, slot, start, ax, damage, (dm ? 200 : 250) * quad, w);
       return;
     default:
-      for (int i = 0; i < shots; i++) launch(s, slot, r.shot, origin, start, ax, damage, w);
+      for (int i = 0; i < shots; i++) launch(s, slot, r.shot, origin, start, ax, damage, quad, w);
       return;
   }
 }
@@ -427,6 +459,117 @@ void fight_spawn(SequelServer& s, int slot) {
   p.hand = SqHand{};
   p.stepped = false;
   p.killer = -1;
+  p.quad_until = p.invulnerable_until = p.breather_until = p.suit_until = 0;
+  p.silencer_shots = 0;
+  p.power_on = false;
+  p.air_until = s.level_time + 12;
+  p.drown_at = 0;
+  p.drown_damage = 2;
+  p.old_fall = 0;
+}
+
+bool fight_use(SequelServer& s, int slot, int item) {
+  if (item < 0 || item >= kSqItemCount || !fightable(s, slot)) return false;
+  SequelPlayer& p = s.players[slot];
+  const SqItem& it = kSqItems[item];
+  if (p.body.counts[item] <= 0) return false;
+  if (it.kind == SqKind::power_armour) {
+    p.power_on = !p.power_on;
+    return true;
+  }
+  if (it.kind != SqKind::powerup) return false;
+  p.body.counts[item]--;
+  const auto extend = [&s, &it](double& until) {
+    until = std::max(until, s.level_time) + it.amount;
+  };
+  const std::string_view name = it.classname;
+  if (name == "item_quad")
+    extend(p.quad_until);
+  else if (name == "item_invulnerability")
+    extend(p.invulnerable_until);
+  else if (name == "item_silencer")
+    p.silencer_shots += it.amount;
+  else if (name == "item_breather")
+    extend(p.breather_until);
+  else if (name == "item_enviro")
+    extend(p.suit_until);
+  return true;
+}
+
+void fight_body_frame(SequelServer& s, int slot) {
+  if (!fightable(s, slot)) return;
+  SequelPlayer& p = s.players[slot];
+  const double now = s.level_time;
+  const bool suit = p.suit_until > now;
+  // Air: refilled by the rebreather or the suit; once it runs out under water, a blow each second
+  // that grows by 2 from 2 to 15, no armour against it; surfacing resets both.
+  if (p.breather_until > now || suit) p.air_until = std::max(p.air_until, now + 10);
+  if (p.water_level < 3) {
+    p.air_until = std::max(p.air_until, now + 12);
+    p.drown_damage = 2;
+  } else if (now >= p.air_until && now >= p.drown_at) {
+    p.drown_at = now + 1;
+    const int blow = p.drown_damage;
+    p.drown_damage = std::min(p.drown_damage + 2, 15);
+    hurt(s, slot, -1, {}, blow, 0, false, kSqByWater, true);
+    if (!p.alive) return;
+  }
+  // Lava and slime each frame he is in them, by how deep.
+  if (p.water_level > 0 && (p.water_type & sh::kSqLava) != 0) {
+    hurt(s, slot, -1, {}, (suit ? 1 : 3) * p.water_level, 0, false, kSqByLava);
+    if (!p.alive) return;
+  }
+  if (p.water_level > 0 && (p.water_type & sh::kSqSlime) != 0 && !suit) {
+    hurt(s, slot, -1, {}, p.water_level, 0, false, kSqBySlime);
+    if (!p.alive) return;
+  }
+  // Falling: the fall speed lost since the last frame (the last frame's when still falling but
+  // slower, else the change on landing), squared × 0.0001; less in water.
+  const float vz = unpack(p.move.velocity).z;
+  float delta = 0;
+  if (p.old_fall < 0 && vz > p.old_fall && !p.on_ground)
+    delta = p.old_fall;
+  else if (p.on_ground)
+    delta = vz - p.old_fall;
+  p.old_fall = vz;
+  delta = delta * delta * 0.0001f;
+  if (p.water_level == 3) return;
+  if (p.water_level == 2) delta *= 0.25f;
+  if (p.water_level == 1) delta *= 0.5f;
+  const bool no_falling = deathmatch(s) && (s.cvars.find("dmflags")->integer() & 8) != 0;
+  if (delta <= 30 || no_falling) return;
+  hurt(s, slot, -1, {0, 0, -1}, std::max(1, static_cast<int>((delta - 30) / 2)), 0, false,
+       kSqByFall);
+}
+
+bool fight_limits(SequelServer& s) {
+  if (!s.pending_map.empty()) return false;
+  const int frags = static_cast<int>(s.cvars.find("fraglimit")->number);
+  const double minutes = s.cvars.find("timelimit")->number;
+  std::string why;
+  if (minutes > 0 && s.level_time >= minutes * 60) why = "Time is up.";
+  for (int i = 0; i < sh::kMaxClients && why.empty() && frags > 0; i++)
+    if (s.clients[i].active && s.players[i].frags >= float(frags))
+      why = name_of(s, i) + " reached the frag limit.";
+  if (why.empty()) return false;
+  print_all(s, why + "\n");
+  // The next map of `sv_maplist` (spaces or commas, wrapping), else this one again.
+  std::vector<std::string> list;
+  std::string word;
+  for (const char c : s.cvars.find("sv_maplist")->value + " ") {
+    if (c == ' ' || c == ',') {
+      if (!word.empty() && word != "0") list.push_back(word);  // an unset list reads "0"
+      word.clear();
+    } else {
+      word += c;
+    }
+  }
+  std::string next = list.empty() ? s.map_name : list[0];
+  for (size_t i = 0; i < list.size(); i++)
+    if (list[i] == s.map_name) next = list[(i + 1) % list.size()];
+  s.pending_map = next;
+  s.pending_change = MapChange::change_level;
+  return true;
 }
 
 void fight_clear(SequelServer& s) {
@@ -527,6 +670,11 @@ void fight_choose(SequelServer& s, int slot, int w) {
 void fight_took(SequelServer& s, int slot, int item) {
   const int w = sq_weapon_of_item(item);
   SequelPlayer& p = s.players[slot];
+  const SqItem& it = kSqItems[item];
+  const bool dm = deathmatch(s);
+  if (it.kind == SqKind::power_armour && dm && p.body.counts[item] == 1) p.power_on = true;
+  if (it.kind == SqKind::powerup && dm && (s.cvars.find("dmflags")->integer() & 16) != 0)
+    fight_use(s, slot, item);                     // instant items
   if (w < 0 || p.body.counts[item] != 1) return;  // only a newly owned weapon
   if (!deathmatch(s) || p.hand.weapon == int(SqWeapon::blaster)) sq_choose(p.hand, p.body, w);
 }
@@ -535,7 +683,10 @@ bool fight_command(SequelServer& s, int slot, const std::string& cmd, const std:
   SequelPlayer& p = s.players[slot];
   if (cmd == "use") {
     const int w = sq_weapon_named(arg);
-    if (w >= 0) fight_choose(s, slot, w);
+    if (w >= 0)
+      fight_choose(s, slot, w);
+    else
+      fight_use(s, slot, sq_item_named(arg));
     return true;
   }
   if (cmd != "weapnext" && cmd != "weapprev") return false;
@@ -574,6 +725,14 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
       line = victim + " blew themselves up.";
     else if (killer == slot)
       line = victim + " gave up.";
+    else if (weapon == kSqByFall)
+      line = victim + " fell too far.";
+    else if (weapon == kSqByLava)
+      line = victim + " sank into the lava.";
+    else if (weapon == kSqBySlime)
+      line = victim + " melted in the slime.";
+    else if (weapon == kSqByWater)
+      line = victim + " ran out of air.";
     else
       line = victim + " died.";
   }

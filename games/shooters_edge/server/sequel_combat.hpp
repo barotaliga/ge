@@ -99,6 +99,9 @@ int sq_weapon_of_item(int item);
 // The weapon called `name` (its name, any case), or -1.
 int sq_weapon_named(std::string_view name);
 
+// The item a player calls `name` (its pickup name, any case), or -1.
+int sq_item_named(std::string_view name);
+
 // Whether `body` holds weapon `w` (the blaster always).
 bool sq_holds(const SqBody& body, int w);
 // Whether `body` holds `w` and the ammo for a shot of it.

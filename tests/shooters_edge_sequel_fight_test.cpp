@@ -4,6 +4,8 @@
 // hit out); a rocket fired at the floor lifts its shooter and hurts him by half (the rocket jump);
 // the machinegun's bullets take 8 each; a number key changes the weapon; a taken weapon is raised
 // at once over the blaster; `kill` scores −1; the HUD shows the weapon's model, frame and ammo.
+// Then the rest of the fight: quad damage ×4, invulnerability, the power shield and the screen
+// (only from in front), a fall's damage, lava each frame, and the frag limit ending the level.
 //
 // ge:summary Tests: the sequel's fight: rail, rocket, rocket jump, bullets, changing, obituaries
 // ge:keywords test sequel fight railgun rocket rocket-jump machinegun obituary frags use-weapon
@@ -42,6 +44,8 @@ std::shared_ptr<const br::Map> hall() {
   w.models[0].push_back(br::box_brush(floor_lo, floor_hi, sh::kSqSolid, "world/floor"));
   w.models[0].push_back(br::box_brush(east_lo, east_hi, sh::kSqSolid, "world/wall"));
   w.models[0].push_back(br::box_brush(west_lo, west_hi, sh::kSqSolid, "world/wall"));
+  const float lava_lo[3] = {700, -256, 0}, lava_hi[3] = {1000, 256, 40};  // a pool over the floor
+  w.models[0].push_back(br::box_brush(lava_lo, lava_hi, sh::kSqLava, "world/lava"));
   w.entities.push_back(
       entity({{"classname", "info_player_start"}, {"origin", "-300 0 24"}, {"angle", "0"}}));
   w.entities.push_back(entity({{"classname", "weapon_railgun"}, {"origin", "-260 0 24"}}));
@@ -154,7 +158,7 @@ TEST(a_rocket_flies_and_hits_for_its_direct_damage) {
 }
 
 TEST(a_rocket_at_the_floor_lifts_its_shooter_and_hurts_him_by_half) {
-  auto a = facing(800);
+  auto a = facing(-800);
   give(*a, sv::SqWeapon::rocket_launcher, 5);
   run(*a, 8, sh::kButtonAttack, 89);
   run(*a, 2);
@@ -215,4 +219,66 @@ TEST(kill_scores_minus_one_and_the_dead_respawn_by_attack) {
   run(*a, 8, sh::kButtonAttack);
   CHECK(a->p(0).alive && a->p(0).health == 100);
   CHECK(a->p(0).hand.weapon == int(sv::SqWeapon::blaster));
+}
+
+TEST(quad_damage_strikes_four_times_as_hard_and_invulnerability_takes_none) {
+  auto a = facing(300);
+  a->p(1).health = 1000;
+  give(*a, sv::SqWeapon::railgun, 10);
+  a->p(0).body.counts[sv::sq_item("item_quad")] = 1;
+  CHECK(a->r.client_command(0, "use Quad Damage") == sv::CommandResult::mod);
+  CHECK(a->p(0).body.counts[sv::sq_item("item_quad")] == 0);
+  run(*a, 8, sh::kButtonAttack);
+  CHECK_MSG(a->p(1).health == 1000 - 400, std::to_string(a->p(1).health));
+  a->p(1).body.counts[sv::sq_item("item_invulnerability")] = 1;
+  a->r.client_command(1, "use invulnerability");
+  run(*a, 16 * 8, sh::kButtonAttack);
+  CHECK(a->p(1).health == 600 && a->p(0).body.ammo[int(sv::SqAmmo::slugs)] == 8);
+}
+
+TEST(the_power_shield_takes_two_thirds_and_the_screen_only_guards_in_front) {
+  auto a = facing(300);
+  a->p(1).body.counts[sv::sq_item("item_power_shield")] = 1;
+  a->p(1).body.ammo[int(sv::SqAmmo::cells)] = 100;
+  a->r.client_command(1, "use Power Shield");
+  CHECK(a->p(1).power_on);
+  give(*a, sv::SqWeapon::railgun, 10);
+  run(*a, 8, sh::kButtonAttack);
+  CHECK_MSG(a->p(1).health == 100 - 34, std::to_string(a->p(1).health));  // 66 saved
+  CHECK(a->p(1).body.ammo[int(sv::SqAmmo::cells)] == 100 - 33);
+  // A screen, Ben facing away from the shot: it guards nothing.
+  auto b = facing(300);
+  b->p(1).body.counts[sv::sq_item("item_power_screen")] = 1;
+  b->p(1).body.ammo[int(sv::SqAmmo::cells)] = 100;
+  b->r.client_command(1, "use Power Screen");
+  give(*b, sv::SqWeapon::railgun, 10);
+  run(*b, 8, sh::kButtonAttack);
+  CHECK(!b->p(1).alive);
+  CHECK(b->p(1).body.ammo[int(sv::SqAmmo::cells)] == 100);
+}
+
+TEST(a_long_fall_hurts_and_lava_burns_each_frame) {
+  auto a = facing(300);
+  a->p(0).move.origin[2] = static_cast<int16_t>((24 + 600) * 8);
+  run(*a, 8 * 20);
+  // Down 600 units: about 810 units/s at the last frame before the floor, (65 − 30) / 2 = 17.
+  CHECK_MSG(a->p(0).health == 100 - 17, std::to_string(a->p(0).health));
+  place(*a, 1, 850);  // into the lava pool
+  run(*a, 8 * 3);
+  CHECK(a->p(1).health < 100 && a->p(1).water_level > 0);
+  run(*a, 8 * 40);
+  CHECK(!a->p(1).alive);
+  CHECK(!a->s().obituaries.empty() && a->s().obituaries.back() == "Ben sank into the lava.");
+  CHECK(a->p(1).frags == -1);
+}
+
+TEST(the_frag_limit_ends_the_level) {
+  auto a = facing(300);
+  a->r.console("fraglimit 1");
+  give(*a, sv::SqWeapon::railgun, 10);
+  a->p(1).health = 50;
+  run(*a, 8, sh::kButtonAttack);
+  CHECK(!a->p(1).alive && a->p(0).frags == 1);
+  run(*a, 8);
+  CHECK(a->r->pending_map == "hall");
 }
