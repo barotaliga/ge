@@ -11,6 +11,7 @@
 #include "progs/text.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/server/builtins.hpp"
+#include "shooters_edge/server/shot_help.hpp"
 
 namespace shooters_edge::server {
 
@@ -166,6 +167,7 @@ static void change_user_info(QcServer& s, int slot, const std::string& key,
   if (!set_info_value(s.clients[slot].userinfo, key, value, old)) return;
   if (key == "name") set_netname(s, slot + 1, value);
   if (key == "cl_speedjump") s.sv.clients[slot].speedjump = value == "1";  // pm_speedjump's ask
+  note_aim_help_info(s, slot, key, value);
   call_hook(s, HookId::user_info_changed, s.named.user_info_changed, slot + 1, {key, old, value});
 }
 

@@ -7,6 +7,7 @@
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_qvm_server_test.cpp
 #include "shooters_edge/server/qvm_server.hpp"
+#include "shooters_edge/server/shot_help.hpp"
 
 #include <cstring>
 
@@ -270,6 +271,7 @@ std::unique_ptr<QvmServer> make_qvm_server(std::vector<uint8_t> module, const Qv
                                            std::string& error) {
   auto s = std::make_unique<QvmServer>();
   if (!create_qvm_server(*s, std::move(module), opt, error)) return nullptr;
+  add_aim_help(*s);
   return s;
 }
 
@@ -477,6 +479,7 @@ void qvm_set_user_info(QvmServer& s, int slot, const std::string& key, const std
   std::string old;
   set_info_value(c.userinfo, key, value, old);
   if (key == "cl_speedjump") s.sv.clients[slot].speedjump = value == "1";  // pm_speedjump's ask
+  note_aim_help_info(s, slot, key, value);
   if (live) {
     set_words(s, "setinfo \"" + key + "\" \"" + value + "\"");
     call_as(s, slot + 1, sim::kQvmUserInfoChanged, 1);

@@ -1,13 +1,15 @@
 // The administrator's words on the classic endpoint (classic_admin.hpp states them).
 //
-// ge:summary users, status, speedjump grants and rcon on the classic endpoint
-// ge:keywords classic_admin users status speedjump rcon grant
+// ge:summary users, status, the player aids' grants and rcon on the classic endpoint
+// ge:keywords classic_admin users status speedjump aimhelp rjump player-aids rcon grant
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_admin_test.cpp
 #include "shooters_edge/net/classic_admin.hpp"
 
 #include <algorithm>
 #include <cstdlib>
+#include <utility>
+#include <vector>
 
 #include "console/console.hpp"
 #include "core/num.hpp"
@@ -21,27 +23,92 @@ namespace shooters_edge::net {
 
 namespace pg = ge::progs;
 
-// A share as the key and the tables show it: at most two decimals, no trailing zeros.
-std::string speedjump_share_text(float share) {
-  std::string t = ge::core::num::to_fixed(static_cast<double>(share), 2);
-  while (!t.empty() && t.back() == '0') t.pop_back();
-  if (!t.empty() && t.back() == '.') t.pop_back();
-  return t;
-}
+const ge::server::AidKind kAids[] = {
+    {"speedjump", "easy jump", "*speedjump", "0.8", true},
+    {"aimhelp", "aim help", "*aimhelp", "1", false},
+    {"rjump", "rocket jump helper", "*rjump", "1", false},
+};
 
-// `text` read whole as a share 0..1, rounded to hundredths; false when it is not one.
-bool speedjump_parse_share(const std::string& text, float& out) {
-  if (text.empty()) return false;
-  char* end = nullptr;
-  const double v = std::strtod(text.c_str(), &end);
-  if (end == text.c_str() || *end != '\0' || !(v >= 0 && v <= 1)) return false;
-  out = static_cast<float>(ge::core::num::round(v * 100)) / 100.0f;
-  return true;
-}
+std::span<const ge::server::AidKind> classic_aids() { return kAids; }
 
 namespace {
 
-constexpr const char* kGrantKey = "*speedjump";
+namespace gsv = ge::server;
+
+const gsv::AidKind& speedjump_kind() { return kAids[0]; }
+const gsv::AidKind& aimhelp_kind() { return kAids[1]; }
+
+int frags_of(const ClassicServer& s, int slot) {
+  return s.clients[slot].rules_active ? static_cast<int>(s.game->world.clients[slot].numbers.frags)
+                                      : 0;
+}
+
+float server_share(const ClassicServer& s) { return s.game->sv.set.move.speedjump; }
+
+bool cvar_on(const ClassicServer& s, const char* name) {
+  const ge::console::Cvar* v = s.game->cvars.find(name);
+  return v != nullptr && v->on();
+}
+
+std::string leeway_text(const ClassicServer& s) {
+  const sh::ServerSettings& set = s.game->sv.set;
+  return gsv::aid_share_text(set.aimhelp_x) + " across, " + gsv::aid_share_text(set.aimhelp_y) +
+         " up and down";
+}
+
+// What seat `slot` has of `kind`: how it is allowed and how it is used.
+gsv::AidSeat seat_aid(const ClassicServer& s, int slot, const gsv::AidKind& kind) {
+  const ClassicClient& c = s.clients[slot];
+  gsv::AidSeat a;
+  a.kind = &kind;
+  const std::string granted = info_get(c.userinfo, kind.key);
+  a.granted = !granted.empty();
+  const std::string name = kind.name;
+  if (name == "speedjump") {
+    if (a.granted)
+      a.allowed = "granted " + granted;
+    else if (server_share(s) > 0)
+      a.allowed = "on for all at " + gsv::aid_share_text(server_share(s));
+    if (info_get(c.userinfo, "cl_speedjump") == "1") a.used = "cl_speedjump 1";
+  } else if (name == "aimhelp") {
+    if (a.granted) a.allowed = "granted, " + leeway_text(s);
+    const int helped = static_cast<size_t>(slot) < s.game->sv.clients.size()
+                           ? s.game->sv.clients[slot].aim_helped
+                           : 0;
+    if (helped > 0)
+      a.used = std::to_string(helped) + " shot" + (helped == 1 ? "" : "s") + " helped";
+  } else if (name == "rjump") {
+    if (a.granted)
+      a.allowed = "granted";
+    else if (cvar_on(s, "sv_rjump") || cvar_on(s, "sv_rrjump"))
+      a.allowed = "on for all";
+  } else if (a.granted) {
+    a.allowed = "granted " + granted;
+  }
+  return a;
+}
+
+gsv::UserRow user_row(const ClassicServer& s, int slot) {
+  const ClassicClient& c = s.clients[slot];
+  gsv::UserRow r;
+  r.userid = c.userid;
+  r.frags = frags_of(s, slot);
+  r.name = c.name;
+  r.spectator = c.spectator;
+  r.bot = c.local && !info_get(c.userinfo, "*bot").empty();
+  for (const gsv::AidKind& k : kAids) {
+    gsv::AidSeat a = seat_aid(s, slot, k);
+    if (!a.allowed.empty() || !a.used.empty()) r.aids.push_back(std::move(a));
+  }
+  return r;
+}
+
+std::vector<gsv::UserRow> user_rows(const ClassicServer& s) {
+  std::vector<gsv::UserRow> rows;
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (s.clients[i].state != ConnState::free) rows.push_back(user_row(s, i));
+  return rows;
+}
 
 std::string pad(std::string s, size_t width) {
   if (s.size() < width) s.append(width - s.size(), ' ');
@@ -52,58 +119,41 @@ std::string pad_left(const std::string& s, size_t width) {
   return s.size() < width ? std::string(width - s.size(), ' ') + s : s;
 }
 
-int frags_of(const ClassicServer& s, int slot) {
-  return s.clients[slot].rules_active ? static_cast<int>(s.game->world.clients[slot].numbers.frags)
-                                      : 0;
-}
-
-float server_share(const ClassicServer& s) { return s.game->sv.set.move.speedjump; }
-
-// The easy jump's column: `-`, `asks`, the share pm_speedjump allows, or `<share> granted`.
-std::string easy_jump_column(const ClassicServer& s, int slot) {
-  const ClassicClient& c = s.clients[slot];
-  const std::string granted = info_get(c.userinfo, kGrantKey);
-  if (!granted.empty()) return granted + " granted";
-  if (info_get(c.userinfo, "cl_speedjump") != "1") return "-";
-  return server_share(s) > 0 ? speedjump_share_text(server_share(s)) : "asks";
-}
-
 std::string address_column(const ClassicClient& c) {
   if (c.local) return info_get(c.userinfo, "*bot").empty() ? "local" : "bot";
   return gn::to_string(c.address);
 }
 
-std::string speedjump_list(const ClassicServer& s) {
+// An aid's grants: who has it, and how to give it.
+std::string aid_list(const ClassicServer& s, const gsv::AidKind& kind) {
   std::string t;
   int n = 0;
   for (int i = 0; i < sh::kMaxClients; i++) {
     const ClassicClient& c = s.clients[i];
     if (c.state == ConnState::free) continue;
-    const std::string granted = info_get(c.userinfo, kGrantKey);
+    const std::string granted = info_get(c.userinfo, kind.key);
     if (granted.empty()) continue;
     t += "  " + std::to_string(c.userid) + " " + c.name + ": " + granted + "\n";
     n++;
   }
-  const std::string head = "easy jump: pm_speedjump " + speedjump_share_text(server_share(s)) +
-                           " for everyone who asks; ";
-  if (n == 0) return head + "granted to nobody (type \"users\", then \"speedjump <id> on\")\n";
+  std::string head = std::string(kind.words) + ": ";
+  if (&kind == &speedjump_kind())
+    head += "pm_speedjump " + gsv::aid_share_text(server_share(s)) + " for everyone who asks; ";
+  if (&kind == &aimhelp_kind()) head += leeway_text(s) + "; ";
+  if (n == 0)
+    return head + "granted to nobody (type \"users\", then \"" + kind.name + " <id> on\")\n";
   return head + "granted to " + std::to_string(n) + ":\n" + t;
+}
+
+std::string join_detail(const gsv::AidKind& kind, const void* ctx) {
+  const ClassicServer& s = *static_cast<const ClassicServer*>(ctx);
+  if (&kind == &aimhelp_kind()) return leeway_text(s);
+  return {};
 }
 
 }  // namespace
 
-std::string classic_users(const ClassicServer& s) {
-  std::string t = "userid frags name\n------ ----- ----\n";
-  int n = 0;
-  for (int i = 0; i < sh::kMaxClients; i++) {
-    const ClassicClient& c = s.clients[i];
-    if (c.state == ConnState::free) continue;
-    t += pad_left(std::to_string(c.userid), 6) + " " + pad_left(std::to_string(frags_of(s, i)), 5) +
-         " " + c.name + "\n";
-    n++;
-  }
-  return t + std::to_string(n) + " total users\n";
-}
+std::string classic_users(const ClassicServer& s) { return gsv::users_text(user_rows(s)); }
 
 std::string classic_status_table(const ClassicServer& s) {
   int players = 0;
@@ -111,8 +161,8 @@ std::string classic_status_table(const ClassicServer& s) {
     if (c.state != ConnState::free) players++;
   std::string t = s.cfg.hostname + " on " + s.game->map_name + ", " + std::to_string(players) +
                   " player" + (players == 1 ? "" : "s") + ", pm_speedjump " +
-                  speedjump_share_text(server_share(s)) + "\n";
-  t += "slot id  name             frags ping loss min address               easy jump\n";
+                  gsv::aid_share_text(server_share(s)) + "\n";
+  t += "slot id  name             frags ping loss min address               aids\n";
   for (int i = 0; i < sh::kMaxClients; i++) {
     const ClassicClient& c = s.clients[i];
     if (c.state == ConnState::free) continue;
@@ -127,7 +177,7 @@ std::string classic_status_table(const ClassicServer& s) {
          pad(name, 16) + " " + pad_left(std::to_string(frags_of(s, i)), 5) + " " +
          pad_left(std::to_string(ping), 4) + " " + pad_left(std::to_string(c.loss_pct), 4) + " " +
          pad_left(std::to_string(minutes), 3) + " " + pad(address_column(c), 21) + " " +
-         easy_jump_column(s, i) + "\n";
+         gsv::aids_column(user_row(s, i)) + "\n";
   }
   return t;
 }
@@ -143,29 +193,53 @@ int classic_find_seat(const ClassicServer& s, const std::string& id_or_name) {
   return -1;
 }
 
+std::string classic_aid_granted(const ClassicServer& s, int slot, const gsv::AidKind& kind) {
+  return info_get(s.clients[slot].userinfo, kind.key);
+}
+
+bool classic_grant(ClassicServer& s, const gsv::AidKind& kind, int userid, const std::string& value,
+                   std::string& error) {
+  const int slot = classic_find_seat(s, std::to_string(userid));
+  if (slot < 0) {
+    error = "No player has user id " + std::to_string(userid) + ". Type \"users\" to see the ids.";
+    return false;
+  }
+  if (info_get(s.clients[slot].userinfo, kind.key) == value) return true;
+  classic_set_info(s, slot, kind.key, value);
+  const std::string& name = s.clients[slot].name;
+  std::string told;
+  if (value.empty())
+    told = name + "'s " + kind.words + " is no longer granted\n";
+  else if (&kind == &speedjump_kind())
+    told = name + " is granted the easy jump (share " + value + ", cl_speedjump 1)\n";
+  else if (&kind == &aimhelp_kind())
+    told = name + " is granted the aim help (" + leeway_text(s) + ")\n";
+  else
+    told = name + " is granted the " + kind.words + "\n";
+  classic_print_all(s, told);
+  s.log.push_back(std::string(kind.name) + " " + std::to_string(slot) + " " + name + " " +
+                  (value.empty() ? "off" : value));
+  return true;
+}
+
 float classic_speedjump_granted(const ClassicServer& s, int slot) {
-  const std::string v = info_get(s.clients[slot].userinfo, kGrantKey);
+  const std::string v = classic_aid_granted(s, slot, speedjump_kind());
   return v.empty() ? -1.0f : static_cast<float>(std::strtod(v.c_str(), nullptr));
 }
 
 bool classic_speedjump(ClassicServer& s, int userid, float share, std::string& error) {
-  const int slot = classic_find_seat(s, std::to_string(userid));
-  if (slot < 0) {
-    error = "speedjump: no player has user id " + std::to_string(userid) +
-            " (type \"users\" for the ids)";
-    return false;
-  }
   if (share > 1) share = 1;
-  const std::string value = share < 0 ? std::string() : speedjump_share_text(share);
-  if (info_get(s.clients[slot].userinfo, kGrantKey) == value) return true;
-  classic_set_info(s, slot, kGrantKey, value);
-  const std::string& name = s.clients[slot].name;
-  classic_print_all(
-      s, share < 0 ? name + "'s easy jump is no longer granted\n"
-                   : name + " is granted the easy jump (share " + value + ", cl_speedjump 1)\n");
-  s.log.push_back("speedjump " + std::to_string(slot) + " " + name + " " +
-                  (value.empty() ? "off" : value));
-  return true;
+  return classic_grant(s, speedjump_kind(), userid,
+                       share < 0 ? std::string() : gsv::aid_share_text(share), error);
+}
+
+std::string classic_aids_join_line(const ClassicServer& s) {
+  return gsv::aids_join_line(user_rows(s), &join_detail, &s);
+}
+
+void classic_tell_aids(ClassicServer& s, int slot) {
+  const std::string line = classic_aids_join_line(s);
+  if (!line.empty()) client_print(s, slot, 2, line);
 }
 
 bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) {
@@ -180,37 +254,38 @@ bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) 
     out = classic_status_table(s);
     return true;
   }
-  if (cmd != "speedjump") return false;
-  if (w.count < 2) {
-    out = speedjump_list(s);
-    return true;
-  }
-  const std::string who = pg::word(w, 1);
-  const int slot = classic_find_seat(s, who);
-  if (slot < 0) {
-    out = "speedjump: no player called " + who + " (type \"users\" for the ids and names)\n";
-    return true;
-  }
-  const std::string what = w.count >= 3 ? pg::word(w, 2) : "on";
-  float share = -1;
-  if (what == "on")
-    share = kGrantShare;
-  else if (what != "off" && !speedjump_parse_share(what, share)) {
-    out = "speedjump: \"" + what + "\" is not on, off or a share 0..1\n";
-    return true;
-  }
+  gsv::AidOrder order;
   std::string error;
-  if (!classic_speedjump(s, s.clients[slot].userid, share, error)) {
+  if (!gsv::aid_parse(kAids, line, order, error)) return false;
+  if (!error.empty()) {
+    out = error + "\n";
+    return true;
+  }
+  if (order.who.empty()) {
+    out = aid_list(s, *order.kind);
+    return true;
+  }
+  const int slot = classic_find_seat(s, order.who);
+  if (slot < 0) {
+    out = "No player is called " + order.who + ". Type \"users\" to see the ids and names.\n";
+    return true;
+  }
+  if (!classic_grant(s, *order.kind, s.clients[slot].userid, order.value, error)) {
     out = error + "\n";
     return true;
   }
   const ClassicClient& c = s.clients[slot];
-  out = share < 0 ? c.name + " (id " + std::to_string(c.userid) + "): easy jump not granted\n"
-                  : c.name + " (id " + std::to_string(c.userid) + "): easy jump granted at " +
-                        speedjump_share_text(share) +
-                        (info_get(c.userinfo, "cl_speedjump") == "1"
-                             ? "\n"
-                             : "; it acts once he sets cl_speedjump 1\n");
+  const std::string who = c.name + " (id " + std::to_string(c.userid) + "): ";
+  if (order.value.empty())
+    out = who + order.kind->words + " not granted\n";
+  else if (order.kind == &speedjump_kind())
+    out = who + "easy jump granted at " + order.value +
+          (info_get(c.userinfo, "cl_speedjump") == "1" ? "\n"
+                                                       : "; it acts once he sets cl_speedjump 1\n");
+  else if (order.kind == &aimhelp_kind())
+    out = who + "aim help granted (" + leeway_text(s) + ")\n";
+  else
+    out = who + order.kind->words + " granted\n";
   return true;
 }
 
@@ -282,7 +357,7 @@ void add_admin_commands(ge::console::Console& con, client::Listen& l, Remote& r)
     }
     return false;
   };
-  con.add_command("users", "users: the players on the server, with their user ids",
+  con.add_command("users", "users: the players on the server, with their user ids and aids",
                   [&r, hosted](Con& c, const Args& a) {
                     if (r.active) {
                       client_command(r.end, "users");
@@ -291,23 +366,35 @@ void add_admin_commands(ge::console::Console& con, client::Listen& l, Remote& r)
                     if (!hosted(c, a))
                       c.print("users: you are not in a match. Start one with map, or connect.");
                   });
-  con.add_command("status",
-                  "status: the match you host: every player's id, ping, address and easy jump",
+  con.add_command("status", "status: the match you host: every player's id, ping, address and aids",
                   [&r, hosted](Con& c, const Args& a) {
                     if (hosted(c, a)) return;
                     c.print(r.active ? "status: answers for the match you host; on a joined server "
                                        "type users, or rcon <password> status"
                                      : "status: you are not hosting a match");
                   });
-  con.add_command("speedjump",
-                  "speedjump <id|name> on|off|<share 0..1>: grant one player the easy jump on "
-                  "the match you host (alone: who has it)",
-                  [&r, hosted](Con& c, const Args& a) {
-                    if (hosted(c, a)) return;
-                    c.print(r.active ? "speedjump: the server's administrator grants it "
-                                       "(rcon <password> speedjump <id> on)"
-                                     : "speedjump: you are not hosting a match");
-                  });
+  for (const ge::server::AidKind& k : kAids) {
+    const std::string name = k.name;
+    std::string usage = name;
+    usage += " <id|name> on|off";
+    if (k.share) usage += "|<share 0..1>";
+    usage += ": grant one player the ";
+    usage += k.words;
+    usage += " on the match you host (alone: who has it)";
+    con.add_command(name, usage, [&r, hosted, name](Con& c, const Args& a) {
+      if (hosted(c, a)) return;
+      if (!r.active) {
+        c.print("You are not hosting a match.");
+        return;
+      }
+      std::string how = "The server's administrator grants it (rcon <password> ";
+      how += name;
+      how += " <id> on), or the players by a vote (vote ";
+      how += name;
+      how += " <player> on).";
+      c.print(how);
+    });
+  }
   con.add_command("rcon", "rcon <password> <line>: a line for the console of the server joined",
                   [&r](Con& c, const Args& a) {
                     if (!r.active) {

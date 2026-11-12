@@ -287,7 +287,8 @@ Any player may ask everyone on the server to change a setting until the map chan
   the administrator's grant (`speedjump`, disclosed in the player's user info) made for this map
   by the players. Its key is `speedjump:<user id>`, so each player is his own change; the next map
   puts back what he had (an administrator's grant comes back, a voted one goes). A player who has
-  left is passed over. `sv_vote_deny speedjump` keeps it to the administrator.
+  left is passed over. `sv_vote_deny speedjump` keeps it to the administrator. Every player aid
+  is voted on the same way (below).
 - **Midair, a match mode.** `k_midair 1` (and `k_midair_minheight` 0..4) turns a deathmatch into
   the rocket duel where only a hit on a player in the air counts: every spawn holds the rocket
   launcher with rockets that never run out, 250 health and 200 armour, nothing lies on the map, a
@@ -297,6 +298,50 @@ Any player may ask everyone on the server to change a setting until the map chan
   (`plugins/shooter/midair.hpp`); the sequel's rules play it today, the classic arena's with their
   move to C++. A vote on `k_midair` restarts the map into or out of the mode; on rules that do not
   play it the vote is refused.
+
+## Player aids: help for one chosen player
+
+Some players need help the rest do not: a player with a disability that makes fast hand motion
+hard, a player on a phone's touch controls. A server gives such help to a chosen player and to
+nobody else (`engine/server/aids.hpp`, every game's), and says so to everyone.
+
+- **The game says which aids it has** (`AidKind`: the word, the words a player reads, the
+  server-only user-info key a grant is kept in, what `on` grants, whether a share 0..1 may be
+  given). Shooter's Edge has three, for every classic game it plays: `speedjump` (the easy jump: the
+  client strafes for him), `aimhelp` (the aim help: the server bends his hitscan shots) and `rjump`
+  (the rocket jump helper, `+rjump` and `+rrjump`).
+- **Off until granted.** An aid acts for a player only when it is granted to him: by a vote of the
+  players (`vote aimhelp <player> on`, keyed `aimhelp:<user id>`, for the map) or by the
+  administrator (`aimhelp <id|name> on|off` on the server's console or over `rcon`). A server
+  setting may turn an aid on for everyone where the aid has one (`pm_speedjump`, `sv_rjump`);
+  the aim help has none.
+- **Disclosed.** A grant is the aid's key in the player's info (`*aimhelp 1`), which a client
+  cannot set itself; everyone is told when it is given or taken back; a player who joins is told
+  every grant on the server with its numbers ("Player aids on this server: bert has aim help (24
+  across, 48 up and down).").
+- **`users` shows them.** The players list is the engine's (`users_text`), the same in every game:
+  a row a seat with the user id, the frags, the name and the seat's aids, each with how it is
+  allowed (granted, or on for all) and whether it is used (`cl_speedjump 1`, `3 shots helped`).
+- **The aim help** (`plugins/shooter/aim_help.hpp`): a granted player's hitscan shot (bullets,
+  pellets, beams, the rail, a blade) that would pass beside, above or below another player by no
+  more than the leeway is bent onto him. Each shot is bent on its own, so a weapon held down (a
+  beam each frame) follows him while the aim stays within the leeway. The leeway is the server's:
+  `sv_aimhelp_x` sideways and `sv_aimhelp_y` up and down, in units at the target (24 and 48; 0
+  turns that axis off, so `sv_aimhelp_x 0` is the vertical help alone). A wall between, a teammate
+  under `teamplay` and a line that already hits are never bent onto. The classic mods' servers bend
+  the line a mod traces for its shot (`shot_help.hpp`); the sequel's server bends its own lines.
+- **Missiles are led** (`aim_lead`): a rocket, a grenade or a nail he launches is flown ahead (a
+  step 1/128 s, gravity for a thrown one) beside each other player foreseen the same way (running
+  on at his velocity, or falling until the floor under him); when it would pass him by no more
+  than the leeway at the moment it reaches him, it is sent where he will be instead: a straight
+  missile at its own speed, a thrown one on the arc that lands on him after the same flight. The
+  classic mods' servers lead the missile the loop has just spawned (`Server::missile_watch`); the
+  sequel's leads its own launch.
+- **The weapons it may bend** are the server's (`sv_aimhelp_allow`, `sv_aimhelp_deny`: weapon
+  names, spaces or commas between, `*` any characters; deny wins, an empty allow list allows the
+  rest), named by the weapon held: `axe sg ssg ng sng gl rl lg` in the classic game, `blaster sg
+  ssg mg cg gl rl hb rg bfg` in the sequel. `sv_aimhelp_deny "rl lg"` keeps it off the two
+  strongest; a casual server leaves both lists empty.
 
 ## Open for extension
 

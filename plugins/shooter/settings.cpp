@@ -75,6 +75,12 @@ constexpr Setting kSettings[] = {
      "0..1: a client with cl_speedjump 1 strafes for its player at this share of the best "
      "strafe's gain while forward and jump are held (0 off)",
      0, 1, true, false, true, GE_SETTING_FIELD(move.speedjump, float), true},
+    {"sv_aimhelp_x",
+     "the aim help's leeway sideways, units at the target: a granted player's hitscan shot that "
+     "misses a player by no more than this is bent onto him (0: no sideways help)",
+     0, 256, true, false, true, GE_SETTING_FIELD(aimhelp_x, float)},
+    {"sv_aimhelp_y", "the aim help's leeway up and down, units at the target (0: no vertical help)",
+     0, 256, true, false, true, GE_SETTING_FIELD(aimhelp_y, float)},
 };
 
 #undef GE_SETTING_FIELD
