@@ -279,11 +279,6 @@ void temp_entity(Io& io, SequelFace& f) {
       p();
       break;
     case 10:
-      by();
-      p();
-      d();
-      by();
-      break;
     case 15:
     case 25:
     case 29:
