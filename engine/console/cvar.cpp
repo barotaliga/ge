@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <string>
+#include <vector>
 
 #include "core/num_text.hpp"
 
@@ -100,15 +102,62 @@ Cvars::Cvars(bool is_server) : is_server_(is_server) {
   sv_cheats_ = &add({.name = "sv_cheats",
                      .fallback = "0",
                      .flags = kServer | kServerInfo,
-                     .help = "1 lets the cheat-flagged cvars change (development, experiments)",
-                     .kind = CvarKind::boolean});
+                     .help = "Whether the settings and commands marked as cheats may be used.",
+                     .kind = CvarKind::boolean,
+                     .values = "0: no cheats (the default); 1: cheats allowed, for development "
+                               "and experiments"});
 }
 
 Cvar* Cvars::find(std::string_view name) {
   const std::string key = lower(name);
   for (auto& c : all_)
     if (c->name == key) return c.get();
+  for (const Synonym& s : synonyms_)
+    if (s.part < 0 && s.name == key) return s.target;
   return nullptr;
+}
+
+bool Cvars::add_synonym(std::string_view name, std::string_view target, int part) {
+  if (!valid_name(name)) return false;
+  const std::string key = lower(name);
+  for (const auto& c : all_)
+    if (c->name == key) return false;
+  Cvar* t = find(target);
+  if (t == nullptr) return false;
+  for (const Synonym& s : synonyms_)
+    if (s.name == key) return s.target == t && s.part == part;
+  synonyms_.push_back({key, t, part < 0 ? -1 : part});
+  return true;
+}
+
+const Synonym* Cvars::synonym(std::string_view name) const {
+  const std::string key = lower(name);
+  for (const Synonym& s : synonyms_)
+    if (s.name == key) return &s;
+  return nullptr;
+}
+
+namespace {
+
+// The words of a value, split on spaces.
+std::vector<std::string> words_of(std::string_view v) {
+  std::vector<std::string> out;
+  size_t at = 0;
+  while (at < v.size()) {
+    while (at < v.size() && v[at] == ' ') at++;
+    const size_t start = at;
+    while (at < v.size() && v[at] != ' ') at++;
+    if (at > start) out.emplace_back(v.substr(start, at - start));
+  }
+  return out;
+}
+
+}  // namespace
+
+std::string Cvars::synonym_value(const Synonym& s) const {
+  if (s.part < 0) return s.target->value;
+  const std::vector<std::string> w = words_of(s.target->value);
+  return static_cast<size_t>(s.part) < w.size() ? w[static_cast<size_t>(s.part)] : std::string();
 }
 
 const Cvar* Cvars::find(std::string_view name) const {
@@ -131,6 +180,7 @@ Cvar& Cvars::make(const CvarSpec& spec, CvarTarget target) {
   c->name = lower(spec.name);
   c->fallback = std::string(spec.fallback);
   c->help = std::string(spec.help);
+  c->values = std::string(spec.values);
   c->flags = spec.flags | (kept ? (c->flags & kArchive) : 0u);
   c->kind = spec.kind;
   c->min = spec.min;
@@ -200,6 +250,14 @@ SetResult Cvars::set(std::string_view name, std::string_view value, Source sourc
   if (!valid_name(name)) return SetResult::bad_name;
   Cvar* c = find(name);
   if (c == nullptr) {
+    if (const Synonym* s = synonym(name)) {  // a part synonym: its word of the target replaced
+      std::vector<std::string> w = words_of(s->target->value);
+      if (w.size() <= static_cast<size_t>(s->part)) w.resize(static_cast<size_t>(s->part) + 1, "0");
+      w[static_cast<size_t>(s->part)] = std::string(value);
+      std::string joined;
+      for (const std::string& x : w) joined.append(joined.empty() ? "" : " ").append(x);
+      return set(*s->target, joined, source);
+    }
     if (!create) return SetResult::unknown;
     c = &add(
         {.name = name, .fallback = "", .flags = kCreated | extra_flags, .kind = CvarKind::text});

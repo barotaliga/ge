@@ -11,6 +11,8 @@
 #include "progs/text.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/server/builtins.hpp"
+#include "shooters_edge/server/chat_rules.hpp"
+#include "shooters_edge/server/shot_help.hpp"
 
 namespace shooters_edge::server {
 
@@ -68,16 +70,9 @@ void run_server_command(QcServer& s, int slot, const pg::Words& w) {
     if (s.named.chat_message > 0 && call_hook(s, HookId::chat_message, s.named.chat_message, e,
                                               {text, team ? 1.0f : 0.0f}) != 0)
       return;
-    // A team's words go to its own (the same `team` in their user info), its name in brackets.
-    uint32_t to = all_clients(s);
-    if (team) {
-      const std::string mine = info_value(c.userinfo, "team");
-      to = 0;
-      for (size_t k = 0; k < 32; k++)
-        if (s.clients[k].active && info_value(s.clients[k].userinfo, "team") == mine) to |= 1u << k;
-    }
-    const std::string who = info_value(c.userinfo, "name");
-    print_to(s, to, 3, (team ? "(" + who + ")" : who) + ": " + text + "\n");
+    // The server's own route (chat_rules.hpp): a team's words to its own, a spectator's to his.
+    const ChatLine line = chat_route(s, slot, team, text);
+    print_to(s, line.to, 3, line.text);
   } else if (std::strcmp(cmd, "pause") == 0) {
     request_pause(s, slot, !s.paused);
   } else if (std::strcmp(cmd, "setinfo") == 0) {
@@ -166,6 +161,7 @@ static void change_user_info(QcServer& s, int slot, const std::string& key,
   if (!set_info_value(s.clients[slot].userinfo, key, value, old)) return;
   if (key == "name") set_netname(s, slot + 1, value);
   if (key == "cl_speedjump") s.sv.clients[slot].speedjump = value == "1";  // pm_speedjump's ask
+  note_aim_help_info(s, slot, key, value);
   call_hook(s, HookId::user_info_changed, s.named.user_info_changed, slot + 1, {key, old, value});
 }
 

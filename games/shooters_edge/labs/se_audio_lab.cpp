@@ -13,13 +13,18 @@
 // shot, 1/333 for a fixed ambient). Then a real fight (`--fight=bots`; both by default): the
 // built-in arena's warmup with bots fighting round the standing player, every sound the server
 // starts for him heard through the window's own hearing off the game's recordings under the
-// classic names (client/own_sounds.hpp), metered and written as WAV.
+// classic names (client/own_sounds.hpp), metered and written as WAV. Then the main menu walked
+// (`--menu=1`): Escape, the cursor down and up, into a page, a setting changed, back out and the
+// menu closed, each frame's click (menu/game_menu.hpp's `take_cue`) played by the window's menu
+// sounds (client/menu_sound.hpp) off the game's own recordings, or off the player's own pack with
+// `--game=<base>/<game folder>` (its recordings stay on this machine: run by hand, never smoked).
 //
 // ge:summary Lab: a scripted fight's and the arena bots' fight's sounds heard, metered, as WAV
 // ge:keywords lab audio shooter fight sounds wav spatial channels listener pan attenuation
 // ge:keywords rocket grenade beam door ambient ricochet se-audio bots arena own-sounds
+// ge:keywords menu-sound menu-cue main-menu click
 // ge:skill audio labs
-// ge:test tests/audio_channels_test.cpp
+// ge:test tests/audio_channels_test.cpp tests/shooters_edge_menu_sound_test.cpp
 #include <cstdio>
 #include <fstream>
 #include <iterator>
@@ -38,7 +43,9 @@
 #include "lab/sound.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/listen_sound.hpp"
+#include "shooters_edge/client/menu_sound.hpp"
 #include "shooters_edge/client/own_sounds.hpp"
+#include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 
 namespace {
@@ -410,6 +417,107 @@ void run_bots(gl::Lab& lab) {
   cl::listen_stop(l);
 }
 
+// The main menu walked by the presses a player makes, each frame's click played as the window
+// plays it: the cues in order, every one heard, the clicks metered and written as WAV.
+void run_menu(gl::Lab& lab) {
+  namespace cl = shooters_edge::client;
+  namespace sm = shooters_edge::menu;
+  using ge::ui::MenuCue;
+  std::string error;
+  cl::SearchPath files;
+  const std::string folder = lab.arg("game");
+  std::string from;
+  if (folder.empty()) {
+    cl::OwnSounds own;
+    if (!cl::mount_own_sounds(files, lab.arg("content"), own, error)) {
+      lab.fail("the game's own sounds did not mount: " + error,
+               "next: run from the tree's root or pass --content=<the content folder>. Skill: "
+               "audio.");
+      return;
+    }
+    from = "the game's own recordings (ui/move, ui/select, ui/back under the classic names)";
+  } else {
+    const size_t cut = folder.find_last_of('/');
+    const std::string base = cut == std::string::npos ? "." : folder.substr(0, cut);
+    const std::string game = cut == std::string::npos ? folder : folder.substr(cut + 1);
+    if (!cl::open_game_dir(base, game, files, error)) {
+      lab.fail("the game folder did not open: " + error,
+               "next: pass --game=<base>/<game folder>. Skill: shooter.");
+      return;
+    }
+    from = "the pack's own recordings (" + folder + ")";
+  }
+  ge::console::Console con;
+  sm::GameMenu menu;
+  menu.add_cvars(con);
+  sm::Host host{.console = &con, .maps = {"start"}};
+  Synth s;
+  cl::MenuSounds clicks(s);
+  // The walk, one press a step, a quarter second apart: what the player does and what it is.
+  struct Step {
+    const char* what;
+    bool escape;
+    bool ge::ui::MenuInput::*key;
+  };
+  const Step steps[] = {
+      {"Escape: the menu opens", true, nullptr},
+      {"down: the cursor moves", false, &ge::ui::MenuInput::down},
+      {"down", false, &ge::ui::MenuInput::down},
+      {"up", false, &ge::ui::MenuInput::up},
+      {"up: back on SINGLE PLAYER", false, &ge::ui::MenuInput::up},
+      {"enter: into SINGLE PLAYER", false, &ge::ui::MenuInput::accept},
+      {"Escape: out to the main menu", false, &ge::ui::MenuInput::back},
+      {"Escape: the menu closes", false, &ge::ui::MenuInput::back},
+  };
+  const int per = kRate / kFps;
+  const int gap = kFps / 4;
+  std::vector<float> mix, chunk(2 * static_cast<size_t>(per));
+  std::string walk;
+  gl::LabTable table{"THE MAIN MENU'S CLICKS", {"press", "cue", "recording", "heard"}, {}};
+  int heard = 0;
+  const int n = static_cast<int>(std::size(steps));
+  for (int i = 0; i < n; i++) {
+    ge::ui::MenuInput in;
+    if (steps[i].key != nullptr) in.*steps[i].key = true;
+    menu.update(in, steps[i].escape, host, 1.0 / kFps);
+    const MenuCue cue = menu.take_cue();
+    const bool played = clicks.play(cue, cl::classic_adapter(), files, cl::kDemoVolume);
+    heard += played ? 1 : 0;
+    static const char* const kNames[] = {"none", "move", "change", "enter", "back"};
+    const std::string name(cl::menu_sound_name(cue));
+    walk += std::string(steps[i].what) + " -> " + kNames[static_cast<int>(cue)] + " (" +
+            (name.empty() ? std::string("silent") : name) + (played ? "" : ", NOT HEARD") + ")\n";
+    table.rows.push_back({steps[i].what, kNames[static_cast<int>(cue)],
+                          name.empty() ? std::string("-") : name, played ? "yes" : "NO"});
+    lab.metric("menu.cue." + std::to_string(i), static_cast<double>(cue), "cue");
+    for (int f = 0; f < gap; f++) {
+      s.render(chunk.data(), per);
+      mix.insert(mix.end(), chunk.begin(), chunk.end());
+    }
+  }
+  lab.table(table);
+  gl::sound_shot(
+      lab,
+      {"menu",
+       "THE MAIN MENU WALKED, HEARD",
+       "Escape, the cursor down twice and up twice, into SINGLE PLAYER, out to the main menu and "
+       "the menu closed, a quarter second apart; each frame's click played as the window plays it "
+       "off " +
+           from + ".",
+       "eight clicks, evenly spaced: the open (menu2), four moves (menu1), the enter (menu2), the "
+       "two backs (menu3); none missing, none clipping",
+       {{"game", folder.empty() ? std::string("own") : folder}}},
+      mix);
+  lab.metric("menu.heard", heard, "clicks");
+  lab.metric("menu.missing", clicks.stats().missing, "names");
+  if (heard != n) {
+    lab.fail("the menu walk heard " + std::to_string(heard) + " of " + std::to_string(n) +
+                 " clicks:\n" + walk,
+             "a cue without a sound (menu/game_menu.cpp) or a recording the files lack "
+             "(client/menu_sound.cpp). Skill: audio.");
+  }
+}
+
 void run(gl::Lab& lab) {
   const std::string fight = lab.arg("fight");
   if (fight != "script" && fight != "bots" && fight != "both") {
@@ -419,6 +527,7 @@ void run(gl::Lab& lab) {
   }
   if (fight != "bots") run_script(lab);
   if (fight != "script") run_bots(lab);
+  if (lab.arg_num("menu") != 0) run_menu(lab);
 }
 
 const gl::LabSpec kSpec{
@@ -436,6 +545,8 @@ const gl::LabSpec kSpec{
         {"bots", "3", "the bots in the arena's fight"},
         {"seconds", "12", "how long the bots' fight is heard"},
         {"content", "games/shooters_edge/content", "the game's content folder (its asset map)"},
+        {"menu", "1", "1: the main menu walked and its clicks heard; 0: not"},
+        {"game", "", "the menu's clicks from a game folder (<base>/<game folder>); empty: our own"},
     },
     "",
     run,

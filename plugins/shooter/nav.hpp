@@ -67,6 +67,7 @@
 #include "ai/path.hpp"
 #include "shooter/brush_hull.hpp"
 #include "shooter/pmove.hpp"
+#include "shooter/world.hpp"
 
 namespace ge::shooter {
 
@@ -112,10 +113,18 @@ struct NavMover {
   // A mover that carries a player (a plat): its model, where it goes from rest and how long a
   // ride takes (its wait at rest, then the travel), s. Without a model it is only an obstacle.
   const BrushModel* model = nullptr;
+  // Or (a version 38 map's plat) its brush model traced by `tracer` (`brushes_solid`).
+  ge::brush::BrushTracer* tracer = nullptr;
+  uint32_t brush_model = 0;
   Vec3f travel;
   Vec3f rest;  // where its model stands at rest (a map's plat is built at its top and lowered)
   float ride_s = 0;
 };
+
+// Whether the mover carries a player (a plat of either map family), not only blocks one.
+inline bool ridden(const NavMover& m) { return m.model != nullptr || m.tracer != nullptr; }
+// A ridden mover as a solid of a move's world, its model standing at `origin`.
+Solid mover_solid(const NavMover& m, Vec3f origin);
 
 struct NavNode {
   Vec3f origin;  // the standing player's origin
@@ -207,7 +216,8 @@ struct NavCounts {
 
 struct NavGraph {
   NavSettings set;
-  Vec3f lo, hi;  // the grid's corner and far corner (the world's bounds)
+  MoveSettings move;  // the move its links were proven with; the pilot flies with it
+  Vec3f lo, hi;       // the grid's corner and far corner (the world's bounds)
   int32_t cols = 0, rows = 0;
   std::vector<NavNode> nodes;
   std::vector<NavLink> links;             // each node's run [first_link, first_link + links)

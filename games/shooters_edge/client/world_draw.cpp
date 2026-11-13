@@ -9,14 +9,19 @@
 #include "shooters_edge/client/world_draw.hpp"
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <vector>
 
+#include "assets/pcx.hpp"
+#include "assets/tga.hpp"
 #include "brush/app/bsp_draw.hpp"
 #include "brush/app/bsp_sky.hpp"
 #include "brush/app/draw_data.hpp"
+#include "brush/app/sky_box.hpp"
 #include "brush/light_probe.hpp"
 #include "camera/pose.hpp"
+#include "capture/jpeg.hpp"
 #include "classicenhance/cached.hpp"
 #include "core/output.hpp"
 #include "prof/zones.hpp"
@@ -62,7 +67,8 @@ struct WorldDraw {
   wgpu::Buffer uniforms;
   gr::FrameUniforms staged{};
   wgpu::BindGroupLayout layout;
-  wgpu::BindGroup frame, post_group[2];  // classic, modern
+  ::ge::render::FrameGroup frame;  // group 0, and its parts for the passes that read few
+  wgpu::BindGroup post_group[2];   // classic, modern
   gr::Sky skypass;
   gr::CloudPass clouds;
   gr::Bloom bloom;
@@ -237,6 +243,70 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
   return g;
 }
 
+// THE MAP'S OWN SKY BOX: `r_skyname` (`chosen`), else the worldspawn's `sky` (or `_sky`, or
+// `skyname`), names six pictures
+// (files.hpp's `sky_box_files`), read and built into the scene's box (brush/app/sky_box.hpp),
+// drawn where the pack's sky is drawn. A box with a picture missing or unreadable is not drawn:
+// the sky texture's layers are, with a status line saying why.
+void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba::Scene& scene,
+                  const std::string& chosen) {
+  std::string name = chosen;
+  if (name.empty() && !scene.map.entities.empty()) {
+    const ge::brush::Entity& world = scene.map.entities[0];
+    name = world.get("sky");
+    if (name.empty()) name = world.get("_sky");
+    if (name.empty()) name = world.get("skyname");
+  }
+  if (name.empty()) return;
+  GE_ZONE("world.sky_box");
+  SkyBoxFiles found;
+  std::string missing;
+  if (!sky_box_files(files, name, &found, &missing)) {
+    ge::core::output::status("shooters_edge: the sky box " + name + " has no " + missing +
+                             " picture under env/ or gfx/env/; the map's sky is drawn");
+    return;
+  }
+  std::array<ge::assets::Image, 6> pictures;
+  for (size_t i = 0; i < 6; ++i) {
+    const std::string& at = found.paths[i];
+    const std::span<const uint8_t> bytes = found.bytes[i];
+    const std::string ext = at.substr(at.size() - 4);
+    std::string why;
+    std::optional<ge::assets::Image> img;
+    if (ext == ".tga") {
+      img = ge::assets::decode_tga(bytes, &why);
+    } else if (ext == ".png") {
+      img = ge::assets::decode_png(bytes);
+    } else if (ext == ".jpg") {
+      if (std::optional<ge::lab::Picture> p = ge::capture::decode_jpeg(bytes, why)) {
+        img = ge::assets::Image{p->width, p->height, std::move(p->rgba)};
+      }
+    } else {
+      ge::assets::IndexedImage indexed;
+      if (ge::assets::decode_pcx(bytes, at, &indexed, &why)) {
+        img = ge::assets::Image{
+            indexed.width, indexed.height,
+            ge::assets::pcx_rgba(indexed,
+                                 indexed.palette.empty() ? palette : std::span<const uint8_t>{})};
+      }
+    }
+    if (!img || img->width <= 0 || img->height <= 0) {
+      std::string line = "shooters_edge: " + at + " did not read";
+      if (!why.empty()) line.append(" (").append(why).append(")");
+      ge::core::output::status(line + "; the map's sky is drawn");
+      return;
+    }
+    pictures[i] = std::move(*img);
+  }
+  std::string why;
+  if (!ba::build_sky_box(pictures, &scene, &why)) {
+    ge::core::output::status("shooters_edge: " + why + "; the map's sky is drawn");
+    return;
+  }
+  ge::core::output::status("shooters_edge: the sky box " + name + " from " + found.paths[0] +
+                           " and its five fellows");
+}
+
 }  // namespace
 
 struct WorldRead {
@@ -299,13 +369,26 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   const std::vector<ge::brush::MapPicture> pictures =
       game.map_textures(game, files, map.name, map.file, picture_store);
   source.pictures = &pictures;
+  // The map's coloured light, a .lit file beside it or in lits/, over the light it carries.
+  std::vector<uint8_t> lit_store;
+  std::string lit_path, lit_refused;
+  const std::span<const uint8_t> lit = map_lit(files, map.name, lit_store, &lit_path, content);
   ba::Pack pack;  // the map file alone, as the scene reader takes it
   pack.bytes = map.file;
   pack.files.push_back({"maps/" + map.name + ".bsp", 0, static_cast<uint32_t>(map.file.size())});
-  if (!ba::load_scene(pack, pack.files[0].name, palette_copy, &r->scene, &error, source)) {
+  if (!ba::load_scene(pack, pack.files[0].name, palette_copy, &r->scene, &error, source, lit,
+                      &lit_refused)) {
     error = "the map " + map.name + " cannot be drawn: " + error;
     return nullptr;
   }
+  if (!lit.empty()) {
+    ge::core::output::status(
+        lit_refused.empty()
+            ? "shooters_edge: the coloured light of " + map.name + " from " + lit_path
+            : "shooters_edge: " + lit_path + " was made for another build of " + map.name +
+                  "; drawn with the map's own light");
+  }
+  read_sky_box(files, palette_copy, r->scene, picture.sky_name);
   // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
   // adds its bounce under the live lights (look.cpp).
   if (picture.ce.rebake && !cache.empty()) {

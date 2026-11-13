@@ -263,6 +263,12 @@ PlayerState player_state(const ClassicServer& s, int about, int to) {
   p.pm = pm_of(s, about);
   p.onground = (e.flags & sh::kFlagOnGround) != 0;
   p.solid = e.solid != sh::kSolidNot;
+  // A player's own size and see-through share are not sent back to that player.
+  if (about != to) {
+    if (row.alpha < 1) p.alpha = row.alpha <= 0 ? 0 : static_cast<int>(row.alpha * 255);
+    const float size = row.scale * 50;
+    if (row.scale != 1) p.scale = size < 1 ? 1 : size > 255 ? 255 : static_cast<int>(size);
+  }
   return p;
 }
 

@@ -18,8 +18,15 @@
 #include "brush/map.hpp"
 #include "brush/trace.hpp"
 #include "core/num.hpp"
+#include "core/num_text.hpp"
 #include "progs/text.hpp"
+#include "shooters_edge/server/rjump_rules.hpp"
+#include "shooters_edge/server/sequel_campaign.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
+#include "shooters_edge/server/sequel_map.hpp"
+#include "shooters_edge/server/sequel_monsters.hpp"
+#include "shooters_edge/server/sequel_targets.hpp"
+#include "shooters_edge/server/shot_help.hpp"
 
 namespace shooters_edge::server {
 
@@ -55,36 +62,94 @@ void register_cvars(SequelServer& s) {
   s.cvars.add({.name = "deathmatch",
                .fallback = "1",
                .flags = con::kServer,
-               .help = "the deathmatch rules: spawn points, respawns by attack"});
+               .help = "The deathmatch rules, with spawn points and respawns by attack.",
+               .values = "0: the single-player or coop game; 1: deathmatch (the default)"});
+  s.cvars.add({.name = "coop",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "Whether everyone plays on one team, cooperatively.",
+               .values = "0: not coop (the default); 1: coop"});
   s.cvars.add({.name = "sv_gravity",
                .fallback = "800",
                .flags = con::kServer,
-               .help = "the pull down on players, units/s^2"});
-  s.cvars.add(
-      {.name = "skill",
-       .fallback = "1",
-       .flags = con::kServer,
-       .help = "0 easy .. 3 hard: which entities a map spawns, how many powerups are held"});
-  s.cvars.add({.name = "dmflags",
-               .fallback = "0",
+               .help = "The pull down on players, in units a second a second.",
+               .values = "N: that pull (800 the default)"});
+  s.cvars.add({.name = "skill",
+               .fallback = "1",
                .flags = con::kServer,
-               .help = "deathmatch's rule bits (8192: infinite ammo)"});
+               .help = "Which entities a map spawns and how many powerups are held.",
+               .values = "0: easy; 1: normal (the default); 2: hard; 3: hardest"});
+  s.cvars.add(
+      {.name = "dmflags",
+       .fallback = "0",
+       .flags = con::kServer,
+       .help = "Deathmatch's rule bits.",
+       .values =
+           "0: none (the default); N: the sum of the bits, such as 8192 for infinite ammunition"});
   s.cvars.add({.name = "fraglimit",
                .fallback = "0",
                .flags = con::kServer,
-               .help = "the frags that end the level; 0 none"});
+               .help = "The frags that end the level.",
+               .values = "0: no limit (the default); 1..N: that many frags"});
   s.cvars.add({.name = "timelimit",
                .fallback = "0",
                .flags = con::kServer,
-               .help = "the minutes that end the level; 0 none"});
-  s.cvars.add({.name = "sv_maplist",
-               .fallback = "",
+               .help = "The minutes that end the level.",
+               .values = "0: no limit (the default); 1..N: that many minutes"});
+  s.cvars.add(
+      {.name = "sv_maplist",
+       .fallback = "",
+       .flags = con::kServer,
+       .help = "The maps a level's end goes through in turn.",
+       .values =
+           "\"\": the same map again (the default); TEXT: these maps, spaces or commas between"});
+  s.cvars.add({.name = "k_midair",
+               .fallback = "0",
                .flags = con::kServer,
-               .help = "the maps a level's end goes through in turn (spaces or commas)"});
+               .help = "Whether rockets count only on a player in the air, in deathmatch.",
+               .values = "0: every hit counts (the default); 1: midair only"});
+  s.cvars.add(
+      {.name = "k_midair_minheight",
+       .fallback = "1",
+       .flags = con::kServer,
+       .help = "The least height a midair hit counts at.",
+       .values =
+           "0: 64 units; 1: 128 units (the default); 2: 256 units; 3: 512 units; 4: 1024 units"});
   s.cvars.add({.name = "sv_airaccelerate",
                .fallback = "0",
                .flags = con::kServer,
-               .help = "the air move's acceleration in deathmatch; 0 the walking rule"});
+               .help = "The air move's acceleration in deathmatch.",
+               .values = "0: the walking rule (the default); N: that acceleration"});
+  s.cvars.add(
+      {.name = "sv_aimhelp_x",
+       .fallback = "24",
+       .flags = con::kServer,
+       .help = "The aim help's leeway sideways for a player granted it, in units at the target.",
+       .values = "0: no sideways help; N: that many units (24 the default)"});
+  s.cvars.add(
+      {.name = "sv_aimhelp_y",
+       .fallback = "48",
+       .flags = con::kServer,
+       .help = "The aim help's leeway up and down for a player granted it, in units at the target.",
+       .values = "0: no vertical help; N: that many units (48 the default)"});
+  add_rjump_settings(s.cvars);  // sv_rjump, sv_rrjump (rjump_rules.hpp)
+  const std::string share =
+      ge::core::num::to_string(num::round(double(s.opt.speedjump) * 1000) / 1000);
+  s.cvars.add({.name = "pm_speedjump",
+               .fallback = share,
+               .flags = con::kServer,
+               .help = "The share of the best strafe's gain a client with cl_speedjump 1 strafes "
+                       "at for its player.",
+               .min = 0,
+               .max = 1,
+               .values = "0: off; 0..1: that share"});
+  s.sv.set.move.speedjump = s.opt.speedjump;
+}
+
+// The slots the loop's pool keeps (the endpoint and the listen read them by slot).
+sh::ClientSlot& pool_slot(SequelServer& s, int slot) {
+  if (s.sv.clients.size() < size_t(sh::kMaxClients)) s.sv.clients.resize(sh::kMaxClients);
+  return s.sv.clients[size_t(slot)];
 }
 
 bool deathmatch(const SequelServer& s) { return s.cvars.find("deathmatch")->on(); }
@@ -146,13 +211,12 @@ const SequelEntity* spawn_spot(SequelServer& s, int slot) {
       return allowed[ge::core::pick_index(s.rng, allowed.size())];
     }
   }
-  for (const SequelEntity& e : s.entities)
-    if (e.classname == "info_player_start") return &e;
-  return nullptr;
+  return campaign_spot(s, slot);
 }
 
 void spawn_player(SequelServer& s, int slot, bool respawn) {
   SequelPlayer& p = s.players[slot];
+  if (respawn) fight_bury(s, slot);
   const SequelEntity* spot = spawn_spot(s, slot);
   const sh::Vec3f at = spot != nullptr ? spot->origin : sh::Vec3f{};
   const float yaw = spot != nullptr ? spot->angles.y : 0;
@@ -186,7 +250,11 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   p.view_height = 22;
   p.water_level = 0;
   p.on_ground = false;
+  p.ground = -1;
   fight_spawn(s, slot);
+  pose_spawn(s, slot);
+  campaign_body(s, slot, respawn);
+  fight_midair_kit(s, slot);
 }
 
 int skill(const SequelServer& s) {
@@ -197,6 +265,7 @@ int skill(const SequelServer& s) {
 // with infinite ammo (8192) the ammo and the BFG.
 bool dm_left_out(const SequelServer& s, int item) {
   if (item < 0 || !deathmatch(s)) return false;
+  if (fight_midair(s)) return true;  // nothing lies on the map in midair
   const SqItem& it = kSqItems[item];
   const std::string_view name = it.classname;
   return (fight_dmflag(s, 1) && it.kind == SqKind::health) ||
@@ -308,25 +377,16 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   else if (pm.s.type != sh::SequelType::spectator)
     pm.s.type = p.alive ? sh::SequelType::normal : sh::SequelType::dead;
   pm.s.gravity = static_cast<int16_t>(s.cvars.find("sv_gravity")->integer());
-  pm.cmd.msec = c.msec;
-  pm.cmd.buttons = c.buttons;
-  pm.cmd.angles[0] = to_short_angle(c.angles.x);
-  pm.cmd.angles[1] = to_short_angle(c.angles.y);
-  pm.cmd.angles[2] = to_short_angle(c.angles.z);
+  pm.cmd = sh::sequel_command(c);  // the jump button the up move (sequel_move.hpp)
   if (s.opt.clients_take_view && p.forced && pm.cmd.angles[0] == p.forced_angles[0] &&
       pm.cmd.angles[1] == p.forced_angles[1] && pm.cmd.angles[2] == p.forced_angles[2]) {
     for (int16_t& d : pm.s.delta_angles) d = 0;  // the client took the turn as its own
     p.forced = false;
   }
-  pm.cmd.forward = c.forward;
-  pm.cmd.side = c.side;
-  pm.cmd.up = c.up;
-  pm.cmd.impulse = c.impulse;
   pm.changed = p.changed;
-  pm.air_accelerate =
-      deathmatch(s) ? static_cast<float>(s.cvars.find("sv_airaccelerate")->number) : 0;
-  sh::SequelBrushWorld bw{s.tracer.get(), p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
-  sh::sequel_move(pm, bw.world());
+  pm.air_accelerate = sequel_air_accelerate(s);
+  MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
+  sh::sequel_move(pm, mw.world());
   p.move = pm.s;
   p.changed = false;
   for (int i = 0; i < 3; i++) p.cmd_angles[i] = pm.cmd.angles[i];
@@ -338,8 +398,10 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   p.water_level = pm.water_level;
   p.water_type = pm.water_type;
   p.on_ground = pm.ground_entity >= 0;
+  p.ground = pm.ground_entity;
   if (!p.alive || s.clients[slot].spectator || s.intermission_at > 0) return;
   touch_items(s, slot);
+  map_touch(s, slot);
   if (c.impulse >= 1 && c.impulse <= kSqWeaponCount) fight_choose(s, slot, c.impulse - 1);
   // The first command of the frame that presses attack steps the hand at once.
   if ((c.buttons & sh::kButtonAttack) != 0 && !p.stepped) {
@@ -365,6 +427,9 @@ void take_packet(SequelServer& s, const sh::Packet& pk) {
 // weapon and no model, until a button is pressed 5 s on.
 void start_intermission(SequelServer& s) {
   s.intermission_at = s.level_time;
+  if (deathmatch(s) || s.cvars.find("coop")->on())  // the scores, for everyone
+    for (const std::string& l : fight_scores(s)) fight_print(s, -1, l + "\n");
+  for (const std::string& l : fight_midair_report(s)) fight_print(s, -1, l);
   const SequelEntity* spot = nullptr;
   for (const char* name : {"info_player_intermission", "info_player_start"}) {
     for (const SequelEntity& e : s.entities)
@@ -418,6 +483,9 @@ void rules_frame(SequelServer& s) {
     intermission_frame(s);
     return;
   }
+  map_frame(s);
+  monster_frame(s);
+  campaign_frame(s);
   fight_missiles(s);
   fight_drops(s);
   for (int i = 0; i < sh::kMaxClients; i++) {  // the hands no command stepped this frame
@@ -426,7 +494,10 @@ void rules_frame(SequelServer& s) {
     p.stepped = false;
     if (s.clients[i].active) fight_body_frame(s, i);
   }
-  if (fight_limits(s)) {
+  for (int i = 0; i < sh::kMaxClients; i++)  // the bodies' frames, once the frame is done
+    if (s.clients[i].active && !s.clients[i].spectator) pose_player(s, i);
+  if (fight_limits(s) || s.exit_now) {
+    s.exit_now = false;
     start_intermission(s);
     return;
   }
@@ -434,8 +505,12 @@ void rules_frame(SequelServer& s) {
     SequelPlayer& p = s.players[i];
     if (!s.clients[i].active || s.clients[i].spectator || p.alive) continue;
     if (s.level_time < p.died_at + kRespawnAfter - 0.001) continue;
-    // By pressing attack, or at once with `dmflags` 1024 (forced respawn).
-    if (deathmatch(s) && ((p.buttons & sh::kButtonAttack) != 0 || fight_dmflag(s, 1024)))
+    // By pressing attack, or at once with `dmflags` 1024 (forced respawn); by himself after 2 s in
+    // midair.
+    const bool by_himself =
+        fight_midair(s) && s.level_time >= p.died_at + sh::kMidairRespawn - 0.001;
+    if (deathmatch(s) &&
+        ((p.buttons & sh::kButtonAttack) != 0 || fight_dmflag(s, 1024) || by_himself))
       spawn_player(s, i, true);
   }
 }
@@ -470,8 +545,15 @@ void fill_rows(SequelServer& s) {
     // The HUD's four counters: shells, bullets, rockets, cells.
     const SqAmmo shown[4] = {SqAmmo::shells, SqAmmo::bullets, SqAmmo::rockets, SqAmmo::cells};
     for (int k = 0; k < 4; k++) wc.numbers.ammo[k] = float(p.body.ammo[static_cast<int>(shown[k])]);
+    // The bots' numbers: the weapon in hand and those carried as bits (1 << the weapon's index),
+    // and every ammunition from shells on.
+    wc.numbers.held = int32_t(1) << p.hand.weapon;
+    for (int k = 0; k < kSqWeaponCount; k++)
+      if (sq_holds(p.body, k)) wc.numbers.carried |= int32_t(1) << k;
+    for (int k = 1; k < kSqAmmoKinds; k++) wc.numbers.stock[k - 1] = float(p.body.ammo[k]);
     wc.numbers.frags = p.frags;
     wc.numbers.view_z = p.view_height;
+    wc.numbers.fov = fight_fov(s, i);
     e.free = false;
     e.origin = unpack(p.move.origin);
     e.velocity = unpack(p.move.velocity);
@@ -484,15 +566,39 @@ void fill_rows(SequelServer& s) {
     e.flags = p.on_ground ? sh::kFlagOnGround : 0;
     e.waterlevel = p.water_level;
     e.health = p.health;
+    e.frame = p.pose.frame;
     const bool unseen = c.spectator || p.gibbed || s.intermission_at > 0;
     e.modelindex = unseen ? 0 : static_cast<int>(s.models.size()) - 1;
+    e.carried_model = unseen || !p.alive ? 0 : s.carried_models[p.hand.weapon];
   }
   for (size_t i = 0; i < s.entities.size(); i++) {  // the items shown or hidden
     const SequelEntity& m = s.entities[i];
     if (m.item >= 0) w.entities[1 + sh::kMaxClients + i].free = m.gone || m.hidden;
   }
+  map_rows(s);
+  monster_rows(s);
+  targets_rows(s);
   fight_rows(s);
   mirror_pool(s);
+}
+
+// The pool's trace (`sh::Server::world_trace`): the map and its solid movers as a shot meets them
+// (solid and windows), the hit as the world's row (0 the world, a mover's row) or -1.
+sh::HullTrace pool_trace(const void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
+                         sh::Vec3f end) {
+  const auto& s = *static_cast<const SequelServer*>(ctx);
+  const sh::SequelTrace t = map_trace(s, start, mins, maxs, end, sh::kSqSolid | sh::kSqWindow);
+  sh::HullTrace tr;
+  tr.allsolid = t.all_solid;
+  tr.startsolid = t.start_solid;
+  tr.inopen = !t.all_solid;
+  tr.fraction = t.fraction;
+  tr.endpos = t.all_solid ? start : t.end;
+  tr.plane.normal = t.normal;
+  tr.plane.dist = t.normal.x * t.end.x + t.normal.y * t.end.y + t.normal.z * t.end.z;
+  tr.plane.type = sh::plane_type(t.normal);
+  tr.ent = t.entity;
+  return tr;
 }
 
 // The world's rows mirrored into the loop's pool (`sv.edicts`), which the classic endpoint, the
@@ -501,6 +607,14 @@ void mirror_pool(SequelServer& s) {
   const RulesWorld& w = s.world;
   if (s.sv.edicts.size() < w.entities.size()) return;  // sized at the map's start
   s.sv.time = s.host_time;
+  if (s.tracer != nullptr) {
+    const ge::brush::Model& m = s.map->models[0];
+    s.world_solid = sh::brushes_solid(*s.tracer, 0, {}, {m.mins[0], m.mins[1], m.mins[2]},
+                                      {m.maxs[0], m.maxs[1], m.maxs[2]});
+    s.sv.brushes = &s.world_solid;
+    s.sv.world_ctx = &s;
+    s.sv.world_trace = &pool_trace;
+  }
   s.sv.num_edicts = static_cast<int>(w.entities.size());
   for (size_t i = 0; i < w.entities.size(); i++) {
     const WorldEntity& row = w.entities[i];
@@ -541,18 +655,23 @@ void fill_lists(SequelServer& s) {
   w.vwep.clear();
   w.statics.clear();
   w.max_clients = sh::kMaxClients;
-  w.entities.assign(1 + sh::kMaxClients + s.entities.size() + kSequelMissiles + kSequelDrops,
-                    WorldEntity{});
+  w.entities.assign(
+      1 + sh::kMaxClients + s.entities.size() + kSequelMissiles + kSequelDrops + kSequelBodies,
+      WorldEntity{});
   w.entity_count = static_cast<int>(w.entities.size());
   w.entities[0].free = false;
   w.entities[0].modelindex = 1;
   for (size_t i = 0; i < s.entities.size(); i++) {
     const SequelEntity& m = s.entities[i];
     WorldEntity& e = w.entities[1 + sh::kMaxClients + i];
-    e.free = m.gone || m.hidden;
+    // Triggers, fields and the map's points are never drawn.
+    e.free = m.gone || m.hidden || m.trigger || m.classname.rfind("trigger_", 0) == 0;
     e.origin = m.origin;
     e.angles = m.angles;
     e.modelindex = m.modelindex;
+    // An item turns where it lies, unless the map placed it untouchable (its spawn flag 1).
+    e.turns = m.item >= 0 && sq_turns(m.item) && (m.spawnflags & 1) == 0;
+    e.effects = e.turns ? kSqTurnEffect : 0;
   }
 }
 
@@ -604,11 +723,16 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   }
   s.sounds.assign(1, "");
   fight_precache(s);
+  monster_precache(s);
+  campaign_start(s);
   fight_clear(s);
   s.models.push_back(kSequelPlayerModel);
   drop_items(s);
   s.frame_number = 0;
   s.level_time = 0;
+  s.exit_now = false;
+  map_spawn(s);
+  monster_spawn(s);
   s.host_time = 0;
   s.map_stopped = false;
   s.pending_map.clear();
@@ -646,6 +770,7 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   c.userid = s.next_userid++;
   c.entered_at = s.level_time;
   set_info(c.userinfo, "name", name);
+  pool_slot(s, slot).speedjump = false;
   s.players[slot] = SequelPlayer{};
   if (s.map != nullptr) spawn_player(s, slot, false);
   if (s.map != nullptr) fill_rows(s);
@@ -655,14 +780,46 @@ void sq_drop(void* r, int slot) {
   SequelServer& s = sq(r);
   if (slot < 0 || slot >= sh::kMaxClients) return;
   s.clients[slot] = ClientInfo{};
+  pool_slot(s, slot).speedjump = false;
   s.players[slot] = SequelPlayer{};
   if (s.map != nullptr) fill_rows(s);
+}
+
+// The rocket jump helper's question (rjump_rules.hpp): the launcher chosen when it is not in
+// hand (its raising is waited for), and fired by the first command of a frame with the hand ready.
+sh::RjumpReady sq_rocket_ready(void* r, int slot, sh::MoveCmd& /*cmd*/, std::string& why) {
+  SequelServer& s = sq(r);
+  SequelPlayer& p = s.players[slot];
+  const int rl = int(SqWeapon::rocket_launcher);
+  if (!p.alive || s.clients[slot].spectator || s.intermission_at > 0) return sh::RjumpReady::never;
+  if (!sq_holds(p.body, rl)) {
+    why = "You have no rocket launcher.\n";
+    return sh::RjumpReady::never;
+  }
+  if (!sq_can_fire(p.body, rl)) {
+    why = "You have no rockets.\n";
+    return sh::RjumpReady::never;
+  }
+  if (p.hand.weapon != rl || (p.hand.pending >= 0 && p.hand.pending != rl)) {
+    if (p.hand.pending != rl) fight_choose(s, slot, rl);
+    return sh::RjumpReady::soon;
+  }
+  if (p.hand.state != SqHandState::ready || p.stepped) return sh::RjumpReady::soon;
+  return sh::RjumpReady::now;
 }
 
 void sq_frame(void* r, const sh::Packet* packets, int count) {
   SequelServer& s = sq(r);
   if (s.map == nullptr || s.paused) return;
-  for (int i = 0; i < count; i++) take_packet(s, packets[i]);
+  s.rj_packets.assign(packets, packets + count);
+  for (sh::Packet& p : s.rj_packets) {
+    const bool shot = rjump_packet(s, p, &s, &sq_rocket_ready, s.level_time);
+    if (p.client < 0 || p.client >= sh::kMaxClients) continue;
+    // The view a shot turned is put back once it has fired: the view before it.
+    const sh::Vec3f before = s.players[p.client].view_angles;
+    take_packet(s, p);
+    if (shot) s.players[p.client].view_angles = before;
+  }
   s.host_time += s.sv.set.mintic;
   while (s.host_time + 1e-9 >= double(s.frame_number + 1) * kFrameSeconds) rules_frame(s);
   fill_rows(s);
@@ -675,6 +832,11 @@ CommandResult sq_client_command(void* r, int slot, const std::string& line) {
   ge::progs::tokenize_words(line.c_str(), w);
   if (w.count == 0) return CommandResult::bad;
   const std::string cmd = ge::progs::word(w, 0);
+  if (campaign_command(s, slot, cmd)) return CommandResult::mod;
+  if (cmd == "score" || cmd == "players" || cmd == "help") {
+    for (const std::string& l : fight_scores(s)) fight_print(s, slot, l + "\n");
+    return CommandResult::mod;
+  }
   if (cmd == "kill") {
     SequelPlayer& p = s.players[slot];
     if (p.alive && s.level_time >= p.spawned_at + kKillAfter) fight_kill(s, slot, slot, -1);
@@ -707,9 +869,11 @@ bool sq_console(void* r, const std::string& line) {
     return true;
   }
   if (s.cvars.find(cmd) != nullptr) {
-    if (w.count >= 2)
+    if (w.count >= 2) {
       s.cvars.set(cmd, ge::progs::word(w, 1), con::Source::local);
-    else
+      if (cmd == "pm_speedjump")
+        s.sv.set.move.speedjump = static_cast<float>(s.cvars.find(cmd)->number);
+    } else
       s.console.push_back(cmd + " is \"" + s.cvars.find(cmd)->value + "\"");
     return true;
   }
@@ -720,6 +884,9 @@ void sq_user_info(void* r, int slot, const std::string& key, const std::string& 
   SequelServer& s = sq(r);
   if (slot < 0 || slot >= sh::kMaxClients || !s.clients[slot].active) return;
   set_info(s.clients[slot].userinfo, key, value);
+  if (key == "cl_speedjump") pool_slot(s, slot).speedjump = value == "1";  // the easy jump's ask
+  if (key == kAimHelpKey) pool_slot(s, slot);  // the grant lands on a seat the pool keeps
+  note_aim_help_info(s, slot, key, value);
   if (s.map != nullptr) fill_rows(s);
 }
 
@@ -749,6 +916,7 @@ std::unique_ptr<SequelServer> make_sequel_server(const SequelServerOptions& opt)
   s->opt = opt;
   s->rng = ge::core::make_rng(opt.seed);
   register_cvars(*s);
+  add_aim_help(*s);
   return s;
 }
 
@@ -759,6 +927,22 @@ RulesRunner sequel_runner(std::unique_ptr<SequelServer> s) {
 
 SequelServer* sequel_of(const RulesRunner& r) {
   return r.calls == &kSequelCalls ? static_cast<SequelServer*>(r.rules) : nullptr;
+}
+
+sh::MoveState sequel_aid_state(const SequelServer& s, int slot) {
+  const SequelPlayer& p = s.players[slot];
+  sh::MoveState m;
+  m.origin = unpack(p.move.origin);
+  m.velocity = unpack(p.move.velocity);
+  m.ground = p.on_ground ? 0 : -1;
+  m.waterlevel = p.water_level;
+  const bool playing = p.alive && !s.clients[slot].spectator && s.intermission_at <= 0;
+  m.type = playing ? sh::MoveType::normal : sh::MoveType::none;
+  return m;
+}
+
+float sequel_air_accelerate(const SequelServer& s) {
+  return deathmatch(s) ? static_cast<float>(s.cvars.find("sv_airaccelerate")->number) : 0;
 }
 
 }  // namespace shooters_edge::server

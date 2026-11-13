@@ -108,16 +108,19 @@ TEST(a_kept_demo_is_unpacked_and_played) {
   // Kept (as a fetch leaves it): unpacked beside it and played.
   fs::create_directories(root / "state" / "demos");
   {
-    std::ofstream f(root / "state" / "demos" / (sha + ".ger"), std::ios::binary);
+    std::ofstream f(root / "state" / "demos" / (sha + ".ged"), std::ios::binary);
     f.write(reinterpret_cast<const char*>(file.data()), static_cast<std::streamsize>(file.size()));
   }
   CHECK(run({"link", "open", link, "--dry-run", "--json"}, out, root) == 0);
   const fs::path mvd = root / "state" / "demos" / (sha + ".mvd");
   CHECK_MSG(has(command_of(out), "-playdemo " + mvd.string()), out);
-  std::ifstream in(mvd, std::ios::binary);
-  const std::vector<uint8_t> back((std::istreambuf_iterator<char>(in)),
-                                  std::istreambuf_iterator<char>());
-  CHECK(back == recording);
+  {
+    // Closed before the folder is removed: Windows refuses to delete a file still open.
+    std::ifstream in(mvd, std::ios::binary);
+    const std::vector<uint8_t> back((std::istreambuf_iterator<char>(in)),
+                                    std::istreambuf_iterator<char>());
+    CHECK(back == recording);
+  }
   fs::remove_all(root);
 }
 

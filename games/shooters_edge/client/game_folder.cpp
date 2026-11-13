@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_game_folder_test.cpp
 #include "shooters_edge/client/game_folder.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
@@ -115,9 +116,56 @@ std::string game_of(const std::string& basedir, const ge::classicenhance::Profil
   return std::string(content.base_dir);
 }
 
-void choose_folder(Args& args, const std::string& prefs) {
+namespace {
+
+void play_found(Args& args, const FoundInstall& f, const std::string& how) {
+  out::status("shooters_edge: " + std::string(f.content->what) + " (" + f.release + ") in " +
+              f.basedir + ", " + how + " (-basedir names another)");
+  args.basedir = f.basedir;
+  args.profile = std::string(f.content->id);
+  if (!args.game_set) args.game = game_of(f.basedir, *f.content);
+}
+
+}  // namespace
+
+void choose_folder(Args& args, const std::string& prefs, const std::vector<std::string>& places,
+                   std::vector<FoundInstall>* found) {
   if (!args.basedir_set) {
     const KeptGame kept = remembered_game(prefs);
+    // Started inside an install, or placed above some: played at once, ahead of the one kept.
+    std::vector<std::string> where{args.basedir};
+    where.insert(where.end(), places.begin(), places.end());
+    std::vector<FoundInstall> below;
+    for (const std::string& place : where) {
+      if (place.empty()) continue;
+      for (FoundInstall& f : installs_below(place)) {
+        std::error_code ec;
+        const bool seen = std::any_of(below.begin(), below.end(), [&](const FoundInstall& b) {
+          return fs::equivalent(b.basedir, f.basedir, ec);
+        });
+        if (!seen) below.push_back(std::move(f));
+      }
+    }
+    if (found != nullptr) *found = below;
+    for (const std::string& place : where) {
+      FoundInstall inside;
+      if (!place.empty() && install_around(place, inside)) {
+        std::error_code ec;
+        if (found != nullptr && std::none_of(found->begin(), found->end(), [&](const auto& b) {
+              return fs::equivalent(b.basedir, inside.basedir, ec);
+            }))
+          found->insert(found->begin(), inside);
+        play_found(args, inside, "the install the game was started in");
+        return;
+      }
+    }
+    if (const int pick = pick_install(below, kept.basedir); pick >= 0) {
+      play_found(args, below[static_cast<size_t>(pick)],
+                 below.size() == 1 ? "the install beside the game"
+                                   : "one of " + std::to_string(below.size()) +
+                                         " installs beside the game (games lists them)");
+      return;
+    }
     const ge::classicenhance::Profile* content =
         kept.basedir.empty() ? nullptr : ge::classicenhance::find_profile(kept.profile);
     std::string basedir, why;
@@ -229,6 +277,7 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
       out.campaign = &out.pack_progs;
     }
   }
+  out.rules_campaign = out.campaign == nullptr && game.rules_campaign;
   const ge::classicenhance::Profile& content = profiles::content_of(game);
   std::vector<uint8_t> store;
   out.registered = !find_file(files, content.full_game, store).empty();
@@ -242,12 +291,58 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
   return true;
 }
 
+namespace {
+
+// NEW GAME and `coopgame` for a game whose own rules keep the campaign (GameContent's
+// `rules_campaign`): the multiplayer program's game on the first map with `deathmatch` 0, `coop`
+// off or on; a new game each time (`ListenOptions::new_game`). `coopgame` seats its companions
+// once the game has started (client/sequel_party.hpp), `addbot` and `removebot` after.
+void rules_campaign_commands(ge::console::Console& con, Listen& listen, const GameContent& content,
+                             std::string& next_map) {
+  using CArgs = ge::console::Args;
+  using Con = ge::console::Console;
+  con.add_command("newgame", "newgame: a new single-player game from the first map",
+                  [&listen, &next_map, &content](Con&, const CArgs&) {
+                    listen.opt.console.emplace_back("deathmatch 0");
+                    listen.opt.console.emplace_back("coop 0");
+                    listen.opt.companions = 0;
+                    listen.opt.new_game = true;
+                    next_map = content.first_map;
+                  });
+  con.add_command("coopgame",
+                  "coopgame [bots] [novice|average|expert] [map]: a new coop game (everyone on "
+                  "one team; each player comes back as he entered the level) with that many "
+                  "companion bots beside you, 1 by default, from the first map or the map named; "
+                  "addbot and removebot change the party during the game",
+                  [&listen, &next_map, &content](Con&, const CArgs& a) {
+                    std::string map = content.first_map;
+                    int bots = 1;
+                    sh::AimSkill skill = sh::AimSkill::average;
+                    for (size_t i = 1; i < a.size(); i++) {
+                      const std::string& w = a[i];
+                      if (!w.empty() && w[0] >= '0' && w[0] <= '9')
+                        bots = std::atoi(w.c_str());
+                      else if (!skill_named(w, skill))
+                        map = w;
+                    }
+                    listen.opt.console.emplace_back("deathmatch 0");
+                    listen.opt.console.emplace_back("coop 1");
+                    listen.opt.companions = bots;
+                    listen.opt.companion_skill = skill;
+                    listen.opt.new_game = true;
+                    next_map = map;
+                  });
+}
+
+}  // namespace
+
 void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPath& files,
                        const GameContent& content, std::string& next_map, std::string& load_ask) {
   using CArgs = ge::console::Args;
   using Con = ge::console::Console;
   if (content.campaign == nullptr) {
     for (const char* name : {"newgame", "coopgame", "save", "load"}) con.remove_command(name);
+    if (content.rules_campaign) rules_campaign_commands(con, listen, content, next_map);
     return;
   }
   con.add_command("newgame", "newgame: a new single-player game from the start map",
@@ -330,7 +425,16 @@ bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<Loade
     listen.opt.new_game = false;
     return listen_campaign(listen, *content.campaign, std::move(map), listen.opt, error);
   }
+  // A new game on rules that keep their own campaign starts their server afresh (its settings
+  // are the new game's); else a level change keeps it (net/classic_game.hpp).
+  const bool fresh = content.rules_campaign && listen.opt.new_game;
   listen.opt.new_game = false;
+  if (fresh) {  // the new game's companions seated once it runs (`coopgame <bots>`)
+    if (!listen_start(listen, content.progs, std::move(map), listen.opt, error)) return false;
+    const std::string add = "addbot " + std::string(sh::aim_skill_name(listen.opt.companion_skill));
+    for (int k = 0; k < listen.opt.companions; k++) listen_lobby(listen, add);
+    return true;
+  }
   if (listen.campaign_host || listen.progs != &content.progs)
     return listen_start(listen, content.progs, std::move(map), listen.opt, error);
   return listen_change(listen, std::move(map), error);

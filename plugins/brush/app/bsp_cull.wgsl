@@ -29,12 +29,13 @@ struct Params {
 @group(1) @binding(2) var<storage, read> pvs: array<u32>;  // a bit a chunk
 @group(1) @binding(3) var<storage, read> src: array<u32>;
 @group(1) @binding(4) var<storage, read_write> dst: array<u32>;  // the early phase's, the late's
-@group(1) @binding(5) var<storage, read_write> sizes: array<u32>;  // a chunk's indices drawn
-// 0 not drawn, 1 hidden early (for the late phase), 2 drawn early, 3 drawn late.
-@group(1) @binding(6) var<storage, read_write> state: array<u32>;
+// A chunk's two words in one buffer (a browser allows 8 storage buffers a stage, the frame's two
+// among them): x the indices drawn, y its state: 0 not drawn, 1 hidden early (for the late
+// phase), 2 drawn early, 3 drawn late.
+@group(1) @binding(5) var<storage, read_write> chunk_words: array<vec2u>;
 // Two phases of eight kinds' indexed draws (five words each), then the counters.
-@group(1) @binding(7) var<storage, read_write> args: array<atomic<u32>>;
-@group(1) @binding(8) var hiz: texture_2d<f32>;
+@group(1) @binding(6) var<storage, read_write> args: array<atomic<u32>>;
+@group(1) @binding(7) var hiz: texture_2d<f32>;
 
 const kKinds = 8u;
 const kStats = 80u;  // 2 x 8 x 5
@@ -106,8 +107,8 @@ fn test_early(@builtin(global_invocation_id) id: vec3u) {
   if (i >= params.info.x) {
     return;
   }
-  state[i] = 0u;
-  sizes[i] = 0u;
+  chunk_words[i].y = 0u;
+  chunk_words[i].x = 0u;
   let ch = chunks[i];
   if ((pvs[i >> 5u] & (1u << (i & 31u))) == 0u) {
     atomicAdd(&args[kStats + kStatPvs], 1u);
@@ -122,13 +123,13 @@ fn test_early(@builtin(global_invocation_id) id: vec3u) {
   // The last frame's camera saw this box where it is plus how far the eye has moved since.
   let d = frame.eye_delta.xyz;
   if (params.info.z != 0u && hidden(frame.prev_view_proj, lo + d, hi + d)) {
-    state[i] = 1u;
+    chunk_words[i].y = 1u;
     atomicAdd(&args[kStats + kStatOccluded], 1u);
     return;
   }
   atomicAdd(&args[kStats + kStatEarly], 1u);
-  state[i] = 2u;
-  sizes[i] = ch.count;
+  chunk_words[i].y = 2u;
+  chunk_words[i].x = ch.count;
 }
 
 @compute @workgroup_size(64)
@@ -137,8 +138,8 @@ fn test_late(@builtin(global_invocation_id) id: vec3u) {
   if (i >= params.info.x) {
     return;
   }
-  sizes[i] = 0u;
-  if (state[i] != 1u) {
+  chunk_words[i].x = 0u;
+  if (chunk_words[i].y != 1u) {
     return;
   }
   let ch = chunks[i];
@@ -147,8 +148,8 @@ fn test_late(@builtin(global_invocation_id) id: vec3u) {
     return;
   }
   atomicAdd(&args[kStats + kStatLate], 1u);
-  state[i] = 3u;
-  sizes[i] = ch.count;
+  chunk_words[i].y = 3u;
+  chunk_words[i].x = ch.count;
 }
 
 // THE SCAN: one workgroup. Each thread sums a block of chunks, the block sums are scanned, and
@@ -165,7 +166,7 @@ fn scan(lid: u32, phase: u32) {
   let b = min(a + per, n);
   var s = 0u;
   for (var i = a; i < b; i++) {
-    s += sizes[i];
+    s += chunk_words[i].x;
   }
   sums[lid] = s;
   workgroupBarrier();
@@ -181,8 +182,8 @@ fn scan(lid: u32, phase: u32) {
   }
   var at = sums[lid] - s;
   for (var i = a; i < b; i++) {
-    let size = sizes[i];
-    sizes[i] = at;  // the chunk's offset from here on
+    let size = chunk_words[i].x;
+    chunk_words[i].x = at;  // the chunk's offset from here on
     // A chunk that starts a kind (the chunks are sorted by kind) names where the kind starts.
     let k = chunks[i].info.x;
     var j0 = 0u;
@@ -232,7 +233,7 @@ fn copy(i: u32, phase: u32, drawn: bool) {
     return;
   }
   let ch = chunks[i];
-  let to = phase * params.info.y + sizes[i];
+  let to = phase * params.info.y + chunk_words[i].x;
   for (var j = 0u; j < ch.count; j++) {
     dst[to + j] = src[ch.first + j];
   }
@@ -242,7 +243,7 @@ fn copy(i: u32, phase: u32, drawn: bool) {
 fn copy_early(@builtin(global_invocation_id) id: vec3u) {
   let i = id.x;
   if (i < params.info.x) {
-    copy(i, 0u, state[i] == 2u);
+    copy(i, 0u, chunk_words[i].y == 2u);
   }
 }
 
@@ -250,6 +251,6 @@ fn copy_early(@builtin(global_invocation_id) id: vec3u) {
 fn copy_late(@builtin(global_invocation_id) id: vec3u) {
   let i = id.x;
   if (i < params.info.x) {
-    copy(i, 1u, state[i] == 3u);
+    copy(i, 1u, chunk_words[i].y == 3u);
   }
 }

@@ -73,6 +73,10 @@ struct DeviceOptions {
   int validation = -1;
   // Features to leave off even when the adapter has them (a test of the fallback path).
   std::array<bool, kFeatureCount> force_off{};
+  // Ask for WebGPU's default limits instead of the adapter's best (16 sampled textures a
+  // stage, 256 array layers, ...): what a browser grants a page, so a native run shows where
+  // the renderer would not fit there. GE_GPU_LIMITS=default sets it too.
+  bool default_limits = false;
 };
 
 // What drew the frames: printed once at creation, and stamped on lab captures.
@@ -114,6 +118,11 @@ void end_load(Device& device);
 // Block until `future` completes, processing the device's events. For load, tests and lab
 // captures only: never inside a frame.
 void wait(Device& device, wgpu::Future future);
+
+// Every render pass begins here: a depth attachment that loads (no clear) gets a finite clear
+// value all the same, since a browser refuses the pass over the native API's "undefined" (NaN).
+wgpu::RenderPassEncoder begin_render_pass(wgpu::CommandEncoder& encoder,
+                                          const wgpu::RenderPassDescriptor& desc);
 
 // A Dawn string (a message, a label) as a std::string.
 std::string to_string(wgpu::StringView s);

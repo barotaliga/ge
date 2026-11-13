@@ -729,6 +729,17 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       p.frame_f = items[i].frame_f;
       p.lerp = items[i].lerp;
     }
+    // A carried model rides its holder: the holder's drawn place and frames (it follows it).
+    for (size_t i = 1; i < out.models.size(); i++) {
+      Placed& c = out.models[i];
+      const Placed& h = out.models[i - 1];
+      if (c.entity < kCarriedEntity || h.entity != c.entity - kCarriedEntity) continue;
+      c.origin = h.origin;
+      c.angles = h.angles;
+      c.frame_from = h.frame_from;
+      c.frame_f = h.frame_f;
+      c.lerp = h.lerp;
+    }
   }
   // The missiles where their models are drawn, so a trail and a glow ride the drawn rocket.
   thread_local std::vector<Missile> missiles;
@@ -891,11 +902,23 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         continue;
       }
     }
-    if (s.on.trails && !m.grenade) {  // its first frame seen: no flight yet, the light on it
+    if (m.grenade) {  // no motor: a classic grenade gives no light; its painted ends glow faintly
+      if (s.on.trails && s.models != nullptr)
+        for (const Placed& p : out.models) {
+          if (p.entity != m.entity || p.modelindex <= 0 ||
+              p.modelindex >= static_cast<int>(s.models->kinds.size()))
+            continue;
+          const ModelKind& k = s.models->kinds[size_t(p.modelindex)];
+          if (k.glow_share > 0) out.lights.push_back(fx::grenade_glow(to, k.glow_rgb, m.entity));
+          break;
+        }
+      continue;
+    }
+    if (s.on.trails) {  // its first frame seen: no flight yet, the light on it
       if (!lit) continue;
       const double still[3] = {0, 0, 0};
       out.lights.push_back(fx::motor_light(to, still, static_cast<uint32_t>(m.entity), t));
-    } else if (!s.on.trails) {
+    } else {
       out.lights.push_back(fx::rocket_light(to));
     }
   }

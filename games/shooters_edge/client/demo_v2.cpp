@@ -22,6 +22,7 @@
 #include "replay/codec.hpp"
 #include "replay/stream.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_caption.hpp"
 
 namespace shooters_edge::client {
 
@@ -1328,13 +1329,17 @@ void demo_hub_meta(std::span<const uint8_t> recording, gr::Meta& header, gr::Met
   const DemoState& s = d.state;
   const auto info = [&](const char* key) {
     for (const auto& [k, v] : s.serverinfo)
-      if (k == key) return v;
+      if (k == key) return plain_text(v);  // a page shows them: the font's bytes as ASCII
     return std::string();
   };
+  for (Seen& p : seen) {
+    p.name = plain_text(p.name);
+    p.team = plain_text(p.team);
+  }
   const auto on = [&](const char* key) { return std::atoi(info(key).c_str()) != 0; };
   const size_t players = seen.size();
   std::string mode;
-  if (s.format == DemoFormat::single)
+  if (s.format == DemoFormat::single || (s.format == DemoFormat::sequel && s.players.size() <= 1))
     mode = "single";
   else if (on("coop"))
     mode = "coop";
@@ -1383,7 +1388,13 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
             {"bytes", std::to_string(recording.size())},
             {"keyframe_seconds", std::to_string(options.keyframe_seconds)}};
   gr::Meta final_meta;
-  if (!sequel) demo_hub_meta(recording, h.meta, final_meta);  // the sequel's: its own face's
+  gr::Meta sequel_meta;  // the hub's words for a sequel's recording, after its face's own
+  if (!sequel) {
+    demo_hub_meta(recording, h.meta, final_meta);
+  } else {
+    demo_hub_meta(recording, sequel_meta, final_meta);
+    std::erase_if(final_meta, [](const auto& kv) { return kv.first == "duration_ms"; });
+  }
   h.meta.insert(h.meta.end(), options.meta.begin(), options.meta.end());
   if (multiview)
     h.tracks = {{kMultiviewTrack, gr::TrackKind::messages, gr::TrackCodec::field, "multiview"}};
@@ -1417,10 +1428,11 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
   } else if (sequel) {
     // The broadcast's writer (sequel_tv.hpp), fed the finished recording: the same bytes.
     SequelBroadcast b;
-    sequel_broadcast_begin(b, every, recording.size());
+    sequel_meta.insert(sequel_meta.end(), options.meta.begin(), options.meta.end());
+    sequel_broadcast_begin(b, every, recording.size(), sequel_meta);
     for (const std::span<const uint8_t> block : sequel_blocks(recording))
       sequel_broadcast_block(b, block);
-    sequel_broadcast_end(b);
+    sequel_broadcast_end(b, final_meta);
     out = std::move(b.out);
     rep.records = b.report.blocks;
     rep.walked = b.report.walked;
@@ -1445,41 +1457,68 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
   return true;
 }
 
-bool unpack_demo(std::span<const uint8_t> file, std::vector<uint8_t>& out, std::string& error) {
-  out.clear();
+struct DemoUnpacker::State {
   gr::StreamReader r;
-  if (!gr::read_stream_header(file, r, error)) return false;
-  if (r.header.game != kGame) {
-    error = "a replay file of the game \"" + r.header.game + "\", not this game's";
-    return false;
-  }
-  Face f;
+  Face face;
   SequelCoder sequel;
-  bool started = false, sequel_seen = false;
+  bool opened = false, started = false, sequel_seen = false;
+};
+
+DemoUnpacker::DemoUnpacker() : state(std::make_unique<State>()) {}
+DemoUnpacker::~DemoUnpacker() = default;
+DemoUnpacker::DemoUnpacker(DemoUnpacker&&) noexcept = default;
+DemoUnpacker& DemoUnpacker::operator=(DemoUnpacker&&) noexcept = default;
+
+bool unpack_more(DemoUnpacker& u, std::span<const uint8_t> file, std::vector<uint8_t>& out,
+                 std::string& error) {
+  DemoUnpacker::State& st = *u.state;
+  error.clear();
+  if (!st.opened) {
+    if (!gr::read_stream_header(file, st.r, error)) return false;
+    if (st.r.header.game != kGame) {
+      error = "a replay file of the game \"" + st.r.header.game + "\", not this game's";
+      return false;
+    }
+    st.opened = true;
+  }
+  st.r.bytes = file;  // the same file, grown: the reader goes on from its last whole block
   gr::Block b;
-  while (gr::next_block(r, b, error)) {
+  for (;;) {
+    const size_t at = st.r.at;
+    if (!gr::next_block(st.r, b, error)) {
+      st.r.at = at;  // a block not whole yet is read again when more has come
+      break;
+    }
+    u.blocks++;
     for (const gr::Chunk& c : b.chunks) {
       if (c.track == kSequelTrack) {
-        if (!started && !b.keyframe) continue;
-        started = sequel_seen = true;
-        if (!unpack_sequel_chunk(sequel, c.bytes, b.keyframe, out, error)) {
+        if (!st.started && !b.keyframe) continue;
+        st.started = st.sequel_seen = true;
+        if (!unpack_sequel_chunk(st.sequel, c.bytes, b.keyframe, out, error)) {
           error += " (the block at " + std::to_string(b.time_ms) + " ms)";
           return false;
         }
       } else if (c.track == kBytesTrack) {
         out.insert(out.end(), c.bytes.begin(), c.bytes.end());
       } else if (c.track == kMultiviewTrack) {
-        if (!started && !b.keyframe) continue;  // a stream joined late starts at a keyframe
-        started = true;
-        if (!unpack_block(c.bytes, f, b.keyframe, out, error)) {
+        if (!st.started && !b.keyframe) continue;  // a stream joined late starts at a keyframe
+        st.started = true;
+        if (!unpack_block(c.bytes, st.face, b.keyframe, out, error)) {
           error += " (the block at " + std::to_string(b.time_ms) + " ms)";
           return false;
         }
       }
     }
   }
+  return true;
+}
+
+bool unpack_demo(std::span<const uint8_t> file, std::vector<uint8_t>& out, std::string& error) {
+  out.clear();
+  DemoUnpacker u;
+  if (!unpack_more(u, file, out, error)) return false;
   // A sequel recording ends with a length of -1; a cut file stops at its last whole block.
-  if (sequel_seen && error.empty()) out.insert(out.end(), 4, 0xFF);
+  if (u.state->sequel_seen && error.empty()) out.insert(out.end(), 4, 0xFF);
   return true;  // a cut file: what its whole blocks held, `error` naming the cut
 }
 

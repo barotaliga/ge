@@ -8,13 +8,17 @@
 //   built viewer, gets the same page with the reason where the picture would be.
 // - `/demo/{sha256}`: one archived demo in the viewer, read by hash from the hub's own `/d/...`
 //   path; the demo's map, players and length, Play in the game, Download, and its Map (radar.hpp).
+// - `/content/{sha256}.pak.zst`: a demo's content pack (content.hpp), which the Demo page hands the
+//   viewer in place of every pack when the game names a demo's files.
 // - `/viewer/{file}`: the viewer's files (`<id>_viewer.js`, its `.wasm`, its data) from the hub's
-//   `--viewer=<dir>`, the build's `ge_add_web_viewer` output. A name with a slash, `..` or another
-//   extension is refused.
+//   `--viewer=<dir>`, the build's `ge_add_web_viewer` output, and the content packs (`.pak`,
+//   `.pk3`) the hub's operator puts beside it for the viewer to draw from, handed to it by name
+//   order (`--pack=/viewer/<name>`). A name with a slash, `..` or another extension is refused.
 //
 // The page's script is the few lines that start the viewer: the canvas and the arguments handed
-// to it (`--tv=ws://...`, `--stream=`, `--demo=/d/...`), then the viewer's loader. Every other
-// part of the page is plain HTML, so the page reads the same with script off.
+// to it (`--tv=ws://...`, `--stream=`, `--demo=/d/...`, `--pack=`), the status line the viewer
+// writes (`#viewer-status`: what is loading, or why there is no picture), then the viewer's
+// loader. Every other part of the page is plain HTML, so the page reads the same with script off.
 //
 //   watch_path(node, stream)            the Watch page's path for a broadcast
 //   viewer_built(site, spec)            the hub serves a viewer for this game

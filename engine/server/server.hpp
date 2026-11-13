@@ -40,7 +40,7 @@
 // ge:keywords sv_vote_deny vote_settings
 // ge:keywords sv_password sv_visibility sv_motd sv_admin sv_maprotation sv_maxspectators
 // ge:keywords sv_spectatorpassword sv_rendezvous sv_mod lan-advert multiplayer hosting
-// ge:keywords rcon_password remote-console
+// ge:keywords rcon_password remote-console sv_login sv_accountmaster sv_accountport
 // ge:skill net
 // ge:test tests/server_core_test.cpp
 #pragma once
@@ -56,6 +56,7 @@
 #include "net/node.hpp"
 #include "net/session.hpp"
 #include "net/transport.hpp"
+#include "server/login.hpp"
 #include "server/vote.hpp"
 
 namespace ge::server {
@@ -65,36 +66,43 @@ constexpr int kMaxClients = 32;
 // Everything a server is started with. The first block are cvars (`add_server_cvars`); the second
 // only how a dedicated process runs (main.hpp's flags).
 struct ServerConfig {
-  std::string hostname = "server";   // sv_hostname: the name in the browser and the lobby
-  std::string description;           // sv_description: a line under the name
-  std::string ip;                    // net_ip: the address to listen on (empty: every interface)
-  int32_t port = 0;                  // net_port: the game's port (0: the game's default)
-  int32_t maxclients = 8;            // sv_maxclients: 1..32
-  std::string map;                   // sv_map (empty: the game's default)
-  int32_t bots = 0;                  // sv_bots: slots the game's bots fill at the start
-  int32_t lobby = 0;                 // sv_lobby: 1 warms up every map until the lobby's match
-  uint32_t seed = 1;                 // sv_seed: the run's seed
-  std::string password;              // sv_password: joining takes it (the advert says locked)
-  std::string visibility = "lan";    // sv_visibility: lan, invite or listed (net/hosting.hpp)
-  std::string motd;                  // sv_motd: the message a player sees on joining
-  std::string admin;                 // sv_admin: how to reach the server's owner
-  std::string maprotation;           // sv_maprotation: the maps after the first, space-separated
-  int32_t max_spectators = 0;        // sv_maxspectators: spectators beside the players
-  std::string spectator_password;    // sv_spectatorpassword: watching takes it
-  std::string rcon_password;         // rcon_password: the remote console's (empty: none offered)
-  std::string rendezvous;            // sv_rendezvous: the rendezvous to list with (M17r)
-  std::string masters;               // sv_master: the masters to beat to, space-separated
-  std::string mod;                   // sv_mod: the mods' directories, lowest first (read-only)
-  double timeout_s = 65;             // sv_timeout: a client silent this long is dropped
-  double countdown_s = 5;            // sv_countdown: everyone ready to the match, s (sv_lobby)
-  double intermission_s = 0;         // sv_intermission: a match's end to the next map, s
+  std::string hostname = "server";  // sv_hostname: the name in the browser and the lobby
+  std::string description;          // sv_description: a line under the name
+  std::string ip;                   // net_ip: the address to listen on (empty: every interface)
+  int32_t port = 0;                 // net_port: the game's port (0: the game's default)
+  int32_t maxclients = 8;           // sv_maxclients: 1..32
+  std::string map;                  // sv_map (empty: the game's default)
+  int32_t bots = 0;                 // sv_bots: slots the game's bots fill at the start
+  int32_t lobby = 0;                // sv_lobby: 1 warms up every map until the lobby's match
+  uint32_t seed = 1;                // sv_seed: the run's seed
+  std::string password;             // sv_password: joining takes it (the advert says locked)
+  std::string visibility = "lan";   // sv_visibility: lan, invite or listed (net/hosting.hpp)
+  std::string motd;                 // sv_motd: the message a player sees on joining
+  std::string admin;                // sv_admin: how to reach the server's owner
+  std::string country;              // sv_country: where the server is, a two-letter code ("se")
+  std::string city;                 // sv_city: its city, for browsers and the hub
+  std::string coords;               // sv_coords: "latitude,longitude", for maps of servers
+  std::string public_addr;          // sv_publicaddr: the "host:port" a browser should show
+  std::string maprotation;          // sv_maprotation: the maps after the first, space-separated
+  int32_t max_spectators = 0;       // sv_maxspectators: spectators beside the players
+  int32_t vote = 1;                 // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
+  std::string spectator_password;   // sv_spectatorpassword: watching takes it
+  std::string rcon_password;        // rcon_password: the remote console's (empty: none offered)
+  std::string rendezvous;           // sv_rendezvous: the rendezvous to list with (M17r)
+  std::string masters;              // sv_master: the masters to beat to, space-separated
+  std::string mod;                  // sv_mod: the mods' directories, lowest first (read-only)
+  double timeout_s = 65;            // sv_timeout: a client silent this long is dropped
+  double countdown_s = 5;           // sv_countdown: everyone ready to the match, s (sv_lobby)
+  double intermission_s = 0;        // sv_intermission: a match's end to the next map, s
   std::string floodprot = "10 1 1";  // sv_floodprot: "N S T" chat lines (guards.hpp)
   std::string floodprot_msg;         // sv_floodprotmsg: what a flooder is told ("": the silence)
-  int32_t vote = 1;         // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
-  double vote_time_s = 30;  // sv_vote_time: how long a vote stays open, s
-  double vote_wait_s = 30;  // sv_vote_wait: a failed vote's caller waits this long, s
-  std::string vote_allow;   // sv_vote_allow: settings that may be voted on (empty: all)
+  double vote_time_s = 30;           // sv_vote_time: how long a vote stays open, s
+  double vote_wait_s = 30;           // sv_vote_wait: a failed vote's caller waits this long, s
+  std::string vote_allow;            // sv_vote_allow: settings that may be voted on (empty: all)
   std::string vote_deny = kVoteDenyDefault;  // sv_vote_deny: settings that never may
+  // The logins (login.hpp): sv_login, sv_logintime, sv_loginname, sv_loginwelcome,
+  // sv_accountmaster, sv_accountkey, sv_reservednames.
+  LoginSettings login;
   std::string root = ".";  // where the game directories are (`--root`): maps, cfgs
   // The game's own rules (ServerGame::rules: `fraglimit`, `timelimit`) by name, as set; empty is
   // unset, the game's own default.
@@ -104,14 +112,20 @@ struct ServerConfig {
   double status_every = 5;     // a status line every this many seconds of server time (0: none)
   bool realtime = false;       // pace the frames to the wall clock
   bool offline = false;        // no socket: the game alone (a test, a lab, a run of bots)
+  bool explain = false;        // print every server value with its source instead of running
   std::string log;             // write the run's input log here
   std::string replay;          // replay this input log instead of running
-  bool explain = false;        // print every server value with its source instead of running
   std::string explain_prefix;  // only the cvars starting with this
   // A LISTEN server's content, prepared by the game's own client in its process (the program, the
   // map it already read, its player): the game's own type, read by its `create`; null for a
   // dedicated server, which makes everything from the settings above.
   void* host = nullptr;
+  // The accounts a game's logins ask (login.hpp), made by the dedicated process (main.cpp) or a
+  // lab: the server's own service when sv_accountmaster is empty, else the socket the master is
+  // asked on; and the clock codes and tickets are read by (Unix microseconds). Null: no logins.
+  account::Service* accounts = nullptr;
+  net::Transport* account_link = nullptr;
+  int64_t (*unix_us)() = nullptr;
 };
 
 // What a replay found.
@@ -123,10 +137,25 @@ struct ServerReplay {
 
 // A setting the game's own rules read (`fraglimit`, `timelimit`): a server cvar beside the core's,
 // set like them (every server.cfg layer, `+set`, the console; `--explain` shows where), and handed
-// to `create` in `ServerConfig::rules`. Its fallback is empty: unset leaves the game's own default.
+// to `create` in `ServerConfig::rules`. Its fallback is empty (unset leaves the game's own default)
+// unless the rule names one: a setting of several words wants one, so that a synonym for one word
+// (console/cvar.hpp) changes that word and keeps the others.
 struct GameRule {
   const char* name;
-  const char* help;  // what it does, with its unit
+  const char* help;                // what it does: one sentence (console/words.hpp)
+  const char* fallback = nullptr;  // its default, when not empty
+  const char* values = nullptr;    // what each value does (console/words.hpp)
+};
+
+// A GAME'S OWN NAME for one of the core's settings (`ServerGame::names`): the name its configs,
+// its admins and its mods use, such as a classic game's `maxclients` for `sv_maxclients`. It is a
+// synonym on the server's console (console/cvar.hpp): a server.cfg line, `+set`, rcon or a vote by
+// either name sets the one setting. `part` >= 0 names one word of a setting that holds several
+// (`sv_floodprot`'s "N S T").
+struct SettingName {
+  const char* name;
+  const char* setting;
+  int part = -1;
 };
 
 // A game's server, as functions over its own state (`void*`, made by `create`). Called once a
@@ -142,6 +171,8 @@ struct ServerGame {
   const char* base_dir = "base";    // the base game directory, whose server.cfg is read first
   const GameRule* rules = nullptr;  // the game's own rules, `rule_count` of them
   int rule_count = 0;
+  const SettingName* names = nullptr;  // the game's names for the core's settings, `name_count`
+  int name_count = 0;
 
   // The game on `config`'s map with its bots; null with `error` (what and the next action).
   void* (*create)(const ServerConfig& config, std::string& error) = nullptr;
@@ -173,6 +204,12 @@ struct ServerGame {
   // offline. Both null: the core's own node, session and hosting round `frame`.
   bool (*serve)(void* game, net::Transport& port, std::string& error) = nullptr;
   void (*net_frame)(void* game, int64_t now_us) = nullptr;
+
+  // A game a TV node can broadcast (engine/tv/server_source.hpp): the last frame as the game's
+  // viewers need it (what changed: its moves, its events), appended to `out`, and the whole state
+  // a viewer who joins starts from. Both null: no broadcast.
+  void (*tv_frame)(const void* game, std::vector<uint8_t>& out) = nullptr;
+  void (*tv_keyframe)(const void* game, std::vector<uint8_t>& out) = nullptr;
 };
 
 struct Server {

@@ -40,7 +40,15 @@ struct WorldEntity {
   int waterlevel = 0;        // 0 dry .. 3 under
   int modelindex = 0;        // the model list's index; 0 none
   int frame = 0, skin = 0, colormap = 0, effects = 0;
-  float alpha = 1;  // 1 opaque (the extension field; 1 when the program has none)
+  // It turns about its yaw on the viewer's own clock, 100° a second (an item lying about), its own
+  // angles set aside: what a runner whose `effects` are its own game's bits says to every reader.
+  bool turns = false;
+  // A second model drawn with it, at its place and on its frame (a player's carried weapon): the
+  // model list's index; 0 none.
+  int carried_model = 0;
+  float alpha = 1;                // 1 opaque (the extension field; 1 when the program has none)
+  float scale = 1;                // the model's size (the extension field; 0 in it reads 1)
+  float colormod[3] = {1, 1, 1};  // the tint (the extension field; '0 0 0' in it reads 1 1 1)
   float health = 0;
 };
 
@@ -56,7 +64,13 @@ struct PlayerNumbers {
   float weapon_frame = 0;
   float items = 0;   // the program's item bits
   float view_z = 0;  // the eye above the origin
+  float fov = 0;     // the field of view the rules hold him to, degrees; 0 his own
   float frags = 0;
+  // A runner's own weapons and ammunition, for the bots (bots/bot_arsenal.hpp), where the first
+  // game's bits above do not fit (the sequel's): the weapon held and those carried as bits of the
+  // runner's own weapon index, and every ammunition by its own index.
+  int32_t held = 0, carried = 0;
+  float stock[8] = {};
 };
 
 // One client slot (the player is entity slot + 1).
@@ -75,6 +89,7 @@ struct WorldStatic {
   int frame = 0, colormap = 0, skin = 0;
   sh::Vec3f origin, angles;
   float alpha = 1;
+  float colormod[3] = {1, 1, 1};
 };
 
 struct RulesWorld {
@@ -102,6 +117,10 @@ struct RulesWorld {
 };
 
 struct QcServer;
+struct StaticEntity;
+
+// A static entity as the world shows it: its see-through share and tint from the extras.
+WorldStatic world_static(const StaticEntity& st);
 
 // True when entity `e` is shown: drawn by a window and sent to clients. It needs a model index
 // AND a model text: a program hides a taken item by emptying its `model` (keeping the index, so
@@ -111,6 +130,10 @@ bool model_shown(const QcServer& s, int e);
 // How much of entity `e` shows, 0..1 (1 solid): the mod's `alpha` field when it sets one above 0
 // (DP_ENT_ALPHA), else the map's `alpha` key, else 1.
 float entity_alpha(const QcServer& s, int e);
+// Entity `e`'s size: the mod's `scale` field, 1 when it is 0 or the program has none.
+float entity_scale(const QcServer& s, int e);
+// Entity `e`'s tint: the mod's `colormod` field when not '0 0 0', else the map's key, else 1 1 1.
+void entity_colormod(const QcServer& s, int e, float out[3]);
 
 // The runner's half for the QC server: the lists, then the clients and every entity row. The lists
 // are copied only at the map's start (`full`); a frame's fill rewrites the rest in place.

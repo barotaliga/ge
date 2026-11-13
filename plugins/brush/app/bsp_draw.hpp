@@ -234,6 +234,9 @@ struct DynamicLight {
   // Its share against the frame's dynamic_strength: a light brighter than the rest of the effects'
   // (a lightning bolt beside a muzzle's flash) stays that much brighter whatever the player sets.
   double boost = 1;
+  // The entity it rides on (0: none): that entity's own model is not lit by it, so a glow that
+  // comes off part of a model (a grenade's painted ends) lights the room, not the rest of it.
+  int entity = 0;
 };
 
 struct GpuJob {
@@ -271,6 +274,8 @@ struct GpuBsp {
   // The moving casters under the sun: an orthographic map of them alone round the eye, a tile of
   // their atlas (info.z 1 when drawn this frame).
   GpuJob sun_caster;
+  // The map's sky box (Scene::sky_box): on (1), a face's texel in the atlas's uv (its inset).
+  float sky_box[4];
 };
 
 struct BspDraw {
@@ -281,6 +286,7 @@ struct BspDraw {
   wgpu::Texture atlas, light;
   wgpu::Texture surface;  // the textures' relief (Scene::surface), or a 1 x 1 flat stand-in
   wgpu::Texture cover;    // how solid each texel is (Scene::cover), or a 1 x 1 solid stand-in
+  wgpu::Texture sky_box;  // the map's sky box (Scene::sky_box), or a 1 x 1 stand-in unread
   // The scene's rebaked light (RGB9E5) and its direction (RGBA8), or 1 x 1 stand-ins.
   wgpu::Texture rebake_rgb, rebake_dir, rebake_bounce;
   wgpu::Buffer uniform, lights, jobs;
@@ -322,7 +328,10 @@ struct BspDraw {
   std::array<std::array<float, 4>, kMaxShadowed> slot_key{};
   std::array<bool, kMaxShadowed> slot_held{};      // a slot's cube holds its key's light
   std::array<uint64_t, kMaxShadowed> slot_used{};  // the shadow_frame a light last read it
-  uint64_t shadow_frame = 0;                       // prepare_bsp's count
+  // The cubes this device holds: kMaxShadowed, or fewer where its texture array is shorter
+  // (a browser's default limit is 256 layers: 42 cubes).
+  int cube_slots = kMaxShadowed;
+  uint64_t shadow_frame = 0;     // prepare_bsp's count
   int shadows_waiting = 0;       // this frame's casters over the budget, unshadowed (prepare_bsp)
   std::vector<int> fresh_slots;  // this frame's slots to draw (prepare_bsp)
   std::array<GpuJob, kOrthos> ortho_drawn{};  // what each orthographic map holds
@@ -379,7 +388,7 @@ void encode_bsp_shadows(const BspDraw& draw, const gpu::PipelineSet& pipelines,
 // "bsp.shadows", "bsp" and "bsp.sky": the map into the cleared targets.
 void encode_bsp(const BspDraw& draw, const gpu::PipelineSet& pipelines, render::FrameRecorder& rec,
                 wgpu::CommandEncoder& encoder, const render::FrameTargets& targets,
-                const wgpu::BindGroup& frame);
+                const render::FrameGroup& frame);
 // "bsp.veil", after the sky and the clouds: the sky faces' pixels times the options' sky light
 // and tint (nothing when both are 1, or in the classic mode).
 void encode_bsp_veil(const BspDraw& draw, const gpu::PipelineSet& pipelines,

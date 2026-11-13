@@ -34,7 +34,8 @@ void close_chunk(SequelBroadcast& b) {
 
 }  // namespace
 
-void sequel_broadcast_begin(SequelBroadcast& b, int keyframe_seconds, uint64_t bytes) {
+void sequel_broadcast_begin(SequelBroadcast& b, int keyframe_seconds, uint64_t bytes,
+                            const gr::Meta& meta) {
   b.out.clear();
   b.taken = 0;
   b.keyframe_seconds = keyframe_seconds;
@@ -43,6 +44,7 @@ void sequel_broadcast_begin(SequelBroadcast& b, int keyframe_seconds, uint64_t b
   h.meta = {{"format", "sequel"},
             {"bytes", std::to_string(bytes)},
             {"keyframe_seconds", std::to_string(keyframe_seconds)}};
+  h.meta.insert(h.meta.end(), meta.begin(), meta.end());
   h.tracks = {{kSequelTrack, gr::TrackKind::messages, gr::TrackCodec::field, "sequel"}};
   gr::stream_begin(b.writer, h, b.out);
 }
@@ -54,11 +56,13 @@ void sequel_broadcast_block(SequelBroadcast& b, std::span<const uint8_t> block) 
   if (b.pending.size() == kChunkBlocks) close_chunk(b);
 }
 
-void sequel_broadcast_end(SequelBroadcast& b) {
+void sequel_broadcast_end(SequelBroadcast& b, const gr::Meta& final_meta) {
   if (b.ended) return;
   close_chunk(b);
-  gr::stream_finish(b.writer, {{"duration_ms", std::to_string(b.blocks * 100)},
-                               {"records", std::to_string(b.report.blocks)}});
+  gr::Meta last = {{"duration_ms", std::to_string(b.blocks * 100)},
+                   {"records", std::to_string(b.report.blocks)}};
+  last.insert(last.end(), final_meta.begin(), final_meta.end());
+  gr::stream_finish(b.writer, last);
   b.ended = true;
 }
 

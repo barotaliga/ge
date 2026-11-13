@@ -75,7 +75,7 @@ bool other_near(const WalkStart& st, const OtherBox& o) {
 // `moving`: the world with the players' boxes from solid `first` on (null: the map's alone).
 WalkSeen fly(const MoveWorld& world, MoveWorld* moving, int first, const WalkStart& st, WalkWay way,
              Vec3f aim) {
-  MoveSettings move;
+  MoveSettings move = st.move != nullptr ? *st.move : MoveSettings{};
   move.maxspeed = st.maxspeed;
   MoveState m;
   m.origin = st.origin;

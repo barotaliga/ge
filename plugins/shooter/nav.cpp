@@ -66,7 +66,7 @@ int32_t mover_at(std::span<const NavMover> movers, Vec3f lo, Vec3f hi) {
 // player beside a plat is not on it), any other wherever its box meets the player's.
 int32_t mover_holding(std::span<const NavMover> movers, Vec3f p) {
   for (const NavMover& m : movers) {
-    if (m.model != nullptr) {
+    if (ridden(m)) {
       if (p.x > m.absmin.x && p.x < m.absmax.x && p.y > m.absmin.y && p.y < m.absmax.y &&
           p.z + kPlayerMins.z <= m.absmax.z + 1 && p.z + kPlayerMaxs.z >= m.absmin.z)
         return m.ent;
@@ -130,6 +130,20 @@ const char* nav_kind_name(NavKind k) {
       return "script";
   }
   return "?";
+}
+
+Solid mover_solid(const NavMover& m, Vec3f origin) {
+  if (m.tracer != nullptr)
+    return brushes_solid(*m.tracer, m.brush_model, origin, m.absmin - m.rest, m.absmax - m.rest);
+  Solid s;
+  s.kind = SolidKind::brush;
+  s.origin = origin;
+  if (m.model == nullptr) return s;
+  s.point_hull = m.model->hulls[0];
+  s.clip_hull = m.model->hulls[1];
+  s.mins = m.model->mins;
+  s.maxs = m.model->maxs;
+  return s;
 }
 
 void map_world(const BrushModel& map, MoveWorld& world) {
@@ -212,6 +226,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
                const NavSettings& set, NavGraph& g) {
   g = NavGraph{};
   g.set = set;
+  g.move = move;
   const Solid& w = world.solids[0];
   g.lo = w.mins;
   g.hi = w.maxs;
@@ -482,17 +497,10 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
   // traced again for the floor on its top, a ride up to each, and the ways off it proven there.
   g.movers.assign(movers.begin(), movers.end());
   for (const NavMover& m : movers) {
-    if (m.model == nullptr) continue;
+    if (!ridden(m)) continue;
     MoveWorld there = world;
     if (there.count >= kMaxSolids) continue;
-    Solid& s = there.solids[there.count++];
-    s = Solid{};
-    s.kind = SolidKind::brush;
-    s.origin = m.rest + m.travel;
-    s.point_hull = m.model->hulls[0];
-    s.clip_hull = m.model->hulls[1];
-    s.mins = m.model->mins;
-    s.maxs = m.model->maxs;
+    there.solids[there.count++] = mover_solid(m, m.rest + m.travel);
     const size_t rest = g.nodes.size();
     for (size_t a = 0; a < rest; a++) {
       const NavNode& na = g.nodes[a];
@@ -832,8 +840,7 @@ RocketBurst rocket_burst(const MoveWorld& world, Vec3f origin, Vec3f angles,
   const Vec3f fwd = angle_vectors(angles).forward;
   const Vec3f start = origin + Vec3f{0, 0, rj.eye} + fwd * 8 - Vec3f{0, 0, 8};
   const Vec3f end = start + fwd * 4096;
-  const HullTrace tr = trace_hull(world.solids[0].point_hull, start - world.solids[0].origin,
-                                  end - world.solids[0].origin);
+  const HullTrace tr = point_trace(world, start, end);
   if (tr.fraction >= 1 || tr.startsolid) return out;
   out.ok = true;
   out.at = start + (end - start) * tr.fraction - fwd * rj.back_off;
@@ -948,13 +955,12 @@ Vec3f grenade_at(const MoveWorld& world, Vec3f origin, Vec3f angles, float t,
   Vec3f at = origin + Vec3f{0, 0, gj.blast.eye} + fwd * 8 - Vec3f{0, 0, 8};
   Vec3f v = fwd * gj.speed + Vec3f{0, 0, gj.up};
   const float dt = static_cast<float>(msec) * 0.001f;
-  const Solid& w = world.solids[0];
   bool rest = false;
   for (float done = 0; done + dt * 0.5f < t && !rest; done += dt) {
     // The toss: gravity first, then the move, then the bounce off what it met.
     v.z -= gj.gravity * dt;
     const Vec3f end = at + v * dt;
-    const HullTrace tr = trace_hull(w.point_hull, at - w.origin, end - w.origin);
+    const HullTrace tr = point_trace(world, at, end);
     if (tr.startsolid || tr.allsolid) break;
     at = at + (end - at) * tr.fraction;
     if (tr.fraction >= 1) continue;

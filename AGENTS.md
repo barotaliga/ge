@@ -59,6 +59,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/gamecli.md`](docs/gamecli.md) | A player's game CLI (M55): `<game>_cli` for players' agents, its layers (engine, plugin, game), the answer, settings and the catalog, servers, hosting and joining, places, the lab |
 | [`docs/hub.md`](docs/hub.md) | The hub (M56): a community's website of every live game and demo; the master, the status record, the poller, the JSON API, the pages, the archive by hash, watching in a browser, the plan |
 | [`docs/tv.md`](docs/tv.md) | TV, proxy and forward for every game (M57): the four pieces and their names, the layers, the replay file version 2 and its tracks, the field codec and what it measured, the decisions |
+| [`docs/accounts.md`](docs/accounts.md) | Accounts and stats (M59): one account across every game, names reserved, tickets for our clients and codes for classic ones, the login settings, the match report, the hub's player pages |
 
 **The working area.** `porting/` holds everything that only matters while modules are
 being carried over from their reference sources: the porting guide (`porting/README.md`),
@@ -89,14 +90,17 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   repository's structure and ship in no game, and Blender Python asset builders: offline
   sources of a model, run headless by `ge asset` (docs/goals.md M8g), whose output (a .glb)
   is committed and loaded by the engine in C++; they never run in a game, CI never needs
-  Blender, and no other scripting enters the tree. The one runtime exception is
-  Shooter's Edge's QC VM and compiled-module VM (`plugins/progs`, `docs/shooters-edge.md`), which
-  execute existing mods' bytecode (a `.dat` or a `.qvm`) for compatibility; the tree's own QC is limited to that game's baseline mod and its test mod. Nothing about the reference sources'
-  architecture (their layers, module split, file layout, state shape, names or data
-  formats) is assumed to carry over: each design decision is made here, for this engine,
-  and recorded in `docs/architecture.md`. Where a carried-over module keeps a behaviour (a
-  golden pins its bits), that is a decision about the result, not about the structure
-  around it.
+  Blender, and no other scripting enters the tree. The one runtime exception is Shooter's
+  Edge's QC VM and compiled-module VM (`plugins/progs`, `docs/shooters-edge.md`), which execute
+  existing mods' bytecode (a `.dat` or a `.qvm`) for compatibility ONLY: **no QC of our own.**
+  Our own game rules are C++ (`engine/mod` packages, `docs/mods.md`); the baseline mod's QC
+  sources (`games/shooters_edge/qc/`) take no new code and are being carried to C++ packages
+  and deleted (M52h); the only QC left is the VMs' own test fixtures, built inside their tests.
+  Nothing about the reference sources' architecture (their layers, module split, file layout,
+  state shape, names or data formats) is assumed to carry over: each design decision is made
+  here, for this engine, and recorded in `docs/architecture.md`. Where a carried-over module
+  keeps a behaviour (a golden pins its bits), that is a decision about the result, not about
+  the structure around it.
 - **WRITE ONLY TO THIS REPOSITORY.** The reference sources (`porting/README.md` names
   them) are read-only: clone them beside this checkout, read them and run them, but never
   commit, push, open issues or comment there. If a reference has a bug, the engine
@@ -252,16 +256,17 @@ a good build saves them back.
 **Linux is checked here, before the push; CI runs only what can differ elsewhere.** `make
 precheck` is the Linux gate (GCC debug+ASan on Mesa's lavapipe: the build, the lint, the shaders,
 the tests and the labs' digests the change reaches), and CI (`.github/workflows/ci.yml`) runs no
-Linux build, test or lint on a pull request or in the queue. A pull request runs the gates
+Linux test or lint on a pull request or in the queue. A pull request runs the gates only
 (fmt-check, agents-check, libm-check, release-check, the changeset rule: cheap, and the queue's
-combined tree needs them), Windows (MSVC: its warnings, its CRT) and macOS (Apple Clang on arm64:
-another compiler and ISA), each building everything and running the whole suite, so the goldens
-and the labs' digests are held on both; the merge queue runs the same on the tree that lands plus
-`packaging.yml` (the installed package consumed on Windows and macOS, and `ge new` growing a repo
-when the change reaches `engine/cli`, `engine/play`, `engine/lab`, the templates or the build). A
-change to prose alone (docs, skills, lessons, root Markdown, fragments) runs the gates only; the
-label `full-ci` adds the Linux rows (GCC debug+ASan, GCC and Clang release, arm64), the lint and
-the shaders' check, and the whole packaging. The ruleset requires one check, `required`, which
+combined tree needs them); the merge queue adds the Linux GCC release compile (`linux-gcc`). THE
+MATRIX RUNS ON MAIN: every push to main runs Windows (MSVC: its warnings, its CRT) and macOS (Apple
+Clang on arm64: another compiler and ISA), each building everything and running the whole suite,
+so the goldens and the labs' digests are held on both, plus the Linux GCC release row and
+`packaging.yml` when the push reaches `engine/cli`, `engine/play`, `engine/lab`, the templates or
+the build; main's runs are never cancelled (they queue one behind another), so each one answers
+the `main-red` issue, and the PR that broke main fixes it first. The daily run adds the other
+Linux rows (GCC debug+ASan, Clang release, arm64), the whole-tree lint and the whole packaging; the
+label `full-ci` runs all of that on a pull request that fears another platform. The ruleset requires one check, `required`, which
 passes when every job passed or was skipped by those rules. A golden failure on one row points at
 that row's compiler or libm. GPU and window tests run where there is an adapter and skip (CTest's
 exit 77) where not; the Linux rows under `full-ci` run them on lavapipe with `GE_GPU_REQUIRE=1`,
@@ -301,6 +306,7 @@ characters.
 | `engine/console/` | The console (`ge::console`, `docs/console.md`): cvars and their tiers, the console language, aliases, binds, cfg files, the drop-down console's model | `console` |
 | `engine/replay/` | Replays (`ge::replay`, `docs/replays.md`): a run watched again off its input log, the keyframes a seek starts from (the game's `Run::clone`), the player's seek in a step budget, the transport | `replay` |
 | `engine/tv/` | TV (`ge::tv`, `docs/tv.md`): a match's replay file stream from a source, held by a delay in game time, fanned out to viewers and relays; chat up, the tree's count; over engine/net; the trial | `replay`, `net` |
+| `engine/account/` | Player accounts (`ge::account`, `docs/accounts.md`): the store a master keeps, names reserved by a key folded per game, Argon2id secrets, one-time login codes, the throttle, its log | `net` |
 | `engine/save/` | Saves (`ge::save`, `docs/saves.md`): the save file (header, meta, tagged versioned chunks, directory, XXH64), the state described once for its writer and reader | `save` |
 | `engine/capture/` | Video with sound (`ge::capture`, in `ge_play`; `docs/replays.md`): the Matroska and fragmented MP4 muxers and readers, I420, the encoders, the export's A/V clock, the live capture, the sync fixture | `replay` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |
@@ -309,6 +315,7 @@ characters.
 | `engine/gamecli/` | A player's game CLI (`ge::gamecli`, `docs/gamecli.md`): the command table and answer, settings through the catalog, servers, players, rcon, hosting, joining, logs; `ge_add_game_cli` | `agent-interface` |
 | `engine/server/` | The server core (`ge::server`, `docs/servers.md`): `ServerGame` a game plugs in, the frame, the node, session and hosting round it, the dedicated process (`ge_add_server`), the sample game and trial | `net` |
 | `engine/hub/` | The hub (`ge::hub`, `docs/hub.md`): a game's `HubSpec`, the poller of masters and status records, the index, the JSON API, HTTP with server-sent events, the process (`ge_add_hub`) | `net` |
+| `engine/web/` | The web (`ge::web`, `docs/hub.md` § Watching in a browser): a game's viewer in the browser: its arguments from the hub's page, the page's calls (fetch, paint, canvas, status line); `ge_add_web_viewer` | `net` |
 | `engine/texgen/` | Procedural textures (`ge::texgen`, `docs/textures.md`): the `.tex` recipe, tileable noise, the layer kinds, the bake to maps and its disk cache; `library/` the specimens | `textures` |
 | `engine/snow/` | Snow over any ground (`ge::snow`, `docs/snow.md`): the layer and its cover, sparse fixed-point tiles, `sample`, `press` and imprint records, reference contacts, the snapshot | `snow` |
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
@@ -362,6 +369,7 @@ characters.
 | `games/shooters_edge/cli/` | Shooter's Edge's player CLI (`shooters_edge_cli`): its Spec over engine/gamecli (places, the classic protocol, launch words, settings), classic enhance's group, its demos | `agent-interface`, `shooter` |
 | `games/shooters_edge/server/` | Shooter's Edge's server: the host, its slots and input log, the dedicated binary; the mod server (QC builtins and extensions, hooks, the test and baseline mods, a progs from a path) | `shooter`, `progs` |
 | `games/shooters_edge/hub/` | Shooter's Edge's hub binary (`shooters_edge_hub`): the engine's hub with the game's modes and words | `net` |
+| `games/shooters_edge/web/` | Shooter's Edge's web viewer (`shooters_edge_viewer`, the `web` preset): the packs and a demo fetched from a hub, the match played on the page's canvas | `net` |
 | `games/shooters_edge/qc/` | Shooter's Edge's own QC mods modders start from: `common/` shared, `arena/` the deathmatch, `campaign/` the single-player game (built by `ge qc build`) | `progs` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (the harness), `golden.hpp`, `golden/` | `testing` |
 | `porting/` | The WORKING AREA (above): the porting guide, the porting map, the golden-table generators. Deleted when porting ends | `port` |

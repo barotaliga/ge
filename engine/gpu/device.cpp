@@ -9,6 +9,7 @@
 // ge:test tests/gpu_device_test.cpp
 #include "gpu/device.hpp"
 
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -39,7 +40,11 @@ constexpr std::array<wgpu::FeatureName, kFeatureCount> kFeatureNames = {
     wgpu::FeatureName::TextureCompressionBC,
     wgpu::FeatureName::TextureCompressionASTC,
     wgpu::FeatureName::TextureCompressionETC2,
+#if defined(__EMSCRIPTEN__)
+    wgpu::FeatureName{},  // the browser's WebGPU has no transient attachments: never asked
+#else
     wgpu::FeatureName::TransientAttachments,
+#endif
 };
 
 std::string_view backend_name(wgpu::BackendType b) {
@@ -104,19 +109,21 @@ std::string system32_dir() {
 }
 #endif
 
-// Whether an environment variable is "1" (MSVC deprecates std::getenv in favour of its own).
-bool env_on(const char* name) {
+// Whether an environment variable holds `want` (MSVC deprecates std::getenv for its own).
+bool env_is(const char* name, const char* want) {
 #ifdef _MSC_VER
   char* v = nullptr;
   size_t n = 0;
-  const bool on = _dupenv_s(&v, &n, name) == 0 && v != nullptr && std::strcmp(v, "1") == 0;
+  const bool on = _dupenv_s(&v, &n, name) == 0 && v != nullptr && std::strcmp(v, want) == 0;
   std::free(v);
   return on;
 #else
   const char* v = std::getenv(name);
-  return v && std::strcmp(v, "1") == 0;
+  return v && std::strcmp(v, want) == 0;
 #endif
 }
+
+bool env_on(const char* name) { return env_is(name, "1"); }
 
 }  // namespace
 
@@ -191,18 +198,31 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
 
   std::vector<wgpu::FeatureName> wanted;
   for (int i = 0; i < kFeatureCount; ++i) {
-    if (options.force_off[i] || !dev->adapter.HasFeature(kFeatureNames[i])) continue;
+    if (options.force_off[i] || kFeatureNames[i] == wgpu::FeatureName{} ||
+        !dev->adapter.HasFeature(kFeatureNames[i])) {
+      continue;
+    }
+#if defined(__EMSCRIPTEN__)
+    // A page's timers are coarse by design, and a split pass's "no write" index does not cross
+    // into the browser's API: the web build times nothing.
+    if (static_cast<Feature>(i) == Feature::timestamp_query) continue;
+#endif
     wanted.push_back(kFeatureNames[i]);
     dev->features.on[i] = true;
   }
 
-  dev->validation = options.validation < 0
+  // The browser's own limits or the adapter's best (a null below asks for WebGPU's defaults);
+  // a run on the browser's limits is a check, so its validation is always on.
+  const bool default_limits = options.default_limits || env_is("GE_GPU_LIMITS", "default");
+  dev->validation = default_limits ? true
+                    : options.validation < 0
 #ifdef NDEBUG
                         ? false
 #else
                         ? true
 #endif
                         : options.validation != 0;
+#if !defined(__EMSCRIPTEN__)
   static constexpr const char* kNoChecks[] = {"skip_validation", "disable_robustness"};
   // Dawn rounds every timestamp down to 2^16 ns by default (a browser's guard against timing
   // attacks), which leaves a pass's GPU time in steps of 0.0655 ms: the engine times its own
@@ -215,14 +235,17 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
   }
   toggles.disabledToggleCount = 1;
   toggles.disabledToggles = kFullTimers;
+#endif
 
   const std::string label(options.label);
   wgpu::DeviceDescriptor desc{};
-  desc.nextInChain = &toggles;
+#if !defined(__EMSCRIPTEN__)
+  desc.nextInChain = &toggles;  // the browser takes no toggles: its own checks always run
+#endif
   desc.label = wgpu::StringView(label.data(), label.size());
   desc.requiredFeatureCount = wanted.size();
   desc.requiredFeatures = wanted.data();
-  desc.requiredLimits = &dev->limits;
+  desc.requiredLimits = default_limits ? nullptr : &dev->limits;
   Device* self = dev.get();
   desc.SetUncapturedErrorCallback(
       [](const wgpu::Device&, wgpu::ErrorType type, wgpu::StringView message, Device* d) {
@@ -259,6 +282,7 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
           }),
       UINT64_MAX);
   if (!dev->device) return nullptr;
+#if !defined(__EMSCRIPTEN__)
   dev->device.SetLoggingCallback([](wgpu::LoggingType type, wgpu::StringView message) {
     if (type == wgpu::LoggingType::Warning || type == wgpu::LoggingType::Error) {
       out::warn("gpu: dawn: " + to_string(message) + " (skill: gpu)");
@@ -266,6 +290,8 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
       out::debug("gpu: dawn: " + to_string(message));
     }
   });
+#endif
+  if (default_limits) dev->device.GetLimits(&dev->limits);  // what the device really has
   dev->queue = dev->device.GetQueue();
   out::info("gpu: adapter " + adapter_line(*dev));
   return dev;
@@ -274,6 +300,18 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
 void end_load(Device& device) { device.loading = false; }
 
 void wait(Device& device, wgpu::Future future) { device.instance.WaitAny(future, UINT64_MAX); }
+
+wgpu::RenderPassEncoder begin_render_pass(wgpu::CommandEncoder& encoder,
+                                          const wgpu::RenderPassDescriptor& desc) {
+  if (!desc.depthStencilAttachment || !std::isnan(desc.depthStencilAttachment->depthClearValue)) {
+    return encoder.BeginRenderPass(&desc);
+  }
+  wgpu::RenderPassDepthStencilAttachment depth = *desc.depthStencilAttachment;
+  depth.depthClearValue = 0.0f;  // read only when it clears, and then it was set
+  wgpu::RenderPassDescriptor d = desc;
+  d.depthStencilAttachment = &depth;
+  return encoder.BeginRenderPass(&d);
+}
 
 std::string adapter_line(const Device& d) {
   std::string line = d.report.name + " / " + d.report.driver + " / " + d.report.backend;

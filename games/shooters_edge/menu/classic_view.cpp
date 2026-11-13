@@ -84,7 +84,48 @@ constexpr CarvedPiece kDemosPieces[] = {
     {"mainmenu", 67, 40, 21, 20, 60, 0},   // Options' o
     {"mainmenu", 106, 40, 17, 20, 82, 0},  // Options' s
 };
-constexpr CarvedWord kCarvedWords[] = {{"demos", 0xb378b8eec94a7f36ULL, kDemosPieces}};
+// SELECT GAME: Single's capital S, Ordering's e, Help's l (a stem and its foot), the left half of
+// Options' o for the c (the font's O is two halves), Options' t; Game's capital G short of its
+// hook's last column, Player's a, Game's m and Ordering's e.
+constexpr CarvedPiece kGamesPieces[] = {
+    {"mainmenu", 2, 0, 18, 20, 0, 0},       // Single's S
+    {"mainmenu", 153, 60, 17, 20, 19, 0},   // Ordering's e
+    {"mainmenu", 40, 60, 17, 20, 37, 0},    // Help's l
+    {"mainmenu", 153, 60, 17, 20, 55, 0},   // Ordering's e
+    {"mainmenu", 67, 40, 11, 20, 73, 0},    // the left half of Options' o
+    {"mainmenu", 40, 40, 19, 20, 85, 0},    // Options' t
+    {"sp_menu", 70, 0, 19, 20, 115, 1},     // Game's G (its strip sits a pixel higher)
+    {"mainmenu", 143, 0, 23, 20, 135, 0},   // Player's a
+    {"sp_menu", 107, 0, 21, 20, 159, 1},    // Game's m
+    {"mainmenu", 153, 60, 17, 20, 181, 0},  // Ordering's e
+};
+// The two games' names on SELECT GAME: Quit's Q (the logo's own) and u, Player's a without the
+// foot it shares with the l, a k of Ordering's r stem with Player's y arm over the leg of the r
+// beside it, Ordering's e; the sequel's numeral two of Single's I.
+constexpr CarvedPiece kClassicNamePieces[] = {
+    {"mainmenu", 0, 80, 22, 20, 0, 0},     // Quit's Q
+    {"mainmenu", 23, 80, 19, 20, 23, 0},   // Quit's u
+    {"mainmenu", 147, 0, 19, 20, 43, 0},   // Player's a
+    {"mainmenu", 171, 60, 9, 20, 63, 0},   // the k: Ordering's r stem,
+    {"mainmenu", 176, 0, 8, 9, 72, 0},     // Player's y arm,
+    {"mainmenu", 182, 68, 9, 12, 73, 8},   // the r's leg
+    {"mainmenu", 153, 60, 17, 20, 85, 0},  // Ordering's e
+};
+constexpr CarvedPiece kSequelNamePieces[] = {
+    {"mainmenu", 0, 80, 22, 20, 0, 0},     // Quit's Q
+    {"mainmenu", 23, 80, 19, 20, 23, 0},   // Quit's u
+    {"mainmenu", 147, 0, 19, 20, 43, 0},   // Player's a
+    {"mainmenu", 171, 60, 9, 20, 63, 0},   // the k: Ordering's r stem,
+    {"mainmenu", 176, 0, 8, 9, 72, 0},     // Player's y arm,
+    {"mainmenu", 182, 68, 9, 12, 73, 8},   // the r's leg
+    {"mainmenu", 153, 60, 17, 20, 85, 0},  // Ordering's e
+    {"mainmenu", 22, 0, 8, 20, 110, 0},    // Single's I
+    {"mainmenu", 22, 0, 8, 20, 120, 0},    // twice
+};
+constexpr CarvedWord kCarvedWords[] = {{"demos", 0xb378b8eec94a7f36ULL, kDemosPieces},
+                                       {"games", 0xb378b8eec94a7f36ULL, kGamesPieces},
+                                       {"game-classic", 0xb378b8eec94a7f36ULL, kClassicNamePieces},
+                                       {"game-sequel", 0xb378b8eec94a7f36ULL, kSequelNamePieces}};
 
 // Row `id`'s word cut from the strips at (x, y), classic px; false when these strips are not the
 // ones it was measured on (the caller draws the glyphs instead).
@@ -110,6 +151,24 @@ bool carve(const ClassicPen& pen, std::string_view id, float x, float y) {
   }
   return false;
 }
+
+}  // namespace
+
+bool carve_word(const ClassicPen& pen, std::string_view id, float x, float y) {
+  return carve(pen, id, x, y);
+}
+
+float carved_width(const ClassicArt& art, std::string_view id) {
+  for (const CarvedWord& w : kCarvedWords) {
+    if (w.row != id || w.print != art.strip_print || art.strip_print == 0) continue;
+    int right = 0;
+    for (const CarvedPiece& p : w.pieces) right = std::max(right, p.dx + p.w);
+    return static_cast<float>(right);
+  }
+  return 0;
+}
+
+namespace {
 
 bool drawn(const ui::Item& it) { return !(it.kind == ui::ItemKind::back && it.disabled); }
 

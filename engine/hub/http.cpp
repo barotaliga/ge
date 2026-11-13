@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "core/json_write.hpp"
+#include "hub/account_page.hpp"
 #include "hub/pages.hpp"
 
 namespace ge::hub {
@@ -17,6 +18,13 @@ namespace ge::hub {
 namespace gn = ge::net;
 
 namespace {
+
+std::string lower_ascii(std::string_view s) {
+  std::string out(s);
+  for (char& c : out)
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  return out;
+}
 
 const char* reason(int code) {
   switch (code) {
@@ -37,11 +45,40 @@ const char* reason(int code) {
   }
 }
 
-void send(HttpConn& c, const std::string& bytes) {
-  gn::tcp_send_bytes(c.stream, reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
+constexpr size_t kFeedPiece = size_t{64} * 1024;  // an answer goes to the stream this much at once
+
+// As much of the answer's bytes as the stream's backlog takes now (a viewer's file or a pack is
+// megabytes: the rest goes as the client reads it, over the next updates).
+void feed(HttpConn& c) {
+  while (c.out_at < c.out.size()) {
+    const size_t n = std::min(kFeedPiece, c.out.size() - c.out_at);
+    if (!gn::tcp_send_bytes(c.stream, reinterpret_cast<const uint8_t*>(c.out.data() + c.out_at), n))
+      break;
+    c.out_at += n;
+  }
+  if (c.out_at >= c.out.size()) {
+    c.out.clear();
+    c.out_at = 0;
+  }
 }
 
-bool drained(const HttpConn& c) { return c.stream.out_head >= c.stream.out.size(); }
+void send(HttpConn& c, const std::string& bytes) {
+  c.out += bytes;
+  feed(c);
+}
+
+bool loopback(const gn::Address& a) {
+  if (a.family == gn::Family::ipv4) return a.bytes[0] == 127;
+  if (a.family != gn::Family::ipv6) return false;
+  for (int i = 0; i < 15; i++) {
+    if (a.bytes[i] != 0) return false;
+  }
+  return a.bytes[15] == 1;
+}
+
+bool drained(const HttpConn& c) {
+  return c.out_at >= c.out.size() && c.stream.out_head >= c.stream.out.size();
+}
 
 }  // namespace
 
@@ -63,6 +100,10 @@ HttpParse http_parse(std::string_view data, HttpRequest& out) {
     return HttpParse::bad;
   }
   out.host.clear();
+  out.content_length = 0;
+  out.forwarded_https = false;
+  out.forwarded_for.clear();
+  out.gzip = false;
   const std::string_view head = data.substr(0, end);
   for (size_t at = head.find("\r\n"); at != std::string_view::npos && at < head.size();) {
     const size_t from = at + 2;
@@ -75,6 +116,33 @@ HttpParse http_parse(std::string_view data, HttpRequest& out) {
       while (!v.empty() && v.back() == ' ') v.remove_suffix(1);
       out.host = std::string(v);
     }
+    if (const size_t colon = h.find(':'); colon != std::string_view::npos) {
+      // The Account page's posts: the body's length, and what the operator's proxy says.
+      std::string name(h.substr(0, colon));
+      for (char& ch : name) ch = static_cast<char>(ch >= 'A' && ch <= 'Z' ? ch - 'A' + 'a' : ch);
+      std::string_view v = h.substr(colon + 1);
+      while (!v.empty() && v.front() == ' ') v.remove_prefix(1);
+      while (!v.empty() && v.back() == ' ') v.remove_suffix(1);
+      if (name == "content-length") {
+        size_t n = 0;
+        for (const char ch : v) {
+          if (ch < '0' || ch > '9' || n > kMaxRequest * 1024) return HttpParse::bad;
+          n = n * 10 + static_cast<size_t>(ch - '0');
+        }
+        out.content_length = n;
+      } else if (name == "x-forwarded-proto") {
+        out.forwarded_https = v == "https" || v == "HTTPS";
+      } else if (name == "x-forwarded-for") {
+        out.forwarded_for = std::string(v.substr(0, v.find(',')));
+        while (!out.forwarded_for.empty() && out.forwarded_for.back() == ' ') {
+          out.forwarded_for.pop_back();
+        }
+      }
+    }
+    if (h.size() > 16 && lower_ascii(h.substr(0, 16)) == "accept-encoding:" &&
+        lower_ascii(h.substr(16)).find("gzip") != std::string::npos) {
+      out.gzip = true;
+    }
     at = eol;
   }
   return HttpParse::ok;
@@ -85,6 +153,7 @@ std::string http_response(const Answer& a, bool head_only) {
   const bool text = a.type.rfind("text/", 0) == 0 || a.type == "application/json";
   r += "Content-Type: " + a.type + (text ? "; charset=utf-8\r\n" : "\r\n");
   r += "Content-Length: " + std::to_string(a.body.size()) + "\r\n";
+  if (!a.encoding.empty()) r += "Content-Encoding: " + a.encoding + "\r\nVary: Accept-Encoding\r\n";
   r += a.max_age_s > 0 ? "Cache-Control: public, max-age=" + std::to_string(a.max_age_s) + "\r\n"
                        : std::string("Cache-Control: no-store\r\n");
   r += "Access-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n";
@@ -153,6 +222,7 @@ void http_update(HttpServer& s, const Poller& p, const HubSpec& spec, int64_t no
 
   for (HttpConn& c : s.conns) {
     gn::tcp_pump(c.stream);
+    feed(c);
     std::vector<uint8_t> bytes;
     if (gn::tcp_take_bytes(c.stream, bytes) > 0 && !c.answered && !c.events) {
       c.in.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
@@ -164,19 +234,49 @@ void http_update(HttpServer& s, const Poller& p, const HubSpec& spec, int64_t no
         if (now_us - c.opened_us > kRequestTimeoutUs) c.stream.closed = true;
         continue;
       }
+      const bool post = r == HttpParse::ok && req.method == "POST";
+      if (post && req.content_length <= kMaxForm &&
+          c.in.size() < req.head_size + req.content_length) {
+        if (now_us - c.opened_us > kRequestTimeoutUs) c.stream.closed = true;
+        continue;  // the form's body is still coming
+      }
       c.answered = true;
+      const std::string path = r == HttpParse::ok ? target_path(req.target) : std::string();
+      const bool account_path = path == "/account" || path.rfind("/account/", 0) == 0;
+      if (r == HttpParse::ok && account_path && req.content_length <= kMaxForm) {
+        AccountAsk ask;
+        ask.method = req.method;
+        ask.path = path;
+        if (post) ask.body = c.in.substr(req.head_size, req.content_length);
+        const bool local = loopback(c.stream.peer);
+        ask.secure = local || req.forwarded_https;
+        ask.from =
+            local && !req.forwarded_for.empty() ? req.forwarded_for : gn::to_string(c.stream.peer);
+        ask.unix_us = s.unix_s * 1000000;
+        Answer a;
+        account_answer(spec, s.accounts, ask, a);
+        if (!ask.body.empty()) ge::net::wipe(c.in.data(), c.in.size());  // the form held secrets
+        s.stats.answered++;
+        send(c, http_response(a, req.method == "HEAD"));
+        gn::tcp_pump(c.stream);
+        continue;
+      }
       if (r != HttpParse::ok) {
         s.stats.errors++;
         send(c, r == HttpParse::too_big
                     ? http_error(431, "the request's head is over 8 KB", "send a shorter request")
                     : http_error(400, "the request line is not 'GET /path HTTP/1.1'",
                                  "send a GET for / or a path under /v1"));
+      } else if (post && account_path) {
+        s.stats.errors++;
+        send(c, http_error(413, "a form is at most 2 KB", "send a shorter form"));
       } else if (req.method != "GET" && req.method != "HEAD") {
         s.stats.errors++;
-        send(c, http_error(405, "the hub answers GET and HEAD only", "send a GET"));
+        send(c, http_error(405, "the hub answers GET and HEAD, and POST to /account only",
+                           "send a GET"));
       } else {
         const Answer a = hub_answer(p, spec, req.target, now_us,
-                                    Site{s.archive, s.unix_s, req.host, s.viewer_dir});
+                                    Site{s.archive, s.unix_s, req.host, s.viewer_dir, req.gzip});
         if (a.events && a.code == 200) {
           const HubNode* n = poller_find(p, a.node);
           c.answered = false;

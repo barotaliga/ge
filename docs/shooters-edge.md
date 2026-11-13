@@ -106,6 +106,38 @@ is kept (`game_folder.txt` in the platform's per-user folder) and opened at the 
 `-basedir` names none and the folder the game runs in holds no game. `basedir <folder>` in the
 console does the same as LOAD GAME (`client/game_folder.hpp`). Then `map dm3` plays that map.
 
+**Dropped into an install, or beside several** (`client/install_search.hpp`). Started inside a
+classic install (the folder the game runs in, or the folder its executable or app was placed in,
+is an install or lies inside one: its base folder, its multiplayer folder, the bundled client's
+folder), the game plays that install at once, ahead of the one kept. Placed in a folder ABOVE
+installs, it finds each folder right under it that is one: the folders named like a classic
+install first, in any case (the two games' own names, with or without a space or a 2, their
+multiplayer client's names, the bundles' names, the sequel's short name), then any other folder
+that holds a game. Each one's release is told by its packs' sizes (the first game's shareware or
+registered packs, the sequel's demo or full game; any other size is your own copy); the game
+loaded last is played when it is one of them, else the first full game. `games` in the console
+lists them and `games <n>` loads one.
+
+**An install's configs, in its own order** (`client/install_configs.hpp`). The bundled client's
+configs come with the install: `default.cfg` on disk, then, when the bundled client's folder holds
+`configs/config.cfg`, `autoexec.cfg` and that config, then `autoexec.cfg`, then the window's own
+saved settings (so a change made here sticks), then the command line's `+set` pairs and its other
+`+` commands. `exec` finds a file in the window's settings folder, the game folder, the bundled
+client's folder and the base folder, then in the archives, which include the bundled client's
+folder's own (its place names and fonts). Settings the window does not have are passed over and
+counted on one line. The sequel's install runs its bundled client's order: `config.cfg`
+(`q2config.cfg` on Windows, each tried after the other; a mod folder's before the base folder's),
+then the base folder's `autoexec.cfg` and the mod's, `postexec.cfg`, the window's own settings, the
+command line, and `postinit.cfg` last. Maps' coloured light is also read from `maps/lits/<map>.lit`.
+
+**Place names, made in the game** (`client/place_names.hpp`). Each map's place names are read as
+it starts (`tp_loadlocs`): the file saved under the game folder first, else the game's own.
+Stand in a place and `addloc <name>`; `removeloc` forgets the nearest, `clearlocs` all of them,
+`saveloc <name>` (or `saveloc $mapname`) writes `<game folder>/locs/<name>.loc` in the shared
+format, `loadloc <name>` reads one, and `loc` says where you are. The long names
+(`locations_add` and so on) work too, and so does the sequel's spelling: `loc add <name>`,
+`loc del`, `loc set <name>` (renames the nearest), `loc list` and `loc save`.
+
 **The title and the loads.** With no `+map` the window opens at once on the title
 (`client/title.hpp`: a night with the full moon low in a total eclipse, blood red, cloud carried
 across it) with the main menu up, the start map loading behind it; ESCAPE out of the menu plays it
@@ -1029,7 +1061,11 @@ In the window, `sv_coop 1` makes the campaign a coop game (`client/coop_mode.hpp
 or on the command line the game starts as one on the start map, set in the console one starts at
 once, with `sv_coopbots` companions (1 by default, at most seven: eight players); `skill` is the
 monsters' for everyone. `coopgame [bots] [novice|average|expert] [map]` starts one by hand, and
-`addbot` and `removebot` change the party during it (`client/coop_party.hpp`). With `sv_port`
+`addbot` and `removebot` change the party during it (`client/coop_party.hpp`). `addbot` in a
+single-player game seats a companion too, at any time: the game turns cooperative there and then
+(`server/campaign.hpp`'s `campaign_set_coop`: a death respawns at a coop start instead of
+restarting the map, and the coop weapon rule holds) and turns back to single player when the last
+companion leaves; the game saves again once it has gone. With `sv_port`
 set, others join the coop game over the classic protocol as they would a server
 (`net/classic_coop.hpp`): the window's player and the companions are the endpoint's local seats, a
 client who joins enters the campaign and is carried from map to map with his parms as the player
@@ -1229,9 +1265,15 @@ every pass, and judged by captioned screenshots:
   to the same pixels as drawing everything. **Light styles**: every style a face stores is a
   layer of the lightmap atlas, and the 64 styles' levels are a uniform the frame fills from their
   letter patterns ('a' dark, 'm' as baked, ten letters a second; `set_light_style`), so animated
-  light costs no re-upload. Coloured light from `.lit` files when present (to come).
+  light costs no re-upload. Coloured light from a `.lit` file when the game's files hold one
+  (`maps/<name>.lit` beside the map, else `lits/<name>.lit`; `client/files.hpp`'s `map_lit`), over
+  the grey light the map carries; one made for another build of the map is refused and the map keeps
+  its own.
 - **Materials**: animated texture sequences ("+0" .. "+9", five frames a second, each texture
-  starting at its own frame), warped liquids, the two-layer scrolling sky (a skybox to come),
+  starting at its own frame), warped liquids, the two-layer scrolling sky or the map's own sky
+  box (the worldspawn's `sky` names six pictures under `env/` or `gfx/env/`, `rt bk lf ft up dn`,
+  as .tga, .png, .jpg or .pcx; `client/files.hpp`'s `sky_box_files`, `brush/app/sky_box.hpp`)
+  drawn at infinity on the sky faces, all six or none (`r_skyname` names one for every map),
   fullbright palette colours as emissive.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
@@ -1395,6 +1437,23 @@ server set `rcon_password` and send `rcon <password> <line>` from a joined windo
 speedjump 3 on`) or any classic client. Without a password the remote console is refused. The
 words and the remote console are `net/classic_admin.hpp`.
 
+**The rocket jump helpers (M18e).** `+rjump` does a rocket jump for the player: one press asks
+the server, and on the first command the rocket launcher can fire the server fires a real rocket
+80 degrees down at his own yaw as he jumps (the launcher chosen for it; a press inside the refire,
+or while the sequel raises the launcher, waits up to a second with his jump held back). `+rrjump`
+is the reverse rocket jump: the shot turned half round at his own pitch (look down to throw
+yourself forward). Nothing is added: the rocket, its ammo, the blast's damage and push are a
+hand-made rocket jump's, and his screen never turns. An aid for a player whose hands cannot turn,
+jump and fire at once. The request is impulse 164 (156 the reverse) sent with the jump, the
+numbers a classic match mod uses for its own helpers, so the buttons work on such servers too.
+The server decides: `sv_rjump` and `sv_rrjump` (0 or 1, in the server info, 0 on a dedicated
+server, on in the window's own match) are rules a vote may change for the map; a player granted
+the helpers (the server-only user info key `*rjump 1`, visible to all) may use both anyway. A
+refused press is told in a game's words ("The rocket jump helper is off on this server.", "You
+have no rocket launcher.", "You have no rockets."). One code for both games' rules
+(`server/rjump_rules.hpp` over `plugins/shooter/rjump_assist.hpp`); a compiled module answers its
+own impulses.
+
 **The lobby (M18q).** Before the match, on M17d's sessions: the players and their pings, teams,
 ready, chat to all or the team, a map vote, kick, and the host's start; at the end of the match
 everyone returns to it. Joining is from the server browser, an invite (M17j's friends), or an
@@ -1423,6 +1482,25 @@ recording's extension stands before its packing, so `match.mvd.gz` is and `maps.
 ENTER checks the file before anything starts (`client/demo_check.hpp`: the bytes, not the name;
 unpacked, then read to its level's map) and plays it as `playdemo` does, or shows in the footer
 why it is no demo. BACKSPACE goes up a folder, LEFT and RIGHT through the places, R lists again.
+
+**A classic game in its own look, picked from SELECT GAME (M18k2).** SELECT GAME is the main
+menu's first row, so ENTER on a fresh start goes straight to it (`menu_games`;
+`menu/games_page.hpp`). It shows each classic game the content profiles know by a picture of its
+name (`menu/art/<id>.png`, embedded; the names are pictures, never words in the tree), the
+install of it loaded last (`client/installs.hpp`: `<prefs>/installs.txt`, a line a game) and that
+install's edition, read from its packs the moment it is picked (the profile's `full_game` file
+found or not: Shareware or Registered, the sequel's Demo or Full game). ENTER on a game with a
+kept install opens it; on one never found, or FIND ANOTHER INSTALL, the window's folder chooser,
+and the folder is taken by whichever game's base folder it holds (`install_of`). Once a classic
+game is open, the title's night gives way to its own recordings played behind the menu in turn
+(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game; "" keeps the night), ESCAPE closes the menu onto the
+recording to watch it, and nothing modern is left on screen: the console is written in the
+game's glyph sheet over its own console background (`menu/classic_console.hpp`, the engine's
+`ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
+GAME and SELECT GAME are drawn in the game's letters under carved titles (`menu/classic_pages.hpp`;
+SELECT GAME's own row and the two games' names on it cut letter by letter from the strips like DEMOS'). Lab `se-attract` draws
+the menu, SELECT GAME, the watched recording, the console, DEMOS and JOIN A GAME over a played
+recording (`--basedir` a player's install).
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
 output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),
@@ -1660,6 +1738,7 @@ list is in `porting/shooters-edge/survey.md`.
 | Later | Single-player campaigns and co-op on the single-player `progs` | M18s |
 | Better | The easy jump: `cl_speedjump 1` hops and gains on forward and jump alone where the server's `pm_speedjump` allows it, and on any other server by the client strafing for the player, disclosed in the user info (`docs/movement.md`) | M18e |
 | Better | The quick weapon: `cl_quickweapon 1` makes +attack fire the best weapon carried of `cl_quickweapon_prio` and put `cl_quickweapon_default` back; +attack2 the same off `cl_quickweapon_prio2`; `cl_quickweapon_preview` shows the weapon a press would fire see-through in hand, `cl_quickweapon_hide` hides the hand instead (§ The quick weapon) | M48i |
+| Better | Weapon groups: `cl_weapongroups 1` makes each number key pick the best weapon of its group (`cl_weapongroup<n>`, the game's own by default), the next on a second press, with a HUD column that opens on the key and folds into the weapon in hand (§ Weapon groups) | M48j |
 | Later | Splitscreen; touch controls for phones and tablets | M18m |
 
 ### The quick weapon
@@ -1688,6 +1767,31 @@ frame's TAA-U averages to a see-through gun. Through a tap of +attack the hand k
 quick weapon: the ghost turns solid in 0.06 s, fires, stays solid 0.15 s more and eases back to the
 ghost over 0.25 s while the kept weapon comes back unseen, so no weapon switch is drawn. +attack2
 switches as any weapon key does. Lab: `se-quickweapon` (its `tap-chart`).
+
+### Weapon groups
+
+The number keys pick from groups of weapons instead of one weapon each, on the client
+(`plugins/shooter/weapon_groups.hpp` for any shooter, `client/weapon_groups.hpp` the game's
+wiring), so it works in the window's own match and on any server joined.
+
+| Cvar | Default | What it does |
+| --- | --- | --- |
+| `cl_weapongroups` | 0 | 1: a number key whose group is set picks from it |
+| `cl_weapongroup1` .. `cl_weapongroup9` | empty | the key's weapons, best first, by weapon key; empty: the game's own group; `0`: no group (the key picks its own weapon) |
+
+The classic game's groups are 1 `7 6` (the rocket launcher, then the grenade launcher), 2 `8` (the
+beam gun), 3 `3 2` (the shotguns), 4 `5 4` (the nailguns), 5 `1` (the melee weapon); keys 6 to 8
+have none, so they still pick their own weapon. The sequel's, by its own keys, are 1 `8 7 6` (the
+explosives), 2 `10` (the railgun), 3 `3 2` (the shotguns), 4 `9 5 4` (the rapid-fire guns), 5 `1`
+(the blaster) and 6 `11` (the BFG). A key asks for the best weapon of its group carried with a
+shot's ammunition; pressed again within 2 s it asks for the next, round to the first. The number
+key's `impulse` (the default binds) is read as the group, before the quick weapon sees it.
+
+The HUD's `wgroup` element, in every look (moved and sized by its `hud_wgroup_*` cvars), is a column
+on the right edge: on a key it opens to the group's weapons carried, best first, the one asked for
+framed; the attack, or 2 s without a press, folds the others down into it over 0.2 s; folded it
+shows the weapon in hand alone, with a gold `+` while its group holds another weapon carried. A
+weapon without ammunition shows faded. Lab: `se-weapongroups`.
 
 ## Labs
 

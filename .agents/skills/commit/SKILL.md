@@ -69,10 +69,11 @@ auto-merge on the PR: `main` merges only through GitHub's merge queue, and auto-
 PR joins it (`gh pr merge <pr> --auto --squash`; an agent tool that only "enables auto-merge"
 may not enqueue on a queue base, so read the PR's state back after arming). CI runs no Linux
 build, test or lint: `make precheck` is that gate, so a push without it lands unchecked on Linux.
-A pull request runs the gates, Windows and macOS; the queue runs them again on the tree that
-lands, with the packaging, and a job only the queue ran ejects the PR with that job's log: fix
-it, push, and it queues again. Label a PR `full-ci` to add the Linux rows, the lint and the whole
-packaging before queueing a risky change (a compiler-sensitive one, a build change). A direct merge is
+A pull request runs the gates only; the queue adds the Linux GCC compile, and a job only the
+queue ran ejects the PR with that job's log: fix it, push, and it queues again. Windows and macOS
+run on main after it lands (below). Label a PR `full-ci` to run Windows, macOS, every Linux row,
+the lint and the whole packaging before queueing a risky change (a compiler-sensitive one, a
+build change, a big object on the stack, a file held open while it is deleted). A direct merge is
 refused, so `ge ci <pr> --merge` on a queue base arms auto-merge instead and says so. `ge ci <pr> --wait`, run in
 the background, is the check-in as one call: it returns when a check fails, the PR conflicts,
 or every check is green. Then
@@ -100,10 +101,10 @@ every entry queued behind it.
 compile (`linux-gcc`, no tests: GCC's -Werror is what merged changes break), so it merges within
 minutes of being armed. Any thread may label its own PR so, once `make precheck` is green and the
 branch is clean against main: the precheck is then the only build and test it had. Every push to
-main runs the WHOLE matrix (macOS, Windows and the Linux rows; a newer push cancels the older
-run) when the merge queue is empty, and once a day at 05:00 Stockholm time a run nothing cancels
-adds the whole-tree lint and the whole packaging, so what a skipped PR breaks shows on main
-within the hour on a quiet day, or by the next morning: a red main run opens (or adds to) the one `main-red` issue, names the
+main runs macOS, Windows and the Linux GCC release row, and nothing cancels it (a push that lands
+meanwhile waits as the one pending run, replaced by a later one), and once a day at 05:00
+Stockholm time the daily run adds every Linux row, the whole-tree lint and the whole packaging,
+so what any PR breaks on another platform shows on main within the hour: a red main run opens (or adds to) the one `main-red` issue, names the
 commits and comments on the PR it landed with, and the issue closes itself on the next green
 main. Whoever's PR broke main fixes it first, in the next PR, before any other work on that
 thread; a thread that sees `main-red` open does not label `skip-ci` until it closes.

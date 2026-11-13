@@ -226,13 +226,18 @@ SkyColours sky_colours_of(const std::vector<uint8_t>& rgba, uint32_t w, uint32_t
 }  // namespace
 
 bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t> palette,
-                Scene* out, std::string* error, const TextureSource& source) {
+                Scene* out, std::string* error, const TextureSource& source,
+                std::span<const uint8_t> lit, std::string* lit_refused) {
   Scene& s = *out;
   s.name = std::string(path);
   const std::span<const uint8_t> file = pack_file(pack, path);
   if (file.empty()) return fail(error, "the pack has no " + std::string(path));
   if (palette.size() < 768) return fail(error, "the palette is not 768 bytes");
   if (!read_bsp(file, &s.map, error)) return false;
+  if (!lit.empty()) {
+    std::string why;
+    if (!read_lit(lit, &s.map, &why) && lit_refused != nullptr) *lit_refused = why;
+  }
   const Map& m = s.map;
 
   // ── The texture atlas: every texture at its rectangle, rounded so each mip halves it ──

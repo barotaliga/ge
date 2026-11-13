@@ -76,8 +76,7 @@ void create_bsp_cull(gpu::Device& device, gpu::PipelineSet& pipelines, BspCull& 
   c.pvs = r::make_buffer(device, "bsp.cull.pvs", ((n + 31) / 32) * 4, BU::Storage);
   c.dst = r::make_buffer(device, "bsp.cull.indices", std::max<size_t>(c.total, 3) * 2 * 4,
                          BU::Storage | BU::Index);
-  c.sizes = r::make_buffer(device, "bsp.cull.sizes", n * 4, BU::Storage);
-  c.state = r::make_buffer(device, "bsp.cull.state", n * 4, BU::Storage);
+  c.words = r::make_buffer(device, "bsp.cull.words", n * 8, BU::Storage);  // size, state
   c.args = r::make_buffer(device, "bsp.cull.args", uint64_t{kStatsAt + kStats} * 4,
                           BU::Storage | BU::Indirect | BU::CopySrc);
   c.params = r::make_buffer(device, "bsp.cull.params", 16, BU::Uniform);
@@ -85,11 +84,11 @@ void create_bsp_cull(gpu::Device& device, gpu::PipelineSet& pipelines, BspCull& 
 
   using r::Slot;
   const auto cs = wgpu::ShaderStage::Compute;
-  c.layout = r::make_layout(
-      device, "bsp.cull",
-      {Slot::uniform, Slot::storage_shade, Slot::storage_shade, Slot::storage_shade, Slot::storage,
-       Slot::storage, Slot::storage, Slot::storage, Slot::texture_raw},
-      cs);
+  c.layout =
+      r::make_layout(device, "bsp.cull",
+                     {Slot::uniform, Slot::storage_shade, Slot::storage_shade, Slot::storage_shade,
+                      Slot::storage, Slot::storage, Slot::storage, Slot::texture_raw},
+                     cs);
   const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::bsp_cull, "bsp.cull");
   wgpu::ComputePipelineDescriptor cd{};
   cd.layout = r::make_pipeline_layout(device, "bsp.cull", {frame, c.layout});
@@ -114,9 +113,9 @@ void create_bsp_cull(gpu::Device& device, gpu::PipelineSet& pipelines, BspCull& 
 
 void create_bsp_cull_targets(gpu::Device& device, BspCull& c, const r::FrameTargets& targets) {
   r::create_hiz_targets(device, c.hiz, targets);
-  c.group = r::make_group(
-      device, "bsp.cull", c.layout,
-      {c.params, c.chunk_buf, c.pvs, c.src, c.dst, c.sizes, c.state, c.args, c.hiz.view});
+  c.group =
+      r::make_group(device, "bsp.cull", c.layout,
+                    {c.params, c.chunk_buf, c.pvs, c.src, c.dst, c.words, c.args, c.hiz.view});
 }
 
 void prepare_bsp_cull(gpu::Device& device, BspCull& c, const Scene& scene, const double eye[3],

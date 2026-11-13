@@ -56,10 +56,11 @@ ge_add_server(shooters_edge_dedicated OUTPUT_NAME shooters_edge_server SOURCES s
 
 # The hub (hub/), named `shooters_edge_hub` on disk at the build's root: the engine's hub
 # (engine/hub, docs/hub.md) with the game's modes and words. `--help` lists its flags.
-# The classic status query (net/classic_browse, net/classic_info) is built into it alone, so the
-# hub links none of the game's server.
+# The classic status query (net/classic_browse, net/classic_info) is built into it; the client's
+# demo reader is linked for a demo's content pack (client/demo_content.hpp).
 ge_add_hub(shooters_edge_hub_bin OUTPUT_NAME shooters_edge_hub
-           SOURCES hub/main.cpp net/classic_browse.cpp net/classic_info.cpp)
+           SOURCES hub/main.cpp net/classic_browse.cpp net/classic_info.cpp
+           LINK shooters_edge_client)
 target_include_directories(shooters_edge_hub_bin PRIVATE ${PROJECT_SOURCE_DIR}/games)
 
 # The bot team, headless (net/bots_main.cpp), named `shooters_edge_bots` on disk at the build's
@@ -98,8 +99,14 @@ file(GLOB SHOOTERS_EDGE_MENU_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DI
 add_library(shooters_edge_menu STATIC ${SHOOTERS_EDGE_MENU_SOURCES})
 target_include_directories(shooters_edge_menu PUBLIC ${PROJECT_SOURCE_DIR}/games)
 target_link_libraries(shooters_edge_menu PUBLIC ge_ui ge_console ge_vfs ge_net ge_classicenhance
-                                            ge_play shooters_edge_hud)
+                                            ge_assets ge_play shooters_edge_hud)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_menu)
+# SELECT GAME's pictures of the games' names, by content profile (menu/games_page.cpp).
+include(${PROJECT_SOURCE_DIR}/cmake/EmbedBinary.cmake)
+foreach(name classic sequel)
+  ge_embed_binary(shooters_edge_menu se_game_name_${name}
+                  ${CMAKE_CURRENT_SOURCE_DIR}/menu/art/${name}.png)
+endforeach()
 
 # Its app half (app/): the picture's game side over the engine's passes and the brush world's
 # renderer: the effects (trails, bursts, dynamic lights, the screen's blend) and the looks. It
@@ -158,6 +165,12 @@ if(GE_GPU AND TARGET ge_brush_app)
                                                         ge_brush_app ge_classicenhance ge_render
                                                         ge_ui ge_morph ge_play ge_detail)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_client_gpu)
+endif()
+# The web viewer (web/viewer.cpp, docs/hub.md § Watching in a browser): the world drawn on the hub
+# page's canvas, a demo played from the hub's archive; `shooters_edge_viewer.js` and `.wasm` in
+# the web build's `shooters_edge_viewer/`, the folder a hub's --viewer=<dir> serves.
+if(TARGET shooters_edge_client_gpu)
+  ge_add_web_viewer(shooters_edge SOURCES web/viewer.cpp LIBS shooters_edge_client_gpu ge_tv)
 endif()
 if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
   add_executable(shooters_edge client/main.cpp client/window_cvars.cpp client/bot_view.cpp)

@@ -80,6 +80,9 @@ struct ServerSettings {
   bool nostep = false;     // sv_nostep: no stepping up
   float rollangle = 2;     // cl_rollangle: the body's roll at speed, degrees
   float rollspeed = 200;   // cl_rollspeed: the sideways speed that rolls it fully, units/s
+  // The aim help's leeway (aim_help.hpp) for a player granted it: units at the target.
+  float aimhelp_x = 24;  // sv_aimhelp_x: sideways
+  float aimhelp_y = 48;  // sv_aimhelp_y: up and down
 };
 
 // A sound the loop or the program started this frame, for the host to play.
@@ -106,6 +109,8 @@ struct ClientSlot {
   bool jump_held = false;       // the move's jump-held flag between commands
   bool speedjump = false;       // the player's client strafes for him (cl_speedjump 1 in his
                                 // user info, disclosed; pm_speedjump its share)
+  bool aimhelp = false;         // granted the aim help (`*aimhelp` in his user info, aim_help.hpp)
+  int aim_helped = 0;           // his shots the aim help bent (the players list's "used")
   Vec3f ground_normal;          // the plane the move last stood on (its jump and landing fix)
   int speed_bank_ms = 0;        // the speed check's banked surplus, 0..500
   double speed_check_time = 0;  // the server time of the last speed check
@@ -126,12 +131,25 @@ struct LoopCounts {
 // after each trigger touch `touch_links` runs. A plain function and its context: nothing virtual.
 using TouchWatch = void (*)(void* ctx, struct Server& sv, int trigger, int toucher, bool after);
 
+struct Solid;
+
 struct Server {
   ServerSettings set;
   std::vector<Edict> edicts;  // reserved to set.max_edicts; [0] the world
   int num_edicts = 1;         // slots in use (free ones included)
   AreaTree area;
   std::vector<BrushModel> models;  // by modelindex; [0] none, [1] the world
+  // A map of the version 38 family, which has no clip hulls: when set, the world is traced and
+  // its contents read through its brushes (`trace_move`, `world_contents`; world.hpp's
+  // `brushes` solid); `trace_move` traces nothing else in the pool unless `world_trace` is set. The
+  // rules that keep such a map set it on the pool they mirror their world into (the sequel's).
+  const Solid* brushes = nullptr;
+  // Those rules' own trace of the map, when they give one: the world and the brush entities that
+  // stand in it now (doors, plats) at their places, so a line is stopped where a player's is.
+  // `trace_move` asks it first; `world_ctx` is theirs, passed back.
+  const void* world_ctx = nullptr;
+  HullTrace (*world_trace)(const void* ctx, Vec3f start, Vec3f mins, Vec3f maxs,
+                           Vec3f end) = nullptr;
   Program program;
   Globals g;
   double time = 0;          // the server's time, s
@@ -150,6 +168,9 @@ struct Server {
   uint32_t touch_stamp = 0;
   TouchWatch touch_watch = nullptr;  // a game's rule round each trigger touch; none when null
   void* touch_watch_ctx = nullptr;
+  // A game's rule on each new missile before its first move (the aim help's lead); none when null.
+  void (*missile_watch)(void* ctx, Server& sv, int missile) = nullptr;
+  void* missile_watch_ctx = nullptr;
   LoopCounts counts;
 };
 

@@ -63,6 +63,7 @@ TEST(a_maps_goals_are_only_what_its_items_and_areas_allow) {
   items[1].kind = bt::ItemKind::armor2;
   items[2].kind = bt::ItemKind::weapon;
   items[2].weapon = 32;  // the rocket launcher's bit
+  items[2].role = bt::WeaponRole::launcher;
   for (size_t i = 0; i < items.size(); i++) items[i].node = static_cast<int32_t>(i);
   bt::MapPlan plan;
   plan.areas.resize(2);

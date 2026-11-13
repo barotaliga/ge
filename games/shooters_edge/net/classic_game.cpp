@@ -7,9 +7,13 @@
 // ge:test tests/shooters_edge_classic_game_test.cpp
 #include "shooters_edge/net/classic_game.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <iterator>
 #include <memory>
 #include <span>
@@ -17,16 +21,21 @@
 #include <vector>
 
 #include "core/num.hpp"
+#include "mod/loader.hpp"
 #include "net/packet.hpp"
 #include "progs/file.hpp"
+#include "shooter/midair.hpp"
 #include "shooter/settings.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
+#include "shooters_edge/client/sequel_party.hpp"
 #include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_coop.hpp"
 #include "shooters_edge/net/classic_coop_game.hpp"
+#include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/classic_login.hpp"
 #include "shooters_edge/net/classic_qtv.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
@@ -46,6 +55,8 @@ namespace cl = shooters_edge::client;
 namespace sh = ge::shooter;
 
 struct Game {
+  // The C++ mod packages named in sv_mod (docs/mods.md § On the server), open while any rules run.
+  std::vector<std::unique_ptr<ge::mod::LoadedMod>> packages;
   ge::progs::Progs progs;
   const ge::progs::Progs* program = &progs;  // the one played: `progs`, or a listen's own
   std::vector<uint8_t> module;               // the mod's compiled module (a .qvm); empty: `program`
@@ -61,6 +72,8 @@ struct Game {
   // The lobby and the bots (sv_lobby, sv_bots; null: neither). Without sv_lobby it stays in its
   // match: the bots play every map as it comes.
   std::unique_ptr<cl::Room> room;
+  // The sequel's companions outside deathmatch (`addbot` on its own rules; null: none ever).
+  std::unique_ptr<cl::SequelParty> mates;
   std::array<const sv::RulesCommon*, gs::kLobbySeats> applied{};  // the rules a seat's team is on
   std::array<gs::Team, gs::kLobbySeats> shown{};                  // the team its user info says
   int said = 0;                                                   // the lobby's lines printed
@@ -80,6 +93,8 @@ struct Game {
   int qtv_port = 0;
   QtvConfig qtv_cfg;
   std::unique_ptr<QtvPort> qtv;
+  // The logins (sv_login, classic_login.hpp; null: none asked and no service handed in).
+  std::unique_ptr<ClassicLogin> login;
   ~Game() {
     if (qtv && classic) qtv_close(*qtv, *classic);
     qtv.reset();
@@ -115,40 +130,138 @@ void host_tap(void* ctx, const sv::RulesCommon& game) {
 // loop's settings (plugins/shooter/settings.hpp: `sv_gravity`, `sv_mintic`, `pm_ktjump`) follow,
 // then the endpoint's own, which the mod never sees.
 constexpr gs::GameRule kModRules[] = {
-    {"deathmatch", "the match's rules: 1 and up deathmatch, as the mod reads them"},
-    {"teamplay", "team rules, as the mod reads them"},
-    {"fraglimit", "frags that end the match (0 none)"},
-    {"timelimit", "the match's length, minutes (0 none)"},
-    {"samelevel", "1: the map does not change at the end"},
-    {"pausable", "1: a player may pause the game (0: only unpausing)"},
+    {"deathmatch", "The match's rules as the mod reads them.", nullptr,
+     "0: no deathmatch, the mod's own game; 1..N: that deathmatch mode, as the mod numbers them"},
+    {"teamplay", "The team rules as the mod reads them.", nullptr,
+     "0: every player for himself; 1..N: that team mode, as the mod numbers them"},
+    {"fraglimit", "The frags a player needs to end the match.", nullptr,
+     "0: no limit; 1..N: that many frags"},
+    {"timelimit", "The match's length in minutes.", nullptr,
+     "0: no limit; 1..N: that many minutes"},
+    {"samelevel", "Whether the map stays the same when the match ends.", nullptr,
+     "0: the next map follows; 1: the same map again"},
+    {"pausable", "Whether a player may pause the game.", nullptr,
+     "0: only unpausing; 1: players may pause"},
+    // The aim help's weapons (server/shot_help.hpp): names, spaces between, `*` any characters.
+    {"sv_aimhelp_allow", "The weapons the aim help may bend, by name with spaces between.", nullptr,
+     "\"\": every weapon but the denied (the default); TEXT: only these, * matching any "
+     "characters"},
+    {"sv_aimhelp_deny", "The weapons the aim help never bends, by name with spaces between.",
+     nullptr, "\"\": none (the default); TEXT: these, such as rl lg"},
+    // The sequel's rules only; a map without brushes plays by the mod's own and leaves it alone.
+    {"dmflags", "The sequel's deathmatch rule bits, which the first game's maps ignore.", nullptr,
+     "0: none; N: the sum of the bits, such as 8192 for infinite ammunition"},
+    // The rocket jump helpers (server/rjump_rules.hpp): a mod's rule, live and voted per map.
+    {"sv_rjump", "Whether players may use the rocket jump helper, +rjump.", nullptr,
+     "0: not allowed (the default); 1: allowed"},
+    {"sv_rrjump", "Whether players may use the reverse rocket jump helper, +rrjump.", nullptr,
+     "0: not allowed (the default); 1: allowed"},
+    {"k_midair", "Whether rockets count only on a player in the air, on the sequel's maps.",
+     nullptr, "0: every hit counts (the default); 1: midair only, the map restarts"},
+    {"k_midair_minheight", "The least height a midair hit counts at.", nullptr,
+     "0: 64 units; 1: 128 units (the default); 2: 256 units; 3: 512 units; 4: 1024 units"},
+    // The server's own chat when the mod leaves it to the server (server/chat_rules.hpp).
+    {"sv_spectalk", "Whether a spectator's public chat reaches the players.", nullptr,
+     "0: only the other spectators hear it; 1: everyone hears it (the default)"},
 };
 
 constexpr gs::GameRule kEndpointRules[] = {
-    {"sv_maxrate", "the most bytes/s a client may ask for with its rate (0 no cap; 0)"},
-    {"sv_antilag", "1: a shot sees the others where the shooter saw them (0)"},
-    {"sv_voip", "1: players' voice is relayed to their team (0)"},
-    {"maxfps", "the most moves a second a client sends, told in the server info (77)"},
-    {"allow_download", "0: no file is offered to a client that lacks one (1)"},
-    {"allow_download_skins", "0: no skins/ file is offered (1)"},
-    {"allow_download_models", "0: no progs/ model is offered (1)"},
-    {"allow_download_sounds", "0: no sound/ file is offered (1)"},
-    {"allow_download_maps", "0: no maps/ file is offered (1)"},
-    {"allow_download_other", "1: files outside those folders are offered too (0)"},
-    {"sv_downloadchunksperframe", "chunks of 1 KB a downloading client gets a frame, 1..30 (30)"},
+    {"sv_maxrate", "The most bytes a second a client may ask for with its rate.", nullptr,
+     "0: no cap (the default); 1..N: that many bytes a second"},
+    {"sv_antilag", "Whether a shot sees the others where the shooter saw them.", nullptr,
+     "0: off (the default); 1: on"},
+    {"sv_antilagexact",
+     "Whether the rewind goes to exactly the frame the shooter saw, not a little further.", nullptr,
+     "0: a little further (the default); 1: exactly"},
+    {"sv_safestrafe", "Commands of no sideways move put between a player's reversed strafes.",
+     nullptr, "0: off (the default); 1..N: that many commands"},
+    {"sv_voip", "Whether players' voices are relayed to their team.", nullptr,
+     "0: off (the default); 1: on"},
+    {"sv_voipecho", "Whether a speaker hears his own voice back, to test it.", nullptr,
+     "0: off (the default); 1: on"},
+    {"sv_rconcrypt", "Whether the remote console takes only a hashed password.", nullptr,
+     "0: the password itself or a hashed one (the default); 1: only a hashed one"},
+    {"sv_rcontime", "The seconds a hashed remote console line's time may be off by.", nullptr,
+     "0: any time; 1..3600: that many seconds (60 the default)"},
+    {"sv_rconrate", "The remote console tries answered a second.", nullptr,
+     "0: no limit; 1..1000: that many (10 the default)"},
+    {"sv_vippassword", "The passwords, spaces between, any of which makes a client a VIP.", nullptr,
+     "\"\": none (the default); TEXT: these words, and a VIP is asked no password and may take "
+     "the VIP spectator slots"},
+    {"sv_vipvalues", "The VIP level each password of sv_vippassword gives, spaces between.",
+     nullptr, "\"\": 1, 2 and so on, in order (the default); TEXT: these levels"},
+    {"sv_maxvipspectators", "The spectator slots only a VIP may take.", nullptr,
+     "0: none (the default); 1..32: that many"},
+    {"sv_banmode", "How the ban list made by addip is read.", nullptr,
+     "0: only the addresses on it may join; 1: the addresses on it are refused (the default)"},
+    {"maxfps", "The most moves a second a client sends, told in the server info.", nullptr,
+     "N: that many (77 the default)"},
+    {"sv_download", "Whether a client that lacks a file is offered it.", nullptr,
+     "0: no file is offered; 1: files are offered (the default)"},
+    {"sv_download_skins", "Whether files in skins/ are offered.", nullptr,
+     "0: not offered; 1: offered (the default)"},
+    {"sv_download_models", "Whether models in progs/ are offered.", nullptr,
+     "0: not offered; 1: offered (the default)"},
+    {"sv_download_sounds", "Whether files in sound/ are offered.", nullptr,
+     "0: not offered; 1: offered (the default)"},
+    {"sv_download_maps", "Whether files in maps/ are offered.", nullptr,
+     "0: not offered; 1: offered (the default)"},
+    {"sv_download_other", "Whether files outside those folders are offered too.", nullptr,
+     "0: not offered (the default); 1: offered"},
+    {"sv_downloadchunks", "The 1 KB chunks a downloading client gets a frame.", nullptr,
+     "1..30: that many (30 the default)"},
+    {"sv_watervis", "Whether clients are told they may see through water.", nullptr,
+     "0: not told (the default); 1: told"},
+    {"sv_fullspectate",
+     "What happens to a player joining a full server while a spectator slot is free.", nullptr,
+     "0: refused; 1: seated as a spectator unless its user info's svf has bit 2; 2: seated as a "
+     "spectator only if its svf has bit 1 (the default)"},
+    {"sv_reconnectwait",
+     "The seconds a slot must have been connected before its address may connect again.", nullptr,
+     "0: no wait (the default); 1..N: that many seconds"},
+    {"sv_maxping", "The ping above which a player entering plays as a spectator, in ms.", nullptr,
+     "0: no limit (the default); 1..10000: that many ms"},
+    {"sv_minping", "The ping each player's packets are held to at least, in ms.", nullptr,
+     "0: off (the default); 1..N: that many ms"},
+    {"sv_minpingcmd", "Whether players may set the minimum ping with minping before a match.",
+     nullptr, "0: not allowed; 1: allowed (the default)"},
+    {"sv_defaultname", "The name a client with an empty or unusable name gets.", nullptr,
+     "TEXT: that name (player the default)"},
+    {"sv_unfake",
+     "Whether line breaks in a public chat line are shown as #, so none fakes another.", nullptr,
+     "0: kept; 1: shown as # (the default)"},
+    {"sv_colorkick",
+     "Whether a client changing its top colour more than 6 times in 8 seconds is kicked.", nullptr,
+     "0: never kicked; 1: kicked (the default)"},
+    {"sv_infoflood", "The user info changes a client may make before it is kicked.", "300 3",
+     "N N: more changes than the first in the second's seconds is kicked, 0 in either no limit "
+     "(300 3 the default)"},
     // The stream port for classic relays (classic_qtv.hpp).
-    {"qtv_streamport", "the TCP port classic relays take the match from, 0..65534 (0: none)"},
-    {"qtv_maxstreams", "relays streamed at once (0 or less: no limit; 1)"},
-    {"qtv_password", "the password a relay must give (empty: none)"},
-    {"qtv_pendingtimeout", "seconds a relay has to finish its request, 1..60 (5)"},
-    {"qtv_streamtimeout", "seconds a relay may take nothing before it is dropped, 5..600 (45)"},
-    {"qtv_sayenabled", "1: a relay's viewers' chat reaches the players, not just spectators (0)"},
+    {"qtv_streamport", "The TCP port classic relays take the match from.", nullptr,
+     "0: none (the default); 1..65534: that port"},
+    {"qtv_maxstreams", "The relays streamed at once.", nullptr,
+     "N: that many, 0 or less no limit (1 the default)"},
+    {"qtv_password", "The password a relay must give.", nullptr,
+     "\"\": none (the default); TEXT: that password"},
+    {"qtv_pendingtimeout", "The seconds a relay has to finish its request.", nullptr,
+     "1..60: that many seconds (5 the default)"},
+    {"qtv_streamtimeout", "The seconds a relay may send nothing before it is dropped.", nullptr,
+     "5..600: that many seconds (45 the default)"},
+    {"qtv_sayenabled", "Whether a relay's viewers' chat reaches the players.", nullptr,
+     "0: only the spectators (the default); 1: the players too"},
     // The coop campaign in place of a match (classic_coop_game.hpp): the endpoint's, never a mod's.
-    {"sv_coop", "1: the game folder's campaign in coop, not a match (0)"},
-    {"sv_coopbots", "coop: companion bots playing beside the players, 0..7 (0)"},
-    {"skill", "coop: the monsters' skill for everyone, 0..3 (1)"},
-    {"sv_friendlyfire", "coop: 1 lets one player's shots harm another (0)"},
-    {"sv_friendlypush", "coop: 1 lets a spared teammate's blow push you, harmless (0)"},
-    {"sv_episodes_done", "coop: the episodes done, a bit each; the start map opens the next (0)"},
+    {"sv_coop", "Whether the server plays the game folder's campaign in coop, not a match.",
+     nullptr, "0: a match (the default); 1: the campaign in coop"},
+    {"sv_coopbots", "The companion bots playing beside the players in coop.", nullptr,
+     "0: none (the default); 1..7: that many"},
+    {"skill", "The monsters' skill for everyone in coop.", nullptr,
+     "0: easy; 1: normal (the default); 2: hard; 3: nightmare"},
+    {"sv_friendlyfire", "Whether one player's shots harm another in coop.", nullptr,
+     "0: spared (the default); 1: harmed"},
+    {"sv_friendlypush", "Whether a spared teammate's blow pushes you in coop, harmlessly.", nullptr,
+     "0: no push (the default); 1: pushed"},
+    {"sv_episodes_done", "The episodes done in coop, a bit each, so the start map opens the next.",
+     nullptr, "N: the bits (0 the default)"},
 };
 
 // Every rule, in the order `--explain` lists them: built once.
@@ -157,11 +270,83 @@ const std::vector<gs::GameRule>& all_rules() {
     std::vector<gs::GameRule> out(std::begin(kModRules), std::end(kModRules));
     int count = 0;
     const sh::Setting* table = sh::settings_table(count);
-    for (int i = 0; i < count; i++) out.push_back({table[i].name, table[i].help});
+    for (int i = 0; i < count; i++)
+      out.push_back({table[i].name, table[i].help, nullptr, table[i].values});
     out.insert(out.end(), std::begin(kEndpointRules), std::end(kEndpointRules));
     return out;
   }();
   return rules;
+}
+
+// Each classic game's own names for the server's settings (gs::SettingName): a server.cfg, `+set`,
+// rcon or vote line by either name sets the one setting. Both games share the names they have in
+// common, so one table serves both: the first game's alone (floodprot, floodprotmsg), the
+// sequel's alone (sv_maplist, the three flood words), and both (hostname, maxclients, ...).
+constexpr gs::SettingName kSettingNames[] = {
+    {"hostname", "sv_hostname"},
+    {"maxclients", "sv_maxclients"},
+    {"maxspectators", "sv_maxspectators"},
+    {"password", "sv_password"},
+    {"spectator_password", "sv_spectatorpassword"},
+    {"timeout", "sv_timeout"},
+    {"floodprot", "sv_floodprot"},
+    {"floodprotmsg", "sv_floodprotmsg"},
+    {"sv_maplist", "sv_maprotation"},
+    {"flood_msgs", "sv_floodprot", 0},
+    {"flood_persecond", "sv_floodprot", 1},
+    {"flood_waitdelay", "sv_floodprot", 2},
+    {"allow_download", "sv_download"},
+    {"allow_download_skins", "sv_download_skins"},
+    {"allow_download_models", "sv_download_models"},
+    {"allow_download_sounds", "sv_download_sounds"},
+    {"allow_download_maps", "sv_download_maps"},
+    {"allow_download_other", "sv_download_other"},
+    {"sv_downloadchunksperframe", "sv_downloadchunks"},
+    {"sv_default_name", "sv_defaultname"},
+    {"sv_forcenick", "sv_loginname"},
+    {"sv_registrationinfo", "sv_loginwelcome"},
+    {"sv_forcespec_onfull", "sv_fullspectate"},
+    {"sv_reconnectlimit", "sv_reconnectwait"},
+    {"sv_enable_cmd_minping", "sv_minpingcmd"},
+    {"countrycode", "sv_country"},
+    {"city", "sv_city"},
+    {"coords", "sv_coords"},
+    {"hostport", "sv_publicaddr"},
+    {"sv_admininfo", "sv_admin"},
+    {"watervis", "sv_watervis"},
+    {"sv_kicktop", "sv_colorkick"},
+    {"sv_kickuserinfospamcount", "sv_infoflood", 0},
+    {"sv_kickuserinfospamtime", "sv_infoflood", 1},
+    {"sv_antilag_no_pred", "sv_antilagexact"},
+    {"sv_voip_echo", "sv_voipecho"},
+    {"sv_crypt_rcon", "sv_rconcrypt"},
+    {"sv_timestamplen", "sv_rcontime"},
+    {"sv_rconlim", "sv_rconrate"},
+    {"filterban", "sv_banmode"},
+    {"vip_password", "sv_vippassword"},
+    {"vip_values", "sv_vipvalues"},
+    {"maxvip_spectators", "sv_maxvipspectators"},
+};
+
+// The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
+// own table before they start: each mod sees the server it runs on, not a default of its own.
+void game_names(sv::RulesCommon& rules, const gs::ServerConfig& c) {
+  const struct {
+    const char* name;
+    std::string value;
+    const char* help;
+  } values[] = {
+      {"hostname", c.hostname, "The server's name, which is sv_hostname."},
+      {"maxclients", std::to_string(c.maxclients), "The most players, which is sv_maxclients."},
+      {"maxspectators", std::to_string(c.max_spectators),
+       "The most spectators, which is sv_maxspectators."},
+  };
+  for (const auto& v : values) {
+    if (rules.cvars.find(v.name) == nullptr)
+      rules.cvars.add({v.name, v.value, ge::console::kServer, v.help, ge::console::CvarKind::text});
+    else
+      rules.cvars.set(v.name, v.value, ge::console::Source::code);
+  }
 }
 
 bool is_endpoint_rule(const std::string& name) {
@@ -205,24 +390,118 @@ bool qtv_settings(const gs::ServerConfig& c, int& port, QtvConfig& q, std::strin
   return true;
 }
 
+// A 0 or 1 endpoint rule into `on` (unset: left as it is).
+bool endpoint_flag(const gs::ServerConfig& c, const char* name, bool& on, std::string& error) {
+  int v = on ? 1 : 0;
+  if (!endpoint_int(c, name, 0, 1, v, error)) return false;
+  on = v != 0;
+  return true;
+}
+
+// sv_infoflood's "N S": the most user info changes in a window of S seconds.
+bool info_flood(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
+  const auto it = c.rules.find("sv_infoflood");
+  if (it == c.rules.end() || it->second.empty()) return true;
+  int count = 0;
+  double seconds = 0;
+  char* end = nullptr;
+  const char* p = it->second.c_str();
+  count = static_cast<int>(std::strtol(p, &end, 10));
+  const bool first = end != p;
+  p = end;
+  seconds = std::strtod(p, &end);
+  while (*end == ' ') end++;
+  if (!first || end == p || *end != '\0' || count < 0 || seconds < 0) {
+    error = "sv_infoflood \"" + it->second +
+            "\" is not two numbers \"N S\" of 0 or more (--explain=sv_infoflood shows where it was "
+            "set)";
+    return false;
+  }
+  cfg.info_flood_count = count;
+  cfg.info_flood_s = seconds;
+  return true;
+}
+
+// sv_vippassword's words and sv_vipvalues' numbers.
+bool vip_words(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
+  auto words = [](const std::string& text) {
+    std::vector<std::string> out;
+    for (size_t at = 0; at < text.size();) {
+      const size_t end = std::min(text.find(' ', at), text.size());
+      if (end > at) out.push_back(text.substr(at, end - at));
+      at = end + 1;
+    }
+    return out;
+  };
+  if (const auto p = c.rules.find("sv_vippassword"); p != c.rules.end())
+    cfg.vip_passwords = words(p->second);
+  if (const auto v = c.rules.find("sv_vipvalues"); v != c.rules.end()) {
+    cfg.vip_values.clear();
+    for (const std::string& n : words(v->second)) {
+      char* end = nullptr;
+      const long level = std::strtol(n.c_str(), &end, 10);
+      if (end == n.c_str() || *end != '\0' || level < 0 || level > 1000000) {
+        error = "sv_vipvalues \"" + v->second + "\": \"" + n +
+                "\" is not a level; give whole numbers 0 or more, spaces between "
+                "(--explain=sv_vipvalues shows where it was set)";
+        return false;
+      }
+      cfg.vip_values.push_back(static_cast<int>(level));
+    }
+  }
+  return true;
+}
+
 bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
+  int watervis = 0, reconnect_wait = static_cast<int>(cfg.reconnect_wait_s);
   int antilag = cfg.antilag ? 1 : 0, voice = cfg.voice ? 1 : 0;
+  int safe_strafe = cfg.safe_strafe;
   int all = cfg.allow_download ? 1 : 0, skins = cfg.allow_skins ? 1 : 0;
   int models = cfg.allow_models ? 1 : 0, sounds = cfg.allow_sounds ? 1 : 0;
   int maps = cfg.allow_maps ? 1 : 0, other = cfg.allow_other ? 1 : 0;
   if (!endpoint_int(c, "sv_maxrate", 0, 1000000, cfg.maxrate, error) ||
       !endpoint_int(c, "sv_antilag", 0, 1, antilag, error) ||
       !endpoint_int(c, "sv_voip", 0, 1, voice, error) ||
-      !endpoint_int(c, "maxfps", 20, 1000, cfg.maxfps, error) ||
-      !endpoint_int(c, "allow_download", 0, 1, all, error) ||
-      !endpoint_int(c, "allow_download_skins", 0, 1, skins, error) ||
-      !endpoint_int(c, "allow_download_models", 0, 1, models, error) ||
-      !endpoint_int(c, "allow_download_sounds", 0, 1, sounds, error) ||
-      !endpoint_int(c, "allow_download_maps", 0, 1, maps, error) ||
-      !endpoint_int(c, "allow_download_other", 0, 1, other, error) ||
-      !endpoint_int(c, "sv_downloadchunksperframe", 1, 30, cfg.chunks_per_frame, error))
+      !endpoint_flag(c, "sv_voipecho", cfg.voice_echo, error) ||
+      !endpoint_flag(c, "sv_antilagexact", cfg.antilag_exact, error) ||
+      !endpoint_int(c, "sv_safestrafe", 0, 100, safe_strafe, error) ||
+      !endpoint_flag(c, "sv_rconcrypt", cfg.rcon_crypt, error) ||
+      !endpoint_int(c, "sv_rcontime", 0, 3600, cfg.rcon_time_s, error) ||
+      !endpoint_int(c, "sv_rconrate", 0, 1000, cfg.rcon_rate, error) ||
+      !endpoint_int(c, "sv_banmode", 0, 1, cfg.ban_mode, error) ||
+      !endpoint_int(c, "sv_maxvipspectators", 0, 32, cfg.max_vip_spectators, error) ||
+      !vip_words(c, cfg, error) || !endpoint_int(c, "maxfps", 20, 1000, cfg.maxfps, error) ||
+      !endpoint_int(c, "sv_download", 0, 1, all, error) ||
+      !endpoint_int(c, "sv_download_skins", 0, 1, skins, error) ||
+      !endpoint_int(c, "sv_download_models", 0, 1, models, error) ||
+      !endpoint_int(c, "sv_download_sounds", 0, 1, sounds, error) ||
+      !endpoint_int(c, "sv_download_maps", 0, 1, maps, error) ||
+      !endpoint_int(c, "sv_download_other", 0, 1, other, error) ||
+      !endpoint_int(c, "sv_downloadchunks", 1, 30, cfg.chunks_per_frame, error) ||
+      !endpoint_flag(c, "sv_unfake", cfg.unfake, error) ||
+      !endpoint_flag(c, "sv_colorkick", cfg.colour_kick, error) ||
+      !endpoint_int(c, "sv_watervis", 0, 1, watervis, error) ||
+      !endpoint_int(c, "sv_fullspectate", 0, 2, cfg.full_spectate, error) ||
+      !endpoint_int(c, "sv_maxping", 0, 10000, cfg.max_ping_ms, error) ||
+      !endpoint_int(c, "sv_minping", 0, 1000, cfg.min_ping_ms, error) ||
+      !endpoint_flag(c, "sv_minpingcmd", cfg.min_ping_cmd, error) ||
+      !endpoint_int(c, "sv_reconnectwait", 0, 3600, reconnect_wait, error) ||
+      !info_flood(c, cfg, error))
     return false;
+  if (const auto n = c.rules.find("sv_defaultname"); n != c.rules.end() && !n->second.empty()) {
+    if (sanitize_name(n->second, "") != n->second) {
+      error =
+          "sv_defaultname \"" + n->second +
+          "\" can't be a name: it holds \\ $ # \" ; or a line break, starts or ends with a space, "
+          "or is console (--explain=sv_defaultname shows where it was set)";
+      return false;
+    }
+    cfg.default_name = n->second;
+  }
+  cfg.reconnect_wait_s = reconnect_wait;
+  cfg.max_spectators = c.max_spectators;
   cfg.antilag = antilag != 0;
+  cfg.safe_strafe = safe_strafe;
   cfg.voice = voice != 0;
   cfg.allow_download = all != 0;
   cfg.allow_skins = skins != 0;
@@ -241,6 +520,14 @@ bool read_game_file(void* ctx, const std::string& name, std::vector<uint8_t>& by
   if (found.empty()) return false;
   bytes.assign(found.begin(), found.end());
   return true;
+}
+
+// The loop's client slots: the players' and, when spectators have their own, theirs.
+int slots(const gs::ServerConfig& c) {
+  int vip = 0;
+  if (const auto v = c.rules.find("sv_maxvipspectators"); v != c.rules.end())
+    vip = std::max(0, std::atoi(v->second.c_str()));
+  return std::min(sh::kMaxClients, c.maxclients + std::max(0, c.max_spectators) + vip);
 }
 
 // The mod's rules on the map `name`, set from the settings: into `map` and `rules`.
@@ -264,14 +551,14 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     sv::SequelServerOptions so;
     so.seed = c.seed;
     so.clients_take_view = true;  // the classic protocol's clients take the server's view
+    so.speedjump = speedjump;
     std::unique_ptr<sv::SequelServer> sq = sv::make_sequel_server(so);
-    sq->sv.set.maxclients = c.maxclients;
-    sq->sv.set.move.speedjump = speedjump;
+    sq->sv.set.maxclients = slots(c);
     rules = sv::sequel_runner(std::move(sq));
   } else if (!g.module.empty()) {
     sv::QvmServerOptions so;
     so.seed = c.seed;
-    so.loop.maxclients = c.maxclients;
+    so.loop.maxclients = slots(c);
     so.loop.max_edicts = 1024;
     so.loop.move.speedjump = speedjump;
     so.read_file = &read_game_file;
@@ -285,7 +572,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
   } else {
     sv::QcServerOptions so;
     so.seed = c.seed;
-    so.loop.maxclients = c.maxclients;
+    so.loop.maxclients = slots(c);
     so.loop.max_edicts = 1024;
     so.loop.move.speedjump = speedjump;
     std::unique_ptr<sv::QcServer> qc = sv::make_qc_server(*g.program, so, error);
@@ -301,29 +588,37 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
       rules.console("serverinfo *gamedir \"" + g.cfg.gamedir + "\"");
     for (const std::string& line : g.info_lines) rules.console(line);
   }
+  game_names(*rules, c);
   for (const auto& [rule, value] : c.rules) {
     // A module checks a client's rate against the endpoint's cap, so it is told the cap.
     if (rule == "sv_maxrate" && !g.module.empty() && !value.empty() && value != "0")
       rules.console("sv_maxrate \"" + value + "\"");
     if (value.empty() || is_endpoint_rule(rule)) continue;
+    if (rule == "dmflags" && !brushes) continue;  // the sequel's alone
     sh::ServerSettings check;
     if (sh::find_setting(rule) && !sh::set_setting(check, rule, value, error)) {
       error.append(" (--explain=").append(rule).append(" shows where it was set)");
       return false;
     }
     char* end = nullptr;
-    std::strtod(value.c_str(), &end);  // every rule is a number
+    std::strtod(value.c_str(), &end);  // every rule is a number but the aim help's lists
     std::string line = rule;
     line.append(" \"").append(value).append("\"");
     // The sequel's rules keep their own few settings and leave the rest of a mod's alone.
     const bool taken = rules.console(line) || brushes;
-    if (end == value.c_str() || *end != '\0' || !taken) {
+    const bool text = rule == "sv_aimhelp_allow" || rule == "sv_aimhelp_deny";  // names
+    if ((!text && (end == value.c_str() || *end != '\0')) || !taken) {
       error = line;
       error.append(" is not a number (--explain=");
       error.append(rule).append(" shows where it was set)");
       return false;
     }
   }
+  for (const auto& p : g.packages) {  // the C++ mods, laid over the rules as the map starts
+    rules->mods.tables.push_back(p->table);
+    rules->mods.names.push_back(p->manifest.name);
+  }
+  rules->mods.seed = c.seed;
   if (!rules.start(map->spec, error)) {
     error = "the map " + name + " did not load: " + error;
     return false;
@@ -378,6 +673,40 @@ std::string top_mod(const std::string& mods) {
   return top;
 }
 
+// The C++ mod packages among `sv_mod`'s comma-separated folders (a folder holding a
+// `mod.manifest`, under `--root` or as given), loaded in order into `g.packages`; the other folders
+// are left in `folders` for the game folder. False with `error` when a package is refused.
+bool load_packages(Game& g, const gs::ServerConfig& c, std::string& folders, std::string& error) {
+  std::string rest;
+  size_t at = 0;
+  while (at <= c.mod.size()) {
+    size_t comma = c.mod.find(',', at);
+    if (comma == std::string::npos) comma = c.mod.size();
+    std::string folder = c.mod.substr(at, comma - at);
+    at = comma + 1;
+    while (!folder.empty() && folder.back() == ' ') folder.pop_back();
+    while (!folder.empty() && folder.front() == ' ') folder.erase(0, 1);
+    if (folder.empty()) continue;
+    std::filesystem::path dir = std::filesystem::path(c.root) / folder;
+    std::error_code ec;
+    if (!std::filesystem::exists(dir / "mod.manifest", ec)) dir = folder;
+    if (!std::filesystem::exists(dir / "mod.manifest", ec)) {
+      if (!rest.empty()) rest += ',';
+      rest += folder;
+      continue;
+    }
+    auto loaded = std::make_unique<ge::mod::LoadedMod>();
+    const ge::mod::LoadResult r = ge::mod::load_mod(dir, {SE_MOD_GAME, SE_MOD_API}, *loaded);
+    if (!r.ok()) {
+      error = "the mod package " + folder + " was refused: " + r.errors.front();
+      return false;
+    }
+    g.packages.push_back(std::move(loaded));
+  }
+  folders = std::move(rest);
+  return true;
+}
+
 // The program: a named mod's own (its compiled module `qwprogs.qvm` when it has one, else its
 // folder's program files through the game's adapter, the base game's under it), else the
 // baseline mod.
@@ -400,7 +729,15 @@ bool open_program(Game& g, const std::string& mod, std::string& error) {
 void* create(const gs::ServerConfig& c, std::string& error) {
   auto g = std::make_unique<Game>();
   g->settings = c;
+  std::string folders;  // sv_mod's game folders, the packages taken out
+  if (!load_packages(*g, c, folders, error)) return nullptr;
   if (c.host == nullptr && coop_asked(c)) {
+    if (!g->packages.empty()) {
+      error =
+          "C++ mods can't run in a coop campaign yet. Take the package out of sv_mod, or set "
+          "sv_coop to 0.";
+      return nullptr;
+    }
     g->coop = coop_open(c, error);
     return g->coop ? g.release() : nullptr;
   }
@@ -410,7 +747,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     if (g->host->files != nullptr) g->files = *g->host->files;
     g->map = g->host->map;
   } else {
-    const std::string mod = top_mod(c.mod);
+    const std::string mod = top_mod(folders);
     const std::string folder = mod.empty() ? std::string(kGameFolder) : mod;
     // The built-in arena needs no game folder; any other map, a rotation's or a mod's, is read
     // from one (the mod's over the base game's).
@@ -432,9 +769,26 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->vote.settings = gs::vote_settings(c);
   if (g->host != nullptr) host_bind(*g);
   g->cfg.hostname = c.hostname;
+  g->cfg.info = {{"countrycode", c.country},
+                 {"city", c.city},
+                 {"coords", c.coords},
+                 {"hostport", c.public_addr},
+                 {"*admin", c.admin}};
+  if (const auto w = c.rules.find("sv_watervis"); w != c.rules.end() && w->second == "1")
+    g->cfg.info.emplace_back("watervis", "1");
+  // A client predicts its own move, so it is told when the server holds its strafes apart.
+  if (const auto w = c.rules.find("sv_safestrafe");
+      w != c.rules.end() && !w->second.empty() && w->second != "0")
+    g->cfg.info.emplace_back("sv_safestrafe", w->second);
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
   g->cfg.rcon_password = c.rcon_password;
+  g->cfg.unix_time = [] { return static_cast<int64_t>(std::time(nullptr)); };  // rcon, bans
+  // The ban list beside the game's files, where a dedicated server keeps its own (writeip).
+  if (g->host == nullptr && !g->files.folder.empty()) {
+    g->cfg.ban_file = (std::filesystem::path(g->files.folder) / "listip.cfg").string();
+    g->cfg.vip_file = (std::filesystem::path(g->files.folder) / "vip_ip.cfg").string();
+  }
   g->cfg.seed = c.seed;
   g->cfg.timeout_s = c.timeout_s;
   g->cfg.flood_msg = c.floodprot_msg;
@@ -469,14 +823,15 @@ std::string next_map(const gs::ServerConfig& c, const std::string& current,
 // (read when the server starts). A passed change is written into `settings.rules`, which every map
 // is made from: a mod's rule is set in the running rules at once (a limit the warmup holds waits
 // for the match), and a setting the players' own moves are predicted with restarts the map, so
-// every client is told it as it signs on again. A restart keeps the change; the next map puts it
-// back.
+// every client is told it as it signs on again, as does midair (`k_midair`, which takes the items
+// off the map); `k_midair_minheight` is told in the mode's words. A restart keeps the change; the
+// next map puts it back.
 //
-// `vote speedjump <id|name> on|off|<share>` grants one player the easy jump for this map, or takes
-// it back (classic_admin.hpp's grant: disclosed, `*speedjump` in his user info). The change is
-// keyed `speedjump:<user id>`, so two votes on one player are one change and two players are two;
-// its value names the player and the share (`Ann on`, `Ann 0.5`, `Ann off`), its `before` what he
-// had. The next map puts each back; a player who left is passed over.
+// `vote <aid> <id|name> on|off|<value>` grants one player an aid for this map (`speedjump`,
+// `aimhelp`, `rjump`: classic_admin.hpp's grants, engine/server/aids.hpp), or takes it back. The
+// change is keyed `<aid>:<user id>`, so two votes on one player are one change and two players are
+// two; its value names the player and the grant (`Ann on`, `Ann 0.5`, `Ann off`), its `before`
+// what he had. The next map puts each back; a player who left is passed over.
 
 // A rule the warmup holds at 0 (hold_limits) while the lobby waits for its match.
 bool held_now(const Game& g, std::string_view name) {
@@ -484,78 +839,64 @@ bool held_now(const Game& g, std::string_view name) {
          (name == "fraglimit" || name == "timelimit");
 }
 
-constexpr std::string_view kSpeedjumpVote = "speedjump";
-
-// The share a speedjump change's value ends in (`Ann on`, `Ann 0.5`): -1 for `off`.
-float speedjump_vote_share(std::string_view value) {
-  const size_t space = value.find_last_of(' ');
-  const std::string last(space == std::string_view::npos ? value : value.substr(space + 1));
-  float share = -1;
-  if (last == "on") return kGrantShare;
-  if (last != "off" && !speedjump_parse_share(last, share)) return -1;
-  return share;
-}
-
-// `vote speedjump <id|name> on|off|<share>`: the player named, and the grant asked for him.
-bool speedjump_vote_check(const Game& g, std::string_view value, gs::VoteCheck& out) {
-  const std::string text(value);
-  const size_t space = text.find_last_of(' ');
-  if (!g.classic || space == std::string::npos) {
-    out.error = "usage: vote speedjump <id|name> on|off";
+// `vote <aid> <id|name> on|off|<value>`: the player named, and the grant asked for him.
+bool aid_vote_check(const Game& g, const gs::AidKind& kind, std::string_view value,
+                    gs::VoteCheck& out) {
+  std::string who, grant;
+  if (!g.classic) {
+    out.error = std::string(kind.words) + " is granted only on a server players join.";
     return false;
   }
-  const std::string who = text.substr(0, text.find_last_not_of(' ', space) + 1);
-  const std::string what = text.substr(space + 1);
-  float share = -1;
-  if (what == "on")
-    share = kGrantShare;
-  else if (what != "off" && !speedjump_parse_share(what, share)) {
-    out.error = "speedjump: \"" + what + "\" is not on, off or a share 0..1";
-    return false;
-  }
+  if (!gs::aid_vote_split(kind, value, who, grant, out.error)) return false;
   const ClassicServer& cs = *g.classic;
   const int slot = classic_find_seat(cs, who);
   if (slot < 0) {
-    out.error = "speedjump: no player called " + who + " (type \"users\" for the ids and names)";
+    out.error = "No player is called " + who + ". Type \"users\" to see the ids and names.";
     return false;
   }
   const ClassicClient& c = cs.clients[slot];
-  const float had = classic_speedjump_granted(cs, slot);
-  const auto word = [](float s) {
-    return s < 0              ? std::string("off")
-           : s == kGrantShare ? std::string("on")
-                              : speedjump_share_text(s);
-  };
-  out.key = "speedjump:" + std::to_string(c.userid);
-  out.value = c.name + " " + word(share);
-  out.before = c.name + " " + word(had);
+  out.key = gs::aid_vote_key(kind, c.userid);
+  out.value = c.name + " " + gs::aid_vote_word(kind, grant);
+  out.before = c.name + " " + gs::aid_vote_word(kind, classic_aid_granted(cs, slot, kind));
   return true;
 }
 
-// A passed or put-back speedjump change made: the grant set on the user id its key names, while
-// he is on the server.
-void speedjump_vote_apply(Game& g, const gs::VoteChange& c) {
+// The aid a vote's change is about (its name), or null.
+const gs::AidKind* vote_aid(std::string_view name) { return gs::aid_find(classic_aids(), name); }
+
+// A passed or put-back aid change made: the grant set on the user id its key names, while he is on
+// the server.
+void aid_vote_apply(Game& g, const gs::AidKind& kind, const gs::VoteChange& c) {
   if (!g.classic) return;
-  const int userid = std::atoi(c.key.c_str() + kSpeedjumpVote.size() + 1);
-  std::string error;
-  classic_speedjump(*g.classic, userid, speedjump_vote_share(c.value), error);
+  const int userid = std::atoi(c.key.c_str() + std::string_view(kind.name).size() + 1);
+  const size_t space = c.value.find_last_of(' ');
+  std::string grant, error;
+  gs::aid_value(kind, space == std::string::npos ? c.value : c.value.substr(space + 1), grant,
+                error);
+  classic_grant(*g.classic, kind, userid, grant, error);
 }
 
 bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::VoteCheck& out) {
   const Game& g = *static_cast<const Game*>(ctx);
-  if (name == kSpeedjumpVote) return speedjump_vote_check(g, value, out);
+  if (const gs::AidKind* aid = vote_aid(name)) return aid_vote_check(g, *aid, value, out);
   const std::string rule(name), text(value);
   bool known = false;
   for (const gs::GameRule& r : all_rules()) known = known || rule == r.name;
   if (!known) {
     out.error = rule +
                 " is not a setting of this server. Type \"vote rules\" to see what may be "
-                "voted on (fraglimit, timelimit, teamplay, sv_gravity, pm_speedjump, "
-                "speedjump <player> on...).";
+                "voted on (fraglimit, timelimit, teamplay, sv_gravity, pm_speedjump, sv_rjump, "
+                "speedjump <player> on, aimhelp <player> on...).";
     return false;
   }
   if (is_endpoint_rule(rule)) {
     out.error = rule + " is set when the server starts, so it can't be voted on";
+    return false;
+  }
+  // Midair is the sequel's rules' own (and a loaded match mod's that has it); the classic arena's
+  // comes with its rules' move to C++ (plugins/shooter/midair.hpp holds the shared rules).
+  if (rule.rfind("k_midair", 0) == 0 && g.module.empty() && sv::sequel_of(g.rules) == nullptr) {
+    out.error = "Midair can't be played on this map yet";
     return false;
   }
   if (const sh::Setting* setting = sh::find_setting(rule); setting != nullptr) {
@@ -565,6 +906,8 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
       out.error = error;
       return false;
     }
+  } else if (rule == "sv_aimhelp_allow" || rule == "sv_aimhelp_deny") {
+    // A list of weapons' names: any text.
   } else {
     char* end = nullptr;
     std::strtod(text.c_str(), &end);
@@ -593,19 +936,29 @@ void vote_turn(Game& g) {
   b.said.clear();
   b.notes.clear();
   bool restart = false;
+  const char* why = "The map restarts so everyone moves by the new setting\n";
   for (const gs::VoteChange& c : gs::vote_take(b)) {
-    if (c.name == kSpeedjumpVote) {
-      speedjump_vote_apply(g, c);
+    if (const gs::AidKind* aid = vote_aid(c.name)) {
+      aid_vote_apply(g, *aid, c);
       continue;
     }
     g.settings.rules[c.name] = c.value;
-    if (sh::find_setting(c.name) != nullptr)
+    // The aim help's leeway is the server's alone: nobody predicts with it, so no restart.
+    if (sh::find_setting(c.name) != nullptr && !c.name.starts_with("sv_aimhelp")) {
       restart = true;
-    else if (!held_now(g, c.name))
+    } else if (c.name == "k_midair") {
+      // Midair takes the items off the map and arms every spawn: a new start.
       g.rules.console(c.name + " \"" + c.value + "\"");
+      restart = true;
+      why = c.value == "0" ? "The map restarts without midair\n" : "The map restarts for midair\n";
+    } else if (!held_now(g, c.name)) {
+      g.rules.console(c.name + " \"" + c.value + "\"");
+    }
+    if (c.name == "k_midair_minheight" && g.classic)
+      classic_print_all(*g.classic, sh::midair_level_line(sh::midair_level(c.value)));
   }
   if (restart && g.classic) {
-    classic_print_all(*g.classic, "The map restarts so everyone moves by the new setting\n");
+    classic_print_all(*g.classic, why);
     sv::RulesCommon& now = *g.rules;
     now.pending_map = g.map->name;
     now.pending_change = sv::MapChange::restart;
@@ -631,8 +984,8 @@ void vote_sync(Game& g) {
 // Their lines go out at once, while the players are still on the map that is ending.
 void vote_map_over(Game& g) {
   for (const gs::VoteChange& c : gs::vote_map_over(g.vote)) {
-    if (c.name == kSpeedjumpVote)
-      speedjump_vote_apply(g, c);
+    if (const gs::AidKind* aid = vote_aid(c.name))
+      aid_vote_apply(g, *aid, c);
     else
       g.settings.rules[c.name] = c.value;
   }
@@ -642,10 +995,64 @@ void vote_map_over(Game& g) {
 // The game moved onto the map `name` (`supplied`: a listen server's, read by its window): the
 // next map's server made, the endpoint moved onto it, the old one let go. A map that does not load
 // leaves the game on the one it was playing (`failed` says why, `error` too).
+// The sequel's rules outside deathmatch keep the campaign (the bodies carried, the help computer,
+// the cross-level bits: server/sequel_campaign.hpp) in their own server, so a level change starts
+// the next map on the same server rather than a new one; the players stay seated through it. A
+// lobby's game and a map without brushes make new rules as before.
+// The sequel's companions follow the game onto the next level of its campaign (the same rules):
+// they stay seated and are made afresh on the new map's nav. New rules (a new game, deathmatch)
+// send them away, as a map no companion can walk does.
+void mates_follow(Game& g, bool same_rules) {
+  if (!g.mates || cl::sequel_party_size(*g.mates) == 0) return;
+  cl::SequelParty& p = *g.mates;
+  std::vector<int> gone;
+  std::string error;
+  if (same_rules) cl::sequel_party_enter(p, g.rules, g.map->spec, false, gone, error);
+  for (int i = cl::sequel_party_last(p); !same_rules && i > 0; i = cl::sequel_party_last(p)) {
+    if (g.classic) g.classic->clients[i].rules_active = false;  // never on the new rules
+    gone.push_back(i);
+    cl::sequel_party_forget(p, i);
+  }
+  for (const int i : gone)
+    if (g.classic) classic_drop(*g.classic, i, "left the game");
+  if (cl::sequel_party_size(p) == 0) p.turned_coop = false;
+  if (same_rules && !gone.empty() && g.classic)
+    client_print(*g.classic, 0, 2, error + " Your companions leave.\n");
+}
+
+bool keeps_campaign(const Game& g, const cl::LoadedMap& next) {
+  if (g.room || next.spec.brushes == nullptr) return false;
+  const sv::SequelServer* sq = sv::sequel_of(g.rules);
+  return sq != nullptr && !sq->cvars.find("deathmatch")->on();
+}
+
+bool next_level_on_same_rules(Game& g, std::shared_ptr<cl::LoadedMap> map, std::string& error) {
+  if (!g.rules.start(map->spec, error)) {
+    error = "the map " + map->name + " did not load: " + error;
+    g.failed = error;
+    return false;
+  }
+  if (map->from_file) sv::use_map_sets(*g.rules, map->bsp);
+  if (g.classic && !classic_change(*g.classic, g.rules, error)) {
+    g.failed = error;
+    return false;
+  }
+  g.map = std::move(map);
+  g.changes++;
+  g.failed.clear();
+  mates_follow(g, true);
+  host_bind(g);
+  return true;
+}
+
 bool move_to(Game& g, const std::string& name, bool match_over, std::string& error,
              std::shared_ptr<cl::LoadedMap> supplied = nullptr) {
   // A vote lasts the map: put back before the next map is made (a restart keeps it).
   if (match_over) vote_map_over(g);
+  if (supplied && keeps_campaign(g, *supplied))
+    return next_level_on_same_rules(g, std::move(supplied), error);
+  if (!supplied && g.map && g.map->name == name && keeps_campaign(g, *g.map))
+    return next_level_on_same_rules(g, g.map, error);  // a restart: as each player came in
   std::shared_ptr<cl::LoadedMap> map;
   sv::RulesRunner next;
   if (!open_map(g, name, map, next, error, std::move(supplied))) {
@@ -671,6 +1078,7 @@ bool move_to(Game& g, const std::string& name, bool match_over, std::string& err
     cl::room_enter(*g.room, g.rules, g.map->spec);
     g.applied.fill(nullptr);
   }
+  mates_follow(g, false);
   host_bind(g);
   return true;
 }
@@ -809,6 +1217,70 @@ void lobby_words(Game& g) {
   sv::announce_flush(g.room->announcer, g.rules->out, g.rules->sv.time);
 }
 
+// The sequel's companions outside deathmatch: `addbot [skill]` and `removebot` from the window's
+// player (slot 0), the leader they escort. A single-player game turns cooperative for the first and
+// back for the last one leaving. False when the line is not theirs.
+bool mate_words(Game& g, int slot, const std::string& line) {
+  const size_t space = line.find(' ');
+  const std::string word = line.substr(0, space);
+  if ((word != "addbot" && word != "removebot") || !g.classic || g.host == nullptr || slot != 0)
+    return false;
+  const ge::console::Cvar* dm = g.rules->cvars.find("deathmatch");
+  if (sv::sequel_of(g.rules) == nullptr || (dm != nullptr && dm->on())) return false;
+  ClassicServer& cs = *g.classic;
+  if (!g.mates) {
+    g.mates = std::make_unique<cl::SequelParty>();
+    g.mates->seed = g.settings.seed;
+  }
+  cl::SequelParty& p = *g.mates;
+  const ge::console::Cvar* coop = g.rules->cvars.find("coop");
+  if (word == "removebot") {
+    const int last = cl::sequel_party_last(p);
+    if (last < 0) {
+      client_print(cs, slot, 2, "There is no companion to send away.\n");
+      return true;
+    }
+    classic_drop(cs, last, "left the game");  // off the rules too
+    cl::sequel_party_forget(p, last);
+    if (p.turned_coop && cl::sequel_party_size(p) == 0) {
+      g.rules.console("coop 0");
+      p.turned_coop = false;
+      client_print(cs, slot, 2, "You play alone again.\n");
+    }
+    return true;
+  }
+  sh::AimSkill skill = sh::AimSkill::average;
+  const std::string named = space == std::string::npos ? "" : line.substr(space + 1);
+  if (!named.empty() && !cl::skill_named(named, skill)) {
+    client_print(cs, slot, 2,
+                 "addbot: unknown skill \"" + named + "\" (use novice, average or expert)\n");
+    return true;
+  }
+  const bool turned = coop == nullptr || !coop->on();
+  if (turned) g.rules.console("coop 1");
+  uint32_t held = 0;
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (cs.clients[i].state != ConnState::free) held |= 1u << i;
+  std::string error;
+  const int at = cl::sequel_party_add(p, g.rules, g.map->spec, skill, held, error);
+  if (at < 0 || !classic_add_local(cs, at, p.mates[static_cast<size_t>(at)]->name, error)) {
+    if (at > 0) {
+      g.rules.drop(at);
+      cl::sequel_party_forget(p, at);
+    }
+    if (turned) g.rules.console("coop 0");
+    client_print(cs, slot, 2, "addbot: " + error + "\n");
+    return true;
+  }
+  if (turned) {
+    p.turned_coop = true;
+    client_print(cs, slot, 2, "The game is cooperative while you have company.\n");
+  }
+  const cl::SequelMate& m = *p.mates[static_cast<size_t>(at)];
+  client_print(cs, slot, 2, m.name + " (" + sh::aim_skill_name(skill) + ") joins the game\n");
+  return true;
+}
+
 // A client's words the server takes before the mod: the vote's (`vote ...`, and `yes` and `no`
 // while one is open) from anyone; with a room, `addbot [skill]` and `removebot` from the leader,
 // and with sv_lobby the lobby's own (ready, break, team, start, lobby).
@@ -821,7 +1293,7 @@ bool room_words(void* ctx, int slot, const std::string& line) {
       return true;
     }
   }
-  if (!g.room) return false;
+  if (!g.room) return mate_words(g, slot, line);
   cl::Room& r = *g.room;
   ClassicServer& cs = *g.classic;
   const size_t space = line.find(' ');
@@ -883,6 +1355,7 @@ void frame(void* g) {
   if (game.coop) return coop_frame(*game.coop);
   std::vector<sh::Packet> moves;
   if (game.room) cl::room_packets(*game.room, *game.rules, frame_msec(game), moves);
+  if (game.mates) cl::sequel_party_packets(*game.mates, game.rules, frame_msec(game), moves);
   game.rules.frame(moves.data(), static_cast<int>(moves.size()));
   sv::RulesCommon& now = *game.rules;
   now.out.all.clear();
@@ -893,13 +1366,42 @@ void frame(void* g) {
   lobby_words(game);
 }
 
+// The ban and VIP lists `writeip` and `vip_writeip` saved, read back at start (a line they do not
+// take is left out).
+void load_bans(ClassicServer& s) {
+  std::string line, out;
+  if (!s.cfg.ban_file.empty()) {
+    std::ifstream f(s.cfg.ban_file);
+    while (std::getline(f, line))
+      if (line.rfind("addip ", 0) == 0) gs::ban_command(s.bans, line, classic_unix_time(s), out);
+  }
+  if (!s.cfg.vip_file.empty()) {
+    std::ifstream f(s.cfg.vip_file);
+    while (std::getline(f, line))
+      if (line.rfind("vip_addip ", 0) == 0)
+        gs::vip_command(s.vips, line, classic_unix_time(s), out);
+  }
+}
+
+// A client's words: a login's first (classic_login.hpp), then the lobby's and the votes'.
+bool game_words(void* ctx, int slot, const std::string& line) {
+  Game& game = *static_cast<Game*>(ctx);
+  if (game.login && classic_login_line(*game.login, slot, line)) return true;
+  return room_words(ctx, slot, line);
+}
+
 bool serve(void* g, ge::net::Transport& port, std::string& error) {
   Game& game = *static_cast<Game*>(g);
   if (game.coop) return coop_serve(*game.coop, port, error);
   game.classic = std::make_unique<ClassicServer>();
   if (!classic_start(*game.classic, game.rules, port, game.cfg, error)) return false;
-  game.classic->game_command = room_words;
+  load_bans(*game.classic);
+  game.classic->game_command = game_words;
   game.classic->game_ctx = &game;
+  if (game.host == nullptr && classic_login_wanted(game.settings)) {
+    game.login = std::make_unique<ClassicLogin>();
+    if (!classic_login_open(*game.login, *game.classic, game.settings, error)) return false;
+  }
   if (game.host != nullptr) {  // the window's player: slot 0, a local seat the window moves
     if (!classic_add_local(*game.classic, 0, game.host->player, error, false)) return false;
     game.classic->clients[0].rules_active = false;  // sync_host puts it on the map
@@ -924,7 +1426,13 @@ void net_frame(void* g, int64_t now_us) {
   if (game.coop) return coop_net_frame(*game.coop, now_us);
   if (game.room)
     cl::room_packets(*game.room, *game.rules, frame_msec(game), game.classic->local_moves);
+  if (game.mates)
+    cl::sequel_party_packets(*game.mates, game.rules, frame_msec(game), game.classic->local_moves);
+  const gs::LobbyPhase phase = game.room ? game.room->lobby.phase : gs::LobbyPhase::warmup;
+  game.classic->match_on = game.settings.lobby != 0 &&
+                           (phase == gs::LobbyPhase::countdown || phase == gs::LobbyPhase::match);
   classic_frame(*game.classic, now_us);
+  if (game.login) classic_login_frame(*game.login);
   if (game.qtv) qtv_update(*game.qtv, *game.classic);
   sync_host(game);
   sync_seats(game);
@@ -944,7 +1452,7 @@ int seated(const void* g) {
 
 uint64_t hash(const void* g) {
   const Game& game = *static_cast<const Game*>(g);
-  return game.coop ? coop_hash(*game.coop) : ge::shooter::server_hash(game.rules->sv);
+  return game.coop ? coop_hash(*game.coop) : sv::rules_hash(*game.rules);
 }
 
 // The hub's record (docs/hub.md): the map, the mode the rules make, the phase, every client.
@@ -1081,6 +1589,8 @@ gs::ServerGame make() {
   g.base_dir = kGameFolder;
   g.rules = all_rules().data();
   g.rule_count = static_cast<int>(all_rules().size());
+  g.names = kSettingNames;
+  g.name_count = static_cast<int>(std::size(kSettingNames));
   g.create = create;
   g.destroy = destroy;
   g.frame_seconds = frame_seconds;

@@ -13,10 +13,12 @@
 // ge:summary The client's search path: the base folder and a mod folder over it, packs, pk3s
 // ge:keywords search-path basedir game-folder mod gamedir pak pk3 pack archive find_file files
 // ge:keywords open_game_dir loose-files palette maps map_names content_packs archive_paths
+// ge:keywords map_lit lit coloured-light lits sky_box_files sky-box skybox env
 // ge:skill vfs shooter
 // ge:test tests/shooters_edge_files_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -35,8 +37,10 @@ struct SearchPath {
   ge::vfs::SearchPath vfs;  // every source mounted, the last winning
 };
 
-// The base folder `<basedir>/<the content profile's base folder>` and, when `game` names another,
-// the mod folder `<basedir>/<game>` over it. False with the reason and the next step when the game
+// The base folder `<basedir>/<the content profile's base folder>`, the bundled client's folder over
+// it when the install has one (client/install_configs.hpp's `client_folder`: its place names,
+// fonts and pictures), and, when `game` names another, the mod folder `<basedir>/<game>` over
+// them. False with the reason and the next step when the game
 // folder is missing or an archive does not read.
 bool open_game_dir(
     const std::string& basedir, const std::string& game, SearchPath& out, std::string& error,
@@ -58,6 +62,25 @@ std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name
 std::span<const uint8_t> game_palette(
     const SearchPath& path, std::vector<uint8_t>& store,
     const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+
+// The map `map`'s coloured light: `maps/lits/<map>.lit`, else `<maps folder>/<map>.lit` beside
+// the map (`maps/dm6.lit`), else `lits/<map>.lit`, the folder players keep downloaded light files
+// in; viewing `store` or a pack, with its path in `found`. Empty when neither is there.
+std::span<const uint8_t> map_lit(
+    const SearchPath& path, std::string_view map, std::vector<uint8_t>& store, std::string* found,
+    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+
+// THE SKY BOX `name`'s six pictures, in the order rt, bk, lf, ft, up, dn (brush/app/sky_box.hpp):
+// each the first of `env/<name><suffix>`, `gfx/env/<name><suffix>`, `env/<name>_<suffix>` and
+// `gfx/env/<name>_<suffix>` the files hold as a .tga, .png, .jpg or .pcx, in that order, its bytes
+// and path kept. True when all six are there; false with `missing` the first one's suffix not
+// found. A name that is empty or holds a dot, slash or backslash finds none.
+struct SkyBoxFiles {
+  std::array<std::string, 6> paths;
+  std::array<std::vector<uint8_t>, 6> bytes;
+};
+bool sky_box_files(const SearchPath& path, std::string_view name, SkyBoxFiles* out,
+                   std::string* missing = nullptr);
 
 // The maps the search path holds (the content row's maps: `maps/<name>.bsp` for the first game),
 // loose or in an archive, by name, the row's start map first and the rest in order.

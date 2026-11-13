@@ -24,7 +24,8 @@ generic: one hub program for every game on the engine, the game supplying only i
 | Demo | One demo: the picture, the scoreboard and the game's stats behind a spoiler, the seek bar, the speed, whom to follow, clips by time range in the link | On demand |
 | Scoreboard | One server's scoreboard alone, sized for a streamer's overlay | Every 5 s |
 
-No accounts and no login: everything a hub shows is public, read-only, and cacheable for seconds.
+No login to read it: everything a hub shows is public, read-only, and cacheable for seconds. The one
+exception is the Account page a player signs up and gets a login code on ([`accounts.md`](accounts.md), M59).
 
 ## The parts
 
@@ -131,11 +132,48 @@ web build the engine has (G5): a viewer, never the game, and nothing in it plays
 | Piece | What it is |
 | --- | --- |
 | The web viewer | A game's viewer target, `ge_add_web_viewer(<game>)`: its renderer, its demo reader and the TV client, nothing of input beyond the camera and the transport. Built by Emscripten, drawing through the browser's WebGPU with the same WGSL the native renderer uses (Dawn ships the browser's binding) |
-| Its stream | The TV node's stream carried over a WebSocket (the TV layer's browser carriage), the same chunks a native spectator reads; a demo fetched by its hash from the archive, decoded in the viewer |
-| Its content | The level and the models from the hub's content folder, compressed, named by hash, cached by the browser for a year; the first visit's download kept small by sending the level being watched first |
+| Its stream | The TV node's stream carried over a WebSocket (the TV layer's browser carriage), the same messages a native spectator reads: the viewer says hello, turns the messages back into the replay file as it grows (`tv::Watch`) and unpacks each whole block into the recording as it comes (Shooter's Edge's `unpack_more`); it plays two blocks behind and holds its last frame when the next block is late. A demo is fetched by its hash from the archive, decoded in the viewer |
+| Its content | A demo's own content pack (`engine/hub/content.hpp`): the game names the files the demo draws from (`HubSpec::demo_files`: Shooter's Edge's maps, precached models and sounds, and the basics every picture needs; and `HubSpec::file_needs`, what each file found names in turn: a sequel map's texture files and either game's sky box), the hub takes them out of the packs beside the viewer (a later pack wins, as a game folder's numbered packs), writes them as one pack, zstd-packs it and keeps it in the archive's `content/` named by its own SHA-256, served at `/content/<sha>.pak.zst` and cached by the browser for a year. It is made when the demo arrives, so no visitor waits; two demos that need the same files share one pack. A 20-minute 4on4 on the classic game's third level takes 1.6 MB instead of the two packs' 52 MB. A game that names no files hands the viewer every pack beside it |
+| Its games | One viewer plays either classic game's recordings: the format is read off the demo's bytes (Shooter's Edge's `client/demo.hpp`), and the world is drawn with that game's palette and models. The sequel's demo pack's own recording plays from a 9.7 MB content pack |
 | Its controls | Seek, speed, pause, whom to follow and free camera, through the transport the native replay player already has (`engine/replay`); clip links (`?t=from-to:who`) |
 | The page glue | The few lines of script a page needs to start the viewer, hand it the stream's address and wire the buttons: platform glue, kept as small as the platform allows, as Apple's and Android's app shells are |
 | Content rights | A hub serves only content its operator may share. For the classic game that is the free pack and the operator's own; a level whose content the hub may not serve is shown in the installed game instead |
+
+THE BUILD. The `web` preset (`cmake --preset web`, with `EMSDK` set: Emscripten's toolchain)
+sets `GE_WEB` and builds only `GE_WEB_GAME`'s viewer (`shooters_edge` by default) and what it
+links: no host tools, no packaging, no encoders, no window layer. Dawn's own browser binding
+(Emscripten's `emdawnwebgpu` port) stands in for the native Dawn library, so `engine/gpu` and
+`engine/render` compile unchanged but for the surface, which a web build makes on the page's
+canvas (`NativeWindow::Kind::canvas`). `engine/web` holds what every viewer shares: its arguments
+(`viewer_args.hpp`, tested natively) and the page's calls (`browser.hpp`: a file fetched from the
+hub, the next paint, the canvas's size, the status line). Every wait (a fetch, a paint, the GPU's)
+suspends the C++ stack through JSPI, so a viewer is a plain loop in `main`. `ge_add_web_viewer`
+writes `<game>_viewer.js` and `.wasm` into `build/web/<game>_viewer/`, each with a gzip copy beside it
+(`.gz`, `cmake/WebGzip.cmake`) that the hub sends a browser that takes gzip, the folder a hub's
+`--viewer=<dir>` serves; the hub's operator puts the content packs it may share beside them
+(`.pak`, `.pk3`); the Watch page hands them to the viewer by name order, the Demo page the demo's own content pack.
+
+THE FIRST VISIT. What a visitor downloads before the first picture is kept small: the wasm leaves
+out the other worlds' moon maps (2.8 MB a hub's matches never show; `GE_MOON_MAPS`), goes gzip
+(4.0 MB to 1.7 MB), and the demo's own content pack comes in place of every pack. The page
+fetches the wasm itself and hands it to the viewer's script, so a bar under the picture and the
+status line follow the download in megabytes; the viewer's own fetches (the demo, the content)
+do the same (`web::fetch_bytes` with a label).
+
+THE LIMITS. A browser offers WebGPU's default limits unless the machine's GPU earns it more:
+16 sampled textures a shader stage, 8 storage buffers and 256 layers an array texture, among
+others. The software adapter in the container offers exactly those. A pipeline layout counts every
+entry its stages can see, used or not, so the frame's group 0 (17 entries, 11 of them textures)
+is built whole for the passes that read most of it and in lean parts for the rest
+(`render::FrameGroup`: `block` for post, `surface` for the classic map, `water` for the water),
+each keeping its bindings' own numbers so one WGSL source serves both; the parts come from what
+each entry point statically reads (Tint's binding inspector). The shadow cubes are as many as the
+device's array layers hold (42 in a browser, 48 elsewhere), and the cull reads its chunks' sizes
+and states from one buffer. Two browser refusals the native device lets pass are taken out at the
+source: a render pass's NaN depth clear value (`gpu::begin_render_pass` gives it 0) and timestamp
+queries (not asked for on the web). A native run asks for exactly the defaults with
+`GE_GPU_LIMITS=default` (validation on), so a pipeline over them names itself in the log without
+a browser.
 
 Two cheaper ways stay in the plan beside it: Watch and Play buttons that open the installed game
 (`<game>://tv/<node>/<stream>`, `<game>://demo/<sha256>`, a link each client registers), and the
@@ -155,6 +193,7 @@ browser's own GPU.
 | 5 | M56e | Open in the game: each client's link scheme and `+tv`/`+demo` start; Watch and Play buttons | A Shooter's Edge client opened from a hub link, watching a bot match |
 | 6 | M56f | The classic adapter: the classic masters, status queries and broadcasters read into the records; Shooter's Edge's hub lists the internet's classic servers | `se-hub` lab against the simulated classic servers, and once by hand against the real masters |
 | 7 | M56g | The web viewer: `ge_add_web_viewer`, the Emscripten and WebGPU build, the stream over a WebSocket, demos by hash, the content folder, the transport; the Watch and Demo pages; Shooter's Edge's and Fall Line's viewers | `hub-viewer` lab: the viewer in headless Chromium on a software WebGPU adapter, a live bot match and a demo screenshotted, seek checked, first-visit bytes measured |
+| 7b | M56g2 | The renderer within WebGPU's default limits (16 sampled textures a stage, 256 array layers) on the web build: the frame's group split by what each stage reads, the shadow cubes capped by the device; the picture on the canvas | `hub-viewer` lab: the match drawn on the canvas in headless Chromium |
 | 8 | M56h | The live map for phones and slow machines: the RADAR track, the hub's SVG view, live updates | `hub-radar` lab: a bot match drawn frame by frame |
 
 ### Built so far
@@ -177,7 +216,7 @@ browser's own GPU.
   protocol, modes and their weights, the score's column) and the interest rule. `api.hpp` answers
   `/v1`, `/v1/servers` (filters `mode`, `min_players`, `has_players`, `kind`), `/v1/servers/{address}`,
   `/v1/servers/{address}/events`, `/v1/streams`, `/v1/nodes` and `/v1/masters` as JSON, a pure
-  function of the index. `http.hpp` carries it: HTTP/1.1 GET and HEAD, CORS open, the cache time
+  function of the index. `http.hpp` carries it: HTTP/1.1 GET and HEAD (and POST to the Account page's `/account/...` alone, a form of at most 2 KB), CORS open, the cache time
   of the busy period, server-sent events for one node's record with a comment line every 15 s.
   `main.hpp` is the process (`ge_add_hub`, cmake/Hub.cmake); `--serve-master` runs the master in
   the same process, so one binary is a community's whole service. Shooter's Edge's is
@@ -203,11 +242,11 @@ browser's own GPU.
 
 - **M56d** (`hub-archive`): `archive.hpp` is the demo archive: replay files kept by SHA-256 under
   `d/abc/`, each row read from the hub's meta words, the same file from two places kept once,
-  `archive.tsv` for the operator's tags. `--archive=<dir>` turns it on; a recorder drops `.ger`
+  `archive.tsv` for the operator's tags. `--archive=<dir>` turns it on; a recorder drops `.ged`
   files in `<dir>/inbox/` (a refused one goes to `inbox/refused/`), and `--keep-gb` and
   `--keep-days` prune the oldest untagged demos. `/v1/demos` searches by player (any part, any
   case), mode, map, team, tag, server and age, newest first, 15 a page, with the scores left out;
-  `/v1/demos/{sha256}` is one demo's summary with them; `/d/abc/{sha256}.ger` is the file, cached a
+  `/v1/demos/{sha256}` is one demo's summary with them; `/d/abc/{sha256}.ged` is the file, cached a
   year. `/demos` is the page: a search form, Play (`<id>://demo/<sha256>`) and Download, the
   scores folded until asked. Pulling demos from TV nodes waits for the TV node (M57b).
 

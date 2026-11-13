@@ -46,6 +46,9 @@ struct ConsoleStyle {
   Color list_detail = hex(0x828ca0);
   Color notify_band = hex(0x10141c, 0.55f);
   float cursor_blink_s = 0.5f;  // half a period; 0: always on
+  // Where the image is held as it covers the panel, 0 its top to 1 its bottom: 1 slides a
+  // full-screen picture down with the panel, its foot at the panel's edge (a classic console).
+  float image_focus_y = 0.5f;
 };
 
 // The console as it stands, into `list` (begun at the target's size). `image` is con_bgimage's

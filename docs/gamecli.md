@@ -17,7 +17,7 @@ The CLI is built in the three homes every feature lives in (docs/architecture.md
 
 | Layer | Where | What it gives |
 | --- | --- | --- |
-| Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset`, `server settings/set`, `servers`, `server info`, `players`, `rcon`, `host`, `host list`, `host stop`, `join`, `logs` |
+| Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset/check/format`, `server settings/set/check/format`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `join`, `logs`, `account signup/signin/code/recover/show` |
 | Plugin | `plugins/<name>/cli/` (built into `ge_<name>_cli`) | A group of rows any game linking the plugin adds: classic enhance's `content` (the install's packs, their release by SHA-256, the enhanced cache) |
 | Game | `games/<game>/cli/` | The game's `Spec` (its programs, ports, protocol, places, launch words, the settings it registers) and its own rows: Shooter's Edge's `demos`, `demos play`, `demos pack`, `demos unpack` |
 
@@ -63,6 +63,14 @@ player's agent installs it with `shooters_edge_cli skill > ~/.claude/skills/shoo
   written by `server set` into the base game directory's `server.cfg`, the line that sets it
   rewritten in place. `server settings` works them out exactly as the dedicated process does
   (`engine/server/config.hpp`'s layers, in this process) and says where each value came from.
+- **Checked and tidied** without running (`engine/console/cfg_tidy.hpp`): `settings check` and
+  `server check` read a cfg (the player's `config.cfg`, the install's `server.cfg`, or a file
+  named) and list each line that sets a setting the game lacks (with the nearest name), a value
+  none of the setting's own values fit (with what it takes, from the catalog's `values`) or a
+  setting set twice; they exit 1 when they find one. `settings format` and `server format` write
+  it back tidy: `--comments` puts each setting's one sentence above it, `--pretty` groups the
+  settings into sections in one fixed order with their values in one column, binds by key, then
+  aliases and the other commands as written; `--write` rewrites the file in place.
 
 ## Servers
 
@@ -71,7 +79,9 @@ own, driven by the wall clock until every reply is in or `--wait` passes: the LA
 masters (the player's `sb_masters`, the install's lists, `--master`) and the named servers
 (`sb_servers`, `--server`). `players` and `server info` ask one server; `rcon` sends the game's
 remote console request (`--password`, else the player's `rcon_password`) and gathers the reply's
-packets.
+packets. `route <address>` runs the same refresh, then asks every forwarder it found for its list
+and answers the lowest summed ping to the server (`engine/forward/routes.hpp`): straight, or the
+forwarders to go through, nearest first, with the chain the game's route setting takes.
 
 ## Hosting and joining
 
@@ -98,9 +108,21 @@ commands). `link open <link>` reads a link strictly (a host, a port, a stream nu
 nothing else reaches a command line) and starts the window: `Spec::join_words` for Join,
 `Spec::spectate_words` for Spectate (Shooter's Edge: `+set spectator 1 +connect`),
 `Spec::tv_words` for Watch, and for Play the demo fetched from the hub into
-`<state>/demos/<sha256>.ger`, checked against its hash, kept for the next time, and handed to
+`<state>/demos/<sha256>.ged`, checked against its hash, kept for the next time, and handed to
 `Spec::demo_words` (Shooter's Edge unpacks it into the recording its demo player reads and adds
 `-playdemo`). A game without a row's words is refused with what it cannot open yet.
+
+## An account
+
+`account signup <name>`, `account signin <name>`, `account code <name>`, `account recover <name>
+<recovery code>` and `account show` reach a master's account service (`docs/accounts.md` § The
+service on the wire): a hub run with `--accounts`, or a server that is its own master.
+`--master=<host[:port]>` names it once (port 27901 by default); the CLI keeps it, the service's
+key and the last ticket in `<state>/account.txt`, readable by its owner alone. The key is learned
+at the first contact and checked at every later one: a service that answers with another key is
+refused, unless `--key=<hex>` names the new one. The password comes from `--password` or one line
+of standard input. `account code` prints the line a classic client's console takes (`login <name>
+<code>`), good once within 15 minutes; `signin`'s ticket is what our own client hands a server.
 
 ## Places
 

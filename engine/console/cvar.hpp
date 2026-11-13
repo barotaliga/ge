@@ -28,10 +28,17 @@
 // written back as text with `core::num::to_string` (shortest round trip), so a cfg sets the
 // same bits everywhere.
 //
+// SYNONYMS: another name for a setting (`add_synonym`): a game's own name for one of the engine's,
+// such as a classic mod's `maxclients` for the server's `sv_maxclients`. A WHOLE synonym is the
+// cvar under a second name: `find` answers the target, so a cfg line, the console and a program's
+// reads and writes all reach it. A PART synonym is one word of a target that holds several ("N S
+// T"): `set` by its name replaces that word and `synonym_value` reads it. Synonyms are not listed
+// by `sorted`, so a saved cfg writes each setting once, under its own name.
+//
 // ge:summary Console variables: named, typed, flagged settings, owned or bound to a struct field
 // ge:keywords cvar cvars console-variable setting settings config cfg flag archive server-info
 // ge:keywords user-info cheat latch read-only bind tier sv_ cl_ r_ info-string apply_info
-// ge:keywords revision clamp sv_cheats set_watch watch
+// ge:keywords revision clamp sv_cheats set_watch watch synonym add_synonym other-name setting-alias
 // ge:skill console
 // ge:test tests/console_cvar_test.cpp
 #pragma once
@@ -73,10 +80,11 @@ struct CvarSpec {
   std::string_view name = {};
   std::string_view fallback = {};  // the default, as text
   uint32_t flags = 0;
-  std::string_view help = {};  // what it does, a phrase, with its unit
+  std::string_view help = {};  // what it does: one sentence (console/words.hpp)
   CvarKind kind = CvarKind::number;
   double min = -std::numeric_limits<double>::infinity();
   double max = std::numeric_limits<double>::infinity();
+  std::string_view values = {};  // what each value does (console/words.hpp)
 };
 
 // The field a bound cvar writes, or none (the cvar owns its value).
@@ -88,6 +96,7 @@ struct Cvar {
   std::string value;     // as text, after clamping
   std::string fallback;  // the default
   std::string help;
+  std::string values;   // what each value does (console/words.hpp)
   std::string latched;  // a value waiting for apply_latched; empty when none
   double number = 0;    // the value read as a number (0 when it is not one)
   uint32_t flags = 0;
@@ -100,6 +109,13 @@ struct Cvar {
   bool on() const { return number != 0; }
   int32_t integer() const;
   bool is_default() const { return value == fallback; }
+};
+
+// Another name for a cvar (SYNONYMS above).
+struct Synonym {
+  std::string name;  // lower case
+  Cvar* target = nullptr;
+  int part = -1;  // -1: the whole value; else the index of the word it names
 };
 
 // What `Cvars::set` did.
@@ -168,6 +184,16 @@ class Cvars {
   bool is_server() const { return is_server_; }
   bool cheats() const;  // sv_cheats is on
 
+  // `name` as another name for the cvar `target` (`part` -1: its whole value; k: its word k).
+  // False when `name` is not a valid name or is a cvar of its own, when `target` is unknown, or
+  // when `name` already names something else; true again for the same synonym.
+  bool add_synonym(std::string_view name, std::string_view target, int part = -1);
+  // The synonym `name` (whole or part), or null.
+  const Synonym* synonym(std::string_view name) const;
+  // A synonym's value: the target's, or its word `part` ("" past its last word).
+  std::string synonym_value(const Synonym& s) const;
+  const std::vector<Synonym>& synonyms() const { return synonyms_; }
+
   // Every cvar, sorted by name (a fresh vector: for listing, not for a frame).
   std::vector<const Cvar*> sorted() const;
   std::vector<Cvar*> sorted();
@@ -177,6 +203,7 @@ class Cvars {
   Cvar& make(const CvarSpec& spec, CvarTarget target);
   void store(Cvar& cvar, std::string_view text);
   std::vector<std::unique_ptr<Cvar>> all_;
+  std::vector<Synonym> synonyms_;
   bool is_server_;
   Cvar* sv_cheats_ = nullptr;
   Watch watch_;

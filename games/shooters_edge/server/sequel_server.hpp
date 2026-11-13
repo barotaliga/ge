@@ -46,28 +46,35 @@
 //   intermission (everyone frozen at its spot, a button after 5 s leaves for the next map); the
 //   `dmflags` bits 1, 2, 2048 and 8192 leave items out, 4 keeps weapons, 32 repeats the level, 512
 //   spawns farthest, 1024 respawns at once.
-//
-// Movers and monsters are the next rows (docs/goals/M18v.md, M18v7); the rules' numbers are in the
-// clean-room notes. Held by
-// tests/shooters_edge_sequel_server_test.cpp.
+// - **Teams, bodies and scores**: with `dmflags` 64 (by skin) or 128 (by model), or in `coop`,
+//   teammates' blows do nothing with 256 but push, and a team kill scores −1; `fov` is held to
+//   1..160 (90 with 32768); a respawn leaves the body, up to 8, thrown apart by a blast under −40;
+//   `score` lists the scores, which the intermission prints to everyone.
+// - **The map's movers and triggers**: sequel_map.hpp. Monsters are the next row (M18v7d).
 //
 // ge:summary The sequel's rules as a second runner: its maps' brushes, spawns and the 10 Hz frame
 // ge:keywords sequel sequel-server sequel-runner runner-calls program-form spawn-point respawn
-// ge:keywords deathmatch level-time frame-100ms brush-map sequel_runner sequel_of
+// ge:keywords deathmatch level-time frame-100ms brush-map sequel_runner sequel_of midair
+// ge:keywords pm_speedjump cl_speedjump easy-jump jump-up-move
 // ge:skill shooter
 // ge:test tests/shooters_edge_sequel_server_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "core/prng.hpp"
+#include "shooter/midair.hpp"
+#include "shooter/pmove.hpp"
 #include "shooter/sequel_move.hpp"
+#include "shooter/world.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
+#include "shooters_edge/server/sequel_poses.hpp"
 
 namespace ge::brush {
 struct Map;
@@ -78,15 +85,98 @@ namespace shooters_edge::server {
 
 // One of the map's entities, as its text placed it.
 struct SequelEntity {
+  // Times (level time; 0 none): an item's respawn, a mover's next action, the last touch that
+  // counted (a field's once a second), a running effect's end and its next tick
+  // (sequel_targets.hpp).
+  double respawn_at = 0;
+  double think_at = 0;
+  double touched_at = -100;
+  double until = 0, tick_at = 0;
   std::string classname, targetname, target, model;
-  sh::Vec3f origin, angles;
+  // The map's movers and triggers (sequel_map.hpp).
+  std::string message, killtarget, team, pathtarget, noise, map;
   int modelindex = 0;  // `*n` brush models; an item's model in the model list
   int spawnflags = 0;
   // An item (sequel_items.hpp's row, -1 none): dropped to the floor at the start, taken by a
   // player's touch, hidden until its respawn in deathmatch, gone otherwise.
   int item = -1;
+  int block = -1;  // its block in the map's entity text; -1 one the rules made (a door's field)
+  int owner = -1;  // a field's or a trigger's mover
+  float speed = 0, accel = 0, decel = 0, wait = 0, lip = 0, delay = 0, random = 0;
+  int dmg = 0, health = 0, max_health = 0, sounds = 0;
+  int state = 0;         // a mover's: 0 at rest closed, 1 opening, 2 open, 3 closing
+  int team_master = -1;  // the first of its team; -1 none
+  int think = 0;         // which action (sequel_map.cpp)
+  int activator = -1;    // the slot that set it going (a train's, a delayed use's)
+  int frames = 0;        // the plain move's whole frames left
+  float rest = 0;        // the plain move's remainder; the accelerated move's distance left
+  float now_speed = 0, next_speed = 0, top = 0, decel_span = 0;  // per frame
+  int arrive = 0;  // what arriving does (sequel_map.cpp)
+  // The single player's other entities (sequel_targets.hpp): a count (a counter's, a string's
+  // place), the frame shown, the item a key lock needs, the entity a laser aims at.
+  int count = 0, frame = 0;
+  int needs = -1, aim = -1;
+  sh::Vec3f origin, angles;
+  sh::Vec3f mins, maxs;    // its box about its origin (a brush model's bounds, a field's box)
+  sh::Vec3f dir;           // a mover's or a push's way
+  sh::Vec3f closed, open;  // a door's or button's two places (a plat's top and bottom)
+  // The move in progress: its velocity (units/s), the place it is going to.
+  sh::Vec3f velocity, dest;
+  // A turning mover (a rotating door, a rotator): its turn in progress (degrees/s), the angles it
+  // is turning to, a door's two angles, and the axis it turns about (a unit vector of angles).
+  sh::Vec3f avelocity, adest, closed_angles, open_angles, axis;
   bool hidden = false, gone = false;
-  double respawn_at = 0;  // level time it shows again; 0: not waiting
+  bool solid = false;    // a brush that stops moves and shots (a mover, a wall present)
+  bool trigger = false;  // touched when a living player's box overlaps it
+  bool moved = false;    // a plat: it has had a move (its use is spent)
+  bool last = false;     // the next push is the move's last
+  bool accelerated = false;
+  bool turns = false;  // a turning mover
+  bool box = false;    // a box that stops what is traced against monsters (a living monster)
+  bool on = false;     // a laser's or a conveyor's on
+};
+
+// A monster of the single player (sequel_monsters.hpp): its map entity and its mind.
+struct SequelMonster {
+  int entity = -1;
+  int kind = 0;    // its row in the roster
+  int enemy = -1;  // the slot it hunts; -1 none
+  float ideal_yaw = 0;
+  sh::Vec3f velocity;  // its fall, a blow's push
+  bool on_ground = false;
+  sh::Vec3f last_sight;  // where it last saw (or heard) its enemy
+  double seen_at = -100;
+  double attack_finished = 0;  // the next missile attack's earliest time
+  double busy_until = 0;       // an attack's wind-up, shots and recovery
+  double fire_at = 0, burst_until = 0;
+  int attack = 0;  // the attack in progress: 0 and 1 the blows, 2.. the ranged ones
+  int burst_frame = 0;
+  double pain_at = -100, pain_hold = 0;
+  float gravity = 1;     // its share of the world's gravity (a gravity trigger sets it)
+  int corner = -1;       // the `path_corner` it walks to
+  int combat = -1;       // the `point_combat` it runs to on finding an enemy
+  bool hold = false;     // holds its ground (at its combat point)
+  bool ambush = false;   // wakes only by seeing or being hurt
+  bool waiting = false;  // hidden until used
+  bool dead = false;
+  std::string item;  // dropped at death
+  // The full game's (sequel-monsters-full.md):
+  int loops = 0;       // the attack's loops after its first
+  bool aimed = false;  // a rail's aim taken, at `aim_at`
+  sh::Vec3f aim_at;
+  bool leaping = false;  // in the air on a leap; `struck` once it has hurt
+  bool struck = false;
+  int screen = 0;        // a power screen's points left
+  double died_at = 0;    // level time
+  double end_at = 0;     // a boss's wreck, a crashed flier: when it ends
+  int boom_step = -1;    // a boss's blasts so far
+  int patient = -1;      // a medic's corpse (a monster row) it is raising
+  int old_enemy = -1;    // and the enemy it had
+  double revive_at = 0;  // the cable's moment
+  bool claimed = false;  // a corpse a medic is raising
+  bool spare = false;    // waits to come out at a boss's death (not yet counted)
+  double used_at = -1;   // a figure's use (the commander's body)
+  SqMonsterPose pose;    // the frame it shows (sequel_poses.hpp)
 };
 
 struct SequelPlayer {
@@ -128,7 +218,19 @@ struct SequelPlayer {
   double air_until = 0, drown_at = 0;
   int drown_damage = 2;
   float old_fall = 0;
-  bool gibbed = false;  // died under −40: his body is gone (no model)
+  bool gibbed = false;        // died under −40: his body is gone (no model)
+  int ground = -1;            // the world row he stands on (0 the world, a mover's row), -1 none
+  double windfly_at = -10;    // the last push's sound
+  int64_t noise_frame = -10;  // the rules frame of his last noise a monster may hear (his weapon)
+  sh::Vec3f noise_at;
+  // The campaign's (sequel_campaign.hpp): the help news seen and its beeps, the screen open; the
+  // body carried to the next level and the one he entered this level with.
+  int help_seen = 0, help_unread = 0;
+  bool help_open = false;
+  bool carried = false, has_entered = false;
+  ge::shooter::MidairTally midair;  // his counted midairs this level (plugins/shooter/midair.hpp)
+  SqBody carry, entered;
+  SqPose pose;  // the frame his body shows (sequel_poses.hpp)
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.
@@ -143,6 +245,10 @@ struct SequelMissile {
   int radius_damage = 0;
   float radius = 0;
   bool resting = false;  // a grenade come to rest on a floor
+  int from = -1;         // the map entity that fired it (a monster); -1 a player
+  int burst = 0;         // a BFG ball's final burst's strength (0: its direct hit's)
+  float reach = 1000;    // and its reach
+  float fired_z = 0;     // a rocket's: the height its shooter stood at when he fired (midair)
 };
 inline constexpr int kSequelMissiles = 64;  // the rows the world keeps for shots in flight
 
@@ -160,6 +266,17 @@ struct SequelDrop {
 };
 inline constexpr int kSequelDrops = 32;  // the rows the world keeps for dropped items
 
+// A body left where a player died, kept when he respawns: up to 8 stay, the oldest reused. A blow
+// that takes it under −40 throws it apart.
+struct SequelBody {
+  bool live = false;
+  sh::Vec3f origin;
+  float yaw = 0;
+  float health = 0;
+  int frame = 0;  // the death's last, which it keeps
+};
+inline constexpr int kSequelBodies = 8;
+
 struct SequelServerOptions {
   uint32_t seed = 1;
   // The clients take the server's view as their own when it turns them (the classic protocol's
@@ -167,6 +284,10 @@ struct SequelServerOptions {
   // spent once a client sends the turned view back (`SequelPlayer::forced`). False: the sequel's
   // own model, where a client keeps its angles and the delta stays.
   bool clients_take_view = false;
+  // pm_speedjump's default: the easy jump's share (0 off). The runner keeps pm_speedjump in
+  // `sv.set.move.speedjump` and a client's `cl_speedjump 1` ask in `sv.clients[slot].speedjump`, as
+  // the classic runners do; it reads a command's jump button as the up move (`sh::sequel_command`).
+  float speedjump = 0;
 };
 
 // The player's model, last in the model list.
@@ -176,23 +297,62 @@ struct SequelServer : RulesCommon {
   SequelServerOptions opt;
   std::shared_ptr<const ge::brush::Map> map;
   std::unique_ptr<ge::brush::BrushTracer> tracer;
+  // The map's world as the pool's traces read it (`sv.brushes`, set as the world is mirrored).
+  sh::Solid world_solid;
   std::vector<SequelEntity> entities;
   SequelPlayer players[sh::kMaxClients];
   ge::core::Rng rng = ge::core::make_rng(1);
   int64_t frame_number = 0;
-  double level_time = 0;  // frame_number × 0.1, s
-  double host_time = 0;   // the host's clock, s
+  int pain_turn = 0, death_turn = 0;  // the players' pains and deaths, in turn (sequel_poses.hpp)
+  double level_time = 0;              // frame_number × 0.1, s
+  double host_time = 0;               // the host's clock, s
   int next_userid = 1;
   SequelMissile missiles[kSequelMissiles];
-  int weapon_models[kSqWeaponCount] = {};  // each weapon's view model in the model list
-  int missile_models[kSqShotKinds] = {};   // by `SqShot`
-  std::vector<std::string> obituaries;     // every death's line, in order (the tests, the lab)
+  int weapon_models[kSqWeaponCount] = {};   // each weapon's view model in the model list
+  int carried_models[kSqWeaponCount] = {};  // each weapon as another player sees it carried
+  int missile_models[kSqShotKinds] = {};    // by `SqShot`
+  std::vector<std::string> obituaries;      // every death's line, in order (the tests, the lab)
+  std::vector<sh::Packet> rj_packets;       // a frame's packets as the rocket jump helper left them
   SequelDrop drops[kSequelDrops];
+  SequelBody bodies[kSequelBodies];
+  int next_body = 0;             // the body slot the next respawn fills
   std::vector<int> item_models;  // each item row's world model in the model list (the drops')
   // The intermission: level time it began (0 none) and the map it leads to; everyone stands frozen
   // at its spot, and after 5 s any button leaves.
   double intermission_at = 0;
   std::string next_map;
+  // A use put off by its `delay`: the entity whose targets fire, at a level time, by a slot.
+  struct Delayed {
+    int entity;
+    double at;
+    int activator;
+  };
+  std::vector<Delayed> delayed;
+  int secrets = 0, secrets_found = 0, goals = 0, goals_found = 0;
+  // The game across its levels (sequel_campaign.hpp): the help computer's two messages and how
+  // often they changed, the spawn point this level was entered by and the one the exit names, the
+  // cross-level bits, whether the exit ends a unit.
+  std::string help[2];
+  int help_changed = 0;
+  std::string spawn_name, next_spawn;
+  uint32_t cross_bits = 0;
+  bool next_unit = false;
+  bool exit_now = false;  // an exit was used: the intermission starts at the frame's end
+  // The area portals by number, open or shut (a door opens those its target names); what is sent
+  // to a client is cut at a shut one once the map's areas are read.
+  std::vector<uint8_t> portals;
+  // The monsters (sequel_monsters.hpp), the level's count, and who saw a player last: the map
+  // entity and its frame, and the player the monsters look at this frame.
+  std::vector<SequelMonster> monsters;
+  int monsters_total = 0, monsters_killed = 0;
+  int sight_entity = -1;
+  int64_t sight_frame = -10;
+  int sight_client = -1;
+  // Midair (`k_midair`): the rocket whose blow is being dealt (its shooter's height when he fired;
+  // NaN none), and the frags and rise of the counted hit its kill scores.
+  float rocket_from_z = std::numeric_limits<float>::quiet_NaN();
+  int midair_frags = 0;
+  float midair_rise = 0;
 
   SequelServer();
   ~SequelServer();
@@ -204,5 +364,13 @@ std::unique_ptr<SequelServer> make_sequel_server(const SequelServerOptions& opt)
 RulesRunner sequel_runner(std::unique_ptr<SequelServer> s);
 // The sequel's server behind a runner, or null for another form.
 SequelServer* sequel_of(const RulesRunner& r);
+
+// The air acceleration the move runs with: `sv_airaccelerate` in deathmatch, 0 otherwise (a
+// client's easy jump picks its air law by it: shooter/speedjump_assist.hpp's sequel_jump_rules).
+float sequel_air_accelerate(const SequelServer& s);
+
+// A player's state as a client's input aid reads it (the easy jump: shooter/speedjump_assist.hpp):
+// the velocity, the ground, the water and walking (`normal`) while alive and playing, else `none`.
+ge::shooter::MoveState sequel_aid_state(const SequelServer& s, int slot);
 
 }  // namespace shooters_edge::server

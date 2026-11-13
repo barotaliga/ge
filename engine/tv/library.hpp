@@ -4,7 +4,7 @@
 // file by its hash (node.hpp's `list` and `get`), and the node sends the file's bytes.
 //
 // ge:summary A TV node's finished replay files listed by SHA-256, with their header's meta
-// ge:keywords tv library files archive sha256 hash list get ger finished folder library_scan
+// ge:keywords tv library files archive sha256 hash list get ged finished folder library_scan
 // ge:skill replay
 // ge:test tests/tv_web_test.cpp
 #pragma once
@@ -26,7 +26,7 @@ struct LibraryFile {
   replay::Meta meta;  // the header's
 };
 
-// Every `.ger` file directly in `dir` that opens as a replay file, by name. False with `error`
+// Every `.ged` file directly in `dir` that opens as a replay file, by name. False with `error`
 // when the folder cannot be read.
 bool library_scan(const std::string& dir, std::vector<LibraryFile>& out, std::string& error);
 

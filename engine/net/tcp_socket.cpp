@@ -103,6 +103,16 @@ bool tcp_accept(TcpListener& l, TcpStream& out) {
   return true;
 }
 
+bool tcp_waiting(const TcpListener& l) {
+  if (l.handle == -1) return false;
+  const Handle h = handle_of(l.handle);
+  fd_set r;
+  FD_ZERO(&r);
+  FD_SET(h, &r);
+  timeval zero{0, 0};
+  return ::select(static_cast<int>(h) + 1, &r, nullptr, nullptr, &zero) > 0;
+}
+
 bool tcp_connect(TcpStream& s, const Address& to, std::string* error) {
   tcp_close(s);
   sockaddr_storage sa;
@@ -175,6 +185,7 @@ void tcp_pump(TcpStream& s) {
       break;
     }
     s.out_head += static_cast<size_t>(n);
+    s.sent += static_cast<uint64_t>(n);
   }
   if (s.out_head == s.out.size()) {
     s.out.clear();
@@ -194,6 +205,7 @@ void tcp_pump(TcpStream& s) {
       break;
     }
     s.in.insert(s.in.end(), chunk, chunk + n);
+    s.received += static_cast<uint64_t>(n);
   }
 }
 
@@ -234,6 +246,29 @@ size_t tcp_take_bytes(TcpStream& s, std::vector<uint8_t>& into) {
   s.in.clear();
   s.in_head = 0;
   return n;
+}
+
+bool tcp_settle(TcpStream& from, TcpStream& to, int spins) {
+  for (int i = 0; i < spins; i++) {
+    if (from.closed || to.closed) return false;
+    tcp_pump(from);
+    tcp_pump(to);
+    if (from.out_head == from.out.size() && !from.connecting && to.received >= from.sent)
+      return true;
+  }
+  return false;
+}
+
+void tcp_settle_pairs(const std::vector<TcpStream*>& streams) {
+  for (size_t i = 0; i < streams.size(); i++)
+    for (size_t j = i + 1; j < streams.size(); j++) {
+      TcpStream& a = *streams[i];
+      TcpStream& b = *streams[j];
+      if (a.handle == -1 || b.handle == -1 || a.closed || b.closed) continue;
+      if (!(a.local == b.peer) || !(a.peer == b.local)) continue;
+      tcp_settle(a, b);
+      tcp_settle(b, a);
+    }
 }
 
 }  // namespace ge::net

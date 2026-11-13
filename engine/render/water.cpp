@@ -5,6 +5,7 @@
 // ge:skill render water
 // ge:test tests/render_water_test.cpp
 #include "render/water.hpp"
+#include "render/sky.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -286,7 +287,7 @@ std::vector<water::Component> chop_waves(double rms_slope, int count, uint32_t s
 }
 
 void create_water(gpu::Device& device, gpu::PipelineSet& pipelines, Water& water,
-                  const wgpu::BindGroupLayout& frame) {
+                  const wgpu::BindGroupLayout& /*frame: water reads only kFrameWater of it*/) {
   water.layout =
       make_layout(device, "water",
                   {Slot::uniform, Slot::storage_read, Slot::texture, Slot::texture_raw,
@@ -341,7 +342,8 @@ void create_water(gpu::Device& device, gpu::PipelineSet& pipelines, Water& water
     depth.depthCompare = wgpu::CompareFunction::Greater;
     wgpu::RenderPipelineDescriptor desc{};
     desc.label = "water.draw";
-    desc.layout = make_pipeline_layout(device, "water.draw", {frame, water.layout});
+    desc.layout = make_pipeline_layout(device, "water.draw",
+                                       {frame_layout(device, kFrameWater), water.layout});
     desc.vertex.module = module;
     desc.vertex.entryPoint = "vs_main";
     desc.vertex.constantCount = 1;
@@ -423,7 +425,8 @@ void create_water(gpu::Device& device, gpu::PipelineSet& pipelines, Water& water
     depth.depthCompare = wgpu::CompareFunction::Always;
     wgpu::RenderPipelineDescriptor desc{};
     desc.label = "water.shore";
-    desc.layout = make_pipeline_layout(device, "water.shore", {frame, water.layout});
+    desc.layout = make_pipeline_layout(device, "water.shore",
+                                       {frame_layout(device, kFrameWater), water.layout});
     desc.vertex.module = module;
     desc.vertex.entryPoint = "vs_full";
     desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
@@ -461,7 +464,8 @@ void create_water(gpu::Device& device, gpu::PipelineSet& pipelines, Water& water
     depth.depthCompare = wgpu::CompareFunction::Greater;
     wgpu::RenderPipelineDescriptor desc{};
     desc.label = "water.stream";
-    desc.layout = make_pipeline_layout(device, "water.stream", {frame, st.layout});
+    desc.layout = make_pipeline_layout(device, "water.stream",
+                                       {frame_layout(device, kFrameWater), st.layout});
     desc.vertex.module = module;
     desc.vertex.entryPoint = "vs_main";
     desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
@@ -793,7 +797,7 @@ void prepare_water(gpu::Device& device, Water& water, const FrameView& view, int
 
 void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                   wgpu::CommandEncoder& encoder, const FrameTargets& targets,
-                  const wgpu::BindGroup& frame) {
+                  const FrameGroup& frame) {
   // Nothing drawn and no eye under the water: the rows run empty (no copy), so every later pass
   // keeps its timing row.
   const bool drawn = std::any_of(water.bodies.begin(), water.bodies.end(),
@@ -839,7 +843,7 @@ void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRe
   desc.colorAttachments = colours;
   desc.depthStencilAttachment = &depth;
   wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "water");
-  pass.SetBindGroup(0, frame);
+  pass.SetBindGroup(0, frame.water);
   // The shore's wet band under every body first: the ground over the level, which the water
   // then leaves alone.
   pass.SetPipeline(pipelines.render(water.p_shore));
@@ -900,7 +904,7 @@ void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRe
   under.depthStencilAttachment = &test;
   wgpu::RenderPassEncoder bp = rec.render(encoder, under, "water.below");
   bp.SetPipeline(pipelines.render(water.p_below));
-  bp.SetBindGroup(0, frame);
+  bp.SetBindGroup(0, frame.water);
   bp.SetIndexBuffer(water.indices, wgpu::IndexFormat::Uint32);
   // Each underside the eye may see; the depth test keeps the nearest.
   for (const Water::Slot& slot : water.bodies) {

@@ -6,6 +6,7 @@
 // ge:test tests/fall_line_spectate_test.cpp
 #include "replay/spectate.hpp"
 
+#include <algorithm>
 #include <map>
 #include <string>
 #include <utility>
@@ -62,6 +63,62 @@ struct In {
   }
 };
 
+constexpr char kDeltaMagic[8] = {'G', 'E', 'K', 'D', 'E', 'L', 'T', 'A'};
+
+bool is_delta(std::span<const uint8_t> c) {
+  return c.size() >= 8 && std::equal(c.begin(), c.begin() + 8, kDeltaMagic);
+}
+
+// `save` as a delta against `base` (saved at `base_step`), `save` saved at `step`.
+std::vector<uint8_t> make_delta(std::span<const uint8_t> save, int64_t step,
+                                std::span<const uint8_t> base, int64_t base_step) {
+  std::vector<uint8_t> out(kDeltaMagic, kDeltaMagic + 8);
+  put_u(out, static_cast<uint64_t>(step));
+  put_u(out, static_cast<uint64_t>(base_step));
+  put_u(out, save.size());
+  const size_t head = out.size();
+  out.resize(head + save.size());
+  for (size_t i = 0; i < save.size(); i++)
+    out[head + i] = static_cast<uint8_t>(save[i] ^ (i < base.size() ? base[i] : 0));
+  return out;
+}
+
+// A delta applied to `base` (saved at `base_step`): the save and its step. False with the reason.
+bool apply_delta(std::span<const uint8_t> delta, std::vector<uint8_t>& base, int64_t& base_step,
+                 std::string& error) {
+  In in{delta, 8};
+  const auto step = static_cast<int64_t>(in.u());
+  const auto against = static_cast<int64_t>(in.u());
+  const uint64_t size = in.u();
+  if (in.bad || size != delta.size() - in.at) {
+    error = "a delta keyframe is damaged";
+    return false;
+  }
+  if (against != base_step) {
+    error = "a delta keyframe at step " + std::to_string(step) + " is taken against step " +
+            std::to_string(against) + " but the keyframe before it is at step " +
+            std::to_string(base_step);
+    return false;
+  }
+  std::vector<uint8_t> save(size);
+  for (size_t i = 0; i < save.size(); i++)
+    save[i] = static_cast<uint8_t>(delta[in.at + i] ^ (i < base.size() ? base[i] : 0));
+  base = std::move(save);
+  base_step = step;
+  return true;
+}
+
+// The first step of a block's inputs chunk (-1: none).
+int64_t first_step(const Block& b) {
+  for (const Chunk& c : b.chunks) {
+    if (c.track != kInputsTrack) continue;
+    In in{c.bytes};
+    const auto v = static_cast<int64_t>(in.u());
+    return in.bad ? -1 : v;
+  }
+  return -1;
+}
+
 double grid_steps(play::AxisKind kind) {
   if (kind == play::AxisKind::signed_unit) return play::kSignedSteps;
   if (kind == play::AxisKind::lever) return play::kLeverSteps;
@@ -101,8 +158,20 @@ SpectateWriter::SpectateWriter(const play::GameSpec& spec, const play::Setup& se
 bool SpectateWriter::keyframe(const play::Run& run, std::string& error) {
   std::vector<uint8_t> save;
   if (!play::save_run(spec_, setup_, run, steps_, {}, save, error)) return false;
-  stream_add(writer_, kKeyframeTrack, time_ms_of(steps_, spec_.hz), save);
-  block_keyframe_ = true;
+  const bool whole =
+      last_save_.empty() || options_.full_every <= 1 || keys_since_full_ + 1 >= options_.full_every;
+  if (whole) {
+    stream_add(writer_, kKeyframeTrack, time_ms_of(steps_, spec_.hz), save);
+    block_keyframe_ = true;
+    keys_since_full_ = 0;
+  } else {
+    stream_add(writer_, kKeyframeTrack, time_ms_of(steps_, spec_.hz),
+               make_delta(save, steps_, last_save_, last_save_step_));
+    keys_since_full_++;
+  }
+  block_save_ = true;
+  last_save_ = std::move(save);
+  last_save_step_ = steps_;
   return true;
 }
 
@@ -124,6 +193,7 @@ void SpectateWriter::close_block(const play::Run& run) {
   runs_.clear();
   runs_n_ = 0;
   block_keyframe_ = false;
+  block_save_ = false;
   block_first_ = steps_;
 }
 
@@ -155,7 +225,7 @@ bool SpectateWriter::step(std::span<const double> snapped, const play::Run& run,
 }
 
 void SpectateWriter::finish(const play::Run& run) {
-  if (steps_ > block_first_ || block_keyframe_) close_block(run);
+  if (steps_ > block_first_ || block_save_) close_block(run);
   stream_finish(writer_,
                 {{"steps", std::to_string(steps_)}, {"digest", play::hex64(run.digest())}});
 }
@@ -282,20 +352,55 @@ bool spectate_follow(Spectator& s, const play::GameSpec& spec, std::span<const u
     }
     if (!s.run) {
       if (!b.keyframe) continue;  // wait for a keyframe block
-      for (const Chunk& c : b.chunks) {
-        if (c.track != kKeyframeTrack) continue;
-        int64_t step = 0;
-        s.run = play::load_run(spec, c.bytes, step, error, "the stream's keyframe");
-        if (!s.run) {
-          s.error = error;
-          return false;
+      // Look ahead: the newest save the whole blocks so far hold, from this one's and the deltas
+      // after it, and the block it is in.
+      std::vector<uint8_t> save;
+      int64_t save_step = -1, deltas = 0;
+      size_t save_at = at;
+      StreamReader look = s.reader;
+      look.at = at;
+      Block lb;
+      size_t lat = at;
+      while (next_block(look, lb, error)) {
+        if (!save.empty() && !s.skip_ahead) break;
+        for (const Chunk& c : lb.chunks) {
+          if (c.track != kKeyframeTrack) continue;
+          if (is_delta(c.bytes)) {
+            if (save.empty()) continue;
+            if (!apply_delta(c.bytes, save, save_step, error)) {
+              s.error = error + " (block " + std::to_string(lb.index) + ")";
+              return false;
+            }
+            deltas++;
+          } else if (lb.keyframe) {
+            save = c.bytes;
+            save_step = first_step(lb);
+            deltas = 0;
+          }
+          save_at = lat;
         }
-        s.step = step;
-        s.started = step;
+        lat = look.at;
       }
-      if (!s.run) {
+      error.clear();
+      if (save.empty()) {
         s.error = "a keyframe block with no keyframe in it (block " + std::to_string(b.index) + ")";
         return false;
+      }
+      int64_t step = 0;
+      s.run = play::load_run(spec, save, step, error, "the stream's keyframe");
+      if (!s.run) {
+        s.error = error;
+        return false;
+      }
+      s.step = step;
+      s.started = step;
+      s.deltas = deltas;
+      if (save_at != at) {  // start at the block that holds it
+        s.reader.at = save_at;
+        if (!next_block(s.reader, b, error)) {
+          s.error = "the block that held the newest keyframe no longer reads: " + error;
+          return false;
+        }
       }
     }
     for (const Chunk& c : b.chunks) {

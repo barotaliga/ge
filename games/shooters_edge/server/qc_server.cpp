@@ -8,14 +8,18 @@
 // ge:test tests/shooters_edge_qc_server_test.cpp
 #include "shooters_edge/server/qc_server.hpp"
 
+#include <algorithm>
 #include <cstdio>
 
 #include "shooter/frame.hpp"
 #include "shooter/settings.hpp"
 #include "shooters_edge/server/builtins.hpp"
 #include "shooters_edge/server/catalogue.hpp"
+#include "shooters_edge/server/chat_rules.hpp"
 #include "shooters_edge/server/client_data.hpp"
 #include "shooters_edge/server/commands.hpp"
+#include "shooters_edge/server/rjump_rules.hpp"
+#include "shooters_edge/server/shot_help.hpp"
 
 namespace shooters_edge::server {
 
@@ -30,51 +34,80 @@ constexpr int kNotInDeathmatch = 2048, kNotEasy = 256, kNotMedium = 512, kNotHar
 
 void add_mod_settings(RulesCommon& s, const sh::ServerSettings& loop) {
   const uint32_t srv = con::kServer, info = con::kServer | con::kServerInfo;
-  s.cvars.add({"deathmatch", "1", info, "the match's rules: 0 cooperative, 1 and up deathmatch"});
-  s.cvars.add({"skill", "1", srv, "the monsters' skill, 0..3"});
-  s.cvars.add({"teamplay", "0", info, "team rules, as the mod reads them"});
-  s.cvars.add({"coop", "0", srv, "a single-player program's cooperative game (on: deathmatch 0)"});
-  s.cvars.add({"sv_friendlyfire", "0", info,
-               "coop: 1 lets one player's shots harm another (0: teammates are spared)"});
-  s.cvars.add({"sv_friendlypush", "0", info,
-               "coop with sv_friendlyfire 0: 1 lets a teammate's blow push you, harmless (a rocket "
-               "boost off a friend); 0 no push"});
-  s.cvars.add({"sv_episodes_done", "0", srv,
-               "coop: the episodes done, a bit each (1, 2, 4, 8); each next episode opens on the "
-               "start map once the one before is done; the host keeps it from game to game"});
-  s.cvars.add({"registered", "0", srv,
-               "1 when the packs carry the full game (a single-player program opens its "
-               "episodes); the host sets it"});
-  s.cvars.add({"timelimit", "0", info, "the match's length, minutes (0 none)"});
-  s.cvars.add({"fraglimit", "0", info, "frags that end the match (0 none)"});
-  s.cvars.add({"samelevel", "0", info, "1: the map does not change at the end"});
-  s.cvars.add({"sv_playermove", "auto", info,
-               "the player move: arena (the predicted move), original (the server's own step) or "
-               "auto (original for a single-player program); read at map start",
-               con::CvarKind::text});
-  s.cvars.add({"sv_idealpitchscale", "0.8", srv,
-               "a single-player program's view tilt on a slope: degrees a unit of the floor's "
-               "step (0 off)"});
+  const auto add = [&s](const char* name, std::string_view fallback, uint32_t flags,
+                        const char* help, const char* values,
+                        con::CvarKind kind = con::CvarKind::number) {
+    s.cvars.add({.name = name,
+                 .fallback = fallback,
+                 .flags = flags,
+                 .help = help,
+                 .kind = kind,
+                 .values = values});
+  };
+  add("deathmatch", "1", info, "The match's rules as the mod reads them.",
+      "0: cooperative; 1: deathmatch (the default); 2..N: another deathmatch mode of the mod's");
+  add("skill", "1", srv, "The monsters' skill.",
+      "0: easy; 1: normal (the default); 2: hard; 3: nightmare");
+  add("teamplay", "0", info, "The team rules as the mod reads them.",
+      "0: every player for himself (the default); 1..N: that team mode, as the mod numbers them");
+  add("coop", "0", srv, "Whether a single-player program plays its cooperative game.",
+      "0: not cooperative (the default); 1: cooperative, with deathmatch 0");
+  add("sv_friendlyfire", "0", info, "Whether one player's shots harm another in coop.",
+      "0: teammates are spared (the default); 1: harmed");
+  add("sv_friendlypush", "0", info,
+      "Whether a spared teammate's blow pushes you in coop, such as a rocket boost off a friend.",
+      "0: no push (the default); 1: pushed, harmlessly");
+  add("sv_episodes_done", "0", srv,
+      "The episodes done in coop, a bit each, which the host keeps from game to game.",
+      "N: the sum of 1, 2, 4 and 8 for each episode done, the start map opening the next (0 the "
+      "default)");
+  add("registered", "0", srv, "Whether the packs carry the full game, which the host sets.",
+      "0: the shareware game (the default); 1: the full game, every episode open");
+  add("timelimit", "0", info, "The match's length in minutes.",
+      "0: no limit (the default); 1..N: that many minutes");
+  add("fraglimit", "0", info, "The frags a player needs to end the match.",
+      "0: no limit (the default); 1..N: that many frags");
+  add("samelevel", "0", info, "Whether the map stays the same when the match ends.",
+      "0: the next map follows (the default); 1: the same map again");
+  add("sv_playermove", "auto", info, "Which player move runs, read when a map starts.",
+      "arena: the predicted move; original: the server's own step; auto: original for a "
+      "single-player program, else arena (the default)",
+      con::CvarKind::text);
+  add("sv_idealpitchscale", "0.8", srv,
+      "How far a single-player program tilts the view on a slope, in degrees a unit of step.",
+      "0: no tilt; N: that many degrees (0.8 the default)");
   // The move's and the loop's own (plugins/shooter/settings.hpp), their defaults the options'.
   int count = 0;
   const sh::Setting* table = sh::settings_table(count);
   for (int i = 0; i < count; i++) {
     const sh::Setting& t = table[i];
     const std::string fallback = sh::setting_text(t, loop);
-    s.cvars.add({t.name, fallback, info, t.help,
-                 t.flag ? con::CvarKind::boolean : con::CvarKind::number, t.low, t.high});
+    s.cvars.add({.name = t.name,
+                 .fallback = fallback,
+                 .flags = info,
+                 .help = t.help,
+                 .kind = t.flag ? con::CvarKind::boolean : con::CvarKind::number,
+                 .min = t.low,
+                 .max = t.high,
+                 .values = t.values});
   }
-  s.cvars.add({"pausable", "1", srv, "1: a player may pause the game (0: only unpausing)",
-               con::CvarKind::boolean});
-  s.cvars.add({"sv_phs", "1", srv, "1: sounds go only to clients that can hear them"});
-  s.cvars.add({"sv_specprint", "0", srv,
-               "bits: 1 spectators get a copy of a tracked player's centerprints, 2 sprints"});
-  s.cvars.add({"sv_longfraglog", "0", srv, "1: the frag log's long lines (teams and the date)"});
-  s.cvars.add({"sv_aim", "0.93", srv,
-               "a single-player program's autoaim: the least cosine a target is aimed at (1 off)"});
-  s.cvars.add({"sv_progs", "", srv, "the path of the progs to run (empty: the built-in test mod)",
-               con::CvarKind::text});
-  s.cvars.add({"hostname", "unnamed", info, "the server's name", con::CvarKind::text});
+  add("pausable", "1", srv, "Whether a player may pause the game.",
+      "0: only unpausing; 1: players may pause (the default)", con::CvarKind::boolean);
+  add("sv_phs", "1", srv, "Whether sounds go only to the clients that can hear them.",
+      "0: to every client; 1: only to those that can hear them (the default)");
+  add("sv_specprint", "0", srv,
+      "Which of a tracked player's prints a spectator gets a copy of, as bits.",
+      "0: none (the default); 1: centre prints; 2: printed lines; 3: both");
+  add("sv_longfraglog", "0", srv,
+      "Whether the frag log writes long lines, with teams and the date.",
+      "0: short lines (the default); 1: long lines");
+  add("sv_aim", "0.93", srv,
+      "How near a single-player program's autoaim must be to a target, as the least cosine.",
+      "1: no autoaim; 0..1: that cosine, lower aims from further off (0.93 the default)");
+  add("sv_progs", "", srv, "The path of the progs to run.",
+      "\"\": the built-in test mod (the default); TEXT: that file", con::CvarKind::text);
+  add("hostname", "unnamed", info, "The server's name.", "TEXT: that name (unnamed the default)",
+      con::CvarKind::text);
 }
 
 namespace {
@@ -273,11 +306,22 @@ void settings_from_cvars(const RulesCommon& s, sh::ServerSettings& set, bool liv
 
 void apply_settings(QcServer& s) { settings_from_cvars(s, s.sv.set, true); }
 
+void write_game_kind(QcServer& s) {
+  const float serverflags = s.serverflags;
+  if (s.q.layout->g.serverflags >= 0)
+    s.serverflags = pg::global_float(s.q.vm, s.q.layout->g.serverflags);
+  write_rules(s);
+  s.serverflags = serverflags;
+}
+
 bool create_qc_server(QcServer& s, const pg::Progs& progs, const QcServerOptions& opt,
                       std::string& error) {
   s.opt = opt;
   s.progs = &progs;
   if (s.cvars.find("deathmatch") == nullptr) add_mod_settings(s, s.opt.loop);
+  // The rocket jump helper (rjump_rules.hpp): the engine's for a QC program; a compiled module
+  // answers its own impulses.
+  if (s.cvars.find("sv_rjump") == nullptr) add_rjump_settings(s.cvars);
   if (pg::find_global(progs, "self") == nullptr) {
     error = "mod server: the progs has no engine-side globals; load a multiplayer progs";
     return false;
@@ -289,6 +333,8 @@ std::unique_ptr<QcServer> make_qc_server(const pg::Progs& progs, const QcServerO
                                          std::string& error) {
   auto s = std::make_unique<QcServer>();
   if (!create_qc_server(*s, progs, opt, error)) return nullptr;
+  add_aim_help(*s);
+  add_chat_settings(s->cvars);  // sv_spectalk (chat_rules.hpp)
   return s;
 }
 
@@ -321,6 +367,9 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
     w.weapon = offset("weapon");
     w.weaponframe = offset("weaponframe");
     w.alpha = offset("alpha");
+    w.attack_finished = offset("attack_finished");
+    w.scale = offset("scale");
+    w.colormod = offset("colormod");
   }
   NamedHooks& n = s.named;
   n.user_cmd = named(progs, "UserCmd");
@@ -498,7 +547,54 @@ void save_change_parms(QcServer& s) {
   }
 }
 
+namespace {
+
+// The rocket jump helper's question of a classic program (rjump_rules.hpp): the launcher is the
+// item bit 32, chosen by impulse 7 in the same command it fires on; it waits out the refire
+// (`attack_finished`, when the program has one).
+constexpr float kRocketLauncherItem = 32;
+constexpr uint8_t kRocketLauncherImpulse = 7;
+
+sh::RjumpReady qc_rocket_ready(void* rules, int slot, sh::MoveCmd& cmd, std::string& why) {
+  const QcServer& s = *static_cast<const QcServer*>(rules);
+  const int e = slot + 1;
+  const auto& f = s.q.layout->f;
+  auto value = [&s, e](int offset) {
+    return offset < 0 ? 0.0f : pg::as_float(*pg::entity_field(s.q.vm, e, offset));
+  };
+  if (value(f.deadflag) != 0 || value(f.health) <= 0) return sh::RjumpReady::never;
+  const auto items = static_cast<int32_t>(value(f.items));
+  if ((items & static_cast<int32_t>(kRocketLauncherItem)) == 0) {
+    why = "You have no rocket launcher.\n";
+    return sh::RjumpReady::never;
+  }
+  if (value(f.ammo_rockets) < 1) {
+    why = "You have no rockets.\n";
+    return sh::RjumpReady::never;
+  }
+  if (s.world_fields.attack_finished >= 0 &&
+      value(s.world_fields.attack_finished) > static_cast<float>(s.sv.time))
+    return sh::RjumpReady::soon;
+  if (value(f.weapon) != kRocketLauncherItem) cmd.impulse = kRocketLauncherImpulse;
+  return sh::RjumpReady::now;
+}
+
+}  // namespace
+
 void qc_frame(QcServer& s, const sh::Packet* packets, int count) {
+  // The rocket jump helper rewrites the commands it acts on (rjump_rules.hpp).
+  // The view a shot turned is put back after the frame, so no one sees it a frame longer and the
+  // player's own view is never moved (his client keeps his angles).
+  s.rj_packets.assign(packets, packets + count);
+  uint32_t shots = 0;
+  sh::Vec3f own[sh::kMaxClients];
+  for (sh::Packet& p : s.rj_packets) {
+    const sh::Vec3f angles = p.cmds[2].angles;
+    if (!rjump_packet(s, p, &s, &qc_rocket_ready, s.sv.time)) continue;
+    shots |= 1u << p.client;
+    own[p.client] = angles;
+  }
+  packets = s.rj_packets.data();
   if (s.paused) {
     s.paused_seconds += s.sv.set.mintic;
     if (s.named.paused_tic > 0)
@@ -506,6 +602,12 @@ void qc_frame(QcServer& s, const sh::Packet* packets, int count) {
                 {static_cast<float>(s.paused_seconds)});
   } else {
     sh::server_frame(s.sv, packets, count);
+  }
+  for (int i = 0; shots != 0 && i < sh::kMaxClients; i++) {
+    if ((shots & (1u << i)) == 0) continue;
+    sh::Vec3f v = own[i];
+    v.x = std::clamp(v.x, s.sv.set.minpitch, s.sv.set.maxpitch);
+    s.sv.edicts[static_cast<size_t>(i) + 1].v_angle = v;
   }
   update_visclients(s);
   take_client_data(s);

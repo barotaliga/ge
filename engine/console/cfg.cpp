@@ -7,6 +7,7 @@
 #include "console/cfg.hpp"
 
 #include "console/lex.hpp"
+#include "console/words.hpp"
 
 namespace ge::console {
 
@@ -82,6 +83,9 @@ std::string describe(const Console& c, std::string_view name) {
     std::string s = v->name + " \"" + v->value + "\" (default \"" + v->fallback + "\", " +
                     range_text(*v) + ", flags " + flags_text(v->flags) + ")";
     if (!v->help.empty()) s += ": " + v->help;
+    std::vector<ValueEntry> values;
+    if (parse_values(v->values, values))
+      for (const ValueEntry& e : values) s += "\n  " + e.pattern + ": " + e.meaning;
     return s;
   }
   if (const auto it = c.commands().find(n); it != c.commands().end())
@@ -100,6 +104,9 @@ std::string dump_text(const Console& c) {
     if ((v->flags & (kServer | kReadOnly | kCreated | kCheat)) != 0) continue;
     out += "\n// " + (v->help.empty() ? std::string("(no help)") : v->help) + " [" +
            range_text(*v) + "]\n";
+    std::vector<ValueEntry> values;
+    if (parse_values(v->values, values))
+      for (const ValueEntry& e : values) out += "//   " + e.pattern + ": " + e.meaning + "\n";
     out += ((v->flags & kArchive) != 0 ? "seta " : "set ") + v->name + " " + saved(v->value) + "\n";
   }
   return out;

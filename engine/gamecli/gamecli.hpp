@@ -40,6 +40,7 @@
 #include <vector>
 
 #include "console/console.hpp"
+#include "forward/routes.hpp"
 #include "net/server_list.hpp"
 #include "server/server.hpp"
 
@@ -95,6 +96,7 @@ struct Spec {
   uint16_t lan_first = 27500, lan_last = 27500;  // the ports a LAN broadcast reaches
   uint16_t master_port = 27000;                  // a master named without a port
   net::ServerQuery query;                        // the server browser's protocol
+  forward::RouteQuery routes;                    // its forwarders' lists (`route`; none: empty)
   // The dedicated server's game: its settings (`server settings`, `server set`) are worked out
   // in this process exactly as the server works them out (engine/server/main.hpp).
   const server::ServerGame* server_game = nullptr;

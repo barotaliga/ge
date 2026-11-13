@@ -23,7 +23,7 @@ names them (`ServerGame::rules`, a `GameRule` each: Shooter's Edge's `deathmatch
 `fraglimit`, `timelimit`, `samelevel`, `pausable`; the move's and the loop's settings every
 shooter shares, `plugins/shooter/settings.hpp`: `sv_gravity`, `sv_maxspeed`, `sv_mintic`,
 `sv_maxvelocity`, `pm_ktjump`, …; and its endpoint's: `sv_maxrate`, `sv_antilag`, `sv_voip`, `maxfps`,
-`allow_download*`), the core makes each a server
+`sv_download*`), the core makes each a server
 cvar with an empty fallback (unset: the game's own default), every layer, `+set` and `--explain`
 reach it like the core's, and `create` gets the values in `ServerConfig::rules`. A map is read from
 the game folder's loose files or its packs, and when a match ends the server moves everyone to
@@ -188,6 +188,66 @@ and the flags `--port`, `--ip`, `--maxclients`, `--name`, `--description`, `--cf
 `--map`, `--bots`, `--lobby`, which are the same cvars set at layer 6. The game adds its own (`fraglimit`, a mountain's
 seed) the same way.
 
+**A game's own names for these settings** (M53i). A game whose configs, admins and mods already
+use other names lists them in `ServerGame::names` (`SettingName`): each is a synonym on the
+server's console (`docs/console.md` § Synonyms), so a `server.cfg` line, `+set`, rcon or a vote by
+either name sets the one setting, and the two can never disagree. A name may stand for one word of
+a setting that holds several. Shooter's Edge's table serves both classic games, since their names
+do not clash with each other, only with ours:
+
+| Ours | The first classic game's | The sequel's |
+| --- | --- | --- |
+| `sv_hostname` | `hostname` | `hostname` |
+| `sv_maxclients` | `maxclients` | `maxclients` |
+| `sv_maxspectators` | `maxspectators` | `maxspectators` |
+| `sv_password`, `sv_spectatorpassword` | `password`, `spectator_password` | the same |
+| `sv_timeout` | `timeout` | `timeout` |
+| `sv_maprotation` | | `sv_maplist` |
+| `sv_floodprot` | `floodprot` | `flood_msgs`, `flood_persecond`, `flood_waitdelay` (its three words) |
+| `sv_floodprotmsg` | `floodprotmsg` | |
+| `sv_admin` | `sv_admininfo` | |
+| `sv_country`, `sv_city`, `sv_coords` | `countrycode`, `city`, `coords` | |
+| `sv_publicaddr` | `hostport` | |
+
+**Every classic server setting under our names** (M58). The classic server program's own
+settings are sorted into three: ported under our names with the classic name as a synonym, covered
+by something of ours that does it better (not ported), and not ported (no use here). The working
+list is `porting/shooters-edge/server-inventory.md`. Ported so far, Shooter's Edge's endpoint
+rules unless marked engine:
+
+| Ours | Classic | What |
+| --- | --- | --- |
+| `sv_download`, `sv_download_skins`, `_models`, `_sounds`, `_maps`, `_other` | `allow_download*` | which folders a client may download |
+| `sv_downloadchunks` | `sv_downloadchunksperframe` | 1 KB chunks a downloading client gets a frame, 1..30 |
+| `sv_country`, `sv_city`, `sv_coords`, `sv_publicaddr` (engine) | `countrycode`, `city`, `coords`, `hostport` | where the server is and the address a browser shows, in the server info |
+| `sv_watervis` | `watervis` | 1: clients are told they may see through water |
+| `sv_defaultname` | `sv_default_name` | the name a client with an empty or unusable name gets (`player`) |
+| `sv_unfake` | `sv_unfake` | 1: carriage returns in a public chat line become `#` |
+| `sv_colorkick` | `sv_kicktop` | 1: more than 6 top colour changes in 8 s kicks |
+| `sv_infoflood` (`"N S"`) | `sv_kickuserinfospamcount`, `sv_kickuserinfospamtime` (one word each) | more than N user info changes in S s kicks (`300 3`) |
+| `sv_fullspectate` | `sv_forcespec_onfull` | a player joining a full server: 0 refused, 1 a spectator unless `svf` bit 2, 2 only with `svf` bit 1 |
+| `sv_reconnectwait` | `sv_reconnectlimit` | seconds before a connected address may connect again; a storm gets no answer |
+| `sv_maxping` | `sv_maxping` | a player over this ping (ms) on entering plays as a spectator |
+| `sv_minping`, `sv_minpingcmd` | `sv_minping`, `sv_enable_cmd_minping` | each player's packets held until its ping reaches this; players may set it with `minping` before a match |
+| `sv_spectalk` (the mod's rule) | `sv_spectalk` | 0: a spectator's `say` reaches only spectators, as `[SPEC] <name>:`; his `say_team` always does. The server's own chat, when the mod leaves chat to it |
+| `sv_safestrafe` | `sv_safestrafe` | N: a reversed sideways move is zeroed until N commands of none lie between; in the server info |
+| `sv_antilagexact` | `sv_antilag_no_pred` | 1: the rewind goes to exactly the frame the shooter saw, no lead |
+| `sv_voipecho` | `sv_voip_echo` | 1: a speaker hears his own voice back |
+| `sv_rconcrypt` | `sv_crypt_rcon` | 1: the remote console takes only a hashed password (SHA-1 of the password, the time and the line); 0 takes either |
+| `sv_rcontime` | `sv_timestamplen` | seconds a hashed line's time may be off the server's clock (0: not checked; 60) |
+| `sv_rconrate` | `sv_rconlim` | remote console tries answered a second (0: no limit; 10) |
+| `sv_banmode` | `filterban` | 1: the ban list refuses its addresses; 0: only its addresses may join. The list is the engine's (`engine/server/bans.hpp`): `addip <pattern> [ban\|safe] [+seconds\|time]`, `removeip`, `listip`, `writeip`, saved to the game folder's `listip.cfg` and read back at start |
+| `sv_vippassword`, `sv_vipvalues` | `vip_password`, `vip_values` | words that make a client a VIP, and the level each gives; a VIP skips the passwords and carries `*VIP <level>`. The VIP address list is `vip_addip <pattern> [level]`, `vip_removeip`, `vip_listip`, `vip_writeip` (saved to `vip_ip.cfg`) |
+| `sv_maxvipspectators` | `maxvip_spectators` | spectator slots only a VIP may take |
+
+With `sv_maxspectators` above 0 the spectators have their own slots beside `sv_maxclients`'s
+players (the loop's slots are both, at most 32); at 0 a spectator takes a free player slot.
+
+A mod reads the server it runs on by its game's names too: before the rules start, the game puts
+`hostname`, `maxclients` and `maxspectators` in the rules' own table, so a bytecode or compiled
+mod's `cvar("maxclients")` reads the real number, not a default of its own. A rule only one
+game's mods know (the sequel's `dmflags`) is left alone by a map of the other.
+
 ## Meta-cvars: one switch for a group
 
 Some settings are a bundle: "a modern server" means lag compensation on, a faster tick, the
@@ -264,7 +324,72 @@ Any player may ask everyone on the server to change a setting until the map chan
   the administrator's grant (`speedjump`, disclosed in the player's user info) made for this map
   by the players. Its key is `speedjump:<user id>`, so each player is his own change; the next map
   puts back what he had (an administrator's grant comes back, a voted one goes). A player who has
-  left is passed over. `sv_vote_deny speedjump` keeps it to the administrator.
+  left is passed over. `sv_vote_deny speedjump` keeps it to the administrator. Every player aid
+  is voted on the same way (below).
+- **Midair, a match mode.** `k_midair 1` (and `k_midair_minheight` 0..4) turns a deathmatch into
+  the rocket duel where only a hit on a player in the air counts: every spawn holds the rocket
+  launcher with rockets that never run out, 250 health and 200 armour, nothing lies on the map, a
+  rocket on another player at least the least height (64, 128, 256, 512 or 1024 units) above the
+  floor kills him and scores 1, 2, 4 or 8 by how far he was above where the shooter fired, and the
+  match's end tells each player's midairs. The rules are one C++ file every game's rules call
+  (`plugins/shooter/midair.hpp`); the sequel's rules play it today, the classic arena's with their
+  move to C++. A vote on `k_midair` restarts the map into or out of the mode; on rules that do not
+  play it the vote is refused.
+
+## Player aids: help for one chosen player
+
+Some players need help the rest do not: a player with a disability that makes fast hand motion
+hard, a player on a phone's touch controls. A server gives such help to a chosen player and to
+nobody else (`engine/server/aids.hpp`, every game's), and says so to everyone.
+
+- **The game says which aids it has** (`AidKind`: the word, the words a player reads, the
+  server-only user-info key a grant is kept in, what `on` grants, whether a share 0..1 may be
+  given). Shooter's Edge has three, for every classic game it plays: `speedjump` (the easy jump: the
+  client strafes for him), `aimhelp` (the aim help: the server bends his hitscan shots) and `rjump`
+  (the rocket jump helper, `+rjump` and `+rrjump`).
+- **Off until granted.** An aid acts for a player only when it is granted to him: by a vote of the
+  players (`vote aimhelp <player> on`, keyed `aimhelp:<user id>`, for the map) or by the
+  administrator (`aimhelp <id|name> on|off` on the server's console or over `rcon`). A server
+  setting may turn an aid on for everyone where the aid has one (`pm_speedjump`, `sv_rjump`);
+  the aim help has none.
+- **Disclosed.** A grant is the aid's key in the player's info (`*aimhelp 1`), which a client
+  cannot set itself; everyone is told when it is given or taken back; a player who joins is told
+  every grant on the server with its numbers ("Player aids on this server: bert has aim help (24
+  across, 48 up and down).").
+- **`users` shows them.** The players list is the engine's (`users_text`), the same in every game:
+  a row a seat with the user id, the frags, the name and the seat's aids, each with how it is
+  allowed (granted, or on for all) and whether it is used (`cl_speedjump 1`, `3 shots helped`).
+- **The aim help** (`plugins/shooter/aim_help.hpp`): a granted player's hitscan shot (bullets,
+  pellets, beams, the rail, a blade) that would pass beside, above or below another player by no
+  more than the leeway is bent onto him. Each shot is bent on its own, so a weapon held down (a
+  beam each frame) follows him while the aim stays within the leeway. The leeway is the server's:
+  `sv_aimhelp_x` sideways and `sv_aimhelp_y` up and down, in units at the target (24 and 48; 0
+  turns that axis off, so `sv_aimhelp_x 0` is the vertical help alone). A wall between, a teammate
+  under `teamplay` and a line that already hits are never bent onto. The classic mods' servers bend
+  the line a mod traces for its shot (`shot_help.hpp`); the sequel's server bends its own lines.
+- **Missiles are led** (`aim_lead`): a rocket, a grenade or a nail he launches is flown ahead (a
+  step 1/128 s, gravity for a thrown one) beside each other player foreseen the same way; when it would pass him by no more
+  than the leeway at the moment it reaches him, it is sent where he will be instead: a straight
+  missile at its own speed, a thrown one on the arc that lands on him after the same flight. The
+  classic mods' servers lead the missile the loop has just spawned (`Server::missile_watch`); the
+  sequel's leads its own launch.
+- **How a player is foreseen** (`lead_mover`) was chosen on recorded matches: the `se-aimlead`
+  lab replays every player's real path in a folder of multiview recordings, fires a rocket, a
+  grenade and a nail at him from where the other players stood, leads each by one rule and flies
+  it against where he really went. Over 13 recordings (155,518 shots a rule) the winner takes his
+  velocity as it is and his jump's arc falling to the ground under him, leads nobody slower than
+  150 units/s across (`kLeadRun`) and foresees his run at most 0.6 s ahead (`kLeadReach`). A rocket
+  hits 23.4% against 19.0% unled (41.6% against 24.8% from 150 to 400 units); a target in the air
+  16.2% against 9.8%; a grenade 12.8% against 11.8%. Means over a window (0.1 s to 1 s), an
+  exponential mean, a fading run, acceleration and the sway's centre all scored lower; the lab
+  reads the air from the path alone (its steps falling by the gravity, the floor at the takeoff),
+  where the server knows his footing. Past 1000 units no lead still scores higher (16.8% against
+  15.3%): a player turns during a long flight.
+- **The weapons it may bend** are the server's (`sv_aimhelp_allow`, `sv_aimhelp_deny`: weapon
+  names, spaces or commas between, `*` any characters; deny wins, an empty allow list allows the
+  rest), named by the weapon held: `axe sg ssg ng sng gl rl lg` in the classic game, `blaster sg
+  ssg mg cg gl rl hb rg bfg` in the sequel. `sv_aimhelp_deny "rl lg"` keeps it off the two
+  strongest; a casual server leaves both lists empty.
 
 ## Open for extension
 
@@ -313,4 +438,5 @@ What maps onto which classic feature is kept in the working area
 | `server-cfg` | M53b, M53e | A base, a mod and a profile `server.cfg` with the explained table drawn as an image; meta-cvars on and off |
 | `server-lobby` | M53c | Warmup, ready and break, countdown, match, intermission, rotation, charted per phase, for both games |
 | `server-vote` | M53h | People coming and going while votes are called and answered: each vote's count over time against the yes needed, how each ended, every change put back at the map's end, replayed to the bit |
+| `se-midair` | M53h | Midair's shared rules charted, and one rocket at a target at each height on the sequel's rules: counted or not, the frags, the line, the lift; on a hall or a real map's slice |
 | `server-launch` | M53d | The game spawning a dedicated server, joining it, leaving, finding it again and stopping it |

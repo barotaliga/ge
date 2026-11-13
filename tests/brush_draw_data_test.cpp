@@ -4,9 +4,11 @@
 // a size that is no multiple keeps the map's own; and with no source the atlas is as before.
 // A replaced texture's relief lands in the surface atlas at its rectangle and mips, flat elsewhere.
 // A light is seen by its fire, its globe or a glowing face within kFixtureM; a fill light is not.
+// A `.lit` file colours the map's light (and the lightmap atlas); one from another build is
+// refused.
 //
 // ge:summary Tests the BSP scene's texture source: upscaled textures, their rects, st and mips
-// ge:keywords test brush scene load_scene texture-source upscaled atlas mips st rect
+// ge:keywords test brush scene load_scene texture-source upscaled atlas mips st rect lit
 // ge:keywords surface-atlas relief seen-lights fill-light fixture
 // ge:skill brush testing
 #include <algorithm>
@@ -197,6 +199,39 @@ TEST(a_full_colour_pictures_alpha_and_a_fence_textures_holes_make_the_cover) {
   size_t zeros = 0;
   for (uint8_t c : fenced.cover.levels[0]) zeros += c == 0;
   CHECK(zeros == 64);
+}
+
+TEST(a_lit_file_colours_the_light_and_one_from_another_build_is_refused) {
+  const ba::Pack pack = fixture_pack();
+  const std::vector<uint8_t> palette = grey_palette();
+  ba::Scene own;
+  std::string error;
+  CHECK_MSG(ba::load_scene(pack, "maps/hall.bsp", palette, &own, &error), error);
+  const size_t luxels = own.map.light_rgb.size();
+  CHECK(luxels > 0 && luxels % 3 == 0);
+  // A version 1 QLIT file: every luxel pure red.
+  std::vector<uint8_t> lit = {'Q', 'L', 'I', 'T', 1, 0, 0, 0};
+  for (size_t i = 0; i < luxels; i += 3) lit.insert(lit.end(), {200, 0, 0});
+  std::string refused;
+  ba::Scene red;
+  CHECK_MSG(ba::load_scene(pack, "maps/hall.bsp", palette, &red, &error, {}, lit, &refused), error);
+  CHECK(refused.empty());
+  CHECK(red.map.light_rgb[0] == 200 && red.map.light_rgb[1] == 0 && red.map.light_rgb[2] == 0);
+  // The lightmap atlas carries it: some luxel red with no green, where the grey map had none.
+  const auto reddish = [](const ba::Scene& s) {
+    const std::vector<uint8_t>& l = s.light.levels[0];
+    for (size_t i = 0; i + 3 < l.size(); i += 4)
+      if (l[i] > 0 && l[i + 1] == 0 && l[i + 2] == 0) return true;
+    return false;
+  };
+  CHECK(reddish(red) && !reddish(own));
+  // One luxel short: another compile's light, refused, and the map keeps its own.
+  lit.resize(lit.size() - 3);
+  ba::Scene kept;
+  CHECK_MSG(ba::load_scene(pack, "maps/hall.bsp", palette, &kept, &error, {}, lit, &refused),
+            error);
+  CHECK(!refused.empty());
+  CHECK(kept.map.light_rgb == own.map.light_rgb);
 }
 
 TEST(a_light_is_seen_by_its_fire_its_globe_or_a_glowing_face_within_reach) {

@@ -1,8 +1,8 @@
 // Tests: the sequel's match broadcast (games/shooters_edge/client/sequel_tv.hpp). Fed a made-up
-// recording block by block, the broadcast writes exactly the bytes `pack_demo` writes for the
-// finished recording; a live broadcast through a TV node (engine/tv/node.hpp), held by a delay, is
-// watched by a viewer from the start and one who joins half way: each one's stream unpacks to the
-// whole recording byte for byte.
+// recording block by block, the broadcast (given the hub's words for the match) writes exactly the
+// bytes `pack_demo` writes for the finished recording; a live broadcast through a TV node
+// (engine/tv/node.hpp), held by a delay, is watched by a viewer from the start and one who joins
+// half way: each one's stream unpacks to the whole recording byte for byte.
 //
 // ge:summary Tests: the sequel's broadcast: the same bytes as the file, watched live through TV
 // ge:keywords test sequel broadcast tv-node late-viewer replay-v2 round-trip dm2
@@ -24,15 +24,19 @@ TEST(the_broadcast_writes_the_bytes_the_file_has) {
   std::vector<uint8_t> file;
   std::string error;
   CHECK(cl::pack_demo(rec, file, error));
+  // Given the words a hub files the match by (a finished file knows them up front).
+  ge::replay::Meta head, last_meta;
+  cl::demo_hub_meta(rec, head, last_meta);
+  std::erase_if(last_meta, [](const auto& kv) { return kv.first == "duration_ms"; });
   cl::SequelBroadcast b;
-  cl::sequel_broadcast_begin(b, 30, rec.size());
+  cl::sequel_broadcast_begin(b, 30, rec.size(), head);
   std::vector<uint8_t> live;
   for (const std::span<const uint8_t> block : cl::sequel_blocks(rec)) {
     cl::sequel_broadcast_block(b, block);
     const std::span<const uint8_t> fresh = cl::sequel_broadcast_fresh(b);
     live.insert(live.end(), fresh.begin(), fresh.end());
   }
-  cl::sequel_broadcast_end(b);
+  cl::sequel_broadcast_end(b, last_meta);
   const std::span<const uint8_t> last = cl::sequel_broadcast_fresh(b);
   live.insert(live.end(), last.begin(), last.end());
   CHECK(live == file);

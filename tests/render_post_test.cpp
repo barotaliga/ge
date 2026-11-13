@@ -32,7 +32,7 @@ struct Scene {
   wgpu::Buffer uniforms;
   r::FrameUniforms staged{};
   wgpu::BindGroupLayout layout;
-  wgpu::BindGroup frame;
+  ::ge::render::FrameGroup frame;
   r::Sky sky;
   r::Bloom bloom;
   r::Post plain, glow, crisp, vignetted, grainy;  // crisp: sharpened and fringed

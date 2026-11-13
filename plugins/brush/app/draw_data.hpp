@@ -198,9 +198,24 @@ struct Scene {
   double start_heading = 0;
   uint32_t sky_texture = UINT32_MAX;  // the first sky texture (the classic before's)
   SkyColours sky_colours;             // that texture's colours (bsp_sky.hpp picks our sky by them)
-  uint32_t counts[kKinds] = {};       // triangles of each kind
-  Rebaked rebaked;                    // the map's light rebaked (attach_rebake), or empty
+  // THE MAP'S OWN SKY BOX (sky_box.hpp's `build_sky_box`), drawn on the sky faces where the
+  // pack's sky is drawn (the classic renderer, or v2 with Options::pack_sky); empty (no levels):
+  // the sky texture's two scrolling layers. Six square faces of `sky_box_face` texels in one
+  // atlas three faces wide and two high, sRGB, in the engine's order: the faces seen looking
+  // along +x, -x, +y, -y, +z, -z (kSkyBoxLook), each with its top edge toward kSkyBoxUp.
+  Atlas sky_box;
+  uint32_t sky_box_face = 0;
+  uint32_t counts[kKinds] = {};  // triangles of each kind
+  Rebaked rebaked;               // the map's light rebaked (attach_rebake), or empty
 };
+
+// The sky box's six faces in their order (Scene::sky_box): the way each is looked along from
+// inside, and the way its top edge points (engine axes, y up); its right edge points
+// cross(up, look). The first three are the atlas's top row, the last three its bottom.
+inline constexpr int kSkyBoxLook[6][3] = {{1, 0, 0},  {-1, 0, 0}, {0, 1, 0},
+                                          {0, -1, 0}, {0, 0, 1},  {0, 0, -1}};
+inline constexpr int kSkyBoxUp[6][3] = {{0, 1, 0}, {0, 1, 0}, {0, 0, 1},
+                                        {0, 0, 1}, {0, 1, 0}, {0, 1, 0}};
 
 // THE TEXTURE SOURCE: where a texture's pixels come from. The map's own (its miptex through the
 // palette) unless `replace` is set and fills `rgba` (sRGB; alpha 255 a texel that glows) for the
@@ -229,8 +244,12 @@ struct TextureSource {
 inline constexpr uint8_t kFlatSurface[4] = {128, 128, 255, 191};
 
 // The map `path` in `pack` read and made ready, with `palette` (768 bytes) for its pixels.
+// `lit`, when not empty, is the map's coloured light, a `.lit` file's bytes (`read_lit`) found
+// beside it, over the light the file carries (grey, or its own RGB lump); one that does not fit
+// the map (another compile's, another family) is named in `lit_refused` and the map keeps its own.
 bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t> palette,
-                Scene* out, std::string* error, const TextureSource& source = {});
+                Scene* out, std::string* error, const TextureSource& source = {},
+                std::span<const uint8_t> lit = {}, std::string* lit_refused = nullptr);
 
 // THE SEEN LIGHTS: a light entity is a source the player can see when the game draws one at it (a
 // flame, a torch, a globe) or when a face whose texture glows (kFixtureGlow of its texels or more,

@@ -1,6 +1,6 @@
-// THE HUB'S DEMO ARCHIVE (docs/hub.md § The archive): replay files (version 2, `.ger`,
+// THE HUB'S DEMO ARCHIVE (docs/hub.md § The archive): replay files (version 2, `.ged`,
 // engine/replay/stream.hpp) kept by the SHA-256 of their bytes under a three-character fan-out
-// (`d/abc/abc….ger`), so a demo has one name everywhere, the same demo from two places is kept
+// (`d/abc/abc….ged`), so a demo has one name everywhere, the same demo from two places is kept
 // once, and every file is immutable. A demo's row is what its header and trailer say (the hub's
 // meta words, below), never what a file name says. The operator's own facts about a demo (when it
 // came, its tags) are the one file the archive writes beside them, `archive.tsv`.
@@ -11,7 +11,7 @@
 // meta: `duration_ms`, `score` ("name<TAB>score"), `team_score` ("team<TAB>score"). Anything else
 // is the game's and kept unread.
 //
-// Files come in through `archive_add` (bytes) or the inbox: every `.ger` an operator's recorder
+// Files come in through `archive_add` (bytes) or the inbox: every `.ged` an operator's recorder
 // drops in `<dir>/inbox/` is taken by `archive_ingest`. Search is the Demos page's: by mode, map,
 // player (any part of a name, any case), team, tag, server and age, newest first, 15 a page.
 // Retention drops the oldest untagged demos past a size or an age. The index lives in memory and
@@ -88,7 +88,7 @@ AddResult archive_add(Archive& a, std::span<const uint8_t> bytes, int64_t now_s,
                       const std::vector<std::string>& tags, std::string& error,
                       DemoRow* row = nullptr);
 
-// Every `.ger` in `<dir>/inbox/` added and removed from there (a refused one is moved to
+// Every `.ged` in `<dir>/inbox/` added and removed from there (a refused one is moved to
 // `<dir>/inbox/refused/`). The number taken.
 int archive_ingest(Archive& a, int64_t now_s, std::vector<std::string>& errors);
 
@@ -98,7 +98,7 @@ int archive_prune(Archive& a, int64_t max_bytes, int64_t max_age_s, int64_t now_
 
 // The row for a hash, or null.
 const DemoRow* archive_find(const Archive& a, std::string_view sha);
-// A demo's file under the archive, relative to its directory: "d/abc/abc….ger".
+// A demo's file under the archive, relative to its directory: "d/abc/abc….ged".
 std::string archive_path(std::string_view sha);
 // A row read from a replay file's bytes alone (no hash, no times); false with `error`.
 bool demo_row(std::span<const uint8_t> bytes, DemoRow& out, std::string& error);
@@ -118,7 +118,7 @@ DemoQuery demo_query(std::string_view target);  // from a request's query string
 DemoPage archive_search(const Archive& a, const DemoQuery& q, int64_t now_s);
 
 // THE ARCHIVE'S PATHS (archive_api.cpp): `/v1/demos` (the search as JSON: rows, total, page,
-// pages), `/v1/demos/{sha256}` (one demo's summary), `/d/{abc}/{sha256}.ger` (the file, cached a
+// pages), `/v1/demos/{sha256}` (one demo's summary), `/d/{abc}/{sha256}.ged` (the file, cached a
 // year) and `/d/{abc}/{sha256}.json` (its summary). True when `target` is one of them, with the
 // answer in `out`; a hub with no archive (`a` null) answers them 404 with the flag to pass.
 bool archive_answer(const Archive* a, std::string_view target, int64_t now_s, Answer& out);

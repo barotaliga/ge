@@ -315,6 +315,9 @@ void proxy_near_update(ProxyNear& n, int64_t now_us) {
     }
     c->last_us = now_us;
     if (!c->opened) continue;  // the game's resend brings it again once the session is up
+    if (n.config.tap)
+      n.config.tap(
+          {c->link.session, c->from, n.server, true, {buf, static_cast<size_t>(got)}, now_us});
     link_send(c->link, {buf, static_cast<size_t>(got)}, now_us, [&](std::span<const uint8_t> f) {
       net::transport_send(*n.link_port, n.far, f.data(), f.size(), now_us);
     });
@@ -352,6 +355,7 @@ void proxy_near_update(ProxyNear& n, int64_t now_us) {
         c->why.assign(reinterpret_cast<const char*>(buf + r.at), static_cast<size_t>(len));
       }
     } else if (link_receive(c->link, f, datagram) == 1) {
+      if (n.config.tap) n.config.tap({c->link.session, c->from, n.server, false, datagram, now_us});
       net::transport_send(*n.client_port, c->from, datagram.data(), datagram.size(), now_us);
       c->last_us = now_us;
     }
@@ -485,8 +489,10 @@ void proxy_far_update(ProxyFar& f, int64_t now_us) {
       continue;
     }
     s->last_us = now_us;
-    if (link_receive(s->link, fr, datagram) == 1)
+    if (link_receive(s->link, fr, datagram) == 1) {
+      if (f.config.tap) f.config.tap({s->link.session, s->near, s->server, true, datagram, now_us});
       net::transport_send(*s->up, s->server, datagram.data(), datagram.size(), now_us);
+    }
   }
   for (size_t i = 0; i < f.sessions.size();) {
     FarSession& s = *f.sessions[i];
@@ -495,6 +501,9 @@ void proxy_far_update(ProxyFar& f, int64_t now_us) {
     };
     while ((got = net::transport_receive(*s.up, buf, sizeof buf, from, now_us)) >= 0) {
       if (from != s.server) continue;
+      if (f.config.tap)
+        f.config.tap(
+            {s.link.session, s.near, s.server, false, {buf, static_cast<size_t>(got)}, now_us});
       link_send(s.link, {buf, static_cast<size_t>(got)}, now_us, out);
       s.last_us = now_us;
     }

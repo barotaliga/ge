@@ -24,6 +24,7 @@
 #include "check.hpp"
 #include "core/num.hpp"
 #include "shooter/sequel_move.hpp"
+#include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace {
@@ -157,6 +158,55 @@ TEST(the_rail_kills_through_armour_and_the_obituary_scores) {
   run(*a, 16 * 8, sh::kButtonAttack);  // the next slug, a period later
   CHECK(!a->p(1).alive && a->p(0).frags == 1);
   CHECK(!a->s().obituaries.empty() && a->s().obituaries.back() == "Ben was pierced by Ana's rail.");
+}
+
+TEST(the_aim_help_bends_a_granted_players_rail_onto_a_head_it_passes_over) {
+  // Ana's slug passes some 20 over Ben's head at his distance: a miss.
+  auto a = facing(300);
+  give(*a, sv::SqWeapon::railgun, 10);
+  run(*a, 8, sh::kButtonAttack, -3.6f);
+  CHECK(a->p(0).body.ammo[int(sv::SqAmmo::slugs)] == 9);
+  CHECK(a->p(1).health == 100);
+  // Granted the aim help: the same shot is bent onto him, and counted.
+  auto b = facing(300);
+  b->r.user_info(0, "*aimhelp", "1");
+  CHECK(b->s().sv.clients[0].aimhelp);
+  give(*b, sv::SqWeapon::railgun, 10);
+  run(*b, 8, sh::kButtonAttack, -3.6f);
+  CHECK_MSG(b->p(1).health < 100, std::to_string(b->p(1).health));
+  CHECK(b->s().sv.clients[0].aim_helped == 1);
+  // No vertical leeway: missed again.
+  auto c = facing(300);
+  c->r.user_info(0, "*aimhelp", "1");
+  c->r.console("sv_aimhelp_y 0");
+  give(*c, sv::SqWeapon::railgun, 10);
+  run(*c, 8, sh::kButtonAttack, -3.6f);
+  CHECK(c->p(1).health == 100);
+}
+
+TEST(the_aim_help_leads_a_rocket_unless_the_weapon_is_denied) {
+  // Ana's rocket passes some 25 over Ben's head: it hits the far wall, and the blast is too far.
+  auto a = facing(300);
+  give(*a, sv::SqWeapon::rocket_launcher, 10);
+  run(*a, 8, sh::kButtonAttack, -4.0f);
+  run(*a, 120);
+  CHECK(a->p(1).health == 100);
+  auto b = facing(300);
+  b->r.user_info(0, "*aimhelp", "1");
+  give(*b, sv::SqWeapon::rocket_launcher, 10);
+  run(*b, 8, sh::kButtonAttack, -4.0f);
+  run(*b, 120);
+  CHECK_MSG(b->p(1).health < 100, std::to_string(b->p(1).health));
+  CHECK(b->s().sv.clients[0].aim_helped == 1);
+  // The server denies the help to the rocket launcher: missed again.
+  auto c = facing(300);
+  c->r.user_info(0, "*aimhelp", "1");
+  c->r.console("sv_aimhelp_deny \"rl lg\"");
+  give(*c, sv::SqWeapon::rocket_launcher, 10);
+  run(*c, 8, sh::kButtonAttack, -4.0f);
+  run(*c, 120);
+  CHECK(c->p(1).health == 100);
+  CHECK(c->s().sv.clients[0].aim_helped == 0);
 }
 
 TEST(a_rocket_flies_and_hits_for_its_direct_damage) {
@@ -406,4 +456,64 @@ TEST(a_weapon_stays_when_taken_and_infinite_ammo_fills_the_stock) {
   CHECK(e.item == rail && !e.hidden && !e.gone);  // it stays for the next player
   run(*a, 8 * 20, sh::kButtonAttack);             // and her shots take none
   CHECK(a->p(0).body.ammo[int(sv::SqAmmo::slugs)] == 50);
+}
+
+TEST(teammates_by_skin_take_no_damage_without_friendly_fire_and_a_team_kill_scores_minus_one) {
+  auto a = facing(300);
+  a->r.user_info(0, "skin", "male/red");
+  a->r.user_info(1, "skin", "female/red");
+  a->r.console("dmflags 320");  // skin teams, no friendly fire
+  CHECK(sv::fight_teammates(a->s(), 0, 1));
+  give(*a, sv::SqWeapon::railgun, 10);
+  run(*a, 8, sh::kButtonAttack);
+  CHECK(a->p(1).alive && a->p(1).health == 100);
+  a->r.console("dmflags 128");  // model teams: male and female are not one team
+  CHECK(!sv::fight_teammates(a->s(), 0, 1));
+  a->r.console("dmflags 64");  // skin teams with friendly fire
+  a->p(1).health = 10;
+  run(*a, 16 * 8, sh::kButtonAttack);
+  CHECK(!a->p(1).alive && a->p(0).frags == -1);
+}
+
+TEST(the_field_of_view_is_held_to_its_range_and_fixed_by_the_flag) {
+  auto a = arena();
+  run(*a, 8);
+  CHECK(a->r->world.clients[0].numbers.fov == 90);
+  a->r.user_info(0, "fov", "200");
+  CHECK(a->r->world.clients[0].numbers.fov == 160);
+  a->r.user_info(0, "fov", "110");
+  CHECK(a->r->world.clients[0].numbers.fov == 110);
+  a->r.console("dmflags 32768");
+  run(*a, 8);
+  CHECK(a->r->world.clients[0].numbers.fov == 90);
+}
+
+TEST(a_respawn_leaves_the_body_which_a_blast_throws_apart) {
+  auto a = facing(300);
+  a->r.console("dmflags 1024");  // the dead respawn at once
+  give(*a, sv::SqWeapon::railgun, 10);
+  a->p(1).health = 80;
+  run(*a, 8, sh::kButtonAttack);  // 100 on 80: −20, a body knocked back, not a gib
+  CHECK(!a->p(1).alive && !a->p(1).gibbed);
+  run(*a, 8 * 12);  // a second on: he stands up elsewhere
+  CHECK(a->p(1).alive);
+  const sv::SequelBody& b = a->s().bodies[0];
+  CHECK_MSG(b.live && b.origin.x > 300 && b.health == -20,
+            std::to_string(b.origin.x) + " " + std::to_string(b.health));
+  const size_t row = sv::fight_first_row(a->s()) + sv::kSequelMissiles + sv::kSequelDrops;
+  CHECK(!a->r->world.entities[row].free && a->r->world.entities[row].modelindex > 0);
+  sv::fight_blast(a->s(), b.origin, 0, 100, 120, int(sv::SqWeapon::rocket_launcher));
+  CHECK(!b.live);
+  run(*a, 1);
+  CHECK(a->r->world.entities[row].free);
+}
+
+TEST(the_scores_list_the_best_first) {
+  auto a = arena();
+  run(*a, 8);
+  a->p(1).frags = 3;
+  a->p(0).frags = -1;
+  const std::vector<std::string> lines = sv::fight_scores(a->s());
+  CHECK(lines.size() == 2 && lines[0] == "   3  Ben" && lines[1] == "  -1  Ana");
+  CHECK(a->r.client_command(0, "score") == sv::CommandResult::mod);
 }

@@ -203,7 +203,7 @@ TEST(a_sea_draws_under_the_sky) {
   r::create_post(d, pipelines, post, layout, wgpu::TextureFormat::RGBA8Unorm);
   CHECK(pipelines.finish(d));
   ge::gpu::end_load(d);
-  wgpu::BindGroup frame = r::frame_group(d, layout, uniforms, sky);
+  auto frame = r::frame_group(d, layout, uniforms, sky);
   r::create_water_targets(d, water, targets);
   const gw::World world = sea(8);
   r::add_water_body(d, water, world.bodies[0]);
@@ -279,7 +279,7 @@ TEST(the_waters_pace_puts_its_motion_on_a_slower_clock) {
   r::create_post(d, pipelines, post, layout, wgpu::TextureFormat::RGBA8Unorm);
   CHECK(pipelines.finish(d));
   ge::gpu::end_load(d);
-  wgpu::BindGroup frame = r::frame_group(d, layout, uniforms, sky);
+  auto frame = r::frame_group(d, layout, uniforms, sky);
   r::create_water_targets(d, water, targets);
   const gw::World world = sea(8);
   r::WaterDraw draw;
@@ -353,7 +353,7 @@ TEST(a_pool_over_open_air_shows_its_underside_from_below) {
   r::create_post(d, pipelines, post, layout, wgpu::TextureFormat::RGBA8Unorm);
   CHECK(pipelines.finish(d));
   ge::gpu::end_load(d);
-  wgpu::BindGroup frame = r::frame_group(d, layout, uniforms, sky);
+  auto frame = r::frame_group(d, layout, uniforms, sky);
   r::create_water_targets(d, water, targets);
   // A box of water 20 m across round (256, 256), from 2 m down up to its top at 1 m.
   gw::World world(ge::wind::Field{});

@@ -7,6 +7,7 @@
 // ge:test tests/cli_perf_test.cpp
 #include "play/load.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <thread>

@@ -15,6 +15,7 @@
 
 #include "core/json_write.hpp"
 #include "hub/archive.hpp"
+#include "hub/content.hpp"
 #include "hub/link.hpp"
 #include "hub/page_parts.hpp"
 
@@ -60,9 +61,28 @@ std::string status_key(const gn::Status& s, std::string_view key) {
   return {};
 }
 
+bool is_pack(std::string_view name) {
+  const size_t dot = name.rfind('.');
+  const std::string_view ext = dot == std::string_view::npos ? "" : name.substr(dot);
+  return ext == ".pak" || ext == ".pk3";
+}
+
+// The content packs beside the viewer, by name: the order the viewer mounts them (a later one
+// searched first, as a game folder's numbered packs).
+std::vector<std::string> viewer_packs(const Site& site) {
+  std::vector<std::string> out;
+  std::error_code ec;
+  for (fs::directory_iterator it(site.viewer_dir, ec), end; !ec && it != end; it.increment(ec)) {
+    const std::string name = it->path().filename().string();
+    if (it->is_regular_file(ec) && is_pack(name)) out.push_back(name);
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
 // The picture's place: the viewer started with `args`, or the reason there is none.
 std::string viewer_slot(const Site& site, const HubSpec& spec, const std::vector<std::string>& args,
-                        const std::string& no_viewer) {
+                        const std::string& no_viewer, const std::string& content = "") {
   std::string h = "<div class=\"viewer\">";
   if (!no_viewer.empty()) return h + "<p class=\"none\">" + no_viewer + "</p></div>";
   if (!viewer_built(site, spec)) {
@@ -72,12 +92,41 @@ std::string viewer_slot(const Site& site, const HubSpec& spec, const std::vector
   }
   std::string list;
   for (const std::string& a : args) list += (list.empty() ? "" : ",") + script_str(a);
+  if (!content.empty()) {
+    list += "," + script_str("--pack=/" + content);  // only what the demo needs (content.hpp)
+  } else {
+    for (const std::string& pack : viewer_packs(site))
+      list += "," + script_str("--pack=/viewer/" + pack);
+  }
+  // The wasm (the most of a first visit) fetched by the page itself, so the bar follows it; the
+  // viewer's script then starts on those bytes. Its size is the file's, before any gzip: what
+  // the page counts as the bytes come.
+  const std::string name = viewer_name(spec);
+  std::error_code ec;
+  const auto wasm_size = fs::file_size(fs::path(site.viewer_dir) / (name + ".wasm"), ec);
   h += "<canvas id=\"view\" width=\"1280\" height=\"720\"></canvas>";
+  h += "<progress id=\"viewer-bar\" max=\"1\" value=\"0\"></progress>";
+  h += "<p class=\"small\" id=\"viewer-status\">Loading the viewer...</p>";
   h += "<noscript><p class=\"none\">The viewer needs script; open it in the game "
        "instead.</p></noscript>";
   h += "<script>var Module={canvas:document.getElementById(\"view\"),arguments:[" + list +
        "]};</script>";
-  h += "<script src=\"/viewer/" + viewer_name(spec) + ".js\" async></script></div>";
+  h += "<script>(function(){var bar=document.getElementById(\"viewer-bar\"),"
+       "line=document.getElementById(\"viewer-status\"),total=" +
+       std::to_string(ec ? 0 : wasm_size) +
+       ",got=0,parts=[];function mb(n){return (n/1048576).toFixed(1);}"
+       "function start(){var s=document.createElement(\"script\");s.src=\"/viewer/" +
+       name +
+       ".js\";document.body.appendChild(s);}"
+       "fetch(\"/viewer/" +
+       name +
+       ".wasm\").then(function(r){if(!r.ok||!r.body)throw 0;var rd=r.body.getReader();"
+       "function step(){return rd.read().then(function(d){if(d.done)return;parts.push(d.value);"
+       "got+=d.value.length;if(total){bar.max=total;bar.value=Math.min(got,total);}"
+       "line.textContent=\"Loading the viewer... \"+mb(got)+(total?\" of \"+mb(total):\"\")+"
+       "\" MB\";return step();});}return step();}).then(function(){var b=new Uint8Array(got),"
+       "at=0;parts.forEach(function(p){b.set(p,at);at+=p.length;});Module.wasmBinary=b;"
+       "bar.hidden=true;start();},function(){bar.hidden=true;start();});})();</script></div>";
   return h;
 }
 
@@ -185,7 +234,13 @@ Answer demo_page(const HubSpec& spec, std::string_view sha, const Site& site) {
        html_escape(r->map) + " · " + utc_text(r->start_s);
   if (!r->server.empty()) h += " · " + html_escape(r->server);
   h += "</p>";
-  h += viewer_slot(site, spec, {"--demo=/" + archive_path(r->sha)}, "");
+  ContentPack pack;
+  std::string why;
+  const std::string content =
+      viewer_built(site, spec) && demo_content(site, spec, r->sha, pack, why)
+          ? content_path(pack.sha)
+          : "";
+  h += viewer_slot(site, spec, {"--demo=/" + archive_path(r->sha)}, "", content);
   h += "<p class=\"act\"><a class=\"btn watch\" href=\"" + scheme_of(spec) + "://demo/" + r->sha;
   if (link_host(site.host)) h += "?hub=" + site.host;
   h += "\">Play in the game</a><a class=\"small\" href=\"/" + archive_path(r->sha) +
@@ -220,19 +275,27 @@ Answer viewer_file(const HubSpec& spec, std::string_view name, const Site& site)
                      : ext == ".wasm" ? "application/wasm"
                      : ext == ".data" ? "application/octet-stream"
                      : ext == ".json" ? "application/json"
+                     : is_pack(name)  ? "application/octet-stream"
                                       : nullptr;
   if (!plain || type == nullptr) {
     return refuse(
         "the viewer's files are names of letters, digits, '_', '-' and '.', ending .js, "
-        ".wasm, .data or .json");
+        ".wasm, .data, .json, .pak or .pk3");
   }
   if (site.viewer_dir.empty()) {
     return refuse("this hub serves no viewer: start it with --viewer=<dir>, the build's " +
                   viewer_name(spec) + " folder");
   }
-  std::ifstream f(fs::path(site.viewer_dir) / std::string(name), std::ios::binary);
-  if (!f) return refuse("no " + std::string(name) + " in the hub's viewer folder");
+  // The build's gzip copy beside the file when the reader takes it (the wasm is a third the size).
+  const fs::path file = fs::path(site.viewer_dir) / std::string(name);
   Answer a;
+  std::ifstream f;
+  if (site.gzip) {
+    f.open(file.string() + ".gz", std::ios::binary);
+    if (f.is_open()) a.encoding = "gzip";
+  }
+  if (!f.is_open()) f.open(file, std::ios::binary);
+  if (!f.is_open()) return refuse("no " + std::string(name) + " in the hub's viewer folder");
   a.type = type;
   a.body.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
   a.max_age_s = kViewerMaxAgeS;
@@ -255,6 +318,7 @@ bool watch_answer(const Poller& p, const HubSpec& spec, std::string_view target,
                   const Site& site, Answer& out) {
   std::string path = target_path(target);
   while (path.size() > 1 && path.back() == '/') path.pop_back();
+  if (content_answer(path, site, out)) return true;
   const std::pair<std::string_view, int> kinds[] = {{"/watch/", 0}, {"/demo/", 1}, {"/viewer/", 2}};
   for (const auto& [prefix, kind] : kinds) {
     if (path.rfind(prefix, 0) != 0) continue;

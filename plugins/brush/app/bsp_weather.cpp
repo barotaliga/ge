@@ -24,27 +24,30 @@ void add_weather_cvars(con::Cvars& cvars, WeatherCvars& out) {
     double fallback, min, max;
     uint32_t flags;
     std::string_view help;
+    std::string_view values;
     double* field;
   };
   const uint32_t server = con::kServer | con::kServerInfo;
   const uint32_t player = con::kArchive;
   const Number numbers[] = {
-      {"sv_precip", out.precip, 0, 1, server,
-       "how hard it falls, 0 .. 1 (light, moderate, heavy, a storm past 0.85)", &out.precip},
-      {"sv_rain", out.rain, 0, 1, server, "the share that is rain: 0 dry snow, 0.5 sleet, 1 rain",
-       &out.rain},
-      {"sv_wind", out.wind, 0, 60, server, "the mean wind, m/s", &out.wind},
+      {"sv_precip", out.precip, 0, 1, server, "How hard the rain or snow falls.",
+       "0: not at all; 0..1: light to heavy, a storm past 0.85 (0.5 the default)", &out.precip},
+      {"sv_rain", out.rain, 0, 1, server, "The share of the fall that is rain.",
+       "0: dry snow; 0..1: that share, 0.5 sleet; 1: rain (the default)", &out.rain},
+      {"sv_wind", out.wind, 0, 60, server, "The mean wind, in m/s.",
+       "0..60: that speed (4 the default)", &out.wind},
       {"sv_winddir", out.wind_from, 0, 360, server,
-       "the bearing the wind blows from, deg (0 the map's +z, clockwise from above)",
-       &out.wind_from},
+       "The bearing the wind blows from, in degrees clockwise from the map's +z.",
+       "0..360: that bearing (210 the default)", &out.wind_from},
       {"sv_gust", out.gust, 0, 1, server,
-       "the gusts' strength, the speed's deviation over its mean", &out.gust},
+       "The gusts' strength, the speed's deviation over its mean.",
+       "0: a steady wind; 0..1: that share (0.25 the default)", &out.gust},
       {"sv_hour", out.hour, -1, 24, server,
-       "the hour the sun stands at, 0 .. 24: up at 5, high in the south at noon, down at 19 (-1: "
-       "the map's own, picked from its sky)",
-       &out.hour},
+       "The hour the sun stands at, up at 5, high in the south at noon and down at 19.",
+       "-1: the map's own, picked from its sky (the default); 0..24: that hour", &out.hour},
       {"r_precip_density", out.density, 0.25, 2, player,
-       "the particles a full fall draws, a share of the default", &out.density},
+       "The particles a full fall draws, a share of the default.",
+       "0.25..2: that share (1 the default)", &out.density},
   };
   for (const Number& n : numbers) {
     const std::string fallback = core::num::to_string(n.fallback);
@@ -54,7 +57,8 @@ void add_weather_cvars(con::Cvars& cvars, WeatherCvars& out) {
                 .help = n.help,
                 .kind = con::CvarKind::number,
                 .min = n.min,
-                .max = n.max},
+                .max = n.max,
+                .values = n.values},
                n.field);
   }
   struct Switch {
@@ -62,25 +66,30 @@ void add_weather_cvars(con::Cvars& cvars, WeatherCvars& out) {
     bool fallback;
     uint32_t flags;
     std::string_view help;
+    std::string_view values;
     bool* field;
   };
   const Switch switches[] = {
-      {"sv_weather", out.on, server, "the weather on the map: rain, snow, wind and storms",
-       &out.on},
-      {"r_precip", out.draw, player, "the falling rain and snow drawn", &out.draw},
-      {"r_splashes", out.splashes, player, "the drops' splashes where the rain lands",
-       &out.splashes},
-      {"r_wet", out.wet, player, "the wet faces and the puddles where the rain reaches", &out.wet},
-      {"r_snowcover", out.snowcover, player, "the snow settling on what faces up and is open",
-       &out.snowcover},
-      {"r_lightning", out.lightning, player, "a storm's lightning flashes", &out.lightning},
+      {"sv_weather", out.on, server, "Whether the map has weather, rain, snow, wind and storms.",
+       "0: none (the default); 1: weather", &out.on},
+      {"r_precip", out.draw, player, "Whether the falling rain and snow are drawn.",
+       "0: not drawn; 1: drawn (the default)", &out.draw},
+      {"r_splashes", out.splashes, player, "Whether the drops splash where the rain lands.",
+       "0: no splashes; 1: splashes (the default)", &out.splashes},
+      {"r_wet", out.wet, player, "Whether the faces and puddles where the rain reaches look wet.",
+       "0: dry; 1: wet (the default)", &out.wet},
+      {"r_snowcover", out.snowcover, player, "Whether snow settles on what faces up and is open.",
+       "0: no cover; 1: snow settles (the default)", &out.snowcover},
+      {"r_lightning", out.lightning, player, "Whether a storm's lightning flashes.",
+       "0: no flashes; 1: flashes (the default)", &out.lightning},
   };
   for (const Switch& s : switches) {
     cvars.bind({.name = s.name,
                 .fallback = s.fallback ? "1" : "0",
                 .flags = s.flags,
                 .help = s.help,
-                .kind = con::CvarKind::boolean},
+                .kind = con::CvarKind::boolean,
+                .values = s.values},
                s.field);
   }
 }

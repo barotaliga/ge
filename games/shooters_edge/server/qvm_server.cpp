@@ -7,6 +7,8 @@
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_qvm_server_test.cpp
 #include "shooters_edge/server/qvm_server.hpp"
+#include "shooters_edge/server/chat_rules.hpp"
+#include "shooters_edge/server/shot_help.hpp"
 
 #include <cstring>
 
@@ -99,21 +101,13 @@ void send_forced_views(QvmServer& s) {
   }
 }
 
-// The chat a module left to the server: everyone (or the speaker's team) gets "<name>: <text>".
+// The chat a module left to the server: the server's own route (chat_rules.hpp).
 void server_say(QvmServer& s, int slot, bool team) {
   std::string text = s.words.args;
   if (text.size() >= 2 && text.front() == '"' && text.back() == '"')
     text = text.substr(1, text.size() - 2);
-  const ClientInfo& c = s.clients[slot];
-  uint32_t to = everyone(s);
-  if (team) {
-    const std::string mine = info_value(c.userinfo, "team");
-    to = 0;
-    for (int k = 0; k < sh::kMaxClients; k++)
-      if (s.clients[k].active && info_value(s.clients[k].userinfo, "team") == mine) to |= 1u << k;
-  }
-  const std::string who = info_value(c.userinfo, "name");
-  print_to(s, to, 3, (team ? "(" + who + ")" : who) + ": " + text + "\n");
+  const ChatLine line = chat_route(s, slot, team, text);
+  print_to(s, line.to, 3, line.text);
 }
 
 void run_server_command(QvmServer& s, int slot) {
@@ -247,20 +241,31 @@ bool create_qvm_server(QvmServer& s, std::vector<uint8_t> module, const QvmServe
   }
   if (s.cvars.find("deathmatch") == nullptr) {
     add_mod_settings(s, s.opt.loop);
-    s.cvars.add({"sv_pr2references", "0", con::kServer,
-                 "1: the module's string fields are references (the module sets it at init)"});
-    s.cvars.add({"developer", "0", con::kServer, "1: the module's developer prints shown"});
+    s.cvars.add(
+        {.name = "sv_pr2references",
+         .fallback = "0",
+         .flags = con::kServer,
+         .help = "Whether the module's string fields are references, which it sets at init.",
+         .values = "0: offsets (the default); 1: references"});
+    s.cvars.add({.name = "developer",
+                 .fallback = "0",
+                 .flags = con::kServer,
+                 .help = "Whether the module's developer prints are shown.",
+                 .values = "0: hidden (the default); 1: shown"});
     // The rate cap as the module reads it (it checks each client's `rate` against it): the
     // endpoint's `sv_maxrate` when set, else the most the endpoint accepts.
-    s.cvars.add({"sv_maxrate", "300000", con::kServer,
-                 "the most bytes/s a client's rate may be, as the module reads it"});
+    s.cvars.add({.name = "sv_maxrate",
+                 .fallback = "300000",
+                 .flags = con::kServer,
+                 .help = "The most bytes a second a client's rate may be, as the module reads it.",
+                 .values = "N: that many bytes a second (300000 the default)"});
     // The server's name and version as a module shows them (its `about` page), and the cvars a
     // module sets at init to describe itself: a name the module sets is kept, never refused.
-    s.cvars.add({"version", s.opt.version, con::kServer, "the server's name and version",
+    s.cvars.add({"version", s.opt.version, con::kServer, "The server's name and version.",
                  con::CvarKind::text});
     for (const char* name : {"qwm_name", "qwm_fullname", "qwm_version", "qwm_buildnum",
                              "qwm_platform", "qwm_builddate", "qwm_homepage"})
-      s.cvars.add({name, "", con::kServer, "the module's own description, set at its init",
+      s.cvars.add({name, "", con::kServer, "The module's own description, which it sets at init.",
                    con::CvarKind::text});
   }
   return true;
@@ -270,6 +275,8 @@ std::unique_ptr<QvmServer> make_qvm_server(std::vector<uint8_t> module, const Qv
                                            std::string& error) {
   auto s = std::make_unique<QvmServer>();
   if (!create_qvm_server(*s, std::move(module), opt, error)) return nullptr;
+  add_aim_help(*s);
+  add_chat_settings(s->cvars);  // sv_spectalk (chat_rules.hpp)
   return s;
 }
 
@@ -477,6 +484,7 @@ void qvm_set_user_info(QvmServer& s, int slot, const std::string& key, const std
   std::string old;
   set_info_value(c.userinfo, key, value, old);
   if (key == "cl_speedjump") s.sv.clients[slot].speedjump = value == "1";  // pm_speedjump's ask
+  note_aim_help_info(s, slot, key, value);
   if (live) {
     set_words(s, "setinfo \"" + key + "\" \"" + value + "\"");
     call_as(s, slot + 1, sim::kQvmUserInfoChanged, 1);
@@ -525,10 +533,7 @@ void fill_qvm_world(QvmServer& s, RulesWorld& w, bool full) {
     w.sounds = s.sounds;
     w.vwep = s.vwep;
     w.statics.clear();
-    for (const StaticEntity& st : s.statics)
-      w.statics.push_back({st.modelindex, static_cast<int>(st.frame), static_cast<int>(st.colormap),
-                           static_cast<int>(st.skin), st.origin, st.angles,
-                           st.extras.has_alpha ? st.extras.alpha : 1.0f});
+    for (const StaticEntity& st : s.statics) w.statics.push_back(world_static(st));
     w.max_clients = s.sv.set.maxclients;
     w.weapon_frames = true;
     w.map_title = std::string(sim::entity_text(q, 0, F.message));
@@ -599,6 +604,7 @@ void fill_qvm_world(QvmServer& s, RulesWorld& w, bool full) {
     r.effects = static_cast<int>(sim::field_f(q, e, F.effects));
     const pg::EntityExtras& x = s.extras[static_cast<size_t>(e)];
     r.alpha = x.has_alpha ? x.alpha : 1.0f;
+    for (int i = 0; i < 3; i++) r.colormod[i] = x.has_colormod ? x.colormod[i] : 1.0f;
   }
 }
 
@@ -628,10 +634,10 @@ void r_destroy(void* r) { delete static_cast<QvmServer*>(r); }
 
 constexpr RunnerCalls kQvmCalls = {"qvm",    &r_start,   &r_connect, &r_drop,
                                    &r_frame, &r_command, &r_console, &r_user_info,
-                                   &r_pause, &r_carry,   &r_destroy};
+                                   &r_pause, &r_carry,   &r_destroy, true};
 constexpr RunnerCalls kQvmOverCalls = {"qvm",    &r_start,   &r_connect, &r_drop,
                                        &r_frame, &r_command, &r_console, &r_user_info,
-                                       &r_pause, &r_carry,   nullptr};
+                                       &r_pause, &r_carry,   nullptr,    true};
 
 }  // namespace
 

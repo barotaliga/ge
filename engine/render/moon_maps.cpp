@@ -16,6 +16,7 @@
 #include "assets/image.hpp"
 #include "render/moons.hpp"
 
+#if GE_MOON_MAPS
 // The maps' bytes, compiled in by cmake/EmbedBinary.cmake (CMakeLists.txt's ge_render).
 extern const unsigned char ge_moon_map_phobos[];
 extern const std::size_t ge_moon_map_phobos_size;
@@ -43,6 +44,7 @@ extern const unsigned char ge_moon_colour_ganymede[];
 extern const std::size_t ge_moon_colour_ganymede_size;
 extern const unsigned char ge_moon_colour_triton[];
 extern const std::size_t ge_moon_colour_triton_size;
+#endif
 
 namespace ge::render {
 
@@ -52,6 +54,7 @@ using Bytes = std::span<const uint8_t>;
 
 constexpr int kKinds = 10;
 
+#if GE_MOON_MAPS
 Bytes map_png(int kind) {
   static const std::array<Bytes, kKinds> maps = {{
       {ge_moon_map_phobos, ge_moon_map_phobos_size},
@@ -80,6 +83,11 @@ Bytes colour_png(int kind) {
       return {};
   }
 }
+#else
+// A web build carries no maps: every kind is drawn at its mean, in its tint.
+Bytes map_png(int) { return {}; }
+Bytes colour_png(int) { return {}; }
+#endif
 
 // The image's first `channels` channels, or nothing when it does not decode at `w` x `h`.
 std::vector<uint8_t> decode(Bytes png, int w, int h, int channels) {

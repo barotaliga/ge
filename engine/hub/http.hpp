@@ -3,13 +3,14 @@
 // answers from the pages and the JSON API (pages.hpp, api.hpp) with CORS open and their cache
 // time, and server-sent events for a node's record (`/v1/servers/{address}/events`: one
 // connection kept open, an event each time the record changes, a comment line every 15 s so
-// proxies keep it). No TLS: an operator's reverse proxy does that. The request parser and the
+// proxies keep it). POST only to the Account page (/account/...), a form of at most 2 KB
+// (account_page.hpp). No TLS: an operator's reverse proxy does that. The request parser and the
 // response writer are pure functions over bytes, tested without a socket; `HttpServer` is the
 // thin loop that carries them.
 //
 // ge:summary The hub's HTTP/1.1: request parsing, responses, server-sent events, the server loop
 // ge:keywords hub http http-1-1 get head request response cors cache-control sse event-stream
-// ge:keywords server-sent-events keepalive tcp listen
+// ge:keywords server-sent-events keepalive tcp listen post form content-length x-forwarded-proto
 // ge:skill net
 // ge:test tests/hub_http_test.cpp
 #pragma once
@@ -20,6 +21,7 @@
 #include <string_view>
 #include <vector>
 
+#include "account/service.hpp"
 #include "hub/api.hpp"
 #include "hub/archive.hpp"
 #include "net/tcp_socket.hpp"
@@ -33,8 +35,12 @@ constexpr int kMaxConnections = 256;
 
 struct HttpRequest {
   std::string method, target, version;
-  std::string host;      // the Host header ("" when none): the address the reader used
-  size_t head_size = 0;  // the bytes the head took, the blank line with it
+  std::string host;              // the Host header ("" when none): the address the reader used
+  size_t content_length = 0;     // a POST's body (Content-Length)
+  bool forwarded_https = false;  // X-Forwarded-Proto: https (the operator's proxy added TLS)
+  std::string forwarded_for;     // X-Forwarded-For's first address ("" when none)
+  bool gzip = false;             // Accept-Encoding names gzip: a viewer file may go packed
+  size_t head_size = 0;          // the bytes the head took, the blank line with it
 };
 
 enum class HttpParse : uint8_t { more, ok, bad, too_big };
@@ -61,6 +67,8 @@ struct HttpConn {
   uint64_t sent_changes = 0;
   int64_t sent_us = 0;
   uint64_t event_id = 0;
+  std::string out;    // the answer's bytes the stream's backlog has not taken yet
+  size_t out_at = 0;  // ... from here
 };
 
 struct HttpStats {
@@ -71,9 +79,10 @@ struct HttpServer {
   net::TcpListener listener;
   std::vector<HttpConn> conns;
   HttpStats stats;
-  const Archive* archive = nullptr;  // the demo archive the pages read (null: none)
-  std::string viewer_dir;            // the web viewer's files (watch.hpp; "" none)
-  int64_t unix_s = 0;                // the wall clock's time, set by the process each turn
+  const Archive* archive = nullptr;      // the demo archive the pages read (null: none)
+  std::string viewer_dir;                // the web viewer's files (watch.hpp; "" none)
+  account::Service* accounts = nullptr;  // the account service the Account page works (null: none)
+  int64_t unix_s = 0;                    // the wall clock's time, set by the process each turn
 };
 
 // Listen on `bind`; false with `error` (the address, the OS's reason, the next action).

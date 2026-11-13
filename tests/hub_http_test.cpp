@@ -1,13 +1,15 @@
 // engine/hub/http.hpp and main.hpp: a request's head parsed (whole, partial, bad, too big), the
 // response's headers (length, CORS, cache, HEAD without a body), events written line by line, the
-// flags read, and a hub's HTTP server answering a GET and an event stream on loopback (a sandbox
-// with no loopback socket skips that one).
+// flags read, and a hub's HTTP server answering a GET, an event stream and a file larger than the
+// stream's backlog on loopback (a sandbox with no loopback socket skips those).
 //
 // ge:summary Test: the hub's HTTP: parsing, responses, events, flags, a loopback GET and stream
 // ge:keywords test hub http parse response sse event flags loopback
 // ge:skill net testing
 #include "hub/http.hpp"
 
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -23,6 +25,9 @@ TEST(http_parses_a_request_head) {
   CHECK(http_parse("GET /v1/servers?mode=ffa HTTP/1.1\r\nHost: x\r\n\r\nrest", r) == HttpParse::ok);
   CHECK(r.method == "GET" && r.target == "/v1/servers?mode=ffa" && r.version == "HTTP/1.1");
   CHECK(r.head_size == std::string("GET /v1/servers?mode=ffa HTTP/1.1\r\nHost: x\r\n\r\n").size());
+  CHECK(!r.gzip);
+  CHECK(http_parse("GET /a HTTP/1.1\r\naccept-encoding: br, GZIP\r\n\r\n", r) == HttpParse::ok);
+  CHECK(r.gzip);  // the viewer's files may go packed
   CHECK(http_parse("GARBAGE\r\n\r\n", r) == HttpParse::bad);
   CHECK(http_parse("GET v1 HTTP/1.1\r\n\r\n", r) == HttpParse::bad);
   CHECK(http_parse(std::string(kMaxRequest + 10, 'a'), r) == HttpParse::too_big);
@@ -41,6 +46,10 @@ TEST(http_writes_responses_and_events) {
   const std::string h = http_response(a, true);
   CHECK(h.find("Content-Length: 7\r\n") != std::string::npos &&
         h.substr(h.size() - 4) == "\r\n\r\n");
+  CHECK(r.find("Content-Encoding") == std::string::npos);
+  a.encoding = "gzip";
+  const std::string gz = http_response(a, false);
+  CHECK(gz.find("Content-Encoding: gzip\r\nVary: Accept-Encoding\r\n") != std::string::npos);
   CHECK(http_error(404, "x", "y").rfind("HTTP/1.1 404 Not Found", 0) == 0);
   CHECK(sse_event("status", "{}", 3) == "id: 3\nevent: status\ndata: {}\n\n");
   CHECK(sse_event("m", "a\nb", 1) == "id: 1\nevent: m\ndata: a\ndata: b\n\n");
@@ -56,6 +65,9 @@ TEST(hub_reads_its_flags) {
   HubOptions bad;
   CHECK(!hub_options({"--master=x", "--http=99999"}, bad, err) &&
         err.find("--http") != std::string::npos);
+  HubOptions acc;  // a hub that only keeps the accounts
+  CHECK(hub_options({"--accounts=/srv/accounts", "--accounts-port=27911"}, acc, err));
+  CHECK(acc.accounts == "/srv/accounts" && acc.accounts_port == 27911);
   std::vector<Address> masters;
   CHECK(master_list("sim:1:27900, sim:2:27900", masters, err) && masters.size() == 2);
 }
@@ -121,4 +133,46 @@ TEST(http_serves_a_get_and_an_event_stream_on_loopback) {
   CHECK(s.stats.answered == 1 && s.stats.streams == 1 && s.stats.events == 2);
   tcp_close(e);
   http_close(s);
+}
+
+TEST(http_serves_an_answer_larger_than_the_streams_backlog_whole) {
+  HttpServer s;
+  std::string err;
+  if (!http_open(s, loopback_v4(0), err)) {
+    ge::test::skip("no loopback TCP socket here: " + err);
+    return;
+  }
+  // A viewer's file four times the stream's backlog (a wasm is megabytes).
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "ge-hub-http-big";
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir);
+  std::string big(kStreamBacklog * 4, '\0');
+  for (size_t i = 0; i < big.size(); i++) big[i] = static_cast<char>('a' + i % 26);
+  std::ofstream(dir / "big.wasm", std::ios::binary) << big;
+  s.viewer_dir = dir.string();
+  HubSpec spec;
+  spec.game = "Test";
+  const Poller p;
+  TcpStream c;
+  CHECK(tcp_connect(c, s.listener.local, &err));
+  const std::string req = "GET /viewer/big.wasm HTTP/1.1\r\nHost: hub\r\n\r\n";
+  tcp_send_bytes(c, reinterpret_cast<const uint8_t*>(req.data()), req.size());
+  std::string got;
+  int64_t now = 0;
+  for (int i = 0; i < 5000 && (got.find("\r\n\r\n") == std::string::npos ||
+                               got.size() - got.find("\r\n\r\n") - 4 < big.size());
+       i++) {
+    now += 1000;
+    http_update(s, p, spec, now);
+    tcp_pump(c);
+    std::vector<uint8_t> bytes;
+    tcp_take_bytes(c, bytes);
+    got.append(bytes.begin(), bytes.end());
+  }
+  const size_t head = got.find("\r\n\r\n");
+  CHECK(got.rfind("HTTP/1.1 200 OK", 0) == 0 && head != std::string::npos);
+  CHECK(got.substr(head + 4) == big);
+  tcp_close(c);
+  http_close(s);
+  std::filesystem::remove_all(dir);
 }

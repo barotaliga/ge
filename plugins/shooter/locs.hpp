@@ -18,6 +18,7 @@
 // ge:summary A map's place names: the .loc format read, macros expanded, the nearest point named
 // ge:keywords loc locations place-name callout loc-file location-macro nearest-loc teamplay
 // ge:keywords parse_locs nearest_loc loc_name_at loc_places place-middle area-labels
+// ge:keywords add_loc remove_nearest_loc locs_text loc-editing save-locs
 // ge:skill shooter bots
 // ge:test tests/shooter_locs_test.cpp
 #pragma once
@@ -39,6 +40,7 @@ inline constexpr std::array<std::string_view, 16> kLocKeys = {
 struct Loc {
   std::string name;
   Vec3f at;
+  std::string raw;  // the name as the file writes it, macros kept ("": `name`)
 };
 
 struct Locs {
@@ -61,5 +63,17 @@ const Loc* nearest_loc(const Locs& locs, Vec3f p);
 
 // The name of the place `p` is in: its nearest point's, or "" with none.
 std::string loc_name_at(const Locs& locs, Vec3f p);
+
+// EDITING, as a player names the places of a map standing in them: a point added at `at` named
+// `raw` (its macros kept for the file, expanded for `name`), always at the end, with no check for
+// another point near it; the point nearest `at` removed (the first of equals), false with none;
+// and the points as a file's text (`locs_text`): one line a point in order, each coordinate times
+// eight rounded to the nearest whole number (halves away from zero), right-aligned in at least
+// four places, one space between, then a space and the raw name; LF line ends, the last line's
+// too; no header. A name longer than kLocNameMax is cut to it on reading, as by `parse_locs`.
+inline constexpr size_t kLocNameMax = 63;
+void add_loc(Locs& locs, Vec3f at, std::string_view raw);
+bool remove_nearest_loc(Locs& locs, Vec3f at, Loc* removed = nullptr);
+std::string locs_text(const Locs& locs);
 
 }  // namespace ge::shooter

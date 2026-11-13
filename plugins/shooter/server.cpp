@@ -6,6 +6,7 @@
 // ge:skill shooter
 // ge:test tests/shooter_server_test.cpp
 #include "shooter/server.hpp"
+#include "shooter/world.hpp"
 
 namespace ge::shooter {
 
@@ -192,7 +193,10 @@ void start_sound(Server& sv, int e, int channel, const char* sample, float volum
   sv.sounds[sv.sound_count++] = {e, channel, sample, volume, attenuation, false, {}};
 }
 
-int world_contents(const Server& sv, Vec3f p) { return point_contents(sv.models[1].hulls[0], p); }
+int world_contents(const Server& sv, Vec3f p) {
+  if (sv.brushes != nullptr) return solid_point_contents(*sv.brushes, p);
+  return point_contents(sv.models[1].hulls[0], p);
+}
 
 namespace {
 

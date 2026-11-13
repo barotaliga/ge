@@ -65,6 +65,7 @@ struct Placed {
   int entity = 0;  // a static: -1 - its index
   int modelindex = 0;
   int frame = 0, skin = 0;
+  int carried = 0;  // a second model drawn with it on its frame (a carried weapon); 0 none
   // Its animation drawn between frames (model_lerp.hpp): `frame_from` the frame group it is
   // leaving (-1: none) and `frame_f` the share of the way to `frame` (1: there); `lerp` flows a
   // looping group (a torch's flame) between its own frames too. Off: each frame as the server
@@ -72,9 +73,10 @@ struct Placed {
   int frame_from = -1;
   float frame_f = 1;
   bool lerp = false;
-  int effects = 0;  // the entity's effect bits (kGlow...)
-  float alpha = 1;  // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
-  float scale = 1;  // its size about the origin (a mod's `scale`)
+  int effects = 0;     // the entity's effect bits (kGlow...)
+  bool turns = false;  // it turns about its yaw on the picture's clock (the rules' world says so)
+  float alpha = 1;     // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
+  float scale = 1;     // its size about the origin (a mod's `scale`)
   float colormod[3] = {1, 1, 1};  // its light tinted, glowing texels kept (a mod's `colormod`)
   sh::Vec3f origin, angles;
   uint32_t top = models::kShirtRow, bottom = models::kPantsRow;  // palette rows for the tints
@@ -100,7 +102,10 @@ inline int effect_model(const Listen& l, EffectModel m) {
 // The effect bits a power held lights its holder with (the mod's EF_DIMLIGHT, EF_BLUE, EF_RED).
 inline constexpr int kGlow = 8, kGlowBlue = 64, kGlowRed = 128;
 
-// Every entity to draw this frame (not the local player).
+// A carried model's entity number: its holder's plus this, so its last pose is its own.
+inline constexpr int kCarriedEntity = 1 << 20;
+
+// Every entity to draw this frame (not the local player); a carried model right after its holder.
 void place_models(const Listen& l, std::vector<Placed>& out);
 
 struct ModelLoad {
@@ -124,6 +129,10 @@ struct ModelKind {
   models::Groups frames, skins;
   bool spin = false, synced = true;
   uint32_t flags = 0;  // a model file's effect flags (effects.hpp's kTrailGib, ...)
+  // The colour its pack skin's glowing texels paint (linear, brightest channel 1) and their share
+  // of the skin (0: nothing glows): what a grenade's red ends light round it (world_fx).
+  float glow_rgb[3] = {0, 0, 0};
+  float glow_share = 0;
   ge::render::SpriteFacing facing = ge::render::SpriteFacing::parallel;
 };
 

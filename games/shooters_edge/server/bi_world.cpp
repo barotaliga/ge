@@ -17,6 +17,8 @@
 #include "progs/stdlib.hpp"
 #include "shooter/trace.hpp"
 #include "shooters_edge/server/builtins.hpp"
+#include "shooters_edge/server/rules_world.hpp"
+#include "shooters_edge/server/shot_help.hpp"
 
 namespace shooters_edge::server {
 
@@ -211,8 +213,10 @@ void bi_traceline(pg::Vm& vm) {
   flush_to_world(qc_of(vm));
   const int shooter = lag_shooter(s, pass);
   if (shooter) s.lag_rewind(s.lag_ctx, shooter, true);
-  const sh::HullTrace tr = sh::trace_move(s.sv, vec_arg(vm, 0), {}, {}, vec_arg(vm, 1),
-                                          trace_kind(pg::arg_float(vm, 2)), pass);
+  sh::Vec3f end = vec_arg(vm, 1);
+  help_traced_shot(s, pass, vec_arg(vm, 0), end);  // a granted player's shot (shot_help.hpp)
+  const sh::HullTrace tr =
+      sh::trace_move(s.sv, vec_arg(vm, 0), {}, {}, end, trace_kind(pg::arg_float(vm, 2)), pass);
   if (shooter) s.lag_rewind(s.lag_ctx, shooter, false);
   write_trace(vm, tr);
 }
@@ -552,6 +556,14 @@ void bi_makestatic(pg::Vm& vm) {
     st.origin = field_v(vm, e, pg::vm_layout(vm).f.origin);
     st.angles = field_v(vm, e, pg::vm_layout(vm).f.angles);
     st.extras = s.extras[static_cast<size_t>(e)];
+    // The mod's own see-through and tint fields are kept with it, as the map's keys are.
+    const float alpha = entity_alpha(s, e);
+    st.extras.has_alpha = alpha != 1;
+    st.extras.alpha = alpha;
+    float tint[3];
+    entity_colormod(s, e, tint);
+    st.extras.has_colormod = tint[0] != 1 || tint[1] != 1 || tint[2] != 1;
+    for (int i = 0; i < 3; i++) st.extras.colormod[i] = tint[i];
     s.statics.push_back(st);
     NetEvent ev;
     ev.kind = EventKind::static_entity;

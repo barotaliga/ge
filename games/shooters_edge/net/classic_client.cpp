@@ -196,6 +196,16 @@ void on_stufftext(ClassicClientEnd& c, const std::string& text) {
       } else {
         client_command(c, rest);
       }
+    } else if (cmd == "packet" && w.count >= 3) {
+      // A connectionless line the server asks to have sent back (a check of the address it
+      // reaches us from): sent to the address named, or to the server when the name does not read.
+      gn::Address to = c.server;
+      if (!gn::parse_address(pg::word(w, 1), to)) to = c.server;
+      std::vector<uint8_t> b = {0xff, 0xff, 0xff, 0xff};
+      const std::string line_out = pg::word(w, 2);
+      b.insert(b.end(), line_out.begin(), line_out.end());
+      gn::transport_send(*c.transport, to, b.data(), b.size(), static_cast<int64_t>(c.now * 1e6));
+      c.bytes_out += static_cast<int64_t>(b.size());
     } else if (cmd == "fullserverinfo") {
       c.serverinfo = pg::word(w, 1);
       const std::string z = info_get(c.serverinfo, "*z_ext");
@@ -540,8 +550,14 @@ void read_oob(ClassicClientEnd& c, const uint8_t* data, size_t size) {
     channel_set_rate(c.ch, 0);
     client_command(c, "new");
   } else if (type == 'n' && c.stage == ClientStage::connect) {
-    c.refused = std::string(reinterpret_cast<const char*>(data) + 5,
-                            strnlen(reinterpret_cast<const char*>(data) + 5, size - 5));
+    std::string text(reinterpret_cast<const char*>(data) + 5,
+                     strnlen(reinterpret_cast<const char*>(data) + 5, size - 5));
+    // A full server seating the client as a spectator says so and goes on to the accept.
+    if (text.find("connecting as spectator") != std::string::npos) {
+      c.oob_prints.push_back(std::move(text));
+      return;
+    }
+    c.refused = std::move(text);
     c.stage = ClientStage::dropped;
   } else if (type == 'n') {  // after the connect: a remote console's answer
     c.oob_prints.emplace_back(reinterpret_cast<const char*>(data) + 5,

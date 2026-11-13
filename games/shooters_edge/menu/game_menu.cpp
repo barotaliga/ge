@@ -9,8 +9,10 @@
 #include "shooters_edge/menu/game_menu.hpp"
 
 #include <filesystem>
+#include <string>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #include "classicenhance/cache.hpp"
 #include "classicenhance/source.hpp"
@@ -47,16 +49,18 @@ void GameMenu::add_cvars(ge::console::Console& con) {
   con.cvars().bind({.name = "menu_look",
                     .fallback = "auto",
                     .flags = ge::console::kArchive,
-                    .help = "the main menu's look: auto (the pack's own pictures when the packs "
-                            "have them), classic or modern",
-                    .kind = ge::console::CvarKind::text},
+                    .help = "The main menu's look.",
+                    .kind = ge::console::CvarKind::text,
+                    .values = "auto: the pack's own pictures when the packs have them (the "
+                              "default); classic: the pack's; modern: ours"},
                    &look_);
   con.cvars().bind({.name = "ce_auto",
                     .fallback = "1",
                     .flags = ge::console::kArchive,
-                    .help = "1: a game loaded (LOAD GAME, basedir) is enhanced in the background "
-                            "at once; 0: only by CLASSIC ENHANCED > ENHANCE",
-                    .kind = ge::console::CvarKind::boolean},
+                    .help = "Whether a game loaded by LOAD GAME or basedir is enhanced in the "
+                            "background at once.",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: only by CLASSIC ENHANCED > ENHANCE; 1: at once (the default)"},
                    &auto_);
   ce::bind_switches(con.cvars(), &switches_);
   ce::sync_switches(enhance_, switches_);
@@ -85,6 +89,10 @@ void GameMenu::add_cvars(ge::console::Console& con) {
   con.add_command("menu_demos",
                   "menu_demos: the main menu opened at DEMOS (recordings anywhere on the machine)",
                   opener("demos"));
+  con.add_command("menu_games",
+                  "menu_games: the main menu opened at SELECT GAME (the classic games and their "
+                  "installs)",
+                  opener("games"));
   servers_.add_cvars(con);
   demos_.add_cvars(con);
 }
@@ -92,6 +100,7 @@ void GameMenu::add_cvars(ge::console::Console& con) {
 void GameMenu::set_art(ClassicArt art) { art_ = std::move(art); }
 
 void GameMenu::load_refused(std::string why) {
+  games_.set_note(why);
   load_note_ = std::move(why);
   if (ui::Page* p = main_.page("enhanced")) {
     if (ui::Item* it = p->find("load")) it->hint = "NOT LOADED: " + load_note_;
@@ -117,6 +126,7 @@ void GameMenu::show(Host& host, std::string_view page) {
   in_gallery_ = false;
   in_servers_ = false;
   in_demos_ = false;
+  in_games_ = false;
   waiting_.clear();
   main_.reset();
   const bool gallery = page == "screenshots";
@@ -125,12 +135,15 @@ void GameMenu::show(Host& host, std::string_view page) {
   if (servers) page = "multi";
   const bool demos = page == "demos";
   if (demos) page = "main";
+  const bool games = page == "games";
+  if (games) page = "main";
   if (page != "main") main_.open(page);
   refresh_main(host);
   main_.top().focus = -1;
   main_.move_focus(0);
   help_page_ = 0;
   open_ = true;
+  cue(ui::MenuCue::enter);
   if (gallery) {
     main_.top().focus = -1;
     main_.focus("screenshots");
@@ -146,25 +159,65 @@ void GameMenu::show(Host& host, std::string_view page) {
     main_.focus("demos");
     show_demos();
   }
+  if (games) {
+    main_.top().focus = -1;
+    main_.focus("games");
+    show_games();
+  }
 }
 
 void GameMenu::hide() {
+  if (open_) cue(ui::MenuCue::back);
   open_ = false;
   waiting_.clear();
   in_enhance_ = false;
   in_gallery_ = false;
   in_servers_ = false;
   in_demos_ = false;
+  in_games_ = false;
+}
+
+void GameMenu::show_games() {
+  cue(ui::MenuCue::enter);
+  in_games_ = true;
+  games_.open();
+}
+
+void GameMenu::update_games(const ui::MenuInput& in, Host& host) {
+  if (in.up || in.down) cue(ui::MenuCue::move);
+  switch (games_.input(in)) {
+    case GamesAction::leave:
+      cue(ui::MenuCue::back);
+      in_games_ = false;
+      refresh_main(host);
+      return;
+    case GamesAction::open:
+      game_ask_ = {.asked = true,
+                   .browse = false,
+                   .id = games_.chosen().id,
+                   .install = games_.chosen().install};
+      cue(ui::MenuCue::enter);
+      return;
+    case GamesAction::browse:
+      cue(ui::MenuCue::enter);
+      game_ask_ = {.asked = true, .browse = true, .id = games_.chosen().id, .install = {}};
+      return;
+    case GamesAction::none:
+      return;
+  }
 }
 
 void GameMenu::show_demos() {
+  cue(ui::MenuCue::enter);
   in_demos_ = true;
   demos_.open();
 }
 
 void GameMenu::update_demos(const ui::MenuInput& in, Host& host) {
+  if (in.up || in.down || in.left || in.right) cue(ui::MenuCue::move);
   switch (demos_.input(in)) {
     case DemosAction::leave:
+      cue(ui::MenuCue::back);
       in_demos_ = false;
       refresh_main(host);
       return;
@@ -179,6 +232,7 @@ void GameMenu::update_demos(const ui::MenuInput& in, Host& host) {
 }
 
 void GameMenu::show_servers() {
+  cue(ui::MenuCue::enter);
   in_servers_ = true;
   std::string why;
   if (!servers_.open(&why) && con_ != nullptr) con_->print("join a game: " + why);
@@ -186,8 +240,10 @@ void GameMenu::show_servers() {
 
 void GameMenu::update_servers(const ui::MenuInput& in, Host& host) {
   servers_.frame(dt_);
+  if (in.up || in.down || in.left || in.right) cue(ui::MenuCue::move);
   switch (servers_.input(in, in.refresh)) {
     case ServersAction::leave:
+      cue(ui::MenuCue::back);
       in_servers_ = false;
       refresh_main(host);
       return;
@@ -201,6 +257,7 @@ void GameMenu::update_servers(const ui::MenuInput& in, Host& host) {
 }
 
 void GameMenu::show_gallery() {
+  cue(ui::MenuCue::enter);
   in_gallery_ = true;
   gallery_.scan();  // a screenshot taken since the last look
   gallery_.reset();
@@ -217,7 +274,10 @@ void GameMenu::update_gallery(const ui::MenuInput& in, Host& host) {
   gi.del = in.del;
   if (in.pointer_moved || in.click) gi.pointed = gallery_page_.hit(in.pointer_x, in.pointer_y);
   gi.click = in.click && gi.pointed >= 0;
+  if (in.up || in.down || in.left || in.right) cue(ui::MenuCue::move);
+  if (in.accept || gi.click) cue(ui::MenuCue::enter);
   if (gallery_.input(gi) == ge::capture::GalleryAction::leave) {
+    cue(ui::MenuCue::back);
     in_gallery_ = false;
     refresh_main(host);
     return;
@@ -326,6 +386,7 @@ void GameMenu::press_key(std::string_view key, Host& host) {
   if (waiting_.empty() || waiting_fresh_ || host.console == nullptr) return;
   const Control* c = control_of(waiting_);
   waiting_.clear();
+  cue(key == "escape" ? ui::MenuCue::back : ui::MenuCue::change);
   if (c != nullptr && (key == "backspace" || key == "del")) {
     unbind_control(*host.console, c->command);
   } else if (c != nullptr && key != "escape") {
@@ -363,9 +424,22 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
     update_demos(in, host);
     return;
   }
+  if (in_games_) {
+    update_games(in, host);
+    return;
+  }
   if (in_enhance_) ce::sync_enhancing(enhance_, board());
+  // The focus where it was before the presses: moved (by a key or the pointer) is a click.
+  ui::Menu& driven = in_enhance_ ? enhance_ : main_;
+  const std::string page_before = driven.top().id;
+  const int focus_before = driven.top().focus;
+  const auto moved = [&] {
+    return driven.top().id == page_before && driven.top().focus != focus_before;
+  };
   if (in_enhance_) {
-    for (const ui::MenuEvent& e : enhance_.input(in, hits_)) apply_enhance(e, host);
+    const std::vector<ui::MenuEvent> events = enhance_.input(in, hits_);
+    cue(ui::menu_cue(events, moved()));
+    for (const ui::MenuEvent& e : events) apply_enhance(e, host);
     // BACK from the enhancing page: the game's own page, not classic-enhance's pack choice.
     if (in_enhance_ && enhance_.top().id == "classic") {
       in_enhance_ = false;
@@ -376,9 +450,12 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
   const bool help = classic() && main_.top().id == "help" && help_pages(art_) > 0;
   if (help && (in.left || in.right || in.accept)) {
     help_page_ += in.left ? -1 : 1;
+    cue(ui::MenuCue::move);
     return;
   }
-  for (const ui::MenuEvent& e : main_.input(in, hits_)) {
+  const std::vector<ui::MenuEvent> events = main_.input(in, hits_);
+  cue(ui::menu_cue(events, moved()));
+  for (const ui::MenuEvent& e : events) {
     switch (apply_event(e, main_, host)) {
       case Outcome::close:
       case Outcome::back_at_root:
@@ -404,6 +481,9 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
       case Outcome::demos:
         show_demos();
         return;
+      case Outcome::games:
+        show_games();
+        return;
       case Outcome::classic_enhance:
         if (std::string why; !enhance_game(true, &why) && con_ != nullptr)
           con_->print("classic enhance: " + why);
@@ -427,13 +507,27 @@ void GameMenu::draw(ui::DrawList& list, int width, int height, double t) {
     return;
   }
   if (in_servers_) {
-    servers_.draw(list, width, height, style_);
+    if (classic())
+      servers_.draw_classic(list, art_, width, height, t);
+    else
+      servers_.draw(list, width, height, style_);
     problems_ = servers_.problems();
     return;
   }
   if (in_demos_) {
-    demos_.draw(list, width, height, style_);
+    if (classic())
+      demos_.draw_classic(list, art_, width, height, t);
+    else
+      demos_.draw(list, width, height, style_);
     problems_ = demos_.problems();
+    return;
+  }
+  if (in_games_) {
+    if (classic())
+      games_.draw_classic(list, art_, width, height, t);
+    else
+      games_.draw(list, width, height, style_);
+    problems_ = games_.problems();
     return;
   }
   if (classic() && !in_enhance_) {

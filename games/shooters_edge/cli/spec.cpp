@@ -2,7 +2,7 @@
 //
 // ge:summary Shooter's Edge's player CLI: the Spec's functions and the demos commands
 // ge:keywords shooters_edge_cli locate join_words listen_words demos demos-play demos-pack
-// ge:keywords demos-unpack ger replay-v2
+// ge:keywords demos-unpack ged replay-v2
 // ge:skill shooter agent-interface
 // ge:test tests/gamecli_cli_test.cpp
 #include "shooters_edge/cli/spec.hpp"
@@ -256,7 +256,7 @@ bool write_bytes(const fs::path& f, std::span<const uint8_t> bytes) {
 std::string kib(size_t bytes) { return std::to_string((bytes + 512) / 1024) + " KiB"; }
 
 // `demos pack <name>`: the recording (unpacked first if it is packed) as a replay file version 2
-// beside it, `<name>.ger`, read back to check it gives the same bytes.
+// beside it, `<name>.ged`, read back to check it gives the same bytes.
 int cmd_demos_pack(gc::Ctx& ctx) {
   if (ctx.words.size() != 1)
     return gc::refuse(ctx, 2, "demos pack takes one recording's name or file",
@@ -281,7 +281,7 @@ int cmd_demos_pack(gc::Ctx& ctx) {
   if (ge::replay::is_stream(bytes))
     return gc::refuse(ctx, 1, file.string() + " is already a replay file",
                       "shooters_edge_cli demos unpack " + ctx.words[0]);
-  const fs::path out = fs::path(file).replace_extension(".ger");
+  const fs::path out = fs::path(file).replace_extension(".ged");
   if (fs::exists(out))
     return gc::refuse(ctx, 1, out.string() + " is already there",
                       "delete or rename it, then pack again");
@@ -329,7 +329,7 @@ int cmd_demos_unpack(gc::Ctx& ctx) {
     return gc::refuse(ctx, 2, "demos unpack takes one replay file's name or file",
                       "shooters_edge_cli demos (lists them)");
   if (!gc::need_places(ctx)) return 1;
-  fs::path file = find_demo_file(ctx, ctx.words[0] + ".ger");
+  fs::path file = find_demo_file(ctx, ctx.words[0] + ".ged");
   if (file.empty()) file = find_demo_file(ctx, ctx.words[0]);
   std::vector<uint8_t> bytes;
   if (file.empty() || !read_bytes(file, bytes) || !ge::replay::is_stream(bytes))
@@ -369,6 +369,7 @@ gc::Spec make() {
   s.lan_last = shooters_edge::net::kLanLastPort;
   s.master_port = 27000;
   s.query = shooters_edge::net::classic_query();
+  s.routes = shooters_edge::net::classic_route_query();
   s.server_game = &shooters_edge::net::classic_game();
   s.rcon = shooters_edge::net::classic_rcon;
   s.read_rcon = shooters_edge::net::classic_read_print;
@@ -385,10 +386,10 @@ gc::Spec make() {
                         "demos play final", "shooters_edge", cmd_demos_play});
   s.commands.push_back(
       {"demos pack", "<name>",
-       "a recording packed as a replay file (.ger) beside it, checked to come back",
+       "a recording packed as a replay file (.ged) beside it, checked to come back",
        "demos pack final", "shooters_edge", cmd_demos_pack});
-  s.commands.push_back({"demos unpack", "<name>", "a replay file (.ger) back to the recording",
-                        "demos unpack final.ger", "shooters_edge", cmd_demos_unpack});
+  s.commands.push_back({"demos unpack", "<name>", "a replay file (.ged) back to the recording",
+                        "demos unpack final.ged", "shooters_edge", cmd_demos_unpack});
   s.flags = {{"basedir", "<dir>", "the classic game's install (default: the one loaded last)"},
              {"game", "<folder>", "the game folder over it (default: the multiplayer one)"}};
   s.notes =
@@ -399,7 +400,7 @@ gc::Spec make() {
       "address is usually `host:27500`. The player's name is the setting `name`, the colours "
       "`topcolor` and `bottomcolor`; `cl_speedjump 1` asks a server for the easy jump. "
       "`demos` lists recordings and `demos play <name>` watches one; `demos pack <name>` writes "
-      "the replay file (.ger), about half the size of a packed recording.";
+      "the replay file (.ged), about half the size of a packed recording.";
   return s;
 }
 

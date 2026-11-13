@@ -16,6 +16,7 @@
 // ge:keywords platform window sdl native-window surface-handles input keyboard pointer mouse
 // ge:keywords focus quit resize pixel-size hidpi input-snapshot poll clock ticks monotonic
 // ge:keywords headless display_available open_window poll_input now_ns prefs_dir prefs user-dir
+// ge:keywords app_dir executable-folder base-path
 // ge:keywords fullscreen set_fullscreen displays external-monitor pick_folder folder_picked
 // ge:keywords folder-dialog file-dialog folder-chooser run_app app-entry uikit ios-main
 // ge:keywords refresh_hz refresh-rate promotion wait_until_ns precise-sleep set_swap_images
@@ -35,13 +36,14 @@ namespace ge::platform {
 
 // What the GPU's surface is made from. Exactly the handles of `kind` are set.
 struct NativeWindow {
-  enum class Kind : uint8_t { none, x11, wayland, metal, win32 };
+  enum class Kind : uint8_t { none, x11, wayland, metal, win32, canvas };
   Kind kind = Kind::none;
-  void* display = nullptr;      // x11: Display*; wayland: wl_display*
-  uint64_t x11_window = 0;      // x11: the Window id
-  void* surface = nullptr;      // wayland: wl_surface*; win32: HWND
-  void* instance = nullptr;     // win32: HINSTANCE
-  void* metal_layer = nullptr;  // metal: CAMetalLayer*
+  void* display = nullptr;       // x11: Display*; wayland: wl_display*
+  uint64_t x11_window = 0;       // x11: the Window id
+  void* surface = nullptr;       // wayland: wl_surface*; win32: HWND
+  void* instance = nullptr;      // win32: HINSTANCE
+  void* metal_layer = nullptr;   // metal: CAMetalLayer*
+  const char* canvas = nullptr;  // canvas (the web): the page's canvas by CSS selector, "#view"
 };
 
 // A key, numbered by its USB HID usage (the physical key, whatever the layout): the index into
@@ -186,5 +188,10 @@ void set_swap_images(Window& window, int images);
 // data under `org` and `app`. Empty when there is none (then a game keeps nothing, or asks for a
 // path).
 std::string prefs_dir(std::string_view org, std::string_view app);
+
+// The folder the running executable is in (on Apple, an app bundle's `Contents/MacOS` or its
+// resources), ending in a separator; empty when the platform cannot say. A game placed in a
+// folder of its content finds it from here when it was started elsewhere (a double click).
+std::string app_dir();
 
 }  // namespace ge::platform

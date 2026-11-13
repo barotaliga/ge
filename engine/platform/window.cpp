@@ -337,4 +337,9 @@ std::string prefs_dir(std::string_view org, std::string_view app) {
   return dir;
 }
 
+std::string app_dir() {
+  const char* path = SDL_GetBasePath();  // SDL owns it
+  return path != nullptr ? std::string(path) : std::string();
+}
+
 }  // namespace ge::platform

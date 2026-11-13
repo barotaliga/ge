@@ -157,9 +157,22 @@ void run(gl::Lab& lab) {
       // Loopback: the connection is up and the request with the server before its next look,
       // so a run lets every relay in on the same frame.
       for (int i = 0; i < 100000 && r.tcp.connecting; i++) gn::tcp_pump(r.tcp);
+      for (int i = 0; i < 1000000 && !gn::tcp_waiting(m.port.listener) && !r.tcp.closed; i++)
+        gn::tcp_pump(r.tcp);
       gn::tcp_send_bytes(r.tcp, reinterpret_cast<const uint8_t*>(text.data()), text.size());
     }
+    // Loopback is not instant everywhere (macOS queues it): before a side reads, every byte the
+    // other side sent is in, so a run reads the same bytes on the same step on every machine.
+    const auto settle = [&] {
+      std::vector<gn::TcpStream*> all;
+      all.reserve(m.port.relays.size() + relays.size());
+      for (const auto& pr : m.port.relays) all.push_back(&pr->tcp);
+      for (Relay& r : relays) all.push_back(&r.tcp);
+      gn::tcp_settle_pairs(all);
+    };
+    settle();
     cn::qtv_update(m.port, m.server);
+    settle();
     for (size_t i = 0; i < relays.size(); i++) {
       Relay& r = relays[i];
       if (!r.dialed) continue;

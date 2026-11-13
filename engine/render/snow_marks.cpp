@@ -36,7 +36,7 @@ wgpu::RenderPassEncoder open_pass(wgpu::CommandEncoder& encoder, const gpu::Targ
   desc.colorAttachments = &colour;
   if (rec) return rec->render(encoder, desc, name);
   desc.label = name;
-  return encoder.BeginRenderPass(&desc);
+  return gpu::begin_render_pass(encoder, desc);
 }
 
 // One map's pass: its stamps are `count` from `first` in the buffer.

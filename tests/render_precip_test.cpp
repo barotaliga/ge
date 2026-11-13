@@ -39,7 +39,8 @@ struct Scene {
   wgpu::Buffer uniforms;
   r::FrameUniforms staged{};
   wgpu::BindGroupLayout layout;
-  wgpu::BindGroup frame, post_group;
+  ::ge::render::FrameGroup frame;
+  wgpu::BindGroup post_group;
   r::Sky sky;
   r::Terrain terrain;
   r::Post post;

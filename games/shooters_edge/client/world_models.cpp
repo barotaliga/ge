@@ -184,6 +184,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
   const sv::RulesCommon& s = *l.server;
   const int me = player_state(l).entity;
   const int models = int(s.models.size());
+  const bool qc = l.rules != nullptr && sv::qc_of(*l.rules) != nullptr;
   for (int e = 1; e < s.sv.num_edicts; e++) {
     const sh::Edict& ed = s.sv.edicts[size_t(e)];
     if (ed.free || ed.modelindex <= 0 || ed.modelindex >= models || e == me) continue;
@@ -191,9 +192,19 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
     Placed p;
     p.entity = e;
     p.modelindex = ed.modelindex;
-    p.frame = int(field_named(l, e, "frame"));
-    p.skin = int(field_named(l, e, "skin"));
-    p.effects = int(field_named(l, e, "effects"));
+    if (qc) {
+      p.frame = int(field_named(l, e, "frame"));
+      p.skin = int(field_named(l, e, "skin"));
+      p.effects = int(field_named(l, e, "effects"));
+    } else if (size_t(e) < s.world.entities.size()) {
+      // Rules of our own (no program): their world rows carry the frame, the skin and the turn.
+      // Their effects are their own game's bits, not these, so none are read.
+      const sv::WorldEntity& row = s.world.entities[size_t(e)];
+      p.frame = row.frame;
+      p.skin = row.skin;
+      p.turns = row.turns;
+      if (row.carried_model > 0 && row.carried_model < models) p.carried = row.carried_model;
+    }
     p.alpha = entity_alpha(l, e);
     entity_look(l, e, p);
     p.origin = ed.origin;
@@ -204,6 +215,14 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       p.bottom = colour_row(c, "bottomcolor", 0);
     }
     out.push_back(p);
+    if (p.carried > 0) {  // the weapon it carries: the same place and frame, its own model
+      Placed w = p;
+      w.entity = e + kCarriedEntity;
+      w.modelindex = p.carried;
+      w.skin = 0;
+      w.carried = 0;
+      out.push_back(w);
+    }
   }
   for (size_t i = 0; i < s.statics.size(); i++) {
     const sv::StaticEntity& st = s.statics[i];
@@ -277,6 +296,7 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       bool any_stand_in = false;
       for (size_t s = 0; s < std::max<size_t>(1, model.skins.size()); s++) {
         morphs.push_back(models::morph_from_alias(model, palette, int(s)));
+        if (s == 0) k.glow_share = models::glow_colour(morphs.back().skin, k.glow_rgb);
         if (s < opened.skins.size() && opened.skins[s].width > 0) {
           stood_in.emplace_back(morphs.size() - 1, morphs.back().skin);
           stand_in_skin(morphs.back().skin, opened.skins[s]);
@@ -571,7 +591,8 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     }
     for (int c = 0; c < 3; c++) g.now.position[c] = w[c];
     float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
-    if (k.spin) ang[1] = float(std::fmod(t * kSpinDegPerS, 360.0));
+    if (k.spin || p.turns) ang[1] = float(std::fmod(t * kSpinDegPerS, 360.0));
+    if (p.turns) ang[0] = ang[2] = 0;  // yaw only
     models::rotation_of(ang, k.is == ModelKind::Is::alias, g.now.rotation);
     g.now.frame_a = frame_a;
     g.now.frame_b = frame_b;
@@ -600,7 +621,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     // are to the floor under it.
     double dyn[3], toward[3];
     const double mid[3] = {w[0], w[1] + 16 * br::kUnitM, w[2]};
-    effects::dynamic_light_at(dynamic, mid, dynamic_strength, dyn, toward);
+    effects::dynamic_light_at(dynamic, mid, dynamic_strength, dyn, toward, p.entity);
     double floor_lum = 0, dyn_lum = 0;
     for (int c = 0; c < 3; c++) {
       // The world's own soft floor (bsp_draw's r_minlight), so a thing in a dark corner reads

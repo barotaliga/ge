@@ -17,6 +17,7 @@
 #include <thread>
 
 #include "core/json_write.hpp"
+#include "forward/routes.hpp"
 #include "gamecli/commands.hpp"
 #include "net/transport.hpp"
 #include "net/udp_socket.hpp"
@@ -189,14 +190,17 @@ const gn::ServerEntry* ask_one(Ctx& ctx, gn::ServerList& list, gn::Transport& t,
 
 }  // namespace
 
-int cmd_servers(Ctx& ctx) {
-  gn::ServerListConfig config;
+namespace {
+
+// Where a refresh looks: the LAN (the player's sb_lan or --lan), the masters and the servers named
+// (the player's settings, the flags and the places). Names that did not resolve go in
+// `unresolved`; true when the LAN is asked.
+bool servers_config(Ctx& ctx, gn::ServerListConfig& config, std::vector<std::string>& unresolved) {
   const bool lan =
       ctx.has("lan") ? ctx.flag("lan") != "0" : player_setting(ctx, "sb_lan", "1") != "0";
   if (lan)
     for (uint32_t p = ctx.spec.lan_first; p <= ctx.spec.lan_last; p++)
       config.lan.push_back(gn::ipv4(255, 255, 255, 255, static_cast<uint16_t>(p)));
-  std::vector<std::string> unresolved;
   const auto add = [&](const std::string& text, uint16_t port, std::vector<gn::Address>& into) {
     gn::Address a;
     std::string error;
@@ -217,6 +221,15 @@ int cmd_servers(Ctx& ctx) {
   for (const std::string& s : split(ctx.flag("server"), ",")) named.push_back(s);
   for (const std::string& s : named) add(s, ctx.spec.default_port, config.servers);
 
+  return lan;
+}
+
+}  // namespace
+
+int cmd_servers(Ctx& ctx) {
+  gn::ServerListConfig config;
+  std::vector<std::string> unresolved;
+  const bool lan = servers_config(ctx, config, unresolved);
   gn::ServerFilter filter;
   filter.name_has = ctx.flag("has");
   filter.mode = ctx.flag("mode");
@@ -366,6 +379,75 @@ int cmd_rcon(Ctx& ctx) {
                           {"command", json_str(command)},
                           {"reply", json_str(reply)}}),
                 reply, "");
+}
+
+int cmd_route(Ctx& ctx) {
+  if (ctx.spec.routes.ask == nullptr)
+    return refuse(ctx, 1, std::string(ctx.spec.title) + " has no forwarders to route through",
+                  std::string(ctx.spec.cli) + " join <address> connects straight");
+  if (ctx.words.size() != 1)
+    return refuse(
+        ctx, 2, "route takes one address, host[:port]",
+        std::string(ctx.spec.cli) + " route 192.168.1.20:" + std::to_string(ctx.spec.default_port));
+  gn::Address server;
+  std::string error;
+  if (!resolve(ctx.words[0], ctx.spec.default_port, server, error))
+    return refuse(ctx, 1, error,
+                  "check the address, or find it with " + std::string(ctx.spec.cli) + " servers");
+  gn::ServerListConfig config;
+  std::vector<std::string> unresolved;
+  servers_config(ctx, config, unresolved);
+  bool named = false;
+  for (const gn::Address& a : config.servers) named = named || a == server;
+  if (!named) config.servers.push_back(server);
+  gn::ServerList list;
+  gn::Transport t;
+  if (!browse(ctx, config, wait_s(ctx, 3), list, t)) return 1;
+  forward::RouteFinder rf;
+  const Clock::time_point t0 = Clock::now();
+  forward::route_finder_start(rf, ctx.spec.routes, t, list, 0);
+  const int64_t until = static_cast<int64_t>(wait_s(ctx, 3) * 1e6);
+  for (int64_t now = since_us(t0); now < until; now = since_us(t0)) {
+    forward::route_finder_update(rf, now);
+    if (forward::route_finder_done(rf, now)) break;
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+  }
+  gn::close_transport(t);
+  const forward::Route r = forward::best_route(forward::route_finder_table(rf, list), server);
+  std::vector<std::string> hops;
+  hops.reserve(r.forwarders.size());
+  for (const gn::Address& a : r.forwarders) hops.push_back(gn::to_string(a));
+  const std::string chain = forward::route_chain(r, server);
+  std::string text;
+  std::string summary;
+  std::string next;
+  if (!r.found) {
+    summary = gn::to_string(server) + " did not answer, and no forwarder reaches it";
+    next = "check the address, or name a master that lists forwarders (--master=host:port)";
+  } else if (r.forwarders.empty()) {
+    summary = "straight is best: " + std::to_string(r.ping_ms) + " ms";
+    text = gn::to_string(server) + "  " + std::to_string(r.ping_ms) + " ms straight\n";
+    next = std::string(ctx.spec.cli) + " join " + gn::to_string(server);
+  } else {
+    summary = "through " + std::to_string(r.forwarders.size()) + " forwarder" +
+              (r.forwarders.size() == 1 ? "" : "s") + ": " + std::to_string(r.ping_ms) + " ms" +
+              (r.direct_ms >= 0 ? " (straight " + std::to_string(r.direct_ms) + " ms)"
+                                : " (no straight answer)");
+    for (const std::string& h : hops) text += h + "  forwarder\n";
+    text += gn::to_string(server) + "  " + std::to_string(r.ping_ms) + " ms in all\n";
+    next = "connect to " + hops[0] + " with the route after it as the game's route setting (" +
+           chain.substr(hops[0].size() + 1) + ")";
+  }
+  return answer(ctx,
+                json_obj({{"server", json_str(gn::to_string(server))},
+                          {"found", json_bool(r.found)},
+                          {"forwarders", core::json_strs(hops)},
+                          {"chain", json_str(chain)},
+                          {"ping_ms", json_num(r.ping_ms)},
+                          {"direct_ms", json_num(r.direct_ms)},
+                          {"asked", json_num(static_cast<long long>(rf.asked.size()))},
+                          {"answered", json_num(static_cast<long long>(rf.replies))}}),
+                text, summary, next);
 }
 
 }  // namespace ge::gamecli

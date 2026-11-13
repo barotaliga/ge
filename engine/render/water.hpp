@@ -322,6 +322,6 @@ void prepare_water(gpu::Device& device, Water& water, const FrameView& view,
 // "water.copy", "water" (the still bodies, then the moving water) and "water.below".
 void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                   wgpu::CommandEncoder& encoder, const FrameTargets& targets,
-                  const wgpu::BindGroup& frame);
+                  const FrameGroup& frame);
 
 }  // namespace ge::render

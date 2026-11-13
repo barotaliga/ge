@@ -9,6 +9,7 @@
 // ge:test tests/shooters_edge_classic_server_test.cpp
 #include "shooters_edge/net/classic_server.hpp"
 
+#include <algorithm>
 #include <charconv>
 #include <cstring>
 #include <iterator>
@@ -27,6 +28,24 @@
 namespace shooters_edge::net {
 
 namespace pg = ge::progs;
+
+int64_t classic_unix_time(const ClassicServer& s) {
+  return s.cfg.unix_time != nullptr ? s.cfg.unix_time() : 0;
+}
+
+int16_t safe_strafe(StrafeGuard& g, int16_t side, int n) {
+  const int8_t dir = side > 0 ? 1 : side < 0 ? -1 : 0;
+  if (g.force == 0 && dir != 0 && g.dir != 0 && dir != g.dir && g.zeros < n) g.force = n - g.zeros;
+  if (dir != 0) g.dir = dir;
+  if (g.force > 0) {
+    g.force--;
+    if (g.zeros < n) g.zeros++;
+    return 0;
+  }
+  g.zeros = dir == 0 ? g.zeros + 1 : 0;
+  if (g.zeros > n) g.zeros = n;
+  return side;
+}
 
 namespace {
 
@@ -112,7 +131,26 @@ int rate_of(const ClassicServer& s, const std::string& info) {
   return rate < 500 ? 500 : rate > 300000 ? 300000 : rate;
 }
 
+// A connecting client's VIP level (ServerConfig's notes): by a password word, by the address.
+int vip_level(const ClassicServer& s, const gn::Address& from, const std::string& spec,
+              const std::string& password) {
+  int level = 0;
+  for (size_t i = 0; i < s.cfg.vip_passwords.size(); i++) {
+    const std::string& word = s.cfg.vip_passwords[i];
+    if (word.empty() || word == "none" || (word != spec && word != password)) continue;
+    level = i < s.cfg.vip_values.size() ? s.cfg.vip_values[i] : static_cast<int>(i) + 1;
+    break;
+  }
+  if (const gs::BanEntry* e = gs::ban_match(s.vips, from, classic_unix_time(s)))
+    level = std::max(level, e->level);
+  return level;
+}
+
 void handle_connect(ClassicServer& s, const gn::Address& from, const std::string& text) {
+  if (gs::ban_refuses(s.bans, s.cfg.ban_mode, from, classic_unix_time(s))) {
+    reject(s, from, "You are banned from this server.");
+    return;
+  }
   pg::Words w;
   pg::tokenize_words(text.substr(0, text.find('\n')).c_str(), w);
   const int version = std::atoi(pg::word(w, 1));
@@ -141,30 +179,71 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   }
   bool spectator = false;
   const std::string spec = info_get(userinfo, "spectator");
-  if (!spec.empty() && spec != "0") {
-    if (!s.cfg.spectator_password.empty() && s.cfg.spectator_password != "none" &&
+  const bool watching = !spec.empty() && spec != "0";
+  const int vip = vip_level(s, from, watching ? spec : "", info_get(userinfo, "password"));
+  if (watching) {
+    if (vip == 0 && !s.cfg.spectator_password.empty() && s.cfg.spectator_password != "none" &&
         spec != s.cfg.spectator_password) {
       reject(s, from, "requires a spectator password");
       return;
     }
     spectator = true;
-  } else if (!s.cfg.password.empty() && s.cfg.password != "none" &&
+  } else if (vip == 0 && !s.cfg.password.empty() && s.cfg.password != "none" &&
              info_get(userinfo, "password") != s.cfg.password) {
     reject(s, from, "server requires a password");
     return;
   }
+  info_remove(userinfo, "*VIP");
+  if (vip > 0) info_set(userinfo, "*VIP", std::to_string(vip));
   info_remove(userinfo, "spectator");
   info_remove(userinfo, "password");
   if (spectator) info_set(userinfo, "*spectator", "1");
 
-  // A reconnect from the same address and qport drops the old slot.
+  // A reconnect from the same address and qport drops the old slot, unless that slot connected
+  // too short a time ago (sv_reconnectwait): then the storm gets no answer at all.
   for (int i = 0; i < sh::kMaxClients; i++) {
     const ClassicClient& c = s.clients[i];
-    if (c.state != ConnState::free && same_host(c.address, from) &&
-        (c.ch.qport == qport || c.address.port == from.port))
-      classic_drop(s, i, "reconnected");
+    if (c.state == ConnState::free || c.local || !same_host(c.address, from) ||
+        (c.ch.qport != qport && c.address.port != from.port))
+      continue;
+    if (s.cfg.reconnect_wait_s > 0 && s.game->sv.time - c.connect_time < s.cfg.reconnect_wait_s) {
+      s.counts.rejects++;
+      s.log.push_back("reject " + gn::to_string(from) + ": reconnected too soon");
+      return;
+    }
+    classic_drop(s, i, "reconnected");
   }
   const int maxclients = s.game->sv.set.maxclients;
+  // Spectators in their own slots (sv_maxspectators): the players' and theirs counted apart.
+  if (s.cfg.max_spectators > 0 || s.cfg.max_vip_spectators > 0) {
+    int players = 0, watchers = 0;
+    for (int i = 0; i < maxclients && i < sh::kMaxClients; i++) {
+      const ClassicClient& c = s.clients[i];
+      if (c.state != ConnState::free)
+        (c.spectator ? watchers : players)++;
+      else if (s.game->clients[i].active)
+        players++;
+    }
+    // A VIP may watch from the VIP spectator slots too (sv_maxvipspectators).
+    const int vip_seats = std::max(0, s.cfg.max_vip_spectators);
+    const int most = maxclients - s.cfg.max_spectators - vip_seats;
+    const int watch_seats = s.cfg.max_spectators + (vip > 0 ? vip_seats : 0);
+    if (!spectator && players >= most) {
+      const int svf = std::atoi(info_get(userinfo, "svf").c_str());
+      const bool forced = watchers < watch_seats && ((s.cfg.full_spectate == 1 && (svf & 2) == 0) ||
+                                                     (s.cfg.full_spectate == 2 && (svf & 1) != 0));
+      if (!forced) {
+        reject(s, from, "server is full");
+        return;
+      }
+      send_oob_print(s, from, "server is full: connecting as spectator\n");
+      spectator = true;
+      info_set(userinfo, "*spectator", "1");
+    } else if (spectator && watchers >= watch_seats) {
+      reject(s, from, "server is full");
+      return;
+    }
+  }
   int slot = -1;
   for (int i = 0; i < maxclients && i < sh::kMaxClients; i++)
     if (s.clients[i].state == ConnState::free && !s.game->clients[i].active) {
@@ -198,7 +277,8 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   const std::string ge = info_get(userinfo, "*ge_ext");
   asked[ExtFamily::ge] = ge.empty() ? 0u : static_cast<uint32_t>(std::atoi(ge.c_str()));
   info_remove(userinfo, "*ge_ext");
-  info_remove(userinfo, "*speedjump");  // the easy jump's grant is the server's to give
+  // A player aid's grant (classic_admin.hpp) is the server's to give.
+  for (const ge::server::AidKind& k : classic_aids()) info_remove(userinfo, k.key);
   c.ext = agree(s.cfg.offered, asked);
   c.coords = coords_of(c.ext);
   const bool proxy = !info_get(userinfo, "Qizmo").empty() || !info_get(userinfo, "*qtv").empty();
@@ -206,7 +286,8 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   std::vector<std::string> taken;
   for (int i = 0; i < sh::kMaxClients; i++)
     if (i != slot && s.clients[i].state != ConnState::free) taken.push_back(s.clients[i].name);
-  c.name = unique_name(sanitize_name(info_get(userinfo, "name")), taken);
+  c.name = unique_name(sanitize_name(info_get(userinfo, "name"), s.cfg.default_name), taken);
+  if (s.name_rule != nullptr) s.name_rule(s.name_ctx, slot, c.name, true);
   info_set(userinfo, "name", c.name);
   c.userinfo = userinfo;
   const std::string msg = info_get(userinfo, "msg");
@@ -245,6 +326,23 @@ void handle_oob(ClassicServer& s, const gn::Address& from, const uint8_t* data, 
   // `ip`, `log` and the server extras are not answered.
 }
 
+// The packet's commands the loop will run (the lost ones' copies first, as it runs them) through
+// the safe strafe; the two it ran last packet stay as guarded, so the copies agree.
+void guard_strafes(int n, StrafeGuard& g, sh::Packet& p) {
+  const uint32_t lost = g.seq == 0 ? 0 : p.sequence - g.seq - 1;
+  if (lost == 0 && g.seq != 0) {
+    p.cmds[0] = g.last[0];
+    p.cmds[1] = g.last[1];
+  } else {
+    if (lost > 1) p.cmds[0].side = safe_strafe(g, p.cmds[0].side, n);
+    if (lost > 0) p.cmds[1].side = safe_strafe(g, p.cmds[1].side, n);
+  }
+  p.cmds[2].side = safe_strafe(g, p.cmds[2].side, n);
+  g.seq = p.sequence;
+  g.last[0] = p.cmds[1];
+  g.last[1] = p.cmds[2];
+}
+
 // A move: the checksum's verdict, then the loop's packet.
 void read_move(ClassicServer& s, int slot, const ClcMsg& m, const uint8_t* payload, bool& moved) {
   ClassicClient& c = s.clients[slot];
@@ -268,6 +366,7 @@ void read_move(ClassicServer& s, int slot, const ClcMsg& m, const uint8_t* paylo
   p.client = slot;
   p.sequence = c.ch.incoming_sequence;
   for (int i = 0; i < 3; i++) p.cmds[i] = m.cmds[i];
+  if (s.cfg.safe_strafe > 0 && !c.spectator) guard_strafes(s.cfg.safe_strafe, c.strafe, p);
   s.packets.push_back(p);
 }
 
@@ -290,9 +389,12 @@ void relay_voice(ClassicServer& s, int slot, const ClcMsg& m) {
   const std::string team = info_get(c.userinfo, "team");
   for (int j = 0; j < sh::kMaxClients && !w.overflow; j++) {
     ClassicClient& d = s.clients[j];
-    if (j == slot || d.state != ConnState::spawned || !d.ext.has(ExtFamily::x2, kX2Voice)) continue;
+    if ((j == slot && !s.cfg.voice_echo) || d.state != ConnState::spawned ||
+        !d.ext.has(ExtFamily::x2, kX2Voice))
+      continue;
     // By team: his team-mates; with no team (a free-for-all), the others with none.
-    if (s.cfg.voice_route == VoiceRoute::team && info_get(d.userinfo, "team") != team) continue;
+    if (s.cfg.voice_route == VoiceRoute::team && info_get(d.userinfo, "team") != team && j != slot)
+      continue;
     if (d.local) {  // the listen server's own player: handed over, no packet carries it
       if (s.local_voice == nullptr) continue;
       s.local_voice(s.local_ctx, j, v);
@@ -321,6 +423,14 @@ void handle_packet(ClassicServer& s, int slot, const uint8_t* data, size_t size)
     c.ping_s = c.ping_samples == 0 ? ping : c.ping_s + (ping - c.ping_s) / 16.0;
     c.ping_samples++;
     acked.sent = -acked.sent;  // counted once
+  }
+  // The hold toward the minimum ping (sv_minping), 1 ms a packet; never for a spectator.
+  if (s.cfg.min_ping_ms > 0 && !c.spectator && !s.game->paused && c.ping_samples > 0) {
+    const double ms = c.ping_s * 1000;
+    if (ms < s.cfg.min_ping_ms) c.hold_s = std::min(1.0, c.hold_s + 0.001);
+    if (ms > s.cfg.min_ping_ms + 1) c.hold_s = std::max(0.0, c.hold_s - 0.001);
+  } else if (s.cfg.min_ping_ms <= 0 || c.spectator) {
+    c.hold_s = 0;
   }
   gn::Reader r = gn::make_reader(data, size);
   r.at = at;
@@ -376,8 +486,9 @@ void lag_rewind(void* ctx, int shooter, bool begin) {
   const ServerFrame& f = sc.frames[sc.ch.incoming_acknowledged & 63];
   const double acked = f.sequence == sc.ch.incoming_acknowledged ? f.server_time : s.game->sv.time;
   const std::string maxfps = info_get(s.serverinfo, "maxfps");
-  const double target = antilag_target(
-      acked, sc.ping_s, maxfps.empty() ? 77 : std::atoi(maxfps.c_str()), s.game->sv.time);
+  const double target =
+      antilag_target(acked, sc.ping_s, maxfps.empty() ? 77 : std::atoi(maxfps.c_str()),
+                     s.game->sv.time, s.cfg.antilag_exact);
   s.lag_rewinds++;
   for (int j = 0; j < sh::kMaxClients; j++) {
     if (j == me || !s.clients[j].rules_active || s.clients[j].spectator) continue;
@@ -527,6 +638,8 @@ bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error
   for (const auto& [k, v] : sh::changed_info(qc.sv.set))
     info_set(s.serverinfo, k, v, kServerInfoBytes);
   for (const auto& [k, v] : qc.serverinfo) info_set(s.serverinfo, k, v, kServerInfoBytes);
+  for (const auto& [k, v] : s.cfg.info)
+    if (!v.empty()) info_set(s.serverinfo, k, v, kServerInfoBytes);
   if (s.cfg.antilag) {
     qc.lag_rewind = &lag_rewind;
     qc.lag_ctx = &s;
@@ -640,6 +753,7 @@ void classic_set_info(ClassicServer& s, int slot, const std::string& key,
   ClassicClient& c = s.clients[slot];
   if (c.state == ConnState::free || info_get(c.userinfo, key) == value) return;
   if (!info_set(c.userinfo, key, value)) return;
+  if (key == "name") c.name = value;
   if (c.rules_active) s.rules->user_info(slot, key, value);
   for (int j = 0; j < sh::kMaxClients; j++) {
     if (s.clients[j].state == ConnState::free) continue;
@@ -720,6 +834,24 @@ std::string status_text(const ClassicServer& s, int opt) {
   return t;
 }
 
+namespace {
+
+// A look value as a byte: below `lo` it is `lo`, above 255 it is 255, the fraction dropped.
+int look_byte(float v, int lo) {
+  return v < static_cast<float>(lo) ? lo : v > 255 ? 255 : static_cast<int>(v);
+}
+
+}  // namespace
+
+void entity_look(EntityState& st, float alpha, float scale, const float colormod[3]) {
+  if (alpha != 1) {
+    const int v = static_cast<int>(alpha * 254);
+    st.alpha = alpha >= 1 ? 0 : v < 1 ? 1 : v > 254 ? 254 : v;
+  }
+  st.scale = scale == 1 ? 16 : look_byte(scale * 16, 1);
+  for (int c = 0; c < 3; c++) st.colormod[c] = look_byte(colormod[c] * 32, 0);
+}
+
 void status_players(const ClassicServer& s, std::vector<gn::StatusPlayer>& out) {
   out.clear();
   for (int i = 0; i < sh::kMaxClients; i++) {
@@ -752,10 +884,7 @@ EntityState entity_state(const ClassicServer& s, int e) {
   st.effects = row.effects;
   st.origin = row.origin;
   st.angles = row.angles;
-  if (row.alpha != 1) {
-    const int v = static_cast<int>(row.alpha * 254);
-    st.alpha = row.alpha >= 1 ? 0 : v < 1 ? 1 : v > 254 ? 254 : v;
-  }
+  entity_look(st, row.alpha, row.scale, row.colormod);
   return st;
 }
 
@@ -807,7 +936,26 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
       slot = i;
       break;
     }
-    if (slot >= 0) handle_packet(s, slot, buf, size);
+    if (slot < 0) continue;
+    ClassicClient& c = s.clients[slot];
+    if (c.hold_s > 0 || !c.held.empty()) {  // held back for the minimum ping
+      c.held.push_back({s.now + c.hold_s, std::vector<uint8_t>(buf, buf + size)});
+      continue;
+    }
+    handle_packet(s, slot, buf, size);
+  }
+  for (int i = 0; i < sh::kMaxClients; i++) {  // the held packets whose time has come, in order
+    ClassicClient& c = s.clients[i];
+    size_t let = 0;
+    while (let < c.held.size() && c.held[let].at <= s.now) let++;
+    if (let == 0) continue;
+    std::vector<ClassicClient::Held> due(std::make_move_iterator(c.held.begin()),
+                                         std::make_move_iterator(c.held.begin() + let));
+    c.held.erase(c.held.begin(), c.held.begin() + static_cast<std::ptrdiff_t>(let));
+    for (const ClassicClient::Held& h : due) {
+      if (s.clients[i].state == ConnState::free) break;
+      handle_packet(s, i, h.bytes.data(), h.bytes.size());
+    }
   }
   for (const sh::Packet& p : s.local_moves)  // the game's own seats, after the network's
     if (p.client >= 0 && p.client < sh::kMaxClients && s.clients[p.client].local &&

@@ -21,6 +21,8 @@
 // - **The fallback map**: where the window starts when the content holds no start map (the
 //   content row's `start_map`): the built-in arena.
 // - **The full game** is the content row's `full_game` file being in the packs.
+// - **The weapon groups**: what each number key picks with cl_weapongroups 1
+//   (client/weapon_groups.hpp), one list of the game's weapon keys a group, best first.
 // - **The episodes**: each one's first map, in the order the start map opens them.
 // - **Items, their words and the sounds** a bot reads (items.hpp).
 // - **The server's words** (words.hpp): the obituaries, the clock, the lobby and its countdown in
@@ -29,7 +31,7 @@
 // ge:summary A classic game's game half as data: each mode's program files, the fallback map
 // ge:keywords game-profile profile classic program progs qwprogs multiplayer single-player
 // ge:keywords mod-program fallback-map game-half find_game program-form program-side
-// ge:keywords demo-extensions
+// ge:keywords demo-extensions weapon-groups kclassicgroups ksequelgroups
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_profile_test.cpp
 #pragma once
@@ -90,17 +92,31 @@ struct GameProfile {
   // Each episode's first map, in order: the start map opens them one at a time, each once the
   // one before is done (server/campaign_episodes.hpp).
   std::span<const std::string_view> episode_maps;
+  // The number keys' weapon groups with cl_weapongroups 1 (client/weapon_groups.hpp): key 1's
+  // first, each the game's weapon keys best first ("7 6").
+  std::span<const std::string_view> weapon_groups;
+  // Its maps carry their own single-player rules (the sequel's runner keeps the campaign: the
+  // body carried, the help computer): NEW GAME and `coopgame` start them with `deathmatch` 0, and
+  // the runner is kept from level to level, when no single-player program is found.
+  bool rules_campaign = false;
+  // The recordings played in turn behind its main menu (client/main.cpp's `menu_attract` auto),
+  // by name as `playdemo` takes them; "" none (the title's night stays).
+  std::string_view attract;
 };
 
 inline constexpr ProgramFile kClassicMultiplayer[] = {{.name = "qwprogs.dat"},
                                                       {.name = "progs.dat"}};
 inline constexpr ProgramFile kClassicSinglePlayer[] = {{.name = "progs.dat"}};
 inline constexpr std::string_view kClassicDemos[] = {".dem",  ".mvd",   ".qwdv",  ".mvdv", ".mvdz",
-                                                     ".qwdz", ".mvdvz", ".qwdvz", ".ger"};
+                                                     ".qwdz", ".mvdvz", ".qwdvz", ".ged"};
 
 inline constexpr std::string_view kClassicHeld[] = {
     "progs/v_axe.mdl",   "progs/v_shot.mdl", "progs/v_shot2.mdl", "progs/v_nail.mdl",
     "progs/v_nail2.mdl", "progs/v_rock.mdl", "progs/v_rock2.mdl", "progs/v_light.mdl"};
+
+// 1 the launchers (rockets, then grenades), 2 the beam gun, 3 the shotguns (double first, by the
+// movement keys: the shotguns are used more), 4 the nailguns (heavy first), 5 the melee weapon.
+inline constexpr std::string_view kClassicGroups[] = {"7 6", "8", "3 2", "5 4", "1"};
 
 inline constexpr std::string_view kClassicEpisodes[] = {"e1m1", "e2m1", "e3m1", "e4m1"};
 
@@ -111,6 +127,11 @@ inline constexpr ProgramFile kSequelPrograms[] = {
     {.name = "gamex86_64.so", .form = ProgramForm::game_library},
     {.name = "gamei386.so", .form = ProgramForm::game_library}};
 inline constexpr std::string_view kSequelDemos[] = {".dm2"};
+// By the sequel's weapon keys (1 blaster, 2 shotgun, 3 super shotgun, 4 machinegun, 5 chaingun,
+// 6 hand grenades, 7 grenade launcher, 8 rocket launcher, 9 hyperblaster, 10 railgun, 11 BFG):
+// 1 the explosives (rockets, the grenade launcher, hand grenades), 2 the railgun, 3 the shotguns,
+// 4 the rapid fire guns (hyperblaster, chaingun, machinegun), 5 the blaster, 6 the BFG.
+inline constexpr std::string_view kSequelGroups[] = {"8 7 6", "10", "3 2", "9 5 4", "1", "11"};
 
 inline constexpr GameProfile kGameProfiles[] = {
     {.id = "classic",
@@ -122,7 +143,10 @@ inline constexpr GameProfile kGameProfiles[] = {
      .held_weapons = kClassicHeld,
      .arsenal = kClassicArsenal,
      .words = kClassicServerWords,
-     .episode_maps = kClassicEpisodes},
+     .episode_maps = kClassicEpisodes,
+     .weapon_groups = kClassicGroups,
+     .rules_campaign = false,
+     .attract = "demo1 demo2 demo3"},
     // The sequel: the demo's packs have no start map of the full game, so its first map.
     {.id = "sequel",
      .multiplayer_programs = kSequelPrograms,
@@ -133,7 +157,10 @@ inline constexpr GameProfile kGameProfiles[] = {
      .held_weapons = {},
      .arsenal = {},
      .words = {},
-     .episode_maps = {}},
+     .episode_maps = {},
+     .weapon_groups = kSequelGroups,
+     .rules_campaign = true,
+     .attract = ""},  // its recordings do not play yet
 };
 
 // The first row: the classic game, the one every reader uses until a choice of game is made.

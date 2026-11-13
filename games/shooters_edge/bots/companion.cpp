@@ -34,9 +34,7 @@ constexpr float kTurnRate = 720;    // degrees/s the companion's own view turns 
 constexpr float kLookRate = 260;    // and a bored look's
 constexpr float kPressReach = 120;  // a touch button walked into from this near, units
 constexpr float kShootReach = 900;  // a shot button fired at from this near, units
-constexpr int32_t kWGrenades = 16,
-                  kWRockets = 32;         // the blast weapons' W_ bits (games/shooters_edge/qc)
-constexpr float kLookSight = 700;         // an item this near and in sight is worth a bored look
+constexpr float kLookSight = 700;   // an item this near and in sight is worth a bored look
 constexpr float kHopOut[2] = {180, 320};  // a bored hop's turn point from the leader, units
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
@@ -70,23 +68,18 @@ const server::WorldEntity& ent_of(const server::RulesCommon& s, int e) {
 
 // Each model's kind of monster: 0 none, 1 one any weapon kills, 2 one only a blast keeps down,
 // 3 one no weapon kills.
-void monster_models(const server::RulesCommon& s, std::vector<uint8_t>& out) {
+void monster_models(const server::RulesCommon& s, const BotArsenal& a, std::vector<uint8_t>& out) {
   out.assign(s.models.size(), 0);
-  for (size_t m = 0; m < s.models.size(); m++) {
-    for (std::string_view name : profiles::kClassicMonsters)
-      if (s.models[m] == name) out[m] = 1;
-    for (std::string_view name : profiles::kClassicBlastOnly)
-      if (s.models[m] == name) out[m] = 2;
-    for (std::string_view name : profiles::kClassicNoWeapon)
-      if (s.models[m] == name) out[m] = 3;
-  }
+  if (a.monster == nullptr) return;
+  for (size_t m = 0; m < s.models.size(); m++)
+    out[m] = static_cast<uint8_t>(a.monster(s.models[m]));
 }
 
 // The kinds of monster player `ent` fights with what he holds: a blast's (the grenade or rocket
 // launcher, with its ammunition) puts down the second kind too.
-int fights_up_to(const server::RulesCommon& s, int ent) {
-  const Stats st = read_stats(s, ent);
-  return (st.weapon & (kWGrenades | kWRockets)) != 0 && st.rockets > 0 ? 2 : 1;
+int fights_up_to(const server::RulesCommon& s, int ent, const BotArsenal& a) {
+  const Stats st = read_stats(s, ent, a);
+  return (st.weapon & (a.lob | a.launcher)) != 0 && ammo_of(st, a.launcher_ammo) > 0 ? 2 : 1;
 }
 
 bool alive_player(const server::RulesCommon& s, int slot) {
@@ -328,7 +321,7 @@ void escort_init(Fighter& f, const server::RulesCommon& s, int slot, int leader)
     e.rest[i] = e.last_at[i] = ent_of(s, static_cast<int>(i)).origin;
     e.last_yaw[i] = ent_of(s, static_cast<int>(i)).angles.y;
   }
-  monster_models(s, e.monster_model);
+  monster_models(s, *f.arsenal, e.monster_model);
   e.button_rest.clear();
   e.button_done.clear();
   for (const ButtonSpot& b : f.button_spots) {
@@ -365,7 +358,7 @@ void hunt_init(Fighter& f, const server::RulesCommon& s) {
   set_moves(f, false, false);  // a first time through is walked: no hop off a ledge
   f.bot.senses.friends = 0xffffffffu;
   f.bot.senses.foes.assign(s.sv.edicts.size(), 0);
-  monster_models(s, f.escort.monster_model);
+  monster_models(s, *f.arsenal, f.escort.monster_model);
 }
 
 void hunt_sense(Fighter& f, const server::RulesCommon& s) {
@@ -373,7 +366,7 @@ void hunt_sense(Fighter& f, const server::RulesCommon& s) {
   if (foes.size() < static_cast<size_t>(s.sv.num_edicts))
     foes.resize(static_cast<size_t>(s.sv.num_edicts), 0);
   const std::vector<uint8_t>& mm = f.escort.monster_model;
-  const int top = fights_up_to(s, f.slot + 1);
+  const int top = fights_up_to(s, f.slot + 1, *f.arsenal);
   for (int ent = s.sv.set.maxclients + 1; ent < s.sv.num_edicts; ent++) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(ent)];
     const int kind = !d.free && d.solid != sh::kSolidNot && d.modelindex > 0 &&
@@ -387,7 +380,7 @@ void hunt_sense(Fighter& f, const server::RulesCommon& s) {
 void escort_sense(Fighter& f, const server::RulesCommon& s, int me, double t) {
   Escort& e = f.escort;
   const server::WorldEntity& leader = ent_of(s, e.leader + 1);
-  const int top = fights_up_to(s, me);
+  const int top = fights_up_to(s, me, *f.arsenal);
   // His velocity off his places a command apart (a client sees where he is, frame by frame); any
   // move off the spot ends his standing still.
   if (e.last_t >= 0 && t > e.last_t) {

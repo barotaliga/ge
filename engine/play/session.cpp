@@ -6,6 +6,8 @@
 // ge:test tests/play_session_test.cpp
 #include "play/session.hpp"
 
+#include <algorithm>
+
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "lab/lab.hpp"

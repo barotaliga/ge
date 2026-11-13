@@ -245,7 +245,8 @@ struct Scene {
   wgpu::Buffer uniforms;
   gr::FrameUniforms staged{};
   wgpu::BindGroupLayout layout;
-  wgpu::BindGroup frame, post_group, light;
+  ::ge::render::FrameGroup frame;  // group 0, and its parts for the passes that read few
+  wgpu::BindGroup post_group, light;
   gr::Sky sky;
   gr::Terrain terrain;
   gr::Hiz hiz;

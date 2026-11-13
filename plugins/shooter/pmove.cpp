@@ -18,9 +18,8 @@ namespace {
 constexpr double kFloorZ = 0.7;           // a plane whose normal z reaches this is ground
 constexpr float kGroundSpeedLimit = 180;  // rising faster than this is never on the ground
 constexpr float kJumpSpeed = 270;
-constexpr float kAirWishCap = 30;  // the air's wish speed cap in the gain's subtraction
-constexpr float kEdgeAhead = 16;   // the edge probe: this far ahead of the origin
-constexpr float kEdgeDepth = 34;   // and this far down from the feet
+constexpr float kEdgeAhead = 16;  // the edge probe: this far ahead of the origin
+constexpr float kEdgeDepth = 34;  // and this far down from the feet
 constexpr float kWaterJumpUp = 310;
 constexpr float kWaterJumpOut = 50;
 constexpr float kWaterJumpTime = 2;  // s
@@ -187,7 +186,8 @@ void air_accelerate(Mover& m, Vec3f wishdir, float wishspeed, float accel) {
   MoveState& s = m.s;
   if (!accelerates(s)) return;
   const float h0 = horizontal_speed(s.velocity);
-  const float wishspd = wishspeed > kAirWishCap ? kAirWishCap : wishspeed;
+  const float wish_cap = m.set.air_wish_cap;
+  const float wishspd = wish_cap > 0 && wishspeed > wish_cap ? wish_cap : wishspeed;
   const float add = wishspd - dot(s.velocity, wishdir);
   if (add <= 0) return;
   float speed = accel * wishspeed * m.dt;
@@ -246,7 +246,7 @@ int walk_move(Mover& m, const MoveCmd& cmd, const ViewAxes& ax) {
     return step_slide_move(m, false);
   }
 
-  air_accelerate(m, wishdir, wishspeed, m.set.accelerate);
+  air_accelerate(m, wishdir, wishspeed, m.set.air_accel != 0 ? m.set.air_accel : m.set.accelerate);
   s.velocity.z = s.velocity.z - fall;
   const int blocked = m.set.airstep ? step_slide_move(m, true) : slide_move(m);
   if (m.set.pground && (blocked & kBlockedFloor) != 0) {

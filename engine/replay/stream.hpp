@@ -1,4 +1,4 @@
-// THE REPLAY FILE, VERSION 2 (`.ger`; docs/tv.md § The replay file, version 2): one binary format
+// THE REPLAY FILE, VERSION 2 (`.ged`; docs/tv.md § The replay file, version 2): one binary format
 // for a kept match and a live broadcast, the same bytes on disk and on the wire. A TV stream is a
 // file being written: a viewer that joins reads the header, then blocks from a keyframe on.
 //

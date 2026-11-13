@@ -4,13 +4,16 @@
 // base's; a mod's zip read too; the maps listed with the start map first; a loose file written
 // after the mount found; the base game's numbered packs (and no stand-in) as the content packs,
 // whose cache key is the one classic-enhance's pipeline gives the same packs, a content zip
-// standing in for the first pack (`pak0.pk3`) among them.
+// standing in for the first pack (`pak0.pk3`) among them; a map's `.lit` beside it, else in
+// `lits/`.
 //
 // ge:summary Tests the client's search path: base and mod folders, packs, zips, loose files
 // ge:keywords test shooters-edge search-path mod gamedir pak pk3 loose-files content_packs
+// ge:keywords sky_box_files sky-box
 // ge:skill vfs shooter testing
 #include <filesystem>
 #include <fstream>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -83,6 +86,62 @@ TEST(the_base_folder_layers_its_packs_and_loose_files) {
   CHECK(maps.size() == 2 && maps[0] == "start" && maps[1] == "a");
   CHECK(cl::archive_paths(sp).size() == 2);
   CHECK(cl::content_packs(sp).size() == 2);
+  fs::remove_all(root);
+}
+
+TEST(a_maps_coloured_light_is_found_beside_it_then_in_lits) {
+  const fs::path root = fs::temp_directory_path() / "ge_se_files_lit_test";
+  fs::remove_all(root);
+  const std::string base(ge::classicenhance::classic_profile().base_dir);
+  write_pack(root / base / "pak0.pak", {{"maps/a.bsp", bytes_of("A")},
+                                        {"maps/a.lit", bytes_of("beside")},
+                                        {"maps/b.bsp", bytes_of("B")}});
+  write(root / base / "lits" / "a.lit", bytes_of("kept"));
+  write(root / base / "lits" / "b.lit", bytes_of("kept b"));
+  cl::SearchPath sp;
+  std::string error;
+  CHECK_MSG(cl::open_game_dir(root.string(), base, sp, error), error);
+  std::vector<uint8_t> store;
+  std::string found;
+  std::span<const uint8_t> lit = cl::map_lit(sp, "a", store, &found);
+  CHECK(std::string(lit.begin(), lit.end()) == "beside" && found == "maps/a.lit");
+  lit = cl::map_lit(sp, "b", store, &found);
+  CHECK(std::string(lit.begin(), lit.end()) == "kept b" && found == "lits/b.lit");
+  found.clear();
+  CHECK(cl::map_lit(sp, "c", store, &found).empty() && found.empty());
+  fs::remove_all(root);
+}
+
+TEST(a_sky_boxs_six_pictures_are_found_each_by_its_own_path_and_format) {
+  const fs::path root = fs::temp_directory_path() / "ge_se_files_sky_test";
+  fs::remove_all(root);
+  const std::string base(ge::classicenhance::classic_profile().base_dir);
+  // rt, bk and lf in the pack under env/; ft as a png under gfx/env/; up with an underscore; dn
+  // both as a tga and a pcx, the tga first.
+  write_pack(root / base / "pak0.pak", {{"env/duskrt.tga", bytes_of("rt")},
+                                        {"env/duskbk.tga", bytes_of("bk")},
+                                        {"env/dusklf.pcx", bytes_of("lf")}});
+  write(root / base / "gfx" / "env" / "duskft.png", bytes_of("ft"));
+  write(root / base / "env" / "dusk_up.jpg", bytes_of("up"));
+  write(root / base / "env" / "duskdn.pcx", bytes_of("dn pcx"));
+  write(root / base / "env" / "duskdn.tga", bytes_of("dn"));
+  cl::SearchPath sp;
+  std::string error;
+  CHECK_MSG(cl::open_game_dir(root.string(), base, sp, error), error);
+  cl::SkyBoxFiles found;
+  std::string missing;
+  CHECK_MSG(cl::sky_box_files(sp, "dusk", &found, &missing), missing);
+  CHECK(found.paths[0] == "env/duskrt.tga" && found.paths[2] == "env/dusklf.pcx");
+  CHECK(found.paths[3] == "gfx/env/duskft.png" && found.paths[4] == "env/dusk_up.jpg");
+  CHECK(found.paths[5] == "env/duskdn.tga");
+  CHECK(std::string(found.bytes[5].begin(), found.bytes[5].end()) == "dn");
+  // One missing refuses the box and names it; a name with a dot or a slash finds nothing.
+  fs::remove(root / base / "env" / "dusk_up.jpg");
+  cl::SearchPath again;
+  CHECK_MSG(cl::open_game_dir(root.string(), base, again, error), error);
+  CHECK(!cl::sky_box_files(again, "dusk", &found, &missing) && missing == "up");
+  CHECK(!cl::sky_box_files(again, "../dusk", &found, &missing));
+  CHECK(!cl::sky_box_files(again, "", &found, &missing));
   fs::remove_all(root);
 }
 

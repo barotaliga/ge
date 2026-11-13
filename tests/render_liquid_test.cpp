@@ -151,7 +151,7 @@ TEST(a_lava_pool_glows_at_night) {
   r::create_post(d, pipelines, post, layout, wgpu::TextureFormat::RGBA8Unorm);
   CHECK(pipelines.finish(d));
   ge::gpu::end_load(d);
-  wgpu::BindGroup frame = r::frame_group(d, layout, uniforms, sky);
+  auto frame = r::frame_group(d, layout, uniforms, sky);
   r::create_liquid_targets(d, liquids, targets);
   const r::LiquidLook& look = *r::find_liquid_look("lava");
   const gw::World lava = pool("lava", 10);

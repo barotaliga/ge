@@ -55,3 +55,28 @@ TEST(each_place_is_named_once_at_its_points_middle) {
   CHECK(p[1].at.x == 1000);
   CHECK(sh::loc_places(sh::Locs{}).empty());
 }
+
+TEST(places_are_added_removed_and_written_as_a_file_reads_them_back) {
+  ge::shooter::Locs locs;
+  ge::shooter::add_loc(locs, {100.06f, -50.0f, 24.0f}, "quad room");
+  ge::shooter::add_loc(locs, {-0.0625f, 512.0f, -3.1f}, "$loc_name_ra low");
+  CHECK(locs.points.size() == 2);
+  CHECK(locs.points[1].name == "ra low");
+  // Eighths, halves away from zero, four places at least, the raw name kept, LF after each.
+  CHECK_MSG(
+      ge::shooter::locs_text(locs) == " 800 -400  192 quad room\n  -1 4096  -25 $loc_name_ra low\n",
+      ge::shooter::locs_text(locs));
+  ge::shooter::Locs back;
+  CHECK(ge::shooter::parse_locs(ge::shooter::locs_text(locs), back) == 2);
+  CHECK(back.points[1].raw == "$loc_name_ra low" && back.points[1].name == "ra low");
+  CHECK(ge::shooter::locs_text(back) == ge::shooter::locs_text(locs));
+  // The nearest goes; then the other; then none.
+  ge::shooter::Loc gone;
+  CHECK(ge::shooter::remove_nearest_loc(locs, {90, -40, 20}, &gone) && gone.name == "quad room");
+  CHECK(ge::shooter::remove_nearest_loc(locs, {90, -40, 20}));
+  CHECK(!ge::shooter::remove_nearest_loc(locs, {0, 0, 0}));
+  // A name over 63 characters is cut on reading.
+  ge::shooter::Locs cut;
+  ge::shooter::parse_locs("0 0 0 " + std::string(80, 'x') + "\n", cut);
+  CHECK(cut.points[0].raw.size() == ge::shooter::kLocNameMax);
+}

@@ -24,10 +24,12 @@
 
 #include "check.hpp"
 #include "console/console.hpp"
+#include "console/view.hpp"
 #include "lab/png.hpp"
 #include "net/sim_network.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
+#include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/menu/classic_view.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/main_menu.hpp"
@@ -83,9 +85,9 @@ sm::FindFile fixture_find(const std::map<std::string, std::vector<uint8_t>, std:
 TEST(menu_has_the_classic_pages_and_rows) {
   const Menu m = sm::build_menu();
   const Page& root = *m.page("main");
-  CHECK(root.items.size() == 6);
-  const char* rows[] = {"single", "multi", "demos", "options", "help", "quit"};
-  for (size_t i = 0; i < 6; i++) CHECK(root.items[i].id == rows[i]);
+  CHECK(root.items.size() == 7);
+  const char* rows[] = {"games", "single", "multi", "demos", "options", "help", "quit"};
+  for (size_t i = 0; i < 7; i++) CHECK(root.items[i].id == rows[i]);
   for (const char* p : {"single", "multi", "host", "setup", "options", "video", "help", "quit"})
     CHECK_MSG(m.page(p) != nullptr, std::string("no page ") + p);
   for (const Page* p : {m.page("single"), m.page("multi")})
@@ -213,10 +215,17 @@ TEST(escape_opens_the_menu_and_backs_out_of_it) {
   CHECK(!item(g.main(), "options", "classic")->disabled);  // the ce_ switches are registered
   MenuInput accept;
   accept.accept = true;
-  g.update(accept, false, host, 0.016);  // SINGLE PLAYER
-  CHECK(g.main().top().id == "single");
+  g.update(accept, false, host, 0.016);  // SELECT GAME, the root's first row
+  CHECK(g.in_games());
   MenuInput back;
   back.back = true;
+  g.update(back, false, host, 0.016);
+  CHECK(!g.in_games() && g.open() && g.main().top().id == "main");
+  MenuInput down;
+  down.down = true;
+  g.update(down, false, host, 0.016);
+  g.update(accept, false, host, 0.016);  // SINGLE PLAYER
+  CHECK(g.main().top().id == "single");
   g.update(back, false, host, 0.016);
   CHECK(g.main().top().id == "main");
   g.update(back, false, host, 0.016);
@@ -226,6 +235,48 @@ TEST(escape_opens_the_menu_and_backs_out_of_it) {
   CHECK(g.open() && g.main().top().id == "quit");
   g.update(accept, false, host, 0.016);  // YES
   CHECK(!w.ran.empty() && w.ran.back() == "quit");
+}
+
+TEST(every_press_leaves_the_sound_it_makes) {
+  using ge::ui::MenuCue;
+  World w;
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .maps = {"start"}};
+  g.update({}, false, host, 0.016);
+  CHECK(g.take_cue() == MenuCue::none);  // closed, nothing pressed: silent
+  g.update({}, true, host, 0.016);       // Escape opens it
+  CHECK(g.take_cue() == MenuCue::enter);
+  CHECK(g.take_cue() == MenuCue::none);  // taken once
+  MenuInput down;
+  down.down = true;
+  g.update(down, false, host, 0.016);  // the cursor moves
+  CHECK(g.take_cue() == MenuCue::move);
+  MenuInput up;
+  up.up = true;
+  g.update(up, false, host, 0.016);
+  CHECK(g.take_cue() == MenuCue::move);
+  g.update(down, false, host, 0.016);  // past SELECT GAME, the first row
+  CHECK(g.take_cue() == MenuCue::move);
+  MenuInput accept;
+  accept.accept = true;
+  g.update(accept, false, host, 0.016);  // into SINGLE PLAYER
+  CHECK(g.main().top().id == "single");
+  CHECK(g.take_cue() == MenuCue::enter);
+  MenuInput back;
+  back.back = true;
+  g.update(back, false, host, 0.016);  // out to the main menu
+  CHECK(g.main().top().id == "main");
+  CHECK(g.take_cue() == MenuCue::back);
+  g.update(back, false, host, 0.016);  // the menu closed
+  CHECK(!g.open());
+  CHECK(g.take_cue() == MenuCue::back);
+  w.con.execute("togglemenu");  // the console's Escape opens it, and closes it again
+  g.update({}, false, host, 0.016);
+  CHECK(g.open() && g.take_cue() == MenuCue::enter);
+  w.con.execute("togglemenu");
+  g.update({}, false, host, 0.016);
+  CHECK(!g.open() && g.take_cue() == MenuCue::back);
 }
 
 TEST(customize_controls_shows_the_binds_and_binds_the_next_key) {
@@ -323,6 +374,55 @@ TEST(classic_enhanced_pages_set_their_cvars_and_open_the_enhance_menu) {
   CHECK(g.main().top().id == "enhanced");
 }
 
+TEST(select_game_opens_a_kept_install_and_asks_for_a_folder_otherwise) {
+  World w;
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con};
+  int listed = 0;
+  g.games().set_lister([&listed] {
+    listed++;
+    return std::vector<sm::GameRow>{
+        {.id = "classic", .install = "/a/game", .edition = "Shareware", .playing = true},
+        {.id = "sequel", .install = "/b/game", .edition = "Full game", .playing = false},
+    };
+  });
+  w.con.execute("menu_games");
+  g.update({}, false, host, 0.016);
+  CHECK(g.open() && g.in_games() && listed == 1);
+  // The names are pictures, never words: each game's decodes, an unknown id's is empty.
+  CHECK(!sm::game_name_picture("classic").rgba.empty());
+  CHECK(!sm::game_name_picture("sequel").rgba.empty());
+  CHECK(sm::game_name_picture("other").rgba.empty());
+  // The cursor starts on the game playing; ENTER on it goes back to the root.
+  MenuInput accept;
+  accept.accept = true;
+  g.update(accept, false, host, 0.016);
+  CHECK(!g.in_games() && g.main().top().id == "main");
+  CHECK(!g.take_game().asked);
+  // The other game with a kept install: the window is asked to open it.
+  g.show(host, "games");
+  MenuInput down;
+  down.down = true;
+  g.update(down, false, host, 0.016);
+  g.update(accept, false, host, 0.016);
+  sm::GameMenu::GameAsk ask = g.take_game();
+  CHECK(ask.asked && !ask.browse && ask.id == "sequel" && ask.install == "/b/game");
+  CHECK(!g.take_game().asked);  // once
+  // FIND ANOTHER INSTALL, the last row: the folder chooser.
+  g.update(down, false, host, 0.016);
+  g.update(accept, false, host, 0.016);
+  ask = g.take_game();
+  CHECK(ask.asked && ask.browse && ask.id.empty());
+  // A game never found: its folder is asked for.
+  g.games().set_lister(
+      [] { return std::vector<sm::GameRow>{{.id = "classic", .install = "", .edition = ""}}; });
+  g.show(host, "games");
+  g.update(accept, false, host, 0.016);
+  ask = g.take_game();
+  CHECK(ask.asked && ask.browse && ask.id == "classic");
+}
+
 TEST(load_game_asks_the_window_for_a_folder_and_says_why_one_was_refused) {
   World w;
   w.con.add_command("basedir", "", [](ge::console::Console&, const ge::console::Args&) {});
@@ -363,6 +463,32 @@ TEST(classic_pictures_are_read_from_the_packs_files) {
   lacking.erase("gfx/mainmenu.lmp");
   CHECK(!sm::load_classic_art(fixture_find(lacking), &art, &error));
   CHECK(error.find("mainmenu") != std::string::npos);
+}
+
+TEST(a_classic_game_s_console_is_in_its_letters_over_its_background) {
+  const auto files = sm::fixture_files();
+  sm::ClassicArt art;
+  std::string error;
+  CHECK_MSG(sm::load_classic_art(fixture_find(files), &art, &error), error);
+  sm::ClassicConsole look;
+  sm::classic_console(art, look);
+  CHECK(look.on() && look.style.font == &look.font);
+  CHECK(look.back != nullptr && look.back == art.find("conback"));
+  ge::console::Console con;
+  ge::console::ConsoleView view(con);
+  view.add(ge::console::LineKind::output, "a line");
+  view.set_open(true);
+  for (int k = 0; k < 60; k++) view.frame(1 / 30.0);
+  DrawList dl;
+  dl.begin(1280, 720);
+  sm::draw_game_console(dl, view, look, 0);
+  int backs = 0;
+  for (const auto& c : dl.cmds()) backs += c.box.image == look.back ? 1 : 0;
+  CHECK(backs == 1);
+  // No pictures read: the engine's own look, no background.
+  sm::ClassicConsole none;
+  sm::classic_console(sm::ClassicArt{}, none);
+  CHECK(!none.on() && none.back == nullptr);
 }
 
 TEST(load_and_save_show_the_slots_and_run_their_lines) {
@@ -420,9 +546,10 @@ TEST(both_looks_lay_every_page_out_clean) {
   CHECK(sm::load_classic_art(fixture_find(files), &art, &error));
   for (const char* look : {"modern", "classic"}) {
     if (std::string(look) == "classic") g.set_art(art);
-    for (const char* page : {"main", "single", "multi", "host", "setup", "options", "video",
-                             "weapon", "controls", "enhanced", "ce_art", "ce_light", "ce_liquids",
-                             "ce_fire", "ce_weather", "help", "quit", "load", "save"}) {
+    for (const char* page :
+         {"main",       "single",   "multi",    "host",   "setup",    "options",    "video",
+          "weapon",     "controls", "enhanced", "ce_art", "ce_light", "ce_liquids", "ce_fire",
+          "ce_weather", "help",     "quit",     "load",   "save",     "games"}) {
       for (const auto& [width, height] : {std::pair{1280, 720}, std::pair{390, 844}}) {
         g.show(host, page);
         CHECK(g.classic() == (std::string(look) == "classic"));
@@ -440,13 +567,15 @@ TEST(both_looks_lay_every_page_out_clean) {
   const sm::ClassicLayout l = sm::layout_classic(g.main(), art, 1280, 720);
   CHECK(l.strip && l.scale == 3);
   CHECK(l.items[1].y - l.items[0].y == 60);
-  // DEMOS has no words in the strip: its own band, the strip's next rows one band lower.
-  CHECK(l.bands[0] == 0 && l.bands[1] == 1 && l.bands[2] == -1 && l.bands[3] == 2);
-  CHECK(l.items[3].y - l.items[2].y == 60);
+  // SELECT GAME and DEMOS have no words in the strip: each its own band, the strip's rows in
+  // between and after.
+  CHECK(l.bands[0] == -1 && l.bands[1] == 0 && l.bands[2] == 1 && l.bands[3] == -1 &&
+        l.bands[4] == 2);
+  CHECK(l.items[4].y - l.items[3].y == 60);
 
-  // DEMOS cut from the strips' own letters only on the strips it was measured on: the stand-in's
-  // strips have another print, so it falls back to the glyphs; with the pack's print, six pieces
-  // of the strips (two of SINGLE PLAYER's picture) and no glyph.
+  // DEMOS and SELECT GAME cut from the strips' own letters only on the strips it was measured on:
+  // the stand-in's strips have another print, so it falls back to the glyphs; with the pack's
+  // print, six pieces of the strips (two of SINGLE PLAYER's picture) and no glyph.
   CHECK(art.strip_print != 0);
   const auto pieces = [&](const sm::ClassicArt& a, const ge::ui::Image* img) {
     DrawList dl;
@@ -459,8 +588,24 @@ TEST(both_looks_lay_every_page_out_clean) {
   CHECK(pieces(art, art.find("sp_menu")) == 0);
   sm::ClassicArt pack = art;
   pack.strip_print = 0xb378b8eec94a7f36ULL;
-  CHECK(pieces(pack, pack.find("sp_menu")) == 2);
+  CHECK(pieces(pack, pack.find("sp_menu")) == 4);  // DEMOS' L and m, SELECT GAME's G and m
   CHECK(pieces(pack, &pack.glyphs) < pieces(art, &art.glyphs));
+
+  // SELECT GAME's names: seven pieces of the strips for the first game, nine for the sequel's
+  // (its numeral), on the pack's strips; the stand-in's draw none and fall back to the pictures.
+  const auto names = [&](const sm::ClassicArt& a) {
+    sm::GamesPage page;
+    page.set_games({{.id = "classic", .install = "", .edition = ""},
+                    {.id = "sequel", .install = "", .edition = ""}});
+    DrawList dl;
+    dl.begin(1280, 720);
+    page.draw_classic(dl, a, 1280, 720, 0);
+    int n = 0;
+    for (const auto& c : dl.cmds()) n += c.box.image == a.find("mainmenu") ? 1 : 0;
+    return n;
+  };
+  CHECK(names(art) == 0);
+  CHECK(names(pack) == 8 + 7 + 9);  // the carved title's eight from the same strip
 }
 
 TEST(enhanced_pictures_draw_at_the_classic_sizes) {

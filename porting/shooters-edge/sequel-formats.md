@@ -191,6 +191,111 @@ through.
 the first game's language (`configs.md`); the sequel's own commands and settings are named in
 `sequel-rules.md` § Settings.
 
+## Animation (read)
+
+Read from the sequel's released source; frame indices measured by listing each MD2's frame names.
+A server frame is 100 ms; every frame number below is an index into the model's frame list.
+
+- **Items turn on the client.** The entity's effects bit 0x1 (rotate) makes the client set yaw to
+  client time in ms ÷ 10 (whole division): 100°/s in whole-degree steps, pitch and roll 0, the
+  map's angle ignored. The clock is the client's game time, held within 100 ms of the server's, so
+  viewers agree to within about 10°. Set on armour, the power screen and shield, weapons with a
+  world model, powerups, bandolier, pack and keys (placed or dropped); not on ammo or health. No
+  bob. Every item on the ground also has render flag 512 (glow): its light gains 0.1 × sin(7 t),
+  t in client seconds, never below 80% of the unpulsed light. An item's "no touch" spawn flag (1)
+  removes both. Other effect bits make the client pick frames itself (0/1 or 2/3 at 2 Hz, all
+  frames at 2 Hz or 10 Hz): animated brush textures and the BFG ball.
+- **The player model** (male, female, cyborg: 198 frames, same names and order): stand 0–39
+  (stand01–40), run 40–45, attack 46–53, pain1 54–57, pain2 58–61, pain3 62–65, jump 66–71, flip
+  72–83, salute 84–94, taunt 95–111, wave 112–122, point 123–134, crouched stand 135–153, crouched
+  walk 154–159, crouched attack 160–168, crouched pain 169–172, crouched death 173–177, death1
+  178–183, death2 184–189, death3 190–197.
+- **Player priorities**, low to high: basic, gesture (and landing), jump, pain, attack, death,
+  reverse. One frame per server frame, stepped after that frame's movement, firing and damage, so a
+  sequence's first frame is the first sent. Basic (stand, run, crouched stand or walk) loops and is
+  re-chosen when a sequence ends; running is any horizontal speed. A duck change cuts anything below
+  death. No ground at gesture or below: jump1, then hold jump2; regaining ground plays jump3–jump6 at
+  gesture priority. Firing starts attack1–8 (crouched crattak1–9) at any priority; the hyperblaster
+  holds attack1 while firing, the machine gun shows attack1 or attack2 (3 in 4) each frame, the chain
+  gun alternates them. Pain (any damage that frame) only below pain priority; standing pains rotate
+  2, 3, 1 on one counter shared by all players; crouched uses crpain. Death cuts everything, rotates
+  2, 3, 1 likewise (crouched: crdeath) and holds its last frame. `wave <n>`: 0 flip, 1 salute,
+  2 taunt, 3 wave, other point; refused crouched or above gesture priority. Weapon put-away plays
+  pain304 down to pain301 (reverse) from 4 gun frames before the end; raising (and every spawn)
+  sends pain302–304. A standing grenade throw plays wave07 down to wave01; crouched crattak1–3.
+- **The carried weapon** is a linked model drawn with the body's frame, previous frame, blend,
+  origin and angles. The skin number's high byte picks it from `players/<model>/`: 0 `weapon.md2`,
+  then `w_blaster`, `w_shotgun`, `w_sshotgun`, `w_machinegun`, `w_chaingun`, `a_grenades`,
+  `w_glauncher`, `w_rlauncher`, `w_hyperblaster`, `w_railgun`, `w_bfg` (1–11); missing falls back to
+  that `weapon.md2`, then male's; `cl_vwep 0` draws only 0. Their frames are the body's 0–172 (plus an
+  unused 173 `g_view` in most); the weapon is removed at death. Body pitch is view pitch ÷ 3, roll up
+  to 4 × 2° with sideways speed (`sv_rollangle` 2, `sv_rollspeed` 200).
+- **Monsters** think every 100 ms over an action: first and last frame, per frame a movement kind,
+  a step distance (× model scale) and an optional routine, and an end routine. Frames advance by one
+  and wrap; a switch goes to the new first frame unless the current frame is inside the new range; a
+  routine may jump within the action or hold the frame. A death action's end stops the think, so the
+  corpse keeps its last frame. Frame numbers equal model frame indices for every shipped monster
+  (measured), so stems give ranges, but an action may use a subrange or frames of another stem.
+  Exceptions: the supertank's names do not follow its actions; the final boss's walker is drawn with
+  the rider model plus the walker as a linked model on one frame (rider frames 0–187 repeat the
+  walker's); `misc_actor` uses a frame list that does not fit the player model it draws (no shipped
+  map places one); a frame past a model's end draws frame 0.
+- **The soldier** (475 frames): stand 146–175 and 176–214, walk 215–247 (usually 215–224) and
+  256–265, start run 97–98, run 99–104, attacks 0–11, 12–29, 30–38 (duck and shoot), 39–44
+  (machine gun, holds attak403 for 0.3–1.0 s), 109–122 (run and shoot), duck 45–49, pains 50–54, 55–61,
+  62–79, 80–96 (thrown upward), deaths 272–307, 308–342, 343–387 (head shot), 388–440, 441–464,
+  465–474, each holding its last frame. Frames 127–145 (`runt`) are unused.
+- **Gibs** spin 0–600°/s on each axis by the server (angles += spin × 0.1 each frame, the client
+  blends), stopping when they land; a landed small meat piece plays frames 1–10. A gibbed monster
+  becomes its head, frame 0, spinning yaw at up to ±600°/s; a gibbed player becomes a head without
+  spin. Player corpses keep their last death frame in 8 recycled slots.
+
+## Monster frame runs (measured; the mapping derived)
+
+Each monster model's frames, grouped by the stem of their names (the frames sharing a name in
+order), read from the full game's first pack by a scratch script (measured). Which run plays which
+action is derived from the names where the reader's note gives no table (all but the soldier):
+`server/sequel_poses.cpp` holds the runs it uses. Notable bends: the infantry's and the gunner's
+`stand` run is one long run (its fidget and its stand are not told apart by name); the boss2
+model's stand begins with stand30–50 before stand1–29; the flyer has no death run (it explodes);
+the flipper's swim is `flphor`, its bite `flpbit`; the hover's move is `forwrd`; the mutant's
+`attack` run serves its claws and its leap alike.
+
+## The carried weapon on the wire (read)
+
+- **The names come from the model configstrings.** An entry starting `#` is a carried-weapon file
+  name relative to `players/<model>/`, never a model to load or download. The game registers, while
+  the world entity spawns (after the map, its `*n` brush models and the Blaster's models; before
+  every other entity's): `#w_blaster.md2`, `#w_shotgun.md2`, `#w_sshotgun.md2`, `#w_machinegun.md2`,
+  `#w_chaingun.md2`, `#a_grenades.md2`, `#w_glauncher.md2`, `#w_rlauncher.md2`,
+  `#w_hyperblaster.md2`, `#w_railgun.md2`, `#w_bfg.md2` (CTF adds `#w_grapple.md2` last).
+- **The client's list** is built once per level load: slot 0 `weapon.md2`, then each `#` entry in
+  configstring order (walking up from model index 1 to the first empty one), at most 20 slots.
+  Extra entries are ignored, and a `#` entry set mid-level waits for the next load. `cl_vwep 0`
+  (archived, default 1) loads only slot 0. A cyborg missing a file tries male's. A player's info is
+  valid only if body, skin, icon and `weapon.md2` all load; otherwise it draws as male/grunt.
+- **The high byte** (skin number shifted right 8) indexes that list directly, so it is the 1-based
+  position among the `#` entries; the stock 1–11 only holds because the game registers them in its
+  item order. The game writes item number × 256 + slot on every weapon change, only while the body's
+  model index is 255; 0 when there is no weapon (not reached in stock play). An index of 20 or more,
+  or `cl_vwep 0`, means slot 0; a slot that did not load falls back to that player's slot 0, then
+  male's `weapon.md2`. The skin number goes on the wire as 1, 2 or 4 bytes (below 256, below 65536,
+  else), so a player with a weapon sends 2.
+- **The low byte** is the slot (entity number − 1), naming the player-skin configstring
+  `<name>\<model>/<skin>`. Body model index 255 means "body and skin from that client info"; model
+  index 0 draws nothing, linked models included. Sexed sounds go by entity number − 1, so the low
+  byte must equal it.
+- **Model index 2 = 255** on a live player (set at spawn) is the carried weapon; 0 at death and at
+  intermission (where the body's index and index 3 go to 0 too). The game sends nothing in indices
+  3 and 4 for players. The client draws any non-zero index 2, 3 or 4 as extra models with the body's
+  origin, angles, frame, previous frame and blend, skin 0 of the file and no render flags (the
+  colour shell stays on the body); index 2 with bit 0x80 set draws model (value − 128) translucent
+  at alpha 0.32.
+- **The view model** is the player state's gun index, an ordinary model index (the item's
+  `models/weapons/v_*/tris.md2`), reset to frame 0 on each change, 0 at intermission or with no
+  weapon; independent of all the above. A client never draws its own player entity (body or linked
+  models), so a player sees only that view model.
+
 ## Not yet specified
 
 The recording format (`.dm2`, the demo's `q2demo1.dm2`) and the network protocol (version 34)

@@ -26,12 +26,10 @@ namespace {
 
 namespace sh = ge::shooter;
 
-constexpr int32_t kWRockets = 32;      // the launcher's W_ bit
-constexpr int32_t kRocketsNumber = 7;  // and its impulse
-constexpr double kPackSeen_s = 2;      // the victim's place known this lately: where the pack lies
-constexpr float kPackReached = 48;     // a called pack this near is had (or gone)
-constexpr double kBoreHold_s = 1.5;    // the bore's command held this long at most
-constexpr double kPackCall_s = 3;  // a pack's call waits this long at most for its turn to speak
+constexpr double kPackSeen_s = 2;    // the victim's place known this lately: where the pack lies
+constexpr float kPackReached = 48;   // a called pack this near is had (or gone)
+constexpr double kBoreHold_s = 1.5;  // the bore's command held this long at most
+constexpr double kPackCall_s = 3;    // a pack's call waits this long at most for its turn to speak
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;
@@ -321,7 +319,9 @@ int32_t packs_known_goal(Fighter& f, sh::Vec3f me, const Stats& st, double t, bo
                          bool in_sight) {
   if (f.known_packs.empty() || !f.bot.pilot.pilot.g || in_sight) return -1;
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
-  const bool full = st.rockets >= 100 && st.shells >= 100 && st.nails >= 200 && st.cells >= 100;
+  bool full = true;  // every ammunition at its most: a pack gives nothing
+  for (int i = 0; i < st.arsenal->ammo_count; i++)
+    full = full && st.ammo[i] >= st.arsenal->ammo_max[i];
   const bool greedy = f.sense == MapSense::novice;
   const KnownPack* best = nullptr;
   int32_t best_node = -1;
@@ -368,7 +368,7 @@ int32_t packs_goal(Fighter& f, sh::Vec3f me, const Stats& st, double t) {
   }
   // A mate answered the call (`coming [ga]`) before this player did: his pack.
   if (mn.pack_claim_t > mn.pack_t && mn.pack_answered != mn.pack_t) return -1;
-  const bool lack = (st.items & kWRockets) == 0;
+  const bool lack = !has_launcher(st);
   if (mn.pack_rl ? !lack : false) return -1;  // a launcher of its own: the pack is a mate's
   // The quad's carrier goes; else only the one who believes himself the nearest of his team.
   const bool quad = (st.items & 4194304) != 0;
@@ -393,7 +393,7 @@ bool packs_bore(Fighter& f, const server::RulesCommon& s, int me, const Stats& s
   const sh::Vec3f at = s.world.entities[static_cast<size_t>(me)].origin;
   if (t >= f.bore_until) {
     if (!f.team || f.teamwork == MapSense::novice || sh::selfish(f.traits)) return false;
-    if ((st.items & kWRockets) == 0 || st.rockets < 1 || t - f.bored_at < kBoreGap_s) return false;
+    if (!has_launcher(st) || launcher_rounds(st) < 1 || t - f.bored_at < kBoreGap_s) return false;
     if (st.health + st.armor * st.armortype > kBoreWeak) return false;  // its rocket would not do
     bool carrier = false;
     for (const Mate& m : f.mind.mates)
@@ -409,8 +409,8 @@ bool packs_bore(Fighter& f, const server::RulesCommon& s, int me, const Stats& s
     f.stats.bored++;
   }
   // The launcher in hand, the view at its own feet, still; fired once it is up.
-  if (st.weapon != kWRockets) {
-    cmd.impulse = kRocketsNumber;
+  if (!holds_launcher(st)) {
+    cmd.impulse = static_cast<uint8_t>(launcher_number(*st.arsenal));
   } else {
     cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonAttack);
   }

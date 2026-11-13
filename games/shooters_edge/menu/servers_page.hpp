@@ -1,5 +1,6 @@
 // SHOOTER'S EDGE'S SERVER BROWSER (MULTIPLAYER ▸ JOIN A GAME, `menu_servers`): the engine's server
-// list (net/server_list.hpp) on a socket of the page's own, drawn in the modern menu's look.
+// list (net/server_list.hpp) on a socket of the page's own, drawn in the modern menu's look or the
+// loaded game's classic one (`draw_classic`, classic_pages.hpp: its glyph sheet, its title).
 //
 // - WHERE IT LOOKS: the LAN (`sb_lan` 1: the status query broadcast to the ports the game's
 //   servers use), the masters (`sb_masters`, host:port words, and the masters the loaded install
@@ -32,6 +33,7 @@
 
 #include "net/server_list.hpp"
 #include "net/transport.hpp"
+#include "shooters_edge/menu/classic_art.hpp"
 #include "ui/draw.hpp"
 #include "ui/menu.hpp"
 #include "ui/menu_view.hpp"
@@ -74,6 +76,9 @@ class ServersPage {
   const std::string& chosen() const { return chosen_; }
 
   void draw(ge::ui::DrawList& list, int width, int height, const ge::ui::MenuStyle& style);
+  // The same in the loaded game's classic look, in its glyph sheet (classic_pages.hpp); `t` blinks
+  // the cursor.
+  void draw_classic(ge::ui::DrawList& list, const ClassicArt& art, int width, int height, double t);
   const std::vector<std::string>& problems() const { return problems_; }
 
   const ge::net::ServerList& list() const { return list_; }

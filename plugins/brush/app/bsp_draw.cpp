@@ -16,6 +16,7 @@
 #include "brush/app/bsp_fix.wgsl.hpp"
 #include "brush/app/bsp_flames.hpp"
 #include "brush/app/bsp_shadow.wgsl.hpp"
+#include "render/sky.hpp"
 #include "render/view.hpp"
 #include "water/glow.hpp"
 
@@ -238,6 +239,21 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
       upload(device, d.cover, solid);
     }
   }
+  {
+    // The map's sky box (draw_data.hpp's Scene::sky_box), or a 1 x 1 stand-in the shader skips.
+    const bool has = !scene.sky_box.levels.empty();
+    const uint32_t w = has ? scene.sky_box.width : 1, h = has ? scene.sky_box.height : 1;
+    d.sky_box = r::make_texture(device, "bsp.sky_box", w, h, 1, wgpu::TextureFormat::RGBA8UnormSrgb,
+                                sampled, 1);
+    if (has) {
+      upload(device, d.sky_box, scene.sky_box);
+    } else {
+      Atlas none;
+      none.width = none.height = 1;
+      none.levels.push_back({0, 0, 0, 255});
+      upload(device, d.sky_box, none);
+    }
+  }
   d.light = r::make_texture(device, "bsp.lightmaps", scene.light.width, scene.light.height, 1,
                             wgpu::TextureFormat::RGBA8Unorm, sampled);
   upload(device, d.light, scene.light);
@@ -278,9 +294,11 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     }
   }
 
-  d.cubes = depth_array(device, "bsp.cubes", kCubeSize, kMaxShadowed * 6);
-  for (uint32_t k = 0; k < kMaxShadowed * 6; ++k) d.cube_layers.push_back(layer_view(d.cubes, k));
-  d.cubes_view = array_view(d.cubes, kMaxShadowed * 6);
+  d.cube_slots = std::min(kMaxShadowed, int(device.limits.maxTextureArrayLayers / 6));
+  const uint32_t cube_layers = uint32_t(d.cube_slots) * 6;
+  d.cubes = depth_array(device, "bsp.cubes", kCubeSize, cube_layers);
+  for (uint32_t k = 0; k < cube_layers; ++k) d.cube_layers.push_back(layer_view(d.cubes, k));
+  d.cubes_view = array_view(d.cubes, cube_layers);
   {
     // One atlas, a row a light and a column a face, so a frame draws them all in one pass.
     wgpu::TextureDescriptor desc{};
@@ -337,14 +355,14 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
       {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler, Slot::storage_read,
        Slot::depth_array, Slot::compare, Slot::depth_array, Slot::texture, Slot::texture,
        Slot::storage_read, Slot::storage_read, Slot::texture, Slot::texture, Slot::texture,
-       Slot::storage_read, Slot::depth_array},
+       Slot::storage_read, Slot::depth_array, Slot::texture},
       both);
   d.group = r::make_group(
       device, "bsp", d.layout,
       {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler, d.lights,
        d.cubes_view, d.compare, d.orthos_view, d.rebake_rgb.CreateView(), d.rebake_dir.CreateView(),
        d.frames, d.movers, d.surface.CreateView(), d.rebake_bounce.CreateView(),
-       d.cover.CreateView(), d.grid, d.caster_cubes_view});
+       d.cover.CreateView(), d.grid, d.caster_cubes_view, d.sky_box.CreateView()});
   d.fix_layout = r::make_layout(device, "bsp.sky", {Slot::texture, Slot::uniform},
                                 wgpu::ShaderStage::Fragment);
   d.shadow_layout = r::make_layout(device, "bsp.shadows", {Slot::storage_read}, both);
@@ -382,7 +400,8 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     depth.depthCompare = wgpu::CompareFunction::Greater;
     wgpu::RenderPipelineDescriptor desc{};
     desc.label = "bsp.draw";
-    desc.layout = r::make_pipeline_layout(device, "bsp.draw", {frame, d.layout});
+    desc.layout = r::make_pipeline_layout(device, "bsp.draw",
+                                          {r::frame_layout(device, r::kFrameSurface), d.layout});
     desc.vertex.module = module;
     desc.vertex.entryPoint = "vs_main";
     desc.vertex.bufferCount = 1;
@@ -537,7 +556,7 @@ static bool same_job(const GpuJob& a, const GpuJob& b) {
 void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, const Options& o) {
   const Scene& s = *d.scene;
   d.options = o;
-  d.options.shadowed = std::clamp(o.shadowed, 0, kMaxShadowed);
+  d.options.shadowed = std::clamp(o.shadowed, 0, d.cube_slots);
   const bool lights = o.mode == Mode::v2 && o.lighting == Lighting::lights;
   // The lights near enough to the eye to reach what it sees, nearest first.
   struct Pick {
@@ -686,7 +705,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   for (const size_t c : casters) {
     const std::array<float, 4> key = key_of(d.frame_lights[c]);
     int slot = -1;
-    for (int k = 0; k < kMaxShadowed && slot < 0; ++k)
+    for (int k = 0; k < d.cube_slots && slot < 0; ++k)
       if (d.slot_held[size_t(k)] && !taken[size_t(k)] && d.slot_key[size_t(k)] == key) slot = k;
     if (slot < 0) {
       homeless.push_back(c);
@@ -700,7 +719,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   d.shadows_waiting = 0;
   // The first frame after the map is made draws every cube: it is the load's, not play's (unless
   // the caller warms the map up over frames of its own: `first_all` off).
-  const size_t budget = d.shadow_frame == 1 && o.first_all ? size_t(kMaxShadowed)
+  const size_t budget = d.shadow_frame == 1 && o.first_all ? size_t(d.cube_slots)
                                                            : size_t(std::max(o.fresh_cubes, 0));
   for (const size_t c : homeless) {
     if (d.fresh_slots.size() >= budget) {
@@ -708,11 +727,11 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       continue;
     }
     int slot = -1;
-    for (int k = 0; k < kMaxShadowed; ++k) {
+    for (int k = 0; k < d.cube_slots; ++k) {
       if (taken[size_t(k)]) continue;
       if (slot < 0 || d.slot_used[size_t(k)] < d.slot_used[size_t(slot)]) slot = k;
     }
-    taken[size_t(slot)] = true;  // casters <= kMaxShadowed: one is always free
+    taken[size_t(slot)] = true;  // casters <= cube_slots: one is always free
     d.slot_key[size_t(slot)] = key_of(d.frame_lights[c]);
     d.slot_held[size_t(slot)] = true;
     d.slot_used[size_t(slot)] = d.shadow_frame;
@@ -720,7 +739,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     d.frame_lights[c].info[0] = float(slot * 6);
   }
   // Every held slot's six faces, so the jobs buffer always says what its cubes hold.
-  for (int k = 0; k < kMaxShadowed; ++k) {
+  for (int k = 0; k < d.cube_slots; ++k) {
     if (!d.slot_held[size_t(k)]) continue;
     const std::array<float, 4>& key = d.slot_key[size_t(k)];
     for (int f = 0; f < 6; ++f) {
@@ -848,6 +867,10 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   // The relief (v2, a scene with a surface atlas): on, the parallax's depth and reach.
   const bool relief = o.relief && o.mode == Mode::v2 && !s.surface.levels.empty();
   const double parallax = relief ? std::max(o.parallax, 0.0) : 0;
+  // The map's sky box: on, and half a texel of the atlas (each face's edge is inset by it).
+  const bool box = !s.sky_box.levels.empty() && s.sky_box_face > 0;
+  const double inset = box ? 0.5 / double(s.sky_box_face) : 0;
+  set4(d.staged.sky_box, box ? 1 : 0, inset, inset, 0);
   set4(d.staged.info4, o.bump, o.pack_sky ? 1 : 0, parallax > 0 ? o.parallax_reach : 0,
        relief ? o.specular : 0);
   set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers,
@@ -1043,7 +1066,7 @@ void encode_bsp_shadows(const BspDraw& d, const gpu::PipelineSet& pipelines, r::
 
 void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRecorder& rec,
                 wgpu::CommandEncoder& encoder, const r::FrameTargets& targets,
-                const wgpu::BindGroup& frame) {
+                const r::FrameGroup& frame) {
   const bool v2 = d.options.mode == Mode::v2;
   encode_bsp_shadows(d, pipelines, rec, encoder);
   // The map: every kind's faces, or (culled) a phase's, drawn into the targets; the late phase
@@ -1074,7 +1097,7 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
     const bool lit_only =
         d.staged.info[0] > 0.5f && d.staged.info[1] == 1.0f && d.staged.weather[0] < 0.5f;
     pass.SetPipeline(pipelines.render(lit_only ? d.p_draw_lit : d.p_draw));
-    pass.SetBindGroup(0, frame);
+    pass.SetBindGroup(0, frame.surface);
     pass.SetBindGroup(1, d.group);
     pass.SetVertexBuffer(0, d.vertices);
     pass.SetIndexBuffer(culled ? d.cull.dst : d.indices, wgpu::IndexFormat::Uint32);
