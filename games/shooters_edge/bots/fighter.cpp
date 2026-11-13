@@ -1172,6 +1172,11 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
           if (pool && f.reach.reached(static_cast<int32_t>(n))) continue;
           if (pool && f.swim && !wet_node(n)) continue;
           if (d.z > (swim || pool ? 240 : 48)) continue;
+          // (`lostdry`) On dry land, never back onto a node in lava or slime or on a mover (dm2's
+          // south pit: the nearest nodes in a clear line stood on its trains, over the lava).
+          if (f.features[sh::Feature::lostdry] && !pool && !swim &&
+              ((!g.harm.empty() && g.harm[n] != 0) || g.nodes[n].mover >= 0))
+            continue;
           const float dd = d.x * d.x + d.y * d.y + d.z * d.z;
           if (nn == kLook && dd >= near_d[kLook - 1]) continue;
           int k = nn < kLook ? nn++ : kLook - 1;
