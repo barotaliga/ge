@@ -12,6 +12,19 @@ if(NOT GE_WEB)
   target_include_directories(ge_webtransport SYSTEM PRIVATE ${GE_QUIC_INCLUDES})
   target_compile_definitions(ge_webtransport PRIVATE ${GE_QUIC_DEFINES})
   if(WIN32)
+    # picotls.h asks Windows for "wincompat.h"; its own pulls in the socket headers and defines
+    # ssize_t as a macro. This one gives the endpoint only what the header needs, as a type.
+    file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/ge_webtransport_win/wincompat.h" CONTENT [=[
+#pragma once
+#include <stdint.h>
+typedef int ssize_t; /* what the library itself was built with */
+#ifndef __attribute__
+#define __attribute__(X)
+#endif
+]=])
+    target_include_directories(ge_webtransport SYSTEM PRIVATE
+      "${CMAKE_BINARY_DIR}/ge_webtransport_win")
+    target_compile_definitions(ge_webtransport PRIVATE _WINDOWS=1)
     target_link_libraries(ge_webtransport PRIVATE bcrypt)
   endif()
 endif()
