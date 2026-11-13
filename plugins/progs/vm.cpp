@@ -96,6 +96,16 @@ void unwind(Vm& vm, int entry_depth) {
 
 // Runs builtin `number` with `argc` arguments. False on a fault.
 bool run_builtin(Vm& vm, int32_t number, int argc) {
+  if (number >= kNativeBase) {  // a native program's function (native.hpp)
+    const size_t i = static_cast<size_t>(number - kNativeBase);
+    if (i >= vm.natives.size() || vm.natives[i] == nullptr) {
+      raisef(vm, "native function %lld is not provided by this game", number - kNativeBase);
+      return false;
+    }
+    vm.argc = argc;
+    vm.natives[i](vm);
+    return !vm.fault.set;
+  }
   if (number <= 0 || number >= static_cast<int32_t>(vm.builtins.size()) ||
       vm.builtins[static_cast<size_t>(number)].fn == nullptr) {
     raisef(vm, "builtin %lld is not provided by this game", number);
@@ -555,6 +565,11 @@ bool call_function(Vm& vm, int32_t fn) {
   }
   vm.statement = saved_statement;
   return ok;
+}
+
+bool call_builtin(Vm& vm, int32_t number, int argc) {
+  if (vm.fault.set) return false;
+  return run_builtin(vm, number, argc);
 }
 
 void vm_error(Vm& vm, const char* message) { raise(vm, message); }
