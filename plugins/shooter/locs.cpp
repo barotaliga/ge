@@ -103,23 +103,23 @@ std::vector<Loc> loc_places(const Locs& locs) {
   return out;
 }
 
-const Loc* nearest_loc(const Locs& locs, Vec3f p, float range) {
+const Loc* nearest_loc(const Locs& locs, Vec3f p, float range, const LocSight& seen) {
   const Loc* best = nullptr;
   float best_d = 0;
   for (const Loc& l : locs.points) {
     const Vec3f d = l.at - p;
     const float dd = d.x * d.x + d.y * d.y + d.z * d.z;
     if (range > 0 && dd > range * range) continue;
-    if (!best || dd < best_d) {
-      best = &l;
-      best_d = dd;
-    }
+    if (best && dd >= best_d) continue;
+    if (seen && !seen(p, l.at)) continue;  // asked only of a point that would be nearer
+    best = &l;
+    best_d = dd;
   }
   return best;
 }
 
-std::string loc_name_at(const Locs& locs, Vec3f p, float range) {
-  const Loc* l = nearest_loc(locs, p, range);
+std::string loc_name_at(const Locs& locs, Vec3f p, float range, const LocSight& seen) {
+  const Loc* l = nearest_loc(locs, p, range, seen);
   return l ? l->name : std::string();
 }
 
@@ -131,8 +131,8 @@ void add_loc(Locs& locs, Vec3f at, std::string_view raw) {
   locs.points.push_back(std::move(l));
 }
 
-bool remove_nearest_loc(Locs& locs, Vec3f at, Loc* removed, float range) {
-  const Loc* near = nearest_loc(locs, at, range);
+bool remove_nearest_loc(Locs& locs, Vec3f at, Loc* removed, float range, const LocSight& seen) {
+  const Loc* near = nearest_loc(locs, at, range, seen);
   if (near == nullptr) return false;
   const auto i = locs.points.begin() + (near - locs.points.data());
   if (removed != nullptr) *removed = *i;
@@ -155,6 +155,23 @@ std::string locs_text(const Locs& locs) {
     out += '\n';
   }
   return out;
+}
+
+std::vector<std::string> recorded_loc_lines(const Locs& locs) {
+  std::vector<std::string> out;
+  const std::string text = locs_text(locs);
+  size_t at = 0;
+  while (at < text.size()) {
+    const size_t end = text.find('\n', at);
+    out.push_back(std::string(kRecordedLoc) + text.substr(at, end - at) + "\n");
+    at = end + 1;
+  }
+  return out;
+}
+
+bool read_recorded_loc(std::string_view line, Locs& out) {
+  if (line.substr(0, kRecordedLoc.size()) != kRecordedLoc) return false;
+  return parse_locs(line.substr(kRecordedLoc.size()), out) > 0;
 }
 
 }  // namespace ge::shooter

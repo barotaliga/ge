@@ -102,6 +102,7 @@ struct Game {
   // The match being played, tallied each frame, and the report of the one that just ended (taken
   // once by the core: `match_report`).
   MatchTally tally;
+  StatsEyes stats_eyes;  // the weapon stats' last frame (classic_stats.hpp)
   ge::net::MatchReport report;
   bool report_ready = false;
   ~Game() {
@@ -1123,6 +1124,8 @@ void tally(Game& g) {
   const bool counting =
       rule_number(g, "deathmatch") != 0 && (!lobby || g.room->lobby.phase == gs::LobbyPhase::match);
   tally_frame(g.tally, g.rules->world, counting, accounts);
+  if (const sv::QcServer* q = sv::qc_of(g.rules))
+    stats_frame(g.stats_eyes, tally_stats(g.tally), *q);
 }
 
 // The match is over: its report made, for the core to take.
@@ -1133,8 +1136,11 @@ void end_match(Game& g) {
   f.fraglimit = rule_number(g, "fraglimit");
   f.timelimit = rule_number(g, "timelimit");
   f.stopped = g.rules->map_stopped;
+  f.stats = sv::qc_of(g.rules) != nullptr;
   ge::net::MatchReport r;
   if (!tally_end(g.tally, g.rules->world, f, r)) return;
+  if (g.classic)
+    for (const std::string& line : stats_lines(r)) classic_print_all(*g.classic, line + "\n");
   g.report = std::move(r);
   g.report_ready = true;
 }

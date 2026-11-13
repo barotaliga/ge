@@ -394,6 +394,37 @@ void shoot(SequelServer& s, SequelMonster& m, const Attack& a, int n) {
   const sh::Vec3f from = eye(e, kind(m));
   m.ideal_yaw = yaw_to(unpack(s.players[m.enemy].move.origin) - e.origin);
   if (a.fire != Fire::sweep) e.angles.y = m.ideal_yaw;
+  // The shot leaving: its flash at the gun along the aim (a burst's every frame).
+  const char* flash = nullptr;
+  switch (a.fire) {
+    case Fire::bolt:
+    case Fire::sweep:
+      flash = "te_monster_flash.blaster";
+      break;
+    case Fire::pellets:
+    case Fire::burst:
+    case Fire::guns:
+      flash = "te_monster_flash.gun";
+      break;
+    case Fire::grenade:
+    case Fire::rockets:
+      flash = "te_monster_flash.rocket";
+      break;
+    case Fire::rail:
+      flash = "te_monster_flash.rail";
+      break;
+    case Fire::bfg:
+      flash = "te_monster_flash.bfg";
+      break;
+    default:
+      break;
+  }
+  if (flash != nullptr) {
+    const sh::Vec3f to = unpack(s.players[m.enemy].move.origin);
+    sh::Vec3f d = to - from;
+    sh::normalize(d);
+    fight_monster_line(s, flash, m.entity, from, from + d * 16.0f);
+  }
   switch (a.fire) {
     case Fire::bolt:
       for (int i = 0; i < a.count; i++)
@@ -426,6 +457,8 @@ void shoot(SequelServer& s, SequelMonster& m, const Attack& a, int n) {
       return;
     case Fire::drain: {  // a tongue that holds while the line is clear
       if (!reaches(s, m, m.enemy, kShotMask & ~sh::kSqMonster)) return;
+      fight_monster_line(s, "te_parasite_attack", m.entity, from,
+                         unpack(s.players[m.enemy].move.origin));
       const int dmg = m.burst_frame == 0 ? a.damage : a.damage_max;
       fight_hurt(s, m.enemy, -1, {}, dmg, 0, cause_of(m));
       return;
@@ -714,6 +747,7 @@ bool tend(SequelServer& s, SequelMonster& m) {
   }
   const bool near = sh::length(b.origin - e.origin) <= 256 && sees_body(s, m, c);
   if (m.revive_at > 0) {  // the cable is out
+    if (near) fight_monster_line(s, "te_medic_cable_attack", m.entity, eye(e, kind(m)), b.origin);
     if (s.level_time + 0.001 < m.revive_at) return true;
     if (near) {
       fight_effect(s, "te_medic_cable", b.origin);

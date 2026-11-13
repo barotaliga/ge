@@ -5,7 +5,8 @@
 // matches. Totals are kept per game, mode, map and ping band (the player's average ping in the
 // match: under 40, 80, 120 or 200 ms, or more), so a player's are read whole, for one map, for one
 // mode, with some modes left out, or at a good ping only (`TotalsFilter`); the game's own columns
-// (a weapon's hits, the damage given) are summed by name beside the common ones. A report is taken
+// (a weapon's hits, the damage given) are summed by name beside the common ones, but for one whose
+// name ends `_max` (the longest streak), which keeps its largest. A report is taken
 // once by its server's key and id, so one sent again (its answer lost) counts once. A guest
 // (account 0) and a bot add to no totals.
 //

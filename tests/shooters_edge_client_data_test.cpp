@@ -205,7 +205,7 @@ TEST(lookspring_drifts_the_pitch_only_while_moving_on_the_ground_with_the_mouse_
   CHECK(near(view.x, 4.8f));  // the mouse is pitching the view
 }
 
-TEST(a_blow_kicks_the_view_away_from_its_source) {
+TEST(a_blow_kicks_the_view_toward_its_source_by_its_count) {
   pg::Progs stub;
   std::string error;
   CHECK_MSG(sv::build_campaign_stub(stub, error), error);
@@ -230,7 +230,11 @@ TEST(a_blow_kicks_the_view_away_from_its_source) {
     return v.pose;
   };
   const ge::camera::Pose before = look(false), after = look(true);
-  // A blow from the front pitches the view up; one from the right rolls it.
-  CHECK_MSG(after.pitch > before.pitch + 0.01, std::to_string(after.pitch - before.pitch));
-  CHECK_MSG(std::fabs(after.roll - before.roll) > 0.01, std::to_string(after.roll - before.roll));
+  // A blow of count 20 from ahead and to the right (45 degrees): the classic kick, toward it, of
+  // 20 x 0.6 x cos 45 degrees: the pitch down and the right side down.
+  const double kick = 20 * 0.6 * std::sqrt(0.5) * 3.14159265358979323846 / 180;
+  CHECK_MSG(std::fabs((before.pitch - after.pitch) - kick) < 1e-3,
+            std::to_string(before.pitch - after.pitch));
+  CHECK_MSG(std::fabs((after.roll - before.roll) - kick) < 1e-3,
+            std::to_string(after.roll - before.roll));
 }

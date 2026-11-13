@@ -164,6 +164,52 @@ TEST(a_second_game_look_is_its_folder_and_skin_with_the_default_figure_behind) {
   CHECK(l.folder.empty() && l.skin == gr::kOwnSkin);
 }
 
+TEST(teammates_and_enemies_wear_the_skin_and_colours_forced_on_their_side) {
+  CHECK(md::side_of(true, "red", "red") == md::Side::team);
+  CHECK(md::side_of(true, "red", "blue") == md::Side::enemy);
+  CHECK(md::side_of(false, "red", "red") == md::Side::enemy);  // teamplay off: all enemies
+  CHECK(md::side_of(true, "", "") == md::Side::enemy);         // no team: no teammates
+  md::SkinChoice c;
+  c.team = "olive";
+  c.enemy = "rust";
+  CHECK(md::forced_skin(c, md::Side::team, "blue") == "olive");
+  CHECK(md::forced_skin(c, md::Side::enemy, "blue") == "rust");
+  CHECK(md::forced_skin(c, md::Side::none, "blue") == "blue");
+  c.all = "neon";  // allskins over both
+  CHECK(md::forced_skin(c, md::Side::team, "blue") == "blue");
+  int top = 0, bottom = 0;
+  CHECK(md::parse_forced_colours("4", "", &top, &bottom) && top == 4 && bottom == 4);
+  CHECK(md::parse_forced_colours("2", "16", &top, &bottom) && top == 2 && bottom == 13);
+  CHECK(!md::parse_forced_colours("red", "", &top, &bottom) && top == 2);
+  CHECK(md::parse_forced_colours("off", "", &top, &bottom) && top == -1 && bottom == -1);
+  c.enemy_top = 4;
+  c.enemy_bottom = 12;
+  uint32_t t = 1, b = 2;
+  md::forced_colours(c, md::Side::team, &t, &b);
+  CHECK(t == 1 && b == 2);  // teammates keep theirs
+  md::forced_colours(c, md::Side::enemy, &t, &b);
+  CHECK(t == 4 && b == 12);
+}
+
+TEST(a_first_game_player_named_figure_wears_its_folders_picture) {
+  const std::unordered_map<std::string, uint32_t> figures{{"cyborg", 0}};
+  const std::unordered_map<std::string, uint32_t> skins{{"cyborg/oni911", 5}, {"cyborg/ps9000", 6}};
+  const std::unordered_map<std::string, uint32_t> first{{"cyborg", 5}};
+  md::SkinChoice c;
+  md::Look l = md::choose_figure(c, "Cyborg", "PS9000.pcx", figures, skins, first);
+  CHECK(l.folder == "cyborg" && l.skin == 6);
+  l = md::choose_figure(c, "cyborg", "rust", figures, skins,
+                        first);  // not in the folder: its first
+  CHECK(l.folder == "cyborg" && l.skin == 5);
+  CHECK(md::choose_figure(c, "", "rust", figures, skins, first).folder.empty());
+  CHECK(md::choose_figure(c, "robot", "rust", figures, skins, first).folder.empty());
+  CHECK(md::choose_figure(c, "../cyborg", "rust", figures, skins, first).folder.empty());
+  c.all = "ps9000";  // allskins in the folder too
+  CHECK(md::choose_figure(c, "cyborg", "oni911", figures, skins, first).skin == 6);
+  c.noskins = 1;  // the game's own figure
+  CHECK(md::choose_figure(c, "cyborg", "oni911", figures, skins, first).folder.empty());
+}
+
 TEST(the_fronts_face_out_in_the_engines_frame) {
   const gr::MorphModel out = md::morph_from_alias(ge::morph::sample_model(), grey_palette(), 0);
   const std::vector<float>& p = out.positions[0];

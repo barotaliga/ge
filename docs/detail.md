@@ -74,6 +74,8 @@ floor, blood runs over a step's rounded nose, and nothing floats past an edge.
 | `scorch` | a ragged burnt core, tongues thrown out by the blast, a soot halo; embers in patches of the core and along the tongues | near-black, matte; its embers glow white-orange at the blast and cool through red, out by 0.6 s (`ember_s`), as the fireball dies | kept |
 | `bullet_hole` | a dark hole, a crater to a pale rim, three to six cracks, a halo of dust | dark grey | kept |
 | `blood` | a splash with a rim, a run one way, six to ten droplets | wet red, drying to matte brown over 45 s | fades over the last 60 s of 120 s |
+| `burn_line` | a beam's burnt line along u: a ragged black core wandering a little off the middle (never at the ends), a thin soot halo, both thinned over each end's last stretch; its box `length_m` long along `along` | white-hot, cooling through orange and red to black over 3 s | kept |
+| `melt` | the pool a held beam or a hot hit melts: a ragged molten middle, a ring of raised slag, a soot halo | as `burn_line`; `DecalAt::ember_s` lengthens it (a big burst's mark cools slower); pressed again larger in its own slot (`DecalAt::slot`, `serial`) | kept |
 
 The masks are pure functions of the kind, a variant number and (u, v); a renderer bakes them once
 (`bake_atlas`: cover in red and alpha, the relief in green, the embers in blue), a CPU lab reads

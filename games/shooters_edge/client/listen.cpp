@@ -1088,6 +1088,12 @@ bool listen_lobby(Listen& l, std::string_view line) {
   return taken;
 }
 
+bool listen_say(Listen& l, const std::string& line) {
+  if (l.rules == nullptr || l.server == nullptr) return false;
+  l.rules->client_command(0, line);
+  return true;
+}
+
 bool listen_admin(Listen& l, const std::string& line, std::string& out) {
   if (!l.host || l.host->admin == nullptr || l.host->game == nullptr || l.match == nullptr)
     return false;
@@ -1157,6 +1163,12 @@ PlayerState player_state(const Listen& l) {
   p.health = me.health;
   p.dead = me.health <= 0;
   p.on_ground = (me.flags & sh::kFlagOnGround) != 0;
+  p.view_ofs = me.view_ofs;
+  if (const sv::PlayerNumbers& n = l.server->world.clients[0].numbers; n.view_set) {
+    p.rules_view = true;
+    p.view_ofs = {n.view_offset[0], n.view_offset[1], n.view_offset[2]};
+    p.kick = {n.kick[0], n.kick[1], n.kick[2]};
+  }
   const sv::QcServer* q = program(l);
   if (q == nullptr) return p;
   const pg::Vm& vm = q->q.vm;

@@ -70,6 +70,7 @@
 #include "shooter/midair.hpp"
 #include "shooter/pmove.hpp"
 #include "shooter/sequel_move.hpp"
+#include "shooter/sequel_view.hpp"
 #include "shooter/world.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
@@ -237,6 +238,11 @@ struct SequelPlayer {
   double picked_at = -100;
   int64_t hit_frame = -1;
   int hit_bits = 0;
+  // His view (plugins/shooter/sequel_view.hpp): its state, this frame's offset and kick, and the
+  // angles the dead view lies at.
+  ge::shooter::SequelViewState view;
+  ge::shooter::SequelView seen;
+  sh::Vec3f dead_angles;
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.

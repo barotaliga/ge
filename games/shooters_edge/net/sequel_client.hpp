@@ -45,6 +45,9 @@ struct SequelClientConfig {
   uint16_t qport = 1;
   int seed = 1;
   int send_every = 1;  // ticks between packets in the game (a slower client sends fewer)
+  // Seconds between spells of 150 ms in which the moves acknowledge no frame (0: never), so the
+  // server sends its next frame whole: a relay of this recording starts a late viewer there.
+  double whole_every = 0;
   // Through forwarders (engine/forward): the hops in order, the server after them. The route is
   // dialled first (`ge::forward::Dial`), then the game's own handshake goes to the first hop.
   std::vector<gn::Address> via;
@@ -60,7 +63,7 @@ struct SequelClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   std::string refused;  // the server's reason when refused or dropped
   int32_t challenge = 0;
   Channel ch;
-  double now = 0, last_ask = -1, last_tick = -1;
+  double now = 0, last_ask = -1, last_tick = -1, last_whole = -1;
   ge::forward::Dial dial;  // the route through `cfg.via`, when it has hops
   bool dialing = false;
   int tick = 0;

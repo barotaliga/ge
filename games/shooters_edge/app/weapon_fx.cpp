@@ -700,7 +700,6 @@ const gr::BeamLook& rail_look() {
     a.hit_cd = 900;
     a.root_cd = 300;
     a.light_rgb[0] = 0.4f, a.light_rgb[1] = 0.55f, a.light_rgb[2] = 1.0f;
-    a.scorch_m = 0.25f;
     a.ember_s = 0.4f;
     return a;
   }();

@@ -54,6 +54,13 @@ void add_user_info_cvars(ge::console::Console& con, UserInfo& info) {
                     .kind = ge::console::CvarKind::text,
                     .values = "\"\": theirs to choose (the default); TEXT: skins/TEXT.pcx"},
                    &info.skin);
+  con.cvars().bind({.name = "model",
+                    .fallback = "",
+                    .flags = ge::console::kArchive | ge::console::kUserInfo,
+                    .help = "The figure others see you as: a folder in their players folder.",
+                    .kind = ge::console::CvarKind::text,
+                    .values = "\"\": the game's own (the default); TEXT: players/TEXT/"},
+                   &info.model);
   con.cvars().bind(
       {.name = "cl_speedjump",
        .fallback = "0",
@@ -85,11 +92,14 @@ void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) 
   if (l.server->sv.clients[0].active && l.server->sv.clients[0].speedjump != info.speedjump)
     l.rules->user_info(0, "cl_speedjump", info.speedjump ? "1" : "0");
   if (l.server == info.sent_to && name == info.name && info.top == info.sent_top &&
-      info.bottom == info.sent_bottom && info.skin == info.sent_skin)
+      info.bottom == info.sent_bottom && info.skin == info.sent_skin &&
+      info.model == info.sent_model)
     return;
   info.sent_to = l.server;
   info.name = name, info.sent_top = info.top, info.sent_bottom = info.bottom;
   info.sent_skin = info.skin;
+  const bool model_named = !info.model.empty() || !info.sent_model.empty();  // none: not sent
+  info.sent_model = info.model;
   l.opt.player = name;
   namespace sv = shooters_edge::server;
   // A match's server tells every client (ListenHost::set_info); a campaign's rules take it.
@@ -101,6 +111,7 @@ void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) 
   };
   set("name", name);
   set("skin", info.skin);
+  if (model_named) set("model", info.model);
   if (l.room) return;  // a team game's lobby wears the team's colours (lobby.cpp)
   set("topcolor", std::to_string(info.top));
   set("bottomcolor", std::to_string(info.bottom));

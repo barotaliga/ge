@@ -265,6 +265,11 @@ SequelPlayerState player_state(const RulesCommon& c, int slot, const sh::SequelS
     p.gravity = 800;
   }
   p.view_offset[2] = quarter(wc.numbers.view_z);
+  if (wc.numbers.view_set)  // the rules' own view: the bob, the tilts and the kicks
+    for (int k = 0; k < 3; k++) {
+      p.view_offset[k] = quarter(wc.numbers.view_offset[k]);
+      p.kick[k] = quarter(wc.numbers.kick[k]);
+    }
   const float va[3] = {e.view_angles.x, e.view_angles.y, e.view_angles.z};
   for (int k = 0; k < 3; k++) p.view_angles[k] = angle16(va[k]);
   p.gun_index = static_cast<uint8_t>(wire_model(wc.numbers.weapon_model));
@@ -413,6 +418,12 @@ void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWi
   for (const auto& [n, one] : parts.baselines) {
     if (blocks.back().size() + one.size() + 64 > size_t(kSequelMaxBlock)) blocks.emplace_back();
     blocks.back().insert(blocks.back().end(), one.begin(), one.end());
+  }
+  for (const std::string& line : opt.stuffed) {
+    if (blocks.back().size() + line.size() + 16 > size_t(kSequelMaxBlock)) blocks.emplace_back();
+    Out l{blocks.back()};
+    l.u8(kStuffText);
+    l.str(line);
   }
   if (blocks.back().size() + 16 > size_t(kSequelMaxBlock)) blocks.emplace_back();
   Out o{blocks.back()};

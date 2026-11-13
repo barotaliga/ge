@@ -19,7 +19,7 @@ namespace {
 
 constexpr size_t kSignonShare = 700;  // bytes of the signon one answer adds before its prompt
 constexpr int kStringCmdsPerPacket = 7;
-constexpr uint8_t kSvcDisconnect = 7, kSvcStuffText = 11, kSvcDownload = 16;
+constexpr uint8_t kSvcDisconnect = 7, kSvcPrint = 10, kSvcStuffText = 11, kSvcDownload = 16;
 constexpr size_t kLogKept = 512;
 
 void note(SequelNetServer& s, std::string line) {
@@ -73,7 +73,8 @@ void drop(SequelNetServer& s, int slot, const std::string& why) {
   SequelNetClient& c = s.clients[slot];
   if (c.stage == SequelSlot::free) return;
   note(s, c.name + " dropped: " + why);
-  if (c.stage == SequelSlot::active) s.rules->drop(slot);
+  // A client signing on again after a level change still holds its slot in the rules.
+  if ((**s.rules).clients[slot].active) s.rules->drop(slot);
   // The disconnect, once, with whatever reliable data is still owed.
   const uint8_t bye[] = {kSvcDisconnect};
   channel_reliable(c.ch, bye, sizeof bye);
@@ -138,7 +139,9 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   c.userinfo = userinfo;
   c.name = info_get(userinfo, "name");
   if (c.name.empty()) c.name = "unnamed";
+  c.userid = s.next_userid++;
   c.spectator = spectator;
+  if (s.name_rule != nullptr) s.name_rule(s.hook_ctx, slot, c.name, true);
   c.heard = s.now;
   channel_setup(c.ch, false, qport, s.now);
   channel_set_rate(c.ch, 0);
@@ -205,6 +208,9 @@ void string_command(SequelNetServer& s, int slot, const std::string& line) {
   if (w.empty()) return;
   const std::string& cmd = w[0];
   const bool signon = cmd == "configstrings" || cmd == "baselines" || cmd == "begin";
+  const bool protocol =
+      signon || cmd == "new" || cmd == "disconnect" || cmd == "download" || cmd == "nextdl";
+  if (!protocol && s.line_hook != nullptr && s.line_hook(s.hook_ctx, slot, line)) return;
   if (signon && (w.size() < 2 || std::atoi(w[1].c_str()) != s.count)) {
     note(s, c.name + " from a different level: the signon starts again");
     return start_signon(s, slot);
@@ -272,7 +278,9 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
       packets.push_back(p);
     } else if (id == kClcUserInfo) {
       c.userinfo = read_string(r);
-      const std::string name = info_get(c.userinfo, "name");
+      std::string name = info_get(c.userinfo, "name");
+      if (!name.empty() && s.name_rule != nullptr)
+        s.name_rule(s.hook_ctx, slot, name, c.stage != SequelSlot::active);
       if (!name.empty() && name != c.name) {
         c.name = name;
         if (c.stage == SequelSlot::active) s.rules->user_info(slot, "name", name);
@@ -380,6 +388,43 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us) {
       drop(s, i, "timed out");
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
   send_frames(s);
+}
+
+void sequel_net_level(SequelNetServer& s, const sv::SequelWireOptions& wire) {
+  const int32_t count = s.cfg.wire.server_count + 1;  // the server data carries it too
+  s.cfg.wire = wire;
+  s.cfg.wire.server_count = count;
+  s.count = 0x10000 + count;
+  s.written_frame = s.game->frame_number;
+  for (SequelNetClient& c : s.clients) {
+    if (c.stage == SequelSlot::free) continue;
+    c.stage = SequelSlot::signon;  // the rules keep the slot until `begin` seats it again
+    c.acked = -1;
+    stuff(c, "changing\n");
+    stuff(c, "reconnect\n");
+  }
+  note(s, "the level changed to " + s.game->map_name);
+}
+
+void sequel_net_print(SequelNetServer& s, int slot, const std::string& text) {
+  if (slot < 0 || slot >= sh::kMaxClients || s.clients[slot].stage == SequelSlot::free) return;
+  std::vector<uint8_t> b = {kSvcPrint, 2};
+  b.insert(b.end(), text.begin(), text.end());
+  b.push_back(0);
+  reliable(s.clients[slot], b);
+}
+
+void sequel_net_rename(SequelNetServer& s, int slot, const std::string& name) {
+  if (slot < 0 || slot >= sh::kMaxClients) return;
+  SequelNetClient& c = s.clients[slot];
+  if (c.stage == SequelSlot::free || c.name == name) return;
+  c.name = name;
+  if (c.stage == SequelSlot::active) s.rules->user_info(slot, "name", name);
+}
+
+void sequel_net_drop(SequelNetServer& s, int slot, const std::string& why) {
+  if (slot < 0 || slot >= sh::kMaxClients) return;
+  drop(s, slot, why);
 }
 
 void sequel_net_stop(SequelNetServer& s) {

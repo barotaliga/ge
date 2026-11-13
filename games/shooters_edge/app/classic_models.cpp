@@ -204,6 +204,52 @@ uint32_t choose_skin(const SkinChoice& choice, std::string_view skin,
   return base != read.end() ? base->second : gr::kOwnSkin;
 }
 
+Side side_of(bool teamplay, std::string_view mine, std::string_view theirs) {
+  return teamplay && !mine.empty() && mine == theirs ? Side::team : Side::enemy;
+}
+
+std::string_view forced_skin(const SkinChoice& choice, Side side, std::string_view own) {
+  if (!choice.all.empty() || side == Side::none) return own;  // choose_skin puts allskins on
+  const std::string& forced = side == Side::team ? choice.team : choice.enemy;
+  return forced.empty() ? own : std::string_view(forced);
+}
+
+void forced_colours(const SkinChoice& choice, Side side, uint32_t* top, uint32_t* bottom) {
+  if (side == Side::none) return;
+  const int t = side == Side::team ? choice.team_top : choice.enemy_top;
+  const int b = side == Side::team ? choice.team_bottom : choice.enemy_bottom;
+  if (t >= 0) *top = uint32_t(std::min(t, int(kColourRows) - 1));
+  if (b >= 0) *bottom = uint32_t(std::min(b, int(kColourRows) - 1));
+}
+
+bool parse_forced_colours(std::string_view top, std::string_view bottom, int* out_top,
+                          int* out_bottom) {
+  if (top == "off" && bottom.empty()) {
+    *out_top = *out_bottom = -1;
+    return true;
+  }
+  const auto number = [](std::string_view v, int* out) {
+    if (v.empty() || v.size() > 3) return false;
+    int n = 0;
+    for (char c : v) {
+      if (c < '0' || c > '9') return false;
+      n = n * 10 + (c - '0');
+    }
+    *out = std::min(n, int(kColourRows) - 1);
+    return true;
+  };
+  int t = 0, b = 0;
+  if (!number(top, &t)) return false;
+  if (bottom.empty()) {
+    b = t;
+  } else if (!number(bottom, &b)) {
+    return false;
+  }
+  *out_top = t;
+  *out_bottom = b;
+  return true;
+}
+
 Look choose_look(const SkinChoice& choice, std::string_view look,
                  const std::unordered_map<std::string, uint32_t>& figures,
                  const std::unordered_map<std::string, uint32_t>& skins) {
@@ -245,6 +291,31 @@ Look choose_look(const SkinChoice& choice, std::string_view look,
   }
   if (out.skin == gr::kOwnSkin) out.skin = skin_in(folder, std::string(kDefaultSkin));
   out.folder = figures.contains(folder) ? folder : std::string{};
+  return out;
+}
+
+Look choose_figure(const SkinChoice& choice, std::string_view model, std::string_view skin,
+                   const std::unordered_map<std::string, uint32_t>& figures,
+                   const std::unordered_map<std::string, uint32_t>& skins,
+                   const std::unordered_map<std::string, uint32_t>& first_skins) {
+  Look out;
+  if (choice.noskins == 1 || model.empty()) return out;
+  std::string folder(model);
+  for (char& c : folder) c = c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c;
+  if (folder.find("..") != std::string::npos || folder.find('/') != std::string::npos ||
+      folder.find('\\') != std::string::npos || !figures.contains(folder))
+    return out;
+  out.folder = folder;
+  const std::string key = skin_key(choice.all.empty() ? skin : std::string_view(choice.all));
+  if (!key.empty() && key.find('/') == std::string::npos) {
+    const auto found = skins.find(folder + "/" + key);
+    if (found != skins.end()) {
+      out.skin = found->second;
+      return out;
+    }
+  }
+  const auto first = first_skins.find(folder);
+  if (first != first_skins.end()) out.skin = first->second;
   return out;
 }
 

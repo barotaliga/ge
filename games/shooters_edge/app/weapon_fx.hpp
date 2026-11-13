@@ -42,6 +42,7 @@
 // ge:summary Shooter's Edge's enhanced weapon effects: layered blasts, exhaust, the bolt, the hits
 // ge:keywords weapon-fx enhanced effects explosion fireball layered secondary embers ember-ball
 // ge:keywords rocket-trail exhaust grenade-trail fire_trail smoke_trail smoke lightning bolt
+// ge:keywords glow-mark slug-mark energy-ball-mark
 // ge:keywords beam arc-gun impact hit
 // ge:keywords pellet nail surface classic-soul blast_light debris chunks dirt no-smoke
 // ge:skill render shooter
@@ -55,6 +56,7 @@
 #include "render/beam.hpp"
 #include "render/explosion.hpp"
 #include "render/explosions.hpp"
+#include "render/marks.hpp"
 #include "render/muzzle.hpp"
 #include "render/particles.hpp"
 #include "shooters_edge/app/effects.hpp"
@@ -112,6 +114,13 @@ gr::MuzzleFire exhaust(const double at[3], const double dir[3], uint32_t seed, d
 // 8 to 12 Hz between 0.8 and 1 of kMotorLevel, off the rocket's own seed so two never waver as one.
 inline constexpr double kNozzleM = 0.3, kMotorLightM = 6.5, kMotorLevel = 1.7;
 Light motor_light(const double at[3], const double dir[3], uint32_t seed, double now_s);
+// THE GLOWING HIT MARKS (ce_decals; render/marks.hpp's `press_glow`): a slug gun's hit melts a
+// small round mark into the wall that glows white-hot and cools to black in a few seconds; a big
+// energy ball's burst leaves a large one that cools slowly. Both light the room while they glow
+// (`mark_glows`), as the bolt's burnt line and melt do.
+inline constexpr ge::render::GlowMark kSlugMark{0.32, 3.0};
+inline constexpr ge::render::GlowMark kEnergyBallMark{1.9, 7.0};
+
 // A grenade's painted ends glowing (ce_trails; a classic grenade gives no light): `rgb` the colour
 // its skin's glowing texels paint (world_models' ModelKind::glow_rgb), at kGrenadeGlowLevel,
 // reaching kGrenadeGlowM, a faint red on the floor and the wall it passes; it rides on `entity`,

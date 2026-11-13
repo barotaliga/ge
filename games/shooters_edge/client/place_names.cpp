@@ -34,8 +34,9 @@ std::string file_name(const std::string& name) {
 bool read_file(const PlaceNames& p, const SearchPath& files, const std::string& file,
                std::string& text) {
   if (!p.game_dir.empty()) {
-    std::ifstream f(p.game_dir / "locs" / file, std::ios::binary);
-    if (f) {
+    const std::filesystem::path at = on_disk_any_case(p.game_dir, "locs/" + file);
+    std::ifstream f(at, std::ios::binary);
+    if (!at.empty() && f) {
       text.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
       return true;
     }
@@ -49,6 +50,11 @@ bool read_file(const PlaceNames& p, const SearchPath& files, const std::string& 
 
 float range_of(const PlaceNames& p) {
   return p.range != nullptr ? static_cast<float>(p.range->number) : 0;
+}
+
+// What a point must pass to be the nearest: in sight when `loc_trace` is on and a map can say.
+sh::LocSight sight_of(const PlaceNames& p) {
+  return p.trace != nullptr && p.trace->on() && p.clear_line ? p.clear_line : sh::LocSight{};
 }
 
 std::string lower(std::string s) {
@@ -80,8 +86,31 @@ void map_started(PlaceNames& p, const GameAdapter& adapter, const SearchPath& fi
   if (adapter.open_locations != nullptr) adapter.open_locations(adapter, files, map, p.locs);
 }
 
+std::string fill_place_codes(const PlaceNames& p, std::string_view text) {
+  std::string out;
+  out.reserve(text.size());
+  std::string here;
+  bool known = false;
+  for (size_t i = 0; i < text.size(); ++i) {
+    if (text[i] != '%' || i + 1 >= text.size() || text[i + 1] != 'l') {
+      out += text[i];
+      continue;
+    }
+    if (!known) {
+      known = true;
+      sh::Vec3f at;
+      if (p.where && p.where(at)) here = sh::loc_name_at(p.locs, at, range_of(p), sight_of(p));
+      if (here.empty()) here = p.someplace != nullptr ? p.someplace->value : "someplace";
+    }
+    out += here;
+    ++i;
+  }
+  return out;
+}
+
 void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& adapter,
                         const SearchPath& files, const WhereAmI& where) {
+  p.where = where;
   con::Cvars& v = con.cvars();
   p.load = &v.add({.name = "tp_loadlocs",
                    .fallback = "1",
@@ -94,12 +123,33 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
                         .help = "where you are when the map has no place names",
                         .kind = con::CvarKind::text});
   p.range = &v.add({.name = "loc_dist",
-                    .fallback = adapter.game != nullptr ? adapter.game->place_range : "0",
+                    .fallback = adapter.game != nullptr ? adapter.game->place_range : "500",
                     .flags = con::kArchive,
                     .help = "How far a place name reaches from its point, in units.",
                     .kind = con::CvarKind::number,
                     .min = 0,
                     .values = "0: no limit; NUMBER: a point farther than this is no place"});
+  p.trace = &v.add({.name = "loc_trace",
+                    .fallback = "0",
+                    .flags = con::kArchive,
+                    .help = "1: a place's point behind a wall is not where you are",
+                    .kind = con::CvarKind::boolean});
+  // The sequel's place macros: where the player is and where the view looks, `unknown` when no
+  // place is within reach or no game is playing.
+  if (adapter.game != nullptr && adapter.game->place_macros) {
+    con.add_macro("loc_here", [&p, where] {
+      sh::Vec3f at;
+      if (!where || !where(at)) return std::string("unknown");
+      const std::string name = sh::loc_name_at(p.locs, at, range_of(p), sight_of(p));
+      return name.empty() ? std::string("unknown") : name;
+    });
+    con.add_macro("loc_there", [&p] {
+      sh::Vec3f at;
+      if (!p.looked_at || !p.looked_at(at)) return std::string("unknown");
+      const std::string name = sh::loc_name_at(p.locs, at, range_of(p), sight_of(p));
+      return name.empty() ? std::string("unknown") : name;
+    });
+  }
   // Each command under its name and its older short name, the same command either way.
   const auto both = [&con](const char* name, const char* old_name, const std::string& help,
                            const con::CommandFn& fn) {
@@ -124,7 +174,7 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
     sh::Vec3f at{0, 0, 0};
     if (where) where(at);
     sh::Loc gone;
-    if (!sh::remove_nearest_loc(p.locs, at, &gone, range_of(p))) {
+    if (!sh::remove_nearest_loc(p.locs, at, &gone, range_of(p), sight_of(p))) {
       c.print("There are no places left to remove.");
       return;
     }
@@ -208,7 +258,7 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
         sh::Vec3f at;
         if (sub.empty()) {
           if (!in_game(c, at)) return;
-          const std::string name = sh::loc_name_at(p.locs, at, range_of(p));
+          const std::string name = sh::loc_name_at(p.locs, at, range_of(p), sight_of(p));
           c.print(name.empty() ? (p.someplace != nullptr ? p.someplace->value : "someplace")
                                : name);
         } else if (sub == "add") {
@@ -221,7 +271,7 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
             return;
           }
           if (!in_game(c, at)) return;
-          const sh::Loc* near = sh::nearest_loc(p.locs, at, range_of(p));
+          const sh::Loc* near = sh::nearest_loc(p.locs, at, range_of(p), sight_of(p));
           if (near == nullptr) {
             c.print("There is no place near you to rename.");
             return;

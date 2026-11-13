@@ -27,6 +27,7 @@
 #include "morph/read.hpp"
 #include "render/sprite_shapes.hpp"
 #include "shooters_edge/app/effects.hpp"
+#include "shooters_edge/app/figure_frames.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 #include "vfs/search.hpp"
 
@@ -73,17 +74,22 @@ uint32_t colour_row(const sv::ClientInfo& c, const char* key, uint32_t fallback)
 // animation between its last two frames when one is under way, else its group flowing between its
 // own frames (`Placed::lerp`), else the frame alone.
 void frames_of(const ModelKind& k, const Placed& p, double at, uint32_t& a, uint32_t& b, float& f) {
+  // Another figure's frame of the same name's kind (ModelKind::frame_map).
+  const auto mapped = [&k](int n) {
+    return n >= 0 && size_t(n) < k.frame_map.size() ? k.frame_map[size_t(n)] : n;
+  };
+  const int frame = mapped(p.frame);
   if (p.frame_from >= 0 && p.frame_f < 1) {
-    a = models::frame_in(k.frames, p.frame_from, at);
-    b = models::frame_in(k.frames, p.frame, at);
+    a = models::frame_in(k.frames, mapped(p.frame_from), at);
+    b = models::frame_in(k.frames, frame, at);
     f = std::clamp(p.frame_f, 0.0f, 1.0f);
     return;
   }
   if (p.lerp) {
-    models::frames_between(k.frames, p.frame, at, a, b, f);
+    models::frames_between(k.frames, frame, at, a, b, f);
     return;
   }
-  a = b = models::frame_in(k.frames, p.frame, at);
+  a = b = models::frame_in(k.frames, frame, at);
   f = 0;
 }
 
@@ -234,11 +240,13 @@ void read_player_skins(const SearchPath& files, ModelsRead& m) {
   }
 }
 
-// One second-game morph model read into `k`, its skins left a texel each: what it wears is another
+// One figure's morph model read into `k`, its skins left a texel each: what it wears is another
 // model's or a slot's (`MorphDraw::skin`, `slot`), so no picture is held twice; the first skin as
-// it was goes to `own` when asked.
+// it was goes to `own` when asked. `keep`: its own skins kept (a first-game figure's, worn in the
+// player's colours when no picture of the folder's is).
 void add_figure_kind(const mo::Model& model, std::span<const uint8_t> palette, ModelKind& k,
-                     std::vector<gr::MorphModel>& morphs, gr::MorphSkin* own = nullptr) {
+                     std::vector<gr::MorphModel>& morphs, gr::MorphSkin* own = nullptr,
+                     bool keep = false) {
   k.is = ModelKind::Is::alias;
   k.first = uint32_t(morphs.size());
   k.frames = models::frame_groups(model);
@@ -248,18 +256,20 @@ void add_figure_kind(const mo::Model& model, std::span<const uint8_t> palette, M
   for (size_t s = 0; s < std::max<size_t>(1, model.skins.size()); s++) {
     morphs.push_back(models::morph_from_alias(model, palette, int(s)));
     if (s == 0 && own != nullptr) *own = morphs.back().skin;
-    morphs.back().skin = gr::MorphSkin{1, 1, {128, 128, 128, 255}, {}};
+    if (!keep) morphs.back().skin = gr::MorphSkin{1, 1, {128, 128, 128, 255}, {}};
   }
 }
 
-// THE SECOND GAME'S FIGURES: every folder under `players/` with a figure (`tris.md2`, at most
-// kMaxFigures), the weapons the server lists as carried (`#<file>`) in each that has them (their
-// shared picture once, the first one's), each folder kept while the atlas holds it; and the
-// pictures in each (`<skin>.tga`, `.png` or `.pcx`, not an icon `_i` nor `weapon`) listed, read
-// whole the first time a player wears one.
+// THE FIGURES: every folder under `players/` with a figure (`tris.md2`, else `tris.mdl`; at most
+// kMaxFigures; the second game's own, or one a player of the first game names in `model`, its
+// frames mapped from the game's figure's by name: app/figure_frames.hpp), the weapons the server
+// lists as carried (`#<file>`) in each that has them (their shared picture once, the first one's),
+// each folder kept while the atlas holds it; and the pictures in each (`<skin>.tga`, `.png` or
+// `.pcx`, not an icon `_i` nor `weapon`) listed, read whole the first time a player wears one, the
+// first of each folder kept for a skin it lacks.
 void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
                   const GameAdapter& game, ModelsRead& m) {
-  std::vector<std::string> folders;
+  std::vector<std::pair<std::string, std::string>> folders;   // folder, its figure's file
   std::vector<std::pair<std::string, std::string>> pictures;  // key, path
   for (const ge::vfs::Listed& l : ge::vfs::list(files.vfs)) {
     const std::string_view n = l.name;
@@ -270,8 +280,14 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
     const std::string folder(rest.substr(0, slash));
     const std::string_view file = rest.substr(slash + 1);
     if (file.find('/') != std::string_view::npos) continue;
-    if (file == "tris.md2") {
-      if (folders.size() < kMaxFigures) folders.push_back(folder);
+    if (file == "tris.md2" || file == "tris.mdl") {
+      const auto same = std::find_if(folders.begin(), folders.end(),
+                                     [&folder](const auto& f) { return f.first == folder; });
+      if (same != folders.end()) {
+        if (file == "tris.md2") same->second = file;  // the second game's figure first
+      } else if (folders.size() < kMaxFigures) {
+        folders.emplace_back(folder, std::string(file));
+      }
       continue;
     }
     if (!(file.ends_with(".pcx") || file.ends_with(".png") || file.ends_with(".tga"))) continue;
@@ -285,18 +301,26 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
   for (const ModelKind& k : m.kinds)
     if (!k.carried.empty()) carried.push_back(k.carried);
   std::vector<gr::AtlasRect> rects;
-  for (const std::string& folder : folders) {
+  for (const auto& [folder, figure_file] : folders) {
     OpenedModel opened;
     std::string error;
-    const std::string path = "players/" + folder + "/tris.md2";
+    std::string path = "players/";
+    path.append(folder).append("/").append(figure_file);
+    const bool painted = figure_file == "tris.md2";
     if (!game.open_model(game, files, path, opened, error) || opened.form != ModelForm::morph) {
       if (!error.empty()) not_drawn("model", path, error);
       continue;
     }
     const size_t morphs_before = m.morphs.size(), kinds_before = m.figure_kinds.size();
     ModelKind k;
-    k.figure = true;
-    add_figure_kind(opened.morph, palette, k, m.morphs);
+    k.figure = painted;  // a first-game figure wears its own skins in the player's colours
+    add_figure_kind(opened.morph, palette, k, m.morphs, nullptr, !painted);
+    if (!m.player_frames.empty()) {
+      std::vector<std::string> names;
+      names.reserve(opened.morph.frames.size());
+      for (const mo::Frame& fr : opened.morph.frames) names.push_back(fr.name);
+      k.frame_map = models::figure_frames(m.player_frames, names);
+    }
     std::vector<std::pair<std::string, uint32_t>> carried_here;
     gr::MorphSkin weapon_skin;
     const uint32_t body = uint32_t(m.figure_kinds.size());
@@ -334,8 +358,13 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
     m.figures.emplace(folder, body);
     for (auto& [key, at] : carried_here) m.figure_carried.emplace(key, at);
   }
-  for (const auto& [key, path] : pictures)
-    if (m.figures.contains(key.substr(0, key.find('/')))) list_skin(m, key, path, true);
+  std::sort(pictures.begin(), pictures.end());
+  for (const auto& [key, path] : pictures) {
+    const std::string folder = key.substr(0, key.find('/'));
+    if (!m.figures.contains(folder)) continue;
+    list_skin(m, key, path, true);
+    m.figure_first_skins.try_emplace(folder, m.player_skins.at(key));
+  }
 }
 
 // A skin listed, read through its forms in order: false when none reads (said once).
@@ -379,7 +408,14 @@ const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn) {
   const ModelKind& k = m.kinds[size_t(p.modelindex)];
   *worn = {};
   if (k.player && p.entity > 0 && p.entity <= sh::kMaxClients) {
-    worn->file = models::choose_skin(m.skin_choice, p.skin_name, m.player_skins);
+    const std::string_view skin = models::forced_skin(m.skin_choice, p.side, p.skin_name);
+    const models::Look figure = models::choose_figure(m.skin_choice, p.model_name, skin, m.figures,
+                                                      m.player_skins, m.figure_first_skins);
+    if (!figure.folder.empty()) {  // the figure they named, in its folder's picture
+      if (figure.skin != gr::kOwnSkin) worn->file = figure.skin;
+      return m.figure_kinds[m.figures.at(figure.folder)];
+    }
+    worn->file = models::choose_skin(m.skin_choice, skin, m.player_skins);
     return k;
   }
   if ((!k.figure && k.carried.empty()) || m.figures.empty()) return k;
@@ -433,6 +469,11 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
   if (!l.server) return;
   const sv::RulesCommon& s = *l.server;
   const int me = player_state(l).entity;
+  const ge::console::Cvar* tp = s.cvars.find("teamplay");
+  const bool teamplay = tp != nullptr && tp->on();
+  const std::string mine = me > 0 && me <= sh::kMaxClients
+                               ? sv::info_value(s.clients[size_t(me - 1)].userinfo, "team")
+                               : std::string{};
   const int models = int(s.models.size());
   const bool qc = l.rules != nullptr && sv::qc_of(*l.rules) != nullptr;
   for (int e = 1; e < s.sv.num_edicts; e++) {
@@ -464,6 +505,8 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       p.top = colour_row(c, "topcolor", 0);
       p.bottom = colour_row(c, "bottomcolor", 0);
       p.skin_name = sv::info_value(c.userinfo, "skin");
+      p.model_name = sv::info_value(c.userinfo, "model");
+      p.side = models::side_of(teamplay, mine, sv::info_value(c.userinfo, "team"));
     }
     out.push_back(p);
     if (p.carried > 0) {  // the weapon it carries: the same place and frame, its own model
@@ -539,6 +582,8 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       const mo::Model& model = opened.morph;
       k.is = ModelKind::Is::alias;
       k.player = name == kPlayerModel;
+      if (k.player)
+        for (const mo::Frame& fr : model.frames) m.player_frames.push_back(fr.name);
       k.figure = name.starts_with("players/") && name.ends_with("/tris.md2");
       if (name.size() > 1 && name[0] == '#') k.carried = name.substr(1);
       k.first = uint32_t(morphs.size());
@@ -641,7 +686,7 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
   if (any_player) read_player_skins(files, m);
   bool any_figure = false;
   for (const ModelKind& k : m.kinds) any_figure = any_figure || k.figure;
-  if (any_figure) read_figures(files, palette, game, m);
+  if (any_figure || any_player) read_figures(files, palette, game, m);
   m.ramps = models::palette_ramps(palette);
   if (!map.models.empty()) m.probe = models::make_probe(map);
   if (!m.skin_files.empty()) {
@@ -660,6 +705,7 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
   m.player_skins = std::move(read.player_skins);
   m.figures = std::move(read.figures);
   m.figure_carried = std::move(read.figure_carried);
+  m.figure_first_skins = std::move(read.figure_first_skins);
   m.figure_kinds = std::move(read.figure_kinds);
   m.skin_files = std::move(read.skin_files);
   m.files = read.files;
@@ -910,6 +956,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     m.last_pose[p.entity] = g.now;
     g.tint[0] = p.top;
     g.tint[1] = p.bottom;
+    models::forced_colours(m.skin_choice, p.side, &g.tint[0], &g.tint[1]);
     g.skin = worn.model;
     if (worn.file != Worn::kNoFile) g.slot = worn_slot(d, m, worn.file);
     if (k.figure || !k.carried.empty()) {  // the second game's skins wear their own colours

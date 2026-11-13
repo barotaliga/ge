@@ -333,6 +333,18 @@ asks for it; Shooter's Edge's is the classic `pingstatus`). Hosts are matched wi
 so a forwarder beside a server is that host, and ties go to the fewer hops. `<game>_cli route
 <address>` answers the route and the chain to give the game.
 
+**A fixed route** (`engine/forward/fixed.hpp`) is for a client that cannot name a route at all (an
+unmodified client of the sequel knows only a server's address). The forward's port sends every
+client to one destination: the player connects to the forward as if it were the server, and the
+forward gives the client its own socket upstream and copies both ways. A dialled route still works
+beside it on the same port. Since the forward cannot read the game's handshake, it takes nothing on
+trust: until a client has sent 3 datagrams, at most 4 bytes go back for each byte it sent (a
+challenge for a challenge ask fits; a level's signon does not), so a spoofed address gets no more
+from the forward than it gets by asking the server directly. `shooters_edge_hops forward
+--server=<host:port>` runs one. An unmodified client of the sequel, black-box on the full game's
+q2dm1, plays through it to our `shooters_edge_sequel_server` and to an unmodified server alike,
+proven on its third datagram, with no answer held back.
+
 ## Proxy
 
 `engine/proxy` (`proxy.hpp`, `trial.hpp`). Two hops that understand the slow link between them:
@@ -435,6 +447,51 @@ to our `shooters_edge_sequel_server` and to an unmodified server alike:
 | One copy, to ours | 10.1% (48 of 475) | in game, the losses as the client's own |
 | Three copies, to ours | 0.2% (1 of 464) | in game, as on a clean line |
 | Three copies, to an unmodified server | 0% (0 of 63) | in game, as on a clean line |
+
+## The sequel's TV
+
+The sequel has no stream port and no TV of its own, and an unmodified client of the sequel knows
+only how to join a server. So our TV for it is a server to its viewers
+(`games/shooters_edge/net/sequel_tv_relay.hpp`):
+
+```
+watcher (34) -> broadcast (replay v2) -> TV node (delay) -> sequel face (34) -> viewers
+```
+
+- **The watcher** is our sequel client joined to the server as a spectator. It works on ours and
+  on an unmodified server alike. It is a camera: it flies after one player at a time, from behind
+  and above, for 20 s each. Every 2 s it acknowledges no frame for 150 ms, so the server sends its
+  next frame whole.
+- **The broadcast and the node** are the same as for any recording (`client/sequel_tv.hpp`,
+  `engine/tv`). The node holds the match back by the delay.
+- **The face** (`net/sequel_tv_face.hpp`) answers a viewer's challenge and connect as a server
+  would. It keeps the server data, every configstring as it stands, the baselines, and the blocks
+  since the newest whole frame. Each viewer gets:
+  - the signon, about 1 KB at a time. Each unit ends with a prompt the client echoes, since a
+    client in its signon sends a packet only when it has something to say;
+  - the match from the newest whole frame onwards.
+
+Everything goes on the reliable channel, because every frame deltas from the one before it. So a
+lost packet is sent again, rather than leaving the viewer with a frame it cannot read. The server
+data is marked as a recording played (attract loop 1), so the viewer's client does not predict.
+Stuffed lines are taken out, because they were the server's to the watcher.
+
+`shooters_edge_hops sequel-tv --server=<host:port> --port=27911 --delay=7` runs the relay. An
+unmodified client of the sequel was measured black-box on the full game's q2dm1:
+
+| Source | What the viewer saw |
+| --- | --- |
+| Our `shooters_edge_sequel_server` with a player walking | The match 3 s behind, the camera following the player |
+| An unmodified server | The match 3 s behind, from where the server puts a spectator |
+
+`tests/shooters_edge_sequel_tv_face_test.cpp` checks four cases:
+- a viewer from the start;
+- a late viewer, who starts at a whole frame;
+- a viewer over a lossy line, which still reads every frame;
+- a wrong password, refused in a player's words.
+
+It also runs the relay end to end, with the viewer 8 to 30 frames behind the watcher at a 1 s
+delay.
 
 ## The sequel's recordings
 

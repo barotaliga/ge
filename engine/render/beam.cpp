@@ -20,6 +20,10 @@ namespace libm = core::libm;
 constexpr double kTau = 6.28318530717958647692;
 // No fork leaves the channel this near its source: by the eye a short fork fills the view.
 constexpr double kForkFrom = 1.5;
+// A hit that moved further than this between two frames jumped (to another wall): a new line.
+constexpr double kLineJumpM = 2.5;
+// A hit that stays within this of where it came to rest is held still.
+constexpr double kStillM = 0.05;
 
 // A stream for one draw site: the shot's seed, the strike and a purpose mixed into one seed.
 core::Rng stream(uint32_t seed, int64_t strike, uint32_t purpose) {
@@ -213,8 +217,14 @@ const BeamKnob* beam_knobs() {
       {"light_every_m", &BeamLook::light_every_m, 0.5f, 50},
       {"hit_cd", &BeamLook::hit_cd, 0, 1e6f},
       {"root_cd", &BeamLook::root_cd, 0, 1e6f},
-      {"scorch_m", &BeamLook::scorch_m, 0.05f, 4},
-      {"scorch_every_s", &BeamLook::scorch_every_s, 0.02f, 10},
+      {"line_m", &BeamLook::line_m, 0.01f, 1},
+      {"line_piece_m", &BeamLook::line_piece_m, 0.02f, 2},
+      {"line_most_m", &BeamLook::line_most_m, 0.05f, 4},
+      {"melt_after_s", &BeamLook::melt_after_s, 0, 5},
+      {"melt_every_s", &BeamLook::melt_every_s, 0.01f, 2},
+      {"melt_m", &BeamLook::melt_m, 0.02f, 2},
+      {"melt_most_m", &BeamLook::melt_most_m, 0.02f, 4},
+      {"melt_grow_s", &BeamLook::melt_grow_s, 0.05f, 30},
       {"ember_s", &BeamLook::ember_s, 0, 20},
       {"ember_cd", &BeamLook::ember_cd, 0, 1e5f},
   };
@@ -350,36 +360,72 @@ int beam_lights(const BeamLook& look, const BeamShot& shot, double t_s, LocalLig
 bool beam_burns(const BeamLook& look, const BeamShot& shot, double t_s, BurnTrail& trail,
                 BeamBurn& out) {
   if (t_s < shot.born_s || (shot.end_s >= 0 && t_s > shot.end_s)) return false;
-  double at[3] = {shot.to[0], shot.to[1], shot.to[2]};
-  if (trail.any) {
-    double d2 = 0;
-    for (int k = 0; k < 3; ++k)
-      d2 += (shot.to[k] - trail.last_at[k]) * (shot.to[k] - trail.last_at[k]);
-    const double step = look.scorch_m / 3.0;
-    if (d2 < step * step && t_s - trail.last_s < look.scorch_every_s) return false;
-    // A hit that jumped further than two steps since the last burn: the next burn half a scorch
-    // on toward it, so a caller asking again until this says no fills the gap.
-    const double d = std::sqrt(d2);
-    if (d > 2 * step) {
-      for (int k = 0; k < 3; ++k) {
-        at[k] = trail.last_at[k] + (shot.to[k] - trail.last_at[k]) * (1.5 * step / d);
-      }
-    }
-  }
-  core::Rng r = stream(shot.seed, trail.count, 7);
-  out = BeamBurn{};
+  double d[3];
+  double dist2 = 0, off = 0, same = 0;
   for (int k = 0; k < 3; ++k) {
-    out.at[k] = at[k];
-    out.normal[k] = shot.normal[k];
-    trail.last_at[k] = at[k];
+    d[k] = shot.to[k] - trail.last_at[k];
+    dist2 += d[k] * d[k];
+    off += d[k] * shot.normal[k];
+    same += shot.normal[k] * trail.last_n[k];
   }
-  out.size_m = look.scorch_m * (0.85 + 0.3 * core::next(r));
-  out.spin_rad = core::next(r) * kTau;
+  // First landing, or a jump off the face it was burning (another wall, round a corner, a ledge's
+  // far side): the line starts again where it lands now.
+  if (!trail.any || same < 0.95 || std::abs(off) > look.line_m || dist2 > kLineJumpM * kLineJumpM) {
+    trail.any = true;
+    for (int k = 0; k < 3; ++k) {
+      trail.last_at[k] = trail.rest_at[k] = shot.to[k];
+      trail.last_n[k] = shot.normal[k];
+    }
+    trail.still_s = t_s;
+    trail.melt_s = -1;
+    return false;
+  }
+  out = BeamBurn{};
+  for (int k = 0; k < 3; ++k) out.normal[k] = shot.normal[k];
   out.born_s = t_s;
+  const double dist = std::sqrt(dist2);
+  // Still: the hit has stayed within kStillM of where it came to rest (a hand's shake); further,
+  // it rests anew there.
+  double moved2 = 0;
+  for (int k = 0; k < 3; ++k)
+    moved2 += (shot.to[k] - trail.rest_at[k]) * (shot.to[k] - trail.rest_at[k]);
+  if (moved2 > kStillM * kStillM) {
+    for (int k = 0; k < 3; ++k) trail.rest_at[k] = shot.to[k];
+    trail.still_s = t_s;
+    trail.melt_s = -1;
+  }
+  const bool settled = t_s - trail.still_s >= look.melt_after_s;
+  // Settled short of a piece's length: the line is laid on to where it rests, the melt's place.
+  if (dist >= look.line_piece_m || (settled && dist > 0.5 * look.line_m)) {
+    // A piece of line on toward the hit, at most `line_most_m` of it, each end reaching half its
+    // width past its point so the next piece overlaps it.
+    const double step = std::min(dist, static_cast<double>(look.line_most_m));
+    core::Rng r = stream(shot.seed, trail.count, 7);
+    for (int k = 0; k < 3; ++k) {
+      const double end = trail.last_at[k] + d[k] * (step / dist);
+      out.at[k] = 0.5 * (trail.last_at[k] + end);
+      out.along[k] = d[k] / dist;
+      trail.last_at[k] = end;
+    }
+    out.size_m = look.line_m * (0.9 + 0.2 * core::next(r));
+    out.length_m = step + look.line_m;
+    out.variant = static_cast<uint32_t>(core::next(r) * 1024);
+    ++trail.count;
+    return true;
+  }
+  // Held on the spot: after a moment the wall melts, the pool pressed again larger every so often.
+  const double held = t_s - trail.still_s - look.melt_after_s;
+  if (held < 0) return false;
+  if (trail.melt_s >= 0 && t_s - trail.melt_s < look.melt_every_s) return false;
+  if (trail.melt_s < 0) ++trail.melts;
+  trail.melt_s = t_s;
+  core::Rng r = stream(shot.seed, trail.melts, 11);  // one pool's own shape as it grows
+  const double grow = std::clamp(held / std::max(look.melt_grow_s, 1e-3f), 0.0, 1.0);
+  for (int k = 0; k < 3; ++k) out.at[k] = trail.last_at[k];
+  out.size_m = look.melt_m + (look.melt_most_m - look.melt_m) * grow;
+  out.spin_rad = core::next(r) * kTau;
   out.variant = static_cast<uint32_t>(core::next(r) * 1024);
-  trail.any = true;
-  trail.last_s = t_s;
-  ++trail.count;
+  out.melt = trail.melts;
   return true;
 }
 

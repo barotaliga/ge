@@ -6,6 +6,7 @@
 // ge:test tests/account_service_test.cpp
 #include "account/service.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 #include "net/wire.hpp"
@@ -15,7 +16,7 @@ namespace ge::account {
 namespace {
 
 constexpr uint8_t kMagic[4] = {'g', 'e', 'A', 'C'};
-constexpr uint8_t kKeyAsk = 1, kPub = 2, kAsk = 3, kAnswer = 4, kReport = 5, kTaken = 6;
+constexpr uint8_t kKeyAsk = 1, kPub = 2, kAsk = 3, kAnswer = 4, kReport = 5, kTaken = 6, kPiece = 7;
 constexpr size_t kTakenSize = 5 + 8 + 1 + 64;
 constexpr uint8_t kAskNonce = 1, kAnswerNonce = 2;
 
@@ -56,20 +57,20 @@ std::vector<uint8_t> taken_signed(const net::Key& server, uint64_t id, Taken t) 
   return {out, out + w.size};
 }
 
-// A report datagram: checked, taken, answered.
-void read_report(Service& svc, net::Reader& r, const uint8_t* data, size_t size,
+// A report's signature and bytes from `server`: checked, taken, answered.
+void take_report(Service& svc, const net::Key& server, const uint8_t* body, size_t size,
                  const net::Address& from, int64_t now_us) {
-  net::Key server{};
   net::Signature sig{};
-  net::read_bytes(r, server.data(), 32);
-  net::read_bytes(r, sig.data(), sig.size());
-  if (r.bad || size < kTakenSize + 32 || !net::sign_check(server, sig, data + r.at, size - r.at)) {
+  if (size < sig.size() + 32) {
     svc.stats.refused++;
     return;
   }
+  std::memcpy(sig.data(), body, sig.size());
+  const uint8_t* bytes = body + sig.size();
+  const size_t n = size - sig.size();
   net::MatchReport report;
   std::string error;
-  if (!net::report_read(data + r.at, size - r.at, report, error)) {
+  if (!net::sign_check(server, sig, bytes, n) || !net::report_read(bytes, n, report, error)) {
     svc.stats.refused++;
     return;
   }
@@ -86,6 +87,46 @@ void read_report(Service& svc, net::Reader& r, const uint8_t* data, size_t size,
   net::write_u8(w, static_cast<uint8_t>(t));
   net::write_bytes(w, answer.data(), answer.size());
   net::transport_send(*svc.transport, from, out, w.size, now_us);
+}
+
+// A piece of a report: kept until the last one comes, then the whole taken.
+void read_piece(Service& svc, net::Reader& r, const uint8_t* data, size_t size,
+                const net::Address& from, int64_t now_us) {
+  net::Key server{};
+  net::read_bytes(r, server.data(), 32);
+  const uint64_t id = net::read_u64(r);
+  const uint8_t number = net::read_u8(r), count = net::read_u8(r);
+  const size_t bytes = size - r.at;
+  if (r.bad || count < 2 || count > kReportPieces || number >= count || bytes == 0 ||
+      bytes > kReportPieceBytes) {
+    svc.stats.refused++;
+    return;
+  }
+  std::vector<Piecing>& all = svc.pieces;
+  all.erase(std::remove_if(all.begin(), all.end(),
+                           [&](const Piecing& p) { return now_us - p.since_us > kPiecingLife_us; }),
+            all.end());
+  auto it = std::find_if(all.begin(), all.end(),
+                         [&](const Piecing& p) { return p.server == server && p.id == id; });
+  if (it != all.end() && it->pieces.size() != count) {  // not the report it began as
+    all.erase(it);
+    it = all.end();
+  }
+  if (it == all.end()) {
+    if (all.size() >= kPiecingsKept) all.erase(all.begin());  // the oldest
+    all.push_back({server, id, now_us, std::vector<std::vector<uint8_t>>(count), 0});
+    it = all.end() - 1;
+  }
+  std::vector<uint8_t>& slot = it->pieces[number];
+  if (slot.empty()) {
+    slot.assign(data + r.at, data + size);
+    it->have++;
+  }
+  if (it->have < it->pieces.size()) return;
+  std::vector<uint8_t> body;
+  for (const std::vector<uint8_t>& p : it->pieces) body.insert(body.end(), p.begin(), p.end());
+  all.erase(it);
+  take_report(svc, server, body.data(), body.size(), from, now_us);
 }
 
 net::Key fresh_key(Service& svc) {
@@ -240,7 +281,17 @@ bool service_read(Service& svc, const uint8_t* data, size_t size, const net::Add
     return true;
   }
   if (kind == kReport) {
-    read_report(svc, r, data, size, from, now_us);
+    net::Key server{};
+    net::read_bytes(r, server.data(), 32);
+    if (r.bad || size < kTakenSize + 32) {
+      svc.stats.refused++;
+      return true;
+    }
+    take_report(svc, server, data + r.at, size - r.at, from, now_us);
+    return true;
+  }
+  if (kind == kPiece) {
+    read_piece(svc, r, data, size, from, now_us);
     return true;
   }
   if (kind != kAsk) {
@@ -348,17 +399,38 @@ bool report_ask_start(ReportAsk& a, const net::Address& service, const net::Key&
   a.next_us = now_us;
   std::vector<uint8_t> bytes;
   std::string error;
-  if (!net::report_write(r, bytes, error) || 5 + 32 + 64 + bytes.size() > net::kMaxDatagram) {
+  if (!net::report_write(r, bytes, error)) {
     a.done = true;
     return false;
   }
   const net::Signature sig = net::sign(server, bytes.data(), bytes.size());
-  a.datagram.resize(5 + 32 + 64 + bytes.size());
-  net::Writer w = net::make_writer(a.datagram.data(), a.datagram.size());
-  write_start(w, kReport);
-  net::write_bytes(w, server.pub.data(), 32);
-  net::write_bytes(w, sig.data(), sig.size());
-  net::write_bytes(w, bytes.data(), bytes.size());
+  std::vector<uint8_t> body(sig.begin(), sig.end());
+  body.insert(body.end(), bytes.begin(), bytes.end());
+  if (5 + 32 + body.size() <= net::kMaxDatagram) {
+    std::vector<uint8_t>& d = a.datagrams.emplace_back(5 + 32 + body.size());
+    net::Writer w = net::make_writer(d.data(), d.size());
+    write_start(w, kReport);
+    net::write_bytes(w, server.pub.data(), 32);
+    net::write_bytes(w, body.data(), body.size());
+    return true;
+  }
+  const size_t count = (body.size() + kReportPieceBytes - 1) / kReportPieceBytes;
+  if (count > kReportPieces) {
+    a.done = true;
+    return false;
+  }
+  for (size_t i = 0; i < count; i++) {
+    const size_t at = i * kReportPieceBytes;
+    const size_t n = std::min(kReportPieceBytes, body.size() - at);
+    std::vector<uint8_t>& d = a.datagrams.emplace_back(5 + 32 + 8 + 2 + n);
+    net::Writer w = net::make_writer(d.data(), d.size());
+    write_start(w, kPiece);
+    net::write_bytes(w, server.pub.data(), 32);
+    net::write_u64(w, r.id);
+    net::write_u8(w, static_cast<uint8_t>(i));
+    net::write_u8(w, static_cast<uint8_t>(count));
+    net::write_bytes(w, body.data() + at, n);
+  }
   return true;
 }
 
@@ -370,7 +442,8 @@ void report_ask_update(ReportAsk& a, net::Transport& t, int64_t now_us) {
   }
   a.tries++;
   a.next_us = now_us + a.ask_us;
-  net::transport_send(t, a.service, a.datagram.data(), a.datagram.size(), now_us);
+  for (const std::vector<uint8_t>& d : a.datagrams)
+    net::transport_send(t, a.service, d.data(), d.size(), now_us);
 }
 
 bool report_ask_read(ReportAsk& a, const uint8_t* data, size_t size, const net::Address& from) {

@@ -131,8 +131,11 @@ then the base folder's `autoexec.cfg` and the mod's, `postexec.cfg`, the window'
 command line, and `postinit.cfg` last; its `default.cfg` is the one in its packs (the window's
 console keys kept through its `unbindall`). Each game's order lives in one table,
 `client/load_order.hpp`: its files' ranks too, so the sequel's folders rank their packs and zips
-(`.pkz`) over their loose files, every `pak*` archive by its number, and the rerelease's archive at
-the install's root under them all, as its own client loads them. Maps' coloured light is also read from `maps/lits/<map>.lit`.
+over their loose files, and the rerelease's archive at the install's root goes under them all, as
+its own client loads them. In every game a folder's `pak0`, `pak1` ... come first by number, then
+every other pack or zip (`.pak`, `.pkz`, `.pk3`) by name, so a pack dropped in under any name is
+read; one whose name starts with `_` is set aside and never read. Loose files and place-name files
+are found in any letter case. Maps' coloured light is also read from `maps/lits/<map>.lit`.
 
 **Place names, made in the game** (`client/place_names.hpp`). Each map's place names are read as
 it starts (`tp_loadlocs`): the file saved under the game folder first, else the game's own.
@@ -141,11 +144,18 @@ Stand in a place and `addloc <name>`; `removeloc` forgets the nearest, `clearloc
 format, `loadloc <name>` reads one, and `loc` says where you are. The long names
 (`locations_add` and so on) work too, and so does the sequel's spelling: `loc add <name>`,
 `loc del`, `loc set <name>` (renames the nearest), `loc list` and `loc save`. A place reaches
-`loc_dist` units from its point (the game's own default: 500 in the sequel, no limit in the first
-game; 0 is no limit): farther off, `loc` says someplace and `removeloc` or `loc set` finds nothing.
-The places follow the player's view on a server joined and in a demo played as well as in the
-window's own game: each map's file is read as it starts, from the recording's game folder for a
-demo, and edited and saved the same way.
+`loc_dist` units from its point (500 in every classic game; 0 is no limit): farther off, `loc` says
+someplace and `removeloc` or `loc set` finds nothing. With `loc_trace 1` a point behind a wall
+from where the player stands is passed over too. The places follow the player's view on a
+server joined and in a demo played as well as in the window's own game: each map's file is read as
+it starts, from the recording's game folder for a demo, and edited and saved the same way. A
+recording keeps the place names it was played with (stuffed `//loc` lines in its signon, a comment
+to any other client: `plugins/shooter/locs.hpp`), and a demo that kept them is watched with those,
+no file needed. `say` and `say_team` talk on the server joined or the window's own; `%l` in the
+line becomes the place the player is in before it is sent, so the others read the place's name.
+The sequel's macros name places in any console line: `$loc_here` the place the player is in,
+`$loc_there` the place nearest where the view's line stops (8,192 units ahead or the first wall,
+`client/map_line.hpp`), each `unknown` with none within `loc_dist`.
 
 **The title and the loads.** With no `+map` the window opens at once on the title
 (`client/title.hpp`: a night with the full moon low in a total eclipse, blood red, cloud carried
@@ -1007,6 +1017,28 @@ armour, or both, once the sequel's profile lands. The design makes that possible
   arsenal). The exact classic campaign stays exact. Our campaign variant plays the classic maps
   with any arsenal.
 
+### Classic remix: one game played with another's maps and items
+
+Classic remix (M18u, `docs/goals/M18u.md`) is a feature of classic-enhance: one classic game
+played with another's parts. It is off unless the player sets `cr_enabled 1`, and even then does
+nothing unless two classic games are loaded as FULL games (`client/remix.hpp`'s `remix_check`; a
+shareware or demo install never counts), so a game loaded on its own keeps its own assets alone.
+
+- **The item table** (`profiles/remix.hpp`): each game's map items as the other's, by role: a
+  weapon by its place in the set (the nail weapons are the bullet ones, the beam is the rail), an
+  ammunition by the weapon that spends it, health and armour by size, a powerup by what it does.
+  The low spawnflags bits (an item's variant: the small and mega health, the large boxes) are
+  replaced, the bits above (the skills and modes it is left out of) kept; an item with no match
+  is left out and counted, so a map never spawns a class the rules do not know.
+- **Another game's map**: a map the played game's packs lack is found in the other game's, and
+  its items become the played game's (M18u2, M18u3).
+- **Another game's items** (`cr_items`: 0 the played game's, 1 the classic game's, 2 the
+  sequel's): a game's own maps played with the other game's items, and the HUD that shows them is
+  that game's (M18u4).
+
+Lab `se-remix` draws a real map of each game from above with its own items and with the other
+game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`).
+
 ### The re-release: words by key
 
 The full game's later release ships a program and maps that print text KEYS (a `$`, then
@@ -1356,6 +1388,18 @@ every pass, and judged by captioned screenshots:
   `skin` goes to the server with your colours. A name with `..` or a leading dot is refused, its
   extension dropped, cut to 15 characters (`app/classic_models.hpp`'s `skin_key`, `choose_skin`).
   Colours 8 to 13 read their palette rows backwards, since those rows are stored bright to dark.
+- **Skins and colours by side** (M18i17): `teamskin` and `enemyskin` put one skin on every
+  teammate or every enemy, and `teamcolor` and `enemycolor` (`off`, one colour, or shirt and pants,
+  0 to 13) their colours. A teammate shares your team while `teamplay` is on; everyone else is an
+  enemy. `allskins` still wins over both. They apply to the first game's players, live and in
+  demos (`app/classic_models.hpp`'s `side_of`, `forced_skin`, `forced_colours`).
+- **Player figures in the first game** (M18i18): a player's `model` names a folder
+  `players/<model>/` with a `tris.md2` (drawn as painted, so the second game's figures can be
+  copied in as they are) or a `tris.mdl` (its own skins in the player's colours). Its skin is the
+  folder's picture of the player's skin name, else the folder's first. The server still animates
+  the game's own figure; each frame is drawn as the named figure's frame of the same kind, matched
+  by the frames' names (`app/figure_frames.hpp`). A folder you lack, or `noskins 1`, draws the
+  game's own figure. Your own `model` goes to the server beside your skin.
 - **Player figures in the second game** (M18i16): a player's `skin` there is "<model>/<skin>",
   the figure a folder `players/<model>/` with its `tris.md2`, its skins as pictures beside it, and
   the weapons it carries (the files the server names with a '#', drawn in place of its weapon). Each
@@ -1591,12 +1635,15 @@ found or not: Shareware or Registered, the sequel's Demo or Full game). ENTER on
 kept install opens it; on one never found, or FIND ANOTHER INSTALL, the window's folder chooser,
 and the folder is taken by whichever game's base folder it holds (`install_of`). Once a classic
 game is open, the title's night gives way to its own recordings played behind the menu in turn
-(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game; "" keeps the night), ESCAPE closes the menu onto the
+(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game and q2demo1 from the sequel's `demos/` folder; "" keeps the night), ESCAPE closes the menu onto the
 recording to watch it, and nothing modern is left on screen: the console is written in the
 game's glyph sheet over its own console background (`menu/classic_console.hpp`, the engine's
 `ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
 GAME and SELECT GAME are drawn in the game's letters under carved titles (`menu/classic_pages.hpp`;
-SELECT GAME's own row and the two games' names on it cut letter by letter from the strips like DEMOS'). Lab `se-attract` draws
+SELECT GAME's own row, DEMOS and the two games' names on it set by code in the strips' carved letters:
+`menu/carved_letters.hpp` cuts each letter it knows out of the strips into its own picture when the
+pack loads, dropping any speck of a neighbour a letter's box caught, and a word is laid out from them
+on one 20 px line with a pixel between letters). Lab `se-attract` draws
 the menu, SELECT GAME, OPTIONS, the watched recording, the console, DEMOS and JOIN A GAME over a
 played recording (`--basedir` a player's install; `--demo=none` over the title's dark, for a game
 whose recordings cannot play yet).

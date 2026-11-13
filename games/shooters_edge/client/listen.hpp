@@ -374,6 +374,9 @@ double listen_tic(const Listen& l);
 // a campaign the last two seat and let go a companion (coop on: `coopgame` starts one so). False
 // when the line is none of them, or when no lobby runs (a line saying so is printed).
 bool listen_lobby(Listen& l, std::string_view line);
+// The player's chat line (`say "..."` or `say_team "..."`) on the window's own server, as slot 0
+// says it: false when no game is playing.
+bool listen_say(Listen& l, const std::string& line);
 // An administrator's line on the window's own server (`users`, `status`, `speedjump`: ListenHost's
 // `admin`): false when no match is hosted or the line is none of them, the answer in `out`.
 bool listen_admin(Listen& l, const std::string& line, std::string& out);
@@ -410,6 +413,10 @@ struct PlayerState {
   bool on_ground = false;
   bool dead = false;
   float health = 0;
+  // The rules work the view out themselves (the sequel's: RulesWorld's `view_set`): `view_ofs` is
+  // their eye with its bob, `kick` the angles they add (degrees), `v_angle` the dead view's.
+  bool rules_view = false;
+  sh::Vec3f kick;
 };
 PlayerState player_state(const Listen& l);
 

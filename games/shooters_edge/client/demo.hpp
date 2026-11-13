@@ -62,6 +62,7 @@
 #include <string>
 #include <vector>
 
+#include "shooter/locs.hpp"
 #include "shooter/vec.hpp"
 #include "vfs/unpack.hpp"
 
@@ -192,13 +193,17 @@ struct DemoEffect {
 
 struct DemoState {
   DemoFormat format = DemoFormat::single;
-  bool voice_format = false;                // a `.qwdv` or `.mvdv` (the voice header)
-  int protocol = 0;                         // 15 single, 28 client and multiview, 34 sequel
-  std::string map;                          // "e1m1" off `maps/e1m1.bsp`; "" before the first level
-  int levels = 0;                           // level starts read so far (a new level: load its map)
+  bool voice_format = false;  // a `.qwdv` or `.mvdv` (the voice header)
+  int protocol = 0;           // 15 single, 28 client and multiview, 34 sequel
+  std::string map;            // "e1m1" off `maps/e1m1.bsp`; "" before the first level
+  int levels = 0;             // level starts read so far (a new level: load its map)
+  // The level's place names as the recording kept them (`//loc` lines, plugins/shooter/locs.hpp);
+  // empty when it kept none.
+  ge::shooter::Locs places;
   double time = 0;                          // the demo's clock, s
   sh::Vec3f eye;                            // the view's eye, units
   sh::Vec3f angles;                         // the view's angles, degrees
+  sh::Vec3f kick;                           // sequel: the server's kick angles on the view, degrees
   int view_entity = 1;                      // single: the entity the eye rides
   int max_clients = 1;                      // single: the players, entities 1 to this
   int player = 0;                           // the recording (client) or tracked (multiview) slot
@@ -217,6 +222,7 @@ struct DemoState {
   std::array<bool, 32> spectator{};         // client, multiview: the slot watches (`*spectator`)
   std::array<int, 32> top{}, bottom{};      // client, multiview: each slot's colours (0..13)
   std::array<std::string, 32> skins;        // client, multiview: each slot's `skin` ("": none)
+  std::array<std::string, 32> figures;      // client, multiview: each slot's `model` ("": none)
   std::string game;  // client, multiview: the game folder the server ran ("fortress"; "" unnamed)
   // Client, multiview: the server's info keys in the order first seen (the signon's
   // `fullserverinfo`, then each `serverinfo` change): `hostname`, `teamplay`, `maxclients` ...
@@ -244,6 +250,14 @@ struct SequelView {
   int pm_type = 0, pm_time = 0, pm_flags = 0, gravity = 0;
   int gun_model = 0, gun_frame = 0, fov = 0, rdflags = 0;
   int16_t stats[32] = {};
+};
+
+// One message of a sequel block as the reader walked it: its id and where it lies in the block
+// (`at` its id byte, `end` one past its last byte). A frame's span holds its player state and
+// entities after it.
+struct DemoSpan {
+  uint8_t id = 0;
+  uint32_t at = 0, end = 0;
 };
 
 struct Demo {
@@ -286,6 +300,9 @@ struct Demo {
   bool reconnect = false;
   int32_t server_count = 0;
   int32_t last_frame = -1;
+  // When set, the sequel reader lists each block's messages here (cleared at each block): what a
+  // relay that passes the blocks on reads them by (net/sequel_tv_face.hpp).
+  std::vector<DemoSpan>* spans = nullptr;
 };
 
 // `bytes` as a demo of any format (detected), unpacked first when packed or archived
