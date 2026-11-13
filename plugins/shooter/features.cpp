@@ -65,13 +65,15 @@ constexpr Features kKeys =
 // +5.0 on dm2 and -0.8 on e1m2 a match head to head, a launcher owner's weapon in hand at his
 // death near people's: dm2 77 / 22 % launcher / scattergun, people 72 / 25; `pokestand` on:
 // -0.2 on dm2 and -0.2 on e1m2 a match head to head, no more running round under a button it
-// fires at without a shot).
+// fires at without a shot; `scriptfresh` on: a bug fixed, +1.7 / -3.7 on e1m2 a match head to
+// head (mean -1.0, inside the sides' noise), dm2 alike (no scripted way), the YA's climb no longer
+// resumed at the walkway's step from the floor).
 constexpr Features kJudging = of(
     {Feature::runupkeys, Feature::underway, Feature::gappast, Feature::airgap, Feature::pilotcast,
      Feature::landwall, Feature::circlekeys, Feature::circleview, Feature::circleaim,
      Feature::leadmean, Feature::leadarc, Feature::airarc, Feature::hopopen, Feature::fightway,
      Feature::letgo, Feature::retreatrun, Feature::nogoal, Feature::tripkeep, Feature::routetime,
-     Feature::fetch, Feature::liftbrake, Feature::scriptfresh, Feature::scriptentry});
+     Feature::fetch, Feature::liftbrake, Feature::scriptentry});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
