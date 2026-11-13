@@ -476,7 +476,13 @@ int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& s
         fell += t - when < kHotSpot_s && dist(where, it.at) < kDangerReach ? 1 : 0;
       if (fell >= 2) return 0.0;
     }
-    const double run = dist(me, it.at) / kRun + (by_dive ? it.dive_s : 0);
+    // (`routetime`, M18r.md 3) The run by the route's time (the reach's, worked out each second),
+    // not the straight line: e1m2's YA is near in a line from below and 13 s by its stairs, and
+    // as the route went round other items came nearer in a line: 6 of 371 trips took it.
+    const bool by_route = f.features[sh::Feature::routetime] && f.reach_at >= 0 && it.node >= 0 &&
+                          f.reach.reached(it.node);
+    const double run =
+        (by_route ? f.reach.cost(it.node) : dist(me, it.at) / kRun) + (by_dive ? it.dive_s : 0);
     const double wait = it.present ? 0 : it.back_at - t;
     // Only the items a game turns on are waited for; the rest are taken when they are there.
     const bool key = key_item(it);
