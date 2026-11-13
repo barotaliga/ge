@@ -1017,6 +1017,28 @@ armour, or both, once the sequel's profile lands. The design makes that possible
   arsenal). The exact classic campaign stays exact. Our campaign variant plays the classic maps
   with any arsenal.
 
+### Classic remix: one game played with another's maps and items
+
+Classic remix (M18u, `docs/goals/M18u.md`) is a feature of classic-enhance: one classic game
+played with another's parts. It is off unless the player sets `cr_enabled 1`, and even then does
+nothing unless two classic games are loaded as FULL games (`client/remix.hpp`'s `remix_check`; a
+shareware or demo install never counts), so a game loaded on its own keeps its own assets alone.
+
+- **The item table** (`profiles/remix.hpp`): each game's map items as the other's, by role: a
+  weapon by its place in the set (the nail weapons are the bullet ones, the beam is the rail), an
+  ammunition by the weapon that spends it, health and armour by size, a powerup by what it does.
+  The low spawnflags bits (an item's variant: the small and mega health, the large boxes) are
+  replaced, the bits above (the skills and modes it is left out of) kept; an item with no match
+  is left out and counted, so a map never spawns a class the rules do not know.
+- **Another game's map**: a map the played game's packs lack is found in the other game's, and
+  its items become the played game's (M18u2, M18u3).
+- **Another game's items** (`cr_items`: 0 the played game's, 1 the classic game's, 2 the
+  sequel's): a game's own maps played with the other game's items, and the HUD that shows them is
+  that game's (M18u4).
+
+Lab `se-remix` draws a real map of each game from above with its own items and with the other
+game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`).
+
 ### The re-release: words by key
 
 The full game's later release ships a program and maps that print text KEYS (a `$`, then
