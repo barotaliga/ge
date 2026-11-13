@@ -201,6 +201,9 @@ struct NavJumper {
   // A walk or drop along a lip over lava or slime (`brink` or `brink_side`) costs this share of
   // its time more (`sidebrink`: a route up a ramp over a pit keeps to its middle, off the edge).
   float lip_share = 0;
+  // `jumpcuts`: every cut link kept off the route (a jump missed twice, pilot.cpp `missed_jump`);
+  // off, only those through a mover or a gap trick.
+  bool cuts_all = false;
   // Whether he takes `l` at all (any link but a blast jump or a gap's: always).
   bool takes(const NavLink& l) const {
     if (l.kind == NavKind::script) return scripts;

@@ -1086,7 +1086,8 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
                       afford && f.features[sh::Feature::gj];
     jumper.level = moves >= kRocketLevelMoves[2] ? 2 : moves >= kRocketLevelMoves[1] ? 1 : 0;
     jumper.extra_s = kRocketLevelExtra_s[jumper.level];
-    jumper.scripts = f.features[sh::Feature::routes];  // the map's scripted ways to key items
+    jumper.cuts_all = f.features[sh::Feature::jumpcuts];  // jumps missed twice kept off
+    jumper.scripts = f.features[sh::Feature::routes];     // the map's scripted ways to key items
     // The map's gap tricks (shooter/nav_gaps.hpp): a hopper's, out of its hop, and planned only
     // while it already moves near a gap's speed (a slow one would walk up to it and give it up).
     const float across_speed =
