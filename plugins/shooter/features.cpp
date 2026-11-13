@@ -67,14 +67,15 @@ constexpr Features kKeys =
 // -0.2 on dm2 and -0.2 on e1m2 a match head to head, no more running round under a button it
 // fires at without a shot; `scriptfresh` on: a bug fixed, +1.7 / -3.7 on e1m2 a match head to
 // head (mean -1.0, inside the sides' noise), dm2 alike (no scripted way), the YA's climb no longer
-// resumed at the walkway's step from the floor).
+// resumed at the walkway's step from the floor); `gapnear` on: +6.0 on dm2 (+4.2 / +7.8) and -0.2
+// on e1m2 a match head to head, e1m2's gaps given up 75 -> 63 a match for half the field.
 constexpr Features kJudging = of(
     {Feature::runupkeys, Feature::underway, Feature::gappast, Feature::airgap, Feature::pilotcast,
      Feature::landwall, Feature::circlekeys, Feature::circleview, Feature::circleaim,
      Feature::leadmean, Feature::leadarc, Feature::airarc, Feature::hopopen, Feature::fightway,
      Feature::letgo, Feature::retreatrun, Feature::nogoal, Feature::tripkeep, Feature::routetime,
      Feature::fetch, Feature::liftbrake, Feature::scriptentry, Feature::calmvel, Feature::lookturn,
-     Feature::viewbook, Feature::gapturn, Feature::gapnear});
+     Feature::viewbook, Feature::gapturn});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
