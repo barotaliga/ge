@@ -239,6 +239,21 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
       upload(device, d.cover, solid);
     }
   }
+  {
+    // The map's sky box (draw_data.hpp's Scene::sky_box), or a 1 x 1 stand-in the shader skips.
+    const bool has = !scene.sky_box.levels.empty();
+    const uint32_t w = has ? scene.sky_box.width : 1, h = has ? scene.sky_box.height : 1;
+    d.sky_box = r::make_texture(device, "bsp.sky_box", w, h, 1, wgpu::TextureFormat::RGBA8UnormSrgb,
+                                sampled, 1);
+    if (has) {
+      upload(device, d.sky_box, scene.sky_box);
+    } else {
+      Atlas none;
+      none.width = none.height = 1;
+      none.levels.push_back({0, 0, 0, 255});
+      upload(device, d.sky_box, none);
+    }
+  }
   d.light = r::make_texture(device, "bsp.lightmaps", scene.light.width, scene.light.height, 1,
                             wgpu::TextureFormat::RGBA8Unorm, sampled);
   upload(device, d.light, scene.light);
@@ -340,14 +355,14 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
       {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler, Slot::storage_read,
        Slot::depth_array, Slot::compare, Slot::depth_array, Slot::texture, Slot::texture,
        Slot::storage_read, Slot::storage_read, Slot::texture, Slot::texture, Slot::texture,
-       Slot::storage_read, Slot::depth_array},
+       Slot::storage_read, Slot::depth_array, Slot::texture},
       both);
   d.group = r::make_group(
       device, "bsp", d.layout,
       {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler, d.lights,
        d.cubes_view, d.compare, d.orthos_view, d.rebake_rgb.CreateView(), d.rebake_dir.CreateView(),
        d.frames, d.movers, d.surface.CreateView(), d.rebake_bounce.CreateView(),
-       d.cover.CreateView(), d.grid, d.caster_cubes_view});
+       d.cover.CreateView(), d.grid, d.caster_cubes_view, d.sky_box.CreateView()});
   d.fix_layout = r::make_layout(device, "bsp.sky", {Slot::texture, Slot::uniform},
                                 wgpu::ShaderStage::Fragment);
   d.shadow_layout = r::make_layout(device, "bsp.shadows", {Slot::storage_read}, both);
@@ -852,6 +867,10 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   // The relief (v2, a scene with a surface atlas): on, the parallax's depth and reach.
   const bool relief = o.relief && o.mode == Mode::v2 && !s.surface.levels.empty();
   const double parallax = relief ? std::max(o.parallax, 0.0) : 0;
+  // The map's sky box: on, and half a texel of the atlas (each face's edge is inset by it).
+  const bool box = !s.sky_box.levels.empty() && s.sky_box_face > 0;
+  const double inset = box ? 0.5 / double(s.sky_box_face) : 0;
+  set4(d.staged.sky_box, box ? 1 : 0, inset, inset, 0);
   set4(d.staged.info4, o.bump, o.pack_sky ? 1 : 0, parallax > 0 ? o.parallax_reach : 0,
        relief ? o.specular : 0);
   set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers,

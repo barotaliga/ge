@@ -25,6 +25,9 @@ TEST(http_parses_a_request_head) {
   CHECK(http_parse("GET /v1/servers?mode=ffa HTTP/1.1\r\nHost: x\r\n\r\nrest", r) == HttpParse::ok);
   CHECK(r.method == "GET" && r.target == "/v1/servers?mode=ffa" && r.version == "HTTP/1.1");
   CHECK(r.head_size == std::string("GET /v1/servers?mode=ffa HTTP/1.1\r\nHost: x\r\n\r\n").size());
+  CHECK(!r.gzip);
+  CHECK(http_parse("GET /a HTTP/1.1\r\naccept-encoding: br, GZIP\r\n\r\n", r) == HttpParse::ok);
+  CHECK(r.gzip);  // the viewer's files may go packed
   CHECK(http_parse("GARBAGE\r\n\r\n", r) == HttpParse::bad);
   CHECK(http_parse("GET v1 HTTP/1.1\r\n\r\n", r) == HttpParse::bad);
   CHECK(http_parse(std::string(kMaxRequest + 10, 'a'), r) == HttpParse::too_big);
@@ -43,6 +46,10 @@ TEST(http_writes_responses_and_events) {
   const std::string h = http_response(a, true);
   CHECK(h.find("Content-Length: 7\r\n") != std::string::npos &&
         h.substr(h.size() - 4) == "\r\n\r\n");
+  CHECK(r.find("Content-Encoding") == std::string::npos);
+  a.encoding = "gzip";
+  const std::string gz = http_response(a, false);
+  CHECK(gz.find("Content-Encoding: gzip\r\nVary: Accept-Encoding\r\n") != std::string::npos);
   CHECK(http_error(404, "x", "y").rfind("HTTP/1.1 404 Not Found", 0) == 0);
   CHECK(sse_event("status", "{}", 3) == "id: 3\nevent: status\ndata: {}\n\n");
   CHECK(sse_event("m", "a\nb", 1) == "id: 1\nevent: m\ndata: a\ndata: b\n\n");

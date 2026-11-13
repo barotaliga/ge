@@ -98,13 +98,35 @@ std::string viewer_slot(const Site& site, const HubSpec& spec, const std::vector
     for (const std::string& pack : viewer_packs(site))
       list += "," + script_str("--pack=/viewer/" + pack);
   }
+  // The wasm (the most of a first visit) fetched by the page itself, so the bar follows it; the
+  // viewer's script then starts on those bytes. Its size is the file's, before any gzip: what
+  // the page counts as the bytes come.
+  const std::string name = viewer_name(spec);
+  std::error_code ec;
+  const auto wasm_size = fs::file_size(fs::path(site.viewer_dir) / (name + ".wasm"), ec);
   h += "<canvas id=\"view\" width=\"1280\" height=\"720\"></canvas>";
+  h += "<progress id=\"viewer-bar\" max=\"1\" value=\"0\"></progress>";
   h += "<p class=\"small\" id=\"viewer-status\">Loading the viewer...</p>";
   h += "<noscript><p class=\"none\">The viewer needs script; open it in the game "
        "instead.</p></noscript>";
   h += "<script>var Module={canvas:document.getElementById(\"view\"),arguments:[" + list +
        "]};</script>";
-  h += "<script src=\"/viewer/" + viewer_name(spec) + ".js\" async></script></div>";
+  h += "<script>(function(){var bar=document.getElementById(\"viewer-bar\"),"
+       "line=document.getElementById(\"viewer-status\"),total=" +
+       std::to_string(ec ? 0 : wasm_size) +
+       ",got=0,parts=[];function mb(n){return (n/1048576).toFixed(1);}"
+       "function start(){var s=document.createElement(\"script\");s.src=\"/viewer/" +
+       name +
+       ".js\";document.body.appendChild(s);}"
+       "fetch(\"/viewer/" +
+       name +
+       ".wasm\").then(function(r){if(!r.ok||!r.body)throw 0;var rd=r.body.getReader();"
+       "function step(){return rd.read().then(function(d){if(d.done)return;parts.push(d.value);"
+       "got+=d.value.length;if(total){bar.max=total;bar.value=Math.min(got,total);}"
+       "line.textContent=\"Loading the viewer... \"+mb(got)+(total?\" of \"+mb(total):\"\")+"
+       "\" MB\";return step();});}return step();}).then(function(){var b=new Uint8Array(got),"
+       "at=0;parts.forEach(function(p){b.set(p,at);at+=p.length;});Module.wasmBinary=b;"
+       "bar.hidden=true;start();},function(){bar.hidden=true;start();});})();</script></div>";
   return h;
 }
 
@@ -264,9 +286,16 @@ Answer viewer_file(const HubSpec& spec, std::string_view name, const Site& site)
     return refuse("this hub serves no viewer: start it with --viewer=<dir>, the build's " +
                   viewer_name(spec) + " folder");
   }
-  std::ifstream f(fs::path(site.viewer_dir) / std::string(name), std::ios::binary);
-  if (!f) return refuse("no " + std::string(name) + " in the hub's viewer folder");
+  // The build's gzip copy beside the file when the reader takes it (the wasm is a third the size).
+  const fs::path file = fs::path(site.viewer_dir) / std::string(name);
   Answer a;
+  std::ifstream f;
+  if (site.gzip) {
+    f.open(file.string() + ".gz", std::ios::binary);
+    if (f.is_open()) a.encoding = "gzip";
+  }
+  if (!f.is_open()) f.open(file, std::ios::binary);
+  if (!f.is_open()) return refuse("no " + std::string(name) + " in the hub's viewer folder");
   a.type = type;
   a.body.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
   a.max_age_s = kViewerMaxAgeS;

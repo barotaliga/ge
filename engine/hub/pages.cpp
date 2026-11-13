@@ -453,6 +453,13 @@ text-align:left;border-bottom:1px solid var(--line)}table.players th{color:var(-
 td.bot{color:var(--hot)}td.spectating,td.watching{color:var(--dim)}
 .overlay{max-width:420px;background:var(--panel);border-radius:12px;margin:16px}
 footer{color:var(--dim);font-size:13px;padding:24px 16px;text-align:center}.none{color:var(--dim)}
+main.acct{padding:16px;max-width:640px}.acct form{display:grid;gap:10px;max-width:420px;
+margin:8px 0}.acct label{display:grid;gap:4px;color:var(--dim);font-size:14px}.acct input{
+font:inherit;padding:8px 10px;border-radius:6px;border:1px solid var(--line);
+background:var(--panel2);color:var(--ink)}.acct button{font:inherit;padding:8px 14px;
+border-radius:6px;border:0;background:var(--accent);color:var(--bg);cursor:pointer;
+justify-self:start}.acct :disabled{opacity:.5;cursor:not-allowed}.acct .warn{color:var(--hot)}
+.acct .code{font:600 28px ui-monospace,monospace;letter-spacing:.08em}
 form.search{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}form.search input,form.search select,
 form.search button{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid var(--line);
 background:var(--panel);color:var(--ink)}form.search button{background:var(--accent);color:var(--bg);
@@ -474,7 +481,11 @@ main.watch h3{margin:8px 0}.viewer{background:#000;aspect-ratio:16/9;border-radi
 align-items:center;justify-content:center;overflow:hidden;position:relative}.viewer canvas{width:100%;
 height:100%;display:block}.viewer .none{color:#c8c8c8;padding:16px;text-align:center;max-width:36em}
 #viewer-status{position:absolute;left:0;right:0;bottom:0;margin:0;padding:8px 12px;color:#e8e8e8;
-background:rgba(0,0,0,.6)}#viewer-status:empty{display:none}
+background:rgba(0,0,0,.6)}#viewer-status:empty{display:none}#viewer-bar{position:absolute;left:12px;
+right:12px;bottom:44px;width:calc(100% - 24px);height:6px;appearance:none;border:0;border-radius:3px;
+background:#333}#viewer-bar::-webkit-progress-bar{background:#333;border-radius:3px}
+#viewer-bar::-webkit-progress-value{background:#1b8a5a;border-radius:3px}
+#viewer-bar::-moz-progress-bar{background:#1b8a5a;border-radius:3px}
 ul.also{list-style:none;padding:0;margin:0}ul.also li{margin:6px 0}
 @media(max-width:700px){main.watch{grid-template-columns:1fr}}
 )css";
