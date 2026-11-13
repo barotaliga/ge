@@ -1806,7 +1806,9 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     } else if (l.kind == NavKind::script && l.script >= 0 &&
                static_cast<size_t>(l.script) < g.scripts.size() && !mover_in_way(p, s, l, a, b)) {
       // A SCRIPTED WAY (nav_script.hpp): the script's own keys, as its proof flew them.
-      if (p.script_from != a || p.script_to != b) {
+      const bool stale = p.set.script_fresh && p.clock_s - p.script_at > 2 * static_cast<double>(dt);
+      p.script_at = p.clock_s;
+      if (p.script_from != a || p.script_to != b || stale) {
         p.script_from = a;
         p.script_to = b;
         p.script_step = 0;
@@ -1816,7 +1818,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       }
       const NavScript& sc = g.scripts[static_cast<size_t>(l.script)];
       const ScriptKeys k =
-          script_keys(sc, p.script_step, s.origin, s.velocity, s.onground, p.set.arrive);
+          script_keys(sc, p.script_step, s.origin, s.velocity, s.onground, p.set.arrive,
+                      p.set.script_entry);
       p.mode = s.onground ? PilotMode::walk : PilotMode::air;
       if (p.script_step > p.script_seen) {
         p.script_seen = p.script_step;
