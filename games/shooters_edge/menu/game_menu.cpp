@@ -117,7 +117,7 @@ void GameMenu::set_game(std::string basedir) {
 }
 
 bool GameMenu::classic() const {
-  if (!art_.loaded()) return false;
+  if (!art_.menu_ready()) return false;
   return look_ == "classic" || look_ == "auto";
 }
 

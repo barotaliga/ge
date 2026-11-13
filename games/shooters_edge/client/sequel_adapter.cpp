@@ -2,8 +2,8 @@
 // its mods, programs (native game libraries, named and passed over), maps, their wall textures
 // (`textures/*.wal`), sounds, config files and demo listing read as any classic game's; and its
 // own calls, each answering what this build reads of the game so far: the console's letters and
-// background but no pictures of its HUD and menus yet (the window draws its own), the shell's menu,
-// no held weapons; its client recordings. Each grows here as the sequel's rows land
+// background and its menu's pictures but not its HUD's yet (the window draws its own), the
+// shell's menu, no held weapons; its client recordings. Each grows here as the sequel's rows land
 // (docs/goals/M18v.md).
 //
 // ge:summary The sequel's adapter: the shared calls over its rows, and its own calls as they land
@@ -11,7 +11,9 @@
 // ge:keywords second-game adapter_of
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
+#include <cstdint>
 #include <filesystem>
+#include <iterator>
 #include <span>
 #include <string>
 #include <string_view>
@@ -30,8 +32,10 @@ namespace {
 namespace pf = shooters_edge::profiles;
 
 // A picture of the game's files (`pics/<name>.pcx`) in its own palette, `clear` see-through; empty
-// when the files hold none that reads.
-ge::ui::Image pcx_picture(const SearchPath& files, std::string_view name, int clear) {
+// when the files hold none that reads. `print`, when given, folds in the picture's palette indices
+// (FNV-1a, 64-bit).
+ge::ui::Image pcx_picture(const SearchPath& files, std::string_view name, int clear,
+                          uint64_t* print = nullptr) {
   std::vector<uint8_t> store;
   const std::span<const uint8_t> bytes =
       find_file(files, "pics/" + std::string(name) + ".pcx", store);
@@ -39,6 +43,8 @@ ge::ui::Image pcx_picture(const SearchPath& files, std::string_view name, int cl
   std::string why;
   if (bytes.empty() || !ge::assets::decode_pcx(bytes, name, &img, &why) || img.palette.empty())
     return {};
+  if (print != nullptr)
+    for (const uint8_t v : img.indices) *print = (*print ^ v) * 0x100000001b3ULL;
   ge::ui::Image out;
   out.width = img.width;
   out.height = img.height;
@@ -48,8 +54,23 @@ ge::ui::Image pcx_picture(const SearchPath& files, std::string_view name, int cl
   return out;
 }
 
-// The console's letters (`conchars`, its last colour see-through) and background (`conback`);
-// the status bar's and the menus' pictures are not read yet, so the menu keeps its modern look.
+// The menu's pictures by name: the main menu's plates (each with its lit copy, `_sel`), the plaque
+// and the logo down the left, the spinning cursor's fifteen frames and each page's banner.
+constexpr std::string_view kMenuPictures[] = {
+    "m_main_game",           "m_main_multiplayer",   "m_main_options",         "m_main_quit",
+    "m_main_video",          "m_main_game_sel",      "m_main_multiplayer_sel", "m_main_options_sel",
+    "m_main_quit_sel",       "m_main_video_sel",     "m_main_plaque",          "m_main_logo",
+    "m_banner_game",         "m_banner_multiplayer", "m_banner_options",       "m_banner_video",
+    "m_banner_start_server", "m_banner_join_server", "m_banner_plauer_setup",  "m_banner_load_game",
+    "m_banner_save_game",    "m_banner_customize"};
+constexpr int kCursorFrames = 15;
+// The plates the menu's missing words are cut from (classic_view.cpp), in the print's order.
+constexpr int kPrinted = 5;
+
+// The console's letters (`conchars`, its last colour see-through) and background (`conback`), and
+// the menu's pictures (above, the same colour see-through), the first five printed so words cut
+// from their letters are cut only from the plates they were measured on; the status bar's pictures
+// are not read yet, so the HUD keeps the window's own.
 ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhance,
                          const std::filesystem::path&) {
   ClassicPictures out;
@@ -59,6 +80,21 @@ ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhan
   if (out.menu.glyphs.width != 128 || out.menu.glyphs.height != 128) out.menu.glyphs = {};
   if (ge::ui::Image back = pcx_picture(files, "conback", -1); !back.empty())
     out.menu.pictures.emplace("conback", std::move(back));
+  uint64_t print = 0xcbf29ce484222325ULL;
+  int printed = 0;
+  for (size_t i = 0; i < std::size(kMenuPictures); i++) {
+    const bool printing = i < kPrinted;
+    ge::ui::Image pic = pcx_picture(files, kMenuPictures[i], 255, printing ? &print : nullptr);
+    if (pic.empty()) continue;
+    if (printing) printed++;
+    out.menu.pictures.emplace(std::string(kMenuPictures[i]), std::move(pic));
+  }
+  for (int f = 0; f < kCursorFrames; f++) {
+    const std::string name = "m_cursor" + std::to_string(f);
+    if (ge::ui::Image pic = pcx_picture(files, name, 255); !pic.empty())
+      out.menu.pictures.emplace(name, std::move(pic));
+  }
+  if (printed == kPrinted) out.menu.strip_print = print;
   return out;
 }
 
