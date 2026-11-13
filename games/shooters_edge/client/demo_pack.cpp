@@ -13,6 +13,7 @@ namespace shooters_edge::client {
 
 std::string packed_extension(DemoFormat base, bool voice) {
   if (base == DemoFormat::single) return ".demz";
+  if (base == DemoFormat::sequel) return ".dm2z";
   if (voice) return voice_extension(base) + "z";
   return base == DemoFormat::multiview ? ".mvdz" : ".qwdz";
 }
@@ -20,6 +21,7 @@ std::string packed_extension(DemoFormat base, bool voice) {
 std::string plain_extension(DemoFormat base) {
   if (base == DemoFormat::single) return ".dem";
   if (base == DemoFormat::multiview) return ".mvd";
+  if (base == DemoFormat::sequel) return ".dm2";
   const std::string voice = voice_extension(base);
   return voice.substr(0, voice.size() - 1);
 }

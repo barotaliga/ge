@@ -43,7 +43,10 @@ namespace {
 namespace se = shooters_edge::hud;
 
 const char* format_name(DemoFormat f) {
-  return f == DemoFormat::single ? "single" : f == DemoFormat::client ? "client" : "multiview";
+  return f == DemoFormat::single      ? "single"
+         : f == DemoFormat::client    ? "client"
+         : f == DemoFormat::multiview ? "multiview"
+                                      : "sequel";
 }
 
 // The entity the listener's own sounds come from: the view entity, or the recording player's.
@@ -382,7 +385,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     if (o.hud && !s.intermission) {
       se::fill_hud(hud, demo_status(s, at), art);
       hud.layout.draw(overlay, hud.layout.frame(o.width, o.height, se::hud_style()),
-                      se::hud_style());
+                      se::hud_style(art));
     }
     if (o.text || o.messages) {
       const std::string title =

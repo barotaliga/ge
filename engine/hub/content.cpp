@@ -146,8 +146,13 @@ bool demo_content(const Site& site, const HubSpec& spec, std::string_view demo_s
         if (l.name.rfind(f, 0) == 0) want.insert(std::string(l.name));
     }
   }
+  // Each name read once; what a file found names in turn (`file_needs`) joins the walk.
   std::vector<std::pair<std::string, std::vector<uint8_t>>> files;
-  for (const std::string& n : want) {
+  std::vector<std::string> todo(want.rbegin(), want.rend());
+  std::vector<std::string> more;
+  while (!todo.empty()) {
+    const std::string n = std::move(todo.back());
+    todo.pop_back();
     const vfs::FileRef* ref = vfs::find(sp, n);
     std::vector<uint8_t> bytes;
     std::string why;
@@ -155,8 +160,18 @@ bool demo_content(const Site& site, const HubSpec& spec, std::string_view demo_s
       out.missing++;
       continue;
     }
+    if (spec.file_needs) {
+      more.clear();
+      spec.file_needs(n, bytes, more);
+      for (std::string& m : more) {
+        m = lower(m);
+        if (!m.empty() && m.back() != '/' && want.insert(m).second) todo.push_back(m);
+      }
+    }
     files.emplace_back(std::string(vfs::stored_name(sp, *ref)), std::move(bytes));
   }
+  std::sort(files.begin(), files.end(),  // by name, as the names asked for were walked
+            [](const auto& a, const auto& b) { return lower(a.first) < lower(b.first); });
   std::vector<uint8_t> pak;
   if (!vfs::write_pak(files, &pak, &error)) return false;
   const std::vector<uint8_t> packed = vfs::zstd_pack(pak, vfs::ZstdLevel{});

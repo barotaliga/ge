@@ -33,6 +33,7 @@
 #include <initializer_list>
 #include <map>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -224,7 +225,11 @@ struct PageShot {
 
 constexpr PageShot kPages[] = {
     {"main", "multi",
-     "The root: SINGLE PLAYER, MULTIPLAYER, OPTIONS, HELP and QUIT, the focus on MULTIPLAYER."},
+     "The root: SELECT GAME first, then SINGLE PLAYER, MULTIPLAYER, DEMOS, OPTIONS, HELP and "
+     "QUIT, the focus on MULTIPLAYER."},
+    {"games", "",
+     "SELECT GAME: each classic game by the picture of its name, the one loaded marked with its "
+     "edition and install, the other not found yet; ENTER on it finds its folder."},
     {"single", "",
      "SINGLE PLAYER: NEW GAME runs `newgame` (the packs' single-player program from the map "
      "start); LOAD and SAVE open the save slots."},
@@ -387,6 +392,16 @@ void run(ge::lab::Lab& lab) {
       if (classic) g.menu.set_art(sets[static_cast<size_t>(pass)].art);
       int dimmed = 0, rows = 0;
       for (const PageShot& ps : kPages) {
+        if (std::string_view(ps.page) == "games")
+          g.menu.games().set_lister([] {
+            return std::vector<sm::GameRow>{
+                {.id = "classic",
+                 .install = "/games/classic",
+                 .edition = "Shareware",
+                 .playing = true,
+                 .missing = false},
+                {.id = "sequel", .install = "", .edition = "", .playing = false, .missing = false}};
+          });
         g.menu.show(g.host, ps.page);
         if (*ps.focus) g.menu.main().focus(ps.focus);
         for (const ui::Item& it : g.menu.main().top().items) {

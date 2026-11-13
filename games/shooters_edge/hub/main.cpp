@@ -27,6 +27,7 @@ ge::hub::HubSpec spec() {
   s.http_port = 28080;
   s.browse = shooters_edge::net::classic_query();  // the classic servers already out there
   s.demo_files = shooters_edge::client::demo_files;
+  s.file_needs = shooters_edge::client::content_needs;
   return s;
 }
 

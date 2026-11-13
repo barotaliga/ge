@@ -1,7 +1,8 @@
 // games/shooters_edge/client/demo_content.hpp: the files a demo draws from: its map, the models
 // and sounds its lists name (the map's inline models left out), the basics every picture needs,
 // lower case and sorted; the same names from the recording and from its replay file; a file that
-// is not a demo refused.
+// is not a demo refused; the sequel's: its maps, models' folders and pictures, and a map's
+// textures.
 //
 // ge:summary Test: a demo's content names: map, precached models and sounds, basics, refusals
 // ge:keywords test demo content files precache models sounds content-pack demo_files
@@ -13,9 +14,11 @@
 #include <string>
 #include <vector>
 
+#include "brush/write.hpp"
 #include "check.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/demo_write.hpp"
+#include "shooters_edge/client/sequel_demo.hpp"
 
 namespace se = shooters_edge::client;
 
@@ -63,4 +66,30 @@ TEST(a_file_that_is_no_demo_is_refused) {
   std::string error;
   CHECK(!se::demo_files(junk, names, error));
   CHECK(!error.empty());
+}
+
+TEST(a_sequel_demo_names_its_map_model_folders_and_pictures) {
+  const std::vector<uint8_t> rec = se::sequel_fixture(2, 4);
+  std::vector<std::string> names;
+  std::string error;
+  CHECK_MSG(se::demo_files(rec, names, error), error);
+  CHECK(holds(names, "maps/yard.bsp") && !holds(names, "maps/yard.lit"));
+  CHECK(holds(names, "models/things/thing1/"));  // the model's folder: it and its skins
+  CHECK(holds(names, "pics/colormap.pcx") && !holds(names, "gfx/palette.lmp"));
+  for (const std::string& n : names) CHECK(n.find("tris.md2") == std::string::npos);
+}
+
+TEST(a_sequel_map_names_its_texture_files) {
+  // A version 38 map (the brush plugin's fixture).
+  std::vector<uint8_t> bsp;
+  std::string error;
+  CHECK_MSG(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v38, &bsp, &error),
+            error);
+  std::vector<std::string> more;
+  se::content_needs("maps/yard.bsp", bsp, more);
+  CHECK(!more.empty());
+  for (const std::string& m : more) CHECK(m.rfind("textures/", 0) == 0 && m.ends_with(".wal"));
+  more.clear();
+  se::content_needs("sound/a.wav", bsp, more);  // only a map names more
+  CHECK(more.empty());
 }

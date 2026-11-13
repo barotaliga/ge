@@ -37,8 +37,10 @@ struct SearchPath {
   ge::vfs::SearchPath vfs;  // every source mounted, the last winning
 };
 
-// The base folder `<basedir>/<the content profile's base folder>` and, when `game` names another,
-// the mod folder `<basedir>/<game>` over it. False with the reason and the next step when the game
+// The base folder `<basedir>/<the content profile's base folder>`, the bundled client's folder over
+// it when the install has one (client/install_configs.hpp's `client_folder`: its place names,
+// fonts and pictures), and, when `game` names another, the mod folder `<basedir>/<game>` over
+// them. False with the reason and the next step when the game
 // folder is missing or an archive does not read.
 bool open_game_dir(
     const std::string& basedir, const std::string& game, SearchPath& out, std::string& error,
@@ -61,9 +63,9 @@ std::span<const uint8_t> game_palette(
     const SearchPath& path, std::vector<uint8_t>& store,
     const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
 
-// The map `map`'s coloured light: `<maps folder>/<map>.lit` beside the map (`maps/dm6.lit`),
-// else `lits/<map>.lit`, the folder players keep downloaded light files in; viewing `store` or a
-// pack, with its path in `found`. Empty when neither is there.
+// The map `map`'s coloured light: `maps/lits/<map>.lit`, else `<maps folder>/<map>.lit` beside
+// the map (`maps/dm6.lit`), else `lits/<map>.lit`, the folder players keep downloaded light files
+// in; viewing `store` or a pack, with its path in `found`. Empty when neither is there.
 std::span<const uint8_t> map_lit(
     const SearchPath& path, std::string_view map, std::vector<uint8_t>& store, std::string* found,
     const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());

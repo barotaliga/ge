@@ -26,7 +26,7 @@
 // ge:keywords video dimmed disabled cvar console-line needs togglemenu shooters-edge
 // ge:keywords load-page save-page save-slots customize-controls controls bind_control bound_keys
 // ge:keywords classic-enhanced ce_ graphics weather held-weapon gamma brightness load-game
-// ge:keywords screenshots gallery demos demo-browser
+// ge:keywords screenshots gallery demos demo-browser select-game
 // ge:skill ui console
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -126,12 +126,13 @@ bool host_knows(const Host& host, std::string_view name);
 // A cvar's value as text, the client's first; "" when neither has it.
 std::string host_value(const Host& host, std::string_view name);
 
-// The pages: `main` (the root: SINGLE PLAYER, MULTIPLAYER, DEMOS, OPTIONS, HELP, QUIT), `single`,
-// `multi`, `host` (NEW GAME), `setup`, `options`, `video` and its `weapon`, `enhanced` (CLASSIC
-// ENHANCED) and its `ce_art`, `ce_light`, `ce_liquids`, `ce_fire` and `ce_weather`, `help`, `quit`;
-// the slot pages `load` and `save` (rows `s0`..`s11`, then BACK; a slot activated runs `load s<i>`
-// or `save s<i>` and closes the menu; an empty slot is dimmed on LOAD); and `controls` (CUSTOMIZE
-// CONTROLS: a row `c<i>` a move of `controls()`, its value the keys bound to it).
+// The pages: `main` (the root: SELECT GAME, SINGLE PLAYER, MULTIPLAYER, DEMOS, OPTIONS, HELP,
+// QUIT), `single`, `multi`, `host` (NEW GAME), `setup`, `options`, `video` and its `weapon`,
+// `enhanced` (CLASSIC ENHANCED) and its `ce_art`, `ce_light`, `ce_liquids`, `ce_fire` and
+// `ce_weather`, `help`, `quit`; the slot pages `load` and `save` (rows `s0`..`s11`, then BACK; a
+// slot activated runs `load s<i>` or `save s<i>` and closes the menu; an empty slot is dimmed on
+// LOAD); and `controls` (CUSTOMIZE CONTROLS: a row `c<i>` a move of `controls()`, its value the
+// keys bound to it).
 ge::ui::Menu build_menu(const MenuTable& table = classic_menu());
 
 // Every entry's dimming and value read from the host (on opening, and after the console changed
@@ -144,7 +145,7 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back = false);
 // item names the row). `load_game`: LOAD GAME, the window shows the desktop's folder chooser.
 // `classic_enhance`: ENHANCE, the enhancing watched. `screenshots`: OPTIONS ▸ SCREENSHOTS, the
 // gallery's page shown (gallery_page.hpp). `servers`: JOIN A GAME's browser. `demos`: DEMOS, the
-// demos page (demos_page.hpp).
+// demos page (demos_page.hpp). `games`: SELECT GAME, the games page (games_page.hpp).
 enum class Outcome : uint8_t {
   none,
   close,
@@ -154,7 +155,8 @@ enum class Outcome : uint8_t {
   bind_key,
   screenshots,
   servers,
-  demos
+  demos,
+  games
 };
 
 // One menu event applied: a client setting's line run, NEW GAME's START running the rules and the

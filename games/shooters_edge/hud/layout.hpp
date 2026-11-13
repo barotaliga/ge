@@ -91,6 +91,10 @@ Look look_from(std::string_view word);
 
 // The HUD's type and colours (the kit's style).
 ge::hud::Style hud_style();
+// The same for a game's own pictures: a classic game's glyph sheet (`art.glyphs`) writes its
+// messages, the centre print and the figures in that game's letters; a set with no sheet keeps
+// the charset above.
+ge::hud::Style hud_style(const HudArt& art);
 
 // The table and what fills it every frame.
 struct Hud {

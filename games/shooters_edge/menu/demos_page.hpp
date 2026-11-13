@@ -1,5 +1,6 @@
 // SHOOTER'S EDGE'S DEMOS PAGE (the main menu's DEMOS, `menu_demos`): the engine's folder browser
-// (vfs/browse.hpp) over the player's own folders, drawn in the modern menu's look, to pick a
+// (vfs/browse.hpp) over the player's own folders, drawn in the modern menu's look or the loaded
+// game's classic one (`draw_classic`, classic_pages.hpp: its glyph sheet, its plaque), to pick a
 // recorded game anywhere on the machine (the game's folder, Downloads, a USB stick) and watch it.
 //
 // - WHAT IS LISTED: folders, and the files named as the game's recordings (the window hands the
@@ -33,6 +34,7 @@
 #include <string_view>
 #include <vector>
 
+#include "shooters_edge/menu/classic_art.hpp"
 #include "ui/draw.hpp"
 #include "ui/menu.hpp"
 #include "ui/menu_view.hpp"
@@ -72,6 +74,9 @@ class DemosPage {
   const std::string& facts() const { return facts_; }
 
   void draw(ge::ui::DrawList& list, int width, int height, const ge::ui::MenuStyle& style);
+  // The same in the loaded game's classic look, in its glyph sheet (classic_pages.hpp); `t` blinks
+  // the cursor.
+  void draw_classic(ge::ui::DrawList& list, const ClassicArt& art, int width, int height, double t);
   const std::vector<std::string>& problems() const { return problems_; }
 
   ge::vfs::FolderBrowser& browser() { return browser_; }

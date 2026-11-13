@@ -106,6 +106,38 @@ is kept (`game_folder.txt` in the platform's per-user folder) and opened at the 
 `-basedir` names none and the folder the game runs in holds no game. `basedir <folder>` in the
 console does the same as LOAD GAME (`client/game_folder.hpp`). Then `map dm3` plays that map.
 
+**Dropped into an install, or beside several** (`client/install_search.hpp`). Started inside a
+classic install (the folder the game runs in, or the folder its executable or app was placed in,
+is an install or lies inside one: its base folder, its multiplayer folder, the bundled client's
+folder), the game plays that install at once, ahead of the one kept. Placed in a folder ABOVE
+installs, it finds each folder right under it that is one: the folders named like a classic
+install first, in any case (the two games' own names, with or without a space or a 2, their
+multiplayer client's names, the bundles' names, the sequel's short name), then any other folder
+that holds a game. Each one's release is told by its packs' sizes (the first game's shareware or
+registered packs, the sequel's demo or full game; any other size is your own copy); the game
+loaded last is played when it is one of them, else the first full game. `games` in the console
+lists them and `games <n>` loads one.
+
+**An install's configs, in its own order** (`client/install_configs.hpp`). The bundled client's
+configs come with the install: `default.cfg` on disk, then, when the bundled client's folder holds
+`configs/config.cfg`, `autoexec.cfg` and that config, then `autoexec.cfg`, then the window's own
+saved settings (so a change made here sticks), then the command line's `+set` pairs and its other
+`+` commands. `exec` finds a file in the window's settings folder, the game folder, the bundled
+client's folder and the base folder, then in the archives, which include the bundled client's
+folder's own (its place names and fonts). Settings the window does not have are passed over and
+counted on one line. The sequel's install runs its bundled client's order: `config.cfg`
+(`q2config.cfg` on Windows, each tried after the other; a mod folder's before the base folder's),
+then the base folder's `autoexec.cfg` and the mod's, `postexec.cfg`, the window's own settings, the
+command line, and `postinit.cfg` last. Maps' coloured light is also read from `maps/lits/<map>.lit`.
+
+**Place names, made in the game** (`client/place_names.hpp`). Each map's place names are read as
+it starts (`tp_loadlocs`): the file saved under the game folder first, else the game's own.
+Stand in a place and `addloc <name>`; `removeloc` forgets the nearest, `clearlocs` all of them,
+`saveloc <name>` (or `saveloc $mapname`) writes `<game folder>/locs/<name>.loc` in the shared
+format, `loadloc <name>` reads one, and `loc` says where you are. The long names
+(`locations_add` and so on) work too, and so does the sequel's spelling: `loc add <name>`,
+`loc del`, `loc set <name>` (renames the nearest), `loc list` and `loc save`.
+
 **The title and the loads.** With no `+map` the window opens at once on the title
 (`client/title.hpp`: a night with the full moon low in a total eclipse, blood red, cloud carried
 across it) with the main menu up, the start map loading behind it; ESCAPE out of the menu plays it
@@ -1450,6 +1482,25 @@ recording's extension stands before its packing, so `match.mvd.gz` is and `maps.
 ENTER checks the file before anything starts (`client/demo_check.hpp`: the bytes, not the name;
 unpacked, then read to its level's map) and plays it as `playdemo` does, or shows in the footer
 why it is no demo. BACKSPACE goes up a folder, LEFT and RIGHT through the places, R lists again.
+
+**A classic game in its own look, picked from SELECT GAME (M18k2).** SELECT GAME is the main
+menu's first row, so ENTER on a fresh start goes straight to it (`menu_games`;
+`menu/games_page.hpp`). It shows each classic game the content profiles know by a picture of its
+name (`menu/art/<id>.png`, embedded; the names are pictures, never words in the tree), the
+install of it loaded last (`client/installs.hpp`: `<prefs>/installs.txt`, a line a game) and that
+install's edition, read from its packs the moment it is picked (the profile's `full_game` file
+found or not: Shareware or Registered, the sequel's Demo or Full game). ENTER on a game with a
+kept install opens it; on one never found, or FIND ANOTHER INSTALL, the window's folder chooser,
+and the folder is taken by whichever game's base folder it holds (`install_of`). Once a classic
+game is open, the title's night gives way to its own recordings played behind the menu in turn
+(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game; "" keeps the night), ESCAPE closes the menu onto the
+recording to watch it, and nothing modern is left on screen: the console is written in the
+game's glyph sheet over its own console background (`menu/classic_console.hpp`, the engine's
+`ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
+GAME and SELECT GAME are drawn in the game's letters under carved titles (`menu/classic_pages.hpp`;
+SELECT GAME's own row cut letter by letter from the strips like DEMOS'). Lab `se-attract` draws
+the menu, SELECT GAME, the watched recording, the console, DEMOS and JOIN A GAME over a played
+recording (`--basedir` a player's install).
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
 output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),

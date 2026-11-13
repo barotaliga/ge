@@ -16,7 +16,8 @@
 //   one (its content profile's id) and its install, in `<prefs>/game_folder.txt` (`profile <id>`,
 //   `basedir <folder>`; the older single line of a folder reads as the first profile's). Kept
 //   whenever a game opens (at the start, LOAD GAME, `basedir`) and opened at the next start unless
-//   `-basedir` names another (`choose_folder`), so the game starts as that classic game (its
+//   `-basedir` names another or the game was started inside an install or placed above some
+//   (`choose_folder`, client/install_search.hpp), so the game starts as that classic game (its
 //   pictures, menus, HUD, programs and maps) until another is loaded. With none kept, the folder
 //   the game runs in.
 // - **What it holds** (`load_programs`): the multiplayer program (`-progs`, else the game's own
@@ -44,6 +45,7 @@
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
+#include "shooters_edge/client/install_search.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 
@@ -67,10 +69,16 @@ const ge::classicenhance::Profile* install_of(const std::string& folder, std::st
 std::string game_of(const std::string& basedir, const ge::classicenhance::Profile& content =
                                                     ge::classicenhance::classic_profile());
 
-// The install the window opens, into `args`: `-basedir`, else the game loaded last (kept under
-// `prefs`) while its install still checks, else the folder the game runs in; then the game folder
-// over it, `-game`, else `game_of`.
-void choose_folder(Args& args, const std::string& prefs);
+// The install the window opens, into `args`: `-basedir`; else the install the game was started
+// inside (client/install_search.hpp's `install_around` of the folder it runs in, `args.basedir`,
+// then of each of `places`: the folder its executable was placed in); else of the installs right
+// under those folders (`installs_below`), the game loaded last when it is one of them, else the
+// first full game; else the game loaded last (kept under `prefs`) while its install still checks;
+// else the folder the game runs in. Then the game folder over it, `-game`, else `game_of`. `found`
+// (when given) gets the installs found under those folders, for the console's `games`.
+void choose_folder(Args& args, const std::string& prefs,
+                   const std::vector<std::string>& places = {},
+                   std::vector<FoundInstall>* found = nullptr);
 
 // The classic game loaded last: its content profile's id and its install.
 struct KeptGame {

@@ -730,6 +730,14 @@ gh::Style hud_style() {
   return st;
 }
 
+gh::Style hud_style(const HudArt& art) {
+  gh::Style st = hud_style();
+  if (art.glyphs.empty()) return st;
+  const gh::Face face = gh::Face::glyph_sheet(art.glyphs);
+  st.value_face = st.caption_face = st.big_face = face;
+  return st;
+}
+
 Hud make_hud() {
   Hud hud;
   for (const Row& r : rows()) hud.layout.add(r.spec);
