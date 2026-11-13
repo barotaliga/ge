@@ -163,7 +163,12 @@ void send_packet(SequelClientEnd& c, int64_t now_us) {
     c.cmds[0] = c.cmds[1];
     c.cmds[1] = c.cmds[2];
     c.cmds[2] = sequel_cmd(m);
-    write_sequel_move(w, c.demo.last_frame, c.cmds, c.ch.outgoing_sequence);
+    int32_t acked = c.demo.last_frame;
+    if (c.cfg.whole_every > 0 && c.now - c.last_whole >= c.cfg.whole_every) c.last_whole = c.now;
+    // For 150 ms (past the server's next 10 Hz frame, whatever moves come between) no frame is
+    // acknowledged, so the server's next one is whole.
+    if (c.cfg.whole_every > 0 && c.now - c.last_whole < 0.15) acked = -1;
+    write_sequel_move(w, acked, c.cmds, c.ch.outgoing_sequence);
     c.moves++;
   }
   uint8_t out[kMaxPacket];
