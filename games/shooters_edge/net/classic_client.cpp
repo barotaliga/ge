@@ -103,6 +103,13 @@ void next_skin_or_begin(ClassicClientEnd& c) {
   if (!c.begun) {
     c.begun = true;
     client_command(c, "begin " + std::to_string(c.spawncount));
+    // Voice heard from here on, sent to the target asked for (net/classic_talk.hpp).
+    if (c.cfg.voice && c.ext.has(ExtFamily::x2, kX2Voice)) {
+      client_command(c, "unmuteall");
+      const std::string want = c.voice_to.empty() ? c.cfg.voice_to : c.voice_to;
+      c.voice_to.clear();
+      if (!want.empty()) classic_voice_target(c, want);
+    }
   }
 }
 
@@ -615,6 +622,12 @@ void client_start(ClassicClientEnd& c, gn::Transport& t, const gn::Address& serv
 
 void client_rcon(ClassicClientEnd& c, const std::string& password, const std::string& line) {
   send_oob_text(c, "rcon \"" + password + "\" " + line + "\n");
+}
+
+void classic_voice_target(ClassicClientEnd& c, const std::string& word) {
+  if (word.empty() || word == c.voice_to) return;
+  c.voice_to = word;
+  if (c.begun) client_command(c, "voicetarg " + word);
 }
 
 void client_command(ClassicClientEnd& c, const std::string& line) {

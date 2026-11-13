@@ -162,7 +162,7 @@ const cs::Atlas atlas = cs::build_atlas(cs::FontId::terminal, cs::atlas_size_for
 // CPU: draw and light a run straight onto an RGBA picture.
 cs::LayerCache layers;
 cs::TextPlace at{16, 10, 32};
-cs::paint_text(rgba, width, height, atlas, "] say_prox anyone at the lift?", at,
+cs::paint_text(rgba, width, height, atlas, "] say_near anyone at the lift?", at,
                cs::look(cs::LookId::phosphor), layers);
 ```
 

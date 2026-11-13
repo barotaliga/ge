@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 
+#include "account/service.hpp"
 #include "check.hpp"
 #include "net/sim_network.hpp"
 #include "progs/qc_compile.hpp"
@@ -29,6 +30,9 @@ namespace se = shooters_edge::net;
 namespace gn = ge::net;
 
 constexpr uint16_t kPort = 27500, kClientPort = 27001;
+constexpr int64_t kUnix0 = 1794500000ll * 1000000;
+int64_t g_unix = kUnix0;
+int64_t unix_now() { return g_unix; }
 
 std::unique_ptr<cl::LoadedMap> stub_map(const std::string& name) {
   auto m = std::make_unique<cl::LoadedMap>();
@@ -84,7 +88,8 @@ struct Coop {
   gn::Transport port, client_port;
   cl::Listen l;
   se::ClassicClientEnd visitor;
-  explicit Coop(int companions, bool coop = true, bool ours = false) {
+  explicit Coop(int companions, bool coop = true, bool ours = false,
+                ge::account::Service* accounts = nullptr) {
     if (!ours) CHECK_MSG(sv::build_campaign_stub(stub, error), error);
     gn::open_sim_transport(port, net, gn::sim_address(0, kPort));
     gn::open_sim_transport(client_port, net, gn::sim_address(1, kClientPort));
@@ -93,6 +98,11 @@ struct Coop {
     opt.companions = companions;
     opt.transport = &port;
     opt.player = "host";
+    if (accounts != nullptr) {
+      opt.login.login = 1;
+      opt.accounts = accounts;
+      opt.unix_us = unix_now;
+    }
     CHECK_MSG(ours ? cl::listen_start(l, campaign_mod(), coop_map("start"), opt, error)
                    : cl::listen_start(l, stub, stub_map("first"), opt, error),
               error);
@@ -106,6 +116,7 @@ struct Coop {
   void run(int n) {
     for (int f = 0; f < n && l.server != nullptr; f++) {
       const auto now = static_cast<int64_t>((l.net_s + sv::kCampaignStep) * 1e6);
+      g_unix = kUnix0 + now;
       gn::sim_advance(net, now);
       se::client_tick(visitor, now);
       cl::listen_frame(l, {});
@@ -178,4 +189,43 @@ TEST(a_client_joins_our_campaign_in_coop_on_a_free_coop_start) {
   };
   CHECK(apart(1, 2) && apart(1, 3) && apart(2, 3));
   CHECK(sv::qc_of(g.l.campaign_host->server)->q.faults == 0);
+}
+
+TEST(a_client_logs_in_on_the_windows_coop_game) {
+  namespace ga = ge::account;
+  g_unix = kUnix0;
+  gn::SimNetwork accounts_net = gn::make_sim_network(2, gn::LinkConditions{});
+  gn::Transport own_port;
+  gn::open_sim_transport(own_port, accounts_net, gn::sim_address(8, ga::kAccountPort));
+  ga::Store store;
+  ga::store_init(store, ga::HashCost{8, 1});
+  ga::Fresh f{};
+  ga::create(store, "Niclas", "correct horse", g_unix, f);
+  ga::Service own;
+  uint64_t fresh_n = 1;
+  ga::service_init(
+      own, ga::ServiceConfig{}, std::move(store), own_port,
+      [](void* ctx, uint8_t* out, size_t size) {
+        auto* n = static_cast<uint64_t*>(ctx);
+        for (size_t i = 0; i < size; i++) out[i] = static_cast<uint8_t>(*n * 131 + i * 17);
+        (*n)++;
+      },
+      &fresh_n);
+  f[0] = 7;
+  const std::string code = ga::make_code(own.store, 1, g_unix, f).code;
+  Coop g(0, true, false, &own);
+  CHECK(g.l.door != nullptr);
+  for (int f2 = 0; f2 < 400 && g.visitor.stage != se::ClientStage::active; f2++) g.run(1);
+  CHECK_MSG(g.visitor.stage == se::ClientStage::active, g.visitor.refused);
+  // The login is the campaign's server's too: told how, and taken before the campaign sees it.
+  g.run(20);
+  bool told = false;
+  for (const std::string& line : g.visitor.prints)
+    told = told || line.find("login <name> <code>") != std::string::npos;
+  CHECK(told);
+  se::client_command(g.visitor, "login niclas " + code);
+  g.run(60);
+  CHECK(g.visitor.playernum >= 0);
+  if (g.visitor.playernum < 0) return;
+  CHECK(se::info_get(g.visitor.userinfos[g.visitor.playernum], "*auth") == "Niclas");
 }

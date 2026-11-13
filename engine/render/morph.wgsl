@@ -32,6 +32,7 @@ struct Draw {
   shade_dir: vec4f,
   warp: Warp,  // render/wgsl/warp.wgsl (MorphWarp)
   burn: vec4f,  // charred, embers, etched, seed (MorphBurn)
+  skin: vec4u,  // x: the model whose skin it wears (MorphDraw::skin); y: its slot + 1 (0: none)
 }
 
 const kTintSteps = 16u;
@@ -43,6 +44,21 @@ const kTintSteps = 16u;
 @group(1) @binding(4) var<storage, read> draws: array<Draw>;
 @group(1) @binding(5) var<storage, read> ramps: array<vec4f>;
 @group(1) @binding(6) var atlas: texture_2d<f32>;
+@group(1) @binding(7) var slots: texture_2d_array<f32>;  // the skins worn by slot (MorphDraw::slot)
+
+const kSlotSize = 512u;  // render/morph.hpp's kMorphSlotSize
+
+// The rectangle the draw's skin is read from: its worn model's in the atlas, or a whole slot.
+fn skin_rect(m: Model, d: Draw) -> vec4u {
+  return select(m.rect, vec4u(0u, 0u, kSlotSize, kSlotSize), d.skin.y != 0u);
+}
+
+fn skin_load(p: vec2i, d: Draw) -> vec4f {
+  if (d.skin.y != 0u) {
+    return textureLoad(slots, p, i32(d.skin.y - 1u), 0);
+  }
+  return textureLoad(atlas, p, 0);
+}
 
 fn rotate(q: vec4f, v: vec3f) -> vec3f {
   let t = 2.0 * cross(q.xyz, v);
@@ -102,7 +118,7 @@ fn srgb_decode(c: vec3f) -> vec3f {
 
 // A texel resolved: linear rgb, and a 1 in w when it lights itself.
 fn texel(p: vec2i, d: Draw) -> vec4f {
-  let c = textureLoad(atlas, p, 0);
+  let c = skin_load(p, d);
   let mark = u32(round(c.a * 255.0));
   let region = mark >> 6u;
   if (region != 0u) {
@@ -113,9 +129,10 @@ fn texel(p: vec2i, d: Draw) -> vec4f {
 }
 
 fn skin_at(uv: vec2f, m: Model, d: Draw) -> vec4f {
-  let lo = vec2i(m.rect.xy);
-  let hi = vec2i(m.rect.xy + m.rect.zw) - 1;
-  let at = uv * vec2f(m.rect.zw);
+  let r = skin_rect(m, d);
+  let lo = vec2i(r.xy);
+  let hi = vec2i(r.xy + r.zw) - 1;
+  let at = uv * vec2f(r.zw);
   if (d.info.w == 0u) {
     return texel(clamp(lo + vec2i(floor(at)), lo, hi), d);
   }
@@ -146,11 +163,12 @@ fn see_through_gone(gone: f32, pixel: vec2f, frame_number: f32) -> bool {
   return (bayer[p.y * 4u + p.x] + 0.5) / 16.0 < gone;
 }
 
-fn hole_at(uv: vec2f, m: Model) -> bool {
-  let lo = vec2i(m.rect.xy);
-  let hi = vec2i(m.rect.xy + m.rect.zw) - 1;
-  let p = clamp(lo + vec2i(floor(uv * vec2f(m.rect.zw))), lo, hi);
-  return u32(round(textureLoad(atlas, p, 0).a * 255.0)) == 2u;
+fn hole_at(uv: vec2f, m: Model, d: Draw) -> bool {
+  let r = skin_rect(m, d);
+  let lo = vec2i(r.xy);
+  let hi = vec2i(r.xy + r.zw) - 1;
+  let p = clamp(lo + vec2i(floor(uv * vec2f(r.zw))), lo, hi);
+  return u32(round(skin_load(p, d).a * 255.0)) == 2u;
 }
 
 // THE BURN (MorphBurn) on a texel's albedo `a` at the model-frame point `p` (m): the char's soot
@@ -194,12 +212,12 @@ struct FragmentOut {
 @fragment
 fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   let d = draws[in.draw];
-  let m = models[d.info.x];
+  let m = models[d.skin.x];  // only its skin's rectangle is read here
   var n = normalize(in.normal);
   if (!front) {
     n = -n;
   }
-  if (hole_at(in.uv, m) || see_through_gone(d.shade_dir.w, in.position.xy, frame.time.y)) {
+  if (hole_at(in.uv, m, d) || see_through_gone(d.shade_dir.w, in.position.xy, frame.time.y)) {
     discard;
   }
   let burn = warp_burn(d.warp, in.local.xyz, in.local.w);

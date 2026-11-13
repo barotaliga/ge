@@ -18,6 +18,7 @@
 //
 // ge:summary The pack's effects the engine replaces with its own: file, effect id, why
 // ge:keywords replace effect explosion flare bubbles fire torch flame sprite model glow
+// ge:keywords missile monster-shot acid laser lava-ball monster-gun muzzle
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #pragma once
@@ -44,6 +45,26 @@ inline constexpr Replacement kReplacements[] = {
      "a painted flame; the engine's fire flickers, lights the room and casts moving shadows"},
     {"progs/flame2.mdl", "fire.large", false,
      "a painted flame; the engine's fire flickers, lights the room and casts moving shadows"},
+    // The monsters' shots, drawn as the pack's models with the engine's trail, light and splash
+    // round them (Shooter's Edge's app/monster_fx.hpp, `missile.<kind>`).
+    {"progs/w_spike.mdl", "missile.acid", true,
+     "classic specks; the engine's acid drips, glows green and splashes off the wall"},
+    {"progs/k_spike.mdl", "missile.flame", true,
+     "classic specks; the engine's fire bolt streams flame and embers and bursts where it lands"},
+    {"progs/v_spike.mdl", "missile.void", true,
+     "classic specks; the engine's ball is a knot of violet light with motes spiralling off it"},
+    {"progs/lavaball.mdl", "missile.lava", true,
+     "the rocket's specks; the engine's lava ball burns, smokes and drips molten drops"},
+    {"progs/laser.mdl", "missile.laser", true,
+     "a bare model; the engine's laser is a streak of red light that lights the walls it passes"},
+    {"progs/zom_gib.mdl", "missile.flesh", true,
+     "blood specks; the engine's flesh drips dark drops that fall"},
+    // The monsters that fire a gun: the model drawn as it is, with the engine's muzzle fire at its
+    // gun when it shoots (a caster's flash stays a light alone).
+    {"progs/soldier.mdl", "monster.gun", true,
+     "a flash of light; the engine's shotgun fire bursts from the muzzle"},
+    {"progs/enforcer.mdl", "monster.gun", true,
+     "a flash of light; the engine's gun fire bursts from the muzzle"},
 };
 
 // The row for a pack path; nullptr when the engine draws the file itself.

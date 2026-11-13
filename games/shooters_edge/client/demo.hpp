@@ -220,6 +220,7 @@ struct DemoState {
   std::array<std::string, 32> teams;        // client, multiview: each slot's team ("": none)
   std::array<bool, 32> spectator{};         // client, multiview: the slot watches (`*spectator`)
   std::array<int, 32> top{}, bottom{};      // client, multiview: each slot's colours (0..13)
+  std::array<std::string, 32> skins;        // client, multiview: each slot's `skin` ("": none)
   std::string game;  // client, multiview: the game folder the server ran ("fortress"; "" unnamed)
   // Client, multiview: the server's info keys in the order first seen (the signon's
   // `fullserverinfo`, then each `serverinfo` change): `hostname`, `teamplay`, `maxclients` ...
@@ -279,6 +280,14 @@ struct Demo {
   std::array<SequelView, 16> views;
   int max_clients = 0;
   bool framed = false;
+  // The sequel format read off a live connection (net/sequel_client.hpp): the lines the server
+  // stuffed (each with its newline; the reader appends, its owner takes them), the server's
+  // reconnect message seen, the server data's count, and the newest frame read whole (-1: none,
+  // or the last one deltaed from a frame this reader did not hold).
+  std::vector<std::string> stuffed;
+  bool reconnect = false;
+  int32_t server_count = 0;
+  int32_t last_frame = -1;
 };
 
 // `bytes` as a demo of any format (detected), unpacked first when packed or archived
@@ -321,6 +330,10 @@ DemoRead next_multiview(Demo& d, std::string& error);
 // the server data's protocol; the rest may still be on its way), and its next frame.
 bool is_sequel_demo(std::span<const uint8_t> bytes);
 DemoRead next_sequel(Demo& d, std::string& error);
+// `d` set up to read the sequel format from blocks appended to `d.bytes` as they come (a live
+// connection's payloads); open_demo does the same for a file.
+void sequel_stream_begin(Demo& d);
+inline constexpr size_t kSequelStuffedKept = 256;
 
 // The voice message's body (after the id byte) into `out`; false when it runs past the end.
 bool read_voice(DemoMsg& m, DemoVoice& out);

@@ -15,10 +15,10 @@
 #include <iterator>
 #include <thread>
 
-#include "account/host.hpp"
 #include "core/num.hpp"
 #include "net/address.hpp"
 #include "net/udp_socket.hpp"
+#include "server/accounts.hpp"
 
 namespace ge::server {
 
@@ -112,41 +112,6 @@ int64_t wall_unix_us() {
                                   .count());
 }
 
-// The accounts the game's logins ask (login.hpp): with sv_login on and no sv_accountmaster, the
-// server's own service over `accounts.log` and `account.key` in its game folder, on
-// sv_accountport; with a master, a socket of its own to ask it on. False with `error`.
-bool open_accounts(const ServerGame& game, ServerConfig& c, account::Host& host,
-                   gn::Transport& link, bool& have_link, std::string& error) {
-  c.unix_us = wall_unix_us;
-  if (!c.login.master.empty()) {
-    gn::Address any;
-    gn::parse_address("0.0.0.0:0", any);
-    if (!gn::open_udp_transport(link, any, &error)) {
-      error = "cannot open a socket to ask the account master on: " + error;
-      return false;
-    }
-    have_link = true;
-    c.account_link = &link;
-    return true;
-  }
-  if (c.login.login == 0) return true;
-  const std::string dir = c.root + "/" + game.base_dir;
-  const int port = c.login.port > 0 ? c.login.port : account::kAccountPort;
-  gn::Address at;
-  if (!gn::parse_address((c.ip.empty() ? "0.0.0.0" : c.ip) + ":" + std::to_string(port), at) ||
-      !account::host_open(host, dir, at, account::HashCost{}, wall_unix_us(), error)) {
-    error = "sv_login is on and this server is its own account master, but " + error +
-            ". Set sv_accountport to a free port, or sv_accountmaster to a master's address";
-    return false;
-  }
-  if (!host.warning.empty()) std::fprintf(stderr, "%s: %s\n", game.binary, host.warning.c_str());
-  std::printf("%s: its own account master: %zu accounts in %s, service on %s, key %s\n",
-              game.binary, host.svc.store.accounts.size(), dir.c_str(), gn::to_string(at).c_str(),
-              gn::key_to_hex(account::service_key(host.svc)).c_str());
-  c.accounts = &host.svc;
-  return true;
-}
-
 int run(const ServerGame& game, const ServerConfig& given) {
   ServerConfig c = given;
   gn::Transport sock, lan;
@@ -179,19 +144,21 @@ int run(const ServerGame& game, const ServerConfig& given) {
                      game.binary, static_cast<unsigned>(game.discovery_port), why.c_str());
     }
   }
-  account::Host accounts;
-  gn::Transport link;
-  bool have_link = false;
+  ServerAccounts accounts;
   const auto close_all = [&] {
-    account::host_close(accounts);
-    if (have_link) gn::close_transport(link);
+    server_accounts_close(accounts);
     if (have_lan) gn::close_transport(lan);
     if (!c.offline) gn::close_transport(sock);
   };
-  if (!c.offline && !open_accounts(game, c, accounts, link, have_link, error)) {
-    std::fprintf(stderr, "%s: %s\n", game.binary, error.c_str());
-    close_all();
-    return 1;
+  if (!c.offline) {
+    std::string said;
+    if (!server_accounts_open(accounts, c, c.root + "/" + game.base_dir, wall_unix_us, said,
+                              error)) {
+      std::fprintf(stderr, "%s: %s\n", game.binary, error.c_str());
+      close_all();
+      return 1;
+    }
+    if (!said.empty()) std::printf("%s: %s\n", game.binary, said.c_str());
   }
   Server s;
   if (!server_open(s, game, c, c.offline ? nullptr : &sock, have_lan ? &lan : nullptr, error)) {
@@ -214,7 +181,8 @@ int run(const ServerGame& game, const ServerConfig& given) {
       std::this_thread::sleep_until(due);
     }
     server_frame(s);
-    account::host_update(accounts, wall_unix_us());
+    server_accounts_update(accounts, wall_unix_us());
+    server_accounts_reports(accounts, s, wall_unix_us());
     if (status_frames > 0 && (n + 1) % status_frames == 0) {
       std::printf("%s\n", server_status(s).c_str());
       std::fflush(stdout);

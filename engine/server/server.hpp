@@ -54,6 +54,7 @@
 #include "net/hosting.hpp"
 #include "net/master.hpp"
 #include "net/node.hpp"
+#include "net/report.hpp"
 #include "net/session.hpp"
 #include "net/transport.hpp"
 #include "server/login.hpp"
@@ -211,7 +212,15 @@ struct ServerGame {
   // a viewer who joins starts from. Both null: no broadcast.
   void (*tv_frame)(const void* game, std::vector<uint8_t>& out) = nullptr;
   void (*tv_keyframe)(const void* game, std::vector<uint8_t>& out) = nullptr;
+
+  // A match that just ended (net/report.hpp): true once per match with its report, the game's
+  // part filled (the mode, the map, the duration, how it ended, the teams, the players and the
+  // game's columns); the server adds its own (the id, the game, the server's name and address,
+  // the start). Null: the game reports no matches.
+  bool (*match_report)(void* game, net::MatchReport& out) = nullptr;
 };
+
+constexpr size_t kReportsKept = 16;  // a server's last match reports, newest last
 
 struct Server {
   Server() = default;
@@ -234,6 +243,9 @@ struct Server {
   net::MasterBeat beat;  // sv_master's masters (none: no beat)
   uint64_t status_answers = 0;
   uint64_t public_secret = 0;  // an own-protocol game's status cookies (the node's otherwise)
+  // The matches the game reported (ServerGame::match_report), the last kReportsKept, newest last.
+  std::vector<net::MatchReport> reports;
+  uint64_t matches_reported = 0;
 };
 
 // The settings' cvars bound to `config` (which must outlive `cvars`), its values the fallbacks;

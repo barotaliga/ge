@@ -63,6 +63,28 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
                 style.kinds[static_cast<size_t>(l->kind)]);
       y += row;
     }
+    // The chat line under them (a `messagemode`): its prompt in the route's colour, the text, the
+    // cursor.
+    if (view.chatting()) {
+      const std::string prompt = std::string(view.chat_prompt()) + " ";
+      const std::string& typed = view.chat_input();
+      const float pw = font.advance(prompt, text);
+      const float tw = font.advance(typed, text);
+      list.rect({margin - 4 * s, y, pw + tw + 14 * s, row}, style.notify_band, 3 * s);
+      const float base = y + (row + ascent) * 0.5f - 1 * s;
+      const con::LineKind kind = view.chat_to() == con::ChatTo::team     ? con::LineKind::team
+                                 : view.chat_to() == con::ChatTo::nearby ? con::LineKind::nearby
+                                 : view.chat_to() == con::ChatTo::one    ? con::LineKind::whisper
+                                                                         : con::LineKind::chat;
+      list.text(font, text, margin, base, prompt, style.kinds[static_cast<size_t>(kind)]);
+      list.text(font, text, margin + pw, base, typed, style.input);
+      const bool lit = style.cursor_blink_s <= 0 ||
+                       static_cast<long long>(std::floor(time_s / style.cursor_blink_s)) % 2 == 0;
+      if (lit) {
+        const float cx = margin + pw + font.advance(typed.substr(0, view.chat_cursor()), text);
+        list.rect({cx, y + 2 * s, 2 * s, row - 4 * s}, style.cursor);
+      }
+    }
     return;
   }
 

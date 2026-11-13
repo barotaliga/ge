@@ -82,6 +82,7 @@
 #include "render/marks.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/app/look.hpp"
+#include "shooters_edge/app/monster_fx.hpp"
 #include "shooters_edge/app/muzzle.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -103,6 +104,9 @@ struct FxSwitches {
   // ce_flares, ce_bubbles: the pack's flare and bubble sprites drawn as the engine's (the models'
   // `prepare_models`, through classic-enhance's replacement table).
   bool flares = false, bubbles = false;
+  // ce_monsters: the monsters' missiles, spit and splashes in the modern look (app/monster_fx.hpp);
+  // off, the classic specks.
+  bool monsters = false;
   // r_lerpmodels, r_lerpmove (either look): the models drawn between their frames (model_lerp.hpp)
   ModelLerpSwitches lerp;
 };
@@ -119,6 +123,7 @@ struct HeldBeam {
   EffectModel model = EffectModel::bolt2;
   ge::render::BurnTrail trail;  // where it last burnt the wall it lands on
   bool across = false;          // the arc across the player's gun's prongs (fx::prong_arc_look)
+  bool rail = false;            // the sequel's rail (fx::rail_look): fired once, then fading
   double seen = 0;
 };
 
@@ -201,6 +206,27 @@ struct FxState {
     double carry = 0;
   };
   std::unordered_map<int, Bleeding> bleeding, bleeding_next;
+  // THE MONSTERS' MISSILES (app/monster_fx.hpp: a model the replacement table or its trail flags
+  // name): each in flight as it was a frame ago (m, and map units), the way it flew, its kind and
+  // its classic trail's side; those gone this frame (where their spit lands); the splashes whose
+  // light still fades.
+  struct MonsterFlight {
+    ge::camera::Vec3 at;
+    sh::Vec3f map_at;
+    double dir[3] = {0, 0, 0};
+    effects::MonsterShot kind = effects::MonsterShot::none;
+    int count = 0;
+  };
+  std::unordered_map<int, MonsterFlight> monster_flights, monster_next;
+  std::vector<MonsterFlight> monster_gone;
+  struct MonsterSplash {
+    double at[3] = {0, 0, 0};
+    double t = 0;
+    effects::MonsterShot kind = effects::MonsterShot::none;
+  };
+  std::vector<MonsterSplash> monster_splashes;
+  // A monster's gun's flash (its muzzle-flash effect bit): when each began, by entity.
+  std::unordered_map<int, double> monster_fired;
   std::unordered_map<uint32_t, std::array<float, 3>> wall_colours;  // each texture's, as hit
   std::vector<Wound> wounds;
   std::unordered_map<int, float> wound_health;  // each wounded body's health a frame ago
@@ -232,6 +258,8 @@ struct FxState {
 
 // One frame's effects for the world pass.
 struct FxFrame {
+  // Whether the server allows see-through liquids (look.hpp's `watervis_allowed`; a demo always).
+  bool see_through = true;
   effects::Particles births;
   std::vector<effects::Light> lights;
   double blend[4] = {0, 0, 0, 0};  // the screen's: sRGB colour and share

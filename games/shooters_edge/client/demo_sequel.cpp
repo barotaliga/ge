@@ -204,8 +204,8 @@ void set_string(Demo& d, int index, std::string text) {
 void server_data(Demo& d, DemoMsg& m) {
   DemoState& s = d.state;
   s.protocol = m.i32();
-  m.i32();  // the server count
-  m.u8();   // the recording's kind
+  d.server_count = m.i32();
+  m.u8();  // the recording's kind
   s.game = m.str();
   s.player = std::max(0, m.i16());
   m.str();  // the level's full name
@@ -223,6 +223,7 @@ void server_data(Demo& d, DemoMsg& m) {
   for (Frame& f : d.ring) f.clear();
   d.views.fill(SequelView{});
   d.framed = false;
+  d.last_frame = -1;
   // Until the server says how many it takes: the recording's own player alone, as a game for one
   // player says nothing.
   s.players.assign(static_cast<size_t>(std::min(s.player + 1, 32)), DemoEntity{});
@@ -318,6 +319,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   d.views[slot] = v;
   d.ring[slot] = to;
   d.framed = true;
+  d.last_frame = have_base || delta <= 0 ? number : -1;
 
   // Into the state the window reads.
   std::vector<DemoEntity>& ents = s.entities;
@@ -541,14 +543,19 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
       case kLayout:
         m.str();
         break;
-      case kStuffText:  // a place name the recording kept read, the rest skipped
-        sh::read_recorded_loc(m.str(), s.places);
+      case kStuffText: {  // a place name the recording kept read; the rest kept for the caller
+        std::string text = m.str();
+        if (sh::read_recorded_loc(text, s.places)) break;
+        if (d.stuffed.size() < kSequelStuffedKept) d.stuffed.push_back(std::move(text));
         break;
+      }
       case kInventory:
         m.skip(512);
         break;
       case kNop:
+        break;
       case kReconnect:
+        d.reconnect = true;
         break;
       case kDisconnect:
         d.ended = true;
@@ -625,6 +632,13 @@ int32_t i32_at(std::span<const uint8_t> b, size_t at) {
 }
 
 }  // namespace
+
+void sequel_stream_begin(Demo& d) {
+  d.state.format = DemoFormat::sequel;
+  d.state.protocol = 34;
+  d.ring.resize(16);
+  d.baselines.resize(kMostEntities);
+}
 
 bool is_sequel_demo(std::span<const uint8_t> bytes) {
   if (bytes.size() < 13) return false;

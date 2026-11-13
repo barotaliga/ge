@@ -621,6 +621,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
               !info_field(info, "*spectator").empty() && info_field(info, "*spectator") != "0";
           s.top[k] = colour_of(info_field(info, "topcolor"));
           s.bottom[k] = colour_of(info_field(info, "bottomcolor"));
+          s.skins[k] = info_field(info, "skin");
         }
         break;
       }
@@ -683,6 +684,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
           if (key == "*spectator") s.spectator[k] = !value.empty() && value != "0";
           if (key == "topcolor") s.top[k] = colour_of(value);
           if (key == "bottomcolor") s.bottom[k] = colour_of(value);
+          if (key == "skin") s.skins[k] = value;
         }
         break;
       }

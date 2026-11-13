@@ -7,6 +7,7 @@
 // ge:skill replay shooter
 // ge:test tests/shooters_edge_demo_v2_test.cpp
 #include "shooters_edge/client/demo_v2.hpp"
+#include "shooters_edge/client/recording_tv.hpp"
 #include "shooters_edge/client/sequel_demo.hpp"
 #include "shooters_edge/client/sequel_tv.hpp"
 
@@ -35,7 +36,8 @@ constexpr uint32_t kMostBody = 1u << 20;  // a record's body past this is damage
 constexpr uint32_t kFamilyFte = 0x58455446, kFamilyFte2 = 0x32455446, kFamilyMvd = 0x3144564D;
 constexpr uint32_t kFteFloatCoords = 0x8000, kFteChunkedDownloads = 0x20000000;
 constexpr uint32_t kMvdFloatCoords = 0x1, kMvdHighLagTeleport = 0x2;
-constexpr uint32_t kMultiviewTrack = 1, kBytesTrack = 2;  // kSequelTrack: sequel_tv.hpp
+constexpr uint32_t kMultiviewTrack = 1;
+constexpr uint32_t kBytesTrack = kRecordingTrack;  // recording_tv.hpp; kSequelTrack: sequel_tv.hpp
 constexpr size_t kBytesBlock = size_t{256} << 10;
 constexpr int64_t kBlockMs = 1000;
 constexpr const char* kGame = "shooters_edge";

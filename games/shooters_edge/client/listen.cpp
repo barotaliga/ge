@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
@@ -27,6 +28,7 @@
 #include "shooters_edge/server/classic_save.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 // The baseline mod's sources, built into the game (CMakeLists.txt: ge_embed_binary), in the
@@ -148,7 +150,19 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   if (ev.kind != sv::EventKind::point_effect) return;
   const float n = ev.values[3];  // the times asked for, 1..255 (NaN: once)
   const int count = !(n >= 1) ? 1 : n > 255 ? 255 : static_cast<int>(n);
-  if (uint8_t kind = 0; sv::classic_temp_entity(ev.text, kind)) {
+  // The sequel's names for effects the first game has: its sparks off a wall are a gunshot's hit,
+  // its blasts an explosion; the BFG's burst is an explosion and its own green burst too.
+  const std::string_view name = ev.text;
+  const bool blast = name == "te_bfg_bigexplosion" || name == "te_bfg_explosion" ||
+                     name == "te_rocket_explosion" || name == "te_grenade_explosion" ||
+                     name == "te_explosion1" || name == "te_explosion2" ||
+                     name == "te_plasma_explosion";
+  if (blast) l.explosions.push_back(ev.origin);
+  if (blast && name != "te_bfg_bigexplosion") return;
+  const bool sparks = name == "te_sparks" || name == "te_bullet_sparks" ||
+                      name == "te_screen_sparks" || name == "te_shield_sparks" ||
+                      name == "te_laser_sparks" || name == "te_shotgun";
+  if (uint8_t kind = 0; sv::classic_temp_entity(sparks ? "te_gunshot" : ev.text, kind)) {
     if (kind == kExplosion || kind == 4) {
       l.explosions.push_back(ev.origin);
       return;
@@ -294,6 +308,8 @@ void close_match(Listen& l) {
   l.room = nullptr;
   l.match.reset();
   l.host.reset();
+  if (l.accounts) ge::server::server_accounts_close(*l.accounts);
+  l.accounts.reset();
   if (l.port) ge::net::close_transport(*l.port);
   l.port.reset();
 }
@@ -320,6 +336,40 @@ bool catch_up(Listen& l) {
 
 // A match: the engine's server opened on `opt.game` with the window's program and map, the player
 // slot 0, on `opt.port` for others to join (none: a socket that is never read).
+int64_t wall_unix_us() {
+  return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                  std::chrono::system_clock::now().time_since_epoch())
+                                  .count());
+}
+
+int64_t unix_now(const Listen& l) {
+  return l.opt.unix_us != nullptr ? l.opt.unix_us() : wall_unix_us();
+}
+
+// The logins on a game others join (`opt.login`): `c` takes the accounts they ask, the window's
+// own (opened into `l.accounts`, its count printed) or a master's socket. False with `error`.
+bool open_logins(Listen& l, ge::server::ServerConfig& c, std::string& error) {
+  c.login = l.opt.login;
+  c.unix_us = l.opt.unix_us != nullptr ? l.opt.unix_us : wall_unix_us;
+  if (l.opt.accounts != nullptr) {
+    c.accounts = l.opt.accounts;
+    return true;
+  }
+  if (c.login.login == 0 && c.login.master.empty()) return true;
+  l.accounts = std::make_unique<ge::server::ServerAccounts>();
+  std::string said;
+  if (!ge::server::server_accounts_open(*l.accounts, c, l.opt.accounts_dir, c.unix_us, said,
+                                        error)) {
+    l.accounts.reset();
+    return false;
+  }
+  if (l.accounts->hosted)
+    l.prints.push_back("This game keeps its own player accounts (" +
+                       std::to_string(l.accounts->host.svc.store.accounts.size()) +
+                       " registered).");
+  return true;
+}
+
 bool start_map(Listen& l, std::string& error) {
   close_match(l);
   if (l.opt.game == nullptr) {
@@ -360,6 +410,10 @@ bool start_map(Listen& l, std::string& error) {
               ". Pick another port, or 0 to play alone.";
       return false;
     }
+  }
+  if ((l.opt.port > 0 || l.opt.transport != nullptr) && !open_logins(l, c, error)) {
+    if (l.opt.transport == nullptr) ge::net::close_transport(*port);
+    return false;
   }
   auto server = std::make_unique<ge::server::Server>();
   l.host = std::move(h);
@@ -539,6 +593,8 @@ void close_door(Listen& l) {
   if (l.door == nullptr) return;
   l.door_calls->close(l.door);
   l.door = nullptr;
+  if (l.accounts) ge::server::server_accounts_close(*l.accounts);
+  l.accounts.reset();
 }
 
 // A coop campaign served to others: the door opened on the port, the player and the companions
@@ -565,6 +621,12 @@ void open_door(Listen& l) {
     l.prints.push_back("coop: others cannot join: " + error);
     return;
   }
+  // The logins on the coop game, as on a match.
+  ge::server::ServerConfig c;
+  if (l.door_calls->logins != nullptr &&
+      (!open_logins(l, c, error) || ((c.accounts != nullptr || c.account_link != nullptr) &&
+                                     !l.door_calls->logins(l.door, c, error))))
+    l.prints.push_back("coop: logins are off: " + error);
   l.net_s = 0;
   bool seated = l.door_calls->seat(l.door, 0, o.player, false, error);
   for (int i = 1; seated && l.party && i < sh::kMaxClients; i++)
@@ -856,6 +918,8 @@ double listen_tic(const Listen& l) {
   return l.campaign_host ? sv::kCampaignStep : l.server->sv.set.mintic;
 }
 
+constexpr int kMuzzleFlashBit = 2;  // the entity's muzzle-flash effect bit
+
 void listen_frame(Listen& l, sh::MoveCmd cmd) {
   cmd.msec = static_cast<uint8_t>(ge::core::num::round(listen_tic(l) * 1000));
   cmd.angles = l.view;
@@ -906,6 +970,7 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     if (l.door != nullptr) {  // the endpoint's frame: the network's moves, then the local seats'
       l.net_s += sv::kCampaignStep;
       const auto now_us = static_cast<int64_t>(ge::core::num::round(l.net_s * 1e6));
+      if (l.accounts) ge::server::server_accounts_update(*l.accounts, unix_now(l));
       if (!l.door_calls->frame(l.door, sent, count, now_us, l.failed)) {
         close_door(l);
         l.rules = nullptr;
@@ -914,6 +979,16 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
       }
       if (l.campaign_host->history.size() != l.maps_started) campaign_entered(l);
     } else {
+      // A gun's flash lasts the one frame it was fired in: the program sets the bit as the
+      // monster shoots and leaves it for the server to clear once the frame is out, so it is
+      // cleared here before the next (else a soldier would seem to fire on every frame after).
+      if (l.server != nullptr && l.rules != nullptr && sv::qc_of(*l.rules) != nullptr)
+        for (int e = 1; e < l.server->sv.num_edicts; e++) {
+          if (l.server->sv.edicts[size_t(e)].free) continue;
+          const int fx = static_cast<int>(field_named(l, e, "effects"));
+          if ((fx & kMuzzleFlashBit) != 0)
+            set_field_named(l, e, "effects", static_cast<float>(fx & ~kMuzzleFlashBit));
+        }
       if (!sv::campaign_frame(*l.campaign_host, sent, count, l.failed)) {
         l.rules = nullptr;
         l.server = nullptr;
@@ -928,6 +1003,10 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     l.host->ctx = &l;
     l.host->move(l.host->game, p);
     ge::server::server_frame(*l.match);
+    if (l.accounts) {
+      ge::server::server_accounts_update(*l.accounts, unix_now(l));
+      ge::server::server_accounts_reports(*l.accounts, *l.match, unix_now(l));
+    }
     if (catch_up(l)) entered(l);  // the lobby's restart into the match: a new server
   }
   sv::RulesCommon& s = *l.server;
@@ -1037,6 +1116,13 @@ bool on_lobby_screen(const Listen& l) {
   return l.room && l.server != nullptr && !sv::lobby_on_map(l.room->lobby, 0);
 }
 
+bool listen_command(Listen& l, const std::string& line) {
+  if (!l.match || !l.host || l.host->command == nullptr || l.host->game == nullptr) return false;
+  l.host->command(l.host->game, line);
+  catch_up(l);
+  return true;
+}
+
 bool listen_voice(const Listen& l) {
   return l.match && l.host && l.host->speak != nullptr && l.opt.voice;
 }
@@ -1088,6 +1174,24 @@ PlayerState player_state(const Listen& l) {
 
 void missiles_of(const Listen& l, std::vector<Missile>& out) {
   out.clear();
+  // The sequel's shots in flight, by their kind (a player's or a monster's alike).
+  if (const sv::SequelServer* sq = l.rules ? sv::sequel_of(*l.rules) : nullptr) {
+    const size_t first = sv::fight_first_row(*sq);
+    for (int k = 0; k < sv::kSequelMissiles; k++) {
+      const sv::SequelMissile& m = sq->missiles[k];
+      if (!m.live) continue;
+      Missile o;
+      o.entity = static_cast<int>(first) + k;
+      o.origin = m.origin;
+      o.rocket = m.kind == sv::SqShot::rocket || m.kind == sv::SqShot::grenade ||
+                 m.kind == sv::SqShot::hand_grenade;
+      o.grenade = m.kind == sv::SqShot::grenade || m.kind == sv::SqShot::hand_grenade;
+      o.bolt = m.kind == sv::SqShot::bolt;
+      o.bfg = m.kind == sv::SqShot::bfg;
+      out.push_back(o);
+    }
+    return;
+  }
   const sv::QcServer* q = program(l);
   if (q == nullptr) return;
   const sv::RulesCommon& s = *l.server;

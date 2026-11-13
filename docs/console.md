@@ -87,7 +87,7 @@ The other flags:
 - `kUserInfo`: rides in the user info a client sends the server (`name`).
 
 A server's stuffed text may run only the commands marked as safe to stuff (`echo`, `set`,
-`wait`, `say`, `say_team`, `say_prox`) and set only the server's cvars. It never touches a player's files,
+`wait`, `say`, `say_team`, `say_near`) and set only the server's cvars. It never touches a player's files,
 binds or archived cvars.
 
 `cvarlist` prints the flags as letters: `A` archive, `U` user info, `S` server info, `V` server,
@@ -216,10 +216,27 @@ by default.
 | --- | --- |
 | `toggleconsole` | Opens or closes the console. |
 | `clear` | Empties the scrollback. |
-| `say <text>` | A chat line to everyone. |
-| `say_team <text>` | A chat line to your team. |
-| `say_prox <text>` | A chat line to the players near you (the game decides how near). |
-| `whisper <nick> <text>` | A chat line to one player. |
+
+### Talk: chat and voice, for a multiplayer game
+
+A single-player game has no chat. A multiplayer game opts in with `console/talk.hpp`'s
+`add_talk` and a `TalkSpec` naming the routes it has (a team, the players near, one player); the
+lines go to the view's chat sender, which the game points at its network, and the game reads the
+voice keys each frame (`talk_voice`, the narrowest route held winning). Keys are bound only where
+the player bound nothing.
+
+| Command | Key | What it does |
+| --- | --- | --- |
+| `say <text>` | | A chat line to everyone. |
+| `say_team <text>` | | A chat line to your team. |
+| `say_near <text>` | | A chat line to the players near you (the game's server decides how near). |
+| `whisper <nick> <text>` | | A chat line to one player. |
+| `messagemode` | T | The chat line opened for everyone: Enter says it, Escape drops it. |
+| `messagemode2` | Y | The chat line for your team. |
+| `messagemode3` | U | The chat line for the players near you. |
+| `+voice` | V | Talk to everyone while held. |
+| `+voice_team` | B | Talk to your team while held. |
+| `+voice_near` | N | Talk to the players near you while held. |
 
 ## The drop-down console
 

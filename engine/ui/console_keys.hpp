@@ -8,13 +8,17 @@
 // repeats too) and the text typed (the code points the platform's text input sends, as UTF-8;
 // the tilde's own character is dropped on the frame it toggled).
 //
+// THE CHAT LINE (a `messagemode`, console/talk.hpp) takes the typed text and the edit keys the
+// same way while it is open, the binds then read from the `console` table; the letter of the key
+// that opened it types nothing on that frame.
+//
 // The game reads its own keys only when `ConsoleKeys::held` was false for the frame: a key
 // pressed to type a command must not also steer. The window turns text input on while the view
 // is down (platform/devices.hpp's `set_text_input`).
 //
 // ge:summary The console at the keyboard: keys to binds, edit keys and typed text to the view
 // ge:keywords ui console keyboard keys text typing edit-key toggleconsole tilde bind modifier
-// ge:keywords feed_console console-keys repeat utf-8
+// ge:keywords feed_console console-keys repeat utf-8 chat-line messagemode
 // ge:skill ui console
 // ge:test tests/ui_console_keys_test.cpp
 #pragma once

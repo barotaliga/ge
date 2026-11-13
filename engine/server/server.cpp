@@ -252,6 +252,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   const std::string welcome = c.login.welcome, master = c.login.master, key = c.login.key;
   const std::string reserved = std::to_string(c.login.reserved);
   const std::string account_port = std::to_string(c.login.port);
+  const std::string stats = std::to_string(c.login.stats);
   bind("sv_login", login, latched, "Whether players must log in to an account to play.",
        CvarKind::integer, 0, 2,
        "0: nobody is asked, a login still counts (the default); 1: players must log in, "
@@ -283,6 +284,12 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   bind("sv_accountport", account_port, latched,
        "The UDP port the server's own account service answers on, when it is its own master.",
        CvarKind::integer, 0, 65535, "0: 27901 (the default); 1..65535: that port", &c.login.port);
+  bind("sv_stats", stats, latched,
+       "Whether each finished match's report goes to the account master, for players' stats.",
+       CvarKind::integer, 0, 1,
+       "0: no reports; 1: every match the game reports, to sv_accountmaster or to the server's "
+       "own accounts (the default)",
+       &c.login.stats);
   for (int i = 0; i < game.rule_count; i++) {
     const GameRule& r = game.rules[i];
     std::string& field = c.rules[r.name];  // a map's node: its address outlives the inserts
@@ -399,16 +406,36 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   return true;
 }
 
+// A match the game says just ended: the server's part added, kept with the last few.
+void take_report(Server& s) {
+  if (s.game->match_report == nullptr) return;
+  net::MatchReport r;
+  if (!s.game->match_report(s.state, r)) return;
+  const int64_t unix_us = s.config.unix_us != nullptr ? s.config.unix_us() : 0;
+  r.start_s = (unix_us / 1000 - r.duration_ms) / 1000;
+  r.id = (static_cast<uint64_t>(r.start_s) << 16) ^ ++s.matches_reported;
+  r.game = s.game->base_dir != nullptr ? s.game->base_dir : "";
+  r.version = std::to_string(s.game->version);
+  r.server = s.config.hostname;
+  if (s.config.port > 0)
+    r.address = (s.config.ip.empty() ? std::string("0.0.0.0") : s.config.ip) + ":" +
+                std::to_string(s.config.port);
+  s.reports.push_back(std::move(r));
+  if (s.reports.size() > kReportsKept) s.reports.erase(s.reports.begin());
+}
+
 void server_frame(Server& s) {
   if (!s.state) return;
   if (s.own_protocol) {
     s.game->net_frame(s.state, s.now_us);
+    take_report(s);
     if (!s.beat.config.masters.empty()) gn::master_beat_update(s.beat, *s.port, s.now_us);
     s.now_us = server_next_us(s);
     s.frame++;
     return;
   }
   s.game->frame(s.state);
+  take_report(s);
   s.now_us = server_next_us(s);
   s.frame++;
   if (!s.networked) return;
