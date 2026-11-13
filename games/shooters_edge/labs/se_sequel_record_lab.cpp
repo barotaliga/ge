@@ -3,11 +3,14 @@
 // sequel's rules (the demo pack's map with `--pak` and `--map`, else a test hall), recorded from
 // the first's view through the server-side wire. The recording is attached twice: packed as the
 // replay file (match.ged) and as the sequel's own client demo (match.dm2), the file a stock client
-// of that game plays. It answers how many frames and bytes the match took, whether the sequel's
-// reader walks every block, and whether the replay file unpacks to the same bytes.
+// of that game plays. The match is also broadcast as it is recorded (client/sequel_tv.hpp) through
+// a TV node held 2 s, to a viewer there from the start and one who joins half way. It answers how
+// many frames and bytes the match took, whether the sequel's reader walks every block, whether the
+// replay file unpacks to the same bytes, and whether both viewers get the whole match.
 //
-// ge:summary Lab: a match on the sequel's rules recorded as a .ged and as the sequel's own .dm2
+// ge:summary Lab: a match on the sequel's rules recorded as .ged and .dm2, and watched through TV
 // ge:keywords lab sequel record dm2 ged demo-pack wire stock-client signon frames
+// ge:keywords tv-node broadcast late-viewer live-match
 // ge:skill replay shooter labs
 // ge:test tests/shooters_edge_sequel_wire_test.cpp
 #include <fstream>
@@ -23,8 +26,10 @@
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/sequel_demo.hpp"
+#include "shooters_edge/client/sequel_tv.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/server/sequel_wire.hpp"
+#include "tv/node.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -34,6 +39,24 @@ namespace br = ge::brush;
 namespace sh = ge::shooter;
 namespace sv = shooters_edge::server;
 namespace cl = shooters_edge::client;
+namespace tv = ge::tv;
+
+// The recording's whole blocks from `at` on, each handed to the broadcast without its length; `at`
+// moves past them. The end marker (length -1) is the broadcast's end, not a block.
+void broadcast_new_blocks(const std::vector<uint8_t>& rec, size_t& at, cl::SequelBroadcast& b) {
+  while (at + 4 <= rec.size()) {
+    const uint32_t n = static_cast<uint32_t>(rec[at]) | static_cast<uint32_t>(rec[at + 1]) << 8 |
+                       static_cast<uint32_t>(rec[at + 2]) << 16 |
+                       static_cast<uint32_t>(rec[at + 3]) << 24;
+    if (n == 0xffffffffu) {
+      at += 4;
+      return;
+    }
+    if (at + 4 + n > rec.size()) return;
+    cl::sequel_broadcast_block(b, {rec.data() + at + 4, n});
+    at += 4 + n;
+  }
+}
 
 br::WorldBrush box(float x0, float y0, float z0, float x1, float y1, float z1) {
   const float lo[3] = {x0, y0, z0}, hi[3] = {x1, y1, z1};
@@ -106,6 +129,20 @@ void run(gl::Lab& lab) {
   sv::sequel_sky(*map->spec.brushes, opt);
   sv::SequelRecorder rec;
   sv::sequel_record_start(rec, *r, 0, opt);
+  // The match broadcast as it is recorded, through a TV node held 2 s, to a viewer there from the
+  // start and one who joins half way.
+  cl::SequelBroadcast cast;
+  cl::sequel_broadcast_begin(cast, 0);
+  size_t cast_at = 0;
+  tv::Node node;
+  node.config.delay_ms = 2000;
+  tv::Watch early, late;
+  tv::Watch* watch[2] = {&early, &late};
+  const tv::Send send = [&](int link, std::span<const uint8_t> msg) {
+    return tv::watch_receive(*watch[link], msg);
+  };
+  bool fed = true;
+  int64_t late_catch_up = -1;
   const int ticks = static_cast<int>(lab.arg_num("seconds") * 1000.0 / 13.0);
   uint32_t seq = 0;
   for (int t = 0; t < ticks; t++) {
@@ -125,8 +162,31 @@ void run(gl::Lab& lab) {
     }
     r.frame(packets.data(), static_cast<int>(packets.size()));
     sv::sequel_record_frame(rec, *r, static_cast<int32_t>(s.frame_number), &s.players[0].move);
+    broadcast_new_blocks(rec.bytes, cast_at, cast);
+    const int64_t now_ms = static_cast<int64_t>(t) * 13;
+    const std::span<const uint8_t> fresh = cl::sequel_broadcast_fresh(cast);
+    if (!fresh.empty()) fed = tv::tv_feed(node, fresh, now_ms) && fed;
+    if (t == 0) {
+      tv::tv_join(node, 0);
+      tv::tv_receive(node, 0, tv::tv_hello("early", false));
+    }
+    if (t == ticks / 2) {
+      late_catch_up = tv::tv_catch_up_blocks(node);
+      tv::tv_join(node, 1);
+      tv::tv_receive(node, 1, tv::tv_hello("late", false));
+    }
+    tv::tv_update(node, now_ms, send);
   }
   sv::sequel_record_stop(rec);
+  broadcast_new_blocks(rec.bytes, cast_at, cast);
+  cl::sequel_broadcast_end(cast);
+  int64_t end_ms = static_cast<int64_t>(ticks) * 13;
+  fed = tv::tv_feed(node, cl::sequel_broadcast_fresh(cast), end_ms) && fed;
+  tv::tv_end(node);
+  for (int k = 0; k < 400 && !(early.ended && late.ended); k++) {
+    end_ms += 13;
+    tv::tv_update(node, end_ms, send);
+  }
 
   std::vector<uint8_t> packed, back;
   cl::DemoPackReport rep;
@@ -143,17 +203,32 @@ void run(gl::Lab& lab) {
   t.rows.push_back({".dm2 bytes", std::to_string(rec.bytes.size())});
   t.rows.push_back({".ged bytes", std::to_string(packed.size())});
   t.rows.push_back({".ged back to .dm2 exactly", round ? "yes" : "no"});
+  int whole = 0;
+  for (const tv::Watch* w : watch) {
+    std::vector<uint8_t> got;
+    std::string why;
+    if (w->ended && cl::unpack_demo(w->stream, got, why) && got == rec.bytes) whole++;
+  }
+  t.rows.push_back({"broadcast: the TV node fed / its file's bytes",
+                    std::string(fed ? "yes" : "no") + " / " + std::to_string(cast.out.size())});
+  t.rows.push_back(
+      {"the late viewer's catch-up at half time (blocks)", std::to_string(late_catch_up)});
+  t.rows.push_back({"viewers given the whole match (of 2)", std::to_string(whole)});
   lab.table(t);
   lab.metric("record.frames", static_cast<double>(rec.frames), "frames");
   lab.metric("record.dm2_bytes", static_cast<double>(rec.bytes.size()), "bytes");
   lab.metric("record.ged_bytes", static_cast<double>(packed.size()), "bytes");
   lab.metric("record.walked", rep.walked == rep.records && rep.kept == 0 ? 1 : 0, "bool");
   lab.metric("record.round_trip", round ? 1 : 0, "bool");
+  lab.metric("tv.viewers_whole", whole, "viewers");
   lab.attach("match.dm2", rec.bytes);
   lab.attach("match.ged", packed);
   if (rep.walked != rep.records || rep.kept != 0)
     lab.fail("the sequel's reader did not walk every block of the recording",
              "next: run tests/shooters_edge_sequel_wire_test.cpp; skill: replay.");
+  if (whole != 2)
+    lab.fail("a viewer of the match through the TV node did not get the whole recording",
+             "next: run tests/shooters_edge_sequel_tv_test.cpp; skill: replay.");
   if (!round)
     lab.fail("the replay file did not unpack to the recording: " + error,
              "next: run tests/shooters_edge_sequel_wire_test.cpp; skill: replay.");
@@ -166,7 +241,8 @@ const gl::LabSpec kSpec{
     "games/shooters_edge/server/sequel_wire: a match on the sequel's rules recorded as its demo",
     "replay",
     "Two players on the sequel's rules recorded through the server-side wire: how many frames and "
-    "bytes, does the sequel's reader walk it whole, and does the .ged give the .dm2 back?",
+    "bytes, does the sequel's reader walk it whole, does the .ged give the .dm2 back, and do two "
+    "viewers watching it live through a TV node get the whole match?",
     {
         {"pak", "", "the sequel demo's baseq2/pak0.pak (empty: a test hall)"},
         {"map", "demo1", "the map in the pack, without maps/ and .bsp"},

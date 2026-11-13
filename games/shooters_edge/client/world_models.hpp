@@ -80,6 +80,9 @@ struct Placed {
   float colormod[3] = {1, 1, 1};  // its light tinted, glowing texels kept (a mod's `colormod`)
   sh::Vec3f origin, angles;
   uint32_t top = models::kShirtRow, bottom = models::kPantsRow;  // palette rows for the tints
+  // A player's `skin` (its user info's: the picture `skins/<name>.pcx` its figure wears, chosen
+  // by `player_skin_morph`); empty: none named.
+  std::string skin_name;
   // Its warp (world_fx.hpp, warps.hpp): short of whole an alias model is drawn dissolving to ash
   // or out of it (render/morph.hpp's MorphWarp).
   ge::render::MorphWarp warp;
@@ -134,7 +137,14 @@ struct ModelKind {
   float glow_rgb[3] = {0, 0, 0};
   float glow_share = 0;
   ge::render::SpriteFacing facing = ge::render::SpriteFacing::parallel;
+  bool player = false;  // the players' own figure (kPlayerModel): it wears each one's skin
 };
+
+// THE PLAYERS' SKINS: the figure every player is drawn as, and the most pictures under `skins/`
+// read with a map (each a skin-only morph model, kept while the atlas holds them).
+inline constexpr std::string_view kPlayerModel = "progs/player.mdl";
+inline constexpr size_t kMaxPlayerSkins = 32;
+using models::SkinChoice;
 
 struct WorldModels {
   std::vector<ModelKind> kinds;    // by modelindex
@@ -155,6 +165,9 @@ struct WorldModels {
   std::vector<ge::render::MorphDraw> morph_draws;
   std::vector<ge::render::SpriteDraw> sprite_draws;
   std::vector<std::pair<double, size_t>> near;  // scratch
+  // The skins read (skin_key -> its skin-only morph model) and the player's choice this frame.
+  std::unordered_map<std::string, uint32_t> player_skins;
+  SkinChoice skin_choice;
 };
 
 // The models read and their skins decoded, on the CPU (any thread: it reads the files and the
@@ -167,6 +180,7 @@ struct ModelsRead {
   std::vector<ge::render::SpriteFrame> frames;
   ge::render::TintRamps ramps;
   models::LightProbe probe;
+  std::unordered_map<std::string, uint32_t> player_skins;
 };
 // Reads `load.names` through `game`'s adapter and `palette`; a file missing or refused is
 // reported once and drawn as nothing.
@@ -189,7 +203,9 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed,
 // it rises (`ce_bubbles`); of the bubbles the game blows only `bubbles_share` is drawn, the pack's
 // sprites and the made ones alike (`ce_bubbles_share`).
 struct InPlace {
-  bool flames = false, flares = false, bubbles = false;
+  // explosions: the engine's blast is drawn where the game shows the pack's explosion sprite (an
+  // entity the game's own logic turns into one as its shot bursts), so the sprite is left out.
+  bool flames = false, flares = false, bubbles = false, explosions = false;
   double bubbles_share = 1;
 };
 // `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a
@@ -205,6 +221,11 @@ void prepare_models(ge::gpu::Device& device, WorldModels& m, const ge::brush::Ma
 // The triangles of `p`'s model as `prepare_models` draws it at `time_s` (its frame and skin
 // group): nine floats a triangle, its model's own frame (m). False for a sprite, a brush or none.
 bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::vector<float>& out);
+// The tip of what `p` holds out at `time_s`: of its model's points as drawn, the one furthest along
+// `forward` (world, unit), into `tip` (world, m). A monster's gun barrel, as its frame moves it.
+// False for a sprite, a brush or none.
+bool held_tip(const WorldModels& m, const Placed& p, double time_s, const double forward[3],
+              double tip[3]);
 
 // THE MOVING CASTERS (the modern look's real-time lights, M54): the alias models of `placed`
 // within kCasterReachM of the eye (players, monsters, items; not a torch's flame, which is light),

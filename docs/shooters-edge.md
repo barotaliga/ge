@@ -1316,6 +1316,18 @@ every pass, and judged by captioned screenshots:
   pyramid still cull), since few maps were built to be seen through their water and the rooms
   under it would be missing. Where the modern look draws its own water, lava and slime, those
   passes stay as they are.
+- **Player skins** (M18i15): each player wears the picture their `skin` names,
+  `skins/<name>.tga`, `.png` or `.pcx`, the first that reads. A .pcx is the palette's: its shirt and
+  pants rows take the player's colours and its glowing rows light themselves, as the figure's own
+  skin does, its top-left 296x194 stretched over the figure (a picture over 320x200 is refused). A
+  .tga or .png is drawn as painted (halved past 1024 a side). The skins are read with the map's
+  models (`client/world_models.cpp`'s `read_player_skins`, at most 32, each kept while the morph
+  atlas holds it); a skin that turns up later shows at the next map. `baseskin` (base) is worn by a
+  player who names none or one not there, else the figure's own; `allskins <name>` puts one on
+  everyone; `noskins 1` draws every player in the figure's own skin, in their colours; your own
+  `skin` goes to the server with your colours. A name with `..` or a leading dot is refused, its
+  extension dropped, cut to 15 characters (`app/classic_models.hpp`'s `skin_key`, `choose_skin`).
+  Colours 8 to 13 read their palette rows backwards, since those rows are stored bright to dark.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
 - **Effects from the game's files** (`client/world_fx.hpp`, M18l): a file `particles/<any>.fx`
@@ -1337,6 +1349,16 @@ every pass, and judged by captioned screenshots:
   explosion's sprite (its 6 frames at 10 a second) and the lightning bolt's model laid every 30
   units from the player's origin to the end, each segment turned to a fresh roll every frame.
   The classic look also draws each weapon's own flash frames, not the engine's muzzle fire.
+- **The monsters' attacks** (`games/shooters_edge/app/monster_fx.hpp`, roadmap row M47f): the
+  pack's shot models named in classic-enhance's replacement table (`missile.<kind>`), or a model's
+  tracer bits, are drawn by `client/world_fx.cpp`'s `monster_missiles`. The classic look lays the
+  classic tracer specks (green, orange or purple either side of the line, the lava ball the
+  rocket's trail) and the spit's coloured splash (codes 7 and 8). Under `ce_monsters` in the modern
+  look: the flier's acid drips and glows green and splashes off the wall, the knight's fire bolt
+  streams flame and embers and bursts, the caster's ball is a knot of violet light with motes
+  spiralling off it, the boss's lava ball burns, smokes and drips molten drops, the enforcer's
+  laser is a red streak that lights the walls and sparks where it ends, a zombie's flesh drips dark
+  drops; each shot carries a bright head and its light. Lab `se-monster-fx`.
 - **Effects, enhanced** (`games/shooters_edge/app/weapon_fx.hpp`, the modern look, each behind
   its `ce_` switch: `ce_muzzles`, `ce_explosions`, `ce_trails`, `ce_hits`, `ce_beams`): a
   LAYERED fireball of the engine's (`render/explosion.hpp`: the main ball, then three smaller

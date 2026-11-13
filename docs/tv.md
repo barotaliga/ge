@@ -411,7 +411,11 @@ as the game's recorder writes it, then a frame each 100 ms whose player state an
 deltas against the frame before), and `record <name>` in the window writes them as `<name>.ged`.
 The map's checksum (configstring 31) is the MD4 of the whole map file with its four words XORed,
 measured against the demo pack's map. The same encoder is what the sequel's own server will send
-real clients (M18v9), so a hosted match broadcasts through TV from it.
+real clients (M18v9), so a hosted match broadcasts through TV from it. A match on our server is broadcast
+as it is recorded: each new block of the recording goes to the broadcast, and the TV node's viewers
+get the whole match, a late one from its start (`tests/shooters_edge_sequel_wire_test.cpp`; the
+`se-sequel-record` lab: 60 s on the demo pack's demo1, 13.5 KB broadcast, a viewer joining half way
+sent 28 blocks to catch up, both viewers back byte for byte).
 
 ## The watcher
 

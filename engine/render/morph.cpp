@@ -42,10 +42,11 @@ struct GpuDraw {
   float ambient[4];
   float shade[4];
   float shade_dir[4];
-  float warp[16];  // render/wgsl/warp.wgsl's Warp
-  float burn[4];   // charred, embers, etched, seed
+  float warp[16];    // render/wgsl/warp.wgsl's Warp
+  float burn[4];     // charred, embers, etched, seed
+  uint32_t skin[4];  // the model whose skin it wears
 };
-static_assert(sizeof(GpuDraw) == 240, "match morph.wgsl's Draw");
+static_assert(sizeof(GpuDraw) == 256, "match morph.wgsl's Draw");
 
 float srgb_to_linear(uint8_t v) {
   const double c = v / 255.0;
@@ -363,6 +364,7 @@ void prepare_morph(gpu::Device& device, Morph& morph, std::span<const MorphDraw>
     g.burn[1] = d.burn.embers;
     g.burn[2] = d.burn.etched;
     g.burn[3] = d.burn.seed;
+    g.skin[0] = d.skin < morph.index_counts.size() ? d.skin : d.model;
     std::memcpy(&morph.staged[morph.drawn * sizeof(GpuDraw)], &g, sizeof g);
     morph.staged_models[morph.drawn] = d.model;
     ++morph.drawn;

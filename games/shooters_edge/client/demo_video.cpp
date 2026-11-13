@@ -126,6 +126,7 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
         if (!out.empty() && out.back().entity == static_cast<int>(k) + 1 && k < s.top.size()) {
           out.back().top = static_cast<uint32_t>(s.top[k]);
           out.back().bottom = static_cast<uint32_t>(s.bottom[k]);
+          out.back().skin_name = s.skins[k];
         }
       }
   }
