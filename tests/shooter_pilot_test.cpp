@@ -369,11 +369,40 @@ TEST(a_goal_chained_past_a_pickup_is_run_through_not_stopped_at) {
   }
   CHECK_MSG(arrived, "the chain's goal was not reached: read pilot_step's mode on the way");
   CHECK_MSG(p.stats.via_touched == 1 && p.stats.via_missed == 0,
-            "the item was not run through (" + std::to_string(p.stats.via_touched) +
-                " through, " + std::to_string(p.stats.via_missed) + " missed)");
+            "the item was not run through (" + std::to_string(p.stats.via_touched) + " through, " +
+                std::to_string(p.stats.via_missed) + " missed)");
   CHECK_MSG(p.stats.via_speed > 200, "the item was run through at " +
                                          std::to_string(p.stats.via_speed) +
                                          " u/s: the walk slowed into it as into a goal");
+}
+
+// A route's every node passed in one command (a fast run over a dense stretch, a flight landing
+// at the goal): the pass loop's guard ends on the route's last node, which is the goal, not a
+// node to read past (the next node read past the route's end: a crash in a 4on4 on dm2).
+TEST(a_route_passed_to_its_last_node_in_one_command_arrives) {
+  FlipRoom room({FlipRoom::box({-512, -512, -64}, {1024, 1024, 0})}, {-512, -512, -64},
+                {1024, 1024, 256}, {0, 0, 24});
+  const sh::NavGraph& g = room.g;
+  const int32_t start = sh::nav_nearest(g, {0, 0, 24});
+  sh::Pilot p;
+  sh::pilot_init(p, g, sh::PilotSettings{}, sh::pilot_hands(sh::PilotHands::none), 77, 1);
+  sh::PilotSense s;
+  s.origin = g.nodes[static_cast<size_t>(start)].origin;
+  s.onground = true;
+  s.world = &room.world;
+  // A goal east whose route is nine nodes: eight links, the guard's eight passes.
+  int32_t goal = -1;
+  for (float x = 192; x <= 384 && goal < 0; x += 8) {
+    const int32_t n = sh::nav_nearest(g, {x, 0, 24});
+    CHECK(sh::pilot_go(p, n, s));
+    if (p.route.size() == 9) goal = n;
+  }
+  CHECK_MSG(goal >= 0, "no goal east has a route of nine nodes: the floor's grid changed");
+  if (goal < 0) return;
+  s.origin = g.nodes[static_cast<size_t>(goal)].origin;  // already there: every node passed
+  sh::pilot_step(p, s, pr::kPilotMsec);
+  CHECK_MSG(p.mode == sh::PilotMode::arrived,
+            "a route passed to its goal in one command did not arrive (pilot_step's pass loop)");
 }
 
 // `jumpfly`: on human hands the run at the pit's jump reaches its start off the line or the speed,

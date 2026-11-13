@@ -37,6 +37,7 @@ constexpr float kKeyAxis = 400;       // a keyboard's key: the classic client's 
 constexpr float kKeyPressMin = 0.3f;  // a wish under this share of a run presses no key in the air
 
 bool over_harm(const Pilot& p, Vec3f S, Vec3f T) {
+  if (p.set.gap_lava) return false;  // (`gaplava`) curved into over lava or slime too
   return nav_harm_near(*p.g, {(S.x + T.x) * 0.5f, (S.y + T.y) * 0.5f, S.z}, kGapCurveHarm);
 }
 
@@ -388,7 +389,8 @@ bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, 
       return false;
     }
   }
-  if (p.set.gap_turn && p.gap_turn_node == p.route[gk] && p.clock_s - p.gap_turn_s < kGapBackMost_s) {
+  if (p.set.gap_turn && p.gap_turn_node == p.route[gk] &&
+      p.clock_s - p.gap_turn_s < kGapBackMost_s) {
     // Turned, and too near for a curve to build the jump's speed: back to where people's curve
     // begins (`kGapTurnBack` behind the lip, on its line), the curve taken from there
     // (gap_curve, gap_run: ~180 units/s, a curve to ~490 in 0.4 s).

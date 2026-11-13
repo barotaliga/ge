@@ -124,6 +124,8 @@ struct PilotSettings {
   // on along the ground (straight, curving or side to side, rolled through the hands:
   // pilot_gaps.hpp `gap_run`) to where a jump does, and far out it runs on rather than gives up.
   bool gap_circle = false;
+  // `gaplava`: `gap_circle`'s curve and run taken into a gap over lava or slime too.
+  bool gap_lava = false;
   // `curvekeys`: the keys are a keyboard's (a caller's, held on `curve_keys`): the run to a gap's
   // lip rolled out as keys, forward and the side key full at once a command late, not through the
   // hands' slew of the side axis.
@@ -468,13 +470,13 @@ struct Pilot {
   float via_near = 1e30f;  // the nearest across the player has come to it
   int32_t via_left = -1;
   double via_left_at = -1e9;
-  std::vector<int32_t> shut;               // doors the caller knows are shut: never planned through
-  std::vector<NavExtraLink> shut_links;    // and links it knows are (onto a bridge still in)
-  std::vector<NavExtraLink> cut_all;       // cut and shut_links together, for the route
+  std::vector<int32_t> shut;             // doors the caller knows are shut: never planned through
+  std::vector<NavExtraLink> shut_links;  // and links it knows are (onto a bridge still in)
+  std::vector<NavExtraLink> cut_all;     // cut and shut_links together, for the route
   NavExtraLink near_cut{-1, -1, NavKind::jump, 0, 0};  // (`gapnear`) a gap left out of one plan
-  double wanted[3] = {}, pressed[3] = {};  // the last command's yaw, forward, side
-  float lane = 0, lane_want = 0, lane_until = 0;  // the lane now, wanted, and until when (s)
-  float offset = 0;                               // units off the line now (signed, left +)
+  double wanted[3] = {}, pressed[3] = {};              // the last command's yaw, forward, side
+  float lane = 0, lane_want = 0, lane_until = 0;       // the lane now, wanted, and until when (s)
+  float offset = 0;                                    // units off the line now (signed, left +)
   core::Rng lane_rng{1};
   ai::Hands hands;
   ai::Search search;

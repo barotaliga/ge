@@ -1496,6 +1496,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.gap_strafe = features[sh::Feature::airgap];
   ps.pilot_cast = features[sh::Feature::pilotcast];
   ps.gap_circle = features[sh::Feature::gapbuild];
+  ps.gap_lava = features[sh::Feature::gaplava];
   ps.curve_keys = features[sh::Feature::keys] && features[sh::Feature::curvekeys];
   ps.under_way = features[sh::Feature::underway];
   ps.retarget = features[sh::Feature::retarget];
