@@ -16,6 +16,14 @@
 //   answer  "geAC" 4, the ask's exchange key (32), tag (16), sealed body:
 //           refusal u8, wait_us u64, account u64, code (u8 length), words (u8 length),
 //           ticket (u16 length)
+//   report  "geAC" 5, the server's public key (32), its signature (64) over the report, the report
+//           (net/report.hpp's bytes)                     (unsealed: a report is no secret)
+//   taken   "geAC" 6, the report's id u64, how it was taken u8 (matches.hpp's Taken), the
+//           service's signature (64) over "geAC" 6, the server's key, the id and how
+// A report is a game server's finished match (docs/accounts.md § The match report): the service
+// keeps it in `matches` by the server's key, adding it to the accounts' totals when the master's
+// owner trusts that key. It is answered `taken` (sent again: the same answer), signed, so a server
+// stops sending only on the service's own word.
 // No answer outgrows its ask, so the service cannot be used to amplify traffic at a third party.
 // An ask sent again (lost on the way, or replayed by someone who caught it) gets the answer it
 // got the first time, from the recent answers kept by exchange key: an account is never made
@@ -56,6 +64,7 @@
 #include <string>
 #include <vector>
 
+#include "account/matches.hpp"
 #include "account/store.hpp"
 #include "account/ticket.hpp"
 #include "net/address.hpp"
@@ -95,6 +104,7 @@ struct ServiceStats {
   uint64_t refused = 0;  // short, unknown, not padded, or not sealed to our key
   uint64_t by_op[8] = {};
   uint64_t tickets = 0;
+  uint64_t reports = 0;  // match reports taken (sent again ones too)
 };
 
 struct Recent {
@@ -113,6 +123,7 @@ struct Service {
   std::vector<Recent> recent;  // a ring of `config.recent`
   size_t recent_next = 0;
   ServiceStats stats;
+  Matches matches;  // the match reports servers sent (matches.hpp)
   uint8_t buffer[net::kMaxDatagram];
 };
 
@@ -130,6 +141,28 @@ inline const net::Key& service_key(const Service& svc) { return svc.keys.pub; }
 // `self>` and the player's), and on success the seat's ticket signed into `ticket`.
 Answer service_login(Service& svc, std::string_view name, std::string_view code,
                      std::string_view player, int64_t now_us, Ticket& ticket);
+
+// A report taken IN PROCESS, from a game server that is its own master (its own key).
+Taken service_report(Service& svc, const net::Key& server, const net::MatchReport& r);
+
+// A GAME SERVER'S REPORT sent to a master elsewhere: signed with the server's key, sent again
+// every `ask_us` until the master's signed answer comes or `max_tries` pass.
+struct ReportAsk {
+  net::Address service;
+  net::Key service_key{}, server{};
+  uint64_t id = 0;
+  std::vector<uint8_t> datagram;
+  int64_t next_us = 0, ask_us = 2000000;
+  int tries = 0, max_tries = 30;
+  bool done = false, answered = false;
+  Taken taken = Taken::shown;
+};
+// False when the report does not fit one datagram or is past its limits (nothing is sent).
+bool report_ask_start(ReportAsk& a, const net::Address& service, const net::Key& service_key,
+                      const net::SignKeys& server, const net::MatchReport& r, int64_t now_us);
+void report_ask_update(ReportAsk& a, net::Transport& t, int64_t now_us);
+// The service's answer to this report: true when the datagram was it (the caller drops it).
+bool report_ask_read(ReportAsk& a, const uint8_t* data, size_t size, const net::Address& from);
 
 // AN ASKER'S HALF.
 struct Reply {

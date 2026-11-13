@@ -990,7 +990,10 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     l.host->ctx = &l;
     l.host->move(l.host->game, p);
     ge::server::server_frame(*l.match);
-    if (l.accounts) ge::server::server_accounts_update(*l.accounts, unix_now(l));
+    if (l.accounts) {
+      ge::server::server_accounts_update(*l.accounts, unix_now(l));
+      ge::server::server_accounts_reports(*l.accounts, *l.match, unix_now(l));
+    }
     if (catch_up(l)) entered(l);  // the lobby's restart into the match: a new server
   }
   sv::RulesCommon& s = *l.server;

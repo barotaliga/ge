@@ -97,7 +97,8 @@ bool report_write(const MatchReport& r, std::vector<uint8_t>& out, std::string& 
     put_str(w, p.team);
     write_u64(w, p.account);
     write_u8(w, p.bot ? 1 : 0);
-    for (const int64_t v : {p.score, p.frags, p.deaths, p.suicides, p.team_kills, p.seconds})
+    for (const int64_t v : {p.score, p.frags, p.deaths, p.suicides, p.team_kills, p.seconds,
+                            p.ping_min, p.ping_avg, p.ping_max})
       put_int(w, v);
     for (const int64_t v : p.columns) put_int(w, v);
   }
@@ -151,7 +152,8 @@ bool report_read(const uint8_t* data, size_t size, MatchReport& out, std::string
     get_str(r, p.team);
     p.account = read_u64(r);
     p.bot = read_u8(r) != 0;
-    for (int64_t* v : {&p.score, &p.frags, &p.deaths, &p.suicides, &p.team_kills, &p.seconds})
+    for (int64_t* v : {&p.score, &p.frags, &p.deaths, &p.suicides, &p.team_kills, &p.seconds,
+                       &p.ping_min, &p.ping_avg, &p.ping_max})
       *v = get_int(r);
     p.columns.resize(out.columns.size());
     for (int64_t& v : p.columns) v = get_int(r);
