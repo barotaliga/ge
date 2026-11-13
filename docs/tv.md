@@ -390,6 +390,30 @@ The map's checksum (configstring 31) is the MD4 of the whole map file with its f
 measured against the demo pack's map. The same encoder is what the sequel's own server will send
 real clients (M18v9), so a hosted match broadcasts through TV from it.
 
+## The watcher
+
+A server with no broadcaster (a classic server with its stream port off, or one that never had one)
+is watched by way of a WATCHER (`games/shooters_edge/net/classic_watcher.hpp`, M57h): our classic
+client joined as a spectator, recording as a player's client recording does, its recording handed
+to a broadcast as it grows (`games/shooters_edge/client/recording_tv.hpp`: the recording's bytes in
+one-second zstd blocks on the `recording` track, the track `pack_demo` keeps a client recording on,
+so `unpack_demo` gives the recording back byte for byte). A TV node takes it as any stream. The
+first block is the only keyframe, so a late viewer is sent the match from its start, as the sequel's
+broadcast does. What a viewer gets is what one spectator was sent: the watcher follows the play as a
+spectator does and does not see the whole map, as a multiview recording would.
+
+`tests/shooters_edge_classic_watcher_test.cpp`: on the simulated network, a watcher on our classic
+server while a player runs, a viewer there from the start and one who joins half way, both given
+the watcher's whole recording, which reads to its end. The `se-watcher` lab does the same, and with
+`--server` joins a live classic server: against an open-source classic server with its stream port
+off, built beside the checkout, 25 s gave a 116 KB recording as a 37 KB broadcast, the late viewer
+sent 7 blocks to catch up, both viewers whole. That server refuses a second connection from the same
+address for a few seconds after the last attempt (`reconnect rejected: too soon`), so a watcher and
+a player on one machine join one after the other.
+
+The sequel's half (a watcher on an unmodified sequel server) waits on the sequel's network protocol
+(M18v9).
+
 ## Decisions
 
 | Decision | Taken | Considered and not taken |
