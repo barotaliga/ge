@@ -1,6 +1,7 @@
-// THE SEQUEL'S NET SERVER (protocol 34, sequel_net.hpp): the sequel's rules (server/sequel_server.hpp,
-// through a RulesRunner) served to clients over engine/net's transports, each client's view written
-// by the sequel's wire (server/sequel_wire.hpp), the same bytes a recording holds.
+// THE SEQUEL'S NET SERVER (protocol 34, sequel_net.hpp): the sequel's rules
+// (server/sequel_server.hpp, through a RulesRunner) served to clients over engine/net's transports,
+// each client's view written by the sequel's wire (server/sequel_wire.hpp), the same bytes a
+// recording holds.
 //
 // OUT OF BAND it answers `getchallenge` (one number per address, kept), `connect` (the protocol,
 // the challenge, a free slot, the password; a refusal is a print a player reads), `info 34`,

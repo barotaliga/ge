@@ -98,8 +98,8 @@ cn::SequelClientEnd& join(Rig& r, cn::SequelClientConfig cfg) {
   gn::open_sim_transport(*r.ct.back(), r.net, gn::sim_address(uint32_t(n + 1), 27901));
   r.clients.push_back(std::make_unique<cn::SequelClientEnd>());
   cfg.qport = static_cast<uint16_t>(100 + n);
-  cn::sequel_client_start(*r.clients.back(), *r.ct.back(), gn::sim_address(0, cn::kPortSequel),
-                          cfg, static_cast<double>(r.now) / 1e6);
+  cn::sequel_client_start(*r.clients.back(), *r.ct.back(), gn::sim_address(0, cn::kPortSequel), cfg,
+                          static_cast<double>(r.now) / 1e6);
   return *r.clients.back();
 }
 
@@ -201,8 +201,8 @@ TEST(a_client_joins_through_the_signon_and_plays_on_deltas) {
   CHECK(sc.bad_checksums == 0);
   CHECK_MSG(sc.full_frames <= 2, std::to_string(sc.full_frames) + " whole frames");
   const float dx = c.demo.state.eye.x - x0, dy = c.demo.state.eye.y - y0;
-  CHECK_MSG(dx * dx + dy * dy > 100.0f * 100.0f, "the player walked " + std::to_string(dx) + "," +
-                                                      std::to_string(dy));
+  CHECK_MSG(dx * dx + dy * dy > 100.0f * 100.0f,
+            "the player walked " + std::to_string(dx) + "," + std::to_string(dy));
   cn::sequel_client_stop(c);
   run(*r, 10);
   CHECK(cn::sequel_net_clients(r->server) == 0);

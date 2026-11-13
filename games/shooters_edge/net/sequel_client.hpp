@@ -61,10 +61,10 @@ struct SequelClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): o
 
   client::Demo demo;  // what the server sent, as the sequel's recording, read as it comes
   bool recording = true;
-  std::vector<std::string> stuffed;  // every line stuffed, in order (the first 256)
-  std::vector<std::string> prints;   // every print's text, in order (the first 256)
-  int signon_steps = 0;              // signon commands answered
-  int levels = 0;                    // server data read
+  std::vector<std::string> stuffed;          // every line stuffed, in order (the first 256)
+  std::vector<std::string> prints;           // every print's text, in order (the first 256)
+  int signon_steps = 0;                      // signon commands answered
+  int levels = 0;                            // server data read
   double connected_at = -1, active_at = -1;  // the network's times, s
 
   SequelCmd cmds[3];  // the three newest, oldest first

@@ -93,15 +93,15 @@ void report(gl::Lab& lab, const cn::SequelClientEnd& c, const Seen& seen, const 
   t.rows.push_back({"frames read", std::to_string(c.frames)});
   t.rows.push_back({"moves sent", std::to_string(c.moves)});
   t.rows.push_back({"units its view moved", ge::core::num::to_fixed(moved, 1)});
-  t.rows.push_back({"bytes in / out", std::to_string(c.bytes_in) + " / " +
-                                          std::to_string(c.bytes_out)});
+  t.rows.push_back(
+      {"bytes in / out", std::to_string(c.bytes_in) + " / " + std::to_string(c.bytes_out)});
   t.rows.push_back({"recording bytes, walks whole",
                     std::to_string(c.demo.bytes.size()) + ", " + (whole ? "yes" : "no")});
   if (ours != nullptr) {
-    t.rows.push_back({"server: moves taken / bad checksums", std::to_string(ours->moves) + " / " +
-                                                               std::to_string(ours->bad_checksums)});
-    t.rows.push_back({"server: frames / whole frames", std::to_string(ours->frames) + " / " +
-                                                         std::to_string(ours->full_frames)});
+    t.rows.push_back({"server: moves taken / bad checksums",
+                      std::to_string(ours->moves) + " / " + std::to_string(ours->bad_checksums)});
+    t.rows.push_back({"server: frames / whole frames",
+                      std::to_string(ours->frames) + " / " + std::to_string(ours->full_frames)});
   }
   for (size_t i = 0; i < c.prints.size() && i < 6; i++) t.rows.push_back({"print", c.prints[i]});
   lab.table(t, det);
@@ -195,7 +195,8 @@ void live(gl::Lab& lab, const std::string& server) {
   cfg.name = lab.arg("name");
   cfg.spectator = lab.arg_num("spectator") != 0;
   // A fresh qport each run: a server ignores a connect from the address and qport of a slot in use.
-  cfg.qport = static_cast<uint16_t>(1024 + std::chrono::steady_clock::now().time_since_epoch().count() % 60000);
+  cfg.qport = static_cast<uint16_t>(
+      1024 + std::chrono::steady_clock::now().time_since_epoch().count() % 60000);
   cfg.send_every = static_cast<int>(lab.arg_num("every"));
   if (lab.arg_num("walk") != 0) cfg.brain = walk;
   auto c = std::make_unique<cn::SequelClientEnd>();

@@ -401,7 +401,8 @@ void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWi
   blocks.assign(1, parts.server_data);
   for (const auto& [i, one] : parts.config_strings) {
     // The message less its id, index and zero: the string's length.
-    if (blocks.back().size() + (one.size() - 4) + 32 > size_t(kSequelMaxBlock)) blocks.emplace_back();
+    if (blocks.back().size() + (one.size() - 4) + 32 > size_t(kSequelMaxBlock))
+      blocks.emplace_back();
     blocks.back().insert(blocks.back().end(), one.begin(), one.end());
   }
   for (const auto& [n, one] : parts.baselines) {

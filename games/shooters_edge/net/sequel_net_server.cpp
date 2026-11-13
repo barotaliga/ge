@@ -1,5 +1,5 @@
-// The sequel's net server (sequel_net_server.hpp): out of band, the signon by the client's commands,
-// the moves into the rules, the frames out.
+// The sequel's net server (sequel_net_server.hpp): out of band, the signon by the client's
+// commands, the moves into the rules, the frames out.
 //
 // ge:summary The sequel's net server's steps: challenges, connects, the signon, moves and frames
 // ge:keywords sequel-server sequel_net_frame signon configstrings baselines begin move frame
@@ -118,8 +118,8 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
     if (c.stage != SequelSlot::free && same_host(c.address, from) &&
         (c.qport == qport || c.address.port == from.port))
       return;  // already in: a repeat
-  const bool spectator = !info_get(userinfo, "spectator").empty() &&
-                         info_get(userinfo, "spectator") != "0";
+  const bool spectator =
+      !info_get(userinfo, "spectator").empty() && info_get(userinfo, "spectator") != "0";
   if (!spectator && !s.cfg.password.empty() && s.cfg.password != "none" &&
       info_get(userinfo, "password") != s.cfg.password)
     return refuse(s, from, "Password required or incorrect.\nConnection refused.");
@@ -154,8 +154,8 @@ void read_oob(SequelNetServer& s, const gn::Address& from, const uint8_t* data, 
     auto at = s.challenges.find(host_key(from));
     if (at == s.challenges.end()) {
       s.next_challenge = s.next_challenge * 1103515245u + 12345u;
-      at = s.challenges.emplace(host_key(from), static_cast<int32_t>((s.next_challenge >> 16) &
-                                                                     0x7FFFu))
+      at = s.challenges
+               .emplace(host_key(from), static_cast<int32_t>((s.next_challenge >> 16) & 0x7FFFu))
                .first;
     }
     send_oob(s, from, "challenge " + std::to_string(at->second) + " p=34");

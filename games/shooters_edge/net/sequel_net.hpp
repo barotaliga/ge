@@ -19,10 +19,10 @@
 // byte (pitch 0x01, yaw 0x02, roll 0x04 as shorts in 65536ths of a turn; forward 0x08, side 0x10,
 // up 0x20 as shorts; buttons 0x40, impulse 0x80 as bytes), then msec and the light level always.
 // The checksum covers the bytes after it to the third command's end (at most 60), with four bytes
-// of the key table (sequel_checksum_table.cpp, measured) at `sequence mod 1020` appended: their CRC-16 (polynomial 0x1021, initial
-// 0xFFFF, no reflection, no final XOR) XORed with the plain sum of the same bytes, the low byte
-// kept. A server ignores a move whose checksum is wrong, and the rest of its packet, but takes the
-// frame it acknowledges.
+// of the key table (sequel_checksum_table.cpp, measured) at `sequence mod 1020` appended: their
+// CRC-16 (polynomial 0x1021, initial 0xFFFF, no reflection, no final XOR) XORed with the plain sum
+// of the same bytes, the low byte kept. A server ignores a move whose checksum is wrong, and the
+// rest of its packet, but takes the frame it acknowledges.
 //
 // ge:summary The sequel's live protocol shared by both ends: client messages, moves, checksums
 // ge:keywords sequel protocol-34 live clc move usercmd delta checksum challenge connect
