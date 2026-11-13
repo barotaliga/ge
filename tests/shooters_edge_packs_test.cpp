@@ -141,3 +141,35 @@ TEST(a_bare_coming_after_a_pack_call_claims_the_pack) {
   bt::mind_hear(g, "bert", "coming [ga]", 40.0);
   CHECK(g.mind.pack_claim_t < g.mind.pack_t);
 }
+
+// A PLACE HEARD BY A NAME A LOC FILE REPEATS (`placeheard`, mind.cpp `place_heard`): two rooms
+// named `tele` far apart; a mate last heard of beside the far one says `lost [tele]`. Off, the
+// enemy is put at the middle of every `tele` point, in neither room; on, in the far room, at the
+// red armour standing there.
+TEST(a_place_name_a_loc_file_repeats_is_heard_as_the_room_round_the_speaker) {
+  sh::Locs locs;
+  locs.points = {{"tele", {0, 0, 0}, {}},
+                 {"tele", {200, 0, 0}, {}},
+                 {"tele", {3000, 0, 0}, {}},
+                 {"tele", {3200, 0, 0}, {}},
+                 {"big", {3100, 900, 0}, {}}};
+  const auto heard = [&](bool on, bool armour) {
+    bt::Fighter f;
+    f.name = "me";
+    f.locs = &locs;
+    f.features.set(sh::Feature::placeheard, on);
+    if (armour) {
+      f.items.emplace_back();
+      f.items.back().name = "item_armorInv";
+      f.items.back().kind = bt::ItemKind::armor3;
+      f.items.back().at = {3150, 40, 0};
+    }
+    bt::mind_hear(f, "anna", "safe [big]", 10.0);  // where she is
+    bt::mind_hear(f, "anna", "lost [tele]", 11.0);
+    return f.mind.enemy_at;
+  };
+  const sh::Vec3f off = heard(false, false), room = heard(true, false), ra = heard(true, true);
+  CHECK(off.x == 1600);                     // the middle of both rooms: in neither
+  CHECK(room.x == 3000 || room.x == 3200);  // a point of the far room
+  CHECK(ra.x == 3150 && ra.y == 40);        // the red armour standing in it
+}

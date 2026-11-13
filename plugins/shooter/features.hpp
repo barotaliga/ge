@@ -162,6 +162,11 @@
 //   unless the run already heads at it near its speed: it was planned and given up on the next
 //   landing, off every route for 10 s (shooter/pilot.cpp, M18r.md 0c); on (head to head dm2
 //   +6.0, e1m2 -0.2).
+// - `placeheard`: a place a mate names is heard as a region, as a person hears it: a loc file
+//   names a room by many points (dm2's `tele` 16 over 585 units), so the name is read as the
+//   points of that name round where the speaker was last known, and as the item among them when
+//   one stands there (the place a map's items name); off, the middle of every point of the name
+//   (bots/mind.cpp `place_pos`, M18r.md 0c); on (head to head dm2 -1.25, e1m2 +0.5).
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
@@ -177,7 +182,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot liftbrake lift-shaft scriptfresh script-step scriptentry script-entry calmvel calm-view facing lookturn view-lead viewbook gapturn gap-refused gapnear
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot liftbrake lift-shaft scriptfresh script-step scriptentry script-entry calmvel calm-view facing lookturn view-lead viewbook gapturn gap-refused gapnear placeheard place-heard loc-region
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -290,9 +295,10 @@ enum class Feature : uint8_t {
   viewbook,
   gapturn,
   gapnear,
+  placeheard,
   trial,
 };
-constexpr size_t kFeatures = 100;
+constexpr size_t kFeatures = 101;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
