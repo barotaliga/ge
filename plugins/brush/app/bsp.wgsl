@@ -81,6 +81,9 @@ struct Bsp {
   sun_caster: Job,
   // the map's sky box: x on (1), yz half a texel in a face's own 0..1
   sky_box: vec4f,
+  // how opaque each liquid is (water, slime, lava, a teleporter's face): under 1, its faces are
+  // drawn in the see-through pass (kSeeThrough), a warped face not named for one as water
+  liquid_alpha: vec4f,
 };
 
 // A shadow map's camera: an origin, three axes (z the way it looks) and its reach: a point
@@ -161,6 +164,9 @@ fn grid_cell(p: vec3f) -> i32 {
 // v2 lit in real time with no weather (the modern look's usual frame), so its shader carries no
 // code for the lightmaps', the rebake's or the weather's paths. The picture is the same either way.
 override kLitOnly: bool = false;
+// THE SEE-THROUGH PASS (bsp_draw.hpp's "bsp.liquids"): the liquids' faces blended over the world
+// drawn, by their kind's `bsp.liquid_alpha`, after the fog.
+override kSeeThrough: bool = false;
 
 const kSolid = 0u;
 const kSky = 1u;
@@ -907,6 +913,11 @@ fn fs_main(in: VsOut) -> FsOut {
     if (out.mask.x > 0.5) {
       out.colour.a = 0.0;
     }
+  }
+  if (kSeeThrough) {
+    let a = bsp.liquid_alpha;
+    out.colour.a = select(select(select(a.x, a.w, in.kind == kTele), a.z, in.kind == kLava), a.y,
+                          in.kind == kSlime);
   }
   return out;
 }

@@ -905,6 +905,8 @@ double listen_tic(const Listen& l) {
   return l.campaign_host ? sv::kCampaignStep : l.server->sv.set.mintic;
 }
 
+constexpr int kMuzzleFlashBit = 2;  // the entity's muzzle-flash effect bit
+
 void listen_frame(Listen& l, sh::MoveCmd cmd) {
   cmd.msec = static_cast<uint8_t>(ge::core::num::round(listen_tic(l) * 1000));
   cmd.angles = l.view;
@@ -964,6 +966,16 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
       }
       if (l.campaign_host->history.size() != l.maps_started) campaign_entered(l);
     } else {
+      // A gun's flash lasts the one frame it was fired in: the program sets the bit as the
+      // monster shoots and leaves it for the server to clear once the frame is out, so it is
+      // cleared here before the next (else a soldier would seem to fire on every frame after).
+      if (l.server != nullptr && l.rules != nullptr && sv::qc_of(*l.rules) != nullptr)
+        for (int e = 1; e < l.server->sv.num_edicts; e++) {
+          if (l.server->sv.edicts[size_t(e)].free) continue;
+          const int fx = static_cast<int>(field_named(l, e, "effects"));
+          if ((fx & kMuzzleFlashBit) != 0)
+            set_field_named(l, e, "effects", static_cast<float>(fx & ~kMuzzleFlashBit));
+        }
       if (!sv::campaign_frame(*l.campaign_host, sent, count, l.failed)) {
         l.rules = nullptr;
         l.server = nullptr;
