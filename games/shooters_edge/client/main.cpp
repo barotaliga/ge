@@ -114,6 +114,7 @@
 #include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/client/listen_sound.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
+#include "shooters_edge/client/map_line.hpp"
 #include "shooters_edge/client/map_load.hpp"
 #include "shooters_edge/client/menu_sound.hpp"
 #include "shooters_edge/client/own_sounds.hpp"
@@ -526,7 +527,31 @@ int run_main(int argc, char** argv) {
   struct Watched {
     bool on = false;
     ge::shooter::Vec3f at{0, 0, 0};
+    ge::shooter::Vec3f angles{0, 0, 0};                  // the view's, degrees
+    const shooters_edge::server::BspMap* map = nullptr;  // its map's world (null: none read)
   } place_seen;
+  // Where the view looks: 8,192 units along it from where the player stands, or the first solid.
+  places.looked_at = [&listen, &place_seen](ge::shooter::Vec3f& at) {
+    ge::shooter::Vec3f from, angles;
+    const shooters_edge::server::BspMap* map = nullptr;
+    if (place_seen.on) {
+      from = place_seen.at;
+      angles = place_seen.angles;
+      map = place_seen.map;
+    } else if (listen.server != nullptr && listen.map && listen.server->world.entities.size() > 1) {
+      from = listen.server->world.entities[1].origin;
+      angles = listen.server->world.entities[1].view_angles;
+      map = &listen.map->bsp;
+    } else {
+      return false;
+    }
+    const ge::shooter::Vec3f f = ge::shooter::angle_vectors(angles).forward;
+    constexpr float kReach = 8192;
+    const ge::shooter::Vec3f to = {from.x + f.x * kReach, from.y + f.y * kReach,
+                                   from.z + f.z * kReach};
+    at = map != nullptr ? cl::line_end(*map, from, to) : to;
+    return true;
+  };
   cl::add_place_commands(
       console, places, adapter, files, [&listen, &place_seen](ge::shooter::Vec3f& at) {
         if (place_seen.on) {
@@ -1446,6 +1471,8 @@ int run_main(int argc, char** argv) {
       const cl::DemoState& ds = drawn_remote ? remote.demo.state : cl::demo_drawn(bench);
       place_seen.on = !ds.map.empty();
       place_seen.at = {ds.eye.x, ds.eye.y, ds.eye.z - ds.view_height};
+      place_seen.angles = ds.angles;
+      place_seen.map = bench_map ? &bench_map->bsp : nullptr;
       if (step == cl::TimedemoStep::new_level) {
         // The game folder the recording's server ran, mounted when the window is not on it.
         std::vector<std::string> lines;

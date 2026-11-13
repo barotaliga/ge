@@ -25,6 +25,8 @@
 //   (client/weapon_groups.hpp), one list of the game's weapon keys a group, best first.
 // - **The episodes**: each one's first map, in the order the start map opens them.
 // - **Items, their words and the sounds** a bot reads (items.hpp).
+// - **Place names**: how far one reaches by default (`loc_dist`) and whether its client's place
+//   macros (`$loc_here`, `$loc_there`) are there (client/place_names.hpp).
 // - **The server's words** (words.hpp): the obituaries, the clock, the lobby and its countdown in
 //   the game's own words; empty: the mod's and the lobby's own.
 //
@@ -105,6 +107,8 @@ struct GameProfile {
   // How far a place name reaches by default, units (client/place_names.hpp's `loc_dist`): a point
   // farther from the player than this is no place they are in; 0, no limit.
   std::string_view place_range = "0";
+  // Its client's place macros, `$loc_here` and `$loc_there` (client/place_names.hpp).
+  bool place_macros = false;
 };
 
 inline constexpr ProgramFile kClassicMultiplayer[] = {{.name = "qwprogs.dat"},
@@ -164,7 +168,8 @@ inline constexpr GameProfile kGameProfiles[] = {
      .weapon_groups = kSequelGroups,
      .rules_campaign = true,
      .attract = "",  // its recordings do not play yet
-     .place_range = "500"},
+     .place_range = "500",
+     .place_macros = true},
 };
 
 // The first row: the classic game, the one every reader uses until a choice of game is made.

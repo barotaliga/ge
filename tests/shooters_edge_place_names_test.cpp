@@ -2,10 +2,11 @@
 // player stands, removed nearest first, saved under the game folder in the shared format and read
 // back by name and when the map starts; the same map again keeps unsaved edits; a name that would
 // leave the folder refused; no game, no adding; a place reaches loc_dist (500 units in the
-// sequel, any distance in the first game).
+// sequel, any distance in the first game); the sequel's `$loc_here` and `$loc_there`.
 //
 // ge:summary Tests the window's place names: added, removed, saved, read at map start
 // ge:keywords test shooters-edge place-names addloc saveloc loadloc removeloc map_started loc_dist
+// ge:keywords loc_here loc_there place-macros
 // ge:skill shooter console testing
 #include <filesystem>
 #include <fstream>
@@ -121,4 +122,40 @@ TEST(a_classic_place_reaches_any_distance) {
   p.locs.points.push_back({.name = "start", .at = {0, 0, 0}, .raw = "start"});
   con.execute("removeloc");
   CHECK(p.locs.points.empty());
+}
+
+TEST(the_sequel_s_macros_name_where_the_player_is_and_looks) {
+  ge::console::Console con;
+  cl::PlaceNames p;
+  p.game_dir = fs::temp_directory_path() / "ge_se_place_names_four";
+  cl::SearchPath files;
+  bool playing = false;
+  ge::shooter::Vec3f here{0, 0, 0}, looked{0, 0, 0};
+  cl::add_place_commands(con, p, cl::sequel_adapter(), files, [&](ge::shooter::Vec3f& at) {
+    at = here;
+    return playing;
+  });
+  p.looked_at = [&](ge::shooter::Vec3f& at) {
+    at = looked;
+    return playing;
+  };
+  p.locs.points.push_back({.name = "red armor", .at = {0, 0, 0}, .raw = "red armor"});
+  p.locs.points.push_back({.name = "quad", .at = {2000, 0, 0}, .raw = "quad"});
+  CHECK(con.expand_text("at $loc_here") == "at unknown");  // no game
+  playing = true;
+  looked = {1900, 0, 0};
+  CHECK(con.expand_text("at $loc_here, see ${loc_there}") == "at red armor, see quad");
+  here = {1000, 0, 0};  // past loc_dist from both
+  CHECK(con.expand_text("$loc_here") == "unknown");
+}
+
+TEST(the_first_game_has_no_place_macros) {
+  ge::console::Console con;
+  cl::PlaceNames p;
+  cl::SearchPath files;
+  cl::add_place_commands(con, p, cl::classic_adapter(), files, [](ge::shooter::Vec3f& at) {
+    at = {0, 0, 0};
+    return true;
+  });
+  CHECK(con.expand_text("$loc_here") == "$loc_here");
 }

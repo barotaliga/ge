@@ -100,6 +100,22 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
                     .kind = con::CvarKind::number,
                     .min = 0,
                     .values = "0: no limit; NUMBER: a point farther than this is no place"});
+  // The sequel's place macros: where the player is and where the view looks, `unknown` when no
+  // place is within reach or no game is playing.
+  if (adapter.game != nullptr && adapter.game->place_macros) {
+    con.add_macro("loc_here", [&p, where] {
+      sh::Vec3f at;
+      if (!where || !where(at)) return std::string("unknown");
+      const std::string name = sh::loc_name_at(p.locs, at, range_of(p));
+      return name.empty() ? std::string("unknown") : name;
+    });
+    con.add_macro("loc_there", [&p] {
+      sh::Vec3f at;
+      if (!p.looked_at || !p.looked_at(at)) return std::string("unknown");
+      const std::string name = sh::loc_name_at(p.locs, at, range_of(p));
+      return name.empty() ? std::string("unknown") : name;
+    });
+  }
   // Each command under its name and its older short name, the same command either way.
   const auto both = [&con](const char* name, const char* old_name, const std::string& help,
                            const con::CommandFn& fn) {

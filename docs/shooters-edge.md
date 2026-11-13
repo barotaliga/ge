@@ -145,7 +145,10 @@ format, `loadloc <name>` reads one, and `loc` says where you are. The long names
 game; 0 is no limit): farther off, `loc` says someplace and `removeloc` or `loc set` finds nothing.
 The places follow the player's view on a server joined and in a demo played as well as in the
 window's own game: each map's file is read as it starts, from the recording's game folder for a
-demo, and edited and saved the same way.
+demo, and edited and saved the same way. The sequel's macros name them in any console line:
+`$loc_here` the place the player is in, `$loc_there` the place nearest where the view's line
+stops (8,192 units ahead or the first wall, `client/map_line.hpp`), each `unknown` with none
+within `loc_dist`.
 
 **The title and the loads.** With no `+map` the window opens at once on the title
 (`client/title.hpp`: a night with the full moon low in a total eclipse, blood red, cloud carried

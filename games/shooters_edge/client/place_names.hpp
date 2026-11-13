@@ -21,6 +21,10 @@
 //   and is the one `removeloc`, `loc del` and `loc set` act on.
 // - **Where the player is**: the window's own game, a server joined, or a demo played (the view's
 //   point less its eye height); the map's place names are read as each one's map starts.
+// - **The sequel's macros** (the game's `place_macros`): `$loc_here` is the place the player is
+//   in and `$loc_there` the place nearest where the view's line stops (`looked_at`: 8,192 units
+//   from where the player stands, or the first solid), each within `loc_dist`, `unknown` with
+//   none or no game; every console line expands them (`echo I am at $loc_here`).
 // - The file's text is the shared format's (`locs_text`): eighths of a unit, the names as typed,
 //   their `$loc_name_<key>` words kept.
 //
@@ -30,7 +34,7 @@
 // ge:keywords place-names loc locations loc-editing locations_add locations_remove addloc
 // ge:keywords removeloc locations_savefile saveloc locations_loadfile loadloc locations_clearall
 // ge:keywords clearlocs tp_loadlocs loc_dist place-range tp_name_someplace map_started where-am-i
-// ge:keywords loc-add loc-set loc-list loc-save
+// ge:keywords loc-add loc-set loc-list loc-save loc_here loc_there place-macros
 // ge:skill shooter console
 // ge:test tests/shooters_edge_place_names_test.cpp
 #pragma once
@@ -53,6 +57,9 @@ struct PlaceNames {
   const ge::console::Cvar* load = nullptr;       // tp_loadlocs (null: on)
   const ge::console::Cvar* someplace = nullptr;  // tp_name_someplace
   const ge::console::Cvar* range = nullptr;      // loc_dist (null: no limit)
+  // Where the player's view stops: the line along it from where the player stands, 8,192 units
+  // or to the first solid (`$loc_there`); false (or null) when no game is playing.
+  std::function<bool(ge::shooter::Vec3f&)> looked_at;
 };
 
 // Where the player stands (the middle of the player's box), false when no game is playing.
