@@ -1,19 +1,20 @@
-// Tests: the arena in C++ (games/shooters_edge/rules/arena*.cpp) plays the compiled QC arena's
-// matches side by side: every player's path and frags each frame, every mover, every print and
-// frag line, every hook call, the builtins' counts (but the text calls the QC needed to read a
-// number, which C++ reads itself) and the loop's digest every frame. The matches: a deathmatch on
-// the baseline arena with its door and plat to the time limit, the same in deathmatch 4, and one
-// in a loaded game's words with teams.
+// Tests: the arena in C++ (games/shooters_edge/rules/arena*.cpp) plays the matches the compiled
+// QC arena played before it was deleted: the frames, the end, the frag lines, the prints and the
+// loop's digest every frame, folded into one number per match. The numbers were the QC's, taken
+// while the two ran side by side and agreed frame by frame (every path, mover, print, frag line,
+// hook call and builtin count too); a change that moves one is a change to the rules. The
+// matches: a deathmatch on the baseline arena with its door and plat to the time limit, the same
+// in deathmatch 4, and one in a loaded game's words with teams.
 //
-// ge:summary Tests: the arena's rules in C++ play the compiled QC arena's matches to the bit
-// ge:keywords test arena native-arena side-by-side parity baseline-mod mod-match deathmatch
-// ge:keywords dmm4 words loop-digest
+// ge:summary Tests: the arena's rules in C++ play the QC arena's matches to the bit, pinned
+// ge:keywords test arena native-arena parity baseline-mod mod-match deathmatch dmm4 words
+// ge:keywords loop-digest pinned
 // ge:skill progs shooter testing
+#include <cstdint>
 #include <string>
 #include <vector>
 
 #include "check.hpp"
-#include "progs/file.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/profiles/words.hpp"
 #include "shooters_edge/rules/arena.hpp"
@@ -21,105 +22,73 @@
 #include "shooters_edge/server/mod_match.hpp"
 
 namespace sv = shooters_edge::server;
-namespace pg = ge::progs;
 namespace pf = shooters_edge::profiles;
 
 namespace {
 
-const pg::Progs& compiled() {
-  static const pg::Progs p = [] {
-    pg::Progs out;
-    std::string error;
-    if (!sv::compile_baseline_mod(GE_SOURCE_DIR, out, error)) out = {};
-    return out;
-  }();
-  return p;
+struct Pin {
+  int frames;
+  size_t frags, prints;
+  uint64_t hash;  // FNV-1a over every frame's loop digest, then the frag lines, then the prints
+};
+
+uint64_t fold(const sv::ModMatchReport& r) {
+  uint64_t h = 1469598103934665603ull;
+  const auto mix = [&h](uint64_t w) {
+    for (int i = 0; i < 8; i++) {
+      h ^= (w >> (8 * i)) & 0xffu;
+      h *= 1099511628211ull;
+    }
+  };
+  for (uint64_t d : r.loop_digests) mix(d);
+  for (const std::string& t : r.frag_log)
+    for (char c : t) mix(static_cast<uint8_t>(c));
+  for (const std::string& t : r.prints)
+    for (char c : t) mix(static_cast<uint8_t>(c));
+  return h;
 }
 
-sv::ModMatchReport play(bool native, const std::vector<std::string>& console) {
+void same_match(const std::vector<std::string>& console, const Pin& qc) {
   sv::ModMatchOptions o;
-  if (native) {
-    o.native = &sv::native_arena();
-  } else {
-    o.compiled = &compiled();
-    o.compiled_name = "the arena in QC";
-  }
+  o.native = &sv::native_arena();
   o.entities = sv::kBaselineArenaEntities;
   o.bots = 2;
   o.max_frames = 5100;
   o.console = console;
-  return sv::run_mod_match(o);
-}
-
-// The text calls the QC made to read a number (C++ reads the text itself).
-bool counted(int number) { return number != 114 && number != 116; }
-
-void same_match(const std::vector<std::string>& console) {
-  const sv::ModMatchReport a = play(false, console);
-  const sv::ModMatchReport n = play(true, console);
-  CHECK_MSG(a.ok, a.error);
+  const sv::ModMatchReport n = sv::run_mod_match(o);
   CHECK_MSG(n.ok, n.error);
   CHECK_MSG(n.faults == 0, n.last_fault);
-  CHECK(a.frames > 1000);
-  CHECK(n.frames == a.frames);
-  CHECK(n.ended == a.ended);
-  CHECK(n.players.size() == a.players.size());
-  for (size_t p = 0; p < a.players.size() && p < n.players.size(); p++) {
-    const sv::PlayerPath& x = a.players[p];
-    const sv::PlayerPath& y = n.players[p];
-    CHECK_MSG(x.frags == y.frags && x.deaths == y.deaths && x.frags_at == y.frags_at, x.name);
-    CHECK(x.points.size() == y.points.size());
-    for (size_t i = 0; i < x.points.size() && i < y.points.size(); i++) {
-      if (x.points[i].x == y.points[i].x && x.points[i].y == y.points[i].y &&
-          x.points[i].z == y.points[i].z)
-        continue;
-      CHECK_MSG(false, x.name + " parts at frame " + std::to_string(i));
-      break;
-    }
-  }
-  CHECK(n.missiles.size() == a.missiles.size());
-  CHECK(n.movers.size() == a.movers.size());
-  for (size_t m = 0; m < a.movers.size() && m < n.movers.size(); m++)
-    CHECK_MSG(n.movers[m].z == a.movers[m].z, a.movers[m].classname);
-  CHECK(n.prints == a.prints);
-  CHECK(n.frag_log == a.frag_log);
-  CHECK(n.hook_log.size() == a.hook_log.size());
-  for (int h = 0; h < static_cast<int>(sv::HookId::count); h++)
-    CHECK(n.hook_counts[h] == a.hook_counts[h]);
-  std::vector<sv::BuiltinCount> x;
-  std::vector<sv::BuiltinCount> y;
-  for (const sv::BuiltinCount& b : a.builtins)
-    if (counted(b.number)) x.push_back(b);
-  for (const sv::BuiltinCount& b : n.builtins)
-    if (counted(b.number)) y.push_back(b);
-  CHECK(x.size() == y.size());
-  for (size_t i = 0; i < x.size() && i < y.size(); i++)
-    CHECK_MSG(x[i].number == y[i].number && x[i].calls == y[i].calls,
-              x[i].name + ": " + std::to_string(x[i].calls) + " calls in QC, " +
-                  std::to_string(y[i].calls) + " in C++");
-  // The world as played, frame by frame (the programs' memories differ: the QC keeps its
-  // constants and locals in globals, and its strings sit elsewhere in its table).
-  CHECK(n.loop_digests == a.loop_digests);
-  for (size_t i = 0; i < a.loop_digests.size() && i < n.loop_digests.size(); i++) {
-    if (a.loop_digests[i] == n.loop_digests[i]) continue;
-    CHECK_MSG(false, "the world parts at frame " + std::to_string(i));
-    break;
-  }
-  CHECK(a.frag_log.size() > 3);  // the match had kills to compare
+  CHECK(n.ended);
+  CHECK(n.frames == qc.frames);
+  CHECK(n.frag_log.size() == qc.frags);
+  CHECK(n.prints.size() == qc.prints);
+  CHECK_MSG(fold(n) == qc.hash,
+            "the match parts from the QC's: frames " + std::to_string(n.frames) + ", frag lines " +
+                std::to_string(n.frag_log.size()) + ", prints " + std::to_string(n.prints.size()) +
+                "; next: a deliberate change to the rules rewrites the pin");
 }
 
 }  // namespace
 
 TEST(the_arena_in_cpp_plays_the_qc_deathmatch) {
-  CHECK(!compiled().functions.empty());
-  same_match({"deathmatch 1", "timelimit 1"});
+  same_match({"deathmatch 1", "timelimit 1"}, {4924, 19, 58, 0xb68f506cd41ba69bull});
 }
 
-TEST(the_arena_in_cpp_plays_the_qc_deathmatch_4) { same_match({"deathmatch 4", "timelimit 1"}); }
+TEST(the_arena_in_cpp_plays_the_qc_deathmatch_4) {
+  same_match({"deathmatch 4", "timelimit 1"}, {4924, 10, 47, 0xa94b0ab5a15ebcf0ull});
+}
 
 TEST(the_arena_in_cpp_plays_the_qc_match_in_a_games_words) {
   std::vector<std::string> console = pf::item_name_lines(pf::kClassicNames);
   for (std::string& line : pf::word_lines(pf::kClassicServerWords)) console.push_back(line);
   console.insert(console.end(), {"deathmatch 1", "teamplay 1", "timelimit 1"});
-  same_match(console);
+  same_match(console, {4924, 19, 156, 0x5652a81935aee329ull});
+}
+
+TEST(the_baseline_mod_is_the_native_arena) {
+  ge::progs::Progs p;
+  std::string error;
+  CHECK_MSG(sv::baseline_mod(p, error), error);
+  CHECK(p.natives != nullptr);
+  CHECK(p.statements.size() <= 1);  // no bytecode: every function is C++
 }

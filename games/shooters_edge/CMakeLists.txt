@@ -150,8 +150,7 @@ ge_add_mod(shooters_edge_mod_rocket_bounce NAME rocket-bounce VERSION 1.0.0 GAME
 
 # Its client (client/): the listen server and its local player (listen.hpp), the search path over
 # a game folder's packs (files.hpp), the player's keys and mouse (controls.hpp) and what he sees of
-# the server (view.hpp): a library with no GPU, which the tests drive headless; the baseline mod's
-# QC sources are built into it, so the game compiles its mod at start and reads no source file.
+# the server (view.hpp): a library with no GPU, which the tests drive headless.
 # Then the `shooters_edge` window (client/main.cpp, the world drawn by client/world_draw.cpp) when
 # the GPU and the platform are built. Headers are spelled "shooters_edge/client/<file>.hpp".
 file(GLOB SHOOTERS_EDGE_CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/client/*.cpp)
@@ -163,13 +162,6 @@ target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_
                                                   ge_brush ge_camera ge_input ge_audio ge_net
                                                   ge_ui ge_replay ge_morph shooters_edge_menu
                                                   ge_classicenhance)
-include(${PROJECT_SOURCE_DIR}/cmake/EmbedBinary.cmake)
-# Each source as `<variant>_<file>` (qc/<variant>/<file>.qc): the arena variant's and the shared.
-foreach(qc arena_engine common_defs arena_glue common_util common_combat common_weapons
-           common_items common_dmm4 common_player common_map arena_world)
-  string(REGEX REPLACE "^([a-z]+)_(.*)$" "\\1/\\2" qc_path ${qc})
-  ge_embed_binary(shooters_edge_client se_qc_${qc} ${CMAKE_CURRENT_SOURCE_DIR}/qc/${qc_path}.qc)
-endforeach()
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_client)
 # The world's frame (client/world_draw.cpp), the modern look's water, liquids, flames and weather
 # behind the classic-enhance switches (client/world_extras.cpp), the effects fed to it

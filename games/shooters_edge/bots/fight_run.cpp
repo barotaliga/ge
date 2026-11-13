@@ -68,7 +68,7 @@ FightReport run_fight(const FightOptions& opt) {
     return r;
   }
   ge::progs::Progs progs;
-  if (!server::compile_baseline_mod(opt.root, progs, r.error)) return r;
+  if (!server::baseline_mod(progs, r.error)) return r;
   server::QcServerOptions so;
   so.seed = opt.seed;
   so.loop.max_edicts = 1024;

@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <iterator>
+#include <memory>
 #include <set>
 #include <string_view>
 
@@ -136,6 +137,7 @@ bool build_native_progs(const NativeProgram& program, Progs& out, NativeOffsets&
     }
     offsets.fields.push_back(d->offset);
   }
+  out.natives = std::make_shared<const NativeOffsets>(offsets);
   return true;
 }
 
