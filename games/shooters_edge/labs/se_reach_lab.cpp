@@ -37,6 +37,8 @@
 #include <vector>
 
 #include "brush/write.hpp"
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "lab/lab.hpp"
 #include "progs/entity_text.hpp"
@@ -71,6 +73,12 @@ constexpr float kGapBack[] = {160, 320, 480, 640};
 constexpr float kGapWalk = 180;
 constexpr uint32_t kGapSeeds = 3;
 constexpr float kGapLimit_s = 6;
+// --walk: the runs' start speeds (units/s), their headings off the way to the first node
+// (degrees), the seeds, the time each is given.
+constexpr float kWalkSpeeds[] = {250, 320, 400};
+constexpr float kWalkTurns[] = {-45, -20, 0, 20, 45};
+constexpr uint32_t kWalkSeeds = 4;
+constexpr float kWalkLimit_s = 6;
 
 struct Gap {
   std::string item, why;
@@ -104,6 +112,7 @@ struct MapReach {
   int64_t gap_runs = 0, gap_planned = 0, gap_jumped = 0, gap_landed = 0, gap_refused = 0;
   std::vector<std::vector<std::string>> route_rows, floor_rows;  // --route's and --floors' rows
   std::vector<std::vector<std::string>> script_rows;  // the scripted routes, held or refused
+  std::vector<std::vector<std::string>> walk_rows;    // --walk: each variant's runs
 };
 
 // The probes asked of the first map: a route between two points, each node and the link onto
@@ -113,6 +122,13 @@ struct Probe {
   sh::Vec3f from, to;  // --route's ends
   float wet = 1;       // --route-wet: every link into a wet node priced this many times its proof
   float fx0 = 0, fy0 = 0, fx1 = 0, fy1 = 0, fstep = 8;  // --floors' line and step
+  // --walk: a route walked from `walk_from` to `walk_to` (origins) by an expert's pilot through an
+  // expert's keyboard, already running at each of `kWalkSpeeds` on each of `kWalkTurns` off the way
+  // to its first node, on `kWalkSeeds` seeds, under each variant's switches (name, features).
+  bool walk = false;
+  sh::Vec3f walk_from, walk_to;
+  std::vector<std::pair<std::string, sh::Features>> walk_variants;
+  float walk_view_lag_s = 0.3f;  // --walk-view-lag: the view trails the run's heading (s)
 };
 
 bool vec_of(const char* s, sh::Vec3f& out) {
@@ -138,8 +154,62 @@ void floors_at(const sh::MoveWorld& w, float x, float y, float top, float bottom
   }
 }
 
+// --walk: the runs of one variant; each run's lava or slime entered (its feet in it, any
+// command), arrival and time.
+void walk_runs(const bt::MapNav& nav, const Probe& pr, const std::string& name,
+               const sh::Features& f, MapReach& out) {
+  const sh::NavGraph& g = nav.graph;
+  const int32_t a = sh::nav_nearest(g, pr.walk_from), b = sh::nav_nearest(g, pr.walk_to);
+  if (a < 0 || b < 0) return;
+  ge::ai::Search rs;
+  const sh::NavRoute route = sh::nav_route(g, a, b, rs);
+  if (route.nodes.size() < 2) return;
+  const sh::Vec3f from = g.nodes[static_cast<size_t>(a)].origin;
+  const sh::Vec3f first = g.nodes[static_cast<size_t>(route.nodes[1])].origin;
+  const double way = ge::core::libm::atan2(static_cast<double>(first.y - from.y),
+                                           static_cast<double>(first.x - from.x));
+  const sh::Traits traits = sh::traits_of(sh::AimSkill::expert, sh::Temper::balanced);
+  sh::PilotHands hands = sh::PilotHands::none;
+  sh::PilotSettings ps = bt::fighter_pilot(f, traits, sh::AimSkill::expert, hands);
+  const sh::Features* keys = f[sh::Feature::keys] ? &f : nullptr;
+  for (const float speed : kWalkSpeeds) {
+    int runs = 0, fell = 0, arrived = 0;
+    float time = 0;
+    std::string where;
+    for (const float turn : kWalkTurns) {
+      const double h = way + static_cast<double>(turn) * (ge::core::kPi / 180.0);
+      const sh::Vec3f v{static_cast<float>(ge::core::libm::cos(h)) * speed,
+                        static_cast<float>(ge::core::libm::sin(h)) * speed, 0};
+      for (uint32_t seed = 1; seed <= kWalkSeeds; seed++) {
+        const bt::RunResult r = bt::run_route(nav.world, g, from, pr.walk_to, hands, seed, ps,
+                                              kWalkLimit_s, v, keys, traits[sh::Trait::moves],
+                                              pr.walk_view_lag_s);
+        runs++;
+        bool in = false;
+        for (const sh::Vec3f o : r.trail) {
+          const int c = sh::water_contents(nav.world, {o.x, o.y, o.z - 22});
+          if (c == sh::kContentsLava || c == sh::kContentsSlime) {
+            in = true;
+            if (where.size() < 120)
+              where += (where.empty() ? "" : ", ") + to_fixed(o.x, 0) + " " + to_fixed(o.y, 0);
+            break;
+          }
+        }
+        fell += in;
+        if (r.arrived && !in) arrived++, time += r.time_s;
+      }
+    }
+    out.walk_rows.push_back({name, to_fixed(speed, 0), std::to_string(runs), std::to_string(fell),
+                             std::to_string(arrived),
+                             arrived > 0 ? to_fixed(time / static_cast<float>(arrived), 2) : "-",
+                             where.empty() ? "-" : where});
+  }
+}
+
 void probe_map(const bt::MapNav& nav, const Probe& pr, MapReach& out) {
   const sh::NavGraph& g = nav.graph;
+  if (pr.walk)
+    for (const auto& [name, f] : pr.walk_variants) walk_runs(nav, pr, name, f, out);
   if (pr.route) {
     const int32_t a = sh::nav_nearest(g, pr.from), b = sh::nav_nearest(g, pr.to);
     ge::ai::Search rs;
@@ -520,6 +590,27 @@ void run(gl::Lab& lab) {
     probe.floors = static_cast<bool>(f >> probe.fx0 >> probe.fy0 >> probe.fx1 >> probe.fy1);
     if (probe.floors && !(f >> probe.fstep)) probe.fstep = 8;
     probe.wet = std::stof(lab.arg("route-wet"));
+    std::istringstream w(lab.arg("walk"));
+    probe.walk = static_cast<bool>(w >> probe.walk_from.x >> probe.walk_from.y >>
+                                   probe.walk_from.z >> sep >> probe.walk_to.x >> probe.walk_to.y >>
+                                   probe.walk_to.z);
+    probe.walk_view_lag_s = std::stof(lab.arg("walk-view-lag"));
+    probe.walk_from.z += 24;
+    probe.walk_to.z += 24;
+    // --walk-variants: "name:switches;name:switches" (se-team's --features on the full preset).
+    std::istringstream vs(lab.arg("walk-variants"));
+    std::string item;
+    while (probe.walk && std::getline(vs, item, ';')) {
+      const size_t colon = item.find(':');
+      sh::Features feats = sh::features_all();
+      const std::string sw = colon == std::string::npos ? "" : item.substr(colon + 1);
+      if (!sw.empty() && !sh::apply_features(sw, feats, error)) {
+        lab.fail("se-reach: --walk-variants: " + error,
+                 "next: name switches as se-team's --features");
+        return;
+      }
+      probe.walk_variants.emplace_back(item.substr(0, colon), feats);
+    }
     // Each probe's point is a player's origin, its feet 24 under.
     probe.from.z += 24;
     probe.to.z += 24;
@@ -702,6 +793,18 @@ void run(gl::Lab& lab) {
     lab.metric("reach.gap-refused", static_cast<double>(refused), "count");
     lab.table(gf);
   }
+  if (probe.walk && !maps.empty()) {
+    lab.table({"--walk on " + maps.front().name +
+                   ": an expert's pilot through an expert's keyboard under a view trailing its "
+                   "heading (--walk-view-lag; no brink guard: no server) "
+                   "walking the route, already running at the speed, headed 45, 20 and 0 degrees "
+                   "either side of its first node, 4 seeds each: runs, those into lava or slime "
+                   "(and where, the first few), arrived dry (and their mean time)",
+               {"variant", "start u/s", "runs", "into lava", "arrived", "s", "where in"},
+               maps.front().walk_rows});
+    for (const auto& row : maps.front().walk_rows)
+      lab.metric("reach.walk." + row[0] + ".fell-" + row[1], std::stod(row[3]), "count");
+  }
   if (probe.route && !maps.empty())
     lab.table({"--route on " + maps.front().name + ": each node (feet) and the link onto it",
                {"#", "node", "at (x y feet)", "link", "s", "jump speed"},
@@ -737,6 +840,14 @@ const gl::LabSpec kSpec{
         {"gaps", "", "fly: every gap trick run up to by an expert's pilot from behind, tabled"},
         {"gap-features", "+gapbuild", "--gaps=fly: the pilot's switches, as se-team's --features"},
         {"gap-trace", "", "--gaps=fly: every command of each first seed's run to this TSV"},
+        {"walk", "",
+         "a route on the first map walked by an expert's pilot from 'x y z > x y z' (feet), "
+         "already running, at 250, 320 and 400 u/s: the runs into lava or slime tabled"},
+        {"walk-view-lag", "0.3",
+         "--walk: the view trails the run's heading with this time constant, s (the keys "
+         "pressed under it, as under a fighter's calm view); 0: the view is the heading"},
+        {"walk-variants", "base:",
+         "--walk: 'name:switches;name:switches', each switches as se-team's --features"},
     },
     "",
     run,

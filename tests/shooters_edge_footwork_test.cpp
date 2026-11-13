@@ -2,11 +2,12 @@
 // buttons.hpp `button_fires`): a side key turned round passes through 1 to 3 commands with no side
 // key unless the change is a clean one, never on a proven jump; and a button's doors are found
 // through the relays it fires (e1m2's plate: a delayed trigger_once opens the teleporters' doors);
-// and a pilot's curve on the ground held on its keys, W and the side key (`curvekeys`).
+// and a pilot's curve on the ground held on its keys, W and the side key (`curvekeys`); a key
+// whose step ends over lava never pressed (`brinkkeys`).
 //
 // ge:summary Tests: the side key's change held off as a hand's is; a button's doors through relays
 // ge:keywords test fighter_keys key-change socd perfect-strafe button_fires trigger_relay
-// ge:keywords fighter_keyboard key-set feathering weapon-key press_keys curvekeys
+// ge:keywords fighter_keyboard key-set feathering weapon-key press_keys curvekeys brinkkeys
 // ge:skill bots testing
 #include <memory>
 #include <string>
@@ -17,6 +18,8 @@
 #include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/footwork.hpp"
 #include "shooters_edge/bots/keyboard.hpp"
+#include "shooter/brush_hull.hpp"
+#include "shooter/nav.hpp"
 
 namespace sh = ge::shooter;
 namespace fb = shooters_edge::bots;
@@ -194,4 +197,61 @@ TEST(a_buttons_doors_are_found_through_the_relays_it_fires) {
   CHECK(has(fired, "t65") && has(fired, "t73") && has(fired, "t80"));
   CHECK(!has(fired, "t90"));  // a counter needs more than one press: not followed
   CHECK(fb::button_fires(blocks, "").empty());
+}
+
+TEST(a_key_into_lava_is_not_pressed_with_brinkkeys) {
+  // A ledge (y 0 up, its top at z 0) over a pit of lava (y under 0): standing 30 from the edge
+  // facing it, the wish forward. With `brinkkeys` W is never pressed (its step ends over the
+  // lava); without it W goes down.
+  const auto brush = [](int contents, sh::Vec3f lo, sh::Vec3f hi) {
+    sh::Brush b;
+    b.contents = contents;
+    b.planes = {{{1, 0, 0}, hi.x},   {{-1, 0, 0}, -lo.x}, {{0, 1, 0}, hi.y},
+                {{0, -1, 0}, -lo.y}, {{0, 0, 1}, hi.z},   {{0, 0, -1}, -lo.z}};
+    return b;
+  };
+  const std::vector<sh::Brush> brushes = {
+      brush(sh::kContentsSolid, {-512, 0, -256}, {512, 512, 0}),
+      brush(sh::kContentsSolid, {-512, -512, -256}, {512, 0, -200}),
+      brush(sh::kContentsLava, {-512, -512, -200}, {512, 0, -150}),
+      brush(sh::kContentsSolid, {-544, -544, -256}, {-512, 544, 256}),
+      brush(sh::kContentsSolid, {512, -544, -256}, {544, 544, 256}),
+      brush(sh::kContentsSolid, {-544, -544, -256}, {544, -512, 256}),
+      brush(sh::kContentsSolid, {-544, 512, -256}, {544, 544, 256})};
+  const sh::HullData point = sh::build_point_hull(brushes);
+  const sh::HullData clip = sh::build_box_hull(brushes, sh::kPlayerMins, sh::kPlayerMaxs);
+  sh::MoveWorld world;
+  world.solids[0].point_hull = point.hull();
+  world.solids[0].clip_hull = clip.hull();
+  world.solids[0].mins = {-544, -544, -256};
+  world.solids[0].maxs = {544, 544, 256};
+  world.count = 1;
+  sh::NavGraph g;
+  sh::build_nav(world, {}, sh::MoveSettings{}, sh::NavSettings{}, g);
+  std::vector<uint8_t> harm(g.nodes.size(), 0);
+  for (size_t n = 0; n < g.nodes.size(); n++)
+    harm[n] = sh::water_contents(world, {g.nodes[n].origin.x, g.nodes[n].origin.y,
+                                         g.nodes[n].origin.z - 22}) == sh::kContentsLava;
+  sh::nav_mark_harm(g, harm);
+  CHECK_MSG(sh::nav_harm_near(g, {0, 30, 24}, 192), "the pit's floor has no harm node near");
+  for (const bool guard : {false, true}) {
+    fb::KeyHand k;
+    fb::key_hand_init(k, 90, 3);
+    sh::Features features = sh::features_all();
+    features.set(sh::Feature::brinkkeys, guard);
+    const fb::KeysNear near{&world, &g, {0, 30, 24}};
+    int pressed = 0;
+    for (int n = 0; n < 40; n++) {
+      sh::MoveCmd c;
+      c.msec = 13;
+      c.angles = {0, -90, 0};
+      c.forward = 320;
+      fb::press_keys(k, features, c, {}, true, sh::kNoCurveKeys, &near);
+      pressed += c.forward > 0;
+    }
+    if (guard)
+      CHECK_MSG(pressed == 0, "W pressed toward the lava " + std::to_string(pressed) + " commands");
+    else
+      CHECK_MSG(pressed > 20, "without brinkkeys W was pressed only " + std::to_string(pressed));
+  }
 }

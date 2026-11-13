@@ -82,11 +82,13 @@ RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sh::PilotHan
 // (shooter/nav.hpp `rocket_burst`, `rocket_blast`).
 // `keys`: the commands pressed through a hand on a keyboard with these features (keyboard.hpp
 // `press_keys`, the hand's times by the `moves` trait), as a fighter's are under `keys`.
+// `view_lag_s` (> 0): the view is not the pilot's heading but trails it, eased toward it with
+// this time constant, the keys turned under it (a fighter's calm view lags the run's turns).
 RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f from, sh::Vec3f to,
                     sh::PilotHands hands, uint32_t seed,
                     const sh::PilotSettings& set = sh::PilotSettings{}, float limit_s = 20,
                     sh::Vec3f start_velocity = {}, const sh::Features* keys = nullptr,
-                    uint8_t moves = 0);
+                    uint8_t moves = 0, float view_lag_s = 0);
 
 struct Arena {
   server::Host host;

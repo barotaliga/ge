@@ -36,6 +36,14 @@ constexpr double kCounterOff = 25;   // and this near it lets go, units/s
 constexpr double kSteer = 0.02;      // the steering's tally past this changes the set, set-seconds
 constexpr double kSteerEdge = 0.08;  // a wish this near a set (a share of 45 degrees) is that set
 constexpr double kCurveView = 20;    // a pilot's curve held while the view is this near its, deg
+// `brinkkeys`: looked for within this of a harm node lower down (units); a key's step (units: a
+// fifth of a second at a run, the box past an edge by its half-width from 48 back);
+// the run looked along this long (s), no further than this (units), from this speed (units/s).
+constexpr float kBrinkNear = 192;
+constexpr float kBrinkStep = 64;
+constexpr float kBrinkRun_s = 0.25f;
+constexpr float kBrinkRunMost = 80;
+constexpr float kBrinkRunMin = 60;
 
 uint32_t bit(int a) { return 1u << static_cast<uint32_t>(a); }
 
@@ -81,6 +89,47 @@ double wrap(double deg) {
   return deg;
 }
 
+// `brinkkeys`: the movement keys of `want` near lava or slime (keyboard.hpp `KeysNear`): one whose
+// step under the view ends over it let go of; a run carried over it within a quarter second
+// answered with the keys against the run (the set nearest its back).
+uint32_t keys_off_brink(const KeysNear& n, const sh::MoveCmd& cmd, sh::Vec3f velocity,
+                        uint32_t want) {
+  if (n.world == nullptr || n.g == nullptr || !sh::nav_harm_near(*n.g, n.origin, kBrinkNear))
+    return want;
+  const double yaw = cmd.angles.y * (ge::core::kPi / 180.0);
+  const float fx = static_cast<float>(ge::core::libm::cos(yaw)),
+              fy = static_cast<float>(ge::core::libm::sin(yaw));
+  const sh::Vec3f o = n.origin;
+  const auto falls = [&](float dx, float dy, float d) {
+    return sh::nav_falls_in_harm(*n.world, o, {o.x + dx * d, o.y + dy * d, o.z});
+  };
+  // Each key's step: forward along the view, right a quarter turn clockwise of it.
+  const struct {
+    int act;
+    float dx, dy;
+  } steps[4] = {{kFwd, fx, fy}, {kBack, -fx, -fy}, {kRight, fy, -fx}, {kLeft, -fy, fx}};
+  for (const auto& s : steps)
+    if ((want & bit(s.act)) != 0 && falls(s.dx, s.dy, kBrinkStep)) want &= ~bit(s.act);
+  const float speed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+  if (speed > kBrinkRunMin) {
+    const float ahead = speed * kBrinkRun_s < kBrinkRunMost ? speed * kBrinkRun_s : kBrinkRunMost;
+    const float vx = velocity.x / speed, vy = velocity.y / speed;
+    if (falls(vx, vy, ahead)) {
+      // The back of the run under the view: its set (0 forward, clockwise by 45 degrees).
+      const float bf = -(vx * fx + vy * fy), bs = -(vx * fy - vy * fx);
+      double ang = ge::core::libm::atan2(bs, bf) * (180.0 / ge::core::kPi);
+      if (ang < 0) ang += 360;
+      const int set = static_cast<int>(std::floor(ang / 45 + 0.5)) % 8;
+      want &= ~(bit(kFwd) | bit(kBack) | bit(kLeft) | bit(kRight));
+      if (set == 7 || set == 0 || set == 1) want |= bit(kFwd);
+      if (set >= 1 && set <= 3) want |= bit(kRight);
+      if (set >= 3 && set <= 5) want |= bit(kBack);
+      if (set >= 5 && set <= 7) want |= bit(kLeft);
+    }
+  }
+  return want;
+}
+
 }  // namespace
 
 void key_hand_init(KeyHand& k, uint8_t moves, uint32_t seed) {
@@ -94,7 +143,7 @@ void fighter_keyboard_init(Fighter& f, uint8_t moves, uint32_t seed) {
 }
 
 void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool onground,
-                      bool brinked) {
+                      bool brinked, sh::Vec3f origin) {
   const sh::Pilot& p = f.bot.pilot.pilot;
   int8_t curve = sh::kNoCurveKeys;
   // The pilot's curve, while the command is still the pilot's: a hop's (no aim takes the view in
@@ -102,11 +151,12 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
   if (p.curve_keys != sh::kNoCurveKeys && p.mode == sh::PilotMode::hop && !brinked &&
       std::fabs(wrap(static_cast<double>(cmd.angles.y) - p.yaw)) < kCurveView)
     curve = p.curve_keys;
-  press_keys(f.keys, f.features, cmd, velocity, onground, curve);
+  const KeysNear near{f.bot.pilot.world, p.g, origin};
+  press_keys(f.keys, f.features, cmd, velocity, onground, curve, &near);
 }
 
 void press_keys(KeyHand& keys, const sh::Features& features, sh::MoveCmd& cmd, sh::Vec3f velocity,
-                bool onground, int8_t curve) {
+                bool onground, int8_t curve, const KeysNear* near) {
   // The wish's key set: 0 forward, clockwise by 45 degrees (side positive is right).
   const double fw = cmd.forward, sd = cmd.side;
   keys.wish_forward = cmd.forward;
@@ -189,6 +239,7 @@ void press_keys(KeyHand& keys, const sh::Features& features, sh::MoveCmd& cmd, s
   if (set >= 1 && set <= 3) want |= bit(kRight);
   if (set >= 3 && set <= 5) want |= bit(kBack);
   if (set >= 5 && set <= 7) want |= bit(kLeft);
+  if (near != nullptr && features[sh::Feature::brinkkeys]) want = keys_off_brink(*near, cmd, velocity, want);
   // A JUMP ASKED FOR is pressed (`jumpkey`): wanted until its key goes down (`kJumpLatch_s` at
   // most), not only on the commands that ask (a pilot lets go between two asks, and a press
   // cancelled before the finger lands, ai/keys.hpp, never landed a jump under a novice's hand).

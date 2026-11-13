@@ -830,7 +830,7 @@ namespace {
 // Whether the player's box swept from `p` to `to` (stopped by a wall; a stair's step climbed: the
 // sweep tried a step and two higher too, the furthest kept), then dropped to the floor (400 units
 // at most), stands in lava or slime.
-bool side_falls_in(const MoveWorld& w, Vec3f p, Vec3f to) {
+bool side_falls_in_(const MoveWorld& w, Vec3f p, Vec3f to) {
   HullTrace go;
   go.fraction = -1;
   for (const float up : {0.f, kStepHeight, 2 * kStepHeight}) {
@@ -847,6 +847,10 @@ bool side_falls_in(const MoveWorld& w, Vec3f p, Vec3f to) {
 }
 
 }  // namespace
+
+bool nav_falls_in_harm(const MoveWorld& world, Vec3f p, Vec3f to) {
+  return side_falls_in_(world, p, to);
+}
 
 int64_t nav_mark_side_harm(NavGraph& g, const MoveWorld& world, float side, float near) {
   if (g.harm.size() != g.nodes.size()) return 0;
@@ -870,7 +874,7 @@ int64_t nav_mark_side_harm(NavGraph& g, const MoveWorld& world, float side, floa
         const Vec3f p{A.x + (B.x - A.x) * f, A.y + (B.y - A.y) * f,
                       A.z + (B.z - A.z) * f + kStepHeight};
         for (const float s : {side, -side})
-          if (!l.brink_side && side_falls_in(world, p, {p.x + rx * s, p.y + ry * s, p.z}))
+          if (!l.brink_side && side_falls_in_(world, p, {p.x + rx * s, p.y + ry * s, p.z}))
             l.brink_side = true;
       }
       if (l.brink_side) marked++;

@@ -134,6 +134,9 @@ struct PilotSettings {
   // `fallseen`: the walk foreseen (`ahead`) counts a flight that leaves the floor over lava or
   // slime as the worst way (look_ahead.hpp `WalkStart::harm`).
   bool walk_falls = false;
+  // `liplook`: within reach of lava or slime the walk aims this long ahead at its speed (at
+  // least `look`), s; 0: `look` always.
+  float lip_look_s = 0;
   // `curvekeys`: the keys are a keyboard's (a caller's, held on `curve_keys`): the run to a gap's
   // lip rolled out as keys, forward and the side key full at once a command late, not through the
   // hands' slew of the side axis.

@@ -76,7 +76,7 @@ RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sh::PilotHan
 RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f from, sh::Vec3f to,
                     sh::PilotHands hands, uint32_t seed, const sh::PilotSettings& set,
                     float limit_s, sh::Vec3f start_velocity, const sh::Features* keys,
-                    uint8_t moves) {
+                    uint8_t moves, float view_lag_s) {
   RunResult r;
   const int32_t a = sh::nav_nearest(g, from), b = sh::nav_nearest(g, to);
   if (a < 0 || b < 0) return r;
@@ -122,11 +122,34 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
   bool grenade = false;
   KeyHand hand;
   if (keys != nullptr) key_hand_init(hand, moves, seed);
+  double view = 0;
+  bool view_set = false;
   for (int i = 0; i < most; i++) {
     sh::MoveCmd cmd = sh::pilot_step(p, s, kPilotMsec);
-    if (keys != nullptr)
+    if (view_lag_s > 0) {
+      // The view eased toward the pilot's heading; the wish (forward and side under the
+      // heading) turned under the view.
+      const double want = cmd.angles.y;
+      if (!view_set) view = want, view_set = true;
+      double d = want - view;
+      while (d > 180) d -= 360;
+      while (d < -180) d += 360;
+      const double k = static_cast<double>(kPilotMsec) * 0.001 / static_cast<double>(view_lag_s);
+      view += d * (k < 1 ? k : 1);
+      const double off = (want - view) * (ge::core::kPi / 180.0);
+      const double c = ge::core::libm::cos(off), sn = ge::core::libm::sin(off);
+      const double f = cmd.forward, sd = cmd.side;
+      // Forward along `want` is (cos off, sin off) under the view (`off` to the left of it);
+      // right is (sin off, -cos off).
+      cmd.forward = sh::quantize_axis(static_cast<float>(f * c + sd * sn));
+      cmd.side = sh::quantize_axis(static_cast<float>(-f * sn + sd * c));
+      cmd.angles.y = static_cast<float>(view);
+    }
+    if (keys != nullptr) {
+      const KeysNear near{&world, &g, st.origin};
       press_keys(hand, *keys, cmd, st.velocity, st.ground >= 0,
-                 p.mode == sh::PilotMode::hop ? p.curve_keys : sh::kNoCurveKeys);
+                 p.mode == sh::PilotMode::hop ? p.curve_keys : sh::kNoCurveKeys, &near);
+    }
     if (p.stats.plans != planned) {
       planned = p.stats.plans;
       r.plans.push_back(p.route);

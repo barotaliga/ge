@@ -210,6 +210,9 @@ bool is_barred(const Pilot& p, int32_t m) {
 
 // A lip over lava or slime to this pilot: a `brink` link, or with `sidebrink` one whose side step
 // falls in (`NavLink::brink_side`).
+// `liplook`: the walk's look grows with the run within this of a harm node lower down, units.
+constexpr float kLipNear = 192;
+
 bool lip(const Pilot& p, const NavLink& l) { return l.brink || (p.set.brink_side && l.brink_side); }
 
 // The end of a strafe stretch from route[k]: the furthest route index j whose links from k are
@@ -579,8 +582,6 @@ Vec3f pursue(const Pilot& p, Vec3f at, float look) {
     if (p.set.brink_line && (lip(p, *l) || lip(p, *l2))) return b;  // a lip's corner: turned at
   }
 }
-
-Vec3f pursue(const Pilot& p, Vec3f at) { return pursue(p, at, p.set.look); }
 
 // A chain's pickup within `look` of `at`, or its node passed, and the box's way to it clear (the
 // map's solids, when the sense has them): the aim is the item itself (a walk or a hop runs through
@@ -2278,7 +2279,14 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       if (p.mode == PilotMode::wait || p.mode == PilotMode::run_up || p.mode == PilotMode::jump ||
           p.mode == PilotMode::swim)
         p.mode = PilotMode::walk;
-      const Vec3f aim = via_aim(p, s, ahead, p.set.look, pursue(p, ahead));
+      // (`liplook`) Near lava or slime the look runs `lip_look_s` ahead at the run's speed: a
+      // corner by the edge turned early, inside it, not overshot over the edge.
+      float look = p.set.look;
+      if (p.set.lip_look_s > 0 && nav_harm_near(*p.g, s.origin, kLipNear)) {
+        const float run = across({}, s.velocity) * p.set.lip_look_s;
+        if (run > look) look = run;
+      }
+      const Vec3f aim = via_aim(p, s, ahead, look, pursue(p, ahead, look));
       target = lane_target(p, dt, t, aim);
       const bool foreseeing = p.set.ahead && s.world != nullptr && s.onground;
       if (foreseeing) target = aim_clear(p, *s.world, s.origin, ahead, aim, target);
