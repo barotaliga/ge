@@ -753,7 +753,7 @@ void run(gl::Lab& lab) {
              "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
              "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
              "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
-             "\twater\tliquid\tbrink\ttrap\n";
+             "\twater\tliquid\tbrink\ttrap\tmate0\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -1031,7 +1031,8 @@ void run(gl::Lab& lab) {
     bool away = false;
     for (const auto& ft : f.floor_traps) away = away || ft.away;
     out << '\t' << e.waterlevel << '\t' << liquid << '\t' << f.brink_note << '\t' << f.trap_press
-        << (away ? "/1" : "/0") << '\n';
+        << (away ? "/1" : "/0") << '\t'
+        << ((f.bot.senses.friends & 1u) != 0 || f.slot == 0 ? 1 : 0) << '\n';
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
@@ -1696,7 +1697,7 @@ void run(gl::Lab& lab) {
     for (int side = 0; side < 2 && differ; side++) {
       double dmg = 0, react = 0, s_fired = 0, s_hit = 0, s_speed = 0;
       int64_t n = 0, reactions = 0, s_pre = 0, view_n = 0, in_view = 0, seen = 0, checks = 0,
-              off = 0, shots = 0, deaths = 0, s_wet = 0, s_alive = 0;
+              off = 0, shots = 0, deaths = 0, lava = 0, s_wet = 0, s_alive = 0;
       for (const cn::TeamPlayer& p : r.players) {
         if (p.team != side) continue;
         n++;
@@ -1711,6 +1712,7 @@ void run(gl::Lab& lab) {
         off += p.trigger_off;
         shots += p.shots;
         deaths += p.deaths;
+        lava += p.lava_deaths;
         s_wet += p.wet;
         for (int m = 0; m < 4; m++) s_alive += p.mode_commands[m];
         s_speed += p.speed_sum;
@@ -1722,6 +1724,7 @@ void run(gl::Lab& lab) {
       const auto ratio = [](double a, double b) { return b > 0 ? a / b : 0; };
       const std::string k = std::string("team.side.") + (side == 0 ? "red." : "blue.");
       lab.metric(k + "deaths", static_cast<double>(deaths), "count");
+      lab.metric(k + "deaths-in-lava", static_cast<double>(lava), "count");
       lab.metric(k + "speed-avg", ratio(s_speed, static_cast<double>(s_alive)), "units/s");
       lab.metric(k + "wet", ratio(static_cast<double>(s_wet), static_cast<double>(s_alive)),
                  "share");

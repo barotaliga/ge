@@ -313,6 +313,8 @@ struct Fighter {
   std::vector<FloorTrap> floor_traps;  // the map's floor traps (floor_trap.hpp)
   int32_t trap_press = -1;             // the trap whose button it presses now, or -1
   double trap_until = -1e9;            // and until when
+  double trap_told = -1e9;             // when a mate's `trap` call was read (floor_trap.hpp)
+  int32_t trap_stay = -1;              // the trap it fired: held at its button while it is away
   Mind mind;         // what it believes of its team, its claim, its calls (mind.hpp)
   Escort escort;     // a co-op companion's own state (companion.hpp; leader -1: none)
   KeyHand keys;      // the hand on the keys (feature `keys`, keyboard.hpp)

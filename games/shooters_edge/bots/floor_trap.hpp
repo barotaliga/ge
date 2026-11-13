@@ -11,13 +11,18 @@
 //   off walls); a walk between them does. Not pressing, the keys keep the box `kTrapKeep` clear
 //   of it: the wish's share toward it let go, a run into it braked.
 // - THE PRESS (`floor_trap_think`): an enemy seen or heard within `kTrapFresh_s` over the floor
-//   (inside its box, his feet within `kTrapAbove` of its top), no mate over it, the floor at rest,
-//   this fighter within `kTrapReach` of the button and the straight way to it off the floor: it
+//   (inside its box, his feet within `kTrapAbove` of its top), no mate over it as far as it knows
+//   (each mate's last place seen, sent or not, and a team line's lately), the floor at rest, this
+//   fighter on the button's level within `kTrapReach` of it, the straight way to it off the floor: it
 //   goes to the button's node and walks into the button (the keys toward it under the view, the
 //   aim kept), for at most `kTrapPress_s`.
-// - THE STAY: while the floor is away its nodes are shut (`watch_bridges`), so no route crosses
-//   the gap: the presser holds where it is unless a rocket jump (when it can afford one) leads out.
-//   The teleporters that land on the floor are shut with it (`floor_trap_shut`), for every bot.
+// - THE STAY: the presser's goal is the button's node until the floor is back (`trap_stay`), and
+//   while the floor is away its nodes are shut (`watch_bridges`), so no route crosses the gap.
+//   The teleporters that land on the floor are shut with it (`floor_trap_shut`), for every bot,
+//   and the keys keep `kTeleKeep` off where they start (a fight's footwork steps in otherwise).
+// - THE CALL: a floor known only by sight is believed there by a mate who has not seen it go (he
+//   walks or teleports in). The presser says `trap` (talk.hpp) as it goes; a mate who reads it
+//   takes the floor, and its teleporters, as away for `kTrapTold_s` (`Fighter::trap_told`).
 //
 // ge:summary The floor trap: a floor over lava a touch button slides away, never brushed by accident,
 // ge:summary pressed only when an enemy stands on it, the presser staying put till it returns
@@ -40,6 +45,10 @@ constexpr float kTrapReach = 250;     // the fighter this near the button (acros
 constexpr double kTrapPress_s = 3;    // a press given up after this long
 constexpr float kTrapKeep = 24;       // not pressing: the box kept this clear of the button, units
 constexpr float kTrapKeep_s = 0.2f;   // and a run braked that would close the rest in this long, s
+constexpr double kTrapTold_s = 4;     // a mate's `trap` call read: the floor taken as away this long
+constexpr double kTrapMateFresh_s = 5;  // a mate a team line put over the floor this lately
+constexpr float kTrapLevel = 64;        // the presser's feet within this of the button's bottom
+constexpr float kTeleKeep = 48;  // the floor away: kept this far off its teleporters' link starts
 
 // The map's floor traps off its buttons and bridges (after `buttons_init` and the bridges).
 void floor_traps_init(Fighter& f, const ge::shooter::NavGraph& g, const server::RulesCommon& s);

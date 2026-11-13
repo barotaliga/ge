@@ -12,6 +12,8 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "shooter/features.hpp"
+#include "shooters_edge/bots/mind.hpp"
+#include "shooters_edge/bots/talk.hpp"
 
 namespace shooters_edge::bots {
 
@@ -119,11 +121,20 @@ void floor_trap_think(Fighter& f, const server::RulesCommon& s, int me, double t
     tr.away = away;
   }
   if (!f.features[sh::Feature::floortrap] || f.floor_traps.empty()) return;
+  if (f.trap_stay >= 0 && !floor_away(f, f.floor_traps[static_cast<size_t>(f.trap_stay)])) {
+    f.trap_stay = -1;  // the floor back: on again
+    f.goal_node = -1;
+  }
   if (f.trap_press >= 0) {
     const FloorTrap& tr = f.floor_traps[static_cast<size_t>(f.trap_press)];
     if (floor_away(f, tr)) {
       f.stats.trap_fired++;  // done: the floor is gone, the stay is the shut floor's
+      Said call;
+      call.kind = SayKind::trap;
+      mind_say(f, t, call, s.world.entities[static_cast<size_t>(me)].origin);
+      const int32_t fired = f.trap_press;
       end_press(f);
+      f.trap_stay = fired;  // stays at the button till the floor is back
     } else if (t >= f.trap_until) {
       end_press(f);
     }
@@ -135,7 +146,9 @@ void floor_trap_think(Fighter& f, const server::RulesCommon& s, int me, double t
     if (floor_away(f, tr)) continue;
     const ButtonSpot& bs = f.button_spots[static_cast<size_t>(tr.button)];
     const float dx = bs.at.x - self.x, dy = bs.at.y - self.y;
-    if (dx * dx + dy * dy > kTrapReach * kTrapReach || over_floor(tr, self)) continue;
+    if (dx * dx + dy * dy > kTrapReach * kTrapReach || over_floor(tr, self) ||
+        std::fabs(self.z + sh::kPlayerMins.z - tr.blo.z) > kTrapLevel)
+      continue;
     // The way to it straight, off the floor (from the button's side of it, not across it).
     bool across_floor = false;
     for (int q = 1; q <= 8 && !across_floor; q++) {
@@ -154,13 +167,16 @@ void floor_trap_think(Fighter& f, const server::RulesCommon& s, int me, double t
                                        static_cast<float>(m.z)});
     }
     if (!enemy) continue;
-    // No mate over it (a teammate's place is known to his team).
+    // No mate over it as far as it knows: where it last saw each (a mate out of its sight is not
+    // sent: his last place stands), and where a team line put him lately.
     bool mate = false;
     for (int slot = 0; slot < s.sv.set.maxclients && slot < 32; slot++) {
       if (((f.bot.senses.friends >> slot) & 1u) == 0 || slot + 1 == me) continue;
       const server::WorldEntity& e = s.world.entities[static_cast<size_t>(slot) + 1];
-      mate = mate || (!e.free && over_floor(tr, e.origin));
+      mate = mate || ((e.origin.x != 0 || e.origin.y != 0) && over_floor(tr, e.origin));
     }
+    for (const Mate& m : f.mind.mates)
+      mate = mate || (t - m.at_t < kTrapMateFresh_s && over_floor(tr, m.at));
     if (mate) continue;
     f.trap_press = static_cast<int32_t>(k);
     f.trap_until = t + kTrapPress_s;
@@ -205,6 +221,26 @@ void floor_trap_cmd(Fighter& f, const server::RulesCommon& s, int me, sh::MoveCm
     if (along > 0) wx -= along * ux, wy -= along * uy, changed = true;
     const float run = self.velocity.x * ux + self.velocity.y * uy;
     if (run > 0 && (d - 16) < run * kTrapKeep_s) wx -= 320 * ux, wy -= 320 * uy, changed = true;
+  }
+  // While a floor is away (as it believes): kept off the teleporters landing on it, as off the
+  // button (a fight's footwork in dm2's yellow-armour alcoves stepped into the one at its back:
+  // the route has it shut, the feet did not). A teleporter's trigger is where its link starts.
+  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  for (const FloorTrap& tr : f.floor_traps) {
+    if (!floor_away(f, tr)) continue;
+    for (const sh::NavExtraLink& l : tr.teleports) {
+      const sh::Vec3f p = g.nodes[static_cast<size_t>(l.from)].origin;
+      if (std::fabs(p.z - o.z) > 48) continue;
+      float ux = p.x - o.x, uy = p.y - o.y;
+      const float d = std::sqrt(ux * ux + uy * uy);
+      if (d < 1 || d > kTeleKeep + 64) continue;
+      ux /= d, uy /= d;
+      const float along = wx * ux + wy * uy;
+      if (along > 0 && d < kTeleKeep + 32) wx -= along * ux, wy -= along * uy, changed = true;
+      const float run = self.velocity.x * ux + self.velocity.y * uy;
+      if (run > 0 && d - kTeleKeep < run * kTrapKeep_s)
+        wx -= 320 * ux, wy -= 320 * uy, changed = true;
+    }
   }
   if (!changed) return;
   cmd.forward = sh::quantize_axis(wx * fx + wy * fy);

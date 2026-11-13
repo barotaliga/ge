@@ -120,6 +120,7 @@ struct TeamPlayer {
   sh::Features features;  // and the behaviours he had (shooter/features.hpp)
   float frags = 0;
   int deaths = 0;
+  int lava_deaths = 0;  // of them in lava or slime
   int64_t shots = 0, pickups = 0, switches = 0, packs = 0, held_fire = 0;
   int64_t reactions = 0, pre_aimed = 0;  // sightings reacted to, and pre-aimed (shooter/bot.hpp)
   int64_t strokes = 0, lifts = 0;        // the mouse hand's strokes and lifts (ai/mouse.hpp)
