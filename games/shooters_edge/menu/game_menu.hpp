@@ -39,7 +39,6 @@
 // games and their installs (`games().set_lister`); a game picked comes back by `take_game`, its
 // install to open or the folder chooser to show, and a folder that did not load comes back to its
 // footer through `load_refused`. In the classic look it is drawn in the game's own glyph sheet.
-//
 // THE SOUNDS: each frame's presses leave one cue (ui/menu.hpp's `MenuCue`) the window plays from
 // the game's own recordings (client/menu_sound.hpp): the menu opened (Escape, `togglemenu`) or a
 // page or item entered is `enter`; the focus moved, or a page of the screenshots, servers, demos
@@ -48,11 +47,8 @@
 //
 // The commands it registers: `togglemenu` (what ESCAPE does), `menu_main`, `menu_options`,
 // `menu_quit`, `menu_screenshots`, `menu_servers`, `menu_demos`, `menu_games` (the menu opened on
-// that page);
-// the cvars
-// `menu_look` (auto, classic, modern) and `ce_auto` (1: a game loaded is enhanced in the background
-// at once). The game keeps running under the menu (the listen server's frames go on); the player's
-// keys and mouse go to the menu while it is open.
+// that page); the cvars `menu_look` (auto, classic, modern) and `ce_auto` (1: a game loaded is
+// enhanced in the background at once). The game runs on under the menu; the keys go to it.
 //
 // ge:summary The main menu over the game: ESCAPE, the presses, the classic or modern look, enhance
 // ge:keywords menu main-menu escape togglemenu menu_look classic modern look overlay pointer
@@ -60,8 +56,7 @@
 // ge:keywords waiting-key rebind customize-controls load-game take_load enhance_game ce_auto
 // ge:keywords background-enhance take_ended screenshots gallery menu_screenshots set_screenshots
 // ge:keywords server-browser join-a-game menu_servers servers demos menu_demos take_demo
-// ge:keywords select-game menu_games take_game games-page
-// ge:keywords menu-sound menu-cue take_cue click
+// ge:keywords select-game menu_games take_game games-page menu-sound menu-cue take_cue click
 // ge:skill ui console classicenhance
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
