@@ -113,6 +113,12 @@ bool add_archive(SearchPath* sp, const std::string& name, std::vector<uint8_t> b
 bool add_directory(SearchPath* sp, const std::string& dir, const std::string& game,
                    std::string* error);
 
+// Mounts one file written to disk after the mount (`<dir>/<name>`, a download kept in a game's
+// folder) over everything mounted: its own source, so a listed directory need not be walked
+// again. False with the reason when it is not a file there.
+bool add_file(SearchPath* sp, const std::string& dir, const std::string& name,
+              const std::string& game, std::string* error);
+
 // The file that wins `path`, or nullptr. Never allocates.
 const FileRef* find(const SearchPath& sp, std::string_view path);
 // The file's bytes; false with the reason.

@@ -113,8 +113,10 @@ TEST(the_sequel_full_game_is_told_by_its_first_pack) {
 }
 
 TEST(the_folder_the_game_was_placed_in_is_the_one_holding_its_app) {
-  CHECK(cl::placed_folder("/games/nquake/Shooter's Edge.app/Contents/MacOS/") == "/games/nquake");
-  CHECK(cl::placed_folder("/games/nquake/") == "/games/nquake");
+  // In the platform's own separators (a backslash on Windows).
+  const fs::path folder = fs::path("/games/nquake").make_preferred();
+  CHECK(fs::path(cl::placed_folder("/games/nquake/Shooter's Edge.app/Contents/MacOS/")) == folder);
+  CHECK(fs::path(cl::placed_folder("/games/nquake/")) == folder);
   CHECK(cl::placed_folder("").empty());
 }
 
