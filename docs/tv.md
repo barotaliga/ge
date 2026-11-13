@@ -333,6 +333,18 @@ asks for it; Shooter's Edge's is the classic `pingstatus`). Hosts are matched wi
 so a forwarder beside a server is that host, and ties go to the fewer hops. `<game>_cli route
 <address>` answers the route and the chain to give the game.
 
+**A fixed route** (`engine/forward/fixed.hpp`) is for a client that cannot name a route at all (an
+unmodified client of the sequel knows only a server's address). The forward's port sends every
+client to one destination: the player connects to the forward as if it were the server, and the
+forward gives the client its own socket upstream and copies both ways. A dialled route still works
+beside it on the same port. Since the forward cannot read the game's handshake, it takes nothing on
+trust: until a client has sent 3 datagrams, at most 4 bytes go back for each byte it sent (a
+challenge for a challenge ask fits; a level's signon does not), so a spoofed address gets no more
+from the forward than it gets by asking the server directly. `shooters_edge_hops forward
+--server=<host:port>` runs one. An unmodified client of the sequel, black-box on the full game's
+q2dm1, plays through it to our `shooters_edge_sequel_server` and to an unmodified server alike,
+proven on its third datagram, with no answer held back.
+
 ## Proxy
 
 `engine/proxy` (`proxy.hpp`, `trial.hpp`). Two hops that understand the slow link between them:
