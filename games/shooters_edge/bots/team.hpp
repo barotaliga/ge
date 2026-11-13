@@ -44,6 +44,8 @@ struct TeamStats {
   int64_t retakes = 0;    // goes to take a lost area back
   int64_t pushes = 0;     // pushes on the base called (`attack`), and joined
   int64_t joins = 0;
+  int64_t fetches = 0, fetched = 0;  // trips as the team's taker for its armour (`fetch`), and taken
+  int64_t fetch_end[5] = {};  // how the others ended: a role, believed gone, the time, death, retreat
   int64_t spam_shots = 0;              // rockets fired at a spot enemies come in by
   int64_t role_commands[kRoles] = {};  // members' commands in each role
 };
