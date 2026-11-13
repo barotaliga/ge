@@ -598,7 +598,9 @@ an eye in the air under its floor its underside: the shared geometry at the floo
 top's own waves, laid past the top's box (a pool's bottom may be wider than its top) and kept where
 the opaque map does not stand at or in front of the floor's plane (the ceiling round the hole is
 flush with the water's bottom, so it is drawn with no depth test and the undisturbed plane's
-distance is weighed against the scene's). It is lit as the top is, turned over: the air's Fresnel
+distance is weighed against the scene's; with no depth test, the coarser rings' fragments under a
+finer ring's footprint, lifted out of the way for the top's depth test, are dropped, or they show
+through walls the plane test passes). It is lit as the top is, turned over: the air's Fresnel
 mirrors what lies under it (the game's planar mirror in the floor's plane, else marched), and the
 rest is the view up through the water: the ray bent in by Snell's law, carried to the top, bent out
 through the top's waves there, the world over the pool read along it (the view up from the top),

@@ -179,6 +179,26 @@ std::vector<MenuEvent> Menu::input(const MenuInput& in, const std::vector<Rect>&
   return out;
 }
 
+MenuCue menu_cue(const std::vector<MenuEvent>& events, bool moved) {
+  MenuCue cue = moved ? MenuCue::move : MenuCue::none;
+  for (const MenuEvent& e : events) {
+    switch (e.kind) {
+      case EventKind::opened:
+      case EventKind::activated:
+        cue = louder(cue, MenuCue::enter);
+        break;
+      case EventKind::changed:
+        cue = louder(cue, MenuCue::change);
+        break;
+      case EventKind::closed:
+      case EventKind::back_at_root:
+        cue = louder(cue, MenuCue::back);
+        break;
+    }
+  }
+  return cue;
+}
+
 std::string item_value(const Item& item, std::string_view on, std::string_view off) {
   switch (item.kind) {
     case ItemKind::toggle:

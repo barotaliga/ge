@@ -74,6 +74,9 @@ struct MapNav {
   // A version 38 map's: the map the world's solids trace and the tracer they share (single
   // threaded: the nav and the bots that read it trace on one thread).
   std::shared_ptr<const ge::brush::Map> brushes;
+  // The move the nav's walks and jumps are planned with: the first game's unless its caller sets
+  // another before `build_map_nav` (the sequel's: `sequel_nav_move`).
+  ge::shooter::MoveSettings move;
   std::unique_ptr<ge::brush::BrushTracer> tracer;
   ge::shooter::MoveWorld world;
   ge::shooter::NavGraph graph;
@@ -116,5 +119,10 @@ std::vector<ge::shooter::NavMover> map_movers(const server::RulesCommon& s,
 // False with `error` when no floor holds a node.
 bool build_map_nav(const server::RulesCommon& s, const server::MapSpec& spec,
                    const char* start_class, MapNav& out, std::string& error);
+// The sequel's ground as the nav's move reads it: its top speed (300) and friction (6); its
+// stop speed, acceleration and gravity are the first game's already. Its air steering (a plain
+// acceleration of 1, no cap) is not the first game's: the nav still plans a jump's flight with the
+// first game's (open, M18v8).
+ge::shooter::MoveSettings sequel_nav_move();
 
 }  // namespace shooters_edge::bots
