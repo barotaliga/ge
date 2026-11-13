@@ -11,7 +11,8 @@
 // drawn as the player sees it. Our own client joins too (the window's `Remote`): it holds the
 // ticket the game CLI's `account signin` left from the community's master, reads `*accountkey` in
 // the server info, trades the ticket for a code on its own socket and logs itself in, typing
-// nothing.
+// nothing. A guest on the community's server under a registered name is renamed once the master
+// answers that an account holds it.
 //
 // ge:summary Lab: classic clients logging in on the dedicated server, own master and remote
 // ge:keywords lab se-login login sv_login sv_accountmaster login-code two-step-login auth-key
@@ -195,6 +196,7 @@ Session run_session(uint32_t seed, double seconds, double login_time_s) {
       player("two-step", "nic", 1, 1.0, {{4.0, "login niclas"}, {6.0, "say " + niclas_master}}),
       player("spent-code", "spy", 0, 2.0,
              {{8.0, "say login niclas " + niclas_own}, {9.0, "say hello"}}),
+      player("guest-elsewhere", "N1clas", 1, 0.5, {{5.0, "say is this name taken?"}}),
       player("our-client", "window", 1, 0.0, {{8.0, "say hello from the window"}}),
   };
   r.players.back().ours = true;
@@ -399,6 +401,12 @@ void run(gl::Lab& lab) {
        "on the wire types it after him: a code works once, so it logs nobody in. He cannot chat "
        "either, and is dropped when his time is up.",
        "the refusal, the chat held, the drop"},
+      {"guest-elsewhere", "A REGISTERED NAME ON A COMMUNITY'S SERVER",
+       "A guest joins the community's server as N1clas. The server keeps no accounts of its own, "
+       "so it lets the name go while it asks the master whether an account holds it; the master "
+       "says Niclas does, and the guest is renamed and told why. The answer is kept: the name is "
+       "asked once while the server runs.",
+       "the name refused soon after joining, the chat held, the drop"},
       {"our-client", "OUR OWN CLIENT LOGS ITSELF IN",
        "Our own client joins the community's server holding the ticket the game CLI's account "
        "signin left from the same master. It reads the master's key in the server info, trades "

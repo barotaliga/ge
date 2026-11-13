@@ -30,6 +30,9 @@
 //   recover  name, recovery code, password  -> account, a new recovery code
 //   ticket_code  a ticket this service signed  -> account, a login code (our own client's: it
 //            holds a ticket, never the password, and the classic wire then carries only the code)
+//   name     a name's key, folded by the asking game's rules
+//                                           -> the account that reserves it (0: none), asked by a
+//            game server whose master is elsewhere, to keep a registered name from a guest
 // The throttle's address is the asker's; for `login` it is the server's and the player's
 // together, so one player's wrong codes do not hold the whole server's.
 //
@@ -72,7 +75,8 @@ enum class Op : uint8_t {
   code = 3,
   login = 4,
   recover = 5,
-  ticket_code = 6
+  ticket_code = 6,
+  name = 7
 };
 const char* op_name(Op op);
 
@@ -89,7 +93,7 @@ struct ServiceConfig {
 struct ServiceStats {
   uint64_t key_asks = 0, asks = 0, answers = 0, resent = 0;
   uint64_t refused = 0;  // short, unknown, not padded, or not sealed to our key
-  uint64_t by_op[7] = {};
+  uint64_t by_op[8] = {};
   uint64_t tickets = 0;
 };
 
