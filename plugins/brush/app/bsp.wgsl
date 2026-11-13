@@ -79,6 +79,8 @@ struct Bsp {
   capsules: array<vec4f, 8>,
   // the moving casters along the sun: their atlas's last row's first tile (info.z 1: drawn)
   sun_caster: Job,
+  // the map's sky box: x on (1), yz half a texel in a face's own 0..1
+  sky_box: vec4f,
 };
 
 // A shadow map's camera: an origin, three axes (z the way it looks) and its reach: a point
@@ -139,6 +141,9 @@ struct Mover {
 // The moving casters' cubes (bsp_draw.hpp's kCasterLights of them): one atlas in layer 0, a light's
 // six faces a row, each face as the world's.
 @group(1) @binding(16) var caster_cubes: texture_depth_2d_array;
+// The map's sky box: six faces in an atlas three wide and two high (draw_data.hpp's
+// Scene::sky_box), or a 1 x 1 stand-in unread.
+@group(1) @binding(17) var sky_box: texture_2d<f32>;
 // bsp_draw.hpp's kGridX, kGridY, kGridZ and kGridCells
 const kGridDims = vec3f(32.0, 16.0, 32.0);
 const kGridCells = 16384u;
@@ -146,7 +151,7 @@ const kGridCells = 16384u;
 // The grid's cell `p` lies in, -1 outside it or with no grid.
 fn grid_cell(p: vec3f) -> i32 {
   let c = floor((p - bsp.grid.xyz) / bsp.grid.w);
-  if (bsp.grid.w > 0.0 && all(c >= vec3f(0.0)) && all(c < kGridDims)) {
+  if (bsp.grid.w > 0.0 && all(c >= vec3f()) && all(c < kGridDims)) {
     return i32(c.x + kGridDims.x * (c.y + kGridDims.y * c.z));
   }
   return -1;
@@ -306,7 +311,7 @@ fn filtered(st: vec2f, rect: vec4f, dx: vec2f, dy: vec2f) -> vec4f {
   let k0 = u32(floor(lod));
   let k1 = min(k0 + 1u, top);
   let fr = lod - floor(lod);
-  var sum = vec4f(0.0);
+  var sum = vec4f();
   for (var i = 0; i < i32(taps); i++) {
     let q = st + major * ((f32(i) + 0.5) / taps - 0.5);
     var a = bilinear(q, rect, k0);
@@ -438,7 +443,7 @@ fn teleport(world: vec3f, n: vec3f, eye_dir: vec3f, t: f32) -> vec3f {
 // The dynamic lights on the lightmaps' light (the classic's and v2's lightmaps): each falls off
 // in a straight line from its middle to nothing at its radius, whichever way the face faces.
 fn dynamic_light(p: vec3f) -> vec3f {
-  var e = vec3f(0.0);
+  var e = vec3f();
   let count = u32(bsp.info.z);
   for (var i = 0u; i < count; i++) {
     let l = lights[i];
@@ -461,7 +466,7 @@ fn lightmap(lm: vec2f, styles: u32) -> vec3f {
   if (lm.x < 0.0) {
     return vec3f(1.0);
   }
-  var e = vec3f(0.0);
+  var e = vec3f();
   for (var k = 0u; k < 4u; k++) {
     let id = (styles >> (8u * k)) & 255u;
     if (id == 255u) {
@@ -506,6 +511,31 @@ fn relief_normal(ng: vec3f, st: vec2f, rect: vec4f, lod: f32, dx: vec2f, dy: vec
   }
   let grad = sign(det) * (hx * r1 + hy * r2);
   return normalize(abs(det) * ng - grad);
+}
+
+// THE MAP'S SKY BOX seen along `d` (engine axes, y up): the face of the axis `d` is most along,
+// read at the point `d` meets it. Each face, looked at along its axis D with its top edge toward U,
+// has its right edge toward cross(U, D), as an eye inside the box sees it. The faces in the atlas:
+// +x, -x, +y in the top row, -y, +z, -z in the bottom (draw_data.hpp's kSkyBoxLook and kSkyBoxUp).
+fn sky_box_at(d: vec3f) -> vec3f {
+  let a = abs(d);
+  var f = 4u;
+  var l = vec3f(0, 0, d.z);
+  var u = vec3f(0, 1, 0);
+  if (a.x >= max(a.y, a.z)) {
+    f = 0u;
+    l = vec3f(d.x, 0, 0);
+  } else if (a.y >= a.z) {
+    f = 2u;
+    l = vec3f(0, d.y, 0);
+    u = u.xzy;
+  }
+  let m = dot(l, vec3f(1));
+  f += u32(m < 0);
+  let i = bsp.sky_box.yz;
+  let st = clamp(vec2f(dot(d, cross(u, sign(l))), -dot(d, u)) / abs(m) * 0.5 + 0.5, i, 1 - i);
+  return textureSampleLevel(sky_box, light_sampler, (vec2f(vec2u(f % 3, f / 3)) + st) / vec2f(3, 2),
+                            0).rgb;
 }
 
 // The classic sky: a far layer and a near one over it (its texel 0 clear), scrolling.
@@ -780,7 +810,7 @@ fn ripples(xz: vec2f, t: f32) -> vec2f {
 fn weathered(p: vec3f, n: vec3f, albedo: vec3f, eye_dir: vec3f) -> Weathered {
   var w: Weathered;
   w.albedo = albedo;
-  w.sheen = vec3f(0.0);
+  w.sheen = vec3f();
   w.n = n;
   w.flash = 0.0;
   if (kLitOnly || bsp.weather.x < 0.5) {
@@ -850,7 +880,7 @@ struct FsOut {
 // carries its clip plane in the frame's sixth plane, all zero in the frame's own view: what lies
 // on its far side is dropped, and the sky's pixels keep an alpha of 0 for the reader to fill.
 fn second_view() -> bool {
-  return any(frame.planes[5] != vec4f(0.0));
+  return any(frame.planes[5] != vec4f());
 }
 
 // THE FOG IN AN AREA (render/fog.hpp; bsp_fog.hpp's volumes): under v2 every face but the sky's
@@ -879,8 +909,8 @@ fn fs_main(in: VsOut) -> FsOut {
 
 fn shade(in: VsOut) -> FsOut {
   var out: FsOut;
-  out.motion = vec4f(0.0);
-  out.mask = vec4f(0.0);
+  out.motion = vec4f();
+  out.mask = vec4f();
   let classic = !kLitOnly && bsp.info.x < 0.5;
   let t = bsp.info2.x;
   var st = in.st;
@@ -905,7 +935,10 @@ fn shade(in: VsOut) -> FsOut {
 
   if (in.kind == kSky) {
     if (classic || bsp.info4.y > 0.5) {
-      out.colour = vec4f(srgb_to_linear(classic_sky(eye_dir)) * white, 1.0);
+      // The map's own sky box when it has one (a linear read of an sRGB texture), else the sky
+      // texture's two scrolling layers.
+      out.colour = vec4f(mix(srgb_to_linear(classic_sky(eye_dir)), sky_box_at(eye_dir),
+                             bsp.sky_box.x) * white, 1);
     } else {
       out.mask = vec4f(1.0);
       out.colour = vec4f(0.0, 0.0, 0.0, 1.0);
@@ -1010,10 +1043,10 @@ fn shade(in: VsOut) -> FsOut {
   // the highlights' strength, 0 none (no relief)
   let shine = select(0.0, bsp.info4.w, relief);
   var e = vec3f(bsp.info.w) * cavity;
-  var phys = vec3f(0.0);
+  var phys = vec3f();
   // the highlights, the lightmaps' units
-  var es = vec3f(0.0);
-  var phys_s = vec3f(0.0);
+  var es = vec3f();
+  var phys_s = vec3f();
   // The light of the lights with a moving casters' cube: whole (the world's shadow alone) and as
   // the casters leave it, for their share of the room's own light.
   var cast_full = 0.0;

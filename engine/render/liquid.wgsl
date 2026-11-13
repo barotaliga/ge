@@ -275,12 +275,13 @@ fn air_plume(dir: vec3f, t0: f32, t1: f32, k: u32) -> f32 {
   return exp(-dot(q, q) / (r * r) - h / kStirScale) * across;
 }
 
-// The heat's weight along the ray: the layer (e-folding over a metre) and the plumes' heat, a
-// burning body's plume as hot as kStirHeat m of the layer at the melt.
-const kStirHeat = 4.0;
+// The heat's weight along the ray: the layer (e-folding over kHeatScale) and the plumes' heat, a
+// burning body's plume as hot as kStirHeat m of the layer at the melt (a body on fire is hotter
+// than the lake's air: its plume keeps its bend where the layer's is gentle).
+const kStirHeat = 8.0;
 const kStirSmoke = 1.2;  // 1/m: a plume's gas at its axis, at full smoke
 fn air_heat(dir: vec3f, t0: f32, t1: f32) -> f32 {
-  var w = air_layer(dir, t0, t1, 1.0);
+  var w = air_layer(dir, t0, t1, kHeatScale);
   let n = u32(body.fume.w);
   for (var k = 0u; k < n; k++) {
     w += kStirHeat * body.stirs[k].w * air_plume(dir, t0, t1, k);
@@ -746,7 +747,7 @@ fn fs_air(in: ShimmerOut) -> AirOut {
   let low = mix(t0, t1, select(0.3, 0.7, dir.y < 0.0));
   let w = frame.eye.xyz + dir * low;
   // The plumes once: their heat for the haze, their smoke for the gas.
-  var heat = air_layer(dir, t0, t1, 1.0);
+  var heat = air_layer(dir, t0, t1, kHeatScale);
   var tau_stirs = 0.0;
   let stirs = u32(body.fume.w);
   for (var k = 0u; k < stirs; k++) {

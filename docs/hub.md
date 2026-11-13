@@ -133,7 +133,7 @@ web build the engine has (G5): a viewer, never the game, and nothing in it plays
 | --- | --- |
 | The web viewer | A game's viewer target, `ge_add_web_viewer(<game>)`: its renderer, its demo reader and the TV client, nothing of input beyond the camera and the transport. Built by Emscripten, drawing through the browser's WebGPU with the same WGSL the native renderer uses (Dawn ships the browser's binding) |
 | Its stream | The TV node's stream carried over a WebSocket (the TV layer's browser carriage), the same messages a native spectator reads: the viewer says hello, turns the messages back into the replay file as it grows (`tv::Watch`) and unpacks each whole block into the recording as it comes (Shooter's Edge's `unpack_more`); it plays two blocks behind and holds its last frame when the next block is late. A demo is fetched by its hash from the archive, decoded in the viewer |
-| Its content | The level and the models from the hub's content folder, compressed, named by hash, cached by the browser for a year; the first visit's download kept small by sending the level being watched first |
+| Its content | A demo's own content pack (`engine/hub/content.hpp`): the game names the files the demo draws from (`HubSpec::demo_files`: Shooter's Edge's maps, precached models and sounds, and the basics every picture needs), the hub takes them out of the packs beside the viewer (a later pack wins, as a game folder's numbered packs), writes them as one pack, zstd-packs it and keeps it in the archive's `content/` named by its own SHA-256, served at `/content/<sha>.pak.zst` and cached by the browser for a year. It is made when the demo arrives, so no visitor waits; two demos that need the same files share one pack. A 20-minute 4on4 on the classic game's third level takes 1.6 MB instead of the two packs' 52 MB. A game that names no files hands the viewer every pack beside it |
 | Its controls | Seek, speed, pause, whom to follow and free camera, through the transport the native replay player already has (`engine/replay`); clip links (`?t=from-to:who`) |
 | The page glue | The few lines of script a page needs to start the viewer, hand it the stream's address and wire the buttons: platform glue, kept as small as the platform allows, as Apple's and Android's app shells are |
 | Content rights | A hub serves only content its operator may share. For the classic game that is the free pack and the operator's own; a level whose content the hub may not serve is shown in the installed game instead |
@@ -147,9 +147,17 @@ canvas (`NativeWindow::Kind::canvas`). `engine/web` holds what every viewer shar
 (`viewer_args.hpp`, tested natively) and the page's calls (`browser.hpp`: a file fetched from the
 hub, the next paint, the canvas's size, the status line). Every wait (a fetch, a paint, the GPU's)
 suspends the C++ stack through JSPI, so a viewer is a plain loop in `main`. `ge_add_web_viewer`
-writes `<game>_viewer.js` and `.wasm` into `build/web/<game>_viewer/`, the folder a hub's
+writes `<game>_viewer.js` and `.wasm` into `build/web/<game>_viewer/`, each with a gzip copy beside it
+(`.gz`, `cmake/WebGzip.cmake`) that the hub sends a browser that takes gzip, the folder a hub's
 `--viewer=<dir>` serves; the hub's operator puts the content packs it may share beside them
-(`.pak`, `.pk3`), and the Demo and Watch pages hand them to the viewer by name order.
+(`.pak`, `.pk3`); the Watch page hands them to the viewer by name order, the Demo page the demo's own content pack.
+
+THE FIRST VISIT. What a visitor downloads before the first picture is kept small: the wasm leaves
+out the other worlds' moon maps (2.8 MB a hub's matches never show; `GE_MOON_MAPS`), goes gzip
+(4.0 MB to 1.7 MB), and the demo's own content pack comes in place of every pack. The page
+fetches the wasm itself and hands it to the viewer's script, so a bar under the picture and the
+status line follow the download in megabytes; the viewer's own fetches (the demo, the content)
+do the same (`web::fetch_bytes` with a label).
 
 THE LIMITS. A browser offers WebGPU's default limits unless the machine's GPU earns it more:
 16 sampled textures a shader stage, 8 storage buffers and 256 layers an array texture, among
@@ -207,7 +215,7 @@ browser's own GPU.
   protocol, modes and their weights, the score's column) and the interest rule. `api.hpp` answers
   `/v1`, `/v1/servers` (filters `mode`, `min_players`, `has_players`, `kind`), `/v1/servers/{address}`,
   `/v1/servers/{address}/events`, `/v1/streams`, `/v1/nodes` and `/v1/masters` as JSON, a pure
-  function of the index. `http.hpp` carries it: HTTP/1.1 GET and HEAD, CORS open, the cache time
+  function of the index. `http.hpp` carries it: HTTP/1.1 GET and HEAD (and POST to the Account page's `/account/...` alone, a form of at most 2 KB), CORS open, the cache time
   of the busy period, server-sent events for one node's record with a comment line every 15 s.
   `main.hpp` is the process (`ge_add_hub`, cmake/Hub.cmake); `--serve-master` runs the master in
   the same process, so one binary is a community's whole service. Shooter's Edge's is

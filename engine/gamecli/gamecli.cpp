@@ -44,6 +44,21 @@ constexpr Command kEngine[] = {
      "settings set sensitivity 4.5", "engine", cmd_settings_set},
     {"settings reset", "<name>", "a player's setting back to its default",
      "settings reset sensitivity", "engine", cmd_settings_reset},
+    {"settings check", "[<file>]",
+     "a config's mistakes: settings this game lacks, values none of its own fit, a setting set "
+     "twice (the player's config.cfg when no file is named)",
+     "settings check autoexec.cfg", "engine", cmd_settings_check},
+    {"settings format", "[<file>]",
+     "a config written back tidy (--comments: each setting's help above it; --pretty: sections, "
+     "a fixed order, values aligned; --write: in place)",
+     "settings format --pretty --write", "engine", cmd_settings_format},
+    {"server check", "[<file>]",
+     "a server cfg's mistakes, as settings check finds them (server.cfg when no file is named)",
+     "server check", "engine", cmd_server_check},
+    {"server format", "[<file>]",
+     "a server cfg written back tidy, as settings format writes it (server.cfg when no file is "
+     "named)",
+     "server format --pretty", "engine", cmd_server_format},
     {"server settings", "[<prefix>]",
      "the dedicated server's settings: each value, where it was set (server.cfg's layers) and its "
      "default",
@@ -77,6 +92,20 @@ constexpr Command kEngine[] = {
     {"link register", "",
      "this game's links made to open in it: a hub's buttons then start the game",
      "link register --dry-run", "engine", cmd_link_register},
+    {"account signup", "<name>",
+     "an account made at a master's account service: one name on every server, any game",
+     "account signup Ranger --master=hub.example.org --password=<it>", "engine",
+     cmd_account_signup},
+    {"account signin", "<name>", "signed in: a ticket kept for 24 hours that servers check",
+     "account signin Ranger --password=<it>", "engine", cmd_account_signin},
+    {"account code", "<name>",
+     "a one-time login code for a classic client's console (login <name> <code>)",
+     "account code Ranger --password=<it>", "engine", cmd_account_code},
+    {"account recover", "<name> <recovery code>",
+     "a new password set with the recovery code shown at sign-up",
+     "account recover Ranger K7QF-29MD-AB12-CD34 --password=<new>", "engine", cmd_account_recover},
+    {"account show", "", "the account service used last, its key, and whose ticket is kept",
+     "account show --json", "engine", cmd_account_show},
     {"logs", "[<name>]", "the logs of what this CLI started, or the end of one",
      "logs dedicated-27500 --lines=40", "engine", cmd_logs},
 };
@@ -94,11 +123,27 @@ struct CommandFlags {
   std::vector<Flag> flags;
 };
 
+const std::vector<Flag> kAccountFlags = {
+    {"master", "<host[:port]>",
+     "the account service (a hub run with --accounts, or a server that is its own master); kept "
+     "for the next time"},
+    {"key", "<hex>", "the service's key, when known (otherwise learned at the first contact)"},
+    {"password", "<text>", "the password (otherwise one line of standard input)"},
+    {"wait", "<s>", "the most seconds to wait for the service (default 4)"}};
+
 const std::vector<CommandFlags>& flag_table() {
   static const std::vector<CommandFlags> table = {
       {"settings list",
        {{"changed", "", "only the settings off their default"},
         {"tier", "<player|server|all>", "whose settings (default player)"}}},
+      {"settings format",
+       {{"comments", "", "each setting's one sentence of help above it"},
+        {"pretty", "", "sections in a fixed order, values aligned, and the comments"},
+        {"write", "", "rewrite the file in place (default: print it)"}}},
+      {"server format",
+       {{"comments", "", "each setting's one sentence of help above it"},
+        {"pretty", "", "sections in a fixed order, values aligned, and the comments"},
+        {"write", "", "rewrite the file in place (default: print it)"}}},
       {"servers",
        {{"lan", "<0|1>", "look on the LAN (default: the player's sb_lan)"},
         {"master", "<host:port,...>", "masters to ask, beside the player's sb_masters"},
@@ -133,6 +178,10 @@ const std::vector<CommandFlags>& flag_table() {
       {"link open", {{"dry-run", "", "say what would be fetched and started, do neither"}}},
       {"link register", {{"dry-run", "", "say which files and commands it takes, do nothing"}}},
       {"logs", {{"lines", "<n>", "the last this many lines (default 30)"}}},
+      {"account signup", kAccountFlags},
+      {"account signin", kAccountFlags},
+      {"account code", kAccountFlags},
+      {"account recover", kAccountFlags},
   };
   return table;
 }

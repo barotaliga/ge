@@ -8,6 +8,7 @@
 #include "server/server.hpp"
 
 #include <cstdio>
+#include <limits>
 
 #include "core/num.hpp"
 #include "core/num_text.hpp"
@@ -116,133 +117,146 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   const std::string spec_password = c.spectator_password, rendezvous = c.rendezvous, mod = c.mod;
   const std::string masters = c.masters;
   const std::string rcon = c.rcon_password;
-  cvars.bind(
-      {"sv_hostname", name, info, "the server's name in the browser and the lobby", CvarKind::text},
-      &c.hostname);
-  cvars.bind({"sv_description", about, info, "a line or two under the name in the browser",
-              CvarKind::text},
-             &c.description);
-  cvars.bind(
-      {"net_ip", ip, latched, "the address to listen on (empty: every interface)", CvarKind::text},
-      &c.ip);
-  cvars.bind({"net_port", port, latched, "the game's UDP port", CvarKind::integer, 1, 65535},
-             &c.port);
-  cvars.bind({"sv_maxclients", clients, latched_info, "player slots", CvarKind::integer, 1,
-              static_cast<double>(most)},
-             &c.maxclients);
-  cvars.bind({"sv_map", map, info, "the map the server starts on", CvarKind::text}, &c.map);
-  cvars.bind({"sv_bots", bots, latched, "slots the game's bots fill at the start",
-              CvarKind::integer, 0, static_cast<double>(most)},
-             &c.bots);
-  cvars.bind({"sv_lobby", lobby, latched_info,
-              "1: every map warms up until everyone is ready (ready, break, team, start)",
-              CvarKind::integer, 0, 1},
-             &c.lobby);
-  cvars.bind({"sv_seed", seed, latched, "the run's seed", CvarKind::integer, 0, 4294967295.0},
-             &c.seed);
-  cvars.bind(
-      {"sv_password", password, cn::kServer, "a password to join (empty: none)", CvarKind::text},
-      &c.password);
-  cvars.bind({"sv_visibility", visibility, cn::kServer,
-              "lan (the LAN only), invite (by its id) or listed (public)", CvarKind::text},
-             &c.visibility);
-  cvars.bind({"sv_motd", motd, cn::kServer, "the message a player sees on joining", CvarKind::text},
-             &c.motd);
-  cvars.bind({"sv_admin", admin, info, "how to reach the server's owner", CvarKind::text},
-             &c.admin);
+  // Each setting's words (console/words.hpp): one sentence, then what each value does.
+  auto bind = [&](std::string_view id, std::string_view fallback, uint32_t flags,
+                  std::string_view help, CvarKind kind, double min, double max,
+                  std::string_view values, auto* target) {
+    cvars.bind({.name = id,
+                .fallback = fallback,
+                .flags = flags,
+                .help = help,
+                .kind = kind,
+                .min = min,
+                .max = max,
+                .values = values},
+               target);
+  };
+  constexpr double kAny = std::numeric_limits<double>::infinity();
+  const std::string slots_values = "1.." + std::to_string(most) + ": that many players";
+  const std::string bots_values =
+      "0: no bots (the default); 1.." + std::to_string(most) + ": that many slots";
+  bind("sv_hostname", name, info, "The server's name in the server browser and the lobby.",
+       CvarKind::text, -kAny, kAny, "TEXT: the name shown", &c.hostname);
+  bind("sv_description", about, info, "A line or two shown under the name in the browser.",
+       CvarKind::text, -kAny, kAny, "\"\": none; TEXT: the line shown", &c.description);
+  bind("net_ip", ip, latched, "The local address the server listens on.", CvarKind::text, -kAny,
+       kAny, "\"\": every interface (the default); TEXT: that address only", &c.ip);
+  bind("net_port", port, latched, "The UDP port the game listens on.", CvarKind::integer, 1, 65535,
+       "1..65535: that port", &c.port);
+  bind("sv_maxclients", clients, latched_info, "The most players the server seats at once.",
+       CvarKind::integer, 1, static_cast<double>(most), slots_values, &c.maxclients);
+  bind("sv_map", map, info, "The map the server starts on.", CvarKind::text, -kAny, kAny,
+       "TEXT: the map's name", &c.map);
+  bind("sv_bots", bots, latched, "How many player slots the game's bots fill at the start.",
+       CvarKind::integer, 0, static_cast<double>(most), bots_values, &c.bots);
+  bind("sv_lobby", lobby, latched_info,
+       "Whether every map warms up in a lobby until everyone is ready.", CvarKind::integer, 0, 1,
+       "0: the match starts at once (the default); 1: a warm-up until all say ready", &c.lobby);
+  bind("sv_seed", seed, latched, "The seed every random choice of the run starts from.",
+       CvarKind::integer, 0, 4294967295.0, "0..4294967295: that seed", &c.seed);
+  bind("sv_password", password, cn::kServer, "The password a player must give to join.",
+       CvarKind::text, -kAny, kAny, "\"\": none (the default); TEXT: that password", &c.password);
+  bind("sv_visibility", visibility, cn::kServer, "Who can find the server.", CvarKind::text, -kAny,
+       kAny,
+       "lan: only the local network (the default); invite: those given its id; listed: everyone, "
+       "in the public list",
+       &c.visibility);
+  bind("sv_motd", motd, cn::kServer, "The message a player sees on joining.", CvarKind::text, -kAny,
+       kAny, "\"\": none; TEXT: the message", &c.motd);
+  bind("sv_admin", admin, info, "How to reach the server's owner, shown in the server info.",
+       CvarKind::text, -kAny, kAny, "\"\": not said; TEXT: a name, an address or a link", &c.admin);
   const std::string country = c.country, city = c.city, coords = c.coords, addr = c.public_addr;
-  cvars.bind(
-      {"sv_country", country, info,
-       "the country the server is in, as a two-letter code (empty: not said)", CvarKind::text},
-      &c.country);
-  cvars.bind({"sv_city", city, info, "the city the server is in (empty: not said)", CvarKind::text},
-             &c.city);
-  cvars.bind({"sv_coords", coords, info,
-              "where the server is as \"latitude,longitude\", for maps of servers (empty: not "
-              "said)",
-              CvarKind::text},
-             &c.coords);
-  cvars.bind({"sv_publicaddr", addr, info,
-              "the \"host:port\" a browser should show for this server (empty: the address "
-              "it is reached at)",
-              CvarKind::text},
-             &c.public_addr);
-  cvars.bind({"sv_maprotation", rotation, info, "the maps after the first, space-separated",
-              CvarKind::text},
-             &c.maprotation);
-  cvars.bind({"sv_maxspectators", spectators, latched_info, "spectators beside the players",
-              CvarKind::integer, 0, static_cast<double>(kMaxClients)},
-             &c.max_spectators);
-  cvars.bind({"sv_spectatorpassword", spec_password, cn::kServer,
-              "a password to watch (empty: none)", CvarKind::text},
-             &c.spectator_password);
-  cvars.bind(
-      {"rcon_password", rcon, cn::kServer,
-       "the remote console's password: \"rcon <password> <line>\" runs a server console line "
-       "from afar (empty: no remote console)",
-       CvarKind::text},
-      &c.rcon_password);
-  cvars.bind({"sv_rendezvous", rendezvous, latched, "the rendezvous to list with (empty: none)",
-              CvarKind::text},
-             &c.rendezvous);
-  cvars.bind({"sv_master", masters, latched,
-              "the masters to beat to, space-separated host:port (port 27900 when unsaid; empty: "
-              "listed by none)",
-              CvarKind::text},
-             &c.masters);
-  cvars.bind({"sv_mod", mod, cn::kServer | cn::kServerInfo | cn::kReadOnly,
-              "the mods' directories over the base, lowest first (--mod)", CvarKind::text},
-             &c.mod);
+  bind("sv_country", country, info, "The country the server is in, for browsers to show.",
+       CvarKind::text, -kAny, kAny, "\"\": not said; TEXT: a two-letter country code (se)",
+       &c.country);
+  bind("sv_city", city, info, "The city the server is in, for browsers to show.", CvarKind::text,
+       -kAny, kAny, "\"\": not said; TEXT: the city", &c.city);
+  bind("sv_coords", coords, info, "Where the server is on the globe, for maps of servers.",
+       CvarKind::text, -kAny, kAny, "\"\": not said; TEXT: \"latitude,longitude\" in degrees",
+       &c.coords);
+  bind("sv_publicaddr", addr, info, "The address a browser should show for this server.",
+       CvarKind::text, -kAny, kAny,
+       "\"\": the address it is reached at; TEXT: \"host:port\" to show instead", &c.public_addr);
+  bind("sv_maprotation", rotation, info, "The maps played after the first, in turn.",
+       CvarKind::text, -kAny, kAny,
+       "\"\": the first map again; TEXT: map names with spaces between", &c.maprotation);
+  bind("sv_maxspectators", spectators, latched_info,
+       "How many spectator slots the server has beside the players'.", CvarKind::integer, 0,
+       static_cast<double>(kMaxClients),
+       "0: spectators take free player slots (the default); 1..32: that many of their own",
+       &c.max_spectators);
+  bind("sv_spectatorpassword", spec_password, cn::kServer,
+       "The password a spectator must give to watch.", CvarKind::text, -kAny, kAny,
+       "\"\": none (the default); TEXT: that password", &c.spectator_password);
+  bind("rcon_password", rcon, cn::kServer,
+       "The password that lets a remote console run server console lines from afar.",
+       CvarKind::text, -kAny, kAny,
+       "\"\": no remote console (the default); TEXT: that password, given as rcon <password> "
+       "<line>",
+       &c.rcon_password);
+  bind("sv_rendezvous", rendezvous, latched,
+       "The rendezvous server that lists this server and helps players reach it.", CvarKind::text,
+       -kAny, kAny, "\"\": none (the default); TEXT: its host:port", &c.rendezvous);
+  bind("sv_master", masters, latched, "The master servers this server reports itself to.",
+       CvarKind::text, -kAny, kAny,
+       "\"\": none, listed by no master (the default); TEXT: host:port addresses with spaces "
+       "between (port 27900 when left out)",
+       &c.masters);
+  bind("sv_mod", mod, cn::kServer | cn::kServerInfo | cn::kReadOnly,
+       "The mods' game directories laid over the base game, set by --mod.", CvarKind::text, -kAny,
+       kAny, "\"\": the base game alone; TEXT: directories, lowest first, commas between", &c.mod);
   const std::string timeout = core::num::to_string(c.timeout_s);
   const std::string flood = c.floodprot, flood_msg = c.floodprot_msg;
-  cvars.bind({"sv_timeout", timeout, cn::kServer,
-              "seconds a client may go unheard before it is dropped", CvarKind::number, 1, 3600},
-             &c.timeout_s);
+  bind("sv_timeout", timeout, cn::kServer,
+       "How long a client may go unheard before it is dropped, in seconds.", CvarKind::number, 1,
+       3600, "1..3600: that many seconds", &c.timeout_s);
   const std::string countdown = core::num::to_string(c.countdown_s);
   const std::string intermission = core::num::to_string(c.intermission_s);
-  cvars.bind(
-      {"sv_countdown", countdown, cn::kServer,
-       "with sv_lobby: seconds between everyone ready and the match", CvarKind::number, 0, 600},
-      &c.countdown_s);
-  cvars.bind({"sv_intermission", intermission, cn::kServer,
-              "with sv_lobby: seconds the scores stay up after a match before the next map",
-              CvarKind::number, 0, 600},
-             &c.intermission_s);
-  cvars.bind({"sv_floodprot", flood, cn::kServer,
-              "\"N S T\": N chat lines in S seconds, else silent for T seconds", CvarKind::text},
-             &c.floodprot);
-  cvars.bind({"sv_floodprotmsg", flood_msg, cn::kServer,
-              "what a player who floods the chat is told (empty: how long the silence is)",
-              CvarKind::text},
-             &c.floodprot_msg);
+  bind("sv_countdown", countdown, cn::kServer,
+       "With the lobby, the seconds between everyone being ready and the match.", CvarKind::number,
+       0, 600, "0: the match starts at once; 1..600: that many seconds", &c.countdown_s);
+  bind("sv_intermission", intermission, cn::kServer,
+       "With the lobby, the seconds the scores stay up before the next map.", CvarKind::number, 0,
+       600, "0: the next map at once; 1..600: that many seconds", &c.intermission_s);
+  bind("sv_floodprot", flood, cn::kServer,
+       "How much a player may chat before being silenced for a while.", CvarKind::text, -kAny, kAny,
+       "N N N: N lines in any S seconds, else silent for T seconds (\"10 1 1\" the default)",
+       &c.floodprot);
+  bind("sv_floodprotmsg", flood_msg, cn::kServer, "What a player who floods the chat is told.",
+       CvarKind::text, -kAny, kAny,
+       "\"\": how long the silence lasts (the default); TEXT: that message instead",
+       &c.floodprot_msg);
   const std::string vote = std::to_string(c.vote);
   const std::string vote_time = core::num::to_string(c.vote_time_s);
   const std::string vote_wait = core::num::to_string(c.vote_wait_s);
   const std::string vote_allow = c.vote_allow, vote_deny = c.vote_deny;
-  cvars.bind({"sv_vote", vote, cn::kServer,
-              "1: players may vote on settings for the map (vote <name> <value>)",
-              CvarKind::integer, 0, 1},
-             &c.vote);
-  cvars.bind({"sv_vote_time", vote_time, cn::kServer, "seconds a vote stays open", CvarKind::number,
-              5, 600},
-             &c.vote_time_s);
-  cvars.bind({"sv_vote_wait", vote_wait, cn::kServer,
-              "seconds a player whose vote failed waits before calling another", CvarKind::number,
-              0, 3600},
-             &c.vote_wait_s);
-  cvars.bind({"sv_vote_allow", vote_allow, cn::kServer,
-              "settings players may vote on, * for any characters (empty: all but sv_vote_deny)",
-              CvarKind::text},
-             &c.vote_allow);
-  cvars.bind({"sv_vote_deny", vote_deny, cn::kServer,
-              "settings no vote may change, * for any characters", CvarKind::text},
-             &c.vote_deny);
+  bind("sv_vote", vote, cn::kServer, "Whether players may vote to change a setting for the map.",
+       CvarKind::integer, 0, 1, "0: no votes; 1: vote <name> <value> calls one (the default)",
+       &c.vote);
+  bind("sv_vote_time", vote_time, cn::kServer, "How long a vote stays open, in seconds.",
+       CvarKind::number, 5, 600, "5..600: that many seconds", &c.vote_time_s);
+  bind("sv_vote_wait", vote_wait, cn::kServer,
+       "How long a player whose vote failed waits before calling another, in seconds.",
+       CvarKind::number, 0, 3600, "0: no wait; 1..3600: that many seconds", &c.vote_wait_s);
+  bind("sv_vote_allow", vote_allow, cn::kServer, "The settings players may vote on.",
+       CvarKind::text, -kAny, kAny,
+       "\"\": all but sv_vote_deny's (the default); TEXT: names with spaces between, * for any "
+       "characters",
+       &c.vote_allow);
+  bind("sv_vote_deny", vote_deny, cn::kServer, "The settings no vote may change.", CvarKind::text,
+       -kAny, kAny, "TEXT: names with spaces between, * for any characters", &c.vote_deny);
   for (int i = 0; i < game.rule_count; i++) {
     const GameRule& r = game.rules[i];
     std::string& field = c.rules[r.name];  // a map's node: its address outlives the inserts
     if (field.empty() && r.fallback != nullptr) field = r.fallback;
     const std::string fallback = field;
-    cvars.bind({r.name, fallback, info, r.help, CvarKind::text}, &field);
+    cvars.bind({.name = r.name,
+                .fallback = fallback,
+                .flags = info,
+                .help = r.help,
+                .kind = CvarKind::text,
+                .values = r.values != nullptr ? r.values : ""},
+               &field);
   }
   for (int i = 0; i < game.name_count; i++) {
     const SettingName& n = game.names[i];

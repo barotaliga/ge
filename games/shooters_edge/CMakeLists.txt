@@ -56,10 +56,11 @@ ge_add_server(shooters_edge_dedicated OUTPUT_NAME shooters_edge_server SOURCES s
 
 # The hub (hub/), named `shooters_edge_hub` on disk at the build's root: the engine's hub
 # (engine/hub, docs/hub.md) with the game's modes and words. `--help` lists its flags.
-# The classic status query (net/classic_browse, net/classic_info) is built into it alone, so the
-# hub links none of the game's server.
+# The classic status query (net/classic_browse, net/classic_info) is built into it; the client's
+# demo reader is linked for a demo's content pack (client/demo_content.hpp).
 ge_add_hub(shooters_edge_hub_bin OUTPUT_NAME shooters_edge_hub
-           SOURCES hub/main.cpp net/classic_browse.cpp net/classic_info.cpp)
+           SOURCES hub/main.cpp net/classic_browse.cpp net/classic_info.cpp
+           LINK shooters_edge_client)
 target_include_directories(shooters_edge_hub_bin PRIVATE ${PROJECT_SOURCE_DIR}/games)
 
 # The bot team, headless (net/bots_main.cpp), named `shooters_edge_bots` on disk at the build's

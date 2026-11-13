@@ -42,6 +42,7 @@
 #include "shooters_edge/client/world_fx.hpp"
 #include "tv/node.hpp"
 #include "ui/draw.hpp"
+#include "vfs/unpack.hpp"
 #include "web/browser.hpp"
 #include "web/viewer_args.hpp"
 
@@ -65,12 +66,20 @@ int fail(const std::string& line, const std::string& detail = "") {
 // The packs fetched and mounted in order, a later one searched first (as the game's folder).
 bool mount_packs(const ge::web::ViewerArgs& a, cl::SearchPath& files, std::string& error) {
   for (size_t i = 0; i < a.packs.size(); i++) {
-    ge::web::say("Loading the game's files (" + std::to_string(i + 1) + " of " +
-                 std::to_string(a.packs.size()) + ")...");
+    const std::string said = a.packs.size() == 1
+                                 ? std::string("Loading the game's files...")
+                                 : "Loading the game's files (" + std::to_string(i + 1) + " of " +
+                                       std::to_string(a.packs.size()) + ")...";
+    ge::web::say(said);
     std::vector<uint8_t> bytes;
-    if (!ge::web::fetch_bytes(a.packs[i], bytes, error)) return false;
+    if (!ge::web::fetch_bytes(a.packs[i], bytes, error, said)) return false;
     const std::string& url = a.packs[i];
     const std::string name = url.substr(url.rfind('/') + 1);
+    if (ge::vfs::wrapping_of(bytes) != ge::vfs::Wrapping::none) {  // a demo's zstd content pack
+      ge::vfs::Unpacked u;
+      if (!ge::vfs::unpack_one(std::move(bytes), u, error)) return false;
+      bytes = std::move(u.bytes);
+    }
     if (!cl::add_archive(files, name, std::move(bytes), error)) return false;
   }
   return true;
@@ -153,7 +162,7 @@ int main(int argc, char** argv) {
   } else {
     ge::web::say("Loading the demo...");
     std::vector<uint8_t> demo_bytes;
-    if (!ge::web::fetch_bytes(args.demo, demo_bytes, error))
+    if (!ge::web::fetch_bytes(args.demo, demo_bytes, error, "Loading the demo..."))
       return fail("The demo did not load. Try again in a moment.", error);
     t.name = t.found = args.demo;
     if (!game.open_demo(game, std::move(demo_bytes), t.demo, error))

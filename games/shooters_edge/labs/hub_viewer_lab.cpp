@@ -34,6 +34,7 @@
 
 #include "brush/write.hpp"
 #include "hub/archive.hpp"
+#include "hub/content.hpp"
 #include "hub/http.hpp"
 #include "hub/watch.hpp"
 #include "lab/lab.hpp"
@@ -42,6 +43,7 @@
 #include "net/address.hpp"
 #include "net/status.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/client/demo_content.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/classic_team.hpp"
@@ -63,6 +65,7 @@ gh::HubSpec spec() {
   s.id = "shooters_edge";
   s.modes = {{"4on4", 9}, {"2on2", 8}, {"1on1", 7}, {"ffa", 3}};
   s.score = "frags";
+  s.demo_files = cl::demo_files;
   return s;
 }
 
@@ -133,6 +136,10 @@ void run(gl::Lab& lab) {
   for (const char* f : {"shooters_edge_viewer.js", "shooters_edge_viewer.wasm"}) {
     if (have_viewer) {
       fs::copy_file(built / f, viewer / f, fs::copy_options::overwrite_existing, ec);
+      // The build's gzip copy, which the hub sends a browser that takes gzip.
+      const std::string gz = std::string(f) + ".gz";
+      if (fs::is_regular_file(built / gz, ec))
+        fs::copy_file(built / gz, viewer / gz, fs::copy_options::overwrite_existing, ec);
     } else {
       // Stand-ins, so the Demo page (digested) is the one a hub with the viewer serves, whether
       // or not this machine has the web build.
@@ -155,9 +162,19 @@ void run(gl::Lab& lab) {
   gh::watch_answer(gh::Poller{}, spec(), "/demo/" + row.sha, 0, site, page);
   lab.metric("demo_kb", static_cast<double>(ger.size()) / 1024.0, "KiB");
   lab.metric("pack_kb", static_cast<double>(pak.size()) / 1024.0, "KiB");
+  // The demo's own content pack: only the files it draws from, out of the packs beside the viewer.
+  gh::ContentPack content;
+  if (!gh::demo_content(site, spec(), row.sha, content, error)) {
+    lab.fail("hub-viewer: the demo's content pack: " + error,
+             "run tests/hub_content_test.cpp, then read engine/hub/content.cpp");
+    return;
+  }
+  lab.metric("content_kb", static_cast<double>(content.bytes) / 1024.0, "KiB");
+  lab.metric("content_raw_kb", static_cast<double>(content.raw) / 1024.0, "KiB");
+  lab.metric("content_files", static_cast<double>(content.files), "files");
   if (have_viewer) {
     if (page.code != 200 || !has(page.body, "<canvas id=\"view\"") ||
-        !has(page.body, "\"--pack=/viewer/pak0.pak\"") ||
+        !has(page.body, "\"--pack=/" + gh::content_path(content.sha) + "\"") ||
         !has(page.body, "\"--demo=/" + gh::archive_path(row.sha) + "\"")) {
       lab.fail("the Demo page does not start the viewer with the demo and the pack",
                "run tests/hub_watch_test.cpp, then read watch.cpp's viewer_slot");
@@ -166,9 +183,18 @@ void run(gl::Lab& lab) {
     const double wasm = static_cast<double>(file_bytes(viewer / "shooters_edge_viewer.wasm"));
     lab.metric("viewer_js_kb", js / 1024.0, "KiB", gl::Det::measured);
     lab.metric("viewer_wasm_kb", wasm / 1024.0, "KiB", gl::Det::measured);
+    // What goes over the wire: the gzip copies where the build made them.
+    const auto sent = [&](const char* f, double plain) {
+      const int64_t gz = file_bytes(viewer / (std::string(f) + ".gz"));
+      return gz > 0 ? static_cast<double>(gz) : plain;
+    };
+    const double js_sent = sent("shooters_edge_viewer.js", js);
+    const double wasm_sent = sent("shooters_edge_viewer.wasm", wasm);
+    lab.metric("viewer_sent_kb", (js_sent + wasm_sent) / 1024.0, "KiB", gl::Det::measured);
     lab.metric(
         "first_visit_kb",
-        (js + wasm + static_cast<double>(pak.size() + ger.size() + page.body.size())) / 1024.0,
+        (js_sent + wasm_sent + static_cast<double>(content.bytes + ger.size() + page.body.size())) /
+            1024.0,
         "KiB", gl::Det::measured);
   } else {
     lab.note("no built viewer in " + built.string() +
@@ -265,42 +291,6 @@ void run(gl::Lab& lab) {
     }
   }
 
-  // A player's own demo and packs (`--real-demo`, `--real-packs`): the recording packed into a
-  // replay file, taken by the archive, and its Demo page drawn from the packs beside the viewer.
-  // Nothing of them is kept or digested.
-  if (const std::string real = lab.arg("real-demo"); !real.empty()) {
-    std::ifstream f(real, std::ios::binary);
-    const std::vector<uint8_t> rec{std::istreambuf_iterator<char>(f), {}};
-    std::vector<uint8_t> real_ger;
-    gh::DemoRow real_row;
-    const fs::path packs = lab.arg("real-packs");
-    for (const char* name : {"pak0.pak", "pak1.pak"}) {
-      if (fs::is_regular_file(packs / name, ec))
-        fs::copy_file(packs / name, viewer / name, fs::copy_options::overwrite_existing, ec);
-    }
-    if (rec.empty() || !cl::pack_demo(rec, real_ger, error)) {
-      lab.note("the demo " + real + " did not pack: " + error);
-    } else if (gh::archive_add(archive, real_ger, 1794480100, {}, error, &real_row) !=
-               gh::AddResult::added) {
-      lab.note("the archive did not take " + real + ": " + error);
-    } else {
-      const int wait_s = 2 * static_cast<int>(lab.arg_num("wait"));
-      const std::optional<gl::Picture> got =
-          draw("/demo/" + real_row.sha, "real", wait_s, gh::Poller{}, {});
-      if (got) {
-        drawn++;
-        lab.shot({"real",
-                  "A PLAYER'S OWN DEMO ON THE DEMO PAGE " + std::to_string(wait_s) + " S IN",
-                  "The demo " + fs::path(real).filename().string() +
-                      " packed into a replay file and filed by the hub's archive, played by the "
-                      "web viewer from the player's own packs.",
-                  "the demo's map and players drawn on the canvas.",
-                  {{"wait_s", std::to_string(wait_s)}}},
-                 *got, gl::Det::measured);
-      }
-    }
-  }
-
   // The same match live: a TV node fed the replay file, paced to the match's own clock by its
   // delay, with WebSocket viewers; the hub's Watch page points the viewer at it.
   if (lab.arg("live") != "0") {
@@ -366,6 +356,53 @@ void run(gl::Lab& lab) {
       ge::tv::tv_web_close(web);
     }
   }
+  // Last, since its packs replace the halls' beside the viewer: a player's own demo and packs
+  // (`--real-demo`, `--real-packs`): the recording packed into a replay file, taken by the archive,
+  // and its Demo page drawn from the packs beside the viewer. Nothing of them is kept or digested.
+  if (const std::string real = lab.arg("real-demo"); !real.empty()) {
+    std::ifstream f(real, std::ios::binary);
+    const std::vector<uint8_t> rec{std::istreambuf_iterator<char>(f), {}};
+    std::vector<uint8_t> real_ger;
+    gh::DemoRow real_row;
+    const fs::path packs = lab.arg("real-packs");
+    for (const char* name : {"pak0.pak", "pak1.pak"}) {
+      if (fs::is_regular_file(packs / name, ec))
+        fs::copy_file(packs / name, viewer / name, fs::copy_options::overwrite_existing, ec);
+    }
+    if (rec.empty() || !cl::pack_demo(rec, real_ger, error)) {
+      lab.note("the demo " + real + " did not pack: " + error);
+    } else if (gh::archive_add(archive, real_ger, 1794480100, {}, error, &real_row) !=
+               gh::AddResult::added) {
+      lab.note("the archive did not take " + real + ": " + error);
+    } else {
+      // Its content pack made ahead, as the hub does when a demo arrives, and measured.
+      gh::ContentPack real_content;
+      if (gh::demo_content(site, spec(), real_row.sha, real_content, error)) {
+        lab.metric("real_content_kb", static_cast<double>(real_content.bytes) / 1024.0, "KiB",
+                   gl::Det::measured);
+        lab.metric("real_content_files", static_cast<double>(real_content.files), "files",
+                   gl::Det::measured);
+      } else {
+        lab.note("no content pack for " + real + ": " + error);
+      }
+      const int wait_s = 2 * static_cast<int>(lab.arg_num("wait"));
+      const std::optional<gl::Picture> got =
+          draw("/demo/" + real_row.sha, "real", wait_s, gh::Poller{}, {});
+      if (got) {
+        drawn++;
+        lab.shot({"real",
+                  "A PLAYER'S OWN DEMO ON THE DEMO PAGE " + std::to_string(wait_s) + " S IN",
+                  "The demo " + fs::path(real).filename().string() +
+                      " packed into a replay file and filed by the hub's archive, played by the "
+                      "web viewer from its own content pack: only its files, out of the "
+                      "player's own packs.",
+                  "the demo's map and players drawn on the canvas.",
+                  {{"wait_s", std::to_string(wait_s)}}},
+                 *got, gl::Det::measured);
+      }
+    }
+  }
+
   lab.metric("pages_drawn", drawn, "pictures", gl::Det::measured);
   gh::http_close(http);
   if (lab.arg("keep") == "1") {

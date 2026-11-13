@@ -71,22 +71,27 @@ void ServersPage::add_cvars(ge::console::Console& con) {
   con.cvars().bind({.name = "sb_lan",
                     .fallback = "1",
                     .flags = ge::console::kArchive,
-                    .help = "1: JOIN A GAME looks for servers on the LAN (a broadcast)",
-                    .kind = ge::console::CvarKind::boolean},
+                    .help = "Whether JOIN A GAME looks for servers on the LAN, by a broadcast.",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: no; 1: yes (the default)"},
                    &lan_);
-  con.cvars().bind({.name = "sb_masters",
-                    .fallback = "",
-                    .flags = ge::console::kArchive,
-                    .help = "the masters JOIN A GAME asks for their servers, host:port words "
-                            "(beside those the loaded game's own server lists name)",
-                    .kind = ge::console::CvarKind::text},
-                   &masters_);
-  con.cvars().bind({.name = "sb_servers",
-                    .fallback = "",
-                    .flags = ge::console::kArchive,
-                    .help = "servers JOIN A GAME always asks, host:port words (your favourites)",
-                    .kind = ge::console::CvarKind::text},
-                   &servers_);
+  con.cvars().bind(
+      {.name = "sb_masters",
+       .fallback = "",
+       .flags = ge::console::kArchive,
+       .help = "The masters JOIN A GAME asks for their servers, beside those the loaded game's own "
+               "server lists name.",
+       .kind = ge::console::CvarKind::text,
+       .values = "\"\": none of your own (the default); TEXT: host:port words with spaces between"},
+      &masters_);
+  con.cvars().bind(
+      {.name = "sb_servers",
+       .fallback = "",
+       .flags = ge::console::kArchive,
+       .help = "The servers JOIN A GAME always asks, your favourites.",
+       .kind = ge::console::CvarKind::text,
+       .values = "\"\": none (the default); TEXT: host:port words with spaces between"},
+      &servers_);
 }
 
 bool ServersPage::open(std::string* why) {

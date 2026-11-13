@@ -33,6 +33,7 @@
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "console/console.hpp"
+#include "console/words.hpp"
 #include "net/sim_network.hpp"
 #include "server/config.hpp"
 #include "server/main.hpp"
@@ -41,6 +42,10 @@
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/server/chat_rules.hpp"
+#include "shooters_edge/server/rjump_rules.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
+#include "shooters_edge/server/shot_help.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 #include "vfs/pak.hpp"
 
@@ -201,6 +206,32 @@ TEST(classic_game_the_mod_s_rules_are_settings) {
   Server refused;
   CHECK(!server_open(refused, se::classic_game(), bad, nullptr, nullptr, error));
   CHECK_MSG(error.find("fraglimit \"lots\" is not a number") != std::string::npos, error);
+}
+
+// Every setting a server owner can set says what it does in one sentence and what each value
+// does (console/words.hpp): the server's own, the game's rules and the mod's table.
+TEST(classic_game_every_server_setting_explains_itself) {
+  ge::console::Console con{true};
+  ServerConfig c;
+  ServerCfg cfg;
+  std::string error;
+  CHECK_MSG(server_configure(con, {"--map=arena"}, c, cfg, se::classic_game(), error), error);
+  int count = 0;
+  for (const ge::console::Cvar* v : con.cvars().sorted()) {
+    CHECK_MSG(ge::console::words_fault(*v).empty(), v->name + ": " + ge::console::words_fault(*v));
+    CHECK_MSG(!v->values.empty() || v->kind == ge::console::CvarKind::text, v->name);
+    count++;
+  }
+  CHECK(count > 100);
+  auto mod = std::make_unique<shooters_edge::server::RulesCommon>();
+  shooters_edge::server::add_mod_settings(*mod, {});
+  shooters_edge::server::add_rjump_settings(mod->cvars);
+  shooters_edge::server::add_chat_settings(mod->cvars);
+  shooters_edge::server::add_aim_help(*mod);
+  for (const ge::console::Cvar* v : mod->cvars.sorted()) {
+    CHECK_MSG(ge::console::words_fault(*v).empty(), v->name + ": " + ge::console::words_fault(*v));
+    CHECK_MSG(!v->values.empty() || v->kind == ge::console::CvarKind::text, v->name);
+  }
 }
 
 TEST(classic_game_the_shooter_s_and_the_endpoint_s_settings) {

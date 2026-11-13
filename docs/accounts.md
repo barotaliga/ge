@@ -61,7 +61,7 @@ and its prompt.
 | Part | Home | What it is |
 | --- | --- | --- |
 | The account store | `engine/account` (new module) | Accounts, names and their folded keys, Argon2id hashes, one-time codes, the throttle; an append-only log on disk replayed at start, compacted into a snapshot. Pure functions over a clock passed in, so a lab runs it on the simulated network |
-| The ticket | `engine/account` | What a logged-in player carries: account id, name, the games it may be used for, issued and expiry (24 h), the master's id; signed with the master's Ed25519 key. Any server checks it with the master's public key, offline |
+| The ticket | `engine/account` | What a logged-in player carries: account id, name, issued and expiry (24 h), the master's public key (good for every game); signed with the master's Ed25519 key. Any server checks it with the master's public key, offline |
 | The account service | `engine/account`, run by the master's process (the hub's `--master`, or a master alone), or by a server that is its own master | Sign up, sign in, tickets, a server's login ask, codes, the reports and each account's totals, over a sealed channel (X25519 to the master's published key, then the network's XChaCha20-Poly1305) |
 | The login seam | `engine/server` | A seat's login state (guest, asked, logged in as an account), the prompt's timer, the reserved-name rule, the settings below; the game supplies its words and how its clients answer |
 | The match report | `engine/net/report.hpp` | The record of one finished match, generic (§ The match report); the replay file's closing summary carries the same record |
@@ -146,6 +146,35 @@ they would a master, and a hub pointed at it shows its stats; the console's `acc
 manage it. Its accounts are its own: a player who also wants them elsewhere signs up with a
 community's master, and a server joins that master by setting `sv_accountmaster`.
 
+### The service on the wire
+
+`engine/account/service.hpp` holds the bytes; this is what they promise.
+
+- **One published key.** A master (or a server that is its own) has one Ed25519 key pair, grown
+  from the seed in `account.key` beside `accounts.log`. Its public key is `sv_accountkey`: it checks
+  the master's tickets, and the same key converted to X25519 is what every ask is sealed to. A
+  client that has no key yet asks for it (an unsealed `key` datagram) and keeps the first answer;
+  a program with `sv_accountkey` set refuses any other.
+- **Every ask sealed.** An ask draws a new exchange key pair, seals its body (XChaCha20-Poly1305
+  under BLAKE2b of the exchange and both public keys) and is answered under the same key, so a
+  name, password, code or ticket is never on the wire in the clear and only the asker reads the
+  answer. The ask is padded to 512 bytes and no answer is bigger, so the service cannot be used
+  to flood a third party.
+- **Sent again, answered the same.** An ask is sent again every half second until it is answered
+  (six tries). The service keeps its last 1024 answers by the ask's exchange key and answers an ask
+  it has seen with the answer it gave: an account is never made twice, nor a code spent twice, by
+  one ask; a replayed ask's answer opens only for its asker. The `accounts` lab runs 40 players
+  through sign-up, sign-in, a code and a server's login at 0, 10 and 30% loss.
+- **The ops.** `create` (name, password: the recovery code), `sign_in` (a ticket), `code` (the
+  password: a login code), `login` (asked by a game server for a classic client: the name, the
+  code and the player's address; a ticket for the seat) and `recover` (the recovery code and a new
+  password). The throttle's address for `login` is the server's and the player's together, so one
+  player's wrong codes do not hold the server's other players.
+- **Hosted.** `account::Host` runs the service on a UDP socket (port 27901 by default) over the
+  store and key in a folder: the hub's `--accounts=<dir>` (beside `--serve-master`), and a server
+  with no `sv_accountmaster` (M59c). The slow hash runs on the service's own loop: a sign-in costs
+  one Argon2id hash (about 100 ms at 64 MiB), held back by the throttle.
+
 ## Names
 
 `sv_reservednames 1` (the default when `sv_login` is on) reserves every account's name on the
@@ -209,7 +238,7 @@ their recent-stats answer into the same record, best effort and without accounts
 | Player | An account: totals per game and mode, the game's columns, the recent matches with their demos |
 | Match | One report: the scoreboard, each player's columns, the demo |
 | Leaders | Per game, mode and column, over a period |
-| Account | Sign up, sign in, a one-time code, the recovery code, delete. Plain HTML forms, no script; the only pages that take input, so the hub must sit behind the operator's TLS proxy for them, and says so on the page when it is reached without TLS |
+| Account | `/account`, on a hub run with `--accounts` (`engine/hub/account_page.hpp`): sign up (the recovery code shown once), a one-time login code with the line a classic client types, a new password by the recovery code. Plain HTML forms posted to `/account/...`, no script, no cookie, every answer `no-store`. A password is taken only over HTTPS (the operator's proxy says so with `X-Forwarded-Proto: https`) or from the hub's own machine; otherwise the forms are shown disabled and a post is refused. The throttle counts by the proxy's `X-Forwarded-For` |
 
 The JSON API: `/v1/players/{name}`, `/v1/matches?game=&mode=&player=&page=`, `/v1/matches/{id}`,
 `/v1/leaders?game=&mode=&stat=&days=`. The hub's line that it has no accounts and no login
@@ -220,7 +249,9 @@ The JSON API: `/v1/players/{name}`, `/v1/matches?game=&mode=&player=&page=`, `/v
 | Row | What | Labs |
 | --- | --- | --- |
 | M59a | `engine/account`: the store, names and folding per game, Argon2id, the throttle, codes, the log and its snapshot | `accounts` |
-| M59b | The account service in the master's process: sign up, sign in, tickets, the server's login ask, over the sealed channel; the hub's Account page | `accounts` |
+| M59b | The account service in the master's process: sign up, sign in, tickets, the server's login ask, over the sealed channel (built) | `accounts` |
+| M59b2 | The game CLI's `account` group (built) | `accounts` |
+| M59b3 | The hub's Account page (built) | `hub-pages` |
 | M59c | The login seam in `engine/server`, the settings above, our client's ticket; the first classic game's prompt and `login` line | `se-login` |
 | M59d | The sequel's prompt and `login` line, one account logged in on both games' servers | `se-login` |
 | M59e | The match report, the replay file's closing summary, the master's totals, trusted servers | `match-report` |

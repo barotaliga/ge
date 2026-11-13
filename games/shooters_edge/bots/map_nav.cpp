@@ -370,7 +370,7 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
   out.bridges.clear();
   open_doors_as_floor(s, spec, out.tracer.get(), blocks, out.world, out.bridges);
   out.movers = movers_of(s, spec, out.tracer.get(), blocks);
-  sh::build_nav(out.world, out.movers, sh::MoveSettings{}, sh::NavSettings{}, out.graph);
+  sh::build_nav(out.world, out.movers, out.move, sh::NavSettings{}, out.graph);
   const std::vector<sh::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
   sh::nav_add_links(out.graph, teleports);
   for (NavBridge& br : out.bridges) {
@@ -416,8 +416,8 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
           sc.steps.push_back({{r.steps[k].x, r.steps[k].y, r.steps[k].z + 24}, r.steps[k].hop});
         sc.steps.back().at = out.graph.nodes[static_cast<size_t>(made.to)].origin;
         const sh::NavProof pr = sh::prove_script(
-            out.world, sh::MoveSettings{}, out.graph.nodes[static_cast<size_t>(made.from)].origin,
-            sc, out.graph.set);
+            out.world, out.move, out.graph.nodes[static_cast<size_t>(made.from)].origin, sc,
+            out.graph.set);
         if (pr.reached) {
           made.held = true;
           made.time_s = pr.time_s;
@@ -506,7 +506,7 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
     sh::NavBridgeSettings bs;
     bs.wanted = wanted;
     bs.avoid = out.harm;
-    out.bridges_made = sh::nav_bridge_pockets(out.world, sh::MoveSettings{}, graph, main, bs);
+    out.bridges_made = sh::nav_bridge_pockets(out.world, out.move, graph, main, bs);
     find_main();
   }
   // The map's tricks: rocket links people's jumps prove, landing where a way back on foot leads
@@ -538,11 +538,10 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
         }
       sh::NavTrickSettings ts;
       ts.grenades = true;
-      out.tricks_made = sh::nav_add_tricks(out.world, sh::MoveSettings{}, graph, tricks, back, ts);
+      out.tricks_made = sh::nav_add_tricks(out.world, out.move, graph, tricks, back, ts);
       ts.rockets = false;
       ts.near = 8;  // from the bridge's own takeoff
-      out.bridged_grenades =
-          sh::nav_add_tricks(out.world, sh::MoveSettings{}, graph, bridged, back, ts);
+      out.bridged_grenades = sh::nav_add_tricks(out.world, out.move, graph, bridged, back, ts);
     }
   }
   // The traps: nodes no way on foot leads back from to the main part (a room a rocket jump or a
@@ -559,7 +558,7 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
   // The jumps a miss of kills (over lava or slime, or landing at an edge over it): flown again
   // past the target and from a slower run, kept only when both hold, and dearer (dm2's lava room
   // took half the bots' deaths: a jump down onto its ramp carried them off the edge).
-  out.hardened = sh::nav_harden_jumps(out.world, sh::MoveSettings{}, graph, out.harm);
+  out.hardened = sh::nav_harden_jumps(out.world, out.move, graph, out.harm);
   // THE GAP TRICKS (gap_tricks.hpp): people's speed jumps over a pit as jump links at a hopper's
   // speed, landing where a way back on foot leads to the main part; after the hardening, which
   // would price a jump over lava as a run's miss.
@@ -576,7 +575,7 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
             out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] && !out.harm[n] && !out.trap[n]
                 ? 1
                 : 0;
-      out.gaps_made = sh::nav_add_gap_tricks(out.world, sh::MoveSettings{}, graph, gaps, back);
+      out.gaps_made = sh::nav_add_gap_tricks(out.world, out.move, graph, gaps, back);
     }
   }
   // OUT OF A PIT BY ROCKET (shooter/escape.hpp): from every liquid at least waist deep, a rocket
@@ -593,7 +592,7 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
     for (const NavBridge& br : out.bridges)
       for (const int32_t n : br.nodes)
         if (n >= 0 && static_cast<size_t>(n) < land.size()) land[static_cast<size_t>(n)] = 0;
-    out.escapes_made = sh::nav_add_escapes(out.world, sh::MoveSettings{}, graph, land);
+    out.escapes_made = sh::nav_add_escapes(out.world, out.move, graph, land);
   }
   std::vector<uint8_t> exits(graph.nodes.size(), 0);
   for (size_t n = 0; n < graph.nodes.size(); n++)
@@ -609,6 +608,13 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
     return false;
   }
   return true;
+}
+
+sh::MoveSettings sequel_nav_move() {
+  sh::MoveSettings m;
+  m.maxspeed = 300;
+  m.friction = 6;
+  return m;
 }
 
 }  // namespace shooters_edge::bots

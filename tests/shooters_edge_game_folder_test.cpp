@@ -203,7 +203,7 @@ TEST(the_campaign_commands_go_with_the_campaign) {
 
 // A game whose own rules keep the campaign (the sequel's runner) and no single-player program:
 // NEW GAME and COOPERATIVE start its game with deathmatch 0, coop off or on, from its first map;
-// there is nothing to save yet, and companions can't join it yet.
+// there is nothing to save yet, and `coopgame` seats its companions (1 by default).
 TEST(a_game_whose_rules_keep_the_campaign_has_new_game_and_coopgame) {
   ge::console::Console con;
   cl::Listen listen;
@@ -220,10 +220,13 @@ TEST(a_game_whose_rules_keep_the_campaign_has_new_game_and_coopgame) {
   CHECK(cl::wants_campaign(listen.opt) && listen.opt.console.back() == "coop 0");
   next_map.clear();
   listen.opt.new_game = false;
-  con.execute("coopgame 2 demo2");
-  CHECK(next_map == "demo2" && listen.opt.new_game && listen.opt.companions == 0);
+  con.execute("coopgame 2 expert demo2");
+  CHECK(next_map == "demo2" && listen.opt.new_game && listen.opt.companions == 2);
+  CHECK(listen.opt.companion_skill == ge::shooter::AimSkill::expert);
   CHECK(listen.opt.console.back() == "coop 1");
-  CHECK(!con.output().empty() && con.output().back().find("Companions") != std::string::npos);
+  next_map.clear();
+  con.execute("coopgame");  // one companion by default, from the first map
+  CHECK(next_map == "demo1" && listen.opt.companions == 1);
 }
 
 namespace {

@@ -179,3 +179,16 @@ TEST(the_highlight_glides_to_the_focus_and_draws) {
   for (int i = 0; i < 60; i++) v.frame(m, L, 1.0 / 60);
   CHECK(v.page_in() == 1);
 }
+
+TEST(a_frame_makes_one_cue_the_strongest) {
+  Menu m = demo();
+  m.input({});
+  CHECK(menu_cue({}, false) == MenuCue::none);
+  CHECK(menu_cue({}, true) == MenuCue::move);
+  const auto opened = m.input(press(&MenuInput::accept));  // PLAY: activated, maybe a page
+  CHECK(menu_cue(opened, true) == MenuCue::enter);
+  CHECK(menu_cue({{EventKind::changed, "p", "i"}}, true) == MenuCue::change);
+  CHECK(menu_cue({{EventKind::activated, "p", "i"}, {EventKind::closed, "p", {}}}, false) ==
+        MenuCue::back);
+  CHECK(menu_cue({{EventKind::back_at_root, "root", {}}}, false) == MenuCue::back);
+}

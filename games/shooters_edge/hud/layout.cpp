@@ -748,49 +748,57 @@ void add_cvars(ge::console::Console& con, Hud& hud) {
   con.cvars().bind(
       {.name = "hud_style",
        .fallback = std::string(look_name(Look::classic)),
-       .help = "the HUD's look: classic (the status bar), modern (the corners), "
-               "compact (an arch at the bottom centre), arena (big figures bottom centre, "
-               "guns and ammunition down the right), tactical (shield over health "
-               "bottom left, the loadout bottom right) or minimal (small figures)",
-       .kind = ge::console::CvarKind::text},
+       .help = "The HUD's look.",
+       .kind = ge::console::CvarKind::text,
+       .values = "classic: the status bar (the default); modern: the corners; compact: an arch at "
+                 "the bottom centre; arena: big figures bottom centre, guns and ammunition down "
+                 "the right; tactical: shield over health bottom left, the loadout bottom right; "
+                 "minimal: small figures"},
       &hud.look);
-  con.cvars().bind({.name = "viewsize",
-                    .fallback = "100",
-                    .help = "the status bars: 100 every one, 110 the classic look's status bar "
-                            "without its inventory bar, 120 none (the crosshair and the messages "
-                            "stay)",
-                    .kind = ge::console::CvarKind::integer,
-                    .min = 100,
-                    .max = 120},
-                   &hud.viewsize);
-  con.cvars().bind({.name = "hud_sbar",
-                    .fallback = "1",
-                    .help = "the classic look's status bar and inventory bar panels (0: their "
-                            "pieces alone over the world)",
-                    .kind = ge::console::CvarKind::boolean},
-                   &hud.sbar);
-  con.cvars().bind({.name = "hud_vitals",
-                    .fallback = "left",
-                    .help = "the side of the screen health and armour stand on in every look but "
-                            "the classic one: left, or right (the whole look mirrored)",
-                    .kind = ge::console::CvarKind::text},
-                   &hud.vitals);
-  con.cvars().bind({.name = "hud_guns",
-                    .fallback = "look",
-                    .help = "the guns: ammo (two to a line by ammunition, each line led by its "
-                            "count), pairs (the same lines, the counts apart), row (one row); "
-                            "look: each look's own",
-                    .kind = ge::console::CvarKind::text},
-                   &hud.guns);
+  con.cvars().bind(
+      {.name = "viewsize",
+       .fallback = "100",
+       .help = "How much of the status bars is drawn.",
+       .kind = ge::console::CvarKind::integer,
+       .min = 100,
+       .max = 120,
+       .values = "100: every one (the default); 110: the classic look's status bar without its "
+                 "inventory bar; 120: none, the crosshair and the messages staying"},
+      &hud.viewsize);
+  con.cvars().bind(
+      {.name = "hud_sbar",
+       .fallback = "1",
+       .help = "Whether the classic look's status bar and inventory bar panels are drawn.",
+       .kind = ge::console::CvarKind::boolean,
+       .values = "0: their pieces alone over the world; 1: the panels (the default)"},
+      &hud.sbar);
+  con.cvars().bind(
+      {.name = "hud_vitals",
+       .fallback = "left",
+       .help =
+           "The side of the screen health and armour stand on, in every look but the classic one.",
+       .kind = ge::console::CvarKind::text,
+       .values = "left: the left (the default); right: the right, the whole look mirrored"},
+      &hud.vitals);
+  con.cvars().bind(
+      {.name = "hud_guns",
+       .fallback = "look",
+       .help = "How the guns are laid out.",
+       .kind = ge::console::CvarKind::text,
+       .values = "ammo: two to a line by ammunition, each line led by its count; pairs: the same "
+                 "lines, the counts apart; row: one row; look: each look's own (the default)"},
+      &hud.guns);
   con.cvars().bind({.name = "hud_guns_all",
                     .fallback = "1",
-                    .help = "every gun, those not owned dim (0: the guns owned alone)",
-                    .kind = ge::console::CvarKind::boolean},
+                    .help = "Whether every gun is shown, those not owned dim.",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: the guns owned alone; 1: every gun (the default)"},
                    &hud.guns_all);
   con.cvars().bind({.name = "hud_ammo_all",
                     .fallback = "1",
-                    .help = "all four ammunition counts (0: the ammunition in hand alone)",
-                    .kind = ge::console::CvarKind::boolean},
+                    .help = "Whether all four ammunition counts are shown.",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: the ammunition in hand alone; 1: all four (the default)"},
                    &hud.ammo_all);
   gh::add_hud_cvars(con, hud.layout);
 }

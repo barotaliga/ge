@@ -17,183 +17,213 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
   auto& cv = con.cvars();
   cv.bind({.name = "r_look",
            .fallback = "modern",
-           .help = "the picture: classic (crisp texels, the lightmaps, the palette) or modern "
-                   "(filtered, real-time lights, bloom)",
-           .kind = gc::CvarKind::text},
+           .help = "The picture's look.",
+           .kind = gc::CvarKind::text,
+           .values = "classic: crisp texels, the lightmaps, the palette; modern: filtered, "
+                     "real-time lights, bloom (the default)"},
           &picture.look);
   // The modern look's real-time lights, exposure and bloom make a spark or a blast's light at the
   // classic's strength wash a room out, so its defaults turn them down.
   cv.bind({.name = "r_fx_lights",
            .fallback = "0.2",
-           .help = "how much light explosions, rockets and shots throw in the modern look, the "
-                   "classic's 1",
+           .help = "How much light explosions, rockets and shots throw in the modern look.",
            .min = 0,
-           .max = 4},
+           .max = 4,
+           .values = "0: none; 0..4: that many times the classic's (0.2 the default)"},
           &picture.fx_lights);
   cv.bind({.name = "r_fx_glow",
            .fallback = "0.15",
-           .help = "how bright sparks and embers glow in the modern look, the classic's 1",
+           .help = "How bright sparks and embers glow in the modern look.",
            .min = 0,
-           .max = 4},
+           .max = 4,
+           .values = "0: unlit; 0..4: that many times the classic's (0.15 the default)"},
           &picture.fx_glow);
   cv.bind({.name = "r_bloom",
            .fallback = "0.08",
-           .help = "the modern look's bloom, 0 none to 1; read when the picture is built",
+           .help = "The modern look's bloom, read when the picture is built.",
            .min = 0,
-           .max = 1},
+           .max = 1,
+           .values = "0: none; 0..1: that strength (0.08 the default)"},
           &picture.bloom);
   cv.bind({.name = "r_lava_glow",
            .fallback = "0.02",
-           .help = "how much the lava lights the walls round it in the modern look, 0 none",
+           .help = "How much the lava lights the walls round it in the modern look.",
            .min = 0,
-           .max = 4},
+           .max = 4,
+           .values = "0: none; 0..4: that strength (0.02 the default)"},
           &picture.lava_glow);
   cv.bind({.name = "r_lerpmodels",
            .fallback = "1",
            .flags = gc::kArchive,
-           .help = "the models' animation drawn between their frames, so a figure moves smoothly "
-                   "(1), or each frame as the game steps it (0)",
-           .kind = gc::CvarKind::boolean},
+           .help = "Whether the models' animation is drawn between their frames, so a figure moves "
+                   "smoothly.",
+           .kind = gc::CvarKind::boolean,
+           .values = "0: each frame as the game steps it; 1: smoothly (the default)"},
           &picture.lerp_models);
-  cv.bind({.name = "r_lerpmove",
-           .fallback = "1",
-           .flags = gc::kArchive,
-           .help = "the models' places in your own game drawn between the server's frames, and a "
-                   "monster's strides over their time (1), or where each frame puts them (0)",
-           .kind = gc::CvarKind::boolean},
-          &picture.lerp_move);
+  cv.bind(
+      {.name = "r_lerpmove",
+       .fallback = "1",
+       .flags = gc::kArchive,
+       .help = "Whether the models' places in your own game are drawn between the server's frames.",
+       .kind = gc::CvarKind::boolean,
+       .values = "0: where each frame puts them; 1: smoothly, a monster's strides over their time "
+                 "(the default)"},
+      &picture.lerp_move);
   cv.bind({.name = "r_arrival",
            .fallback = "1",
            .flags = gc::kArchive,
-           .help = "how strongly your own arrival (a spawn, a teleporter's far end) sweeps the "
-                   "whole view in a flash and a warp, with ce_warps on in the modern look; 0 none",
+           .help = "How strongly your own arrival, at a spawn or a teleporter's far end, sweeps "
+                   "the view in a flash and a warp, with ce_warps on in the modern look.",
            .min = 0,
-           .max = 1},
+           .max = 1,
+           .values = "0: none; 0..1: that strength (1 the default)"},
           &picture.arrival);
   cv.bind({.name = "ce_bubbles_share",
            .fallback = "0.3",
            .flags = gc::kArchive,
-           .help = "the share of the bubbles rising under water that is drawn, in either look: 1 "
-                   "every one the game blows, 0 none",
+           .help = "The share of the bubbles rising under water that is drawn, in either look.",
            .min = 0,
-           .max = 1},
+           .max = 1,
+           .values = "0: none; 0..1: that share, 1 every one the game blows (0.3 the default)"},
           &picture.bubbles_share);
   cv.bind({.name = "ce_water_specks",
            .fallback = "0",
            .flags = gc::kArchive,
-           .help = "the specks floating in the water round you while you swim under it in the "
-                   "modern look: 1 as many as the water's look has, 0 none",
+           .help = "How many specks float in the water round you while you swim under it in the "
+                   "modern look.",
            .min = 0,
-           .max = 1},
+           .max = 1,
+           .values = "0: none (the default); 0..1: that share of the water's own"},
           &picture.water_specks);
   cv.bind({.name = "r_slime_glow",
            .fallback = "1",
-           .help = "how much the slime's green glow lights the walls round it in the modern look, "
-                   "0 none",
+           .help = "How much the slime's green glow lights the walls round it in the modern look.",
            .min = 0,
-           .max = 4},
+           .max = 4,
+           .values = "0: none; 0..4: that strength (1 the default)"},
           &picture.slime_glow);
   cv.bind({.name = "r_glow",
            .fallback = "0.6",
            .flags = gc::kArchive,
-           .help = "how bright the glowing parts of the walls (windows, lamps' panels) are in the "
-                   "modern look, 1 as the classic draws them",
+           .help = "How bright the glowing parts of the walls, windows and lamps' panels, are in "
+                   "the modern look.",
            .min = 0,
-           .max = 2},
+           .max = 2,
+           .values = "0: unlit; 0..2: that many times as the classic draws them (0.6 the default)"},
           &picture.glow);
-  cv.bind({.name = "r_fire_glow",
-           .fallback = "1",
-           .flags = gc::kArchive,
-           .help = "how bright the torches', braziers' and bonfires' flames burn in the modern "
-                   "look, 1 as made",
-           .min = 0,
-           .max = 4},
-          &picture.fire_glow);
-  cv.bind({.name = "r_fill_shadows",
-           .fallback = "0",
-           .flags = gc::kArchive,
-           .help = "1: every map light throws a figure's shadow, the unseen fill lights too, and "
-                   "a figure darkens the light bounced round him; 0: only lights whose source "
-                   "shows (flames, globes, lamps at their glowing fittings)",
-           .min = 0,
-           .max = 1},
-          &picture.fill_shadows);
+  cv.bind(
+      {.name = "r_fire_glow",
+       .fallback = "1",
+       .flags = gc::kArchive,
+       .help = "How bright the torches', braziers' and bonfires' flames burn in the modern look.",
+       .min = 0,
+       .max = 4,
+       .values = "0: unlit; 0..4: that many times as made (1 the default)"},
+      &picture.fire_glow);
+  cv.bind(
+      {.name = "r_fill_shadows",
+       .fallback = "0",
+       .flags = gc::kArchive,
+       .help = "Whether every map light throws a figure's shadow, the unseen fill lights too.",
+       .min = 0,
+       .max = 1,
+       .values =
+           "0: only lights whose source shows, flames, globes and lamps at their glowing fittings "
+           "(the default); 1: every light, and a figure darkens the light bounced round him"},
+      &picture.fill_shadows);
   cv.bind({.name = "r_fire_speed",
            .fallback = "1",
            .flags = gc::kArchive,
-           .help = "how fast the torches', braziers' and bonfires' flames puff, churn and flicker "
-                   "in the modern look, 1 a real fire's of their size (a torch puffs about three "
-                   "times a second, a bonfire about once), lower slower",
+           .help = "How fast the torches', braziers' and bonfires' flames puff, churn and flicker "
+                   "in the modern look.",
            .min = 0,
-           .max = 2},
+           .max = 2,
+           .values = "0: frozen; 0..2: that many times a real fire's of their size, a torch "
+                     "puffing about three times a second (1 the default)"},
           &picture.fire_pace);
-  cv.bind({.name = "r_water_speed",
-           .fallback = "0.7",
-           .flags = gc::kArchive,
-           .help = "how fast the pools' water moves (its swell, its chop, its ripples) in the "
-                   "modern look, 1 a real water's, lower slower",
-           .min = 0,
-           .max = 2},
-          &picture.water_pace);
+  cv.bind(
+      {.name = "r_water_speed",
+       .fallback = "0.7",
+       .flags = gc::kArchive,
+       .help = "How fast the pools' water moves, its swell, chop and ripples, in the modern look.",
+       .min = 0,
+       .max = 2,
+       .values = "0: still; 0..2: that many times a real water's (0.7 the default)"},
+      &picture.water_pace);
   cv.bind({.name = "r_farland",
            .fallback = "auto",
-           .help = "the land round the map seen over its walls from high up: auto (one to suit "
-                   "the map's sky), off, or alps, fjord, highlands, winter, dolomites, sierra, "
-                   "volcano, arctic, xeno, ember, rime",
-           .kind = gc::CvarKind::text},
+           .help = "The land round the map seen over its walls from high up.",
+           .kind = gc::CvarKind::text,
+           .values = "auto: one to suit the map's sky (the default); off: none; alps: alpine "
+                     "peaks; fjord: a fjord; highlands: highlands; winter: a winter land; "
+                     "dolomites: dolomites; sierra: a sierra; volcano: volcanoes; arctic: arctic "
+                     "ice; xeno: an alien land; ember: an ember land; rime: a rime land"},
           &picture.far_land);
+  cv.bind({.name = "r_skyname",
+           .fallback = "",
+           .flags = gc::kArchive,
+           .help = "a sky box drawn through every map's sky in place of the map's own, by the "
+                   "name of its six pictures under env/ or gfx/env/; empty, each map's own",
+           .kind = gc::CvarKind::text},
+          &picture.sky_name);
   cv.bind({.name = "r_farland_warm",
            .fallback = "0",
-           .help = "the far land's air warmer than its own by this many degrees C (below 0 "
-                   "colder: the snow comes down the mountains and the lakes freeze)",
+           .help = "How much warmer the far land's air is than its own, in degrees C.",
            .min = -40,
-           .max = 40},
+           .max = 40,
+           .values = "-40..40: that many degrees, below 0 colder, the snow coming down the "
+                     "mountains and the lakes freezing (0 the default)"},
           &picture.far_warm);
   cv.bind({.name = "gamma",
            .fallback = "1",
            .flags = gc::kArchive,
-           .help = "the picture's brightness: 1 as drawn, lower brighter (0.5 the brightest the "
-                   "menu offers)",
+           .help = "The picture's brightness, lower brighter.",
            .min = 0.3,
-           .max = 1.5},
+           .max = 1.5,
+           .values = "0.3..1.5: that gamma, 1 as drawn and 0.5 the brightest the menu offers (1 "
+                     "the default)"},
           &picture.gamma);
   cv.bind({.name = "r_quality",
            .fallback = "custom",
            .flags = gc::kArchive,
-           .help = "the shadows, the water and the skies together: custom (each ce_ switch and "
-                   "its ce_<id>_quality as set), low, medium, high, top, auto (the most inside "
-                   "r_budget) or 0..1 (cheapest to the top, by measured cost)",
-           .kind = gc::CvarKind::text},
+           .help = "The shadows, the water and the skies set together.",
+           .kind = gc::CvarKind::text,
+           .values = "custom: each ce_ switch and its quality as set (the default); low: the "
+                     "cheapest; medium: between; high: the best but the top; top: everything; "
+                     "auto: the most inside r_budget; 0..1: cheapest to the top, by measured cost"},
           &picture.quality);
   cv.bind({.name = "r_budget",
            .fallback = "8.3",
            .flags = gc::kArchive,
-           .help = "the GPU time a frame may take with r_quality auto, ms (8.3: 120 Hz)",
+           .help = "The GPU time a frame may take with r_quality auto, in ms.",
            .min = 1,
-           .max = 100},
+           .max = 100,
+           .values = "1..100: that many ms (8.3 the default, for 120 Hz)"},
           &picture.budget_ms);
   ge::classicenhance::bind_switches(cv, &picture.ce);
   // Each dear switch's level when it is on (Stops), beside its ce_ switch.
-  const auto level = [&](const char* name, const char* help, std::string* field) {
+  const auto level = [&](const char* name, const char* help, const char* values,
+                         std::string* field) {
     cv.bind({.name = name,
              .fallback = "high",
              .flags = gc::kArchive,
              .help = help,
-             .kind = gc::CvarKind::text},
+             .kind = gc::CvarKind::text,
+             .values = values},
             field);
   };
-  level("ce_shadows_quality",
-        "the live lights' shadows with ce_shadows on: low (the walls' alone, no figure's), medium "
-        "(the figures' too, hard-edged) or high (soft by each flame's size, from every light)",
+  level("ce_shadows_quality", "The live lights' shadows with ce_shadows on.",
+        "low: the walls' alone, no figure's; medium: the figures' too, hard-edged; high: soft by "
+        "each flame's size, from every light (the default)",
         &picture.shadows_quality);
-  level("ce_water_quality",
-        "the water with ce_water on: low (a still surface lit by the room, no reflection), "
-        "medium (its chop and the room reflected off the screen) or high (the room mirrored "
-        "whole, the sun's caustics and shafts)",
+  level("ce_water_quality", "The water with ce_water on.",
+        "low: a still surface lit by the room, no reflection; medium: its chop and the room "
+        "reflected off the screen; high: the room mirrored whole, the sun's caustics and shafts "
+        "(the default)",
         &picture.water_quality);
-  level("ce_skies_quality",
-        "the sky with ce_skies on: low (our sky, its mean cloud, no cloud layer), medium (the "
-        "cloud layer too) or high (and the far land round the map seen from high up)",
+  level("ce_skies_quality", "The sky with ce_skies on.",
+        "low: our sky with its mean cloud, no cloud layer; medium: the cloud layer too; high: and "
+        "the far land round the map seen from high up (the default)",
         &picture.skies_quality);
   ge::brush::app::add_weather_cvars(cv, picture.weather);
 }

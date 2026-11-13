@@ -15,6 +15,8 @@
 // - ON THE GPU: one R8Unorm array of every kind's map and one RGBA8Unorm array of their colours
 //   (white for a kind with none), each layer a kind, with their whole mip chains (each level the
 //   box filter of the one above).
+// - IN A WEB BUILD (a viewer on a hub's page) the maps are left out of the wasm (2.8 MB); every
+//   kind is drawn at its mean, in its tint (`GE_MOON_MAPS`, engine/render/module.cmake).
 //
 // ge:summary Other moons' faces: real mosaics decoded, scaled, mipmapped and uploaded as arrays
 // ge:keywords render moons moon-maps albedo mosaic texture-array mipmap io europa ganymede

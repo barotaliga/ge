@@ -42,6 +42,8 @@ struct HubOptions {
   std::string archive;                         // the demo archive's directory ("" none)
   double keep_gb = 0, keep_days = 0;           // the archive's retention (0: no limit)
   std::string viewer;                          // the web viewer's built files ("" none, watch.hpp)
+  std::string accounts;   // the account service's folder ("" none run here; account/host.hpp)
+  int accounts_port = 0;  // its UDP port (0: kAccountPort)
   bool help = false;
 };
 
