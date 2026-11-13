@@ -47,6 +47,10 @@ bool read_file(const PlaceNames& p, const SearchPath& files, const std::string& 
   return true;
 }
 
+float range_of(const PlaceNames& p) {
+  return p.range != nullptr ? static_cast<float>(p.range->number) : 0;
+}
+
 std::string lower(std::string s) {
   for (char& ch : s) ch = ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch;
   return s;
@@ -89,6 +93,13 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
                         .flags = con::kArchive,
                         .help = "where you are when the map has no place names",
                         .kind = con::CvarKind::text});
+  p.range = &v.add({.name = "loc_dist",
+                    .fallback = adapter.game != nullptr ? adapter.game->place_range : "0",
+                    .flags = con::kArchive,
+                    .help = "How far a place name reaches from its point, in units.",
+                    .kind = con::CvarKind::number,
+                    .min = 0,
+                    .values = "0: no limit; NUMBER: a point farther than this is no place"});
   // Each command under its name and its older short name, the same command either way.
   const auto both = [&con](const char* name, const char* old_name, const std::string& help,
                            const con::CommandFn& fn) {
@@ -113,7 +124,7 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
     sh::Vec3f at{0, 0, 0};
     if (where) where(at);
     sh::Loc gone;
-    if (!sh::remove_nearest_loc(p.locs, at, &gone)) {
+    if (!sh::remove_nearest_loc(p.locs, at, &gone, range_of(p))) {
       c.print("There are no places left to remove.");
       return;
     }
@@ -197,7 +208,7 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
         sh::Vec3f at;
         if (sub.empty()) {
           if (!in_game(c, at)) return;
-          const std::string name = sh::loc_name_at(p.locs, at);
+          const std::string name = sh::loc_name_at(p.locs, at, range_of(p));
           c.print(name.empty() ? (p.someplace != nullptr ? p.someplace->value : "someplace")
                                : name);
         } else if (sub == "add") {
@@ -210,7 +221,7 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
             return;
           }
           if (!in_game(c, at)) return;
-          const sh::Loc* near = sh::nearest_loc(p.locs, at);
+          const sh::Loc* near = sh::nearest_loc(p.locs, at, range_of(p));
           if (near == nullptr) {
             c.print("There is no place near you to rename.");
             return;
@@ -232,7 +243,6 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
           c.print("Usage: loc, or loc add|del|set|list|save");
         }
       });
-  (void)adapter;
 }
 
 }  // namespace shooters_edge::client

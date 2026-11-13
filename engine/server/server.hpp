@@ -145,6 +145,7 @@ struct GameRule {
   const char* help;                // what it does: one sentence (console/words.hpp)
   const char* fallback = nullptr;  // its default, when not empty
   const char* values = nullptr;    // what each value does (console/words.hpp)
+  bool info = true;                // published in the server info a browser reads
 };
 
 // A GAME'S OWN NAME for one of the core's settings (`ServerGame::names`): the name its configs,

@@ -6,6 +6,7 @@
 // ge:test tests/server_login_test.cpp
 #include "server/login.hpp"
 
+#include <cstddef>
 #include <cstdio>
 
 #include "account/ticket.hpp"
@@ -178,6 +179,51 @@ bool reserved_here(const Logins& l, int slot, const std::string& key) {
   return it != l.own->store.keys.end() && ga::find(l.own->store, it->second) != nullptr;
 }
 
+// A master elsewhere's answer about `key`, kept; the master asked when it never was. False (let
+// the name go) until it answers that an account holds it.
+bool reserved_elsewhere(Logins& l, const std::string& key) {
+  if (l.own != nullptr || l.link == nullptr || !l.key_known) return false;
+  for (const NameCheck& c : l.names)
+    if (c.key == key) return c.answered && c.reserved;
+  if (l.names.size() >= kNameChecks) {  // the oldest answered one goes
+    for (auto it = l.names.begin(); it != l.names.end(); ++it)
+      if (it->answered) {
+        l.names.erase(it);
+        break;
+      }
+    if (l.names.size() >= kNameChecks) return false;  // all still asking: ask later
+  }
+  NameCheck& c = l.names.emplace_back();
+  c.key = key;
+  net::Key fresh{};
+  l.fresh(l.fresh_ctx, fresh.data(), fresh.size());
+  ga::ask_start(c.ask, ga::Op::name, l.master, l.master_key, {key}, fresh, l.now_us);
+  l.stats.names_asked++;
+  return false;
+}
+
+// A name the master says an account holds: every guest going by it is renamed (told now, or on
+// joining when still connecting).
+void name_answered(Logins& l, const NameCheck& c) {
+  for (int i = 0; i < kLoginSeats; i++) {
+    LoginSeat& seat = l.seats[i];
+    if (seat.state == LoginState::in || seat.shown.empty() ||
+        ga::name_key(l.rules, seat.shown) != c.key)
+      continue;
+    const std::string name = std::move(seat.shown);
+    seat.shown.clear();
+    l.out.push_back({LoginOut::Kind::unname, i, name});
+    if (seat.state == LoginState::empty) {
+      seat.renamed = name;
+    } else {
+      l.stats.renamed++;
+      tell(
+          l, i,
+          "The name " + name + " belongs to a registered player. If it's yours, log in to use it.");
+    }
+  }
+}
+
 }  // namespace
 
 bool logins_open(Logins& l, const LoginSettings& set, const account::NameRules& rules,
@@ -191,6 +237,8 @@ bool logins_open(Logins& l, const LoginSettings& set, const account::NameRules& 
   l.fresh = fresh;
   l.fresh_ctx = fresh_ctx;
   for (LoginSeat& s : l.seats) s = LoginSeat{};
+  l.names.clear();
+  l.now_us = unix_us;
   l.out.clear();
   if (set.master.empty()) {
     l.own = own;
@@ -232,7 +280,9 @@ void login_seat(Logins& l, int slot, int userid, bool spectator, std::string_vie
   LoginSeat& seat = l.seats[slot];
   if (seat.state != LoginState::empty && seat.userid == userid) return;
   std::string renamed = std::move(seat.renamed);
+  std::string shown = std::move(seat.shown);
   seat = LoginSeat{};
+  seat.shown = std::move(shown);
   seat.state = LoginState::guest;
   seat.userid = userid;
   seat.spectator = spectator;
@@ -262,6 +312,7 @@ void login_leave(Logins& l, int slot) {
 
 bool login_line(Logins& l, int slot, std::string_view line, double now_s, int64_t unix_us) {
   (void)now_s;
+  l.now_us = unix_us;
   if (slot < 0 || slot >= kLoginSeats) return false;
   LoginSeat& seat = l.seats[slot];
   std::string_view text = trim(line);
@@ -321,10 +372,13 @@ bool login_line(Logins& l, int slot, std::string_view line, double now_s, int64_
 }
 
 void logins_frame(Logins& l, double now_s, int64_t unix_us) {
+  l.now_us = unix_us;
   if (l.link != nullptr) {
     if (!l.key_known && !l.key_ask.done) account::key_ask_update(l.key_ask, *l.link, unix_us);
     for (LoginSeat& s : l.seats)
       if (s.state == LoginState::asking) account::ask_update(s.ask, *l.link, unix_us);
+    for (NameCheck& c : l.names)
+      if (!c.answered) account::ask_update(c.ask, *l.link, unix_us);
     net::Address from;
     for (;;) {
       const int n = net::transport_receive(*l.link, l.buffer, sizeof l.buffer, from, unix_us);
@@ -341,8 +395,27 @@ void logins_frame(Logins& l, double now_s, int64_t unix_us) {
         }
         continue;
       }
+      bool read = false;
       for (LoginSeat& s : l.seats)
-        if (s.state == LoginState::asking && account::ask_read(s.ask, l.buffer, size, from)) break;
+        if (s.state == LoginState::asking && account::ask_read(s.ask, l.buffer, size, from)) {
+          read = true;
+          break;
+        }
+      for (size_t k = 0; !read && k < l.names.size(); k++)
+        read = !l.names[k].answered && account::ask_read(l.names[k].ask, l.buffer, size, from);
+    }
+    for (size_t k = 0; k < l.names.size();) {
+      NameCheck& c = l.names[k];
+      if (c.answered || !c.ask.done) {
+        k++;
+      } else if (!c.ask.answered) {  // no answer: asked again the next time the name comes
+        l.names.erase(l.names.begin() + static_cast<std::ptrdiff_t>(k));
+      } else {
+        c.answered = true;
+        c.reserved = c.ask.reply.refusal == ga::Refusal::none && c.ask.reply.account != 0;
+        if (c.reserved) name_answered(l, c);
+        k++;
+      }
     }
     if (!l.key_known && l.key_ask.done && !l.key_ask.answered) {
       l.notes.push_back("the account master " + net::to_string(l.master) +
@@ -379,7 +452,12 @@ NameVerdict login_name(Logins& l, int slot, std::string& name, bool quiet) {
   }
   if (l.set.reserved == 0 || !logins_active(l)) return NameVerdict::free;
   const std::string key = account::name_key(l.rules, name);
-  if (key.empty() || !reserved_here(l, slot, key)) return NameVerdict::free;
+  if (key.empty()) return NameVerdict::free;
+  if (!reserved_here(l, slot, key) && !reserved_elsewhere(l, key)) {
+    seat.shown = name;
+    return NameVerdict::free;
+  }
+  seat.shown.clear();
   l.stats.renamed += quiet ? 0 : 1;
   if (quiet)
     seat.renamed = name;
@@ -392,5 +470,17 @@ uint64_t login_account(const Logins& l, int slot) {
   if (slot < 0 || slot >= kLoginSeats) return 0;
   return l.seats[slot].state == LoginState::in ? l.seats[slot].account : 0;
 }
+
+bool login_key(const Logins& l, net::Key& out) {
+  if (l.own != nullptr) {
+    out = account::service_key(*l.own);
+    return true;
+  }
+  if (!l.key_known) return false;
+  out = l.master_key;
+  return true;
+}
+
+std::string login_key_tag(const net::Key& key) { return net::key_to_hex(key).substr(0, 16); }
 
 }  // namespace ge::server

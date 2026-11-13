@@ -140,7 +140,12 @@ Stand in a place and `addloc <name>`; `removeloc` forgets the nearest, `clearloc
 `saveloc <name>` (or `saveloc $mapname`) writes `<game folder>/locs/<name>.loc` in the shared
 format, `loadloc <name>` reads one, and `loc` says where you are. The long names
 (`locations_add` and so on) work too, and so does the sequel's spelling: `loc add <name>`,
-`loc del`, `loc set <name>` (renames the nearest), `loc list` and `loc save`.
+`loc del`, `loc set <name>` (renames the nearest), `loc list` and `loc save`. A place reaches
+`loc_dist` units from its point (the game's own default: 500 in the sequel, no limit in the first
+game; 0 is no limit): farther off, `loc` says someplace and `removeloc` or `loc set` finds nothing.
+The places follow the player's view on a server joined and in a demo played as well as in the
+window's own game: each map's file is read as it starts, from the recording's game folder for a
+demo, and edited and saved the same way.
 
 **The title and the loads.** With no `+map` the window opens at once on the title
 (`client/title.hpp`: a night with the full moon low in a total eclipse, blood red, cloud carried
@@ -1523,8 +1528,19 @@ game's glyph sheet over its own console background (`menu/classic_console.hpp`, 
 `ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
 GAME and SELECT GAME are drawn in the game's letters under carved titles (`menu/classic_pages.hpp`;
 SELECT GAME's own row and the two games' names on it cut letter by letter from the strips like DEMOS'). Lab `se-attract` draws
-the menu, SELECT GAME, the watched recording, the console, DEMOS and JOIN A GAME over a played
-recording (`--basedir` a player's install).
+the menu, SELECT GAME, OPTIONS, the watched recording, the console, DEMOS and JOIN A GAME over a
+played recording (`--basedir` a player's install; `--demo=none` over the title's dark, for a game
+whose recordings cannot play yet).
+
+The sequel's menu is drawn in its own pictures too (`client/sequel_adapter.cpp` reads its
+`pics/*.pcx`; `ClassicArt::plates`, `menu/classic_view.hpp`). They are drawn on a 320 x 240
+screen with the 320 x 200 one in its middle. The root is its main menu: the plaque and the logo
+down the left, a plate for each row, the lit plate and the spinning cursor on the focused row.
+Each page under it has its banner over the top. SELECT GAME, DEMOS and HELP have no plate of
+their own, so each is built from the other plates' letters, a 17 px cell each. The C, the H and
+the K are pieced from O, N, R and Y (`kPlate*`, held to the plates' print). SELECT GAME's title and
+the two games' names on it are plates built the same way. The lobby and the scoreboard stay
+modern in the sequel until their pictures are read.
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
 output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),

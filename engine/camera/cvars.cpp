@@ -6,6 +6,7 @@
 // ge:test tests/camera_cvars_test.cpp
 #include "camera/cvars.hpp"
 
+#include <algorithm>
 #include <string>
 
 #include "core/math.hpp"
@@ -30,40 +31,57 @@ void add_camera_cvars(con::Cvars& c, CameraCvars& out, const CameraDefaults& d) 
     std::string_view name;
     double fallback, min, max;
     std::string_view help;
+    std::string_view values;  // console/words.hpp
     double* field;
   };
   const Row rows[] = {
-      {"cl_fov", d.fov, 0, 170, "the first-person lens, deg horizontal at 4:3; 0: the rig's own",
-       &out.fov},
+      {"cl_fov", d.fov, 0, 170, "The first-person lens's horizontal angle at 4:3, in degrees.",
+       "0: the rig's own; 0..170: that many degrees", &out.fov},
       {"cl_viewheight", d.viewheight, 0, 1e4,
-       "the first-person eyes over the body, world units; 0: the rig's own", &out.viewheight},
-      {"cl_bob", d.bob, 0, 0.2, "the stride's bob a unit of ground speed (0 off)", &out.bob},
-      {"cl_bobcycle", d.bobcycle, 0.05, 5, "the stride's period, s", &out.bobcycle},
-      {"cl_bobup", d.bobup, 0.01, 0.99, "the rising share of the stride", &out.bobup},
-      {"cl_rollangle", d.rollangle, 0, 30, "the strafe roll at full side speed, deg (0 off)",
-       &out.rollangle},
+       "How high the first-person eyes sit over the body, in world units.",
+       "0: the rig's own; 0..10000: that many units", &out.viewheight},
+      {"cl_bob", d.bob, 0, 0.2,
+       "How much the view bobs with the stride, for each unit of ground speed.",
+       "0: no bob; 0..0.2: that much", &out.bob},
+      {"cl_bobcycle", d.bobcycle, 0.05, 5, "How long a stride's bob takes, in seconds.",
+       "0.05..5: that many seconds", &out.bobcycle},
+      {"cl_bobup", d.bobup, 0.01, 0.99, "The share of a stride the view spends rising.",
+       "0.01..0.99: that share", &out.bobup},
+      {"cl_rollangle", d.rollangle, 0, 30, "How far the view rolls at full side speed, in degrees.",
+       "0: no roll; 0..30: that many degrees", &out.rollangle},
       {"cl_rollspeed", d.rollspeed, 0.01, 1e5,
-       "the side speed that reaches cl_rollangle, world units/s", &out.rollspeed},
-      {"v_kicktime", d.kicktime, 0, 5, "how long a hit's view kick lasts, s", &out.kicktime},
-      {"v_kickpitch", d.kickpitch, 0, 30, "a hit's view kick in pitch, deg a unit of its size",
-       &out.kickpitch},
-      {"v_kickroll", d.kickroll, 0, 30, "a hit's view kick in roll, deg a unit of its size",
-       &out.kickroll},
-      {"v_idlescale", d.idlescale, 0, 10, "the idle sway at its most, deg (0 off)", &out.idlescale},
-      {"cl_landdip", d.landdip, 0, 4, "the landing dip, a share of the rig's own (0 off)",
-       &out.landdip},
+       "The side speed that rolls the view all of cl_rollangle, in world units a second.",
+       "0.01..100000: that speed", &out.rollspeed},
+      {"v_kicktime", d.kicktime, 0, 5, "How long a hit's view kick lasts, in seconds.",
+       "0: no kick; 0..5: that many seconds", &out.kicktime},
+      {"v_kickpitch", d.kickpitch, 0, 30,
+       "How far a hit kicks the view in pitch, in degrees for each unit of its size.",
+       "0: none; 0..30: that many degrees", &out.kickpitch},
+      {"v_kickroll", d.kickroll, 0, 30,
+       "How far a hit kicks the view in roll, in degrees for each unit of its size.",
+       "0: none; 0..30: that many degrees", &out.kickroll},
+      {"v_idlescale", d.idlescale, 0, 10, "How far the view sways at most when idle, in degrees.",
+       "0: no sway; 0..10: that many degrees", &out.idlescale},
+      {"cl_landdip", d.landdip, 0, 4,
+       "How far the view dips on landing, as a share of the rig's own.",
+       "0: no dip; 1: the rig's own; 0..4: that share", &out.landdip},
       {"cl_chasedist", d.chasedist, 0, 1e5,
-       "the chase camera's arm behind, world units; 0: the rig's own", &out.chasedist},
+       "How far behind the chase camera's arm reaches, in world units.",
+       "0: the rig's own; 0..100000: that many units", &out.chasedist},
       {"cl_chaseheight", d.chaseheight, 0, 1e5,
-       "the chase camera's arm over, world units; 0: the rig's own", &out.chaseheight},
-      {"cl_fovspeed", d.fovspeed, 0, 1, "how much a following lens widens with speed, 0 .. 1",
-       &out.fovspeed},
-      {"cl_camblend", d.camblend, 0, 4, "every camera change's length, a share; 0 cuts",
-       &out.camblend},
+       "How far up the chase camera's arm reaches, in world units.",
+       "0: the rig's own; 0..100000: that many units", &out.chaseheight},
+      {"cl_fovspeed", d.fovspeed, 0, 1, "How much a following lens widens with speed.",
+       "0: not at all; 0..1: that much", &out.fovspeed},
+      {"cl_camblend", d.camblend, 0, 4,
+       "How long every camera change takes, as a share of its own length.",
+       "0: a cut; 0..4: that share", &out.camblend},
       {"cl_motion", d.motion, 0, 1,
-       "comfort: every camera motion you did not command (bob, roll, sway, tremor, shakes), 0 .. 1",
-       &out.motion},
-      {"cl_shake", d.shake, 0, 1, "the camera's shakes alone, 0 .. 1", &out.shake},
+       "How much of the camera's motion you did not command remains: bob, roll, sway, tremor and "
+       "shakes.",
+       "0: none, for comfort; 1: all of it; 0..1: that share", &out.motion},
+      {"cl_shake", d.shake, 0, 1, "How much of the camera's shakes remain.",
+       "0: none; 1: all of them; 0..1: that share", &out.shake},
   };
   for (const Row& r : rows) {
     // The registry copies the fallback and the help (console/cvar.hpp's Cvar).
@@ -74,16 +92,27 @@ void add_camera_cvars(con::Cvars& c, CameraCvars& out, const CameraDefaults& d) 
             .help = r.help,
             .kind = con::CvarKind::number,
             .min = r.min,
-            .max = r.max},
+            .max = r.max,
+            .values = r.values},
            r.field);
   }
   if (!d.camera.empty()) {
-    const std::string help = "the camera's rung: " + std::string(d.ladder_names);
+    // One entry a rung, each its own name (console/words.hpp).
+    std::string values;
+    for (size_t at = 0; at < d.ladder_names.size();) {
+      const size_t end = std::min(d.ladder_names.find(' ', at), d.ladder_names.size());
+      if (end > at) {
+        if (!values.empty()) values += "; ";
+        values.append(d.ladder_names.substr(at, end - at)).append(": that rung");
+      }
+      at = end + 1;
+    }
     out.camera_cvar = &c.bind({.name = "cl_camera",
                                .fallback = d.camera,
                                .flags = kPlayer,
-                               .help = help,
-                               .kind = con::CvarKind::text},
+                               .help = "The camera's rung on the game's ladder.",
+                               .kind = con::CvarKind::text,
+                               .values = values},
                               &out.camera);
     out.camera_seen = out.camera_cvar->revision;
   }

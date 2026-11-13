@@ -7,6 +7,7 @@
 // ge:skill console sim testing
 #include "check.hpp"
 #include "console/cfg.hpp"
+#include "console/words.hpp"
 #include "fall_line/cfg/cvars.hpp"
 #include "fall_line/sim/hunt_cfg.hpp"
 
@@ -20,10 +21,13 @@ TEST(defaults_match_the_struct) {
   fall_line::cfg::add_cvars(c, s);
   CHECK(s.width == fresh.width && s.shadow_size == fresh.shadow_size && s.bloom == fresh.bloom);
   CHECK(s.view == "chase" && s.seed == 38 && s.hour == -1 && s.volume == fresh.volume);
-  // Every cvar the game reads has its help, and every name follows the prefixes.
+  // Every cvar the game reads says what it does in one sentence and what each value does.
+  int count = 0;
   for (const con::Cvar* v : c.cvars().sorted()) {
-    CHECK_MSG(!v->help.empty(), v->name + " has no help: say what it does in cfg/cvars.cpp");
+    CHECK_MSG(con::words_fault(*v).empty(), v->name + ": " + con::words_fault(*v));
+    count++;
   }
+  CHECK(count > 60);
 }
 
 TEST(a_cfg_reaches_the_settings_after_the_latch) {

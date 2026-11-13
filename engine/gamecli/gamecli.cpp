@@ -98,8 +98,9 @@ constexpr Command kEngine[] = {
      cmd_account_signup},
     {"account signin", "<name>", "signed in: a ticket kept for 24 hours that servers check",
      "account signin Ranger --password=<it>", "engine", cmd_account_signin},
-    {"account code", "<name>",
-     "a one-time login code for a classic client's console (login <name> <code>)",
+    {"account code", "[<name>]",
+     "a one-time login code for a classic client's console (login <name> <code>), bought with "
+     "the ticket kept by account signin, else with the password",
      "account code Ranger --password=<it>", "engine", cmd_account_code},
     {"account recover", "<name> <recovery code>",
      "a new password set with the recovery code shown at sign-up",
