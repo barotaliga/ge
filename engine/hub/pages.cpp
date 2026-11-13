@@ -65,7 +65,8 @@ std::string nav(const HubSpec& spec, const char* on) {
   };
   return "<header><a class=\"brand\" href=\"/\">" + html_escape(spec.game) + "</a><nav>" +
          link("/", "Servers") + link("/players", "Players") + link("/demos", "Demos") +
-         link("/v1", "API") + "</nav></header>\n";
+         (spec.map_files ? link("/play", "Play") : std::string()) + link("/v1", "API") +
+         "</nav></header>\n";
 }
 
 std::string foot() {
@@ -487,6 +488,9 @@ background:#333}#viewer-bar::-webkit-progress-bar{background:#333;border-radius:
 #viewer-bar::-webkit-progress-value{background:#1b8a5a;border-radius:3px}
 #viewer-bar::-moz-progress-bar{background:#1b8a5a;border-radius:3px}
 ul.also{list-style:none;padding:0;margin:0}ul.also li{margin:6px 0}
+ul.maps{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;list-style:none;
+padding:0}ul.maps a{display:block;padding:12px;border-radius:8px;background:var(--panel);
+text-decoration:none;font-weight:600}
 @media(max-width:700px){main.watch{grid-template-columns:1fr}}
 )css";
   return css;
