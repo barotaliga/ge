@@ -28,6 +28,8 @@
 
 #include "account/service.hpp"
 #include "account/ticket.hpp"
+#include "brush/read.hpp"
+#include "brush/write.hpp"
 #include "console/console.hpp"
 #include "console/view.hpp"
 #include "core/num.hpp"
@@ -38,6 +40,10 @@
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
+#include "shooters_edge/net/sequel_client.hpp"
+#include "shooters_edge/net/sequel_login.hpp"
+#include "shooters_edge/net/sequel_net_server.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 #include "ui/console.hpp"
 #include "ui/raster.hpp"
 
@@ -306,6 +312,106 @@ Session run_session(uint32_t seed, double seconds, double login_time_s) {
   return r;
 }
 
+// THE SEQUEL'S SERVER: its own accounts, a stock client of the sequel on it. The client enters as a
+// guest (its client forwards an unknown word only once in the game), types the login line and is
+// shown by its account's name; a second joins as a registered name and plays as "player".
+namespace br = ge::brush;
+namespace sv = shooters_edge::server;
+
+std::shared_ptr<const br::Map> sequel_hall(std::string& error) {
+  br::BrushWorld w;
+  w.models.resize(1);
+  const auto box = [&](float x0, float y0, float z0, float x1, float y1, float z1) {
+    const float lo[3] = {x0, y0, z0}, hi[3] = {x1, y1, z1};
+    w.models[0].push_back(br::box_brush(lo, hi, ge::shooter::kSqSolid, "world/wall"));
+  };
+  box(-1024, -1024, -16, 1024, 1024, 0);
+  box(-1040, -1024, -16, -1024, 1024, 256);
+  box(1024, -1024, -16, 1040, 1024, 256);
+  box(-1040, 1024, -16, 1040, 1040, 256);
+  box(-1040, -1040, -16, 1040, -1024, 256);
+  for (const char* at : {"-400 -400 24", "400 400 24"}) {
+    br::Entity e;
+    e.pairs = {{"classname", "info_player_deathmatch"}, {"origin", at}, {"angle", "0"}};
+    w.entities.push_back(e);
+  }
+  std::vector<uint8_t> bytes;
+  auto map = std::make_shared<br::Map>();
+  if (!br::write_brush_world(w, &bytes, &error) || !br::read_bsp(bytes, map.get(), &error))
+    return nullptr;
+  return map;
+}
+
+void sequel_session(uint32_t seed, Session& r) {
+  sv::RulesRunner rules = sv::sequel_runner(sv::make_sequel_server({}));
+  rules.console("deathmatch 1");
+  sv::MapSpec map;
+  map.name = "hall";
+  map.brushes = sequel_hall(r.error);
+  if (!map.brushes || !rules.start(map, r.error)) return;
+  gn::SimNetwork net = gn::make_sim_network(seed + 11, gn::LinkConditions{});
+  gn::Transport st, service_port, ct[2];
+  gn::open_sim_transport(st, net, gn::sim_address(0, se::kPortSequel));
+  gn::open_sim_transport(service_port, net, gn::sim_address(9, ga::kAccountPort));
+  se::SequelNetServer server;
+  if (!se::sequel_net_start(server, rules, st, se::SequelNetConfig{}, r.error)) return;
+  uint64_t fresh_n = seed;
+  ga::Service svc;
+  ga::ServiceConfig sc;
+  sc.seed = key_of(seed, 5);
+  ga::service_init(svc, sc, accounts(seed), service_port, counter_fresh, &fresh_n);
+  gs::LoginSettings set;
+  set.login = 1;
+  se::SequelLogin login;
+  if (!se::sequel_login_open(login, server, set, &svc, nullptr, unix_now, r.error)) return;
+  Player who[2] = {player("sequel", "eve", 2, 0, {}), player("sequel-guest", "N1clas", 2, 0, {})};
+  se::SequelClientEnd clients[2];
+  for (int i = 0; i < 2; i++) {
+    gn::open_sim_transport(ct[i], net, gn::sim_address(uint32_t(i + 1), kClientPort));
+    se::SequelClientConfig cfg;
+    cfg.name = who[i].name;
+    cfg.qport = static_cast<uint16_t>(100 + i);
+    se::sequel_client_start(clients[i], ct[i], gn::sim_address(0, se::kPortSequel), cfg, 0);
+  }
+  const std::string code = ga::make_code(svc.store, 1, g_unix, fresh_of(seed, 40)).code;
+  int64_t now = 0;
+  bool typed = false;
+  size_t read[2] = {0, 0};  // prints already in the console picture
+  const auto take = [&](int i) {
+    for (; read[i] < clients[i].prints.size(); read[i]++) {
+      std::string line = clients[i].prints[read[i]];
+      while (!line.empty() && line.back() == '\n') line.pop_back();
+      who[i].console.push_back(line);
+      if (agent_syntax(line)) r.agent++;
+      if (line.find(code) != std::string::npos) r.leaks++;
+      fold(r.digest, line);
+    }
+  };
+  for (int t = 0; t < 600; t++) {
+    now += 13000;
+    gn::sim_advance(net, now);
+    for (se::SequelClientEnd& c : clients) se::sequel_client_tick(c, now);
+    se::sequel_net_frame(server, now);
+    ga::service_update(svc, g_unix);
+    se::sequel_login_frame(login);
+    if (!typed && now >= 3000000 && clients[0].stage == se::ClientStage::active) {
+      typed = true;
+      const std::string line = "login Niclas " + code;
+      take(0);
+      who[0].console.push_back("]" + line);
+      se::sequel_client_command(clients[0], line);
+    }
+  }
+  for (int i = 0; i < 2; i++) {
+    take(i);
+    who[i].shown = server.clients[i].name;
+    who[i].auth = gs::login_account(login.logins, i) != 0 ? who[i].shown : "";
+    who[i].dropped = server.clients[i].stage == se::SequelSlot::free;
+    fold(r.digest, who[i].shown + "|" + who[i].auth);
+    r.players.push_back(std::move(who[i]));
+  }
+}
+
 void draw(gl::Picture& p, const con::ConsoleView& v) {
   ge::ui::Image img;
   img.width = p.width, img.height = p.height;
@@ -340,8 +446,10 @@ void run(gl::Lab& lab) {
   const auto seed = static_cast<uint32_t>(lab.arg_num("seed"));
   const double seconds = lab.arg_num("seconds");
   const double login_time = lab.arg_num("logintime");
-  const Session a = run_session(seed, seconds, login_time);
-  const Session b = run_session(seed, seconds, login_time);
+  Session a = run_session(seed, seconds, login_time);
+  Session b = run_session(seed, seconds, login_time);
+  if (a.error.empty()) sequel_session(seed, a);
+  if (b.error.empty()) sequel_session(seed, b);
   if (!a.error.empty()) {
     lab.fail("the dedicated servers did not open: " + a.error,
              "Fix what the error names (games/shooters_edge/net/classic_login.cpp, "
@@ -356,8 +464,12 @@ void run(gl::Lab& lab) {
   for (const Player& p : a.players) {
     in += p.auth.empty() ? 0 : 1;
     dropped += p.dropped ? 1 : 0;
-    table.rows.push_back({p.label, p.server == 0 ? "own master" : "master elsewhere", p.name,
-                          p.shown, p.auth.empty() ? "-" : p.auth, p.dropped ? "dropped" : "yes"});
+    table.rows.push_back({p.label,
+                          p.server == 0   ? "own master"
+                          : p.server == 1 ? "master elsewhere"
+                                          : "the sequel's, own master",
+                          p.name, p.shown, p.auth.empty() ? "-" : p.auth,
+                          p.dropped ? "dropped" : "yes"});
   }
   lab.metric("logged_in", in, "players");
   lab.metric("dropped", dropped, "players");
@@ -413,6 +525,16 @@ void run(gl::Lab& lab) {
        "the ticket for a one-time code on a socket of its own, and sends the login line: the "
        "player types nothing and the ticket never reaches the game server.",
        "'Logging in as Ann.', then 'Ann logged in.' and the player's chat after it"},
+      {"sequel", "LOGGED IN ON THE SEQUEL'S SERVER",
+       "A stock client of the sequel joins a server of the sequel that keeps its own accounts. Its "
+       "client forwards a word it does not know only once in the game, so it enters as a guest, is "
+       "told how to log in in lines its console shows whole (38 characters), types login with the "
+       "one-time code and is shown by its account's name. The line never reaches the rules.",
+       "the prompt in short lines, then 'Niclas logged in.'"},
+      {"sequel-guest", "A REGISTERED NAME ON THE SEQUEL'S SERVER",
+       "A second client of the sequel joins as N1clas, which folds to the registered Niclas: it "
+       "plays as player and is told why.",
+       "the name refused, the prompt"},
   };
   for (const Shot& one : shots)
     for (const Player& p : a.players)
@@ -425,10 +547,11 @@ const gl::LabSpec kSpec{
     "se-login",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_login and engine/server/login (logging in from a stock "
-    "client)",
+    "games/shooters_edge/net/classic_login, sequel_login and engine/server/login (logging in "
+    "from a stock client)",
     "net",
-    "Does a stock classic client log in on our servers with a one-time code, by either form, on a "
+    "Does a stock classic client (either game's) log in on our servers with a one-time code, by "
+    "either form, on a "
     "server that is its own master and on one asking a master, with names, chat and time held as "
     "the design says and no login line shown to anyone?",
     {
