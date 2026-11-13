@@ -95,7 +95,7 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
     con.add_command(name, help, fn);
     con.add_command(old_name, help, fn);
   };
-  const con::CommandFn add = [&p, where](con::Console& c, const CArgs& a) {
+  const auto add = [&p, where](con::Console& c, const CArgs& a) {
     if (a.size() != 2) {
       c.print("Usage: addloc <name>");
       return;
@@ -109,7 +109,7 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
     c.print("Added place \"" + a[1] + "\" at " + at_text(at));
   };
   both("locations_add", "addloc", "locations_add <name>: name the place where you stand", add);
-  const con::CommandFn remove = [&p, where](con::Console& c, const CArgs&) {
+  const auto remove = [&p, where](con::Console& c, const CArgs&) {
     sh::Vec3f at{0, 0, 0};
     if (where) where(at);
     sh::Loc gone;
@@ -127,7 +127,7 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
          p.locs.points.clear();
          c.print("Cleared " + std::to_string(n) + " places.");
        });
-  const con::CommandFn save = [&p](con::Console& c, const CArgs& a) {
+  const auto save = [&p](con::Console& c, const CArgs& a) {
     if (a.size() != 2) {
       c.print("Usage: saveloc <name>");
       return;

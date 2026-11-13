@@ -24,7 +24,8 @@
 // ge:summary The window's place names: read at map start, added, removed and saved in the game
 // ge:keywords place-names loc locations loc-editing locations_add locations_remove addloc
 // ge:keywords removeloc locations_savefile saveloc locations_loadfile loadloc locations_clearall
-// ge:keywords clearlocs loc-add loc-set loc-list loc-save tp_loadlocs tp_name_someplace map_started where-am-i
+// ge:keywords clearlocs tp_loadlocs tp_name_someplace map_started where-am-i
+// ge:keywords loc-add loc-set loc-list loc-save
 // ge:skill shooter console
 // ge:test tests/shooters_edge_place_names_test.cpp
 #pragma once
