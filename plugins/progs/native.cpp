@@ -7,6 +7,7 @@
 #include "progs/native.hpp"
 
 #include <cstdio>
+#include <iterator>
 #include <set>
 #include <string_view>
 
@@ -101,7 +102,9 @@ bool build_native_progs(const NativeProgram& program, Progs& out, NativeOffsets&
     rec.first_statement = -(kNativeBase + static_cast<int32_t>(i));
     rec.file = a.string(program.file);
     rec.num_parms = static_cast<int32_t>(fn.parms.size());
-    for (size_t k = 0; k < fn.parms.size(); k++) rec.parm_size[k] = fn.parms[k];
+    // Bounded by the record's slots as well (checked above), so the optimizer sees no overflow.
+    for (size_t k = 0; k < fn.parms.size() && k < std::size(rec.parm_size); k++)
+      rec.parm_size[k] = fn.parms[k];
     offsets.functions.push_back(at);
     offsets.runs.push_back(fn.run);
   }
