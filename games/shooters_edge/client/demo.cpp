@@ -320,10 +320,7 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
     bytes.erase(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(kVoiceHeader));
   }
   if (voice_base == 0 && is_sequel_demo(bytes)) {
-    out.state.format = DemoFormat::sequel;
-    out.state.protocol = 34;
-    out.ring.resize(16);
-    out.baselines.resize(1024);
+    sequel_stream_begin(out);
   } else if (is_multiview(bytes)) {
     out.state.format = DemoFormat::multiview;
     out.state.view_height = 22;
