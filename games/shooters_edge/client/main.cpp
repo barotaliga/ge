@@ -297,7 +297,8 @@ int run_main(int argc, char** argv) {
   console.cvars().set("con_notifylines", "0", ge::console::Source::code);
   // The install (client/game_folder.hpp): -basedir, else the one loaded last; multiplayer over
   // `id1`.
-  // Started inside an install (or placed in one, or above several: client/install_search.hpp), that one.
+  // Started inside an install (or placed in one, or above several: client/install_search.hpp), that
+  // one.
   const std::string prefs = ge::platform::prefs_dir("gameengine2", "shooters_edge");
   std::vector<cl::FoundInstall> installs;  // the console's `games`
   cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);

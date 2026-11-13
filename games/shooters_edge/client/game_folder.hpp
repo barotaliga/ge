@@ -70,11 +70,11 @@ std::string game_of(const std::string& basedir, const ge::classicenhance::Profil
                                                     ge::classicenhance::classic_profile());
 
 // The install the window opens, into `args`: `-basedir`; else the install the game was started
-// inside (client/install_search.hpp's `install_around` of the folder it runs in, `args.basedir`, then of
-// each of `places`: the folder its executable was placed in); else of the installs right under
-// those folders (`installs_below`), the game loaded last when it is one of them, else the first
-// full game; else the game loaded last (kept under `prefs`) while its install still checks; else
-// the folder the game runs in. Then the game folder over it, `-game`, else `game_of`. `found`
+// inside (client/install_search.hpp's `install_around` of the folder it runs in, `args.basedir`,
+// then of each of `places`: the folder its executable was placed in); else of the installs right
+// under those folders (`installs_below`), the game loaded last when it is one of them, else the
+// first full game; else the game loaded last (kept under `prefs`) while its install still checks;
+// else the folder the game runs in. Then the game folder over it, `-game`, else `game_of`. `found`
 // (when given) gets the installs found under those folders, for the console's `games`.
 void choose_folder(Args& args, const std::string& prefs,
                    const std::vector<std::string>& places = {},

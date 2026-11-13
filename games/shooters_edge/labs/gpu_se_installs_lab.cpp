@@ -1,10 +1,10 @@
 // LAB `se-installs`: THE CLASSIC INSTALLS A PLAYER DROPS THE GAME BESIDE. A parent folder holding
-// classic installs (client/install_search.hpp) searched as the window searches the folder it was placed
-// in: each install found by its folder's name or by what it holds, its release told by its packs'
-// sizes, the one the window would play picked; then, for each, its configs run in the install's
-// own order (client/install_configs.hpp) on a console of its own, the files listed in the order
-// they ran; its search path opened with the bundled client's folder in it; and its start map drawn
-// from the player's start, with its place names counted (client/place_names.hpp).
+// classic installs (client/install_search.hpp) searched as the window searches the folder it was
+// placed in: each install found by its folder's name or by what it holds, its release told by its
+// packs' sizes, the one the window would play picked; then, for each, its configs run in the
+// install's own order (client/install_configs.hpp) on a console of its own, the files listed in the
+// order they ran; its search path opened with the bundled client's folder in it; and its start map
+// drawn from the player's start, with its place names counted (client/place_names.hpp).
 //
 // Without `--parent` the installs are our own: three folders written under the temporary folder
 // (the first game's shareware and registered packs, the sequel's demo, by their sizes alone, and a
