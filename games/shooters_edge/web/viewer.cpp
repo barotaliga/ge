@@ -8,7 +8,8 @@
 // The page's status line says what is loading, or why there is no picture. Either classic game's
 // recording plays (demo.hpp: the format is read off the bytes); the hub's packs are that game's.
 // With `--play=<map>` the page plays a match against bots instead (play.hpp): only the player
-// build (`shooters_edge_play`, SE_WEB_PLAY) has the server for it.
+// build (`shooters_edge_play`, SE_WEB_PLAY) has the server for it. With `--join=<url>` it plays a
+// real server through the page's WebTransport session instead (join.hpp), in the same build.
 //
 // A LIVE BROADCAST (`--tv=ws://...`) is read off the TV node's WebSocket (tv/websocket.hpp): the
 // viewer says hello as a viewer, the node's messages are turned back into the replay file as it
@@ -44,6 +45,7 @@
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
+#include "shooters_edge/web/join.hpp"
 #include "shooters_edge/web/play.hpp"
 #include "tv/node.hpp"
 #include "ui/draw.hpp"
@@ -145,6 +147,14 @@ int main(int argc, char** argv) {
   cl::SearchPath files;
   if (!mount_packs(args, files, error))
     return fail("The game's files did not load. Try again in a moment.", error);
+  if (!args.join.empty()) {
+#ifdef SE_WEB_PLAY
+    return shooters_edge::web::join_in_page(args, files, kCanvas);
+#else
+    return fail("This page's viewer only watches. Open the hub's Play page to play.",
+                "--join needs shooters_edge_play.js, the viewer that plays");
+#endif
+  }
   if (!args.play.empty()) {
 #ifdef SE_WEB_PLAY
     return shooters_edge::web::play_in_page(args, files, kCanvas);

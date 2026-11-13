@@ -43,7 +43,8 @@ TEST(a_watch_page_s_words_are_read) {
 TEST(wrong_words_are_refused_with_what_the_viewer_takes) {
   ViewerArgs a;
   std::string error;
-  CHECK(!parse({}, a, error) && error.find("none of --demo, --tv and --play") != std::string::npos);
+  CHECK(!parse({}, a, error) &&
+        error.find("none of --demo, --tv, --play and --join") != std::string::npos);
   CHECK(!parse({"--demo=/d/x", "--tv=ws://h:1/", "--stream=1"}, a, error));
   CHECK(error.find("more than one") != std::string::npos);
   CHECK(!parse({"--tv=ws://h:1/"}, a, error) && error.find("--stream") != std::string::npos);
@@ -69,4 +70,26 @@ TEST(a_play_page_s_words_are_read) {
   CHECK(!parse({"--demo=/d/x", "--bots=2"}, a, error) &&
         error.find("goes with --play") != std::string::npos);
   CHECK(!parse({"--demo=/d/x", "--play=dm3"}, a, error));
+}
+
+TEST(a_join_page_s_words_are_read) {
+  ViewerArgs a;
+  std::string error;
+  const std::string hash(64, 'a');
+  CHECK(parse({"--join=https://10.0.0.5:4433/play?to=10.0.0.9:27500", "--cert=" + hash,
+               "--pack=/content/ab.pak.zst"},
+              a, error));
+  CHECK(a.join == "https://10.0.0.5:4433/play?to=10.0.0.9:27500" && a.join_to == "10.0.0.9:27500");
+  CHECK(a.cert == hash && a.play.empty() && a.packs.size() == 1);
+  CHECK(parse({"--join=https://h:1/play?name=x&to=example.org:27500"}, a, error));
+  CHECK(a.join_to == "example.org:27500" && a.cert.empty());
+  CHECK(!parse({"--join=http://h:1/play?to=x:1"}, a, error) &&
+        error.find("not an endpoint") != std::string::npos);
+  CHECK(!parse({"--join=https://h:1/play"}, a, error));
+  CHECK(!parse({"--join=https://h:1/play?to=x:1", "--cert=abc"}, a, error) &&
+        error.find("not a certificate") != std::string::npos);
+  CHECK(!parse({"--play=dm3", "--cert=" + hash}, a, error) &&
+        error.find("goes with --join") != std::string::npos);
+  CHECK(!parse({"--play=dm3", "--join=https://h:1/play?to=x:1"}, a, error) &&
+        error.find("more than one") != std::string::npos);
 }

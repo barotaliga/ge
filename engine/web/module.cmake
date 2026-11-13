@@ -8,7 +8,7 @@ if(GE_WEB)
   list(APPEND GE_WEB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/engine/web/browser.cpp)
 endif()
 add_library(ge_web STATIC ${GE_WEB_SOURCES})
-target_link_libraries(ge_web PUBLIC ge_core ge_input)
+target_link_libraries(ge_web PUBLIC ge_core ge_input ge_net)
 
 ge_module(ge_web EXPORT web)
 include(cmake/Web.cmake)

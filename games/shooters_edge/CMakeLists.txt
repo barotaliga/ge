@@ -90,7 +90,7 @@ set_target_properties(shooters_edge_bots_cli PROPERTIES OUTPUT_NAME shooters_edg
 # our forward, proxies or TV node as a process of its own, for any classic client. `--help` lists
 # its kinds and flags.
 add_executable(shooters_edge_hops_cli net/hops_main.cpp)
-target_link_libraries(shooters_edge_hops_cli PRIVATE shooters_edge_classic ge_proxy ge_flags)
+target_link_libraries(shooters_edge_hops_cli PRIVATE shooters_edge_classic ge_proxy ge_webtransport ge_flags)
 set_target_properties(shooters_edge_hops_cli PROPERTIES OUTPUT_NAME shooters_edge_hops
                       RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
@@ -189,7 +189,7 @@ endif()
 # so a page that only watches downloads no server.
 if(TARGET shooters_edge_client_gpu)
   ge_add_web_viewer(shooters_edge SOURCES web/viewer.cpp LIBS shooters_edge_client_gpu ge_tv)
-  ge_add_web_viewer(shooters_edge NAME shooters_edge_play SOURCES web/viewer.cpp web/play.cpp
+  ge_add_web_viewer(shooters_edge NAME shooters_edge_play SOURCES web/viewer.cpp web/play.cpp web/join.cpp
                     LIBS shooters_edge_client_gpu shooters_edge_classic ge_tv
                     DEFINES SE_WEB_PLAY=1)
 endif()
