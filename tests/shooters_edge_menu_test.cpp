@@ -28,6 +28,7 @@
 #include "lab/png.hpp"
 #include "net/sim_network.hpp"
 #include "net/transport.hpp"
+#include "shooters_edge/menu/carved_letters.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
 #include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/menu/classic_view.hpp"
@@ -573,26 +574,40 @@ TEST(both_looks_lay_every_page_out_clean) {
         l.bands[4] == 2);
   CHECK(l.items[4].y - l.items[3].y == 60);
 
-  // DEMOS and SELECT GAME cut from the strips' own letters only on the strips it was measured on:
-  // the stand-in's strips have another print, so it falls back to the glyphs; with the pack's
-  // print, six pieces of the strips (two of SINGLE PLAYER's picture) and no glyph.
-  CHECK(art.strip_print != 0);
-  const auto pieces = [&](const sm::ClassicArt& a, const ge::ui::Image* img) {
+  // DEMOS and SELECT GAME set in the strips' own letters, each cut into its own picture, only on
+  // the strips the cuts were measured on: the stand-in's strips have another print, so no letter
+  // is cut and the rows fall back to the glyphs; with the pack's print, a picture a letter.
+  CHECK(art.strip_print != 0 && art.letters.empty());
+  const auto letters = [](const sm::ClassicArt& a, const DrawList& dl) {
+    int n = 0;
+    for (const auto& c : dl.cmds())
+      for (const auto& [ch, img] : a.letters) n += c.box.image == &img ? 1 : 0;
+    return n;
+  };
+  const auto root = [&](const sm::ClassicArt& a, const ge::ui::Image* img) {
     DrawList dl;
     dl.begin(1280, 720);
     sm::draw_classic(dl, g.main(), a, l, 0, 0);
     int n = 0;
     for (const auto& c : dl.cmds()) n += c.box.image == img ? 1 : 0;
-    return n;
+    return std::pair{n, letters(a, dl)};
   };
-  CHECK(pieces(art, art.find("sp_menu")) == 0);
+  // The pack's strips stood in by solid ones of their size, so every letter's box is cut whole.
   sm::ClassicArt pack = art;
+  pack.pictures["mainmenu"] = make_image(240, 100, hex(0x804020));
+  pack.pictures["sp_menu"] = make_image(240, 60, hex(0x804020));
   pack.strip_print = 0xb378b8eec94a7f36ULL;
-  CHECK(pieces(pack, pack.find("sp_menu")) == 4);  // DEMOS' L and m, SELECT GAME's G and m
-  CHECK(pieces(pack, &pack.glyphs) < pieces(art, &art.glyphs));
+  sm::cut_letters(&pack);
+  CHECK(pack.letters.size() == 15);
+  // Every letter its own columns, on the 20 px line.
+  for (const auto& [ch, img] : pack.letters) CHECK(img.height == 20 && img.width > 0);
+  CHECK(root(art, nullptr).second == 0);
+  CHECK(root(pack, nullptr).second == 5 + 10);  // DEMOS, SELECT GAME (the space no picture)
+  CHECK(root(pack, &pack.glyphs).first < root(art, &art.glyphs).first);
+  CHECK(sm::carved_text_width(pack, "Demos") > 0 && sm::carved_text_width(pack, "Demos!") == 0);
 
-  // SELECT GAME's names: seven pieces of the strips for the first game, nine for the sequel's
-  // (its numeral), on the pack's strips; the stand-in's draw none and fall back to the pictures.
+  // SELECT GAME's title and the games' names: a picture a letter, five for the first game and
+  // seven for the sequel's (its numeral); the stand-in's draw none and fall back to the pictures.
   const auto names = [&](const sm::ClassicArt& a) {
     sm::GamesPage page;
     page.set_games({{.id = "classic", .install = "", .edition = ""},
@@ -600,12 +615,28 @@ TEST(both_looks_lay_every_page_out_clean) {
     DrawList dl;
     dl.begin(1280, 720);
     page.draw_classic(dl, a, 1280, 720, 0);
-    int n = 0;
-    for (const auto& c : dl.cmds()) n += c.box.image == a.find("mainmenu") ? 1 : 0;
-    return n;
+    return letters(a, dl);
   };
   CHECK(names(art) == 0);
-  CHECK(names(pack) == 8 + 7 + 9);  // the carved title's eight from the same strip
+  CHECK(names(pack) == 10 + 5 + 7);
+
+  // A speck a letter's box catches of a neighbour is left out: the u here a 5 px square and a
+  // 2 px speck beside it in Quit's u box.
+  sm::ClassicArt specks = pack;
+  Image strip = make_image(240, 100, hex(0x000000, 0));
+  const auto dot = [&](int x, int y) {
+    const size_t i = (static_cast<size_t>(y) * 240 + static_cast<size_t>(x)) * 4;
+    strip.rgba[i] = 200;
+    strip.rgba[i + 3] = 255;
+  };
+  for (int y = 85; y < 90; y++)
+    for (int x = 25; x < 30; x++) dot(x, y);
+  dot(38, 92);
+  dot(39, 92);
+  specks.pictures["mainmenu"] = strip;
+  sm::cut_letters(&specks);
+  CHECK(specks.letters.count('u') == 1 && specks.letters.at('u').width == 5);
+  CHECK(specks.letters.count('i') == 0);  // Quit's i box holds nothing here
 }
 
 TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
@@ -667,7 +698,7 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   };
   sm::ClassicArt pack = art;
   pack.strip_print = 0xfd50f20825e19f40ULL;
-  CHECK(sm::carved_width(art, "games") == 0 && sm::carved_width(pack, "games") == 209);
+  CHECK(sm::carved_width(art, "games") == 0 && sm::carved_width(pack, "games") == 206);
   CHECK(glyphs(art) == 10 + 5 + 4);  // SELECT GAME (no space drawn), DEMOS, HELP
   CHECK(glyphs(pack) == 0);
 
