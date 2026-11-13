@@ -164,10 +164,10 @@ struct RulesCommon {
 struct ModSetting {
   const char* name = nullptr;  // null: the move's and the loop's own stand here
   const char* fallback = "";
-  bool info = false;  // published in the server info
   const char* help = "";
   const char* values = "";
   ge::console::CvarKind kind = ge::console::CvarKind::number;
+  bool info = false;  // published in the server info
 };
 
 // Those settings in the order they are registered, the move's and the loop's own at the row with
