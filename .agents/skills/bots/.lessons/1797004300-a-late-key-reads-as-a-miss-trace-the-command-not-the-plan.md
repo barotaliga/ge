@@ -22,3 +22,6 @@ concepts: [rocket-jump, flip, liftoff, shotjump, rjready, keyboard, jump-key, la
 - A staging that disagrees with the match is the staging's bug first: se-reach `--rockets=fly`
   under `keys` never fired a flip the match's fighter fires; analog (`--gap-features=-keys`) it
   matched the proof. Say which switches a staging can be trusted under.
+- The proof it was the misread: with `liftoff` on, honouring every jump missed twice (`jumpcuts`)
+  took dm2's jumps 125.7 -> 113.3, not the half it took before. A rule that "broke" the bot may
+  have been reading a broken signal: fix the signal, then judge the rule again.
