@@ -248,6 +248,14 @@ struct PilotSettings {
   // run-up or a jump's run fallen well under its start or into water; off, a walker circles under
   // the node until the stuck check (no nearer across for `stuck_s`).
   bool under_way = false;
+  // `liftoff`: a jump asked for and not yet off the ground (a keyboard's jump key lands a few
+  // commands after the ask) is waited for, the jump still asked, for `kLeapLiftOff_s`; off, the
+  // next command on the ground reads as a jump landed short (`missed_jump`, planned again).
+  bool lift_off = false;
+  // `rjready`: a rocket jump's shot only with the launcher in hand and ready to fire
+  // (`PilotSense::rocket_ready`); not, the run goes on past its start and lines up again. Off, the
+  // shot went with whatever was in hand (another weapon's shot, no blast: a plain jump).
+  bool rocket_wait = false;
   // THE LANE: a person does not walk the route's line. On a level walk with room either side (the
   // graph's `nav_room`), the walker keeps `lane` of that room off the line, to one side or the
   // other: a side and an amount drawn every `lane_min_s`..`lane_max_s` off its own stream, eased in
@@ -393,6 +401,7 @@ struct Pilot {
   bool no_circle = false;        // the caller's: no curve now, the hop's jump at once (`circleaim`)
   bool jump_pressed = false;     // the jump button in the last command
   bool airborne = false;         // left the ground on the current jump link
+  double leap_s = -1e9;          // when that jump was asked for (`clock_s`; `liftoff`)
   float grenade_s = -1;          // a grenade jump's: since its shot, s (-1: not fired yet)
   Vec3f grenade_stand;           // and where the jumper stands for its blast
   float grenade_yaw = 0;         // and the view's yaw at the shot, held through the fuse

@@ -165,6 +165,7 @@ inline constexpr const char* kWetWhy[12] = {"roam",       "fight",    "chase", "
 struct FighterStats {
   int64_t commands = 0, shots = 0, switches = 0, pickups = 0, respawns = 0;
   int64_t goal_changes = 0;  // its item goal changed (the commitment's measure)
+  int64_t shot_waits = 0;    // rocket jumps whose shot waited for the jump key (`shotjump`)
   int64_t packs_called = 0, packs_fetched = 0, bored = 0;  // launchers in packs (packs.hpp)
   // Every death's pack it came to know of (`packinfer`), by how its place was known (`PackFrom`),
   // its guesses (the weapon believed against the truth where the runner knows it) and its trips.
@@ -320,10 +321,10 @@ struct Fighter {
   int32_t trap_stay = -1;              // the trap it fired: held at its button while it is away
   int32_t trap_flee = -1;  // the trap whose floor it stands on as it goes (`trapflee`), or -1
   int32_t trap_exit = -1;  // and the node off it it runs to
-  Mind mind;         // what it believes of its team, its claim, its calls (mind.hpp)
-  Escort escort;     // a co-op companion's own state (companion.hpp; leader -1: none)
-  KeyHand keys;      // the hand on the keys (feature `keys`, keyboard.hpp)
-  std::string name;  // its player name, as its teammates see it in their team lines
+  Mind mind;               // what it believes of its team, its claim, its calls (mind.hpp)
+  Escort escort;           // a co-op companion's own state (companion.hpp; leader -1: none)
+  KeyHand keys;            // the hand on the keys (feature `keys`, keyboard.hpp)
+  std::string name;        // its player name, as its teammates see it in their team lines
   std::string pack_call_item = "rl";  // what the pending pack call says is in it ("rl", "lg")
   ge::ai::Search reach;               // every node it can get to from where it stood at `reach_at`
   FighterStats stats;
@@ -438,6 +439,14 @@ struct Fighter {
   // "feet", "unseen", "retreat", "near", "blocked").
   double press_until = -1e9;
   const char* press_note = "-";
+  // For the trace alone: the last piece of the command that changed the move's keys (forward,
+  // side, jump): "bot" (the pilot and the aim's own), "item", "button", "dodge", "swim", "landing",
+  // "lost", "spam", "packs", "poke", "trap", "escort", "uturn", "brink"; "-" none pressed (the
+  // keyboard after them presses what they wanted).
+  const char* keys_by = "-";
+  // (`shotjump`) A rocket jump's shot held for the jump key until this (`t`), on this view.
+  double shot_wait_until = -1e9;
+  sh::Vec3f shot_view;
   // For the trace alone: what the brink guard did this command (-1 it did not run: not near a
   // harm node, or the feet not free; else the ways round into a pit, +10 the run heading in,
   // +100 the keys changed).
@@ -486,7 +495,8 @@ struct Fighter {
 constexpr float kGapBuild_s = 0.3f;
 
 // `sidebrink`: a walk or drop along a lip over lava or slime costs a route this share of its time
-// more (shooter/nav.hpp `NavJumper::lip_share`): up a ramp over a pit the route keeps to its middle.
+// more (shooter/nav.hpp `NavJumper::lip_share`): up a ramp over a pit the route keeps to its
+// middle.
 constexpr float kLipShare = 1.0f;
 
 // The pilot's settings and hands for a fighter with these behaviours and moves (`traits`' moves

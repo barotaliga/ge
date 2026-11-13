@@ -736,8 +736,9 @@ void run(gl::Lab& lab) {
   // calm view's `glance` and `sound` swipes named apart), the keys sent and the velocity, the
   // heading the pilot's wish runs along (`walk`) and the calm view's target (`look`), and what the
   // feet did with the aim (`press`: footwork.hpp's note), and the heading the air steers for
-  // (`way`: a hop's aim, a walk's target in the air). Both this run's own: a set (--seeds) runs
-  // several matches at once.
+  // (`way`: a hop's aim, a walk's target in the air), which piece of the fighter last changed the
+  // move's keys (`keys`: fighter.hpp `keys_by`) and whether the launcher is in hand and ready
+  // (`rl`). Both this run's own: a set (--seeds) runs several matches at once.
   std::ofstream trace;
   Watch watch;
   if (!lab.arg("trace").empty()) {
@@ -753,7 +754,7 @@ void run(gl::Lab& lab) {
              "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
              "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
              "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
-             "\twater\tliquid\tbrink\ttrap\tmate0\n";
+             "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -945,11 +946,12 @@ void run(gl::Lab& lab) {
         << to_fixed(sp, 0) << '\t' << to_fixed(e.health, 0) << '\t'
         << shooters_edge::bots::fight_mode_name(f.mode) << '\t' << goal << '\t' << f.goal_node
         << '\t' << (f.unlocking ? 1 : 0) << '\t' << sh::pilot_mode_name(p.mode) << '\t' << link
-        << (link_brink(p) != 0 ? std::string(1, link_brink(p)) : std::string()) << '\t' << p.script_step << '\t' << p.because << '\t'
-        << to_fixed(cmd.angles.y, 2) << '\t' << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by
-        << '\t' << cmd.forward << '\t' << cmd.side << '\t' << to_fixed(e.velocity.x, 0) << '\t'
-        << to_fixed(e.velocity.y, 0) << '\t' << to_fixed(f.bot.walk_yaw, 1) << '\t'
-        << to_fixed(f.bot.look_yaw, 1) << '\t' << f.press_note << '\t' << p.k << '\t';
+        << (link_brink(p) != 0 ? std::string(1, link_brink(p)) : std::string()) << '\t'
+        << p.script_step << '\t' << p.because << '\t' << to_fixed(cmd.angles.y, 2) << '\t'
+        << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by << '\t' << cmd.forward << '\t'
+        << cmd.side << '\t' << to_fixed(e.velocity.x, 0) << '\t' << to_fixed(e.velocity.y, 0)
+        << '\t' << to_fixed(f.bot.walk_yaw, 1) << '\t' << to_fixed(f.bot.look_yaw, 1) << '\t'
+        << f.press_note << '\t' << p.k << '\t';
     // The route's next node (where the pilot heads), '-' with no route.
     if (p.g != nullptr && p.k + 1 < p.route.size()) {
       const sh::Vec3f nx = p.g->nodes[static_cast<size_t>(p.route[p.k + 1])].origin;
@@ -1034,8 +1036,9 @@ void run(gl::Lab& lab) {
     out << '\t' << e.waterlevel << '\t' << liquid << '\t' << f.brink_note << '\t' << f.trap_press
         << (away ? "/1" : "/0");
     if (f.trap_flee >= 0) out << "/f" << f.trap_exit;
-    out << '\t'
-        << ((f.bot.senses.friends & 1u) != 0 || f.slot == 0 ? 1 : 0) << '\n';
+    out << '\t' << ((f.bot.senses.friends & 1u) != 0 || f.slot == 0 ? 1 : 0) << '\t' << f.keys_by
+        << '\t'  // who wrote the move's keys (fighter.hpp `keys_by`)
+        << (f.bot.pilot.rocket_ready ? 1 : 0) << '\n';  // the rocket launcher in hand
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
