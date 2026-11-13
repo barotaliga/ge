@@ -2,7 +2,7 @@
 //
 // ge:summary The web viewer's page calls defined: fetch, the paint, the canvas, the status line
 // ge:keywords web browser emscripten em-async-js fetch request-animation-frame websocket
-// ge:keywords keys pointer scancode take_input
+// ge:keywords keys pointer scancode take_input take_play_input pointer-lock mouse-look keyup
 // ge:skill net
 #include "web/browser.hpp"
 
@@ -10,6 +10,8 @@
 #include <emscripten/html5.h>
 
 #include <cstdlib>
+
+#include "input/state.hpp"
 
 namespace {
 
@@ -121,61 +123,179 @@ EM_JS(void, ge_web_ws_close, (int id), {
   if (s) s.state = 2;
 });
 
-// The canvas's keys and pointer, gathered by listeners set on the first call: keys by the
-// keyboard's scancode (the USB HID usage the platform layer uses too) as they go down, the pointer
-// in the canvas's pixels. A click focuses the canvas, so its keys never scroll the page. The JS
-// keeps to what the C++ formatter leaves alone: no `===`, no regular expressions, no `=>`.
-EM_JS(int, ge_web_input, (const char* selector, int* keys, int most, float* xyb), {
+// The canvas's keys, buttons, wheel and pointer, gathered by listeners set on the first call and
+// kept in `Module.geIn`: keys by the keyboard's scancode (the USB HID usage the platform layer uses
+// too) as they go down and up, the pointer in the canvas's pixels, the mouse's movement while the
+// pointer is locked to the canvas (`play`: a click locks it, Escape lets it go). A click focuses
+// the canvas, so its keys never scroll the page; losing the focus lets every key and button go. The
+// JS keeps to what the C++ formatter leaves alone: no `===`, no regular expressions, no `=>`.
+EM_JS(int, ge_web_attach, (const char* selector, int play), {
   const c = document.querySelector(UTF8ToString(selector));
   if (!c) return 0;
-  if (!c.geInput) {
-    const g = {keys : [], x : -1, y : -1, b : 0};
-    const codes = {
-      Space : 44,
-      ArrowRight : 79,
-      ArrowLeft : 80,
-      ArrowDown : 81,
-      ArrowUp : 82,
-      Home : 74,
-      PageUp : 75,
-      End : 77,
-      PageDown : 78
-    };
-    c.tabIndex = 0;
-    c.addEventListener(
-        "keydown", function(e) {
-          let k = codes[e.code];
-          if (!k && e.code.length == 4 && e.code.indexOf("Key") == 0) k = e.code.charCodeAt(3) - 61;
-          if (!k) return;
-          g.keys.push(k);
-          e.preventDefault();
-        });
-    const at = function(e) {
-      const r = c.getBoundingClientRect();
-      g.x = (e.clientX - r.left) * c.width / r.width;
-      g.y = (e.clientY - r.top) * c.height / r.height;
-    };
-    c.addEventListener("pointermove", at);
-    c.addEventListener(
-        "pointerdown", function(e) {
-          at(e);
-          g.b = 1;
-          c.focus();
-        });
-    window.addEventListener("pointerup", function() { g.b = 0; });
-    c.addEventListener(
-        "pointerleave", function() {
-          if (!g.b) g.x = g.y = -1;
-        });
-    c.geInput = g;
+  if (c.geInput) {
+    if (play) c.geInput.play = 1;
+    return 1;
   }
-  const g = c.geInput;
+  const g = {
+    keys : [],
+    ev : [],
+    down : {},
+    x : -1,
+    y : -1,
+    b : 0,
+    bm : 0,
+    mx : 0,
+    my : 0,
+    wh : 0,
+    play : play
+  };
+  const codes = {
+    Enter : 40,
+    Escape : 41,
+    Backspace : 42,
+    Tab : 43,
+    Space : 44,
+    Minus : 45,
+    Equal : 46,
+    BracketLeft : 47,
+    BracketRight : 48,
+    Backslash : 49,
+    Semicolon : 51,
+    Quote : 52,
+    Backquote : 53,
+    Comma : 54,
+    Period : 55,
+    Slash : 56,
+    Pause : 72,
+    Insert : 73,
+    Home : 74,
+    PageUp : 75,
+    Delete : 76,
+    End : 77,
+    PageDown : 78,
+    ArrowRight : 79,
+    ArrowLeft : 80,
+    ArrowDown : 81,
+    ArrowUp : 82,
+    ControlLeft : 224,
+    ShiftLeft : 225,
+    AltLeft : 226,
+    ControlRight : 228,
+    ShiftRight : 229,
+    AltRight : 230
+  };
+  const code_of = function(e) {
+    let k = codes[e.code];
+    const n = e.code.length;
+    if (!k && n == 4 && e.code.indexOf("Key") == 0) k = e.code.charCodeAt(3) - 61;
+    if (!k && n == 6 && e.code.indexOf("Digit") == 0) k = 30 + (e.code.charCodeAt(5) - 39) % 10;
+    if (!k && n >= 2 && n <= 3 && e.code.charAt(0) == "F") {
+      const f = Number(e.code.substring(1));
+      if (f >= 1 && f <= 12) k = 57 + f;
+    }
+    return k || 0;
+  };
+  c.tabIndex = 0;
+  c.addEventListener(
+      "keydown", function(e) {
+        const k = code_of(e);
+        if (!k) return;
+        e.preventDefault();
+        if (e.repeat) return;
+        g.keys.push(k);
+        g.ev.push(k + 65536);
+        g.down[k] = 1;
+      });
+  c.addEventListener(
+      "keyup", function(e) {
+        const k = code_of(e);
+        if (!k) return;
+        e.preventDefault();
+        g.ev.push(k);
+        delete g.down[k];
+      });
+  c.addEventListener(
+      "blur", function() {
+        for (const k in g.down) g.ev.push(Number(k));
+        g.down = {};
+        g.bm = 0;
+      });
+  const at = function(e) {
+    const r = c.getBoundingClientRect();
+    g.x = (e.clientX - r.left) * c.width / r.width;
+    g.y = (e.clientY - r.top) * c.height / r.height;
+    if (document.pointerLockElement == c) {
+      g.mx += e.movementX || 0;
+      g.my += e.movementY || 0;
+    }
+  };
+  c.addEventListener("pointermove", at);
+  c.addEventListener(
+      "pointerdown", function(e) {
+        at(e);
+        g.b = 1;
+        c.focus();
+        if (g.play && document.pointerLockElement != c && c.requestPointerLock) {
+          const p = c.requestPointerLock();
+          if (p && p.catch) p.catch(function(){});
+        }
+      });
+  window.addEventListener("pointerup", function() { g.b = 0; });
+  c.addEventListener(
+      "pointerleave", function() {
+        if (!g.b) g.x = g.y = -1;
+      });
+  c.addEventListener(
+      "mousedown", function(e) {
+        if (e.button < 5) g.bm |= 1 << e.button;
+      });
+  window.addEventListener(
+      "mouseup", function(e) {
+        if (e.button < 5) g.bm &= ~(1 << e.button);
+      });
+  c.addEventListener("contextmenu", function(e) { e.preventDefault(); });
+  c.addEventListener("wheel",
+                     function(e) {
+                       if (!g.play) return;
+                       e.preventDefault();
+                       if (e.deltaY) g.wh += e.deltaY > 0 ? -1 : 1;
+                     },
+                     {passive : false});
+  c.geInput = g;
+  Module.geIn = g;
+  return 1;
+});
+
+// The keys that went down since the last call into `keys` (at most `most`) and the pointer into
+// `xyb` (x, y, a button held); the count.
+EM_JS(int, ge_web_input, (int* keys, int most, float* xyb), {
+  const g = Module.geIn;
   const n = Math.min(g.keys.length, most);
   for (let i = 0; i < n; i++) HEAP32[(keys >> 2) + i] = g.keys[i];
   g.keys = [];
+  g.ev = [];
   HEAPF32[xyb >> 2] = g.x;
   HEAPF32[(xyb >> 2) + 1] = g.y;
   HEAPF32[(xyb >> 2) + 2] = g.b;
+  return n;
+});
+
+// The keys' downs and ups since the last call into `ev` (the scancode, plus 65536 for a down; at
+// most `most`) and the mouse into `m` (movement x and y, wheel notches, the buttons' bits, whether
+// the pointer is locked); the count.
+EM_JS(int, ge_web_play, (int* ev, int most, float* m), {
+  const g = Module.geIn;
+  const n = Math.min(g.ev.length, most);
+  for (let i = 0; i < n; i++) HEAP32[(ev >> 2) + i] = g.ev[i];
+  g.ev = g.ev.slice(n);
+  g.keys = [];
+  HEAPF32[m >> 2] = g.mx;
+  HEAPF32[(m >> 2) + 1] = g.my;
+  HEAPF32[(m >> 2) + 2] = g.wh;
+  HEAPF32[(m >> 2) + 3] = g.bm;
+  HEAPF32[(m >> 2) + 4] =
+      document.pointerLockElement && document.pointerLockElement.geInput == g ? 1 : 0;
+  g.mx = g.my = g.wh = 0;
   return n;
 });
 
@@ -184,13 +304,42 @@ EM_JS(int, ge_web_input, (const char* selector, int* keys, int most, float* xyb)
 namespace ge::web {
 
 void take_input(const char* selector, PageInput& out) {
+  out = {};
+  if (!ge_web_attach(selector, 0)) return;
   int keys[64];
   float xyb[3] = {-1, -1, 0};
-  const int n = ge_web_input(selector, keys, 64, xyb);
+  const int n = ge_web_input(keys, 64, xyb);
   out.pressed.assign(keys, keys + n);
   out.x = xyb[0];
   out.y = xyb[1];
   out.button = xyb[2] != 0;
+}
+
+bool take_play_input(const char* selector, ge::input::InputState& s) {
+  ge::input::begin_frame(s);
+  if (!ge_web_attach(selector, 1)) return false;
+  int ev[128];
+  float m[5] = {0, 0, 0, 0, 0};
+  const int n = ge_web_play(ev, 128, m);
+  for (int i = 0; i < n; i++) {
+    const int code = ev[i] & 0xffff;
+    const bool down = ev[i] >= 65536;
+    if (code <= 0 || code >= ge::input::kKeys) continue;
+    const auto k = static_cast<size_t>(code);
+    if (down && !s.keys_held[k]) s.keys_pressed[k] = true;
+    if (!down && s.keys_held[k]) s.keys_released[k] = true;
+    s.keys_held[k] = down;
+  }
+  s.mouse.dx += m[0];
+  s.mouse.dy += m[1];
+  s.mouse.raw = true;
+  s.mouse.wheel_y += m[2];
+  const auto bits = static_cast<uint64_t>(m[3]);
+  ge::input::Edges64& b = s.mouse.buttons;
+  b.pressed = bits & ~b.held;
+  b.released = b.held & ~bits;
+  b.held = bits;
+  return m[4] != 0;
 }
 
 int ws_open(const std::string& url) { return ge_web_ws_open(url.c_str()); }

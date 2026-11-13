@@ -2,7 +2,7 @@
 // ge:keywords look classic modern palette grade quantize r_look r_fx_lights r_fx_glow r_bloom
 // ge:keywords r_farland r_farland_warm far-land ce_bubbles_share bubbles ce_water_specks
 // ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
-// ge:keywords noskins baseskin allskins player-skins
+// ge:keywords noskins baseskin allskins player-skins teamskin enemyskin teamcolor enemycolor
 // ge:keywords see-through-liquids watervis liquid_alphas
 // ge:skill render shooter
 // ge:test tests/shooters_edge_effects_test.cpp
@@ -13,6 +13,7 @@
 #include <string>
 
 #include "brush/map_fog.hpp"
+#include "shooters_edge/app/classic_models.hpp"
 
 namespace shooters_edge::look {
 
@@ -233,6 +234,43 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         k.print(picture.all_skins.empty() ? "Every player wears their own skin."
                                           : "Every player wears " + picture.all_skins + ".");
       });
+  cv.bind({.name = "teamskin",
+           .fallback = "",
+           .flags = gc::kArchive,
+           .help = "The skin every teammate wears.",
+           .kind = gc::CvarKind::text,
+           .values = "TEXT: that skin on every teammate; \"\": each their own (the default)"},
+          &picture.team_skin);
+  cv.bind({.name = "enemyskin",
+           .fallback = "",
+           .flags = gc::kArchive,
+           .help = "The skin every enemy wears.",
+           .kind = gc::CvarKind::text,
+           .values = "TEXT: that skin on every enemy; \"\": each their own (the default)"},
+          &picture.enemy_skin);
+  const auto colours = [&con](const char* name, const char* help, const char* who, int* top,
+                              int* bottom) {
+    con.add_command(name, help, [name, top, bottom, who](gc::Console& k, const gc::Args& a) {
+      if (a.size() < 2) {
+        k.print(*top < 0 ? std::string("Every ") + who + " wears their own colours."
+                         : std::string("Every ") + who + " wears colours " + std::to_string(*top) +
+                               " and " + std::to_string(*bottom) + ".");
+        return;
+      }
+      if (a.size() > 3 ||
+          !models::parse_forced_colours(a[1], a.size() > 2 ? a[2] : "", top, bottom)) {
+        k.print(std::string(name) + " takes one or two colours from 0 to 13, or off.");
+        return;
+      }
+      k.print(*top < 0 ? std::string("Every ") + who + " wears their own colours."
+                       : std::string("Every ") + who + " wears colours " + std::to_string(*top) +
+                             " and " + std::to_string(*bottom) + ".");
+    });
+  };
+  colours("teamcolor", "teamcolor [off | colour | top bottom]: every teammate's colours",
+          "teammate", &picture.team_top, &picture.team_bottom);
+  colours("enemycolor", "enemycolor [off | colour | top bottom]: every enemy's colours", "enemy",
+          &picture.enemy_top, &picture.enemy_bottom);
   con.add_command(
       "fog",
       "fog <density> <red> <green> <blue> [alpha] [bias]: the fog in the air, until the next map",

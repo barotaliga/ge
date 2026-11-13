@@ -1,6 +1,6 @@
 // The hub's Watch and Demo pages and the viewer's files, defined (watch.hpp).
 //
-// ge:summary The Watch and Demo pages around the web viewer, and the viewer's files, defined
+// ge:summary The Watch, Demo and Play pages around the web viewer, and the viewer's files, defined
 // ge:keywords hub watch demo web-viewer canvas loader viewer-files mime
 // ge:skill net
 // ge:test tests/hub_watch_test.cpp
@@ -30,6 +30,17 @@ constexpr size_t kOtherBroadcasts = 6;
 
 std::string viewer_name(const HubSpec& spec) {
   return (spec.id.empty() ? std::string("game") : spec.id) + "_viewer";
+}
+
+// The player: the viewer that also runs a match in the page.
+std::string player_name(const HubSpec& spec) {
+  return (spec.id.empty() ? std::string("game") : spec.id) + "_play";
+}
+
+bool built(const Site& site, const std::string& name) {
+  if (site.viewer_dir.empty()) return false;
+  std::error_code ec;
+  return fs::is_regular_file(fs::path(site.viewer_dir) / (name + ".js"), ec);
 }
 
 // A JSON string safe inside a <script>: '<' written as its escape, so no text closes the tag.
@@ -82,10 +93,12 @@ std::vector<std::string> viewer_packs(const Site& site) {
 
 // The picture's place: the viewer started with `args`, or the reason there is none.
 std::string viewer_slot(const Site& site, const HubSpec& spec, const std::vector<std::string>& args,
-                        const std::string& no_viewer, const std::string& content = "") {
+                        const std::string& no_viewer, const std::string& content = "",
+                        bool play = false) {
   std::string h = "<div class=\"viewer\">";
   if (!no_viewer.empty()) return h + "<p class=\"none\">" + no_viewer + "</p></div>";
-  if (!viewer_built(site, spec)) {
+  const std::string name = play ? player_name(spec) : viewer_name(spec);
+  if (!built(site, name)) {
     return h +
            "<p class=\"none\">This hub does not serve the game's viewer yet, so the picture is "
            "not here. Open it in the game with the button below.</p></div>";
@@ -101,7 +114,6 @@ std::string viewer_slot(const Site& site, const HubSpec& spec, const std::vector
   // The wasm (the most of a first visit) fetched by the page itself, so the bar follows it; the
   // viewer's script then starts on those bytes. Its size is the file's, before any gzip: what
   // the page counts as the bytes come.
-  const std::string name = viewer_name(spec);
   std::error_code ec;
   const auto wasm_size = fs::file_size(fs::path(site.viewer_dir) / (name + ".wasm"), ec);
   h += "<canvas id=\"view\" width=\"1280\" height=\"720\"></canvas>";
@@ -256,6 +268,65 @@ Answer demo_page(const HubSpec& spec, std::string_view sha, const Site& site) {
   return html(200, std::move(h), 3600);
 }
 
+// The maps to play: those the packs beside the viewer hold that the game shows.
+std::vector<std::string> play_maps(const HubSpec& spec, const Site& site) {
+  std::vector<std::string> maps = viewer_maps(site);
+  if (spec.map_shown) std::erase_if(maps, [&](const std::string& m) { return !spec.map_shown(m); });
+  return maps;
+}
+
+// `/play`: the maps the packs beside the viewer hold, each a Play page.
+Answer play_list(const HubSpec& spec, const Site& site) {
+  std::string h = head(spec, "Play", false) + nav(spec, "Play") + "<main><h2>Play</h2>";
+  const std::vector<std::string> maps = play_maps(spec, site);
+  if (!built(site, player_name(spec)) || maps.empty()) {
+    h += "<p class=\"none\">This hub does not serve the game to play in a browser yet. Join a "
+         "server from <a href=\"/\">the front page</a> in the game instead.</p>";
+  } else {
+    h += "<p>Play a match against bots here in the page, on any map this hub holds. The game "
+         "runs in your browser; only the map's own files are downloaded.</p><ul class=\"maps\">";
+    for (const std::string& m : maps)
+      h += "<li><a href=\"/play/" + html_escape(m) + "\">" + html_escape(m) + "</a></li>";
+    h += "</ul>";
+  }
+  h += "</main>" + foot();
+  return html(200, std::move(h), 3600);
+}
+
+// `/play/{map}`: a match on the map in the page, its files in one pack.
+Answer play_page(const HubSpec& spec, std::string_view map, const Site& site) {
+  const std::vector<std::string> maps = play_maps(spec, site);
+  if (!map_name_ok(map) || std::find(maps.begin(), maps.end(), map) == maps.end()) {
+    return not_found(spec, "No such map",
+                     "The hub holds no map by that name. The maps are on <a "
+                     "href=\"/play\">the Play page</a>.",
+                     "Play");
+  }
+  const std::string title = std::string(map);
+  std::string h = head(spec, title, false) + nav(spec, "Play") + "<main class=\"watch\">";
+  h += "<section class=\"stage\"><h2>" + html_escape(title) + "</h2>";
+  h += "<p class=\"meta\"><b>deathmatch</b> · " + html_escape(title) + " · you and " +
+       std::to_string(kPlayBots) + " bots</p>";
+  ContentPack pack;
+  std::string why;
+  const std::string content =
+      built(site, player_name(spec)) && map_content(site, spec, map, pack, why)
+          ? content_path(pack.sha)
+          : "";
+  h +=
+      viewer_slot(site, spec, {"--play=" + std::string(map), "--bots=" + std::to_string(kPlayBots)},
+                  "", content, true);
+  h += "<p class=\"small\">Click the picture to play: W A S D move, the mouse looks, the left "
+       "button fires, SPACE jumps, 1 to 8 or the wheel pick a weapon, TAB shows the scores, "
+       "Escape lets the mouse go.</p>";
+  h += "</section><aside><h3>Other maps</h3><ul class=\"also\">";
+  for (const std::string& m : maps)
+    if (m != map)
+      h += "<li><a href=\"/play/" + html_escape(m) + "\">" + html_escape(m) + "</a></li>";
+  h += "</ul></aside></main>" + foot();
+  return html(200, std::move(h), 3600);
+}
+
 Answer viewer_file(const HubSpec& spec, std::string_view name, const Site& site) {
   const auto refuse = [&](const std::string& why) {
     Answer a;
@@ -308,24 +379,29 @@ std::string watch_path(const gn::Address& node, uint32_t stream) {
   return "/watch/" + html_escape(gn::to_string(node)) + "/" + std::to_string(stream);
 }
 
-bool viewer_built(const Site& site, const HubSpec& spec) {
-  if (site.viewer_dir.empty()) return false;
-  std::error_code ec;
-  return fs::is_regular_file(fs::path(site.viewer_dir) / (viewer_name(spec) + ".js"), ec);
-}
+bool viewer_built(const Site& site, const HubSpec& spec) { return built(site, viewer_name(spec)); }
+
+bool player_built(const Site& site, const HubSpec& spec) { return built(site, player_name(spec)); }
 
 bool watch_answer(const Poller& p, const HubSpec& spec, std::string_view target, int64_t now_us,
                   const Site& site, Answer& out) {
   std::string path = target_path(target);
   while (path.size() > 1 && path.back() == '/') path.pop_back();
   if (content_answer(path, site, out)) return true;
-  const std::pair<std::string_view, int> kinds[] = {{"/watch/", 0}, {"/demo/", 1}, {"/viewer/", 2}};
+  if (spec.map_files && path == "/play") {
+    out = play_list(spec, site);
+    return true;
+  }
+  const std::pair<std::string_view, int> kinds[] = {
+      {"/watch/", 0}, {"/demo/", 1}, {"/viewer/", 2}, {"/play/", 3}};
   for (const auto& [prefix, kind] : kinds) {
     if (path.rfind(prefix, 0) != 0) continue;
+    if (kind == 3 && !spec.map_files) continue;
     const std::string_view rest = std::string_view(path).substr(prefix.size());
     out = kind == 0   ? watch_page(p, spec, rest, now_us, site)
           : kind == 1 ? demo_page(spec, rest, site)
-                      : viewer_file(spec, rest, site);
+          : kind == 2 ? viewer_file(spec, rest, site)
+                      : play_page(spec, rest, site);
     return true;
   }
   return false;

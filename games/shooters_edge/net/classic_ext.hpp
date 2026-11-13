@@ -47,8 +47,9 @@ constexpr uint32_t kMvdFloatCoords = 0x1, kMvdTeleport = 0x2;
 constexpr uint32_t kZPmType = 1, kZPmTypeNew = 2, kZViewHeight = 4, kZServerTime = 8;
 constexpr uint32_t kZPitchLimits = 0x10, kZJoinObserve = 0x20, kZOnGround = 0x40;
 constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
-// The game's own set (`*ge_ext`, as the z set travels): named effects, svc ids 120 and 121.
-constexpr uint32_t kGeNamedEffects = 1;
+// The game's own set (`*ge_ext`, as the z set travels): named effects, svc ids 120 and 121; the
+// aim help's bend told to the player it helped, svc id 122 (the client turns the view onto it).
+constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2;
 
 struct ExtBit {
   ExtFamily family;

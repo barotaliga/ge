@@ -132,3 +132,19 @@ TEST(matches_a_team_match_wins_for_the_best_team_and_the_log_reads_back) {
   CHECK(back.kept.size() == 2 && back.log.empty());
   CHECK(!ga::matches_line(back, "report zz 00", error));
 }
+
+TEST(matches_a_max_column_keeps_its_largest_and_the_rest_sum) {
+  ga::Matches m;
+  ga::matches_trust(m, key(1));
+  gn::MatchReport a = duel(1), b = duel(2);
+  a.columns = {"rl_hits", "streak_max"};
+  b.columns = a.columns;
+  a.players[0].columns = {5, 7};
+  b.players[0].columns = {3, 4};
+  b.map = "dm3";
+  ga::matches_add(m, key(1), a);
+  ga::matches_add(m, key(1), b);
+  const ga::Totals t = ga::totals_sum(m, 7, {});
+  CHECK(t.columns.at("rl_hits") == 8);
+  CHECK(t.columns.at("streak_max") == 7);
+}

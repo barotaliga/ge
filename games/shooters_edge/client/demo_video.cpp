@@ -120,6 +120,11 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
     put(static_cast<int>(n), s.entities[n]);
   }
   if (s.format != DemoFormat::single) {
+    bool teamplay = false;
+    for (const auto& [key, value] : s.serverinfo)
+      if (key == "teamplay") teamplay = !value.empty() && value != "0";
+    const std::string mine =
+        s.player >= 0 && size_t(s.player) < s.teams.size() ? s.teams[size_t(s.player)] : "";
     for (size_t k = 0; k < s.players.size(); k++)
       if (static_cast<int>(k) != s.player && s.players[k].present) {
         put(static_cast<int>(k) + 1, s.players[k]);
@@ -127,6 +132,7 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
           out.back().top = static_cast<uint32_t>(s.top[k]);
           out.back().bottom = static_cast<uint32_t>(s.bottom[k]);
           out.back().skin_name = s.skins[k];
+          out.back().side = models::side_of(teamplay, mine, s.teams[k]);
         }
       }
   }

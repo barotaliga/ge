@@ -14,9 +14,15 @@
 // The Demo page hands the viewer `--pack=/content/<sha>.pak.zst` when the pack can be made, else
 // every pack beside the viewer as before.
 //
+// A MAP'S PACK (`map_content`, docs/hub.md § Playing in a browser): the files a match on that map
+// draws from (`HubSpec::map_files`), made the same way the first time the map's Play page is
+// asked for, its index `content/map-<map>.txt`. `viewer_maps` lists the maps the packs beside the
+// viewer hold, the Play page's list.
+//
 // ge:summary A demo's content pack: only the files it needs out of the hub's packs, zstd, by hash
 // ge:keywords hub content pack demo files minimal download zstd pak viewer cache content-address
-// ge:keywords demo_content content_answer demo_files file_needs
+// ge:keywords demo_content content_answer demo_files file_needs map_content map_files viewer_maps
+// ge:keywords play-page map-pack
 // ge:skill net
 // ge:test tests/hub_content_test.cpp
 #pragma once
@@ -24,6 +30,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "hub/pages.hpp"
 #include "hub/spec.hpp"
@@ -45,6 +52,17 @@ std::string content_path(std::string_view sha);
 // viewer.
 bool demo_content(const Site& site, const HubSpec& spec, std::string_view demo_sha,
                   ContentPack& out, std::string& error);
+// The pack for playing on `map` (a map the packs beside the viewer hold): made the first time,
+// read back after. False with the reason when the game names no map's files, the name is not a
+// map's, no archive keeps packs or no pack holds the map.
+bool map_content(const Site& site, const HubSpec& spec, std::string_view map, ContentPack& out,
+                 std::string& error);
+// A map's name as a Play page's path takes it: lower-case letters, digits, '_' and '-'.
+inline constexpr size_t kMostMapName = 32;
+bool map_name_ok(std::string_view map);
+// The maps (`maps/<name>.bsp`) the packs beside the viewer hold, by name; the packs read again
+// only when they change.
+std::vector<std::string> viewer_maps(const Site& site);
 // `/content/...` answered into `out` (the pack, cached a year); false for any other path.
 bool content_answer(std::string_view path, const Site& site, Answer& out);
 
