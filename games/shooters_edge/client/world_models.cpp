@@ -379,7 +379,8 @@ const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn) {
   const ModelKind& k = m.kinds[size_t(p.modelindex)];
   *worn = {};
   if (k.player && p.entity > 0 && p.entity <= sh::kMaxClients) {
-    worn->file = models::choose_skin(m.skin_choice, p.skin_name, m.player_skins);
+    worn->file = models::choose_skin(
+        m.skin_choice, models::forced_skin(m.skin_choice, p.side, p.skin_name), m.player_skins);
     return k;
   }
   if ((!k.figure && k.carried.empty()) || m.figures.empty()) return k;
@@ -433,6 +434,11 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
   if (!l.server) return;
   const sv::RulesCommon& s = *l.server;
   const int me = player_state(l).entity;
+  const ge::console::Cvar* tp = s.cvars.find("teamplay");
+  const bool teamplay = tp != nullptr && tp->on();
+  const std::string mine = me > 0 && me <= sh::kMaxClients
+                               ? sv::info_value(s.clients[size_t(me - 1)].userinfo, "team")
+                               : std::string{};
   const int models = int(s.models.size());
   const bool qc = l.rules != nullptr && sv::qc_of(*l.rules) != nullptr;
   for (int e = 1; e < s.sv.num_edicts; e++) {
@@ -464,6 +470,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       p.top = colour_row(c, "topcolor", 0);
       p.bottom = colour_row(c, "bottomcolor", 0);
       p.skin_name = sv::info_value(c.userinfo, "skin");
+      p.side = models::side_of(teamplay, mine, sv::info_value(c.userinfo, "team"));
     }
     out.push_back(p);
     if (p.carried > 0) {  // the weapon it carries: the same place and frame, its own model
@@ -910,6 +917,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     m.last_pose[p.entity] = g.now;
     g.tint[0] = p.top;
     g.tint[1] = p.bottom;
+    models::forced_colours(m.skin_choice, p.side, &g.tint[0], &g.tint[1]);
     g.skin = worn.model;
     if (worn.file != Worn::kNoFile) g.slot = worn_slot(d, m, worn.file);
     if (k.figure || !k.carried.empty()) {  // the second game's skins wear their own colours

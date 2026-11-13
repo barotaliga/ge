@@ -392,6 +392,9 @@ struct Run {
   gr::BeamLook look;
   gr::BeamShot shot;
   gr::BurnTrail trail;
+  uint32_t melt = 0;  // the melt last pressed and its slot
+  int melt_slot = -1;
+  uint32_t melt_serial = 0;
   gd::DecalPool pool = gd::make_pool(160, 96);
   gr::BeamShape shape;
   std::vector<gr::BurnVertex> burns;
@@ -469,8 +472,20 @@ gl::Picture frame_at(ge::gpu::Device& d, Scene& s, Run& run, const gd::Receivers
     da.spin_rad = burn.spin_rad;
     da.now_s = t;
     da.variant = burn.variant % kAtlasVariants;
-    da.kind = gd::DecalKind::scorch;
-    if (gd::place_decal(run.pool, rec, da) >= 0) ++run.burns_placed;
+    da.kind = burn.melt == 0 ? gd::DecalKind::burn_line : gd::DecalKind::melt;
+    da.length_m = burn.length_m;
+    da.along = gd::Vec3{burn.along[0], burn.along[1], burn.along[2]};
+    if (burn.melt != 0 && burn.melt == run.melt) {  // the same pool, grown in its own slot
+      da.slot = run.melt_slot;
+      da.serial = run.melt_serial;
+    }
+    const int slot = gd::place_decal(run.pool, rec, da);
+    if (burn.melt != 0) {
+      run.melt = burn.melt;
+      run.melt_slot = slot;
+      run.melt_serial = slot >= 0 ? run.pool.decals[static_cast<size_t>(slot)].serial : 0;
+    }
+    if (slot >= 0) ++run.burns_placed;
   }
   run.burns.clear();
   for (uint32_t i = 0; i < run.pool.capacity; ++i) {
@@ -485,8 +500,8 @@ gl::Picture frame_at(ge::gpu::Device& d, Scene& s, Run& run, const gd::Receivers
       b.at[1] = v.pos.y;
       b.at[2] = v.pos.z;
       b.u = static_cast<float>((dc.variant + v.u) / kAtlasVariants);
-      b.v = static_cast<float>(
-          (static_cast<double>(static_cast<int>(gd::DecalKind::scorch)) + v.v) / gd::kDecalKinds);
+      b.v = static_cast<float>((static_cast<double>(static_cast<int>(dc.kind)) + v.v) /
+                               gd::kDecalKinds);
       b.fade = static_cast<float>(v.fade);
       b.soot = static_cast<float>(0.9 * look.opacity);
       b.ember = ember;

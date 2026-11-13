@@ -1356,6 +1356,11 @@ every pass, and judged by captioned screenshots:
   `skin` goes to the server with your colours. A name with `..` or a leading dot is refused, its
   extension dropped, cut to 15 characters (`app/classic_models.hpp`'s `skin_key`, `choose_skin`).
   Colours 8 to 13 read their palette rows backwards, since those rows are stored bright to dark.
+- **Skins and colours by side** (M18i17): `teamskin` and `enemyskin` put one skin on every
+  teammate or every enemy, and `teamcolor` and `enemycolor` (`off`, one colour, or shirt and pants,
+  0 to 13) their colours. A teammate shares your team while `teamplay` is on; everyone else is an
+  enemy. `allskins` still wins over both. They apply to the first game's players, live and in
+  demos (`app/classic_models.hpp`'s `side_of`, `forced_skin`, `forced_colours`).
 - **Player figures in the second game** (M18i16): a player's `skin` there is "<model>/<skin>",
   the figure a folder `players/<model>/` with its `tris.md2`, its skins as pictures beside it, and
   the weapons it carries (the files the server names with a '#', drawn in place of its weapon). Each
