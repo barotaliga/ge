@@ -95,11 +95,11 @@ void feed_console(con::Console& c, con::ConsoleView& view, const input::Queue& q
     if (e.type == input::EventType::text) {
       const auto cp = static_cast<uint32_t>(e.v[0]);
       const bool own = cp == '`' || cp == '~' || cp == 0xa7 || cp == 0xbd || cp == '<' || cp == '>';
-      if (view.chatting() && !chat_from) {
-        view.type(utf8(cp));
-      } else if (view.open() && !view.chatting() && !(toggled && own)) {
-        view.type(utf8(cp));  // § ½ < > on the ISO key
-      }
+      // The chat line takes every letter but the one that opened it; the console every letter
+      // but the tilde's own (§ ½ < > on the ISO key).
+      const bool chat_takes = view.chatting() && !chat_from;
+      const bool console_takes = view.open() && !view.chatting() && !(toggled && own);
+      if (chat_takes || console_takes) view.type(utf8(cp));
       continue;
     }
     if (e.type != input::EventType::key) continue;

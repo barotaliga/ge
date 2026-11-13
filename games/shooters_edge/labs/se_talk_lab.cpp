@@ -223,7 +223,9 @@ gl::Picture floor_of(const sh::MoveWorld& world, const sl::TopView& v) {
       const float x = v.lo.x + static_cast<float>(px - sl::kTopMargin) + 1.0f;
       const float y = v.hi.y - static_cast<float>(py - sl::kTopMargin) - 1.0f;
       gl::Rgba c{70, 74, 72, 255};
-      for (float z = v.hi.z - 8; z > v.lo.z; z -= 24) {
+      for (int k = 0;; k++) {
+        const float z = v.hi.z - 8 - 24.0f * static_cast<float>(k);
+        if (z <= v.lo.z) break;
         if (sh::point_contents(hull, {x, y, z}) == sh::kContentsSolid) continue;
         const sh::HullTrace tr = sh::trace_hull(hull, {x, y, z}, {x, y, v.lo.z});
         const float t = (tr.endpos.z - v.lo.z) / span;  // 0 low .. 1 high

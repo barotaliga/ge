@@ -27,7 +27,7 @@
 //
 // ge:summary Talk: the chat and voice commands and buttons a multiplayer game opts into
 // ge:keywords talk chat voice-chat opt-in say say_team say_near whisper messagemode messagemode2
-// ge:keywords messagemode3 push-to-talk +voice +voice_team +voice_near nearby proximity route
+// ge:keywords messagemode3 push-to-talk voice-button voice-team voice-near nearby proximity route
 // ge:keywords talk_voice add_talk talkspec multiplayer chat-line
 // ge:skill console net
 // ge:test tests/console_talk_test.cpp
