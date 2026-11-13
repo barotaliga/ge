@@ -872,6 +872,20 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       h.seed = static_cast<uint32_t>(m.entity);
       s.haze.push_back(h);
     }
+    // The sequel's glowing shots (a blaster's bolt, the BFG's ball): a light riding each, and in
+    // the modern look a trail of shining specks behind it.
+    if (m.bolt || m.bfg) {
+      const float* rgb = m.bfg ? fx::kBfgRgb : fx::kBoltRgb;
+      if (s.on.trails && was != s.last.end()) {
+        double from[3];
+        put(was->second, from);
+        fx::glow_trail(from, to, rgb, m.bfg ? 0.12 : 0.035, m.bfg ? 0.05 : 0.04, s.seed++,
+                       &out.births);
+      }
+      out.lights.push_back(fx::shot_glow(to, rgb, m.bfg ? fx::kBfgGlowM : fx::kBoltGlowM,
+                                         m.bfg ? fx::kBfgGlowLevel : fx::kBoltGlowLevel, m.entity));
+      continue;
+    }
     if (!m.rocket) continue;
     if (was != s.last.end()) {
       double from[3];
@@ -1244,7 +1258,15 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       }
       case EffectKind::explosion:
         break;
-      case EffectKind::named: {  // a mod's own effect: the files' of its name, or nothing
+      case EffectKind::named: {        // a mod's own effect: the files' of its name, or nothing
+        if (e.name == "te_blaster") {  // the sequel's bolt landing: yellow sparks
+          fx::blaster_hit(p, s.seed++, &out.births);
+          break;
+        }
+        if (e.name == "te_bfg_bigexplosion") {  // the BFG's burst (its blast is an explosion's)
+          if (s.on.explosions) fx::bfg_burst(p, s.seed++, &out.births);
+          break;
+        }
         double way[3] = {kUpWay[0], kUpWay[1], kUpWay[2]};
         if (e.way.x != 0 || e.way.y != 0 || e.way.z != 0) engine_dir(e.way, way);
         const double floor_y = l.map ? floor_under(*l.map, e.at, eye_map) : -1e9;
@@ -1255,6 +1277,27 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         double from[3], to[3];
         put(engine_point(e.at), from);
         put(engine_point(e.end), to);
+        if (e.name == "te_railtrail") {  // the sequel's rail: its coil, round a beam (ce_beams)
+          if (s.on.beams) {
+            HeldBeam b;
+            b.entity = e.entity;
+            b.rail = true;
+            b.shot.born_s = t;
+            b.shot.end_s = t + 0.05;
+            b.shot.seed = s.seed++;
+            for (int k = 0; k < 3; ++k) {
+              b.shot.from[k] = from[k];
+              b.shot.to[k] = to[k];
+            }
+            double normal[3], dir[3];
+            face(e.end, normal, dir);
+            for (int k = 0; k < 3; ++k) b.shot.normal[k] = normal[k];
+            b.seen = t;
+            s.beams.push_back(b);
+          }
+          fx::rail_spiral(from, to, s.seed++, &out.births);  // its coil round the line
+          break;
+        }
         trail_scripted(s, e.name, from, to, out);
         break;
       }
@@ -1275,12 +1318,18 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   for (HeldBeam& b : s.beams)
     if (b.shot.end_s < 0 && t - b.seen > kBeamHoldS) b.shot.end_s = b.seen + kBeamHoldS;
   std::erase_if(s.beams, [&](const HeldBeam& b) {
-    const double release = s.on.beams ? fx::bolt_look().release_s : 0;
+    const double release = !s.on.beams ? 0
+                           : b.rail    ? fx::rail_look().release_s
+                                       : fx::bolt_look().release_s;
     return b.shot.end_s >= 0 && t > b.shot.end_s + release;
   });
   ge::core::Rng roll = ge::core::make_rng(s.seed++);  // the classic bolt's segments' roll
   int segment = 0;
   for (HeldBeam& b : s.beams) {
+    if (b.rail) {  // a rail's beam: drawn, no burns, its own light where it lands
+      if (s.on.beams) out.beams.push_back(b);
+      continue;
+    }
     if (s.on.beams) {
       // Its burns where it lands, a few to fill a sweep's gap.
       ge::render::BeamBurn burn;

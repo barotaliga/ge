@@ -138,6 +138,20 @@ void effect(SequelServer& s, const char* name, sh::Vec3f at) {
   event(s, std::move(ev));
 }
 
+// A line effect `name` from `from` to `to` (a rail's): the start in `origin`, the end in `values`.
+void line_effect(SequelServer& s, const char* name, sh::Vec3f from, sh::Vec3f to, int ent) {
+  NetEvent ev;
+  ev.kind = EventKind::trail_effect;
+  ev.to = kEveryone;
+  ev.ent = ent;
+  ev.origin = from;
+  ev.values[0] = to.x;
+  ev.values[1] = to.y;
+  ev.values[2] = to.z;
+  ev.text = name;
+  event(s, std::move(ev));
+}
+
 void print_to(SequelServer& s, int slot, std::string text) {
   NetEvent ev;
   ev.kind = EventKind::print;
@@ -463,7 +477,7 @@ void rail(SequelServer& s, int slot, sh::Vec3f start, const sh::ViewAxes& ax, in
     const Line l = shoot_line(s, start, end, skip);
     if (l.player < 0) {
       map_damage(s, l.mover, slot, damage);
-      effect(s, "te_railtrail", l.end);
+      line_effect(s, "te_railtrail", start, l.end, slot + 1);
       return;
     }
     hurt(s, l.player, slot, ax.forward, damage, kick, false, weapon);
@@ -1475,7 +1489,7 @@ void fight_monster_rail(SequelServer& s, int from, sh::Vec3f start, sh::Vec3f en
         monster_damage(s, l.mover, -1, damage, dir);
       else
         map_damage(s, l.mover, -1, damage);
-      effect(s, "te_railtrail", l.end);
+      line_effect(s, "te_railtrail", start, l.end, map_row(from));
       return;
     }
     hurt(s, l.player, -1, dir, damage, kick, false, cause);

@@ -119,6 +119,7 @@ struct HeldBeam {
   EffectModel model = EffectModel::bolt2;
   ge::render::BurnTrail trail;  // where it last burnt the wall it lands on
   bool across = false;          // the arc across the player's gun's prongs (fx::prong_arc_look)
+  bool rail = false;            // the sequel's rail (fx::rail_look): fired once, then fading
   double seen = 0;
 };
 
