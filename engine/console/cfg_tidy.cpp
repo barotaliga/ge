@@ -295,7 +295,47 @@ int section_rank(std::string_view section) {
 // space after it rather than pushing every other comment far right.
 constexpr size_t kCommentColumnMost = 40;
 
-std::string help_comment(const Cvar& v) { return v.help.empty() ? "" : "// " + v.help; }
+// A meaning without its default mark ("that rate (10 the default)" -> "that rate"), its first
+// letter a capital.
+std::string choice_meaning(std::string meaning) {
+  if (const size_t at = meaning.find("the default)"); at != std::string::npos) {
+    const size_t open = meaning.rfind('(', at);
+    if (open != std::string::npos) {
+      meaning.erase(open, at + std::string_view("the default)").size() - open);
+      while (!meaning.empty() && meaning.back() == ' ') meaning.pop_back();
+    }
+  }
+  if (!meaning.empty() && meaning[0] >= 'a' && meaning[0] <= 'z')
+    meaning[0] = static_cast<char>(meaning[0] - 'a' + 'A');
+  return meaning;
+}
+
+// A setting's default as a cfg writes it: its own, or when that is empty (left to its owner, a
+// game's rule) the one its words name.
+std::string default_of(const Cvar& v) {
+  return v.fallback.empty() ? stated_default(v.values) : v.fallback;
+}
+
+// A setting's comment: its help, then each of its own values with what it does (the values it
+// names, not a number, text or range of any kind: "1: Classic, 2: Enhanced."), then its default: "// How to render shadows.
+// 1: Classic, 2: Enhanced. (Default: 1)."
+std::string help_comment(const Cvar& v) {
+  if (v.help.empty()) return "";
+  std::string out = "// " + v.help;
+  std::vector<ValueEntry> entries;
+  std::string choices;
+  if (parse_values(v.values, entries))
+    for (const ValueEntry& e : entries) {
+      if (e.pattern == "N" || e.pattern == "TEXT" || e.pattern.find("..") != std::string::npos)
+        continue;  // a number or text of any kind, or a range: the help says what it is
+      const std::string meaning = choice_meaning(e.meaning);
+      if (meaning.empty()) continue;
+      choices += (choices.empty() ? "" : ", ") + e.pattern + ": " + meaning;
+    }
+  if (!choices.empty()) out += " " + choices + (choices.ends_with('.') ? "" : ".");
+  if (const std::string d = default_of(v); !d.empty()) out += " (Default: " + d + ").";
+  return out;
+}
 
 std::string banner(std::string_view title) {
   const std::string rule = "//" + std::string(70, '=');
@@ -319,12 +359,14 @@ bool banner_line(const std::string& line) {
          title == "Binds" || title == "Aliases" || title == "Commands";
 }
 
-// The comments above an item, less a help comment the commented writers add themselves (and,
-// for the pretty writer, its banners and the blank lines between).
-std::vector<std::string> kept_above(const Item& it, const std::string& help, bool pretty) {
+// The comments above an item, less a help comment the commented writers add themselves (any
+// line that starts with the setting's help: what an earlier writer put there, with or without
+// its values and default) and, for the pretty writer, its banners and the blank lines between.
+std::vector<std::string> kept_above(const Item& it, const Cvar* help_of, bool pretty) {
+  const std::string help = help_of != nullptr && !help_of->help.empty() ? "// " + help_of->help : "";
   std::vector<std::string> out;
   for (const std::string& line : it.above) {
-    if (!help.empty() && line == help) continue;
+    if (!help.empty() && line.starts_with(help)) continue;
     if (pretty && (line.empty() || banner_line(line))) continue;
     out.push_back(line);
   }
@@ -352,7 +394,7 @@ std::string format_cfg(const Console& c, std::string_view text, const CfgFormat&
       if (it.blank_before > 0 && !out.empty()) out += "\n";
       const Setting s = setting_of(c, tokenize(it.text));
       const std::string help = s.cvar != nullptr ? help_comment(*s.cvar) : "";
-      put_comments(out, kept_above(it, comments ? help : "", false));
+      put_comments(out, kept_above(it, comments ? s.cvar : nullptr, false));
       if (comments && !help.empty()) out += help + "\n";
       out += with_beside(s.is_setting ? setting_line(s, 0) : it.text, it) + "\n";
     }
@@ -399,16 +441,11 @@ std::string format_cfg(const Console& c, std::string_view text, const CfgFormat&
     for (const Cvar* v : c.cvars().sorted()) {
       if ((v->flags & how.defaults) == 0 || (v->flags & (kReadOnly | kCreated)) != 0) continue;
       if (set.count(v) != 0) continue;
-      // Written at its default exactly, so the cfg changes nothing. An empty default leaves the
-      // value to the setting's owner (a game's rule); the value that comes to, when its words
-      // name it, is said after its help.
-      const std::string& value = v->fallback;
+      // Written at its default: its own, or the one its words name when that is left to its
+      // owner (a game's rule).
+      const std::string value = default_of(*v);
       Item& it = made.emplace_back();
       it.text = v->name + " \"" + value + "\"";
-      if (const std::string own = value.empty() ? stated_default(v->values) : "";
-          !own.empty())
-        it.beside = std::string(v->help.empty() ? "// " : "") + "(empty: the game's own, " + own +
-                    ")";
       Setting s;
       s.cvar = v;
       s.name = v->name;
@@ -445,7 +482,7 @@ std::string format_cfg(const Console& c, std::string_view text, const CfgFormat&
       if (!help.empty() && own.starts_with(help)) own = trim(own.substr(help.size()));
       Row l{setting_line(p.s, pad),
              help.empty() ? own : (own.empty() ? help : help + " " + own),
-             kept_above(*p.item, help, true)};
+             kept_above(*p.item, p.s.cvar, true)};
       if (l.head.size() <= kCommentColumnMost) column = std::max(column, l.head.size());
       rows[rank].push_back(std::move(l));
     }
@@ -472,7 +509,7 @@ std::string format_cfg(const Console& c, std::string_view text, const CfgFormat&
     }
     out += (out.empty() ? "" : "\n") + banner(title) + "\n";
     for (const Placed& p : list) {
-      put_comments(out, kept_above(*p.item, "", true));
+      put_comments(out, kept_above(*p.item, nullptr, true));
       out += with_beside(p.item->text, *p.item) + "\n";
     }
   };

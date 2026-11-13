@@ -14,8 +14,10 @@
 //
 // THE FORMAT (`format_cfg`) writes the same commands back tidy: one command a line, a setting as
 // `name "value"` (`set` and `seta` kept where written), a comment kept with the command it sits
-// above or beside. With `comments` each setting gets its one sentence of help as a `//` line above
-// it (written once: a cfg formatted again does not gather a second). With `pretty` (which implies
+// above or beside. With `comments` each setting gets a `//` line above it: its one sentence of
+// help, the values it names with what each does, and its default ("// How the ban list is read.
+// 0: Only those on it join, 1: Those on it are refused. (Default: 1)."), written once: a cfg
+// formatted again does not gather a second. With `pretty` (which implies
 // comments) a setting written by another name (a synonym, console/cvar.hpp) takes its own, and
 // the settings are grouped into sections by their name's prefix, in one fixed order and
 // by name inside each, under a banner, one a line: the values aligned in a column and each
@@ -57,9 +59,9 @@ struct CfgFormat {
   bool pretty = false;    // sections, a fixed order, values aligned (and comments)
   // With `pretty`: every setting carrying one of these flags (kServer for a server's cfg,
   // kArchive for a player's) that the text does not set is written too, at its default, so the
-  // file shows everything it could set, each exactly at its default (so it changes nothing); an
-  // empty default, left to the setting's owner, says above it the value its words name
-  // (console/words.hpp's `stated_default`). 0: only what the text sets.
+  // file shows everything it could set, each at its default; an empty default, left to the
+  // setting's owner (a game's rule), is written as the one its words name (console/words.hpp's
+  // `stated_default`). 0: only what the text sets.
   uint32_t defaults = 0;
 };
 

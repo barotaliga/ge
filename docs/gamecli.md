@@ -72,8 +72,9 @@ player's agent installs it with `shooters_edge_cli skill > ~/.claude/skills/shoo
   settings into sections in one fixed order, one a line with their values in one column and
   their sentences beside them in another, binds by key, then
   aliases and the other commands as written; `--defaults` (with `--pretty`) adds every setting
-  the file leaves alone (a player's saved settings, a server's own), each at its default and
-  with its sentence; `--write` rewrites the file in place.
+  the file leaves alone (a player's saved settings, a server's own), each at its default;
+  every comment is the setting's sentence, the values it names with what each does, and
+  "(Default: x)."; `--write` rewrites the file in place.
 
 ## Servers
 
