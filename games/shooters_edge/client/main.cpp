@@ -119,6 +119,7 @@
 #include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/scores.hpp"
+#include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/title.hpp"
@@ -143,6 +144,7 @@
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/server/words.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "ui/console.hpp"
@@ -359,6 +361,9 @@ int run_main(int argc, char** argv) {
     return g != nullptr ? *g : shooters_edge::profiles::classic_game();
   };
   cl::SearchPath files;
+  // The sequel's status bar, drawn from its rules' own program (sequel_bar.hpp).
+  cl::SequelBar sequel_bar;
+  sequel_bar.files = &files;
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
   cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
@@ -533,6 +538,7 @@ int run_main(int argc, char** argv) {
   // again when it flips and when an enhance run ends (client/classic_pictures.hpp). The first read
   // is on a thread, behind the title; the menu opens once they are in.
   const auto use_pictures = [&](cl::ClassicPictures pics, bool say) {
+    sequel_bar.pictures.clear();  // read again from the packs now open
     // Always the loaded game's own: another game's install loaded leaves none of the last one's.
     game_menu.set_art(std::move(pics.menu));
     shooters_edge::menu::classic_console(game_menu.art(), con_look);
@@ -1638,7 +1644,13 @@ int run_main(int argc, char** argv) {
     // the classic look: the weapon's own flash and its light alone).
     cl::fire_held(held_fire, hand, fx_state.on.muzzles, view.time_s, fx);
     overlay.begin(w, h);
-    if (listen.campaign.end == cl::LevelEnd::none) {
+    const shooters_edge::server::SequelServer* sequel =
+        listen.rules ? shooters_edge::server::sequel_of(*listen.rules) : nullptr;
+    if (sequel != nullptr && listen.campaign.end == cl::LevelEnd::none) {
+      // The sequel's own bar, from the program its rules send.
+      cl::run_sequel_bar(sequel_bar, sequel->world, 0, sequel->frame_number, w, h);
+      cl::draw_sequel_bar(overlay, sequel_bar, cl::sequel_bar_scale(h));
+    } else if (listen.campaign.end == cl::LevelEnd::none) {
       se::Status hud_status = cl::status_of(listen, t);
       cl::group_status(controls.groups, hud_status, t);  // the weapon group (weapon_groups.hpp)
       se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
