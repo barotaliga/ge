@@ -443,13 +443,20 @@ int check_file(Ctx& ctx, const con::Console& console, const fs::path& file,
   return found.empty() ? rc : 1;
 }
 
-// A cfg written back tidy (--comments, --pretty), printed or with --write in place.
-int format_file(Ctx& ctx, const con::Console& console, const fs::path& file) {
+// A cfg written back tidy (--comments, --pretty; --defaults adds every setting of `flags` the file
+// leaves alone), printed or with --write in place.
+int format_file(Ctx& ctx, const con::Console& console, const fs::path& file, uint32_t flags) {
   std::string text;
   if (!read_text(file, text))
     return refuse(ctx, 1, "no cfg file at " + file.string(), "check the path");
-  const std::string tidy = con::format_cfg(
-      console, text, {.comments = ctx.has("comments"), .pretty = ctx.has("pretty")});
+  if (ctx.has("defaults") && !ctx.has("pretty"))
+    return refuse(ctx, 2, "--defaults writes every setting into a pretty cfg's sections",
+                  "add --pretty");
+  const std::string tidy =
+      con::format_cfg(console, text,
+                      {.comments = ctx.has("comments"),
+                       .pretty = ctx.has("pretty"),
+                       .defaults = ctx.has("defaults") ? flags : 0u});
   if (ctx.has("write") && tidy != text) {
     std::ofstream f(file, std::ios::binary);
     if (!(f << tidy))
@@ -480,7 +487,7 @@ int cmd_settings_format(Ctx& ctx) {
   Player p;
   if (!load_player(ctx, p, false)) return 1;
   const fs::path file = ctx.words.empty() ? p.dir / con::kConfigFile : fs::path(ctx.words[0]);
-  return format_file(ctx, *p.console, file);
+  return format_file(ctx, *p.console, file, con::kArchive);
 }
 
 int cmd_server_check(Ctx& ctx) {
@@ -494,7 +501,7 @@ int cmd_server_format(Ctx& ctx) {
   ServerSide s;
   if (!load_server(ctx, s)) return 1;
   const fs::path file = ctx.words.empty() ? server_cfg_path(ctx) : fs::path(ctx.words[0]);
-  return format_file(ctx, *s.console, file);
+  return format_file(ctx, *s.console, file, con::kServer);
 }
 
 }  // namespace ge::gamecli

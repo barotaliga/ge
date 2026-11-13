@@ -271,5 +271,10 @@ TEST(settings_check_and_format) {
   CHECK(cfg.find("// Binds") != std::string::npos);
   CHECK_MSG(run(s, {"settings", "format", "--pretty", "--json"}, out) == 0, out);
   CHECK(out.find("\"changed\":false") != std::string::npos);
+  // --defaults: the player's other settings too, each at its default; only with --pretty.
+  CHECK_MSG(run(s, {"settings", "format", "--pretty", "--defaults"}, out) == 0, out);
+  CHECK_MSG(out.find("seta sensitivity \"50\"\n") != std::string::npos, out);
+  CHECK(out.size() > cfg.size());
+  CHECK(run(s, {"settings", "format", "--defaults"}, out) == 2);
   fs::remove_all(root);
 }

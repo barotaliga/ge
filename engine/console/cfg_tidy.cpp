@@ -8,6 +8,7 @@
 #include "console/cfg_tidy.hpp"
 
 #include <algorithm>
+#include <deque>
 #include <map>
 #include <set>
 
@@ -382,6 +383,36 @@ std::string format_cfg(const Console& c, std::string_view text, const CfgFormat&
       aliases.push_back(p);
     } else {
       others.push_back(p);
+    }
+  }
+  // `defaults`: every other setting of those flags, at its default, in its section.
+  std::deque<Item> made;  // the made items, kept in place while `sections` points at them
+  if (how.defaults != 0) {
+    std::set<const Cvar*> set;
+    for (const auto& [rank, list] : sections)
+      for (const Placed& p : list)
+        if (p.s.cvar != nullptr) set.insert(p.s.cvar);
+    for (const Cvar* v : c.cvars().sorted()) {
+      if ((v->flags & how.defaults) == 0 || (v->flags & (kReadOnly | kCreated)) != 0) continue;
+      if (set.count(v) != 0) continue;
+      // Written at its default exactly, so the cfg changes nothing. An empty default leaves the
+      // value to the setting's owner (a game's rule); the value that comes to, when its words
+      // name it, is said above it.
+      const std::string& value = v->fallback;
+      Item& it = made.emplace_back();
+      it.text = v->name + " \"" + value + "\"";
+      if (const std::string own = value.empty() ? stated_default(v->values) : "";
+          !own.empty())
+        it.above.push_back("// Left empty, it is the game's own: " + own + ".");
+      Setting s;
+      s.cvar = v;
+      s.name = v->name;
+      s.value = value;
+      s.has_value = true;
+      s.is_setting = true;
+      const std::string_view sec = cfg_section(v->name);
+      sections[section_rank(sec)].push_back({&it, s, items.size() + made.size()});
+      titles[section_rank(sec)] = std::string(sec);
     }
   }
   const auto key = [](const Placed& p) {

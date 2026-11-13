@@ -21,14 +21,18 @@
 // by name inside each, under a banner, their values aligned in a column; binds follow by key,
 // then aliases, then every other command in the order written (an `exec` still runs last). The
 // commands themselves are never changed, so a formatted cfg sets exactly what the original did.
+// With `defaults` (pretty only) the settings the text leaves alone are written in their sections
+// too, each at its default, which changes nothing either: a setting at its default is set to it.
 //
 // ge:summary A cfg checked against a console's settings and written back tidy, commented or pretty
 // ge:keywords cfg-check cfg-format check_cfg format_cfg config-validator config-formatter tidy
 // ge:keywords pretty comments sections align unknown-setting invalid-value cfg-lint
+// ge:keywords defaults every-setting
 // ge:skill console
 // ge:test tests/console_cfg_tidy_test.cpp
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -50,6 +54,12 @@ std::vector<CfgFinding> check_cfg(const Console& c, std::string_view text);
 struct CfgFormat {
   bool comments = false;  // each setting's help above it
   bool pretty = false;    // sections, a fixed order, values aligned (and comments)
+  // With `pretty`: every setting carrying one of these flags (kServer for a server's cfg,
+  // kArchive for a player's) that the text does not set is written too, at its default, so the
+  // file shows everything it could set, each exactly at its default (so it changes nothing); an
+  // empty default, left to the setting's owner, says above it the value its words name
+  // (console/words.hpp's `stated_default`). 0: only what the text sets.
+  uint32_t defaults = 0;
 };
 
 // `text` written back tidy (above), each setting's words from `c`.

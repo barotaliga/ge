@@ -70,7 +70,9 @@ player's agent installs it with `shooters_edge_cli skill > ~/.claude/skills/shoo
   setting set twice; they exit 1 when they find one. `settings format` and `server format` write
   it back tidy: `--comments` puts each setting's one sentence above it, `--pretty` groups the
   settings into sections in one fixed order with their values in one column, binds by key, then
-  aliases and the other commands as written; `--write` rewrites the file in place.
+  aliases and the other commands as written; `--defaults` (with `--pretty`) adds every setting
+  the file leaves alone (a player's saved settings, a server's own), each at its default and
+  with its sentence; `--write` rewrites the file in place.
 
 ## Servers
 

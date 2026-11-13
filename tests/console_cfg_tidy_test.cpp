@@ -117,3 +117,46 @@ TEST(classic_names_are_checked_and_the_pretty_format_writes_the_game_s_own) {
   CHECK_MSG(pretty.find("sv_maxclients \"16\"") != std::string::npos, pretty);
   CHECK(pretty.find("flood_msgs    \"6\"") != std::string::npos);  // a part keeps its name
 }
+
+// `defaults`: every setting of those flags the cfg leaves alone is written too, at its default,
+// in its section; one the cfg sets keeps its value; another flag's, a read-only one and one `set`
+// made are left out; and the file formatted again is the same file.
+TEST(the_pretty_format_with_defaults_writes_every_setting) {
+  con::Console c{true};
+  c.cvars().add({.name = "sv_maxclients",
+                 .fallback = "8",
+                 .flags = con::kServer,
+                 .help = "The most players the server seats.",
+                 .kind = con::CvarKind::integer});
+  c.cvars().add({.name = "timelimit",
+                 .fallback = "0",
+                 .flags = con::kServer,
+                 .help = "The match's length in minutes."});
+  c.cvars().add({.name = "sv_version",
+                 .fallback = "1.0",
+                 .flags = con::kServer | con::kReadOnly,
+                 .kind = con::CvarKind::text});
+  c.cvars().add({.name = "sensitivity", .fallback = "3", .flags = con::kArchive});
+  c.cvars().add({.name = "skill",
+                 .flags = con::kServer,
+                 .help = "How hard the monsters are.",
+                 .kind = con::CvarKind::text,
+                 .values = "0: easy; 1: normal (the default); 2: hard"});
+  const std::string text = "timelimit 20\n";
+  const std::string all = con::format_cfg(c, text, {.pretty = true, .defaults = con::kServer});
+  CHECK_MSG(all.find("// The most players the server seats.\nsv_maxclients \"8\"\n") !=
+                std::string::npos,
+            all);
+  CHECK_MSG(all.find("timelimit     \"20\"") != std::string::npos, all);
+  CHECK(all.find("// Server") < all.find("// Match"));
+  CHECK(all.find("sv_version") == std::string::npos);
+  CHECK(all.find("sensitivity") == std::string::npos);
+  // An empty default is written empty (the game's own), the value it comes to said above it.
+  CHECK_MSG(all.find("// Left empty, it is the game's own: 1.\n// How hard the monsters are.\n"
+                     "skill         \"\"\n") != std::string::npos,
+            all);
+  CHECK(con::format_cfg(c, all, {.pretty = true, .defaults = con::kServer}) == all);
+  CHECK(con::check_cfg(c, all).empty());
+  // Without it, only what the cfg sets.
+  CHECK(con::format_cfg(c, text, {.pretty = true}).find("sv_maxclients") == std::string::npos);
+}
