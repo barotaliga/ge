@@ -90,6 +90,23 @@ std::string skin_key(std::string_view name);
 uint32_t choose_skin(const SkinChoice& choice, std::string_view skin,
                      const std::unordered_map<std::string, uint32_t>& read);
 
+// THE SECOND GAME'S LOOKS: a player's `skin` is "<model>/<skin>", the figure's folder under
+// `players/` and a picture in it. Which figure and skin they are drawn in, out of the folders whose
+// figure was read (`figures`, by lower-case folder) and the skins read (`skins`, by
+// "<folder>/<skin>"): the folder up to the first '/' (else up to a backslash; with neither, none
+// and the rest after its first character); a folder not read is kDefaultFigure's; a skin missing
+// from the folder is the default figure's of that name (the figure turning to it too), else the
+// folder's kDefaultSkin. `noskins 1` or no look: the default figure in its default skin. `folder`
+// empty when not even the default figure was read; `skin` kOwnSkin when no skin was read.
+inline constexpr std::string_view kDefaultFigure = "male", kDefaultSkin = "grunt";
+struct Look {
+  std::string folder;
+  uint32_t skin = ge::render::kOwnSkin;
+};
+Look choose_look(const SkinChoice& choice, std::string_view look,
+                 const std::unordered_map<std::string, uint32_t>& figures,
+                 const std::unordered_map<std::string, uint32_t>& skins);
+
 // An item map's world model as one frame, its faces' textures in its skin.
 ge::render::MorphModel morph_from_brush(const ge::brush::Map& item,
                                         std::span<const uint8_t> palette);
