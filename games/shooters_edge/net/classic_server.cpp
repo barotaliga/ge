@@ -287,6 +287,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   for (int i = 0; i < sh::kMaxClients; i++)
     if (i != slot && s.clients[i].state != ConnState::free) taken.push_back(s.clients[i].name);
   c.name = unique_name(sanitize_name(info_get(userinfo, "name"), s.cfg.default_name), taken);
+  if (s.name_rule != nullptr) s.name_rule(s.name_ctx, slot, c.name, true);
   info_set(userinfo, "name", c.name);
   c.userinfo = userinfo;
   const std::string msg = info_get(userinfo, "msg");
@@ -752,6 +753,7 @@ void classic_set_info(ClassicServer& s, int slot, const std::string& key,
   ClassicClient& c = s.clients[slot];
   if (c.state == ConnState::free || info_get(c.userinfo, key) == value) return;
   if (!info_set(c.userinfo, key, value)) return;
+  if (key == "name") c.name = value;
   if (c.rules_active) s.rules->user_info(slot, key, value);
   for (int j = 0; j < sh::kMaxClients; j++) {
     if (s.clients[j].state == ConnState::free) continue;

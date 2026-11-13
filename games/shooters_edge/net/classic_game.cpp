@@ -35,6 +35,7 @@
 #include "shooters_edge/net/classic_coop.hpp"
 #include "shooters_edge/net/classic_coop_game.hpp"
 #include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/classic_login.hpp"
 #include "shooters_edge/net/classic_qtv.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
@@ -92,6 +93,8 @@ struct Game {
   int qtv_port = 0;
   QtvConfig qtv_cfg;
   std::unique_ptr<QtvPort> qtv;
+  // The logins (sv_login, classic_login.hpp; null: none asked and no service handed in).
+  std::unique_ptr<ClassicLogin> login;
   ~Game() {
     if (qtv && classic) qtv_close(*qtv, *classic);
     qtv.reset();
@@ -300,6 +303,8 @@ constexpr gs::SettingName kSettingNames[] = {
     {"allow_download_other", "sv_download_other"},
     {"sv_downloadchunksperframe", "sv_downloadchunks"},
     {"sv_default_name", "sv_defaultname"},
+    {"sv_forcenick", "sv_loginname"},
+    {"sv_registrationinfo", "sv_loginwelcome"},
     {"sv_forcespec_onfull", "sv_fullspectate"},
     {"sv_reconnectlimit", "sv_reconnectwait"},
     {"sv_enable_cmd_minping", "sv_minpingcmd"},
@@ -1378,14 +1383,25 @@ void load_bans(ClassicServer& s) {
   }
 }
 
+// A client's words: a login's first (classic_login.hpp), then the lobby's and the votes'.
+bool game_words(void* ctx, int slot, const std::string& line) {
+  Game& game = *static_cast<Game*>(ctx);
+  if (game.login && classic_login_line(*game.login, slot, line)) return true;
+  return room_words(ctx, slot, line);
+}
+
 bool serve(void* g, ge::net::Transport& port, std::string& error) {
   Game& game = *static_cast<Game*>(g);
   if (game.coop) return coop_serve(*game.coop, port, error);
   game.classic = std::make_unique<ClassicServer>();
   if (!classic_start(*game.classic, game.rules, port, game.cfg, error)) return false;
   load_bans(*game.classic);
-  game.classic->game_command = room_words;
+  game.classic->game_command = game_words;
   game.classic->game_ctx = &game;
+  if (game.host == nullptr && classic_login_wanted(game.settings)) {
+    game.login = std::make_unique<ClassicLogin>();
+    if (!classic_login_open(*game.login, *game.classic, game.settings, error)) return false;
+  }
   if (game.host != nullptr) {  // the window's player: slot 0, a local seat the window moves
     if (!classic_add_local(*game.classic, 0, game.host->player, error, false)) return false;
     game.classic->clients[0].rules_active = false;  // sync_host puts it on the map
@@ -1416,6 +1432,7 @@ void net_frame(void* g, int64_t now_us) {
   game.classic->match_on = game.settings.lobby != 0 &&
                            (phase == gs::LobbyPhase::countdown || phase == gs::LobbyPhase::match);
   classic_frame(*game.classic, now_us);
+  if (game.login) classic_login_frame(*game.login);
   if (game.qtv) qtv_update(*game.qtv, *game.classic);
   sync_host(game);
   sync_seats(game);

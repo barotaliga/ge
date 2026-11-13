@@ -102,6 +102,19 @@ const Recent* recent_of(const Service& svc, const net::Key& asker) {
 
 }  // namespace
 
+Answer service_login(Service& svc, std::string_view name, std::string_view code,
+                     std::string_view player, int64_t now_us, Ticket& ticket) {
+  svc.stats.by_op[static_cast<size_t>(Op::login)]++;
+  Answer a = login_game(svc.store, name, code, "self>" + std::string(player), now_us);
+  if (a.refusal != Refusal::none) return a;
+  const Account* acc = find(svc.store, a.id);
+  if (acc) {
+    ticket = ticket_issue(svc.keys, acc->id, acc->name, now_us / 1000000, svc.config.ticket_life_s);
+    svc.stats.tickets++;
+  }
+  return a;
+}
+
 const char* op_name(Op op) {
   switch (op) {
     case Op::create:
