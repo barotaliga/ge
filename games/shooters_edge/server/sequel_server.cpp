@@ -569,6 +569,7 @@ void fill_rows(SequelServer& s) {
     e.frame = p.pose.frame;
     const bool unseen = c.spectator || p.gibbed || s.intermission_at > 0;
     e.modelindex = unseen ? 0 : static_cast<int>(s.models.size()) - 1;
+    e.carried_model = unseen || !p.alive ? 0 : s.carried_models[p.hand.weapon];
   }
   for (size_t i = 0; i < s.entities.size(); i++) {  // the items shown or hidden
     const SequelEntity& m = s.entities[i];

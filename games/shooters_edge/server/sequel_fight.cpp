@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "brush/trace.hpp"
@@ -38,6 +39,21 @@ constexpr int32_t kWorldMask = sh::kSqSolid | sh::kSqWindow;
 constexpr int32_t kShotMask = kWorldMask | sh::kSqMonster;  // a shot stops at a monster too
 constexpr int32_t kSurfSky = 0x4;  // a sky surface: a shot that reaches it is gone
 constexpr uint32_t kEveryone = 0xffffffffu;
+// The carried weapons' names, in a client's order (it numbers them from 1).
+constexpr std::pair<SqWeapon, const char*> kCarried[] = {
+    {SqWeapon::blaster, "#w_blaster.md2"},
+    {SqWeapon::shotgun, "#w_shotgun.md2"},
+    {SqWeapon::super_shotgun, "#w_sshotgun.md2"},
+    {SqWeapon::machinegun, "#w_machinegun.md2"},
+    {SqWeapon::chaingun, "#w_chaingun.md2"},
+    {SqWeapon::hand_grenade, "#a_grenades.md2"},
+    {SqWeapon::grenade_launcher, "#w_glauncher.md2"},
+    {SqWeapon::rocket_launcher, "#w_rlauncher.md2"},
+    {SqWeapon::hyperblaster, "#w_hyperblaster.md2"},
+    {SqWeapon::railgun, "#w_railgun.md2"},
+    {SqWeapon::bfg, "#w_bfg.md2"},
+};
+
 constexpr const char* kMissileModels[kSqShotKinds] = {"models/objects/laser/tris.md2",
                                                       "",
                                                       "",
@@ -742,6 +758,9 @@ void fight_precache(SequelServer& s) {
     return static_cast<int>(s.models.size()) - 1;
   };
   for (int w = 0; w < kSqWeaponCount; w++) s.weapon_models[w] = model(kSqWeapons[w].view_model);
+  // The weapons as others see them carried: names a client takes from the player's own model
+  // folder ("#" and the file), in the order a client numbers them from 1 (the skin's high byte).
+  for (const auto& [w, name] : kCarried) s.carried_models[static_cast<int>(w)] = model(name);
   for (int k = 0; k < kSqShotKinds; k++) s.missile_models[k] = model(kMissileModels[k]);
   const auto add_sound = [&s](const char* name) {
     if (std::find(s.sounds.begin(), s.sounds.end(), name) == s.sounds.end())
