@@ -52,7 +52,7 @@ ngtcp2_socklen to_sockaddr(const net::Address& a, ngtcp2_sockaddr_union& out) {
   if (a.family == net::Family::ipv6) {
     out.in6.sin6_family = NGTCP2_AF_INET6;
     out.in6.sin6_port = port_be;
-    std::memcpy(out.in6.sin6_addr.s6_addr, a.bytes, 16);
+    std::memcpy(&out.in6.sin6_addr, a.bytes, 16);  // the field's name is a macro on Windows
     return sizeof out.in6;
   }
   out.in.sin_family = NGTCP2_AF_INET;
@@ -63,7 +63,7 @@ ngtcp2_socklen to_sockaddr(const net::Address& a, ngtcp2_sockaddr_union& out) {
   } else {
     std::memcpy(ip, a.bytes, 4);
   }
-  std::memcpy(&out.in.sin_addr.s_addr, ip, 4);
+  std::memcpy(&out.in.sin_addr, ip, 4);
   return sizeof out.in;
 }
 
@@ -777,7 +777,8 @@ int verify_sign(void* verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t
     std::memcpy(rs + size_t{32} * static_cast<size_t>(i) + (32 - len), v, len);
   }
   const std::array<uint8_t, 32> digest = sha256(data.base, data.len);
-  return uECC_verify(c.server_key.data(), digest.data(), digest.size(), rs, uECC_secp256r1())
+  return uECC_verify(c.server_key.data(), digest.data(), static_cast<unsigned>(digest.size()), rs,
+                     uECC_secp256r1())
              ? 0
              : PTLS_ALERT_DECRYPT_ERROR;
 }

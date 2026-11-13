@@ -168,7 +168,7 @@ bool make_certificate(Certificate& out, int64_t unix_now, std::string_view name,
 
   const std::array<uint8_t, 32> digest = sha256(tbs_seq.data(), tbs_seq.size());
   uint8_t sig[64];
-  if (!uECC_sign(out.key.data(), digest.data(), digest.size(), sig, curve)) {
+  if (!uECC_sign(out.key.data(), digest.data(), static_cast<unsigned>(digest.size()), sig, curve)) {
     if (error) *error = "certificate: signing failed (the random source failed)";
     return false;
   }
