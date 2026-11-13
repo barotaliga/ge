@@ -209,3 +209,83 @@ TEST(service_trades_its_own_ticket_for_a_login_code) {
   CHECK(w.ask(w.client, ga::Op::ticket_code, {std::string(reinterpret_cast<char*>(buf), n)}, 15)
             .reply.refusal == ga::Refusal::wrong);
 }
+
+namespace {
+
+gn::MatchReport report_of(uint64_t id) {
+  gn::MatchReport r;
+  r.id = id;
+  r.game = "id1";
+  r.mode = "1on1";
+  r.map = "dm3";
+  gn::ReportPlayer p;
+  p.name = "Ann";
+  p.account = 1;
+  p.score = p.frags = 10;
+  r.players = {p};
+  return r;
+}
+
+// A report sent from the server's port until the service answers it.
+ga::ReportAsk send_report(World& w, const gn::SignKeys& keys, const gn::MatchReport& r,
+                          bool drop_first = false) {
+  ga::ReportAsk a;
+  CHECK(ga::report_ask_start(a, kServiceAt, ga::service_key(w.svc), keys, r, w.now));
+  for (int i = 0; i < 200 && !a.done; i++) {
+    ga::report_ask_update(a, w.server, w.now);
+    w.now += 20000;
+    gn::sim_advance(w.net, w.now);
+    ga::service_update(w.svc, w.now);
+    gn::sim_advance(w.net, w.now);
+    uint8_t buf[gn::kMaxDatagram];
+    gn::Address from;
+    int n = 0;
+    while ((n = gn::transport_receive(w.server, buf, sizeof buf, from, w.now)) >= 0) {
+      if (drop_first) {  // the first answer is lost: the report goes again
+        drop_first = false;
+        continue;
+      }
+      ga::report_ask_read(a, buf, static_cast<size_t>(n), from);
+    }
+  }
+  return a;
+}
+
+}  // namespace
+
+TEST(service_a_trusted_server_s_report_counts_once_however_often_sent) {
+  World w;
+  const gn::SignKeys server = gn::sign_keys(key_of(9));
+  ga::matches_trust(w.svc.matches, server.pub);
+  const ga::ReportAsk a = send_report(w, server, report_of(5), true);
+  CHECK(a.answered && a.taken == ga::Taken::counted);
+  CHECK(a.tries >= 2);
+  CHECK(w.svc.stats.reports >= 2);  // the report came twice
+  CHECK(w.svc.matches.kept.size() == 1);
+  CHECK(ga::totals_sum(w.svc.matches, 1, {}).matches == 1);
+  CHECK(ga::totals_sum(w.svc.matches, 1, {.map = "dm3"}).frags == 10);
+}
+
+TEST(service_an_unlisted_server_s_report_is_shown_and_a_forged_one_refused) {
+  World w;
+  const gn::SignKeys server = gn::sign_keys(key_of(9));
+  const ga::ReportAsk a = send_report(w, server, report_of(6));
+  CHECK(a.answered && a.taken == ga::Taken::shown);
+  CHECK(ga::totals_sum(w.svc.matches, 1, {}).matches == 0);
+  // A report whose signature is not its server's: refused, never answered.
+  ga::ReportAsk forged;
+  CHECK(ga::report_ask_start(forged, kServiceAt, ga::service_key(w.svc), server, report_of(7),
+                             w.now));
+  forged.datagram[5 + 32] ^= 1;
+  forged.max_tries = 3;
+  const uint64_t refused = w.svc.stats.refused;
+  for (int i = 0; i < 50 && !forged.done; i++) {
+    ga::report_ask_update(forged, w.server, w.now);
+    w.now += 1000000;
+    gn::sim_advance(w.net, w.now);
+    ga::service_update(w.svc, w.now);
+  }
+  CHECK(!forged.answered);
+  CHECK(w.svc.stats.refused > refused);
+  CHECK(w.svc.matches.kept.size() == 1);
+}

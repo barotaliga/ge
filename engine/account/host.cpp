@@ -103,8 +103,77 @@ bool load_store(const std::string& path, Store& s, HashCost cost, int64_t unix_u
   return true;
 }
 
+// The files and the socket a half-open or open host holds, closed.
+static void host_close_files(Host& h) {
+  if (h.log) std::fclose(h.log);
+  if (h.reports) std::fclose(h.reports);
+  h.log = h.reports = nullptr;
+  net::close_transport(h.port);
+}
+
+bool load_trusted(const std::string& path, std::vector<net::Key>& out, std::string& error) {
+  std::string text;
+  if (!read_file(path, text)) {
+    error = "cannot read " + path + "; next: write the trusted servers' keys there, one a line";
+    return false;
+  }
+  size_t at = 0;
+  int n = 0;
+  while (at < text.size()) {
+    size_t end = text.find('\n', at);
+    if (end == std::string::npos) end = text.size();
+    std::string line = text.substr(at, end - at);
+    at = end + 1;
+    n++;
+    if (const size_t hash = line.find('#'); hash != std::string::npos) line.resize(hash);
+    while (!line.empty() && (line.back() == ' ' || line.back() == '\r' || line.back() == '\t'))
+      line.pop_back();
+    while (!line.empty() && (line.front() == ' ' || line.front() == '\t')) line.erase(0, 1);
+    if (line.empty()) continue;
+    net::Key k{};
+    std::string why;
+    if (!net::key_from_hex(line, k, why)) {
+      error = path;
+      error += " line " + std::to_string(n) + ": ";
+      error += why;
+      error += "; next: write a server's key as the 64 hex digits it prints at start";
+      return false;
+    }
+    out.push_back(k);
+  }
+  return true;
+}
+
+// The reports in `path` read into `m`; a last line cut short is dropped with a warning.
+static bool load_reports(const std::string& path, Matches& m, std::string& warning,
+                         std::string& error) {
+  std::string text;
+  if (!read_file(path, text)) return true;
+  size_t at = 0;
+  int n = 0;
+  while (at < text.size()) {
+    const size_t end = text.find('\n', at);
+    if (end == std::string::npos) {
+      warning +=
+          (warning.empty() ? "" : "; ") + path + ": its last line was cut short and is dropped";
+      break;
+    }
+    n++;
+    std::string why;
+    if (end > at && !matches_line(m, text.substr(at, end - at), why)) {
+      error = path;
+      error += " line " + std::to_string(n) + ": ";
+      error += why;
+      error += "; next: fix or remove that line (it is one match's report)";
+      return false;
+    }
+    at = end + 1;
+  }
+  return true;
+}
+
 bool host_open(Host& h, const std::string& dir, const net::Address& bind, HashCost cost,
-               int64_t unix_us, std::string& error) {
+               int64_t unix_us, std::string& error, const std::vector<net::Key>& trusted) {
   std::error_code ec;
   fs::create_directories(dir, ec);
   h.dir = dir;
@@ -129,6 +198,19 @@ bool host_open(Host& h, const std::string& dir, const net::Address& bind, HashCo
   }
   service_init(h.svc, config, std::move(store), h.port, os_fresh, nullptr);
   net::wipe(config.seed.data(), config.seed.size());
+  for (const net::Key& k : trusted) matches_trust(h.svc.matches, k);
+  matches_trust(h.svc.matches, h.svc.keys.pub);
+  const std::string reports_path = (fs::path(dir) / "reports.log").string();
+  if (!load_reports(reports_path, h.svc.matches, h.warning, error)) {
+    host_close_files(h);
+    return false;
+  }
+  h.reports = std::fopen(reports_path.c_str(), "ab");
+  if (!h.reports) {
+    host_close_files(h);
+    error = "cannot append to " + reports_path + "; next: make it writable";
+    return false;
+  }
   h.open = true;
   return true;
 }
@@ -136,6 +218,11 @@ bool host_open(Host& h, const std::string& dir, const net::Address& bind, HashCo
 void host_update(Host& h, int64_t unix_us) {
   if (!h.open) return;
   service_update(h.svc, unix_us);
+  if (!h.svc.matches.log.empty()) {
+    std::fwrite(h.svc.matches.log.data(), 1, h.svc.matches.log.size(), h.reports);
+    std::fflush(h.reports);
+    h.svc.matches.log.clear();
+  }
   if (!h.svc.store.log.empty()) {
     std::fwrite(h.svc.store.log.data(), 1, h.svc.store.log.size(), h.log);
     std::fflush(h.log);
@@ -145,9 +232,8 @@ void host_update(Host& h, int64_t unix_us) {
 
 void host_close(Host& h) {
   if (!h.open) return;
-  std::fclose(h.log);
-  h.log = nullptr;
-  net::close_transport(h.port);
+  host_update(h, 0);  // what is waiting in the logs is written
+  host_close_files(h);
   h.open = false;
 }
 

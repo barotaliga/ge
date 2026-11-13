@@ -42,6 +42,7 @@ struct TallySeat {
   int64_t base = 0;  // the seat's frags when it started counting
   int64_t frags = 0;
   int64_t deaths = 0, suicides = 0, team_kills = 0;
+  int64_t ping_sum = 0, ping_n = 0, ping_min = 0, ping_max = 0;  // ms, each frame's ping
   int userid = 0;
   bool on = false, bot = false, alive = false;
 };
