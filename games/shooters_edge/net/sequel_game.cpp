@@ -1,6 +1,6 @@
 // The sequel's dedicated server game (sequel_game.hpp).
 //
-// ge:summary The sequel's dedicated server game: the map read, the rules started and moved on, served
+// ge:summary The sequel's dedicated server game: its maps read, the rules started and moved on
 // ge:keywords sequel-dedicated-server sequel_game protocol-34 servergame
 // ge:skill net shooter
 // ge:test tests/shooters_edge_sequel_net_test.cpp
