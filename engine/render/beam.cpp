@@ -281,7 +281,7 @@ void build_beam(const BeamLook& look, const BeamShot& shot, double t_s, BeamShap
       oy = (oy + kick(r) * look.wander * ds) * (1 - look.pull);
       const double e = i == n ? 0 : std::min(1.0, std::min(s, f.len - s) / std::max(ease, 1e-6));
       double hx = 0, hy = 0;
-      if (fils > 1 && look.braid_m > 0) {
+      if (look.braid_m > 0) {  // one filament winds round the axis too: a coil
         const double a = kTau * (look.twist * s + spin) + phase;
         hx = look.braid_m * libm::cos(a);
         hy = look.braid_m * libm::sin(a);

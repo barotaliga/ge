@@ -3,14 +3,15 @@
 // (`textures/*.wal`), sounds, config files and demo listing read as any classic game's; and its
 // own calls, each answering what this build reads of the game so far: the console's letters and
 // background and its menu's pictures, its status bar drawn from its rules' own program
-// (sequel_bar.hpp), the shell's menu, no held weapons; its client recordings. Each grows here as
-// the sequel's rows land (docs/goals/M18v.md).
+// (sequel_bar.hpp), the shell's menu, its held weapons (the frame its rules' hand is on); its
+// client recordings. Each grows here as the sequel's rows land (docs/goals/M18v.md).
 //
 // ge:summary The sequel's adapter: the shared calls over its rows, and its own calls as they land
 // ge:keywords sequel-adapter sequel adapter wal wall-texture native-library gamex86 md2 pcx
 // ge:keywords second-game adapter_of
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <iterator>
@@ -21,9 +22,11 @@
 #include <vector>
 
 #include "assets/pcx.hpp"
+#include "classicenhance/weapons.hpp"
 #include "shooters_edge/client/adapter_parts.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
+#include "shooters_edge/server/sequel_combat.hpp"
 
 namespace shooters_edge::client {
 
@@ -102,13 +105,6 @@ const shooters_edge::menu::MenuTable& menu(const GameAdapter&) {
   return shooters_edge::menu::classic_menu();
 }
 
-bool held_weapons(const GameAdapter&, const SearchPath&, std::vector<ge::viewmodel::HeldModel>& out,
-                  std::string& why) {
-  out.clear();
-  why.clear();  // none yet: the sequel's held models are a later row
-  return false;
-}
-
 // A player's model names no skin (the player chooses it): until a player's own choice reaches the
 // window, his model wears its folder's `grunt` skin, else the male model's (the game's own
 // fallbacks for a missing skin).
@@ -131,6 +127,51 @@ bool open_model(const GameAdapter& self, const SearchPath& files, const std::str
     break;
   }
   return true;
+}
+
+// Its own held weapons, in its rules' weapon order (server/sequel_combat.hpp's table): each
+// weapon's view model, authored at the eye, every frame kept. The hand shows the frame its rules'
+// hand is on (held.cpp), so no `fire` clip. Each skin is the picture beside the model in its own
+// palette; the sequel's skins have no glowing texels.
+bool held_weapons(const GameAdapter& self, const SearchPath& files,
+                  std::vector<ge::viewmodel::HeldModel>& out, std::string& why) {
+  out.clear();
+  why.clear();
+  // The skins' colours: the game's palette, the one its colour map picture carries.
+  ge::classicenhance::Palette palette;
+  {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> bytes = find_file(files, "pics/colormap.pcx", store);
+    ge::assets::IndexedImage img;
+    std::string error;
+    if (bytes.empty() || !ge::assets::decode_pcx(bytes, "pics/colormap.pcx", &img, &error) ||
+        img.palette.size() < palette.rgb.size()) {
+      why = "no pics/colormap.pcx in the game's files to colour the held weapons' skins";
+      return false;
+    }
+    std::copy_n(img.palette.begin(), palette.rgb.size(), palette.rgb.begin());
+  }
+  int found = 0;
+  std::string missing;
+  for (const server::SqWeaponRow& row : server::kSqWeapons) {
+    OpenedModel m;
+    std::string error;
+    if (!open_model(self, files, row.view_model, m, error) || m.form != ModelForm::morph) {
+      missing += missing.empty() ? "" : ", ";
+      missing += row.view_model;
+      if (!error.empty()) missing += " (" + error + ")";
+      continue;
+    }
+    found++;
+    ge::viewmodel::HeldModel h = ge::classicenhance::held_from_morph(m.morph, palette, 0);
+    if (!m.skins.empty() && m.skins[0].width > 0) h.skin.image = std::move(m.skins[0]);
+    h.skin.glow.clear();
+    out.push_back(std::move(h));
+  }
+  if (missing.empty()) return true;
+  if (found > 0) why = "the game's files lack held weapons: " + missing;
+  out.clear();
+  return false;
 }
 
 // Its own client recordings (demo.hpp § SEQUEL); another game's are refused.
