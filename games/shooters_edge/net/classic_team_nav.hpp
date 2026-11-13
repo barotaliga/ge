@@ -46,6 +46,7 @@ struct TeamNav {
   bt::MapNav nav;
   sh::Locs given;  // the map's place names from a file (none: named off its items)
   sh::Locs locs;   // every fighter's, set with the first
+  const sh::ViewBook* view_book = nullptr;  // where people look on the map (every fighter's)
   std::vector<std::unique_ptr<TeamDive>> dives;
   std::vector<int32_t> item_dive;  // each item's dive, -1 none
   bool dives_made = false;

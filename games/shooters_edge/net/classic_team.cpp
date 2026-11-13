@@ -146,6 +146,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   // The nav graph off the world and the movers (bots/map_nav.hpp).
   TeamNav tn;
   tn.given = opt.locs;
+  if (!opt.view_book.entries.empty()) tn.view_book = &opt.view_book;
   bt::MapNav& nav = tn.nav;
   if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, r.error)) {
     r.error = "run_team_match: " + r.error;

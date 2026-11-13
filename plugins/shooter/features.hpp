@@ -148,6 +148,13 @@
 // - `calmvel`: moving past 150 units/s, the calm view on the pilot's walk within 8 degrees, not
 //   on the route's point 320 units on (shooter/bot.cpp, M18r.md 6); not kept (enemies appearing
 //   faced 52 -> 51 %, the run turns faster than the view follows), in no preset.
+// - `lookturn`: the calm view's point on the route kept within 60 degrees of the pilot's walk
+//   (past a node overshot or a switchback the route's point 320 units on lay 90+ degrees off the
+//   walk in 58 % of the frames the view trailed the run's turn by 40+) (shooter/bot.cpp,
+//   M18r.md 6); judging, in no preset.
+// - `viewbook`: moving past 150 units/s, the calm view looks where people look at that spot moving
+//   that way, off the map's view book (shooter/view_book.hpp; se-team `--viewbook=<file>`)
+//   (shooter/bot.cpp, M18r.md 6); judging, in no preset.
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
@@ -163,7 +170,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot liftbrake lift-shaft scriptfresh script-step scriptentry script-entry calmvel calm-view facing
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot liftbrake lift-shaft scriptfresh script-step scriptentry script-entry calmvel calm-view facing lookturn view-lead viewbook
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -272,9 +279,11 @@ enum class Feature : uint8_t {
   scriptfresh,
   scriptentry,
   calmvel,
+  lookturn,
+  viewbook,
   trial,
 };
-constexpr size_t kFeatures = 96;
+constexpr size_t kFeatures = 98;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

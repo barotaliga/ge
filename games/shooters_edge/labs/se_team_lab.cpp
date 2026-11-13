@@ -162,6 +162,15 @@ struct Watch {
   // spot kept (64-unit cells, the pilot's mode): the corners a look ahead must see.
   std::array<float, 64> last_speed{};
   std::array<sh::Vec3f, 64> last_vel{};
+  // THE VIEW IN THE RUN'S TURN (se-moves' tracks by one rule, M18r.md 6): on the ground at 200+
+  // units/s, the view's yaw off the velocity's in the turn's direction while the run turns past
+  // 90 degrees a second (people's p25 -11 to -18: the view leads or keeps up; a view trailing by
+  // 40+ is a bot's), and the view within 15 degrees of the run of all that ground.
+  std::array<double, 64> turn_t{};
+  std::array<bool, 64> turn_ground{};
+  int64_t run_frames = 0, run_on = 0;
+  std::vector<float> turn_lead;
+  std::map<std::string, std::array<int64_t, 2>> turn_by;  // the view's writer: turning, trailing
   std::array<float, 64> last_health{};
   std::array<bool, 64> moved{};
   int64_t bumps = 0, hard_bumps = 0, alive_commands = 0;
@@ -279,6 +288,25 @@ void watch_view(Watch& w, int k, double t, float yaw, const char* by) {
 }
 
 void facing_metrics(gl::Lab& lab, const Watch& w) {
+  if (w.run_frames > 0)
+    lab.metric("team.turnview.on-run",
+               static_cast<double>(w.run_on) / static_cast<double>(w.run_frames), "share");
+  if (!w.turn_lead.empty()) {
+    std::vector<float> v = w.turn_lead;
+    std::sort(v.begin(), v.end());
+    const auto at = [&](double q) {
+      return static_cast<double>(v[static_cast<size_t>(q * static_cast<double>(v.size() - 1))]);
+    };
+    lab.metric("team.turnview.lead-p25", at(0.25), "deg");
+    lab.metric("team.turnview.lead-p50", at(0.5), "deg");
+    int64_t trail = 0;
+    for (const auto& [key, row] : w.turn_by) trail += row[1];
+    lab.metric("team.turnview.trail40",
+               static_cast<double>(trail) / static_cast<double>(v.size()), "share");
+    for (const auto& [key, row] : w.turn_by)
+      lab.metric("team.turnview." + key + ".trail40",
+                 static_cast<double>(row[1]) / static_cast<double>(v.size()), "share");
+  }
   int64_t seen = 0, faced = 0;
   for (const auto& [key, row] : w.facing) {
     seen += row[0];
@@ -549,6 +577,22 @@ void run(gl::Lab& lab) {
     std::fclose(lf);
     if (ge::shooter::parse_locs(text, locs) > 0) locs.from = lab.arg("locs");
   }
+  ge::shooter::ViewBook view_book;  // where people look (--viewbook: the `viewbook` feature's)
+  if (!lab.arg("viewbook").empty()) {
+    std::FILE* vf = std::fopen(lab.arg("viewbook").c_str(), "rb");
+    if (!vf) {
+      lab.fail("se-team: cannot read " + lab.arg("viewbook"),
+               "next: pass --viewbook=<a view book that exists> (shooter/view_book.hpp), or leave "
+               "it out");
+      return;
+    }
+    std::string text;
+    char buf[4096];
+    size_t got = 0;
+    while ((got = std::fread(buf, 1, sizeof buf, vf)) > 0) text.append(buf, got);
+    std::fclose(vf);
+    if (ge::shooter::parse_view_book(text, view_book) > 0) view_book.from = lab.arg("viewbook");
+  }
   if (!basedir.empty()) {
     cl::SearchPath files;
     if (!cl::open_game_dir(basedir, lab.arg("game"), files, error)) {
@@ -584,6 +628,7 @@ void run(gl::Lab& lab) {
   o.map_name = name;
   if (basedir.empty()) o.entities = cn::kTeamHallsEntities;
   o.locs = std::move(locs);
+  o.view_book = std::move(view_book);
   o.progs = &progs;
   o.seed = seed;
   o.client_fed = lab.arg_num("client-fed") != 0;
@@ -837,6 +882,34 @@ void run(gl::Lab& lab) {
                        sh::pilot_mode_name(p.mode)}]++;
       }
     }
+    const bool ground = (e.flags & sh::kFlagOnGround) != 0;
+    if (e.health > 0 && ground && tr.turn_ground[i] && sp >= 200 && tr.last_speed[i] >= 200) {
+      const double dt = w.sv.time - tr.turn_t[i];
+      const auto deg = [](double y, double x) {
+        return ge::core::libm::atan2(y, x) * (180.0 / ge::core::kPi);
+      };
+      const auto wrap180 = [](double a) {
+        while (a > 180) a -= 360;
+        while (a < -180) a += 360;
+        return a;
+      };
+      const double hd = deg(e.velocity.y, e.velocity.x);
+      const double off = wrap180(cmd.angles.y - hd);
+      tr.run_frames++;
+      tr.run_on += std::fabs(off) < 15 ? 1 : 0;
+      if (dt > 0 && dt <= 0.12) {
+        const double turn = wrap180(hd - deg(tr.last_vel[i].y, tr.last_vel[i].x)) / dt;
+        if (std::fabs(turn) > 90) {
+          const double lead = turn > 0 ? off : -off;
+          tr.turn_lead.push_back(static_cast<float>(lead));
+          auto& row = tr.turn_by[f.bot.view_by];
+          row[0]++;
+          row[1] += lead < -40 ? 1 : 0;
+        }
+      }
+    }
+    tr.turn_t[i] = w.sv.time;
+    tr.turn_ground[i] = e.health > 0 && ground;
     tr.last_speed[i] = sp;
     tr.last_vel[i] = {e.velocity.x, e.velocity.y, 0};
     tr.last_health[i] = e.health;
@@ -2181,6 +2254,8 @@ const gl::LabSpec kSpec{
          "the game folder under --basedir"},
         {"map", "", "with --basedir: the map (e1m2 when empty)"},
         {"save", "", "also write the recording to this path (ending in z, .mvdz: packed)"},
+        {"viewbook", "",
+         "where people look on the map (shooter/view_book.hpp), for the `viewbook` feature"},
         {"locs", "",
          "the map's place names (a .loc file); else the game folder's locs/<map>.loc, else the "
          "items'"},
