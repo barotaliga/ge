@@ -58,6 +58,7 @@
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/layout.hpp"
+#include "shooters_edge/menu/carved_letters.hpp"
 #include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
@@ -289,6 +290,46 @@ void run(gl::Lab& lab) {
          "simulated network, the name, map, players and ping, the selected one's address below.",
          "four rows; the cursor on the first; the footer's address",
          [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    // Every carved letter on the measured lines: a capital's top and foot (rows 1 and 16, red), a
+    // small capital's (rows 3 and 15, green), the 20 px row (blue).
+    shot("letters", "EVERY CARVED LETTER ON ITS LINES",
+         "A to Z and a to z in the menu's carved letters, four classic px to a pixel: the ones "
+         "the strips hold cut from them, the ones they hold in the other size only grown or shrunk "
+         "from it, the F from the E and the I, and B X Z, b x z carved after their traced shapes. "
+         "Red: a capital's top and foot; green: a small capital's; blue: the row.",
+         "every letter between its lines; no stray pixels beside a letter",
+         [&](ge::ui::DrawList& dl) {
+           constexpr float kZ = 4;
+           const std::string_view lines[] = {"ABCDEFGHI", "JKLMNOPQR", "STUVWXYZ",
+                                             "abcdefghi", "jklmnopqr", "stuvwxyz"};
+           const auto bar = [&](float y, uint32_t rgb) {
+             ge::ui::Box b;
+             b.rect = {0, y * kZ, static_cast<float>(iw), 1};
+             b.fill = ge::ui::solid(ge::ui::hex(rgb));
+             b.feather = 0;
+             dl.box(b);
+           };
+           const sm::ClassicArt& art = menu.art();
+           for (size_t k = 0; k < std::size(lines); k++) {
+             const float top = 4 + 28 * static_cast<float>(k);
+             bar(top + 1, 0xff4646), bar(top + 17, 0xff4646);
+             bar(top + 3, 0x46e646), bar(top + 16, 0x46e646), bar(top + 20, 0x5a78ff);
+             float x = 4;
+             for (const char c : lines[k]) {
+               const auto it = art.letters.find(c);
+               if (it == art.letters.end()) continue;
+               ge::ui::Box b;
+               b.rect = {x * kZ, top * kZ, art.width_of(it->second) * kZ, sm::kCarvedLine * kZ};
+               b.image = &it->second;
+               b.uv = {0, 0, static_cast<float>(it->second.width),
+                       static_cast<float>(it->second.height)};
+               b.nearest = true;
+               b.feather = 0;
+               dl.box(b);
+               x += art.width_of(it->second) + 4;
+             }
+           }
+         });
   };
 
   // `--demo=none`: the menu over the title's dark, drawn on the CPU (a game whose recordings
@@ -356,7 +397,7 @@ void run(gl::Lab& lab) {
     if (ls::gpu_required())
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
-    ls::placeholders(lab, {"menu", "games", "watched", "console", "demos", "servers"});
+    ls::placeholders(lab, {"menu", "games", "watched", "console", "demos", "servers", "letters"});
     ls::checked(lab, 0, 0);
     return;
   }

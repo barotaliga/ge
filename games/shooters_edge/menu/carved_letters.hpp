@@ -3,7 +3,11 @@
 // words for (SELECT GAME, DEMOS, the games' names on SELECT GAME) is written in those letters by
 // code: when the pack loads, every letter the table knows is cut out of the strips into its own
 // picture, each piece of it holding only the letter's own pixels (a speck a piece's box caught of
-// a neighbour, a part under `kSpeck` pixels, is left out), and set on the strips' common line;
+// a neighbour, a part under `kSpeck` pixels, is left out), and set on the strips' common line; a
+// letter the strips hold in one size only is made in the other by doubling or dropping its
+// straightest rows and columns (the A from the a, the h from the H), the F from the E and the I;
+// the few left (B X Z, b x z) are carved after their traced shapes (carved_masks.hpp), each pixel
+// coloured like a cut letter's pixel in the same place (rim, lit or shaded edge, face);
 // `carved_layout` lays a word out from them, spaced as the strips space theirs.
 //
 // The table was measured on one set of strips, named by their print (`ClassicArt::strip_print`);
@@ -29,7 +33,8 @@ namespace shooters_edge::menu {
 inline constexpr float kCarvedLine = 24;
 
 // Cuts every letter the table knows from `art`'s strips into `art->letters` (at the art's density)
-// when the strips are the ones it was measured on; clears them otherwise.
+// and carves the rest of A to Z and a to z in their colours when the strips are the ones it was
+// measured on; clears them otherwise.
 void cut_letters(ClassicArt* art);
 
 // `text` set in the carved letters: each letter's left edge (classic px from the word's) into
