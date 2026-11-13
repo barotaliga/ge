@@ -26,7 +26,8 @@ constexpr const char* kNames[kFeatures] = {
     "circleaim",  "leadwall",   "leadmean",   "leadarc",  "airwalk",   "airarc",     "hopjump",
     "hopside",    "noback",     "levelview",  "hopopen",  "fightway",  "letgo",      "paceback",
     "retreatrun", "hide",       "nogoal",     "tripkeep", "routetime", "fetch",
-    "pokestand",  "liftbrake",  "trial"};
+    "pokestand",  "liftbrake",  "scriptfresh", "scriptentry",
+    "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -62,13 +63,15 @@ constexpr Features kKeys =
 // `paceback` on: -2.9 on dm2 and +4.3 on e1m2 a match head to head, a lost aim back on the way by
 // the hand's stroke, not creeping: backwards 20.6 -> 18.4 % by one rule, people 13.8; `hide` on:
 // +5.0 on dm2 and -0.8 on e1m2 a match head to head, a launcher owner's weapon in hand at his
-// death near people's: dm2 77 / 22 % launcher / scattergun, people 72 / 25).
+// death near people's: dm2 77 / 22 % launcher / scattergun, people 72 / 25; `pokestand` on:
+// -0.2 on dm2 and -0.2 on e1m2 a match head to head, no more running round under a button it
+// fires at without a shot).
 constexpr Features kJudging = of(
     {Feature::runupkeys, Feature::underway, Feature::gappast, Feature::airgap, Feature::pilotcast,
      Feature::landwall, Feature::circlekeys, Feature::circleview, Feature::circleaim,
      Feature::leadmean, Feature::leadarc, Feature::airarc, Feature::hopopen, Feature::fightway,
      Feature::letgo, Feature::retreatrun, Feature::nogoal, Feature::tripkeep, Feature::routetime,
-     Feature::fetch, Feature::pokestand, Feature::liftbrake});
+     Feature::fetch, Feature::liftbrake, Feature::scriptfresh, Feature::scriptentry});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

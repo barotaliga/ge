@@ -1510,6 +1510,8 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.hop_side_only = features[sh::Feature::hopside];
   ps.hop_open = features[sh::Feature::hopopen];
   ps.lift_brake = features[sh::Feature::liftbrake];
+  ps.script_fresh = features[sh::Feature::scriptfresh];
+  ps.script_entry = features[sh::Feature::scriptentry];
   ps.circle.target = expert ? 430.f : 380.f;
   ps.circle.most_s = expert ? 0.3f : 0.2f;
   // People's hop starts (`recipes`): a hopper copies its level's out of the book.

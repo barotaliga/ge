@@ -135,10 +135,16 @@
 //   trip to it (games/shooters_edge/bots/mind.cpp, M18r.md 3); not kept (head to head e1m2 -4.5,
 //   dm2 -1.5: the trips fail on the way, not for want of a taker), in no preset.
 // - `pokestand`: a button a shot opens is shot from a stand (the keys let go within 250 units),
-//   never run into (games/shooters_edge/bots/buttons.cpp, M18r.md 3); judging.
+//   never run into (games/shooters_edge/bots/buttons.cpp, M18r.md 3); on (even head to head).
 // - `liftbrake`: walking to a lift's edge with the lift not there, the keys let go within the
 //   run's stop, so the wait is at the edge and not in its shaft (shooter/pilot.cpp, M18r.md 3);
 //   not kept (dm2's waits 125 -> 178 bot-seconds a match: the wait is the lift's), in no preset.
+// - `scriptfresh`: a scripted way left and come back to is flown from its first step (a bug: the
+//   step it was left at was kept, e1m2's YA climb aimed at the walkway from the floor)
+//   (shooter/pilot.cpp, M18r.md 3); judging.
+// - `scriptentry`: a scripted way's entry had anywhere within 64 units once lined up, the keys let
+//   go short of that (a run in from the side circled the entry's point) (shooter/nav_script.cpp,
+//   M18r.md 3); not kept (e1m2's YA lying 77 -> 80 %, slower: the stop costs more), in no preset.
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
@@ -154,7 +160,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot liftbrake lift-shaft
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot liftbrake lift-shaft scriptfresh script-step scriptentry script-entry
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -260,9 +266,11 @@ enum class Feature : uint8_t {
   fetch,
   pokestand,
   liftbrake,
+  scriptfresh,
+  scriptentry,
   trial,
 };
-constexpr size_t kFeatures = 93;
+constexpr size_t kFeatures = 95;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
