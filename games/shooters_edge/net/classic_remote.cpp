@@ -536,6 +536,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
     prints.insert(prints.end(), st.prints.begin(), st.prints.end());
     effects.insert(effects.end(), st.effects.begin(), st.effects.end());
     if (!st.centre.empty()) centre = st.centre;
+    if (st.aim_bend >= 0) sh::aim_turn_bent(r.aim_turn, st.aim_bend);
   }
   d.state.started = std::move(started);
   d.state.stopped = std::move(stopped);
@@ -600,6 +601,20 @@ void remote_hands(Remote& r, const client::Moves& m, const ge::input::InputState
                   const client::ControlSettings& c, double dt) {
   client::turn_view(in, m, c, dt, r.view);
   sh::MoveCmd cmd = client::read_controls(m, in, c);
+  // The aim help's turn: toward the player the server last bent a shot onto, while firing.
+  const client::DemoState& st = r.demo.state;
+  const int target = r.aim_turn.target;
+  sh::Vec3f middle;
+  const sh::Vec3f* at = nullptr;
+  if (target >= 1 && static_cast<size_t>(target - 1) < st.players.size()) {
+    const client::DemoEntity& p = st.players[static_cast<size_t>(target - 1)];
+    if (p.present && !p.dead) {
+      middle = p.origin + sh::Vec3f{0, 0, 4};  // the player's box middle (-24..32 up)
+      at = &middle;
+    }
+  }
+  client::aim_turn_view(c, r.aim_turn, r.view, st.eye, at, (cmd.buttons & sh::kButtonAttack) != 0,
+                        dt);
   if (cmd.impulse == 0) cmd.impulse = r.hands.impulse;
   r.hands = cmd;
 }

@@ -82,6 +82,10 @@ TEST(a_granted_players_shot_over_a_head_is_bent_onto_him) {
   CHECK(sv::help_traced_shot(*a.s, 1, a.eye(), end) == 2);
   CHECK(end.z < unbent.z);
   CHECK(a.s->sv.clients[0].aim_helped == 1);
+  // The bend is told to him alone, naming whom (his client turns the view onto Bob).
+  CHECK(!a.s->out.events.empty());
+  const sv::NetEvent& told = a.s->out.events.back();
+  CHECK(told.kind == sv::EventKind::aim_bend && told.to == 1u && told.ent == 2);
   // The bent line passes through his box at his distance.
   const sh::Vec3f from = a.eye();
   const float t = (bob.origin.x - from.x) / (end.x - from.x);

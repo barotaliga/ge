@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cstdlib>
 #include <cstring>
 #include <iterator>
 #include <string_view>
