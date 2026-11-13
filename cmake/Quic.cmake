@@ -60,7 +60,8 @@ endif()
 set(_ge_quic_gen "${CMAKE_BINARY_DIR}/ge_quic")
 set(_ge_cfg "#pragma once\n#define NGTCP2_STATICLIB 1\n")
 if(WIN32)
-  string(APPEND _ge_cfg "#define HAVE_DECL_BE64TOH 0\n#define HAVE_DECL_BSWAP_64 0\n")
+  string(APPEND _ge_cfg "#define HAVE_DECL_BE64TOH 0\n#define HAVE_DECL_BSWAP_64 0\n"
+    "#ifndef WIN32_LEAN_AND_MEAN\n#define WIN32_LEAN_AND_MEAN\n#endif\n#include <windows.h>\n")
 elseif(APPLE)
   string(APPEND _ge_cfg "#define HAVE_ARPA_INET_H 1\n#define HAVE_NETINET_IN_H 1\n"
     "#define HAVE_UNISTD_H 1\n#define HAVE_DECL_BE64TOH 0\n#define HAVE_DECL_BSWAP_64 0\n"
@@ -114,6 +115,8 @@ set(GE_QUIC_DEFINES NGTCP2_STATICLIB=1 NGTCP2_USE_GENERIC_SOCKADDR=1 NGTCP2_AF_I
   NGTCP2_AF_INET6=10)
 target_compile_definitions(ge_quic PRIVATE HAVE_CONFIG_H=1 ${GE_QUIC_DEFINES})
 if(WIN32)
+  # picotls's clock on Windows; windows.h (in config.h) is what ngtcp2 wipes its keys with.
+  target_sources(ge_quic PRIVATE "${_ge_pt}/picotlsvs/picotls/wintimeofday.c")
   target_include_directories(ge_quic PRIVATE "${_ge_pt}/picotlsvs/picotls")
   target_compile_definitions(ge_quic PRIVATE _WINDOWS=1 _CRT_SECURE_NO_WARNINGS=1)
 endif()
