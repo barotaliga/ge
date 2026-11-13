@@ -34,7 +34,8 @@
 //
 // ge:summary Spectating by inputs: a play-contract run as a replay v2 stream, followed by digest
 // ge:keywords spectate spectating inputs keyframe save_run load_run digest late-joiner tv
-// ge:keywords spectate_writer spectator follow deterministic replay-v2 m23f
+// ge:keywords spectate_writer spectator follow deterministic replay-v2 m23f spectate_pack
+// ge:keywords spectate_inputs input-log ger fall-line-replay
 // ge:skill replay
 // ge:test tests/fall_line_spectate_test.cpp
 #pragma once
@@ -46,6 +47,7 @@
 #include <vector>
 
 #include "play/game.hpp"
+#include "play/inputs.hpp"
 #include "replay/stream.hpp"
 
 namespace ge::replay {
@@ -111,6 +113,17 @@ struct Spectator {
   StreamReader reader;
   bool have_header = false;
 };
+
+// A RUN'S REPLAY ON VERSION 2: an input log (play/inputs.hpp) and its stream are the same run.
+// `spectate_pack` steps the run through the log and writes it as the stream a broadcast would have
+// been (its keyframes and each block's digest); `spectate_inputs` reads a stream from its first
+// block back into the log, every run of held inputs and the final digest, which `ge replay`, `ge
+// diverge` and `ge why` then take as any log. False with `error` (a log of another game, a stream
+// that does not start at its first block, damage).
+bool spectate_pack(const play::GameSpec& spec, const play::InputLog& log, std::vector<uint8_t>& out,
+                   std::string& error, const SpectateOptions& options = {});
+bool spectate_inputs(const play::GameSpec& spec, std::span<const uint8_t> stream,
+                     play::InputLog& out, std::string& error);
 
 // Steps the spectator's run through every whole block of `stream` (the whole stream so far: the
 // header, then blocks from wherever the viewer joined) it has not yet followed. False once it has

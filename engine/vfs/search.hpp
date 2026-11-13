@@ -10,6 +10,11 @@
 //    together in name order;
 // 3. its loose files, every file under the directory but those archives and what is inside a
 //    `.pk3dir`, which win over all of them.
+// That is the default `GameLayout`. A game whose own client ranks its files another way says so in
+// its layout: the archives over the loose files (each directory's packs win over its loose files),
+// other zip endings (`.pkz`), and every archive whose name starts `pak` numbered by the digits
+// after it (none: 0; equal numbers by name), the rest after them by name.
+//
 // Names (directory entries, archive entries, the files' own) are compared as the archives' systems
 // did: ASCII case folded and '\\' read as '/' (`same_name`). A directory is listed when it is
 // mounted and read from disk when a file of it is read; an archive is read whole at mount and
@@ -25,7 +30,8 @@
 //
 // ge:summary The search path: game directories, packs, pk3s and pk3dirs, the winning file, lookup
 // ge:keywords vfs search-path gamedir game-directory mount pak pk3 pk3dir zip loose-files override
-// ge:keywords find lookup hash no-allocation read view list priority add_game
+// ge:keywords find lookup hash no-allocation read view list priority add_game game-layout
+// ge:keywords archives-over-loose pkz game_archives read_from_pack load-order
 // ge:skill vfs
 // ge:test tests/vfs_search_test.cpp
 #pragma once
@@ -76,8 +82,27 @@ struct SearchPath {
   size_t files = 0;
 };
 
+// How a game directory's files rank against each other (`add_game`, above).
+struct GameLayout {
+  bool archives_over_loose = false;  // the loose files mounted first, the archives over them
+  bool pak_prefix = false;  // every archive named `pak*` numbered by the digits after `pak`
+  std::vector<std::string> zip_endings = {".pk3"};  // lower case, the dot included
+  bool pk3dir = true;                               // `*.pk3dir` directories mounted as zips
+};
+
 // Mounts the game directory `<root>/<game>`; false with the reason (naming the file) in `*error`.
-bool add_game(SearchPath* sp, const std::string& root, const std::string& game, std::string* error);
+bool add_game(SearchPath* sp, const std::string& root, const std::string& game, std::string* error,
+              const GameLayout& layout = {});
+
+// The archives of the game directory `<root>/<game>` as `add_game` would mount them, lowest first,
+// each a path on disk (a `.pk3dir` directory included).
+std::vector<std::string> game_archives(const std::string& root, const std::string& game,
+                                       const GameLayout& layout = {});
+
+// The file `path` read out of the pack (`.pak`) on disk at `pack`, reading its directory and that
+// file only; false when the pack is not one or holds no such file (`*error` says which).
+bool read_from_pack(const std::string& pack, std::string_view path, std::vector<uint8_t>* out,
+                    std::string* error);
 // Mounts one archive from memory (a pack or a zip, told by its first bytes) under `name`.
 bool add_archive(SearchPath* sp, const std::string& name, std::vector<uint8_t> bytes,
                  const std::string& game, std::string* error);
