@@ -43,7 +43,10 @@ namespace {
 namespace se = shooters_edge::hud;
 
 const char* format_name(DemoFormat f) {
-  return f == DemoFormat::single ? "single" : f == DemoFormat::client ? "client" : "multiview";
+  return f == DemoFormat::single      ? "single"
+         : f == DemoFormat::client    ? "client"
+         : f == DemoFormat::multiview ? "multiview"
+                                      : "sequel";
 }
 
 // The entity the listener's own sounds come from: the view entity, or the recording player's.

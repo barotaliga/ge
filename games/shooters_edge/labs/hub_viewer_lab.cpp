@@ -66,6 +66,7 @@ gh::HubSpec spec() {
   s.modes = {{"4on4", 9}, {"2on2", 8}, {"1on1", 7}, {"ffa", 3}};
   s.score = "frags";
   s.demo_files = cl::demo_files;
+  s.file_needs = cl::content_needs;
   return s;
 }
 

@@ -157,7 +157,11 @@ ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhan
 }
 
 bool open_demo_(const GameAdapter&, std::vector<uint8_t> bytes, Demo& out, std::string& error) {
-  return open_demo(std::move(bytes), out, error);
+  if (!open_demo(std::move(bytes), out, error)) return false;
+  if (out.state.format != DemoFormat::sequel) return true;
+  error = "This recording is of another game. Choose that game to watch it.";  // its own assets
+  out = Demo{};
+  return false;
 }
 
 const GameAdapter kClassic{.game = &pf::kGameProfiles[0],

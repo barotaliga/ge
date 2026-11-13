@@ -47,12 +47,13 @@ struct SequelBroadcast {
 
 // The broadcast begun: the replay file's header in `out`. `bytes` is the finished recording's
 // size when known (a file's header says it; a live broadcast's says 0).
-void sequel_broadcast_begin(SequelBroadcast& b, int keyframe_seconds, uint64_t bytes = 0);
+void sequel_broadcast_begin(SequelBroadcast& b, int keyframe_seconds, uint64_t bytes = 0,
+                            const ge::replay::Meta& meta = {});
 // One of the recording's blocks (its messages, the length taken off); every tenth closes a block
 // of the file.
 void sequel_broadcast_block(SequelBroadcast& b, std::span<const uint8_t> block);
 // The recording ended: the last blocks closed and the trailer written.
-void sequel_broadcast_end(SequelBroadcast& b);
+void sequel_broadcast_end(SequelBroadcast& b, const ge::replay::Meta& final_meta = {});
 // The file's bytes written since the last call (a TV node's feed).
 std::span<const uint8_t> sequel_broadcast_fresh(SequelBroadcast& b);
 

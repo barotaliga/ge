@@ -5,7 +5,8 @@
 // window draws. A demo is watched like a video with the window's own controls (demo_playback.hpp):
 // the play bar with its highlights over the picture, and on the canvas's keys Space or K pause,
 // Left and Right skip, Up and Down change the speed, Page Up and Page Down jump between highlights.
-// The page's status line says what is loading, or why there is no picture.
+// The page's status line says what is loading, or why there is no picture. Either classic game's
+// recording plays (demo.hpp: the format is read off the bytes); the hub's packs are that game's.
 //
 // A LIVE BROADCAST (`--tv=ws://...`) is read off the TV node's WebSocket (tv/websocket.hpp): the
 // viewer says hello as a viewer, the node's messages are turned back into the replay file as it
@@ -30,6 +31,7 @@
 #include "gpu/surface.hpp"
 #include "platform/window.hpp"
 #include "shooters_edge/app/look.hpp"
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_fx.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
@@ -96,8 +98,7 @@ struct Live {
 
 // What the node sent since the last paint taken in, and the blocks it completed unpacked. False
 // with the page's line in `line` and the detail in `error` when the broadcast cannot go on.
-bool pump(Live& live, cl::Timedemo& t, const cl::GameAdapter& game, std::string& line,
-          std::string& error) {
+bool pump(Live& live, cl::Timedemo& t, std::string& line, std::string& error) {
   std::vector<uint8_t> msg;
   while (ge::web::ws_take(live.socket, msg)) {
     if (!ge::tv::watch_receive(live.watch, msg)) {
@@ -119,7 +120,7 @@ bool pump(Live& live, cl::Timedemo& t, const cl::GameAdapter& game, std::string&
     return false;
   }
   if (!live.open && live.unpacker.blocks >= kLiveLead && !live.opening.empty()) {
-    if (!game.open_demo(game, std::move(live.opening), t.demo, error)) {
+    if (!cl::open_demo(std::move(live.opening), t.demo, error)) {
       line = "This broadcast cannot be shown here. Open it in the game below.";
       return false;
     }
@@ -142,7 +143,6 @@ int main(int argc, char** argv) {
   if (!mount_packs(args, files, error))
     return fail("The game's files did not load. Try again in a moment.", error);
   cl::Timedemo t;
-  const cl::GameAdapter& game = cl::classic_adapter();
   const bool live = !args.tv.empty();
   Live broadcast;
   if (live) {
@@ -165,7 +165,7 @@ int main(int argc, char** argv) {
     if (!ge::web::fetch_bytes(args.demo, demo_bytes, error, "Loading the demo..."))
       return fail("The demo did not load. Try again in a moment.", error);
     t.name = t.found = args.demo;
-    if (!game.open_demo(game, std::move(demo_bytes), t.demo, error))
+    if (!cl::open_demo(std::move(demo_bytes), t.demo, error))
       return fail("This demo cannot be played here. Download it and play it in the game.", error);
     t.start = t.demo;
   }
@@ -218,7 +218,7 @@ int main(int argc, char** argv) {
     last_ms = now_ms;
     if (live) {
       std::string line;
-      if (!pump(broadcast, t, game, line, error)) return fail(line, error);
+      if (!pump(broadcast, t, line, error)) return fail(line, error);
       if (!broadcast.open) {
         if (ge::web::ws_state(broadcast.socket) == ge::web::WsState::closed)
           return fail("The broadcast stopped before the match was shown.");
@@ -276,8 +276,11 @@ int main(int argc, char** argv) {
     cl::demo_fx_frame(read, demo_fx);
     const cl::DemoState& s = cl::demo_drawn(t);
     if (!world || s.models.size() != world_models) {
+      // The recording's own game: its palette, its models' families.
+      const cl::GameAdapter& game =
+          s.format == cl::DemoFormat::sequel ? cl::sequel_adapter() : cl::classic_adapter();
       world = cl::create_world_draw(*device, files, *map, w, h, surface.format(), look, {}, error,
-                                    {s.models, {}});
+                                    {s.models, {}}, game);
       if (!world)
         return fail(
             "This browser's graphics cannot draw this game's world yet. Play it in the game "

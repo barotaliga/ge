@@ -54,6 +54,7 @@ struct Seen {
 const char* format_name(cl::DemoFormat f) {
   return f == cl::DemoFormat::single   ? "single-player"
          : f == cl::DemoFormat::client ? "client"
+         : f == cl::DemoFormat::sequel ? "sequel client"
                                        : "multiview";
 }
 
