@@ -293,13 +293,10 @@ std::string refusal_words(Refusal r, int64_t wait_us) {
     case Refusal::held: {
       const int64_t s = (wait_us + 999999) / 1000000;
       char line[96];
-      if (s >= 60) {
-        std::snprintf(line, sizeof line, "Too many tries. Wait %lld minutes and try again.",
-                      static_cast<long long>((s + 59) / 60));
-      } else {
-        std::snprintf(line, sizeof line, "Too many tries. Wait %lld seconds and try again.",
-                      static_cast<long long>(s));
-      }
+      const long long n = s >= 60 ? (s + 59) / 60 : s;
+      const char* unit =
+          s >= 60 ? (n == 1 ? "minute" : "minutes") : (n == 1 ? "second" : "seconds");
+      std::snprintf(line, sizeof line, "Too many tries. Wait %lld %s and try again.", n, unit);
       return line;
     }
     case Refusal::blocked:
