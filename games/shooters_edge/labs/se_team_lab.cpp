@@ -513,6 +513,17 @@ const char* link_of(const sh::Pilot& p) {
   return "-";
 }
 
+// Whether that link walks a lip over lava or slime (`NavLink::brink`): the trace's link with "!".
+bool link_brink(const sh::Pilot& p) {
+  if (p.g == nullptr || p.k + 1 >= p.route.size()) return false;
+  const sh::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
+  for (int32_t q = 0; q < a.links; q++) {
+    const sh::NavLink& l = p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
+    if (l.to == p.route[p.k + 1]) return l.brink;
+  }
+  return false;
+}
+
 // The kind of the link after the current one (`end`: the next node is the route's last).
 const char* link2_of(const sh::Pilot& p) {
   if (p.g == nullptr || p.k + 1 >= p.route.size()) return "-";
@@ -934,11 +945,11 @@ void run(gl::Lab& lab) {
         << to_fixed(sp, 0) << '\t' << to_fixed(e.health, 0) << '\t'
         << shooters_edge::bots::fight_mode_name(f.mode) << '\t' << goal << '\t' << f.goal_node
         << '\t' << (f.unlocking ? 1 : 0) << '\t' << sh::pilot_mode_name(p.mode) << '\t' << link
-        << '\t' << p.script_step << '\t' << p.because << '\t' << to_fixed(cmd.angles.y, 2) << '\t'
-        << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by << '\t' << cmd.forward << '\t'
-        << cmd.side << '\t' << to_fixed(e.velocity.x, 0) << '\t' << to_fixed(e.velocity.y, 0)
-        << '\t' << to_fixed(f.bot.walk_yaw, 1) << '\t' << to_fixed(f.bot.look_yaw, 1) << '\t'
-        << f.press_note << '\t' << p.k << '\t';
+        << (link_brink(p) ? "!" : "") << '\t' << p.script_step << '\t' << p.because << '\t'
+        << to_fixed(cmd.angles.y, 2) << '\t' << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by
+        << '\t' << cmd.forward << '\t' << cmd.side << '\t' << to_fixed(e.velocity.x, 0) << '\t'
+        << to_fixed(e.velocity.y, 0) << '\t' << to_fixed(f.bot.walk_yaw, 1) << '\t'
+        << to_fixed(f.bot.look_yaw, 1) << '\t' << f.press_note << '\t' << p.k << '\t';
     // The route's next node (where the pilot heads), '-' with no route.
     if (p.g != nullptr && p.k + 1 < p.route.size()) {
       const sh::Vec3f nx = p.g->nodes[static_cast<size_t>(p.route[p.k + 1])].origin;
