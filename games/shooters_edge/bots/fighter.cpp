@@ -1558,6 +1558,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.gap_circle = features[sh::Feature::gapbuild];
   ps.gap_lava = features[sh::Feature::gaplava];
   ps.shut_every = features[sh::Feature::bridgeseen];
+  ps.hop_side_off = features[sh::Feature::sidehop];
   ps.brink_line = features[sh::Feature::brinkline];
   ps.brink_side = features[sh::Feature::sidebrink];
   ps.walk_falls = features[sh::Feature::fallseen];

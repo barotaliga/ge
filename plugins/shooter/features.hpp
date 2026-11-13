@@ -201,11 +201,18 @@
 // - `trapflee`: a player standing on a floor trap's floor when it goes (as it sees it, or a mate's
 //   call) runs off it at once by the nav's shortest way to the ground round it, with the floor's
 //   slide and not against it, before any goal (bots/floor_trap.hpp; dm2: 47 of 82 trap deaths
-//   stood on the floor as it went and fell ~3 s later, M18r.md 0c); judging, in no preset.
+//   stood on the floor as it went and fell ~3 s later, M18r.md 0c); on (head to head dm2 -2.7,
+//   inside the noise; its side's lava deaths fewer).
 // - `bridgeseen`: a bridge the player is no longer sent is believed gone once one of its nodes is
 //   in sight with no floor under it (a client keeps an unsent mover where it last saw it: dm2's red
 //   armour's bridge stood out in the bot's mind after it went back, and routes walked off the lip
-//   into the pit; bots/fighter.cpp `bridge_seen_gone`, M18r.md 0c); judging, in no preset.
+//   into the pit; and the links shut onto a bridge or a floor door still in honoured, which no
+//   route did: they carry no mover; bots/fighter.cpp `bridge_seen_gone`, M18r.md 0c); on (head to
+//   head dm2 +7.4, e1m2 -0.3).
+// - `sidehop`: a hop's stretch ends at a walk whose side step falls into lava or slime
+//   (`NavLink::brink_side`), walked, not hopped (dm2's yellow-armour stair: most of its falls came
+//   out of a hop or a copied hop start; shooter/pilot.cpp `hop_stretch`, M18r.md 0c); not kept
+//   (YA falls 24 -> 20 over 8 seeds, noise; the hop share 0.45 -> 0.39, people 0.46), in no preset.
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
@@ -221,7 +228,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot liftbrake lift-shaft scriptfresh script-step scriptentry script-entry calmvel calm-view facing lookturn view-lead viewbook gapturn gap-refused gapnear placeheard place-heard loc-region gaplava gap-over-lava brinkline lip-corner sidebrink side-step fallseen fall-foreseen liplook brinkkeys floortrap floor-trap trapflee trap-flee bridgeseen bridge-seen
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot liftbrake lift-shaft scriptfresh script-step scriptentry script-entry calmvel calm-view facing lookturn view-lead viewbook gapturn gap-refused gapnear placeheard place-heard loc-region gaplava gap-over-lava brinkline lip-corner sidebrink side-step fallseen fall-foreseen liplook brinkkeys floortrap floor-trap trapflee trap-flee bridgeseen bridge-seen sidehop side-hop
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -344,9 +351,10 @@ enum class Feature : uint8_t {
   floortrap,
   trapflee,
   bridgeseen,
+  sidehop,
   trial,
 };
-constexpr size_t kFeatures = 110;
+constexpr size_t kFeatures = 111;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

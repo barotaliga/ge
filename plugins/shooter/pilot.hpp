@@ -170,6 +170,9 @@ struct PilotSettings {
   // ground, so the hop needs no stop of its own (hops along dm2's pits: share 9-11 % -> 14-15 %;
   // head to head ~50 frags a set: kept for the speed, which passes for a person more than frags).
   bool hop_lips = false;
+  // (`sidehop`) A hop's stretch ends at a link whose side step falls into lava or slime too
+  // (`NavLink::brink_side`: dm2's yellow-armour stair), walked, not hopped.
+  bool hop_side_off = false;
   // THE CIRCLE JUMP (`circlejump`, circle_jump.hpp): a hop's first jump taken out of a curve on
   // the ground, forward and a side key, the view on the velocity, as people's are (their standing
   // jumps take off at ~430): until `circle.target` speed, `circle.most_s` or past the route's line.

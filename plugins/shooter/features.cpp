@@ -31,7 +31,7 @@ constexpr const char* kNames[kFeatures] = {
     "pokestand",  "liftbrake",  "scriptfresh", "scriptentry", "calmvel",   "lookturn",
     "viewbook",   "gapturn",    "gapnear",     "placeheard",  "gaplava",   "brinkline",
     "sidebrink",  "fallseen",   "liplook",     "brinkkeys",   "floortrap",
-    "trapflee",   "bridgeseen", "trial"};
+    "trapflee",   "bridgeseen", "sidehop",     "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -80,7 +80,12 @@ constexpr Features kKeys =
 // `gaplava` on (over `brinkkeys`): even head to head on dm2 (-4.7 / +4.8), dm2's gap tricks over
 // lava jumped 0 -> ~0.8 a match a side (about half landed; people ~7), lava deaths 9.0 -> 9.1-9.7;
 // `floortrap` on: +5.0 on dm2 (-4.8 / +14.8) a match head to head, ~2.5 presses a match each
-// firing, the enemy's lava deaths +2.5 / +3.7 a match and the presser's own +0.25 / -0.9.
+// firing, the enemy's lava deaths +2.5 / +3.7 a match and the presser's own +0.25 / -0.9;
+// `bridgeseen` on: +7.4 on dm2 (+7.9 / +6.9) and -0.3 on e1m2 a match head to head, the side with
+// it dying in lava 8.8 -> 5.6 and 7.2 -> 5.2 a match (the shut links onto a bridge still in were
+// never honoured); `trapflee` on (over `bridgeseen`): -2.7 on dm2 (+2.1 / -7.4, inside the sides'
+// noise; it runs ~2 times a match) a match head to head, the side with it in lava 6.4 -> 4.5 and
+// 5.4 -> 5.0: a person runs off a floor going from under him.
 constexpr Features kJudging =
     of({Feature::runupkeys, Feature::underway,    Feature::gappast,    Feature::airgap,
         Feature::pilotcast, Feature::landwall,    Feature::circlekeys, Feature::circleview,
@@ -89,8 +94,7 @@ constexpr Features kJudging =
         Feature::nogoal,    Feature::tripkeep,    Feature::routetime,  Feature::fetch,
         Feature::liftbrake, Feature::scriptentry, Feature::calmvel,    Feature::lookturn,
         Feature::viewbook,  Feature::gapturn,     Feature::brinkline,
-        Feature::sidebrink, Feature::fallseen,    Feature::liplook,    Feature::trapflee,
-        Feature::bridgeseen});
+        Feature::sidebrink, Feature::fallseen,    Feature::liplook,    Feature::sidehop});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
