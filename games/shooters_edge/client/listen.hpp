@@ -411,6 +411,9 @@ struct Missile {
   sh::Vec3f origin;
   bool rocket = false;   // a rocket or a grenade: something that explodes
   bool grenade = false;  // a grenade (bounces, smokes) rather than a rocket
+  // Neither: a nail, or one of the sequel's glowing shots, by the kind of shot whoever fired it
+  // (a player or a monster): a blaster's bolt, or the BFG's ball.
+  bool bolt = false, bfg = false;
 };
 void missiles_of(const Listen& l, std::vector<Missile>& out);
 
