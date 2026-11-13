@@ -615,7 +615,18 @@ int32_t nav_nearest(const NavGraph& g, Vec3f p) {
 
 NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& search,
                    float mover_penalty_s, std::span<const int32_t> barred,
-                   std::span<const NavExtraLink> cut, const NavJumper& jumper) {
+                   std::span<const NavExtraLink> cut, const NavJumper& jumper,
+                   std::span<const NavExtraLink> shut) {
+  // `shut`: every link's end looked up in a 64-bit filter of its ends first, so the search scans
+  // the list only for a link that may be in it.
+  uint64_t shut_to = 0;
+  for (const NavExtraLink& c : shut) shut_to |= uint64_t{1} << (static_cast<uint32_t>(c.to) & 63u);
+  auto is_shut = [&](int32_t a, int32_t b) {
+    if (((shut_to >> (static_cast<uint32_t>(b) & 63u)) & 1u) == 0) return false;
+    for (const NavExtraLink& c : shut)
+      if (c.from == a && c.to == b) return true;
+    return false;
+  };
   auto is_cut = [&](int32_t a, int32_t b) {
     for (const NavExtraLink& c : cut)
       if (c.from == a && c.to == b) return true;
@@ -655,6 +666,7 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
           // across it, a gap trick given up) is not taken.
           if (is_barred(l.mover) || is_barred(g.nodes[static_cast<size_t>(l.to)].mover) ||
               ((l.mover >= 0 || l.gap) && !cut.empty() && is_cut(a, l.to)) ||
+              (shut_to != 0 && is_shut(a, l.to)) ||
               !(jumper.takes(l) || jumper.builds_to(l, search.cost(a))))
             continue;
           const double cost =
@@ -680,7 +692,10 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
 }
 
 int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, const NavJumper& jumper,
-                  std::span<const int32_t> shut) {
+                  std::span<const int32_t> shut, std::span<const NavExtraLink> shut_links) {
+  uint64_t shut_to = 0;  // a 64-bit filter of the shut links' ends (as `nav_route`'s)
+  for (const NavExtraLink& c : shut_links)
+    shut_to |= uint64_t{1} << (static_cast<uint32_t>(c.to) & 63u);
   search.reset(g.nodes.size());
   if (from < 0) return 0;
   search.seed(from);
@@ -691,6 +706,8 @@ int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, const Nav
       if (!jumper.takes(l)) continue;
       bool closed = false;
       for (const int32_t m : shut) closed |= l.mover == m;
+      if (((shut_to >> (static_cast<uint32_t>(l.to) & 63u)) & 1u) != 0)
+        for (const NavExtraLink& c : shut_links) closed |= c.from == a && c.to == l.to;
       if (closed) continue;
       const double cost = search.cost(a) + jumper.cost_s(l);
       if (search.improves(l.to, cost)) search.reach(l.to, cost, a);

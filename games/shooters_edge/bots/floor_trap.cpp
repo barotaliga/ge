@@ -7,11 +7,14 @@
 // ge:test tests/shooters_edge_footwork_test.cpp
 #include "shooters_edge/bots/floor_trap.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "shooter/brink.hpp"
 #include "shooter/features.hpp"
+#include "shooter/trace.hpp"
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/bots/talk.hpp"
 
@@ -43,6 +46,80 @@ bool floor_away(const Fighter& f, const FloorTrap& tr) {
 void end_press(Fighter& f) {
   f.trap_press = -1;
   f.goal_node = -1;
+}
+
+float flat(sh::Vec3f a, sh::Vec3f b) {
+  return std::sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
+}
+
+// (`trapflee`) Whether a player at `self` runs straight to node origin `o` off the floor: his box
+// swept there a jump's height up meets no wall, and no lava or slime lies under the line now (the
+// gap the floor leaves).
+bool flee_clear(const server::RulesCommon& s, int me, sh::Vec3f self, sh::Vec3f o) {
+  const float up = (o.z > self.z ? o.z : self.z) + kFleeUp;
+  const sh::HullTrace go =
+      sh::trace_move(s.sv, {self.x, self.y, self.z + kFleeUp}, sh::kPlayerMins, sh::kPlayerMaxs,
+                     {o.x, o.y, up}, sh::kTraceNoMonsters, me);
+  if (go.startsolid || go.fraction < 1) return false;
+  const float d = flat(self, o);
+  for (float u = 16; u < d; u += 16) {
+    const float k = u / d;
+    const sh::Vec3f p{self.x + (o.x - self.x) * k, self.y + (o.y - self.y) * k, up};
+    if (sh::over_harm(s.sv, p, p, me)) return false;
+  }
+  return true;
+}
+
+// (`trapflee`) The node off the trap's floor a player at `self` standing on it as it goes runs to:
+// off the floor's box, on his level or up to a jump higher (dm2's floor lies 20 under the strips
+// beside it and 52 under the ledge south), the nearest by its straight distance, a way against
+// the slide of the door under him costing double (the floor carries him the other way), and run
+// to straight (`flee_clear`). The nav's floor nodes are no way off: they stay where the floor was
+// while it slides from under him. The way chosen is kept while it stays clear.
+int32_t floor_exit(const Fighter& f, const server::RulesCommon& s, const FloorTrap& tr, int me,
+                   sh::Vec3f self) {
+  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  auto off_floor = [&](sh::Vec3f o) {
+    return o.x < tr.lo.x - 16 || o.x > tr.hi.x + 16 || o.y < tr.lo.y - 16 || o.y > tr.hi.y + 16;
+  };
+  if (f.trap_exit >= 0 && static_cast<size_t>(f.trap_exit) < g.nodes.size()) {
+    const sh::Vec3f o = g.nodes[static_cast<size_t>(f.trap_exit)].origin;
+    if (flat(self, o) <= kFleeReach && flee_clear(s, me, self, o)) return f.trap_exit;
+  }
+  // The slide under him: the door whose box (where it is now) holds him, off its rest.
+  float mx = 0, my = 0;
+  for (const int32_t b : tr.floors) {
+    const Fighter::Bridge& br = f.bridges[static_cast<size_t>(b)];
+    const server::WorldEntity& d = s.world.entities[static_cast<size_t>(br.ent)];
+    if (self.x < d.absmin.x || self.x > d.absmax.x || self.y < d.absmin.y || self.y > d.absmax.y)
+      continue;
+    const float dx = d.origin.x - br.spawn.x, dy = d.origin.y - br.spawn.y;
+    const float len = std::sqrt(dx * dx + dy * dy);
+    if (len >= 1) mx = dx / len, my = dy / len;
+  }
+  struct Way {
+    float cost;
+    int32_t node;
+  };
+  std::vector<Way> ways;
+  for (size_t n = 0; n < g.nodes.size(); n++) {
+    const sh::Vec3f o = g.nodes[n].origin;
+    if (g.nodes[n].swim || g.nodes[n].mover >= 0 || (!g.harm.empty() && g.harm[n] != 0)) continue;
+    if (o.z > self.z + kFleeJump || o.z < self.z - kFleeStep || !off_floor(o)) continue;
+    const float d = flat(self, o);
+    if (d > kFleeReach) continue;
+    const float against = -((o.x - self.x) * mx + (o.y - self.y) * my);
+    ways.push_back({d + (against > 0 ? against : 0), static_cast<int32_t>(n)});
+  }
+  std::sort(ways.begin(), ways.end(), [](const Way& a, const Way& b) {
+    return a.cost < b.cost || (a.cost == b.cost && a.node < b.node);
+  });
+  int tried = 0;
+  for (const Way& w : ways) {
+    if (tried++ >= kFleeTries) break;
+    if (flee_clear(s, me, self, g.nodes[static_cast<size_t>(w.node)].origin)) return w.node;
+  }
+  return -1;
 }
 
 }  // namespace
@@ -119,6 +196,27 @@ void floor_trap_think(Fighter& f, const server::RulesCommon& s, int me, double t
     const bool away = floor_away(f, tr);
     if (away && !tr.away) f.stats.trap_opens++;
     tr.away = away;
+  }
+  if (f.features[sh::Feature::trapflee]) {
+    // On a trap's floor as it goes (as it sees it, or a mate called it): off it by the nearest way.
+    const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
+    int32_t flee = -1, exit = -1;
+    for (size_t k = 0; k < f.floor_traps.size() && flee < 0; k++) {
+      const FloorTrap& tr = f.floor_traps[k];
+      if (!floor_away(f, tr) || !over_floor(tr, self)) continue;
+      exit = floor_exit(f, s, tr, me, self);
+      if (exit >= 0) flee = static_cast<int32_t>(k);
+    }
+    if (flee >= 0) {
+      if (f.trap_flee < 0) f.stats.trap_flees++;
+      if (exit != f.trap_exit) f.goal_node = -1;
+      f.trap_flee = flee;
+      f.trap_exit = exit;
+    } else if (f.trap_flee >= 0) {
+      f.trap_flee = -1;
+      f.trap_exit = -1;
+      f.goal_node = -1;
+    }
   }
   if (!f.features[sh::Feature::floortrap] || f.floor_traps.empty()) return;
   if (f.trap_stay >= 0 && !floor_away(f, f.floor_traps[static_cast<size_t>(f.trap_stay)])) {
@@ -221,6 +319,22 @@ void floor_trap_cmd(Fighter& f, const server::RulesCommon& s, int me, sh::MoveCm
     if (along > 0) wx -= along * ux, wy -= along * uy, changed = true;
     const float run = self.velocity.x * ux + self.velocity.y * uy;
     if (run > 0 && (d - 16) < run * kTrapKeep_s) wx -= 320 * ux, wy -= 320 * uy, changed = true;
+  }
+  // (`trapflee`) On a trap's floor as it goes: run straight at the way off it, no jump (the
+  // route's nodes stay where the floor was).
+  if (f.trap_flee >= 0 && f.trap_exit >= 0) {
+    const sh::Vec3f to = f.bot.pilot.pilot.g->nodes[static_cast<size_t>(f.trap_exit)].origin;
+    float ux = to.x - o.x, uy = to.y - o.y;
+    const float d = std::sqrt(ux * ux + uy * uy);
+    if (d >= 1) {
+      wx = 320 * ux / d, wy = 320 * uy / d;
+      // Up onto a ledge: jumped near it, else no jump (a hop on the floor lands where it went).
+      const bool up = to.z > o.z + kFleeStep && d < kFleeJumpAt &&
+                      (static_cast<int>(self.flags) & sh::kFlagOnGround) != 0;
+      cmd.buttons = static_cast<uint8_t>(up ? cmd.buttons | sh::kButtonJump
+                                            : cmd.buttons & ~sh::kButtonJump);
+      changed = true;
+    }
   }
   // While a floor is away (as it believes): kept off the teleporters landing on it, as off the
   // button (a fight's footwork in dm2's yellow-armour alcoves stepped into the one at its back:

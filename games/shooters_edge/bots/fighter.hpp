@@ -207,6 +207,8 @@ struct FighterStats {
   int64_t trap_fired = 0;           // and its floor gone while it pressed
   int64_t trap_opens = 0;           // a floor trap's floor seen going away, whoever pressed
   int64_t trap_kept = 0;            // commands its keys were kept off a trap's button
+  int64_t trap_flees = 0;           // runs off a trap's floor as it went (`trapflee`)
+  int64_t bridges_seen_gone = 0;    // a bridge believed out seen gone, not sent (`bridgeseen`)
   int64_t dives_given_up = 0;       // dives turned back (late, or short of air)
   double dive_wet_s = 0;            // time in the water on a dive
   int64_t outmatched = 0;           // commands spent turned from a fight it believed it loses
@@ -307,6 +309,7 @@ struct Fighter {
     bool floor = false;     // a floor door (map_nav.hpp NavBridge): there at rest, not when away
     float wait = 0;         // a bridge's time out before it goes back, s (<= 0: stays out)
     double out_since = -1;  // when it last came all the way out, server time; -1: not out
+    // (a floor door's, under `bridgeseen`: when it was last seen away)
   };
   std::vector<Bridge> bridges;
   bool bridges_seen = false;
@@ -315,6 +318,8 @@ struct Fighter {
   double trap_until = -1e9;            // and until when
   double trap_told = -1e9;             // when a mate's `trap` call was read (floor_trap.hpp)
   int32_t trap_stay = -1;              // the trap it fired: held at its button while it is away
+  int32_t trap_flee = -1;  // the trap whose floor it stands on as it goes (`trapflee`), or -1
+  int32_t trap_exit = -1;  // and the node off it it runs to
   Mind mind;         // what it believes of its team, its claim, its calls (mind.hpp)
   Escort escort;     // a co-op companion's own state (companion.hpp; leader -1: none)
   KeyHand keys;      // the hand on the keys (feature `keys`, keyboard.hpp)

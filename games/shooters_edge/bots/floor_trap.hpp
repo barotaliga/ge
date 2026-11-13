@@ -23,6 +23,13 @@
 // - THE CALL: a floor known only by sight is believed there by a mate who has not seen it go (he
 //   walks or teleports in). The presser says `trap` (talk.hpp) as it goes; a mate who reads it
 //   takes the floor, and its teleporters, as away for `kTrapTold_s` (`Fighter::trap_told`).
+// - THE FLIGHT OFF IT (`trapflee`, `floor_exit`): a player standing on the floor as it goes (it
+//   slides from under him at ~100 units/s: ~3 s to the drop) runs straight off it before any goal,
+//   to the nearest node off the floor's box, up to a jump higher (dm2's floor lies 20 under the
+//   strips beside it), that a straight run reaches (no wall, no open lava under the line), a way
+//   against the slide of the door under him costing double; the keys run at it and jump onto a
+//   ledge (the route's floor nodes stay where the floor was). dm2: 47 of 82 trap deaths stood on
+//   the floor as it went and fell ~3 s later.
 //
 // ge:summary The floor trap: a floor over lava a touch button slides away, never brushed by accident,
 // ge:summary pressed only when an enemy stands on it, the presser staying put till it returns
@@ -48,6 +55,12 @@ constexpr float kTrapKeep_s = 0.2f;   // and a run braked that would close the r
 constexpr double kTrapTold_s = 4;     // a mate's `trap` call read: the floor taken as away this long
 constexpr double kTrapMateFresh_s = 5;  // a mate a team line put over the floor this lately
 constexpr float kTrapLevel = 64;        // the presser's feet within this of the button's bottom
+constexpr float kFleeStep = 18;    // `trapflee`: a step (lower or higher: walked onto)
+constexpr float kFleeJump = 40;    // a way off the floor up to this higher (jumped onto), units
+constexpr float kFleeUp = 48;      // the straight run's sweep this high (over a ledge), units
+constexpr float kFleeJumpAt = 100;  // a higher way jumped at from this near, units
+constexpr float kFleeReach = 640;  // and this near across, units
+constexpr int kFleeTries = 24;     // the nearest this many tried by the trace
 constexpr float kTeleKeep = 48;  // the floor away: kept this far off its teleporters' link starts
 
 // The map's floor traps off its buttons and bridges (after `buttons_init` and the bridges).

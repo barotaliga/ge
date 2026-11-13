@@ -63,6 +63,10 @@ struct NavBridge {
   int ent = -1;                // the door's edict
   ge::shooter::Vec3f spawn;    // where it stood when the map began (in: no bridge yet)
   std::vector<int32_t> nodes;  // the nodes standing on it, out
+  // Of those, the ones it alone holds up: no floor of the map's own under the player's box there
+  // without it (`nodes` takes a box beyond its edge too, so a walkway's nodes beside its root:
+  // shut with it, a bot standing there planned on across it; `bridgeseen` takes these).
+  std::vector<int32_t> own;
   bool touch = false;  // no name: it moves when touched (a trap: in, under whoever steps on)
   // A FLOOR DOOR (`floor_door`): a plate resting shut as a floor that a button slides away (dm2's
   // big room). Its nodes stand on it at rest (`spawn`) and are shut while it is away from there.

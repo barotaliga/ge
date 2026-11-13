@@ -1134,16 +1134,20 @@ NavRoute plan_way(Pilot& p, int32_t from, int32_t goal) {
   std::span<const NavExtraLink> cut = p.cut;
   bool gaps_off = false;
   for (const double until : p.gaps_off_s) gaps_off = gaps_off || until > p.clock_s;
-  if (!p.shut_links.empty() || gaps_off || p.near_cut.from >= 0) {
+  // (`bridgeseen`) The links onto a bridge still in shut on every link (they carry no mover).
+  const bool shut_every = p.set.shut_every && !p.shut_links.empty();
+  if ((!p.shut_links.empty() && !shut_every) || gaps_off || p.near_cut.from >= 0) {
     p.cut_all = p.cut;
-    p.cut_all.insert(p.cut_all.end(), p.shut_links.begin(), p.shut_links.end());
+    if (!shut_every) p.cut_all.insert(p.cut_all.end(), p.shut_links.begin(), p.shut_links.end());
     for (size_t i = 0; i < p.gaps_off.size(); i++)
       if (p.gaps_off_s[i] > p.clock_s) p.cut_all.push_back(p.gaps_off[i]);
     if (p.near_cut.from >= 0) p.cut_all.push_back(p.near_cut);
     cut = p.cut_all;
   }
   return nav_route(*p.g, from, goal, p.search, 1,
-                   std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut, p.set.jumper);
+                   std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut, p.set.jumper,
+                   shut_every ? std::span<const NavExtraLink>(p.shut_links)
+                              : std::span<const NavExtraLink>{});
 }
 
 // (`gapnear`) The route's first gap trick when its takeoff is within `kGapCurveFrom` of the player

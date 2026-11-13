@@ -6,6 +6,7 @@
 #include "shooters_edge/net/classic_team_nav.hpp"
 
 #include "ai/path.hpp"
+#include "shooter/features.hpp"
 #include "shooter/nav.hpp"
 #include "shooters_edge/bots/floor_trap.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
@@ -42,7 +43,9 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const server::RulesCommon& 
   f.bot.view_book = tn.view_book;
   f.bridges.clear();
   for (const bt::NavBridge& br : nav.bridges)
-    f.bridges.push_back({br.ent, br.spawn, br.nodes, !br.floor, br.floor, br.wait, -1});
+    f.bridges.push_back({br.ent, br.spawn,
+                         f.features[ge::shooter::Feature::bridgeseen] && !br.floor ? br.own : br.nodes,
+                         !br.floor, br.floor, br.wait, -1});
   bt::floor_traps_init(f, graph, seen);  // after the buttons and the bridges
   f.name = name;
   if (tn.locs.points.empty()) {
