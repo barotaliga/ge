@@ -42,6 +42,7 @@ constexpr float kStageOut = 400;      // a gather spot at least this far from th
 constexpr float kGatherNear = 350;    // a mate this near the gather spot has gathered
 constexpr double kGather_s = 8;       // the gather waits this long at most
 constexpr double kPush_s = 30;        // a push lasts this long at most
+constexpr float kPlaceLink = 400;     // `placeheard`: points of one name this near are one place
 constexpr double kPushGap_s = 25;     // one player calls a push no oftener than this
 constexpr double kPushClear_s = 4;    // on the base with no enemy seen this long: the push is over
 constexpr double kFetchAhead_s = 5;   // the taker goes for an armour due this soon
@@ -82,11 +83,83 @@ float protection_of(const SayStatus& st) {
   return st.armor < 0 ? 0.f : share * static_cast<float>(st.armor);
 }
 
-// Where a place name is: the middle of the points of that name, else the item called by it
-// nearest `near` (the speaker's own place when it has one).
-bool place_pos(const Fighter& f, const std::string& name, sh::Vec3f& out) {
+// A place heard by its name as a person hears it (`placeheard`): a loc file names a room by many
+// points and the same name may stand for rooms apart, so the name is read as the points of that
+// name linked to the one nearest `hint` (where the speaker was last known; none: the first), each
+// within `kPlaceLink` of the next; and where an item stands among them (a key item, a weapon or
+// the mega whose nearest point is one of them), as that item's spot, the one nearest the place's
+// middle (what a map's items name: the place a player calls by it); else the place's point nearest
+// its middle. False when no point has the name.
+bool place_heard(const Fighter& f, const std::string& name, const sh::Vec3f* hint, sh::Vec3f& out) {
+  const std::vector<sh::Loc>& pts = f.locs->points;
+  std::vector<uint8_t> in(pts.size(), 0);
+  size_t seed = pts.size();
+  float seed_d = 0;
+  for (size_t i = 0; i < pts.size(); i++) {
+    if (pts[i].name != name) continue;
+    const float d = hint ? dist(pts[i].at, *hint) : 0;
+    if (seed == pts.size() || d < seed_d) {
+      seed = i;
+      seed_d = d;
+    }
+  }
+  if (seed == pts.size()) return false;
+  std::vector<size_t> todo{seed};
+  in[seed] = 1;
+  sh::Vec3f sum{0, 0, 0};
+  int n = 0;
+  while (!todo.empty()) {
+    const size_t a = todo.back();
+    todo.pop_back();
+    sum = sum + pts[a].at;
+    n++;
+    for (size_t b = 0; b < pts.size(); b++)
+      if (!in[b] && pts[b].name == name && dist(pts[a].at, pts[b].at) <= kPlaceLink) {
+        in[b] = 1;
+        todo.push_back(b);
+      }
+  }
+  const sh::Vec3f mid = sum * (1.f / static_cast<float>(n));
+  int32_t item = -1;
+  float item_d = 0;
+  for (size_t i = 0; i < f.items.size(); i++) {
+    const ItemSpot& it = f.items[i];
+    if (!key_item(it) && it.kind != ItemKind::weapon && it.kind != ItemKind::mega) continue;
+    const sh::Loc* l = sh::nearest_loc(*f.locs, it.at);
+    if (l == nullptr || !in[static_cast<size_t>(l - pts.data())]) continue;
+    const float d = dist(it.at, mid);
+    if (item < 0 || d < item_d) {
+      item = static_cast<int32_t>(i);
+      item_d = d;
+    }
+  }
+  if (item >= 0) {
+    out = f.items[static_cast<size_t>(item)].at;
+    return true;
+  }
+  bool first = true;
+  float best = 0;
+  for (size_t i = 0; i < pts.size(); i++) {
+    if (!in[i]) continue;
+    const float d = dist(pts[i].at, mid);
+    if (first || d < best) {
+      first = false;
+      best = d;
+      out = pts[i].at;
+    }
+  }
+  return true;
+}
+
+// Where a place name is: the middle of the points of that name (`placeheard`: the place round
+// `hint`, place_heard), else the item called by it nearest `near` (the speaker's own place when
+// it has one).
+bool place_pos(const Fighter& f, const std::string& name, sh::Vec3f& out,
+               const sh::Vec3f* hint = nullptr) {
   if (name.empty()) return false;
-  if (f.locs) {
+  if (f.locs && f.features[sh::Feature::placeheard]) {
+    if (place_heard(f, name, hint, out)) return true;
+  } else if (f.locs) {
     sh::Vec3f sum{0, 0, 0};
     int n = 0;
     for (const sh::Loc& l : f.locs->points)
@@ -246,7 +319,9 @@ bool gather_spot(const Fighter& f, int32_t ra, sh::Vec3f at, std::string& name, 
   for (const int32_t e : base.entries) {
     const std::string n = place_of(f, g.nodes[static_cast<size_t>(e)].origin);
     sh::Vec3f p;
-    if (n.empty() || n == inside || !place_pos(f, n, p) || dist(p, there) < kStageOut) continue;
+    if (n.empty() || n == inside || !place_pos(f, n, p, &g.nodes[static_cast<size_t>(e)].origin) ||
+        dist(p, there) < kStageOut)
+      continue;
     const int32_t node = sh::nav_nearest(g, p);
     if (node < 0 || (f.reach_at >= 0 && !f.reach.reached(node))) continue;
     const float d = dist(p, at);
@@ -445,7 +520,9 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
   const Said s = parse_say(text);
   Mate& m = mate_named(f, from);
   sh::Vec3f p;
-  const bool has_place = place_pos(f, s.loc, p);
+  // (`placeheard`) The place read round where the speaker was last known.
+  const bool known = t - m.at_t < mate_fresh_s(f);
+  const bool has_place = place_pos(f, s.loc, p, known ? &m.at : nullptr);
   const sh::Vec3f* pp = has_place ? &p : nullptr;
   // Where the speaker is: the place his own news carries.
   switch (s.kind) {
@@ -887,11 +964,11 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
     if (mn.fetch >= 0) {
       const float gives = armour_gives(f.items[static_cast<size_t>(mn.fetch)]);
       const bool worn = mine >= gives * 0.9f;
-      const int end = worn                                          ? -1
-                      : r == Role::carry || r == Role::rush             ? 0
-                      : due_of(f, mn.fetch, t) - t > kFetchAhead_s      ? 1
-                      : t - mn.fetch_t > kFetch_s                       ? 2
-                                                                        : 5;
+      const int end = worn                                         ? -1
+                      : r == Role::carry || r == Role::rush        ? 0
+                      : due_of(f, mn.fetch, t) - t > kFetchAhead_s ? 1
+                      : t - mn.fetch_t > kFetch_s                  ? 2
+                                                                   : 5;
       if (worn) f.team->stats.fetched++;
       if (end >= 0 && end < 5) f.team->stats.fetch_end[end]++;
       if (end < 5) mn.fetch = -1;
@@ -905,7 +982,8 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
         bool ahead = false;
         for (const Mate& m : mn.mates) {
           if (ahead || t - m.at_t >= mate_fresh_s(f)) continue;
-          const bool needs = m.armour < 0 || t - m.strength_t >= kMateFresh_s || m.armour < gives * 0.9f;
+          const bool needs =
+              m.armour < 0 || t - m.strength_t >= kMateFresh_s || m.armour < gives * 0.9f;
           ahead = needs && run_s(f, m.at, it.node) < run;
         }
         if (!ahead) {
