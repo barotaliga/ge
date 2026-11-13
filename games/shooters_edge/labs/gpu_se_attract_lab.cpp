@@ -301,9 +301,10 @@ void run(gl::Lab& lab) {
   accept.accept = true;
   menu.update(accept, false, host, 1 / 60.0);
   shot("games", "SELECT GAME",
-       "SELECT GAME in the classic look: each game by the picture of its name, the one playing "
-       "marked with its edition and install, the other not found yet.",
-       "two names drawn as pictures; the first marked playing; the cursor on it",
+       "SELECT GAME in the classic look: each game's name cut from the menu strips' own carved "
+       "letters (its picture on other strips), the one playing marked with its edition and "
+       "install, the other not found yet.",
+       "two names in the menu's carved letters; the first marked playing; the cursor on it",
        [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
   menu.hide();
   shot("watched", "ESCAPE: THE RECORDING WATCHED",

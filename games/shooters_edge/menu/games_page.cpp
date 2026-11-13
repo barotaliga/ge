@@ -201,9 +201,12 @@ void GamesPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int widt
       break;
     }
     const GameRow& g = rows_[static_cast<size_t>(i)];
+    // The name cut from the menu strips' own carved letters where they were measured, else its
+    // picture.
     const ui::Image& name = game_name_picture(g.id);
     const ui::Rect r = pen.at(x, y, 0, 20);
-    if (picture(list, name, r.x, r.y, r.h) <= 0) pen.text(g.id, x, y + 6, false);
+    if (!carve_word(pen, "game-" + g.id, x + 4, y) && picture(list, name, r.x, r.y, r.h) <= 0)
+      pen.text(g.id, x, y + 6, false);
     if (g.playing) {
       const std::string_view now = "playing";
       pen.text(now, kListRight - 8 * static_cast<float>(now.size()), y + 6, false);

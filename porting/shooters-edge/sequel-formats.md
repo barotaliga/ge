@@ -261,6 +261,41 @@ model's stand begins with stand30–50 before stand1–29; the flyer has no deat
 the flipper's swim is `flphor`, its bite `flpbit`; the hover's move is `forwrd`; the mutant's
 `attack` run serves its claws and its leap alike.
 
+## The carried weapon on the wire (read)
+
+- **The names come from the model configstrings.** An entry starting `#` is a carried-weapon file
+  name relative to `players/<model>/`, never a model to load or download. The game registers, while
+  the world entity spawns (after the map, its `*n` brush models and the Blaster's models; before
+  every other entity's): `#w_blaster.md2`, `#w_shotgun.md2`, `#w_sshotgun.md2`, `#w_machinegun.md2`,
+  `#w_chaingun.md2`, `#a_grenades.md2`, `#w_glauncher.md2`, `#w_rlauncher.md2`,
+  `#w_hyperblaster.md2`, `#w_railgun.md2`, `#w_bfg.md2` (CTF adds `#w_grapple.md2` last).
+- **The client's list** is built once per level load: slot 0 `weapon.md2`, then each `#` entry in
+  configstring order (walking up from model index 1 to the first empty one), at most 20 slots.
+  Extra entries are ignored, and a `#` entry set mid-level waits for the next load. `cl_vwep 0`
+  (archived, default 1) loads only slot 0. A cyborg missing a file tries male's. A player's info is
+  valid only if body, skin, icon and `weapon.md2` all load; otherwise it draws as male/grunt.
+- **The high byte** (skin number shifted right 8) indexes that list directly, so it is the 1-based
+  position among the `#` entries; the stock 1–11 only holds because the game registers them in its
+  item order. The game writes item number × 256 + slot on every weapon change, only while the body's
+  model index is 255; 0 when there is no weapon (not reached in stock play). An index of 20 or more,
+  or `cl_vwep 0`, means slot 0; a slot that did not load falls back to that player's slot 0, then
+  male's `weapon.md2`. The skin number goes on the wire as 1, 2 or 4 bytes (below 256, below 65536,
+  else), so a player with a weapon sends 2.
+- **The low byte** is the slot (entity number − 1), naming the player-skin configstring
+  `<name>\<model>/<skin>`. Body model index 255 means "body and skin from that client info"; model
+  index 0 draws nothing, linked models included. Sexed sounds go by entity number − 1, so the low
+  byte must equal it.
+- **Model index 2 = 255** on a live player (set at spawn) is the carried weapon; 0 at death and at
+  intermission (where the body's index and index 3 go to 0 too). The game sends nothing in indices
+  3 and 4 for players. The client draws any non-zero index 2, 3 or 4 as extra models with the body's
+  origin, angles, frame, previous frame and blend, skin 0 of the file and no render flags (the
+  colour shell stays on the body); index 2 with bit 0x80 set draws model (value − 128) translucent
+  at alpha 0.32.
+- **The view model** is the player state's gun index, an ordinary model index (the item's
+  `models/weapons/v_*/tris.md2`), reset to frame 0 on each change, 0 at intermission or with no
+  weapon; independent of all the above. A client never draws its own player entity (body or linked
+  models), so a player sees only that view model.
+
 ## Not yet specified
 
 The recording format (`.dm2`, the demo's `q2demo1.dm2`) and the network protocol (version 34)

@@ -308,10 +308,11 @@ struct SequelServer : RulesCommon {
   double host_time = 0;               // the host's clock, s
   int next_userid = 1;
   SequelMissile missiles[kSequelMissiles];
-  int weapon_models[kSqWeaponCount] = {};  // each weapon's view model in the model list
-  int missile_models[kSqShotKinds] = {};   // by `SqShot`
-  std::vector<std::string> obituaries;     // every death's line, in order (the tests, the lab)
-  std::vector<sh::Packet> rj_packets;      // a frame's packets as the rocket jump helper left them
+  int weapon_models[kSqWeaponCount] = {};   // each weapon's view model in the model list
+  int carried_models[kSqWeaponCount] = {};  // each weapon as another player sees it carried
+  int missile_models[kSqShotKinds] = {};    // by `SqShot`
+  std::vector<std::string> obituaries;      // every death's line, in order (the tests, the lab)
+  std::vector<sh::Packet> rj_packets;       // a frame's packets as the rocket jump helper left them
   SequelDrop drops[kSequelDrops];
   SequelBody bodies[kSequelBodies];
   int next_body = 0;             // the body slot the next respawn fills
