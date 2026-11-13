@@ -157,4 +157,21 @@ std::string locs_text(const Locs& locs) {
   return out;
 }
 
+std::vector<std::string> recorded_loc_lines(const Locs& locs) {
+  std::vector<std::string> out;
+  const std::string text = locs_text(locs);
+  size_t at = 0;
+  while (at < text.size()) {
+    const size_t end = text.find('\n', at);
+    out.push_back(std::string(kRecordedLoc) + text.substr(at, end - at) + "\n");
+    at = end + 1;
+  }
+  return out;
+}
+
+bool read_recorded_loc(std::string_view line, Locs& out) {
+  if (line.substr(0, kRecordedLoc.size()) != kRecordedLoc) return false;
+  return parse_locs(line.substr(kRecordedLoc.size()), out) > 0;
+}
+
 }  // namespace ge::shooter

@@ -9,10 +9,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <iterator>
 #include <span>
 #include <string>
 #include <string_view>
 #include <utility>
+
+#include "shooters_edge/menu/carved_letters.hpp"
 
 namespace shooters_edge::menu {
 
@@ -75,61 +78,15 @@ struct CarvedWord {
   uint64_t print = 0;
   std::span<const CarvedPiece> pieces;
 };
-// DEMOS: the capital D a capital L's stem and the right half of a capital O (the way the small d
-// is a stem and a bowl), then the small capitals e, m, o and s.
-constexpr CarvedPiece kDemosPieces[] = {
-    {"sp_menu", 2, 20, 8, 20, 0, 0},       // the stem of Load's L
-    {"mainmenu", 11, 40, 11, 20, 8, 0},    // the right half of Options' O ...
-    {"mainmenu", 22, 47, 1, 4, 19, 7},     // ... and its outline's widest column, beside the P
-    {"mainmenu", 153, 60, 17, 20, 20, 0},  // Ordering's e
-    {"sp_menu", 107, 0, 21, 20, 38, 1},    // Game's m (its strip sits a pixel higher)
-    {"mainmenu", 67, 40, 21, 20, 60, 0},   // Options' o
-    {"mainmenu", 106, 40, 17, 20, 82, 0},  // Options' s
-};
-// SELECT GAME: Single's capital S, Ordering's e, Help's l (a stem and its foot), the left half of
-// Options' o for the c (the font's O is two halves), Options' t; Game's capital G short of its
-// hook's last column, Player's a, Game's m and Ordering's e.
-constexpr CarvedPiece kGamesPieces[] = {
-    {"mainmenu", 2, 0, 18, 20, 0, 0},       // Single's S
-    {"mainmenu", 153, 60, 17, 20, 19, 0},   // Ordering's e
-    {"mainmenu", 40, 60, 17, 20, 37, 0},    // Help's l
-    {"mainmenu", 153, 60, 17, 20, 55, 0},   // Ordering's e
-    {"mainmenu", 67, 40, 11, 20, 73, 0},    // the left half of Options' o
-    {"mainmenu", 40, 40, 19, 20, 85, 0},    // Options' t
-    {"sp_menu", 70, 0, 19, 20, 115, 1},     // Game's G (its strip sits a pixel higher)
-    {"mainmenu", 143, 0, 23, 20, 135, 0},   // Player's a
-    {"sp_menu", 107, 0, 21, 20, 159, 1},    // Game's m
-    {"mainmenu", 153, 60, 17, 20, 181, 0},  // Ordering's e
-};
-// The two games' names on SELECT GAME: Quit's Q (the logo's own) and u, Player's a without the
-// foot it shares with the l, a k of Ordering's r stem with Player's y arm over the leg of the r
-// beside it, Ordering's e; the sequel's numeral two of Single's I.
-constexpr CarvedPiece kClassicNamePieces[] = {
-    {"mainmenu", 0, 80, 22, 20, 0, 0},     // Quit's Q
-    {"mainmenu", 23, 80, 19, 20, 23, 0},   // Quit's u
-    {"mainmenu", 147, 0, 19, 20, 43, 0},   // Player's a
-    {"mainmenu", 171, 60, 9, 20, 63, 0},   // the k: Ordering's r stem,
-    {"mainmenu", 176, 0, 8, 9, 72, 0},     // Player's y arm,
-    {"mainmenu", 182, 68, 9, 12, 73, 8},   // the r's leg
-    {"mainmenu", 153, 60, 17, 20, 85, 0},  // Ordering's e
-};
-constexpr CarvedPiece kSequelNamePieces[] = {
-    {"mainmenu", 0, 80, 22, 20, 0, 0},     // Quit's Q
-    {"mainmenu", 23, 80, 19, 20, 23, 0},   // Quit's u
-    {"mainmenu", 147, 0, 19, 20, 43, 0},   // Player's a
-    {"mainmenu", 171, 60, 9, 20, 63, 0},   // the k: Ordering's r stem,
-    {"mainmenu", 176, 0, 8, 9, 72, 0},     // Player's y arm,
-    {"mainmenu", 182, 68, 9, 12, 73, 8},   // the r's leg
-    {"mainmenu", 153, 60, 17, 20, 85, 0},  // Ordering's e
-    {"mainmenu", 22, 0, 8, 20, 110, 0},    // Single's I
-    {"mainmenu", 22, 0, 8, 20, 120, 0},    // twice
-};
 // THE SEQUEL'S PLATES (its main menu's words, each on a tag 32 px tall): a word a plate of its own,
 // the left end (the hole) of GAME's plate, a letter a cell of the plates' even 17 px pitch (16 or
 // 17 classic px, every cell the plate's whole height so its edges run on), then GAME's right end.
-// A space is three slips of plain plate 3 px wide (QUIT's between the I and the T). Letters no
-// plate has: the C an O with its right side hidden under the recess's plain ground, the H an N with
-// its diagonal hidden and a slip of T's bar across, the K an R with Y's right arm over its bowl.
+// A space is three slips of plain plate 2 px wide (the bare margin left of QUIT's I),
+// the letters' own margins beside it. The plates' surfaces differ in brightness by a tenth (QUIT's
+// is the darkest), so every piece of a word is darkened to the word's darkest surface
+// (`plate_surface`) and no cell shows its edge. Letters no plate has: the C an O with its right
+// side hidden under the recess's plain ground, the H an N with its diagonal hidden and a slip of
+// T's bar across, the K an R with Y's right arm over its bowl.
 constexpr uint64_t kPlatePrint = 0xfd50f20825e19f40ULL;
 constexpr CarvedPiece kPlateGames[] = {
     {"m_main_game", 0, 0, 19, 32, 0, 0},           // the plate's left end
@@ -141,14 +98,14 @@ constexpr CarvedPiece kPlateGames[] = {
     {"m_main_options", 24, 10, 6, 9, 97, 11},      // ... its right side hidden
     {"m_main_options", 24, 10, 6, 9, 101, 11},
     {"m_main_multiplayer", 69, 0, 17, 32, 103, 0},  // T
-    {"m_main_quit", 66, 0, 3, 32, 120, 0},          // the space
-    {"m_main_quit", 66, 0, 3, 32, 123, 0},
-    {"m_main_quit", 66, 0, 3, 32, 126, 0},
-    {"m_main_game", 19, 0, 17, 32, 129, 0},  // G
-    {"m_main_game", 36, 0, 17, 32, 146, 0},  // A
-    {"m_main_game", 53, 0, 16, 32, 163, 0},  // M
-    {"m_main_game", 69, 0, 17, 32, 179, 0},  // E
-    {"m_main_game", 86, 0, 13, 32, 196, 0},  // the plate's right end
+    {"m_main_quit", 52, 0, 2, 32, 120, 0},          // the space: three slips of the plain plate
+    {"m_main_quit", 52, 0, 2, 32, 122, 0},          // left of QUIT's I, the filter's reach
+    {"m_main_quit", 52, 0, 2, 32, 124, 0},          // either side still plain
+    {"m_main_game", 19, 0, 17, 32, 126, 0},         // G
+    {"m_main_game", 36, 0, 17, 32, 143, 0},         // A
+    {"m_main_game", 53, 0, 16, 32, 160, 0},         // M
+    {"m_main_game", 69, 0, 17, 32, 176, 0},         // E
+    {"m_main_game", 86, 0, 13, 32, 193, 0},         // the plate's right end
 };
 constexpr CarvedPiece kPlateDemos[] = {
     {"m_main_game", 0, 0, 19, 32, 0, 0},       {"m_main_video", 53, 0, 16, 32, 19, 0},  // D
@@ -186,36 +143,106 @@ constexpr CarvedPiece kPlateSequel[] = {
     {"m_main_multiplayer", 187, 0, 17, 32, 70, 0},
     {"m_main_multiplayer", 160, 4, 12, 11, 75, 4},
     {"m_main_game", 69, 0, 17, 32, 87, 0},
-    {"m_main_quit", 66, 0, 3, 32, 104, 0},  // the space
-    {"m_main_quit", 66, 0, 3, 32, 107, 0},
-    {"m_main_quit", 66, 0, 3, 32, 110, 0},
-    {"m_main_quit", 53, 0, 16, 32, 113, 0},  // I
-    {"m_main_quit", 53, 0, 16, 32, 129, 0},  // I
-    {"m_main_game", 86, 0, 13, 32, 145, 0},
+    {"m_main_quit", 52, 0, 2, 32, 104, 0},   // the space: three slips of the plain plate
+    {"m_main_quit", 52, 0, 2, 32, 106, 0},   // left of QUIT's I, the filter's reach
+    {"m_main_quit", 52, 0, 2, 32, 108, 0},   // either side still plain
+    {"m_main_quit", 53, 0, 16, 32, 110, 0},  // I
+    {"m_main_quit", 53, 0, 16, 32, 126, 0},  // I
+    {"m_main_game", 86, 0, 13, 32, 142, 0},
 };
-constexpr CarvedWord kCarvedWords[] = {{"demos", 0xb378b8eec94a7f36ULL, kDemosPieces},
-                                       {"games", 0xb378b8eec94a7f36ULL, kGamesPieces},
-                                       {"game-classic", 0xb378b8eec94a7f36ULL, kClassicNamePieces},
-                                       {"game-sequel", 0xb378b8eec94a7f36ULL, kSequelNamePieces},
-                                       {"games", kPlatePrint, kPlateGames},
+constexpr CarvedWord kCarvedWords[] = {{"games", kPlatePrint, kPlateGames},
                                        {"demos", kPlatePrint, kPlateDemos},
                                        {"help", kPlatePrint, kPlateHelp},
                                        {"game-classic", kPlatePrint, kPlateClassic},
                                        {"game-sequel", kPlatePrint, kPlateSequel}};
 
-// Row `id`'s word cut from the strips at (x, y), classic px; false when these strips are not the
-// ones it was measured on (the caller draws the glyphs instead). `lit`: each piece from its
-// picture's lit copy (`_sel`) where the art has one.
+// The rows and names the strips have no words for, set in their carved letters by code
+// (carved_letters.hpp). The games' names are spelt letter by letter: the tree names neither game.
+constexpr char kClassicName[] = {'Q', 'u', 'a', 'k', 'e'};
+constexpr char kSequelName[] = {'Q', 'u', 'a', 'k', 'e', ' ', 'i', 'i'};
+struct LetterWord {
+  std::string_view row, text;
+};
+constexpr LetterWord kLetterWords[] = {
+    {"demos", "Demos"},
+    {"games", "Select Game"},
+    {"game-classic", std::string_view(kClassicName, std::size(kClassicName))},
+    {"game-sequel", std::string_view(kSequelName, std::size(kSequelName))}};
+
+// Row `id`'s word in the art's cut letters, or empty.
+std::string_view letter_word(const ClassicArt& art, std::string_view id) {
+  if (art.letters.empty()) return {};
+  for (const LetterWord& w : kLetterWords)
+    if (w.row == id && carved_text_width(art, w.text) > 0) return w.text;
+  return {};
+}
+
+// `text` in the art's cut letters, its line's top left at (x, y), classic px.
+void set_letters(const ClassicPen& pen, std::string_view text, float x, float y) {
+  const ClassicArt& art = pen.art;
+  for (const char c : text) {
+    if (c == ' ') {
+      x += 6;
+      continue;
+    }
+    const ui::Image& img = art.letters.at(c);
+    ui::Box b;
+    b.rect = pen.at(x, y, art.width_of(img), kCarvedLine);
+    b.image = &img;
+    b.uv = {0, 0, static_cast<float>(img.width), static_cast<float>(img.height)};
+    b.nearest = art.density <= 1;
+    b.feather = 0;
+    pen.dl.box(b);
+    x += art.width_of(img) + 1;
+  }
+}
+
+// The mean brightness of a plate's surface: its rows 2 to 5 (classic px) above the letters' recess,
+// across x 20 to 80; 0 for another picture.
+float plate_surface(const ui::Image& img, float d) {
+  const int y0 = static_cast<int>(2 * d), y1 = static_cast<int>(6 * d);
+  const int x0 = static_cast<int>(20 * d), x1 = std::min(img.width, static_cast<int>(80 * d));
+  double sum = 0;
+  int n = 0;
+  for (int y = y0; y < std::min(y1, img.height); y++)
+    for (int x = x0; x < x1; x++) {
+      const size_t i =
+          (static_cast<size_t>(y) * static_cast<size_t>(img.width) + static_cast<size_t>(x)) * 4;
+      sum += 0.3 * img.rgba[i] + 0.6 * img.rgba[i + 1] + 0.1 * img.rgba[i + 2];
+      n++;
+    }
+  return n > 0 ? static_cast<float>(sum / n) : 0;
+}
+
+// Row `id`'s word at (x, y), classic px: in the strips' cut letters, or cut from the sequel's
+// plates; false when the art has neither for it (the caller draws the glyphs instead). `lit`: each
+// plate piece from its picture's lit copy (`_sel`) where the art has one.
 bool carve(const ClassicPen& pen, std::string_view id, float x, float y, bool lit = false) {
   const ClassicArt& art = pen.art;
+  if (const std::string_view text = letter_word(art, id); !text.empty()) {
+    set_letters(pen, text, x, y);
+    return true;
+  }
   for (const CarvedWord& w : kCarvedWords) {
     if (w.row != id || w.print != art.strip_print || art.strip_print == 0) continue;
-    for (const CarvedPiece& p : w.pieces) {
+    const auto source = [&](const CarvedPiece& p) {
       const ui::Image* img = lit ? art.find(std::string(p.picture) + "_sel") : nullptr;
-      if (img == nullptr) img = art.find(p.picture);
+      return img != nullptr ? img : art.find(p.picture);
+    };
+    float darkest = 0;
+    for (const CarvedPiece& p : w.pieces) {
+      const ui::Image* img = source(p);
       if (img == nullptr) return false;
+      const float s = plate_surface(*img, static_cast<float>(img->height) / art.height_of(*img));
+      if (s > 0 && (darkest == 0 || s < darkest)) darkest = s;
+    }
+    for (const CarvedPiece& p : w.pieces) {
+      const ui::Image* img = source(p);
       const float d = static_cast<float>(img->height) / art.height_of(*img);  // px a classic px
+      const float s = plate_surface(*img, d);
+      const float shade = s > 0 && darkest > 0 ? darkest / s : 1;
       ui::Box b;
+      b.fill = ui::solid({shade, shade, shade, 1});
       b.rect = pen.at(x + static_cast<float>(p.dx), y + static_cast<float>(p.dy),
                       static_cast<float>(p.w), static_cast<float>(p.h));
       b.image = img;
@@ -237,6 +264,8 @@ bool carve_word(const ClassicPen& pen, std::string_view id, float x, float y, bo
 }
 
 float carved_width(const ClassicArt& art, std::string_view id) {
+  if (const std::string_view text = letter_word(art, id); !text.empty())
+    return carved_text_width(art, text);
   for (const CarvedWord& w : kCarvedWords) {
     if (w.row != id || w.print != art.strip_print || art.strip_print == 0) continue;
     int right = 0;

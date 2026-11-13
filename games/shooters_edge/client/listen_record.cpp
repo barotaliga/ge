@@ -188,6 +188,14 @@ void record_listen_begin(ListenRecorder& r, const Listen& l, int pack_level) {
     lists.str(user_info(c));
   }
   record(r, 0, kAll, 0, lists);
+  if (r.places != nullptr && !r.places->points.empty()) {
+    Out places;
+    for (const std::string& line : sh::recorded_loc_lines(*r.places)) {
+      places.u8(9);  // stufftext
+      places.str(line);
+    }
+    record(r, 0, kAll, 0, places);
+  }
 }
 
 void record_listen_frame(ListenRecorder& r, const Listen& l) {
@@ -357,6 +365,7 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
     opt.server_count = static_cast<int32_t>(l.maps_started) + 1;
     if (l.map) opt.map_checksum = sv::sequel_map_checksum(l.map->file);
     if (l.map && l.map->spec.brushes) sv::sequel_sky(*l.map->spec.brushes, opt);
+    if (r.places != nullptr) opt.stuffed = sh::recorded_loc_lines(*r.places);
     r.sequel = std::make_unique<sv::SequelRecorder>();
     sv::sequel_record_start(*r.sequel, *l.server, 0, opt);
     r.on = true;
