@@ -44,7 +44,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   auto g = std::make_unique<Game>();
   const ge::classicenhance::Profile* sequel = ge::classicenhance::find_profile("sequel");
   if (sequel == nullptr) {
-    error = "This build has no content profile for the sequel, so it cannot host it.";
+    error = "this build has no content row for the sequel, so its game folder is unknown";
     return nullptr;
   }
   const std::string base(sequel->base_dir);
@@ -53,8 +53,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->map = cl::load_named_map(g->files, name, error);
   if (!g->map) return nullptr;
   if (g->map->spec.brushes == nullptr) {
-    error = "maps/" + name + ".bsp is not a map of the sequel. Pick one of the maps in " + c.root +
-            "/" + base + ".";
+    error = "maps/" + name + ".bsp is not a map of the sequel's family; name one from " + c.root +
+            "/" + base;
     return nullptr;
   }
   sv::SequelServerOptions so;
