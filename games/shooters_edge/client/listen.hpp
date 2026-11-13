@@ -104,6 +104,12 @@ struct LoadedMap {
   sv::BspMap bsp;
   bool from_file = false;     // false: the built-in arena (nothing for the world draw)
   std::vector<uint8_t> file;  // the map file's bytes
+  // Classic remix (client/remix.hpp): the content profile id of the other game whose packs held
+  // the map ("" the played game's own), and whether a map of brushes plays on the programs'
+  // rules (the played game's), its models traced through their brushes, instead of the rules
+  // that trace brushes.
+  std::string from_game;
+  bool program_rules = false;
 };
 
 // `maps/<name>.bsp` read from bytes.

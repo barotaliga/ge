@@ -5,15 +5,26 @@
 // ge:summary Tests classic remix: the item table, the entity rewrite, the check, cr_items
 // ge:keywords test remix classic-remix item-table remix_entities remix_check cr_items cr_enabled
 // ge:skill shooter testing
+#include <bit>
+#include <cmath>
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "brush/write.hpp"
 #include "check.hpp"
 #include "classicenhance/profile.hpp"
 #include "console/cvar.hpp"
 #include "progs/entity_text.hpp"
+#include "progs/layout.hpp"
+#include "progs/vm.hpp"
+#include "shooter/sequel_move.hpp"
+#include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/remix.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/remix.hpp"
+#include "shooters_edge/server/qc_server.hpp"
+#include "vfs/pak.hpp"
 
 namespace cl = shooters_edge::client;
 namespace pf = shooters_edge::profiles;
@@ -94,23 +105,83 @@ TEST(a_map_rewritten_keeps_what_is_not_an_item_and_the_mode_bits) {
   CHECK(value(b[4], "classname") == "weapon_railgun" && value(b[4], "spawnflags").empty());
   CHECK(rep.items == 4 && rep.swapped == 3 && rep.dropped == 1);
   CHECK(rep.swaps.size() == 4 && rep.swaps[3].from == "item_key1" && rep.swaps[3].to.empty());
-  CHECK(cl::remix_line(rep, "sequel").find("3 of the map's 4 items") != std::string::npos);
+  CHECK(cl::remix_line(rep, "sequel").find("the map's 4 items") != std::string::npos);
 
   std::string same;
   CHECK(cl::remix_entities(text, "classic", "classic", same, &rep, error) && same == text);
   CHECK(rep.items == 0);
 }
 
-TEST(the_sequels_variant_bits_become_the_classic_games) {
+TEST(the_sequels_small_pickups_are_gathered_into_the_classic_games_sizes) {
   const std::string text =
-      "{\n\"classname\" \"item_pack\"\n\"spawnflags\" \"1\"\n}\n"
-      "{\n\"classname\" \"item_health_small\"\n}\n";
+      "{\n\"classname\" \"item_pack\"\n\"spawnflags\" \"1\"\n\"origin\" \"0 0 0\"\n}\n"
+      // Four stimpacks and a box of ten together: 18, one fifteen.
+      "{\n\"classname\" \"item_health_small\"\n\"origin\" \"1000 0 0\"\n}\n"
+      "{\n\"classname\" \"item_health_small\"\n\"origin\" \"1032 0 0\"\n}\n"
+      "{\n\"classname\" \"item_health_small\"\n\"origin\" \"1064 0 0\"\n}\n"
+      "{\n\"classname\" \"item_health_small\"\n\"origin\" \"1096 0 0\"\n}\n"
+      "{\n\"classname\" \"item_health\"\n\"origin\" \"1128 0 0\"\n}\n"
+      // Three large boxes in a row: 75, three twenty-fives.
+      "{\n\"classname\" \"item_health_large\"\n\"origin\" \"0 2000 0\"\n}\n"
+      "{\n\"classname\" \"item_health_large\"\n\"origin\" \"0 2100 0\"\n}\n"
+      "{\n\"classname\" \"item_health_large\"\n\"origin\" \"0 2200 0\"\n}\n"
+      // A lone stimpack: too small for the smallest box. Ten shards together: a green armour.
+      "{\n\"classname\" \"item_health_small\"\n\"origin\" \"-3000 0 0\"\n}\n";
+  std::string shards;
+  for (int i = 0; i < 10; i++)
+    shards += "{\n\"classname\" \"item_armor_shard\"\n\"origin\" \"" + std::to_string(16 * i) +
+              " -3000 0\"\n}\n";
   std::string out, error;
-  CHECK(cl::remix_entities(text, "sequel", "classic", out, nullptr, error));
+  cl::RemixReport rep;
+  CHECK(cl::remix_entities(text + shards, "sequel", "classic", out, &rep, error));
   const auto b = blocks_of(out);
-  CHECK(b.size() == 2);
+  CHECK_MSG(b.size() == 6, std::to_string(b.size()) + " blocks");
+  if (b.size() != 6) return;
   CHECK(value(b[0], "classname") == "item_rockets" && value(b[0], "spawnflags") == "1");
   CHECK(value(b[1], "classname") == "item_health" && value(b[1], "spawnflags") == "1");
+  CHECK(value(b[1], "origin") == "1000 0 0");  // on the pool's first spot
+  for (int i = 2; i <= 4; i++)
+    CHECK(value(b[i], "classname") == "item_health" && value(b[i], "spawnflags").empty());
+  CHECK(value(b[5], "classname") == "item_armor1");
+  CHECK(rep.pooled == 19 && rep.laid == 5);
+  CHECK(cl::remix_line(rep, "classic").find("19 small pickups gathered into 5") !=
+        std::string::npos);
+}
+
+TEST(a_map_with_no_strong_weapon_gets_one_and_one_with_too_many_loses_some) {
+  const auto weapons = [](std::initializer_list<const char*> names) {
+    std::string t;
+    int x = 0;
+    for (const char* n : names) {
+      t += "{\n\"classname\" \"" + std::string(n) + "\"\n\"origin\" \"" + std::to_string(x) +
+           " 0 0\"\n}\n";
+      x += 1000;
+    }
+    return t;
+  };
+  std::string out, error;
+  cl::RemixReport rep;
+  CHECK(
+      cl::remix_entities(weapons({"weapon_supershotgun", "weapon_nailgun", "weapon_supernailgun"}),
+                         "classic", "sequel", out, &rep, error));
+  auto b = blocks_of(out);
+  CHECK(rep.weapons == 3 && rep.strong_by_role == 0 && rep.strong == 1);
+  // The best weak one (the chaingun the super nailgun became) raised to the rocket launcher.
+  CHECK(b.size() == 3 && value(b[2], "classname") == "weapon_rocketlauncher");
+  CHECK(rep.notes.size() == 1);
+  CHECK(cl::remix_entities(weapons({"weapon_rocketlauncher", "weapon_rocketlauncher",
+                                    "weapon_lightning", "weapon_lightning", "weapon_nailgun"}),
+                           "classic", "sequel", out, &rep, error));
+  b = blocks_of(out);
+  CHECK(rep.strong_by_role == 4 && rep.strong == 2);  // two of five at most
+  CHECK(b.size() == 5 && value(b[0], "classname") == "weapon_rocketlauncher" &&
+        value(b[3], "classname") == "weapon_hyperblaster");
+  shooters_edge::profiles::RemixBalance free;
+  free.strong_min = 0;
+  free.strong_share = 1;
+  CHECK(cl::remix_entities(weapons({"weapon_supershotgun", "weapon_nailgun"}), "classic", "sequel",
+                           out, &rep, error, free));
+  CHECK(rep.strong == 0 && rep.notes.empty());  // the settings turn the balance off
 }
 
 TEST(the_remix_wants_two_full_games_and_cr_enabled) {
@@ -145,4 +216,102 @@ TEST(cr_items_names_whose_items_a_map_gets) {
   CHECK(std::string(cl::items_game(s, "sequel")) == "classic");
   cvars.set("cr_enabled", "1", ge::console::Source::local);
   CHECK(s.enabled);
+}
+
+namespace {
+
+namespace br = ge::brush;
+namespace sh = ge::shooter;
+
+// The other game's hall: a floor of brushes walled round, a door-sized block of its own model
+// (`*1`) ahead, the start facing it (+y), and the sequel's rail lying on the way.
+std::vector<uint8_t> sequel_hall() {
+  br::BrushWorld world;
+  world.models.resize(2);
+  const auto box = [&](size_t model, float x0, float y0, float z0, float x1, float y1, float z1) {
+    const float lo[3] = {x0, y0, z0}, hi[3] = {x1, y1, z1};
+    world.models[model].push_back(br::box_brush(lo, hi, sh::kSqSolid, "world/wall"));
+  };
+  box(0, -512, -512, -16, 512, 512, 0);
+  box(0, -528, -512, -16, -512, 512, 256);
+  box(0, 512, -512, -16, 528, 512, 256);
+  box(0, -528, 512, -16, 528, 528, 256);
+  box(0, -528, -528, -16, 528, -512, 256);
+  box(1, -64, 300, 0, 64, 316, 128);  // the block across the way
+  const auto entity = [](std::initializer_list<std::pair<std::string, std::string>> pairs) {
+    br::Entity e;
+    for (const auto& p : pairs) e.pairs.push_back(p);
+    return e;
+  };
+  world.entities.push_back(
+      entity({{"classname", "info_player_deathmatch"}, {"origin", "0 0 24"}, {"angle", "90"}}));
+  world.entities.push_back(entity({{"classname", "weapon_railgun"}, {"origin", "-16 100 16"}}));
+  world.entities.push_back(entity({{"classname", "item_armor_shard"}, {"origin", "200 0 16"}}));
+  world.entities.push_back(entity({{"classname", "func_wall"}, {"model", "*1"}}));
+  std::vector<uint8_t> bsp;
+  std::string error;
+  CHECK_MSG(br::write_brush_world(world, &bsp, &error), error);
+  return bsp;
+}
+
+std::vector<uint8_t> pack(const std::vector<std::pair<std::string, std::vector<uint8_t>>>& files) {
+  std::vector<uint8_t> out;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak(files, &out, &error), error);
+  return out;
+}
+
+}  // namespace
+
+// The sequel's map in the classic game (M18u2): found in the other game's packs only with the
+// remix on, its items made the classic game's, and played on the classic game's program: the
+// player stands on its brushes, walks over the rail that is now the beam weapon and takes it, and
+// is stopped by the block of the map's own model, traced through its brushes.
+TEST(the_sequels_map_plays_on_the_classic_rules_with_the_classic_items) {
+  cl::SearchPath mine;  // the classic game's own files: no such map
+  cl::RemixFiles remix;
+  remix.played = "classic";
+  std::string error;
+  CHECK(cl::add_archive(remix.files, "pak0.pak", pack({{"maps/hall.bsp", sequel_hall()}}), error));
+  CHECK(cl::load_remixed_map(mine, "hall", &remix, error) == nullptr);  // the remix off
+  remix.state.on = true;
+  remix.state.other = "sequel";
+  std::string said;
+  std::unique_ptr<cl::LoadedMap> map = cl::load_remixed_map(mine, "hall", &remix, error, &said);
+  CHECK_MSG(map != nullptr, error);
+  if (!map) return;
+  CHECK(map->from_game == "sequel" && map->program_rules && map->spec.brushes != nullptr);
+  CHECK(map->spec.entities.find("weapon_lightning") != std::string::npos);
+  CHECK(map->spec.entities.find("weapon_railgun") == std::string::npos);
+  CHECK(map->spec.entities.find("item_armor_shard") == std::string::npos);
+  CHECK_MSG(said.find("the map's 2 items") != std::string::npos, said);
+
+  static const ge::progs::Progs progs = [] {
+    ge::progs::Progs out;
+    std::string why;
+    CHECK_MSG(cl::baseline_progs(out, why), why);
+    return out;
+  }();
+  cl::Listen l;
+  CHECK_MSG(cl::listen_start(l, progs, std::move(map), shooters_edge::net::listen_options(), error),
+            error);
+  if (l.rules == nullptr) return;
+  shooters_edge::server::QcServer* qc = shooters_edge::server::qc_of(*l.rules);
+  CHECK(qc != nullptr && qc->tracer != nullptr);
+  if (qc == nullptr) return;
+  const auto me = [&] { return l.server->sv.edicts[1]; };
+  for (int i = 0; i < 120; i++) cl::listen_frame(l, {});  // spawned, fallen onto the floor
+  const sh::Vec3f stood = me().origin;
+  CHECK_MSG(std::fabs(stood.z - 24) < 1.0f, "stood at z " + std::to_string(stood.z));
+  CHECK((me().flags & sh::kFlagOnGround) != 0);
+  sh::MoveCmd walk;
+  walk.angles = {0, 90, 0};
+  walk.forward = 320;
+  for (int i = 0; i < 300; i++) cl::listen_frame(l, walk);
+  const sh::Vec3f at = me().origin;
+  CHECK_MSG(at.y > 200 && at.y < 300 - 16 + 1, "walked to y " + std::to_string(at.y));
+  CHECK(std::fabs(at.z - stood.z) < 1.0f);
+  const float items =
+      std::bit_cast<float>(*ge::progs::entity_field(qc->q.vm, 1, ge::progs::kFItems));
+  CHECK_MSG((static_cast<int>(items) & 64) != 0, "items " + std::to_string(items));
 }

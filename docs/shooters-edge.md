@@ -1030,8 +1030,18 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   The low spawnflags bits (an item's variant: the small and mega health, the large boxes) are
   replaced, the bits above (the skills and modes it is left out of) kept; an item with no match
   is left out and counted, so a map never spawns a class the rules do not know.
-- **Another game's map**: a map the played game's packs lack is found in the other game's, and
-  its items become the played game's (M18u2, M18u3).
+- **Another game's map** (`client/remix.hpp`'s `load_remixed_map`): a map the played game's
+  packs lack is found in the other game's, read from the other game's packs with the played
+  game's mounted over them (`RemixFiles`: its walls and sky its own, in its own palette, every
+  model, sound and picture the rules name the played game's), and its items become the played
+  game's (M18u2; the sequel's rules on the classic game's maps are M18u3). The classic rules run
+  on a sequel map by tracing its models through their brushes (`sh::Server::model_solids`).
+- **The balance** (`profiles::RemixBalance`): the weapons a map gets are weighed by tier against
+  the rest of its weapons: fewer than `cr_strong_min` strong ones and the best weak one is raised
+  to the strong kind the map has fewest of; more than `cr_strong_share` of them strong and the
+  last are lowered to the best weak one. Small pickups that the played game has no size for (the
+  sequel's stimpacks and shards) are gathered within `cr_pool_radius` units and laid down as the
+  played game's packs by the total they held, a lone one left out.
 - **Another game's items** (`cr_items`: 0 the played game's, 1 the classic game's, 2 the
   sequel's): a game's own maps played with the other game's items, and the HUD that shows them is
   that game's (M18u4).

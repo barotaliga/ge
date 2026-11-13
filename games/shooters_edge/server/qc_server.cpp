@@ -404,12 +404,36 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
                        ? sh::PlayerMove::original
                        : sh::PlayerMove::arena;
   settings_from_cvars(s, set, false);
-  sh::create_server(s.sv, set, map.models, sim::qc_program(s.q));
+  // A version 38 map (classic remix): its models' bounds as the loop's, their hulls empty, and
+  // each traced through the map's brushes instead.
+  std::vector<sh::BrushModel> brush_models;
+  s.tracer.reset();
+  if (map.brushes != nullptr && map.models.empty()) {
+    for (const ge::brush::Model& m : map.brushes->models) {
+      sh::BrushModel b;
+      b.mins = {m.mins[0], m.mins[1], m.mins[2]};
+      b.maxs = {m.maxs[0], m.maxs[1], m.maxs[2]};
+      brush_models.push_back(b);
+    }
+    s.tracer = std::make_unique<ge::brush::BrushTracer>(*map.brushes);
+  }
+  const std::vector<sh::BrushModel>& models = s.tracer ? brush_models : map.models;
+  if (models.empty()) {
+    error = "the map " + map.name + " has no models to play on";
+    return false;
+  }
+  sh::create_server(s.sv, set, models, sim::qc_program(s.q));
+  if (s.tracer) {
+    s.sv.model_solids.assign(models.size() + 1, sh::Solid{});
+    for (size_t k = 0; k < models.size(); k++)
+      s.sv.model_solids[k + 1] = sh::brushes_solid(*s.tracer, static_cast<uint32_t>(k), {},
+                                                   models[k].mins, models[k].maxs);
+  }
   apply_settings(s);
   s.map_name = map.name;
   s.models.assign(1, "");
   s.models.push_back("maps/" + map.name + ".bsp");
-  for (size_t i = 1; i < map.models.size(); i++) s.models.push_back("*" + std::to_string(i));
+  for (size_t i = 1; i < models.size(); i++) s.models.push_back("*" + std::to_string(i));
   s.models.reserve(kMaxModels);
   s.sounds.assign(1, "");
   s.sounds.reserve(kMaxSounds);  // never reallocated: the loop's sounds point into it

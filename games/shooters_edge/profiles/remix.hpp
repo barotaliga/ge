@@ -67,6 +67,10 @@ inline constexpr RemixRow kRemixRows[] = {
     {"classic", "sequel", "item_spikes", "ammo_bullets", 0, 0},
     {"classic", "sequel", "item_rockets", "ammo_rockets", 0, 0},
     {"classic", "sequel", "item_cells", "ammo_slugs", 0, 0},
+    // The older ammunition box: bit 2 rockets, bit 4 nails, else shells (bit 8 the large one).
+    {"classic", "sequel", "item_weapon", "ammo_rockets", 2, 0},
+    {"classic", "sequel", "item_weapon", "ammo_bullets", 4, 0},
+    {"classic", "sequel", "item_weapon", "ammo_shells", 0, 0},
     {"classic", "sequel", "item_health", "item_health_mega", 2, 0},
     {"classic", "sequel", "item_health", "item_health", 1, 0},
     {"classic", "sequel", "item_health", "item_health_large", 0, 0},
@@ -114,6 +118,96 @@ inline constexpr RemixRow kRemixRows[] = {
     {"sequel", "classic", "item_breather", "item_artifact_envirosuit", 0, 0},
     {"sequel", "classic", "item_silencer", kDropped, 0, 0},
 };
+
+// THE BALANCE the role table alone would miss: a map is a balance of strong and weak things, so
+// after each item takes its match by role, the map as a whole is weighed in the target game's set.
+//
+// - **Weapons by tier** (`kWeaponTiers`): each game's weapons ranked 1 (a starting weapon's kin)
+//   to 4; tier 3 and up is STRONG. A remixed map keeps between a floor (`RemixBalance::strong_min`,
+//   when it has two or more weapons) and a share (`strong_share` of its weapons, rounded up) of
+//   strong ones: short of the floor, its best weak weapon is raised to the strong weapon the map
+//   has fewest of; past the share, its last strong ones are lowered to the target's best weak one.
+// - **Pools** (`kPoolItems`, `kPoolOutputs`): where one game scatters small pickups the other
+//   does not have (the sequel's stimpacks and health boxes, its armour shards), the ones lying
+//   within `pool_radius` of each other are added up and laid down again as the target's own sizes,
+//   the largest that fits first, on the spots they lay on: four stimpacks and a box of ten make
+//   one fifteen, three boxes of twenty-five make two twenty-fives and a fifteen. A pool too small
+//   for the target's smallest by half is left out.
+struct WeaponTier {
+  std::string_view game;
+  std::string_view class_name;
+  int32_t tier = 1;
+};
+
+inline constexpr WeaponTier kWeaponTiers[] = {
+    {"classic", "weapon_supershotgun", 1},
+    {"classic", "weapon_nailgun", 1},
+    {"classic", "weapon_supernailgun", 2},
+    {"classic", "weapon_grenadelauncher", 2},
+    {"classic", "weapon_rocketlauncher", 3},
+    {"classic", "weapon_lightning", 3},
+    {"sequel", "weapon_shotgun", 1},
+    {"sequel", "weapon_supershotgun", 1},
+    {"sequel", "weapon_machinegun", 1},
+    {"sequel", "weapon_chaingun", 2},
+    {"sequel", "weapon_grenadelauncher", 2},
+    {"sequel", "weapon_hyperblaster", 2},
+    {"sequel", "weapon_rocketlauncher", 3},
+    {"sequel", "weapon_railgun", 3},
+    {"sequel", "weapon_bfg", 4},
+};
+inline constexpr int32_t kStrongTier = 3;
+
+struct RemixBalance {
+  int32_t strong_min = 1;     // strong weapons at least, on a map of two weapons or more
+  float strong_share = 0.4f;  // strong weapons at most: this share of them, rounded up
+  float pool_radius = 160;    // u: small pickups this near one another are added up
+};
+
+// A small pickup one game scatters, by the pool it adds to and what it is worth there.
+struct PoolItem {
+  std::string_view from, to;  // the direction it pools in
+  std::string_view class_name;
+  std::string_view pool;  // "health", "armour"
+  int32_t amount = 0;
+};
+// What a pool is laid down as in the target game: the largest first.
+struct PoolOutput {
+  std::string_view to;
+  std::string_view pool;
+  std::string_view class_name;
+  int32_t bits = 0;
+  int32_t amount = 0;
+};
+
+inline constexpr PoolItem kPoolItems[] = {
+    {"sequel", "classic", "item_health_small", "health", 2},
+    {"sequel", "classic", "item_health", "health", 10},
+    {"sequel", "classic", "item_health_large", "health", 25},
+    {"sequel", "classic", "item_armor_shard", "armour", 2},
+};
+// The classic game's health comes as fifteen (bit 1) and twenty-five; twenty shard points make a
+// green armour.
+inline constexpr PoolOutput kPoolOutputs[] = {
+    {"classic", "health", "item_health", 0, 25},
+    {"classic", "health", "item_health", 1, 15},
+    {"classic", "armour", "item_armor1", 0, 20},
+};
+
+// The tier of `class_name` in `game` (0: not a ranked weapon).
+inline int32_t weapon_tier(std::string_view game, std::string_view class_name) {
+  for (const WeaponTier& w : kWeaponTiers)
+    if (w.game == game && w.class_name == class_name) return w.tier;
+  return 0;
+}
+
+// The pool row of `class_name` from `from` to `to`, or nullptr.
+inline const PoolItem* pool_item(std::string_view from, std::string_view to,
+                                 std::string_view class_name) {
+  for (const PoolItem& p : kPoolItems)
+    if (p.from == from && p.to == to && p.class_name == class_name) return &p;
+  return nullptr;
+}
 
 // Whether `class_name` is an item in either game (`kItemPrefixes`).
 inline bool is_item_class(std::string_view class_name) {

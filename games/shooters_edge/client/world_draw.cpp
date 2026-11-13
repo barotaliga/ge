@@ -351,6 +351,15 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
                              " in the game's files; drawing grey");
   }
   const std::vector<uint8_t> palette_copy(palette.begin(), palette.end());
+  // Another game's map (classic remix): its textures and sky in its own game's palette, the
+  // played game's models in the played game's.
+  std::vector<uint8_t> map_palette = palette_copy;
+  if (const ge::classicenhance::Profile* from = ge::classicenhance::find_profile(map.from_game);
+      from != nullptr && !map.from_game.empty()) {
+    std::vector<uint8_t> other_store;
+    const std::span<const uint8_t> other = game_palette(files, other_store, *from);
+    if (other.size() >= 768) map_palette.assign(other.begin(), other.end());
+  }
   if (grey.empty()) r->grade_palette = palette_copy;
   r->classic_grade = look::palette_grade(r->grade_palette);  // a search of the palette: on here
   // The enhanced cache, when this pack's were enhanced (the in-game menu's ENHANCE): keyed by the
@@ -379,7 +388,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   ba::Pack pack;  // the map file alone, as the scene reader takes it
   pack.bytes = map.file;
   pack.files.push_back({"maps/" + map.name + ".bsp", 0, static_cast<uint32_t>(map.file.size())});
-  if (!ba::load_scene(pack, pack.files[0].name, palette_copy, &r->scene, &error, source, lit,
+  if (!ba::load_scene(pack, pack.files[0].name, map_palette, &r->scene, &error, source, lit,
                       &lit_refused)) {
     error = "the map " + map.name + " cannot be drawn: " + error;
     return nullptr;
@@ -391,7 +400,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
             : "shooters_edge: " + lit_path + " was made for another build of " + map.name +
                   "; drawn with the map's own light");
   }
-  read_sky_box(files, palette_copy, r->scene, picture.sky_name);
+  read_sky_box(files, map_palette, r->scene, picture.sky_name);
   // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
   // adds its bounce under the live lights (look.cpp).
   if (picture.ce.rebake && !cache.empty()) {

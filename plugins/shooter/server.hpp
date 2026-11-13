@@ -38,6 +38,7 @@
 #include "shooter/brush_hull.hpp"
 #include "shooter/pmove.hpp"
 #include "shooter/program.hpp"
+#include "shooter/world.hpp"
 
 namespace ge::shooter {
 
@@ -144,6 +145,12 @@ struct Server {
   // `brushes` solid); `trace_move` traces nothing else in the pool unless `world_trace` is set. The
   // rules that keep such a map set it on the pool they mirror their world into (the sequel's).
   const Solid* brushes = nullptr;
+  // A map of the version 38 family played on rules that trace hulls (classic remix, M18u2):
+  // each brush model as a `brushes` solid by modelindex ([0] none, [1] the world), its origin
+  // zero. A trace (`clip_to_entity`), the world's contents and a move's list of solids take a
+  // model's solid in place of its hulls, which such a map leaves empty. Empty for a map that has
+  // clip hulls.
+  std::vector<Solid> model_solids;
   // Those rules' own trace of the map, when they give one: the world and the brush entities that
   // stand in it now (doors, plats) at their places, so a line is stopped where a player's is.
   // `trace_move` asks it first; `world_ctx` is theirs, passed back.

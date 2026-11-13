@@ -40,6 +40,7 @@
 #include <string>
 #include <vector>
 
+#include "brush/trace.hpp"
 #include "console/cvar.hpp"
 #include "progs/entity_text.hpp"
 #include "progs/extensions.hpp"
@@ -164,6 +165,10 @@ struct QcServer : RulesCommon {
     int attack_finished = -1;  // the refire's end (the rocket jump helper waits for it)
   } world_fields;
   std::vector<sh::Packet> rj_packets;  // a frame's packets as the rocket jump helper left them
+
+  // A version 38 map's brushes, which its models are traced through on these rules (classic
+  // remix, M18u2: `sh::Server::model_solids`); null on a map of clip hulls.
+  std::unique_ptr<ge::brush::BrushTracer> tracer;
 
   std::vector<HookCall> hook_log;
   int64_t hook_counts[static_cast<int>(HookId::count)] = {};
