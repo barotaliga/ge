@@ -276,7 +276,7 @@ TEST(service_an_unlisted_server_s_report_is_shown_and_a_forged_one_refused) {
   ga::ReportAsk forged;
   CHECK(ga::report_ask_start(forged, kServiceAt, ga::service_key(w.svc), server, report_of(7),
                              w.now));
-  forged.datagram[5 + 32] ^= 1;
+  forged.datagrams[0][5 + 32] ^= 1;
   forged.max_tries = 3;
   const uint64_t refused = w.svc.stats.refused;
   for (int i = 0; i < 50 && !forged.done; i++) {
@@ -288,4 +288,43 @@ TEST(service_an_unlisted_server_s_report_is_shown_and_a_forged_one_refused) {
   CHECK(!forged.answered);
   CHECK(w.svc.stats.refused > refused);
   CHECK(w.svc.matches.kept.size() == 1);
+}
+
+TEST(service_a_report_too_big_for_a_datagram_comes_in_pieces) {
+  World w;
+  const gn::SignKeys server = gn::sign_keys(key_of(9));
+  ga::matches_trust(w.svc.matches, server.pub);
+  // Sixteen players with sixty columns of big numbers: several datagrams' worth.
+  gn::MatchReport r = report_of(8);
+  for (int c = 0; c < 60; c++) r.columns.push_back("column_number_" + std::to_string(c));
+  r.players.clear();
+  for (int i = 0; i < 16; i++) {
+    gn::ReportPlayer p;
+    p.name = "player" + std::to_string(i);
+    p.account = static_cast<uint64_t>(i) + 1;
+    for (int c = 0; c < 60; c++) p.columns.push_back(int64_t{1000000} + c);
+    r.players.push_back(p);
+  }
+  const ga::ReportAsk a = send_report(w, server, r, true);
+  CHECK(a.datagrams.size() >= 2);
+  for (const std::vector<uint8_t>& d : a.datagrams) CHECK(d.size() <= gn::kMaxDatagram);
+  CHECK(a.answered && a.taken == ga::Taken::counted);
+  CHECK(w.svc.matches.kept.size() == 1);
+  CHECK(w.svc.pieces.empty());
+  CHECK(ga::totals_sum(w.svc.matches, 16, {}).columns.at("column_number_59") == 1000059);
+  // Pieces that never finish are dropped once they are a minute old.
+  ga::ReportAsk half;
+  r.id = 9;
+  CHECK(ga::report_ask_start(half, kServiceAt, ga::service_key(w.svc), server, r, w.now));
+  half.datagrams.pop_back();
+  half.max_tries = 1;
+  ga::report_ask_update(half, w.server, w.now);
+  w.now += 20000;
+  gn::sim_advance(w.net, w.now);
+  ga::service_update(w.svc, w.now);
+  CHECK(w.svc.pieces.size() == 1);
+  CHECK(!send_report(w, server, report_of(10)).datagrams.empty());
+  w.now += ga::kPiecingLife_us + 1;
+  CHECK(send_report(w, server, r).answered);  // its own pieces, the stale ones dropped
+  CHECK(w.svc.pieces.empty());
 }

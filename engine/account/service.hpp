@@ -20,6 +20,8 @@
 //           (net/report.hpp's bytes)                     (unsealed: a report is no secret)
 //   taken   "geAC" 6, the report's id u64, how it was taken u8 (matches.hpp's Taken), the
 //           service's signature (64) over "geAC" 6, the server's key, the id and how
+//   piece   "geAC" 7, server key (32), report id u64, number u8, count u8, bytes: a `report`'s
+//           part after the key, split when too big for one datagram (`Piecing`)
 // A report is a game server's finished match (docs/accounts.md § The match report): the service
 // keeps it in `matches` by the server's key, adding it to the accounts' totals when the master's
 // owner trusts that key. It is answered `taken` (sent again: the same answer), signed, so a server
@@ -49,13 +51,11 @@
 //   ask_start(ask, op, service, its key, fields, fresh, now)
 //   every frame: ask_update(ask, transport, now); each datagram: ask_read(ask, data, size, from)
 //   `done`: `answered` with `reply`, or the service never answered
-// Fresh bytes come from the caller (the operating system's in a real program, a seeded stream in
-// a lab), so a service and its askers on the simulated network replay to the bit.
+// Fresh bytes come from the caller (the system's, or a lab's seeded stream): it replays to the bit.
 //
 // ge:summary The account service over the network: sealed asks, sign-up, sign-in, tickets, codes
-// ge:keywords account service account-service sealed ask answer x25519 sign-up sign-in ticket
-// ge:keywords login-ask code recover amplification replay account-port service_update ask_start
-// ge:keywords ask_update ask_read public-key key-fetch
+// ge:keywords account-service sealed ask x25519 sign-up sign-in ticket login-ask code recover
+// ge:keywords amplification replay account-port service_update ask_start ask_read key-fetch pieces
 // ge:skill net
 // ge:test tests/account_service_test.cpp
 #pragma once
@@ -107,6 +107,21 @@ struct ServiceStats {
   uint64_t reports = 0;  // match reports taken (sent again ones too)
 };
 
+constexpr size_t kReportPieces = 16, kReportPieceBytes = 1400;
+constexpr size_t kPiecingsKept = 32;
+constexpr int64_t kPiecingLife_us = 60000000;
+
+// A report arriving in pieces, kept until the last comes (at most kPiecingsKept reports at once,
+// the oldest dropped; each for kPiecingLife_us) and then taken whole; the server sends every piece
+// again until the answer comes.
+struct Piecing {
+  net::Key server{};
+  uint64_t id = 0;
+  int64_t since_us = 0;
+  std::vector<std::vector<uint8_t>> pieces;  // by number; empty: not yet come
+  size_t have = 0;
+};
+
 struct Recent {
   net::Key asker{};
   std::vector<uint8_t> bytes;  // the answer datagram as sent
@@ -124,6 +139,7 @@ struct Service {
   size_t recent_next = 0;
   ServiceStats stats;
   Matches matches;  // the match reports servers sent (matches.hpp)
+  std::vector<Piecing> pieces;
   uint8_t buffer[net::kMaxDatagram];
 };
 
@@ -151,13 +167,13 @@ struct ReportAsk {
   net::Address service;
   net::Key service_key{}, server{};
   uint64_t id = 0;
-  std::vector<uint8_t> datagram;
+  std::vector<std::vector<uint8_t>> datagrams;  // one `report`, or its pieces
   int64_t next_us = 0, ask_us = 2000000;
   int tries = 0, max_tries = 30;
   bool done = false, answered = false;
   Taken taken = Taken::shown;
 };
-// False when the report does not fit one datagram or is past its limits (nothing is sent).
+// False when the report does not fit kReportPieces or is past its limits (nothing is sent).
 bool report_ask_start(ReportAsk& a, const net::Address& service, const net::Key& service_key,
                       const net::SignKeys& server, const net::MatchReport& r, int64_t now_us);
 void report_ask_update(ReportAsk& a, net::Transport& t, int64_t now_us);
