@@ -22,17 +22,21 @@
 #include <vector>
 
 #include "core/num_text.hpp"
+#include "forward/forward.hpp"
 #include "lab/lab.hpp"
 #include "net/address.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/net/classic_client.hpp"
+#include "shooters_edge/net/classic_forward.hpp"
+#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 
 namespace {
 
 namespace gl = ge::lab;
 namespace gn = ge::net;
+namespace fw = ge::forward;
 namespace sn = shooters_edge::net;
 
 void not_run(gl::Lab& lab) {
@@ -87,8 +91,34 @@ void live(gl::Lab& lab, const std::string& server) {
       const std::span<const uint8_t> got = shooters_edge::client::find_file(*files, path, store);
       return std::vector<uint8_t>(got.begin(), got.end());
     };
+  // With --forward=<port>, our forward opens on that loopback port, allowed only the server, and
+  // the client reaches the server through it: its connect carries the route in `prx`.
+  const int forward_port = static_cast<int>(lab.arg_num("forward"));
+  gn::Transport hop_port;
+  fw::Forward fwd;
+  sn::ClassicFace face;
+  gn::Address first = to;
+  if (forward_port > 0) {
+    const gn::Address hop = gn::ipv4(127, 0, 0, 1, static_cast<uint16_t>(forward_port));
+    if (!gn::open_udp_transport(hop_port, hop, &error)) {
+      lab.note("se-interop: the forward's socket did not open on " + gn::to_string(hop) + ": " +
+               error + "; next: pick a free port with --forward=<port>");
+      lab.metric("interop.run", 0, "bool");
+      return;
+    }
+    fw::ForwardConfig fc;
+    fc.name = "se-interop";
+    fc.allow = {to};
+    fc.seed = 7;
+    fw::forward_init(fwd, fc, hop_port, [](gn::Transport& out) {
+      return gn::open_udp_transport(out, gn::ipv4(0, 0, 0, 0, 0), nullptr);
+    });
+    sn::classic_forward_attach(fwd, face);
+    cfg.prx = text;
+    first = hop;
+  }
   sn::ClassicClientEnd c;
-  sn::client_start(c, t, to, cfg, 0);
+  sn::client_start(c, t, first, cfg, 0);
   sn::ClientRecorder recording;
   const std::string record_to = lab.arg("record");
   if (!record_to.empty()) {
@@ -106,6 +136,7 @@ void live(gl::Lab& lab, const std::string& server) {
     now_us = std::chrono::duration_cast<std::chrono::microseconds>(
                  std::chrono::steady_clock::now() - start)
                  .count();
+    if (forward_port > 0) fw::forward_update(fwd, now_us);
     sn::client_tick(c, now_us);
     if (c.stage != said) {
       said = c.stage;
@@ -141,6 +172,33 @@ void live(gl::Lab& lab, const std::string& server) {
                         std::to_string(c.ch.sent) + " / " + std::to_string(t.send_failures)});
   facts.rows.push_back({"serverinfo", c.serverinfo});
   lab.table(facts);
+  if (forward_port > 0) {
+    // The server's copy of our own user info, as it sent it to every client: the forwarder's mark.
+    std::string mark = "-";
+    for (int i = 0; i < 32; i++)
+      if (sn::info_get(c.userinfos[i], "name") == cfg.name) {
+        const std::string got = sn::info_get(c.userinfos[i], "*qwfwd");
+        if (!got.empty()) mark = got;
+      }
+    gl::LabTable hop{"through our forward", {"what", "value"}, {}};
+    hop.rows.push_back({"route (prx)", cfg.prx});
+    hop.rows.push_back({"challenges / connects / accepted / refused",
+                        std::to_string(face.counts.challenges) + " / " +
+                            std::to_string(face.counts.connects) + " / " +
+                            std::to_string(face.counts.accepted) + " / " +
+                            std::to_string(face.counts.refused)});
+    uint64_t up = 0, down = 0;
+    for (const auto& h : fwd.clients) {
+      up += h->bytes_up;
+      down += h->bytes_down;
+    }
+    hop.rows.push_back({"bytes up / down", std::to_string(up) + " / " + std::to_string(down)});
+    hop.rows.push_back({"the server's *qwfwd for us", mark});
+    lab.table(hop);
+    lab.metric("interop.forward_accepted", static_cast<double>(face.counts.accepted), "clients");
+    lab.metric("interop.forward_mark", mark != "-" ? 1 : 0, "bool");
+    fw::forward_close(fwd);
+  }
   gl::LabTable printed{"lines printed to the client", {"line"}, {}};
   for (const std::string& p : c.prints) printed.rows.push_back({p});
   for (const std::string& p : c.centerprints) printed.rows.push_back({"[centre] " + p});
@@ -178,7 +236,8 @@ const gl::LabSpec kSpec{
      {"seconds", "10", "wall seconds to play"},
      {"name", "interop", "the client's name"},
      {"record", "", "write the session as a client demo to this path (empty: none)"},
-     {"basedir", "", "the game's base folder (its id1 and mod folders): the map's checksum"}},
+     {"basedir", "", "the game's base folder (its id1 and mod folders): the map's checksum"},
+     {"forward", "0", "play through our forward on this loopback port (0: straight to the server)"}},
     "",
     run,
 };
