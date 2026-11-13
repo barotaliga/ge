@@ -15,6 +15,8 @@
 //                         [--password=<pw>] [--delay=7] [--name=tv]
 //   shooters_edge_hops sequel-tv --port=27911 --server=<sequel host:port> [--server-password=<pw>]
 //                         [--password=<pw>] [--delay=7] [--name=tv]   (sequel_tv_relay.hpp)
+//   shooters_edge_hops sequel-tv --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
+//                         a recording played round and round instead   (sequel_tv_demo.hpp)
 //
 // voice: agent (a command-line tool's main: its errors are for whoever runs it;
 // docs/architecture.md § Player text).
@@ -27,6 +29,8 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <thread>
@@ -41,6 +45,7 @@
 #include "proxy/proxy.hpp"
 #include "shooters_edge/net/classic_forward.hpp"
 #include "shooters_edge/net/classic_tv.hpp"
+#include "shooters_edge/net/sequel_tv_demo.hpp"
 #include "shooters_edge/net/sequel_tv_relay.hpp"
 
 namespace sn = shooters_edge::net;
@@ -75,6 +80,8 @@ void usage() {
       "  sequel-tv   --port=27911 --server=<host:port> [--server-password=<pw>]\n"
       "              [--password=<pw>] [--delay=7] [--name=tv]: a watcher on a server of the\n"
       "              sequel, its match served to the sequel's own clients\n"
+      "              or --demo=<file.dm2> in place of --server: a recording, played round and\n"
+      "              round at the game's pace\n"
       "Every kind: [--bind=<ip>] (default every interface; the proxy's pair: 127.0.0.1)\n"
       "  [--copies=3] [--name=<name>] [--seconds=<n>, 0 until stopped] [--status=10]\n");
 }
@@ -98,7 +105,7 @@ bool open_upstream(gn::Transport& out) {
 }
 
 struct Options {
-  std::string kind, name, bind, server_password, password;
+  std::string kind, name, bind, server_password, password, demo;
   int port = 0, copies = 3;
   double link_loss = 0, delay = 7, seconds = 0, status = 10;
   bool open = false;
@@ -152,6 +159,9 @@ struct Hops {
   gn::Transport sq_watcher, sq_face;
   sn::SequelTvRelay sq;
   bool has_sq = false;
+  sn::SequelTvFace sq_demo_face;  // --demo: the face fed from a recording, no watcher
+  sn::SequelTvDemo sq_demo;
+  bool has_sq_demo = false;
   bool forward = false, has_near = false, has_far = false, has_tv = false;
 };
 
@@ -204,6 +214,10 @@ std::string status_line(const Hops& h) {
          std::to_string(h.sq.face.blocks) + ", whole frames " +
          std::to_string(h.sq.face.whole_frames) + ", viewers " +
          std::to_string(sn::sequel_tv_viewers(h.sq.face)) + ". ";
+  if (h.has_sq_demo)
+    s += "sequel tv: recording frames " + std::to_string(h.sq_demo.frames) + ", rounds " +
+         std::to_string(h.sq_demo.rounds) + (h.sq_demo.ended ? " (ended)" : "") + ", viewers " +
+         std::to_string(sn::sequel_tv_viewers(h.sq_demo_face)) + ". ";
   return s;
 }
 
@@ -247,6 +261,8 @@ int run(int argc, char** argv) {
       o.password = v;
     } else if (flag(a, "delay", v)) {
       o.delay = std::atof(v.c_str());
+    } else if (flag(a, "demo", v)) {
+      o.demo = v;
     } else if (flag(a, "name", v)) {
       o.name = v;
     } else if (flag(a, "seconds", v)) {
@@ -354,8 +370,29 @@ int run(int argc, char** argv) {
     h.has_tv = true;
     std::printf("tv on %s, relaying %s\n", gn::to_string(h.tv.listener.local).c_str(),
                 gn::to_string(o.server).c_str());
+  } else if (o.kind == "sequel-tv" && !o.demo.empty()) {
+    std::ifstream in(o.demo, std::ios::binary);
+    std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                               std::istreambuf_iterator<char>());
+    if (!in.good() && bytes.empty())
+      return fail("the recording " + o.demo + " did not open", "name a .dm2 file that exists");
+    if (!sn::sequel_tv_demo_open(h.sq_demo, std::move(bytes), true, error))
+      return fail(o.demo + ": " + error, "name a recording of the sequel (.dm2)");
+    const gn::Address bind = at(o.bind, o.port > 0 ? o.port : 27911);
+    if (!gn::open_udp_transport(h.sq_face, bind, &error))
+      return fail("the TV's socket did not open on " + gn::to_string(bind) + ": " + error,
+                  "pick a free --port");
+    sn::SequelTvConfig fc;
+    fc.name = o.name.empty() ? "Shooter's Edge TV" : o.name;
+    fc.password = o.password;
+    sn::sequel_tv_start(h.sq_demo_face, h.sq_face, fc);
+    h.has_sq_demo = true;
+    std::printf("sequel tv on %s, playing %s round and round\n", gn::to_string(bind).c_str(),
+                o.demo.c_str());
   } else if (o.kind == "sequel-tv") {
-    if (!o.has_server) return fail("a sequel TV watches one server", "--server=<host:port>");
+    if (!o.has_server)
+      return fail("a sequel TV watches one server or plays one recording",
+                  "--server=<host:port> or --demo=<file.dm2>");
     const gn::Address bind = at(o.bind, o.port > 0 ? o.port : 27911);
     if (!gn::open_udp_transport(h.sq_face, bind, &error))
       return fail("the TV's socket did not open on " + gn::to_string(bind) + ": " + error,
@@ -400,6 +437,12 @@ int run(int argc, char** argv) {
       for (; face_log < h.sq.face.log.size(); face_log++)
         std::printf("tv: %s\n", h.sq.face.log[face_log].c_str());
     }
+    if (h.has_sq_demo) {
+      sn::sequel_tv_demo_update(h.sq_demo, h.sq_demo_face, now_us);
+      sn::sequel_tv_frame(h.sq_demo_face, now_us);
+      for (; face_log < h.sq_demo_face.log.size(); face_log++)
+        std::printf("tv: %s\n", h.sq_demo_face.log[face_log].c_str());
+    }
     if (o.status > 0 && now >= next_status) {
       next_status += o.status;
       std::printf("%.0f s: %s\n", now, status_line(h).c_str());
@@ -412,6 +455,7 @@ int run(int argc, char** argv) {
   if (h.has_far) px::proxy_far_close(h.far);
   if (h.has_tv) sn::tv_close(h.tv);
   if (h.has_sq) sn::sequel_tv_relay_close(h.sq);
+  if (h.has_sq_demo) sn::sequel_tv_stop(h.sq_demo_face);
   return 0;
 }
 

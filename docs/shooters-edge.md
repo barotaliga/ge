@@ -1400,6 +1400,14 @@ every pass, and judged by captioned screenshots:
   the game's own figure; each frame is drawn as the named figure's frame of the same kind, matched
   by the frames' names (`app/figure_frames.hpp`). A folder you lack, or `noskins 1`, draws the
   game's own figure. Your own `model` goes to the server beside your skin.
+- **Skins and figures from the server** (M18i19): joining a server, a client asks for the
+  pictures and figures the players wear that it lacks before it begins: `skins/<skin>.pcx`, and for
+  a `model`, `players/<model>/tris.md2` (`tris.mdl` only when the server has no `.md2`) and the
+  folder's `<skin>.pcx`. Each is kept in the game folder it came for, so the next visit needs no
+  download, and the level is drawn again once it lands. `noskins 1` fetches nothing. The server
+  serves those files out of its own game folder when downloads are on, read when first asked and
+  kept (`ServerConfig::read_file`), and answers `listskins` (the console's `serverskins`) with the
+  skins and figures it offers (`net/classic_looks.hpp`).
 - **Player figures in the second game** (M18i16): a player's `skin` there is "<model>/<skin>",
   the figure a folder `players/<model>/` with its `tris.md2`, its skins as pictures beside it, and
   the weapons it carries (the files the server names with a '#', drawn in place of its weapon). Each

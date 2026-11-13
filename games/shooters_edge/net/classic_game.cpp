@@ -1458,6 +1458,19 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   Game& game = *static_cast<Game*>(g);
   if (game.coop) return coop_serve(*game.coop, port, error);
   game.classic = std::make_unique<ClassicServer>();
+  // The game folder's files offered to a client that lacks one (a skin, a player figure), and
+  // listed for `listskins`; the maps' folder, read as the maps are.
+  game.cfg.read_file = [&game](const std::string& path, std::vector<uint8_t>* out) {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> got = cl::find_file(game.files, path, store);
+    out->assign(got.begin(), got.end());
+    return !out->empty();
+  };
+  game.cfg.list_files = [&game] {
+    std::vector<std::string> names;
+    for (const ge::vfs::Listed& l : ge::vfs::list(game.files.vfs)) names.emplace_back(l.name);
+    return names;
+  };
   if (!classic_start(*game.classic, game.rules, port, game.cfg, error)) return false;
   load_bans(*game.classic);
   game.classic->game_command = game_words;
