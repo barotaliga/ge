@@ -2,6 +2,7 @@
 // ge:keywords look classic modern palette grade quantize r_look r_fx_lights r_fx_glow r_bloom
 // ge:keywords r_farland r_farland_warm far-land ce_bubbles_share bubbles ce_water_specks
 // ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
+// ge:keywords noskins baseskin allskins player-skins
 // ge:keywords see-through-liquids watervis liquid_alphas
 // ge:skill render shooter
 // ge:test tests/shooters_edge_effects_test.cpp
@@ -188,8 +189,8 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .help = "How solid water looks: below 1 you see through it.",
            .min = 0,
            .max = 1,
-           .values = "0..1: 1 solid (the default), 0.5 half see-through, 0 not drawn; a server "
-                     "can keep water solid, and a map not made to be seen through shows less"},
+           .values = "0..1: 1 solid (the default), 0.5 half see-through, 0 not drawn (a server "
+                     "can keep water solid, and a map not made to be seen through shows less)"},
           &picture.water_alpha);
   const struct {
     const char* name;
@@ -208,6 +209,30 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
              .kind = gc::CvarKind::text,
              .values = "\"\": as r_wateralpha (the default); 0..1: 1 solid, 0 not drawn"},
             k.value);
+  cv.bind({.name = "noskins",
+           .fallback = "0",
+           .flags = gc::kArchive,
+           .help = "Whether players are drawn in their own skins.",
+           .kind = gc::CvarKind::integer,
+           .min = 0,
+           .max = 2,
+           .values = "0: each in their own skin (the default); 1: everyone in the plain skin, in "
+                     "their colours; 2: their own skins, but none fetched from a server"},
+          &picture.noskins);
+  cv.bind({.name = "baseskin",
+           .fallback = "base",
+           .flags = gc::kArchive,
+           .help = "The skin of a player who names none, or one you do not have.",
+           .kind = gc::CvarKind::text,
+           .values = "TEXT: the skin of that name (base, the default); \"\": the plain skin"},
+          &picture.base_skin);
+  con.add_command(
+      "allskins", "allskins [skin]: one skin on every player; with none, each their own",
+      [&picture](gc::Console& k, const gc::Args& a) {
+        picture.all_skins = a.size() < 2 ? std::string{} : a[1];
+        k.print(picture.all_skins.empty() ? "Every player wears their own skin."
+                                          : "Every player wears " + picture.all_skins + ".");
+      });
   con.add_command(
       "fog",
       "fog <density> <red> <green> <blue> [alpha] [bias]: the fog in the air, until the next map",

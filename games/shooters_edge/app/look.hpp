@@ -107,6 +107,12 @@ struct Picture {
   // solid (`liquid_alphas`).
   double water_alpha = 1;
   std::string slime_alpha, lava_alpha, tele_alpha;
+  // noskins: 0 each player drawn in their own skin (`skins/<name>.pcx`), 1 every player in the
+  // figure's own skin (still in their colours), 2 as 0 with nothing fetched from a server;
+  // baseskin: the skin of a player who names none or one the files lack; the `allskins` command's
+  // one skin on every player ("": each their own).
+  int noskins = 0;
+  std::string base_skin = "base", all_skins;
   double far_warm = 0;  // r_farland_warm: its air warmer (or colder) than its kind's, C
   // r_lerpmodels, r_lerpmove: the models' animation drawn between frames, and (in the window's own
   // game) their places between the server's states (client/model_lerp.hpp); either look.
@@ -124,8 +130,8 @@ struct Picture {
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
 // r_farland, r_farland_warm, r_skyname, r_skyfog, r_lerpmodels, r_lerpmove, r_arrival,
 // ce_bubbles_share, ce_water_specks, r_quality, r_budget, every ce_ switch, the three
-// ce_<id>_quality levels, r_wateralpha and its kin and the weather's cvars over `picture` (it must
-// outlive `con`), and the `fog` command.
+// ce_<id>_quality levels, r_wateralpha and its kin, noskins, baseskin and the weather's cvars over
+// `picture` (it must outlive `con`), and the `fog` and `allskins` commands.
 void add_cvars(ge::console::Console& con, Picture& picture);
 // r_look's look; modern for a word it does not know.
 Look look_of(const Picture& picture);

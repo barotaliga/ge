@@ -138,6 +138,8 @@ struct MorphBurn {
   float seed = 0;  // the patches' offset, 0..1
 };
 
+inline constexpr uint32_t kOwnSkin = ~0u;
+
 struct MorphDraw {
   uint32_t model = 0;
   MorphPose now, last;        // `last`: where it was the frame before (a cut: the same as now)
@@ -158,6 +160,10 @@ struct MorphDraw {
   float alpha = 1;
   MorphWarp warp;
   MorphBurn burn;
+  // The skin it wears: another model's (a player's own picture on a shared figure, uploaded as a
+  // SKIN-ONLY model: a `MorphModel` with a skin and no frames), laid over its own coordinates;
+  // `kOwnSkin` (or any index past the models): its own.
+  uint32_t skin = kOwnSkin;
 };
 
 // Where each model's skin sits in the atlas, texels.

@@ -32,6 +32,7 @@ struct Draw {
   shade_dir: vec4f,
   warp: Warp,  // render/wgsl/warp.wgsl (MorphWarp)
   burn: vec4f,  // charred, embers, etched, seed (MorphBurn)
+  skin: vec4u,  // x: the model whose skin it wears (its own, or a skin-only model's: MorphDraw::skin)
 }
 
 const kTintSteps = 16u;
@@ -194,7 +195,7 @@ struct FragmentOut {
 @fragment
 fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   let d = draws[in.draw];
-  let m = models[d.info.x];
+  let m = models[d.skin.x];  // only its skin's rectangle is read here
   var n = normalize(in.normal);
   if (!front) {
     n = -n;

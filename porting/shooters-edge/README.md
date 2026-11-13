@@ -21,6 +21,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `qc-strings.md` | The extended string builtins (the string set: stov, strstrofs, str2chr, chr2str, strconv, strpad, infoadd, infoget, the comparisons) and sprintf, each edge case, from a clean-room reader (M18l) |
 | `entity-look.md` | An entity's look fields (scale, colormod, alpha) in QC and their bytes on the wire, the entity delta's and the player update's encodings, from a clean-room reader (M18l) |
 | `sky-box.md` | A map's own sky box: its name in the worldspawn, the six pictures' paths and formats, their orientation, where the box is drawn; the sequel's rotation, from a clean-room reader (M18i12) |
+| `player-skins.md` | Each player's skin (the name chosen, the picture and its cut, the fallbacks, the colours' rows, `noskins`, `baseskin`, `allskins`, 24-bit forms), from a clean-room reader (M18i15) |
 | `fog-alpha.md` | A map's fog (its worldspawn keys, the curve, the sky's share, the command, the reset) and see-through liquids (the alpha settings, the server's permission, the drawing), from a clean-room reader (M18i13, M18i14) |
 | `movement.md` | The player's movement at the modern server's defaults: the settings, every step of the move, the clip hulls and the trace, the test vectors' format (M18o1) |
 | `gameloop.md` | The game loop: the game program's hooks, entities, the area tree, the server frame, thinking, tossing, pushers, touching, the player's packet and command, client prediction (M18o2) |

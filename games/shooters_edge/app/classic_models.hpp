@@ -24,14 +24,19 @@
 // ge:keywords classic-models mdl spr brush-item morph_from_alias morph_from_brush sprite_frames_of
 // ge:keywords palette tint shirt pants fullbright glow skin frame-group light-probe light_under
 // ge:keywords entity-pose items armour health weapons flames frames_between frame-lerp
+// ge:keywords player-skin player_skin skin_of_indices skins-pcx reversed-rows
 // ge:skill render shooter morph
 // ge:test tests/shooters_edge_classic_models_test.cpp
 #pragma once
 
 #include <cstdint>
 #include <span>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
+#include "assets/pcx.hpp"
 #include "brush/map.hpp"
 #include "morph/model.hpp"
 #include "render/morph.hpp"
@@ -43,14 +48,48 @@ inline constexpr int kFullbrightFirst = 224;  // palette indices from here light
 inline constexpr uint32_t kShirtRow = 1;      // the palette row a player's top colour replaces
 inline constexpr uint32_t kPantsRow = 6;      // and his bottom colour
 inline constexpr uint32_t kColourRows = 14;   // the palette's rows a colour can name
+inline constexpr uint32_t kReversedRow = 8;   // rows from here run bright to dark: read backwards
 
-// The palette's colour rows as tint ramps (row r: indices 16 r .. 16 r + 15, linear), so a tinted
-// texel drawn with its own row's tint is its own colour.
+// The palette's colour rows as tint ramps (row r: indices 16 r .. 16 r + 15, linear; from
+// kReversedRow up the other way round, 16 r + 15 down to 16 r, since those rows are stored bright
+// to dark), so a tinted texel drawn with its own row's tint is its own colour, and a skin's dark
+// folds stay dark in every colour.
 ge::render::TintRamps palette_ramps(std::span<const uint8_t> palette);
 
 // Skin `skin` (clamped) of `model` as the engine's morph model.
 ge::render::MorphModel morph_from_alias(const ge::morph::Model& model,
                                         std::span<const uint8_t> palette, int skin);
+// A skin of palette `indices` (`width` x `height`, rows from the top) as the morph pass draws it:
+// the fullbright range glowing, the shirt's and the pants' rows tinted.
+ge::render::MorphSkin skin_of_indices(std::span<const uint8_t> indices, uint32_t width,
+                                      uint32_t height, std::span<const uint8_t> palette);
+
+// A PLAYER'S OWN SKIN: a picture of palette indices (a `skins/<name>.pcx`, its own palette
+// ignored) laid at the top left of a kPlayerPictureWidth x kPlayerPictureHeight field of index 0,
+// and the field's top-left kPlayerSkinWidth x kPlayerSkinHeight stretched over the whole of the
+// figure's coordinates, whatever its own skin's size; tinted and lit as the model's own skin is.
+// False (`out` untouched) for a picture larger than the field or damaged.
+inline constexpr int kPlayerPictureWidth = 320, kPlayerPictureHeight = 200;
+inline constexpr int kPlayerSkinWidth = 296, kPlayerSkinHeight = 194;
+bool player_skin(const ge::assets::IndexedImage& picture, std::span<const uint8_t> palette,
+                 ge::render::MorphSkin* out);
+
+// WHICH SKIN A PLAYER WEARS. The player's choice (look.hpp's noskins, baseskin and allskins):
+struct SkinChoice {
+  int noskins = 0;            // 0, 2: the skins drawn; 1: every player in the figure's own skin
+  std::string base = "base";  // the skin of a player who names none, or one the files lack
+  std::string all;            // one skin on every player ("": each their own)
+};
+// A skin name as looked up: its extension dropped, lower case, cut to kSkinNameChars; empty for a
+// name that climbs out of `skins/` (holds "..") or starts with a dot.
+inline constexpr size_t kSkinNameChars = 15;
+std::string skin_key(std::string_view name);
+// The skin a player naming `skin` wears, out of `read` (skin_key -> its morph model): `all` over
+// their own, `base` for none or one not read, and the figure's own (render's kOwnSkin) under
+// `noskins 1` or when neither is there.
+uint32_t choose_skin(const SkinChoice& choice, std::string_view skin,
+                     const std::unordered_map<std::string, uint32_t>& read);
+
 // An item map's world model as one frame, its faces' textures in its skin.
 ge::render::MorphModel morph_from_brush(const ge::brush::Map& item,
                                         std::span<const uint8_t> palette);
