@@ -62,6 +62,10 @@ struct BurnVertex {
   float relief = 0;
   float up[2] = {0, 1};
   float light[3] = {1, 1, 1};  // the light on it, whites (a lightmap's 1 a surface as painted)
+  // A HOT burn (a beam's line, a melt) glows KEYED: `glow_keys` whites the eye is adapted to when
+  // fresh (`ember` a fresh one's), dimming with its heat, so it burns white-hot in any room; 0 a
+  // scorch's dull glow by its luminance, under the pass's kEmberKeys.
+  float glow_keys = 0;
 };
 
 // wgsl's BeamLookGpu, BeamSeg and BurnVert.

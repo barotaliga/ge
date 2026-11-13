@@ -1,13 +1,14 @@
 // THE ORDER EACH CLASSIC GAME LOADS IN: how its own client ranks the files of an install and runs
 // its configs at the start, one table a game, so the window loads each game as that game loads.
 //
-// - **Files** (`layout`, read by client/files.hpp's `open_game_dir`): the first game's folders
-//   mount their packs, then their zips, then their loose files over them (a loose file wins), with
-//   the bundled client's folder between the base folder and the game folder. The sequel's mount
-//   their loose files first and their archives over them (a pack in a folder wins over a loose
-//   file there), every archive named `pak*` numbered by the digits after `pak` and the rest
-//   (`.pak`, the zips `.pkz` and `.pk3`) after them by name; the rerelease's archive at the
-//   install's root (`Q2Game.kpf` in its client's spelling, `root_archive`) under the base folder.
+// - **Files** (`layout`, read by client/files.hpp's `open_game_dir`): in every game a folder's
+//   packs named `pak` and a digit come first by number (`pak0`, `pak1` ... `pak10`, a `.pkz` or
+//   `.pk3` too), then every other pack and zip (`.pak`, `.pkz`, `.pk3`) by name; one whose name
+//   starts with `_` is turned off and never mounted. The first game's folders mount their loose
+//   files over those (a loose file wins), with the bundled client's folder between the base folder
+//   and the game folder. The sequel's mount their loose files first and their archives over them (a
+//   pack in a folder wins over a loose file there), with the rerelease's archive at the install's
+//   root (`Q2Game.kpf` in its client's spelling, `root_archive`) under the base folder.
 // - **Startup** (`start`, run by client/install_configs.hpp's `start_configs`): each step in
 //   order. `main` is the install's own main config (`main_where`, `main_files`), or the window's
 //   own saved config when the install has none; `own` runs the window's config after the
@@ -16,6 +17,7 @@
 //
 // ge:summary Each classic game's load order: its files' ranks and its startup configs, in order
 // ge:keywords load-order startup-order search-order game-layout archives-over-loose pkz
+// ge:keywords pak-names underscore-off pack-order
 // ge:keywords load_order_of start-step defaults-in-packs root-archive q2game-kpf
 // ge:skill shooter console vfs
 // ge:test tests/shooters_edge_install_configs_test.cpp
