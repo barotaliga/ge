@@ -558,6 +558,15 @@ int run_main(int argc, char** argv) {
     size_t kept_count = 0;  // how many of them
   } place_seen;
   recorder.places = &places.locs;  // a recording keeps the place names it is played with
+  // Whether nothing solid stands between two points in the map being played or watched
+  // (`loc_trace`).
+  places.clear_line = [&listen, &place_seen](ge::shooter::Vec3f from, ge::shooter::Vec3f to) {
+    const shooters_edge::server::BspMap* map =
+        place_seen.on ? place_seen.map : (listen.map ? &listen.map->bsp : nullptr);
+    if (map == nullptr) return true;
+    const ge::shooter::Vec3f end = cl::line_end(*map, from, to);
+    return end.x == to.x && end.y == to.y && end.z == to.z;
+  };
   // Where the view looks: 8,192 units along it from where the player stands, or the first solid.
   places.looked_at = [&listen, &place_seen](ge::shooter::Vec3f& at) {
     ge::shooter::Vec3f from, angles;
