@@ -203,6 +203,7 @@ struct DemoState {
   double time = 0;                          // the demo's clock, s
   sh::Vec3f eye;                            // the view's eye, units
   sh::Vec3f angles;                         // the view's angles, degrees
+  sh::Vec3f kick;                           // sequel: the server's kick angles on the view, degrees
   int view_entity = 1;                      // single: the entity the eye rides
   int max_clients = 1;                      // single: the players, entities 1 to this
   int player = 0;                           // the recording (client) or tracked (multiview) slot

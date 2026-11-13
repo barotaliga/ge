@@ -33,6 +33,33 @@ double strafe_roll(const FirstPersonRow& row, double side_speed) {
   return side_speed < 0 ? -a : a;
 }
 
+FirstPersonRow classic_first_person(double unit_m) {
+  FirstPersonRow r;
+  r.eye_stand_m = 22 * unit_m;
+  r.eye_crouch_m = r.eye_stand_m;
+  r.crouch_halflife_s = 0;  // the eye's height is the body's, at once (a death drops it)
+  r.step_rise_mps = 80 * unit_m;
+  r.step_max_m = 12 * unit_m;
+  r.bob = 0.02;
+  r.bob_cycle_s = 0.6;
+  r.bob_up = 0.5;
+  r.bob_lo_m = -7 * unit_m;
+  r.bob_hi_m = 4 * unit_m;
+  r.roll_angle = 2 * core::kPi / 180;
+  r.roll_speed_mps = 200 * unit_m;
+  r.kick_pitch = r.kick_roll = 0.6 * core::kPi / 180;
+  r.kick_time_s = 0.5;
+  r.punch = 0;
+  r.dip_per_mps = 0;
+  r.dip_max_m = 0;
+  r.fov_y = FirstPersonRow{}.fov_y;
+  r.zoom_fov_y = r.fov_y;
+  r.idle = 0;
+  r.bob_hold_air = true;
+  r.kick_to_source = true;
+  return r;
+}
+
 Pose frame_first_person(const FirstPersonRow& row, const Subject& s, FirstPersonState& st,
                         double dt, double motion) {
   const double crouched = core::lerp(row.eye_stand_m, row.eye_crouch_m, s.crouch);
@@ -78,8 +105,9 @@ Pose frame_first_person(const FirstPersonRow& row, const Subject& s, FirstPerson
       // down, one travelling backward (from the front) pitches it up.
       const double right = e.dir.x * cy - e.dir.z * sy;
       const double fwd = e.dir.x * sy + e.dir.z * cy;
-      st.kick_roll = e.size * right * row.kick_roll;
-      st.kick_pitch = -e.size * fwd * row.kick_pitch;
+      const double away = row.kick_to_source ? -1.0 : 1.0;
+      st.kick_roll = away * e.size * right * row.kick_roll;
+      st.kick_pitch = -away * e.size * fwd * row.kick_pitch;
       st.kick_left = row.kick_time_s;
     }
   }
@@ -93,8 +121,17 @@ Pose frame_first_person(const FirstPersonRow& row, const Subject& s, FirstPerson
   }
   st.zoom = damp(st.zoom, s.zoom, row.zoom_halflife_s, dt);
 
-  const double bob = s.grounded ? first_person_bob(row, st.clock, ground_speed) : 0.0;
-  const double dip_clipped = row.dip_max_m * libm::tanh(dip / row.dip_max_m);
+  double bob = 0;
+  if (!row.bob_hold_air) {
+    bob = s.grounded ? first_person_bob(row, st.clock, ground_speed) : 0.0;
+  } else if (s.grounded) {
+    st.bob_clock += dt;
+    st.bob_held = bob = first_person_bob(row, st.bob_clock, ground_speed);
+  } else {
+    bob = st.bob_held;
+  }
+  const double dip_clipped =
+      row.dip_max_m > 0 ? row.dip_max_m * libm::tanh(dip / row.dip_max_m) : 0.0;
   double idle_yaw = 0, idle_pitch = 0, idle_roll = 0;
   if (row.idle > 0) {
     idle_yaw = row.idle * libm::sin(st.clock * core::kTau / 2.0);

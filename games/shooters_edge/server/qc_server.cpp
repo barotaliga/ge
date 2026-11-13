@@ -361,6 +361,7 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
 
   // The adapter and its VM afresh: the progs' globals as the file has them, every string gone.
   if (!sim::create_qc_program(s.q, progs, set.max_edicts, error)) return false;
+  if (s.opt.natives != nullptr) pg::bind_natives(s.q.vm, *s.opt.natives);
   s.q.owner = &s;
   s.q.before_call = &before_call;
   s.q.after_call = &after_call;

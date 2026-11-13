@@ -257,7 +257,9 @@ std::vector<std::string> viewer_maps(const Site& site) {
       const std::string ext = lower(it->path().extension().string());
       if (!it->is_regular_file(ec) || (ext != ".pak" && ext != ".pk3")) continue;
       parts.push_back(it->path().filename().string() + ":" + std::to_string(it->file_size(ec)) +
-                      ":" + std::to_string(it->last_write_time(ec).time_since_epoch().count()));
+                      ":" +
+                      std::to_string(static_cast<long long>(
+                          it->last_write_time(ec).time_since_epoch().count())));
     }
     std::sort(parts.begin(), parts.end());
     for (const std::string& p : parts) key += "|" + p;

@@ -337,6 +337,8 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   s.time = static_cast<double>(number) * 0.1;
   s.view_height = static_cast<float>(v.offset[2]) * 0.25f;
   s.angles = {angle16(v.angles[0]), angle16(v.angles[1]), angle16(v.angles[2])};
+  s.kick = {static_cast<float>(v.kick[0]) * 0.25f, static_cast<float>(v.kick[1]) * 0.25f,
+            static_cast<float>(v.kick[2]) * 0.25f};
   if (static_cast<size_t>(s.player) < s.players.size()) {
     DemoEntity& me = s.players[static_cast<size_t>(s.player)];
     me.present = true;

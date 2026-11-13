@@ -65,6 +65,7 @@
 #include <vector>
 
 #include "progs/file.hpp"
+#include "progs/native.hpp"
 
 namespace shooters_edge::server {
 
@@ -75,6 +76,10 @@ bool build_test_mod(ge::progs::Progs& out, std::string& error);
 std::vector<uint8_t> test_mod_bytes(std::vector<int32_t>& lines);
 
 extern const char* const kArenaEntities;
+
+// The test mod as a native program (progs/native.hpp): the same functions in C++
+// (test_mod_native.cpp), which play a match exactly as the assembled ones do.
+const ge::progs::NativeProgram& native_test_mod();
 
 // The single-player stub into `out`. False with `error` only if the assembler broke.
 bool build_single_player_stub(ge::progs::Progs& out, std::string& error);
