@@ -373,6 +373,21 @@ bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, 
     because = "a gap trick ahead: running on to its lip";
     return false;
   }
+  // (`gapturn`) The run heading away from the jump: turned to on the ground before it is given up.
+  if (p.set.gap_turn && across({}, s.velocity) > kGapTurnSpeed) {
+    const float off = wrap(heading(s.velocity.x, s.velocity.y) - heading(dir.x, dir.y));
+    // A turn starts afresh at another gap, or at this one come back to (not asked 0.5 s).
+    if (p.gap_turn_node != p.route[gk] || p.clock_s - p.gap_turn_last_s > 0.5) {
+      p.gap_turn_node = p.route[gk];
+      p.gap_turn_s = p.clock_s;
+    }
+    p.gap_turn_last_s = p.clock_s;
+    if ((off > kGapTurnOff || off < -kGapTurnOff) && p.clock_s - p.gap_turn_s < kGapTurnMost_s) {
+      p.brink_free = false;
+      because = "a gap trick behind the run: turning to its lip";
+      return false;
+    }
+  }
   p.stats.gap_refused++;
   if (gl != nullptr) gap_off(p, {p.route[gk], p.route[gk + 1], NavKind::jump, gl->time_s});
   replanned = true;  // the caller plans again

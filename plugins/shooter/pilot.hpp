@@ -186,6 +186,11 @@ struct PilotSettings {
   // stairs: a climb left on the walkway's step aimed at it from the floor, into the riser or
   // under the walkway into the pool).
   bool script_fresh = false;
+  // THE GAP TURNED TO (`gapturn`): a gap trick near its lip with the run heading away from its
+  // jump (a route just planned through it from a run the other way) is turned to on the ground,
+  // `kGapTurnMost_s` at most, before it is given up (it was given up at once, and the way round
+  // was through the water: e1m2's pool, 68 % of the refusals wet within 4 s).
+  bool gap_turn = false;
   // THE SCRIPT'S ENTRY HAD NEAR IT (`scriptentry`, nav_script.hpp `script_keys`' loose entry).
   bool script_entry = false;
   CircleSettings circle;
@@ -407,6 +412,9 @@ struct Pilot {
   };
   MoverSeen movers_seen[8];
   bool gap_flight = false;
+  // (`gapturn`) the gap turned to (its start node) and since when (`clock_s`)
+  int32_t gap_turn_node = -1;
+  double gap_turn_s = 0, gap_turn_last_s = -1e9;
   NavExtraLink gap_link;     // the gap jumped (`gap_flight`): judged where it comes down
   bool gap_aloft = false;    // and its flight has left the ground (a bot's keys may press late)
   double gap_pressed_s = 0;  // when its jump was pressed (`clock_s`)

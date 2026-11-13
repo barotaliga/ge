@@ -733,6 +733,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         }
       }
       if (b.look_turn && std::fabs(wrap(look_yaw - pilot_yaw)) > kLookTurnMax) look_yaw = pilot_yaw;
+      bool booked = false;
       if (b.view_booked && b.view_book != nullptr) {
         const Edict& me_ent = sv.edicts[static_cast<size_t>(me)];
         const float vx = me_ent.velocity.x, vy = me_ent.velocity.y;
@@ -740,8 +741,10 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         if (vx * vx + vy * vy > kBookSpeed * kBookSpeed &&
             view_book_yaw(*b.view_book, me_ent.origin,
                           static_cast<float>(core::libm::atan2(vy, vx) * (180 / core::kPi)),
-                          kBookFrames, kBookConsistency, book_yaw))
+                          kBookFrames, kBookConsistency, book_yaw)) {
           look_yaw = book_yaw;
+          booked = true;
+        }
       }
       // (`calmvel`) Moving at a run, the calm view looks the way it moves: an enemy appearing ahead
       // of the run was on the screen 25 % of the time with the view on the route's point 320 on
@@ -842,7 +845,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       // A swipe there and back at a turn meant's pace (the glance, the sound's).
       const bool swipe =
           (b.glance && sv.time < b.glance_back_until) || (b.listen && sv.time < b.sound_back_until);
-      b.view_by = !swipe ? "calm" : (b.listen && sv.time < b.sound_back_until) ? "sound" : "glance";
+      b.view_by = !swipe ? (booked ? "book" : "calm") : (b.listen && sv.time < b.sound_back_until) ? "sound" : "glance";
       if (b.mouse && b.aim.mouse) {
         // The hand's strokes onto the look, at ease (an about-face at a turn meant's pace); the
         // pitch let lie within kCalmPitchTol of level.
