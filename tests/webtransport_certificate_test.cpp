@@ -33,8 +33,8 @@ TEST(certificate_validity_fits_a_browser) {
   Certificate c;
   CHECK(make_certificate(c, 1800000000, "x", nullptr));
   CHECK(c.not_before < 1800000000 && c.not_after > 1800000000);
-  CHECK(c.not_after - c.not_before <= 14 * 86400);
-  CHECK(c.not_after - 1800000000 >= 12 * 86400);
+  CHECK(c.not_after - c.not_before <= int64_t{14} * 86400);
+  CHECK(c.not_after - 1800000000 >= int64_t{12} * 86400);
   const std::string der(c.der.begin(), c.der.end());
   CHECK(der.find(utc_time(c.not_before)) != std::string::npos);
   CHECK(der.find(utc_time(c.not_after)) != std::string::npos);

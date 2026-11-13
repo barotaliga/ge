@@ -170,7 +170,7 @@ TEST(h3_connect_and_answer) {
 TEST(h3_datagrams) {
   std::vector<uint8_t> d;
   const uint8_t m[2] = {7, 8};
-  put_datagram(d, 4 * 100, m, 2);
+  put_datagram(d, uint64_t{400}, m, 2);
   uint64_t stream = 0;
   size_t at = 0;
   CHECK(read_datagram(d.data(), d.size(), stream, at));

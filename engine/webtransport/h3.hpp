@@ -59,7 +59,7 @@ void put_frame(std::vector<uint8_t>& out, uint64_t type, const uint8_t* payload,
 // frame (false while it is incomplete). A frame longer than `max_payload` sets `failed`.
 struct FrameReader {
   std::vector<uint8_t> pending;
-  size_t max_payload = 64 * 1024;
+  size_t max_payload = size_t{64} * 1024;
   bool failed = false;
   void take(const uint8_t* data, size_t size) { pending.insert(pending.end(), data, data + size); }
   bool next(uint64_t& type, std::vector<uint8_t>& payload);

@@ -30,7 +30,7 @@ namespace {
 constexpr size_t kCidSize = 18;
 constexpr size_t kPacketSize = 1452;
 constexpr uint64_t kH3NoError = 0x100;
-constexpr uint64_t kMaxStreamOut = 64 * 1024;  // a stream's bytes we keep to send
+constexpr uint64_t kMaxStreamOut = uint64_t{64} * 1024;  // a stream's bytes we keep to send
 const char kAlpn[] = "h3";
 
 uint64_t ms_to_ns(uint64_t ms) { return ms * 1000000ull; }
@@ -369,10 +369,10 @@ ngtcp2_callbacks callbacks(bool server) {
 
 void transport_params(ngtcp2_transport_params& p, uint64_t idle_ms) {
   ngtcp2_transport_params_default(&p);
-  p.initial_max_stream_data_bidi_local = 256 * 1024;
-  p.initial_max_stream_data_bidi_remote = 256 * 1024;
-  p.initial_max_stream_data_uni = 256 * 1024;
-  p.initial_max_data = 1024 * 1024;
+  p.initial_max_stream_data_bidi_local = uint64_t{256} * 1024;
+  p.initial_max_stream_data_bidi_remote = uint64_t{256} * 1024;
+  p.initial_max_stream_data_uni = uint64_t{256} * 1024;
+  p.initial_max_data = uint64_t{1024} * 1024;
   p.initial_max_streams_bidi = 16;
   p.initial_max_streams_uni = 16;
   p.max_idle_timeout = ms_to_ns(idle_ms);
@@ -774,7 +774,7 @@ int verify_sign(void* verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t
     p += len;
     while (len > 32 && *v == 0) ++v, --len;
     if (len > 32) return PTLS_ALERT_DECRYPT_ERROR;
-    std::memcpy(rs + 32 * i + (32 - len), v, len);
+    std::memcpy(rs + size_t{32} * static_cast<size_t>(i) + (32 - len), v, len);
   }
   const std::array<uint8_t, 32> digest = sha256(data.base, data.len);
   return uECC_verify(c.server_key.data(), digest.data(), digest.size(), rs, uECC_secp256r1())
