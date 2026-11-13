@@ -182,6 +182,13 @@ void sequel_client_start(SequelClientEnd& c, gn::Transport& t, const gn::Address
   c.server = server;
   c.now = now;
   cl::sequel_stream_begin(c.demo);
+  if (!cfg.via.empty()) {
+    std::vector<gn::Address> chain = cfg.via;
+    chain.push_back(server);
+    ge::forward::dial_start(c.dial, chain, static_cast<uint64_t>(cfg.seed) * 7919u + cfg.qport,
+                            static_cast<int64_t>(now * 1e6));
+    c.dialing = true;
+  }
 }
 
 void sequel_client_command(SequelClientEnd& c, const std::string& line) {
@@ -203,7 +210,8 @@ void sequel_client_tick(SequelClientEnd& c, int64_t now_us) {
     const auto size = static_cast<size_t>(n);
     c.datagrams_in++;
     c.bytes_in += n;
-    if (from != c.server || c.stage == ClientStage::dropped) continue;
+    if (!c.cfg.via.empty() && ge::forward::dial_read(c.dial, buf, size, from, now_us)) continue;
+    if (c.dialing || from != c.server || c.stage == ClientStage::dropped) continue;
     if (is_out_of_band(buf, size)) {
       read_oob(c, buf, size);
       continue;
@@ -212,6 +220,22 @@ void sequel_client_tick(SequelClientEnd& c, int64_t now_us) {
     size_t at = 0;
     if (!channel_process(c.ch, buf, size, c.now, at)) continue;
     read_payload(c, buf + at, size - at);
+  }
+  if (!c.cfg.via.empty()) {
+    ge::forward::dial_update(c.dial, *c.transport, now_us);
+    if (c.dialing && c.dial.state == ge::forward::DialState::routed) {
+      c.dialing = false;
+      c.server = c.dial.first;  // the game's handshake goes to the first hop
+    } else if (c.dialing && (c.dial.state == ge::forward::DialState::refused ||
+                             c.dial.state == ge::forward::DialState::timed_out)) {
+      c.dialing = false;
+      c.stage = ClientStage::dropped;
+      c.refused = "the route through the forwarders failed: " + c.dial.why;
+    }
+    if (c.dialing) {
+      c.last_tick = c.now;
+      return;
+    }
   }
   switch (c.stage) {
     case ClientStage::challenge:

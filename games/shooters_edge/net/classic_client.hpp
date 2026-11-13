@@ -14,7 +14,9 @@
 // `talk` script says so, speaks: `speech` when given, else a voice of its own
 // (net/voice_trial.hpp's speech off its seed), from where it last stopped, cut into 20 ms frames,
 // Opus-coded (net/voice_codec.hpp) and sent as one voice message (clc 83) a tick with the frames
-// cut since the last. It counts the voice messages it is sent by talker. With `live_mic` it
+// cut since the last. At its `begin` it asks to hear voice (`unmuteall`) and names its voice's
+// target (`ClientConfig::voice_to`, `voicetarg`: net/classic_talk.hpp). It counts the voice
+// messages it is sent by talker. With `live_mic` it
 // speaks the player's own microphone instead (`mic_in`, handed in by the window), while
 // `mic_talking`.
 //
@@ -105,6 +107,9 @@ struct ClientConfig {
   // A player's own microphone in place of `talk` and `speech`: the samples the window hands in
   // (`ClassicClientEnd::mic_in`), sent while `mic_talking` (the push-to-talk key held).
   bool live_mic = false;
+  // Who its voice goes to (`voicetarg`: all, team, near or a slot), told to the server at its
+  // `begin`; "" leaves the server's own (team). `classic_voice_target` changes it later.
+  std::string voice_to;
   int seed = 1;
   uint16_t qport = 1;
 };
@@ -191,6 +196,7 @@ struct ClassicClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): 
   size_t speech_at = 0;
   std::vector<float> mic_in;         // live_mic: the microphone's samples not yet cut
   bool mic_talking = false;          // live_mic: the talk key held
+  std::string voice_to;              // the voice's target the server was last told ("" none)
   std::vector<uint8_t> voice_out;    // this tick's voice message, sent with its move
   int64_t voice_sent = 0;            // frames sent
   int64_t voice_heard[32] = {};      // voice messages received, by talker
@@ -209,6 +215,9 @@ void client_start(ClassicClientEnd& c, gn::Transport& t, const gn::Address& serv
 void client_tick(ClassicClientEnd& c, int64_t now_us);
 // Queues a string command on the reliable stream (a client's console line to the server).
 void client_command(ClassicClientEnd& c, const std::string& line);
+// Its voice's target (`voicetarg <word>`: all, team, near, a slot) told to the server when it
+// differs from the last one told; the word is kept until the client has begun.
+void classic_voice_target(ClassicClientEnd& c, const std::string& word);
 // A remote console line (`rcon <password> <line>`) sent out of band to the server; its answer
 // arrives in `oob_prints`.
 void client_rcon(ClassicClientEnd& c, const std::string& password, const std::string& line);

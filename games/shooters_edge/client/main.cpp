@@ -249,6 +249,31 @@ int run_main(int argc, char** argv) {
   cl::Timedemo bench;
   sn::Remote remote;  // `connect`: the window on a server elsewhere
   sn::add_remote_commands(console, remote);
+  // Chat and voice (console/talk.hpp): said to the server joined, else to the window's own
+  // match's server; T, Y and U open the chat line, V, B and N talk.
+  ge::console::Talk talk;
+  ge::console::add_talk(console, con_view, talk);
+  remote.talk = &talk;
+  con_view.set_chat([&](ge::console::ChatTo to, std::string_view, std::string_view text) {
+    using ge::console::ChatTo;
+    std::string said(text);
+    std::erase(said, '"');  // the line goes in quotes
+    const std::string line = std::string(to == ChatTo::team     ? "say_team"
+                                         : to == ChatTo::nearby ? "say_near"
+                                                                : "say") +
+                             " \"" + said + "\"";
+    if (remote.active && remote.watch) {
+      console.print("You can't chat while watching a broadcast.");
+      return false;
+    }
+    if (remote.active) {
+      sn::client_command(remote.end, line);
+      return true;
+    }
+    if (cl::listen_command(listen, line)) return true;
+    console.print("Nobody is here to read that: chat works in a multiplayer game.");
+    return false;
+  });
   sn::add_admin_commands(console, listen, remote);  // users, status, speedjump, rcon
   // The vote on a setting (engine/server/vote.hpp): to the server joined, else the window's own.
   for (const char* word : {"vote", "yes", "no"})
@@ -680,8 +705,8 @@ int run_main(int argc, char** argv) {
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
   out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"
                       : std::string("shooters_edge: no audio device; a demo plays silent"));
-  // The microphone, opened the first time +voip is held on a server joined (the system asks the
-  // player's leave then, never at start) and read every frame after (net/classic_remote.hpp).
+  // The microphone, opened the first time a talk key is held on a server joined (the system asks
+  // the player's leave then, never at start) and read every frame after (net/classic_remote.hpp).
   std::unique_ptr<ge::platform::AudioIn> mic;
   bool mic_tried = false;
   std::vector<float> mic_samples(static_cast<size_t>(sn::kMicMostSamples));
@@ -1012,8 +1037,8 @@ int run_main(int argc, char** argv) {
       ge::input::update(held, queue);
       ge::ui::feed_console(console, con_view, queue, con_keys);
       console.run();
-      if (con_view.open() != text_on) {
-        text_on = con_view.open();
+      if (con_view.typing() != text_on) {
+        text_on = con_view.typing();
         ge::platform::set_text_input(*window, text_on);
       }
       // The bots' ticks on the wall clock, 13 ms each; a stall drops ticks, never floods them.
@@ -1126,8 +1151,8 @@ int run_main(int argc, char** argv) {
     const std::string map_before = next_map;
     const bool joined_before = remote.active;
     ge::ui::feed_console(console, con_view, queue, con_keys);
-    if (con_view.open() != text_on) {
-      text_on = con_view.open();
+    if (con_view.typing() != text_on) {
+      text_on = con_view.typing();
       ge::platform::set_text_input(*window, text_on);
     }
     // The main menu: Escape opens it and goes back out of it; while it is up it has the keys and
@@ -1381,14 +1406,16 @@ int run_main(int argc, char** argv) {
     }
     // Joined to a server (`connect`): its game drawn as a played demo's is (classic_remote.hpp),
     // from the frame its first level is known to the frame it drops, the listen server held.
-    // The microphone: opened the first time +voip is held where voice is carried (a server
+    // The microphone: opened the first time a voice key is held where voice is carried (a server
     // joined, or the window's own match), then read every frame into the game that carries it.
-    const bool talk_key = remote.voip_key != nullptr && remote.voip_key->down();
+    // The key held names who hears it (console/talk.hpp), told to the server as it changes.
+    const ge::console::TalkVoice talking = ge::console::talk_voice(talk);
+    const bool talk_key = talking.on || (remote.voip_key != nullptr && remote.voip_key->down());
     const bool voice_here = !remote.active && cl::listen_voice(listen);
     if (!mic_tried && (sn::remote_talking(remote) || (voice_here && talk_key))) {
       mic_tried = true;
       mic = ge::platform::open_audio_in(ge::net::kVoiceRate);
-      tell(mic ? "voice: the microphone is on while +voip is held"
+      tell(mic ? "voice: the microphone is on while you hold a talk key"
                : "voice: no microphone (there is none, or the system refused permission). Allow "
                  "the microphone for Shooter's Edge and restart the game.",
            t);
@@ -1399,8 +1426,12 @@ int run_main(int argc, char** argv) {
       const std::span<const float> heard_mic{mic_samples.data(), static_cast<size_t>(n)};
       if (remote.active)
         sn::remote_mic(remote, heard_mic);
-      else if (voice_here)
+      else if (voice_here) {
+        if (talking.on)  // told every frame he talks: a new map seats him afresh
+          cl::listen_command(listen,
+                             "voicetarg " + std::string(ge::console::chat_to_word(talking.to)));
         cl::listen_mic(listen, heard_mic, talk_key);
+      }
     }
     auto joined = sn::RemoteStep::waiting;
     if (remote.active || (bench_map && !bench.active)) {

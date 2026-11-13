@@ -15,11 +15,13 @@ namespace {
 
 // CUSTOMIZE CONTROLS' moves, in the classic page's order.
 constexpr Control kControls[] = {
-    {"+attack", "ATTACK"},      {"+forward", "MOVE FORWARD"},  {"+back", "MOVE BACK"},
-    {"+moveleft", "STEP LEFT"}, {"+moveright", "STEP RIGHT"},  {"+jump", "JUMP"},
-    {"+speed", "WALK / RUN"},   {"+strafe", "SIDESTEP"},       {"+left", "TURN LEFT"},
-    {"+right", "TURN RIGHT"},   {"impulse 10", "NEXT WEAPON"}, {"+voip", "PUSH TO TALK"},
-    {"+movedown", "SWIM DOWN"}, {"+moveup", "SWIM UP"},
+    {"+attack", "ATTACK"},           {"+forward", "MOVE FORWARD"},  {"+back", "MOVE BACK"},
+    {"+moveleft", "STEP LEFT"},      {"+moveright", "STEP RIGHT"},  {"+jump", "JUMP"},
+    {"+speed", "WALK / RUN"},        {"+strafe", "SIDESTEP"},       {"+left", "TURN LEFT"},
+    {"+right", "TURN RIGHT"},        {"impulse 10", "NEXT WEAPON"}, {"+movedown", "SWIM DOWN"},
+    {"+moveup", "SWIM UP"},          {"messagemode", "CHAT"},       {"messagemode2", "TEAM CHAT"},
+    {"messagemode3", "CHAT NEARBY"}, {"+voice", "TALK TO ALL"},     {"+voice_team", "TALK TO TEAM"},
+    {"+voice_near", "TALK NEARBY"},
 };
 
 }  // namespace
