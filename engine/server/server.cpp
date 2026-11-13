@@ -245,6 +245,44 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
        &c.vote_allow);
   bind("sv_vote_deny", vote_deny, cn::kServer, "The settings no vote may change.", CvarKind::text,
        -kAny, kAny, "TEXT: names with spaces between, * for any characters", &c.vote_deny);
+  // The logins (login.hpp).
+  const std::string login = std::to_string(c.login.login);
+  const std::string login_time = core::num::to_string(c.login.time_s);
+  const std::string login_name = std::to_string(c.login.name);
+  const std::string welcome = c.login.welcome, master = c.login.master, key = c.login.key;
+  const std::string reserved = std::to_string(c.login.reserved);
+  const std::string account_port = std::to_string(c.login.port);
+  bind("sv_login", login, latched, "Whether players must log in to an account to play.",
+       CvarKind::integer, 0, 2,
+       "0: nobody is asked, a login still counts (the default); 1: players must log in, "
+       "spectators may watch as guests; 2: everyone must",
+       &c.login.login);
+  bind("sv_logintime", login_time, cn::kServer,
+       "How long a player who must log in has to do it, in seconds.", CvarKind::number, 10, 3600,
+       "10..3600: that many seconds", &c.login.time_s);
+  bind("sv_loginname", login_name, cn::kServer,
+       "Whether a logged-in player is shown by the account's name.", CvarKind::integer, 0, 1,
+       "0: by the name the player picks; 1: by the account's, and renaming is refused (the "
+       "default)",
+       &c.login.name);
+  bind("sv_loginwelcome", welcome, cn::kServer,
+       "A line shown before the login prompt, such as where to get a login code.", CvarKind::text,
+       -kAny, kAny, "\"\": none (the default); TEXT: that line", &c.login.welcome);
+  bind("sv_accountmaster", master, latched,
+       "The account master the server's logins are checked by.", CvarKind::text, -kAny, kAny,
+       "\"\": the server is its own master, its accounts kept in its game folder (the default); "
+       "TEXT: the master's host[:port]",
+       &c.login.master);
+  bind("sv_accountkey", key, latched, "The account master's public key, which signs its tickets.",
+       CvarKind::text, -kAny, kAny,
+       "\"\": learned from the master at the first answer and printed; TEXT: 64 hex digits",
+       &c.login.key);
+  bind("sv_reservednames", reserved, cn::kServer,
+       "Whether guests may not use a registered player's name.", CvarKind::integer, 0, 1,
+       "0: any name; 1: a registered name is the account's alone (the default)", &c.login.reserved);
+  bind("sv_accountport", account_port, latched,
+       "The UDP port the server's own account service answers on, when it is its own master.",
+       CvarKind::integer, 0, 65535, "0: 27901 (the default); 1..65535: that port", &c.login.port);
   for (int i = 0; i < game.rule_count; i++) {
     const GameRule& r = game.rules[i];
     std::string& field = c.rules[r.name];  // a map's node: its address outlives the inserts

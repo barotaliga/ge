@@ -135,6 +135,21 @@ logs, demos and broadcasts: the server takes it before anything prints or record
 player's own console does not echo a line it sent as chat. A login line still counts toward the
 chat flood guard.
 
+### On the server
+
+`engine/server/login.hpp` is the seam every game's server logs players in through, whatever its
+protocol: the game hands it its seats and the lines its players type, and it answers with what to do
+(a line to the player or to everyone, the seat's name, its login key, a drop). A login line is the
+login's before the lobby, the rules or a recording see it; a `login` sent as a command counts toward
+the chat flood rule as chat does. The dedicated process (`engine/server/main.cpp`) makes the
+accounts the logins ask: with `sv_login` on and no `sv_accountmaster`, the server's own service over
+`accounts.log` and `account.key` in its game folder, on `sv_accountport` (27901), its key printed at
+the start; with a master, a socket of its own to ask it on. With `sv_accountkey` unset, the key the
+master answers with first is believed and printed for the owner to set. A server with `sv_login 0`
+and no master keeps no logins. Shooter's Edge wires it in `games/shooters_edge/net/classic_login.hpp`.
+A player under a registered name who has not logged in yet plays under the game's default name and
+is told to log in to use it.
+
 ### A server is its own master
 
 A server whose `sv_accountmaster` is empty is its OWN master (the maintainer, 2026-11-12): it keeps
@@ -178,8 +193,8 @@ community's master, and a server joins that master by setting `sv_accountmaster`
 ## Names
 
 `sv_reservednames 1` (the default when `sv_login` is on) reserves every account's name on the
-server: a guest whose folded name is an account's is renamed to `sv_defaultname` with a number and
-told the name is registered; a logged-in player is always shown by their account's name when
+server: a guest whose folded name is an account's plays under `sv_defaultname` (with a number when it
+is taken) and is told the name is registered and to log in to use it; a logged-in player is always shown by their account's name when
 `sv_loginname` is 1. A player may not take a name while another seat holds it logged in.
 
 ## The settings
@@ -196,6 +211,7 @@ classic names as synonyms (`docs/servers.md` § A game's own names):
 | `sv_accountmaster` | covers `sv_login_web` | the account master's address; empty (the default): the server is its own master (§ A server is its own master) |
 | `sv_accountkey` | | the master's public key tickets are checked with; with no master, the server's own |
 | `sv_reservednames` | | 1: guests may not use an account's name |
+| `sv_accountport` | | the port a server that is its own master answers the account service on (27901) |
 | `sv_stats` | | 1: send each finished match's report to the master |
 | covered | `sv_hashpasswords` | secrets are always Argon2id; nothing is stored in the clear |
 | covered | `sv_www_address`, `sv_www_authkey` | the master the server beats to and the server's key |
@@ -252,7 +268,8 @@ The JSON API: `/v1/players/{name}`, `/v1/matches?game=&mode=&player=&page=`, `/v
 | M59b | The account service in the master's process: sign up, sign in, tickets, the server's login ask, over the sealed channel (built) | `accounts` |
 | M59b2 | The game CLI's `account` group (built) | `accounts` |
 | M59b3 | The hub's Account page (built) | `hub-pages` |
-| M59c | The login seam in `engine/server`, the settings above, our client's ticket; the first classic game's prompt and `login` line | `se-login` |
+| M59c | The login seam in `engine/server` (`server/login.hpp`), the settings above, a dedicated server that is its own master; the first classic game's prompt and `login` line (built) | `se-login` |
+| M59c2 | Our client's ticket in its connect; reserved names on a server whose master is elsewhere (a name ask); logins on a listen server and in a coop campaign | `se-login` |
 | M59d | The sequel's prompt and `login` line, one account logged in on both games' servers | `se-login` |
 | M59e | The match report, the replay file's closing summary, the master's totals, trusted servers | `match-report` |
 | M59f | The hub's Player, Match and Leaders pages and their API; the classic adapter's recent stats | `hub-players` |
