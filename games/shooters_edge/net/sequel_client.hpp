@@ -10,7 +10,7 @@
 // `next_sequel`), so the client's state is `demo.state` and its recording is `demo.bytes` (end it
 // with `sequel_client_stop`; a length of -1 closes it). A level change (`changing`, then
 // `reconnect`) sends `new` again on the same connection; the server's reconnect message starts a
-// fresh connect.
+// fresh connect. Through forwarders (`cfg.via`) the route is dialled before the challenge.
 //
 // Nothing reads a wall clock: `sequel_client_tick` takes the network's time, so a session replays.
 //
@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 
+#include "forward/forward.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_channel.hpp"
@@ -44,6 +45,9 @@ struct SequelClientConfig {
   uint16_t qport = 1;
   int seed = 1;
   int send_every = 1;  // ticks between packets in the game (a slower client sends fewer)
+  // Through forwarders (engine/forward): the hops in order, the server after them. The route is
+  // dialled first (`ge::forward::Dial`), then the game's own handshake goes to the first hop.
+  std::vector<gn::Address> via;
   // The command at a tick (msec set by the client); null: stands still.
   std::function<sh::MoveCmd(int tick)> brain;
 };
@@ -57,6 +61,8 @@ struct SequelClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   int32_t challenge = 0;
   Channel ch;
   double now = 0, last_ask = -1, last_tick = -1;
+  ge::forward::Dial dial;  // the route through `cfg.via`, when it has hops
+  bool dialing = false;
   int tick = 0;
 
   client::Demo demo;  // what the server sent, as the sequel's recording, read as it comes
