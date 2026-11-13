@@ -22,6 +22,7 @@
 #include "shooters_edge/bots/ears.hpp"
 #include "shooters_edge/bots/footwork.hpp"
 #include "shooters_edge/bots/item_routes.hpp"
+#include "shooters_edge/bots/keyboard.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
 #include "shooters_edge/bots/packs.hpp"
@@ -1263,7 +1264,9 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   f.rng = ge::core::make_rng(seed * 2654435761u + 12345u);
   f.keys_rng = ge::core::make_rng(seed * 2246822519u + 777u);
   f.clean_keys = static_cast<float>(sh::scale(traits[sh::Trait::moves], {0.08, 0.2, 0.4, 0.5}));
+  fighter_keyboard_init(f, traits[sh::Trait::moves], seed);
   sh::dodge_init(f.dodge, seed);
+  f.press_rng = ge::core::make_rng(seed ^ 0x2545f491u);
   f.dodge_k = sh::dodge_skill(traits[sh::Trait::dodge]);
   const int me = slot + 1;
   sh::client_view(s.sv, me, f.bot.view);
@@ -1332,6 +1335,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   f.bot.selfaim = f.features[sh::Feature::selfaim];
   f.bot.corner = f.features[sh::Feature::corner];
   f.bot.glance = f.features[sh::Feature::glance];
+  f.bot.lookway = f.features[sh::Feature::lookway];
   f.bot.listen = f.features[sh::Feature::listen];
   f.bot.pools = f.bot.pilot.pilot.set.floor_swim = f.features[sh::Feature::pools];
 }
@@ -1705,7 +1709,14 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
         sh::brink_guard(s.sv, *f.bot.pilot.pilot.g, me, d.origin, d.velocity, cmd).changed)
       f.stats.brink++;
   }
-  fighter_keys(f, cmd);  // the side key turned round as a person's hand turns it (footwork.hpp)
+  // The keys: pressed by a hand on a keyboard (keyboard.hpp), or the side key turned round as a
+  // person's hand turns it (footwork.hpp).
+  if (f.features[sh::Feature::keys]) {
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(me)];
+    fighter_keyboard(f, cmd, d.velocity, (d.flags & sh::kFlagOnGround) != 0);
+  } else {
+    fighter_keys(f, cmd);
+  }
   return cmd;
 }
 

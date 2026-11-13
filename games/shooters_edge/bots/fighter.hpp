@@ -45,6 +45,7 @@
 #include <utility>
 #include <vector>
 
+#include "ai/keys.hpp"
 #include "ai/path.hpp"
 #include "core/prng.hpp"
 #include "shooter/bot.hpp"
@@ -188,9 +189,12 @@ struct FighterStats {
   int64_t dodging = 0;              // commands spent stepping across an enemy's line (dodge.hpp)
   int64_t brink = 0;                // commands whose keys the brink changed (shooter/brink.hpp)
   int64_t dodge_turns = 0;          // and the times it turned the step back
-  int64_t watching = 0;             // commands standing with the view on a way in (watch.hpp)
-  int64_t landings = 0;             // commands walking onto an exit node just climbed out to
-  double speed_sum = 0;             // its speed across the floor summed over its commands alive
+  // The press (`press`, footwork.hpp): commands it was weighed in a fight, those pressed on at him
+  // and back, and those held off by his nearness or a step not clear.
+  int64_t press_weighed = 0, press_on = 0, press_back = 0, press_near = 0, press_blocked = 0;
+  int64_t watching = 0;  // commands standing with the view on a way in (watch.hpp)
+  int64_t landings = 0;  // commands walking onto an exit node just climbed out to
+  double speed_sum = 0;  // its speed across the floor summed over its commands alive
   double mode_speed[sh::kPilotModes + 1] = {};  // and by the pilot's mode at the command
   int64_t mode_n[sh::kPilotModes + 1] = {};
 };
@@ -226,6 +230,16 @@ struct FoeRead {
 };
 
 struct MapPlan;
+
+// The hand on the keys (feature `keys`, keyboard.hpp): the keyboard, the key set wanted last (-1
+// none), whether feathering has the keys on, and the steering's tally (the way wished less the
+// way pressed, summed over time, in sets times seconds).
+struct KeyHand {
+  ge::ai::Keyboard board;
+  int set = -1;
+  bool feather = true;
+  double steer = 0;
+};
 
 struct Fighter {
   // Ordered by size, largest first, so the struct packs tight.
@@ -270,6 +284,7 @@ struct Fighter {
   bool bridges_seen = false;
   Mind mind;         // what it believes of its team, its claim, its calls (mind.hpp)
   Escort escort;     // a co-op companion's own state (companion.hpp; leader -1: none)
+  KeyHand keys;      // the hand on the keys (feature `keys`, keyboard.hpp)
   std::string name;  // its player name, as its teammates see it in their team lines
   std::string pack_call_item = "rl";  // what the pending pack call says is in it ("rl", "lg")
   ge::ai::Search reach;               // every node it can get to from where it stood at `reach_at`
@@ -376,6 +391,14 @@ struct Fighter {
   sh::Vec3f shot_from, shot_dir, blast_at;
   int32_t shot_number = 0;  // and its weapon
   sh::Dodge dodge;          // its side steps in a fight (shooter/dodge.hpp)
+  // The forward key in a fight (`press`, footwork.hpp): +1 on at him, -1 back, 0 the route's own,
+  // held until `press_until`, drawn off its own stream; and for the trace alone what the feet did
+  // with the aim this command ("on", "back", "route") or what kept the press out ("errand", "wet",
+  // "feet", "unseen", "retreat", "near", "blocked").
+  double press_until = -1e9;
+  const char* press_note = "-";
+  int32_t press = 0;
+  ge::core::Rng press_rng{1};
   // The ways in it watches from where it stands (watch.hpp): their spots, the node they were
   // worked out for, the one watched and until when.
   std::vector<sh::Vec3f> watch;

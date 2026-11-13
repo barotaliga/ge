@@ -22,7 +22,10 @@
 //   out);
 // - THE FIGHT'S FEET: with an enemy faced, the player's speed across the line to him and along it
 //   (closing positive), the share of it over 200 units/s across, and how often the side across
-//   turns (a strafe dodge's jink): the dodge measured alike for people and bots;
+//   turns (a strafe dodge's jink): the dodge measured alike for people and bots; on dry feet
+//   (`fight.dry.*`) by the distance to him (`fight.near.*` under 300 units, `mid` to 700, `far`)
+//   and with or without a loaded launcher (`fight.rl.*`, `fight.no-rl.*`): people close in
+//   (+68 units/s on dry feet), less with the launcher (+38);
 // - WET: the share of the time alive with the waist in water, slime or lava, and of the time an
 //   enemy is faced.
 //
@@ -32,6 +35,9 @@
 //   over the mean (a hand's bell about 1.9, a constant turn 1), the share held dead level, lifts
 //   (a sweep of 60 or more, a pause of 0.05-0.35 s, a sweep on the same way) a minute, and
 //   reversals (the turn's way flipping between two ticks, both past 60 degrees/s) a second: jitter.
+// - THE KEYS (keys_read.hpp, `keys.*`): the movement keys read off the body, and the same split by
+//   an enemy in view at the last sample (`keys.fight.*`) or not (`keys.calm.*`): people's W on a
+//   steady run 48 % calm, 28 % in a fight; `keys.fight-share` the fight's part of the reads.
 //
 // `--samples=<file.tsv>` writes every sample alive as a row (the recording, the clock, the slot,
 // the team, the place, wet, the eyes under, the speed, an enemy faced) for a question the
@@ -45,6 +51,7 @@
 // ge:keywords lab se-people people realism yardstick in-view line-of-sight engagement contact
 // ge:keywords speed mvd multiview recordings real-matches bots-against-people positioning
 // ge:keywords dodge strafe fight-across wet water swimming hand mouse sweep tilt lift jitter
+// ge:keywords fight-along closing keys-fight keys-calm fight-feet-by-range
 // ge:keywords weapons-owned shots-per-min firepower launcher health armour
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
@@ -68,6 +75,7 @@
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/labs/keys_read.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 #include "shooters_edge/net/classic_team.hpp"
 
@@ -80,8 +88,9 @@ namespace cn = shooters_edge::net;
 namespace la = shooters_edge::labs;
 using ge::core::num::to_fixed;
 
-constexpr float kSight = 4096;  // the bots' sight range (shooter/senses.hpp)
-constexpr float kEye = 22;      // the eye over the origin
+constexpr float kSight = 4096;       // the bots' sight range (shooter/senses.hpp)
+constexpr double kFightAfter = 0.5;  // a key read this long past the last enemy seen is a fight's
+constexpr float kEye = 22;           // the eye over the origin
 constexpr float kFastest = 1000;
 constexpr float kFov = 120;        // the bots' view across, degrees (bots/fighter.cpp)
 constexpr float kFovY = 88.5f;     // and its height
@@ -107,6 +116,11 @@ struct Player {
   // Alive with the waist under water, slime or lava (a swimmer), and of those, with an enemy faced.
   int64_t wet = 0, wet_faced = 0;
   double fight_across = 0, fight_along = 0;
+  // The same on dry feet (out of the water: a swimmer's feet are the water's), by his distance to
+  // the enemy faced (kFightBands: near, mid, far) and by whether he holds a loaded rocket launcher
+  // (0 without, 1 with): samples, across and along summed.
+  int64_t band_n[3] = {}, rl_n[2] = {};
+  double band_across[3] = {}, band_along[3] = {}, rl_across[2] = {}, rl_along[2] = {};
   // The arms: samples with each weapon owned (kArmBits), the health and armour summed.
   int64_t owned[8] = {};
   double health = 0, armour = 0;
@@ -117,6 +131,7 @@ constexpr int32_t kArmBits[8] = {4096, 1, 2, 4, 8, 16, 32, 64};
 constexpr const char* kArmNames[8] = {"axe",      "shotgun",  "double",  "nailgun",
                                       "super-ng", "grenades", "rockets", "lightning"};
 constexpr double kAcross = 200;
+constexpr double kFightBands[2] = {300, 700};  // near under the first, far past the second, units
 constexpr double kSideSpeed = 100;
 constexpr double kCalmSpeed = 100;
 constexpr float kCalmBands[3] = {15, 45, 90};
@@ -211,7 +226,11 @@ struct Read {
   std::array<ItemControl, kItemKinds> items{};
   std::map<std::string, int64_t> shots;  // the players' weapon sounds, by the sound's name
   HandRead hand;
-  HandRead hop;  // the hand while hopping alone (past kHopSpeed across)
+  HandRead hop;       // the hand while hopping alone (past kHopSpeed across)
+  la::KeysRead keys;  // the movement keys read off the body (keys_read.hpp)
+  // The same reads split by whether an enemy was in his line of sight at the last sample (within
+  // kFightAfter of it): the fight's footwork against the rest.
+  la::KeysRead keys_fight, keys_calm;
   // Backpacks: how many fell, how many went before they ran out (taken), the time each lay
   // until taken summed, and those taken within 10 s.
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -316,6 +335,31 @@ void hand_metrics(gl::Lab& lab, const std::string& key, const HandRead& hand) {
              ratio(static_cast<double>(hand.flat), static_cast<double>(hand.turning)), "share");
 }
 
+// The keys read off the bodies (keys_read.hpp): each key set's share of the ground's reads (no key
+// among them) and of the air's, the wish's angle off its key set on the ground (a keyboard's sits
+// on the eight), the key set's changes a second, a side key's hold, and the part-way share of the
+// steady ground speeds (a key is down or up).
+void keys_metrics(gl::Lab& lab, const std::string& pre, la::KeysRead& k) {
+  const auto ratio = [](double a, double b) { return b > 0 ? a / b : 0; };
+  int64_t ground = 0, air = 0;
+  for (size_t i = 0; i < 8; i++) ground += k.ground[i];
+  for (size_t i = 0; i < 3; i++) air += k.air[i];
+  const double g = static_cast<double>(ground), a = static_cast<double>(air);
+  for (size_t i = 0; i < 8; i++)
+    lab.metric(pre + "ground." + la::kKeySets[i], ratio(static_cast<double>(k.ground[i]), g),
+               "share");
+  lab.metric(pre + "air.left", ratio(static_cast<double>(k.air[0]), a), "share");
+  lab.metric(pre + "air.none", ratio(static_cast<double>(k.air[1]), a), "share");
+  lab.metric(pre + "air.right", ratio(static_cast<double>(k.air[2]), a), "share");
+  lab.metric(pre + "off-p50", la::keys_quantile(k.off, 0.5), "deg");
+  lab.metric(pre + "off-p90", la::keys_quantile(k.off, 0.9), "deg");
+  lab.metric(pre + "side-changes-per-s", ratio(static_cast<double>(k.changes), k.read_s), "per-s");
+  lab.metric(pre + "side-run-p50", la::keys_quantile(k.side_runs, 0.5), "s");
+  lab.metric(pre + "side-run-p90", la::keys_quantile(k.side_runs, 0.9), "s");
+  lab.metric(pre + "part-share", ratio(static_cast<double>(k.part), static_cast<double>(k.steady)),
+             "share");
+}
+
 // A slot's team: its user info's `team`, else its shirt's colour (a recording without the key).
 std::string team_of(const cl::DemoState& s, int i) {
   const std::string& t = s.teams[static_cast<size_t>(i)];
@@ -354,6 +398,9 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<HandState> hands(32), hops(32);
   std::vector<sh::Vec3f> hand_was(32);
   double hand_next = 0, hand_at = -1;
+  std::vector<la::KeysState> keys(32);
+  std::vector<double> seen_at(32, -1e9);  // by slot: the last sample with an enemy in view
+  const sh::Hull& body = m.bsp.models[0].hulls[1];
   for (;;) {
     const cl::DemoRead rd = cl::next_frame(d, out.error);
     if (rd == cl::DemoRead::error) return;
@@ -374,6 +421,39 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
           out.shots[s.sounds[static_cast<size_t>(snd.sound)]]++;
       }
     if (t0 < 0) t0 = s.time;
+    // The keys, at every update of a live player (his origin moved: a multiview recording keeps
+    // a player's last state between his updates).
+    for (int i = 0; i < 32; i++) {
+      const cl::DemoEntity& p = s.players[static_cast<size_t>(i)];
+      la::KeysState& k = keys[static_cast<size_t>(i)];
+      const bool live = p.present && !p.dead && !s.names[static_cast<size_t>(i)].empty();
+      if (!live) {
+        if (k.n > 0) {
+          la::KeysRead one;
+          la::keys_reset(k, one);
+          la::add(out.keys, one);
+          const bool fight = s.time - seen_at[static_cast<size_t>(i)] <= every + kFightAfter;
+          la::add(fight ? out.keys_fight : out.keys_calm, one);
+        }
+        continue;
+      }
+      if (k.n > 0) {
+        const sh::Vec3f last = la::keys_back(k, 0).at;
+        if (last.x == p.origin.x && last.y == p.origin.y && last.z == p.origin.z) continue;
+      }
+      const sh::HullTrace down =
+          sh::trace_hull(body, p.origin, {p.origin.x, p.origin.y, p.origin.z - 2});
+      const bool ground = down.startsolid || down.fraction < 1;
+      const bool wet = sh::point_contents(world, p.origin) <= sh::kContentsWater;
+      la::KeysRead one;
+      if (wet)
+        la::keys_reset(k, one);
+      else
+        la::keys_update(k, one, s.time, p.origin, p.angles.y, ground);
+      la::add(out.keys, one);
+      const bool fight = s.time - seen_at[static_cast<size_t>(i)] <= every + kFightAfter;
+      la::add(fight ? out.keys_fight : out.keys_calm, one);
+    }
     // The hand, every kHandEvery of the match for every live player.
     if (s.time >= hand_next) {
       const double dt = hand_at < 0 ? 0 : s.time - hand_at;
@@ -482,6 +562,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         if (cone) faced = j;
       }
       pl.in_view += view;
+      if (view) seen_at[static_cast<size_t>(i)] = s.time;
       pl.fired_in_view += view && s.time - fired_at[static_cast<size_t>(i)] <= kFired_s;
       pl.in_cone += cone;
       const bool wet = sh::point_contents(world, p.origin) <= sh::kContentsWater;
@@ -560,6 +641,20 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
           pl.fight_across += std::fabs(across);
           pl.fight_along += along;
           pl.fight_wide += std::fabs(across) > kAcross;
+          const int band = len < kFightBands[0] ? 0 : len < kFightBands[1] ? 1 : 2;
+          if (!wet) {
+            pl.band_n[band]++;
+            pl.band_across[band] += std::fabs(across);
+            pl.band_along[band] += along;
+            bool rl = false;
+            if (static_cast<size_t>(i) < d.player_stats.size()) {
+              const auto& st = d.player_stats[static_cast<size_t>(i)];
+              rl = (st[cl::kStatItems] & kLauncher) != 0 && st[cl::kStatRockets] > 0;
+            }
+            pl.rl_n[rl]++;
+            pl.rl_across[rl] += std::fabs(across);
+            pl.rl_along[rl] += along;
+          }
           if (std::fabs(across) > kSideSpeed) {
             const int8_t side = across > 0 ? 1 : -1;
             int8_t& ws = was_side[static_cast<size_t>(i)];
@@ -678,6 +773,7 @@ void run(gl::Lab& lab) {
   std::array<ItemControl, kItemKinds> items{};
   std::map<std::string, int64_t> shots;
   HandRead hand, hop;
+  la::KeysRead keys, keys_fight, keys_calm;
   int used = 0, skipped = 0;
   double seconds = 0;
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -706,6 +802,9 @@ void run(gl::Lab& lab) {
     pack_wait += r.pack_wait;
     add(hand, r.hand);
     add(hop, r.hop);
+    la::add(keys, r.keys);
+    la::add(keys_fight, r.keys_fight);
+    la::add(keys_calm, r.keys_calm);
     Player sum;
     for (const Player& p : r.players) {
       sum.alive += p.alive;
@@ -731,6 +830,16 @@ void run(gl::Lab& lab) {
       all.fight_turns += p.fight_turns;
       all.fight_across += p.fight_across;
       all.fight_along += p.fight_along;
+      for (int b = 0; b < 3; b++) {
+        all.band_n[b] += p.band_n[b];
+        all.band_across[b] += p.band_across[b];
+        all.band_along[b] += p.band_along[b];
+      }
+      for (int b = 0; b < 2; b++) {
+        all.rl_n[b] += p.rl_n[b];
+        all.rl_across[b] += p.rl_across[b];
+        all.rl_along[b] += p.rl_along[b];
+      }
       for (int w = 0; w < 8; w++) {
         all.owned[w] += p.owned[w];
       }
@@ -818,6 +927,29 @@ void run(gl::Lab& lab) {
   lab.metric("people.fight-across", of_fight(all.fight_across), "units/s");
   lab.metric("people.fight-along", of_fight(all.fight_along), "units/s");
   lab.metric("people.fight-wide", of_fight(static_cast<double>(all.fight_wide)), "share");
+  // On dry feet, by the distance to him and by a loaded rocket launcher: each part's share of the
+  // dry samples, its speed across and along (closing positive).
+  const auto per_n = [](double k, int64_t n) { return n > 0 ? k / static_cast<double>(n) : 0; };
+  const int64_t dry_n = all.rl_n[0] + all.rl_n[1];
+  double dry_across = 0, dry_along = 0;
+  for (int b = 0; b < 2; b++) dry_across += all.rl_across[b], dry_along += all.rl_along[b];
+  lab.metric("people.fight.dry.share", of_fight(static_cast<double>(dry_n)), "share");
+  lab.metric("people.fight.dry.across", per_n(dry_across, dry_n), "units/s");
+  lab.metric("people.fight.dry.along", per_n(dry_along, dry_n), "units/s");
+  const char* const kBandNames[3] = {"near", "mid", "far"};
+  for (int b = 0; b < 3; b++) {
+    const std::string pre = std::string("people.fight.") + kBandNames[b] + ".";
+    lab.metric(pre + "share", per_n(static_cast<double>(all.band_n[b]), dry_n), "share");
+    lab.metric(pre + "across", per_n(all.band_across[b], all.band_n[b]), "units/s");
+    lab.metric(pre + "along", per_n(all.band_along[b], all.band_n[b]), "units/s");
+  }
+  const char* const kRlNames[2] = {"no-rl", "rl"};
+  for (int b = 0; b < 2; b++) {
+    const std::string pre = std::string("people.fight.") + kRlNames[b] + ".";
+    lab.metric(pre + "share", per_n(static_cast<double>(all.rl_n[b]), dry_n), "share");
+    lab.metric(pre + "across", per_n(all.rl_across[b], all.rl_n[b]), "units/s");
+    lab.metric(pre + "along", per_n(all.rl_along[b], all.rl_n[b]), "units/s");
+  }
   lab.metric("people.fight-side-turns", of_fight(static_cast<double>(all.fight_turns)) / every,
              "per s");
   // Backpacks: dropped a player-minute alive, the share taken, the time one lay until taken, the
@@ -850,6 +982,17 @@ void run(gl::Lab& lab) {
   hand_metrics(lab, "people.hand.", hand);
   hand_metrics(lab, "people.hop.", hop);
   lab.metric("people.hop.share", hand.secs > 0 ? hop.secs / hand.secs : 0, "share");
+  keys_metrics(lab, "people.keys.", keys);
+  keys_metrics(lab, "people.keys.fight.", keys_fight);
+  keys_metrics(lab, "people.keys.calm.", keys_calm);
+  int64_t fight_reads = 0, all_reads = 0;
+  for (size_t i = 0; i < 8; i++) {
+    fight_reads += keys_fight.ground[i];
+    all_reads += keys.ground[i];
+  }
+  lab.metric("people.keys.fight-share",
+             all_reads > 0 ? static_cast<double>(fight_reads) / static_cast<double>(all_reads) : 0,
+             "share");
   if (used == 0)
     lab.fail("se-people: no recording of " + m.name + " read",
              "next: pass --mapname=<the recordings' map> with --basedir, or --dir of that map's");
