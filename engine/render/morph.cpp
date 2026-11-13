@@ -210,7 +210,7 @@ void pack_warp(const MorphWarp& w, float out[16]) {
 
 bool create_morph(gpu::Device& device, gpu::PipelineSet& pipelines, Morph& morph,
                   const wgpu::BindGroupLayout& frame, std::span<const MorphModel> models,
-                  const TintRamps& ramps) {
+                  const TintRamps& ramps, uint32_t slot_count) {
   std::vector<AtlasRect> rects;
   if (models.empty() || !pack_morph_atlas(models, rects)) return false;
   // Every model's frames, coordinates and triangles, one after another.
@@ -283,6 +283,17 @@ bool create_morph(gpu::Device& device, gpu::PipelineSet& pipelines, Morph& morph
   layout.rowsPerImage = atlas_h;
   wgpu::Extent3D size{kMorphAtlasSize, atlas_h, 1};
   device.queue.WriteTexture(&dst, atlas.data(), atlas.size(), &layout, &size);
+  // The slots: a layer each (one when none, so the binding has a texture).
+  morph.slot_count = slot_count;
+  wgpu::TextureDescriptor sd{};
+  sd.label = "morph.slots";
+  sd.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+  sd.dimension = wgpu::TextureDimension::e2D;
+  sd.size = {kMorphSlotSize, kMorphSlotSize, std::max(1u, slot_count)};
+  sd.format = wgpu::TextureFormat::RGBA8Unorm;
+  morph.slots = device.device.CreateTexture(&sd);
+  wgpu::TextureViewDescriptor sv{};
+  sv.dimension = wgpu::TextureViewDimension::e2DArray;
   morph.staged.assign(kMaxMorphDraws * sizeof(GpuDraw), 0);
   morph.staged_models.assign(kMaxMorphDraws, 0);
 
@@ -290,11 +301,11 @@ bool create_morph(gpu::Device& device, gpu::PipelineSet& pipelines, Morph& morph
   morph.layout =
       make_layout(device, "morph",
                   {Slot::storage_read, Slot::storage_read, Slot::storage_read, Slot::storage_read,
-                   Slot::storage_read, Slot::storage_read, Slot::texture},
+                   Slot::storage_read, Slot::storage_read, Slot::texture, Slot::texture_array},
                   vf);
   morph.group = make_group(device, "morph", morph.layout,
                            {morph.models, morph.vertices, morph.uvs, morph.indices, morph.draws,
-                            morph.ramps, morph.atlas.CreateView()});
+                            morph.ramps, morph.atlas.CreateView(), morph.slots.CreateView(&sv)});
   const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::morph, "morph");
   wgpu::ColorTargetState colours[2]{};
   colours[0].format = kHdrFormat;
@@ -319,6 +330,38 @@ bool create_morph(gpu::Device& device, gpu::PipelineSet& pipelines, Morph& morph
   desc.depthStencil = &depth;
   desc.fragment = &fragment;
   morph.p_draw = pipelines.add_render(device, desc);
+  return true;
+}
+
+std::vector<uint8_t> slot_texels(const MorphSkin& skin) {
+  std::vector<uint8_t> out(size_t{kMorphSlotSize} * kMorphSlotSize * 4, 0);
+  if (skin.width == 0 || skin.height == 0 ||
+      skin.rgba.size() < size_t{skin.width} * skin.height * 4)
+    return out;
+  for (uint32_t y = 0; y < kMorphSlotSize; ++y) {
+    const uint32_t sy = static_cast<uint32_t>(uint64_t{y} * skin.height / kMorphSlotSize);
+    for (uint32_t x = 0; x < kMorphSlotSize; ++x) {
+      const uint32_t sx = static_cast<uint32_t>(uint64_t{x} * skin.width / kMorphSlotSize);
+      const size_t src = size_t{sy} * skin.width + sx;
+      uint8_t* t = &out[(size_t{y} * kMorphSlotSize + x) * 4];
+      std::memcpy(t, &skin.rgba[src * 4], 3);
+      t[3] = skin.marks.empty() ? kMarkPlain : skin.marks[src];
+    }
+  }
+  return out;
+}
+
+bool set_morph_slot(gpu::Device& device, Morph& morph, uint32_t slot, const MorphSkin& skin) {
+  if (slot >= morph.slot_count || skin.width == 0 || skin.height == 0) return false;
+  const std::vector<uint8_t> texels = slot_texels(skin);
+  wgpu::TexelCopyTextureInfo dst{};
+  dst.texture = morph.slots;
+  dst.origin = {0, 0, slot};
+  wgpu::TexelCopyBufferLayout layout{};
+  layout.bytesPerRow = kMorphSlotSize * 4;
+  layout.rowsPerImage = kMorphSlotSize;
+  wgpu::Extent3D size{kMorphSlotSize, kMorphSlotSize, 1};
+  device.queue.WriteTexture(&dst, texels.data(), texels.size(), &layout, &size);
   return true;
 }
 
@@ -365,6 +408,7 @@ void prepare_morph(gpu::Device& device, Morph& morph, std::span<const MorphDraw>
     g.burn[2] = d.burn.etched;
     g.burn[3] = d.burn.seed;
     g.skin[0] = d.skin < morph.index_counts.size() ? d.skin : d.model;
+    g.skin[1] = d.slot < morph.slot_count ? d.slot + 1 : 0;
     std::memcpy(&morph.staged[morph.drawn * sizeof(GpuDraw)], &g, sizeof g);
     morph.staged_models[morph.drawn] = d.model;
     ++morph.drawn;
