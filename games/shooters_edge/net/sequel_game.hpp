@@ -12,11 +12,14 @@
 // is told and signs on again on its connection. The rules' `sv_maplist` is `sv_map` then
 // `sv_maprotation`, wrapping; a map that cannot be read starts this one again.
 //
+// LOGINS: with `sv_login` on, or accounts handed in (its own master, or `sv_accountmaster`), the
+// players log in as on the first game's server (sequel_login.hpp).
+//
 // Offline (no socket) the frame is the rules' own with nobody's moves.
 //
 // ge:summary The sequel's dedicated server game: its rules served over protocol 34 by the core
 // ge:keywords sequel-dedicated-server shooters_edge_sequel_server protocol-34 servergame baseq2
-// ge:keywords sequel_game level-change sv_maprotation sv_maplist
+// ge:keywords sequel_game sequel-login level-change sv_maprotation sv_maplist
 // ge:skill net shooter
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #pragma once

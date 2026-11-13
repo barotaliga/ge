@@ -1530,6 +1530,10 @@ void fight_kick(SequelServer& s, int slot, sh::Vec3f push) {
 
 void fight_effect(SequelServer& s, const char* name, sh::Vec3f at) { effect(s, name, at); }
 
+void fight_monster_line(SequelServer& s, const char* name, int from, sh::Vec3f a, sh::Vec3f b) {
+  line_effect(s, name, a, b, map_row(from));
+}
+
 sh::Vec3f fight_laser(SequelServer& s, sh::Vec3f start, sh::Vec3f end, int damage, int attacker,
                       int skip_entity) {
   sh::Vec3f dir = end - start;

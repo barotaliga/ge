@@ -1605,12 +1605,15 @@ found or not: Shareware or Registered, the sequel's Demo or Full game). ENTER on
 kept install opens it; on one never found, or FIND ANOTHER INSTALL, the window's folder chooser,
 and the folder is taken by whichever game's base folder it holds (`install_of`). Once a classic
 game is open, the title's night gives way to its own recordings played behind the menu in turn
-(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game; "" keeps the night), ESCAPE closes the menu onto the
+(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game and q2demo1 from the sequel's `demos/` folder; "" keeps the night), ESCAPE closes the menu onto the
 recording to watch it, and nothing modern is left on screen: the console is written in the
 game's glyph sheet over its own console background (`menu/classic_console.hpp`, the engine's
 `ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
 GAME and SELECT GAME are drawn in the game's letters under carved titles (`menu/classic_pages.hpp`;
-SELECT GAME's own row and the two games' names on it cut letter by letter from the strips like DEMOS'). Lab `se-attract` draws
+SELECT GAME's own row, DEMOS and the two games' names on it set by code in the strips' carved letters:
+`menu/carved_letters.hpp` cuts each letter it knows out of the strips into its own picture when the
+pack loads, dropping any speck of a neighbour a letter's box caught, and a word is laid out from them
+on one 20 px line with a pixel between letters). Lab `se-attract` draws
 the menu, SELECT GAME, OPTIONS, the watched recording, the console, DEMOS and JOIN A GAME over a
 played recording (`--basedir` a player's install; `--demo=none` over the title's dark, for a game
 whose recordings cannot play yet).

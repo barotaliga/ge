@@ -12,7 +12,8 @@
 //
 // ge:summary Tests the first game's adapter: mods, programs by form, map info, textures, demos
 // ge:keywords test shooters-edge game-adapter list_mods find_program program-form map_info
-// ge:keywords map_textures list_demos find_demo qwprogs open_model open_sound replacement-skin
+// ge:keywords map_textures list_demos find_demo demo_folder attract
+// ge:keywords qwprogs open_model open_sound replacement-skin
 // ge:keywords pictures replacement-picture find_config read_configs_from open_locations
 // ge:keywords held_weapons menu-table game-modes hud_art_of
 // ge:skill shooter testing
@@ -224,6 +225,21 @@ TEST(the_demos_are_listed_and_found_by_a_bare_name) {
   CHECK_MSG(a.find_demo(a, files, "demos/final", bytes, found, error), error);
   CHECK(bytes.size() == 1 && bytes[0] == 2);
   CHECK(!a.find_demo(a, files, "nothing", bytes, found, error));
+  CHECK(!a.find_demo(a, files, "final", bytes, found, error));  // the first game: top level only
+}
+
+TEST(the_sequel_finds_a_bare_demo_name_in_its_demos_folder_and_plays_it_behind_the_menu) {
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"demos/q2demo1.dm2", {7}}}, &pak, &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  const cl::GameAdapter& a = cl::sequel_adapter();
+  std::vector<uint8_t> bytes;
+  std::string found;
+  CHECK_MSG(a.find_demo(a, files, std::string(a.game->attract), bytes, found, error), error);
+  CHECK(bytes.size() == 1 && bytes[0] == 7);
+  CHECK_MSG(found.starts_with("demos/q2demo1.dm2"), found);
 }
 
 TEST(a_model_is_read_into_its_form_with_a_picture_standing_in_for_a_skin) {
