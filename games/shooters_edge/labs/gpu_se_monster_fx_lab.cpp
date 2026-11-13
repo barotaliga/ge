@@ -1,4 +1,4 @@
-// LAB `se-monster-fx`: THE MONSTERS' ATTACKS, CLASSIC BESIDE THE MODERN LOOK'S VARIANTS. A campaign
+// LAB `se-monster-fx`: THE MONSTERS' ATTACKS, CLASSIC BESIDE THE MODERN LOOK. A campaign
 // on the listen server (client/listen.hpp) with the packs' own single-player program, on a map the
 // kind lives on. For each kind in `--kinds` its first monster with a clear way to it is found, and
 // the player stood in front of it, unhurt (god mode) but seen, so it wakes and attacks. The run is
@@ -8,18 +8,18 @@
 //
 // - CLASSIC: the classic look (the classic specks of client/world_fx.hpp and app/monster_fx.hpp's
 //   `classic_tracer`).
-// - MODERN 1 and MODERN 2: the modern look with ce_monsters on, in each of app/monster_fx.hpp's
-//   two variants, so the two can be judged against each other.
+// - MODERN: the modern look with ce_monsters on (app/monster_fx.hpp; chosen from two variants
+//   filmed this way side by side, the other dropped).
 //
-// Each kind gives a GIF of the three side by side, a sheet of moments, and the specks and lights
+// Each kind gives a GIF of the two side by side, a sheet of moments, and the specks and lights
 // each look threw. With `--game=<base>/<folder>` (a game folder of packs) it is the player's own
 // maps, for PRIVATE pictures only. Without it the lab throws each kind's trail, glow and splash
-// straight off app/monster_fx.hpp in every variant and counts them: deterministic numbers that the
+// straight off app/monster_fx.hpp in each look and counts them: deterministic numbers that the
 // smoke run checks everywhere.
 //
-// ge:summary Lab: each monster's attack filmed classic beside the modern look's two variants
+// ge:summary Lab: each monster's attack filmed classic beside the modern look
 // ge:keywords lab se-monster-fx monster-fx monsters attacks missile acid flame void lava laser
-// ge:keywords flesh variants classic-vs-enhanced gif side-view ce_monsters
+// ge:keywords flesh classic-vs-enhanced gif side-view ce_monsters
 // ge:skill shooter labs render
 // ge:test tests/shooters_edge_monster_fx_test.cpp
 #include <algorithm>
@@ -62,8 +62,8 @@ namespace sh = ge::shooter;
 namespace es = ge::lab::explosion_scene;
 
 constexpr float kFlMonster = 32, kFlGod = 64;  // the program's `flags` bits
-constexpr int kLooks = 3;
-const char* const kLookNames[kLooks] = {"classic", "modern 1", "modern 2"};
+constexpr int kLooks = 2;
+const char* const kLookNames[kLooks] = {"classic", "modern"};
 
 // A kind: its model's name (progs/<model>.mdl), the maps it is looked for on by default (the first
 // that has one in the open at the game's skill), and the shot it throws as the lab names it.
@@ -262,9 +262,10 @@ ge::camera::Pose side_camera(const Staged& g) {
   const double ex = look.x - cam.x, ey = look.y - cam.y, ez = look.z - cam.z;
   ge::camera::Pose pose;
   pose.eye = cl::engine_point(cam);
-  pose.yaw = cl::engine_heading(static_cast<float>(std::atan2(ey, ex) * 180 / 3.14159265358979));
-  pose.pitch = cl::engine_pitch(
-      static_cast<float>(-std::atan2(ez, std::sqrt(ex * ex + ey * ey)) * 180 / 3.14159265358979));
+  pose.yaw = cl::engine_heading(
+      static_cast<float>(ge::core::libm::atan2(ey, ex) * 180 / 3.14159265358979));
+  pose.pitch = cl::engine_pitch(static_cast<float>(
+      -ge::core::libm::atan2(ez, std::sqrt(ex * ex + ey * ey)) * 180 / 3.14159265358979));
   pose.fov_y = 1.15;
   return pose;
 }
@@ -315,7 +316,7 @@ void film(gl::Lab& lab, const Setup& s, const Kind& k) {
   const int start = std::max(0, shot_at - int(s.before / tic));
   const int end = shot_at + int(s.seconds / tic);
   double t = 0, next_draw = -1;
-  double births[kLooks] = {0, 0, 0}, lights[kLooks] = {0, 0, 0};
+  double births[kLooks] = {0, 0}, lights[kLooks] = {0, 0};
   std::vector<gl::Picture> gif;
   std::vector<std::vector<gl::Picture>> moments;
   for (int i = 0; i <= end; i++) {
@@ -325,7 +326,6 @@ void film(gl::Lab& lab, const Setup& s, const Kind& k) {
     cl::frame_view(g.l, shown, 1, t, tic);
     for (int v = 0; v < kLooks; ++v) {
       state[v].on = cl::fx_switches(s.looks[v]);
-      if (v == 2 && state[v].on.monsters > 0) state[v].on.monsters = 2;
       state[v].models = drawn[v] ? &cl::world_models(*drawn[v]) : nullptr;
       cl::step_fx(g.l, shown, state[v], t, tic, frame[v]);
       if (i >= start) {
@@ -357,9 +357,10 @@ void film(gl::Lab& lab, const Setup& s, const Kind& k) {
   }
   const std::string id = k.name;
   for (int v = 0; v < kLooks; ++v) {
-    const std::string look = v == 0 ? "classic" : v == 1 ? "modern1" : "modern2";
-    lab.metric(id + "." + look + ".specks", births[v], "count", gl::Det::measured);
-    lab.metric(id + "." + look + ".lights", lights[v], "count", gl::Det::measured);
+    std::string look = id;
+    look += v == 0 ? ".classic" : ".modern";
+    lab.metric(look + ".specks", births[v], "count", gl::Det::measured);
+    lab.metric(look + ".lights", lights[v], "count", gl::Det::measured);
   }
   if (gif.empty()) return;
   // The sheet: four moments, each look a column.
@@ -378,8 +379,8 @@ void film(gl::Lab& lab, const Setup& s, const Kind& k) {
   lab.shot({id + ".sheet",
             std::string(k.name) + ": " + k.shot,
             "The " + std::string(k.name) + "'s " + k.shot + " on " + map_name +
-                ", from beside the line of fire: the classic look and the modern look's two "
-                "variants, at moments after the shot leaves.",
+                ", from beside the line of fire: the classic look beside the modern "
+                "look, at moments after the shot leaves.",
             "the shot's trail, its light on the walls and the splash where it lands",
             {{"map", map_name}}},
            es::sheet_of(sheet, names, kLooks), gl::Det::measured);
@@ -390,13 +391,13 @@ void film(gl::Lab& lab, const Setup& s, const Kind& k) {
 // every look, counted (deterministic).
 void numbers(gl::Lab& lab) {
   gl::LabTable table{"Each kind's specks over a 2 m flight and its splash, by look",
-                     {"kind", "classic", "modern 1", "modern 2", "glow (modern 1)"},
+                     {"kind", "classic", "modern", "glow (modern)"},
                      {}};
   for (const fx::MonsterShot k :
        {fx::MonsterShot::acid, fx::MonsterShot::flame, fx::MonsterShot::void_ball,
         fx::MonsterShot::lava, fx::MonsterShot::laser, fx::MonsterShot::flesh}) {
     const std::string name = fx::monster_shot_name(k);
-    int counts[kLooks] = {0, 0, 0};
+    int counts[kLooks] = {0, 0};
     for (int v = 0; v < kLooks; ++v) {
       fx::Particles out;
       for (int step = 0; step < 20; ++step) {
@@ -404,26 +405,20 @@ void numbers(gl::Lab& lab) {
         if (v == 0)
           fx::classic_tracer(k, from, to, step, uint32_t(step + 1), {}, &out);
         else
-          fx::monster_trail(k, v, from, to, uint32_t(step + 1), &out);
+          fx::monster_trail(k, from, to, uint32_t(step + 1), &out);
       }
       if (v > 0) {
         const double p[3] = {2, 1, 0}, n[3] = {-1, 0, 0}, d[3] = {1, 0, 0};
         std::vector<ge::render::Blast> blasts;
-        fx::monster_splash(k, v, p, n, d, 0, 7, 0, &blasts, &out);
+        fx::monster_splash(k, p, n, d, 0, 7, 0, &blasts, &out);
       }
       counts[v] = int(out.size());
-      lab.metric(name + "." +
-                     (v == 0   ? "classic"
-                      : v == 1 ? "modern1"
-                               : "modern2") +
-                     ".specks",
-                 counts[v], "count");
+      lab.metric(name + "." + (v == 0 ? "classic" : "modern") + ".specks", counts[v], "count");
     }
     fx::Light light;
     const double p[3] = {0, 1, 0}, d[3] = {1, 0, 0};
-    const bool glows = fx::monster_glow(k, 1, p, d, 1, 0, &light);
+    const bool glows = fx::monster_glow(k, p, d, 1, 0, &light);
     table.rows.push_back({name, std::to_string(counts[0]), std::to_string(counts[1]),
-                          std::to_string(counts[2]),
                           glows ? ge::core::num::to_fixed(light.radius, 1) + " m" : "none"});
   }
   lab.table(table);
@@ -507,7 +502,7 @@ const gl::LabSpec kSpec{
     "(app/monster_fx.hpp, client/world_fx.hpp's monster_missiles, ce_monsters)",
     "shooter",
     "Do the monsters' attacks read as modern effects? Each kind's first shot filmed from the side "
-    "on a real map, the classic look beside the modern look's two variants.",
+    "on a real map, the classic look beside the modern look.",
     {
         {"game", "", "a game folder (<base>/<folder>); empty: each kind's numbers alone"},
         {"map", "", "with --game: the map for every kind; empty: each kind's own"},

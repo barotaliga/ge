@@ -61,18 +61,17 @@ TEST(the_classic_tracer_lays_specks_either_side_of_its_line_in_turn) {
   CHECK(none.empty());  // a laser is its model alone
 }
 
-TEST(every_modern_kind_trails_the_same_for_the_same_seed_in_both_variants) {
+TEST(every_modern_kind_trails_the_same_for_the_same_seed) {
   const double from[3] = {0, 1, 0}, to[3] = {1, 1, 0};
-  for (const fx::MonsterShot k : kModern)
-    for (const int v : {1, 2}) {
-      fx::Particles a, b, c;
-      fx::monster_trail(k, v, from, to, 5, &a);
-      fx::monster_trail(k, v, from, to, 5, &b);
-      fx::monster_trail(k, v, from, to, 6, &c);
-      CHECK(!a.empty());
-      CHECK(same(a, b));
-      CHECK(!same(a, c));
-    }
+  for (const fx::MonsterShot k : kModern) {
+    fx::Particles a, b, c;
+    fx::monster_trail(k, from, to, 5, &a);
+    fx::monster_trail(k, from, to, 5, &b);
+    fx::monster_trail(k, from, to, 6, &c);
+    CHECK(!a.empty());
+    CHECK(same(a, b));
+    CHECK(!same(a, c));
+  }
 }
 
 TEST(a_splash_throws_off_the_face_it_hit_and_its_light_fades_out) {
@@ -81,17 +80,17 @@ TEST(a_splash_throws_off_the_face_it_hit_and_its_light_fades_out) {
        {fx::MonsterShot::acid, fx::MonsterShot::flame, fx::MonsterShot::laser}) {
     fx::Particles out;
     std::vector<gr::Blast> blasts;
-    fx::monster_splash(k, 1, at, normal, dir, 0, 3, 0, &blasts, &out);
+    fx::monster_splash(k, at, normal, dir, 0, 3, 0, &blasts, &out);
     CHECK(!out.empty());
     for (const gr::Particle& p : out) CHECK(p.v[0] < 0.3f);  // back off the wall, never into it
     fx::Light light;
-    CHECK(fx::splash_light(k, 1, at, 0.01, &light));
-    CHECK(!fx::splash_light(k, 1, at, fx::kSplashLightS, &light));
+    CHECK(fx::splash_light(k, at, 0.01, &light));
+    CHECK(!fx::splash_light(k, at, fx::kSplashLightS, &light));
   }
-  // The fire bolt bursts into a small fireball in the first variant.
+  // The fire bolt bursts into a small fireball.
   std::vector<gr::Blast> blasts;
   fx::Particles out;
-  fx::monster_splash(fx::MonsterShot::flame, 1, at, normal, dir, 0, 3, 0, &blasts, &out);
+  fx::monster_splash(fx::MonsterShot::flame, at, normal, dir, 0, 3, 0, &blasts, &out);
   CHECK(blasts.size() == size_t(1) && blasts[0].look == &fx::flame_burst_look());
 }
 
@@ -99,9 +98,9 @@ TEST(the_shots_glow_and_the_fire_ones_carry_a_flame) {
   const double at[3] = {0, 1, 0}, dir[3] = {1, 0, 0};
   for (const fx::MonsterShot k : kModern) {
     fx::Light light;
-    CHECK(fx::monster_glow(k, 1, at, dir, 1, 0, &light) == (k != fx::MonsterShot::flesh));
+    CHECK(fx::monster_glow(k, at, dir, 1, 0, &light) == (k != fx::MonsterShot::flesh));
     gr::MuzzleFire flame;
     const bool fire = k == fx::MonsterShot::flame || k == fx::MonsterShot::lava;
-    CHECK(fx::monster_flame(k, 1, at, dir, 1, 0, &flame) == fire);
+    CHECK(fx::monster_flame(k, at, dir, 1, 0, &flame) == fire);
   }
 }

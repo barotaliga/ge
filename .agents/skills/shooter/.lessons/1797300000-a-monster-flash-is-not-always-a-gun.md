@@ -2,7 +2,7 @@
 title: The muzzle-flash bit on a monster is set by casters too; key a gun's fire to the model
 date: 2026-11-13
 scope: games/shooters_edge/client/world_fx.cpp
-concepts: [monster, muzzle-flash, effects-bit, caster, ce_monsters, replace-table]
+concepts: [monster, muzzle-flash, effects-bit, caster, ce-monsters, replace-table]
 ---
 
 The entity's muzzle-flash effect bit is set when a soldier or an enforcer shoots, but also

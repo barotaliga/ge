@@ -1,7 +1,7 @@
 // The monsters' attacks in the modern look (monster_fx.hpp).
 //
 // ge:summary The monsters' missiles and spit in the modern look: acid, flame, void, lava, laser
-// ge:keywords monster-fx acid flame void-ball lava-ball laser flesh tracer splash variant
+// ge:keywords monster-fx acid flame void-ball lava-ball laser flesh tracer splash
 // ge:skill render shooter
 // ge:test tests/shooters_edge_monster_fx_test.cpp
 #include "shooters_edge/app/monster_fx.hpp"
@@ -160,7 +160,7 @@ gr::MuzzleLook make_flame_bolt(bool lava) {
   l.life_s = 0.06;
   l.core_k = lava ? 2100 : 2300;
   l.cool_k = lava ? 1300 : 1500;
-  l.glow = lava ? 0.18 : 0.14;
+  l.glow = lava ? 0.18 : 0.05;
   l.flash = 0;
   l.billows = 1.0;
   l.fray = 0.6;
@@ -309,78 +309,60 @@ void classic_spit_hit(MonsterShot k, const double p[3], uint32_t seed, Palette p
   }
 }
 
-void monster_trail(MonsterShot k, int variant, const double from[3], const double to[3],
-                   uint32_t seed, Particles* out) {
+void monster_trail(MonsterShot k, const double from[3], const double to[3], uint32_t seed,
+                   Particles* out) {
   Rng r = ge::core::make_rng(seed);
-  const bool b = variant == 2;
   switch (k) {
     case MonsterShot::acid:
-      along(from, to, b ? 0.05 : 0.07, r, [&](const double p[3], const double dir[3]) {
-        // Drops of acid that drip off and fall, glowing green, and (variant 2) a comet's tail of
-        // hot motes left swirling behind.
-        Particle d =
-            shine(p, kAcid, b ? 2.0 : 1.7, 0.25, 0.6, rnd(r, 0.35, 0.7), rnd(r, 0.04, 0.08));
+      along(from, to, 0.07, r, [&](const double p[3], const double dir[3]) {
+        // Drops of acid that drip off and fall, glowing green, in a thin green mist.
+        Particle d = shine(p, kAcid, 1.7, 0.25, 0.6, rnd(r, 0.35, 0.7), rnd(r, 0.04, 0.08));
         double v[3];
         unit(r, v);
         for (int c = 0; c < 3; ++c) d.v[c] = float(v[c] * rnd(r, 0.1, 0.5) - dir[c] * 0.4);
-        d.fall = b ? 0.5f : 1.0f;
+        d.fall = 1.0f;
         d.streak = 0.03f;
         d.drag = 0.6f;
         out->push_back(d);
-        if (b) {
-          Particle m = shine(p, kAcidHot, 2.6, 0.3, 0.25, rnd(r, 0.25, 0.5), rnd(r, 0.035, 0.06));
-          for (int c = 0; c < 3; ++c) m.v[c] = float(v[c] * 0.6);
-          m.swirl = 0.8f;
-          m.fall = -0.05f;
-          out->push_back(m);
-        } else if (rnd(r, 0, 1) < 0.4) {
+        if (rnd(r, 0, 1) < 0.4) {
           out->push_back(puff(p, rnd(r, 0.06, 0.12), rnd(r, 0.25, 0.5), 0.5, rnd(r, 0.1, 0.22),
                               rnd(r, 0.5, 0.9), kAcidMist, r));
         }
       });
       break;
     case MonsterShot::flame:
-      along(from, to, b ? 0.05 : 0.07, r, [&](const double p[3], const double dir[3]) {
+      along(from, to, 0.07, r, [&](const double p[3], const double dir[3]) {
         double v[3];
         unit(r, v);
         for (int c = 0; c < 3; ++c) v[c] = v[c] * 0.6 - dir[c] * 0.4;
-        Particle e =
-            ember(p, v, rnd(r, 0.3, 1.2), b ? 2600 : 2200, b ? 0.12 : 0.09, rnd(r, 0.2, 0.45), r);
-        e.fall = b ? 0.4f : -0.15f;
-        e.streak = b ? 0.04f : 0.0f;
-        e.size = float(b ? rnd(r, 0.025, 0.04) : rnd(r, 0.04, 0.08));
+        Particle e = ember(p, v, rnd(r, 0.3, 1.2), 2200, 0.09, rnd(r, 0.2, 0.45), r);
+        e.fall = -0.15f;
+        e.streak = 0.0f;
+        e.size = float(rnd(r, 0.04, 0.08));
         out->push_back(e);
-        if (!b || rnd(r, 0, 1) < 0.3)
-          out->push_back(puff(p, rnd(r, 0.05, 0.1), rnd(r, 0.2, 0.5), 0.25, rnd(r, 0.1, 0.3),
-                              rnd(r, 0.6, 1.2), kSmoke, r));
+        out->push_back(puff(p, rnd(r, 0.05, 0.1), rnd(r, 0.2, 0.5), 0.25, rnd(r, 0.1, 0.3),
+                            rnd(r, 0.6, 1.2), kSmoke, r));
       });
       break;
     case MonsterShot::void_ball: {
       double a[3], c[3];
-      along(from, to, b ? 0.06 : 0.05, r, [&](const double p[3], const double dir[3]) {
+      along(from, to, 0.05, r, [&](const double p[3], const double dir[3]) {
         across(dir, a, c);
         // Motes spiralling off round the path, and a dark wake.
-        const double ang = rnd(r, 0, kTau), rad = b ? rnd(r, 0.05, 0.15) : rnd(r, 0.08, 0.2);
+        const double ang = rnd(r, 0, kTau), rad = rnd(r, 0.08, 0.2);
         const double ca = std::cos(ang), sa = std::sin(ang);
         double q[3], v[3];
         for (int k3 = 0; k3 < 3; ++k3) {
           q[k3] = p[k3] + (a[k3] * ca + c[k3] * sa) * rad;
           v[k3] = (-a[k3] * sa + c[k3] * ca) * 1.2 + (a[k3] * ca + c[k3] * sa) * 0.4;
         }
-        Particle m = shine(q, b ? kVoidHot : kVoid, b ? 2.6 : 2.2, 0.15, 0.25, rnd(r, 0.3, 0.6),
-                           rnd(r, 0.035, 0.065));
+        Particle m = shine(q, kVoid, 2.2, 0.15, 0.25, rnd(r, 0.3, 0.6), rnd(r, 0.035, 0.065));
         for (int k3 = 0; k3 < 3; ++k3) m.v[k3] = float(v[k3]);
         m.drag = 1.5f;
         m.fall = 0;
-        m.swirl = b ? 0.6f : 0.2f;
+        m.swirl = 0.2f;
         out->push_back(m);
-        if (b) {
-          Particle g = shine(p, kVoid, 0.5, 0.1, 0.4, rnd(r, 0.3, 0.6), rnd(r, 0.12, 0.2));
-          g.opacity = 0.35f;
-          g.grow = 0.4f;
-          g.drag = 3;
-          out->push_back(g);
-        } else if (rnd(r, 0, 1) < 0.5) {
+        if (rnd(r, 0, 1) < 0.5) {
           out->push_back(puff(p, rnd(r, 0.08, 0.14), rnd(r, 0.3, 0.6), 0.08, rnd(r, 0.2, 0.4),
                               rnd(r, 0.6, 1.0), kVoidSmoke, r));
         }
@@ -397,8 +379,8 @@ void monster_trail(MonsterShot k, int variant, const double from[3], const doubl
         e.fall = -0.1f;
         e.streak = 0;
         out->push_back(e);
-        Particle s = puff(p, rnd(r, 0.12, 0.25), rnd(r, 0.4, 1.0), b ? 0.08 : 0.25,
-                          rnd(r, 0.25, 0.55), rnd(r, 1.2, 2.4), b ? kDarkSmoke : kSmoke, r);
+        Particle s = puff(p, rnd(r, 0.12, 0.25), rnd(r, 0.4, 1.0), 0.25, rnd(r, 0.25, 0.55),
+                          rnd(r, 1.2, 2.4), kSmoke, r);
         out->push_back(s);
         if (rnd(r, 0, 1) < 0.5) {
           for (int c = 0; c < 3; ++c) v[c] = v[c] * 0.3 - dir[c] * 0.2;
@@ -412,27 +394,16 @@ void monster_trail(MonsterShot k, int variant, const double from[3], const doubl
       });
       break;
     case MonsterShot::laser:
-      along(from, to, b ? 0.04 : 0.1, r, [&](const double p[3], const double dir[3]) {
-        if (b) {
-          // A tracer's wake: hot motes shed off its line, falling short.
-          double v[3];
-          unit(r, v);
-          Particle m = shine(p, kLaserHot, 2.0, 0.2, 0.08, rnd(r, 0.1, 0.25), 0.02);
-          for (int c = 0; c < 3; ++c) m.v[c] = float(v[c] * rnd(r, 0.2, 0.8));
-          m.streak = 0.02f;
-          m.fall = 0.3f;
-          out->push_back(m);
-        } else {
-          // A glowing streak along its line, fading fast.
-          Particle m = shine(p, kLaser, 2.4, 0.1, 0.05, rnd(r, 0.06, 0.12), 0.06);
-          for (int c = 0; c < 3; ++c) m.v[c] = float(dir[c] * 2);
-          m.streak = 0.04f;
-          out->push_back(m);
-        }
+      along(from, to, 0.1, r, [&](const double p[3], const double dir[3]) {
+        // A glowing streak along its line, fading fast.
+        Particle m = shine(p, kLaser, 2.4, 0.1, 0.05, rnd(r, 0.06, 0.12), 0.06);
+        for (int c = 0; c < 3; ++c) m.v[c] = float(dir[c] * 2);
+        m.streak = 0.04f;
+        out->push_back(m);
       });
       break;
     case MonsterShot::flesh:
-      along(from, to, b ? 0.08 : 0.12, r, [&](const double p[3], const double dir[3]) {
+      along(from, to, 0.12, r, [&](const double p[3], const double dir[3]) {
         double v[3];
         unit(r, v);
         Particle d = at(p);
@@ -447,10 +418,6 @@ void monster_trail(MonsterShot k, int variant, const double from[3], const doubl
         d.streak = 0.03f;
         d.floor_y = -1e9f;
         out->push_back(d);
-        if (b && rnd(r, 0, 1) < 0.35) {
-          const float mist[3] = {0.75f, 0.2f, 0.18f};
-          out->push_back(puff(p, 0.05, 0.25, 0.3, 0.25, rnd(r, 0.4, 0.8), mist, r));
-        }
       });
       break;
     case MonsterShot::none:
@@ -458,9 +425,8 @@ void monster_trail(MonsterShot k, int variant, const double from[3], const doubl
   }
 }
 
-void monster_head(MonsterShot k, int variant, const double p[3], const double dir[3], double speed,
+void monster_head(MonsterShot k, const double p[3], const double dir[3], double speed,
                   Particles* out) {
-  const bool b = variant == 2;
   const float* core = nullptr;
   double core_m = 0.12, level = 3;
   constexpr float kFireHot[3] = {1.0f, 0.8f, 0.45f};
@@ -470,11 +436,12 @@ void monster_head(MonsterShot k, int variant, const double p[3], const double di
       break;
     case MonsterShot::flame:
       core = kFireHot;
-      core_m = b ? 0.1 : 0.14;
+      core_m = 0.08;  // a small hot point: the flame round it is the bolt, not a glowing bulb
+      level = 2;
       break;
     case MonsterShot::void_ball:
       core = kVoidHot;
-      core_m = b ? 0.2 : 0.16;
+      core_m = 0.16;
       level = 3.5;
       break;
     case MonsterShot::lava:
@@ -499,29 +466,28 @@ void monster_head(MonsterShot k, int variant, const double p[3], const double di
   out->push_back(c);
 }
 
-bool monster_glow(MonsterShot k, int variant, const double p[3], const double dir[3], uint32_t seed,
+bool monster_glow(MonsterShot k, const double p[3], const double dir[3], uint32_t seed,
                   double now_s, Light* out) {
   const double phase = static_cast<double>(seed % 997u) * 0.37;
   const double waver = 0.5 + 0.3 * std::sin(now_s * kTau * 9.1 + phase) +
                        0.2 * std::sin(now_s * kTau * 13.7 + phase * 1.7);
-  const bool b = variant == 2;
   const float* rgb = nullptr;
   double level = 1, reach = 3;
   switch (k) {
     case MonsterShot::acid:
       rgb = kAcid;
-      level = b ? 1.3 : 0.9;
-      reach = b ? 4 : 3;
+      level = 0.9;
+      reach = 3;
       break;
     case MonsterShot::flame:
       rgb = nullptr;
-      level = b ? 1.4 : 1.2;
+      level = 0.8;
       reach = 4.5;
       break;
     case MonsterShot::void_ball:
       rgb = kVoid;
-      level = b ? 1.6 : 1.2;
-      reach = b ? 5.5 : 4.5;
+      level = 1.2;
+      reach = 4.5;
       break;
     case MonsterShot::lava:
       level = 2.2;
@@ -529,7 +495,7 @@ bool monster_glow(MonsterShot k, int variant, const double p[3], const double di
       break;
     case MonsterShot::laser:
       rgb = kLaser;
-      level = b ? 1.0 : 1.4;
+      level = 1.4;
       reach = 3.5;
       break;
     default:
@@ -544,11 +510,10 @@ bool monster_glow(MonsterShot k, int variant, const double p[3], const double di
   return true;
 }
 
-bool monster_flame(MonsterShot k, int variant, const double p[3], const double dir[3],
-                   uint32_t seed, double now_s, gr::MuzzleFire* out) {
+bool monster_flame(MonsterShot k, const double p[3], const double dir[3], uint32_t seed,
+                   double now_s, gr::MuzzleFire* out) {
   const bool lava = k == MonsterShot::lava;
   if (k != MonsterShot::flame && !lava) return false;
-  if (k == MonsterShot::flame && variant == 2) return false;  // the dart: embers alone
   const double l = std::sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
   if (l < 1e-6) return false;
   gr::MuzzleFire f;
@@ -583,11 +548,10 @@ gr::MuzzleFire monster_muzzle(const double p[3], const double dir[3], uint32_t s
   return f;
 }
 
-void monster_splash(MonsterShot k, int variant, const double p[3], const double* normal,
-                    const double dir[3], double floor_y, uint32_t seed, double now_s,
-                    std::vector<gr::Blast>* blasts, Particles* births) {
+void monster_splash(MonsterShot k, const double p[3], const double* normal, const double dir[3],
+                    double floor_y, uint32_t seed, double now_s, std::vector<gr::Blast>* blasts,
+                    Particles* births) {
   Rng r = ge::core::make_rng(seed);
-  const bool b = variant == 2;
   double n[3] = {-dir[0], -dir[1], -dir[2]};
   if (normal != nullptr)
     for (int c = 0; c < 3; ++c) n[c] = normal[c];
@@ -595,13 +559,13 @@ void monster_splash(MonsterShot k, int variant, const double p[3], const double*
   switch (k) {
     case MonsterShot::acid: {
       // Droplets thrown off the face that fall and run, a hiss of green haze.
-      for (int i = 0; i < (b ? 50 : 36); ++i) {
+      for (int i = 0; i < 36; ++i) {
         double d[3];
         unit(r, d);
         away_from(n, d);
-        Particle q = shine(off, i % 3 == 0 ? kAcidHot : kAcid, b ? 2.2 : 1.8, 0.2, 0.5,
-                           rnd(r, 0.4, 0.9), rnd(r, 0.035, 0.07));
-        for (int c = 0; c < 3; ++c) q.v[c] = float(d[c] * rnd(r, 0.6, b ? 3.5 : 2.5));
+        Particle q = shine(off, i % 3 == 0 ? kAcidHot : kAcid, 1.8, 0.2, 0.5, rnd(r, 0.4, 0.9),
+                           rnd(r, 0.035, 0.07));
+        for (int c = 0; c < 3; ++c) q.v[c] = float(d[c] * rnd(r, 0.6, 2.5));
         q.fall = 1;
         q.drag = 0.8f;
         q.streak = 0.03f;
@@ -609,13 +573,13 @@ void monster_splash(MonsterShot k, int variant, const double p[3], const double*
         q.bounce = 0.1f;
         births->push_back(q);
       }
-      for (int i = 0; i < (b ? 3 : 6); ++i)
+      for (int i = 0; i < 6; ++i)
         births->push_back(puff(off, rnd(r, 0.1, 0.2), rnd(r, 0.4, 0.8), 0.55, rnd(r, 0.15, 0.3),
                                rnd(r, 0.8, 1.5), kAcidMist, r));
       break;
     }
     case MonsterShot::flame: {
-      if (!b && blasts != nullptr) {
+      if (blasts != nullptr) {
         gr::Blast f;
         for (int c = 0; c < 3; ++c) f.at[c] = p[c];
         if (normal != nullptr) {
@@ -627,24 +591,19 @@ void monster_splash(MonsterShot k, int variant, const double p[3], const double*
         f.born_s = now_s;
         blasts->push_back(f);
       }
-      for (int i = 0; i < (b ? 60 : 30); ++i) {
+      for (int i = 0; i < 30; ++i) {
         double d[3];
         unit(r, d);
         away_from(n, d);
-        Particle e =
-            ember(off, d, rnd(r, 1, b ? 6 : 4), b ? 2600 : 2300, 0.25, rnd(r, 0.3, 0.8), r);
+        Particle e = ember(off, d, rnd(r, 1, 4), 2300, 0.25, rnd(r, 0.3, 0.8), r);
         e.floor_y = float(floor_y);
         e.bounce = 0.3f;
         births->push_back(e);
       }
-      if (b)
-        for (int i = 0; i < 4; ++i)
-          births->push_back(puff(off, rnd(r, 0.08, 0.15), rnd(r, 0.4, 0.7), 0.2, 0.3,
-                                 rnd(r, 0.6, 1.2), kSmoke, r));
       break;
     }
     case MonsterShot::laser:
-      for (int i = 0; i < (b ? 24 : 14); ++i) {
+      for (int i = 0; i < 14; ++i) {
         double d[3];
         unit(r, d);
         away_from(n, d);
@@ -662,7 +621,7 @@ void monster_splash(MonsterShot k, int variant, const double p[3], const double*
   }
 }
 
-bool splash_light(MonsterShot k, int variant, const double p[3], double age, Light* out) {
+bool splash_light(MonsterShot k, const double p[3], double age, Light* out) {
   if (age < 0 || age >= kSplashLightS) return false;
   const double left = 1 - age / kSplashLightS;
   const float* rgb = nullptr;
@@ -674,7 +633,7 @@ bool splash_light(MonsterShot k, int variant, const double p[3], double age, Lig
       break;
     case MonsterShot::flame:
       rgb = kFire;
-      level = variant == 2 ? 1.6 : 2.0;
+      level = 2.0;
       reach = 4.5;
       break;
     case MonsterShot::laser:

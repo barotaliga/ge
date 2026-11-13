@@ -104,9 +104,9 @@ struct FxSwitches {
   // ce_flares, ce_bubbles: the pack's flare and bubble sprites drawn as the engine's (the models'
   // `prepare_models`, through classic-enhance's replacement table).
   bool flares = false, bubbles = false;
-  // ce_monsters: the monsters' missiles, spit and splashes in the modern look (app/monster_fx.hpp),
-  // its variant (1; the lab films 2 beside it); 0 the classic specks.
-  int monsters = 0;
+  // ce_monsters: the monsters' missiles, spit and splashes in the modern look (app/monster_fx.hpp);
+  // off, the classic specks.
+  bool monsters = false;
   // r_lerpmodels, r_lerpmove (either look): the models drawn between their frames (model_lerp.hpp)
   ModelLerpSwitches lerp;
 };

@@ -749,6 +749,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     const InPlace in_place{.flames = o.mode == ba::Mode::v2 && f.picture->ce.flames,
                            .flares = on.flares,
                            .bubbles = on.bubbles,
+                           .explosions = on.explosions,
                            .bubbles_share = f.picture->bubbles_share};
     prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
                    in_place, fx.lights, o.dynamic_strength, &f.burning);

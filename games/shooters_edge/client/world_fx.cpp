@@ -445,7 +445,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.arrival = picture.ce.warps ? std::clamp(picture.arrival, 0.0, 1.0) : 0;
   s.flares = picture.ce.flares;
   s.bubbles = picture.ce.bubbles;
-  s.monsters = picture.ce.monsters ? 1 : 0;
+  s.monsters = picture.ce.monsters;
   return s;
 }
 
@@ -664,7 +664,7 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
                       std::vector<Missile>& missiles) {
   s.monster_next.clear();
   s.monster_gone.clear();
-  const int variant = s.on.monsters;
+  const bool modern = s.on.monsters;
   if (s.models != nullptr) {
     for (const Placed& m : out.models) {
       if (m.entity <= 0 || m.modelindex <= 0 ||
@@ -676,8 +676,7 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
       if (kind == fx::MonsterShot::none && (k.flags & fx::kTrailZombieGib) != 0)
         kind = fx::MonsterShot::flesh;
       // A zombie's flesh in the classic look is the bleeding pieces' (above).
-      if (kind == fx::MonsterShot::none || (kind == fx::MonsterShot::flesh && variant == 0))
-        continue;
+      if (kind == fx::MonsterShot::none || (kind == fx::MonsterShot::flesh && !modern)) continue;
       FxState::MonsterFlight now;
       now.at = engine_point(m.origin);
       now.map_at = m.origin;
@@ -694,26 +693,26 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
         for (int c = 0; c < 3; ++c) now.dir[c] = was->second.dir[c];
         if (len > 1e-4 && len < kMonsterJumpM) {
           for (int c = 0; c < 3; ++c) now.dir[c] = d[c] / len;
-          if (variant == 0)
+          if (!modern)
             now.count =
                 fx::classic_tracer(kind, from, to, now.count, s.seed++, s.palette, &out.births);
           else
-            fx::monster_trail(kind, variant, from, to, s.seed++, &out.births);
+            fx::monster_trail(kind, from, to, s.seed++, &out.births);
         }
       }
-      if (variant > 0) {
+      if (modern) {
         double speed = 0;
         if (was != s.monster_flights.end() && dt > 0) {
           const ge::camera::Vec3 a = was->second.at;
           speed =
               std::min(ge::core::hypot3(now.at.x - a.x, now.at.y - a.y, now.at.z - a.z) / dt, 60.0);
         }
-        fx::monster_head(kind, variant, to, now.dir, speed, &out.births);
+        fx::monster_head(kind, to, now.dir, speed, &out.births);
         fx::Light light;
-        if (fx::monster_glow(kind, variant, to, now.dir, uint32_t(m.entity), t, &light))
+        if (fx::monster_glow(kind, to, now.dir, uint32_t(m.entity), t, &light))
           out.lights.push_back(light);
         ge::render::MuzzleFire flame;
-        if (fx::monster_flame(kind, variant, to, now.dir, uint32_t(m.entity), t, &flame))
+        if (fx::monster_flame(kind, to, now.dir, uint32_t(m.entity), t, &flame))
           out.flames.push_back(flame);
       } else if (kind == fx::MonsterShot::lava) {
         out.lights.push_back(fx::rocket_light(to));  // the classic's light on a rocket's trail
@@ -738,7 +737,7 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
     if (!fresh && t - it->second > kMonsterRefireS) it->second = t;
   }
   std::erase_if(s.monster_fired, [&](const auto& kv) { return t - kv.second > 1; });
-  if (variant > 0) {
+  if (modern) {
     for (const Placed& m : out.models) {
       const auto f = s.monster_fired.find(m.entity);
       if (f == s.monster_fired.end() || t - f->second > fx::kMonsterMuzzleS) continue;
@@ -747,13 +746,16 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
           m.modelindex >= static_cast<int>(s.models->kinds.size()) ||
           s.models->kinds[size_t(m.modelindex)].effect != "monster.gun")
         continue;
+      // At the barrel's tip as this frame holds it, so the fire rides the gun.
       const double yaw = m.angles.y * ge::core::kPi / 180;
-      const sh::Vec3f gun = {m.origin.x + float(std::cos(yaw) * kMonsterGunU),
-                             m.origin.y + float(std::sin(yaw) * kMonsterGunU),
-                             m.origin.z + kMonsterGunUpU};
       double at[3], dir[3];
-      put(engine_point(gun), at);
       engine_dir({float(std::cos(yaw)), float(std::sin(yaw)), 0}, dir);
+      if (!held_tip(*s.models, m, t, dir, at)) {
+        const sh::Vec3f gun = {m.origin.x + float(std::cos(yaw) * kMonsterGunU),
+                               m.origin.y + float(std::sin(yaw) * kMonsterGunU),
+                               m.origin.z + kMonsterGunUpU};
+        put(engine_point(gun), at);
+      }
       out.flames.push_back(fx::monster_muzzle(
           at, dir, uint32_t(m.entity) * 31u + uint32_t(f->second * 77), f->second));
     }
@@ -769,13 +771,13 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
     s.monster_gone.push_back(f);
     // A laser leaves no message where it ends: its sparks where it was last seen, off the face it
     // was flying into.
-    if (f.kind != fx::MonsterShot::laser || variant == 0 || !l.map) continue;
+    if (f.kind != fx::MonsterShot::laser || !modern || !l.map) continue;
     double normal[3], off = 0, p[3];
     const bool face = surface_near(*l.map, f.map_at, normal, &off);
     put(f.at, p);
     const double floor_y = floor_under(*l.map, f.map_at, f.map_at);
-    fx::monster_splash(f.kind, variant, p, face ? normal : nullptr, f.dir, floor_y, s.seed++, t,
-                       &s.blasts, &out.births);
+    fx::monster_splash(f.kind, p, face ? normal : nullptr, f.dir, floor_y, s.seed++, t, &s.blasts,
+                       &out.births);
     FxState::MonsterSplash sp;
     put(f.at, sp.at);
     sp.t = t;
@@ -787,7 +789,7 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
   // The splashes' light while it fades.
   std::erase_if(s.monster_splashes, [&](const FxState::MonsterSplash& sp) {
     fx::Light light;
-    if (variant == 0 || !fx::splash_light(sp.kind, variant, sp.at, t - sp.t, &light))
+    if (!modern || !fx::splash_light(sp.kind, sp.at, t - sp.t, &light))
       return t - sp.t > fx::kSplashLightS || t < sp.t;
     out.lights.push_back(light);
     return false;
@@ -800,7 +802,7 @@ bool monster_spit_hit(const FxScene& l, FxState& s, const Effect& e, const doubl
                       FxFrame& out) {
   if (e.code != 7 && e.code != 8) return false;
   const fx::MonsterShot kind = e.code == 7 ? fx::MonsterShot::acid : fx::MonsterShot::flame;
-  if (s.on.monsters == 0) {
+  if (!s.on.monsters) {
     fx::classic_spit_hit(kind, p, s.seed++, s.palette, &out.births);
     return true;
   }
@@ -817,8 +819,8 @@ bool monster_spit_hit(const FxScene& l, FxState& s, const Effect& e, const doubl
   double normal[3], off = 0;
   const bool face = l.map && surface_near(*l.map, e.at, normal, &off);
   const double floor_y = l.map ? floor_under(*l.map, e.at, e.at) : -1e9;
-  fx::monster_splash(kind, s.on.monsters, p, face ? normal : nullptr, dir, floor_y, s.seed++, t,
-                     &s.blasts, &out.births);
+  fx::monster_splash(kind, p, face ? normal : nullptr, dir, floor_y, s.seed++, t, &s.blasts,
+                     &out.births);
   FxState::MonsterSplash sp;
   for (int c = 0; c < 3; ++c) sp.at[c] = p[c];
   sp.t = t;
@@ -973,7 +975,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       const uint32_t flags = s.models->kinds[size_t(m.modelindex)].flags;
       if ((flags & (fx::kTrailGib | fx::kTrailZombieGib)) == 0) continue;
       // A zombie's flesh under ce_monsters is the monsters' missiles' (monster_missiles).
-      if ((flags & fx::kTrailGib) == 0 && s.on.monsters > 0) continue;
+      if ((flags & fx::kTrailGib) == 0 && s.on.monsters) continue;
       FxState::Bleeding now{engine_point(m.origin), m.modelindex, 0};
       const auto was = s.bleeding.find(m.entity);
       if (was != s.bleeding.end() && was->second.modelindex == m.modelindex) {
