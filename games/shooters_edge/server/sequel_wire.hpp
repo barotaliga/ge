@@ -21,7 +21,9 @@
 // each active client's `name\male/grunt` at 1312 + slot. A model index on the wire is the
 // runner's plus one for the same reason. The layouts are in porting/shooters-edge/sequel-demo.md.
 //
-// Stats: 1 health, 3 the ammo in hand, 5 armour (the slots the demo's own status bar reads).
+// The status bar: the rules' own (rules_world.hpp's `status_bar`, with its pictures at image
+// strings 544 + n and its item names at 1056 + n) and every one of the player's 32 stats; for
+// rules with none, a bar of three numbers and stats 1 health, 3 the ammo in hand, 5 armour.
 //
 // ge:summary The sequel's protocol 34 server messages from a runner's rows: signon and frames
 // ge:keywords sequel wire protocol-34 serverdata configstring spawnbaseline frame playerinfo
