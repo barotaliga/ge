@@ -62,6 +62,18 @@ std::vector<ServedFile> trial_files() {
   return files;
 }
 
+std::vector<ServedFile> trial_figure_files() {
+  std::vector<ServedFile> files(2);
+  files[0].path = "players/cyborg/tris.md2";
+  files[1].path = "players/cyborg/oni911.pcx";
+  for (size_t f = 0; f < files.size(); f++) {
+    files[f].bytes.resize(3000 + f * 1700);
+    for (size_t i = 0; i < files[f].bytes.size(); i++)
+      files[f].bytes[i] = static_cast<uint8_t>((i * 37 + f * 91 + 3) & 0xff);
+  }
+  return files;
+}
+
 TrialReport run_classic_trial(const TrialOptions& opt) {
   TrialReport rep;
   rep.preset = opt.preset;
@@ -111,6 +123,24 @@ TrialReport run_classic_trial(const TrialOptions& opt) {
   cfg.antilag = opt.antilag;
   cfg.seed = opt.seed;
   cfg.maxrate = opt.maxrate;
+  const std::vector<ServedFile> figure_files = trial_figure_files();
+  if (opt.figures) {
+    // Read on demand, as a dedicated server reads its game folder, never preloaded.
+    cfg.read_file = [&figure_files](const std::string& path, std::vector<uint8_t>* out) {
+      for (const ServedFile& f : figure_files)
+        if (f.path == path) {
+          *out = f.bytes;
+          return true;
+        }
+      return false;
+    };
+    cfg.list_files = [&figure_files] {
+      std::vector<std::string> names;
+      names.reserve(figure_files.size());
+      for (const ServedFile& f : figure_files) names.push_back(f.path);
+      return names;
+    };
+  }
   if (!classic_start(*server, rules, *st, cfg, error)) {
     rep.error = error;
     return rep;
@@ -131,6 +161,10 @@ TrialReport run_classic_trial(const TrialOptions& opt) {
     cc.qport = static_cast<uint16_t>(1000 + i);
     cc.topcolor = static_cast<int>(i % 14);
     cc.bottomcolor = static_cast<int>((i * 5) % 14);
+    if (opt.figures && i == 0) {
+      cc.model = "cyborg";
+      cc.skin = "oni911";
+    }
     clients[i] = std::make_unique<ClassicClientEnd>();
     client_start(*clients[i], *ct[i], server_at, cc, 0);
   }
@@ -155,7 +189,8 @@ TrialReport run_classic_trial(const TrialOptions& opt) {
   rep.frames = frames;
   rep.seconds = frames * kFrameUs / 1e6;
 
-  const std::vector<ServedFile> files = trial_files();
+  std::vector<ServedFile> files = trial_files();
+  if (opt.figures) files.insert(files.end(), figure_files.begin(), figure_files.end());
   for (size_t i = 0; i < n; i++) {
     const ClassicClientEnd& c = *clients[i];
     TrialClient t;

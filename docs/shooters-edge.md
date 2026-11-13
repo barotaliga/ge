@@ -145,7 +145,8 @@ format, `loadloc <name>` reads one, and `loc` says where you are. The long names
 (`locations_add` and so on) work too, and so does the sequel's spelling: `loc add <name>`,
 `loc del`, `loc set <name>` (renames the nearest), `loc list` and `loc save`. A place reaches
 `loc_dist` units from its point (500 in every classic game; 0 is no limit): farther off, `loc` says
-someplace and `removeloc` or `loc set` finds nothing. The places follow the player's view on a
+someplace and `removeloc` or `loc set` finds nothing. With `loc_trace 1` a point behind a wall
+from where the player stands is passed over too. The places follow the player's view on a
 server joined and in a demo played as well as in the window's own game: each map's file is read as
 it starts, from the recording's game folder for a demo, and edited and saved the same way. A
 recording keeps the place names it was played with (stuffed `//loc` lines in its signon, a comment
@@ -1016,6 +1017,28 @@ armour, or both, once the sequel's profile lands. The design makes that possible
   arsenal). The exact classic campaign stays exact. Our campaign variant plays the classic maps
   with any arsenal.
 
+### Classic remix: one game played with another's maps and items
+
+Classic remix (M18u, `docs/goals/M18u.md`) is a feature of classic-enhance: one classic game
+played with another's parts. It is off unless the player sets `cr_enabled 1`, and even then does
+nothing unless two classic games are loaded as FULL games (`client/remix.hpp`'s `remix_check`; a
+shareware or demo install never counts), so a game loaded on its own keeps its own assets alone.
+
+- **The item table** (`profiles/remix.hpp`): each game's map items as the other's, by role: a
+  weapon by its place in the set (the nail weapons are the bullet ones, the beam is the rail), an
+  ammunition by the weapon that spends it, health and armour by size, a powerup by what it does.
+  The low spawnflags bits (an item's variant: the small and mega health, the large boxes) are
+  replaced, the bits above (the skills and modes it is left out of) kept; an item with no match
+  is left out and counted, so a map never spawns a class the rules do not know.
+- **Another game's map**: a map the played game's packs lack is found in the other game's, and
+  its items become the played game's (M18u2, M18u3).
+- **Another game's items** (`cr_items`: 0 the played game's, 1 the classic game's, 2 the
+  sequel's): a game's own maps played with the other game's items, and the HUD that shows them is
+  that game's (M18u4).
+
+Lab `se-remix` draws a real map of each game from above with its own items and with the other
+game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`).
+
 ### The re-release: words by key
 
 The full game's later release ships a program and maps that print text KEYS (a `$`, then
@@ -1377,6 +1400,14 @@ every pass, and judged by captioned screenshots:
   the game's own figure; each frame is drawn as the named figure's frame of the same kind, matched
   by the frames' names (`app/figure_frames.hpp`). A folder you lack, or `noskins 1`, draws the
   game's own figure. Your own `model` goes to the server beside your skin.
+- **Skins and figures from the server** (M18i19): joining a server, a client asks for the
+  pictures and figures the players wear that it lacks before it begins: `skins/<skin>.pcx`, and for
+  a `model`, `players/<model>/tris.md2` (`tris.mdl` only when the server has no `.md2`) and the
+  folder's `<skin>.pcx`. Each is kept in the game folder it came for, so the next visit needs no
+  download, and the level is drawn again once it lands. `noskins 1` fetches nothing. The server
+  serves those files out of its own game folder when downloads are on, read when first asked and
+  kept (`ServerConfig::read_file`), and answers `listskins` (the console's `serverskins`) with the
+  skins and figures it offers (`net/classic_looks.hpp`).
 - **Player figures in the second game** (M18i16): a player's `skin` there is "<model>/<skin>",
   the figure a folder `players/<model>/` with its `tris.md2`, its skins as pictures beside it, and
   the weapons it carries (the files the server names with a '#', drawn in place of its weapon). Each

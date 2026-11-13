@@ -19,6 +19,9 @@
 // - **How far a place reaches** (`loc_dist`, the game's `place_range` by default: 500 units in
 //   every classic game; 0 no limit): the nearest point within it names where the player is, and
 //   is the one `removeloc`, `loc del` and `loc set` act on.
+// - **Through walls** (`loc_trace`, 0 by default): with 1, a point whose straight line from the
+//   player is blocked by the map's solid is passed over (`clear_line`), so a place behind a wall
+//   is not the one the player is in.
 // - **Where the player is**: the window's own game, a server joined, or a demo played (the view's
 //   point less its eye height); the map's place names are read as each one's map starts.
 // - **The sequel's macros** (the game's `place_macros`): `$loc_here` is the place the player is
@@ -37,7 +40,7 @@
 // ge:keywords removeloc locations_savefile saveloc locations_loadfile loadloc locations_clearall
 // ge:keywords clearlocs tp_loadlocs loc_dist place-range tp_name_someplace map_started where-am-i
 // ge:keywords loc-add loc-set loc-list loc-save loc_here loc_there place-macros
-// ge:keywords fill_place_codes percent-l chat-location say say_team
+// ge:keywords fill_place_codes percent-l chat-location say say_team loc_trace clear_line
 // ge:skill shooter console
 // ge:test tests/shooters_edge_place_names_test.cpp
 #pragma once
@@ -67,6 +70,10 @@ struct PlaceNames {
   // Where the player's view stops: the line along it from where the player stands, 8,192 units
   // or to the first solid (`$loc_there`); false (or null) when no game is playing.
   std::function<bool(ge::shooter::Vec3f&)> looked_at;
+  // Whether the straight line between two points is clear of the map's solid (`loc_trace` 1: a
+  // place's point behind a wall is not where the player is); null: no map to ask.
+  ge::shooter::LocSight clear_line;
+  const ge::console::Cvar* trace = nullptr;  // loc_trace
   WhereAmI where;  // where the player stands (add_place_commands keeps it)
 };
 

@@ -104,3 +104,18 @@ TEST(a_recording_keeps_places_as_comment_lines_read_back_whole) {
   CHECK(!sh::read_recorded_loc("fullserverinfo \"\\a\\b\"", back));
   CHECK(back.points.size() == 2);
 }
+
+TEST(a_point_out_of_sight_is_passed_over_for_the_next_nearest) {
+  sh::Locs l;
+  sh::parse_locs("80 0 0 behind the wall\n800 0 0 in the room\n", l);  // 10 and 100 units off
+  const sh::LocSight wall = [](sh::Vec3f, sh::Vec3f to) { return to.x > 50; };
+  int asked = 0;
+  const sh::LocSight counted = [&](sh::Vec3f, sh::Vec3f) {
+    asked++;
+    return true;
+  };
+  CHECK(sh::loc_name_at(l, {0, 0, 0}) == "behind the wall");
+  CHECK(sh::loc_name_at(l, {0, 0, 0}, 0, wall) == "in the room");
+  CHECK(sh::nearest_loc(l, {0, 0, 0}, 50, wall) == nullptr);  // the one in sight is too far
+  CHECK(sh::loc_name_at(l, {0, 0, 0}, 0, counted) == "behind the wall" && asked == 1);
+}
