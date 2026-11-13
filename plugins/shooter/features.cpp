@@ -25,7 +25,7 @@ constexpr const char* kNames[kFeatures] = {
     "airkeys",    "airview",    "chainhop",   "airwall",  "landwall", "circlekeys", "circleview",
     "circleaim",  "leadwall",   "leadmean",   "leadarc",  "airwalk",  "airarc",     "hopjump",
     "hopside",    "noback",     "levelview",  "hopopen",  "fightway", "letgo",      "paceback",
-    "retreatrun", "hide",       "trial"};
+    "retreatrun", "hide",       "nogoal",     "tripkeep", "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -60,11 +60,11 @@ constexpr Features kKeys =
 // dm2 and +1.0 on e1m2 a match head to head, looks past 45 degrees down 4.6 -> 1.9 %, people's;
 // `paceback` on: -2.9 on dm2 and +4.3 on e1m2 a match head to head, a lost aim back on the way by
 // the hand's stroke, not creeping: backwards 20.6 -> 18.4 % by one rule, people 13.8).
-constexpr Features kJudging =
-    of({Feature::runupkeys, Feature::underway, Feature::gappast, Feature::airgap,
-        Feature::pilotcast, Feature::landwall, Feature::circlekeys, Feature::circleview,
-        Feature::circleaim, Feature::leadmean, Feature::leadarc, Feature::airarc, Feature::hopopen,
-        Feature::fightway, Feature::letgo, Feature::retreatrun, Feature::hide});
+constexpr Features kJudging = of(
+    {Feature::runupkeys, Feature::underway, Feature::gappast, Feature::airgap, Feature::pilotcast,
+     Feature::landwall, Feature::circlekeys, Feature::circleview, Feature::circleaim,
+     Feature::leadmean, Feature::leadarc, Feature::airarc, Feature::hopopen, Feature::fightway,
+     Feature::letgo, Feature::retreatrun, Feature::hide, Feature::nogoal, Feature::tripkeep});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

@@ -812,6 +812,17 @@ void choose_weapon(Fighter& f, const Stats& st, float range, double t, ai::Why* 
   }
 }
 
+// The pilot on a scripted way (`NavKind::script`, a trick's route) this step.
+bool on_script(const sh::Pilot& p) {
+  if (p.g == nullptr || p.k + 1 >= p.route.size()) return false;
+  const sh::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
+  for (int32_t q = 0; q < a.links; q++) {
+    const sh::NavLink& l = p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
+    if (l.to == p.route[p.k + 1]) return l.kind == sh::NavKind::script;
+  }
+  return false;
+}
+
 // THE HIDE (`hide`, M18r.md 0k2): a pack dropped at a death holds the weapon in hand, so a
 // player who has the launcher holds the scattergun while no one is in sight and takes the
 // launcher up for the fight (at once: the mod's select is instant once the refire is over, and
@@ -1226,8 +1237,16 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   // unless the goal itself is that near, the way is a dive's, an escape's or the map's, or it
   // backs off (a retreat chooses its health away from the enemy, best_item):
   // people's small health 3.6 a player-minute against the bots' 0.5 without it.
+  // A SCRIPTED WAY TAKEN IS FINISHED (`tripkeep`, M18r.md 0c1): on a trick's way to its goal
+  // (e1m2's stair jumps to the YA) the goal is held, unless it backs off: 9 of 28 climbs toward
+  // the YA were dropped halfway for shells, the quad, the mega or health (12 got there).
+  const bool trip = f.features[sh::Feature::tripkeep] && !escaping && committed < 0 &&
+                    f.goal_item >= 0 && f.mode != FightMode::retreat &&
+                    f.items[static_cast<size_t>(f.goal_item)].present &&
+                    on_script(f.bot.pilot.pilot);
+  if (trip) f.stats.trips_kept++;
   int32_t near = -1;
-  if (!escaping && committed < 0 && f.objective < 0 && f.diving < 0 &&
+  if (!trip && !escaping && committed < 0 && f.objective < 0 && f.diving < 0 &&
       f.mode != FightMode::retreat && f.features[sh::Feature::shortgoals]) {
     const bool held = f.short_item >= 0 && t < f.short_until &&
                       f.items[static_cast<size_t>(f.short_item)].present;
@@ -1248,7 +1267,9 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   if (locked_errands(f) && !escaping && committed < 0 && f.objective < 0) door_errand(f, s, t);
 
   // The goal: the role's first, then the items.
-  if (committed >= 0) {
+  if (trip) {
+    // the scripted way held to its goal
+  } else if (committed >= 0) {
     // Kept on the dive's field whatever the reach from the water says (the nearest node under
     // water may stand in the pocket already).
     f.diving = f.last_dive = committed;
@@ -1300,6 +1321,10 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
         f.decided_at = t;
       }
       const int32_t mate = f.outmatched ? nearest_mate_node(f, self.origin, t) : -1;
+      // (`nogoal`, M18r.md 3) Nothing worth taking: no item goal kept from before (a holder in a
+      // full armour stood on the armour it walked back to as its claim, the old goal kept: the
+      // goal's tiring read it, and the lying count took it for a taker).
+      if (i < 0 && f.features[sh::Feature::nogoal]) f.goal_item = -1;
       if (i < 0 && mate >= 0) {
         go_to(f, mate);  // nothing to take: to the team
       } else if (i >= 0) {
