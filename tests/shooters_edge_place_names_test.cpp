@@ -1,10 +1,11 @@
 // The window's place names (games/shooters_edge/client/place_names.hpp): places added where the
 // player stands, removed nearest first, saved under the game folder in the shared format and read
 // back by name and when the map starts; the same map again keeps unsaved edits; a name that would
-// leave the folder refused; no game, no adding.
+// leave the folder refused; no game, no adding; a place reaches loc_dist (500 units in the
+// sequel, any distance in the first game).
 //
 // ge:summary Tests the window's place names: added, removed, saved, read at map start
-// ge:keywords test shooters-edge place-names addloc saveloc loadloc removeloc map_started
+// ge:keywords test shooters-edge place-names addloc saveloc loadloc removeloc map_started loc_dist
 // ge:skill shooter console testing
 #include <filesystem>
 #include <fstream>
@@ -96,6 +97,28 @@ TEST(the_sequel_s_loc_sub_commands_edit_the_same_places) {
   CHECK(p.locs.points.size() == 1 && p.locs.points[0].raw == "mega health");
   con.execute("loc save");
   CHECK(fs::exists(game / "locs" / "q2dm1.loc"));
+  // A place reaches 500 units in this game: farther off, there is none to rename or remove.
+  CHECK(p.range != nullptr && p.range->value == "500");
+  here = {600, 0, 0};
+  con.execute("loc set far away");
   con.execute("loc del");
+  CHECK(p.locs.points.size() == 1 && p.locs.points[0].raw == "mega health");
+  con.execute("loc_dist 0");
+  con.execute("loc del");
+  CHECK(p.locs.points.empty());
+}
+
+TEST(a_classic_place_reaches_any_distance) {
+  ge::console::Console con;
+  cl::PlaceNames p;
+  p.game_dir = fs::temp_directory_path() / "ge_se_place_names_three";
+  cl::SearchPath files;
+  cl::add_place_commands(con, p, cl::classic_adapter(), files, [](ge::shooter::Vec3f& at) {
+    at = {9000, 0, 0};
+    return true;
+  });
+  CHECK(p.range != nullptr && p.range->value == "0");
+  p.locs.points.push_back({.name = "start", .at = {0, 0, 0}, .raw = "start"});
+  con.execute("removeloc");
   CHECK(p.locs.points.empty());
 }

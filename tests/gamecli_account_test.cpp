@@ -109,6 +109,12 @@ TEST(gamecli_account_signs_up_signs_in_and_makes_a_code) {
   CHECK_MSG(run({"account", "code", "Ranger", "--password=long enough"}, out, root) == 0, out);
   j = parse(out);
   CHECK_MSG(j["result.code"].text.size() == 9, out);
+  // Signed in: the ticket buys the code, no password asked.
+  CHECK_MSG(run({"account", "code"}, out, root) == 0, out);
+  j = parse(out);
+  CHECK_MSG(j["result.code"].text.size() == 9 && j["result.by"].text == "ticket", out);
+  CHECK_MSG(run({"account", "code", "ranger"}, out, root) == 0, out);
+  CHECK_MSG(parse(out)["result.by"].text == "ticket", out);
   CHECK_MSG(run({"account", "code", "Ranger", "--password=not it at all"}, out, root) == 1, out);
   j = parse(out);
   CHECK_MSG(j["error"].text.find("password") != std::string::npos, out);

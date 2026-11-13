@@ -256,3 +256,42 @@ TEST(login_needs_a_service_when_logins_are_asked) {
   CHECK(!gs::logins_open(l, set, ga::NameRules{}, nullptr, nullptr, counter_fresh, nullptr, 0,
                          error));
 }
+
+TEST(login_remote_master_keeps_a_registered_name_from_a_guest) {
+  World w;
+  w.settings.master = gn::to_string(kMasterAt);
+  w.settings.key = gn::key_to_hex(ga::service_key(w.svc));
+  std::string error;
+  CHECK_MSG(gs::logins_open(w.logins, w.settings, ga::NameRules{15, true, false}, nullptr, &w.link,
+                            counter_fresh, &w.fresh_n, w.now, error),
+            "logins_open (remote): " + error);
+  // A guest on the server under a registered name: let go while the master is asked, then renamed.
+  gs::login_seat(w.logins, 0, 11, false, "10.0.0.7:27001", w.game_s);
+  std::string name = "N1clas";
+  CHECK(gs::login_name(w.logins, 0, name) == gs::NameVerdict::free);
+  w.logins.out.clear();
+  w.run(0.5);
+  CHECK(w.has(gs::LoginOut::Kind::unname, 0, "N1clas"));
+  CHECK(contains(w.told(0), "belongs to a registered player"));
+  CHECK(w.logins.stats.names_asked == 1);
+  // Asked once: the next guest under it is refused at once, with no ask.
+  name = "niclas";
+  CHECK(gs::login_name(w.logins, 1, name, true) == gs::NameVerdict::reserved);
+  CHECK(w.logins.stats.names_asked == 1);
+  // A name nobody holds stays, and is asked once.
+  w.logins.out.clear();
+  name = "wanderer";
+  CHECK(gs::login_name(w.logins, 0, name) == gs::NameVerdict::free);
+  w.run(0.5);
+  CHECK(w.logins.out.empty());
+  CHECK(gs::login_name(w.logins, 0, name) == gs::NameVerdict::free);
+  CHECK(w.logins.stats.names_asked == 2);
+  // A seat still connecting is renamed silently and told on joining.
+  name = "Ann";
+  CHECK(gs::login_name(w.logins, 2, name, true) == gs::NameVerdict::free);
+  w.run(0.5);
+  CHECK(w.has(gs::LoginOut::Kind::unname, 2, "Ann"));
+  w.logins.out.clear();
+  gs::login_seat(w.logins, 2, 13, false, "10.0.0.9:27001", w.game_s);
+  CHECK(contains(w.told(2), "The name Ann belongs to a registered player"));
+}
