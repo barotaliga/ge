@@ -44,23 +44,29 @@ struct Letter {
   std::span<const Piece> pieces;
 };
 
-constexpr Piece kQ[] = {{"mainmenu", 0, 80, 22, 103, 0, 0}};    // Quit's Q, its tail to row 23
-constexpr Piece kU[] = {{"mainmenu", 23, 83, 41, 95, 0, 3}};    // Quit's u
-constexpr Piece kI[] = {{"mainmenu", 43, 83, 50, 95, 0, 3}};    // Quit's i
-constexpr Piece kA[] = {{"mainmenu", 151, 2, 167, 14, 0, 3}};   // Player's a
+constexpr Piece kQ[] = {{"mainmenu", 0, 80, 22, 103, 0, 0}};  // Quit's Q, its tail to row 23
+constexpr Piece kU[] = {{"mainmenu", 23, 83, 41, 95, 0, 3}};  // Quit's u
+constexpr Piece kI[] = {{"mainmenu", 43, 83, 50, 95, 0, 3}};  // Quit's i
+// Player's a from its apex's broad row: its point would stand a pixel above every flat top.
+constexpr Piece kA[] = {{"mainmenu", 151, 3, 167, 14, 0, 4}};
 constexpr Piece kE[] = {{"mainmenu", 153, 63, 169, 75, 0, 3}};  // Ordering's e
-// The k: Player's r stem, Player's y right arm against it, the r's leg under the arm.
+// The k: Player's r stem, Player's y right arm against it (short of the e's stem beside it), the
+// r's leg under the arm.
 constexpr Piece kK[] = {{"mainmenu", 199, 2, 208, 14, 0, 3},
-                        {"mainmenu", 176, 2, 183, 9, 9, 3},
+                        {"mainmenu", 176, 2, 182, 9, 9, 3},
                         {"mainmenu", 211, 9, 220, 14, 9, 10}};
-constexpr Piece kS[] = {{"mainmenu", 1, 0, 20, 19, 0, 1}};       // Single's S
-constexpr Piece kL[] = {{"mainmenu", 40, 60, 56, 79, 0, 0}};     // Help's l
-constexpr Piece kC[] = {{"mainmenu", 67, 40, 77, 59, 0, 0}};     // the left half of Options' o
+constexpr Piece kS[] = {{"mainmenu", 1, 0, 20, 19, 0, 1}};    // Single's S
+constexpr Piece kL[] = {{"mainmenu", 40, 60, 56, 79, 0, 0}};  // Help's l
+// The c: the left half of Options' o and the ends of its right half's top and foot, open between.
+constexpr Piece kC[] = {{"mainmenu", 67, 40, 77, 59, 0, 0},
+                        {"mainmenu", 78, 43, 83, 45, 11, 3},
+                        {"mainmenu", 78, 53, 83, 55, 11, 13}};
 constexpr Piece kT[] = {{"mainmenu", 40, 40, 58, 59, 0, 0}};     // Options' t
 constexpr Piece kO[] = {{"mainmenu", 67, 40, 87, 59, 0, 0}};     // Options' o
 constexpr Piece kSs[] = {{"mainmenu", 106, 40, 122, 59, 0, 0}};  // Options' s
-constexpr Piece kG[] = {{"sp_menu", 70, 0, 90, 21, 0, 1}};       // Game's G, its tail to row 22
-constexpr Piece kM[] = {{"sp_menu", 107, 0, 127, 19, 0, 1}};     // Game's m
+// Game's G, its tail to row 22; its last two columns only down to the jaw, where the a begins.
+constexpr Piece kG[] = {{"sp_menu", 70, 0, 88, 21, 0, 1}, {"sp_menu", 89, 0, 90, 10, 19, 1}};
+constexpr Piece kM[] = {{"sp_menu", 107, 0, 127, 19, 0, 1}};  // Game's m
 // The capital D: Load's L stem and the right half of Options' O.
 constexpr Piece kD[] = {{"sp_menu", 2, 20, 9, 39, 0, 0}, {"mainmenu", 11, 40, 21, 59, 8, 0}};
 
