@@ -285,6 +285,8 @@ struct TeamMatchReport {
   int64_t swim_wet = 0, swim_leading = 0;  // the swim field's wet cells, and those with a way out
   int64_t dives = 0;        // pockets only the water reaches, each with a field to dive in by
   double nav_build_ms = 0;  // measured
+  // The nav's links along a lip over lava or slime, and a side step off into it (map_nav.hpp).
+  int64_t nav_brink_links = 0, nav_side_brink_links = 0;
   int hold_item = -1, quad_item = -1;
   std::string locs_from;                     // where the place names came from
   int64_t locs = 0;                          // how many points they name

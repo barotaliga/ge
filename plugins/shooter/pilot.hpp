@@ -128,6 +128,12 @@ struct PilotSettings {
   bool gap_lava = false;
   // `brinkline`: the walk's look point stops at a node beside a lip over lava or slime.
   bool brink_line = false;
+  // `sidebrink`: a link whose side step falls into lava or slime (`NavLink::brink_side`) is a lip
+  // as a `brink` one is (every check of `brink` and `brink_line` reads it).
+  bool brink_side = false;
+  // `fallseen`: the walk foreseen (`ahead`) counts a flight that leaves the floor over lava or
+  // slime as the worst way (look_ahead.hpp `WalkStart::harm`).
+  bool walk_falls = false;
   // `curvekeys`: the keys are a keyboard's (a caller's, held on `curve_keys`): the run to a gap's
   // lip rolled out as keys, forward and the side key full at once a command late, not through the
   // hands' slew of the side axis.

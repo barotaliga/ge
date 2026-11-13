@@ -1498,6 +1498,9 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.gap_circle = features[sh::Feature::gapbuild];
   ps.gap_lava = features[sh::Feature::gaplava];
   ps.brink_line = features[sh::Feature::brinkline];
+  ps.brink_side = features[sh::Feature::sidebrink];
+  ps.walk_falls = features[sh::Feature::fallseen];
+  ps.jumper.lip_share = features[sh::Feature::sidebrink] ? kLipShare : 0;
   ps.curve_keys = features[sh::Feature::keys] && features[sh::Feature::curvekeys];
   ps.under_way = features[sh::Feature::underway];
   ps.retarget = features[sh::Feature::retarget];
@@ -2043,6 +2046,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   // landings or a knock, no key carries it into lava or slime (in the air a wish against the
   // run still brakes at the full acceleration: the air's cap is on the speed gained, not lost).
   bool brinked = false;
+  f.brink_note = -1;
   if (!dead && f.features[sh::Feature::brink]) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(me)];
     const sh::PilotMode pm = f.bot.pilot.pilot.mode;
@@ -2050,10 +2054,14 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
                            pm == sh::PilotMode::hop || pm == sh::PilotMode::idle ||
                            pm == sh::PilotMode::arrived || pm == sh::PilotMode::wait;
     // A flight the pilot proved lands safe (a gap trick's, or a hop by one) is not braked.
-    if (free_feet && d.waterlevel == 0 && !f.bot.pilot.pilot.brink_free &&
-        sh::brink_guard(s.sv, *f.bot.pilot.pilot.g, me, d.origin, d.velocity, cmd).changed) {
-      f.stats.brink++;
-      brinked = true;
+    if (free_feet && d.waterlevel == 0 && !f.bot.pilot.pilot.brink_free) {
+      const sh::BrinkGuard bg =
+          sh::brink_guard(s.sv, *f.bot.pilot.pilot.g, me, d.origin, d.velocity, cmd);
+      if (bg.ran) f.brink_note = bg.ways + (bg.run_in ? 10 : 0) + (bg.changed ? 100 : 0);
+      if (bg.changed) {
+        f.stats.brink++;
+        brinked = true;
+      }
     }
   }
   // The keys: pressed by a hand on a keyboard (keyboard.hpp), or the side key turned round as a

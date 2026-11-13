@@ -174,6 +174,8 @@ struct NavLink {
       false;            // a teleporter's: walked INTO its trigger (at the link's start), not across
   int32_t escape = -1;  // a rocket out of a pit's liquid: its index in `NavGraph::escapes`
   bool brink = false;   // a walk or drop along the lip over lava or slime (`nav_mark_harm`)
+  bool brink_side =
+      false;  // a walk or drop whose side step falls into lava or slime (`nav_mark_side_harm`)
   bool gap = false;  // a jump over a gap at a hopper's speed (`speed` past a run's; nav_gaps.hpp)
 };
 
@@ -196,6 +198,9 @@ struct NavJumper {
   float gap_build_s = -1;
   uint8_t level = 2;
   float extra_s = 0;
+  // A walk or drop along a lip over lava or slime (`brink` or `brink_side`) costs this share of
+  // its time more (`sidebrink`: a route up a ramp over a pit keeps to its middle, off the edge).
+  float lip_share = 0;
   // Whether he takes `l` at all (any link but a blast jump or a gap's: always).
   bool takes(const NavLink& l) const {
     if (l.kind == NavKind::script) return scripts;
@@ -209,7 +214,10 @@ struct NavJumper {
     return l.gap && gap_build_s >= 0 && l.level <= level && at_s >= gap_build_s;
   }
   // What `l` costs him, s.
-  float cost_s(const NavLink& l) const { return nav_blast(l.kind) ? l.time_s + extra_s : l.time_s; }
+  float cost_s(const NavLink& l) const {
+    if (nav_blast(l.kind)) return l.time_s + extra_s;
+    return l.brink || l.brink_side ? l.time_s * (1 + lip_share) : l.time_s;
+  }
 };
 
 // How the build went, for the lab.
@@ -412,6 +420,14 @@ int64_t nav_close_entries(NavGraph& g, std::span<const uint8_t> closed,
 int64_t nav_mark_harm(NavGraph& g, std::span<const uint8_t> harm, float reach = 40);
 // Whether a harm node lies within `reach` across of `p` and a step or more under it.
 bool nav_harm_near(const NavGraph& g, Vec3f p, float reach);
+// THE SIDE STEP INTO THE HARM (`nav_mark_side_harm`): a walk or drop over a deep pit (a ramp or a
+// walkway high over its lava: dm2's ramp up to the yellow armour runs 100-160 over it) has no harm
+// floor within `nav_mark_harm`'s reach, yet a run that cuts a corner off it falls in. Along every
+// walk and drop within `near` across of a harm node lower than it, every 16 units, the player's box
+// is swept `side` units out to each side (a wall stops it) and dropped to the floor: lava or slime
+// at its feet marks the link `brink_side`. Needs `NavGraph::harm` (`nav_mark_harm` first). Returns
+// how many links it marked.
+int64_t nav_mark_side_harm(NavGraph& g, const MoveWorld& world, float side = 72, float near = 320);
 
 // REPAIRING POCKETS (`nav_bridge_pockets`): after the build (and the water, the teleporters),
 // a POCKET is a set of nodes, joined by links among themselves, that the map's main part (the

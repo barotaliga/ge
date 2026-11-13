@@ -47,8 +47,9 @@ constexpr int kWalkWays = 4;
 constexpr int kWalkMs = 25;      // a flight's command, ms
 constexpr float kWalkBump = 40;  // the speed a wall takes in one command to count a bump, u/s
 const char* walk_way_name(WalkWay way);
-// The pilot's `because` for a walk pressed the way `way` (not the pursuit).
-const char* walk_way_because(WalkWay way);
+// The pilot's `because` for a walk pressed the way `way` (not the pursuit), round a bump or
+// (`fall`) away from a fall into lava or slime the pursuit's flight foresaw.
+const char* walk_way_because(WalkWay way, bool fall = false);
 
 // Another player as the walk foresees him: his box where he stands now, moved along `velocity`
 // (flat) through the flight. The pilot is handed at most `kWalkOthers`, the nearest.
@@ -71,11 +72,16 @@ struct WalkStart {
   float horizon = 0;                   // the flight's length, s (the delay included)
   std::span<const OtherBox> others;    // the players near, as boxes in the flight (empty: none)
   const MoveSettings* move = nullptr;  // the move flown (null: the default MoveSettings)
+  // A FALL INTO HARM foreseen too (`fallseen`): a flight whose box leaves the floor over lava or
+  // slime (the floor under it, traced down, in either) falls, and is put after every way that
+  // does not, bumps or none; the straight look along the velocity then looks for such a floor too.
+  bool harm = false;
 };
 
 struct WalkSeen {
   float bump = 0;    // the speed walls took in the flight, u/s summed
   float nearer = 0;  // how much nearer the aim it ends, units
+  bool falls = false;  // (`WalkStart::harm`) its box left the floor over lava or slime
 };
 
 // The way to press from `st` toward `aim` (`near`: the route's next node, the `near` way's aim),

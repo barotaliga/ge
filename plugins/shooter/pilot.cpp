@@ -208,6 +208,10 @@ bool is_barred(const Pilot& p, int32_t m) {
   return false;
 }
 
+// A lip over lava or slime to this pilot: a `brink` link, or with `sidebrink` one whose side step
+// falls in (`NavLink::brink_side`).
+bool lip(const Pilot& p, const NavLink& l) { return l.brink || (p.set.brink_side && l.brink_side); }
+
 // The end of a strafe stretch from route[k]: the furthest route index j whose links from k are
 // walks on one level, no mover, every node between within `line` of the straight line from the
 // player to node j; -1 when the stretch is shorter than `strafe_min`.
@@ -219,7 +223,7 @@ int32_t strafe_stretch(const Pilot& p, Vec3f at) {
     const NavLink* l = link_of(g, p.route[j - 1], p.route[j]);
     const Vec3f nj = node(g, p.route[j]).origin;
     if (l == nullptr || l->kind != NavKind::walk || l->mover >= 0) break;
-    if (p.set.brink && l->brink) break;
+    if (p.set.brink && lip(p, *l)) break;
     if (nj.z > z + kLevel || nj.z < z - kLevel) break;
     bool straight = true;
     for (size_t i = p.k + 1; i < j && straight; i++)
@@ -253,7 +257,7 @@ int32_t hop_stretch(const Pilot& p, Vec3f at) {
       continue;
     }
     if (l == nullptr || (l->kind != NavKind::walk && l->kind != NavKind::drop) || l->mover >= 0 ||
-        l->teleport || (p.set.brink && l->brink && !p.set.hop_lips))
+        l->teleport || (p.set.brink && lip(p, *l) && !p.set.hop_lips))
       break;
     const NavLink* l2 = j + 1 < p.route.size() ? link_of(g, p.route[j], p.route[j + 1]) : nullptr;
     if (l2 != nullptr && leaps(l2->kind) && !(l2->gap && hops_gaps(p))) break;
@@ -572,7 +576,7 @@ Vec3f pursue(const Pilot& p, Vec3f at, float look) {
         !level(g, p.route[k], p.route[k + 1], p.set.slopes) ||
         !level(g, p.route[k + 1], p.route[k + 2], p.set.slopes))
       return b;
-    if (p.set.brink_line && (l->brink || l2->brink)) return b;  // a lip's corner: turned at
+    if (p.set.brink_line && (lip(p, *l) || lip(p, *l2))) return b;  // a lip's corner: turned at
   }
 }
 
@@ -634,8 +638,10 @@ Vec3f aim_clear(const Pilot& p, const MoveWorld& world, Vec3f o, Vec3f at, Vec3f
 
 // THE WALK FORESEEN (look_ahead.hpp `foresee_walk`): the way the walk presses now; `w` keeps the
 // pursuit's keys or takes another way's.
-WalkWay foresee(const Pilot& p, const PilotSense& s, Vec3f aim, Vec3f near, Want& w, ai::Why* why) {
-  const WalkStart st{s.origin,
+WalkWay foresee(const Pilot& p, const PilotSense& s, Vec3f aim, Vec3f near, Want& w, ai::Why* why,
+                bool& fall) {
+  fall = false;
+  WalkStart st{s.origin,
                      s.velocity,
                      s.onground,
                      s.waterlevel,
@@ -646,10 +652,12 @@ WalkWay foresee(const Pilot& p, const PilotSense& s, Vec3f aim, Vec3f near, Want
                      p.set.lead_s + p.set.ahead_s,
                      p.set.ahead_bodies ? s.others : std::span<const OtherBox>{},
                      &p.g->move};
+  st.harm = p.set.walk_falls;
   WalkKeys keys;
   WalkSeen seen[kWalkWays];
   bool flown = false;
   const WalkWay way = foresee_walk(*s.world, st, aim, near, keys, seen, flown);
+  fall = flown && seen[0].falls;
   if (flown) record_walk(why, across({}, s.velocity), way, seen);
   if (way == WalkWay::pursue) return way;
   w.yaw = unwrap(keys.yaw, p.yaw);
@@ -2282,7 +2290,9 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       if (body && !wait_body) target = round;
       if (across(ahead, target) > 1) w.yaw = unwrap(yaw_at(ahead, target), p.yaw);
       w.forward = wait_body ? 0.f : facing(w.yaw, p.yaw);
-      const WalkWay seen = foreseeing ? foresee(p, s, target, B, w, why) : WalkWay::pursue;
+      bool fall_seen = false;
+      const WalkWay seen =
+          foreseeing ? foresee(p, s, target, B, w, why, fall_seen) : WalkWay::pursue;
       // Slowing into the goal (late hands run past a small top and off it, or orbit it).
       const float d = across(ahead, node(*p.g, p.route.back()).origin);
       if (d < p.set.look) w.forward *= d < p.set.look * kBrake ? kBrake : d / p.set.look;
@@ -2307,7 +2317,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       because = lift_brake                ? "a lift not there ahead: braking short of it"
                 : wait_body               ? "a player standing in the way: waiting for him"
                 : body                    ? "a player standing in the way: round him"
-                : seen != WalkWay::pursue ? walk_way_because(seen)
+                : seen != WalkWay::pursue ? walk_way_because(seen, fall_seen)
                 : l.kind == NavKind::drop ? "walking off the edge"
                                           : "walking the route";
       // A flip ahead within its turn: turning round into it already, strafing along the route.

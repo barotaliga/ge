@@ -409,6 +409,10 @@ struct Fighter {
   // "feet", "unseen", "retreat", "near", "blocked").
   double press_until = -1e9;
   const char* press_note = "-";
+  // For the trace alone: what the brink guard did this command (-1 it did not run: not near a
+  // harm node, or the feet not free; else the ways round into a pit, +10 the run heading in,
+  // +100 the keys changed).
+  int32_t brink_note = -1;
   int32_t press = 0;
   ge::core::Rng press_rng{1};
   // The ways in it watches from where it stands (watch.hpp): their spots, the node they were
@@ -451,6 +455,10 @@ struct Fighter {
 // `gapbuild`: a hopper plans a gap trick slower than a gap's speed when the route reaches the
 // takeoff this long after setting off, s (a hop gains about 100 units/s a second from a run's 320).
 constexpr float kGapBuild_s = 0.3f;
+
+// `sidebrink`: a walk or drop along a lip over lava or slime costs a route this share of its time
+// more (shooter/nav.hpp `NavJumper::lip_share`): up a ramp over a pit the route keeps to its middle.
+constexpr float kLipShare = 1.0f;
 
 // The pilot's settings and hands for a fighter with these behaviours and moves (`traits`' moves
 // tier: an expert hops on practised hands, an average player the simple hop on steady ones, a

@@ -825,6 +825,60 @@ int64_t nav_mark_harm(NavGraph& g, std::span<const uint8_t> harm, float reach) {
   return marked;
 }
 
+namespace {
+
+// Whether the player's box swept from `p` to `to` (stopped by a wall; a stair's step climbed: the
+// sweep tried a step and two higher too, the furthest kept), then dropped to the floor (400 units
+// at most), stands in lava or slime.
+bool side_falls_in(const MoveWorld& w, Vec3f p, Vec3f to) {
+  HullTrace go;
+  go.fraction = -1;
+  for (const float up : {0.f, kStepHeight, 2 * kStepHeight}) {
+    const HullTrace t = player_trace(w, {p.x, p.y, p.z + up}, {to.x, to.y, p.z + up});
+    if (!t.startsolid && !t.allsolid && t.fraction > go.fraction + 0.01f) go = t;
+    if (go.fraction >= 1) break;
+  }
+  if (go.fraction < 0) return false;
+  const Vec3f e = go.endpos;
+  const HullTrace down = player_trace(w, e, {e.x, e.y, e.z - 400});
+  if (down.fraction >= 1 || down.startsolid) return false;
+  const int c = water_contents(w, {down.endpos.x, down.endpos.y, down.endpos.z + kPlayerMins.z + 2});
+  return c == kContentsLava || c == kContentsSlime;
+}
+
+}  // namespace
+
+int64_t nav_mark_side_harm(NavGraph& g, const MoveWorld& world, float side, float near) {
+  if (g.harm.size() != g.nodes.size()) return 0;
+  int64_t marked = 0;
+  for (size_t a = 0; a < g.nodes.size(); a++) {
+    const NavNode& n = g.nodes[a];
+    if (g.harm[a] || !nav_harm_near(g, n.origin, near)) continue;
+    for (int32_t k = 0; k < n.links; k++) {
+      NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+      if ((l.kind != NavKind::walk && l.kind != NavKind::drop) || g.harm[static_cast<size_t>(l.to)])
+        continue;
+      const Vec3f A = n.origin, B = g.nodes[static_cast<size_t>(l.to)].origin;
+      const float len = across(A, B);
+      if (len < 1) continue;
+      // Across the link: its right hand, flat.
+      const float rx = (B.y - A.y) / len, ry = -(B.x - A.x) / len;
+      const int steps = 1 + static_cast<int>(len / 16);
+      for (int q = 0; q <= steps && !l.brink_side; q++) {
+        const float f = static_cast<float>(q) / static_cast<float>(steps);
+        // A step over the line's height: over a ramp's rise and a stair's tread.
+        const Vec3f p{A.x + (B.x - A.x) * f, A.y + (B.y - A.y) * f,
+                      A.z + (B.z - A.z) * f + kStepHeight};
+        for (const float s : {side, -side})
+          if (!l.brink_side && side_falls_in(world, p, {p.x + rx * s, p.y + ry * s, p.z}))
+            l.brink_side = true;
+      }
+      if (l.brink_side) marked++;
+    }
+  }
+  return marked;
+}
+
 void flip_keys(float way, float view, float& forward, float& side) {
   const ViewAxes ax = angle_vectors({0, view, 0});
   const Vec3f w = angle_vectors({0, way, 0}).forward;

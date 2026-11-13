@@ -162,6 +162,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   r.swim_wet = swim.wet;
   r.swim_leading = swim.leading;
   r.nav_build_ms = nav.build_ms;
+  r.nav_brink_links = nav.brink_links;
+  r.nav_side_brink_links = nav.side_brink_links;
   r.lo = graph.lo;
   r.hi = graph.hi;
   r.nav_nodes = static_cast<int64_t>(graph.nodes.size());

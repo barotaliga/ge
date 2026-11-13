@@ -600,6 +600,7 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
   sh::build_swim(out.world, graph, exits, sh::SwimSettings{}, out.swim);
   // THE BRINK (shooter/brink.hpp): the harm kept on the graph, the walks along its lips marked.
   out.brink_links = sh::nav_mark_harm(graph, out.harm);
+  out.side_brink_links = sh::nav_mark_side_harm(graph, out.world);
   sh::nav_room(graph);  // the room either side a walker strays into (pilot.hpp's lane)
   out.build_ms =
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();

@@ -1,6 +1,7 @@
 // THE BRINK: beside a pit of lava, a forward key over the lip is let go of, a run into it is
 // braked and its jump let go of, a key along the lip or away from it is kept, and far from any
-// harm nothing changes; the nav marks the walks along a lip and no other.
+// harm nothing changes; the nav marks the walks along a lip and no other, and a walk whose side
+// step falls into lava far below.
 //
 // ge:summary Tests: the brink guard's keys by a lava pit, and the nav's brink links
 // ge:keywords test brink brink_guard over_harm nav_mark_harm nav_harm_near lava-lip lava pit
@@ -9,6 +10,7 @@
 
 #include "check.hpp"
 #include "shooter/brink.hpp"
+#include "shooter/brush_hull.hpp"
 #include "shooter/hull.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooter_loop_bench.hpp"
@@ -133,4 +135,35 @@ TEST(the_nav_marks_the_walks_along_a_lip_and_no_other) {
   CHECK(sh::nav_harm_near(g, {-16, 0, 24}, 40));
   CHECK(!sh::nav_harm_near(g, {-600, 0, 24}, 40));
   CHECK(!sh::nav_harm_near(g, {16, 0, -104}, 40));  // the pit's own floor: not under it
+}
+
+TEST(a_walk_whose_side_step_falls_into_lava_far_below_is_marked_and_one_further_in_not) {
+  // A ledge (y 0..400, its top at z 0) high over a pit (y < 0) whose lava lies 150 down: the
+  // pit's floor nodes are far across from any walk on the ledge, so no walk is a `brink`.
+  const auto brush = [](int contents, sh::Vec3f lo, sh::Vec3f hi) {
+    sh::Brush b = box(lo, hi);
+    b.contents = contents;
+    return b;
+  };
+  const std::vector<sh::Brush> brushes = {
+      brush(sh::kContentsSolid, {-512, 0, -256}, {512, 400, 0}),
+      brush(sh::kContentsSolid, {-512, -512, -256}, {512, 0, -200}),
+      brush(sh::kContentsLava, {-512, -512, -200}, {512, 0, -150})};
+  const sh::HullData point = sh::build_point_hull(brushes);
+  const sh::HullData clip = sh::build_box_hull(brushes, sh::kPlayerMins, sh::kPlayerMaxs);
+  sh::MoveWorld world;
+  world.solids[0].point_hull = point.hull();
+  world.solids[0].clip_hull = clip.hull();
+  world.solids[0].mins = {-512, -512, -256};
+  world.solids[0].maxs = {512, 400, 0};
+  world.count = 1;
+  // Column order: the pit's floor (0,-160) 0, the edge walk's (-64,24) 1 and (64,24) 3, the
+  // middle walk's (-64,120) 2 and (64,120) 4.
+  sh::NavGraph g = graph(
+      {{0, -160, -176}, {-64, 24, 24}, {-64, 120, 24}, {64, 24, 24}, {64, 120, 24}},
+      {{1, 3}, {2, 4}});
+  CHECK(!g.links[0].brink && !g.links[1].brink);  // nothing harms within a lip's reach
+  CHECK(sh::nav_mark_side_harm(g, world) == 1);
+  CHECK(g.links[0].brink_side);   // 24 from the edge: a side step off it falls in
+  CHECK(!g.links[1].brink_side);  // 120 in: a side step lands on the ledge
 }

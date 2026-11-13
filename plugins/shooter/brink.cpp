@@ -42,6 +42,7 @@ BrinkGuard brink_guard(const Server& sv, const NavGraph& g, int me, Vec3f origin
                        MoveCmd& cmd) {
   BrinkGuard out;
   if (!nav_harm_near(g, origin, kNear)) return out;
+  out.ran = true;
   // The wish on the plan: forward along the view's yaw, the side to its right.
   const double yaw = cmd.angles.y * (core::kPi / 180.0);
   const float fx = static_cast<float>(core::libm::cos(yaw)),
