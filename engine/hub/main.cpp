@@ -283,6 +283,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     std::printf("%s_hub: archive %s: %zu demos, %.1f MB\n", spec.id.c_str(), o.archive.c_str(),
                 archive.rows.size(), static_cast<double>(archive.bytes) / 1e6);
   }
+  if (accounts.open) http.accounts = &accounts.svc;  // the Account page works its store
   if (!o.viewer.empty()) {
     http.viewer_dir = o.viewer;
     std::printf("%s_hub: viewer files from %s\n", spec.id.c_str(), o.viewer.c_str());
