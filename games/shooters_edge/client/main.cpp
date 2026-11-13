@@ -235,6 +235,8 @@ int run_main(int argc, char** argv) {
   shooters_edge::look::add_cvars(console, picture);
   shooters_edge::view::ViewSettings view_settings;
   shooters_edge::view::add_view_cvars(console.cvars(), view_settings);
+  ge::camera::CameraCvars camera_cvars;  // cl_bob, cl_rollangle, v_kick... at the classic look's
+  cl::add_view_camera_cvars(console.cvars(), camera_cvars);
   console.add_command("quit", "quit the game", [&](Con&, const CArgs&) { quit = true; });
   cl::UserInfo user_info;  // SETUP's colours (and the console's `name`), sent as they change
   cl::add_user_info_cvars(console, user_info);
@@ -1684,6 +1686,7 @@ int run_main(int argc, char** argv) {
     }
     // The eyes on the player and what the world throws, then the overlay: the HUD, the console.
     shown.lerp = picture.lerp_move;  // r_lerpmove: the eye between the server's frames too
+    cl::apply_view_cvars(camera_cvars, shown);
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
     view.frame = static_cast<uint64_t>(presented);
     fx_state.models = world ? &cl::world_models(*world) : nullptr;

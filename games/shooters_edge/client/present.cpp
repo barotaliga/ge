@@ -21,6 +21,29 @@ namespace {
 constexpr double kDeg = 3.14159265358979323846 / 180;
 }  // namespace
 
+void add_view_camera_cvars(ge::console::Cvars& c, ge::camera::CameraCvars& out) {
+  ge::camera::CameraDefaults d;  // the classic look's numbers, in map units
+  d.unit_m = ge::brush::kUnitM;
+  d.bob = 0.02;
+  d.bobcycle = 0.6;
+  d.bobup = 0.5;
+  d.rollangle = 2;
+  d.rollspeed = 200;
+  d.kicktime = 0.5;
+  d.kickpitch = d.kickroll = 0.6;
+  d.idlescale = 0;
+  d.landdip = 0;
+  ge::camera::add_camera_cvars(c, out, d);
+}
+
+void apply_view_cvars(const ge::camera::CameraCvars& c, ViewState& v) {
+  static const ge::camera::FirstPersonRow kClassic =
+      ge::camera::classic_first_person(ge::brush::kUnitM);
+  ge::camera::apply_first_person_cvars(c, kClassic, v.row);
+  v.viewheight_m = c.viewheight * c.unit_m;
+  if (c.fov > 0) v.row.fov_y = v.row.zoom_fov_y = ge::camera::fov_y_of(c.fov * kDeg, 4.0 / 3.0);
+}
+
 ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, double t, double dt) {
   // The mod's explosions since the last look (a rocket at point blank goes off in the frame that
   // fired it, so it is never seen in flight).
@@ -32,6 +55,7 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
   std::erase_if(v.blasts, [&](const Blast& b) { return t - b.t > kBlastS; });
 
   ge::camera::Subject s = subject_of(l, v.row);
+  if (v.viewheight_m > 0) v.row.eye_stand_m = v.viewheight_m;
   const PlayerState me = player_state(l);
   // The eye's place between the last two states, one server frame behind.
   if (l.server != nullptr) {
@@ -58,8 +82,7 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
       s.pos = engine_point(feet);
     }
   }
-  // The blows since the last look, each kicking the view away from its source.
-  v.row.kick_pitch = v.row.kick_roll = kHitKickDeg * kDeg;
+  // The blows since the last look, each tipping the view toward its source by its count.
   if (l.blows.size() < v.blows_seen) v.blows_seen = 0;  // a new map
   for (; v.blows_seen < l.blows.size(); v.blows_seen++) {
     const Blow& b = l.blows[v.blows_seen];
@@ -68,7 +91,7 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
     const double len = ge::core::hypot3(dir.x, dir.y, dir.z);
     if (len > 0) dir = {dir.x / len, dir.y / len, dir.z / len};
     ge::camera::add_moment(s, ge::camera::Moment::hit,
-                           std::min(1.0, (b.armor + b.blood) / kFullBlow), dir);
+                           std::max(kKickCountMin, 0.5 * b.armor + 0.5 * b.blood), dir);
   }
   if (l.forced) ge::camera::add_moment(s, ge::camera::Moment::teleport, 0);
   if (s.grounded && !v.was_grounded)
@@ -83,6 +106,7 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
   v.pose.pitch -= me.punch.x * kDeg;
   v.pose.yaw -= me.punch.y * kDeg;
   v.pose.roll += me.punch.z * kDeg;
+  if (me.dead) v.pose.roll = kDeadRollDeg * kDeg;  // lying on the floor
   ge::camera::to_frame_view(v.pose, view);
   return view;
 }

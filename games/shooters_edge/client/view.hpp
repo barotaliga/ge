@@ -34,8 +34,10 @@ double engine_pitch(float pitch_deg);
 // The HUD's snapshot of the player at the client's time `t`.
 hud::Status status_of(const Listen& l, double t);
 
+inline constexpr double kDeadEyeUnits = -16;  // the eye over the origin dead (lying down), units
+
 // The camera's subject: the feet, the velocity, grounded, the look. `row`'s standing eye height
-// is set from the mod's view offset (the eyes over the feet).
+// is set from the mod's view offset (the eyes over the feet), `kDeadEyeUnits` dead.
 ge::camera::Subject subject_of(const Listen& l, ge::camera::FirstPersonRow& row);
 
 }  // namespace shooters_edge::client
