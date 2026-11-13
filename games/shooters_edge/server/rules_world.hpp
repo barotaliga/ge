@@ -43,6 +43,9 @@ struct WorldEntity {
   // It turns about its yaw on the viewer's own clock, 100° a second (an item lying about), its own
   // angles set aside: what a runner whose `effects` are its own game's bits says to every reader.
   bool turns = false;
+  // A second model drawn with it, at its place and on its frame (a player's carried weapon): the
+  // model list's index; 0 none.
+  int carried_model = 0;
   float alpha = 1;                // 1 opaque (the extension field; 1 when the program has none)
   float scale = 1;                // the model's size (the extension field; 0 in it reads 1)
   float colormod[3] = {1, 1, 1};  // the tint (the extension field; '0 0 0' in it reads 1 1 1)
