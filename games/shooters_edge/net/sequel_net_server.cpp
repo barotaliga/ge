@@ -19,7 +19,7 @@ namespace {
 
 constexpr size_t kSignonShare = 700;  // bytes of the signon one answer adds before its prompt
 constexpr int kStringCmdsPerPacket = 7;
-constexpr uint8_t kSvcDisconnect = 7, kSvcStuffText = 11;
+constexpr uint8_t kSvcDisconnect = 7, kSvcStuffText = 11, kSvcDownload = 16;
 constexpr size_t kLogKept = 512;
 
 void note(SequelNetServer& s, std::string line) {
@@ -228,6 +228,14 @@ void string_command(SequelNetServer& s, int slot, const std::string& line) {
     c.acked = -1;
     sv::sequel_resync(c.wire);
     note(s, c.name + " entered the game");
+  } else if (cmd == "download") {
+    // No file is sent: a download is refused (size -1, percent 0) and the client goes on without
+    // it, as it does when an unmodified server's downloads are off.
+    const uint8_t refused[4] = {kSvcDownload, 0xff, 0xff, 0};
+    reliable(c, std::vector<uint8_t>(refused, refused + 4));
+    note(s, c.name + " asked for " + (w.size() > 1 ? w[1] : std::string("a file")) +
+                ", which this server does not send");
+  } else if (cmd == "nextdl") {
   } else if (cmd == "disconnect") {
     drop(s, slot, "left");
   } else if (c.stage == SequelSlot::active) {

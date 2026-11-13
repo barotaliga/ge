@@ -426,6 +426,16 @@ sequel server built beside the checkout (15 s each, loopback):
 | The proxies, 10% link loss, one copy | 13.6% of the server's packets lost; the signon did not finish |
 | The proxies, 10% link loss, three copies | 38 frames, no loss |
 
+An unmodified client of the sequel through `shooters_edge_hops proxy` (near and far in one
+process, the link between them losing 10% of its frames each way), 30 s on the full game's q2dm1,
+to our `shooters_edge_sequel_server` and to an unmodified server alike:
+
+| Path | Server packets lost on the link | What the player saw |
+| --- | --- | --- |
+| One copy, to ours | 10.1% (48 of 475) | in game, the losses as the client's own |
+| Three copies, to ours | 0.2% (1 of 464) | in game, as on a clean line |
+| Three copies, to an unmodified server | 0% (0 of 63) | in game, as on a clean line |
+
 ## The sequel's recordings
 
 The sequel's client recording (a `.dm2`: blocks of a 32-bit length and one server packet's messages,
