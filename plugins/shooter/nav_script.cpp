@@ -70,8 +70,20 @@ bool reached_step(const NavScript& sc, size_t i, Vec3f o, bool onground, float a
 }  // namespace
 
 ScriptKeys script_keys(const NavScript& sc, size_t& i, Vec3f origin, Vec3f velocity, bool onground,
-                       float arrive) {
+                       float arrive, bool loose_entry) {
   ScriptKeys k;
+  if (loose_entry && i == 0 && sc.steps.size() > 1 && onground &&
+      !reached_step(sc, 0, origin, onground, arrive)) {
+    const float dz = origin.z - sc.steps[0].at.z;
+    if (dz <= kOnHeight && dz >= -kOnHeight && across(origin, sc.steps[0].at) <= kSlowInto) {
+      if (!lined_up(sc, velocity)) {
+        k.yaw = yaw_at(origin, sc.steps[1].at);
+        k.forward = 0;
+        return k;
+      }
+      i = 1;  // lined up near the entry: on to the first step from here
+    }
+  }
   while (i < sc.steps.size() && reached_step(sc, i, origin, onground, arrive)) {
     // The entry is left only lined up: a player carried in fast or from the side brakes there
     // and turns down the script (its proof starts standing).

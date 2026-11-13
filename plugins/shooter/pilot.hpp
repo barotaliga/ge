@@ -181,6 +181,13 @@ struct PilotSettings {
   // at its rest, the keys let go within the run's stop of it (the wait is at its edge, not in the
   // shaft under it).
   bool lift_brake = false;
+  // THE SCRIPT FROM ITS START (`scriptfresh`): a scripted way left (another goal, a fight's
+  // replan) and come back to is flown from its first step, not the step it was left at (e1m2's YA
+  // stairs: a climb left on the walkway's step aimed at it from the floor, into the riser or
+  // under the walkway into the pool).
+  bool script_fresh = false;
+  // THE SCRIPT'S ENTRY HAD NEAR IT (`scriptentry`, nav_script.hpp `script_keys`' loose entry).
+  bool script_entry = false;
   CircleSettings circle;
   // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while `jumper.rockets` is set (the
   // caller's say: the launcher in hand, its rockets, the health for the blast), those of its
@@ -367,6 +374,7 @@ struct Pilot {
   int tries = 0;                             // and the run-ups at it
   int32_t script_from = -1, script_to = -1;  // the scripted way being flown (nav_script.hpp)
   size_t script_step = 0, script_seen = 0;   // its step aimed at, and the furthest yet
+  double script_at = -1e9;                   // the clock it was last flown at (`script_fresh`)
   bool script_done = false;                  // its last step reached
   const char* because = "";                  // the last command's reason, for a trace
   // A rocket jump's shot ahead (this command's, read by the view's hand): the view it fires with

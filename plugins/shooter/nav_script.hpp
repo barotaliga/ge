@@ -51,8 +51,11 @@ struct ScriptKeys {
 // The keys for a player at `origin` moving at `velocity` along `sc`, aiming at step `i` (moved on
 // as each is reached; the entry, step 0, only once he is lined up: under 330 units/s and standing
 // or running within 30 degrees of the way to step 1, else braking there turned down the script).
+// With `loose_entry` (`scriptentry`) the entry is had anywhere within `kSlowInto` of it once lined
+// up, and short of that the keys let go, turned up the script: a player run in from the side
+// circled the entry's point at ~200 units/s under a keyboard's taps, never on it slow and lined up.
 ScriptKeys script_keys(const NavScript& sc, size_t& i, Vec3f origin, Vec3f velocity, bool onground,
-                       float arrive);
+                       float arrive, bool loose_entry = false);
 
 // The script flown by the move from standing at `from`.
 NavProof prove_script(const MoveWorld& world, const MoveSettings& move, Vec3f from,
