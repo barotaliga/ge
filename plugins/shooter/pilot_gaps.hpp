@@ -21,6 +21,10 @@ namespace ge::shooter::pilot_parts {
 
 inline constexpr float kGapLand = 48;        // a gap's jump lands across within this of its landing
 inline constexpr float kGapUp = 32;          // and within this up or down
+// (`gapturn`) a run this fast, heading this far off a gap's jump (degrees), is turned to the gap
+// on the ground this long at most (s) before the gap is given up.
+inline constexpr float kGapTurnSpeed = 150, kGapTurnOff = 60;
+inline constexpr double kGapTurnMost_s = 1.5;
 inline constexpr float kGapCurveFrom = 160;  // a curve into a gap begun this near its start, units
 
 // Whether a jump pressed at `at` moving at `velocity` comes down across, by the gap's landing `T`:
