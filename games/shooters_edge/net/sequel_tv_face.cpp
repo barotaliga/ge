@@ -257,7 +257,11 @@ void new_level(SequelTvFace& f) {
     v.queue.clear();
     // As a server changing levels: the client keeps its connection and asks for the signon again
     // with `new`; it may be sent this one message before it does.
-    static constexpr char kAgain[] = "\x0b" "changing\n\0" "\x0b" "reconnect\n";
+    static constexpr char kAgain[] =
+        "\x0b"
+        "changing\n\0"
+        "\x0b"
+        "reconnect\n";
     queue(v, std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(kAgain), sizeof kAgain));
     v.stage = SequelViewerStage::signon;
     v.asked = false;
