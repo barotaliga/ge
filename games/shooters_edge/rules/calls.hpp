@@ -15,7 +15,7 @@
 // call and field access is a no-op and the function should return: `q.failed()`.
 //
 // ge:summary The classic server's globals, fields and builtins typed for rules written in C++
-// ge:keywords native rules-calls c++-rules builtins makevectors setorigin spawn remove find
+// ge:keywords native rules-calls native-rules builtins makevectors setorigin spawn remove find
 // ge:keywords findradius bprint sprint sound writebyte multicast vector-math native-program
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_native_rules_test.cpp

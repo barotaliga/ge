@@ -20,7 +20,7 @@
 //
 // ge:summary A native program: a progs built from a declaration whose functions are C++
 // ge:keywords native native-program native-function build_native_progs bind_natives knativebase
-// ge:keywords declaration globals fields strings functions c++-rules no-bytecode
+// ge:keywords declaration globals fields strings functions native-rules no-bytecode
 // ge:skill progs
 // ge:test tests/progs_native_test.cpp
 #pragma once

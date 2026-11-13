@@ -3,7 +3,7 @@
 // on either plays the same. Each function's comment is the rule it carries.
 //
 // ge:summary The test mod written in C++ as a native program, played as the assembled one plays
-// ge:keywords test-mod native native-test-mod c++-rules worldspawn putclientinserver t_damage
+// ge:keywords test-mod native native-test-mod native-rules worldspawn putclientinserver t_damage
 // ge:keywords missile_touch w_firerocket startframe native_test_mod
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_native_rules_test.cpp
@@ -13,7 +13,7 @@
 #include <cstdint>
 
 #include "shooter/entity.hpp"
-#include "shooters_edge/server/rules_calls.hpp"
+#include "shooters_edge/rules/calls.hpp"
 
 namespace shooters_edge::server {
 

@@ -1,5 +1,5 @@
 // Tests: rules written in C++ as a native program (progs/native.hpp) on the mod server, through
-// the classic server's calls (shooters_edge/server/rules_calls.hpp). The test mod in C++
+// the classic server's calls (shooters_edge/rules/calls.hpp). The test mod in C++
 // (test_mod_native.cpp) and the assembled test mod play the same match side by side: every
 // player's path and frags each frame, every hook call in order, every print and frag line, every
 // builtin's count, and the loop's digest every frame.
