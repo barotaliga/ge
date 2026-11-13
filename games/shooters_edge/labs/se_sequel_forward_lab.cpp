@@ -8,7 +8,7 @@
 // what the server saw as the client's address, and how much of the server's traffic the client
 // lost with the proxy and without it.
 //
-// ge:summary Lab: our sequel client through two forwarders or our proxy, to our server or a live one
+// ge:summary Lab: the sequel client through two forwarders or the proxies, to any sequel server
 // ge:keywords lab se-sequel-forward sequel forward proxy hops chain route dial lossy-link
 // ge:keywords client-loss live-server
 // ge:skill net shooter labs
