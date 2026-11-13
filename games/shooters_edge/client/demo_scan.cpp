@@ -53,6 +53,7 @@ struct Death {
   int stack = 0, stack_armour = 0;
   double stack_s = 0;
   int32_t victim_weapon = 0, victim_items = 0;  // his active weapon and items while last alive
+  int32_t victim_rockets = 0;                   // and his rockets
 };
 
 struct Gain {
@@ -75,7 +76,7 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error, bool track
   std::array<bool, kSlots> was_dead{};
   std::array<int32_t, kSlots> was_health{};
   // Each player's weapon in hand and items while last alive (the hide: what a death drops).
-  std::array<int32_t, kSlots> alive_weapon{}, alive_items{};
+  std::array<int32_t, kSlots> alive_weapon{}, alive_items{}, alive_rockets{};
   std::array<int32_t, kSlots> was_frags{};
   std::array<double, kSlots> jumped;
   jumped.fill(-1e9);
@@ -105,6 +106,7 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error, bool track
       was_health.fill(0);
       alive_weapon.fill(0);
       alive_items.fill(0);
+      alive_rockets.fill(0);
       was_frags = s.frags;
       for (auto& p : past) p.clear();
       flying.clear();
@@ -192,6 +194,7 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error, bool track
         dd.jumped = jumped;
         dd.victim_weapon = alive_weapon[static_cast<size_t>(k)];
         dd.victim_items = alive_items[static_cast<size_t>(k)];
+        dd.victim_rockets = alive_rockets[static_cast<size_t>(k)];
         dd.victim_at = h.empty() ? p.origin : h.back().origin;
         // In the air: well over the lowest he stood lately, and moving up or down.
         float floor = dd.victim_at.z;
@@ -223,6 +226,8 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error, bool track
         const int32_t aw = stat_of(k, kStatActiveWeapon), it = stat_of(k, kStatItems);
         if (aw >= 0) alive_weapon[static_cast<size_t>(k)] = aw;
         if (it >= 0) alive_items[static_cast<size_t>(k)] = it;
+        const int32_t rk = stat_of(k, kStatRockets);
+        if (rk >= 0) alive_rockets[static_cast<size_t>(k)] = rk;
         h.push_back(
             {now, p.origin, health >= 0 ? health + std::max(armour, 0) : 0, std::max(armour, 0)});
         while (!h.empty() && now - h.front().t > kStackLookS + 0.5) h.erase(h.begin());
@@ -252,6 +257,7 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error, bool track
     k.victim_at = dd.victim_at;
     k.victim_weapon = weapon_of(dd.victim_weapon);
     k.victim_launcher = (dd.victim_items & kItemLauncher) != 0;
+    k.victim_rockets = dd.victim_rockets;
     Gain* best = nullptr;
     for (Gain& g : gains) {
       if (g.left <= 0 || g.slot == dd.victim || std::fabs(g.t - dd.t) > kKillMatchS) continue;

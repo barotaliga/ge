@@ -89,6 +89,7 @@ struct DemoKill {
   // hide: an owner killed with another weapon in hand drops no launcher; melee: unknown).
   hud::Weapon victim_weapon = hud::Weapon::melee;
   bool victim_launcher = false;
+  int victim_rockets = 0;  // his rockets while last alive (none: the launcher could not be held)
 };
 
 // A rocket's or a grenade's flight.
