@@ -13,6 +13,10 @@
 //   shooters_edge_hops proxy-far --port=<p> --allow=<host[:port],...> | --open [--copies=3]
 //   shooters_edge_hops tv --port=27900 --server=<host:stream port> [--server-password=<pw>]
 //                         [--password=<pw>] [--delay=7] [--name=tv]
+//   shooters_edge_hops tv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]
+//                         a client recording played round and round to any classic client, the
+//                         oldest too, over plain protocol 28   (classic_tv_udp.hpp,
+//                         classic_tv_recording.hpp)
 //   shooters_edge_hops sequel-tv --port=27911 --server=<sequel host:port> [--server-password=<pw>]
 //                         [--password=<pw>] [--delay=7] [--name=tv]   (sequel_tv_relay.hpp)
 //   shooters_edge_hops sequel-tv --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
@@ -45,6 +49,7 @@
 #include "proxy/proxy.hpp"
 #include "shooters_edge/net/classic_forward.hpp"
 #include "shooters_edge/net/classic_tv.hpp"
+#include "shooters_edge/net/classic_tv_recording.hpp"
 #include "shooters_edge/net/sequel_tv_demo.hpp"
 #include "shooters_edge/net/sequel_tv_relay.hpp"
 
@@ -162,6 +167,10 @@ struct Hops {
   sn::SequelTvFace sq_demo_face;  // --demo: the face fed from a recording, no watcher
   sn::SequelTvDemo sq_demo;
   bool has_sq_demo = false;
+  gn::Transport qw_face;  // tv --demo: the face for classic clients fed from a recording
+  sn::ClassicTvUdp cl_demo_face;
+  sn::UdpTvRecording cl_demo;
+  bool has_cl_demo = false;
   bool forward = false, has_near = false, has_far = false, has_tv = false;
 };
 
@@ -214,6 +223,10 @@ std::string status_line(const Hops& h) {
          std::to_string(h.sq.face.blocks) + ", whole frames " +
          std::to_string(h.sq.face.whole_frames) + ", viewers " +
          std::to_string(sn::sequel_tv_viewers(h.sq.face)) + ". ";
+  if (h.has_cl_demo)
+    s += "tv: recording packets " + std::to_string(h.cl_demo.packets) + ", rounds " +
+         std::to_string(h.cl_demo.rounds) + (h.cl_demo.ended ? " (ended)" : "") + ", viewers " +
+         std::to_string(sn::udp_tv_viewers(h.cl_demo_face)) + ". ";
   if (h.has_sq_demo)
     s += "sequel tv: recording frames " + std::to_string(h.sq_demo.frames) + ", rounds " +
          std::to_string(h.sq_demo.rounds) + (h.sq_demo.ended ? " (ended)" : "") + ", viewers " +
@@ -355,6 +368,26 @@ int run(int argc, char** argv) {
       std::printf("the link loses %s of its frames each way (a test)\n",
                   ge::core::num::to_fixed(o.link_loss, 2).c_str());
     }
+  } else if (o.kind == "tv" && !o.demo.empty()) {
+    std::ifstream in(o.demo, std::ios::binary);
+    std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                               std::istreambuf_iterator<char>());
+    if (bytes.empty())
+      return fail("the recording " + o.demo + " did not open",
+                  "name a client recording that exists");
+    if (!sn::udp_tv_recording_open(h.cl_demo, std::move(bytes), true, error))
+      return fail(o.demo + ": " + error, "name a multiplayer client's recording");
+    const gn::Address bind = at(o.bind, o.port > 0 ? o.port : 27900);
+    if (!gn::open_udp_transport(h.qw_face, bind, &error))
+      return fail("the TV's socket did not open on " + gn::to_string(bind) + ": " + error,
+                  "pick a free --port");
+    sn::UdpTvConfig fc;
+    fc.name = o.name.empty() ? "Shooter's Edge TV" : o.name;
+    fc.password = o.password;
+    sn::udp_tv_start(h.cl_demo_face, h.qw_face, fc);
+    h.has_cl_demo = true;
+    std::printf("tv on %s, playing %s round and round to classic clients\n",
+                gn::to_string(bind).c_str(), o.demo.c_str());
   } else if (o.kind == "tv") {
     if (!o.has_server)
       return fail("a TV node relays one server's stream port", "--server=<host:port>");
@@ -437,6 +470,12 @@ int run(int argc, char** argv) {
       for (; face_log < h.sq.face.log.size(); face_log++)
         std::printf("tv: %s\n", h.sq.face.log[face_log].c_str());
     }
+    if (h.has_cl_demo) {
+      sn::udp_tv_recording_update(h.cl_demo, h.cl_demo_face, now_us);
+      sn::udp_tv_frame(h.cl_demo_face, now_us);
+      for (; face_log < h.cl_demo_face.log.size(); face_log++)
+        std::printf("tv: %s\n", h.cl_demo_face.log[face_log].c_str());
+    }
     if (h.has_sq_demo) {
       sn::sequel_tv_demo_update(h.sq_demo, h.sq_demo_face, now_us);
       sn::sequel_tv_frame(h.sq_demo_face, now_us);
@@ -456,6 +495,7 @@ int run(int argc, char** argv) {
   if (h.has_tv) sn::tv_close(h.tv);
   if (h.has_sq) sn::sequel_tv_relay_close(h.sq);
   if (h.has_sq_demo) sn::sequel_tv_stop(h.sq_demo_face);
+  if (h.has_cl_demo) sn::udp_tv_stop(h.cl_demo_face);
   return 0;
 }
 
