@@ -32,6 +32,7 @@
 
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "console/cfg_tidy.hpp"
 #include "console/console.hpp"
 #include "console/words.hpp"
 #include "net/sim_network.hpp"
@@ -232,6 +233,13 @@ TEST(classic_game_every_server_setting_explains_itself) {
     CHECK_MSG(ge::console::words_fault(*v).empty(), v->name + ": " + ge::console::words_fault(*v));
     CHECK_MSG(!v->values.empty() || v->kind == ge::console::CvarKind::text, v->name);
   }
+  // A server.cfg setting any of the mod's own settings to its default checks clean: the server
+  // knows every one (but sv_progs, which only a test match reads).
+  std::string cfg_text;
+  for (const ge::console::Cvar* v : mod->cvars.sorted())
+    if (v->name != "sv_progs") cfg_text += v->name + " \"" + v->fallback + "\"\n";
+  for (const ge::console::CfgFinding& f : ge::console::check_cfg(con, cfg_text))
+    CHECK_MSG(false, std::to_string(f.line) + ": " + f.what);
 }
 
 TEST(classic_game_the_shooter_s_and_the_endpoint_s_settings) {
