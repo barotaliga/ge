@@ -252,6 +252,7 @@ std::vector<std::string> game_archives(const std::string& root, const std::strin
   std::sort(packs.begin(), packs.end());
   std::sort(others.begin(), others.end());
   std::vector<std::string> out;
+  out.reserve(packs.size() + others.size());
   for (const auto& p : packs) out.push_back((dir / p.second).string());
   for (const auto& o : others) out.push_back((dir / o.second).string());
   return out;
