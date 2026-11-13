@@ -231,6 +231,12 @@ struct SequelPlayer {
   ge::shooter::MidairTally midair;  // his counted midairs this level (plugins/shooter/midair.hpp)
   SqBody carry, entered;
   SqPose pose;  // the frame his body shows (sequel_poses.hpp)
+  // The status bar's (sequel_bar.hpp): the item last picked up (its number, 0 none) and when, and
+  // the blows taken in rules frame `hit_frame` (bit 1 to his health, bit 2 to his armour).
+  int picked = 0;
+  double picked_at = -100;
+  int64_t hit_frame = -1;
+  int hit_bits = 0;
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.
@@ -308,10 +314,11 @@ struct SequelServer : RulesCommon {
   double host_time = 0;               // the host's clock, s
   int next_userid = 1;
   SequelMissile missiles[kSequelMissiles];
-  int weapon_models[kSqWeaponCount] = {};  // each weapon's view model in the model list
-  int missile_models[kSqShotKinds] = {};   // by `SqShot`
-  std::vector<std::string> obituaries;     // every death's line, in order (the tests, the lab)
-  std::vector<sh::Packet> rj_packets;      // a frame's packets as the rocket jump helper left them
+  int weapon_models[kSqWeaponCount] = {};   // each weapon's view model in the model list
+  int carried_models[kSqWeaponCount] = {};  // each weapon as another player sees it carried
+  int missile_models[kSqShotKinds] = {};    // by `SqShot`
+  std::vector<std::string> obituaries;      // every death's line, in order (the tests, the lab)
+  std::vector<sh::Packet> rj_packets;       // a frame's packets as the rocket jump helper left them
   SequelDrop drops[kSequelDrops];
   SequelBody bodies[kSequelBodies];
   int next_body = 0;             // the body slot the next respawn fills

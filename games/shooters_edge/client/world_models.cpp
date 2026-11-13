@@ -203,6 +203,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       p.frame = row.frame;
       p.skin = row.skin;
       p.turns = row.turns;
+      if (row.carried_model > 0 && row.carried_model < models) p.carried = row.carried_model;
     }
     p.alpha = entity_alpha(l, e);
     entity_look(l, e, p);
@@ -214,6 +215,14 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       p.bottom = colour_row(c, "bottomcolor", 0);
     }
     out.push_back(p);
+    if (p.carried > 0) {  // the weapon it carries: the same place and frame, its own model
+      Placed w = p;
+      w.entity = e + kCarriedEntity;
+      w.modelindex = p.carried;
+      w.skin = 0;
+      w.carried = 0;
+      out.push_back(w);
+    }
   }
   for (size_t i = 0; i < s.statics.size(); i++) {
     const sv::StaticEntity& st = s.statics[i];

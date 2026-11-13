@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "brush/trace.hpp"
@@ -21,6 +22,7 @@
 #include "core/num.hpp"
 #include "shooter/aim_help.hpp"
 #include "shooters_edge/server/messages.hpp"
+#include "shooters_edge/server/sequel_bar.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
 #include "shooters_edge/server/shot_help.hpp"
@@ -38,6 +40,21 @@ constexpr int32_t kWorldMask = sh::kSqSolid | sh::kSqWindow;
 constexpr int32_t kShotMask = kWorldMask | sh::kSqMonster;  // a shot stops at a monster too
 constexpr int32_t kSurfSky = 0x4;  // a sky surface: a shot that reaches it is gone
 constexpr uint32_t kEveryone = 0xffffffffu;
+// The carried weapons' names, in a client's order (it numbers them from 1).
+constexpr std::pair<SqWeapon, const char*> kCarried[] = {
+    {SqWeapon::blaster, "#w_blaster.md2"},
+    {SqWeapon::shotgun, "#w_shotgun.md2"},
+    {SqWeapon::super_shotgun, "#w_sshotgun.md2"},
+    {SqWeapon::machinegun, "#w_machinegun.md2"},
+    {SqWeapon::chaingun, "#w_chaingun.md2"},
+    {SqWeapon::hand_grenade, "#a_grenades.md2"},
+    {SqWeapon::grenade_launcher, "#w_glauncher.md2"},
+    {SqWeapon::rocket_launcher, "#w_rlauncher.md2"},
+    {SqWeapon::hyperblaster, "#w_hyperblaster.md2"},
+    {SqWeapon::railgun, "#w_railgun.md2"},
+    {SqWeapon::bfg, "#w_bfg.md2"},
+};
+
 constexpr const char* kMissileModels[kSqShotKinds] = {"models/objects/laser/tris.md2",
                                                       "",
                                                       "",
@@ -301,6 +318,13 @@ void midair_hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int d
   s.midair_frags = 0;
 }
 
+// A blow the status bar shows for the frame (sequel_bar.hpp): `bit` 1 to health, 2 to armour.
+void mark_hit(const SequelServer& s, SequelPlayer& p, int bit) {
+  if (p.hit_frame != s.frame_number) p.hit_bits = 0;  // a new frame's blows
+  p.hit_frame = s.frame_number;
+  p.hit_bits |= bit;
+}
+
 void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, int knockback,
           bool energy, int weapon, bool no_armour = false, bool past_invulnerable = false) {
   if (!fightable(s, target) || damage <= 0) return;
@@ -323,8 +347,11 @@ void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, 
   int saved = 0;
   if (!no_armour) {
     if (along) saved += power_save(p, dir, damage);
-    saved += sq_armour_save(p.body, damage - saved, energy);
+    const int armour = sq_armour_save(p.body, damage - saved, energy);
+    saved += armour;
+    if (armour > 0) mark_hit(s, p, 2);
   }
+  if (damage - saved > 0) mark_hit(s, p, 1);
   p.health -= float(damage - saved);
   if (p.health <= 0) {
     p.health = std::max(p.health, -999.0f);
@@ -742,6 +769,9 @@ void fight_precache(SequelServer& s) {
     return static_cast<int>(s.models.size()) - 1;
   };
   for (int w = 0; w < kSqWeaponCount; w++) s.weapon_models[w] = model(kSqWeapons[w].view_model);
+  // The weapons as others see them carried: names a client takes from the player's own model
+  // folder ("#" and the file), in the order a client numbers them from 1 (the skin's high byte).
+  for (const auto& [w, name] : kCarried) s.carried_models[static_cast<int>(w)] = model(name);
   for (int k = 0; k < kSqShotKinds; k++) s.missile_models[k] = model(kMissileModels[k]);
   const auto add_sound = [&s](const char* name) {
     if (std::find(s.sounds.begin(), s.sounds.end(), name) == s.sounds.end())
@@ -990,6 +1020,10 @@ void fight_took(SequelServer& s, int slot, int item) {
   SequelPlayer& p = s.players[slot];
   const SqItem& it = kSqItems[item];
   const bool dm = deathmatch(s);
+  // The status bar's pickup (3 s), and the item selected when it has a use.
+  p.picked = sq_item_number(item);
+  p.picked_at = s.level_time;
+  if (sq_selects(p.picked)) p.body.selected = p.picked;
   if (it.kind == SqKind::power_armour && dm && p.body.counts[item] == 1) p.power_on = true;
   if (it.kind == SqKind::powerup && dm && (s.cvars.find("dmflags")->integer() & 16) != 0)
     fight_use(s, slot, item);                     // instant items

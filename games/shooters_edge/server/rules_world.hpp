@@ -43,6 +43,9 @@ struct WorldEntity {
   // It turns about its yaw on the viewer's own clock, 100° a second (an item lying about), its own
   // angles set aside: what a runner whose `effects` are its own game's bits says to every reader.
   bool turns = false;
+  // A second model drawn with it, at its place and on its frame (a player's carried weapon): the
+  // model list's index; 0 none.
+  int carried_model = 0;
   float alpha = 1;                // 1 opaque (the extension field; 1 when the program has none)
   float scale = 1;                // the model's size (the extension field; 0 in it reads 1)
   float colormod[3] = {1, 1, 1};  // the tint (the extension field; '0 0 0' in it reads 1 1 1)
@@ -68,6 +71,9 @@ struct PlayerNumbers {
   // runner's own weapon index, and every ammunition by its own index.
   int32_t held = 0, carried = 0;
   float stock[8] = {};
+  // A layout game's 32 stats, the numbers its status bar program reads (the sequel's: health,
+  // ammo, armour, their icons as indices into `RulesWorld::images`, the pickup, the timer, ...).
+  int16_t stats[32] = {};
 };
 
 // One client slot (the player is entity slot + 1).
@@ -99,6 +105,11 @@ struct RulesWorld {
   std::vector<WorldStatic> statics;
   int max_clients = sh::kMaxClients;
   bool weapon_frames = false;  // the rules animate the held weapon (`weapon_frame` is live)
+  // A layout game's status bar: its program (the layout language a client runs every frame), the
+  // pictures its stats name by index ([0] "": none) and the item names they name (the pickup's).
+  std::string status_bar;
+  std::vector<std::string> images;
+  std::vector<std::string> item_names;
 
   // Rewritten when they change (a string is copied only when it differs).
   std::string lightstyles[kWorldLightStyles];

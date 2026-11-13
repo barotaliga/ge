@@ -26,7 +26,7 @@ constexpr uint8_t kPrint = 10, kStuffText = 11, kServerData = 12, kConfigString 
 // Configstring slots.
 constexpr int kCsName = 0, kCsSky = 2, kCsSkyAxis = 3, kCsSkyRotate = 4, kCsStatusBar = 5,
               kCsMaxClients = 30, kCsChecksum = 31, kCsModels = 32, kCsSounds = 288,
-              kCsLights = 800, kCsSkins = 1312;
+              kCsImages = 544, kCsLights = 800, kCsItems = 1056, kCsSkins = 1312;
 
 // An entity delta's flag bits.
 constexpr uint32_t kOriginX = 1u << 0, kOriginY = 1u << 1, kAngleYaw = 1u << 2,
@@ -76,9 +76,10 @@ int8_t quarter(float v) { return static_cast<int8_t>(std::clamp(v * 4.0f, -128.0
 // The wire's model number for the runner's: the map itself is 1, so every other is one up.
 int wire_model(int ours) { return ours <= 0 ? 0 : ours + 1; }
 
-// The status bar, in the layout language a client draws (y from the bottom, x from the centre, the
-// big numbers of health, ammunition and armour by their stats 1, 3 and 5). Kept under the slot's
-// 64 bytes so it never runs on into the next configstring.
+// The status bar of rules that send none, in the layout language a client draws (y from the bottom,
+// x from the centre, the big numbers of health, ammunition and armour by their stats 1, 3 and 5).
+// A longer one (the sequel's own, sequel_bar.hpp) runs on into the slots after 5, as a client
+// reads it.
 constexpr const char* kStatusBar = "yb -24 xv 16 hnum xv 116 anum xv 216 rnum";
 
 // The configstrings the runner's state gives.
@@ -91,13 +92,17 @@ void config_strings(const RulesCommon& c, const SequelWireOptions& opt,
   cs[kCsSky] = opt.sky;
   cs[kCsSkyAxis] = opt.sky_axis;
   cs[kCsSkyRotate] = opt.sky_rotate;
-  cs[kCsStatusBar] = kStatusBar;
+  cs[kCsStatusBar] = c.world.status_bar.empty() ? std::string(kStatusBar) : c.world.status_bar;
   cs[kCsModels + 1] = "maps/" + c.map_name + ".bsp";
   for (size_t i = 1; i < c.models.size(); i++) {
     const int at = wire_model(static_cast<int>(i));
     if (at < 256) cs[size_t(kCsModels) + size_t(at)] = c.models[i];
   }
   for (size_t i = 1; i < c.sounds.size() && i < 256; i++) cs[kCsSounds + i] = c.sounds[i];
+  for (size_t i = 1; i < c.world.images.size() && i < 256; i++)
+    cs[kCsImages + i] = c.world.images[i];
+  for (size_t i = 1; i < c.world.item_names.size() && i < 256; i++)
+    cs[kCsItems + i] = c.world.item_names[i];
   for (int i = 0; i < kLightStyles && i < kWorldLightStyles; i++)
     cs[size_t(kCsLights) + size_t(i)] = c.world.lightstyles[i];
   for (int s = 0; s < sh::kMaxClients; s++)
@@ -134,6 +139,20 @@ SequelEntityState entity_state(const RulesCommon& c, int n) {
   s.model[0] = wire_model(e.modelindex);
   s.frame = e.frame;
   s.skin = static_cast<uint32_t>(e.skin);
+  if (player) {
+    // A player is drawn from his client info (model 255, the low byte of the skin his slot), his
+    // carried weapon a second model (255 too), chosen by the skin's high byte: its place among
+    // the model list's carried names ("#..."), from 1.
+    s.model[0] = 255;
+    s.skin = static_cast<uint32_t>(n - 1);
+    if (e.carried_model > 0) {
+      uint32_t place = 0;
+      for (int i = 1; i <= e.carried_model && size_t(i) < c.models.size(); i++)
+        if (!c.models[size_t(i)].empty() && c.models[size_t(i)][0] == '#') place++;
+      s.model[1] = 255;
+      s.skin |= place << 8;
+    }
+  }
   s.effects = static_cast<uint32_t>(e.effects);
   const std::string& model =
       size_t(e.modelindex) < c.models.size() ? c.models[size_t(e.modelindex)] : std::string();
@@ -251,9 +270,13 @@ SequelPlayerState player_state(const RulesCommon& c, int slot, const sh::SequelS
   p.gun_index = static_cast<uint8_t>(wire_model(wc.numbers.weapon_model));
   p.gun_frame = static_cast<uint8_t>(static_cast<int>(wc.numbers.weapon_frame));
   p.fov = 90;
-  p.stats[1] = static_cast<int16_t>(static_cast<int>(wc.numbers.health));
-  p.stats[3] = static_cast<int16_t>(static_cast<int>(wc.numbers.current_ammo));
-  p.stats[5] = static_cast<int16_t>(static_cast<int>(wc.numbers.armour));
+  if (!c.world.status_bar.empty()) {  // the rules' own stats for their own bar
+    for (int k = 0; k < 32; k++) p.stats[k] = wc.numbers.stats[k];
+  } else {
+    p.stats[1] = static_cast<int16_t>(static_cast<int>(wc.numbers.health));
+    p.stats[3] = static_cast<int16_t>(static_cast<int>(wc.numbers.current_ammo));
+    p.stats[5] = static_cast<int16_t>(static_cast<int>(wc.numbers.armour));
+  }
   return p;
 }
 

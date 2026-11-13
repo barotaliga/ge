@@ -65,6 +65,7 @@ struct Placed {
   int entity = 0;  // a static: -1 - its index
   int modelindex = 0;
   int frame = 0, skin = 0;
+  int carried = 0;  // a second model drawn with it on its frame (a carried weapon); 0 none
   // Its animation drawn between frames (model_lerp.hpp): `frame_from` the frame group it is
   // leaving (-1: none) and `frame_f` the share of the way to `frame` (1: there); `lerp` flows a
   // looping group (a torch's flame) between its own frames too. Off: each frame as the server
@@ -101,7 +102,10 @@ inline int effect_model(const Listen& l, EffectModel m) {
 // The effect bits a power held lights its holder with (the mod's EF_DIMLIGHT, EF_BLUE, EF_RED).
 inline constexpr int kGlow = 8, kGlowBlue = 64, kGlowRed = 128;
 
-// Every entity to draw this frame (not the local player).
+// A carried model's entity number: its holder's plus this, so its last pose is its own.
+inline constexpr int kCarriedEntity = 1 << 20;
+
+// Every entity to draw this frame (not the local player); a carried model right after its holder.
 void place_models(const Listen& l, std::vector<Placed>& out);
 
 struct ModelLoad {

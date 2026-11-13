@@ -2,7 +2,7 @@
 // its mods, programs (native game libraries, named and passed over), maps, their wall textures
 // (`textures/*.wal`), sounds, config files and demo listing read as any classic game's; and its
 // own calls, each answering what this build reads of the game so far: the console's letters and
-// background but no pictures of its HUD and menus yet (the window draws its own), the shell's menu,
+// background, its status bar drawn from its rules' own program (sequel_bar.hpp), the shell's menu,
 // no held weapons; its client recordings. Each grows here as the sequel's rows land
 // (docs/goals/M18v.md).
 //
@@ -54,7 +54,7 @@ ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhan
                          const std::filesystem::path&) {
   ClassicPictures out;
   out.enhanced = enhance;
-  out.hud_why = "the sequel's own status bar pictures are not read yet";
+  out.hud_why = "the sequel draws its own bar, from the program its rules send";
   out.menu.glyphs = pcx_picture(files, "conchars", 255);
   if (out.menu.glyphs.width != 128 || out.menu.glyphs.height != 128) out.menu.glyphs = {};
   if (ge::ui::Image back = pcx_picture(files, "conback", -1); !back.empty())
@@ -78,6 +78,9 @@ bool held_weapons(const GameAdapter&, const SearchPath&, std::vector<ge::viewmod
 // fallbacks for a missing skin).
 bool open_model(const GameAdapter& self, const SearchPath& files, const std::string& name,
                 OpenedModel& out, std::string& error) {
+  // A carried weapon's name ("#w_shotgun.md2"): a file in the player's model folder.
+  if (!name.empty() && name[0] == '#')
+    return open_model(self, files, "players/male/" + name.substr(1), out, error);
   if (!parts::open_model(self, files, name, out, error)) return false;
   if (out.form != ModelForm::morph || !out.morph.skins.empty() || name.rfind("players/", 0) != 0)
     return true;

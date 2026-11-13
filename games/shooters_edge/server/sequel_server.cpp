@@ -21,6 +21,7 @@
 #include "core/num_text.hpp"
 #include "progs/text.hpp"
 #include "shooters_edge/server/rjump_rules.hpp"
+#include "shooters_edge/server/sequel_bar.hpp"
 #include "shooters_edge/server/sequel_campaign.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
@@ -569,6 +570,7 @@ void fill_rows(SequelServer& s) {
     e.frame = p.pose.frame;
     const bool unseen = c.spectator || p.gibbed || s.intermission_at > 0;
     e.modelindex = unseen ? 0 : static_cast<int>(s.models.size()) - 1;
+    e.carried_model = unseen || !p.alive ? 0 : s.carried_models[p.hand.weapon];
   }
   for (size_t i = 0; i < s.entities.size(); i++) {  // the items shown or hidden
     const SequelEntity& m = s.entities[i];
@@ -578,6 +580,7 @@ void fill_rows(SequelServer& s) {
   monster_rows(s);
   targets_rows(s);
   fight_rows(s);
+  bar_rows(s);
   mirror_pool(s);
 }
 
@@ -658,6 +661,7 @@ void fill_lists(SequelServer& s) {
       1 + sh::kMaxClients + s.entities.size() + kSequelMissiles + kSequelDrops + kSequelBodies,
       WorldEntity{});
   w.entity_count = static_cast<int>(w.entities.size());
+  bar_start(s);
   w.entities[0].free = false;
   w.entities[0].modelindex = 1;
   for (size_t i = 0; i < s.entities.size(); i++) {
