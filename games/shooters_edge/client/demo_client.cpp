@@ -620,6 +620,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
           s.top[k] = colour_of(info_field(info, "topcolor"));
           s.bottom[k] = colour_of(info_field(info, "bottomcolor"));
           s.skins[k] = info_field(info, "skin");
+          s.figures[k] = info_field(info, "model");
         }
         break;
       }
@@ -683,6 +684,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
           if (key == "topcolor") s.top[k] = colour_of(value);
           if (key == "bottomcolor") s.bottom[k] = colour_of(value);
           if (key == "skin") s.skins[k] = value;
+          if (key == "model") s.figures[k] = value;
         }
         break;
       }

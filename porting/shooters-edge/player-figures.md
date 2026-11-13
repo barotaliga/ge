@@ -38,3 +38,10 @@ skins are [player-skins.md](player-skins.md).
   `weapon.pcx`, `<skin>.pcx`, `<skin>_i.pcx`, each skipped when present; never the `w_*.md2` (read).
 - Settings `allow_download` and `allow_download_players` (default 0) on both sides (read).
 - Files under `players/` are written under the base game's folder, through a `.tmp` name (read).
+
+## The first game (M18i18)
+
+- No maintained first-game client lets a player choose a figure (read); our `model` user info key
+  is our own. The frame map by the frames' names is derived from the two figures' files (the first
+  game's figure names its runs `axrun`, `stand`, `pain`, `deatha`, `shotatt` ...; the second's
+  `stand01`, `run1`, `attack1`, `pain101`, `death201` ...): measured on the packs, not read.

@@ -248,8 +248,8 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .kind = gc::CvarKind::text,
            .values = "TEXT: that skin on every enemy; \"\": each their own (the default)"},
           &picture.enemy_skin);
-  const auto colours = [&con](const char* name, const char* help, const char* who, int* top,
-                              int* bottom) {
+  const auto colours = [&con](const char* name, const char* help, const char* who, int8_t* top,
+                              int8_t* bottom) {
     con.add_command(name, help, [name, top, bottom, who](gc::Console& k, const gc::Args& a) {
       if (a.size() < 2) {
         k.print(*top < 0 ? std::string("Every ") + who + " wears their own colours."
@@ -257,11 +257,13 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
                                " and " + std::to_string(*bottom) + ".");
         return;
       }
-      if (a.size() > 3 ||
-          !models::parse_forced_colours(a[1], a.size() > 2 ? a[2] : "", top, bottom)) {
+      int t = 0, b = 0;
+      if (a.size() > 3 || !models::parse_forced_colours(a[1], a.size() > 2 ? a[2] : "", &t, &b)) {
         k.print(std::string(name) + " takes one or two colours from 0 to 13, or off.");
         return;
       }
+      *top = int8_t(t);
+      *bottom = int8_t(b);
       k.print(*top < 0 ? std::string("Every ") + who + " wears their own colours."
                        : std::string("Every ") + who + " wears colours " + std::to_string(*top) +
                              " and " + std::to_string(*bottom) + ".");

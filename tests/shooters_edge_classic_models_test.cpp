@@ -191,6 +191,25 @@ TEST(teammates_and_enemies_wear_the_skin_and_colours_forced_on_their_side) {
   CHECK(t == 4 && b == 12);
 }
 
+TEST(a_first_game_player_named_figure_wears_its_folders_picture) {
+  const std::unordered_map<std::string, uint32_t> figures{{"cyborg", 0}};
+  const std::unordered_map<std::string, uint32_t> skins{{"cyborg/oni911", 5}, {"cyborg/ps9000", 6}};
+  const std::unordered_map<std::string, uint32_t> first{{"cyborg", 5}};
+  md::SkinChoice c;
+  md::Look l = md::choose_figure(c, "Cyborg", "PS9000.pcx", figures, skins, first);
+  CHECK(l.folder == "cyborg" && l.skin == 6);
+  l = md::choose_figure(c, "cyborg", "rust", figures, skins,
+                        first);  // not in the folder: its first
+  CHECK(l.folder == "cyborg" && l.skin == 5);
+  CHECK(md::choose_figure(c, "", "rust", figures, skins, first).folder.empty());
+  CHECK(md::choose_figure(c, "robot", "rust", figures, skins, first).folder.empty());
+  CHECK(md::choose_figure(c, "../cyborg", "rust", figures, skins, first).folder.empty());
+  c.all = "ps9000";  // allskins in the folder too
+  CHECK(md::choose_figure(c, "cyborg", "oni911", figures, skins, first).skin == 6);
+  c.noskins = 1;  // the game's own figure
+  CHECK(md::choose_figure(c, "cyborg", "oni911", figures, skins, first).folder.empty());
+}
+
 TEST(the_fronts_face_out_in_the_engines_frame) {
   const gr::MorphModel out = md::morph_from_alias(ge::morph::sample_model(), grey_palette(), 0);
   const std::vector<float>& p = out.positions[0];
