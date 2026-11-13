@@ -1533,8 +1533,7 @@ int run_main(int argc, char** argv) {
       cl::demo_fx_step(ds, bench_demo_fx, bench_map.get(), view, bench_fx_state, t, wall, bench_fx);
       // See-through liquids on a joined server where its `watervis` allows them; a demo played
       // back always may.
-      bench_fx.see_through =
-          !drawn_remote || shooters_edge::look::watervis_allowed(ds.serverinfo);
+      bench_fx.see_through = !drawn_remote || shooters_edge::look::watervis_allowed(ds.serverinfo);
       // The quick weapon's preview held in place of the game's weapon (quick_fire.hpp).
       in_hand.show = drawn_remote ? cl::quick_show(controls.quick, cl::demo_status(ds, t), t) : -1;
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
