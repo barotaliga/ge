@@ -128,7 +128,11 @@ folder's own (its place names and fonts). Settings the window does not have are 
 counted on one line. The sequel's install runs its bundled client's order: `config.cfg`
 (`q2config.cfg` on Windows, each tried after the other; a mod folder's before the base folder's),
 then the base folder's `autoexec.cfg` and the mod's, `postexec.cfg`, the window's own settings, the
-command line, and `postinit.cfg` last. Maps' coloured light is also read from `maps/lits/<map>.lit`.
+command line, and `postinit.cfg` last; its `default.cfg` is the one in its packs (the window's
+console keys kept through its `unbindall`). Each game's order lives in one table,
+`client/load_order.hpp`: its files' ranks too, so the sequel's folders rank their packs and zips
+(`.pkz`) over their loose files, every `pak*` archive by its number, and the rerelease's archive at
+the install's root under them all, as its own client loads them. Maps' coloured light is also read from `maps/lits/<map>.lit`.
 
 **Place names, made in the game** (`client/place_names.hpp`). Each map's place names are read as
 it starts (`tp_loadlocs`): the file saved under the game folder first, else the game's own.
@@ -1275,6 +1279,15 @@ every pass, and judged by captioned screenshots:
   as .tga, .png, .jpg or .pcx; `client/files.hpp`'s `sky_box_files`, `brush/app/sky_box.hpp`)
   drawn at infinity on the sky faces, all six or none (`r_skyname` names one for every map),
   fullbright palette colours as emissive.
+- **The map's own fog** (`brush/map_fog.hpp`, M18i13): the worldspawn's `fog` (`_fog`, `airfog`:
+  density, red, green, blue, then alpha and bias; fewer numbers fill the rest) and `skyfog`; the
+  `fog` command takes the same words and holds until the next map (with none, it says what it
+  is); `r_skyfog` is the sky's share where the map does not set one (0.5). Drawn in both looks as
+  the engine's flat fog (`render/view.hpp`'s `FlatFog`, read through `frame.wgsl`'s `local_fog`
+  by every material): a surface z units out is alpha x (1 - e^-(t^2)) fog, t = max(density / 64 x
+  z - bias, 0), by its distance from the eye (not its depth along the view, so turning on the
+  spot changes nothing); the sky takes its fixed share; a glow added over the scene fades to
+  black.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
 - **Effects from the game's files** (`client/world_fx.hpp`, M18l): a file `particles/<any>.fx`

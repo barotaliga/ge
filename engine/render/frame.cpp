@@ -180,6 +180,17 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
 
   // THE LIGHTNING (render/view.hpp).
   flash_rows(view.flashes, pre, u.flash_info, u.flashes);
+
+  // THE FLAT FOG (render/view.hpp): its colour, its density; its share over the sky, its alpha,
+  // its bias.
+  const FlatFog& g = view.flat_fog;
+  const bool fogged = g.density > 0;
+  for (int i = 0; i < 3; ++i) u.flat_fog[0][i] = fogged ? static_cast<float>(g.colour[i]) : 0.0f;
+  u.flat_fog[0][3] = fogged ? static_cast<float>(g.density) : 0.0f;
+  u.flat_fog[1][0] = fogged ? static_cast<float>(std::clamp(g.sky, 0.0, 1.0)) : 0.0f;
+  u.flat_fog[1][1] = fogged ? static_cast<float>(std::clamp(g.alpha, 0.0, 1.0)) : 0.0f;
+  u.flat_fog[1][2] = fogged ? static_cast<float>(std::max(g.bias, 0.0)) : 0.0f;
+  u.flat_fog[1][3] = 0.0f;
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,

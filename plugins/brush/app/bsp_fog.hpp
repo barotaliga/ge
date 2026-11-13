@@ -21,11 +21,15 @@
 //   orthographic map, `Options::fog_sun` draws it with the lightmaps' light too), so a hall's dust
 //   shows the shafts the sun throws through its windows (`BspFogShadow`).
 //
+// - ALL ITS AIR (`map_flat_fog`): the map's own flat fog (map_fog.hpp: the worldspawn's `fog`, or
+//   the `fog` command's) as the renderer's one colour by distance (render/view.hpp's `FlatFog`).
+//
 // The volumes are a pure function of the scene; the frame hands them to `render::prepare_fog`.
 //
 // ge:summary A classic map's own areas of fog: placed fog volumes, the haze over its lava and slime
 // ge:keywords bsp brush fog fog-volume fog_volume dust haze lava-haze slime-haze sky-share
 // ge:keywords bsp_fog sun-map casters shafts window bsp_fog_shadow steam-fog pool_mist climate
+// ge:keywords map_flat_fog flat-fog map-fog skyfog
 // ge:skill brush render
 // ge:test tests/brush_bsp_fog_test.cpp
 #pragma once
@@ -34,6 +38,7 @@
 
 #include "brush/app/bsp_draw.hpp"
 #include "brush/app/draw_data.hpp"
+#include "brush/map_fog.hpp"
 #include "gpu/device.hpp"
 #include "render/fog.hpp"
 #include "render/shadows.hpp"
@@ -74,6 +79,11 @@ wind::Mist pool_mist(const LiquidPatch& pool, const wind::Climate& air, double h
 // Every volume of the scene: the placed, then the lava's, then the slime's, then the air's over
 // the pools (with `rows.air`), each with its sky share (a placed one's `sky` key kept).
 std::vector<render::FogVolume> bsp_fog(const Scene& scene, const FogRows& rows = {});
+
+// THE MAP'S FLAT FOG (map_fog.hpp) as the renderer's (render/view.hpp's `FlatFog`): its density
+// over 64 a map unit in metres, its colour from sRGB to linear (a colour above 1 kept), its sky
+// share the map's `skyfog` or else `player_sky`, times its alpha; none at a density of 0 or less.
+render::FlatFog map_flat_fog(const MapFog& fog, double player_sky);
 
 // The BSP renderer's sun map (its first orthographic map) as the fog's casters.
 render::OrthoShadow bsp_sun_map(const BspDraw& draw);

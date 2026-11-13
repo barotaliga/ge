@@ -231,6 +231,12 @@ struct SequelPlayer {
   ge::shooter::MidairTally midair;  // his counted midairs this level (plugins/shooter/midair.hpp)
   SqBody carry, entered;
   SqPose pose;  // the frame his body shows (sequel_poses.hpp)
+  // The status bar's (sequel_bar.hpp): the item last picked up (its number, 0 none) and when, and
+  // the blows taken in rules frame `hit_frame` (bit 1 to his health, bit 2 to his armour).
+  int picked = 0;
+  double picked_at = -100;
+  int64_t hit_frame = -1;
+  int hit_bits = 0;
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.

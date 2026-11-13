@@ -5,7 +5,8 @@
 # turns each `<dir>/<name>.wgsl` (a path under engine/ or plugins/) into a generated header
 # `<dir>/<name>.wgsl.hpp` on <target>'s include path, holding
 #
-#   namespace ge::wgsl { inline constexpr std::string_view <name> = R"..."; }
+#   namespace ge::wgsl { inline constexpr std::string_view <name> = R"..."; } (past 60 000 bytes,
+#   literals joined into a std::string the string_view looks at: cmake/WgslEmbed.cmake)
 #
 # with every `#include "<path>.wgsl"` line resolved first (searched beside the including file,
 # then from engine/ and plugins/; each file once). No shader is read from disk at run time.

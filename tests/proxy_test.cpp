@@ -94,6 +94,37 @@ TEST(one_end_drops_repeats_and_packs_only_against_what_the_other_holds) {
   CHECK(a.stats.bytes_out * 2 < a.stats.payload_out * 3);  // three copies cost under one and a half
 }
 
+// A proxy whose loop runs no faster than the game sends: the copies of one datagram fall due
+// while the next one arrives, and they go first, so a lost first copy is made good before the
+// newer datagram and the far end passes the game's datagrams on in the order they were sent.
+TEST(due_copies_go_before_a_newer_datagram) {
+  px::LinkEnd a, b;
+  a.config.repeat = 2;
+  a.config.gap_us = 4000;
+  std::vector<std::vector<uint8_t>> wire;
+  const px::FrameOut out = [&](std::span<const uint8_t> f) {
+    wire.emplace_back(f.begin(), f.end());
+  };
+  std::vector<uint8_t> d;
+  std::vector<int> order;
+  for (int64_t k = 0; k < 10; k++) {
+    // The proxy's frame: what came from the game, then what is due. Every other datagram's first
+    // frame is lost on the way, so only its copy arrives.
+    px::link_send(a, snapshot(static_cast<int>(k), 100), k * 13000, out);
+    if (k % 2 == 0) wire.pop_back();
+    px::link_update(a, k * 13000, out);
+    for (const auto& f : wire)
+      if (px::link_receive(b, f, d) == 1) order.push_back(d[0]);
+    wire.clear();
+  }
+  px::link_update(a, 200000, out);
+  for (const auto& f : wire)
+    if (px::link_receive(b, f, d) == 1) order.push_back(d[0]);
+  CHECK(order.size() == 10);
+  CHECK(b.stats.duplicates == 5);
+  for (size_t i = 0; i < order.size(); i++) CHECK(order[i] == static_cast<int>(i));
+}
+
 TEST(repeats_cut_the_loss_a_game_sees_and_packing_halves_the_link) {
   const auto trial = [](double loss, int repeat, bool pack) {
     px::TrialConfig c;
