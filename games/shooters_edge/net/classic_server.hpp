@@ -85,6 +85,9 @@ struct MultiviewRecorder;
 inline constexpr size_t kMostVoiceBytes = 1024;  // a client's voice message's frames, bytes
 
 enum class VoiceRoute : uint8_t { all, team };
+// Who a talker's voice goes to (`voicetarg`, classic_talk.hpp): everyone, his team, the players
+// near him or one player.
+enum class VoiceTo : uint8_t { all, team, near, one };
 
 struct ServedFile {
   std::string path;  // lower case, slashes: "skins/blue.pcx"
@@ -173,7 +176,9 @@ struct ServerConfig {
   bool antilag_exact = false;  // sv_antilagexact: rewind to the frame seen, with no lead
   bool voice = false;          // offer the voice bit and relay voice
   bool voice_echo = false;     // sv_voipecho: a speaker is sent his own voice back
-  VoiceRoute voice_route = VoiceRoute::team;
+  VoiceRoute voice_route = VoiceRoute::team;  // the target a connection starts with
+  int earshot =
+      1000;  // sv_earshot: how near `say_near` and the near voice reach, map units (0 off)
   bool min_ping_cmd = true;  // sv_minpingcmd
 };
 
@@ -243,6 +248,12 @@ struct ClassicClient {
   bool local = false;    // a seat the game plays in its own process (a bot): no address, no packets
   int frags_told = 0;    // the frags every client was last sent
   gs::FloodGuard flood;  // its chat lines' times and its silence
+  // Its voice (classic_talk.hpp): the target its voice goes to (`voicetarg`; the slot for one),
+  // whether it hears voice at all (`unmuteall`, `muteall`) and the talkers it ignores, a bit each.
+  VoiceTo voice_to = VoiceTo::team;
+  int voice_one = -1;
+  bool voice_heard = false;
+  uint32_t voice_ignored = 0;
   double colour_since = -1;  // the top colour's window (sv_colorkick): its start, s (-1 none)
   double info_since = -1;    // the user info's window (sv_infoflood): its start, s (-1 none)
   double hold_s = 0;         // the hold, 0..1 s, moved by 1 ms a packet toward the minimum ping
