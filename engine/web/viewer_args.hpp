@@ -5,14 +5,19 @@
 //   --demo=<url>      a demo to play, fetched from the hub (`/d/ab/<sha256>.ger`)
 //   --tv=ws://h:p/    a live broadcast's TV node, its WebSocket (with --stream)
 //   --stream=<n>      the broadcast's stream on that node
+//   --play=<map>      a game played on the page on that map (M56i): the game's own server runs in
+//                     the viewer, the player at the canvas's keys and mouse
+//   --bots=<n>        with --play, the bots that join him, 0..15 (3 by default)
 //   --pack=<url>      a content pack the world is drawn from, fetched; repeated, in mount order
 //   --speed=<x>       the demo's pace, 0..20 (1 by default)
 //
-// One of --demo and --tv is needed. A word the viewer does not know is refused with its name, so
-// a hub that hands a newer viewer's words to an older one says which.
+// One of --demo, --tv and --play is needed. A word the viewer does not know is refused with its
+// name, so a hub that hands a newer viewer's words to an older one says which.
 //
-// ge:summary The web viewer's arguments from the hub's page: the demo, the broadcast, the packs
+// ge:summary The web viewer's arguments from the hub's page: the demo, the broadcast, a map to
+// ge:summary play, the packs
 // ge:keywords web viewer arguments module-arguments demo tv stream pack speed parse_viewer_args
+// ge:keywords play bots play-in-browser
 // ge:skill net
 // ge:test tests/web_viewer_args_test.cpp
 #pragma once
@@ -26,11 +31,14 @@
 namespace ge::web {
 
 inline constexpr double kMostSpeed = 20;
+inline constexpr int kMostBots = 15;
 
 struct ViewerArgs {
   std::string demo;                // the demo's URL ("": none)
   std::string tv;                  // the TV node's WebSocket URL ("": none)
   uint32_t stream = 0;             // with `tv`
+  std::string play;                // the map a game is played on ("": none)
+  int bots = 3;                    // with `play`
   std::vector<std::string> packs;  // the content packs' URLs, in mount order
   double speed = 1;
 };

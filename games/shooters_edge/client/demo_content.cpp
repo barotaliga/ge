@@ -35,6 +35,13 @@ std::string lower(std::string s) {
 
 }  // namespace
 
+void game_basics(bool sequel, std::vector<std::string>& out) {
+  if (sequel)
+    out.insert(out.end(), std::begin(kSequelBasics), std::end(kSequelBasics));
+  else
+    out.insert(out.end(), std::begin(kBasics), std::end(kBasics));
+}
+
 bool demo_files(std::span<const uint8_t> demo, std::vector<std::string>& names,
                 std::string& error) {
   names.clear();

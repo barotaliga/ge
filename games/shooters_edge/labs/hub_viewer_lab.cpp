@@ -7,7 +7,9 @@
 // after a wall-clock wait (hub_browser.hpp's `live_draw`): the viewer fetches the pack and the
 // demo and draws the match on the canvas. It answers whether the page starts the viewer with the
 // right words, what a visitor downloads (the viewer, the pack, the demo), and whether the picture
-// is there.
+// is there. The Play page too (docs/hub.md § Playing in a browser): a map's own content pack, the
+// page that starts the player build on it, and a match against bots played in the page with keys
+// and the mouse sent to the canvas.
 //
 // The demo, the pack and the page are deterministic. The viewer's size is the web build's, and the
 // pictures are a browser's (GE_CHROMIUM or the container's), so both are measured. Without a built
@@ -15,6 +17,7 @@
 //
 // ge:summary Lab: a bots' demo played by the web viewer in headless Chromium off the hub's page
 // ge:keywords lab hub-viewer web-viewer wasm webgpu browser chromium demo-page canvas pack bytes
+// ge:keywords play-page play-in-browser player
 // ge:skill net labs
 // ge:test tests/hub_watch_test.cpp tests/web_viewer_args_test.cpp
 #include <atomic>
@@ -46,6 +49,8 @@
 #include "shooters_edge/client/demo_content.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/play_content.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/classic_team.hpp"
 #include "tv/node.hpp"
 #include "tv/websocket.hpp"
@@ -67,7 +72,30 @@ gh::HubSpec spec() {
   s.score = "frags";
   s.demo_files = cl::demo_files;
   s.file_needs = cl::content_needs;
+  s.map_files = [](std::string_view map, const ge::vfs::SearchPath& files,
+                   std::vector<std::string>& names, std::string& error) {
+    cl::SearchPath sp;
+    sp.vfs = files;
+    return cl::play_files(sp, map, cn::listen_options(), names, error);
+  };
+  s.map_shown = cl::map_playable;
   return s;
+}
+
+ge::brush::Entity entity(std::initializer_list<std::pair<std::string, std::string>> pairs) {
+  ge::brush::Entity e;
+  for (const auto& p : pairs) e.pairs.push_back(p);
+  return e;
+}
+
+// The halls with four deathmatch spots and a rocket launcher: the map a Play page plays.
+bool duel_map(std::vector<uint8_t>& out, std::string& error) {
+  ge::brush::Fixture f = ge::brush::sample_fixture();
+  for (const char* at : {"128 192 40", "400 96 40", "700 256 40", "544 700 40"})
+    f.entities.push_back(
+        entity({{"classname", "info_player_deathmatch"}, {"origin", at}, {"angle", "0"}}));
+  f.entities.push_back(entity({{"classname", "weapon_rocketlauncher"}, {"origin", "128 192 0"}}));
+  return ge::brush::write_bsp(f, ge::brush::Family::v29, &out, &error);
 }
 
 bool has(const std::string& s, const std::string& part) {
@@ -116,7 +144,9 @@ void run(gl::Lab& lab) {
     lab.fail("hub-viewer: packing the demo: " + error, "run tests/shooters_edge_demo_v2_test.cpp");
     return;
   }
-  if (!ge::vfs::write_pak({{"maps/halls.bsp", halls}}, &pak, &error)) {
+  std::vector<uint8_t> duel;
+  if (!duel_map(duel, error) ||
+      !ge::vfs::write_pak({{"maps/duel.bsp", duel}, {"maps/halls.bsp", halls}}, &pak, &error)) {
     lab.fail("hub-viewer: the halls' pack: " + error, "run tests/vfs_pak_test.cpp");
     return;
   }
@@ -134,8 +164,11 @@ void run(gl::Lab& lab) {
   const fs::path built = lab.arg("viewer");
   const bool have_viewer = fs::is_regular_file(built / "shooters_edge_viewer.js", ec) &&
                            fs::is_regular_file(built / "shooters_edge_viewer.wasm", ec);
-  for (const char* f : {"shooters_edge_viewer.js", "shooters_edge_viewer.wasm"}) {
-    if (have_viewer) {
+  const bool have_player = fs::is_regular_file(built / "shooters_edge_play.js", ec) &&
+                           fs::is_regular_file(built / "shooters_edge_play.wasm", ec);
+  for (const char* f : {"shooters_edge_viewer.js", "shooters_edge_viewer.wasm",
+                        "shooters_edge_play.js", "shooters_edge_play.wasm"}) {
+    if (std::string_view(f).find("_play.") != std::string_view::npos ? have_player : have_viewer) {
       fs::copy_file(built / f, viewer / f, fs::copy_options::overwrite_existing, ec);
       // The build's gzip copy, which the hub sends a browser that takes gzip.
       const std::string gz = std::string(f) + ".gz";
@@ -203,6 +236,31 @@ void run(gl::Lab& lab) {
              "cmake --build build/web --target shooters_edge_viewer)");
   }
   lab.attach("demo.html", {page.body.begin(), page.body.end()});
+
+  // The Play page (docs/hub.md § Playing in a browser): the map's own content pack, named by what
+  // a match on it with bots lists, and the page that starts the player on it.
+  gh::ContentPack duel_pack;
+  if (!gh::map_content(site, spec(), "duel", duel_pack, error)) {
+    lab.fail("hub-viewer: the duel's content pack: " + error,
+             "run tests/shooters_edge_play_content_test.cpp, then read engine/hub/content.cpp");
+    return;
+  }
+  lab.metric("play_content_kb", static_cast<double>(duel_pack.bytes) / 1024.0, "KiB");
+  lab.metric("play_content_files", static_cast<double>(duel_pack.files), "files");
+  gh::Answer play_page;
+  gh::watch_answer(gh::Poller{}, spec(), "/play/duel", 0, site, play_page);
+  if (play_page.code != 200 || !has(play_page.body, "\"--play=duel\"") ||
+      !has(play_page.body, "\"--pack=/" + gh::content_path(duel_pack.sha) + "\"") ||
+      !has(play_page.body, "shooters_edge_play.js")) {
+    lab.fail("the Play page does not start the player on the map with its pack",
+             "run tests/hub_watch_test.cpp, then read watch.cpp's play_page");
+  }
+  lab.attach("play.html", {play_page.body.begin(), play_page.body.end()});
+  if (have_player) {
+    const double sent = static_cast<double>(file_bytes(viewer / "shooters_edge_play.wasm.gz") +
+                                            file_bytes(viewer / "shooters_edge_play.js.gz"));
+    lab.metric("player_sent_kb", sent / 1024.0, "KiB", gl::Det::measured);
+  }
 
   const std::string browser = lab.arg("browser") == "0" ? "" : gl::hub_browser::find_browser();
   if (!have_viewer || browser.empty()) {
@@ -357,6 +415,32 @@ void run(gl::Lab& lab) {
       ge::tv::tv_web_close(web);
     }
   }
+  // A match played on the Play page: the canvas clicked (the pointer locked to it), W held while
+  // the mouse turns the view, then the picture.
+  if (lab.arg("play") != "0" && have_player) {
+    namespace hb = gl::hub_browser;
+    const int wait_s = 2 * static_cast<int>(lab.arg_num("wait"));
+    std::vector<hb::LiveAct> acts = hb::click(w / 3, h / 3, 500);
+    const std::string w_key = R"("code":"KeyW","key":"w")";
+    acts.push_back({"Input.dispatchKeyEvent", "{\"type\":\"keyDown\"," + w_key + "}", 1500});
+    for (int i = 1; i <= 6; i++) acts.push_back(hb::move(w / 3 + 30 * i, h / 3, 300));
+    acts.push_back({"Input.dispatchKeyEvent", "{\"type\":\"keyUp\"," + w_key + "}", 3000});
+    const std::optional<gl::Picture> got =
+        draw("/play/duel", "play", wait_s, gh::Poller{}, {}, acts);
+    if (got) {
+      drawn++;
+      lab.shot({"play",
+                "A MATCH PLAYED ON THE PLAY PAGE",
+                "GET /play/duel " + std::to_string(wait_s) +
+                    " s in, then the canvas clicked, W held and the mouse moved: the player build "
+                    "runs the game's own server with three bots in the page, on the map's own "
+                    "content pack, and the canvas's keys and mouse are the player's hands.",
+                "the hall from the player's eye with the weapon in hand, the HUD along the "
+                "bottom and the lobby's banner or the match; the view turned from the start.",
+                {{"wait_s", std::to_string(wait_s)}}},
+               *got, gl::Det::measured);
+    }
+  }
   // Last, since its packs replace the halls' beside the viewer: a player's own demo and packs
   // (`--real-demo`, `--real-packs`): the recording packed into a replay file, taken by the archive,
   // and its Demo page drawn from the packs beside the viewer. Nothing of them is kept or digested.
@@ -417,11 +501,12 @@ const gl::LabSpec kSpec{
     "hub-viewer",
     gl::LabKind::picture,
     "game:shooters_edge",
-    "engine/hub/watch (the Demo page), engine/web (the viewer's arguments and the page's calls) "
-    "and web/viewer.cpp (the game's viewer)",
+    "engine/hub/watch (the Demo and Play pages), engine/web (the viewer's arguments and the "
+    "page's calls) and web/viewer.cpp and web/play.cpp (the game's viewer and player)",
     "net",
     "Does the hub's Demo page start the game's web viewer with the demo and its pack, how much "
-    "does a first visit download, and does the match play on the canvas?",
+    "does a first visit download, does the match play on the canvas, and can a visitor play a "
+    "match against bots on the Play page?",
     {
         {"minutes", "0.5", "the bots' match's length"},
         {"viewer", "build/web/shooters_edge_viewer", "the web build's viewer folder"},
@@ -435,6 +520,7 @@ const gl::LabSpec kSpec{
         {"real-demo", "", "a player's own recording to play too (measured, never kept)"},
         {"real-packs", "", "the folder holding that recording's packs (pak0.pak, pak1.pak)"},
         {"live", "1", "also watch the match live through a TV node on the Watch page (0: not)"},
+        {"play", "1", "also play a match against bots on the Play page (0: not)"},
         {"keep", "0", "1: keep the hub's folders (the viewer, the pack, the archive) after a run"},
     },
     "--minutes=0.1 --browser=0",

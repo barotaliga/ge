@@ -126,8 +126,8 @@ master and a TV node can share one small machine. The labs run all of it on the 
 ## Watching in a browser
 
 A hub page shows a match with the ENGINE ITSELF: a viewer built from the same C++ as the game,
-compiled to WebAssembly, drawing through WebGPU, loaded by the Watch and Demo pages. It is the one
-web build the engine has (G5): a viewer, never the game, and nothing in it plays.
+compiled to WebAssembly, drawing through WebGPU, loaded by the Watch and Demo pages. It is the
+engine's one web build (G5) with its one sibling, the player of § Playing in a browser.
 
 | Piece | What it is |
 | --- | --- |
@@ -181,6 +181,26 @@ live overhead map (a RADAR track the hub draws), for phones and slow machines. V
 camera was considered and not taken: a CPU-rendered client per stream costs more than the
 browser's own GPU.
 
+## Playing in a browser
+
+The hub is a place to play, not only to watch (the maintainer's choice, 2026-11-12): a visitor
+picks a map on the Play page and plays it in the page, the game itself running in the browser.
+It widens the one web exception of § Watching in a browser from a viewer to a player, built from
+the same C++ as the game.
+
+| Piece | What it is |
+| --- | --- |
+| The player | A second web build beside the viewer, `ge_add_web_viewer(<game> NAME <game>_play ...)`: the viewer with the game's server linked in (Shooter's Edge's `shooters_edge_play`, `SE_WEB_PLAY`: its classic match server and the baseline mod). Kept apart so a page that only watches downloads no server (1.75 MB against 2.8 MB, gzip) |
+| Its match | `--play=<map>` with `--bots=<n>` (`web/viewer_args.hpp`): the game's own listen server on the map, in the page's WebAssembly; the lobby seats the bots, every seat ready, the countdown, then the match. A map change the server asks for that the page's files lack plays the map again. The match is the visitor's alone; nothing leaves the page |
+| Its hands | `engine/web`'s `take_play_input`: the canvas's keys held and let go (by scancode), the mouse's buttons and wheel, and the mouse's movement while the pointer is locked to the canvas (a click locks it, Escape lets it go), as the engine's `input::InputState`; the game reads it as its window does (Shooter's Edge's default keys, `controls.hpp`) |
+| Its content | A map's own content pack (`engine/hub/content.hpp`'s `map_content`): the game names the files a match on the map draws from (`HubSpec::map_files`: Shooter's Edge starts the match headless with bots for four seconds of game time and names the models and sounds its server lists, with the map, the basics and the pictures of the HUD, scores and menus, `client/play_content.hpp`), made once a map, named by its hash, cached a year |
+| Its pages | `/play`: the maps the packs beside the viewer hold; `/play/{map}`: the player on that map with the map's pack, the keys under it and the other maps beside it. The nav's Play appears for a game with `map_files` |
+
+Next, in order: the match online (the page joins the game's own server: its datagrams carried
+over a WebSocket by a bridge beside the server, then WebTransport where the browser has it, and
+the classic servers through `engine/forward`); files cached in the browser by their hash, so a
+second map fetches only what it lacks; the sound through the browser's audio; touch controls.
+
 ## The plan
 
 | Phase | Row | What lands | Shown by |
@@ -195,6 +215,7 @@ browser's own GPU.
 | 7 | M56g | The web viewer: `ge_add_web_viewer`, the Emscripten and WebGPU build, the stream over a WebSocket, demos by hash, the content folder, the transport; the Watch and Demo pages; Shooter's Edge's and Fall Line's viewers | `hub-viewer` lab: the viewer in headless Chromium on a software WebGPU adapter, a live bot match and a demo screenshotted, seek checked, first-visit bytes measured |
 | 7b | M56g2 | The renderer within WebGPU's default limits (16 sampled textures a stage, 256 array layers) on the web build: the frame's group split by what each stage reads, the shadow cubes capped by the device; the picture on the canvas | `hub-viewer` lab: the match drawn on the canvas in headless Chromium |
 | 8 | M56h | The live map for phones and slow machines: the RADAR track, the hub's SVG view, live updates | `hub-radar` lab: a bot match drawn frame by frame |
+| 9 | M56i | Playing in a browser: the player build, a match against bots in the page, the Play pages and a map's content pack; then online through a WebSocket bridge, files cached by hash, sound | `hub-viewer` lab: the Play page in headless Chromium, keys and mouse sent, the match screenshotted |
 
 ### Built so far
 

@@ -57,11 +57,11 @@ ge_add_server(shooters_edge_dedicated OUTPUT_NAME shooters_edge_server SOURCES s
 
 # The hub (hub/), named `shooters_edge_hub` on disk at the build's root: the engine's hub
 # (engine/hub, docs/hub.md) with the game's modes and words. `--help` lists its flags.
-# The classic status query (net/classic_browse, net/classic_info) is built into it; the client's
-# demo reader is linked for a demo's content pack (client/demo_content.hpp).
-ge_add_hub(shooters_edge_hub_bin OUTPUT_NAME shooters_edge_hub
-           SOURCES hub/main.cpp net/classic_browse.cpp net/classic_info.cpp
-           LINK shooters_edge_client)
+# The classic protocol's library gives it the classic status query (net/classic_browse,
+# net/classic_info) and the match a Play page's map is started on to name its files
+# (client/play_content.hpp); the client's demo reader names a demo's (client/demo_content.hpp).
+ge_add_hub(shooters_edge_hub_bin OUTPUT_NAME shooters_edge_hub SOURCES hub/main.cpp
+           LINK shooters_edge_classic)
 target_include_directories(shooters_edge_hub_bin PRIVATE ${PROJECT_SOURCE_DIR}/games)
 
 # The bot team, headless (net/bots_main.cpp), named `shooters_edge_bots` on disk at the build's
@@ -177,9 +177,15 @@ if(GE_GPU AND TARGET ge_brush_app)
 endif()
 # The web viewer (web/viewer.cpp, docs/hub.md § Watching in a browser): the world drawn on the hub
 # page's canvas, a demo played from the hub's archive; `shooters_edge_viewer.js` and `.wasm` in
-# the web build's `shooters_edge_viewer/`, the folder a hub's --viewer=<dir> serves.
+# the web build's `shooters_edge_viewer/`, the folder a hub's --viewer=<dir> serves. Beside it the
+# player (`shooters_edge_play`, docs/hub.md § Playing in a browser): the same viewer that also
+# plays a match on the page against bots (web/play.cpp, its server the classic game's), kept apart
+# so a page that only watches downloads no server.
 if(TARGET shooters_edge_client_gpu)
   ge_add_web_viewer(shooters_edge SOURCES web/viewer.cpp LIBS shooters_edge_client_gpu ge_tv)
+  ge_add_web_viewer(shooters_edge NAME shooters_edge_play SOURCES web/viewer.cpp web/play.cpp
+                    LIBS shooters_edge_client_gpu shooters_edge_classic ge_tv
+                    DEFINES SE_WEB_PLAY=1)
 endif()
 if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
   add_executable(shooters_edge client/main.cpp client/window_cvars.cpp client/bot_view.cpp)
