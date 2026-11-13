@@ -123,7 +123,7 @@
 //   (-1.9, -0.7, slower), in no preset.
 // - `hide`: the launcher's owner (not a novice) holds the scattergun while no one is in sight, so
 //   a pack dropped holds no launcher, and takes the launcher up at a sighting
-//   (games/shooters_edge/bots/fighter.cpp, M18r.md 0k2); judging.
+//   (games/shooters_edge/bots/fighter.cpp, M18r.md 0k2), not until nobody has been seen 1.5 s; on.
 // - `nogoal`: nothing worth taking, no item goal kept from before (a holder walking back to its
 //   claim stood on a full armour with it as its goal) (fighter.cpp, M18r.md 3); moved nothing.
 // - `tripkeep`: on a scripted way to its goal item, the goal held unless it backs off
