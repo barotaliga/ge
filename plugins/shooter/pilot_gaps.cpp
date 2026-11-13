@@ -50,7 +50,7 @@ int8_t held_side(const Pilot& p) {
 
 bool gap_lands_late(const Pilot& p, const PilotSense& s, int msec, Vec3f T) {
   if (s.world == nullptr) return false;
-  MoveSettings move;
+  MoveSettings move = p.g->move;
   move.maxspeed = s.maxspeed;
   MoveState st;
   st.origin = s.origin;
@@ -118,7 +118,7 @@ bool gap_curve(const Pilot& p, const PilotSense& s, int msec, float& err, bool& 
   if (!p.set.gap_circle || s.world == nullptr || gk > p.k + kGapCurveLinks) return false;
   const Vec3f S = node(*p.g, p.route[gk]).origin, T = node(*p.g, p.route[gk + 1]).origin;
   if (across(s.origin, S) > kGapCurveFrom || over_harm(p, S, T)) return false;
-  MoveSettings move;
+  MoveSettings move = p.g->move;
   move.maxspeed = s.maxspeed;
   now = gap_lands(*s.world, move, s.origin, s.velocity, T, msec, p.set.gap_past, p.set.gap_strafe);
   const float vh = across({}, s.velocity) > 1 ? heading(s.velocity.x, s.velocity.y) : p.yaw;
@@ -135,7 +135,7 @@ GapRun gap_run(const Pilot& p, const PilotSense& s, int msec) {
   if (across(s.origin, S) > kGapCurveFrom || over_harm(p, S, T)) return out;
   Vec3f dir{T.x - S.x, T.y - S.y, 0};
   normalize(dir);
-  MoveSettings move;
+  MoveSettings move = p.g->move;
   move.maxspeed = s.maxspeed;
   const float dt = static_cast<float>(msec) * 0.001f;
   const auto lands = [&](const MoveState& st) {
@@ -228,7 +228,7 @@ JumpFlight hop_cast(const Pilot& p, const PilotSense& s, int msec) {
   if (s.world == nullptr || p.forecasting) return out;
   Pilot c = p;
   c.forecasting = true;
-  MoveSettings move;
+  MoveSettings move = p.g->move;
   move.maxspeed = s.maxspeed;
   MoveState st;
   st.origin = s.origin;
@@ -309,7 +309,7 @@ bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, 
   const size_t gk = static_cast<size_t>(p.gap_k);
   const NavLink* gl = link_of(g, p.route[gk], p.route[gk + 1]);
   const Vec3f S = node(g, p.route[gk]).origin, T = node(g, p.route[gk + 1]).origin;
-  MoveSettings move;
+  MoveSettings move = p.g->move;
   move.maxspeed = s.maxspeed;
   Vec3f dir{T.x - S.x, T.y - S.y, 0};
   normalize(dir);
