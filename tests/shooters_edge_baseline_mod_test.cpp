@@ -8,7 +8,7 @@
 // profile gives them (`localinfo` under each class name), in its own when none is given.
 //
 // ge:summary Tests: the baseline QC mod compiles with the engine's layout and plays a deathmatch
-// ge:keywords test baseline-mod compile_baseline_mod mod-match deathmatch bots door plat frags
+// ge:keywords test baseline-mod baseline_mod mod-match deathmatch bots door plat frags
 // ge:keywords obituaries pickups layout-check pickup-message item-name localinfo
 // ge:skill progs shooter testing
 #include <set>
@@ -36,7 +36,7 @@ struct Built {
 const Built& baseline() {
   static const Built b = [] {
     Built out;
-    out.ok = sv::compile_baseline_mod(GE_SOURCE_DIR, out.progs, out.error);
+    out.ok = sv::baseline_mod(out.progs, out.error);
     return out;
   }();
   return b;

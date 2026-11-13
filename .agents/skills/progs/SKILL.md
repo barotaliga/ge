@@ -1,6 +1,6 @@
 ---
 name: progs
-description: "Use for plugins/progs in gameengine2: the QC virtual machine Shooter's Edge runs mods' bytecode on. The progs loader and checker (every bound and index refused with the section, record, field and value), the classic multiplayer engine-side layout (globals 28..89, the 102 fields, crc 54730), the interpreter (every opcode on 32-bit floats, the call convention, the call depth, the local stack, the run-away guard), entity, field, pointer, function and string values, temporaries, the builtin table a game fills and the extension registry, faults with a QC stack trace and lines, the profile and trace hooks, the assembler and the sample program, the QC compiler (compile_qc, ge qc build) and the language it reads, the qc tool behind ge qc, the qc lab, and the bytecode program on the shooter seam (games/shooters_edge/sim/qc_program); the standard builtins (stdlib: math, vectors, ftos and vtos text, tokenize, the string extensions, strzone), the map's entity text, and the mod server (games/shooters_edge/server: the builtin catalogue by number, checkextension, the hooks, the extension fields, loading a progs from --progs or sv_progs, the assembled test mod, a match with bots, the se-mod lab); the baseline deathmatch mod in QC (games/shooters_edge/qc, its arena, the se-baseline lab); the compiled-module VM (qvm.hpp: a match mod's qwprogs.qvm loaded, checked and run, system calls and re-entry, faults with frames, qvm_asm and its sample, the qvm lab; the module server games/shooters_edge/server/qvm_server and qvm_calls, the adapter sim/qvm_program, the hand-assembled qvm_test_mod, the se-qvm lab); the M18c, M18d and M18p rows."
+description: "Use for plugins/progs in gameengine2: the QC virtual machine Shooter's Edge runs mods' bytecode on. The progs loader and checker (every bound and index refused with the section, record, field and value), the classic multiplayer engine-side layout (globals 28..89, the 102 fields, crc 54730), the interpreter (every opcode on 32-bit floats, the call convention, the call depth, the local stack, the run-away guard), entity, field, pointer, function and string values, temporaries, the builtin table a game fills and the extension registry, faults with a QC stack trace and lines, the profile and trace hooks, the assembler and the sample program, the QC compiler (compile_qc, ge qc build) and the language it reads, the qc tool behind ge qc, the qc lab, and the bytecode program on the shooter seam (games/shooters_edge/sim/qc_program); the standard builtins (stdlib: math, vectors, ftos and vtos text, tokenize, the string extensions, strzone), the map's entity text, and the mod server (games/shooters_edge/server: the builtin catalogue by number, checkextension, the hooks, the extension fields, loading a progs from --progs or sv_progs, the assembled test mod, a match with bots, the se-mod lab); native programs (native.hpp: a progs whose functions are C++, bound by create_vm) and the arena's rules in C++ (games/shooters_edge/rules, the baseline mod, the se-baseline lab); the campaign's QC (games/shooters_edge/qc); the compiled-module VM (qvm.hpp: a match mod's qwprogs.qvm loaded, checked and run, system calls and re-entry, faults with frames, qvm_asm and its sample, the qvm lab; the module server games/shooters_edge/server/qvm_server and qvm_calls, the adapter sim/qvm_program, the hand-assembled qvm_test_mod, the se-qvm lab); the M18c, M18d and M18p rows."
 ---
 
 # The progs plugin
@@ -29,8 +29,10 @@ is the design, `docs/goals.md` M18c, M18d and M18p the rows.
 | `progs/entity_text.hpp` | The map's entity text parsed and spawned into a progs' fields (typed values, `angle`, `light`, `_` keys, the inhibit flags) |
 | `games/shooters_edge/sim/qc_program.hpp` | A loaded progs as a program on the shooter loop's seam; `before_call` / `after_call` for the server |
 | `games/shooters_edge/server/qvm_server.hpp`, `qvm_calls.cpp`, `qvm_test_mod.hpp`, `sim/qvm_program.hpp`, `labs/se_qvm_lab.cpp` | The module server (form "qvm" behind `RulesRunner`): a mod's `qwprogs.qvm` starting the map in its own order, every system call, the records mirrored to the loop around each export and inside a call that reads or moves the world, the hand-assembled test module, the `se-qvm` lab (`--root --mod --map` runs a real mod folder) |
-| `games/shooters_edge/server/` | The mod server: `catalogue.hpp` (every builtin by number, the extensions), `bi_*.cpp` (the game's builtins), `messages.hpp` (the Write family and multicast), `commands.hpp` (client commands, chat, info, the console, pausing), `qc_server.hpp` (the hooks, clients, maps), `campaign.hpp` (the campaign host: a single-player program's maps in a chain, the parms and `serverflags` carried, `changelevel` / `restart` / `map`), `test_mod.hpp` (with the campaign stub, compiled from `layout_declarations`), `baseline_mod.hpp` (the baseline mod compiled from source, its arena's entity text), `mod_match.hpp` (a progs played by bots), `labs/se_mod_lab.cpp`, `labs/se_baseline_lab.cpp` |
-| `games/shooters_edge/qc/` | The baseline deathmatch mod in QC, its README the modder's guide |
+| `games/shooters_edge/server/` | The mod server: `catalogue.hpp` (every builtin by number, the extensions), `bi_*.cpp` (the game's builtins), `messages.hpp` (the Write family and multicast), `commands.hpp` (client commands, chat, info, the console, pausing), `qc_server.hpp` (the hooks, clients, maps), `campaign.hpp` (the campaign host: a single-player program's maps in a chain, the parms and `serverflags` carried, `changelevel` / `restart` / `map`), `test_mod.hpp` (with the campaign stub, compiled from `layout_declarations`), `baseline_mod.hpp` (the baseline mod: the arena's rules in C++ as a progs; its arena's entity text), `mod_match.hpp` (a progs played by bots), `labs/se_mod_lab.cpp`, `labs/se_baseline_lab.cpp` |
+| `progs/native.hpp` | A native program: a progs built from a declaration (form, globals, fields, strings, functions) whose functions are C++; `Progs::natives` carries them and `create_vm` binds them; word helpers that read and write as the bytecode does (`bit_and`, `bit_or`) |
+| `games/shooters_edge/rules/` | Our own rules in C++ as native programs: `calls.hpp` (the classic server's globals, fields and calls typed), `arena*.cpp` (the deathmatch, the baseline mod; `arena_decl.hpp` its declaration under the QC's names), held to the QC's matches by `tests/shooters_edge_arena_rules_test.cpp` |
+| `games/shooters_edge/qc/` | The campaign's QC and `common/` (frozen; being carried to C++, M52h), its README the guide |
 
 ## Rules
 
@@ -95,8 +97,9 @@ is the design, `docs/goals.md` M18c, M18d and M18p the rows.
 - **The output is the text's alone.** No time, path or hash order reaches the bytes:
   `tests/progs_qc_compile_test.cpp` builds twice and compares, and `tests/golden/progs_qc_compile.txt`
   holds the listing of every construct. A deliberate change rewrites it and says why.
-- **The baseline mod is game logic, not a test fixture.** Change it as a modder would (its
-  README), keep its arena's entity text (`baseline_mod.cpp`) placing every entity it spawns, and
+- **The baseline mod is game logic, not a test fixture.** It is C++ now
+  (`games/shooters_edge/rules/arena*.cpp`); a deliberate change to its play rewrites the pins in
+  `tests/shooters_edge_arena_rules_test.cpp` and says why. Keep its arena's entity text (`baseline_mod.cpp`) placing every entity it spawns, and
   run `make lab LAB=se-baseline` before and after; `tests/shooters_edge_baseline_mod_test.cpp`
   holds it to a clean spawn, a deathmatch, the door, the plat and a replay.
 - **The compiled-module VM is a second machine, not a QC mode.** One flat byte memory (a power of
@@ -107,6 +110,12 @@ is the design, `docs/goals.md` M18c, M18d and M18p the rows.
   ENTER and a computed JUMP only against its function and depth 0. Every load, store and block copy
   is checked; a host reads module memory only through `qvm_ptr`, `qvm_string` and
   `qvm_put_string`, and stops the module with `qvm_raise` (the outermost call returns 0).
+- **Carrying QC to C++ is statement for statement.** 32-bit floats in the QC's order; `if` on a
+  float tests the word (`-0` is true: `on()`), `!x` compares as a float; `&&` and `||` evaluate
+  both sides (C++ `&` and `|` on bools, a side with effects taken into a temporary first, in the
+  QC's order); unary minus is `0 - x`; `&` and `|` truncate each side to int32 (`bit_and`); a
+  local read before it is written is 0. Hold it side by side with the compiled QC on the same
+  match (`run_mod_match` both ways, every frame's loop digest) before the QC goes.
 - **Run the lab before and after** a change to the VM: `make lab LAB=qc ARGS="--tag=before"`, then
   `--compare=before`; its digest (`make ge ARGS="digest qc --write"`) holds the sample's profile.
   A change to the server or a builtin runs `make lab LAB=se-mod` the same way, and a change to

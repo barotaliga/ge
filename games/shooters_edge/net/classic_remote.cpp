@@ -635,6 +635,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.skin = cvar("skin", "base");
     cfg.model = cvar("model", "");
     cfg.fetch_looks = cvar("noskins", "0") == "0";  // 1: none drawn; 2: none fetched
+    cfg.fetch_lit = cvar("r_loadlit", "1") != "0";
+    cfg.fetch_locs = cvar("tp_loadlocs", "1") != "0";
     cfg.keep_file = [&r](const std::string& gamedir, const std::string& path,
                          const std::vector<uint8_t>& bytes) {
       if (r.keep_file) r.keep_file(gamedir, path, bytes);

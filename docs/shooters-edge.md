@@ -712,16 +712,16 @@ server's frames go on under it). Its pages are the classic game's:
 ## Running your own mod
 
 The mod server (`games/shooters_edge/server`, M18p) runs a multiplayer `progs` as a compiler
-wrote it. The tree ships one in source: the **baseline mod** (`games/shooters_edge/qc/`, M18d),
-a complete deathmatch (weapons, ammunition, armour, health, deaths and respawns, frags, doors,
-plats, buttons and triggers) written in QC for modders to copy and change. Its README is the
-modder's guide; `ge qc build games/shooters_edge/qc/arena/progs.src` compiles it to `progs.dat`
-with the tree's own QC compiler (`plugins/progs/qc_compile.hpp`, the language in
-`porting/shooters-edge/qc-language.md`), and the `se-baseline` lab plays it against bots. The
-same sources build a second variant, `qc/campaign/` (M18s7): the classic maps' single-player
-game on the single-player program form, run by the campaign host and played on a pack's maps
-by `se-campaign --progs=games/shooters_edge/qc/campaign/progs.src`. What both variants share is
-`qc/common/`; each variant's `engine.qc` and `glue.qc` hold what its form does differently.
+wrote it, and a NATIVE program (`plugins/progs/native.hpp`) in the same place: a progs whose
+functions are C++. The game's own deathmatch, the **baseline mod** (M18d: weapons, ammunition,
+armour, health, deaths and respawns, frags, doors, plats, buttons and triggers), is one: the
+arena's rules in C++ (`games/shooters_edge/rules/arena*.cpp`, M52h), which the `se-baseline` lab
+plays against bots. The campaign is still QC until it is carried over too (M52h):
+`qc/campaign/` (M18s7), the classic maps' single-player game on the single-player program form,
+run by the campaign host and played on a pack's maps by
+`se-campaign --progs=games/shooters_edge/qc/campaign/progs.src`, on `qc/common/`; its README is
+the guide, and `ge qc build` compiles it with the tree's own QC compiler
+(`plugins/progs/qc_compile.hpp`, the language in `porting/shooters-edge/qc-language.md`).
 
 - **Point the game at it** with a path: `--progs=<file>` on the command line, or the `sv_progs`
   cvar in the server's console lines (`sv_progs mods/arena/progs.dat`, or `set sv_progs ...`).
@@ -1075,13 +1075,11 @@ own programs are the same pair:
 | | Arena (multiplayer) | Campaign (single player) |
 | --- | --- | --- |
 | The classic game's own | the player's multiplayer `progs` | the player's single-player `progs` in its first pack: the exact campaign, episode 1 on the shareware pack, all four with the full game |
-| Ours (free) | `qc/arena/progs.src`: today's deathmatch | `qc/campaign/progs.src`: monsters, the level flow, runes, skill, coop on the same common code |
-| Shared | `qc/common/`: weapons, items, combat, doors, plats, buttons, triggers | |
+| Ours (free) | `rules/arena*.cpp`: today's deathmatch in C++ | `qc/campaign/progs.src`: monsters, the level flow, runes, skill, coop on `qc/common/` (QC until it is carried to C++) |
 
 Choosing single or multiplayer is choosing a program: the menu's SINGLE PLAYER ▸ NEW GAME loads
 the profile's campaign program (the pack's own when present, else ours), MULTIPLAYER its arena
-program. Our variants are built by `ge qc build` from their own `progs.src`; a modder copies
-either.
+program. Our campaign is built by `ge qc build` from its `progs.src`; the arena is C++.
 
 ### Co-op and its companions
 
@@ -1420,6 +1418,12 @@ every pass, and judged by captioned screenshots:
   serves those files out of its own game folder when downloads are on, read when first asked and
   kept (`ServerConfig::read_file`), and answers `listskins` (the console's `serverskins`) with the
   skins and figures it offers (`net/classic_looks.hpp`).
+- **A map's extras from the server** (M18i20): after the looks, the same client asks for the
+  map's coloured light (`lits/<map>.lit`) only while `r_loadlit` is 1 and it has no `.lit` of the
+  map, and its place names (`locs/<map>.loc`) only while `tp_loadlocs` is 1 and it has none. Both
+  are kept in the game folder; the light shows when the level is drawn again, and the place names
+  are read again. A server offers them with its maps (`allow_maps`), a light asked for in `lits/`
+  from beside the map too. `r_loadlit 0` draws every map in its own grey light.
 - **Player figures in the second game** (M18i16): a player's `skin` there is "<model>/<skin>",
   the figure a folder `players/<model>/` with its `tris.md2`, its skins as pictures beside it, and
   the weapons it carries (the files the server names with a '#', drawn in place of its weapon). Each

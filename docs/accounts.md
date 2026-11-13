@@ -345,14 +345,17 @@ their recent-stats answer into the same record, best effort and without accounts
 
 | Page | What |
 | --- | --- |
-| Player | An account: totals per game and mode, the game's columns, the recent matches with their demos |
-| Match | One report: the scoreboard, each player's columns, the demo |
-| Leaders | Per game, mode and column, over a period |
+| Player | `/player/{name}` (`engine/hub/stats_page.hpp`): an account's counted totals (matches, wins, frags, deaths, efficiency, frags a match, time played), by game and mode, the weapons by kills with their accuracy (the report's `<w>_attacks`, `<w>_hits`, `<w>_kills`, `<w>_deaths` columns), the game's other columns (a `_max` one as the best of a match), and the last 20 matches the hub still holds. A plain GET form filters it: one map, one mode, modes left out (a box each: no ffa), a ping band (under 40, 80, 120 or 200 ms) |
+| Match | `/match/{id}`, the id in 16 hex digits: the teams' scores, the scoreboard by team and score, each player's accuracy and kills per weapon, the other columns, a link to the demo when one was recorded; a report from a server the owner has not listed says it counts in no totals |
+| Leaders | `/leaders`: the best 50 accounts by one stat (frags, wins, matches, score, efficiency, frags a death, frags a match, any column, a weapon's accuracy `<w>_acc`), under the Player page's filters, all time or over the last 1, 7 or 30 days of the reports the hub still holds; a ratio counts an account with 3 matches or more under the filter |
 | Account | `/account`, on a hub run with `--accounts` (`engine/hub/account_page.hpp`): sign up (the recovery code shown once), a one-time login code with the line a classic client types, a new password by the recovery code. Plain HTML forms posted to `/account/...`, no script, no cookie, every answer `no-store`. A password is taken only over HTTPS (the operator's proxy says so with `X-Forwarded-Proto: https`) or from the hub's own machine; otherwise the forms are shown disabled and a post is refused. The throttle counts by the proxy's `X-Forwarded-For` |
 
 The JSON API: `/v1/players/{name}`, `/v1/matches?game=&mode=&player=&page=`, `/v1/matches/{id}`,
-`/v1/leaders?game=&mode=&stat=&days=`. The hub's line that it has no accounts and no login
-(`docs/hub.md`) holds for every page but Account.
+`/v1/leaders?game=&mode=&stat=&days=` (each also takes the Player page's `map`, `without` and
+`ping`), served by the same file. They and the three pages are served only by a hub run with
+`--accounts`, whose nav bar then links Leaders; any other hub answers them with a 404 that says it
+keeps no player stats. The hub's line that it has no accounts and no login (`docs/hub.md`) holds
+for every page but these and Account.
 
 ## The plan
 
