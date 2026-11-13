@@ -42,6 +42,8 @@ constexpr double kRespawnAfter = 1;   // the dead may respawn this long after dy
 constexpr uint8_t kRespawnHold = 14;  // the deathmatch respawn's teleport hold, in 8 ms
 constexpr float kSpawnHealth = 100;
 constexpr double kIntermissionHold = 5;  // the intermission's least time before a button leaves, s
+// Its most: a server nobody presses a button on (everyone away, a dedicated one) still moves on, s.
+constexpr double kIntermissionMost = 20;
 
 SequelServer& sq(void* rules) { return *static_cast<SequelServer*>(rules); }
 
@@ -102,6 +104,7 @@ void register_cvars(SequelServer& s) {
        .fallback = "",
        .flags = con::kServer,
        .help = "The maps a level's end goes through in turn.",
+       .kind = con::CvarKind::text,
        .values =
            "\"\": the same map again (the default); TEXT: these maps, spaces or commas between"});
   s.cvars.add({.name = "k_midair",
@@ -463,12 +466,14 @@ void start_intermission(SequelServer& s) {
   }
 }
 
-// The intermission's frame: 5 s on, any button pressed leaves for the next map.
+// The intermission's frame: 5 s on, any button pressed leaves for the next map; after 20 s it
+// leaves by itself.
 void intermission_frame(SequelServer& s) {
   if (!s.pending_map.empty() || s.level_time + 0.001 < s.intermission_at + kIntermissionHold)
     return;
+  const bool over = s.level_time + 0.001 >= s.intermission_at + kIntermissionMost;
   for (int i = 0; i < sh::kMaxClients; i++)
-    if (s.clients[i].active && s.players[i].buttons != 0) {
+    if (over || (s.clients[i].active && s.players[i].buttons != 0)) {
       s.pending_map = s.next_map;
       s.pending_change = MapChange::change_level;
       return;

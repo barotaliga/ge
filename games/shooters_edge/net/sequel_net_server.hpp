@@ -19,13 +19,17 @@
 // frame's prints, centred prints, stuffed lines and changed configstrings go on the reliable
 // channel; the frame and its sounds unreliably.
 //
+// A LEVEL CHANGE (`sequel_net_level`) keeps every connection: the count goes up, each client is
+// sent `changing` and `reconnect` and asks for the signon again with `new`.
+//
 // A client is dropped on `disconnect`, after `timeout` seconds of silence, on a message it cannot
 // read, or on overflowing its reliable channel; it is sent the disconnect message once.
 //
 // ge:summary The sequel's net server: the rules served to live protocol 34 clients over a transport
 // ge:keywords sequel-server protocol-34 live-server getchallenge connect signon configstrings
 // ge:keywords baselines begin frame delta ack move checksum status info timeout disconnect
-// ge:keywords sequel_net_start sequel_net_frame sequel_net_stop
+// ge:keywords sequel_net_start sequel_net_frame sequel_net_stop sequel_net_level level-change
+// ge:keywords changelevel changing reconnect
 // ge:skill net shooter
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #pragma once
@@ -96,5 +100,9 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us);
 // Every client told the server is going, and dropped.
 void sequel_net_stop(SequelNetServer& s);
 int sequel_net_clients(const SequelNetServer& s);
+// The rules moved onto another map (their `start` run again) with `wire` the new map's checksum
+// and sky: the level's count goes up and every client is told the level changed (`changing`, then
+// `reconnect`), and signs on again on the same connection; `begin` seats it on the new map.
+void sequel_net_level(SequelNetServer& s, const sv::SequelWireOptions& wire);
 
 }  // namespace shooters_edge::net

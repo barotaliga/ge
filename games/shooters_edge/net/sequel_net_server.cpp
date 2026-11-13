@@ -73,7 +73,8 @@ void drop(SequelNetServer& s, int slot, const std::string& why) {
   SequelNetClient& c = s.clients[slot];
   if (c.stage == SequelSlot::free) return;
   note(s, c.name + " dropped: " + why);
-  if (c.stage == SequelSlot::active) s.rules->drop(slot);
+  // A client signing on again after a level change still holds its slot in the rules.
+  if ((**s.rules).clients[slot].active) s.rules->drop(slot);
   // The disconnect, once, with whatever reliable data is still owed.
   const uint8_t bye[] = {kSvcDisconnect};
   channel_reliable(c.ch, bye, sizeof bye);
@@ -380,6 +381,22 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us) {
       drop(s, i, "timed out");
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
   send_frames(s);
+}
+
+void sequel_net_level(SequelNetServer& s, const sv::SequelWireOptions& wire) {
+  const int32_t count = s.cfg.wire.server_count + 1;  // the server data carries it too
+  s.cfg.wire = wire;
+  s.cfg.wire.server_count = count;
+  s.count = 0x10000 + count;
+  s.written_frame = s.game->frame_number;
+  for (SequelNetClient& c : s.clients) {
+    if (c.stage == SequelSlot::free) continue;
+    c.stage = SequelSlot::signon;  // the rules keep the slot until `begin` seats it again
+    c.acked = -1;
+    stuff(c, "changing\n");
+    stuff(c, "reconnect\n");
+  }
+  note(s, "the level changed to " + s.game->map_name);
 }
 
 void sequel_net_stop(SequelNetServer& s) {
