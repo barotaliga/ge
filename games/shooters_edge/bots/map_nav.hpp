@@ -119,10 +119,11 @@ std::vector<ge::shooter::NavMover> map_movers(const server::RulesCommon& s,
 // False with `error` when no floor holds a node.
 bool build_map_nav(const server::RulesCommon& s, const server::MapSpec& spec,
                    const char* start_class, MapNav& out, std::string& error);
-// The sequel's ground as the nav's move reads it: its top speed (300) and friction (6); its
-// stop speed, acceleration and gravity are the first game's already. Its air steering (a plain
-// acceleration of 1, no cap) is not the first game's: the nav still plans a jump's flight with the
-// first game's (open, M18v8).
-ge::shooter::MoveSettings sequel_nav_move();
+// The sequel's move as the nav and the pilot read it: its top speed (300) and friction (6) (its
+// stop speed, acceleration and gravity are the first game's already), and its air: with the
+// server's air acceleration `air_accelerate` 0 (`sequel_air_accelerate`, its default) a plain
+// acceleration of 1 against the whole wish, a jump's flight barely steered; otherwise 10 against
+// a wish of 30, the first game's strafing.
+ge::shooter::MoveSettings sequel_nav_move(float air_accelerate);
 
 }  // namespace shooters_edge::bots

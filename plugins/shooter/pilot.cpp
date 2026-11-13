@@ -333,7 +333,7 @@ bool jump_blocked(const Pilot& p, const MoveWorld& world, Vec3f o, float speed, 
 bool circling(Pilot& p, const PilotSense& s, float vh, float speed, float err, float dt, int msec,
               Want& w) {
   if (p.circle_s < 0 || p.gap_k >= 0 || p.jump_pressed) return false;
-  MoveSettings move;
+  MoveSettings move = p.g->move;
   move.maxspeed = s.maxspeed;
   const CircleStep c = circle_step(vh, speed, err, p.circle_s, static_cast<float>(msec) * 0.001f,
                                    p.circle_side, move, p.set.circle);
@@ -539,7 +539,8 @@ WalkWay foresee(const Pilot& p, const PilotSense& s, Vec3f aim, Vec3f near, Want
                       static_cast<float>(p.pressed[2])},
                      p.set.lead_s,
                      p.set.lead_s + p.set.ahead_s,
-                     p.set.ahead_bodies ? s.others : std::span<const OtherBox>{}};
+                     p.set.ahead_bodies ? s.others : std::span<const OtherBox>{},
+                     &p.g->move};
   WalkKeys keys;
   WalkSeen seen[kWalkWays];
   bool flown = false;
@@ -614,7 +615,7 @@ bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, 
   const size_t gk = static_cast<size_t>(p.gap_k);
   const NavLink* gl = link_of(g, p.route[gk], p.route[gk + 1]);
   const Vec3f S = node(g, p.route[gk]).origin, T = node(g, p.route[gk + 1]).origin;
-  MoveSettings move;
+  MoveSettings move = p.g->move;
   move.maxspeed = s.maxspeed;
   Vec3f dir{T.x - S.x, T.y - S.y, 0};
   normalize(dir);
