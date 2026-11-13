@@ -1408,6 +1408,12 @@ every pass, and judged by captioned screenshots:
   serves those files out of its own game folder when downloads are on, read when first asked and
   kept (`ServerConfig::read_file`), and answers `listskins` (the console's `serverskins`) with the
   skins and figures it offers (`net/classic_looks.hpp`).
+- **A map's extras from the server** (M18i20): after the looks, the same client asks for the
+  map's coloured light (`lits/<map>.lit`) only while `r_loadlit` is 1 and it has no `.lit` of the
+  map, and its place names (`locs/<map>.loc`) only while `tp_loadlocs` is 1 and it has none. Both
+  are kept in the game folder; the light shows when the level is drawn again, and the place names
+  are read again. A server offers them with its maps (`allow_maps`), a light asked for in `lits/`
+  from beside the map too. `r_loadlit 0` draws every map in its own grey light.
 - **Player figures in the second game** (M18i16): a player's `skin` there is "<model>/<skin>",
   the figure a folder `players/<model>/` with its `tris.md2`, its skins as pictures beside it, and
   the weapons it carries (the files the server names with a '#', drawn in place of its weapon). Each

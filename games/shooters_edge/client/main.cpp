@@ -465,8 +465,11 @@ int run_main(int argc, char** argv) {
   // A skin or player figure fetched joining a server: written into the game's folder on disk (the
   // server's game folder under the base folder when it plays another) and, when that is the
   // folder played, mounted over the search path at once, as the classic clients keep downloads.
-  remote.keep_file = [&files, &args, game_row](const std::string& gamedir, const std::string& path,
-                                               const std::vector<uint8_t>& bytes) {
+  bool locs_fetched = false;  // a map's place names fetched: read again when its level starts
+  remote.keep_file = [&files, &args, game_row, &locs_fetched](const std::string& gamedir,
+                                                              const std::string& path,
+                                                              const std::vector<uint8_t>& bytes) {
+    if (path.starts_with("locs/")) locs_fetched = true;
     const bool ours =
         gamedir.empty() || gamedir == args.game ||
         gamedir == shooters_edge::profiles::content_of(game_row(args.profile)).base_dir;
@@ -1578,6 +1581,8 @@ int run_main(int argc, char** argv) {
         const cl::SearchPath& from =
             cl::demo_folder(bench_folder, args.basedir, args.game, ds, files, lines);
         for (const std::string& line : lines) console.print("playdemo: " + line);
+        if (locs_fetched) places.map.clear();  // the same map, with the file it just fetched
+        locs_fetched = false;
         cl::map_started(places, adapter, from, ds.map);  // its place names, from where it played
         bench_map = cl::load_named_map(from, ds.map, error);
         if (!bench_map) {
