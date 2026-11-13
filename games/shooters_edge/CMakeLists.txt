@@ -55,6 +55,12 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 ge_add_server(shooters_edge_dedicated OUTPUT_NAME shooters_edge_server SOURCES server/bin/main.cpp
               LINK shooters_edge_classic)
 
+# The sequel's dedicated server (server/bin/sequel_main.cpp), `shooters_edge_sequel_server` on
+# disk at the build's root: the same core over the sequel's rules on its own protocol
+# (net/sequel_game.hpp), so an existing client of the sequel joins it.
+ge_add_server(shooters_edge_sequel_dedicated OUTPUT_NAME shooters_edge_sequel_server
+              SOURCES server/bin/sequel_main.cpp LINK shooters_edge_classic)
+
 # The hub (hub/), named `shooters_edge_hub` on disk at the build's root: the engine's hub
 # (engine/hub, docs/hub.md) with the game's modes and words. `--help` lists its flags.
 # The classic status query (net/classic_browse, net/classic_info) is built into it; the client's

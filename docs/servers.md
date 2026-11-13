@@ -55,7 +55,12 @@ build/debug/shooters_edge_server --name="Arena Night" --description="the arena" 
 build/debug/shooters_edge_server --root=<install> --map=dm6 --port=27512 --realtime --for=0 \
   +set fraglimit 20 +set timelimit 10
 build/debug/shooters_edge_server --root=servers --mod=arena --cfg=duel --explain=sv_
+build/debug/shooters_edge_sequel_server --root=<install> --map=q2dm1 --port=27910 --realtime --for=0
 ```
+
+`shooters_edge_sequel_server` is the same process over the sequel's rules on its own protocol
+(`games/shooters_edge/net/sequel_game.hpp`): `--root` holds the sequel's game folder, and an
+unmodified client of the sequel joins it.
 
 The layers are read as loose files under `--root` (`<root>/<dir>/server.cfg`); a copy inside a
 pack is not read yet, and `ge server cfg --explain` comes with `ge server` (M53d) over the
