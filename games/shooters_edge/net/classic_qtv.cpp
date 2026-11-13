@@ -517,7 +517,7 @@ int qtv_streaming(const QtvPort& p) {
   return n;
 }
 
-void qtv_update(QtvPort& p, ClassicServer& s) {
+void qtv_accept(QtvPort& p, const ClassicServer& s) {
   // New connections; past the limit and three spare, told so and closed.
   for (;;) {
     auto r = std::make_unique<QtvRelay>();
@@ -533,6 +533,10 @@ void qtv_update(QtvPort& p, ClassicServer& s) {
     }
     p.relays.push_back(std::move(r));
   }
+}
+
+void qtv_update(QtvPort& p, ClassicServer& s) {
+  qtv_accept(p, s);
   std::vector<uint8_t> got;
   for (const auto& rp : p.relays) {
     QtvRelay& r = *rp;
