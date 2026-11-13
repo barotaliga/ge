@@ -1512,6 +1512,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.lift_brake = features[sh::Feature::liftbrake];
   ps.script_fresh = features[sh::Feature::scriptfresh];
   ps.gap_turn = features[sh::Feature::gapturn];
+  ps.gap_near = features[sh::Feature::gapnear];
   ps.script_entry = features[sh::Feature::scriptentry];
   ps.circle.target = expert ? 430.f : 380.f;
   ps.circle.most_s = expert ? 0.3f : 0.2f;

@@ -775,6 +775,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].gap_jumps = fi.bot.pilot.pilot.stats.gap_jumps;
     r.players[k].gap_landed = fi.bot.pilot.pilot.stats.gap_landed;
     r.players[k].gap_refused = fi.bot.pilot.pilot.stats.gap_refused;
+    r.players[k].gap_near = fi.bot.pilot.pilot.stats.gap_near;
     r.players[k].hops = fi.bot.pilot.pilot.stats.hops;
     r.players[k].hop_jumps = fi.bot.pilot.pilot.stats.hop_jumps;
     r.players[k].circles = fi.bot.pilot.pilot.stats.circles;

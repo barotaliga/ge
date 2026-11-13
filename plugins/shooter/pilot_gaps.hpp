@@ -30,6 +30,7 @@ inline constexpr double kGapTurnMost_s = 1.5;
 inline constexpr float kGapTurnBack = 180, kGapBackNear = 40;
 inline constexpr double kGapBackMost_s = 4;
 inline constexpr float kGapCurveFrom = 160;  // a curve into a gap begun this near its start, units
+inline constexpr float kGapNearShare = 0.9f;  // (`gapnear`) a near gap planned at this of its speed
 
 // Whether a jump pressed at `at` moving at `velocity` comes down across, by the gap's landing `T`:
 // flown by the move (nav_gaps.hpp `fly_jump`), forward at the landing all the way.
