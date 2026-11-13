@@ -104,3 +104,30 @@ TEST(the_shots_glow_and_the_fire_ones_carry_a_flame) {
     CHECK(fx::monster_flame(k, at, dir, 1, 0, &flame) == fire);
   }
 }
+
+TEST(the_sequels_cables_and_flashes_are_known_by_name_and_drawn) {
+  CHECK(fx::cable_of("te_parasite_attack") == fx::Cable::drain);
+  CHECK(fx::cable_of("te_medic_cable_attack") == fx::Cable::heal);
+  CHECK(fx::flash_of("te_monster_flash.rocket") == fx::Flash::rocket);
+  CHECK(fx::flash_of("te_railtrail") == fx::Flash::none);
+  const double from[3] = {0, 1, 0}, to[3] = {2, 1, 0}, dir[3] = {1, 0, 0};
+  for (const fx::Cable c : {fx::Cable::drain, fx::Cable::heal}) {
+    fx::Particles classic, modern, again;
+    fx::classic_cable(c, from, to, 3, &classic);
+    fx::monster_cable(c, from, to, 3, 0.5, &modern);
+    fx::monster_cable(c, from, to, 3, 0.5, &again);
+    CHECK(!classic.empty() && modern.size() > classic.size());
+    CHECK(same(modern, again));
+    fx::Light light;
+    CHECK(fx::cable_light(c, to, 0.5, &light));
+  }
+  fx::Light light;
+  CHECK(fx::flash_light(fx::Flash::gun, from, 0, &light));
+  CHECK(!fx::flash_light(fx::Flash::gun, from, 1, &light));
+  ge::render::MuzzleFire fire;
+  CHECK(fx::flash_fire(fx::Flash::gun, from, dir, 1, 0, &fire));
+  CHECK(!fx::flash_fire(fx::Flash::rail, from, dir, 1, 0, &fire));
+  fx::Particles sparks;
+  fx::flash_sparks(fx::Flash::blaster, from, dir, 1, &sparks);
+  CHECK(!sparks.empty());
+}

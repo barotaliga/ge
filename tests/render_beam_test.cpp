@@ -174,21 +174,45 @@ TEST(beam_lights_lie_along_it_and_at_the_hit) {
   CHECK(std::fabs(hit.candela - l.hit_cd * level) < 1e-3f * l.hit_cd);
 }
 
-TEST(beam_burns_once_a_spot_and_never_after_release) {
+TEST(beam_burns_trace_a_line_melt_where_held_and_stop_after_release) {
   const r::BeamLook l = look_of("arc");
   r::BeamShot s = a_shot();
-  s.end_s = 2;
+  s.end_s = 10;
   r::BurnTrail trail;
   r::BeamBurn burn;
-  CHECK(!r::beam_burns(l, s, 0.9, trail, burn));
-  CHECK(r::beam_burns(l, s, 1.1, trail, burn));
-  CHECK(burn.size_m > 0 && burn.at[2] == s.to[2]);
-  CHECK(!r::beam_burns(l, s, 1.1 + l.scorch_every_s * 0.5, trail, burn));
-  CHECK(r::beam_burns(l, s, 1.1 + l.scorch_every_s * 1.01, trail, burn));
-  s.to[0] += l.scorch_m;  // moved: burns again at once
-  CHECK(r::beam_burns(l, s, 1.1 + l.scorch_every_s * 1.02, trail, burn));
-  s.to[0] += l.scorch_m;
-  CHECK(!r::beam_burns(l, s, 2.05, trail, burn));
+  CHECK(!r::beam_burns(l, s, 0.9, trail, burn));  // not fired yet
+  CHECK(!r::beam_burns(l, s, 1.0, trail, burn));  // first landing: where the line starts
+  // Swept 0.6 m along the wall (x) in one frame: a piece from the start to the hit, its ends
+  // reaching half a width past each point.
+  s.to[0] += 0.6;
+  CHECK(r::beam_burns(l, s, 1.01, trail, burn));
+  CHECK(burn.melt == 0 && burn.along[0] > 0.999);
+  CHECK(std::fabs(burn.at[0] - (s.to[0] - 0.3)) < 1e-9);
+  CHECK(std::fabs(burn.length_m - (0.6 + l.line_m)) < 1e-6);
+  CHECK(!r::beam_burns(l, s, 1.01, trail, burn));  // the line has reached the hit
+  // A sweep too fast for one piece: pieces of `line_most_m` until it reaches the hit.
+  s.to[0] += 2;
+  int pieces = 0;
+  while (pieces < 8 && r::beam_burns(l, s, 1.02, trail, burn)) ++pieces;
+  CHECK(pieces == 3);
+  // Held on the spot: nothing until `melt_after_s`, then a melt that grows, pressed again every
+  // `melt_every_s` under the same number.
+  CHECK(!r::beam_burns(l, s, 1.02 + l.melt_after_s * 0.5, trail, burn));
+  const double t0 = 1.02 + l.melt_after_s + 0.001;
+  CHECK(r::beam_burns(l, s, t0, trail, burn));
+  const uint32_t melt = burn.melt;
+  const double small = burn.size_m;
+  CHECK(melt > 0 && small >= l.melt_m && burn.along[0] == 0);
+  CHECK(!r::beam_burns(l, s, t0 + l.melt_every_s * 0.5, trail, burn));
+  CHECK(r::beam_burns(l, s, t0 + l.melt_grow_s * 0.5, trail, burn));
+  CHECK(burn.melt == melt && burn.size_m > small);
+  CHECK(r::beam_burns(l, s, t0 + l.melt_grow_s * 2, trail, burn));
+  CHECK(std::fabs(burn.size_m - l.melt_most_m) < 1e-6);
+  // A jump to another face starts a new line there, drawing nothing through the air.
+  s.to[2] -= 1;
+  s.normal[0] = 1, s.normal[2] = 0;
+  CHECK(!r::beam_burns(l, s, 9.9, trail, burn));
+  CHECK(!r::beam_burns(l, s, 10.1, trail, burn));  // let go
   CHECK(r::ember_level(l, 0) == l.ember_cd);
   CHECK(r::ember_level(l, l.ember_s * 0.5) < l.ember_cd * 0.2f);
   CHECK(r::ember_level(l, l.ember_s) == 0);

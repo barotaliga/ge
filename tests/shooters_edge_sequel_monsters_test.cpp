@@ -267,3 +267,40 @@ TEST(the_commanders_body_stays_in_deathmatch_uncounted_and_slumps_when_used) {
   CHECK(sv::map_damage(h->s(), h->m().entity, 0, 500));  // a figure: never hurt
   CHECK(!h->e().gone && !h->m().dead);
 }
+
+namespace {
+
+// The named line effects the server sent over `seconds`, by name.
+std::vector<std::string> lines_sent(Hall& h, int seconds) {
+  std::vector<std::string> names;
+  for (int i = 0; i < seconds * kSecond; i++) {
+    h.s().out.events.clear();
+    run(h, 1);
+    for (const sv::NetEvent& ev : h.s().out.events)
+      if (ev.kind == sv::EventKind::trail_effect) names.push_back(ev.text);
+  }
+  return names;
+}
+
+bool has(const std::vector<std::string>& v, const char* name) {
+  for (const std::string& s : v)
+    if (s == name) return true;
+  return false;
+}
+
+}  // namespace
+
+TEST(a_guards_shot_leaves_with_a_blaster_flash_the_window_draws) {
+  auto h = open_hall({guard("0 0 24", "180")});
+  const std::vector<std::string> sent = lines_sent(*h, 8);
+  CHECK_MSG(has(sent, "te_monster_flash.blaster"), sent.empty() ? "none" : sent[0]);
+}
+
+TEST(a_parasites_drain_and_a_medics_cable_are_sent_as_lines) {
+  auto p = open_hall({monster("monster_parasite", "-450 0 24", "180")});
+  CHECK(has(lines_sent(*p, 8), "te_parasite_attack"));
+  auto m = open_hall({guard("100 0 24", "0"), monster("monster_medic", "250 0 24", "0")});
+  run(*m, 10);
+  CHECK(sv::map_damage(m->s(), m->m(0).entity, 0, 25));
+  CHECK(has(lines_sent(*m, 6), "te_medic_cable_attack"));
+}

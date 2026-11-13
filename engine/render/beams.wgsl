@@ -46,7 +46,8 @@ struct BeamSeg {
 struct BurnVert {
   at: vec4f,    // camera-relative position; its fade on a turned triangle
   uv: vec4f,    // the atlas's uv; the soot's darkness; the ember's luminance (cd/m^2)
-  more: vec4f,  // the relief's share of its darkness (0: by its cover alone); the world's up in uv
+  more: vec4f,  // the relief's share of its darkness (0: by its cover alone); the world's up in uv;
+                // a hot burn's glow when fresh, whites (0: a scorch's, by its luminance)
   lit: vec4f,   // the light on it, in whites (a lightmap's 1 a surface as painted)
 }
 
@@ -184,6 +185,7 @@ struct BurnOut {
   @location(1) look: vec4f,  // the fade, the soot, the ember, the relief's share
   @location(2) up: vec2f,    // the world's up across the mark (its uv's units)
   @location(3) lit: vec3f,   // the light on it, whites
+  @location(4) @interpolate(flat) keys: f32,  // a hot burn's glow when fresh, whites; 0 a scorch's
 }
 
 @vertex
@@ -198,6 +200,7 @@ fn burn_vs(@builtin(vertex_index) vid: u32) -> BurnOut {
   out.uv = v.uv.xy;
   out.look = vec4f(v.at.w, v.uv.z, v.uv.w, v.more.x);
   out.up = v.more.yz;
+  out.keys = v.more.w;
   out.lit = v.lit.rgb;
   return out;
 }
@@ -225,7 +228,10 @@ fn burn_fs(in: BurnOut) -> @location(0) vec4f {
   let heat = clamp(in.look.z / max(bp.more.y, 1e-3), 0.0, 1.0);
   // Never brighter on the screen than kEmberKeys whites: by day an ember is as hot as it is, but
   // in a dark room at night the eye, opened to the dark, would see it swell into a blinding ball.
-  let ember_l = min(ember * frame.world.y / kSunLux, kEmberKeys / max(exposure(), 1e-20));
+  var ember_l = min(ember * frame.world.y / kSunLux, kEmberKeys / max(exposure(), 1e-20));
+  if (in.keys > 0.0) {  // a hot burn KEYED: its heat times `keys` whites, as bright by day as at night
+    ember_l = in.keys * ember / max(bp.more.y, 1e-3) / max(exposure(), 1e-20);
+  }
   let glow = burn_ember(heat) * ember_l;
   if (in.look.w <= 0.0) {  // a scorch: its soot by its cover
     return vec4f(min(glow, vec3f(60000.0)), 1.0 - in.look.y * cover);

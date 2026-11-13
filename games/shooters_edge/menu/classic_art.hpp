@@ -54,6 +54,9 @@ struct ClassicArt {
   // these are, so a word cut from their letters (classic_view.cpp) is cut only from the pictures it
   // was measured on. 0 when any is missing.
   uint64_t strip_print = 0;
+  // The strips' carved letters, each its own picture cut from them (carved_letters.hpp), when the
+  // strips are the ones the cuts were measured on.
+  std::map<char, ge::ui::Image> letters;
 
   // A picture's size in classic pixels.
   float width_of(const ge::ui::Image& img) const { return static_cast<float>(img.width) / density; }

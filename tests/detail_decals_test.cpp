@@ -3,11 +3,13 @@
 // pool takes free slots, then the oldest; blood dries and fades and is freed at the end of its
 // life while a scorch keeps; masks are empty outside their circle; an overfull decal keeps its
 // nearest triangles within the slot; and placements keep their bits in
-// tests/golden/detail_decals.txt.
+// tests/golden/detail_decals.txt. A burn line runs the length of its long box, thinned at its
+// ends; a melt pressed again grows in its own slot; both glow and cool to black.
 //
 // ge:summary Test: decals clipped across surfaces, the pool, ageing, masks; golden
 // ge:keywords test detail decal clip pool age blood scorch mask golden
 // ge:skill detail testing
+#include <algorithm>
 #include <cmath>
 #include <set>
 #include <string>
@@ -126,7 +128,10 @@ TEST(masks_cover_inside_their_circle_only) {
         const double u = (i + 0.5) / 64, v = (j + 0.5) / 64;
         const gd::MaskSample s = gd::mask_at(kind, 2, u, v);
         CHECK(s.cover >= 0 && s.cover <= 1 && s.shade >= -1 && s.shade <= 1);
-        if ((u - 0.5) * (u - 0.5) + (v - 0.5) * (v - 0.5) >= 0.25) CHECK(s.cover == 0);
+        // A burn line runs the length of its box; the rest are round.
+        if (kind != gd::DecalKind::burn_line &&
+            (u - 0.5) * (u - 0.5) + (v - 0.5) * (v - 0.5) >= 0.25)
+          CHECK(s.cover == 0);
         inside += s.cover;
       }
     }
@@ -136,7 +141,73 @@ TEST(masks_cover_inside_their_circle_only) {
     if (kind == gd::DecalKind::bullet_hole) CHECK(gd::mask_at(kind, 0, 0.5, 0.5).shade == -1);
   }
   const std::vector<uint8_t> atlas = gd::bake_atlas(32, 4);
-  CHECK(atlas.size() == static_cast<size_t>(32 * 4) * 32 * 3 * 4);
+  CHECK(atlas.size() == static_cast<size_t>(32 * 4) * 32 * gd::kDecalKinds * 4);
+}
+
+TEST(a_burn_line_runs_along_its_box_and_thins_at_its_ends) {
+  // Black along its middle from end to end, nothing at its sides, thinned to nothing at its ends.
+  for (uint32_t var = 0; var < 4; ++var) {
+    for (int i = 2; i < 18; ++i) {
+      const double u = 0.15 + 0.7 * i / 20.0;
+      double most = 0;
+      for (int j = 0; j < 9; ++j)
+        most = std::max(most, gd::mask_at(gd::DecalKind::burn_line, var, u, 0.4 + 0.025 * j).cover);
+      CHECK_MSG(most > 0.6, "var " + std::to_string(var) + " at u " + std::to_string(u));
+      CHECK(gd::mask_at(gd::DecalKind::burn_line, var, u, 0.01).cover < 0.05);
+    }
+    CHECK(gd::mask_at(gd::DecalKind::burn_line, var, 0.001, 0.5).cover < 0.02);
+    CHECK(gd::mask_at(gd::DecalKind::burn_line, var, 0.999, 0.5).cover < 0.02);
+  }
+  // Placed 2 m long and 0.14 m wide along a wall: its vertices span the length along the line.
+  const gd::TriMesh m = hall_mesh();
+  const gd::Receivers r = gd::bin_receivers(m);
+  gd::DecalPool pool = gd::make_pool(4);
+  gd::DecalAt d;
+  d.kind = gd::DecalKind::burn_line;
+  d.at = {6, 2, 3};  // on the right wall's face (x 6)
+  d.normal = {-1, 0, 0};
+  d.size_m = 0.14;
+  d.length_m = 2;
+  d.along = {0.3, 0, 1};  // into the wall a little: laid flat along it, so along +z
+  const int slot = gd::place_decal(pool, r, d);
+  CHECK(slot >= 0);
+  if (slot < 0) return;
+  double z0 = 1e9, z1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const gd::DecalVertex& v : gd::decal_verts(pool, static_cast<uint32_t>(slot))) {
+    z0 = std::min(z0, v.pos.z), z1 = std::max(z1, v.pos.z);
+    y0 = std::min(y0, v.pos.y), y1 = std::max(y1, v.pos.y);
+  }
+  CHECK(std::fabs(z1 - z0 - 2) < 1e-6 && std::fabs(y1 - y0 - 0.14) < 1e-6);
+  CHECK(pool.decals[static_cast<size_t>(slot)].length_m == 2);
+}
+
+TEST(a_melt_pressed_again_grows_in_its_own_slot) {
+  const gd::TriMesh m = hall_mesh();
+  const gd::Receivers r = gd::bin_receivers(m);
+  gd::DecalPool pool = gd::make_pool(4);
+  gd::DecalAt d;
+  d.kind = gd::DecalKind::melt;
+  d.at = {6, 2, 3};
+  d.normal = {-1, 0, 0};
+  d.size_m = 0.2;
+  const int first = gd::place_decal(pool, r, d);
+  CHECK(first >= 0);
+  if (first < 0) return;
+  d.slot = first;
+  d.serial = pool.decals[static_cast<size_t>(first)].serial;
+  d.size_m = 0.6;
+  d.now_s = 1;
+  CHECK(gd::place_decal(pool, r, d) == first);
+  CHECK(gd::live_count(pool) == 1 && pool.decals[static_cast<size_t>(first)].size_m == 0.6);
+  // A stale serial (the slot taken by another since) takes a slot of its own.
+  d.serial += 7;
+  CHECK(gd::place_decal(pool, r, d) != first);
+  // White-hot when fresh, black once it has cooled; a longer glow cools later.
+  const double es = gd::decal_spec(gd::DecalKind::melt).ember_s;
+  CHECK(gd::look_at(gd::DecalKind::melt, 0).er > 2);
+  CHECK(gd::look_at(gd::DecalKind::melt, es).er == 0);
+  CHECK(gd::look_at(gd::DecalKind::melt, es, 2 * es).er > 0);
+  CHECK(gd::look_at(gd::DecalKind::burn_line, es).r < 0.05);
 }
 
 TEST(an_overfull_decal_keeps_its_nearest_triangles) {

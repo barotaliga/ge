@@ -62,6 +62,7 @@
 #include <string>
 #include <vector>
 
+#include "shooter/locs.hpp"
 #include "shooter/vec.hpp"
 #include "vfs/unpack.hpp"
 
@@ -192,10 +193,13 @@ struct DemoEffect {
 
 struct DemoState {
   DemoFormat format = DemoFormat::single;
-  bool voice_format = false;                // a `.qwdv` or `.mvdv` (the voice header)
-  int protocol = 0;                         // 15 single, 28 client and multiview, 34 sequel
-  std::string map;                          // "e1m1" off `maps/e1m1.bsp`; "" before the first level
-  int levels = 0;                           // level starts read so far (a new level: load its map)
+  bool voice_format = false;  // a `.qwdv` or `.mvdv` (the voice header)
+  int protocol = 0;           // 15 single, 28 client and multiview, 34 sequel
+  std::string map;            // "e1m1" off `maps/e1m1.bsp`; "" before the first level
+  int levels = 0;             // level starts read so far (a new level: load its map)
+  // The level's place names as the recording kept them (`//loc` lines, plugins/shooter/locs.hpp);
+  // empty when it kept none.
+  ge::shooter::Locs places;
   double time = 0;                          // the demo's clock, s
   sh::Vec3f eye;                            // the view's eye, units
   sh::Vec3f angles;                         // the view's angles, degrees
