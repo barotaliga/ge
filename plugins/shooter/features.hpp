@@ -160,7 +160,8 @@
 //   judging, in no preset.
 // - `gapnear`: a route is not planned through a gap trick whose takeoff is near (`kGapCurveFrom`)
 //   unless the run already heads at it near its speed: it was planned and given up on the next
-//   landing, off every route for 10 s (shooter/pilot.cpp, M18r.md 0c); judging, in no preset.
+//   landing, off every route for 10 s (shooter/pilot.cpp, M18r.md 0c); on (head to head dm2
+//   +6.0, e1m2 -0.2).
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
