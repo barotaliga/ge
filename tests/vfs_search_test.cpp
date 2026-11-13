@@ -80,6 +80,7 @@ fs::path fixture() {
   put(base / "sound" / "Door.wav", text("loose wav"));
   put_pak(mod / "pak0.pak", {{"b.txt", text("mod")}, {"m.txt", text("mod pak0")}});
   put_pak(mod / "misc.pak", {{"m.txt", text("misc.pak")}, {"qwprogs.dat", text("misc progs")}});
+  put_pak(mod / "_set_aside.pak", {{"u.txt", text("set aside")}});  // `_`: never mounted
   put(mod / "progs.dat", text("mod progs"));
   return root;
 }
@@ -122,6 +123,7 @@ TEST(each_name_is_won_by_the_last_source_mounted) {
   CHECK(contents(sp, "m.txt") == "misc.pak");  // an unnumbered pack after the numbered ones
   CHECK(contents(sp, "qwprogs.dat") == "misc progs");
   CHECK(contents(sp, "missing.txt") == "<none>");
+  CHECK(contents(sp, "u.txt") == "<none>");  // in a pack turned off by its `_`
   // The archives themselves and the pk3dir's own files are not loose files.
   CHECK(vfs::find(sp, "pak0.pak") == nullptr);
   CHECK(vfs::find(sp, "misc.pak") == nullptr);
@@ -134,7 +136,8 @@ TEST(a_layout_with_archives_over_loose_ranks_as_its_game_does) {
   const fs::path g = root / "g";
   put_pak(g / "pak0.pak", {{"a.txt", text("pak0")}, {"b.txt", text("pak0")}});
   put_pak(g / "pak2.pak", {{"b.txt", text("pak2")}});
-  put_pak(g / "pak_x.pak", {{"c.txt", text("pak_x")}});  // `pak` with no digits: number 0
+  put_pak(g / "pak_x.pak", {{"c.txt", text("pak_x")}});  // `pak` with no digit: by name
+  put_pak(g / "_off.pak", {{"e.txt", text("_off")}});    // `_`: turned off
   put(g / "z.pkz", vfs::write_stored_zip({{"b.txt", text("z.pkz")}, {"d.txt", text("z.pkz")}}));
   put(g / "a.txt", text("loose"));
   put(g / "c.txt", text("loose"));
@@ -145,14 +148,15 @@ TEST(a_layout_with_archives_over_loose_ranks_as_its_game_does) {
   layout.zip_endings = {".pkz", ".pk3"};
   const std::vector<std::string> order = vfs::game_archives(root.string(), "g", layout);
   CHECK(order.size() == 4 && fs::path(order[0]).filename() == "pak0.pak" &&
-        fs::path(order[1]).filename() == "pak_x.pak" && fs::path(order[3]).filename() == "z.pkz");
+        fs::path(order[1]).filename() == "pak2.pak" &&
+        fs::path(order[2]).filename() == "pak_x.pak" && fs::path(order[3]).filename() == "z.pkz");
   vfs::SearchPath sp;
   std::string error;
   CHECK_MSG(vfs::add_game(&sp, root.string(), "g", &error, layout), error);
   CHECK(contents(sp, "a.txt") == "pak0");   // a pack over the loose file
   CHECK(contents(sp, "b.txt") == "z.pkz");  // an unnumbered archive over every numbered one
   CHECK(contents(sp, "c.txt") == "pak_x");
-  CHECK(contents(sp, "e.txt") == "loose");  // a loose file no archive holds
+  CHECK(contents(sp, "e.txt") == "loose");  // a loose file no archive mounted holds
   // One file read out of a pack without reading the pack whole.
   std::vector<uint8_t> one;
   CHECK_MSG(vfs::read_from_pack((g / "pak2.pak").string(), "B.TXT", &one, &error), error);

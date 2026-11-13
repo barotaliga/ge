@@ -15,6 +15,7 @@
 //
 // ge:summary The client's search path: the base folder and a mod folder over it, packs, pk3s
 // ge:keywords search-path basedir game-folder mod gamedir pak pk3 pack archive find_file files
+// ge:keywords on_disk_any_case any-case letter-case
 // ge:keywords open_game_dir loose-files palette maps map_names content_packs archive_paths
 // ge:keywords map_lit lit coloured-light lits sky_box_files sky-box skybox env
 // ge:skill vfs shooter
@@ -23,6 +24,7 @@
 
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <span>
 #include <string>
@@ -55,8 +57,14 @@ bool open_game_dir(
 bool add_archive(SearchPath& path, const std::string& name, std::vector<uint8_t> bytes,
                  std::string& error);
 
+// The file `name` ('/' separated) under the folder `dir` on disk, each part of it matched in any
+// letter case (`locs/DM2.LOC` for `locs/dm2.loc`): its path, or "" when there is none. The exact
+// spelling is tried first.
+std::filesystem::path on_disk_any_case(const std::filesystem::path& dir, std::string_view name);
+
 // The file at `path` ('/' separated, as the game names it): a loose file's bytes copied into
-// `store` and viewed, or a view into its pack. Empty when no place has it.
+// `store` and viewed, or a view into its pack, a loose file's name matched in any letter case.
+// Empty when no place has it.
 std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name,
                                    std::vector<uint8_t>& store);
 

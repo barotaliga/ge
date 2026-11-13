@@ -7,8 +7,10 @@
 // WHAT A RECORDING HOLDS, the multiview form demo.hpp reads:
 //
 // - THE SIGNON (`record_listen_begin`): the server data (the multiview tag, the server's time, the
-//   map's title), the model and sound lists, the light styles, the static entities and every
-//   connected player's user info (his name, team and colours).
+//   map's title), the model and sound lists, the light styles, the static entities, every
+//   connected player's user info (his name, team and colours) and the map's place names as
+//   stuffed `//loc` lines (`places`), which another client's console reads as comments. The
+//   sequel's recording carries the same lines in its signon.
 // - A FRAME each time the server ran (`record_listen_frame`), stamped with the milliseconds since
 //   the last (1..255): every connected player's record (origin, angles, model, skin, effects,
 //   frame, dead when his health is 0 or under), the entity list whole (every live entity with a
@@ -29,7 +31,7 @@
 // ge:summary The console's record and stop: the listen game written as a packed multiview demo
 // ge:keywords record stop listen-record mvdz mvd multiview packed zstd demo_pack signon frame
 // ge:keywords packetentities playerinfo record_listen_begin record_listen_frame record_listen_end
-// ge:keywords record_tick add_record_commands ready
+// ge:keywords record_tick add_record_commands ready recorded-places loc-lines
 // ge:skill shooter replay
 // ge:test tests/shooters_edge_listen_record_test.cpp
 #pragma once
@@ -42,6 +44,7 @@
 #include <vector>
 
 #include "console/console.hpp"
+#include "shooter/locs.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
@@ -75,6 +78,9 @@ struct ListenRecorder {
   // The sequel's rules playing: its own recording (server/sequel_wire.hpp) from the player's
   // view, kept whole and written as a replay file (`.ged`) at the stop.
   std::unique_ptr<sv::SequelRecorder> sequel;
+  // The map's place names as they are when the recording begins, kept in it (`//loc` lines,
+  // plugins/shooter/locs.hpp) so it plays back with them; null: none kept.
+  const ge::shooter::Locs* places = nullptr;
   ~ListenRecorder();
 };
 

@@ -10,10 +10,12 @@
 //    together in name order;
 // 3. its loose files, every file under the directory but those archives and what is inside a
 //    `.pk3dir`, which win over all of them.
-// That is the default `GameLayout`. A game whose own client ranks its files another way says so in
-// its layout: the archives over the loose files (each directory's packs win over its loose files),
-// other zip endings (`.pkz`), and every archive whose name starts `pak` numbered by the digits
-// after it (none: 0; equal numbers by name), the rest after them by name.
+// An archive (or `.pk3dir`) whose name starts with `_` is turned off: never mounted, so a player
+// sets one aside by renaming it. That is the default `GameLayout`. A game whose own client ranks
+// its files another way says so in its layout: the archives over the loose files (each
+// directory's packs win over its loose files), other zip endings (`.pkz`), and every archive
+// whose name is `pak` and a digit numbered by the digits (`pak1.pkz`, `pak2-maps.pak`; equal
+// numbers by name), every other name after them by name.
 //
 // Names (directory entries, archive entries, the files' own) are compared as the archives' systems
 // did: ASCII case folded and '\\' read as '/' (`same_name`). A directory is listed when it is
@@ -85,7 +87,8 @@ struct SearchPath {
 // How a game directory's files rank against each other (`add_game`, above).
 struct GameLayout {
   bool archives_over_loose = false;  // the loose files mounted first, the archives over them
-  bool pak_prefix = false;  // every archive named `pak*` numbered by the digits after `pak`
+  bool pak_prefix = false;           // every archive named `pak<digit>*` numbered by its digits
+  bool underscore_off = true;        // an archive whose name starts with `_` is not mounted
   std::vector<std::string> zip_endings = {".pk3"};  // lower case, the dot included
   bool pk3dir = true;                               // `*.pk3dir` directories mounted as zips
 };
