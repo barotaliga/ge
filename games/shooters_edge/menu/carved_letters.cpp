@@ -22,6 +22,14 @@ constexpr uint64_t kStripPrint = 0xb378b8eec94a7f36ULL;
 // A part of a piece smaller than this (pixels at the pack's own size) is a speck of a neighbour.
 constexpr int kSpeck = 6;
 
+// The spacing, measured between the inks of the strips' own words: 1 px between letters (39 of
+// the strips' 46 gaps; the rest 2), and a word's space 5 px before a round capital ("New Game":
+// the w to the G) and 10 px before a stem ("Single Player": the e to the P).
+constexpr float kLetterGap = 1, kSpaceRound = 5, kSpaceStem = 10;
+bool round_left(char c) {
+  return c == 'G' || c == 'O' || c == 'Q' || c == 'C' || c == 'o' || c == 'c';
+}
+
 // A piece of a letter: the box x0..x1, y0..y1 (classic px, inclusive) of `picture`, set at `dx`
 // from the letter's left and with the box's top on row `top` of the line. The strips' first band
 // (`mainmenu`'s and `sp_menu`'s top row of words) sits a pixel higher than the others, so a piece
@@ -36,7 +44,7 @@ struct Letter {
   std::span<const Piece> pieces;
 };
 
-constexpr Piece kQ[] = {{"mainmenu", 0, 80, 22, 99, 0, 0}};     // Quit's Q
+constexpr Piece kQ[] = {{"mainmenu", 0, 80, 22, 103, 0, 0}};    // Quit's Q, its tail to row 23
 constexpr Piece kU[] = {{"mainmenu", 23, 83, 41, 95, 0, 3}};    // Quit's u
 constexpr Piece kI[] = {{"mainmenu", 43, 83, 50, 95, 0, 3}};    // Quit's i
 constexpr Piece kA[] = {{"mainmenu", 151, 2, 167, 14, 0, 3}};   // Player's a
@@ -51,7 +59,7 @@ constexpr Piece kC[] = {{"mainmenu", 67, 40, 77, 59, 0, 0}};     // the left hal
 constexpr Piece kT[] = {{"mainmenu", 40, 40, 58, 59, 0, 0}};     // Options' t
 constexpr Piece kO[] = {{"mainmenu", 67, 40, 87, 59, 0, 0}};     // Options' o
 constexpr Piece kSs[] = {{"mainmenu", 106, 40, 122, 59, 0, 0}};  // Options' s
-constexpr Piece kG[] = {{"sp_menu", 70, 0, 90, 19, 0, 1}};       // Game's G
+constexpr Piece kG[] = {{"sp_menu", 70, 0, 90, 21, 0, 1}};       // Game's G, its tail to row 22
 constexpr Piece kM[] = {{"sp_menu", 107, 0, 127, 19, 0, 1}};     // Game's m
 // The capital D: Load's L stem and the right half of Options' O.
 constexpr Piece kD[] = {{"sp_menu", 2, 20, 9, 39, 0, 0}, {"mainmenu", 11, 40, 21, 59, 8, 0}};
@@ -167,18 +175,28 @@ void cut_letters(ClassicArt* art) {
     if (ui::Image img = cut(*art, l); !img.empty()) art->letters.emplace(l.c, std::move(img));
 }
 
-float carved_text_width(const ClassicArt& art, std::string_view text) {
+float carved_layout(const ClassicArt& art, std::string_view text, std::vector<float>* xs) {
+  if (xs != nullptr) xs->assign(text.size(), 0);
   float x = 0;
+  bool space = false, first = true;
   for (size_t i = 0; i < text.size(); i++) {
     if (text[i] == ' ') {
-      x += 6;
+      space = true;
       continue;
     }
     const auto it = art.letters.find(text[i]);
     if (it == art.letters.end()) return 0;
-    x += art.width_of(it->second) + (i + 1 < text.size() ? 1.0f : 0.0f);
+    if (!first) x += space ? (round_left(text[i]) ? kSpaceRound : kSpaceStem) : kLetterGap;
+    if (xs != nullptr) (*xs)[i] = x;
+    x += art.width_of(it->second);
+    space = false;
+    first = false;
   }
   return x;
+}
+
+float carved_text_width(const ClassicArt& art, std::string_view text) {
+  return carved_layout(art, text, nullptr);
 }
 
 }  // namespace shooters_edge::menu
