@@ -9,11 +9,14 @@
 // map's checksum and sky go in its configstrings, as a client checks its own copy of the map.
 // One map a run: a level change is still to come (docs/goals/M18v.md, M18v10).
 //
+// LOGINS: with `sv_login` on, or accounts handed in (its own master, or `sv_accountmaster`), the
+// players log in as on the first game's server (sequel_login.hpp).
+//
 // Offline (no socket) the frame is the rules' own with nobody's moves.
 //
 // ge:summary The sequel's dedicated server game: its rules served over protocol 34 by the core
 // ge:keywords sequel-dedicated-server shooters_edge_sequel_server protocol-34 servergame baseq2
-// ge:keywords sequel_game
+// ge:keywords sequel_game sequel-login
 // ge:skill net shooter
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #pragma once

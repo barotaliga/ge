@@ -130,7 +130,9 @@ guest. The line the server takes, in each game:
   game, and its stock game turns an unknown word into public chat. So the seat enters as a guest
   (a spectator where `sv_login` asks it to log in), the server takes `login ...` before the game
   sees it, and while connecting the player types `cmd login ...`. Its prompt lines are at most 38
-  characters, the width its console shows.
+  characters, the width its console shows (`games/shooters_edge/net/sequel_login.hpp` cuts each
+  line the login tells at a space); a logged-in seat is shown by its account's name alone, and a
+  guest under a registered name plays as `player`.
 
 On the first classic game a logged-in seat gets the `*auth` user info key (its login), which the
 community's client already draws on its scoreboard as the login name with a marker; the classic

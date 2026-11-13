@@ -19,6 +19,10 @@
 // frame's prints, centred prints, stuffed lines and changed configstrings go on the reliable
 // channel; the frame and its sounds unreliably.
 //
+// THE GAME'S HOOKS (the logins, sequel_login.hpp): `line_hook` sees each string command but the
+// signon's first and takes it (true) before the rules; `name_rule` may change the name a client
+// connects or renames with. `sequel_net_print`, `sequel_net_rename` and `sequel_net_drop` answer.
+//
 // A client is dropped on `disconnect`, after `timeout` seconds of silence, on a message it cannot
 // read, or on overflowing its reliable channel; it is sent the disconnect message once.
 //
@@ -66,6 +70,7 @@ struct SequelNetClient {
   sv::SequelWire wire;
   sv::SequelSignon signon;
   std::string userinfo, name;
+  int userid = 0;  // the server's number for whoever took the slot
   bool spectator = false;
   double heard = 0, sent = 0;  // the network's times of the last packet each way, s
   int32_t acked = -1;          // the frame the newest move acknowledged
@@ -83,7 +88,11 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   int32_t count = 0;  // the level's count, as the server data carries it
   int64_t written_frame = -1;
   double now = 0;
+  int next_userid = 1;
   std::vector<std::string> log;  // what the server would print on its console (the first 512)
+  bool (*line_hook)(void* ctx, int slot, const std::string& line) = nullptr;
+  void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
+  void* hook_ctx = nullptr;
   int64_t datagrams_in = 0, bytes_in = 0, bytes_out = 0, refused = 0;
 };
 
@@ -96,5 +105,11 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us);
 // Every client told the server is going, and dropped.
 void sequel_net_stop(SequelNetServer& s);
 int sequel_net_clients(const SequelNetServer& s);
+// A line printed in the client's console (reliable; level 2, a print a player reads).
+void sequel_net_print(SequelNetServer& s, int slot, const std::string& text);
+// The client named `name` (its rules' name too, once in the game).
+void sequel_net_rename(SequelNetServer& s, int slot, const std::string& name);
+// The client dropped (what it was printed before goes with the disconnect); `why` for the log.
+void sequel_net_drop(SequelNetServer& s, int slot, const std::string& why);
 
 }  // namespace shooters_edge::net
