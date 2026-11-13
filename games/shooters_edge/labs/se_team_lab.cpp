@@ -753,7 +753,7 @@ void run(gl::Lab& lab) {
              "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
              "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
              "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
-             "\twater\tliquid\tbrink\n";
+             "\twater\tliquid\tbrink\ttrap\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -1027,7 +1027,11 @@ void run(gl::Lab& lab) {
     // (the map's contents a little above the feet: the server keeps no liquid's kind for a player)
     const int liquid =
         e.waterlevel > 0 ? sh::world_contents(w.sv, {e.origin.x, e.origin.y, e.origin.z - 23}) : 0;
-    out << '\t' << e.waterlevel << '\t' << liquid << '\t' << f.brink_note << '\n';
+    // The floor trap: the one being pressed (-1 none) and whether a trap's floor is away (`/1`).
+    bool away = false;
+    for (const auto& ft : f.floor_traps) away = away || ft.away;
+    out << '\t' << e.waterlevel << '\t' << liquid << '\t' << f.brink_note << '\t' << f.trap_press
+        << (away ? "/1" : "/0") << '\n';
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
@@ -1558,6 +1562,17 @@ void run(gl::Lab& lab) {
       lab.metric("team.gap-landed", static_cast<double>(gl), "count");
       lab.metric("team.gap-refused", static_cast<double>(gr), "count");
       lab.metric("team.gap-near", static_cast<double>(gn), "count");  // `gapnear`: planned round
+      // The floor traps (bots/floor_trap.hpp): the floor's openings (as the first player saw
+      // them, a fighter's bridges read alike), the presses on purpose, and those that fired.
+      int64_t tp = 0, tf = 0, to = 0, tk = 0;
+      for (const cn::TeamPlayer& p : r.players) {
+        tp += p.trap_presses, tf += p.trap_fired, tk += p.trap_kept;
+        to = p.trap_opens > to ? p.trap_opens : to;  // each saw them while alive: the most
+      }
+      lab.metric("team.trap.opens", static_cast<double>(to), "count");
+      lab.metric("team.trap.kept", static_cast<double>(tk), "count");
+      lab.metric("team.trap.presses", static_cast<double>(tp), "count");
+      lab.metric("team.trap.fired", static_cast<double>(tf), "count");
       // The hops (shooter/pilot.hpp): stretches entered, and jumps pressed on their landings.
       int64_t hs = 0, hj = 0;
       for (const cn::TeamPlayer& p : r.players) hs += p.hops, hj += p.hop_jumps;
