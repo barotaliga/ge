@@ -1,7 +1,7 @@
 ---
 title: The web build catches a missing standard include that the debug build forgives
 date: 2026-11-13
-concepts: [includes, portability, web, emscripten, libc++]
+concepts: [includes, portability, web, emscripten, libcxx]
 ---
 
 `std::atoi` without `<cstdlib>` built clean on Linux GCC and failed only in the web preset
