@@ -20,7 +20,8 @@
 //
 // ge:summary The decals drawn as the beams pass's burns: the atlas, a blast's scorch, the burns
 // ge:keywords render marks decals burns scorch bullet-hole blood atlas mark_atlas mark_burns
-// ge:keywords press_scorch mark_beam_settings ember soot relief press_glow mark_glows glow-light melt
+// ge:keywords press_scorch mark_beam_settings ember soot relief
+// ge:keywords press_glow mark_glows glow-light melt
 // ge:skill render detail
 // ge:test tests/render_marks_test.cpp
 #pragma once

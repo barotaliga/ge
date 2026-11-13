@@ -49,7 +49,8 @@
 // ge:summary Lightning beams: the channel, re-striking, flicker, the lights, scorches and embers
 // ge:keywords render beam lightning arc bolt electric plasma channel strike flicker shimmer
 // ge:keywords filament braid fork branch core glow sheath scorch burn ember beam_level
-// ge:keywords build_beam beam_lights beam_burns beam_knobs burn-line melt thunderbolt weapon-effect core_keys
+// ge:keywords build_beam beam_lights beam_burns beam_knobs thunderbolt weapon-effect core_keys
+// ge:keywords burn-line melt
 // ge:keywords glow_keys keyed-brightness exposure night
 // ge:skill render
 // ge:test tests/render_beam_test.cpp

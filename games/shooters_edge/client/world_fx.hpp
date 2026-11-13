@@ -266,15 +266,12 @@ struct FxState {
 
 // One frame's effects for the world pass.
 struct FxFrame {
-  // Whether the server allows see-through liquids (look.hpp's `watervis_allowed`; a demo always).
-  bool see_through = true;
   effects::Particles births;
   std::vector<effects::Light> lights;
   double blend[4] = {0, 0, 0, 0};  // the screen's: sRGB colour and share
   // The same without a lava's or a slime's tint, for a look that draws the liquid round the eye.
   double blend_dry[4] = {0, 0, 0, 0};
   std::vector<Placed> models;  // the entities with a model (world_models.hpp)
-  float held_shown = 1;        // the weapon in hand's warp: the local player's arrival
   // The local player's own arrival (ce_warps): s into it (below 0: none), and the colour of its
   // flash, the pack's teleport fog's brightest (sRGB-encoded), for the post pass's warp of the
   // whole view (render/post.hpp's `arrival_warp`, at FxSwitches::arrival).
@@ -293,6 +290,9 @@ struct FxFrame {
   // The local player as the world would place him (never drawn in his own eyes, still casting his
   // shadow, M54); `has_self` false when he is dead or there is no server.
   Placed self;
+  float held_shown = 1;  // the weapon in hand's warp: the local player's arrival
+  // Whether the server allows see-through liquids (look.hpp's `watervis_allowed`; a demo always).
+  bool see_through = true;
   bool has_self = false;
 };
 
