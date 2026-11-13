@@ -793,7 +793,7 @@ bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Ve
 // The weapon: the best loaded at `range`, asked for by its impulse; a blast weapon only while
 // `blast_ok` (a companion's foe far enough from every player, companion.hpp).
 void choose_weapon(Fighter& f, const Stats& st, float range, double t, ai::Why* why,
-                   bool blast_ok = true) {
+                   bool blast_ok = true, bool now = false) {
   const auto score = [&](int32_t i) {
     const BotWeapon& w = f.arsenal->weapons[static_cast<size_t>(i)];
     if (!blast_ok && w.blast) return -1.0;
@@ -805,8 +805,41 @@ void choose_weapon(Fighter& f, const Stats& st, float range, double t, ai::Why* 
                                   "the best loaded at the range");
   if (w >= 0) {
     const BotWeapon& best = weapons[static_cast<size_t>(w)];
-    if (best.bit != st.weapon && loaded(st, best) && t - f.impulse_at >= kImpulseGap_s)
+    if (best.bit != st.weapon && loaded(st, best) && (now || t - f.impulse_at >= kImpulseGap_s)) {
       f.want_weapon = best.number;
+      f.hid = false;
+    }
+  }
+}
+
+// THE HIDE (`hide`, M18r.md 0k2): a pack dropped at a death holds the weapon in hand, so a
+// player who has the launcher holds the scattergun while no one is in sight and takes the
+// launcher up for the fight (at once: the mod's select is instant once the refire is over, and
+// waits it out before). People keep the plain scattergun in hand at 25 % (dm2) to 39 % (e1m2) of
+// the launcher owners' deaths with rockets left; a novice keeps the launcher up.
+// The plainest loaded spread a hide takes up (the scattergun): its weapon bit, 0 for none.
+int32_t hide_row(const Fighter& f, const Stats& st) {
+  const BotWeapon* sg = nullptr;
+  for (const BotWeapon& w : f.arsenal->weapons)
+    if (w.curve == WeaponCurve::scatter && w.ammo >= 0 && loaded(st, w) &&
+        (sg == nullptr || w.number < sg->number))
+      sg = &w;
+  return sg != nullptr ? sg->bit : 0;
+}
+
+void hide_launcher(Fighter& f, const Stats& st, bool seen_now, double t, ai::Why* why) {
+  if (!f.features[sh::Feature::hide] || f.skill == sh::AimSkill::novice || seen_now) return;
+  const BotArsenal& a = *f.arsenal;
+  const BotWeapon* rl = weapon_row(a, a.launcher);
+  if (rl == nullptr || st.weapon != rl->bit) return;
+  const BotWeapon* sg = weapon_row(a, hide_row(f, st));
+  if (sg == nullptr || t - f.impulse_at < kImpulseGap_s) return;
+  f.want_weapon = sg->number;
+  f.hid = true;
+  f.stats.hides++;
+  if (why) {
+    why->decide("hide");
+    why->choose(sg->name, "no one in sight: the launcher kept out of a dropped pack");
   }
 }
 
@@ -1307,7 +1340,10 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   }
 
   if (f.diving < 0) f.last_dive = -1;
-  choose_weapon(f, st, range, t, why);
+  // (`hide`) Held while no one is in sight; a sighting takes the launcher up at once.
+  if (f.hid && st.weapon != hide_row(f, st)) f.hid = false;
+  if (!(f.hid && !seen_now)) choose_weapon(f, st, range, t, why, true, f.hid);
+  hide_launcher(f, st, seen_now, t, why);
   // A blast jump on the way next: its launcher in hand for it (a rocket jump's, a grenade
   // jump's).
   const sh::Pilot& pl = f.bot.pilot.pilot;
