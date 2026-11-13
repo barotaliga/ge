@@ -37,7 +37,7 @@ struct Pit {
   sh::HullData point, clip;
   sh::MoveWorld world;
   sh::NavGraph g;
-  explicit Pit(float width, int liquid = sh::kContentsLava) {
+  explicit Pit(float width, int liquid = sh::kContentsLava, sh::NavSettings set = {}) {
     sh::Brush lava = box({0, -256, -192}, {width, 256, -128});
     lava.contents = liquid;
     const float e = width + 512;
@@ -53,7 +53,7 @@ struct Pit {
     world.solids[0].mins = {-544, -288, -256};
     world.solids[0].maxs = {e + 32, 288, 256};
     world.count = 1;
-    sh::build_nav(world, {}, sh::MoveSettings{}, sh::NavSettings{}, g);
+    sh::build_nav(world, {}, sh::MoveSettings{}, set, g);
   }
   int gap_links() const {
     int n = 0;
@@ -95,14 +95,30 @@ TEST(a_hoppers_trick_over_a_wide_pit_is_a_gap_link_only_a_gap_taker_plans) {
 }
 
 TEST(a_narrow_pit_a_runs_jump_crosses_gives_no_gap_link) {
+  // The graph's own jumps over it go aslant (from x -16 to 144, 128 to the side): the trick along
+  // one of them is held.
   Pit pit(128);
-  const sh::NavGapTrick trick{{-8, 0, 24}, {176, 0, 24}, 450, 0};
+  const sh::NavGapTrick trick{{-16, -16, 24}, {144, 112, 24}, 450, 0};
   const sh::NavGapCounts c =
       sh::nav_add_gap_tricks(pit.world, sh::MoveSettings{}, pit.g, {&trick, 1}, {});
   CHECK_MSG(c.held == 0, "held " + std::to_string(c.held));
   CHECK_MSG(c.run_makes == 1,
             "proofs " + std::to_string(c.proofs) + " run " + std::to_string(c.run_makes));
   CHECK(pit.gap_links() == 0);
+}
+
+TEST(a_pit_a_runs_jump_crosses_but_the_graph_never_tried_is_a_gap_link) {
+  // The graph's own jumps reach only 96 across here: the run's jump over the pit is no link of
+  // its, so the trick is not left to it (e1m2's YA walkway to the east walkway, 290 across).
+  sh::NavSettings near;
+  near.reach = 96;
+  Pit pit(128, sh::kContentsLava, near);
+  const sh::NavGapTrick trick{{-8, 0, 24}, {176, 0, 24}, 450, 0};
+  const sh::NavGapCounts c =
+      sh::nav_add_gap_tricks(pit.world, sh::MoveSettings{}, pit.g, {&trick, 1}, {});
+  CHECK_MSG(c.held == 1, "held " + std::to_string(c.held) + " run " + std::to_string(c.run_makes));
+  CHECK(c.run_makes == 0);
+  CHECK(pit.gap_links() == 1);
 }
 
 TEST(the_look_before_a_takeoff_lands_across_at_a_hoppers_speed_and_short_at_a_runs) {
