@@ -128,6 +128,40 @@ TEST(each_name_is_won_by_the_last_source_mounted) {
   CHECK(vfs::find(sp, "a.pk3dir/d.txt") == nullptr);
 }
 
+TEST(a_layout_with_archives_over_loose_ranks_as_its_game_does) {
+  const fs::path root = fs::temp_directory_path() / "ge_vfs_search_layout";
+  fs::remove_all(root);
+  const fs::path g = root / "g";
+  put_pak(g / "pak0.pak", {{"a.txt", text("pak0")}, {"b.txt", text("pak0")}});
+  put_pak(g / "pak2.pak", {{"b.txt", text("pak2")}});
+  put_pak(g / "pak_x.pak", {{"c.txt", text("pak_x")}});  // `pak` with no digits: number 0
+  put(g / "z.pkz", vfs::write_stored_zip({{"b.txt", text("z.pkz")}, {"d.txt", text("z.pkz")}}));
+  put(g / "a.txt", text("loose"));
+  put(g / "c.txt", text("loose"));
+  put(g / "e.txt", text("loose"));
+  vfs::GameLayout layout;
+  layout.archives_over_loose = true;
+  layout.pak_prefix = true;
+  layout.zip_endings = {".pkz", ".pk3"};
+  const std::vector<std::string> order = vfs::game_archives(root.string(), "g", layout);
+  CHECK(order.size() == 4 && fs::path(order[0]).filename() == "pak0.pak" &&
+        fs::path(order[1]).filename() == "pak_x.pak" && fs::path(order[3]).filename() == "z.pkz");
+  vfs::SearchPath sp;
+  std::string error;
+  CHECK_MSG(vfs::add_game(&sp, root.string(), "g", &error, layout), error);
+  CHECK(contents(sp, "a.txt") == "pak0");   // a pack over the loose file
+  CHECK(contents(sp, "b.txt") == "z.pkz");  // an unnumbered archive over every numbered one
+  CHECK(contents(sp, "c.txt") == "pak_x");
+  CHECK(contents(sp, "e.txt") == "loose");  // a loose file no archive holds
+  // One file read out of a pack without reading the pack whole.
+  std::vector<uint8_t> one;
+  CHECK_MSG(vfs::read_from_pack((g / "pak2.pak").string(), "B.TXT", &one, &error), error);
+  CHECK(std::string(one.begin(), one.end()) == "pak2");
+  CHECK(!vfs::read_from_pack((g / "pak2.pak").string(), "a.txt", &one, &error));
+  CHECK(!vfs::read_from_pack((g / "a.txt").string(), "a.txt", &one, &error));
+  fs::remove_all(root);
+}
+
 TEST(names_are_found_whatever_their_case_and_separators) {
   const vfs::SearchPath sp = mounted(fixture());
   CHECK(contents(sp, "MAPS\\c.BSP") == "pak1 map");

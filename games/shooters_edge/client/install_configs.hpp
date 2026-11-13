@@ -8,7 +8,7 @@
 //   and the base folder, each on disk; the game's archives after them (client/game_adapter.hpp's
 //   `read_configs_from`). So `exec configs/config.cfg` in the game folder's `autoexec.cfg` finds
 //   the client folder's `configs/config.cfg`, as the bundled client finds it.
-// - **The order** (`start_configs`): `default.cfg` (a copy on disk; the one inside the base
+// - **The order** (`start_configs`, each game's steps in client/load_order.hpp): `default.cfg` (a copy on disk; the one inside the base
 //   folder's first pack is the game's own and is not run); then the install's main config and
 //   the files its client runs after it (below); then the window's own saved `config.cfg`, so a
 //   change made in this game sticks; then the command line's `+set` pairs, then its other `+`

@@ -222,8 +222,43 @@ bool add_directory(SearchPath* sp, const std::string& dir, const std::string& ga
   return true;
 }
 
-bool add_game(SearchPath* sp, const std::string& root, const std::string& game,
-              std::string* error) {
+std::vector<std::string> game_archives(const std::string& root, const std::string& game,
+                                       const GameLayout& layout) {
+  const fs::path dir = fs::path(root) / game;
+  std::vector<std::pair<std::pair<int64_t, std::string>, std::string>> packs;  // (n, folded), name
+  std::vector<std::pair<std::string, std::string>> others;  // folded name, name on disk
+  const auto zip_ending = [&layout](const std::string& folded) {
+    for (const std::string& e : layout.zip_endings)
+      if (ends_with(folded, e)) return true;
+    return false;
+  };
+  std::error_code ec;
+  for (const fs::directory_entry& e : fs::directory_iterator(dir, ec)) {
+    const std::string name = e.path().filename().string(), folded = lower(name);
+    if (layout.pak_prefix && !folded.empty() && folded[0] == '.') continue;  // hidden: not one
+    const bool file = e.is_regular_file(ec);
+    const bool archive = file && (ends_with(folded, ".pak") || zip_ending(folded));
+    if (layout.pak_prefix && archive && folded.compare(0, 3, "pak") == 0) {
+      int64_t n = 0;
+      for (size_t i = 3; i < folded.size() && folded[i] >= '0' && folded[i] <= '9'; ++i)
+        n = n * 10 + (folded[i] - '0');
+      packs.push_back({{n, folded}, name});
+    } else if (!layout.pak_prefix && file && pak_number(folded) >= 0) {
+      packs.push_back({{pak_number(folded), folded}, name});
+    } else if (archive || (layout.pk3dir && e.is_directory(ec) && ends_with(folded, ".pk3dir"))) {
+      others.emplace_back(folded, name);
+    }
+  }
+  std::sort(packs.begin(), packs.end());
+  std::sort(others.begin(), others.end());
+  std::vector<std::string> out;
+  for (const auto& p : packs) out.push_back((dir / p.second).string());
+  for (const auto& o : others) out.push_back((dir / o.second).string());
+  return out;
+}
+
+bool add_game(SearchPath* sp, const std::string& root, const std::string& game, std::string* error,
+              const GameLayout& layout) {
   const fs::path dir = fs::path(root) / game;
   std::error_code ec;
   if (!fs::is_directory(dir, ec)) {
@@ -233,43 +268,64 @@ bool add_game(SearchPath* sp, const std::string& root, const std::string& game,
     }
     return false;
   }
-  std::vector<std::pair<int64_t, std::string>> packs;
-  std::vector<std::pair<std::string, std::string>> others;  // folded name, name on disk
-  for (const fs::directory_entry& e : fs::directory_iterator(dir, ec)) {
-    const std::string name = e.path().filename().string(), folded = lower(name);
-    if (e.is_regular_file(ec) && pak_number(folded) >= 0) {
-      packs.emplace_back(pak_number(folded), name);
-    } else if ((e.is_regular_file(ec) &&
-                (ends_with(folded, ".pk3") || ends_with(folded, ".pak"))) ||
-               (e.is_directory(ec) && ends_with(folded, ".pk3dir"))) {
-      others.emplace_back(folded, name);
-    }
-  }
-  std::sort(packs.begin(), packs.end());
-  std::sort(others.begin(), others.end());
-  for (const auto& [n, name] : packs) {
-    std::vector<uint8_t> bytes;
-    if (!read_disk((dir / name).string(), &bytes, error)) return false;
-    if (!add_archive(sp, (dir / name).string(), std::move(bytes), game, error)) return false;
-  }
-  for (const auto& [folded, name] : others) {
-    const fs::path at = dir / name;
-    if (ends_with(folded, ".pk3dir")) {
-      if (!add_directory(sp, at.string(), game, error)) return false;
+  const auto mount_loose = [&] {
+    Source loose;
+    loose.kind = SourceKind::directory;
+    loose.path = dir.string();
+    loose.game = game;
+    if (!walk(dir, true, &loose.files, &loose.file_sizes, error)) return false;
+    sp->sources.push_back(std::move(loose));
+    index_source(*sp, uint32_t(sp->sources.size() - 1));
+    return true;
+  };
+  if (layout.archives_over_loose && !mount_loose()) return false;
+  for (const std::string& at : game_archives(root, game, layout)) {
+    if (fs::is_directory(at, ec)) {
+      if (!add_directory(sp, at, game, error)) return false;
       continue;
     }
     std::vector<uint8_t> bytes;
-    if (!read_disk(at.string(), &bytes, error)) return false;
-    if (!add_archive(sp, at.string(), std::move(bytes), game, error)) return false;
+    if (!read_disk(at, &bytes, error)) return false;
+    if (!add_archive(sp, at, std::move(bytes), game, error)) return false;
   }
-  Source loose;
-  loose.kind = SourceKind::directory;
-  loose.path = dir.string();
-  loose.game = game;
-  if (!walk(dir, true, &loose.files, &loose.file_sizes, error)) return false;
-  sp->sources.push_back(std::move(loose));
-  index_source(*sp, uint32_t(sp->sources.size() - 1));
-  return true;
+  return layout.archives_over_loose || mount_loose();
+}
+
+bool read_from_pack(const std::string& pack, std::string_view path, std::vector<uint8_t>* out,
+                    std::string* error) {
+  constexpr size_t kHeader = 12, kEntry = 64, kPath = 56;
+  std::ifstream f(pack, std::ios::binary);
+  const auto refuse = [&](const std::string& why) {
+    if (error) *error = "vfs: " + pack + ": " + why;
+    return false;
+  };
+  uint8_t head[kHeader];
+  if (!f || !f.read(reinterpret_cast<char*>(head), kHeader) || head[0] != 'P' || head[1] != 'A' ||
+      head[2] != 'C' || head[3] != 'K')
+    return refuse("not a pack");
+  const auto u32 = [](const uint8_t* b) {
+    return uint32_t(b[0]) | uint32_t(b[1]) << 8 | uint32_t(b[2]) << 16 | uint32_t(b[3]) << 24;
+  };
+  const uint32_t dir = u32(head + 4), len = u32(head + 8);
+  if (len % kEntry != 0) return refuse("its directory is not whole entries");
+  std::vector<uint8_t> entries(len);
+  f.seekg(dir);
+  if (!f.read(reinterpret_cast<char*>(entries.data()), std::streamsize(len)))
+    return refuse("its directory runs past its end");
+  for (size_t at = 0; at < len; at += kEntry) {
+    size_t n = 0;
+    while (n < kPath && entries[at + n] != 0) ++n;
+    bool same = n == path.size();
+    for (size_t i = 0; same && i < n; ++i) same = fold(char(entries[at + i])) == fold(path[i]);
+    if (!same) continue;
+    const uint32_t offset = u32(&entries[at + kPath]), size = u32(&entries[at + kPath + 4]);
+    out->resize(size);
+    f.seekg(offset);
+    if (!f.read(reinterpret_cast<char*>(out->data()), std::streamsize(size)))
+      return refuse(std::string(path) + " runs past its end");
+    return true;
+  }
+  return refuse("holds no " + std::string(path));
 }
 
 const FileRef* find(const SearchPath& sp, std::string_view path) {
