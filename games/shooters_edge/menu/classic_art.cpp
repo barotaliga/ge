@@ -11,6 +11,7 @@
 #include <array>
 #include <cmath>
 
+#include "shooters_edge/menu/carved_letters.hpp"
 #include "ui/draw.hpp"
 #include "ui/font.hpp"
 #include "ui/raster.hpp"
@@ -262,6 +263,7 @@ bool load_classic_art(const FindFile& find, ClassicArt* out, std::string* error,
     }
   }
   if (printed == 2) out->strip_print = print;
+  cut_letters(out);
   if (out->find("mainmenu") == nullptr) {
     *error = "the packs have no gfx/mainmenu.lmp";
     *out = {};

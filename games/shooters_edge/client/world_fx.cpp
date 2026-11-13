@@ -1550,6 +1550,33 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         double from[3], to[3];
         put(engine_point(e.at), from);
         put(engine_point(e.end), to);
+        // The sequel's monsters' cables (a parasite's tongue, a medic's line) and shots leaving.
+        if (const fx::Cable c = fx::cable_of(e.name); c != fx::Cable::none) {
+          if (s.on.monsters) {
+            fx::monster_cable(c, from, to, s.seed++, t, &out.births);
+            fx::Light light;
+            if (fx::cable_light(c, to, t, &light)) out.lights.push_back(light);
+          } else {
+            fx::classic_cable(c, from, to, s.seed++, &out.births);
+          }
+          break;
+        }
+        if (const fx::Flash f = fx::flash_of(e.name); f != fx::Flash::none) {
+          FxState::MonsterFlash m;
+          const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+          const double len = ge::core::hypot3(d[0], d[1], d[2]);
+          for (int k = 0; k < 3; ++k) {
+            m.at[k] = from[k];
+            m.dir[k] = len > 1e-6 ? d[k] / len : 0;
+          }
+          m.t = t;
+          m.entity = e.entity;
+          m.seed = s.seed++;
+          m.kind = f;
+          m.sparked = false;
+          s.monster_flashes.push_back(m);
+          break;
+        }
         if (e.name == "te_railtrail") {  // the sequel's rail: its coil, round a beam (ce_beams)
           if (s.on.beams) {
             HeldBeam b;
@@ -1589,6 +1616,37 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       }
     }
   }
+  // The sequel's monsters' flashes: a light each look draws, the fire the modern look's.
+  // The shot leaves from the shooter's eye; the flash sits at its gun's tip as this frame holds
+  // the model (the vertex furthest along the aim), or at the eye when it has no model drawn.
+  std::erase_if(s.monster_flashes, [&](FxState::MonsterFlash& f) {
+    double at[3] = {f.at[0], f.at[1], f.at[2]}, dir[3] = {f.dir[0], f.dir[1], f.dir[2]};
+    if (s.models != nullptr)
+      for (const Placed& m : out.models)
+        if (m.entity == f.entity) {  // along the way the model faces, as a gun is held
+          const double yaw = m.angles.y * ge::core::kPi / 180;
+          double ahead[3], tip[3];
+          engine_dir({float(std::cos(yaw)), float(std::sin(yaw)), 0}, ahead);
+          // A little up as well, so a foot striding out is never taken for the gun.
+          const double reach[3] = {ahead[0], ahead[1] + 0.4, ahead[2]};
+          if (held_tip(*s.models, m, t, reach, tip))
+            for (int k = 0; k < 3; ++k) {
+              at[k] = tip[k];
+              dir[k] = ahead[k];
+            }
+          break;
+        }
+    if (s.on.monsters && !f.sparked) fx::flash_sparks(f.kind, at, dir, f.seed, &out.births);
+    f.sparked = true;
+    fx::Light light;
+    const bool lit = fx::flash_light(f.kind, at, t - f.t, &light);
+    if (lit) out.lights.push_back(light);
+    ge::render::MuzzleFire fire;
+    if (s.on.monsters && t - f.t < fx::kMonsterMuzzleS &&
+        fx::flash_fire(f.kind, at, dir, f.seed, f.t, &fire))
+      out.flames.push_back(fire);
+    return !lit && t >= f.t;
+  });
   // The enhanced blasts and puffs while they are seen, their main balls' light while it lasts.
   std::erase_if(s.blasts, [&](const ge::render::Blast& b) {
     return t - b.born_s > ge::render::blast_life(b) || t < b.born_s - 1;

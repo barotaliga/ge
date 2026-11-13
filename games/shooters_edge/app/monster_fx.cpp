@@ -650,4 +650,162 @@ bool splash_light(MonsterShot k, const double p[3], double age, Light* out) {
   return true;
 }
 
+namespace {
+
+constexpr float kDrain[3] = {1.0f, 0.25f, 0.4f};
+constexpr float kDrainHot[3] = {1.0f, 0.65f, 0.75f};
+constexpr float kHeal[3] = {0.45f, 0.7f, 1.0f};
+constexpr float kHealHot[3] = {0.85f, 0.95f, 1.0f};
+constexpr double kCableLifeS = 0.12;  // past the next server frame's (0.1 s), so it never gaps
+
+}  // namespace
+
+Cable cable_of(std::string_view e) {
+  if (e == "te_parasite_attack") return Cable::drain;
+  if (e == "te_medic_cable_attack") return Cable::heal;
+  return Cable::none;
+}
+
+void classic_cable(Cable c, const double from[3], const double to[3], uint32_t seed,
+                   Particles* out) {
+  if (c == Cable::none) return;
+  Rng r = ge::core::make_rng(seed);
+  const float dull[3] = {0.55f, 0.08f, 0.1f}, pale[3] = {0.5f, 0.6f, 0.85f};
+  along(from, to, 0.1, r, [&](const double p[3], const double*) {
+    Particle q = shine(p, c == Cable::drain ? dull : pale, 1.0, 1.0, 0, kCableLifeS, 0.03);
+    out->push_back(q);
+  });
+}
+
+void monster_cable(Cable c, const double from[3], const double to[3], uint32_t seed, double now_s,
+                   Particles* out) {
+  if (c == Cable::none) return;
+  Rng r = ge::core::make_rng(seed);
+  const bool drain = c == Cable::drain;
+  const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+  const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+  if (len < 1e-4) return;
+  const double dir[3] = {d[0] / len, d[1] / len, d[2] / len};
+  double a[3], b[3];
+  across(dir, a, b);
+  // The line itself: a core every 2 cm, wound round its line (the tongue writhes in a slow wave,
+  // the cable twists in a tight helix) and moving with time.
+  const int n = std::max(2, int(len / 0.02));
+  for (int i = 0; i <= n; ++i) {
+    const double u = double(i) / n, x = u * len;
+    const double env = std::sin(u * kTau * 0.5);  // still at both ends
+    double off_a = 0, off_b = 0;
+    if (drain) {
+      const double w = std::sin(x * 9 - now_s * 14);
+      off_a = 0.05 * env * w;
+      off_b = 0.03 * env * std::sin(x * 5 + now_s * 9);
+    } else {
+      const double ang = x * 28 - now_s * 30;
+      off_a = 0.025 * env * std::cos(ang);
+      off_b = 0.025 * env * std::sin(ang);
+    }
+    double p[3];
+    for (int k = 0; k < 3; ++k) p[k] = from[k] + dir[k] * x + a[k] * off_a + b[k] * off_b;
+    const double pulse = drain ? 0.75 + 0.25 * std::sin(x * 6 - now_s * 20) : 1.0;
+    Particle q = shine(p, drain ? kDrain : kHeal, (drain ? 2.0 : 2.4) * pulse, 0.6, 0.3,
+                       kCableLifeS, drain ? 0.035 : 0.022);
+    q.fall = 0;
+    out->push_back(q);
+  }
+  // Where it holds: the tongue spatters, the cable sparks.
+  for (int i = 0; i < (drain ? 3 : 4); ++i) {
+    double v[3];
+    unit(r, v);
+    Particle q = drain ? shine(to, kBlood, 1.0, 0.4, 0.6, rnd(r, 0.3, 0.6), rnd(r, 0.02, 0.035))
+                       : shine(to, kHealHot, 2.6, 0.5, 0.15, rnd(r, 0.1, 0.25), 0.015);
+    for (int k = 0; k < 3; ++k) q.v[k] = float(v[k] * rnd(r, 0.5, drain ? 1.5 : 3.0));
+    q.fall = drain ? 1.0f : 0.4f;
+    q.streak = 0.02f;
+    if (drain) q.kelvin = 0, q.albedo = 0.35f;
+    out->push_back(q);
+  }
+  // A brighter knot where it leaves the monster.
+  Particle k = shine(from, drain ? kDrainHot : kHealHot, 2.5, 0.5, 0.2, kCableLifeS, 0.05);
+  k.fall = 0;
+  out->push_back(k);
+}
+
+bool cable_light(Cable c, const double to[3], double now_s, Light* out) {
+  if (c == Cable::none) return false;
+  const bool drain = c == Cable::drain;
+  const double flick =
+      drain ? 0.8 + 0.2 * std::sin(now_s * kTau * 6) : 0.7 + 0.3 * std::sin(now_s * kTau * 17);
+  for (int k = 0; k < 3; ++k) out->pos[k] = to[k];
+  out->radius = drain ? 2.0 : 3.0;
+  for (int k = 0; k < 3; ++k)
+    out->colour[k] = (drain ? 0.8 : 1.1) * flick * double(drain ? kDrain[k] : kHeal[k]);
+  return true;
+}
+
+Flash flash_of(std::string_view e) {
+  if (e == "te_monster_flash.blaster") return Flash::blaster;
+  if (e == "te_monster_flash.gun") return Flash::gun;
+  if (e == "te_monster_flash.rocket") return Flash::rocket;
+  if (e == "te_monster_flash.rail") return Flash::rail;
+  if (e == "te_monster_flash.bfg") return Flash::bfg;
+  return Flash::none;
+}
+
+namespace {
+
+const float* flash_rgb(Flash f) {
+  static constexpr float kBlaster[3] = {1.0f, 0.85f, 0.3f}, kGun[3] = {1.0f, 0.7f, 0.35f},
+                         kRail[3] = {0.4f, 0.55f, 1.0f}, kBfg[3] = {0.35f, 1.0f, 0.3f};
+  switch (f) {
+    case Flash::blaster:
+      return kBlaster;
+    case Flash::rail:
+      return kRail;
+    case Flash::bfg:
+      return kBfg;
+    default:
+      return kGun;
+  }
+}
+
+}  // namespace
+
+bool flash_light(Flash f, const double at[3], double age, Light* out) {
+  if (f == Flash::none || age < 0 || age >= kMonsterMuzzleS * 1.5) return false;
+  const double left = 1 - age / (kMonsterMuzzleS * 1.5);
+  const float* rgb = flash_rgb(f);
+  for (int k = 0; k < 3; ++k) out->pos[k] = at[k];
+  out->radius = f == Flash::bfg ? 7 : 5;  // metres: a gun's as the classic muzzle light
+  for (int k = 0; k < 3; ++k) out->colour[k] = 2.0 * left * double(rgb[k]);
+  return true;
+}
+
+bool flash_fire(Flash f, const double at[3], const double dir[3], uint32_t seed, double born_s,
+                gr::MuzzleFire* out) {
+  if (f != Flash::gun && f != Flash::rocket) return false;
+  gr::MuzzleFire m = monster_muzzle(at, dir, seed, born_s);
+  if (f == Flash::rocket) m.shot.look = gr::muzzle_look_by_id("muzzle.rocket");
+  *out = m;
+  return true;
+}
+
+void flash_sparks(Flash f, const double at[3], const double dir[3], uint32_t seed, Particles* out) {
+  if (f != Flash::blaster && f != Flash::rail && f != Flash::bfg) return;
+  Rng r = ge::core::make_rng(seed);
+  const float* rgb = flash_rgb(f);
+  for (int i = 0; i < 10; ++i) {
+    double v[3];
+    unit(r, v);
+    for (int k = 0; k < 3; ++k) v[k] = v[k] * 0.6 + dir[k];
+    Particle q = shine(at, rgb, 2.4, 0.4, 0.1, rnd(r, 0.08, 0.2), 0.02);
+    for (int k = 0; k < 3; ++k) q.v[k] = float(v[k] * rnd(r, 1.0, 3.0));
+    q.streak = 0.02f;
+    q.fall = 0.2f;
+    out->push_back(q);
+  }
+  Particle g = shine(at, rgb, 3.0, 0.5, 0.05, kMonsterMuzzleS, f == Flash::bfg ? 0.15 : 0.08);
+  g.fall = 0;
+  out->push_back(g);
+}
+
 }  // namespace shooters_edge::effects

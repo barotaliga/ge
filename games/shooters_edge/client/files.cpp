@@ -90,15 +90,42 @@ bool open_game_dir(const std::string& basedir, const std::string& game, SearchPa
   return true;
 }
 
+fs::path on_disk_any_case(const fs::path& dir, std::string_view name) {
+  std::error_code ec;
+  if (const fs::path exact = dir / std::string(name); fs::exists(exact, ec)) return exact;
+  const auto folded = [](std::string t) {
+    for (char& ch : t) ch = ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch;
+    return t;
+  };
+  fs::path at = dir;
+  size_t from = 0;
+  while (from <= name.size()) {
+    size_t to = name.find('/', from);
+    if (to == std::string_view::npos) to = name.size();
+    const std::string part = folded(std::string(name.substr(from, to - from)));
+    from = to + 1;
+    if (part.empty()) continue;
+    fs::path next;
+    for (const fs::directory_entry& e : fs::directory_iterator(at, ec))
+      if (folded(e.path().filename().string()) == part) {
+        next = e.path();
+        break;
+      }
+    if (next.empty()) return {};
+    at = next;
+  }
+  return at;
+}
+
 std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name,
                                    std::vector<uint8_t>& store) {
   // A loose file in the game folder, as it is on disk now (one written since the mount): first
   // where loose files win, else only when no archive holds the name.
   const auto loose = [&]() -> std::span<const uint8_t> {
     if (path.folder.empty()) return {};
-    const fs::path at = fs::path(path.folder) / std::string(name);
+    const fs::path at = on_disk_any_case(path.folder, name);
     std::error_code ec;
-    if (fs::is_regular_file(at, ec) && read_whole(at, store)) return store;
+    if (!at.empty() && fs::is_regular_file(at, ec) && read_whole(at, store)) return store;
     return {};
   };
   if (path.loose_first)

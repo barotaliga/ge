@@ -131,8 +131,11 @@ then the base folder's `autoexec.cfg` and the mod's, `postexec.cfg`, the window'
 command line, and `postinit.cfg` last; its `default.cfg` is the one in its packs (the window's
 console keys kept through its `unbindall`). Each game's order lives in one table,
 `client/load_order.hpp`: its files' ranks too, so the sequel's folders rank their packs and zips
-(`.pkz`) over their loose files, every `pak*` archive by its number, and the rerelease's archive at
-the install's root under them all, as its own client loads them. Maps' coloured light is also read from `maps/lits/<map>.lit`.
+over their loose files, and the rerelease's archive at the install's root goes under them all, as
+its own client loads them. In every game a folder's `pak0`, `pak1` ... come first by number, then
+every other pack or zip (`.pak`, `.pkz`, `.pk3`) by name, so a pack dropped in under any name is
+read; one whose name starts with `_` is set aside and never read. Loose files and place-name files
+are found in any letter case. Maps' coloured light is also read from `maps/lits/<map>.lit`.
 
 **Place names, made in the game** (`client/place_names.hpp`). Each map's place names are read as
 it starts (`tp_loadlocs`): the file saved under the game folder first, else the game's own.
@@ -141,11 +144,17 @@ Stand in a place and `addloc <name>`; `removeloc` forgets the nearest, `clearloc
 format, `loadloc <name>` reads one, and `loc` says where you are. The long names
 (`locations_add` and so on) work too, and so does the sequel's spelling: `loc add <name>`,
 `loc del`, `loc set <name>` (renames the nearest), `loc list` and `loc save`. A place reaches
-`loc_dist` units from its point (the game's own default: 500 in the sequel, no limit in the first
-game; 0 is no limit): farther off, `loc` says someplace and `removeloc` or `loc set` finds nothing.
-The places follow the player's view on a server joined and in a demo played as well as in the
-window's own game: each map's file is read as it starts, from the recording's game folder for a
-demo, and edited and saved the same way.
+`loc_dist` units from its point (500 in every classic game; 0 is no limit): farther off, `loc` says
+someplace and `removeloc` or `loc set` finds nothing. The places follow the player's view on a
+server joined and in a demo played as well as in the window's own game: each map's file is read as
+it starts, from the recording's game folder for a demo, and edited and saved the same way. A
+recording keeps the place names it was played with (stuffed `//loc` lines in its signon, a comment
+to any other client: `plugins/shooter/locs.hpp`), and a demo that kept them is watched with those,
+no file needed. `say` and `say_team` talk on the server joined or the window's own; `%l` in the
+line becomes the place the player is in before it is sent, so the others read the place's name.
+The sequel's macros name places in any console line: `$loc_here` the place the player is in,
+`$loc_there` the place nearest where the view's line stops (8,192 units ahead or the first wall,
+`client/map_line.hpp`), each `unknown` with none within `loc_dist`.
 
 **The title and the loads.** With no `+map` the window opens at once on the title
 (`client/title.hpp`: a night with the full moon low in a total eclipse, blood red, cloud carried
@@ -1601,7 +1610,10 @@ recording to watch it, and nothing modern is left on screen: the console is writ
 game's glyph sheet over its own console background (`menu/classic_console.hpp`, the engine's
 `ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
 GAME and SELECT GAME are drawn in the game's letters under carved titles (`menu/classic_pages.hpp`;
-SELECT GAME's own row and the two games' names on it cut letter by letter from the strips like DEMOS'). Lab `se-attract` draws
+SELECT GAME's own row, DEMOS and the two games' names on it set by code in the strips' carved letters:
+`menu/carved_letters.hpp` cuts each letter it knows out of the strips into its own picture when the
+pack loads, dropping any speck of a neighbour a letter's box caught, and a word is laid out from them
+on one 20 px line with a pixel between letters). Lab `se-attract` draws
 the menu, SELECT GAME, OPTIONS, the watched recording, the console, DEMOS and JOIN A GAME over a
 played recording (`--basedir` a player's install; `--demo=none` over the title's dark, for a game
 whose recordings cannot play yet).

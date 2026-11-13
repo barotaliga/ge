@@ -18,6 +18,7 @@
 // ge:summary A map's place names: the .loc format read, macros expanded, the nearest point named
 // ge:keywords loc locations place-name callout loc-file location-macro nearest-loc teamplay
 // ge:keywords parse_locs nearest_loc loc_name_at loc_places place-middle area-labels
+// ge:keywords recorded_loc_lines read_recorded_loc recorded-places demo-places
 // ge:keywords add_loc remove_nearest_loc locs_text loc-editing save-locs
 // ge:skill shooter bots
 // ge:test tests/shooter_locs_test.cpp
@@ -76,5 +77,14 @@ inline constexpr size_t kLocNameMax = 63;
 void add_loc(Locs& locs, Vec3f at, std::string_view raw);
 bool remove_nearest_loc(Locs& locs, Vec3f at, Loc* removed = nullptr, float range = 0);
 std::string locs_text(const Locs& locs);
+
+// PLACES CARRIED IN A RECORDING: a recording keeps the place names its game was played with as
+// stuffed lines, `//loc ` and a line of the file's text (`locs_text`), one a point, so watching it
+// needs no file and another client runs nothing (the line is a comment to its console).
+// `recorded_loc_lines` makes them, each ending in a newline; `read_recorded_loc` adds the point of
+// one such line to `out` (true), false when the line is not one.
+inline constexpr std::string_view kRecordedLoc = "//loc ";
+std::vector<std::string> recorded_loc_lines(const Locs& locs);
+bool read_recorded_loc(std::string_view line, Locs& out);
 
 }  // namespace ge::shooter
