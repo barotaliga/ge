@@ -426,6 +426,51 @@ sequel server built beside the checkout (15 s each, loopback):
 | The proxies, 10% link loss, one copy | 13.6% of the server's packets lost; the signon did not finish |
 | The proxies, 10% link loss, three copies | 38 frames, no loss |
 
+## The sequel's TV
+
+The sequel has no stream port and no TV of its own, and an unmodified client of the sequel knows
+only how to join a server. So our TV for it is a server to its viewers
+(`games/shooters_edge/net/sequel_tv_relay.hpp`):
+
+```
+watcher (34) -> broadcast (replay v2) -> TV node (delay) -> sequel face (34) -> viewers
+```
+
+- **The watcher** is our sequel client joined to the server as a spectator. It works on ours and
+  on an unmodified server alike. It is a camera: it flies after one player at a time, from behind
+  and above, for 20 s each. Every 2 s it acknowledges no frame for 150 ms, so the server sends its
+  next frame whole.
+- **The broadcast and the node** are the same as for any recording (`client/sequel_tv.hpp`,
+  `engine/tv`). The node holds the match back by the delay.
+- **The face** (`net/sequel_tv_face.hpp`) answers a viewer's challenge and connect as a server
+  would. It keeps the server data, every configstring as it stands, the baselines, and the blocks
+  since the newest whole frame. Each viewer gets:
+  - the signon, about 1 KB at a time. Each unit ends with a prompt the client echoes, since a
+    client in its signon sends a packet only when it has something to say;
+  - the match from the newest whole frame onwards.
+
+Everything goes on the reliable channel, because every frame deltas from the one before it. So a
+lost packet is sent again, rather than leaving the viewer with a frame it cannot read. The server
+data is marked as a recording played (attract loop 1), so the viewer's client does not predict.
+Stuffed lines are taken out, because they were the server's to the watcher.
+
+`shooters_edge_hops sequel-tv --server=<host:port> --port=27911 --delay=7` runs the relay. An
+unmodified client of the sequel was measured black-box on the full game's q2dm1:
+
+| Source | What the viewer saw |
+| --- | --- |
+| Our `shooters_edge_sequel_server` with a player walking | The match 3 s behind, the camera following the player |
+| An unmodified server | The match 3 s behind, from where the server puts a spectator |
+
+`tests/shooters_edge_sequel_tv_face_test.cpp` checks four cases:
+- a viewer from the start;
+- a late viewer, who starts at a whole frame;
+- a viewer over a lossy line, which still reads every frame;
+- a wrong password, refused in a player's words.
+
+It also runs the relay end to end, with the viewer 8 to 30 frames behind the watcher at a 1 s
+delay.
+
 ## The sequel's recordings
 
 The sequel's client recording (a `.dm2`: blocks of a 32-bit length and one server packet's messages,
