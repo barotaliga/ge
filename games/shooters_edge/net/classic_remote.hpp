@@ -48,13 +48,6 @@
 // his own left out. While `+voip` is held he speaks the microphone the window hands to
 // `remote_mic`.
 //
-// LOGGING IN (docs/accounts.md § From our own client): when the window names the player's account
-// file (`remote_login_from`: the one the game CLI's `account signin` writes) and a server's info
-// carries `*accountkey` naming the same master's key, the client trades the file's ticket with
-// the master for a one-time code on a socket of its own once it is in the game, and sends the
-// server `login <name> <code>`, as a player would type it. Another master's server, or one
-// without logins, is joined as before; a ticket run out is said on the console.
-//
 // ge:summary The window joined to a server: the classic client driven by the hands, drawn as a demo
 // ge:keywords remote-client connect disconnect join-server classic-client live-demo network-play
 // ge:keywords remote_connect remote_step remote_disconnect setangle tick-clock reconnect
@@ -62,8 +55,7 @@
 // ge:keywords remote_world smoothing replayed predict_other other-players cl_predict_players
 // ge:keywords interpolation lerp cl_nolerp entity-lerp draw-clock round-trip
 // ge:keywords cl_speedjump pm_speedjump easy-jump assisted_command kstockshare
-// ge:keywords voice voice-chat cl_voip push-to-talk microphone remote_mic
-// ge:keywords autologin remote_login_from accountkey account-file
+// ge:keywords voice voice-chat cl_voip push-to-talk microphone remote_mic autologin accountkey
 // ge:skill net shooter
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
@@ -102,7 +94,12 @@ enum class RemoteStep : uint8_t {
   dropped,    // the server refused or dropped the client: `Remote::why`
 };
 
-// Logging in by the player's account file (`remote_login_from`).
+// LOGGING IN (docs/accounts.md § From our own client): when the window names the player's account
+// file (`remote_login_from`: the one the game CLI's `account signin` writes) and a server's info
+// carries `*accountkey` naming the same master's key, the client trades the file's ticket with
+// the master for a one-time code on a socket of its own once it is in the game, and sends the
+// server `login <name> <code>`, as a player would type it. Another master's server, or one
+// without logins, is joined as before; a ticket run out is said on the console.
 struct RemoteLogin {
   ge::account::ClientLogin c;
   gn::Transport own;                     // the socket to the master, opened for the ask
