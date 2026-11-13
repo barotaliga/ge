@@ -1655,6 +1655,8 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   f.bot.glance = f.features[sh::Feature::glance];
   f.bot.lookway = f.features[sh::Feature::lookway];
   f.bot.calm_vel = f.features[sh::Feature::calmvel];
+  f.bot.look_turn = f.features[sh::Feature::lookturn];
+  f.bot.view_booked = f.features[sh::Feature::viewbook];
   f.bot.listen = f.features[sh::Feature::listen];
   f.bot.pools = f.bot.pilot.pilot.set.floor_swim = f.features[sh::Feature::pools];
 }

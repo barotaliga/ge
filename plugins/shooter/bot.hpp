@@ -48,6 +48,7 @@
 #include "shooter/aim.hpp"
 #include "shooter/pilot.hpp"
 #include "shooter/senses.hpp"
+#include "shooter/view_book.hpp"
 
 namespace ge::shooter {
 
@@ -200,6 +201,17 @@ struct Bot {
   // not at the route's point `kCalmAhead` on (through a corner's wall): people's view lies within
   // 15 degrees of their run 48 % of a calm run, and enemies appear ahead of it.
   bool calm_vel = false;
+  // THE WALK'S SIDE (`lookturn`): the calm view's point on the route kept within `kLookTurnMax`
+  // degrees of the pilot's walk, else the walk: past a node overshot or round a switchback the
+  // point lay behind the run's turn (e1m2: the view trailing the turn by 40+ degrees 28 % of the
+  // calm view's turning, the point 90+ off the walk in 58 % of those).
+  bool look_turn = false;
+  // PEOPLE'S VIEW (`viewbook`): moving past 150 units/s, the calm view looks where people look at
+  // that spot moving that way (view_book.hpp, read off their recordings), when the map has a book
+  // and the spot an entry: people's view there predicts their own within 30 degrees 64 % of the
+  // frames, "along the run" 56 % (e1m2).
+  bool view_booked = false;
+  const ViewBook* view_book = nullptr;
   double glance_next = 0, glance_until = -1;
   float glance_off = 0;
   // The glance is a SWIPE (a turn meant's pace there and back), held `kGlanceHold_s` from when

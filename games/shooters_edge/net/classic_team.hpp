@@ -33,6 +33,7 @@
 #include "shooter/aim.hpp"
 #include "shooter/features.hpp"
 #include "shooter/locs.hpp"
+#include "shooter/view_book.hpp"
 #include "shooter/pilot.hpp"
 #include "shooter/temper.hpp"
 #include "shooter/traits.hpp"
@@ -72,6 +73,7 @@ struct TeamMatchOptions {
   std::string map_name = "halls";
   std::string entities;  // in place of the map's entity text (empty: the map's own)
   sh::Locs locs;         // the map's place names, `from` where (none: named off its items)
+  sh::ViewBook view_book;  // where people look on the map (none: the bots' own calm view)
   const ge::progs::Progs* progs = nullptr;  // the baseline mod, compiled
   TeamSide teams[2] = {TeamSide("red", 4), TeamSide("blue", 13)};
   int frames = 46154;  // server frames of 13 ms (ten minutes)
