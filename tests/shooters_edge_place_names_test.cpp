@@ -199,3 +199,20 @@ TEST(a_chat_line_s_percent_l_becomes_the_place_the_player_is_in) {
   playing = false;
   CHECK(cl::fill_place_codes(p, "%l%l") == "someplacesomeplace");
 }
+
+TEST(loc_trace_passes_over_a_place_behind_a_wall) {
+  ge::console::Console con;
+  cl::PlaceNames p;
+  cl::SearchPath files;
+  cl::add_place_commands(con, p, cl::classic_adapter(), files, [](ge::shooter::Vec3f& at) {
+    at = {0, 0, 0};
+    return true;
+  });
+  p.clear_line = [](ge::shooter::Vec3f, ge::shooter::Vec3f to) { return to.x > 50; };
+  p.locs.points.push_back({.name = "other side", .at = {20, 0, 0}, .raw = "other side"});
+  p.locs.points.push_back({.name = "this side", .at = {200, 0, 0}, .raw = "this side"});
+  CHECK(p.trace != nullptr && p.trace->value == "0");
+  CHECK(cl::fill_place_codes(p, "%l") == "other side");
+  con.execute("loc_trace 1");
+  CHECK(cl::fill_place_codes(p, "%l") == "this side");
+}

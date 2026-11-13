@@ -959,7 +959,7 @@ bool fight_limits(SequelServer& s) {
   std::string word;
   for (const char c : s.cvars.find("sv_maplist")->value + " ") {
     if (c == ' ' || c == ',') {
-      if (!word.empty() && word != "0") list.push_back(word);  // an unset list reads "0"
+      if (!word.empty() && word != "0") list.push_back(word);  // "0" names none
       word.clear();
     } else {
       word += c;

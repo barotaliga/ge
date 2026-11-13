@@ -30,8 +30,13 @@ TEST(account_file_round_trip_owner_only) {
   CHECK(ga::account_file_read(path, back));
   CHECK(back.master == f.master && back.key == f.key && back.name == f.name &&
         back.ticket == f.ticket);
+#ifndef _WIN32
+  // POSIX modes: owner read and write only. Windows has no group or other bits (std::filesystem
+  // reports a file's read-only flag for all three), and the file is private by the profile
+  // folder's access list instead, so there is nothing for this check to read.
   const fs::perms p = fs::status(path).permissions();
   CHECK((p & (fs::perms::group_all | fs::perms::others_all)) == fs::perms::none);
+#endif
   CHECK(ga::hex_to_bytes("007fff") == std::vector<uint8_t>({0x00, 0x7f, 0xff}));
   CHECK(ga::hex_to_bytes("0g").empty() && ga::hex_to_bytes("abc").empty());
   fs::remove_all(dir, ec);

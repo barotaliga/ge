@@ -13,7 +13,8 @@
 // Where no file is there, a game names its points itself (the Shooter's Edge bots name each item's
 // spot), so every map has its place names.
 //
-// Parsing allocates; `nearest_loc` does not. Deterministic: integer coordinates, a stable order.
+// Parsing allocates; `nearest_loc` does not (its `seen` is the caller's). Deterministic: integer
+// coordinates, a stable order.
 //
 // ge:summary A map's place names: the .loc format read, macros expanded, the nearest point named
 // ge:keywords loc locations place-name callout loc-file location-macro nearest-loc teamplay
@@ -25,6 +26,7 @@
 #pragma once
 
 #include <array>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -59,12 +61,17 @@ int parse_locs(std::string_view text, Locs& out);
 // pictured with its places named; a callout's place read as one spot).
 std::vector<Loc> loc_places(const Locs& locs);
 
+// Whether the straight line from `from` to a point is clear (no solid between them), for a
+// nearest point that must be in sight; empty: every point counts.
+using LocSight = std::function<bool(Vec3f from, Vec3f to)>;
+
 // The point nearest `p` (the first of equals), or nullptr with none; with `range` above 0, only a
-// point at most that far (units, straight line) counts.
-const Loc* nearest_loc(const Locs& locs, Vec3f p, float range = 0);
+// point at most that far (units, straight line) counts, and with `seen`, only one it says is in
+// sight from `p`.
+const Loc* nearest_loc(const Locs& locs, Vec3f p, float range = 0, const LocSight& seen = {});
 
 // The name of the place `p` is in: its nearest point's (within `range`, as above), or "" with none.
-std::string loc_name_at(const Locs& locs, Vec3f p, float range = 0);
+std::string loc_name_at(const Locs& locs, Vec3f p, float range = 0, const LocSight& seen = {});
 
 // EDITING, as a player names the places of a map standing in them: a point added at `at` named
 // `raw` (its macros kept for the file, expanded for `name`), always at the end, with no check for
@@ -75,7 +82,8 @@ std::string loc_name_at(const Locs& locs, Vec3f p, float range = 0);
 // too; no header. A name longer than kLocNameMax is cut to it on reading, as by `parse_locs`.
 inline constexpr size_t kLocNameMax = 63;
 void add_loc(Locs& locs, Vec3f at, std::string_view raw);
-bool remove_nearest_loc(Locs& locs, Vec3f at, Loc* removed = nullptr, float range = 0);
+bool remove_nearest_loc(Locs& locs, Vec3f at, Loc* removed = nullptr, float range = 0,
+                        const LocSight& seen = {});
 std::string locs_text(const Locs& locs);
 
 // PLACES CARRIED IN A RECORDING: a recording keeps the place names its game was played with as
