@@ -59,6 +59,8 @@ bool walking_mode(PilotMode pm) {
 }
 constexpr double kCalmDrift = 3;   // degrees a second of the hand's drift, at most
 constexpr float kCalmAhead = 320;  // units on along the route the calm view looks at
+constexpr float kCalmVelSpeed = 150;  // (`calmvel`) past this, units/s, the calm view on the run
+constexpr double kCalmVelBand = 8;    // and held within this of it, degrees
 // The glance (bot.hpp `glance`): how often, how far round, what counts as open, how long held.
 constexpr double kGlanceMin_s = 1.2, kGlanceSpread_s = 1.3;
 constexpr float kGlanceSide = 75, kGlanceBack = 120;
@@ -725,7 +727,18 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
           }
         }
       }
+      // (`calmvel`) Moving at a run, the calm view looks the way it moves: an enemy appearing ahead
+      // of the run was on the screen 25 % of the time with the view on the route's point 320 on
+      // (through a corner's wall), 83 % with it on the way it moved (e1m2).
       double band = kCalmBand;
+      if (b.calm_vel) {
+        const Edict& me_ent = sv.edicts[static_cast<size_t>(me)];
+        const float vx = me_ent.velocity.x, vy = me_ent.velocity.y;
+        if (vx * vx + vy * vy > kCalmVelSpeed * kCalmVelSpeed) {
+          look_yaw = pilot_yaw;
+          band = kCalmVelBand;  // the mouse steers the run: the keys stay on W
+        }
+      }
       if (b.listen) {
         // THE SOUND'S SWIPE (bot.hpp): an enemy heard where none was known, looked at.
         const Vec3f o_at = sv.edicts[static_cast<size_t>(me)].origin;

@@ -118,6 +118,13 @@ struct Player {
   int64_t fight_n = 0, fight_wide = 0, fight_turns = 0;
   // Alive with the waist under water, slime or lava (a swimmer), and of those, with an enemy faced.
   int64_t wet = 0, wet_faced = 0;
+  // AN ENEMY APPEARING: one who comes into a clear line (none the sample before, alive both), and of
+  // those, met on the screen, beside it (within 120 degrees of the view's yaw), or behind: where
+  // he looks is where enemies come from, or not.
+  int64_t appear = 0, appear_faced = 0, appear_beside = 0;
+  // and those met moving (past 150 units/s), by where he lies against the run: ahead (within 60
+  // degrees of it), beside, behind (more than 120 off), each with those on the screen.
+  int64_t run_appear[3] = {}, run_faced[3] = {};
   double fight_across = 0, fight_along = 0;
   // The same on dry feet (out of the water: a swimmer's feet are the water's), by his distance to
   // the enemy faced (kFightBands: near, mid, far) and by whether he holds a loaded rocket launcher
@@ -405,6 +412,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<la::KeysState> keys(32);
   std::vector<la::BumpState> bumps(32);
   std::vector<double> seen_at(32, -1e9);  // by slot: the last sample with an enemy in view
+  std::vector<uint8_t> clear_was(32 * 32, 0);  // by pair (i, j): j in a clear line of i last sample
   const sh::Hull& body = m.bsp.models[0].hulls[1];
   for (;;) {
     const cl::DemoRead rd = cl::next_frame(d, out.error);
@@ -585,6 +593,41 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
                (ahead > 0 && std::fabs(sh::dot(ax.right, h)) * wide.x <= ahead * wide.y &&
                 std::fabs(sh::dot(ax.up, h)) * high.x <= ahead * high.y);
         if (cone) faced = j;
+      }
+      // Enemies appearing (above): every enemy's clear line now against the sample before.
+      for (int j = 0; j < 32; j++) {
+        const cl::DemoEntity& e = s.players[static_cast<size_t>(j)];
+        uint8_t& was_clear = clear_was[static_cast<size_t>(i) * 32 + static_cast<size_t>(j)];
+        if (j == i || !e.present || e.dead || s.names[static_cast<size_t>(j)].empty() ||
+            team_of(s, j) == pl.team) {
+          was_clear = 0;
+          continue;
+        }
+        const sh::Vec3f head{e.origin.x, e.origin.y, e.origin.z + kEye};
+        const sh::Vec3f h = head - eye;
+        const bool now = sh::dot(h, h) <= kSight * kSight &&
+                         (clear(world, eye, head) || clear(world, eye, e.origin));
+        if (now && !was_clear && was_alive[static_cast<size_t>(i)]) {
+          pl.appear++;
+          const float ahead = sh::dot(ax.forward, h);
+          const bool on = ahead > 0 && std::fabs(sh::dot(ax.right, h)) * wide.x <= ahead * wide.y &&
+                          std::fabs(sh::dot(ax.up, h)) * high.x <= ahead * high.y;
+          const float flat = std::sqrt(h.x * h.x + h.y * h.y);
+          const float fx = ax.forward.x, fy = ax.forward.y;
+          const float fl = std::sqrt(fx * fx + fy * fy);
+          const float c = flat > 1 && fl > 0 ? (fx * h.x + fy * h.y) / (flat * fl) : 1.f;
+          pl.appear_faced += on;
+          pl.appear_beside += !on && c > -0.5f;
+          const sh::Vec3f mv = p.origin - was[static_cast<size_t>(i)];
+          const float ms = std::sqrt(mv.x * mv.x + mv.y * mv.y) / static_cast<float>(every);
+          if (ms > 150 && flat > 1) {
+            const float rc = (mv.x * h.x + mv.y * h.y) / (std::sqrt(mv.x * mv.x + mv.y * mv.y) * flat);
+            const int band = rc > 0.5f ? 0 : rc > -0.5f ? 1 : 2;
+            pl.run_appear[band]++;
+            pl.run_faced[band] += on;
+          }
+        }
+        was_clear = now ? 1 : 0;
       }
       pl.in_view += view;
       if (view) seen_at[static_cast<size_t>(i)] = s.time;
@@ -852,6 +895,13 @@ void run(gl::Lab& lab) {
       for (int b = 0; b < 4; b++) all.calm_off[b] += p.calm_off[b];
       all.wet += p.wet;
       all.wet_faced += p.wet_faced;
+      all.appear += p.appear;
+      all.appear_faced += p.appear_faced;
+      all.appear_beside += p.appear_beside;
+      for (int q = 0; q < 3; q++) {
+        all.run_appear[q] += p.run_appear[q];
+        all.run_faced[q] += p.run_faced[q];
+      }
       all.fight_n += p.fight_n;
       all.fight_wide += p.fight_wide;
       all.fight_turns += p.fight_turns;
@@ -951,6 +1001,32 @@ void run(gl::Lab& lab) {
       "people.faced-wet",
       all.in_cone > 0 ? static_cast<double>(all.wet_faced) / static_cast<double>(all.in_cone) : 0,
       "share");
+  const auto of_appear = [&](int64_t k) {
+    return all.appear > 0 ? static_cast<double>(k) / static_cast<double>(all.appear) : 0;
+  };
+  lab.metric("people.appear-per-min",
+             all.alive > 0 ? static_cast<double>(all.appear) * 60 /
+                                 (static_cast<double>(all.alive) * every)
+                           : 0,
+             "per-min");
+  lab.metric("people.appear-faced", of_appear(all.appear_faced), "share");
+  lab.metric("people.appear-beside", of_appear(all.appear_beside), "share");
+  lab.metric("people.appear-behind", of_appear(all.appear - all.appear_faced - all.appear_beside),
+             "share");
+  {
+    static constexpr const char* kRun[3] = {"ahead", "beside", "behind"};
+    const int64_t runs = all.run_appear[0] + all.run_appear[1] + all.run_appear[2];
+    for (int q = 0; q < 3; q++) {
+      lab.metric(std::string("people.appear-run.") + kRun[q],
+                 runs > 0 ? static_cast<double>(all.run_appear[q]) / static_cast<double>(runs) : 0,
+                 "share");
+      lab.metric(std::string("people.appear-run.") + kRun[q] + ".faced",
+                 all.run_appear[q] > 0 ? static_cast<double>(all.run_faced[q]) /
+                                             static_cast<double>(all.run_appear[q])
+                                       : 0,
+                 "share");
+    }
+  }
   lab.metric("people.fight-across", of_fight(all.fight_across), "units/s");
   lab.metric("people.fight-along", of_fight(all.fight_along), "units/s");
   lab.metric("people.fight-wide", of_fight(static_cast<double>(all.fight_wide)), "share");

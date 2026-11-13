@@ -196,6 +196,10 @@ struct Bot {
   // point over 120 degrees off the run 17 % of their time; people's view within 15 degrees of
   // their run 48 %, the bots' 23 %).
   bool lookway = false;
+  // THE RUN'S WAY (`calmvel`): moving past 150 units/s, the calm view looks the way the run goes,
+  // not at the route's point `kCalmAhead` on (through a corner's wall): people's view lies within
+  // 15 degrees of their run 48 % of a calm run, and enemies appear ahead of it.
+  bool calm_vel = false;
   double glance_next = 0, glance_until = -1;
   float glance_off = 0;
   // The glance is a SWIPE (a turn meant's pace there and back), held `kGlanceHold_s` from when

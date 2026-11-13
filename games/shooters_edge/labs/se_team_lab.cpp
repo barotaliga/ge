@@ -48,6 +48,8 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "shooter/nav.hpp"
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "shooter/trace.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
@@ -125,6 +127,11 @@ struct Watch {
   // The time off the screen by where the nearest enemy in sight lies (beside, behind, over or
   // under), how far, and whether he faces the bot (it in his own screen: coming at it).
   std::map<std::string, int64_t> facing_off;
+  // AN ENEMY APPEARING (se-people's `appear`): one newly in a clear line, by the bot's mode and
+  // view writer then: appearances, and those met on the screen.
+  std::map<std::string, std::array<int64_t, 2>> appear;
+  std::map<std::string, std::array<int64_t, 2>> appear_way;  // roaming: by the way it moves
+  std::array<uint64_t, 64> clear_was{};  // by fighter: the enemy slots in a clear line last look
   std::ofstream* out = nullptr;                // the trace, when asked for
   shooters_edge::labs::WhyLog* log = nullptr;  // the decision log, when asked for (--why)
   int every = 4;
@@ -281,6 +288,26 @@ void facing_metrics(gl::Lab& lab, const Watch& w) {
   lab.metric("team.facing.faced", static_cast<double>(faced) / static_cast<double>(seen), "share");
   // Each mode and view writer: its share of the time an enemy is in sight, and of the time one
   // is in sight off the screen.
+  int64_t app = 0, app_on = 0;
+  for (const auto& [key, row] : w.appear) {
+    app += row[0];
+    app_on += row[1];
+  }
+  if (app > 0) {
+    lab.metric("team.appear.faced", static_cast<double>(app_on) / static_cast<double>(app), "share");
+    for (const auto& [key, row] : w.appear) {
+      lab.metric("team.appear." + key + ".share", static_cast<double>(row[0]) / static_cast<double>(app),
+                 "share");
+      lab.metric("team.appear." + key + ".faced",
+                 row[0] > 0 ? static_cast<double>(row[1]) / static_cast<double>(row[0]) : 0, "share");
+    }
+    for (const auto& [key, row] : w.appear_way) {
+      lab.metric("team.appear." + key + ".share", static_cast<double>(row[0]) / static_cast<double>(app),
+                 "share");
+      lab.metric("team.appear." + key + ".faced",
+                 row[0] > 0 ? static_cast<double>(row[1]) / static_cast<double>(row[0]) : 0, "share");
+    }
+  }
   int64_t off = 0;
   for (const auto& [key, n] : w.facing_off) off += n;
   for (const auto& [key, n] : w.facing_off)
@@ -706,9 +733,10 @@ void run(gl::Lab& lab) {
       const sh::Vec3f wide = sh::angle_vectors({0, 60.f, 0}).forward;
       const sh::Vec3f high = sh::angle_vectors({0, 44.25f, 0}).forward;
       bool seen = false, faced = false;
+      uint64_t clear_now = 0;
       float near_d2 = 1e30f;
       std::string near_key;
-      for (size_t j = 1; j < w.world.entities.size() && j <= 32 && !faced; j++) {
+      for (size_t j = 1; j < w.world.entities.size() && j <= 32; j++) {
         const int sl = static_cast<int>(j) - 1;
         if (sl == f.slot || !w.world.clients[static_cast<size_t>(sl)].active ||
             (f.team->friends >> sl & 1u) != 0)
@@ -723,9 +751,38 @@ void run(gl::Lab& lab) {
         };
         if (!clear(head) && !clear(o.origin)) continue;
         seen = true;
+        clear_now |= uint64_t{1} << sl;
         const float ahead = sh::dot(ax.forward, h);
-        faced = ahead > 0 && std::fabs(sh::dot(ax.right, h)) * wide.x <= ahead * wide.y &&
-                std::fabs(sh::dot(ax.up, h)) * high.x <= ahead * high.y;
+        const bool on = ahead > 0 && std::fabs(sh::dot(ax.right, h)) * wide.x <= ahead * wide.y &&
+                        std::fabs(sh::dot(ax.up, h)) * high.x <= ahead * high.y;
+        if ((tr.clear_was[static_cast<size_t>(k)] >> sl & 1u) == 0) {
+          auto& row = tr.appear[std::string(shooters_edge::bots::fight_mode_name(f.mode)) + "." +
+                                f.bot.view_by];
+          row[0]++;
+          row[1] += on ? 1 : 0;
+          // Roaming: where he appears against the way the bot moves (at a walk or more).
+          const float vs = std::sqrt(e.velocity.x * e.velocity.x + e.velocity.y * e.velocity.y);
+          const float hf = std::sqrt(h.x * h.x + h.y * h.y);
+          if (f.mode == shooters_edge::bots::FightMode::roam && vs > 100 && hf > 1) {
+            const float c = (e.velocity.x * h.x + e.velocity.y * h.y) / (vs * hf);
+            const char* by_way = c > 0.5f ? "ahead" : c > -0.5f ? "beside" : "behind";
+            // Steep: more than 40 degrees over or under the eye; else, the view's yaw off the
+            // velocity's (under 30 degrees: "on").
+            const float vy = static_cast<float>(ge::core::libm::atan2(e.velocity.y, e.velocity.x) *
+                                                (180.0 / ge::core::kPi));
+            float off = cmd.angles.y - vy;
+            while (off > 180) off -= 360;
+            while (off < -180) off += 360;
+            const char* how = std::fabs(h.z) > 0.84f * hf ? ".steep"
+                              : std::fabs(off) < 30      ? ".view-on-way"
+                                                         : ".view-off-way";
+            auto& wrow = tr.appear_way[std::string("way.") + by_way + "." + f.bot.view_by + how];
+            wrow[0]++;
+            wrow[1] += on ? 1 : 0;
+          }
+        }
+        faced = faced || on;
+        if (on) continue;
         if (!faced && sh::dot(h, h) < near_d2) {
           near_d2 = sh::dot(h, h);
           const float flat = std::sqrt(h.x * h.x + h.y * h.y);
@@ -753,6 +810,7 @@ void run(gl::Lab& lab) {
           near_key = std::string(where) + "." + far + (at_me ? ".coming" : ".unaware") + known;
         }
       }
+      tr.clear_was[static_cast<size_t>(k)] = clear_now;
       if (seen && !faced && !near_key.empty()) tr.facing_off[near_key]++;
       if (seen) {
         auto& row = tr.facing[std::string(shooters_edge::bots::fight_mode_name(f.mode)) + "." +
