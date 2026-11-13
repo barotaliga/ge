@@ -67,6 +67,9 @@ struct HubSpec {
   std::function<bool(std::string_view map, const vfs::SearchPath& files,
                      std::vector<std::string>& names, std::string& error)>
       map_files;
+  // The hub keeps player stats (it runs the account service, `--accounts`): the nav bar links the
+  // Leaders page (stats_page.hpp). The hub's main sets it; a game leaves it false.
+  bool stats = false;
   // Whether a map the packs hold is one to play (a game keeps some models as maps). Unset: all.
   std::function<bool(std::string_view map)> map_shown;
 };

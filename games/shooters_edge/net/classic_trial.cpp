@@ -63,9 +63,11 @@ std::vector<ServedFile> trial_files() {
 }
 
 std::vector<ServedFile> trial_figure_files() {
-  std::vector<ServedFile> files(2);
+  std::vector<ServedFile> files(4);
   files[0].path = "players/cyborg/tris.md2";
   files[1].path = "players/cyborg/oni911.pcx";
+  files[2].path = "maps/arena.lit";  // asked for as lits/arena.lit
+  files[3].path = "locs/arena.loc";
   for (size_t f = 0; f < files.size(); f++) {
     files[f].bytes.resize(3000 + f * 1700);
     for (size_t i = 0; i < files[f].bytes.size(); i++)
@@ -161,6 +163,7 @@ TrialReport run_classic_trial(const TrialOptions& opt) {
     cc.qport = static_cast<uint16_t>(1000 + i);
     cc.topcolor = static_cast<int>(i % 14);
     cc.bottomcolor = static_cast<int>((i * 5) % 14);
+    cc.fetch_lit = cc.fetch_locs = opt.figures;
     if (opt.figures && i == 0) {
       cc.model = "cyborg";
       cc.skin = "oni911";
@@ -190,7 +193,10 @@ TrialReport run_classic_trial(const TrialOptions& opt) {
   rep.seconds = frames * kFrameUs / 1e6;
 
   std::vector<ServedFile> files = trial_files();
-  if (opt.figures) files.insert(files.end(), figure_files.begin(), figure_files.end());
+  if (opt.figures) {
+    files.insert(files.end(), figure_files.begin(), figure_files.end());
+    files.push_back({"lits/arena.lit", figure_files[2].bytes});  // the light as the client keeps it
+  }
   for (size_t i = 0; i < n; i++) {
     const ClassicClientEnd& c = *clients[i];
     TrialClient t;

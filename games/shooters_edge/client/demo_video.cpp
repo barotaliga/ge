@@ -18,6 +18,7 @@
 
 #include "audio/synth.hpp"
 #include "audio/voice.hpp"
+#include "brush/map.hpp"
 #include "camera/first_person.hpp"
 #include "capture/av_export.hpp"
 #include "classicenhance/cached.hpp"
@@ -365,6 +366,9 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     report.highlight = pick.text;
   }
   report.from_s = from;
+  DemoEyes eyes;
+  const ge::camera::FirstPersonRow classic_row =
+      ge::camera::classic_first_person(ge::brush::kUnitM);
   for (int64_t k = 0;; k++) {
     const double at = from + static_cast<double>(k) / o.fps;
     if (length > 0 && at >= from + length) break;
@@ -386,7 +390,13 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
       world_models = s.models.size();
     }
     if (!world) continue;
-    ge::render::FrameView view = demo_view(s, ge::camera::FirstPersonRow{}.fov_y, at);
+    const sh::BrushModel* ground = !map->spec.models.empty() ? &map->spec.models[0] : nullptr;
+    const double fov = ge::camera::FirstPersonRow{}.fov_y;
+    ge::render::FrameView view =
+        o.classic_view
+            ? demo_eyes_view(s, read, eyes, o.view_row != nullptr ? *o.view_row : classic_row,
+                             ground, {}, fov, read.time - (vt - at), at)
+            : demo_view(s, fov, at);
     view.frame = static_cast<uint64_t>(k);
     ge::ui::DrawList overlay;
     overlay.begin(o.width, o.height);
