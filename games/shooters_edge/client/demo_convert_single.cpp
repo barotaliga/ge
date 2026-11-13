@@ -110,7 +110,7 @@ struct Written {
 };
 
 // The source's entity-update flags (demo_single.cpp's table).
-enum : int {
+enum : uint16_t {
   kSrcMoreBits = 1 << 0,
   kSrcOrigin1 = 1 << 1,
   kSrcOrigin2 = 1 << 2,
@@ -127,7 +127,7 @@ enum : int {
 };
 
 // The target's entity-delta flags (demo_client.cpp's table): the word's, then the more byte's.
-enum : int {
+enum : uint16_t {
   kOrigin1 = 1 << 9,
   kOrigin2 = 1 << 10,
   kOrigin3 = 1 << 11,
@@ -148,7 +148,7 @@ constexpr int kMvOrigin = 1, kMvAngles = 8, kMvEffects = 64, kMvSkin = 128, kMvD
 constexpr int kMvWeaponFrame = 1024, kMvModel = 2048;
 
 // The clientdata flags (demo_single.cpp's).
-enum : int {
+enum : uint16_t {
   kCdViewHeight = 1 << 0,
   kCdIdealPitch = 1 << 1,
   kCdPunch1 = 1 << 2,

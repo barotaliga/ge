@@ -85,7 +85,7 @@ struct SequelTo34 final : ConvertStream {
         } else if (sp->id == kFrame) {
           c.notes.frames++;
           if (protocol == 26) {
-            body.insert(body.begin() + static_cast<std::ptrdiff_t>(sp->at + 9), uint8_t{0});
+            body.insert(body.begin() + static_cast<std::ptrdiff_t>(sp->at) + 9, uint8_t{0});
             c.notes.rewritten["a frame given its suppress count"]++;
           }
         }

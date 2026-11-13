@@ -66,7 +66,7 @@ Frames read_frames(std::vector<uint8_t> bytes, cl::DemoFormat want, int rocket) 
 }
 
 std::vector<uint8_t> converted(const std::vector<uint8_t>& dem, cl::ConvertNotes& notes,
-                               cl::ConvertOptions opt = {}) {
+                               const cl::ConvertOptions& opt = {}) {
   std::vector<uint8_t> out;
   std::string error;
   CHECK_MSG(cl::convert_demo(dem, cl::DemoFormat::multiview, opt, out, notes, error), error);
@@ -207,7 +207,7 @@ std::vector<uint8_t> as_protocol_26(const std::vector<uint8_t>& dm2) {
     std::vector<uint8_t> body(d.bytes.begin() + 4, d.bytes.end());
     for (auto sp = spans.rbegin(); sp != spans.rend(); ++sp) {
       if (sp->id == 12) body[sp->at + 1] = 26;
-      if (sp->id == 20) body.erase(body.begin() + static_cast<std::ptrdiff_t>(sp->at + 9));
+      if (sp->id == 20) body.erase(body.begin() + static_cast<std::ptrdiff_t>(sp->at) + 9);
     }
     const auto n = static_cast<int32_t>(body.size());
     const auto* p = reinterpret_cast<const uint8_t*>(&n);
