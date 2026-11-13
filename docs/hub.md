@@ -147,9 +147,17 @@ canvas (`NativeWindow::Kind::canvas`). `engine/web` holds what every viewer shar
 (`viewer_args.hpp`, tested natively) and the page's calls (`browser.hpp`: a file fetched from the
 hub, the next paint, the canvas's size, the status line). Every wait (a fetch, a paint, the GPU's)
 suspends the C++ stack through JSPI, so a viewer is a plain loop in `main`. `ge_add_web_viewer`
-writes `<game>_viewer.js` and `.wasm` into `build/web/<game>_viewer/`, the folder a hub's
+writes `<game>_viewer.js` and `.wasm` into `build/web/<game>_viewer/`, each with a gzip copy beside it
+(`.gz`, `cmake/WebGzip.cmake`) that the hub sends a browser that takes gzip, the folder a hub's
 `--viewer=<dir>` serves; the hub's operator puts the content packs it may share beside them
 (`.pak`, `.pk3`); the Watch page hands them to the viewer by name order, the Demo page the demo's own content pack.
+
+THE FIRST VISIT. What a visitor downloads before the first picture is kept small: the wasm leaves
+out the other worlds' moon maps (2.8 MB a hub's matches never show; `GE_MOON_MAPS`), goes gzip
+(4.0 MB to 1.7 MB), and the demo's own content pack comes in place of every pack. The page
+fetches the wasm itself and hands it to the viewer's script, so a bar under the picture and the
+status line follow the download in megabytes; the viewer's own fetches (the demo, the content)
+do the same (`web::fetch_bytes` with a label).
 
 THE LIMITS. A browser offers WebGPU's default limits unless the machine's GPU earns it more:
 16 sampled textures a shader stage, 8 storage buffers and 256 layers an array texture, among

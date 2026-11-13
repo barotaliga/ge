@@ -18,6 +18,13 @@ namespace gn = ge::net;
 
 namespace {
 
+std::string lower_ascii(std::string_view s) {
+  std::string out(s);
+  for (char& c : out)
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  return out;
+}
+
 const char* reason(int code) {
   switch (code) {
     case 200:
@@ -83,6 +90,7 @@ HttpParse http_parse(std::string_view data, HttpRequest& out) {
     return HttpParse::bad;
   }
   out.host.clear();
+  out.gzip = false;
   const std::string_view head = data.substr(0, end);
   for (size_t at = head.find("\r\n"); at != std::string_view::npos && at < head.size();) {
     const size_t from = at + 2;
@@ -95,6 +103,10 @@ HttpParse http_parse(std::string_view data, HttpRequest& out) {
       while (!v.empty() && v.back() == ' ') v.remove_suffix(1);
       out.host = std::string(v);
     }
+    if (h.size() > 16 && lower_ascii(h.substr(0, 16)) == "accept-encoding:" &&
+        lower_ascii(h.substr(16)).find("gzip") != std::string::npos) {
+      out.gzip = true;
+    }
     at = eol;
   }
   return HttpParse::ok;
@@ -105,6 +117,7 @@ std::string http_response(const Answer& a, bool head_only) {
   const bool text = a.type.rfind("text/", 0) == 0 || a.type == "application/json";
   r += "Content-Type: " + a.type + (text ? "; charset=utf-8\r\n" : "\r\n");
   r += "Content-Length: " + std::to_string(a.body.size()) + "\r\n";
+  if (!a.encoding.empty()) r += "Content-Encoding: " + a.encoding + "\r\nVary: Accept-Encoding\r\n";
   r += a.max_age_s > 0 ? "Cache-Control: public, max-age=" + std::to_string(a.max_age_s) + "\r\n"
                        : std::string("Cache-Control: no-store\r\n");
   r += "Access-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n";
@@ -197,7 +210,7 @@ void http_update(HttpServer& s, const Poller& p, const HubSpec& spec, int64_t no
         send(c, http_error(405, "the hub answers GET and HEAD only", "send a GET"));
       } else {
         const Answer a = hub_answer(p, spec, req.target, now_us,
-                                    Site{s.archive, s.unix_s, req.host, s.viewer_dir});
+                                    Site{s.archive, s.unix_s, req.host, s.viewer_dir, req.gzip});
         if (a.events && a.code == 200) {
           const HubNode* n = poller_find(p, a.node);
           c.answered = false;

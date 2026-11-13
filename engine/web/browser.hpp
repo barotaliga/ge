@@ -1,7 +1,8 @@
 // THE BROWSER'S SIDE OF A WEB VIEWER (Emscripten builds only, GE_WEB): the few calls a game's
 // viewer makes on the page that holds it (engine/hub/watch.hpp writes that page).
 //
-// - `fetch_bytes`: a file from the hub (a demo by its `/d/...` path, a content pack) read whole.
+// - `fetch_bytes`: a file from the hub (a demo by its `/d/...` path, a content pack) read whole,
+//   the status line and the page's bar following the download when it is named.
 // - `next_frame`: waits for the page's next paint and answers its time, ms; the viewer's loop
 //   draws one frame a paint, so a hidden tab costs nothing.
 // - `canvas_size`: the canvas's pixel size (the page sets it; 1280 x 720 by default).
@@ -30,7 +31,10 @@
 namespace ge::web {
 
 // `url`'s bytes into `out`. False with the URL and the HTTP status (or that it did not answer).
-bool fetch_bytes(const std::string& url, std::vector<uint8_t>& out, std::string& error);
+// With `progress` ("Loading the demo..."), the status line says it with the megabytes so far and
+// the page's bar fills as the bytes come.
+bool fetch_bytes(const std::string& url, std::vector<uint8_t>& out, std::string& error,
+                 const std::string& progress = "");
 // Waits for the page's next paint; its time, ms.
 double next_frame();
 // The canvas `selector` names: its pixel size.

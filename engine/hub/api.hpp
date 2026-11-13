@@ -31,9 +31,10 @@ struct Answer {
   int code = 200;
   std::string type = "application/json";
   std::string body;
-  int max_age_s = 0;    // Cache-Control's max-age
-  bool events = false;  // the path asks for an event stream (http.hpp keeps it open)
-  net::Address node;    // ... of this node
+  int max_age_s = 0;     // Cache-Control's max-age
+  std::string encoding;  // Content-Encoding ("gzip": the body is packed; "" plain)
+  bool events = false;   // the path asks for an event stream (http.hpp keeps it open)
+  net::Address node;     // ... of this node
 };
 
 // The answer to GET `target` (a path with its query). `now_us` dates the ages in it.
