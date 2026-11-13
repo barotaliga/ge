@@ -43,13 +43,13 @@
 
 #include "brush/write.hpp"
 #include "classicenhance/profile.hpp"
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "shooter/nav.hpp"
-#include "core/libm/libm.hpp"
-#include "core/math.hpp"
 #include "shooter/trace.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
@@ -132,7 +132,7 @@ struct Watch {
   std::map<std::string, std::array<int64_t, 2>> appear;
   std::map<std::string, std::array<int64_t, 2>> appear_way;  // roaming: by the way it moves
   std::array<uint64_t, 64> clear_was{};  // by fighter: the enemy slots in a clear line last look
-  std::ofstream* out = nullptr;                // the trace, when asked for
+  std::ofstream* out = nullptr;          // the trace, when asked for
   shooters_edge::labs::WhyLog* log = nullptr;  // the decision log, when asked for (--why)
   int every = 4;
   std::array<int, 64> count{};
@@ -301,8 +301,8 @@ void facing_metrics(gl::Lab& lab, const Watch& w) {
     lab.metric("team.turnview.lead-p50", at(0.5), "deg");
     int64_t trail = 0;
     for (const auto& [key, row] : w.turn_by) trail += row[1];
-    lab.metric("team.turnview.trail40",
-               static_cast<double>(trail) / static_cast<double>(v.size()), "share");
+    lab.metric("team.turnview.trail40", static_cast<double>(trail) / static_cast<double>(v.size()),
+               "share");
     for (const auto& [key, row] : w.turn_by)
       lab.metric("team.turnview." + key + ".trail40",
                  static_cast<double>(row[1]) / static_cast<double>(v.size()), "share");
@@ -322,28 +322,31 @@ void facing_metrics(gl::Lab& lab, const Watch& w) {
     app_on += row[1];
   }
   if (app > 0) {
-    lab.metric("team.appear.faced", static_cast<double>(app_on) / static_cast<double>(app), "share");
+    lab.metric("team.appear.faced", static_cast<double>(app_on) / static_cast<double>(app),
+               "share");
     for (const auto& [key, row] : w.appear) {
-      lab.metric("team.appear." + key + ".share", static_cast<double>(row[0]) / static_cast<double>(app),
-                 "share");
+      lab.metric("team.appear." + key + ".share",
+                 static_cast<double>(row[0]) / static_cast<double>(app), "share");
       lab.metric("team.appear." + key + ".faced",
-                 row[0] > 0 ? static_cast<double>(row[1]) / static_cast<double>(row[0]) : 0, "share");
+                 row[0] > 0 ? static_cast<double>(row[1]) / static_cast<double>(row[0]) : 0,
+                 "share");
     }
     for (const auto& [key, row] : w.appear_way) {
-      lab.metric("team.appear." + key + ".share", static_cast<double>(row[0]) / static_cast<double>(app),
-                 "share");
+      lab.metric("team.appear." + key + ".share",
+                 static_cast<double>(row[0]) / static_cast<double>(app), "share");
       lab.metric("team.appear." + key + ".faced",
-                 row[0] > 0 ? static_cast<double>(row[1]) / static_cast<double>(row[0]) : 0, "share");
+                 row[0] > 0 ? static_cast<double>(row[1]) / static_cast<double>(row[0]) : 0,
+                 "share");
     }
   }
   int64_t off = 0;
   for (const auto& [key, n] : w.facing_off) off += n;
   for (const auto& [key, n] : w.facing_off)
-    lab.metric("team.facing-off." + key, static_cast<double>(n) / static_cast<double>(std::max<int64_t>(off, 1)),
-               "share");
+    lab.metric("team.facing-off." + key,
+               static_cast<double>(n) / static_cast<double>(std::max<int64_t>(off, 1)), "share");
   for (const auto& [key, row] : w.facing) {
-    lab.metric("team.facing." + key + ".seen", static_cast<double>(row[0]) / static_cast<double>(seen),
-               "share");
+    lab.metric("team.facing." + key + ".seen",
+               static_cast<double>(row[0]) / static_cast<double>(seen), "share");
     if (seen > faced)
       lab.metric("team.facing." + key + ".off",
                  static_cast<double>(row[0] - row[1]) / static_cast<double>(seen - faced), "share");
@@ -738,7 +741,8 @@ void run(gl::Lab& lab) {
              "\tscript_"
              "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
              "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
-             "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up\n";
+             "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
+             "\twater\tliquid\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -819,8 +823,8 @@ void run(gl::Lab& lab) {
             while (off > 180) off -= 360;
             while (off < -180) off += 360;
             const char* how = std::fabs(h.z) > 0.84f * hf ? ".steep"
-                              : std::fabs(off) < 30      ? ".view-on-way"
-                                                         : ".view-off-way";
+                              : std::fabs(off) < 30       ? ".view-on-way"
+                                                          : ".view-off-way";
             auto& wrow = tr.appear_way[std::string("way.") + by_way + "." + f.bot.view_by + how];
             wrow[0]++;
             wrow[1] += on ? 1 : 0;
@@ -841,8 +845,8 @@ void run(gl::Lab& lab) {
           const sh::ViewAxes his = sh::angle_vectors({o.view_angles.x, o.view_angles.y, 0});
           const sh::Vec3f back = eye - head;
           const float his_ahead = sh::dot(his.forward, back);
-          const bool at_me = his_ahead > 0 && std::fabs(sh::dot(his.right, back)) * wide.x <=
-                                                  his_ahead * wide.y;
+          const bool at_me =
+              his_ahead > 0 && std::fabs(sh::dot(his.right, back)) * wide.x <= his_ahead * wide.y;
           // What the bot knows of him: seen within 2 s, heard within 1 s, or nothing.
           const char* known = ".unknown";
           for (const sh::Contact& ct : f.bot.senses.contacts) {
@@ -1003,10 +1007,16 @@ void run(gl::Lab& lab) {
         }
       }
       if (up > 1e8f)
-        out << "-\n";
+        out << "-";
       else
-        out << to_fixed(up, 0) << '\n';
+        out << to_fixed(up, 0);
     }
+    // How deep it stands in a liquid (0 dry .. 3 under) and which (the contents number: -3
+    // water, -4 slime, -5 lava; 0 dry): a death in lava told from one in a fight.
+    // (the map's contents a little above the feet: the server keeps no liquid's kind for a player)
+    const int liquid =
+        e.waterlevel > 0 ? sh::world_contents(w.sv, {e.origin.x, e.origin.y, e.origin.z - 23}) : 0;
+    out << '\t' << e.waterlevel << '\t' << liquid << '\n';
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
@@ -1369,9 +1379,9 @@ void run(gl::Lab& lab) {
       lab.metric(key, static_cast<double>(r.lying[ki]) / static_cast<double>(r.lying_n[ki]),
                  "share");
       lab.metric(key + ".takers",
-                 r.lying[ki] > 0 ? static_cast<double>(r.lying_takers[ki]) /
-                                       static_cast<double>(r.lying[ki])
-                                 : 0,
+                 r.lying[ki] > 0
+                     ? static_cast<double>(r.lying_takers[ki]) / static_cast<double>(r.lying[ki])
+                     : 0,
                  "share");
       for (int w = 0; w < cn::kLyingWhy; w++)
         lab.metric(key + "." + cn::kLyingWhyNames[w],
