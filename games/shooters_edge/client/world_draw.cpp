@@ -63,7 +63,8 @@ struct WorldDraw {
   ba::SkyPick night;      // the map's own classic night, for an sv_hour after dusk (bsp_sky.hpp)
   bool dark = false;      // its sky texture is dark: the map is seen under its night (dark_sky)
   ge::brush::MapFog fog;  // the map's own fog (its worldspawn's `fog` and `skyfog`)
-  double top_y = 0;       // the map's highest point, m: the clouds stand over it
+  double liquid_alpha[4] = {-1, -1, -1, -1};  // the map's own `wateralpha` and kin (-1: none)
+  double top_y = 0;  // the map's highest point, m: the clouds stand over it
   ge::gpu::PipelineSet pipelines;
   gr::FrameTargets targets;
   wgpu::Buffer uniforms;
@@ -508,6 +509,7 @@ WorldDrawPtr begin_world(ge::gpu::Device& d, WorldReadPtr read, uint32_t width, 
   f->has_map = read->has_map;
   f->scene = std::move(read->scene);
   f->fog = ge::brush::map_fog(f->scene.map);
+  look::map_liquid_alphas(f->scene.map, f->liquid_alpha);
   f->sky = read->sky;
   f->night = read->night;
   f->dark = read->dark;
@@ -650,6 +652,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     o.first_all = false;
     o.fresh_cubes = f.warm_cubes;
   }
+  // See-through liquids: the map's, else the player's, solid where the server keeps them so.
+  look::liquid_alphas(*f.picture, f.liquid_alpha, fx.see_through, o.liquid_alpha);
   o.sky_light = sky.sky_light;
   o.sky_seen = sky.sky_seen;
   for (int k = 0; k < 3; ++k) o.sky_tint[k] = sky.tint[k];
@@ -751,7 +755,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     const InPlace in_place{.flames = o.mode == ba::Mode::v2 && f.picture->ce.flames,
                            .flares = on.flares,
                            .bubbles = on.bubbles,
+                           .explosions = on.explosions,
                            .bubbles_share = f.picture->bubbles_share};
+    f.models.skin_choice = {
+        .noskins = f.picture->noskins, .base = f.picture->base_skin, .all = f.picture->all_skins};
     prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
                    in_place, fx.lights, o.dynamic_strength, &f.burning);
   }

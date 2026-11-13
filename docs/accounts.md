@@ -217,6 +217,22 @@ server: a guest whose folded name is an account's plays under `sv_defaultname` (
 is taken) and is told the name is registered and to log in to use it; a logged-in player is always shown by their account's name when
 `sv_loginname` is 1. A player may not take a name while another seat holds it logged in.
 
+A server whose master is elsewhere does not hold the accounts, so it asks the master (`name`: the
+name folded by the game's rules, answered with the account that reserves it). The name is let go
+while the master answers, a fraction of a second; if an account holds it, the guest is renamed
+then and told why (a player still connecting is told on joining). The answer is kept while the
+server runs (up to 256 names), so a name is asked once, and a name the master did not answer is
+asked again the next time it is used.
+
+## On the window's own game
+
+A game's own window serving others (a match on `sv_port`, or a coop campaign opened to others)
+keeps logins as a dedicated server does: `sv_login`, `sv_logintime`, `sv_loginwelcome`,
+`sv_accountmaster` and `sv_accountkey` in the window's console, taking effect with the next map.
+With no master the window is its own: its accounts are kept in the game's own folder
+(`<prefs>/accounts`) and served on `sv_accountport`. The window's player is never asked to log in.
+The engine half is `server/accounts.hpp`, shared with the dedicated process.
+
 ## The settings
 
 This row owns the classic login settings the server-settings work (M58) held out. Ours, with the
@@ -239,9 +255,23 @@ classic names as synonyms (`docs/servers.md` § A game's own names):
 
 ## The match report
 
-What a finished match leaves, generic in `engine/net/report.hpp`, filled by `engine/server` when the
-match ends (the phase's `lobby_end`), and the same record as the replay file's closing summary, so
-a demo's stats and the hub's are one thing, joined by the demo's SHA-256:
+What a finished match leaves, generic in `engine/net/report.hpp`, and the same record as the replay
+file's closing summary, so a demo's stats and the hub's are one thing, joined by the demo's SHA-256.
+The game fills its part when a match ends (`ServerGame::match_report`, asked after every frame and
+true once per match) and `engine/server` adds its own (the id, the game and its version, the
+server's name and address, the start in Unix seconds); the server keeps its last 16 on
+`Server::reports`, newest last. The bytes refuse a report past their limits (64 players, 16 teams,
+32 columns) rather than cut it, since a report that says less than the match is worse than none.
+
+Shooter's Edge tallies a deathmatch off the rules' world every frame
+(`games/shooters_edge/net/classic_report.hpp`), since the rules keep only the frags: a player whose
+health falls to nothing died; one whose frags fall on that frame killed themself; one whose frags
+fall while they live killed a team mate. A player who leaves stays in the report with the seconds
+they played. With a lobby only its match counts (the warmup is not a match), and a restart starts the
+tally again. The match ends where its limit was reached (the time limit's moment, or the frag that
+reached the frag limit), not when the map changes after the intermission; then the end is a limit,
+a forfeit when fewer than two sides are left, or broken off. The `match-report` lab plays a
+free-for-all and a team match of bots and draws each report as the hub's scoreboard.
 
 | Part | Fields |
 | --- | --- |
@@ -289,7 +319,7 @@ The JSON API: `/v1/players/{name}`, `/v1/matches?game=&mode=&player=&page=`, `/v
 | M59b2 | The game CLI's `account` group (built) | `accounts` |
 | M59b3 | The hub's Account page (built) | `hub-pages` |
 | M59c | The login seam in `engine/server` (`server/login.hpp`), the settings above, a dedicated server that is its own master; the first classic game's prompt and `login` line (built) | `se-login` |
-| M59c2 | Our client's ticket in its connect; reserved names on a server whose master is elsewhere (a name ask); logins on a listen server and in a coop campaign | `se-login` |
+| M59c2 | Our client logs itself in by its ticket; reserved names on a server whose master is elsewhere (a name ask); logins on a listen server and in a coop campaign | `se-login` |
 | M59d | The sequel's prompt and `login` line, one account logged in on both games' servers | `se-login` |
 | M59e | The match report, the replay file's closing summary, the master's totals, trusted servers | `match-report` |
 | M59f | The hub's Player, Match and Leaders pages and their API; the classic adapter's recent stats | `hub-players` |

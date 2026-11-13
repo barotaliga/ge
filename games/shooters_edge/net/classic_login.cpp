@@ -124,6 +124,14 @@ void classic_login_frame(ClassicLogin& l) {
         if (s.clients[o.slot].name != name) classic_set_info(s, o.slot, "name", name);
         break;
       }
+      case gs::LoginOut::Kind::unname: {  // a registered name the master told of late
+        std::vector<std::string> taken;
+        for (int i = 0; i < sh::kMaxClients; i++)
+          if (i != o.slot && s.clients[i].state != ConnState::free)
+            taken.push_back(s.clients[i].name);
+        classic_set_info(s, o.slot, "name", unique_name(s.cfg.default_name, taken));
+        break;
+      }
       case gs::LoginOut::Kind::auth:
         classic_set_info(s, o.slot, "*auth", o.text);
         break;

@@ -47,6 +47,13 @@ void add_user_info_cvars(ge::console::Console& con, UserInfo& info) {
                       .max = 13,
                       .values = "0..13: that colour of the palette's rows (0 the default)"},
                      field);
+  con.cvars().bind({.name = "skin",
+                    .fallback = "",
+                    .flags = ge::console::kArchive | ge::console::kUserInfo,
+                    .help = "The skin others see you in: a picture in their skins folder.",
+                    .kind = ge::console::CvarKind::text,
+                    .values = "\"\": theirs to choose (the default); TEXT: skins/TEXT.pcx"},
+                   &info.skin);
   con.cvars().bind(
       {.name = "cl_speedjump",
        .fallback = "0",
@@ -78,10 +85,11 @@ void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) 
   if (l.server->sv.clients[0].active && l.server->sv.clients[0].speedjump != info.speedjump)
     l.rules->user_info(0, "cl_speedjump", info.speedjump ? "1" : "0");
   if (l.server == info.sent_to && name == info.name && info.top == info.sent_top &&
-      info.bottom == info.sent_bottom)
+      info.bottom == info.sent_bottom && info.skin == info.sent_skin)
     return;
   info.sent_to = l.server;
   info.name = name, info.sent_top = info.top, info.sent_bottom = info.bottom;
+  info.sent_skin = info.skin;
   l.opt.player = name;
   namespace sv = shooters_edge::server;
   // A match's server tells every client (ListenHost::set_info); a campaign's rules take it.
@@ -92,6 +100,7 @@ void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) 
       l.rules->user_info(0, key, value);
   };
   set("name", name);
+  set("skin", info.skin);
   if (l.room) return;  // a team game's lobby wears the team's colours (lobby.cpp)
   set("topcolor", std::to_string(info.top));
   set("bottomcolor", std::to_string(info.bottom));

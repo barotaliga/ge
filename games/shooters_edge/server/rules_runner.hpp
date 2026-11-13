@@ -30,6 +30,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -158,6 +159,20 @@ struct RulesCommon {
 
   RulesMods mods;  // C++ mods on top (none: the rules alone, every hash as before)
 };
+
+// One setting every runner of a classic mod registers beside the move's and the loop's own.
+struct ModSetting {
+  const char* name = nullptr;  // null: the move's and the loop's own stand here
+  const char* fallback = "";
+  const char* help = "";
+  const char* values = "";
+  ge::console::CvarKind kind = ge::console::CvarKind::number;
+  bool info = false;  // published in the server info
+};
+
+// Those settings in the order they are registered, the move's and the loop's own at the row with
+// no name; what the server's check reads for the settings a mod has.
+std::span<const ModSetting> mod_settings();
 
 // The settings every runner of a classic mod registers (the match's rules, the move's and the
 // loop's, the server's own), their defaults `loop`'s; and their values written into `set`: every

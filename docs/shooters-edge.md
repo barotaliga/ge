@@ -1248,6 +1248,33 @@ session (`classic_trial`):
 `se-net` runs the session under every preset. `se-interop` is a stub until the dedicated
 server's classic flag and existing programs are at hand.
 
+**The sequel's protocol** (`games/shooters_edge/net/sequel_*`, protocol 34, M18v9) is spoken the
+same way, beside the classic one and sharing its net channel:
+
+- **Out of band**: the challenge (one number per address), the connect with the protocol, qport,
+  challenge and user info, `info`, `status` and `ping`. A refusal is a print a player reads.
+- **The signon** runs by the client's own string commands: `new` gets the server data and a
+  stuffed `cmd configstrings`, each answer adds about 700 bytes and the next prompt, then the
+  baselines the same way, then `precache`, answered with `begin`. Every prompt carries the
+  level's count, and a wrong count starts the signon again.
+- **What a client reads** is the sequel's own recording format: each packet's payload is one
+  block, read by the recording's reader (`client/demo_sequel.cpp`), so a client records as it
+  plays and its state is the demo player's.
+- **Moves** carry the newest frame the client read whole, which the server deltas the next frame
+  from, and three commands each delta coded against the one before. The move's checksum uses
+  the sequel's own key table, a wire constant MEASURED for interop
+  (`sequel_checksum_table.cpp`): a live server names the byte it expected for a move it refuses,
+  so one minute of moves solved all 960 non-zero bytes, one candidate each.
+- **Our server** (`sequel_net_server.hpp`) serves the sequel's rules through the wire the
+  recordings use (`server/sequel_wire.hpp`): the prints, centred prints, stuffed lines and changed
+  configstrings reliably, the frame and its sounds unreliably, whole when the client lost the frame
+  it would delta from.
+
+`se-sequel-net` runs our client on our server (simulated) or on a live one (`--server=`).
+Measured on a live server of the sequel: our client got through the signon and played, every move
+was taken, and it walked; that server ran about three frames a second in the container, with or
+without our client, so its frame rate there is the server's own.
+
 **The native protocol** is the engine's own (`docs/networking.md`), used between our client and
 our server when both ends are ours: the M17 handshake and AEAD (M17i), the snapshot ring and
 deltas with interest (M17f), prediction of the local player and of projectiles, lag
@@ -1293,6 +1320,29 @@ every pass, and judged by captioned screenshots:
   z - bias, 0), by its distance from the eye (not its depth along the view, so turning on the
   spot changes nothing); the sky takes its fixed share; a glow added over the scene fades to
   black.
+- **See-through liquids** (M18i14): `r_wateralpha` (1: solid) and `r_slimealpha`,
+  `r_lavaalpha`, `r_telealpha` (empty: water's), or the map's own `wateralpha` and kin; a server
+  that sets `watervis` 0 keeps every liquid solid, the window's own match or a server joined with
+  `connect` alike, and a demo played back never is (`app/look.hpp`'s `liquid_alphas`,
+  `watervis_allowed`). Our server tells clients with `sv_watervis 1`. The world
+  pass draws a see-through kind after the world, blended over it, testing the depth without
+  writing it, and at 0 not at all (`brush/app/bsp_draw.hpp`'s "bsp.liquids"). While one is
+  see-through the cull leaves the map's potentially visible set out (the frustum and the depth
+  pyramid still cull), since few maps were built to be seen through their water and the rooms
+  under it would be missing. Where the modern look draws its own water, lava and slime, those
+  passes stay as they are.
+- **Player skins** (M18i15): each player wears the picture their `skin` names,
+  `skins/<name>.tga`, `.png` or `.pcx`, the first that reads. A .pcx is the palette's: its shirt and
+  pants rows take the player's colours and its glowing rows light themselves, as the figure's own
+  skin does, its top-left 296x194 stretched over the figure (a picture over 320x200 is refused). A
+  .tga or .png is drawn as painted (halved past 1024 a side). The skins are read with the map's
+  models (`client/world_models.cpp`'s `read_player_skins`, at most 32, each kept while the morph
+  atlas holds it); a skin that turns up later shows at the next map. `baseskin` (base) is worn by a
+  player who names none or one not there, else the figure's own; `allskins <name>` puts one on
+  everyone; `noskins 1` draws every player in the figure's own skin, in their colours; your own
+  `skin` goes to the server with your colours. A name with `..` or a leading dot is refused, its
+  extension dropped, cut to 15 characters (`app/classic_models.hpp`'s `skin_key`, `choose_skin`).
+  Colours 8 to 13 read their palette rows backwards, since those rows are stored bright to dark.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
 - **Effects from the game's files** (`client/world_fx.hpp`, M18l): a file `particles/<any>.fx`
@@ -1314,6 +1364,16 @@ every pass, and judged by captioned screenshots:
   explosion's sprite (its 6 frames at 10 a second) and the lightning bolt's model laid every 30
   units from the player's origin to the end, each segment turned to a fresh roll every frame.
   The classic look also draws each weapon's own flash frames, not the engine's muzzle fire.
+- **The monsters' attacks** (`games/shooters_edge/app/monster_fx.hpp`, roadmap row M47f): the
+  pack's shot models named in classic-enhance's replacement table (`missile.<kind>`), or a model's
+  tracer bits, are drawn by `client/world_fx.cpp`'s `monster_missiles`. The classic look lays the
+  classic tracer specks (green, orange or purple either side of the line, the lava ball the
+  rocket's trail) and the spit's coloured splash (codes 7 and 8). Under `ce_monsters` in the modern
+  look: the flier's acid drips and glows green and splashes off the wall, the knight's fire bolt
+  streams flame and embers and bursts, the caster's ball is a knot of violet light with motes
+  spiralling off it, the boss's lava ball burns, smokes and drips molten drops, the enforcer's
+  laser is a red streak that lights the walls and sparks where it ends, a zombie's flesh drips dark
+  drops; each shot carries a bright head and its light. Lab `se-monster-fx`.
 - **Effects, enhanced** (`games/shooters_edge/app/weapon_fx.hpp`, the modern look, each behind
   its `ce_` switch: `ce_muzzles`, `ce_explosions`, `ce_trails`, `ce_hits`, `ce_beams`): a
   LAYERED fireball of the engine's (`render/explosion.hpp`: the main ball, then three smaller
@@ -1517,8 +1577,19 @@ game's glyph sheet over its own console background (`menu/classic_console.hpp`, 
 `ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
 GAME and SELECT GAME are drawn in the game's letters under carved titles (`menu/classic_pages.hpp`;
 SELECT GAME's own row and the two games' names on it cut letter by letter from the strips like DEMOS'). Lab `se-attract` draws
-the menu, SELECT GAME, the watched recording, the console, DEMOS and JOIN A GAME over a played
-recording (`--basedir` a player's install).
+the menu, SELECT GAME, OPTIONS, the watched recording, the console, DEMOS and JOIN A GAME over a
+played recording (`--basedir` a player's install; `--demo=none` over the title's dark, for a game
+whose recordings cannot play yet).
+
+The sequel's menu is drawn in its own pictures too (`client/sequel_adapter.cpp` reads its
+`pics/*.pcx`; `ClassicArt::plates`, `menu/classic_view.hpp`). They are drawn on a 320 x 240
+screen with the 320 x 200 one in its middle. The root is its main menu: the plaque and the logo
+down the left, a plate for each row, the lit plate and the spinning cursor on the focused row.
+Each page under it has its banner over the top. SELECT GAME, DEMOS and HELP have no plate of
+their own, so each is built from the other plates' letters, a 17 px cell each. The C, the H and
+the K are pieced from O, N, R and Y (`kPlate*`, held to the plates' print). SELECT GAME's title and
+the two games' names on it are plates built the same way. The lobby and the scoreboard stay
+modern in the sequel until their pictures are read.
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
 output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),

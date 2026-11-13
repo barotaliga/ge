@@ -30,7 +30,8 @@
 //
 // The passes, in a frame's order: "bsp.shadows" (v2 with lights or weather: the stale maps, timed
 // as one), then with r_cull
-// "bsp.cull", "bsp", "hiz", "bsp.cull.late" and "bsp.late", else "bsp"; then "bsp.sky" (v2);
+// "bsp.cull", "bsp", "hiz", "bsp.cull.late" and "bsp.late", else "bsp"; then "bsp.liquids" (only
+// with a see-through liquid: `Options::liquid_alpha`); then "bsp.sky" (v2);
 // then the caller's sky, clouds, water and liquids over the frame's targets.
 //
 // ge:summary The BSP renderer: classic or v2 (our sky, our liquids, real-time lights and shadows)
@@ -40,6 +41,7 @@
 // ge:keywords relief normal-map parallax-occlusion roughness specular ggx surface-atlas
 // ge:keywords shadow-cache shadow-slot fresh_slots fresh_cubes shadow-budget shadow-hitch
 // ge:keywords encode_bsp_shadows first_all warm-up shadow-pick shadow-pop pvs-shadows
+// ge:keywords see-through-liquids liquid_alpha wateralpha transparent-water bsp-liquids
 // ge:skill brush render
 #pragma once
 
@@ -186,6 +188,13 @@ struct Options {
   // v2 leaves the liquids' faces to the engine's water and liquid passes; these draw a kind's
   // faces warped as the classic does instead (a game whose pass for that kind is switched off).
   bool warped_water = false, warped_slime = false, warped_lava = false;
+  // SEE-THROUGH LIQUIDS: how opaque the liquids' faces drawn here are: water (and a warped face
+  // not named for a liquid), slime, lava, a teleporter's. Under 1, that kind is drawn after the
+  // world in "bsp.liquids", blended over it and testing the depth without writing it (what lies
+  // behind shows through, the near side's own fog on it); at 0 or under, not at all. With any
+  // under 1, the cull's potentially visible set is left out (`pvs`): a map's visibility was
+  // rarely made to see through its water, and the frustum and the pyramid still cull.
+  double liquid_alpha[4] = {1, 1, 1, 1};
   // The sun's map drawn for the area fog's light (bsp_fog.hpp) even with the lightmaps' light.
   bool fog_sun = false;
 };
@@ -276,6 +285,8 @@ struct GpuBsp {
   GpuJob sun_caster;
   // The map's sky box (Scene::sky_box): on (1), a face's texel in the atlas's uv (its inset).
   float sky_box[4];
+  // How opaque each liquid is: water, slime, lava, a teleporter's face (Options::liquid_alpha).
+  float liquid_alpha[4];
 };
 
 struct BspDraw {
@@ -315,7 +326,7 @@ struct BspDraw {
   wgpu::Texture mask;
   wgpu::TextureView mask_view;
   // p_draw_lit: p_draw with only the real-time lights' path (v2, no weather; bsp.wgsl's kLitOnly)
-  uint32_t p_draw = 0, p_draw_lit = 0, p_fix = 0, p_veil = 0, p_shadow = 0;
+  uint32_t p_draw = 0, p_draw_lit = 0, p_liquid = 0, p_fix = 0, p_veil = 0, p_shadow = 0;
   uint32_t p_ortho = 0, p_ortho_sky = 0, p_ortho_shut = 0;  // an orthographic map's three steps
   // This frame's (prepare_bsp).
   GpuBsp staged{};

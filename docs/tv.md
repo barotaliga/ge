@@ -378,6 +378,29 @@ between them:
 Three copies cut the loss at 10% about eighty times; packing sends 30% of the plain bytes down, so
 three copies packed cost less than one plain.
 
+## The sequel's hops
+
+The sequel has no forwarder or proxy protocol of its own, so nothing about the hops goes in its
+connect: our sequel client (`games/shooters_edge/net/sequel_client.hpp`, `via` in its config) dials
+the forward route with `engine/forward`'s dial before it asks for a challenge, then runs the
+sequel's handshake end to end to the first hop as if it were the server. The proxies need nothing
+from the client at all: the near proxy is the server's address to it, so a stock sequel client
+reaches the proxies by address alone. The server sees the last hop's address and plays as usual.
+
+The `se-sequel-forward` lab, smoke on the simulated network with our sequel server, 6 s and 10%
+loss each way on the lossy paths: the client through two forwarders dialled its route and played
+with no bad move checksum; the client through the proxies (three copies, packed) lost none of the
+server's packets, while a client straight over a path as lossy lost 12%. Against an unmodified
+sequel server built beside the checkout (15 s each, loopback):
+
+| Path | What the client got |
+| --- | --- |
+| Straight | 26 frames |
+| Two forwarders | Routed, 13.3 ms round trip to the first hop, the player walked 756 units |
+| The proxies, a clean link | No loss; link bytes up 88 814 for the game's 29 035, down 38 892 for 11 848 |
+| The proxies, 10% link loss, one copy | 13.6% of the server's packets lost; the signon did not finish |
+| The proxies, 10% link loss, three copies | 38 frames, no loss |
+
 ## The sequel's recordings
 
 The sequel's client recording (a `.dm2`: blocks of a 32-bit length and one server packet's messages,
@@ -411,7 +434,35 @@ as the game's recorder writes it, then a frame each 100 ms whose player state an
 deltas against the frame before), and `record <name>` in the window writes them as `<name>.ged`.
 The map's checksum (configstring 31) is the MD4 of the whole map file with its four words XORed,
 measured against the demo pack's map. The same encoder is what the sequel's own server will send
-real clients (M18v9), so a hosted match broadcasts through TV from it.
+real clients (M18v9), so a hosted match broadcasts through TV from it. A match on our server is broadcast
+as it is recorded: each new block of the recording goes to the broadcast, and the TV node's viewers
+get the whole match, a late one from its start (`tests/shooters_edge_sequel_wire_test.cpp`; the
+`se-sequel-record` lab: 60 s on the demo pack's demo1, 13.5 KB broadcast, a viewer joining half way
+sent 28 blocks to catch up, both viewers back byte for byte).
+
+## The watcher
+
+A server with no broadcaster (a classic server with its stream port off, or one that never had one)
+is watched by way of a WATCHER (`games/shooters_edge/net/classic_watcher.hpp`, M57h): our classic
+client joined as a spectator, recording as a player's client recording does, its recording handed
+to a broadcast as it grows (`games/shooters_edge/client/recording_tv.hpp`: the recording's bytes in
+one-second zstd blocks on the `recording` track, the track `pack_demo` keeps a client recording on,
+so `unpack_demo` gives the recording back byte for byte). A TV node takes it as any stream. The
+first block is the only keyframe, so a late viewer is sent the match from its start, as the sequel's
+broadcast does. What a viewer gets is what one spectator was sent: the watcher follows the play as a
+spectator does and does not see the whole map, as a multiview recording would.
+
+`tests/shooters_edge_classic_watcher_test.cpp`: on the simulated network, a watcher on our classic
+server while a player runs, a viewer there from the start and one who joins half way, both given
+the watcher's whole recording, which reads to its end. The `se-watcher` lab does the same, and with
+`--server` joins a live classic server: against an open-source classic server with its stream port
+off, built beside the checkout, 25 s gave a 116 KB recording as a 37 KB broadcast, the late viewer
+sent 7 blocks to catch up, both viewers whole. That server refuses a second connection from the same
+address for a few seconds after the last attempt (`reconnect rejected: too soon`), so a watcher and
+a player on one machine join one after the other.
+
+The sequel's half (a watcher on an unmodified sequel server) waits on the sequel's network protocol
+(M18v9).
 
 ## Decisions
 
@@ -428,3 +479,4 @@ real clients (M18v9), so a hosted match broadcasts through TV from it.
 | The proxy's packing | XOR against the newest datagram the other end confirmed, zero runs counted: generic, a lost frame costs only itself | A stream compressor across frames (the classic "quality line"): smaller, but one loss damages what follows; the field codec on the link: needs the game's schema, a later face |
 | The sequel's late viewer | The match from its start (the broadcast keyframes once): small, and its frames need what came before | A keyframe that repeats the level's start: the frames after it are deltas against frames the viewer never had |
 | The browser viewer | The WebSocket downstream lands with TV (M57b), for the hub's web viewer (M56) | Later: the hub needs it first |
+| The sequel's route | Our sequel client dials the forward route before its challenge; nothing goes in the sequel's connect | A route in the sequel's userinfo or connect line: the sequel has no such field, and an unmodified server would have to ignore it |
