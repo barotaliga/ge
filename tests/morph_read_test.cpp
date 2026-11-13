@@ -65,6 +65,79 @@ TEST(sprite_round_trip_keeps_frames) {
   }
 }
 
+// The second family: skins named, not carried; a seam vertex is a second texture coordinate; every
+// frame packed to its own extent.
+TEST(second_family_model_round_trips_names_coordinates_and_frames) {
+  mo::Model in = mo::sample_model();
+  in.skins.clear();
+  in.skin_paths = {"models/items/sample/skin.pcx", "models/items/sample/skin2.pcx"};
+  in.skin_width = 16;
+  in.skin_height = 8;
+  const std::vector<uint8_t> bytes = mo::write_model2(in);
+  CHECK(bytes[0] == 'I' && bytes[3] == '2');
+  mo::Model out;
+  std::string error;
+  CHECK_MSG(mo::read_model(bytes, "sample.md2", &out, &error), error);
+  CHECK(out.skins.empty() && out.skin_paths == in.skin_paths);
+  CHECK(out.skin_width == 16 && out.skin_height == 8);
+  CHECK(out.indices.size() == in.indices.size() && out.vertex_count() == in.vertex_count());
+  for (size_t i = 0; i < in.indices.size(); i++) {
+    const uint32_t a = in.indices[i], b = out.indices[i];
+    CHECK(in.source_vertex[a] == out.source_vertex[b]);
+    // Coordinates are whole texels in the file: within half a texel.
+    CHECK(std::fabs(in.st[size_t{a} * 2] - out.st[size_t{b} * 2]) <= 0.5f / 16 + 1e-6f);
+    CHECK(std::fabs(in.st[size_t{a} * 2 + 1] - out.st[size_t{b} * 2 + 1]) <= 0.5f / 8 + 1e-6f);
+  }
+  CHECK(out.frames.size() == in.frames.size() && out.frames[2].name == "grow2");
+  for (size_t f = 0; f < out.frames.size(); f++) {
+    CHECK(out.frames[f].group == int(f) && out.frames[f].interval == 0.0f);
+    for (size_t i = 0; i < in.indices.size(); i++) {
+      for (size_t k = 0; k < 3; k++) {
+        const float a = in.frames[f].positions[size_t(in.indices[i]) * 3 + k];
+        const float b = out.frames[f].positions[size_t(out.indices[i]) * 3 + k];
+        CHECK(std::fabs(a - b) <= 0.5f * 48.0f / 255.0f + 1e-4f);
+      }
+      CHECK(out.frames[f].min[0] <= out.frames[f].max[0]);
+    }
+  }
+  // Every truncation is refused; so are a wrong version and a triangle past the vertices.
+  for (size_t n = 0; n < bytes.size(); n += 5) {
+    mo::Model m;
+    CHECK(!mo::read_model({bytes.data(), n}, "cut.md2", &m, &error));
+  }
+  CHECK(error.find("cut.md2") == 0);
+  std::vector<uint8_t> bad = bytes;
+  bad[4] = 9;
+  mo::Model m;
+  CHECK(!mo::read_model(bad, "v9.md2", &m, &error) && error.find("version 9") != std::string::npos);
+  bad = bytes;
+  const size_t at_tris = size_t(bad[52]) | size_t(bad[53]) << 8;  // the triangles' offset
+  bad[at_tris] = 99;
+  bad[at_tris + 1] = 0;
+  CHECK(!mo::read_model(bad, "tri.md2", &m, &error) &&
+        error.find("names vertex 99") != std::string::npos);
+}
+
+TEST(second_family_sprite_names_its_pictures) {
+  mo::Sprite in;
+  for (int i = 0; i < 2; i++) {
+    mo::SpriteFrame f;
+    f.width = 56;
+    f.height = 40 + i;
+    f.origin_x = -28;
+    f.origin_y = 20;
+    f.picture = "sprites/s_sample_" + std::to_string(i) + ".pcx";
+    in.frames.push_back(f);
+  }
+  mo::Sprite out;
+  std::string error;
+  CHECK_MSG(mo::read_sprite(mo::write_sprite2(in), "sample.sp2", &out, &error), error);
+  CHECK(out.frames.size() == 2 && out.facing == mo::Facing::parallel);
+  CHECK(out.max_width == 56 && out.max_height == 41);
+  CHECK(out.frames[1].picture == "sprites/s_sample_1.pcx" && out.frames[1].indices.empty());
+  CHECK(out.frames[0].origin_x == -28 && out.frames[0].origin_y == 20);
+}
+
 TEST(damage_is_refused_with_a_next_step) {
   const std::vector<uint8_t> model = mo::write_model(mo::sample_model());
   const std::vector<uint8_t> sprite = mo::write_sprite(mo::sample_sprite());
