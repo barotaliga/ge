@@ -295,6 +295,8 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
                 archive.rows.size(), static_cast<double>(archive.bytes) / 1e6);
   }
   if (accounts.open) http.accounts = &accounts.svc;  // the Account page works its store
+  HubSpec site_spec = spec;
+  site_spec.stats = accounts.open;  // the pages link the Leaders page
   if (!o.viewer.empty()) {
     http.viewer_dir = o.viewer;
     std::printf("%s_hub: viewer files from %s\n", spec.id.c_str(), o.viewer.c_str());
@@ -359,7 +361,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
         }
       }
     }
-    http_update(http, p, spec, now);
+    http_update(http, p, site_spec, now);
     if (now >= next_line) {
       std::printf(
           "%s_hub: %d servers, %d broadcasts, %zu nodes listed; %llu asks, %llu records, "

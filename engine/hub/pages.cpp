@@ -65,6 +65,7 @@ std::string nav(const HubSpec& spec, const char* on) {
   };
   return "<header><a class=\"brand\" href=\"/\">" + html_escape(spec.game) + "</a><nav>" +
          link("/", "Servers") + link("/players", "Players") + link("/demos", "Demos") +
+         (spec.stats ? link("/leaders", "Leaders") : std::string()) +
          (spec.map_files ? link("/play", "Play") : std::string()) + link("/v1", "API") +
          "</nav></header>\n";
 }
@@ -491,6 +492,14 @@ ul.also{list-style:none;padding:0;margin:0}ul.also li{margin:6px 0}
 ul.maps{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;list-style:none;
 padding:0}ul.maps a{display:block;padding:12px;border-radius:8px;background:var(--panel);
 text-decoration:none;font-weight:600}
+main.stats h3{margin:20px 0 8px}.tiles{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;
+min-width:96px;display:grid}.tile b{font-size:22px}.wide{overflow-x:auto}
+table.num{border-collapse:collapse;display:block;max-width:100%;overflow-x:auto}table.num td,table.num th{padding:5px 10px;
+text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}table.num td:first-child,
+table.num th:first-child{text-align:left}table.num th{color:var(--dim);font-weight:500}table.rank td:nth-child(2),
+table.rank th:nth-child(2){text-align:left}
+label.without{color:var(--dim);font-size:14px;align-self:center}.warn{color:var(--hot)}
 @media(max-width:700px){main.watch{grid-template-columns:1fr}}
 )css";
   return css;

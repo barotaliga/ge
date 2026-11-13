@@ -55,7 +55,7 @@ void add_column(std::map<std::string, int64_t>& to, const std::string& name, int
 }
 
 // The best score and the best team's name: who won.
-void add_totals(Matches& m, const net::MatchReport& r) {
+void add_totals(std::map<TotalsKey, Totals>& totals, const net::MatchReport& r) {
   int64_t best = 0;
   bool any = false;
   for (const net::ReportPlayer& p : r.players)
@@ -78,7 +78,7 @@ void add_totals(Matches& m, const net::MatchReport& r) {
   if (tied) best_team.clear();
   for (const net::ReportPlayer& p : r.players) {
     if (p.account == 0 || p.bot) continue;
-    Totals& t = m.totals[{p.account, r.game, r.mode, r.map, ping_band(p.ping_avg)}];
+    Totals& t = totals[{p.account, r.game, r.mode, r.map, ping_band(p.ping_avg)}];
     t.matches++;
     const bool won = r.teams.empty() ? p.score == best : !best_team.empty() && p.team == best_team;
     if (won) t.wins++;
@@ -101,7 +101,7 @@ Taken take(Matches& m, const net::Key& server, const net::MatchReport& r) {
   m.taken++;
   const bool counted = m.trusted.count(server) != 0;
   if (counted) {
-    add_totals(m, r);
+    add_totals(m.totals, r);
     m.counted++;
   }
   m.kept.push_back({server, counted, r});
@@ -154,31 +154,48 @@ bool matches_line(Matches& m, const std::string& line, std::string& error) {
   return true;
 }
 
-Totals totals_sum(const Matches& m, uint64_t account, const TotalsFilter& f) {
-  Totals sum;
+bool totals_keeps(const TotalsFilter& f, const TotalsKey& key) {
   const auto has = [](const std::vector<std::string>& v, const std::string& s) {
     return std::find(v.begin(), v.end(), s) != v.end();
   };
+  const auto& [id, game, mode, map, band] = key;
+  if (f.ping_under > 0 && (band >= kPingBandCount - 1 || kPingBands[band] > f.ping_under))
+    return false;
+  if (!f.game.empty() && game != f.game) return false;
+  if (!f.map.empty() && map != f.map) return false;
+  return !f.modes.empty() ? has(f.modes, mode) : !has(f.without, mode);
+}
+
+void totals_add(Totals& to, const Totals& t) {
+  to.matches += t.matches;
+  to.wins += t.wins;
+  to.score += t.score;
+  to.frags += t.frags;
+  to.deaths += t.deaths;
+  to.suicides += t.suicides;
+  to.team_kills += t.team_kills;
+  to.seconds += t.seconds;
+  for (const auto& [name, v] : t.columns) add_column(to.columns, name, v);
+}
+
+Totals totals_sum(const Matches& m, uint64_t account, const TotalsFilter& f) {
+  Totals sum;
   for (auto it = m.totals.lower_bound({account, "", "", "", 0});
-       it != m.totals.end() && std::get<0>(it->first) == account; ++it) {
-    const auto& [id, game, mode, map, band] = it->first;
-    if (f.ping_under > 0 && (band >= kPingBandCount - 1 || kPingBands[band] > f.ping_under))
-      continue;
-    if (!f.game.empty() && game != f.game) continue;
-    if (!f.map.empty() && map != f.map) continue;
-    if (!f.modes.empty() ? !has(f.modes, mode) : has(f.without, mode)) continue;
-    const Totals& t = it->second;
-    sum.matches += t.matches;
-    sum.wins += t.wins;
-    sum.score += t.score;
-    sum.frags += t.frags;
-    sum.deaths += t.deaths;
-    sum.suicides += t.suicides;
-    sum.team_kills += t.team_kills;
-    sum.seconds += t.seconds;
-    for (const auto& [name, v] : t.columns) add_column(sum.columns, name, v);
-  }
+       it != m.totals.end() && std::get<0>(it->first) == account; ++it)
+    if (totals_keeps(f, it->first)) totals_add(sum, it->second);
   return sum;
+}
+
+std::map<uint64_t, Totals> totals_by_account(const Matches& m, const TotalsFilter& f,
+                                             int64_t since_s) {
+  std::map<TotalsKey, Totals> recent;
+  if (since_s > 0)
+    for (const KeptMatch& k : m.kept)
+      if (k.counted && k.report.start_s >= since_s) add_totals(recent, k.report);
+  std::map<uint64_t, Totals> out;
+  for (const auto& [key, t] : since_s > 0 ? recent : m.totals)
+    if (totals_keeps(f, key)) totals_add(out[std::get<0>(key)], t);
+  return out;
 }
 
 }  // namespace ge::account
