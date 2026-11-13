@@ -32,6 +32,14 @@ float yaw_to(Vec3f from, Vec3f to) {
 // A wall: a plane neither floor nor ceiling.
 bool wall(const HullTrace& tr) { return tr.plane.normal.z < 0.7f && tr.plane.normal.z > -0.7f; }
 
+// Whether the floor under the player's box at `o` (traced down 400 units) is lava or slime.
+bool harm_under(const MoveWorld& world, Vec3f o) {
+  const HullTrace down = player_trace(world, o, {o.x, o.y, o.z - 400});
+  if (down.startsolid || down.fraction >= 1) return false;
+  const int c = water_contents(world, {down.endpos.x, down.endpos.y, down.endpos.z - 22});
+  return c == kContentsLava || c == kContentsSlime;
+}
+
 // The keys of `way` from `at` moving `v`, toward `aim`.
 WalkKeys way_keys(WalkWay way, Vec3f at, Vec3f v, Vec3f aim, float maxspeed) {
   WalkKeys k;
@@ -101,6 +109,7 @@ WalkSeen fly(const MoveWorld& world, MoveWorld* moving, int first, const WalkSta
     const MoveResult r = player_move(m, c, move, moving != nullptr ? *moving : world);
     const float lost = before - flat_speed(m.velocity);
     if ((r.blocked & (kBlockedStep | kBlockedOther)) != 0 && lost >= kWalkBump) out.bump += lost;
+    if (st.harm && !out.falls && m.ground < 0 && harm_under(world, m.origin)) out.falls = true;
     t += step;
   }
   out.nearer = d0 - flat_dist(m.origin, aim);
@@ -191,7 +200,19 @@ const char* walk_way_name(WalkWay way) {
   return kNames[static_cast<int>(way)];
 }
 
-const char* walk_way_because(WalkWay way) {
+const char* walk_way_because(WalkWay way, bool fall) {
+  if (fall) {
+    switch (way) {
+      case WalkWay::brake:
+        return "walking the route: braking into the turn, a fall into lava foreseen";
+      case WalkWay::near:
+        return "walking the route: the near node, a fall into lava foreseen";
+      case WalkWay::ease:
+        return "walking the route: easing off, a fall into lava foreseen";
+      default:
+        return "walking the route";
+    }
+  }
   switch (way) {
     case WalkWay::brake:
       return "walking the route: braking into the turn foreseen";
@@ -225,7 +246,17 @@ WalkWay foresee_walk(const MoveWorld& world, const WalkStart& st, Vec3f aim, Vec
     if (!box_free(world, a)) a = st.origin;
     const HullTrace tr = player_trace(
         world, a, {a.x + st.velocity.x * st.horizon, a.y + st.velocity.y * st.horizon, a.z});
-    if (near_others == 0 && (tr.fraction >= 1 || !wall(tr))) return WalkWay::pursue;
+    // (`harm`) and a box's width on, the floor under where it stops: lava or slime there is
+    // a fall to fly (a box stands on an edge until it is past it).
+    bool harm = false;
+    if (st.harm) {
+      const float speed = flat_speed(st.velocity);
+      const float run = st.horizon + 32 / speed;
+      const HullTrace on = player_trace(
+          world, a, {a.x + st.velocity.x * run, a.y + st.velocity.y * run, a.z});
+      harm = !on.startsolid && harm_under(world, on.endpos);
+    }
+    if (near_others == 0 && (tr.fraction >= 1 || !wall(tr)) && !harm) return WalkWay::pursue;
   }
   // The world with the players' boxes in it, when one is near (copied once for every flight).
   std::optional<MoveWorld> moving_world;
@@ -245,16 +276,20 @@ WalkWay foresee_walk(const MoveWorld& world, const WalkStart& st, Vec3f aim, Vec
     moving = &*moving_world;
   }
   seen[0] = fly(world, moving, world.count, start, WalkWay::pursue, aim);
-  if (seen[0].bump <= 0) return WalkWay::pursue;
+  if (seen[0].bump <= 0 && !seen[0].falls) return WalkWay::pursue;
   flown = true;
   int best = 0;
   for (int k = 1; k < kWalkWays; k++) {
     const auto way = static_cast<WalkWay>(k);
     seen[k] = fly(world, moving, world.count, start, way, way == WalkWay::near ? near : aim);
+    // A fall first (the worst), then a bump; among the clean the nearest the aim wins, among the
+    // others the least bumped.
     const bool clean = seen[k].bump <= 0, best_clean = seen[best].bump <= 0;
-    if (clean != best_clean
-            ? clean
-            : (clean ? seen[k].nearer > seen[best].nearer : seen[k].bump < seen[best].bump))
+    if (seen[k].falls != seen[best].falls
+            ? !seen[k].falls
+            : clean != best_clean
+                  ? clean
+                  : (clean ? seen[k].nearer > seen[best].nearer : seen[k].bump < seen[best].bump))
       best = k;
   }
   const auto chosen = static_cast<WalkWay>(best);
@@ -273,6 +308,7 @@ void record_walk(ai::Why* why, float speed, WalkWay way, const WalkSeen seen[kWa
                 static_cast<double>(seen[k].nearer - seen[k].bump));
     why->term("bump", static_cast<double>(seen[k].bump));
     why->term("nearer", static_cast<double>(seen[k].nearer));
+    if (seen[k].falls) why->bar("falls");
   }
   why->choose(walk_way_name(way), way == WalkWay::pursue
                                       ? "every way bumps: the pursuit's"

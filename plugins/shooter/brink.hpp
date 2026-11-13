@@ -32,6 +32,7 @@ bool over_harm(const Server& sv, Vec3f from, Vec3f to, int me);
 
 // What the guard found and did on one command.
 struct BrinkGuard {
+  bool ran = false;      // near a harm node: the guard looked
   int ways = 0;          // the ways round (of eight) into the pit
   bool run_in = false;   // the run itself heads into it within a quarter second
   bool changed = false;  // the keys were changed

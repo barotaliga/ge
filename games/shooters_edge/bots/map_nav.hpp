@@ -106,6 +106,7 @@ struct MapNav {
   int32_t main_n = 0;
   int64_t teleport_links = 0, closed_links = 0, harm_links = 0;
   int64_t brink_links = 0;  // walks and drops along a lip over lava or slime (`nav_mark_harm`)
+  int64_t side_brink_links = 0;  // walks and drops a side step off into it (`nav_mark_side_harm`)
   double build_ms = 0;      // wall time, never in a digest
 };
 

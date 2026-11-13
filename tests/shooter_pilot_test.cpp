@@ -295,6 +295,39 @@ TEST(the_walk_foreseen_flies_round_a_player_standing_on_its_line) {
                 " into the player: a way that bumps less was not chosen");
 }
 
+TEST(the_walk_foreseen_brakes_off_a_lava_edge_a_turn_would_slide_over) {
+  // A ledge (y 0 up, its top at z 0) over a pit of lava (y under 0, 150 down). Running south at
+  // 320 u/s 50 units from the edge, the hands still pressing south (the walk's turn not yet in
+  // them), the aim turned west along the edge: the pursuit's flight slides on over the edge into
+  // the lava. With the harm foreseen a way that does not fall is pressed (the brake); without it
+  // nothing is even flown (no wall ahead).
+  sh::Brush lava = FlipRoom::box({-512, -512, -200}, {512, 0, -150});
+  lava.contents = sh::kContentsLava;
+  FlipRoom room({FlipRoom::box({-512, 0, -256}, {512, 512, 0}),
+                 FlipRoom::box({-512, -512, -256}, {512, 0, -200}), lava},
+                {-512, -512, -256}, {512, 512, 256}, {0, 200, 24});
+  sh::WalkStart st;
+  st.origin = {0, 50, 24};
+  st.velocity = {0, -320, 0};
+  st.pressed = {-90, 1, 0};  // forward, south, while the hands catch up
+  st.delay = 0.1f;
+  st.horizon = 0.35f;
+  const sh::Vec3f aim{-400, 40, 24}, near{-100, 200, 24};
+  sh::WalkKeys keys;
+  sh::WalkSeen seen[sh::kWalkWays];
+  bool flown = true;
+  sh::WalkWay way = sh::foresee_walk(room.world, st, aim, near, keys, seen, flown);
+  CHECK_MSG(!flown && way == sh::WalkWay::pursue,
+            "with no harm looked for, a floor with no wall ahead was flown");
+  st.harm = true;
+  way = sh::foresee_walk(room.world, st, aim, near, keys, seen, flown);
+  CHECK_MSG(flown && seen[0].falls,
+            "the pursuit's flight was not seen to slide over the edge into the lava");
+  CHECK_MSG(way != sh::WalkWay::pursue && !seen[static_cast<int>(way)].falls,
+            std::string("the walk pressed ") + sh::walk_way_name(way) +
+                " over the edge: a way that does not fall was not chosen");
+}
+
 TEST(a_player_standing_on_the_way_is_walked_round_or_waited_for) {
   // A player standing 100 units along the walk's line on an open floor: the walk aims beside him
   // and just past him. In a corridor no wider than two boxes there is no room: it waits.

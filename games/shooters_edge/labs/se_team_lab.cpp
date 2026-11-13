@@ -513,15 +513,15 @@ const char* link_of(const sh::Pilot& p) {
   return "-";
 }
 
-// Whether that link walks a lip over lava or slime (`NavLink::brink`): the trace's link with "!".
-bool link_brink(const sh::Pilot& p) {
-  if (p.g == nullptr || p.k + 1 >= p.route.size()) return false;
+// The link walked: '!' along a lip (`brink`), '?' a side step off into the harm (`brink_side`).
+char link_brink(const sh::Pilot& p) {
+  if (p.g == nullptr || p.k + 1 >= p.route.size()) return 0;
   const sh::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
   for (int32_t q = 0; q < a.links; q++) {
     const sh::NavLink& l = p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
-    if (l.to == p.route[p.k + 1]) return l.brink;
+    if (l.to == p.route[p.k + 1]) return l.brink ? '!' : l.brink_side ? '?' : 0;
   }
-  return false;
+  return 0;
 }
 
 // The kind of the link after the current one (`end`: the next node is the route's last).
@@ -753,7 +753,7 @@ void run(gl::Lab& lab) {
              "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
              "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
              "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
-             "\twater\tliquid\n";
+             "\twater\tliquid\tbrink\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -945,7 +945,7 @@ void run(gl::Lab& lab) {
         << to_fixed(sp, 0) << '\t' << to_fixed(e.health, 0) << '\t'
         << shooters_edge::bots::fight_mode_name(f.mode) << '\t' << goal << '\t' << f.goal_node
         << '\t' << (f.unlocking ? 1 : 0) << '\t' << sh::pilot_mode_name(p.mode) << '\t' << link
-        << (link_brink(p) ? "!" : "") << '\t' << p.script_step << '\t' << p.because << '\t'
+        << (link_brink(p) != 0 ? std::string(1, link_brink(p)) : std::string()) << '\t' << p.script_step << '\t' << p.because << '\t'
         << to_fixed(cmd.angles.y, 2) << '\t' << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by
         << '\t' << cmd.forward << '\t' << cmd.side << '\t' << to_fixed(e.velocity.x, 0) << '\t'
         << to_fixed(e.velocity.y, 0) << '\t' << to_fixed(f.bot.walk_yaw, 1) << '\t'
@@ -1027,7 +1027,7 @@ void run(gl::Lab& lab) {
     // (the map's contents a little above the feet: the server keeps no liquid's kind for a player)
     const int liquid =
         e.waterlevel > 0 ? sh::world_contents(w.sv, {e.origin.x, e.origin.y, e.origin.z - 23}) : 0;
-    out << '\t' << e.waterlevel << '\t' << liquid << '\n';
+    out << '\t' << e.waterlevel << '\t' << liquid << '\t' << f.brink_note << '\n';
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
@@ -1841,6 +1841,8 @@ void run(gl::Lab& lab) {
     if (n > 0) lab.metric("team.round-trip-ms", 1000 * lag / static_cast<double>(n), "ms");
   }
   lab.metric("team.nav-build-ms", r.nav_build_ms, "ms", gl::Det::measured);
+  lab.metric("team.nav-brink-links", static_cast<double>(r.nav_brink_links), "links");
+  lab.metric("team.nav-side-brink-links", static_cast<double>(r.nav_side_brink_links), "links");
   lab.metric("team.mvd-bytes", static_cast<double>(r.mvd.size()), "bytes");
   for (int key = 0; key < static_cast<int>(r.item_at.size()); key++) {
     if (key != r.hold_item && key != r.quad_item && lab.arg("items") != "all") continue;
