@@ -29,7 +29,8 @@
 //   protocol 34 recording comes back byte for byte.
 //
 // ge:summary Demo formats converted as they are read: a stream of source bytes in, target out
-// ge:keywords demo-convert convert conversion transcode dem mvd qwd dm2 stream on-the-fly tv
+// ge:keywords demo-convert convert conversion transcode dem mvd client-recording dm2
+// ge:keywords stream on-the-fly tv
 // ge:keywords convert_begin convert_feed convert_take convert_end convert-notes dropped
 // ge:keywords single-to-multiview format-name
 // ge:skill shooter replay
@@ -50,7 +51,7 @@ namespace shooters_edge::client {
 struct ConvertOptions {
   // The game folder the target's server data names (the multiplayer formats'): the folder a
   // player's client opens the recording's files from.
-  std::string game = "qw";
+  std::string game = "id1";
   // Leave out the target's end (its disconnect): a broadcast that loops a recording starts it
   // again rather than ending it.
   bool no_end = false;
@@ -104,8 +105,8 @@ bool convert_take(DemoConvert& c, std::vector<uint8_t>& out, std::string& error)
 bool convert_demo(std::vector<uint8_t> bytes, DemoFormat to, const ConvertOptions& options,
                   std::vector<uint8_t>& out, ConvertNotes& notes, std::string& error);
 
-// The format a file's name asks for (`.dem` single, `.qwd` client, `.mvd` multiview, `.dm2`
-// sequel; a packed name's `z` and a `.gz` taken off first). False when it names none.
+// The format a file's name asks for (`.dem` single, the client recording's, `.mvd` multiview,
+// `.dm2` sequel; a packed name's `z` and a `.gz` taken off first). False when it names none.
 bool format_of_name(const std::string& path, DemoFormat& out);
 // The format's name for a player: "single-player demo (.dem)", ...
 std::string format_words(DemoFormat f);

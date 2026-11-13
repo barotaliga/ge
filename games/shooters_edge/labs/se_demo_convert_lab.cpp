@@ -12,7 +12,7 @@
 // and rewritten) and the eye's height on both sides over the frames of the first recording.
 // Everything is deterministic.
 //
-// ge:summary Lab: demos converted to another format and read back frame for frame against the source
+// ge:summary Lab: demos converted to another format, read back frame for frame against the source
 // ge:keywords lab se-demo-convert demo-convert dem mvd dm2 protocol-26 frame-for-frame eye stats
 // ge:skill shooter labs
 // ge:test tests/shooters_edge_demo_convert_test.cpp

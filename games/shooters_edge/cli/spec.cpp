@@ -342,7 +342,9 @@ int cmd_demos_convert(gc::Ctx& ctx) {
   client::DemoFormat to{};
   if (!client::format_of_name(out.string(), to))
     return gc::refuse(ctx, 2, out.filename().string() + " names no recording format",
-                      "end the name in .dem, .qwd, .mvd or .dm2 (a z after it packs it)");
+                      "end the name in .dem, " +
+                          client::plain_extension(client::DemoFormat::client) +
+                          ", .mvd or .dm2 (a z after it packs it)");
   if (fs::exists(out))
     return gc::refuse(ctx, 1, out.string() + " is already there",
                       "delete or rename it, then convert again");

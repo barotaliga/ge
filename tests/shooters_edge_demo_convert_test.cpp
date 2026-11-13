@@ -17,6 +17,7 @@
 #include "check.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_convert.hpp"
+#include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/client/sequel_demo.hpp"
 
@@ -265,7 +266,8 @@ TEST(a_multiview_recording_opening_with_a_print_reads) {
 TEST(a_files_format_is_told_by_its_name) {
   cl::DemoFormat f{};
   CHECK(cl::format_of_name("demos/a.dem", f) && f == cl::DemoFormat::single);
-  CHECK(cl::format_of_name("A.QWD", f) && f == cl::DemoFormat::client);
+  CHECK(cl::format_of_name("A" + cl::plain_extension(cl::DemoFormat::client), f) &&
+        f == cl::DemoFormat::client);
   CHECK(cl::format_of_name("m.mvdz", f) && f == cl::DemoFormat::multiview);
   CHECK(cl::format_of_name("m.mvd.gz", f) && f == cl::DemoFormat::multiview);
   CHECK(cl::format_of_name("x.dm2", f) && f == cl::DemoFormat::sequel);

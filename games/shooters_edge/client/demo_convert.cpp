@@ -11,6 +11,8 @@
 #include <cctype>
 #include <utility>
 
+#include "shooters_edge/client/demo_pack.hpp"
+
 namespace shooters_edge::client {
 
 bool convert_supported(DemoFormat from, DemoFormat to) {
@@ -23,7 +25,7 @@ std::string format_words(DemoFormat f) {
     case DemoFormat::single:
       return "single-player demo (.dem)";
     case DemoFormat::client:
-      return "client recording (.qwd)";
+      return "client recording (" + plain_extension(DemoFormat::client) + ")";
     case DemoFormat::multiview:
       return "multiview recording (.mvd)";
     case DemoFormat::sequel:
@@ -99,7 +101,7 @@ bool format_of_name(const std::string& path, DemoFormat& out) {
   if (ext.size() == 4 && ext.back() == 'z') ext.pop_back();  // a packed name: .mvdz
   if (ext == "dem")
     out = DemoFormat::single;
-  else if (ext == "qwd")
+  else if ("." + ext == plain_extension(DemoFormat::client))
     out = DemoFormat::client;
   else if (ext == "mvd")
     out = DemoFormat::multiview;
