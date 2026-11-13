@@ -215,7 +215,7 @@ browser's own GPU.
   protocol, modes and their weights, the score's column) and the interest rule. `api.hpp` answers
   `/v1`, `/v1/servers` (filters `mode`, `min_players`, `has_players`, `kind`), `/v1/servers/{address}`,
   `/v1/servers/{address}/events`, `/v1/streams`, `/v1/nodes` and `/v1/masters` as JSON, a pure
-  function of the index. `http.hpp` carries it: HTTP/1.1 GET and HEAD, CORS open, the cache time
+  function of the index. `http.hpp` carries it: HTTP/1.1 GET and HEAD (and POST to the Account page's `/account/...` alone, a form of at most 2 KB), CORS open, the cache time
   of the busy period, server-sent events for one node's record with a comment line every 15 s.
   `main.hpp` is the process (`ge_add_hub`, cmake/Hub.cmake); `--serve-master` runs the master in
   the same process, so one binary is a community's whole service. Shooter's Edge's is

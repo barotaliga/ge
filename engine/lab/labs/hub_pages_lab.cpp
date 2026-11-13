@@ -2,7 +2,8 @@
 // them. An index of a busy evening (a full team match with its teams and a broadcast, a duel, a
 // capture match, a public deathmatch half bots, a server of bots alone, a match on its score
 // screen, empty servers and a TV node) is written as the Servers page, the Players page, a filtered
-// page, one scoreboard overlay and the broadcast's Watch page; their HTML is attached and hashed.
+// page, one scoreboard overlay and the broadcast's Watch page, then the Account page (its forms
+// over HTTPS and over plain HTTP, and a login code made); their HTML is attached and hashed.
 // When a headless Chromium is on the machine (GE_CHROMIUM, or the container's
 // /opt/pw-browsers/chromium), each page is drawn at a desktop's and a phone's width and shown:
 // those pictures are the browser's, so they are measured, never hashed. It answers whether the
@@ -11,6 +12,7 @@
 //
 // ge:summary Lab: the hub's HTML pages written from a sample index and drawn by headless Chromium
 // ge:keywords lab hub pages html browser chromium screenshot phone desktop cards overlay
+// ge:keywords account-page
 // ge:skill net labs
 // ge:test tests/hub_pages_test.cpp
 #include <cstdint>
@@ -22,6 +24,8 @@
 #include <string>
 #include <vector>
 
+#include "account/service.hpp"
+#include "hub/account_page.hpp"
 #include "hub/pages.hpp"
 #include "hub/poller.hpp"
 #include "hub/spec.hpp"
@@ -160,6 +164,44 @@ void run(gl::Lab& lab) {
   gh::watch_answer(index, spec, gh::watch_path(index.nodes[0].status.streams[0].node, 1), now, {},
                    watch);
   const std::string& watch_html = watch.body;
+  // The Account page (M59b3): its forms over HTTPS and over plain HTTP, and a code made.
+  ge::net::Transport unused;
+  ge::account::Service accounts;
+  uint64_t fresh_n = 1;  // the fresh bytes' counter: each run starts it again, so it digests alike
+  {
+    ge::account::Store store;
+    ge::account::store_init(store, ge::account::HashCost{8, 1});
+    ge::account::ServiceConfig c;
+    c.seed.fill(5);
+    ge::account::service_init(
+        accounts, c, std::move(store), unused,
+        [](void* ctx, uint8_t* out, size_t size) {
+          auto* n = static_cast<uint64_t*>(ctx);
+          for (size_t i = 0; i < size; i++) out[i] = static_cast<uint8_t>(*n * 37 + i * 11);
+          (*n)++;
+        },
+        &fresh_n);
+  }
+  const int64_t kUnix = 1794500000ll * 1000000;
+  gh::Answer account_forms, account_plain, account_code;
+  gh::account_answer(spec, &accounts, {"GET", "/account", "", true, "a", kUnix}, account_forms);
+  gh::account_answer(spec, &accounts, {"GET", "/account", "", false, "a", kUnix}, account_plain);
+  gh::Answer made;
+  gh::account_answer(spec, &accounts,
+                     {"POST", "/account/signup",
+                      "name=Ranger&password=long+enough&again=long+enough", true, "a", kUnix},
+                     made);
+  gh::account_answer(
+      spec, &accounts,
+      {"POST", "/account/code", "name=ranger&password=long+enough", true, "a", kUnix},
+      account_code);
+  lab.attach("account.html", bytes(account_forms.body));
+  lab.attach("account-code.html", bytes(account_code.body));
+  if (made.code != 200 || account_code.code != 200 ||
+      account_code.body.find("<code>login Ranger ") == std::string::npos) {
+    lab.fail("the Account page did not sign up and make a code",
+             "next: hub/account_page.cpp; skill: net");
+  }
   lab.attach("servers.html", bytes(servers));
   lab.attach("players.html", bytes(players));
   lab.attach("servers-ffa.html", bytes(ffa));
@@ -234,6 +276,17 @@ void run(gl::Lab& lab) {
        "scoreboard and the other broadcasts beside it.",
        "the frame at 16:9 with its words centred, the scoreboard to the right, Open in the game "
        "below with 23 watching and 30 s behind."},
+      {"account", "THE ACCOUNT PAGE OVER HTTPS", &account_forms.body, 1280, 1100, true,
+       "GET /account on a hub run with --accounts, reached over HTTPS: sign up, a login code for "
+       "a classic client, and a new password by the recovery code.",
+       "three short forms, one under another, each with a line on what it is for."},
+      {"account-plain", "THE ACCOUNT PAGE OVER PLAIN HTTP, ON A PHONE", &account_plain.body, 390,
+       1500, false,
+       "The same page reached over plain HTTP: it never asks for a password in the clear.",
+       "the warning in amber above, every field and button dimmed and disabled."},
+      {"account-code", "A LOGIN CODE MADE", &account_code.body, 1280, 520, true,
+       "POST /account/code: the code a classic client's console takes, and the line to type.",
+       "the code large, 'login Ranger <code>' below it, good once within 15 minutes."},
   };
   int drawn = 0;
   for (const View& v : views) {
@@ -247,7 +300,7 @@ void run(gl::Lab& lab) {
     lab.shot({v.id, v.title, v.what, v.look, {{"width", std::to_string(v.w)}}}, *pic,
              gl::Det::measured);
   }
-  lab.metric("pages_drawn", drawn, "of 6", gl::Det::measured);
+  lab.metric("pages_drawn", drawn, "of 9", gl::Det::measured);
   fs::remove_all(dir, ec);
 }
 

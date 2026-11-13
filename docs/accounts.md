@@ -238,7 +238,7 @@ their recent-stats answer into the same record, best effort and without accounts
 | Player | An account: totals per game and mode, the game's columns, the recent matches with their demos |
 | Match | One report: the scoreboard, each player's columns, the demo |
 | Leaders | Per game, mode and column, over a period |
-| Account | Sign up, sign in, a one-time code, the recovery code, delete. Plain HTML forms, no script; the only pages that take input, so the hub must sit behind the operator's TLS proxy for them, and says so on the page when it is reached without TLS |
+| Account | `/account`, on a hub run with `--accounts` (`engine/hub/account_page.hpp`): sign up (the recovery code shown once), a one-time login code with the line a classic client types, a new password by the recovery code. Plain HTML forms posted to `/account/...`, no script, no cookie, every answer `no-store`. A password is taken only over HTTPS (the operator's proxy says so with `X-Forwarded-Proto: https`) or from the hub's own machine; otherwise the forms are shown disabled and a post is refused. The throttle counts by the proxy's `X-Forwarded-For` |
 
 The JSON API: `/v1/players/{name}`, `/v1/matches?game=&mode=&player=&page=`, `/v1/matches/{id}`,
 `/v1/leaders?game=&mode=&stat=&days=`. The hub's line that it has no accounts and no login
@@ -251,7 +251,7 @@ The JSON API: `/v1/players/{name}`, `/v1/matches?game=&mode=&player=&page=`, `/v
 | M59a | `engine/account`: the store, names and folding per game, Argon2id, the throttle, codes, the log and its snapshot | `accounts` |
 | M59b | The account service in the master's process: sign up, sign in, tickets, the server's login ask, over the sealed channel (built) | `accounts` |
 | M59b2 | The game CLI's `account` group (built) | `accounts` |
-| M59b3 | The hub's Account page | `accounts` |
+| M59b3 | The hub's Account page (built) | `hub-pages` |
 | M59c | The login seam in `engine/server`, the settings above, our client's ticket; the first classic game's prompt and `login` line | `se-login` |
 | M59d | The sequel's prompt and `login` line, one account logged in on both games' servers | `se-login` |
 | M59e | The match report, the replay file's closing summary, the master's totals, trusted servers | `match-report` |
