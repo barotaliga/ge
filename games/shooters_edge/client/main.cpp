@@ -1531,6 +1531,9 @@ int run_main(int argc, char** argv) {
       bench_fx_state.models = &cl::world_models(*world);
       bench_fx_state.on = cl::fx_switches(picture);
       cl::demo_fx_step(ds, bench_demo_fx, bench_map.get(), view, bench_fx_state, t, wall, bench_fx);
+      // See-through liquids on a joined server where its `watervis` allows them; a demo played
+      // back always may.
+      bench_fx.see_through = !drawn_remote || shooters_edge::look::watervis_allowed(ds.serverinfo);
       // The quick weapon's preview held in place of the game's weapon (quick_fire.hpp).
       in_hand.show = drawn_remote ? cl::quick_show(controls.quick, cl::demo_status(ds, t), t) : -1;
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
@@ -1658,6 +1661,9 @@ int run_main(int argc, char** argv) {
     fx_state.book = &fx_book;
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
+    // See-through liquids where the server allows them (its `watervis`).
+    fx.see_through = listen.server == nullptr ||
+                     shooters_edge::look::watervis_allowed(listen.server->serverinfo);
     view_settings.lerp = picture.lerp_models;  // r_lerpmodels: the held weapon's frames too
     // The quick weapon's preview held in place of the game's weapon (quick_fire.hpp).
     in_hand.show =

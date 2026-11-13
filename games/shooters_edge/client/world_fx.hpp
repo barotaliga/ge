@@ -232,6 +232,8 @@ struct FxState {
 
 // One frame's effects for the world pass.
 struct FxFrame {
+  // Whether the server allows see-through liquids (look.hpp's `watervis_allowed`; a demo always).
+  bool see_through = true;
   effects::Particles births;
   std::vector<effects::Light> lights;
   double blend[4] = {0, 0, 0, 0};  // the screen's: sRGB colour and share
