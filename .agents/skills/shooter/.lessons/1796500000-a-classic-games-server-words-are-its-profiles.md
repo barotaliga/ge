@@ -1,7 +1,7 @@
 ---
 title: A classic game's server words are its profile's table, said through `words`
 date: 2026-11-05
-scope: games/shooters_edge/profiles/words.hpp, games/shooters_edge/server/words.hpp, games/shooters_edge/server/announce.hpp, games/shooters_edge/qc/arena/glue.qc
+scope: games/shooters_edge/profiles/words.hpp, games/shooters_edge/server/words.hpp, games/shooters_edge/server/announce.hpp, games/shooters_edge/rules/arena_glue.cpp
 concepts: [classic-words, obituary, countdown, words-builtin, localinfo, redtext, gold-digits, lobby]
 ---
 

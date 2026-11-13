@@ -35,6 +35,7 @@ void open_live(client::Demo& d) {
 }
 
 void start(Remote& r, const ClientConfig& cfg) {
+  r.kept = false;
   ClientConfig c = cfg;
   c.brain = [&r](int) {
     sh::MoveCmd m = r.hands;
@@ -418,8 +419,9 @@ RemoteStep watch_step(Remote& r, std::vector<std::string>& said) {
     return RemoteStep::dropped;
   }
   if (!any || d.state.map.empty()) return RemoteStep::waiting;
-  if (d.state.levels != r.levels) {
+  if (d.state.levels != r.levels || (r.kept && r.end.begun)) {
     r.levels = d.state.levels;
+    if (r.end.begun) r.kept = false;  // what was fetched joining is read with the level
     return RemoteStep::new_level;
   }
   return RemoteStep::frame;
@@ -582,8 +584,9 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   }
   lerp_entities(r, draw_s);
   if (!any || d.state.map.empty()) return RemoteStep::waiting;
-  if (d.state.levels != r.levels) {
+  if (d.state.levels != r.levels || (r.kept && r.end.begun)) {
     r.levels = d.state.levels;
+    if (r.end.begun) r.kept = false;  // what was fetched joining is read with the level
     return RemoteStep::new_level;
   }
   return RemoteStep::frame;
@@ -629,6 +632,16 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
       return v != nullptr && !v->value.empty() ? v->value : fallback;
     };
     cfg.name = cvar("name", "player");
+    cfg.skin = cvar("skin", "base");
+    cfg.model = cvar("model", "");
+    cfg.fetch_looks = cvar("noskins", "0") == "0";  // 1: none drawn; 2: none fetched
+    cfg.fetch_lit = cvar("r_loadlit", "1") != "0";
+    cfg.fetch_locs = cvar("tp_loadlocs", "1") != "0";
+    cfg.keep_file = [&r](const std::string& gamedir, const std::string& path,
+                         const std::vector<uint8_t>& bytes) {
+      if (r.keep_file) r.keep_file(gamedir, path, bytes);
+      r.kept = true;
+    };
     cfg.topcolor = std::atoi(cvar("topcolor", "0").c_str());
     cfg.bottomcolor = std::atoi(cvar("bottomcolor", "0").c_str());
     cfg.speedjump = cvar("cl_speedjump", "0") == "1";
@@ -709,6 +722,16 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   r.voip_key = &con.add_button(
       "voip",
       "+voip: talk while held, to those the server sends a voice to by default (your team)");
+  con.add_command("serverskins",
+                  "serverskins: the skins and player models the server joined offers, and "
+                  "whether it lets you download them",
+                  [&r](Con& c, const Args&) {
+                    if (!r.active) {
+                      c.print("serverskins: not connected");
+                      return;
+                    }
+                    client_command(r.end, "listskins");
+                  });
   con.add_command(
       "netstatus", "netstatus: the server joined, its stage and the traffic",
       [&r](Con& c, const Args&) {

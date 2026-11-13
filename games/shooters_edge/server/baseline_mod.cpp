@@ -1,30 +1,21 @@
-// The baseline mod compiled from its sources, and the arena's entity text for it.
+// The baseline mod (the arena's rules in C++) as a progs, and the arena's entity text for it.
 //
-// ge:summary The baseline QC deathmatch mod compiled from source, and its arena's entity text
-// ge:keywords baseline-mod compile_baseline_mod entity-text
+// ge:summary The baseline deathmatch mod built from the arena's rules in C++, and its entity text
+// ge:keywords baseline-mod baseline_mod entity-text native-arena
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_baseline_mod_test.cpp
 #include "shooters_edge/server/baseline_mod.hpp"
 
-#include "progs/qc_compile.hpp"
+#include "progs/native.hpp"
+#include "shooters_edge/rules/arena.hpp"
 
 namespace shooters_edge::server {
 
-bool compile_baseline_mod(const std::filesystem::path& root, ge::progs::Progs& out,
-                          std::string& error) {
-  const std::filesystem::path src = root / kBaselineSource;
-  ge::progs::QcProject project = ge::progs::compile_project(src);
-  if (!project.result.ok) {
-    error = "compile_baseline_mod: " + src.generic_string() + " did not compile:";
-    for (const ge::progs::QcDiagnostic& d : project.result.diagnostics) {
-      if (d.error) error += " " + ge::progs::diagnostic_text(d) + ";";
-    }
-    error += " The game is built wrong: its baseline mod (" + std::string(kBaselineSource) +
-             ") does not compile.";
-    return false;
-  }
-  out = std::move(project.result.progs);
-  return true;
+bool baseline_mod(ge::progs::Progs& out, std::string& error) {
+  ge::progs::NativeOffsets offsets;
+  if (ge::progs::build_native_progs(native_arena(), out, offsets, error)) return true;
+  error = "the baseline mod: " + error + "; the game is built wrong (games/shooters_edge/rules)";
+  return false;
 }
 
 // The arena (games/shooters_edge/sim/arena.hpp): the west room x -512..128, the east room

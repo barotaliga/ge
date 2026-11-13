@@ -12,6 +12,7 @@
 #include "core/json_write.hpp"
 #include "hub/account_page.hpp"
 #include "hub/pages.hpp"
+#include "hub/stats_page.hpp"
 
 namespace ge::hub {
 
@@ -274,6 +275,9 @@ void http_update(HttpServer& s, const Poller& p, const HubSpec& spec, int64_t no
         s.stats.errors++;
         send(c, http_error(405, "the hub answers GET and HEAD, and POST to /account only",
                            "send a GET"));
+      } else if (Answer st; stats_answer(spec, s.accounts, req.target, s.unix_s, st)) {
+        s.stats.answered++;
+        send(c, http_response(st, req.method == "HEAD"));
       } else {
         const Answer a = hub_answer(p, spec, req.target, now_us,
                                     Site{s.archive, s.unix_s, req.host, s.viewer_dir, req.gzip});

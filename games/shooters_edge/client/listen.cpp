@@ -19,7 +19,6 @@
 
 #include "core/num.hpp"
 #include "progs/layout.hpp"
-#include "progs/qc_compile.hpp"
 #include "progs/vm.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/server/announce.hpp"
@@ -30,31 +29,6 @@
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
-
-// The baseline mod's sources, built into the game (CMakeLists.txt: ge_embed_binary), in the
-// order its project file compiles them.
-extern const unsigned char se_qc_arena_engine[];
-extern const std::size_t se_qc_arena_engine_size;
-extern const unsigned char se_qc_common_defs[];
-extern const std::size_t se_qc_common_defs_size;
-extern const unsigned char se_qc_arena_glue[];
-extern const std::size_t se_qc_arena_glue_size;
-extern const unsigned char se_qc_common_util[];
-extern const std::size_t se_qc_common_util_size;
-extern const unsigned char se_qc_common_combat[];
-extern const std::size_t se_qc_common_combat_size;
-extern const unsigned char se_qc_common_weapons[];
-extern const std::size_t se_qc_common_weapons_size;
-extern const unsigned char se_qc_common_items[];
-extern const std::size_t se_qc_common_items_size;
-extern const unsigned char se_qc_common_dmm4[];
-extern const std::size_t se_qc_common_dmm4_size;
-extern const unsigned char se_qc_common_player[];
-extern const std::size_t se_qc_common_player_size;
-extern const unsigned char se_qc_common_map[];
-extern const std::size_t se_qc_common_map_size;
-extern const unsigned char se_qc_arena_world[];
-extern const std::size_t se_qc_arena_world_size;
 
 namespace shooters_edge::client {
 
@@ -179,15 +153,6 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   e.way = {ev.values[0], ev.values[1], ev.values[2]};
   e.count = std::min(count, 64);
   l.effects.push_back(std::move(e));
-}
-
-pg::QcSource source(const char* name, const unsigned char* bytes, std::size_t size) {
-  pg::QcSource s;
-  s.name = name;
-  s.text.reserve(size);
-  for (std::size_t i = 0; i < size; i++)
-    if (bytes[i] != '\r') s.text.push_back(static_cast<char>(bytes[i]));  // a Windows checkout
-  return s;
 }
 
 // The program's own state behind the rules (the reads the rules' world does not carry yet: a
@@ -644,30 +609,7 @@ void open_door(Listen& l) {
 
 }  // namespace
 
-bool baseline_progs(pg::Progs& out, std::string& error) {
-  const pg::QcSource sources[] = {
-      source("engine.qc", se_qc_arena_engine, se_qc_arena_engine_size),
-      source("../common/defs.qc", se_qc_common_defs, se_qc_common_defs_size),
-      source("glue.qc", se_qc_arena_glue, se_qc_arena_glue_size),
-      source("../common/util.qc", se_qc_common_util, se_qc_common_util_size),
-      source("../common/combat.qc", se_qc_common_combat, se_qc_common_combat_size),
-      source("../common/weapons.qc", se_qc_common_weapons, se_qc_common_weapons_size),
-      source("../common/items.qc", se_qc_common_items, se_qc_common_items_size),
-      source("../common/dmm4.qc", se_qc_common_dmm4, se_qc_common_dmm4_size),
-      source("../common/player.qc", se_qc_common_player, se_qc_common_player_size),
-      source("../common/map.qc", se_qc_common_map, se_qc_common_map_size),
-      source("world.qc", se_qc_arena_world, se_qc_arena_world_size),
-  };
-  pg::QcResult r = pg::compile_qc(sources);
-  if (!r.ok) {
-    error = "the baseline mod did not compile:";
-    for (const pg::QcDiagnostic& d : r.diagnostics) error += "\n  " + pg::diagnostic_text(d);
-    error += "\nThe game is built wrong: its mod's source has errors at the lines named.";
-    return false;
-  }
-  out = std::move(r.progs);
-  return true;
-}
+bool baseline_progs(pg::Progs& out, std::string& error) { return sv::baseline_mod(out, error); }
 
 std::unique_ptr<LoadedMap> map_from_bytes(std::span<const uint8_t> bytes, const std::string& name,
                                           std::string& error) {

@@ -132,9 +132,6 @@ struct QcServerOptions {
   // The release's words by key (progs/localized.hpp): a program's `$key` prints, centre prints and
   // written strings leave the server as their words. Null: they leave as the program wrote them.
   std::shared_ptr<const pg::LocalizedText> localized;
-  // A native program's functions (progs/native.hpp) when the progs was built from one; it must
-  // outlive the server. Null: the progs is bytecode.
-  const pg::NativeOffsets* natives = nullptr;
 };
 
 struct QcServer : RulesCommon {

@@ -180,20 +180,18 @@ std::string_view letter_word(const ClassicArt& art, std::string_view id) {
 // `text` in the art's cut letters, its line's top left at (x, y), classic px.
 void set_letters(const ClassicPen& pen, std::string_view text, float x, float y) {
   const ClassicArt& art = pen.art;
-  for (const char c : text) {
-    if (c == ' ') {
-      x += 6;
-      continue;
-    }
-    const ui::Image& img = art.letters.at(c);
+  std::vector<float> xs;
+  carved_layout(art, text, &xs);
+  for (size_t i = 0; i < text.size(); i++) {
+    if (text[i] == ' ') continue;
+    const ui::Image& img = art.letters.at(text[i]);
     ui::Box b;
-    b.rect = pen.at(x, y, art.width_of(img), kCarvedLine);
+    b.rect = pen.at(x + xs[i], y, art.width_of(img), kCarvedLine);
     b.image = &img;
     b.uv = {0, 0, static_cast<float>(img.width), static_cast<float>(img.height)};
     b.nearest = art.density <= 1;
     b.feather = 0;
     pen.dl.box(b);
-    x += art.width_of(img) + 1;
   }
 }
 
@@ -544,8 +542,12 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
         const bool last = band + 1 == static_cast<int>(pa->rows.size());
         const float from = kBand * static_cast<float>(band);
         const float tall = last ? std::max(kBand, art.height_of(*strip) - from) : kBand;
+        // The strips' first band holds its words a pixel higher than every other band (measured:
+        // its small capitals on rows 2 to 14, the others' on 3 to 15), so it is set a pixel lower
+        // and every row's letters stand on the same line.
+        const float drop = band == 0 ? l.scale : 0;
         ui::Box b;
-        b.rect = {r.x, r.y, r.w, tall * l.scale};
+        b.rect = {r.x, r.y + drop, r.w, tall * l.scale};
         b.image = strip;
         b.uv = {0, from * d, static_cast<float>(strip->width), tall * d};
         b.nearest = art.density <= 1;

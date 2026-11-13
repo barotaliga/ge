@@ -156,6 +156,13 @@ struct Remote {
   // checksum and the model checks a server asks for); unset, they are sent as 0 and unsent.
   std::function<std::vector<uint8_t>(const std::string& gamedir, const std::string& path)>
       read_file;
+  // A skin or player figure fetched while joining (ClientConfig::keep_file): the window keeps it in
+  // the game's folder. `kept`: one was, so once the game is begun the level is read again
+  // (RemoteStep::new_level) and the players are drawn in what was fetched.
+  std::function<void(const std::string& gamedir, const std::string& path,
+                     const std::vector<uint8_t>& bytes)>
+      keep_file;
+  bool kept = false;
   gn::Address server;
   bool active = false;
   ClientStage said = ClientStage::challenge;  // the stage last reported

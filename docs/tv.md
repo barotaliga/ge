@@ -493,6 +493,64 @@ unmodified client of the sequel was measured black-box on the full game's q2dm1:
 It also runs the relay end to end, with the viewer 8 to 30 frames behind the watcher at a 1 s
 delay.
 
+### A recording as the source
+
+`shooters_edge_hops sequel-tv --demo=<file.dm2> --port=27911` serves a recording to viewers in place
+of a live server (`net/sequel_tv_demo.hpp`). It feeds the recording's blocks to the same face at
+the game's pace: a block that holds a frame is 100 ms. At the end the recording starts again. Each
+time round, the server data's count goes up by one, and the face tells every viewer the level
+changed (`changing`, then `reconnect`, as a server does). A client keeps its loading picture up
+until it signs on with a count it has not seen. The recording must be protocol 34. The full game's
+own `demos/*.dm2` are from an older protocol, and an unmodified client refuses them.
+
+Measured black-box: an unmodified client watched a 30 s recording of q2dm1 for 75 s, through 15
+rounds, and stayed connected. The test plays a recording to a viewer three times round at ten
+frames a second.
+
+### Classic clients at the TV
+
+Any multiplayer client of the classic game, the oldest one too, can watch through our TV. It
+connects to the TV the way it connects to a server (`net/classic_tv_udp.hpp`). What it gets is one
+player's view in plain protocol 28, with no extensions, so it is never sent a message it may not
+know. Clients that speak the stream protocol still get the multiview stream unchanged from the
+classic face above, with free look; this face is for the clients that do not.
+
+- **Seated in the player's view.** The server data gives the viewer the watched player's own slot.
+  Every packet carries that player's state and turns the viewer's view to his angles (`setangle`).
+  The movement settings are zero, so the viewer cannot fly off. There is no free look: one
+  player's view holds only what that player saw, so a camera of its own would show a world with
+  holes in it.
+- **Whole entity lists.** Players and entities are read under the source's agreed extensions and
+  written again plain. Every entity list goes out whole against the baselines (svc 47), never as a
+  delta. A viewer's client needs no frame of its own to read the next one, and a lost packet costs
+  only that packet. Entities past 511, models past 255 and the extensions' own messages are left
+  out. An extended sound or baseline goes as its plain form when it fits.
+- **The signon from what the face keeps:** the server data, the server info (without the
+  extension keys), the lists, the statics, the baselines, the light styles, each player's line
+  and the stats. A viewer that joins late starts at once. Downloads are refused, so a client that
+  lacks a skin goes on without it.
+- **Reliable or not.** What changes the level's state (prints, frags, user info, light styles,
+  stats) goes on the reliable channel in order, in messages of at most 700 bytes so a frame
+  still fits beside one. Sounds, effects, damage and kicks ride with the frame.
+- **One stream for each player's view.** A client recording has one stream. A multiview match
+  turned into every player's view has one stream per player, each converted only while someone
+  watches it. A viewer follows the TV's pick (`udp_tv_follow`, the TV's auto track) until it
+  presses fire, or its track keys send `ptrack <slot>`. It then watches that player for as long
+  as the face has a stream of his view. A move to another player's seat goes as a level change
+  (`changing`, `reconnect`), because the viewer's own slot changes with it.
+
+`shooters_edge_hops tv --demo=<client recording> --port=27900` plays a client recording into the face,
+round and round (`net/classic_tv_recording.hpp`). The recording is played at its own pace from its
+first packet, and a silence longer than a second is cut to one. Each command record's angles are
+the view. Each time round, the spawn count goes up by one, so every viewer signs on again.
+
+Measured black-box: an existing client asked for no extensions, joined the TV playing a bot's dm4
+recording from our server, and watched it with the HUD, the prints and the team chat. Moving the
+mouse did not turn the view. The test (`tests/shooters_edge_classic_tv_udp_test.cpp`) records a
+match on our server and has a viewer with no extensions walk the signon, seated in the recorder's
+slot. That viewer sees the players move and stays on through the loop. A second test viewer joins
+late, and a third is refused for a wrong password.
+
 ## The sequel's recordings
 
 The sequel's client recording (a `.dm2`: blocks of a 32-bit length and one server packet's messages,
