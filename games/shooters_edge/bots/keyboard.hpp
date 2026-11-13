@@ -49,11 +49,19 @@ void fighter_keyboard_init(Fighter& f, uint8_t moves, uint32_t seed);
 // `velocity` the player's own, `onground` whether he stands. `curve`: a pilot's curve on the
 // ground meant as keys (shooter/pilot.hpp `Pilot::curve_keys`: forward and the side key, -1 left,
 // 1 right, 0 forward alone), held whole, not read off the axes (`curvekeys`); `kNoCurveKeys` none.
+// `brinkkeys` (with `near`: the world, the nav with its harm, where the player stands): near lava
+// or slime a key whose step (64 units under the view) ends over it is not wanted, and a run that
+// carries the box over it within a quarter second (80 units at most) wants the keys against it.
+struct KeysNear {
+  const sh::MoveWorld* world = nullptr;
+  const sh::NavGraph* g = nullptr;
+  sh::Vec3f origin;
+};
 void press_keys(KeyHand& k, const sh::Features& features, sh::MoveCmd& cmd, sh::Vec3f velocity,
-                bool onground, int8_t curve = sh::kNoCurveKeys);
+                bool onground, int8_t curve = sh::kNoCurveKeys, const KeysNear* near = nullptr);
 // The fighter's: its pilot's curve held when the command is still the pilot's (a hop on its
 // heading, the brink guard not in it: `brinked`).
 void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool onground,
-                      bool brinked = false);
+                      bool brinked = false, sh::Vec3f origin = {});
 
 }  // namespace shooters_edge::bots

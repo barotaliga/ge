@@ -428,6 +428,9 @@ bool nav_harm_near(const NavGraph& g, Vec3f p, float reach);
 // at its feet marks the link `brink_side`. Needs `NavGraph::harm` (`nav_mark_harm` first). Returns
 // how many links it marked.
 int64_t nav_mark_side_harm(NavGraph& g, const MoveWorld& world, float side = 72, float near = 320);
+// Whether the player's box swept from `p` toward `to` (a wall stops it; a stair's step or two
+// climbed), then dropped to the floor (400 units at most), stands in lava or slime.
+bool nav_falls_in_harm(const MoveWorld& world, Vec3f p, Vec3f to);
 
 // REPAIRING POCKETS (`nav_bridge_pockets`): after the build (and the water, the teleporters),
 // a POCKET is a set of nodes, joined by links among themselves, that the map's main part (the

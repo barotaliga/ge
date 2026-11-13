@@ -1500,6 +1500,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.brink_line = features[sh::Feature::brinkline];
   ps.brink_side = features[sh::Feature::sidebrink];
   ps.walk_falls = features[sh::Feature::fallseen];
+  ps.lip_look_s = features[sh::Feature::liplook] ? 0.3f : 0;
   ps.jumper.lip_share = features[sh::Feature::sidebrink] ? kLipShare : 0;
   ps.curve_keys = features[sh::Feature::keys] && features[sh::Feature::curvekeys];
   ps.under_way = features[sh::Feature::underway];
@@ -2068,7 +2069,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   // person's hand turns it (footwork.hpp).
   if (f.features[sh::Feature::keys]) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(me)];
-    fighter_keyboard(f, cmd, d.velocity, (d.flags & sh::kFlagOnGround) != 0, brinked);
+    fighter_keyboard(f, cmd, d.velocity, (d.flags & sh::kFlagOnGround) != 0, brinked, d.origin);
   } else {
     fighter_keys(f, cmd);
   }

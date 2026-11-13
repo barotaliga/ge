@@ -42,8 +42,9 @@ float arc_clear(const MoveWorld& world, Vec3f o, Vec3f v, int side, float dt, fl
 bool walk_clear(const MoveWorld& world, Vec3f o, Vec3f to);
 
 // THE WALK FORESEEN.
-enum class WalkWay : uint8_t { pursue, brake, near, ease };
-constexpr int kWalkWays = 4;
+// `stop` (run back against the velocity) is flown only when a fall is looked for (`harm`).
+enum class WalkWay : uint8_t { pursue, brake, near, ease, stop };
+constexpr int kWalkWays = 5;
 constexpr int kWalkMs = 25;      // a flight's command, ms
 constexpr float kWalkBump = 40;  // the speed a wall takes in one command to count a bump, u/s
 const char* walk_way_name(WalkWay way);

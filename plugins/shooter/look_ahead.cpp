@@ -45,6 +45,7 @@ WalkKeys way_keys(WalkWay way, Vec3f at, Vec3f v, Vec3f aim, float maxspeed) {
   WalkKeys k;
   k.yaw = yaw_to(at, aim);
   k.forward = way == WalkWay::ease ? 0.f : 1.f;
+  if (way == WalkWay::stop && (v.x != 0 || v.y != 0)) k.yaw = yaw_to(at, at - Vec3f{v.x, v.y, 0});
   if (way == WalkWay::brake) {
     // The velocity's part across the way to the aim pushed against: the old way's speed taken off.
     const ViewAxes ax = angle_vectors({0, k.yaw, 0});
@@ -196,7 +197,7 @@ bool body_on_way(const MoveWorld& world, Vec3f o, Vec3f to, std::span<const Othe
 }
 
 const char* walk_way_name(WalkWay way) {
-  static constexpr const char* kNames[kWalkWays] = {"pursue", "brake", "near", "ease"};
+  static constexpr const char* kNames[kWalkWays] = {"pursue", "brake", "near", "ease", "stop"};
   return kNames[static_cast<int>(way)];
 }
 
@@ -209,6 +210,8 @@ const char* walk_way_because(WalkWay way, bool fall) {
         return "walking the route: the near node, a fall into lava foreseen";
       case WalkWay::ease:
         return "walking the route: easing off, a fall into lava foreseen";
+      case WalkWay::stop:
+        return "walking the route: stopping short, a fall into lava foreseen";
       default:
         return "walking the route";
     }
@@ -278,9 +281,21 @@ WalkWay foresee_walk(const MoveWorld& world, const WalkStart& st, Vec3f aim, Vec
   seen[0] = fly(world, moving, world.count, start, WalkWay::pursue, aim);
   if (seen[0].bump <= 0 && !seen[0].falls) return WalkWay::pursue;
   flown = true;
+  // A fall foreseen: run back against the velocity when that does not fall (the same keys every
+  // command while the fall is foreseen; the other ways' aims swing a command to the next, and a
+  // keyboard's hand changing its set presses the old keys on into the pit meanwhile).
+  if (seen[0].falls) {
+    const int s = static_cast<int>(WalkWay::stop);
+    seen[s] = fly(world, moving, world.count, start, WalkWay::stop, aim);
+    if (!seen[s].falls) {
+      keys = way_keys(WalkWay::stop, st.origin, st.velocity, aim, st.maxspeed);
+      return WalkWay::stop;
+    }
+  }
   int best = 0;
   for (int k = 1; k < kWalkWays; k++) {
     const auto way = static_cast<WalkWay>(k);
+    if (way == WalkWay::stop && !st.harm) continue;
     seen[k] = fly(world, moving, world.count, start, way, way == WalkWay::near ? near : aim);
     // A fall first (the worst), then a bump; among the clean the nearest the aim wins, among the
     // others the least bumped.
@@ -304,6 +319,9 @@ void record_walk(ai::Why* why, float speed, WalkWay way, const WalkSeen seen[kWa
   why->decide("foresee");
   why->fact("speed", static_cast<double>(speed));
   for (int k = 0; k < kWalkWays; k++) {
+    if (static_cast<WalkWay>(k) == WalkWay::stop && seen[k].nearer == 0 && seen[k].bump == 0 &&
+        !seen[k].falls)
+      continue;  // not flown
     why->option(walk_way_name(static_cast<WalkWay>(k)),
                 static_cast<double>(seen[k].nearer - seen[k].bump));
     why->term("bump", static_cast<double>(seen[k].bump));
