@@ -329,6 +329,11 @@ struct ClassicServer {
   void (*seat)(void* ctx, int slot, const std::string& name, bool spectator) = nullptr;
   void (*unseat)(void* ctx, int slot) = nullptr;
   void* seat_ctx = nullptr;
+  // The game's say over a seat's name (a login's, classic_login.hpp): the name the client wants,
+  // already cleaned and made unique, which the game may change; `connecting`: on the connect, when
+  // the client reads nothing yet.
+  void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
+  void* name_ctx = nullptr;
 };
 
 // Serves `rules` (its map already started) over `t`. False with `error` when it cannot.
@@ -350,7 +355,8 @@ bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std:
 // A listen server's own player talking (`slot` a local seat that is no bot): his voice message
 // relayed as a client's is, by `voice_route`, when the server has voice (`ServerConfig::voice`).
 void classic_local_voice(ClassicServer& s, int slot, const ClcMsg& m);
-// One key of a seat's user info set, told to every client and to the rules (a lobby's team).
+// One key of a seat's user info set, told to every client and to the rules (a lobby's team); the
+// `name` key renames the seat.
 void classic_set_info(ClassicServer& s, int slot, const std::string& key, const std::string& value);
 // A line printed to every spawned client.
 void classic_print_all(ClassicServer& s, const std::string& text);

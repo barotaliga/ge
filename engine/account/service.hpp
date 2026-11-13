@@ -112,6 +112,11 @@ void service_update(Service& svc, int64_t now_us);
 bool service_read(Service& svc, const uint8_t* data, size_t size, const net::Address& from,
                   int64_t now_us);
 inline const net::Key& service_key(const Service& svc) { return svc.keys.pub; }
+// The `login` op answered IN PROCESS, for a game server that is its own master: a classic
+// client's name and one-time code checked against the store under the same throttle (its address
+// `self>` and the player's), and on success the seat's ticket signed into `ticket`.
+Answer service_login(Service& svc, std::string_view name, std::string_view code,
+                     std::string_view player, int64_t now_us, Ticket& ticket);
 
 // AN ASKER'S HALF.
 struct Reply {

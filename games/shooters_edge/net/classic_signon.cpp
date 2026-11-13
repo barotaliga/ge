@@ -301,6 +301,7 @@ void cmd_setinfo(ClassicServer& s, int slot, const std::string& key, const std::
     for (int i = 0; i < sh::kMaxClients; i++)
       if (i != slot && s.clients[i].state != ConnState::free) taken.push_back(s.clients[i].name);
     v = unique_name(sanitize_name(value, s.cfg.default_name), taken);
+    if (s.name_rule != nullptr) s.name_rule(s.name_ctx, slot, v, false);
     c.name = v;
     info_set(c.userinfo, "name", v);
   }
@@ -534,7 +535,8 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
     // Spectator tracking, screenshots and uploads: not built.
   } else {
     // A chat line held to the flood rule first (a dropped one tells only its sender why).
-    if ((cmd == "say" || cmd == "say_team") && !c.local) {
+    // A `login` line counts too (classic_login.hpp): it is a chat line a client sent as a command.
+    if ((cmd == "say" || cmd == "say_team" || cmd == "login") && !c.local) {
       const gs::FloodVerdict v = gs::flood_check(c.flood, s.cfg.flood, s.game->sv.time);
       if (v != gs::FloodVerdict::allowed) {
         client_print(s, slot, 3,
