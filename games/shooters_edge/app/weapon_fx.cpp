@@ -765,7 +765,6 @@ const gr::BeamLook& plasma_look() {
     a.light_cd = 0;  // the shot's own light rides it (shot_glow)
     a.hit_cd = 0;
     a.root_cd = 0;
-    a.scorch_m = 0;
     a.ember_s = 0;
     return a;
   }();
@@ -799,7 +798,6 @@ const gr::BeamLook& rail_coil_look() {
     a.light_cd = 0;  // the rail's lights are rail_lights'
     a.hit_cd = 0;
     a.root_cd = 0;
-    a.scorch_m = 0;
     a.ember_s = 0;
     return a;
   }();
