@@ -615,12 +615,24 @@ bit) among their messages. Without the header and the voice messages it is a pla
   out (`net/classic_record.hpp`).
 - **The server's multiview recording (`.mvdv`)** holds every voice it relayed, whoever heard it:
   all the teams.
+- **Who a voice goes to** is the talker's own choice (`net/classic_talk.hpp`): the client names
+  it with `voicetarg all|team|near|<slot>` (kept for the connection; a word the server does not
+  know means the team), and the window does so by the key held: `+voice` (V) everyone,
+  `+voice_team` (B) the team, `+voice_near` (N) the players within `sv_earshot` with no wall
+  between (engine/console/talk.hpp). A listener hears voice once his client sends `unmuteall`
+  (ours does at `begin`), and `vignore <slot>` stops one talker reaching him. `+voip` talks to the
+  server's default (the team).
+- **Chat** goes the same way: `say`, `say_team` and `say_near` (the players near, as
+  `<name> (nearby): <text>`), typed on the chat line T, Y and U open (`messagemode`,
+  `messagemode2`, `messagemode3`) or in the console. A `say` the rules take nothing of (the
+  sequel's have no chat) is routed by the server's own chat. `make lab LAB=se-talk ARGS="--basedir=<folder> --map=dm6"`
+  pictures who hears a talker from above.
 - **The window joined to a server** (`connect`, `net/classic_remote.hpp`) asks for voice with
   `cl_voip 1` and hears what the server routes to the player through the same players, its own
-  voice left out; while `+voip` is held (V) the microphone is sent. The live recording it reads
+  voice left out; while a voice key is held the microphone is sent. The live recording it reads
   (`ClientRecorder::live`) keeps the voices with no header; a file it records is unchanged.
 - **The window's own match** relays voice too (`sv_voip 1` while `cl_voip` is on): its player
-  hears the joined players and is heard while `+voip` is held (`listen_mic`). In a free-for-all
+  hears the joined players and is heard while a voice key is held (`listen_mic`). In a free-for-all
   (nobody on a team) the team route reaches everyone.
 - **Playing one back** (`playdemo`, `-demovideo`, the labs): the reader finds the header by its
   bytes; each talker's frames play on a stream of their own, a gap of up to three frames
@@ -1248,6 +1260,33 @@ session (`classic_trial`):
 `se-net` runs the session under every preset. `se-interop` is a stub until the dedicated
 server's classic flag and existing programs are at hand.
 
+**The sequel's protocol** (`games/shooters_edge/net/sequel_*`, protocol 34, M18v9) is spoken the
+same way, beside the classic one and sharing its net channel:
+
+- **Out of band**: the challenge (one number per address), the connect with the protocol, qport,
+  challenge and user info, `info`, `status` and `ping`. A refusal is a print a player reads.
+- **The signon** runs by the client's own string commands: `new` gets the server data and a
+  stuffed `cmd configstrings`, each answer adds about 700 bytes and the next prompt, then the
+  baselines the same way, then `precache`, answered with `begin`. Every prompt carries the
+  level's count, and a wrong count starts the signon again.
+- **What a client reads** is the sequel's own recording format: each packet's payload is one
+  block, read by the recording's reader (`client/demo_sequel.cpp`), so a client records as it
+  plays and its state is the demo player's.
+- **Moves** carry the newest frame the client read whole, which the server deltas the next frame
+  from, and three commands each delta coded against the one before. The move's checksum uses
+  the sequel's own key table, a wire constant MEASURED for interop
+  (`sequel_checksum_table.cpp`): a live server names the byte it expected for a move it refuses,
+  so one minute of moves solved all 960 non-zero bytes, one candidate each.
+- **Our server** (`sequel_net_server.hpp`) serves the sequel's rules through the wire the
+  recordings use (`server/sequel_wire.hpp`): the prints, centred prints, stuffed lines and changed
+  configstrings reliably, the frame and its sounds unreliably, whole when the client lost the frame
+  it would delta from.
+
+`se-sequel-net` runs our client on our server (simulated) or on a live one (`--server=`).
+Measured on a live server of the sequel: our client got through the signon and played, every move
+was taken, and it walked; that server ran about three frames a second in the container, with or
+without our client, so its frame rate there is the server's own.
+
 **The native protocol** is the engine's own (`docs/networking.md`), used between our client and
 our server when both ends are ours: the M17 handshake and AEAD (M17i), the snapshot ring and
 deltas with interest (M17f), prediction of the local player and of projectiles, lag
@@ -1304,6 +1343,18 @@ every pass, and judged by captioned screenshots:
   pyramid still cull), since few maps were built to be seen through their water and the rooms
   under it would be missing. Where the modern look draws its own water, lava and slime, those
   passes stay as they are.
+- **Player skins** (M18i15): each player wears the picture their `skin` names,
+  `skins/<name>.tga`, `.png` or `.pcx`, the first that reads. A .pcx is the palette's: its shirt and
+  pants rows take the player's colours and its glowing rows light themselves, as the figure's own
+  skin does, its top-left 296x194 stretched over the figure (a picture over 320x200 is refused). A
+  .tga or .png is drawn as painted (halved past 1024 a side). The skins are read with the map's
+  models (`client/world_models.cpp`'s `read_player_skins`, at most 32, each kept while the morph
+  atlas holds it); a skin that turns up later shows at the next map. `baseskin` (base) is worn by a
+  player who names none or one not there, else the figure's own; `allskins <name>` puts one on
+  everyone; `noskins 1` draws every player in the figure's own skin, in their colours; your own
+  `skin` goes to the server with your colours. A name with `..` or a leading dot is refused, its
+  extension dropped, cut to 15 characters (`app/classic_models.hpp`'s `skin_key`, `choose_skin`).
+  Colours 8 to 13 read their palette rows backwards, since those rows are stored bright to dark.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
 - **Effects from the game's files** (`client/world_fx.hpp`, M18l): a file `particles/<any>.fx`

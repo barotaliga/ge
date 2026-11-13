@@ -38,6 +38,7 @@
 #include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_login.hpp"
 #include "shooters_edge/net/classic_qtv.hpp"
+#include "shooters_edge/net/classic_report.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/announce.hpp"
@@ -98,6 +99,11 @@ struct Game {
   std::unique_ptr<QtvPort> qtv;
   // The logins (sv_login, classic_login.hpp; null: none asked and no service handed in).
   std::unique_ptr<ClassicLogin> login;
+  // The match being played, tallied each frame, and the report of the one that just ended (taken
+  // once by the core: `match_report`).
+  MatchTally tally;
+  ge::net::MatchReport report;
+  bool report_ready = false;
   ~Game() {
     if (qtv && classic) qtv_close(*qtv, *classic);
     qtv.reset();
@@ -178,10 +184,12 @@ constexpr gs::GameRule kEndpointRules[] = {
      "0: a little further (the default); 1: exactly"},
     {"sv_safestrafe", "Commands of no sideways move put between a player's reversed strafes.",
      nullptr, "0: off (the default); 1..N: that many commands"},
-    {"sv_voip", "Whether players' voices are relayed to their team.", nullptr,
+    {"sv_voip", "Whether players' voices are relayed to those they talk to.", nullptr,
      "0: off (the default); 1: on"},
     {"sv_voipecho", "Whether a speaker hears his own voice back, to test it.", nullptr,
      "0: off (the default); 1: on"},
+    {"sv_earshot", "How near a player must stand to read nearby chat and hear a nearby voice.",
+     nullptr, "0: no nearby chat or voice; 1..65536: that many map units (1000 the default)"},
     {"sv_rconcrypt", "Whether the remote console takes only a hashed password.", nullptr,
      "0: the password itself or a hashed one (the default); 1: only a hashed one"},
     {"sv_rcontime", "The seconds a hashed remote console line's time may be off by.", nullptr,
@@ -477,6 +485,7 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
       !endpoint_int(c, "sv_antilag", 0, 1, antilag, error) ||
       !endpoint_int(c, "sv_voip", 0, 1, voice, error) ||
       !endpoint_flag(c, "sv_voipecho", cfg.voice_echo, error) ||
+      !endpoint_int(c, "sv_earshot", 0, 65536, cfg.earshot, error) ||
       !endpoint_flag(c, "sv_antilagexact", cfg.antilag_exact, error) ||
       !endpoint_int(c, "sv_safestrafe", 0, 100, safe_strafe, error) ||
       !endpoint_flag(c, "sv_rconcrypt", cfg.rcon_crypt, error) ||
@@ -1098,6 +1107,38 @@ bool move_to(Game& g, const std::string& name, bool match_over, std::string& err
   return true;
 }
 
+// A number the rules hold (0 when they have no such setting).
+double rule_number(const Game& g, const char* name) {
+  const ge::console::Cvar* v = g.rules ? g.rules->cvars.find(name) : nullptr;
+  return v ? v->number : 0;
+}
+
+// The match's tally after the rules' frame: it counts a deathmatch's players, in a lobby's match
+// alone when the server has one (classic_report.hpp).
+void tally(Game& g) {
+  std::array<uint64_t, sh::kMaxClients> accounts{};
+  if (g.login)
+    for (int i = 0; i < sh::kMaxClients; i++) accounts[i] = gs::login_account(g.login->logins, i);
+  const bool lobby = g.room && g.settings.lobby != 0;
+  const bool counting =
+      rule_number(g, "deathmatch") != 0 && (!lobby || g.room->lobby.phase == gs::LobbyPhase::match);
+  tally_frame(g.tally, g.rules->world, counting, accounts);
+}
+
+// The match is over: its report made, for the core to take.
+void end_match(Game& g) {
+  TallyFacts f;
+  f.teams = rule_number(g, "teamplay") != 0;
+  f.mode = classic_mode(f.teams, false, g.settings.maxclients);
+  f.fraglimit = rule_number(g, "fraglimit");
+  f.timelimit = rule_number(g, "timelimit");
+  f.stopped = g.rules->map_stopped;
+  ge::net::MatchReport r;
+  if (!tally_end(g.tally, g.rules->world, f, r)) return;
+  g.report = std::move(r);
+  g.report_ready = true;
+}
+
 // The change the mod or the console asked for (`changelevel`, `map`, `restart`). A listen server's
 // next map is its window's to read (`ListenHost::asked`, then `change`); a restart is the same map.
 void change_if_asked(Game& g) {
@@ -1123,6 +1164,7 @@ void change_if_asked(Game& g) {
       name = next_map(g.settings, current, name);
     match_over = now.pending_change != sv::MapChange::restart;
     now.pending_map.clear();
+    if (match_over) end_match(g);
     if (match_over && lobby != nullptr && lobby->phase == gs::LobbyPhase::match &&
         lobby->settings.intermission_s > 0) {  // the intermission first, then this map
       gs::lobby_end(*lobby, now.sv.time);
@@ -1372,6 +1414,7 @@ void frame(void* g) {
   if (game.room) cl::room_packets(*game.room, *game.rules, frame_msec(game), moves);
   if (game.mates) cl::sequel_party_packets(*game.mates, game.rules, frame_msec(game), moves);
   game.rules.frame(moves.data(), static_cast<int>(moves.size()));
+  tally(game);
   sv::RulesCommon& now = *game.rules;
   now.out.all.clear();
   for (auto& one : now.out.one) one.clear();
@@ -1450,6 +1493,7 @@ void net_frame(void* g, int64_t now_us) {
                            (phase == gs::LobbyPhase::countdown || phase == gs::LobbyPhase::match);
   classic_frame(*game.classic, now_us);
   if (game.login) classic_login_frame(*game.login);
+  tally(game);
   if (game.qtv) qtv_update(*game.qtv, *game.classic);
   sync_host(game);
   sync_seats(game);
@@ -1459,6 +1503,15 @@ void net_frame(void* g, int64_t now_us) {
   lobby_words(game);
   sync_host(game);
   sync_seats(game);  // a new map's seats
+}
+
+// The match that just ended, once (classic_report.hpp).
+bool match_report(void* g, ge::net::MatchReport& out) {
+  Game& game = *static_cast<Game*>(g);
+  if (!game.report_ready) return false;
+  out = std::move(game.report);
+  game.report_ready = false;
+  return true;
 }
 
 int seated(const void* g) {
@@ -1480,14 +1533,8 @@ void fill_status(const void* g, ge::net::Status& st) {
     const ge::console::Cvar* v = game.rules ? game.rules->cvars.find(name) : nullptr;
     return v ? std::atoi(v->value.c_str()) : 0;
   };
-  const int seats = game.settings.maxclients;
-  if (game.coop || number("coop") != 0) {
-    st.mode = "coop";
-  } else if (number("teamplay") != 0) {
-    st.mode = seats <= 4 ? "2on2" : "4on4";
-  } else {
-    st.mode = seats <= 2 ? "1on1" : "ffa";
-  }
+  st.mode = classic_mode(number("teamplay") != 0, game.coop || number("coop") != 0,
+                         game.settings.maxclients);
   if (!game.held_map.empty()) st.phase = ge::net::StatusPhase::intermission;
   for (const char* name : {"fraglimit", "timelimit"}) {
     st.keys.emplace_back(name, std::to_string(number(name)));
@@ -1578,6 +1625,12 @@ void host_speak(void* g, int gen, int seq, const std::vector<uint8_t>& data) {
   classic_local_voice(*game.classic, 0, m);
 }
 
+// The window's player's string command (a chat line, his voice's target), as a client's.
+void host_command(void* g, const std::string& line) {
+  Game& game = *static_cast<Game*>(g);
+  if (game.classic) string_command(*game.classic, 0, line);
+}
+
 void host_bind(Game& g) {
   if (g.host == nullptr) return;
   cl::ListenHost& h = *g.host;
@@ -1592,6 +1645,7 @@ void host_bind(Game& g) {
   h.set_info = host_info;
   h.speak = host_speak;
   h.admin = host_admin;
+  h.command = host_command;
 }
 
 gs::ServerGame make() {
@@ -1619,6 +1673,7 @@ gs::ServerGame make() {
   g.version = 1;
   g.serve = serve;
   g.net_frame = net_frame;
+  g.match_report = match_report;
   return g;
 }
 

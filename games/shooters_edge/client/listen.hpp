@@ -156,6 +156,9 @@ struct ListenHost {
   // `status`, `speedjump <id> on|off|<share>`): false when the line is none of them, the answer
   // in `out`.
   bool (*admin)(void* game, const std::string& line, std::string& out) = nullptr;
+  // The player's line to the server as a client's string command (`say`, `say_team`,
+  // `say_near`, `voicetarg`): routed by the server as a joined client's is.
+  void (*command)(void* game, const std::string& line) = nullptr;
 };
 
 // THE CAMPAIGN'S DOOR: a coop campaign served to others over the classic protocol, so they join
@@ -386,6 +389,9 @@ bool on_lobby_screen(const Listen& l);
 void listen_mic(Listen& l, std::span<const float> samples, bool talking);
 // Whether the game playing carries the player's voice (a match with `ListenOptions::voice`).
 bool listen_voice(const Listen& l);
+// The player's line to his own match's server as a joined client's (ListenHost's `command`: a
+// chat line, a voice target): false when no match is hosted (a campaign, nothing loaded).
+bool listen_command(Listen& l, const std::string& line);
 
 // One server frame with the player's command `cmd` (its angles are `l.view`, its length the
 // server's frame; an impulse waiting goes with it).
@@ -411,6 +417,9 @@ struct Missile {
   sh::Vec3f origin;
   bool rocket = false;   // a rocket or a grenade: something that explodes
   bool grenade = false;  // a grenade (bounces, smokes) rather than a rocket
+  // Neither: a nail, or one of the sequel's glowing shots, by the kind of shot whoever fired it
+  // (a player or a monster): a blaster's bolt, or the BFG's ball.
+  bool bolt = false, bfg = false;
 };
 void missiles_of(const Listen& l, std::vector<Missile>& out);
 

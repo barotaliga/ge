@@ -178,4 +178,30 @@ inline constexpr double kBoltReachM = 7;  // the classic's bolt reaches about 21
 inline constexpr double kBoltBoost = 8;   // 1.6 / r_fx_lights' default
 int bolt_lights(const gr::BeamShot& shot, double t_s, Light* out);
 
+// THE SEQUEL'S SHOTS, by the kind of shot whoever fired it (a player or a monster):
+//
+// - a BLASTER'S BOLT: a hot yellow light riding it (kBoltGlowM) and a short trail of shining
+//   yellow specks behind it (`glow_trail` with kBoltRgb);
+// - the BFG'S BALL: a large green light (kBfgGlowM) and a thick trail of green specks;
+// - the RAIL: a straight blue-white beam (`rail_look`, render/beam.hpp) wound by one filament's
+//   helix, held a moment and fading over kRailFadeS; in the classic look a spiral of blue specks
+//   round a white core (`rail_spiral`);
+// - a bolt's hit: yellow sparks and a flick of light (`blaster_hit`); the BFG's burst: a green
+//   ball of specks (`bfg_burst`) under the engine's blast.
+inline constexpr float kBoltRgb[3] = {1.0f, 0.75f, 0.25f};
+inline constexpr float kBfgRgb[3] = {0.35f, 1.0f, 0.35f};
+inline constexpr double kBoltGlowM = 3.5, kBoltGlowLevel = 1.2;
+inline constexpr double kBfgGlowM = 8, kBfgGlowLevel = 2.2;
+inline constexpr double kRailFadeS = 1.0;
+// The light riding a glowing shot at `at`: `rgb` at `level`, reaching `radius_m`, on `entity` (so
+// the shot's own model is not lit by it).
+Light shot_glow(const double at[3], const float rgb[3], double radius_m, double level, int entity);
+// Shining specks of `rgb` over the stretch flown, `size` m across, one each `step` m.
+void glow_trail(const double from[3], const double to[3], const float rgb[3], double size,
+                double step, uint32_t seed, Particles* out);
+const gr::BeamLook& rail_look();
+void rail_spiral(const double from[3], const double to[3], uint32_t seed, Particles* out);
+void blaster_hit(const double at[3], uint32_t seed, Particles* out);
+void bfg_burst(const double at[3], uint32_t seed, Particles* out);
+
 }  // namespace shooters_edge::effects

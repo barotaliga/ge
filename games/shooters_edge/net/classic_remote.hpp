@@ -68,6 +68,7 @@
 
 #include "account/client_login.hpp"
 #include "console/console.hpp"
+#include "console/talk.hpp"
 #include "input/state.hpp"
 #include "net/transport.hpp"
 #include "shooter/predict.hpp"
@@ -116,6 +117,7 @@ struct Remote {
   // In the order that packs it (the lint holds the padding).
   gn::Transport* transport = nullptr;             // what it talks over (`own`, or remote_start's)
   const ge::console::Button* voip_key = nullptr;  // `+voip` (add_remote_commands)
+  const ge::console::Talk* talk = nullptr;        // the window's +voice keys (console/talk.hpp)
   std::unique_ptr<StreamWatch> watch;             // watching a broadcast (`watch`), not playing
   std::unique_ptr<RemoteLogin> login;             // logging in by the account file, when named
   int64_t now_us = 0;                             // the tick clock
@@ -201,8 +203,10 @@ void remote_hands(Remote& r, const client::Moves& m, const ge::input::InputState
 // The microphone's samples since the last call (48 kHz mono), sent at the next ticks while `+voip`
 // is held. Dropped when not joined, when the server has no voice, or past `kMicMostSamples` unsent.
 void remote_mic(Remote& r, std::span<const float> samples);
-// True while the player is joined with voice and holds `+voip` (the window opens the microphone the
-// first time, and shows that he is talking).
+// True while the player is joined with voice and holds a voice key (`+voice`, `+voice_team`,
+// `+voice_near` of `Remote::talk`, or `+voip`): the window opens the microphone the first time,
+// and shows that he is talking. The key held names the voice's target (`voicetarg`), told to the
+// server as it changes.
 bool remote_talking(const Remote& r);
 
 // `connect <host>[:port]`, `disconnect`, `reconnect` (the last server again), `netstatus`, the

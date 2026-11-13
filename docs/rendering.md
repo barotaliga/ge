@@ -617,7 +617,10 @@ frame a list of `MorphDraw`s.
 - **Upload once.** Every frame of every model goes into one storage buffer, two `vec4` a vertex.
   The triangles and the coordinates go into two more. The skins are shelf-packed into one
   2048-wide atlas, tallest first, a texel apart (`pack_morph_atlas`). A frame writes only its
-  draws: 224 bytes each, at most `kMaxMorphDraws`.
+  draws: 256 bytes each, at most `kMaxMorphDraws`.
+- **A skin to wear.** A model may be skin-only (a skin, no frames), packed into the atlas with
+  the rest. A draw's `skin` names the model whose skin it wears over its own coordinates: one
+  shared figure, each player in their own picture.
 - **Frames blended on the GPU.** The vertex stage pulls each vertex by index and mixes the draw's
   two frames by its share. It does the same for the frame before, so a swinging limb carries its
   own motion into the motion target and TAA keeps it sharp. A model with frames at 10 a second

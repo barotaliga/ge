@@ -127,6 +127,7 @@ struct HeldBeam {
   int melt_slot = -1;
   uint32_t melt_serial = 0;
   bool across = false;  // the arc across the player's gun's prongs (fx::prong_arc_look)
+  bool rail = false;    // the sequel's rail (fx::rail_look): fired once, then fading
   double seen = 0;
 };
 
