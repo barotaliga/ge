@@ -7,17 +7,21 @@
 //   --stream=<n>      the broadcast's stream on that node
 //   --play=<map>      a game played on the page on that map (M56i): the game's own server runs in
 //                     the viewer, the player at the canvas's keys and mouse
-//   --bots=<n>        with --play, the bots that join him, 0..15 (3 by default)
+//   --bots=<n>        with --play, the bots that join the player, 0..15 (3 by default)
+//   --join=<url>      a game server played on from the page (M56i2): the WebTransport endpoint's
+//                     URL (`https://h:p/play?to=<server host:port>`), whose datagrams the
+//                     forwarder sends on to that server as UDP
+//   --cert=<hex>      with --join, the endpoint's certificate by its SHA-256 (64 hex digits)
 //   --pack=<url>      a content pack the world is drawn from, fetched; repeated, in mount order
 //   --speed=<x>       the demo's pace, 0..20 (1 by default)
 //
-// One of --demo, --tv and --play is needed. A word the viewer does not know is refused with its
-// name, so a hub that hands a newer viewer's words to an older one says which.
+// One of --demo, --tv, --play and --join is needed. A word the viewer does not know is refused with
+// its name, so a hub that hands a newer viewer's words to an older one says which.
 //
 // ge:summary The web viewer's arguments from the hub's page: the demo, the broadcast, a map to
 // ge:summary play, the packs
 // ge:keywords web viewer arguments module-arguments demo tv stream pack speed parse_viewer_args
-// ge:keywords play bots play-in-browser
+// ge:keywords play bots play-in-browser join cert webtransport server-certificate-hashes
 // ge:skill net
 // ge:test tests/web_viewer_args_test.cpp
 #pragma once
@@ -39,6 +43,9 @@ struct ViewerArgs {
   uint32_t stream = 0;             // with `tv`
   std::string play;                // the map a game is played on ("": none)
   int bots = 3;                    // with `play`
+  std::string join;                // the endpoint's URL a server is played through ("": none)
+  std::string join_to;             // the server it names (`to=`), "host:port"
+  std::string cert;                // with `join`: the certificate's hash, 64 hex digits
   std::vector<std::string> packs;  // the content packs' URLs, in mount order
   double speed = 1;
 };

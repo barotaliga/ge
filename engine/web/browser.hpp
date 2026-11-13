@@ -9,6 +9,10 @@
 // - `ws_open`, `ws_send`, `ws_take`, `ws_close`: a WebSocket (a TV node's, tv/websocket.hpp),
 //   its binary messages queued as they come and taken whole in order, never waited for: the
 //   viewer's loop takes what has come each frame.
+// - `wt_open`, `wt_send`, `wt_take`, `wt_close`: a WebTransport session (the page's way to a
+//   game server: datagrams to an endpoint, engine/webtransport, which the forwarder sends on as
+//   UDP), its certificate trusted by its hash; `wt_pipe` makes it a net transport's pipe, so a
+//   game's client plays over it as it would over a socket.
 // - `take_input`: the canvas's keys pressed since the last call (by scancode, the USB HID usage
 //   the platform layer uses) and its pointer in canvas pixels; a click focuses the canvas.
 // - `take_play_input`: a game played on the page: keys held and let go, the mouse's buttons,
@@ -22,7 +26,7 @@
 // ge:summary The web viewer's calls on its page: fetch a file, wait for a paint, the canvas, say
 // ge:keywords web browser emscripten jspi fetch_bytes next_frame request-animation-frame canvas
 // ge:keywords canvas_size say viewer-status websocket ws_open ws_take ws_send
-// ge:keywords take_play_input pointer-lock play-in-browser
+// ge:keywords take_play_input pointer-lock play-in-browser webtransport wt_open wt_pipe datagram
 // ge:skill net
 #pragma once
 
@@ -30,6 +34,8 @@
 #include <span>
 #include <string>
 #include <vector>
+
+#include "net/transport.hpp"
 
 namespace ge::input {
 struct InputState;
@@ -69,6 +75,23 @@ bool ws_send(int socket, std::span<const uint8_t> msg);
 // The oldest message not taken yet into `msg`; false when none has come.
 bool ws_take(int socket, std::vector<uint8_t>& msg);
 void ws_close(int socket);
+
+enum class WtState : uint8_t { connecting, open, closed };
+// A WebTransport session to `url` (`https://host:port/path`), its certificate trusted by
+// `cert_hash` (64 hex digits; "" trusts the browser's own authorities): its number, or -1 when the
+// browser has no WebTransport or refused the URL.
+int wt_open(const std::string& url, const std::string& cert_hash);
+WtState wt_state(int session);
+// Why the session closed or never opened ("" while it is open).
+std::string wt_why(int session);
+// One datagram (at most webtransport's kMaxDatagram); false when the session is not open.
+bool wt_send(int session, std::span<const uint8_t> datagram);
+// The oldest datagram not taken yet; false when none has come.
+bool wt_take(int session, std::vector<uint8_t>& datagram);
+void wt_close(int session);
+// The session as a transport's pipe (net::open_pipe_transport) to `peer`, the address its
+// datagrams are reported from.
+net::DatagramPipe wt_pipe(int session, const net::Address& peer);
 
 // `line` in the page's status line and the console ("" clears the status line).
 void say(const std::string& line);

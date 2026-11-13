@@ -2,6 +2,7 @@
 //
 // ge:summary The web viewer's page calls defined: fetch, the paint, the canvas, the status line
 // ge:keywords web browser emscripten em-async-js fetch request-animation-frame websocket
+// ge:keywords webtransport datagram server-certificate-hashes wt_open wt_pipe
 // ge:keywords keys pointer scancode take_input take_play_input pointer-lock mouse-look keyup
 // ge:skill net
 #include "web/browser.hpp"
@@ -9,6 +10,7 @@
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
 
+#include <cstdint>
 #include <cstdlib>
 
 #include "input/state.hpp"
@@ -121,6 +123,95 @@ EM_JS(void, ge_web_ws_close, (int id), {
   const s = Module.geSockets && Module.geSockets[id];
   if (s && s.ws) s.ws.close();
   if (s) s.state = 2;
+});
+
+// The page's WebTransport sessions, by number (docs/hub.md § Playing in a browser): datagrams
+// both ways, those that come queued as they come (at most 512 waiting: the oldest go first, as a
+// full socket's would) and taken in order. The certificate is trusted by its SHA-256 when one is
+// given (64 hex digits: the endpoint's own, engine/webtransport/certificate.hpp).
+EM_JS(int, ge_web_wt_open, (const char* url, const char* hash), {
+  if (!Module.geSessions) Module.geSessions = [];
+  const s = {queue : [], state : 0, why : ""};
+  const opts = {};
+  const hex = UTF8ToString(hash);
+  if (hex.length == 64) {
+    const v = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) v[i] = parseInt(hex.substr(i * 2, 2), 16);
+    opts.serverCertificateHashes = [ {algorithm : "sha-256", value : v} ];
+  }
+  if (typeof WebTransport == "undefined") return -1;
+  try {
+    s.t = new WebTransport(UTF8ToString(url), opts);
+  } catch (e) {
+    return -1;
+  }
+  const gone = function(e) {
+    s.state = 2;
+    if (!s.why) s.why = e ? String(e.message || e) : "the session closed";
+  };
+  s.t.ready
+      .then(function() {
+        s.state = 1;
+        s.w = s.t.datagrams.writable.getWriter();
+        const r = s.t.datagrams.readable.getReader();
+        const pump = function() {
+          r.read()
+              .then(function(d) {
+                if (d.done) return;
+                if (s.queue.length >= 512) s.queue.shift();
+                s.queue.push(d.value);
+                pump();
+              })
+              .catch(gone);
+        };
+        pump();
+      })
+      .catch(gone);
+  s.t.closed.then(function() { gone(null); }).catch(gone);
+  Module.geSessions.push(s);
+  return Module.geSessions.length - 1;
+});
+
+EM_JS(int, ge_web_wt_state, (int id), {
+  const s = Module.geSessions && Module.geSessions[id];
+  return s ? s.state : 2;
+});
+
+EM_JS(int, ge_web_wt_send, (int id, const uint8_t* data, int len), {
+  const s = Module.geSessions && Module.geSessions[id];
+  if (!s || s.state != 1) return 0;
+  s.w.write(HEAPU8.slice(data, data + len)).catch(function(){});
+  return 1;
+});
+
+// The next datagram's length, or -1 when none is queued.
+EM_JS(int, ge_web_wt_peek, (int id), {
+  const s = Module.geSessions && Module.geSessions[id];
+  return s && s.queue.length ? s.queue[0].length : -1;
+});
+
+EM_JS(void, ge_web_wt_take, (int id, uint8_t* out), {
+  const s = Module.geSessions[id];
+  HEAPU8.set(s.queue.shift(), out);
+});
+
+EM_JS(void, ge_web_wt_close, (int id), {
+  const s = Module.geSessions && Module.geSessions[id];
+  if (s && s.t && s.state != 2) s.t.close();
+  if (s) {
+    s.state = 2;
+    if (!s.why) s.why = "closed by the page";
+  }
+});
+
+// Why the session closed, in a malloc'd string ("" while it is open).
+EM_JS(char*, ge_web_wt_why, (int id), {
+  const s = Module.geSessions && Module.geSessions[id];
+  const t = s ? s.why : "no such session";
+  const n = lengthBytesUTF8(t) + 1;
+  const p = _malloc(n);
+  stringToUTF8(t, p, n);
+  return p;
 });
 
 // The canvas's keys, buttons, wheel and pointer, gathered by listeners set on the first call and
@@ -362,6 +453,67 @@ bool ws_take(int socket, std::vector<uint8_t>& msg) {
 }
 
 void ws_close(int socket) { ge_web_ws_close(socket); }
+
+int wt_open(const std::string& url, const std::string& cert_hash) {
+  return ge_web_wt_open(url.c_str(), cert_hash.c_str());
+}
+
+WtState wt_state(int session) {
+  const int s = ge_web_wt_state(session);
+  return s == 0 ? WtState::connecting : s == 1 ? WtState::open : WtState::closed;
+}
+
+bool wt_send(int session, std::span<const uint8_t> datagram) {
+  return ge_web_wt_send(session, datagram.data(), static_cast<int>(datagram.size())) != 0;
+}
+
+bool wt_take(int session, std::vector<uint8_t>& datagram) {
+  const int n = ge_web_wt_peek(session);
+  if (n < 0) return false;
+  datagram.resize(static_cast<size_t>(n));
+  ge_web_wt_take(session, datagram.data());
+  return true;
+}
+
+void wt_close(int session) { ge_web_wt_close(session); }
+
+std::string wt_why(int session) {
+  char* p = ge_web_wt_why(session);
+  std::string why = p;
+  std::free(p);
+  return why;
+}
+
+namespace {
+
+bool pipe_send(void* ctx, const uint8_t* data, size_t size) {
+  return ge_web_wt_send(static_cast<int>(reinterpret_cast<intptr_t>(ctx)), data,
+                        static_cast<int>(size)) != 0;
+}
+
+int pipe_receive(void* ctx, uint8_t* buffer, size_t capacity) {
+  const int id = static_cast<int>(reinterpret_cast<intptr_t>(ctx));
+  const int n = ge_web_wt_peek(id);
+  if (n < 0) return -1;
+  if (static_cast<size_t>(n) > capacity) {
+    std::vector<uint8_t> drop(static_cast<size_t>(n));  // too big for the caller: dropped
+    ge_web_wt_take(id, drop.data());
+    return -1;
+  }
+  ge_web_wt_take(id, buffer);
+  return n;
+}
+
+}  // namespace
+
+net::DatagramPipe wt_pipe(int session, const net::Address& peer) {
+  net::DatagramPipe p;
+  p.send = pipe_send;
+  p.receive = pipe_receive;
+  p.ctx = reinterpret_cast<void*>(static_cast<intptr_t>(session));
+  p.peer = peer;
+  return p;
+}
 
 bool fetch_bytes(const std::string& url, std::vector<uint8_t>& out, std::string& error,
                  const std::string& progress) {

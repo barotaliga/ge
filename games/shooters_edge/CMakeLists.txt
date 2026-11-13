@@ -189,7 +189,7 @@ endif()
 # so a page that only watches downloads no server.
 if(TARGET shooters_edge_client_gpu)
   ge_add_web_viewer(shooters_edge SOURCES web/viewer.cpp LIBS shooters_edge_client_gpu ge_tv)
-  ge_add_web_viewer(shooters_edge NAME shooters_edge_play SOURCES web/viewer.cpp web/play.cpp
+  ge_add_web_viewer(shooters_edge NAME shooters_edge_play SOURCES web/viewer.cpp web/play.cpp web/join.cpp
                     LIBS shooters_edge_client_gpu shooters_edge_classic ge_tv
                     DEFINES SE_WEB_PLAY=1)
 endif()
