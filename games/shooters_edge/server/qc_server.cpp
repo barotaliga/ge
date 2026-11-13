@@ -30,84 +30,98 @@ namespace con = ge::console;
 constexpr int kFirstDynamic = 33;  // entities after the world and the 32 client slots
 constexpr int kNotInDeathmatch = 2048, kNotEasy = 256, kNotMedium = 512, kNotHard = 1024;
 
+// The settings every runner of a classic mod registers, in order; the row with no name stands for
+// the move's and the loop's own (plugins/shooter/settings.hpp), whose defaults are the options'.
+constexpr ModSetting kModSettings[] = {
+    {"deathmatch", "1", true, "The match's rules as the mod reads them.",
+     "0: cooperative; 1: deathmatch (the default); 2..N: another deathmatch mode of the mod's",
+     con::CvarKind::number},
+    {"skill", "1", false, "The monsters' skill.",
+     "0: easy; 1: normal (the default); 2: hard; 3: nightmare", con::CvarKind::number},
+    {"teamplay", "0", true, "The team rules as the mod reads them.",
+     "0: every player for himself (the default); 1..N: that team mode, as the mod numbers them",
+     con::CvarKind::number},
+    {"coop", "0", false, "Whether a single-player program plays its cooperative game.",
+     "0: not cooperative (the default); 1: cooperative, with deathmatch 0", con::CvarKind::number},
+    {"sv_friendlyfire", "0", true, "Whether one player's shots harm another in coop.",
+     "0: teammates are spared (the default); 1: harmed", con::CvarKind::number},
+    {"sv_friendlypush", "0", true,
+     "Whether a spared teammate's blow pushes you in coop, such as a rocket boost off a friend.",
+     "0: no push (the default); 1: pushed, harmlessly", con::CvarKind::number},
+    {"sv_episodes_done", "0", false,
+     "The episodes done in coop, a bit each, which the host keeps from game to game.",
+     "N: the sum of 1, 2, 4 and 8 for each episode done, the start map opening the next (0 the "
+     "default)",
+     con::CvarKind::number},
+    {"registered", "0", false, "Whether the packs carry the full game, which the host sets.",
+     "0: the shareware game (the default); 1: the full game, every episode open",
+     con::CvarKind::number},
+    {"timelimit", "0", true, "The match's length in minutes.",
+     "0: no limit (the default); 1..N: that many minutes", con::CvarKind::number},
+    {"fraglimit", "0", true, "The frags a player needs to end the match.",
+     "0: no limit (the default); 1..N: that many frags", con::CvarKind::number},
+    {"samelevel", "0", true, "Whether the map stays the same when the match ends.",
+     "0: the next map follows (the default); 1: the same map again", con::CvarKind::number},
+    {"sv_playermove", "auto", true, "Which player move runs, read when a map starts.",
+     "arena: the predicted move; original: the server's own step; auto: original for a "
+     "single-player program, else arena (the default)",
+     con::CvarKind::text},
+    {"sv_idealpitchscale", "0.8", false,
+     "How far a single-player program tilts the view on a slope, in degrees a unit of step.",
+     "0: no tilt; N: that many degrees (0.8 the default)", con::CvarKind::number},
+    {nullptr},  // the move's and the loop's own (plugins/shooter/settings.hpp) here
+    {"pausable", "1", false, "Whether a player may pause the game.",
+     "0: only unpausing; 1: players may pause (the default)", con::CvarKind::boolean},
+    {"sv_phs", "1", false, "Whether sounds go only to the clients that can hear them.",
+     "0: to every client; 1: only to those that can hear them (the default)",
+     con::CvarKind::number},
+    {"sv_specprint", "0", false,
+     "Which of a tracked player's prints a spectator gets a copy of, as bits.",
+     "0: none (the default); 1: centre prints; 2: printed lines; 3: both", con::CvarKind::number},
+    {"sv_longfraglog", "0", false,
+     "Whether the frag log writes long lines, with teams and the date.",
+     "0: short lines (the default); 1: long lines", con::CvarKind::number},
+    {"sv_aim", "0.93", false,
+     "How near a single-player program's autoaim must be to a target, as the least cosine.",
+     "1: no autoaim; 0..1: that cosine, lower aims from further off (0.93 the default)",
+     con::CvarKind::number},
+    {"sv_progs", "", false, "The path of the progs to run.",
+     "\"\": the built-in test mod (the default); TEXT: that file", con::CvarKind::text},
+    {"hostname", "unnamed", true, "The server's name.", "TEXT: that name (unnamed the default)",
+     con::CvarKind::text},
+};
+
 }  // namespace
+
+std::span<const ModSetting> mod_settings() { return kModSettings; }
 
 void add_mod_settings(RulesCommon& s, const sh::ServerSettings& loop) {
   const uint32_t srv = con::kServer, info = con::kServer | con::kServerInfo;
-  const auto add = [&s](const char* name, std::string_view fallback, uint32_t flags,
-                        const char* help, const char* values,
-                        con::CvarKind kind = con::CvarKind::number) {
-    s.cvars.add({.name = name,
-                 .fallback = fallback,
-                 .flags = flags,
-                 .help = help,
-                 .kind = kind,
-                 .values = values});
-  };
-  add("deathmatch", "1", info, "The match's rules as the mod reads them.",
-      "0: cooperative; 1: deathmatch (the default); 2..N: another deathmatch mode of the mod's");
-  add("skill", "1", srv, "The monsters' skill.",
-      "0: easy; 1: normal (the default); 2: hard; 3: nightmare");
-  add("teamplay", "0", info, "The team rules as the mod reads them.",
-      "0: every player for himself (the default); 1..N: that team mode, as the mod numbers them");
-  add("coop", "0", srv, "Whether a single-player program plays its cooperative game.",
-      "0: not cooperative (the default); 1: cooperative, with deathmatch 0");
-  add("sv_friendlyfire", "0", info, "Whether one player's shots harm another in coop.",
-      "0: teammates are spared (the default); 1: harmed");
-  add("sv_friendlypush", "0", info,
-      "Whether a spared teammate's blow pushes you in coop, such as a rocket boost off a friend.",
-      "0: no push (the default); 1: pushed, harmlessly");
-  add("sv_episodes_done", "0", srv,
-      "The episodes done in coop, a bit each, which the host keeps from game to game.",
-      "N: the sum of 1, 2, 4 and 8 for each episode done, the start map opening the next (0 the "
-      "default)");
-  add("registered", "0", srv, "Whether the packs carry the full game, which the host sets.",
-      "0: the shareware game (the default); 1: the full game, every episode open");
-  add("timelimit", "0", info, "The match's length in minutes.",
-      "0: no limit (the default); 1..N: that many minutes");
-  add("fraglimit", "0", info, "The frags a player needs to end the match.",
-      "0: no limit (the default); 1..N: that many frags");
-  add("samelevel", "0", info, "Whether the map stays the same when the match ends.",
-      "0: the next map follows (the default); 1: the same map again");
-  add("sv_playermove", "auto", info, "Which player move runs, read when a map starts.",
-      "arena: the predicted move; original: the server's own step; auto: original for a "
-      "single-player program, else arena (the default)",
-      con::CvarKind::text);
-  add("sv_idealpitchscale", "0.8", srv,
-      "How far a single-player program tilts the view on a slope, in degrees a unit of step.",
-      "0: no tilt; N: that many degrees (0.8 the default)");
-  // The move's and the loop's own (plugins/shooter/settings.hpp), their defaults the options'.
-  int count = 0;
-  const sh::Setting* table = sh::settings_table(count);
-  for (int i = 0; i < count; i++) {
-    const sh::Setting& t = table[i];
-    const std::string fallback = sh::setting_text(t, loop);
-    s.cvars.add({.name = t.name,
-                 .fallback = fallback,
-                 .flags = info,
-                 .help = t.help,
-                 .kind = t.flag ? con::CvarKind::boolean : con::CvarKind::number,
-                 .min = t.low,
-                 .max = t.high,
-                 .values = t.values});
+  for (const ModSetting& m : kModSettings) {
+    if (m.name != nullptr) {
+      s.cvars.add({.name = m.name,
+                   .fallback = m.fallback,
+                   .flags = m.info ? info : srv,
+                   .help = m.help,
+                   .kind = m.kind,
+                   .values = m.values});
+      continue;
+    }
+    int count = 0;
+    const sh::Setting* table = sh::settings_table(count);
+    for (int i = 0; i < count; i++) {
+      const sh::Setting& t = table[i];
+      const std::string fallback = sh::setting_text(t, loop);
+      s.cvars.add({.name = t.name,
+                   .fallback = fallback,
+                   .flags = info,
+                   .help = t.help,
+                   .kind = t.flag ? con::CvarKind::boolean : con::CvarKind::number,
+                   .min = t.low,
+                   .max = t.high,
+                   .values = t.values});
+    }
   }
-  add("pausable", "1", srv, "Whether a player may pause the game.",
-      "0: only unpausing; 1: players may pause (the default)", con::CvarKind::boolean);
-  add("sv_phs", "1", srv, "Whether sounds go only to the clients that can hear them.",
-      "0: to every client; 1: only to those that can hear them (the default)");
-  add("sv_specprint", "0", srv,
-      "Which of a tracked player's prints a spectator gets a copy of, as bits.",
-      "0: none (the default); 1: centre prints; 2: printed lines; 3: both");
-  add("sv_longfraglog", "0", srv,
-      "Whether the frag log writes long lines, with teams and the date.",
-      "0: short lines (the default); 1: long lines");
-  add("sv_aim", "0.93", srv,
-      "How near a single-player program's autoaim must be to a target, as the least cosine.",
-      "1: no autoaim; 0..1: that cosine, lower aims from further off (0.93 the default)");
-  add("sv_progs", "", srv, "The path of the progs to run.",
-      "\"\": the built-in test mod (the default); TEXT: that file", con::CvarKind::text);
-  add("hostname", "unnamed", info, "The server's name.", "TEXT: that name (unnamed the default)",
-      con::CvarKind::text);
 }
 
 namespace {
