@@ -838,8 +838,13 @@ int32_t hide_row(const Fighter& f, const Stats& st) {
   return sg != nullptr ? sg->bit : 0;
 }
 
+// (`hide`) Not until no enemy has been seen this long, s: a fight's peeks keep the launcher up.
+constexpr double kHideCalm_s = 1.5;
+
 void hide_launcher(Fighter& f, const Stats& st, bool seen_now, double t, ai::Why* why) {
-  if (!f.features[sh::Feature::hide] || f.skill == sh::AimSkill::novice || seen_now) return;
+  if (!f.features[sh::Feature::hide] || f.skill == sh::AimSkill::novice || seen_now ||
+      t - f.mind.sighted_t < kHideCalm_s)
+    return;
   const BotArsenal& a = *f.arsenal;
   const BotWeapon* rl = weapon_row(a, a.launcher);
   if (rl == nullptr || st.weapon != rl->bit) return;
