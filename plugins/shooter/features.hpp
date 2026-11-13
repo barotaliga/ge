@@ -128,6 +128,8 @@
 //   claim stood on a full armour with it as its goal) (fighter.cpp, M18r.md 3); moved nothing.
 // - `tripkeep`: on a scripted way to its goal item, the goal held unless it backs off
 //   (fighter.cpp, M18r.md 0c1); moved nothing (the YA taken no more).
+// - `routetime`: an item's run weighed by its route's time (the reach's), not the straight line
+//   (fighter.cpp best_item, M18r.md 3); the YA chosen less (lying 82 -> 88 %), in no preset.
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
@@ -143,7 +145,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep routetime
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -245,9 +247,10 @@ enum class Feature : uint8_t {
   hide,
   nogoal,
   tripkeep,
+  routetime,
   trial,
 };
-constexpr size_t kFeatures = 89;
+constexpr size_t kFeatures = 90;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
