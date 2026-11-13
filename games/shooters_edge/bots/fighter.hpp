@@ -161,6 +161,7 @@ struct FighterStats {
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
   int64_t on_the_way = 0;    // short goals taken up on the way
+  int64_t trips_kept = 0;    // (`tripkeep`) thinks a scripted way's goal was held
   int64_t hides = 0;         // (`hide`) the launcher put away for the scattergun
   int64_t stood = 0;         // (`fightway`) a fight's back key let go: stood and dodged
   int64_t chained = 0;       // item goals planned on to the next one (`chains`)
