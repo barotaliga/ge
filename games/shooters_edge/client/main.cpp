@@ -59,6 +59,7 @@
 // ge:keywords scoreboard scr_levelstats settings config-cfg topcolor bottomcolor gamma binds f12
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -302,6 +303,15 @@ int run_main(int argc, char** argv) {
   // Started inside an install (or placed in one, or above several: client/install_search.hpp), that
   // one.
   const std::string prefs = ge::platform::prefs_dir("gameengine2", "shooters_edge");
+  // The game CLI's account file (`account signin`): our client logs itself in by it on a server
+  // whose master is the same (net/classic_remote.hpp § Logging in).
+  if (!prefs.empty())
+    sn::remote_login_from(
+        remote, (std::filesystem::path(prefs) / "cli" / "account.txt").string(), [] {
+          return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                          std::chrono::system_clock::now().time_since_epoch())
+                                          .count());
+        });
   std::vector<cl::FoundInstall> installs;  // the console's `games`
   cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
@@ -595,6 +605,9 @@ int run_main(int argc, char** argv) {
   listen_opt.lobby_settings = listen.opt.lobby_settings;
   listen_opt.port = listen.opt.port;  // others join on it (sv_port)
   listen_opt.maxclients = listen.opt.maxclients;
+  listen_opt.login = listen.opt.login;  // sv_login and the rest, as the console set them
+  if (!prefs.empty())
+    listen_opt.accounts_dir = (std::filesystem::path(prefs) / "accounts").string();
   listen_opt.registered = game_content.registered;
   listen_opt.episodes = game_content.episodes;
   listen_opt.item_names = game_content.item_names;
@@ -1521,6 +1534,9 @@ int run_main(int argc, char** argv) {
       bench_fx_state.models = &cl::world_models(*world);
       bench_fx_state.on = cl::fx_switches(picture);
       cl::demo_fx_step(ds, bench_demo_fx, bench_map.get(), view, bench_fx_state, t, wall, bench_fx);
+      // See-through liquids on a joined server where its `watervis` allows them; a demo played
+      // back always may.
+      bench_fx.see_through = !drawn_remote || shooters_edge::look::watervis_allowed(ds.serverinfo);
       // The quick weapon's preview held in place of the game's weapon (quick_fire.hpp).
       in_hand.show = drawn_remote ? cl::quick_show(controls.quick, cl::demo_status(ds, t), t) : -1;
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
@@ -1648,6 +1664,9 @@ int run_main(int argc, char** argv) {
     fx_state.book = &fx_book;
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
+    // See-through liquids where the server allows them (its `watervis`).
+    fx.see_through = listen.server == nullptr ||
+                     shooters_edge::look::watervis_allowed(listen.server->serverinfo);
     view_settings.lerp = picture.lerp_models;  // r_lerpmodels: the held weapon's frames too
     // The quick weapon's preview held in place of the game's weapon (quick_fire.hpp).
     in_hand.show =

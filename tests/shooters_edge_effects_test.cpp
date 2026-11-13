@@ -327,3 +327,38 @@ TEST(a_dynamic_light_adds_to_a_model_in_a_straight_line_to_nothing_at_its_radius
   CHECK(rgb[0] > 200.0 / 255.0);
   CHECK(toward[0] > 0);
 }
+
+TEST(see_through_liquids_take_the_maps_alpha_else_the_players_else_waters) {
+  namespace lk = shooters_edge::look;
+  lk::Picture p;
+  const double none[4] = {-1, -1, -1, -1};
+  double a[4];
+  lk::liquid_alphas(p, none, true, a);
+  CHECK(a[0] == 1 && a[1] == 1 && a[2] == 1 && a[3] == 1);  // solid by default
+  p.water_alpha = 0.4;
+  p.lava_alpha = "0.9";
+  p.tele_alpha = "word";  // not a number: water's
+  lk::liquid_alphas(p, none, true, a);
+  CHECK(a[0] == 0.4 && a[1] == 0.4 && a[2] == 0.9 && a[3] == 0.4);
+  const double map[4] = {0.6, -1, 2, -1};  // the map's own wins, clamped to 1
+  lk::liquid_alphas(p, map, true, a);
+  CHECK(a[0] == 0.6 && a[1] == 0.6 && a[2] == 1 && a[3] == 0.6);
+  lk::liquid_alphas(p, map, false, a);  // the server keeps them solid
+  CHECK(a[0] == 1 && a[1] == 1 && a[2] == 1 && a[3] == 1);
+}
+
+TEST(a_maps_liquid_keys_and_a_servers_watervis) {
+  namespace lk = shooters_edge::look;
+  ge::brush::Map m;
+  ge::brush::Entity world;
+  world.pairs = {{"wateralpha", "0.5"}, {"_lavaalpha", "0.8"}, {"telealpha", "x"}};
+  m.entities.push_back(world);
+  double a[4];
+  lk::map_liquid_alphas(m, a);
+  CHECK(a[0] == 0.5 && a[1] < 0 && a[2] == 0.8 && a[3] < 0);
+  lk::map_liquid_alphas(ge::brush::Map{}, a);
+  CHECK(a[0] < 0 && a[3] < 0);
+  CHECK(lk::watervis_allowed({}));  // absent: allowed
+  CHECK(lk::watervis_allowed({{"hostname", "x"}, {"watervis", "1"}}));
+  CHECK(!lk::watervis_allowed({{"watervis", "0"}}));  // the server keeps them solid
+}

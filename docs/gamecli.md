@@ -122,7 +122,9 @@ key and the last ticket in `<state>/account.txt`, readable by its owner alone. T
 at the first contact and checked at every later one: a service that answers with another key is
 refused, unless `--key=<hex>` names the new one. The password comes from `--password` or one line
 of standard input. `account code` prints the line a classic client's console takes (`login <name>
-<code>`), good once within 15 minutes; `signin`'s ticket is what our own client hands a server.
+<code>`), good once within 15 minutes. After `signin` it asks no password: the ticket kept buys the
+code (the service's `ticket_code`), and our own client logs itself in the same way, so neither the
+password nor the ticket ever crosses a classic game's plain-text wire.
 
 ## Places
 

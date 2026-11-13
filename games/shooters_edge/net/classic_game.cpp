@@ -18,6 +18,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "core/num.hpp"
@@ -44,6 +45,7 @@
 #include "shooters_edge/server/dedicated.hpp"
 #include "shooters_edge/server/lobby.hpp"
 #include "shooters_edge/server/qvm_server.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::net {
@@ -53,6 +55,7 @@ namespace {
 namespace gs = ge::server;
 namespace cl = shooters_edge::client;
 namespace sh = ge::shooter;
+namespace srv = shooters_edge::server;
 
 struct Game {
   // The C++ mod packages named in sv_mod (docs/mods.md § On the server), open while any rules run.
@@ -273,6 +276,17 @@ const std::vector<gs::GameRule>& all_rules() {
     for (int i = 0; i < count; i++)
       out.push_back({table[i].name, table[i].help, nullptr, table[i].values});
     out.insert(out.end(), std::begin(kEndpointRules), std::end(kEndpointRules));
+    // The rest of what every classic mod's runner registers (server/rules_runner.hpp), so a
+    // server.cfg may set them and the check knows them. Not `hostname`, which is the core's
+    // sv_hostname by another name, nor `sv_progs`, which only a test match reads.
+    for (const srv::ModSetting& m : srv::mod_settings()) {
+      if (m.name == nullptr || std::string_view(m.name) == "hostname" ||
+          std::string_view(m.name) == "sv_progs")
+        continue;
+      const auto same = [&m](const gs::GameRule& r) { return std::string_view(r.name) == m.name; };
+      if (std::none_of(out.begin(), out.end(), same))
+        out.push_back({m.name, m.help, nullptr, m.values, m.info});
+    }
     return out;
   }();
   return rules;
@@ -606,7 +620,8 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     line.append(" \"").append(value).append("\"");
     // The sequel's rules keep their own few settings and leave the rest of a mod's alone.
     const bool taken = rules.console(line) || brushes;
-    const bool text = rule == "sv_aimhelp_allow" || rule == "sv_aimhelp_deny";  // names
+    const bool text =
+        rule == "sv_aimhelp_allow" || rule == "sv_aimhelp_deny" || rule == "sv_playermove";
     if ((!text && (end == value.c_str() || *end != '\0')) || !taken) {
       error = line;
       error.append(" is not a number (--explain=");
@@ -1398,7 +1413,9 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   load_bans(*game.classic);
   game.classic->game_command = game_words;
   game.classic->game_ctx = &game;
-  if (game.host == nullptr && classic_login_wanted(game.settings)) {
+  // Logins, on a dedicated server and on the window's own match alike (its player is a local seat,
+  // never asked).
+  if (classic_login_wanted(game.settings)) {
     game.login = std::make_unique<ClassicLogin>();
     if (!classic_login_open(*game.login, *game.classic, game.settings, error)) return false;
   }

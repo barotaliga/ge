@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -59,6 +60,7 @@
 #include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "ui/raster.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -195,6 +197,118 @@ void run(gl::Lab& lab) {
   menu.servers().use_transport(&browser);
   menu.servers().set_lan_ports(27500, 27500);
 
+  const int iw = static_cast<int>(w), ih = static_cast<int>(h);
+  int problems = 0;
+  // The pages, each a picture taken by `shot` with `behind` (words) under them; `watched`, when
+  // set, draws ESCAPE's picture (the recording watched with its play bar).
+  using Over = std::function<void(ge::ui::DrawList&)>;
+  using Shot = std::function<void(const char*, const std::string&, const std::string&,
+                                  const std::string&, const Over&)>;
+  const auto pages = [&](const Shot& shot, const std::string& behind, double t,
+                         const Over& watched) {
+    const std::string behind_line =
+        watched ? "Playing the recording behind the menu." : "No recording plays behind the menu.";
+    ge::ui::MenuInput none;
+    menu.show(host, "main");
+    menu.main().focus("games");
+    menu.settle();
+    shot("menu", "THE GAME'S OWN MENU OVER ITS RECORDING",
+         "The main menu in the game's own pictures, " + behind +
+             ". SELECT GAME is the first row, cut in the menu's own letters where they were "
+             "measured, the spinning cursor beside it.",
+         "the darkened menu over what plays behind it; SELECT GAME first",
+         [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    ge::ui::MenuInput accept;
+    accept.accept = true;
+    menu.update(accept, false, host, 1 / 60.0);
+    shot("games", "SELECT GAME",
+         "SELECT GAME in the classic look: each game's name cut from the menu strips' own carved "
+         "letters (its picture on other strips), the one playing marked with its edition and "
+         "install, the other not found yet.",
+         "two names in the menu's carved letters; the first marked playing; the cursor on it",
+         [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    menu.show(host, "options");
+    menu.settle();
+    shot("options", "OPTIONS IN THE GAME'S OWN PICTURES",
+         "A page under the root: its title the game's own picture (the sequel's banner over the "
+         "screen's top), its rows in the game's glyph sheet.",
+         "the title picture centred at the top; the rows' labels right-aligned to the cursor",
+         [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    menu.hide();
+    if (watched)
+      shot("watched", "ESCAPE: THE RECORDING WATCHED",
+           "ESCAPE closes the menu over the recording, which plays on: watched with its play bar.",
+           "the play bar along the bottom over the HUD; no menu", watched);
+    con.print("]map dm4");
+    con.print("Can't find maps/dm4.bsp in this install.");
+    con.print(behind_line);
+    con.print("]menu_attract");
+    con.print("\"menu_attract\" is \"auto\"");
+    con_view.set_open(true);
+    for (int k = 0; k < 60; k++) con_view.frame(1 / 30.0);
+    shot("console", "THE CONSOLE IN THE GAME'S LETTERS",
+         "The console down over the recording: its lines in the game's own glyph sheet, over the "
+         "game's console background sliding down with it.",
+         "the background picture down to the panel's edge; the lines in the game's letters",
+         [&](ge::ui::DrawList& dl) { sm::draw_game_console(dl, con_view, con_look, t); });
+    con_view.set_open(false);
+    for (int k = 0; k < 60; k++) con_view.frame(1 / 30.0);
+    menu.show(host, "demos");
+    menu.settle();
+    shot("demos", "DEMOS IN THE CLASSIC LOOK",
+         "DEMOS in the game's own letters: the place and the folder, the folders and the "
+         "recordings with their sizes, the cursor, the keys at the foot.",
+         "glyph rows right of the plaque; no modern slabs",
+         [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    menu.show(host, "servers");
+    int64_t now = 0;
+    uint8_t buf[64];
+    gn::Address from;
+    for (int i = 0; i < 90; i++) {
+      now += 16000;
+      gn::sim_advance(net, now);
+      for (size_t s = 0; s < servers.size(); s++)
+        while (gn::transport_receive(servers[s], buf, sizeof buf, from, now) >= 0) {
+          const std::string_view line = kServers[s];
+          gn::transport_send(servers[s], from, reinterpret_cast<const uint8_t*>(line.data()),
+                             line.size(), now);
+        }
+      menu.update(none, false, host, 0.016);
+    }
+    lab.metric("servers-listed", static_cast<double>(menu.servers().rows().size()), "count", det);
+    shot("servers", "JOIN A GAME IN THE CLASSIC LOOK",
+         "JOIN A GAME in the game's own letters under its multiplayer title: four servers on the "
+         "simulated network, the name, map, players and ping, the selected one's address below.",
+         "four rows; the cursor on the first; the footer's address",
+         [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+  };
+
+  // `--demo=none`: the menu over the title's dark, drawn on the CPU (a game whose recordings
+  // cannot play yet keeps the title behind its menu).
+  if (lab.arg("demo") == "none") {
+    const Shot flat = [&](const char* id, const std::string& title, const std::string& caption,
+                          const std::string& look_for, const Over& over) {
+      ge::ui::DrawList overlay;
+      overlay.begin(iw, ih);
+      over(overlay);
+      for (const std::string& p : menu.problems()) {
+        problems++;
+        lab.fail(std::string(id) + ": " + p, "Fix the page's classic layout. Skill: ui.");
+      }
+      ge::ui::Image img = ge::ui::make_image(iw, ih, ge::ui::hex(0x101018));
+      ge::ui::render(overlay, img);
+      lab.shot({id,
+                title,
+                caption,
+                look_for,
+                {{"demo", "none"}, {"pack", real ? "player's" : "fixture"}}},
+               gl::Picture{img.width, img.height, std::move(img.rgba)}, det);
+    };
+    pages(flat, "the title's dark behind it", 3.25, {});
+    lab.metric("problems", problems, "count", det);
+    return;
+  }
+
   // The recording, played to the frame the pictures are taken on.
   cl::Timedemo bench;
   if (!cl::timedemo_start(files, lab.arg("demo"), bench, error, adapter)) {
@@ -258,11 +372,9 @@ void run(gl::Lab& lab) {
   // The effects run up to the picture's moment, so the arrival's flash has faded as in the window.
   for (int k = 0; k <= 234; k++)
     cl::demo_fx_step(ds, demo_fx, map.get(), view, fx_state, k / 72.0, 1.0 / 72, fx);
-  const int iw = static_cast<int>(w), ih = static_cast<int>(h);
-  int problems = 0;
   // One picture: the recording's frame with its HUD, then what `over` draws on it.
-  const auto shot = [&](const char* id, const std::string& title, const std::string& caption,
-                        const std::string& look_for, const auto& over) {
+  const Shot shot = [&](const char* id, const std::string& title, const std::string& caption,
+                        const std::string& look_for, const Over& over) {
     ge::ui::DrawList overlay;
     overlay.begin(iw, ih);
     se::fill_hud(hud, cl::demo_status(ds, t), hud_art);
@@ -287,74 +399,13 @@ void run(gl::Lab& lab) {
              gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
              gl::Det::measured);
   };
-  ge::ui::MenuInput none;
-  menu.show(host, "main");
-  menu.main().focus("games");
-  menu.settle();
-  shot("menu", "THE GAME'S OWN MENU OVER ITS RECORDING",
-       "The main menu in the game's own pictures, its recording (" + bench.name + " on " + ds.map +
-           ") playing behind it in place of the title's night. SELECT GAME is the first row, cut "
-           "in the strips' letters where they were measured, the spinning cursor beside it.",
-       "the recording's world and HUD under the darkened menu; SELECT GAME first",
-       [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
-  ge::ui::MenuInput accept;
-  accept.accept = true;
-  menu.update(accept, false, host, 1 / 60.0);
-  shot("games", "SELECT GAME",
-       "SELECT GAME in the classic look: each game's name cut from the menu strips' own carved "
-       "letters (its picture on other strips), the one playing marked with its edition and "
-       "install, the other not found yet.",
-       "two names in the menu's carved letters; the first marked playing; the cursor on it",
-       [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
-  menu.hide();
-  shot("watched", "ESCAPE: THE RECORDING WATCHED",
-       "ESCAPE closes the menu over the recording, which plays on: watched with its play bar.",
-       "the play bar along the bottom over the HUD; no menu", [&](ge::ui::DrawList& dl) {
-         playback.shown_until = t + 10;
-         cl::playback_draw(dl, playback, bench, iw, ih, t);
-       });
-  con.print("]map dm4");
-  con.print("Can't find maps/dm4.bsp in this install.");
-  con.print("Playing " + bench.name + " behind the menu.");
-  con.print("]menu_attract");
-  con.print("\"menu_attract\" is \"auto\"");
-  con_view.set_open(true);
-  for (int k = 0; k < 60; k++) con_view.frame(1 / 30.0);
-  shot("console", "THE CONSOLE IN THE GAME'S LETTERS",
-       "The console down over the recording: its lines in the game's own glyph sheet, over the "
-       "game's console background sliding down with it.",
-       "the background picture down to the panel's edge; the lines in the game's letters",
-       [&](ge::ui::DrawList& dl) { sm::draw_game_console(dl, con_view, con_look, t); });
-  con_view.set_open(false);
-  for (int k = 0; k < 60; k++) con_view.frame(1 / 30.0);
-  menu.show(host, "demos");
-  menu.settle();
-  shot("demos", "DEMOS IN THE CLASSIC LOOK",
-       "DEMOS in the game's own letters: the place and the folder, the folders and the "
-       "recordings with their sizes, the cursor, the keys at the foot.",
-       "glyph rows right of the plaque; no modern slabs",
-       [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
-  menu.show(host, "servers");
-  int64_t now = 0;
-  uint8_t buf[64];
-  gn::Address from;
-  for (int i = 0; i < 90; i++) {
-    now += 16000;
-    gn::sim_advance(net, now);
-    for (size_t s = 0; s < servers.size(); s++)
-      while (gn::transport_receive(servers[s], buf, sizeof buf, from, now) >= 0) {
-        const std::string_view line = kServers[s];
-        gn::transport_send(servers[s], from, reinterpret_cast<const uint8_t*>(line.data()),
-                           line.size(), now);
-      }
-    menu.update(none, false, host, 0.016);
-  }
-  lab.metric("servers-listed", static_cast<double>(menu.servers().rows().size()), "count", det);
-  shot("servers", "JOIN A GAME IN THE CLASSIC LOOK",
-       "JOIN A GAME in the game's own letters under its multiplayer title: four servers on the "
-       "simulated network, the name, map, players and ping, the selected one's address below.",
-       "four rows; the cursor on the first; the footer's address",
-       [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+  pages(shot,
+        "its recording (" + bench.name + " on " + ds.map +
+            ") playing behind it in place of the title's night",
+        t, [&](ge::ui::DrawList& dl) {
+          playback.shown_until = t + 10;
+          cl::playback_draw(dl, playback, bench, iw, ih, t);
+        });
   lab.metric("problems", problems, "count", det);
   ls::checked(lab, static_cast<int>(device->errors.load()),
               static_cast<int>(device->pipelines_after_load));
@@ -370,7 +421,7 @@ const gl::LabSpec kSpec{
     "SELECT GAME first?",
     {{"size", "1280,800", "the frame's width and height, px"},
      {"basedir", "", "the folder a player's game is installed in: its own pack and recording"},
-     {"demo", "demo1", "the recording played behind the menu"},
+     {"demo", "demo1", "the recording played behind the menu; none: the title's dark, on the CPU"},
      {"frame", "400", "the recording's frame the pictures are taken on"}},
     "--size=640,400 --frame=120",
     run,

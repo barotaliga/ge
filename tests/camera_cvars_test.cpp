@@ -14,6 +14,7 @@
 #include "camera/scenarios.hpp"
 #include "check.hpp"
 #include "console/console.hpp"
+#include "console/words.hpp"
 #include "core/math.hpp"
 
 namespace cam = ge::camera;
@@ -107,6 +108,9 @@ TEST(cl_camera_changes_the_rung_when_it_moves) {
   d.camera = "chase";
   d.ladder_names = "eyes chase far high helmet tips orbit trackside";
   cam::add_camera_cvars(console.cvars(), v, d);
+  // Every camera setting says what it does and what each value does (console/words.hpp).
+  for (const con::Cvar* cv : console.cvars().sorted())
+    CHECK_MSG(con::words_fault(*cv).empty(), cv->name + ": " + con::words_fault(*cv));
   cam::Camera c = reference_camera();
   c.rung = cam::find_rung(c, "far");
   // Unchanged since registration: the game's own rung stands.
