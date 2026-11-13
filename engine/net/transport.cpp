@@ -141,7 +141,7 @@ bool send_now(Transport& t, const Address& to, const uint8_t* data, size_t size,
       if (TcpStream* s = stream_to(t, to)) ok = tcp_send_frame(*s, data, size);
       break;
     case TransportKind::pipe:
-      ok = t.pipe.send(t.pipe.ctx, data, size);
+      ok = t.pipe.send(t.pipe.ctx, to, data, size);
       break;
     case TransportKind::none:
       break;
@@ -235,8 +235,7 @@ int receive_one(Transport& t, uint8_t* buffer, size_t capacity, Address& from, i
       n = tcp_receive(t, buffer, capacity, from);
       break;
     case TransportKind::pipe:
-      n = t.pipe.receive(t.pipe.ctx, buffer, capacity);
-      if (n >= 0) from = t.pipe.peer;
+      n = t.pipe.receive(t.pipe.ctx, buffer, capacity, from);
       break;
     case TransportKind::none:
       break;

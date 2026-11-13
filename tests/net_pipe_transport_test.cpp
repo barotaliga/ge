@@ -1,8 +1,8 @@
 // engine/net/transport.hpp's pipe: a transport to one peer whose datagrams the caller carries (a
 // browser page's WebTransport session). Two pipes joined by queues in memory stand in for the page
-// and the far end: a datagram goes into the pipe whatever address it is sent to, one received is
-// reported from the pipe's peer, and two nodes connect and trade a reliable message over them as
-// they would over UDP.
+// and the far end: a datagram goes into the pipe with the address it is sent to, one received is
+// reported from the sender the pipe names, and two nodes connect and trade a reliable message over
+// them as they would over UDP.
 //
 // ge:summary Test: the pipe transport, and two nodes over a pair of pipes
 // ge:keywords test net transport pipe datagram-pipe webtransport node
@@ -28,31 +28,35 @@ struct Line {
 struct End {
   Line* out = nullptr;
   Line* in = nullptr;
+  Address peer;  // every datagram received comes from it
+  Address last_to;
 };
 
-bool end_send(void* ctx, const uint8_t* data, size_t size) {
+bool end_send(void* ctx, const Address& to, const uint8_t* data, size_t size) {
   End& e = *static_cast<End*>(ctx);
   if (!e.out->open) return false;
+  e.last_to = to;
   e.out->queue.emplace_back(data, data + size);
   return true;
 }
 
-int end_receive(void* ctx, uint8_t* buffer, size_t capacity) {
+int end_receive(void* ctx, uint8_t* buffer, size_t capacity, Address& from) {
   End& e = *static_cast<End*>(ctx);
   if (e.in->queue.empty()) return -1;
   std::vector<uint8_t> d = std::move(e.in->queue.front());
   e.in->queue.pop_front();
   if (d.size() > capacity) return -1;  // as a socket would: too big for the buffer, dropped
   std::copy(d.begin(), d.end(), buffer);
+  from = e.peer;
   return static_cast<int>(d.size());
 }
 
 DatagramPipe pipe_of(End& e, const Address& peer) {
+  e.peer = peer;
   DatagramPipe p;
   p.send = end_send;
   p.receive = end_receive;
   p.ctx = &e;
-  p.peer = peer;
   return p;
 }
 
@@ -64,17 +68,18 @@ TEST(pipe_refuses_missing_calls) {
   CHECK(t.kind == TransportKind::none);
 }
 
-TEST(pipe_sends_to_its_peer_and_hears_from_it) {
+TEST(pipe_carries_the_address_both_ways) {
   Line ab, ba;
-  End a{&ab, &ba}, b{&ba, &ab};
+  End a{&ab, &ba, {}, {}}, b{&ba, &ab, {}, {}};
   const Address server = ipv4(10, 0, 0, 7, 27500);
   Transport t;
   CHECK(open_pipe_transport(t, pipe_of(a, server)));
   CHECK(t.kind == TransportKind::pipe);
   const uint8_t m[3] = {1, 2, 3};
-  // Any address: the pipe has one peer.
+  // The address goes to the pipe with the datagram: the pipe decides what it means.
   CHECK(transport_send(t, ipv4(192, 168, 1, 1, 9), m, sizeof m, 0));
   CHECK(ab.queue.size() == 1 && ab.queue.front() == std::vector<uint8_t>(m, m + 3));
+  CHECK(a.last_to == ipv4(192, 168, 1, 1, 9));
   uint8_t buf[16];
   Address from;
   CHECK(transport_receive(t, buf, sizeof buf, from, 0) == -1);  // nothing yet: at once
@@ -93,7 +98,7 @@ TEST(pipe_sends_to_its_peer_and_hears_from_it) {
 
 TEST(pipe_two_nodes_talk) {
   Line up, down;
-  End page{&up, &down}, far{&down, &up};
+  End page{&up, &down, {}, {}}, far{&down, &up, {}, {}};
   const Address server = ipv4(10, 0, 0, 7, 27500), player = ipv4(10, 0, 0, 9, 50000);
   Transport ct, ht;
   CHECK(open_pipe_transport(ct, pipe_of(page, server)));

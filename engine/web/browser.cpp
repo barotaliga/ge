@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <memory>
 
 #include "input/state.hpp"
 
@@ -486,13 +487,19 @@ std::string wt_why(int session) {
 
 namespace {
 
-bool pipe_send(void* ctx, const uint8_t* data, size_t size) {
-  return ge_web_wt_send(static_cast<int>(reinterpret_cast<intptr_t>(ctx)), data,
-                        static_cast<int>(size)) != 0;
+// The session and the address its datagrams are reported from.
+struct PipeEnd {
+  int session = -1;
+  net::Address peer;
+};
+
+bool pipe_send(void* ctx, const net::Address&, const uint8_t* data, size_t size) {
+  return ge_web_wt_send(static_cast<PipeEnd*>(ctx)->session, data, static_cast<int>(size)) != 0;
 }
 
-int pipe_receive(void* ctx, uint8_t* buffer, size_t capacity) {
-  const int id = static_cast<int>(reinterpret_cast<intptr_t>(ctx));
+int pipe_receive(void* ctx, uint8_t* buffer, size_t capacity, net::Address& from) {
+  const PipeEnd& end = *static_cast<PipeEnd*>(ctx);
+  const int id = end.session;
   const int n = ge_web_wt_peek(id);
   if (n < 0) return -1;
   if (static_cast<size_t>(n) > capacity) {
@@ -501,17 +508,20 @@ int pipe_receive(void* ctx, uint8_t* buffer, size_t capacity) {
     return -1;
   }
   ge_web_wt_take(id, buffer);
+  from = end.peer;
   return n;
 }
 
 }  // namespace
 
 net::DatagramPipe wt_pipe(int session, const net::Address& peer) {
+  // One end a session, kept for the page's life (a page opens a handful at most).
+  static std::vector<std::unique_ptr<PipeEnd>> ends;
+  ends.push_back(std::make_unique<PipeEnd>(PipeEnd{session, peer}));
   net::DatagramPipe p;
   p.send = pipe_send;
   p.receive = pipe_receive;
-  p.ctx = reinterpret_cast<void*>(static_cast<intptr_t>(session));
-  p.peer = peer;
+  p.ctx = ends.back().get();
   return p;
 }
 

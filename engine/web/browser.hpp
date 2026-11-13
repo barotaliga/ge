@@ -89,8 +89,8 @@ bool wt_send(int session, std::span<const uint8_t> datagram);
 // The oldest datagram not taken yet; false when none has come.
 bool wt_take(int session, std::vector<uint8_t>& datagram);
 void wt_close(int session);
-// The session as a transport's pipe (net::open_pipe_transport) to `peer`, the address its
-// datagrams are reported from.
+// The session as a transport's pipe (net::open_pipe_transport): every datagram sent goes into it,
+// whatever its address, and every one received is reported from `peer`.
 net::DatagramPipe wt_pipe(int session, const net::Address& peer);
 
 // `line` in the page's status line and the console ("" clears the status line).

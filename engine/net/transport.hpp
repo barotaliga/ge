@@ -1,8 +1,8 @@
 // THE TRANSPORT: one way to send and receive datagrams, whatever carries them: a real UDP
 // socket, TCP streams carrying them as frames (tcp_socket.hpp), a socket on the simulated
-// network (whose links may be streams too: conditions.hpp), or a PIPE to one peer that the caller
-// carries itself (a browser page's WebTransport session, engine/web/browser.hpp: every datagram
-// goes to the pipe, whatever address it is sent to, and every one received comes from its peer). A
+// network (whose links may be streams too: conditions.hpp), or a PIPE whose datagrams the caller
+// carries itself (a browser page's WebTransport session, engine/web/browser.hpp; a forwarder's
+// sockets and sessions behind one transport). A
 // node (node.hpp) talks only to this, so the same node code runs a real game and a headless lab. A
 // transport may have a capture attached: every datagram it sends and receives is written to it with
 // the time the caller passed, so a real session and a simulated one are captured the same way.
@@ -36,14 +36,14 @@ namespace ge::net {
 
 enum class TransportKind : uint8_t { none, udp, sim, tcp, pipe };
 
-// A pipe the caller carries: `send` takes one datagram (false when it cannot go now); `receive`
-// gives the oldest one that came into `buffer` and answers its size, or -1 when none has. `peer`
-// is the address every datagram received is reported from (the server a page plays on).
+// A pipe the caller carries: `send` takes one datagram for `to` (false when it cannot go now);
+// `receive` gives the oldest one that came into `buffer`, `from` set to its sender, and answers its
+// size, or -1 when none has. A page's session has one peer and reports it for every datagram; a
+// pipe may also carry several (a forwarder's sockets and sessions behind one transport).
 struct DatagramPipe {
-  bool (*send)(void* ctx, const uint8_t* data, size_t size) = nullptr;
-  int (*receive)(void* ctx, uint8_t* buffer, size_t capacity) = nullptr;
+  bool (*send)(void* ctx, const Address& to, const uint8_t* data, size_t size) = nullptr;
+  int (*receive)(void* ctx, uint8_t* buffer, size_t capacity, Address& from) = nullptr;
   void* ctx = nullptr;
-  Address peer;
 };
 
 // The most streams a TCP host holds: every peer's, and room for the ones it will deny.
@@ -100,7 +100,7 @@ bool open_udp_transport(Transport& t, const Address& bind, std::string* error);
 // A TCP host listening at `bind`; a TCP client connecting to `host` (it sends once connected).
 bool open_tcp_host_transport(Transport& t, const Address& bind, std::string* error);
 bool open_tcp_client_transport(Transport& t, const Address& host, std::string* error);
-// A pipe to one peer (DatagramPipe); false when `pipe` has no send or receive.
+// A pipe the caller carries (DatagramPipe); false when `pipe` has no send or receive.
 bool open_pipe_transport(Transport& t, const DatagramPipe& pipe);
 void close_transport(Transport& t);
 // Fake conditions on `t`'s sends (null `fake` or default conditions: none); `pool` datagrams can
