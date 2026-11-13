@@ -7,8 +7,9 @@
 // (the nearest `takeoffs`) and within `land` of their landing (the nearest `landings`), on the
 // main part (`back`: one byte a node, empty any); from each takeoff to each landing, a jump at
 // people's speed (their takeoff's quarter, then `faster` times it) proven by `prove_link`, and
-// the first that lands is kept, when the same jump at the move's maxspeed (a run's) does not
-// land: one a run makes is no speed jump, and the graph's own jumps already hold it. The link is
+// the first that lands is kept, unless the same jump at the move's maxspeed (a run's) lands and
+// the graph's own way there is about as quick (its jumps reach only `NavSettings::reach` across
+// and need a run-up: a trick a run makes can be missing from it). The link is
 // a jump (`NavKind::jump`) with its `speed` past the maxspeed and `gap` set, at the trick's level,
 // costing its flight and `cost_s`. A route takes it only for a jumper with `NavJumper::gaps` (a
 // hopper) of that level or more; the pilot flies it out of a hop (pilot.hpp).
@@ -45,7 +46,7 @@ struct NavGapSettings {
 
 struct NavGapCounts {
   int64_t held = 0, proofs = 0;
-  int64_t run_makes = 0;      // tricks a run's jump makes too: left to the graph's own jumps
+  int64_t run_makes = 0;      // tricks a run's jump makes as quick as the graph: left to it
   std::vector<int32_t> from;  // each trick's link start, -1 where none was kept
 };
 
