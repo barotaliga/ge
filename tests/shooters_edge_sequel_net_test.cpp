@@ -15,6 +15,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "forward/forward.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -31,6 +32,7 @@ namespace gn = ge::net;
 namespace sv = shooters_edge::server;
 namespace cn = shooters_edge::net;
 namespace cl = shooters_edge::client;
+namespace fw = ge::forward;
 
 br::WorldBrush box(float x0, float y0, float z0, float x1, float y1, float z1) {
   const float lo[3] = {x0, y0, z0}, hi[3] = {x1, y1, z1};
@@ -248,4 +250,50 @@ TEST(a_lossy_link_still_plays) {
   CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
   CHECK(c.frames > 30);
   CHECK(r->server.clients[0].moves > 300);
+}
+
+TEST(a_client_plays_through_two_forwarders) {
+  auto r = rig({});
+  // Forwarders on nodes 20 and 21 (their upstream sockets from port 40000), the server on node 0.
+  const gn::Address a = gn::sim_address(20, 30000), b = gn::sim_address(21, 30000);
+  gn::Transport a_port, b_port;
+  gn::open_sim_transport(a_port, r->net, a);
+  gn::open_sim_transport(b_port, r->net, b);
+  uint16_t next_up = 40000;
+  auto opener = [&r, &next_up](uint32_t node) {
+    return [&r, &next_up, node](gn::Transport& t) {
+      return gn::open_sim_transport(t, r->net, gn::sim_address(node, next_up++));
+    };
+  };
+  fw::Forward fa, fb;
+  fw::ForwardConfig fc;
+  fc.name = "first";
+  fc.allow = {b};
+  fc.seed = 1;
+  fw::forward_init(fa, fc, a_port, opener(20));
+  fc.name = "second";
+  fc.allow = {gn::sim_address(0, cn::kPortSequel)};
+  fc.seed = 2;
+  fw::forward_init(fb, fc, b_port, opener(21));
+  cn::SequelClientConfig cfg;
+  cfg.brain = forward;
+  cfg.via = {a, b};
+  cn::SequelClientEnd& c = join(*r, cfg);
+  for (int i = 0; i < 300; i++) {
+    r->now += 13000;
+    gn::sim_advance(r->net, r->now);
+    fw::forward_update(fa, r->now);
+    fw::forward_update(fb, r->now);
+    cn::sequel_client_tick(c, r->now);
+    cn::sequel_net_frame(r->server, r->now);
+  }
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
+  CHECK(c.dial.state == fw::DialState::routed);
+  CHECK(c.frames > 20);
+  CHECK(r->server.clients[0].moves > 200);
+  CHECK(r->server.clients[0].bad_checksums == 0);
+  // The server sees the second forwarder, not the client.
+  CHECK(gn::sim_node(r->server.clients[0].address) == 21);
+  fw::forward_close(fa);
+  fw::forward_close(fb);
 }
