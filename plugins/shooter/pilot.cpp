@@ -25,9 +25,9 @@ namespace ge::shooter {
 
 namespace {
 
-// (`liftbrake`) The run's stop on the ground: ~v/4 under friction, the hands' lag on top, s; plus units.
+// (`liftbrake`) The run's stop on the ground: ~v/4 under friction, the hands' lag on top, s; plus
+// units.
 constexpr float kLiftStop_s = 0.35f, kLiftStopPad = 16;
-
 
 using namespace pilot_parts;
 
@@ -365,8 +365,8 @@ bool circling(Pilot& p, const PilotSense& s, float vh, float speed, float err, f
       return false;  // a jump now lands across: gap_takeoff takes it
     }
   }
-  if (p.set.hop_open && p.circle_side == 0 && p.gap_k < 0 && s.world != nullptr &&
-      err < kOpenErr && err > -kOpenErr) {
+  if (p.set.hop_open && p.circle_side == 0 && p.gap_k < 0 && s.world != nullptr && err < kOpenErr &&
+      err > -kOpenErr) {
     // (`hopopen`) The way near straight ahead: the curve out to the side whose arc stays clear
     // of a wall (a start run up along a wall circles out into the corridor's space).
     const int8_t mine = err > 0 ? int8_t{-1} : int8_t{1};
@@ -1285,11 +1285,11 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   p.clock_s += static_cast<double>(dt);
   p.circling_now = false;
   // A hop's landing this command (`hop_chain`): the hop was in the air on the last one.
-  const bool chain = p.set.hop_chain && s.onground && p.hop_air_s >= 0 &&
-                     p.clock_s - p.hop_air_s <= kChainLand_s;
+  const bool chain =
+      p.set.hop_chain && s.onground && p.hop_air_s >= 0 && p.clock_s - p.hop_air_s <= kChainLand_s;
   // (Carried through the whole flight: a hop's stretch that ended in the air still lands one.)
-  if (!s.onground && (p.mode == PilotMode::hop ||
-                      (p.hop_air_s >= 0 && p.clock_s - p.hop_air_s <= kChainLand_s)))
+  if (!s.onground &&
+      (p.mode == PilotMode::hop || (p.hop_air_s >= 0 && p.clock_s - p.hop_air_s <= kChainLand_s)))
     p.hop_air_s = p.clock_s;
   see_movers(p, s);
   const NavGraph& g = *p.g;
@@ -1361,6 +1361,10 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     }
     break;
   }
+  // The guard can end the loop on the node it just passed: the route's last is the goal (else
+  // its next node is read past the route's end).
+  if (p.mode != PilotMode::idle && p.mode != PilotMode::arrived && p.k + 1 >= p.route.size())
+    p.mode = PilotMode::arrived;
   if (p.mode == PilotMode::arrived) because = "at the goal";
 
   bool replanned = false;
@@ -1839,7 +1843,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     } else if (l.kind == NavKind::script && l.script >= 0 &&
                static_cast<size_t>(l.script) < g.scripts.size() && !mover_in_way(p, s, l, a, b)) {
       // A SCRIPTED WAY (nav_script.hpp): the script's own keys, as its proof flew them.
-      const bool stale = p.set.script_fresh && p.clock_s - p.script_at > 2 * static_cast<double>(dt);
+      const bool stale =
+          p.set.script_fresh && p.clock_s - p.script_at > 2 * static_cast<double>(dt);
       p.script_at = p.clock_s;
       if (p.script_from != a || p.script_to != b || stale) {
         p.script_from = a;
@@ -1850,9 +1855,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         p.best_s = t;
       }
       const NavScript& sc = g.scripts[static_cast<size_t>(l.script)];
-      const ScriptKeys k =
-          script_keys(sc, p.script_step, s.origin, s.velocity, s.onground, p.set.arrive,
-                      p.set.script_entry);
+      const ScriptKeys k = script_keys(sc, p.script_step, s.origin, s.velocity, s.onground,
+                                       p.set.arrive, p.set.script_entry);
       p.mode = s.onground ? PilotMode::walk : PilotMode::air;
       if (p.script_step > p.script_seen) {
         p.script_seen = p.script_step;
