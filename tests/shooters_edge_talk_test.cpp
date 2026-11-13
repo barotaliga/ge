@@ -120,3 +120,14 @@ TEST(a_pack_call_reads_as_a_pack_and_its_launcher) {
   const bt::Said r = bt::parse_say(bt::say_text(w));
   CHECK(r.kind == bt::SayKind::pack && r.item == "rl" && r.loc == "ya");
 }
+
+TEST(a_floor_traps_call_reads_back_as_a_trap) {
+  // `floortrap`: the presser's call, as written and as a person types it.
+  bt::Said s;
+  s.kind = bt::SayKind::trap;
+  s.loc = "big";
+  const std::string text = bt::say_text(s);
+  CHECK(text == "trap [big]");
+  CHECK(bt::parse_say(text).kind == bt::SayKind::trap);
+  CHECK(bt::parse_say("TRAP!").kind == bt::SayKind::trap || bt::parse_say("trap").kind == bt::SayKind::trap);
+}
