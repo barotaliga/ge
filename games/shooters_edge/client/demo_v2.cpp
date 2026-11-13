@@ -7,8 +7,8 @@
 // ge:skill replay shooter
 // ge:test tests/shooters_edge_demo_v2_test.cpp
 #include "shooters_edge/client/demo_v2.hpp"
-#include "shooters_edge/client/sequel_demo.hpp"
 #include "shooters_edge/client/recording_tv.hpp"
+#include "shooters_edge/client/sequel_demo.hpp"
 #include "shooters_edge/client/sequel_tv.hpp"
 
 #include <algorithm>
