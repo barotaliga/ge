@@ -84,7 +84,7 @@ void classic_list_frame(const ClassicPen& pen, std::string_view page, std::strin
   pen.picture(pen.art.find("qplaque"), 16, 4);
   // The sequel's plates: its banner, or a plate of the page's word, above the 200 px screen.
   const bool plates = pen.art.plates();
-  const float top = plates ? -16 : 4;
+  const float top = plates ? -16.0f : 4.0f;
   if (plates) title = banner_of(page);
   if (const ui::Image* pic = title.empty() ? nullptr : pen.art.find(title)) {
     pen.picture(pic, std::floor((kScreenW - pen.art.width_of(*pic)) / 2), top);
