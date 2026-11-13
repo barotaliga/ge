@@ -204,6 +204,50 @@ uint32_t choose_skin(const SkinChoice& choice, std::string_view skin,
   return base != read.end() ? base->second : gr::kOwnSkin;
 }
 
+Look choose_look(const SkinChoice& choice, std::string_view look,
+                 const std::unordered_map<std::string, uint32_t>& figures,
+                 const std::unordered_map<std::string, uint32_t>& skins) {
+  const auto lower = [](std::string_view v) {
+    std::string out(v);
+    for (char& c : out) c = c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c;
+    return out;
+  };
+  std::string folder, skin;
+  if (choice.noskins != 1 && !look.empty()) {
+    size_t cut = look.find('/');
+    if (cut == std::string_view::npos) cut = look.find('\\');
+    if (cut != std::string_view::npos) {
+      folder = lower(look.substr(0, cut));
+      skin = lower(look.substr(cut + 1));
+    } else {
+      skin = lower(look.substr(1));
+    }
+  } else {
+    folder = std::string(kDefaultFigure);
+    skin = std::string(kDefaultSkin);
+  }
+  if (folder.empty() || folder.find("..") != std::string::npos || !figures.contains(folder))
+    folder = std::string(kDefaultFigure);
+  Look out;
+  const auto skin_in = [&skins](const std::string& f, const std::string& k) {
+    if (k.empty() || k.find("..") != std::string::npos || k.find('/') != std::string::npos)
+      return gr::kOwnSkin;
+    const auto found = skins.find(f + "/" + k);
+    return found == skins.end() ? gr::kOwnSkin : found->second;
+  };
+  out.skin = skin_in(folder, skin);
+  if (out.skin == gr::kOwnSkin && folder != kDefaultFigure) {
+    const uint32_t other = skin_in(std::string(kDefaultFigure), skin);
+    if (other != gr::kOwnSkin) {
+      folder = std::string(kDefaultFigure);
+      out.skin = other;
+    }
+  }
+  if (out.skin == gr::kOwnSkin) out.skin = skin_in(folder, std::string(kDefaultSkin));
+  out.folder = figures.contains(folder) ? folder : std::string{};
+  return out;
+}
+
 gr::MorphModel morph_from_brush(const br::Map& item, std::span<const uint8_t> palette) {
   gr::MorphModel out;
   std::vector<float> pos, nrm;

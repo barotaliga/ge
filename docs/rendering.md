@@ -621,6 +621,11 @@ frame a list of `MorphDraw`s.
 - **A skin to wear.** A model may be skin-only (a skin, no frames), packed into the atlas with
   the rest. A draw's `skin` names the model whose skin it wears over its own coordinates: one
   shared figure, each player in their own picture.
+- **Skins worn later.** A skin read while the scene runs (a player's own, the first time it is
+  worn) goes into a slot: a layer of a 2D array texture, 512 square, the picture stretched by the
+  nearest texel with its marks (`set_morph_slot`, `slot_texels`). A draw's `slot` wears it over its
+  own coordinates; the game reuses the slot worn longest ago, so the atlas holds only what the map
+  needs and a game may ship any number of skins.
 - **Frames blended on the GPU.** The vertex stage pulls each vertex by index and mixes the draw's
   two frames by its share. It does the same for the frame before, so a swinging limb carries its
   own motion into the motion target and TAA keeps it sharp. A model with frames at 10 a second

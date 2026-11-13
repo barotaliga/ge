@@ -253,6 +253,31 @@ hands the records to the demo reader a whole frame at a time, so the window draw
 draws a game it joined (the same view, sounds and lines). Still to come in M57c: the node writing
 its own name into the server info.
 
+### The hops as a process, and an existing client through them
+
+`shooters_edge_hops` (`games/shooters_edge/net/hops_main.cpp`) runs one hop as a process of its
+own, on the wall clock, so any classic client goes through it: `forward` (the classic face, the
+route in the connect's `prx`), `proxy` (the near and far proxies in one process, `--link-loss` for a
+test), `proxy-near`, `proxy-far`, and `tv` (the node on a server's stream port). `--help` lists the
+flags; a status line every `--status` seconds counts the clients, the link's bytes and, for the
+proxies, the server's packets lost on the link.
+
+Checked with an existing open-source classic client on Xvfb against our server (dm4, 30 s each,
+`rate 30000`, `cl_maxfps 30`; the client's own loss readout):
+
+| Path | What the client showed |
+| --- | --- |
+| Straight to our server | 0% loss |
+| The proxies, 10% link loss each way, one copy | 19% loss (the hops counted 10.5% of the server's packets lost) |
+| The proxies, 10% link loss each way, three copies | 0% (the hops counted 0.3%) |
+| Our forward (`cl_proxyaddr` set to it) | Routed, played, 0% |
+| Watching through our TV node (`qtvplay`) | The match, tracking a player |
+
+Watching took one fix: a recording's signon now carries the sound list before the model list,
+which is the order a player's client asks for them in; with the model list first, that client
+refused the entities' model indexes ("bad modelindex"). Found by cutting a captured stream record
+by record and editing it until the client took it.
+
 ## Forward
 
 `engine/forward` (`forward.hpp`). An opaque hop between a game's client and its server, for a

@@ -70,6 +70,11 @@ gn::ReportPlayer player_of(const TallySeat& s, bool teams, double end) {
   p.suicides = s.suicides;
   p.team_kills = s.team_kills;
   p.seconds = played_s(s, end);
+  if (s.ping_n > 0) {
+    p.ping_min = s.ping_min;
+    p.ping_max = s.ping_max;
+    p.ping_avg = (s.ping_sum + s.ping_n / 2) / s.ping_n;
+  }
   return p;
 }
 
@@ -115,6 +120,11 @@ void tally_frame(MatchTally& t, const sv::RulesWorld& w, bool counting,
     if (frags != s.frags) t.scored = w.time;
     s.frags = frags;
     s.until = w.time;
+    const int64_t ping = c.ping_ms;
+    s.ping_min = s.ping_n == 0 ? ping : std::min(s.ping_min, ping);
+    s.ping_max = std::max(s.ping_max, ping);
+    s.ping_sum += ping;
+    s.ping_n++;
     s.name = c.name;
     s.team = info(c, "team");
     if (accounts[i] != 0) s.account = accounts[i];

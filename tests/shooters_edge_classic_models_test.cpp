@@ -142,6 +142,28 @@ TEST(a_player_wears_their_skin_else_the_base_else_the_figures_own) {
   CHECK(md::choose_skin(c, "blue", read) == 11);
 }
 
+TEST(a_second_game_look_is_its_folder_and_skin_with_the_default_figure_behind) {
+  const std::unordered_map<std::string, uint32_t> figures{{"male", 0}, {"female", 1}};
+  const std::unordered_map<std::string, uint32_t> skins{
+      {"male/grunt", 1}, {"male/cipher", 2}, {"female/athena", 3}, {"female/grunt", 4}};
+  md::SkinChoice c;
+  md::Look l = md::choose_look(c, "Female/Athena", figures, skins);
+  CHECK(l.folder == "female" && l.skin == 3);
+  l = md::choose_look(c, "female/cipher", figures, skins);  // only the default figure has it
+  CHECK(l.folder == "male" && l.skin == 2);
+  l = md::choose_look(c, "female/nothere", figures, skins);  // the folder's own grunt
+  CHECK(l.folder == "female" && l.skin == 4);
+  l = md::choose_look(c, "robot/athena", figures, skins);  // a folder not read
+  CHECK(l.folder == "male" && l.skin == 1);
+  l = md::choose_look(c, "female/../x", figures, skins);
+  CHECK(l.folder == "female" && l.skin == 4);
+  c.noskins = 1;
+  l = md::choose_look(c, "female/athena", figures, skins);
+  CHECK(l.folder == "male" && l.skin == 1);
+  l = md::choose_look({}, "female/athena", {}, {});  // nothing read: the server's figure
+  CHECK(l.folder.empty() && l.skin == gr::kOwnSkin);
+}
+
 TEST(the_fronts_face_out_in_the_engines_frame) {
   const gr::MorphModel out = md::morph_from_alias(ge::morph::sample_model(), grey_palette(), 0);
   const std::vector<float>& p = out.positions[0];

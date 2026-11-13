@@ -8,7 +8,8 @@
 //   "geMR" version u8 (1), id u64, game, version, server, address, mode, map, demo_sha256,
 //   start_s, duration_ms, ended u8, columns (count u8, each a name), teams (count u8, each name,
 //   score, colour u32), players (count u8, each name, team, account u64, bot u8, score, frags,
-//   deaths, suicides, team_kills, seconds, then one number per column)
+//   deaths, suicides, team_kills, seconds, ping_min, ping_avg, ping_max, then one number per
+//   column)
 // A report past its limits (kReportPlayers, kReportTeams, kReportColumns) is refused by the
 // writer, never cut: a report that says less than the match is worse than none. The reader refuses
 // damage (a short record, a count past its limit, an unknown version) with what and where.
@@ -51,8 +52,9 @@ struct ReportPlayer {
   uint64_t account = 0;    // 0: a guest
   bool bot = false;
   int64_t score = 0, frags = 0, deaths = 0, suicides = 0, team_kills = 0;
-  int64_t seconds = 0;           // played
-  std::vector<int64_t> columns;  // one per MatchReport::columns, in order
+  int64_t seconds = 0;                               // played
+  int64_t ping_min = 0, ping_avg = 0, ping_max = 0;  // ms over the time played (0: not known)
+  std::vector<int64_t> columns;                      // one per MatchReport::columns, in order
 };
 
 struct MatchReport {
