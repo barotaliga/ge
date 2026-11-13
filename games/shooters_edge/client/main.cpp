@@ -107,6 +107,8 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/held.hpp"
+#include "shooters_edge/client/install_configs.hpp"
+#include "shooters_edge/client/install_search.hpp"
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/client/listen_sound.hpp"
@@ -114,6 +116,7 @@
 #include "shooters_edge/client/map_load.hpp"
 #include "shooters_edge/client/menu_sound.hpp"
 #include "shooters_edge/client/own_sounds.hpp"
+#include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/settings.hpp"
@@ -294,10 +297,19 @@ int run_main(int argc, char** argv) {
   console.cvars().set("con_notifylines", "0", ge::console::Source::code);
   // The install (client/game_folder.hpp): -basedir, else the one loaded last; multiplayer over
   // `id1`.
+  // Started inside an install (or placed in one, or above several: client/install_search.hpp), that
+  // one.
   const std::string prefs = ge::platform::prefs_dir("gameengine2", "shooters_edge");
-  cl::choose_folder(args, prefs);
+  std::vector<cl::FoundInstall> installs;  // the console's `games`
+  cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
-  console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
+  // The install's configs in its own order, its folders on `exec`'s path
+  // (client/install_configs.hpp).
+  const auto content_row = [&]() -> const ge::classicenhance::Profile& {
+    const ge::classicenhance::Profile* c = ge::classicenhance::find_profile(args.profile);
+    return c != nullptr ? *c : ge::classicenhance::classic_profile();
+  };
+  console.set_search_path(cl::config_dirs(args.basedir, args.game, content_row()));
   // A session's own config (`-config <file>`): read and saved there, the player's left alone.
   if (!session.config.empty()) console.set_config_file(session.config);
   // F12's screenshots (engine/capture/screenshot.hpp), in <game folder>/screenshots/ beside its
@@ -333,7 +345,12 @@ int run_main(int argc, char** argv) {
     return rows;
   });
   const auto save_settings = [&console] { cl::save_settings(console); };
-  ge::console::start(console, args.plus);
+  if (const cl::ConfigsRun ran =
+          cl::start_configs(console, args.basedir, args.game, content_row(), args.plus);
+      ran.passed_over > 0)
+    out::status("shooters_edge: " + std::to_string(ran.passed_over) +
+                " lines of the install's configs name settings this game does not have; "
+                "passed over");
   console.cvars().apply_latched();
 
   // The game the install is (args.profile, found by its folders: client/game_folder.hpp).
@@ -486,6 +503,15 @@ int run_main(int argc, char** argv) {
                                       .maps = adapter.list_maps(adapter, files)};
   cl::add_adapter_commands(console, adapter, files, args.basedir);
   cl::read_configs_from(console, adapter, files);  // `exec` finds a cfg in the game's packs too
+  // The map's place names, read as it starts and made in the game (client/place_names.hpp).
+  cl::PlaceNames places;
+  places.game_dir = std::filesystem::path(args.basedir) / args.game;
+  cl::add_place_commands(console, places, adapter, files, [&listen](ge::shooter::Vec3f& at) {
+    if (listen.server == nullptr || !listen.map || listen.server->world.entities.size() < 2)
+      return false;
+    at = listen.server->world.entities[1].origin;
+    return true;
+  });
   // DEMOS: the game's recordings anywhere on the machine, each checked before it plays.
   const auto demo_places = [&] {
     game_menu.demos().set_game_places(
@@ -784,6 +810,27 @@ int run_main(int argc, char** argv) {
                         else
                           folder_ask = cl::expand_home(a.size() == 2 ? a[1] : a.rest(0));
                       });
+  // The installs found where the game was started or placed (client/install_search.hpp): `games`
+  // lists them, `games <n>` loads one as `basedir` does.
+  console.add_command("games",
+                      "games: the classic games found where this game was started or placed; "
+                      "games <number>: load one of them",
+                      [&](Con& c, const CArgs& a) {
+                        if (a.size() >= 2) {
+                          const int n = std::atoi(a[1].c_str());
+                          if (n >= 1 && n <= static_cast<int>(installs.size())) {
+                            folder_ask = installs[static_cast<size_t>(n) - 1].basedir;
+                            return;
+                          }
+                          c.print("There is no game " + a[1] + " in the list.");
+                        }
+                        if (installs.empty())
+                          c.print(
+                              "No classic games were found beside this game. Put it in your "
+                              "game's folder, or in the folder above it.");
+                        for (size_t i = 0; i < installs.size(); ++i)
+                          c.print(cl::install_line(installs[i], static_cast<int>(i) + 1));
+                      });
   const auto open_folder = [&](const std::string& basedir) {
     // Whichever game the install is: its rows and its adapter from here on.
     std::string root;
@@ -803,11 +850,14 @@ int run_main(int argc, char** argv) {
     args.basedir = basedir;
     args.profile = std::string(content->id);
     args.game = cl::game_of(basedir, *content);
+    places.locs = {};
+    places.map.clear();
+    places.game_dir = std::filesystem::path(basedir) / args.game;
     adapter = cl::adapter_of(game_row(args.profile));
     game_menu.demos().set_extensions(cl::listed_extensions(adapter.game->demo_extensions));
     menu_host.table = &adapter.menu(adapter);
     game_menu.set_table(*menu_host.table);
-    console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
+    console.set_search_path(cl::config_dirs(args.basedir, args.game, *content));
     if (!cl::load_programs(adapter, files, args.progs, game_content, error, *adapter.game))
       return false;
     listen.opt.registered = game_content.registered;
@@ -1211,6 +1261,9 @@ int run_main(int argc, char** argv) {
           cl::load_world(loader, files, *listen.map, picture, listen.server->models, adapter, t);
       }
     }
+
+    // A map started on the window's own server: its place names read (the same map keeps them).
+    if (!remote.active && listen.map) cl::map_started(places, adapter, files, listen.map->name);
 
     // Co-op as the window's mode: `sv_coop` turned on, the friendly-fire settings, the episodes.
     cl::coop_frame(coop_mode, listen, game_content.campaign != nullptr, game_content.start_map,

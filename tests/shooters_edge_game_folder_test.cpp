@@ -114,13 +114,13 @@ TEST(the_game_loaded_is_kept_and_chosen_unless_basedir_names_another) {
   cl::choose_folder(a, prefs.string());
   CHECK(fs::equivalent(a.basedir, root));
   CHECK(a.game == kMulti);
-  // The game kept wins over an install where the game runs: it stays until another is loaded.
+  // An install the game was started inside wins over the game kept: it is played at once.
   const fs::path here = fresh("here");
   write_pack(here / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
   cl::Args in_install;
   in_install.basedir = here.string();
   cl::choose_folder(in_install, prefs.string());
-  CHECK(fs::equivalent(in_install.basedir, root));
+  CHECK(fs::equivalent(in_install.basedir, here));
   // -basedir and -game given: kept as they are.
   cl::Args named;
   named.basedir = "/elsewhere";

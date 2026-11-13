@@ -6,7 +6,9 @@
 // ge:test tests/shooter_locs_test.cpp
 #include "shooter/locs.hpp"
 
+#include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 
 namespace ge::shooter {
@@ -75,7 +77,8 @@ int parse_locs(std::string_view text, Locs& out) {
     Loc l;
     l.at = {static_cast<float>(v[0]) / 8.f, static_cast<float>(v[1]) / 8.f,
             static_cast<float>(v[2]) / 8.f};
-    l.name = expand_loc_name(line.substr(p, e - p));
+    l.raw = std::string(line.substr(p, std::min(e - p, kLocNameMax)));
+    l.name = expand_loc_name(l.raw);
     out.points.push_back(std::move(l));
     n++;
   }
@@ -89,7 +92,7 @@ std::vector<Loc> loc_places(const Locs& locs) {
     size_t i = 0;
     while (i < out.size() && out[i].name != l.name) i++;
     if (i == out.size()) {
-      out.push_back({l.name, {0, 0, 0}});
+      out.push_back({l.name, {0, 0, 0}, {}});
       count.push_back(0);
     }
     out[i].at = out[i].at + l.at;
@@ -117,6 +120,40 @@ const Loc* nearest_loc(const Locs& locs, Vec3f p) {
 std::string loc_name_at(const Locs& locs, Vec3f p) {
   const Loc* l = nearest_loc(locs, p);
   return l ? l->name : std::string();
+}
+
+void add_loc(Locs& locs, Vec3f at, std::string_view raw) {
+  Loc l;
+  l.at = at;
+  l.raw = std::string(raw);
+  l.name = expand_loc_name(raw);
+  locs.points.push_back(std::move(l));
+}
+
+bool remove_nearest_loc(Locs& locs, Vec3f at, Loc* removed) {
+  const Loc* near = nearest_loc(locs, at);
+  if (near == nullptr) return false;
+  const auto i = locs.points.begin() + (near - locs.points.data());
+  if (removed != nullptr) *removed = *i;
+  locs.points.erase(i);
+  return true;
+}
+
+std::string locs_text(const Locs& locs) {
+  const auto eighths = [](float v) {
+    const double x = static_cast<double>(v) * 8.0;
+    return static_cast<long>(x < 0 ? x - 0.5 : x + 0.5);
+  };
+  std::string out;
+  for (const Loc& l : locs.points) {
+    char nums[64];
+    std::snprintf(nums, sizeof nums, "%4ld %4ld %4ld ", eighths(l.at.x), eighths(l.at.y),
+                  eighths(l.at.z));
+    out += nums;
+    out += l.raw.empty() ? l.name : l.raw;
+    out += '\n';
+  }
+  return out;
 }
 
 }  // namespace ge::shooter

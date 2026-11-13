@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_game_folder_test.cpp
 #include "shooters_edge/client/game_folder.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
@@ -115,9 +116,56 @@ std::string game_of(const std::string& basedir, const ge::classicenhance::Profil
   return std::string(content.base_dir);
 }
 
-void choose_folder(Args& args, const std::string& prefs) {
+namespace {
+
+void play_found(Args& args, const FoundInstall& f, const std::string& how) {
+  out::status("shooters_edge: " + std::string(f.content->what) + " (" + f.release + ") in " +
+              f.basedir + ", " + how + " (-basedir names another)");
+  args.basedir = f.basedir;
+  args.profile = std::string(f.content->id);
+  if (!args.game_set) args.game = game_of(f.basedir, *f.content);
+}
+
+}  // namespace
+
+void choose_folder(Args& args, const std::string& prefs, const std::vector<std::string>& places,
+                   std::vector<FoundInstall>* found) {
   if (!args.basedir_set) {
     const KeptGame kept = remembered_game(prefs);
+    // Started inside an install, or placed above some: played at once, ahead of the one kept.
+    std::vector<std::string> where{args.basedir};
+    where.insert(where.end(), places.begin(), places.end());
+    std::vector<FoundInstall> below;
+    for (const std::string& place : where) {
+      if (place.empty()) continue;
+      for (FoundInstall& f : installs_below(place)) {
+        std::error_code ec;
+        const bool seen = std::any_of(below.begin(), below.end(), [&](const FoundInstall& b) {
+          return fs::equivalent(b.basedir, f.basedir, ec);
+        });
+        if (!seen) below.push_back(std::move(f));
+      }
+    }
+    if (found != nullptr) *found = below;
+    for (const std::string& place : where) {
+      FoundInstall inside;
+      if (!place.empty() && install_around(place, inside)) {
+        std::error_code ec;
+        if (found != nullptr && std::none_of(found->begin(), found->end(), [&](const auto& b) {
+              return fs::equivalent(b.basedir, inside.basedir, ec);
+            }))
+          found->insert(found->begin(), inside);
+        play_found(args, inside, "the install the game was started in");
+        return;
+      }
+    }
+    if (const int pick = pick_install(below, kept.basedir); pick >= 0) {
+      play_found(args, below[static_cast<size_t>(pick)],
+                 below.size() == 1 ? "the install beside the game"
+                                   : "one of " + std::to_string(below.size()) +
+                                         " installs beside the game (games lists them)");
+      return;
+    }
     const ge::classicenhance::Profile* content =
         kept.basedir.empty() ? nullptr : ge::classicenhance::find_profile(kept.profile);
     std::string basedir, why;

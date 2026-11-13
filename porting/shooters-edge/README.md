@@ -13,6 +13,8 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `README.md` | This page: the clean-room rules for these notes |
 | `survey.md` | What today's community clients and servers do, their licences, and which features the plan takes |
 | `configs.md` | The console language at its modern extent, as a specification in our words (`engine/console` is built from it) |
+| `installs.md` | The nQuake and nQuake2 installs: layouts, file kinds, the bundled clients' config order and search paths (clean-room facts) |
+| `loc-editing.md` | Making and editing place names in game: the commands, the file written, loading (clean-room facts) |
 | `formats.md` | The file formats: pak, pk3, the search order, BSP29 lump by lump, BSP2, MDL, SPR, WAD2, LMP, WAV |
 | `progs.md` | QuakeC bytecode for the VM (M18c): the file and its checks, memory and value encodings, calls, every opcode's semantics, the engine-side globals and fields, the map's entity text, allocating and freeing entities |
 | `builtins.md` | The modern server's builtins by number, its extension builtins and list, the monster moves, the hooks and when they are called, client commands, the extension fields (M18p) |
