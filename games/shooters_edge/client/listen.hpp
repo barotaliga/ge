@@ -189,47 +189,48 @@ struct CampaignDoor {
 };
 
 struct ListenOptions {
-  uint32_t seed = 1;
+  // In the order that packs it (the lint holds the padding).
+  const SearchPath* files = nullptr;  // where a campaign's next map is read (outlives the listen)
+  // The server a match runs on (net/classic_game.hpp's `classic_game()`); a match does not start
+  // without one. A campaign runs on its own host.
+  const ge::server::ServerGame* game = nullptr;
+  // Or the socket others join on, opened by the caller (a test's simulated network): it outlives
+  // the listen, and `port` is not opened.
+  ge::net::Transport* transport = nullptr;
+  // The logins on a match others join (the window's `sv_login`, `sv_accountmaster`, ...; server/
+  // login.hpp): with sv_login on and no master, the window's own accounts in `accounts_dir`; with
+  // a master, a socket to ask it on. `accounts`, when set, is the service instead (a test's, on
+  // the simulated network). `unix_us` is the wall clock (null: the computer's).
+  ge::account::Service* accounts = nullptr;
+  int64_t (*unix_us)() = nullptr;
+  // A campaign in coop is served to others on `port` (or `transport`) through this door
+  // (net/classic_coop.hpp's `classic_coop()`); null: a coop game is the window's alone.
+  const CampaignDoor* door = nullptr;
   std::vector<std::string> console = {"deathmatch 1"};  // server lines before each map loads
   std::vector<std::string> item_names;  // a match's server lines before `console` (GameContent's)
   std::vector<std::string>
       arsenal;  // the game's weapons and armour as server lines (GameContent's)
   std::string player = "player";
-  const SearchPath* files = nullptr;  // where a campaign's next map is read (outlives the listen)
-  bool registered = false;            // a campaign's content is the full game (gfx/pop.lmp)
-  sv::EpisodeOrder episodes;          // a campaign's episodes in order (GameContent's)
-  // A match opens every map in the lobby's warmup (lobby_room.hpp): ready, teams, bots, the
-  // countdown, then the map restarted for the match. Off: the match starts with the map.
-  bool lobby = false;
+  std::string hostname = "Shooter's Edge";
+  std::string accounts_dir;
   // The window's lobby: two seats (a bot counts) before a match may start, and the player waits
   // on the lobby's own screen until he joins the warmup (F4).
   sv::LobbySettings lobby_settings = {.min_players = 2, .warm_on_join = false};
-  // The server a match runs on (net/classic_game.hpp's `classic_game()`); a match does not start
-  // without one. A campaign runs on its own host.
-  const ge::server::ServerGame* game = nullptr;
+  sv::EpisodeOrder episodes;  // a campaign's episodes in order (GameContent's)
+  ge::server::LoginSettings login;
+  uint32_t seed = 1;
   // Others join the match on this UDP port (0: nobody: the match is the window's alone).
   int port = 0;
-  // Or the socket others join on, opened by the caller (a test's simulated network): it outlives
-  // the listen, and `port` is not opened.
-  ge::net::Transport* transport = nullptr;
-  std::string hostname = "Shooter's Edge";
   int maxclients = 32;
-  // The logins on a match others join (the window's `sv_login`, `sv_accountmaster`, ...; server/
-  // login.hpp): with sv_login on and no master, the window's own accounts in `accounts_dir`; with
-  // a master, a socket to ask it on. `accounts`, when set, is the service instead (a test's, on
-  // the simulated network). `unix_us` is the wall clock (null: the computer's).
-  ge::server::LoginSettings login;
-  std::string accounts_dir;
-  ge::account::Service* accounts = nullptr;
-  int64_t (*unix_us)() = nullptr;
+  // A campaign in coop starts with this many companions beside the player (coop_party.hpp).
+  int companions = 0;
+  bool registered = false;  // a campaign's content is the full game (gfx/pop.lmp)
+  // A match opens every map in the lobby's warmup (lobby_room.hpp): ready, teams, bots, the
+  // countdown, then the map restarted for the match. Off: the match starts with the map.
+  bool lobby = false;
   // A match relays its players' voices (`sv_voip 1`), the window's player among them
   // (`listen_mic`, `Listen::voices`).
   bool voice = true;
-  // A campaign in coop is served to others on `port` (or `transport`) through this door
-  // (net/classic_coop.hpp's `classic_coop()`); null: a coop game is the window's alone.
-  const CampaignDoor* door = nullptr;
-  // A campaign in coop starts with this many companions beside the player (coop_party.hpp).
-  int companions = 0;
   sh::AimSkill companion_skill = sh::AimSkill::average;
   // The next map starts a new campaign on these options (`newgame`, `coopgame`, `sv_coop 1`),
   // not the running one's change of map; cleared once it has started.
