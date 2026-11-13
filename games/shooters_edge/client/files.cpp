@@ -16,6 +16,7 @@
 #include "classicenhance/profile.hpp"
 #include "save/file.hpp"
 #include "shooters_edge/client/install_configs.hpp"
+#include "shooters_edge/client/load_order.hpp"
 #include "vfs/zip.hpp"
 
 namespace shooters_edge::client {
@@ -57,9 +58,18 @@ bool open_game_dir(const std::string& basedir, const std::string& game, SearchPa
     return false;
   }
   std::string why;
+  const LoadOrder& order = load_order_of(content);
+  out.loose_first = !order.layout.archives_over_loose;
+  // The archive at the install's root, under everything (the sequel's rerelease keeps one).
+  if (const fs::path at = root / std::string(order.root_archive);
+      !order.root_archive.empty() && fs::is_regular_file(at, ec)) {
+    std::vector<uint8_t> bytes;
+    if (!read_whole(at, bytes) || !add_archive(out, at.string(), std::move(bytes), error))
+      return false;
+  }
   // The base game under a mod: its files are the mod's unless the mod has its own.
   if (game != base && fs::is_directory(root / base, ec) &&
-      !ge::vfs::add_game(&out.vfs, root.string(), base, &why)) {
+      !ge::vfs::add_game(&out.vfs, root.string(), base, &why, order.layout)) {
     error =
         why + ". Replace the damaged archive, or move it out of " + (root / base).string() + ".";
     return false;
@@ -67,11 +77,11 @@ bool open_game_dir(const std::string& basedir, const std::string& game, SearchPa
   // The bundled client's folder between them, as its client plays it (install_configs.hpp).
   if (const fs::path client = client_folder(root, content);
       !client.empty() && client.filename() != game &&
-      !ge::vfs::add_game(&out.vfs, root.string(), client.filename().string(), &why)) {
+      !ge::vfs::add_game(&out.vfs, root.string(), client.filename().string(), &why, order.layout)) {
     error = why + ". Replace the damaged archive, or move it out of " + client.string() + ".";
     return false;
   }
-  if (!ge::vfs::add_game(&out.vfs, root.string(), game, &why)) {
+  if (!ge::vfs::add_game(&out.vfs, root.string(), game, &why, order.layout)) {
     error =
         why + ". Replace the damaged archive, or move it out of " + (root / game).string() + ".";
     return false;
@@ -82,14 +92,21 @@ bool open_game_dir(const std::string& basedir, const std::string& game, SearchPa
 
 std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name,
                                    std::vector<uint8_t>& store) {
-  // A loose file in the game folder first, as it is on disk now (one written since the mount).
-  if (!path.folder.empty()) {
-    const fs::path loose = fs::path(path.folder) / std::string(name);
+  // A loose file in the game folder, as it is on disk now (one written since the mount): first
+  // where loose files win, else only when no archive holds the name.
+  const auto loose = [&]() -> std::span<const uint8_t> {
+    if (path.folder.empty()) return {};
+    const fs::path at = fs::path(path.folder) / std::string(name);
     std::error_code ec;
-    if (fs::is_regular_file(loose, ec) && read_whole(loose, store)) return store;
-  }
+    if (fs::is_regular_file(at, ec) && read_whole(at, store)) return store;
+    return {};
+  };
+  if (path.loose_first)
+    if (const std::span<const uint8_t> b = loose(); !b.empty()) return b;
   const ge::vfs::FileRef* ref = ge::vfs::find(path.vfs, name);
-  if (ref == nullptr) return {};
+  if (ref == nullptr) return path.loose_first ? std::span<const uint8_t>{} : loose();
+  if (!path.loose_first && path.vfs.sources[ref->source].kind == ge::vfs::SourceKind::directory)
+    if (const std::span<const uint8_t> b = loose(); !b.empty()) return b;
   if (const std::span<const uint8_t> v = ge::vfs::view(path.vfs, *ref); !v.empty()) return v;
   std::string why;
   if (!ge::vfs::read(path.vfs, *ref, &store, &why)) return {};

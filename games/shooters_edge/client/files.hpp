@@ -3,10 +3,13 @@
 // classic game's folders under the base folder (`-basedir <dir>`): the content profile's base
 // folder first (`id1` for the first game, classicenhance/profile.hpp), then the game folder
 // `-game` names over it when that is another (a mod), so a mod's file of the same path wins and
-// everything else comes from the base. Each folder mounts its numbered packs in number order,
-// then its zips (`*.pk3`) and unpacked zips (`*.pk3dir`), then its loose files, a later one
-// winning; names are matched ignoring case. A loose file written into the game folder after it
-// was opened (a demo just recorded) is found too: the game folder on disk is looked at first.
+// everything else comes from the base. Each folder's files rank as the game's own client ranks
+// them (client/load_order.hpp): the first game's numbered packs in number order, then its zips
+// (`*.pk3`) and unpacked zips (`*.pk3dir`), then its loose files, a later one winning; the
+// sequel's loose files under its packs and zips (`*.pkz`), its rerelease archive under the base
+// folder. Names are matched ignoring case. A loose file written into the game folder after it
+// was opened (a demo just recorded) is found too: the game folder on disk is looked at first (the
+// sequel's: when its archives do not hold the name).
 // Archives are read whole at mount and checked; a file is a view into its archive where it is
 // stored unpacked.
 //
@@ -35,6 +38,7 @@ namespace shooters_edge::client {
 struct SearchPath {
   std::string folder;       // the game folder on disk, the mod's when one is named ("" none)
   ge::vfs::SearchPath vfs;  // every source mounted, the last winning
+  bool loose_first = true;  // the game folder's loose files on disk win (client/load_order.hpp)
 };
 
 // The base folder `<basedir>/<the content profile's base folder>`, the bundled client's folder over
