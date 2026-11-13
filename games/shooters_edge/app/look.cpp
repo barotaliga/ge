@@ -189,8 +189,8 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .help = "How solid water looks: below 1 you see through it.",
            .min = 0,
            .max = 1,
-           .values = "0..1: 1 solid (the default), 0.5 half see-through, 0 not drawn; a server "
-                     "can keep water solid, and a map not made to be seen through shows less"},
+           .values = "0..1: 1 solid (the default), 0.5 half see-through, 0 not drawn (a server "
+                     "can keep water solid, and a map not made to be seen through shows less)"},
           &picture.water_alpha);
   const struct {
     const char* name;
