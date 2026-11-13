@@ -59,6 +59,7 @@ struct LoginSettings {
   int32_t name = 1;      // sv_loginname: 1 a logged-in seat is shown by its account's name
   int32_t reserved = 1;  // sv_reservednames: 1 guests may not use an account's name
   int32_t port = 0;      // sv_accountport: the own master's service port (0: kAccountPort)
+  int32_t stats = 1;     // sv_stats: 1 each finished match's report goes to the master
 };
 
 enum class LoginState : uint8_t { empty, guest, code_next, asking, in };

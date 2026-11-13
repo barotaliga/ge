@@ -13,10 +13,15 @@
 //     sets it), and a command while it is 0 (single player: there is nobody to chat to).
 //
 // CHAT goes out through the game's `Chat` sender (net/session.hpp's chat in a multiplayer game);
-// with none set, a line is shown locally as said. `say`, `say_team`, `say_prox` (to the players
-// near you: the game decides how near) and `whisper <nick>` are commands like any other, so a
-// bind or an alias can chat (`bind f1 "say_team need help"`). A held key's `+` command (a
-// game's `+voice_prox`, talking while it is down) is the console's button (`add_button`).
+// with none set, a line is shown locally as said. The chat COMMANDS (`say`, `say_team`,
+// `say_near`, `whisper`, the `messagemode` family) and the voice buttons are not the view's: a
+// multiplayer game opts into them with console/talk.hpp's `add_talk`, so a single-player game
+// has none.
+//
+// THE CHAT LINE (`open_chat`): the one-line prompt a `messagemode` opens over the game (the
+// console stays up). While it is open the typed text and the edit keys are its, Enter says it
+// to whom it was opened for and closes it, Escape closes it unsaid. `typing()` is true while
+// either the console or the chat line has the keyboard.
 //
 // THE VIEW HOLDS NO PIXELS: it is the model a renderer draws (the 2D layer's text pass in the
 // app, the CPU raster in the `console` lab), so it is tested and pictured headless. Its cvars:
@@ -29,7 +34,8 @@
 //
 // ge:summary The drop-down console: scrollback by kind, the input line, history, / commands, chat
 // ge:keywords console view drop-down tilde backquote toggleconsole scrollback history input-line
-// ge:keywords chat say say_team say_prox proximity whisper message server event notify
+// ge:keywords chat say say_team say_near proximity whisper message server event notify
+// ge:keywords chat-line messagemode chat-prompt typing
 // ge:keywords completion tab con_height con_chat con_speed con_lines slash-command
 // ge:keywords background gradient colour con_bgtop con_bgbottom con_bgalpha con_bgimage con_font
 // ge:keywords autocomplete suggestion suggestions hint con_suggest
@@ -123,8 +129,8 @@ enum class EditKey : uint8_t {
 
 class ConsoleView {
  public:
-  // Registers the view's cvars and commands on `c` (toggleconsole, clear, say, say_team, say_prox,
-  // whisper, echo_event) and takes `c`'s printing into the scrollback.
+  // Registers the view's cvars and commands on `c` (toggleconsole, clear) and takes `c`'s printing
+  // into the scrollback.
   explicit ConsoleView(Console& c);
 
   // SLIDING. `frame` moves the drop toward open or closed at con_speed and advances the clock.
@@ -148,7 +154,7 @@ class ConsoleView {
   // The newest lines younger than con_notifytime, at most con_notifylines: shown while closed.
   std::vector<const ViewLine*> notify() const;
 
-  // TYPING.
+  // TYPING: into the chat line while it is open, else into the console's input line.
   void type(std::string_view text);
   void key(EditKey k);
   const std::string& input() const { return input_; }
@@ -172,12 +178,27 @@ class ConsoleView {
 
   // The game's chat; none: a line is shown as said by `name`.
   void set_chat(ChatSender send) { chat_ = std::move(send); }
+  // `text` said to `to` (`nick`: ChatTo::one's player) through the game's chat; a `"..."` round
+  // the whole text is dropped, an empty text says nothing.
+  void say(ChatTo to, std::string_view nick, std::string_view text);
+
+  // THE CHAT LINE. Opened for `to` (a `messagemode`), empty; opening it again re-aims it.
+  void open_chat(ChatTo to);
+  void close_chat();
+  bool chatting() const { return chatting_; }
+  ChatTo chat_to() const { return chat_to_; }
+  const std::string& chat_input() const { return chat_input_; }
+  size_t chat_cursor() const { return chat_cursor_; }
+  // The words before the typed text, as a player reads them ("Say:", "Team:", "Nearby:").
+  std::string_view chat_prompt() const;
+  // The console or the chat line has the keyboard.
+  bool typing() const { return open_ || chatting_; }
 
  private:
   void submit();
   bool accept();             // the selected or top suggestion into the input line; false: none
   std::string head() const;  // the first word being typed, or "" when no suggestion applies
-  void say(ChatTo to, std::string_view nick, std::string_view text);
+  void chat_key(EditKey k);
   Console& c_;
   std::deque<ViewLine> lines_;
   std::vector<std::string> history_;
@@ -199,6 +220,10 @@ class ConsoleView {
   std::string font_ = "mono";
   double bg_alpha_ = 0.85;
   ChatSender chat_;
+  bool chatting_ = false;
+  ChatTo chat_to_ = ChatTo::all;
+  std::string chat_input_;
+  size_t chat_cursor_ = 0;
 };
 
 }  // namespace ge::console

@@ -32,6 +32,22 @@ MorphModel two_frames() {
 
 }  // namespace
 
+TEST(a_slot_holds_its_skin_stretched_by_the_nearest_texel_with_the_marks) {
+  MorphSkin skin;
+  skin.width = 2;
+  skin.height = 1;
+  skin.rgba = {10, 20, 30, 255, 40, 50, 60, 255};
+  skin.marks = {kMarkPlain, 7};
+  const std::vector<uint8_t> t = slot_texels(skin);
+  CHECK(t.size() == size_t{kMorphSlotSize} * kMorphSlotSize * 4);
+  CHECK(t[0] == 10 && t[2] == 30 && t[3] == kMarkPlain);
+  const size_t right = (size_t{kMorphSlotSize} * (kMorphSlotSize - 1) + kMorphSlotSize - 1) * 4;
+  CHECK(t[right] == 40 && t[right + 3] == 7);
+  const size_t mid = size_t{kMorphSlotSize / 2} * 4;  // the second texel starts half way
+  CHECK(t[mid] == 40 && t[mid - 4] == 10);
+  CHECK(slot_texels(MorphSkin{})[0] == 0);  // an empty skin: a clear slot
+}
+
 TEST(two_frames_blend_and_the_normals_stay_unit) {
   const MorphModel m = two_frames();
   std::vector<float> p, n;

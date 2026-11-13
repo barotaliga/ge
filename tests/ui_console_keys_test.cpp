@@ -10,6 +10,7 @@
 
 #include "check.hpp"
 #include "console/binds.hpp"
+#include "console/talk.hpp"
 #include "console/view.hpp"
 #include "input/event.hpp"
 #include "ui/console_keys.hpp"
@@ -18,6 +19,7 @@ using namespace ge;
 
 namespace {
 
+constexpr uint16_t kT = 23, kW = 26, kEscape = 41;
 constexpr uint16_t kGrave = 53, kNonUs = 100, kEnter = 40, kBackspace = 42, kS = 22, kCtrl = 224;
 
 void key(input::Queue& q, uint16_t usage, bool down, bool repeat = false) {
@@ -127,4 +129,46 @@ TEST(a_modifier_is_spelled_before_its_key_and_a_held_bind_lets_go) {
   key(q, kS, false);
   ui::feed_console(c, v, q, keys);
   CHECK(!talk.down());
+}
+
+// T opens the chat line (messagemode): its own letter types nothing, what follows is typed into
+// the line, the game reads no keys meanwhile (W moves nothing), Enter says it, Escape drops it.
+TEST(the_chat_line_takes_the_keys_while_open) {
+  console::Console c;
+  console::ConsoleView v(c);
+  console::Talk talk;
+  console::add_talk(c, v, talk);
+  std::string said;
+  v.set_chat([&](console::ChatTo, std::string_view, std::string_view t) {
+    said = std::string(t);
+    return true;
+  });
+  const console::Button& fwd = c.add_button("forward", "+forward");
+  c.binds().set(console::BindMode::game, "w", "+forward");
+  ui::ConsoleKeys keys;
+  input::Queue q;
+  key(q, kT, true);
+  text(q, "t");  // the key's own letter, on the frame it opened the line
+  key(q, kT, false);
+  ui::feed_console(c, v, q, keys);
+  CHECK(v.chatting() && v.chat_input().empty() && keys.held && !v.open());
+  q.clear();
+  key(q, kW, true);
+  text(q, "we go");
+  key(q, kW, false);
+  ui::feed_console(c, v, q, keys);
+  CHECK(v.chat_input() == "we go" && !fwd.down());
+  q.clear();
+  key(q, kEnter, true);
+  ui::feed_console(c, v, q, keys);
+  CHECK(!v.chatting() && said == "we go");
+  q.clear();
+  key(q, kT, true);
+  key(q, kT, false);
+  ui::feed_console(c, v, q, keys);
+  q.clear();
+  text(q, "never");
+  key(q, kEscape, true);
+  ui::feed_console(c, v, q, keys);
+  CHECK(!v.chatting() && said == "we go");
 }

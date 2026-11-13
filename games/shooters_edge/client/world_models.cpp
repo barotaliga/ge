@@ -11,11 +11,14 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include "assets/image.hpp"
+#include "assets/tga.hpp"
 #include "brush/read.hpp"
 #include "classicenhance/cached.hpp"
 #include "classicenhance/models.hpp"
@@ -25,6 +28,7 @@
 #include "render/sprite_shapes.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/server/qc_server.hpp"
+#include "vfs/search.hpp"
 
 namespace shooters_edge::client {
 
@@ -176,7 +180,253 @@ void entity_look(const Listen& l, int e, Placed& p) {
     for (int k = 0; k < 3; k++) p.colormod[k] = x[size_t(e)].colormod[k];
 }
 
+// A 24-bit skin as the morph pass draws it: its colours as painted (no shirt or pants tinted),
+// alpha under half a hole, halved while a side is over the slot's, which holds it.
+gr::MorphSkin true_colour_skin(ge::assets::Image img) {
+  while (img.width > int(gr::kMorphSlotSize) || img.height > int(gr::kMorphSlotSize)) {
+    ge::assets::Image half;
+    half.width = std::max(1, img.width / 2);
+    half.height = std::max(1, img.height / 2);
+    half.rgba.resize(size_t(half.width) * size_t(half.height) * 4);
+    for (int y = 0; y < half.height; y++)
+      for (int x = 0; x < half.width; x++)
+        for (int c = 0; c < 4; c++) {
+          int sum = 0;
+          for (int k = 0; k < 4; k++) {
+            const int sx = std::min(img.width - 1, 2 * x + (k & 1));
+            const int sy = std::min(img.height - 1, 2 * y + (k >> 1));
+            sum += img.rgba[(size_t(sy) * size_t(img.width) + size_t(sx)) * 4 + size_t(c)];
+          }
+          half.rgba[(size_t(y) * size_t(half.width) + size_t(x)) * 4 + size_t(c)] =
+              uint8_t((sum + 2) / 4);
+        }
+    img = std::move(half);
+  }
+  gr::MorphSkin skin;
+  stand_in_skin(skin, img);
+  return skin;
+}
+
+// Lists a skin picture under `key` (its path's forms gathered: .tga, then .png, then .pcx).
+void list_skin(ModelsRead& m, const std::string& key, std::string_view path, bool whole) {
+  auto [at, fresh] = m.player_skins.try_emplace(key, uint32_t(m.skin_files.size()));
+  if (fresh) m.skin_files.push_back({key, whole, {}});
+  std::vector<std::string>& paths = m.skin_files[at->second].paths;
+  paths.emplace_back(path);
+  const auto rank = [](const std::string& q) {
+    return q.ends_with(".tga") ? 0 : q.ends_with(".png") ? 1 : 2;
+  };
+  std::stable_sort(paths.begin(), paths.end(), [&rank](const std::string& x, const std::string& y) {
+    return rank(x) < rank(y);
+  });
+}
+
+// THE PLAYERS' SKINS: every name under `skins/` with a .tga, .png or .pcx, listed; each is read
+// the first time a player wears it (`worn_slot`).
+void read_player_skins(const SearchPath& files, ModelsRead& m) {
+  for (const ge::vfs::Listed& l : ge::vfs::list(files.vfs)) {
+    const std::string_view n = l.name;
+    if (!n.starts_with("skins/") ||
+        !(n.ends_with(".pcx") || n.ends_with(".png") || n.ends_with(".tga")))
+      continue;
+    const std::string key = models::skin_key(n.substr(6));
+    if (!key.empty() && key.find('/') == std::string::npos) list_skin(m, key, n, false);
+  }
+}
+
+// One second-game morph model read into `k`, its skins left a texel each: what it wears is another
+// model's or a slot's (`MorphDraw::skin`, `slot`), so no picture is held twice; the first skin as
+// it was goes to `own` when asked.
+void add_figure_kind(const mo::Model& model, std::span<const uint8_t> palette, ModelKind& k,
+                     std::vector<gr::MorphModel>& morphs, gr::MorphSkin* own = nullptr) {
+  k.is = ModelKind::Is::alias;
+  k.first = uint32_t(morphs.size());
+  k.frames = models::frame_groups(model);
+  k.skins = models::skin_groups(model);
+  k.flags = model.flags;
+  k.synced = model.synced;
+  for (size_t s = 0; s < std::max<size_t>(1, model.skins.size()); s++) {
+    morphs.push_back(models::morph_from_alias(model, palette, int(s)));
+    if (s == 0 && own != nullptr) *own = morphs.back().skin;
+    morphs.back().skin = gr::MorphSkin{1, 1, {128, 128, 128, 255}, {}};
+  }
+}
+
+// THE SECOND GAME'S FIGURES: every folder under `players/` with a figure (`tris.md2`, at most
+// kMaxFigures), the weapons the server lists as carried (`#<file>`) in each that has them (their
+// shared picture once, the first one's), each folder kept while the atlas holds it; and the
+// pictures in each (`<skin>.tga`, `.png` or `.pcx`, not an icon `_i` nor `weapon`) listed, read
+// whole the first time a player wears one.
+void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
+                  const GameAdapter& game, ModelsRead& m) {
+  std::vector<std::string> folders;
+  std::vector<std::pair<std::string, std::string>> pictures;  // key, path
+  for (const ge::vfs::Listed& l : ge::vfs::list(files.vfs)) {
+    const std::string_view n = l.name;
+    if (!n.starts_with("players/")) continue;
+    const std::string_view rest = n.substr(8);
+    const size_t slash = rest.find('/');
+    if (slash == std::string_view::npos || slash == 0) continue;
+    const std::string folder(rest.substr(0, slash));
+    const std::string_view file = rest.substr(slash + 1);
+    if (file.find('/') != std::string_view::npos) continue;
+    if (file == "tris.md2") {
+      if (folders.size() < kMaxFigures) folders.push_back(folder);
+      continue;
+    }
+    if (!(file.ends_with(".pcx") || file.ends_with(".png") || file.ends_with(".tga"))) continue;
+    const std::string skin = models::skin_key(file);
+    if (skin.empty() || skin.ends_with("_i") || skin == "weapon") continue;
+    std::string key = folder;
+    key.append("/").append(skin);
+    pictures.emplace_back(std::move(key), std::string(n));
+  }
+  std::vector<std::string> carried;
+  for (const ModelKind& k : m.kinds)
+    if (!k.carried.empty()) carried.push_back(k.carried);
+  std::vector<gr::AtlasRect> rects;
+  for (const std::string& folder : folders) {
+    OpenedModel opened;
+    std::string error;
+    const std::string path = "players/" + folder + "/tris.md2";
+    if (!game.open_model(game, files, path, opened, error) || opened.form != ModelForm::morph) {
+      if (!error.empty()) not_drawn("model", path, error);
+      continue;
+    }
+    const size_t morphs_before = m.morphs.size(), kinds_before = m.figure_kinds.size();
+    ModelKind k;
+    k.figure = true;
+    add_figure_kind(opened.morph, palette, k, m.morphs);
+    std::vector<std::pair<std::string, uint32_t>> carried_here;
+    gr::MorphSkin weapon_skin;
+    const uint32_t body = uint32_t(m.figure_kinds.size());
+    m.figure_kinds.push_back(std::move(k));
+    for (const std::string& c : carried) {
+      OpenedModel w;
+      std::string at = "players/";
+      at.append(folder).append("/").append(c);
+      std::vector<uint8_t> store;
+      if (find_file(files, at, store).empty()) continue;  // the default figure's is drawn
+      if (!game.open_model(game, files, at, w, error) || w.form != ModelForm::morph) continue;
+      ModelKind wk;
+      wk.carried = c;
+      add_figure_kind(w.morph, palette, wk, m.morphs,
+                      weapon_skin.width == 0 ? &weapon_skin : nullptr);
+      std::string key = folder;
+      key.append("/").append(c);
+      carried_here.emplace_back(std::move(key), uint32_t(m.figure_kinds.size()));
+      m.figure_kinds.push_back(std::move(wk));
+    }
+    uint32_t worn = gr::kOwnSkin;
+    if (weapon_skin.width > 0) {
+      worn = uint32_t(m.morphs.size());
+      m.morphs.push_back({});
+      m.morphs.back().skin = std::move(weapon_skin);
+    }
+    if (!gr::pack_morph_atlas(m.morphs, rects)) {  // the atlas is full: the default figure's
+      m.morphs.resize(morphs_before);
+      m.figure_kinds.resize(kinds_before);
+      ge::core::output::status("shooters_edge: players/" + folder +
+                               " is drawn as the default figure: the atlas is full");
+      continue;
+    }
+    for (size_t i = body + 1; i < m.figure_kinds.size(); i++) m.figure_kinds[i].worn = worn;
+    m.figures.emplace(folder, body);
+    for (auto& [key, at] : carried_here) m.figure_carried.emplace(key, at);
+  }
+  for (const auto& [key, path] : pictures)
+    if (m.figures.contains(key.substr(0, key.find('/')))) list_skin(m, key, path, true);
+}
+
+// A skin listed, read through its forms in order: false when none reads (said once).
+bool read_skin(const SearchPath& files, std::span<const uint8_t> palette, const SkinFile& f,
+               gr::MorphSkin* out) {
+  std::vector<uint8_t> store;
+  std::string error;
+  for (const std::string& path : f.paths) {
+    const std::span<const uint8_t> bytes = find_file(files, path, store);
+    if (bytes.empty()) continue;
+    error.clear();
+    if (path.ends_with(".pcx")) {
+      ge::assets::IndexedImage picture;
+      if (!ge::assets::decode_pcx(bytes, path, &picture, &error)) continue;
+      if (f.whole) {
+        *out = models::skin_of_indices(picture.indices, uint32_t(picture.width),
+                                       uint32_t(picture.height), palette);
+        return true;
+      }
+      if (models::player_skin(picture, palette, out)) return true;
+      error = "larger than " + std::to_string(models::kPlayerPictureWidth) + "x" +
+              std::to_string(models::kPlayerPictureHeight);
+      continue;
+    }
+    std::optional<ge::assets::Image> img = path.ends_with(".tga")
+                                               ? ge::assets::decode_tga(bytes, &error)
+                                               : ge::assets::decode_png(bytes);
+    if (img && img->width > 0 && img->height > 0) {
+      *out = true_colour_skin(std::move(*img));
+      return true;
+    }
+    if (error.empty()) error = "not a picture this game reads";
+  }
+  not_drawn("skin", f.paths.empty() ? f.key : f.paths.back(), error);
+  return false;
+}
+
 }  // namespace
+
+const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn) {
+  const ModelKind& k = m.kinds[size_t(p.modelindex)];
+  *worn = {};
+  if (k.player && p.entity > 0 && p.entity <= sh::kMaxClients) {
+    worn->file = models::choose_skin(m.skin_choice, p.skin_name, m.player_skins);
+    return k;
+  }
+  if ((!k.figure && k.carried.empty()) || m.figures.empty()) return k;
+  const models::Look look =
+      models::choose_look(m.skin_choice, p.skin_name, m.figures, m.player_skins);
+  if (look.folder.empty()) return k;
+  if (k.figure) {
+    if (look.skin == gr::kOwnSkin) return k;  // no skin of theirs listed: the server's figure
+    worn->file = look.skin;
+    return m.figure_kinds[m.figures.at(look.folder)];
+  }
+  const auto found = m.figure_carried.find(look.folder + "/" + k.carried);
+  if (found == m.figure_carried.end()) return k;
+  worn->model = m.figure_kinds[found->second].worn;
+  return m.figure_kinds[found->second];
+}
+
+uint32_t worn_slot(ge::gpu::Device& d, WorldModels& m, uint32_t file) {
+  if (file >= m.skin_files.size() || m.files == nullptr || m.morph.slot_count == 0)
+    return gr::kNoSlot;
+  WorldModels::Slots& s = m.slots;
+  s.of_file.resize(m.skin_files.size(), gr::kNoSlot);
+  s.failed.resize(m.skin_files.size(), false);
+  s.file_in.resize(m.morph.slot_count, ~0u);
+  s.used.resize(m.morph.slot_count, 0);
+  if (s.of_file[file] != gr::kNoSlot) {
+    s.used[s.of_file[file]] = s.frame;
+    return s.of_file[file];
+  }
+  if (s.failed[file]) return gr::kNoSlot;
+  gr::MorphSkin skin;
+  if (!read_skin(*m.files, m.palette, m.skin_files[file], &skin)) {
+    s.failed[file] = true;
+    return gr::kNoSlot;
+  }
+  // The slot worn longest ago (one never used first); never one worn this frame.
+  uint32_t slot = 0;
+  for (uint32_t i = 1; i < s.used.size(); i++)
+    if (s.used[i] < s.used[slot]) slot = i;
+  if (s.used[slot] == s.frame && s.frame != 0) return gr::kNoSlot;
+  if (s.file_in[slot] != ~0u) s.of_file[s.file_in[slot]] = gr::kNoSlot;
+  gr::set_morph_slot(d, m.morph, slot, skin);
+  s.file_in[slot] = file;
+  s.of_file[file] = slot;
+  s.used[slot] = s.frame;
+  return slot;
+}
 
 void place_models(const Listen& l, std::vector<Placed>& out) {
   out.clear();
@@ -213,6 +463,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       const sv::ClientInfo& c = s.clients[size_t(e - 1)];
       p.top = colour_row(c, "topcolor", 0);
       p.bottom = colour_row(c, "bottomcolor", 0);
+      p.skin_name = sv::info_value(c.userinfo, "skin");
     }
     out.push_back(p);
     if (p.carried > 0) {  // the weapon it carries: the same place and frame, its own model
@@ -287,6 +538,9 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
     if (opened.form == ModelForm::morph) {
       const mo::Model& model = opened.morph;
       k.is = ModelKind::Is::alias;
+      k.player = name == kPlayerModel;
+      k.figure = name.starts_with("players/") && name.ends_with("/tris.md2");
+      if (name.size() > 1 && name[0] == '#') k.carried = name.substr(1);
       k.first = uint32_t(morphs.size());
       k.frames = models::frame_groups(model);
       k.skins = models::skin_groups(model);
@@ -382,8 +636,18 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
                              std::to_string(enhanced.size()) + " skins enhanced from " +
                              load.cache.string());
   }
+  bool any_player = false;
+  for (const ModelKind& k : m.kinds) any_player = any_player || k.player;
+  if (any_player) read_player_skins(files, m);
+  bool any_figure = false;
+  for (const ModelKind& k : m.kinds) any_figure = any_figure || k.figure;
+  if (any_figure) read_figures(files, palette, game, m);
   m.ramps = models::palette_ramps(palette);
   if (!map.models.empty()) m.probe = models::make_probe(map);
+  if (!m.skin_files.empty()) {
+    m.files = &files;
+    m.palette.assign(palette.begin(), palette.end());
+  }
   return m;
 }
 
@@ -393,10 +657,19 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
   m.brush_of = std::move(read.brush_of);
   m.brushes = read.brushes;
   m.probe = std::move(read.probe);
+  m.player_skins = std::move(read.player_skins);
+  m.figures = std::move(read.figures);
+  m.figure_carried = std::move(read.figure_carried);
+  m.figure_kinds = std::move(read.figure_kinds);
+  m.skin_files = std::move(read.skin_files);
+  m.files = read.files;
+  m.palette = std::move(read.palette);
+  m.slots = {};
   const std::vector<gr::MorphModel>& morphs = read.morphs;
   const std::vector<gr::SpriteFrame>& frames = read.frames;
   if (!morphs.empty()) {
-    m.has_morph = gr::create_morph(d, pipelines, m.morph, frame, morphs, read.ramps);
+    m.has_morph = gr::create_morph(d, pipelines, m.morph, frame, morphs, read.ramps,
+                                   m.skin_files.empty() ? 0 : uint32_t(kSkinSlots));
     if (!m.has_morph)
       ge::core::output::status(
           "shooters_edge: the models' skins do not fit the atlas; models not drawn");
@@ -439,7 +712,8 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed,
 bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::vector<float>& out) {
   out.clear();
   if (p.modelindex <= 0 || size_t(p.modelindex) >= m.kinds.size()) return false;
-  const ModelKind& k = m.kinds[size_t(p.modelindex)];
+  Worn worn_skin;
+  const ModelKind& k = drawn_kind(m, p, &worn_skin);
   if (k.is != ModelKind::Is::alias) return false;
   // The model and frame as prepare_models picks them.
   const double at =
@@ -463,6 +737,32 @@ bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::v
   return !out.empty();
 }
 
+bool held_tip(const WorldModels& m, const Placed& p, double time_s, const double forward[3],
+              double tip[3]) {
+  thread_local std::vector<float> body;
+  if (!body_triangles(m, p, time_s, body)) return false;
+  double w[3];
+  to_world(p.origin, w);
+  const float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
+  float q[4];
+  models::rotation_of(ang, true, q);
+  const double x = q[0], y = q[1], z = q[2], s = q[3];
+  double best = -1e30;
+  for (size_t i = 0; i + 2 < body.size(); i += 3) {
+    const double v[3] = {body[i], body[i + 1], body[i + 2]};
+    const double t[3] = {2 * (y * v[2] - z * v[1]), 2 * (z * v[0] - x * v[2]),
+                         2 * (x * v[1] - y * v[0])};
+    const double r[3] = {v[0] + s * t[0] + (y * t[2] - z * t[1]),
+                         v[1] + s * t[1] + (z * t[0] - x * t[2]),
+                         v[2] + s * t[2] + (x * t[1] - y * t[0])};
+    const double d = r[0] * forward[0] + r[1] * forward[1] + r[2] * forward[2];
+    if (d <= best) continue;
+    best = d;
+    for (int c = 0; c < 3; ++c) tip[c] = w[c] + r[c];
+  }
+  return best > -1e30;
+}
+
 void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const Placed* self,
                     const gr::FrameView& view, std::vector<float>& out,
                     std::vector<ge::brush::app::CasterBox>& boxes) {
@@ -471,7 +771,8 @@ void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const 
   std::vector<float> body;
   const auto cast = [&](const Placed& p) {
     if (size_t(p.modelindex) >= m.kinds.size()) return;
-    const ModelKind& k = m.kinds[size_t(p.modelindex)];
+    Worn worn_skin;
+    const ModelKind& k = drawn_kind(m, p, &worn_skin);
     if (k.is != ModelKind::Is::alias || k.effect.starts_with("fire")) return;
     if (p.warp.shown < 1) return;  // half ash: its shadow would be whole
     if (p.alpha < 0.5f) return;    // mostly see-through: a whole shadow would give it away
@@ -514,6 +815,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
   m.morph_draws.clear();
   m.sprite_draws.clear();
   m.near.clear();
+  m.slots.frame++;
   for (size_t i = 0; i < placed.size(); i++) {
     const Placed& p = placed[i];
     if (size_t(p.modelindex) >= m.kinds.size()) continue;
@@ -528,7 +830,8 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
   const double t = view.time_s;
   for (const auto& [dist, i] : m.near) {
     const Placed& p = placed[i];
-    const ModelKind& k = m.kinds[size_t(p.modelindex)];
+    Worn worn;
+    const ModelKind& k = drawn_kind(m, p, &worn);
     double w[3];
     to_world(p.origin, w);
     // Unsynced copies each start their loop at their own moment.
@@ -537,6 +840,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       if (!m.has_sprites || m.sprite_draws.size() >= gr::kMaxSprites) continue;
       // Only a share of the bubbles the game blows is drawn, in either look (ce_bubbles_share).
       if (k.effect == "bubbles" && !bubble_kept(p.entity, in_place.bubbles_share)) continue;
+      if (k.effect == "explosion" && in_place.explosions) continue;
       const bool flare = k.made != ModelKind::kNone && k.effect == "flare" && in_place.flares;
       const bool bubble = k.made != ModelKind::kNone && k.effect == "bubbles" && in_place.bubbles;
       if (flare || bubble) {
@@ -606,6 +910,12 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     m.last_pose[p.entity] = g.now;
     g.tint[0] = p.top;
     g.tint[1] = p.bottom;
+    g.skin = worn.model;
+    if (worn.file != Worn::kNoFile) g.slot = worn_slot(d, m, worn.file);
+    if (k.figure || !k.carried.empty()) {  // the second game's skins wear their own colours
+      g.tint[0] = models::kShirtRow;
+      g.tint[1] = models::kPantsRow;
+    }
     // The light on the floor under it, taken again when it has moved.
     auto [found, fresh] = m.lit.try_emplace(p.entity);
     WorldModels::Lit& lit = found->second;
