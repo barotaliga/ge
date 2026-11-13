@@ -132,9 +132,13 @@
 //   (fighter.cpp best_item, M18r.md 3); the YA chosen less (lying 82 -> 88 %), in no preset.
 // - `fetch`: the team's taker for its armour: a player whose own armour is worse, who believes
 //   himself the nearest of his team that needs it as it comes up, says `coming` and holds the
-//   trip to it (games/shooters_edge/bots/mind.cpp, M18r.md 3); judging.
+//   trip to it (games/shooters_edge/bots/mind.cpp, M18r.md 3); not kept (head to head e1m2 -4.5,
+//   dm2 -1.5: the trips fail on the way, not for want of a taker), in no preset.
 // - `pokestand`: a button a shot opens is shot from a stand (the keys let go within 250 units),
 //   never run into (games/shooters_edge/bots/buttons.cpp, M18r.md 3); judging.
+// - `liftbrake`: walking to a lift's edge with the lift not there, the keys let go within the
+//   run's stop, so the wait is at the edge and not in its shaft (shooter/pilot.cpp, M18r.md 3);
+//   not kept (dm2's waits 125 -> 178 bot-seconds a match: the wait is the lift's), in no preset.
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
@@ -150,7 +154,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot liftbrake lift-shaft
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -255,9 +259,10 @@ enum class Feature : uint8_t {
   routetime,
   fetch,
   pokestand,
+  liftbrake,
   trial,
 };
-constexpr size_t kFeatures = 92;
+constexpr size_t kFeatures = 93;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
