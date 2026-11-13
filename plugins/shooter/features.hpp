@@ -196,7 +196,8 @@
 // - `floortrap`: a floor over lava a touch button slides away (dm2's big room) is never brushed by
 //   accident (the links into the nodes touching its button kept off routes), its button pressed
 //   only when an enemy stands on the floor and no mate does, the presser staying put till the
-//   floor returns (bots/floor_trap.hpp, M18r.md 0c); judging, in no preset.
+//   floor returns, its teleporters shut and kept off while it is away, a `trap` call to the team
+//   (bots/floor_trap.hpp, M18r.md 0c); on (head to head dm2 +5.0, the enemy's lava deaths +3).
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
