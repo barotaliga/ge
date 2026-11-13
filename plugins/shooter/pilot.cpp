@@ -572,6 +572,7 @@ Vec3f pursue(const Pilot& p, Vec3f at, float look) {
         !level(g, p.route[k], p.route[k + 1], p.set.slopes) ||
         !level(g, p.route[k + 1], p.route[k + 2], p.set.slopes))
       return b;
+    if (p.set.brink_line && (l->brink || l2->brink)) return b;  // a lip's corner: turned at
   }
 }
 

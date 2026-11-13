@@ -13,21 +13,24 @@ namespace ge::shooter {
 namespace {
 
 constexpr const char* kNames[kFeatures] = {
-    "calm",       "pace",        "swimaim",     "screen",   "keep",      "lead",       "lane",
-    "hop",        "shortgoals",  "commit",      "danger",   "dodge",     "watch",      "spam",
-    "packs",      "talk",        "plan",        "rj",       "gj",        "airsteer",   "surface",
-    "glance",     "eye",         "selfaim",     "pools",    "routes",    "corner",     "mouse",
-    "packinfer",  "listen",      "stairs",      "locked",   "escape",    "brink",      "gapjump",
-    "headroom",   "liphop",      "circlejump",  "ahead",    "bodies",    "beat",       "keys",
-    "keysteer",   "lookway",     "press",       "slopes",   "counter",   "jumpkey",    "backstep",
-    "runupkeys",  "gapbuild",    "curvekeys",   "underway", "recipes",   "chains",     "retarget",
-    "uturn",      "jumpfly",     "gappast",     "lipjump",  "airgap",    "pilotcast",  "aimhop",
-    "airkeys",    "airview",     "chainhop",    "airwall",  "landwall",  "circlekeys", "circleview",
-    "circleaim",  "leadwall",    "leadmean",    "leadarc",  "airwalk",   "airarc",     "hopjump",
-    "hopside",    "noback",      "levelview",   "hopopen",  "fightway",  "letgo",      "paceback",
-    "retreatrun", "hide",        "nogoal",      "tripkeep", "routetime", "fetch",      "pokestand",
-    "liftbrake",  "scriptfresh", "scriptentry", "calmvel",  "lookturn",  "viewbook",   "gapturn",
-    "gapnear",    "placeheard",  "gaplava",     "trial"};
+    "calm",       "pace",       "swimaim",     "screen",      "keep",      "lead",
+    "lane",       "hop",        "shortgoals",  "commit",      "danger",    "dodge",
+    "watch",      "spam",       "packs",       "talk",        "plan",      "rj",
+    "gj",         "airsteer",   "surface",     "glance",      "eye",       "selfaim",
+    "pools",      "routes",     "corner",      "mouse",       "packinfer", "listen",
+    "stairs",     "locked",     "escape",      "brink",       "gapjump",   "headroom",
+    "liphop",     "circlejump", "ahead",       "bodies",      "beat",      "keys",
+    "keysteer",   "lookway",    "press",       "slopes",      "counter",   "jumpkey",
+    "backstep",   "runupkeys",  "gapbuild",    "curvekeys",   "underway",  "recipes",
+    "chains",     "retarget",   "uturn",       "jumpfly",     "gappast",   "lipjump",
+    "airgap",     "pilotcast",  "aimhop",      "airkeys",     "airview",   "chainhop",
+    "airwall",    "landwall",   "circlekeys",  "circleview",  "circleaim", "leadwall",
+    "leadmean",   "leadarc",    "airwalk",     "airarc",      "hopjump",   "hopside",
+    "noback",     "levelview",  "hopopen",     "fightway",    "letgo",     "paceback",
+    "retreatrun", "hide",       "nogoal",      "tripkeep",    "routetime", "fetch",
+    "pokestand",  "liftbrake",  "scriptfresh", "scriptentry", "calmvel",   "lookturn",
+    "viewbook",   "gapturn",    "gapnear",     "placeheard",  "gaplava",   "brinkline",
+    "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -78,7 +81,7 @@ constexpr Features kJudging =
         Feature::hopopen,   Feature::fightway,    Feature::letgo,      Feature::retreatrun,
         Feature::nogoal,    Feature::tripkeep,    Feature::routetime,  Feature::fetch,
         Feature::liftbrake, Feature::scriptentry, Feature::calmvel,    Feature::lookturn,
-        Feature::viewbook,  Feature::gapturn,     Feature::gaplava});
+        Feature::viewbook,  Feature::gapturn,     Feature::gaplava,    Feature::brinkline});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
