@@ -1413,7 +1413,9 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   load_bans(*game.classic);
   game.classic->game_command = game_words;
   game.classic->game_ctx = &game;
-  if (game.host == nullptr && classic_login_wanted(game.settings)) {
+  // Logins, on a dedicated server and on the window's own match alike (its player is a local seat,
+  // never asked).
+  if (classic_login_wanted(game.settings)) {
     game.login = std::make_unique<ClassicLogin>();
     if (!classic_login_open(*game.login, *game.classic, game.settings, error)) return false;
   }

@@ -224,6 +224,15 @@ then and told why (a player still connecting is told on joining). The answer is 
 server runs (up to 256 names), so a name is asked once, and a name the master did not answer is
 asked again the next time it is used.
 
+## On the window's own game
+
+A game's own window serving others (a match on `sv_port`, or a coop campaign opened to others)
+keeps logins as a dedicated server does: `sv_login`, `sv_logintime`, `sv_loginwelcome`,
+`sv_accountmaster` and `sv_accountkey` in the window's console, taking effect with the next map.
+With no master the window is its own: its accounts are kept in the game's own folder
+(`<prefs>/accounts`) and served on `sv_accountport`. The window's player is never asked to log in.
+The engine half is `server/accounts.hpp`, shared with the dedicated process.
+
 ## The settings
 
 This row owns the classic login settings the server-settings work (M58) held out. Ours, with the
