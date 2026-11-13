@@ -584,6 +584,7 @@ void throw_grenade(SequelServer& s, int slot, float speed, double fuse) {
   SequelPlayer& p = s.players[slot];
   const int w = int(SqWeapon::hand_grenade);
   const SqWeaponRow& r = kSqWeapons[w];
+  p.pose.threw = true;
   const sh::Vec3f origin = unpack(p.move.origin);
   const sh::ViewAxes ax = sh::angle_vectors(p.view_angles);
   const sh::Vec3f eye = origin + sh::Vec3f{0, 0, p.view_height - 8};
@@ -614,6 +615,7 @@ void throw_grenade(SequelServer& s, int slot, float speed, double fuse) {
 void fire(SequelServer& s, int slot, int shots) {
   SequelPlayer& p = s.players[slot];
   if (p.silencer_shots <= 0) monster_noise(s, slot);
+  p.pose.shot = true;
   const int w = p.hand.weapon;
   const SqWeaponRow& r = kSqWeapons[w];
   const sh::Vec3f origin = unpack(p.move.origin);
@@ -1287,6 +1289,7 @@ void fight_rows(SequelServer& s) {
     e.absmin = e.origin + e.mins;
     e.absmax = e.origin + e.maxs;
     e.health = b.health;
+    e.frame = b.frame;
     e.modelindex = static_cast<int>(s.models.size()) - 1;  // the player's model, last
   }
   for (int k = 0; k < kSequelDrops; k++) {
@@ -1298,6 +1301,8 @@ void fight_rows(SequelServer& s) {
     e.origin = d.origin;
     e.velocity = d.velocity;
     e.modelindex = s.item_models[size_t(d.item)];
+    e.turns = sq_turns(d.item);
+    e.effects = e.turns ? kSqTurnEffect : 0;
   }
   for (int k = 0; k < kSequelMissiles; k++) {
     const SequelMissile& m = s.missiles[k];
@@ -1360,6 +1365,7 @@ void fight_bury(SequelServer& s, int slot) {
   b.origin = unpack(p.move.origin);
   b.yaw = p.view_angles.y;
   b.health = p.health;
+  b.frame = p.pose.frame;
 }
 
 std::vector<std::string> fight_scores(const SequelServer& s) {

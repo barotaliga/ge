@@ -102,6 +102,22 @@ int sq_item(std::string_view classname) {
   return -1;
 }
 
+bool sq_turns(int item) {
+  if (item < 0 || item >= kSqItemCount) return false;
+  const SqItem& it = kSqItems[item];
+  const std::string_view name = it.classname;
+  switch (it.kind) {
+    case SqKind::ammo:
+      return false;
+    case SqKind::health:
+      return name == "item_adrenaline" || name == "item_ancient_head";
+    case SqKind::key:
+      return name != "key_commander_head";
+    default:
+      return true;
+  }
+}
+
 SqBody sq_new_body() {
   SqBody b;
   b.max_ammo[at(SqAmmo::bullets)] = 200;

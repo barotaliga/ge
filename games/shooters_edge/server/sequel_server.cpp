@@ -252,6 +252,7 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   p.on_ground = false;
   p.ground = -1;
   fight_spawn(s, slot);
+  pose_spawn(s, slot);
   campaign_body(s, slot, respawn);
   fight_midair_kit(s, slot);
 }
@@ -493,6 +494,8 @@ void rules_frame(SequelServer& s) {
     p.stepped = false;
     if (s.clients[i].active) fight_body_frame(s, i);
   }
+  for (int i = 0; i < sh::kMaxClients; i++)  // the bodies' frames, once the frame is done
+    if (s.clients[i].active && !s.clients[i].spectator) pose_player(s, i);
   if (fight_limits(s) || s.exit_now) {
     s.exit_now = false;
     start_intermission(s);
@@ -563,6 +566,7 @@ void fill_rows(SequelServer& s) {
     e.flags = p.on_ground ? sh::kFlagOnGround : 0;
     e.waterlevel = p.water_level;
     e.health = p.health;
+    e.frame = p.pose.frame;
     const bool unseen = c.spectator || p.gibbed || s.intermission_at > 0;
     e.modelindex = unseen ? 0 : static_cast<int>(s.models.size()) - 1;
   }
@@ -664,6 +668,9 @@ void fill_lists(SequelServer& s) {
     e.origin = m.origin;
     e.angles = m.angles;
     e.modelindex = m.modelindex;
+    // An item turns where it lies, unless the map placed it untouchable (its spawn flag 1).
+    e.turns = m.item >= 0 && sq_turns(m.item) && (m.spawnflags & 1) == 0;
+    e.effects = e.turns ? kSqTurnEffect : 0;
   }
 }
 

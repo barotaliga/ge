@@ -9,12 +9,15 @@
 // the sequel's base folder) a map of its (`--map`, default base1) is played on the window's own
 // listen server as a single-player game; every model the server lists is opened (the counts by
 // kind measured), and each kind of thing it placed (a weapon, armour, health, ammo, another item,
-// a monster, the player as another sees him) is shot from a little way off in both looks: PRIVATE
+// a monster, the player as another sees him) is shot from a little way off in both looks. Then the
+// poses (server/sequel_poses.hpp): a strip of a monster's runs and one of the player's sequences,
+// each at the frame the rules set for it, and a strip of the armour turning where it lies: PRIVATE
 // pictures only, never committed.
 //
 // ge:summary Lab: the sequel's models and sprites opened and drawn on its map, in both looks
 // ge:keywords lab se-sequel-models sequel md2 sp2 idp2 ids2 second-model-family skin-pictures
 // ge:keywords items weapons armour health ammo monsters player world-models classic modern
+// ge:keywords poses pose-strip turning-items animation-frames
 // ge:skill morph shooter labs
 #include <cmath>
 #include <memory>
@@ -41,6 +44,9 @@
 #include "shooters_edge/client/world_models.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "shooters_edge/server/sequel_map.hpp"
+#include "shooters_edge/server/sequel_monster_kinds.hpp"
+#include "shooters_edge/server/sequel_poses.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "vfs/pak.hpp"
 
@@ -153,6 +159,66 @@ void opened_counts(gl::Lab& lab, const cl::GameAdapter& adapter, const cl::Searc
   if (refused > 0)
     lab.fail(std::to_string(refused) + " models refused (the notes name them)",
              "Read each refusal; the reader is plugins/morph/read.cpp. Skill: morph.");
+}
+
+namespace sv = shooters_edge::server;
+
+// A frame's middle, or its last for a held one.
+int mid(sv::SqSpan s) { return (s.first + s.last) / 2; }
+
+// One pose of a strip: its caption word and the frame shown.
+struct Pose {
+  std::string word;
+  int frame;
+};
+
+// The poses a strip shows of a monster kind: each of its runs, the death's last (held).
+std::vector<Pose> monster_poses(const sv::SqMonsterPoses& t) {
+  std::vector<Pose> out;
+  if (!t.stand.none()) out.push_back({"stand", mid(t.stand)});
+  if (!t.walk.none()) out.push_back({"walk", mid(t.walk)});
+  if (!t.run.none()) out.push_back({"run", mid(t.run)});
+  for (int a = 0; a < 5; a++)
+    if (!t.attack[a][0].none()) {
+      out.push_back({a < 2 ? "blow" : "attack", mid(t.attack[a][0])});
+      break;
+    }
+  if (!t.pain[0].none()) out.push_back({"pain", mid(t.pain[0])});
+  if (!t.death[0].none()) out.push_back({"dead", t.death[0].last});
+  return out;
+}
+
+std::vector<Pose> player_poses() {
+  namespace f = sv::sq_frames;
+  return {{"stand", mid(f::kStand)},
+          {"run", mid(f::kRun)},
+          {"attack", mid(f::kAttack)},
+          {"pain", mid(f::kPain[0])},
+          {"jump", f::kJump.first + 1},
+          {"crouch", mid(f::kCrouchStand)},
+          {"crouch walk", mid(f::kCrouchWalk)},
+          {"dead", f::kDeath[0].last}};
+}
+
+// Tiles of `w` x `h` laid side by side, each halved.
+gl::Picture strip(const std::vector<ge::gpu::Image>& tiles) {
+  if (tiles.empty()) return {};
+  const int tw = int(tiles[0].width) / 2, th = int(tiles[0].height) / 2;
+  gl::Picture p{tw * int(tiles.size()), th,
+                std::vector<uint8_t>(size_t(tw) * tiles.size() * th * 4)};
+  for (size_t k = 0; k < tiles.size(); k++)
+    for (int y = 0; y < th; y++)
+      for (int x = 0; x < tw; x++)
+        for (int c = 0; c < 4; c++) {
+          const ge::gpu::Image& im = tiles[k];
+          int sum = 0;
+          for (int dy = 0; dy < 2; dy++)
+            for (int dx = 0; dx < 2; dx++)
+              sum += im.rgba[(size_t(2 * y + dy) * im.width + size_t(2 * x + dx)) * 4 + size_t(c)];
+          p.rgba[(size_t(y) * size_t(p.width) + size_t(int(k) * tw + x)) * 4 + size_t(c)] =
+              uint8_t(sum / 4);
+        }
+  return p;
 }
 
 void run(gl::Lab& lab) {
@@ -320,6 +386,102 @@ void run(gl::Lab& lab) {
       shots++;
     }
     if (chosen == &me) fx.models.pop_back();
+  }
+  // THE POSES: a monster's runs and the player's sequences, frame by frame as the rules set them,
+  // and an item turning where it lies, a strip each (classic look).
+  look.look = "classic";
+  const auto view_of = [&](const cl::Placed& p, const float e[3], bool figure) {
+    ge::render::FrameView v = base;
+    const float at_f[3] = {p.origin.x, p.origin.y, p.origin.z + (figure ? 0.0f : 8.0f)};
+    double eye[3], at[3];
+    br::to_engine(e, eye);
+    br::to_engine(at_f, at);
+    for (int c = 0; c < 3; c++) v.eye[c] = eye[c];
+    const double dx = at[0] - eye[0], dy = at[1] - eye[1], dz = at[2] - eye[2];
+    v.heading = lm::atan2(dx, dz);
+    v.pitch = lm::atan2(dy, std::sqrt(dx * dx + dz * dz));
+    return v;
+  };
+  const auto film = [&](size_t k, const cl::Placed* chosen, const std::vector<Pose>& poses,
+                        const std::string& name, const std::string& id) {
+    float e[3];
+    if (chosen == nullptr || !eye_for(chosen->origin, 96.0f, 24.0f, e)) return;
+    const ge::render::FrameView v = view_of(*chosen, e, true);
+    const bool mine = chosen == &me;
+    if (mine) fx.models.push_back(me);
+    cl::Placed* drawn = nullptr;
+    for (cl::Placed& p : fx.models)
+      if (p.entity == chosen->entity) drawn = &p;
+    if (drawn == nullptr) {
+      if (mine) fx.models.pop_back();
+      return;
+    }
+    const cl::Placed kept = *drawn;
+    std::vector<ge::gpu::Image> tiles;
+    std::string words;
+    for (const Pose& pose : poses) {
+      drawn->frame = pose.frame;
+      drawn->frame_from = -1;
+      drawn->frame_f = 1;
+      drawn->lerp = false;
+      cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
+      tiles.push_back(ge::gpu::read_now(*device, out));
+      words.append(words.empty() ? "" : ", ")
+          .append(pose.word)
+          .append(" ")
+          .append(std::to_string(pose.frame));
+    }
+    *drawn = kept;
+    if (mine) fx.models.pop_back();
+    lab.shot({id,
+              std::string(kSubjects[k].title) + ": ITS POSES",
+              "The " + std::string(kSubjects[k].id) + " " + name +
+                  " drawn in each of its poses as "
+                  "the rules set them, left to right: " +
+                  words + ".",
+              "each pose a different stance, the frame the word says; the dead one lying down",
+              {{"map", map_name}, {"look", "classic"}, {"size", lab.arg("size")}}},
+             strip(tiles), gl::Det::measured);
+    lab.metric("poses." + std::string(kSubjects[k].id), double(poses.size()), "count",
+               gl::Det::measured);
+    shots++;
+  };
+  const sv::SequelServer* sq = l.rules != nullptr ? sv::sequel_of(*l.rules) : nullptr;
+  if (sq != nullptr) {
+    const size_t mk = 5, pk = kSubjectCount - 1;  // the monster, the player
+    for (const cl::Placed* p : of_kind[mk]) {
+      const sv::SqMonsterPoses* kind_poses = nullptr;
+      for (const sv::SequelMonster& m : sq->monsters)
+        if (sv::map_row(m.entity) == p->entity)
+          kind_poses = sv::sq_monster_poses(sv::roster::kKinds[m.kind].classname);
+      float e[3];
+      if (kind_poses == nullptr || !eye_for(p->origin, 96.0f, 24.0f, e)) continue;
+      film(mk, p, monster_poses(*kind_poses), kind_poses->classname, "monster-poses");
+      break;
+    }
+    film(pk, &me, player_poses(), shooters_edge::server::kSequelPlayerModel, "player-poses");
+    // An item that turns, a quarter turn (0.9 s) a tile.
+    for (const cl::Placed* p : of_kind[1]) {  // the armour
+      float e[3];
+      if (!p->turns || !eye_for(p->origin, 56.0f, 32.0f, e)) continue;
+      ge::render::FrameView v = view_of(*p, e, false);
+      std::vector<ge::gpu::Image> tiles;
+      for (int q = 0; q < 4; q++) {
+        v.time_s = base.time_s + 0.9 * q;
+        cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
+        tiles.push_back(ge::gpu::read_now(*device, out));
+      }
+      lab.shot({"armour-turns",
+                "THE ARMOUR TURNS",
+                "The armour " + names[size_t(p->modelindex)] +
+                    " where it lies, 0.9 s apart left to right: it turns 100 degrees a second "
+                    "about its upright.",
+                "a quarter turn more in each tile, standing upright, never tipping",
+                {{"map", map_name}, {"look", "classic"}, {"size", lab.arg("size")}}},
+               strip(tiles), gl::Det::measured);
+      shots++;
+      break;
+    }
   }
   lab.metric("shots", shots, "count", gl::Det::measured);
   ls::checked(lab, static_cast<int>(device->errors.load()),

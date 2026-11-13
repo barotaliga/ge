@@ -74,6 +74,7 @@
 #include "shooters_edge/server/rules_runner.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
+#include "shooters_edge/server/sequel_poses.hpp"
 
 namespace ge::brush {
 struct Map;
@@ -175,6 +176,7 @@ struct SequelMonster {
   bool claimed = false;  // a corpse a medic is raising
   bool spare = false;    // waits to come out at a boss's death (not yet counted)
   double used_at = -1;   // a figure's use (the commander's body)
+  SqMonsterPose pose;    // the frame it shows (sequel_poses.hpp)
 };
 
 struct SequelPlayer {
@@ -228,6 +230,7 @@ struct SequelPlayer {
   bool carried = false, has_entered = false;
   ge::shooter::MidairTally midair;  // his counted midairs this level (plugins/shooter/midair.hpp)
   SqBody carry, entered;
+  SqPose pose;  // the frame his body shows (sequel_poses.hpp)
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.
@@ -270,6 +273,7 @@ struct SequelBody {
   sh::Vec3f origin;
   float yaw = 0;
   float health = 0;
+  int frame = 0;  // the death's last, which it keeps
 };
 inline constexpr int kSequelBodies = 8;
 
@@ -299,8 +303,9 @@ struct SequelServer : RulesCommon {
   SequelPlayer players[sh::kMaxClients];
   ge::core::Rng rng = ge::core::make_rng(1);
   int64_t frame_number = 0;
-  double level_time = 0;  // frame_number × 0.1, s
-  double host_time = 0;   // the host's clock, s
+  int pain_turn = 0, death_turn = 0;  // the players' pains and deaths, in turn (sequel_poses.hpp)
+  double level_time = 0;              // frame_number × 0.1, s
+  double host_time = 0;               // the host's clock, s
   int next_userid = 1;
   SequelMissile missiles[kSequelMissiles];
   int weapon_models[kSqWeaponCount] = {};  // each weapon's view model in the model list

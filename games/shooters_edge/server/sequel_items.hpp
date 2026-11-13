@@ -151,6 +151,13 @@ inline constexpr int kSqItemCount = static_cast<int>(sizeof(kSqItems) / sizeof(k
 // The row of `classname`, or -1 when it is no item.
 int sq_item(std::string_view classname);
 
+// The sequel's own effect bit that turns an entity about its yaw on the client's clock, 100° a
+// second (an item lying about).
+inline constexpr int kSqTurnEffect = 1;
+// Whether item `item` turns where it lies: armour, weapons, powerups, packs and keys, adrenaline
+// and the ancient head; never ammo, the other health or the commander's head.
+bool sq_turns(int item);
+
 // A player's body and what he carries.
 struct SqBody {
   int health = 100, max_health = 100;

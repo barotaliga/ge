@@ -72,9 +72,10 @@ struct Placed {
   int frame_from = -1;
   float frame_f = 1;
   bool lerp = false;
-  int effects = 0;  // the entity's effect bits (kGlow...)
-  float alpha = 1;  // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
-  float scale = 1;  // its size about the origin (a mod's `scale`)
+  int effects = 0;     // the entity's effect bits (kGlow...)
+  bool turns = false;  // it turns about its yaw on the picture's clock (the rules' world says so)
+  float alpha = 1;     // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
+  float scale = 1;     // its size about the origin (a mod's `scale`)
   float colormod[3] = {1, 1, 1};  // its light tinted, glowing texels kept (a mod's `colormod`)
   sh::Vec3f origin, angles;
   uint32_t top = models::kShirtRow, bottom = models::kPantsRow;  // palette rows for the tints
