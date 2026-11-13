@@ -26,8 +26,16 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_sound)
 # shooter).
 file(GLOB SHOOTERS_EDGE_SERVER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/server/*.cpp)
 add_library(shooters_edge_server STATIC ${SHOOTERS_EDGE_SERVER_SOURCES})
-target_link_libraries(shooters_edge_server PUBLIC shooters_edge_sim ge_save ge_server)
+target_link_libraries(shooters_edge_server PUBLIC shooters_edge_sim shooters_edge_rules ge_save ge_server)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_server)
+
+# Its own rules in C++ (rules/, M52h): native programs on the mod server (progs/native.hpp), the
+# arena's deathmatch first, as a library the server links (skills: progs, shooter).
+file(GLOB SHOOTERS_EDGE_RULES_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/rules/*.cpp)
+add_library(shooters_edge_rules STATIC ${SHOOTERS_EDGE_RULES_SOURCES})
+target_include_directories(shooters_edge_rules PUBLIC ${PROJECT_SOURCE_DIR}/games)
+target_link_libraries(shooters_edge_rules PUBLIC ge_progs)
+set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_rules)
 
 # Its bots (bots/): the pilot (plugins/shooter/pilot.hpp) played on the game's maps, on the nav
 # course through the move and on the arena through the server's bot slots, for the tests and the
