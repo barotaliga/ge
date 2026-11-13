@@ -6,6 +6,7 @@
 // ge:test tests/account_service_test.cpp
 #include "account/service.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 #include "net/wire.hpp"
@@ -15,7 +16,8 @@ namespace ge::account {
 namespace {
 
 constexpr uint8_t kMagic[4] = {'g', 'e', 'A', 'C'};
-constexpr uint8_t kKeyAsk = 1, kPub = 2, kAsk = 3, kAnswer = 4;
+constexpr uint8_t kKeyAsk = 1, kPub = 2, kAsk = 3, kAnswer = 4, kReport = 5, kTaken = 6, kPiece = 7;
+constexpr size_t kTakenSize = 5 + 8 + 1 + 64;
 constexpr uint8_t kAskNonce = 1, kAnswerNonce = 2;
 
 void nonce_of(uint8_t* nonce, uint8_t kind) { net::counter_nonce(nonce, 0, kind); }
@@ -42,6 +44,89 @@ std::string read_text(net::Reader& r) {
   const uint8_t n = net::read_u8(r);
   const uint8_t* p = net::read_view(r, n);
   return p ? std::string(reinterpret_cast<const char*>(p), n) : std::string();
+}
+
+// What the service signs in its answer to a report.
+std::vector<uint8_t> taken_signed(const net::Key& server, uint64_t id, Taken t) {
+  uint8_t out[4 + 1 + 32 + 8 + 1];
+  net::Writer w = net::make_writer(out, sizeof out);
+  write_start(w, kTaken);
+  net::write_bytes(w, server.data(), 32);
+  net::write_u64(w, id);
+  net::write_u8(w, static_cast<uint8_t>(t));
+  return {out, out + w.size};
+}
+
+// A report's signature and bytes from `server`: checked, taken, answered.
+void take_report(Service& svc, const net::Key& server, const uint8_t* body, size_t size,
+                 const net::Address& from, int64_t now_us) {
+  net::Signature sig{};
+  if (size < sig.size() + 32) {
+    svc.stats.refused++;
+    return;
+  }
+  std::memcpy(sig.data(), body, sig.size());
+  const uint8_t* bytes = body + sig.size();
+  const size_t n = size - sig.size();
+  net::MatchReport report;
+  std::string error;
+  if (!net::sign_check(server, sig, bytes, n) || !net::report_read(bytes, n, report, error)) {
+    svc.stats.refused++;
+    return;
+  }
+  svc.stats.reports++;
+  Taken t = matches_add(svc.matches, server, report);
+  if (t == Taken::again)  // answered as the first time
+    t = svc.matches.trusted.count(server) != 0 ? Taken::counted : Taken::shown;
+  const std::vector<uint8_t> msg = taken_signed(server, report.id, t);
+  const net::Signature answer = net::sign(svc.keys, msg.data(), msg.size());
+  uint8_t out[kTakenSize];
+  net::Writer w = net::make_writer(out, sizeof out);
+  write_start(w, kTaken);
+  net::write_u64(w, report.id);
+  net::write_u8(w, static_cast<uint8_t>(t));
+  net::write_bytes(w, answer.data(), answer.size());
+  net::transport_send(*svc.transport, from, out, w.size, now_us);
+}
+
+// A piece of a report: kept until the last one comes, then the whole taken.
+void read_piece(Service& svc, net::Reader& r, const uint8_t* data, size_t size,
+                const net::Address& from, int64_t now_us) {
+  net::Key server{};
+  net::read_bytes(r, server.data(), 32);
+  const uint64_t id = net::read_u64(r);
+  const uint8_t number = net::read_u8(r), count = net::read_u8(r);
+  const size_t bytes = size - r.at;
+  if (r.bad || count < 2 || count > kReportPieces || number >= count || bytes == 0 ||
+      bytes > kReportPieceBytes) {
+    svc.stats.refused++;
+    return;
+  }
+  std::vector<Piecing>& all = svc.pieces;
+  all.erase(std::remove_if(all.begin(), all.end(),
+                           [&](const Piecing& p) { return now_us - p.since_us > kPiecingLife_us; }),
+            all.end());
+  auto it = std::find_if(all.begin(), all.end(),
+                         [&](const Piecing& p) { return p.server == server && p.id == id; });
+  if (it != all.end() && it->pieces.size() != count) {  // not the report it began as
+    all.erase(it);
+    it = all.end();
+  }
+  if (it == all.end()) {
+    if (all.size() >= kPiecingsKept) all.erase(all.begin());  // the oldest
+    all.push_back({server, id, now_us, std::vector<std::vector<uint8_t>>(count), 0});
+    it = all.end() - 1;
+  }
+  std::vector<uint8_t>& slot = it->pieces[number];
+  if (slot.empty()) {
+    slot.assign(data + r.at, data + size);
+    it->have++;
+  }
+  if (it->have < it->pieces.size()) return;
+  std::vector<uint8_t> body;
+  for (const std::vector<uint8_t>& p : it->pieces) body.insert(body.end(), p.begin(), p.end());
+  all.erase(it);
+  take_report(svc, server, body.data(), body.size(), from, now_us);
 }
 
 net::Key fresh_key(Service& svc) {
@@ -195,6 +280,20 @@ bool service_read(Service& svc, const uint8_t* data, size_t size, const net::Add
     net::transport_send(t, from, w.data, w.size, now_us);
     return true;
   }
+  if (kind == kReport) {
+    net::Key server{};
+    net::read_bytes(r, server.data(), 32);
+    if (r.bad || size < kTakenSize + 32) {
+      svc.stats.refused++;
+      return true;
+    }
+    take_report(svc, server, data + r.at, size - r.at, from, now_us);
+    return true;
+  }
+  if (kind == kPiece) {
+    read_piece(svc, r, data, size, from, now_us);
+    return true;
+  }
   if (kind != kAsk) {
     svc.stats.refused++;
     return true;
@@ -283,6 +382,85 @@ void service_update(Service& svc, int64_t now_us) {
                                      now_us)) >= 0) {
     if (!service_read(svc, svc.buffer, static_cast<size_t>(n), from, now_us)) svc.stats.refused++;
   }
+}
+
+Taken service_report(Service& svc, const net::Key& server, const net::MatchReport& r) {
+  svc.stats.reports++;
+  return matches_add(svc.matches, server, r);
+}
+
+bool report_ask_start(ReportAsk& a, const net::Address& service, const net::Key& service_key,
+                      const net::SignKeys& server, const net::MatchReport& r, int64_t now_us) {
+  a = ReportAsk{};
+  a.service = service;
+  a.service_key = service_key;
+  a.server = server.pub;
+  a.id = r.id;
+  a.next_us = now_us;
+  std::vector<uint8_t> bytes;
+  std::string error;
+  if (!net::report_write(r, bytes, error)) {
+    a.done = true;
+    return false;
+  }
+  const net::Signature sig = net::sign(server, bytes.data(), bytes.size());
+  std::vector<uint8_t> body(sig.begin(), sig.end());
+  body.insert(body.end(), bytes.begin(), bytes.end());
+  if (5 + 32 + body.size() <= net::kMaxDatagram) {
+    std::vector<uint8_t>& d = a.datagrams.emplace_back(5 + 32 + body.size());
+    net::Writer w = net::make_writer(d.data(), d.size());
+    write_start(w, kReport);
+    net::write_bytes(w, server.pub.data(), 32);
+    net::write_bytes(w, body.data(), body.size());
+    return true;
+  }
+  const size_t count = (body.size() + kReportPieceBytes - 1) / kReportPieceBytes;
+  if (count > kReportPieces) {
+    a.done = true;
+    return false;
+  }
+  for (size_t i = 0; i < count; i++) {
+    const size_t at = i * kReportPieceBytes;
+    const size_t n = std::min(kReportPieceBytes, body.size() - at);
+    std::vector<uint8_t>& d = a.datagrams.emplace_back(5 + 32 + 8 + 2 + n);
+    net::Writer w = net::make_writer(d.data(), d.size());
+    write_start(w, kPiece);
+    net::write_bytes(w, server.pub.data(), 32);
+    net::write_u64(w, r.id);
+    net::write_u8(w, static_cast<uint8_t>(i));
+    net::write_u8(w, static_cast<uint8_t>(count));
+    net::write_bytes(w, body.data() + at, n);
+  }
+  return true;
+}
+
+void report_ask_update(ReportAsk& a, net::Transport& t, int64_t now_us) {
+  if (a.done || now_us < a.next_us) return;
+  if (a.tries >= a.max_tries) {
+    a.done = true;
+    return;
+  }
+  a.tries++;
+  a.next_us = now_us + a.ask_us;
+  for (const std::vector<uint8_t>& d : a.datagrams)
+    net::transport_send(t, a.service, d.data(), d.size(), now_us);
+}
+
+bool report_ask_read(ReportAsk& a, const uint8_t* data, size_t size, const net::Address& from) {
+  if (a.done || size != kTakenSize || !(from == a.service)) return false;
+  net::Reader r = net::make_reader(data, size);
+  uint8_t kind = 0;
+  if (!read_start(r, kind) || kind != kTaken) return false;
+  const uint64_t id = net::read_u64(r);
+  const uint8_t how = net::read_u8(r);
+  net::Signature sig{};
+  net::read_bytes(r, sig.data(), sig.size());
+  if (r.bad || id != a.id || how > static_cast<uint8_t>(Taken::again)) return false;
+  const std::vector<uint8_t> msg = taken_signed(a.server, id, static_cast<Taken>(how));
+  if (!net::sign_check(a.service_key, sig, msg.data(), msg.size())) return false;
+  a.taken = static_cast<Taken>(how);
+  a.done = a.answered = true;
+  return true;
 }
 
 void ask_start(Ask& a, Op op, const net::Address& service, const net::Key& service_key,

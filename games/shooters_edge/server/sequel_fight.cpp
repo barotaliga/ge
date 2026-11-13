@@ -508,6 +508,17 @@ bool aim_helped_weapon(const SequelServer& s, int slot, int w) {
          w < kSqWeaponCount && aim_help_weapon_allowed(s, kSqAimNames[w]);
 }
 
+// The bend told to the player it helped: his client turns the view onto the player in slot
+// `target` (entity target + 1, as the classic endpoint numbers players; aim_turn.hpp).
+void tell_bend(SequelServer& s, int slot, int target) {
+  s.sv.clients[slot].aim_helped++;
+  NetEvent ev;
+  ev.kind = EventKind::aim_bend;
+  ev.to = 1u << slot;
+  ev.ent = target + 1;
+  event(s, std::move(ev));
+}
+
 sh::AimLeeway aim_leeway(const SequelServer& s) {
   return {float(s.cvars.find("sv_aimhelp_x")->number), float(s.cvars.find("sv_aimhelp_y")->number)};
 }
@@ -536,7 +547,7 @@ sh::Vec3f led_velocity(SequelServer& s, int slot, int w, sh::Vec3f start, sh::Ve
       sh::aim_lead(shot, view_forward, {targets, size_t(n)}, aim_leeway(s), fall);
   if (!b.bent) return velocity;
   if (gravity == 0 && shoot_line(s, start, b.at, 1u << slot).player != b.target) return velocity;
-  s.sv.clients[slot].aim_helped++;
+  tell_bend(s, slot, b.target);
   return b.velocity;
 }
 
@@ -557,7 +568,7 @@ sh::Vec3f helped_forward(SequelServer& s, int slot, int w, sh::Vec3f eye, sh::Ve
   const sh::AimBend b = sh::aim_help(eye, forward, kRange, {targets, size_t(n)}, leeway);
   if (!b.bent) return forward;
   if (shoot_line(s, eye, b.aim + b.forward * 8, 1u << slot).player != b.target) return forward;
-  s.sv.clients[slot].aim_helped++;
+  tell_bend(s, slot, b.target);
   return b.forward;
 }
 

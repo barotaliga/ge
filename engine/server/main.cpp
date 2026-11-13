@@ -182,6 +182,7 @@ int run(const ServerGame& game, const ServerConfig& given) {
     }
     server_frame(s);
     server_accounts_update(accounts, wall_unix_us());
+    server_accounts_reports(accounts, s, wall_unix_us());
     if (status_frames > 0 && (n + 1) % status_frames == 0) {
       std::printf("%s\n", server_status(s).c_str());
       std::fflush(stdout);

@@ -34,6 +34,7 @@ const ExtBit kExtBits[] = {
     {ExtFamily::z, true, kZVwep, "view-weapons"},
     {ExtFamily::z, true, kZSolid, "solid"},
     {ExtFamily::ge, true, kGeNamedEffects, "named-effects"},
+    {ExtFamily::ge, true, kGeAimBend, "aim-bend"},
 };
 const int kExtBitCount = static_cast<int>(sizeof kExtBits / sizeof kExtBits[0]);
 

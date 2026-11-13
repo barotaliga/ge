@@ -79,7 +79,25 @@ struct SkinChoice {
   int noskins = 0;            // 0, 2: the skins drawn; 1: every player in the figure's own skin
   std::string base = "base";  // the skin of a player who names none, or one the files lack
   std::string all;            // one skin on every player ("": each their own)
+  // teamskin, enemyskin: the skin of every teammate or every enemy ("": their own); teamcolor,
+  // enemycolor: their shirt and pants colours (-1: their own).
+  std::string team, enemy;
+  int team_top = -1, team_bottom = -1, enemy_top = -1, enemy_bottom = -1;
 };
+// THE SIDES: which side a player is on as the viewer sees it, for teamskin and teamcolor. With
+// teamplay on, a player whose team is the viewer's is a teammate; everyone else (and everyone with
+// teamplay off) an enemy. `none`: not a player, nothing forced.
+enum class Side : uint8_t { none, team, enemy };
+Side side_of(bool teamplay, std::string_view mine, std::string_view theirs);
+// The skin a player on `side` is drawn in by name: allskins over teamskin or enemyskin over their
+// own (then `choose_skin` as ever).
+std::string_view forced_skin(const SkinChoice& choice, Side side, std::string_view own);
+// Their colours, 0..13, after teamcolor or enemycolor.
+void forced_colours(const SkinChoice& choice, Side side, uint32_t* top, uint32_t* bottom);
+// A teamcolor or enemycolor command's words: "off" (-1, -1), one colour for both, or top and
+// bottom, each clamped to 0..13; false (nothing changed) for anything else.
+bool parse_forced_colours(std::string_view top, std::string_view bottom, int* out_top,
+                          int* out_bottom);
 // A skin name as looked up: its extension dropped, lower case, cut to kSkinNameChars; empty for a
 // name that climbs out of `skins/` (holds "..") or starts with a dot.
 inline constexpr size_t kSkinNameChars = 15;
@@ -89,6 +107,23 @@ std::string skin_key(std::string_view name);
 // `noskins 1` or when neither is there.
 uint32_t choose_skin(const SkinChoice& choice, std::string_view skin,
                      const std::unordered_map<std::string, uint32_t>& read);
+
+// THE SECOND GAME'S LOOKS: a player's `skin` is "<model>/<skin>", the figure's folder under
+// `players/` and a picture in it. Which figure and skin they are drawn in, out of the folders whose
+// figure was read (`figures`, by lower-case folder) and the skins read (`skins`, by
+// "<folder>/<skin>"): the folder up to the first '/' (else up to a backslash; with neither, none
+// and the rest after its first character); a folder not read is kDefaultFigure's; a skin missing
+// from the folder is the default figure's of that name (the figure turning to it too), else the
+// folder's kDefaultSkin. `noskins 1` or no look: the default figure in its default skin. `folder`
+// empty when not even the default figure was read; `skin` kOwnSkin when no skin was read.
+inline constexpr std::string_view kDefaultFigure = "male", kDefaultSkin = "grunt";
+struct Look {
+  std::string folder;
+  uint32_t skin = ge::render::kOwnSkin;
+};
+Look choose_look(const SkinChoice& choice, std::string_view look,
+                 const std::unordered_map<std::string, uint32_t>& figures,
+                 const std::unordered_map<std::string, uint32_t>& skins);
 
 // An item map's world model as one frame, its faces' textures in its skin.
 ge::render::MorphModel morph_from_brush(const ge::brush::Map& item,

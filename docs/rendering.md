@@ -621,6 +621,11 @@ frame a list of `MorphDraw`s.
 - **A skin to wear.** A model may be skin-only (a skin, no frames), packed into the atlas with
   the rest. A draw's `skin` names the model whose skin it wears over its own coordinates: one
   shared figure, each player in their own picture.
+- **Skins worn later.** A skin read while the scene runs (a player's own, the first time it is
+  worn) goes into a slot: a layer of a 2D array texture, 512 square, the picture stretched by the
+  nearest texel with its marks (`set_morph_slot`, `slot_texels`). A draw's `slot` wears it over its
+  own coordinates; the game reuses the slot worn longest ago, so the atlas holds only what the map
+  needs and a game may ship any number of skins.
 - **Frames blended on the GPU.** The vertex stage pulls each vertex by index and mixes the draw's
   two frames by its share. It does the same for the frame before, so a swinging limb carries its
   own motion into the motion target and TAA keeps it sharp. A model with frames at 10 a second
@@ -2441,14 +2446,22 @@ room round it and burning where it lands (`engine/render/beam.hpp`, `beams.hpp`,
   pre-exposure (`night.cpp`'s `pre_exposure` adds `FrameView::lamp_lux`): a dark room exposed for
   its torches alone stores the beam's white past a half float's 65504, the target holds
   infinity and the tone curve turns it black. The pass also clamps what it writes below that.
-- **It burns where it lands.** `beam_burns` says when a held beam leaves a scorch: at once on a
-  new spot, again each `scorch_every_s` while it dwells, and, when the hit jumps further than
-  half a scorch in a frame, at every half scorch along the jump (the caller asks again until it
-  says no), so a fast sweep still leaves an unbroken trail. The game presses each through its decal
-  system (engine/detail's `place_decal`, a scorch) and hands the pass the clipped meshes; the
-  pass lays the soot over the picture and a fresh burn's ember (`ember_level`: `ember_cd`
-  cooling over `ember_s`) in it, white-yellow to a dull red, hottest in the heart and the cracks
-  of the atlas's mask, in one blend (the ember added, the picture kept by the soot's alpha).
+- **It burns a line where it sweeps, and melts the wall where it stays.** `beam_burns` lays a
+  burnt LINE behind the hit, not a row of round scorches: a piece from where the line ends to the
+  hit once the hit has moved `line_piece_m` along its face (at most `line_most_m` a piece; the
+  caller asks again until it says no, so a fast sweep is laid whole), each piece a long decal
+  (engine/detail's `burn_line`, `line_m` wide) reaching half its width past both ends so it
+  overlaps its neighbours and the pieces read as one unbroken line. A hit that leaves its face (a
+  jump to another wall, round a corner) starts a new line there instead of drawing one through the
+  air. Held still (within `kStillM` for `melt_after_s`) the line is laid on to the spot and the
+  wall MELTS there: a `melt` decal `melt_m` across, pressed again every `melt_every_s` in its own
+  slot (`DecalAt::slot`) and larger, up to `melt_most_m` after `melt_grow_s`. Both glow KEYED
+  (`BurnVertex::glow_keys`, render/marks.hpp's `kHotGlowKeys` whites the eye is adapted to when
+  fresh, so white-hot in a lit room and never a blinding ball in a dark one), cool through orange
+  and red and keep as black soot; while they glow they light the room (render/marks.hpp's
+  `mark_glows`: each glowing mark a light off the wall by its heat and size, the near ones merged
+  into one). A scorch's ember stays dull (`ember_level`, under kEmberKeys). A slug's hit and a big
+  energy ball's burst press the same melt (`press_glow`, a `GlowMark`'s size and glow time).
 - **Presets.** `arc` (one thick, nearly straight channel in a violet-blue sheath, struck 30
   times a second), `bolt` (a jagged forking channel, struck 14 times a second with a bright
   flash each), `braid` (three thin strands wound round each other, cyan, crackling at 40 a

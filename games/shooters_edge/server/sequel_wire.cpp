@@ -345,11 +345,16 @@ bool to_slot(const NetEvent& e, int slot) { return (e.to >> slot) & 1u; }
 }  // namespace
 
 void sequel_sky(const ge::brush::Map& map, SequelWireOptions& opt) {
+  // A world that names none gets the sky, axis and turn an unmodified sequel server sends for it
+  // (measured on the full game's q2dm1): an empty sky has a client ask for "env/rt.tga" and stall.
+  opt.sky = "unit1_";
+  opt.sky_axis = "0.000000 0.000000 0.000000";
+  opt.sky_rotate = "0.000000";
   if (map.entities.empty()) return;
   const ge::brush::Entity& world = map.entities[0];
-  opt.sky = world.get("sky");
-  opt.sky_axis = world.get("skyaxis");
-  opt.sky_rotate = world.get("skyrotate");
+  if (!world.get("sky").empty()) opt.sky = world.get("sky");
+  if (!world.get("skyaxis").empty()) opt.sky_axis = world.get("skyaxis");
+  if (!world.get("skyrotate").empty()) opt.sky_rotate = world.get("skyrotate");
 }
 
 int32_t sequel_map_checksum(std::span<const uint8_t> bsp) {

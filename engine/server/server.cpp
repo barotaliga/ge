@@ -252,6 +252,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   const std::string welcome = c.login.welcome, master = c.login.master, key = c.login.key;
   const std::string reserved = std::to_string(c.login.reserved);
   const std::string account_port = std::to_string(c.login.port);
+  const std::string stats = std::to_string(c.login.stats);
   bind("sv_login", login, latched, "Whether players must log in to an account to play.",
        CvarKind::integer, 0, 2,
        "0: nobody is asked, a login still counts (the default); 1: players must log in, "
@@ -283,6 +284,12 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   bind("sv_accountport", account_port, latched,
        "The UDP port the server's own account service answers on, when it is its own master.",
        CvarKind::integer, 0, 65535, "0: 27901 (the default); 1..65535: that port", &c.login.port);
+  bind("sv_stats", stats, latched,
+       "Whether each finished match's report goes to the account master, for players' stats.",
+       CvarKind::integer, 0, 1,
+       "0: no reports; 1: every match the game reports, to sv_accountmaster or to the server's "
+       "own accounts (the default)",
+       &c.login.stats);
   for (int i = 0; i < game.rule_count; i++) {
     const GameRule& r = game.rules[i];
     std::string& field = c.rules[r.name];  // a map's node: its address outlives the inserts

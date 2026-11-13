@@ -261,7 +261,7 @@ The game fills its part when a match ends (`ServerGame::match_report`, asked aft
 true once per match) and `engine/server` adds its own (the id, the game and its version, the
 server's name and address, the start in Unix seconds); the server keeps its last 16 on
 `Server::reports`, newest last. The bytes refuse a report past their limits (64 players, 16 teams,
-32 columns) rather than cut it, since a report that says less than the match is worse than none.
+64 columns) rather than cut it, since a report that says less than the match is worse than none.
 
 Shooter's Edge tallies a deathmatch off the rules' world every frame
 (`games/shooters_edge/net/classic_report.hpp`), since the rules keep only the frags: a player whose
@@ -287,12 +287,54 @@ trailer and keeps those keys readable, so an archive of older demos still reads 
 reader moves to the report in the same pull request). The hub's new answers live in their own files
 beside `engine/hub/api.cpp`.
 
-The server sends it to the master it beats to, sealed with its own key, acknowledged and retried.
-The master adds each logged-in player's part to that account's totals per game and mode, and hands
-the reports to the hub. **Which reports count**: only those from servers whose key the master's
-owner has listed (`--trusted-servers`); any other server's matches are shown on the hub but add to
-no totals, since a server can say anything about its own matches. A match with bots is shown and
-counted, with its bots marked.
+Each player also carries the lowest, average and highest ping the server saw over the match.
+
+**Sending it** (`sv_stats 1`, the default; `engine/server/accounts.hpp`). A server that is its own
+master takes its reports in process and counts them as its own. A server with `sv_accountmaster`
+signs each report with a key of its own (`server.key` in its game folder, made at the first start;
+the start prints its public half for the master's owner) and sends it on a socket of its own,
+again every 2 s until the master's signed answer comes (a minute at most). It needs the master's
+key (`sv_accountkey`) to check that answer, and without it sends nothing and says so at the start.
+The datagrams are the account service's (`account/service.hpp`): the report is not sealed, since it
+is no secret, and the answer is smaller than the report, so the service amplifies nothing. A report
+too big for one datagram (a full server's weapon stats) goes in up to 16 pieces the master joins
+before it checks the signature; it keeps at most 32 reports' pieces at once, each for a minute.
+
+### The weapon stats
+
+Shooter's Edge reads each player's weapon stats off the QC server every frame
+(`games/shooters_edge/net/classic_stats.hpp`, changing nothing there) and sends them as the
+report's columns. They are what a classic match's statistics keep (the facts in
+`porting/shooters-edge/match-stats.md`), plus mid-airs (the maintainer, 2026-11-13):
+
+| Columns | What |
+| --- | --- |
+| `<w>_attacks`, `<w>_hits`, `<w>_kills`, `<w>_deaths` for axe, sg, ssg, ng, sng, gl, rl, lg | attacks (pellets, nails, projectiles, pulses, swings), hits (a direct touch on a player, team mates too), kills by the final blow's weapon, deaths to it |
+| `rl_splash`, `gl_splash`, `rl_damage` | enemies a rocket's or grenade's blast hurt, one each (the shown rl and gl percentages), and the rockets' damage summed (its average per splash hit) |
+| `midair`, `midair_height`, `midair_height_max` | rocket blows on an enemy off the ground and out of the water, their heights over the floor below |
+| `dmg_given`, `dmg_taken`, `dmg_team`, `dmg_self`, `dmg_ewep` | health and armour taken, to and from enemies, to team mates, to oneself, and given to an enemy carrying the rocket launcher or the arc |
+| `ga`, `ya`, `ra`, `mh`, `quad`, `pent`, `ring`, `quad_s` | armour, mega healths and power-ups taken; the seconds the quad was held |
+| `spawn_frags`, `streak_max`, `quad_run_max` | kills within 2 s of the victim's spawn, the longest run of kills between deaths, the most kills of one quad |
+
+When the match ends every player reads them in the console: their frags and efficiency, each
+weapon's accuracy, the rockets' direct hits, average damage and mid-airs, armour and power-ups,
+damage, the streaks and spawn frags. The `match-report` lab draws them as a match page.
+
+**At the master** (`account/matches.hpp`). A report is taken once by its server's key and id, so
+one sent again counts once. **Which reports count**: only those from servers whose key the master's
+owner has listed (the hub's `--trusted-servers=<file>`, one key a line, and the service's own key);
+any other server's matches are kept and shown but add to no totals, since a server can say anything
+about its own matches. A match with bots is kept and counted for its logged-in players; a bot and a
+guest add to no totals. The reports are kept in `reports.log` beside the store and read back at
+start, so the totals come back by the trust the master has then; the last 256 are kept for the hub.
+
+**Totals** are kept per account, game, mode, map and ping band (the player's average ping in the
+match: under 40, 80, 120 or 200 ms, or more), and summed under a filter (`TotalsFilter`): every
+game or one, every map or one, chosen modes or every mode but some (all but ffa), and only matches
+played under a ping. So a player reads their stats whole, on one map, in one mode, or at a good
+ping, from the same records (the maintainer, 2026-11-13). The game's own columns are summed by name
+beside the common ones, but for one whose name ends `_max` (the longest streak, the highest mid-air),
+which keeps its largest.
 
 The classic servers already on the internet report nothing to us; the hub's classic adapter reads
 their recent-stats answer into the same record, best effort and without accounts.

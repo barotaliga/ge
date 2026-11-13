@@ -1348,13 +1348,26 @@ every pass, and judged by captioned screenshots:
   pants rows take the player's colours and its glowing rows light themselves, as the figure's own
   skin does, its top-left 296x194 stretched over the figure (a picture over 320x200 is refused). A
   .tga or .png is drawn as painted (halved past 1024 a side). The skins are read with the map's
-  models (`client/world_models.cpp`'s `read_player_skins`, at most 32, each kept while the morph
-  atlas holds it); a skin that turns up later shows at the next map. `baseskin` (base) is worn by a
+  models' names (`client/world_models.cpp`'s `read_player_skins`) and read the first time a player
+  wears one into one of the morph pass's 32 slots (`worn_slot`); a skin that turns up later shows
+  at the next map. `baseskin` (base) is worn by a
   player who names none or one not there, else the figure's own; `allskins <name>` puts one on
   everyone; `noskins 1` draws every player in the figure's own skin, in their colours; your own
   `skin` goes to the server with your colours. A name with `..` or a leading dot is refused, its
   extension dropped, cut to 15 characters (`app/classic_models.hpp`'s `skin_key`, `choose_skin`).
   Colours 8 to 13 read their palette rows backwards, since those rows are stored bright to dark.
+- **Skins and colours by side** (M18i17): `teamskin` and `enemyskin` put one skin on every
+  teammate or every enemy, and `teamcolor` and `enemycolor` (`off`, one colour, or shirt and pants,
+  0 to 13) their colours. A teammate shares your team while `teamplay` is on; everyone else is an
+  enemy. `allskins` still wins over both. They apply to the first game's players, live and in
+  demos (`app/classic_models.hpp`'s `side_of`, `forced_skin`, `forced_colours`).
+- **Player figures in the second game** (M18i16): a player's `skin` there is "<model>/<skin>",
+  the figure a folder `players/<model>/` with its `tris.md2`, its skins as pictures beside it, and
+  the weapons it carries (the files the server names with a '#', drawn in place of its weapon). Each
+  folder with a figure is read with the map's models (at most 8, while the atlas holds them); a
+  folder not there is the default figure's (male), a skin missing from the folder is the default
+  figure's of that name (the figure turning to it), else the folder's grunt; `noskins 1` draws
+  everyone as the default figure in grunt (`app/classic_models.hpp`'s `choose_look`).
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
 - **Effects from the game's files** (`client/world_fx.hpp`, M18l): a file `particles/<any>.fx`

@@ -385,20 +385,56 @@ std::shared_ptr<const MarkFaces> receivers_of(const ge::brush::Map& m) {
   return faces;
 }
 
-// A mark pressed onto the receivers (nothing without them).
+// A mark pressed onto the receivers (nothing without them): its slot, or -1.
+int press(FxState& s, const ge::detail::DecalAt& d);
+
+// A square mark pressed onto the receivers (nothing without them).
 void mark(FxState& s, ge::detail::DecalKind kind, const double at[3], const double n[3],
           double size_m, double spin, uint32_t variant, double t) {
-  if (!s.receivers) return;
   ge::detail::DecalAt d;
   d.at = {at[0], at[1], at[2]};
   d.normal = {n[0], n[1], n[2]};
   d.size_m = size_m;
   d.spin_rad = spin;
   d.now_s = t;
-  d.variant = variant % ge::render::kMarkVariants;
+  d.variant = variant;
   d.kind = kind;
+  press(s, d);
+}
+
+// A held beam's burn: a piece of its line, or its melt pressed again in its own slot.
+void beam_mark(FxState& s, HeldBeam& b, const ge::render::BeamBurn& burn) {
+  ge::detail::DecalAt d;
+  d.at = {burn.at[0], burn.at[1], burn.at[2]};
+  d.normal = {burn.normal[0], burn.normal[1], burn.normal[2]};
+  d.size_m = burn.size_m;
+  d.spin_rad = burn.spin_rad;
+  d.now_s = burn.born_s;
+  d.variant = burn.variant;
+  if (burn.melt == 0) {
+    d.kind = ge::detail::DecalKind::burn_line;
+    d.length_m = burn.length_m;
+    d.along = {burn.along[0], burn.along[1], burn.along[2]};
+    press(s, d);
+    return;
+  }
+  d.kind = ge::detail::DecalKind::melt;
+  if (burn.melt == b.melt) {
+    d.slot = b.melt_slot;
+    d.serial = b.melt_serial;
+  }
+  b.melt = burn.melt;
+  b.melt_slot = press(s, d);
+  b.melt_serial = b.melt_slot >= 0 ? s.marks.decals[static_cast<size_t>(b.melt_slot)].serial : 0;
+}
+
+int press(FxState& s, const ge::detail::DecalAt& placed) {
+  if (!s.receivers) return -1;
+  ge::detail::DecalAt d = placed;
+  d.variant %= ge::render::kMarkVariants;
+  const double at[3] = {d.at.x, d.at.y, d.at.z};
   const int slot = ge::detail::place_decal(s.marks, s.receivers->receivers, d);
-  if (slot < 0 || s.marked == nullptr) return;
+  if (slot < 0 || s.marked == nullptr) return slot;
   // The light it lies in: the lightmap under it, a luxel of 128 a surface as painted.
   if (s.mark_light.size() < s.marks.capacity) s.mark_light.assign(s.marks.capacity, {1, 1, 1});
   const float p[3] = {static_cast<float>(at[0] / ge::brush::kUnitM),
@@ -410,6 +446,7 @@ void mark(FxState& s, ge::detail::DecalKind kind, const double at[3], const doub
     lit = {2 * rgb[0], 2 * rgb[1], 2 * rgb[2]};
   else
     lit = {0.5f, 0.5f, 0.5f};
+  return slot;
 }
 
 // The marks as the beams' pass's burns, each in the light it was pressed in.
@@ -419,6 +456,22 @@ void burns_of(const FxState& s, double t, std::vector<ge::render::BurnVertex>& o
 }
 
 }  // namespace
+
+void glow_mark(FxState& s, const double at[3], const double n[3], const ge::render::GlowMark& m,
+               double t) {
+  if (!s.on.decals) return;
+  ge::detail::DecalAt d;
+  d.at = {at[0], at[1], at[2]};
+  d.normal = {n[0], n[1], n[2]};
+  d.size_m = m.size_m;
+  d.ember_s = m.glow_s;
+  d.now_s = t;
+  const uint32_t own = s.seed++;  // its own variant and turn
+  d.variant = own;
+  d.spin_rad = static_cast<double>(own * 2654435761u % 360) * ge::core::kPi / 180;
+  d.kind = ge::detail::DecalKind::melt;
+  press(s, d);
+}
 
 void warp_dust(const Warp& w, const fx::Dust& d, double was, double age, uint32_t seed,
                fx::Particles* out) {
@@ -1480,6 +1533,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         }
         if (e.name == "te_bfg_bigexplosion") {  // the BFG's burst (its blast is an explosion's)
           if (s.on.explosions) fx::bfg_burst(p, s.seed++, &out.births);
+          // On a wall (the face seen from the eye at the burst): a large glowing mark, slow to
+          // cool.
+          double normal[3], dir[3];
+          face(eye_map, normal, dir);
+          if (on_face) glow_mark(s, p, normal, fx::kEnergyBallMark, t);
           break;
         }
         double way[3] = {kUpWay[0], kUpWay[1], kUpWay[2]};
@@ -1511,6 +1569,19 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
             s.beams.push_back(b);
           }
           fx::rail_spiral(from, to, s.seed++, &out.births);  // its coil round the line
+          // Where it struck a wall (the line run on a little past its end): a small glowing mark.
+          const float dx = e.end.x - e.at.x, dy = e.end.y - e.at.y, dz = e.end.z - e.at.z;
+          const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
+          sh::Vec3f fn{};
+          ge::detail::SurfaceClass sc = ge::detail::SurfaceClass::unknown;
+          if (map != nullptr && len > 1 &&
+              face_hit(*map, e.at,
+                       {e.end.x + dx / len * 8, e.end.y + dy / len * 8, e.end.z + dz / len * 8},
+                       &face_texture, &fn, &sc, face_light, face_st)) {
+            double normal[3];
+            engine_dir(fn, normal);
+            glow_mark(s, to, normal, fx::kSlugMark, t);
+          }
           break;
         }
         trail_scripted(s, e.name, from, to, out);
@@ -1546,13 +1617,13 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       continue;
     }
     if (s.on.beams) {
-      // Its burns where it lands, a few to fill a sweep's gap.
+      // Its burns where it lands: the line it traces, a few pieces to fill a fast sweep, and the
+      // melt where it stays.
       ge::render::BeamBurn burn;
-      for (int i = 0; s.on.decals && i < 4 &&
+      for (int i = 0; s.on.decals && i < 6 &&
                       ge::render::beam_burns(fx::bolt_look(), b.shot, t, b.trail, burn);
            ++i)
-        mark(s, ge::detail::DecalKind::scorch, burn.at, burn.normal, burn.size_m, burn.spin_rad,
-             burn.variant, burn.born_s);
+        beam_mark(s, b, burn);
       out.beams.push_back(b);
       fx::Light ll[ge::render::kBeamLights];
       const int n = fx::bolt_lights(b.shot, t, ll);
@@ -1579,6 +1650,20 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     }
   }
   burns_of(s, t, out.burns);
+  // The marks still glowing light the room round them (render/marks.hpp's mark_glows).
+  if (s.on.decals && s.receivers) {
+    ge::render::MarkGlow glows[kMarkGlowLights];
+    const int n = ge::render::mark_glows(s.marks, t, glows, kMarkGlowLights);
+    for (int i = 0; i < n; ++i) {
+      fx::Light g;
+      for (int k = 0; k < 3; ++k) {
+        g.pos[k] = glows[i].at[k];
+        g.colour[k] = kMarkGlowGain * glows[i].rgb[k];
+      }
+      g.radius = glows[i].reach_m;
+      out.lights.push_back(g);
+    }
+  }
   if (s.on.decals)
     draw_wounds(l, s, out.models, l.pose.eye, t, dt, out.births);
   else

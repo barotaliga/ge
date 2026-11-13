@@ -31,6 +31,11 @@ namespace shooters_edge::client {
 // sorted. False with the reason when it does not open.
 bool demo_files(std::span<const uint8_t> demo, std::vector<std::string>& names, std::string& error);
 
+// What any picture of the game needs whatever is shown (the palette and colour map, the player's
+// head and gibs, the thrown and fired models the effects draw, the particle effects), or of the
+// sequel (`sequel`), appended to `out`.
+void game_basics(bool sequel, std::vector<std::string>& out);
+
 // The files `name` (its `bytes`) draws from in turn, appended to `more` (`HubSpec::file_needs`): a
 // map that keeps its textures outside names each one's file, and a map with a sky box its faces.
 void content_needs(std::string_view name, std::span<const uint8_t> bytes,

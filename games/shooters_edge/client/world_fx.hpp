@@ -121,9 +121,13 @@ struct HeldBeam {
   ge::render::BeamShot shot;   // engine metres
   sh::Vec3f map_from, map_to;  // map units (the classic bolt's segments)
   EffectModel model = EffectModel::bolt2;
-  ge::render::BurnTrail trail;  // where it last burnt the wall it lands on
-  bool across = false;          // the arc across the player's gun's prongs (fx::prong_arc_look)
-  bool rail = false;            // the sequel's rail (fx::rail_look): fired once, then fading
+  ge::render::BurnTrail trail;  // where its burnt line ends on the wall it lands on
+  // Its melt (render/beam.hpp's BeamBurn::melt) and the marks' slot it was pressed in last.
+  uint32_t melt = 0;
+  int melt_slot = -1;
+  uint32_t melt_serial = 0;
+  bool across = false;  // the arc across the player's gun's prongs (fx::prong_arc_look)
+  bool rail = false;    // the sequel's rail (fx::rail_look): fired once, then fading
   double seen = 0;
 };
 
@@ -131,9 +135,14 @@ struct HeldBeam {
 // (the world model's, sky and liquids left out, made into receivers once a map): a blast's scorch
 // where it went off against a surface (render/explosion.hpp's `scorch_of`, its embers glowing for
 // a second and a half), a bullet hole where a round hit a face, the bolt's burns where it lands
-// (render/beam.hpp's `beam_burns`). Kept in a pool of kMarks, the oldest reused; drawn as the
+// (render/beam.hpp's `beam_burns`: the line it traces as it sweeps, the wall melting where it is
+// held). Kept in a pool of kMarks, the oldest reused; drawn as the
 // beams' pass's burns (soot and ember) through the decal masks' atlas (render/marks.hpp).
-inline constexpr uint32_t kMarks = 128;
+inline constexpr uint32_t kMarks = 256;
+// The glowing marks' lights (render/marks.hpp's mark_glows): at most this many a frame, each this
+// bright at a level of 1 (the lightmaps' units).
+inline constexpr int kMarkGlowLights = 6;
+inline constexpr double kMarkGlowGain = 3;
 inline constexpr double kHoleM = 0.16, kNailHoleM = 0.2;
 inline constexpr double kPelletSpread = 0.04;  // a shot's pellets' cone, rad: one message's holes
 // THE WOUNDS (ce_decals): where a round struck a body, a hole with blood splattered round it,
@@ -258,15 +267,12 @@ struct FxState {
 
 // One frame's effects for the world pass.
 struct FxFrame {
-  // Whether the server allows see-through liquids (look.hpp's `watervis_allowed`; a demo always).
-  bool see_through = true;
   effects::Particles births;
   std::vector<effects::Light> lights;
   double blend[4] = {0, 0, 0, 0};  // the screen's: sRGB colour and share
   // The same without a lava's or a slime's tint, for a look that draws the liquid round the eye.
   double blend_dry[4] = {0, 0, 0, 0};
   std::vector<Placed> models;  // the entities with a model (world_models.hpp)
-  float held_shown = 1;        // the weapon in hand's warp: the local player's arrival
   // The local player's own arrival (ce_warps): s into it (below 0: none), and the colour of its
   // flash, the pack's teleport fog's brightest (sRGB-encoded), for the post pass's warp of the
   // whole view (render/post.hpp's `arrival_warp`, at FxSwitches::arrival).
@@ -285,6 +291,9 @@ struct FxFrame {
   // The local player as the world would place him (never drawn in his own eyes, still casting his
   // shadow, M54); `has_self` false when he is dead or there is no server.
   Placed self;
+  float held_shown = 1;  // the weapon in hand's warp: the local player's arrival
+  // Whether the server allows see-through liquids (look.hpp's `watervis_allowed`; a demo always).
+  bool see_through = true;
   bool has_self = false;
 };
 
@@ -344,6 +353,11 @@ bool trail_scripted(FxState& s, std::string_view name, const double from[3], con
 void scripted_lights(FxState& s, double t, FxFrame& out);
 
 // The effects of the wall frame of `dt` s at time `t` s.
+// A glowing hit mark (ce_decals) pressed on the map's faces at `at` (engine m) out along `n`:
+// white-hot, cooling to black over `m.glow_s` and lighting the room while it glows (a slug's
+// hit: app/weapon_fx.hpp's kSlugMark; a big energy ball's burst: kEnergyBallMark).
+void glow_mark(FxState& s, const double at[3], const double n[3], const ge::render::GlowMark& m,
+               double t);
 void step_fx(const FxScene& scene, FxState& s, double t, double dt, FxFrame& out);
 // The same off the listen server, after frame_view brought `v` up to date.
 void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double dt, FxFrame& out);

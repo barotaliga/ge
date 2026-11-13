@@ -87,6 +87,8 @@ const char* event_kind_name(EventKind k) {
       return "point-effect";
     case EventKind::trail_effect:
       return "trail-effect";
+    case EventKind::aim_bend:
+      return "aim-bend";
   }
   return "?";
 }
@@ -127,6 +129,7 @@ std::string event_text(const NetEvent& e) {
       e.kind == EventKind::point_effect || e.kind == EventKind::trail_effect)
     s += " at " + ge::core::num::to_fixed(e.origin.x, 1) + " " +
          ge::core::num::to_fixed(e.origin.y, 1) + " " + ge::core::num::to_fixed(e.origin.z, 1);
+  if (e.kind == EventKind::aim_bend) s += " onto " + std::to_string(e.ent);
   if (!e.bytes.empty()) s += " " + std::to_string(e.bytes.size()) + " bytes";
   return s;
 }

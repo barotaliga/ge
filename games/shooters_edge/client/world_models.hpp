@@ -34,6 +34,7 @@
 // ge:keywords sprites bare-flames topcolor bottomcolor place_brushes doors plats
 // ge:keywords ce_models enhanced-skins cached_skins replacement-skin skin-stand-in
 // ge:keywords body_triangles shapes warp-ash dynamic-lights model-lighting
+// ge:keywords player-figures choose_look worn_slot drawn_kind carried-weapons skin-files
 // ge:skill render shooter morph
 #pragma once
 
@@ -83,6 +84,8 @@ struct Placed {
   // A player's `skin` (its user info's: the picture `skins/<name>.pcx` its figure wears, chosen
   // by `player_skin_morph`); empty: none named.
   std::string skin_name;
+  // Its side as the viewer sees it (teamskin, enemycolor: `models::side_of`); none: not a player.
+  models::Side side = models::Side::none;
   // Its warp (world_fx.hpp, warps.hpp): short of whole an alias model is drawn dissolving to ash
   // or out of it (render/morph.hpp's MorphWarp).
   ge::render::MorphWarp warp;
@@ -138,12 +141,38 @@ struct ModelKind {
   float glow_share = 0;
   ge::render::SpriteFacing facing = ge::render::SpriteFacing::parallel;
   bool player = false;  // the players' own figure (kPlayerModel): it wears each one's skin
+  // The second game's player figure (`players/<folder>/tris.md2`) or a weapon carried on it
+  // (`#<file>`, its file in the figure's folder, `carried`): drawn in each player's own look.
+  bool figure = false;
+  std::string carried;
+  uint32_t worn = ~0u;  // a weapon of a figure's folder: the skin-only model its picture is in
 };
 
 // THE PLAYERS' SKINS: the figure every player is drawn as, and the most pictures under `skins/`
 // read with a map (each a skin-only morph model, kept while the atlas holds them).
 inline constexpr std::string_view kPlayerModel = "progs/player.mdl";
 inline constexpr size_t kMaxPlayerSkins = 32;
+// The second game's figures read with a map (every folder under `players/` with a figure), and the
+// skins in them.
+inline constexpr size_t kMaxFigures = 8;
+// The skins worn at once (render/morph.hpp's slots): one read the first time it is worn, kept
+// until a slot is wanted for another and it was worn longest ago.
+inline constexpr size_t kSkinSlots = 32;
+
+// A skin picture listed with the map: its key, read whole (the second game's) or cut as the first
+// game's, and its files in the order tried (.tga, .png, .pcx).
+struct SkinFile {
+  std::string key;
+  bool whole = false;
+  std::vector<std::string> paths;
+};
+
+// What a draw wears: a model's skin (render's kOwnSkin: its own) or a listed skin (`file`).
+struct Worn {
+  static constexpr uint32_t kNoFile = ~0u;
+  uint32_t model = ge::render::kOwnSkin;
+  uint32_t file = kNoFile;
+};
 using models::SkinChoice;
 
 struct WorldModels {
@@ -165,10 +194,31 @@ struct WorldModels {
   std::vector<ge::render::MorphDraw> morph_draws;
   std::vector<ge::render::SpriteDraw> sprite_draws;
   std::vector<std::pair<double, size_t>> near;  // scratch
-  // The skins read (skin_key -> its skin-only morph model) and the player's choice this frame.
+  // The skins listed (skin_key -> its `skin_files` row) and the player's choice this frame.
   std::unordered_map<std::string, uint32_t> player_skins;
   SkinChoice skin_choice;
+  // The second game's figures (folder -> its kind in `figure_kinds`) and the weapons carried on
+  // each ("<folder>/<file>" -> its kind there).
+  std::unordered_map<std::string, uint32_t> figures, figure_carried;
+  std::vector<ModelKind> figure_kinds;
+  // The skins listed (`player_skins` keys them) and where they are read from, and the slots.
+  std::vector<SkinFile> skin_files;
+  const SearchPath* files = nullptr;
+  std::vector<uint8_t> palette;
+  struct Slots {
+    std::vector<uint32_t> of_file, file_in;  // a file's slot; a slot's file
+    std::vector<uint64_t> used;              // the frame each slot was last worn
+    std::vector<bool> failed;                // a file that read in no form
+    uint64_t frame = 0;
+  } slots;
 };
+
+// The kind `p` is drawn as, and what it wears: a player in their own skin, a second-game player as
+// their own figure, the weapon they carry from its folder.
+const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn);
+// The slot listed skin `file` is in, read into the slot worn longest ago the first time; kNoSlot
+// when it does not read or every slot is worn this frame.
+uint32_t worn_slot(ge::gpu::Device& d, WorldModels& m, uint32_t file);
 
 // The models read and their skins decoded, on the CPU (any thread: it reads the files and the
 // cache, no GPU), for `create_models` to upload.
@@ -180,7 +230,12 @@ struct ModelsRead {
   std::vector<ge::render::SpriteFrame> frames;
   ge::render::TintRamps ramps;
   models::LightProbe probe;
-  std::unordered_map<std::string, uint32_t> player_skins;
+  std::unordered_map<std::string, uint32_t> player_skins;  // skin key -> its `skin_files` row
+  std::unordered_map<std::string, uint32_t> figures, figure_carried;
+  std::vector<ModelKind> figure_kinds;
+  std::vector<SkinFile> skin_files;
+  const SearchPath* files = nullptr;  // where the skins are read from (it outlives the models)
+  std::vector<uint8_t> palette;
 };
 // Reads `load.names` through `game`'s adapter and `palette`; a file missing or refused is
 // reported once and drawn as nothing.

@@ -268,6 +268,8 @@ void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
     take_sound(l, s, ev);
     if (prints && ev.kind == sv::EventKind::print && (ev.to & 1u) != 0) l.prints.push_back(ev.text);
     if (ev.kind == sv::EventKind::centerprint && (ev.to & 1u) != 0) l.centres.push_back(ev.text);
+    if (ev.kind == sv::EventKind::aim_bend && (ev.to & 1u) != 0)
+      sh::aim_turn_bent(l.aim_turn, ev.ent);
     // The baseline mod's explosion: its temporary-entity message's first two bytes.
     if (ev.kind == sv::EventKind::multicast && ev.bytes.size() >= 2 && ev.bytes[0] == kTempEntity &&
         ev.bytes[1] == kExplosion)
@@ -1003,7 +1005,10 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     l.host->ctx = &l;
     l.host->move(l.host->game, p);
     ge::server::server_frame(*l.match);
-    if (l.accounts) ge::server::server_accounts_update(*l.accounts, unix_now(l));
+    if (l.accounts) {
+      ge::server::server_accounts_update(*l.accounts, unix_now(l));
+      ge::server::server_accounts_reports(*l.accounts, *l.match, unix_now(l));
+    }
     if (catch_up(l)) entered(l);  // the lobby's restart into the match: a new server
   }
   sv::RulesCommon& s = *l.server;
@@ -1167,6 +1172,19 @@ PlayerState player_state(const Listen& l) {
   if (const int f = pg::vm_layout(vm).f.idealpitch; f >= 0)
     p.ideal_pitch = pg::as_float(*pg::entity_field(vm, 1, f));
   return p;
+}
+
+bool aim_turn_points(const Listen& l, int target, sh::Vec3f& eye, sh::Vec3f& middle) {
+  const sv::RulesWorld& w = l.server->world;
+  if (w.entities.size() < 2) return false;
+  const sv::WorldEntity& me = w.entities[1];
+  const float view_z = w.clients[0].numbers.view_z;
+  eye = me.origin + sh::Vec3f{0, 0, view_z != 0 ? view_z : 22};
+  if (target < 1 || static_cast<size_t>(target) >= w.entities.size()) return false;
+  const sv::WorldEntity& t = w.entities[static_cast<size_t>(target)];
+  if (t.free || t.health <= 0) return false;
+  middle = (t.absmin + t.absmax) * 0.5f;
+  return true;
 }
 
 void missiles_of(const Listen& l, std::vector<Missile>& out) {

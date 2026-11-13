@@ -142,6 +142,55 @@ TEST(a_player_wears_their_skin_else_the_base_else_the_figures_own) {
   CHECK(md::choose_skin(c, "blue", read) == 11);
 }
 
+TEST(a_second_game_look_is_its_folder_and_skin_with_the_default_figure_behind) {
+  const std::unordered_map<std::string, uint32_t> figures{{"male", 0}, {"female", 1}};
+  const std::unordered_map<std::string, uint32_t> skins{
+      {"male/grunt", 1}, {"male/cipher", 2}, {"female/athena", 3}, {"female/grunt", 4}};
+  md::SkinChoice c;
+  md::Look l = md::choose_look(c, "Female/Athena", figures, skins);
+  CHECK(l.folder == "female" && l.skin == 3);
+  l = md::choose_look(c, "female/cipher", figures, skins);  // only the default figure has it
+  CHECK(l.folder == "male" && l.skin == 2);
+  l = md::choose_look(c, "female/nothere", figures, skins);  // the folder's own grunt
+  CHECK(l.folder == "female" && l.skin == 4);
+  l = md::choose_look(c, "robot/athena", figures, skins);  // a folder not read
+  CHECK(l.folder == "male" && l.skin == 1);
+  l = md::choose_look(c, "female/../x", figures, skins);
+  CHECK(l.folder == "female" && l.skin == 4);
+  c.noskins = 1;
+  l = md::choose_look(c, "female/athena", figures, skins);
+  CHECK(l.folder == "male" && l.skin == 1);
+  l = md::choose_look({}, "female/athena", {}, {});  // nothing read: the server's figure
+  CHECK(l.folder.empty() && l.skin == gr::kOwnSkin);
+}
+
+TEST(teammates_and_enemies_wear_the_skin_and_colours_forced_on_their_side) {
+  CHECK(md::side_of(true, "red", "red") == md::Side::team);
+  CHECK(md::side_of(true, "red", "blue") == md::Side::enemy);
+  CHECK(md::side_of(false, "red", "red") == md::Side::enemy);  // teamplay off: all enemies
+  CHECK(md::side_of(true, "", "") == md::Side::enemy);         // no team: no teammates
+  md::SkinChoice c;
+  c.team = "olive";
+  c.enemy = "rust";
+  CHECK(md::forced_skin(c, md::Side::team, "blue") == "olive");
+  CHECK(md::forced_skin(c, md::Side::enemy, "blue") == "rust");
+  CHECK(md::forced_skin(c, md::Side::none, "blue") == "blue");
+  c.all = "neon";  // allskins over both
+  CHECK(md::forced_skin(c, md::Side::team, "blue") == "blue");
+  int top = 0, bottom = 0;
+  CHECK(md::parse_forced_colours("4", "", &top, &bottom) && top == 4 && bottom == 4);
+  CHECK(md::parse_forced_colours("2", "16", &top, &bottom) && top == 2 && bottom == 13);
+  CHECK(!md::parse_forced_colours("red", "", &top, &bottom) && top == 2);
+  CHECK(md::parse_forced_colours("off", "", &top, &bottom) && top == -1 && bottom == -1);
+  c.enemy_top = 4;
+  c.enemy_bottom = 12;
+  uint32_t t = 1, b = 2;
+  md::forced_colours(c, md::Side::team, &t, &b);
+  CHECK(t == 1 && b == 2);  // teammates keep theirs
+  md::forced_colours(c, md::Side::enemy, &t, &b);
+  CHECK(t == 4 && b == 12);
+}
+
 TEST(the_fronts_face_out_in_the_engines_frame) {
   const gr::MorphModel out = md::morph_from_alias(ge::morph::sample_model(), grey_palette(), 0);
   const std::vector<float>& p = out.positions[0];

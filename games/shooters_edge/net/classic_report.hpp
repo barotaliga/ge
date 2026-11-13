@@ -5,6 +5,9 @@
 // that death killed themself, one whose frags fall while alive killed a team mate. A player who
 // leaves before the end stays in the report with the time played.
 //
+// With `TallyFacts::stats` the report's columns are each seat's weapon stats (classic_stats.hpp),
+// which the game reads into `TallySeat::stats` after `tally_frame` (`tally_stats`).
+//
 // The tally counts only while `counting` (a lobby's match, or always without a lobby); a frame
 // that does not count, a map that changes or a clock that goes back (a restart) starts it again.
 // `tally_end` builds the report once and holds the tally until the map changes or restarts. The
@@ -29,6 +32,7 @@
 
 #include "net/report.hpp"
 #include "shooter/server.hpp"
+#include "shooters_edge/net/classic_stats.hpp"
 #include "shooters_edge/server/rules_world.hpp"
 
 namespace shooters_edge::net {
@@ -42,8 +46,10 @@ struct TallySeat {
   int64_t base = 0;  // the seat's frags when it started counting
   int64_t frags = 0;
   int64_t deaths = 0, suicides = 0, team_kills = 0;
+  int64_t ping_sum = 0, ping_n = 0, ping_min = 0, ping_max = 0;  // ms, each frame's ping
   int userid = 0;
   bool on = false, bot = false, alive = false;
+  SeatStats stats;  // the weapon stats (classic_stats.hpp), when the game reads them
 };
 
 struct MatchTally {
@@ -63,12 +69,16 @@ struct TallyFacts {
   double fraglimit = 0, timelimit = 0;  // the rules' (timelimit in minutes; 0 none)
   bool teams = false;
   bool stopped = false;  // the map stopped on an error
+  bool stats = false;    // the seats' weapon stats were read: the report's columns
 };
 
 const char* classic_mode(bool teamplay, bool coop, int seats);
 
 void tally_frame(MatchTally& t, const shooters_edge::server::RulesWorld& w, bool counting,
                  const std::array<uint64_t, ge::shooter::kMaxClients>& accounts);
+
+// The seats `stats_frame` reads into: those counting now, null for the rest.
+std::array<SeatStats*, ge::shooter::kMaxClients> tally_stats(MatchTally& t);
 
 bool tally_end(MatchTally& t, const shooters_edge::server::RulesWorld& w, const TallyFacts& facts,
                ge::net::MatchReport& out);
