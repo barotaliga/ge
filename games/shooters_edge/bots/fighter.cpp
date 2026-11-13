@@ -5,8 +5,8 @@
 // ge:keywords fighter fighter_init fighter_command read_stats item-spot weapon-table tolerance
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_fight_test.cpp
-#include "shooters_edge/bots/floor_trap.hpp"
 #include "shooters_edge/bots/fighter.hpp"
+#include "shooters_edge/bots/floor_trap.hpp"
 
 #include <cmath>
 #include <cstdlib>
@@ -38,6 +38,20 @@ namespace shooters_edge::bots {
 
 namespace {
 
+// The move's keys as the trace's `keys` column compares them: who changed them last.
+struct KeysSeen {
+  int16_t forward = 0, side = 0;
+  bool jump = false;
+};
+KeysSeen keys_seen(const sh::MoveCmd& c) {
+  return {c.forward, c.side, (c.buttons & sh::kButtonJump) != 0};
+}
+void keys_mark(Fighter& f, const sh::MoveCmd& c, KeysSeen& was, const char* by) {
+  const KeysSeen now = keys_seen(c);
+  if (now.forward != was.forward || now.side != was.side || now.jump != was.jump) f.keys_by = by;
+  was = now;
+}
+
 namespace pg = ge::progs;
 namespace ai = ge::ai;
 
@@ -51,6 +65,7 @@ constexpr float kRetreatBelow = 50;   // health plus armour's protection: weak u
 constexpr float kStrongAgain = 80;    // and strong again at this
 constexpr double kChase_s = 3;        // a contact lost this long ago is still chased
 constexpr double kModeBeat_s = 0.5;   // a person's beat: a mode held this long (`beat`)
+constexpr double kShotWait_s = 0.15;  // a rocket jump's shot waits this long for the jump key
 constexpr double kGoalTire_s = 30;    // one goal item held this long in vain is let go of
 constexpr double kHealTire_s = 8;     // and sooner by a weak player, who cannot wait for it
 constexpr double kTired_s = 20;       // for this long
@@ -97,9 +112,9 @@ constexpr double kLanding_s = 2;   // out of the water, its exit node walked ont
 constexpr double kBaseHeal = 1.4;  // health in the team's base is worth this more to a healer
 constexpr double kLauncherWorth = 240;   // the launcher lacked: worth a long run
 constexpr double kBridgeSpare_s = 2.5;   // a bridge left this long before it goes back, s
-constexpr float kGoneSight = 800;  // `bridgeseen`: a bridge's node looked at this near, units
-constexpr float kGoneDrop = 64;    // and no floor this far under it: gone
-constexpr double kFloorBack_s = 10;  // `bridgeseen`: a floor door seen away, unseen since, back
+constexpr float kGoneSight = 800;        // `bridgeseen`: a bridge's node looked at this near, units
+constexpr float kGoneDrop = 64;          // and no floor this far under it: gone
+constexpr double kFloorBack_s = 10;      // `bridgeseen`: a floor door seen away, unseen since, back
 constexpr float kRocketJumpHealth = 70;  // the health a rocket jump is tried with (it costs ~50)
 // A hopper plans the map's gap tricks only this fast or faster, units/s (people take off at
 // 420 to 500; a gap's jump is flown only when the move says it lands across).
@@ -895,17 +910,17 @@ void hide_launcher(Fighter& f, const Stats& st, bool seen_now, double t, ai::Why
 // client keeps a mover it is no longer sent where it last saw it: dm2's red armour's bridge, seen
 // out and gone back into its wall out of view, stood out in the bot's mind, and the route walked
 // off the lip into the pit (22 of 25 lava deaths there in 8 matches).
-bool bridge_seen_gone(const Fighter::Bridge& b, const server::RulesCommon& s, int me,
-                      sh::Vec3f eye, const sh::NavGraph& g) {
+bool bridge_seen_gone(const Fighter::Bridge& b, const server::RulesCommon& s, int me, sh::Vec3f eye,
+                      const sh::NavGraph& g) {
   if (!s.world.entities[static_cast<size_t>(b.ent)].free) return false;  // sent: its place stands
   for (const int32_t n : b.nodes) {
     const sh::Vec3f o = g.nodes[static_cast<size_t>(n)].origin;
     if (dist(o, eye) > kGoneSight) continue;
-    const sh::HullTrace look =
-        sh::trace_move(s.sv, eye, {}, {}, o, sh::kTraceNoMonsters, me);
+    const sh::HullTrace look = sh::trace_move(s.sv, eye, {}, {}, o, sh::kTraceNoMonsters, me);
     if (look.fraction < 1) continue;
-    const sh::HullTrace down = sh::trace_move(s.sv, o, sh::kPlayerMins, sh::kPlayerMaxs,
-                                              {o.x, o.y, o.z - kGoneDrop}, sh::kTraceNoMonsters, me);
+    const sh::HullTrace down =
+        sh::trace_move(s.sv, o, sh::kPlayerMins, sh::kPlayerMaxs, {o.x, o.y, o.z - kGoneDrop},
+                       sh::kTraceNoMonsters, me);
     if (down.fraction >= 1 || sh::over_harm(s.sv, o, o, me)) return true;
   }
   return false;
@@ -970,7 +985,7 @@ void watch_bridges(Fighter& f, const server::RulesCommon& s, int me) {
     }
   }
   floor_trap_shut(f, shut);  // the teleporters onto a floor trap's floor while it is away
-  f.goal_node = -1;  // planned again
+  f.goal_node = -1;          // planned again
   if (f.features[sh::Feature::bridgeseen]) f.reach_at = -1;  // and where it can get to
 }
 
@@ -1373,7 +1388,8 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     // A floor trap's button, an enemy on its floor, or held at it while the floor is away
     // (floor_trap.hpp).
     const int32_t k = f.trap_press >= 0 ? f.trap_press : f.trap_stay;
-    go_to(f, f.button_spots[static_cast<size_t>(f.floor_traps[static_cast<size_t>(k)].button)].node);
+    go_to(f,
+          f.button_spots[static_cast<size_t>(f.floor_traps[static_cast<size_t>(k)].button)].node);
   } else if (!escaping && f.door_button >= 0) {
     go_to(f, f.button_spots[static_cast<size_t>(f.door_button)].node);  // a shut door's button
   } else if (near >= 0) {
@@ -1571,6 +1587,8 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.jumper.lip_share = features[sh::Feature::sidebrink] ? kLipShare : 0;
   ps.curve_keys = features[sh::Feature::keys] && features[sh::Feature::curvekeys];
   ps.under_way = features[sh::Feature::underway];
+  ps.lift_off = features[sh::Feature::liftoff];
+  ps.rocket_wait = features[sh::Feature::rjready];
   ps.retarget = features[sh::Feature::retarget];
   ps.hop_headroom = features[sh::Feature::headroom];
   ps.hop_lips = features[sh::Feature::liphop];
@@ -1741,7 +1759,9 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   const Stats st = read_stats(s, me, *f.arsenal);
   const double t = s.sv.time;
   f.bot.pilot.grenade_ready = st.weapon == f.arsenal->lob;  // a grenade jump fires with it in hand
-  f.bot.pilot.rocket_ready = st.weapon == f.arsenal->launcher;  // a rocket out of a pit with this
+  // A rocket out of a pit with this; under `rjready` ready to fire too (its refire over).
+  f.bot.pilot.rocket_ready =
+      st.weapon == f.arsenal->launcher && (!f.features[sh::Feature::rjready] || t >= f.ready_at);
   // A companion's view is its own (it faces the leader).
   f.bot.calm = f.escort.leader < 0 && f.features[sh::Feature::calm];
   if (f.features[sh::Feature::packs] || f.features[sh::Feature::packinfer])
@@ -1861,6 +1881,9 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   f.bot.hold_front_only = f.features[sh::Feature::letgo];
   f.bot.run_front_only = f.features[sh::Feature::retreatrun] && f.mode == FightMode::retreat;
   sh::MoveCmd cmd = sh::bot_source(f.bot).next(&f.bot, s.sv, slot, msec);
+  KeysSeen keys_was;
+  f.keys_by = "-";
+  keys_mark(f, cmd, keys_was, "bot");
   f.stats.mode_commands[static_cast<int>(f.mode)]++;
   if (held) f.stats.weapon_commands[held->number]++;
 
@@ -1880,6 +1903,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
       cmd.side = sh::quantize_axis(static_cast<float>(-ge::core::libm::sin(rel) * 320));
     }
   }
+  keys_mark(f, cmd, keys_was, "item");
 
   // A button opened by a shot: from where the line meets it, the view on it and the trigger.
   if (!dead && f.unlocking && f.goal_item >= 0 && !f.bot.aiming) {
@@ -1904,8 +1928,10 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     }
   }
 
+  keys_mark(f, cmd, keys_was, "button");
   if (!dead && f.features[sh::Feature::dodge])
     fighter_dodge(f, s, me, t, why, cmd);  // the side steps (footwork.hpp)
+  keys_mark(f, cmd, keys_was, "dodge");
 
   sh::Vec3f way;
   const bool swim = water_way(f, s, me, t, msec, why, way);  // every command: it keeps the air
@@ -1971,6 +1997,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     }
   } else if (!dead && fighter_landing(f, s, me, t, cmd)) {
     // Just climbed out: onto its exit node first (footwork.hpp).
+    keys_mark(f, cmd, keys_was, "landing");
   } else if (!dead && f.lost_to >= 0) {
     const sh::Vec3f to = f.bot.pilot.pilot.g->nodes[static_cast<size_t>(f.lost_to)].origin;
     const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
@@ -1990,7 +2017,9 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     } else if ((f.stats.commands / 48) % 3 == 0) {
       cmd.buttons |= sh::kButtonJump;
     }
+    keys_mark(f, cmd, keys_was, "lost");
   }
+  keys_mark(f, cmd, keys_was, "swim");  // the swim's branches above (the rest marked their own)
 
   if (dead) {
     // Back in once the mod allows: attack pressed every other command (a press is an edge).
@@ -2008,11 +2037,16 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     spam_fire(f, s, me, st, t, cmd);
     spam_news_fire(f, s, me, st, t, cmd);
   }
+  keys_mark(f, cmd, keys_was, "spam");
   if (!dead && f.features[sh::Feature::packs])
     packs_bore(f, s, me, st, t, cmd);  // its launcher to the quad
+  keys_mark(f, cmd, keys_was, "packs");
   if (!dead) button_poke_cmd(f, s, me, t, cmd);
+  keys_mark(f, cmd, keys_was, "poke");
   if (!dead) floor_trap_cmd(f, s, me, cmd);
+  keys_mark(f, cmd, keys_was, "trap");
   if (!dead && f.escort.leader >= 0) escort_command(f, s, me, t, msec, cmd);
+  keys_mark(f, cmd, keys_was, "escort");
 
   // The trigger: a contact in sight, the view on the aim within the weapon's width at the range.
   bool clicked = false;  // the finger stepped this command
@@ -2111,6 +2145,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
         turn_back_round(cmd, d.origin, d.velocity, f.bot.pilot.world))
       f.stats.turned_round++;
   }
+  keys_mark(f, cmd, keys_was, "uturn");
   // THE BRINK: with the feet free, on the ground or in the air between a stair's steps, a hop's
   // landings or a knock, no key carries it into lava or slime (in the air a wish against the
   // run still brakes at the full acceleration: the air's cap is on the speed gained, not lost).
@@ -2133,11 +2168,33 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
       }
     }
   }
+  keys_mark(f, cmd, keys_was, "brink");
   // The keys: pressed by a hand on a keyboard (keyboard.hpp), or the side key turned round as a
   // person's hand turns it (footwork.hpp).
   if (f.features[sh::Feature::keys]) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(me)];
     fighter_keyboard(f, cmd, d.velocity, (d.flags & sh::kFlagOnGround) != 0, brinked, d.origin);
+    // (`shotjump`) A rocket jump's shot waits for the jump key: the mouse held still on the shot's
+    // view, the trigger pressed on the command the key goes down (a shot before it bursts under a
+    // player still on the ground: a flat run, no lift). Given up after `kShotWait_s`.
+    if (f.features[sh::Feature::shotjump] && !dead) {
+      if (f.bot.pilot.pilot.shot_now && (cmd.buttons & sh::kButtonAttack) != 0) {
+        f.shot_wait_until = t + kShotWait_s;
+        f.shot_view = cmd.angles;
+      }
+      if (t <= f.shot_wait_until) {
+        cmd.angles.x = f.shot_view.x;
+        cmd.angles.y = f.shot_view.y;
+        f.bot.view_by = "shot";
+        if ((cmd.buttons & sh::kButtonJump) != 0) {
+          cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonAttack);
+          f.shot_wait_until = -1e9;
+          f.stats.shot_waits++;
+        } else {
+          cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonAttack);
+        }
+      }
+    }
   } else {
     fighter_keys(f, cmd);
   }

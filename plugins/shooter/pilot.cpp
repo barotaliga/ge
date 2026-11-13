@@ -86,6 +86,7 @@ constexpr float kChainSpeed = 250;
 constexpr float kGapLanded = 96;
 constexpr float kGapCurveTop = 560;      // the curve's speed is not what ends it
 constexpr float kGapCurveMost_s = 0.6f;  // it runs this long at most
+constexpr double kLeapLiftOff_s = 0.15;  // a jump's lift-off waited for this long (`liftoff`)
 constexpr double kGapLiftOff_s = 0.3;    // a gap's jump not off the ground this long after: none
 constexpr float kGapCurveCorner = 5;     // and begins with the landing this far off the velocity
 constexpr float kLevel = 2;              // a strafe stretch's nodes lie within this of one height
@@ -644,16 +645,16 @@ WalkWay foresee(const Pilot& p, const PilotSense& s, Vec3f aim, Vec3f near, Want
                 bool& fall) {
   fall = false;
   WalkStart st{s.origin,
-                     s.velocity,
-                     s.onground,
-                     s.waterlevel,
-                     s.maxspeed,
-                     {static_cast<float>(p.pressed[0]), static_cast<float>(p.pressed[1]),
-                      static_cast<float>(p.pressed[2])},
-                     p.set.lead_s,
-                     p.set.lead_s + p.set.ahead_s,
-                     p.set.ahead_bodies ? s.others : std::span<const OtherBox>{},
-                     &p.g->move};
+               s.velocity,
+               s.onground,
+               s.waterlevel,
+               s.maxspeed,
+               {static_cast<float>(p.pressed[0]), static_cast<float>(p.pressed[1]),
+                static_cast<float>(p.pressed[2])},
+               p.set.lead_s,
+               p.set.lead_s + p.set.ahead_s,
+               p.set.ahead_bodies ? s.others : std::span<const OtherBox>{},
+               &p.g->move};
   st.harm = p.set.walk_falls;
   WalkKeys keys;
   WalkSeen seen[kWalkWays];
@@ -1145,10 +1146,10 @@ NavRoute plan_way(Pilot& p, int32_t from, int32_t goal) {
     if (p.near_cut.from >= 0) p.cut_all.push_back(p.near_cut);
     cut = p.cut_all;
   }
-  return nav_route(*p.g, from, goal, p.search, 1,
-                   std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut, p.set.jumper,
-                   shut_every ? std::span<const NavExtraLink>(p.shut_links)
-                              : std::span<const NavExtraLink>{});
+  return nav_route(
+      *p.g, from, goal, p.search, 1, std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut,
+      p.set.jumper,
+      shut_every ? std::span<const NavExtraLink>(p.shut_links) : std::span<const NavExtraLink>{});
 }
 
 // (`gapnear`) The route's first gap trick when its takeoff is within `kGapCurveFrom` of the player
@@ -2157,6 +2158,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           w.forward = 1;
           w.jump = true;
           p.airborne = true;
+          p.leap_s = p.clock_s;
           p.stats.jumps++;
           because = "the grenade jump: jump as the fuse runs out";
         }
@@ -2208,6 +2210,17 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           because = aim.x == B.x && aim.y == B.y ? "in the air: strafing onto the target"
                                                  : "in the air: strafing round the corner";
         }
+      } else if (p.set.lift_off && p.clock_s - p.leap_s <= kLeapLiftOff_s) {
+        // (`liftoff`) Not off the ground yet: the jump's key still on its way down. The jump
+        // asked again, the run held on the way (a flip's keys under the view behind).
+        p.mode = PilotMode::air;
+        w.jump = true;
+        w.yaw = p.yaw;
+        if (l.kind == NavKind::rocket && l.back)
+          flip_keys(yaw_at(s.origin, B), p.yaw, w.forward, w.side);
+        else
+          w.forward = 1;
+        because = "the jump not off the ground yet";
       } else {
         // Landed, and not on the target (passed() would have moved on): plan again. A jump
         // landed short twice is not one this player makes: never planned again.
@@ -2250,8 +2263,14 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
                                  : flip           ? p.set.rocket_back_pitch
                                                   : p.set.rocket_pitch;
         if (jumped.kind == NavKind::rocket) p.shot_pitch = shot_pitch;
-        const bool jumped_now = approach_jump(p, s, S, T, v, w, target, because, flip, msec,
-                                              jumped.kind == NavKind::jump);
+        bool jumped_now = approach_jump(p, s, S, T, v, w, target, because, flip, msec,
+                                        jumped.kind == NavKind::jump);
+        if (jumped_now && jumped.kind == NavKind::rocket && p.set.rocket_wait && !s.rocket_ready) {
+          // (`rjready`) The launcher not up (or not ready to fire): no jump; run on, line up again.
+          jumped_now = false;
+          w.jump = false;
+          because = "a rocket jump: the launcher not ready";
+        }
         if (jumped_now) {
           // A rocket jump: the shot at the feet with the jump (its blast does the rest); the flip's
           // behind, down at the floor it runs off.
@@ -2268,6 +2287,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           p.stats.jumps++;
           if (!on_it) advance(p, s);
           p.airborne = true;
+          p.leap_s = p.clock_s;
           p.mode = PilotMode::air;
         } else if (p.stats.run_ups != run_ups && ++p.tries >= kRunUpTries) {
           // Lined up again and again and never off (the run-up walled in, the line never held):

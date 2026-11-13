@@ -16,13 +16,19 @@ TEST(the_presets_are_every_feature_or_none_and_a_novice_does_not_glance) {
     const auto x = static_cast<sh::Feature>(k);
     // A trial is never on by default, nor a feature not judged or dropped.
     bool off = false;
-    for (sh::Feature o : {sh::Feature::trial, sh::Feature::lookway, sh::Feature::press,
-                          sh::Feature::counter, sh::Feature::chains, sh::Feature::retarget,
-                          sh::Feature::runupkeys, sh::Feature::underway, sh::Feature::gappast,
-                          sh::Feature::airgap, sh::Feature::pilotcast,
-                          sh::Feature::landwall, sh::Feature::circlekeys,
-                          sh::Feature::circleview, sh::Feature::circleaim,
-                          sh::Feature::leadmean, sh::Feature::leadarc})
+    for (sh::Feature o : {sh::Feature::trial,       sh::Feature::lookway,    sh::Feature::press,
+                          sh::Feature::counter,     sh::Feature::chains,     sh::Feature::retarget,
+                          sh::Feature::runupkeys,   sh::Feature::underway,   sh::Feature::gappast,
+                          sh::Feature::airgap,      sh::Feature::pilotcast,  sh::Feature::landwall,
+                          sh::Feature::circlekeys,  sh::Feature::circleview, sh::Feature::circleaim,
+                          sh::Feature::leadmean,    sh::Feature::leadarc,    sh::Feature::airarc,
+                          sh::Feature::hopopen,     sh::Feature::fightway,   sh::Feature::letgo,
+                          sh::Feature::retreatrun,  sh::Feature::nogoal,     sh::Feature::tripkeep,
+                          sh::Feature::routetime,   sh::Feature::fetch,      sh::Feature::liftbrake,
+                          sh::Feature::scriptentry, sh::Feature::calmvel,    sh::Feature::lookturn,
+                          sh::Feature::viewbook,    sh::Feature::gapturn,    sh::Feature::brinkline,
+                          sh::Feature::sidebrink,   sh::Feature::fallseen,   sh::Feature::liplook,
+                          sh::Feature::sidehop,     sh::Feature::lostdry})
       off = off || x == o;
     CHECK(sh::features_all()[x] == !off);
     CHECK(!sh::features_none()[x]);
