@@ -140,7 +140,12 @@ Stand in a place and `addloc <name>`; `removeloc` forgets the nearest, `clearloc
 `saveloc <name>` (or `saveloc $mapname`) writes `<game folder>/locs/<name>.loc` in the shared
 format, `loadloc <name>` reads one, and `loc` says where you are. The long names
 (`locations_add` and so on) work too, and so does the sequel's spelling: `loc add <name>`,
-`loc del`, `loc set <name>` (renames the nearest), `loc list` and `loc save`.
+`loc del`, `loc set <name>` (renames the nearest), `loc list` and `loc save`. A place reaches
+`loc_dist` units from its point (the game's own default: 500 in the sequel, no limit in the first
+game; 0 is no limit): farther off, `loc` says someplace and `removeloc` or `loc set` finds nothing.
+The places follow the player's view on a server joined and in a demo played as well as in the
+window's own game: each map's file is read as it starts, from the recording's game folder for a
+demo, and edited and saved the same way.
 
 **The title and the loads.** With no `+map` the window opens at once on the title
 (`client/title.hpp`: a night with the full moon low in a total eclipse, blood red, cloud carried
