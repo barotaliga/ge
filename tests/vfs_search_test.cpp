@@ -110,6 +110,25 @@ uint64_t fnv(const std::vector<uint8_t>& b) {
 
 }  // namespace
 
+TEST(a_file_written_after_the_mount_is_added_over_everything) {
+  const fs::path root = fixture();
+  vfs::SearchPath sp = mounted(root);
+  put(root / "mod" / "skins" / "new.pcx", text("downloaded"));
+  put(root / "mod" / "a.txt", text("downloaded a"));
+  CHECK(contents(sp, "skins/new.pcx") == "<none>");  // listed at the mount: not seen yet
+  std::string error;
+  CHECK_MSG(vfs::add_file(&sp, (root / "mod").string(), "skins/new.pcx", "mod", &error), error);
+  CHECK_MSG(vfs::add_file(&sp, (root / "mod").string(), "a.txt", "mod", &error), error);
+  CHECK(contents(sp, "skins/new.pcx") == "downloaded");
+  CHECK(contents(sp, "Skins\\NEW.pcx") == "downloaded");
+  CHECK(contents(sp, "a.txt") == "downloaded a");  // over the loose file mounted before
+  bool listed = false;
+  for (const vfs::Listed& l : vfs::list(sp)) listed = listed || l.name == "skins/new.pcx";
+  CHECK(listed);
+  CHECK(!vfs::add_file(&sp, (root / "mod").string(), "nothere.pcx", "mod", &error));
+  CHECK(error.find("nothere.pcx") != std::string::npos);
+}
+
 TEST(each_name_is_won_by_the_last_source_mounted) {
   const fs::path root = fixture();
   const vfs::SearchPath sp = mounted(root);

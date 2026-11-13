@@ -134,7 +134,6 @@ constexpr float kLaser[3] = {1.0f, 0.32f, 0.08f};
 constexpr float kLaserHot[3] = {1.0f, 0.85f, 0.55f};
 constexpr float kBlood[3] = {0.55f, 0.03f, 0.02f};
 constexpr float kSmoke[3] = {1.0f, 0.93f, 0.86f};
-constexpr float kDarkSmoke[3] = {0.9f, 0.85f, 0.8f};
 
 // The stretch's points every `step` m, each at a random place within its step.
 template <class F>

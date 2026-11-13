@@ -65,6 +65,7 @@
 #include <ctime>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <future>
 #include <memory>
@@ -461,6 +462,27 @@ int run_main(int argc, char** argv) {
     }
     const std::span<const uint8_t> got = cl::find_file(*from, path, store);
     return std::vector<uint8_t>(got.begin(), got.end());
+  };
+  // A skin or player figure fetched joining a server: written into the game's folder on disk (the
+  // server's game folder under the base folder when it plays another) and, when that is the
+  // folder played, mounted over the search path at once, as the classic clients keep downloads.
+  remote.keep_file = [&files, &args, game_row](const std::string& gamedir, const std::string& path,
+                                               const std::vector<uint8_t>& bytes) {
+    const bool ours =
+        gamedir.empty() || gamedir == args.game ||
+        gamedir == shooters_edge::profiles::content_of(game_row(args.profile)).base_dir;
+    const std::filesystem::path dir =
+        ours ? std::filesystem::path(files.folder) : std::filesystem::path(args.basedir) / gamedir;
+    if (dir.empty() || path.find("..") != std::string::npos) return;
+    std::error_code ec;
+    std::filesystem::create_directories((dir / path).parent_path(), ec);
+    std::ofstream out(dir / path, std::ios::binary);
+    out.write(reinterpret_cast<const char*>(bytes.data()), std::streamsize(bytes.size()));
+    out.close();
+    std::string why;
+    if (!out || !ours) return;
+    if (!ge::vfs::add_file(&files.vfs, dir.string(), path, dir.filename().string(), &why))
+      out::status("shooters_edge: " + why);
   };
   if (!args.demovideo.empty()) return cl::demo_video_main(console, args, files, picture, playback);
   // The window first, the title's night in it at once (client/title.hpp); the rest of the start

@@ -196,10 +196,25 @@ the same C++ as the game.
 | Its content | A map's own content pack (`engine/hub/content.hpp`'s `map_content`): the game names the files a match on the map draws from (`HubSpec::map_files`: Shooter's Edge starts the match headless with bots for four seconds of game time and names the models and sounds its server lists, with the map, the basics and the pictures of the HUD, scores and menus, `client/play_content.hpp`), made once a map, named by its hash, cached a year |
 | Its pages | `/play`: the maps the packs beside the viewer hold; `/play/{map}`: the player on that map with the map's pack, the keys under it and the other maps beside it. The nav's Play appears for a game with `map_files` |
 
-Next, in order: the match online (the page joins the game's own server: its datagrams carried
-over a WebSocket by a bridge beside the server, then WebTransport where the browser has it, and
-the classic servers through `engine/forward`); files cached in the browser by their hash, so a
-second map fetches only what it lacks; the sound through the browser's audio; touch controls.
+Online, the page's datagrams go out as WebTransport datagrams and on as UDP. A page cannot send
+UDP, but it can open a WebTransport session (QUIC and HTTP/3) and send unreliable datagrams on it,
+which is what a game's packets want. The far end of the session is a forwarder
+(`engine/forward`): it takes each session's datagrams and sends them on to the game server as
+plain UDP, one for one, and the server's back the same way. So the game's own server, ours or a
+classic one, needs nothing new: it sees an ordinary UDP client at the forwarder's address. A
+WebSocket carries the datagrams only for a browser without WebTransport.
+
+| Piece | What it is |
+| --- | --- |
+| The endpoint | `engine/webtransport` (`ge_webtransport`, native only): a WebTransport server and client over QUIC (ngtcp2) and TLS 1.3 (picotls with its own cryptography; no OpenSSL), and the small part of HTTP/3 a browser's session needs (`h3.hpp`: the control stream's SETTINGS, QPACK with the static table only, the extended CONNECT and its answer, the datagram's session id). A server takes a socket's datagrams and reports sessions opened, datagrams and closes as events |
+| Its certificate | Self-signed over a P-256 key, made in memory when the endpoint starts and good for 13 days (`certificate.hpp`). The page trusts it by its SHA-256 (`serverCertificateHashes`), which the hub hands it from the forwarder's status record, so no certificate authority is needed. A browser takes such a certificate only for at most 14 days, with a P-256 key and with extensions (it refused ours until it carried a subjectAltName) |
+| The check | The `webtransport` lab opens a session over each network preset on the simulated network and sends a game's datagrams through it beside plain UDP: the same round trip and loss. Headless Chromium opened a session to the endpoint, echoed datagrams and closed it (M56i2a's pull request shows it) |
+
+Next, in order: the forwarder's WebTransport face (each session a client of the forwarder, sent
+on as UDP to the server its path names, with the allow list and the limits a forwarder has); the
+page's side in `engine/web` (the session, its datagrams, the WebSocket fallback) and the page
+joining a server from its card; files cached in the browser by their hash, so a second map
+fetches only what it lacks; the sound through the browser's audio; touch controls.
 
 ## The plan
 
@@ -215,7 +230,7 @@ second map fetches only what it lacks; the sound through the browser's audio; to
 | 7 | M56g | The web viewer: `ge_add_web_viewer`, the Emscripten and WebGPU build, the stream over a WebSocket, demos by hash, the content folder, the transport; the Watch and Demo pages; Shooter's Edge's and Fall Line's viewers | `hub-viewer` lab: the viewer in headless Chromium on a software WebGPU adapter, a live bot match and a demo screenshotted, seek checked, first-visit bytes measured |
 | 7b | M56g2 | The renderer within WebGPU's default limits (16 sampled textures a stage, 256 array layers) on the web build: the frame's group split by what each stage reads, the shadow cubes capped by the device; the picture on the canvas | `hub-viewer` lab: the match drawn on the canvas in headless Chromium |
 | 8 | M56h | The live map for phones and slow machines: the RADAR track, the hub's SVG view, live updates | `hub-radar` lab: a bot match drawn frame by frame |
-| 9 | M56i | Playing in a browser: the player build, a match against bots in the page, the Play pages and a map's content pack; then online through a WebSocket bridge, files cached by hash, sound | `hub-viewer` lab: the Play page in headless Chromium, keys and mouse sent, the match screenshotted |
+| 9 | M56i | Playing in a browser: the player build, a match against bots in the page, the Play pages and a map's content pack; then online: WebTransport datagrams from the page into a forwarder that sends them on as UDP; files cached by hash, sound | `hub-viewer` lab: the Play page in headless Chromium, keys and mouse sent, the match screenshotted |
 
 ### Built so far
 

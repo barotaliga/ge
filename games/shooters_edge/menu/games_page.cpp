@@ -191,7 +191,7 @@ void GamesPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int widt
   const float x = kListLeft + 8;
   // A game: its name's picture 20 px tall (on the sequel's plates, its own plate 32 px tall), its
   // install and edition in the glyphs under it.
-  const float name_h = art.plates() ? 32 : 20;
+  const float name_h = art.plates() ? 32.0f : 20.0f;
   float y = kListTop;
   for (int i = 0; i < count(); i++) {
     const bool game = i < static_cast<int>(rows_.size());
