@@ -2,10 +2,13 @@
 // presses it on the face and not on the floor, a blast in the open air leaves none; the burns
 // carry each triangle of every live mark into its kind's and variant's cell of the atlas, a fresh
 // scorch's embers at their hottest and cooled after, its soot left; the atlas is the decals'
-// masks at the marks' size and the beams pass made for it has room for a pool's burns.
+// masks at the marks' size and the beams pass made for it has room for a pool's burns; a glowing
+// mark pressed on a wall lights the room while it glows, a big one brighter and further, glows
+// side by side join into one light, and none is left once they have cooled.
 //
 // ge:summary Tests for the marks drawn: the scorch pressed, the burns, the atlas
 // ge:keywords test render marks decals scorch burns atlas ember soot press_scorch mark_burns
+// ge:keywords press_glow mark_glows
 // ge:skill render testing
 #include <vector>
 
@@ -102,4 +105,30 @@ TEST(the_atlas_and_the_pass_settings_fit_the_marks) {
   CHECK(s.atlas == &atlas && s.atlas_width == uint32_t{r::kMarkAtlasPx} * r::kMarkVariants);
   CHECK(s.atlas_height == uint32_t{r::kMarkAtlasPx} * gd::kDecalKinds);
   CHECK(s.max_burn_verts == 2400u);
+}
+
+TEST(glowing_marks_light_the_room_until_they_cool) {
+  const gd::TriMesh m = yard();
+  const gd::Receivers rec = gd::bin_receivers(m, 2);
+  gd::DecalPool pool = gd::make_pool(8);
+  const double out[3] = {0, 0, -1};
+  const double a[3] = {-4, 2, 9.5}, b[3] = {-3.6, 2, 9.5}, c[3] = {5, 2, 9.5};
+  const r::GlowMark small{0.25, 2}, big{1.6, 6};
+  CHECK(r::press_glow(pool, rec, a, out, small, 1.0, 1) >= 0);
+  CHECK(r::press_glow(pool, rec, b, out, small, 1.0, 2) >= 0);  // beside a: one light with it
+  CHECK(r::press_glow(pool, rec, c, out, big, 1.0, 3) >= 0);
+  r::MarkGlow g[4];
+  int n = r::mark_glows(pool, 1.0, g, 4);
+  CHECK(n == 2);
+  if (n != 2) return;
+  // The big one first: brighter and reaching further; both warm (more red than blue), off the wall.
+  CHECK(g[0].at[0] > 4 && g[0].rgb[0] > g[1].rgb[0] && g[0].reach_m > g[1].reach_m);
+  CHECK(g[1].at[0] < -3.6 && g[1].at[0] > -4);
+  for (int i = 0; i < 2; ++i) CHECK(g[i].rgb[0] > g[i].rgb[2] && g[i].at[2] < 9.5);
+  // At 3 s the small ones have cooled and the big one still glows; at 8 s none.
+  n = r::mark_glows(pool, 4.0, g, 4);
+  CHECK(n == 1 && g[0].at[0] > 4);
+  CHECK(r::mark_glows(pool, 8.0, g, 4) == 0);
+  // The heat's colour: dull red cold, white-yellow hot.
+  CHECK(r::ember_rgb(0)[1] < 0.1f && r::ember_rgb(1)[1] > 0.7f);
 }

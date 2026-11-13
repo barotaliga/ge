@@ -7,6 +7,7 @@
 // status line every `--status` seconds.
 //
 //   shooters_edge_hops forward --port=30000 --allow=<host[:port],...> | --open
+//   shooters_edge_hops forward --port=<p> --server=<host:port>   (a fixed route: fixed.hpp)
 //   shooters_edge_hops proxy --port=<near> --server=<host:port> [--link-loss=0.1] [--copies=3]
 //   shooters_edge_hops proxy-near --port=<p> --far=<host:port> --server=<host:port> [--copies=3]
 //   shooters_edge_hops proxy-far --port=<p> --allow=<host[:port],...> | --open [--copies=3]
@@ -30,6 +31,7 @@
 #include <vector>
 
 #include "core/num_text.hpp"
+#include "forward/fixed.hpp"
 #include "forward/forward.hpp"
 #include "net/address.hpp"
 #include "net/conditions.hpp"
@@ -59,6 +61,8 @@ void usage() {
   std::printf(
       "shooters_edge_hops <kind> [flags]: one of our hops for any classic client\n"
       "  forward     --port=30000 --allow=<host[:port],...> | --open   (the route in prx)\n"
+      "  forward     --port=<p> --server=<host:port>: every client to that server, for a\n"
+      "              client that cannot name a route (the sequel's, any game's)\n"
       "  proxy       --port=<near> --server=<host:port> [--link-loss=0..1]: near on --port,\n"
       "              far on the next, a link between them losing --link-loss each way\n"
       "  proxy-near  --port=<p> --far=<host:port> --server=<host:port>\n"
@@ -134,6 +138,8 @@ struct Hops {
   gn::FakeLink near_fake, far_fake;
   fw::Forward fwd;
   sn::ClassicFace face;
+  fw::FixedFace fixed;
+  bool fixed_route = false;
   px::ProxyNear near;
   px::ProxyFar far;
   sn::TvNode tv;
@@ -142,7 +148,11 @@ struct Hops {
 
 std::string status_line(const Hops& h) {
   std::string s;
-  if (h.forward)
+  if (h.forward && h.fixed_route)
+    s += "forward: clients " + std::to_string(h.fwd.clients.size()) + ", taken " +
+         std::to_string(h.fixed.clients) + ", proven " + std::to_string(h.fixed.proven) +
+         ", answers held back " + std::to_string(h.fixed.held_back) + ". ";
+  else if (h.forward)
     s += "forward: clients " + std::to_string(h.fwd.clients.size()) + ", accepted " +
          std::to_string(h.face.counts.accepted) + ", refused " +
          std::to_string(h.face.counts.refused) + ". ";
@@ -236,7 +246,7 @@ int run(int argc, char** argv) {
   Hops& h = *owned;
   std::string error;
   if (o.kind == "forward") {
-    if (o.allow.empty() && !o.open)
+    if (o.allow.empty() && !o.open && !o.has_server)
       return fail("a forward reaches only what it allows", "--allow=<host:port,...> or --open");
     const gn::Address bind = at(o.bind, o.port > 0 ? o.port : sn::kForwardPort);
     if (!gn::open_udp_transport(h.fwd_port, bind, &error))
@@ -245,12 +255,21 @@ int run(int argc, char** argv) {
     fw::ForwardConfig fc;
     fc.name = o.name.empty() ? "forward" : o.name;
     fc.allow = o.allow;
+    if (o.has_server) fc.allow.push_back(o.server);
     fc.open = o.open;
     fc.seed = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
     fw::forward_init(h.fwd, fc, h.fwd_port, open_upstream);
-    sn::classic_forward_attach(h.fwd, h.face);
     h.forward = true;
-    std::printf("forward on %s\n", gn::to_string(bind).c_str());
+    if (o.has_server) {
+      h.fixed.to = o.server;
+      fw::fixed_route_attach(h.fwd, h.fixed);
+      h.fixed_route = true;
+      std::printf("forward on %s, every client to %s\n", gn::to_string(bind).c_str(),
+                  gn::to_string(o.server).c_str());
+    } else {
+      sn::classic_forward_attach(h.fwd, h.face);
+      std::printf("forward on %s\n", gn::to_string(bind).c_str());
+    }
   } else if (o.kind == "proxy" || o.kind == "proxy-near" || o.kind == "proxy-far") {
     const bool near = o.kind != "proxy-far", far = o.kind != "proxy-near";
     if (near && !o.has_server)

@@ -62,6 +62,7 @@
 #include <string>
 #include <vector>
 
+#include "shooter/locs.hpp"
 #include "shooter/vec.hpp"
 #include "vfs/unpack.hpp"
 
@@ -192,10 +193,13 @@ struct DemoEffect {
 
 struct DemoState {
   DemoFormat format = DemoFormat::single;
-  bool voice_format = false;                // a `.qwdv` or `.mvdv` (the voice header)
-  int protocol = 0;                         // 15 single, 28 client and multiview, 34 sequel
-  std::string map;                          // "e1m1" off `maps/e1m1.bsp`; "" before the first level
-  int levels = 0;                           // level starts read so far (a new level: load its map)
+  bool voice_format = false;  // a `.qwdv` or `.mvdv` (the voice header)
+  int protocol = 0;           // 15 single, 28 client and multiview, 34 sequel
+  std::string map;            // "e1m1" off `maps/e1m1.bsp`; "" before the first level
+  int levels = 0;             // level starts read so far (a new level: load its map)
+  // The level's place names as the recording kept them (`//loc` lines, plugins/shooter/locs.hpp);
+  // empty when it kept none.
+  ge::shooter::Locs places;
   double time = 0;                          // the demo's clock, s
   sh::Vec3f eye;                            // the view's eye, units
   sh::Vec3f angles;                         // the view's angles, degrees
@@ -231,6 +235,7 @@ struct DemoState {
   std::vector<DemoEffect> effects;           // temporary entities, in order
   std::string centre;       // a centre message or the finale's text (the last); empty when none
   uint32_t set_angles = 0;  // client, multiview: a bit a slot whose view the server set (setangle)
+  int aim_bend = -1;        // a live stream's: the entity the aim help bent the player's shot onto
   int64_t frames = 0;       // frames read
 };
 
@@ -261,8 +266,9 @@ struct Demo {
   int cmd_size = 0;                   // the client format's usercmd struct: 24 or 28 (0: unknown)
   int player_model = 0;  // the client format's `progs/player.mdl` index: a playerinfo's default
   bool ended = false;
-  // The stream is a live connection's that agreed the game's own named effects (the ge set): its
-  // ids 120 and 121 are read as them. Off (every file), they are ids this reader does not know.
+  // The stream is a live connection's that agreed the game's own set (the ge set): its ids 120
+  // and 121 are read as named effects, 122 as the aim help's bend. Off (every file), they are ids
+  // this reader does not know.
   bool named_effects = false;
   // The multiview format: the player the view rides (-1: the lowest slot playing), each player's
   // own stats (the stats records write them; the tracked one's are copied to `state.stats`).

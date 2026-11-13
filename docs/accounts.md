@@ -261,7 +261,7 @@ The game fills its part when a match ends (`ServerGame::match_report`, asked aft
 true once per match) and `engine/server` adds its own (the id, the game and its version, the
 server's name and address, the start in Unix seconds); the server keeps its last 16 on
 `Server::reports`, newest last. The bytes refuse a report past their limits (64 players, 16 teams,
-32 columns) rather than cut it, since a report that says less than the match is worse than none.
+64 columns) rather than cut it, since a report that says less than the match is worse than none.
 
 Shooter's Edge tallies a deathmatch off the rules' world every frame
 (`games/shooters_edge/net/classic_report.hpp`), since the rules keep only the frags: a player whose
@@ -296,7 +296,29 @@ the start prints its public half for the master's owner) and sends it on a socke
 again every 2 s until the master's signed answer comes (a minute at most). It needs the master's
 key (`sv_accountkey`) to check that answer, and without it sends nothing and says so at the start.
 The datagrams are the account service's (`account/service.hpp`): the report is not sealed, since it
-is no secret, and the answer is smaller than the report, so the service amplifies nothing.
+is no secret, and the answer is smaller than the report, so the service amplifies nothing. A report
+too big for one datagram (a full server's weapon stats) goes in up to 16 pieces the master joins
+before it checks the signature; it keeps at most 32 reports' pieces at once, each for a minute.
+
+### The weapon stats
+
+Shooter's Edge reads each player's weapon stats off the QC server every frame
+(`games/shooters_edge/net/classic_stats.hpp`, changing nothing there) and sends them as the
+report's columns. They are what a classic match's statistics keep (the facts in
+`porting/shooters-edge/match-stats.md`), plus mid-airs (the maintainer, 2026-11-13):
+
+| Columns | What |
+| --- | --- |
+| `<w>_attacks`, `<w>_hits`, `<w>_kills`, `<w>_deaths` for axe, sg, ssg, ng, sng, gl, rl, lg | attacks (pellets, nails, projectiles, pulses, swings), hits (a direct touch on a player, team mates too), kills by the final blow's weapon, deaths to it |
+| `rl_splash`, `gl_splash`, `rl_damage` | enemies a rocket's or grenade's blast hurt, one each (the shown rl and gl percentages), and the rockets' damage summed (its average per splash hit) |
+| `midair`, `midair_height`, `midair_height_max` | rocket blows on an enemy off the ground and out of the water, their heights over the floor below |
+| `dmg_given`, `dmg_taken`, `dmg_team`, `dmg_self`, `dmg_ewep` | health and armour taken, to and from enemies, to team mates, to oneself, and given to an enemy carrying the rocket launcher or the arc |
+| `ga`, `ya`, `ra`, `mh`, `quad`, `pent`, `ring`, `quad_s` | armour, mega healths and power-ups taken; the seconds the quad was held |
+| `spawn_frags`, `streak_max`, `quad_run_max` | kills within 2 s of the victim's spawn, the longest run of kills between deaths, the most kills of one quad |
+
+When the match ends every player reads them in the console: their frags and efficiency, each
+weapon's accuracy, the rockets' direct hits, average damage and mid-airs, armour and power-ups,
+damage, the streaks and spawn frags. The `match-report` lab draws them as a match page.
 
 **At the master** (`account/matches.hpp`). A report is taken once by its server's key and id, so
 one sent again counts once. **Which reports count**: only those from servers whose key the master's
@@ -311,7 +333,8 @@ match: under 40, 80, 120 or 200 ms, or more), and summed under a filter (`Totals
 game or one, every map or one, chosen modes or every mode but some (all but ffa), and only matches
 played under a ping. So a player reads their stats whole, on one map, in one mode, or at a good
 ping, from the same records (the maintainer, 2026-11-13). The game's own columns are summed by name
-beside the common ones.
+beside the common ones, but for one whose name ends `_max` (the longest streak, the highest mid-air),
+which keeps its largest.
 
 The classic servers already on the internet report nothing to us; the hub's classic adapter reads
 their recent-stats answer into the same record, best effort and without accounts.

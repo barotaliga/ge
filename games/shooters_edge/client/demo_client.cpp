@@ -344,6 +344,7 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   m.str();                 // the level's title
   m.skip(size_t{10} * 4);  // the movement settings
   s.levels++;
+  s.places = {};
   s.map.clear();
   s.models.assign(1, "");
   s.sounds.assign(1, "");
@@ -486,10 +487,11 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         s.prints.push_back({level, m.str()});
         break;
       }
-      case 9: {  // stufftext: the signon's `fullserverinfo "\\key\\value..."` read, the rest
-                 // skipped
+      case 9: {  // stufftext: the signon's `fullserverinfo "\\key\\value..."` and `//loc` read, the
+                 // rest skipped
         const std::string text = m.str();
         const std::string word = "fullserverinfo \"";
+        if (sh::read_recorded_loc(text, s.places)) break;  // a place name the recording kept
         if (text.rfind(word, 0) == 0) {
           const size_t end = text.find('"', word.size());
           set_info(s.serverinfo,
@@ -733,6 +735,14 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         s.effects.push_back(std::move(e));
         break;
       }
+      case 122:  // the game's own: the aim help bent this player's shot onto an entity
+        if (!d.named_effects) {
+          error = "message id 122 is not one this reader knows";
+          ok = false;
+          break;
+        }
+        s.aim_bend = m.i16();
+        break;
       default:
         error = "message id " + std::to_string(id) + " is not one this reader knows";
         ok = false;

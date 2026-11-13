@@ -20,6 +20,9 @@ constexpr std::string_view kRootArchive =
 
 LoadOrder first_game() {
   LoadOrder o;
+  // Its packs `pak<n>` by number, then every other pack and zip (`.pkz` too) by name.
+  o.layout.pak_prefix = true;
+  o.layout.zip_endings = {".pkz", ".pk3"};
   o.client_folder = true;
   o.main_where = MainWhere::client_configs;
   o.main_files = {"config.cfg", ""};

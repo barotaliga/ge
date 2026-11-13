@@ -30,6 +30,7 @@
 #include "net/sim_network.hpp"
 #include "server/server.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/classic_stats.hpp"
 
 namespace {
 
@@ -126,6 +127,74 @@ gl::Picture scoreboard(const gn::MatchReport& r, int w, int h) {
                                  num(pl.team_kills),
                                  num(pl.seconds)};
     for (int i = 0; i < 7; i++) gl::draw_text(p, col(i), y, cells[i], i == 0 ? c : ink, s);
+    y += row;
+  }
+  return p;
+}
+
+// The report's weapon stats as a hub's match page shows them: a row per player.
+int64_t column(const gn::MatchReport& r, const gn::ReportPlayer& p, const char* name) {
+  for (size_t i = 0; i < r.columns.size() && i < p.columns.size(); i++)
+    if (r.columns[i] == name) return p.columns[i];
+  return 0;
+}
+
+std::string share(int64_t part, int64_t whole) {
+  return whole > 0 ? num((part * 100 + whole / 2) / whole) + "%" : "-";
+}
+
+gl::Picture stats_picture(const gn::MatchReport& r, int w, int h, gl::LabTable& table) {
+  const gl::Rgba bg{18, 20, 26}, ink{226, 228, 232}, dim{140, 146, 158}, band{34, 38, 48};
+  const gl::Rgba gold{238, 190, 80}, red{226, 92, 80}, blue{96, 150, 236};
+  gl::Picture p = gl::create_picture(w, h, bg);
+  const int s = w >= 900 ? 2 : 1;
+  const int row = gl::kGlyphH * s + 6 * s;
+  int y = 4 * s;
+  gl::draw_text(p, 6 * s, y, "WEAPON STATS  " + r.map + "  " + r.mode, gold, s);
+  y += row + 2 * s;
+  const char* heads[] = {"player", "rl", "dh",   "mid", "gl",  "lg",   "sg",
+                         "ssg",    "ng", "kill", "gvn", "tkn", "strk", "arm"};
+  const double cols[] = {6,    0.18, 0.25, 0.30, 0.36, 0.43, 0.50,
+                         0.57, 0.64, 0.70, 0.76, 0.83, 0.89, 0.95};
+  constexpr int kCols = 14;
+  auto col = [&](int i) { return i == 0 ? cols[0] * s : cols[i] * w; };
+  fill_rect(p, 0, y - s * 2, w, row, band);
+  for (int i = 0; i < kCols; i++) gl::draw_text(p, col(i), y, heads[i], dim, s);
+  y += row;
+  for (const gn::ReportPlayer& pl : r.players) {
+    const auto c = [&](const char* name) { return column(r, pl, name); };
+    int64_t kills = 0;
+    for (const char* k : {"axe_kills", "sg_kills", "ssg_kills", "ng_kills", "sng_kills", "gl_kills",
+                          "rl_kills", "lg_kills"})
+      kills += c(k);
+    const std::string cells[kCols] = {
+        pl.name,
+        share(c("rl_splash"), c("rl_attacks")),
+        num(c("rl_hits")),
+        num(c("midair")),
+        share(c("gl_splash"), c("gl_attacks")),
+        share(c("lg_hits"), c("lg_attacks")),
+        share(c("sg_hits"), c("sg_attacks")),
+        share(c("ssg_hits"), c("ssg_attacks")),
+        share(c("ng_hits") + c("sng_hits"), c("ng_attacks") + c("sng_attacks")),
+        num(kills),
+        num(c("dmg_given")),
+        num(c("dmg_taken")),
+        num(c("streak_max")),
+        num(c("ga") + c("ya") + c("ra"))};
+    const gl::Rgba tint = pl.team == "red" ? red : pl.team == "blue" ? blue : ink;
+    if (y + row <= h)
+      for (int i = 0; i < kCols; i++) gl::draw_text(p, col(i), y, cells[i], i == 0 ? tint : ink, s);
+    table.rows.push_back({r.mode, cells[0], cells[1], cells[2], cells[3], cells[4], cells[5],
+                          cells[6], cells[7], cells[8], cells[9], cells[10], cells[11], cells[12],
+                          cells[13]});
+    y += row;
+  }
+  // What the players read when the match ends.
+  y += row;
+  for (const std::string& line : se::stats_lines(r)) {
+    if (y + row > h) break;
+    gl::draw_text(p, 6 * s, y, line, line[0] == ' ' && line[1] != ' ' ? ink : dim, s);
     y += row;
   }
   return p;
@@ -255,7 +324,12 @@ void run(gl::Lab& lab) {
                      {"match", "reports", "players", "ended", "frags", "deaths", "suicides",
                       "team kills", "bytes", "reads back", "same again"},
                      {}};
+  gl::LabTable weapons{"each player's weapon stats",
+                       {"match", "player", "rl", "dh", "mid", "gl", "lg", "sg", "ssg", "ng",
+                        "kills", "given", "taken", "strk", "armr"},
+                       {}};
   int once = 0, read_back = 0, same = 0, deaths = 0;
+  int64_t attacks = 0, hits = 0, given = 0, taken_dmg = 0, kills_by_weapon = 0, frags_all = 0;
   std::vector<gn::MatchReport> sent;
   const int w = static_cast<int>(lab.arg_num("width"));
   const int h = static_cast<int>(lab.arg_num("height"));
@@ -289,6 +363,31 @@ void run(gl::Lab& lab) {
                           a.bytes == b.bytes ? "yes" : "no"});
     lab.shot({m.label, m.title, m.what, m.expect, {{"seed", lab.arg("seed")}}},
              scoreboard(r, w, h));
+    for (const gn::ReportPlayer& pl : r.players) {
+      for (size_t i = 0; i < r.columns.size() && i < pl.columns.size(); i++) {
+        const std::string& name = r.columns[i];
+        const auto ends = [&](const char* tail) {
+          const size_t n = std::char_traits<char>::length(tail);
+          return name.size() > n && name.compare(name.size() - n, n, tail) == 0;
+        };
+        if (ends("_attacks")) attacks += pl.columns[i];
+        if (ends("_hits")) hits += pl.columns[i];
+        if (ends("_kills")) kills_by_weapon += pl.columns[i];
+        if (name == "dmg_given") given += pl.columns[i];
+        if (name == "dmg_taken") taken_dmg += pl.columns[i];
+      }
+      frags_all += pl.frags;
+    }
+    lab.shot({std::string(m.label) + "-weapons",
+              std::string(m.title) + ": WEAPON STATS",
+              "The same match's columns: each weapon's attacks, hits and kills, the rockets' and "
+              "grenades' splash hits on enemies, mid-airs, damage given and taken, armour taken "
+              "and the longest streak, read off the server every frame; under them the lines "
+              "every player reads when the match ends.",
+              "rockets hit at a fair rate, the damage given about the damage taken across the "
+              "players, kills by weapon about the frags",
+              {{"seed", lab.arg("seed")}}},
+             stats_picture(r, w, h, weapons));
     sent.push_back(r);
   }
   // The reports to a master: from a trusted server (the first answer lost) and an unlisted one.
@@ -334,6 +433,13 @@ void run(gl::Lab& lab) {
   lab.metric("reports_read_back", read_back, "reports");
   lab.metric("same_report_again", same, "reports");
   lab.metric("deaths", deaths, "deaths");
+  lab.metric("weapon_attacks", static_cast<double>(attacks), "attacks");
+  lab.metric("weapon_hits", static_cast<double>(hits), "hits");
+  lab.metric("kills_by_weapon", static_cast<double>(kills_by_weapon), "kills");
+  lab.metric("frags", static_cast<double>(frags_all), "frags");
+  lab.metric("damage_given", static_cast<double>(given), "points");
+  lab.metric("damage_taken", static_cast<double>(taken_dmg), "points");
+  lab.table(std::move(weapons));
   lab.table(std::move(table));
   lab.table(std::move(to_master));
   lab.table(std::move(totals));
@@ -343,10 +449,12 @@ const gl::LabSpec kSpec{
     "match-report",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_report and engine/net/report (what a finished match leaves)",
+    "games/shooters_edge/net/classic_report and classic_stats, engine/net/report (what a finished "
+    "match leaves)",
     "net",
     "Does a match on our server report once when it ends, with every player's frags, deaths, "
-    "suicides and team kills as the rules played them, the teams' scores and how it ended, in a "
+    "suicides and team kills as the rules played them, their weapon stats (attacks, hits, "
+    "kills, splash, mid-airs, damage, armour, streaks), the teams' scores and how it ended, in a "
     "record that reads back as written and is the same on every run; and does a master take each "
     "report once, count only a trusted server's, and sum an account's totals by mode, map and "
     "ping?",

@@ -55,7 +55,12 @@ build/debug/shooters_edge_server --name="Arena Night" --description="the arena" 
 build/debug/shooters_edge_server --root=<install> --map=dm6 --port=27512 --realtime --for=0 \
   +set fraglimit 20 +set timelimit 10
 build/debug/shooters_edge_server --root=servers --mod=arena --cfg=duel --explain=sv_
+build/debug/shooters_edge_sequel_server --root=<install> --map=q2dm1 --port=27910 --realtime --for=0
 ```
+
+`shooters_edge_sequel_server` is the same process over the sequel's rules on its own protocol
+(`games/shooters_edge/net/sequel_game.hpp`): `--root` holds the sequel's game folder, and an
+unmodified client of the sequel joins it.
 
 The layers are read as loose files under `--root` (`<root>/<dir>/server.cfg`); a copy inside a
 pack is not read yet, and `ge server cfg --explain` comes with `ge server` (M53d) over the
@@ -386,6 +391,14 @@ nobody else (`engine/server/aids.hpp`, every game's), and says so to everyone.
   reads the air from the path alone (its steps falling by the gravity, the floor at the takeoff),
   where the server knows his footing. Past 1000 units no lead still scores higher (16.8% against
   15.3%): a player turns during a long flight.
+- **The view turns with the help** (`plugins/shooter/aim_turn.hpp`): the server tells the player
+  it helped whom it bent a shot onto (the game's own message, svc 122 in the `ge` extension set;
+  a classic client is never sent it), and our client turns his view toward that player with a
+  spring while he holds the attack, and back to his own aim after he lets go. The mouse keeps
+  turning the view throughout, and the target is let go when it strays more than 64 units off
+  his own aim. What the client sends is the turned view, so the server's recording and anyone
+  watching see a person's aim. `cl_aimhelp_turn 0` keeps the view still; the `se-aimturn` lab
+  charts it on a strafer.
 - **The weapons it may bend** are the server's (`sv_aimhelp_allow`, `sv_aimhelp_deny`: weapon
   names, spaces or commas between, `*` any characters; deny wins, an empty allow list allows the
   rest), named by the weapon held: `axe sg ssg ng sng gl rl lg` in the classic game, `blaster sg

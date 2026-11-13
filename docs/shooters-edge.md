@@ -131,8 +131,11 @@ then the base folder's `autoexec.cfg` and the mod's, `postexec.cfg`, the window'
 command line, and `postinit.cfg` last; its `default.cfg` is the one in its packs (the window's
 console keys kept through its `unbindall`). Each game's order lives in one table,
 `client/load_order.hpp`: its files' ranks too, so the sequel's folders rank their packs and zips
-(`.pkz`) over their loose files, every `pak*` archive by its number, and the rerelease's archive at
-the install's root under them all, as its own client loads them. Maps' coloured light is also read from `maps/lits/<map>.lit`.
+over their loose files, and the rerelease's archive at the install's root goes under them all, as
+its own client loads them. In every game a folder's `pak0`, `pak1` ... come first by number, then
+every other pack or zip (`.pak`, `.pkz`, `.pk3`) by name, so a pack dropped in under any name is
+read; one whose name starts with `_` is set aside and never read. Loose files and place-name files
+are found in any letter case. Maps' coloured light is also read from `maps/lits/<map>.lit`.
 
 **Place names, made in the game** (`client/place_names.hpp`). Each map's place names are read as
 it starts (`tp_loadlocs`): the file saved under the game folder first, else the game's own.
@@ -141,11 +144,17 @@ Stand in a place and `addloc <name>`; `removeloc` forgets the nearest, `clearloc
 format, `loadloc <name>` reads one, and `loc` says where you are. The long names
 (`locations_add` and so on) work too, and so does the sequel's spelling: `loc add <name>`,
 `loc del`, `loc set <name>` (renames the nearest), `loc list` and `loc save`. A place reaches
-`loc_dist` units from its point (the game's own default: 500 in the sequel, no limit in the first
-game; 0 is no limit): farther off, `loc` says someplace and `removeloc` or `loc set` finds nothing.
-The places follow the player's view on a server joined and in a demo played as well as in the
-window's own game: each map's file is read as it starts, from the recording's game folder for a
-demo, and edited and saved the same way.
+`loc_dist` units from its point (500 in every classic game; 0 is no limit): farther off, `loc` says
+someplace and `removeloc` or `loc set` finds nothing. The places follow the player's view on a
+server joined and in a demo played as well as in the window's own game: each map's file is read as
+it starts, from the recording's game folder for a demo, and edited and saved the same way. A
+recording keeps the place names it was played with (stuffed `//loc` lines in its signon, a comment
+to any other client: `plugins/shooter/locs.hpp`), and a demo that kept them is watched with those,
+no file needed. `say` and `say_team` talk on the server joined or the window's own; `%l` in the
+line becomes the place the player is in before it is sent, so the others read the place's name.
+The sequel's macros name places in any console line: `$loc_here` the place the player is in,
+`$loc_there` the place nearest where the view's line stops (8,192 units ahead or the first wall,
+`client/map_line.hpp`), each `unknown` with none within `loc_dist`.
 
 **The title and the loads.** With no `+map` the window opens at once on the title
 (`client/title.hpp`: a night with the full moon low in a total eclipse, blood red, cloud carried
@@ -1356,6 +1365,11 @@ every pass, and judged by captioned screenshots:
   `skin` goes to the server with your colours. A name with `..` or a leading dot is refused, its
   extension dropped, cut to 15 characters (`app/classic_models.hpp`'s `skin_key`, `choose_skin`).
   Colours 8 to 13 read their palette rows backwards, since those rows are stored bright to dark.
+- **Skins and colours by side** (M18i17): `teamskin` and `enemyskin` put one skin on every
+  teammate or every enemy, and `teamcolor` and `enemycolor` (`off`, one colour, or shirt and pants,
+  0 to 13) their colours. A teammate shares your team while `teamplay` is on; everyone else is an
+  enemy. `allskins` still wins over both. They apply to the first game's players, live and in
+  demos (`app/classic_models.hpp`'s `side_of`, `forced_skin`, `forced_colours`).
 - **Player figures in the second game** (M18i16): a player's `skin` there is "<model>/<skin>",
   the figure a folder `players/<model>/` with its `tris.md2`, its skins as pictures beside it, and
   the weapons it carries (the files the server names with a '#', drawn in place of its weapon). Each

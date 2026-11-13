@@ -58,6 +58,7 @@ enum class EventKind : uint8_t {
   pause,
   point_effect,  // a named effect at a point (pointparticles): `text` the name, values way, count
   trail_effect,  // a named trail (trailparticles): `text`, from `origin` to values 0..2, `ent`
+  aim_bend,      // the aim help bent a shot of `to`'s player onto entity `ent` (aim_turn.hpp)
 };
 const char* event_kind_name(EventKind k);
 

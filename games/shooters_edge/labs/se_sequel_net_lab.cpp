@@ -12,6 +12,7 @@
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #include <chrono>
 #include <cmath>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <thread>
@@ -215,6 +216,12 @@ void live(gl::Lab& lab, const std::string& server) {
       seen = {c->demo.state.eye.x, c->demo.state.eye.y, c->demo.state.eye.z, true};
   }
   cn::sequel_client_stop(*c);
+  // The client's recording kept as a file the sequel's client plays (`--record`).
+  if (!lab.arg("record").empty()) {
+    std::ofstream out(lab.arg("record"), std::ios::binary);
+    out.write(reinterpret_cast<const char*>(c->demo.bytes.data()),
+              static_cast<std::streamsize>(c->demo.bytes.size()));
+  }
   report(lab, *c, seen, text, nullptr, gl::Det::measured);
 }
 
@@ -242,6 +249,7 @@ const gl::LabSpec kSpec{
         {"spectator", "0", "1: join as a spectator"},
         {"name", "edge", "the client's name"},
         {"every", "1", "a live client's ticks (13 ms) between packets"},
+        {"record", "", "live: the client's recording written to this .dm2 file"},
     },
     "--seconds=6",
     run,

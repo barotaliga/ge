@@ -58,7 +58,7 @@ int64_t played_s(const TallySeat& s, double end) {
       ge::core::num::round(std::max(0.0, std::min(s.until, end) - s.since)));
 }
 
-gn::ReportPlayer player_of(const TallySeat& s, bool teams, double end) {
+gn::ReportPlayer player_of(const TallySeat& s, bool teams, double end, bool stats) {
   gn::ReportPlayer p;
   p.name = s.name;
   if (teams) p.team = s.team;
@@ -74,6 +74,11 @@ gn::ReportPlayer player_of(const TallySeat& s, bool teams, double end) {
     p.ping_min = s.ping_min;
     p.ping_max = s.ping_max;
     p.ping_avg = (s.ping_sum + s.ping_n / 2) / s.ping_n;
+  }
+  if (stats) {
+    SeatStats closed = s.stats;
+    stats_close(closed);
+    p.columns.assign(closed.n.begin(), closed.n.end());
   }
   return p;
 }
@@ -131,6 +136,14 @@ void tally_frame(MatchTally& t, const sv::RulesWorld& w, bool counting,
   }
 }
 
+std::array<SeatStats*, ge::shooter::kMaxClients> tally_stats(MatchTally& t) {
+  std::array<SeatStats*, ge::shooter::kMaxClients> out{};
+  if (!t.counting || t.ended) return out;
+  for (size_t i = 0; i < t.seats.size(); i++)
+    if (t.seats[i].on) out[i] = &t.seats[i].stats;
+  return out;
+}
+
 bool tally_end(MatchTally& t, const sv::RulesWorld& w, const TallyFacts& facts,
                gn::MatchReport& out) {
   if (t.ended || !t.counting || t.map != w.map_name) return false;
@@ -151,9 +164,9 @@ bool tally_end(MatchTally& t, const sv::RulesWorld& w, const TallyFacts& facts,
   const double end = frag_limit ? t.scored : time_limit ? std::max(t.start, time_end) : w.time;
   std::vector<gn::ReportPlayer> players;
   players.reserve(t.left.size() + static_cast<size_t>(present));
-  for (const TallySeat& s : t.left) players.push_back(player_of(s, facts.teams, end));
+  for (const TallySeat& s : t.left) players.push_back(player_of(s, facts.teams, end, facts.stats));
   for (const TallySeat& s : t.seats)
-    if (s.on) players.push_back(player_of(s, facts.teams, end));
+    if (s.on) players.push_back(player_of(s, facts.teams, end, facts.stats));
   // The best first; a tie by the fewer deaths, then by name, so the order is the same everywhere.
   std::stable_sort(players.begin(), players.end(), [](const auto& a, const auto& b) {
     if (a.score != b.score) return a.score > b.score;
@@ -164,6 +177,8 @@ bool tally_end(MatchTally& t, const sv::RulesWorld& w, const TallyFacts& facts,
   out.mode = facts.mode;
   out.map = w.map_name;
   out.duration_ms = static_cast<int64_t>(ge::core::num::round((end - t.start) * 1000));
+  if (facts.stats)
+    for (int k = 0; k < kMatchStats; k++) out.columns.emplace_back(stat_name(k));
   if (facts.teams) {
     for (const gn::ReportPlayer& p : players) {
       if (p.team.empty()) continue;
