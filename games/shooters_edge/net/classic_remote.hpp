@@ -48,6 +48,13 @@
 // his own left out. While `+voip` is held he speaks the microphone the window hands to
 // `remote_mic`.
 //
+// LOGGING IN (docs/accounts.md § From our own client): when the window names the player's account
+// file (`remote_login_from`: the one the game CLI's `account signin` writes) and a server's info
+// carries `*accountkey` naming the same master's key, the client trades the file's ticket with
+// the master for a one-time code on a socket of its own once it is in the game, and sends the
+// server `login <name> <code>`, as a player would type it. Another master's server, or one
+// without logins, is joined as before; a ticket run out is said on the console.
+//
 // ge:summary The window joined to a server: the classic client driven by the hands, drawn as a demo
 // ge:keywords remote-client connect disconnect join-server classic-client live-demo network-play
 // ge:keywords remote_connect remote_step remote_disconnect setangle tick-clock reconnect
@@ -56,6 +63,7 @@
 // ge:keywords interpolation lerp cl_nolerp entity-lerp draw-clock round-trip
 // ge:keywords cl_speedjump pm_speedjump easy-jump assisted_command kstockshare
 // ge:keywords voice voice-chat cl_voip push-to-talk microphone remote_mic
+// ge:keywords autologin remote_login_from accountkey account-file
 // ge:skill net shooter
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
@@ -66,6 +74,7 @@
 #include <string>
 #include <vector>
 
+#include "account/client_login.hpp"
 #include "console/console.hpp"
 #include "input/state.hpp"
 #include "net/transport.hpp"
@@ -93,11 +102,25 @@ enum class RemoteStep : uint8_t {
   dropped,    // the server refused or dropped the client: `Remote::why`
 };
 
+// Logging in by the player's account file (`remote_login_from`).
+struct RemoteLogin {
+  ge::account::ClientLogin c;
+  gn::Transport own;                     // the socket to the master, opened for the ask
+  gn::Transport* link = nullptr;         // where the ask goes (`own`, or a test's)
+  std::string path;                      // the account file
+  int64_t (*unix_us)() = nullptr;        // the wall clock: the ask's and a ticket's life
+  ge::account::FreshFn fresh = nullptr;  // the ask's exchange secret (nullptr: the OS's)
+  void* fresh_ctx = nullptr;
+  bool asked = false, done = false;  // this join's
+  bool opened = false;               // `own` open
+};
+
 struct Remote {
   // In the order that packs it (the lint holds the padding).
   gn::Transport* transport = nullptr;             // what it talks over (`own`, or remote_start's)
   const ge::console::Button* voip_key = nullptr;  // `+voip` (add_remote_commands)
   std::unique_ptr<StreamWatch> watch;             // watching a broadcast (`watch`), not playing
+  std::unique_ptr<RemoteLogin> login;             // logging in by the account file, when named
   int64_t now_us = 0;                             // the tick clock
   double owed_s = 0;                              // wall time not yet a tick
   int64_t setangles = 0;                          // the server's turns taken
@@ -154,6 +177,12 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
                     std::string& error);
 // Joins over a transport already open (the simulated network's, in tests and labs).
 void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const ClientConfig& cfg);
+// Logs in by the account file at `path` on every server whose master it names (the window's: the
+// game CLI's `<state>/account.txt`). `unix_us` is the wall clock (the ask runs on it, apart from
+// the game's tick clock); `link`, when given, is the socket the master is asked over (the simulated
+// network's), else one is opened for each ask.
+void remote_login_from(Remote& r, const std::string& path, int64_t (*unix_us)(),
+                       gn::Transport* link = nullptr);
 // The level's brush models the prediction moves through ([0] the world), the window's once it
 // has loaded the level `remote_step` named (nullptr: nothing predicted).
 void remote_world(Remote& r, const std::vector<sh::BrushModel>* models);

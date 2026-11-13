@@ -7,10 +7,14 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <filesystem>
 #include <functional>
 
+#include "net/crypto.hpp"
+#include "net/udp_socket.hpp"
 #include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/classic_login.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
 
 namespace shooters_edge::net {
@@ -71,6 +75,71 @@ void start(Remote& r, const ClientConfig& cfg) {
   r.ents_old.clear();
   r.ents_new.clear();
   r.frame_old_s = r.frame_new_s = -1;
+  if (r.login) {
+    r.login->asked = false;
+    r.login->done = false;
+  }
+}
+
+int64_t unix_now(const RemoteLogin& l) { return l.unix_us != nullptr ? l.unix_us() : 0; }
+
+void login_close(RemoteLogin& l) {
+  if (l.opened) gn::close_transport(l.own);
+  l.opened = false;
+}
+
+// Once in the game on a server whose info names the account file's master: the ticket traded for
+// a code, and the login line sent. Said on the console in a player's words.
+void login_step(Remote& r, std::vector<std::string>& said) {
+  if (!r.login || r.end.stage != ClientStage::active) return;
+  RemoteLogin& l = *r.login;
+  if (l.done) return;
+  ge::account::ClientLogin& c = l.c;
+  if (!l.asked) {
+    l.done = true;
+    const std::string tag = info_get(r.end.serverinfo, kAccountKeyInfo);
+    if (tag.empty()) return;  // a server that keeps no logins
+    std::error_code ec;
+    if (!std::filesystem::exists(l.path, ec)) return;  // never signed in here: the server says how
+    std::string why;
+    if (!ge::account::client_login_load(c, l.path, unix_now(l) / 1000000, why)) {
+      said.push_back(why);
+      return;
+    }
+    if (!ge::account::client_login_fits(c, tag)) return;  // another master's server
+    if (l.link == nullptr) {
+      std::string error;
+      if (!gn::open_udp_transport(l.own, gn::ipv4(0, 0, 0, 0, 0), &error)) {
+        said.push_back("Couldn't reach the account server to log you in.");
+        return;
+      }
+      l.opened = true;
+    }
+    gn::Key fresh{};
+    if (l.fresh != nullptr)
+      l.fresh(l.fresh_ctx, fresh.data(), fresh.size());
+    else
+      gn::os_random_bytes(fresh.data(), fresh.size());
+    ge::account::client_login_ask(c, fresh, unix_now(l));
+    said.push_back("Logging in as " + c.file.name + ".");
+    l.asked = true;
+    l.done = false;
+  }
+  gn::Transport& link = l.link != nullptr ? *l.link : l.own;
+  if (!ge::account::client_login_update(c, link, unix_now(l))) return;
+  l.done = true;
+  login_close(l);
+  switch (c.step) {
+    case ge::account::ClientLoginStep::code:
+      client_command(r.end, "login " + c.file.name + " " + c.code);
+      break;
+    case ge::account::ClientLoginStep::refused:
+      said.push_back(c.words.empty() ? "Couldn't log you in." : c.words);
+      break;
+    default:
+      said.push_back("The account server didn't answer. You can still log in with a code.");
+      break;
+  }
 }
 
 sh::MoveSettings settings_of(const ClassicClientEnd& c) { return client_move_settings(c); }
@@ -245,6 +314,14 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
   return true;
 }
 
+void remote_login_from(Remote& r, const std::string& path, int64_t (*unix_us)(),
+                       gn::Transport* link) {
+  if (!r.login) r.login = std::make_unique<RemoteLogin>();
+  r.login->path = path;
+  r.login->unix_us = unix_us;
+  r.login->link = link;
+}
+
 void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const ClientConfig& cfg) {
   remote_disconnect(r);
   r.transport = &t;
@@ -274,6 +351,7 @@ void remote_disconnect(Remote& r) {
     }
   }
   r.end.record = nullptr;
+  if (r.login) login_close(*r.login);
   if (r.transport == &r.own) gn::close_transport(r.own);
   r.transport = nullptr;
   r.active = false;
@@ -402,6 +480,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
     if (r.said == ClientStage::dropped && !r.end.refused.empty()) line += ": " + r.end.refused;
     said.push_back(line);
   }
+  login_step(r, said);
   if (r.end.stage == ClientStage::dropped) {
     r.why = r.end.refused.empty() ? "the connection was lost" : r.end.refused;
     return RemoteStep::dropped;

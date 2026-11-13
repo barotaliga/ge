@@ -59,6 +59,7 @@
 // ge:keywords scoreboard scr_levelstats settings config-cfg topcolor bottomcolor gamma binds f12
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -300,6 +301,15 @@ int run_main(int argc, char** argv) {
   // Started inside an install (or placed in one, or above several: client/install_search.hpp), that
   // one.
   const std::string prefs = ge::platform::prefs_dir("gameengine2", "shooters_edge");
+  // The game CLI's account file (`account signin`): our client logs itself in by it on a server
+  // whose master is the same (net/classic_remote.hpp § Logging in).
+  if (!prefs.empty())
+    sn::remote_login_from(
+        remote, (std::filesystem::path(prefs) / "cli" / "account.txt").string(), [] {
+          return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                          std::chrono::system_clock::now().time_since_epoch())
+                                          .count());
+        });
   std::vector<cl::FoundInstall> installs;  // the console's `games`
   cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.

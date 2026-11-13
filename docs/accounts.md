@@ -89,10 +89,30 @@ failures, which lets anyone lock anyone out; a hold that runs out does not.
 ### From our own client
 
 The client signs in to the master once (the name and password over the sealed channel, never in
-the clear) and gets a TICKET. It hands the ticket to each server it joins, in its connect request.
-The server checks the signature with the master's public key (`sv_accountkey`, from the
-environment or `server.cfg`) and the expiry, and the seat is logged in before it spawns, with no
-round trip to the master. A server that cannot reach the master still logs our players in.
+the clear) and gets a TICKET. The game CLI's `account signin` keeps it in the player's account
+file (`<state>/account.txt`, readable by its owner alone; `engine/account/account_file.hpp`) with
+the master's address and key; the game's own client reads the same file.
+
+On the classic protocol the ticket never goes to the game server, since the protocol encrypts
+nothing and a ticket read off the wire would log anyone in until it runs out. Instead:
+
+1. A server that keeps logins puts `*accountkey` in its server info: the first 16 hex digits of
+   the key its tickets are signed with (its own service's, or its master's once known).
+2. Our client, once in the game on a server whose tag is its file's master's, asks that master
+   over the sealed channel, on a socket of its own, to trade the ticket for a one-time login code
+   (`ticket_code`, `engine/account/client_login.hpp`).
+3. It sends the server `login <name> <code>`, the line a player would type, and the server logs it
+   in as it logs in a classic client. The code works once, so reading it off the wire is no use.
+
+The player types nothing and sees `Logging in as Niclas.`, then the server's `Niclas logged in.`
+A server of another master, or one that keeps no logins, is joined as a guest; a ticket that has
+run out is said on the console (`Your sign-in has run out. Sign in again.`). The game CLI's
+`account code` uses the same trade, so a player who signed in once gets a code for a stock client
+without the password.
+
+A future protocol of our own that seals its connect can carry the ticket itself: the server checks
+the signature with the master's public key (`sv_accountkey`) and the expiry, and logs the seat in
+before it spawns, with no round trip to the master.
 
 ### From a classic client
 
