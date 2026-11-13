@@ -108,6 +108,8 @@
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/install_configs.hpp"
+#include "shooters_edge/client/install_search.hpp"
+#include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/client/listen_sound.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
@@ -127,6 +129,7 @@
 #include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/hud/lobby_page.hpp"
+#include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
@@ -270,6 +273,19 @@ int run_main(int argc, char** argv) {
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
   game_menu.add_cvars(console);
+  // The console in the loaded classic game's own letters and background (menu/classic_console.hpp).
+  shooters_edge::menu::ClassicConsole con_look;
+  // menu_attract: the recordings a classic game plays behind its main menu (below).
+  std::string attract_demos;
+  console.cvars().bind({.name = "menu_attract",
+                        .fallback = "auto",
+                        .flags = ge::console::kArchive,
+                        .help = "The recordings a classic game plays in turn behind its main "
+                                "menu.",
+                        .kind = ge::console::CvarKind::text,
+                        .values = "auto: the game's own (the default); \"\": none, the title's "
+                                  "night sky; TEXT: these recordings, by name"},
+                       &attract_demos);
   shooters_edge::menu::BoardView board_view;
   // The HUD's pictures: a classic game's own once its packs are open (below), Shooter's Edge's
   // free set only for its own content (client/classic_pictures.hpp's hud_art_of).
@@ -281,7 +297,7 @@ int run_main(int argc, char** argv) {
   console.cvars().set("con_notifylines", "0", ge::console::Source::code);
   // The install (client/game_folder.hpp): -basedir, else the one loaded last; multiplayer over
   // `id1`.
-  // Started inside an install (or placed in one, or above several: client/installs.hpp), that one.
+  // Started inside an install (or placed in one, or above several: client/install_search.hpp), that one.
   const std::string prefs = ge::platform::prefs_dir("gameengine2", "shooters_edge");
   std::vector<cl::FoundInstall> installs;  // the console's `games`
   cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);
@@ -305,6 +321,28 @@ int run_main(int argc, char** argv) {
   ge::capture::add_screenshot_command(console, shots, "<game folder>/screenshots/");
   game_menu.set_screenshots(shots.dir());  // OPTIONS > SCREENSHOTS looks through them
   game_menu.servers().set_query(shooters_edge::net::classic_query());  // JOIN A GAME
+  // SELECT GAME: every classic game, its install kept on this computer and its edition.
+  game_menu.games().set_lister([&] {
+    std::vector<shooters_edge::menu::GameRow> rows;
+    const auto kept = cl::remembered_installs(prefs);
+    for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles) {
+      shooters_edge::menu::GameRow g;
+      g.id = std::string(p.id);
+      if (const auto it = kept.find(p.id); it != kept.end()) g.install = it->second;
+      if (args.profile == p.id && !game_menu.game().empty()) {
+        g.playing = true;
+        g.install = game_menu.game();
+      }
+      if (std::string basedir, why; !g.install.empty()) {
+        if (cl::check_game_folder(g.install, &basedir, &why, p))
+          g.edition = std::string(cl::edition_words(cl::edition_of(basedir, p), p));
+        else
+          g.missing = true;
+      }
+      rows.push_back(std::move(g));
+    }
+    return rows;
+  });
   const auto save_settings = [&console] { cl::save_settings(console); };
   if (const cl::ConfigsRun ran =
           cl::start_configs(console, args.basedir, args.game, content_row(), args.plus);
@@ -320,6 +358,8 @@ int run_main(int argc, char** argv) {
     return g != nullptr ? *g : shooters_edge::profiles::classic_game();
   };
   cl::SearchPath files;
+  // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
+  const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
   cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
   cl::add_record_commands(console, recorder, listen, files, playback.record);
   std::string error;
@@ -442,7 +482,7 @@ int run_main(int argc, char** argv) {
     }
     game_menu.draw(overlay, w, h, t);
     con_view.frame(dt);
-    ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
+    shooters_edge::menu::draw_game_console(overlay, con_view, con_look, t);
     if (!caption.empty())
       ge::hud::draw_spinner(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(), t,
                             caption, t - since);
@@ -492,7 +532,9 @@ int run_main(int argc, char** argv) {
   // again when it flips and when an enhance run ends (client/classic_pictures.hpp). The first read
   // is on a thread, behind the title; the menu opens once they are in.
   const auto use_pictures = [&](cl::ClassicPictures pics, bool say) {
-    if (!pics.menu.glyphs.empty()) game_menu.set_art(std::move(pics.menu));
+    // Always the loaded game's own: another game's install loaded leaves none of the last one's.
+    game_menu.set_art(std::move(pics.menu));
+    shooters_edge::menu::classic_console(game_menu.art(), con_look);
     classic_art = std::move(pics.hud);
     classic_art.finish();
     if (!say) return pics.enhanced;
@@ -523,7 +565,10 @@ int run_main(int argc, char** argv) {
   const bool measured = !args.timedemo.empty() || !args.playdemo.empty() || args.frames != 0;
   bool on_title = next_map.empty() && !measured;
   bool menu_at_start = on_title;
-  if (next_map.empty()) next_map = game_content.first_map;
+  // A classic game opened on its title plays its recordings behind the main menu (`menu_attract`,
+  // below) in place of loading its first map; the first map loads when they cannot play.
+  bool attract_at_start = on_title && opened && !attract_demos.empty();
+  if (next_map.empty() && !attract_at_start) next_map = game_content.first_map;
   cl::ListenOptions listen_opt = shooters_edge::net::listen_options();
   listen_opt.files = &files;
   if (const ge::console::Cvar* n = console.cvars().find("name"); n != nullptr && !n->value.empty())
@@ -548,6 +593,7 @@ int run_main(int argc, char** argv) {
     game_menu.servers().set_masters(shooters_edge::net::classic_install_masters(basedir));
     // The game played is the one the next start opens, however it was picked (-basedir too).
     cl::remember_game(prefs, basedir, shooters_edge::profiles::content_of(*adapter.game));
+    cl::remember_install(prefs, shooters_edge::profiles::content_of(*adapter.game).id, basedir);
     if (game_menu.auto_enhance() && !measured) {
       if (game_menu.enhance_game(false, &why))
         out::status("shooters_edge: enhancing " + basedir +
@@ -656,7 +702,29 @@ int run_main(int argc, char** argv) {
   std::function<bool()> back_to_listen;  // below
   // `by_player`: the player stopped a played demo (Escape on a timedemo, or something else asked
   // for from the menu or the console over a paused one): not a failure.
+  // THE RECORDINGS BEHIND THE MENU (`menu_attract`): while the title is up in a classic game, its
+  // recordings play in turn behind the main menu, which leaves them playing; ESCAPE closes the
+  // menu to watch one. Anything else asked for (a map, a game joined, a demo picked) stops them.
+  bool attract = false;        // the demo playing is one of them
+  bool attract_asked = false;  // one was asked for and has not started yet
+  size_t attract_next = 0;     // the next one's place in the list
+  const auto start_attract = [&] {
+    const std::string list =
+        attract_demos == "auto" ? std::string(adapter.game->attract) : attract_demos;
+    std::vector<std::string> words;
+    for (size_t at = 0; at < list.size();) {
+      const size_t end = std::min(list.find(' ', at), list.size());
+      if (end > at) words.push_back(list.substr(at, end - at));
+      at = end + 1;
+    }
+    if (words.empty() || cl::archive_paths(files).empty()) return false;
+    bench_ask = words[attract_next++ % words.size()];
+    play_ask = true;
+    attract_asked = true;
+    return true;
+  };
   const auto end_bench = [&](const std::string& why, double now_s, bool by_player = false) {
+    attract = false;
     const std::string setup = std::to_string(w) + "x" + std::to_string(h) +
                               ", drawn offscreen, shown at 30 Hz, r_look " + picture.look + ", " +
                               device->report.name + " on " + device->report.backend;
@@ -741,7 +809,7 @@ int run_main(int argc, char** argv) {
                         else
                           folder_ask = cl::expand_home(a.size() == 2 ? a[1] : a.rest(0));
                       });
-  // The installs found where the game was started or placed (client/installs.hpp): `games`
+  // The installs found where the game was started or placed (client/install_search.hpp): `games`
   // lists them, `games <n>` loads one as `basedir` does.
   console.add_command("games",
                       "games: the classic games found where this game was started or placed; "
@@ -811,6 +879,7 @@ int run_main(int argc, char** argv) {
     game_menu.servers().set_masters(shooters_edge::net::classic_install_masters(basedir));
     demo_places();
     cl::remember_game(prefs, basedir, *content);
+    cl::remember_install(prefs, content->id, basedir);
     save_settings();  // the player's settings go on in the new folder
     out::status("shooters_edge: loaded " + basedir + " (" + files.folder + ")");
     if (std::string why; game_menu.auto_enhance() && !game_menu.enhance_game(true, &why))
@@ -959,7 +1028,7 @@ int run_main(int argc, char** argv) {
         overlay.box(b);
       }
       con_view.frame(dt);
-      ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
+      shooters_edge::menu::draw_game_console(overlay, con_view, con_look, t);
       const wgpu::TextureView target = acquire_frame();
       if (!target) continue;
       cl::draw_world(*device, bot_world ? *bot_world : *title, view, {}, nullptr, dt, overlay,
@@ -984,6 +1053,8 @@ int run_main(int argc, char** argv) {
   long presented = 0;
   double longest = 0;  // the longest frame, s: a hitch a load or a stall made
   while ((args.frames == 0 || presented < args.frames) && !quit) {
+    if (std::exchange(attract_at_start, false) && !start_attract())
+      next_map = game_content.first_map;
     if (cl::arrived(first_pictures, measured))
       pictures_enhanced = use_pictures(first_pictures.get(), true);
     if (!first_pictures.valid() && picture.ce.pictures != pictures_enhanced)
@@ -1062,7 +1133,8 @@ int run_main(int argc, char** argv) {
           menu_host.saves[static_cast<size_t>(i)] = cl::save_label(files, "s" + std::to_string(i));
       }
       game_menu.update(mi, opening, menu_host, wall);
-      if (watched && !was_open && game_menu.open()) {  // (Escape or `togglemenu`): held behind it
+      if (watched && !attract && !was_open &&
+          game_menu.open()) {  // (Escape or `togglemenu`): held behind it
         paused_before_menu = playback.paused;
         playback.paused = true;
       }
@@ -1075,8 +1147,8 @@ int run_main(int argc, char** argv) {
         play_ask = true;
       }
       if (was_open && !game_menu.open()) {
-        if (watched) playback.paused = paused_before_menu;  // the demo plays on
-        save_settings();                                    // what the menu changed is kept
+        if (watched && !attract) playback.paused = paused_before_menu;  // the demo plays on
+        save_settings();   // what the menu changed is kept
         on_title = false;  // the title's menu closed: the map is played (once it has loaded)
         // A setting the world reads once (the enhanced textures and skins, the rebaked light, the
         // bloom) changed: the world made again behind the window, the old one drawn meanwhile.
@@ -1138,6 +1210,14 @@ int run_main(int argc, char** argv) {
     // A game folder asked for: LOAD GAME's chooser answered, or the console's `basedir`.
     if (game_menu.take_load())
       ge::platform::pick_folder(*window, "Load game: the folder holding id1", args.basedir);
+    // SELECT GAME: a game's install opened at once, or the folder chooser to find one.
+    if (shooters_edge::menu::GameMenu::GameAsk ask = game_menu.take_game(); ask.asked) {
+      if (ask.browse)
+        ge::platform::pick_folder(*window, "Select game: the folder your game is installed in",
+                                  args.basedir);
+      else
+        folder_ask = ask.install;
+    }
     if (std::string picked, why; ge::platform::folder_picked(*window, &picked, &why)) {
       if (!why.empty())
         game_menu.load_refused(why + ". You can also type \"basedir <folder>\" in the console.");
@@ -1145,10 +1225,17 @@ int run_main(int argc, char** argv) {
     }
     if (!folder_ask.empty() && !bench.active) {
       std::string basedir;
-      if (!cl::check_game_folder(folder_ask, &basedir, &error)) {
+      if (cl::install_of(folder_ask, &basedir, &error) == nullptr) {
         game_menu.load_refused(error);
         console.print("load game: " + error);
-      } else if (!open_folder(basedir)) {
+      } else if (open_folder(basedir)) {
+        // From the menu: its root in the game's own look, the game's recordings behind it.
+        if (game_menu.open() && !measured) {
+          game_menu.show(menu_host, "main");
+          on_title = true;
+          if (start_attract()) next_map.clear();
+        }
+      } else {
         if (!listen.map) {  // let go of the old game, then the new one did not load
           error.insert(0, "shooters_edge: " + basedir + " did not load: ");
           out::error(error + "; see docs/shooters-edge.md § Playing it");
@@ -1225,8 +1312,11 @@ int run_main(int argc, char** argv) {
     // at its pace keeps vsync.
     if (!bench_ask.empty()) {
       const bool quit_after = bench_ask == args.timedemo || bench_ask == args.playdemo;
+      const bool for_attract = std::exchange(attract_asked, false);
       if (!cl::timedemo_start(files, bench_ask, bench, error, adapter)) {
-        console.print("timedemo: " + error);
+        console.print((for_attract ? "menu_attract: " : "timedemo: ") + error);
+        // None of the game's recordings plays: the title's night, the first map loading behind.
+        if (for_attract && next_map.empty() && !listen.map) next_map = game_content.first_map;
         if (quit_after) {
           out::error("shooters_edge: the timedemo did not start: " + error +
                      "; see docs/shooters-edge.md § Benchmarking a demo");
@@ -1234,13 +1324,14 @@ int run_main(int argc, char** argv) {
         }
       } else {
         bench.quit_after = quit_after;
+        attract = for_attract;
         bench.paced = play_ask;
         bench.hear = play_ask;  // its sounds and lines gathered for the draw (demo_heard.hpp)
         bench.demo.track = playback.track;
         console.print((play_ask ? "playdemo: " : "timedemo: ") + bench.found);
         if (play_ask && !cl::playback_begin(playback, bench, error))
           console.print("playdemo: no highlights: " + error);
-        con_view.set_open(false);
+        if (!attract) con_view.set_open(false);
         if (!play_ask) {
           vsync = false;  // and unlocked: immediate present, where the platform has it
           surface.configure_unlocked(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
@@ -1338,7 +1429,9 @@ int run_main(int argc, char** argv) {
         if (drawn_remote) sn::remote_world(remote, &bench_map->spec.models);
         if (paced) hearing.level(ds, from, &bench_map->bsp.map);
       } else if (step != cl::TimedemoStep::frame) {
-        if (!end_bench(step == cl::TimedemoStep::error ? error : "", t)) return 1;
+        const bool next = attract && step != cl::TimedemoStep::error;  // the next one, in turn
+        if (!end_bench(step == cl::TimedemoStep::error ? error : "", t, attract)) return 1;
+        if (next && !quit) start_attract();
         continue;
       }
       // A client recording's model list may grow after its level started: the world made again.
@@ -1365,7 +1458,7 @@ int run_main(int argc, char** argv) {
       if (drawn_remote) cl::group_status(controls.groups, hud_status, t);  // the weapon group
       se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
       const auto placed =
-          hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style());
+          hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), hud_look());
       playback.bar_bottom_px = cl::hud_inset(placed, h);
       if (bench.paced && !game_menu.open()) cl::playback_draw(overlay, playback, bench, w, h, t);
       ge::hud::draw_frame_rate(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(),
@@ -1373,7 +1466,7 @@ int run_main(int argc, char** argv) {
       if (paced) {  // a demo watched or a game joined: the menu and the console over it
         game_menu.draw(overlay, w, h, t);
         con_view.frame(wall);
-        ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
+        shooters_edge::menu::draw_game_console(overlay, con_view, con_look, t);
       }
       // Every frame is drawn, but only one in kBenchShowNs is shown: the rest go to an offscreen
       // target of the surface's format. A window's present waits for the display however its
@@ -1547,7 +1640,7 @@ int run_main(int argc, char** argv) {
       cl::group_status(controls.groups, hud_status, t);  // the weapon group (weapon_groups.hpp)
       se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
       const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
-      hud.layout.draw(overlay, hf, se::hud_style());
+      hud.layout.draw(overlay, hf, hud_look());
       hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
     }
     if (listen.room && listen.server != nullptr) {
@@ -1567,7 +1660,7 @@ int run_main(int argc, char** argv) {
                              pacing.times, pacing.refresh, pacing.show);
     game_menu.draw(overlay, w, h, t);
     con_view.frame(wall);
-    ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
+    shooters_edge::menu::draw_game_console(overlay, con_view, con_look, t);
     if (cl::busy(loader))  // the world made again behind the one drawn
       ge::hud::draw_spinner(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(), t,
                             cl::load_caption(loader), t - loader.since_s);

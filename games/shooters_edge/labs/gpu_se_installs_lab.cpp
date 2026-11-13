@@ -1,5 +1,5 @@
 // LAB `se-installs`: THE CLASSIC INSTALLS A PLAYER DROPS THE GAME BESIDE. A parent folder holding
-// classic installs (client/installs.hpp) searched as the window searches the folder it was placed
+// classic installs (client/install_search.hpp) searched as the window searches the folder it was placed
 // in: each install found by its folder's name or by what it holds, its release told by its packs'
 // sizes, the one the window would play picked; then, for each, its configs run in the install's
 // own order (client/install_configs.hpp) on a console of its own, the files listed in the order
@@ -37,7 +37,7 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/install_configs.hpp"
-#include "shooters_edge/client/installs.hpp"
+#include "shooters_edge/client/install_search.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
@@ -107,7 +107,7 @@ void run(gl::Lab& lab) {
   lab.table(t, det);
   if (own && found.size() != std::size(cl::kKnownReleasePacks)) {
     lab.fail("the fixture's installs were not all found",
-             "Read installs_below in client/installs.cpp. Skill: shooter.");
+             "Read installs_below in client/install_search.cpp. Skill: shooter.");
   }
 
   // The configs each runs, in order.

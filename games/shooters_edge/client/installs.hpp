@@ -1,111 +1,43 @@
-// THE CLASSIC INSTALLS AROUND THE GAME: the classic game the window was started inside, and the
-// installs in the folder it was placed in, so a player who drops the game into an install (or
-// beside several) plays them with no folder to pick.
+// THE CLASSIC GAMES' INSTALLS ON THIS MACHINE: what SELECT GAME shows beside each game the content
+// profiles know (classicenhance/profile.hpp): the install of it the player loaded last, and which
+// edition that install is.
 //
-// - **Started inside one** (`install_around`): the folder the game runs in, or the folder its
-//   executable was placed in, is an install the content profiles know, or lies inside one (its base
-//   folder, its multiplayer folder, the client's own folder beside them: up to `kInstallDepth`
-//   folders up). That install is played at once, ahead of the game loaded last.
-// - **Placed above several** (`installs_below`): the folders right under it named like a classic
-//   install, in any case (`kInstallNames`, in that order), then any other folder under it that is
-//   one; each checked as an install by its own folders (client/game_folder.hpp's `install_of`), so
-//   a folder of either game is found by what it holds, not by its name.
-// - **Which release** (`release_of`): the first numbered pack and the full game's pack told by
-//   their sizes (`kKnownReleasePacks`): the first game's shareware or registered packs, the
-//   sequel's demo or full game; a pack of another size is the player's own copy, taken as a full
-//   game. Sizes, not digests: a start reads no pack.
-// - **Which is played** (`pick_install`): of the installs found, the game loaded last when it is
-//   one of them, else the first full game, else the first.
+// - **Kept by game** (`remember_install`, `remembered_installs`): `<prefs>/installs.txt`, a line a
+//   game, `<profile id> <folder>`; written whenever a game's install opens, beside the single game
+//   loaded last (game_folder.hpp's `remember_game`), so picking a game a second time opens its
+//   install at once, with no folder to find.
+// - **Which edition** (`edition_of`): the packs read through the search path, the profile's
+//   full-game file found in them or not (`full_game`: a picture only the full game's packs hold),
+//   so an install reads as the shareware game or the registered one the moment it is picked.
 //
-// The console's `games` lists the installs found and `games <n>` loads one (client/main.cpp).
-//
-// ge:summary The classic installs around the game: started inside one, placed above several
-// ge:keywords installs install-detection started-inside placed-above parent-folder nquake
-// ge:keywords install_around installs_below release_of pick_install known-release shareware
-// ge:keywords registered demo full-game install-names games-command app-folder
+// ge:summary Each classic game's install kept by game, and whether it is the shareware or the full
+// ge:keywords installs select-game remember_install remembered_installs edition shareware
+// ge:keywords registered full-game installs-txt
 // ge:skill shooter classicenhance
-// ge:test tests/shooters_edge_installs_test.cpp
+// ge:test tests/shooters_edge_game_folder_test.cpp
 #pragma once
 
-#include <array>
-#include <cstdint>
+#include <map>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include "classicenhance/profile.hpp"
 
 namespace shooters_edge::client {
 
-// How many folders up from where the game runs an install is still looked for.
-inline constexpr int kInstallDepth = 4;
+// Keeps `basedir` as the install of the game `id` (a content profile's id); false (nothing kept)
+// when `prefs` is empty or unwritable.
+bool remember_install(const std::string& prefs, std::string_view id, const std::string& basedir);
+// Every game's install kept, by profile id; empty when none (or `prefs` is empty).
+std::map<std::string, std::string, std::less<>> remembered_installs(const std::string& prefs);
 
-// The names a classic install's folder goes by, matched in any case, in the order they are tried:
-// the first game's (its own name, its multiplayer client's short and long names, the bundle's),
-// then the sequel's (its name with a 2, spaced or not, the bundle's, its short name, its name with
-// a roman II). Spelled in pieces so the clean-slate scan (tools/agents-index.mjs) does not read
-// them as prose naming the games.
-inline constexpr std::array<std::string_view, 9> kInstallNames = {
-    "qu"
-    "ake",
-    "q"
-    "w",
-    "qu"
-    "akeworld",
-    "nquake",
-    "qu"
-    "ake2",
-    "qu"
-    "ake 2",
-    "nquake2",
-    "q2",
-    "qu"
-    "ake ii"};
+enum class Edition : uint8_t { unknown, shareware, full };
 
-// A numbered pack whose size tells a release.
-struct KnownReleasePack {
-  std::string_view profile;  // the content profile's id
-  std::string_view pack;     // its file name, matched in any case
-  uint64_t size;             // bytes
-  std::string_view release;  // in a player's words
-  bool full;                 // the whole game, not a sample of it
-};
+// Which edition the install at `basedir` of `content` is: unknown when its packs do not open.
+Edition edition_of(const std::string& basedir, const ge::classicenhance::Profile& content);
 
-inline constexpr KnownReleasePack kKnownReleasePacks[] = {
-    {"classic", "pak0.pak", 18689235, "shareware", false},
-    {"classic", "pak1.pak", 34257856, "registered", true},
-    {"sequel", "pak0.pak", 49951322, "demo", false},
-    {"sequel", "pak0.pak", 183997730, "full game", true},
-};
-
-// A classic install found.
-struct FoundInstall {
-  const ge::classicenhance::Profile* content = nullptr;
-  std::string basedir;  // the install's folder
-  std::string release;  // "shareware", "registered", "demo", "full game", or "your own copy"
-  bool full = false;    // the whole game
-};
-
-// The release the install at `basedir` holds, played as `content`, into `out`.
-void release_of(const ge::classicenhance::Profile& content, const std::string& basedir,
-                FoundInstall& out);
-
-// The install `folder` is or lies inside (up to kInstallDepth folders up): true with it.
-bool install_around(const std::string& folder, FoundInstall& out);
-
-// The installs right under `parent`: the folders named in kInstallNames first, in that order, then
-// the others, by name. None when `parent` is a file system's root.
-std::vector<FoundInstall> installs_below(const std::string& parent);
-
-// The folder the game was placed in, from its executable's folder: the folder holding the app
-// bundle when it runs from one (`<folder>/Game.app/Contents/MacOS`), else the executable's own.
-std::string placed_folder(const std::string& exe_dir);
-
-// Which of `found` is played: the one at `kept` (the game loaded last), else the first full game,
-// else the first; -1 when `found` is empty.
-int pick_install(const std::vector<FoundInstall>& found, const std::string& kept);
-
-// One line a found install, as `games` prints it: "1  the classic game (registered)  <folder>".
-std::string install_line(const FoundInstall& f, int n);
+// The edition in the game's words for the player ("Shareware", "Registered"; the sequel's "Demo",
+// "Full game").
+std::string_view edition_words(Edition e, const ge::classicenhance::Profile& content);
 
 }  // namespace shooters_edge::client

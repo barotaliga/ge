@@ -106,7 +106,7 @@ is kept (`game_folder.txt` in the platform's per-user folder) and opened at the 
 `-basedir` names none and the folder the game runs in holds no game. `basedir <folder>` in the
 console does the same as LOAD GAME (`client/game_folder.hpp`). Then `map dm3` plays that map.
 
-**Dropped into an install, or beside several** (`client/installs.hpp`). Started inside a
+**Dropped into an install, or beside several** (`client/install_search.hpp`). Started inside a
 classic install (the folder the game runs in, or the folder its executable or app was placed in,
 is an install or lies inside one: its base folder, its multiplayer folder, the bundled client's
 folder), the game plays that install at once, ahead of the one kept. Placed in a folder ABOVE
@@ -1482,6 +1482,25 @@ recording's extension stands before its packing, so `match.mvd.gz` is and `maps.
 ENTER checks the file before anything starts (`client/demo_check.hpp`: the bytes, not the name;
 unpacked, then read to its level's map) and plays it as `playdemo` does, or shows in the footer
 why it is no demo. BACKSPACE goes up a folder, LEFT and RIGHT through the places, R lists again.
+
+**A classic game in its own look, picked from SELECT GAME (M18k2).** SELECT GAME is the main
+menu's first row, so ENTER on a fresh start goes straight to it (`menu_games`;
+`menu/games_page.hpp`). It shows each classic game the content profiles know by a picture of its
+name (`menu/art/<id>.png`, embedded; the names are pictures, never words in the tree), the
+install of it loaded last (`client/installs.hpp`: `<prefs>/installs.txt`, a line a game) and that
+install's edition, read from its packs the moment it is picked (the profile's `full_game` file
+found or not: Shareware or Registered, the sequel's Demo or Full game). ENTER on a game with a
+kept install opens it; on one never found, or FIND ANOTHER INSTALL, the window's folder chooser,
+and the folder is taken by whichever game's base folder it holds (`install_of`). Once a classic
+game is open, the title's night gives way to its own recordings played behind the menu in turn
+(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game; "" keeps the night), ESCAPE closes the menu onto the
+recording to watch it, and nothing modern is left on screen: the console is written in the
+game's glyph sheet over its own console background (`menu/classic_console.hpp`, the engine's
+`ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
+GAME and SELECT GAME are drawn in the game's letters under carved titles (`menu/classic_pages.hpp`;
+SELECT GAME's own row cut letter by letter from the strips like DEMOS'). Lab `se-attract` draws
+the menu, SELECT GAME, the watched recording, the console, DEMOS and JOIN A GAME over a played
+recording (`--basedir` a player's install).
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
 output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),

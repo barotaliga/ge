@@ -1,9 +1,10 @@
 // The sequel's adapter (game_adapter.hpp): the shared calls (adapter_parts.hpp) over its rows, so
 // its mods, programs (native game libraries, named and passed over), maps, their wall textures
 // (`textures/*.wal`), sounds, config files and demo listing read as any classic game's; and its
-// own calls, each answering what this build reads of the game so far: no pictures of its HUD and
-// menus yet (the window draws its own), the shell's menu, no held weapons and no demo playback.
-// Each grows here as the sequel's rows land (docs/goals/M18v.md).
+// own calls, each answering what this build reads of the game so far: the console's letters and
+// background but no pictures of its HUD and menus yet (the window draws its own), the shell's menu,
+// no held weapons and no demo playback. Each grows here as the sequel's rows land
+// (docs/goals/M18v.md).
 //
 // ge:summary The sequel's adapter: the shared calls over its rows, and its own calls as they land
 // ge:keywords sequel-adapter sequel adapter wal wall-texture native-library gamex86 md2 pcx
@@ -11,8 +12,12 @@
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #include <filesystem>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
+
+#include "assets/pcx.hpp"
 
 #include "shooters_edge/client/adapter_parts.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
@@ -23,11 +28,36 @@ namespace {
 
 namespace pf = shooters_edge::profiles;
 
-ClassicPictures pictures(const GameAdapter&, const SearchPath&, bool enhance,
+// A picture of the game's files (`pics/<name>.pcx`) in its own palette, `clear` see-through; empty
+// when the files hold none that reads.
+ge::ui::Image pcx_picture(const SearchPath& files, std::string_view name, int clear) {
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> bytes =
+      find_file(files, "pics/" + std::string(name) + ".pcx", store);
+  ge::assets::IndexedImage img;
+  std::string why;
+  if (bytes.empty() || !ge::assets::decode_pcx(bytes, name, &img, &why) || img.palette.empty())
+    return {};
+  ge::ui::Image out;
+  out.width = img.width;
+  out.height = img.height;
+  out.rgba = ge::assets::pcx_rgba(img);
+  for (size_t i = 0; i < img.indices.size(); i++)
+    if (img.indices[i] == clear) out.rgba[i * 4 + 3] = 0;
+  return out;
+}
+
+// The console's letters (`conchars`, its last colour see-through) and background (`conback`);
+// the status bar's and the menus' pictures are not read yet, so the menu keeps its modern look.
+ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhance,
                          const std::filesystem::path&) {
   ClassicPictures out;
   out.enhanced = enhance;
   out.hud_why = "the sequel's own status bar pictures are not read yet";
+  out.menu.glyphs = pcx_picture(files, "conchars", 255);
+  if (out.menu.glyphs.width != 128 || out.menu.glyphs.height != 128) out.menu.glyphs = {};
+  if (ge::ui::Image back = pcx_picture(files, "conback", -1); !back.empty())
+    out.menu.pictures.emplace("conback", std::move(back));
   return out;
 }
 

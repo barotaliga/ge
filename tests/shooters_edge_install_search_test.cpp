@@ -1,4 +1,4 @@
-// The classic installs around the game (games/shooters_edge/client/installs.hpp) over folders
+// The classic installs around the game (games/shooters_edge/client/install_search.hpp) over folders
 // written here: an install found from inside its base folder, its multiplayer folder and a
 // client's folder beside them; the installs under a parent found by their folder names in any
 // case and by what they hold, named ones first; the releases told by their packs' sizes; the one
@@ -17,7 +17,7 @@
 #include "check.hpp"
 #include "classicenhance/profile.hpp"
 #include "shooters_edge/client/game_folder.hpp"
-#include "shooters_edge/client/installs.hpp"
+#include "shooters_edge/client/install_search.hpp"
 
 namespace cl = shooters_edge::client;
 namespace fs = std::filesystem;

@@ -1,16 +1,18 @@
 // The charsets as grid fonts: a name the charsets know builds a font (the same one every call),
 // an unknown name builds none; its metrics and advance are shares of the cell, its glyphs ink
 // their cells and a code point past the grid draws the missing glyph; a pixel font draws at whole
-// multiples of its grid.
+// multiples of its grid; a game's glyph sheet is a square pixel font shaded by its brightness.
 //
 // ge:summary Tests the charsets as grid fonts: lookup, metrics, advance, masks, pixel snapping
 // ge:keywords test ui charset grid-font font atlas monospace pixel-font load_grid
 // ge:skill ui testing
 #include <cmath>
+#include <string>
 
 #include "check.hpp"
 #include "ui/charset_font.hpp"
 #include "ui/font.hpp"
+#include "ui/image.hpp"
 
 using namespace ge::ui;
 
@@ -72,4 +74,33 @@ TEST(a_pixel_font_draws_at_whole_multiples_of_its_grid) {
                m.alpha[static_cast<size_t>(y + 1) * m.w + x] == v;
     }
   CHECK(blocks && lit(m) > 20);
+}
+
+TEST(a_glyph_sheet_is_a_square_pixel_font_shaded_by_its_brightness) {
+  // A 128 x 128 sheet: 'A' a full white cell, 'B' a half-bright one, the rest see-through.
+  Image sheet = make_image(128, 128, {0, 0, 0, 0});
+  const auto fill = [&](int code, uint8_t v) {
+    for (int y = 0; y < 8; y++)
+      for (int x = 0; x < 8; x++) {
+        uint8_t* px = &sheet.rgba[(static_cast<size_t>((code >> 4) * 8 + y) * 128 +
+                                   static_cast<size_t>((code & 15) * 8 + x)) *
+                                  4];
+        px[0] = px[1] = px[2] = v;
+        px[3] = 255;
+      }
+  };
+  fill('A', 255);
+  fill('B', 128);
+  Font f;
+  CHECK(sheet_font(sheet, f));
+  CHECK(f.grid());
+  CHECK(f.metrics(20).ascent + f.metrics(20).descent == 16);  // a whole multiple of 8
+  CHECK(std::fabs(f.advance("AB", 16) - 32) < 0.01f);         // square cells
+  const GlyphMask& a = f.mask(f.glyph_index('A'), 16, 0);
+  const GlyphMask& b = f.mask(f.glyph_index('B'), 16, 0);
+  CHECK(lit(a) == 16 * 16 && lit(b) == 0 && b.alpha[0] >= 120 && b.alpha[0] <= 136);
+  CHECK(lit(f.mask(f.glyph_index('C'), 16, 0)) == 0);
+  Font none;
+  std::string why;
+  CHECK(!sheet_font(make_image(100, 64, {0, 0, 0, 0}), none, &why) && !why.empty());
 }

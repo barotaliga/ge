@@ -17,7 +17,7 @@
 //   `basedir <folder>`; the older single line of a folder reads as the first profile's). Kept
 //   whenever a game opens (at the start, LOAD GAME, `basedir`) and opened at the next start unless
 //   `-basedir` names another or the game was started inside an install or placed above some
-//   (`choose_folder`, client/installs.hpp), so the game starts as that classic game (its
+//   (`choose_folder`, client/install_search.hpp), so the game starts as that classic game (its
 //   pictures, menus, HUD, programs and maps) until another is loaded. With none kept, the folder
 //   the game runs in.
 // - **What it holds** (`load_programs`): the multiplayer program (`-progs`, else the game's own
@@ -45,7 +45,7 @@
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
-#include "shooters_edge/client/installs.hpp"
+#include "shooters_edge/client/install_search.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 
@@ -70,7 +70,7 @@ std::string game_of(const std::string& basedir, const ge::classicenhance::Profil
                                                     ge::classicenhance::classic_profile());
 
 // The install the window opens, into `args`: `-basedir`; else the install the game was started
-// inside (client/installs.hpp's `install_around` of the folder it runs in, `args.basedir`, then of
+// inside (client/install_search.hpp's `install_around` of the folder it runs in, `args.basedir`, then of
 // each of `places`: the folder its executable was placed in); else of the installs right under
 // those folders (`installs_below`), the game loaded last when it is one of them, else the first
 // full game; else the game loaded last (kept under `prefs`) while its install still checks; else
