@@ -102,7 +102,8 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
     pic.tint({1, 1, 1, alpha});
     draw_background(list, pic, panel, time_s);
   }
-  list.rect({0, cover - style.edge_px * s, w, style.edge_px * s}, style.edge);
+  if (style.edge_px > 0)
+    list.rect({0, cover - style.edge_px * s, w, style.edge_px * s}, style.edge);
 
   // The lines, newest just over the input line, the page growing up from it.
   list.push_clip(panel);

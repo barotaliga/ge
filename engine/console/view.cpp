@@ -167,15 +167,23 @@ Background ConsoleView::background() const {
   return b;
 }
 
-double ConsoleView::cover() const { return drop_ * height_; }
+double ConsoleView::cover() const { return std::max(drop_ * height_, over_); }
+
+void ConsoleView::set_full(bool full) {
+  full_ = full;
+  if (full) over_ = 1;
+}
 
 void ConsoleView::frame(double dt_s) {
   clock_ += dt_s;
   const double target = open_ ? 1.0 : 0.0;
   if (speed_ <= 0) {
     drop_ = target;
+    over_ = full_ ? 1 : 0;
     return;
   }
+  // Let go of the whole screen: it slides up at con_speed, the drop meeting it on the way.
+  if (!full_) over_ = std::max(0.0, over_ - dt_s * speed_);
   // con_speed is screens a second; the drop is in shares of con_height.
   const double step = dt_s * speed_ / std::max(height_, 0.1);
   drop_ = drop_ < target ? std::min(target, drop_ + step) : std::max(target, drop_ - step);
