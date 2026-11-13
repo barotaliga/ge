@@ -2,7 +2,7 @@
 //
 // ge:summary The map drawn again for its water: the planar mirror in a pool's plane, the view up
 // ge:keywords bsp water planar-mirror view-up bsp-views encode_bsp_views
-// ge:keywords mirror-skirt kMirrorSkirt waterline clip-plane white-line
+// ge:keywords mirror-skirt mirror_skirt waterline clip-plane white-line
 // ge:skill brush render water
 #include "brush/app/bsp_views.hpp"
 
