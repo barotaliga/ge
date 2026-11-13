@@ -125,9 +125,9 @@
 //   a pack dropped holds no launcher, and takes the launcher up at a sighting
 //   (games/shooters_edge/bots/fighter.cpp, M18r.md 0k2); judging.
 // - `nogoal`: nothing worth taking, no item goal kept from before (a holder walking back to its
-//   claim stood on a full armour with it as its goal) (fighter.cpp, M18r.md 3); judging.
+//   claim stood on a full armour with it as its goal) (fighter.cpp, M18r.md 3); moved nothing.
 // - `tripkeep`: on a scripted way to its goal item, the goal held unless it backs off
-//   (fighter.cpp, M18r.md 0c1); judging.
+//   (fighter.cpp, M18r.md 0c1); moved nothing (the YA taken no more).
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
