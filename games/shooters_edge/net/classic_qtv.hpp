@@ -30,6 +30,7 @@
 // ge:summary The server's stream port for classic relays: handshake, auth, per-relay stream, chat
 // ge:keywords qtv stream-port broadcaster relay handshake qtvsv begin auth challenge sha3-512
 // ge:keywords up-message say_game qul viewers catch-up qtv_streamport qtv_password qtv_maxstreams
+// ge:keywords qtv_accept
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_qtv_test.cpp
 #pragma once
@@ -152,6 +153,9 @@ bool qtv_open(QtvPort& p, const gn::Address& bind, const QtvConfig& cfg, std::st
 // After each server frame: new relays taken, handshakes answered, the frame's bytes sent, up
 // messages run, relays that stalled dropped.
 void qtv_update(QtvPort& p, ClassicServer& s);
+// Only the new relays taken (`qtv_update` starts with this). A test or a lab holding both ends
+// calls it first, so it can settle a new relay's request in before the update reads it.
+void qtv_accept(QtvPort& p, const ClassicServer& s);
 // Every relay ended with the end of the recording, and the port closed.
 void qtv_close(QtvPort& p, ClassicServer& s);
 int qtv_streaming(const QtvPort& p);
