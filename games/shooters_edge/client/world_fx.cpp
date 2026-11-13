@@ -721,9 +721,9 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
       s.monster_next[m.entity] = now;
     }
   }
-  // A monster's gun's flash (the entity's muzzle-flash bit, a soldier's or an enforcer's shot): a
-  // light at its gun, and under ce_monsters the muzzle fire there. A flash is new when the last
-  // began more than kMonsterRefireS ago.
+  // A monster's flash (the entity's muzzle-flash bit: a soldier's or an enforcer's shot, a caster's
+  // throw): a light at its hands, and under ce_monsters the muzzle fire at a gun's (`monster.gun`).
+  // A flash is new when the last began more than kMonsterRefireS ago.
   for (const Placed& m : out.models) {
     if (m.entity <= static_cast<int>(sh::kMaxClients) || (m.effects & kMuzzleFlash) == 0) continue;
     const double yaw = m.angles.y * ge::core::kPi / 180;
@@ -742,6 +742,11 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
     for (const Placed& m : out.models) {
       const auto f = s.monster_fired.find(m.entity);
       if (f == s.monster_fired.end() || t - f->second > fx::kMonsterMuzzleS) continue;
+      // Only a gun's: a caster's flash as it throws is a light alone.
+      if (s.models == nullptr || m.modelindex <= 0 ||
+          m.modelindex >= static_cast<int>(s.models->kinds.size()) ||
+          s.models->kinds[size_t(m.modelindex)].effect != "monster.gun")
+        continue;
       const double yaw = m.angles.y * ge::core::kPi / 180;
       const sh::Vec3f gun = {m.origin.x + float(std::cos(yaw) * kMonsterGunU),
                              m.origin.y + float(std::sin(yaw) * kMonsterGunU),

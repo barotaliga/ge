@@ -72,33 +72,25 @@ struct Kind {
   const char* model;
   const char* map;
   const char* shot;
+  const char* shot_model;  // its shot's model ("": a beam or its gun's flash)
+  float range = 0;         // units the player stands off (0: --range)
 };
 constexpr Kind kKinds[] = {
-    {"wizard", "wizard", "e1m3,e1m4,e1m5,e2m4,e3m5", "acid spit"},
-    {"hknight", "hknight", "e2m3,e2m5,e3m3,e3m6", "fire bolts"},
-    {"shalrath", "shalrath", "e2m6,e3m6,e4m6,e4m7", "void ball"},
-    {"enforcer", "enforcer", "e2m1,e3m1,e4m1", "laser"},
-    {"soldier", "soldier", "e1m1,e1m2", "shotgun"},
-    {"zombie", "zombie", "e1m3,e2m6,e4m3", "flesh"},
-    {"ogre", "ogre", "e1m2,e1m3,e1m4", "grenade"},
-    {"shambler", "shambler", "e1m3,e1m5,e2m6,e1m8", "lightning"},
-    {"boss", "boss", "e1m7", "lava ball"},
+    {"wizard", "wizard", "e1m3,e1m4,e1m5,e2m4,e3m5", "acid spit", "progs/w_spike.mdl"},
+    {"hknight", "hknight", "e2m3,e2m5,e3m3,e3m6", "fire bolts", "progs/k_spike.mdl"},
+    {"shalrath", "shalrath", "e2m6,e3m6,e4m6,e4m7", "void ball", "progs/v_spike.mdl"},
+    {"enforcer", "enforcer", "e2m1,e3m1,e4m1", "laser", "progs/laser.mdl"},
+    {"soldier", "soldier", "e1m1,e1m2", "shotgun", ""},
+    {"zombie", "zombie", "e1m3,e2m6,e4m3", "flesh", "progs/zom_gib.mdl", 160},
+    {"ogre", "ogre", "e1m2,e1m3,e1m4", "grenade", "progs/grenade.mdl"},
+    {"shambler", "shambler", "e1m3,e1m5,e2m6,e1m8", "lightning", ""},
+    {"boss", "boss", "e1m7", "lava ball", "progs/lavaball.mdl"},
 };
 
 std::string model_of(const cl::Listen& l, int e) {
   const sh::Edict& ed = l.server->sv.edicts[size_t(e)];
   if (ed.free || ed.modelindex <= 0 || ed.modelindex >= int(l.server->models.size())) return "";
   return l.server->models[size_t(ed.modelindex)];
-}
-
-// A monster's shot in flight: an entity whose model is one of theirs (or the ogre's grenade).
-bool is_shot(const std::string& m) {
-  static const char* const kShots[] = {
-      "progs/w_spike.mdl", "progs/k_spike.mdl", "progs/v_spike.mdl", "progs/laser.mdl",
-      "progs/zom_gib.mdl", "progs/grenade.mdl", "progs/lavaball.mdl"};
-  for (const char* s : kShots)
-    if (m == s) return true;
-  return false;
 }
 
 std::vector<int> monsters_of(const cl::Listen& l, const std::string& model) {
@@ -173,7 +165,8 @@ bool stage(gl::Lab& lab, const Setup& s, const Kind& k, const std::string& map_n
   for (const int e : monsters_of(g.l, k.model)) {
     const sh::Edict& ed = g.l.server->sv.edicts[size_t(e)];
     for (const float share : {1.f, 0.75f, 0.5f, 0.35f})
-      if (stand_off(g.l, ed.origin, ed.angles.y, s.range * share, g.stand, g.yaw)) {
+      if (stand_off(g.l, ed.origin, ed.angles.y, (k.range > 0 ? k.range : s.range) * share, g.stand,
+                    g.yaw)) {
         g.monster = e;
         g.at = ed.origin;
         break;
@@ -202,7 +195,7 @@ void hold(Staged& g) {
 }
 
 // The first frame (after the staging) a shot of the monster's is out, or -1 within `wait` s.
-int first_shot(const Setup& s, Staged& g) {
+int first_shot(const Setup& s, const Kind& k, Staged& g) {
   const double tic = cl::listen_tic(g.l);
   sh::MoveCmd cmd;
   cmd.msec = static_cast<uint8_t>(std::lround(tic * 1000));
@@ -211,46 +204,68 @@ int first_shot(const Setup& s, Staged& g) {
   for (int i = 0; i < int(s.wait / tic); i++) {
     hold(g);
     cl::listen_frame(g.l, cmd);
-    for (int e = sh::kMaxClients + 1; e < g.l.server->sv.num_edicts; e++)
-      if (is_shot(model_of(g.l, e))) return i;
-    if ((int(cl::field_named(g.l, g.monster, "effects")) & 2) != 0) return i;  // a gun's flash
+    // Its own shot: one that appears near it (another monster's does not count).
+    const sh::Vec3f me = g.l.server->sv.edicts[size_t(g.monster)].origin;
+    for (int e = sh::kMaxClients + 1; e < g.l.server->sv.num_edicts; e++) {
+      if (model_of(g.l, e) != k.shot_model) continue;
+      const sh::Vec3f p = g.l.server->sv.edicts[size_t(e)].origin;
+      if (ge::core::hypot3(p.x - me.x, p.y - me.y, p.z - me.z) < 96) return i;
+    }
+    if (k.shot_model[0] == 0 && (int(cl::field_named(g.l, g.monster, "effects")) & 2) != 0)
+      return i;  // a gun's flash
     for (size_t j = effects0; j < g.l.effects.size(); j++)
-      if (g.l.effects[j].kind == cl::EffectKind::beam) return i;
+      if (g.l.effects[j].kind == cl::EffectKind::beam && g.l.effects[j].entity == g.monster)
+        return i;
   }
   return -1;
 }
 
-// The camera: over the player's shoulder (back, to one side and up from his eye, as far as the
-// room lets), looking at the monster, so the shot comes at it across the picture.
+// Nothing solid between two points (map units).
+bool clear_line(const cl::Listen& l, sh::Vec3f a, sh::Vec3f b) {
+  const float len =
+      std::sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y) + (b.z - a.z) * (b.z - a.z));
+  const int n = std::max(2, int(len / 4));  // a step of 4 units: no wall is thinner
+  for (int i = 0; i <= n; i++) {
+    const float u = float(i) / float(n);
+    if (!open_at(l, a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u, a.z + (b.z - a.z) * u))
+      return false;
+  }
+  return true;
+}
+
+// The camera: off to one side of the line between the two (as far as the room lets), a little
+// back from the player and up, seeing both, looking at a point a third of the way from him to the
+// monster, so the shot crosses the picture and lands short of the camera.
 ge::camera::Pose side_camera(const Staged& g) {
   const sh::Vec3f eye = {g.stand.x, g.stand.y, g.stand.z + 22};
   const sh::Vec3f aim = {g.at.x, g.at.y, g.at.z + 8};
   const float dx = aim.x - eye.x, dy = aim.y - eye.y;
   const float len = std::max(1.f, std::sqrt(dx * dx + dy * dy));
   const float fx_ = dx / len, fy = dy / len, sx = -fy, sy = fx_;
-  sh::Vec3f cam = eye;
+  // None clear: over his shoulder, at his eye.
+  sh::Vec3f cam = {eye.x - fx_ * 8, eye.y - fy * 8, eye.z + 4};
+  if (!clear_line(g.l, cam, aim)) cam = eye;
   bool found = false;
-  for (const float back : {72.f, 48.f, 24.f})
-    for (const float side : {40.f, -40.f, 20.f, -20.f}) {
-      if (found) break;
-      const sh::Vec3f c = {eye.x - fx_ * back + sx * side, eye.y - fy * back + sy * side,
-                           eye.z + 16};
-      bool clear = true;
-      for (float u = 0; u <= 1.0f && clear; u += 0.125f)
-        clear = open_at(g.l, eye.x + (c.x - eye.x) * u, eye.y + (c.y - eye.y) * u,
-                        eye.z + (c.z - eye.z) * u);
-      if (clear) {
-        cam = c;
-        found = true;
+  for (const float side : {160.f, 128.f, 96.f, 72.f, 48.f, 24.f})
+    for (const float back : {48.f, 16.f, 96.f, -32.f})
+      for (const float sign : {1.f, -1.f}) {
+        if (found) break;
+        const sh::Vec3f c = {eye.x - fx_ * back + sx * side * sign,
+                             eye.y - fy * back + sy * side * sign, eye.z + 24};
+        if (clear_line(g.l, c, eye) && clear_line(g.l, c, aim)) {
+          cam = c;
+          found = true;
+        }
       }
-    }
-  const double ex = aim.x - cam.x, ey = aim.y - cam.y, ez = aim.z - cam.z;
+  const sh::Vec3f look = {eye.x + (aim.x - eye.x) * 0.4f, eye.y + (aim.y - eye.y) * 0.4f,
+                          eye.z + (aim.z - eye.z) * 0.4f};
+  const double ex = look.x - cam.x, ey = look.y - cam.y, ez = look.z - cam.z;
   ge::camera::Pose pose;
   pose.eye = cl::engine_point(cam);
   pose.yaw = cl::engine_heading(static_cast<float>(std::atan2(ey, ex) * 180 / 3.14159265358979));
   pose.pitch = cl::engine_pitch(
       static_cast<float>(-std::atan2(ez, std::sqrt(ex * ex + ey * ey)) * 180 / 3.14159265358979));
-  pose.fov_y = 1.0;
+  pose.fov_y = 1.15;
   return pose;
 }
 
@@ -266,7 +281,7 @@ void film(gl::Lab& lab, const Setup& s, const Kind& k) {
     const bool last = a >= maps.size();
     Staged probe;
     if (!stage(lab, s, k, map_name, probe, !last)) continue;
-    shot_at = first_shot(s, probe);
+    shot_at = first_shot(s, k, probe);
   }
   if (shot_at < 0) {
     lab.note(std::string("se-monster-fx: no ") + k.name + " attacked within " +
@@ -496,7 +511,7 @@ const gl::LabSpec kSpec{
     {
         {"game", "", "a game folder (<base>/<folder>); empty: each kind's numbers alone"},
         {"map", "", "with --game: the map for every kind; empty: each kind's own"},
-        {"kinds", "wizard,hknight,shalrath,enforcer,soldier,zombie,ogre,shambler,boss",
+        {"kinds", "wizard,hknight,shalrath,enforcer,soldier,zombie,ogre,shambler",
          "with --game: the monsters by name"},
         {"range", "256", "units from the monster the player stands"},
         {"seconds", "2.2", "seconds filmed after the shot"},

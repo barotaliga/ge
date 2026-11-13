@@ -18,7 +18,7 @@
 //
 // ge:summary The pack's effects the engine replaces with its own: file, effect id, why
 // ge:keywords replace effect explosion flare bubbles fire torch flame sprite model glow
-// ge:keywords missile monster-shot acid laser lava-ball
+// ge:keywords missile monster-shot acid laser lava-ball monster-gun muzzle
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #pragma once
@@ -59,6 +59,12 @@ inline constexpr Replacement kReplacements[] = {
      "a bare model; the engine's laser is a streak of red light that lights the walls it passes"},
     {"progs/zom_gib.mdl", "missile.flesh", true,
      "blood specks; the engine's flesh drips dark drops that fall"},
+    // The monsters that fire a gun: the model drawn as it is, with the engine's muzzle fire at its
+    // gun when it shoots (a caster's flash stays a light alone).
+    {"progs/soldier.mdl", "monster.gun", true,
+     "a flash of light; the engine's shotgun fire bursts from the muzzle"},
+    {"progs/enforcer.mdl", "monster.gun", true,
+     "a flash of light; the engine's gun fire bursts from the muzzle"},
 };
 
 // The row for a pack path; nullptr when the engine draws the file itself.
