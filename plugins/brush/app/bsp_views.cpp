@@ -2,6 +2,7 @@
 //
 // ge:summary The map drawn again for its water: the planar mirror in a pool's plane, the view up
 // ge:keywords bsp water planar-mirror view-up bsp-views encode_bsp_views
+// ge:keywords mirror-skirt mirror_skirt waterline clip-plane white-line
 // ge:skill brush render water
 #include "brush/app/bsp_views.hpp"
 
@@ -16,7 +17,8 @@ namespace r = ge::render;
 namespace {
 
 constexpr double kPi = 3.14159265358979323846;
-constexpr uint32_t kUpSize = 512;  // the view up's texels a side, at most
+constexpr uint32_t kUpSize = 512;     // the view up's texels a side, at most
+constexpr float kMirrorSkirt = 0.1f;  // m past the level the mirror's cut lies (prepare_bsp_views)
 
 void make_view(gpu::Device& device, BspView& v, const char* label, uint32_t w, uint32_t h) {
   v.width = w;
@@ -161,7 +163,12 @@ void prepare_bsp_views(gpu::Device& device, BspViews& views, const r::FrameUnifo
     mirror_matrices(main.view_proj, main.inv_view_proj, vp, inv);
     const float eye[3] = {main.eye[0], 2 * h - main.eye[1], main.eye[2]};
     // Over the surface the mirror shows what stands over the water; under it, what lies below.
-    const float plane[4] = {0, below ? -1.0f : 1.0f, 0, below ? h : -h};
+    // The cut sits kMirrorSkirt past the level, so a wall's foot is in the mirror's picture down
+    // to the waterline and a little past it: cut at the level itself, the half-size picture's last
+    // row along the wall comes out empty and the water reads the room's flat light there, a thin
+    // bright line where the water meets the wall.
+    const float cut = h + (below ? kMirrorSkirt : -kMirrorSkirt);
+    const float plane[4] = {0, below ? -1.0f : 1.0f, 0, below ? cut : -cut};
     stage(views.mirror, main, vp, inv, eye, plane);
     device.queue.WriteBuffer(views.mirror.uniforms, 0, &views.mirror.staged,
                              sizeof views.mirror.staged);
