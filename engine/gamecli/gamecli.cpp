@@ -50,7 +50,8 @@ constexpr Command kEngine[] = {
      "settings check autoexec.cfg", "engine", cmd_settings_check},
     {"settings format", "[<file>]",
      "a config written back tidy (--comments: each setting's help above it; --pretty: sections, "
-     "a fixed order, values aligned; --defaults: with --pretty, every other setting at its default; "
+     "a fixed order, values aligned; --defaults: with --pretty, every other setting at its "
+     "default; "
      "--write: in place)",
      "settings format --pretty --write", "engine", cmd_settings_format},
     {"server check", "[<file>]",

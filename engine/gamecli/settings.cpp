@@ -452,11 +452,10 @@ int format_file(Ctx& ctx, const con::Console& console, const fs::path& file, uin
   if (ctx.has("defaults") && !ctx.has("pretty"))
     return refuse(ctx, 2, "--defaults writes every setting into a pretty cfg's sections",
                   "add --pretty");
-  const std::string tidy =
-      con::format_cfg(console, text,
-                      {.comments = ctx.has("comments"),
-                       .pretty = ctx.has("pretty"),
-                       .defaults = ctx.has("defaults") ? flags : 0u});
+  const std::string tidy = con::format_cfg(console, text,
+                                           {.comments = ctx.has("comments"),
+                                            .pretty = ctx.has("pretty"),
+                                            .defaults = ctx.has("defaults") ? flags : 0u});
   if (ctx.has("write") && tidy != text) {
     std::ofstream f(file, std::ios::binary);
     if (!(f << tidy))
