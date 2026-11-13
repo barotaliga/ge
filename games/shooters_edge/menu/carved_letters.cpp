@@ -7,13 +7,11 @@
 #include "shooters_edge/menu/carved_letters.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cstdint>
 #include <cstdlib>
+#include <initializer_list>
 #include <span>
 #include <vector>
-
-#include "shooters_edge/menu/carved_masks.hpp"
 
 namespace shooters_edge::menu {
 
@@ -157,7 +155,8 @@ void put_piece(const ui::Image& src, int bx, int by, int bw, int bh, int d, floa
     for (int i = 0; i < bw; i++) {
       const int l = label[at(i, j)];
       if (l == 0 || sizes[static_cast<size_t>(l)] < kSpeck * d * d) continue;
-      if (static_cast<float>(i / d) < lean * static_cast<float>(j / d)) continue;
+      if (const int ci = i / d, cj = j / d; static_cast<float>(ci) < lean * static_cast<float>(cj))
+        continue;
       const int tx = x + i, ty = y + j;
       if (tx < 0 || ty < 0 || tx >= dst.width || ty >= dst.height) continue;
       const size_t from = (static_cast<size_t>(by + j) * static_cast<size_t>(src.width) +
@@ -213,122 +212,6 @@ ui::Image cut(const ClassicArt& art, const Letter& letter) {
         static_cast<size_t>(out.width) * 4,
         out.rgba.begin() + static_cast<std::ptrdiff_t>(static_cast<size_t>(y) *
                                                        static_cast<size_t>(out.width) * 4));
-  return out;
-}
-
-// --- The traced letters, carved in the cut letters' own colours ---
-
-// A pixel's place in a carved letter (classic px): how far in from the letter's edge it lies (1
-// the dark rim, up to 4) and, within two of the edge, the side it faces: 1 lit (an edge above or to
-// its left), 2 shaded (below or to its right), 0 both or neither. 3 * depth + side, 3 to 14.
-int role(const std::vector<uint8_t>& ink, int w, int h, int x, int y) {
-  const auto in = [&](int a, int b) {
-    return a >= 0 && b >= 0 && a < w && b < h &&
-           ink[(static_cast<size_t>(b) * static_cast<size_t>(w) + static_cast<size_t>(a))] != 0;
-  };
-  int depth = 1;
-  for (bool whole = true; depth < 4 && whole;) {
-    for (int k = -depth; k <= depth && whole; k++) {
-      const int r = depth - std::abs(k);
-      whole = in(x + k, y + r) && in(x + k, y - r);
-    }
-    if (whole) depth++;
-  }
-  int side = 0;
-  if (depth <= 2) {
-    const bool lit = !in(x, y - 1) || !in(x - 1, y) || !in(x - 1, y - 1);
-    const bool shade = !in(x, y + 1) || !in(x + 1, y) || !in(x + 1, y + 1);
-    side = lit == shade ? 0 : (lit ? 1 : 2);
-  }
-  return depth * 3 + side;
-}
-
-// A pixel of a cut letter a traced one takes its colour from: the letter, its classic px, its
-// brightness.
-struct Donor {
-  const ui::Image* img;
-  int x, y, bright;
-};
-using Pools = std::array<std::vector<Donor>, 15>;
-
-// Every pixel of the cut letters by its role, each role's darkest first.
-Pools donors(const ClassicArt& art, int d) {
-  Pools pools;
-  for (const auto& [c, img] : art.letters) {
-    const int w = img.width / d, h = img.height / d;
-    std::vector<uint8_t> ink(static_cast<size_t>(w) * static_cast<size_t>(h));
-    const auto px = [&](int x, int y) {
-      return ((static_cast<size_t>(y) * static_cast<size_t>(d)) * static_cast<size_t>(img.width) +
-              (static_cast<size_t>(x) * static_cast<size_t>(d))) *
-             4;
-    };
-    for (int y = 0; y < h; y++)
-      for (int x = 0; x < w; x++)
-        ink[(static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x))] =
-            img.rgba[px(x, y) + 3];
-    for (int y = 0; y < h; y++)
-      for (int x = 0; x < w; x++) {
-        if (ink[(static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x))] == 0)
-          continue;
-        const size_t at = px(x, y);
-        pools[static_cast<size_t>(role(ink, w, h, x, y))].push_back(
-            {&img, x, y, img.rgba[at] + img.rgba[at + 1] + img.rgba[at + 2]});
-      }
-  }
-  for (std::vector<Donor>& p : pools)
-    std::stable_sort(p.begin(), p.end(),
-                     [](const Donor& a, const Donor& b) { return a.bright < b.bright; });
-  return pools;
-}
-
-// A traced letter carved: each pixel of its shape the colour (the whole pack px block) of a cut
-// letter's pixel in the same role, picked from the role's middle half by a noise in 2 px cells, so
-// the face reads as one surface, and one pixel in twenty from anywhere in the role (its specks).
-ui::Image carve_traced(const TracedLetter& t, const Pools& pools, int d) {
-  int w = 0;
-  for (const std::string_view r : t.rows) w = std::max(w, static_cast<int>(r.size()));
-  const int h = static_cast<int>(kCarvedLine);
-  std::vector<uint8_t> ink(static_cast<size_t>(w) * static_cast<size_t>(h));
-  for (size_t j = 0; j < t.rows.size(); j++)
-    for (size_t i = 0; i < t.rows[j].size(); i++)
-      if (t.top + static_cast<int>(j) < h && t.rows[j][i] == '#')
-        ink[(static_cast<size_t>(t.top) + j) * static_cast<size_t>(w) + i] = 1;
-  ui::Image out;
-  out.width = w * d;
-  out.height = h * d;
-  out.rgba.assign(static_cast<size_t>(out.width) * static_cast<size_t>(out.height) * 4, 0);
-  const uint32_t seed = static_cast<uint8_t>(t.c);
-  for (int y = 0; y < h; y++)
-    for (int x = 0; x < w; x++) {
-      if (ink[(static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x))] == 0)
-        continue;
-      const int r = role(ink, w, h, x, y);
-      const std::vector<Donor>& pool = !pools[static_cast<size_t>(r)].empty()
-                                           ? pools[static_cast<size_t>(r)]
-                                           : pools[static_cast<size_t>(r / 3 * 3)];
-      if (pool.empty()) continue;
-      const auto ux = static_cast<uint32_t>(x), uy = static_cast<uint32_t>(y);
-      const uint32_t hash = (ux * 73856093u) ^ (uy * 19349663u) ^ (seed * 83492791u);
-      const uint32_t noise = ((ux / 2) * 92821u ^ (uy / 2) * 68917u ^ seed * 1543u) & 0xffffu;
-      const auto n = static_cast<uint32_t>(pool.size());
-      const uint32_t pick = hash % 20 == 0 ? hash % n : n / 4 + noise * (n / 2) / 65536u;
-      const Donor& from = pool[std::min<size_t>(pick, pool.size() - 1)];
-      for (int b = 0; b < d; b++)
-        std::copy_n(
-            from.img->rgba.begin() + static_cast<std::ptrdiff_t>(
-                                         ((static_cast<size_t>(from.y) * static_cast<size_t>(d) +
-                                           static_cast<size_t>(b)) *
-                                              static_cast<size_t>(from.img->width) +
-                                          (static_cast<size_t>(from.x) * static_cast<size_t>(d))) *
-                                         4),
-            static_cast<size_t>(d) * 4,
-            out.rgba.begin() +
-                static_cast<std::ptrdiff_t>(
-                    ((static_cast<size_t>(y) * static_cast<size_t>(d) + static_cast<size_t>(b)) *
-                         static_cast<size_t>(out.width) +
-                     (static_cast<size_t>(x) * static_cast<size_t>(d))) *
-                    4));
-    }
   return out;
 }
 
@@ -460,6 +343,125 @@ ui::Image make_f(const ui::Image& e, const ui::Image& i, int d) {
   return out;
 }
 
+// --- Letters pieced from others, a pack px at a time ---
+
+// A clear letter `w` px wide on the carved line.
+ui::Image blank(int w, int d) {
+  ui::Image out;
+  out.width = w * d;
+  out.height = static_cast<int>(kCarvedLine) * d;
+  out.rgba.assign(static_cast<size_t>(out.width) * static_cast<size_t>(out.height) * 4, 0);
+  return out;
+}
+
+size_t offset(const ui::Image& img, int x, int y, int d) {
+  return (static_cast<size_t>(y) * static_cast<size_t>(d) * static_cast<size_t>(img.width) +
+          static_cast<size_t>(x) * static_cast<size_t>(d)) *
+         4;
+}
+
+// Pack px (x, y) of `src` copied to (tx, ty) of `dst`, every row of its d by d block.
+void copy_px(const ui::Image& src, int x, int y, ui::Image& dst, int tx, int ty, int d) {
+  for (int b = 0; b < d; b++)
+    std::copy_n(
+        src.rgba.begin() +
+            static_cast<std::ptrdiff_t>(
+                offset(src, x, y, d) + static_cast<size_t>(b) * static_cast<size_t>(src.width) * 4),
+        static_cast<size_t>(d) * 4,
+        dst.rgba.begin() + static_cast<std::ptrdiff_t>(offset(dst, tx, ty, d) +
+                                                       static_cast<size_t>(b) *
+                                                           static_cast<size_t>(dst.width) * 4));
+}
+
+// `src`'s pack px laid over `dst` at (dx, dy), where `keep` says so; where both have ink the
+// brighter wins, so a face crossing a rim stays face and the crossing reads as one surface.
+template <typename Shift, typename Keep>
+void lay(ui::Image& dst, const ui::Image& src, Shift dx, int dy, int d, Keep keep) {
+  const int w = src.width / d, h = src.height / d, dw = dst.width / d, dh = dst.height / d;
+  for (int y = 0; y < h; y++)
+    for (int x = 0; x < w; x++) {
+      const size_t from = offset(src, x, y, d);
+      if (src.rgba[from + 3] == 0 || !keep(x, y)) continue;
+      const int tx = x + dx(y), ty = y + dy;
+      if (tx < 0 || ty < 0 || tx >= dw || ty >= dh) continue;
+      const size_t to = offset(dst, tx, ty, d);
+      const int a = src.rgba[from] + src.rgba[from + 1] + src.rgba[from + 2];
+      const int b = dst.rgba[to] + dst.rgba[to + 1] + dst.rgba[to + 2];
+      if (dst.rgba[to + 3] == 0 || a > b) copy_px(src, x, y, dst, tx, ty, d);
+    }
+}
+void lay_at(ui::Image& dst, const ui::Image& src, int dx, int dy, int d) {
+  lay(dst, src, [dx](int) { return dx; }, dy, d, [](int, int) { return true; });
+}
+
+// A row's shift on a slant of `total` px from row y0 to row y1, rounded half away from zero.
+int slant(int total, int y, int y0, int y1) {
+  const int t = std::clamp(y, y0, y1) - y0, span = y1 - y0;
+  const int s = (std::abs(total) * t * 2 + span) / (2 * span);
+  return total < 0 ? std::abs(total) - s : s;
+}
+
+// The pack px rows `rows` of `src` stacked from row 0.
+ui::Image stack_rows(const ui::Image& src, std::initializer_list<std::pair<int, int>> spans, int x0,
+                     int x1, int d) {
+  ui::Image out = blank(x1 - x0 + 1, d);
+  int j = 0;
+  for (const auto& [a, b] : spans)
+    for (int y = a; y <= b; y++, j++)
+      for (int x = x0; x <= x1; x++) copy_px(src, x, y, out, x - x0, j, d);
+  return out;
+}
+
+// The letter trimmed to the columns it fills.
+ui::Image trim(const ui::Image& img, int d) {
+  const int w = img.width / d, h = img.height / d;
+  int left = w, right = -1;
+  for (int y = 0; y < h; y++)
+    for (int x = 0; x < w; x++)
+      if (img.rgba[offset(img, x, y, d) + 3] != 0) {
+        left = std::min(left, x);
+        right = std::max(right, x);
+      }
+  if (right < 0) return {};
+  ui::Image out = blank(right - left + 1, d);
+  for (int y = 0; y < h; y++)
+    for (int x = left; x <= right; x++) copy_px(img, x, y, out, x - left, y, d);
+  return out;
+}
+
+// The B: the I's stem, and beside it twice the right half of the O cut down to its curves (its
+// top four rows and its foot five), one bowl on rows 1 to 9 and one on 8 to 16.
+ui::Image make_b(const ui::Image& i, const ui::Image& o, int d) {
+  const ui::Image bowl = stack_rows(o, {{1, 4}, {12, 16}}, 11, o.width / d - 1, d);
+  ui::Image out = blank(i.width / d + bowl.width / d, d);
+  lay_at(out, i, 0, 0, d);
+  lay_at(out, bowl, 6, 1, d);
+  lay_at(out, bowl, 6, 8, d);
+  return trim(out, d);
+}
+
+// The X: two I's leaned 11 px each way between rows 1 and 16, crossed; their feet stay level on the
+// lines.
+ui::Image make_x(const ui::Image& i, int d) {
+  ui::Image out = blank(i.width / d + 11, d);
+  const auto all = [](int, int) { return true; };
+  lay(out, i, [](int y) { return slant(11, y, 1, 16); }, 0, d, all);
+  lay(out, i, [](int y) { return slant(-11, y, 1, 16); }, 0, d, all);
+  return trim(out, d);
+}
+
+// The Z: the I's stem (rows 3 to 14) leaned from the top right to the foot left, under the E's top
+// bar (rows 1 to 3) and its foot (rows 14 to 16).
+ui::Image make_z(const ui::Image& i, const ui::Image& e, int d) {
+  const int lean = e.width / d - i.width / d;
+  ui::Image out = blank(e.width / d, d);
+  lay(
+      out, i, [lean](int y) { return slant(-lean, y, 3, 14); }, 0, d,
+      [](int, int y) { return y >= 3 && y <= 14; });
+  lay(out, e, [](int) { return 0; }, 0, d, [](int, int y) { return y <= 3 || y >= 14; });
+  return trim(out, d);
+}
+
 }  // namespace
 
 void cut_letters(ClassicArt* art) {
@@ -480,10 +482,14 @@ void cut_letters(ClassicArt* art) {
     make('F', make_f(art->letters.at('E'), art->letters.at('I'), d));
   if (const auto it = art->letters.find('F'); it != art->letters.end())
     make('f', resize_letter(it->second, d, false));
-  // The few left (B X Z, b x z), carved after their traced shapes in the cut ones' colours.
-  const Pools pools = donors(*art, d);
-  for (const TracedLetter& t : traced_letters())
-    if (art->letters.count(t.c) == 0) art->letters.emplace(t.c, carve_traced(t, pools, d));
+  // The three in neither size, pieced from others, and their small capitals.
+  const auto has = [&](char c) { return art->letters.count(c) != 0; };
+  if (has('I') && has('O')) make('B', make_b(art->letters.at('I'), art->letters.at('O'), d));
+  if (has('I')) make('X', make_x(art->letters.at('I'), d));
+  if (has('I') && has('E')) make('Z', make_z(art->letters.at('I'), art->letters.at('E'), d));
+  for (const char c : {'B', 'X', 'Z'})
+    if (const auto it = art->letters.find(c); it != art->letters.end())
+      make(static_cast<char>(c - 'A' + 'a'), resize_letter(it->second, d, false));
 }
 
 float carved_layout(const ClassicArt& art, std::string_view text, std::vector<float>* xs) {

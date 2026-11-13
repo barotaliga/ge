@@ -295,7 +295,7 @@ void run(gl::Lab& lab) {
     shot("letters", "EVERY CARVED LETTER ON ITS LINES",
          "A to Z and a to z in the menu's carved letters, four classic px to a pixel: the ones "
          "the strips hold cut from them, the ones they hold in the other size only grown or shrunk "
-         "from it, the F from the E and the I, and B X Z, b x z carved after their traced shapes. "
+         "from it, the F from the E and the I; the B, X and Z pieced from the I, the O and the E. "
          "Red: a capital's top and foot; green: a small capital's; blue: the row.",
          "every letter between its lines; no stray pixels beside a letter",
          [&](ge::ui::DrawList& dl) {

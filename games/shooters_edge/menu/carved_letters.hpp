@@ -6,8 +6,8 @@
 // a neighbour, a part under `kSpeck` pixels, is left out), and set on the strips' common line; a
 // letter the strips hold in one size only is made in the other by doubling or dropping its
 // straightest rows and columns (the A from the a, the h from the H), the F from the E and the I;
-// the few left (B X Z, b x z) are carved after their traced shapes (carved_masks.hpp), each pixel
-// coloured like a cut letter's pixel in the same place (rim, lit or shaded edge, face);
+// and the three in neither size are pieced from others (the B an I and two half O's, the X two
+// leaned I's crossed, the Z a leaned I under the E's bars), their small capitals shrunk from them;
 // `carved_layout` lays a word out from them, spaced as the strips space theirs.
 //
 // The table was measured on one set of strips, named by their print (`ClassicArt::strip_print`);
@@ -33,7 +33,7 @@ namespace shooters_edge::menu {
 inline constexpr float kCarvedLine = 24;
 
 // Cuts every letter the table knows from `art`'s strips into `art->letters` (at the art's density)
-// and carves the rest of A to Z and a to z in their colours when the strips are the ones it was
+// and makes the rest of A to Z and a to z from them when the strips are the ones it was
 // measured on; clears them otherwise.
 void cut_letters(ClassicArt* art);
 
