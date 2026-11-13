@@ -77,14 +77,19 @@ void monster_trail(MonsterShot k, int variant, const double from[3], const doubl
                    uint32_t seed, Particles* out);
 // Its glowing head this frame at `at` going `dir` at `speed` (m/s): a bright core and a soft halo
 // round the pack's model, alive a few frames, so the shot reads across a room.
-void monster_head(MonsterShot k, int variant, const double at[3], const double dir[3],
-                  double speed, Particles* out);
+void monster_head(MonsterShot k, int variant, const double at[3], const double dir[3], double speed,
+                  Particles* out);
 // The light it carries at `at` going `dir` (unit; zero: still) at `now_s`; false for none.
 bool monster_glow(MonsterShot k, int variant, const double at[3], const double dir[3],
                   uint32_t seed, double now_s, Light* out);
 // The flame it carries this frame (the flame bolt's and the lava ball's), false for none.
 bool monster_flame(MonsterShot k, int variant, const double at[3], const double dir[3],
                    uint32_t seed, double now_s, ge::render::MuzzleFire* out);
+// A monster's gun fired (a soldier's shotgun, an enforcer's laser gun) at `at` pointing `dir`
+// (unit), the shot at `born_s`: the muzzle fire of a shotgun, drawn kMonsterMuzzleS.
+inline constexpr double kMonsterMuzzleS = 0.08;
+ge::render::MuzzleFire monster_muzzle(const double at[3], const double dir[3], uint32_t seed,
+                                      double born_s);
 // Where it lands on the face `normal` (unit, out of it; null: in the air) coming along `dir`
 // (unit): its burst into `births`, a fireball's puffs into `blasts`. The floor under it, `floor_y`.
 void monster_splash(MonsterShot k, int variant, const double at[3], const double* normal,

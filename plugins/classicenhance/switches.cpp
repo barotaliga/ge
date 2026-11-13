@@ -109,7 +109,8 @@ const SwitchSpec kSwitches[] = {
      "blown back in out of it. Off: the pack's teleport flash, the player there at once.",
      &S::warps, false},
     {"monsters", "EFFECTS", "MONSTER ATTACKS",
-     "Monsters' spit, fire bolts, magic and lasers glow, trail and splash. Off: the classic specks.",
+     "Monsters' spit, fire bolts, magic and lasers glow, trail and splash. Off: the classic "
+     "specks.",
      &S::monsters, false},
     {"burning", "EFFECTS", "BURNING",
      "A player in lava smokes, chars and catches small flames, one in slime fumes and is etched; "

@@ -23,9 +23,9 @@ bool same(const fx::Particles& a, const fx::Particles& b) {
          (a.empty() || std::memcmp(a.data(), b.data(), a.size() * sizeof a[0]) == 0);
 }
 
-constexpr fx::MonsterShot kModern[] = {fx::MonsterShot::acid, fx::MonsterShot::flame,
+constexpr fx::MonsterShot kModern[] = {fx::MonsterShot::acid,      fx::MonsterShot::flame,
                                        fx::MonsterShot::void_ball, fx::MonsterShot::lava,
-                                       fx::MonsterShot::laser, fx::MonsterShot::flesh};
+                                       fx::MonsterShot::laser,     fx::MonsterShot::flesh};
 
 }  // namespace
 

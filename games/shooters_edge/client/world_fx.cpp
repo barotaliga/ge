@@ -650,13 +650,16 @@ void draw_wounds(const FxScene& sc, FxState& s, const std::vector<Placed>& place
   }
 }
 
-
 // THE MONSTERS' MISSILES (app/monster_fx.hpp): every drawn model the replacement table or its
 // trail flags name a monster's shot lays its trail over the stretch it flew since the last frame
 // (the classic specks, or under ce_monsters the modern look) and carries its light and flame; one
 // gone this frame is kept for the splash where it landed, and a laser gone throws its sparks there.
 // The monsters' shots are taken out of `missiles`, so the player's weapons' trails pass them by.
 constexpr double kMonsterJumpM = 10;  // a shot that moved this far in a frame jumped: no trail
+// A monster's gun, from its origin (map units: ahead, up), and a flash again after this long.
+constexpr float kMonsterGunU = 22, kMonsterGunUpU = 10;
+constexpr double kMonsterRefireS = 0.15;
+constexpr int kMuzzleFlash = 2;  // the entity's muzzle-flash effect bit
 void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame& out,
                       std::vector<Missile>& missiles) {
   s.monster_next.clear();
@@ -692,8 +695,8 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
         if (len > 1e-4 && len < kMonsterJumpM) {
           for (int c = 0; c < 3; ++c) now.dir[c] = d[c] / len;
           if (variant == 0)
-            now.count = fx::classic_tracer(kind, from, to, now.count, s.seed++, s.palette,
-                                           &out.births);
+            now.count =
+                fx::classic_tracer(kind, from, to, now.count, s.seed++, s.palette, &out.births);
           else
             fx::monster_trail(kind, variant, from, to, s.seed++, &out.births);
         }
@@ -702,8 +705,8 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
         double speed = 0;
         if (was != s.monster_flights.end() && dt > 0) {
           const ge::camera::Vec3 a = was->second.at;
-          speed = std::min(ge::core::hypot3(now.at.x - a.x, now.at.y - a.y, now.at.z - a.z) / dt,
-                           60.0);
+          speed =
+              std::min(ge::core::hypot3(now.at.x - a.x, now.at.y - a.y, now.at.z - a.z) / dt, 60.0);
         }
         fx::monster_head(kind, variant, to, now.dir, speed, &out.births);
         fx::Light light;
@@ -716,6 +719,38 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
         out.lights.push_back(fx::rocket_light(to));  // the classic's light on a rocket's trail
       }
       s.monster_next[m.entity] = now;
+    }
+  }
+  // A monster's gun's flash (the entity's muzzle-flash bit, a soldier's or an enforcer's shot): a
+  // light at its gun, and under ce_monsters the muzzle fire there. A flash is new when the last
+  // began more than kMonsterRefireS ago.
+  for (const Placed& m : out.models) {
+    if (m.entity <= static_cast<int>(sh::kMaxClients) || (m.effects & kMuzzleFlash) == 0) continue;
+    const double yaw = m.angles.y * ge::core::kPi / 180;
+    const sh::Vec3f gun = {m.origin.x + float(std::cos(yaw) * kMonsterGunU),
+                           m.origin.y + float(std::sin(yaw) * kMonsterGunU),
+                           m.origin.z + kMonsterGunUpU};
+    double at[3], dir[3];
+    put(engine_point(gun), at);
+    engine_dir({float(std::cos(yaw)), float(std::sin(yaw)), 0}, dir);
+    out.lights.push_back(fx::muzzle_light(at));
+    auto [it, fresh] = s.monster_fired.try_emplace(m.entity, t);
+    if (!fresh && t - it->second > kMonsterRefireS) it->second = t;
+  }
+  std::erase_if(s.monster_fired, [&](const auto& kv) { return t - kv.second > 1; });
+  if (variant > 0) {
+    for (const Placed& m : out.models) {
+      const auto f = s.monster_fired.find(m.entity);
+      if (f == s.monster_fired.end() || t - f->second > fx::kMonsterMuzzleS) continue;
+      const double yaw = m.angles.y * ge::core::kPi / 180;
+      const sh::Vec3f gun = {m.origin.x + float(std::cos(yaw) * kMonsterGunU),
+                             m.origin.y + float(std::sin(yaw) * kMonsterGunU),
+                             m.origin.z + kMonsterGunUpU};
+      double at[3], dir[3];
+      put(engine_point(gun), at);
+      engine_dir({float(std::cos(yaw)), float(std::sin(yaw)), 0}, dir);
+      out.flames.push_back(fx::monster_muzzle(
+          at, dir, uint32_t(m.entity) * 31u + uint32_t(f->second * 77), f->second));
     }
   }
   // Those gone, in entity order (each draws on the seed in turn).
@@ -743,8 +778,7 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
     s.monster_splashes.push_back(sp);
   }
   s.monster_flights.swap(s.monster_next);
-  std::erase_if(missiles,
-                [&](const Missile& m) { return s.monster_flights.contains(m.entity); });
+  std::erase_if(missiles, [&](const Missile& m) { return s.monster_flights.contains(m.entity); });
   // The splashes' light while it fades.
   std::erase_if(s.monster_splashes, [&](const FxState::MonsterSplash& sp) {
     fx::Light light;

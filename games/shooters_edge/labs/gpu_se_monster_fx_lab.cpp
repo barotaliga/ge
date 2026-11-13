@@ -78,6 +78,7 @@ constexpr Kind kKinds[] = {
     {"hknight", "hknight", "e2m3,e2m5,e3m3,e3m6", "fire bolts"},
     {"shalrath", "shalrath", "e2m6,e3m6,e4m6,e4m7", "void ball"},
     {"enforcer", "enforcer", "e2m1,e3m1,e4m1", "laser"},
+    {"soldier", "soldier", "e1m1,e1m2", "shotgun"},
     {"zombie", "zombie", "e1m3,e2m6,e4m3", "flesh"},
     {"ogre", "ogre", "e1m2,e1m3,e1m4", "grenade"},
     {"shambler", "shambler", "e1m3,e1m5,e2m6,e1m8", "lightning"},
@@ -92,10 +93,9 @@ std::string model_of(const cl::Listen& l, int e) {
 
 // A monster's shot in flight: an entity whose model is one of theirs (or the ogre's grenade).
 bool is_shot(const std::string& m) {
-  static const char* const kShots[] = {"progs/w_spike.mdl",  "progs/k_spike.mdl",
-                                       "progs/v_spike.mdl",  "progs/laser.mdl",
-                                       "progs/zom_gib.mdl",  "progs/grenade.mdl",
-                                       "progs/lavaball.mdl"};
+  static const char* const kShots[] = {
+      "progs/w_spike.mdl", "progs/k_spike.mdl", "progs/v_spike.mdl", "progs/laser.mdl",
+      "progs/zom_gib.mdl", "progs/grenade.mdl", "progs/lavaball.mdl"};
   for (const char* s : kShots)
     if (m == s) return true;
   return false;
@@ -213,6 +213,7 @@ int first_shot(const Setup& s, Staged& g) {
     cl::listen_frame(g.l, cmd);
     for (int e = sh::kMaxClients + 1; e < g.l.server->sv.num_edicts; e++)
       if (is_shot(model_of(g.l, e))) return i;
+    if ((int(cl::field_named(g.l, g.monster, "effects")) & 2) != 0) return i;  // a gun's flash
     for (size_t j = effects0; j < g.l.effects.size(); j++)
       if (g.l.effects[j].kind == cl::EffectKind::beam) return i;
   }
@@ -325,6 +326,9 @@ void film(gl::Lab& lab, const Setup& s, const Kind& k) {
     ge::camera::to_frame_view(cam, view);
     view.time_s = t;
     for (int v = 0; v < kLooks; ++v) {
+      // Seen from beside him, not through his eyes: no hurt's flash on the picture.
+      for (double& c : frame[v].blend) c = 0;
+      for (double& c : frame[v].blend_dry) c = 0;
       cl::draw_world(*s.device, *drawn[v], view, frame[v], nullptr, tic, {}, out.view);
       if (t + 1e-9 < next_draw) continue;
       const ge::gpu::Image img = ge::gpu::read_now(*s.device, out);
@@ -348,7 +352,8 @@ void film(gl::Lab& lab, const Setup& s, const Kind& k) {
   std::vector<std::string> names;
   const size_t n = moments.size();
   for (size_t m = 0; m < 4; ++m) {
-    const size_t i = std::min(n - 1, size_t(s.before * 25) + m * (n - 1 - size_t(s.before * 25)) / 4);
+    const size_t i =
+        std::min(n - 1, size_t(s.before * 25) + m * (n - 1 - size_t(s.before * 25)) / 4);
     for (int v = 0; v < kLooks; ++v) {
       sheet.push_back(moments[i][size_t(v)]);
       names.push_back(std::string(kLookNames[v]) + "  " +
@@ -392,7 +397,11 @@ void numbers(gl::Lab& lab) {
         fx::monster_splash(k, v, p, n, d, 0, 7, 0, &blasts, &out);
       }
       counts[v] = int(out.size());
-      lab.metric(name + "." + (v == 0 ? "classic" : v == 1 ? "modern1" : "modern2") + ".specks",
+      lab.metric(name + "." +
+                     (v == 0   ? "classic"
+                      : v == 1 ? "modern1"
+                               : "modern2") +
+                     ".specks",
                  counts[v], "count");
     }
     fx::Light light;
@@ -424,8 +433,7 @@ void run(gl::Lab& lab) {
   {
     std::vector<uint8_t> store;
     const std::span<const uint8_t> bytes = cl::find_file(files, "progs.dat", store);
-    if (!ge::progs::load_progs(bytes.data(), bytes.size(), progs, error,
-                               ge::progs::every_form())) {
+    if (!ge::progs::load_progs(bytes.data(), bytes.size(), progs, error, ge::progs::every_form())) {
       lab.fail("se-monster-fx: the pack's progs.dat: " + error,
                "Pass a game folder whose packs hold a progs.dat. Skill: progs.");
       return;
@@ -467,8 +475,9 @@ void run(gl::Lab& lab) {
     for (const Kind& c : kKinds)
       if (name == c.name) k = &c;
     if (k == nullptr) {
-      lab.note("se-monster-fx: no kind " + name + " (wizard, hknight, shalrath, enforcer, zombie, "
-               "ogre, shambler, boss)");
+      lab.note("se-monster-fx: no kind " + name +
+               " (wizard, hknight, shalrath, enforcer, soldier, "
+               "zombie, ogre, shambler, boss)");
       continue;
     }
     film(lab, s, *k);
@@ -487,7 +496,7 @@ const gl::LabSpec kSpec{
     {
         {"game", "", "a game folder (<base>/<folder>); empty: each kind's numbers alone"},
         {"map", "", "with --game: the map for every kind; empty: each kind's own"},
-        {"kinds", "wizard,hknight,shalrath,enforcer,zombie,ogre,shambler,boss",
+        {"kinds", "wizard,hknight,shalrath,enforcer,soldier,zombie,ogre,shambler,boss",
          "with --game: the monsters by name"},
         {"range", "256", "units from the monster the player stands"},
         {"seconds", "2.2", "seconds filmed after the shot"},

@@ -224,6 +224,8 @@ struct FxState {
     effects::MonsterShot kind = effects::MonsterShot::none;
   };
   std::vector<MonsterSplash> monster_splashes;
+  // A monster's gun's flash (its muzzle-flash effect bit): when each began, by entity.
+  std::unordered_map<int, double> monster_fired;
   std::unordered_map<uint32_t, std::array<float, 3>> wall_colours;  // each texture's, as hit
   std::vector<Wound> wounds;
   std::unordered_map<int, float> wound_health;  // each wounded body's health a frame ago

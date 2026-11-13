@@ -318,8 +318,8 @@ void monster_trail(MonsterShot k, int variant, const double from[3], const doubl
       along(from, to, b ? 0.05 : 0.07, r, [&](const double p[3], const double dir[3]) {
         // Drops of acid that drip off and fall, glowing green, and (variant 2) a comet's tail of
         // hot motes left swirling behind.
-        Particle d = shine(p, kAcid, b ? 2.0 : 1.7, 0.25, 0.6, rnd(r, 0.35, 0.7),
-                           rnd(r, 0.04, 0.08));
+        Particle d =
+            shine(p, kAcid, b ? 2.0 : 1.7, 0.25, 0.6, rnd(r, 0.35, 0.7), rnd(r, 0.04, 0.08));
         double v[3];
         unit(r, v);
         for (int c = 0; c < 3; ++c) d.v[c] = float(v[c] * rnd(r, 0.1, 0.5) - dir[c] * 0.4);
@@ -344,8 +344,8 @@ void monster_trail(MonsterShot k, int variant, const double from[3], const doubl
         double v[3];
         unit(r, v);
         for (int c = 0; c < 3; ++c) v[c] = v[c] * 0.6 - dir[c] * 0.4;
-        Particle e = ember(p, v, rnd(r, 0.3, 1.2), b ? 2600 : 2200, b ? 0.12 : 0.09,
-                           rnd(r, 0.2, 0.45), r);
+        Particle e =
+            ember(p, v, rnd(r, 0.3, 1.2), b ? 2600 : 2200, b ? 0.12 : 0.09, rnd(r, 0.2, 0.45), r);
         e.fall = b ? 0.4f : -0.15f;
         e.streak = b ? 0.04f : 0.0f;
         e.size = float(b ? rnd(r, 0.025, 0.04) : rnd(r, 0.04, 0.08));
@@ -367,8 +367,8 @@ void monster_trail(MonsterShot k, int variant, const double from[3], const doubl
           q[k3] = p[k3] + (a[k3] * ca + c[k3] * sa) * rad;
           v[k3] = (-a[k3] * sa + c[k3] * ca) * 1.2 + (a[k3] * ca + c[k3] * sa) * 0.4;
         }
-        Particle m = shine(q, b ? kVoidHot : kVoid, b ? 2.6 : 2.2, 0.15, 0.25,
-                           rnd(r, 0.3, 0.6), rnd(r, 0.035, 0.065));
+        Particle m = shine(q, b ? kVoidHot : kVoid, b ? 2.6 : 2.2, 0.15, 0.25, rnd(r, 0.3, 0.6),
+                           rnd(r, 0.035, 0.065));
         for (int k3 = 0; k3 < 3; ++k3) m.v[k3] = float(v[k3]);
         m.drag = 1.5f;
         m.fall = 0;
@@ -458,54 +458,49 @@ void monster_trail(MonsterShot k, int variant, const double from[3], const doubl
   }
 }
 
-void monster_head(MonsterShot k, int variant, const double p[3], const double dir[3],
-                  double speed, Particles* out) {
+void monster_head(MonsterShot k, int variant, const double p[3], const double dir[3], double speed,
+                  Particles* out) {
   const bool b = variant == 2;
   const float* core = nullptr;
-  const float* halo = nullptr;
-  double core_m = 0.2, halo_m = 0.55, level = 2.5;
-  constexpr float kFire[3] = {1.0f, 0.55f, 0.18f};
-  constexpr float kFireHot[3] = {1.0f, 0.85f, 0.5f};
+  double core_m = 0.12, level = 3;
+  constexpr float kFireHot[3] = {1.0f, 0.8f, 0.45f};
   switch (k) {
     case MonsterShot::acid:
-      core = kAcidHot, halo = kAcid;
+      core = kAcidHot;
       break;
     case MonsterShot::flame:
-      core = kFireHot, halo = kFire;
-      core_m = b ? 0.16 : 0.22;
+      core = kFireHot;
+      core_m = b ? 0.1 : 0.14;
       break;
     case MonsterShot::void_ball:
-      core = kVoidHot, halo = kVoid;
-      core_m = 0.26, halo_m = b ? 0.9 : 0.7;
-      level = 3;
+      core = kVoidHot;
+      core_m = b ? 0.2 : 0.16;
+      level = 3.5;
       break;
     case MonsterShot::lava:
-      core = kFireHot, halo = kFire;
-      core_m = 0.4, halo_m = 1.1;
+      core = kFireHot;
+      core_m = 0.25;
       break;
     case MonsterShot::laser:
-      core = kLaserHot, halo = kLaser;
-      core_m = 0.07, halo_m = b ? 0.18 : 0.3;
+      core = kLaserHot;
+      core_m = 0.06;
       level = 4;
       break;
     default:
       return;
   }
-  // The core streaked along its flight (a laser's to a line), the halo round it.
+  // A white-hot core streaked along its flight (a laser's to a line); the bloom and its light
+  // make the glow round it.
   Particle c = shine(p, core, level, 0.5, 0, 0.035, core_m);
   for (int i = 0; i < 3; ++i) c.v[i] = float(dir[i] * speed);
   c.streak = k == MonsterShot::laser ? 0.035f : 0.012f;
   c.fall = 0;
+  c.opacity = 0.9f;
   out->push_back(c);
-  Particle h = shine(p, halo, level * 0.35, 0.3, 0, 0.035, halo_m);
-  for (int i = 0; i < 3; ++i) h.v[i] = float(dir[i] * speed);
-  h.opacity = 0.35f;
-  h.fall = 0;
-  out->push_back(h);
 }
 
-bool monster_glow(MonsterShot k, int variant, const double p[3], const double dir[3],
-                  uint32_t seed, double now_s, Light* out) {
+bool monster_glow(MonsterShot k, int variant, const double p[3], const double dir[3], uint32_t seed,
+                  double now_s, Light* out) {
   const double phase = static_cast<double>(seed % 997u) * 0.37;
   const double waver = 0.5 + 0.3 * std::sin(now_s * kTau * 9.1 + phase) +
                        0.2 * std::sin(now_s * kTau * 13.7 + phase * 1.7);
@@ -572,6 +567,22 @@ bool monster_flame(MonsterShot k, int variant, const double p[3], const double d
   return true;
 }
 
+gr::MuzzleFire monster_muzzle(const double p[3], const double dir[3], uint32_t seed,
+                              double born_s) {
+  gr::MuzzleFire f;
+  f.shot.look = gr::muzzle_look_by_id("muzzle.shotgun");
+  f.shot.seed = seed;
+  f.shot.born_s = born_s;
+  double a[3], b[3];
+  across(dir, a, b);
+  for (int c = 0; c < 3; ++c) {
+    f.pose.at[c] = p[c];
+    f.pose.dir[c] = dir[c];
+    f.pose.up[c] = -b[c];  // the world's up, square to the barrel
+  }
+  return f;
+}
+
 void monster_splash(MonsterShot k, int variant, const double p[3], const double* normal,
                     const double dir[3], double floor_y, uint32_t seed, double now_s,
                     std::vector<gr::Blast>* blasts, Particles* births) {
@@ -620,8 +631,8 @@ void monster_splash(MonsterShot k, int variant, const double p[3], const double*
         double d[3];
         unit(r, d);
         away_from(n, d);
-        Particle e = ember(off, d, rnd(r, 1, b ? 6 : 4), b ? 2600 : 2300, 0.25, rnd(r, 0.3, 0.8),
-                           r);
+        Particle e =
+            ember(off, d, rnd(r, 1, b ? 6 : 4), b ? 2600 : 2300, 0.25, rnd(r, 0.3, 0.8), r);
         e.floor_y = float(floor_y);
         e.bounce = 0.3f;
         births->push_back(e);
