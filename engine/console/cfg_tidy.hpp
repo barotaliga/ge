@@ -18,7 +18,8 @@
 // it (written once: a cfg formatted again does not gather a second). With `pretty` (which implies
 // comments) a setting written by another name (a synonym, console/cvar.hpp) takes its own, and
 // the settings are grouped into sections by their name's prefix, in one fixed order and
-// by name inside each, under a banner, their values aligned in a column; binds follow by key,
+// by name inside each, under a banner, one a line: the values aligned in a column and each
+// setting's help beside it in another (`name  "value"  // help`); binds follow by key,
 // then aliases, then every other command in the order written (an `exec` still runs last). The
 // commands themselves are never changed, so a formatted cfg sets exactly what the original did.
 // With `defaults` (pretty only) the settings the text leaves alone are written in their sections

@@ -98,8 +98,12 @@ TEST(the_pretty_format_sorts_into_sections_and_aligns) {
                commands = pretty.find("// Commands");
   CHECK_MSG(server < mouse && mouse < picture && picture < binds && binds < commands, pretty);
   CHECK(pretty.find("bind a +moveleft\nbind w +forward") != std::string::npos);
-  CHECK(pretty.find("// The most players the server seats.\nsv_maxclients \"16\"") !=
-        std::string::npos);
+  // The help beside the setting, the comments in one column.
+  CHECK_MSG(pretty.find("sv_maxclients \"16\"      // The most players the server seats.\n") !=
+                std::string::npos,
+            pretty);
+  CHECK(pretty.find("sensitivity   \"4\"       // The mouse's turn.\n") != std::string::npos);
+  CHECK(pretty.find("r_look        \"classic\" // The picture's look.\n") != std::string::npos);
   CHECK(pretty.rfind("exec last\n") == pretty.size() - 10);
   CHECK(con::format_cfg(c, pretty, {.pretty = true}) == pretty);
   CHECK(con::check_cfg(c, pretty).empty());
@@ -144,16 +148,18 @@ TEST(the_pretty_format_with_defaults_writes_every_setting) {
                  .values = "0: easy; 1: normal (the default); 2: hard"});
   const std::string text = "timelimit 20\n";
   const std::string all = con::format_cfg(c, text, {.pretty = true, .defaults = con::kServer});
-  CHECK_MSG(all.find("// The most players the server seats.\nsv_maxclients \"8\"\n") !=
+  CHECK_MSG(all.find("sv_maxclients \"8\"  // The most players the server seats.\n") !=
                 std::string::npos,
             all);
-  CHECK_MSG(all.find("timelimit     \"20\"") != std::string::npos, all);
+  CHECK_MSG(all.find("timelimit     \"20\" // The match's length in minutes.\n") !=
+                std::string::npos,
+            all);
   CHECK(all.find("// Server") < all.find("// Match"));
   CHECK(all.find("sv_version") == std::string::npos);
   CHECK(all.find("sensitivity") == std::string::npos);
   // An empty default is written empty (the game's own), the value it comes to said above it.
-  CHECK_MSG(all.find("// Left empty, it is the game's own: 1.\n// How hard the monsters are.\n"
-                     "skill         \"\"\n") != std::string::npos,
+  CHECK_MSG(all.find("skill         \"\"   // How hard the monsters are. (empty: the game's own, "
+                     "1)\n") != std::string::npos,
             all);
   CHECK(con::format_cfg(c, all, {.pretty = true, .defaults = con::kServer}) == all);
   CHECK(con::check_cfg(c, all).empty());

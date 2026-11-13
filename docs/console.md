@@ -61,7 +61,8 @@ cvar it has (Shooter's Edge's server: `classic_game_every_server_setting_explain
 and a setting set twice; `format_cfg` writes the same commands back one a line, a setting as
 `name "value"`, with `comments` each setting's help above it and with `pretty` (an ezQuake-style
 config) the settings in sections by their prefix (`cfg_section`) in one fixed order, by name,
-under banners, their values in one column, then binds by key, aliases and the other commands in
+under banners, one a line with the values in one column and each setting's help beside it in
+another, then binds by key, aliases and the other commands in
 the order written; with `defaults` (pretty only) every setting of the given flags the cfg leaves
 alone joins its section at its default, so the file lists everything it could set. Formatting a
 formatted cfg changes nothing. A player's CLI runs both

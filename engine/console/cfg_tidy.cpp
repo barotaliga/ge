@@ -291,6 +291,10 @@ int section_rank(std::string_view section) {
   return static_cast<int>(std::size(kOrder));
 }
 
+// The comment column of a pretty cfg stops here: a longer setting line takes its comment one
+// space after it rather than pushing every other comment far right.
+constexpr size_t kCommentColumnMost = 40;
+
 std::string help_comment(const Cvar& v) { return v.help.empty() ? "" : "// " + v.help; }
 
 std::string banner(std::string_view title) {
@@ -397,13 +401,14 @@ std::string format_cfg(const Console& c, std::string_view text, const CfgFormat&
       if (set.count(v) != 0) continue;
       // Written at its default exactly, so the cfg changes nothing. An empty default leaves the
       // value to the setting's owner (a game's rule); the value that comes to, when its words
-      // name it, is said above it.
+      // name it, is said after its help.
       const std::string& value = v->fallback;
       Item& it = made.emplace_back();
       it.text = v->name + " \"" + value + "\"";
       if (const std::string own = value.empty() ? stated_default(v->values) : "";
           !own.empty())
-        it.above.push_back("// Left empty, it is the game's own: " + own + ".");
+        it.beside = std::string(v->help.empty() ? "// " : "") + "(empty: the game's own, " + own +
+                    ")";
       Setting s;
       s.cvar = v;
       s.name = v->name;
@@ -423,16 +428,38 @@ std::string format_cfg(const Console& c, std::string_view text, const CfgFormat&
   for (const auto& [rank, list] : sections)
     for (const Placed& p : list)
       pad = std::max(pad, (p.s.verb.empty() ? 0 : p.s.verb.size() + 1) + p.s.name.size());
+  // Each setting one line: the name, its value in one column, then its help (and a comment of
+  // its own after it) in another, as far right as the longest line that is not overlong.
+  struct Row {
+    std::string head, comment;
+    std::vector<std::string> above;
+  };
+  std::map<int, std::vector<Row>> rows;
+  size_t column = 0;
   for (auto& [rank, list] : sections) {
     std::stable_sort(list.begin(), list.end(),
                      [&](const Placed& a, const Placed& b) { return key(a) < key(b); });
-    out += (out.empty() ? "" : "\n") + banner(titles[rank]);
     for (const Placed& p : list) {
       const std::string help = p.s.cvar != nullptr ? help_comment(*p.s.cvar) : "";
-      out += "\n";
-      put_comments(out, kept_above(*p.item, help, true));
-      if (!help.empty()) out += help + "\n";
-      out += with_beside(setting_line(p.s, pad), *p.item) + "\n";
+      std::string own = p.item->beside;  // less the help a pretty writer put there before
+      if (!help.empty() && own.starts_with(help)) own = trim(own.substr(help.size()));
+      Row l{setting_line(p.s, pad),
+             help.empty() ? own : (own.empty() ? help : help + " " + own),
+             kept_above(*p.item, help, true)};
+      if (l.head.size() <= kCommentColumnMost) column = std::max(column, l.head.size());
+      rows[rank].push_back(std::move(l));
+    }
+  }
+  for (const auto& [rank, list] : rows) {
+    out += (out.empty() ? "" : "\n") + banner(titles[rank]) + "\n";
+    for (const Row& l : list) {
+      put_comments(out, l.above);
+      std::string line = l.head;
+      if (!l.comment.empty()) {
+        line.append(line.size() < column ? column - line.size() : 0, ' ');
+        line += " " + l.comment;
+      }
+      out += line + "\n";
     }
   }
   const auto group = [&](std::string_view title, std::vector<Placed>& list, bool by_key) {
