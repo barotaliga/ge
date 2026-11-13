@@ -1270,7 +1270,10 @@ every pass, and judged by captioned screenshots:
   the grey light the map carries; one made for another build of the map is refused and the map keeps
   its own.
 - **Materials**: animated texture sequences ("+0" .. "+9", five frames a second, each texture
-  starting at its own frame), warped liquids, the two-layer scrolling sky (a skybox to come),
+  starting at its own frame), warped liquids, the two-layer scrolling sky or the map's own sky
+  box (the worldspawn's `sky` names six pictures under `env/` or `gfx/env/`, `rt bk lf ft up dn`,
+  as .tga, .png, .jpg or .pcx; `client/files.hpp`'s `sky_box_files`, `brush/app/sky_box.hpp`)
+  drawn at infinity on the sky faces, all six or none (`r_skyname` names one for every map),
   fullbright palette colours as emissive.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.

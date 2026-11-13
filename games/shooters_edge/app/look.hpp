@@ -90,6 +90,9 @@ struct Picture {
   // r_farland: the land round the map seen over its walls from high up (render/far_land.hpp):
   // auto (a kind dealt to suit the map's sky), off, or a kind's name; read when the world is made.
   std::string far_land = "auto";
+  // r_skyname: the sky box drawn through every map's sky in place of the one its settings name
+  // (client/files.hpp's `sky_box_files`); empty, each map's own. Read when the world is made.
+  std::string sky_name;
   double far_warm = 0;  // r_farland_warm: its air warmer (or colder) than its kind's, C
   // r_lerpmodels, r_lerpmove: the models' animation drawn between frames, and (in the window's own
   // game) their places between the server's states (client/model_lerp.hpp); either look.
