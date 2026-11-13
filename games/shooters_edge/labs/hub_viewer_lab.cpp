@@ -98,6 +98,21 @@ bool duel_map(std::vector<uint8_t>& out, std::string& error) {
   return ge::brush::write_bsp(f, ge::brush::Family::v29, &out, &error);
 }
 
+// A page as digested: the wasm's size the page counts its bar against is the web build's (or the
+// stand-in's), so it is written as 0, and the digest is the same with or without the build.
+std::vector<uint8_t> digested_page(const std::string& body) {
+  std::string out = body;
+  const std::string key = "total=";
+  size_t at = out.find(key);
+  if (at != std::string::npos) {
+    at += key.size();
+    size_t end = at;
+    while (end < out.size() && out[end] >= '0' && out[end] <= '9') ++end;
+    out.replace(at, end - at, "0");
+  }
+  return {out.begin(), out.end()};
+}
+
 bool has(const std::string& s, const std::string& part) {
   return s.find(part) != std::string::npos;
 }
@@ -235,7 +250,7 @@ void run(gl::Lab& lab) {
              ": the pictures need the web build (cmake --preset web, then "
              "cmake --build build/web --target shooters_edge_viewer)");
   }
-  lab.attach("demo.html", {page.body.begin(), page.body.end()});
+  lab.attach("demo.html", digested_page(page.body));
 
   // The Play page (docs/hub.md § Playing in a browser): the map's own content pack, named by what
   // a match on it with bots lists, and the page that starts the player on it.
@@ -255,7 +270,7 @@ void run(gl::Lab& lab) {
     lab.fail("the Play page does not start the player on the map with its pack",
              "run tests/hub_watch_test.cpp, then read watch.cpp's play_page");
   }
-  lab.attach("play.html", {play_page.body.begin(), play_page.body.end()});
+  lab.attach("play.html", digested_page(play_page.body));
   if (have_player) {
     const double sent = static_cast<double>(file_bytes(viewer / "shooters_edge_play.wasm.gz") +
                                             file_bytes(viewer / "shooters_edge_play.js.gz"));
