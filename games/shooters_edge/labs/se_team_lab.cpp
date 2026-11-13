@@ -635,7 +635,7 @@ void run(gl::Lab& lab) {
              "\tscript_"
              "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
              "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
-             "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\n";
+             "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -761,7 +761,7 @@ void run(gl::Lab& lab) {
     }
     // Its armour's protection (type times value), the rules' numbers.
     const auto& num = w.world.clients[static_cast<size_t>(f.slot)].numbers;
-    out << to_fixed(num.armour_type * num.armour, 0) << '\n';
+    out << to_fixed(num.armour_type * num.armour, 0) << '\t' << f.mind.fetch << '\n';
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
@@ -1028,6 +1028,14 @@ void run(gl::Lab& lab) {
   lab.metric("team.areas-lost-seen",
              static_cast<double>(r.teams[0].lost_seen + r.teams[1].lost_seen), "count");
   lab.metric("team.retakes", static_cast<double>(r.teams[0].retakes + r.teams[1].retakes), "count");
+  lab.metric("team.fetches", static_cast<double>(r.teams[0].fetches + r.teams[1].fetches), "count");
+  lab.metric("team.fetched", static_cast<double>(r.teams[0].fetched + r.teams[1].fetched), "count");
+  {
+    static constexpr const char* kEnd[5] = {"role", "gone", "time", "death", "retreat"};
+    for (int e = 0; e < 5; e++)
+      lab.metric(std::string("team.fetch-end.") + kEnd[e],
+                 static_cast<double>(r.teams[0].fetch_end[e] + r.teams[1].fetch_end[e]), "count");
+  }
   lab.metric("team.pushes", static_cast<double>(r.teams[0].pushes + r.teams[1].pushes), "count");
   {
     int64_t changes = 0;
@@ -1113,6 +1121,11 @@ void run(gl::Lab& lab) {
       if (r.lying_n[ki] == 0) continue;
       const std::string key = std::string("team.lying.") + cn::kLyingItemNames[k];
       lab.metric(key, static_cast<double>(r.lying[ki]) / static_cast<double>(r.lying_n[ki]),
+                 "share");
+      lab.metric(key + ".takers",
+                 r.lying[ki] > 0 ? static_cast<double>(r.lying_takers[ki]) /
+                                       static_cast<double>(r.lying[ki])
+                                 : 0,
                  "share");
       for (int w = 0; w < cn::kLyingWhy; w++)
         lab.metric(key + "." + cn::kLyingWhyNames[w],

@@ -670,6 +670,21 @@ bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Ve
       }
     }
   }
+  // The team's taker for its armour (mind.hpp, `fetch`) backing off still goes for it, the armour
+  // being what it backs off for, unless the enemy is nearer it.
+  if (f.team && f.mode == FightMode::retreat && f.mind.fetch >= 0 &&
+      f.reach.reached(f.items[static_cast<size_t>(f.mind.fetch)].node)) {
+    const sh::Vec3f there = f.items[static_cast<size_t>(f.mind.fetch)].at;
+    if (c == nullptr || !ai::known(c->seen) || dist(at_of(c->seen), there) >= dist(me, there)) {
+      go_item(f, s, f.mind.fetch);
+      if (why) {
+        why->decide("role_goal");
+        why->choose("fetch", "the team's taker for its armour, backing off to it");
+      }
+      return true;
+    }
+    f.team->stats.fetch_end[4]++;
+  }
   if (!f.team || f.mode == FightMode::retreat) return false;
   // A pack a mate called, when this player is the one to fetch it (packs.hpp).
   if (const int32_t pn = f.features[sh::Feature::packs] ? packs_goal(f, me, st, t) : -1; pn >= 0) {
@@ -697,6 +712,12 @@ bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Ve
     if (it.kind == ItemKind::armor3 || (it.kind == ItemKind::armor2 && armour < 0)) armour = ii;
     if (it.kind == ItemKind::weapon && it.weapon == f.arsenal->launcher && launcher < 0)
       launcher = ii;
+  }
+  // The team's taker for its armour (mind.hpp, `fetch`): the trip held, in a fight too.
+  if (mn.fetch >= 0 && can_reach(mn.fetch)) {
+    go_item(f, s, mn.fetch);
+    note("fetch", "the team's taker for its armour");
+    return true;
   }
   switch (f.role) {
     case Role::hold: {
@@ -1258,7 +1279,7 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   if (trip) f.stats.trips_kept++;
   int32_t near = -1;
   if (!trip && !escaping && committed < 0 && f.objective < 0 && f.diving < 0 &&
-      f.mode != FightMode::retreat && f.features[sh::Feature::shortgoals]) {
+      f.mode != FightMode::retreat && f.features[sh::Feature::shortgoals] && f.mind.fetch < 0) {
     const bool held = f.short_item >= 0 && t < f.short_until &&
                       f.items[static_cast<size_t>(f.short_item)].present;
     if (held) {

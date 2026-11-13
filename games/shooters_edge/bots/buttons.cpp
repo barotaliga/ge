@@ -260,7 +260,16 @@ void button_poke_cmd(Fighter& f, const server::RulesCommon& s, int me, double t,
   // view's wish as meant under that view: unturned, a hop's side key braked in the air).
   sh::turn_axes(cmd.forward, cmd.side, was_yaw, cmd.angles.y);
   f.bot.set_by = "poke";
-  if (flat < 200) {
+  if (b.shoot && f.features[sh::Feature::pokestand]) {
+    // (`pokestand`) A button a shot opens is never touched: near it the keys let go, so the view
+    // settles on it and the shot goes off (the hand holds the trigger until the view is there; run
+    // round under dm2's RA button at 300 units/s it seldom was: 12 s of pokes, no shot).
+    if (flat < 250) {
+      cmd.forward = 0;
+      cmd.side = 0;
+      cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
+    }
+  } else if (flat < 200) {
     cmd.forward = 320;  // into it: a touch presses it
     cmd.side = 0;
   }
