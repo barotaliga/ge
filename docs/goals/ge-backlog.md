@@ -51,6 +51,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## The CI loop
 
+- `ge test --affected --one-at-a-time` (link one reached test, run it, delete its binary, then the next, so the reach never holds more than one ASan test binary on disk: precheck's batched link step still filled a cloud container's disk twice; the next-roadmap-row thread)
 - precheck linking and running the reached tests in batches when the disk cannot hold them all (done: under the free space's room for them, with half to spare, they are linked, run and deleted a batch at a time, `PRECHECK_TEST_BATCH` setting the size; an engine/core change reaches every test and filled a 16 GB disk twice; game CLI thread, #657)
 - the session-start hook failing loudly (done: the package step cut off after `GE_SETUP_TIMEOUT` and tried twice, a worker stopped by a signal writes `failed killed ... during <step>`, and `--wait` names a worker that died outright as `failed died` with its last step, instead of a status left `running`; TAB scoreboard thread)
 - precheck running every gate and printing each failure whole (done: no gate stops the run but the build, so every lint finding shows in one round)
