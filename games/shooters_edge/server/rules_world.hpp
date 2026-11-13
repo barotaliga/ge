@@ -64,7 +64,11 @@ struct PlayerNumbers {
   float weapon_frame = 0;
   float items = 0;   // the program's item bits
   float view_z = 0;  // the eye above the origin
-  float fov = 0;     // the field of view the rules hold him to, degrees; 0 his own
+  // The view as the rules work it out (the sequel's: its bob, tilts and kicks), when `view_set`:
+  // the eye's offset from the origin (units) and the angles added to the view (degrees).
+  bool view_set = false;
+  float view_offset[3] = {}, kick[3] = {};
+  float fov = 0;  // the field of view the rules hold him to, degrees; 0 his own
   float frags = 0;
   // A runner's own weapons and ammunition, for the bots (bots/bot_arsenal.hpp), where the first
   // game's bits above do not fit (the sequel's): the weapon held and those carried as bits of the

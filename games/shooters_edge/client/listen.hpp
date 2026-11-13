@@ -413,6 +413,10 @@ struct PlayerState {
   bool on_ground = false;
   bool dead = false;
   float health = 0;
+  // The rules work the view out themselves (the sequel's: RulesWorld's `view_set`): `view_ofs` is
+  // their eye with its bob, `kick` the angles they add (degrees), `v_angle` the dead view's.
+  bool rules_view = false;
+  sh::Vec3f kick;
 };
 PlayerState player_state(const Listen& l);
 
