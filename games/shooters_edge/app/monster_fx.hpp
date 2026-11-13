@@ -32,7 +32,7 @@
 // ge:summary The monsters' missiles and spit in the modern look: acid, flame, void, lava, laser
 // ge:keywords monster-fx monsters missile acid spit flier flame knight void-ball vore lava-ball
 // ge:keywords boss laser enforcer flesh zombie tracer tracer-trail wizspike knightspike ce_monsters
-// ge:keywords monster-attacks splash
+// ge:keywords monster-attacks splash cable drain parasite medic heal monster-flash sequel
 // ge:skill render shooter
 // ge:test tests/shooters_edge_monster_fx_test.cpp
 #pragma once
@@ -98,6 +98,34 @@ void monster_splash(MonsterShot k, const double at[3], const double* normal, con
 // The splash's light `age` s after it, false once gone.
 inline constexpr double kSplashLightS = 0.35;
 bool splash_light(MonsterShot k, const double at[3], double age, Light* out);
+
+// THE SEQUEL'S MONSTER-ONLY ATTACKS (its shots themselves draw as the player's weapons', keyed by
+// the shot's kind). A CABLE held between a monster and what it holds, sent each server frame:
+// - DRAIN (`te_parasite_attack`): a parasite's tongue on its prey. Classic: a line of dull red
+//   specks. Modern: a pulsing pink-red tongue that writhes along its length and spatters at the
+//   end, with a red light where it bites.
+// - HEAL (`te_medic_cable_attack`): a medic's cable on a corpse it raises. Classic: a line of
+//   pale blue specks. Modern: a crackling blue-white cable that twists round its line, sparking
+//   where it holds, with a cold light.
+enum class Cable : uint8_t { none, drain, heal };
+Cable cable_of(std::string_view effect);
+// The cable from `from` to `to` (m) at `now_s`, its specks living until the next server frame.
+void classic_cable(Cable c, const double from[3], const double to[3], uint32_t seed,
+                   Particles* out);
+void monster_cable(Cable c, const double from[3], const double to[3], uint32_t seed, double now_s,
+                   Particles* out);
+// Its light where it holds.
+bool cable_light(Cable c, const double to[3], double now_s, Light* out);
+// A MONSTER'S SHOT LEAVING (`te_monster_flash.<kind>`: blaster, gun, rocket, rail, bfg), at `at`
+// going `dir` (unit): the flash's light and, in the modern look, its muzzle fire and sparks.
+enum class Flash : uint8_t { none, blaster, gun, rocket, rail, bfg };
+Flash flash_of(std::string_view effect);
+bool flash_light(Flash f, const double at[3], double age, Light* out);
+// The muzzle fire (the gun's and the rocket's), false for none; drawn kMonsterMuzzleS.
+bool flash_fire(Flash f, const double at[3], const double dir[3], uint32_t seed, double born_s,
+                ge::render::MuzzleFire* out);
+// The sparks it throws once (the blaster's, the rail's and the BFG's coloured glow).
+void flash_sparks(Flash f, const double at[3], const double dir[3], uint32_t seed, Particles* out);
 
 // The fire bolt's burst as a small fireball.
 const ge::render::BlastLook& flame_burst_look();
