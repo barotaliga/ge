@@ -22,9 +22,9 @@ namespace {
 namespace sh = ge::shooter;
 
 // The declaration's indices.
-enum Global { kLastspot, kMatchOver, kFrames, kHasPause, kStartHour };
-enum Field { kAttackFinished, kMovement, kMaxspeed, kGravity };
-enum Str {
+enum Global : uint8_t { kLastspot, kMatchOver, kFrames, kHasPause, kStartHour };
+enum Field : uint8_t { kAttackFinished, kMovement, kMaxspeed, kGravity };
+enum Str : uint8_t {
   kPlayerMdl,
   kMissileMdl,
   kRocketWav,
@@ -49,7 +49,7 @@ enum Str {
   kGg,
   kGoodGame,
 };
-enum Fn { kMissileTouch = 11, kSubRemove = 10 };  // their index in kFunctions
+enum Fn : uint8_t { kMissileTouch = 11, kSubRemove = 10 };  // their index in kFunctions
 
 constexpr Vec3 kZero{0, 0, 0};
 

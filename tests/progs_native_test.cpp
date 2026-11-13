@@ -8,6 +8,7 @@
 // ge:summary Tests: native programs: the layout, calls three ways, state in the VM, the faults
 // ge:keywords test progs native native-program build_native_progs bind_natives call_builtin
 // ge:skill progs testing
+#include <cstdint>
 #include <string>
 
 #include "check.hpp"
@@ -21,10 +22,10 @@ using namespace ge::progs;
 namespace {
 
 // The declaration's indices.
-enum { kCount };           // globals
-enum { kScore, kSpot };    // fields
-enum { kHello };           // strings
-enum { kAdd, kAddTwice };  // functions
+enum : uint8_t { kCount };           // globals
+enum : uint8_t { kScore, kSpot };    // fields
+enum : uint8_t { kHello };           // strings
+enum : uint8_t { kAdd, kAddTwice };  // functions
 
 // void(float n) add: count += n; entity 1's score += n; its spot = '1 2 3' * n.
 void add(Vm& vm) {
