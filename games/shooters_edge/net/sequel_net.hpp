@@ -19,7 +19,7 @@
 // byte (pitch 0x01, yaw 0x02, roll 0x04 as shorts in 65536ths of a turn; forward 0x08, side 0x10,
 // up 0x20 as shorts; buttons 0x40, impulse 0x80 as bytes), then msec and the light level always.
 // The checksum covers the bytes after it to the third command's end (at most 60), with four bytes
-// of the key table at `sequence mod 1020` appended: their CRC-16 (polynomial 0x1021, initial
+// of the key table (sequel_checksum_table.cpp, measured) at `sequence mod 1020` appended: their CRC-16 (polynomial 0x1021, initial
 // 0xFFFF, no reflection, no final XOR) XORed with the plain sum of the same bytes, the low byte
 // kept. A server ignores a move whose checksum is wrong, and the rest of its packet, but takes the
 // frame it acknowledges.
@@ -72,6 +72,9 @@ sh::MoveCmd move_cmd(const SequelCmd& c);
 void write_sequel_cmd(gn::Writer& w, const SequelCmd& from, const SequelCmd& to);
 SequelCmd read_sequel_cmd(gn::Reader& r, const SequelCmd& from);
 
+// The key table (sequel_checksum_table.cpp): a wire constant measured for interop.
+constexpr int kSequelChecksumTableSize = 1024;
+extern const uint8_t kSequelChecksumTable[kSequelChecksumTableSize];
 // The checksum byte over `body` (the bytes after the checksum byte) for packet `sequence`.
 uint8_t sequel_move_checksum(const uint8_t* body, size_t size, uint32_t sequence);
 

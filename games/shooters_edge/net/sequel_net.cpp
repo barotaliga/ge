@@ -92,7 +92,7 @@ uint8_t sequel_move_checksum(const uint8_t* body, size_t size, uint32_t sequence
   const size_t n = size < static_cast<size_t>(kChecksumCovered) ? size : kChecksumCovered;
   uint8_t buf[kChecksumCovered + 4];
   if (n) std::memcpy(buf, body, n);
-  std::memcpy(buf + n, kChecksumTable + (sequence % 1020u), 4);
+  std::memcpy(buf + n, kSequelChecksumTable + (sequence % 1020u), 4);
   uint32_t sum = 0;
   for (size_t i = 0; i < n + 4; i++) sum += buf[i];
   return static_cast<uint8_t>((crc16(buf, n + 4) ^ sum) & 0xFFu);

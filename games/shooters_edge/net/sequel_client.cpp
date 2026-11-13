@@ -151,6 +151,7 @@ void read_payload(SequelClientEnd& c, const uint8_t* data, size_t size) {
 
 void send_packet(SequelClientEnd& c, int64_t now_us) {
   const bool active = c.stage == ClientStage::active;
+  if (active && c.cfg.send_every > 1 && c.tick % c.cfg.send_every != 0) return;
   if (!active && channel_reliable_backlog(c.ch) == 0 && c.now - c.last_ask < kRetry) return;
   c.last_ask = c.now;
   uint8_t payload[kSequelPacket];

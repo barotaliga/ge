@@ -194,7 +194,9 @@ void live(gl::Lab& lab, const std::string& server) {
   cn::SequelClientConfig cfg;
   cfg.name = lab.arg("name");
   cfg.spectator = lab.arg_num("spectator") != 0;
-  cfg.qport = 2026;
+  // A fresh qport each run: a server ignores a connect from the address and qport of a slot in use.
+  cfg.qport = static_cast<uint16_t>(1024 + std::chrono::steady_clock::now().time_since_epoch().count() % 60000);
+  cfg.send_every = static_cast<int>(lab.arg_num("every"));
   if (lab.arg_num("walk") != 0) cfg.brain = walk;
   auto c = std::make_unique<cn::SequelClientEnd>();
   cn::sequel_client_start(*c, t, to, cfg, 0);
@@ -238,6 +240,7 @@ const gl::LabSpec kSpec{
         {"walk", "1", "1: the client walks a square; 0: it stands"},
         {"spectator", "0", "1: join as a spectator"},
         {"name", "edge", "the client's name"},
+        {"every", "1", "a live client's ticks (13 ms) between packets"},
     },
     "--seconds=6",
     run,

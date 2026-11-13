@@ -43,6 +43,7 @@ struct SequelClientConfig {
   std::string password;
   uint16_t qport = 1;
   int seed = 1;
+  int send_every = 1;  // ticks between packets in the game (a slower client sends fewer)
   // The command at a tick (msec set by the client); null: stands still.
   std::function<sh::MoveCmd(int tick)> brain;
 };

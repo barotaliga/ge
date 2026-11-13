@@ -18,6 +18,7 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/net/classic_wire.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
 #include "shooters_edge/net/sequel_net_server.hpp"
@@ -140,6 +141,39 @@ TEST(a_move_and_its_checksum_come_back_as_written) {
   gn::Reader again = gn::make_reader(buf + 1, w.size - 1);
   CHECK(cn::read_sequel_move(again, 1235, m));
   CHECK(!m.checksum_ok);  // another packet's number: another byte
+}
+
+TEST(the_checksum_is_the_byte_a_live_server_expected) {
+  // Moves a live server of the sequel refused, with the byte it said it expected (the body after
+  // the checksum byte, the packet's sequence): what the measured key table must reproduce.
+  struct Vector {
+    uint32_t sequence;
+    const char* body;
+    int expected;
+  };
+  const Vector vectors[] = {
+      {37, "ab020000082c010d00000d00000d00", 58},
+      {612, "b80200000a00802c010d00000d00000d00", 19},
+      {959, "c10200000a00402c010d00000d00000d00", 7},
+      {1500, "cc0200000a00c02c010d00000d00000d00", 96},
+  };
+  for (const Vector& v : vectors) {
+    std::string body;
+    CHECK(cn::from_hex(v.body, body));
+    const uint8_t got = cn::sequel_move_checksum(reinterpret_cast<const uint8_t*>(body.data()),
+                                                 body.size(), v.sequence);
+    CHECK_MSG(got == v.expected, "sequence " + std::to_string(v.sequence) + ": " +
+                                     std::to_string(got) + ", the server expected " +
+                                     std::to_string(v.expected));
+  }
+  uint64_t sum = 0, weighted = 0;
+  for (int i = 0; i < cn::kSequelChecksumTableSize; i++) {
+    sum += cn::kSequelChecksumTable[i];
+    weighted += uint64_t(i + 1) * cn::kSequelChecksumTable[i];
+  }
+  CHECK(sum == 124780);
+  CHECK(weighted == 59989697);
+  for (int i = 960; i < cn::kSequelChecksumTableSize; i++) CHECK(cn::kSequelChecksumTable[i] == 0);
 }
 
 TEST(out_of_band_words_keep_a_quoted_word_whole) {

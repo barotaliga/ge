@@ -1248,6 +1248,33 @@ session (`classic_trial`):
 `se-net` runs the session under every preset. `se-interop` is a stub until the dedicated
 server's classic flag and existing programs are at hand.
 
+**The sequel's protocol** (`games/shooters_edge/net/sequel_*`, protocol 34, M18v9) is spoken the
+same way, beside the classic one and sharing its net channel:
+
+- **Out of band**: the challenge (one number per address), the connect with the protocol, qport,
+  challenge and user info, `info`, `status` and `ping`. A refusal is a print a player reads.
+- **The signon** runs by the client's own string commands: `new` gets the server data and a
+  stuffed `cmd configstrings`, each answer adds about 700 bytes and the next prompt, then the
+  baselines the same way, then `precache`, answered with `begin`. Every prompt carries the
+  level's count, and a wrong count starts the signon again.
+- **What a client reads** is the sequel's own recording format: each packet's payload is one
+  block, read by the recording's reader (`client/demo_sequel.cpp`), so a client records as it
+  plays and its state is the demo player's.
+- **Moves** carry the newest frame the client read whole, which the server deltas the next frame
+  from, and three commands each delta coded against the one before. The move's checksum uses
+  the sequel's own key table, a wire constant MEASURED for interop
+  (`sequel_checksum_table.cpp`): a live server names the byte it expected for a move it refuses,
+  so one minute of moves solved all 960 non-zero bytes, one candidate each.
+- **Our server** (`sequel_net_server.hpp`) serves the sequel's rules through the wire the
+  recordings use (`server/sequel_wire.hpp`): the prints, centred prints, stuffed lines and changed
+  configstrings reliably, the frame and its sounds unreliably, whole when the client lost the frame
+  it would delta from.
+
+`se-sequel-net` runs our client on our server (simulated) or on a live one (`--server=`).
+Measured on a live server of the sequel: our client got through the signon and played, every move
+was taken, and it walked; that server ran about three frames a second in the container, with or
+without our client, so its frame rate there is the server's own.
+
 **The native protocol** is the engine's own (`docs/networking.md`), used between our client and
 our server when both ends are ours: the M17 handshake and AEAD (M17i), the snapshot ring and
 deltas with interest (M17f), prediction of the local player and of projectiles, lag
