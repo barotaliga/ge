@@ -1039,7 +1039,9 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
 - **The balance** (`profiles::RemixBalance`): the weapons a map gets are weighed by tier against
   the rest of its weapons: fewer than `cr_strong_min` strong ones and the best weak one is raised
   to the strong kind the map has fewest of; more than `cr_strong_share` of them strong and the
-  last are lowered to the best weak one. Small pickups that the played game has no size for (the
+  last are lowered to the best weak one the map has fewest of; and no more than `cr_strong_same`
+  copies of one strong weapon (two by default: three lightning guns leave a super nailgun), the
+  copy nearest a strong armour or the mega health lowered first so the power is spread out. Small pickups that the played game has no size for (the
   sequel's stimpacks and shards) are gathered within `cr_pool_radius` units and laid down as the
   played game's packs by the total they held, a lone one left out.
 - **Another game's items** (`cr_items`: 0 the played game's, 1 the classic game's, 2 the

@@ -95,6 +95,16 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .max = 1,
               .values = "0 to 1: 0.4 the default (two strong of five weapons); 1 no limit"},
              &out->balance.strong_share);
+  cvars.bind({.name = "cr_strong_same",
+              .fallback = "2",
+              .flags = ge::console::kArchive,
+              .help = "How many copies of one strong weapon a remixed map keeps at most; the rest "
+                      "are lowered, the one nearest a strong armour first.",
+              .kind = ge::console::CvarKind::integer,
+              .min = 0,
+              .max = 8,
+              .values = "0: no limit; 2: two of a kind at most (the default)"},
+             &out->balance.strong_same);
   cvars.bind({.name = "cr_pool_radius",
               .fallback = "160",
               .flags = ge::console::kArchive,
@@ -203,6 +213,77 @@ void balance_weapons(std::vector<Item>& items, std::string_view to, const pf::Re
   const int n = static_cast<int>(weapons.size());
   const int floor = n >= 2 ? std::min(bal.strong_min, n) : 0;
   const int cap = std::max(floor, static_cast<int>(std::ceil(bal.strong_share * float(n))));
+  // Lowered: to the target's best weak weapon the map has fewest of (the first in the table on a
+  // tie), the strong copy nearest a strong pickup first (`kStrongPickups`), else the last in it.
+  int weak_tier = 0;
+  for (const pf::WeaponTier& w : pf::kWeaponTiers)
+    if (w.game == to && w.tier < pf::kStrongTier) weak_tier = std::max(weak_tier, w.tier);
+  const auto weak_pick = [&] {
+    std::string_view pick;
+    int fewest = 1 << 30;
+    for (const pf::WeaponTier& w : pf::kWeaponTiers) {
+      if (w.game != to || w.tier != weak_tier) continue;
+      int there = 0;
+      for (size_t i : weapons) there += items[i].becomes == w.class_name ? 1 : 0;
+      if (there < fewest) {
+        fewest = there;
+        pick = w.class_name;
+      }
+    }
+    return pick;
+  };
+  const auto near_strong = [&](size_t i) {  // squared distance to the nearest strong pickup
+    float best = -1;
+    for (const Item& p : items) {
+      bool strong = false;
+      for (const pf::StrongPickup& s : pf::kStrongPickups)
+        strong = strong || (s.game == to && p.becomes == s.class_name &&
+                            (s.bits < 0 || (p.bits & pf::kItemBits) == s.bits));
+      if (!strong) continue;
+      float d2 = 0;
+      for (int a = 0; a < 3; a++) {
+        const float d = p.at[a] - items[i].at[a];
+        d2 += d * d;
+      }
+      if (best < 0 || d2 < best) best = d2;
+    }
+    return best;
+  };
+  // One strong copy lowered, of `only` ("" any strong one); false when there is none.
+  const auto lower = [&](std::string_view only, const std::string& why) {
+    size_t pick = weapons.size();
+    float pick_d2 = -1;
+    for (size_t k = weapons.size(); k-- > 0;) {
+      const Item& it = items[weapons[k]];
+      if (tier(weapons[k]) < pf::kStrongTier || (!only.empty() && it.becomes != only)) continue;
+      const float d2 = near_strong(weapons[k]);
+      if (pick == weapons.size() || (d2 >= 0 && (pick_d2 < 0 || d2 < pick_d2))) {
+        pick = k;
+        pick_d2 = d2;
+      }
+    }
+    const std::string_view weak = weak_pick();
+    if (pick == weapons.size() || weak.empty()) return false;
+    Item& it = items[weapons[pick]];
+    r.notes.push_back(it.cls + " " + where(it) + ": " + it.becomes + " lowered to " +
+                      std::string(weak) + ", " + why +
+                      (pick_d2 >= 0 ? ", the copy nearest a strong armour" : ""));
+    it.becomes = std::string(weak);
+    return true;
+  };
+  // Too many of one kind: the copies past `strong_same` lowered.
+  for (const pf::WeaponTier& w : pf::kWeaponTiers) {
+    if (w.game != to || w.tier < pf::kStrongTier || bal.strong_same <= 0) continue;
+    const auto copies = [&] {
+      int c = 0;
+      for (size_t i : weapons) c += items[i].becomes == w.class_name ? 1 : 0;
+      return c;
+    };
+    while (copies() > bal.strong_same &&
+           lower(w.class_name,
+                 "the map had more than " + std::to_string(bal.strong_same) + " of it")) {
+    }
+  }
   // Raised: the best weak weapon (first in the map on a tie) to the strong one fewest lie as.
   while (strong_count() < floor) {
     size_t best = weapons.size();
@@ -227,20 +308,7 @@ void balance_weapons(std::vector<Item>& items, std::string_view to, const pf::Re
                       std::string(pick) + ", the map had too few strong weapons");
     it.becomes = std::string(pick);
   }
-  // Lowered: the last strong ones in the map to the best weak weapon.
-  std::string_view weak;
-  int weak_tier = 0;
-  for (const pf::WeaponTier& w : pf::kWeaponTiers)
-    if (w.game == to && w.tier < pf::kStrongTier && w.tier >= weak_tier) {
-      weak = w.class_name;
-      weak_tier = w.tier;
-    }
-  for (size_t k = weapons.size(); k-- > 0 && strong_count() > cap && !weak.empty();) {
-    Item& it = items[weapons[k]];
-    if (tier(weapons[k]) < pf::kStrongTier) continue;
-    r.notes.push_back(it.cls + " " + where(it) + ": " + it.becomes + " lowered to " +
-                      std::string(weak) + ", the map had too many strong weapons");
-    it.becomes = std::string(weak);
+  while (strong_count() > cap && lower("", "the map had too many strong weapons")) {
   }
   r.strong = strong_count();
 }

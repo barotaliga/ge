@@ -175,13 +175,43 @@ TEST(a_map_with_no_strong_weapon_gets_one_and_one_with_too_many_loses_some) {
   b = blocks_of(out);
   CHECK(rep.strong_by_role == 4 && rep.strong == 2);  // two of five at most
   CHECK(b.size() == 5 && value(b[0], "classname") == "weapon_rocketlauncher" &&
-        value(b[3], "classname") == "weapon_hyperblaster");
+        value(b[3], "classname") == "weapon_chaingun" &&
+        value(b[2], "classname") == "weapon_grenadelauncher");  // each to a weak one it lacks
   shooters_edge::profiles::RemixBalance free;
   free.strong_min = 0;
   free.strong_share = 1;
   CHECK(cl::remix_entities(weapons({"weapon_supershotgun", "weapon_nailgun"}), "classic", "sequel",
                            out, &rep, error, free));
   CHECK(rep.strong == 0 && rep.notes.empty());  // the settings turn the balance off
+}
+
+TEST(a_third_copy_of_a_strong_weapon_is_lowered_the_one_nearest_a_strong_armour_first) {
+  // The sequel's hyperblaster, railgun and BFG all become the lightning gun: three of a kind.
+  const std::string map =
+      "{\n\"classname\" \"weapon_hyperblaster\"\n\"origin\" \"0 0 0\"\n}\n"
+      "{\n\"classname\" \"weapon_railgun\"\n\"origin\" \"1000 0 0\"\n}\n"
+      "{\n\"classname\" \"weapon_bfg\"\n\"origin\" \"2000 0 0\"\n}\n"
+      "{\n\"classname\" \"item_armor_body\"\n\"origin\" \"1100 0 0\"\n}\n";
+  shooters_edge::profiles::RemixBalance keep_share;
+  keep_share.strong_share = 1;  // only the copies' limit at work
+  std::string out, error;
+  cl::RemixReport rep;
+  CHECK(cl::remix_entities(map, "sequel", "classic", out, &rep, error, keep_share));
+  auto b = blocks_of(out);
+  CHECK(rep.strong_by_role == 3 && rep.strong == 2);
+  // The railgun's spot lies beside the body armour: its lightning gun is the one lowered.
+  CHECK(b.size() == 4 && value(b[1], "classname") == "weapon_supernailgun");
+  CHECK(value(b[0], "classname") == "weapon_lightning" &&
+        value(b[2], "classname") == "weapon_lightning");
+  CHECK(rep.notes.size() == 1 && rep.notes[0].find("strong armour") != std::string::npos);
+  // With no strong pickup on the map, the last copy is the one lowered.
+  const std::string bare = map.substr(0, map.rfind("{\n\"classname\" \"item_armor_body"));
+  CHECK(cl::remix_entities(bare, "sequel", "classic", out, &rep, error, keep_share));
+  b = blocks_of(out);
+  CHECK(b.size() == 3 && value(b[2], "classname") == "weapon_supernailgun");
+  keep_share.strong_same = 0;  // no limit
+  CHECK(cl::remix_entities(bare, "sequel", "classic", out, &rep, error, keep_share));
+  CHECK(rep.strong == 3);
 }
 
 TEST(the_remix_wants_two_full_games_and_cr_enabled) {

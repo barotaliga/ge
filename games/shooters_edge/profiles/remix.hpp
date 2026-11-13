@@ -126,7 +126,11 @@ inline constexpr RemixRow kRemixRows[] = {
 //   to 4; tier 3 and up is STRONG. A remixed map keeps between a floor (`RemixBalance::strong_min`,
 //   when it has two or more weapons) and a share (`strong_share` of its weapons, rounded up) of
 //   strong ones: short of the floor, its best weak weapon is raised to the strong weapon the map
-//   has fewest of; past the share, its last strong ones are lowered to the target's best weak one.
+//   has fewest of; past the share, strong ones are lowered to the target's best weak one the map
+//   has fewest of. No more than `strong_same` of one strong weapon are kept: the rest are lowered
+//   too. Which copy is lowered: the one nearest a strong pickup (`kStrongPickups`: the best armours
+//   and the mega health), so the power is spread across the map; with none on the map, the last in
+//   it.
 // - **Pools** (`kPoolItems`, `kPoolOutputs`): where one game scatters small pickups the other
 //   does not have (the sequel's stimpacks and health boxes, its armour shards), the ones lying
 //   within `pool_radius` of each other are added up and laid down again as the target's own sizes,
@@ -158,9 +162,25 @@ inline constexpr WeaponTier kWeaponTiers[] = {
 };
 inline constexpr int32_t kStrongTier = 3;
 
+// A pickup that makes the place it lies strong, in the target's names and variant bits (-1: any):
+// a strong weapon beside one is the first lowered.
+struct StrongPickup {
+  std::string_view game;
+  std::string_view class_name;
+  int32_t bits = -1;
+};
+
+inline constexpr StrongPickup kStrongPickups[] = {
+    {"classic", "item_armor2", -1},      {"classic", "item_armorInv", -1},
+    {"classic", "item_health", 2},  // the mega health
+    {"sequel", "item_armor_combat", -1}, {"sequel", "item_armor_body", -1},
+    {"sequel", "item_power_shield", -1}, {"sequel", "item_health_mega", -1},
+};
+
 struct RemixBalance {
   int32_t strong_min = 1;     // strong weapons at least, on a map of two weapons or more
   float strong_share = 0.4f;  // strong weapons at most: this share of them, rounded up
+  int32_t strong_same = 2;    // copies of one strong weapon at most (0: no limit)
   float pool_radius = 160;    // u: small pickups this near one another are added up
 };
 
