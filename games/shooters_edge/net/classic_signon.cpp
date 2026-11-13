@@ -14,6 +14,7 @@
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_server_test.cpp
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 
 #include "progs/layout.hpp"

@@ -22,6 +22,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `entity-look.md` | An entity's look fields (scale, colormod, alpha) in QC and their bytes on the wire, the entity delta's and the player update's encodings, from a clean-room reader (M18l) |
 | `sky-box.md` | A map's own sky box: its name in the worldspawn, the six pictures' paths and formats, their orientation, where the box is drawn; the sequel's rotation, from a clean-room reader (M18i12) |
 | `player-skins.md` | Each player's skin (the name chosen, the picture and its cut, the fallbacks, the colours' rows, `noskins`, `baseskin`, `allskins`, 24-bit forms), from a clean-room reader (M18i15) |
+| `player-figures.md` | The second game's player figures (the look "<model>/<skin>", its fallbacks to male and grunt, the carried weapons, 24-bit pictures, the downloads at connect), from a clean-room reader (M18i16) |
 | `fog-alpha.md` | A map's fog (its worldspawn keys, the curve, the sky's share, the command, the reset) and see-through liquids (the alpha settings, the server's permission, the drawing), from a clean-room reader (M18i13, M18i14) |
 | `movement.md` | The player's movement at the modern server's defaults: the settings, every step of the move, the clip hulls and the trace, the test vectors' format (M18o1) |
 | `gameloop.md` | The game loop: the game program's hooks, entities, the area tree, the server frame, thinking, tossing, pushers, touching, the player's packet and command, client prediction (M18o2) |
@@ -34,6 +35,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `deaths.md` | Monster deaths, gibs and blood: each kind's death sequences, gib health and pieces, the gib and head throw, blood at hits, the client's bursts and model-flag trails, bouncing, the zombie, the player (M18s7) |
 | `deathmatch4.md` | Deathmatch 4 in the classic match mod: the armed spawn, spawn invincibility, the items stripped and kept, backpacks and bonus powers, OctaPower, its settings and commands, spawns and scoring |
 | `midair.md` | Midair in the classic match mod (clean-room answers): the toggle and the minimum height, the rockets-only spawn, when a rocket kills, the height trace, knockback, the score bands, the messages and statistics |
+| `match-stats.md` | The per-player match stats the classic match mod keeps and shows when a match ends (clean-room answers): what an attack and a hit are per weapon, direct, real and virtual rocket hits, damage counted, kills per weapon, items and time held, streaks, spawn frags, the printed report and its top lists, the on-demand commands |
 | `weapon-switch.md` | The weapon after a shot in the classic match mod: refire times, the switch held until the refire ends, what a dropped pack holds, what onlookers can tell, the client's switch-after-fire settings |
 | `demo-smoothing.md` | Recorded games drawn between their frames: the client's one-frame-behind playback, the rules for players, the tracked view and entities, where it snaps |
 | `held-weapons.md` | The first-person weapon's frames: the axe's two swings, how a swing is picked, when the frame is set, what the client draws |

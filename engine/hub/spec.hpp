@@ -12,7 +12,8 @@
 // THE DEMO'S CONTENT (`demo_files`, content.hpp): a game that can say which of its files a demo
 // draws from (its map, the models and sounds it lists, what every picture needs) lets the hub send
 // a viewer a small pack of only those instead of every pack it holds; `file_needs` adds what a
-// file found names in turn (a map whose textures are files of their own).
+// file found names in turn (a map whose textures are files of their own). `map_files` does the same
+// for playing a map in the page (the Play page).
 //
 // ge:summary A game's hub spec (words, protocol, modes and weights) and the interest rule
 // ge:keywords hub spec hubspec mode weight interest order cards score-column game words
@@ -29,6 +30,7 @@
 
 #include "hub/poller.hpp"
 #include "net/server_list.hpp"
+#include "vfs/search.hpp"
 
 namespace ge::hub {
 
@@ -59,6 +61,14 @@ struct HubSpec {
   std::function<void(std::string_view name, std::span<const uint8_t> bytes,
                      std::vector<std::string>& more)>
       file_needs;
+  // The content paths a match on `map` needs (docs/hub.md § Playing in a browser), read out of
+  // `files` (the packs beside the viewer, the map among them) as `demo_files` names them; false
+  // with the reason when the map does not play. Unset: the hub has no Play page.
+  std::function<bool(std::string_view map, const vfs::SearchPath& files,
+                     std::vector<std::string>& names, std::string& error)>
+      map_files;
+  // Whether a map the packs hold is one to play (a game keeps some models as maps). Unset: all.
+  std::function<bool(std::string_view map)> map_shown;
 };
 
 // How long a match may sit in its intermission before it drops to the bottom.

@@ -45,6 +45,18 @@ const char* held(const RulesCommon& s, int slot) {
   return weapon_name(s.world.clients[slot].numbers.weapon);
 }
 
+// The bend told to the player it helped (his client turns the view onto `target`: aim_turn.hpp).
+void tell_bend(RulesCommon& s, int slot, int target) {
+  s.sv.clients[slot].aim_helped++;
+  NetEvent ev;
+  ev.kind = EventKind::aim_bend;
+  ev.to = 1u << slot;
+  ev.time = s.sv.time;
+  ev.ent = target;
+  s.out.events.push_back(std::move(ev));
+  s.out.events_total++;
+}
+
 void lead_missile(void* ctx, sh::Server& /*sv*/, int missile) {
   RulesCommon& s = *static_cast<RulesCommon*>(ctx);
   const int shooter = s.sv.edicts[static_cast<size_t>(missile)].owner;
@@ -53,8 +65,9 @@ void lead_missile(void* ctx, sh::Server& /*sv*/, int missile) {
     return;
   if (!aim_help_weapon_allowed(s, held(s, slot))) return;
   const sh::AimLeeway leeway{s.sv.set.aimhelp_x, s.sv.set.aimhelp_y};
-  if (sh::aim_help_missile(s.sv, missile, leeway, team_friends(s, slot)) >= 0)
-    s.sv.clients[slot].aim_helped++;
+  if (const int target = sh::aim_help_missile(s.sv, missile, leeway, team_friends(s, slot));
+      target >= 0)
+    tell_bend(s, slot, target);
 }
 
 }  // namespace
@@ -121,7 +134,7 @@ int help_traced_shot(RulesCommon& s, int pass, sh::Vec3f start, sh::Vec3f& end) 
   if (!aim_help_weapon_allowed(s, held(s, slot))) return -1;
   const sh::AimLeeway leeway{s.sv.set.aimhelp_x, s.sv.set.aimhelp_y};
   const int target = sh::aim_help_line(s.sv, pass, start, end, leeway, team_friends(s, slot));
-  if (target >= 0) s.sv.clients[slot].aim_helped++;
+  if (target >= 0) tell_bend(s, slot, target);
   return target;
 }
 

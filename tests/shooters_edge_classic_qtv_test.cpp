@@ -225,6 +225,14 @@ TEST(a_relay_is_sent_the_match_and_its_chat_reaches_the_players) {
   // The stream after the answer: a multiview recording the reader plays to its end.
   std::vector<uint8_t> stream(r.got.begin() + static_cast<std::ptrdiff_t>(used), r.got.end());
   CHECK(has(stream, "fullserverinfo \"") && has(stream, "skins\n"));
+  // The sound list comes before the model list: an existing client playing the stream refuses the
+  // entities' model indexes when it comes after.
+  const std::string models_at = std::string("\x2d\x00maps/", 7);
+  const auto model_list =
+      std::search(stream.begin(), stream.end(), models_at.begin(), models_at.end());
+  const uint8_t sounds_at[2] = {0x2e, 0x00};
+  const auto sound_list = std::search(stream.begin(), stream.end(), sounds_at, sounds_at + 2);
+  CHECK(model_list != stream.end() && sound_list < model_list);
   cl::Demo d;
   std::string error;
   CHECK_MSG(cl::open_demo(stream, d, error), error);

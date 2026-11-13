@@ -1,7 +1,8 @@
 // engine/web/viewer_args.hpp: the words the hub's page hands a web viewer, read and refused.
 //
-// ge:summary Test: the web viewer's arguments (--demo, --tv, --stream, --pack, --speed)
-// ge:keywords test web viewer arguments parse_viewer_args demo tv stream pack speed
+// ge:summary Test: the web viewer's arguments (--demo, --tv, --stream, --play, --bots, --pack,
+// ge:summary --speed)
+// ge:keywords test web viewer arguments parse_viewer_args demo tv stream pack speed play bots
 // ge:skill net testing
 #include "web/viewer_args.hpp"
 
@@ -42,9 +43,9 @@ TEST(a_watch_page_s_words_are_read) {
 TEST(wrong_words_are_refused_with_what_the_viewer_takes) {
   ViewerArgs a;
   std::string error;
-  CHECK(!parse({}, a, error) && error.find("neither --demo nor --tv") != std::string::npos);
+  CHECK(!parse({}, a, error) && error.find("none of --demo, --tv and --play") != std::string::npos);
   CHECK(!parse({"--demo=/d/x", "--tv=ws://h:1/", "--stream=1"}, a, error));
-  CHECK(error.find("both") != std::string::npos);
+  CHECK(error.find("more than one") != std::string::npos);
   CHECK(!parse({"--tv=ws://h:1/"}, a, error) && error.find("--stream") != std::string::npos);
   CHECK(!parse({"--tv=http://h:1/", "--stream=1"}, a, error));
   CHECK(error.find("not a WebSocket") != std::string::npos);
@@ -54,4 +55,18 @@ TEST(wrong_words_are_refused_with_what_the_viewer_takes) {
   CHECK(!parse({"--demo=/d/x", "--fly"}, a, error));
   CHECK(error.find("--fly") != std::string::npos &&
         error.find("--pack=<url>") != std::string::npos);
+}
+
+TEST(a_play_page_s_words_are_read) {
+  ViewerArgs a;
+  std::string error;
+  CHECK(parse({"--play=dm3", "--bots=5", "--pack=/content/ab.pak.zst"}, a, error));
+  CHECK(a.play == "dm3" && a.bots == 5 && a.demo.empty() && a.tv.empty() && a.packs.size() == 1);
+  CHECK(parse({"--play=e1m1"}, a, error) && a.bots == 3);
+  CHECK(!parse({"--play=../x"}, a, error) && error.find("not a map") != std::string::npos);
+  CHECK(!parse({"--play=dm3", "--bots=16"}, a, error) &&
+        error.find("0 to 15") != std::string::npos);
+  CHECK(!parse({"--demo=/d/x", "--bots=2"}, a, error) &&
+        error.find("goes with --play") != std::string::npos);
+  CHECK(!parse({"--demo=/d/x", "--play=dm3"}, a, error));
 }

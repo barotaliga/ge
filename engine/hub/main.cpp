@@ -77,6 +77,9 @@ bool hub_options(const std::vector<std::string>& args, HubOptions& out, std::str
     } else if (key == "--accounts") {
       out.accounts = value;
       ok = !value.empty();
+    } else if (key == "--trusted-servers") {
+      out.trusted_servers = value;
+      ok = !value.empty();
     } else if (key == "--accounts-port") {
       ok = number(value, d) && d >= 1 && d <= 65535 && d == static_cast<int>(d);
       out.accounts_port = static_cast<int>(d);
@@ -141,6 +144,8 @@ std::string hub_help(const HubSpec& spec) {
          "  --accounts=<dir>          run the account service here: the store and its key in "
          "<dir> (docs/accounts.md)\n"
          "  --accounts-port=<n>       the account service's UDP port (default 27901)\n"
+         "  --trusted-servers=<file>  game servers' keys, one a line, whose match reports count "
+         "toward players' totals\n"
          "  --viewer=<dir>            serve the game's web viewer from <dir> (the build's "
          "<game>_viewer folder) on the Watch and Demo pages\n"
          "  --status=<s>              a status line this often (default 60)\n"
@@ -239,9 +244,12 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
   if (!o.accounts.empty()) {
     gn::Address accounts_at;
     const int port = o.accounts_port ? o.accounts_port : ge::account::kAccountPort;
-    if (!gn::parse_address(o.ip + ":" + std::to_string(port), accounts_at) ||
+    std::vector<gn::Key> trusted;
+    if ((!o.trusted_servers.empty() &&
+         !ge::account::load_trusted(o.trusted_servers, trusted, error)) ||
+        !gn::parse_address(o.ip + ":" + std::to_string(port), accounts_at) ||
         !ge::account::host_open(accounts, o.accounts, accounts_at, ge::account::HashCost{},
-                                unix_us(), error)) {
+                                unix_us(), error, trusted)) {
       std::fprintf(stderr, "%s_hub: --accounts: %s\n", spec.id.c_str(), error.c_str());
       close_udp();
       if (o.serve_master) gn::close_transport(master_port);
@@ -250,10 +258,13 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     if (!accounts.warning.empty()) {
       std::fprintf(stderr, "%s_hub: --accounts: %s\n", spec.id.c_str(), accounts.warning.c_str());
     }
-    std::printf("%s_hub: accounts in %s, %zu held, service on %s, key %s\n", spec.id.c_str(),
-                o.accounts.c_str(), accounts.svc.store.accounts.size(),
-                gn::to_string(accounts_at).c_str(),
-                gn::key_to_hex(ge::account::service_key(accounts.svc)).c_str());
+    std::printf(
+        "%s_hub: accounts in %s, %zu held, service on %s, key %s; %zu match reports, "
+        "%zu trusted servers\n",
+        spec.id.c_str(), o.accounts.c_str(), accounts.svc.store.accounts.size(),
+        gn::to_string(accounts_at).c_str(),
+        gn::key_to_hex(ge::account::service_key(accounts.svc)).c_str(),
+        accounts.svc.matches.kept.size(), trusted.size());
   }
   const auto close_accounts = [&] { ge::account::host_close(accounts); };
   HttpServer http;

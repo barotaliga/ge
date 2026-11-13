@@ -1,6 +1,6 @@
 // A demo's content pack, made and served (content.hpp).
 //
-// ge:summary A demo's content pack made from the viewer folder's packs and served by its hash
+// ge:summary A demo's or a map's content pack made from the viewer folder's packs, served by hash
 // ge:keywords hub content pack demo files zstd pak cache
 // ge:skill net
 // ge:test tests/hub_content_test.cpp
@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <mutex>
 #include <set>
 #include <utility>
 #include <vector>
@@ -69,45 +70,28 @@ std::string content_path(std::string_view sha) {
   return "content/" + std::string(sha) + ".pak.zst";
 }
 
-bool demo_content(const Site& site, const HubSpec& spec, std::string_view demo_sha,
-                  ContentPack& out, std::string& error) {
-  out = {};
-  if (!spec.demo_files) {
-    error = "the game names no demo's files";
+namespace {
+
+// A pack made before: the index names it. False when there is none (or its pack is gone).
+bool read_index(const Site& site, const fs::path& index, ContentPack& out) {
+  std::ifstream f(index);
+  std::string sha;
+  uint64_t raw = 0;
+  size_t files = 0, missing = 0;
+  std::error_code ec;
+  if (!(f >> sha >> raw >> files >> missing) || !is_hex64(sha) ||
+      !fs::is_regular_file(fs::path(site.archive->dir) / content_path(sha), ec))
     return false;
-  }
-  if (site.archive == nullptr || site.archive->dir.empty() || !is_hex64(demo_sha)) {
-    error = "no archive holds the demo " + std::string(demo_sha);
-    return false;
-  }
-  const fs::path root = fs::path(site.archive->dir) / "content";
-  const fs::path index = root / (std::string(demo_sha) + ".txt");
-  // Made before: the index names the pack.
-  {
-    std::ifstream f(index);
-    std::string sha;
-    uint64_t raw = 0;
-    size_t files = 0, missing = 0;
-    std::error_code ec;
-    if (f >> sha >> raw >> files >> missing && is_hex64(sha) &&
-        fs::is_regular_file(fs::path(site.archive->dir) / content_path(sha), ec)) {
-      out.sha = sha;
-      out.bytes = fs::file_size(fs::path(site.archive->dir) / content_path(sha), ec);
-      out.raw = raw;
-      out.files = files;
-      out.missing = missing;
-      return true;
-    }
-  }
-  std::vector<uint8_t> demo;
-  if (!read_file(fs::path(site.archive->dir) / archive_path(demo_sha), demo)) {
-    error = "the demo " + std::string(demo_sha) + " is not in the archive";
-    return false;
-  }
-  std::vector<std::string> names;
-  if (!spec.demo_files(demo, names, error)) return false;
-  // The viewer folder's packs, in the order the viewer mounts them.
-  vfs::SearchPath sp;
+  out.sha = sha;
+  out.bytes = fs::file_size(fs::path(site.archive->dir) / content_path(sha), ec);
+  out.raw = raw;
+  out.files = files;
+  out.missing = missing;
+  return true;
+}
+
+// The viewer folder's packs mounted in the order the viewer mounts them.
+bool mount_viewer_packs(const Site& site, vfs::SearchPath& sp, std::string& error) {
   std::vector<fs::path> packs;
   std::error_code ec;
   if (!site.viewer_dir.empty()) {
@@ -127,9 +111,17 @@ bool demo_content(const Site& site, const HubSpec& spec, std::string_view demo_s
     }
   }
   if (packs.empty()) {
-    error = "no pack beside the viewer to take the demo's files from";
+    error = "no pack beside the viewer to take the files from";
     return false;
   }
+  return true;
+}
+
+// The pack of `names` (a name ending in '/' takes the folder) out of `sp`, kept under its hash and
+// pointed at by `index`.
+bool make_pack(const Site& site, const HubSpec& spec, const vfs::SearchPath& sp,
+               const std::vector<std::string>& names, const fs::path& index, ContentPack& out,
+               std::string& error) {
   // The names asked for, the folders' files too.
   std::set<std::string> want;
   std::vector<std::string> folders;
@@ -179,15 +171,119 @@ bool demo_content(const Site& site, const HubSpec& spec, std::string_view demo_s
   out.bytes = packed.size();
   out.raw = pak.size();
   out.files = files.size();
+  std::error_code ec;
   const fs::path file = fs::path(site.archive->dir) / content_path(out.sha);
   if (!fs::is_regular_file(file, ec) && !write_file(file, packed)) {
-    error = "the content pack could not be written under " + root.string();
+    error = "the content pack could not be written under " + file.parent_path().string();
     return false;
   }
   const std::string line = out.sha + " " + std::to_string(out.raw) + " " +
                            std::to_string(out.files) + " " + std::to_string(out.missing) + "\n";
   write_file(index, {reinterpret_cast<const uint8_t*>(line.data()), line.size()});
   return true;
+}
+
+}  // namespace
+
+bool demo_content(const Site& site, const HubSpec& spec, std::string_view demo_sha,
+                  ContentPack& out, std::string& error) {
+  out = {};
+  if (!spec.demo_files) {
+    error = "the game names no demo's files";
+    return false;
+  }
+  if (site.archive == nullptr || site.archive->dir.empty() || !is_hex64(demo_sha)) {
+    error = "no archive holds the demo " + std::string(demo_sha);
+    return false;
+  }
+  const fs::path index = fs::path(site.archive->dir) / "content" / (std::string(demo_sha) + ".txt");
+  if (read_index(site, index, out)) return true;
+  std::vector<uint8_t> demo;
+  if (!read_file(fs::path(site.archive->dir) / archive_path(demo_sha), demo)) {
+    error = "the demo " + std::string(demo_sha) + " is not in the archive";
+    return false;
+  }
+  std::vector<std::string> names;
+  if (!spec.demo_files(demo, names, error)) return false;
+  vfs::SearchPath sp;
+  if (!mount_viewer_packs(site, sp, error)) return false;
+  return make_pack(site, spec, sp, names, index, out, error);
+}
+
+bool map_name_ok(std::string_view map) {
+  if (map.empty() || map.size() > kMostMapName) return false;
+  return std::all_of(map.begin(), map.end(), [](char c) {
+    return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
+  });
+}
+
+bool map_content(const Site& site, const HubSpec& spec, std::string_view map, ContentPack& out,
+                 std::string& error) {
+  out = {};
+  if (!spec.map_files) {
+    error = "the game names no map's files";
+    return false;
+  }
+  if (!map_name_ok(map)) {
+    error = "'" + std::string(map) + "' is not a map's name (lower-case letters, digits, _ and -)";
+    return false;
+  }
+  if (site.archive == nullptr || site.archive->dir.empty()) {
+    error = "this hub keeps no archive to keep the map's pack in (--archive=<dir>)";
+    return false;
+  }
+  const fs::path index =
+      fs::path(site.archive->dir) / "content" / ("map-" + std::string(map) + ".txt");
+  if (read_index(site, index, out)) return true;
+  vfs::SearchPath sp;
+  if (!mount_viewer_packs(site, sp, error)) return false;
+  if (vfs::find(sp, "maps/" + std::string(map) + ".bsp") == nullptr) {
+    error = "no pack beside the viewer holds the map " + std::string(map);
+    return false;
+  }
+  std::vector<std::string> names;
+  if (!spec.map_files(map, sp, names, error)) return false;
+  return make_pack(site, spec, sp, names, index, out, error);
+}
+
+std::vector<std::string> viewer_maps(const Site& site) {
+  // The packs are read again only when they change (they are tens of megabytes): the folder, each
+  // pack's name, size and time.
+  std::string key = site.viewer_dir;
+  std::error_code ec;
+  if (!site.viewer_dir.empty()) {
+    std::vector<std::string> parts;
+    for (fs::directory_iterator it(site.viewer_dir, ec), end; !ec && it != end; it.increment(ec)) {
+      const std::string ext = lower(it->path().extension().string());
+      if (!it->is_regular_file(ec) || (ext != ".pak" && ext != ".pk3")) continue;
+      parts.push_back(it->path().filename().string() + ":" + std::to_string(it->file_size(ec)) +
+                      ":" + std::to_string(it->last_write_time(ec).time_since_epoch().count()));
+    }
+    std::sort(parts.begin(), parts.end());
+    for (const std::string& p : parts) key += "|" + p;
+  }
+  static std::mutex lock;
+  static std::string read_for;
+  static std::vector<std::string> maps;
+  const std::lock_guard<std::mutex> hold(lock);
+  if (read_for == key) return maps;
+  maps.clear();
+  read_for = key;
+  vfs::SearchPath sp;
+  std::string error;
+  if (!mount_viewer_packs(site, sp, error)) return maps;
+  for (const vfs::Listed& l : vfs::list(sp)) {
+    const std::string n = lower(std::string(l.name));
+    constexpr std::string_view kDir = "maps/", kExt = ".bsp";
+    if (n.size() <= kDir.size() + kExt.size() || n.rfind(kDir, 0) != 0 ||
+        n.compare(n.size() - kExt.size(), kExt.size(), kExt) != 0)
+      continue;
+    const std::string name = n.substr(kDir.size(), n.size() - kDir.size() - kExt.size());
+    if (map_name_ok(name)) maps.push_back(name);
+  }
+  std::sort(maps.begin(), maps.end());
+  maps.erase(std::unique(maps.begin(), maps.end()), maps.end());
+  return maps;
 }
 
 bool content_answer(std::string_view path, const Site& site, Answer& out) {

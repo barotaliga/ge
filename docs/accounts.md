@@ -287,12 +287,31 @@ trailer and keeps those keys readable, so an archive of older demos still reads 
 reader moves to the report in the same pull request). The hub's new answers live in their own files
 beside `engine/hub/api.cpp`.
 
-The server sends it to the master it beats to, sealed with its own key, acknowledged and retried.
-The master adds each logged-in player's part to that account's totals per game and mode, and hands
-the reports to the hub. **Which reports count**: only those from servers whose key the master's
-owner has listed (`--trusted-servers`); any other server's matches are shown on the hub but add to
-no totals, since a server can say anything about its own matches. A match with bots is shown and
-counted, with its bots marked.
+Each player also carries the lowest, average and highest ping the server saw over the match.
+
+**Sending it** (`sv_stats 1`, the default; `engine/server/accounts.hpp`). A server that is its own
+master takes its reports in process and counts them as its own. A server with `sv_accountmaster`
+signs each report with a key of its own (`server.key` in its game folder, made at the first start;
+the start prints its public half for the master's owner) and sends it on a socket of its own,
+again every 2 s until the master's signed answer comes (a minute at most). It needs the master's
+key (`sv_accountkey`) to check that answer, and without it sends nothing and says so at the start.
+The datagrams are the account service's (`account/service.hpp`): the report is not sealed, since it
+is no secret, and the answer is smaller than the report, so the service amplifies nothing.
+
+**At the master** (`account/matches.hpp`). A report is taken once by its server's key and id, so
+one sent again counts once. **Which reports count**: only those from servers whose key the master's
+owner has listed (the hub's `--trusted-servers=<file>`, one key a line, and the service's own key);
+any other server's matches are kept and shown but add to no totals, since a server can say anything
+about its own matches. A match with bots is kept and counted for its logged-in players; a bot and a
+guest add to no totals. The reports are kept in `reports.log` beside the store and read back at
+start, so the totals come back by the trust the master has then; the last 256 are kept for the hub.
+
+**Totals** are kept per account, game, mode, map and ping band (the player's average ping in the
+match: under 40, 80, 120 or 200 ms, or more), and summed under a filter (`TotalsFilter`): every
+game or one, every map or one, chosen modes or every mode but some (all but ffa), and only matches
+played under a ping. So a player reads their stats whole, on one map, in one mode, or at a good
+ping, from the same records (the maintainer, 2026-11-13). The game's own columns are summed by name
+beside the common ones.
 
 The classic servers already on the internet report nothing to us; the hub's classic adapter reads
 their recent-stats answer into the same record, best effort and without accounts.
