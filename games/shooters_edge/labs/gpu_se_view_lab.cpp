@@ -27,13 +27,23 @@
 // PRIVATE pictures only; without it, the fixture: a hall and a room up a step from it. The run
 // heads the way of the longest clear run from where the player spawned.
 //
+// THE SEQUEL'S RULES (a map of brushes: `--rules=sequel` for the fixture, or a sequel's game folder
+// and map) work the view out on the server (plugins/shooter/sequel_view.hpp: `run_pitch`,
+// `run_roll`, `bob_up`, `bob_pitch`, `bob_roll`, the blows' and the shot's kicks, the dead view)
+// and the window eases what they send between their frames. There the reference is the rules' view
+// as sent; the blows are the rules' own (`sequel_view_blow`), the player fires the blaster once
+// while standing (its kick), and on the fixture the Exit holds the bob's lift, the strafe's roll,
+// the blows' kicks, the shot's and the dead roll to the rules' numbers.
+//
 // ge:summary Lab: the first-person view's bob, roll, kick, step and death against the classic
 // ge:keywords lab se-view view bob roll kick step-smoothing dead-roll first-person classic-view
 // ge:keywords cl_bob cl_rollangle v_kickpitch v_kickroll formulas listen-server
+// ge:keywords sequel-view run_pitch run_roll bob_up bob_pitch bob_roll
 // ge:skill camera shooter labs
 // ge:test tests/camera_first_person_test.cpp
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <memory>
 #include <string>
@@ -57,6 +67,8 @@
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/server/sequel_map.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -66,6 +78,7 @@ namespace gl = ge::lab;
 namespace br = ge::brush;
 namespace sh = ge::shooter;
 namespace cm = ge::camera;
+namespace sv = shooters_edge::server;
 
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kDeg = kPi / 180;
@@ -76,16 +89,34 @@ constexpr double kRollAngle = 2, kRollSpeed = 200;
 constexpr double kKickTime = 0.5, kKickPitch = 0.6, kKickRoll = 0.6, kKickMin = 10;
 constexpr double kStepRate = 80, kStepMax = 12;
 constexpr double kDeadEye = -16, kDeadRoll = 80;
+// The sequel's: the standing eye and the bob's top at a run (300 x bob_up).
+constexpr double kSequelEye = 22, kSequelBobTop = 1.2;
 
 // The fixture: a long hall (the writer's start in its middle, facing east) and a room 16 units up
 // at its east end (a step).
-bool fixture_files(cl::SearchPath& files, std::string& error) {
+bool fixture_files(cl::SearchPath& files, bool sequel, std::string& error) {
+  std::vector<uint8_t> map, pak;
+  if (sequel) {
+    // The sequel's rules move through brushes: the same hall and step as floors (no faces: the
+    // run is measured, not drawn).
+    br::BrushWorld w;
+    w.models.resize(1);
+    const float hall_lo[3] = {0, 0, -16}, hall_hi[3] = {3072, 1024, 0};
+    const float step_lo[3] = {3072, 0, -16}, step_hi[3] = {3584, 1024, 16};
+    w.models[0].push_back(br::box_brush(hall_lo, hall_hi, sh::kSqSolid, "world/floor"));
+    w.models[0].push_back(br::box_brush(step_lo, step_hi, sh::kSqSolid, "world/floor"));
+    br::Entity start;
+    start.pairs = {{"classname", "info_player_start"}, {"origin", "1536 512 24"}, {"angle", "0"}};
+    w.entities.push_back(start);
+    if (!br::write_brush_world(w, &map, &error)) return false;
+    if (!ge::vfs::write_pak({{"maps/steps.bsp", map}}, &pak, &error)) return false;
+    return cl::add_archive(files, "pak0.pak", std::move(pak), error);
+  }
   br::Fixture f;
   f.rooms.push_back({"hall", {0, 0, 0}, {3072, 1024, 256}, "floor", "wall", "ceiling", {}});
   f.rooms.push_back({"landing", {3072, 0, 16}, {3584, 1024, 256}, "floor", "wall", "ceiling", {}});
   f.lights.push_back({{1536, 512, 200}, 1600, 220});
   f.lights.push_back({{3328, 512, 200}, 600, 220});
-  std::vector<uint8_t> map, pak;
   if (!br::write_bsp(f, br::Family::v29, &map, &error)) return false;
   if (!ge::vfs::write_pak({{"maps/steps.bsp", map}}, &pak, &error)) return false;
   return cl::add_archive(files, "pak0.pak", std::move(pak), error);
@@ -133,7 +164,7 @@ struct Classic {
       double dx = blow->from.x - p.origin.x, dy = blow->from.y - p.origin.y,
              dz = blow->from.z - p.origin.z;
       const double len = ge::core::hypot3(dx, dy, dz);
-      if (len > 0) dx /= len, dy /= len, dz /= len;
+      if (len > 0) dx /= len, dy /= len;  // the blow's height plays no part
       kick_roll = count * (dx * sy - dy * cy) * kKickRoll;
       kick_pitch = count * (dx * cy + dy * sy) * kKickPitch;
       kick_left = kKickTime;
@@ -152,6 +183,19 @@ struct Classic {
 // The heading (of eight) with the longest clear run for the player's box from where he stands, to
 // 1024 units, so the run's stride is not cut short by a wall.
 float longest_run(const cl::Listen& l) {
+  if (const sv::SequelServer* sq = sv::sequel_of(*l.rules)) {  // the sequel's map and its trace
+    const sh::Vec3f at = l.server->world.entities[1].origin;
+    const sh::Vec3f mins{-16, -16, -24}, maxs{16, 16, 32};
+    float best = -1, yaw = l.view.y;
+    for (int k = 0; k < 8; k++) {
+      const double a = k * 45 * kDeg;
+      const sh::Vec3f to{at.x + static_cast<float>(1024 * ge::core::libm::cos(a)),
+                         at.y + static_cast<float>(1024 * ge::core::libm::sin(a)), at.z};
+      const float run = sv::map_trace(*sq, at, mins, maxs, to, sh::kSqSolid).fraction;
+      if (run > best) best = run, yaw = static_cast<float>(k * 45);
+    }
+    return yaw;
+  }
   const sh::Server& srv = l.server->sv;
   const sh::Vec3f at = srv.edicts[1].origin;
   sh::MoveWorld world;
@@ -169,7 +213,7 @@ float longest_run(const cl::Listen& l) {
   return yaw;
 }
 
-enum class Phase { stand, run, jump, strafe_right, strafe_left, hit, climb, dead };
+enum class Phase : uint8_t { stand, run, jump, strafe_right, strafe_left, hit, climb, dead };
 const char* const kPhaseNames[] = {"stand",       "run",   "jump",   "strafe right",
                                    "strafe left", "blows", "run on", "dead"};
 
@@ -203,7 +247,8 @@ struct Film {
 };
 
 void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& map_name,
-                const Pictures& pics, std::vector<Row>& rows, std::vector<Film>& film) {
+                const Pictures& pics, std::vector<Row>& rows, std::vector<Film>& film,
+                bool& sequel) {
   static const ge::progs::Progs progs = [] {
     ge::progs::Progs p;
     std::string why;
@@ -219,6 +264,8 @@ void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& ma
     return;
   }
   const double tic = cl::listen_tic(l);
+  // A map of brushes plays on the sequel's rules, whose server works the view out itself.
+  sequel = sv::sequel_of(*l.rules) != nullptr;
   for (int i = 0; i < 100; i++) cl::listen_frame(l, {});  // spawned and landed
   const float yaw = longest_run(l);
   cl::ViewState shown;
@@ -251,6 +298,7 @@ void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& ma
   Classic classic;
   double t = 0;
   bool drew_bob = false, drew_strafe = false, drew_kick = false, drew_dead = false;
+  bool drew_shot = !sequel;
   for (const Step& step : kScript) {
     const int frames = static_cast<int>(step.seconds / tic);
     for (int i = 0; i < frames; i++) {
@@ -272,6 +320,9 @@ void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& ma
         case Phase::strafe_left:
           cmd.side = -350;
           break;
+        case Phase::stand:  // the sequel's blaster, once: its kick for one rules frame
+          if (sequel && i == int(0.25 / tic)) cmd.buttons = sh::kButtonAttack;
+          break;
         default:
           break;
       }
@@ -290,8 +341,13 @@ void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& ma
         b.blood = right ? 30 : 20;
         b.from = {p.origin.x + static_cast<float>(128 * ge::core::libm::cos(a)),
                   p.origin.y + static_cast<float>(128 * ge::core::libm::sin(a)), p.origin.z};
-        l.blows.push_back(b);
-        blow = &b;
+        if (sequel) {  // the rules' own blow, as a hit by the sequel's fight lands it
+          sh::sequel_view_blow(sv::sequel_of(*l.rules)->players[0].view, right ? 30 : 20,
+                               right ? 30 : 20, b.from - p.origin);
+        } else {
+          l.blows.push_back(b);
+          blow = &b;
+        }
       }
       const ge::render::FrameView view = cl::frame_view(l, shown, 1, t, tic);
       cl::step_fx(l, shown, fx_state, t, tic, fx);
@@ -301,51 +357,80 @@ void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& ma
       r.ground = p.on_ground;
       r.eye = (shown.pose.eye.y - cl::engine_point(p.origin).y) / br::kUnitM;
       r.roll = shown.pose.roll / kDeg;
-      r.pitch = -(shown.pose.pitch - cl::engine_pitch(l.view.x)) / kDeg;
-      classic.frame(p, yaw, blow, tic, r.eye_classic, r.roll_classic, r.pitch_classic);
+      r.pitch = -(shown.pose.pitch - cl::engine_pitch(0.0f)) / kDeg;  // from the look, level
+      if (sequel) {
+        // The rules' view as sent this frame: the window shows it eased between rules frames.
+        const shooters_edge::server::PlayerNumbers& n = l.server->world.clients[0].numbers;
+        r.eye_classic = n.view_offset[2];
+        r.roll_classic = p.dead ? sh::kSequelDeadRoll : n.kick[2];
+        r.pitch_classic = p.dead ? sh::kSequelDeadPitch : n.kick[0];
+      } else {
+        classic.frame(p, yaw, blow, tic, r.eye_classic, r.roll_classic, r.pitch_classic);
+      }
       rows.push_back(r);
       (void)view;
       // The pictures: the bob's top while running, the roll at full strafe, the kick's first
-      // frame, the dead view a second on.
-      const double bob_now = r.eye_classic - p.view_ofs.z;
-
+      // frame, the dead view a second on (and the sequel's shot).
+      const double bob_now = r.eye_classic - (sequel ? kSequelEye : p.view_ofs.z);
+      if (!drew_shot && step.phase == Phase::stand && r.pitch_classic < -0.5) {
+        drew_shot = true;
+        draw("shot", "A SHOT: THE WEAPON'S KICK",
+             "The frame the blaster fires: the view tipped 1 degree up and the eye 2 units back, "
+             "for one rules frame.",
+             "the view a touch higher than standing", t);
+      }
       if (!drew_bob && step.phase == Phase::run && i > frames / 8 && p.on_ground &&
-          bob_now >= kBobHi - 1e-6) {
+          bob_now >= (sequel ? kSequelBobTop : kBobHi - 1e-6)) {
         drew_bob = true;
         draw("run-bob", "RUNNING: THE BOB AT ITS TOP",
-             "From the eyes running at full speed, at the top of the stride's bob (+4 units).",
+             sequel ? "From the eyes running at full speed, at the top of the stride (the eye 1.5 "
+                      "units up, the view nodded down by the run and the stride)."
+                    : "From the eyes running at full speed, at the top of the stride's bob (+4 "
+                      "units).",
              "the view a little higher than standing, level", t);
       }
       if (!drew_strafe && step.phase == Phase::strafe_right && i == frames - 1) {
         drew_strafe = true;
         draw("strafe-right", "STRAFING RIGHT: THE ROLL",
-             "From the eyes strafing right at full speed: the horizon rolled 2 degrees, right "
-             "side down.",
+             sequel ? "From the eyes strafing right at full speed: the horizon rolled 1.5 degrees "
+                      "(300 x run_roll), right side down."
+                    : "From the eyes strafing right at full speed: the horizon rolled 2 degrees, "
+                      "right side down.",
              "the horizon tipped down to the right, a little", t);
       }
-      if (!drew_kick && blow != nullptr) {
+      if (!drew_kick &&
+          (sequel ? step.phase == Phase::hit && r.roll_classic > 5 : blow != nullptr)) {
         drew_kick = true;
         draw("kick-right", "A BLOW FROM THE RIGHT: THE KICK",
-             "The frame a blow of 30 from the right lands: the view tipped 9 degrees toward it.",
+             sequel ? "The rules frame a blow of 30 from the right lands: the view tipped 9 "
+                      "degrees toward it (0.3 of 30 x 100 / health)."
+                    : "The frame a blow of 30 from the right lands: the view tipped 9 degrees "
+                      "toward it.",
              "the horizon tipped down to the right, more than the strafe's", t);
       }
       if (!drew_dead && step.phase == Phase::dead && i == frames - 1 && p.dead) {
         drew_dead = true;
         draw("dead", "DEAD: ON THE FLOOR",
-             "A second after the player died: the eye 16 units under the origin, the view rolled "
-             "80 degrees.",
+             sequel ? "A second after the player died: the eye low, the view rolled 40 degrees "
+                      "and looking 15 up."
+                    : "A second after the player died: the eye 16 units under the origin, the "
+                      "view rolled 80 degrees.",
              "the floor close and the world on its side", t);
       }
     }
   }
 }
 
-void chart(gl::Lab& lab, const std::vector<Row>& rows, const std::string& id,
+void chart(gl::Lab& lab, const std::vector<Row>& rows, bool sequel, const std::string& id,
            const std::string& title, const std::string& y_label, double Row::*view,
            double Row::*classic, const std::string& caption, const std::string& look_for) {
   gl::LineChart spec;
-  spec.frame = {title, "the classic look's defaults; one server frame a point", "t (s)", y_label};
-  gl::Trace a{"the view", {}, {}}, b{"the classic formula", {}, {}};
+  spec.frame = {title,
+                sequel ? "the sequel's rules, their view worked out by the server; a frame a point"
+                       : "the classic look's defaults; one server frame a point",
+                "t (s)", y_label};
+  gl::Trace a{"the view", {}, {}},
+      b{sequel ? "the rules' view as sent" : "the classic formula", {}, {}};
   for (const Row& r : rows) {
     a.x.push_back(r.t);
     a.y.push_back(r.*view);
@@ -366,7 +451,40 @@ void chart(gl::Lab& lab, const std::vector<Row>& rows, const std::string& id,
   lab.shot({id, c.title, caption, look_for, {}}, gl::to_picture(c.plot));
 }
 
-void report(gl::Lab& lab, const std::vector<Row>& rows) {
+// The sequel's view, checked by its own numbers: the window eases the rules' view between their
+// frames, so it trails what they sent by up to a frame and is not held to it.
+// On a real map the walls cut the script's moves short, so only the fixture is held to them.
+void check_sequel(gl::Lab& lab, const std::vector<Row>& rows, bool held) {
+  double top = -1e9, strafe = 0, blow_roll = 0, blow_pitch = 0, shot = 0, dead_roll = 0;
+  for (const Row& r : rows) {
+    if (r.phase == Phase::run) top = std::max(top, r.eye_classic);
+    if (r.phase == Phase::strafe_right) strafe = std::max(strafe, r.roll_classic);
+    if (r.phase == Phase::hit) blow_roll = std::max(blow_roll, r.roll_classic);
+    if (r.phase == Phase::hit) blow_pitch = std::min(blow_pitch, r.pitch_classic);
+    if (r.phase == Phase::stand) shot = std::min(shot, r.pitch_classic);
+    if (r.phase == Phase::dead) dead_roll = r.roll;
+  }
+  lab.metric("sequel.run.eye-top", top, "units");
+  lab.metric("sequel.strafe.roll", strafe, "deg");
+  lab.metric("sequel.blows.roll", blow_roll, "deg");
+  lab.metric("sequel.blows.pitch", blow_pitch, "deg");
+  lab.metric("sequel.shot.pitch", shot, "deg");
+  lab.metric("sequel.dead.roll", dead_roll, "deg");
+  std::string off;
+  if (top < kSequelEye + 1) off += " the run's eye tops at " + std::to_string(top) + ";";
+  if (strafe < 1.2 || strafe > 2.5) off += " the strafe rolls " + std::to_string(strafe) + ";";
+  if (blow_roll < 8) off += " the blow from the right rolls " + std::to_string(blow_roll) + ";";
+  if (blow_pitch > -4) off += " the blow from ahead tips " + std::to_string(blow_pitch) + ";";
+  if (shot > -0.9) off += " the shot tips " + std::to_string(shot) + ";";
+  if (std::fabs(dead_roll - sh::kSequelDeadRoll) > 0.5)
+    off += " the dead view rolls " + std::to_string(dead_roll) + ";";
+  if (held && !off.empty())
+    lab.fail("se-view: the sequel's view is off its rules:" + off,
+             "Chart the phase where it parts (sequel-eye.png, sequel-roll.png, sequel-pitch.png) "
+             "against plugins/shooter/sequel_view.hpp's rules and its test. Skill: camera.");
+}
+
+void report(gl::Lab& lab, const std::vector<Row>& rows, bool sequel, bool fixture) {
   double eye = 0, roll = 0, pitch = 0, top = -1e9, low = 1e9, most_roll = 0, most_kick = 0;
   for (const Row& r : rows) {
     eye = std::max(eye, std::fabs(r.eye - r.eye_classic));
@@ -376,23 +494,27 @@ void report(gl::Lab& lab, const std::vector<Row>& rows) {
     if (r.phase == Phase::strafe_right) most_roll = std::max(most_roll, r.roll);
     if (r.phase == Phase::hit) most_kick = std::max(most_kick, std::fabs(r.pitch));
   }
-  lab.metric("eye.worst-off", eye, "units");
-  lab.metric("roll.worst-off", roll, "deg");
-  lab.metric("pitch.worst-off", pitch, "deg");
-  lab.metric("run.eye-top", top, "units");
-  lab.metric("run.eye-low", low, "units");
-  lab.metric("strafe.roll", most_roll, "deg");
-  lab.metric("blows.pitch", most_kick, "deg");
-  if (eye > 0.01 || roll > 0.01 || pitch > 0.01)
+  if (sequel) check_sequel(lab, rows, fixture);
+  if (!sequel) {
+    lab.metric("eye.worst-off", eye, "units");
+    lab.metric("roll.worst-off", roll, "deg");
+    lab.metric("pitch.worst-off", pitch, "deg");
+    lab.metric("run.eye-top", top, "units");
+    lab.metric("run.eye-low", low, "units");
+    lab.metric("strafe.roll", most_roll, "deg");
+    lab.metric("blows.pitch", most_kick, "deg");
+  }
+  if (!sequel && (eye > 0.01 || roll > 0.01 || pitch > 0.01))
     lab.fail("se-view: the view is off the classic formulas by up to " + std::to_string(eye) +
                  " units, " + std::to_string(roll) + " degrees of roll and " +
                  std::to_string(pitch) + " of pitch",
              "Chart the phase where it parts (eye.png, roll.png, pitch.png) and compare "
              "engine/camera/first_person.cpp's classic row with docs/camera.md § Shooter's Edge's "
              "view. Skill: camera.");
-  gl::LabTable table{"the script's phases: the view against the classic formulas",
-                     {"phase", "from (s)", "eye (u)", "classic", "roll (deg)", "classic",
-                      "pitch (deg)", "classic"},
+  const char* ref = sequel ? "rules" : "classic";
+  gl::LabTable table{sequel ? "the script's phases: the view against the rules' view as sent"
+                            : "the script's phases: the view against the classic formulas",
+                     {"phase", "from (s)", "eye (u)", ref, "roll (deg)", ref, "pitch (deg)", ref},
                      {}};
   for (size_t i = 0; i < rows.size();) {
     size_t j = i;
@@ -410,28 +532,48 @@ void report(gl::Lab& lab, const std::vector<Row>& rows) {
     i = j;
   }
   lab.table(table);
-  chart(lab, rows, "eye", "THE EYE OVER THE ORIGIN", "eye (units)", &Row::eye, &Row::eye_classic,
+  if (sequel) {
+    chart(lab, rows, true, "sequel-eye", "THE EYE OVER THE ORIGIN", "eye (units)", &Row::eye,
+          &Row::eye_classic,
+          "The eye over the origin through the script on the sequel's rules: 22 standing, the "
+          "stride's lift running (at most 300 x bob_up), the shot's push back, eased up the step, "
+          "low dead.",
+          "the view's line following the rules' a frame behind");
+    chart(lab, rows, true, "sequel-roll", "THE VIEW'S ROLL", "roll (deg, right side down)",
+          &Row::roll, &Row::roll_classic,
+          "The roll: the stride's sway, +1.5 strafing right and -1.5 left (run_roll), the kick "
+          "toward a blow from the right fading over half a second, 40 dead.",
+          "the view's line following the rules' a frame behind");
+    chart(lab, rows, true, "sequel-pitch", "THE VIEW'S PITCH FROM THE LOOK", "pitch (deg, down)",
+          &Row::pitch, &Row::pitch_classic,
+          "The pitch off the look: the blaster's one-frame kick up, the run's nod down "
+          "(run_pitch, bob_pitch), a blow from ahead tipping it up, 15 up dead.",
+          "the view's line following the rules' a frame behind");
+    return;
+  }
+  chart(lab, rows, false, "eye", "THE EYE OVER THE ORIGIN", "eye (units)", &Row::eye,
+        &Row::eye_classic,
         "The eye's height over the player's origin through the script: 22 standing, the bob "
         "while running (-7..+4), held in the air, eased up the step, 16 under the origin dead.",
         "the view's line on the formula's everywhere");
-  chart(lab, rows, "roll", "THE VIEW'S ROLL", "roll (deg, right side down)", &Row::roll,
+  chart(lab, rows, false, "roll", "THE VIEW'S ROLL", "roll (deg, right side down)", &Row::roll,
         &Row::roll_classic,
         "The roll: +2 strafing right, -2 strafing left, the kick toward a blow from the right "
         "fading over half a second, 80 dead.",
         "the view's line on the formula's everywhere");
-  chart(lab, rows, "pitch", "THE VIEW'S PITCH FROM THE LOOK", "pitch (deg, down)", &Row::pitch,
-        &Row::pitch_classic,
+  chart(lab, rows, false, "pitch", "THE VIEW'S PITCH FROM THE LOOK", "pitch (deg, down)",
+        &Row::pitch, &Row::pitch_classic,
         "The pitch off the player's look: the kick of a blow from in front, down toward it, "
         "fading over half a second.",
         "the view's line on the formula's everywhere");
 }
 
-void run(gl::Lab& lab) {
-  const std::string folder = lab.arg("game");
+// One run of the script: on the fixture by `sequel_fixture`'s rules, or on the folder's map.
+void run_one(gl::Lab& lab, const std::string& folder, bool sequel_fixture) {
   std::string error;
   cl::SearchPath files;
   if (folder.empty()) {
-    if (!fixture_files(files, error)) {
+    if (!fixture_files(files, sequel_fixture, error)) {
       lab.fail("se-view: the fixture: " + error, "Read the reason above. Skill: brush.");
       return;
     }
@@ -457,12 +599,28 @@ void run(gl::Lab& lab) {
   }
   std::vector<Row> rows;
   std::vector<Film> film;
-  run_script(lab, files, folder.empty() ? "steps" : lab.arg("map"), pics, rows, film);
+  bool sequel = false;
+  run_script(lab, files, folder.empty() ? "steps" : lab.arg("map"), pics, rows, film, sequel);
   if (rows.empty()) return;
-  report(lab, rows);
+  report(lab, rows, sequel, folder.empty());
   for (const Film& f : film)
-    lab.shot({f.id, f.title, f.caption, f.look_for, {{"map", lab.arg("map")}}}, f.picture,
-             gl::Det::measured);
+    lab.shot({(sequel ? "sequel-" : "") + f.id,
+              f.title,
+              f.caption,
+              f.look_for,
+              {{"map", lab.arg("map")}}},
+             f.picture, gl::Det::measured);
+}
+
+void run(gl::Lab& lab) {
+  const std::string folder = lab.arg("game");
+  const std::string& rules = lab.arg("rules");
+  if (!folder.empty()) {
+    run_one(lab, folder, false);
+    return;
+  }
+  if (rules != "sequel") run_one(lab, "", false);
+  if (rules != "classic") run_one(lab, "", true);
 }
 
 const gl::LabSpec kSpec{
@@ -477,7 +635,8 @@ const gl::LabSpec kSpec{
     "and frames from the eyes on a real map.",
     {
         {"game", "", "a game folder (<base>/<folder>); empty: the fixture hall and its step"},
-        {"map", "e1m1", "with --game: the map"},
+        {"map", "e1m1", "with --game: the map (a sequel's map plays on the sequel's rules)"},
+        {"rules", "both", "without --game: the fixture's rules: classic, sequel or both"},
     },
     "",
     run,

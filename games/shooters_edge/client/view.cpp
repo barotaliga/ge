@@ -113,7 +113,7 @@ ge::camera::Subject subject_of(const Listen& l, ge::camera::FirstPersonRow& row)
   s.look_pitch = engine_pitch(l.view.x);
   s.heading = s.look_yaw;
   // The eye over the feet: the mod's view offset, 16 units under the origin dead (lying down).
-  const double over = p.dead ? kDeadEyeUnits : static_cast<double>(p.view_ofs.z);
+  const double over = p.dead && !p.rules_view ? kDeadEyeUnits : static_cast<double>(p.view_ofs.z);
   row.eye_stand_m = row.eye_crouch_m = (over - ge::shooter::kPlayerMins.z) * ge::brush::kUnitM;
   return s;
 }

@@ -358,6 +358,8 @@ void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, 
   }
   if (damage == 0) return;                                                // the push lands
   if (p.invulnerable_until > s.level_time && !past_invulnerable) return;  // the push lands
+  // What he sees of it: its points and push kick the view toward where it came from.
+  sh::sequel_view_blow(p.view, damage, along ? knockback : 0, dir * -1.0f);
   int saved = 0;
   if (!no_armour) {
     if (along) saved += power_save(p, dir, damage);
@@ -653,6 +655,48 @@ void throw_grenade(SequelServer& s, int slot, float speed, double fuse) {
          ax, damage, quad, w, speed, fuse);
 }
 
+// The view's kick a shot gives (plugins/shooter/sequel_view.hpp), for one rules frame: up and back
+// along the aim by the weapon; the machinegun's and chaingun's a shake (dealt off the frame and the
+// slot, never the rules' own stream, so the shots fall where they did); the BFG's a long heave up.
+void weapon_kick(SequelServer& s, int slot, int w, sh::Vec3f forward) {
+  sh::SequelViewState& v = s.players[slot].view;
+  ge::core::Rng shake =
+      ge::core::make_rng(static_cast<uint32_t>(s.frame_number) * 64u + uint32_t(slot) + 0x5eedu);
+  const auto jitter = [&shake](float most) {
+    return static_cast<float>(ge::core::range(shake, -most, most));
+  };
+  float up = 0, back = 0;
+  switch (static_cast<SqWeapon>(w)) {
+    case SqWeapon::blaster:
+    case SqWeapon::hyperblaster:
+    case SqWeapon::grenade_launcher:
+    case SqWeapon::rocket_launcher:
+      up = 1, back = 2;
+      break;
+    case SqWeapon::shotgun:
+    case SqWeapon::super_shotgun:
+      up = 2, back = 2;
+      break;
+    case SqWeapon::railgun:
+      up = 3, back = 3;
+      break;
+    case SqWeapon::machinegun:
+    case SqWeapon::chaingun:
+      v.weapon_angles = {static_cast<SqWeapon>(w) == SqWeapon::chaingun ? jitter(0.7f) : 0.0f,
+                         jitter(0.7f), jitter(0.7f)};
+      v.weapon_origin = {jitter(0.35f), jitter(0.35f), jitter(0.35f)};
+      return;
+    case SqWeapon::bfg:
+      v.weapon_origin = forward * -2.0f;
+      sh::sequel_view_hard_kick(v, -40, jitter(8));
+      return;
+    default:
+      return;
+  }
+  v.weapon_angles = {-up, 0, 0};
+  v.weapon_origin = forward * -back;
+}
+
 void fire(SequelServer& s, int slot, int shots) {
   SequelPlayer& p = s.players[slot];
   if (p.silencer_shots <= 0) monster_noise(s, slot);
@@ -674,6 +718,7 @@ void fire(SequelServer& s, int slot, int shots) {
     p.silencer_shots--;
   else
     sound(s, slot + 1, origin, r.sound);
+  weapon_kick(s, slot, w, view_forward);
   switch (r.shot) {
     case SqShot::pellets:
       if (w == int(SqWeapon::super_shotgun)) {
@@ -809,6 +854,7 @@ void fight_spawn(SequelServer& s, int slot) {
   p.drown_damage = 2;
   p.old_fall = 0;
   p.gibbed = false;
+  p.view = {};
 }
 
 bool fight_use(SequelServer& s, int slot, int item) {
@@ -879,6 +925,7 @@ void fight_body_frame(SequelServer& s, int slot) {
   if (p.water_level == 3) return;
   if (p.water_level == 2) delta *= 0.25f;
   if (p.water_level == 1) delta *= 0.5f;
+  sh::sequel_view_fall(p.view, delta);  // a hard landing dips the view
   const bool no_falling = deathmatch(s) && (s.cvars.find("dmflags")->integer() & 8) != 0;
   if (delta <= 30 || no_falling) return;
   hurt(s, slot, -1, {0, 0, -1}, std::max(1, static_cast<int>((delta - 30) / 2)), 0, false,

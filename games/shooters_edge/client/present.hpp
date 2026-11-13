@@ -10,7 +10,10 @@
 //   tips the view toward where it came from by its count (half the armour and blood it took, at
 //   least `kKickCountMin`) times `v_kickroll` and `v_kickpitch`, fading over `v_kicktime`; the
 //   program's punch (its recoil kick, decaying on the server) is added to the view's angles,
-//   never the aim. `docs/camera.md` § Shooter's Edge's view.
+//   never the aim. `docs/camera.md` § Shooter's Edge's view. When the rules work the view out
+//   themselves (the sequel's, `PlayerState::rules_view`), their eye offset and kick angles are
+//   drawn between their last two frames and the rig adds no bob, roll or kick of its own; a step
+//   up is eased at `kRulesStepRate` within `kRulesStepMost`; dead, the view is the rules'.
 //   With `ViewState::lerp` (`r_lerpmove`) the eye's place is drawn one server frame behind,
 //   between the last two states (as the models are, model_lerp.hpp), so moving never shudders
 //   when the server's 72 or 77 frames a second fall unevenly on the display's; the look is the
@@ -37,10 +40,12 @@
 
 namespace shooters_edge::client {
 
-inline constexpr double kBlastS = 0.5;       // a blast is kept, s
-inline constexpr double kKickCountMin = 10;  // the least count a blow kicks the view by
-inline constexpr double kDeadRollDeg = 80;   // the view's roll dead
-inline constexpr float kEyeSnapUnits = 64;   // the eye moving farther in one state: not between
+inline constexpr double kBlastS = 0.5;         // a blast is kept, s
+inline constexpr double kRulesStepRate = 180;  // units/s: a step's 18 units over a tenth (sequel)
+inline constexpr double kRulesStepMost = 20;   // the most it lags, units (sequel)
+inline constexpr double kKickCountMin = 10;    // the least count a blow kicks the view by
+inline constexpr double kDeadRollDeg = 80;     // the view's roll dead
+inline constexpr float kEyeSnapUnits = 64;     // the eye moving farther in one state: not between
 
 struct Blast {
   ge::camera::Vec3 at;  // engine metres
@@ -65,6 +70,8 @@ struct ViewState {
   bool lerp = false;
   sh::Vec3f eye_prev, eye_now;
   double eye_prev_s = -1, eye_now_s = -1;
+  // The rules' own view (PlayerState::rules_view) at their last two frames and as drawn between.
+  sh::Vec3f offset_prev, offset_now, kick_prev, kick_now, offset, kick;
 };
 
 // The camera's cvars a player turns (cl_bob, cl_bobcycle, cl_bobup, cl_rollangle, cl_rollspeed,

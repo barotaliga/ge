@@ -183,6 +183,26 @@ server's state, within 0.01 units and degrees. Still open: the same view on a jo
 in demo playback (`demo_view` draws the eye as it was recorded, without the bob, the roll or the
 kick).
 
+**The sequel's view is the rules'.** On the sequel's rules (a map of brushes) the server works the
+view out once a rules frame (0.1 s) and sends it in the player state, so every client, ours or
+another, shows the same view; the window turns its own bob, roll and kick off and eases what the
+rules sent between their frames. `plugins/shooter/sequel_view.hpp` is the rule, any game on the
+sequel's rules calls it, and its server settings are:
+
+| What | The rules' view | Server cvars (defaults) |
+| --- | --- | --- |
+| The stride | a clock stepping 0.0625, 0.125 or 0.25 a frame by the ground speed (5..100, to 210, past it), its last step kept in the air, 4 times as fast ducked; its share \|sin(clock × π)\| | |
+| The bob | the share × the speed × `bob_up` lifts the eye (at most 6 units); × `bob_pitch` nods the view, × `bob_roll` sways it (its side flipped each stride; both × 6 ducked) | `bob_up` 0.005, `bob_pitch` 0.002, `bob_roll` 0.002 |
+| The run | the speed along the view × `run_pitch` dips it, across it × `run_roll` rolls it (a strafe right: right side down) | `run_pitch` 0.002, `run_roll` 0.005 |
+| A blow | the push × 100 / the health, at least half the points (at least 10), at most 50; 0.3 of it rolls the view toward the blow's side and tips it away from its front, fading over 0.5 s | |
+| A fall | a severity of 15 or more tips the view down by half of it (at most 40) and lowers the eye by 0.4 of that, over 0.3 s | |
+| A shot | the weapon's kick for one frame (the blaster and the launchers 1 degree up and 2 units back, the shotguns 2, the rail gun 3; the machine and chain guns a random shake; the big gun's long kick) | |
+| Dead | no kick; rolled 40 degrees, looking 15 up toward the killer | |
+| The eye | the view height, less the fall's dip, plus the lift and the shot's push, held to -14..14 across and -22..30 up | |
+
+The `se-view` lab runs the same script on the sequel's rules (`--rules=sequel`, or a sequel's map)
+and holds the fixture's bob, strafe roll, blows, shot and dead view to these numbers.
+
 ### Boom (`Boom`): the chase camera
 
 A lens on an arm that stands behind the subject on a yaw that FOLLOWS the way it travels, at a
