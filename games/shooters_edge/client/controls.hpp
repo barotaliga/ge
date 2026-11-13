@@ -21,6 +21,9 @@
 // - `lookspring`: while it is on, a player who moves on the ground without pitching the mouse has
 //   his pitch drift to the program's ideal pitch (`spring_view`: level ground centres it, a slope
 //   tilts it down or up the way he goes, at `kSpringSpeed` degrees a second).
+// - `aim_turn_view`: a player the server's aim help helps sees his view turn toward the player a
+//   shot was bent onto while he fires, and back to his own aim after (`cl_aimhelp_turn`, on by
+//   default; shooter/aim_turn.hpp), so his recording looks like his own aim.
 //
 // ge:summary The player's keys and mouse as the view's turn and the server's command
 // ge:keywords controls keys mouse-look raw-mouse sensitivity invert wasd jump fire impulse
@@ -37,6 +40,7 @@
 #include "console/console.hpp"
 #include "input/mouse_capture.hpp"
 #include "input/state.hpp"
+#include "shooter/aim_turn.hpp"
 #include "shooter/pmove.hpp"
 #include "shooters_edge/client/quick_fire.hpp"
 #include "shooters_edge/client/weapon_groups.hpp"
@@ -66,6 +70,7 @@ struct ControlSettings {
   int side_speed = 350;
   int up_speed = 200;
   double strafe_scale = 36;  // units/s of sidestep a degree the mouse's counts would have turned
+  bool aim_turn = true;      // cl_aimhelp_turn: the view turns onto the aim help's bend
   // in_mouse_release: what takes the pointer back from the look (input::Release's bits)
   uint32_t mouse_release = ge::input::kReleaseDefault;
   ControlButtons buttons;
@@ -82,6 +87,13 @@ struct Moves {
   bool left = false, right = false;  // turning
   int impulse = 0;
 };
+
+// The aim help's turn (shooter/aim_turn.hpp) for one frame, when `cl_aimhelp_turn` is on: the
+// view moved toward the player the server last bent a shot onto (`target_at` his middle, null when
+// gone), and back once the attack is let go; off, any turn left is given back at once.
+void aim_turn_view(const ControlSettings& c, ge::shooter::AimTurn& turn, ge::shooter::Vec3f& view,
+                   ge::shooter::Vec3f eye, const ge::shooter::Vec3f* target_at, bool attack,
+                   double dt);
 
 inline constexpr double kSpringSpeed = 90;  // degrees a second the lookspring drifts the pitch
 
