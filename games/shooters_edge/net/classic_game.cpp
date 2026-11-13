@@ -184,10 +184,12 @@ constexpr gs::GameRule kEndpointRules[] = {
      "0: a little further (the default); 1: exactly"},
     {"sv_safestrafe", "Commands of no sideways move put between a player's reversed strafes.",
      nullptr, "0: off (the default); 1..N: that many commands"},
-    {"sv_voip", "Whether players' voices are relayed to their team.", nullptr,
+    {"sv_voip", "Whether players' voices are relayed to those they talk to.", nullptr,
      "0: off (the default); 1: on"},
     {"sv_voipecho", "Whether a speaker hears his own voice back, to test it.", nullptr,
      "0: off (the default); 1: on"},
+    {"sv_earshot", "How near a player must stand to read nearby chat and hear a nearby voice.",
+     nullptr, "0: no nearby chat or voice; 1..65536: that many map units (1000 the default)"},
     {"sv_rconcrypt", "Whether the remote console takes only a hashed password.", nullptr,
      "0: the password itself or a hashed one (the default); 1: only a hashed one"},
     {"sv_rcontime", "The seconds a hashed remote console line's time may be off by.", nullptr,
@@ -483,6 +485,7 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
       !endpoint_int(c, "sv_antilag", 0, 1, antilag, error) ||
       !endpoint_int(c, "sv_voip", 0, 1, voice, error) ||
       !endpoint_flag(c, "sv_voipecho", cfg.voice_echo, error) ||
+      !endpoint_int(c, "sv_earshot", 0, 65536, cfg.earshot, error) ||
       !endpoint_flag(c, "sv_antilagexact", cfg.antilag_exact, error) ||
       !endpoint_int(c, "sv_safestrafe", 0, 100, safe_strafe, error) ||
       !endpoint_flag(c, "sv_rconcrypt", cfg.rcon_crypt, error) ||
@@ -1622,6 +1625,12 @@ void host_speak(void* g, int gen, int seq, const std::vector<uint8_t>& data) {
   classic_local_voice(*game.classic, 0, m);
 }
 
+// The window's player's string command (a chat line, his voice's target), as a client's.
+void host_command(void* g, const std::string& line) {
+  Game& game = *static_cast<Game*>(g);
+  if (game.classic) string_command(*game.classic, 0, line);
+}
+
 void host_bind(Game& g) {
   if (g.host == nullptr) return;
   cl::ListenHost& h = *g.host;
@@ -1636,6 +1645,7 @@ void host_bind(Game& g) {
   h.set_info = host_info;
   h.speak = host_speak;
   h.admin = host_admin;
+  h.command = host_command;
 }
 
 gs::ServerGame make() {

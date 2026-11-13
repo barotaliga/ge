@@ -233,6 +233,7 @@ rules unless marked engine:
 | `sv_safestrafe` | `sv_safestrafe` | N: a reversed sideways move is zeroed until N commands of none lie between; in the server info |
 | `sv_antilagexact` | `sv_antilag_no_pred` | 1: the rewind goes to exactly the frame the shooter saw, no lead |
 | `sv_voipecho` | `sv_voip_echo` | 1: a speaker hears his own voice back |
+| `sv_earshot` | — | how near (map units, 1000) a player must stand, with no wall sound cannot pass, to read `say_near` and hear a voice aimed `near` (0: neither) |
 | `sv_rconcrypt` | `sv_crypt_rcon` | 1: the remote console takes only a hashed password (SHA-1 of the password, the time and the line); 0 takes either |
 | `sv_rcontime` | `sv_timestamplen` | seconds a hashed line's time may be off the server's clock (0: not checked; 60) |
 | `sv_rconrate` | `sv_rconlim` | remote console tries answered a second (0: no limit; 10) |

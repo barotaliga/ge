@@ -28,6 +28,7 @@
 #include "shooters_edge/server/classic_save.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 // The baseline mod's sources, built into the game (CMakeLists.txt: ge_embed_binary), in the
@@ -149,7 +150,19 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   if (ev.kind != sv::EventKind::point_effect) return;
   const float n = ev.values[3];  // the times asked for, 1..255 (NaN: once)
   const int count = !(n >= 1) ? 1 : n > 255 ? 255 : static_cast<int>(n);
-  if (uint8_t kind = 0; sv::classic_temp_entity(ev.text, kind)) {
+  // The sequel's names for effects the first game has: its sparks off a wall are a gunshot's hit,
+  // its blasts an explosion; the BFG's burst is an explosion and its own green burst too.
+  const std::string_view name = ev.text;
+  const bool blast = name == "te_bfg_bigexplosion" || name == "te_bfg_explosion" ||
+                     name == "te_rocket_explosion" || name == "te_grenade_explosion" ||
+                     name == "te_explosion1" || name == "te_explosion2" ||
+                     name == "te_plasma_explosion";
+  if (blast) l.explosions.push_back(ev.origin);
+  if (blast && name != "te_bfg_bigexplosion") return;
+  const bool sparks = name == "te_sparks" || name == "te_bullet_sparks" ||
+                      name == "te_screen_sparks" || name == "te_shield_sparks" ||
+                      name == "te_laser_sparks" || name == "te_shotgun";
+  if (uint8_t kind = 0; sv::classic_temp_entity(sparks ? "te_gunshot" : ev.text, kind)) {
     if (kind == kExplosion || kind == 4) {
       l.explosions.push_back(ev.origin);
       return;
@@ -1097,6 +1110,13 @@ bool on_lobby_screen(const Listen& l) {
   return l.room && l.server != nullptr && !sv::lobby_on_map(l.room->lobby, 0);
 }
 
+bool listen_command(Listen& l, const std::string& line) {
+  if (!l.match || !l.host || l.host->command == nullptr || l.host->game == nullptr) return false;
+  l.host->command(l.host->game, line);
+  catch_up(l);
+  return true;
+}
+
 bool listen_voice(const Listen& l) {
   return l.match && l.host && l.host->speak != nullptr && l.opt.voice;
 }
@@ -1148,6 +1168,24 @@ PlayerState player_state(const Listen& l) {
 
 void missiles_of(const Listen& l, std::vector<Missile>& out) {
   out.clear();
+  // The sequel's shots in flight, by their kind (a player's or a monster's alike).
+  if (const sv::SequelServer* sq = l.rules ? sv::sequel_of(*l.rules) : nullptr) {
+    const size_t first = sv::fight_first_row(*sq);
+    for (int k = 0; k < sv::kSequelMissiles; k++) {
+      const sv::SequelMissile& m = sq->missiles[k];
+      if (!m.live) continue;
+      Missile o;
+      o.entity = static_cast<int>(first) + k;
+      o.origin = m.origin;
+      o.rocket = m.kind == sv::SqShot::rocket || m.kind == sv::SqShot::grenade ||
+                 m.kind == sv::SqShot::hand_grenade;
+      o.grenade = m.kind == sv::SqShot::grenade || m.kind == sv::SqShot::hand_grenade;
+      o.bolt = m.kind == sv::SqShot::bolt;
+      o.bfg = m.kind == sv::SqShot::bfg;
+      out.push_back(o);
+    }
+    return;
+  }
   const sv::QcServer* q = program(l);
   if (q == nullptr) return;
   const sv::RulesCommon& s = *l.server;

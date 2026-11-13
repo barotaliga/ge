@@ -629,4 +629,140 @@ int bolt_lights(const gr::BeamShot& shot, double t_s, Light* out) {
   return n;
 }
 
+namespace {
+
+// A shining speck of `rgb` (linear) at `level` times a white surface's light, fading over `life`.
+Particle shine(const double p[3], const float rgb[3], double level, double size, double life,
+               Rng& r) {
+  Particle q = at(p);
+  double d[3];
+  unit(r, d);
+  set_v(q, d, rnd(r, 0.05, 0.3));
+  q.life = float(life * rnd(r, 0.8, 1.2));
+  q.size = float(size * rnd(r, 0.8, 1.2));
+  q.drag = 3.0f;
+  q.fall = 0.0f;
+  q.albedo = 0.3f;
+  q.opacity = 1;
+  q.kelvin = float(-level);
+  q.cool_s = float(life);
+  for (int k = 0; k < 3; ++k) q.tint[k] = rgb[k];
+  return q;
+}
+
+}  // namespace
+
+Light shot_glow(const double p[3], const float rgb[3], double radius_m, double level, int entity) {
+  Light l;
+  for (int k = 0; k < 3; ++k) l.pos[k] = p[k];
+  l.radius = radius_m;
+  for (int k = 0; k < 3; ++k) l.colour[k] = level * rgb[k];
+  l.entity = entity;
+  return l;
+}
+
+void glow_trail(const double from[3], const double to[3], const float rgb[3], double size,
+                double step, uint32_t seed, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+  const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+  const int n = std::min(64, std::max(1, int(len / step)));
+  for (int i = 0; i < n; ++i) {
+    const double t = (i + rnd(r, 0, 1)) / n;
+    const double p[3] = {from[0] + d[0] * t, from[1] + d[1] * t, from[2] + d[2] * t};
+    out->push_back(shine(p, rgb, 3.0, size, 0.25, r));
+  }
+}
+
+const gr::BeamLook& rail_look() {
+  static const gr::BeamLook l = [] {
+    gr::BeamLook a;
+    a.step_m = 0.05f;
+    a.wander = 0;  // a straight line: the slug's path
+    a.pull = 1;
+    a.filaments = 1;
+    a.braid_m = 0.07f;  // the helix wound round it
+    a.twist = 1.6f;
+    a.spin_hz = 0;
+    a.fork_chance = 0;
+    a.strike_hz = 0;
+    a.core_m = 0.02f;
+    a.glow_m = 0.28f;
+    a.core_rgb[0] = 0.9f, a.core_rgb[1] = 0.95f, a.core_rgb[2] = 1.0f;
+    a.glow_rgb[0] = 0.25f, a.glow_rgb[1] = 0.45f, a.glow_rgb[2] = 1.0f;
+    a.flash = 0.8f;
+    a.flash_s = 0.05f;
+    a.flicker = 0;
+    a.shimmer = 0.15f;
+    a.attack_s = 0.01f;
+    a.release_s = float(kRailFadeS);
+    a.light_cd = 1500;
+    a.hit_cd = 900;
+    a.root_cd = 300;
+    a.light_rgb[0] = 0.4f, a.light_rgb[1] = 0.55f, a.light_rgb[2] = 1.0f;
+    a.scorch_m = 0.25f;
+    a.ember_s = 0.4f;
+    return a;
+  }();
+  return l;
+}
+
+void rail_spiral(const double from[3], const double to[3], uint32_t seed, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+  const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+  if (len < 1e-4) return;
+  const double f[3] = {d[0] / len, d[1] / len, d[2] / len};
+  // Two axes across the line for the spiral.
+  double a[3] = {0, 1, 0};
+  if (std::abs(f[1]) > 0.9) a[0] = 1, a[1] = 0;
+  double u[3] = {f[1] * a[2] - f[2] * a[1], f[2] * a[0] - f[0] * a[2], f[0] * a[1] - f[1] * a[0]};
+  const double ul = std::sqrt(u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
+  for (double& x : u) x /= ul;
+  const double v[3] = {f[1] * u[2] - f[2] * u[1], f[2] * u[0] - f[0] * u[2],
+                       f[0] * u[1] - f[1] * u[0]};
+  static constexpr float kCore[3] = {0.9f, 0.95f, 1.0f};
+  static constexpr float kCoil[3] = {0.25f, 0.45f, 1.0f};
+  const int n = std::min(1500, int(len / 0.025));
+  for (int i = 0; i < n; ++i) {
+    const double s = len * i / n;
+    const double ang = s * 2 * 3.14159265358979 / 0.6;  // a turn every 0.6 m
+    const double c = std::cos(ang) * 0.07, sn = std::sin(ang) * 0.07;
+    const double p[3] = {from[0] + f[0] * s + u[0] * c + v[0] * sn,
+                         from[1] + f[1] * s + u[1] * c + v[1] * sn,
+                         from[2] + f[2] * s + u[2] * c + v[2] * sn};
+    Particle q = shine(p, kCoil, 2.0, 0.03, 0.9, r);
+    for (int k = 0; k < 3; ++k) q.v[k] = float((u[k] * c + v[k] * sn) * 0.6);
+    out->push_back(q);
+    if (i % 3 == 0) {
+      const double core[3] = {from[0] + f[0] * s, from[1] + f[1] * s, from[2] + f[2] * s};
+      out->push_back(shine(core, kCore, 2.5, 0.02, 0.5, r));
+    }
+  }
+}
+
+void blaster_hit(const double p[3], uint32_t seed, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int i = 0; i < 24; ++i) {
+    double d[3];
+    unit(r, d);
+    Particle q = ember(p, d, rnd(r, 1.5, 4.0), 2600, 0.12, rnd(r, 0.15, 0.4), r);
+    q.size = float(rnd(r, 0.02, 0.035));
+    out->push_back(q);
+  }
+  for (int i = 0; i < 6; ++i) out->push_back(shine(p, kBoltRgb, 3.0, 0.08, 0.15, r));
+}
+
+void bfg_burst(const double p[3], uint32_t seed, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int i = 0; i < 160; ++i) {
+    double d[3];
+    unit(r, d);
+    Particle q = shine(p, kBfgRgb, 3.0, rnd(r, 0.06, 0.14), rnd(r, 0.6, 1.2), r);
+    set_v(q, d, rnd(r, 2.0, 7.0));
+    q.drag = 1.5f;
+    out->push_back(q);
+  }
+}
+
 }  // namespace shooters_edge::effects

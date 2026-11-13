@@ -170,7 +170,7 @@ void run(ge::lab::Lab& lab) {
     ge::lab::fill_rect(p, 0, 0, 1280, 220, {8, 14, 10, 235});
     w.write(p, FontId::terminal, LookId::phosphor,
             "] exec autoexec.cfg\nexecing autoexec.cfg\n] sv_gravity 800\n"
-            "\"sv_gravity\" is \"800\"\n] say_prox anyone at the lift?\n] _",
+            "\"sv_gravity\" is \"800\"\n] say_near anyone at the lift?\n] _",
             16, 10, 32);
     ge::lab::fill_rect(p, 0, 218, 1280, 2, {60, 200, 90, 255});
     w.write(p, FontId::gothic, LookId::rusted, "FALL LINE", 300, 250, 128, 6);
