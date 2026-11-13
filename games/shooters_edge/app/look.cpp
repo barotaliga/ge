@@ -162,9 +162,10 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
   cv.bind({.name = "r_skyname",
            .fallback = "",
            .flags = gc::kArchive,
-           .help = "A sky box drawn through every map's sky in place of the map's own, by the "
-                   "name of its six pictures under env/ or gfx/env/; empty, each map's own",
-           .kind = gc::CvarKind::text},
+           .help = "A sky box drawn through every map's sky in place of the map's own.",
+           .kind = gc::CvarKind::text,
+           .values = "\"\": each map's own sky (the default); TEXT: the sky box of that name, "
+                     "its six pictures under env/ or gfx/env/"},
           &picture.sky_name);
   cv.bind({.name = "r_farland_warm",
            .fallback = "0",

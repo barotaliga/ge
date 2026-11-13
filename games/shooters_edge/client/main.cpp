@@ -277,10 +277,11 @@ int run_main(int argc, char** argv) {
   console.cvars().bind({.name = "menu_attract",
                         .fallback = "auto",
                         .flags = ge::console::kArchive,
-                        .help = "the recordings a classic game plays behind its main menu, in "
-                                "turn (auto: the game's own; \"\": the title's night sky "
-                                "instead)",
-                        .kind = ge::console::CvarKind::text},
+                        .help = "The recordings a classic game plays in turn behind its main "
+                                "menu.",
+                        .kind = ge::console::CvarKind::text,
+                        .values = "auto: the game's own (the default); \"\": none, the title's "
+                                  "night sky; TEXT: these recordings, by name"},
                        &attract_demos);
   shooters_edge::menu::BoardView board_view;
   // The HUD's pictures: a classic game's own once its packs are open (below), Shooter's Edge's
