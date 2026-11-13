@@ -124,6 +124,10 @@
 // - `hide`: the launcher's owner (not a novice) holds the scattergun while no one is in sight, so
 //   a pack dropped holds no launcher, and takes the launcher up at a sighting
 //   (games/shooters_edge/bots/fighter.cpp, M18r.md 0k2); judging.
+// - `nogoal`: nothing worth taking, no item goal kept from before (a holder walking back to its
+//   claim stood on a full armour with it as its goal) (fighter.cpp, M18r.md 3); judging.
+// - `tripkeep`: on a scripted way to its goal item, the goal held unless it backs off
+//   (fighter.cpp, M18r.md 0c1); judging.
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
@@ -139,7 +143,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -239,9 +243,11 @@ enum class Feature : uint8_t {
   paceback,
   retreatrun,
   hide,
+  nogoal,
+  tripkeep,
   trial,
 };
-constexpr size_t kFeatures = 87;
+constexpr size_t kFeatures = 89;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
