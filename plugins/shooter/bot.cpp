@@ -61,6 +61,11 @@ constexpr double kCalmDrift = 3;   // degrees a second of the hand's drift, at m
 constexpr float kCalmAhead = 320;  // units on along the route the calm view looks at
 constexpr float kCalmVelSpeed = 150;  // (`calmvel`) past this, units/s, the calm view on the run
 constexpr double kCalmVelBand = 8;    // and held within this of it, degrees
+constexpr float kLookTurnMax = 60;    // (`lookturn`) the calm look this near the walk at most
+// (`viewbook`) people's view at a spot read off this many frames at least, this consistent
+// (hundredths of the mean resultant length), moving past this, units/s.
+constexpr int32_t kBookFrames = 30, kBookConsistency = 50;
+constexpr float kBookSpeed = 150;
 // The glance (bot.hpp `glance`): how often, how far round, what counts as open, how long held.
 constexpr double kGlanceMin_s = 1.2, kGlanceSpread_s = 1.3;
 constexpr float kGlanceSide = 75, kGlanceBack = 120;
@@ -726,6 +731,17 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
             break;
           }
         }
+      }
+      if (b.look_turn && std::fabs(wrap(look_yaw - pilot_yaw)) > kLookTurnMax) look_yaw = pilot_yaw;
+      if (b.view_booked && b.view_book != nullptr) {
+        const Edict& me_ent = sv.edicts[static_cast<size_t>(me)];
+        const float vx = me_ent.velocity.x, vy = me_ent.velocity.y;
+        float book_yaw = 0;
+        if (vx * vx + vy * vy > kBookSpeed * kBookSpeed &&
+            view_book_yaw(*b.view_book, me_ent.origin,
+                          static_cast<float>(core::libm::atan2(vy, vx) * (180 / core::kPi)),
+                          kBookFrames, kBookConsistency, book_yaw))
+          look_yaw = book_yaw;
       }
       // (`calmvel`) Moving at a run, the calm view looks the way it moves: an enemy appearing ahead
       // of the run was on the screen 25 % of the time with the view on the route's point 320 on
