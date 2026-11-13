@@ -115,11 +115,12 @@
 //   preset.
 // - `fightway`: in a fight, an enemy in sight who is not chasing (coming on under 100 units/s):
 //   the route's back key let go, the dodge's side key alone (games/shooters_edge/bots/footwork.cpp,
-//   M18r.md 0w); judging.
+//   M18r.md 0w); not kept (-4.2 dm2, -4.6 e1m2 head to head), in no preset.
 // - `letgo`: the aim's hold on a player lost from sight let go once he lies more than 100
-//   degrees off the way walked (bot.cpp, M18r.md 0w); judging.
+//   degrees off the way walked (bot.cpp, M18r.md 0w); not kept (-7.8, -3.6), in no preset.
 // - `retreatrun`: backing off, one more than 100 degrees off the way walked who is not coming on
-//   (under 100 units/s) is not aimed at: the run faces its way (bot.cpp, M18r.md 0w); judging.
+//   (under 100 units/s) is not aimed at: the run faces its way (bot.cpp, M18r.md 0w); not kept
+//   (-1.9, -0.7, slower), in no preset.
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
