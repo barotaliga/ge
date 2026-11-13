@@ -1124,15 +1124,33 @@ NavRoute plan_way(Pilot& p, int32_t from, int32_t goal) {
   std::span<const NavExtraLink> cut = p.cut;
   bool gaps_off = false;
   for (const double until : p.gaps_off_s) gaps_off = gaps_off || until > p.clock_s;
-  if (!p.shut_links.empty() || gaps_off) {
+  if (!p.shut_links.empty() || gaps_off || p.near_cut.from >= 0) {
     p.cut_all = p.cut;
     p.cut_all.insert(p.cut_all.end(), p.shut_links.begin(), p.shut_links.end());
     for (size_t i = 0; i < p.gaps_off.size(); i++)
       if (p.gaps_off_s[i] > p.clock_s) p.cut_all.push_back(p.gaps_off[i]);
+    if (p.near_cut.from >= 0) p.cut_all.push_back(p.near_cut);
     cut = p.cut_all;
   }
   return nav_route(*p.g, from, goal, p.search, 1,
                    std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut, p.set.jumper);
+}
+
+// (`gapnear`) The route's first gap trick when its takeoff is within `kGapCurveFrom` of the player
+// and his run does not already head at it at `kGapNearShare` of its speed: a run that cannot take
+// it (it would be given up on the next landing and kept off every route for 10 s); else none.
+NavExtraLink gap_too_near(const Pilot& p, const PilotSense& s, std::span<const int32_t> route) {
+  for (size_t j = 0; j + 1 < route.size(); j++) {
+    const NavLink* l = link_of(*p.g, route[j], route[j + 1]);
+    if (l == nullptr || !l->gap) continue;
+    const Vec3f S = node(*p.g, route[j]).origin, T = node(*p.g, route[j + 1]).origin;
+    if (across(s.origin, S) > kGapCurveFrom) break;
+    Vec3f dir{T.x - S.x, T.y - S.y, 0};
+    normalize(dir);
+    if (dot(Vec3f{s.velocity.x, s.velocity.y, 0}, dir) >= l->speed * kGapNearShare) break;
+    return {route[j], route[j + 1], NavKind::jump, l->time_s};
+  }
+  return {-1, -1, NavKind::jump, 0, 0};
 }
 
 }  // namespace
@@ -1164,6 +1182,17 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
   restart(p, s);
   p.via_k = -1;
   p.route = plan_way(p, plan_from(p, s), goal).nodes;
+  if (p.set.gap_near && !p.route.empty()) {
+    p.near_cut = gap_too_near(p, s, p.route);
+    if (p.near_cut.from >= 0) {
+      std::vector<int32_t> round = plan_way(p, plan_from(p, s), goal).nodes;
+      if (!round.empty()) {
+        p.route = std::move(round);
+        p.stats.gap_near++;
+      }
+      p.near_cut.from = -1;
+    }
+  }
   if (p.route.empty()) {
     p.mode = PilotMode::idle;
     return false;

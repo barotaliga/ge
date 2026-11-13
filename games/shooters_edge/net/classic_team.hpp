@@ -191,6 +191,7 @@ struct TeamPlayer {
   int64_t escapes = 0, escapes_out = 0;   // rockets out of a pit's liquid, and those landed out
   int64_t gap_jumps = 0, gap_landed = 0;  // gap tricks jumped out of a hop, and landed across
   int64_t gap_refused = 0;                // gap tricks given up (no jump lands across)
+  int64_t gap_near = 0;                   // (`gapnear`) routes planned round a gap too near
   int64_t hops = 0, hop_jumps = 0;        // hop stretches entered, and jumps pressed in them
   int64_t circles = 0;                    // hops started by a circle jump
   double circle_speed = 0;                // and their takeoff speeds, summed

@@ -1530,12 +1530,13 @@ void run(gl::Lab& lab) {
       lab.metric("team.escapes-out", static_cast<double>(eo), "count");
       // The gap tricks (shooter/nav_gaps.hpp): jumped out of a hop, landed across, given up.
       // People's on dm2 (the se-rj lab): the YA pit's about 6 a match, the RA pit's some 40.
-      int64_t gj = 0, gl = 0, gr = 0;
+      int64_t gj = 0, gl = 0, gr = 0, gn = 0;
       for (const cn::TeamPlayer& p : r.players)
-        gj += p.gap_jumps, gl += p.gap_landed, gr += p.gap_refused;
+        gj += p.gap_jumps, gl += p.gap_landed, gr += p.gap_refused, gn += p.gap_near;
       lab.metric("team.gap-jumps", static_cast<double>(gj), "count");
       lab.metric("team.gap-landed", static_cast<double>(gl), "count");
       lab.metric("team.gap-refused", static_cast<double>(gr), "count");
+      lab.metric("team.gap-near", static_cast<double>(gn), "count");  // `gapnear`: planned round
       // The hops (shooter/pilot.hpp): stretches entered, and jumps pressed on their landings.
       int64_t hs = 0, hj = 0;
       for (const cn::TeamPlayer& p : r.players) hs += p.hops, hj += p.hop_jumps;

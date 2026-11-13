@@ -191,6 +191,11 @@ struct PilotSettings {
   // `kGapTurnMost_s` at most, before it is given up (it was given up at once, and the way round
   // was through the water: e1m2's pool, 68 % of the refusals wet within 4 s).
   bool gap_turn = false;
+  // A GAP NOT PLANNED NEAR (`gapnear`): a route is not planned through a gap trick whose takeoff
+  // is within `kGapCurveFrom` unless the run already heads at it at `kGapNearShare` of its speed
+  // (planned from a run that could not take it, it was given up on the next landing and kept off
+  // every route for `kGapOff_s`).
+  bool gap_near = false;
   // THE SCRIPT'S ENTRY HAD NEAR IT (`scriptentry`, nav_script.hpp `script_keys`' loose entry).
   bool script_entry = false;
   CircleSettings circle;
@@ -335,6 +340,7 @@ struct PilotStats {
   int32_t gap_jumps = 0;            // gap tricks jumped out of a hop (nav_gaps.hpp)
   int32_t gap_landed = 0;           // and of them, landed by their landing node
   int32_t gap_refused = 0;          // gaps given up at the lip: no jump from there lands across
+  int32_t gap_near = 0;             // (`gapnear`) routes planned round a gap too near to take
   float gap_speed = 0;              // the gap jumps' takeoff speeds across, summed, units/s
   int32_t recipe_asks = 0;          // hop starts looked for in the book (`recipes`)
   int32_t recipe_commits = 0;       // and one proven and begun
@@ -465,6 +471,7 @@ struct Pilot {
   std::vector<int32_t> shut;               // doors the caller knows are shut: never planned through
   std::vector<NavExtraLink> shut_links;    // and links it knows are (onto a bridge still in)
   std::vector<NavExtraLink> cut_all;       // cut and shut_links together, for the route
+  NavExtraLink near_cut{-1, -1, NavKind::jump, 0, 0};  // (`gapnear`) a gap left out of one plan
   double wanted[3] = {}, pressed[3] = {};  // the last command's yaw, forward, side
   float lane = 0, lane_want = 0, lane_until = 0;  // the lane now, wanted, and until when (s)
   float offset = 0;                               // units off the line now (signed, left +)
