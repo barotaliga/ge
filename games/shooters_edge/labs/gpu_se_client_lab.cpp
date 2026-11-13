@@ -661,6 +661,27 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     a = b + 1;
   }
   if (!say.empty()) lab.metric("said.prints", static_cast<double>(l.prints.size()), "");
+  // `--botinfo="model cyborg;skin oni911"`: those user info keys on every player but you (the
+  // companions `--say=addbot` seated), as if each had set them.
+  const std::string botinfo = lab.arg("botinfo");
+  for (size_t a = 0; a < botinfo.size() && l.server != nullptr;) {
+    const size_t b = std::min(botinfo.find(';', a), botinfo.size());
+    const std::string pair = botinfo.substr(a, b - a);
+    const size_t gap = pair.find(' ');
+    if (gap != std::string::npos)
+      for (int i = 1; i < sh::kMaxClients; i++) {
+        auto& info = l.server->clients[size_t(i)].userinfo;
+        if (!l.server->clients[size_t(i)].active) continue;
+        const std::string key = pair.substr(0, gap), value = pair.substr(gap + 1);
+        auto it =
+            std::find_if(info.begin(), info.end(), [&](const auto& kv) { return kv.first == key; });
+        if (it != info.end())
+          it->second = value;
+        else
+          info.emplace_back(key, value);
+      }
+    a = b + 1;
+  }
   // The views: `--views` (x,y,z,yaw,pitch in the map's units and degrees, ';' between), the
   // player stood there; else the start, four ways.
   struct Place {
@@ -1090,6 +1111,8 @@ const gl::LabSpec kSpec{
      {"say", "",
       "with --game: console lines the player types first, ';' between (`vote fraglimit 30`), "
       "the server's answers in the HUD's feed"},
+     {"botinfo", "",
+      "with --say=addbot: user info keys on every player but you, ';' between (`model cyborg`)"},
      {"server", "",
       "with --game: the server's lines before the map starts, ';' between (`coop 1`: a coop "
       "game, where `--say=addbot` seats a companion)"}},

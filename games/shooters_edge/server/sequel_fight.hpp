@@ -127,6 +127,9 @@ sh::Vec3f fight_laser(SequelServer& s, sh::Vec3f start, sh::Vec3f end, int damag
                       int skip_entity);
 // A point effect (`te_*`) at `at` for everyone.
 void fight_effect(SequelServer& s, const char* name, sh::Vec3f at);
+// A line effect `name` from `a` to `b` that monster entity `from` makes (a cable it holds out, a
+// shot's flash from its gun along its aim): the window draws it, a classic client ignores it.
+void fight_monster_line(SequelServer& s, const char* name, int from, sh::Vec3f a, sh::Vec3f b);
 // An item (`classname`) thrown up from `at`, as a monster drops it at death.
 void fight_drop_at(SequelServer& s, sh::Vec3f at, const std::string& classname);
 // A body thrown apart at `at`: entity row `ent`'s sound and the blood.

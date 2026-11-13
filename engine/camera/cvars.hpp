@@ -26,7 +26,8 @@
 // ge:summary The camera's cvars: cl_fov, cl_bob, v_kick, cl_chase, cl_motion; units and defaults
 // ge:keywords camera cvars cvar settings cfg cl_fov cl_viewheight cl_bob cl_rollangle v_kickpitch
 // ge:keywords cl_camera cl_chasedist cl_fovspeed cl_camblend cl_motion cl_shake comfort world-unit
-// ge:keywords add_camera_cvars apply_camera_cvars camera-cvars camera-defaults
+// ge:keywords add_camera_cvars apply_camera_cvars apply_first_person_cvars camera-cvars
+// ge:keywords camera-defaults
 // ge:skill camera console
 // ge:test tests/camera_cvars_test.cpp
 #pragma once
@@ -78,6 +79,12 @@ void add_camera_cvars(console::Cvars& cvars, CameraCvars& out, const CameraDefau
 
 // The settings struct the cvars say (metres, radians, shares).
 CameraSettings camera_settings(const CameraCvars& v);
+
+// Write the first-person cvars over one row: `base` is the row as the game cut it (its view height
+// and landing dip, which the cvars scale), `out` the row the rig frames with. For a game that
+// frames one first-person rig of its own rather than a camera stack.
+void apply_first_person_cvars(const CameraCvars& v, const FirstPersonRow& base,
+                              FirstPersonRow& out);
 
 // Write the cvars over `cam`: its settings, and each rig's row over `ladder`'s own (the rows the
 // camera was made from, in its rung order). When `cl_camera` moved since the last apply, the rung

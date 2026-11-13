@@ -21,6 +21,29 @@ namespace {
 constexpr double kDeg = 3.14159265358979323846 / 180;
 }  // namespace
 
+void add_view_camera_cvars(ge::console::Cvars& c, ge::camera::CameraCvars& out) {
+  ge::camera::CameraDefaults d;  // the classic look's numbers, in map units
+  d.unit_m = ge::brush::kUnitM;
+  d.bob = 0.02;
+  d.bobcycle = 0.6;
+  d.bobup = 0.5;
+  d.rollangle = 2;
+  d.rollspeed = 200;
+  d.kicktime = 0.5;
+  d.kickpitch = d.kickroll = 0.6;
+  d.idlescale = 0;
+  d.landdip = 0;
+  ge::camera::add_camera_cvars(c, out, d);
+}
+
+void apply_view_cvars(const ge::camera::CameraCvars& c, ViewState& v) {
+  static const ge::camera::FirstPersonRow kClassic =
+      ge::camera::classic_first_person(ge::brush::kUnitM);
+  ge::camera::apply_first_person_cvars(c, kClassic, v.row);
+  v.viewheight_m = c.viewheight * c.unit_m;
+  if (c.fov > 0) v.row.fov_y = v.row.zoom_fov_y = ge::camera::fov_y_of(c.fov * kDeg, 4.0 / 3.0);
+}
+
 ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, double t, double dt) {
   // The mod's explosions since the last look (a rocket at point blank goes off in the frame that
   // fired it, so it is never seen in flight).
@@ -31,8 +54,18 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
         {engine_point(l.explosions[v.explosions_seen]), t, l.explosions[v.explosions_seen]});
   std::erase_if(v.blasts, [&](const Blast& b) { return t - b.t > kBlastS; });
 
-  ge::camera::Subject s = subject_of(l, v.row);
   const PlayerState me = player_state(l);
+  // The rules' own view (the sequel's): the bob, the tilts and the kicks are theirs, so the rig
+  // adds none; it eases a step up as the sequel's client does, 20 units at most over a tenth.
+  ge::camera::FirstPersonRow row = v.row;
+  if (me.rules_view) {
+    row.bob = 0;
+    row.roll_angle = row.kick_pitch = row.kick_roll = 0;
+    row.step_rise_mps = kRulesStepRate * ge::brush::kUnitM;
+    row.step_max_m = kRulesStepMost * ge::brush::kUnitM;
+  }
+  ge::camera::Subject s = subject_of(l, row);
+  if (v.viewheight_m > 0 && !me.rules_view) row.eye_stand_m = v.viewheight_m;
   // The eye's place between the last two states, one server frame behind.
   if (l.server != nullptr) {
     const double now = l.server->sv.time;
@@ -45,12 +78,26 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
       v.eye_prev_s = cut ? now : v.eye_now_s;
       v.eye_now = me.origin;
       v.eye_now_s = now;
+      v.offset_prev = cut ? me.view_ofs : v.offset_now;
+      v.kick_prev = cut ? me.kick : v.kick_now;
+      v.offset_now = me.view_ofs;
+      v.kick_now = me.kick;
     }
     const double gap = v.eye_now_s - v.eye_prev_s;
+    const double tic = listen_tic(l);
+    const double drawn = now + std::min(l.owed, tic) - tic;
+    const auto f = gap > 0 && gap <= 0.25
+                       ? static_cast<float>(std::clamp((drawn - v.eye_prev_s) / gap, 0.0, 1.0))
+                       : 1.0f;
+    // The rules' view between their last two frames, always (their 10 a second would judder).
+    if (me.rules_view) {
+      const auto mix = [f](sh::Vec3f a, sh::Vec3f b) { return a + (b - a) * f; };
+      v.offset = mix(v.offset_prev, v.offset_now);
+      v.kick = mix(v.kick_prev, v.kick_now);
+      row.eye_stand_m = row.eye_crouch_m =
+          (static_cast<double>(v.offset.z) - ge::shooter::kPlayerMins.z) * ge::brush::kUnitM;
+    }
     if (v.lerp && gap > 0 && gap <= 0.25) {
-      const double tic = listen_tic(l);
-      const double drawn = now + std::min(l.owed, tic) - tic;
-      const auto f = static_cast<float>(std::clamp((drawn - v.eye_prev_s) / gap, 0.0, 1.0));
       sh::Vec3f feet{v.eye_prev.x + (v.eye_now.x - v.eye_prev.x) * f,
                      v.eye_prev.y + (v.eye_now.y - v.eye_prev.y) * f,
                      v.eye_prev.z + (v.eye_now.z - v.eye_prev.z) * f};
@@ -58,8 +105,7 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
       s.pos = engine_point(feet);
     }
   }
-  // The blows since the last look, each kicking the view away from its source.
-  v.row.kick_pitch = v.row.kick_roll = kHitKickDeg * kDeg;
+  // The blows since the last look, each tipping the view toward its source by its count.
   if (l.blows.size() < v.blows_seen) v.blows_seen = 0;  // a new map
   for (; v.blows_seen < l.blows.size(); v.blows_seen++) {
     const Blow& b = l.blows[v.blows_seen];
@@ -68,7 +114,7 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
     const double len = ge::core::hypot3(dir.x, dir.y, dir.z);
     if (len > 0) dir = {dir.x / len, dir.y / len, dir.z / len};
     ge::camera::add_moment(s, ge::camera::Moment::hit,
-                           std::min(1.0, (b.armor + b.blood) / kFullBlow), dir);
+                           std::max(kKickCountMin, 0.5 * b.armor + 0.5 * b.blood), dir);
   }
   if (l.forced) ge::camera::add_moment(s, ge::camera::Moment::teleport, 0);
   if (s.grounded && !v.was_grounded)
@@ -78,11 +124,26 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
   v.fall_speed = me.velocity.z;
   ge::render::FrameView view;
   view.time_s = t;
-  v.pose = ge::camera::frame_first_person(v.row, s, v.eyes, dt, 1.0);
+  v.pose = ge::camera::frame_first_person(row, s, v.eyes, dt, 1.0);
+  if (me.rules_view) {  // the rules' kick angles, and the eye moved across by their offset
+    const ge::camera::Vec3 o = engine_point({0, 0, 0}),
+                           d = engine_point({v.offset.x, v.offset.y, 0});
+    v.pose.eye = {v.pose.eye.x + d.x - o.x, v.pose.eye.y + d.y - o.y, v.pose.eye.z + d.z - o.z};
+    v.pose.pitch -= v.kick.x * kDeg;
+    v.pose.yaw -= v.kick.y * kDeg;
+    v.pose.roll += v.kick.z * kDeg;
+  }
   // The program's punch on the view (pitch down and yaw left positive in the map's angles).
   v.pose.pitch -= me.punch.x * kDeg;
   v.pose.yaw -= me.punch.y * kDeg;
   v.pose.roll += me.punch.z * kDeg;
+  if (me.dead && me.rules_view) {  // the rules' dead view: on its side, looking up at the killer
+    v.pose.pitch = engine_pitch(me.v_angle.x);
+    v.pose.yaw = engine_heading(me.v_angle.y);
+    v.pose.roll = me.v_angle.z * kDeg;
+  } else if (me.dead) {
+    v.pose.roll = kDeadRollDeg * kDeg;  // lying on the floor
+  }
   ge::camera::to_frame_view(v.pose, view);
   return view;
 }

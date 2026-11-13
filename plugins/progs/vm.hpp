@@ -75,6 +75,11 @@ struct Vm;
 // to the return slot, and calls `vm_error` to fault.
 using Builtin = void (*)(Vm& vm);
 
+// A NATIVE FUNCTION: a function record whose first statement is -(kNativeBase + i) runs
+// `Vm::natives[i]` (native.hpp: a program whose functions are C++), called like a builtin with the
+// call's argument count in `vm.argc`. Numbers below kNativeBase are the builtin table's.
+constexpr int32_t kNativeBase = 0x10000;
+
 struct BuiltinSlot {
   Builtin fn = nullptr;
   const char* name = "";
@@ -137,6 +142,8 @@ struct Vm {
   // A builtin bound to a function by its name (`bind_by_name`), by function: its number, 0 none.
   std::vector<int32_t> named;
   int argc = 0;                       // the running builtin's argument count
+  std::span<const Builtin> natives;   // a native program's functions (native.hpp), by index
+  const void* native_data = nullptr;  // what they read (native.hpp's NativeOffsets)
   void* user = nullptr;               // the game's, for its builtins
   const TraceHooks* trace = nullptr;  // when set, every hook runs (slower)
 
@@ -197,6 +204,9 @@ int bind_by_name(Vm& vm, std::span<const NamedBuiltin> rows);
 
 // The engine's call of function `fn`. True when it returned; false on a fault (`vm.fault`).
 bool call_function(Vm& vm, int32_t fn);
+// Builtin `number` (or a native function at kNativeBase and up) run with `argc` arguments already
+// in the parameter slots, as a CALL runs it: what a native function calls the game through.
+bool call_builtin(Vm& vm, int32_t number, int argc);
 // Faults the running call with `message` (a builtin's error): the call returns false.
 void vm_error(Vm& vm, const char* message);
 void clear_fault(Vm& vm);

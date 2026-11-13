@@ -236,6 +236,17 @@ struct FxState {
   std::vector<MonsterSplash> monster_splashes;
   // A monster's gun's flash (its muzzle-flash effect bit): when each began, by entity.
   std::unordered_map<int, double> monster_fired;
+  // The sequel's monsters' shots leaving (`te_monster_flash.<kind>`), their light and fire held
+  // while they last.
+  struct MonsterFlash {
+    double at[3], dir[3];  // the shooter's eye and aim; the fire is drawn at its gun's tip
+    double t;
+    int entity;
+    bool sparked;  // the modern look's sparks thrown, once, at the tip
+    uint32_t seed;
+    effects::Flash kind;
+  };
+  std::vector<MonsterFlash> monster_flashes;
   std::unordered_map<uint32_t, std::array<float, 3>> wall_colours;  // each texture's, as hit
   std::vector<Wound> wounds;
   std::unordered_map<int, float> wound_health;  // each wounded body's health a frame ago
