@@ -54,7 +54,6 @@ void run(gl::Lab& lab) {
   fb::FightOptions o;
   o.frames = frames;
   o.seed = seed;
-  o.root = lab.arg("root");
   // The skills and temperaments, one a fighter, comma separated (empty: the defaults).
   const auto split = [](const std::string& list) {
     std::vector<std::string> out;
@@ -259,7 +258,6 @@ const gl::LabSpec kSpec{
     {
         {"frames", "9000", "the match's server frames (13 ms each)"},
         {"seed", "1", "the mod's and the fighters' seed"},
-        {"root", ".", "the repository's root (the mod's sources are under it)"},
         {"skills", "",
          "the fighters' aims, comma separated (empty: expert, average, average, novice)"},
         {"tempers", "",

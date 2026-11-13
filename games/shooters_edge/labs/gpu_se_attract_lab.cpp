@@ -29,6 +29,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include "brush/write.hpp"
@@ -178,14 +179,21 @@ void run(gl::Lab& lab) {
         .edition = "",
         .playing = false,
         .missing = false}});
-  // DEMOS on the install's own folder.
-  const std::string game_dir =
-      real ? (std::filesystem::path(install) / content->base_dir).generic_string() : "";
-  menu.demos().set_extensions(cl::listed_extensions(adapter.game->demo_extensions));
+  // DEMOS on the install's own folder; on the fixture an empty folder of the lab's, never the
+  // machine's own home (its files would move the picture from one machine to the next).
+  std::string game_dir;
   if (real) {
-    menu.demos().set_game_places({{"GAME", game_dir}});
-    menu.demos().set_player_places({{"GAME FOLDER", game_dir}});
+    game_dir = (std::filesystem::path(install) / content->base_dir).generic_string();
+  } else {
+    const std::filesystem::path empty = "previews/se-attract-player/base";
+    std::error_code ec;
+    std::filesystem::remove_all(empty.parent_path(), ec);
+    std::filesystem::create_directories(empty, ec);
+    game_dir = empty.generic_string();
   }
+  menu.demos().set_extensions(cl::listed_extensions(adapter.game->demo_extensions));
+  menu.demos().set_game_places({{"GAME", game_dir}});
+  menu.demos().set_player_places({{"GAME FOLDER", game_dir}});
   // JOIN A GAME on the simulated network.
   gn::SimNetwork net = gn::make_sim_network(1, gn::LinkConditions{});
   std::vector<gn::Transport> servers(std::size(kServers));

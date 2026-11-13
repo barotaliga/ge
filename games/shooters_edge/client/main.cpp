@@ -101,6 +101,7 @@
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
 #include "shooters_edge/client/demo_check.hpp"
+#include "shooters_edge/client/demo_eyes.hpp"
 #include "shooters_edge/client/demo_heard.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
@@ -465,8 +466,11 @@ int run_main(int argc, char** argv) {
   // A skin or player figure fetched joining a server: written into the game's folder on disk (the
   // server's game folder under the base folder when it plays another) and, when that is the
   // folder played, mounted over the search path at once, as the classic clients keep downloads.
-  remote.keep_file = [&files, &args, game_row](const std::string& gamedir, const std::string& path,
-                                               const std::vector<uint8_t>& bytes) {
+  bool locs_fetched = false;  // a map's place names fetched: read again when its level starts
+  remote.keep_file = [&files, &args, game_row, &locs_fetched](const std::string& gamedir,
+                                                              const std::string& path,
+                                                              const std::vector<uint8_t>& bytes) {
+    if (path.starts_with("locs/")) locs_fetched = true;
     const bool ours =
         gamedir.empty() || gamedir == args.game ||
         gamedir == shooters_edge::profiles::content_of(game_row(args.profile)).base_dir;
@@ -911,6 +915,7 @@ int run_main(int argc, char** argv) {
   bool text_on = false;
   ge::platform::InputSnapshot input;
   cl::ViewState shown;
+  cl::DemoEyes demo_eyes;  // the classic view on a demo's or a joined server's eye
   ge::ui::Vec2 last_pointer;
   cl::FxState fx_state;
   cl::FxFrame fx;
@@ -1578,6 +1583,8 @@ int run_main(int argc, char** argv) {
         const cl::SearchPath& from =
             cl::demo_folder(bench_folder, args.basedir, args.game, ds, files, lines);
         for (const std::string& line : lines) console.print("playdemo: " + line);
+        if (locs_fetched) places.map.clear();  // the same map, with the file it just fetched
+        locs_fetched = false;
         cl::map_started(places, adapter, from, ds.map);  // its place names, from where it played
         bench_map = cl::load_named_map(from, ds.map, error);
         if (!bench_map) {
@@ -1613,7 +1620,24 @@ int run_main(int argc, char** argv) {
         for (const std::string& line : lines) tell(line, t);
       }
       if (!world) continue;  // no level of the demo's yet
-      ge::render::FrameView view = cl::demo_view(ds, ge::camera::FirstPersonRow{}.fov_y, t);
+      // The first game's bob, strafe roll and damage kick rebuilt on the recorded eye (the
+      // player's camera cvars), a game joined moving by its prediction (demo_eyes.hpp).
+      cl::apply_view_cvars(camera_cvars, shown);
+      cl::DemoBody body;
+      if (drawn_remote && remote.predicted) {
+        body.known = true;
+        body.velocity = remote.ahead.velocity;
+        body.on_ground = remote.ahead.ground >= 0;
+      }
+      const cl::DemoState& ds_read = drawn_remote ? remote.demo.state : bench.demo.state;
+      const ge::shooter::BrushModel* ground =
+          bench_map && !bench_map->spec.models.empty() ? &bench_map->spec.models[0] : nullptr;
+      ge::render::FrameView view = cl::demo_eyes_view(ds, ds_read, demo_eyes, shown.row, ground,
+                                                      body, ge::camera::FirstPersonRow{}.fov_y,
+                                                      drawn_remote      ? t
+                                                      : bench.clock < 0 ? ds.time
+                                                                        : bench.clock,
+                                                      t);
       view.frame = static_cast<uint64_t>(presented);
       overlay.begin(w, h);
       se::Status hud_status = cl::demo_status(ds, t);

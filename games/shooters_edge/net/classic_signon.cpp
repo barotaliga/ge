@@ -342,10 +342,13 @@ bool download_allowed(const ClassicServer& s, const std::string& path, std::stri
   auto under = [&](const char* dir) { return path.rfind(dir, 0) == 0; };
   // A player figure's folder: its pictures are skins, its figures models.
   const bool figure = under("players/") && (path.ends_with(".md2") || path.ends_with(".mdl"));
+  // A map's coloured light and place names go with the map.
+  const bool extra =
+      (under("lits/") && path.ends_with(".lit")) || (under("locs/") && path.ends_with(".loc"));
   const bool ok = under("skins/") || (under("players/") && !figure) ? s.cfg.allow_skins
                   : under("progs/") || figure                       ? s.cfg.allow_models
                   : under("sound/")                                 ? s.cfg.allow_sounds
-                  : under("maps/")                                  ? s.cfg.allow_maps
+                  : under("maps/") || extra                         ? s.cfg.allow_maps
                                                                     : s.cfg.allow_other;
   if (!ok) why = "that kind of file is not offered";
   return ok;
@@ -389,7 +392,11 @@ void cmd_download(ClassicServer& s, int slot, std::string path) {
     for (size_t i = 0; i < s.cfg.files.size(); i++)
       if (s.cfg.files[i].path == path) file = static_cast<int>(i);
     std::vector<uint8_t> bytes;
-    if (file < 0 && s.cfg.read_file && s.cfg.read_file(path, &bytes) && !bytes.empty()) {
+    // A map's coloured light asked for in lits/ may sit beside the map instead.
+    const bool lit = path.starts_with("lits/") && path.ends_with(".lit");
+    if (file < 0 && s.cfg.read_file &&
+        ((s.cfg.read_file(path, &bytes) && !bytes.empty()) ||
+         (lit && s.cfg.read_file("maps/" + path.substr(5), &bytes) && !bytes.empty()))) {
       s.cfg.files.push_back({path, std::move(bytes)});  // kept for the next who asks
       file = static_cast<int>(s.cfg.files.size() - 1);
     }

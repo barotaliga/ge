@@ -22,6 +22,7 @@
 #include "shooters_edge/net/sequel_client.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
 #include "shooters_edge/net/sequel_net_server.hpp"
+#include "shooters_edge/net/sequel_tv_demo.hpp"
 #include "shooters_edge/net/sequel_tv_face.hpp"
 #include "shooters_edge/net/sequel_tv_relay.hpp"
 
@@ -247,4 +248,51 @@ TEST(the_relay_carries_the_match_through_a_tv_node_to_a_viewer_behind_by_the_del
   const int32_t behind = relay->watcher.demo.last_frame - viewer.demo.last_frame;
   CHECK_MSG(behind >= 8 && behind <= 30, std::to_string(behind) + " frames behind");
   cn::sequel_tv_relay_close(*relay);
+}
+
+TEST(a_recording_plays_to_viewers_at_the_games_pace_and_loops) {
+  auto r = rig();
+  run(*r, 400);  // the watcher's recording: about 5 s of the match
+  CHECK_MSG(r->watcher.stage == cn::ClientStage::active, r->watcher.refused);
+  std::vector<uint8_t> recording = r->watcher.demo.bytes;
+  const int64_t recorded = r->watcher.frames;
+  CHECK(recorded > 30);
+  // A second face on node 9 plays the recording; one viewer watches it.
+  gn::Transport face_port, viewer_port;
+  gn::open_sim_transport(face_port, r->net, gn::sim_address(9, 27910));
+  gn::open_sim_transport(viewer_port, r->net, gn::sim_address(10, 27901));
+  cn::SequelTvFace face;
+  cn::sequel_tv_start(face, face_port, {});
+  cn::SequelTvDemo demo;
+  std::string error;
+  CHECK(!cn::sequel_tv_demo_open(demo, std::vector<uint8_t>(16, 0), true, error));
+  CHECK_MSG(!error.empty(), "a refusal says why");
+  CHECK_MSG(cn::sequel_tv_demo_open(demo, recording, true, error), error);
+  cn::SequelClientEnd v;
+  cn::SequelClientConfig cfg;
+  cfg.name = "couch";
+  cfg.qport = 300;
+  cn::sequel_client_start(v, viewer_port, gn::sim_address(9, 27910), cfg,
+                          static_cast<double>(r->now) / 1e6);
+  const int64_t start = r->now;
+  int64_t frames_at_1s = -1;
+  for (int i = 0; i < 1300; i++) {  // about 17 s: three times round
+    r->now += 13000;
+    gn::sim_advance(r->net, r->now);
+    cn::sequel_client_tick(v, r->now);
+    cn::sequel_tv_demo_update(demo, face, r->now);
+    cn::sequel_tv_frame(face, r->now);
+    if (frames_at_1s < 0 && r->now - start >= 1000000) frames_at_1s = demo.frames;
+  }
+  CHECK_MSG(face.error.empty(), face.error);
+  CHECK(!demo.ended);
+  // The game's pace: ten frames a second, not the whole file at once.
+  CHECK_MSG(frames_at_1s >= 9 && frames_at_1s <= 12, std::to_string(frames_at_1s) + " frames");
+  CHECK_MSG(demo.rounds >= 2, std::to_string(demo.rounds) + " rounds");
+  CHECK(face.levels >= 2);  // each round a level of its own, its count raised
+  CHECK_MSG(v.stage == cn::ClientStage::active, v.refused + " " + v.error);
+  CHECK_MSG(v.error.empty(), v.error);
+  CHECK(v.levels >= 3);
+  CHECK(v.demo.state.map == "hall");
+  CHECK_MSG(v.frames > 100, std::to_string(v.frames) + " frames");
 }
