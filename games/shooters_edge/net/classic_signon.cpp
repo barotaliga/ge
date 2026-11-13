@@ -23,6 +23,7 @@
 #include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/net/classic_talk.hpp"
 #include "shooters_edge/server/commands.hpp"
 
 namespace shooters_edge::net {
@@ -537,7 +538,14 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
   } else {
     // A chat line held to the flood rule first (a dropped one tells only its sender why).
     // A `login` line counts too (classic_login.hpp): it is a chat line a client sent as a command.
-    if ((cmd == "say" || cmd == "say_team" || cmd == "login") && !c.local) {
+    const bool chat = cmd == "say" || cmd == "say_team" || cmd == "say_near";
+    const bool voice =
+        cmd == "voicetarg" || cmd == "unmuteall" || cmd == "muteall" || cmd == "vignore";
+    if (voice) {  // the voice's target and mutes (classic_talk.hpp): the server's own
+      classic_talk_command(s, slot, w);
+      return;
+    }
+    if ((chat || cmd == "login") && !c.local) {
       const gs::FloodVerdict v = gs::flood_check(c.flood, s.cfg.flood, s.game->sv.time);
       if (v != gs::FloodVerdict::allowed) {
         client_print(s, slot, 3,
@@ -551,9 +559,17 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
     if (cmd == "say" && s.cfg.unfake)
       for (char& ch : said)
         if (ch == '\r') ch = '#';
-    // The game's own words (a lobby's ready, team, start) first, then the rules'.
+    // The game's own words (a lobby's ready, team, start) first, then the rules'. Nearby chat
+    // is the server's own (no rules know of it); a say the rules took nothing of (the sequel's
+    // have no chat) is routed by the server's own chat.
     const bool taken = s.game_command != nullptr && s.game_command(s.game_ctx, slot, said);
-    if (!taken && c.rules_active) s.rules->client_command(slot, said);
+    if (taken) return;
+    if (cmd == "say_near") {
+      classic_talk_command(s, slot, w);
+      return;
+    }
+    if (c.rules_active && s.rules->client_command(slot, said) == sv::CommandResult::bad && chat)
+      classic_server_say(s, slot, cmd == "say_team", said);
   }
 }
 

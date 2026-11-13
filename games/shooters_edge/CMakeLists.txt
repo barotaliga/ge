@@ -38,10 +38,11 @@ target_link_libraries(shooters_edge_bots PUBLIC shooters_edge_server)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_bots)
 
 # The classic protocol (net/classic_*): the codec, the net channel, the classic server over the
-# QC server on engine/net's sockets, the scripted client and the measured trial (skill: net). Only
-# the classic_ files: net/host_* belong to the host's own library.
+# QC server on engine/net's sockets, the scripted client and the measured trial (skill: net); and
+# the sequel's live protocol beside it (net/sequel_*: its client and server). Only the classic_ and
+# sequel_ files: net/host_* belong to the host's own library.
 file(GLOB SHOOTERS_EDGE_CLASSIC_SOURCES CONFIGURE_DEPENDS
-     ${CMAKE_CURRENT_SOURCE_DIR}/net/classic_*.cpp)
+     ${CMAKE_CURRENT_SOURCE_DIR}/net/classic_*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/sequel_*.cpp)
 add_library(shooters_edge_classic STATIC ${SHOOTERS_EDGE_CLASSIC_SOURCES})
 target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters_edge_client ge_net ge_play
                       ge_forward)
@@ -69,6 +70,14 @@ target_include_directories(shooters_edge_hub_bin PRIVATE ${PROJECT_SOURCE_DIR}/g
 add_executable(shooters_edge_bots_cli net/bots_main.cpp)
 target_link_libraries(shooters_edge_bots_cli PRIVATE shooters_edge_classic ge_flags)
 set_target_properties(shooters_edge_bots_cli PROPERTIES OUTPUT_NAME shooters_edge_bots
+                      RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# The hops, headless (net/hops_main.cpp), named `shooters_edge_hops` on disk at the build's root:
+# our forward, proxies or TV node as a process of its own, for any classic client. `--help` lists
+# its kinds and flags.
+add_executable(shooters_edge_hops_cli net/hops_main.cpp)
+target_link_libraries(shooters_edge_hops_cli PRIVATE shooters_edge_classic ge_proxy ge_flags)
+set_target_properties(shooters_edge_hops_cli PROPERTIES OUTPUT_NAME shooters_edge_hops
                       RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # Its HUD (hud/): the player's status snapshot, the HUD's pictures (the free set painted in code),
@@ -116,7 +125,7 @@ if(TARGET ge_brush_app)
   add_library(shooters_edge_app STATIC ${SHOOTERS_EDGE_APP_SOURCES})
   target_include_directories(shooters_edge_app PUBLIC ${PROJECT_SOURCE_DIR}/games)
   target_link_libraries(shooters_edge_app PUBLIC ge_render ge_brush_app ge_classicenhance ge_console
-                                                ge_morph)
+                                                ge_morph ge_assets)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_app)
 endif()
 

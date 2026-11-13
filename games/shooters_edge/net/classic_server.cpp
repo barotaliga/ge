@@ -24,6 +24,7 @@
 #include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_record.hpp"
+#include "shooters_edge/net/classic_talk.hpp"
 #include "shooters_edge/server/commands.hpp"
 
 namespace shooters_edge::net {
@@ -295,6 +296,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   c.msg_level = msg.empty() ? 1 : std::atoi(msg.c_str());
   channel_set_rate(c.ch, rate_of(s, userinfo), std::atoi(info_get(userinfo, "dupe").c_str()));
   c.connect_time = s.game->sv.time;
+  c.voice_to = s.cfg.voice_route == VoiceRoute::all ? VoiceTo::all : VoiceTo::team;
   c.datagram.reserve(kMaxMsgLen);
   s.counts.connects++;
   s.log.push_back("connect " + std::to_string(slot) + " " + c.name + " " + gn::to_string(from) +
@@ -387,15 +389,13 @@ void relay_voice(ClassicServer& s, int slot, const ClcMsg& m) {
   uint8_t buf[kMaxMsgLen + 8];
   gn::Writer w = gn::make_writer(buf, sizeof buf);
   write_svc(w, v, WireCtx{});
-  const std::string team = info_get(c.userinfo, "team");
   for (int j = 0; j < sh::kMaxClients && !w.overflow; j++) {
     ClassicClient& d = s.clients[j];
     if ((j == slot && !s.cfg.voice_echo) || d.state != ConnState::spawned ||
-        !d.ext.has(ExtFamily::x2, kX2Voice))
+        !d.ext.has(ExtFamily::x2, kX2Voice) || !d.voice_heard || (d.voice_ignored >> slot & 1u))
       continue;
-    // By team: his team-mates; with no team (a free-for-all), the others with none.
-    if (s.cfg.voice_route == VoiceRoute::team && info_get(d.userinfo, "team") != team && j != slot)
-      continue;
+    // By the talker's target (classic_talk.hpp): everyone, his team, the players near, one.
+    if (j != slot && !talk_hears(s, slot, j, c.voice_to, c.voice_one)) continue;
     if (d.local) {  // the listen server's own player: handed over, no packet carries it
       if (s.local_voice == nullptr) continue;
       s.local_voice(s.local_ctx, j, v);
@@ -739,6 +739,8 @@ bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std:
   info_set(c.userinfo, "name", name);
   if (bot) info_set(c.userinfo, "*bot", "1");
   if (!bot && s.cfg.voice) c.ext[ExtFamily::x2] |= kX2Voice;  // the window's player talks, hears
+  c.voice_to = s.cfg.voice_route == VoiceRoute::all ? VoiceTo::all : VoiceTo::team;
+  c.voice_heard = !bot;  // no client to send `unmuteall`: he listens from the start
   s.log.push_back("local " + std::to_string(slot) + " " + name);
   full_client_update(s, slot, -1);
   return true;

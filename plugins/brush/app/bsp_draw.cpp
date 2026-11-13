@@ -26,6 +26,41 @@ namespace r = ge::render;
 
 namespace {
 
+// Whether this renderer draws kind `k`'s faces (v2 leaves the liquids to the engine's passes
+// unless their warped faces are asked for).
+bool drawn_here(const Options& o, Kind k) {
+  if (o.mode != Mode::v2) return true;
+  return !((k == kWater && !o.warped_water) || (k == kSlime && !o.warped_slime) ||
+           (k == kLava && !o.warped_lava));
+}
+
+// How opaque kind `k`'s faces are (1: not a liquid).
+double alpha_of(const Options& o, Kind k) {
+  switch (k) {
+    case kWater:
+    case kWarp:
+      return o.liquid_alpha[0];
+    case kSlime:
+      return o.liquid_alpha[1];
+    case kLava:
+      return o.liquid_alpha[2];
+    case kTele:
+      return o.liquid_alpha[3];
+    default:
+      return 1;
+  }
+}
+
+// Whether kind `k` is drawn see-through (or not at all, at 0 and under) rather than with the world.
+bool see_through(const Options& o, Kind k) { return alpha_of(o, k) < 1; }
+
+// Whether any liquid drawn here is see-through, so the see-through pass runs.
+bool see_through_any(const Options& o) {
+  for (Kind k : {kWarp, kTele, kWater, kSlime, kLava})
+    if (drawn_here(o, k) && see_through(o, k)) return true;
+  return false;
+}
+
 wgpu::Texture depth_array(gpu::Device& device, std::string_view label, uint32_t size,
                           uint32_t layers, wgpu::TextureFormat format = r::kDepthFormat) {
   wgpu::TextureDescriptor desc{};
@@ -420,6 +455,23 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     fragment.constants = &lit_only;
     desc.label = "bsp.draw.lit";
     d.p_draw_lit = pipelines.add_render(device, desc);
+    // The see-through liquids (kSeeThrough): blended over the world by their alpha, the depth
+    // tested and kept, the motion and the mask left as the world wrote them.
+    wgpu::ConstantEntry see_through{};
+    see_through.key = "kSeeThrough";
+    see_through.value = 1;
+    fragment.constants = &see_through;
+    wgpu::BlendState over{};
+    over.color.srcFactor = wgpu::BlendFactor::SrcAlpha;
+    over.color.dstFactor = wgpu::BlendFactor::OneMinusSrcAlpha;
+    over.alpha.srcFactor = wgpu::BlendFactor::Zero;
+    over.alpha.dstFactor = wgpu::BlendFactor::One;
+    colours[0].blend = &over;
+    colours[1].writeMask = wgpu::ColorWriteMask::None;
+    colours[2].writeMask = wgpu::ColorWriteMask::None;
+    depth.depthWriteEnabled = false;
+    desc.label = "bsp.draw.liquids";
+    d.p_liquid = pipelines.add_render(device, desc);
   }
   {
     const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::bsp_fix, "bsp.sky");
@@ -871,6 +923,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   const bool box = !s.sky_box.levels.empty() && s.sky_box_face > 0;
   const double inset = box ? 0.5 / double(s.sky_box_face) : 0;
   set4(d.staged.sky_box, box ? 1 : 0, inset, inset, 0);
+  // How opaque each liquid is (the see-through pass reads it).
+  set4(d.staged.liquid_alpha, o.liquid_alpha[0], o.liquid_alpha[1], o.liquid_alpha[2],
+       o.liquid_alpha[3]);
   set4(d.staged.info4, o.bump, o.pack_sky ? 1 : 0, parallax > 0 ? o.parallax_reach : 0,
        relief ? o.specular : 0);
   set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers,
@@ -884,7 +939,8 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   }
   if (o.cull) {
     GE_ZONE("bsp.cull");
-    prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0, o.pvs);
+    prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0,
+                     o.pvs && !see_through_any(o));
     ++d.culled_frames;
   } else {
     d.culled_frames = 0;
@@ -1103,10 +1159,7 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
     pass.SetIndexBuffer(culled ? d.cull.dst : d.indices, wgpu::IndexFormat::Uint32);
     const Kind drawn[] = {kSolid, kSky, kWarp, kTele, kWater, kSlime, kLava};
     for (Kind k : drawn) {
-      const bool own = (k == kWater && !d.options.warped_water) ||
-                       (k == kSlime && !d.options.warped_slime) ||
-                       (k == kLava && !d.options.warped_lava);
-      if (v2 && own) continue;
+      if (!drawn_here(d.options, k) || see_through(d.options, k)) continue;
       if (d.range[k][1] == 0) continue;
       if (culled)
         pass.DrawIndexedIndirect(d.cull.args, cull_args_at(phase, k));
@@ -1124,6 +1177,44 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
     draw_pass("bsp.late", 1);
   } else {
     draw_pass("bsp", 0);
+  }
+  // THE SEE-THROUGH LIQUIDS, over everything the passes above drew (both phases' faces).
+  if (see_through_any(d.options)) {
+    wgpu::RenderPassColorAttachment colours[3]{};
+    colours[0].view = targets.hdr_view;
+    colours[1].view = targets.motion_view;
+    colours[2].view = d.mask_view;
+    for (auto& c : colours) {
+      c.loadOp = wgpu::LoadOp::Load;
+      c.storeOp = wgpu::StoreOp::Store;
+    }
+    wgpu::RenderPassDepthStencilAttachment depth{};
+    depth.view = targets.depth_view;
+    depth.depthLoadOp = wgpu::LoadOp::Load;
+    depth.depthStoreOp = wgpu::StoreOp::Store;
+    wgpu::RenderPassDescriptor desc{};
+    desc.colorAttachmentCount = 3;
+    desc.colorAttachments = colours;
+    desc.depthStencilAttachment = &depth;
+    wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "bsp.liquids");
+    pass.SetPipeline(pipelines.render(d.p_liquid));
+    pass.SetBindGroup(0, frame.surface);
+    pass.SetBindGroup(1, d.group);
+    pass.SetVertexBuffer(0, d.vertices);
+    pass.SetIndexBuffer(culled ? d.cull.dst : d.indices, wgpu::IndexFormat::Uint32);
+    for (Kind k : {kWarp, kTele, kWater, kSlime, kLava}) {
+      if (!drawn_here(d.options, k) || !see_through(d.options, k) || d.range[k][1] == 0 ||
+          alpha_of(d.options, k) <= 0)
+        continue;
+      for (int phase = 0; phase < (culled ? 2 : 1); ++phase) {
+        if (culled)
+          pass.DrawIndexedIndirect(d.cull.args, cull_args_at(phase, k));
+        else
+          pass.DrawIndexed(d.range[k][1], 1, d.range[k][0], 0, 0);
+        ++rec.current().draws;
+      }
+    }
+    pass.End();
   }
   if (v2) {
     wgpu::RenderPassDepthStencilAttachment depth{};

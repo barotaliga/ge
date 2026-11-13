@@ -108,8 +108,13 @@ gr::TintRamps palette_ramps(std::span<const uint8_t> palette) {
   gr::TintRamps r;
   r.rgb.resize(size_t(kColourRows) * gr::kTintSteps * 3);
   for (uint32_t i = 0; i < kColourRows * gr::kTintSteps; i++) {
+    // The rows from kReversedRow up are stored bright to dark: a step reads them backwards, so a
+    // skin's dark folds stay dark in any colour.
+    const uint32_t row = i / gr::kTintSteps, step = i % gr::kTintSteps;
+    const uint32_t index =
+        row < kReversedRow ? i : row * gr::kTintSteps + gr::kTintSteps - 1 - step;
     uint8_t c[4];
-    colour_of(palette, uint8_t(i), c);
+    colour_of(palette, uint8_t(index), c);
     for (size_t k = 0; k < 3; k++) r.rgb[size_t(i) * 3 + k] = to_linear(c[k]);
   }
   return r;
@@ -142,14 +147,104 @@ gr::MorphModel morph_from_alias(const mo::Model& model, std::span<const uint8_t>
     return out;
   }
   const mo::Skin& s = model.skins[size_t(std::clamp(skin, 0, int(model.skins.size()) - 1))];
-  out.skin.width = uint32_t(s.width);
-  out.skin.height = uint32_t(s.height);
-  out.skin.rgba.resize(s.indices.size() * 4);
-  out.skin.marks.resize(s.indices.size());
-  for (size_t i = 0; i < s.indices.size(); i++) {
-    colour_of(palette, s.indices[i], &out.skin.rgba[i * 4]);
-    out.skin.marks[i] = mark_of(s.indices[i]);
+  out.skin = skin_of_indices(s.indices, uint32_t(s.width), uint32_t(s.height), palette);
+  return out;
+}
+
+gr::MorphSkin skin_of_indices(std::span<const uint8_t> indices, uint32_t width, uint32_t height,
+                              std::span<const uint8_t> palette) {
+  gr::MorphSkin out;
+  out.width = width;
+  out.height = height;
+  out.rgba.resize(indices.size() * 4);
+  out.marks.resize(indices.size());
+  for (size_t i = 0; i < indices.size(); i++) {
+    colour_of(palette, indices[i], &out.rgba[i * 4]);
+    out.marks[i] = mark_of(indices[i]);
   }
+  return out;
+}
+
+bool player_skin(const ge::assets::IndexedImage& picture, std::span<const uint8_t> palette,
+                 gr::MorphSkin* out) {
+  if (picture.width < 1 || picture.height < 1 || picture.width > kPlayerPictureWidth ||
+      picture.height > kPlayerPictureHeight ||
+      picture.indices.size() != size_t(picture.width) * size_t(picture.height))
+    return false;
+  // The picture at the top left of a field of index 0, and the field's top left cut out.
+  std::vector<uint8_t> cut(size_t(kPlayerSkinWidth) * kPlayerSkinHeight, 0);
+  const int w = std::min(picture.width, kPlayerSkinWidth);
+  const int h = std::min(picture.height, kPlayerSkinHeight);
+  for (int y = 0; y < h; y++)
+    for (int x = 0; x < w; x++)
+      cut[size_t(y) * kPlayerSkinWidth + size_t(x)] =
+          picture.indices[size_t(y) * size_t(picture.width) + size_t(x)];
+  *out = skin_of_indices(cut, kPlayerSkinWidth, kPlayerSkinHeight, palette);
+  return true;
+}
+
+std::string skin_key(std::string_view name) {
+  const size_t dot = name.rfind('.');
+  const size_t slash = name.rfind('/');
+  if (dot != std::string_view::npos && (slash == std::string_view::npos || dot > slash))
+    name = name.substr(0, dot);
+  if (name.empty() || name[0] == '.' || name.find("..") != std::string_view::npos) return {};
+  std::string key(name.substr(0, kSkinNameChars));
+  for (char& c : key) c = c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c;
+  return key;
+}
+
+uint32_t choose_skin(const SkinChoice& choice, std::string_view skin,
+                     const std::unordered_map<std::string, uint32_t>& read) {
+  if (choice.noskins == 1) return gr::kOwnSkin;
+  const std::string own = skin_key(choice.all.empty() ? skin : std::string_view(choice.all));
+  const auto found = read.find(own);
+  if (!own.empty() && found != read.end()) return found->second;
+  const auto base = read.find(skin_key(choice.base));
+  return base != read.end() ? base->second : gr::kOwnSkin;
+}
+
+Look choose_look(const SkinChoice& choice, std::string_view look,
+                 const std::unordered_map<std::string, uint32_t>& figures,
+                 const std::unordered_map<std::string, uint32_t>& skins) {
+  const auto lower = [](std::string_view v) {
+    std::string out(v);
+    for (char& c : out) c = c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c;
+    return out;
+  };
+  std::string folder, skin;
+  if (choice.noskins != 1 && !look.empty()) {
+    size_t cut = look.find('/');
+    if (cut == std::string_view::npos) cut = look.find('\\');
+    if (cut != std::string_view::npos) {
+      folder = lower(look.substr(0, cut));
+      skin = lower(look.substr(cut + 1));
+    } else {
+      skin = lower(look.substr(1));
+    }
+  } else {
+    folder = std::string(kDefaultFigure);
+    skin = std::string(kDefaultSkin);
+  }
+  if (folder.empty() || folder.find("..") != std::string::npos || !figures.contains(folder))
+    folder = std::string(kDefaultFigure);
+  Look out;
+  const auto skin_in = [&skins](const std::string& f, const std::string& k) {
+    if (k.empty() || k.find("..") != std::string::npos || k.find('/') != std::string::npos)
+      return gr::kOwnSkin;
+    const auto found = skins.find(f + "/" + k);
+    return found == skins.end() ? gr::kOwnSkin : found->second;
+  };
+  out.skin = skin_in(folder, skin);
+  if (out.skin == gr::kOwnSkin && folder != kDefaultFigure) {
+    const uint32_t other = skin_in(std::string(kDefaultFigure), skin);
+    if (other != gr::kOwnSkin) {
+      folder = std::string(kDefaultFigure);
+      out.skin = other;
+    }
+  }
+  if (out.skin == gr::kOwnSkin) out.skin = skin_in(folder, std::string(kDefaultSkin));
+  out.folder = figures.contains(folder) ? folder : std::string{};
   return out;
 }
 

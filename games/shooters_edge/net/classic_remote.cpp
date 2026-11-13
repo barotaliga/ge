@@ -366,7 +366,9 @@ void remote_mic(Remote& r, std::span<const float> samples) {
 }
 
 bool remote_talking(const Remote& r) {
-  return r.active && r.end.cfg.voice && r.voip_key != nullptr && r.voip_key->down();
+  if (!r.active || !r.end.cfg.voice) return false;
+  if (r.talk != nullptr && ge::console::talk_voice(*r.talk).on) return true;
+  return r.voip_key != nullptr && r.voip_key->down();
 }
 
 namespace {
@@ -453,7 +455,13 @@ bool remote_watch(Remote& r, const std::string& address, const std::string& name
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
   if (!r.active) return RemoteStep::waiting;
   if (r.watch) return watch_step(r, said);
-  if (r.end.cfg.live_mic) r.end.mic_talking = remote_talking(r);
+  if (r.end.cfg.live_mic) {
+    r.end.mic_talking = remote_talking(r);
+    // The key held names who hears it (everyone, the team, the players near).
+    if (r.end.mic_talking && r.talk != nullptr && ge::console::talk_voice(*r.talk).on)
+      classic_voice_target(
+          r.end, std::string(ge::console::chat_to_word(ge::console::talk_voice(*r.talk).to)));
+  }
   r.owed_s += wall_s;
   // What the player's place was before this frame's packets, for the correction they make.
   const int me = r.end.playernum;
@@ -611,7 +619,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.speedjump = cvar("cl_speedjump", "0") == "1";
     cfg.spectator = cvar("spectator", "0") == "1";  // `set spectator 1`: join to watch
     cfg.voice = r.voip;
-    cfg.live_mic = true;  // the window's microphone (remote_mic), while +voip is held
+    cfg.live_mic = true;  // the window's microphone (remote_mic), while a voice key is held
     cfg.qport = static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
     cfg.read_file = r.read_file;
     std::string error;
@@ -683,7 +691,9 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                             "routes to you and talk while +voip is held (from the next connect)",
                     .kind = ge::console::CvarKind::boolean},
                    &r.voip);
-  r.voip_key = &con.add_button("voip", "+voip: talk to the server's players while held");
+  r.voip_key = &con.add_button(
+      "voip",
+      "+voip: talk while held, to those the server sends a voice to by default (your team)");
   con.add_command(
       "netstatus", "netstatus: the server joined, its stage and the traffic",
       [&r](Con& c, const Args&) {

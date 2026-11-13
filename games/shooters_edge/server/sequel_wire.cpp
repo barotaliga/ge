@@ -351,8 +351,8 @@ int32_t sequel_map_checksum(std::span<const uint8_t> bsp) {
   return static_cast<int32_t>(md4_word(bsp));
 }
 
-void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWireOptions& opt,
-                   std::vector<std::vector<uint8_t>>& blocks) {
+void sequel_signon_parts(SequelWire& w, const RulesCommon& c, int slot,
+                         const SequelWireOptions& opt, SequelSignon& out) {
   w = SequelWire{};
   w.opt = opt;
   w.slot = slot;
@@ -360,9 +360,9 @@ void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWi
   w.last.assign(kSequelEntities, SequelEntityState{});
   w.events_done = c.out.events_total;
   config_strings(c, opt, w.sent);
-  blocks.assign(1, {});
+  out = SequelSignon{};
   {
-    Out o{blocks.back()};
+    Out o{out.server_data};
     o.u8(kServerData);
     o.i32(kSequelProtocol);
     o.i32(0x10000 + opt.server_count);
@@ -374,11 +374,12 @@ void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWi
   for (int i = 0; i < kSequelConfigStrings; i++) {
     const std::string& s = w.sent[size_t(i)];
     if (s.empty()) continue;
-    if (blocks.back().size() + s.size() + 32 > size_t(kSequelMaxBlock)) blocks.emplace_back();
-    Out o{blocks.back()};
+    std::vector<uint8_t> one;
+    Out o{one};
     o.u8(kConfigString);
     o.i16(i);
     o.str(s);
+    out.config_strings.emplace_back(i, std::move(one));
   }
   const SequelEntityState zero;
   for (int n = 1; n < kSequelEntities; n++) {
@@ -389,6 +390,22 @@ void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWi
     Out e{one};
     e.u8(kBaseline);
     write_entity(e, delta_flags(zero, s, n, true), n, s);
+    out.baselines.emplace_back(n, std::move(one));
+  }
+}
+
+void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWireOptions& opt,
+                   std::vector<std::vector<uint8_t>>& blocks) {
+  SequelSignon parts;
+  sequel_signon_parts(w, c, slot, opt, parts);
+  blocks.assign(1, parts.server_data);
+  for (const auto& [i, one] : parts.config_strings) {
+    // The message less its id, index and zero: the string's length.
+    if (blocks.back().size() + (one.size() - 4) + 32 > size_t(kSequelMaxBlock))
+      blocks.emplace_back();
+    blocks.back().insert(blocks.back().end(), one.begin(), one.end());
+  }
+  for (const auto& [n, one] : parts.baselines) {
     if (blocks.back().size() + one.size() + 64 > size_t(kSequelMaxBlock)) blocks.emplace_back();
     blocks.back().insert(blocks.back().end(), one.begin(), one.end());
   }
@@ -398,18 +415,24 @@ void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWi
   o.str("precache\n");
 }
 
+void sequel_resync(SequelWire& w) {
+  w.last_frame = -1;
+  w.last.assign(kSequelEntities, SequelEntityState{});
+}
+
 void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
-                  const sh::SequelState* move, std::vector<uint8_t>& block) {
+                  const sh::SequelState* move, std::vector<uint8_t>& block,
+                  std::vector<uint8_t>* reliable) {
   block.clear();
-  Out o{block};
+  Out r{reliable != nullptr ? *reliable : block};
   // The reliable part: what changed among the configstrings, then the prints and the lines.
   std::vector<std::string> now;
   config_strings(c, w.opt, now);
   for (int i = 0; i < kSequelConfigStrings; i++)
     if (now[size_t(i)] != w.sent[size_t(i)]) {
-      o.u8(kConfigString);
-      o.i16(i);
-      o.str(now[size_t(i)]);
+      r.u8(kConfigString);
+      r.i16(i);
+      r.str(now[size_t(i)]);
       w.sent[size_t(i)] = now[size_t(i)];
     }
   const std::vector<NetEvent>& events = c.out.events;
@@ -419,17 +442,18 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
     const NetEvent& e = events[i];
     if (!to_slot(e, w.slot)) continue;
     if (e.kind == EventKind::print) {
-      o.u8(kPrint);
-      o.u8(static_cast<uint32_t>(std::clamp(e.level, 0, 3)));
-      o.str(e.text);
+      r.u8(kPrint);
+      r.u8(static_cast<uint32_t>(std::clamp(e.level, 0, 3)));
+      r.str(e.text);
     } else if (e.kind == EventKind::centerprint) {
-      o.u8(kCenterPrint);
-      o.str(e.text);
+      r.u8(kCenterPrint);
+      r.str(e.text);
     } else if (e.kind == EventKind::stuffcmd) {
-      o.u8(kStuffText);
-      o.str(e.text);
+      r.u8(kStuffText);
+      r.str(e.text);
     }
   }
+  Out o{block};
   // The frame, numbered from 1: a stock client draws nothing from a frame numbered 0 (measured: it
   // stops on a field of view of 0 before the first frame it keeps).
   const int32_t number = frame_number + 1;

@@ -11,13 +11,14 @@
 // kind measured), and each kind of thing it placed (a weapon, armour, health, ammo, another item,
 // a monster, the player as another sees him) is shot from a little way off in both looks. Then the
 // poses (server/sequel_poses.hpp): a strip of a monster's runs and one of the player's sequences,
-// each at the frame the rules set for it, and a strip of the armour turning where it lies: PRIVATE
+// each at the frame the rules set for it, and a strip of the armour turning where it lies; with
+// `--looks` the player again in each look named, as another who chose it is seen: PRIVATE
 // pictures only, never committed.
 //
 // ge:summary Lab: the sequel's models and sprites opened and drawn on its map, in both looks
 // ge:keywords lab se-sequel-models sequel md2 sp2 idp2 ids2 second-model-family skin-pictures
 // ge:keywords items weapons armour health ammo monsters player world-models classic modern
-// ge:keywords poses pose-strip turning-items animation-frames
+// ge:keywords poses pose-strip turning-items animation-frames looks player-looks
 // ge:skill morph shooter labs
 #include <cmath>
 #include <memory>
@@ -404,6 +405,40 @@ void run(gl::Lab& lab) {
     }
     if (chosen == &me) pop_me();
   }
+  // `--looks`: the player again in each look ("<model>/<skin>", ';' between), as another player
+  // who chose it sees them: their own figure, its skin and the weapon from its folder.
+  const std::string looks = lab.arg("looks");
+  float look_eye[3];
+  if (!looks.empty() && eye_for(me.origin, 72.0f, 16.0f, look_eye)) {
+    look.look = "classic";
+    int n = 0;
+    for (size_t a = 0; a < looks.size(); n++) {
+      const size_t b = std::min(looks.find(';', a), looks.size());
+      me.skin_name = looks.substr(a, b - a);
+      a = b + 1;
+      push_me();
+      ge::render::FrameView v = base;
+      const float at_f[3] = {me.origin.x, me.origin.y, me.origin.z};
+      double eye[3], at[3];
+      br::to_engine(look_eye, eye);
+      br::to_engine(at_f, at);
+      for (int c = 0; c < 3; c++) v.eye[c] = eye[c];
+      const double dx = at[0] - eye[0], dy = at[1] - eye[1], dz = at[2] - eye[2];
+      v.heading = lm::atan2(dx, dz);
+      v.pitch = lm::atan2(dy, std::sqrt(dx * dx + dz * dz));
+      cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
+      const ge::gpu::Image img = ge::gpu::read_now(*device, out);
+      lab.shot({"look-" + std::to_string(n),
+                "The player as " + me.skin_name,
+                "The player drawn as another who chose the look " + me.skin_name + " is seen.",
+                "the figure and skin the look names, else the default figure's",
+                {{"map", map_name}, {"look", me.skin_name}, {"size", lab.arg("size")}}},
+               gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
+               gl::Det::measured);
+      pop_me();
+    }
+    me.skin_name.clear();
+  }
   // THE POSES: a monster's runs and the player's sequences, frame by frame as the rules set them,
   // and an item turning where it lies, a strip each (classic look).
   look.look = "classic";
@@ -526,7 +561,8 @@ const gl::LabSpec kSpec{
     "armour, health, ammo, monsters and players stand on its map, in both looks?",
     {{"size", "640,360", "the frame's width and height, px"},
      {"game", "", "the folder holding the sequel's base folder (empty: the fixture, no pictures)"},
-     {"map", "base1", "the map to stand in (with --game)"}},
+     {"map", "base1", "the map to stand in (with --game)"},
+     {"looks", "", "the player again in each look (\"<model>/<skin>\", ';' between; with --game)"}},
     "",
     run,
 };

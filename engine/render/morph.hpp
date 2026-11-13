@@ -55,6 +55,7 @@
 // ge:keywords warp morph-warp dissolve materialize dematerialize spawn teleport fade-in fade-out
 // ge:keywords warp_vertex warp_field warp_cut pack_warp ash dust crumble burning-edge shimmer pinch
 // ge:keywords create_morph prepare_morph encode_morph pose_morph morph_texel pack_morph_atlas
+// ge:keywords skin-slots set_morph_slot slot_texels worn-skin lazy-skin
 // ge:skill render
 // ge:test tests/render_morph_test.cpp
 #pragma once
@@ -73,6 +74,10 @@ namespace ge::render {
 inline constexpr uint32_t kTintSteps = 16;       // a ramp's colours
 inline constexpr uint32_t kMaxMorphDraws = 256;  // drawn a frame
 inline constexpr uint32_t kMorphAtlasSize = 2048;
+// THE SLOTS: skins written while the scene runs (a player's own picture, read the first time it
+// is worn), each kMorphSlotSize square in a layer of their own, stretched over the coordinates of
+// the model that wears it (`MorphDraw::slot`).
+inline constexpr uint32_t kMorphSlotSize = 512;
 
 // A skin texel's mark.
 inline constexpr uint8_t kMarkPlain = 0;
@@ -138,6 +143,8 @@ struct MorphBurn {
   float seed = 0;  // the patches' offset, 0..1
 };
 
+inline constexpr uint32_t kOwnSkin = ~0u, kNoSlot = ~0u;
+
 struct MorphDraw {
   uint32_t model = 0;
   MorphPose now, last;        // `last`: where it was the frame before (a cut: the same as now)
@@ -158,6 +165,12 @@ struct MorphDraw {
   float alpha = 1;
   MorphWarp warp;
   MorphBurn burn;
+  // The skin it wears: another model's (a player's own picture on a shared figure, uploaded as a
+  // SKIN-ONLY model: a `MorphModel` with a skin and no frames), laid over its own coordinates;
+  // `kOwnSkin` (or any index past the models): its own.
+  uint32_t skin = kOwnSkin;
+  // A slot it wears instead (`set_morph_slot`), over `skin`; kNoSlot: none.
+  uint32_t slot = kNoSlot;
 };
 
 // Where each model's skin sits in the atlas, texels.
@@ -189,7 +202,8 @@ void pack_warp(const MorphWarp& w, float out[16]);
 
 struct Morph {
   wgpu::Buffer models, vertices, uvs, indices, draws, ramps;
-  wgpu::Texture atlas;
+  wgpu::Texture atlas, slots;
+  uint32_t slot_count = 0;
   wgpu::BindGroupLayout layout;
   wgpu::BindGroup group;
   uint32_t p_draw = 0;
@@ -201,9 +215,15 @@ struct Morph {
 };
 
 // Upload `models` and `ramps` (at least one row) once. False when the skins do not fit the atlas.
+// `slot_count` slots are made for skins worn later (none: one unused).
 bool create_morph(gpu::Device& device, gpu::PipelineSet& pipelines, Morph& morph,
                   const wgpu::BindGroupLayout& frame, std::span<const MorphModel> models,
-                  const TintRamps& ramps);
+                  const TintRamps& ramps, uint32_t slot_count = 0);
+// Writes `skin` into slot `slot`, stretched to the slot by the nearest texel (each keeps its mark).
+// False for a slot past the count or an empty skin.
+bool set_morph_slot(gpu::Device& device, Morph& morph, uint32_t slot, const MorphSkin& skin);
+// The CPU twin of the stretch: `skin` as the slot holds it, RGBA with the mark in alpha.
+std::vector<uint8_t> slot_texels(const MorphSkin& skin);
 // This frame's draws, relative to `view`'s eye.
 void prepare_morph(gpu::Device& device, Morph& morph, std::span<const MorphDraw> draws,
                    const FrameView& view);
