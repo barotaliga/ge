@@ -100,7 +100,6 @@ struct Picture {
   // The `fog` command's words (density red green blue alpha bias) and how many times it was given:
   // drawn over the map's own fog when given since the world was made, so a new map is its own.
   std::string fog;
-  int fog_serial = 0;
   // r_wateralpha: how opaque water is (0..1; 1 the default, solid), and r_slimealpha,
   // r_lavaalpha, r_telealpha the same for slime, lava and a teleporter's face ("": water's). A
   // map's own `wateralpha` and kin hold for that map; a server that sets `watervis` 0 keeps them
@@ -112,6 +111,7 @@ struct Picture {
   // baseskin: the skin of a player who names none or one the files lack; the `allskins` command's
   // one skin on every player ("": each their own).
   int noskins = 0;
+  int fog_serial = 0;  // how many times the `fog` command was given (above)
   std::string base_skin = "base", all_skins;
   // teamskin, enemyskin: every teammate's or every enemy's skin ("": their own); the teamcolor and
   // enemycolor commands' shirt and pants colours (-1: their own). A teammate shares your team
@@ -119,9 +119,6 @@ struct Picture {
   std::string team_skin, enemy_skin;
   int team_top = -1, team_bottom = -1, enemy_top = -1, enemy_bottom = -1;
   double far_warm = 0;  // r_farland_warm: its air warmer (or colder) than its kind's, C
-  // r_lerpmodels, r_lerpmove: the models' animation drawn between frames, and (in the window's own
-  // game) their places between the server's states (client/model_lerp.hpp); either look.
-  bool lerp_models = true, lerp_move = true;
   // r_arrival: how strongly your own arrival (a spawn, a teleport's far end) warps the whole view
   // in the modern look with ce_warps on (render/post.hpp's arrival), 0 none.
   double arrival = 1;
@@ -131,6 +128,9 @@ struct Picture {
   // ce_water_specks: the specks floating in the water seen from under it, a share of the pool
   // look's (render/underwater.hpp's `motes`); 0 by default: round a swimmer they read as bubbles.
   double water_specks = 0;
+  // r_lerpmodels, r_lerpmove: the models' animation drawn between frames, and (in the window's own
+  // game) their places between the server's states (client/model_lerp.hpp); either look.
+  bool lerp_models = true, lerp_move = true;
 };
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
 // r_farland, r_farland_warm, r_skyname, r_skyfog, r_lerpmodels, r_lerpmove, r_arrival,

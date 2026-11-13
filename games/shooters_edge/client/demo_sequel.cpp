@@ -210,6 +210,7 @@ void server_data(Demo& d, DemoMsg& m) {
   s.player = std::max(0, m.i16());
   m.str();  // the level's full name
   s.levels++;
+  s.places = {};
   s.map.clear();
   s.models.assign(1, "");
   s.sounds.assign(1, "");
@@ -542,12 +543,12 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
       case kLayout:
         m.str();
         break;
-      case kStuffText:
-        if (d.stuffed.size() < kSequelStuffedKept)
-          d.stuffed.push_back(m.str());
-        else
-          m.str();
+      case kStuffText: {  // a place name the recording kept read; the rest kept for the caller
+        std::string text = m.str();
+        if (sh::read_recorded_loc(text, s.places)) break;
+        if (d.stuffed.size() < kSequelStuffedKept) d.stuffed.push_back(std::move(text));
         break;
+      }
       case kInventory:
         m.skip(512);
         break;

@@ -235,10 +235,12 @@ std::vector<std::string> game_archives(const std::string& root, const std::strin
   std::error_code ec;
   for (const fs::directory_entry& e : fs::directory_iterator(dir, ec)) {
     const std::string name = e.path().filename().string(), folded = lower(name);
-    if (layout.pak_prefix && !folded.empty() && folded[0] == '.') continue;  // hidden: not one
+    if (layout.pak_prefix && !folded.empty() && folded[0] == '.') continue;      // hidden: not one
+    if (layout.underscore_off && !folded.empty() && folded[0] == '_') continue;  // turned off
     const bool file = e.is_regular_file(ec);
     const bool archive = file && (ends_with(folded, ".pak") || zip_ending(folded));
-    if (layout.pak_prefix && archive && folded.compare(0, 3, "pak") == 0) {
+    if (layout.pak_prefix && archive && folded.size() > 3 && folded.compare(0, 3, "pak") == 0 &&
+        folded[3] >= '0' && folded[3] <= '9') {
       int64_t n = 0;
       for (size_t i = 3; i < folded.size() && folded[i] >= '0' && folded[i] <= '9'; ++i)
         n = n * 10 + (folded[i] - '0');

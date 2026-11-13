@@ -90,3 +90,17 @@ TEST(places_are_added_removed_and_written_as_a_file_reads_them_back) {
   ge::shooter::parse_locs("0 0 0 " + std::string(80, 'x') + "\n", cut);
   CHECK(cut.points[0].raw.size() == ge::shooter::kLocNameMax);
 }
+
+TEST(a_recording_keeps_places_as_comment_lines_read_back_whole) {
+  sh::Locs l;
+  sh::add_loc(l, {100, 200, 24}, "quad");
+  sh::add_loc(l, {-50, 0, 24}, "$loc_name_ra room");
+  const std::vector<std::string> lines = sh::recorded_loc_lines(l);
+  CHECK(lines.size() == 2);
+  CHECK_MSG(lines[0] == "//loc  800 1600  192 quad\n", lines[0]);
+  sh::Locs back;
+  for (const std::string& line : lines) CHECK(sh::read_recorded_loc(line, back));
+  CHECK(back.points.size() == 2 && back.points[1].name == "ra room");
+  CHECK(!sh::read_recorded_loc("fullserverinfo \"\\a\\b\"", back));
+  CHECK(back.points.size() == 2);
+}

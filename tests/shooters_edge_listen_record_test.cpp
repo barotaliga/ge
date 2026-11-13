@@ -111,12 +111,13 @@ struct Recorded {
   float last_health = 0;
 };
 
-Recorded record_session(int level) {
+Recorded record_session(int level, const sh::Locs* places = nullptr) {
   Recorded out;
   const cl::SearchPath files = halls_files();
   cl::Listen l;
   if (!start(l, files)) return out;
   cl::ListenRecorder r;
+  r.places = places;
   cl::record_listen_begin(r, l, level);
   play(l, [&] {
     cl::record_listen_frame(r, l);
@@ -249,4 +250,22 @@ TEST(record_and_stop_write_a_file_that_plays_by_name) {
   // error_code form leaves the scratch folder for the next run's remove_all instead of throwing.
   std::error_code ec;
   fs::remove_all(root, ec);
+}
+
+TEST(a_recording_keeps_the_place_names_it_was_played_with) {
+  sh::Locs places;
+  sh::add_loc(places, {256, 192, 64}, "hall");
+  sh::add_loc(places, {900, 192, 64}, "side room");
+  const Recorded rec = record_session(0, &places);
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(rec.bytes, d, error), error);
+  CHECK(cl::next_frame(d, error) == cl::DemoRead::frame);
+  CHECK_MSG(d.state.places.points.size() == 2, std::to_string(d.state.places.points.size()));
+  CHECK(d.state.places.points[1].name == "side room");
+  // One without them keeps none.
+  cl::Demo none;
+  CHECK_MSG(cl::open_demo(plain().bytes, none, error), error);
+  CHECK(cl::next_frame(none, error) == cl::DemoRead::frame);
+  CHECK(none.state.places.points.empty());
 }

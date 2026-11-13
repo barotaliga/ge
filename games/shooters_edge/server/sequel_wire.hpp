@@ -87,6 +87,8 @@ struct SequelWireOptions {
   // The world's sky (configstrings 2, 3 and 4: its name, axis and turn a second, as text), from
   // the map's world entity (`sequel_sky`); empty: none named.
   std::string sky, sky_axis, sky_rotate;
+  // Lines stuffed at the end of the signon, before `precache` (a recording's place names).
+  std::vector<std::string> stuffed;
 };
 
 // The sky the map's world entity names (its `sky`, `skyaxis` and `skyrotate` keys) into `opt`.
