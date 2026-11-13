@@ -14,6 +14,11 @@
 //   reader that recomputes them from the frame's own triangles needs no table.
 // - **Frames** in a group play in turn at the group's intervals; a lone frame is a group of one
 //   with no interval. **Skins** likewise.
+// - **Two model families** read into it: the first (magic `IDPO`) carries its skins as pictures
+//   and splits its seam by the skin's halves; the second (`IDP2`) names its skins as picture files
+//   of the game's (`skin_paths`, each `skin_width` by `skin_height`, `skins` then empty) and gives
+//   a seam vertex a second texture coordinate, so a vertex here is a file vertex and coordinate
+//   pair. Its frames have no groups: the game sets the frame number itself.
 //
 // ge:summary Classic vertex-animated models and sprites in one view: skins, mesh, morph frames
 // ge:keywords morph model mdl sprite spr skin frame group interval vertex-animation seam palette
@@ -45,8 +50,10 @@ struct Frame {
 
 struct Model {
   std::vector<Skin> skins;
-  std::vector<float> st;          // two a vertex: texture coordinates, 0..1 across the skin
-  std::vector<uint32_t> indices;  // three a triangle, counter-clockwise seen from outside
+  std::vector<std::string> skin_paths;  // the second family's: picture files the game holds
+  int skin_width = 0, skin_height = 0;  // the size its texture coordinates are measured in
+  std::vector<float> st;                // two a vertex: texture coordinates, 0..1 across the skin
+  std::vector<uint32_t> indices;        // three a triangle, counter-clockwise seen from outside
   std::vector<Frame> frames;
   std::vector<int> source_vertex;  // a vertex's index in the file (before the seam split)
   std::array<float, 3> eye{};
@@ -60,6 +67,7 @@ struct Model {
 enum class Facing : uint8_t { upright, facing, parallel, oriented, parallel_oriented };
 
 struct SpriteFrame {
+  std::string picture;  // the second family's: the frame's picture file (`indices` then empty)
   int width = 0, height = 0;
   int origin_x = 0, origin_y = 0;  // the picture's top left against the sprite's origin, units
   std::vector<uint8_t> indices;

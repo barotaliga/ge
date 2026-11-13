@@ -17,6 +17,7 @@
 
 #include "assets/image.hpp"
 #include "assets/iqm.hpp"
+#include "assets/pcx.hpp"
 #include "assets/tga.hpp"
 #include "brush/pictures.hpp"
 #include "brush/read.hpp"
@@ -228,6 +229,23 @@ bool open_skeletal(const SearchPath& files, const std::string& name, std::span<c
   return true;
 }
 
+// A picture the second model family names (a skin, a sprite's frame) read as palette indices; an
+// unreadable or missing one says so and is left out.
+bool named_picture(const SearchPath& files, const std::string& path, const std::string& model,
+                   ge::assets::IndexedImage& out) {
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> bytes = find_file(files, path, store);
+  std::string why;
+  if (bytes.empty() || !ge::assets::decode_pcx(bytes, path, &out, &why)) {
+    ge::core::output::status(
+        "shooters_edge: " + model + "'s picture " + path +
+        (bytes.empty() ? " is not in the files" : " did not read (" + why + ")") +
+        "; it is drawn without it");
+    return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 bool open_model(const GameAdapter&, const SearchPath& files, const std::string& name,
@@ -255,9 +273,35 @@ bool open_model(const GameAdapter&, const SearchPath& files, const std::string& 
     }
     return true;
   }
-  if (kind == ".spr") {
+  if (kind == ".md2") {
+    if (!ge::morph::read_model(bytes, name, &out.morph, &error)) return false;
+    out.form = ModelForm::morph;
+    // Its skins are the game's pictures, by name: read into the model as palette indices.
+    for (const std::string& path : out.morph.skin_paths) {
+      ge::assets::IndexedImage img;
+      if (!named_picture(files, path, name, img)) continue;
+      out.morph.skins.push_back(
+          {img.width, img.height, std::move(img.indices), 0.0f, int(out.morph.skins.size())});
+    }
+    return true;
+  }
+  if (kind == ".spr" || kind == ".sp2") {
     if (!ge::morph::read_sprite(bytes, name, &out.sprite, &error)) return false;
     out.form = ModelForm::sprite;
+    for (ge::morph::SpriteFrame& f : out.sprite.frames) {
+      ge::assets::IndexedImage img;
+      if (f.picture.empty() || !named_picture(files, f.picture, name, img)) continue;
+      f.width = img.width;
+      f.height = img.height;
+      f.indices = std::move(img.indices);
+    }
+    // A frame whose picture is missing is dropped; a sprite with none left is not drawn.
+    std::erase_if(out.sprite.frames,
+                  [](const ge::morph::SpriteFrame& f) { return f.indices.empty(); });
+    if (out.sprite.frames.empty()) {
+      error = "none of its frames' pictures read";
+      return false;
+    }
     return true;
   }
   if (kind == ".bsp") {
@@ -265,8 +309,8 @@ bool open_model(const GameAdapter&, const SearchPath& files, const std::string& 
     out.form = ModelForm::brush;
     return true;
   }
-  error =
-      "a model of a kind this game does not draw (" + kind + "); use a .mdl, .iqm, .spr or .bsp";
+  error = "a model of a kind this game does not draw (" + kind +
+          "); use a .mdl, .md2, .iqm, .spr, .sp2 or .bsp";
   return false;
 }
 

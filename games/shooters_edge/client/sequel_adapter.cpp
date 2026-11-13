@@ -19,8 +19,8 @@
 #include <vector>
 
 #include "assets/pcx.hpp"
-
 #include "shooters_edge/client/adapter_parts.hpp"
+#include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 
 namespace shooters_edge::client {
@@ -73,6 +73,27 @@ bool held_weapons(const GameAdapter&, const SearchPath&, std::vector<ge::viewmod
   return false;
 }
 
+// A player's model names no skin (the player chooses it): until a player's own choice reaches the
+// window, his model wears its folder's `grunt` skin, else the male model's (the game's own
+// fallbacks for a missing skin).
+bool open_model(const GameAdapter& self, const SearchPath& files, const std::string& name,
+                OpenedModel& out, std::string& error) {
+  if (!parts::open_model(self, files, name, out, error)) return false;
+  if (out.form != ModelForm::morph || !out.morph.skins.empty() || name.rfind("players/", 0) != 0)
+    return true;
+  const std::string folder = std::filesystem::path(name).parent_path().generic_string();
+  for (const std::string& path : {folder + "/grunt.pcx", std::string("players/male/grunt.pcx")}) {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> bytes = find_file(files, path, store);
+    ge::assets::IndexedImage img;
+    std::string why;
+    if (bytes.empty() || !ge::assets::decode_pcx(bytes, path, &img, &why)) continue;
+    out.morph.skins.push_back({img.width, img.height, std::move(img.indices), 0.0f, 0});
+    break;
+  }
+  return true;
+}
+
 // Its own client recordings (demo.hpp § SEQUEL); another game's are refused.
 bool open_demo_(const GameAdapter&, std::vector<uint8_t> bytes, Demo& out, std::string& error) {
   if (!open_demo(std::move(bytes), out, error)) return false;
@@ -88,7 +109,7 @@ const GameAdapter kSequel{.game = &pf::kGameProfiles[1],
                           .list_maps = parts::list_maps,
                           .map_info = parts::map_info,
                           .map_textures = parts::map_textures,
-                          .open_model = parts::open_model,
+                          .open_model = open_model,
                           .open_sound = parts::open_sound,
                           .pictures = pictures,
                           .find_config = parts::find_config,

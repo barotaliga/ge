@@ -25,6 +25,10 @@ namespace ge::morph {
 
 std::vector<uint8_t> write_model(const Model& m);
 std::vector<uint8_t> write_sprite(const Sprite& s);
+// The second family's (model.hpp): `skin_paths` and `skin_width`/`skin_height` for the skins,
+// every frame packed to its own 1/255 of its extent; a sprite's frames by their `picture`.
+std::vector<uint8_t> write_model2(const Model& m);
+std::vector<uint8_t> write_sprite2(const Sprite& s);
 
 Model sample_model();
 Sprite sample_sprite();

@@ -2,6 +2,7 @@
 //
 // ge:summary Packs a model view into model-file bytes and a sprite into sprite bytes; the fixtures
 // ge:keywords write pack seam onseam facesfront group interval fixture octahedron sprite
+// ge:keywords write_model2 write_sprite2 md2 sp2
 // ge:skill morph
 // ge:test tests/morph_read_test.cpp
 #include "morph/write.hpp"
@@ -285,6 +286,99 @@ Sprite sample_sprite() {
     s.frames.push_back(std::move(f));
   }
   return s;
+}
+
+namespace {
+
+void put16(std::vector<uint8_t>& b, int v) {
+  b.push_back(uint8_t(v & 0xff));
+  b.push_back(uint8_t((v >> 8) & 0xff));
+}
+
+void put_name(std::vector<uint8_t>& b, const std::string& name, size_t n) {
+  for (size_t i = 0; i < n; i++) b.push_back(i < name.size() ? uint8_t(name[i]) : 0);
+}
+
+void patch32(std::vector<uint8_t>& b, size_t at, size_t v) {
+  for (size_t i = 0; i < 4; i++) b[at + i] = uint8_t(v >> (8 * i));
+}
+
+}  // namespace
+
+std::vector<uint8_t> write_model2(const Model& m) {
+  int sources = 0;
+  for (const int s : m.source_vertex) sources = std::max(sources, s + 1);
+  const int sw = m.skin_width > 0 ? m.skin_width : 8;
+  const int sh = m.skin_height > 0 ? m.skin_height : 8;
+  std::vector<uint8_t> b;
+  b.insert(b.end(), {'I', 'D', 'P', '2'});
+  puti(b, 8);
+  puti(b, sw);
+  puti(b, sh);
+  puti(b, 40 + 4 * sources);
+  puti(b, int(m.skin_paths.size()));
+  puti(b, sources);
+  puti(b, int(m.vertex_count()));  // one coordinate a view vertex
+  puti(b, int(m.indices.size() / 3));
+  puti(b, 0);  // no draw commands
+  puti(b, int(m.frames.size()));
+  const size_t offsets = b.size();
+  for (int i = 0; i < 6; i++) puti(b, 0);
+  patch32(b, offsets, b.size());
+  for (const std::string& p : m.skin_paths) put_name(b, p, 64);
+  patch32(b, offsets + 4, b.size());
+  for (uint32_t v = 0; v < m.vertex_count(); v++) {
+    put16(b, round_int(double(m.st[size_t{v} * 2]) * sw));
+    put16(b, round_int(double(m.st[size_t{v} * 2 + 1]) * sh));
+  }
+  patch32(b, offsets + 8, b.size());
+  for (size_t t = 0; t + 2 < m.indices.size(); t += 3) {
+    // The view winds the other way round from the file.
+    const uint32_t v[3] = {m.indices[t], m.indices[t + 2], m.indices[t + 1]};
+    for (const uint32_t i : v) put16(b, m.source_vertex[i]);
+    for (const uint32_t i : v) put16(b, int(i));
+  }
+  patch32(b, offsets + 12, b.size());
+  for (const Frame& f : m.frames) {
+    float lo[3] = {1e30f, 1e30f, 1e30f}, hi[3] = {-1e30f, -1e30f, -1e30f};
+    for (size_t i = 0; i + 2 < f.positions.size(); i += 3) {
+      for (size_t k = 0; k < 3; k++) {
+        lo[k] = std::min(lo[k], f.positions[i + k]);
+        hi[k] = std::max(hi[k], f.positions[i + k]);
+      }
+    }
+    float scale[3];
+    for (size_t k = 0; k < 3; k++) scale[k] = hi[k] > lo[k] ? (hi[k] - lo[k]) / 255.0f : 1.0f;
+    for (const float v : scale) putf(b, v);
+    for (const float v : lo) putf(b, v);
+    put_name(b, f.name, 16);
+    std::vector<uint8_t> packed(size_t(sources) * 4, 0);
+    for (uint32_t v = 0; v < m.vertex_count(); v++) {
+      for (size_t k = 0; k < 3; k++) {
+        const double q = double(f.positions[size_t{v} * 3 + k] - lo[k]) / double(scale[k]);
+        packed[size_t(m.source_vertex[v]) * 4 + k] = uint8_t(std::clamp(round_int(q), 0, 255));
+      }
+    }
+    b.insert(b.end(), packed.begin(), packed.end());
+  }
+  patch32(b, offsets + 16, b.size());  // the draw commands: none
+  patch32(b, offsets + 20, b.size());  // the end
+  return b;
+}
+
+std::vector<uint8_t> write_sprite2(const Sprite& s) {
+  std::vector<uint8_t> b;
+  b.insert(b.end(), {'I', 'D', 'S', '2'});
+  puti(b, 2);
+  puti(b, int(s.frames.size()));
+  for (const SpriteFrame& f : s.frames) {
+    puti(b, f.width);
+    puti(b, f.height);
+    puti(b, -f.origin_x);
+    puti(b, f.origin_y);
+    put_name(b, f.picture, 64);
+  }
+  return b;
 }
 
 }  // namespace ge::morph
