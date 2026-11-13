@@ -141,9 +141,15 @@ struct Server {
   std::vector<BrushModel> models;  // by modelindex; [0] none, [1] the world
   // A map of the version 38 family, which has no clip hulls: when set, the world is traced and
   // its contents read through its brushes (`trace_move`, `world_contents`; world.hpp's
-  // `brushes` solid) and nothing else in the pool is traced. The rules that keep such a map set
-  // it on the pool they mirror their world into (the sequel's).
+  // `brushes` solid); `trace_move` traces nothing else in the pool unless `world_trace` is set. The
+  // rules that keep such a map set it on the pool they mirror their world into (the sequel's).
   const Solid* brushes = nullptr;
+  // Those rules' own trace of the map, when they give one: the world and the brush entities that
+  // stand in it now (doors, plats) at their places, so a line is stopped where a player's is.
+  // `trace_move` asks it first; `world_ctx` is theirs, passed back.
+  const void* world_ctx = nullptr;
+  HullTrace (*world_trace)(const void* ctx, Vec3f start, Vec3f mins, Vec3f maxs,
+                           Vec3f end) = nullptr;
   Program program;
   Globals g;
   double time = 0;          // the server's time, s

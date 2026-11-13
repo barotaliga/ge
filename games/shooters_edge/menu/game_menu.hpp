@@ -35,6 +35,12 @@
 // and the menu closes, the window playing it as `playdemo` does. It keeps the modern look in both
 // looks.
 //
+// THE SOUNDS: each frame's presses leave one cue (ui/menu.hpp's `MenuCue`) the window plays from
+// the game's own recordings (client/menu_sound.hpp): the menu opened (Escape, `togglemenu`) or a
+// page or item entered is `enter`; the focus moved, or a page of the screenshots, servers, demos
+// or help flipped, is `move`; a value changed or a key bound is `change`; back out of a page and
+// the menu closed is `back`.
+//
 // The commands it registers: `togglemenu` (what ESCAPE does), `menu_main`, `menu_options`,
 // `menu_quit`, `menu_screenshots`, `menu_servers`, `menu_demos` (the menu opened on that page);
 // the cvars
@@ -48,6 +54,7 @@
 // ge:keywords waiting-key rebind customize-controls load-game take_load enhance_game ce_auto
 // ge:keywords background-enhance take_ended screenshots gallery menu_screenshots set_screenshots
 // ge:keywords server-browser join-a-game menu_servers servers demos menu_demos take_demo
+// ge:keywords menu-sound menu-cue take_cue click
 // ge:skill ui console classicenhance
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -138,6 +145,9 @@ class GameMenu {
   bool in_demos() const { return in_demos_; }
   std::string take_demo() { return std::exchange(demo_ask_, std::string()); }
 
+  // The sound this frame's presses (and opening or closing) made since the last call; none after.
+  ge::ui::MenuCue take_cue() { return std::exchange(cue_, ge::ui::MenuCue::none); }
+
   // The next draw settles every animation where it is going (a lab's still).
   void settle() { settle_ = true; }
   // The look the menu draws in now.
@@ -175,6 +185,8 @@ class GameMenu {
   std::vector<ge::ui::Rect> hits_;  // the last layout's rows, for the pointer
   std::vector<std::string> problems_;
   bool open_ = false;
+  ge::ui::MenuCue cue_ = ge::ui::MenuCue::none;  // the sound not yet taken
+  void cue(ge::ui::MenuCue c) { cue_ = ge::ui::louder(cue_, c); }
   bool toggle_ = false;
   bool settle_ = false;
   std::string_view toggle_page_ = "main";  // a literal: the commands' pages

@@ -58,6 +58,16 @@ struct FragmentOut {
 @fragment
 fn fs_underside(in: VertexOut) -> FragmentOut {
   let foot = max(length(dpdx(in.xz)), length(dpdy(in.xz)));
+  // A coarser level under the finer one's footprint: its vertices there are lifted out of the
+  // way (vs_main), which hides them from the top under the depth test; this pass has none, so
+  // they are dropped here, or their lifted triangles, a step off the plane, show through the
+  // walls the floor's plane test below passes (a wall beyond the plane but before them).
+  if (in.level > 0u) {
+    let f = body.levels[in.level - 1u];
+    if (all(in.xz > f.xy) && all(in.xz < f.xy + vec2f(f32(kGrid) * f.z))) {
+      discard;
+    }
+  }
   let dist = length(in.rel);
   let d = in.rel / dist;  // the eye's ray, up toward the underside
   let uv = in.position.xy * frame.size.zw;

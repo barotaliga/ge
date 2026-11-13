@@ -58,6 +58,9 @@ TEST(hub_reads_its_flags) {
   HubOptions bad;
   CHECK(!hub_options({"--master=x", "--http=99999"}, bad, err) &&
         err.find("--http") != std::string::npos);
+  HubOptions acc;  // a hub that only keeps the accounts
+  CHECK(hub_options({"--accounts=/srv/accounts", "--accounts-port=27911"}, acc, err));
+  CHECK(acc.accounts == "/srv/accounts" && acc.accounts_port == 27911);
   std::vector<Address> masters;
   CHECK(master_list("sim:1:27900, sim:2:27900", masters, err) && masters.size() == 2);
 }

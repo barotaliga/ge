@@ -17,6 +17,7 @@
 
 #include "brush/read.hpp"
 #include "brush/write.hpp"
+#include "classicenhance/profile.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
@@ -27,6 +28,9 @@
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace {
@@ -36,6 +40,8 @@ namespace gl = ge::lab;
 namespace sh = ge::shooter;
 namespace sv = shooters_edge::server;
 namespace bt = shooters_edge::bots;
+namespace cl = shooters_edge::client;
+namespace pf = shooters_edge::profiles;
 
 constexpr int kBots = 4;
 constexpr double kBotHz = 1000.0 / bt::kPilotMsec;
@@ -129,26 +135,52 @@ struct Seat {
   gl::Trace path;
 };
 
+// The map asked for (`--game` and `--map`: the player's own packs), or the hall.
+std::shared_ptr<const br::Map> lab_map(gl::Lab& lab, std::string& name, std::string& error) {
+  if (lab.arg("game").empty()) {
+    name = "hall";
+    return hall(error);
+  }
+  const pf::GameProfile& game = *pf::find_game("sequel");
+  const ge::classicenhance::Profile& content = pf::content_of(game);
+  cl::SearchPath files;
+  if (!cl::open_game_dir(lab.arg("game"), std::string(content.base_dir), files, error, content))
+    return nullptr;
+  name = lab.arg("map");
+  std::unique_ptr<cl::LoadedMap> m = cl::load_named_map(files, name, error);
+  auto map = std::make_shared<br::Map>();
+  if (!m || !br::read_bsp(m->file, map.get(), &error)) return nullptr;
+  return map;
+}
+
 void run(gl::Lab& lab) {
-  std::string error;
-  const std::shared_ptr<const br::Map> map = hall(error);
+  std::string error, name;
+  const std::shared_ptr<const br::Map> map = lab_map(lab, name, error);
   if (map == nullptr) {
-    lab.fail("the hall did not build: " + error, "Read the reason above. Skill: brush.");
+    lab.fail("the map did not load: " + error,
+             "Read the reason above; --game is the folder holding the sequel's base folder, --map "
+             "a map in it. Skill: brush.");
     return;
   }
-  sv::RulesRunner r = sv::sequel_runner(sv::make_sequel_server({}));
+  const bool hall_map = lab.arg("game").empty();
+  // The bots take a turned view as their own (a spot's angle, a teleport's), as the window's
+  // player does: so its turn is spent, not added to every view they send after.
+  sv::SequelServerOptions opt;
+  opt.clients_take_view = true;
+  sv::RulesRunner r = sv::sequel_runner(sv::make_sequel_server(opt));
   r.console("deathmatch 1");
   sv::MapSpec spec;
-  spec.name = "hall";
+  spec.name = name;
   spec.brushes = map;
   if (!r.start(spec, error)) {
-    lab.fail("the sequel's rules did not start the hall: " + error,
+    lab.fail("the sequel's rules did not start " + name + ": " + error,
              "Read the reason above. Skill: shooter.");
     return;
   }
   auto nav = std::make_unique<bt::MapNav>();
+  nav->move = bt::sequel_nav_move();
   if (!bt::build_map_nav(*r, spec, "info_player_deathmatch", *nav, error)) {
-    lab.fail("the bots' nav did not build on the hall: " + error,
+    lab.fail("the bots' nav did not build on " + name + ": " + error,
              "Read bots/map_nav.cpp's build_map_nav. Skill: bots.");
     return;
   }
@@ -180,7 +212,11 @@ void run(gl::Lab& lab) {
       Seat& s = *seats[static_cast<size_t>(i)];
       s.cmds[0] = s.cmds[1];
       s.cmds[1] = s.cmds[2];
+      const bool turned = game.players[i].forced;  // a view the rules turned it to, unspent
+      const sh::Vec3f view = r->sv.edicts[static_cast<size_t>(i) + 1].v_angle;
+      if (turned) s.fighter.bot.yaw = view.y;
       s.cmds[2] = bt::fighter_command(s.fighter, *r, i, bt::kPilotMsec);
+      if (turned) s.cmds[2].angles = view;
       sh::Packet p;
       p.client = i;
       p.sequence = ++s.sequence;
@@ -203,7 +239,7 @@ void run(gl::Lab& lab) {
     }
   }
   gl::LabTable table{
-      "four bots, " + fixed(seconds, 0) + " s of deathmatch on the hall",
+      "four bots, " + fixed(seconds, 0) + " s of deathmatch on " + name,
       {"bot", "frags", "deaths", "pickups", "firing steps", "switches", "most in hand"},
       {}};
   float frags = 0;
@@ -247,7 +283,7 @@ void run(gl::Lab& lab) {
   lab.metric("off-blaster", alive > 0 ? off_blaster / alive : 0, "share");
   lab.metric("nav.nodes", static_cast<double>(nav->graph.nodes.size()), "nodes");
   if (pickups == 0)
-    lab.fail("no bot took an item on the hall",
+    lab.fail("no bot took an item on " + name,
              "Read the fighter's goals (bots/goals.cpp) and item_of with the sequel's arsenal "
              "(bots/knowledge.cpp). Skill: bots.");
   if (shots == 0)
@@ -263,19 +299,26 @@ void run(gl::Lab& lab) {
   gl::LineChart plan;
   plan.points = true;
   plan.spikes = false;
-  plan.frame = {"FOUR BOTS ON THE HALL, FROM ABOVE",
+  std::string upper = name;
+  for (char& c : upper) c = static_cast<char>(c >= 'a' && c <= 'z' ? c - 32 : c);
+  plan.frame = {"FOUR BOTS ON " + upper + ", FROM ABOVE",
                 "the sequel's rules on a version 38 map; the bots read its arsenal", "x (units)",
                 "y (units)"};
   for (const auto& s : seats) plan.traces.push_back(s->path);
-  lab.shot({"paths",
-            plan.frame.title,
-            "Every bot's place every eighth step of the match, seen from above: the west half (x "
-            "below 0), the doorway at y between -48 and 48, the east half, and the ledge past "
-            "x 384 the plat rises to.",
-            "trails in both halves and through the doorway, and some on the ledge past x 384 "
-            "(the railgun's, reached by the plat)",
-            {{"frags", fixed(frags, 0)}, {"pickups", std::to_string(pickups)}}},
-           gl::to_picture(gl::line_chart(plan).plot));
+  lab.shot(
+      {"paths",
+       plan.frame.title,
+       hall_map
+           ? "Every bot's place every eighth step of the match, seen from above: the west "
+             "half (x below 0), the doorway at y between -48 and 48, the east half, and "
+             "the ledge past x 384 the plat rises to."
+           : "Every bot's place every eighth step of the match on " + name + ", seen from above.",
+       hall_map ? "trails in both halves and through the doorway, and some on the ledge past "
+                  "x 384 (the railgun's, reached by the plat)"
+                : "trails over the whole map's floors, not a few rooms; no trail stuck "
+                  "pressed along one wall",
+       {{"frags", fixed(frags, 0)}, {"pickups", std::to_string(pickups)}}},
+      gl::to_picture(gl::line_chart(plan).plot));
 }
 
 const gl::LabSpec kSpec{
@@ -286,7 +329,9 @@ const gl::LabSpec kSpec{
     "bots",
     "Do the bots walk, ride, teleport, pick up, switch to and fire the sequel's weapons, and score "
     "frags on a version 38 map under its rules?",
-    {{"seconds", "120", "seconds of deathmatch"}},
+    {{"seconds", "120", "seconds of deathmatch"},
+     {"game", "", "the folder holding the sequel's base folder (none: the hall built here)"},
+     {"map", "q2dm1", "the map played with --game"}},
     "--seconds=30",
     run,
 };

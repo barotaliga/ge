@@ -9,8 +9,10 @@
 #include "shooters_edge/menu/game_menu.hpp"
 
 #include <filesystem>
+#include <string>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #include "classicenhance/cache.hpp"
 #include "classicenhance/source.hpp"
@@ -47,16 +49,18 @@ void GameMenu::add_cvars(ge::console::Console& con) {
   con.cvars().bind({.name = "menu_look",
                     .fallback = "auto",
                     .flags = ge::console::kArchive,
-                    .help = "the main menu's look: auto (the pack's own pictures when the packs "
-                            "have them), classic or modern",
-                    .kind = ge::console::CvarKind::text},
+                    .help = "The main menu's look.",
+                    .kind = ge::console::CvarKind::text,
+                    .values = "auto: the pack's own pictures when the packs have them (the "
+                              "default); classic: the pack's; modern: ours"},
                    &look_);
   con.cvars().bind({.name = "ce_auto",
                     .fallback = "1",
                     .flags = ge::console::kArchive,
-                    .help = "1: a game loaded (LOAD GAME, basedir) is enhanced in the background "
-                            "at once; 0: only by CLASSIC ENHANCED > ENHANCE",
-                    .kind = ge::console::CvarKind::boolean},
+                    .help = "Whether a game loaded by LOAD GAME or basedir is enhanced in the "
+                            "background at once.",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: only by CLASSIC ENHANCED > ENHANCE; 1: at once (the default)"},
                    &auto_);
   ce::bind_switches(con.cvars(), &switches_);
   ce::sync_switches(enhance_, switches_);
@@ -131,6 +135,7 @@ void GameMenu::show(Host& host, std::string_view page) {
   main_.move_focus(0);
   help_page_ = 0;
   open_ = true;
+  cue(ui::MenuCue::enter);
   if (gallery) {
     main_.top().focus = -1;
     main_.focus("screenshots");
@@ -149,6 +154,7 @@ void GameMenu::show(Host& host, std::string_view page) {
 }
 
 void GameMenu::hide() {
+  if (open_) cue(ui::MenuCue::back);
   open_ = false;
   waiting_.clear();
   in_enhance_ = false;
@@ -158,13 +164,16 @@ void GameMenu::hide() {
 }
 
 void GameMenu::show_demos() {
+  cue(ui::MenuCue::enter);
   in_demos_ = true;
   demos_.open();
 }
 
 void GameMenu::update_demos(const ui::MenuInput& in, Host& host) {
+  if (in.up || in.down || in.left || in.right) cue(ui::MenuCue::move);
   switch (demos_.input(in)) {
     case DemosAction::leave:
+      cue(ui::MenuCue::back);
       in_demos_ = false;
       refresh_main(host);
       return;
@@ -179,6 +188,7 @@ void GameMenu::update_demos(const ui::MenuInput& in, Host& host) {
 }
 
 void GameMenu::show_servers() {
+  cue(ui::MenuCue::enter);
   in_servers_ = true;
   std::string why;
   if (!servers_.open(&why) && con_ != nullptr) con_->print("join a game: " + why);
@@ -186,8 +196,10 @@ void GameMenu::show_servers() {
 
 void GameMenu::update_servers(const ui::MenuInput& in, Host& host) {
   servers_.frame(dt_);
+  if (in.up || in.down || in.left || in.right) cue(ui::MenuCue::move);
   switch (servers_.input(in, in.refresh)) {
     case ServersAction::leave:
+      cue(ui::MenuCue::back);
       in_servers_ = false;
       refresh_main(host);
       return;
@@ -201,6 +213,7 @@ void GameMenu::update_servers(const ui::MenuInput& in, Host& host) {
 }
 
 void GameMenu::show_gallery() {
+  cue(ui::MenuCue::enter);
   in_gallery_ = true;
   gallery_.scan();  // a screenshot taken since the last look
   gallery_.reset();
@@ -217,7 +230,10 @@ void GameMenu::update_gallery(const ui::MenuInput& in, Host& host) {
   gi.del = in.del;
   if (in.pointer_moved || in.click) gi.pointed = gallery_page_.hit(in.pointer_x, in.pointer_y);
   gi.click = in.click && gi.pointed >= 0;
+  if (in.up || in.down || in.left || in.right) cue(ui::MenuCue::move);
+  if (in.accept || gi.click) cue(ui::MenuCue::enter);
   if (gallery_.input(gi) == ge::capture::GalleryAction::leave) {
+    cue(ui::MenuCue::back);
     in_gallery_ = false;
     refresh_main(host);
     return;
@@ -326,6 +342,7 @@ void GameMenu::press_key(std::string_view key, Host& host) {
   if (waiting_.empty() || waiting_fresh_ || host.console == nullptr) return;
   const Control* c = control_of(waiting_);
   waiting_.clear();
+  cue(key == "escape" ? ui::MenuCue::back : ui::MenuCue::change);
   if (c != nullptr && (key == "backspace" || key == "del")) {
     unbind_control(*host.console, c->command);
   } else if (c != nullptr && key != "escape") {
@@ -364,8 +381,17 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
     return;
   }
   if (in_enhance_) ce::sync_enhancing(enhance_, board());
+  // The focus where it was before the presses: moved (by a key or the pointer) is a click.
+  ui::Menu& driven = in_enhance_ ? enhance_ : main_;
+  const std::string page_before = driven.top().id;
+  const int focus_before = driven.top().focus;
+  const auto moved = [&] {
+    return driven.top().id == page_before && driven.top().focus != focus_before;
+  };
   if (in_enhance_) {
-    for (const ui::MenuEvent& e : enhance_.input(in, hits_)) apply_enhance(e, host);
+    const std::vector<ui::MenuEvent> events = enhance_.input(in, hits_);
+    cue(ui::menu_cue(events, moved()));
+    for (const ui::MenuEvent& e : events) apply_enhance(e, host);
     // BACK from the enhancing page: the game's own page, not classic-enhance's pack choice.
     if (in_enhance_ && enhance_.top().id == "classic") {
       in_enhance_ = false;
@@ -376,9 +402,12 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
   const bool help = classic() && main_.top().id == "help" && help_pages(art_) > 0;
   if (help && (in.left || in.right || in.accept)) {
     help_page_ += in.left ? -1 : 1;
+    cue(ui::MenuCue::move);
     return;
   }
-  for (const ui::MenuEvent& e : main_.input(in, hits_)) {
+  const std::vector<ui::MenuEvent> events = main_.input(in, hits_);
+  cue(ui::menu_cue(events, moved()));
+  for (const ui::MenuEvent& e : events) {
     switch (apply_event(e, main_, host)) {
       case Outcome::close:
       case Outcome::back_at_root:

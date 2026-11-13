@@ -34,6 +34,7 @@
 
 #include "brush/write.hpp"
 #include "hub/archive.hpp"
+#include "hub/content.hpp"
 #include "hub/http.hpp"
 #include "hub/watch.hpp"
 #include "lab/lab.hpp"
@@ -42,6 +43,7 @@
 #include "net/address.hpp"
 #include "net/status.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/client/demo_content.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/classic_team.hpp"
@@ -63,6 +65,7 @@ gh::HubSpec spec() {
   s.id = "shooters_edge";
   s.modes = {{"4on4", 9}, {"2on2", 8}, {"1on1", 7}, {"ffa", 3}};
   s.score = "frags";
+  s.demo_files = cl::demo_files;
   return s;
 }
 
@@ -155,9 +158,19 @@ void run(gl::Lab& lab) {
   gh::watch_answer(gh::Poller{}, spec(), "/demo/" + row.sha, 0, site, page);
   lab.metric("demo_kb", static_cast<double>(ger.size()) / 1024.0, "KiB");
   lab.metric("pack_kb", static_cast<double>(pak.size()) / 1024.0, "KiB");
+  // The demo's own content pack: only the files it draws from, out of the packs beside the viewer.
+  gh::ContentPack content;
+  if (!gh::demo_content(site, spec(), row.sha, content, error)) {
+    lab.fail("hub-viewer: the demo's content pack: " + error,
+             "run tests/hub_content_test.cpp, then read engine/hub/content.cpp");
+    return;
+  }
+  lab.metric("content_kb", static_cast<double>(content.bytes) / 1024.0, "KiB");
+  lab.metric("content_raw_kb", static_cast<double>(content.raw) / 1024.0, "KiB");
+  lab.metric("content_files", static_cast<double>(content.files), "files");
   if (have_viewer) {
     if (page.code != 200 || !has(page.body, "<canvas id=\"view\"") ||
-        !has(page.body, "\"--pack=/viewer/pak0.pak\"") ||
+        !has(page.body, "\"--pack=/" + gh::content_path(content.sha) + "\"") ||
         !has(page.body, "\"--demo=/" + gh::archive_path(row.sha) + "\"")) {
       lab.fail("the Demo page does not start the viewer with the demo and the pack",
                "run tests/hub_watch_test.cpp, then read watch.cpp's viewer_slot");
@@ -168,7 +181,7 @@ void run(gl::Lab& lab) {
     lab.metric("viewer_wasm_kb", wasm / 1024.0, "KiB", gl::Det::measured);
     lab.metric(
         "first_visit_kb",
-        (js + wasm + static_cast<double>(pak.size() + ger.size() + page.body.size())) / 1024.0,
+        (js + wasm + static_cast<double>(content.bytes + ger.size() + page.body.size())) / 1024.0,
         "KiB", gl::Det::measured);
   } else {
     lab.note("no built viewer in " + built.string() +
@@ -284,6 +297,16 @@ void run(gl::Lab& lab) {
                gh::AddResult::added) {
       lab.note("the archive did not take " + real + ": " + error);
     } else {
+      // Its content pack made ahead, as the hub does when a demo arrives, and measured.
+      gh::ContentPack real_content;
+      if (gh::demo_content(site, spec(), real_row.sha, real_content, error)) {
+        lab.metric("real_content_kb", static_cast<double>(real_content.bytes) / 1024.0, "KiB",
+                   gl::Det::measured);
+        lab.metric("real_content_files", static_cast<double>(real_content.files), "files",
+                   gl::Det::measured);
+      } else {
+        lab.note("no content pack for " + real + ": " + error);
+      }
       const int wait_s = 2 * static_cast<int>(lab.arg_num("wait"));
       const std::optional<gl::Picture> got =
           draw("/demo/" + real_row.sha, "real", wait_s, gh::Poller{}, {});
@@ -293,7 +316,8 @@ void run(gl::Lab& lab) {
                   "A PLAYER'S OWN DEMO ON THE DEMO PAGE " + std::to_string(wait_s) + " S IN",
                   "The demo " + fs::path(real).filename().string() +
                       " packed into a replay file and filed by the hub's archive, played by the "
-                      "web viewer from the player's own packs.",
+                      "web viewer from its own content pack: only its files, out of the "
+                      "player's own packs.",
                   "the demo's map and players drawn on the canvas.",
                   {{"wait_s", std::to_string(wait_s)}}},
                  *got, gl::Det::measured);

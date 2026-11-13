@@ -89,6 +89,7 @@ HullTrace clip_to_entity(const Server& sv, int ent, Vec3f start, Vec3f mins, Vec
 
 HullTrace trace_move(const Server& sv, Vec3f start, Vec3f mins, Vec3f maxs, Vec3f end, int kind,
                      int passent) {
+  if (sv.world_trace != nullptr) return sv.world_trace(sv.world_ctx, start, mins, maxs, end);
   if (sv.brushes != nullptr) {  // a version 38 map: the world alone, through its brushes
     HullTrace tr = solid_box_trace(*sv.brushes, start, mins, maxs, end);
     tr.ent = tr.fraction < 1 || tr.startsolid ? 0 : -1;

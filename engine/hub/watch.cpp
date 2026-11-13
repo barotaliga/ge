@@ -15,6 +15,7 @@
 
 #include "core/json_write.hpp"
 #include "hub/archive.hpp"
+#include "hub/content.hpp"
 #include "hub/link.hpp"
 #include "hub/page_parts.hpp"
 
@@ -81,7 +82,7 @@ std::vector<std::string> viewer_packs(const Site& site) {
 
 // The picture's place: the viewer started with `args`, or the reason there is none.
 std::string viewer_slot(const Site& site, const HubSpec& spec, const std::vector<std::string>& args,
-                        const std::string& no_viewer) {
+                        const std::string& no_viewer, const std::string& content = "") {
   std::string h = "<div class=\"viewer\">";
   if (!no_viewer.empty()) return h + "<p class=\"none\">" + no_viewer + "</p></div>";
   if (!viewer_built(site, spec)) {
@@ -91,8 +92,12 @@ std::string viewer_slot(const Site& site, const HubSpec& spec, const std::vector
   }
   std::string list;
   for (const std::string& a : args) list += (list.empty() ? "" : ",") + script_str(a);
-  for (const std::string& pack : viewer_packs(site))
-    list += "," + script_str("--pack=/viewer/" + pack);
+  if (!content.empty()) {
+    list += "," + script_str("--pack=/" + content);  // only what the demo needs (content.hpp)
+  } else {
+    for (const std::string& pack : viewer_packs(site))
+      list += "," + script_str("--pack=/viewer/" + pack);
+  }
   h += "<canvas id=\"view\" width=\"1280\" height=\"720\"></canvas>";
   h += "<p class=\"small\" id=\"viewer-status\">Loading the viewer...</p>";
   h += "<noscript><p class=\"none\">The viewer needs script; open it in the game "
@@ -207,7 +212,13 @@ Answer demo_page(const HubSpec& spec, std::string_view sha, const Site& site) {
        html_escape(r->map) + " · " + utc_text(r->start_s);
   if (!r->server.empty()) h += " · " + html_escape(r->server);
   h += "</p>";
-  h += viewer_slot(site, spec, {"--demo=/" + archive_path(r->sha)}, "");
+  ContentPack pack;
+  std::string why;
+  const std::string content =
+      viewer_built(site, spec) && demo_content(site, spec, r->sha, pack, why)
+          ? content_path(pack.sha)
+          : "";
+  h += viewer_slot(site, spec, {"--demo=/" + archive_path(r->sha)}, "", content);
   h += "<p class=\"act\"><a class=\"btn watch\" href=\"" + scheme_of(spec) + "://demo/" + r->sha;
   if (link_host(site.host)) h += "?hub=" + site.host;
   h += "\">Play in the game</a><a class=\"small\" href=\"/" + archive_path(r->sha) +
@@ -278,6 +289,7 @@ bool watch_answer(const Poller& p, const HubSpec& spec, std::string_view target,
                   const Site& site, Answer& out) {
   std::string path = target_path(target);
   while (path.size() > 1 && path.back() == '/') path.pop_back();
+  if (content_answer(path, site, out)) return true;
   const std::pair<std::string_view, int> kinds[] = {{"/watch/", 0}, {"/demo/", 1}, {"/viewer/", 2}};
   for (const auto& [prefix, kind] : kinds) {
     if (path.rfind(prefix, 0) != 0) continue;

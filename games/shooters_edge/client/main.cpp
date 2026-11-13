@@ -111,6 +111,7 @@
 #include "shooters_edge/client/listen_sound.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
 #include "shooters_edge/client/map_load.hpp"
+#include "shooters_edge/client/menu_sound.hpp"
 #include "shooters_edge/client/own_sounds.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/scores.hpp"
@@ -573,6 +574,7 @@ int run_main(int argc, char** argv) {
   // they free on the way out.
   cl::DemoHearing hearing(synth);       // a played demo's sounds, voices and printed lines
   cl::ListenHearing heard_here(synth);  // the window's own game's sounds (listen_sound.hpp)
+  cl::MenuSounds menu_sounds(synth);    // the main menu's clicks (menu_sound.hpp)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
   out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"
@@ -730,6 +732,7 @@ int run_main(int argc, char** argv) {
     world_current = false;
     cl::listen_stop(listen);
     files = std::move(fresh);
+    menu_sounds.forget();  // the new game's own clicks
     args.basedir = basedir;
     args.profile = std::string(content->id);
     args.game = cl::game_of(basedir, *content);
@@ -1015,7 +1018,10 @@ int run_main(int argc, char** argv) {
         paused_before_menu = playback.paused;
         playback.paused = true;
       }
-      cl::keys_to_menu(game_menu, menu_host, queue, held);            // CUSTOMIZE CONTROLS' key
+      cl::keys_to_menu(game_menu, menu_host, queue, held);  // CUSTOMIZE CONTROLS' key
+      // The click the presses made, from the game's own recordings, at the player's volume.
+      synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
+      menu_sounds.play(game_menu.take_cue(), adapter, files, cl::kDemoVolume);
       if (std::string demo = game_menu.take_demo(); !demo.empty()) {  // DEMOS: checked, played
         bench_ask = std::move(demo);
         play_ask = true;
