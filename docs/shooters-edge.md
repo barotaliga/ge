@@ -1610,7 +1610,10 @@ recording to watch it, and nothing modern is left on screen: the console is writ
 game's glyph sheet over its own console background (`menu/classic_console.hpp`, the engine's
 `ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
 GAME and SELECT GAME are drawn in the game's letters under carved titles (`menu/classic_pages.hpp`;
-SELECT GAME's own row and the two games' names on it cut letter by letter from the strips like DEMOS'). Lab `se-attract` draws
+SELECT GAME's own row, DEMOS and the two games' names on it set by code in the strips' carved letters:
+`menu/carved_letters.hpp` cuts each letter it knows out of the strips into its own picture when the
+pack loads, dropping any speck of a neighbour a letter's box caught, and a word is laid out from them
+on one 20 px line with a pixel between letters). Lab `se-attract` draws
 the menu, SELECT GAME, OPTIONS, the watched recording, the console, DEMOS and JOIN A GAME over a
 played recording (`--basedir` a player's install; `--demo=none` over the title's dark, for a game
 whose recordings cannot play yet).
