@@ -70,6 +70,7 @@
 
 #include "net/transport.hpp"
 #include "progs/file.hpp"
+#include "server/accounts.hpp"
 #include "server/server.hpp"
 #include "shooter/pmove.hpp"
 #include "shooter/speedjump_assist.hpp"
@@ -180,6 +181,9 @@ struct CampaignDoor {
   // The campaign moves maps outside a frame (a new game by hand): let go before, follow after.
   void (*unbind)(void* door) = nullptr;
   bool (*rebind)(void* door, std::string& error) = nullptr;
+  // The logins on the coop game (server/login.hpp), over `c`'s accounts (`accounts`,
+  // `account_link`, `unix_us`, `login`), which outlive the door. False with `error`.
+  bool (*logins)(void* door, const ge::server::ServerConfig& c, std::string& error) = nullptr;
   int (*joined)(const void* door) = nullptr;  // clients that joined over the network, playing
   void (*close)(void* door) = nullptr;
 };
@@ -210,6 +214,14 @@ struct ListenOptions {
   ge::net::Transport* transport = nullptr;
   std::string hostname = "Shooter's Edge";
   int maxclients = 32;
+  // The logins on a match others join (the window's `sv_login`, `sv_accountmaster`, ...; server/
+  // login.hpp): with sv_login on and no master, the window's own accounts in `accounts_dir`; with
+  // a master, a socket to ask it on. `accounts`, when set, is the service instead (a test's, on
+  // the simulated network). `unix_us` is the wall clock (null: the computer's).
+  ge::server::LoginSettings login;
+  std::string accounts_dir;
+  ge::account::Service* accounts = nullptr;
+  int64_t (*unix_us)() = nullptr;
   // A match relays its players' voices (`sv_voip 1`), the window's player among them
   // (`listen_mic`, `Listen::voices`).
   bool voice = true;
@@ -242,8 +254,9 @@ struct Listen {
   std::unique_ptr<ge::server::Server> match;
   std::unique_ptr<ListenHost> host;
   std::unique_ptr<ge::net::Transport> port;
-  std::unique_ptr<sv::Campaign> campaign_host;  // a campaign's host (null in a match)
-  std::unique_ptr<LoadedMap> next;              // a map read ahead for the campaign's loader
+  std::unique_ptr<ge::server::ServerAccounts> accounts;  // a match's logins' (`opt.login`)
+  std::unique_ptr<sv::Campaign> campaign_host;           // a campaign's host (null in a match)
+  std::unique_ptr<LoadedMap> next;  // a map read ahead for the campaign's loader
   bool map_changed = false;  // the campaign moved to another map in the last frames (the window
                              // draws the new one and clears it)
   size_t maps_started = 0;   // of the campaign's history: the maps the listen has entered

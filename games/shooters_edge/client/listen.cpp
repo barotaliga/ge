@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
@@ -294,6 +295,8 @@ void close_match(Listen& l) {
   l.room = nullptr;
   l.match.reset();
   l.host.reset();
+  if (l.accounts) ge::server::server_accounts_close(*l.accounts);
+  l.accounts.reset();
   if (l.port) ge::net::close_transport(*l.port);
   l.port.reset();
 }
@@ -320,6 +323,40 @@ bool catch_up(Listen& l) {
 
 // A match: the engine's server opened on `opt.game` with the window's program and map, the player
 // slot 0, on `opt.port` for others to join (none: a socket that is never read).
+int64_t wall_unix_us() {
+  return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                  std::chrono::system_clock::now().time_since_epoch())
+                                  .count());
+}
+
+int64_t unix_now(const Listen& l) {
+  return l.opt.unix_us != nullptr ? l.opt.unix_us() : wall_unix_us();
+}
+
+// The logins on a game others join (`opt.login`): `c` takes the accounts they ask, the window's
+// own (opened into `l.accounts`, its count printed) or a master's socket. False with `error`.
+bool open_logins(Listen& l, ge::server::ServerConfig& c, std::string& error) {
+  c.login = l.opt.login;
+  c.unix_us = l.opt.unix_us != nullptr ? l.opt.unix_us : wall_unix_us;
+  if (l.opt.accounts != nullptr) {
+    c.accounts = l.opt.accounts;
+    return true;
+  }
+  if (c.login.login == 0 && c.login.master.empty()) return true;
+  l.accounts = std::make_unique<ge::server::ServerAccounts>();
+  std::string said;
+  if (!ge::server::server_accounts_open(*l.accounts, c, l.opt.accounts_dir, c.unix_us, said,
+                                        error)) {
+    l.accounts.reset();
+    return false;
+  }
+  if (l.accounts->hosted)
+    l.prints.push_back("This game keeps its own player accounts (" +
+                       std::to_string(l.accounts->host.svc.store.accounts.size()) +
+                       " registered).");
+  return true;
+}
+
 bool start_map(Listen& l, std::string& error) {
   close_match(l);
   if (l.opt.game == nullptr) {
@@ -360,6 +397,10 @@ bool start_map(Listen& l, std::string& error) {
               ". Pick another port, or 0 to play alone.";
       return false;
     }
+  }
+  if ((l.opt.port > 0 || l.opt.transport != nullptr) && !open_logins(l, c, error)) {
+    if (l.opt.transport == nullptr) ge::net::close_transport(*port);
+    return false;
   }
   auto server = std::make_unique<ge::server::Server>();
   l.host = std::move(h);
@@ -539,6 +580,8 @@ void close_door(Listen& l) {
   if (l.door == nullptr) return;
   l.door_calls->close(l.door);
   l.door = nullptr;
+  if (l.accounts) ge::server::server_accounts_close(*l.accounts);
+  l.accounts.reset();
 }
 
 // A coop campaign served to others: the door opened on the port, the player and the companions
@@ -565,6 +608,12 @@ void open_door(Listen& l) {
     l.prints.push_back("coop: others cannot join: " + error);
     return;
   }
+  // The logins on the coop game, as on a match.
+  ge::server::ServerConfig c;
+  if (l.door_calls->logins != nullptr &&
+      (!open_logins(l, c, error) || ((c.accounts != nullptr || c.account_link != nullptr) &&
+                                     !l.door_calls->logins(l.door, c, error))))
+    l.prints.push_back("coop: logins are off: " + error);
   l.net_s = 0;
   bool seated = l.door_calls->seat(l.door, 0, o.player, false, error);
   for (int i = 1; seated && l.party && i < sh::kMaxClients; i++)
@@ -906,6 +955,7 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     if (l.door != nullptr) {  // the endpoint's frame: the network's moves, then the local seats'
       l.net_s += sv::kCampaignStep;
       const auto now_us = static_cast<int64_t>(ge::core::num::round(l.net_s * 1e6));
+      if (l.accounts) ge::server::server_accounts_update(*l.accounts, unix_now(l));
       if (!l.door_calls->frame(l.door, sent, count, now_us, l.failed)) {
         close_door(l);
         l.rules = nullptr;
@@ -928,6 +978,7 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     l.host->ctx = &l;
     l.host->move(l.host->game, p);
     ge::server::server_frame(*l.match);
+    if (l.accounts) ge::server::server_accounts_update(*l.accounts, unix_now(l));
     if (catch_up(l)) entered(l);  // the lobby's restart into the match: a new server
   }
   sv::RulesCommon& s = *l.server;

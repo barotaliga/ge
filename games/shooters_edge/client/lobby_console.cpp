@@ -2,7 +2,7 @@
 //
 // ge:summary The lobby's console commands and settings: ready, break, team, start, addbot
 // ge:keywords lobby console add_lobby_commands lobby_keys sv_lobby sv_countdown sv_minplayers
-// ge:keywords warmup sv_port sv_maxclients listen-server hosting
+// ge:keywords warmup sv_port sv_maxclients listen-server hosting sv_login sv_accountmaster
 // ge:skill shooter console
 // ge:test tests/shooters_edge_lobby_test.cpp
 #include "shooters_edge/client/lobby_console.hpp"
@@ -72,6 +72,36 @@ void add_lobby_commands(ge::console::Console& con, Listen& l) {
                     .help = "the match's slots: the player, the bots and who joins (1..32)",
                     .kind = ge::console::CvarKind::integer},
                    &l.opt.maxclients);
+  // The logins on a match others join (server/login.hpp); with no master the window keeps the
+  // accounts itself, in its own folder. Each takes effect with the next map.
+  con.cvars().bind({.name = "sv_login",
+                    .fallback = "0",
+                    .help = "whether players joining the match must log in to an account (0 no, "
+                            "1 players, 2 everyone); takes effect with the next map",
+                    .kind = ge::console::CvarKind::integer},
+                   &l.opt.login.login);
+  con.cvars().bind({.name = "sv_logintime",
+                    .fallback = "60",
+                    .help = "how long a player who must log in has to do it, s",
+                    .kind = ge::console::CvarKind::number},
+                   &l.opt.login.time_s);
+  con.cvars().bind({.name = "sv_loginwelcome",
+                    .fallback = "",
+                    .help = "a line shown before the login prompt, such as where to get a code",
+                    .kind = ge::console::CvarKind::text},
+                   &l.opt.login.welcome);
+  con.cvars().bind({.name = "sv_accountmaster",
+                    .fallback = "",
+                    .help = "the account master logins are checked by (\"\": the window keeps "
+                            "its own accounts); takes effect with the next map",
+                    .kind = ge::console::CvarKind::text},
+                   &l.opt.login.master);
+  con.cvars().bind({.name = "sv_accountkey",
+                    .fallback = "",
+                    .help = "the account master's public key, 64 hex digits (\"\": learned at "
+                            "the first answer)",
+                    .kind = ge::console::CvarKind::text},
+                   &l.opt.login.key);
 }
 
 void lobby_keys(Listen& l, const LobbyKeys& k) {
