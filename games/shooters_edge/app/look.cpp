@@ -1,11 +1,15 @@
 // ge:summary Shooter's Edge's looks: the switch's options and the palette grade
 // ge:keywords look classic modern palette grade quantize r_look r_fx_lights r_fx_glow r_bloom
 // ge:keywords r_farland r_farland_warm far-land ce_bubbles_share bubbles ce_water_specks
+// ge:keywords r_skyfog fog-command map-fog
 // ge:skill render shooter
 // ge:test tests/shooters_edge_effects_test.cpp
 #include "shooters_edge/app/look.hpp"
 
 #include <cmath>
+#include <string>
+
+#include "brush/map_fog.hpp"
 
 namespace shooters_edge::look {
 
@@ -167,6 +171,32 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .values = "\"\": each map's own sky (the default); TEXT: the sky box of that name, "
                      "its six pictures under env/ or gfx/env/"},
           &picture.sky_name);
+  cv.bind({.name = "r_skyfog",
+           .fallback = "0.5",
+           .flags = gc::kArchive,
+           .help = "How much of a map's fog is laid over its sky.",
+           .min = 0,
+           .max = 1,
+           .values = "0..1: that share of the fog's colour over the sky (0.5 the default), where "
+                     "the map does not set its own"},
+          &picture.sky_fog);
+  con.add_command(
+      "fog",
+      "fog <density> <red> <green> <blue> [alpha] [bias]: the fog in the air, until the next map",
+      [&picture](gc::Console& k, const gc::Args& a) {
+        if (a.size() < 2) {
+          k.print(picture.fog_serial == 0 ? "The fog is the map's own."
+                                          : "The fog was last set to " + picture.fog + ".");
+          return;
+        }
+        ge::brush::MapFog f;
+        if (!ge::brush::parse_fog(a.rest(0), &f)) {
+          k.print("fog: fog <density> <red> <green> <blue> [alpha] [bias], each a number");
+          return;
+        }
+        picture.fog = ge::brush::fog_words(f);
+        ++picture.fog_serial;
+      });
   cv.bind({.name = "r_farland_warm",
            .fallback = "0",
            .help = "How much warmer the far land's air is than its own, in degrees C.",

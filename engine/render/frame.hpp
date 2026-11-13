@@ -100,11 +100,14 @@ struct FrameUniforms {
   // optical depth out of its cloud.
   float flash_info[4];
   float flashes[2 * kFlashLamps][4];
+  // THE FLAT FOG (render/view.hpp's `FlatFog`): 0 its colour (linear), its density (1/m; 0
+  // none); 1 its share over the sky, its alpha, its bias.
+  float flat_fog[2][4];
 };
 static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 +
                                            16 * kCloudRows * kCloudLayers + 16 * 6 +
                                            16 * kSkyStyleRows + 16 * kMaxMoons * kMoonRows + 16 +
-                                           32 + 16 + 16 * 2 * kFlashLamps,
+                                           32 + 16 + 16 * 2 * kFlashLamps + 32,
               "match frame_types.wgsl");
 
 // The last frame's unjittered camera. Invalid on the first frame and after a cut, when the

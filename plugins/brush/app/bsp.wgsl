@@ -883,9 +883,10 @@ fn second_view() -> bool {
   return any(frame.planes[5] != vec4f());
 }
 
-// THE FOG IN AN AREA (render/fog.hpp; bsp_fog.hpp's volumes): under v2 every face but the sky's
-// mask seen through it, the dust of a hall, the haze over a pool of lava. With no volume in reach
-// `local_fog` hands the colour back as it came, so a map with no fog draws the bits it drew.
+// THE FOG: the map's flat fog (render/view.hpp's `FlatFog`) over every face but the sky's mask,
+// a sky face taking its share over the sky; then, under v2, the fog in an area (render/fog.hpp;
+// bsp_fog.hpp's volumes), the dust of a hall, the haze over a pool of lava. With neither, the
+// colour comes back as it came, so a map with no fog draws the bits it drew.
 // The far side's fragments are dropped before they are shaded: most of the mirror's.
 @fragment
 fn fs_main(in: VsOut) -> FsOut {
@@ -894,10 +895,13 @@ fn fs_main(in: VsOut) -> FsOut {
     discard;
   }
   var out = shade(in);
-  if (bsp.info.x > 0.5 && out.mask.x < 0.5) {
-    let rel = in.world - frame.eye.xyz;
-    out.colour = vec4f(local_fog(out.colour.rgb, in.clip.xy * frame.size.zw, length(rel)),
-                       out.colour.a);
+  if (out.mask.x < 0.5) {
+    let d = length(in.world - frame.eye.xyz);
+    var c = flat_fog(out.colour.rgb, select(d, 1e30, in.kind == kSky));
+    if (bsp.info.x > 0.5) {
+      c = area_fog(c, in.clip.xy * frame.size.zw, d);
+    }
+    out.colour = vec4f(c, out.colour.a);
   }
   if (second) {
     if (out.mask.x > 0.5) {

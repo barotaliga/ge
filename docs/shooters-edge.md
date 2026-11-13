@@ -1275,6 +1275,15 @@ every pass, and judged by captioned screenshots:
   as .tga, .png, .jpg or .pcx; `client/files.hpp`'s `sky_box_files`, `brush/app/sky_box.hpp`)
   drawn at infinity on the sky faces, all six or none (`r_skyname` names one for every map),
   fullbright palette colours as emissive.
+- **The map's own fog** (`brush/map_fog.hpp`, M18i13): the worldspawn's `fog` (`_fog`, `airfog`:
+  density, red, green, blue, then alpha and bias; fewer numbers fill the rest) and `skyfog`; the
+  `fog` command takes the same words and holds until the next map (with none, it says what it
+  is); `r_skyfog` is the sky's share where the map does not set one (0.5). Drawn in both looks as
+  the engine's flat fog (`render/view.hpp`'s `FlatFog`, read through `frame.wgsl`'s `local_fog`
+  by every material): a surface z units out is alpha x (1 - e^-(t^2)) fog, t = max(density / 64 x
+  z - bias, 0), by its distance from the eye (not its depth along the view, so turning on the
+  spot changes nothing); the sky takes its fixed share; a glow added over the scene fades to
+  black.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
 - **Effects from the game's files** (`client/world_fx.hpp`, M18l): a file `particles/<any>.fx`

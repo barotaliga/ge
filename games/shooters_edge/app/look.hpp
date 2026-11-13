@@ -93,6 +93,13 @@ struct Picture {
   // r_skyname: the sky box drawn through every map's sky in place of the one its settings name
   // (client/files.hpp's `sky_box_files`); empty, each map's own. Read when the world is made.
   std::string sky_name;
+  // r_skyfog: the share of a map's fog laid over its sky, where the map's own `skyfog` does not
+  // say (0..1, either look).
+  double sky_fog = 0.5;
+  // The `fog` command's words (density red green blue alpha bias) and how many times it was given:
+  // drawn over the map's own fog when given since the world was made, so a new map is its own.
+  std::string fog;
+  int fog_serial = 0;
   double far_warm = 0;  // r_farland_warm: its air warmer (or colder) than its kind's, C
   // r_lerpmodels, r_lerpmove: the models' animation drawn between frames, and (in the window's own
   // game) their places between the server's states (client/model_lerp.hpp); either look.
@@ -108,9 +115,10 @@ struct Picture {
   double water_specks = 0;
 };
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
-// r_farland, r_farland_warm, r_lerpmodels, r_lerpmove, r_arrival, ce_bubbles_share,
-// ce_water_specks, r_quality, r_budget, every ce_ switch, the three ce_<id>_quality levels and the
-// weather's cvars over `picture` (it must outlive `con`).
+// r_farland, r_farland_warm, r_skyname, r_skyfog, r_lerpmodels, r_lerpmove, r_arrival,
+// ce_bubbles_share, ce_water_specks, r_quality, r_budget, every ce_ switch, the three
+// ce_<id>_quality levels and the weather's cvars over `picture` (it must outlive `con`), and the
+// `fog` command.
 void add_cvars(ge::console::Console& con, Picture& picture);
 // r_look's look; modern for a word it does not know.
 Look look_of(const Picture& picture);

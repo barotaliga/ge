@@ -14,7 +14,8 @@
 // lab draws that map instead, for PRIVATE pictures only: the player at the map's start looking
 // four ways, each in the classic look and in the modern look with every classic-enhance switch on
 // (the enhanced textures when the pack's cache has them); `--cvars="ce_water 0"` sets the modern
-// side's cvars as the console would. The server's models (items, monsters, the other players)
+// side's cvars as the console would, and `--loaded="fog 0.05 0.3 0.25 0.2"` runs commands once the
+// map is loaded. The server's models (items, monsters, the other players)
 // stand where it put them. `--progs=<progs.src>` runs a program of our own there (the campaign
 // variant: its monsters; `pack` the packs' own), and `--settle=<frames>` lets the world run at
 // each view, and `--fire=<frames>` has the player hold attack that long at each view and draws it
@@ -606,6 +607,9 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       return;
     }
   }
+  // `--loaded`: console commands the modern side runs once the map is loaded, as the server's
+  // would (`fog 0.05 0.3 0.25 0.2`: a fog until the next map).
+  con[1].execute(lab.arg("loaded"));
   ge::gpu::Target out = ge::gpu::create_target(*device, "se-client.final", w, h);
   // The HUD over every view, in the art `--hud` picks (auto, classic or free): the packs'
   // own status bar pictures (`auto`, `classic`) or the free set (`free`).
@@ -1069,6 +1073,8 @@ const gl::LabSpec kSpec{
       "enhanced look, then the local player's own arrival through his eyes"},
      {"before", "",
       "with --game: the left side's cvars in the modern look instead of the classic look"},
+     {"loaded", "",
+      "with --game: console commands the modern side runs once the map is loaded (`fog ...`)"},
      {"swings", "0",
       "with --game: after the views, the player takes the axe and swings it this many times, the "
       "game's own held weapons in hand (a sheet, a GIF and which swing each one played)"},
