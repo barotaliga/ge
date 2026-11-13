@@ -59,13 +59,14 @@ constexpr Features kKeys =
 // 2 -> 33 %, no forward key in a hop: a player's bunny hop; `noback` and `levelview` on: +0.8 on
 // dm2 and +1.0 on e1m2 a match head to head, looks past 45 degrees down 4.6 -> 1.9 %, people's;
 // `paceback` on: -2.9 on dm2 and +4.3 on e1m2 a match head to head, a lost aim back on the way by
-// the hand's stroke, not creeping: backwards 20.6 -> 18.4 % by one rule, people 13.8).
-constexpr Features kJudging =
-    of({Feature::runupkeys, Feature::underway, Feature::gappast,    Feature::airgap,
-        Feature::pilotcast, Feature::landwall, Feature::circlekeys, Feature::circleview,
-        Feature::circleaim, Feature::leadmean, Feature::leadarc,    Feature::airarc,
-        Feature::hopopen,   Feature::fightway, Feature::letgo,      Feature::retreatrun,
-        Feature::hide,      Feature::nogoal,   Feature::tripkeep,   Feature::routetime});
+// the hand's stroke, not creeping: backwards 20.6 -> 18.4 % by one rule, people 13.8; `hide` on:
+// +5.0 on dm2 and -0.8 on e1m2 a match head to head, a launcher owner's weapon in hand at his
+// death near people's: dm2 77 / 22 % launcher / scattergun, people 72 / 25).
+constexpr Features kJudging = of(
+    {Feature::runupkeys, Feature::underway, Feature::gappast, Feature::airgap, Feature::pilotcast,
+     Feature::landwall, Feature::circlekeys, Feature::circleview, Feature::circleaim,
+     Feature::leadmean, Feature::leadarc, Feature::airarc, Feature::hopopen, Feature::fightway,
+     Feature::letgo, Feature::retreatrun, Feature::nogoal, Feature::tripkeep, Feature::routetime});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
