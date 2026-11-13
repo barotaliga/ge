@@ -2,7 +2,7 @@
 // its mods, programs (native game libraries, named and passed over), maps, their wall textures
 // (`textures/*.wal`), sounds, config files and demo listing read as any classic game's; and its
 // own calls, each answering what this build reads of the game so far: the console's letters and
-// background but no pictures of its HUD and menus yet (the window draws its own), the shell's menu,
+// background, its status bar drawn from its rules' own program (sequel_bar.hpp), the shell's menu,
 // no held weapons; its client recordings. Each grows here as the sequel's rows land
 // (docs/goals/M18v.md).
 //
@@ -54,7 +54,7 @@ ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhan
                          const std::filesystem::path&) {
   ClassicPictures out;
   out.enhanced = enhance;
-  out.hud_why = "the sequel's own status bar pictures are not read yet";
+  out.hud_why = "the sequel draws its own bar, from the program its rules send";
   out.menu.glyphs = pcx_picture(files, "conchars", 255);
   if (out.menu.glyphs.width != 128 || out.menu.glyphs.height != 128) out.menu.glyphs = {};
   if (ge::ui::Image back = pcx_picture(files, "conback", -1); !back.empty())
