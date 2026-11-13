@@ -635,7 +635,7 @@ void run(gl::Lab& lab) {
              "\tscript_"
              "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
              "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
-             "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\n";
+             "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -748,7 +748,20 @@ void run(gl::Lab& lab) {
     int vis = -1;  // the aimed contact in sight (1), lost (0); -1 with no aim
     for (const sh::Contact& ct : f.bot.senses.contacts)
       if (tg >= 1 && ct.ent == tg) vis = ct.visible ? 1 : 0;
-    out << vis << '\n';
+    out << vis << '\t';
+    // The goal item there as the fighter believes it, and as it is (-1: no item goal).
+    if (f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()) {
+      const auto& it = f.items[static_cast<size_t>(f.goal_item)];
+      const sh::Edict* ie = it.ent >= 0 ? &w.sv.edicts[static_cast<size_t>(it.ent)] : nullptr;
+      const bool real =
+          ie != nullptr && !ie->free && ie->modelindex > 0 && ie->solid != sh::kSolidNot;
+      out << (it.present ? 1 : 0) << '\t' << (real ? 1 : 0) << '\t';
+    } else {
+      out << "-1\t-1\t";
+    }
+    // Its armour's protection (type times value), the rules' numbers.
+    const auto& num = w.world.clients[static_cast<size_t>(f.slot)].numbers;
+    out << to_fixed(num.armour_type * num.armour, 0) << '\n';
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
