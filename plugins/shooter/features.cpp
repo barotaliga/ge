@@ -73,7 +73,9 @@ constexpr Features kKeys =
 // resumed at the walkway's step from the floor); `gapnear` on: +6.0 on dm2 (+4.2 / +7.8) and -0.2
 // on e1m2 a match head to head, e1m2's gaps given up 75 -> 63 a match for half the field;
 // `placeheard` on: a heard place read as the room round the speaker, not the middle of every point
-// of its name in a loc file: -1.25 on dm2 (-7.8 / +5.2) and +0.5 on e1m2 a match head to head.
+// of its name in a loc file: -1.25 on dm2 (-7.8 / +5.2) and +0.5 on e1m2 a match head to head;
+// `brinkkeys` on: +6.2 on dm2 (+11.1 / +1.3) a match head to head, lava deaths 12.75 -> 9.0 a match
+// with both sides on it, frags a minute 9.33 -> 10.71 (e1m2 has no lava or slime: no change).
 constexpr Features kJudging =
     of({Feature::runupkeys, Feature::underway,    Feature::gappast,    Feature::airgap,
         Feature::pilotcast, Feature::landwall,    Feature::circlekeys, Feature::circleview,
@@ -82,8 +84,7 @@ constexpr Features kJudging =
         Feature::nogoal,    Feature::tripkeep,    Feature::routetime,  Feature::fetch,
         Feature::liftbrake, Feature::scriptentry, Feature::calmvel,    Feature::lookturn,
         Feature::viewbook,  Feature::gapturn,     Feature::gaplava,    Feature::brinkline,
-        Feature::sidebrink, Feature::fallseen,    Feature::liplook,
-        Feature::brinkkeys});
+        Feature::sidebrink, Feature::fallseen,    Feature::liplook});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
