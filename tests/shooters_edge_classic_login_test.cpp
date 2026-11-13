@@ -247,3 +247,63 @@ TEST(classic_login_our_client_with_another_masters_ticket_stays_a_guest) {
   CHECK(!w.told("Logging in as"));
   CHECK(!w.told("logged in."));
 }
+
+TEST(classic_login_on_the_window_s_own_match) {
+  namespace cl = shooters_edge::client;
+  g_unix = kUnix0;
+  ge::progs::Progs progs;
+  std::string error;
+  CHECK_MSG(cl::baseline_progs(progs, error), error);
+  gn::SimNetwork net = gn::make_sim_network(6, gn::LinkConditions{});
+  gn::Transport port, client_port, own_port;
+  gn::open_sim_transport(port, net, gn::sim_address(0, 27500));
+  gn::open_sim_transport(client_port, net, gn::sim_address(1, 27001));
+  gn::open_sim_transport(own_port, net, gn::sim_address(8, ga::kAccountPort));
+  uint64_t fresh_n = 1;
+  ga::Store store;
+  ga::store_init(store, ga::HashCost{8, 1});
+  ga::create(store, "Niclas", "correct horse", g_unix, fresh_of(1));
+  ga::Service own;
+  ga::service_init(own, ga::ServiceConfig{}, std::move(store), own_port, counter_fresh, &fresh_n);
+  const std::string code = ga::make_code(own.store, 1, g_unix, fresh_of(2)).code;
+
+  cl::Listen l;
+  cl::ListenOptions opt = se::listen_options();
+  opt.transport = &port;
+  opt.player = "host";
+  opt.login.login = 1;
+  opt.accounts = &own;
+  opt.unix_us = unix_now;
+  cl::SearchPath none;
+  auto map = cl::load_named_map(none, "arena", error);
+  CHECK_MSG(map != nullptr, error);
+  CHECK_MSG(cl::listen_start(l, progs, std::move(map), opt, error), error);
+  if (l.match == nullptr) return;
+  se::ClassicClientEnd visitor;
+  se::ClientConfig cc;
+  cc.name = "visitor";
+  cc.files = {"skins/base.pcx"};
+  se::client_start(visitor, client_port, gn::sim_address(0, 27500), cc, 0);
+  ge::shooter::MoveCmd idle;
+  bool said = false;
+  for (int f = 0; f < 77 * 6; f++) {
+    const int64_t now = l.match->now_us;
+    g_unix = kUnix0 + now;
+    gn::sim_advance(net, now);
+    if (!said && visitor.stage == se::ClientStage::active && now > 3000000) {
+      se::client_command(visitor, "login niclas " + code);
+      said = true;
+    }
+    se::client_tick(visitor, now);
+    cl::listen_frame(l, idle);
+  }
+  CHECK(said);
+  CHECK(visitor.playernum >= 0);
+  if (visitor.playernum < 0) return;
+  CHECK(se::info_get(visitor.userinfos[visitor.playernum], "*auth") == "Niclas");
+  CHECK(se::info_get(visitor.serverinfo, se::kAccountKeyInfo) ==
+        gn::key_to_hex(ga::service_key(own)).substr(0, 16));
+  // The window's own player is never asked to log in.
+  CHECK(se::info_get(visitor.userinfos[0], "name") == "host");
+  cl::listen_stop(l);
+}

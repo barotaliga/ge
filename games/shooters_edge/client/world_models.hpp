@@ -203,7 +203,9 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed,
 // it rises (`ce_bubbles`); of the bubbles the game blows only `bubbles_share` is drawn, the pack's
 // sprites and the made ones alike (`ce_bubbles_share`).
 struct InPlace {
-  bool flames = false, flares = false, bubbles = false;
+  // explosions: the engine's blast is drawn where the game shows the pack's explosion sprite (an
+  // entity the game's own logic turns into one as its shot bursts), so the sprite is left out.
+  bool flames = false, flares = false, bubbles = false, explosions = false;
   double bubbles_share = 1;
 };
 // `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a
@@ -219,6 +221,11 @@ void prepare_models(ge::gpu::Device& device, WorldModels& m, const ge::brush::Ma
 // The triangles of `p`'s model as `prepare_models` draws it at `time_s` (its frame and skin
 // group): nine floats a triangle, its model's own frame (m). False for a sprite, a brush or none.
 bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::vector<float>& out);
+// The tip of what `p` holds out at `time_s`: of its model's points as drawn, the one furthest along
+// `forward` (world, unit), into `tip` (world, m). A monster's gun barrel, as its frame moves it.
+// False for a sprite, a brush or none.
+bool held_tip(const WorldModels& m, const Placed& p, double time_s, const double forward[3],
+              double tip[3]);
 
 // THE MOVING CASTERS (the modern look's real-time lights, M54): the alias models of `placed`
 // within kCasterReachM of the eye (players, monsters, items; not a torch's flame, which is light),

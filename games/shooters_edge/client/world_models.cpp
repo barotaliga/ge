@@ -572,6 +572,32 @@ bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::v
   return !out.empty();
 }
 
+bool held_tip(const WorldModels& m, const Placed& p, double time_s, const double forward[3],
+              double tip[3]) {
+  thread_local std::vector<float> body;
+  if (!body_triangles(m, p, time_s, body)) return false;
+  double w[3];
+  to_world(p.origin, w);
+  const float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
+  float q[4];
+  models::rotation_of(ang, true, q);
+  const double x = q[0], y = q[1], z = q[2], s = q[3];
+  double best = -1e30;
+  for (size_t i = 0; i + 2 < body.size(); i += 3) {
+    const double v[3] = {body[i], body[i + 1], body[i + 2]};
+    const double t[3] = {2 * (y * v[2] - z * v[1]), 2 * (z * v[0] - x * v[2]),
+                         2 * (x * v[1] - y * v[0])};
+    const double r[3] = {v[0] + s * t[0] + (y * t[2] - z * t[1]),
+                         v[1] + s * t[1] + (z * t[0] - x * t[2]),
+                         v[2] + s * t[2] + (x * t[1] - y * t[0])};
+    const double d = r[0] * forward[0] + r[1] * forward[1] + r[2] * forward[2];
+    if (d <= best) continue;
+    best = d;
+    for (int c = 0; c < 3; ++c) tip[c] = w[c] + r[c];
+  }
+  return best > -1e30;
+}
+
 void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const Placed* self,
                     const gr::FrameView& view, std::vector<float>& out,
                     std::vector<ge::brush::app::CasterBox>& boxes) {
@@ -646,6 +672,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       if (!m.has_sprites || m.sprite_draws.size() >= gr::kMaxSprites) continue;
       // Only a share of the bubbles the game blows is drawn, in either look (ce_bubbles_share).
       if (k.effect == "bubbles" && !bubble_kept(p.entity, in_place.bubbles_share)) continue;
+      if (k.effect == "explosion" && in_place.explosions) continue;
       const bool flare = k.made != ModelKind::kNone && k.effect == "flare" && in_place.flares;
       const bool bubble = k.made != ModelKind::kNone && k.effect == "bubbles" && in_place.bubbles;
       if (flare || bubble) {
