@@ -7,6 +7,8 @@
 // the hits), at moments after the first shot (`--times`, ms; a launcher's after its blast,
 // `--blast-times`, and in flight after its shot, `--flight-times`: the rocket's motor lighting the
 // room as it goes), from the eye and, with `--side`, from a second camera beside the line of fire.
+// `--sweep` swings a held weapon's aim across the wall while it fires and holds it still after
+// (the bolt's burnt line, then the wall melting where it stays).
 //
 // The default map is the fixture halls (plugins/brush's sample, a deathmatch spot facing the far
 // wall, two torches), so its pictures may go anywhere. `--game=<folder>` (a game folder of packs,
@@ -19,7 +21,7 @@
 // ge:summary Lab: every weapon's muzzle, rounds, hits, blasts and bolt in the game's frame
 // ge:keywords lab se-weapon-fx weapon-effects explosion rocket-trail lightning bolt beam hits
 // ge:keywords shotgun nailgun grenade rocket arc classic-vs-enhanced before-after side-view
-// ge:keywords mod-effects pointparticles trailparticles
+// ge:keywords mod-effects pointparticles trailparticles sweep burn-line melt
 // ge:skill render shooter labs
 #include <algorithm>
 #include <cmath>
@@ -242,12 +244,27 @@ void run(gl::Lab& lab) {
       place_of(lab.arg("at").empty() && folder.empty() ? "128,192,24,0,8" : lab.arg("at"), at);
   bool has_side = place_of(lab.arg("side"), side);
   auto& player = l.server->sv.edicts[1];
+  // The aim's turn off `at` while a held weapon fires (`--sweep`), degrees.
+  float turn_yaw = 0, turn_pitch = 0;
   const auto stand = [&] {
     if (!placed) return;
     player.origin = {at[0], at[1], at[2]};
     player.velocity = {};
-    l.view.x = at[4];
-    l.view.y = at[3];
+    l.view.x = at[4] + turn_pitch;
+    l.view.y = at[3] + turn_yaw;
+  };
+  // --sweep=degrees,ms[,hold ms]: a held weapon's aim swept across the wall, from half the
+  // degrees to one side to half to the other (dipping a little in the middle) over the ms, then
+  // held still where it ended for the hold.
+  const std::vector<double> sweep = lab.arg_nums("sweep");
+  const double sweep_deg = sweep.size() > 0 ? sweep[0] : 0;
+  const double sweep_ms = sweep.size() > 1 ? std::max(sweep[1], 1.0) : 1000;
+  const double sweep_hold_ms = sweep.size() > 2 ? sweep[2] : 0;
+  const auto aim_turn = [&](double ms) {
+    if (sweep_deg == 0) return;
+    const double u = std::clamp(ms / sweep_ms, 0.0, 1.0);
+    turn_yaw = static_cast<float>(sweep_deg * (0.5 - u));
+    turn_pitch = static_cast<float>(0.12 * sweep_deg * ge::core::libm::sin(ge::core::kPi * u));
   };
   // Every weapon and its ammunition (qc/common/defs.qc's W_ bits and the ammo fields).
   const auto arm = [&] {
@@ -409,7 +426,8 @@ void run(gl::Lab& lab) {
       at[0] = best.from.x, at[1] = best.from.y, at[2] = best.from.z;
       at[3] = static_cast<float>(best.yaw);
       lab.note("aimed at a plain wall: yaw " + std::to_string(best.yaw) + ", " +
-               std::to_string(int(best.dist)) + " units off");
+               std::to_string(int(best.dist)) + " units off, from " + std::to_string(int(at[0])) +
+               "," + std::to_string(int(at[1])) + "," + std::to_string(int(at[2])));
     } else {  // none plain: the wall nearest kAimAt units off from the spawn
       const sh::Vec3f eye = {spawn.x, spawn.y, spawn.z + kEyeZ};
       float near = 1e9f;
@@ -503,6 +521,7 @@ void run(gl::Lab& lab) {
     l.impulse = gun.impulse;
     for (int i = 0; i < 50; i++) frame({}, true);  // the switch, and the last weapon's smoke gone
     for (int i = 0; i < 120; i++) frame({}, true);
+    turn_yaw = turn_pitch = 0;
     sh::MoveCmd fire;
     fire.buttons = sh::kButtonAttack;
     // The moments after the first shot; a launcher's after its blast instead (--blast-times).
@@ -512,8 +531,13 @@ void run(gl::Lab& lab) {
     double from_ms = 0;
     bool started = !blasts_;
     size_t next = 0, flown = blasts_ ? 0 : flight_times.size();
-    for (int i = 0; next < when.size() && i < 500; i++) {
-      frame(i < gun.hold ? fire : sh::MoveCmd{}, true);
+    // A held weapon swept (--sweep) fires for the sweep and its hold.
+    const bool swept = sweep_deg != 0 && gun.hold > 1;
+    const int hold =
+        swept ? static_cast<int>((sweep_ms + sweep_hold_ms) / (kTic * 1000)) + 1 : gun.hold;
+    for (int i = 0; next < when.size() && i < 2000; i++) {
+      if (swept) aim_turn(i * kTic * 1000);
+      frame(i < hold ? fire : sh::MoveCmd{}, true);
       const double ms = (i + 1) * kTic * 1000;
       // In flight: the moments after the shot, while nothing has gone off yet.
       if (!started && flown < flight_times.size() && ms + 1e-6 >= flight_times[flown]) {
@@ -659,6 +683,9 @@ const gl::LabSpec kSpec{
      {"times", "40,200,600", "the moments pictured after the first shot, ms"},
      {"blast-times", "30,150,400,1200", "the launchers' moments, after the first blast, ms"},
      {"flight-times", "", "the launchers' moments in flight, after the shot, ms (none: none)"},
+     {"sweep", "",
+      "degrees,ms[,hold ms]: a held weapon (the arc) swept across the wall over the ms and held "
+      "still after for the hold, firing all the while (its burnt line and the melt); empty: still"},
      {"cvars", "", "the enhanced side's cvars, as the console takes them"},
      {"target", "0", "1: a bot stood in the line of fire, facing the player (its wounds)"},
      {"before", "", "the left side's cvars in the modern look instead of the classic look"},

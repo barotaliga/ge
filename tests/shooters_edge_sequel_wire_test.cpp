@@ -16,12 +16,15 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "brush/map.hpp"
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "shooter/locs.hpp"
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/sequel_demo.hpp"
 #include "shooters_edge/client/sequel_tv.hpp"
@@ -92,16 +95,18 @@ sh::MoveCmd cmd(int16_t forward, float yaw) {
 }
 
 // A match of two players recorded from the first's view for `ticks` host ticks of 13 ms;
-// `each_tick` sees the recording after every tick.
+// `each_tick` sees the recording after every tick; `stuffed` ends the signon.
 std::vector<uint8_t> record(
     int ticks, sv::SequelRecorder* out = nullptr,
-    const std::function<void(const sv::SequelRecorder&, int)>& each_tick = nullptr) {
+    const std::function<void(const sv::SequelRecorder&, int)>& each_tick = nullptr,
+    std::vector<std::string> stuffed = {}) {
   sv::RulesRunner r = start();
   sv::SequelServer& s = *sv::sequel_of(r);
   r.connect(0, "eve", false, false);
   r.connect(1, "bob", false, false);
   sv::SequelWireOptions opt;
   opt.map_checksum = 12345;
+  opt.stuffed = std::move(stuffed);
   sv::SequelRecorder rec;
   sv::sequel_record_start(rec, *r, 0, opt);
   uint32_t seq = 0;
@@ -183,6 +188,21 @@ TEST(the_recording_walks_whole_and_comes_back_from_the_replay_file) {
   CHECK_MSG(cl::unpack_demo(file, back, error) && back == rec, error);
   // Nothing but the match decides the bytes.
   CHECK(record(400) == rec);
+}
+
+TEST(the_signon_carries_the_place_names_and_a_reader_takes_them) {
+  sh::Locs places;
+  sh::add_loc(places, {64, 32, 24}, "red armor");
+  const std::vector<uint8_t> rec = record(20, nullptr, nullptr, sh::recorded_loc_lines(places));
+  bool line = false;
+  for (const auto& b : cl::sequel_blocks(rec))
+    line = line || has(b, "//loc  512  256  192 red armor\n");
+  CHECK(line);
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(rec, d, error), error);
+  CHECK(cl::next_frame(d, error) == cl::DemoRead::frame);
+  CHECK(d.state.places.points.size() == 1 && d.state.places.points[0].name == "red armor");
 }
 
 TEST(the_map_checksum_is_md4s_words_xored) {

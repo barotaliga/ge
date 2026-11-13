@@ -1,7 +1,7 @@
 // Decals: the kinds' table, their masks and looks, the atlas, the clip onto receivers and the pool.
 //
 // ge:summary Decals' kinds, masks, ageing looks, atlas bake, box clip and pool
-// ge:keywords detail decal mask scorch bullet-hole blood clip atlas pool expire
+// ge:keywords detail decal mask scorch bullet-hole blood clip atlas pool expire burn-line melt
 // ge:skill detail
 // ge:test tests/detail_decals_test.cpp
 #include "detail/decals.hpp"
@@ -19,9 +19,9 @@ namespace ge::detail {
 namespace {
 
 constexpr DecalKindSpec kSpecs[kDecalKinds] = {
-    {"scorch", 0, 0, 0, 0.55, 80, 0.6},
-    {"bullet_hole", 0, 0, 0, 0.5, 60, 0},
-    {"blood", 120, 60, 45, 0.4, 85, 0},
+    {"scorch", 0, 0, 0, 0.55, 80, 0.6}, {"bullet_hole", 0, 0, 0, 0.5, 60, 0},
+    {"blood", 120, 60, 45, 0.4, 85, 0}, {"burn_line", 0, 0, 0, 0.55, 80, 3.0},
+    {"melt", 0, 0, 0, 0.4, 80, 3.0},
 };
 
 // The lift off the surface that keeps a decal in front of it, m.
@@ -117,6 +117,44 @@ MaskSample blood(uint32_t var, double x, double y, double r, double a) {
   return {cover, -0.15 + 0.6 * rim};
 }
 
+// A beam's burnt line: u along it, v across. A ragged black core that wanders a little off the
+// middle (never at the ends, so pieces laid end to end meet), a thin soot halo either side, both
+// thinned over each end's last stretch so the overlap with the next piece does not show.
+MaskSample burn_line(uint32_t var, double u, double v) {
+  const double seed = 401 + var * 5;
+  const double y = v - 0.5;
+  const double taper = ramp(0, 0.14, u) * ramp(1, 0.86, u);
+  if (taper <= 0) return {0, 0};
+  const double bell = core::libm::sin(core::kPi * u);
+  const double wander = 0.07 * bell * (fbm(u * 6, 0.5, 1, seed) - 0.5) * 2;
+  const double d = std::fabs(y - wander);
+  const double hw = 0.15 + 0.06 * (fbm(u * 9, 3.5, 1, seed + 1) - 0.5) * 2;
+  const double core_cover = ramp(hw, hw - 0.07, d);
+  const double halo = 0.55 * ramp(0.48, hw, d) * (0.6 + 0.8 * fbm(u * 12, y * 12, 1, seed + 4));
+  const double grain = 0.85 + 0.15 * fbm(u * 20, y * 20, 1, seed + 9);
+  const double cover = std::max(core_cover, halo * grain) * taper;
+  const double shade = -0.3 * core_cover + 0.15 * (fbm(u * 24, y * 24, 1, seed + 2) - 0.5);
+  return {core::clamp(cover, 0, 1), shade, core::clamp(core_cover * taper, 0, 1)};
+}
+
+// The pool a held beam melts into a wall: a ragged molten middle, a ring of raised slag round it
+// and a soot halo outside.
+MaskSample melt(uint32_t var, double x, double y, double r, double a) {
+  const double seed = 503 + var * 3;
+  const double edge = 0.36 + 0.08 * (round_noise(a, 1.4, seed) - 0.5) * 2;
+  const double pool = ramp(edge, edge - 0.1, r);
+  const double ring = ramp(edge - 0.14, edge - 0.04, r) * pool;
+  const double halo =
+      0.6 * ramp(0.5, edge - 0.02, r) * (0.6 + 0.8 * fbm(x * 6, y * 6, 1, seed + 4));
+  const double cover = std::max(pool, halo) * (0.88 + 0.12 * fbm(x * 10, y * 10, 1, seed + 9));
+  // The melt's middle mottled (its glow brighter where the shade is lower): runs of hotter metal
+  // and darker crust, so it never reads as a flat disc.
+  const double mottle = fbm(x * 9, y * 9, 1, seed + 6);
+  const double shade = pool * (1 - ring) * (-0.1 - 0.8 * mottle) + 0.35 * ring +
+                       0.1 * (fbm(x * 24, y * 24, 1, seed) - 0.5);
+  return {core::clamp(cover, 0, 1), shade, core::clamp(pool * (1 - 0.6 * ring), 0, 1)};
+}
+
 // Sutherland-Hodgman against dot(n, p) <= d.
 void clip_loop(const std::vector<Vec3>& in, const Vec3& n, double d, std::vector<Vec3>& out) {
   out.clear();
@@ -152,8 +190,9 @@ bool piece_buried(const Receivers& rec, const std::vector<Vec3>& poly, const Vec
 
 const DecalKindSpec& decal_spec(DecalKind kind) { return kSpecs[static_cast<int>(kind)]; }
 
-DecalLook look_at(DecalKind kind, double age_s) {
-  const DecalKindSpec& s = decal_spec(kind);
+DecalLook look_at(DecalKind kind, double age_s, double ember_s) {
+  DecalKindSpec s = decal_spec(kind);
+  if (ember_s > 0) s.ember_s = ember_s;
   switch (kind) {
     case DecalKind::scorch: {
       // Embers: white-orange at the blast, cooling through red to nothing over `ember_s`; the
@@ -165,6 +204,14 @@ DecalLook look_at(DecalKind kind, double age_s) {
     }
     case DecalKind::bullet_hole:
       return {0.09, 0.085, 0.08, 1, 0};
+    case DecalKind::burn_line:
+    case DecalKind::melt: {
+      // White-hot where the beam has just been, through orange and red to black soot over
+      // `ember_s`; the square of what is left, so it holds its glow longer than a blast's scorch.
+      const double hot = 1 - ramp(0, s.ember_s, age_s);
+      const double k = hot * hot;
+      return {0.03, 0.026, 0.022, 0.95, 0, 2.6 * k, 0.9 * k * hot, 0.2 * k * hot * hot};
+    }
     case DecalKind::blood: {
       const double dry = ramp(0, s.dry_s, age_s);
       const double fade = core::clamp((s.life_s - age_s) / s.fade_s, 0, 1);
@@ -177,6 +224,7 @@ DecalLook look_at(DecalKind kind, double age_s) {
 
 MaskSample mask_at(DecalKind kind, uint32_t variant, double u, double v) {
   if (u < 0 || u > 1 || v < 0 || v > 1) return {0, 0};
+  if (kind == DecalKind::burn_line) return burn_line(variant, u, v);
   const double x = u - 0.5, y = v - 0.5;
   const double r = std::sqrt(x * x + y * y);
   if (r >= 0.5) return {0, 0};
@@ -188,6 +236,10 @@ MaskSample mask_at(DecalKind kind, uint32_t variant, double u, double v) {
       return bullet(variant, x, y, r, a);
     case DecalKind::blood:
       return blood(variant, x, y, r, a);
+    case DecalKind::melt:
+      return melt(variant, x, y, r, a);
+    case DecalKind::burn_line:
+      break;
   }
   return {0, 0};
 }
@@ -236,17 +288,21 @@ int place_decal(DecalPool& pool, const Receivers& rec, const DecalAt& d) {
   const Vec3 t0 = any_perpendicular(n);
   const Vec3 b0 = cross(n, t0);
   const double cs = core::libm::cos(d.spin_rad), sn = core::libm::sin(d.spin_rad);
-  const Vec3 t = add(mul(t0, cs), mul(b0, sn));
+  Vec3 t = add(mul(t0, cs), mul(b0, sn));
+  // A line's own direction, laid flat on the surface.
+  const Vec3 flat = sub(d.along, mul(n, dot(d.along, n)));
+  if (length(flat) > 1e-9) t = normalized(flat);
   const Vec3 b = cross(n, t);
-  const double half = d.size_m * 0.5;
+  const double long_m = d.length_m > 0 ? d.length_m : d.size_m;
+  const double half_t = long_m * 0.5, half = d.size_m * 0.5;
   const double depth = std::max(0.02, d.size_m * spec.depth_share);
-  const double reach = half * 1.4143 + depth;
+  const double reach = std::sqrt(half_t * half_t + half * half) + depth;
   triangles_in(rec, {d.at.x - reach, d.at.y - reach, d.at.z - reach},
                {d.at.x + reach, d.at.y + reach, d.at.z + reach}, pool.scratch);
   const double min_cos = core::libm::cos(spec.max_angle_deg * core::kPi / 180);
   const Vec3 planes[6] = {t, mul(t, -1), b, mul(b, -1), n, mul(n, -1)};
-  const double dists[6] = {dot(t, d.at) + half,  -dot(t, d.at) + half, dot(b, d.at) + half,
-                           -dot(b, d.at) + half, dot(n, d.at) + depth, -dot(n, d.at) + depth};
+  const double dists[6] = {dot(t, d.at) + half_t, -dot(t, d.at) + half_t, dot(b, d.at) + half,
+                           -dot(b, d.at) + half,  dot(n, d.at) + depth,   -dot(n, d.at) + depth};
   pool.staged.clear();
   for (uint32_t tri : pool.scratch.found) {
     const Vec3 tn = normal_of(*rec.mesh, tri);
@@ -262,7 +318,7 @@ int place_decal(DecalPool& pool, const Receivers& rec, const DecalAt& d) {
     const double fade = ramp(min_cos, min_cos + (1 - min_cos) * 0.5, facing);
     auto vert = [&](const Vec3& p) {
       const Vec3 rel = sub(p, d.at);
-      return DecalVertex{mad(p, tn, kLift), dot(rel, t) / d.size_m + 0.5,
+      return DecalVertex{mad(p, tn, kLift), dot(rel, t) / long_m + 0.5,
                          dot(rel, b) / d.size_m + 0.5, fade};
     };
     for (size_t k = 1; k + 1 < pool.poly.size(); ++k) {
@@ -291,10 +347,14 @@ int place_decal(DecalPool& pool, const Receivers& rec, const DecalAt& d) {
     }
     pool.staged.swap(kept);
   }
-  // A free slot, else the oldest placed.
+  // Its own slot when pressed again in place; else a free slot, else the oldest placed.
   uint32_t slot = 0;
   uint32_t oldest = UINT32_MAX;
-  for (uint32_t i = 0; i < pool.capacity; ++i) {
+  const bool again = d.slot >= 0 && static_cast<uint32_t>(d.slot) < pool.capacity &&
+                     pool.decals[static_cast<size_t>(d.slot)].live &&
+                     pool.decals[static_cast<size_t>(d.slot)].serial == d.serial;
+  if (again) slot = static_cast<uint32_t>(d.slot);
+  for (uint32_t i = 0; !again && i < pool.capacity; ++i) {
     if (!pool.decals[i].live) {
       slot = i;
       break;
@@ -313,6 +373,8 @@ int place_decal(DecalPool& pool, const Receivers& rec, const DecalAt& d) {
         d.at,
         n,
         d.size_m,
+        d.length_m,
+        d.ember_s,
         static_cast<uint32_t>(pool.staged.size())};
   std::copy(pool.staged.begin(), pool.staged.end(),
             pool.verts.begin() + static_cast<std::ptrdiff_t>(slot) * pool.verts_per_decal);

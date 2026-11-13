@@ -13,6 +13,7 @@
 #include "core/num.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/net/sequel_login.hpp"
 #include "shooters_edge/net/sequel_net_server.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/server/sequel_wire.hpp"
@@ -30,13 +31,20 @@ struct Game {
   sv::RulesRunner rules;
   SequelNetConfig cfg;
   std::unique_ptr<SequelNetServer> net;  // on the network only
+  // The logins (sequel_login.hpp), when sv_login asks for them or the server has accounts.
+  gs::LoginSettings login_set;
+  ge::account::Service* accounts = nullptr;
+  ge::net::Transport* account_link = nullptr;
+  int64_t (*unix_us)() = nullptr;
+  bool logins_wanted = false;
+  std::unique_ptr<SequelLogin> login;
 };
 
 void* create(const gs::ServerConfig& c, std::string& error) {
   auto g = std::make_unique<Game>();
   const ge::classicenhance::Profile* sequel = ge::classicenhance::find_profile("sequel");
   if (sequel == nullptr) {
-    error = "the sequel's content row is missing; next: classicenhance/profile.hpp";
+    error = "this build has no content row for the sequel, so its game folder is unknown";
     return nullptr;
   }
   const std::string base(sequel->base_dir);
@@ -45,8 +53,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->map = cl::load_named_map(g->files, name, error);
   if (!g->map) return nullptr;
   if (g->map->spec.brushes == nullptr) {
-    error = "maps/" + name + ".bsp is not a map of the sequel's family; next: name one from " +
-            c.root + "/" + base;
+    error = "maps/" + name + ".bsp is not a map of the sequel's family; name one from " + c.root +
+            "/" + base;
     return nullptr;
   }
   sv::SequelServerOptions so;
@@ -67,6 +75,11 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.password = c.password;
   g->cfg.wire.map_checksum = sv::sequel_map_checksum(g->map->file);
   sv::sequel_sky(*g->map->spec.brushes, g->cfg.wire);
+  g->login_set = c.login;
+  g->accounts = c.accounts;
+  g->account_link = c.account_link;
+  g->unix_us = c.unix_us;
+  g->logins_wanted = c.login.login > 0 || c.accounts != nullptr || c.account_link != nullptr;
   return g.release();
 }
 
@@ -95,10 +108,18 @@ void fill_status(const void* g, ge::net::Status& st) {
 bool serve(void* g, ge::net::Transport& port, std::string& error) {
   Game& game = *static_cast<Game*>(g);
   game.net = std::make_unique<SequelNetServer>();
-  return sequel_net_start(*game.net, game.rules, port, game.cfg, error);
+  if (!sequel_net_start(*game.net, game.rules, port, game.cfg, error)) return false;
+  if (!game.logins_wanted) return true;
+  game.login = std::make_unique<SequelLogin>();
+  return sequel_login_open(*game.login, *game.net, game.login_set, game.accounts, game.account_link,
+                           game.unix_us, error);
 }
 
-void net_frame(void* g, int64_t now_us) { sequel_net_frame(*static_cast<Game*>(g)->net, now_us); }
+void net_frame(void* g, int64_t now_us) {
+  Game& game = *static_cast<Game*>(g);
+  sequel_net_frame(*game.net, now_us);
+  if (game.login) sequel_login_frame(*game.login);
+}
 
 const gs::ServerGame& make() {
   static gs::ServerGame g = [] {

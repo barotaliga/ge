@@ -84,6 +84,8 @@ struct Placed {
   // A player's `skin` (its user info's: the picture `skins/<name>.pcx` its figure wears, chosen
   // by `player_skin_morph`); empty: none named.
   std::string skin_name;
+  // Its side as the viewer sees it (teamskin, enemycolor: `models::side_of`); none: not a player.
+  models::Side side = models::Side::none;
   // Its warp (world_fx.hpp, warps.hpp): short of whole an alias model is drawn dissolving to ash
   // or out of it (render/morph.hpp's MorphWarp).
   ge::render::MorphWarp warp;
