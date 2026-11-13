@@ -265,4 +265,19 @@ void prepare_bsp_fog_shadow(gpu::Device& device, BspFogShadow& s, const BspDraw&
   device.queue.WriteBuffer(s.params, 0, &p, sizeof p);
 }
 
+r::FlatFog map_flat_fog(const MapFog& fog, double player_sky) {
+  r::FlatFog g;
+  if (!(fog.density > 0)) return g;
+  g.density = fog.density / 64.0 / kUnitM;
+  for (int i = 0; i < 3; ++i) {
+    const double c = std::max(fog.colour[i], 0.0);
+    g.colour[i] = c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4);
+  }
+  g.alpha = std::clamp(fog.alpha, 0.0, 1.0);
+  g.bias = std::max(fog.bias, 0.0);
+  const double sky = fog.sky_share >= 0 ? fog.sky_share : player_sky;
+  g.sky = std::clamp(sky, 0.0, 1.0) * g.alpha;
+  return g;
+}
+
 }  // namespace ge::brush::app

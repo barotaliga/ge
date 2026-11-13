@@ -420,11 +420,15 @@ fn haze(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
   return local_fog(mix(c, behind, t * t * (3.0 - 2.0 * t)), uv, dist_m);
 }
 
-// THE FOG IN AN AREA (render/fog.hpp), the nearest air of all, so it veils the haze, the mist,
-// the sky and the cloud behind it alike: a colour at `dist_m` (infinity for the sky) seen through
-// the froxel volume's column at screen `uv`. With no volume in reach (`frame.fog.x` 0) the colour
-// is returned as it came.
+// THE FOG IN THE AIR NEAREST THE EYE, so it veils the haze, the mist, the sky and the cloud behind
+// it alike: a colour at `dist_m` (1e30 for the sky) through the flat fog (`flat_fog`) and then the
+// fog in an area (render/fog.hpp): the froxel volume's column at screen `uv` (`area_fog`). With
+// neither (`frame.flat_fog[0].w` and `frame.fog.x` 0) the colour is returned as it came.
 fn local_fog(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
+  return area_fog(flat_fog(colour, dist_m), uv, dist_m);
+}
+
+fn area_fog(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
   if (frame.fog.x <= 0.0) {
     return colour;
   }
@@ -432,14 +436,34 @@ fn local_fog(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
   return colour * v.a + v.rgb;
 }
 
+// THE FLAT FOG (render/view.hpp's `FlatFog`): a colour at `dist_m` (1e30 and more: the sky, which
+// takes the fog's share over the sky) mixed toward the fog's colour by alpha x (1 - e^-(t^2)),
+// t = max(density x d - bias, 0).
+fn flat_fog(colour: vec3f, dist_m: f32) -> vec3f {
+  if (frame.flat_fog[0].w <= 0.0) {
+    return colour;
+  }
+  return mix(colour, frame.flat_fog[0].rgb * white_luminance(), flat_fog_share(dist_m));
+}
+
+fn flat_fog_share(dist_m: f32) -> f32 {
+  let t = max(frame.flat_fog[0].w * min(dist_m, 1e6) - frame.flat_fog[1].z, 0.0);
+  return select(frame.flat_fog[1].y * (1.0 - exp(-t * t)), frame.flat_fog[1].x, dist_m >= 1e29);
+}
+
 // The same over a premultiplied colour (a cloud's light and cover blended over the sky): the
 // cover takes its share of the fog's in-scatter, the sky behind it the rest.
 fn local_fog_over(c: vec4f, uv: vec2f, dist_m: f32) -> vec4f {
+  var g = c;
+  if (frame.flat_fog[0].w > 0.0) {
+    g = vec4f(mix(c.rgb, frame.flat_fog[0].rgb * white_luminance() * c.a, flat_fog_share(dist_m)),
+              c.a);
+  }
   if (frame.fog.x <= 0.0) {
-    return c;
+    return g;
   }
   let v = fog_column(uv, dist_m);
-  return vec4f(c.rgb * v.a + v.rgb * c.a, c.a);
+  return vec4f(g.rgb * v.a + v.rgb * g.a, g.a);
 }
 
 // The volume's column at `uv` out to `dist_m`: the in-scatter (rgb) and the transmittance (a).
