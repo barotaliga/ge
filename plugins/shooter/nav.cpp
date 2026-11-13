@@ -665,7 +665,7 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
           // (a link that crosses two doors carries one of them); a cut link (a door's leaf
           // across it, a gap trick given up) is not taken.
           if (is_barred(l.mover) || is_barred(g.nodes[static_cast<size_t>(l.to)].mover) ||
-              ((l.mover >= 0 || l.gap) && !cut.empty() && is_cut(a, l.to)) ||
+              ((l.mover >= 0 || l.gap || jumper.cuts_all) && !cut.empty() && is_cut(a, l.to)) ||
               (shut_to != 0 && is_shut(a, l.to)) ||
               !(jumper.takes(l) || jumper.builds_to(l, search.cost(a))))
             continue;
@@ -859,7 +859,8 @@ bool side_falls_in_(const MoveWorld& w, Vec3f p, Vec3f to) {
   const Vec3f e = go.endpos;
   const HullTrace down = player_trace(w, e, {e.x, e.y, e.z - 400});
   if (down.fraction >= 1 || down.startsolid) return false;
-  const int c = water_contents(w, {down.endpos.x, down.endpos.y, down.endpos.z + kPlayerMins.z + 2});
+  const int c =
+      water_contents(w, {down.endpos.x, down.endpos.y, down.endpos.z + kPlayerMins.z + 2});
   return c == kContentsLava || c == kContentsSlime;
 }
 
