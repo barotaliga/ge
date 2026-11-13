@@ -109,6 +109,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/game_folder.hpp"
+#include "shooters_edge/client/game_start.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/install_configs.hpp"
 #include "shooters_edge/client/install_search.hpp"
@@ -386,6 +387,15 @@ int run_main(int argc, char** argv) {
     }
     return rows;
   });
+  // scr_conspeed: the console's slide in the loaded game's own unit (client/game_start.hpp),
+  // known before the configs that may set it.
+  cl::GameStart game_start;
+  {
+    const shooters_edge::profiles::GameProfile* g =
+        shooters_edge::profiles::find_game(args.profile);
+    cl::add_start_cvars(console, game_start,
+                        g != nullptr ? *g : shooters_edge::profiles::classic_game());
+  }
   const auto save_settings = [&console] { cl::save_settings(console); };
   if (const cl::ConfigsRun ran =
           cl::start_configs(console, args.basedir, args.game, content_row(), args.plus);
@@ -993,7 +1003,9 @@ int run_main(int argc, char** argv) {
     places.locs = {};
     places.map.clear();
     places.game_dir = std::filesystem::path(basedir) / args.game;
+    const shooters_edge::profiles::GameProfile& was_game = *adapter.game;
     adapter = cl::adapter_of(game_row(args.profile));
+    cl::start_switch_game(console, game_start, was_game, *adapter.game);
     game_menu.demos().set_extensions(cl::listed_extensions(adapter.game->demo_extensions));
     menu_host.table = &adapter.menu(adapter);
     game_menu.set_table(*menu_host.table);
@@ -1196,6 +1208,7 @@ int run_main(int argc, char** argv) {
   long presented = 0;
   double longest = 0;  // the longest frame, s: a hitch a load or a stall made
   while ((args.frames == 0 || presented < args.frames) && !quit) {
+    cl::start_apply_speed(console, game_start);
     if (std::exchange(attract_at_start, false) && !start_attract())
       next_map = game_content.first_map;
     if (cl::arrived(first_pictures, measured))
@@ -1372,10 +1385,17 @@ int run_main(int argc, char** argv) {
         game_menu.load_refused(error);
         console.print("load game: " + error);
       } else if (open_folder(basedir)) {
-        // From the menu: its root in the game's own look, the game's recordings behind it.
+        // From the menu, as the classic games start: the menu gone, the console down over the
+        // screen with the packs added, then up once the game's recording plays (game_start.hpp).
         if (game_menu.open() && !measured) {
-          game_menu.show(menu_host, "main");
+          game_menu.hide();
           on_title = true;
+          std::vector<std::string> lines;
+          for (const std::string& pack : cl::archive_paths(files))
+            lines.push_back(
+                "Added packfile " +
+                std::filesystem::path(pack).lexically_relative(basedir).generic_string());
+          cl::start_begin(game_start, con_view, console, t, lines);
           if (start_attract()) next_map.clear();
         }
       } else {
@@ -1489,6 +1509,9 @@ int run_main(int argc, char** argv) {
       play_ask = false;
       sn::remote_disconnect(remote);  // a demo is not played over a game joined
     }
+    // A game started from SELECT GAME: its console let go once its recording plays, or its first
+    // map has loaded (client/game_start.hpp).
+    cl::start_step(game_start, con_view, t, (attract && bench.active) || listen.map != nullptr);
     // Joined to a server (`connect`): its game drawn as a played demo's is (classic_remote.hpp),
     // from the frame its first level is known to the frame it drops, the listen server held.
     // The microphone: opened the first time a voice key is held where voice is carried (a server
@@ -1646,7 +1669,8 @@ int run_main(int argc, char** argv) {
       const auto placed =
           hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), hud_look());
       playback.bar_bottom_px = cl::hud_inset(placed, h);
-      if (bench.paced && !game_menu.open()) cl::playback_draw(overlay, playback, bench, w, h, t);
+      if (bench.paced && !attract && !game_menu.open())
+        cl::playback_draw(overlay, playback, bench, w, h, t);
       ge::hud::draw_frame_rate(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(),
                                pacing.times, pacing.refresh, pacing.show);
       if (paced) {  // a demo watched or a game joined: the menu and the console over it

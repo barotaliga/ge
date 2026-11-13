@@ -26,6 +26,25 @@ TEST(slides_at_its_speed_and_the_tilde_toggles_it) {
   CHECK(!v.open() && v.drop() == 0);
 }
 
+TEST(full_covers_the_screen_at_once_then_slides_up_at_its_speed) {
+  Console c;
+  ConsoleView v(c);
+  v.set_full(true);
+  CHECK(v.cover() == 1);  // at once, before a frame
+  v.frame(1);
+  CHECK(v.cover() == 1);  // held while loading
+  v.set_full(false);
+  v.frame(0.1);  // 3 screens a second: 0.3 of the screen up
+  CHECK(v.cover() > 0.69 && v.cover() < 0.71);
+  v.frame(1);
+  CHECK(v.cover() == 0);
+  v.set_full(true);  // let go while open: it stops at con_height
+  v.set_open(true);
+  v.set_full(false);
+  for (int i = 0; i < 100; i++) v.frame(0.05);
+  CHECK(v.cover() == 0.5);
+}
+
 TEST(slash_is_a_command_and_plain_text_is_chat_when_con_chat_is_on) {
   Console c;
   ConsoleView v(c);

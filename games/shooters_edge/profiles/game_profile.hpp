@@ -115,6 +115,10 @@ struct GameProfile {
   std::string_view place_range = "500";
   // Its client's place macros, `$loc_here` and `$loc_there` (client/place_names.hpp).
   bool place_macros = false;
+  // How fast its console slides by default (`scr_conspeed`, client/game_start.hpp), and how much
+  // of that is a whole screen: lines a second of a 200-line screen, or screens a second.
+  std::string_view conspeed = "300";
+  double conspeed_screen = 200;
 };
 
 inline constexpr ProgramFile kClassicMultiplayer[] = {{.name = "qwprogs.dat"},
@@ -176,7 +180,9 @@ inline constexpr GameProfile kGameProfiles[] = {
      .weapon_groups = kSequelGroups,
      .rules_campaign = true,
      .attract = "q2demo1",
-     .place_macros = true},
+     .place_macros = true,
+     .conspeed = "3",
+     .conspeed_screen = 1},
 };
 
 // The first row: the classic game, the one every reader uses until a choice of game is made.
