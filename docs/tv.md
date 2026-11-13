@@ -144,6 +144,11 @@ minutes 1.2 kB a second, against 9.2 kB with a whole save every 10 s:
 | Whole every 10 s | 10.7 kB/s | 9.2 kB/s |
 | Whole once, then deltas every 10 s | 2.9 kB/s | 1.2 kB/s |
 
+A run's input log and its stream are the same run: `spectate_pack` steps the run through a log and
+writes the stream its broadcast would have been, and `spectate_inputs` reads a stream from its
+first block back into the log, text for text, so a kept broadcast is a replay `ge replay`,
+`ge diverge` and `ge why` can read once it is turned back.
+
 ## The field codec
 
 The coder (`engine/replay/codec.hpp`) is an adaptive binary range coder: integers only, so it
