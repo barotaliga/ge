@@ -64,5 +64,5 @@ and no rotation over a loaded box. Fog, when on, tints it by a share (`skyfog`).
 
 `plugins/brush/app/sky_box.hpp` (the orientation table in engine axes, the atlas),
 `plugins/brush/app/bsp.wgsl`'s `sky_box_at` (the box on the sky faces, at infinity) and
-`games/shooters_edge/client/files.hpp`'s `sky_box_files` (the paths and formats). Not yet: the
-console override, fog's tint, the sequel's rotation.
+`games/shooters_edge/client/files.hpp`'s `sky_box_files` (the paths and formats). The console override
+is `r_skyname` (the map's own when empty). Not yet: `loadsky`, fog's tint, the sequel's rotation.

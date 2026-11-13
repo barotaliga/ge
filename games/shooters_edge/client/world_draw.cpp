@@ -243,16 +243,20 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
   return g;
 }
 
-// THE MAP'S OWN SKY BOX: the worldspawn's `sky` (or `_sky`, or `skyname`) names six pictures
+// THE MAP'S OWN SKY BOX: `r_skyname` (`chosen`), else the worldspawn's `sky` (or `_sky`, or
+// `skyname`), names six pictures
 // (files.hpp's `sky_box_files`), read and built into the scene's box (brush/app/sky_box.hpp),
 // drawn where the pack's sky is drawn. A box with a picture missing or unreadable is not drawn:
 // the sky texture's layers are, with a status line saying why.
-void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba::Scene& scene) {
-  if (scene.map.entities.empty()) return;
-  const ge::brush::Entity& world = scene.map.entities[0];
-  std::string name = world.get("sky");
-  if (name.empty()) name = world.get("_sky");
-  if (name.empty()) name = world.get("skyname");
+void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba::Scene& scene,
+                  const std::string& chosen) {
+  std::string name = chosen;
+  if (name.empty() && !scene.map.entities.empty()) {
+    const ge::brush::Entity& world = scene.map.entities[0];
+    name = world.get("sky");
+    if (name.empty()) name = world.get("_sky");
+    if (name.empty()) name = world.get("skyname");
+  }
   if (name.empty()) return;
   GE_ZONE("world.sky_box");
   SkyBoxFiles found;
@@ -384,7 +388,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
             : "shooters_edge: " + lit_path + " was made for another build of " + map.name +
                   "; drawn with the map's own light");
   }
-  read_sky_box(files, palette_copy, r->scene);
+  read_sky_box(files, palette_copy, r->scene, picture.sky_name);
   // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
   // adds its bounce under the live lights (look.cpp).
   if (picture.ce.rebake && !cache.empty()) {
