@@ -43,6 +43,17 @@ bool bytes_of(std::string_view hex, std::vector<uint8_t>& out) {
   return true;
 }
 
+// A column whose name ends "_max" keeps its largest value; the rest are summed.
+bool is_max(const std::string& name) {
+  return name.size() >= 4 && name.compare(name.size() - 4, 4, "_max") == 0;
+}
+
+void add_column(std::map<std::string, int64_t>& to, const std::string& name, int64_t v) {
+  auto [it, made] = to.try_emplace(name, v);
+  if (made) return;
+  it->second = is_max(name) ? std::max(it->second, v) : it->second + v;
+}
+
 // The best score and the best team's name: who won.
 void add_totals(Matches& m, const net::MatchReport& r) {
   int64_t best = 0;
@@ -78,7 +89,7 @@ void add_totals(Matches& m, const net::MatchReport& r) {
     t.team_kills += p.team_kills;
     t.seconds += p.seconds;
     for (size_t i = 0; i < r.columns.size() && i < p.columns.size(); i++)
-      t.columns[r.columns[i]] += p.columns[i];
+      add_column(t.columns, r.columns[i], p.columns[i]);
   }
 }
 
@@ -165,7 +176,7 @@ Totals totals_sum(const Matches& m, uint64_t account, const TotalsFilter& f) {
     sum.suicides += t.suicides;
     sum.team_kills += t.team_kills;
     sum.seconds += t.seconds;
-    for (const auto& [name, v] : t.columns) sum.columns[name] += v;
+    for (const auto& [name, v] : t.columns) add_column(sum.columns, name, v);
   }
   return sum;
 }
