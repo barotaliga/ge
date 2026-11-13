@@ -1631,6 +1631,9 @@ int run_main(int argc, char** argv) {
     fx_state.book = &fx_book;
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
+    // See-through liquids where the server allows them (its `watervis`).
+    fx.see_through = listen.server == nullptr ||
+                     shooters_edge::look::watervis_allowed(listen.server->serverinfo);
     view_settings.lerp = picture.lerp_models;  // r_lerpmodels: the held weapon's frames too
     // The quick weapon's preview held in place of the game's weapon (quick_fire.hpp).
     in_hand.show =

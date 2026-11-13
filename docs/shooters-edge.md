@@ -1288,6 +1288,15 @@ every pass, and judged by captioned screenshots:
   z - bias, 0), by its distance from the eye (not its depth along the view, so turning on the
   spot changes nothing); the sky takes its fixed share; a glow added over the scene fades to
   black.
+- **See-through liquids** (M18i14): `r_wateralpha` (1: solid) and `r_slimealpha`,
+  `r_lavaalpha`, `r_telealpha` (empty: water's), or the map's own `wateralpha` and kin; a server
+  that sets `watervis` 0 keeps every liquid solid (`app/look.hpp`'s `liquid_alphas`). The world
+  pass draws a see-through kind after the world, blended over it, testing the depth without
+  writing it, and at 0 not at all (`brush/app/bsp_draw.hpp`'s "bsp.liquids"). While one is
+  see-through the cull leaves the map's potentially visible set out (the frustum and the depth
+  pyramid still cull), since few maps were built to be seen through their water and the rooms
+  under it would be missing. Where the modern look draws its own water, lava and slime, those
+  passes stay as they are.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
 - **Effects from the game's files** (`client/world_fx.hpp`, M18l): a file `particles/<any>.fx`
