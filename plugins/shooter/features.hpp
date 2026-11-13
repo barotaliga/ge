@@ -189,7 +189,8 @@
 // - `brinkkeys`: near lava or slime the keyboard's hand does not want a key whose step under the
 //   view ends over it, and answers a run carried over it within a quarter second with the keys
 //   against the run (bots/keyboard.cpp `keys_off_brink`; the keyboard's 45-degree sets and taps
-//   weave a walk off a line 40 from the edge: se-reach --walk, M18r.md 0c); judging, in no preset.
+//   weave a walk off a line 40 from the edge: se-reach --walk, M18r.md 0c); on (head to head dm2
+//   +6.2, lava deaths 12.75 -> 9.0 a match).
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
