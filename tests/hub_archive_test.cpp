@@ -240,14 +240,14 @@ TEST(demos_page_lists_and_folds_the_scores) {
   spec.id = "test_game";
   spec.modes = {{"4on4", 9}};
   Poller p;
-  const Answer page =
-      hub_answer(p, spec, "/demos?player=vale", 0, Site{&a, 1794450000, "hub.example:28080", ""});
+  const Answer page = hub_answer(p, spec, "/demos?player=vale", 0,
+                                 Site{&a, 1794450000, "hub.example:28080", "", false});
   CHECK(page.code == 200 && page.type == "text/html");
   CHECK(has(page.body, "&lt;b&gt;Vale&lt;/b&gt;") && !has(page.body, "<b>Vale"));
   CHECK(has(page.body, "<details><summary>scores</summary>"));
   CHECK(has(page.body, "test_game://demo/" + a.rows[0].sha + "?hub=hub.example:28080\""));
   CHECK(has(page.body, "2026-11-12 02:20") && has(page.body, "20:00"));
-  CHECK(has(hub_answer(p, spec, "/demos?player=nobody", 0, Site{&a, 0, "", ""}).body,
+  CHECK(has(hub_answer(p, spec, "/demos?player=nobody", 0, Site{&a, 0, "", "", false}).body,
             "No demo matches."));
   CHECK(has(hub_answer(p, spec, "/demos", 0, Site{}).body, "This hub keeps no demos."));
   CHECK(utc_text(0) == "1970-01-01 00:00" && utc_text(951782400) == "2000-02-29 00:00");

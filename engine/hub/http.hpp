@@ -39,6 +39,7 @@ struct HttpRequest {
   size_t content_length = 0;     // a POST's body (Content-Length)
   bool forwarded_https = false;  // X-Forwarded-Proto: https (the operator's proxy added TLS)
   std::string forwarded_for;     // X-Forwarded-For's first address ("" when none)
+  bool gzip = false;             // Accept-Encoding names gzip: a viewer file may go packed
   size_t head_size = 0;          // the bytes the head took, the blank line with it
 };
 

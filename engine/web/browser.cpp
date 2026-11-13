@@ -14,11 +14,43 @@
 namespace {
 
 // 0 with the bytes in a malloc'd block; the HTTP status when it was not 2xx; -1 when no answer.
-EM_ASYNC_JS(int, ge_web_fetch, (const char* url, uint8_t** out, int* len), {
+// With a label, the status line and the page's bar (#viewer-bar) follow the download.
+EM_ASYNC_JS(int, ge_web_fetch, (const char* url, uint8_t** out, int* len, const char* label), {
   try {
     const r = await fetch(UTF8ToString(url));
     if (!r.ok) return r.status;
-    const b = new Uint8Array(await r.arrayBuffer());
+    const said = UTF8ToString(label);
+    const total = Number(r.headers.get("Content-Length") || 0);
+    let b;
+    if (said && r.body && total > 0) {
+      const line = document.getElementById("viewer-status");
+      const bar = document.getElementById("viewer-bar");
+      const mb = function(n) { return (n / 1048576).toFixed(1); };
+      const reader = r.body.getReader();
+      const parts = [];
+      let got = 0;
+      for (;;) {
+        const d = await reader.read();
+        if (d.done) break;
+        parts.push(d.value);
+        got += d.value.length;
+        if (line) line.textContent = said + " " + mb(got) + " of " + mb(total) + " MB";
+        if (bar) {
+          bar.max = total;
+          bar.value = Math.min(got, total);
+          bar.hidden = false;
+        }
+      }
+      if (bar) bar.hidden = true;
+      b = new Uint8Array(got);
+      let at = 0;
+      for (const part of parts) {
+        b.set(part, at);
+        at += part.length;
+      }
+    } else {
+      b = new Uint8Array(await r.arrayBuffer());
+    }
     const p = _malloc(b.length || 1);
     HEAPU8.set(b, p);
     HEAPU32[out >> 2] = p;
@@ -182,10 +214,11 @@ bool ws_take(int socket, std::vector<uint8_t>& msg) {
 
 void ws_close(int socket) { ge_web_ws_close(socket); }
 
-bool fetch_bytes(const std::string& url, std::vector<uint8_t>& out, std::string& error) {
+bool fetch_bytes(const std::string& url, std::vector<uint8_t>& out, std::string& error,
+                 const std::string& progress) {
   uint8_t* data = nullptr;
   int len = 0;
-  const int status = ge_web_fetch(url.c_str(), &data, &len);
+  const int status = ge_web_fetch(url.c_str(), &data, &len, progress.c_str());
   if (status != 0) {
     error = status < 0 ? "the hub did not answer for " + url
                        : "the hub answered " + std::to_string(status) + " for " + url;

@@ -481,7 +481,11 @@ main.watch h3{margin:8px 0}.viewer{background:#000;aspect-ratio:16/9;border-radi
 align-items:center;justify-content:center;overflow:hidden;position:relative}.viewer canvas{width:100%;
 height:100%;display:block}.viewer .none{color:#c8c8c8;padding:16px;text-align:center;max-width:36em}
 #viewer-status{position:absolute;left:0;right:0;bottom:0;margin:0;padding:8px 12px;color:#e8e8e8;
-background:rgba(0,0,0,.6)}#viewer-status:empty{display:none}
+background:rgba(0,0,0,.6)}#viewer-status:empty{display:none}#viewer-bar{position:absolute;left:12px;
+right:12px;bottom:44px;width:calc(100% - 24px);height:6px;appearance:none;border:0;border-radius:3px;
+background:#333}#viewer-bar::-webkit-progress-bar{background:#333;border-radius:3px}
+#viewer-bar::-webkit-progress-value{background:#1b8a5a;border-radius:3px}
+#viewer-bar::-moz-progress-bar{background:#1b8a5a;border-radius:3px}
 ul.also{list-style:none;padding:0;margin:0}ul.also li{margin:6px 0}
 @media(max-width:700px){main.watch{grid-template-columns:1fr}}
 )css";
