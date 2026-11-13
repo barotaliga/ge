@@ -60,7 +60,8 @@ build/debug/shooters_edge_sequel_server --root=<install> --map=q2dm1 --port=2791
 
 `shooters_edge_sequel_server` is the same process over the sequel's rules on its own protocol
 (`games/shooters_edge/net/sequel_game.hpp`): `--root` holds the sequel's game folder, and an
-unmodified client of the sequel joins it.
+unmodified client of the sequel joins it. Its levels go round `sv_maprotation` after `sv_map`
+when `fraglimit` or `timelimit` ends one; every client stays connected and signs on again.
 
 The layers are read as loose files under `--root` (`<root>/<dir>/server.cfg`); a copy inside a
 pack is not read yet, and `ge server cfg --explain` comes with `ge server` (M53d) over the

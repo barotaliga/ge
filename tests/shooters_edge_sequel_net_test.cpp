@@ -246,6 +246,51 @@ TEST(a_map_with_no_sky_gets_the_default_and_a_download_is_refused) {
   CHECK(noted);
 }
 
+TEST(a_level_change_keeps_every_connection_and_seats_each_client_again) {
+  auto r = rig({});
+  cn::SequelClientConfig cfg;
+  cfg.brain = forward;
+  cfg.name = "eve";
+  cn::SequelClientEnd& a = join(*r, cfg);
+  cfg.name = "bob";
+  cn::SequelClientEnd& b = join(*r, cfg);
+  run(*r, 160);
+  CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
+  CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
+  const int32_t count = r->server.count;
+  // What the dedicated game does when the rules ask for a map: start them on it and tell the
+  // clients (sequel_game.cpp).
+  sv::MapSpec next;
+  next.name = "hall2";
+  next.brushes = hall();
+  std::string error;
+  r->rules.carry();
+  CHECK_MSG(r->rules.start(next, error), error);
+  sv::SequelWireOptions wire = r->server.cfg.wire;
+  wire.map_checksum = 1234;
+  cn::sequel_net_level(r->server, wire);
+  CHECK(r->server.count == count + 1);
+  // The server data carries the new count: a client keeps its loading picture up until it does.
+  CHECK(r->server.cfg.wire.server_count == count + 1 - 0x10000);
+  run(*r, 1);
+  cn::sequel_client_stop(b);  // gone while it signs on again: its slot in the rules is freed
+  const auto frames = a.frames;
+  run(*r, 200);
+  CHECK_MSG(a.error.empty(), a.error);
+  CHECK(a.stage == cn::ClientStage::active);
+  CHECK(a.levels == 2);
+  CHECK(a.demo.state.map == "hall2");
+  CHECK(a.frames > frames + 10);
+  CHECK(cn::sequel_net_clients(r->server) == 1);
+  CHECK(r->server.clients[0].stage == cn::SequelSlot::active);
+  CHECK((*r->rules).clients[0].active);
+  CHECK(!(*r->rules).clients[1].active);
+  bool noted = false;
+  for (const std::string& line : r->server.log)
+    noted = noted || line.find("the level changed to hall2") != std::string::npos;
+  CHECK(noted);
+}
+
 TEST(the_sequel_server_game_names_itself_and_refuses_a_missing_folder) {
   const ge::server::ServerGame& g = cn::sequel_game();
   CHECK(g.default_port == cn::kPortSequel);
