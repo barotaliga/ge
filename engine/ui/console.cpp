@@ -74,7 +74,9 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
                   Background::gradient(180, color_of(bg.top, alpha), color_of(bg.bottom, alpha)),
                   panel, time_s);
   if (image != nullptr && !image->empty()) {
-    Background pic = Background::image(*image);
+    Drift held;
+    held.focus_from_y = held.focus_to_y = style.image_focus_y;
+    Background pic = Background::image(*image, Fit::cover, held);
     pic.tint({1, 1, 1, alpha});
     draw_background(list, pic, panel, time_s);
   }

@@ -26,17 +26,23 @@
 // MULTIPLAYER ▸ JOIN A GAME shows the server browser (servers_page.hpp over the engine's server
 // list, net/server_list.hpp): the window hands it the game's protocol with `servers().set_query`
 // and the loaded install's masters with `servers().set_masters`; ENTER on a server runs
-// `connect <address>` and closes the menu, R or F5 refreshes, ESCAPE goes back to MULTIPLAYER. It
-// keeps the modern look in both looks.
+// `connect <address>` and closes the menu, R or F5 refreshes, ESCAPE goes back to MULTIPLAYER. In
+// the classic look it is drawn in the game's own glyph sheet (classic_pages.hpp).
 //
 // DEMOS (on the root) shows the demos page (demos_page.hpp over the engine's folder browser,
 // vfs/browse.hpp): the window hands it the game's recording extensions, the game's folder and its
 // check of a picked file (`demos()`); a demo that passes the check is handed back by `take_demo`
-// and the menu closes, the window playing it as `playdemo` does. It keeps the modern look in both
-// looks.
+// and the menu closes, the window playing it as `playdemo` does. In the classic look it is drawn in
+// the game's own glyph sheet (classic_pages.hpp).
+//
+// SELECT GAME (the root's first row) shows the games page (games_page.hpp): the window hands it the
+// games and their installs (`games().set_lister`); a game picked comes back by `take_game`, its
+// install to open or the folder chooser to show, and a folder that did not load comes back to its
+// footer through `load_refused`. In the classic look it is drawn in the game's own glyph sheet.
 //
 // The commands it registers: `togglemenu` (what ESCAPE does), `menu_main`, `menu_options`,
-// `menu_quit`, `menu_screenshots`, `menu_servers`, `menu_demos` (the menu opened on that page);
+// `menu_quit`, `menu_screenshots`, `menu_servers`, `menu_demos`, `menu_games` (the menu opened on
+// that page);
 // the cvars
 // `menu_look` (auto, classic, modern) and `ce_auto` (1: a game loaded is enhanced in the background
 // at once). The game keeps running under the menu (the listen server's frames go on); the player's
@@ -48,6 +54,7 @@
 // ge:keywords waiting-key rebind customize-controls load-game take_load enhance_game ce_auto
 // ge:keywords background-enhance take_ended screenshots gallery menu_screenshots set_screenshots
 // ge:keywords server-browser join-a-game menu_servers servers demos menu_demos take_demo
+// ge:keywords select-game menu_games take_game games-page
 // ge:skill ui console classicenhance
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -67,6 +74,7 @@
 #include "shooters_edge/menu/classic_view.hpp"
 #include "shooters_edge/menu/demos_page.hpp"
 #include "shooters_edge/menu/gallery_page.hpp"
+#include "shooters_edge/menu/games_page.hpp"
 #include "shooters_edge/menu/main_menu.hpp"
 #include "shooters_edge/menu/servers_page.hpp"
 #include "ui/draw.hpp"
@@ -137,6 +145,17 @@ class GameMenu {
   DemosPage& demos() { return demos_; }
   bool in_demos() const { return in_demos_; }
   std::string take_demo() { return std::exchange(demo_ask_, std::string()); }
+  // SELECT GAME (games_page.hpp), whether it is the page up, and what it asked for since the last
+  // call: a game's install to open (`install` set), or the folder chooser (`browse`).
+  struct GameAsk {
+    bool asked = false;
+    bool browse = false;
+    std::string id;       // the game picked, "" for FIND ANOTHER INSTALL
+    std::string install;  // the install to open
+  };
+  GamesPage& games() { return games_; }
+  bool in_games() const { return in_games_; }
+  GameAsk take_game() { return std::exchange(game_ask_, GameAsk{}); }
 
   // The next draw settles every animation where it is going (a lab's still).
   void settle() { settle_ = true; }
@@ -165,6 +184,8 @@ class GameMenu {
   void update_servers(const ge::ui::MenuInput& in, Host& host);
   void show_demos();
   void update_demos(const ge::ui::MenuInput& in, Host& host);
+  void show_games();
+  void update_games(const ge::ui::MenuInput& in, Host& host);
 
   ge::console::Console* con_ = nullptr;
   std::string look_ = "auto";
@@ -203,9 +224,12 @@ class GameMenu {
   ServersPage servers_;
   DemosPage demos_;
   std::string demo_ask_;  // the demo picked, the window not told yet
+  GamesPage games_;
+  GameAsk game_ask_;  // SELECT GAME's pick, the window not told yet
   bool in_gallery_ = false;
   bool in_servers_ = false;
   bool in_demos_ = false;
+  bool in_games_ = false;
 };
 
 }  // namespace shooters_edge::menu

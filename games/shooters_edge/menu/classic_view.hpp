@@ -127,6 +127,12 @@ struct ClassicPen {
   }
 };
 
+// A strip row's word the pack's pictures have no words for (`demos`), cut from the letters of the
+// strips it was measured on, its top left at (x, y) classic px; false on other strips (the caller
+// writes it in big glyphs). `carved_width` is its width in classic px, 0 when it cannot be cut.
+bool carve_word(const ClassicPen& pen, std::string_view id, float x, float y);
+float carved_width(const ClassicArt& art, std::string_view id);
+
 // The bare classic screen (no page) on a `width` x `height` screen: scaled and centred.
 ClassicLayout classic_screen(int width, int height);
 

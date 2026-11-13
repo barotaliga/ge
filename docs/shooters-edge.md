@@ -1448,6 +1448,25 @@ ENTER checks the file before anything starts (`client/demo_check.hpp`: the bytes
 unpacked, then read to its level's map) and plays it as `playdemo` does, or shows in the footer
 why it is no demo. BACKSPACE goes up a folder, LEFT and RIGHT through the places, R lists again.
 
+**A classic game in its own look, picked from SELECT GAME (M18k2).** SELECT GAME is the main
+menu's first row, so ENTER on a fresh start goes straight to it (`menu_games`;
+`menu/games_page.hpp`). It shows each classic game the content profiles know by a picture of its
+name (`menu/art/<id>.png`, embedded; the names are pictures, never words in the tree), the
+install of it loaded last (`client/installs.hpp`: `<prefs>/installs.txt`, a line a game) and that
+install's edition, read from its packs the moment it is picked (the profile's `full_game` file
+found or not: Shareware or Registered, the sequel's Demo or Full game). ENTER on a game with a
+kept install opens it; on one never found, or FIND ANOTHER INSTALL, the window's folder chooser,
+and the folder is taken by whichever game's base folder it holds (`install_of`). Once a classic
+game is open, the title's night gives way to its own recordings played behind the menu in turn
+(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game; "" keeps the night), ESCAPE closes the menu onto the
+recording to watch it, and nothing modern is left on screen: the console is written in the
+game's glyph sheet over its own console background (`menu/classic_console.hpp`, the engine's
+`ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
+GAME and SELECT GAME are drawn in the game's letters under carved titles (`menu/classic_pages.hpp`;
+SELECT GAME's own row cut letter by letter from the strips like DEMOS'). Lab `se-attract` draws
+the menu, SELECT GAME, the watched recording, the console, DEMOS and JOIN A GAME over a played
+recording (`--basedir` a player's install).
+
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
 output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),
 which goes through the same move and the same game program as a person's, so a bot can do

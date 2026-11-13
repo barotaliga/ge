@@ -85,6 +85,10 @@ void GameMenu::add_cvars(ge::console::Console& con) {
   con.add_command("menu_demos",
                   "menu_demos: the main menu opened at DEMOS (recordings anywhere on the machine)",
                   opener("demos"));
+  con.add_command("menu_games",
+                  "menu_games: the main menu opened at SELECT GAME (the classic games and their "
+                  "installs)",
+                  opener("games"));
   servers_.add_cvars(con);
   demos_.add_cvars(con);
 }
@@ -92,6 +96,7 @@ void GameMenu::add_cvars(ge::console::Console& con) {
 void GameMenu::set_art(ClassicArt art) { art_ = std::move(art); }
 
 void GameMenu::load_refused(std::string why) {
+  games_.set_note(why);
   load_note_ = std::move(why);
   if (ui::Page* p = main_.page("enhanced")) {
     if (ui::Item* it = p->find("load")) it->hint = "NOT LOADED: " + load_note_;
@@ -117,6 +122,7 @@ void GameMenu::show(Host& host, std::string_view page) {
   in_gallery_ = false;
   in_servers_ = false;
   in_demos_ = false;
+  in_games_ = false;
   waiting_.clear();
   main_.reset();
   const bool gallery = page == "screenshots";
@@ -125,6 +131,8 @@ void GameMenu::show(Host& host, std::string_view page) {
   if (servers) page = "multi";
   const bool demos = page == "demos";
   if (demos) page = "main";
+  const bool games = page == "games";
+  if (games) page = "main";
   if (page != "main") main_.open(page);
   refresh_main(host);
   main_.top().focus = -1;
@@ -146,6 +154,11 @@ void GameMenu::show(Host& host, std::string_view page) {
     main_.focus("demos");
     show_demos();
   }
+  if (games) {
+    main_.top().focus = -1;
+    main_.focus("games");
+    show_games();
+  }
 }
 
 void GameMenu::hide() {
@@ -155,6 +168,32 @@ void GameMenu::hide() {
   in_gallery_ = false;
   in_servers_ = false;
   in_demos_ = false;
+  in_games_ = false;
+}
+
+void GameMenu::show_games() {
+  in_games_ = true;
+  games_.open();
+}
+
+void GameMenu::update_games(const ui::MenuInput& in, Host& host) {
+  switch (games_.input(in)) {
+    case GamesAction::leave:
+      in_games_ = false;
+      refresh_main(host);
+      return;
+    case GamesAction::open:
+      game_ask_ = {.asked = true,
+                   .browse = false,
+                   .id = games_.chosen().id,
+                   .install = games_.chosen().install};
+      return;
+    case GamesAction::browse:
+      game_ask_ = {.asked = true, .browse = true, .id = games_.chosen().id, .install = {}};
+      return;
+    case GamesAction::none:
+      return;
+  }
 }
 
 void GameMenu::show_demos() {
@@ -363,6 +402,10 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
     update_demos(in, host);
     return;
   }
+  if (in_games_) {
+    update_games(in, host);
+    return;
+  }
   if (in_enhance_) ce::sync_enhancing(enhance_, board());
   if (in_enhance_) {
     for (const ui::MenuEvent& e : enhance_.input(in, hits_)) apply_enhance(e, host);
@@ -404,6 +447,9 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
       case Outcome::demos:
         show_demos();
         return;
+      case Outcome::games:
+        show_games();
+        return;
       case Outcome::classic_enhance:
         if (std::string why; !enhance_game(true, &why) && con_ != nullptr)
           con_->print("classic enhance: " + why);
@@ -427,13 +473,27 @@ void GameMenu::draw(ui::DrawList& list, int width, int height, double t) {
     return;
   }
   if (in_servers_) {
-    servers_.draw(list, width, height, style_);
+    if (classic())
+      servers_.draw_classic(list, art_, width, height, t);
+    else
+      servers_.draw(list, width, height, style_);
     problems_ = servers_.problems();
     return;
   }
   if (in_demos_) {
-    demos_.draw(list, width, height, style_);
+    if (classic())
+      demos_.draw_classic(list, art_, width, height, t);
+    else
+      demos_.draw(list, width, height, style_);
     problems_ = demos_.problems();
+    return;
+  }
+  if (in_games_) {
+    if (classic())
+      games_.draw_classic(list, art_, width, height, t);
+    else
+      games_.draw(list, width, height, style_);
+    problems_ = games_.problems();
     return;
   }
   if (classic() && !in_enhance_) {

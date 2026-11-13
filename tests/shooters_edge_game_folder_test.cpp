@@ -23,6 +23,7 @@
 #include "console/console.hpp"
 #include "shooters_edge/client/coop_party.hpp"
 #include "shooters_edge/client/game_folder.hpp"
+#include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 #include "vfs/pak.hpp"
@@ -282,4 +283,32 @@ TEST(coopgame_in_a_running_campaign_starts_a_coop_game_that_takes_bots) {
   CHECK(!listen.server->cvars.find("coop")->on());
   CHECK(cl::listen_lobby(listen, "addbot"));
   CHECK(cl::party_size(*listen.party) == 1 && listen.companion_coop);
+}
+
+TEST(each_game_keeps_its_own_install_and_reads_as_its_edition) {
+  const fs::path prefs = fresh("prefs-installs");
+  const fs::path shareware = fresh("shareware");
+  const fs::path full = fresh("full");
+  const ge::classicenhance::Profile& classic = ge::classicenhance::classic_profile();
+  write_pack(shareware / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
+  write_pack(full / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
+  write_pack(full / kBase / "pak1.pak", {{std::string(classic.full_game), {1}}});
+  CHECK(cl::edition_of(shareware.string(), classic) == cl::Edition::shareware);
+  CHECK(cl::edition_of(full.string(), classic) == cl::Edition::full);
+  CHECK(cl::edition_of((shareware / "gone").string(), classic) == cl::Edition::unknown);
+  CHECK(cl::edition_words(cl::Edition::shareware, classic) == "Shareware");
+  CHECK(cl::edition_words(cl::Edition::full, classic) == "Registered");
+
+  // Nothing kept yet; then one install a game, the last one kept for each.
+  CHECK(cl::remembered_installs(prefs.string()).empty());
+  CHECK(cl::remember_install(prefs.string(), "classic", shareware.string()));
+  CHECK(cl::remember_install(prefs.string(), "sequel", "/games/the sequel"));
+  CHECK(cl::remember_install(prefs.string(), "classic", full.string()));
+  const auto kept = cl::remembered_installs(prefs.string());
+  CHECK(kept.size() == 2);
+  CHECK(kept.at("classic") == full.string());
+  CHECK(kept.at("sequel") == "/games/the sequel");  // a folder with a space kept whole
+  // No preferences folder: nothing kept, nothing read.
+  CHECK(!cl::remember_install("", "classic", full.string()));
+  CHECK(cl::remembered_installs("").empty());
 }

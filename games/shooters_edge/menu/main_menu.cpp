@@ -45,7 +45,11 @@ constexpr Choice kFall[] = {{"SNOW", "0"}, {"SLEET", "0.5"}, {"RAIN", "1"}};
 
 // The menu, page by page. A row's `needs` dims it while the console knows no such name.
 constexpr Entry kEntries[] = {
-    // The root: the five rows of the classic main menu.
+    // The root: SELECT GAME first, then the five rows of the classic main menu and DEMOS.
+    {.page = "main",
+     .id = "games",
+     .text = "SELECT GAME",
+     .hint = "Pick the classic game you play and find it on this computer."},
     {.page = "main",
      .id = "single",
      .text = "SINGLE PLAYER",
@@ -1043,6 +1047,7 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   if (e.page == "options" && e.item == "screenshots") return Outcome::screenshots;
   if (e.page == "multi" && e.item == "join") return Outcome::servers;
   if (e.page == "main" && e.item == "demos") return Outcome::demos;
+  if (e.page == "main" && e.item == "games") return Outcome::games;
   if (e.page == "options" && e.item == "reset") {
     reset_defaults(host);
     refresh(menu, host);
