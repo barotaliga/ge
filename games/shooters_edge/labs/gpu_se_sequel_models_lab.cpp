@@ -124,7 +124,9 @@ constexpr Subject kSubjects[] = {
     {"ammo", "AMMO", "the ammo box on the floor, its label the skin's"},
     {"item", "ANOTHER ITEM", "the item whole, standing on the floor"},
     {"monster", "A MONSTER", "the monster standing on its feet, its skin's colours, no torn faces"},
-    {"player", "THE PLAYER", "a player standing on the floor in his skin, as another sees him"},
+    {"player", "THE PLAYER",
+     "a player standing on the floor in his skin, the weapon he carries in his hands, as another "
+     "sees him"},
 };
 constexpr size_t kSubjectCount = sizeof(kSubjects) / sizeof(kSubjects[0]);
 
@@ -290,6 +292,7 @@ void run(gl::Lab& lab) {
       if (names[i] == shooters_edge::server::kSequelPlayerModel) me.modelindex = int(i);
     me.origin = ed.origin;
     me.angles = {0, ed.angles.y, 0};
+    me.carried = l.server->world.entities[size_t(ps.entity)].carried_model;
     of_kind[kSubjectCount - 1] = {&me};
   }
   for (size_t k = 0; k + 1 < kSubjectCount; k++)
@@ -341,6 +344,20 @@ void run(gl::Lab& lab) {
     }
     return false;
   };
+  // The player as another sees him: his body and the weapon he carries, riding it.
+  const auto push_me = [&] {
+    fx.models.push_back(me);
+    if (me.carried <= 0) return;
+    cl::Placed gun = me;
+    gun.entity = me.entity + cl::kCarriedEntity;
+    gun.modelindex = me.carried;
+    gun.carried = 0;
+    fx.models.push_back(gun);
+  };
+  const auto pop_me = [&] {
+    fx.models.pop_back();
+    if (me.carried > 0) fx.models.pop_back();
+  };
   int shots = 0;
   for (size_t k = 0; k < kSubjectCount; k++) {
     const Subject& s = kSubjects[k];
@@ -358,7 +375,7 @@ void run(gl::Lab& lab) {
     }
     lab.note(std::string(s.id) + ": " + names[size_t(chosen->modelindex)] + " frame " +
              std::to_string(chosen->frame) + " skin " + std::to_string(chosen->skin));
-    if (chosen == &me) fx.models.push_back(me);
+    if (chosen == &me) push_me();
     ge::render::FrameView v = base;
     const float at_f[3] = {chosen->origin.x, chosen->origin.y,
                            chosen->origin.z + (figure ? 0.0f : 8.0f)};
@@ -385,7 +402,7 @@ void run(gl::Lab& lab) {
                gl::Det::measured);
       shots++;
     }
-    if (chosen == &me) fx.models.pop_back();
+    if (chosen == &me) pop_me();
   }
   // THE POSES: a monster's runs and the player's sequences, frame by frame as the rules set them,
   // and an item turning where it lies, a strip each (classic look).
@@ -408,18 +425,26 @@ void run(gl::Lab& lab) {
     if (chosen == nullptr || !eye_for(chosen->origin, 96.0f, 24.0f, e)) return;
     const ge::render::FrameView v = view_of(*chosen, e, true);
     const bool mine = chosen == &me;
-    if (mine) fx.models.push_back(me);
+    if (mine) push_me();
     cl::Placed* drawn = nullptr;
     for (cl::Placed& p : fx.models)
       if (p.entity == chosen->entity) drawn = &p;
     if (drawn == nullptr) {
-      if (mine) fx.models.pop_back();
+      if (mine) pop_me();
       return;
     }
+    cl::Placed* held = nullptr;  // the weapon it carries, on the same frame
+    for (cl::Placed& p : fx.models)
+      if (p.entity == chosen->entity + cl::kCarriedEntity) held = &p;
     const cl::Placed kept = *drawn;
     std::vector<ge::gpu::Image> tiles;
     std::string words;
+    const int held_model = held != nullptr ? held->modelindex : 0;
     for (const Pose& pose : poses) {
+      if (held != nullptr) {  // the dead carry nothing (the weapon's frames end before death's)
+        held->frame = pose.frame;
+        held->modelindex = pose.word == "dead" ? 0 : held_model;
+      }
       drawn->frame = pose.frame;
       drawn->frame_from = -1;
       drawn->frame_f = 1;
@@ -432,7 +457,8 @@ void run(gl::Lab& lab) {
           .append(std::to_string(pose.frame));
     }
     *drawn = kept;
-    if (mine) fx.models.pop_back();
+    if (held != nullptr) held->modelindex = held_model;
+    if (mine) pop_me();
     lab.shot({id,
               std::string(kSubjects[k].title) + ": ITS POSES",
               "The " + std::string(kSubjects[k].id) + " " + name +

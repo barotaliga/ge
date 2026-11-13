@@ -78,6 +78,9 @@ bool held_weapons(const GameAdapter&, const SearchPath&, std::vector<ge::viewmod
 // fallbacks for a missing skin).
 bool open_model(const GameAdapter& self, const SearchPath& files, const std::string& name,
                 OpenedModel& out, std::string& error) {
+  // A carried weapon's name ("#w_shotgun.md2"): a file in the player's model folder.
+  if (!name.empty() && name[0] == '#')
+    return open_model(self, files, "players/male/" + name.substr(1), out, error);
   if (!parts::open_model(self, files, name, out, error)) return false;
   if (out.form != ModelForm::morph || !out.morph.skins.empty() || name.rfind("players/", 0) != 0)
     return true;

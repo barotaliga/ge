@@ -99,8 +99,33 @@ constexpr CarvedPiece kGamesPieces[] = {
     {"sp_menu", 107, 0, 21, 20, 159, 1},    // Game's m
     {"mainmenu", 153, 60, 17, 20, 181, 0},  // Ordering's e
 };
+// The two games' names on SELECT GAME: Quit's Q (the logo's own) and u, Player's a without the
+// foot it shares with the l, a k of Ordering's r stem with Player's y arm over the leg of the r
+// beside it, Ordering's e; the sequel's numeral two of Single's I.
+constexpr CarvedPiece kClassicNamePieces[] = {
+    {"mainmenu", 0, 80, 22, 20, 0, 0},     // Quit's Q
+    {"mainmenu", 23, 80, 19, 20, 23, 0},   // Quit's u
+    {"mainmenu", 147, 0, 19, 20, 43, 0},   // Player's a
+    {"mainmenu", 171, 60, 9, 20, 63, 0},   // the k: Ordering's r stem,
+    {"mainmenu", 176, 0, 8, 9, 72, 0},     // Player's y arm,
+    {"mainmenu", 182, 68, 9, 12, 73, 8},   // the r's leg
+    {"mainmenu", 153, 60, 17, 20, 85, 0},  // Ordering's e
+};
+constexpr CarvedPiece kSequelNamePieces[] = {
+    {"mainmenu", 0, 80, 22, 20, 0, 0},     // Quit's Q
+    {"mainmenu", 23, 80, 19, 20, 23, 0},   // Quit's u
+    {"mainmenu", 147, 0, 19, 20, 43, 0},   // Player's a
+    {"mainmenu", 171, 60, 9, 20, 63, 0},   // the k: Ordering's r stem,
+    {"mainmenu", 176, 0, 8, 9, 72, 0},     // Player's y arm,
+    {"mainmenu", 182, 68, 9, 12, 73, 8},   // the r's leg
+    {"mainmenu", 153, 60, 17, 20, 85, 0},  // Ordering's e
+    {"mainmenu", 22, 0, 8, 20, 110, 0},    // Single's I
+    {"mainmenu", 22, 0, 8, 20, 120, 0},    // twice
+};
 constexpr CarvedWord kCarvedWords[] = {{"demos", 0xb378b8eec94a7f36ULL, kDemosPieces},
-                                       {"games", 0xb378b8eec94a7f36ULL, kGamesPieces}};
+                                       {"games", 0xb378b8eec94a7f36ULL, kGamesPieces},
+                                       {"game-classic", 0xb378b8eec94a7f36ULL, kClassicNamePieces},
+                                       {"game-sequel", 0xb378b8eec94a7f36ULL, kSequelNamePieces}};
 
 // Row `id`'s word cut from the strips at (x, y), classic px; false when these strips are not the
 // ones it was measured on (the caller draws the glyphs instead).

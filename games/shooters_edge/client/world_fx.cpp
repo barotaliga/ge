@@ -729,6 +729,17 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       p.frame_f = items[i].frame_f;
       p.lerp = items[i].lerp;
     }
+    // A carried model rides its holder: the holder's drawn place and frames (it follows it).
+    for (size_t i = 1; i < out.models.size(); i++) {
+      Placed& c = out.models[i];
+      const Placed& h = out.models[i - 1];
+      if (c.entity < kCarriedEntity || h.entity != c.entity - kCarriedEntity) continue;
+      c.origin = h.origin;
+      c.angles = h.angles;
+      c.frame_from = h.frame_from;
+      c.frame_f = h.frame_f;
+      c.lerp = h.lerp;
+    }
   }
   // The missiles where their models are drawn, so a trail and a glow ride the drawn rocket.
   thread_local std::vector<Missile> missiles;

@@ -139,6 +139,20 @@ SequelEntityState entity_state(const RulesCommon& c, int n) {
   s.model[0] = wire_model(e.modelindex);
   s.frame = e.frame;
   s.skin = static_cast<uint32_t>(e.skin);
+  if (player) {
+    // A player is drawn from his client info (model 255, the low byte of the skin his slot), his
+    // carried weapon a second model (255 too), chosen by the skin's high byte: its place among
+    // the model list's carried names ("#..."), from 1.
+    s.model[0] = 255;
+    s.skin = static_cast<uint32_t>(n - 1);
+    if (e.carried_model > 0) {
+      uint32_t place = 0;
+      for (int i = 1; i <= e.carried_model && size_t(i) < c.models.size(); i++)
+        if (!c.models[size_t(i)].empty() && c.models[size_t(i)][0] == '#') place++;
+      s.model[1] = 255;
+      s.skin |= place << 8;
+    }
+  }
   s.effects = static_cast<uint32_t>(e.effects);
   const std::string& model =
       size_t(e.modelindex) < c.models.size() ? c.models[size_t(e.modelindex)] : std::string();

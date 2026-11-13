@@ -2,7 +2,8 @@
 // spawned player brings his weapon up, then stands, runs, shoots, flinches at a blow, dies on a
 // death held to its last frame and leaves it to his corpse; a guard stands, attacks the player it
 // sees and dies on a death it holds; items turn where they lie, but not ammo, health or one placed
-// untouchable, and the frames and the turn reach the world's rows.
+// untouchable, and the frames and the turn reach the world's rows; a living player carries his
+// weapon for others to see, a dead one none.
 //
 // ge:summary Tests: the sequel's poses: the player's sequences, a guard's runs, items turning
 // ge:keywords test sequel poses animation frames player-animation monster-animation turning-items
@@ -203,4 +204,21 @@ TEST(items_turn_where_they_lie_but_not_ammo_health_or_an_untouchable_one) {
                                                           {"weapon_railgun", false},
                                                           {"item_adrenaline", true}};
   CHECK(seen == want);
+}
+
+TEST(a_living_player_carries_his_weapon_for_others_and_a_dead_one_none) {
+  auto h = open_hall({}, "1");
+  run(*h, 6);
+  const sv::SequelServer& s = h->s();
+  const int carried = s.world.entities[1].carried_model;
+  CHECK(carried > 0 && size_t(carried) < s.models.size());
+  CHECK(s.models[size_t(carried)] == "#w_blaster.md2");
+  // The carried names, in a client's order (it numbers them from 1).
+  std::vector<std::string> names;
+  for (const std::string& m : s.models)
+    if (!m.empty() && m[0] == '#') names.push_back(m);
+  CHECK(names.size() == 11 && names[5] == "#a_grenades.md2" && names[10] == "#w_bfg.md2");
+  sv::fight_kill(h->s(), 0, -1, 0);
+  run(*h, 1);
+  CHECK(s.world.entities[1].carried_model == 0);
 }

@@ -590,6 +590,22 @@ TEST(both_looks_lay_every_page_out_clean) {
   pack.strip_print = 0xb378b8eec94a7f36ULL;
   CHECK(pieces(pack, pack.find("sp_menu")) == 4);  // DEMOS' L and m, SELECT GAME's G and m
   CHECK(pieces(pack, &pack.glyphs) < pieces(art, &art.glyphs));
+
+  // SELECT GAME's names: seven pieces of the strips for the first game, nine for the sequel's
+  // (its numeral), on the pack's strips; the stand-in's draw none and fall back to the pictures.
+  const auto names = [&](const sm::ClassicArt& a) {
+    sm::GamesPage page;
+    page.set_games({{.id = "classic", .install = "", .edition = ""},
+                    {.id = "sequel", .install = "", .edition = ""}});
+    DrawList dl;
+    dl.begin(1280, 720);
+    page.draw_classic(dl, a, 1280, 720, 0);
+    int n = 0;
+    for (const auto& c : dl.cmds()) n += c.box.image == a.find("mainmenu") ? 1 : 0;
+    return n;
+  };
+  CHECK(names(art) == 0);
+  CHECK(names(pack) == 8 + 7 + 9);  // the carved title's eight from the same strip
 }
 
 TEST(enhanced_pictures_draw_at_the_classic_sizes) {
