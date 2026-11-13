@@ -118,6 +118,13 @@ struct HopSkill {
   std::vector<float> hop_speed, gain;
 };
 struct Watch {
+  // FACING (se-people's rule, every 4th command alive): an enemy in a clear line within the bots'
+  // sight anywhere round (`seen`), and one of them on the 120-degree screen (`faced`), by the
+  // bot's mode and what wrote its view: the time an enemy in plain sight lies off the screen.
+  std::map<std::string, std::array<int64_t, 2>> facing;
+  // The time off the screen by where the nearest enemy in sight lies (beside, behind, over or
+  // under), how far, and whether he faces the bot (it in his own screen: coming at it).
+  std::map<std::string, int64_t> facing_off;
   std::ofstream* out = nullptr;                // the trace, when asked for
   shooters_edge::labs::WhyLog* log = nullptr;  // the decision log, when asked for (--why)
   int every = 4;
@@ -262,6 +269,30 @@ void watch_view(Watch& w, int k, double t, float yaw, const char* by) {
   wr.first += dt;
   if (std::fabs(rate) > 60 && std::fabs(v.rate) > 60 && rate * v.rate < 0) wr.second++;
   v = {t, yaw, rate};
+}
+
+void facing_metrics(gl::Lab& lab, const Watch& w) {
+  int64_t seen = 0, faced = 0;
+  for (const auto& [key, row] : w.facing) {
+    seen += row[0];
+    faced += row[1];
+  }
+  if (seen == 0) return;
+  lab.metric("team.facing.faced", static_cast<double>(faced) / static_cast<double>(seen), "share");
+  // Each mode and view writer: its share of the time an enemy is in sight, and of the time one
+  // is in sight off the screen.
+  int64_t off = 0;
+  for (const auto& [key, n] : w.facing_off) off += n;
+  for (const auto& [key, n] : w.facing_off)
+    lab.metric("team.facing-off." + key, static_cast<double>(n) / static_cast<double>(std::max<int64_t>(off, 1)),
+               "share");
+  for (const auto& [key, row] : w.facing) {
+    lab.metric("team.facing." + key + ".seen", static_cast<double>(row[0]) / static_cast<double>(seen),
+               "share");
+    if (seen > faced)
+      lab.metric("team.facing." + key + ".off",
+                 static_cast<double>(row[0] - row[1]) / static_cast<double>(seen - faced), "share");
+  }
 }
 
 void still_view_metrics(gl::Lab& lab, const Watch& w) {
@@ -668,6 +699,68 @@ void run(gl::Lab& lab) {
       tr.log->take(k, w.sv.time, sp, sh::pilot_mode_name(p.mode), link_of(p), e.origin.x,
                    e.origin.y, e.origin.z - 24, by);
     watch_view(tr, k, w.sv.time, cmd.angles.y, f.bot.view_by);
+    if (e.health > 0 && f.team != nullptr && (tr.count[static_cast<size_t>(k)] & 3) == 0) {
+      // se-people's FACING rule, on the server's truth.
+      const sh::Vec3f eye{e.origin.x, e.origin.y, e.origin.z + 22};
+      const sh::ViewAxes ax = sh::angle_vectors({cmd.angles.x, cmd.angles.y, 0});
+      const sh::Vec3f wide = sh::angle_vectors({0, 60.f, 0}).forward;
+      const sh::Vec3f high = sh::angle_vectors({0, 44.25f, 0}).forward;
+      bool seen = false, faced = false;
+      float near_d2 = 1e30f;
+      std::string near_key;
+      for (size_t j = 1; j < w.world.entities.size() && j <= 32 && !faced; j++) {
+        const int sl = static_cast<int>(j) - 1;
+        if (sl == f.slot || !w.world.clients[static_cast<size_t>(sl)].active ||
+            (f.team->friends >> sl & 1u) != 0)
+          continue;
+        const auto& o = w.world.entities[j];
+        if (o.health <= 0) continue;
+        const sh::Vec3f head{o.origin.x, o.origin.y, o.origin.z + 22};
+        const sh::Vec3f h = head - eye;
+        if (sh::dot(h, h) > 4096.f * 4096.f) continue;
+        const auto clear = [&](sh::Vec3f to) {
+          return sh::trace_move(w.sv, eye, {}, {}, to, sh::kTraceNoMonsters, -1).fraction >= 1;
+        };
+        if (!clear(head) && !clear(o.origin)) continue;
+        seen = true;
+        const float ahead = sh::dot(ax.forward, h);
+        faced = ahead > 0 && std::fabs(sh::dot(ax.right, h)) * wide.x <= ahead * wide.y &&
+                std::fabs(sh::dot(ax.up, h)) * high.x <= ahead * high.y;
+        if (!faced && sh::dot(h, h) < near_d2) {
+          near_d2 = sh::dot(h, h);
+          const float flat = std::sqrt(h.x * h.x + h.y * h.y);
+          const float cosf_ = flat > 1 ? (ax.forward.x * h.x + ax.forward.y * h.y) /
+                                             (flat * std::sqrt(ax.forward.x * ax.forward.x +
+                                                               ax.forward.y * ax.forward.y))
+                                       : 1.f;
+          const char* where = cosf_ > 0.5f ? "over-under" : cosf_ > -0.5f ? "beside" : "behind";
+          const float d = std::sqrt(sh::dot(h, h));
+          const char* far = d < 500 ? "near" : d < 1500 ? "mid" : "far";
+          const sh::ViewAxes his = sh::angle_vectors({o.view_angles.x, o.view_angles.y, 0});
+          const sh::Vec3f back = eye - head;
+          const float his_ahead = sh::dot(his.forward, back);
+          const bool at_me = his_ahead > 0 && std::fabs(sh::dot(his.right, back)) * wide.x <=
+                                                  his_ahead * wide.y;
+          // What the bot knows of him: seen within 2 s, heard within 1 s, or nothing.
+          const char* known = ".unknown";
+          for (const sh::Contact& ct : f.bot.senses.contacts) {
+            if (ct.ent != static_cast<int32_t>(j)) continue;
+            if (ge::ai::known(ct.seen) && ge::ai::age(ct.seen, w.sv.time) <= 2)
+              known = ".seen";
+            else if (ge::ai::known(ct.heard) && ge::ai::age(ct.heard, w.sv.time) <= 1)
+              known = ".heard";
+          }
+          near_key = std::string(where) + "." + far + (at_me ? ".coming" : ".unaware") + known;
+        }
+      }
+      if (seen && !faced && !near_key.empty()) tr.facing_off[near_key]++;
+      if (seen) {
+        auto& row = tr.facing[std::string(shooters_edge::bots::fight_mode_name(f.mode)) + "." +
+                              f.bot.view_by];
+        row[0]++;
+        row[1] += faced ? 1 : 0;
+      }
+    }
     if (e.health > 0) {
       tr.alive_commands++;
       const size_t side = f.team != nullptr && f.team->name == "blue" ? 1 : 0;
@@ -793,6 +886,7 @@ void run(gl::Lab& lab) {
   const double secs = r.seconds;
   hop_metrics(lab, watch);
   still_view_metrics(lab, watch);
+  facing_metrics(lab, watch);
   flights_by_mode(lab, watch, r, basedir, lab.arg("game"), name, o.packed);
   if (watch.log != nullptr) write_why(lab, why_log, r);
 
