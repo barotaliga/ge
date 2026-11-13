@@ -1007,6 +1007,12 @@ bool listen_lobby(Listen& l, std::string_view line) {
   return taken;
 }
 
+bool listen_say(Listen& l, const std::string& line) {
+  if (l.rules == nullptr || l.server == nullptr) return false;
+  l.rules->client_command(0, line);
+  return true;
+}
+
 bool listen_admin(Listen& l, const std::string& line, std::string& out) {
   if (!l.host || l.host->admin == nullptr || l.host->game == nullptr || l.match == nullptr)
     return false;

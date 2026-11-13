@@ -210,6 +210,7 @@ void server_data(Demo& d, DemoMsg& m) {
   s.player = std::max(0, m.i16());
   m.str();  // the level's full name
   s.levels++;
+  s.places = {};
   s.map.clear();
   s.models.assign(1, "");
   s.sounds.assign(1, "");
@@ -538,8 +539,10 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         if (!temp_entity(s, m, error)) return false;
         break;
       case kLayout:
-      case kStuffText:
         m.str();
+        break;
+      case kStuffText:  // a place name the recording kept read, the rest skipped
+        sh::read_recorded_loc(m.str(), s.places);
         break;
       case kInventory:
         m.skip(512);

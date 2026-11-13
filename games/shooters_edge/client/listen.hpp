@@ -355,6 +355,9 @@ double listen_tic(const Listen& l);
 // a campaign the last two seat and let go a companion (coop on: `coopgame` starts one so). False
 // when the line is none of them, or when no lobby runs (a line saying so is printed).
 bool listen_lobby(Listen& l, std::string_view line);
+// The player's chat line (`say "..."` or `say_team "..."`) on the window's own server, as slot 0
+// says it: false when no game is playing.
+bool listen_say(Listen& l, const std::string& line);
 // An administrator's line on the window's own server (`users`, `status`, `speedjump`: ListenHost's
 // `admin`): false when no match is hosted or the line is none of them, the answer in `out`.
 bool listen_admin(Listen& l, const std::string& line, std::string& out);

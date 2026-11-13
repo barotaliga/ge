@@ -529,7 +529,10 @@ int run_main(int argc, char** argv) {
     ge::shooter::Vec3f at{0, 0, 0};
     ge::shooter::Vec3f angles{0, 0, 0};                  // the view's, degrees
     const shooters_edge::server::BspMap* map = nullptr;  // its map's world (null: none read)
+    int kept_level = -1;    // the recording's level whose kept place names are in use
+    size_t kept_count = 0;  // how many of them
   } place_seen;
+  recorder.places = &places.locs;  // a recording keeps the place names it is played with
   // Where the view looks: 8,192 units along it from where the player stands, or the first solid.
   places.looked_at = [&listen, &place_seen](ge::shooter::Vec3f& at) {
     ge::shooter::Vec3f from, angles;
@@ -563,6 +566,25 @@ int run_main(int argc, char** argv) {
         at = listen.server->world.entities[1].origin;
         return true;
       });
+  // CHAT: the player's line to everyone or to the team, on the server joined or the window's own,
+  // its `%l` filled with the place the player is in before it goes (place_names.hpp).
+  for (const char* word : {"say", "say_team"})
+    console.add_command(
+        word,
+        std::string(word) + " <words>: " +
+            (std::string(word) == "say" ? "say it to everyone" : "say it to your team") +
+            " (%l: the place you are in)",
+        [&](Con& c, const CArgs& a) {
+          std::string text = a.rest(0);
+          if (text.size() >= 2 && text.front() == '"' && text.back() == '"')
+            text = text.substr(1, text.size() - 2);
+          if (text.empty()) return;
+          const std::string line = a[0] + " \"" + cl::fill_place_codes(places, text) + "\"";
+          if (remote.active)
+            sn::client_command(remote.end, line);
+          else if (!cl::listen_say(listen, line))
+            c.print("You need to be in a game to talk.");
+        });
   // DEMOS: the game's recordings anywhere on the machine, each checked before it plays.
   const auto demo_places = [&] {
     game_menu.demos().set_game_places(
@@ -1473,6 +1495,16 @@ int run_main(int argc, char** argv) {
       place_seen.at = {ds.eye.x, ds.eye.y, ds.eye.z - ds.view_height};
       place_seen.angles = ds.angles;
       place_seen.map = bench_map ? &bench_map->bsp : nullptr;
+      // The place names the recording kept (or the server stuffed) are the ones it played with:
+      // they stand in for any file while its level lasts.
+      if (!ds.places.points.empty() && (place_seen.kept_level != ds.levels ||
+                                        place_seen.kept_count != ds.places.points.size())) {
+        place_seen.kept_level = ds.levels;
+        place_seen.kept_count = ds.places.points.size();
+        places.locs = ds.places;
+        places.locs.from = "the recording";
+        places.map = ds.map;  // the level's start keeps them (map_started: the same map)
+      }
       if (step == cl::TimedemoStep::new_level) {
         // The game folder the recording's server ran, mounted when the window is not on it.
         std::vector<std::string> lines;

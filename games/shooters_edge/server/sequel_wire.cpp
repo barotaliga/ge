@@ -392,6 +392,12 @@ void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWi
     if (blocks.back().size() + one.size() + 64 > size_t(kSequelMaxBlock)) blocks.emplace_back();
     blocks.back().insert(blocks.back().end(), one.begin(), one.end());
   }
+  for (const std::string& line : opt.stuffed) {
+    if (blocks.back().size() + line.size() + 16 > size_t(kSequelMaxBlock)) blocks.emplace_back();
+    Out l{blocks.back()};
+    l.u8(kStuffText);
+    l.str(line);
+  }
   if (blocks.back().size() + 16 > size_t(kSequelMaxBlock)) blocks.emplace_back();
   Out o{blocks.back()};
   o.u8(kStuffText);

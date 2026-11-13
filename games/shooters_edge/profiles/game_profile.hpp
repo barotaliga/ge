@@ -105,8 +105,9 @@ struct GameProfile {
   // by name as `playdemo` takes them; "" none (the title's night stays).
   std::string_view attract;
   // How far a place name reaches by default, units (client/place_names.hpp's `loc_dist`): a point
-  // farther from the player than this is no place they are in; 0, no limit.
-  std::string_view place_range = "0";
+  // farther from the player than this is no place they are in (500 in every classic game); 0, no
+  // limit.
+  std::string_view place_range = "500";
   // Its client's place macros, `$loc_here` and `$loc_there` (client/place_names.hpp).
   bool place_macros = false;
 };
@@ -168,7 +169,6 @@ inline constexpr GameProfile kGameProfiles[] = {
      .weapon_groups = kSequelGroups,
      .rules_campaign = true,
      .attract = "",  // its recordings do not play yet
-     .place_range = "500",
      .place_macros = true},
 };
 

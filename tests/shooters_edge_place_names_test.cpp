@@ -1,8 +1,9 @@
 // The window's place names (games/shooters_edge/client/place_names.hpp): places added where the
 // player stands, removed nearest first, saved under the game folder in the shared format and read
 // back by name and when the map starts; the same map again keeps unsaved edits; a name that would
-// leave the folder refused; no game, no adding; a place reaches loc_dist (500 units in the
-// sequel, any distance in the first game); the sequel's `$loc_here` and `$loc_there`.
+// leave the folder refused; no game, no adding; a place reaches loc_dist (500 units in
+// every classic game); the sequel's `$loc_here` and `$loc_there`; a file in any letter case; `%l`
+// in chat.
 //
 // ge:summary Tests the window's place names: added, removed, saved, read at map start
 // ge:keywords test shooters-edge place-names addloc saveloc loadloc removeloc map_started loc_dist
@@ -109,7 +110,7 @@ TEST(the_sequel_s_loc_sub_commands_edit_the_same_places) {
   CHECK(p.locs.points.empty());
 }
 
-TEST(a_classic_place_reaches_any_distance) {
+TEST(a_classic_place_reaches_500_units_too) {
   ge::console::Console con;
   cl::PlaceNames p;
   p.game_dir = fs::temp_directory_path() / "ge_se_place_names_three";
@@ -118,8 +119,11 @@ TEST(a_classic_place_reaches_any_distance) {
     at = {9000, 0, 0};
     return true;
   });
-  CHECK(p.range != nullptr && p.range->value == "0");
+  CHECK(p.range != nullptr && p.range->value == "500");
   p.locs.points.push_back({.name = "start", .at = {0, 0, 0}, .raw = "start"});
+  con.execute("removeloc");
+  CHECK(p.locs.points.size() == 1);  // too far off
+  con.execute("loc_dist 0");
   con.execute("removeloc");
   CHECK(p.locs.points.empty());
 }
@@ -158,4 +162,40 @@ TEST(the_first_game_has_no_place_macros) {
     return true;
   });
   CHECK(con.expand_text("$loc_here") == "$loc_here");
+}
+
+TEST(a_loc_file_is_found_whatever_its_letter_case) {
+  const fs::path game = fs::temp_directory_path() / "ge_se_place_names_five";
+  fs::remove_all(game);
+  fs::create_directories(game / "LOCS");
+  std::ofstream(game / "LOCS" / "DM6.Loc") << "0 0 0 tower\n";
+  ge::console::Console con;
+  cl::PlaceNames p;
+  p.game_dir = game;
+  cl::SearchPath files;
+  cl::add_place_commands(con, p, cl::classic_adapter(), files, [](ge::shooter::Vec3f& at) {
+    at = {0, 0, 0};
+    return true;
+  });
+  cl::map_started(p, cl::classic_adapter(), files, "dm6");
+  CHECK(p.locs.points.size() == 1 && p.locs.points[0].name == "tower");
+  fs::remove_all(game);
+}
+
+TEST(a_chat_line_s_percent_l_becomes_the_place_the_player_is_in) {
+  ge::console::Console con;
+  cl::PlaceNames p;
+  cl::SearchPath files;
+  bool playing = true;
+  ge::shooter::Vec3f here{10, 0, 0};
+  cl::add_place_commands(con, p, cl::classic_adapter(), files, [&](ge::shooter::Vec3f& at) {
+    at = here;
+    return playing;
+  });
+  p.locs.points.push_back({.name = "ra room", .at = {0, 0, 0}, .raw = "ra room"});
+  CHECK(cl::fill_place_codes(p, "safe %l, 100%") == "safe ra room, 100%");
+  here = {4000, 0, 0};
+  CHECK(cl::fill_place_codes(p, "help %l") == "help someplace");
+  playing = false;
+  CHECK(cl::fill_place_codes(p, "%l%l") == "someplacesomeplace");
 }
