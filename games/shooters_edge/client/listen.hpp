@@ -71,6 +71,7 @@
 #include "net/transport.hpp"
 #include "progs/file.hpp"
 #include "server/server.hpp"
+#include "shooter/aim_turn.hpp"
 #include "shooter/pmove.hpp"
 #include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/client/campaign_view.hpp"
@@ -251,10 +252,11 @@ struct Listen {
   CampaignView campaign;     // the program's client messages (campaign_view.hpp)
   double entered_at = 0;     // the server's time the player entered this map, s
   uint32_t sequence = 0;
-  sh::MoveCmd cmds[3];  // the three newest, oldest first
-  double owed = 0;      // wall seconds not yet run, s
-  int64_t frames = 0;   // server frames run on this map
-  sh::Vec3f view;       // the player's view angles, degrees (his aim)
+  sh::MoveCmd cmds[3];   // the three newest, oldest first
+  double owed = 0;       // wall seconds not yet run, s
+  int64_t frames = 0;    // server frames run on this map
+  sh::Vec3f view;        // the player's view angles, degrees (his aim)
+  sh::AimTurn aim_turn;  // the aim help's turn of the view (shooter/aim_turn.hpp)
   // The easy jump (shooter/speedjump_assist.hpp): the aid strafing for him while his slot asks
   // (`cl_speedjump 1`), at the server's pm_speedjump; `speedjump_view` of its swing is drawn.
   sh::SpeedJumpAid jump_aid;
@@ -390,6 +392,10 @@ struct PlayerState {
   float health = 0;
 };
 PlayerState player_state(const Listen& l);
+
+// The aim help's turn for the player (slot 0): his eye, and the middle of the player `target`
+// (an entity) when that one is alive in the world; false when he is gone.
+bool aim_turn_points(const Listen& l, int target, sh::Vec3f& eye, sh::Vec3f& middle);
 
 // A missile in flight (an entity of class rocket, grenade or spike), map units.
 struct Missile {

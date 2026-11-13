@@ -69,6 +69,7 @@
 #include "console/console.hpp"
 #include "input/state.hpp"
 #include "net/transport.hpp"
+#include "shooter/aim_turn.hpp"
 #include "shooter/predict.hpp"
 #include "shooter/predict_original.hpp"
 #include "shooter/speedjump_assist.hpp"
@@ -117,6 +118,7 @@ struct Remote {
   int others_msec = 0;        // the most milliseconds one of them was run forward the last step
   int lerped = 0;             // entities drawn between two frames the last step
   sh::Vec3f view;             // the player's angles, degrees (sent with every move)
+  sh::AimTurn aim_turn;       // the aim help's turn of the view (shooter/aim_turn.hpp)
   sh::Vec3f prediction;       // the player's predicted origin, the correction not added
   sh::MoveState ahead;        // the player's whole predicted state (the easy jump's help reads it)
   sh::SpeedJumpAid jump_aid;  // the easy jump's memory (shooter/speedjump_assist.hpp)

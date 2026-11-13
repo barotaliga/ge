@@ -266,7 +266,9 @@ void record_packet(ClientRecorder& r, double time, std::span<const uint8_t> head
                    std::span<const std::pair<size_t, size_t>> messages) {
   std::vector<uint8_t> kept(header.begin(), header.end());
   for (const auto& [from, to] : messages) {
-    if ((payload[from] == svc::ge_point || payload[from] == svc::ge_trail) && !r.live) {
+    if ((payload[from] == svc::ge_point || payload[from] == svc::ge_trail ||
+         payload[from] == svc::ge_aim) &&
+        !r.live) {
       r.stripped++;
       continue;
     }

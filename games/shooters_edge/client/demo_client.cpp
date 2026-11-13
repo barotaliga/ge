@@ -731,6 +731,14 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         s.effects.push_back(std::move(e));
         break;
       }
+      case 122:  // the game's own: the aim help bent this player's shot onto an entity
+        if (!d.named_effects) {
+          error = "message id 122 is not one this reader knows";
+          ok = false;
+          break;
+        }
+        s.aim_bend = m.i16();
+        break;
       default:
         error = "message id " + std::to_string(id) + " is not one this reader knows";
         ok = false;

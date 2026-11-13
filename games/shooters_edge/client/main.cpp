@@ -1583,6 +1583,11 @@ int run_main(int argc, char** argv) {
     if (listen.server != nullptr) {
       const cl::PlayerState me = cl::player_state(listen);
       cl::spring_view(played, controls, me.on_ground, cmd, me.ideal_pitch, wall, listen.view);
+      // The aim help's turn: toward the player a shot of his was bent onto, while he fires.
+      ge::shooter::Vec3f eye, middle;
+      const bool seen = cl::aim_turn_points(listen, listen.aim_turn.target, eye, middle);
+      cl::aim_turn_view(controls, listen.aim_turn, listen.view, eye, seen ? &middle : nullptr,
+                        (cmd.buttons & ge::shooter::kButtonAttack) != 0, wall);
     }
     if (cmd.impulse != 0) listen.impulse = cmd.impulse;
     // A single-player game waits while the console or the menu is up.

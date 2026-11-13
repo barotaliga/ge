@@ -81,6 +81,14 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
                     .kind = ge::console::CvarKind::boolean,
                     .values = "0: it stays (the default); 1: it centres"},
                    &c.lookspring);
+  con.cvars().bind({.name = "cl_aimhelp_turn",
+                    .fallback = "1",
+                    .flags = ge::console::kArchive,
+                    .help = "Whether your view turns toward the player the aim help helps you hit.",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: the view stays where you aim; 1: it turns while you fire and "
+                              "comes back after (the default)"},
+                   &c.aim_turn);
   con.cvars().bind({.name = "cl_run",
                     .fallback = "1",
                     .flags = ge::console::kArchive,
@@ -273,6 +281,18 @@ ge::shooter::MoveCmd read_controls(const Moves& m, const ge::input::InputState& 
 
 ge::shooter::MoveCmd read_controls(const ge::input::InputState& in, const ControlSettings& c) {
   return read_controls(key_moves(in), in, c);
+}
+
+void aim_turn_view(const ControlSettings& c, ge::shooter::AimTurn& turn, ge::shooter::Vec3f& view,
+                   ge::shooter::Vec3f eye, const ge::shooter::Vec3f* target_at, bool attack,
+                   double dt) {
+  if (!c.aim_turn) {  // off: the turn held is given back now
+    view.x -= turn.pitch;
+    view.y -= turn.yaw;
+    turn = {};
+    return;
+  }
+  ge::shooter::aim_turn_step(turn, view, eye, target_at, attack, static_cast<float>(dt));
 }
 
 }  // namespace shooters_edge::client

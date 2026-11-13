@@ -397,6 +397,7 @@ DemoRead next_frame(Demo& d, std::string& error) {
   d.state.effects.clear();
   d.state.centre.clear();
   d.state.set_angles = 0;
+  d.state.aim_bend = -1;
   if (d.state.format == DemoFormat::client) return next_client(d, error);
   if (d.state.format == DemoFormat::sequel) return next_sequel(d, error);
   if (d.state.format == DemoFormat::multiview) {

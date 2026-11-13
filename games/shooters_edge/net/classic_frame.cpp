@@ -187,6 +187,12 @@ void route_event(ClassicServer& s, const sv::NetEvent& ev) {
                     ev.values[0], ev.values[1], ev.values[2]};
         unreliable_svc(s, j, m);
         break;
+      case sv::EventKind::aim_bend:  // to the game's own client only: a classic one has no use
+        if (!c.ext.has(ExtFamily::ge, kGeAimBend)) break;
+        m.id = svc::ge_aim;
+        m.ints = {ev.ent};
+        unreliable_svc(s, j, m);
+        break;
       case sv::EventKind::ambient:
         m.id = svc::spawnstaticsound;
         m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
