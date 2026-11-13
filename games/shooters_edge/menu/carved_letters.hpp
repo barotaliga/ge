@@ -4,7 +4,7 @@
 // code: when the pack loads, every letter the table knows is cut out of the strips into its own
 // picture, each piece of it holding only the letter's own pixels (a speck a piece's box caught of
 // a neighbour, a part under `kSpeck` pixels, is left out), and set on the strips' common line;
-// `carved_text` lays a word out from them, a pixel between letters as the strips space them.
+// `carved_layout` lays a word out from them, spaced as the strips space theirs.
 //
 // The table was measured on one set of strips, named by their print (`ClassicArt::strip_print`);
 // on any other set no letter is cut and the caller writes the word in the glyph sheet instead.
@@ -17,20 +17,25 @@
 #pragma once
 
 #include <string_view>
+#include <vector>
 
 #include "shooters_edge/menu/classic_art.hpp"
 
 namespace shooters_edge::menu {
 
-// A carved word's line: 20 classic px, the small capitals from row 3 to row 15, a capital from
-// row 1 (row 0 for the tall S and G), the Q's tail below.
-inline constexpr float kCarvedLine = 20;
+// A carved word's line: 24 classic px, measured on the strips: the small capitals on rows 3 to 15,
+// a capital on rows 1 to 16, and below the line the t's stem (to 18), the G's tail (to 22) and the
+// Q's (to 23). A row is 20 px; the tails hang into the next row's empty top.
+inline constexpr float kCarvedLine = 24;
 
 // Cuts every letter the table knows from `art`'s strips into `art->letters` (at the art's density)
 // when the strips are the ones it was measured on; clears them otherwise.
 void cut_letters(ClassicArt* art);
 
-// `text`'s width in classic px set in the carved letters, a space 6 px; 0 when a letter is not cut.
+// `text` set in the carved letters: each letter's left edge (classic px from the word's) into
+// `xs` when it is given, by the strips' measured spacing (a pixel between letters, a space 5 px
+// before a round capital and 10 before a stem); the word's width, 0 when a letter is not cut.
+float carved_layout(const ClassicArt& art, std::string_view text, std::vector<float>* xs);
 float carved_text_width(const ClassicArt& art, std::string_view text);
 
 }  // namespace shooters_edge::menu

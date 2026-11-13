@@ -594,13 +594,13 @@ TEST(both_looks_lay_every_page_out_clean) {
   };
   // The pack's strips stood in by solid ones of their size, so every letter's box is cut whole.
   sm::ClassicArt pack = art;
-  pack.pictures["mainmenu"] = make_image(240, 100, hex(0x804020));
-  pack.pictures["sp_menu"] = make_image(240, 60, hex(0x804020));
+  pack.pictures["mainmenu"] = make_image(240, 112, hex(0x804020));
+  pack.pictures["sp_menu"] = make_image(232, 64, hex(0x804020));
   pack.strip_print = 0xb378b8eec94a7f36ULL;
   sm::cut_letters(&pack);
   CHECK(pack.letters.size() == 15);
-  // Every letter its own columns, on the 20 px line.
-  for (const auto& [ch, img] : pack.letters) CHECK(img.height == 20 && img.width > 0);
+  // Every letter its own columns, on the 24 px line (the tails below the 20 px row).
+  for (const auto& [ch, img] : pack.letters) CHECK(img.height == 24 && img.width > 0);
   CHECK(root(art, nullptr).second == 0);
   CHECK(root(pack, nullptr).second == 5 + 10);  // DEMOS, SELECT GAME (the space no picture)
   CHECK(root(pack, &pack.glyphs).first < root(art, &art.glyphs).first);
