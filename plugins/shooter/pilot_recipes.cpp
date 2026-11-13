@@ -103,7 +103,7 @@ bool recipe_choose(Pilot& p, const PilotSense& s, float way, int32_t end) {
   }
   std::sort(best.begin(), best.begin() + n,
             [](const Near& a, const Near& b) { return a.score < b.score; });
-  MoveSettings move;
+  MoveSettings move = p.g->move;
   move.maxspeed = s.maxspeed;
   for (int c = 0; c < n; c++) {
     const Near& pick = best[static_cast<size_t>(c)];

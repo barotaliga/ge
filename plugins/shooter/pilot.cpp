@@ -836,7 +836,7 @@ bool lip_ahead(const MoveWorld& world, Vec3f o, Vec3f v, int msec) {
 // a keyboard pressed a command or two late too, flown by the move from here.
 bool jump_flies(const Pilot& p, const PilotSense& s, int msec, Vec3f T) {
   if (s.world == nullptr) return false;
-  MoveSettings move;
+  MoveSettings move = p.g->move;
   move.maxspeed = s.maxspeed;
   if (!gap_lands(*s.world, move, s.origin, s.velocity, T, msec, p.set.gap_past, p.set.gap_strafe))
     return false;
@@ -2355,7 +2355,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
              speed > kSlow) {
     // A HOP THAT FALLS: a hop's jump whose flight (forward along the run) comes down under the
     // floor it leaves, into a pit beside the way, is not pressed: run on (unless the lip is here).
-    MoveSettings move;
+    MoveSettings move = p.g->move;
     move.maxspeed = s.maxspeed;
     const Vec3f aim{s.origin.x + s.velocity.x, s.origin.y + s.velocity.y, s.origin.z};
     // `pilotcast`: flown by a copy of the pilot (its strafe, its view, its hands), not forward.
