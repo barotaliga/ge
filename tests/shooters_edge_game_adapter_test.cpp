@@ -24,6 +24,7 @@
 
 #include "assets/image.hpp"
 #include "assets/iqm.hpp"
+#include "assets/pcx.hpp"
 #include "assets/test_model.hpp"
 #include "assets/tga.hpp"
 #include "audio/wav.hpp"
@@ -349,6 +350,43 @@ TEST(a_picture_file_of_a_menu_pictures_name_stands_in_for_it) {
   CHECK(big->rgba[0] == 200 && big->rgba[3] == 0 && big->rgba[7] == 0);  // one texel, two pixels
   const ge::ui::Image* kept = stood.menu.find("ttl_main");
   CHECK(kept != nullptr && kept->rgba == ge::ui::scaled_nearest(*title, 2).rgba);
+}
+
+TEST(the_sequel_s_menu_pictures_are_read_from_its_pics_folder) {
+  // The sequel's glyph sheet and main menu pictures as its own PCX files, the last colour clear.
+  const auto pcx = [](int w, int h) {
+    as::IndexedImage img;
+    img.width = w;
+    img.height = h;
+    img.indices.assign(size_t(w) * size_t(h), 7);
+    img.indices[0] = 255;
+    img.palette.assign(768, 90);
+    return as::encode_pcx(img);
+  };
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> listed = {
+      {"pics/conchars.pcx", pcx(128, 128)},          {"pics/m_main_game.pcx", pcx(99, 32)},
+      {"pics/m_main_multiplayer.pcx", pcx(215, 32)}, {"pics/m_main_options.pcx", pcx(150, 32)},
+      {"pics/m_main_quit.pcx", pcx(100, 32)},        {"pics/m_main_plaque.pcx", pcx(38, 166)},
+      {"pics/m_cursor3.pcx", pcx(22, 29)},           {"pics/m_banner_options.pcx", pcx(275, 32)}};
+  const auto read = [&](bool video) {
+    auto all = listed;
+    if (video) all.push_back({"pics/m_main_video.pcx", pcx(118, 32)});
+    std::vector<uint8_t> pak;
+    std::string error;
+    CHECK(ge::vfs::write_pak(all, &pak, &error));
+    cl::SearchPath files;
+    CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+    const cl::GameAdapter& a = cl::sequel_adapter();
+    return a.pictures(a, files, false, {}).menu;
+  };
+  const shooters_edge::menu::ClassicArt art = read(true);
+  CHECK(art.plates() && !art.loaded() && art.screen_height() == 240);
+  const ge::ui::Image* game = art.find("m_main_game");
+  CHECK(game != nullptr && game->width == 99 && game->rgba[3] == 0 && game->rgba[7] == 255);
+  CHECK(art.find("m_cursor3") != nullptr && art.find("m_banner_options") != nullptr);
+  // The words cut from the five plates are cut only when all five were read: their print.
+  CHECK(art.strip_print != 0);
+  CHECK(read(false).strip_print == 0);
 }
 
 TEST(a_config_file_in_the_games_packs_runs_through_exec_after_the_players_own) {

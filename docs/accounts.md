@@ -217,6 +217,13 @@ server: a guest whose folded name is an account's plays under `sv_defaultname` (
 is taken) and is told the name is registered and to log in to use it; a logged-in player is always shown by their account's name when
 `sv_loginname` is 1. A player may not take a name while another seat holds it logged in.
 
+A server whose master is elsewhere does not hold the accounts, so it asks the master (`name`: the
+name folded by the game's rules, answered with the account that reserves it). The name is let go
+while the master answers, a fraction of a second; if an account holds it, the guest is renamed
+then and told why (a player still connecting is told on joining). The answer is kept while the
+server runs (up to 256 names), so a name is asked once, and a name the master did not answer is
+asked again the next time it is used.
+
 ## The settings
 
 This row owns the classic login settings the server-settings work (M58) held out. Ours, with the
@@ -289,7 +296,7 @@ The JSON API: `/v1/players/{name}`, `/v1/matches?game=&mode=&player=&page=`, `/v
 | M59b2 | The game CLI's `account` group (built) | `accounts` |
 | M59b3 | The hub's Account page (built) | `hub-pages` |
 | M59c | The login seam in `engine/server` (`server/login.hpp`), the settings above, a dedicated server that is its own master; the first classic game's prompt and `login` line (built) | `se-login` |
-| M59c2 | Our client's ticket in its connect; reserved names on a server whose master is elsewhere (a name ask); logins on a listen server and in a coop campaign | `se-login` |
+| M59c2 | Our client logs itself in by its ticket; reserved names on a server whose master is elsewhere (a name ask); logins on a listen server and in a coop campaign | `se-login` |
 | M59d | The sequel's prompt and `login` line, one account logged in on both games' servers | `se-login` |
 | M59e | The match report, the replay file's closing summary, the master's totals, trusted servers | `match-report` |
 | M59f | The hub's Player, Match and Leaders pages and their API; the classic adapter's recent stats | `hub-players` |

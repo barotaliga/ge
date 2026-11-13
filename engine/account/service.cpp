@@ -99,6 +99,13 @@ Answer run(Service& svc, Op op, const std::vector<std::string>& f, const net::Ad
         }
       }
       break;
+    case Op::name:
+      if (need(1)) {
+        const auto it = s.keys.find(f[0]);
+        const Account* acc = it != s.keys.end() ? find(s, it->second) : nullptr;
+        a.id = acc != nullptr ? acc->id : 0;
+      }
+      break;
   }
   if (a.refusal == Refusal::none && (op == Op::sign_in || op == Op::login)) {
     const Account* acc = find(s, a.id);
@@ -147,6 +154,8 @@ const char* op_name(Op op) {
       return "recover";
     case Op::ticket_code:
       return "ticket-code";
+    case Op::name:
+      return "name";
   }
   return "?";
 }
@@ -221,7 +230,7 @@ bool service_read(Service& svc, const uint8_t* data, size_t size, const net::Add
   const uint8_t count = net::read_u8(b);
   std::vector<std::string> fields;
   for (uint8_t i = 0; i < count && i < 8 && !b.bad; i++) fields.push_back(read_text(b));
-  if (b.bad || op_byte < 1 || op_byte > 6 || count > 8) {
+  if (b.bad || op_byte < 1 || op_byte > 7 || count > 8) {
     svc.stats.refused++;
     return true;
   }
