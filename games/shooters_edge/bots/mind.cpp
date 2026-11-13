@@ -620,6 +620,9 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
         }
       }
       break;
+    case SayKind::trap:
+      f.trap_told = t;  // the floor trap's floor away: off it and its teleporters a while
+      break;
     case SayKind::help:
       if (has_place) {
         mn.help_at = p;

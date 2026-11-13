@@ -899,6 +899,8 @@ void watch_bridges(Fighter& f, const server::RulesCommon& s) {
     bool in = false;
     if (b.floor) {
       in = dist(o, b.spawn) >= 1;  // a floor door: there only at rest
+      // (`floortrap`) or a mate just called it gone (`trap`), unseen yet
+      if (f.features[sh::Feature::floortrap] && s.sv.time - f.trap_told < kTrapTold_s) in = true;
     } else {
       // A bridge: a floor only all the way out where the map drew it, and not in the last
       // moments of its wait (it goes back from under whoever is on it: dm2's red armour's).
@@ -1312,11 +1314,11 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     go_to(f, f.objective);  // the way through the map (way_through.hpp) before any item
     f.goal_item = -1;       // and no item's errand (a shot at its button) kept from before
     f.unlocking = false;
-  } else if (!escaping && f.trap_press >= 0) {
-    // A floor trap's button, an enemy on its floor (floor_trap.hpp).
-    go_to(f, f.button_spots[static_cast<size_t>(
-                                f.floor_traps[static_cast<size_t>(f.trap_press)].button)]
-                 .node);
+  } else if (!escaping && (f.trap_press >= 0 || f.trap_stay >= 0)) {
+    // A floor trap's button, an enemy on its floor, or held at it while the floor is away
+    // (floor_trap.hpp).
+    const int32_t k = f.trap_press >= 0 ? f.trap_press : f.trap_stay;
+    go_to(f, f.button_spots[static_cast<size_t>(f.floor_traps[static_cast<size_t>(k)].button)].node);
   } else if (!escaping && f.door_button >= 0) {
     go_to(f, f.button_spots[static_cast<size_t>(f.door_button)].node);  // a shut door's button
   } else if (near >= 0) {

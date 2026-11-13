@@ -448,6 +448,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
                              : d.watertype == sh::kContentsSlime ? "slime"
                              : d.watertype == sh::kContentsWater ? "water"
                                                                  : "-";
+        if (d.watertype == sh::kContentsLava || d.watertype == sh::kContentsSlime) p.lava_deaths++;
         // And its way in: where it was 2, 1 and a half second before.
         std::string way;
         for (const double ago : {3.0, 2.5, 2.0, 1.5, 1.0, 0.5}) {
