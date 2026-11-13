@@ -174,6 +174,26 @@ TEST(scripted_clients_sign_on_and_play_under_every_preset) {
                                      "else compare make lab LAB=se-net runs before and after");
 }
 
+TEST(a_client_fetches_the_model_folder_it_wears_from_a_server_that_reads_it_on_demand) {
+  // The first client wears `model cyborg`, `skin oni911`; the server holds that folder, the map's
+  // .lit (beside the map) and .loc only on disk (read on demand) and nobody has them, so every
+  // client fetches the figure, its skin, the light (as lits/arena.lit) and the place names.
+  cn::TrialOptions o;
+  o.clients = 2;
+  o.seconds = 12;
+  o.figures = true;
+  const cn::TrialReport r = cn::run_classic_trial(o);
+  CHECK_MSG(r.ok, r.error);
+  for (const cn::TrialClient& c : r.clients) {
+    CHECK_MSG(c.stage == "active", c.name + " ended at " + c.stage);
+    CHECK_MSG(c.downloads == c.files, c.name + " fetched a damaged file");
+    CHECK_MSG(c.downloads >= 4, c.name + " fetched " + std::to_string(c.downloads) +
+                                    " files, short of the model folder, its skin and the map's "
+                                    "light and place names; next: "
+                                    "make lab LAB=se-net and read the downloads");
+  }
+}
+
 TEST(out_of_band_answers_and_rejects) {
   auto owned = std::make_unique<Rig>();
   Rig& rig = *owned;

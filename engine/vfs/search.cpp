@@ -222,6 +222,26 @@ bool add_directory(SearchPath* sp, const std::string& dir, const std::string& ga
   return true;
 }
 
+bool add_file(SearchPath* sp, const std::string& dir, const std::string& name,
+              const std::string& game, std::string* error) {
+  std::error_code ec;
+  const fs::path at = fs::path(dir) / name;
+  const uintmax_t size = fs::file_size(at, ec);
+  if (ec || !fs::is_regular_file(at, ec)) {
+    if (error) *error = "vfs: " + at.string() + " is not a file";
+    return false;
+  }
+  Source s;
+  s.kind = SourceKind::directory;
+  s.path = dir;
+  s.game = game;
+  s.files = {name};
+  s.file_sizes = {uint64_t(size)};
+  sp->sources.push_back(std::move(s));
+  index_source(*sp, uint32_t(sp->sources.size() - 1));
+  return true;
+}
+
 std::vector<std::string> game_archives(const std::string& root, const std::string& game,
                                        const GameLayout& layout) {
   const fs::path dir = fs::path(root) / game;

@@ -54,6 +54,7 @@ std::string userinfo_of(const ClassicClientEnd& c) {
   std::string u;
   info_set(u, "name", c.cfg.name);
   info_set(u, "skin", c.cfg.skin);
+  if (!c.cfg.model.empty()) info_set(u, "model", c.cfg.model);
   info_set(u, "topcolor", std::to_string(c.cfg.topcolor));
   info_set(u, "bottomcolor", std::to_string(c.cfg.bottomcolor));
   info_set(u, "rate", std::to_string(c.cfg.rate));
@@ -84,7 +85,15 @@ void send_connect(ClassicClientEnd& c) {
 bool has_file(const ClassicClientEnd& c, const std::string& path) {
   for (const std::string& f : c.cfg.files)
     if (f == path) return true;
-  return c.downloaded.count(path) != 0;
+  if (c.downloaded.count(path) != 0) return true;
+  return c.cfg.read_file && !c.cfg.read_file(c.gamedir, path).empty();
+}
+
+// A name a player chose that may stand in a path: not empty, no climbing, no drive or backslash;
+// a folder's (`model`) no '/' either, a skin's may hold one.
+bool plain_name(const std::string& n, bool slash = false) {
+  return !n.empty() && n[0] != '.' && n.find("..") == std::string::npos &&
+         n.find_first_of(slash ? "\\:" : "/\\:") == std::string::npos;
 }
 
 void next_skin_or_begin(ClassicClientEnd& c) {
@@ -92,6 +101,9 @@ void next_skin_or_begin(ClassicClientEnd& c) {
     const std::string path = c.wanted_skins.front();
     c.wanted_skins.erase(c.wanted_skins.begin());
     if (has_file(c, path)) continue;
+    // A first-game figure asked for only when the server had no second-game one.
+    if (path.ends_with("/tris.mdl") && has_file(c, path.substr(0, path.size() - 4) + ".md2"))
+      continue;
     c.dl = ClientDownload{};
     c.dl.name = path;
     c.dl.active = true;
@@ -115,13 +127,34 @@ void next_skin_or_begin(ClassicClientEnd& c) {
 
 void start_skins(ClassicClientEnd& c) {
   c.wanted_skins.clear();
+  const auto want = [&c](const std::string& path) {
+    for (const std::string& w : c.wanted_skins)
+      if (w == path) return;
+    if (!has_file(c, path)) c.wanted_skins.push_back(path);
+  };
   for (const std::string& u : c.userinfos) {
-    const std::string skin = info_get(u, "skin");
-    if (u.empty() || skin.empty()) continue;
-    const std::string path = "skins/" + skin + ".pcx";
-    bool dup = false;
-    for (const std::string& w : c.wanted_skins) dup = dup || w == path;
-    if (!dup && !has_file(c, path)) c.wanted_skins.push_back(path);
+    if (u.empty() || !c.cfg.fetch_looks) continue;
+    std::string skin = info_get(u, "skin"), model = info_get(u, "model");
+    for (std::string* n : {&skin, &model})
+      for (char& ch : *n) ch = ch >= 'A' && ch <= 'Z' ? char(ch - 'A' + 'a') : ch;
+    if (skin.size() > 4 && skin.ends_with(".pcx")) skin.resize(skin.size() - 4);
+    if (plain_name(skin, true)) want("skins/" + skin + ".pcx");
+    if (!plain_name(model)) continue;
+    const std::string folder = "players/" + model + "/";
+    want(folder + "tris.md2");
+    want(folder + "tris.mdl");
+    if (plain_name(skin)) want(folder + skin + ".pcx");
+  }
+  // The map's extras: its name from the model list's first map ("maps/dm4.bsp").
+  const std::string& world = c.models.size() >= 2 ? c.models[1] : std::string();
+  if (world.starts_with("maps/") && world.ends_with(".bsp")) {
+    const std::string map = world.substr(5, world.size() - 9);
+    if (plain_name(map)) {
+      if (c.cfg.fetch_lit && !has_file(c, "maps/" + map + ".lit") &&
+          !has_file(c, "maps/lits/" + map + ".lit"))
+        want("lits/" + map + ".lit");
+      if (c.cfg.fetch_locs) want("locs/" + map + ".loc");
+    }
   }
   next_skin_or_begin(c);
 }
@@ -130,6 +163,7 @@ void finish_download(ClassicClientEnd& c, bool ok) {
   if (ok) {
     c.dl.bytes.resize(static_cast<size_t>(c.dl.size));
     c.downloaded[c.dl.name] = c.dl.bytes;
+    if (c.cfg.keep_file) c.cfg.keep_file(c.gamedir, c.dl.name, c.dl.bytes);
     if (c.dl.chunked) client_command(c, "nextdl -1 100 " + std::to_string(c.dl.number));
   }
   c.dl = ClientDownload{};

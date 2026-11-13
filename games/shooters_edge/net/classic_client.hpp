@@ -79,7 +79,8 @@ inline constexpr size_t kStuffedKept = 256;
 struct ClientConfig {
   std::string name = "player";
   std::string skin = "base";
-  std::string team;  // the user info's team ("": none)
+  std::string model;  // the user info's `model`: the player figure in players/<model>/ ("": none)
+  std::string team;   // the user info's team ("": none)
   int topcolor = 0, bottomcolor = 0;
   int rate = 25000;
   bool spectator = false;
@@ -91,6 +92,21 @@ struct ClientConfig {
   ClientExtMode mode = ClientExtMode::lines;
   Ext ask = first_tier();          // what it understands
   std::vector<std::string> files;  // the files it already has ("skins/base.pcx")
+  // THE LOOKS FETCHED: during the signon it asks for each player's skin (`skins/<skin>.pcx`) and
+  // named figure (`players/<model>/tris.md2`, else `tris.mdl`, and its `<skin>.pcx`) that it
+  // lacks (`files`, `read_file`, what it fetched). Off (`noskins 2`): nothing is asked for.
+  bool fetch_looks = true;
+  // THE MAP'S EXTRAS FETCHED, after the looks, only when lacking and only while what they serve is
+  // on: its coloured light (`lits/<map>.lit`; none when `maps/<map>.lit` or `maps/lits/<map>.lit`
+  // is there; the window's `r_loadlit`) and its place names (`locs/<map>.loc`; `tp_loadlocs`).
+  // Off unless asked (the window's join turns them on by those settings).
+  bool fetch_lit = false;
+  bool fetch_locs = false;
+  // A file fetched, handed on to be kept (the window writes it into the game's folder);
+  // `downloaded` holds it either way.
+  std::function<void(const std::string& gamedir, const std::string& path,
+                     const std::vector<uint8_t>& bytes)>
+      keep_file;
   // The game's file at `path` ("maps/dm4.bsp") in the server's game folder `gamedir`, empty when
   // it has none. The first `prespawn` carries the map's checksum off it (classic_mapsum.hpp); with
   // no reader or no file it carries 0, which a server checking maps refuses. Before it, the client

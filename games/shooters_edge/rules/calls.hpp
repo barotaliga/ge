@@ -55,10 +55,13 @@ struct Q {
   int32_t self() const { return gi(L.g.self); }
   void set_self(int32_t e) { set_gi(L.g.self, e); }
   int32_t other() const { return gi(L.g.other); }
+  void set_other(int32_t e) { set_gi(L.g.other, e); }
   int32_t world() const { return gi(L.g.world); }
   float time() const { return gf(L.g.time); }
   int32_t mapname() const { return gi(L.g.mapname); }
   Vec3 v_forward() const { return gv(L.g.v_forward); }
+  Vec3 v_right() const { return gv(L.g.v_right); }
+  Vec3 v_up() const { return gv(L.g.v_up); }
   void set_newmis(int32_t e) { set_gi(L.g.newmis, e); }
   int parm(int i) const { return L.g.parm1 + i - 1; }  // parm1..parm16's global
 
@@ -83,41 +86,83 @@ struct Q {
     return std::string_view(x != nullptr ? x : "") == std::string_view(y != nullptr ? y : "");
   }
 
+  // A string value's text ("" for none), and whether it is `text`.
+  const char* text(int32_t s) const {
+    const char* x = pg::vm_string(vm, s);
+    return x != nullptr ? x : "";
+  }
+  bool is(int32_t s, std::string_view t) const { return std::string_view(text(s)) == t; }
+
   // A function of the program (its number) run by the engine's call.
   bool call(int32_t function) { return !failed() && pg::call_function(vm, function); }
 
-  // THE CALLS, by the catalogue's numbers.
+  // THE CALLS, by the catalogue's numbers. A text call takes its strings as a list (the
+  // bytecode's variadic arguments).
   void makevectors(Vec3 a) { run(1, a); }
   void setorigin(int32_t e, Vec3 at) { run(2, e, at); }
   void setmodel(int32_t e, int32_t model) { run(3, e, model); }
   void setsize(int32_t e, Vec3 mins, Vec3 maxs) { run(4, e, mins, maxs); }
+  float random() { return run(7) ? pg::result_float(vm) : 0.0f; }
   void sound(int32_t e, float channel, int32_t sample, float volume, float attenuation) {
     run(8, e, channel, sample, volume, attenuation);
   }
+  Vec3 normalize(Vec3 v) { return run(9, v) ? pg::result_vec(vm) : Vec3{}; }
+  void error(std::initializer_list<int32_t> text) { print(10, nullptr, nullptr, text); }
+  void objerror(std::initializer_list<int32_t> text) { print(11, nullptr, nullptr, text); }
   float vlen(Vec3 v) { return run(12, v) ? pg::result_float(vm) : 0.0f; }
   int32_t spawn() { return run(14) ? pg::result_int(vm) : 0; }
   void remove(int32_t e) { run(15, e); }
+  void traceline(Vec3 from, Vec3 to, float nomonsters, int32_t ignore) {
+    run(16, from, to, nomonsters, ignore);
+  }
   int32_t find(int32_t from, int field, int32_t match) {
     return run(18, from, static_cast<int32_t>(field), match) ? pg::result_int(vm) : 0;
   }
   void precache_sound(int32_t s) { run(19, s); }
   void precache_model(int32_t s) { run(20, s); }
+  void stuffcmd(int32_t e, int32_t s) { run(21, e, s); }
   int32_t findradius(Vec3 at, float radius) { return run(22, at, radius) ? pg::result_int(vm) : 0; }
-  void bprint(float level, std::initializer_list<int32_t> text) { print(23, nullptr, level, text); }
-  void sprint(int32_t e, float level, std::initializer_list<int32_t> text) {
-    print(24, &e, level, text);
+  void bprint(float level, std::initializer_list<int32_t> text) {
+    print(23, nullptr, &level, text);
   }
+  void sprint(int32_t e, float level, std::initializer_list<int32_t> text) {
+    print(24, &e, &level, text);
+  }
+  void dprint(std::initializer_list<int32_t> text) { print(25, nullptr, nullptr, text); }
   int32_t ftos(float v) { return run(26, v) ? pg::result_int(vm) : 0; }
+  int32_t vtos(Vec3 v) { return run(27, v) ? pg::result_int(vm) : 0; }
+  float droptofloor() { return run(34) ? pg::result_float(vm) : 0.0f; }
   void lightstyle(float style, int32_t value) { run(35, style, value); }
+  float rint(float v) { return run(36, v) ? pg::result_float(vm) : 0.0f; }
+  float floor(float v) { return run(37, v) ? pg::result_float(vm) : 0.0f; }
+  float ceil(float v) { return run(38, v) ? pg::result_float(vm) : 0.0f; }
+  float pointcontents(Vec3 at) { return run(41, at) ? pg::result_float(vm) : 0.0f; }
+  float fabs(float v) { return run(43, v) ? pg::result_float(vm) : 0.0f; }
   float cvar(int32_t name) { return run(45, name) ? pg::result_float(vm) : 0.0f; }
   Vec3 vectoangles(Vec3 v) { return run(51, v) ? pg::result_vec(vm) : Vec3{}; }
   void WriteByte(float to, float v) { run(52, to, v); }
   void WriteCoord(float to, float v) { run(56, to, v); }
+  void WriteEntity(float to, int32_t e) { run(59, to, e); }
+  void makestatic(int32_t e) { run(69, e); }
   void changelevel(int32_t map) { run(70, map); }
+  void centerprint(int32_t e, std::initializer_list<int32_t> text) { print(73, &e, nullptr, text); }
   void logfrag(int32_t killer, int32_t killed) { run(79, killer, killed); }
+  int32_t infokey(int32_t e, int32_t key) { return run(80, e, key) ? pg::result_int(vm) : 0; }
   void multicast(Vec3 at, float to) { run(82, at, to); }
+  float tokenize(int32_t s) { return run(84, s) ? pg::result_float(vm) : 0.0f; }
+  int32_t argv(float n) { return run(86, n) ? pg::result_int(vm) : 0; }
   float checkextension(int32_t name) { return run(99, name) ? pg::result_float(vm) : 0.0f; }
+  int32_t cvar_string(int32_t name) { return run(103, name) ? pg::result_int(vm) : 0; }
+  int32_t strcat(std::initializer_list<int32_t> text) {
+    print(115, nullptr, nullptr, text);
+    return failed() ? 0 : pg::result_int(vm);
+  }
+  int32_t strzone(int32_t s) { return run(118, s) ? pg::result_int(vm) : 0; }
   void calltimeofday() { run(231); }
+  // A loaded game's own words (GE_QC_WORDS): the template under `key` filled with four values.
+  int32_t words(int32_t key, int32_t a, int32_t b, int32_t c, int32_t d) {
+    return run(640, key, a, b, c, d) ? pg::result_int(vm) : 0;
+  }
 
  private:
   void put(int k, float x) { pg::set_parm_float(vm, k, x); }
@@ -130,11 +175,14 @@ struct Q {
     (put(k++, args), ...);
     return pg::call_builtin(vm, number, k);
   }
-  void print(int32_t number, const int32_t* to, float level, std::initializer_list<int32_t> text) {
+  // A call whose arguments end in a list of strings: an entity and a level before them when the
+  // call takes them.
+  void print(int32_t number, const int32_t* to, const float* level,
+             std::initializer_list<int32_t> text) {
     if (failed()) return;
     int k = 0;
     if (to != nullptr) put(k++, *to);
-    put(k++, level);
+    if (level != nullptr) put(k++, *level);
     for (int32_t s : text) put(k++, s);
     pg::call_builtin(vm, number, k);
   }

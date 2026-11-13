@@ -180,7 +180,7 @@ void sound_at(SequelServer& s, int e, sh::Vec3f at, const char* sample, bool eve
   ev.level = 2;
   ev.origin = at;
   ev.values[0] = 255;
-  ev.values[1] = everywhere ? 0 : 1;
+  ev.values[1] = everywhere ? 0.0f : 1.0f;
   ev.text = sample;
   event(s, std::move(ev));
 }

@@ -54,6 +54,7 @@
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_autotrack.hpp"
+#include "shooters_edge/client/demo_eyes.hpp"
 #include "shooters_edge/client/demo_fx.hpp"
 #include "shooters_edge/client/demo_lerp.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
@@ -91,6 +92,10 @@ struct DemoVideoOptions {
   bool sound = true;
   bool lerp =
       true;  // drawn between the demo's frames (demo_lerp.hpp), as `demo_lerp` in the window
+  // The first game's bob, strafe roll and damage kick rebuilt on the eye (demo_eyes.hpp) by
+  // `view_row` (null: the classic row); false: the eye as recorded.
+  bool classic_view = true;
+  const ge::camera::FirstPersonRow* view_row = nullptr;
   float volume = 0.5f;                     // the game's sounds, under the voices
   float voice_volume = 1.5f;               // the players' voices, over the game as voice chat is
   const look::Picture* picture = nullptr;  // the look (null: the classic look's defaults)
