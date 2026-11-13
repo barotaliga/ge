@@ -17,7 +17,7 @@ The CLI is built in the three homes every feature lives in (docs/architecture.md
 
 | Layer | Where | What it gives |
 | --- | --- | --- |
-| Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset/check/format`, `server settings/set/check/format`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `join`, `logs` |
+| Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset/check/format`, `server settings/set/check/format`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `join`, `logs`, `account signup/signin/code/recover/show` |
 | Plugin | `plugins/<name>/cli/` (built into `ge_<name>_cli`) | A group of rows any game linking the plugin adds: classic enhance's `content` (the install's packs, their release by SHA-256, the enhanced cache) |
 | Game | `games/<game>/cli/` | The game's `Spec` (its programs, ports, protocol, places, launch words, the settings it registers) and its own rows: Shooter's Edge's `demos`, `demos play`, `demos pack`, `demos unpack` |
 
@@ -111,6 +111,18 @@ nothing else reaches a command line) and starts the window: `Spec::join_words` f
 `<state>/demos/<sha256>.ged`, checked against its hash, kept for the next time, and handed to
 `Spec::demo_words` (Shooter's Edge unpacks it into the recording its demo player reads and adds
 `-playdemo`). A game without a row's words is refused with what it cannot open yet.
+
+## An account
+
+`account signup <name>`, `account signin <name>`, `account code <name>`, `account recover <name>
+<recovery code>` and `account show` reach a master's account service (`docs/accounts.md` § The
+service on the wire): a hub run with `--accounts`, or a server that is its own master.
+`--master=<host[:port]>` names it once (port 27901 by default); the CLI keeps it, the service's
+key and the last ticket in `<state>/account.txt`, readable by its owner alone. The key is learned
+at the first contact and checked at every later one: a service that answers with another key is
+refused, unless `--key=<hex>` names the new one. The password comes from `--password` or one line
+of standard input. `account code` prints the line a classic client's console takes (`login <name>
+<code>`), good once within 15 minutes; `signin`'s ticket is what our own client hands a server.
 
 ## Places
 

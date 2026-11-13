@@ -250,7 +250,8 @@ The JSON API: `/v1/players/{name}`, `/v1/matches?game=&mode=&player=&page=`, `/v
 | --- | --- | --- |
 | M59a | `engine/account`: the store, names and folding per game, Argon2id, the throttle, codes, the log and its snapshot | `accounts` |
 | M59b | The account service in the master's process: sign up, sign in, tickets, the server's login ask, over the sealed channel (built) | `accounts` |
-| M59b2 | The game CLI's `account` group and the hub's Account page | `accounts` |
+| M59b2 | The game CLI's `account` group (built) | `accounts` |
+| M59b3 | The hub's Account page | `accounts` |
 | M59c | The login seam in `engine/server`, the settings above, our client's ticket; the first classic game's prompt and `login` line | `se-login` |
 | M59d | The sequel's prompt and `login` line, one account logged in on both games' servers | `se-login` |
 | M59e | The match report, the replay file's closing summary, the master's totals, trusted servers | `match-report` |
