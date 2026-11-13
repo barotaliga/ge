@@ -221,6 +221,7 @@ struct DemoState {
   std::array<bool, 32> spectator{};         // client, multiview: the slot watches (`*spectator`)
   std::array<int, 32> top{}, bottom{};      // client, multiview: each slot's colours (0..13)
   std::array<std::string, 32> skins;        // client, multiview: each slot's `skin` ("": none)
+  std::array<std::string, 32> figures;      // client, multiview: each slot's `model` ("": none)
   std::string game;  // client, multiview: the game folder the server ran ("fortress"; "" unnamed)
   // Client, multiview: the server's info keys in the order first seen (the signon's
   // `fullserverinfo`, then each `serverinfo` change): `hostname`, `teamplay`, `maxclients` ...
@@ -248,6 +249,14 @@ struct SequelView {
   int pm_type = 0, pm_time = 0, pm_flags = 0, gravity = 0;
   int gun_model = 0, gun_frame = 0, fov = 0, rdflags = 0;
   int16_t stats[32] = {};
+};
+
+// One message of a sequel block as the reader walked it: its id and where it lies in the block
+// (`at` its id byte, `end` one past its last byte). A frame's span holds its player state and
+// entities after it.
+struct DemoSpan {
+  uint8_t id = 0;
+  uint32_t at = 0, end = 0;
 };
 
 struct Demo {
@@ -290,6 +299,9 @@ struct Demo {
   bool reconnect = false;
   int32_t server_count = 0;
   int32_t last_frame = -1;
+  // When set, the sequel reader lists each block's messages here (cleared at each block): what a
+  // relay that passes the blocks on reads them by (net/sequel_tv_face.hpp).
+  std::vector<DemoSpan>* spans = nullptr;
 };
 
 // `bytes` as a demo of any format (detected), unpacked first when packed or archived

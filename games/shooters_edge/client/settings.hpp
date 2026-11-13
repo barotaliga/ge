@@ -18,7 +18,7 @@
 //
 // ge:summary The window's settings kept in config.cfg, the user info sent, the mouse on binds
 // ge:keywords settings config-cfg save_settings settings_dir user-info topcolor bottomcolor name
-// ge:keywords skin
+// ge:keywords skin model player-model
 // ge:keywords cl_speedjump cl_speedjump_view easy-jump
 // ge:keywords mouse_to_binds keys_to_menu mouse1 mwheelup customize-controls
 // ge:skill console input
@@ -49,8 +49,11 @@ struct UserInfo {
   std::string name;
   int sent_top = -1, sent_bottom = -1;
   std::string skin, sent_skin;  // skin: the picture others draw you in
+  // model: the figure others draw you as (players/<model>/ in their files; "": the game's own)
+  std::string model, sent_model;
 };
-// `topcolor`, `bottomcolor`, `skin` and `cl_speedjump` over `info` (it must outlive `con`).
+// `topcolor`, `bottomcolor`, `skin`, `model` and `cl_speedjump` over `info` (it must outlive
+// `con`).
 void add_user_info_cvars(ge::console::Console& con, UserInfo& info);
 // The name and colours sent to the server playing when they changed or it is a new server.
 void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info);

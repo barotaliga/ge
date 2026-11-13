@@ -529,6 +529,7 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
 // One block's messages into the state.
 bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
   DemoState& s = d.state;
+  if (d.spans != nullptr) d.spans->clear();
   while (!m.done()) {
     const size_t at = m.at;
     const int id = m.u8();
@@ -621,6 +622,9 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
               " runs past its block's end: the recording is cut or damaged";
       return false;
     }
+    if (d.spans != nullptr)
+      d.spans->push_back(
+          {static_cast<uint8_t>(id), static_cast<uint32_t>(at), static_cast<uint32_t>(m.at)});
   }
   return true;
 }

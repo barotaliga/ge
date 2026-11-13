@@ -1371,6 +1371,13 @@ every pass, and judged by captioned screenshots:
   0 to 13) their colours. A teammate shares your team while `teamplay` is on; everyone else is an
   enemy. `allskins` still wins over both. They apply to the first game's players, live and in
   demos (`app/classic_models.hpp`'s `side_of`, `forced_skin`, `forced_colours`).
+- **Player figures in the first game** (M18i18): a player's `model` names a folder
+  `players/<model>/` with a `tris.md2` (drawn as painted, so the second game's figures can be
+  copied in as they are) or a `tris.mdl` (its own skins in the player's colours). Its skin is the
+  folder's picture of the player's skin name, else the folder's first. The server still animates
+  the game's own figure; each frame is drawn as the named figure's frame of the same kind, matched
+  by the frames' names (`app/figure_frames.hpp`). A folder you lack, or `noskins 1`, draws the
+  game's own figure. Your own `model` goes to the server beside your skin.
 - **Player figures in the second game** (M18i16): a player's `skin` there is "<model>/<skin>",
   the figure a folder `players/<model>/` with its `tris.md2`, its skins as pictures beside it, and
   the weapons it carries (the files the server names with a '#', drawn in place of its weapon). Each
