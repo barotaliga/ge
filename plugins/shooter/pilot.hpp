@@ -126,6 +126,8 @@ struct PilotSettings {
   bool gap_circle = false;
   // `gaplava`: `gap_circle`'s curve and run taken into a gap over lava or slime too.
   bool gap_lava = false;
+  // `brinkline`: the walk's look point stops at a node beside a lip over lava or slime.
+  bool brink_line = false;
   // `curvekeys`: the keys are a keyboard's (a caller's, held on `curve_keys`): the run to a gap's
   // lip rolled out as keys, forward and the side key full at once a command late, not through the
   // hands' slew of the side axis.
