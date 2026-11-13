@@ -179,9 +179,19 @@ cvars bound at the classic defaults (`add_view_camera_cvars`):
 These are the first classic client's defaults; the competitive community's client ships the bob,
 the roll and the kick at 0, which a player gets by setting them so. The `se-view` lab runs the
 view through a scripted run and holds it to these formulas, worked out on their own from the
-server's state, within 0.01 units and degrees. Still open: the same view on a joined server and
-in demo playback (`demo_view` draws the eye as it was recorded, without the bob, the roll or the
-kick).
+server's state, within 0.01 units and degrees.
+
+**On a joined server, in a played demo and in a demo's video** the same rig runs on the eye
+(`games/shooters_edge/client/demo_eyes.hpp`): a recording keeps the player's place and look, never
+the view he saw, so the window rebuilds it with the player's own camera cvars. The velocity is a
+joined game's prediction, else the client recording's player state as sent, else (a multiview
+recording, a single-player demo) the change of place between the last two frames read; the
+ground is the prediction's, else the player's box traced 2 units down the level's player hull
+onto a floor no steeper than the move's; the blows are the damage messages to the player, each
+taken once however many frames were read since the last picture; dead the eye drops and the
+view rolls 80 degrees. The sequel's recordings carry their rules' view and are drawn as sent.
+The `se-demo-eyes` lab plays a demo the window's way and charts the eye's height, roll and pitch
+as recorded and rebuilt.
 
 **The sequel's view is the rules'.** On the sequel's rules (a map of brushes) the server works the
 view out once a rules frame (0.1 s) and sends it in the player state, so every client, ours or

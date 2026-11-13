@@ -100,6 +100,7 @@
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
 #include "shooters_edge/client/demo_check.hpp"
+#include "shooters_edge/client/demo_eyes.hpp"
 #include "shooters_edge/client/demo_heard.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
@@ -880,6 +881,7 @@ int run_main(int argc, char** argv) {
   bool text_on = false;
   ge::platform::InputSnapshot input;
   cl::ViewState shown;
+  cl::DemoEyes demo_eyes;  // the classic view on a demo's or a joined server's eye
   ge::ui::Vec2 last_pointer;
   cl::FxState fx_state;
   cl::FxFrame fx;
@@ -1582,7 +1584,24 @@ int run_main(int argc, char** argv) {
         for (const std::string& line : lines) tell(line, t);
       }
       if (!world) continue;  // no level of the demo's yet
-      ge::render::FrameView view = cl::demo_view(ds, ge::camera::FirstPersonRow{}.fov_y, t);
+      // The first game's bob, strafe roll and damage kick rebuilt on the recorded eye (the
+      // player's camera cvars), a game joined moving by its prediction (demo_eyes.hpp).
+      cl::apply_view_cvars(camera_cvars, shown);
+      cl::DemoBody body;
+      if (drawn_remote && remote.predicted) {
+        body.known = true;
+        body.velocity = remote.ahead.velocity;
+        body.on_ground = remote.ahead.ground >= 0;
+      }
+      const cl::DemoState& ds_read = drawn_remote ? remote.demo.state : bench.demo.state;
+      const ge::shooter::BrushModel* ground =
+          bench_map && !bench_map->spec.models.empty() ? &bench_map->spec.models[0] : nullptr;
+      ge::render::FrameView view = cl::demo_eyes_view(ds, ds_read, demo_eyes, shown.row, ground,
+                                                      body, ge::camera::FirstPersonRow{}.fov_y,
+                                                      drawn_remote      ? t
+                                                      : bench.clock < 0 ? ds.time
+                                                                        : bench.clock,
+                                                      t);
       view.frame = static_cast<uint64_t>(presented);
       overlay.begin(w, h);
       se::Status hud_status = cl::demo_status(ds, t);
