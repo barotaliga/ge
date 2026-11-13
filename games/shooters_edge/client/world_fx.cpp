@@ -1525,8 +1525,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         double from[3], to[3];
         put(engine_point(e.at), from);
         put(engine_point(e.end), to);
-        if (e.name ==
-            "te_railtrail") {  // the sequel's rail: a beam in its unwinding coil (ce_beams)
+        if (e.name == "te_railtrail") {  // the sequel's rail: a beam, a line circling it (ce_beams)
           if (s.on.beams) {
             HeldBeam b;
             b.entity = e.entity;
