@@ -147,15 +147,15 @@ TEST(the_checksum_is_the_byte_a_live_server_expected) {
   // Moves a live server of the sequel refused, with the byte it said it expected (the body after
   // the checksum byte, the packet's sequence): what the measured key table must reproduce.
   struct Vector {
-    uint32_t sequence;
     const char* body;
+    uint32_t sequence;
     int expected;
   };
   const Vector vectors[] = {
-      {37, "ab020000082c010d00000d00000d00", 58},
-      {612, "b80200000a00802c010d00000d00000d00", 19},
-      {959, "c10200000a00402c010d00000d00000d00", 7},
-      {1500, "cc0200000a00c02c010d00000d00000d00", 96},
+      {"ab020000082c010d00000d00000d00", 37, 58},
+      {"b80200000a00802c010d00000d00000d00", 612, 19},
+      {"c10200000a00402c010d00000d00000d00", 959, 7},
+      {"cc0200000a00c02c010d00000d00000d00", 1500, 96},
   };
   for (const Vector& v : vectors) {
     std::string body;
