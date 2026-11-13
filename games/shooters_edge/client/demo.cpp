@@ -385,6 +385,12 @@ bool voice_frames(const DemoVoice& v, std::vector<std::span<const uint8_t>>& out
   return true;
 }
 
+void take_blow(DemoState& s, const DemoBlow& b) {
+  if (s.blows.size() >= kKeptBlows) s.blows.erase(s.blows.begin());
+  s.blows.push_back(b);
+  s.blows_taken++;
+}
+
 DemoRead next_frame(Demo& d, std::string& error) {
   if (d.ended) return DemoRead::end;
   d.state.started.clear();

@@ -170,6 +170,7 @@ void run(gl::Lab& lab) {
       for (Relay& r : relays) all.push_back(&r.tcp);
       gn::tcp_settle_pairs(all);
     };
+    cn::qtv_accept(m.port, m.server);  // a relay just dialed is a pair now, its request settled in
     settle();
     cn::qtv_update(m.port, m.server);
     settle();

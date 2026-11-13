@@ -130,9 +130,6 @@ float angle(DemoMsg& m, const Wire& w) {
   return w.float_coords ? static_cast<float>(m.i16()) * (360.0f / 65536.0f)
                         : static_cast<float>(m.i8()) * (360.0f / 256.0f);
 }
-void skip_point(DemoMsg& m, const Wire& w) {
-  for (int i = 0; i < 3; i++) coord(m, w);
-}
 float angle16(DemoMsg& m) { return static_cast<float>(m.i16()) * (360.0f / 65536.0f); }
 
 using Frame = std::vector<std::pair<int, DemoEntity>>;
@@ -263,8 +260,9 @@ void player_info(Demo& d, DemoMsg& m) {
     if ((bits & 0x40) != 0) m.u8();
     m.u8();  // msec
   }
+  float vel[3] = {0, 0, 0};  // a part left out is 0
   for (int i = 0; i < 3; i++)
-    if ((flags & (0x4 << i)) != 0) m.i16();  // velocity
+    if ((flags & (0x4 << i)) != 0) vel[i] = static_cast<float>(m.i16());
   // A model left out is the server's player model (`progs/player.mdl`), not none.
   p.model = (flags & 0x20) != 0 ? m.u8() : d.player_model;
   if ((flags & 0x40) != 0) p.skin = m.u8();
@@ -281,6 +279,10 @@ void player_info(Demo& d, DemoMsg& m) {
   p.gib = (flags & 0x400) != 0;
   p.present = true;
   if (slot >= 0 && slot < 32) d.state.players[static_cast<size_t>(slot)] = p;
+  if (slot == d.state.player) {
+    d.state.velocity = {vel[0], vel[1], vel[2]};
+    d.state.velocity_read = true;
+  }
 }
 
 // A multiview recording's `playerinfo`: the slot, the field bits, the frame, then the fields the
@@ -530,10 +532,14 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         s.stopped.emplace_back((packed >> 3) & 1023, packed & 7);
         break;
       }
-      case 19:
-        m.skip(2);
-        skip_point(m, w);
-        break;  // damage
+      case 19: {  // damage: the armour, the blood, where it came from
+        DemoBlow b;
+        b.armor = m.u8();
+        b.blood = m.u8();
+        b.from = point(m, w);
+        take_blow(s, b);
+        break;
+      }
       case 20:
         s.statics.push_back(read_spawn(m, w));
         break;  // spawnstatic

@@ -220,8 +220,9 @@ void run(ge::lab::Lab& lab) {
     }
   };
   int problems = 0;
-  for (const Viewport& v : viewports) {
-    Game g;
+  // The lab's player's places only, never the machine's own home: a list of the runner's real
+  // folders would move the pictures from one machine to the next.
+  const auto places = [&](Game& g) {
     g.menu.demos().set_extensions(cl::listed_extensions(game.game->demo_extensions));
     g.menu.demos().set_game_places({{"GAME", (root / "Games" / "base").generic_string()}});
     g.menu.demos().set_player_places({{"HOME", root.generic_string()},
@@ -229,6 +230,10 @@ void run(ge::lab::Lab& lab) {
                                       {"DESKTOP", (root / "Desktop").generic_string()}});
     g.menu.demos().set_check(check);
     g.con.execute("menu_demo_dir \"" + downloads.generic_string() + "\"");
+  };
+  for (const Viewport& v : viewports) {
+    Game g;
+    places(g);
     const auto press = [&](ui::MenuInput in) { g.menu.update(in, false, g.host, 0.016); };
     const auto snap = [&](const std::string& id, const std::string& title,
                           const std::string& caption, const std::string& look_for) {
@@ -320,6 +325,7 @@ void run(ge::lab::Lab& lab) {
   // The classic root: DEMOS in its own band between the strip's rows.
   {
     Game g;
+    places(g);
     sm::ClassicArt art;
     std::string error;
     const auto files = sm::fixture_files();

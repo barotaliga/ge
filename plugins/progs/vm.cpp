@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "progs/native.hpp"
 #include "progs/opcodes.hpp"
 
 namespace ge::progs {
@@ -506,6 +507,12 @@ void create_vm(Vm& vm, const Progs& progs, const VmLimits& limits) {
   vm.profile.assign(progs.functions.size(), FunctionProfile{});
   vm.statements_run = 0;
   vm.fault = Fault{};
+  if (progs.natives) {
+    bind_natives(vm, *progs.natives);
+  } else {
+    vm.natives = {};
+    vm.native_data = nullptr;
+  }
 }
 
 void reset_globals(Vm& vm) { vm.globals = vm.progs->globals; }

@@ -96,6 +96,12 @@ struct ClientConfig {
   // named figure (`players/<model>/tris.md2`, else `tris.mdl`, and its `<skin>.pcx`) that it
   // lacks (`files`, `read_file`, what it fetched). Off (`noskins 2`): nothing is asked for.
   bool fetch_looks = true;
+  // THE MAP'S EXTRAS FETCHED, after the looks, only when lacking and only while what they serve is
+  // on: its coloured light (`lits/<map>.lit`; none when `maps/<map>.lit` or `maps/lits/<map>.lit`
+  // is there; the window's `r_loadlit`) and its place names (`locs/<map>.loc`; `tp_loadlocs`).
+  // Off unless asked (the window's join turns them on by those settings).
+  bool fetch_lit = false;
+  bool fetch_locs = false;
   // A file fetched, handed on to be kept (the window writes it into the game's folder);
   // `downloaded` holds it either way.
   std::function<void(const std::string& gamedir, const std::string& path,

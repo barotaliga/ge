@@ -205,10 +205,10 @@ const ge::progs::Progs* baseline(gl::Lab& lab) {
   if (!built) {
     built = true;
     std::string error;
-    ok = sv::compile_baseline_mod(lab.arg("root"), progs, error);
+    ok = sv::baseline_mod(progs, error);
     if (!ok)
-      lab.fail("se-words: the baseline mod did not compile: " + error,
-               "next: build it with `ge qc build games/shooters_edge/qc/arena/progs.src`");
+      lab.fail("se-words: " + error,
+               "next: run tests/shooters_edge_arena_rules_test.cpp, which names the declaration");
   }
   return ok ? &progs : nullptr;
 }
@@ -330,8 +330,9 @@ const gl::LabSpec kSpec{
     "shooter",
     "Does a player with a classic game loaded read its server's words (obituaries, the lobby, "
     "the countdown, the clock, the end) in its colours, while Shooter's Edge keeps its own?",
-    {{"minutes", "2", "the bot match's time limit, minutes"},
-     {"root", ".", "the repository's root (the mod's sources are under it)"}},
+    {
+        {"minutes", "2", "the bot match's time limit, minutes"},
+    },
     "--minutes=1",
     run,
 };

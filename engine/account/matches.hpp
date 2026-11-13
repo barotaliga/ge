@@ -18,6 +18,8 @@
 //   matches_add(m, server, report) -> Taken   new or again, counted or shown only
 //   matches_line(m, line, error)              one log line read back
 //   totals_sum(m, account, filter)            an account's totals over what the filter keeps
+//   totals_by_account(m, filter, since_s)     every account's, for the hub's Leaders (since_s > 0:
+//                                             summed from the kept reports started since then)
 //
 // ge:summary The matches a master keeps: reports by server, totals per account, trusted servers
 // ge:keywords match-report totals account-totals trusted-servers matches_add reports-log
@@ -95,5 +97,13 @@ Taken matches_add(Matches& m, const net::Key& server, const net::MatchReport& r)
 bool matches_line(Matches& m, const std::string& line, std::string& error);
 // Every game, mode and map the filter keeps, summed (`matches` 0: none).
 Totals totals_sum(const Matches& m, uint64_t account, const TotalsFilter& f);
+// Whether the filter keeps a key's game, mode, map and ping band.
+bool totals_keeps(const TotalsFilter& f, const TotalsKey& key);
+// `t` added to `to` (a `_max` column keeps the larger).
+void totals_add(Totals& to, const Totals& t);
+// Every account's totals the filter keeps. `since_s` 0: all the master holds; else only the
+// counted reports still kept (the last kMatchesKept) that started at or after it, Unix seconds.
+std::map<uint64_t, Totals> totals_by_account(const Matches& m, const TotalsFilter& f,
+                                             int64_t since_s);
 
 }  // namespace ge::account

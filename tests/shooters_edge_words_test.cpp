@@ -195,7 +195,7 @@ const pg::Progs& baseline() {
   static const pg::Progs p = [] {
     pg::Progs out;
     std::string error;
-    CHECK_MSG(sv::compile_baseline_mod(GE_SOURCE_DIR, out, error), error);
+    CHECK_MSG(sv::baseline_mod(out, error), error);
     return out;
   }();
   return p;

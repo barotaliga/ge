@@ -1,7 +1,7 @@
 // THE LISTEN SERVER: Shooter's Edge as one player plays it on his own machine. A match is the
 // engine's server core (engine/server) on the game's server (`ListenOptions::game`, the classic
 // game the dedicated server runs) opened in this process with the window's program (the baseline
-// mod, compiled at start from the sources built into the game: `baseline_progs`) and map
+// mod, the arena's rules in C++: `baseline_progs`) and map
 // (`ListenHost`): the local player is client slot 0, a local seat whose commands go into each
 // frame as packets that are never lost (no prediction: what he sees is the server's own state
 // after each frame), and others join on `ListenOptions::port` (`sv_port`) as they would a
@@ -93,7 +93,7 @@ namespace sv = shooters_edge::server;
 inline constexpr int kMostFrames = 8;             // server frames a wall frame may run
 inline constexpr size_t kMostListenSounds = 256;  // sounds kept for the window between its plays
 
-// The baseline mod compiled from the sources built into the game. False with every diagnostic.
+// The baseline mod (the arena's rules in C++, server/baseline_mod.hpp) as the window runs it.
 bool baseline_progs(ge::progs::Progs& out, std::string& error);
 
 // A map as the listen server plays it and the client draws it. Never copied once read: the spec's

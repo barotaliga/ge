@@ -39,12 +39,15 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "progs/layout.hpp"
 
 namespace ge::progs {
+
+struct NativeOffsets;  // native.hpp: a native program's functions and where its names landed
 
 struct Statement {
   uint16_t op;
@@ -77,6 +80,9 @@ struct Progs {
   int32_t entityfields = 0;         // words an entity holds
   std::vector<int32_t> lines;       // optional: the source line of each statement
   const Layout* layout = nullptr;   // the form its crc names (null: a standalone program)
+  // A native program's C++ (native.hpp: `build_native_progs` sets it): `create_vm` binds it, so a
+  // VM made over the progs runs its functions wherever the progs goes. Never written to a file.
+  std::shared_ptr<const NativeOffsets> natives;
 };
 
 struct LoadOptions {
