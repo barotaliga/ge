@@ -141,7 +141,7 @@
 //   not kept (dm2's waits 125 -> 178 bot-seconds a match: the wait is the lift's), in no preset.
 // - `scriptfresh`: a scripted way left and come back to is flown from its first step (a bug: the
 //   step it was left at was kept, e1m2's YA climb aimed at the walkway from the floor)
-//   (shooter/pilot.cpp, M18r.md 3); judging.
+//   (shooter/pilot.cpp, M18r.md 3); on (head to head e1m2 -1.0, inside the noise; a bug fixed).
 // - `scriptentry`: a scripted way's entry had anywhere within 64 units once lined up, the keys let
 //   go short of that (a run in from the side circled the entry's point) (shooter/nav_script.cpp,
 //   M18r.md 3); not kept (e1m2's YA lying 77 -> 80 %, slower: the stop costs more), in no preset.
