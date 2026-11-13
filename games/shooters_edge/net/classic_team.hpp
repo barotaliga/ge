@@ -193,6 +193,8 @@ struct TeamPlayer {
   int64_t trap_presses = 0, trap_fired = 0;  // a floor trap's button gone for, and fired (`floortrap`)
   int64_t trap_opens = 0;  // the floor traps' floors seen going away (by whoever)
   int64_t trap_kept = 0;   // commands its keys were kept off a trap's button
+  int64_t trap_flees = 0;  // runs off a trap's floor as it went (`trapflee`)
+  int64_t bridges_seen_gone = 0;  // a bridge believed out seen gone (`bridgeseen`)
   int64_t gap_jumps = 0, gap_landed = 0;  // gap tricks jumped out of a hop, and landed across
   int64_t gap_refused = 0;                // gap tricks given up (no jump lands across)
   int64_t gap_near = 0;                   // (`gapnear`) routes planned round a gap too near

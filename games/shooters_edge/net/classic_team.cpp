@@ -780,6 +780,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].trap_fired = fi.stats.trap_fired;
     r.players[k].trap_opens = fi.stats.trap_opens;
     r.players[k].trap_kept = fi.stats.trap_kept;
+    r.players[k].trap_flees = fi.stats.trap_flees;
+    r.players[k].bridges_seen_gone = fi.stats.bridges_seen_gone;
     r.players[k].gap_landed = fi.bot.pilot.pilot.stats.gap_landed;
     r.players[k].gap_refused = fi.bot.pilot.pilot.stats.gap_refused;
     r.players[k].gap_near = fi.bot.pilot.pilot.stats.gap_near;

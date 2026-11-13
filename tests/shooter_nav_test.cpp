@@ -283,6 +283,33 @@ TEST(a_route_proves_again_link_by_link) {
   CHECK_MSG(ran, "the quickest way east does not jump the pit");
 }
 
+TEST(a_shut_link_with_no_mover_is_kept_off_the_route_a_cut_one_is_not) {
+  // A bridge the nav holds as a solid carries no mover: its links shut while it is in are kept off
+  // only as `shut` (`bridgeseen`); `cut` is read on links through a mover and gap tricks.
+  const Course& c = course();
+  const sh::NavGraph& g = c.graph;
+  ge::ai::Search search;
+  const int32_t from = sh::nav_nearest(g, c.map.platform), to = sh::nav_nearest(g, c.map.east_ledge);
+  const sh::NavRoute r = sh::nav_route(g, from, to, search);
+  CHECK_MSG(r.nodes.size() > 2, "no route from the west platform to the east ledge");
+  int32_t a = -1, b = -1;
+  for (size_t i = 0; i + 1 < r.nodes.size() && a < 0; i++)
+    for (const sh::NavLink& l : links_of(g, r.nodes[i]))
+      if (l.to == r.nodes[i + 1] && l.mover < 0 && !l.gap) a = r.nodes[i], b = l.to;
+  CHECK_MSG(a >= 0, "the route has no plain link to cut");
+  const sh::NavExtraLink cut[1] = {{a, b, sh::NavKind::walk, 0}};
+  auto uses = [&](const sh::NavRoute& x) {
+    for (size_t i = 0; i + 1 < x.nodes.size(); i++)
+      if (x.nodes[i] == a && x.nodes[i + 1] == b) return true;
+    return false;
+  };
+  CHECK_MSG(uses(sh::nav_route(g, from, to, search, 1, {}, cut)),
+            "a cut plain link is kept off the route: the pilot's failed jumps now cut (they halved "
+            "dm2's jumps): read nav_route's cut filter");
+  CHECK_MSG(!uses(sh::nav_route(g, from, to, search, 1, {}, {}, {}, cut)),
+            "a shut plain link is still taken: nav_route's shut filter is wrong");
+}
+
 TEST(the_arena_doorway_is_tagged_with_its_door) {
   se::Arena arena;
   se::build_arena(arena);

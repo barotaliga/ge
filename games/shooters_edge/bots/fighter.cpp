@@ -97,6 +97,9 @@ constexpr double kLanding_s = 2;   // out of the water, its exit node walked ont
 constexpr double kBaseHeal = 1.4;  // health in the team's base is worth this more to a healer
 constexpr double kLauncherWorth = 240;   // the launcher lacked: worth a long run
 constexpr double kBridgeSpare_s = 2.5;   // a bridge left this long before it goes back, s
+constexpr float kGoneSight = 800;  // `bridgeseen`: a bridge's node looked at this near, units
+constexpr float kGoneDrop = 64;    // and no floor this far under it: gone
+constexpr double kFloorBack_s = 10;  // `bridgeseen`: a floor door seen away, unseen since, back
 constexpr float kRocketJumpHealth = 70;  // the health a rocket jump is tried with (it costs ~50)
 // A hopper plans the map's gap tricks only this fast or faster, units/s (people take off at
 // 420 to 500; a gap's jump is flown only when the move says it lands across).
@@ -887,9 +890,30 @@ void hide_launcher(Fighter& f, const Stats& st, bool seen_now, double t, ai::Why
   }
 }
 
+// (`bridgeseen`) Whether bridge `b`, left out of what this player is sent, is SEEN gone: one of its
+// nodes in sight within `kGoneSight` with no floor under it (the lava where it stands out). A
+// client keeps a mover it is no longer sent where it last saw it: dm2's red armour's bridge, seen
+// out and gone back into its wall out of view, stood out in the bot's mind, and the route walked
+// off the lip into the pit (22 of 25 lava deaths there in 8 matches).
+bool bridge_seen_gone(const Fighter::Bridge& b, const server::RulesCommon& s, int me,
+                      sh::Vec3f eye, const sh::NavGraph& g) {
+  if (!s.world.entities[static_cast<size_t>(b.ent)].free) return false;  // sent: its place stands
+  for (const int32_t n : b.nodes) {
+    const sh::Vec3f o = g.nodes[static_cast<size_t>(n)].origin;
+    if (dist(o, eye) > kGoneSight) continue;
+    const sh::HullTrace look =
+        sh::trace_move(s.sv, eye, {}, {}, o, sh::kTraceNoMonsters, me);
+    if (look.fraction < 1) continue;
+    const sh::HullTrace down = sh::trace_move(s.sv, o, sh::kPlayerMins, sh::kPlayerMaxs,
+                                              {o.x, o.y, o.z - kGoneDrop}, sh::kTraceNoMonsters, me);
+    if (down.fraction >= 1 || sh::over_harm(s.sv, o, o, me)) return true;
+  }
+  return false;
+}
+
 // The bridges as seen now (fighter.hpp `Bridge`): on a change, the links onto those still in are
 // shut and the way planned again.
-void watch_bridges(Fighter& f, const server::RulesCommon& s) {
+void watch_bridges(Fighter& f, const server::RulesCommon& s, int me) {
   if (f.bridges.empty()) return;
   bool changed = !f.bridges_seen;
   f.bridges_seen = true;
@@ -899,6 +923,14 @@ void watch_bridges(Fighter& f, const server::RulesCommon& s) {
     bool in = false;
     if (b.floor) {
       in = dist(o, b.spawn) >= 1;  // a floor door: there only at rest
+      // (`bridgeseen`) Out of sight (not sent), seen away: back once its time out is over (a
+      // client keeps it where it last saw it; one stood away in a bot's mind for 48 s).
+      if (f.features[sh::Feature::bridgeseen]) {
+        if (in && !s.world.entities[static_cast<size_t>(b.ent)].free) b.out_since = s.sv.time;
+        if (in && s.world.entities[static_cast<size_t>(b.ent)].free && b.out_since >= 0 &&
+            s.sv.time - b.out_since > kFloorBack_s)
+          in = false;
+      }
       // (`floortrap`) or a mate just called it gone (`trap`), unseen yet
       if (f.features[sh::Feature::floortrap] && s.sv.time - f.trap_told < kTrapTold_s) in = true;
     } else {
@@ -908,6 +940,15 @@ void watch_bridges(Fighter& f, const server::RulesCommon& s) {
       if (!out) b.out_since = -1;
       if (out && b.out_since < 0) b.out_since = s.sv.time;
       in = !out || (b.wait > 0 && s.sv.time - b.out_since > b.wait - kBridgeSpare_s);
+    }
+    if (!in && f.features[sh::Feature::bridgeseen]) {
+      const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+      const sh::Vec3f eye{self.origin.x, self.origin.y,
+                          self.origin.z + f.bot.senses.set.view_height};
+      if (bridge_seen_gone(b, s, me, eye, *f.bot.pilot.pilot.g)) {
+        in = true;
+        f.stats.bridges_seen_gone += b.in ? 0 : 1;
+      }
     }
     changed = changed || in != b.in;
     b.in = in;
@@ -930,6 +971,7 @@ void watch_bridges(Fighter& f, const server::RulesCommon& s) {
   }
   floor_trap_shut(f, shut);  // the teleporters onto a floor trap's floor while it is away
   f.goal_node = -1;  // planned again
+  if (f.features[sh::Feature::bridgeseen]) f.reach_at = -1;  // and where it can get to
 }
 
 // A DOOR ON THE WAY (`locked`): the doors only something else opens, while they rest shut. When
@@ -1008,7 +1050,7 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   const double t = s.sv.time;
   const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   floor_trap_think(f, s, me, t);  // a floor trap's button pressed on an enemy on it (floortrap)
-  watch_bridges(f, s);
+  watch_bridges(f, s, me);
   const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
 
   // Where it can get to from here, worked out once a second (a teleporter or a drop is one way).
@@ -1053,8 +1095,13 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     const std::span<const int32_t> shut = locked_errands(f)
                                               ? std::span<const int32_t>(f.bot.pilot.pilot.shut)
                                               : std::span<const int32_t>();
+    // (`bridgeseen`) Nor onto a bridge still in (watch_bridges' shut links).
+    const std::span<const sh::NavExtraLink> shut_links =
+        f.bot.pilot.pilot.set.shut_every
+            ? std::span<const sh::NavExtraLink>(f.bot.pilot.pilot.shut_links)
+            : std::span<const sh::NavExtraLink>();
     f.reach_n = sh::nav_reach(g, sh::nav_nearest(g, self.origin), f.reach,
-                              f.bot.pilot.pilot.set.jumper, shut);
+                              f.bot.pilot.pilot.set.jumper, shut, shut_links);
     f.reach_at = t;
   }
   bool escaping = false;  // on the way out of a pocket: no other goal this think
@@ -1304,7 +1351,10 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   if (locked_errands(f) && !escaping && committed < 0 && f.objective < 0) door_errand(f, s, t);
 
   // The goal: the role's first, then the items.
-  if (trip) {
+  if (!escaping && f.trap_flee >= 0 && f.trap_exit >= 0) {
+    // On a floor trap's floor as it goes: off it first (`trapflee`, floor_trap.hpp).
+    go_to(f, f.trap_exit);
+  } else if (trip) {
     // the scripted way held to its goal
   } else if (committed >= 0) {
     // Kept on the dive's field whatever the reach from the water says (the nearest node under
@@ -1507,6 +1557,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.pilot_cast = features[sh::Feature::pilotcast];
   ps.gap_circle = features[sh::Feature::gapbuild];
   ps.gap_lava = features[sh::Feature::gaplava];
+  ps.shut_every = features[sh::Feature::bridgeseen];
   ps.brink_line = features[sh::Feature::brinkline];
   ps.brink_side = features[sh::Feature::sidebrink];
   ps.walk_falls = features[sh::Feature::fallseen];

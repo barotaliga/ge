@@ -126,6 +126,9 @@ struct PilotSettings {
   bool gap_circle = false;
   // `gaplava`: `gap_circle`'s curve and run taken into a gap over lava or slime too.
   bool gap_lava = false;
+  // (`bridgeseen`) The shut links (onto a bridge or a floor door still in) honoured on every link
+  // (`nav_route`'s `shut`): they carry no mover, so as cut links they were taken all the same.
+  bool shut_every = false;
   // `brinkline`: the walk's look point stops at a node beside a lip over lava or slime.
   bool brink_line = false;
   // `sidebrink`: a link whose side step falls into lava or slime (`NavLink::brink_side`) is a lip

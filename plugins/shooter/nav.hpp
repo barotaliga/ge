@@ -391,16 +391,21 @@ struct NavRoute {
 // straight distance at the fastest speed any link has); links through a mover cost
 // `mover_penalty_s` more, links through a mover in `barred` (a door found shut) are not taken, and
 // nor is any link in `cut` (its `from` and `to`: a way an open door's leaf still stands across);
-// rocket jumps as `jumper` takes them.
+// rocket jumps as `jumper` takes them. `cut` is read on links through a mover and gap tricks only;
+// `shut` on every link (a bridge or a floor door the nav holds as a solid carries no mover, so its
+// links shut while it is in were taken as `cut`: `bridgeseen`).
 NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& search,
                    float mover_penalty_s = 1, std::span<const int32_t> barred = {},
-                   std::span<const NavExtraLink> cut = {}, const NavJumper& jumper = {});
+                   std::span<const NavExtraLink> cut = {}, const NavJumper& jumper = {},
+                   std::span<const NavExtraLink> shut = {});
 
 // Every node a player at node `from` can get to (`search.reached(n)` after; costs the links'
 // times), and how many, `from` itself included; rocket jumps as `jumper` takes them, and no link
-// through a mover in `shut` (a door shut that no route goes through).
+// through a mover in `shut` (a door shut that no route goes through), nor any in `shut_links`
+// (onto a bridge still in: `nav_route`'s `shut`).
 int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, const NavJumper& jumper = {},
-                  std::span<const int32_t> shut = {});
+                  std::span<const int32_t> shut = {},
+                  std::span<const NavExtraLink> shut_links = {});
 
 // Adds `extra` to each node's run of links (after the proven ones), keeping the runs contiguous.
 void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra);

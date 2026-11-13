@@ -13,6 +13,7 @@
 
 #include "progs/entity_text.hpp"
 #include "shooter/nav_script.hpp"
+#include "shooter/world.hpp"
 #include "shooters_edge/bots/gap_tricks.hpp"
 #include "shooters_edge/bots/item_routes.hpp"
 #include "shooters_edge/bots/rocket_tricks.hpp"
@@ -23,6 +24,8 @@ namespace {
 
 namespace sh = ge::shooter;
 namespace pg = ge::progs;
+
+constexpr float kOwnDrop = 24;  // a bridge's own node: no floor of the map's within this under it
 namespace sv = shooters_edge::server;
 
 // A model's box, either family: [0] the world, then the inline models ("*N").
@@ -391,6 +394,16 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
           o.z <= hi.z + 40)
         br.nodes.push_back(static_cast<int32_t>(n));
     }
+    // The ones it alone holds up: the box traced down in the map's own solids (the world, solid
+    // 0, alone) meets no floor within a step.
+    const int32_t count = out.world.count;
+    out.world.count = 1;
+    for (const int32_t n : br.nodes) {
+      const sh::Vec3f o = out.graph.nodes[static_cast<size_t>(n)].origin;
+      const sh::HullTrace down = sh::player_trace(out.world, o, {o.x, o.y, o.z - kOwnDrop});
+      if (down.startsolid || down.fraction >= 1) br.own.push_back(n);
+    }
+    out.world.count = count;
   }
   out.teleport_links = static_cast<int64_t>(teleports.size());
   // SCRIPTED ROUTES to key items (item_routes.hpp): each proven by the move from the node at its
