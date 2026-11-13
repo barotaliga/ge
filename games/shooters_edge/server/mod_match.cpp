@@ -134,6 +134,27 @@ uint64_t digest(const QcServer& s) {
   return h;
 }
 
+// The loop's digest with each think named by its function's name, not its number: what two
+// programs that lay their functions out differently but play the same match agree on.
+uint64_t loop_digest(QcServer& s) {
+  std::vector<int32_t> kept(static_cast<size_t>(s.sv.num_edicts));
+  for (int i = 0; i < s.sv.num_edicts; i++) {
+    sh::Edict& e = s.sv.edicts[static_cast<size_t>(i)];
+    kept[static_cast<size_t>(i)] = e.think;
+    if (e.think <= 0 || e.think >= static_cast<int32_t>(s.progs->functions.size())) continue;
+    uint32_t h = 2166136261u;  // the name's FNV-1a
+    for (const char* c = ge::progs::progs_string(
+             *s.progs, s.progs->functions[static_cast<size_t>(e.think)].name);
+         *c != 0; c++)
+      h = (h ^ static_cast<uint8_t>(*c)) * 16777619u;
+    e.think = static_cast<int32_t>(h & 0x7fffffff);
+  }
+  const uint64_t h = sh::server_hash(s.sv);
+  for (int i = 0; i < s.sv.num_edicts; i++)
+    s.sv.edicts[static_cast<size_t>(i)].think = kept[static_cast<size_t>(i)];
+  return h;
+}
+
 bool is_missile(const QcServer& s, int e) {
   if (s.sv.edicts[static_cast<size_t>(e)].free) return false;
   const int32_t cn = static_cast<int32_t>(
@@ -215,7 +236,11 @@ ModMatchReport run_mod_match(const ModMatchOptions& opt) {
   }
   std::string path = opt.progs.empty() ? progs_from_console(opt.console) : opt.progs;
   ge::progs::Progs progs;
-  if (opt.compiled) {
+  ge::progs::NativeOffsets natives;
+  if (opt.native != nullptr) {
+    if (!ge::progs::build_native_progs(*opt.native, progs, natives, r.error)) return r;
+    r.source = opt.compiled_name.empty() ? "a native program" : opt.compiled_name;
+  } else if (opt.compiled) {
     progs = *opt.compiled;
     r.source = opt.compiled_name.empty() ? "a compiled progs" : opt.compiled_name;
   } else if (!load_mod(path, progs, r.source, r.error)) {
@@ -225,6 +250,7 @@ ModMatchReport run_mod_match(const ModMatchOptions& opt) {
   QcServerOptions so;
   so.seed = opt.seed;
   so.loop.max_edicts = 1024;
+  if (opt.native != nullptr) so.natives = &natives;
   std::string error;
   std::unique_ptr<QcServer> sp = make_qc_server(progs, so, error);
   if (!sp) {
@@ -314,6 +340,7 @@ ModMatchReport run_mod_match(const ModMatchOptions& opt) {
     }
     clear_frame(s.out);
     r.digests.push_back(digest(s));
+    r.loop_digests.push_back(loop_digest(s));
     if (s.map_stopped) {
       r.error = "the mod stopped the map: " + s.stop_reason +
                 " (the console's last lines and the fault's QC stack say more)";
