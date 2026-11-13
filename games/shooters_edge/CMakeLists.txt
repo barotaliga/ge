@@ -82,7 +82,7 @@ set_target_properties(shooters_edge_bots_cli PROPERTIES OUTPUT_NAME shooters_edg
 # our forward, proxies or TV node as a process of its own, for any classic client. `--help` lists
 # its kinds and flags.
 add_executable(shooters_edge_hops_cli net/hops_main.cpp)
-target_link_libraries(shooters_edge_hops_cli PRIVATE shooters_edge_classic ge_proxy ge_flags)
+target_link_libraries(shooters_edge_hops_cli PRIVATE shooters_edge_classic ge_proxy ge_webtransport ge_flags)
 set_target_properties(shooters_edge_hops_cli PROPERTIES OUTPUT_NAME shooters_edge_hops
                       RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 

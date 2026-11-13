@@ -147,6 +147,7 @@ TEST(webtransport_server_close_reaches_the_client) {
   CHECK(p.count(Event::Kind::closed) == 1);
   CHECK(p.events.back().why == "the server is going down");
   CHECK(p.run([&] { return p.client.state() == Client::State::closed; }));
+  CHECK_MSG(p.client.why() == "the server is going down", p.client.why());
   CHECK(p.server.connections() == 0);
 }
 
