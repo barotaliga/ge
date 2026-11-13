@@ -256,6 +256,8 @@ TEST(every_press_leaves_the_sound_it_makes) {
   up.up = true;
   g.update(up, false, host, 0.016);
   CHECK(g.take_cue() == MenuCue::move);
+  g.update(down, false, host, 0.016);  // past SELECT GAME, the first row
+  CHECK(g.take_cue() == MenuCue::move);
   MenuInput accept;
   accept.accept = true;
   g.update(accept, false, host, 0.016);  // into SINGLE PLAYER
