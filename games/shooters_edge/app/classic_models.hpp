@@ -125,6 +125,17 @@ Look choose_look(const SkinChoice& choice, std::string_view look,
                  const std::unordered_map<std::string, uint32_t>& figures,
                  const std::unordered_map<std::string, uint32_t>& skins);
 
+// THE FIRST GAME'S FIGURES: a player's `model` names a folder `players/<model>/` with a figure
+// (`figures`, by lower-case folder), drawn in place of the game's own figure. Its skin is the
+// folder's picture of the player's skin name (`skins`, by "<folder>/<skin>", the name as
+// `forced_skin` leaves it, lower case, its extension dropped), else the folder's first
+// (`first_skins`, by folder), else the figure's own (kOwnSkin). `folder` empty: the game's own
+// figure (none named, one not read, a name that climbs, or `noskins 1`).
+Look choose_figure(const SkinChoice& choice, std::string_view model, std::string_view skin,
+                   const std::unordered_map<std::string, uint32_t>& figures,
+                   const std::unordered_map<std::string, uint32_t>& skins,
+                   const std::unordered_map<std::string, uint32_t>& first_skins);
+
 // An item map's world model as one frame, its faces' textures in its skin.
 ge::render::MorphModel morph_from_brush(const ge::brush::Map& item,
                                         std::span<const uint8_t> palette);
