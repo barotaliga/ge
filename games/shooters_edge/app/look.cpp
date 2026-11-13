@@ -175,6 +175,14 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .values = "\"\": each map's own sky (the default); TEXT: the sky box of that name, "
                      "its six pictures under env/ or gfx/env/"},
           &picture.sky_name);
+  cv.bind({.name = "r_loadlit",
+           .fallback = "1",
+           .flags = gc::kArchive,
+           .help = "Coloured light from a map's .lit file, fetched from a server when you lack it.",
+           .kind = gc::CvarKind::boolean,
+           .values = "1: each map in its coloured light where it has one (the default); 0: every "
+                     "map in its own grey light, and none fetched"},
+          &picture.load_lit);
   cv.bind({.name = "r_skyfog",
            .fallback = "0.5",
            .flags = gc::kArchive,

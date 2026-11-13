@@ -105,4 +105,9 @@ inline void set_return_float(Vm& vm, float v) { set_global_float(vm, kGlobalRetu
 inline void set_return_int(Vm& vm, int32_t v) { set_global_int(vm, kGlobalReturn, v); }
 inline void set_return_vec(Vm& vm, Vec3 v) { set_global_vec(vm, kGlobalReturn, v); }
 
+// `&` and `|` on floats as the bytecode does them: each side truncated toward zero to a 32-bit
+// integer (out of range or NaN: -2147483648), the result back to a float.
+float bit_and(float a, float b);
+float bit_or(float a, float b);
+
 }  // namespace ge::progs

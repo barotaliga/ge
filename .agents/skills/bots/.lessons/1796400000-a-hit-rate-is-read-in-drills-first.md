@@ -1,7 +1,7 @@
 ---
 title: Read a bot's hit rate in a weapon drill and per player before tuning its aim
 date: 2026-11-05
-scope: games/shooters_edge/net/classic_hits.cpp, games/shooters_edge/net/classic_team.cpp, games/shooters_edge/bots/fighter.cpp, games/shooters_edge/qc/arena/world.qc
+scope: games/shooters_edge/net/classic_hits.cpp, games/shooters_edge/net/classic_team.cpp, games/shooters_edge/bots/fighter.cpp, games/shooters_edge/rules/arena_world.cpp
 concepts: [hit-rate, accuracy, drill, respawn, telefrag, trigger]
 ---
 

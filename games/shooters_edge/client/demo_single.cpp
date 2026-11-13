@@ -335,9 +335,15 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
         case kParticle:
           m.skip(6 + 3 + 2);
           break;
-        case kDamage:
-          m.skip(2 + 6);
+        case kDamage: {  // the armour, the blood, where it came from
+          DemoBlow b;
+          b.armor = m.u8();
+          b.blood = m.u8();
+          const float x = coord(m), y = coord(m), z = coord(m);
+          b.from = {x, y, z};
+          take_blow(s, b);
           break;
+        }
         case kSpawnStatic:
           s.statics.push_back(read_spawn(m));
           break;

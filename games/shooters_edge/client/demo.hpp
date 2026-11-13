@@ -181,6 +181,15 @@ enum class DemoEffectKind : uint8_t {
   named,
   named_trail
 };
+// A blow the player took (the protocol's damage message, to him alone): the armour and the blood it
+// cost, and where it came from (units). What tips the classic view (demo_eyes.hpp).
+struct DemoBlow {
+  int armor = 0, blood = 0;
+  sh::Vec3f from;
+};
+
+inline constexpr size_t kKeptBlows = 8;
+
 struct DemoEffect {
   DemoEffectKind kind = DemoEffectKind::gunshot;
   int code = 0;       // the message's kind byte
@@ -200,17 +209,23 @@ struct DemoState {
   // The level's place names as the recording kept them (`//loc` lines, plugins/shooter/locs.hpp);
   // empty when it kept none.
   ge::shooter::Locs places;
-  double time = 0;                          // the demo's clock, s
-  sh::Vec3f eye;                            // the view's eye, units
-  sh::Vec3f angles;                         // the view's angles, degrees
-  sh::Vec3f kick;                           // sequel: the server's kick angles on the view, degrees
-  int view_entity = 1;                      // single: the entity the eye rides
-  int max_clients = 1;                      // single: the players, entities 1 to this
-  int player = 0;                           // the recording (client) or tracked (multiview) slot
-  float view_height = 22;                   // over the origin, units
-  int weapon_frame = 0;                     // single: the held weapon's frame (client data)
-  bool intermission = false;                // the level ended: the eye is the intermission's
-  int32_t stats[kStatCount] = {};           // health, ammo, items ... (DemoStat)
+  double time = 0;   // the demo's clock, s
+  sh::Vec3f eye;     // the view's eye, units
+  sh::Vec3f angles;  // the view's angles, degrees
+  sh::Vec3f kick;    // sequel: the server's kick angles on the view, degrees
+  // The blows the view's player took (single, client, multiview): the last `kKeptBlows` of them
+  // and how many in all since the demo was opened, so a look after several frames misses none.
+  std::vector<DemoBlow> blows;
+  int64_t blows_taken = 0;
+  sh::Vec3f velocity;              // client: the recording's player's, units/s (`velocity_read`)
+  bool velocity_read = false;      // client: the player's velocity came in his last player state
+  int view_entity = 1;             // single: the entity the eye rides
+  int max_clients = 1;             // single: the players, entities 1 to this
+  int player = 0;                  // the recording (client) or tracked (multiview) slot
+  float view_height = 22;          // over the origin, units
+  int weapon_frame = 0;            // single: the held weapon's frame (client data)
+  bool intermission = false;       // the level ended: the eye is the intermission's
+  int32_t stats[kStatCount] = {};  // health, ammo, items ... (DemoStat)
   std::vector<std::string> models, sounds;  // precache lists, index 1 first ([0] is "")
   std::vector<std::string> images;          // sequel: the pictures it names (`pics/<name>.pcx`)
   std::array<std::string, 32> looks;        // sequel: each slot's model and skin ("male/grunt")
@@ -240,6 +255,9 @@ struct DemoState {
   int aim_bend = -1;        // a live stream's: the entity the aim help bent the player's shot onto
   int64_t frames = 0;       // frames read
 };
+
+// `b` taken: kept among the last `kKeptBlows`, counted.
+void take_blow(DemoState& s, const DemoBlow& b);
 
 // The sequel format's player state, as its frames carry it (whole 1/8 units, 1/4 units, angle16).
 struct SequelView {

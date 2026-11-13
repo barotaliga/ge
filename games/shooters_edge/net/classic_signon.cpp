@@ -22,6 +22,7 @@
 #include "progs/vm.hpp"
 #include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/classic_looks.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/net/classic_talk.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -339,11 +340,16 @@ bool download_allowed(const ClassicServer& s, const std::string& path, std::stri
     return false;
   }
   auto under = [&](const char* dir) { return path.rfind(dir, 0) == 0; };
-  const bool ok = under("skins/")   ? s.cfg.allow_skins
-                  : under("progs/") ? s.cfg.allow_models
-                  : under("sound/") ? s.cfg.allow_sounds
-                  : under("maps/")  ? s.cfg.allow_maps
-                                    : s.cfg.allow_other;
+  // A player figure's folder: its pictures are skins, its figures models.
+  const bool figure = under("players/") && (path.ends_with(".md2") || path.ends_with(".mdl"));
+  // A map's coloured light and place names go with the map.
+  const bool extra =
+      (under("lits/") && path.ends_with(".lit")) || (under("locs/") && path.ends_with(".loc"));
+  const bool ok = under("skins/") || (under("players/") && !figure) ? s.cfg.allow_skins
+                  : under("progs/") || figure                       ? s.cfg.allow_models
+                  : under("sound/")                                 ? s.cfg.allow_sounds
+                  : under("maps/") || extra                         ? s.cfg.allow_maps
+                                                                    : s.cfg.allow_other;
   if (!ok) why = "that kind of file is not offered";
   return ok;
 }
@@ -385,6 +391,15 @@ void cmd_download(ClassicServer& s, int slot, std::string path) {
   if (download_allowed(s, path, why)) {
     for (size_t i = 0; i < s.cfg.files.size(); i++)
       if (s.cfg.files[i].path == path) file = static_cast<int>(i);
+    std::vector<uint8_t> bytes;
+    // A map's coloured light asked for in lits/ may sit beside the map instead.
+    const bool lit = path.starts_with("lits/") && path.ends_with(".lit");
+    if (file < 0 && s.cfg.read_file &&
+        ((s.cfg.read_file(path, &bytes) && !bytes.empty()) ||
+         (lit && s.cfg.read_file("maps/" + path.substr(5), &bytes) && !bytes.empty()))) {
+      s.cfg.files.push_back({path, std::move(bytes)});  // kept for the next who asks
+      file = static_cast<int>(s.cfg.files.size() - 1);
+    }
     if (file < 0) why = "not found";
   }
   const bool chunked = c.ext.has(ExtFamily::x, kXChunkedDl);
@@ -533,6 +548,11 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
     }
   } else if (cmd == "users") {
     client_print(s, slot, 2, classic_users(s));  // who is on, by user id (classic_admin.hpp)
+  } else if (cmd == "listskins") {  // the skins and player figures offered (classic_looks.hpp)
+    std::vector<std::string> names;
+    if (s.cfg.list_files) names = s.cfg.list_files();
+    for (const ServedFile& f : s.cfg.files) names.push_back(f.path);
+    client_print(s, slot, 2, looks_offered(names, s.cfg.allow_download));
   } else if (cmd == "ptrack" || cmd == "snap" || cmd == "upload") {
     // Spectator tracking, screenshots and uploads: not built.
   } else {

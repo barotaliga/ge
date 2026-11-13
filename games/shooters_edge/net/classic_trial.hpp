@@ -40,6 +40,10 @@ struct TrialOptions {
   bool antilag = false;
   bool capture = false;  // keep a pcap of the server's datagrams
   int maxrate = 0;
+  // The server also offers a player model folder, the map's coloured light and its place names,
+  // read on demand (`trial_figure_files`); the first client wears the folder (`model cyborg`,
+  // `skin oni911`) and every client asks for the map's extras, so each must fetch all four.
+  bool figures = false;
 };
 
 struct TrialClient {
@@ -72,6 +76,9 @@ struct TrialReport {
 
 // The files the trial's server offers (deterministic bytes).
 std::vector<ServedFile> trial_files();
+// What `figures` serves: players/cyborg/tris.md2 and its oni911.pcx skin, maps/arena.lit and
+// locs/arena.loc.
+std::vector<ServedFile> trial_figure_files();
 
 TrialReport run_classic_trial(const TrialOptions& opt);
 

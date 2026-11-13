@@ -191,11 +191,11 @@ void GamesPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int widt
   const float x = kListLeft + 8;
   // A game: its name's picture 20 px tall (on the sequel's plates, its own plate 32 px tall), its
   // install and edition in the glyphs under it.
-  const float name_h = art.plates() ? 32 : 20;
+  const float name_h = art.plates() ? 32.0f : 20.0f;
   float y = kListTop;
   for (int i = 0; i < count(); i++) {
     const bool game = i < static_cast<int>(rows_.size());
-    const float tall = game ? name_h + 22 : 12;
+    const float tall = game ? name_h + (art.plates() ? 22 : 24) : 12;
     cells_.push_back(pen.at(kListLeft, y, kListRight - kListLeft, tall));
     if (i == selected_) classic_cursor(pen, game ? y + name_h / 2 - 4 : y, t);
     if (!game) {
@@ -210,11 +210,15 @@ void GamesPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int widt
     if (!carve_word(pen, "game-" + g.id, x + 4, y, i == selected_) &&
         picture(list, name, r.x, r.y, r.h) <= 0)
       pen.text(g.id, x, y + 6, false);
+    // "playing" on the name's line: a glyph's ink ends on its cell's row 6, set on the carved
+    // letters' foot (row 15); on a plate, in the middle of it.
     if (g.playing) {
       const std::string_view now = "playing";
-      pen.text(now, kListRight - 8 * static_cast<float>(now.size()), y + name_h / 2 - 4, false);
+      const float cell = art.plates() ? y + name_h / 2 - 4 : y + 15 - 6;
+      pen.text(now, kListRight - 8 * static_cast<float>(now.size()), cell, false);
     }
-    const float under = y + name_h + 2;
+    // The install's rows under the name, clear of the Q's tail (row 23 of the carved line).
+    const float under = y + name_h + (art.plates() ? 2 : 4);
     if (g.install.empty() || g.missing) {
       pen.text(g.missing ? "Its folder is gone." : "Not found yet.", x, under, true);
       pen.text("Enter finds its folder.", x, under + 8, true);

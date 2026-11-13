@@ -62,6 +62,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -139,6 +140,11 @@ struct ServerConfig {
   std::vector<std::pair<std::string, std::string>> info;
   gs::FloodRule flood;  // sv_floodprot
   std::vector<ServedFile> files;
+  // The server's game folder, for a file a client asks for that `files` does not hold (read once,
+  // then kept in `files`) and for `listskins`: false (or unset) when it has none.
+  std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_file;
+  // Every file name in the server's game folder (lower case), for `listskins`; unset: none.
+  std::function<std::vector<std::string>()> list_files;
   std::string hostname = "Shooter's Edge";
   std::string gamedir = "edge";  // the game directory serverdata names
   std::string password, spectator_password;

@@ -37,7 +37,6 @@ bool env_set(const char* name) {
 
 fb::FightOptions duel_of_skills(uint32_t seed, int frames) {
   fb::FightOptions o;
-  o.root = GE_SOURCE_DIR;
   o.frames = frames;
   o.seed = seed;
   o.skills = {sh::AimSkill::expert, sh::AimSkill::novice, sh::AimSkill::expert,

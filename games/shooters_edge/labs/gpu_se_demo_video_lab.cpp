@@ -5,7 +5,8 @@
 // (net/classic_record.hpp). Each recording is read back for who is heard in it, then turned into a
 // video with its sound and voices (client/demo_video.hpp). `--basedir` (with `--game` and
 // `--demo`) turns a real game folder's demo into a video instead, `demo1` by default (`--from`,
-// `--track`, and `--lerp=0` for each frame as read); with `--map`
+// `--track`, `--lerp=0` for each frame as read, `--view=recorded` for the eye without the classic
+// bob, roll and kick); with `--map`
 // too, the match is played on that map of the game folder's (its models and sounds in the video).
 // `--voices=<dir>` has each client speak `<dir>/<name>.wav` (red1, red2, blue1, blue2: any rate,
 // mono or more) in place of its own synthetic voice; nothing it reads is kept. The match's pack
@@ -286,6 +287,7 @@ bool video(gl::Lab& lab, ge::gpu::Device* device, const cl::SearchPath& files,
   o.from_s = lab.arg_num("from");
   o.track = static_cast<int>(lab.arg_num("track"));
   o.lerp = lab.arg("lerp") != "0";
+  o.classic_view = lab.arg("view") != "recorded";
   o.codec = lab.arg("codec");
   o.container = "mkv";
   if (!lab.arg_nums("game-volume").empty())
@@ -461,6 +463,9 @@ const gl::LabSpec kSpec{
      {"from", "0", "where the video starts on the demo's timeline, s"},
      {"track", "-1", "the slot a multiview demo's view rides (-1: the lowest playing)"},
      {"lerp", "1", "1: drawn between the demo's frames (demo_lerp.hpp); 0: each frame as read"},
+     {"view", "classic",
+      "classic: the first game's bob, roll and kick rebuilt on the eye (demo_eyes.hpp); "
+      "recorded: the eye as recorded"},
      {"look", "modern",
       "the picture: modern (the video's default, classic-enhance on) or classic (every ce_ off)"}},
     "--size=160,90 --seconds=2 --ticks=1000",

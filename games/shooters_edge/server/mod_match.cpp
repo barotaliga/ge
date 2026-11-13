@@ -236,8 +236,8 @@ ModMatchReport run_mod_match(const ModMatchOptions& opt) {
   }
   std::string path = opt.progs.empty() ? progs_from_console(opt.console) : opt.progs;
   ge::progs::Progs progs;
-  ge::progs::NativeOffsets natives;
   if (opt.native != nullptr) {
+    ge::progs::NativeOffsets natives;
     if (!ge::progs::build_native_progs(*opt.native, progs, natives, r.error)) return r;
     r.source = opt.compiled_name.empty() ? "a native program" : opt.compiled_name;
   } else if (opt.compiled) {
@@ -250,7 +250,6 @@ ModMatchReport run_mod_match(const ModMatchOptions& opt) {
   QcServerOptions so;
   so.seed = opt.seed;
   so.loop.max_edicts = 1024;
-  if (opt.native != nullptr) so.natives = &natives;
   std::string error;
   std::unique_ptr<QcServer> sp = make_qc_server(progs, so, error);
   if (!sp) {

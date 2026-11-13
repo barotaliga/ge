@@ -375,7 +375,9 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   // The map's coloured light, a .lit file beside it or in lits/, over the light it carries.
   std::vector<uint8_t> lit_store;
   std::string lit_path, lit_refused;
-  const std::span<const uint8_t> lit = map_lit(files, map.name, lit_store, &lit_path, content);
+  const std::span<const uint8_t> lit = picture.load_lit
+                                           ? map_lit(files, map.name, lit_store, &lit_path, content)
+                                           : std::span<const uint8_t>{};
   ba::Pack pack;  // the map file alone, as the scene reader takes it
   pack.bytes = map.file;
   pack.files.push_back({"maps/" + map.name + ".bsp", 0, static_cast<uint32_t>(map.file.size())});

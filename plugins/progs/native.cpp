@@ -6,8 +6,11 @@
 // ge:test tests/progs_native_test.cpp
 #include "progs/native.hpp"
 
+#include <climits>
+#include <cstdint>
 #include <cstdio>
 #include <iterator>
+#include <memory>
 #include <set>
 #include <string_view>
 
@@ -134,6 +137,7 @@ bool build_native_progs(const NativeProgram& program, Progs& out, NativeOffsets&
     }
     offsets.fields.push_back(d->offset);
   }
+  out.natives = std::make_shared<const NativeOffsets>(offsets);
   return true;
 }
 
@@ -181,5 +185,19 @@ void set_field_vec(Vm& vm, int32_t ent, int field, Vec3 v) {
   w[1] = as_word(v.y);
   w[2] = as_word(v.z);
 }
+
+namespace {
+
+// Truncation toward zero to a 32-bit integer, out of range or NaN -2147483648, as BITAND and
+// BITOR truncate.
+int32_t word_int(float f) {
+  if (!(f > -2147483904.0f && f < 2147483648.0f)) return INT32_MIN;
+  return static_cast<int32_t>(f);
+}
+
+}  // namespace
+
+float bit_and(float a, float b) { return static_cast<float>(word_int(a) & word_int(b)); }
+float bit_or(float a, float b) { return static_cast<float>(word_int(a) | word_int(b)); }
 
 }  // namespace ge::progs

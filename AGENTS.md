@@ -311,6 +311,7 @@ characters.
 | `engine/capture/` | Video with sound (`ge::capture`, in `ge_play`; `docs/replays.md`): the Matroska and fragmented MP4 muxers and readers, I420, the encoders, the export's A/V clock, the live capture, the sync fixture | `replay` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |
 | `engine/forward/` | Forward (`ge::forward`, `docs/tv.md`): an opaque hop for any game's datagrams, chained by a route set up before the game's handshake; the dial, the allow list, alive, NAT rebinding, capped answers | `net` |
+| `engine/webtransport/` | WebTransport (`ge::webtransport`, `docs/hub.md`): the session a browser page opens (QUIC by ngtcp2, TLS by picotls, the HTTP/3 it needs), its datagrams; the certificate trusted by hash | `net` |
 | `engine/proxy/` | Proxy (`ge::proxy`, `docs/tv.md`): a near and a far hop over a slow link: each game datagram repeated and packed against the last one the other end holds, sessions with an allow list, the trial | `net` |
 | `engine/gamecli/` | A player's game CLI (`ge::gamecli`, `docs/gamecli.md`): the command table and answer, settings through the catalog, servers, players, rcon, hosting, joining, logs; `ge_add_game_cli` | `agent-interface` |
 | `engine/server/` | The server core (`ge::server`, `docs/servers.md`): `ServerGame` a game plugs in, the frame, the node, session and hosting round it, the dedicated process (`ge_add_server`), the sample game and trial | `net` |
@@ -371,7 +372,7 @@ characters.
 | `games/shooters_edge/rules/` | Shooter's Edge's own rules in C++ as native programs (M52h): the classic server's calls typed for them; the arena, then the campaign, in place of the QC | `progs`, `shooter` |
 | `games/shooters_edge/hub/` | Shooter's Edge's hub binary (`shooters_edge_hub`): the engine's hub with the game's modes and words | `net` |
 | `games/shooters_edge/web/` | Shooter's Edge's web viewer (`shooters_edge_viewer`, the `web` preset): the packs and a demo fetched from a hub, the match played on the page's canvas | `net` |
-| `games/shooters_edge/qc/` | Shooter's Edge's own QC mods modders start from: `common/` shared, `arena/` the deathmatch, `campaign/` the single-player game (built by `ge qc build`) | `progs` |
+| `games/shooters_edge/qc/` | Shooter's Edge's last QC, frozen and being carried to C++ (M52h): `campaign/` the single-player game and `common/` it shares (the arena is C++ now, `rules/`) | `progs` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (the harness), `golden.hpp`, `golden/` | `testing` |
 | `porting/` | The WORKING AREA (above): the porting guide, the porting map, the golden-table generators. Deleted when porting ends | `port` |
 | `tools/` | The repository's checks and scripts: `check-agents.sh`, `agents-index.mjs` (the `ge:` tags, `docs/index.md`, `make find`), `skill-lessons.mjs`, `precheck.sh`, `lint.sh` | `write-code` |

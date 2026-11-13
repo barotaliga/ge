@@ -1,16 +1,16 @@
-// LAB `se-baseline`: does the baseline mod (games/shooters_edge/qc/, compiled from its sources by
-// the QC compiler) play a deathmatch on the test arena the way its sources say? The mod is built
-// from `<root>/games/shooters_edge/qc/arena/progs.src` and played by bots on the arena with its
-// door and plat (games/shooters_edge/server/baseline_mod.hpp) until its time limit changes the
-// level. Tables: the build (functions, statements, globals, crc), the frags and deaths, the
+// LAB `se-baseline`: does the baseline mod (the arena's rules in C++, games/shooters_edge/rules,
+// built as a native program) play a deathmatch on the test arena the way its rules say? It is
+// played by bots on the arena with its door and plat (games/shooters_edge/server/baseline_mod.hpp)
+// until its time limit changes the level. Tables: the build (functions, globals, fields,
+// strings, crc), the frags and deaths, the
 // obituaries by how each death came, the pickups, the missiles by kind, the builtins called.
 // Pictures: the arena from above with the items, the door and the plat, every bot's path and every
 // missile; the frags against the clock; the door's and the plat's heights against the clock. The
-// lab fails when the mod does not compile, faults, spawns an entity it cannot place, or nobody is
+// lab fails when the mod does not build, faults, spawns an entity it cannot place, or nobody is
 // fragged.
 //
-// ge:summary Lab: the baseline QC mod compiled from source and played by bots: frags, items, movers
-// ge:keywords lab se-baseline baseline-mod qc-compiler deathmatch frags obituaries pickups door
+// ge:summary Lab: the baseline mod (the arena's rules in C++) played by bots: frags, items, movers
+// ge:keywords lab se-baseline baseline-mod native-arena deathmatch frags obituaries pickups door
 // ge:keywords plat missiles paths digest
 // ge:skill progs shooter labs
 // ge:test tests/shooters_edge_baseline_mod_test.cpp
@@ -128,7 +128,8 @@ void draw_frags(gl::Lab& lab, const sv::ModMatchReport& r, const Inputs& in) {
   }
   if (r.ended) c.marks.push_back({r.end_time, "the level changes"});
   la::shoot(lab, "frags", gl::line_chart(c),
-            "Each bot's frags as the baseline mod keeps them (combat.qc's score_death): up one for "
+            "Each bot's frags as the baseline mod keeps them (arena_combat.cpp's score_death): up "
+            "one for "
             "a kill, down one for a death by his own hand or the world's; flat for the five "
             "seconds the scores stand after the time limit, then the level changes.",
             "steps of exactly one; down-steps only where a bot killed himself; the lines flat "
@@ -150,36 +151,35 @@ void draw_movers(gl::Lab& lab, const sv::ModMatchReport& r, const Inputs& in) {
     c.traces.push_back(t);
   }
   c.rules = {96, 120};
-  la::shoot(lab, "movers", gl::line_chart(c),
-            "The door (world.qc's func_door) rises 120 units at 100 a second when a player comes "
-            "near, waits 3 s after the last touch and comes down, going back up when it meets a "
-            "player; the plat (func_plat) waits at the bottom until a player stands on it, rides "
-            "96 units up at 64 a second, waits 3 s and comes down.",
-            "ramps of a constant slope between 0 and the dashed tops; the door holding at 120 "
-            "while bots pass and turning back up part-way when blocked; the plat up once for the "
-            "player who spawned on it, and again whenever a bot steps on",
-            in);
+  la::shoot(
+      lab, "movers", gl::line_chart(c),
+      "The door (arena_map.cpp's func_door) rises 120 units at 100 a second when a player comes "
+      "near, waits 3 s after the last touch and comes down, going back up when it meets a "
+      "player; the plat (func_plat) waits at the bottom until a player stands on it, rides "
+      "96 units up at 64 a second, waits 3 s and comes down.",
+      "ramps of a constant slope between 0 and the dashed tops; the door holding at 120 "
+      "while bots pass and turning back up part-way when blocked; the plat up once for the "
+      "player who spawned on it, and again whenever a bot steps on",
+      in);
 }
 
 void run(gl::Lab& lab) {
   ge::progs::Progs progs;
   std::string error;
-  if (!sv::compile_baseline_mod(lab.arg("root"), progs, error)) {
+  if (!sv::baseline_mod(progs, error)) {
     lab.fail("se-baseline: " + error,
-             "next: run the lab from the repository's root, or pass --root");
+             "next: run tests/shooters_edge_arena_rules_test.cpp, which names the declaration");
     return;
   }
-  int builtins = 0;
-  for (const ge::progs::Function& f : progs.functions) builtins += f.first_statement < 0 ? 1 : 0;
   gl::LabTable build{"the build", {"what", "value"}, {}};
-  build.rows = {{"source", sv::kBaselineSource},
-                {"functions", std::to_string(progs.functions.size() - 1 - builtins)},
-                {"builtins declared", std::to_string(builtins)},
-                {"statements", std::to_string(progs.statements.size())},
+  build.rows = {{"source", "games/shooters_edge/rules (C++)"},
+                {"functions", std::to_string(progs.functions.size() - 1)},
                 {"global words", std::to_string(progs.globals.size())},
+                {"field defs", std::to_string(progs.fielddefs.size())},
+                {"entity words", std::to_string(progs.entityfields)},
                 {"crc", std::to_string(progs.crc)}};
   lab.table(build);
-  lab.metric("build.statements", static_cast<double>(progs.statements.size()), "count");
+  lab.metric("build.functions", static_cast<double>(progs.functions.size() - 1), "count");
   lab.metric("build.globals", static_cast<double>(progs.globals.size()), "count");
 
   sv::ModMatchOptions opt;
@@ -237,25 +237,23 @@ void run(gl::Lab& lab) {
                 {"frag log lines", std::to_string(r.frag_log.size())},
                 {"entities inhibited", std::to_string(r.inhibited)},
                 {"map messages", std::to_string(r.map_messages.size())},
-                {"QC statements", std::to_string(r.statements)},
                 {"faults", std::to_string(r.faults)}};
   lab.table(match);
   lab.metric("match.frames", r.frames, "count");
   lab.metric("match.missiles", static_cast<double>(r.missiles.size()), "count");
   lab.metric("match.pickups", picked, "count");
   lab.metric("match.frag-log", static_cast<double>(r.frag_log.size()), "count");
-  lab.metric("match.statements", static_cast<double>(r.statements), "count");
   lab.metric("match.faults", static_cast<double>(r.faults), "count");
 
   if (r.faults > 0)
     lab.fail("se-baseline: the mod faulted " + std::to_string(r.faults) +
                  " times; the last: " + r.last_fault,
-             "next: read the QC stack in the fault; the line table names the .qc line");
+             "next: read the stack in the fault; it names the rule's function");
   for (const std::string& m : r.map_messages)
-    lab.fail(
-        "se-baseline: the map said: " + m,
-        "next: declare the field in games/shooters_edge/qc/common/defs.qc, or fix the entity text "
-        "in games/shooters_edge/server/baseline_mod.cpp");
+    lab.fail("se-baseline: the map said: " + m,
+             "next: declare the field in games/shooters_edge/rules/arena_decl.hpp, or fix the "
+             "entity text "
+             "in games/shooters_edge/server/baseline_mod.cpp");
   if (r.frag_log.empty())
     lab.fail("se-baseline: nobody was fragged",
              "next: run tests/shooters_edge_baseline_mod_test.cpp");
@@ -269,14 +267,13 @@ const gl::LabSpec kSpec{
     "se-baseline",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "games/shooters_edge/qc (the baseline deathmatch mod, compiled by plugins/progs' QC compiler) "
+    "games/shooters_edge/rules (the baseline deathmatch mod, the arena's rules in C++) "
     "on games/shooters_edge/server's mod server, played by bots on the arena with its door and "
     "plat",
     "progs",
-    "Does the baseline mod, compiled from its sources, play a deathmatch as they say: pickups, "
+    "Does the baseline mod play a deathmatch as its rules say: pickups, "
     "weapons, frags and obituaries, respawns, the door and the plat, the time limit?",
     {
-        {"root", ".", "the repository's root (the mod's sources are under it)"},
         {"bots", "2", "bots in the match, 1..32"},
         {"timelimit", "1", "the match's time limit, minutes (the mod reads the cvar)"},
         {"frames", "5100", "server frames of 13 ms at most"},

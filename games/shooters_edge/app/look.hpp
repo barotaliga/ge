@@ -94,6 +94,9 @@ struct Picture {
   // r_skyname: the sky box drawn through every map's sky in place of the one its settings name
   // (client/files.hpp's `sky_box_files`); empty, each map's own. Read when the world is made.
   std::string sky_name;
+  // r_loadlit: 1 a map's coloured light read from its .lit file (client/files.hpp's `map_lit`) and
+  // fetched from a server joined when the files lack it; 0 every map in its own grey light.
+  bool load_lit = true;
   // r_skyfog: the share of a map's fog laid over its sky, where the map's own `skyfog` does not
   // say (0..1, either look).
   double sky_fog = 0.5;
