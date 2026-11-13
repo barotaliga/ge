@@ -246,7 +246,7 @@ void read_messages(SequelTvFace& f, SequelViewer& v, const uint8_t* data, size_t
   }
 }
 
-// A new level: everything kept starts over, and every viewer is told to ask for it.
+// A new level: everything kept starts over, and every viewer is told the level changed.
 void new_level(SequelTvFace& f) {
   f.strings.clear();
   f.baselines.clear();
@@ -255,11 +255,14 @@ void new_level(SequelTvFace& f) {
   for (SequelViewer& v : f.viewers) {
     if (v.stage == SequelViewerStage::free) continue;
     v.queue.clear();
-    const uint8_t again[] = {kSvcReconnect};
-    queue(v, again);
+    // As a server changing levels: the client keeps its connection and asks for the signon again
+    // with `new`; it may be sent this one message before it does.
+    static constexpr char kAgain[] = "\x0b" "changing\n\0" "\x0b" "reconnect\n";
+    queue(v, std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(kAgain), sizeof kAgain));
     v.stage = SequelViewerStage::signon;
     v.asked = false;
     v.signed_on = false;
+    v.go = 1;
   }
 }
 
