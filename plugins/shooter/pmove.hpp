@@ -90,6 +90,12 @@ struct MoveSettings {
   // water jump, which it times itself): the move then never checks for a water jump, never
   // jumps, and leaves `waterjump_time` as it was handed (the program's time left).
   bool program_jumps = false;
+  // THE AIR (a game whose move steers in the air another way): the acceleration in the air (0:
+  // `accelerate`'s) and the wish speed the air's gain is measured against (0: the whole wish).
+  // The defaults are this move's own; the sequel's move with no air acceleration set steers
+  // with 1 and the whole wish (sequel_move.hpp).
+  float air_accel = 0;
+  float air_wish_cap = 30;
 };
 
 // What a player carries from one command to the next.

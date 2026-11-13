@@ -226,6 +226,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
                const NavSettings& set, NavGraph& g) {
   g = NavGraph{};
   g.set = set;
+  g.move = move;
   const Solid& w = world.solids[0];
   g.lo = w.mins;
   g.hi = w.maxs;
