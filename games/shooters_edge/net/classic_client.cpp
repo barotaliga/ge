@@ -145,6 +145,17 @@ void start_skins(ClassicClientEnd& c) {
     want(folder + "tris.mdl");
     if (plain_name(skin)) want(folder + skin + ".pcx");
   }
+  // The map's extras: its name from the model list's first map ("maps/dm4.bsp").
+  const std::string& world = c.models.size() >= 2 ? c.models[1] : std::string();
+  if (world.starts_with("maps/") && world.ends_with(".bsp")) {
+    const std::string map = world.substr(5, world.size() - 9);
+    if (plain_name(map)) {
+      if (c.cfg.fetch_lit && !has_file(c, "maps/" + map + ".lit") &&
+          !has_file(c, "maps/lits/" + map + ".lit"))
+        want("lits/" + map + ".lit");
+      if (c.cfg.fetch_locs) want("locs/" + map + ".loc");
+    }
+  }
   next_skin_or_begin(c);
 }
 
