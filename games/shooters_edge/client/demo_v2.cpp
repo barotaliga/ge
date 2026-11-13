@@ -1339,7 +1339,7 @@ void demo_hub_meta(std::span<const uint8_t> recording, gr::Meta& header, gr::Met
   const auto on = [&](const char* key) { return std::atoi(info(key).c_str()) != 0; };
   const size_t players = seen.size();
   std::string mode;
-  if (s.format == DemoFormat::single)
+  if (s.format == DemoFormat::single || (s.format == DemoFormat::sequel && s.players.size() <= 1))
     mode = "single";
   else if (on("coop"))
     mode = "coop";
@@ -1388,7 +1388,13 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
             {"bytes", std::to_string(recording.size())},
             {"keyframe_seconds", std::to_string(options.keyframe_seconds)}};
   gr::Meta final_meta;
-  if (!sequel) demo_hub_meta(recording, h.meta, final_meta);  // the sequel's: its own face's
+  gr::Meta sequel_meta;  // the hub's words for a sequel's recording, after its face's own
+  if (!sequel) {
+    demo_hub_meta(recording, h.meta, final_meta);
+  } else {
+    demo_hub_meta(recording, sequel_meta, final_meta);
+    std::erase_if(final_meta, [](const auto& kv) { return kv.first == "duration_ms"; });
+  }
   h.meta.insert(h.meta.end(), options.meta.begin(), options.meta.end());
   if (multiview)
     h.tracks = {{kMultiviewTrack, gr::TrackKind::messages, gr::TrackCodec::field, "multiview"}};
@@ -1422,10 +1428,11 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
   } else if (sequel) {
     // The broadcast's writer (sequel_tv.hpp), fed the finished recording: the same bytes.
     SequelBroadcast b;
-    sequel_broadcast_begin(b, every, recording.size());
+    sequel_meta.insert(sequel_meta.end(), options.meta.begin(), options.meta.end());
+    sequel_broadcast_begin(b, every, recording.size(), sequel_meta);
     for (const std::span<const uint8_t> block : sequel_blocks(recording))
       sequel_broadcast_block(b, block);
-    sequel_broadcast_end(b);
+    sequel_broadcast_end(b, final_meta);
     out = std::move(b.out);
     rep.records = b.report.blocks;
     rep.walked = b.report.walked;

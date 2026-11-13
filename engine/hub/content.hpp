@@ -2,10 +2,12 @@
 // taken out of the packs beside the viewer and sent as one small compressed pack, so a visitor
 // downloads that map, its models and sounds rather than every pack the hub holds.
 //
-// The game names the files (`HubSpec::demo_files`); the hub mounts the viewer folder's packs in
-// name order (a later one wins, as a game folder's numbered packs), takes each named file (a name
-// ending in '/' takes the folder), writes them as a pack and packs that with zstd. The result is
-// kept in the archive's `content/` named by its own SHA-256, and the demo's hash points at it
+// The game names the files (`HubSpec::demo_files`, and `file_needs` the ones each file found names
+// in turn, as a map keeps its textures in files of their own); the hub mounts the viewer folder's
+// packs in name order (a later one wins, as a game folder's numbered packs), takes each named file
+// (a name ending in '/' takes the folder), writes them as a pack and packs that with zstd. The
+// result is kept in the archive's `content/` named by its own SHA-256, and the demo's hash points
+// at it
 // (`content/<demo sha>.txt`), so the work is done once a demo and two demos that need the same
 // files share one pack. A name no pack holds is left out and counted.
 //
@@ -14,7 +16,7 @@
 //
 // ge:summary A demo's content pack: only the files it needs out of the hub's packs, zstd, by hash
 // ge:keywords hub content pack demo files minimal download zstd pak viewer cache content-address
-// ge:keywords demo_content content_answer demo_files
+// ge:keywords demo_content content_answer demo_files file_needs
 // ge:skill net
 // ge:test tests/hub_content_test.cpp
 #pragma once

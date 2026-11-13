@@ -3,7 +3,7 @@
 // player's status at every frame, and checked so a damaged file is refused with the place it
 // broke rather than misread.
 //
-// THE THREE FORMATS (`DemoFormat`), told apart by their first bytes, never by the file's name (a
+// THE FOUR FORMATS (`DemoFormat`), told apart by their first bytes, never by the file's name (a
 // packed or archived file is unpacked first, so it opens as the one inside: demo_pack.hpp):
 //
 // - SINGLE (`.dem`): the single-player protocol (version 15) as a client received it. The file
@@ -23,6 +23,9 @@
 //   recorder's own `playerinfo` form (demo_multiview.cpp). A frame ends where the next record's
 //   milliseconds are not 0. The view rides one player (`Demo::track`, the lowest one playing by
 //   default): his origin and his view's angles, his stats, the messages sent to him alone.
+// - SEQUEL (the sequel's client recording, `.dm2`): blocks of an i32 length and one server
+//   packet's messages, ended by -1; a block with a `frame` is one of the game's 10 Hz frames,
+//   deltas off a ring of 16 (demo_sequel.cpp).
 //
 // THE AXES are the map's: units, z up, angles in degrees with the pitch down positive and the
 // yaw counter-clockwise from +x (view.hpp converts to the engine's).
@@ -41,22 +44,13 @@
 // messages among their messages. Without the header and the voice messages it is a plain
 // recording (net/classic_record.hpp writes either). `DemoState::voice_format` says which was read.
 //
-// VOICE (`DemoVoice`) is the protocol's voice message (svc 84, under the x2 family's voice bit):
-// the talker's slot, a generation byte (the codec in its high nibble, `kVoiceOpus`; the talker's
-// stream generation in its low one), the first frame's sequence byte, a u16 length and the
-// payload: 20 ms Opus frames of 48 kHz mono, each a u16 length and its bytes. A client recording
-// with voice carries the voices its player was sent (the server routes a team's talk to the team
-// alone) and the recorder's own, written in as he spoke; a multiview recording with voice carries
-// every player's. A plain recording from another program may carry the message too and is read
-// the same. demo_voice.hpp decodes them into each talker's sound.
-//
 // ge:summary Recorded games read frame by frame: the single-player demo and the client recording
 // ge:keywords demo recording dem playback timedemo benchmark single-player multiplayer client
 // ge:keywords serverinfo serverdata playerinfo packet-entities clientdata view-entity open_demo
 // ge:keywords next_frame demo-format demo-state stats intermission multiview mvd gzip track
 // ge:keywords voice-format qwdv mvdv voice-header sound-events static-sounds read_voice
 // ge:keywords updatefrags frags updateuserinfo player-names dead gib topcolor setinfo gamedir
-// ge:keywords print centerprint obituary chat demo-print
+// ge:keywords print centerprint obituary chat demo-print sequel dm2 sequel-demo configstring
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -75,7 +69,7 @@ namespace shooters_edge::client {
 
 namespace sh = ge::shooter;
 
-enum class DemoFormat : uint8_t { single, client, multiview };
+enum class DemoFormat : uint8_t { single, client, multiview, sequel };
 
 // The voice formats' header (see above).
 inline constexpr uint8_t kVoiceMagic[4] = {'G', 'E', 'V', 'R'};
@@ -158,7 +152,14 @@ struct DemoPrint {
   std::string text;  // as sent: may hold several lines and the charset's coloured letters
 };
 
-// One voice message: a talker's run of 20 ms frames.
+// One voice message, a talker's run of 20 ms frames: the protocol's voice message (svc 84, under
+// the x2 family's voice bit): the talker's slot, a generation byte (the codec in its high nibble,
+// `kVoiceOpus`; the talker's stream generation in its low one), the first frame's sequence byte, a
+// u16 length and the payload: 20 ms Opus frames of 48 kHz mono, each a u16 length and its bytes. A
+// client recording with voice carries the voices its player was sent (the server routes a team's
+// talk to the team alone) and the recorder's own, written in as he spoke; a multiview recording
+// with voice carries every player's. A plain recording from another program may carry the message
+// too and is read the same. demo_voice.hpp decodes them into each talker's sound.
 struct DemoVoice {
   int sender = 0;             // the talker's slot
   int gen = 0;                // the codec (high nibble) and the talker's stream generation (low)
@@ -192,7 +193,7 @@ struct DemoEffect {
 struct DemoState {
   DemoFormat format = DemoFormat::single;
   bool voice_format = false;                // a `.qwdv` or `.mvdv` (the voice header)
-  int protocol = 0;                         // 15 single, 28 client and multiview
+  int protocol = 0;                         // 15 single, 28 client and multiview, 34 sequel
   std::string map;                          // "e1m1" off `maps/e1m1.bsp`; "" before the first level
   int levels = 0;                           // level starts read so far (a new level: load its map)
   double time = 0;                          // the demo's clock, s
@@ -206,6 +207,8 @@ struct DemoState {
   bool intermission = false;                // the level ended: the eye is the intermission's
   int32_t stats[kStatCount] = {};           // health, ammo, items ... (DemoStat)
   std::vector<std::string> models, sounds;  // precache lists, index 1 first ([0] is "")
+  std::vector<std::string> images;          // sequel: the pictures it names (`pics/<name>.pcx`)
+  std::array<std::string, 32> looks;        // sequel: each slot's model and skin ("male/grunt")
   std::vector<DemoEntity> entities;         // by number
   std::vector<DemoEntity> players;          // client, multiview: by slot (32)
   std::array<int32_t, 32> frags{};          // client, multiview: each slot's frags (updatefrags)
@@ -228,6 +231,17 @@ struct DemoState {
   std::string centre;       // a centre message or the finale's text (the last); empty when none
   uint32_t set_angles = 0;  // client, multiview: a bit a slot whose view the server set (setangle)
   int64_t frames = 0;       // frames read
+};
+
+// The sequel format's player state, as its frames carry it (whole 1/8 units, 1/4 units, angle16).
+struct SequelView {
+  int32_t frame = -1;  // the server frame it is of (-1: none kept in this slot)
+  int16_t origin[3] = {}, velocity[3] = {}, delta[3] = {}, angles[3] = {};
+  int8_t offset[3] = {}, kick[3] = {}, gun_offset[3] = {}, gun_angles[3] = {};
+  uint8_t blend[4] = {};
+  int pm_type = 0, pm_time = 0, pm_flags = 0, gravity = 0;
+  int gun_model = 0, gun_frame = 0, fov = 0, rdflags = 0;
+  int16_t stats[32] = {};
 };
 
 struct Demo {
@@ -256,6 +270,11 @@ struct Demo {
   int64_t hidden = 0;   // records no client sees (the recorder's own data), skipped
   int64_t records = 0;  // records read
   int pending = 0;      // records read into the frame not yet finished
+  // The sequel format: each kept frame's player state (by frame number mod 16, `ring` beside it
+  // holding the entity list), the players the server takes, and the first frame read.
+  std::array<SequelView, 16> views;
+  int max_clients = 0;
+  bool framed = false;
 };
 
 // `bytes` as a demo of any format (detected), unpacked first when packed or archived
@@ -294,6 +313,10 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error);
 // The multiview format: whether `bytes` opens as one, and its next frame.
 bool is_multiview(std::span<const uint8_t> bytes);
 DemoRead next_multiview(Demo& d, std::string& error);
+// The sequel format (demo_sequel.cpp): whether `bytes` opens as one (its first block's length and
+// the server data's protocol; the rest may still be on its way), and its next frame.
+bool is_sequel_demo(std::span<const uint8_t> bytes);
+DemoRead next_sequel(Demo& d, std::string& error);
 
 // The voice message's body (after the id byte) into `out`; false when it runs past the end.
 bool read_voice(DemoMsg& m, DemoVoice& out);

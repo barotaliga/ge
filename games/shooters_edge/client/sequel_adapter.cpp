@@ -3,7 +3,7 @@
 // (`textures/*.wal`), sounds, config files and demo listing read as any classic game's; and its
 // own calls, each answering what this build reads of the game so far: the console's letters and
 // background but no pictures of its HUD and menus yet (the window draws its own), the shell's menu,
-// no held weapons and no demo playback. Each grows here as the sequel's rows land
+// no held weapons; its client recordings. Each grows here as the sequel's rows land
 // (docs/goals/M18v.md).
 //
 // ge:summary The sequel's adapter: the shared calls over its rows, and its own calls as they land
@@ -15,6 +15,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "assets/pcx.hpp"
@@ -72,11 +73,12 @@ bool held_weapons(const GameAdapter&, const SearchPath&, std::vector<ge::viewmod
   return false;
 }
 
-// The table fixes the bytes' type (a game that plays them takes them over).
-bool open_demo(const GameAdapter&,
-               std::vector<uint8_t>,  // NOLINT(performance-unnecessary-value-param)
-               Demo&, std::string& error) {
-  error = "This game's recordings can't be played yet.";
+// Its own client recordings (demo.hpp § SEQUEL); another game's are refused.
+bool open_demo_(const GameAdapter&, std::vector<uint8_t> bytes, Demo& out, std::string& error) {
+  if (!open_demo(std::move(bytes), out, error)) return false;
+  if (out.state.format == DemoFormat::sequel) return true;
+  error = "This recording is of another game. Choose that game to watch it.";
+  out = Demo{};
   return false;
 }
 
@@ -96,7 +98,7 @@ const GameAdapter kSequel{.game = &pf::kGameProfiles[1],
                           .modes = parts::modes,
                           .list_demos = parts::list_demos,
                           .find_demo = parts::find_demo,
-                          .open_demo = open_demo};
+                          .open_demo = open_demo_};
 
 }  // namespace
 

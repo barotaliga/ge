@@ -1,7 +1,7 @@
 // engine/hub/content.hpp: a demo's content pack: only the named files out of the packs beside the
 // viewer (a later pack wins, a folder name takes the folder, a missing name counted), zstd-packed
 // and named by its hash, made once and read back, served by its path, and the Demo page handing
-// it to the viewer in place of every pack.
+// it to the viewer in place of every pack; what a file found names in turn taken once each.
 //
 // ge:summary Test: a demo's content pack made from the viewer's packs, cached, served, handed over
 // ge:keywords test hub content pack demo files zstd pak cache demo-page
@@ -183,4 +183,30 @@ TEST(the_demo_page_hands_the_viewer_its_pack) {
   plain.demo_files = nullptr;
   CHECK(watch_answer(Poller{}, plain, "/demo/" + f.tower.sha, 0, f.site, a) && a.code == 200);
   CHECK(has(a.body, "\"--pack=/viewer/pak0.pak\",\"--pack=/viewer/pak1.pak\""));
+}
+
+TEST(a_file_found_names_more_and_each_is_taken_once) {
+  Fixture f;
+  HubSpec s = spec();
+  int asked = 0;
+  // The tower names the big model, which names the tower again: each read once.
+  s.file_needs = [&](std::string_view name, std::span<const uint8_t>,
+                     std::vector<std::string>& more) {
+    asked++;
+    if (name == "maps/tower.bsp") more = {"PROGS/BIG.MDL", "gfx/also-missing.lmp"};
+    if (name == "progs/big.mdl") more = {"maps/tower.bsp"};
+  };
+  ContentPack pack;
+  std::string error;
+  CHECK_MSG(demo_content(f.site, s, f.tower.sha, pack, error), error);
+  CHECK(pack.files == 4);    // the tower, both sounds, and the model it named
+  CHECK(pack.missing == 2);  // gfx/missing.lmp and the one the tower named
+  CHECK(asked == 4);         // once for each file found
+  std::ifstream in(fs::path(f.archive.dir) / content_path(pack.sha), std::ios::binary);
+  const std::vector<uint8_t> packed((std::istreambuf_iterator<char>(in)),
+                                    std::istreambuf_iterator<char>());
+  std::vector<uint8_t> raw;
+  bool big = false;
+  for (const auto& e : entries(packed, raw)) big = big || e.path == "progs/big.mdl";
+  CHECK(big);
 }

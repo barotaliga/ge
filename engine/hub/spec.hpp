@@ -11,7 +11,8 @@
 //
 // THE DEMO'S CONTENT (`demo_files`, content.hpp): a game that can say which of its files a demo
 // draws from (its map, the models and sounds it lists, what every picture needs) lets the hub send
-// a viewer a small pack of only those instead of every pack it holds.
+// a viewer a small pack of only those instead of every pack it holds; `file_needs` adds what a
+// file found names in turn (a map whose textures are files of their own).
 //
 // ge:summary A game's hub spec (words, protocol, modes and weights) and the interest rule
 // ge:keywords hub spec hubspec mode weight interest order cards score-column game words
@@ -53,6 +54,11 @@ struct HubSpec {
   std::function<bool(std::span<const uint8_t> demo, std::vector<std::string>& names,
                      std::string& error)>
       demo_files;
+  // The files a file in the pack draws from in turn (a map's textures kept beside it), appended to
+  // `more` as `demo_files` names them; each is looked at once. Unset: the demo's names alone.
+  std::function<void(std::string_view name, std::span<const uint8_t> bytes,
+                     std::vector<std::string>& more)>
+      file_needs;
 };
 
 // How long a match may sit in its intermission before it drops to the bottom.

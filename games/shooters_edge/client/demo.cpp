@@ -2,7 +2,7 @@
 // walked, the message reader both formats' messages are read with.
 //
 // ge:summary The demo file's records: the format detected, blocks and records walked, the reader
-// ge:keywords open_demo next_frame demo-msg detect block record usercmd-size gzip track ged
+// ge:keywords open_demo next_frame demo-msg detect block record usercmd-size gzip track ged sequel
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo.hpp"
@@ -319,7 +319,12 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
     voice_base = bytes[5];
     bytes.erase(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(kVoiceHeader));
   }
-  if (is_multiview(bytes)) {
+  if (voice_base == 0 && is_sequel_demo(bytes)) {
+    out.state.format = DemoFormat::sequel;
+    out.state.protocol = 34;
+    out.ring.resize(16);
+    out.baselines.resize(1024);
+  } else if (is_multiview(bytes)) {
     out.state.format = DemoFormat::multiview;
     out.state.view_height = 22;
     out.ring.resize(1);
@@ -335,7 +340,8 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
     error =
         "the file is not a single-player demo (it opens with the music track: digits and a "
         "newline), a client recording (a time and a record type 0..2) or a multiview recording "
-        "(a milliseconds byte, a record type and the server data)";
+        "(a milliseconds byte, a record type and the server data), nor the sequel's recording "
+        "(a block's length and the server data)";
     return false;
   }
   if (voice_base != 0) {
@@ -392,6 +398,7 @@ DemoRead next_frame(Demo& d, std::string& error) {
   d.state.centre.clear();
   d.state.set_angles = 0;
   if (d.state.format == DemoFormat::client) return next_client(d, error);
+  if (d.state.format == DemoFormat::sequel) return next_sequel(d, error);
   if (d.state.format == DemoFormat::multiview) {
     const DemoRead r = next_multiview(d, error);
     if (r == DemoRead::frame) finish_frame(d);
