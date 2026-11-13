@@ -171,7 +171,8 @@
 //   taken over lava and slime too (before, only over water: dm2's gaps are all over lava, so the
 //   run reached the lip at a walk and the gap was given up, though a circle jump from there lands
 //   across); the jump is still taken only where the move says it lands across
-//   (shooter/pilot_gaps.cpp, M18r.md 0c); judging, in no preset.
+//   (shooter/pilot_gaps.cpp, M18r.md 0c); on since `brinkkeys` (even head to head on dm2, the
+//   gaps over lava jumped ~0.8 a match a side; before it lava deaths rose 12.8 -> 18.3).
 // - `brinkline`: the walk's look point is not carried past a node where the route walks a lip over
 //   lava or slime (`NavLink::brink`): the walk turns at the route's corners there, not across
 //   them (dm2's YA ramp: a run at 300 cut its curve off the edge into the lava) (shooter/pilot.cpp
@@ -182,7 +183,8 @@
 // - `fallseen`: the walk foreseen (`ahead`) flies each way of pressing and puts one whose box leaves
 //   the floor over lava or slime after every other (a run down dm2's YA stair at 320 overshot a
 //   corner 20 units from the lava's edge: the brink guard braked only at the edge, too late for
-//   the keys) (shooter/look_ahead.cpp, M18r.md 0c); judging, in no preset.
+//   the keys) (shooter/look_ahead.cpp, M18r.md 0c); not kept (over `brinkkeys` head to head dm2
+//   +1.5, -2.8 / +5.7, lava deaths no fewer), in no preset.
 // - `liplook`: near lava or slime the walk's look point runs 0.3 s ahead at its speed (not 64
 //   units): a corner by the edge is turned early and inside, not overshot (shooter/pilot.cpp,
 //   M18r.md 0c); judging, in no preset.
