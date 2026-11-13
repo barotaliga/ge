@@ -54,6 +54,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `television.md` | The classic match broadcaster (clean-room answers): its stream protocol, handshake and auth, the delay, catch-up, chat and viewer lists, the server's side, discovery, HTTP and files (M57) |
 | `forward.md` | The classic packet forwarder (clean-room answers): the route in the userinfo, the connect hop by hop, forwarding and timeouts, its queries, the client's route finder (M57) |
 | `proxy.md` | The classic proxy and its compressed client demos, from public documents and demo bytes only: features, commands, link compression, recording, observers, what is known of .qwz (M57) |
+| `voice.md` | Voice and chat targets in the voice extension: `voicetarg`, `unmuteall`, `vignore`, the chat line; no proximity routing anywhere |
 | `hub.md` | The classic community's live-game and demo website (clean-room answers): its pages and API, the master and status queries, modes and match state, the broadcaster's advert, watching in a browser, the demo index (M56, `docs/hub.md`) |
 | `accounts.md` | Logins and match stats on the classic servers and both games' stock clients (clean-room answers): the console login, the accounts file, the web login and its token, the status and scoreboard keys, the match stats file, `lastscores`, frag logs (M59, `docs/accounts.md`) |
 
