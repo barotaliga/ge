@@ -1762,6 +1762,18 @@ The `valley-fog` lab draws a seed's sea from the summit, from the air, at dawn a
 Not yet: the mountains' shade on the top (a sea at dawn is lit to its far shore under every
 ridge's shadow). Fall Line's own seas are dealt by the map's air at the hour (next section).
 
+## Flat fog
+
+**The flat fog** (`render/view.hpp`'s `FlatFog`, `FrameView::flat_fog`) is the simplest kind: one
+colour filling all the air alike, as a level's author sets it (a classic map's worldspawn `fog`,
+`brush/map_fog.hpp`). A surface d m from the eye is alpha x (1 - e^-(t^2)) fog, t = max(density x
+d - bias, 0): nearly clear near the eye, the far walls sunk into the colour. The sky is at no
+distance, so it takes a fixed share (`sky`). It is read in `frame.wgsl`'s `local_fog` (and
+`local_fog_over`, for a premultiplied colour), before the fog in an area, so every material that
+calls `haze` fades alike; an additive glow, drawn as `haze(c) - haze(0)`, fades to black. The
+distance is the eye's to the point, not the depth along the view, so the fog does not slide as the
+view turns. With `density` 0 nothing reads it: the bits are the ones drawn without it.
+
 ## Fog from the air
 
 `engine/render/mist_fog.hpp` (M51c) is how any world hands what its air says lies at a place

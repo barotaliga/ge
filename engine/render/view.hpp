@@ -36,6 +36,9 @@
 // THE VALLEY FOG is `FrameView::valley` (`ValleyFog`): a sea of fog lying in the valleys under a
 // level top (render/valley_fog.hpp). The default is none.
 //
+// THE FLAT FOG is `FrameView::flat_fog` (`FlatFog`): one colour of fog in all the air, by the
+// distance from the eye, a level's own (a classic map's). The default is none.
+//
 // THE CLOUD a frame is seen under is `FrameView::clouds` (`Clouds`): up to three layers, each a
 // slab of the air (its base and its top, world metres) where a tileable noise passes the cut its
 // cover sets, carried by the wind and changing its shape as it goes. render/clouds.hpp draws it
@@ -260,6 +263,21 @@ struct ValleyFog {
   double albedo = 0.85;      // the share of the light on its top it sends back
 };
 
+// THE FLAT FOG a frame is seen through: one colour of fog filling all the air alike, thickening
+// with the distance from the eye: a surface d m away is `alpha` x (1 - e^-(t^2)) fog, t =
+// max(density x d - bias, 0), so the near air is almost clear and the far walls sink into the
+// colour; `sky` is the share of it laid over the sky, which is at no distance. Drawn by every
+// material through frame.wgsl's `local_fog`, so a surface, a model, a particle and the water fade
+// alike (an additive glow fades to black). A level's own fog (a classic map's worldspawn); the
+// default is none (`density` 0).
+struct FlatFog {
+  double density = 0;                  // 1/m; 0 none
+  double colour[3] = {0.5, 0.5, 0.5};  // linear, a white face's share of the light
+  double alpha = 1;                    // 0..1: the most of a surface it hides
+  double bias = 0;                     // density x d less this: the fog begins bias / density m out
+  double sky = 0;                      // 0..1: the share of the fog's colour over the sky
+};
+
 struct FrameView {
   // The eye, world metres, and where it looks.
   double eye[3] = {0, 0, 0};
@@ -286,6 +304,7 @@ struct FrameView {
   SkyStyle style{};    // the kind of sky (render/sky_style.hpp); the default is the Earth's
   MoonSet moons{};     // the moons over it (render/moons.hpp); the default the Earth's alone
   ValleyFog valley{};  // the sea of fog in the valleys (render/valley_fog.hpp); the default none
+  FlatFog flat_fog{};  // one colour of fog in all the air (a level's own); the default none
   // THE DISCS DRAWN LARGER, as through a longer lens: the sun's and the moon's (and every other
   // world's moon's) angular radii against what they would be (1: as they are). Only the discs grow,
   // with the glow a cloud throws off their limbs; their light on the world is the real one's, so

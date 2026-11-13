@@ -290,7 +290,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
     const std::string fallback = field;
     cvars.bind({.name = r.name,
                 .fallback = fallback,
-                .flags = info,
+                .flags = r.info ? info : static_cast<uint32_t>(cn::kServer),
                 .help = r.help,
                 .kind = CvarKind::text,
                 .values = r.values != nullptr ? r.values : ""},

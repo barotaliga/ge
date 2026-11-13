@@ -144,6 +144,11 @@ minutes 1.2 kB a second, against 9.2 kB with a whole save every 10 s:
 | Whole every 10 s | 10.7 kB/s | 9.2 kB/s |
 | Whole once, then deltas every 10 s | 2.9 kB/s | 1.2 kB/s |
 
+A run's input log and its stream are the same run: `spectate_pack` steps the run through a log and
+writes the stream its broadcast would have been, and `spectate_inputs` reads a stream from its
+first block back into the log, text for text, so a kept broadcast is a replay `ge replay`,
+`ge diverge` and `ge why` can read once it is turned back.
+
 ## The field codec
 
 The coder (`engine/replay/codec.hpp`) is an adaptive binary range coder: integers only, so it
@@ -320,6 +325,29 @@ proxies each datagram travels in a link frame that each sending end may:
 The session opens like forward's route (a padded open, a cookie, then opened or a refusal in
 words), and the far proxy reaches only the servers on its allow list. Lag and loss for practice are
 the transport's own fake conditions.
+
+**Order**: copies that have fallen due go out before a newer datagram, so the far end passes the
+game's datagrams on in the order the game sent them. A game that drops whatever is older than the
+newest it has (the classic protocol does) would otherwise lose a datagram whose first frame was
+lost even though its copy arrived. A proxy's loop should run faster than the game sends (every
+millisecond or so) so a copy leaves at its gap.
+
+**The classic game through it**: nothing classic is in the proxy; a classic client connects to the
+near proxy as to a server. Checked live (`se-interop --proxy=<port> --link-loss=0.1 --copies=3`)
+against an open-source classic server and match mod built beside the checkout, 20 s each:
+
+| Path | Server packets the client counts lost | Link bytes up / down per game byte |
+| --- | --- | --- |
+| Straight to the server | 0.9% | - |
+| Through the proxies, clean link | 1.1% | 1.32 / 1.22 |
+| 10% loss each way, one copy | 20.9% | 1.33 / 1.18 |
+| 10% loss each way, three copies | 1.3% | 3.97 / 3.59 |
+
+The loss the game sees doubles on a lossy link with one copy because the server leaves a gap in its
+own sequence for each command of the client's that does not arrive, as well as the replies the link
+loses; three copies take both away. Packing does not shrink the classic game's datagrams (they are
+already deltas, and short), so its link costs the frame's header on each; the field codec is what
+would make that link smaller.
 
 **Recording** (`engine/proxy/record.hpp`): either proxy hands every game datagram it passes on to
 `ProxyConfig::tap`, with its session and direction, and `proxy_record` keeps them as a replay file:

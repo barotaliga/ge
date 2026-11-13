@@ -38,6 +38,24 @@ void name_rule(void* ctx, int slot, std::string& name, bool connecting) {
   name = unique_name(s.cfg.default_name, taken);
 }
 
+// The key the server's tickets are signed with, once known, as `*accountkey` in the server info:
+// our own client logs itself in when it holds a ticket signed by the same key.
+void advertise_key(ClassicLogin& l) {
+  ge::net::Key key{};
+  if (l.advertised || !gs::login_key(l.logins, key)) return;
+  l.advertised = true;
+  const std::string tag = gs::login_key_tag(key);
+  ClassicServer& s = *l.server;
+  bool set = false;
+  for (auto& [k, v] : s.cfg.info)
+    if (k == kAccountKeyInfo) {
+      v = tag;
+      set = true;
+    }
+  if (!set) s.cfg.info.emplace_back(kAccountKeyInfo, tag);
+  if (!s.serverinfo.empty()) info_set(s.serverinfo, kAccountKeyInfo, tag, kServerInfoBytes);
+}
+
 }  // namespace
 
 ge::account::NameRules classic_name_rules() { return {15, true, false}; }
@@ -55,6 +73,7 @@ bool classic_login_open(ClassicLogin& l, ClassicServer& s, const gs::ServerConfi
     return false;
   s.name_rule = name_rule;
   s.name_ctx = &l;
+  advertise_key(l);
   return true;
 }
 
@@ -82,6 +101,7 @@ void classic_login_frame(ClassicLogin& l) {
       gs::login_seat(l.logins, i, c.userid, c.spectator, ge::net::to_string(c.address), now);
   }
   gs::logins_frame(l.logins, now, unix_now(l));
+  advertise_key(l);
   for (const std::string& note : l.logins.notes) {
     s.log.push_back("login: " + note);
     std::printf("shooters_edge_server: %s\n", note.c_str());
@@ -102,6 +122,14 @@ void classic_login_frame(ClassicLogin& l) {
       case gs::LoginOut::Kind::name: {
         std::string name = o.text;
         if (s.clients[o.slot].name != name) classic_set_info(s, o.slot, "name", name);
+        break;
+      }
+      case gs::LoginOut::Kind::unname: {  // a registered name the master told of late
+        std::vector<std::string> taken;
+        for (int i = 0; i < sh::kMaxClients; i++)
+          if (i != o.slot && s.clients[i].state != ConnState::free)
+            taken.push_back(s.clients[i].name);
+        classic_set_info(s, o.slot, "name", unique_name(s.cfg.default_name, taken));
         break;
       }
       case gs::LoginOut::Kind::auth:

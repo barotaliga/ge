@@ -16,6 +16,8 @@
 #include <sstream>
 #include <thread>
 
+#include "account/account_file.hpp"
+#include "account/names.hpp"
 #include "account/service.hpp"
 #include "account/ticket.hpp"
 #include "core/json_write.hpp"
@@ -47,13 +49,8 @@ int64_t unix_s() {
       .count();
 }
 
-// What `<state>/account.txt` holds.
-struct Saved {
-  std::string master;  // as the player wrote it
-  std::string key;     // 64 hex digits
-  std::string ticket;  // the last ticket's bytes in hex
-  std::string name;    // whose ticket
-};
+// What `<state>/account.txt` holds (account/account_file.hpp: the game's own client reads it too).
+using Saved = ga::AccountFile;
 
 std::string file_of(const Ctx& ctx) {
   return (fs::path(ctx.places.state) / "account.txt").string();
@@ -61,57 +58,14 @@ std::string file_of(const Ctx& ctx) {
 
 Saved load(const Ctx& ctx) {
   Saved s;
-  std::ifstream f(file_of(ctx));
-  std::string line;
-  while (f && std::getline(f, line)) {
-    const size_t sp = line.find(' ');
-    if (sp == std::string::npos) continue;
-    const std::string k = line.substr(0, sp), v = line.substr(sp + 1);
-    if (k == "master") s.master = v;
-    if (k == "key") s.key = v;
-    if (k == "ticket") s.ticket = v;
-    if (k == "name") s.name = v;
-  }
+  ga::account_file_read(file_of(ctx), s);
   return s;
 }
 
-bool save(const Ctx& ctx, const Saved& s) {
-  std::error_code ec;
-  fs::create_directories(ctx.places.state, ec);
-  const std::string path = file_of(ctx);
-  {
-    std::ofstream f(path, std::ios::trunc);
-    if (!f) return false;
-    f << "master " << s.master << "\nkey " << s.key << "\n";
-    if (!s.ticket.empty()) f << "name " << s.name << "\nticket " << s.ticket << "\n";
-  }
-  fs::permissions(path, fs::perms::owner_read | fs::perms::owner_write, fs::perm_options::replace,
-                  ec);
-  return true;
-}
+bool save(const Ctx& ctx, const Saved& s) { return ga::account_file_write(file_of(ctx), s); }
 
-std::string hex(const std::vector<uint8_t>& bytes) {
-  static const char kDigits[] = "0123456789abcdef";
-  std::string s;
-  for (const uint8_t b : bytes) {
-    s += kDigits[b >> 4];
-    s += kDigits[b & 15];
-  }
-  return s;
-}
-
-std::vector<uint8_t> unhex(const std::string& s) {
-  std::vector<uint8_t> out;
-  auto d = [](char c) {
-    return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
-  };
-  for (size_t i = 0; i + 1 < s.size(); i += 2) {
-    const int hi = d(s[i]), lo = d(s[i + 1]);
-    if (hi < 0 || lo < 0) return {};
-    out.push_back(static_cast<uint8_t>(hi * 16 + lo));
-  }
-  return out;
-}
+std::string hex(const std::vector<uint8_t>& bytes) { return ga::bytes_to_hex(bytes); }
+std::vector<uint8_t> unhex(const std::string& s) { return ga::hex_to_bytes(s); }
 
 double wait_of(const Ctx& ctx) {
   const std::string w = ctx.flag("wait");
@@ -278,15 +232,32 @@ int cmd_account_signin(Ctx& ctx) {
 
 int cmd_account_code(Ctx& ctx) {
   if (!need_places(ctx)) return 1;
-  if (ctx.words.size() != 1)
-    return refuse(ctx, 2, "account code takes the name",
-                  std::string(ctx.spec.cli) + " account code <name>");
   Saved saved = load(ctx);
+  // Signed in already (a ticket kept, its name the one asked for or none named): the ticket buys
+  // the code and no password is asked.
+  const bool by_ticket = !ctx.has("password") && !saved.ticket.empty() &&
+                         (ctx.words.empty() || (ctx.words.size() == 1 &&
+                                                ga::name_key(ga::kEveryGame, ctx.words[0]) ==
+                                                    ga::name_key(ga::kEveryGame, saved.name))) &&
+                         (!ctx.has("master") || ctx.flag("master") == saved.master);
+  if (!by_ticket && ctx.words.size() != 1)
+    return refuse(ctx, 2, "account code takes the name, unless you signed in already",
+                  std::string(ctx.spec.cli) + " account code <name>");
+  const std::string name = by_ticket ? saved.name : ctx.words[0];
   ga::Reply r;
-  if (!ask(ctx, ga::Op::code, {ctx.words[0], password_of(ctx, "password")}, saved, r)) return 1;
-  return answer(ctx, json_obj({{"code", json_str(r.code)}, {"minutes", json_num(15)}}),
+  if (by_ticket) {
+    const std::vector<uint8_t> bytes = unhex(saved.ticket);
+    if (!ask(ctx, ga::Op::ticket_code, {std::string(bytes.begin(), bytes.end())}, saved, r))
+      return 1;
+  } else if (!ask(ctx, ga::Op::code, {name, password_of(ctx, "password")}, saved, r)) {
+    return 1;
+  }
+  return answer(ctx,
+                json_obj({{"code", json_str(r.code)},
+                          {"minutes", json_num(15)},
+                          {"by", json_str(by_ticket ? "ticket" : "password")}}),
                 "Your login code: " + r.code + "\nIn a classic client's console type: login " +
-                    ctx.words[0] + " " + r.code + "\nIt works once, within 15 minutes.",
+                    name + " " + r.code + "\nIt works once, within 15 minutes.",
                 "a login code");
 }
 

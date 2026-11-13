@@ -184,3 +184,28 @@ TEST(service_refuses_an_ask_sealed_to_another_key) {
   CHECK(a.done && !a.answered);
   CHECK(w.svc.stats.refused == 2 && w.svc.store.accounts.empty());
 }
+
+TEST(service_trades_its_own_ticket_for_a_login_code) {
+  World w;
+  CHECK(w.ask(w.client, ga::Op::create, {"Niclas", "correct horse"}, 10).reply.refusal ==
+        ga::Refusal::none);
+  const ga::Ask in = w.ask(w.client, ga::Op::sign_in, {"niclas", "correct horse"}, 11);
+  CHECK(!in.reply.ticket.empty());
+  const std::string ticket(in.reply.ticket.begin(), in.reply.ticket.end());
+  const ga::Ask code = w.ask(w.client, ga::Op::ticket_code, {ticket}, 12);
+  CHECK(code.reply.refusal == ga::Refusal::none && code.reply.account == 1);
+  CHECK(code.reply.code.size() == 9);
+  // The code logs a classic client in once, as any login code does.
+  const ga::Ask login =
+      w.ask(w.server, ga::Op::login, {"Niclas", code.reply.code, "10.0.0.7:27001"}, 13);
+  CHECK(login.reply.refusal == ga::Refusal::none && login.reply.account == 1);
+  // A ticket changed by one byte, or signed by another key, gets nothing.
+  std::string bent = ticket;
+  bent[bent.size() - 1] = static_cast<char>(bent[bent.size() - 1] ^ 1);
+  CHECK(w.ask(w.client, ga::Op::ticket_code, {bent}, 14).reply.refusal == ga::Refusal::wrong);
+  ga::Ticket other = ga::ticket_issue(gn::sign_keys(key_of(9)), 1, "Niclas", w.now / 1000000);
+  uint8_t buf[ga::kTicketMax];
+  const size_t n = ga::ticket_write(other, buf, sizeof buf);
+  CHECK(w.ask(w.client, ga::Op::ticket_code, {std::string(reinterpret_cast<char*>(buf), n)}, 15)
+            .reply.refusal == ga::Refusal::wrong);
+}

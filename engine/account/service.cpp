@@ -81,6 +81,31 @@ Answer run(Service& svc, Op op, const std::vector<std::string>& f, const net::Ad
     case Op::recover:
       if (need(3)) a = recover(s, f[0], f[1], f[2], at, now_us, fresh_key(svc));
       break;
+    case Op::ticket_code:
+      if (need(1)) {
+        Ticket t;
+        const auto* bytes = reinterpret_cast<const uint8_t*>(f[0].data());
+        const Account* acc = nullptr;
+        if (ticket_read(bytes, f[0].size(), svc.keys.pub, now_us / 1000000, t) == TicketCheck::ok)
+          acc = find(s, t.account);
+        if (acc == nullptr) {
+          a.refusal = Refusal::wrong;
+          a.words = "That sign-in has run out. Sign in again.";
+        } else if (acc->blocked) {
+          a.refusal = Refusal::blocked;
+          a.words = refusal_words(a.refusal, 0);
+        } else {
+          a = make_code(s, acc->id, now_us, fresh_key(svc));
+        }
+      }
+      break;
+    case Op::name:
+      if (need(1)) {
+        const auto it = s.keys.find(f[0]);
+        const Account* acc = it != s.keys.end() ? find(s, it->second) : nullptr;
+        a.id = acc != nullptr ? acc->id : 0;
+      }
+      break;
   }
   if (a.refusal == Refusal::none && (op == Op::sign_in || op == Op::login)) {
     const Account* acc = find(s, a.id);
@@ -127,6 +152,10 @@ const char* op_name(Op op) {
       return "login";
     case Op::recover:
       return "recover";
+    case Op::ticket_code:
+      return "ticket-code";
+    case Op::name:
+      return "name";
   }
   return "?";
 }
@@ -201,7 +230,7 @@ bool service_read(Service& svc, const uint8_t* data, size_t size, const net::Add
   const uint8_t count = net::read_u8(b);
   std::vector<std::string> fields;
   for (uint8_t i = 0; i < count && i < 8 && !b.bad; i++) fields.push_back(read_text(b));
-  if (b.bad || op_byte < 1 || op_byte > 5 || count > 8) {
+  if (b.bad || op_byte < 1 || op_byte > 7 || count > 8) {
     svc.stats.refused++;
     return true;
   }
