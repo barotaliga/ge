@@ -1605,7 +1605,7 @@ found or not: Shareware or Registered, the sequel's Demo or Full game). ENTER on
 kept install opens it; on one never found, or FIND ANOTHER INSTALL, the window's folder chooser,
 and the folder is taken by whichever game's base folder it holds (`install_of`). Once a classic
 game is open, the title's night gives way to its own recordings played behind the menu in turn
-(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game; "" keeps the night), ESCAPE closes the menu onto the
+(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game and q2demo1 from the sequel's `demos/` folder; "" keeps the night), ESCAPE closes the menu onto the
 recording to watch it, and nothing modern is left on screen: the console is written in the
 game's glyph sheet over its own console background (`menu/classic_console.hpp`, the engine's
 `ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A

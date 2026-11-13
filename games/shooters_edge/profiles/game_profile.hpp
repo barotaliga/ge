@@ -17,7 +17,9 @@
 //   header's CRC, plugins/progs/layout.hpp) is passed over, never run in the wrong mode.
 // - **Demos**: the extensions a demo of this game is listed by and tried with when named without
 //   one, in order (a recording of another extension is still found by its bare name: the files'
-//   top level is searched for that name with any extension, client/timedemo.hpp).
+//   top level is searched for that name with any extension, client/timedemo.hpp), and the folder
+//   its packs keep them in (`demo_folder`: the sequel's `demos/`), where a bare name is looked for
+//   too.
 // - **The fallback map**: where the window starts when the content holds no start map (the
 //   content row's `start_map`): the built-in arena.
 // - **The full game** is the content row's `full_game` file being in the packs.
@@ -86,6 +88,9 @@ struct GameProfile {
   std::span<const ProgramFile> single_player_programs;  // looked for in order
   std::string_view fallback_map;                        // with no start map in the content
   std::span<const std::string_view> demo_extensions;    // tried in order on a bare demo name
+  // The folder its packs keep their recordings in ("demos/"), where a bare name is also looked
+  // for; "": the files' top level only.
+  std::string_view demo_folder;
   ItemTables tables;  // its items, their words and the sounds a bot reads (items.hpp)
   // Its first-person weapons' model files, in the order of the number keys (view::Weapon's).
   std::span<const std::string_view> held_weapons;
@@ -147,6 +152,7 @@ inline constexpr GameProfile kGameProfiles[] = {
      .single_player_programs = kClassicSinglePlayer,
      .fallback_map = "arena",
      .demo_extensions = kClassicDemos,
+     .demo_folder = "",
      .tables = kClassicTables,
      .held_weapons = kClassicHeld,
      .arsenal = kClassicArsenal,
@@ -161,6 +167,7 @@ inline constexpr GameProfile kGameProfiles[] = {
      .single_player_programs = kSequelPrograms,
      .fallback_map = "demo1",
      .demo_extensions = kSequelDemos,
+     .demo_folder = "demos/",
      .tables = {},
      .held_weapons = {},
      .arsenal = {},
@@ -168,7 +175,7 @@ inline constexpr GameProfile kGameProfiles[] = {
      .episode_maps = {},
      .weapon_groups = kSequelGroups,
      .rules_campaign = true,
-     .attract = "",  // its recordings do not play yet
+     .attract = "q2demo1",
      .place_macros = true},
 };
 
