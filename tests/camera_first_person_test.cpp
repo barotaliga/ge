@@ -2,7 +2,8 @@
 // eyes stand at the view height and crouch, a stair is a ramp to the eye, the bob follows the
 // classic stride and clamps, a strafe rolls the horizon toward the way it moves, a hit kicks the
 // view away from the blow and falls off over the kick time, a shot punches the pitch up and it
-// springs back, a landing dips the eyes, and comfort 0 removes every one of them.
+// springs back, a landing dips the eyes, and comfort 0 removes every one of them. The classic row
+// holds its bob in the air, kicks toward the blow and never dips.
 //
 // ge:summary Tests: the first-person rig's look, height, steps, bob, roll, kick, punch, dip
 // ge:keywords test camera first-person bob roll kick punch dip stairs crouch comfort
@@ -26,11 +27,11 @@ struct Frame {
   cam::Pose p;
 };
 
-std::vector<Frame> run(const char* id, double hz, double motion = 1) {
+std::vector<Frame> run(const char* id, double hz, double motion = 1,
+                       const cam::FirstPersonRow& row = {}) {
   const cam::Scenario* sc = cam::find_camera_scenario(id);
   cam::ScriptRun r = cam::start_script(*sc);
   cam::FirstPersonState st;
-  const cam::FirstPersonRow row;
   std::vector<Frame> out;
   const int n = static_cast<int>(sc->seconds * hz);
   for (int i = 1; i <= n; ++i) {
@@ -138,4 +139,35 @@ TEST(comfort_zero_removes_the_bob_the_roll_and_the_kicks) {
       CHECK(std::fabs(eye_over(f) - row.eye_stand_m) < 1e-9);
     }
   }
+}
+
+TEST(the_classic_row_holds_the_bob_in_the_air_and_never_dips) {
+  const double u = 0.025;
+  const cam::FirstPersonRow row = cam::classic_first_person(u);
+  CHECK(std::fabs(row.bob_lo_m + 7 * u) < 1e-12);
+  CHECK(std::fabs(row.bob_hi_m - 4 * u) < 1e-12);
+  CHECK(std::fabs(row.roll_speed_mps - 200 * u) < 1e-12);
+  const auto frames = run("jump", 120, 1, row);
+  size_t off = 0, land = 0;
+  for (size_t i = 1; i < frames.size(); ++i) {
+    if (!frames[i].s.grounded && frames[i - 1].s.grounded && off == 0) off = i;
+    if (off > 0 && frames[i].s.grounded && !frames[i - 1].s.grounded && land == 0) land = i;
+  }
+  CHECK(off > 0 && land > off);
+  // In the air the eye stays at the height (and bob) it left the ground with.
+  for (size_t i = off + 1; i < land; ++i)
+    CHECK_MSG(std::fabs(eye_over(frames[i]) - eye_over(frames[off])) < 1e-9,
+              "the eye moved in the air at frame " + std::to_string(i));
+  // No dip: on the ground the eye is never under the view height less the bob's floor.
+  for (size_t i = land; i < frames.size(); ++i)
+    CHECK(eye_over(frames[i]) >= row.eye_stand_m + row.bob_lo_m - 1e-9);
+}
+
+TEST(the_classic_row_kicks_toward_the_blow) {
+  cam::FirstPersonRow row = cam::classic_first_person(0.025);
+  const auto frames = run("fire", 120, 1, row);
+  // The blow travelling to the right (from the left) rolls the view left side down, toward it.
+  CHECK(frames[301].p.roll < -0.005);
+  // The blow travelling backward (from the front) pitches the view down, toward it.
+  CHECK(frames[421].p.pitch - frames[421].s.look_pitch < -0.005);
 }

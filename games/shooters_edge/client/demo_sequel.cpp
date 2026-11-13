@@ -337,6 +337,8 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   s.time = static_cast<double>(number) * 0.1;
   s.view_height = static_cast<float>(v.offset[2]) * 0.25f;
   s.angles = {angle16(v.angles[0]), angle16(v.angles[1]), angle16(v.angles[2])};
+  s.kick = {static_cast<float>(v.kick[0]) * 0.25f, static_cast<float>(v.kick[1]) * 0.25f,
+            static_cast<float>(v.kick[2]) * 0.25f};
   if (static_cast<size_t>(s.player) < s.players.size()) {
     DemoEntity& me = s.players[static_cast<size_t>(s.player)];
     me.present = true;
@@ -529,6 +531,7 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
 // One block's messages into the state.
 bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
   DemoState& s = d.state;
+  if (d.spans != nullptr) d.spans->clear();
   while (!m.done()) {
     const size_t at = m.at;
     const int id = m.u8();
@@ -621,6 +624,9 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
               " runs past its block's end: the recording is cut or damaged";
       return false;
     }
+    if (d.spans != nullptr)
+      d.spans->push_back(
+          {static_cast<uint8_t>(id), static_cast<uint32_t>(at), static_cast<uint32_t>(m.at)});
   }
   return true;
 }

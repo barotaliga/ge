@@ -13,10 +13,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string_view>
+#include <tuple>
 #include <utility>
 
 #include "brush/map.hpp"
 #include "brush/trace.hpp"
+#include "core/libm/libm.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "progs/text.hpp"
@@ -133,6 +135,19 @@ void register_cvars(SequelServer& s) {
        .flags = con::kServer,
        .help = "The aim help's leeway up and down for a player granted it, in units at the target.",
        .values = "0: no vertical help; N: that many units (48 the default)"});
+  // The view's motion (plugins/shooter/sequel_view.hpp): the run's tilt and the stride's bob.
+  for (const auto& [name, fallback, help] :
+       {std::tuple{"run_pitch", "0.002", "How far running forward dips the view, a unit of speed."},
+        std::tuple{"run_roll", "0.005",
+                   "How far running sideways rolls the view, a unit of speed."},
+        std::tuple{"bob_up", "0.005", "How far the stride lifts the eye, a unit of speed."},
+        std::tuple{"bob_pitch", "0.002", "How far the stride nods the view, a unit of speed."},
+        std::tuple{"bob_roll", "0.002", "How far the stride rocks the view, a unit of speed."}})
+    s.cvars.add({.name = name,
+                 .fallback = fallback,
+                 .flags = con::kServer,
+                 .help = help,
+                 .values = std::string("0: none; N: that much (") + fallback + " the default)"});
   add_rjump_settings(s.cvars);  // sv_rjump, sv_rrjump (rjump_rules.hpp)
   const std::string share =
       ge::core::num::to_string(num::round(double(s.opt.speedjump) * 1000) / 1000);
@@ -475,6 +490,35 @@ void intermission_frame(SequelServer& s) {
     }
 }
 
+// The player's view this frame (plugins/shooter/sequel_view.hpp): the bob, the tilts and the kicks
+// into `SequelPlayer::seen`; dead, the view lying on its side, looking up at the killer.
+void view_frame(SequelServer& s, int slot) {
+  SequelPlayer& p = s.players[slot];
+  sh::SequelViewSettings set;
+  set.run_pitch = static_cast<float>(s.cvars.find("run_pitch")->number);
+  set.run_roll = static_cast<float>(s.cvars.find("run_roll")->number);
+  set.bob_up = static_cast<float>(s.cvars.find("bob_up")->number);
+  set.bob_pitch = static_cast<float>(s.cvars.find("bob_pitch")->number);
+  set.bob_roll = static_cast<float>(s.cvars.find("bob_roll")->number);
+  sh::SequelViewIn in;
+  in.velocity = unpack(p.move.velocity);
+  in.view_angles = p.view_angles;
+  in.view_height = p.view_height;
+  in.health = p.health;
+  in.on_ground = p.on_ground;
+  in.ducked = (p.move.flags & sh::kSqDucked) != 0;
+  in.dead = !p.alive;
+  p.seen = sh::step_sequel_view(p.view, set, in);
+  if (p.alive) return;
+  float yaw = p.view_angles.y;
+  if (p.killer >= 0 && p.killer != slot && p.killer < sh::kMaxClients) {
+    const sh::Vec3f to = unpack(s.players[p.killer].move.origin) - unpack(p.move.origin);
+    if (to.x != 0 || to.y != 0)
+      yaw = static_cast<float>(ge::core::libm::atan2(to.y, to.x) * 180 / 3.14159265358979323846);
+  }
+  p.dead_angles = {sh::kSequelDeadPitch, yaw, sh::kSequelDeadRoll};
+}
+
 // One rules frame: the time advances, the dead who press attack a second after dying respawn.
 void rules_frame(SequelServer& s) {
   s.frame_number++;
@@ -497,6 +541,8 @@ void rules_frame(SequelServer& s) {
   }
   for (int i = 0; i < sh::kMaxClients; i++)  // the bodies' frames, once the frame is done
     if (s.clients[i].active && !s.clients[i].spectator) pose_player(s, i);
+  for (int i = 0; i < sh::kMaxClients; i++)  // and what each sees of it
+    if (s.clients[i].active) view_frame(s, i);
   if (fight_limits(s) || s.exit_now) {
     s.exit_now = false;
     start_intermission(s);
@@ -554,12 +600,22 @@ void fill_rows(SequelServer& s) {
     for (int k = 1; k < kSqAmmoKinds; k++) wc.numbers.stock[k - 1] = float(p.body.ammo[k]);
     wc.numbers.frags = p.frags;
     wc.numbers.view_z = p.view_height;
+    wc.numbers.view_set = true;
+    const bool still = s.intermission_at > 0 || c.spectator;  // no bob, no kick
+    const sh::Vec3f off =
+        still ? sh::Vec3f{0, 0, s.intermission_at > 0 ? 0 : p.view_height} : p.seen.offset;
+    const sh::Vec3f kick = still ? sh::Vec3f{} : p.seen.kick;
+    const float offs[3] = {off.x, off.y, off.z}, kicks[3] = {kick.x, kick.y, kick.z};
+    for (int k = 0; k < 3; k++) {
+      wc.numbers.view_offset[k] = offs[k];
+      wc.numbers.kick[k] = kicks[k];
+    }
     wc.numbers.fov = fight_fov(s, i);
     e.free = false;
     e.origin = unpack(p.move.origin);
     e.velocity = unpack(p.move.velocity);
     e.angles = {0, p.view_angles.y, 0};
-    e.view_angles = p.view_angles;
+    e.view_angles = p.alive || c.spectator ? p.view_angles : p.dead_angles;  // dead: lying there
     e.mins = p.mins;
     e.maxs = p.maxs;
     e.absmin = e.origin + p.mins;

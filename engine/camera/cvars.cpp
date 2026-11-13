@@ -128,6 +128,28 @@ CameraSettings camera_settings(const CameraCvars& v) {
   return s;
 }
 
+void apply_first_person_cvars(const CameraCvars& v, const FirstPersonRow& b, FirstPersonRow& r) {
+  const double u = v.unit_m;
+  if (v.viewheight > 0) {
+    r.eye_stand_m = v.viewheight * u;
+    r.eye_crouch_m = b.eye_crouch_m * r.eye_stand_m / b.eye_stand_m;
+  } else {
+    r.eye_stand_m = b.eye_stand_m;
+    r.eye_crouch_m = b.eye_crouch_m;
+  }
+  r.bob = v.bob;  // a length over a speed: the same in any unit
+  r.bob_cycle_s = v.bobcycle;
+  r.bob_up = v.bobup;
+  r.roll_angle = v.rollangle * kDeg;
+  r.roll_speed_mps = v.rollspeed * u;
+  r.kick_time_s = v.kicktime;
+  r.kick_pitch = v.kickpitch * kDeg;
+  r.kick_roll = v.kickroll * kDeg;
+  r.idle = v.idlescale * kDeg;
+  r.dip_per_mps = b.dip_per_mps * v.landdip;
+  r.dip_max_m = b.dip_max_m * v.landdip;
+}
+
 bool apply_camera_cvars(CameraCvars& v, std::span<const Rig> ladder, Camera& cam, Edit edit,
                         double seconds) {
   cam.settings = camera_settings(v);
@@ -138,26 +160,7 @@ bool apply_camera_cvars(CameraCvars& v, std::span<const Rig> ladder, Camera& cam
     const Rig& base = ladder[static_cast<size_t>(i)];
     Rig& rig = cam.rigs[i];
     if (rig.kind == RigKind::first_person) {
-      FirstPersonRow& r = rig.first_person;
-      const FirstPersonRow& b = base.first_person;
-      if (v.viewheight > 0) {
-        r.eye_stand_m = v.viewheight * u;
-        r.eye_crouch_m = b.eye_crouch_m * r.eye_stand_m / b.eye_stand_m;
-      } else {
-        r.eye_stand_m = b.eye_stand_m;
-        r.eye_crouch_m = b.eye_crouch_m;
-      }
-      r.bob = v.bob;  // a length over a speed: the same in any unit
-      r.bob_cycle_s = v.bobcycle;
-      r.bob_up = v.bobup;
-      r.roll_angle = v.rollangle * kDeg;
-      r.roll_speed_mps = v.rollspeed * u;
-      r.kick_time_s = v.kicktime;
-      r.kick_pitch = v.kickpitch * kDeg;
-      r.kick_roll = v.kickroll * kDeg;
-      r.idle = v.idlescale * kDeg;
-      r.dip_per_mps = b.dip_per_mps * v.landdip;
-      r.dip_max_m = b.dip_max_m * v.landdip;
+      apply_first_person_cvars(v, base.first_person, rig.first_person);
     } else if (rig.kind == RigKind::boom && rig.name == "chase") {
       rig.boom.dist_m = v.chasedist > 0 ? v.chasedist * u : base.boom.dist_m;
       rig.boom.height_m = v.chaseheight > 0 ? v.chaseheight * u : base.boom.height_m;

@@ -159,6 +159,50 @@ player may change:
 The classic first-person look is a set of rows: the stride, the roll and the kick at the
 numbers a classic config sets, in that game's units (below).
 
+### Shooter's Edge's view
+
+`classic_first_person(unit_m)` is the classic look as a row, in the game's own units, and
+Shooter's Edge frames it on the player (`games/shooters_edge/client/present.hpp`), its camera
+cvars bound at the classic defaults (`add_view_camera_cvars`):
+
+| What | The classic look | Cvars (defaults) |
+| --- | --- | --- |
+| View height | the mod's view offset (22 units) over the origin; dead, 16 units under it | `cl_viewheight` (0: the mod's) |
+| The bob | 0.3 of the horizontal speed × `cl_bob` plus 0.7 of it × the sine of the stride's phase (a stride `cl_bobcycle` s long, its first `cl_bobup` rising), clamped to -7..+4 units; its clock runs on the ground only and in the air the last bob is held | `cl_bob` 0.02, `cl_bobcycle` 0.6, `cl_bobup` 0.5 |
+| The roll | the side speed × `cl_rollangle` / `cl_rollspeed`, capped at `cl_rollangle`; strafing right rolls the right side down | `cl_rollangle` 2, `cl_rollspeed` 200 |
+| The kick | a blow's count (half its armour plus half its blood, at least 10) × its side share × `v_kickroll` into the roll and × its front share × `v_kickpitch` into the pitch, TOWARD the blow (`kick_to_source`); a new blow replaces the last; fading linearly over `v_kicktime` | `v_kicktime` 0.5, `v_kickpitch` 0.6, `v_kickroll` 0.6 |
+| Steps | on the ground and higher, the eye rises at 80 units a second, never more than 12 behind; otherwise with the body | |
+| Landing | no dip | `cl_landdip` 0 |
+| Dead | the view rolled 80 degrees | |
+| Lens | 90 degrees horizontal at 4:3, wider screens see more at the sides | `cl_fov` |
+
+These are the first classic client's defaults; the competitive community's client ships the bob,
+the roll and the kick at 0, which a player gets by setting them so. The `se-view` lab runs the
+view through a scripted run and holds it to these formulas, worked out on their own from the
+server's state, within 0.01 units and degrees. Still open: the same view on a joined server and
+in demo playback (`demo_view` draws the eye as it was recorded, without the bob, the roll or the
+kick).
+
+**The sequel's view is the rules'.** On the sequel's rules (a map of brushes) the server works the
+view out once a rules frame (0.1 s) and sends it in the player state, so every client, ours or
+another, shows the same view; the window turns its own bob, roll and kick off and eases what the
+rules sent between their frames. `plugins/shooter/sequel_view.hpp` is the rule, any game on the
+sequel's rules calls it, and its server settings are:
+
+| What | The rules' view | Server cvars (defaults) |
+| --- | --- | --- |
+| The stride | a clock stepping 0.0625, 0.125 or 0.25 a frame by the ground speed (5..100, to 210, past it), its last step kept in the air, 4 times as fast ducked; its share \|sin(clock × π)\| | |
+| The bob | the share × the speed × `bob_up` lifts the eye (at most 6 units); × `bob_pitch` nods the view, × `bob_roll` sways it (its side flipped each stride; both × 6 ducked) | `bob_up` 0.005, `bob_pitch` 0.002, `bob_roll` 0.002 |
+| The run | the speed along the view × `run_pitch` dips it, across it × `run_roll` rolls it (a strafe right: right side down) | `run_pitch` 0.002, `run_roll` 0.005 |
+| A blow | the push × 100 / the health, at least half the points (at least 10), at most 50; 0.3 of it rolls the view toward the blow's side and tips it away from its front, fading over 0.5 s | |
+| A fall | a severity of 15 or more tips the view down by half of it (at most 40) and lowers the eye by 0.4 of that, over 0.3 s | |
+| A shot | the weapon's kick for one frame (the blaster and the launchers 1 degree up and 2 units back, the shotguns 2, the rail gun 3; the machine and chain guns a random shake; the big gun's long kick) | |
+| Dead | no kick; rolled 40 degrees, looking 15 up toward the killer | |
+| The eye | the view height, less the fall's dip, plus the lift and the shot's push, held to -14..14 across and -22..30 up | |
+
+The `se-view` lab runs the same script on the sequel's rules (`--rules=sequel`, or a sequel's map)
+and holds the fixture's bob, strafe roll, blows, shot and dead view to these numbers.
+
 ### Boom (`Boom`): the chase camera
 
 A lens on an arm that stands behind the subject on a yaw that FOLLOWS the way it travels, at a

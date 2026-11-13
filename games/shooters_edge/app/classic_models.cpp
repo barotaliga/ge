@@ -294,6 +294,31 @@ Look choose_look(const SkinChoice& choice, std::string_view look,
   return out;
 }
 
+Look choose_figure(const SkinChoice& choice, std::string_view model, std::string_view skin,
+                   const std::unordered_map<std::string, uint32_t>& figures,
+                   const std::unordered_map<std::string, uint32_t>& skins,
+                   const std::unordered_map<std::string, uint32_t>& first_skins) {
+  Look out;
+  if (choice.noskins == 1 || model.empty()) return out;
+  std::string folder(model);
+  for (char& c : folder) c = c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c;
+  if (folder.find("..") != std::string::npos || folder.find('/') != std::string::npos ||
+      folder.find('\\') != std::string::npos || !figures.contains(folder))
+    return out;
+  out.folder = folder;
+  const std::string key = skin_key(choice.all.empty() ? skin : std::string_view(choice.all));
+  if (!key.empty() && key.find('/') == std::string::npos) {
+    const auto found = skins.find(folder + "/" + key);
+    if (found != skins.end()) {
+      out.skin = found->second;
+      return out;
+    }
+  }
+  const auto first = first_skins.find(folder);
+  if (first != first_skins.end()) out.skin = first->second;
+  return out;
+}
+
 gr::MorphModel morph_from_brush(const br::Map& item, std::span<const uint8_t> palette) {
   gr::MorphModel out;
   std::vector<float> pos, nrm;

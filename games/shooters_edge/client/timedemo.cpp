@@ -423,8 +423,10 @@ ge::render::FrameView demo_view(const DemoState& s, double fov_y, double time_s)
   v.eye[0] = eye.x;
   v.eye[1] = eye.y;
   v.eye[2] = eye.z;
-  v.heading = engine_heading(s.angles.y);
-  v.pitch = engine_pitch(s.angles.x);
+  // The server's kick angles on the view (the sequel's bob, tilts and kicks; 0 in the first game).
+  v.heading = engine_heading(s.angles.y + s.kick.y);
+  v.pitch = engine_pitch(s.angles.x + s.kick.x);
+  v.roll = s.kick.z * 3.14159265358979323846 / 180;
   v.fov_y = fov_y;
   v.time_s = time_s;
   return v;

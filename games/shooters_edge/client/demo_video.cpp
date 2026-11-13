@@ -132,6 +132,7 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
           out.back().top = static_cast<uint32_t>(s.top[k]);
           out.back().bottom = static_cast<uint32_t>(s.bottom[k]);
           out.back().skin_name = s.skins[k];
+          out.back().model_name = s.figures[k];
           out.back().side = models::side_of(teamplay, mine, s.teams[k]);
         }
       }

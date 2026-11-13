@@ -13,6 +13,8 @@
 //   shooters_edge_hops proxy-far --port=<p> --allow=<host[:port],...> | --open [--copies=3]
 //   shooters_edge_hops tv --port=27900 --server=<host:stream port> [--server-password=<pw>]
 //                         [--password=<pw>] [--delay=7] [--name=tv]
+//   shooters_edge_hops sequel-tv --port=27911 --server=<sequel host:port> [--server-password=<pw>]
+//                         [--password=<pw>] [--delay=7] [--name=tv]   (sequel_tv_relay.hpp)
 //
 // voice: agent (a command-line tool's main: its errors are for whoever runs it;
 // docs/architecture.md § Player text).
@@ -39,6 +41,7 @@
 #include "proxy/proxy.hpp"
 #include "shooters_edge/net/classic_forward.hpp"
 #include "shooters_edge/net/classic_tv.hpp"
+#include "shooters_edge/net/sequel_tv_relay.hpp"
 
 namespace sn = shooters_edge::net;
 namespace gn = ge::net;
@@ -69,6 +72,9 @@ void usage() {
       "  proxy-far   --port=<p> --allow=<host[:port],...> | --open\n"
       "  tv          --port=27900 --server=<host:stream port> [--server-password=<pw>]\n"
       "              [--password=<pw>] [--delay=7] [--name=tv]\n"
+      "  sequel-tv   --port=27911 --server=<host:port> [--server-password=<pw>]\n"
+      "              [--password=<pw>] [--delay=7] [--name=tv]: a watcher on a server of the\n"
+      "              sequel, its match served to the sequel's own clients\n"
       "Every kind: [--bind=<ip>] (default every interface; the proxy's pair: 127.0.0.1)\n"
       "  [--copies=3] [--name=<name>] [--seconds=<n>, 0 until stopped] [--status=10]\n");
 }
@@ -143,6 +149,9 @@ struct Hops {
   px::ProxyNear near;
   px::ProxyFar far;
   sn::TvNode tv;
+  gn::Transport sq_watcher, sq_face;
+  sn::SequelTvRelay sq;
+  bool has_sq = false;
   bool forward = false, has_near = false, has_far = false, has_tv = false;
 };
 
@@ -189,6 +198,12 @@ std::string status_line(const Hops& h) {
     s += "tv: viewers " + std::to_string(sn::tv_watching(h.tv)) + ", records " +
          std::to_string(h.tv.counts.records) + ", released " +
          std::to_string(h.tv.counts.released) + ". ";
+  if (h.has_sq)
+    s += "sequel tv: watcher " + std::string(sn::client_stage_name(h.sq.watcher.stage)) +
+         ", frames " + std::to_string(h.sq.watcher.frames) + ", served blocks " +
+         std::to_string(h.sq.face.blocks) + ", whole frames " +
+         std::to_string(h.sq.face.whole_frames) + ", viewers " +
+         std::to_string(sn::sequel_tv_viewers(h.sq.face)) + ". ";
   return s;
 }
 
@@ -339,15 +354,33 @@ int run(int argc, char** argv) {
     h.has_tv = true;
     std::printf("tv on %s, relaying %s\n", gn::to_string(h.tv.listener.local).c_str(),
                 gn::to_string(o.server).c_str());
+  } else if (o.kind == "sequel-tv") {
+    if (!o.has_server) return fail("a sequel TV watches one server", "--server=<host:port>");
+    const gn::Address bind = at(o.bind, o.port > 0 ? o.port : 27911);
+    if (!gn::open_udp_transport(h.sq_face, bind, &error))
+      return fail("the TV's socket did not open on " + gn::to_string(bind) + ": " + error,
+                  "pick a free --port");
+    if (!open_upstream(h.sq_watcher))
+      return fail("the watcher's socket did not open", "check the machine's sockets");
+    sn::SequelTvRelayConfig rc;
+    rc.face.name = o.name.empty() ? "Shooter's Edge TV" : o.name;
+    rc.face.password = o.password;
+    rc.server_password = o.server_password;
+    rc.delay_s = o.delay;
+    sn::sequel_tv_relay_open(h.sq, h.sq_watcher, h.sq_face, o.server, rc, 0);
+    h.has_sq = true;
+    std::printf("sequel tv on %s, watching %s, %.0f s behind\n", gn::to_string(bind).c_str(),
+                gn::to_string(o.server).c_str(), o.delay);
   } else {
-    return fail("no kind '" + o.kind + "'", "forward, proxy, proxy-near, proxy-far or tv");
+    return fail("no kind '" + o.kind + "'",
+                "forward, proxy, proxy-near, proxy-far, tv or sequel-tv");
   }
   std::fflush(stdout);
   std::signal(SIGINT, on_signal);
   std::signal(SIGTERM, on_signal);
   const auto start = std::chrono::steady_clock::now();
   double next_status = o.status;
-  size_t tv_log = 0;
+  size_t tv_log = 0, sq_log = 0, face_log = 0;
   while (g_stop == 0) {
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
     const int64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -361,6 +394,12 @@ int run(int argc, char** argv) {
       sn::tv_update(h.tv, now);
       for (; tv_log < h.tv.log.size(); tv_log++) std::printf("tv: %s\n", h.tv.log[tv_log].c_str());
     }
+    if (h.has_sq) {
+      sn::sequel_tv_relay_update(h.sq, now_us);
+      for (; sq_log < h.sq.log.size(); sq_log++) std::printf("tv: %s\n", h.sq.log[sq_log].c_str());
+      for (; face_log < h.sq.face.log.size(); face_log++)
+        std::printf("tv: %s\n", h.sq.face.log[face_log].c_str());
+    }
     if (o.status > 0 && now >= next_status) {
       next_status += o.status;
       std::printf("%.0f s: %s\n", now, status_line(h).c_str());
@@ -372,6 +411,7 @@ int run(int argc, char** argv) {
   if (h.forward) fw::forward_close(h.fwd);
   if (h.has_far) px::proxy_far_close(h.far);
   if (h.has_tv) sn::tv_close(h.tv);
+  if (h.has_sq) sn::sequel_tv_relay_close(h.sq);
   return 0;
 }
 

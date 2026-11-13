@@ -84,6 +84,9 @@ struct Placed {
   // A player's `skin` (its user info's: the picture `skins/<name>.pcx` its figure wears, chosen
   // by `player_skin_morph`); empty: none named.
   std::string skin_name;
+  // A player's `model` (its user info's: the figure in `players/<model>/` it is drawn as, over the
+  // game's own); empty: none named.
+  std::string model_name;
   // Its side as the viewer sees it (teamskin, enemycolor: `models::side_of`); none: not a player.
   models::Side side = models::Side::none;
   // Its warp (world_fx.hpp, warps.hpp): short of whole an alias model is drawn dissolving to ash
@@ -145,6 +148,10 @@ struct ModelKind {
   // (`#<file>`, its file in the figure's folder, `carried`): drawn in each player's own look.
   bool figure = false;
   std::string carried;
+  // Drawn for the first game's players (a `model` naming its folder): the frame of its own drawn
+  // for each frame of the game's figure, by the frames' names (app/figure_frames.hpp); empty: the
+  // same frame.
+  std::vector<int> frame_map;
   uint32_t worn = ~0u;  // a weapon of a figure's folder: the skin-only model its picture is in
 };
 
@@ -200,6 +207,9 @@ struct WorldModels {
   // The second game's figures (folder -> its kind in `figure_kinds`) and the weapons carried on
   // each ("<folder>/<file>" -> its kind there).
   std::unordered_map<std::string, uint32_t> figures, figure_carried;
+  // Each figure folder's first picture listed (folder -> its `skin_files` row): the first game's
+  // player whose skin the folder lacks wears it.
+  std::unordered_map<std::string, uint32_t> figure_first_skins;
   std::vector<ModelKind> figure_kinds;
   // The skins listed (`player_skins` keys them) and where they are read from, and the slots.
   std::vector<SkinFile> skin_files;
@@ -232,7 +242,11 @@ struct ModelsRead {
   models::LightProbe probe;
   std::unordered_map<std::string, uint32_t> player_skins;  // skin key -> its `skin_files` row
   std::unordered_map<std::string, uint32_t> figures, figure_carried;
+  // Each figure folder's first picture listed (folder -> its `skin_files` row): the first game's
+  // player whose skin the folder lacks wears it.
+  std::unordered_map<std::string, uint32_t> figure_first_skins;
   std::vector<ModelKind> figure_kinds;
+  std::vector<std::string> player_frames;  // the game's figure's frames' names, in order
   std::vector<SkinFile> skin_files;
   const SearchPath* files = nullptr;  // where the skins are read from (it outlives the models)
   std::vector<uint8_t> palette;

@@ -236,6 +236,8 @@ int run_main(int argc, char** argv) {
   shooters_edge::look::add_cvars(console, picture);
   shooters_edge::view::ViewSettings view_settings;
   shooters_edge::view::add_view_cvars(console.cvars(), view_settings);
+  ge::camera::CameraCvars camera_cvars;  // cl_bob, cl_rollangle, v_kick... at the classic look's
+  cl::add_view_camera_cvars(console.cvars(), camera_cvars);
   console.add_command("quit", "quit the game", [&](Con&, const CArgs&) { quit = true; });
   cl::UserInfo user_info;  // SETUP's colours (and the console's `name`), sent as they change
   cl::add_user_info_cvars(console, user_info);
@@ -558,6 +560,15 @@ int run_main(int argc, char** argv) {
     size_t kept_count = 0;  // how many of them
   } place_seen;
   recorder.places = &places.locs;  // a recording keeps the place names it is played with
+  // Whether nothing solid stands between two points in the map being played or watched
+  // (`loc_trace`).
+  places.clear_line = [&listen, &place_seen](ge::shooter::Vec3f from, ge::shooter::Vec3f to) {
+    const shooters_edge::server::BspMap* map =
+        place_seen.on ? place_seen.map : (listen.map ? &listen.map->bsp : nullptr);
+    if (map == nullptr) return true;
+    const ge::shooter::Vec3f end = cl::line_end(*map, from, to);
+    return end.x == to.x && end.y == to.y && end.z == to.z;
+  };
   // Where the view looks: 8,192 units along it from where the player stands, or the first solid.
   places.looked_at = [&listen, &place_seen](ge::shooter::Vec3f& at) {
     ge::shooter::Vec3f from, angles;
@@ -1748,6 +1759,7 @@ int run_main(int argc, char** argv) {
     }
     // The eyes on the player and what the world throws, then the overlay: the HUD, the console.
     shown.lerp = picture.lerp_move;  // r_lerpmove: the eye between the server's frames too
+    cl::apply_view_cvars(camera_cvars, shown);
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
     view.frame = static_cast<uint64_t>(presented);
     fx_state.models = world ? &cl::world_models(*world) : nullptr;
