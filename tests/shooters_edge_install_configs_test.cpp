@@ -20,6 +20,7 @@
 #include "console/console.hpp"
 #include "shooters_edge/client/install_configs.hpp"
 #include "shooters_edge/client/settings.hpp"
+#include "vfs/pak.hpp"
 
 namespace cl = shooters_edge::client;
 namespace fs = std::filesystem;
@@ -107,6 +108,31 @@ TEST(the_sequel_s_install_runs_its_client_s_order) {
   mod.con.set_search_path(cl::config_dirs(root.string(), "ctf", two));
   cl::start_configs(mod.con, root.string(), "ctf", two, {});
   CHECK_MSG(joined(mod.seen) == "modmain,autoexec,mod,postexec,postinit", joined(mod.seen));
+}
+
+TEST(the_sequel_s_default_cfg_comes_from_its_pack_keeping_the_console_keys) {
+  const ge::classicenhance::Profile& two = ge::classicenhance::kProfiles[1];
+  const std::string base(two.base_dir);
+  const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_pack";
+  fs::remove_all(root);
+  std::vector<uint8_t> pack;
+  std::string error;
+  const std::string defaults = "unbindall\nmark packdefault\n";
+  CHECK_MSG(
+      ge::vfs::write_pak({{"default.cfg", {defaults.begin(), defaults.end()}}}, &pack, &error),
+      error);
+  fs::create_directories(root / base);
+  std::ofstream(root / base / "pak0.pak", std::ios::binary)
+      .write(reinterpret_cast<const char*>(pack.data()), std::streamsize(pack.size()));
+  Marks m;
+  m.con.binds().set(ge::console::BindMode::game, "nonus", "toggleconsole");
+  m.con.binds().set(ge::console::BindMode::game, "x", "mark x");
+  m.con.set_search_path(cl::config_dirs(root.string(), base, two));
+  const cl::ConfigsRun ran = cl::start_configs(m.con, root.string(), base, two, {});
+  CHECK_MSG(joined(m.seen) == "packdefault", joined(m.seen));
+  CHECK(!ran.files.empty() && ran.files[0].find("pak0.pak") != std::string::npos);
+  CHECK(m.con.binds().get(ge::console::BindMode::game, "nonus") == "toggleconsole");  // kept
+  CHECK(m.con.binds().get(ge::console::BindMode::game, "x").empty());  // the pack's unbindall
 }
 
 TEST(with_no_main_config_the_engine_s_order_runs) {

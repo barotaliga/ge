@@ -59,6 +59,7 @@
 // ge:keywords scoreboard scr_levelstats settings config-cfg topcolor bottomcolor gamma binds f12
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -119,6 +120,7 @@
 #include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/scores.hpp"
+#include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/title.hpp"
@@ -143,6 +145,7 @@
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/server/words.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "ui/console.hpp"
@@ -300,6 +303,15 @@ int run_main(int argc, char** argv) {
   // Started inside an install (or placed in one, or above several: client/install_search.hpp), that
   // one.
   const std::string prefs = ge::platform::prefs_dir("gameengine2", "shooters_edge");
+  // The game CLI's account file (`account signin`): our client logs itself in by it on a server
+  // whose master is the same (net/classic_remote.hpp § Logging in).
+  if (!prefs.empty())
+    sn::remote_login_from(
+        remote, (std::filesystem::path(prefs) / "cli" / "account.txt").string(), [] {
+          return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                          std::chrono::system_clock::now().time_since_epoch())
+                                          .count());
+        });
   std::vector<cl::FoundInstall> installs;  // the console's `games`
   cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
@@ -359,6 +371,9 @@ int run_main(int argc, char** argv) {
     return g != nullptr ? *g : shooters_edge::profiles::classic_game();
   };
   cl::SearchPath files;
+  // The sequel's status bar, drawn from its rules' own program (sequel_bar.hpp).
+  cl::SequelBar sequel_bar;
+  sequel_bar.files = &files;
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
   cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
@@ -506,12 +521,23 @@ int run_main(int argc, char** argv) {
   // The map's place names, read as it starts and made in the game (client/place_names.hpp).
   cl::PlaceNames places;
   places.game_dir = std::filesystem::path(args.basedir) / args.game;
-  cl::add_place_commands(console, places, adapter, files, [&listen](ge::shooter::Vec3f& at) {
-    if (listen.server == nullptr || !listen.map || listen.server->world.entities.size() < 2)
-      return false;
-    at = listen.server->world.entities[1].origin;
-    return true;
-  });
+  // Where the player is: the view of a server joined or a demo played (its eye less its height),
+  // else the window's own game.
+  struct Watched {
+    bool on = false;
+    ge::shooter::Vec3f at{0, 0, 0};
+  } place_seen;
+  cl::add_place_commands(
+      console, places, adapter, files, [&listen, &place_seen](ge::shooter::Vec3f& at) {
+        if (place_seen.on) {
+          at = place_seen.at;
+          return true;
+        }
+        if (listen.server == nullptr || !listen.map || listen.server->world.entities.size() < 2)
+          return false;
+        at = listen.server->world.entities[1].origin;
+        return true;
+      });
   // DEMOS: the game's recordings anywhere on the machine, each checked before it plays.
   const auto demo_places = [&] {
     game_menu.demos().set_game_places(
@@ -533,6 +559,7 @@ int run_main(int argc, char** argv) {
   // again when it flips and when an enhance run ends (client/classic_pictures.hpp). The first read
   // is on a thread, behind the title; the menu opens once they are in.
   const auto use_pictures = [&](cl::ClassicPictures pics, bool say) {
+    sequel_bar.pictures.clear();  // read again from the packs now open
     // Always the loaded game's own: another game's install loaded leaves none of the last one's.
     game_menu.set_art(std::move(pics.menu));
     shooters_edge::menu::classic_console(game_menu.art(), con_look);
@@ -1265,7 +1292,10 @@ int run_main(int argc, char** argv) {
     }
 
     // A map started on the window's own server: its place names read (the same map keeps them).
-    if (!remote.active && listen.map) cl::map_started(places, adapter, files, listen.map->name);
+    if (!remote.active && !bench.active && listen.map) {
+      place_seen.on = false;
+      cl::map_started(places, adapter, files, listen.map->name);
+    }
 
     // Co-op as the window's mode: `sv_coop` turned on, the friendly-fire settings, the episodes.
     cl::coop_frame(coop_mode, listen, game_content.campaign != nullptr, game_content.start_map,
@@ -1414,12 +1444,15 @@ int run_main(int argc, char** argv) {
       for (const std::string& line : said) console.print(line);
       // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.
       const cl::DemoState& ds = drawn_remote ? remote.demo.state : cl::demo_drawn(bench);
+      place_seen.on = !ds.map.empty();
+      place_seen.at = {ds.eye.x, ds.eye.y, ds.eye.z - ds.view_height};
       if (step == cl::TimedemoStep::new_level) {
         // The game folder the recording's server ran, mounted when the window is not on it.
         std::vector<std::string> lines;
         const cl::SearchPath& from =
             cl::demo_folder(bench_folder, args.basedir, args.game, ds, files, lines);
         for (const std::string& line : lines) console.print("playdemo: " + line);
+        cl::map_started(places, adapter, from, ds.map);  // its place names, from where it played
         bench_map = cl::load_named_map(from, ds.map, error);
         if (!bench_map) {
           if (!end_bench("the demo's map " + ds.map + ": " + error, t)) return 1;
@@ -1638,7 +1671,13 @@ int run_main(int argc, char** argv) {
     // the classic look: the weapon's own flash and its light alone).
     cl::fire_held(held_fire, hand, fx_state.on.muzzles, view.time_s, fx);
     overlay.begin(w, h);
-    if (listen.campaign.end == cl::LevelEnd::none) {
+    const shooters_edge::server::SequelServer* sequel =
+        listen.rules ? shooters_edge::server::sequel_of(*listen.rules) : nullptr;
+    if (sequel != nullptr && listen.campaign.end == cl::LevelEnd::none) {
+      // The sequel's own bar, from the program its rules send.
+      cl::run_sequel_bar(sequel_bar, sequel->world, 0, sequel->frame_number, w, h);
+      cl::draw_sequel_bar(overlay, sequel_bar, cl::sequel_bar_scale(h));
+    } else if (listen.campaign.end == cl::LevelEnd::none) {
       se::Status hud_status = cl::status_of(listen, t);
       cl::group_status(controls.groups, hud_status, t);  // the weapon group (weapon_groups.hpp)
       se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));

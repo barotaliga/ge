@@ -16,6 +16,7 @@
 #include "assets/pcx.hpp"
 #include "assets/tga.hpp"
 #include "brush/app/bsp_draw.hpp"
+#include "brush/app/bsp_fog.hpp"
 #include "brush/app/bsp_sky.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/app/sky_box.hpp"
@@ -59,9 +60,10 @@ struct WorldDraw {
   ba::BspDraw bsp;
   gr::FarLand far;  // the land round the map, seen through its sky faces (r_farland)
   ba::SkyPick sky;
-  ba::SkyPick night;  // the map's own classic night, for an sv_hour after dusk (bsp_sky.hpp)
-  bool dark = false;  // its sky texture is dark: the map is seen under its night (dark_sky)
-  double top_y = 0;   // the map's highest point, m: the clouds stand over it
+  ba::SkyPick night;      // the map's own classic night, for an sv_hour after dusk (bsp_sky.hpp)
+  bool dark = false;      // its sky texture is dark: the map is seen under its night (dark_sky)
+  ge::brush::MapFog fog;  // the map's own fog (its worldspawn's `fog` and `skyfog`)
+  double top_y = 0;       // the map's highest point, m: the clouds stand over it
   ge::gpu::PipelineSet pipelines;
   gr::FrameTargets targets;
   wgpu::Buffer uniforms;
@@ -505,6 +507,7 @@ WorldDrawPtr begin_world(ge::gpu::Device& d, WorldReadPtr read, uint32_t width, 
   f->h = std::max(1u, height);
   f->has_map = read->has_map;
   f->scene = std::move(read->scene);
+  f->fog = ge::brush::map_fog(f->scene.map);
   f->sky = read->sky;
   f->night = read->night;
   f->dark = read->dark;
@@ -598,6 +601,15 @@ ba::SkyPick dress_world_sky(const WorldDraw& f, gr::FrameView& view) {
   return sky;
 }
 
+// THE MAP'S FLAT FOG (brush/app/bsp_fog.hpp's `map_flat_fog`): the `fog` command's words when it
+// was typed (or sent) since the world was made, else the map's own; its sky share the map's
+// `skyfog`, else r_skyfog. A new map is its own fog again.
+gr::FlatFog world_fog(const WorldDraw& f) {
+  ge::brush::MapFog fog = f.fog;
+  if (f.picture->fog_serial != f.made.fog_serial) ge::brush::parse_fog(f.picture->fog, &fog);
+  return ba::map_flat_fog(fog, f.picture->sky_fog);
+}
+
 }  // namespace
 
 void world_sun(const WorldDraw& f, gr::FrameView view, double out[3]) {
@@ -628,6 +640,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   // The map's own sky (its pick), keeping the eye and the look the caller set.
   const ba::SkyPick sky = dress_world_sky(f, view);
   view.altitude_m = 100;
+  view.flat_fog = world_fog(f);
   if (!f.own_sky) {  // a map's cloud seen through its sky faces: every pixel, every frame
     view.clouds.quarter = false;
     view.clouds.spread = false;
