@@ -25,6 +25,10 @@ namespace ge::shooter {
 
 namespace {
 
+// (`liftbrake`) The run's stop on the ground: ~v/4 under friction, the hands' lag on top, s; plus units.
+constexpr float kLiftStop_s = 0.35f, kLiftStopPad = 16;
+
+
 using namespace pilot_parts;
 
 constexpr float kRideArrive = 2;  // a ride is over within this of the top node's height, units
@@ -2242,11 +2246,26 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // Slowing into the goal (late hands run past a small top and off it, or orbit it).
       const float d = across(ahead, node(*p.g, p.route.back()).origin);
       if (d < p.set.look) w.forward *= d < p.set.look * kBrake ? kBrake : d / p.set.look;
+      // (`liftbrake`) The next link boards a lift not there (away from its rest, or on its way):
+      // the keys let go within the run's stop of its edge, so the pilot waits there, not in its
+      // empty shaft (dm2's RA lift: run into at 390 units/s, ~4 % of the bots' time waited there,
+      // in the shaft under it as it came down onto them and went back up).
+      bool lift_brake = false;
+      if (p.set.lift_brake && s.onground && l2 != nullptr && l2->mover >= 0 &&
+          mover_in_way(p, s, *l2, b, p.route[p.k + 2])) {
+        const float v = root_of(s.velocity.x * s.velocity.x + s.velocity.y * s.velocity.y);
+        if (across(s.origin, B) < v * kLiftStop_s + kLiftStopPad) {
+          w.forward = 0;
+          w.side = 0;
+          lift_brake = true;
+        }
+      }
       if (!s.onground && s.waterlevel == 0 && !p.airborne) {
         p.walk_air = true;
         p.walk_air_yaw = yaw_at(s.origin, target);
       }
-      because = wait_body                 ? "a player standing in the way: waiting for him"
+      because = lift_brake                ? "a lift not there ahead: braking short of it"
+                : wait_body               ? "a player standing in the way: waiting for him"
                 : body                    ? "a player standing in the way: round him"
                 : seen != WalkWay::pursue ? walk_way_because(seen)
                 : l.kind == NavKind::drop ? "walking off the edge"

@@ -635,7 +635,7 @@ void run(gl::Lab& lab) {
              "\tscript_"
              "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
              "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
-             "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\n";
+             "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -761,7 +761,28 @@ void run(gl::Lab& lab) {
     }
     // Its armour's protection (type times value), the rules' numbers.
     const auto& num = w.world.clients[static_cast<size_t>(f.slot)].numbers;
-    out << to_fixed(num.armour_type * num.armour, 0) << '\t' << f.mind.fetch << '\n';
+    out << to_fixed(num.armour_type * num.armour, 0) << '\t' << f.mind.fetch << '\t';
+    // The ridden mover of the link walked or the next (its height off its rest, as last seen;
+    // '-' with none): a wait read against the lift's place.
+    {
+      float up = 1e9f;
+      for (size_t q = p.k; p.g != nullptr && q + 1 < p.route.size() && q < p.k + 2; q++) {
+        const sh::NavNode& na = p.g->nodes[static_cast<size_t>(p.route[q])];
+        for (int32_t j = 0; j < na.links && up > 1e8f; j++) {
+          const sh::NavLink& l =
+              p.g->links[static_cast<size_t>(na.first_link) + static_cast<size_t>(j)];
+          if (l.to != p.route[q + 1] || l.mover < 0) continue;
+          for (const sh::NavMover& m : p.g->movers)
+            if (m.ent == l.mover)
+              for (const auto& v : p.movers_seen)
+                if (v.ent == l.mover) up = v.z - m.absmin.z;
+        }
+      }
+      if (up > 1e8f)
+        out << "-\n";
+      else
+        out << to_fixed(up, 0) << '\n';
+    }
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);

@@ -177,6 +177,10 @@ struct PilotSettings {
   // TOWARD THE OPEN (`hopopen`): the hop's side away from a wall for every skill (its air), and a
   // circle jump's curve, the way near straight ahead, out to the side whose arc stays clear.
   bool hop_open = false;
+  // THE LIFT NOT THERE (`liftbrake`): walking to a node whose next link boards a lift that is not
+  // at its rest, the keys let go within the run's stop of it (the wait is at its edge, not in the
+  // shaft under it).
+  bool lift_brake = false;
   CircleSettings circle;
   // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while `jumper.rockets` is set (the
   // caller's say: the launcher in hand, its rockets, the health for the blast), those of its
