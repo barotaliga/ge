@@ -393,4 +393,16 @@ uint64_t login_account(const Logins& l, int slot) {
   return l.seats[slot].state == LoginState::in ? l.seats[slot].account : 0;
 }
 
+bool login_key(const Logins& l, net::Key& out) {
+  if (l.own != nullptr) {
+    out = account::service_key(*l.own);
+    return true;
+  }
+  if (!l.key_known) return false;
+  out = l.master_key;
+  return true;
+}
+
+std::string login_key_tag(const net::Key& key) { return net::key_to_hex(key).substr(0, 16); }
+
 }  // namespace ge::server

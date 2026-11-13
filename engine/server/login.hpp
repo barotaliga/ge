@@ -142,4 +142,10 @@ NameVerdict login_name(Logins& l, int slot, std::string& name, bool quiet = fals
 // The account the seat is logged in to (0: a guest).
 uint64_t login_account(const Logins& l, int slot);
 
+// The key the server's tickets are signed with: its own service's, or its master's once known.
+// A game advertises its tag (the first 16 hex digits) so a player's own client, holding a ticket
+// signed by the same key, knows it can log itself in (docs/accounts.md § From our own client).
+bool login_key(const Logins& l, net::Key& out);
+std::string login_key_tag(const net::Key& key);
+
 }  // namespace ge::server
