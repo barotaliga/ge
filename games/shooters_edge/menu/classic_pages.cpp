@@ -77,20 +77,24 @@ std::string fit_chars(std::string_view s, size_t n, bool left) {
   return std::string(s.substr(0, n - 2)) + "..";
 }
 
-void classic_list_frame(const ClassicPen& pen, std::string_view title, std::string_view carved,
-                        std::string_view words) {
+void classic_list_frame(const ClassicPen& pen, std::string_view page, std::string_view title,
+                        std::string_view carved, std::string_view words) {
   pen.dl.rect({0, 0, static_cast<float>(pen.dl.width()), static_cast<float>(pen.dl.height())},
               ui::hex(0x000000, 0.6f));
   pen.picture(pen.art.find("qplaque"), 16, 4);
+  // The sequel's plates: its banner, or a plate of the page's word, above the 200 px screen.
+  const bool plates = pen.art.plates();
+  const float top = plates ? -16 : 4;
+  if (plates) title = banner_of(page);
   if (const ui::Image* pic = title.empty() ? nullptr : pen.art.find(title)) {
-    pen.picture(pic, std::floor((kScreenW - pen.art.width_of(*pic)) / 2), 4);
+    pen.picture(pic, std::floor((kScreenW - pen.art.width_of(*pic)) / 2), top);
     return;
   }
   if (const float cw = carved.empty() ? 0 : carved_width(pen.art, carved); cw > 0) {
-    carve_word(pen, carved, std::floor((kScreenW - cw) / 2), 4);
+    carve_word(pen, carved, std::floor((kScreenW - cw) / 2), top);
     return;
   }
-  pen.big_text(words, std::floor((kScreenW - 16 * static_cast<float>(words.size())) / 2), 6);
+  pen.big_text(words, std::floor((kScreenW - 16 * static_cast<float>(words.size())) / 2), top + 2);
 }
 
 void classic_cursor(const ClassicPen& pen, float y, double t) {
@@ -104,9 +108,9 @@ void DemosPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int widt
   problems_.clear();
   cells_.clear();
   chips_.clear();
-  const ClassicLayout l = classic_screen(width, height);
+  const ClassicLayout l = classic_screen(art, width, height);
   const ClassicPen pen{list, art, l};
-  classic_list_frame(pen, "", "demos", "DEMOS");
+  classic_list_frame(pen, "demos", "", "demos", "DEMOS");
   const float x = kListLeft + 8;
 
   // The place, LEFT and RIGHT turning it, and the folder open under it (its tail kept).
@@ -172,9 +176,9 @@ void ServersPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int wi
                                double t) {
   problems_.clear();
   cells_.clear();
-  const ClassicLayout l = classic_screen(width, height);
+  const ClassicLayout l = classic_screen(art, width, height);
   const ClassicPen pen{list, art, l};
-  classic_list_frame(pen, "p_multi", "", "SERVERS");
+  classic_list_frame(pen, "servers", "p_multi", "", "SERVERS");
   const float x = kListLeft + 8;
 
   // The columns: the name, the map, players over slots and the ping; the sorted one's head lit.

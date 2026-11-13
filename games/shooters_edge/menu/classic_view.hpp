@@ -12,6 +12,14 @@
 // - HELP as the pack's help pages, one at a time (left and right turn them), and QUIT as its
 //   question in the text box made of the box pieces.
 //
+// THE SEQUEL'S PLATES (`ClassicArt::plates`): its pictures are drawn on a 320 x 240 screen, the
+// 320 x 200 one above sitting in its middle (classic y 0 is the taller screen's y 20), so every
+// page but the root keeps the layout above under the page's banner (275 x 32, centred at classic
+// y -16) in place of the plaque and the title. The root is its main menu: the plaque and the logo
+// down the left at x 16, a plate a row at x 84, 32 px apart and centred, the lit plate (`_sel`) on
+// the focused row with the spinning cursor (fifteen frames, ten a second) left of it at x 58; a
+// row with no plate of its own (SELECT GAME, DEMOS, HELP) built from the others' letters.
+//
 // Pages with no picture of their own use the glyphs for their title; the classic-enhance pages
 // keep the engine's modern view (game_menu.hpp), since their progress panel is drawn for it.
 //
@@ -35,8 +43,9 @@ namespace shooters_edge::menu {
 
 struct ClassicLayout {
   float scale = 1;                  // screen px a classic pixel
-  float x = 0, y = 0;               // the 320 x 200 screen's top left, px
+  float x = 0, y = 0;               // the 320 x 200 screen's top left, px (classic 0, 0)
   bool strip = false;               // the page is drawn as the pack's strip of rows
+  bool plates = false;              // the page is the sequel's root: a plate a row
   std::vector<ge::ui::Rect> items;  // index for index with the page's items; empty: not drawn
   // A strip page's rows, index for index with the items: the strip's band the row shows (its
   // place in the pack's picture), or -1 for a row the picture has no words for (DEMOS on the
@@ -128,13 +137,19 @@ struct ClassicPen {
 };
 
 // A strip row's word the pack's pictures have no words for (`demos`), cut from the letters of the
-// strips it was measured on, its top left at (x, y) classic px; false on other strips (the caller
-// writes it in big glyphs). `carved_width` is its width in classic px, 0 when it cannot be cut.
-bool carve_word(const ClassicPen& pen, std::string_view id, float x, float y);
+// strips it was measured on (or, on the sequel's plates, a plate of its own built from theirs),
+// its top left at (x, y) classic px; false on other pictures (the caller writes it in big glyphs).
+// `lit`: cut from the lit plates (`_sel`) where the art has them. `carved_width` is its width in
+// classic px, 0 when it cannot be cut.
+bool carve_word(const ClassicPen& pen, std::string_view id, float x, float y, bool lit = false);
 float carved_width(const ClassicArt& art, std::string_view id);
 
 // The bare classic screen (no page) on a `width` x `height` screen: scaled and centred.
 ClassicLayout classic_screen(int width, int height);
+// The same for the art's own screen: the sequel's plates' 320 x 240 (above), else 320 x 200.
+ClassicLayout classic_screen(const ClassicArt& art, int width, int height);
+// The sequel's banner for a page (`m_banner_options`), or empty.
+std::string_view banner_of(std::string_view page);
 
 // The page up laid out on a `width` x `height` screen.
 ClassicLayout layout_classic(const ge::ui::Menu& menu, const ClassicArt& art, int width,
