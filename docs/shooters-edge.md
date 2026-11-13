@@ -128,7 +128,11 @@ folder's own (its place names and fonts). Settings the window does not have are 
 counted on one line. The sequel's install runs its bundled client's order: `config.cfg`
 (`q2config.cfg` on Windows, each tried after the other; a mod folder's before the base folder's),
 then the base folder's `autoexec.cfg` and the mod's, `postexec.cfg`, the window's own settings, the
-command line, and `postinit.cfg` last. Maps' coloured light is also read from `maps/lits/<map>.lit`.
+command line, and `postinit.cfg` last; its `default.cfg` is the one in its packs (the window's
+console keys kept through its `unbindall`). Each game's order lives in one table,
+`client/load_order.hpp`: its files' ranks too, so the sequel's folders rank their packs and zips
+(`.pkz`) over their loose files, every `pak*` archive by its number, and the rerelease's archive at
+the install's root under them all, as its own client loads them. Maps' coloured light is also read from `maps/lits/<map>.lit`.
 
 **Place names, made in the game** (`client/place_names.hpp`). Each map's place names are read as
 it starts (`tp_loadlocs`): the file saved under the game folder first, else the game's own.
@@ -1510,8 +1514,8 @@ down the left, a plate for each row, the lit plate and the spinning cursor on th
 Each page under it has its banner over the top. SELECT GAME, DEMOS and HELP have no plate of
 their own, so each is built from the other plates' letters, a 17 px cell each. The C, the H and
 the K are pieced from O, N, R and Y (`kPlate*`, held to the plates' print). SELECT GAME's title and
-the two games' names on it are plates built the same way. The lobby, the scoreboard and the HUD
-stay modern in the sequel until their pictures are read.
+the two games' names on it are plates built the same way. The lobby and the scoreboard stay
+modern in the sequel until their pictures are read.
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
 output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),

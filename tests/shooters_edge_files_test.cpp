@@ -89,6 +89,29 @@ TEST(the_base_folder_layers_its_packs_and_loose_files) {
   fs::remove_all(root);
 }
 
+TEST(the_sequel_s_folders_rank_their_packs_over_their_loose_files) {
+  const ge::classicenhance::Profile& two = ge::classicenhance::kProfiles[1];
+  const fs::path root = fs::temp_directory_path() / "ge_se_files_sequel";
+  fs::remove_all(root);
+  const fs::path base = root / std::string(two.base_dir);
+  write_pack(base / "pak0.pak",
+             {{"pics/a.pcx", bytes_of("pak0")}, {"pics/b.pcx", bytes_of("pak0")}});
+  write(base / "pics" / "a.pcx", bytes_of("loose"));
+  write(base / "pics" / "c.pcx", bytes_of("loose"));
+  write(root / ("Q2"
+                "Game.kpf"),
+        ge::vfs::write_stored_zip(
+            {{"pics/b.pcx", bytes_of("kpf")}, {"pics/d.pcx", bytes_of("kpf")}}));
+  cl::SearchPath sp;
+  std::string error;
+  CHECK_MSG(cl::open_game_dir(root.string(), std::string(two.base_dir), sp, error, two), error);
+  CHECK(text_of(sp, "pics/a.pcx") == "pak0");   // the folder's pack over its loose file
+  CHECK(text_of(sp, "pics/c.pcx") == "loose");  // a loose file no pack holds
+  CHECK(text_of(sp, "pics/b.pcx") == "pak0");   // the base folder over the root archive
+  CHECK(text_of(sp, "pics/d.pcx") == "kpf");
+  fs::remove_all(root);
+}
+
 TEST(a_maps_coloured_light_is_found_beside_it_then_in_lits) {
   const fs::path root = fs::temp_directory_path() / "ge_se_files_lit_test";
   fs::remove_all(root);
