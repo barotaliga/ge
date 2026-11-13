@@ -82,6 +82,7 @@
 #include "render/marks.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/app/look.hpp"
+#include "shooters_edge/app/monster_fx.hpp"
 #include "shooters_edge/app/muzzle.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -103,6 +104,9 @@ struct FxSwitches {
   // ce_flares, ce_bubbles: the pack's flare and bubble sprites drawn as the engine's (the models'
   // `prepare_models`, through classic-enhance's replacement table).
   bool flares = false, bubbles = false;
+  // ce_monsters: the monsters' missiles, spit and splashes in the modern look (app/monster_fx.hpp),
+  // its variant (1; the lab films 2 beside it); 0 the classic specks.
+  int monsters = 0;
   // r_lerpmodels, r_lerpmove (either look): the models drawn between their frames (model_lerp.hpp)
   ModelLerpSwitches lerp;
 };
@@ -201,6 +205,25 @@ struct FxState {
     double carry = 0;
   };
   std::unordered_map<int, Bleeding> bleeding, bleeding_next;
+  // THE MONSTERS' MISSILES (app/monster_fx.hpp: a model the replacement table or its trail flags
+  // name): each in flight as it was a frame ago (m, and map units), the way it flew, its kind and
+  // its classic trail's side; those gone this frame (where their spit lands); the splashes whose
+  // light still fades.
+  struct MonsterFlight {
+    ge::camera::Vec3 at;
+    sh::Vec3f map_at;
+    double dir[3] = {0, 0, 0};
+    effects::MonsterShot kind = effects::MonsterShot::none;
+    int count = 0;
+  };
+  std::unordered_map<int, MonsterFlight> monster_flights, monster_next;
+  std::vector<MonsterFlight> monster_gone;
+  struct MonsterSplash {
+    double at[3] = {0, 0, 0};
+    double t = 0;
+    effects::MonsterShot kind = effects::MonsterShot::none;
+  };
+  std::vector<MonsterSplash> monster_splashes;
   std::unordered_map<uint32_t, std::array<float, 3>> wall_colours;  // each texture's, as hit
   std::vector<Wound> wounds;
   std::unordered_map<int, float> wound_health;  // each wounded body's health a frame ago

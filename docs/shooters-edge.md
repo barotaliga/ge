@@ -1296,6 +1296,16 @@ every pass, and judged by captioned screenshots:
   explosion's sprite (its 6 frames at 10 a second) and the lightning bolt's model laid every 30
   units from the player's origin to the end, each segment turned to a fresh roll every frame.
   The classic look also draws each weapon's own flash frames, not the engine's muzzle fire.
+- **The monsters' attacks** (`games/shooters_edge/app/monster_fx.hpp`, roadmap row M47f): the
+  pack's shot models named in classic-enhance's replacement table (`missile.<kind>`), or a model's
+  tracer bits, are drawn by `client/world_fx.cpp`'s `monster_missiles`. The classic look lays the
+  classic tracer specks (green, orange or purple either side of the line, the lava ball the
+  rocket's trail) and the spit's coloured splash (codes 7 and 8). Under `ce_monsters` in the modern
+  look: the flier's acid drips and glows green and splashes off the wall, the knight's fire bolt
+  streams flame and embers and bursts, the caster's ball is a knot of violet light with motes
+  spiralling off it, the boss's lava ball burns, smokes and drips molten drops, the enforcer's
+  laser is a red streak that lights the walls and sparks where it ends, a zombie's flesh drips dark
+  drops; each shot carries a bright head and its light. Lab `se-monster-fx`.
 - **Effects, enhanced** (`games/shooters_edge/app/weapon_fx.hpp`, the modern look, each behind
   its `ce_` switch: `ce_muzzles`, `ce_explosions`, `ce_trails`, `ce_hits`, `ce_beams`): a
   LAYERED fireball of the engine's (`render/explosion.hpp`: the main ball, then three smaller

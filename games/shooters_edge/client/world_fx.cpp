@@ -21,6 +21,7 @@
 #include "detail/vec.hpp"
 #include "shooter/hull.hpp"
 #include "shooter/trace.hpp"
+#include "shooters_edge/app/monster_fx.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/view.hpp"
 
@@ -444,6 +445,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.arrival = picture.ce.warps ? std::clamp(picture.arrival, 0.0, 1.0) : 0;
   s.flares = picture.ce.flares;
   s.bubbles = picture.ce.bubbles;
+  s.monsters = picture.ce.monsters ? 1 : 0;
   return s;
 }
 
@@ -648,6 +650,144 @@ void draw_wounds(const FxScene& sc, FxState& s, const std::vector<Placed>& place
   }
 }
 
+
+// THE MONSTERS' MISSILES (app/monster_fx.hpp): every drawn model the replacement table or its
+// trail flags name a monster's shot lays its trail over the stretch it flew since the last frame
+// (the classic specks, or under ce_monsters the modern look) and carries its light and flame; one
+// gone this frame is kept for the splash where it landed, and a laser gone throws its sparks there.
+// The monsters' shots are taken out of `missiles`, so the player's weapons' trails pass them by.
+constexpr double kMonsterJumpM = 10;  // a shot that moved this far in a frame jumped: no trail
+void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame& out,
+                      std::vector<Missile>& missiles) {
+  s.monster_next.clear();
+  s.monster_gone.clear();
+  const int variant = s.on.monsters;
+  if (s.models != nullptr) {
+    for (const Placed& m : out.models) {
+      if (m.entity <= 0 || m.modelindex <= 0 ||
+          m.modelindex >= static_cast<int>(s.models->kinds.size()))
+        continue;
+      const ModelKind& k = s.models->kinds[size_t(m.modelindex)];
+      fx::MonsterShot kind = fx::monster_shot_of(k.effect);
+      if (kind == fx::MonsterShot::none) kind = fx::monster_shot_of_flags(k.flags);
+      if (kind == fx::MonsterShot::none && (k.flags & fx::kTrailZombieGib) != 0)
+        kind = fx::MonsterShot::flesh;
+      // A zombie's flesh in the classic look is the bleeding pieces' (above).
+      if (kind == fx::MonsterShot::none || (kind == fx::MonsterShot::flesh && variant == 0))
+        continue;
+      FxState::MonsterFlight now;
+      now.at = engine_point(m.origin);
+      now.map_at = m.origin;
+      now.kind = kind;
+      double to[3];
+      put(now.at, to);
+      const auto was = s.monster_flights.find(m.entity);
+      if (was != s.monster_flights.end() && was->second.kind == kind) {
+        double from[3];
+        put(was->second.at, from);
+        const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+        const double len = ge::core::hypot3(d[0], d[1], d[2]);
+        now.count = was->second.count;
+        for (int c = 0; c < 3; ++c) now.dir[c] = was->second.dir[c];
+        if (len > 1e-4 && len < kMonsterJumpM) {
+          for (int c = 0; c < 3; ++c) now.dir[c] = d[c] / len;
+          if (variant == 0)
+            now.count = fx::classic_tracer(kind, from, to, now.count, s.seed++, s.palette,
+                                           &out.births);
+          else
+            fx::monster_trail(kind, variant, from, to, s.seed++, &out.births);
+        }
+      }
+      if (variant > 0) {
+        double speed = 0;
+        if (was != s.monster_flights.end() && dt > 0) {
+          const ge::camera::Vec3 a = was->second.at;
+          speed = std::min(ge::core::hypot3(now.at.x - a.x, now.at.y - a.y, now.at.z - a.z) / dt,
+                           60.0);
+        }
+        fx::monster_head(kind, variant, to, now.dir, speed, &out.births);
+        fx::Light light;
+        if (fx::monster_glow(kind, variant, to, now.dir, uint32_t(m.entity), t, &light))
+          out.lights.push_back(light);
+        ge::render::MuzzleFire flame;
+        if (fx::monster_flame(kind, variant, to, now.dir, uint32_t(m.entity), t, &flame))
+          out.flames.push_back(flame);
+      } else if (kind == fx::MonsterShot::lava) {
+        out.lights.push_back(fx::rocket_light(to));  // the classic's light on a rocket's trail
+      }
+      s.monster_next[m.entity] = now;
+    }
+  }
+  // Those gone, in entity order (each draws on the seed in turn).
+  thread_local std::vector<int> gone;
+  gone.clear();
+  for (const auto& kv : s.monster_flights)
+    if (!s.monster_next.contains(kv.first)) gone.push_back(kv.first);
+  std::sort(gone.begin(), gone.end());
+  for (const int entity : gone) {
+    const FxState::MonsterFlight& f = s.monster_flights[entity];
+    s.monster_gone.push_back(f);
+    // A laser leaves no message where it ends: its sparks where it was last seen, off the face it
+    // was flying into.
+    if (f.kind != fx::MonsterShot::laser || variant == 0 || !l.map) continue;
+    double normal[3], off = 0, p[3];
+    const bool face = surface_near(*l.map, f.map_at, normal, &off);
+    put(f.at, p);
+    const double floor_y = floor_under(*l.map, f.map_at, f.map_at);
+    fx::monster_splash(f.kind, variant, p, face ? normal : nullptr, f.dir, floor_y, s.seed++, t,
+                       &s.blasts, &out.births);
+    FxState::MonsterSplash sp;
+    put(f.at, sp.at);
+    sp.t = t;
+    sp.kind = f.kind;
+    s.monster_splashes.push_back(sp);
+  }
+  s.monster_flights.swap(s.monster_next);
+  std::erase_if(missiles,
+                [&](const Missile& m) { return s.monster_flights.contains(m.entity); });
+  // The splashes' light while it fades.
+  std::erase_if(s.monster_splashes, [&](const FxState::MonsterSplash& sp) {
+    fx::Light light;
+    if (variant == 0 || !fx::splash_light(sp.kind, variant, sp.at, t - sp.t, &light))
+      return t - sp.t > fx::kSplashLightS || t < sp.t;
+    out.lights.push_back(light);
+    return false;
+  });
+}
+
+// Where a flier's spit or a knight's fire bolt landed (the temporary entity's codes 7 and 8):
+// the classic specks of its colour, or under ce_monsters its splash off the face it flew into.
+bool monster_spit_hit(const FxScene& l, FxState& s, const Effect& e, const double p[3], double t,
+                      FxFrame& out) {
+  if (e.code != 7 && e.code != 8) return false;
+  const fx::MonsterShot kind = e.code == 7 ? fx::MonsterShot::acid : fx::MonsterShot::flame;
+  if (s.on.monsters == 0) {
+    fx::classic_spit_hit(kind, p, s.seed++, s.palette, &out.births);
+    return true;
+  }
+  // The way it flew: the nearest shot of its kind gone this frame (else straight down).
+  double dir[3] = {0, -1, 0};
+  double best = 1e9;
+  for (const FxState::MonsterFlight& f : s.monster_gone) {
+    if (f.kind != kind) continue;
+    const double d = ge::core::hypot3(f.at.x - p[0], f.at.y - p[1], f.at.z - p[2]);
+    if (d >= best) continue;
+    best = d;
+    for (int c = 0; c < 3; ++c) dir[c] = f.dir[c];
+  }
+  double normal[3], off = 0;
+  const bool face = l.map && surface_near(*l.map, e.at, normal, &off);
+  const double floor_y = l.map ? floor_under(*l.map, e.at, e.at) : -1e9;
+  fx::monster_splash(kind, s.on.monsters, p, face ? normal : nullptr, dir, floor_y, s.seed++, t,
+                     &s.blasts, &out.births);
+  FxState::MonsterSplash sp;
+  for (int c = 0; c < 3; ++c) sp.at[c] = p[c];
+  sp.t = t;
+  sp.kind = kind;
+  s.monster_splashes.push_back(sp);
+  return true;
+}
+
 }  // namespace
 
 void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
@@ -769,6 +909,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     s.receivers.reset();
   }
 
+  monster_missiles(l, s, t, dt, out, missiles);
+
   // The eye's aim turning (rad/s: right and up), for a rocket's launch it fires.
   if (s.aimed && dt > 0) {
     double turn = l.pose.yaw - s.aim_yaw;
@@ -791,6 +933,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         continue;
       const uint32_t flags = s.models->kinds[size_t(m.modelindex)].flags;
       if ((flags & (fx::kTrailGib | fx::kTrailZombieGib)) == 0) continue;
+      // A zombie's flesh under ce_monsters is the monsters' missiles' (monster_missiles).
+      if ((flags & fx::kTrailGib) == 0 && s.on.monsters > 0) continue;
       FxState::Bleeding now{engine_point(m.origin), m.modelindex, 0};
       const auto was = s.bleeding.find(m.entity);
       if (was != s.bleeding.end() && was->second.modelindex == m.modelindex) {
@@ -1131,6 +1275,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     switch (e.kind) {
       case EffectKind::impact:
       case EffectKind::spike: {
+        if (monster_spit_hit(l, s, e, p, t, out)) break;
         double normal[3], dir[3];
         ge::detail::SurfaceClass sc = ge::detail::SurfaceClass::unknown;
         if (s.on.hits || s.on.decals) sc = face(eye_map, normal, dir);
