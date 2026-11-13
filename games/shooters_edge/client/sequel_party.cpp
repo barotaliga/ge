@@ -26,6 +26,8 @@ bool build_nav(SequelParty& p, const sv::RulesCommon& s, const sv::MapSpec& map,
     return false;
   }
   auto nav = std::make_unique<bots::MapNav>();
+  // The sequel's move, its air with no air acceleration (a single-player or co-op game's).
+  nav->move = bots::sequel_nav_move(0);
   if (!bots::build_map_nav(s, map, "info_player_start", *nav, error)) {
     error = "Companions can't find their way on " + map.name + ".";
     return false;

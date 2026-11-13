@@ -610,10 +610,14 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
   return true;
 }
 
-sh::MoveSettings sequel_nav_move() {
+sh::MoveSettings sequel_nav_move(float air_accelerate) {
   sh::MoveSettings m;
   m.maxspeed = 300;
   m.friction = 6;
+  if (air_accelerate == 0) {
+    m.air_accel = 1;
+    m.air_wish_cap = 0;
+  }
   return m;
 }
 
