@@ -463,16 +463,16 @@ namespace pg = ge::progs;
   X(hurt_touch, "hurt_touch")
 
 #define SE_X(name, ...) g_##name,
-enum Gl : int { SE_ARENA_GLOBALS(SE_X) kGlobalCount };
+enum Gl : uint8_t { SE_ARENA_GLOBALS(SE_X) kGlobalCount };
 #undef SE_X
 #define SE_X(name, ...) f_##name,
-enum Fd : int { SE_ARENA_FIELDS(SE_X) kFieldCount };
+enum Fd : uint8_t { SE_ARENA_FIELDS(SE_X) kFieldCount };
 #undef SE_X
 #define SE_X(name, ...) s_##name,
-enum St : int { SE_ARENA_STRINGS(SE_X) kStringCount };
+enum St : uint8_t { SE_ARENA_STRINGS(SE_X) kStringCount };
 #undef SE_X
 #define SE_X(name, ...) fn_##name,
-enum Fn : int { SE_ARENA_FUNCTIONS(SE_X) kFunctionCount };
+enum Fn : uint8_t { SE_ARENA_FUNCTIONS(SE_X) kFunctionCount };
 #undef SE_X
 
 // THE RULES' VIEW of the server's calls: Q's, plus the arena's own globals, fields, strings and

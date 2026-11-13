@@ -29,6 +29,8 @@ constexpr pg::NativeDef kGlobals[] = {SE_ARENA_GLOBALS(SE_X)};
 constexpr pg::NativeDef kFields[] = {SE_ARENA_FIELDS(SE_X)};
 #undef SE_X
 #define SE_X(name, text) text,
+// Every entry is its own literal (the list is long and alike, which the comma check misreads).
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 constexpr const char* kStrings[] = {SE_ARENA_STRINGS(SE_X)};
 #undef SE_X
 #define SE_X(name, qc_name) {qc_name, &run<&ar::name>},

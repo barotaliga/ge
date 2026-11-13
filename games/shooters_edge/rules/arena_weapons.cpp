@@ -135,7 +135,7 @@ void fire_pellets_far(A& q, float pellets, float points, float spread, float rea
   const Vec3 from = q.v(me, q.L.f.origin) + q.v(me, q.L.f.view_ofs);
   int32_t struck = q.world();
   float summed = 0;
-  for (float i = 0; i < pellets; i += 1) {
+  for (int i = 0; static_cast<float>(i) < pellets; i++) {  // the QC counts in floats
     const float r1 = crandom(q);
     const Vec3 a = q.v_forward() + q.v_right() * (r1 * spread);
     const float r2 = crandom(q);
@@ -332,8 +332,8 @@ void weapon_set(A& q, float w) {
 
 // The best carried weapon with ammunition: the highest rank, the arc only out of water.
 void weapon_select_best(A& q) {
-  for (float rank = 8; rank > 1; rank = rank - 1) {
-    const float w = weapon_of_rank(rank);
+  for (int rank = 8; rank > 1; rank--) {
+    const float w = weapon_of_rank(static_cast<float>(rank));
     if (carried_and_loaded(q, w)) {
       const bool not_beam = !q.is(weapon_word(q, w, 0), "beam");
       const bool dry = q.f(q.self(), q.L.f.waterlevel) <= 1;
@@ -361,7 +361,7 @@ void weapon_impulse(A& q) {
     }
   } else if (impulse == 10) {
     float rank = weapon_rank(q.f(me, q.L.f.weapon));
-    for (float tries = 0; tries < 8; tries += 1) {
+    for (int tries = 0; tries < 8; tries++) {
       rank = rank + 1;
       if (rank > 8) rank = 1;
       const float w = weapon_of_rank(rank);
@@ -469,17 +469,19 @@ void weapon_frame(A& q) {
 
 // Reads the arsenal and loads what its rows name: every view model, every missile, every sound.
 void weapon_precache(A& q) {
-  for (float slot = 1; slot <= 8; slot += 1) arsenal_keep(q, slot);
-  for (float slot = 1; slot <= 8; slot += 1)
-    q.precache_model(weapon_model(q, weapon_of_rank(slot)));
-  for (float slot = 1; slot <= 8; slot += 1) {
-    const int32_t name = weapon_missile(q, weapon_of_rank(slot));
+  // The QC counts its slots and words in floats; small whole numbers, the same in ints.
+  for (int slot = 1; slot <= 8; slot++) arsenal_keep(q, static_cast<float>(slot));
+  for (int slot = 1; slot <= 8; slot++)
+    q.precache_model(weapon_model(q, weapon_of_rank(static_cast<float>(slot))));
+  for (int slot = 1; slot <= 8; slot++) {
+    const int32_t name = weapon_missile(q, weapon_of_rank(static_cast<float>(slot)));
     if (!q.is(name, "-")) q.precache_model(name);
   }
-  for (float slot = 1; slot <= 8; slot += 1) {
-    for (float i = 11; i <= 14; i += 1) {
+  for (int slot = 1; slot <= 8; slot++) {
+    for (int i = 11; i <= 14; i++) {
       if (i != 12) {
-        const int32_t name = weapon_word(q, weapon_of_rank(slot), i);
+        const int32_t name =
+            weapon_word(q, weapon_of_rank(static_cast<float>(slot)), static_cast<float>(i));
         if (!q.is(name, "-")) q.precache_sound(name);
       }
     }

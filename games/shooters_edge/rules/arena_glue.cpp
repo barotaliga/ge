@@ -211,7 +211,7 @@ void SetChangeParms(A& q) { q.set_gf(q.parm(1), 0); }
 // the map's list; any one when all are taken; the start point on a map without any.
 int32_t spawn_point(A& q) {
   int32_t spot = q.ge(g_last_spawn);
-  for (float tries = 0; tries < 64; tries += 1) {
+  for (int tries = 0; tries < 64; tries++) {  // the QC counts in floats: the same 64
     spot = q.find(spot, q.L.f.classname, q.s(s_info_player_deathmatch));
     if (spot == 0) spot = q.find(q.world(), q.L.f.classname, q.s(s_info_player_deathmatch));
     if (spot == 0) break;
