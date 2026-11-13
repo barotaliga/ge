@@ -16,6 +16,11 @@
 // - **The sequel's spelling**: `loc add <name>` (the rest of the line), `loc del`, `loc set
 //   <name>` (renames the nearest point in place), `loc list` and `loc save [name]` (the map's name
 //   by default) do the same, so a player used to the sequel's client finds them.
+// - **How far a place reaches** (`loc_dist`, the game's `place_range` by default: 500 units in the
+//   sequel, no limit in the first game): the nearest point within it names where the player is,
+//   and is the one `removeloc`, `loc del` and `loc set` act on.
+// - **Where the player is**: the window's own game, a server joined, or a demo played (the view's
+//   point less its eye height); the map's place names are read as each one's map starts.
 // - The file's text is the shared format's (`locs_text`): eighths of a unit, the names as typed,
 //   their `$loc_name_<key>` words kept.
 //
@@ -24,7 +29,7 @@
 // ge:summary The window's place names: read at map start, added, removed and saved in the game
 // ge:keywords place-names loc locations loc-editing locations_add locations_remove addloc
 // ge:keywords removeloc locations_savefile saveloc locations_loadfile loadloc locations_clearall
-// ge:keywords clearlocs tp_loadlocs tp_name_someplace map_started where-am-i
+// ge:keywords clearlocs tp_loadlocs loc_dist place-range tp_name_someplace map_started where-am-i
 // ge:keywords loc-add loc-set loc-list loc-save
 // ge:skill shooter console
 // ge:test tests/shooters_edge_place_names_test.cpp
@@ -47,6 +52,7 @@ struct PlaceNames {
   std::filesystem::path game_dir;                // the game folder on disk a file is saved under
   const ge::console::Cvar* load = nullptr;       // tp_loadlocs (null: on)
   const ge::console::Cvar* someplace = nullptr;  // tp_name_someplace
+  const ge::console::Cvar* range = nullptr;      // loc_dist (null: no limit)
 };
 
 // Where the player stands (the middle of the player's box), false when no game is playing.

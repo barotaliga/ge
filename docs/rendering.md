@@ -617,7 +617,15 @@ frame a list of `MorphDraw`s.
 - **Upload once.** Every frame of every model goes into one storage buffer, two `vec4` a vertex.
   The triangles and the coordinates go into two more. The skins are shelf-packed into one
   2048-wide atlas, tallest first, a texel apart (`pack_morph_atlas`). A frame writes only its
-  draws: 224 bytes each, at most `kMaxMorphDraws`.
+  draws: 256 bytes each, at most `kMaxMorphDraws`.
+- **A skin to wear.** A model may be skin-only (a skin, no frames), packed into the atlas with
+  the rest. A draw's `skin` names the model whose skin it wears over its own coordinates: one
+  shared figure, each player in their own picture.
+- **Skins worn later.** A skin read while the scene runs (a player's own, the first time it is
+  worn) goes into a slot: a layer of a 2D array texture, 512 square, the picture stretched by the
+  nearest texel with its marks (`set_morph_slot`, `slot_texels`). A draw's `slot` wears it over its
+  own coordinates; the game reuses the slot worn longest ago, so the atlas holds only what the map
+  needs and a game may ship any number of skins.
 - **Frames blended on the GPU.** The vertex stage pulls each vertex by index and mixes the draw's
   two frames by its share. It does the same for the frame before, so a swinging limb carries its
   own motion into the motion target and TAA keeps it sharp. A model with frames at 10 a second
@@ -1761,6 +1769,18 @@ hundred metres can give, so it is a layer of its own, drawn per pixel (`render/v
 The `valley-fog` lab draws a seed's sea from the summit, from the air, at dawn and from under it.
 Not yet: the mountains' shade on the top (a sea at dawn is lit to its far shore under every
 ridge's shadow). Fall Line's own seas are dealt by the map's air at the hour (next section).
+
+## Flat fog
+
+**The flat fog** (`render/view.hpp`'s `FlatFog`, `FrameView::flat_fog`) is the simplest kind: one
+colour filling all the air alike, as a level's author sets it (a classic map's worldspawn `fog`,
+`brush/map_fog.hpp`). A surface d m from the eye is alpha x (1 - e^-(t^2)) fog, t = max(density x
+d - bias, 0): nearly clear near the eye, the far walls sunk into the colour. The sky is at no
+distance, so it takes a fixed share (`sky`). It is read in `frame.wgsl`'s `local_fog` (and
+`local_fog_over`, for a premultiplied colour), before the fog in an area, so every material that
+calls `haze` fades alike; an additive glow, drawn as `haze(c) - haze(0)`, fades to black. The
+distance is the eye's to the point, not the depth along the view, so the fog does not slide as the
+view turns. With `density` 0 nothing reads it: the bits are the ones drawn without it.
 
 ## Fog from the air
 

@@ -58,11 +58,12 @@ int parse_locs(std::string_view text, Locs& out);
 // pictured with its places named; a callout's place read as one spot).
 std::vector<Loc> loc_places(const Locs& locs);
 
-// The point nearest `p` (the first of equals), or nullptr with none.
-const Loc* nearest_loc(const Locs& locs, Vec3f p);
+// The point nearest `p` (the first of equals), or nullptr with none; with `range` above 0, only a
+// point at most that far (units, straight line) counts.
+const Loc* nearest_loc(const Locs& locs, Vec3f p, float range = 0);
 
-// The name of the place `p` is in: its nearest point's, or "" with none.
-std::string loc_name_at(const Locs& locs, Vec3f p);
+// The name of the place `p` is in: its nearest point's (within `range`, as above), or "" with none.
+std::string loc_name_at(const Locs& locs, Vec3f p, float range = 0);
 
 // EDITING, as a player names the places of a map standing in them: a point added at `at` named
 // `raw` (its macros kept for the file, expanded for `name`), always at the end, with no check for
@@ -73,7 +74,7 @@ std::string loc_name_at(const Locs& locs, Vec3f p);
 // too; no header. A name longer than kLocNameMax is cut to it on reading, as by `parse_locs`.
 inline constexpr size_t kLocNameMax = 63;
 void add_loc(Locs& locs, Vec3f at, std::string_view raw);
-bool remove_nearest_loc(Locs& locs, Vec3f at, Loc* removed = nullptr);
+bool remove_nearest_loc(Locs& locs, Vec3f at, Loc* removed = nullptr, float range = 0);
 std::string locs_text(const Locs& locs);
 
 }  // namespace ge::shooter

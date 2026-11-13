@@ -102,6 +102,9 @@ struct GameProfile {
   // The recordings played in turn behind its main menu (client/main.cpp's `menu_attract` auto),
   // by name as `playdemo` takes them; "" none (the title's night stays).
   std::string_view attract;
+  // How far a place name reaches by default, units (client/place_names.hpp's `loc_dist`): a point
+  // farther from the player than this is no place they are in; 0, no limit.
+  std::string_view place_range = "0";
 };
 
 inline constexpr ProgramFile kClassicMultiplayer[] = {{.name = "qwprogs.dat"},
@@ -160,7 +163,8 @@ inline constexpr GameProfile kGameProfiles[] = {
      .episode_maps = {},
      .weapon_groups = kSequelGroups,
      .rules_campaign = true,
-     .attract = ""},  // its recordings do not play yet
+     .attract = "",  // its recordings do not play yet
+     .place_range = "500"},
 };
 
 // The first row: the classic game, the one every reader uses until a choice of game is made.

@@ -141,8 +141,30 @@ uint32_t frame_session(std::span<const uint8_t> f) {
   return read_kind(r, kind, session) ? session : 0;
 }
 
+namespace {
+
+// Every copy now due, oldest first: sent before a newer datagram so the far end receives them in
+// the order the game sent them (a copy behind a newer datagram would arrive out of order, and a
+// game that drops what is older than the newest it has would lose it all the same).
+void send_due_copies(LinkEnd& e, int64_t now_us, const FrameOut& out) {
+  for (size_t i = 0; i < e.copies.size();) {
+    if (e.copies[i].at_us > now_us) {
+      i++;
+      continue;
+    }
+    out({e.copies[i].bytes.data(), e.copies[i].size});
+    e.stats.frames_out++;
+    e.stats.bytes_out += e.copies[i].size;
+    e.last_out_us = now_us;
+    e.copies.erase(e.copies.begin() + static_cast<std::ptrdiff_t>(i));
+  }
+}
+
+}  // namespace
+
 void link_send(LinkEnd& e, std::span<const uint8_t> d, int64_t now_us, const FrameOut& out) {
   if (d.size() > kMostDatagram) return;
+  send_due_copies(e, now_us, out);
   const uint32_t seq = e.next_seq++;
   uint8_t buf[net::kMaxDatagram];
   net::Writer w = frame(buf, sizeof buf, Kind::data, e.session);
@@ -175,17 +197,7 @@ void link_send(LinkEnd& e, std::span<const uint8_t> d, int64_t now_us, const Fra
 }
 
 void link_update(LinkEnd& e, int64_t now_us, const FrameOut& out) {
-  for (size_t i = 0; i < e.copies.size();) {
-    if (e.copies[i].at_us > now_us) {
-      i++;
-      continue;
-    }
-    out({e.copies[i].bytes.data(), e.copies[i].size});
-    e.stats.frames_out++;
-    e.stats.bytes_out += e.copies[i].size;
-    e.last_out_us = now_us;
-    e.copies.erase(e.copies.begin() + static_cast<std::ptrdiff_t>(i));
-  }
+  send_due_copies(e, now_us, out);
   if (e.newest != 0 && now_us - e.last_out_us >= e.config.ack_us) {
     uint8_t buf[16];
     net::Writer w = frame(buf, sizeof buf, Kind::ack, e.session);

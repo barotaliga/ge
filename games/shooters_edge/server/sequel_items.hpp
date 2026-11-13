@@ -168,6 +168,7 @@ struct SqBody {
   int armour_count = 0;              // its points
   bool blaster = true;               // the starting weapon, always held
   double mega_until_drain = 0;       // level time a mega's count-down starts; 0 none
+  int selected = 7;  // the selected item as the game's list numbers it (sequel_bar.hpp); -1 none
 };
 
 // A fresh body: health 100 of 100, the blaster, the starting carry limits.

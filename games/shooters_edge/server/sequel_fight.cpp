@@ -22,6 +22,7 @@
 #include "core/num.hpp"
 #include "shooter/aim_help.hpp"
 #include "shooters_edge/server/messages.hpp"
+#include "shooters_edge/server/sequel_bar.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
 #include "shooters_edge/server/shot_help.hpp"
@@ -134,6 +135,20 @@ void effect(SequelServer& s, const char* name, sh::Vec3f at) {
   ev.to = kEveryone;
   ev.origin = at;
   ev.values[1] = 1;
+  ev.text = name;
+  event(s, std::move(ev));
+}
+
+// A line effect `name` from `from` to `to` (a rail's): the start in `origin`, the end in `values`.
+void line_effect(SequelServer& s, const char* name, sh::Vec3f from, sh::Vec3f to, int ent) {
+  NetEvent ev;
+  ev.kind = EventKind::trail_effect;
+  ev.to = kEveryone;
+  ev.ent = ent;
+  ev.origin = from;
+  ev.values[0] = to.x;
+  ev.values[1] = to.y;
+  ev.values[2] = to.z;
   ev.text = name;
   event(s, std::move(ev));
 }
@@ -317,6 +332,13 @@ void midair_hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int d
   s.midair_frags = 0;
 }
 
+// A blow the status bar shows for the frame (sequel_bar.hpp): `bit` 1 to health, 2 to armour.
+void mark_hit(const SequelServer& s, SequelPlayer& p, int bit) {
+  if (p.hit_frame != s.frame_number) p.hit_bits = 0;  // a new frame's blows
+  p.hit_frame = s.frame_number;
+  p.hit_bits |= bit;
+}
+
 void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, int knockback,
           bool energy, int weapon, bool no_armour = false, bool past_invulnerable = false) {
   if (!fightable(s, target) || damage <= 0) return;
@@ -339,8 +361,11 @@ void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, 
   int saved = 0;
   if (!no_armour) {
     if (along) saved += power_save(p, dir, damage);
-    saved += sq_armour_save(p.body, damage - saved, energy);
+    const int armour = sq_armour_save(p.body, damage - saved, energy);
+    saved += armour;
+    if (armour > 0) mark_hit(s, p, 2);
   }
+  if (damage - saved > 0) mark_hit(s, p, 1);
   p.health -= float(damage - saved);
   if (p.health <= 0) {
     p.health = std::max(p.health, -999.0f);
@@ -463,7 +488,7 @@ void rail(SequelServer& s, int slot, sh::Vec3f start, const sh::ViewAxes& ax, in
     const Line l = shoot_line(s, start, end, skip);
     if (l.player < 0) {
       map_damage(s, l.mover, slot, damage);
-      effect(s, "te_railtrail", l.end);
+      line_effect(s, "te_railtrail", start, l.end, slot + 1);
       return;
     }
     hurt(s, l.player, slot, ax.forward, damage, kick, false, weapon);
@@ -1020,6 +1045,10 @@ void fight_took(SequelServer& s, int slot, int item) {
   SequelPlayer& p = s.players[slot];
   const SqItem& it = kSqItems[item];
   const bool dm = deathmatch(s);
+  // The status bar's pickup (3 s), and the item selected when it has a use.
+  p.picked = sq_item_number(item);
+  p.picked_at = s.level_time;
+  if (sq_selects(p.picked)) p.body.selected = p.picked;
   if (it.kind == SqKind::power_armour && dm && p.body.counts[item] == 1) p.power_on = true;
   if (it.kind == SqKind::powerup && dm && (s.cvars.find("dmflags")->integer() & 16) != 0)
     fight_use(s, slot, item);                     // instant items
@@ -1486,7 +1515,7 @@ void fight_monster_rail(SequelServer& s, int from, sh::Vec3f start, sh::Vec3f en
         monster_damage(s, l.mover, -1, damage, dir);
       else
         map_damage(s, l.mover, -1, damage);
-      effect(s, "te_railtrail", l.end);
+      line_effect(s, "te_railtrail", start, l.end, map_row(from));
       return;
     }
     hurt(s, l.player, -1, dir, damage, kick, false, cause);

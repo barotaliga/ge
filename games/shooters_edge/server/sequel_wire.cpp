@@ -26,7 +26,7 @@ constexpr uint8_t kPrint = 10, kStuffText = 11, kServerData = 12, kConfigString 
 // Configstring slots.
 constexpr int kCsName = 0, kCsSky = 2, kCsSkyAxis = 3, kCsSkyRotate = 4, kCsStatusBar = 5,
               kCsMaxClients = 30, kCsChecksum = 31, kCsModels = 32, kCsSounds = 288,
-              kCsLights = 800, kCsSkins = 1312;
+              kCsImages = 544, kCsLights = 800, kCsItems = 1056, kCsSkins = 1312;
 
 // An entity delta's flag bits.
 constexpr uint32_t kOriginX = 1u << 0, kOriginY = 1u << 1, kAngleYaw = 1u << 2,
@@ -76,9 +76,10 @@ int8_t quarter(float v) { return static_cast<int8_t>(std::clamp(v * 4.0f, -128.0
 // The wire's model number for the runner's: the map itself is 1, so every other is one up.
 int wire_model(int ours) { return ours <= 0 ? 0 : ours + 1; }
 
-// The status bar, in the layout language a client draws (y from the bottom, x from the centre, the
-// big numbers of health, ammunition and armour by their stats 1, 3 and 5). Kept under the slot's
-// 64 bytes so it never runs on into the next configstring.
+// The status bar of rules that send none, in the layout language a client draws (y from the bottom,
+// x from the centre, the big numbers of health, ammunition and armour by their stats 1, 3 and 5).
+// A longer one (the sequel's own, sequel_bar.hpp) runs on into the slots after 5, as a client
+// reads it.
 constexpr const char* kStatusBar = "yb -24 xv 16 hnum xv 116 anum xv 216 rnum";
 
 // The configstrings the runner's state gives.
@@ -91,13 +92,17 @@ void config_strings(const RulesCommon& c, const SequelWireOptions& opt,
   cs[kCsSky] = opt.sky;
   cs[kCsSkyAxis] = opt.sky_axis;
   cs[kCsSkyRotate] = opt.sky_rotate;
-  cs[kCsStatusBar] = kStatusBar;
+  cs[kCsStatusBar] = c.world.status_bar.empty() ? std::string(kStatusBar) : c.world.status_bar;
   cs[kCsModels + 1] = "maps/" + c.map_name + ".bsp";
   for (size_t i = 1; i < c.models.size(); i++) {
     const int at = wire_model(static_cast<int>(i));
     if (at < 256) cs[size_t(kCsModels) + size_t(at)] = c.models[i];
   }
   for (size_t i = 1; i < c.sounds.size() && i < 256; i++) cs[kCsSounds + i] = c.sounds[i];
+  for (size_t i = 1; i < c.world.images.size() && i < 256; i++)
+    cs[kCsImages + i] = c.world.images[i];
+  for (size_t i = 1; i < c.world.item_names.size() && i < 256; i++)
+    cs[kCsItems + i] = c.world.item_names[i];
   for (int i = 0; i < kLightStyles && i < kWorldLightStyles; i++)
     cs[size_t(kCsLights) + size_t(i)] = c.world.lightstyles[i];
   for (int s = 0; s < sh::kMaxClients; s++)
@@ -265,9 +270,13 @@ SequelPlayerState player_state(const RulesCommon& c, int slot, const sh::SequelS
   p.gun_index = static_cast<uint8_t>(wire_model(wc.numbers.weapon_model));
   p.gun_frame = static_cast<uint8_t>(static_cast<int>(wc.numbers.weapon_frame));
   p.fov = 90;
-  p.stats[1] = static_cast<int16_t>(static_cast<int>(wc.numbers.health));
-  p.stats[3] = static_cast<int16_t>(static_cast<int>(wc.numbers.current_ammo));
-  p.stats[5] = static_cast<int16_t>(static_cast<int>(wc.numbers.armour));
+  if (!c.world.status_bar.empty()) {  // the rules' own stats for their own bar
+    for (int k = 0; k < 32; k++) p.stats[k] = wc.numbers.stats[k];
+  } else {
+    p.stats[1] = static_cast<int16_t>(static_cast<int>(wc.numbers.health));
+    p.stats[3] = static_cast<int16_t>(static_cast<int>(wc.numbers.current_ammo));
+    p.stats[5] = static_cast<int16_t>(static_cast<int>(wc.numbers.armour));
+  }
   return p;
 }
 
@@ -342,8 +351,8 @@ int32_t sequel_map_checksum(std::span<const uint8_t> bsp) {
   return static_cast<int32_t>(md4_word(bsp));
 }
 
-void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWireOptions& opt,
-                   std::vector<std::vector<uint8_t>>& blocks) {
+void sequel_signon_parts(SequelWire& w, const RulesCommon& c, int slot,
+                         const SequelWireOptions& opt, SequelSignon& out) {
   w = SequelWire{};
   w.opt = opt;
   w.slot = slot;
@@ -351,9 +360,9 @@ void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWi
   w.last.assign(kSequelEntities, SequelEntityState{});
   w.events_done = c.out.events_total;
   config_strings(c, opt, w.sent);
-  blocks.assign(1, {});
+  out = SequelSignon{};
   {
-    Out o{blocks.back()};
+    Out o{out.server_data};
     o.u8(kServerData);
     o.i32(kSequelProtocol);
     o.i32(0x10000 + opt.server_count);
@@ -365,11 +374,12 @@ void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWi
   for (int i = 0; i < kSequelConfigStrings; i++) {
     const std::string& s = w.sent[size_t(i)];
     if (s.empty()) continue;
-    if (blocks.back().size() + s.size() + 32 > size_t(kSequelMaxBlock)) blocks.emplace_back();
-    Out o{blocks.back()};
+    std::vector<uint8_t> one;
+    Out o{one};
     o.u8(kConfigString);
     o.i16(i);
     o.str(s);
+    out.config_strings.emplace_back(i, std::move(one));
   }
   const SequelEntityState zero;
   for (int n = 1; n < kSequelEntities; n++) {
@@ -380,6 +390,22 @@ void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWi
     Out e{one};
     e.u8(kBaseline);
     write_entity(e, delta_flags(zero, s, n, true), n, s);
+    out.baselines.emplace_back(n, std::move(one));
+  }
+}
+
+void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWireOptions& opt,
+                   std::vector<std::vector<uint8_t>>& blocks) {
+  SequelSignon parts;
+  sequel_signon_parts(w, c, slot, opt, parts);
+  blocks.assign(1, parts.server_data);
+  for (const auto& [i, one] : parts.config_strings) {
+    // The message less its id, index and zero: the string's length.
+    if (blocks.back().size() + (one.size() - 4) + 32 > size_t(kSequelMaxBlock))
+      blocks.emplace_back();
+    blocks.back().insert(blocks.back().end(), one.begin(), one.end());
+  }
+  for (const auto& [n, one] : parts.baselines) {
     if (blocks.back().size() + one.size() + 64 > size_t(kSequelMaxBlock)) blocks.emplace_back();
     blocks.back().insert(blocks.back().end(), one.begin(), one.end());
   }
@@ -389,18 +415,24 @@ void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWi
   o.str("precache\n");
 }
 
+void sequel_resync(SequelWire& w) {
+  w.last_frame = -1;
+  w.last.assign(kSequelEntities, SequelEntityState{});
+}
+
 void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
-                  const sh::SequelState* move, std::vector<uint8_t>& block) {
+                  const sh::SequelState* move, std::vector<uint8_t>& block,
+                  std::vector<uint8_t>* reliable) {
   block.clear();
-  Out o{block};
+  Out r{reliable != nullptr ? *reliable : block};
   // The reliable part: what changed among the configstrings, then the prints and the lines.
   std::vector<std::string> now;
   config_strings(c, w.opt, now);
   for (int i = 0; i < kSequelConfigStrings; i++)
     if (now[size_t(i)] != w.sent[size_t(i)]) {
-      o.u8(kConfigString);
-      o.i16(i);
-      o.str(now[size_t(i)]);
+      r.u8(kConfigString);
+      r.i16(i);
+      r.str(now[size_t(i)]);
       w.sent[size_t(i)] = now[size_t(i)];
     }
   const std::vector<NetEvent>& events = c.out.events;
@@ -410,17 +442,18 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
     const NetEvent& e = events[i];
     if (!to_slot(e, w.slot)) continue;
     if (e.kind == EventKind::print) {
-      o.u8(kPrint);
-      o.u8(static_cast<uint32_t>(std::clamp(e.level, 0, 3)));
-      o.str(e.text);
+      r.u8(kPrint);
+      r.u8(static_cast<uint32_t>(std::clamp(e.level, 0, 3)));
+      r.str(e.text);
     } else if (e.kind == EventKind::centerprint) {
-      o.u8(kCenterPrint);
-      o.str(e.text);
+      r.u8(kCenterPrint);
+      r.str(e.text);
     } else if (e.kind == EventKind::stuffcmd) {
-      o.u8(kStuffText);
-      o.str(e.text);
+      r.u8(kStuffText);
+      r.str(e.text);
     }
   }
+  Out o{block};
   // The frame, numbered from 1: a stock client draws nothing from a frame numbered 0 (measured: it
   // stops on a field of view of 0 before the first frame it keeps).
   const int32_t number = frame_number + 1;

@@ -82,6 +82,9 @@ struct Frame {
   // sun's lux, pre-exposed) and the optical depth out of its cloud.
   flash_info: vec4f,
   flashes: array<vec4f, 8>,
+  // THE FLAT FOG (render/view.hpp's `FlatFog`): 0 its colour (linear, a white face's share), its
+  // density (1/m; 0 none); 1 its share over the sky, its alpha, its bias.
+  flat_fog: array<vec4f, 2>,
 }
 
 // THE MOTION a surface at camera-relative `rel` (w = 1; w = 0 for a direction at infinity) made

@@ -34,13 +34,14 @@
 
 #include <cstdint>
 #include <span>
-#include <string_view>
-#include <vector>
-
 #include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include "brush/app/bsp_draw.hpp"
 #include "brush/app/bsp_weather.hpp"
+#include "brush/map.hpp"
 #include "classicenhance/switches.hpp"
 #include "console/console.hpp"
 #include "render/post.hpp"
@@ -93,6 +94,25 @@ struct Picture {
   // r_skyname: the sky box drawn through every map's sky in place of the one its settings name
   // (client/files.hpp's `sky_box_files`); empty, each map's own. Read when the world is made.
   std::string sky_name;
+  // r_skyfog: the share of a map's fog laid over its sky, where the map's own `skyfog` does not
+  // say (0..1, either look).
+  double sky_fog = 0.5;
+  // The `fog` command's words (density red green blue alpha bias) and how many times it was given:
+  // drawn over the map's own fog when given since the world was made, so a new map is its own.
+  std::string fog;
+  int fog_serial = 0;
+  // r_wateralpha: how opaque water is (0..1; 1 the default, solid), and r_slimealpha,
+  // r_lavaalpha, r_telealpha the same for slime, lava and a teleporter's face ("": water's). A
+  // map's own `wateralpha` and kin hold for that map; a server that sets `watervis` 0 keeps them
+  // solid (`liquid_alphas`).
+  double water_alpha = 1;
+  std::string slime_alpha, lava_alpha, tele_alpha;
+  // noskins: 0 each player drawn in their own skin (`skins/<name>.pcx`), 1 every player in the
+  // figure's own skin (still in their colours), 2 as 0 with nothing fetched from a server;
+  // baseskin: the skin of a player who names none or one the files lack; the `allskins` command's
+  // one skin on every player ("": each their own).
+  int noskins = 0;
+  std::string base_skin = "base", all_skins;
   double far_warm = 0;  // r_farland_warm: its air warmer (or colder) than its kind's, C
   // r_lerpmodels, r_lerpmove: the models' animation drawn between frames, and (in the window's own
   // game) their places between the server's states (client/model_lerp.hpp); either look.
@@ -108,9 +128,10 @@ struct Picture {
   double water_specks = 0;
 };
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
-// r_farland, r_farland_warm, r_lerpmodels, r_lerpmove, r_arrival, ce_bubbles_share,
-// ce_water_specks, r_quality, r_budget, every ce_ switch, the three ce_<id>_quality levels and the
-// weather's cvars over `picture` (it must outlive `con`).
+// r_farland, r_farland_warm, r_skyname, r_skyfog, r_lerpmodels, r_lerpmove, r_arrival,
+// ce_bubbles_share, ce_water_specks, r_quality, r_budget, every ce_ switch, the three
+// ce_<id>_quality levels, r_wateralpha and its kin, noskins, baseskin and the weather's cvars over
+// `picture` (it must outlive `con`), and the `fog` and `allskins` commands.
 void add_cvars(ge::console::Console& con, Picture& picture);
 // r_look's look; modern for a word it does not know.
 Look look_of(const Picture& picture);
@@ -125,6 +146,16 @@ ge::brush::app::Options world_options(Look look, ge::brush::app::Options base,
                                       const Picture& picture, const Stops& stops);
 ge::brush::app::Options world_options(Look look, ge::brush::app::Options base = {},
                                       const Picture& picture = {});
+// SEE-THROUGH LIQUIDS: how opaque water, slime, lava and a teleporter's face are drawn (`out`, the
+// renderer's Options::liquid_alpha): the map's own (`map`, the worldspawn's `wateralpha`,
+// `slimealpha`, `lavaalpha`, `telealpha`; below 0 where it has none), else the player's cvars,
+// slime, lava and teleporters falling back to water's; all solid (1) when the server does not
+// allow it (`allowed`). Each is clamped to 0..1.
+void liquid_alphas(const Picture& picture, const double map[4], bool allowed, double out[4]);
+// The map's own liquid alphas off its worldspawn's keys (below 0 where it has none).
+void map_liquid_alphas(const ge::brush::Map& map, double out[4]);
+// Whether a server's info allows see-through liquids: not when it sets `watervis` to 0.
+bool watervis_allowed(const std::vector<std::pair<std::string, std::string>>& serverinfo);
 // THE SKIES' STOPS: the map's cloud layer marched through the sky faces from medium up (off, the
 // pack's own sky fills them: nothing for a cloud to show in), the far land at high alone.
 constexpr bool cloud_at(Stop skies) { return skies >= Stop::medium; }

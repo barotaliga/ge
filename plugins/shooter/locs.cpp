@@ -103,12 +103,13 @@ std::vector<Loc> loc_places(const Locs& locs) {
   return out;
 }
 
-const Loc* nearest_loc(const Locs& locs, Vec3f p) {
+const Loc* nearest_loc(const Locs& locs, Vec3f p, float range) {
   const Loc* best = nullptr;
   float best_d = 0;
   for (const Loc& l : locs.points) {
     const Vec3f d = l.at - p;
     const float dd = d.x * d.x + d.y * d.y + d.z * d.z;
+    if (range > 0 && dd > range * range) continue;
     if (!best || dd < best_d) {
       best = &l;
       best_d = dd;
@@ -117,8 +118,8 @@ const Loc* nearest_loc(const Locs& locs, Vec3f p) {
   return best;
 }
 
-std::string loc_name_at(const Locs& locs, Vec3f p) {
-  const Loc* l = nearest_loc(locs, p);
+std::string loc_name_at(const Locs& locs, Vec3f p, float range) {
+  const Loc* l = nearest_loc(locs, p, range);
   return l ? l->name : std::string();
 }
 
@@ -130,8 +131,8 @@ void add_loc(Locs& locs, Vec3f at, std::string_view raw) {
   locs.points.push_back(std::move(l));
 }
 
-bool remove_nearest_loc(Locs& locs, Vec3f at, Loc* removed) {
-  const Loc* near = nearest_loc(locs, at);
+bool remove_nearest_loc(Locs& locs, Vec3f at, Loc* removed, float range) {
+  const Loc* near = nearest_loc(locs, at, range);
   if (near == nullptr) return false;
   const auto i = locs.points.begin() + (near - locs.points.data());
   if (removed != nullptr) *removed = *i;

@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 
+#include "shooters_edge/net/classic_login.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/server/campaign.hpp"
 
@@ -18,6 +19,7 @@ namespace {
 
 struct Door {
   sv::Campaign* c = nullptr;
+  std::unique_ptr<ClassicLogin> login;  // the logins, when asked (`logins`)
   ClassicServer s;
 };
 
@@ -58,6 +60,24 @@ void* open(sv::Campaign& c, gn::Transport& t, const std::string& hostname, uint3
   return d.release();
 }
 
+// A client's line goes to the login first: a login line never reaches the campaign or chat.
+bool coop_words(void* ctx, int slot, const std::string& line) {
+  Door& o = door(ctx);
+  return o.login && classic_login_line(*o.login, slot, line);
+}
+
+bool logins(void* d, const ge::server::ServerConfig& c, std::string& error) {
+  Door& o = door(d);
+  o.login = std::make_unique<ClassicLogin>();
+  if (!classic_login_open(*o.login, o.s, c, error)) {
+    o.login.reset();
+    return false;
+  }
+  o.s.game_command = coop_words;
+  o.s.game_ctx = &o;
+  return true;
+}
+
 bool seat(void* d, int slot, const std::string& name, bool bot, std::string& error) {
   return classic_add_local(door(d).s, slot, name, error, bot);
 }
@@ -80,6 +100,7 @@ bool frame(void* d, const sh::Packet* local, int count, int64_t now_us, std::str
   Door& o = door(d);
   o.s.local_moves.assign(local, local + count);
   classic_frame(o.s, now_us);
+  if (o.login) classic_login_frame(*o.login);
   sv::Campaign& c = *o.c;
   const sv::RulesCommon& now = *c.server;
   if (now.pending_map.empty()) return true;
@@ -103,6 +124,8 @@ void close(void* d) {
   ClassicServer& s = o->s;
   s.seat = nullptr;
   s.unseat = nullptr;
+  s.game_command = nullptr;
+  s.name_rule = nullptr;
   if (s.game == nullptr) return;  // a next map that failed: nothing is left to tell them
   for (int i = 0; i < sh::kMaxClients; i++) {  // the campaign lets its seats go itself
     if (s.clients[i].state == ConnState::free || s.clients[i].local) continue;
@@ -115,7 +138,8 @@ void close(void* d) {
 }  // namespace
 
 const client::CampaignDoor& classic_coop() {
-  static const client::CampaignDoor d{open, seat, unseat, frame, unbind, rebind, joined, close};
+  static const client::CampaignDoor d{open,   seat,   unseat, frame, unbind,
+                                      rebind, logins, joined, close};
   return d;
 }
 

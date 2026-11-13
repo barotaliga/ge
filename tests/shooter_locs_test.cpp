@@ -45,6 +45,16 @@ TEST(a_point_is_named_by_its_nearest_place) {
   CHECK(sh::loc_name_at(sh::Locs{}, {0, 0, 0}).empty());
 }
 
+TEST(a_range_leaves_a_far_point_unnamed) {
+  sh::Locs l;
+  sh::parse_locs("0 0 0 a\n", l);
+  CHECK(sh::loc_name_at(l, {500, 0, 0}, 500) == "a");  // the edge is in reach
+  CHECK(sh::loc_name_at(l, {501, 0, 0}, 500).empty());
+  CHECK(sh::loc_name_at(l, {501, 0, 0}) == "a");  // 0: no limit
+  CHECK(sh::nearest_loc(l, {0, 900, 0}, 500) == nullptr);
+  CHECK(!sh::remove_nearest_loc(l, {0, 900, 0}, nullptr, 500));
+}
+
 TEST(each_place_is_named_once_at_its_points_middle) {
   sh::Locs l;
   sh::parse_locs("0 0 0 a\n8000 0 0 b\n1600 800 0 a\n", l);

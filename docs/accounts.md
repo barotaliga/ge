@@ -89,10 +89,30 @@ failures, which lets anyone lock anyone out; a hold that runs out does not.
 ### From our own client
 
 The client signs in to the master once (the name and password over the sealed channel, never in
-the clear) and gets a TICKET. It hands the ticket to each server it joins, in its connect request.
-The server checks the signature with the master's public key (`sv_accountkey`, from the
-environment or `server.cfg`) and the expiry, and the seat is logged in before it spawns, with no
-round trip to the master. A server that cannot reach the master still logs our players in.
+the clear) and gets a TICKET. The game CLI's `account signin` keeps it in the player's account
+file (`<state>/account.txt`, readable by its owner alone; `engine/account/account_file.hpp`) with
+the master's address and key; the game's own client reads the same file.
+
+On the classic protocol the ticket never goes to the game server, since the protocol encrypts
+nothing and a ticket read off the wire would log anyone in until it runs out. Instead:
+
+1. A server that keeps logins puts `*accountkey` in its server info: the first 16 hex digits of
+   the key its tickets are signed with (its own service's, or its master's once known).
+2. Our client, once in the game on a server whose tag is its file's master's, asks that master
+   over the sealed channel, on a socket of its own, to trade the ticket for a one-time login code
+   (`ticket_code`, `engine/account/client_login.hpp`).
+3. It sends the server `login <name> <code>`, the line a player would type, and the server logs it
+   in as it logs in a classic client. The code works once, so reading it off the wire is no use.
+
+The player types nothing and sees `Logging in as Niclas.`, then the server's `Niclas logged in.`
+A server of another master, or one that keeps no logins, is joined as a guest; a ticket that has
+run out is said on the console (`Your sign-in has run out. Sign in again.`). The game CLI's
+`account code` uses the same trade, so a player who signed in once gets a code for a stock client
+without the password.
+
+A future protocol of our own that seals its connect can carry the ticket itself: the server checks
+the signature with the master's public key (`sv_accountkey`) and the expiry, and logs the seat in
+before it spawns, with no round trip to the master.
 
 ### From a classic client
 
@@ -197,6 +217,22 @@ server: a guest whose folded name is an account's plays under `sv_defaultname` (
 is taken) and is told the name is registered and to log in to use it; a logged-in player is always shown by their account's name when
 `sv_loginname` is 1. A player may not take a name while another seat holds it logged in.
 
+A server whose master is elsewhere does not hold the accounts, so it asks the master (`name`: the
+name folded by the game's rules, answered with the account that reserves it). The name is let go
+while the master answers, a fraction of a second; if an account holds it, the guest is renamed
+then and told why (a player still connecting is told on joining). The answer is kept while the
+server runs (up to 256 names), so a name is asked once, and a name the master did not answer is
+asked again the next time it is used.
+
+## On the window's own game
+
+A game's own window serving others (a match on `sv_port`, or a coop campaign opened to others)
+keeps logins as a dedicated server does: `sv_login`, `sv_logintime`, `sv_loginwelcome`,
+`sv_accountmaster` and `sv_accountkey` in the window's console, taking effect with the next map.
+With no master the window is its own: its accounts are kept in the game's own folder
+(`<prefs>/accounts`) and served on `sv_accountport`. The window's player is never asked to log in.
+The engine half is `server/accounts.hpp`, shared with the dedicated process.
+
 ## The settings
 
 This row owns the classic login settings the server-settings work (M58) held out. Ours, with the
@@ -219,9 +255,23 @@ classic names as synonyms (`docs/servers.md` § A game's own names):
 
 ## The match report
 
-What a finished match leaves, generic in `engine/net/report.hpp`, filled by `engine/server` when the
-match ends (the phase's `lobby_end`), and the same record as the replay file's closing summary, so
-a demo's stats and the hub's are one thing, joined by the demo's SHA-256:
+What a finished match leaves, generic in `engine/net/report.hpp`, and the same record as the replay
+file's closing summary, so a demo's stats and the hub's are one thing, joined by the demo's SHA-256.
+The game fills its part when a match ends (`ServerGame::match_report`, asked after every frame and
+true once per match) and `engine/server` adds its own (the id, the game and its version, the
+server's name and address, the start in Unix seconds); the server keeps its last 16 on
+`Server::reports`, newest last. The bytes refuse a report past their limits (64 players, 16 teams,
+32 columns) rather than cut it, since a report that says less than the match is worse than none.
+
+Shooter's Edge tallies a deathmatch off the rules' world every frame
+(`games/shooters_edge/net/classic_report.hpp`), since the rules keep only the frags: a player whose
+health falls to nothing died; one whose frags fall on that frame killed themself; one whose frags
+fall while they live killed a team mate. A player who leaves stays in the report with the seconds
+they played. With a lobby only its match counts (the warmup is not a match), and a restart starts the
+tally again. The match ends where its limit was reached (the time limit's moment, or the frag that
+reached the frag limit), not when the map changes after the intermission; then the end is a limit,
+a forfeit when fewer than two sides are left, or broken off. The `match-report` lab plays a
+free-for-all and a team match of bots and draws each report as the hub's scoreboard.
 
 | Part | Fields |
 | --- | --- |
@@ -237,12 +287,31 @@ trailer and keeps those keys readable, so an archive of older demos still reads 
 reader moves to the report in the same pull request). The hub's new answers live in their own files
 beside `engine/hub/api.cpp`.
 
-The server sends it to the master it beats to, sealed with its own key, acknowledged and retried.
-The master adds each logged-in player's part to that account's totals per game and mode, and hands
-the reports to the hub. **Which reports count**: only those from servers whose key the master's
-owner has listed (`--trusted-servers`); any other server's matches are shown on the hub but add to
-no totals, since a server can say anything about its own matches. A match with bots is shown and
-counted, with its bots marked.
+Each player also carries the lowest, average and highest ping the server saw over the match.
+
+**Sending it** (`sv_stats 1`, the default; `engine/server/accounts.hpp`). A server that is its own
+master takes its reports in process and counts them as its own. A server with `sv_accountmaster`
+signs each report with a key of its own (`server.key` in its game folder, made at the first start;
+the start prints its public half for the master's owner) and sends it on a socket of its own,
+again every 2 s until the master's signed answer comes (a minute at most). It needs the master's
+key (`sv_accountkey`) to check that answer, and without it sends nothing and says so at the start.
+The datagrams are the account service's (`account/service.hpp`): the report is not sealed, since it
+is no secret, and the answer is smaller than the report, so the service amplifies nothing.
+
+**At the master** (`account/matches.hpp`). A report is taken once by its server's key and id, so
+one sent again counts once. **Which reports count**: only those from servers whose key the master's
+owner has listed (the hub's `--trusted-servers=<file>`, one key a line, and the service's own key);
+any other server's matches are kept and shown but add to no totals, since a server can say anything
+about its own matches. A match with bots is kept and counted for its logged-in players; a bot and a
+guest add to no totals. The reports are kept in `reports.log` beside the store and read back at
+start, so the totals come back by the trust the master has then; the last 256 are kept for the hub.
+
+**Totals** are kept per account, game, mode, map and ping band (the player's average ping in the
+match: under 40, 80, 120 or 200 ms, or more), and summed under a filter (`TotalsFilter`): every
+game or one, every map or one, chosen modes or every mode but some (all but ffa), and only matches
+played under a ping. So a player reads their stats whole, on one map, in one mode, or at a good
+ping, from the same records (the maintainer, 2026-11-13). The game's own columns are summed by name
+beside the common ones.
 
 The classic servers already on the internet report nothing to us; the hub's classic adapter reads
 their recent-stats answer into the same record, best effort and without accounts.
@@ -269,7 +338,7 @@ The JSON API: `/v1/players/{name}`, `/v1/matches?game=&mode=&player=&page=`, `/v
 | M59b2 | The game CLI's `account` group (built) | `accounts` |
 | M59b3 | The hub's Account page (built) | `hub-pages` |
 | M59c | The login seam in `engine/server` (`server/login.hpp`), the settings above, a dedicated server that is its own master; the first classic game's prompt and `login` line (built) | `se-login` |
-| M59c2 | Our client's ticket in its connect; reserved names on a server whose master is elsewhere (a name ask); logins on a listen server and in a coop campaign | `se-login` |
+| M59c2 | Our client logs itself in by its ticket; reserved names on a server whose master is elsewhere (a name ask); logins on a listen server and in a coop campaign | `se-login` |
 | M59d | The sequel's prompt and `login` line, one account logged in on both games' servers | `se-login` |
 | M59e | The match report, the replay file's closing summary, the master's totals, trusted servers | `match-report` |
 | M59f | The hub's Player, Match and Leaders pages and their API; the classic adapter's recent stats | `hub-players` |

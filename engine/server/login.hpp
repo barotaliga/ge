@@ -59,6 +59,7 @@ struct LoginSettings {
   int32_t name = 1;      // sv_loginname: 1 a logged-in seat is shown by its account's name
   int32_t reserved = 1;  // sv_reservednames: 1 guests may not use an account's name
   int32_t port = 0;      // sv_accountport: the own master's service port (0: kAccountPort)
+  int32_t stats = 1;     // sv_stats: 1 each finished match's report goes to the master
 };
 
 enum class LoginState : uint8_t { empty, guest, code_next, asking, in };
@@ -74,18 +75,29 @@ struct LoginSeat {
   std::string address;    // the player's address, for the throttle
   uint64_t account = 0;
   std::string renamed;  // a reserved name the seat asked for while connecting, told on joining
+  std::string shown;    // the name the seat was last let go by (a master elsewhere checks it)
   account::Ask ask;     // to a master elsewhere
 };
 
+// A name asked of a master elsewhere (`Op::name`): whether an account reserves it. Kept while the
+// server runs (at most kNameChecks, the oldest answered dropped), so a name is asked once.
+struct NameCheck {
+  std::string key;  // the name folded by the game's rules
+  account::Ask ask;
+  bool answered = false, reserved = false;
+};
+inline constexpr size_t kNameChecks = 256;
+
 struct LoginOut {
-  enum class Kind : uint8_t { tell, tell_all, name, auth, drop } kind = Kind::tell;
+  // unname: a guest's name turned out registered; the game names the seat its default name
+  enum class Kind : uint8_t { tell, tell_all, name, auth, drop, unname } kind = Kind::tell;
   int slot = -1;
   std::string text;  // the line (no newline), the name or login, or the drop's reason
 };
 
 struct LoginStats {
   uint64_t lines = 0, asked = 0, in = 0, refused = 0, unanswered = 0, bad_tickets = 0;
-  uint64_t timed_out = 0, chat_held = 0, renamed = 0;
+  uint64_t timed_out = 0, chat_held = 0, renamed = 0, names_asked = 0;
 };
 
 struct Logins {
@@ -99,7 +111,9 @@ struct Logins {
   account::KeyAsk key_ask;           // learning it, when sv_accountkey is unset
   account::FreshFn fresh = nullptr;  // an ask's exchange secret
   void* fresh_ctx = nullptr;
+  int64_t now_us = 0;  // the Unix clock at the last frame or line (a name's ask starts on it)
   LoginSeat seats[kLoginSeats];
+  std::vector<NameCheck> names;    // names asked of a master elsewhere
   std::vector<LoginOut> out;       // what the game must do, in order; it empties it
   std::vector<std::string> notes;  // lines for the server's own log (a key learned)
   LoginStats stats;
@@ -136,10 +150,18 @@ enum class NameVerdict : uint8_t {
   account    // the seat is logged in with sv_loginname 1: `name` is set to its account's
 };
 // The name the player at `slot` wants (on joining or renaming). A refusal tells the player why,
-// unless `quiet` (a seat still connecting, which reads nothing yet).
+// unless `quiet` (a seat still connecting, which reads nothing yet). With a master elsewhere a name
+// not asked before is let go while the master is asked; if it answers that an account holds it,
+// the seat is told and an `unname` order renames it.
 NameVerdict login_name(Logins& l, int slot, std::string& name, bool quiet = false);
 
 // The account the seat is logged in to (0: a guest).
 uint64_t login_account(const Logins& l, int slot);
+
+// The key the server's tickets are signed with: its own service's, or its master's once known.
+// A game advertises its tag (the first 16 hex digits) so a player's own client, holding a ticket
+// signed by the same key, knows it can log itself in (docs/accounts.md § From our own client).
+bool login_key(const Logins& l, net::Key& out);
+std::string login_key_tag(const net::Key& key);
 
 }  // namespace ge::server

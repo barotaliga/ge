@@ -16,6 +16,7 @@
 #include "assets/pcx.hpp"
 #include "assets/tga.hpp"
 #include "brush/app/bsp_draw.hpp"
+#include "brush/app/bsp_fog.hpp"
 #include "brush/app/bsp_sky.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/app/sky_box.hpp"
@@ -59,9 +60,11 @@ struct WorldDraw {
   ba::BspDraw bsp;
   gr::FarLand far;  // the land round the map, seen through its sky faces (r_farland)
   ba::SkyPick sky;
-  ba::SkyPick night;  // the map's own classic night, for an sv_hour after dusk (bsp_sky.hpp)
-  bool dark = false;  // its sky texture is dark: the map is seen under its night (dark_sky)
-  double top_y = 0;   // the map's highest point, m: the clouds stand over it
+  ba::SkyPick night;      // the map's own classic night, for an sv_hour after dusk (bsp_sky.hpp)
+  bool dark = false;      // its sky texture is dark: the map is seen under its night (dark_sky)
+  ge::brush::MapFog fog;  // the map's own fog (its worldspawn's `fog` and `skyfog`)
+  double liquid_alpha[4] = {-1, -1, -1, -1};  // the map's own `wateralpha` and kin (-1: none)
+  double top_y = 0;  // the map's highest point, m: the clouds stand over it
   ge::gpu::PipelineSet pipelines;
   gr::FrameTargets targets;
   wgpu::Buffer uniforms;
@@ -505,6 +508,8 @@ WorldDrawPtr begin_world(ge::gpu::Device& d, WorldReadPtr read, uint32_t width, 
   f->h = std::max(1u, height);
   f->has_map = read->has_map;
   f->scene = std::move(read->scene);
+  f->fog = ge::brush::map_fog(f->scene.map);
+  look::map_liquid_alphas(f->scene.map, f->liquid_alpha);
   f->sky = read->sky;
   f->night = read->night;
   f->dark = read->dark;
@@ -598,6 +603,15 @@ ba::SkyPick dress_world_sky(const WorldDraw& f, gr::FrameView& view) {
   return sky;
 }
 
+// THE MAP'S FLAT FOG (brush/app/bsp_fog.hpp's `map_flat_fog`): the `fog` command's words when it
+// was typed (or sent) since the world was made, else the map's own; its sky share the map's
+// `skyfog`, else r_skyfog. A new map is its own fog again.
+gr::FlatFog world_fog(const WorldDraw& f) {
+  ge::brush::MapFog fog = f.fog;
+  if (f.picture->fog_serial != f.made.fog_serial) ge::brush::parse_fog(f.picture->fog, &fog);
+  return ba::map_flat_fog(fog, f.picture->sky_fog);
+}
+
 }  // namespace
 
 void world_sun(const WorldDraw& f, gr::FrameView view, double out[3]) {
@@ -628,6 +642,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   // The map's own sky (its pick), keeping the eye and the look the caller set.
   const ba::SkyPick sky = dress_world_sky(f, view);
   view.altitude_m = 100;
+  view.flat_fog = world_fog(f);
   if (!f.own_sky) {  // a map's cloud seen through its sky faces: every pixel, every frame
     view.clouds.quarter = false;
     view.clouds.spread = false;
@@ -637,6 +652,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     o.first_all = false;
     o.fresh_cubes = f.warm_cubes;
   }
+  // See-through liquids: the map's, else the player's, solid where the server keeps them so.
+  look::liquid_alphas(*f.picture, f.liquid_alpha, fx.see_through, o.liquid_alpha);
   o.sky_light = sky.sky_light;
   o.sky_seen = sky.sky_seen;
   for (int k = 0; k < 3; ++k) o.sky_tint[k] = sky.tint[k];
@@ -723,7 +740,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     for (const HeldBeam& b : fx.beams) {
       if (f.beam_draws.size() >= f.beam_shapes.size()) break;
       gr::BeamShape& shape = f.beam_shapes[f.beam_draws.size()];
-      const gr::BeamLook* look = b.across ? &effects::prong_arc_look() : &effects::bolt_look();
+      const gr::BeamLook* look = b.rail     ? &effects::rail_look()
+                                 : b.across ? &effects::prong_arc_look()
+                                            : &effects::bolt_look();
       gr::build_beam(*look, b.shot, view.time_s, shape);
       if (shape.count > 0) f.beam_draws.push_back({&shape, look, b.shot.seed});
     }
@@ -736,7 +755,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     const InPlace in_place{.flames = o.mode == ba::Mode::v2 && f.picture->ce.flames,
                            .flares = on.flares,
                            .bubbles = on.bubbles,
+                           .explosions = on.explosions,
                            .bubbles_share = f.picture->bubbles_share};
+    f.models.skin_choice = {
+        .noskins = f.picture->noskins, .base = f.picture->base_skin, .all = f.picture->all_skins};
     prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
                    in_place, fx.lights, o.dynamic_strength, &f.burning);
   }

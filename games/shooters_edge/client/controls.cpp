@@ -24,8 +24,8 @@ bool held(const ge::input::InputState& in, uint16_t k) { return ge::input::key_h
 
 bool down(const ge::console::Button* b) { return b != nullptr && b->down(); }
 
-// The default layout: a key, the command it runs (+voip talks on a server joined:
-// net/classic_remote.hpp; screenshot: engine/capture/screenshot.hpp).
+// The default layout: a key, the command it runs (+voice talks, console/talk.hpp binding the
+// other chat and voice keys: net/classic_remote.hpp; screenshot: engine/capture/screenshot.hpp).
 constexpr const char* kDefaults[][2] = {
     {"w", "+forward"},
     {"s", "+back"},
@@ -52,7 +52,7 @@ constexpr const char* kDefaults[][2] = {
     {"8", "impulse 8"},
     {"mwheelup", "impulse 10"},
     {"mwheeldown", "impulse 10"},
-    {"v", "+voip"},
+    {"v", "+voice"},
     {"f12", "screenshot"},
 };
 

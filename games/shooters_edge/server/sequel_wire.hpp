@@ -21,12 +21,14 @@
 // each active client's `name\male/grunt` at 1312 + slot. A model index on the wire is the
 // runner's plus one for the same reason. The layouts are in porting/shooters-edge/sequel-demo.md.
 //
-// Stats: 1 health, 3 the ammo in hand, 5 armour (the slots the demo's own status bar reads).
+// The status bar: the rules' own (rules_world.hpp's `status_bar`, with its pictures at image
+// strings 544 + n and its item names at 1056 + n) and every one of the player's 32 stats; for
+// rules with none, a bar of three numbers and stats 1 health, 3 the ammo in hand, 5 armour.
 //
 // ge:summary The sequel's protocol 34 server messages from a runner's rows: signon and frames
 // ge:keywords sequel wire protocol-34 serverdata configstring spawnbaseline frame playerinfo
 // ge:keywords packetentities entity-delta delta-frame dm2 recorder record viewpoint map-checksum
-// ge:keywords sequel_signon sequel_frame sequel_record
+// ge:keywords sequel_signon sequel_signon_parts sequel_frame sequel_resync sequel_record
 // ge:skill shooter replay
 // ge:test tests/shooters_edge_sequel_wire_test.cpp
 #pragma once
@@ -35,6 +37,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "brush/map.hpp"
@@ -104,13 +107,28 @@ struct SequelWire {
 // little-endian words XORed, read as a signed number.
 int32_t sequel_map_checksum(std::span<const uint8_t> bsp);
 
+// The signon's messages one by one: the server data, each configstring (by index) and each
+// baseline (by entity number), each message whole with its id. A live server sends them as a
+// client asks for them (net/sequel_net_server.hpp); a recording cuts them into blocks.
+struct SequelSignon {
+  std::vector<uint8_t> server_data;
+  std::vector<std::pair<int, std::vector<uint8_t>>> config_strings, baselines;
+};
+void sequel_signon_parts(SequelWire& w, const RulesCommon& c, int slot,
+                         const SequelWireOptions& opt, SequelSignon& out);
 // The signon for viewpoint `slot`, as blocks of messages (no lengths).
 void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWireOptions& opt,
                    std::vector<std::vector<uint8_t>>& blocks);
 // One frame's block: `frame_number` the rules' frame; `move` the viewpoint's move state when the
-// runner keeps one (null: taken from the world's rows).
+// runner keeps one (null: taken from the world's rows). With `reliable`, the changed
+// configstrings, prints, centred prints and stuffed lines are appended there (a live server's
+// reliable channel) and `block` holds the frame and its sounds alone.
 void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
-                  const ge::shooter::SequelState* move, std::vector<uint8_t>& block);
+                  const ge::shooter::SequelState* move, std::vector<uint8_t>& block,
+                  std::vector<uint8_t>* reliable = nullptr);
+// The viewer holds no frame (a live client lost the one the next would delta from): the next
+// frame is whole, its entities from their baselines.
+void sequel_resync(SequelWire& w);
 
 // A RECORDING (`.dm2`): blocks of a 32-bit length and the block, ended by a length of -1.
 struct SequelRecorder {

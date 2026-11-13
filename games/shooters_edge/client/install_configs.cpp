@@ -13,7 +13,9 @@
 #include <system_error>
 
 #include "console/cfg.hpp"
+#include "shooters_edge/client/load_order.hpp"
 #include "shooters_edge/client/settings.hpp"
+#include "vfs/search.hpp"
 
 namespace shooters_edge::client {
 
@@ -45,14 +47,10 @@ fs::path entry_named(const fs::path& dir, std::string_view name) {
   return {};
 }
 
-bool is_first_game(const ge::classicenhance::Profile& content) {
-  return content.id == ge::classicenhance::kProfiles[0].id;
-}
-
-// The sequel's folders a config is looked for in, the mod's first: `game` when it is a mod (not
-// the base folder in any case), then the base folder.
-std::vector<std::string_view> sequel_folders(const std::string& game,
-                                             const ge::classicenhance::Profile& content) {
+// The game folders a config is looked for in, the mod's first: `game` when it is a mod (not the
+// base folder in any case), then the base folder.
+std::vector<std::string_view> game_folders(const std::string& game,
+                                           const ge::classicenhance::Profile& content) {
   std::vector<std::string_view> out;
   if (!game.empty() && lower(game) != lower(std::string(content.base_dir))) out.emplace_back(game);
   out.push_back(content.base_dir);
@@ -63,34 +61,62 @@ std::vector<std::string_view> sequel_folders(const std::string& game,
 // The sequel's client reads `config.cfg` on Linux and macOS and `q2config.cfg` on Windows; the
 // other is tried after, so an install carried from one system to another keeps its settings.
 std::vector<fs::path> main_configs(const fs::path& root, const std::string& game,
-                                   const ge::classicenhance::Profile& content) {
+                                   const ge::classicenhance::Profile& content,
+                                   const LoadOrder& order) {
   std::vector<fs::path> out;
-  if (is_first_game(content)) {
+  const auto add = [&](const fs::path& dir) {
+    for (const std::string_view n : order.main_files)
+      if (!n.empty()) out.push_back(dir / std::string(n));
+  };
+  if (order.main_where == MainWhere::client_configs) {
     if (const fs::path client = entry_named(root, kClientDir); !client.empty())
-      if (const fs::path configs = entry_named(client, "configs"); !configs.empty())
-        out.push_back(configs / "config.cfg");
+      if (const fs::path configs = entry_named(client, "configs"); !configs.empty()) add(configs);
     return out;
   }
-#ifdef _WIN32
-  const std::string_view names[] = {"q2config.cfg", "config.cfg"};
-#else
-  const std::string_view names[] = {"config.cfg", "q2config.cfg"};
-#endif
-  for (const std::string_view folder : sequel_folders(game, content)) {
-    const fs::path dir = entry_named(root, folder);
-    if (dir.empty()) continue;
-    for (const std::string_view n : names) out.push_back(dir / std::string(n));
-  }
+  for (const std::string_view folder : game_folders(game, content))
+    if (const fs::path dir = entry_named(root, folder); !dir.empty()) add(dir);
   return out;
 }
 
-// The file at `path` run to its end, `wait`s included; false when it is not there.
+// The text of default.cfg from the packs of the game folders (the mod's first), each folder's
+// packs searched before its loose copy as its client ranks them; false when none holds one.
+bool defaults_from_packs(const fs::path& root, const std::string& game,
+                         const ge::classicenhance::Profile& content, const LoadOrder& order,
+                         std::string& text, std::string& from) {
+  for (const std::string_view folder : game_folders(game, content)) {
+    const fs::path dir = entry_named(root, folder);
+    if (dir.empty()) continue;
+    const std::vector<std::string> archives =
+        ge::vfs::game_archives(root.string(), dir.filename().string(), order.layout);
+    for (const std::string& pack : archives | std::views::reverse) {  // the winner first
+      std::vector<uint8_t> bytes;
+      if (!ge::vfs::read_from_pack(pack, con::kDefaultFile, &bytes, nullptr)) continue;
+      text.assign(bytes.begin(), bytes.end());
+      from = pack + "/" + std::string(con::kDefaultFile);
+      return true;
+    }
+    if (order.layout.archives_over_loose) {
+      std::ifstream f(dir / con::kDefaultFile, std::ios::binary);
+      if (!f) continue;
+      text.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+      from = (dir / con::kDefaultFile).string();
+      return true;
+    }
+  }
+  return false;
+}
+
+// `text` run to its end, `wait`s included.
+void run_text(con::Console& c, const std::string& text) {
+  c.append(text);
+  for (int n = 0; n < con::kMaxFrames && c.pending(); ++n) c.run();
+}
+
+// The file at `path` run to its end; false when it is not there.
 bool run_path(con::Console& c, const fs::path& path) {
   std::ifstream f(path, std::ios::binary);
   if (!f) return false;
-  const std::string text{std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()};
-  c.append(text);
-  for (int n = 0; n < con::kMaxFrames && c.pending(); ++n) c.run();
+  run_text(c, std::string{std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()});
   return true;
 }
 
@@ -102,6 +128,28 @@ bool run_named(con::Console& c, std::string_view name, ConfigsRun& out) {
   for (int n = 0; n < con::kMaxFrames && c.pending(); ++n) c.run();
   out.files.emplace_back(name);
   return true;
+}
+
+// The console's own keys (the one under the tilde, the ISO key) in each mode, kept across a config
+// that starts with `unbindall`.
+struct KeptKeys {
+  std::vector<std::pair<std::pair<con::BindMode, std::string>, std::string>> binds;
+};
+constexpr const char* kConsoleKeys[] = {"`", "nonus"};
+constexpr con::BindMode kKeyModes[] = {con::BindMode::game, con::BindMode::console};
+
+KeptKeys keep_console_keys(const con::Console& c) {
+  KeptKeys k;
+  for (const con::BindMode m : kKeyModes)
+    for (const char* key : kConsoleKeys)
+      if (const std::string& b = c.binds().get(m, key); !b.empty())
+        k.binds.push_back({{m, key}, b});
+  return k;
+}
+
+void restore_console_keys(con::Console& c, const KeptKeys& k) {
+  for (const auto& [at, command] : k.binds)
+    if (c.binds().get(at.first, at.second).empty()) c.binds().set(at.first, at.second, command);
 }
 
 // The command line's words cut into its `+set` pairs and the rest, each group in order.
@@ -127,7 +175,7 @@ void split_plus(const std::vector<std::string>& plus, std::vector<std::string>& 
 }  // namespace
 
 fs::path client_folder(const fs::path& root, const ge::classicenhance::Profile& content) {
-  if (!is_first_game(content)) return {};
+  if (!load_order_of(content).client_folder) return {};
   const fs::path p = entry_named(root, kClientDir);
   std::error_code ec;
   return fs::is_directory(p, ec) ? p : fs::path();
@@ -145,7 +193,7 @@ std::vector<fs::path> config_dirs(const std::string& basedir, const std::string&
     dirs.push_back(p);
   };
   add(game);
-  if (is_first_game(content)) add(kClientDir);
+  if (load_order_of(content).client_folder) add(kClientDir);
   add(content.base_dir);
   dirs.emplace_back(".");
   return dirs;
@@ -160,56 +208,91 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
     return out;
   }
   const fs::path root = basedir.empty() ? fs::path(".") : fs::path(basedir);
-  const auto count_unknown = [&c, &out] {
-    c.set_unknown([&out](const con::Args&) {
-      out.passed_over++;
-      return true;
-    });
-  };
-  count_unknown();
-  run_named(c, con::kDefaultFile, out);
+  const LoadOrder& order = load_order_of(content);
   const fs::path own = settings_dir(basedir, game) / con::kConfigFile;
-  const bool first = is_first_game(content);
-  bool installed = false;
-  for (const fs::path& main : main_configs(root, game, content)) {
+  fs::path main;
+  for (const fs::path& p : main_configs(root, game, content, order)) {
     std::error_code ec;
-    if (!fs::is_regular_file(main, ec)) continue;
-    if (first) run_named(c, con::kAutoexecFile, out);  // the bundled client runs it just before
-    if (run_path(c, main)) out.files.push_back(main.string());
-    installed = true;
+    if (!fs::is_regular_file(p, ec)) continue;
+    main = p;
     break;
   }
-  // The window's own saved settings: after the install's (so what the player changed here sticks),
-  // else where the engine's order has them, before autoexec.cfg.
-  if (!installed && run_path(c, own)) out.files.push_back(own.string());
-  if (first || !installed) {
-    run_named(c, con::kAutoexecFile, out);
-  } else {
-    // The sequel's client: the base folder's autoexec.cfg, then the mod's, then postexec.cfg.
-    // With neither, the window's own autoexec.cfg runs in their place.
-    bool ran = false;
-    for (const std::string_view folder : sequel_folders(game, content) | std::views::reverse) {
-      const fs::path dir = entry_named(root, folder);
-      if (dir.empty() || !run_path(c, dir / con::kAutoexecFile)) continue;
-      out.files.push_back((dir / con::kAutoexecFile).string());
-      ran = true;
-    }
-    if (!ran) run_named(c, con::kAutoexecFile, out);
-    run_named(c, kPostexecFile, out);
-  }
-  if (installed && run_path(c, own)) out.files.push_back(own.string());
-  c.set_unknown(nullptr);
   std::vector<std::string> sets, rest;
   split_plus(plus, sets, rest);
-  c.append_command_line(sets);
-  c.run();
-  c.append_command_line(rest);
-  c.run();
-  if (installed && !first) {  // the sequel's client runs postinit.cfg after the command line
-    count_unknown();
-    run_named(c, kPostinitFile, out);
-    c.set_unknown(nullptr);
+  const auto counting = [&c, &out](bool on) {
+    if (on) {
+      c.set_unknown([&out](const con::Args&) {
+        out.passed_over++;
+        return true;
+      });
+    } else {
+      c.set_unknown(nullptr);
+    }
+  };
+  const auto run_file = [&](const fs::path& p) {
+    if (run_path(c, p)) out.files.push_back(p.string());
+  };
+  counting(true);
+  for (const StartStep step : order.start) {
+    switch (step) {
+      case StartStep::defaults: {
+        std::string text, from;
+        if (order.defaults_in_packs &&
+            defaults_from_packs(root, game, content, order, text, from)) {
+          // The game's own default.cfg starts from no binds: the console's own keys are kept.
+          const KeptKeys kept = keep_console_keys(c);
+          run_text(c, text);
+          restore_console_keys(c, kept);
+          out.files.push_back(from);
+        } else {
+          run_named(c, con::kDefaultFile, out);
+        }
+        break;
+      }
+      case StartStep::autoexec_before_main:
+        if (!main.empty()) run_named(c, con::kAutoexecFile, out);
+        break;
+      case StartStep::main:
+        run_file(main.empty() ? own : main);
+        break;
+      case StartStep::autoexec:
+        run_named(c, con::kAutoexecFile, out);
+        break;
+      case StartStep::folder_autoexecs: {
+        // The base folder's, then the mod's; with neither, the window's own in their place.
+        bool ran = false;
+        for (const std::string_view folder : game_folders(game, content) | std::views::reverse) {
+          const fs::path dir = entry_named(root, folder);
+          if (dir.empty() || !run_path(c, dir / con::kAutoexecFile)) continue;
+          out.files.push_back((dir / con::kAutoexecFile).string());
+          ran = true;
+        }
+        if (!ran) run_named(c, con::kAutoexecFile, out);
+        break;
+      }
+      case StartStep::postexec:
+        run_named(c, kPostexecFile, out);
+        break;
+      case StartStep::own:
+        if (!main.empty()) run_file(own);
+        break;
+      case StartStep::command_sets:
+        counting(false);
+        c.append_command_line(sets);
+        c.run();
+        break;
+      case StartStep::command_rest:
+        counting(false);
+        c.append_command_line(rest);
+        c.run();
+        break;
+      case StartStep::postinit:
+        counting(true);
+        run_named(c, kPostinitFile, out);
+        break;
+    }
   }
+  counting(false);
   return out;
 }
 

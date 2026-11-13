@@ -590,6 +590,109 @@ TEST(both_looks_lay_every_page_out_clean) {
   pack.strip_print = 0xb378b8eec94a7f36ULL;
   CHECK(pieces(pack, pack.find("sp_menu")) == 4);  // DEMOS' L and m, SELECT GAME's G and m
   CHECK(pieces(pack, &pack.glyphs) < pieces(art, &art.glyphs));
+
+  // SELECT GAME's names: seven pieces of the strips for the first game, nine for the sequel's
+  // (its numeral), on the pack's strips; the stand-in's draw none and fall back to the pictures.
+  const auto names = [&](const sm::ClassicArt& a) {
+    sm::GamesPage page;
+    page.set_games({{.id = "classic", .install = "", .edition = ""},
+                    {.id = "sequel", .install = "", .edition = ""}});
+    DrawList dl;
+    dl.begin(1280, 720);
+    page.draw_classic(dl, a, 1280, 720, 0);
+    int n = 0;
+    for (const auto& c : dl.cmds()) n += c.box.image == a.find("mainmenu") ? 1 : 0;
+    return n;
+  };
+  CHECK(names(art) == 0);
+  CHECK(names(pack) == 8 + 7 + 9);  // the carved title's eight from the same strip
+}
+
+TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
+  // The sequel's pictures at their sizes, painted flat: the plates, their lit copies, the plaque,
+  // the logo, the cursor's frames and the banners.
+  sm::ClassicArt art;
+  art.glyphs = make_image(128, 128, hex(0xffffff));
+  const std::pair<const char*, int> plates[] = {{"m_main_game", 99},
+                                                {"m_main_multiplayer", 215},
+                                                {"m_main_options", 150},
+                                                {"m_main_quit", 100},
+                                                {"m_main_video", 118}};
+  for (const auto& [name, w] : plates) {
+    art.pictures.emplace(name, make_image(w, 32, hex(0x404040)));
+    art.pictures.emplace(std::string(name) + "_sel", make_image(w, 32, hex(0x606060)));
+  }
+  art.pictures.emplace("m_main_plaque", make_image(38, 166, hex(0x303030)));
+  art.pictures.emplace("m_main_logo", make_image(36, 42, hex(0x303030)));
+  for (int f = 0; f < 15; f++)
+    art.pictures.emplace("m_cursor" + std::to_string(f), make_image(22, 29, hex(0xff0000)));
+  for (const char* b : {"m_banner_game", "m_banner_multiplayer", "m_banner_options",
+                        "m_banner_video", "m_banner_join_server"})
+    art.pictures.emplace(b, make_image(275, 32, hex(0x505050)));
+  CHECK(art.plates() && !art.loaded() && art.menu_ready());
+  CHECK(art.screen_height() == 240);
+  CHECK(sm::banner_of("options") == "m_banner_options" && sm::banner_of("help").empty());
+
+  // Every page reads on the 320 x 240 screen; the root a plate a row, 32 classic px apart.
+  World w;
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .maps = {"start", "arena"}};
+  g.set_art(art);
+  CHECK(g.classic());
+  for (const char* page :
+       {"main", "single", "multi", "options", "video", "help", "quit", "games"}) {
+    g.show(host, page);
+    DrawList dl;
+    dl.begin(1280, 720);
+    g.draw(dl, 1280, 720, 0.25);
+    for (const std::string& p : g.problems()) CHECK_MSG(false, std::string(page) + ": " + p);
+  }
+  g.show(host, "main");
+  const sm::ClassicLayout l = sm::layout_classic(g.main(), art, 1280, 720);
+  CHECK(l.plates && !l.strip && l.scale == 3);
+  CHECK(l.items[1].y - l.items[0].y == 96);
+  CHECK(l.items[1].w == 99 * 3);  // SINGLE PLAYER is the sequel's GAME plate
+  for (const Rect& r : l.items) CHECK(r.w <= 0 || (r.y >= 0 && r.bottom() <= 720));
+
+  // SELECT GAME, DEMOS and HELP built from the plates only where they were measured: elsewhere in
+  // big glyphs.
+  const auto glyphs = [&](const sm::ClassicArt& a) {
+    DrawList dl;
+    dl.begin(1280, 720);
+    sm::draw_classic(dl, g.main(), a, sm::layout_classic(g.main(), a, 1280, 720), 0, 0);
+    int n = 0;
+    for (const auto& c : dl.cmds()) n += c.box.image == &a.glyphs ? 1 : 0;
+    return n;
+  };
+  sm::ClassicArt pack = art;
+  pack.strip_print = 0xfd50f20825e19f40ULL;
+  CHECK(sm::carved_width(art, "games") == 0 && sm::carved_width(pack, "games") == 209);
+  CHECK(glyphs(art) == 10 + 5 + 4);  // SELECT GAME (no space drawn), DEMOS, HELP
+  CHECK(glyphs(pack) == 0);
+
+  // A page under the root takes its banner; SELECT GAME's title and the names are plates: 17
+  // pieces for the title, 8 for the first game, 13 for the sequel's.
+  g.show(host, "options");
+  {
+    DrawList dl;
+    dl.begin(1280, 720);
+    g.draw(dl, 1280, 720, 0);
+    int n = 0;
+    for (const auto& c : dl.cmds()) n += c.box.image == g.art().find("m_banner_options") ? 1 : 0;
+    CHECK(n == 1);
+  }
+  sm::GamesPage page;
+  page.set_games({{.id = "classic", .install = "", .edition = ""},
+                  {.id = "sequel", .install = "", .edition = ""}});
+  DrawList dl;
+  dl.begin(1280, 720);
+  page.draw_classic(dl, pack, 1280, 720, 0);
+  int pieces = 0;
+  for (const auto& c : dl.cmds())
+    for (const auto& [name, img] : pack.pictures)
+      if (c.box.image == &img && name.rfind("m_main_", 0) == 0) pieces++;
+  CHECK(pieces == 17 + 8 + 13);
 }
 
 TEST(enhanced_pictures_draw_at_the_classic_sizes) {

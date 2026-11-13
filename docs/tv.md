@@ -144,6 +144,11 @@ minutes 1.2 kB a second, against 9.2 kB with a whole save every 10 s:
 | Whole every 10 s | 10.7 kB/s | 9.2 kB/s |
 | Whole once, then deltas every 10 s | 2.9 kB/s | 1.2 kB/s |
 
+A run's input log and its stream are the same run: `spectate_pack` steps the run through a log and
+writes the stream its broadcast would have been, and `spectate_inputs` reads a stream from its
+first block back into the log, text for text, so a kept broadcast is a replay `ge replay`,
+`ge diverge` and `ge why` can read once it is turned back.
+
 ## The field codec
 
 The coder (`engine/replay/codec.hpp`) is an adaptive binary range coder: integers only, so it
@@ -248,6 +253,31 @@ hands the records to the demo reader a whole frame at a time, so the window draw
 draws a game it joined (the same view, sounds and lines). Still to come in M57c: the node writing
 its own name into the server info.
 
+### The hops as a process, and an existing client through them
+
+`shooters_edge_hops` (`games/shooters_edge/net/hops_main.cpp`) runs one hop as a process of its
+own, on the wall clock, so any classic client goes through it: `forward` (the classic face, the
+route in the connect's `prx`), `proxy` (the near and far proxies in one process, `--link-loss` for a
+test), `proxy-near`, `proxy-far`, and `tv` (the node on a server's stream port). `--help` lists the
+flags; a status line every `--status` seconds counts the clients, the link's bytes and, for the
+proxies, the server's packets lost on the link.
+
+Checked with an existing open-source classic client on Xvfb against our server (dm4, 30 s each,
+`rate 30000`, `cl_maxfps 30`; the client's own loss readout):
+
+| Path | What the client showed |
+| --- | --- |
+| Straight to our server | 0% loss |
+| The proxies, 10% link loss each way, one copy | 19% loss (the hops counted 10.5% of the server's packets lost) |
+| The proxies, 10% link loss each way, three copies | 0% (the hops counted 0.3%) |
+| Our forward (`cl_proxyaddr` set to it) | Routed, played, 0% |
+| Watching through our TV node (`qtvplay`) | The match, tracking a player |
+
+Watching took one fix: a recording's signon now carries the sound list before the model list,
+which is the order a player's client asks for them in; with the model list first, that client
+refused the entities' model indexes ("bad modelindex"). Found by cutting a captured stream record
+by record and editing it until the client took it.
+
 ## Forward
 
 `engine/forward` (`forward.hpp`). An opaque hop between a game's client and its server, for a
@@ -321,6 +351,29 @@ The session opens like forward's route (a padded open, a cookie, then opened or 
 words), and the far proxy reaches only the servers on its allow list. Lag and loss for practice are
 the transport's own fake conditions.
 
+**Order**: copies that have fallen due go out before a newer datagram, so the far end passes the
+game's datagrams on in the order the game sent them. A game that drops whatever is older than the
+newest it has (the classic protocol does) would otherwise lose a datagram whose first frame was
+lost even though its copy arrived. A proxy's loop should run faster than the game sends (every
+millisecond or so) so a copy leaves at its gap.
+
+**The classic game through it**: nothing classic is in the proxy; a classic client connects to the
+near proxy as to a server. Checked live (`se-interop --proxy=<port> --link-loss=0.1 --copies=3`)
+against an open-source classic server and match mod built beside the checkout, 20 s each:
+
+| Path | Server packets the client counts lost | Link bytes up / down per game byte |
+| --- | --- | --- |
+| Straight to the server | 0.9% | - |
+| Through the proxies, clean link | 1.1% | 1.32 / 1.22 |
+| 10% loss each way, one copy | 20.9% | 1.33 / 1.18 |
+| 10% loss each way, three copies | 1.3% | 3.97 / 3.59 |
+
+The loss the game sees doubles on a lossy link with one copy because the server leaves a gap in its
+own sequence for each command of the client's that does not arrive, as well as the replies the link
+loses; three copies take both away. Packing does not shrink the classic game's datagrams (they are
+already deltas, and short), so its link costs the frame's header on each; the field codec is what
+would make that link smaller.
+
 **Recording** (`engine/proxy/record.hpp`): either proxy hands every game datagram it passes on to
 `ProxyConfig::tap`, with its session and direction, and `proxy_record` keeps them as a replay file:
 the client's datagrams in a `to_server` track and the server's in `to_client`, each a `messages`
@@ -349,6 +402,29 @@ between them:
 
 Three copies cut the loss at 10% about eighty times; packing sends 30% of the plain bytes down, so
 three copies packed cost less than one plain.
+
+## The sequel's hops
+
+The sequel has no forwarder or proxy protocol of its own, so nothing about the hops goes in its
+connect: our sequel client (`games/shooters_edge/net/sequel_client.hpp`, `via` in its config) dials
+the forward route with `engine/forward`'s dial before it asks for a challenge, then runs the
+sequel's handshake end to end to the first hop as if it were the server. The proxies need nothing
+from the client at all: the near proxy is the server's address to it, so a stock sequel client
+reaches the proxies by address alone. The server sees the last hop's address and plays as usual.
+
+The `se-sequel-forward` lab, smoke on the simulated network with our sequel server, 6 s and 10%
+loss each way on the lossy paths: the client through two forwarders dialled its route and played
+with no bad move checksum; the client through the proxies (three copies, packed) lost none of the
+server's packets, while a client straight over a path as lossy lost 12%. Against an unmodified
+sequel server built beside the checkout (15 s each, loopback):
+
+| Path | What the client got |
+| --- | --- |
+| Straight | 26 frames |
+| Two forwarders | Routed, 13.3 ms round trip to the first hop, the player walked 756 units |
+| The proxies, a clean link | No loss; link bytes up 88 814 for the game's 29 035, down 38 892 for 11 848 |
+| The proxies, 10% link loss, one copy | 13.6% of the server's packets lost; the signon did not finish |
+| The proxies, 10% link loss, three copies | 38 frames, no loss |
 
 ## The sequel's recordings
 
@@ -383,7 +459,35 @@ as the game's recorder writes it, then a frame each 100 ms whose player state an
 deltas against the frame before), and `record <name>` in the window writes them as `<name>.ged`.
 The map's checksum (configstring 31) is the MD4 of the whole map file with its four words XORed,
 measured against the demo pack's map. The same encoder is what the sequel's own server will send
-real clients (M18v9), so a hosted match broadcasts through TV from it.
+real clients (M18v9), so a hosted match broadcasts through TV from it. A match on our server is broadcast
+as it is recorded: each new block of the recording goes to the broadcast, and the TV node's viewers
+get the whole match, a late one from its start (`tests/shooters_edge_sequel_wire_test.cpp`; the
+`se-sequel-record` lab: 60 s on the demo pack's demo1, 13.5 KB broadcast, a viewer joining half way
+sent 28 blocks to catch up, both viewers back byte for byte).
+
+## The watcher
+
+A server with no broadcaster (a classic server with its stream port off, or one that never had one)
+is watched by way of a WATCHER (`games/shooters_edge/net/classic_watcher.hpp`, M57h): our classic
+client joined as a spectator, recording as a player's client recording does, its recording handed
+to a broadcast as it grows (`games/shooters_edge/client/recording_tv.hpp`: the recording's bytes in
+one-second zstd blocks on the `recording` track, the track `pack_demo` keeps a client recording on,
+so `unpack_demo` gives the recording back byte for byte). A TV node takes it as any stream. The
+first block is the only keyframe, so a late viewer is sent the match from its start, as the sequel's
+broadcast does. What a viewer gets is what one spectator was sent: the watcher follows the play as a
+spectator does and does not see the whole map, as a multiview recording would.
+
+`tests/shooters_edge_classic_watcher_test.cpp`: on the simulated network, a watcher on our classic
+server while a player runs, a viewer there from the start and one who joins half way, both given
+the watcher's whole recording, which reads to its end. The `se-watcher` lab does the same, and with
+`--server` joins a live classic server: against an open-source classic server with its stream port
+off, built beside the checkout, 25 s gave a 116 KB recording as a 37 KB broadcast, the late viewer
+sent 7 blocks to catch up, both viewers whole. That server refuses a second connection from the same
+address for a few seconds after the last attempt (`reconnect rejected: too soon`), so a watcher and
+a player on one machine join one after the other.
+
+The sequel's half (a watcher on an unmodified sequel server) waits on the sequel's network protocol
+(M18v9).
 
 ## Decisions
 
@@ -400,3 +504,4 @@ real clients (M18v9), so a hosted match broadcasts through TV from it.
 | The proxy's packing | XOR against the newest datagram the other end confirmed, zero runs counted: generic, a lost frame costs only itself | A stream compressor across frames (the classic "quality line"): smaller, but one loss damages what follows; the field codec on the link: needs the game's schema, a later face |
 | The sequel's late viewer | The match from its start (the broadcast keyframes once): small, and its frames need what came before | A keyframe that repeats the level's start: the frames after it are deltas against frames the viewer never had |
 | The browser viewer | The WebSocket downstream lands with TV (M57b), for the hub's web viewer (M56) | Later: the hub needs it first |
+| The sequel's route | Our sequel client dials the forward route before its challenge; nothing goes in the sequel's connect | A route in the sequel's userinfo or connect line: the sequel has no such field, and an unmodified server would have to ignore it |

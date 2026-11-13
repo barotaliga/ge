@@ -8,19 +8,26 @@
 // its owner used it, and a guest under a registered name who never logs in. It answers whether each
 // is logged in, renamed, held or dropped as the design says, whether a login line ever reaches
 // another player, and whether every line a player reads is a game's words; each player's console is
-// drawn as the player sees it.
+// drawn as the player sees it. Our own client joins too (the window's `Remote`): it holds the
+// ticket the game CLI's `account signin` left from the community's master, reads `*accountkey` in
+// the server info, trades the ticket for a code on its own socket and logs itself in, typing
+// nothing. A guest on the community's server under a registered name is renamed once the master
+// answers that an account holds it.
 //
 // ge:summary Lab: classic clients logging in on the dedicated server, own master and remote
 // ge:keywords lab se-login login sv_login sv_accountmaster login-code two-step-login auth-key
-// ge:keywords reserved-names login-timeout console player-text
+// ge:keywords reserved-names login-timeout console player-text autologin accountkey
 // ge:skill net labs
 // ge:test tests/shooters_edge_classic_login_test.cpp
 #include <cstdio>
+#include <filesystem>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "account/service.hpp"
+#include "account/ticket.hpp"
 #include "console/console.hpp"
 #include "console/view.hpp"
 #include "core/num.hpp"
@@ -30,6 +37,7 @@
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/classic_remote.hpp"
 #include "ui/console.hpp"
 #include "ui/raster.hpp"
 
@@ -70,7 +78,8 @@ gn::Key key_of(uint32_t seed, uint8_t b) {
 
 struct Player {
   std::string label, name;
-  int server = 0;  // 0: the server that is its own master; 1: the one asking a master
+  bool ours = false;  // our own client (the window's Remote), logging itself in by its ticket
+  int server = 0;     // 0: the server that is its own master; 1: the one asking a master
   double join_s = 1;
   std::vector<std::pair<double, std::string>> typed;  // console lines and when
   // What happened.
@@ -113,6 +122,23 @@ ga::Store accounts(uint32_t seed) {
   ga::create(store, "Niclas", "correct horse", g_unix, fresh_of(seed, 1));
   ga::create(store, "Ann", "battery staple", g_unix, fresh_of(seed, 2));
   return store;
+}
+
+// The file the game CLI's `account signin` leaves: `master`'s ticket for Ann's account.
+std::string account_file(uint32_t seed, const ga::Service& master, const gn::Address& at) {
+  const ga::Ticket t = ga::ticket_issue(master.keys, 2, "Ann", g_unix / 1000000);
+  uint8_t bytes[ga::kTicketMax];
+  const size_t n = ga::ticket_write(t, bytes, sizeof bytes);
+  ga::AccountFile f;
+  f.master = gn::to_string(at);
+  f.key = gn::key_to_hex(ga::service_key(master));
+  f.name = "Ann";
+  f.ticket = ga::bytes_to_hex(std::vector<uint8_t>(bytes, bytes + n));
+  const std::string path = (std::filesystem::temp_directory_path() /
+                            ("ge_se_login_lab_" + std::to_string(seed)) / "account.txt")
+                               .string();
+  ga::account_file_write(path, f);
+  return path;
 }
 
 Session run_session(uint32_t seed, double seconds, double login_time_s) {
@@ -170,7 +196,17 @@ Session run_session(uint32_t seed, double seconds, double login_time_s) {
       player("two-step", "nic", 1, 1.0, {{4.0, "login niclas"}, {6.0, "say " + niclas_master}}),
       player("spent-code", "spy", 0, 2.0,
              {{8.0, "say login niclas " + niclas_own}, {9.0, "say hello"}}),
+      player("guest-elsewhere", "N1clas", 1, 0.5, {{5.0, "say is this name taken?"}}),
+      player("our-client", "window", 1, 0.0, {{8.0, "say hello from the window"}}),
   };
+  r.players.back().ours = true;
+  // Our own client: the window's Remote, joined at once (its tick clock is the network's), its
+  // account file from the community's master, asked over a socket of its own.
+  gn::Transport our_login;
+  gn::open_sim_transport(our_login, net, gn::sim_address(12, 5000));
+  auto ours = std::make_unique<se::Remote>();
+  std::vector<std::string> ours_said;
+  size_t ours_heard = 0;
   const size_t n = r.players.size();
   std::vector<gn::Transport> ct(n);
   std::vector<se::ClassicClientEnd> ends(n);
@@ -186,6 +222,36 @@ Session run_session(uint32_t seed, double seconds, double login_time_s) {
     for (size_t i = 0; i < n; i++) {
       Player& p = r.players[i];
       if (t < p.join_s) continue;
+      if (p.ours) {
+        if (ours->transport == nullptr) {
+          se::ClientConfig cc;
+          cc.name = p.name;
+          cc.files = {"skins/base.pcx"};
+          cc.seed = static_cast<int>(i + 1);
+          cc.qport = static_cast<uint16_t>(1000 + i);
+          se::remote_start(*ours, ct[i], gn::sim_address(10, kPort), cc);
+          se::remote_login_from(*ours, account_file(seed, master, master_at), unix_now, &our_login);
+          ours->login->fresh = counter_fresh;
+          ours->login->fresh_ctx = &fresh_n;
+        }
+        if (next_typed[i] < p.typed.size() && t >= p.typed[next_typed[i]].first &&
+            ours->end.stage == se::ClientStage::active) {
+          const std::string& line = p.typed[next_typed[i]].second;
+          p.console.push_back("]" + (line.rfind("say ", 0) == 0 ? line.substr(4) : line));
+          se::client_command(ours->end, line);
+          next_typed[i]++;
+        }
+        se::remote_step(*ours, s[0].frame_s, ours_said);
+        // The console: what the client said, then what the server printed, as they came.
+        for (std::string& line : ours_said) p.console.push_back(line);
+        ours_said.clear();
+        for (; ours_heard < ours->end.prints.size(); ours_heard++) {
+          std::string line = ours->end.prints[ours_heard];
+          while (!line.empty() && line.back() == '\n') line.pop_back();
+          p.console.push_back(line);
+        }
+        continue;
+      }
       if (ends[i].transport == nullptr) {
         se::ClientConfig cc;
         cc.name = p.name;
@@ -216,7 +282,7 @@ Session run_session(uint32_t seed, double seconds, double login_time_s) {
   const std::vector<std::string> codes = {niclas_own, ann_own, niclas_master};
   for (size_t i = 0; i < n; i++) {
     Player& p = r.players[i];
-    const se::ClassicClientEnd& e = ends[i];
+    const se::ClassicClientEnd& e = p.ours ? ours->end : ends[i];
     p.dropped = e.stage != se::ClientStage::active;
     if (e.playernum >= 0 && e.playernum < 32) {
       // As another client on its server sees it: the first other player's view of this seat.
@@ -335,6 +401,18 @@ void run(gl::Lab& lab) {
        "on the wire types it after him: a code works once, so it logs nobody in. He cannot chat "
        "either, and is dropped when his time is up.",
        "the refusal, the chat held, the drop"},
+      {"guest-elsewhere", "A REGISTERED NAME ON A COMMUNITY'S SERVER",
+       "A guest joins the community's server as N1clas. The server keeps no accounts of its own, "
+       "so it lets the name go while it asks the master whether an account holds it; the master "
+       "says Niclas does, and the guest is renamed and told why. The answer is kept: the name is "
+       "asked once while the server runs.",
+       "the name refused soon after joining, the chat held, the drop"},
+      {"our-client", "OUR OWN CLIENT LOGS ITSELF IN",
+       "Our own client joins the community's server holding the ticket the game CLI's account "
+       "signin left from the same master. It reads the master's key in the server info, trades "
+       "the ticket for a one-time code on a socket of its own, and sends the login line: the "
+       "player types nothing and the ticket never reaches the game server.",
+       "'Logging in as Ann.', then 'Ann logged in.' and the player's chat after it"},
   };
   for (const Shot& one : shots)
     for (const Player& p : a.players)

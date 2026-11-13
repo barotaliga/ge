@@ -185,35 +185,42 @@ void GamesPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int widt
                              double t) {
   problems_.clear();
   cells_.clear();
-  const ClassicLayout l = classic_screen(width, height);
+  const ClassicLayout l = classic_screen(art, width, height);
   const ClassicPen pen{list, art, l};
-  classic_list_frame(pen, "", "games", "SELECT GAME");
+  classic_list_frame(pen, "games", "", "games", "SELECT GAME");
   const float x = kListLeft + 8;
-  // A game: its name's picture 20 px tall, its install and edition in the glyphs under it.
+  // A game: its name's picture 20 px tall (on the sequel's plates, its own plate 32 px tall), its
+  // install and edition in the glyphs under it.
+  const float name_h = art.plates() ? 32 : 20;
   float y = kListTop;
   for (int i = 0; i < count(); i++) {
     const bool game = i < static_cast<int>(rows_.size());
-    const float tall = game ? 42 : 12;
+    const float tall = game ? name_h + 22 : 12;
     cells_.push_back(pen.at(kListLeft, y, kListRight - kListLeft, tall));
-    if (i == selected_) classic_cursor(pen, game ? y + 6 : y, t);
+    if (i == selected_) classic_cursor(pen, game ? y + name_h / 2 - 4 : y, t);
     if (!game) {
       pen.text("Find another install", x, y, true);
       break;
     }
     const GameRow& g = rows_[static_cast<size_t>(i)];
+    // The name cut from the menu strips' own carved letters where they were measured, else its
+    // picture.
     const ui::Image& name = game_name_picture(g.id);
     const ui::Rect r = pen.at(x, y, 0, 20);
-    if (picture(list, name, r.x, r.y, r.h) <= 0) pen.text(g.id, x, y + 6, false);
+    if (!carve_word(pen, "game-" + g.id, x + 4, y, i == selected_) &&
+        picture(list, name, r.x, r.y, r.h) <= 0)
+      pen.text(g.id, x, y + 6, false);
     if (g.playing) {
       const std::string_view now = "playing";
-      pen.text(now, kListRight - 8 * static_cast<float>(now.size()), y + 6, false);
+      pen.text(now, kListRight - 8 * static_cast<float>(now.size()), y + name_h / 2 - 4, false);
     }
+    const float under = y + name_h + 2;
     if (g.install.empty() || g.missing) {
-      pen.text(g.missing ? "Its folder is gone." : "Not found yet.", x, y + 22, true);
-      pen.text("Enter finds its folder.", x, y + 30, true);
+      pen.text(g.missing ? "Its folder is gone." : "Not found yet.", x, under, true);
+      pen.text("Enter finds its folder.", x, under + 8, true);
     } else {
-      pen.text(g.edition.empty() ? "Found" : glyph_safe(g.edition), x, y + 22, false);
-      pen.text(fit_chars(glyph_safe(g.install), kListChars, true), x, y + 30, true);
+      pen.text(g.edition.empty() ? "Found" : glyph_safe(g.edition), x, under, false);
+      pen.text(fit_chars(glyph_safe(g.install), kListChars, true), x, under + 8, true);
     }
     y += tall + 8;
   }

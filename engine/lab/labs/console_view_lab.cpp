@@ -4,12 +4,13 @@
 // line) drawn by the 2D layer (ui/console.hpp) and pictured down, down in each charset `con_font`
 // names, half-way through its slide and closed with the notify lines over the game, then
 // autocomplete: the list under the input line, a row selected, and Enter on a cvar waiting for
-// its value, and a `+` typed on a plain command (dropped) beside a button's. Each kind of line has
+// its value, the chat line a `messagemode3` opens (console/talk.hpp), and a `+` typed on a
+// plain command (dropped) beside a button's. Each kind of line has
 // its colour. The metrics count the lines by kind and the slide's frames.
 //
 // ge:summary Lab: the drop-down console pictured down, sliding and closed, lines coloured by kind
 // ge:keywords lab console view drop-down picture scrollback chat notify slide tilde
-// ge:keywords autocomplete suggestion hint con_font charset font
+// ge:keywords autocomplete suggestion hint con_font charset font chat-line messagemode say_near
 // ge:skill console labs
 // ge:test tests/console_view_test.cpp
 #include <algorithm>
@@ -19,6 +20,7 @@
 #include <vector>
 
 #include "charset/charset.hpp"
+#include "console/talk.hpp"
 #include "console/view.hpp"
 #include "lab/lab.hpp"
 #include "ui/console.hpp"
@@ -100,7 +102,7 @@ void play_session(con::Console& c, con::ConsoleView& v) {
   line(con::LineKind::team, "(Bo): powder under the cliffs, go left");
   line(con::LineKind::whisper, "[from Ada]: race you down");
   c.execute("whisper Ada you are on");
-  c.execute("say_prox wait for me at the cornice");
+  c.execute("say_near wait for me at the cornice");
   line(con::LineKind::event, "gate 12 missed: +2 s");
   v.type("/r_bloom 0.1");
   v.key(con::EditKey::enter);
@@ -123,6 +125,8 @@ void run(ge::lab::Lab& lab) {
   const int h = static_cast<int>(lab.arg_num("height"));
   con::Console c;  // a listen game: the host sets the server's cvars
   con::ConsoleView v(c);
+  con::Talk talk;  // a multiplayer game's chat (console/talk.hpp)
+  con::add_talk(c, v, talk, {.whisper = true});
   play_session(c, v);
 
   // Down: the toggle, then frames until it rests.
@@ -190,6 +194,26 @@ void run(ge::lab::Lab& lab) {
             "con_notifytime) show at the top of the game.",
             "two lines at the top left over a dark band, nothing else of the console", inputs},
            closed);
+
+  // The chat line: U pressed in the game (messagemode3), a line to the players near half-typed.
+  c.key("u", true);
+  c.run();
+  v.type("rope down on the left");
+  v.key(con::EditKey::left);
+  Picture chat_line = backdrop(w, h);
+  draw(chat_line, v);
+  lab.shot({"chat-line",
+            "THE CHAT LINE: NEARBY",
+            "U in the game opens the chat line for the players near (messagemode3; T everyone, Y "
+            "the team): the console stays up, the line typed under the notify lines, Enter says "
+            "it with say_near and Escape drops it.",
+            "\"Nearby:\" in pale green, the typed text white, the cursor one letter from the end",
+            {{"key", "u"}, {"command", "messagemode3"}}},
+           chat_line);
+  if (!v.chatting() || v.chat_to() != con::ChatTo::nearby)
+    lab.fail("U did not open the chat line for the players near",
+             "run tests/console_talk_test.cpp; skill: console");
+  v.key(con::EditKey::escape);
 
   // Open again: the suggestions while a name is typed, the most submitted first.
   v.toggle();

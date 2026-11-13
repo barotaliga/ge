@@ -6,6 +6,7 @@
 // ge:keywords autocomplete suggestion
 // ge:skill console testing
 #include "check.hpp"
+#include "console/talk.hpp"
 #include "console/view.hpp"
 
 using namespace ge::console;
@@ -48,43 +49,18 @@ TEST(slash_is_a_command_and_plain_text_is_chat_when_con_chat_is_on) {
   CHECK(chat && command);
 }
 
-TEST(chat_goes_through_the_games_sender) {
-  Console c;
-  ConsoleView v(c);
-  std::vector<std::string> sent;
-  v.set_chat([&](ChatTo to, std::string_view nick, std::string_view text) {
-    sent.push_back(std::to_string(static_cast<int>(to)) + "|" + std::string(nick) + "|" +
-                   std::string(text));
-    return true;
-  });
-  c.execute("say hi there; say_team \"go left\"; whisper bob see you; whisper bob");
-  c.execute("say_prox over here");
-  CHECK(sent.size() == 4);
-  CHECK(sent[0] == "0||hi there" && sent[1] == "1||go left" && sent[2] == "2|bob|see you");
-  CHECK(sent[3] == "3||over here");
-  CHECK(c.problems().size() == 1);  // the whisper without a text
-}
-
-// A game's held key: `+voice_prox` talks to the players near you while the key is down.
+// A game's held key: `+duck` crouches while the key is down.
 TEST(a_held_key_is_a_button) {
   Console c;
   ConsoleView v(c);
-  const Button& talk = c.add_button("voice_prox", "+voice_prox: talk to the players near you");
-  c.execute("bind v +voice_prox");
+  const Button& talk = c.add_button("duck", "+duck: crouch while held");
+  c.execute("bind v +duck");
   c.key("v", true);
   c.run();
   CHECK(talk.down());
   c.key("v", false);
   c.run();
   CHECK(!talk.down());
-}
-
-TEST(say_prox_shown_locally) {
-  Console c;
-  ConsoleView v(c);
-  c.execute("name ada; say_prox over here");
-  CHECK(!v.lines().empty() && v.lines().back().kind == LineKind::nearby);
-  CHECK(v.lines().back().text == "(near) ada: over here");
 }
 
 // The panel's background: a flat colour by default, a gradient and an image from cfg lines.
@@ -203,6 +179,8 @@ TEST(arrows_select_and_enter_takes_the_selection) {
 TEST(scrollback_notify_and_triggers_on_game_lines) {
   Console c;
   ConsoleView v(c);
+  Talk talk;
+  add_talk(c, v, talk);
   c.execute("con_lines 64; alias gg \"say gg\"; msg_trigger gg \"wins the race\"");
   for (int i = 0; i < 100; ++i) v.add(LineKind::output, "line " + std::to_string(i));
   CHECK(v.lines().size() == 64 && v.lines().front().text == "line 36");

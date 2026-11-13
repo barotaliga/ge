@@ -7,9 +7,11 @@
 // flood rule as chat does. What the login asks of the game is done here: a line printed to the
 // player or to everyone, the seat's name set to its account's, the `*auth` key set in its user
 // info (the community's client draws it on its scoreboard), the seat dropped when its time runs
-// out. A seat's name goes through the login too, on connecting and on renaming (`name_rule`): a
-// registered name is a guest's no more (the game's default name instead), and a logged-in seat
-// keeps its account's.
+// out. The server info carries `*accountkey` (the first 16 hex digits of the key the server's
+// tickets are signed with) once it is known, for our own client to log itself in by its ticket
+// (classic_autologin.hpp). A seat's name goes through the login too, on connecting and on renaming
+// (`name_rule`): a registered name is a guest's no more (the game's default name instead), and a
+// logged-in seat keeps its account's.
 //
 // The accounts are the server's (gs::ServerConfig::accounts, account_link): the dedicated process
 // hosts its own service or opens a socket to its master (engine/server/main.cpp); a lab hands in a
@@ -30,10 +32,15 @@
 
 namespace shooters_edge::net {
 
+// The server info key that names the key the server's tickets are signed with (its first 16 hex
+// digits), set once the key is known.
+inline constexpr const char* kAccountKeyInfo = "*accountkey";
+
 struct ClassicLogin {
   ge::server::Logins logins;
   int64_t (*unix_us)() = nullptr;
   ClassicServer* server = nullptr;
+  bool advertised = false;  // *accountkey set
 };
 
 // How a classic game's names fold (high-bit coloured text), for its reserved names.

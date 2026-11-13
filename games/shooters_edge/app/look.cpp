@@ -1,11 +1,18 @@
 // ge:summary Shooter's Edge's looks: the switch's options and the palette grade
 // ge:keywords look classic modern palette grade quantize r_look r_fx_lights r_fx_glow r_bloom
 // ge:keywords r_farland r_farland_warm far-land ce_bubbles_share bubbles ce_water_specks
+// ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
+// ge:keywords noskins baseskin allskins player-skins
+// ge:keywords see-through-liquids watervis liquid_alphas
 // ge:skill render shooter
 // ge:test tests/shooters_edge_effects_test.cpp
 #include "shooters_edge/app/look.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <string>
+
+#include "brush/map_fog.hpp"
 
 namespace shooters_edge::look {
 
@@ -167,6 +174,82 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .values = "\"\": each map's own sky (the default); TEXT: the sky box of that name, "
                      "its six pictures under env/ or gfx/env/"},
           &picture.sky_name);
+  cv.bind({.name = "r_skyfog",
+           .fallback = "0.5",
+           .flags = gc::kArchive,
+           .help = "How much of a map's fog is laid over its sky.",
+           .min = 0,
+           .max = 1,
+           .values = "0..1: that share of the fog's colour over the sky (0.5 the default), where "
+                     "the map does not set its own"},
+          &picture.sky_fog);
+  cv.bind({.name = "r_wateralpha",
+           .fallback = "1",
+           .flags = gc::kArchive,
+           .help = "How solid water looks: below 1 you see through it.",
+           .min = 0,
+           .max = 1,
+           .values = "0..1: 1 solid (the default), 0.5 half see-through, 0 not drawn (a server "
+                     "can keep water solid, and a map not made to be seen through shows less)"},
+          &picture.water_alpha);
+  const struct {
+    const char* name;
+    const char* help;
+    std::string* value;
+  } kinds[] = {
+      {"r_slimealpha", "How solid slime looks.", &picture.slime_alpha},
+      {"r_lavaalpha", "How solid lava looks.", &picture.lava_alpha},
+      {"r_telealpha", "How solid a teleporter's face looks.", &picture.tele_alpha},
+  };
+  for (const auto& k : kinds)
+    cv.bind({.name = k.name,
+             .fallback = "",
+             .flags = gc::kArchive,
+             .help = k.help,
+             .kind = gc::CvarKind::text,
+             .values = "\"\": as r_wateralpha (the default); 0..1: 1 solid, 0 not drawn"},
+            k.value);
+  cv.bind({.name = "noskins",
+           .fallback = "0",
+           .flags = gc::kArchive,
+           .help = "Whether players are drawn in their own skins.",
+           .kind = gc::CvarKind::integer,
+           .min = 0,
+           .max = 2,
+           .values = "0: each in their own skin (the default); 1: everyone in the plain skin, in "
+                     "their colours; 2: their own skins, but none fetched from a server"},
+          &picture.noskins);
+  cv.bind({.name = "baseskin",
+           .fallback = "base",
+           .flags = gc::kArchive,
+           .help = "The skin of a player who names none, or one you do not have.",
+           .kind = gc::CvarKind::text,
+           .values = "TEXT: the skin of that name (base, the default); \"\": the plain skin"},
+          &picture.base_skin);
+  con.add_command(
+      "allskins", "allskins [skin]: one skin on every player; with none, each their own",
+      [&picture](gc::Console& k, const gc::Args& a) {
+        picture.all_skins = a.size() < 2 ? std::string{} : a[1];
+        k.print(picture.all_skins.empty() ? "Every player wears their own skin."
+                                          : "Every player wears " + picture.all_skins + ".");
+      });
+  con.add_command(
+      "fog",
+      "fog <density> <red> <green> <blue> [alpha] [bias]: the fog in the air, until the next map",
+      [&picture](gc::Console& k, const gc::Args& a) {
+        if (a.size() < 2) {
+          k.print(picture.fog_serial == 0 ? "The fog is the map's own."
+                                          : "The fog was last set to " + picture.fog + ".");
+          return;
+        }
+        ge::brush::MapFog f;
+        if (!ge::brush::parse_fog(a.rest(0), &f)) {
+          k.print("fog: fog <density> <red> <green> <blue> [alpha] [bias], each a number");
+          return;
+        }
+        picture.fog = ge::brush::fog_words(f);
+        ++picture.fog_serial;
+      });
   cv.bind({.name = "r_farland_warm",
            .fallback = "0",
            .help = "How much warmer the far land's air is than its own, in degrees C.",
@@ -294,6 +377,47 @@ constexpr bool kCapsulesAt[] = {false, false, false, true};
 constexpr double kNearSoft = 0.4;
 
 }  // namespace
+
+namespace {
+
+// A liquid cvar's text as a number, or `fallback` when it is empty or not one.
+double alpha_text(const std::string& text, double fallback) {
+  double v = 0;
+  return !text.empty() && ge::console::parse_number(text, v) ? v : fallback;
+}
+
+}  // namespace
+
+void liquid_alphas(const Picture& picture, const double map[4], bool allowed, double out[4]) {
+  const double water = map[0] >= 0 ? map[0] : picture.water_alpha;
+  out[0] = water;
+  out[1] = map[1] >= 0 ? map[1] : alpha_text(picture.slime_alpha, water);
+  out[2] = map[2] >= 0 ? map[2] : alpha_text(picture.lava_alpha, water);
+  out[3] = map[3] >= 0 ? map[3] : alpha_text(picture.tele_alpha, water);
+  for (int i = 0; i < 4; ++i) out[i] = allowed ? std::clamp(out[i], 0.0, 1.0) : 1.0;
+}
+
+void map_liquid_alphas(const ge::brush::Map& map, double out[4]) {
+  const char* keys[4] = {"wateralpha", "slimealpha", "lavaalpha", "telealpha"};
+  for (int i = 0; i < 4; ++i) {
+    out[i] = -1;
+    if (map.entities.empty()) continue;
+    const ge::brush::Entity& world = map.entities[0];
+    std::string text = world.get(keys[i]);
+    if (text.empty()) text = world.get(std::string("_") + keys[i]);
+    double v = 0;
+    if (!text.empty() && ge::console::parse_number(text, v)) out[i] = std::max(v, 0.0);
+  }
+}
+
+bool watervis_allowed(const std::vector<std::pair<std::string, std::string>>& serverinfo) {
+  for (const auto& [key, value] : serverinfo) {
+    if (key != "watervis") continue;
+    double v = 0;
+    return !ge::console::parse_number(value, v) || v > 0;
+  }
+  return true;
+}
 
 ba::Options world_options(Look look, ba::Options base, const Picture& picture) {
   return world_options(look, base, picture, custom_stops(picture));
