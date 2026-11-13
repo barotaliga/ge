@@ -113,6 +113,11 @@ struct Picture {
   // one skin on every player ("": each their own).
   int noskins = 0;
   std::string base_skin = "base", all_skins;
+  // teamskin, enemyskin: every teammate's or every enemy's skin ("": their own); the teamcolor and
+  // enemycolor commands' shirt and pants colours (-1: their own). A teammate shares your team
+  // with teamplay on; with it off everyone is an enemy.
+  std::string team_skin, enemy_skin;
+  int team_top = -1, team_bottom = -1, enemy_top = -1, enemy_bottom = -1;
   double far_warm = 0;  // r_farland_warm: its air warmer (or colder) than its kind's, C
   // r_lerpmodels, r_lerpmove: the models' animation drawn between frames, and (in the window's own
   // game) their places between the server's states (client/model_lerp.hpp); either look.

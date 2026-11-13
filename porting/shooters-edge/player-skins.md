@@ -54,3 +54,13 @@ behaviour) or **derived**.
 - Only the player model (`progs/player.mdl`) wears a player's skin (read, both). Corpses with a
   colormap wear their player's skin in both clients (derived); not built yet (our corpses carry no
   slot).
+
+## By side (M18i17)
+
+- `teamskin`, `enemyskin` (default empty): the skin for teammates or enemies (read, both clients;
+  one also has powerup variants, not built). A teammate's team equals the forcing team with
+  teamplay on; with it off everyone is an enemy (read).
+- `teamcolor`, `enemycolor` commands: `off`, one number (both) or two; one client clamps 0-16 then
+  the remap clamps to 0-13 (read). We clamp to 0-13. With no argument they print the value (read).
+- One client ignores all of these when serverinfo `fpd` has bit 256 (skins) or 512 (colours)
+  (read). Not built: our servers set no `fpd`.
