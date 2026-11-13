@@ -63,7 +63,7 @@ void sequel_tv_demo_update(SequelTvDemo& d, SequelTvFace& face, int64_t now_us) 
       const uint32_t count = uint32_t(raised[5]) | uint32_t(raised[6]) << 8 |
                              uint32_t(raised[7]) << 16 | uint32_t(raised[8]) << 24;
       const uint32_t next = count + static_cast<uint32_t>(d.rounds);
-      for (int i = 0; i < 4; i++) raised[size_t(5 + i)] = static_cast<uint8_t>(next >> (8 * i));
+      for (size_t i = 0; i < 4; i++) raised[5 + i] = static_cast<uint8_t>(next >> (8 * i));
       block = raised;
     }
     d.at += 4 + block.size();
