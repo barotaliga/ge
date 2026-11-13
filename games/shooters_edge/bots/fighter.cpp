@@ -5,6 +5,7 @@
 // ge:keywords fighter fighter_init fighter_command read_stats item-spot weapon-table tolerance
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_fight_test.cpp
+#include "shooters_edge/bots/floor_trap.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 
 #include <cmath>
@@ -925,6 +926,7 @@ void watch_bridges(Fighter& f, const server::RulesCommon& s) {
         shut.push_back({static_cast<int32_t>(a), l.to, l.kind, l.time_s});
     }
   }
+  floor_trap_shut(f, shut);  // the teleporters onto a floor trap's floor while it is away
   f.goal_node = -1;  // planned again
 }
 
@@ -1003,6 +1005,7 @@ void door_errand(Fighter& f, const server::RulesCommon& s, double t) {
 void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai::Why* why) {
   const double t = s.sv.time;
   const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+  floor_trap_think(f, s, me, t);  // a floor trap's button pressed on an enemy on it (floortrap)
   watch_bridges(f, s);
   const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
 
@@ -1309,6 +1312,11 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     go_to(f, f.objective);  // the way through the map (way_through.hpp) before any item
     f.goal_item = -1;       // and no item's errand (a shot at its button) kept from before
     f.unlocking = false;
+  } else if (!escaping && f.trap_press >= 0) {
+    // A floor trap's button, an enemy on its floor (floor_trap.hpp).
+    go_to(f, f.button_spots[static_cast<size_t>(
+                                f.floor_traps[static_cast<size_t>(f.trap_press)].button)]
+                 .node);
   } else if (!escaping && f.door_button >= 0) {
     go_to(f, f.button_spots[static_cast<size_t>(f.door_button)].node);  // a shut door's button
   } else if (near >= 0) {
@@ -1944,6 +1952,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   if (!dead && f.features[sh::Feature::packs])
     packs_bore(f, s, me, st, t, cmd);  // its launcher to the quad
   if (!dead) button_poke_cmd(f, s, me, t, cmd);
+  if (!dead) floor_trap_cmd(f, s, me, cmd);
   if (!dead && f.escort.leader >= 0) escort_command(f, s, me, t, msec, cmd);
 
   // The trigger: a contact in sight, the view on the aim within the weapon's width at the range.

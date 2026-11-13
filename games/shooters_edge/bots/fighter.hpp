@@ -125,6 +125,21 @@ struct ButtonSpot {
   bool shoot = false;  // opened by a shot (health over 0), not a touch
 };
 
+// A floor over lava or slime a touch button slides away (floor_trap.hpp, `floortrap`): the button
+// (an index into `Fighter::button_spots`), its floor doors (indices into `Fighter::bridges`), the
+// floor's box at rest (its linked floor doors too), the button's box, and the teleporters landing
+// on the floor.
+struct FloorTrap {
+  int32_t button = -1;
+  std::vector<int32_t> floors;
+  sh::Vec3f lo, hi;
+  sh::Vec3f blo, bhi;  // the button's box
+  // The teleporters landing on its floor: shut while the floor is away (dm2's two into the big
+  // room drop whoever takes them into the lava then).
+  std::vector<sh::NavExtraLink> teleports;
+  bool away = false;  // its floor away when last looked (the opens counted on the change)
+};
+
 // A map's exit (`trigger_changelevel`), as a player who keeps off it knows it: its box, the nodes
 // where a standing player's box would touch it, and a node beside it to stand on and show it.
 struct ExitSpot {
@@ -188,6 +203,10 @@ struct FighterStats {
   int64_t spam_shots = 0;           // rockets fired at a spot enemies come in by
   int64_t pokes = 0;                // buttons a novice tried on a whim
   int64_t door_errands = 0;         // buttons pressed for a shut door on the way (`locked`)
+  int64_t trap_presses = 0;         // a floor trap's button gone for, an enemy on it (`floortrap`)
+  int64_t trap_fired = 0;           // and its floor gone while it pressed
+  int64_t trap_opens = 0;           // a floor trap's floor seen going away, whoever pressed
+  int64_t trap_kept = 0;            // commands its keys were kept off a trap's button
   int64_t dives_given_up = 0;       // dives turned back (late, or short of air)
   double dive_wet_s = 0;            // time in the water on a dive
   int64_t outmatched = 0;           // commands spent turned from a fight it believed it loses
@@ -291,6 +310,9 @@ struct Fighter {
   };
   std::vector<Bridge> bridges;
   bool bridges_seen = false;
+  std::vector<FloorTrap> floor_traps;  // the map's floor traps (floor_trap.hpp)
+  int32_t trap_press = -1;             // the trap whose button it presses now, or -1
+  double trap_until = -1e9;            // and until when
   Mind mind;         // what it believes of its team, its claim, its calls (mind.hpp)
   Escort escort;     // a co-op companion's own state (companion.hpp; leader -1: none)
   KeyHand keys;      // the hand on the keys (feature `keys`, keyboard.hpp)
