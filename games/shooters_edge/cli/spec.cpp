@@ -24,6 +24,7 @@
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_convert.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_radar.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
@@ -36,6 +37,7 @@
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/view/hand.hpp"
 #include "vfs/unpack.hpp"
+#include "vfs/zstd.hpp"
 
 namespace shooters_edge::cli {
 
@@ -323,6 +325,66 @@ int cmd_demos_pack(gc::Ctx& ctx) {
       "shooters_edge_cli demos play " + out.filename().string());
 }
 
+// `demos convert <name> <file>`: the recording converted to the format `<file>`'s name asks for
+// (client/demo_convert.hpp), written there (beside the recording when it names no folder); a
+// packed name (`.mvdz`) is packed as the recorders pack. What the target could not hold is listed.
+int cmd_demos_convert(gc::Ctx& ctx) {
+  if (ctx.words.size() != 2)
+    return gc::refuse(ctx, 2, "demos convert takes a recording and the file to write",
+                      "shooters_edge_cli demos convert demo1.dem demo1.mvd");
+  if (!gc::need_places(ctx)) return 1;
+  const fs::path file = find_demo_file(ctx, ctx.words[0]);
+  if (file.empty())
+    return gc::refuse(ctx, 1, "no recording is called '" + ctx.words[0] + "'",
+                      "shooters_edge_cli demos");
+  fs::path out = ctx.words[1];
+  if (!out.has_parent_path()) out = file.parent_path() / out;
+  client::DemoFormat to{};
+  if (!client::format_of_name(out.string(), to))
+    return gc::refuse(ctx, 2, out.filename().string() + " names no recording format",
+                      "end the name in .dem, .qwd, .mvd or .dm2 (a z after it packs it)");
+  if (fs::exists(out))
+    return gc::refuse(ctx, 1, out.string() + " is already there",
+                      "delete or rename it, then convert again");
+  std::vector<uint8_t> bytes;
+  if (!read_bytes(file, bytes))
+    return gc::refuse(ctx, 1, "cannot read " + file.string(), "check the file's permissions");
+  std::vector<uint8_t> converted;
+  client::ConvertNotes notes;
+  std::string error;
+  if (!client::convert_demo(std::move(bytes), to, {}, converted, notes, error))
+    return gc::refuse(ctx, 1, file.filename().string() + " does not convert: " + error,
+                      "shooters_edge_cli demos convert <a .dem> <name>.mvd");
+  const std::string ext = out.extension().string();
+  const bool packed = ext.size() == 5 && (ext.back() == 'z' || ext.back() == 'Z');
+  if (packed) converted = ge::vfs::zstd_pack(converted);
+  if (!write_bytes(out, converted))
+    return gc::refuse(ctx, 1, "cannot write " + out.string(), "check the folder's permissions");
+  std::vector<std::string> dropped, rewritten;
+  std::string text = out.string() + "  " + kib(converted.size()) + ", " +
+                     std::to_string(notes.frames) + " frames\n";
+  for (const auto& [what, n] : notes.dropped) {
+    dropped.push_back(
+        json_obj({{"what", json_str(what)}, {"count", json_num(static_cast<long long>(n))}}));
+    text += "  dropped " + std::to_string(n) + "x " + what + "\n";
+  }
+  for (const auto& [what, n] : notes.rewritten) {
+    rewritten.push_back(
+        json_obj({{"what", json_str(what)}, {"count", json_num(static_cast<long long>(n))}}));
+    text += "  rewritten " + std::to_string(n) + "x " + what + "\n";
+  }
+  return gc::answer(ctx,
+                    json_obj({{"file", json_str(out.string())},
+                              {"from", json_str(file.string())},
+                              {"format", json_str(client::format_words(to))},
+                              {"bytes", json_num(static_cast<long long>(converted.size()))},
+                              {"frames", json_num(static_cast<long long>(notes.frames))},
+                              {"dropped", json_arr(dropped)},
+                              {"rewritten", json_arr(rewritten)}}),
+                    text, "converted to a " + client::format_words(to),
+                    "shooters_edge_cli demos play " + out.filename().string());
+}
+
 // `demos unpack <name>`: a replay file version 2 back to the recording's own bytes beside it.
 int cmd_demos_unpack(gc::Ctx& ctx) {
   if (ctx.words.size() != 1)
@@ -388,6 +450,9 @@ gc::Spec make() {
       {"demos pack", "<name>",
        "a recording packed as a replay file (.ged) beside it, checked to come back",
        "demos pack final", "shooters_edge", cmd_demos_pack});
+  s.commands.push_back({"demos convert", "<name> <file>",
+                        "a recording converted to the format the file's name asks for",
+                        "demos convert demo1.dem demo1.mvd", "shooters_edge", cmd_demos_convert});
   s.commands.push_back({"demos unpack", "<name>", "a replay file (.ged) back to the recording",
                         "demos unpack final.ged", "shooters_edge", cmd_demos_unpack});
   s.flags = {{"basedir", "<dir>", "the classic game's install (default: the one loaded last)"},
@@ -400,7 +465,9 @@ gc::Spec make() {
       "address is usually `host:27500`. The player's name is the setting `name`, the colours "
       "`topcolor` and `bottomcolor`; `cl_speedjump 1` asks a server for the easy jump. "
       "`demos` lists recordings and `demos play <name>` watches one; `demos pack <name>` writes "
-      "the replay file (.ged), about half the size of a packed recording.";
+      "the replay file (.ged), about half the size of a packed recording; `demos convert <name> "
+      "<file>` "
+      "writes it in another format (`demo1.dem` to `demo1.mvd`).";
   return s;
 }
 
