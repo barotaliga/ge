@@ -88,13 +88,18 @@ std::optional<con::EditKey> edit_key(uint16_t usage) {
 
 void feed_console(con::Console& c, con::ConsoleView& view, const input::Queue& queue,
                   ConsoleKeys& keys) {
-  keys.held = view.open();
-  bool toggled = false;  // the tilde went down this frame: its character types nothing
+  keys.held = view.typing();
+  bool toggled = false;    // the tilde went down this frame: its character types nothing
+  bool chat_from = false;  // the chat line opened this frame: the key's own letter types nothing
   for (const input::Event& e : queue.events) {
     if (e.type == input::EventType::text) {
       const auto cp = static_cast<uint32_t>(e.v[0]);
       const bool own = cp == '`' || cp == '~' || cp == 0xa7 || cp == 0xbd || cp == '<' || cp == '>';
-      if (view.open() && !(toggled && own)) view.type(utf8(cp));  // § ½ < > on the ISO key
+      if (view.chatting() && !chat_from) {
+        view.type(utf8(cp));
+      } else if (view.open() && !view.chatting() && !(toggled && own)) {
+        view.type(utf8(cp));  // § ½ < > on the ISO key
+      }
       continue;
     }
     if (e.type != input::EventType::key) continue;
@@ -103,14 +108,19 @@ void feed_console(con::Console& c, con::ConsoleView& view, const input::Queue& q
     if (key == "ctrl") keys.ctrl = down;
     if (key == "alt") keys.alt = down;
     if (key == "shift") keys.shift = down;
-    const bool open = view.open();
-    if (open && down) {
+    const bool typing = view.typing();
+    if (typing && down) {
       if (const auto edit = edit_key(e.code)) view.key(*edit);
     }
     if (key.empty() || (down && e.aux != 0)) continue;  // a repeat edits; it presses no bind
     if (down && (e.code == kGrave || e.code == kNonUs)) toggled = true;
     if (down) {
-      c.key(spelled(key, keys), true, open ? con::BindMode::console : con::BindMode::game);
+      // While the chat line has the keys the binds are the console's (the tilde alone), so a
+      // letter typed presses nothing in the game.
+      const bool was_chatting = view.chatting();
+      c.key(spelled(key, keys), true, typing ? con::BindMode::console : con::BindMode::game);
+      c.run();
+      if (!was_chatting && view.chatting()) chat_from = true;
     } else {
       // The console keeps a held `+` bind by the name it went down with, whatever modifiers were
       // held then; a release under every spelling finds it (the others are not held: no-ops).
@@ -119,7 +129,7 @@ void feed_console(con::Console& c, con::ConsoleView& view, const input::Queue& q
               false);
     }
     c.run();  // a toggle takes effect before the next event
-    keys.held = keys.held || view.open();
+    keys.held = keys.held || view.typing();
   }
   c.run();
 }

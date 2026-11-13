@@ -4,7 +4,9 @@
 // gradient, an optional image over it), its lines coloured by kind with the newest just over the
 // input line; the input line holds `] `, the typed text, the hint (the rest of the name Tab would
 // take, dim) and the cursor; the suggestions hang under the panel's edge with the selected row
-// lit. Up, only the notify lines show, each on a dark band at the top left.
+// lit. Up, only the notify lines show, each on a dark band at the top left, and under them the
+// chat line while a `messagemode` has it open (its prompt in the route's colour, the text, the
+// cursor).
 //
 // Sizes are at a 720 px tall reference and scale with the target's height, so a console reads
 // the same on every screen. The look is a `ConsoleStyle` a game sets; nothing here is Fall
@@ -12,7 +14,7 @@
 // style's font when it names one, or the built-in UI font when con_font names no charset.
 //
 // ge:summary The drop-down console as a draw list: panel, background, lines, input, hint, list
-// ge:keywords ui console draw drop-down panel notify suggestion hint cursor scrollback
+// ge:keywords ui console draw drop-down panel notify suggestion hint cursor scrollback chat-line
 // ge:keywords con_bgtop con_bgbottom con_bgalpha con_bgimage
 // ge:skill ui console
 // ge:test tests/ui_console_test.cpp

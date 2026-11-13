@@ -1031,6 +1031,13 @@ bool on_lobby_screen(const Listen& l) {
   return l.room && l.server != nullptr && !sv::lobby_on_map(l.room->lobby, 0);
 }
 
+bool listen_command(Listen& l, const std::string& line) {
+  if (!l.match || !l.host || l.host->command == nullptr || l.host->game == nullptr) return false;
+  l.host->command(l.host->game, line);
+  catch_up(l);
+  return true;
+}
+
 bool listen_voice(const Listen& l) {
   return l.match && l.host && l.host->speak != nullptr && l.opt.voice;
 }

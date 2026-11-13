@@ -139,23 +139,6 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
                 [this](Console&, const Args&) { toggle(); });
   c.add_command("clear", "clear: empty the console's scrollback",
                 [this](Console&, const Args&) { clear(); });
-  c.add_command(
-      "say", "say <text>: a chat line to everyone",
-      [this](Console&, const Args& a) { say(ChatTo::all, "", a.rest(0)); }, kStuffable);
-  c.add_command(
-      "say_team", "say_team <text>: a chat line to your team",
-      [this](Console&, const Args& a) { say(ChatTo::team, "", a.rest(0)); }, kStuffable);
-  c.add_command(
-      "say_prox", "say_prox <text>: a chat line to the players near you",
-      [this](Console&, const Args& a) { say(ChatTo::nearby, "", a.rest(0)); }, kStuffable);
-  c.add_command("whisper", "whisper <nick> <text>: a chat line to one player",
-                [this](Console& con, const Args& a) {
-                  if (a.size() < 3) {
-                    con.error("whisper needs a nick and a text", "usage: whisper <nick> <text>");
-                    return;
-                  }
-                  say(ChatTo::one, a[1], a.rest(1));
-                });
 }
 
 bool parse_rgb(std::string_view text, Rgb& out) {
@@ -235,6 +218,13 @@ std::vector<const ViewLine*> ConsoleView::notify() const {
 }
 
 void ConsoleView::type(std::string_view text) {
+  if (chatting_) {
+    for (char ch : text) {
+      if (ch == '\n' || ch == '\r') continue;
+      chat_input_.insert(chat_cursor_++, 1, ch);
+    }
+    return;
+  }
   for (char ch : text) {
     if (ch == '\n' || ch == '\r' || ch == '`') continue;  // the toggle key types nothing
     input_.insert(cursor_++, 1, ch);
@@ -243,6 +233,10 @@ void ConsoleView::type(std::string_view text) {
 }
 
 void ConsoleView::key(EditKey k) {
+  if (chatting_) {
+    chat_key(k);
+    return;
+  }
   switch (k) {
     case EditKey::enter: {
       // Enter on a selected cvar fills it in for its value; on anything else it runs it.
@@ -410,10 +404,72 @@ void ConsoleView::say(ChatTo to, std::string_view nick, std::string_view text) {
       add(LineKind::team, "(" + me + "): " + std::string(text));
       break;
     case ChatTo::nearby:
-      add(LineKind::nearby, "(near) " + me + ": " + std::string(text));
+      add(LineKind::nearby, me + " (nearby): " + std::string(text));
       break;
     case ChatTo::one:
       add(LineKind::whisper, "[to " + std::string(nick) + "]: " + std::string(text));
+      break;
+  }
+}
+
+void ConsoleView::open_chat(ChatTo to) {
+  chatting_ = true;
+  chat_to_ = to;
+  chat_input_.clear();
+  chat_cursor_ = 0;
+}
+
+void ConsoleView::close_chat() {
+  chatting_ = false;
+  chat_input_.clear();
+  chat_cursor_ = 0;
+}
+
+std::string_view ConsoleView::chat_prompt() const {
+  switch (chat_to_) {
+    case ChatTo::team:
+      return "Team:";
+    case ChatTo::nearby:
+      return "Nearby:";
+    case ChatTo::one:
+      return "Whisper:";
+    case ChatTo::all:
+      break;
+  }
+  return "Say:";
+}
+
+void ConsoleView::chat_key(EditKey k) {
+  switch (k) {
+    case EditKey::enter: {
+      const std::string line = chat_input_;
+      const ChatTo to = chat_to_;
+      close_chat();
+      if (line.find_first_not_of(" \t") != std::string::npos) say(to, "", line);
+      break;
+    }
+    case EditKey::escape:
+      close_chat();
+      break;
+    case EditKey::backspace:
+      if (chat_cursor_ > 0) chat_input_.erase(--chat_cursor_, 1);
+      break;
+    case EditKey::del:
+      if (chat_cursor_ < chat_input_.size()) chat_input_.erase(chat_cursor_, 1);
+      break;
+    case EditKey::left:
+      if (chat_cursor_ > 0) --chat_cursor_;
+      break;
+    case EditKey::right:
+      if (chat_cursor_ < chat_input_.size()) ++chat_cursor_;
+      break;
+    case EditKey::home:
+      chat_cursor_ = 0;
+      break;
+    case EditKey::end:
+      chat_cursor_ = chat_input_.size();
+      break;
+    default:  // Tab, the arrows up and down, the pages: nothing on one line
       break;
   }
 }
