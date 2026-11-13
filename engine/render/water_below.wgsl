@@ -26,37 +26,6 @@ struct BelowOut {
   @location(1) veil: vec4f,    // the share of it the water's own light fills
 }
 
-// The refractive index of water for red, green and blue light (656, 546 and 450 nm).
-const kWaterEta = vec3f(1.331, 1.334, 1.339);
-
-// Light leaving water into air at `cos_i` to the normal, the water's index `eta`: the exact
-// Fresnel reflectance of the two polarisations, averaged; 1 past the critical angle (total
-// internal reflection).
-fn fresnel_exit(cos_i: f32, eta: f32) -> f32 {
-  let s2 = eta * eta * max(1.0 - cos_i * cos_i, 0.0);
-  if (s2 >= 1.0) {
-    return 1.0;
-  }
-  let ct = sqrt(1.0 - s2);
-  let rs = (eta * cos_i - ct) / (eta * cos_i + ct);
-  let rp = (eta * ct - cos_i) / (eta * ct + cos_i);
-  return 0.5 * (rs * rs + rp * rp);
-}
-
-// The reflectance per colour at `cos_i`, averaged over normals tilted in the plane of incidence by
-// `tilt` rad rms: three Gauss-Hermite nodes (0 and +-sqrt(3) tilt, weighed 2/3 and 1/6 each).
-fn fresnel_exit_rough(cos_i: f32, tilt: f32) -> vec3f {
-  let a = acos(clamp(cos_i, 0.0, 1.0));
-  var r = vec3f(0.0);
-  for (var k = -1; k <= 1; k++) {
-    let c = cos(clamp(a + f32(k) * 1.7320508 * tilt, 0.0, 1.5707963));
-    let w = select(1.0 / 6.0, 2.0 / 3.0, k == 0);
-    r += w * vec3f(fresnel_exit(c, kWaterEta.r), fresnel_exit(c, kWaterEta.g),
-                   fresnel_exit(c, kWaterEta.b));
-  }
-  return r;
-}
-
 @fragment
 fn fs_below(in: VertexOut) -> BelowOut {
   let foot = max(length(dpdx(in.xz)), length(dpdy(in.xz)));

@@ -216,7 +216,8 @@ struct NavCounts {
 
 struct NavGraph {
   NavSettings set;
-  Vec3f lo, hi;  // the grid's corner and far corner (the world's bounds)
+  MoveSettings move;  // the move its links were proven with; the pilot flies with it
+  Vec3f lo, hi;       // the grid's corner and far corner (the world's bounds)
   int32_t cols = 0, rows = 0;
   std::vector<NavNode> nodes;
   std::vector<NavLink> links;             // each node's run [first_link, first_link + links)

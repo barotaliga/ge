@@ -178,7 +178,7 @@ void run(gl::Lab& lab) {
     return;
   }
   auto nav = std::make_unique<bt::MapNav>();
-  nav->move = bt::sequel_nav_move();
+  nav->move = bt::sequel_nav_move(sv::sequel_air_accelerate(*sv::sequel_of(r)));
   if (!bt::build_map_nav(*r, spec, "info_player_deathmatch", *nav, error)) {
     lab.fail("the bots' nav did not build on " + name + ": " + error,
              "Read bots/map_nav.cpp's build_map_nav. Skill: bots.");
@@ -282,6 +282,11 @@ void run(gl::Lab& lab) {
   lab.metric("firing", static_cast<double>(shots), "steps");
   lab.metric("off-blaster", alive > 0 ? off_blaster / alive : 0, "share");
   lab.metric("nav.nodes", static_cast<double>(nav->graph.nodes.size()), "nodes");
+  // The jumps the nav proved with the sequel's move (its air steers far less than the first
+  // game's, so fewer jumps across a gap reach).
+  for (const sh::NavKind k : {sh::NavKind::walk, sh::NavKind::drop, sh::NavKind::jump})
+    lab.metric(std::string("nav.links.") + sh::nav_kind_name(k),
+               static_cast<double>(nav->graph.counts.by_kind[static_cast<int>(k)]), "links");
   if (pickups == 0)
     lab.fail("no bot took an item on " + name,
              "Read the fighter's goals (bots/goals.cpp) and item_of with the sequel's arsenal "

@@ -9,6 +9,7 @@
 //
 //   root      the main menu's root with DEMOS between MULTIPLAYER and OPTIONS (modern look)
 //   classic   the same root in the classic pictures: DEMOS in its own band between the strip's
+//   classic-list  DEMOS itself in the classic look: the game's letters, never the modern slabs
 //   list      DEMOS opened on Downloads: folders, then the recordings newest first
 //   refused   ENTER on `broken.mvd`: the check's reason in the footer, nothing played
 //   game      LEFT to the game's folder: a recording of each format
@@ -21,7 +22,7 @@
 //
 // ge:summary Lab: the DEMOS page listing packed recordings, refusing a bad one, both looks' root
 // ge:keywords lab se-demos demos demo-browser browse downloads packed gz zip 7z tar check refused
-// ge:keywords menu_demos classic-root viewports
+// ge:keywords menu_demos classic-root classic-list viewports
 // ge:skill ui shooter labs
 // ge:test tests/shooters_edge_menu_test.cpp tests/shooters_edge_demo_check_test.cpp
 // ge:test tests/vfs_browse_test.cpp
@@ -358,9 +359,31 @@ void run(ge::lab::Lab& lab) {
                 "it in the picture) between MULTIPLAYER and OPTIONS, cut letter by letter from the "
                 "strips' own carved words on the pack (big glyphs on other strips), the spinning "
                 "cursor beside it.",
-                "the strip's rows in order with DEMOS third; the cursor on DEMOS",
+                "SELECT GAME first, then the strip's rows in order with DEMOS fourth; the cursor "
+                "on DEMOS",
                 {{"look", real ? "pack" : "fixture"}}},
                picture_of(std::move(img)), real || backdrop ? ge::lab::Det::measured : det);
+      // The page itself in the classic look: the game's letters, never the modern slabs.
+      g.menu.show(g.host, "demos");
+      g.menu.settle();
+      ui::DrawList page;
+      page.begin(v.w, v.h);
+      g.menu.draw(page, v.w, v.h, 0.25);
+      for (const std::string& p : g.menu.problems()) {
+        problems++;
+        lab.fail("classic demos: " + p,
+                 "fix DemosPage::draw_classic in classic_pages.cpp. Skill: ui.");
+      }
+      ui::Image list = under(v.w, v.h, backdrop ? &*backdrop : nullptr);
+      ui::render(page, list);
+      lab.shot({"classic-list",
+                real ? "DEMOS IN THE PACK'S OWN LETTERS" : "DEMOS IN THE CLASSIC LOOK'S LETTERS",
+                "DEMOS once a classic game is loaded: the place, the folder, the folders and the "
+                "recordings with their sizes in the game's own glyph sheet under the carved "
+                "title, the cursor, the keys at the foot. No modern slabs in the classic game.",
+                "glyph rows right of the plaque; the carved DEMOS title",
+                {{"look", real ? "pack" : "fixture"}}},
+               picture_of(std::move(list)), real || backdrop ? ge::lab::Det::measured : det);
     }
   }
 

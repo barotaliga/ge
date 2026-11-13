@@ -99,6 +99,9 @@ struct GameProfile {
   // body carried, the help computer): NEW GAME and `coopgame` start them with `deathmatch` 0, and
   // the runner is kept from level to level, when no single-player program is found.
   bool rules_campaign = false;
+  // The recordings played in turn behind its main menu (client/main.cpp's `menu_attract` auto),
+  // by name as `playdemo` takes them; "" none (the title's night stays).
+  std::string_view attract;
 };
 
 inline constexpr ProgramFile kClassicMultiplayer[] = {{.name = "qwprogs.dat"},
@@ -141,7 +144,9 @@ inline constexpr GameProfile kGameProfiles[] = {
      .arsenal = kClassicArsenal,
      .words = kClassicServerWords,
      .episode_maps = kClassicEpisodes,
-     .weapon_groups = kClassicGroups},
+     .weapon_groups = kClassicGroups,
+     .rules_campaign = false,
+     .attract = "demo1 demo2 demo3"},
     // The sequel: the demo's packs have no start map of the full game, so its first map.
     {.id = "sequel",
      .multiplayer_programs = kSequelPrograms,
@@ -154,7 +159,8 @@ inline constexpr GameProfile kGameProfiles[] = {
      .words = {},
      .episode_maps = {},
      .weapon_groups = kSequelGroups,
-     .rules_campaign = true},
+     .rules_campaign = true,
+     .attract = ""},  // its recordings do not play yet
 };
 
 // The first row: the classic game, the one every reader uses until a choice of game is made.

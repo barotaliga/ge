@@ -22,6 +22,7 @@
 #include <span>
 
 #include "ai/why.hpp"
+#include "shooter/pmove.hpp"
 #include "shooter/vec.hpp"
 #include "shooter/world.hpp"
 
@@ -65,10 +66,11 @@ struct WalkStart {
   bool onground = true;
   int waterlevel = 0;
   float maxspeed = 320;
-  WalkKeys pressed;                  // the keys the hands press now (flown for `delay`)
-  float delay = 0;                   // the hands' delay, s
-  float horizon = 0;                 // the flight's length, s (the delay included)
-  std::span<const OtherBox> others;  // the players near, as boxes in the flight (empty: none)
+  WalkKeys pressed;                    // the keys the hands press now (flown for `delay`)
+  float delay = 0;                     // the hands' delay, s
+  float horizon = 0;                   // the flight's length, s (the delay included)
+  std::span<const OtherBox> others;    // the players near, as boxes in the flight (empty: none)
+  const MoveSettings* move = nullptr;  // the move flown (null: the default MoveSettings)
 };
 
 struct WalkSeen {
