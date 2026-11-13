@@ -479,6 +479,7 @@ int frames(float seconds) { return std::max(1, static_cast<int>(seconds * 10 + 0
 void begin_attack(SequelServer& s, SequelMonster& m, int i) {
   const Attack& a = attack_at(m, i);
   m.attack = i;
+  m.pose.cue_attack = i;
   m.burst_frame = 0;
   m.loops = 0;
   m.aimed = false;
@@ -1021,6 +1022,14 @@ void monster_spawn(SequelServer& s) {
     e.origin = t.end;
     m.on_ground = t.fraction < 1;
   }
+  for (SequelMonster& m : s.monsters) {  // standing, where they were placed
+    m.pose.last = s.entities[size_t(m.entity)].origin;
+    const SqMonsterPoses* t = sq_monster_poses(kKinds[m.kind].classname);
+    if (t != nullptr && !t->stand.none()) {
+      m.pose.span = t->stand;
+      m.pose.frame = t->stand.first;
+    }
+  }
 }
 
 void monster_frame(SequelServer& s) {
@@ -1044,10 +1053,12 @@ void monster_frame(SequelServer& s) {
     }
     if (m.dead) {
       lie(s, m);
+      pose_monster(s, m);
       continue;
     }
     if (m.waiting || body(s, m).gone) continue;
     think(s, m);
+    pose_monster(s, m);
   }
 }
 
@@ -1092,6 +1103,7 @@ bool monster_damage(SequelServer& s, int e, int attacker, int damage, sh::Vec3f 
   if (s.level_time + 0.001 >= m.pain_at + kPainEvery && !m.leaping) {
     m.pain_at = s.level_time + (skill(s) == 3 ? 2.0 : 0.0);  // a 5 s wait at skill 3
     if (skill(s) < 3) m.pain_hold = s.level_time + 0.3;      // and no flinch
+    m.pose.cue_pain = true;
     sound(s, e, k.pain);
   }
   return true;
@@ -1196,6 +1208,8 @@ void monster_rows(SequelServer& s) {
     // The commander's body slumps from frame 1 to 24, a frame every 0.1 s from 0.1 s after a use.
     if (kind(m).prop && m.used_at >= 0)
       r.frame = std::clamp(static_cast<int>((s.level_time - m.used_at) / 0.1), 0, 24);
+    else if (sq_monster_poses(kind(m).classname) != nullptr)
+      r.frame = m.pose.frame;
   }
 }
 
