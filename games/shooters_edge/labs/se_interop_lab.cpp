@@ -237,7 +237,8 @@ const gl::LabSpec kSpec{
      {"name", "interop", "the client's name"},
      {"record", "", "write the session as a client demo to this path (empty: none)"},
      {"basedir", "", "the game's base folder (its id1 and mod folders): the map's checksum"},
-     {"forward", "0", "play through our forward on this loopback port (0: straight to the server)"}},
+     {"forward", "0",
+      "play through our forward on this loopback port (0: straight to the server)"}},
     "",
     run,
 };
