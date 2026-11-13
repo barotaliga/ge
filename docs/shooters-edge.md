@@ -1304,6 +1304,18 @@ every pass, and judged by captioned screenshots:
   pyramid still cull), since few maps were built to be seen through their water and the rooms
   under it would be missing. Where the modern look draws its own water, lava and slime, those
   passes stay as they are.
+- **Player skins** (M18i15): each player wears the picture their `skin` names,
+  `skins/<name>.tga`, `.png` or `.pcx`, the first that reads. A .pcx is the palette's: its shirt and
+  pants rows take the player's colours and its glowing rows light themselves, as the figure's own
+  skin does, its top-left 296x194 stretched over the figure (a picture over 320x200 is refused). A
+  .tga or .png is drawn as painted (halved past 1024 a side). The skins are read with the map's
+  models (`client/world_models.cpp`'s `read_player_skins`, at most 32, each kept while the morph
+  atlas holds it); a skin that turns up later shows at the next map. `baseskin` (base) is worn by a
+  player who names none or one not there, else the figure's own; `allskins <name>` puts one on
+  everyone; `noskins 1` draws every player in the figure's own skin, in their colours; your own
+  `skin` goes to the server with your colours. A name with `..` or a leading dot is refused, its
+  extension dropped, cut to 15 characters (`app/classic_models.hpp`'s `skin_key`, `choose_skin`).
+  Colours 8 to 13 read their palette rows backwards, since those rows are stored bright to dark.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
 - **Effects from the game's files** (`client/world_fx.hpp`, M18l): a file `particles/<any>.fx`

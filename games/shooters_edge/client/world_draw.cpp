@@ -754,6 +754,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .flares = on.flares,
                            .bubbles = on.bubbles,
                            .bubbles_share = f.picture->bubbles_share};
+    f.models.skin_choice = {
+        .noskins = f.picture->noskins, .base = f.picture->base_skin, .all = f.picture->all_skins};
     prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
                    in_place, fx.lights, o.dynamic_strength, &f.burning);
   }

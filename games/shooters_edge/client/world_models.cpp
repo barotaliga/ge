@@ -11,11 +11,14 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include "assets/image.hpp"
+#include "assets/tga.hpp"
 #include "brush/read.hpp"
 #include "classicenhance/cached.hpp"
 #include "classicenhance/models.hpp"
@@ -25,6 +28,7 @@
 #include "render/sprite_shapes.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/server/qc_server.hpp"
+#include "vfs/search.hpp"
 
 namespace shooters_edge::client {
 
@@ -176,6 +180,105 @@ void entity_look(const Listen& l, int e, Placed& p) {
     for (int k = 0; k < 3; k++) p.colormod[k] = x[size_t(e)].colormod[k];
 }
 
+// A 24-bit skin as the morph pass draws it: its colours as painted (no shirt or pants tinted),
+// alpha under half a hole, halved while a side is over kMaxSkinSide so the atlas holds it.
+constexpr int kMaxSkinSide = 1024;
+gr::MorphSkin true_colour_skin(ge::assets::Image img) {
+  while (img.width > kMaxSkinSide || img.height > kMaxSkinSide) {
+    ge::assets::Image half;
+    half.width = std::max(1, img.width / 2);
+    half.height = std::max(1, img.height / 2);
+    half.rgba.resize(size_t(half.width) * size_t(half.height) * 4);
+    for (int y = 0; y < half.height; y++)
+      for (int x = 0; x < half.width; x++)
+        for (int c = 0; c < 4; c++) {
+          int sum = 0;
+          for (int k = 0; k < 4; k++) {
+            const int sx = std::min(img.width - 1, 2 * x + (k & 1));
+            const int sy = std::min(img.height - 1, 2 * y + (k >> 1));
+            sum += img.rgba[(size_t(sy) * size_t(img.width) + size_t(sx)) * 4 + size_t(c)];
+          }
+          half.rgba[(size_t(y) * size_t(half.width) + size_t(x)) * 4 + size_t(c)] =
+              uint8_t((sum + 2) / 4);
+        }
+    img = std::move(half);
+  }
+  gr::MorphSkin skin;
+  stand_in_skin(skin, img);
+  return skin;
+}
+
+// THE PLAYERS' SKINS: every name under `skins/` (at most kMaxPlayerSkins, in name order), each
+// from its first of `<name>.tga`, `<name>.png` (24-bit, drawn as painted) and `<name>.pcx` (the
+// palette's, tinted) that reads, as skin-only morph models after `m.morphs`, each kept while the
+// atlas still holds every skin; one that reads in no form is said once and left out.
+void read_player_skins(const SearchPath& files, std::span<const uint8_t> palette, ModelsRead& m) {
+  std::vector<std::string> keys;
+  for (const ge::vfs::Listed& l : ge::vfs::list(files.vfs)) {
+    const std::string_view n = l.name;
+    if (!n.starts_with("skins/") ||
+        !(n.ends_with(".pcx") || n.ends_with(".png") || n.ends_with(".tga")))
+      continue;
+    std::string key = models::skin_key(n.substr(6));
+    if (!key.empty() && key.find('/') == std::string::npos && (keys.empty() || keys.back() != key))
+      keys.push_back(std::move(key));
+  }
+  std::vector<uint8_t> store;
+  std::vector<gr::AtlasRect> rects;
+  size_t left_out = 0;
+  for (const std::string& key : keys) {
+    if (m.player_skins.contains(key)) continue;
+    if (m.player_skins.size() == kMaxPlayerSkins) {
+      left_out++;
+      continue;
+    }
+    gr::MorphModel skin;
+    std::string error, tried;
+    bool read = false;
+    for (const char* ext : {".tga", ".png", ".pcx"}) {
+      const std::string path = "skins/" + key + ext;
+      const std::span<const uint8_t> bytes = find_file(files, path, store);
+      if (bytes.empty()) continue;
+      tried = path;
+      if (ext[1] == 'p' && ext[2] == 'c') {
+        ge::assets::IndexedImage picture;
+        error.clear();
+        read = ge::assets::decode_pcx(bytes, path, &picture, &error) &&
+               models::player_skin(picture, palette, &skin.skin);
+        if (!read && error.empty())
+          error = "larger than " + std::to_string(models::kPlayerPictureWidth) + "x" +
+                  std::to_string(models::kPlayerPictureHeight);
+      } else {
+        std::optional<ge::assets::Image> img =
+            ext[1] == 't' ? ge::assets::decode_tga(bytes, &error) : ge::assets::decode_png(bytes);
+        if (img && img->width > 0 && img->height > 0) {
+          skin.skin = true_colour_skin(std::move(*img));
+          read = true;
+        } else if (error.empty()) {
+          error = "not a picture this game reads";
+        }
+      }
+      if (read) break;
+    }
+    if (!read) {
+      not_drawn("skin", tried, error);
+      continue;
+    }
+    m.morphs.push_back(std::move(skin));
+    if (!gr::pack_morph_atlas(m.morphs, rects)) {
+      m.morphs.pop_back();
+      left_out++;
+      break;
+    }
+    m.player_skins.emplace(key, uint32_t(m.morphs.size() - 1));
+  }
+  if (left_out > 0)
+    ge::core::output::status("shooters_edge: " + std::to_string(m.player_skins.size()) +
+                             " player skins read, the rest left out (the atlas or the limit of " +
+                             std::to_string(kMaxPlayerSkins) +
+                             " is full): those players wear the base skin");
+}
+
 }  // namespace
 
 void place_models(const Listen& l, std::vector<Placed>& out) {
@@ -213,6 +316,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       const sv::ClientInfo& c = s.clients[size_t(e - 1)];
       p.top = colour_row(c, "topcolor", 0);
       p.bottom = colour_row(c, "bottomcolor", 0);
+      p.skin_name = sv::info_value(c.userinfo, "skin");
     }
     out.push_back(p);
     if (p.carried > 0) {  // the weapon it carries: the same place and frame, its own model
@@ -287,6 +391,7 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
     if (opened.form == ModelForm::morph) {
       const mo::Model& model = opened.morph;
       k.is = ModelKind::Is::alias;
+      k.player = name == kPlayerModel;
       k.first = uint32_t(morphs.size());
       k.frames = models::frame_groups(model);
       k.skins = models::skin_groups(model);
@@ -382,6 +487,9 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
                              std::to_string(enhanced.size()) + " skins enhanced from " +
                              load.cache.string());
   }
+  bool any_player = false;
+  for (const ModelKind& k : m.kinds) any_player = any_player || k.player;
+  if (any_player) read_player_skins(files, palette, m);
   m.ramps = models::palette_ramps(palette);
   if (!map.models.empty()) m.probe = models::make_probe(map);
   return m;
@@ -393,6 +501,7 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
   m.brush_of = std::move(read.brush_of);
   m.brushes = read.brushes;
   m.probe = std::move(read.probe);
+  m.player_skins = std::move(read.player_skins);
   const std::vector<gr::MorphModel>& morphs = read.morphs;
   const std::vector<gr::SpriteFrame>& frames = read.frames;
   if (!morphs.empty()) {
@@ -606,6 +715,8 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     m.last_pose[p.entity] = g.now;
     g.tint[0] = p.top;
     g.tint[1] = p.bottom;
+    if (k.player && p.entity > 0 && p.entity <= sh::kMaxClients)
+      g.skin = models::choose_skin(m.skin_choice, p.skin_name, m.player_skins);
     // The light on the floor under it, taken again when it has moved.
     auto [found, fresh] = m.lit.try_emplace(p.entity);
     WorldModels::Lit& lit = found->second;
