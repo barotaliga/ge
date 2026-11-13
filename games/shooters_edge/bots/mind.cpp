@@ -44,6 +44,16 @@ constexpr double kGather_s = 8;       // the gather waits this long at most
 constexpr double kPush_s = 30;        // a push lasts this long at most
 constexpr double kPushGap_s = 25;     // one player calls a push no oftener than this
 constexpr double kPushClear_s = 4;    // on the base with no enemy seen this long: the push is over
+constexpr double kFetchAhead_s = 5;   // the taker goes for an armour due this soon
+constexpr double kFetch_s = 30;       // and holds the trip this long at most
+
+// The protection an armour item gives (its kind's share of a blow times its value); 0 for others.
+float armour_gives(const ItemSpot& it) {
+  return it.kind == ItemKind::armor3   ? 0.8f * 200
+         : it.kind == ItemKind::armor2 ? 0.6f * 150
+         : it.kind == ItemKind::armor1 ? 0.3f * 100
+                                       : 0.f;
+}
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;
@@ -459,6 +469,7 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
     m.has_rl = s.status.weapon == "rl";
     m.weapon_t = t;
   }
+  if (s.status.health >= 0) m.armour = protection_of(s.status);
   if (s.status.health >= 0) {
     m.strength = static_cast<float>(s.status.health) + protection_of(s.status) +
                  (s.status.weapon == "rl" ? 50.f : 0.f);
@@ -666,6 +677,8 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
     }
     f.role = Role::free;
     mn.claim = -1;
+    if (mn.fetch >= 0) f.team->stats.fetch_end[3]++;
+    mn.fetch = -1;
     mn.claimed_said = false;
     return;
   }
@@ -867,6 +880,46 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
     mind_say(f, t, h, at);
   }
   f.role = r;
+
+  // THE TAKER (above): the team's armour taken by the nearest who needs it, the trip held.
+  if (f.features[sh::Feature::fetch]) {
+    const float mine = st.armortype * st.armor;
+    if (mn.fetch >= 0) {
+      const float gives = armour_gives(f.items[static_cast<size_t>(mn.fetch)]);
+      const bool worn = mine >= gives * 0.9f;
+      const int end = worn                                          ? -1
+                      : r == Role::carry || r == Role::rush             ? 0
+                      : due_of(f, mn.fetch, t) - t > kFetchAhead_s      ? 1
+                      : t - mn.fetch_t > kFetch_s                       ? 2
+                                                                        : 5;
+      if (worn) f.team->stats.fetched++;
+      if (end >= 0 && end < 5) f.team->stats.fetch_end[end]++;
+      if (end < 5) mn.fetch = -1;
+    }
+    if (mn.fetch < 0 && ra >= 0 && f.teamwork != MapSense::novice && r != Role::carry &&
+        r != Role::rush && reachable(f, ra) && !mate_going(f, ra, t)) {
+      const ItemSpot& it = f.items[static_cast<size_t>(ra)];
+      const float gives = armour_gives(it);
+      if (gives > 0 && mine < gives * 0.9f && due_of(f, ra, t) - t <= kFetchAhead_s) {
+        const double run = f.reach.cost(it.node);
+        bool ahead = false;
+        for (const Mate& m : mn.mates) {
+          if (ahead || t - m.at_t >= mate_fresh_s(f)) continue;
+          const bool needs = m.armour < 0 || t - m.strength_t >= kMateFresh_s || m.armour < gives * 0.9f;
+          ahead = needs && run_s(f, m.at, it.node) < run;
+        }
+        if (!ahead) {
+          mn.fetch = ra;
+          mn.fetch_t = t;
+          f.team->stats.fetches++;
+          Said c;
+          c.kind = SayKind::coming;
+          c.item = item_call(it);
+          mind_say(f, t, c, at);
+        }
+      }
+    }
+  }
 
   // An expert who knows where all his team is knows where it is not: a key area none of them is
   // in (nor he) is likely the enemy's, the most valuable of them the one to take back.

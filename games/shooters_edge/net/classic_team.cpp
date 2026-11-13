@@ -389,6 +389,17 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           why = std::max(why, w);
         }
         r.lying_why[ki][static_cast<size_t>(why)]++;
+        // Whether anyone alive could take it: an armour is refused to one whose own protection
+        // (type times value) is at least its own; anything else anyone takes.
+        const float gives = kind == 0 ? 0.3f * 100 : kind == 1 ? 0.6f * 150 : 0.8f * 200;
+        bool taker = kind > 2;
+        for (int k = 0; k < n && !taker; k++) {
+          const int sl = r.players[static_cast<size_t>(k)].slot;
+          if (sl < 0 || s.sv.edicts[static_cast<size_t>(sl) + 1].health <= 0) continue;
+          const auto& num = s.world.clients[static_cast<size_t>(sl)].numbers;
+          taker = num.armour_type * num.armour < gives;
+        }
+        if (taker) r.lying_takers[ki]++;
       }
     }
 
@@ -723,6 +734,9 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.teams[t].messages = ts.messages;
     r.teams[t].lost_seen = ts.lost_seen;
     r.teams[t].retakes = ts.retakes;
+    r.teams[t].fetches = ts.fetches;
+    r.teams[t].fetched = ts.fetched;
+    for (int e = 0; e < 5; e++) r.teams[t].fetch_end[e] = ts.fetch_end[e];
     r.teams[t].pushes = ts.pushes;
     r.teams[t].joins = ts.joins;
     r.teams[t].spam_shots = ts.spam_shots;

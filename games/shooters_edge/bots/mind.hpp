@@ -35,6 +35,14 @@
 // nearest of the launcher and the best armour: the quad, where a map has one, is taken first. A
 // rusher whose quad is gone claims the nearest of those two no mate holds, as at the opening.
 //
+// THE TAKER (`fetch`): the team's armour (the one it holds) is taken by whoever needs it, not left
+// lying under a holder who cannot take it. A player whose own armour is worse than it, as it comes
+// up (believed there, or due within `kFetchAhead_s`), with no mate said to be going for it, who
+// believes himself the nearest of his team that needs it (a mate's status said his armour; one
+// whose armour he does not know counted as needing it) says `coming X` and goes, the trip held
+// (no short goals, no other item) until he wears it, believes it taken, backs off, dies or
+// `kFetch_s` has passed.
+//
 // THE PUSH: a team that loses its base (the map plan's held armour) takes it back together, not
 // one by one as each comes back in (one at a time feeds the holders a frag apiece). A strong
 // player who believes the base the enemy's (an enemy seen or called out in it within
@@ -92,6 +100,7 @@ struct Mate {
   bool has_rl = false;       // and whether it was the launcher
   double holds_t = -1e9;     // when he last said his area is safe
   float strength = 100;      // health plus armour's protection, a launcher counted extra
+  float armour = -1;         // his armour's protection as his status said it (-1: never said)
   int32_t going = -1;        // the item he said he is coming for
   int32_t holds = -1;        // the key item whose area he holds
   int slot = -1;             // his player slot, once seen
@@ -139,6 +148,9 @@ struct Mind {
   int32_t claim = -1;            // the key item whose area it claimed (-1: none)
   int32_t gave = -1;             // the item it gave up last
   int32_t retake = -1;           // a key area believed lost: to take back (-1: none)
+  // THE TAKER (`fetch`): the armour it goes for as its team's taker (-1: none), since when.
+  int32_t fetch = -1;
+  double fetch_t = -1e9;
   double retake_t = -1e9;        // when it was last believed lost
   // THE TEAM'S STRATEGY (talk.hpp `Strategy`), as its leader last said it and this player read
   // it: the items it is about (-1: none), when it was taken up, and an "ok" owed for it.
