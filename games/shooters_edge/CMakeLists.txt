@@ -72,6 +72,14 @@ target_link_libraries(shooters_edge_bots_cli PRIVATE shooters_edge_classic ge_fl
 set_target_properties(shooters_edge_bots_cli PROPERTIES OUTPUT_NAME shooters_edge_bots
                       RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# The hops, headless (net/hops_main.cpp), named `shooters_edge_hops` on disk at the build's root:
+# our forward, proxies or TV node as a process of its own, for any classic client. `--help` lists
+# its kinds and flags.
+add_executable(shooters_edge_hops_cli net/hops_main.cpp)
+target_link_libraries(shooters_edge_hops_cli PRIVATE shooters_edge_classic ge_proxy ge_flags)
+set_target_properties(shooters_edge_hops_cli PROPERTIES OUTPUT_NAME shooters_edge_hops
+                      RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # Its HUD (hud/): the player's status snapshot, the HUD's pictures (the free set painted in code),
 # and the three looks over the engine's HUD layout with their hud_ cvars. No GPU: the CPU raster
 # draws it in the `se-hud` lab and the tests (skill: ui). Headers are spelled
