@@ -162,8 +162,33 @@ bool face_hit(const ge::brush::Map& m, const sh::Vec3f& from, const sh::Vec3f& a
 // The surface nearest `at` (map units) within kNearSurfaceU along the six axes: its normal (out of
 // it, engine axes, unit) and how far off it is (m); false in the open.
 constexpr float kNearSurfaceU = 40;
+// A map of brushes (the 38 family) has no clip hulls to trace: the face a line through `at` from
+// `back` units behind it along `dir` crosses there (face_hit), its normal (engine axes).
+bool brush_face_near(const LoadedMap& m, const sh::Vec3f& at, const sh::Vec3f& dir, float back,
+                     double normal[3]) {
+  const sh::Vec3f from = {at.x - dir.x * back, at.y - dir.y * back, at.z - dir.z * back};
+  uint32_t texture = 0;
+  sh::Vec3f n{};
+  ge::detail::SurfaceClass sc = ge::detail::SurfaceClass::unknown;
+  float light[3], st[2];
+  if (!face_hit(m.bsp.map, from, at, &texture, &n, &sc, light, st)) return false;
+  engine_dir(n, normal);
+  return true;
+}
+
 bool surface_near(const LoadedMap& m, const sh::Vec3f& at, double normal[3], double* off_m) {
-  if (m.bsp.world.models.empty()) return false;
+  if (m.bsp.world.models.empty()) {  // brushes: the face a few units off along each axis
+    for (int axis = 0; axis < 3; ++axis)
+      for (const float sign : {-1.0f, 1.0f}) {
+        const sh::Vec3f dir = {axis == 0 ? sign : 0.0f, axis == 1 ? sign : 0.0f,
+                               axis == 2 ? sign : 0.0f};
+        if (brush_face_near(m, at, dir, kNearSurfaceU, normal)) {
+          *off_m = 0;
+          return true;
+        }
+      }
+    return false;
+  }
   const sh::Hull& hull = m.bsp.world.models[0].hulls[0];
   float best = 1;
   for (int axis = 0; axis < 3; ++axis)
@@ -186,7 +211,6 @@ bool surface_near(const LoadedMap& m, const sh::Vec3f& at, double normal[3], dou
 constexpr float kStruckU = 96;
 bool struck_along(const LoadedMap& m, const std::unordered_map<int, FxState::Flight>& flights,
                   const sh::Vec3f& at, double normal[3], double* off_m) {
-  if (m.bsp.world.models.empty()) return false;
   const FxState::Flight* best = nullptr;
   float nearest = kStruckU * kStruckU;
   for (const auto& [e, f] : flights) {
@@ -198,6 +222,11 @@ bool struck_along(const LoadedMap& m, const std::unordered_map<int, FxState::Fli
     }
   }
   if (best == nullptr) return false;
+  if (m.bsp.world.models.empty()) {  // brushes: the face its flight crossed there
+    if (!brush_face_near(m, at, best->dir, kNearSurfaceU, normal)) return false;
+    *off_m = 0;
+    return true;
+  }
   const sh::Hull& hull = m.bsp.world.models[0].hulls[0];
   const sh::Vec3f to = {at.x + best->dir.x * kNearSurfaceU, at.y + best->dir.y * kNearSurfaceU,
                         at.z + best->dir.z * kNearSurfaceU};

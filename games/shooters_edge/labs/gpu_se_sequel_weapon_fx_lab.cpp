@@ -17,6 +17,7 @@
 // ge:keywords rocket grenade sparks glow-trail rail-beam modern-look screenshot
 // ge:skill render labs
 // ge:test tests/shooters_edge_listen_test.cpp
+#include <cmath>
 #include <map>
 #include <memory>
 #include <string>
@@ -59,22 +60,29 @@ namespace sv = shooters_edge::server;
 constexpr double kTic = 0.013;
 
 struct Shot {
-  sv::SqWeapon weapon;
   const char* id;
-  int ticks;  // frames from the trigger to the picture
   const char* look_for;
+  int ticks;  // frames from the trigger to the picture
+  sv::SqWeapon weapon;
+  // At the floor a few steps ahead, the trigger pulled once and the picture from the eye: the marks
+  // the hits leave (bullet holes, a blast's scorch).
+  bool wall = false;
 };
 constexpr Shot kShots[] = {
-    {sv::SqWeapon::blaster, "blaster", 14, "a yellow bolt in flight, its glow on the walls"},
-    {sv::SqWeapon::shotgun, "shotgun", 12, "the pellets' sparks where they hit"},
-    {sv::SqWeapon::super_shotgun, "super-shotgun", 6, "a wider spray of sparks"},
-    {sv::SqWeapon::machinegun, "machinegun", 30, "a line of bullet sparks walking up the wall"},
-    {sv::SqWeapon::chaingun, "chaingun", 50, "a dense spray of sparks"},
-    {sv::SqWeapon::grenade_launcher, "grenade-launcher", 30, "a grenade arcing with its smoke"},
-    {sv::SqWeapon::rocket_launcher, "rocket-launcher", 18, "a rocket's smoke and flame trail"},
-    {sv::SqWeapon::hyperblaster, "hyperblaster", 24, "a stream of yellow bolts, lit"},
-    {sv::SqWeapon::railgun, "railgun", 4, "the rail's straight blue line from gun to wall"},
-    {sv::SqWeapon::bfg, "bfg", 95, "the green ball in flight, the room lit green"},
+    {"blaster", "a yellow bolt in flight, its glow on the walls", 14, sv::SqWeapon::blaster},
+    {"shotgun", "the pellets' sparks where they hit", 12, sv::SqWeapon::shotgun},
+    {"super-shotgun", "a wider spray of sparks", 6, sv::SqWeapon::super_shotgun},
+    {"machinegun", "a line of bullet sparks walking up the wall", 30, sv::SqWeapon::machinegun},
+    {"chaingun", "a dense spray of sparks", 50, sv::SqWeapon::chaingun},
+    {"grenade-launcher", "a grenade arcing with its smoke", 30, sv::SqWeapon::grenade_launcher},
+    {"rocket-launcher", "a rocket's smoke and flame trail", 18, sv::SqWeapon::rocket_launcher},
+    {"hyperblaster", "a stream of yellow bolts, lit", 24, sv::SqWeapon::hyperblaster},
+    {"railgun", "the rail's straight blue line from gun to wall", 4, sv::SqWeapon::railgun},
+    {"bfg", "the green ball in flight, the room lit green", 95, sv::SqWeapon::bfg},
+    {"super-shotgun-marks", "a bullet hole where each pellet struck, spread as the shot spread",
+     200, sv::SqWeapon::super_shotgun, true},
+    {"rocket-marks", "the black scorch the rocket's blast left on the floor", 160,
+     sv::SqWeapon::rocket_launcher, true},
 };
 constexpr const char* kLooks[] = {"classic", "modern"};
 
@@ -159,7 +167,12 @@ void report(gl::Lab& lab, const Shot& shot, const cl::Listen& l, const Seen& see
   lab.metric(key + "bfg", seen.bfgs, "count");
   std::map<std::string, int> named;
   for (const cl::Effect& e : l.effects) named[e.name.empty() ? "classic" : e.name]++;
-  for (const auto& [name, n] : named) lab.metric(key + "effect." + name, n, "count");
+  for (const auto& [name, n] : named) {
+    std::string metric = key;
+    metric += "effect.";
+    metric += name;
+    lab.metric(metric, n, "count");
+  }
 }
 
 // The trigger held for the shot's frames (`each` after every frame).
@@ -174,13 +187,13 @@ void fire(cl::Listen& l, const Shot& shot, Each each) {
   }
 }
 
-// The yaw (degrees, 15 apart) whose level line from the player's eye runs farthest before a wall,
-// so the shot is seen flying and landing rather than against the wall in front.
-float longest_line(const cl::Listen& l) {
+// The yaw (degrees, 15 apart) whose level line from the player's eye runs nearest `want` units
+// before a wall: far, so a shot is seen flying and landing; a few steps, to see its marks.
+float line_of(const cl::Listen& l, float want) {
   ge::brush::BrushTracer tracer(l.map->bsp.map);
   const sh::Vec3f o = l.server->world.entities[1].origin;
   const float eye[3] = {o.x, o.y, o.z + 22}, zero[3] = {0, 0, 0};
-  float best = 0, best_yaw = 0;
+  float best = 1e9f, best_yaw = 0;
   for (int k = 0; k < 24; k++) {
     const float a = static_cast<float>(k) * 15.0f;
     const float r = a * 3.14159265f / 180.0f;
@@ -188,8 +201,9 @@ float longest_line(const cl::Listen& l) {
                sn = static_cast<float>(ge::core::libm::sin(r));
     const float end[3] = {eye[0] + 3000 * c, eye[1] + 3000 * sn, eye[2]};
     const ge::brush::Trace t = tracer.trace(eye, end, zero, zero, sh::kSqSolid);
-    if (t.fraction > best) {
-      best = t.fraction;
+    const float miss = std::abs(t.fraction * 3000 - want);
+    if (miss < best) {
+      best = miss;
       best_yaw = a;
     }
   }
@@ -198,6 +212,7 @@ float longest_line(const cl::Listen& l) {
 
 void counts_only(gl::Lab& lab) {
   for (const Shot& shot : kShots) {
+    if (shot.wall) continue;  // pictures only
     std::string error;
     std::unique_ptr<cl::LoadedMap> map = hall(error);
     cl::ListenOptions opt = shooters_edge::net::listen_options();
@@ -265,13 +280,11 @@ void run(gl::Lab& lab) {
       }
       // Turn to the aim (none given: the longest clear line from the eye), then arm.
       for (int i = 0; i < 20; i++) cl::listen_frame(l, {});
-      if (nums.empty()) yaw = longest_line(l);
-      for (int i = 0; i < 20; i++) {
-        sh::MoveCmd cmd;
-        cmd.msec = 13;
-        cmd.angles = {pitch, yaw, 0};
-        cl::listen_frame(l, cmd);
-      }
+      if (nums.empty()) yaw = line_of(l, 3000.0f);
+      // At the floor a few steps ahead: the marks face the eye.
+      const float tilt = shot.wall ? 35.0f : pitch;
+      l.view = {tilt, yaw, 0};  // the listen sends its own view with every command
+      for (int i = 0; i < 20; i++) cl::listen_frame(l, {});
       if (!arm(l, shot)) {
         lab.fail(std::string(shot.id) + ": the weapon was not raised",
                  "Check sq_choose takes it with its ammo. Skill: shooter.");
@@ -309,7 +322,7 @@ void run(gl::Lab& lab) {
         cl::draw_world(*device, *frame, v, fx, nullptr, kTic, {}, out.view);
       };
       sh::MoveCmd aim;
-      aim.angles = {pitch, yaw, 0};
+      aim.angles = {tilt, yaw, 0};
       aim.msec = 13;
       // The modern look's eye adapts to the scene over its first frames: drawn a while before
       // the trigger, so the picture is not taken through an eye still settling.
@@ -320,17 +333,19 @@ void run(gl::Lab& lab) {
       seen = {};
       for (int i = 0; i < shot.ticks; i++) {
         sh::MoveCmd cmd = aim;
-        cmd.buttons = sh::kButtonAttack;
+        if (!shot.wall || i < 4) cmd.buttons = sh::kButtonAttack;
         cl::listen_frame(l, cmd);
         step(i);
       }
-      if (std::string_view(look_name) == "modern") report(lab, shot, l, seen);
+      if (std::string_view(look_name) == "modern" && !shot.wall) report(lab, shot, l, seen);
       // The eye a step behind the player and beside him, so the shot is seen across its path.
       const double fx_ = ge::core::libm::sin(v.heading), fz = ge::core::libm::cos(v.heading);
-      v.eye[0] += -fx_ * 0.8 + fz * 0.5;
-      v.eye[2] += -fz * 0.8 - fx_ * 0.5;
-      v.eye[1] += 0.3;
-      v.heading -= 0.2;
+      if (!shot.wall) {
+        v.eye[0] += -fx_ * 0.8 + fz * 0.5;
+        v.eye[2] += -fz * 0.8 - fx_ * 0.5;
+        v.eye[1] += 0.3;
+        v.heading -= 0.2;
+      }
       cl::FxFrame still = fx;  // the same moment again: nothing born twice, nothing moved
       still.births.clear();
       cl::draw_world(*device, *frame, v, still, nullptr, 0, {}, out.view);
@@ -340,8 +355,9 @@ void run(gl::Lab& lab) {
                 std::string(sv::kSqWeapons[static_cast<int>(shot.weapon)].name) + ", " + look_name,
                 std::string("The ") + sv::kSqWeapons[static_cast<int>(shot.weapon)].name +
                     " fired on " + map_name + " in the " + look_name +
-                    " look, seen from behind and beside the player " + std::to_string(shot.ticks) +
-                    " frames after the trigger.",
+                    (shot.wall ? " look at the floor a few steps ahead, seen from the eye "
+                               : " look, seen from behind and beside the player ") +
+                    std::to_string(shot.ticks) + " frames after the trigger.",
                 shot.look_for,
                 {{"map", map_name}, {"weapon", shot.id}, {"look", look_name}}},
                gl::Picture{int(img.width), int(img.height), img.rgba}, gl::Det::measured);
