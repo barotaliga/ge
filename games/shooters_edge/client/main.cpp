@@ -506,12 +506,23 @@ int run_main(int argc, char** argv) {
   // The map's place names, read as it starts and made in the game (client/place_names.hpp).
   cl::PlaceNames places;
   places.game_dir = std::filesystem::path(args.basedir) / args.game;
-  cl::add_place_commands(console, places, adapter, files, [&listen](ge::shooter::Vec3f& at) {
-    if (listen.server == nullptr || !listen.map || listen.server->world.entities.size() < 2)
-      return false;
-    at = listen.server->world.entities[1].origin;
-    return true;
-  });
+  // Where the player is: the view of a server joined or a demo played (its eye less its height),
+  // else the window's own game.
+  struct Watched {
+    bool on = false;
+    ge::shooter::Vec3f at{0, 0, 0};
+  } place_seen;
+  cl::add_place_commands(
+      console, places, adapter, files, [&listen, &place_seen](ge::shooter::Vec3f& at) {
+        if (place_seen.on) {
+          at = place_seen.at;
+          return true;
+        }
+        if (listen.server == nullptr || !listen.map || listen.server->world.entities.size() < 2)
+          return false;
+        at = listen.server->world.entities[1].origin;
+        return true;
+      });
   // DEMOS: the game's recordings anywhere on the machine, each checked before it plays.
   const auto demo_places = [&] {
     game_menu.demos().set_game_places(
@@ -1265,7 +1276,10 @@ int run_main(int argc, char** argv) {
     }
 
     // A map started on the window's own server: its place names read (the same map keeps them).
-    if (!remote.active && listen.map) cl::map_started(places, adapter, files, listen.map->name);
+    if (!remote.active && !bench.active && listen.map) {
+      place_seen.on = false;
+      cl::map_started(places, adapter, files, listen.map->name);
+    }
 
     // Co-op as the window's mode: `sv_coop` turned on, the friendly-fire settings, the episodes.
     cl::coop_frame(coop_mode, listen, game_content.campaign != nullptr, game_content.start_map,
@@ -1414,12 +1428,15 @@ int run_main(int argc, char** argv) {
       for (const std::string& line : said) console.print(line);
       // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.
       const cl::DemoState& ds = drawn_remote ? remote.demo.state : cl::demo_drawn(bench);
+      place_seen.on = !ds.map.empty();
+      place_seen.at = {ds.eye.x, ds.eye.y, ds.eye.z - ds.view_height};
       if (step == cl::TimedemoStep::new_level) {
         // The game folder the recording's server ran, mounted when the window is not on it.
         std::vector<std::string> lines;
         const cl::SearchPath& from =
             cl::demo_folder(bench_folder, args.basedir, args.game, ds, files, lines);
         for (const std::string& line : lines) console.print("playdemo: " + line);
+        cl::map_started(places, adapter, from, ds.map);  // its place names, from where it played
         bench_map = cl::load_named_map(from, ds.map, error);
         if (!bench_map) {
           if (!end_bench("the demo's map " + ds.map + ": " + error, t)) return 1;
