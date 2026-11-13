@@ -25,6 +25,10 @@ inline constexpr float kGapUp = 32;          // and within this up or down
 // on the ground this long at most (s) before the gap is given up.
 inline constexpr float kGapTurnSpeed = 150, kGapTurnOff = 60;
 inline constexpr double kGapTurnMost_s = 1.5;
+// And turned, a gap too near to curve into is backed off from to this far behind its lip on its
+// line (within `kGapBackNear`), until this long after the turn began (s).
+inline constexpr float kGapTurnBack = 180, kGapBackNear = 40;
+inline constexpr double kGapBackMost_s = 4;
 inline constexpr float kGapCurveFrom = 160;  // a curve into a gap begun this near its start, units
 
 // Whether a jump pressed at `at` moving at `velocity` comes down across, by the gap's landing `T`:

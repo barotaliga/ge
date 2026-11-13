@@ -415,6 +415,8 @@ struct Pilot {
   // (`gapturn`) the gap turned to (its start node) and since when (`clock_s`)
   int32_t gap_turn_node = -1;
   double gap_turn_s = 0, gap_turn_last_s = -1e9;
+  bool gap_back = false;  // this command: running back to the curve's start, `gap_back_at`
+  Vec3f gap_back_at{};
   NavExtraLink gap_link;     // the gap jumped (`gap_flight`): judged where it comes down
   bool gap_aloft = false;    // and its flight has left the ground (a bot's keys may press late)
   double gap_pressed_s = 0;  // when its jump was pressed (`clock_s`)

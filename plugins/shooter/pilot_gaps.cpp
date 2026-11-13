@@ -388,6 +388,30 @@ bool gap_takeoff(Pilot& p, const PilotSense& s, int msec, const char*& because, 
       return false;
     }
   }
+  if (p.set.gap_turn && p.gap_turn_node == p.route[gk] && p.clock_s - p.gap_turn_s < kGapBackMost_s) {
+    // Turned, and too near for a curve to build the jump's speed: back to where people's curve
+    // begins (`kGapTurnBack` behind the lip, on its line), the curve taken from there
+    // (gap_curve, gap_run: ~180 units/s, a curve to ~490 in 0.4 s).
+    p.gap_turn_last_s = p.clock_s;
+    const Vec3f P{S.x - dir.x * kGapTurnBack, S.y - dir.y * kGapTurnBack, s.origin.z};
+    const float along = dot(Vec3f{s.origin.x - S.x, s.origin.y - S.y, 0}, dir);
+    // The way back on the lip's floor: no wall between, the floor under it every 32 units (a
+    // walkway too short behind its lip backs off into the water).
+    bool floor_back = s.world != nullptr;
+    const Vec3f from{S.x, S.y, s.origin.z};
+    if (floor_back && player_trace(*s.world, from, P).fraction < 1) floor_back = false;
+    for (float b = 32; floor_back && b <= kGapTurnBack; b += 32) {
+      const Vec3f at{S.x - dir.x * b, S.y - dir.y * b, s.origin.z};
+      const HullTrace tr = player_trace(*s.world, at, {at.x, at.y, at.z - kStepHeight - 2});
+      floor_back = !tr.startsolid && tr.fraction < 1;
+    }
+    if (floor_back && along > -kGapTurnBack + kGapBackNear) {
+      p.gap_back = true;
+      p.gap_back_at = P;
+      because = "a gap trick too near: back to its curve's start";
+      return false;
+    }
+  }
   p.stats.gap_refused++;
   if (gl != nullptr) gap_off(p, {p.route[gk], p.route[gk + 1], NavKind::jump, gl->time_s});
   replanned = true;  // the caller plans again
