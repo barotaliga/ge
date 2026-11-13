@@ -1598,6 +1598,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         because = "a landing: jump on it";
         p.safe_flight = false;
         if (w.jump && p.gap_k >= 0 && static_cast<size_t>(p.gap_k) >= p.k) {
+          p.gap_back = false;
           w.jump = gap_takeoff(p, s, msec, because, replanned);
           if (replanned) replan(p, s);  // the gap given up: the goal planned round it
           if (w.jump && p.gap_flight && p.set.curve_keys && p.curve_keys_last != kNoCurveKeys) {
@@ -1613,6 +1614,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
             w.forward = 1;
             w.side = 0;
             w.yaw = unwrap(aim_yaw, p.yaw);
+            // (`gapturn`) Backing off to the gap's curve: the run there, turned under the view.
+            if (p.gap_back) w.yaw = unwrap(yaw_at(s.origin, p.gap_back_at), p.yaw);
           }
         }
         if (w.jump && p.set.hop_headroom && s.world != nullptr &&
