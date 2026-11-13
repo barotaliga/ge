@@ -32,13 +32,16 @@
 //   kBeamLights - 2, its `light_cd` shared among them, each as soft as the spacing), and one at
 //   the hit (`hit_cd`, a little off the surface): render/lights.hpp's `LocalLight`s, at the
 //   beam's level of this frame.
-// - THE BURN (`beam_burns`): where a held beam lands it leaves a scorch (`scorch_m` across) every
-//   `scorch_every_s` while it lands, and at once wherever the hit has moved a third of a scorch
-//   from the last one; a hit that jumped further between two frames gets its burns half a scorch
-//   apart along the jump, one each time the caller asks, so a beam swept over a wall leaves an
-//   unbroken black trail at any frame rate. The caller
-//   presses each onto its world (engine/detail's `place_decal`, a scorch); a fresh burn glows
-//   (`ember_s`, `ember_cd`) and cools to the soot it leaves, read by `ember_level`.
+// - THE BURN (`beam_burns`): where a held beam sweeps over a surface it traces a burnt LINE
+//   (`line_m` wide): a piece from where the last one ended to the hit once the hit has moved
+//   `line_piece_m` (at most `line_most_m` a piece, so a fast sweep asks again to fill the rest),
+//   each piece overlapping the last by its width so the pieces read as one line. Held still on one
+//   spot (`melt_after_s`) the line is laid on to it and it MELTS the wall: a pool `melt_m` across,
+//   pressed again every `melt_every_s` larger, up to `melt_most_m` after `melt_grow_s`, in its own
+//   slot (the same `BeamBurn::melt` number). A hit that jumps off its face (another wall, a ledge's
+//   far side) starts a new line there instead of drawing one through the air. The caller presses
+//   each onto its world (engine/detail's `place_decal`: a burn_line or a melt); a fresh burn glows
+//   (`ember_s`, `ember_cd`) and cools to the black it leaves, read by `ember_level`.
 //
 // Pure: the same look, shot and time give the same channel, levels, lights and burns (every
 // random draw a hash of the shot's seed, the strike and the step; ge::core::libm for the sines).
@@ -46,7 +49,7 @@
 // ge:summary Lightning beams: the channel, re-striking, flicker, the lights, scorches and embers
 // ge:keywords render beam lightning arc bolt electric plasma channel strike flicker shimmer
 // ge:keywords filament braid fork branch core glow sheath scorch burn ember beam_level
-// ge:keywords build_beam beam_lights beam_burns beam_knobs thunderbolt weapon-effect core_keys
+// ge:keywords build_beam beam_lights beam_burns beam_knobs burn-line melt thunderbolt weapon-effect core_keys
 // ge:keywords glow_keys keyed-brightness exposure night
 // ge:skill render
 // ge:test tests/render_beam_test.cpp
@@ -96,10 +99,16 @@ struct BeamLook {
   float hit_cd = 1800;      // the light where it lands, cd
   float root_cd = 200;      // the light at its root, by the source (a gun's muzzle), cd
   float light_rgb[3] = {0.55f, 0.65f, 1.0f};
-  float scorch_m = 0.55f;        // a burn's size across
-  float scorch_every_s = 0.35f;  // a new burn while it lands on one spot
-  float ember_s = 1.2f;          // how long a fresh burn glows
-  float ember_cd = 400;          // its glow at first, cd/m^2
+  float line_m = 0.18f;        // the burnt line's width
+  float line_piece_m = 0.25f;  // a new piece of it once the hit has moved this far
+  float line_most_m = 0.8f;    // a piece's longest
+  float melt_after_s = 0.2f;   // held on one spot this long, it starts to melt the wall
+  float melt_every_s = 0.08f;  // the melt pressed again, larger, this often
+  float melt_m = 0.18f;        // the melt's size across when it starts
+  float melt_most_m = 0.8f;    // and at its largest
+  float melt_grow_s = 3.0f;    // how long it takes to grow from one to the other
+  float ember_s = 1.2f;        // how long a fresh burn glows
+  float ember_cd = 400;        // its glow at first, cd/m^2
 };
 
 inline constexpr int kBeamFilaments = 3;
@@ -120,7 +129,7 @@ struct BeamKnob {
   float BeamLook::*field;
   float lo, hi;
 };
-inline constexpr int kBeamKnobs = 30;
+inline constexpr int kBeamKnobs = 36;
 const BeamKnob* beam_knobs();
 // Set knob `name` (clamped to its ends); false for an unknown name.
 bool set_beam_knob(BeamLook& look, std::string_view name, float value);
@@ -168,26 +177,35 @@ void build_beam(const BeamLook& look, const BeamShot& shot, double t_s, BeamShap
 // candela). Returns how many.
 int beam_lights(const BeamLook& look, const BeamShot& shot, double t_s, LocalLight* out);
 
-// THE BURNS: one scorch the beam leaves.
+// THE BURNS: one piece of the line the beam burns, or its melt.
 struct BeamBurn {
-  double at[3] = {0, 0, 0};
+  double at[3] = {0, 0, 0};  // the piece's middle, the melt's centre
   double normal[3] = {0, 0, -1};
-  double size_m = 0;
-  double spin_rad = 0;  // its turn about its normal
+  double along[3] = {0, 0, 0};  // a piece's direction (unit); zero for a melt
+  double size_m = 0;            // a piece's width, a melt's size across
+  double length_m = 0;          // a piece's length (its ends overlap its neighbours'); 0 a melt
+  double spin_rad = 0;          // a melt's turn about its normal
   double born_s = 0;
   uint32_t variant = 0;
+  // A melt's number on its shot (0 for a piece of line): the same number is the same pool grown,
+  // to be pressed again in the slot it took last time.
+  uint32_t melt = 0;
 };
-// The memory a held beam's burns keep between frames (the last one's place and time).
+// The memory a held beam's burns keep between frames.
 struct BurnTrail {
   bool any = false;
-  double last_at[3] = {0, 0, 0};
-  double last_s = 0;
-  uint32_t count = 0;
+  double last_at[3] = {0, 0, 0};  // where the line ends so far (where a melt sits)
+  double last_n[3] = {0, 0, 0};
+  double rest_at[3] = {0, 0, 0};  // where the hit came to rest
+  double still_s = 0;             // and since when
+  double melt_s = -1;             // when the melt there was last pressed; < 0: none yet
+  uint32_t count = 0;             // pieces laid
+  uint32_t melts = 0;             // melts started
 };
 // The burn `shot` leaves this frame, if it leaves one: true and `out` filled when one is due at
-// `t_s` (held, landing, and either `scorch_every_s` since the last or moved a third of a scorch
-// from it; past two thirds, half a scorch on toward the hit). `trail` is the shot's own and is
-// advanced; ask again until false (a few times at most) to fill a sweep's gap.
+// `t_s` (held and landing: a piece of line once the hit has moved `line_piece_m` along its face,
+// a melt pressed again while it stays). `trail` is the shot's own and is advanced; ask again
+// until false (a few times at most) to lay a fast sweep's pieces.
 bool beam_burns(const BeamLook& look, const BeamShot& shot, double t_s, BurnTrail& trail,
                 BeamBurn& out);
 // A burn's glow at `age_s`, cd/m^2: `ember_cd` at once, cooling to nothing over `ember_s`.

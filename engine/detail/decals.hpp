@@ -17,7 +17,10 @@
 //   `eb` a renderer adds as light and a light pass may cast) and then keeps as soot; a hole keeps;
 //   blood darkens from wet red to dried brown
 //   over `dry_s` and fades to nothing over the last `fade_s` of its `life_s`, and `expire` frees
-//   it.
+//   it. A burn line and a melt glow like a scorch, hot along their middle, and cool to black.
+// - A LINE (`DecalAt::length_m`, `along`): a box `length_m` along `along` (laid flat on the
+//   surface) and `size_m` across; its mask's u runs along it, its ends thinned so pieces laid end
+//   to end, each overlapping the last by its width, read as one unbroken line.
 // - THE POOL is made once (`make_pool`): `capacity` decals of at most `verts_per_decal` vertices.
 //   A new decal takes a free slot, else the oldest one's; one that would need more vertices than a
 //   slot holds keeps only the triangles nearest its centre that fit.
@@ -26,7 +29,7 @@
 //
 // ge:summary Decals that age: scorch, bullet holes, blood clipped to surfaces in a fixed pool
 // ge:keywords detail decal scorch bullet-hole blood splat clip box mask atlas age fade dry pool
-// ge:keywords place_decal expire look_at mask_at bake_atlas decal-kind decal-vertex
+// ge:keywords place_decal expire look_at mask_at bake_atlas decal-kind decal-vertex burn-line melt
 // ge:skill detail
 // ge:test tests/detail_decals_test.cpp
 #pragma once
@@ -41,8 +44,11 @@
 
 namespace ge::detail {
 
-enum class DecalKind : uint8_t { scorch, bullet_hole, blood };
-inline constexpr int kDecalKinds = 3;
+// burn_line: a scorched line a beam traces as it sweeps over a wall, its pieces long boxes laid
+// end to end; melt: the pool a beam held on one spot burns into the wall, pressed again larger in
+// its own slot as the beam stays (`DecalAt::slot`).
+enum class DecalKind : uint8_t { scorch, bullet_hole, blood, burn_line, melt };
+inline constexpr int kDecalKinds = 5;
 
 struct DecalKindSpec {
   std::string_view name;
@@ -62,7 +68,8 @@ struct DecalLook {
   double gloss;                   // 0 matte .. 1 wet
   double er = 0, eg = 0, eb = 0;  // the light it gives off, linear, may pass 1 (embers)
 };
-DecalLook look_at(DecalKind kind, double age_s);
+// `ember_s` > 0: its glow lasts that long instead of the kind's (a big blast's mark cools slower).
+DecalLook look_at(DecalKind kind, double age_s, double ember_s = 0);
 
 struct MaskSample {
   double cover;  // 0..1
@@ -92,7 +99,9 @@ struct Decal {
   double born_s = 0;
   Vec3 at{0, 0, 0}, normal{0, 1, 0};
   double size_m = 0;
-  uint32_t count = 0;  // vertices in the slot, three a triangle
+  double length_m = 0;  // a long mark's length (0: square)
+  double ember_s = 0;   // its glow's length (0: its kind's)
+  uint32_t count = 0;   // vertices in the slot, three a triangle
 };
 
 struct DecalPool {
@@ -118,6 +127,15 @@ struct DecalAt {
   double now_s = 0;
   uint32_t variant = 0;
   DecalKind kind = DecalKind::scorch;
+  // A long mark: `length_m` along `along` (the surface's own direction is taken from it; zero:
+  // `spin_rad` turns it), `size_m` across. 0: square.
+  double length_m = 0;
+  Vec3 along{0, 0, 0};
+  // Pressed again in place: slot `slot` is taken when it still holds the decal placed as
+  // `serial` (a melt grown larger in its own slot), else a slot as any new decal's.
+  int slot = -1;
+  uint32_t serial = 0;
+  double ember_s = 0;  // how long it glows; 0: its kind's (decal_spec)
 };
 // The decal pressed onto `receivers`: its slot, or -1 when no surface under it faces its way.
 int place_decal(DecalPool& pool, const Receivers& receivers, const DecalAt& d);
