@@ -1290,7 +1290,9 @@ every pass, and judged by captioned screenshots:
   black.
 - **See-through liquids** (M18i14): `r_wateralpha` (1: solid) and `r_slimealpha`,
   `r_lavaalpha`, `r_telealpha` (empty: water's), or the map's own `wateralpha` and kin; a server
-  that sets `watervis` 0 keeps every liquid solid (`app/look.hpp`'s `liquid_alphas`). The world
+  that sets `watervis` 0 keeps every liquid solid, the window's own match or a server joined with
+  `connect` alike, and a demo played back never is (`app/look.hpp`'s `liquid_alphas`,
+  `watervis_allowed`). Our server tells clients with `sv_watervis 1`. The world
   pass draws a see-through kind after the world, blended over it, testing the depth without
   writing it, and at 0 not at all (`brush/app/bsp_draw.hpp`'s "bsp.liquids"). While one is
   see-through the cull leaves the map's potentially visible set out (the frustum and the depth
