@@ -55,7 +55,12 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   sq->sv.set.maxclients = c.maxclients;
   g->rules = sv::sequel_runner(std::move(sq));
   g->rules.console("deathmatch 1");
-  for (const auto& [rule, value] : c.rules) g->rules.console(rule + " " + value);
+  for (const auto& [rule, value] : c.rules) {
+    std::string line = rule;
+    line += ' ';
+    line += value;
+    g->rules.console(line);
+  }
   if (!g->rules.start(g->map->spec, error)) return nullptr;
   g->cfg.hostname = c.hostname;
   g->cfg.max_clients = c.maxclients;
