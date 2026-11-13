@@ -159,6 +159,13 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
                      "dolomites: dolomites; sierra: a sierra; volcano: volcanoes; arctic: arctic "
                      "ice; xeno: an alien land; ember: an ember land; rime: a rime land"},
           &picture.far_land);
+  cv.bind({.name = "r_skyname",
+           .fallback = "",
+           .flags = gc::kArchive,
+           .help = "a sky box drawn through every map's sky in place of the map's own, by the "
+                   "name of its six pictures under env/ or gfx/env/; empty, each map's own",
+           .kind = gc::CvarKind::text},
+          &picture.sky_name);
   cv.bind({.name = "r_farland_warm",
            .fallback = "0",
            .help = "How much warmer the far land's air is than its own, in degrees C.",
