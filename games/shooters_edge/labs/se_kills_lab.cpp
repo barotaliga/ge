@@ -443,7 +443,9 @@ void run(gl::Lab& lab) {
   {
     int64_t owners = 0, in_hand = 0, sg = 0, ssg = 0;
     for (const Kill& k : kills) {
-      if (!k.k.victim_launcher || k.k.victim_weapon == hud::Weapon::melee) continue;
+      if (!k.k.victim_launcher || k.k.victim_weapon == hud::Weapon::melee ||
+          k.k.victim_rockets <= 0)
+        continue;
       owners++;
       in_hand += k.k.victim_weapon == hud::Weapon::rocket_launcher;
       sg += k.k.victim_weapon == hud::Weapon::shotgun;

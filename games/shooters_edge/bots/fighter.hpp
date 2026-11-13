@@ -161,6 +161,7 @@ struct FighterStats {
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
   int64_t on_the_way = 0;    // short goals taken up on the way
+  int64_t hides = 0;         // (`hide`) the launcher put away for the scattergun
   int64_t stood = 0;         // (`fightway`) a fight's back key let go: stood and dodged
   int64_t chained = 0;       // item goals planned on to the next one (`chains`)
   int64_t turned_round = 0;  // commands a turn back was pressed across the run (`uturn`)
@@ -340,6 +341,7 @@ struct Fighter {
   int32_t goal_was = -1;    // the goal item held since `goal_since`
   int32_t tired_item = -1;  // an item gone for too long in vain, worth less until `tired_until`
   double goal_since = 0, tired_until = 0;
+  bool hid = false;       // (`hide`) the scattergun taken up over the launcher, nobody in sight
   int32_t spam_for = -1;  // the claim `spam_from` was found for (-1: none yet)
   sh::Vec3f news_spot;    // spam at news (spam.hpp): the way in fired at
   double news_t = -1e9;   // the news it is fired at for (when it came), and the rockets spent
