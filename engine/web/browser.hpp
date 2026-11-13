@@ -11,6 +11,8 @@
 //   viewer's loop takes what has come each frame.
 // - `take_input`: the canvas's keys pressed since the last call (by scancode, the USB HID usage
 //   the platform layer uses) and its pointer in canvas pixels; a click focuses the canvas.
+// - `take_play_input`: a game played on the page: keys held and let go, the mouse's buttons,
+//   wheel and movement with the pointer locked to the canvas, as `ge::input::InputState`.
 // - `say`: a line in the page's status line (`#viewer-status`) and the console: what is loading,
 //   or why there is no picture, in a viewer's words.
 //
@@ -20,6 +22,7 @@
 // ge:summary The web viewer's calls on its page: fetch a file, wait for a paint, the canvas, say
 // ge:keywords web browser emscripten jspi fetch_bytes next_frame request-animation-frame canvas
 // ge:keywords canvas_size say viewer-status websocket ws_open ws_take ws_send
+// ge:keywords take_play_input pointer-lock play-in-browser
 // ge:skill net
 #pragma once
 
@@ -27,6 +30,10 @@
 #include <span>
 #include <string>
 #include <vector>
+
+namespace ge::input {
+struct InputState;
+}
 
 namespace ge::web {
 
@@ -45,6 +52,13 @@ struct PageInput {
   bool button = false;       // a button held
 };
 void take_input(const char* selector, PageInput& out);
+// A game played on the page (M56i): the canvas's keys, mouse buttons, wheel and the mouse's
+// movement since the last call, as the engine's input state (`begin_frame` first, so its edges are
+// this paint's): keys held, pressed and released by scancode, the buttons as MouseButton bits, the
+// wheel in notches (+ away from the player), the movement in the browser's pixels while the
+// pointer is locked to the canvas (a click on it locks it, Escape lets it go; never locked
+// otherwise). Losing the focus lets every key go. True while the pointer is locked.
+bool take_play_input(const char* selector, ge::input::InputState& s);
 
 enum class WsState : uint8_t { connecting, open, closed };
 // A WebSocket to `url` (`ws://host:port/`): its number, or -1 when the browser refused the URL.

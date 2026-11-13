@@ -2,7 +2,8 @@
 // game's client and server talk through a chain of two forwarders, the game's own handshake and
 // messages untouched; a destination off the allow list is refused with the reason; a client whose
 // NAT gives it a new port is followed by its alive; a silent client is dropped; and no answer a
-// forwarder gives is bigger than the datagram that asked for it.
+// forwarder gives is bigger than the datagram that asked for it; a fixed route takes a client that
+// cannot dial and holds its first answers to a budget.
 //
 // ge:summary Tests forward: routes, a two-hop chain with a real game, allow list, rebinding, idle
 // ge:keywords test forward route chain hop allow-list nat-rebinding idle amplification status stun
@@ -11,6 +12,7 @@
 #include <vector>
 
 #include "check.hpp"
+#include "forward/fixed.hpp"
 #include "forward/forward.hpp"
 #include "net/node.hpp"
 #include "net/packet.hpp"
@@ -244,6 +246,52 @@ TEST(a_rebound_client_is_followed_and_a_silent_one_dropped) {
   net::close_transport(client_port);
   net::close_transport(moved_port);
   net::close_transport(server_port);
+}
+
+TEST(a_fixed_route_takes_a_client_that_cannot_dial_and_holds_its_first_answers_to_a_budget) {
+  // f1 as a fixed route to the server: the client sends to it as if it were the server.
+  World w;
+  fw::FixedFace face;
+  face.to = w.server_at;
+  fw::fixed_route_attach(w.f1, face);
+  net::Transport client, server;
+  net::open_sim_transport(client, w.sim, net::sim_address(0, 6001));
+  net::open_sim_transport(server, w.sim, w.server_at);
+  uint8_t buf[net::kMaxDatagram];
+  net::Address from, upstream;
+  // The server answers each datagram with `answer` bytes; what reaches the client is returned.
+  auto exchange = [&](size_t asked, size_t answer) {
+    const std::vector<uint8_t> ask(asked, 7);
+    net::transport_send(client, w.f1_at, ask.data(), ask.size(), w.now);
+    w.advance(1000);
+    w.forwarders();
+    w.advance(1000);
+    int n = net::transport_receive(server, buf, sizeof buf, from, w.now);
+    CHECK(n == static_cast<int>(asked));
+    upstream = from;
+    const std::vector<uint8_t> reply(answer, 9);
+    net::transport_send(server, from, reply.data(), reply.size(), w.now);
+    w.advance(1000);
+    w.forwarders();
+    w.advance(1000);
+    size_t got = 0;
+    while ((n = net::transport_receive(client, buf, sizeof buf, from, w.now)) >= 0) {
+      CHECK(from == w.f1_at);
+      got += static_cast<size_t>(n);
+    }
+    return got;
+  };
+  CHECK(exchange(20, 200) == 0);  // 10 times what it sent: held back
+  CHECK(exchange(20, 60) == 60);  // within four times: passed
+  CHECK(face.held_back == 1);
+  CHECK(face.proven == 0);
+  CHECK(exchange(20, 1200) == 1200);  // its third datagram: everything passes from now on
+  CHECK(face.proven == 1);
+  CHECK(face.clients == 1);
+  CHECK(upstream.port != 6001);  // the server sees the forward's socket, not the client
+  CHECK(w.f1.clients.size() == 1 && w.f1.clients[0]->connected);
+  net::close_transport(client);
+  net::close_transport(server);
 }
 
 TEST(no_answer_is_bigger_than_the_datagram_that_asked) {

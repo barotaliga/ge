@@ -2,7 +2,8 @@
 // live protocol. A move and its checksum come back as written; the scripted client joins the
 // sequel's net server on the simulated network through the whole signon, its frames are deltas,
 // its recording walks whole, and a client that walks forward is seen to move; refusals read as a
-// player's words; a lossy link still plays.
+// player's words; a lossy link still plays; a map with no sky gets the default one and a
+// download is refused; the dedicated server game names itself and refuses a missing folder.
 //
 // ge:summary Test: the sequel's live protocol, our client joined to our server on a simulated net
 // ge:keywords test sequel protocol-34 live client server signon move checksum delta refusal loss
@@ -21,8 +22,10 @@
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
+#include "shooters_edge/net/sequel_game.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
 #include "shooters_edge/net/sequel_net_server.hpp"
+#include "shooters_edge/server/sequel_wire.hpp"
 
 namespace {
 
@@ -217,6 +220,41 @@ TEST(a_client_joins_through_the_signon_and_plays_on_deltas) {
   while ((got = cl::next_frame(d, error)) == cl::DemoRead::frame) frames++;
   CHECK_MSG(got == cl::DemoRead::end, error);
   CHECK(frames == c.frames);
+}
+
+TEST(a_map_with_no_sky_gets_the_default_and_a_download_is_refused) {
+  // A client that finds no sky asks for one to download; it is refused and plays on.
+  cn::SequelNetConfig cfg;
+  sv::sequel_sky(*hall(), cfg.wire);
+  CHECK(cfg.wire.sky == "unit1_");
+  CHECK(cfg.wire.sky_rotate == "0.000000");
+  auto r = rig(cfg);
+  cn::SequelClientConfig cc;
+  cc.brain = forward;
+  cn::SequelClientEnd& c = join(*r, cc);
+  run(*r, 120);
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
+  cn::sequel_client_command(c, "download env/rt.tga");
+  const auto frames = c.frames;
+  run(*r, 120);
+  CHECK_MSG(c.error.empty(), c.error);
+  CHECK(c.stage == cn::ClientStage::active);
+  CHECK(c.frames > frames + 5);
+  bool noted = false;
+  for (const std::string& line : r->server.log)
+    noted = noted || line.find("asked for env/rt.tga") != std::string::npos;
+  CHECK(noted);
+}
+
+TEST(the_sequel_server_game_names_itself_and_refuses_a_missing_folder) {
+  const ge::server::ServerGame& g = cn::sequel_game();
+  CHECK(g.default_port == cn::kPortSequel);
+  CHECK(g.binary == std::string("shooters_edge_sequel_server"));
+  ge::server::ServerConfig c;
+  c.root = "no-such-folder-here";
+  std::string error;
+  CHECK(g.create(c, error) == nullptr);
+  CHECK_MSG(!error.empty(), "a refusal says why");
 }
 
 TEST(refusals_read_as_a_players_words) {

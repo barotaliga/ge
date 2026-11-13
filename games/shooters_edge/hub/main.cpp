@@ -2,17 +2,20 @@
 // protocol, its modes in the order its community ranks them, frags as the score, and the classic
 // status query, so `--browse-master` lists the classic servers already running
 // (engine/hub/browse.hpp), and each demo's content pack names only the files the demo draws from
-// (client/demo_content.hpp). Built as `shooters_edge_hub` at the build's root by `ge_add_hub`;
+// (client/demo_content.hpp), and a map played in the page its own (client/play_content.hpp: the
+// Play page). Built as `shooters_edge_hub` at the build's root by `ge_add_hub`;
 // `--help` lists its flags.
 //
 // ge:summary Shooter's Edge's hub binary: the engine's hub with the game's modes and words
-// ge:keywords shooters-edge hub hubspec modes frags website server-list classic browse
+// ge:keywords shooters-edge hub hubspec modes frags website server-list classic browse play
 // ge:skill net
 // ge:test tests/hub_api_test.cpp
 #include "hub/main.hpp"
 #include "net/packet.hpp"
 #include "shooters_edge/client/demo_content.hpp"
+#include "shooters_edge/client/play_content.hpp"
 #include "shooters_edge/net/classic_browse.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 
 namespace {
 
@@ -28,6 +31,15 @@ ge::hub::HubSpec spec() {
   s.browse = shooters_edge::net::classic_query();  // the classic servers already out there
   s.demo_files = shooters_edge::client::demo_files;
   s.file_needs = shooters_edge::client::content_needs;
+  // Playing a map in the page: what a match on it with bots draws from (client/play_content.hpp).
+  s.map_files = [](std::string_view map, const ge::vfs::SearchPath& files,
+                   std::vector<std::string>& names, std::string& error) {
+    shooters_edge::client::SearchPath sp;
+    sp.vfs = files;
+    return shooters_edge::client::play_files(sp, map, shooters_edge::net::listen_options(), names,
+                                             error);
+  };
+  s.map_shown = shooters_edge::client::map_playable;
   return s;
 }
 

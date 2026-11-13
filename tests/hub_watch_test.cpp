@@ -3,8 +3,8 @@
 // viewer on the demo's file by hash, the packs beside it handed over), the viewer's files and
 // packs served and refused, and the TV node's record naming its web port.
 //
-// ge:summary Test: the hub's Watch and Demo pages, the viewer's files, the TV node's web port
-// ge:keywords test hub watch demo web-viewer viewer-files websocket tv web-port
+// ge:summary Test: the hub's Watch, Demo and Play pages, the viewer's files, the TV node's web port
+// ge:keywords test hub watch demo web-viewer viewer-files websocket tv web-port play map-content
 // ge:skill net testing
 #include "hub/watch.hpp"
 
@@ -14,9 +14,11 @@
 
 #include "check.hpp"
 #include "hub/archive.hpp"
+#include "hub/content.hpp"
 #include "replay/stream.hpp"
 #include "tv/net_link.hpp"
 #include "tv/websocket.hpp"
+#include "vfs/pak.hpp"
 
 using namespace ge::net;
 using namespace ge::hub;
@@ -214,4 +216,46 @@ TEST(a_tv_nodes_record_names_its_web_port) {
     if (k == "web") port = v;
   CHECK(port == std::to_string(web.listener.local.port) && port != "0");
   ge::tv::tv_web_close(web);
+}
+
+TEST(the_play_pages_list_the_maps_and_start_the_player_on_one) {
+  const fs::path dir = fs::temp_directory_path() / "ge-hub-watch-play";
+  fs::remove_all(dir);
+  Archive archive;
+  std::string error;
+  CHECK(archive_open(archive, (dir / "archive").string(), error));
+  Site site;
+  site.archive = &archive;
+  site.viewer_dir = (dir / "viewer").string();
+  fs::create_directories(site.viewer_dir);
+  std::ofstream(fs::path(site.viewer_dir) / "test_game_play.js") << "// the player\n";
+  std::vector<uint8_t> pak;
+  const std::vector<uint8_t> map = {'B', 'S', 'P'}, pic = {1, 2, 3};
+  CHECK(ge::vfs::write_pak(
+      {{"maps/tower.bsp", map}, {"maps/Yard.bsp", map}, {"gfx/a.lmp", pic}, {"sound/b.wav", pic}},
+      &pak, &error));
+  std::ofstream(fs::path(site.viewer_dir) / "pak0.pak", std::ios::binary)
+      .write(reinterpret_cast<const char*>(pak.data()), static_cast<std::streamsize>(pak.size()));
+  HubSpec s = spec();
+  Answer a;
+  CHECK(!watch_answer(Poller{}, s, "/play", 0, site, a));  // a game that names no map's files
+  s.map_files = [](std::string_view m, const ge::vfs::SearchPath&, std::vector<std::string>& names,
+                   std::string&) {
+    names = {"maps/" + std::string(m) + ".bsp", "gfx/"};
+    return true;
+  };
+  CHECK(viewer_maps(site) == std::vector<std::string>({"tower", "yard"}));
+  CHECK(watch_answer(Poller{}, s, "/play", 0, site, a) && a.code == 200);
+  CHECK(has(a.body, "href=\"/play/tower\"") && has(a.body, "href=\"/play/yard\""));
+  CHECK(has(a.body, ">Play</a>"));  // the nav's Play
+  CHECK(watch_answer(Poller{}, s, "/play/tower", 0, site, a) && a.code == 200);
+  ContentPack pack;
+  CHECK_MSG(map_content(site, s, "tower", pack, error), error);
+  CHECK(pack.files == 2 && pack.missing == 0);  // the map and the folder's one picture
+  CHECK(has(a.body, "\"--play=tower\",\"--bots=3\",\"--pack=/" + content_path(pack.sha) + "\""));
+  CHECK(has(a.body, "/viewer/test_game_play.js") && has(a.body, "/play/yard"));
+  CHECK(watch_answer(Poller{}, s, "/play/nowhere", 0, site, a) && a.code == 404);
+  CHECK(watch_answer(Poller{}, s, "/play/..%2fx", 0, site, a) && a.code == 404);
+  CHECK(!map_content(site, s, "Tower", pack, error) && has(error, "not a map's name"));
+  fs::remove_all(dir);
 }
