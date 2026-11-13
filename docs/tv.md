@@ -493,6 +493,20 @@ unmodified client of the sequel was measured black-box on the full game's q2dm1:
 It also runs the relay end to end, with the viewer 8 to 30 frames behind the watcher at a 1 s
 delay.
 
+### A recording as the source
+
+`shooters_edge_hops sequel-tv --demo=<file.dm2> --port=27911` serves a recording to viewers in place
+of a live server (`net/sequel_tv_demo.hpp`). It feeds the recording's blocks to the same face at
+the game's pace: a block that holds a frame is 100 ms. At the end the recording starts again. Each
+time round, the server data's count goes up by one, and the face tells every viewer the level
+changed (`changing`, then `reconnect`, as a server does). A client keeps its loading picture up
+until it signs on with a count it has not seen. The recording must be protocol 34. The full game's
+own `demos/*.dm2` are from an older protocol, and an unmodified client refuses them.
+
+Measured black-box: an unmodified client watched a 30 s recording of q2dm1 for 75 s, through 15
+rounds, and stayed connected. The test plays a recording to a viewer three times round at ten
+frames a second.
+
 ## The sequel's recordings
 
 The sequel's client recording (a `.dm2`: blocks of a 32-bit length and one server packet's messages,
