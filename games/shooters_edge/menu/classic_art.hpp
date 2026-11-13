@@ -1,6 +1,7 @@
 // THE CLASSIC MENU'S PICTURES: the menu art the player's own classic pack carries (`gfx/*.lmp`:
 // the plaque down the left, each page's title, the strips of a page's rows, the spinning cursor,
-// the help pages, the text box's pieces) and the console's glyph sheet from its `gfx.wad`, read
+// the help pages, the text box's pieces, the console's background `conback`) and the console's
+// glyph sheet from its `gfx.wad`, read
 // off the game's search path and coloured by the pack's palette (`gfx/palette.lmp`), so
 // classic_view.hpp draws the menu as the pack's own.
 //
