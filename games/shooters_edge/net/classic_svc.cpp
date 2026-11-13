@@ -68,6 +68,7 @@ const SvcDef kDefs[] = {
     {svc::spawnstaticsound2, true, "spawnstaticsound2", "CCCbhbb"},
     {svc::ge_point, false, "ge_point", "sCCCcccb"},
     {svc::ge_trail, false, "ge_trail", "sCCCCCC"},
+    {svc::ge_aim, false, "ge_aim", "h"},
 };
 constexpr int kDefCount = static_cast<int>(sizeof kDefs / sizeof kDefs[0]);
 

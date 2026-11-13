@@ -386,6 +386,14 @@ nobody else (`engine/server/aids.hpp`, every game's), and says so to everyone.
   reads the air from the path alone (its steps falling by the gravity, the floor at the takeoff),
   where the server knows his footing. Past 1000 units no lead still scores higher (16.8% against
   15.3%): a player turns during a long flight.
+- **The view turns with the help** (`plugins/shooter/aim_turn.hpp`): the server tells the player
+  it helped whom it bent a shot onto (the game's own message, svc 122 in the `ge` extension set;
+  a classic client is never sent it), and our client turns his view toward that player with a
+  spring while he holds the attack, and back to his own aim after he lets go. The mouse keeps
+  turning the view throughout, and the target is let go when it strays more than 64 units off
+  his own aim. What the client sends is the turned view, so the server's recording and anyone
+  watching see a person's aim. `cl_aimhelp_turn 0` keeps the view still; the `se-aimturn` lab
+  charts it on a strafer.
 - **The weapons it may bend** are the server's (`sv_aimhelp_allow`, `sv_aimhelp_deny`: weapon
   names, spaces or commas between, `*` any characters; deny wins, an empty allow list allows the
   rest), named by the weapon held: `axe sg ssg ng sng gl rl lg` in the classic game, `blaster sg
