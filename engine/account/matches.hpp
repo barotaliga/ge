@@ -17,6 +17,7 @@
 //
 //   matches_trust(m, key)                     a server's key the owner trusts
 //   matches_add(m, server, report) -> Taken   new or again, counted or shown only
+//   matches_ban(m, account, now_s)            the ban a counted report's flagged player earned
 //   matches_line(m, line, error)              one log line read back
 //   matches_duo_ask(m, asker, partner, name)  a duo for the two-on-two ladder (ladder.hpp)
 //   totals_sum(m, account, filter)            an account's totals over what the filter keeps
@@ -25,6 +26,7 @@
 //
 // ge:summary The matches a master keeps: reports by server, totals per account, trusted servers
 // ge:keywords match-report totals account-totals trusted-servers matches_add reports-log
+// ge:keywords ban anti-cheat flagged matches_ban
 // ge:keywords player-stats leaders
 // ge:skill net
 // ge:test tests/account_matches_test.cpp
@@ -38,6 +40,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -80,8 +83,21 @@ struct KeptMatch {
   net::MatchReport report;
 };
 
+// A BAN: a counted report (from a trusted server) said its anti-cheat put this account's player
+// out (ReportPlayer::flagged). It runs `ban_s` from the match's end; a later one runs from its
+// own. Bans are worked out from the reports, so reading the log back gives the same bans.
+struct Ban {
+  int64_t until_s = 0;            // Unix seconds
+  std::string game, server, why;  // the report's game and server name, and the verdict
+  uint64_t report = 0;            // the report's id
+};
+
+constexpr int64_t kBanDays = 14;
+
 struct Matches {
   std::set<net::Key> trusted;
+  int64_t ban_s = kBanDays * 24 * 3600;          // how long a ban runs (the master's setting)
+  std::unordered_map<uint64_t, Ban> bans;        // by account: the one that ends last
   std::set<std::pair<net::Key, uint64_t>> seen;  // every report taken, by server and id
   std::deque<KeptMatch> kept;                    // the last kMatchesKept, newest last
   std::map<TotalsKey, Totals> totals;
@@ -98,6 +114,8 @@ enum class Taken : uint8_t {
 
 void matches_trust(Matches& m, const net::Key& server);
 Taken matches_add(Matches& m, const net::Key& server, const net::MatchReport& r);
+// The ban on `account` still running at `now_s`, or null.
+const Ban* matches_ban(const Matches& m, uint64_t account, int64_t now_s);
 // A duo asked for (ladder.hpp), its line appended to `log`.
 DuoAnswer matches_duo_ask(Matches& m, uint64_t asker, uint64_t partner, std::string_view name);
 // A line of the log read back (a report or a duo); false with `error` naming what does not read.
