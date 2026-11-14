@@ -7,6 +7,7 @@
 #include "net/guard.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace ge::net {
 
@@ -147,7 +148,7 @@ std::string guard_summary(const Guard& g, int client) {
     out += " x" + std::to_string(c.counts[k]);
   }
   if (out.empty()) out = "nothing flagged";
-  const auto tenth = static_cast<int64_t>(c.worst * 10 + 0.5);
+  const auto tenth = static_cast<int64_t>(std::floor(c.worst * 10 + 0.5));
   out += "; worst score " + std::to_string(tenth / 10) + "." + std::to_string(tenth % 10);
   if (c.out) out += "; out";
   return out;

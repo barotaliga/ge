@@ -6,7 +6,7 @@
 // anyone faster than full stick. The scores are charted over the run, one line a player, with
 // the out score ruled across. Everything runs on a virtual clock off one seed.
 //
-// ge:summary Lab: honest players and five cheaters under each preset: caught, how soon, no false flag
+// ge:summary Lab: honest players and five cheaters on each preset: caught, how soon, no false flag
 // ge:keywords lab net cheats anti-cheat guard speed-hack teleport flood future-view off-grid
 // ge:keywords false-positive score preset multiplayer
 // ge:skill net labs
@@ -92,7 +92,7 @@ void run(gl::Lab& lab) {
         honest_top = std::max(honest_top, p.top_speed);
         if (p.worst > 0) honest_flagged++;
         if (p.out)
-          lab.fail(name + ": an honest player was put out (" + counts_text(p) + ")",
+          lab.fail(name + ": an honest player was put out, " + counts_text(p),
                    "Read the flag's check in engine/net/guard.cpp and widen its slack only as far "
                    "as a link explains; skill: net.");
         continue;
@@ -100,16 +100,21 @@ void run(gl::Lab& lab) {
       table.rows.push_back({name, who, counts_text(p), fmt(p.worst, 1),
                             p.out ? fmt(p.out_s, 2) : "never", fmt(p.top_speed, 1),
                             fmt(p.travelled, 0)});
-      lab.metric(name + "-" + who + "-out-s", p.out ? p.out_s : -1, "s");
+      std::string key = name;
+      key += "-";
+      key += who;
+      key += "-out-s";
+      lab.metric(key, p.out ? p.out_s : -1, "s");
       if (p.out) caught++;
+      std::string head = name;
+      head += ": the ";
+      head += who;
       if (!p.out)
-        lab.fail(
-            name + ": the " + who + " cheat was not caught (worst score " + fmt(p.worst, 1) + ")",
-            "Read its check in engine/net/guard.cpp and the cheat in "
-            "engine/net/guard_trial.cpp; skill: net.");
+        lab.fail(head + " cheat was not caught, worst score " + fmt(p.worst, 1),
+                 "Read its check in engine/net/guard.cpp and the cheat in "
+                 "engine/net/guard_trial.cpp; skill: net.");
       if (p.top_speed > o.full_stick_mps + 0.5)
-        lab.fail(name + ": the " + who + " cheater moved at " + fmt(p.top_speed, 1) +
-                     " m/s, past full stick's " + fmt(o.full_stick_mps, 1),
+        lab.fail(head + " cheater moved past full stick's " + fmt(o.full_stick_mps, 1) + " m/s",
                  "Read guard_input's clamp and the one input a tick in "
                  "engine/net/replicate_server.cpp; skill: net.");
       if (!charted) {

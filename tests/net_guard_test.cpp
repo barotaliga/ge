@@ -3,7 +3,7 @@
 // player's score stays at nothing and a cheater's runs past the out score. The guard trial over
 // the simulated network catches each of its five cheats and flags no honest player.
 //
-// ge:summary Test: the guard's checks one by one, then the guard trial's honest and cheating players
+// ge:summary Test: the guard's checks one by one, then the trial's honest and cheating players
 // ge:keywords test guard anti-cheat cheats clamp snap flood future teleport
 // ge:skill net testing
 #include "net/guard.hpp"

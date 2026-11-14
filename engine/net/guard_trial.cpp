@@ -174,7 +174,8 @@ GuardTrial run_guard_trial(const GuardTrialConfig& k) {
         if (p->address != host_n->peers[static_cast<size_t>(e.peer)].address) continue;
         p->slot = e.peer;
         const int i = static_cast<int>(&p - &ps.front());
-        const double v[kFields] = {(i % 6) * 30.0 - 75, (i / 6) * 30.0 - 30, 0};
+        const int col = i % 6, row = i / 6;  // six abreast, 30 m apart
+        const double v[kFields] = {col * 30.0 - 75, row * 30.0 - 30, 0};
         p->entity = replicate_spawn(*server, e.peer, v);
       }
     }
@@ -190,8 +191,8 @@ GuardTrial run_guard_trial(const GuardTrialConfig& k) {
       if (v == nullptr) continue;
       double place[2] = {v[kX], v[kZ]};
       if (p.cheat == TrialCheat::teleport) {
-        const double jumps = static_cast<double>(t / hz);
-        place[0] += jumps * kTeleportM;
+        const int jumps = t / hz;  // whole seconds
+        place[0] += static_cast<double>(jumps) * kTeleportM;
       }
       if (p.placed) {
         const double before[kFields] = {p.place[0], p.place[1], 0};
