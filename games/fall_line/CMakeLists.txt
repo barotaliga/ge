@@ -6,6 +6,8 @@ add_library(fall_line_sim STATIC ${FALL_LINE_SIM_SOURCES})
 target_include_directories(fall_line_sim PUBLIC ${PROJECT_SOURCE_DIR}/games)
 target_link_libraries(fall_line_sim PUBLIC fall_line_cfg ge_core ge_prof ge_play ge_replay ge_racing ge_mountain ge_skier ge_snowmobile ge_helicopter ge_paramotor)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_sim)
+# The stamp of the code that builds a map, for the content cache's keys (sim/map_cache.hpp).
+ge_source_stamp(fall_line_sim map_code_stamp CONSTANT kMapCodeStamp DIRS plugins/mountain engine/core)
 
 # Its cvars (cfg/): every setting a cfg may change, bound to one Settings struct the app reads and
 # the play executable registers (skill: console). No GPU.
