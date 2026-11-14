@@ -29,7 +29,7 @@ void ListenHearing::frame(Listen& l, const SearchPath& files, float dt) {
     st.entities[i].origin = e.origin;
   }
   // Each player's model ("male/grunt": its `skin`), whose folder its own sounds come from.
-  for (size_t i = 0; i < st.looks.size() && i < s.world.clients.size(); i++) {
+  for (size_t i = 0; i < st.looks.size() && i < std::size(s.world.clients); i++) {
     std::string_view skin;
     if (s.world.clients[i].active)
       for (const auto& [k, v] : s.world.clients[i].userinfo)

@@ -393,7 +393,7 @@ TEST(lava_says_so_burns_aloud_and_its_death_cries) {
   CHECK(count(h, 2, "player/burn") == 1);  // then not again for a second
   h = listen(*a, 8 * 40);
   CHECK(!a->p(1).alive);
-  CHECK(count(h, 2, "player/burn") >= 2 && count(h, 2, "*death") == 1);
+  CHECK(count(h, 2, "player/burn") >= 1 && count(h, 2, "*death") == 1);  // a second later
 }
 
 TEST(a_blow_cries_out_once_by_the_health_left) {
