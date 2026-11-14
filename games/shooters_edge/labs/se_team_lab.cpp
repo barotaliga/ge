@@ -369,15 +369,15 @@ void run(gl::Lab& lab) {
         if (sl == f.slot || !w.world.clients[static_cast<size_t>(sl)].active ||
             (f.team->friends >> sl & 1u) != 0)
           continue;
-        const auto& o = w.world.entities[j];
-        if (o.health <= 0) continue;
-        const sh::Vec3f head{o.origin.x, o.origin.y, o.origin.z + 22};
+        const auto& foe = w.world.entities[j];
+        if (foe.health <= 0) continue;
+        const sh::Vec3f head{foe.origin.x, foe.origin.y, foe.origin.z + 22};
         const sh::Vec3f h = head - eye;
         if (sh::dot(h, h) > 4096.f * 4096.f) continue;
         const auto clear = [&](sh::Vec3f to) {
           return sh::trace_move(w.sv, eye, {}, {}, to, sh::kTraceNoMonsters, -1).fraction >= 1;
         };
-        if (!clear(head) && !clear(o.origin)) continue;
+        if (!clear(head) && !clear(foe.origin)) continue;
         seen = true;
         clear_now |= uint64_t{1} << sl;
         const float ahead = sh::dot(ax.forward, h);
@@ -421,7 +421,7 @@ void run(gl::Lab& lab) {
           const char* where = cosf_ > 0.5f ? "over-under" : cosf_ > -0.5f ? "beside" : "behind";
           const float d = std::sqrt(sh::dot(h, h));
           const char* far = d < 500 ? "near" : d < 1500 ? "mid" : "far";
-          const sh::ViewAxes his = sh::angle_vectors({o.view_angles.x, o.view_angles.y, 0});
+          const sh::ViewAxes his = sh::angle_vectors({foe.view_angles.x, foe.view_angles.y, 0});
           const sh::Vec3f back = eye - head;
           const float his_ahead = sh::dot(his.forward, back);
           const bool at_me =
