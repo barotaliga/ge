@@ -4,7 +4,10 @@
 // the value that failed and what to do next; a game shows the text as it is.
 //
 // In order (the first failure stops the load, with every manifest error at once):
-//   1. the manifest (`mod.manifest` in the directory given, or the file given) parses and checks;
+//   1. the manifest (`mod.manifest` in the directory given, or the file given) parses and checks,
+//      and its signature (`mod.sig`, signature.hpp), when there is one, holds over it; a game that
+//      loads only trusted packages refuses one that is unsigned or signed by a key it does not
+//      list;
 //   2. its `abi` major is this engine's and its minor no newer than this engine's;
 //   3. its `game` is the loading game's and its `game_api` range holds the game's version;
 //   4. it lists a file for this platform, the file is there, and its SHA-256 is the listed one;
@@ -29,6 +32,7 @@
 #include "mod/abi.hpp"
 #include "mod/library.hpp"
 #include "mod/manifest.hpp"
+#include "mod/signature.hpp"
 
 namespace ge::mod {
 
@@ -36,13 +40,16 @@ namespace ge::mod {
 struct GameOffer {
   std::string_view game;  // "" checks a package without a game
   uint32_t api = 0;
+  const std::vector<TrustedKey>* trusted = nullptr;  // the keys the game trusts (none: no list)
+  bool trusted_only = false;                         // refuse a package no listed key signed
 };
 
 struct LoadedMod {
   std::filesystem::path dir;  // the package's directory
   Manifest manifest;
-  std::string platform;  // the file loaded was listed for this platform
-  Library library;       // open while the table is in use
+  SignatureCheck signature;  // who signed it (signature_words says it to a player)
+  std::string platform;      // the file loaded was listed for this platform
+  Library library;           // open while the table is in use
   const ge_mod_v1* table = nullptr;
 };
 
