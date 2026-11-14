@@ -4,7 +4,24 @@
 ge_module(ge_render)
 if(GE_GPU)
   file(GLOB GE_RENDER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/render/*.cpp)
+  # The moon's face (render/moon_data.cpp) and its fetch: a native build compiles the table in; a
+  # web build leaves it out and writes it beside the viewer instead (cmake/Web.cmake), fetched
+  # when a night sky first shows the moon (render/moon.hpp § A web build).
+  set(GE_MOON_DATA ${CMAKE_CURRENT_SOURCE_DIR}/engine/render/moon_data.cpp)
+  if(GE_WEB)
+    list(REMOVE_ITEM GE_RENDER_SOURCES ${GE_MOON_DATA})
+  else()
+    list(REMOVE_ITEM GE_RENDER_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/engine/render/moon_fetch_web.cpp)
+  endif()
   add_library(ge_render STATIC ${GE_RENDER_SOURCES})
+  if(GE_WEB)
+    file(STRINGS ${GE_MOON_DATA} GE_MOON_SCALE_LINE REGEX "kMoonTableScale = ")
+    string(REGEX REPLACE ".*kMoonTableScale = ([0-9.eE+-]+).*" "\\1" GE_MOON_SCALE "${GE_MOON_SCALE_LINE}")
+    target_compile_definitions(ge_render PRIVATE GE_MOON_FACE=0 GE_MOON_TABLE_SCALE=${GE_MOON_SCALE})
+    target_link_libraries(ge_render PUBLIC ge_web)
+  else()
+    target_compile_definitions(ge_render PRIVATE GE_MOON_FACE=1)
+  endif()
   target_link_libraries(ge_render PUBLIC ge_gpu ge_assets ge_ui ge_water ge_grass ge_snow ge_viewmodel
                                           ge_console ge_detail ge_particles)
   # Other worlds' moons' faces (render/moon_maps.hpp), compiled in: the sky reads no file. A web

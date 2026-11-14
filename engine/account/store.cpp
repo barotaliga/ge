@@ -303,6 +303,15 @@ std::string refusal_words(Refusal r, int64_t wait_us) {
       return "This account is blocked.";
     case Refusal::too_many_codes:
       return "You have 4 codes waiting. Use one, or wait for one to run out.";
+    case Refusal::banned: {
+      const int64_t h = (wait_us / 1000000 + 3599) / 3600;
+      const long long n = h >= 48 ? (h + 23) / 24 : h;
+      const char* unit = h >= 48 ? "days" : (n == 1 ? "hour" : "hours");
+      char line[112];
+      std::snprintf(line, sizeof line,
+                    "This account is banned for cheating. The ban ends in %lld %s.", n, unit);
+      return line;
+    }
   }
   return "";
 }

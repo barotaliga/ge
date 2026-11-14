@@ -43,6 +43,9 @@ TEST(autotrack_cuts_a_recorded_team_game) {
   o.progs = &progs;
   o.frames = 4615;
   o.seed = 2;
+  // The fixture's game kept as recorded with the analog hands: this checks the cuts, not the bots
+  // (with the keyboard's hands seed 2's minute keeps one player hottest throughout).
+  for (cn::TeamSide& side : o.teams) side.features = "-keys,-keysteer";
   const cn::TeamMatchReport r = cn::run_team_match(o);
   CHECK(r.ok);
   cl::Demo d;

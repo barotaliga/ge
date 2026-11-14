@@ -16,6 +16,7 @@ namespace {
 
 constexpr char kMagic[4] = {'g', 'e', 'M', 'R'};
 constexpr uint8_t kVersion = 1;
+constexpr uint8_t kVersionFlagged = 2;  // version 1 and each player's `flagged` after its columns
 constexpr size_t kMost = size_t{64} * 1024;
 
 uint64_t zig(int64_t v) { return (static_cast<uint64_t>(v) << 1) ^ static_cast<uint64_t>(v >> 63); }
@@ -74,8 +75,11 @@ bool report_write(const MatchReport& r, std::vector<uint8_t>& out, std::string& 
     }
   out.assign(kMost, 0);
   Writer w = make_writer(out.data(), out.size());
+  // Version 2 only when a player was flagged, so a clean report stays the bytes version 1 wrote.
+  bool flagged = false;
+  for (const ReportPlayer& p : r.players) flagged = flagged || !p.flagged.empty();
   write_bytes(w, kMagic, 4);
-  write_u8(w, kVersion);
+  write_u8(w, flagged ? kVersionFlagged : kVersion);
   write_u64(w, r.id);
   for (const std::string* s :
        {&r.game, &r.version, &r.server, &r.address, &r.mode, &r.map, &r.demo_sha256})
@@ -101,6 +105,7 @@ bool report_write(const MatchReport& r, std::vector<uint8_t>& out, std::string& 
                             p.ping_min, p.ping_avg, p.ping_max})
       put_int(w, v);
     for (const int64_t v : p.columns) put_int(w, v);
+    if (flagged) put_str(w, p.flagged);
   }
   out.resize(w.size);  // the limits keep it far under kMost
   return !w.overflow;
@@ -115,9 +120,10 @@ bool report_read(const uint8_t* data, size_t size, MatchReport& out, std::string
     return false;
   }
   const uint8_t version = read_u8(r);
-  if (!r.bad && version != kVersion) {
-    error = "a match report of version " + std::to_string(version) + "; this reads version " +
-            std::to_string(kVersion) + ". Update the reader";
+  if (!r.bad && version != kVersion && version != kVersionFlagged) {
+    error = "a match report of version " + std::to_string(version) + "; this reads versions " +
+            std::to_string(kVersion) + " and " + std::to_string(kVersionFlagged) +
+            ". Update the reader";
     return false;
   }
   out.id = read_u64(r);
@@ -157,6 +163,7 @@ bool report_read(const uint8_t* data, size_t size, MatchReport& out, std::string
       *v = get_int(r);
     p.columns.resize(out.columns.size());
     for (int64_t& v : p.columns) v = get_int(r);
+    if (version == kVersionFlagged) get_str(r, p.flagged);
   }
   if (!r.bad && remaining(r) != 0) {
     error = "the match report has " + std::to_string(remaining(r)) + " bytes past its end";

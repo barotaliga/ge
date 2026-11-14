@@ -13,6 +13,7 @@
 
 #include "progs/entity_text.hpp"
 #include "shooter/nav_script.hpp"
+#include "shooter/world.hpp"
 #include "shooters_edge/bots/gap_tricks.hpp"
 #include "shooters_edge/bots/item_routes.hpp"
 #include "shooters_edge/bots/rocket_tricks.hpp"
@@ -23,6 +24,8 @@ namespace {
 
 namespace sh = ge::shooter;
 namespace pg = ge::progs;
+
+constexpr float kOwnDrop = 24;  // a bridge's own node: no floor of the map's within this under it
 namespace sv = shooters_edge::server;
 
 // A model's box, either family: [0] the world, then the inline models ("*N").
@@ -350,7 +353,7 @@ std::vector<sh::NavMover> map_movers(const sv::RulesCommon& s, const sv::MapSpec
 }
 
 bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char* start_class,
-                   MapNav& out, std::string& error) {
+                   MapNav& out, std::string& error, const sh::NavSettings& set) {
   if (model_count(spec) == 0) {
     error = "the map " + spec.name + " has no world for bots to walk on";
     return false;
@@ -370,7 +373,7 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
   out.bridges.clear();
   open_doors_as_floor(s, spec, out.tracer.get(), blocks, out.world, out.bridges);
   out.movers = movers_of(s, spec, out.tracer.get(), blocks);
-  sh::build_nav(out.world, out.movers, out.move, sh::NavSettings{}, out.graph);
+  sh::build_nav(out.world, out.movers, out.move, set, out.graph);
   const std::vector<sh::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
   sh::nav_add_links(out.graph, teleports);
   for (NavBridge& br : out.bridges) {
@@ -391,6 +394,16 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
           o.z <= hi.z + 40)
         br.nodes.push_back(static_cast<int32_t>(n));
     }
+    // The ones it alone holds up: the box traced down in the map's own solids (the world, solid
+    // 0, alone) meets no floor within a step.
+    const int32_t count = out.world.count;
+    out.world.count = 1;
+    for (const int32_t n : br.nodes) {
+      const sh::Vec3f o = out.graph.nodes[static_cast<size_t>(n)].origin;
+      const sh::HullTrace down = sh::player_trace(out.world, o, {o.x, o.y, o.z - kOwnDrop});
+      if (down.startsolid || down.fraction >= 1) br.own.push_back(n);
+    }
+    out.world.count = count;
   }
   out.teleport_links = static_cast<int64_t>(teleports.size());
   // SCRIPTED ROUTES to key items (item_routes.hpp): each proven by the move from the node at its
@@ -600,6 +613,7 @@ bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char
   sh::build_swim(out.world, graph, exits, sh::SwimSettings{}, out.swim);
   // THE BRINK (shooter/brink.hpp): the harm kept on the graph, the walks along its lips marked.
   out.brink_links = sh::nav_mark_harm(graph, out.harm);
+  out.side_brink_links = sh::nav_mark_side_harm(graph, out.world);
   sh::nav_room(graph);  // the room either side a walker strays into (pilot.hpp's lane)
   out.build_ms =
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();

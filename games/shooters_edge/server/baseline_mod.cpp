@@ -6,22 +6,20 @@
 // ge:test tests/shooters_edge_baseline_mod_test.cpp
 #include "shooters_edge/server/baseline_mod.hpp"
 
-#include "progs/native.hpp"
 #include "shooters_edge/rules/arena.hpp"
 #include "shooters_edge/rules/campaign.hpp"
+#include "shooters_edge/server/rules_package.hpp"
 
 namespace shooters_edge::server {
 
 bool baseline_mod(ge::progs::Progs& out, std::string& error) {
-  ge::progs::NativeOffsets offsets;
-  if (ge::progs::build_native_progs(native_arena(), out, offsets, error)) return true;
+  if (rules_progs(arena_rules(), out, error)) return true;
   error = "the baseline mod: " + error + "; the game is built wrong (games/shooters_edge/rules)";
   return false;
 }
 
 bool campaign_mod(ge::progs::Progs& out, std::string& error) {
-  ge::progs::NativeOffsets offsets;
-  if (ge::progs::build_native_progs(native_campaign(), out, offsets, error)) return true;
+  if (rules_progs(campaign_rules(), out, error)) return true;
   error = "the campaign: " + error + "; the game is built wrong (games/shooters_edge/rules)";
   return false;
 }

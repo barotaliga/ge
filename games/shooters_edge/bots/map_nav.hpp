@@ -63,6 +63,10 @@ struct NavBridge {
   int ent = -1;                // the door's edict
   ge::shooter::Vec3f spawn;    // where it stood when the map began (in: no bridge yet)
   std::vector<int32_t> nodes;  // the nodes standing on it, out
+  // Of those, the ones it alone holds up: no floor of the map's own under the player's box there
+  // without it (`nodes` takes a box beyond its edge too, so a walkway's nodes beside its root:
+  // shut with it, a bot standing there planned on across it; `bridgeseen` takes these).
+  std::vector<int32_t> own;
   bool touch = false;  // no name: it moves when touched (a trap: in, under whoever steps on)
   // A FLOOR DOOR (`floor_door`): a plate resting shut as a floor that a button slides away (dm2's
   // big room). Its nodes stand on it at rest (`spawn`) and are shut while it is away from there.
@@ -105,8 +109,9 @@ struct MapNav {
   ge::ai::Search main;  // what the map's main part reaches (the most a start spot reaches)
   int32_t main_n = 0;
   int64_t teleport_links = 0, closed_links = 0, harm_links = 0;
-  int64_t brink_links = 0;  // walks and drops along a lip over lava or slime (`nav_mark_harm`)
-  double build_ms = 0;      // wall time, never in a digest
+  int64_t brink_links = 0;       // walks and drops along a lip over lava or slime (`nav_mark_harm`)
+  int64_t side_brink_links = 0;  // walks and drops a side step off into it (`nav_mark_side_harm`)
+  double build_ms = 0;           // wall time, never in a digest
 };
 
 // The doors and plats of `spec` as movers, off its entity text and the edicts `s` made of them.
@@ -116,9 +121,11 @@ std::vector<ge::shooter::NavMover> map_movers(const server::RulesCommon& s,
                                               ge::brush::BrushTracer* tracer = nullptr);
 // The map's nav built into `out` (whose world and graph the movers point into: keep it where it
 // is), on either map family: the clip hulls of `spec.models` or the brushes of `spec.brushes`.
-// False with `error` when no floor holds a node.
+// False with `error` when no floor holds a node. `set`: the grid's (a trick map's narrow
+// platforms need a finer one than the default 32 units: the `se-trick` lab's --spacing).
 bool build_map_nav(const server::RulesCommon& s, const server::MapSpec& spec,
-                   const char* start_class, MapNav& out, std::string& error);
+                   const char* start_class, MapNav& out, std::string& error,
+                   const ge::shooter::NavSettings& set = ge::shooter::NavSettings{});
 // The sequel's move as the nav and the pilot read it: its top speed (300) and friction (6) (its
 // stop speed, acceleration and gravity are the first game's already), and its air: with the
 // server's air acceleration `air_accelerate` 0 (`sequel_air_accelerate`, its default) a plain

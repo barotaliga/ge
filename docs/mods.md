@@ -379,6 +379,43 @@ feeds the shooter by her blows, sees the kill, replays to the bit and is refused
 keep; the playable server takes the package from `sv_mod` and replays, and refuses one built for
 ABI 2.0. The `mod` lab draws the sequel's duel with and without it.
 
+## Rules as a package
+
+A mod stacks hooks on rules the game already runs; a RULES PACKAGE is the rules: the whole
+program the classic server runs in place of a compiled one
+(`games/shooters_edge/sim/rules_api.hpp`). It is an ordinary package (the manifest, the library,
+`ge_mod_entry`) whose `game` is `shooters_edge_rules` and whose `hooks` points at an `se_rules_v1`:
+
+- **The declaration.** The program's form (multiplayer or single-player), its own globals and
+  fields by name and type, its strings, and its functions by name with their parameters' sizes.
+  The server lays it out as a compiled program is laid out (`plugins/progs/native.hpp`), so the
+  game, the bots and the saves find `attack_finished` or `info_player_start` by name as they
+  would in bytecode. `state_bytes` is 0: the program's state is its globals and fields, in the
+  game's VM, so snapshots, saves and the digest already hold it.
+- **The call.** Each function runs with one argument: the services and the game's context, where
+  the declaration landed (each own global's and field's offset, each string, each function's
+  number) and the form's offsets. Every word is read and written through the services, never
+  through a pointer into the game, and checked: a field of no entity faults the call, as the
+  bytecode's fault does, and every later access in it answers 0. The server's calls are the
+  classic builtins by their numbers, so a rule reaches exactly the code a compiled program
+  reaches.
+- **The game's own.** The arena and the campaign (`games/shooters_edge/rules/`) are written
+  against this table. The game builds the same table in (`baseline_mod.hpp`'s `baseline_mod`,
+  `campaign_mod`), so a build that loads no libraries (the web's) still has its rules, and the
+  build makes them as the `arena` and `campaign` packages too (`build/<preset>/mods/`);
+  `server/rules_package.hpp`'s `load_rules_package` loads one and keeps it open for the process.
+  A rules package offered where a mod is asked for is refused by the loader, its game named.
+
+`tests/shooters_edge_rules_package_test.cpp` holds it: each package plays the built-in copy's
+match to the bit (the arena's deathmatch to its time limit, the campaign's coop hall), and the
+loader and the layout refuse what they should. Every word through a service costs the rules a
+few percent (the arena's pinned deathmatches 20.3 s against 21.4 s, the campaign's coop runs
+34.0 s against 34.2 s, in the debug build with its sanitizers).
+
+*Not taken:* a pointer to the VM's globals in the call, which would save the services' calls on
+the hottest reads, because a store-form package (a WebAssembly module, above) cannot address the
+game's memory, and the cost measured above is small.
+
 ## Rows
 
 | Row | What |

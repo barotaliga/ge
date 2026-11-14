@@ -96,6 +96,11 @@ overshoots a quick move), a slew limit (travel a second), the reach (`lo`, `hi`)
 - **Late hands need a bot that looks further ahead.** The bot steers from where it will be when
   its hands catch up (`BotHands::lead()`, Fall Line's `bot_controls(..., lead_s)`): without it a
   0.2 s delay turns a pursuit into a limit cycle from one end of the stick to the other.
+  Lower the loop's gain (a longer look); predicting the body a delay ahead feeds the same cycle.
+- **A spring settled in two commands or less rings or sticks** (it is explicit Euler): a move that
+  needs every command exact (a hop's view on the velocity) takes settle 0 and no delay.
+- **A look-ahead or a rollout presses through a COPY of the bot's own hands** (and keyboard): they
+  copy cheaply and replay the same wander, so it picks only what the hands can do.
 
 ## How human it looks
 
@@ -207,9 +212,17 @@ lesson on client-fed state), say so in the row or measure it off the server. A t
 saves every later question; a tool worked round is asked again. A
 video is never a checkpoint's step: checkpoints are judged headless (below).
 
-**A checkpoint** is `make precheck` green (a golden or digest a change moves on purpose
-rewritten, and the commit says why), a commit, a push, and the plan's entry updated. No video and
-no live server: every match runs on our own server, in process (`se-team`), headless.
+**A checkpoint** is a commit, a push, and the plan's entry updated, judged by the simulations
+(the sets, head to head, the staging). The build gates (`make precheck`, the lint, every lab's
+smoke digests) are NOT run at a checkpoint: the handoff names the last commit they ran on, and the
+agent asked for a pull request runs them first (a golden or digest a change moves on purpose
+rewritten then, and the commit says why). A change in `plugins/shooter` or
+`games/shooters_edge/bots` moves labs precheck does not reach: run EVERY lab's smoke digests
+(`labs --all --smoke --shard=i/8 --quiet --check-digests=tests/digests`, eight at once) and rewrite
+moved ones one lab at a time (parallel writers keep one file). A test held by a few short matches
+that flips is fixed by measuring what it says or by more seeds; never lower its floor, and name
+the outlier runs in the commit. No video and no live server: every match runs on our
+own server, in process (`se-team`), headless.
 
 **How a change is judged.**
 
@@ -238,20 +251,88 @@ no live server: every match runs on our own server, in process (`se-team`), head
   `se-people --file=<it>` measures it exactly as it measures people's (`--dir=<demos>/<map>`).
 - **What it newly triggers**: a change that should help and hurts is read for what it set off;
   break a number down by its cause before tuning a knob. **A behaviour that rarely runs cannot
-  move a number**: count how often it runs first.
+  move a number**: count how often it runs, and what holds it off, first. **Test a guessed cause
+  against its base rate**: the bad outcome's odds with and without the state, and the same state
+  in people's recordings, before building for it.
 - **Ask people's recordings before guessing**: where the bots lag people, measure how people play
-  that place, item or moment (se-people `--samples`, se-moves, se-rj) and copy it.
+  that place, item or moment (se-people `--samples`, se-moves, se-rj) and copy it. When the
+  maintainer describes how a move is done or names a fault seen in a match, build or check it at
+  once; the measures then judge it.
+- **The recording is the yardstick, the trace finds the cause**: speed, keys, bumps, stops and
+  facing are compared off recordings by one rule (se-people, se-moves, se-recipes on `se-team
+  --save` matches; experts against people's experts, `--skills=expert`), at the finest rate both
+  sides have (a 0.1 s sample hid the brief stops); never off the trace (its speed counts blasts, it
+  sees through walls). The trace (`--trace --trace-every=1`) splits a number by cause: who turned
+  the view (`view`), who wrote the keys (`keys`), the pilot's `because`.
+- **A small set is read for the behaviour's own measure**: a six-seed 5-minute set swings frags
+  ±30 %; a fight change shows first in `team.accuracy`, a projectile's lead in `--drill=rockets`.
+  A variant on the same seeds as an earlier set repeats its base bit for bit: compare against it. A
+  collapsed match is often one bot stuck in one cell or players stacked at one point: read "where
+  they stand still" first.
+- **A switch is judged before a preset gets it**: `kAll` is every bit under `trial`, so a new
+  switch sits after `trial` (out of `features_all`) until its verdict; bit-identical sets mean the
+  variant never ran. `--features=all,+x` also turns on what a preset keeps off: write `+x`. A
+  pilot fix not yet a switch is gated whole on `trial` (`Bot::trial`) for its A/B.
+- **Rare moves are staged, not played**: gap tricks, escapes, a pit's falls (`se-reach
+  --gaps=fly`, `--escapes=fly`, `--walk`), under the keyboard and the trailing view matches press
+  with (`keys` in `--gap-features`, `--walk-view-lag`). A staging that disagrees with the match is
+  the staging's bug first: say which switches it holds under.
+
+**The pilot's rules** (a first-person bot):
+
+- **Test under human hands and the keyboard from the first line.** Plain hands hide orbits,
+  overruns and late jumps.
+- **Keys and views land late** (a hand's delay; the keyboard's 1-3 commands): choose keys for the
+  view when they land (`view_when_keys_land`), never the view now or wanted. A pair a person presses
+  as one move (fire and jump) waits for the slower path (`shotjump`); "landed" after a jump ask
+  waits a lift-off grace (`liftoff`), or every late jump reads as a miss.
+- **A bot knows how its body meets the room**: predict by flying the box through `player_move`
+  (gravity, landings, the slide along walls) for the keys it will press, never a swept line or a
+  guess. A guard looks as far as the flight carries and runs in the air too.
+- **A proof is a move the pilot can start and reproduce**: one keys function and the move's water
+  level for both, a start it reaches (lined up, room to run up and to turn), no view a hand cannot
+  have (it stops at 80 degrees pitch). A refusal on a route's first command is the planner's.
+- **Every view goes through the one hand** (`engine/ai/mouse.hpp`; `bot_hand_override` for a view
+  set after the step), and a writer turns the wish under its view (`turn_axes`, `turn_axes_swim`).
+  A one-command view (a rocket jump's shot) is a contract: announced (`Pilot::shot_*`), fired at
+  `shot_ready`. After a change to who writes the view, read a move's OUTCOME, not its count.
+- **A swimmer is never `onground`**: ask what each check gated on it does in water.
+- **The planner reads what it reads**: a shut link is honoured by `nav_route` AND `nav_reach`, or
+  the goal stays "reachable" and the bot stands planning. A fix to a belief that moves no bit means
+  the planner never saw it: print what it is handed. State kept per link resets when the pilot
+  comes back to the link.
+
+**COPYING MOVEMENT OFF RECORDINGS** (M18r.md § 0r). A hard move is copied whole from people's
+recordings, never rebuilt by hand from their averages: `plugins/shooter/recipes.hpp` cuts a track
+into instances (`read_hop_starts`: frames from the low, the keys read off the move as rocket jumps
+read them), and `play_recipe` plays an instance's keys and view back through `player_move` (the
+PROOF: people's keys played on an open floor reach their recorded speed, or the reader is wrong).
+`se-recipes --dir=<demos>/<map> --basedir=<basedir>` tables them by level and spot, times every
+stop to 400 (people and bots by one rule: run it on `se-team --save` matches too), `--prove=N`
+checks the reader, `--book=<file>` writes the rows a game compiles in
+(`games/shooters_edge/bots/hop_start_book.cpp`; splice the rows into `kRows`, the format is in
+its header). The pilot (`pilot_recipes.hpp`) chooses the nearest entry to its state, turns it to
+its way, FLIES it by the move from where it stands on the map and commits only a proven one, then
+plays it closed loop against the proof. Three things learned getting it to fly in a match:
+- the recorded VIEW is already a person's mouse: play it as it is (`bot.cpp` `recipe_on`); a
+  watch or the mouse hand over it chased the sweep and lost the start (takeoff 341 -> 416);
+- the keyboard presses late, and W and S share a finger: ask keys a press early
+  (`recipe_keys_s`) and keep starts that press back on the ground out of the book;
+- keep the book to starts a bot can use on its way: off the ground soon (0.9 s), set off near the
+  way (75 degrees); people's loops away and back read as made starts too.
 
 **The labs it is worked with** (`build/release/labs <name> ...`, `--basedir=<basedir>`):
 
 | Lab | What it answers |
 | --- | --- |
-| `se-team` | a 4on4 of our bots on our server (a set: `--seeds`, `--variants`, `--jobs`): `--map`, `--seed`, `--minutes`, `--client-fed=1`, `--sides=1` (each side's numbers), `--features`, `--features-red`, `--features-blue`, `--trace=<tsv>` (`--trace-every`: every bot's command as a row: feet, speed, mode, goal, pilot mode, link kind, the view and who turned it), `--save=<mvd>`; the hop by skill always (`team.hop.<skill>.share`, `speed-p50`, `fast-share`, `flights`, `crash-share`, `gain-p50`, `takeoffs-360`, `chained-share`), the deaths in lava or slime (`team.deaths-in.*`); why and where they stand still (`team.still.mover-share`, `no-route-share`, `walk-share` and the top spots); the view's reversals by what turned it (`team.view.<writer>.*`, `team.view.reversals-per-s`, people 0.09); on a real map, every fast flight (380-460 at takeoff) read off the recording by se-moves' rule and put down to the pilot mode that flew it (`team.air.s380.<mode>.gain-p50`, `crash-share`) |
-| `se-people` | people and bots measured alike off recordings: in view, faced, speed, the hand's sweeps (`hand.*`, `hop.*`), fire in view, item control, wet; `--samples=<tsv>` every sample alive |
+| `se-team` | a 4on4 of our bots on our server (a set: `--seeds`, `--variants`, `--jobs`): `--map`, `--seed`, `--minutes`, `--client-fed=1`, `--sides=1` (each side's numbers), `--features`, `--features-red`, `--features-blue`, `--trace=<tsv>` (`--trace-every`: every bot's command as a row: feet, speed, mode, goal, pilot mode, link kind, the view and who turned it, the keys sent and the velocity), `--save=<mvd>`; the hop by skill always (`team.hop.<skill>.share`, `speed-p50`, `fast-share`, `flights`, `crash-share`, `gain-p50`, `takeoffs-360`, `chained-share`), the deaths in lava or slime (`team.deaths-in.*`); why and where they stand still (`team.still.mover-share`, `no-route-share`, `walk-share` and the top spots); the view's reversals by what turned it (`team.view.<writer>.*`, `team.view.reversals-per-s`, people 0.09); on a real map, every fast flight (380-460 at takeoff) read off the recording by se-moves' rule and put down to the pilot mode that flew it (`team.air.s380.<mode>.gain-p50`, `crash-share`) |
+| `se-people` | people and bots measured alike off recordings: in view, faced, speed, the hand's sweeps (`hand.*`, `hop.*`), fire in view, item control, wet, wall and player bumps (`bumps.*`, a minute and a minute at speed); `--samples=<tsv>` every sample alive |
 | `se-moves` | who moves fastest and the weave by speed, per player, off a folder of recordings (`--dir`); the ground between jumps (`jumps.ground-p50`, what a landing costs) and the chains (`jumps.chain-3plus-share`, `jumps.chain-first-off-p50`) |
 | `se-rj` | rocket, grenade and gap jumps read off recordings and clustered into tricks |
-| `se-reach` | a map's nav asked: `--route` node by node, `--floors`, `--escapes=fly` |
-| `se-spot` | a place drawn every way (top, cuts, inside views, a route) |
+| `se-recipes` | people's hop starts read off recordings (by level, the spots, `hop_starts.tsv`, `--frames`), every stop timed to 320 and 400 (`stop.*`: people's 35 % at 400 within 2.5 s), `--prove` the keys played back, `--book` the rows the bots copy |
+| `se-reach` | a map's nav asked: `--route` node by node, `--floors`, `--escapes=fly`; `--gaps=fly` stages every gap trick with an expert's pilot from 160-640 behind its lip (planned, jumped, takeoff speed, landed, refused; `--gap-trace=<tsv>` every command with the pilot's reason; pressed through an expert's keyboard as matches are while `keys` is in `--gap-features`, `-keys` the analog pilot): a gap jump judged in seconds, not in matches; `--walk='x y z > x y z'` walks a route through an expert's keyboard under a view trailing its heading (`--walk-view-lag`), already running at 250/320/400 on five headings, the runs into lava or slime tabled per `--walk-variants`: a pit's falls judged in seconds (a match has ~5, too few to judge) |
+| `se-spot` | a place drawn every way (top, cuts, inside views, a route); `--clip-top=<z>` cuts the map away over a height and steps through the roofs under it, to study a level under another |
+| `se-trick` | one bot down a trick map's course (ztrain, zjumps, ztricks, hoppa2 in the game folder's maps; `.bots/local.md`): the sections off the teleporters, every try's fails and stalls, each section from above and what the nav reaches (roofs cut away; `--clip-top`), `--trace` every command, `--backup`, `--spacing`; defaults to the trick maps' switches `+gappast,+lipjump` |
 | `se-duel` | 3-minute duels, deathmatch mode 4 on povdmm4 by default |
 
 ## What lives where

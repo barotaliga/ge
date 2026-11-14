@@ -30,8 +30,8 @@
 #include "forward/forward.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/client/demo.hpp"
-#include "shooters_edge/net/classic_channel.hpp"
 #include "shooters_edge/net/classic_client.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
 
 namespace shooters_edge::net {
