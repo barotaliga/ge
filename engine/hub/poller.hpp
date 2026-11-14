@@ -94,6 +94,10 @@ void poller_pump(Poller& p, net::Transport& t, int64_t now_us);
 const HubNode* poller_find(const Poller& p, const net::Address& address);
 // Nodes of these kinds that have answered.
 int poller_count(const Poller& p, uint8_t kinds);
+// The forwarder a browser page joins the game server at `server` through: one that answered,
+// takes pages (its record names a WebTransport port and a certificate) and reaches `server`; the
+// one with the fewest clients, or null when none does (docs/hub.md § Playing in a browser).
+const HubNode* poller_page_forward(const Poller& p, const net::Address& server);
 // Humans on a node's record: players who are neither bots, spectators nor viewers.
 // A record's bytes hashed (FNV-1a over status_write): equal records hash equal.
 uint64_t record_hash(const net::Status& s);
