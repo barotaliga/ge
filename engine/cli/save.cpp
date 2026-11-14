@@ -142,6 +142,14 @@ Outcome run_save_game(const BuildOptions& o, const Args& a, const std::string& s
     out.summary = "saved after " + text_of(m, "step") + " steps: " + text_of(m, "bytes") +
                   " bytes in " + text_of(m, "save_ms") + " ms, digest " + text_of(m, "digest");
     out.next = "ge save load " + file + " --steps=1200";
+  } else if (sub == "part") {
+    const std::string file = rel_path(o.repo, fs::path(text_of(m, "file")));
+    out.written.push_back(file);
+    out.summary = "the character's " + text_of(m, "chunk_count") +
+                  " chunks taken out: " + text_of(m, "bytes") + " bytes";
+    out.next =
+        "import it into a run on another setup: play::import_character (docs/saves.md "
+        "§ Part of a run)";
   } else if (sub == "load") {
     out.summary = "loaded at step " + text_of(m, "step") + " in " + text_of(m, "load_ms") +
                   " ms (the map's build included), digest " + text_of(m, "digest_loaded") +

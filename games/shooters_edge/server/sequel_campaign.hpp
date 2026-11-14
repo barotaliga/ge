@@ -39,9 +39,8 @@ const SequelEntity* campaign_spot(const SequelServer& s, int slot);
 void campaign_body(SequelServer& s, int slot, bool respawn);
 // The frame's help news: unread marks and their beeps.
 void campaign_frame(SequelServer& s);
-// A player's command the campaign answers (`help`, `putaway`, `inven`); false for others.
-bool campaign_command(SequelServer& s, int slot, const std::string& cmd);
-// The help computer's screen as player `slot` sees it, line by line.
+// The help computer's screen as a layout program (sequel_screens.hpp shows it): the picture, the
+// skill, the level's name, both messages, and the kills, goals and secrets found of their totals.
 std::string campaign_help_screen(const SequelServer& s);
 
 }  // namespace shooters_edge::server

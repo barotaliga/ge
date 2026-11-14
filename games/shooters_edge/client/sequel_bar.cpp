@@ -85,6 +85,12 @@ void run_sequel_bar(SequelBar& bar, const server::RulesWorld& world, int slot, i
     return sequel_world_string(s.world, index, s.scratch);
   };
   hud::run_layout(in, bar.ops);  // its text copied out of the strings as they are read
+  const server::WorldClient& me = world.clients[slot];
+  if ((in.stats[13] & 1) == 0 || me.layout.empty()) return;
+  std::vector<hud::LayoutOp> over;  // the screen the rules sent him, over the bar
+  in.program = me.layout;
+  hud::run_layout(in, over);
+  for (hud::LayoutOp& op : over) bar.ops.push_back(std::move(op));
 }
 
 void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, int width,
