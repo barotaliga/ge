@@ -1,7 +1,7 @@
 ---
 title: Share QC between the two program forms through a glue file, and check every message format
 date: 2026-10-31
-scope: games/shooters_edge/qc/
+scope: games/shooters_edge/rules/
 concepts: [qc, program-form, single-player, multiplayer, glue, variant, temp-entity, campaign-host]
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: A blast's pellets land as one blow; a lab's effects need the pack's palette and the drawn models
 date: 2026-11-09
-scope: games/shooters_edge/qc/common/weapons.qc, games/shooters_edge/bots/companion.cpp, games/shooters_edge/client/world_fx.cpp, games/shooters_edge/labs/gpu_se_deaths_lab.cpp
+scope: games/shooters_edge/rules/common_weapons.cpp, games/shooters_edge/bots/companion.cpp, games/shooters_edge/client/world_fx.cpp, games/shooters_edge/labs/gpu_se_deaths_lab.cpp
 concepts: [gib, gibs, blood, pellets, multi-damage, quad, super-shotgun, blood-trail, model-flags, palette, fx-state, se-deaths]
 ---
 
