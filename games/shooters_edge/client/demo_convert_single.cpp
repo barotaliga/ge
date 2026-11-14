@@ -1,7 +1,10 @@
-// A SINGLE-PLAYER DEMO (`.dem`, protocol 15) CONVERTED TO A MULTIVIEW RECORDING (`.mvd`) as its
-// blocks arrive (demo_convert.hpp): each block's messages read in order and written as the
-// multiplayer protocol's, so a client that plays recordings of matches plays the demo, and a
-// broadcast serves it.
+// A SINGLE-PLAYER DEMO (`.dem`, protocol 15) CONVERTED TO A MULTIVIEW RECORDING (`.mvd`) OR A
+// CLIENT RECORDING as its blocks arrive (demo_convert.hpp): each block's messages read in order
+// and written as the multiplayer protocol's, so a client that plays recordings of matches plays
+// the demo, and a broadcast serves it. What follows is the multiview target; the client target
+// reads the source the same way and hands each frame to demo_convert_client.hpp's writer (the
+// view's player whole every frame, its velocity from `clientdata`, a view set carried by the
+// command records' angles, a block's messages between frames held for the next frame).
 //
 // THE SOURCE, as demo.hpp reads it: the music track as text and a newline, then blocks of an i32
 // length, three f32 view angles (degrees) and the messages.
@@ -56,7 +59,7 @@
 #include <string>
 #include <utility>
 
-#include "shooters_edge/client/demo_convert.hpp"
+#include "shooters_edge/client/demo_convert_client.hpp"
 
 namespace shooters_edge::client {
 
@@ -69,37 +72,8 @@ constexpr int kSlots = 32;
 constexpr size_t kListChunk = 1024;  // a list message's names before the next chunk, bytes
 constexpr int32_t kNoStat = INT32_MIN;
 
-struct Out {
-  std::vector<uint8_t> b;
-  void u8(int v) { b.push_back(static_cast<uint8_t>(v)); }
-  void i16(int v) {
-    u8(v & 0xFF);
-    u8((v >> 8) & 0xFF);
-  }
-  void i32(int32_t v) {
-    const auto u = static_cast<uint32_t>(v);
-    for (int i = 0; i < 4; i++) u8(static_cast<int>((u >> (8 * i)) & 0xFF));
-  }
-  void f32(float f) {
-    uint32_t u = 0;
-    std::memcpy(&u, &f, sizeof u);
-    i32(static_cast<int32_t>(u));
-  }
-  void str(const std::string& s) {
-    b.insert(b.end(), s.begin(), s.end());
-    b.push_back(0);
-  }
-  void bytes(std::span<const uint8_t> s) { b.insert(b.end(), s.begin(), s.end()); }
-  bool empty() const { return b.empty(); }
-};
-
-// An entity's state as the wire carries it: the bytes, so nothing is rounded twice.
-struct Ent {
-  int model = 0, frame = 0, colormap = 0, skin = 0, effects = 0;
-  std::array<int16_t, 3> origin{};
-  std::array<int8_t, 3> angles{};
-  bool operator==(const Ent&) const = default;
-};
+using Out = ConvOut;
+using Ent = ConvEnt;
 
 // A player as last written in the recorder's form.
 struct Written {
@@ -126,22 +100,7 @@ enum : uint16_t {
   kSrcLongEntity = 1 << 14,
 };
 
-// The target's entity-delta flags (demo_client.cpp's table): the word's, then the more byte's.
-enum : uint16_t {
-  kOrigin1 = 1 << 9,
-  kOrigin2 = 1 << 10,
-  kOrigin3 = 1 << 11,
-  kAngle2 = 1 << 12,
-  kFrame = 1 << 13,
-  kRemove = 1 << 14,
-  kMoreBits = 1 << 15,
-  kAngle1 = 1 << 0,
-  kAngle3 = 1 << 1,
-  kModel = 1 << 2,
-  kColormap = 1 << 3,
-  kSkin = 1 << 4,
-  kEffects = 1 << 5,
-};
+constexpr int kRemove = 1 << 14;  // the entity list's removal bit
 
 // The target's player-form bits.
 constexpr int kMvOrigin = 1, kMvAngles = 8, kMvEffects = 64, kMvSkin = 128, kMvDead = 256;
@@ -159,11 +118,17 @@ enum : uint16_t {
   kCdWeapon = 1 << 14,
 };
 
-int angle16_of(float deg) {
-  return static_cast<int>(std::lround(deg * 65536.0f / 360.0f)) & 0xFFFF;
-}
-
-struct SingleToMultiview final : ConvertStream {
+struct SingleConvert final : ConvertStream {
+  explicit SingleConvert(bool to_client) : client(to_client) {}
+  const bool client;  // the target: a client recording, else a multiview recording
+  ClientRecording rec;
+  bool level_pending = false;  // a client recording's level not yet written (its view unknown)
+  std::vector<std::string> level_models, level_sounds;
+  int level_game_type = 0;
+  double level_base = 0, clock = 0;   // the client recording's time at the level, and the last
+  ClientPlayer view_player;           // the view's player as last updated
+  std::array<int16_t, 3> velocity{};  // the view's, units a second
+  ConvMessages all_, single_, carry_;
   bool header = false;   // the music line read
   bool level = false;    // a level's signon written
   bool framed = false;   // the level's first frame written
@@ -258,6 +223,16 @@ struct SingleToMultiview final : ConvertStream {
     stats.fill(0);
     stats_written.fill(kNoStat);
     c.notes.levels++;
+    if (client) {
+      level_pending = true;
+      level_models = std::move(models);
+      level_sounds = std::move(sounds);
+      level_game_type = game_type;
+      level_base = c.notes.levels > 1 ? clock + 0.1 : 0;
+      view_player = ClientPlayer{};
+      carry_.clear();
+      return !m.bad;
+    }
     Out sd;
     sd.u8(11);  // serverdata: protocol, server count, game folder, time, title, movement
     sd.i32(28);
@@ -316,48 +291,9 @@ struct SingleToMultiview final : ConvertStream {
     return e;
   }
 
-  static void write_spawn(Out& o, const Ent& e) {
-    o.u8(e.model);
-    o.u8(e.frame);
-    o.u8(e.colormap);
-    o.u8(e.skin);
-    for (size_t i = 0; i < 3; i++) {
-      o.i16(e.origin[i]);
-      o.u8(static_cast<uint8_t>(e.angles[i]));
-    }
-  }
-
-  // An entity's delta from `from` to `to` under target number `q`; nothing when it did not change
-  // and `always` is off.
+  static void write_spawn(Out& o, const Ent& e) { conv_write_spawn(o, e); }
   static void write_delta(Out& o, int q, const Ent& from, const Ent& to, bool always) {
-    int bits = 0;
-    if (to.origin[0] != from.origin[0]) bits |= kOrigin1;
-    if (to.origin[1] != from.origin[1]) bits |= kOrigin2;
-    if (to.origin[2] != from.origin[2]) bits |= kOrigin3;
-    if (to.angles[0] != from.angles[0]) bits |= kAngle1;
-    if (to.angles[1] != from.angles[1]) bits |= kAngle2;
-    if (to.angles[2] != from.angles[2]) bits |= kAngle3;
-    if (to.frame != from.frame) bits |= kFrame;
-    if (to.model != from.model) bits |= kModel;
-    if (to.colormap != from.colormap) bits |= kColormap;
-    if (to.skin != from.skin) bits |= kSkin;
-    if (to.effects != from.effects) bits |= kEffects;
-    if (bits == 0 && !always) return;
-    const int more = bits & 0xFF;
-    if (more != 0) bits |= kMoreBits;
-    o.i16(q | (bits & 0xFE00));
-    if (more != 0) o.u8(more);
-    if ((bits & kModel) != 0) o.u8(to.model);
-    if ((bits & kFrame) != 0) o.u8(to.frame);
-    if ((bits & kColormap) != 0) o.u8(to.colormap);
-    if ((bits & kSkin) != 0) o.u8(to.skin);
-    if ((bits & kEffects) != 0) o.u8(to.effects);
-    const int ob[3] = {kOrigin1, kOrigin2, kOrigin3};
-    const int ab[3] = {kAngle1, kAngle2, kAngle3};
-    for (size_t i = 0; i < 3; i++) {
-      if ((bits & ob[i]) != 0) o.i16(to.origin[i]);
-      if ((bits & ab[i]) != 0) o.u8(static_cast<uint8_t>(to.angles[i]));
-    }
+    conv_write_delta(o, q, from, to, always);
   }
 
   const Ent& baseline_target(int q) const {
@@ -376,11 +312,11 @@ struct SingleToMultiview final : ConvertStream {
       cur.any = true;
       cur.origin = e.origin;
       if (slot == pov) {
-        for (size_t i = 0; i < 3; i++) cur.angles[i] = angle16_of(view[i]);
+        for (size_t i = 0; i < 3; i++) cur.angles[i] = conv_angle16(view[i]);
       } else {
-        cur.angles[0] = angle16_of(static_cast<float>(e.angles[0]) * (360.0f / 256.0f) * -3.0f);
-        cur.angles[1] = angle16_of(static_cast<float>(e.angles[1]) * (360.0f / 256.0f));
-        cur.angles[2] = angle16_of(static_cast<float>(e.angles[2]) * (360.0f / 256.0f));
+        cur.angles[0] = conv_angle16(static_cast<float>(e.angles[0]) * (360.0f / 256.0f) * -3.0f);
+        cur.angles[1] = conv_angle16(static_cast<float>(e.angles[1]) * (360.0f / 256.0f));
+        cur.angles[2] = conv_angle16(static_cast<float>(e.angles[2]) * (360.0f / 256.0f));
         rewrite(c, "another player's view pitch from his body's");
       }
       cur.model = e.model;
@@ -507,7 +443,10 @@ struct SingleToMultiview final : ConvertStream {
   bool block(DemoConvert& c, std::span<const uint8_t> body, std::vector<uint8_t>& out,
              std::string& error) {
     DemoMsg m{body};
-    Out all, single;
+    all_.clear();
+    single_.clear();
+    Out& all = all_.out;
+    Out& single = single_.out;
     bool has_time = false;
     updated.clear();
     while (!m.done() && !m.bad && !stopped) {
@@ -585,7 +524,12 @@ struct SingleToMultiview final : ConvertStream {
             }
             break;
           }
-          case 10: {  // setangle: the recorder's slot first
+          case 10: {       // setangle: the recorder's slot first
+            if (client) {  // the view turns now; the command records carry it
+              for (float& a : view) a = static_cast<float>(m.u8()) * (360.0f / 256.0f);
+              rewrite(c, "a view set carried by the command records' angles");
+              break;
+            }
             all.u8(10);
             all.u8(pov);
             for (int i = 0; i < 3; i++) all.u8(m.u8());
@@ -629,7 +573,8 @@ struct SingleToMultiview final : ConvertStream {
             if ((bits & kCdIdealPitch) != 0) m.i8();
             for (int i = 0; i < 3; i++) {
               if ((bits & (kCdPunch1 << i)) != 0) m.i8();
-              if ((bits & (kCdVelocity1 << i)) != 0) m.i8();
+              velocity[static_cast<size_t>(i)] =
+                  static_cast<int16_t>((bits & (kCdVelocity1 << i)) != 0 ? m.i8() * 16 : 0);
             }
             if ((bits & kCdItems) != 0) stats[kStatItems] = m.i32();
             weapon_frame = (bits & kCdWeaponFrame) != 0 ? m.u8() : 0;
@@ -715,6 +660,7 @@ struct SingleToMultiview final : ConvertStream {
             all.u8(22);
             all.i16(q);
             write_spawn(all, e);
+            if (client) rec.baseline(q, e);
             break;
           }
           case 23:
@@ -778,6 +724,8 @@ struct SingleToMultiview final : ConvertStream {
             ok = false;
         }
       }
+      all_.mark();
+      single_.mark();
       if (!ok || m.bad) {
         if (ok) error = "message id " + std::to_string(id) + " runs past the block's end";
         error += " (message at offset " + std::to_string(at) +
@@ -790,6 +738,7 @@ struct SingleToMultiview final : ConvertStream {
         drop(c, "messages before the level's start");
       return true;
     }
+    if (client) return client_block(c, has_time || !updated.empty(), out);
     if (has_time || !updated.empty()) {
       if (!framed) {
         Out skins;
@@ -812,6 +761,97 @@ struct SingleToMultiview final : ConvertStream {
       if (framed) stats_record(out);
     }
     return true;
+  }
+
+  // The client recording's level, written once its view is known (the source names it after
+  // the level's start).
+  void write_level(DemoConvert& c, std::vector<uint8_t>& out) {
+    ClientLevel l;
+    l.game = c.options.game;
+    l.title = title;
+    l.player = pov;
+    l.server_count = static_cast<int>(c.notes.levels);
+    l.models = level_models;
+    l.sounds = level_sounds;
+    l.server_info = "\\maxclients\\" + std::to_string(max_clients) + "\\deathmatch\\" +
+                    std::to_string(level_game_type != 0 ? 1 : 0) + "\\coop\\" +
+                    std::to_string(level_game_type == 0 && max_clients > 1 ? 1 : 0) +
+                    "\\*gamedir\\" + c.options.game + "\\map\\" + map;
+    rec.level(out, level_base, l, c.notes);
+    clock = level_base;
+    level_pending = false;
+  }
+
+  // A block for the client recording: the signon's messages, or a frame and its messages (those
+  // of a block between frames wait for the next frame).
+  bool client_block(DemoConvert& c, bool frame, std::vector<uint8_t>& out) {
+    if (level_pending) write_level(c, out);
+    if (!frame) {
+      if (!framed) {
+        rec.signon(out, clock, all_);
+        rec.signon(out, clock, single_);
+      } else {
+        append(carry_, all_);
+        append(carry_, single_);
+      }
+      return true;
+    }
+    if (!timed) {
+      t0 = now;
+      timed = true;
+    }
+    ClientFrame f;
+    clock = std::max(clock, level_base + 0.1 + (now - t0));
+    f.time = clock;
+    f.view = view;
+    for (const auto& [n, e] : updated) {
+      if (n > max_clients) {
+        const int q = target_number(n);
+        if (q >= kMostTarget)
+          drop(c, "an entity numbered past the list's end");
+        else
+          f.entities.emplace(q, e);
+        continue;
+      }
+      const int slot = n - 1;
+      ClientPlayer p;
+      p.present = true;
+      p.origin = e.origin;
+      p.frame = e.frame;
+      p.model = e.model;
+      p.skin = e.skin;
+      p.effects = e.effects;
+      if (slot == pov) {
+        view_player = p;
+      } else {
+        p.angles = {static_cast<float>(e.angles[0]) * (360.0f / 256.0f) * -3.0f,
+                    static_cast<float>(e.angles[1]) * (360.0f / 256.0f), 0};
+        rewrite(c, "another player's view pitch from his body's");
+        f.players[static_cast<size_t>(slot)] = p;
+      }
+    }
+    if (view_player.present) {
+      ClientPlayer& v = f.players[static_cast<size_t>(pov)];
+      v = view_player;
+      v.angles = view;
+      v.velocity = velocity;
+      v.weapon_frame = weapon_frame;
+      v.dead = stats[kStatHealth] <= 0;
+    }
+    f.stats = stats;
+    append(carry_, all_);
+    append(carry_, single_);
+    rec.frame(out, f, carry_, c.notes);
+    carry_.clear();
+    framed = true;
+    c.notes.frames++;
+    return true;
+  }
+
+  static void append(ConvMessages& to, const ConvMessages& from) {
+    const size_t base = to.out.size();
+    to.out.bytes(from.out.b);
+    for (size_t e : from.ends) to.ends.push_back(base + e);
   }
 
   bool temp_entity(DemoConvert& c, DemoMsg& m, Out& o, std::string& error) {
@@ -914,7 +954,12 @@ struct SingleToMultiview final : ConvertStream {
     if (c.ended && !end_written) {
       if (!c.in.empty()) drop(c, "a block cut short at the end");
       c.in.clear();
-      if (!c.options.no_end && level) {
+      if (client) {
+        if (level) {
+          if (level_pending) write_level(c, out);
+          rec.end(out, clock, !c.options.no_end, c.notes);
+        }
+      } else if (!c.options.no_end && level) {
         Out end;
         end.u8(2);  // disconnect
         end.str("EndOfDemo");
@@ -929,7 +974,11 @@ struct SingleToMultiview final : ConvertStream {
 }  // namespace
 
 std::unique_ptr<ConvertStream> single_to_multiview_stream() {
-  return std::make_unique<SingleToMultiview>();
+  return std::make_unique<SingleConvert>(false);
+}
+
+std::unique_ptr<ConvertStream> single_to_client_stream() {
+  return std::make_unique<SingleConvert>(true);
 }
 
 }  // namespace shooters_edge::client

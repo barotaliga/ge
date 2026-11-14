@@ -16,7 +16,8 @@
 namespace shooters_edge::client {
 
 bool convert_supported(DemoFormat from, DemoFormat to) {
-  return (from == DemoFormat::single && to == DemoFormat::multiview) ||
+  return (from == DemoFormat::single &&
+          (to == DemoFormat::multiview || to == DemoFormat::client)) ||
          (from == DemoFormat::sequel && to == DemoFormat::sequel);
 }
 
@@ -44,12 +45,17 @@ bool convert_begin(DemoConvert& c, DemoFormat from, DemoFormat to, const Convert
     c.stream = single_to_multiview_stream();
     return true;
   }
+  if (from == DemoFormat::single && to == DemoFormat::client) {
+    c.stream = single_to_client_stream();
+    return true;
+  }
   if (from == DemoFormat::sequel && to == DemoFormat::sequel) {
     c.stream = sequel_to_34_stream();
     return true;
   }
   error = "a " + format_words(from) + " does not convert to a " + format_words(to) +
-          " yet: a .dem converts to a .mvd, and a .dm2 to a protocol 34 .dm2";
+          " yet: a .dem converts to a .mvd or a " + plain_extension(DemoFormat::client) +
+          ", and a .dm2 to a protocol 34 .dm2";
   return false;
 }
 

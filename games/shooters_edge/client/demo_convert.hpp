@@ -24,6 +24,10 @@
 //   own player is slot 0 (or his slot in a game of several), the other players are the slots
 //   their entities are, every other entity is renumbered past the 32 player slots, a frame a
 //   block that carries the server's time.
+// - SINGLE TO CLIENT (the client recording, protocol 28 with no extension): the same reading of
+//   the source (demo_convert_single.cpp), written by demo_convert_client.hpp for the oldest
+//   clients: the recorder's view as the recording's player, whole entity lists of at most 64, a
+//   command record a frame with the view's angles. The default for a recording of one view.
 // - SEQUEL TO SEQUEL (`.dm2` to `.dm2`): demo_convert_sequel.cpp. Any protocol the reader takes
 //   (26 to 34) written as protocol 34, which every stock client and the TV's viewers take; a
 //   protocol 34 recording comes back byte for byte.
@@ -113,6 +117,7 @@ std::string format_words(DemoFormat f);
 
 // --- the pairs (demo_convert_*.cpp) ---
 std::unique_ptr<ConvertStream> single_to_multiview_stream();
+std::unique_ptr<ConvertStream> single_to_client_stream();
 std::unique_ptr<ConvertStream> sequel_to_34_stream();
 
 }  // namespace shooters_edge::client
