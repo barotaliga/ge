@@ -9,7 +9,8 @@
 //   make lab LAB=save-character
 //   make lab LAB=save-character ARGS="--from=38 --into=7 --seconds=90"
 //
-// ge:summary Lab: Fall Line's skier profile taken from seed 38 and carried into seed 7, nothing else
+// ge:summary Lab: Fall Line's skier profile taken from seed 38 and carried into seed 7,
+// ge:summary nothing else
 // ge:keywords lab save-character profile character career body carry import extract seed
 // ge:skill save sim labs
 // ge:test tests/fall_line_profile_test.cpp
@@ -82,7 +83,6 @@ void run(gl::Lab& lab) {
   const auto most = static_cast<int64_t>(lab.arg_num("seconds") * fs::kHz);
   const auto map_from = std::make_shared<const mg::Level>(fs::race_map(from));
   const auto map_into = std::make_shared<const mg::Level>(fs::race_map(into));
-  const std::string next = "Run tests/fall_line_profile_test.cpp; read profile.cpp (skill: save).";
 
   // The first run, and the whole run's save the game writes.
   fs::Driver a(map_from, 0);
@@ -98,7 +98,8 @@ void run(gl::Lab& lab) {
   }
   fs::Profile p;
   if (!fs::profile_of(a, p, error)) {
-    lab.fail("save-character: no profile from seed " + fmt(from, 0) + ": " + error, next);
+    lab.fail("save-character: no profile from seed " + fmt(from, 0) + ": " + error,
+             "next: run make test T=fall_line_profile; read profile.cpp; skill: save");
     return;
   }
   sv::Meta meta;
@@ -112,14 +113,16 @@ void run(gl::Lab& lab) {
   }
   const std::array<uint32_t, 1> tags{fs::kProfileTag};
   if (!sv::extract(whole, "fall_line", tags, "the skier", character, error)) {
-    lab.fail("save-character: the character does not cut out of the run's save: " + error, next);
+    lab.fail("save-character: the character does not cut out of the run's save: " + error,
+             "next: run make test T=fall_line_profile; read profile.cpp; skill: save");
     return;
   }
   sv::FileReader r;
   fs::Profile carried;
   if (!r.open(character, "character", "fall_line") ||
       !r.get(fs::kProfileTag, 0, fs::kProfileVersion, carried)) {
-    lab.fail("save-character: the character file does not read: " + r.problem(), next);
+    lab.fail("save-character: the character file does not read: " + r.problem(),
+             "next: run make test T=fall_line_profile; read profile.cpp; skill: save");
     return;
   }
 
@@ -158,13 +161,14 @@ void run(gl::Lab& lab) {
   if (!career_equal || !body_equal)
     lab.fail("save-character: the profile carried into seed " + fmt(into, 0) +
                  " is not the one taken from seed " + fmt(from, 0),
-             next);
+             "next: run make test T=fall_line_profile; read profile.cpp; skill: save");
   if (!rest_equal || parted >= 0)
     lab.fail("save-character: carrying the profile changed seed " + fmt(into, 0) + "'s own run" +
                  (parted >= 0 ? " (parted at step " + std::to_string(parted) + ")" : ""),
-             next);
+             "next: run make test T=fall_line_profile; read profile.cpp; skill: save");
   if (two.career.runs != 2 || two.career.seconds != p.career.seconds + b.state().t)
-    lab.fail("save-character: the career from the second run is not both runs summed", next);
+    lab.fail("save-character: the career from the second run is not both runs summed",
+             "next: run make test T=fall_line_profile; read profile.cpp; skill: save");
 
   gl::LabTable t{"the skier's career",
                  {"profile", "runs", "finishes", "best s", "skied s", "m", "top km/h", "wipeouts",
