@@ -1764,9 +1764,10 @@ The sequel's menu is drawn in its own pictures too (`client/sequel_adapter.cpp` 
 screen with the 320 x 200 one in its middle. The root is its main menu: the plaque and the logo
 down the left, a plate for each row, the lit plate and the spinning cursor on the focused row.
 Each page under it has its banner over the top. SELECT GAME and DEMOS have no plate of
-their own, so each is built from the other plates' letters, a 17 px cell each. The C, the H and
-the K are pieced from O, N, R and Y (`kPlate*`, held to the plates' print). SELECT GAME's title and
-the two games' names on it are plates built the same way. The lobby and the scoreboard stay
+their own, so each is built from the other plates' letters cut out as see-through ink, the
+missing ones pieced from them, laid on a tag of the banners' dirty metal as wide as the word
+(`menu/plate_letters.hpp`, held to the plates' print). SELECT GAME's title and the two games'
+names on it are built the same way. The lobby and the scoreboard stay
 modern in the sequel until their pictures are read.
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
