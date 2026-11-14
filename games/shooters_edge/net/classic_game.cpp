@@ -773,6 +773,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   if (c.host != nullptr) {  // a listen server: the window's program, folder and first map
     g->host = static_cast<cl::ListenHost*>(c.host);
     g->program = g->host->progs;
+    if (g->host->module != nullptr) g->module = *g->host->module;  // a mod's compiled module
     if (g->host->files != nullptr) g->files = *g->host->files;
     g->map = g->host->map;
   } else {

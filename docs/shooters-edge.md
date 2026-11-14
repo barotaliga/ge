@@ -1076,10 +1076,13 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   So is the body's physics: `cr_physics` gives the played game's move the other game's running
   speed, friction, air, landing pause, swimming and harm from a fall from the next map (the
   classic rules by the settings `sv_maxspeed`, `sv_friction`, `pm_airaccel`, `pm_airwish`,
-  `pm_landpause`, `sv_waterfriction`, `pm_swimscale`, `pm_waterjump` and the arena's
+  `pm_landpause`, `sv_waterfriction`, `pm_swimscale`, `pm_waterjump`, `pm_airclimb` (the
+  sequel's stair jump: a ledge reached still rising climbed and the rise kept) and the arena's
   `sv_falldamage`; the sequel's by `sv_physics classic`), each move keeping its own code, and
   nothing a weapon does; lab `se-remix-physics` compares them. A remixed map keeps at most
   `cr_weak_same` copies of a weak weapon, the rest laid down as its ammunition.
+  A classic mod with a compiled module (`qwprogs.qvm`) plays the window's match on it, on the
+  sequel's maps too; the mod sets the boundaries, so `cr_items` and `cr_physics` step aside.
 
 Lab `se-remix` draws a real map of each game from above with its own items and with the other
 game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`); `se-client
