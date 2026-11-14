@@ -1,6 +1,6 @@
-// The hub's pages, defined: the routes, the HTML of each page, the stylesheet.
+// The hub's pages, defined: the routes and the HTML of each page (the stylesheet is style.cpp).
 //
-// ge:summary The hub's pages defined: routing, servers' cards, players, scoreboard, stylesheet
+// ge:summary The hub's pages defined: routing, servers' cards, players, scoreboard
 // ge:keywords hub pages html route card scoreboard players stylesheet escape
 // ge:skill net
 // ge:test tests/hub_pages_test.cpp

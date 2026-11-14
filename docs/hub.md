@@ -294,8 +294,20 @@ that hands the viewer `--run`.
   spectators and watchers, and Join, Spectate and Watch links in the game's scheme), the mode
   filters (`/?mode=`) above and the empty servers listed after. `/players` lists every person, people
   before bots; `/scoreboard/{address}` is one server's scoreboard for a streamer's overlay;
-  `/style.css` is dark by default and light when the reader's system asks. Every text a server sends
+  `/style.css` (`style.cpp`) is light or dark as the reader's system asks. Every text a server sends
   is escaped. `hub_answer` routes a path to the API or a page.
+
+- **The look (M56l).** Every page wears its game's look: `HubSpec::look` puts `data-look` on the
+  page's root, and the stylesheet keeps one block of colour tokens a look, light and dark (`""` the
+  engine's slate and teal, `arena` warm charcoal and ember for Shooter's Edge, `alpine` glacier and
+  night sky for Fall Line); the shapes are the same for every game, so a new look is only tokens. A
+  card's map is a banner in the map's own hue (FNV-1a of its name, so `tower` is the same colour on
+  every hub), a match being played wears a pulsing live badge, a team match a bar of the teams'
+  shares, and the sums are large numbers. The headings take a condensed display face from the
+  reader's system (no font is fetched); a phone gets one column, a nav that scrolls sideways and
+  the Demos table's less needed columns dropped. The `hub-pages` lab draws every page (Servers,
+  Players, Demos, Watch, a player's, a match's, Leaders, Account, the overlay) at a desktop's and a
+  phone's width in both schemes.
 
 - **M56d** (`hub-archive`): `archive.hpp` is the demo archive: replay files kept by SHA-256 under
   `d/abc/`, each row read from the hub's meta words, the same file from two places kept once,
