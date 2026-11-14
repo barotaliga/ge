@@ -91,8 +91,8 @@ TEST(menu_has_the_classic_pages_and_rows) {
   for (size_t i = 0; i < 6; i++) CHECK(root.items[i].id == rows[i]);
   for (const char* p : {"single", "multi", "host", "setup", "options", "video", "help", "quit"})
     CHECK_MSG(m.page(p) != nullptr, std::string("no page ") + p);
-  for (const Page* p : {m.page("single"), m.page("multi")})
-    CHECK(p->items.size() == 4);  // three rows, as the classic strips, and BACK
+  CHECK(m.page("single")->items.size() == 4);  // three rows, as the classic strip, and BACK
+  CHECK(m.page("multi")->items.size() == 5);   // the strip's three, RANKED GAME and BACK
   for (const sm::Entry& e : sm::entries())
     CHECK_MSG(item(m, e.page, e.id) != nullptr, std::string(e.page) + "." + std::string(e.id));
 }
@@ -170,6 +170,29 @@ TEST(new_game_start_runs_the_rules_then_the_map) {
   CHECK(std::find(w.ran.begin(), w.ran.end(), "sv fraglimit 0") != w.ran.end());
   CHECK(std::find(w.ran.begin(), w.ran.end(), "sv teamplay 0") != w.ran.end());
   CHECK(!w.ran.empty() && w.ran.back() == "map dm1");
+}
+
+TEST(ranked_game_looks_for_a_duel_once_the_console_can) {
+  World w;
+  Menu m = sm::build_menu();
+  sm::Host host{.console = &w.con};
+  sm::refresh(m, host);
+  CHECK(item(m, "multi", "ranked")->disabled);  // no `ranked` command: no account client
+  w.con.add_command("ranked", "", [&w](ge::console::Console&, const ge::console::Args& a) {
+    w.ran.push_back("ranked " + a.rest(0));
+  });
+  sm::refresh(m, host);
+  CHECK(!item(m, "multi", "ranked")->disabled);
+  m.open("multi");
+  for (const MenuEvent& e : press(m, "ranked")) sm::apply_event(e, m, host);
+  CHECK(m.top().id == "ranked");
+  sm::Outcome out = sm::Outcome::none;
+  for (const MenuEvent& e : press(m, "duel")) out = sm::apply_event(e, m, host);
+  CHECK(out == sm::Outcome::close);
+  CHECK(!w.ran.empty() && w.ran.back() == "ranked 1on1");
+  m.open("ranked");
+  for (const MenuEvent& e : press(m, "leave")) sm::apply_event(e, m, host);
+  CHECK(w.ran.back() == "ranked leave");
 }
 
 // GAME TYPE COOPERATIVE with a campaign to play starts a coop game on the map, so bots may join;
@@ -550,7 +573,7 @@ TEST(both_looks_lay_every_page_out_clean) {
     for (const char* page :
          {"main",       "single",   "multi",    "host",   "setup",    "options",    "video",
           "weapon",     "controls", "enhanced", "ce_art", "ce_light", "ce_liquids", "ce_fire",
-          "ce_weather", "help",     "quit",     "load",   "save",     "games"}) {
+          "ce_weather", "help",     "quit",     "load",   "save",     "games",      "ranked"}) {
       for (const auto& [width, height] : {std::pair{1280, 720}, std::pair{390, 844}}) {
         g.show(host, page);
         CHECK(g.classic() == (std::string(look) == "classic"));

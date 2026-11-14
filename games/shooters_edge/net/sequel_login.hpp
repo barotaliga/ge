@@ -11,8 +11,11 @@
 //   sequel_login_open(l, server, settings, own, link, unix_us, error)
 //   sequel_login_frame(l, now_s)   once a frame, after sequel_net_frame
 //
+// A server with `sv_ranked` offers its free players' seats to the matchmaker (logins_offer), the
+// ladder's game its folder (`game`), signed by `logins.signer` when the master is another process.
+//
 // ge:summary Logins on the sequel's server: the line taken before the rules, 38-wide prompts
-// ge:keywords sequel-login login sv_login login-prompt reserved-names sequel_login_frame
+// ge:keywords sequel-login login sv_login login-prompt reserved-names sequel_login_frame sv_ranked
 // ge:skill net shooter
 // ge:test tests/shooters_edge_sequel_login_test.cpp
 #pragma once
@@ -32,6 +35,7 @@ struct SequelLogin {
   ge::server::Logins logins;
   SequelNetServer* server = nullptr;
   int64_t (*unix_us)() = nullptr;
+  std::string game = "baseq2";  // the ladder's game: the sequel's folder
 };
 
 // How the sequel's names fold: lower case, look-alikes folded, at most 15 characters.

@@ -262,12 +262,13 @@ void take_blow(DemoState& s, const DemoBlow& b);
 // The sequel format's player state, as its frames carry it (whole 1/8 units, 1/4 units, angle16).
 struct SequelView {
   int32_t frame = -1;  // the server frame it is of (-1: none kept in this slot)
-  int16_t origin[3] = {}, velocity[3] = {}, delta[3] = {}, angles[3] = {};
+  int32_t origin[3] = {}, velocity[3] = {};  // in 1/8 unit (wider than a short on 3435 on)
+  int16_t delta[3] = {}, angles[3] = {};
   int8_t offset[3] = {}, kick[3] = {}, gun_offset[3] = {}, gun_angles[3] = {};
   uint8_t blend[4] = {};
   int pm_type = 0, pm_time = 0, pm_flags = 0, gravity = 0;
   int gun_model = 0, gun_frame = 0, fov = 0, rdflags = 0;
-  int16_t stats[32] = {};
+  int16_t stats[64] = {};  // 32 before protocol 3435
 };
 
 // One message of a sequel block as the reader walked it: its id and where it lies in the block
@@ -346,6 +347,8 @@ struct DemoMsg {
   // When set, read_single_messages pushes each message's offset in `b` (where its id is), so a
   // caller can cut a block at its messages (net/classic_tv_netgame.hpp).
   std::vector<uint32_t>* marks = nullptr;
+  bool int23 =
+      false;  // a sequel stream of protocol 3435 on: its points are int23 (demo_sequel.cpp)
   int u8();
   int i8();
   int i16();

@@ -190,7 +190,7 @@ struct Game {
   sm::Host host;
   Game() {
     using CArgs = ge::console::Args;
-    for (const char* c : {"map", "sv", "quit", "newgame", "load", "save", "basedir"})
+    for (const char* c : {"map", "sv", "quit", "newgame", "load", "save", "basedir", "ranked"})
       con.add_command(c, "", [](ge::console::Console&, const CArgs&) {});
     con.add_command("toggleconsole", "", [](ge::console::Console&, const CArgs&) {});
     shooters_edge::client::add_cvars(con, controls);
@@ -240,8 +240,11 @@ constexpr PageShot kPages[] = {
      "SAVE: the same twelve slots, every one open; a slot runs `save s<i>` (a used slot is "
      "saved over)."},
     {"multi", "host",
-     "MULTIPLAYER: JOIN A GAME dimmed until the client plays over the network; NEW GAME and "
-     "SETUP."},
+     "MULTIPLAYER: JOIN A GAME dimmed until the client plays over the network; NEW GAME, SETUP "
+     "and RANKED GAME."},
+    {"ranked", "duel",
+     "RANKED GAME: 1ON1 runs `ranked 1on1` (matched by rating, joined once found); 2ON2 opens "
+     "the console for the duo's name; STOP LOOKING leaves the queue."},
     {"host", "teamplay",
      "NEW GAME: the server's rules read from its cvars (deathmatch 1, 20 frags, 15 minutes), "
      "TEAMPLAY and SKILL with them; MAX PLAYERS dimmed until others can join over the network."},

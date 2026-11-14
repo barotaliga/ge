@@ -209,11 +209,16 @@ Light classic_light(const double p[3], double radius_u) {
 
 Light muzzle_light(const double p[3]) { return classic_light(p, 200); }
 
-Light rocket_light(const double p[3]) { return classic_light(p, 200); }
+Light rocket_light(const double p[3]) {
+  Light l = classic_light(p, 200);
+  l.group = kLightRocket;
+  return l;
+}
 
 bool explosion_light(const double p[3], double age, Light* out) {
   if (age < 0 || age >= kExplosionLight) return false;
   *out = classic_light(p, 350 - 300 * age);  // 350 units, shrinking 300 a second
+  out->group = kLightExplosion;
   return true;
 }
 
