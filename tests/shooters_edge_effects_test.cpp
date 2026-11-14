@@ -8,6 +8,7 @@
 // ge:skill shooter
 #include <cmath>
 #include <cstring>
+#include <span>
 #include <vector>
 
 #include "check.hpp"
@@ -485,4 +486,15 @@ TEST(r_waterwarp_breathes_the_view_in_a_liquid_and_holds_it_in_the_air) {
   }
   con.execute("r_waterwarp 0");
   CHECK(lk::warped_fov(pic, fx::Medium::water, fov, quarter) == fov);
+}
+
+TEST(r_drawentities_0_draws_no_model_but_the_map) {
+  namespace lk = shooters_edge::look;
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  const std::vector<int> placed = {1, 2, 3};
+  CHECK(lk::drawn_models(pic, std::span<const int>(placed)).size() == 3);
+  con.execute("r_drawentities 0");
+  CHECK(lk::drawn_models(pic, std::span<const int>(placed)).empty());
 }
