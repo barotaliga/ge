@@ -405,3 +405,28 @@ TEST(r_dynamic_0_puts_out_the_moments_lights_in_either_look) {
   con.execute("r_fullbrightskins 3");
   CHECK(pic.fullbright_skins == 1);  // clamped to the cvar's range
 }
+
+TEST(the_v_cvars_tone_each_layer_of_the_screens_tint) {
+  namespace lk = shooters_edge::look;
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  CHECK(pic.content_blend == 1 && pic.damage_blend == 1 && pic.cshift_percent == 100);
+  CHECK(pic.poly_blend);
+  con.execute("v_contentblend 0; v_damagecshift 0.5; v_quadcshift 2; gl_cshiftpercent 40");
+  con.execute("gl_polyblend 0");
+  CHECK(pic.content_blend == 0 && pic.damage_blend == 0.5 && pic.quad_blend == 1);  // clamped
+  CHECK(pic.cshift_percent == 40 && !pic.poly_blend);
+  fx::Screen under;
+  under.medium = fx::Medium::water;
+  double a[4], b[4];
+  fx::screen_blend(under, a);
+  CHECK(a[3] > 0.3);  // the water's tint, whole
+  fx::screen_blend(under, b, {.content = 0});
+  CHECK(b[3] == 0);  // none of it
+  fx::Screen hit;
+  hit.hurt = 300;
+  fx::screen_blend(hit, a);
+  fx::screen_blend(hit, b, {.damage = 0.5});
+  CHECK(std::fabs(b[3] - a[3] / 2) < 1e-12);  // half the flash
+}

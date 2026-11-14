@@ -13,6 +13,7 @@
 // ge:keywords spawnbaseline spawnstatic temp-entity svc read_single_messages
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
+#include <algorithm>
 #include <cstdint>
 #include <string>
 
@@ -329,9 +330,14 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
           s.stopped.emplace_back(packed >> 3, packed & 7);
           break;
         }
-        case kUpdateColors:
-          m.skip(2);
+        case kUpdateColors: {  // a slot's colours: the shirt's row high, the trousers' low
+          const int slot = m.u8(), colours = m.u8();
+          if (slot >= 0 && static_cast<size_t>(slot) < s.top.size()) {
+            s.top[static_cast<size_t>(slot)] = std::min(colours >> 4, 13);
+            s.bottom[static_cast<size_t>(slot)] = std::min(colours & 15, 13);
+          }
           break;
+        }
         case kParticle:
           m.skip(6 + 3 + 2);
           break;

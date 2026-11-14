@@ -36,6 +36,7 @@
 #include <vector>
 
 #include "shooters_edge/client/demo_convert_client.hpp"
+#include "shooters_edge/client/demo_convert_single_out.hpp"
 
 namespace shooters_edge::client {
 
@@ -127,10 +128,12 @@ bool old_client_reads(int id) {
   }
 }
 
+// `Rec` writes the target: ClientRecording or SingleRecording, the same calls.
+template <class Rec>
 struct MultiviewToClient final : ConvertStream {
   Demo d;
   std::vector<DemoSpan> spans;
-  ClientRecording rec;
+  Rec rec;
   bool begun = false, stopped = false, end_written = false;
   // The level.
   bool level = false, in_signon = false;
@@ -574,7 +577,11 @@ struct MultiviewToClient final : ConvertStream {
 }  // namespace
 
 std::unique_ptr<ConvertStream> multiview_to_client_stream() {
-  return std::make_unique<MultiviewToClient>();
+  return std::make_unique<MultiviewToClient<ClientRecording>>();
+}
+
+std::unique_ptr<ConvertStream> multiview_to_single_stream() {
+  return std::make_unique<MultiviewToClient<SingleRecording>>();
 }
 
 void convert_set_pov(DemoConvert& c, int slot) { c.options.pov = slot; }

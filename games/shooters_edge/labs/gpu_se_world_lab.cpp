@@ -693,7 +693,7 @@ void run(gl::Lab& lab) {
     const char* names4[] = {"CLEAR AIR", "UNDER WATER", "IN LAVA", "HURT, POWERED"};
     for (int k = 0; k < 4; ++k) {
       double rgba[4];
-      fx::screen_blend(screens[k], rgba);
+      lk::toned_blend(f.picture, screens[k], rgba);  // the v_ cvars' shares
       pics.push_back(draw(d, f, first, fv, lk::Look::modern, true, 0, rgba));
       labels.push_back(names4[k]);
     }

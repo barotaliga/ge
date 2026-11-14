@@ -104,6 +104,124 @@ constexpr const RemixArsenal* remix_arsenal(std::string_view played, std::string
   return nullptr;
 }
 
+// A THING RENAMED (`Look`): a rules engine of our own that names its models and sounds in code
+// (the sequel's) wears another game's by name: each name the rules register is sent to the
+// players as `to`, an entity drawn with that model takes `skin`, and is drawn `offset` units from
+// where the rules hold it (the other game measures its items from another point of their box).
+struct Look {
+  std::string_view from;
+  std::string_view to;
+  int32_t skin = 0;
+  float offset[3] = {0, 0, 0};
+};
+
+// Where the classic game's items stand against the sequel's: the sequel's lie 15 units over the
+// floor, the classic weapons and armour on it, its boxes from their corner, its artifacts 24 over.
+inline constexpr float kOnFloor = -kSequelLift;
+inline constexpr float kArtifact = 24 - kSequelLift;
+
+// The sequel's rules in the classic game's things, by role as the item table maps the items
+// (profiles/remix.hpp): the shotgun the double-barrelled one, the machinegun and chaingun the
+// nailguns, the hyperblaster, railgun and BFG the lightning gun; the boxes and packs by kind and
+// size; the blaster the classic game's first gun, the hand grenades its grenade launcher.
+inline constexpr Look kSequelAsClassic[] = {
+    // In the hand.
+    {"models/weapons/v_blast/tris.md2", "progs/v_shot.mdl"},
+    {"models/weapons/v_shotg/tris.md2", "progs/v_shot2.mdl"},
+    {"models/weapons/v_shotg2/tris.md2", "progs/v_shot2.mdl"},
+    {"models/weapons/v_machn/tris.md2", "progs/v_nail.mdl"},
+    {"models/weapons/v_chain/tris.md2", "progs/v_nail2.mdl"},
+    {"models/weapons/v_launch/tris.md2", "progs/v_rock.mdl"},
+    {"models/weapons/v_handgr/tris.md2", "progs/v_rock.mdl"},
+    {"models/weapons/v_rocket/tris.md2", "progs/v_rock2.mdl"},
+    {"models/weapons/v_hyperb/tris.md2", "progs/v_light.mdl"},
+    {"models/weapons/v_rail/tris.md2", "progs/v_light.mdl"},
+    {"models/weapons/v_bfg/tris.md2", "progs/v_light.mdl"},
+    // On the floor.
+    {"models/weapons/g_shotg/tris.md2", "progs/g_shot.mdl", 0, {0, 0, kOnFloor}},
+    {"models/weapons/g_shotg2/tris.md2", "progs/g_shot.mdl", 0, {0, 0, kOnFloor}},
+    {"models/weapons/g_machn/tris.md2", "progs/g_nail.mdl", 0, {0, 0, kOnFloor}},
+    {"models/weapons/g_chain/tris.md2", "progs/g_nail2.mdl", 0, {0, 0, kOnFloor}},
+    {"models/weapons/g_launch/tris.md2", "progs/g_rock.mdl", 0, {0, 0, kOnFloor}},
+    {"models/weapons/g_rocket/tris.md2", "progs/g_rock2.mdl", 0, {0, 0, kOnFloor}},
+    {"models/weapons/g_hyperb/tris.md2", "progs/g_light.mdl", 0, {0, 0, kOnFloor}},
+    {"models/weapons/g_rail/tris.md2", "progs/g_light.mdl", 0, {0, 0, kOnFloor}},
+    {"models/weapons/g_bfg/tris.md2", "progs/g_light.mdl", 0, {0, 0, kOnFloor}},
+    {"models/items/armor/jacket/tris.md2", "progs/armor.mdl", 0, {0, 0, kOnFloor}},
+    {"models/items/armor/combat/tris.md2", "progs/armor.mdl", 1, {0, 0, kOnFloor}},
+    {"models/items/armor/body/tris.md2", "progs/armor.mdl", 2, {0, 0, kOnFloor}},
+    {"models/items/ammo/shells/medium/tris.md2", "maps/b_shell0.bsp", 0, {-16, -16, kOnFloor}},
+    {"models/items/ammo/bullets/medium/tris.md2", "maps/b_nail0.bsp", 0, {-16, -16, kOnFloor}},
+    {"models/items/ammo/grenades/medium/tris.md2", "maps/b_rock0.bsp", 0, {-16, -16, kOnFloor}},
+    {"models/items/ammo/rockets/medium/tris.md2", "maps/b_rock0.bsp", 0, {-16, -16, kOnFloor}},
+    {"models/items/ammo/cells/medium/tris.md2", "maps/b_batt0.bsp", 0, {-16, -16, kOnFloor}},
+    {"models/items/ammo/slugs/medium/tris.md2", "maps/b_batt0.bsp", 0, {-16, -16, kOnFloor}},
+    {"models/items/healing/stimpack/tris.md2", "maps/b_bh10.bsp", 0, {-16, -16, kOnFloor}},
+    {"models/items/healing/medium/tris.md2", "maps/b_bh10.bsp", 0, {-16, -16, kOnFloor}},
+    {"models/items/healing/large/tris.md2", "maps/b_bh25.bsp", 0, {-16, -16, kOnFloor}},
+    {"models/items/mega_h/tris.md2", "maps/b_bh100.bsp", 0, {-16, -16, kOnFloor}},
+    {"models/items/quaddama/tris.md2", "progs/quaddama.mdl", 0, {0, 0, kArtifact}},
+    {"models/items/invulner/tris.md2", "progs/invulner.mdl", 0, {0, 0, kArtifact}},
+    {"models/items/enviro/tris.md2", "progs/suit.mdl", 0, {0, 0, kArtifact}},
+    // In flight.
+    {"models/objects/rocket/tris.md2", "progs/missile.mdl"},
+    {"models/objects/grenade/tris.md2", "progs/grenade.mdl"},
+    {"models/objects/laser/tris.md2", "progs/laser.mdl"},
+    // Heard.
+    {"weapons/blastf1a.wav", "weapons/guncock.wav"},
+    {"weapons/shotgf1b.wav", "weapons/shotgn2.wav"},
+    {"weapons/sshotf1b.wav", "weapons/shotgn2.wav"},
+    {"weapons/machgf1b.wav", "weapons/rocket1i.wav"},
+    {"weapons/machgf2b.wav", "weapons/spike2.wav"},
+    {"weapons/grenlf1a.wav", "weapons/grenade.wav"},
+    {"weapons/hgrent1a.wav", "weapons/grenade.wav"},
+    {"weapons/rocklf1a.wav", "weapons/sgun1.wav"},
+    {"weapons/hyprbf1a.wav", "weapons/lhit.wav"},
+    {"weapons/railgf1a.wav", "weapons/lhit.wav"},
+    {"weapons/bfg__f1y.wav", "weapons/lhit.wav"},
+    {"weapons/rocklx1a.wav", "weapons/r_exp3.wav"},
+    {"weapons/grenlx1a.wav", "weapons/r_exp3.wav"},
+    {"weapons/grenlb1b.wav", "weapons/bounce.wav"},
+    {"misc/w_pkup.wav", "weapons/pkup.wav"},
+    {"misc/am_pkup.wav", "weapons/lock4.wav"},
+    {"misc/ar1_pkup.wav", "items/armor1.wav"},
+    {"misc/ar2_pkup.wav", "items/armor1.wav"},
+    {"items/s_health.wav", "items/r_item1.wav"},
+    {"items/n_health.wav", "items/r_item1.wav"},
+    {"items/l_health.wav", "items/health1.wav"},
+    {"items/m_health.wav", "items/r_item2.wav"},
+};
+
+struct RemixLooks {
+  std::string_view played;  // the content profile id whose rules play
+  std::string_view items;   // the content profile id whose things they wear
+  std::span<const Look> looks;
+};
+
+inline constexpr RemixLooks kRemixLooks[] = {{"sequel", "classic", kSequelAsClassic}};
+
+// The renames `played`'s rules wear with `items`'s things, or null (the same game, or no row).
+constexpr const RemixLooks* remix_looks(std::string_view played, std::string_view items) {
+  if (played == items) return nullptr;
+  for (const RemixLooks& r : kRemixLooks)
+    if (r.played == played && r.items == items) return &r;
+  return nullptr;
+}
+
+// The look `name` takes in `looks` (any case), or null when it keeps its own.
+constexpr const Look* look_of(std::span<const Look> looks, std::string_view name) {
+  for (const Look& l : looks) {
+    if (l.from.size() != name.size()) continue;
+    bool same = true;
+    for (size_t i = 0; i < name.size() && same; i++) {
+      const char a = l.from[i], b = name[i];
+      same = (a >= 'A' && a <= 'Z' ? char(a + 32) : a) == (b >= 'A' && b <= 'Z' ? char(b + 32) : b);
+    }
+    if (same) return &l;
+  }
+  return nullptr;
+}
+
 // A view model whose file holds every animation: the frame it rests on and its firing frames.
 struct HeldFrames {
   std::string_view model;
