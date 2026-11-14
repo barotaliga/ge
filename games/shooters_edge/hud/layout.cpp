@@ -745,6 +745,7 @@ Hud make_hud() {
 }
 
 void add_cvars(ge::console::Console& con, Hud& hud) {
+  add_crosshair_cvars(con, hud.crosshair);
   con.cvars().bind(
       {.name = "hud_style",
        .fallback = std::string(look_name(Look::classic)),
@@ -829,8 +830,7 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   const std::string armour_figure = shield ? "666" : std::to_string(s.armour);
   const ui::Color count_ink = art.glyphs.empty() ? art.count_color : ui::Color{1, 1, 1, 1};
 
-  at(crosshair).image = &art.crosshair;
-  at(crosshair).on &= !s.dead;
+  fill_crosshair(at(crosshair), hud.crosshair, art, s.dead);
 
   // CLASSIC.
   at(sbar).image = &art.bar;

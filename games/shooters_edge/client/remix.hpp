@@ -48,6 +48,7 @@ struct LoadedMap;
 struct RemixSettings {
   bool enabled = false;            // cr_enabled
   int32_t items = 0;               // cr_items: 0 the played game's; N the Nth classic game's
+  int32_t models = 0;              // cr_models: the same for the players' figure
   profiles::RemixBalance balance;  // cr_strong_min, cr_strong_share, cr_pool_radius
 };
 
@@ -124,12 +125,15 @@ struct RemixFiles {
   const profiles::RemixArsenal* worn = nullptr;
   // The other game's things the played game's rules wear by name (`sv_wear`), or null.
   const profiles::RemixLooks* looks = nullptr;
-  // True while the rules wear the other game's things (either way): read from `files`.
-  bool wearing() const { return worn != nullptr || looks != nullptr; }
+  // The figure every player is drawn as (`cr_models`), or null: each their own.
+  const profiles::RemixFigure* figure = nullptr;
+  // True while the rules or the players wear the other game's things: read from `files`.
+  bool wearing() const { return worn != nullptr || looks != nullptr || figure != nullptr; }
+  void undress() { worn = nullptr, looks = nullptr, figure = nullptr; }
 };
 
-// What the played game's rules wear while `r` is on (`worn_arsenal`, `worn_looks`) set in `r`;
-// true when it changed.
+// What the played game's rules wear while `r` is on (`worn_arsenal`, `worn_looks`) and the
+// players' figure (`worn_figure`) set in `r`; true when it changed.
 bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played);
 
 // The server's lines while `r` wears the other game's things: the worn arsenal's, or the game's
@@ -155,6 +159,11 @@ const profiles::RemixArsenal* worn_arsenal(const RemixSettings& s, const RemixSt
 // `kRemixLooks`).
 const profiles::RemixLooks* worn_looks(const RemixSettings& s, const RemixState& state,
                                        std::string_view played);
+
+// The figure every player is drawn as while `state` is on: `cr_models`'s game's, or null (off,
+// the played game's own, or no row for the pair).
+const profiles::RemixFigure* worn_figure(const RemixSettings& s, const RemixState& state,
+                                         std::string_view played);
 
 // Opens the other game's files for `state` under the played game's install `basedir` (its game
 // folder `game`); closes them when it is off. False with the reason in the game's words when an
