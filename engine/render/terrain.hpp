@@ -155,19 +155,19 @@ void encode_terrain_horizon(Terrain& terrain, const gpu::PipelineSet& pipelines,
 // The depth prepass ("terrain.depth"): clears the depth and writes every visible tile's.
 void encode_terrain_depth(const Terrain& terrain, const gpu::PipelineSet& pipelines,
                           FrameRecorder& rec, wgpu::CommandEncoder& encoder,
-                          const FrameTargets& targets, const wgpu::BindGroup& frame);
+                          const FrameTargets& targets, const FrameGroup& frame);
 // The colour pass ("terrain"): clears the HDR and motion targets and shades the pixels whose
 // depth is `equal` to the prepass's, each once; the depth is read only.
 void encode_terrain(const Terrain& terrain, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                     wgpu::CommandEncoder& encoder, const FrameTargets& targets,
-                    const wgpu::BindGroup& frame);
+                    const FrameGroup& frame);
 // The overdraw probe (labs; needs TerrainSource::overdraw_probe): every fragment that passes the
 // depth test adds one to `count` (an R16Float view at the render size). After the prepass it
 // tests `equal` against its depth (one a covered pixel); otherwise it clears the depth and
 // tests `greater` as a pass with no prepass would (the overdraw that saves).
 void encode_terrain_overdraw(const Terrain& terrain, const gpu::PipelineSet& pipelines,
                              wgpu::CommandEncoder& encoder, const FrameTargets& targets,
-                             const wgpu::BindGroup& frame, const wgpu::TextureView& count,
+                             const FrameGroup& frame, const wgpu::TextureView& count,
                              bool after_prepass);
 // The wire probe (labs; needs TerrainSource::wire_probe): the tiles the cull kept drawn as their
 // triangles' edges into `colour` (a kWireFormat view at the render size, cleared to black when
@@ -176,7 +176,7 @@ void encode_terrain_overdraw(const Terrain& terrain, const gpu::PipelineSet& pip
 // 32 m, so the clipmap's rings show as bands.
 void encode_terrain_wire(const Terrain& terrain, const gpu::PipelineSet& pipelines,
                          wgpu::CommandEncoder& encoder, const FrameTargets& targets,
-                         const wgpu::BindGroup& frame, const wgpu::TextureView& colour, bool clear);
+                         const FrameGroup& frame, const wgpu::TextureView& colour, bool clear);
 
 // The CPU's min/max pyramid of a heightfield: mip 0's texel i spans samples i and i + 1 (a
 // cell), each mip after halves the last (rounding down, as a texture's mips do; the last texel

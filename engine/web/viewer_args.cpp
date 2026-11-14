@@ -1,7 +1,7 @@
 // The web viewer's arguments, read (viewer_args.hpp).
 //
-// ge:summary The web viewer's arguments read: --demo, --tv, --stream, --play, --bots, --join,
-// ge:summary --cert, --pack and --speed
+// ge:summary The web viewer's arguments read: --demo, --run, --view, --tv, --stream, --play,
+// ge:summary --bots, --join, --cert, --pack and --speed
 // ge:keywords web viewer arguments parse_viewer_args
 // ge:skill net
 // ge:test tests/web_viewer_args_test.cpp
@@ -16,7 +16,8 @@ namespace {
 constexpr const char* kTakes =
     "the viewer takes --demo=<url>, --tv=ws://<host>:<port>/ with --stream=<n>, --play=<map> with "
     "--bots=<0..15>, --join=https://<host>:<port>/play?to=<server> with --cert=<64 hex digits> "
-    "and or --join=ws://<host>:<port>/play?to=<server>, --pack=<url> and --speed=<0..20>";
+    "and or --join=ws://<host>:<port>/play?to=<server>, --run=<url> with --view=<name>, "
+    "--pack=<url> and --speed=<0..20>";
 
 bool value_of(std::string_view arg, std::string_view key, std::string_view& value) {
   if (arg.substr(0, key.size()) != key) return false;
@@ -77,6 +78,18 @@ bool parse_viewer_args(std::span<const std::string_view> args, ViewerArgs& out,
     std::string_view v;
     if (value_of(a, "--demo=", v)) {
       out.demo = std::string(v);
+    } else if (value_of(a, "--run=", v)) {
+      if (v.empty()) {
+        error = std::string("--run= names no run; ") + kTakes;
+        return false;
+      }
+      out.run = std::string(v);
+    } else if (value_of(a, "--view=", v)) {
+      if (!map_name(v)) {
+        error = "--view=" + std::string(v) + " is not a view's name; " + kTakes;
+        return false;
+      }
+      out.view = std::string(v);
     } else if (value_of(a, "--tv=", v)) {
       if (v.substr(0, 5) != "ws://" && v.substr(0, 6) != "wss://") {
         error = "--tv=" + std::string(v) + " is not a WebSocket address; " + kTakes;
@@ -146,11 +159,13 @@ bool parse_viewer_args(std::span<const std::string_view> args, ViewerArgs& out,
       return false;
     }
   }
-  const int modes = (out.demo.empty() ? 0 : 1) + (out.tv.empty() ? 0 : 1) +
-                    (out.play.empty() ? 0 : 1) + (out.join_to.empty() ? 0 : 1);
+  const int modes = (out.demo.empty() ? 0 : 1) + (out.run.empty() ? 0 : 1) +
+                    (out.tv.empty() ? 0 : 1) + (out.play.empty() ? 0 : 1) +
+                    (out.join_to.empty() ? 0 : 1);
   if (modes != 1) {
-    error = std::string(modes == 0 ? "none of --demo, --tv, --play and --join was given"
-                                   : "more than one of --demo, --tv, --play and --join was given") +
+    error = std::string(modes == 0
+                            ? "none of --demo, --run, --tv, --play and --join was given"
+                            : "more than one of --demo, --run, --tv, --play and --join was given") +
             "; " + kTakes;
     return false;
   }
@@ -161,6 +176,10 @@ bool parse_viewer_args(std::span<const std::string_view> args, ViewerArgs& out,
   }
   if (have_bots && out.play.empty()) {
     error = "--bots goes with --play=<map>, a game played on the page; " + std::string(kTakes);
+    return false;
+  }
+  if (!out.view.empty() && out.run.empty()) {
+    error = "--view goes with --run=<url>, a run watched again; " + std::string(kTakes);
     return false;
   }
   if (!out.tv.empty() && !have_stream) {

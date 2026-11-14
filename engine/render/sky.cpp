@@ -268,6 +268,8 @@ FrameGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
   g.block = group(frame_layout(device, kFrameBlock), kFrameBlock);
   g.surface = group(frame_layout(device, kFrameSurface), kFrameSurface);
   g.water = group(frame_layout(device, kFrameWater), kFrameWater);
+  g.ground = group(frame_layout(device, kFrameGround), kFrameGround);
+  g.fog = group(frame_layout(device, kFrameFog), kFrameFog);
   return g;
 }
 

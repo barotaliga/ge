@@ -181,9 +181,10 @@ Picture depth_picture(const std::vector<float>& distance, int width, int height)
   return p;
 }
 
-// A rung's view also says the point it frames (`subject`); a view of the mountain frames none.
-bool camera(const sim::GameState& s, std::string_view name, r::FrameView& view,
-            std::optional<std::array<double, 3>>& subject) {
+}  // namespace
+
+bool run_camera(const sim::GameState& s, std::string_view name, r::FrameView& view,
+                std::optional<std::array<double, 3>>& subject) {
   subject.reset();
   const auto& level = *s.level;
   day_view(level, -1, view);
@@ -202,6 +203,8 @@ bool camera(const sim::GameState& s, std::string_view name, r::FrameView& view,
   }
   return make_view(level, name, view);
 }
+
+namespace {
 
 class FrameRenderer final : public ge::play::Renderer {
  public:
@@ -239,7 +242,7 @@ class FrameRenderer final : public ge::play::Renderer {
     }
     r::FrameView view;
     std::optional<std::array<double, 3>> subject;
-    if (!camera(*s, shot.view, view, subject)) {
+    if (!run_camera(*s, shot.view, view, subject)) {
       error = "no view `" + std::string(shot.view) + "`";
       return false;
     }
