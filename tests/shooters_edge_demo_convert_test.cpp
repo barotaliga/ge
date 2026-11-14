@@ -722,6 +722,48 @@ TEST(a_sequel_recording_of_protocol_26_becomes_protocol_34_byte_for_byte) {
   CHECK(std::equal(all.begin(), all.end(), dm2.begin()));
 }
 
+TEST(an_extended_sequel_recording_becomes_protocol_34_with_what_it_cannot_hold_named) {
+  const std::vector<uint8_t> ext = cl::sequel_extended_fixture();
+  std::vector<uint8_t> out;
+  cl::ConvertNotes notes;
+  std::string error;
+  CHECK_MSG(cl::convert_demo(ext, cl::DemoFormat::sequel, {}, out, notes, error), error);
+  CHECK(notes.frames == 2 && notes.levels == 1);
+  CHECK(notes.rewritten.contains("the server data's protocol as 34"));
+  CHECK(notes.dropped.contains("an entity numbered past 1023"));
+  CHECK(notes.dropped.contains("a settings string with no slot in protocol 34's lists"));
+  CHECK(notes.dropped.contains("a sound past the 255th"));
+  CHECK(notes.dropped.contains("a stat past the 32nd"));
+  CHECK(notes.dropped.contains("the fog"));
+  CHECK(notes.rewritten.contains("a view model past 255 as none"));
+  CHECK(notes.rewritten.contains("a point past a short's reach held at its edge"));
+  CHECK(notes.rewritten.contains("a newer temporary entity as protocol 34's own kind"));
+  // It reads back as an ordinary protocol 34 recording, block by block within 1400 bytes.
+  CHECK(cl::is_sequel_recording(out));
+  cl::Demo d;
+  CHECK_MSG(cl::open_demo(out, d, error), error);
+  int frames = 0;
+  cl::DemoRead r{};
+  bool exploded = false;
+  while ((r = cl::next_frame(d, error)) == cl::DemoRead::frame) {
+    frames++;
+    for (const cl::DemoEffect& e : d.state.effects)
+      exploded = exploded || (e.kind == cl::DemoEffectKind::explosion && e.code == 5);
+  }
+  CHECK_MSG(r == cl::DemoRead::end, error);
+  CHECK(frames == 2 && exploded);
+  const cl::DemoState& s = d.state;
+  CHECK(s.protocol == 34 && s.map == "big" && s.players.size() == 2);
+  CHECK_MSG(s.eye.x == 4095.875f, std::to_string(s.eye.x));  // 30010 held at a short's edge
+  CHECK(s.stats[cl::kStatHealth] == 98 && s.stats[cl::kStatWeapon] == 0);
+  CHECK(s.angles.y == 90.0f);
+  // Entity 500 kept, its int23 deltas resolved into shorts; 2000 gone.
+  CHECK(s.entities.size() > 500 && s.entities[500].present && s.entities[500].model == 40);
+  CHECK_MSG(s.entities[500].origin.x == 1004.0f && s.entities[500].origin.y == 8.0f,
+            std::to_string(s.entities[500].origin.x));
+  CHECK(s.entities.size() <= 2000 || !s.entities[2000].present);
+}
+
 // A converter's banner (a print) before the server data still opens as a multiview recording.
 TEST(a_multiview_recording_opening_with_a_print_reads) {
   cl::ConvertNotes notes;

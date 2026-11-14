@@ -10,7 +10,6 @@
 // ge:keywords test sequel dm2 demo playback frame delta configstring adapter replay-v2
 // ge:keywords extended-limits protocol-3436 int23
 // ge:skill shooter replay
-#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -44,138 +43,6 @@ Read read_all(cl::Demo& d, cl::DemoRead& last, std::string& error) {
     r.eye_x.push_back(d.state.eye.x);
   }
   return r;
-}
-
-// A hand-written protocol 3436 recording: a signon, then two frames that move entity 2000 and the
-// player, with a sound by a word's index and an explosion that gives no light.
-struct Bytes {
-  std::vector<uint8_t> b;
-  void u8(int v) { b.push_back(static_cast<uint8_t>(v)); }
-  void u16(int v) {
-    u8(v & 0xFF);
-    u8((v >> 8) & 0xFF);
-  }
-  void i32(int32_t v) {
-    u16(v & 0xFFFF);
-    u16((v >> 16) & 0xFFFF);
-  }
-  void text(const std::string& s) {
-    b.insert(b.end(), s.begin(), s.end());
-    u8(0);
-  }
-  // An int23 point in 1/8 unit: the value itself (bit 0 set, three bytes)...
-  void whole23(int32_t eighths) {
-    const uint32_t w = (static_cast<uint32_t>(eighths) << 1 | 1u) & 0xFFFFFFu;
-    u16(static_cast<int>(w & 0xFFFF));
-    u8(static_cast<int>(w >> 16));
-  }
-  // ...or a delta from the last (bit 0 clear, a word).
-  void delta23(int32_t eighths) {
-    u16(static_cast<int>((static_cast<uint32_t>(eighths) << 1) & 0xFFFF));
-  }
-};
-
-void block(std::vector<uint8_t>& file, const Bytes& w) {
-  const auto n = static_cast<uint32_t>(w.b.size());
-  for (int k = 0; k < 4; k++) file.push_back(static_cast<uint8_t>(n >> (8 * k)));
-  file.insert(file.end(), w.b.begin(), w.b.end());
-}
-
-std::vector<uint8_t> extended_fixture() {
-  std::vector<uint8_t> file;
-  Bytes w;
-  w.u8(12);  // the server data
-  w.i32(3436);
-  w.i32(0x10001);
-  w.u8(0);
-  w.text("");
-  w.u16(0);
-  w.text("The Big Yard");
-  const auto config = [&](int index, const std::string& text) {
-    w.u8(13);
-    w.u16(index);
-    w.text(text);
-  };
-  config(60, "2");                          // the players, past protocol 34's slot for them
-  config(63, "maps/big.bsp");               // model 1, the world
-  config(62 + 300, "models/big/tris.md2");  // model 300, past a byte
-  config(8254 + 1000, "big/hum.wav");       // sound 1000, past a byte
-  block(file, w);
-  // The baseline of entity 2000: a model by a short, a whole int23 origin, alpha and scale (the
-  // fifth header byte).
-  w = {};
-  w.u8(14);
-  const uint64_t bits = (1ull << 0) | (1ull << 1) | (1ull << 7) | (1ull << 8) | (1ull << 9) |
-                        (1ull << 11) | (1ull << 15) | (1ull << 23) | (1ull << 28) | (1ull << 30) |
-                        (1ull << 31) | (1ull << 32);
-  for (int k = 0; k < 5; k++) w.u8(static_cast<int>(bits >> (8 * k) & 0xFF));
-  w.u16(2000);
-  w.u16(300);            // the model
-  w.whole23(40000 * 8);  // x 40000, past a short's reach
-  w.whole23(-100 * 8);   // y
-  w.whole23(16 * 8);     // z
-  w.u8(128);             // alpha
-  w.u8(32);              // scale: twice
-  block(file, w);
-  for (int f = 1; f <= 2; f++) {
-    w = {};
-    w.u8(20);  // the frame
-    w.i32(f);
-    w.i32(f == 1 ? -1 : f - 1);
-    w.u8(0);
-    w.u8(1);
-    w.u8(0xFF);
-    w.u8(17);  // the player: origin, view angles, gun model, and the third byte for fog
-    w.u16((1 << 1) | (1 << 8) | (1 << 12) | (1 << 15));
-    w.u8(1);  // flag 16: fog
-    if (f == 1) {
-      w.whole23(30000 * 8);
-      w.whole23(0);
-      w.whole23(64 * 8);
-    } else {
-      w.delta23(80);  // ten units on in x
-      w.delta23(0);
-      w.delta23(0);
-    }
-    w.u16(0);
-    w.u16(16384);  // yaw 90
-    w.u16(0);
-    w.u16(300);  // the gun model, a short
-    w.u8(1);     // fog: its colour alone
-    w.u8(10);
-    w.u8(20);
-    w.u8(30);
-    // The stats: health (1) and stat 40, under a varint mask.
-    uint64_t mask = (1ull << 1) | (1ull << 40);
-    while (mask >= 128) {
-      w.u8(static_cast<int>(mask & 127) | 128);
-      mask >>= 7;
-    }
-    w.u8(static_cast<int>(mask));
-    w.u16(100 - f);
-    w.u16(7);
-    w.u8(18);  // the entities: 2000 moves 4 units in x by an int23 delta
-    w.u8((1 << 0) | (1 << 7));
-    w.u8(1);  // bit 8: a short number
-    w.u16(2000);
-    w.delta23(32);
-    w.u8(0);
-    w.u8(0);
-    w.u8(9);  // a sound by a word's index, at a point
-    w.u8(32 | 4);
-    w.u16(1000);
-    w.whole23(30000 * 8);
-    w.whole23(0);
-    w.whole23(0);
-    w.u8(3);  // an explosion without light, at an int23 point
-    w.u8(62);
-    w.whole23(-50000 * 8);
-    w.whole23(8);
-    w.whole23(0);
-    block(file, w);
-  }
-  for (int k = 0; k < 4; k++) file.push_back(0xFF);
-  return file;
 }
 
 }  // namespace
@@ -268,7 +135,7 @@ TEST(a_packed_sequel_recording_reads_the_same) {
 }
 
 TEST(an_extended_recording_reads_its_wider_fields) {
-  const std::vector<uint8_t> file = extended_fixture();
+  const std::vector<uint8_t> file = cl::sequel_extended_fixture();
   cl::Demo d;
   std::string error;
   CHECK_MSG(cl::open_demo(file, d, error), error);
@@ -289,6 +156,7 @@ TEST(an_extended_recording_reads_its_wider_fields) {
   CHECK_MSG(e.origin.x == 40008.0f && e.origin.y == -100.0f && e.origin.z == 16.0f,
             std::to_string(e.origin.x));
   CHECK(e.alpha == 128.0f / 255.0f && e.scale == 2.0f);
+  CHECK(s.entities[500].present && s.entities[500].origin.x == 1004.0f);
   // The player past a short's reach, moved by a delta; the gun model a short; 64 stats.
   CHECK_MSG(s.eye.x == 30010.0f, std::to_string(s.eye.x));
   CHECK(s.angles.y == 90.0f);
@@ -303,7 +171,7 @@ TEST(an_extended_recording_reads_its_wider_fields) {
 }
 
 TEST(an_extended_entity_past_the_limit_is_refused_with_its_place) {
-  std::vector<uint8_t> file = extended_fixture();
+  std::vector<uint8_t> file = cl::sequel_extended_fixture();
   // The last frame's entity number 2000 made 9000, past the extended limit of 8191.
   for (size_t i = file.size() - 8; i > 0; i--) {
     if (file[i] == 0xD0 && file[i + 1] == 0x07 && file[i - 1] == 1) {
