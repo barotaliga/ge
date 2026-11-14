@@ -308,7 +308,7 @@ std::string status_line(const Hops& h) {
          std::to_string(h.cl_demo.rounds) + (h.cl_demo.ended ? " (ended)" : "") + ", viewers " +
          std::to_string(sn::udp_tv_viewers(h.cl_demo_face)) + ". ";
   }
- if (h.has_nq)
+  if (h.has_nq)
     s += "netgame tv: frames " + std::to_string(h.nq.frames) + ", rounds " +
          std::to_string(h.nq.rounds) + ", viewers " +
          std::to_string(sn::udp_tv_netgame_viewers(h.nq)) + ". ";
@@ -558,9 +558,10 @@ int run(int argc, char** argv) {
       if (!sn::udp_tv_netgame_open(h.nq, bytes_kept, true, nq_error)) {
         std::printf("no netgame for single-player clients: %s\n", nq_error.c_str());
       } else if (!gn::open_udp_transport(h.nq_face, nq_bind, &nq_error)) {
-        std::printf("no netgame for single-player clients: the socket did not open on %s: %s "
-                    "(pick a free --netgame-port, or 0 for none)\n",
-                    gn::to_string(nq_bind).c_str(), nq_error.c_str());
+        std::printf(
+            "no netgame for single-player clients: the socket did not open on %s: %s "
+            "(pick a free --netgame-port, or 0 for none)\n",
+            gn::to_string(nq_bind).c_str(), nq_error.c_str());
       } else {
         sn::NetgameTvConfig nc;
         nc.name = fc.name;

@@ -6,11 +6,11 @@
 //
 // THE TRANSPORT (porting/shooters-edge/netgame-transport.md): every datagram but a control one is
 // an 8-byte big-endian header (flags and the whole length, then a sequence) and its payload. A
-// control packet (the CTL bit, no sequence) asks to connect ("QUAKE", net version 3); the accept
-// names this same port, so a viewer behind a NAT keeps the one hole it opened and viewers are told
-// apart by their address. A reliable message goes in fragments of at most 1024 bytes, one in
-// flight, each resent after a second until acknowledged; an unreliable message is one datagram of
-// at most 1024 bytes.
+// control packet (the CTL bit, no sequence) asks to connect (the game's name, net version 3); the
+// accept names this same port, so a viewer behind a NAT keeps the one hole it opened and viewers
+// are told apart by their address. A reliable message goes in fragments of at most 1024 bytes, one
+// in flight, each resent after a second until acknowledged; an unreliable message is one datagram
+// of at most 1024 bytes.
 //
 // THE SIGNON: the recording's own. Each level's blocks are cut at its `signonnum` 1, 2 and 3: the
 // first part (the server info, which the client loads the level from) goes as ONE reliable
@@ -49,10 +49,10 @@ namespace gn = ge::net;
 
 // One block of the single-player recording: its messages' offsets and its due time.
 struct NetgameBlock {
-  uint32_t at = 0, size = 0;            // the message bytes in the recording
-  std::array<float, 3> angles{};        // the recorded view
-  std::vector<uint32_t> marks;          // each message's offset in the block
-  int64_t due_us = 0;                   // on the play clock, from the level's start
+  uint32_t at = 0, size = 0;      // the message bytes in the recording
+  std::array<float, 3> angles{};  // the recorded view
+  std::vector<uint32_t> marks;    // each message's offset in the block
+  int64_t due_us = 0;             // on the play clock, from the level's start
   int level = 0;
 };
 // A level: its first block, the blocks that end its signon parts (`signonnum` 1, 2, 3), and the

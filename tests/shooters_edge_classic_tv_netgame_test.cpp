@@ -16,6 +16,7 @@
 #include "check.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/net/classic_tv_netgame.hpp"
 
@@ -46,14 +47,24 @@ struct Client {
   float last_time = -1;
   bool time_fell = false;
   bool pending = false;  // a reliable command sent and not yet acknowledged
+  std::vector<uint8_t> in_flight;
+  int64_t flight_us = 0;
   std::vector<std::string> outbox;
+  cl::Demo view;  // what the client knows, read by the game's own reader of the protocol
+  std::string read_error;
+
+  void read(const std::vector<uint8_t>& m) {
+    cl::DemoMsg dm;
+    dm.b = m;
+    if (!cl::read_single_messages(view, dm, read_error)) read_error += " (a message did not read)";
+  }
 
   void send_raw(const std::vector<uint8_t>& d, int64_t now) {
     gn::transport_send(*t, server, d.data(), d.size(), now);
   }
   void connect(int64_t now) {
     std::vector<uint8_t> d;
-    const char game[] = "QUAKE";
+    const char game[] = {'Q', 'U', 'A', 'K', 'E', 0};  // the game's name, a wire constant
     be32(d, 0x80000000u | static_cast<uint32_t>(4 + 1 + sizeof(game) + 1));
     d.push_back(0x01);
     d.insert(d.end(), game, game + sizeof(game));
@@ -62,6 +73,10 @@ struct Client {
   }
   void command(const std::string& c) { outbox.push_back(c); }
   void flush(int64_t now) {
+    if (pending && now - flight_us >= 1000000) {  // resent after a second, as the client does
+      send_raw(in_flight, now);
+      flight_us = now;
+    }
     if (pending || outbox.empty()) return;
     std::vector<uint8_t> body;
     for (const std::string& c : outbox) {
@@ -75,23 +90,24 @@ struct Client {
     be32(d, send_seq);
     d.insert(d.end(), body.begin(), body.end());
     send_raw(d, now);
+    in_flight = d;
+    flight_us = now;
     pending = true;
   }
   // The server's messages: the ones this client acts on read, the rest stepped over only where it
   // must be (a frame's messages are counted by their first byte).
   void messages(const std::vector<uint8_t>& m, bool reliable) {
     if (m.size() == 1 && m[0] == 1) return;  // a keepalive
+    read(m);
     if (!reliable) {
       frames++;
       if (m[0] == 7) {
-        float t = 0;
-        std::memcpy(&t, m.data() + 1, 4);
-        if (t < last_time) time_fell = true;
-        last_time = t;
+        float at = 0;
+        std::memcpy(&at, m.data() + 1, 4);
+        if (at < last_time) time_fell = true;
+        last_time = at;
       }
-      for (size_t i = 0; i < m.size(); i++) {
-        if ((m[i] & 0x80) != 0 && i == 5) entity_updates++;  // the first after the time
-      }
+      for (const cl::DemoEntity& e : view.state.entities) entity_updates += e.present ? 1 : 0;
       if (m.size() >= 4 && m[m.size() - 4] == 10) setangles++;
       return;
     }
@@ -208,6 +224,8 @@ TEST(a_single_player_client_signs_on_and_watches_the_recording) {
   CHECK(r.c.entity_updates > 0);
   CHECK(r.c.setangles > 50);  // the recorded view, a frame at a time
   CHECK(!r.c.time_fell);
+  CHECK_MSG(r.c.read_error.empty(), r.c.read_error);
+  CHECK(r.c.view.state.map == "halls");
 }
 
 TEST(the_end_of_the_recording_reconnects_the_viewer_to_the_start) {

@@ -26,22 +26,33 @@ constexpr uint32_t kUnreliable = 0x00100000u, kCtl = 0x80000000u;
 constexpr uint32_t kFlagMask = 0xFFFF0000u, kLenMask = 0x0000FFFFu;
 constexpr size_t kHeader = 8, kFragment = 1024, kMostReliable = 8000, kMostDatagram = 1472;
 constexpr int kNetVersion = 3;
+// The game's name a connect asks with, a wire constant spelled by its letters.
+constexpr char kGameName[] = {'Q', 'U', 'A', 'K', 'E', 0};
 constexpr uint8_t kReqConnect = 0x01, kRepAccept = 0x81, kRepReject = 0x82;
 constexpr int64_t kResendUs = 1000000, kKeepaliveUs = 5000000, kReacceptUs = 2000000;
 constexpr int64_t kMostSilenceUs = 1000000;  // a silence in the recording cut to a second
 
 // The server messages the walk looks at, and those a frame sends unreliable.
 enum : uint8_t {
-  kNop = 1, kDisconnect = 2, kSound = 6, kTime = 7, kStuffText = 9, kSetAngle = 10,
-  kServerInfo = 11, kClientData = 15, kParticle = 18, kDamage = 19, kTempEntity = 23,
+  kNop = 1,
+  kDisconnect = 2,
+  kSound = 6,
+  kTime = 7,
+  kStuffText = 9,
+  kSetAngle = 10,
+  kServerInfo = 11,
+  kClientData = 15,
+  kParticle = 18,
+  kDamage = 19,
+  kTempEntity = 23,
   kSignonNum = 25,
 };
 // The client's.
 enum : uint8_t { kClNop = 1, kClDisconnect = 2, kClMove = 3, kClStringCmd = 4 };
 
 bool frame_message(uint8_t id) {
-  return (id & 0x80) != 0 || id == kTime || id == kClientData || id == kSound ||
-         id == kParticle || id == kTempEntity || id == kSetAngle || id == kDamage;
+  return (id & 0x80) != 0 || id == kTime || id == kClientData || id == kSound || id == kParticle ||
+         id == kTempEntity || id == kSetAngle || id == kDamage;
 }
 
 void put_be32(std::vector<uint8_t>& o, uint32_t v) {
@@ -125,7 +136,7 @@ void each_message(const NetgameTv& tv, size_t b0, uint32_t from, size_t b1, uint
       const uint32_t e = i + 1 < blk.marks.size() ? blk.marks[i + 1] : blk.size;
       if (b == b0 && s < from) continue;
       if (b == b1 && s >= to) break;
-      if (base[s] == kStuffText) continue;
+      if (base[s] == kStuffText || base[s] == kSignonNum) continue;
       f(std::span<const uint8_t>(base + s, e - s));
     }
   }
@@ -133,27 +144,30 @@ void each_message(const NetgameTv& tv, size_t b0, uint32_t from, size_t b1, uint
 
 // A level's signon part (0: to `signonnum` 1, the server info with it; 1: to 2; 2: to 3).
 void queue_part(NetgameTv& tv, NetgameViewer& v, int part) {
+  if (tv.levels.empty()) return;
   const NetgameLevel& L = tv.levels[static_cast<size_t>(tv.level)];
   const size_t b0 = part == 0 ? L.first : L.signon[static_cast<size_t>(part - 1)];
   const uint32_t from = part == 0 ? 0 : L.cut[static_cast<size_t>(part - 1)];
   if (part == 0) {  // one message: the client takes nothing else while it loads
     std::vector<uint8_t> all;
-    each_message(tv, b0, from, L.signon[0], L.cut[0], [&](std::span<const uint8_t> m) {
-      all.insert(all.end(), m.begin(), m.end());
-    });
+    each_message(tv, b0, from, L.signon[0], L.cut[0],
+                 [&](std::span<const uint8_t> m) { all.insert(all.end(), m.begin(), m.end()); });
+    all.push_back(kSignonNum);
+    all.push_back(1);
     queue_reliable(v, all, true);
     return;
   }
-  each_message(tv, b0, from, L.signon[static_cast<size_t>(part)],
-               L.cut[static_cast<size_t>(part)],
+  each_message(tv, b0, from, L.signon[static_cast<size_t>(part)], L.cut[static_cast<size_t>(part)],
                [&](std::span<const uint8_t> m) { queue_reliable(v, m, false); });
+  const std::array<uint8_t, 2> stage{kSignonNum, static_cast<uint8_t>(part + 1)};
+  queue_reliable(v, stage, false);
 }
 
 // The viewer sent back to the current level's start: "reconnect", then its first part.
 void restart(NetgameTv& tv, NetgameViewer& v, bool reconnect) {
   if (reconnect) {
-    static constexpr uint8_t kReconnect[] = {kStuffText, 'r', 'e', 'c', 'o', 'n', 'n', 'e',
-                                             'c',        't', '\n', 0};
+    static constexpr uint8_t kReconnect[] = {kStuffText, 'r', 'e', 'c', 'o',  'n',
+                                             'n',        'e', 'c', 't', '\n', 0};
     queue_reliable(v, kReconnect, false);
   }
   queue_part(tv, v, 0);
@@ -227,7 +241,7 @@ void control(NetgameTv& tv, const uint8_t* d, size_t n, const gn::Address& from,
   const size_t s = 5;
   size_t e = s;
   while (e < n && d[e] != 0) e++;
-  if (e >= n || std::string_view(reinterpret_cast<const char*>(d + s), e - s) != "QUAKE") return;
+  if (e >= n || std::string_view(reinterpret_cast<const char*>(d + s), e - s) != kGameName) return;
   if (e + 1 >= n || d[e + 1] != kNetVersion) {
     const std::string why = "Incompatible version.\n";
     std::vector<uint8_t> body{kRepReject};
@@ -386,8 +400,7 @@ void play(NetgameTv& tv, int64_t now) {
 
 }  // namespace
 
-bool udp_tv_netgame_open(NetgameTv& tv, std::vector<uint8_t> bytes, bool loop,
-                         std::string& error) {
+bool udp_tv_netgame_open(NetgameTv& tv, std::vector<uint8_t> bytes, bool loop, std::string& error) {
   cl::Demo demo;
   if (!cl::open_demo(std::move(bytes), demo, error)) return false;
   if (demo.state.format == cl::DemoFormat::sequel) {
@@ -413,12 +426,27 @@ bool udp_tv_netgame_open(NetgameTv& tv, std::vector<uint8_t> bytes, bool loop,
   cl::Demo walk = demo;
   NetgameLevel cur;
   bool has_info = false;
+  std::array<bool, 3> seen{};  // the level's signon numbers met
   int64_t clock = 0;
   float last_time = -1;
   auto close_level = [&](size_t end) {
-    if (has_info && cur.signon[2] > 0 && cur.signon[0] >= cur.first) {
+    if (has_info && (seen[0] || seen[1] || seen[2])) {
+      // A stage the recording does not mark ends where the next marked one does (or the last
+      // marked one, after it): its part is empty, and the face's own `signonnum` still asks.
+      for (size_t k = 0; k < 3; k++) {
+        if (seen[k]) continue;
+        size_t j = k;
+        while (j < 3 && !seen[j]) j++;
+        if (j == 3) {
+          j = k;
+          while (!seen[j]) j--;
+        }
+        cur.signon[k] = cur.signon[j];
+        cur.cut[k] = cur.cut[j];
+      }
       cur.end = end;
       cur.play = cur.signon[2] + 1;
+      if (cur.play > end) cur.play = end;
       tv.levels.push_back(cur);
     }
   };
@@ -449,6 +477,7 @@ bool udp_tv_netgame_open(NetgameTv& tv, std::vector<uint8_t> bytes, bool loop,
         cur = NetgameLevel{};
         cur.first = bi;
         has_info = true;
+        seen = {};
         clock = 0;
         last_time = -1;
       } else if (id == kSignonNum && s + 1 < n && has_info) {
@@ -456,6 +485,7 @@ bool udp_tv_netgame_open(NetgameTv& tv, std::vector<uint8_t> bytes, bool loop,
         if (k >= 1 && k <= 3) {
           cur.signon[static_cast<size_t>(k - 1)] = bi;
           cur.cut[static_cast<size_t>(k - 1)] = e;
+          seen[static_cast<size_t>(k - 1)] = true;
         }
       } else if (id == kTime && s + 5 <= n) {
         const float t = le_f32(base + s + 1);
