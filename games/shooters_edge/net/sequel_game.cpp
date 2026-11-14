@@ -174,7 +174,7 @@ void net_frame(void* g, int64_t now_us) {
 const gs::ServerGame& make() {
   static gs::ServerGame g = [] {
     gs::ServerGame s;
-    s.binary = "shooters_edge_sequel_server";
+    s.binary = "sesv";
     s.title = "Shooter's Edge on the sequel's protocol";
     s.default_port = kPortSequel;
     s.max_clients = 32;

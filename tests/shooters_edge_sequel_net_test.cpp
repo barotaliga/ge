@@ -294,7 +294,7 @@ TEST(a_level_change_keeps_every_connection_and_seats_each_client_again) {
 TEST(the_sequel_server_game_names_itself_and_refuses_a_missing_folder) {
   const ge::server::ServerGame& g = cn::sequel_game();
   CHECK(g.default_port == cn::kPortSequel);
-  CHECK(g.binary == std::string("shooters_edge_sequel_server"));
+  CHECK(g.binary == std::string("sesv"));
   ge::server::ServerConfig c;
   c.root = "no-such-folder-here";
   std::string error;

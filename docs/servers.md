@@ -11,12 +11,12 @@ server-side match mods, and cvars that switch on whole groups of others. Rows M5
 This page is the design; what each row has built is in its row file. Built so far (M53a, part
 one): `engine/server` with `ServerGame`, `Server` (the frame, the node, the session host and the
 LAN hosting round it), the dedicated process (`server_main`: `server.cfg`, then the flags, then
-`+commands`), `ge_add_server`, a sample game and the server trial, and `shooters_edge_server`
+`+commands`), `ge_add_server`, a sample game and the server trial, and `sesv`
 running on it. M53b: `server.cfg` in layers (`engine/server/config`: the base game directory's,
 each mod's lowest first, a profile's winning copy, the command line, the console), every server
 value's file and line kept (`Cvars::set_watch`), the rest of the server's cvars, and
 `--explain`. M53a part two: a game that speaks its own protocol is handed the port
-(`ServerGame::serve`, `net_frame`), and `shooters_edge_server` now serves the game's own
+(`ServerGame::serve`, `net_frame`), and `sesv` now serves the game's own
 deathmatch over the classic protocol (`games/shooters_edge/net/classic_game.hpp`), so a classic
 client connects and plays (the `se-dedicated` lab). The game's own rules are settings too: a game
 names them (`ServerGame::rules`, a `GameRule` each: Shooter's Edge's `deathmatch`, `teamplay`,
@@ -50,15 +50,15 @@ prints and effects the endpoint hands back; `sv_port` lets others join it. Runni
 
 ```
 make build
-build/debug/shooters_edge_server --name="Arena Night" --description="the arena" --port=27500 \
+build/debug/sesv --name="Arena Night" --description="the arena" --port=27500 \
   --maxclients=16 --realtime --for=0
-build/debug/shooters_edge_server --root=<install> --map=dm6 --port=27512 --realtime --for=0 \
+build/debug/sesv --root=<install> --map=dm6 --port=27512 --realtime --for=0 \
   +set fraglimit 20 +set timelimit 10
-build/debug/shooters_edge_server --root=servers --mod=arena --cfg=duel --explain=sv_
-build/debug/shooters_edge_sequel_server --root=<install> --map=q2dm1 --port=27910 --realtime --for=0
+build/debug/sesv --root=servers --mod=arena --cfg=duel --explain=sv_
+build/debug/sesv --sequel --root=<install> --map=q2dm1 --port=27910 --realtime --for=0
 ```
 
-`shooters_edge_sequel_server` is the same process over the sequel's rules on its own protocol
+`sesv --sequel` is the same process over the sequel's rules on its own protocol
 (`games/shooters_edge/net/sequel_game.hpp`): `--root` holds the sequel's game folder, and an
 unmodified client of the sequel joins it. Its levels go round `sv_maprotation` after `sv_map`
 when `fraglimit` or `timelimit` ends one; every client stays connected and signs on again.
@@ -121,7 +121,7 @@ needs all of it, and Shooter's Edge has its own copy of half of it today.
   (Shooter's Edge's compatible protocol answers on the same socket, M18g).
 - **Each game gets its own server binary.** A game's CMake calls `ge_add_server(<game>_server
   ...)`, which links the engine's `main` with the game's `ServerGame`: `fall_line_server`,
-  `shooters_edge_server`. There is no one binary that loads any game at run time: a game is C++
+  `sesv`. There is no one binary that loads any game at run time: a game is C++
   compiled into its own executables (G8: nothing is registered at run time), and a server runs
   the game's own code so a replay and a client's prediction agree to the bit.
 - **Both ways can start the other's work.** The game's HOST page either runs a listen `Server`

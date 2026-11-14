@@ -149,7 +149,7 @@ bool read_input_log(const std::vector<uint8_t>& bytes, InputLog& log, std::strin
   bool magic = true;  // each byte read even after a mismatch, so short_read says what it should
   for (int i = 0; i < 4; i++) magic = static_cast<char>(r.u8()) == kMagic[i] && magic;
   if (r.short_read || !magic) {
-    error = "not a server input log; shooters_edge_server --log=<path> writes those";
+    error = "not a server input log; sesv --log=<path> writes those";
     return false;
   }
   const uint32_t version = r.u32();

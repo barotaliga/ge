@@ -3,11 +3,17 @@
 // reads back frame for frame: the same map, the eye on the same path, the same view angles, the
 // same status, the rocket renumbered past the player slots where the source had it; fed a few
 // bytes at a time, the stream gives the same bytes as the whole file, every take whole records;
-// the loop's form leaves the end out; what the target cannot hold is counted; a pair that does
-// not exist and a damaged demo are refused with the reason; a file's format is told by its name.
+// the loop's form leaves the end out; the same demo converts to a client recording the oldest
+// clients play (packets within their size, the header's two words one rising sequence, a command
+// record leading each frame's packet with its angles, the commands one sequence ahead, a
+// disconnect at the end) that reads back frame for frame, and a frame of more entities than the
+// oldest client holds keeps the 64 nearest the view; what the target cannot hold is counted; a pair
+// that does not exist and a damaged demo are refused with the reason; a file's format is told by
+// its name.
 //
 // ge:summary Tests: a .dem converted to .mvd as a stream, read back frame for frame
 // ge:keywords test demo-convert dem mvd stream whole-records no-end dropped format_of_name
+// ge:keywords client-recording old-client 64-entities command-record
 // ge:skill shooter testing
 #include <cmath>
 #include <cstring>
@@ -17,6 +23,7 @@
 #include "check.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_convert.hpp"
+#include "shooters_edge/client/demo_convert_client.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/client/sequel_demo.hpp"
@@ -161,6 +168,151 @@ TEST(the_loops_form_leaves_the_end_out) {
   loop.no_end = true;
   CHECK(whole_records(converted(dem, notes, loop), count, last));
   CHECK(last != 2);
+}
+
+// A client recording's records walked, against what the oldest client asks of one.
+struct ClientWalk {
+  bool whole = true;         // no record cut short
+  size_t largest = 0;        // the largest packet record's length, header included
+  bool one_sequence = true;  // both header words equal, rising by one a packet
+  int sequences = 0;         // sequences records
+  int frames_led = 0;        // packets with a command record just before them at their time
+  int packets = 0;
+  int last_id = -1;  // the last packet's first message
+};
+
+ClientWalk walk_client(const std::vector<uint8_t>& b) {
+  ClientWalk w;
+  size_t at = 0;
+  uint32_t seq = 0;
+  bool cmd_before = false;
+  float cmd_time = -1;
+  auto f32 = [&](size_t i) {
+    float f = 0;
+    std::memcpy(&f, &b[i], 4);
+    return f;
+  };
+  auto u32 = [&](size_t i) {
+    uint32_t v = 0;
+    std::memcpy(&v, &b[i], 4);
+    return v;
+  };
+  while (at < b.size()) {
+    if (at + 5 > b.size()) return w.whole = false, w;
+    const float t = f32(at);
+    const int type = b[at + 4];
+    at += 5;
+    if (type == 0) {
+      if (at + 36 > b.size()) return w.whole = false, w;
+      cmd_before = true;
+      cmd_time = t;
+      at += 36;
+    } else if (type == 2) {
+      w.sequences++;
+      at += 8;
+    } else if (type == 1) {
+      const uint32_t len = u32(at);
+      if (at + 4 + len > b.size() || len < 8) return w.whole = false, w;
+      w.largest = std::max<size_t>(w.largest, len);
+      const uint32_t a = u32(at + 4), ack = u32(at + 8);
+      if (a != ack || a != seq + 1) w.one_sequence = false;
+      seq = a;
+      if (cmd_before && cmd_time == t) w.frames_led++;
+      cmd_before = false;
+      w.packets++;
+      w.last_id = len > 8 ? b[at + 12] : -1;
+      at += 4 + len;
+    } else {
+      return w.whole = false, w;
+    }
+  }
+  return w;
+}
+
+TEST(a_single_player_demo_converts_to_a_client_recording_the_oldest_clients_play) {
+  const cl::DemoScript s = script();
+  const std::vector<uint8_t> dem = cl::write_single_demo(s);
+  cl::ConvertNotes notes;
+  std::vector<uint8_t> rec;
+  std::string error;
+  CHECK_MSG(cl::convert_demo(dem, cl::DemoFormat::client, {}, rec, notes, error), error);
+
+  const ClientWalk w = walk_client(rec);
+  CHECK(w.whole && w.one_sequence);
+  CHECK(w.largest <= 1450);
+  CHECK(w.sequences == 1);
+  CHECK(w.frames_led == static_cast<int>(s.origins.size()));  // every frame's packet led
+  CHECK(w.last_id == 2);                                      // a disconnect ends it
+
+  const Frames a = read_frames(dem, cl::DemoFormat::single, 2);
+  const Frames b = read_frames(rec, cl::DemoFormat::client, 33);
+  CHECK_MSG(b.end == cl::DemoRead::end, b.error);
+  CHECK(b.last.map == "halls" && b.last.protocol == 28 && b.last.player == 0);
+  CHECK(b.last.models == a.last.models && b.last.sounds == a.last.sounds);
+  // The ends line up: the signon packets read as frames of their own ahead of the first.
+  CHECK(b.eyes.size() >= s.origins.size());
+  const size_t la = a.eyes.size() - s.origins.size(), lb = b.eyes.size() - s.origins.size();
+  for (size_t i = 0; i < s.origins.size(); i++) {
+    const sh::Vec3f o = s.origins[i];
+    CHECK(b.eyes[lb + i].x == o.x && b.eyes[lb + i].y == o.y && b.eyes[lb + i].z == o.z + 22);
+    CHECK(same_angle(b.angles[lb + i].y, a.angles[la + i].y, 0.001f));
+    CHECK(b.health[lb + i] == a.health[la + i] && b.rockets[lb + i] == a.rockets[la + i]);
+    CHECK(b.rocket_seen[lb + i] == a.rocket_seen[la + i]);
+  }
+
+  // Fed a few bytes at a time, the same bytes.
+  cl::DemoConvert c;
+  CHECK_MSG(cl::convert_begin(c, cl::DemoFormat::single, cl::DemoFormat::client, {}, error), error);
+  std::vector<uint8_t> all;
+  for (size_t at = 0; at < dem.size(); at += 7) {
+    cl::convert_feed(c, std::span(dem).subspan(at, std::min<size_t>(7, dem.size() - at)));
+    CHECK_MSG(cl::convert_take(c, all, error), error);
+  }
+  cl::convert_end(c);
+  CHECK_MSG(cl::convert_take(c, all, error), error);
+  CHECK(all == rec);
+}
+
+TEST(a_frame_of_more_entities_than_the_oldest_client_holds_keeps_the_64_nearest) {
+  cl::ClientRecording rec;
+  cl::ConvertNotes notes;
+  std::vector<uint8_t> out;
+  cl::ClientLevel l;
+  l.game = "id1";
+  l.title = "test";
+  l.models = {"maps/halls.bsp", "progs/player.mdl", "progs/missile.mdl"};
+  l.sounds = {"weapons/rocket1i.wav"};
+  rec.level(out, 0, l, notes);
+  cl::ClientFrame f;
+  f.time = 0.1;
+  f.players[0].present = true;
+  for (int i = 0; i < 100; i++) {
+    cl::ConvEnt e;
+    e.model = 3;
+    e.origin = {static_cast<int16_t>(8 * 10 * i), 0, 0};  // entity 33 + i, 10 units further a step
+    f.entities.emplace(33 + i, e);
+  }
+  rec.frame(out, f, {}, notes);
+  CHECK(notes.dropped["an entity past the 64 a frame holds"] == 36);
+  const ClientWalk w = walk_client(out);
+  CHECK(w.whole && w.one_sequence && w.largest <= 1450);
+  // Read back: entities 33..96 are there, 97 on are not.
+  std::vector<uint8_t> file = out;
+  rec.end(file, 0.2, true, notes);
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(std::move(file), d, error), error);
+  bool saw = false;
+  while (cl::next_frame(d, error) == cl::DemoRead::frame) {
+    const auto& ents = d.state.entities;
+    int present = 0;
+    for (const auto& e : ents) present += e.present ? 1 : 0;
+    if (present == 0) continue;
+    saw = true;
+    CHECK(present == 64);
+    CHECK(ents.size() > 96 && ents[96].present && (ents.size() <= 97 || !ents[97].present));
+  }
+  CHECK(saw);
 }
 
 TEST(a_pair_that_does_not_exist_and_a_damaged_demo_are_refused) {
