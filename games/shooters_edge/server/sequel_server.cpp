@@ -27,6 +27,7 @@
 #include "shooters_edge/server/sequel_campaign.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
+#include "shooters_edge/server/sequel_mods.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
 #include "shooters_edge/server/sequel_targets.hpp"
 #include "shooters_edge/server/shot_help.hpp"
@@ -274,6 +275,7 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   pose_spawn(s, slot);
   campaign_body(s, slot, respawn);
   fight_midair_kit(s, slot);
+  sequel_mods_spawn(s, slot);
 }
 
 int skill(const SequelServer& s) {
@@ -388,6 +390,7 @@ void item_frame(SequelServer& s) {
 }
 
 void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
+  sequel_mods_pre_think(s, slot);
   SequelPlayer& p = s.players[slot];
   sh::SequelMove pm;
   pm.s = p.move;
@@ -439,6 +442,7 @@ void take_packet(SequelServer& s, const sh::Packet& pk) {
   const int lost = gap > 2 ? 2 : static_cast<int>(gap);
   for (int i = 2 - lost; i <= 2; i++) run_command(s, pk.client, pk.cmds[i]);
   p.last_sequence = pk.sequence;
+  sequel_mods_post_think(s, pk.client);
 }
 
 // The intermission begins: the dead stand up, and everyone is moved to its spot (the first
@@ -528,6 +532,7 @@ void view_frame(SequelServer& s, int slot) {
 void rules_frame(SequelServer& s) {
   s.frame_number++;
   s.level_time = double(s.frame_number) * kFrameSeconds;
+  sequel_mods_start_frame(s);
   item_frame(s);
   if (s.intermission_at > 0) {
     intermission_frame(s);
@@ -836,6 +841,7 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   set_info(c.userinfo, "name", name);
   pool_slot(s, slot).speedjump = false;
   s.players[slot] = SequelPlayer{};
+  if (s.map != nullptr) sequel_mods_connect(s, slot);
   if (s.map != nullptr) spawn_player(s, slot, false);
   if (s.map != nullptr) fill_rows(s);
 }
@@ -843,6 +849,7 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
 void sq_drop(void* r, int slot) {
   SequelServer& s = sq(r);
   if (slot < 0 || slot >= sh::kMaxClients) return;
+  if (s.map != nullptr && s.clients[slot].active) sequel_mods_disconnect(s, slot);
   s.clients[slot] = ClientInfo{};
   pool_slot(s, slot).speedjump = false;
   s.players[slot] = SequelPlayer{};
@@ -966,9 +973,9 @@ void sq_carry(void* /*r*/) {}  // a deathmatch body starts from scratch on every
 
 void sq_destroy(void* r) { delete static_cast<SequelServer*>(r); }
 
-constexpr RunnerCalls kSequelCalls = {"sequel",  &sq_start,          &sq_connect, &sq_drop,
-                                      &sq_frame, &sq_client_command, &sq_console, &sq_user_info,
-                                      &sq_pause, &sq_carry,          &sq_destroy};
+constexpr RunnerCalls kSequelCalls = {
+    "sequel",      &sq_start, &sq_connect, &sq_drop,    &sq_frame, &sq_client_command, &sq_console,
+    &sq_user_info, &sq_pause, &sq_carry,   &sq_destroy, false,     &sequel_start_mods};
 
 }  // namespace
 

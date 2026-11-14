@@ -365,6 +365,8 @@ struct SequelServer : RulesCommon {
   float rocket_from_z = std::numeric_limits<float>::quiet_NaN();
   int midair_frags = 0;
   float midair_rise = 0;
+  // The C++ mods' `self` and `other` while a hook runs (sequel_mods.hpp's rows; 0 none).
+  int32_t mod_self = 0, mod_other = 0;
 
   SequelServer();
   ~SequelServer();

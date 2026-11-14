@@ -32,7 +32,10 @@ Errors come back as findings with a next step, the compiler's at their file and 
    Return null when `GE_MOD_ABI_MAJOR_OF(host_abi)` is not yours.
 2. **Hooks run after the game's own rules** at the same points (start frame, a player's pre- and
    post-think, connect, put in server, disconnect), so a hook sees what the game just did: a
-   missile it fired is `newmis` after the post-think.
+   missile it fired is `newmis` after the post-think. Where the rules keep their own entities
+   (Shooter's Edge's sequel maps) two more fire: `damage` (answer the points a blow deals) and
+   `death`; there the services reach only the players and the map's entities, and a mod's own
+   entity or function is refused, so a mod that works on players alone plays on either rules.
 3. **Your own functions**: `function(k)` (k from 1) is the number to store in an entity's think,
    touch or blocked; the game calls your `call(k, self, other)` when it comes due.
    `call_function(fn, self, other)` runs any function, the game's too, so a mod that takes over a

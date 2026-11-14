@@ -149,6 +149,9 @@ include(${PROJECT_SOURCE_DIR}/cmake/Mods.cmake)
 ge_add_mod(shooters_edge_mod_rocket_bounce NAME rocket-bounce VERSION 1.0.0 GAME shooters_edge
   GAME_API 1 SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mods/rocket_bounce/rocket_bounce.cpp
   INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/games)
+ge_add_mod(shooters_edge_mod_vampire NAME vampire VERSION 1.0.0 GAME shooters_edge
+  GAME_API 1 SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mods/vampire/vampire.cpp
+  INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/games)
 
 # Its client (client/): the listen server and its local player (listen.hpp), the search path over
 # a game folder's packs (files.hpp), the player's keys and mouse (controls.hpp) and what he sees of

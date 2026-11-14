@@ -20,6 +20,8 @@ const se_mod_hooks_v1 kHooks = {sizeof(se_mod_hooks_v1),
                                 nullptr,
                                 nullptr,
                                 nullptr,
+                                nullptr,
+                                nullptr,
                                 nullptr};
 
 const ge_mod_v1 kMod = {sizeof(ge_mod_v1), 2u << 16, "abi-two", "1.0.0", SE_MOD_GAME,

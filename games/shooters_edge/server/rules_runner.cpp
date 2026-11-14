@@ -77,6 +77,14 @@ bool start_mods(RulesCommon& s, const RunnerCalls& calls, std::string& error) {
   RulesMods& m = s.mods;
   m.hosts.clear();
   if (m.tables.empty()) return true;
+  if (!calls.program_seam && calls.own_mods != nullptr) {
+    if (!calls.own_mods(s, error)) {
+      m.hosts.clear();
+      return false;
+    }
+    log_mods(s);
+    return true;
+  }
   if (!calls.program_seam) {
     error = std::string("This map's rules (") + calls.form +
             ") can't run C++ mods yet. Take the mod out of sv_mod, or play it on a classic map.";

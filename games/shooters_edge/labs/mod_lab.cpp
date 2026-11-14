@@ -8,8 +8,10 @@
 // rocket's distance from where it was fired against the clock, and the grenade's height against
 // the clock. ON THE SERVER: the same package stacked on a server's rules runner (the bytecode test
 // program on its arena), its first rocket's flight and the runner's digests beside the plain
-// runner's. The lab fails when the mod is refused, when the two modded runs part on any frame (or
-// on the server, at the end), or when the mod changed nothing.
+// runner's. ON THE SEQUEL'S RULES: the sample `vampire` stacked on the sequel's runner in its
+// scripted duel, the shooter's health against the clock beside the plain duel's. The lab fails when
+// the mod is refused, when the two modded runs part on any frame (or on the server, at the end), or
+// when the mod changed nothing.
 //
 // ge:summary Lab: a C++ mod's match beside the plain one: the loader, missiles, bounces, replay
 // ge:keywords lab mod mods cpp-mod rocket-bounce loader match compare replay missiles grenade
@@ -32,6 +34,7 @@
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
+#include "shooters_edge/server/sequel_mod_duel.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 #include "shooters_edge/sim/match.hpp"
 #include "shooters_edge/sim/mod_api.hpp"
@@ -292,6 +295,80 @@ void on_the_server(gl::Lab& lab, const ge_mod_v1* table, const Inputs& in) {
         in);
 }
 
+// ON THE SEQUEL'S RULES (sequel_mods.hpp): the sample `vampire`, which reads and changes the
+// players alone, stacked on the sequel's runner in its scripted duel (sequel_mod_duel.hpp), beside
+// the duel without it: the shooter's health against the clock, the digests, a second modded run.
+void on_the_sequel(gl::Lab& lab, const Inputs& in) {
+  gm::LoadedMod vampire;
+  const gm::LoadResult load =
+      gm::load_mod(std::string(GE_MOD_DIR) + "/vampire", {SE_MOD_GAME, SE_MOD_API}, vampire);
+  if (!load.ok()) {
+    lab.fail("mod: the sample vampire did not load: " +
+                 (load.errors.empty() ? std::string("no reason given") : load.errors.front()),
+             "next: make build (it builds games/shooters_edge/mods/vampire)");
+    return;
+  }
+  const int frames = 600;
+  const sv::SequelDuel plain = sv::run_sequel_duel(nullptr, frames);
+  const sv::SequelDuel modded = sv::run_sequel_duel(vampire.table, frames);
+  const sv::SequelDuel again = sv::run_sequel_duel(vampire.table, frames);
+  for (const sv::SequelDuel* d : {&plain, &modded})
+    if (!d->started) {
+      lab.fail("mod: the sequel's runner did not start: " + d->error,
+               "next: make test T=shooters_edge_rules_mod");
+      return;
+    }
+  const auto most = [](const sv::SequelDuel& d) {
+    float m = 0;
+    for (float h : d.health) m = std::max(m, h);
+    return m;
+  };
+  gl::LabTable t{"on the sequel's rules: vampire stacked on the sequel's runner (its duel)",
+                 {"", "plain", "with vampire"},
+                 {}};
+  t.rows.push_back(
+      {"the shooter's most health", to_fixed(most(plain), 0), to_fixed(most(modded), 0)});
+  t.rows.push_back({"deaths", std::to_string(plain.obituaries.size()),
+                    std::to_string(modded.obituaries.size())});
+  t.rows.push_back({"the mod's hooks run", "0", std::to_string(modded.hook_calls)});
+  t.rows.push_back({"the mod's refusals", "0", std::to_string(modded.refusals)});
+  t.rows.push_back({"the mod's console lines", std::to_string(plain.mod_lines.size()),
+                    std::to_string(modded.mod_lines.size())});
+  t.rows.push_back({"digest after " + std::to_string(frames) + " frames",
+                    hex64(plain.hashes.back()), hex64(modded.hashes.back())});
+  t.rows.push_back(
+      {"a second modded run", "", modded.hashes == again.hashes ? "the same" : "PARTED"});
+  lab.table(t);
+  lab.metric("sequel.plain.most-health", most(plain), "health");
+  lab.metric("sequel.modded.most-health", most(modded), "health");
+  if (modded.hashes != again.hashes)
+    lab.fail("mod: the modded sequel duel did not replay: two runs part",
+             "next: make test T=shooters_edge_rules_mod");
+  if (most(modded) <= most(plain))
+    lab.fail("mod: vampire on the sequel's rules did not feed the shooter",
+             "next: make test T=shooters_edge_rules_mod");
+
+  gl::LineChart c;
+  c.spikes = false;
+  c.frame = {"ON THE SEQUEL'S RULES: THE SHOOTER'S HEALTH", "Ana holds attack at Ben from 1.3 s",
+             "time (s)", "health"};
+  std::vector<double> ts, hp, hm;
+  for (size_t i = 0; i < plain.health.size(); i++) {
+    ts.push_back(static_cast<double>(i) * 0.013);
+    hp.push_back(plain.health[i]);
+    hm.push_back(i < modded.health.size() ? modded.health[i] : 0.0);
+  }
+  c.traces.push_back({"sequel rules", ts, hp});
+  c.traces.push_back({"sequel rules + vampire", ts, hm});
+  shoot(lab, "sequel-health", gl::line_chart(c),
+        "The sample vampire on the sequel's rules, which keep their own players: the shooter's "
+        "health a host frame at a time in the scripted duel, without and with it. Each of her "
+        "blows lands as the rules made it and gives her half its points.",
+        "the plain line flat at 100; the vampire's line climbing in steps from 1.3 s as her bolts "
+        "land, to at most 200",
+        in);
+}
+
 void run(gl::Lab& lab) {
   const int frames = static_cast<int>(lab.arg_num("frames"));
   const int seed = static_cast<int>(lab.arg_num("seed"));
@@ -408,6 +485,7 @@ void run(gl::Lab& lab) {
   draw_rocket(lab, plain, modded, in);
   draw_grenade(lab, plain, modded, in);
   on_the_server(lab, mod.table, in);
+  on_the_sequel(lab, in);
 }
 
 const gl::LabSpec kSpec{
@@ -416,7 +494,8 @@ const gl::LabSpec kSpec{
     "game:shooters_edge",
     "engine/mod's loader and games/shooters_edge/sim/mod_host.hpp's seam, with the sample mod "
     "games/shooters_edge/mods/rocket_bounce on the scripted match and stacked on the server's "
-    "rules runner (rules_runner.hpp)",
+    "rules runner (rules_runner.hpp), and the sample vampire on the sequel's rules "
+    "(sequel_mods.hpp)",
     "mod",
     "Does a C++ mod load, change Shooter's Edge's match the way it says and only that way, and "
     "does the match with it replay to the bit?",

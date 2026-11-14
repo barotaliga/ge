@@ -24,6 +24,7 @@
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/sequel_bar.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
+#include "shooters_edge/server/sequel_mods.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
 #include "shooters_edge/server/shot_help.hpp"
 
@@ -345,6 +346,7 @@ void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, 
   // A teammate's blow does nothing with `dmflags` 256 (no friendly fire) but push.
   if (attacker >= 0 && attacker != target && fight_teammates(s, attacker, target) && dmflag(s, 256))
     damage = 0;
+  if (damage > 0) damage = sequel_mods_damage(s, target, attacker, damage);  // the push still lands
   if (fight_midair(s)) {
     midair_hurt(s, target, attacker, dir, damage, knockback, energy, weapon, no_armour);
     return;
@@ -1195,6 +1197,7 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
   }
   s.obituaries.push_back(line);
   print_all(s, line + "\n");
+  sequel_mods_death(s, slot, killer);
   const sh::Vec3f at = unpack(p.move.origin);
   if (p.health < kGibHealth) {  // thrown apart: the body is gone
     p.gibbed = true;
