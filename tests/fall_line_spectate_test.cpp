@@ -7,6 +7,10 @@
 // ge:summary Tests spectating Fall Line by inputs: whole, late, and through a TV tree, by digest
 // ge:keywords test spectate spectating fall_line inputs keyframe digest tv relay preset late-joiner
 // ge:skill replay testing
+#include <array>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -15,7 +19,9 @@
 #include "net/conditions.hpp"
 #include "play/game.hpp"
 #include "play/inputs.hpp"
+#include "play/main.hpp"
 #include "play/session.hpp"
+#include "replay/play_logs.hpp"
 #include "replay/spectate.hpp"
 #include "replay/stream.hpp"
 #include "tv/trial.hpp"
@@ -23,6 +29,10 @@
 namespace gp = ge::play;
 namespace rp = ge::replay;
 namespace fs = fall_line::sim;
+
+// This executable as a game's play executable would be: the game and the replay file's reader.
+GE_GAME(fs::kGame);
+GE_REPLAY_LOGS();
 
 namespace {
 
@@ -183,6 +193,22 @@ TEST(a_runs_input_log_and_its_replay_file_are_the_same_run) {
   gp::InputLog back;
   CHECK_MSG(rp::spectate_inputs(fs::kGame, file, back, error), error);
   CHECK(gp::to_text(back) == gp::to_text(log));
+  // Wherever a log is taken, the replay file is too: `ge replay` plays it to the recorded digest.
+  const auto parsed = gp::parse_log_bytes(file, error);
+  CHECK_MSG(parsed.has_value(), error);
+  if (parsed) CHECK(gp::to_text(*parsed) == gp::to_text(log));
+  const std::string path =
+      (std::filesystem::temp_directory_path() / "ge_spectate_test_run.ger").string();
+  {
+    std::ofstream f(path, std::ios::binary);
+    f.write(reinterpret_cast<const char*>(file.data()), static_cast<std::streamsize>(file.size()));
+  }
+  std::istringstream in;
+  std::ostringstream out;
+  std::array<char*, 3> argv{const_cast<char*>("play"), const_cast<char*>("replay"),
+                            const_cast<char*>(path.c_str())};
+  CHECK(gp::play_main(3, argv.data(), in, out) == 0);
+  CHECK_MSG(out.str().find("\"matches\":true") != std::string::npos, out.str());
   // A viewer's stream that began after the first block holds no whole run.
   const auto t = rp::read_trailer(file);
   CHECK(t.has_value() && t->index.size() > 12);
