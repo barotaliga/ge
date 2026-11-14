@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
+#include <string>
 
 #include "core/num.hpp"
 #include "mountain/mapgen/packed.hpp"
@@ -30,6 +32,19 @@ std::optional<RealHints> real_hints(std::string_view id) {
     if (id == h->id) return decode_hints(h->data);
   }
   return std::nullopt;
+}
+
+bool lay_real_face(GenerateOptions& opts, std::string_view id) {
+  opts.face = std::string(id);
+  opts.real.reset();
+  opts.real_hints.reset();
+  std::optional<RealFace> face = real_face(id);
+  if (!face) return false;
+  opts.real = std::make_shared<const RealFace>(std::move(*face));
+  if (std::optional<RealHints> h = real_hints(id)) {
+    opts.real_hints = std::make_shared<const RealHints>(std::move(*h));
+  }
+  return true;
 }
 
 std::optional<RealHints> decode_hints(std::string_view data) {
