@@ -15,6 +15,7 @@
 #include <iterator>
 #include <memory>
 
+#include "brush/cli/commands.hpp"
 #include "capture/screenshot.hpp"
 #include "classicenhance/cli/commands.hpp"
 #include "classicenhance/profile.hpp"
@@ -461,6 +462,8 @@ gc::Spec make() {
   s.tv_words = tv_words;
   s.demo_words = demo_words;
   s.commands = ge::classicenhance::cli::commands();
+  for (const ge::gamecli::Command& c : ge::brush::cli::commands()) s.commands.push_back(c);
+  s.command_flags = ge::brush::cli::command_flags();
   s.commands.push_back({"demos", "", "the recordings in the game folder: name, size, file",
                         "demos --json", "shooters_edge", cmd_demos});
   s.commands.push_back({"demos play", "<name>", "watch a recording in the window",
@@ -487,7 +490,9 @@ gc::Spec make() {
       "`demos` lists recordings and `demos play <name>` watches one; `demos pack <name>` writes "
       "the replay file (.ged), about half the size of a packed recording; `demos convert <name> "
       "<file>` "
-      "writes it in another format (`demo1.dem` to `demo1.mvd`).";
+      "writes it in another format (`demo1.dem` to `demo1.mvd`). `map build <plan|svg>` makes a "
+      "map from a text plan or an SVG floor plan with the install's own textures; put the .bsp in "
+      "the game folder's `maps` and start it with `map <name>`.";
   return s;
 }
 
