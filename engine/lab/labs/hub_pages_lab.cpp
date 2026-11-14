@@ -539,7 +539,8 @@ void run(gl::Lab& lab) {
       {"match", "ONE MATCH'S PAGE", &match_page.body, 1280, 1000, false,
        "GET /match/{id}: a kept report: the teams, the scoreboard, each player's accuracy.",
        "red 78 to blue 72 on tower; four players with their weapons; sable named as put out by the "
-       "cheat checks under the scoreboard, and their aim spread 0.02 beside the others' 0.66 to 0.71."},
+       "cheat checks under the scoreboard, and their aim spread 0.02 beside the others' 0.66 to "
+       "0.71."},
       {"runs", "A DOWNHILL GAME'S RUNS, ITS OWN LOOK", &runs_page, 1280, 700, false,
        "GET /demos on Fall Line's hub (look `alpine`): the archive's runs, each found by its seed, "
        "the racers' times at the line.",
