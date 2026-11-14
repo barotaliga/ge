@@ -35,8 +35,9 @@ std::string fit_chars(std::string_view s, size_t n, bool left = false);
 
 // The darkened view, the plaque, and the page's title: the picture `title` when the art has it,
 // else the strip word `carved` when it can be cut, else `words` in big glyphs, centred at the top.
-// On the sequel's plates, the banner of `page` (`banner_of`) in place of `title`, the title above
-// the 320 x 200 screen (classic y -16, the 240 px screen's top).
+// On the sequel's plates, the banner of `page` (`banner_of`) in place of `title`, or `words`
+// written on a banner (`banner_title`), above the 320 x 200 screen (classic y -16, the 240 px
+// screen's top).
 void classic_list_frame(const ClassicPen& pen, std::string_view page, std::string_view title,
                         std::string_view carved, std::string_view words);
 
