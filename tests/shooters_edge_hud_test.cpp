@@ -482,3 +482,34 @@ TEST(the_crosshair_cvars_pick_its_mark_colour_size_and_opacity) {
   CHECK(se::crosshair_colour("51", art()).g == 0.2f);
   CHECK(se::crosshair_colour("", art()).r == 1 && se::crosshair_colour("pink", art()).g == 1);
 }
+
+TEST(the_crosshair_picture_serves_a_screen_with_its_own_mark_and_palette) {
+  // The sequel's screen draws its own mark through the same picker, with its own palette.
+  ui::Image own;
+  own.width = own.height = 16;
+  own.rgba.assign(size_t{16} * 16 * 4, 255);
+  std::vector<uint8_t> palette(768, 0);
+  palette[size_t{7} * 3 + 1] = 255;  // index 7 is green in this palette
+  se::CrosshairSettings s;
+  s.mark = 1;
+  s.colour = "7";
+  s.size = 2;
+  bool shown = false;
+  const ge::hud::Picture p = se::crosshair_picture(s, own, 3.0f, palette, &shown);
+  CHECK(shown && p.image == &own && p.density == 1.5f);
+  CHECK(p.tint.r == 0 && p.tint.g == 1 && p.tint.b == 0 && p.tint.a == 1);
+  s.mark = 5;
+  const ge::hud::Picture built = se::crosshair_picture(s, own, 3.0f, palette, &shown);
+  CHECK(shown && built.image == &se::crosshair_mark(5));
+  s.mark = 0;
+  se::crosshair_picture(s, own, 3.0f, palette, &shown);
+  CHECK(!shown);
+  s.mark = 1;
+  s.alpha = 0;
+  se::crosshair_picture(s, own, 3.0f, palette, &shown);
+  CHECK(!shown);
+  s.alpha = 1;
+  const ui::Image empty;
+  se::crosshair_picture(s, empty, 3.0f, palette, &shown);
+  CHECK(!shown);  // a screen with no mark of its own draws none
+}
