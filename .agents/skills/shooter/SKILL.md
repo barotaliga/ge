@@ -27,6 +27,7 @@ edges. `docs/shooters-edge.md` is the design;
 | `shooter/hull_world.hpp/.cpp` | The engine mover's world over brush models' clip hulls (`mover_world`, the axes `to_engine`/`to_map`, `contents_at`) and a hull 0's liquids laid as `engine/water` volumes (`add_liquids`) |
 | `shooter/row.hpp/.cpp` | The classic row on the engine's mover and swimmer: `classic_rows` from the settings, `row_body`, `row_command` |
 | `shooter/row_recording.hpp/.cpp` | The row against the recordings, one command at a time and as runs (`replay_row`, `row_covers`) |
+| `shooter/app/look.hpp/.cpp` (`ge_shooter_app`) | Every shooter's picture on classic maps: `Picture` and `add_cvars` (r_look, the r_, gl_, v_ and ce_ cvars, skins and colours), each cvar's default the value the game's `Picture` holds at the call (`console/words.hpp`'s `values_for_default` keeps the help honest), `world_options`, `post_settings`, the palette grade, `warped_fov`; a game joins its own effects in its look (Shooter's Edge's `app/look.hpp`) |
 | `labs/pmove_lab.cpp` | The `pmove` lab: every scenario's worst error, paths from above and the side |
 | `plugins/shooter/speedjump_assist.hpp` | `assisted_command`: the command a client sends for forward and jump on a server without `pm_speedjump` (the jump let go in the air, the side key and a sent yaw) |
 | `plugins/shooter/rjump_assist.hpp` | The rocket jump helpers' command: `rjump_command` (the shot 80 down or turned half round, attack and jump), the request a seat keeps (`rjump_take`, `rjump_apply` by the launcher's readiness) |

@@ -816,7 +816,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       // status, or the game's HUD (the classic bar over the sequel's player wearing its things).
       const shooters_edge::server::SequelServer* sq =
           l.rules ? shooters_edge::server::sequel_of(*l.rules) : nullptr;
-      const shooters_edge::hud::CrosshairSettings crosshair;  // the default mark
+      const ge::hud::CrosshairSettings crosshair;  // the default mark
       if (cl::draw_sequel_bars(overlay, own_bar, worn_bar, sq, remix,
                                sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t),
                                !l.campaign_host, &crosshair, {}, t, static_cast<int>(w),

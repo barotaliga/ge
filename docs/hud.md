@@ -134,6 +134,18 @@ those straight from the player's packs at start (or a lab from classic-enhance's
 no choice between the two: with a classic game loaded its own pictures are drawn, and the free art
 only with Shooter's Edge's own content (`client/classic_pictures.hpp`'s `hud_art_of`).
 
+### The crosshair
+
+`hud/crosshair.hpp` is any game's crosshair as the player sets it: `crosshair` (0 none, 1 the
+game's own mark, 2..7 marks painted in code: a dot, a cross, a cross open at the middle, a ring, a
+ring and a dot, an X), `crosshaircolor` (empty the mark's own colours, one number a colour of the
+game's palette, or "R G B"), `crosshairsize` and `crosshairalpha`. A game registers the cvars over
+its `CrosshairSettings` (`add_crosshair_cvars`), and the values the settings hold at that call are
+the cvars' defaults, so each game keeps its own. `crosshair_picture` turns the settings, the game's
+own mark and its palette into a `Picture` any screen draws: Shooter's Edge's HUD element
+(`hud/crosshair.hpp` in the game) and its sequel's status screen (`client/sequel_bar.hpp`) both go
+through it.
+
 ## Skins: the player's and the game's own textures
 
 A **skin** is a directory of images, `skins/<name>/`, that replaces an element's drawn parts.
