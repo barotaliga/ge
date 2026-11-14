@@ -5,6 +5,7 @@
 // ge:keywords bsp brush render renderer classic v2 point-light cube-shadow sun-shadow lava-light
 // ge:skill brush render
 #include "brush/app/bsp_draw.hpp"
+#include "brush/app/sky_box.hpp"
 #include "prof/zones.hpp"
 
 #include <algorithm>
@@ -923,6 +924,10 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   const bool box = !s.sky_box.levels.empty() && s.sky_box_face > 0;
   const double inset = box ? 0.5 / double(s.sky_box_face) : 0;
   set4(d.staged.sky_box, box ? 1 : 0, inset, inset, 0);
+  // Its turn by the level's clock (the map's skyaxis and skyrotate).
+  double turn[3][3];
+  sky_box_turn(s.sky_axis, s.sky_rotate, view.time_s, turn);
+  for (int r = 0; r < 3; ++r) set4(d.staged.sky_turn[r], turn[r][0], turn[r][1], turn[r][2], 0);
   // How opaque each liquid is (the see-through pass reads it).
   set4(d.staged.liquid_alpha, o.liquid_alpha[0], o.liquid_alpha[1], o.liquid_alpha[2],
        o.liquid_alpha[3]);
