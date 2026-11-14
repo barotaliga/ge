@@ -49,7 +49,8 @@ struct TallySeat {
   int64_t ping_sum = 0, ping_n = 0, ping_min = 0, ping_max = 0;  // ms, each frame's ping
   int userid = 0;
   bool on = false, bot = false, alive = false;
-  SeatStats stats;  // the weapon stats (classic_stats.hpp), when the game reads them
+  SeatStats stats;      // the weapon stats (classic_stats.hpp), when the game reads them
+  std::string flagged;  // the cheat check's verdict (classic_cheats.hpp), "" when clean
 };
 
 struct MatchTally {
@@ -76,6 +77,11 @@ const char* classic_mode(bool teamplay, bool coop, int seats);
 
 void tally_frame(MatchTally& t, const shooters_edge::server::RulesWorld& w, bool counting,
                  const std::array<uint64_t, ge::shooter::kMaxClients>& accounts);
+
+// A seat the cheat check put out (classic_cheats.hpp): its verdict kept for the report's
+// `flagged`, which a master that trusts the server turns into a ban (docs/accounts.md § Bans).
+// Nothing for a seat not counting or a match already reported.
+void tally_flag(MatchTally& t, int slot, const std::string& verdict);
 
 // The seats `stats_frame` reads into: those counting now, null for the rest.
 std::array<SeatStats*, ge::shooter::kMaxClients> tally_stats(MatchTally& t);
