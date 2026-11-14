@@ -126,6 +126,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // light (0 off, 1 both, 2 the walls alone, 3 the floors alone); r_wallcolor and r_floorcolor
   // their colours ("R G B", 0..255). Either look.
   int draw_flat = 0;
+  // gl_picmip: the map's textures drawn at a half (1), a quarter (2), an eighth (3) or a
+  // sixteenth (4) of their detail, nearest; 0 their own. Either look.
+  int picmip = 0;
   std::string wall_colour = "150 140 125", floor_colour = "85 95 110", sky_colour = "70 90 120";
   // r_fullbrightskins: how far the players are lifted toward full light wherever they stand (0 lit
   // as the floor under them, 1 fully lit and unshaded).

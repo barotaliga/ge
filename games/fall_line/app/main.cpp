@@ -59,6 +59,7 @@
 // ge:keywords drop-down-console tilde overlay front-door pause-page shell screenshot f12
 // ge:skill platform gpu render audio input
 #include <array>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
@@ -94,6 +95,7 @@
 #include "fall_line/controls/rebinding.hpp"
 #include "fall_line/controls/script.hpp"
 #include "fall_line/sim/map_cache.hpp"
+#include "fall_line/sim/play.hpp"
 #include "fall_line/sim/sky.hpp"
 #include "fall_line/sim/state.hpp"
 #include "fall_line/sound/bank.hpp"
@@ -113,6 +115,7 @@
 #include "play/session_flags.hpp"
 #include "play/window_output.hpp"
 #include "render/screenshot_copy.hpp"
+#include "save/store.hpp"
 #include "ui/console.hpp"
 #include "ui/console_keys.hpp"
 #include "ui/draw.hpp"
@@ -316,6 +319,17 @@ static int run_main(int argc, char** argv) {
   ge::save::DirDisk cache_disk(prefs + "cache");
   ge::save::ContentCache content_cache(cache_disk, "fall_line");
   fall_line::sim::use_content_cache(&content_cache);
+  // The player's saves (docs/saves.md § Fall Line's saves in the game): numbered slots, the quick
+  // slot and a ring of autosaves, in the player's folder; the menus offer them once it opens.
+  ge::save::DirDisk save_disk(prefs + "saves");
+  ge::save::StoreSpec save_spec;
+  save_spec.game = fall_line::sim::kGame.name;
+  save_spec.autosave_spacing_s = 180;
+  ge::save::Store saves(save_disk, save_spec);
+  const bool saves_open = saves.open();
+  if (!saves_open)
+    out::error("fall_line: the saves did not open, so the menus offer none: " + saves.problem() +
+               "; see docs/saves.md");
   std::unique_ptr<fall_line::controls::HandRun> hand =
       fall_line::controls::open_hand_run(set.seed, args.rivals, std::move(map), error);
   if (!hand) {
@@ -403,6 +417,14 @@ static int run_main(int argc, char** argv) {
   // written at the end is the player's latest; the bot's runs behind the front door are not.
   bool player_ran = shell.mode == fall_line::app::Mode::run;
   std::optional<ge::play::InputLog> left;
+  if (saves_open)
+    fall_line::app::set_saves(shell, fall_line::app::rows_of_store(saves, hand->setup_text));
+  const std::string save_title = "Seed " + ge::core::num::to_string(set.seed);
+  const auto unix_now = [] {
+    return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
+                                    std::chrono::system_clock::now().time_since_epoch())
+                                    .count());
+  };
 
   // The run's sound. The synth outlives the device that pulls it (declared first).
   ge::audio::Synth synth;
@@ -626,9 +648,37 @@ static int run_main(int argc, char** argv) {
     if (asked.resume) ge::loop::resume(clock);
     if (asked.to_front) {
       ge::loop::resume(clock);
-      left = fall_line::controls::hand_log(*hand);
+      // A run loaded from a save logs from the save on, which plays back from no start: not kept.
+      left.reset();
+      if (hand->loaded_at < 0) left = fall_line::controls::hand_log(*hand);
       if (!new_run(true)) return 1;
       player_ran = false;
+    }
+    if (!asked.save.empty()) {
+      std::vector<uint8_t> file;
+      error.clear();
+      if (fall_line::controls::hand_save(*hand, save_title, unix_now(), file, error) &&
+          saves.write(asked.save, file)) {
+        fall_line::app::set_saves(shell, fall_line::app::rows_of_store(saves, hand->setup_text));
+        out::status("fall_line: the run is saved into " + fall_line::app::slot_name(asked.save));
+      } else {
+        out::error("fall_line: the run was not saved: " +
+                   (error.empty() ? saves.problem() : error) + "; see docs/saves.md");
+      }
+    }
+    if (!asked.load.empty()) {
+      std::vector<uint8_t> file;
+      error.clear();
+      if (!new_run(args.bot)) return 1;
+      if (saves.read(asked.load, file) && fall_line::controls::hand_load(*hand, file, error)) {
+        out::status("fall_line: " + fall_line::app::slot_name(asked.load) + " is loaded");
+      } else {
+        out::error("fall_line: " + fall_line::app::slot_name(asked.load) +
+                   " did not load, so the run starts from the top: " +
+                   (error.empty() ? saves.problem() : error) + "; see docs/saves.md");
+      }
+      ge::loop::resume(clock);
+      player_ran = true;
     }
     if (asked.settings_changed) {
       faders.on = shell.settings.sound;
@@ -657,6 +707,21 @@ static int run_main(int argc, char** argv) {
     for (int k = 0; k < granted && fall_line::controls::hand_playing(*hand); ++k) {
       fall_line::controls::hand_step(*hand, played, felt_s);
       fall_line::sound::run_sound_step(sound, synth, fall_line::controls::hand_state(*hand));
+    }
+    // The autosave ring: the player's run as it stands, every few minutes of play.
+    const double play_s = static_cast<double>(hand->steps) / fall_line::sim::kGame.hz;
+    if (saves_open && player_ran && shell.mode == fall_line::app::Mode::run && granted > 0 &&
+        fall_line::controls::hand_playing(*hand) && play_s >= save_spec.autosave_spacing_s &&
+        saves.autosave_due(play_s)) {
+      std::vector<uint8_t> file;
+      error.clear();
+      if (fall_line::controls::hand_save(*hand, save_title, unix_now(), file, error) &&
+          saves.autosave(file, play_s)) {
+        fall_line::app::set_saves(shell, fall_line::app::rows_of_store(saves, hand->setup_text));
+      } else {
+        out::error("fall_line: the autosave was not written: " +
+                   (error.empty() ? saves.problem() : error) + "; see docs/saves.md");
+      }
     }
     if (devices) ge::platform::play_feedback(*devices, hand->felt, held, felt_s);
     const fall_line::sim::GameState& state = fall_line::controls::hand_state(*hand);
@@ -751,6 +816,10 @@ static int run_main(int argc, char** argv) {
 
   // The run as its input log (the player's latest; none when no run was played from the front
   // door), and the session as its device events.
+  if (player_ran && hand->loaded_at >= 0) {
+    out::status("fall_line: the run was loaded from a save, so its input log is not written");
+    player_ran = false;
+  }
   const bool any_played = player_ran || left.has_value();
   const ge::play::InputLog log =
       player_ran || !left ? fall_line::controls::hand_log(*hand) : *std::move(left);

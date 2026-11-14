@@ -7,13 +7,13 @@
 // rocket trails, explosions and their light, the screen's blend), the weapon in hand (held.hpp:
 // switched, kicked and flashing as the mod fires it), the HUD (hud/layout.hpp) and the console.
 //
-//   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [-models <dir>]
+//   se [-game 1|2] [-basedir <dir>] [-mod <folder>] [-progs <file>] [-models <dir>]
 //                 [-timedemo <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH] [-config <f>]
 //                 [-demovideo <demo> <file> [--from=m:ss --to=m:ss | --highlight=N] ...]
 //                 [-logfile <file>] [+<command> ...]
 //
-// `-basedir` holds the game folder (`id1`, the multiplayer client's folder over it when present;
-// `-game` names another); `~` is home. Without it, the game loaded last, however it was picked;
+// `-game 1|2` opens that game's kept install, else asks for it (client/install_ask.hpp); `-basedir`
+// holds the game folder (`id1`, `-mod` a mod's over it); `~` is home. Else the game loaded last;
 // LOAD GAME or `basedir <folder>` loads another in place, enhanced in the background
 // (client/game_folder.hpp). `-progs` runs a mod's progs in place of the baseline mod, `-models`
 // names the held weapons' folder (by default the game's `content/models/view`). The other words are
@@ -111,6 +111,7 @@
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/game_start.hpp"
 #include "shooters_edge/client/held.hpp"
+#include "shooters_edge/client/install_ask.hpp"
 #include "shooters_edge/client/install_configs.hpp"
 #include "shooters_edge/client/install_search.hpp"
 #include "shooters_edge/client/installs.hpp"
@@ -184,7 +185,7 @@ int run_main(int argc, char** argv) {
   if (std::string why; !cl::parse(argc, argv, args, why)) {
     ge::play::attach_window_output("", log_error);
     out::error("shooters_edge: the command line was refused: " + why +
-               " Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
+               " Usage: se [-game 1|2] [-basedir <dir>] [-mod <folder>] "
                "[-config <file>] [-logfile <file>] [-progs <file>] [-models <dir>] [-timedemo "
                "<demo>] [-playdemo <demo>] "
                "[--frames=N] [--size=WxH] [-demovideo <demo> <file> [--fps=N] "
@@ -998,14 +999,13 @@ int run_main(int argc, char** argv) {
     for (const std::string& f : faults) console.print("particles: " + f);
     fx_palette_read = true;
   };
-  // LOAD GAME's folder and the console's `basedir` (client/game_folder.hpp): the install opened in
-  // place of the one playing (the old world and servers let go first: they view its packs), its
-  // first map started where the map changes, its packs enhanced in the background, kept for the
-  // next start. False, with nothing changed, when its folder does not open.
+  // LOAD GAME's folder and `basedir` (client/game_folder.hpp): the install opened in place of the
+  // one playing (the old world and servers let go first), its first map started where the map
+  // changes, enhanced in the background, kept. False, nothing changed, when it does not open.
   std::string folder_ask;
+  cl::InstallAsk install_ask = cl::ask_install(*window, args, measured);  // -game N, none kept
   console.add_command("basedir",
-                      "basedir <folder>: your game's install (the folder holding id1) loaded in "
-                      "place of this one, its packs enhanced in the background",
+                      "basedir <folder>: load your game's install (the folder holding id1)",
                       [&](Con& c, const CArgs& a) {
                         if (a.size() < 2)
                           c.print("basedir: " + args.basedir + " (basedir <folder> loads another)");
@@ -1423,8 +1423,7 @@ int run_main(int argc, char** argv) {
     // SELECT GAME: a game's install opened at once, or the folder chooser to find one.
     if (shooters_edge::menu::GameMenu::GameAsk ask = game_menu.take_game(); ask.asked) {
       if (ask.browse)
-        ge::platform::pick_folder(*window, "Select game: the folder your game is installed in",
-                                  args.basedir);
+        ge::platform::pick_folder(*window, "Select game: your game's folder", args.basedir);
       else
         folder_ask = ask.install;
     }
@@ -1432,6 +1431,7 @@ int run_main(int argc, char** argv) {
       if (!why.empty())
         game_menu.load_refused(why + ". You can also type \"basedir <folder>\" in the console.");
       folder_ask = picked;  // "" when the player cancelled
+      if (!cl::answer_install(*window, install_ask, &folder_ask, &why)) game_menu.load_refused(why);
     }
     if (!folder_ask.empty() && !bench.active) {
       std::string basedir;
@@ -1699,8 +1699,7 @@ int run_main(int argc, char** argv) {
         for (const std::string& line : lines) tell(line, t);
       }
       if (!world) continue;  // no level of the demo's yet
-      // The first game's bob, strafe roll and damage kick rebuilt on the recorded eye (the
-      // player's camera cvars), a game joined moving by its prediction (demo_eyes.hpp).
+      // Bob, roll and kick rebuilt on the recorded eye; a game joined by its prediction.
       cl::apply_view_cvars(camera_cvars, shown);
       cl::DemoBody body;
       if (drawn_remote && remote.predicted) {
@@ -1720,11 +1719,12 @@ int run_main(int argc, char** argv) {
       view.frame = static_cast<uint64_t>(presented);
       overlay.begin(w, h);
       se::Status hud_status = cl::demo_status(ds, t);
-      if (drawn_remote) cl::group_status(controls.groups, hud_status, t);  // the weapon group
-      se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
-      const auto placed =
-          hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), hud_look());
-      playback.bar_bottom_px = cl::hud_inset(placed, h);
+      if (drawn_remote) cl::group_status(controls.groups, hud_status, t);       // the weapon group
+      if (!cl::draw_recorded_sequel_bar(overlay, sequel_bar, ds_read, w, h)) {  // its own bar
+        se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
+        playback.bar_bottom_px = cl::hud_inset(
+            hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), hud_look()), h);
+      }
       if (bench.paced && !attract && !game_menu.open())
         cl::playback_draw(overlay, playback, bench, w, h, t);
       ge::hud::draw_frame_rate(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(),

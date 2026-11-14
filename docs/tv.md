@@ -639,6 +639,51 @@ player and rode nine cuts in 150 s, each one a reconnect, and stayed connected. 
 followed view is converted until the viewer's track keys ask for slot 2, it is seated in slot 2's
 view, and that view is let go once it is back on the followed one.
 
+### Single-player clients at the TV
+
+`setv --demo=<recording>` also serves the recording as a **netgame on the single-player protocol**
+(version 15) on `--netgame-port` (26000 by default, the port the single-player client tries when an
+address names none; 0 turns it off), so an unmodified single-player client watches it with
+`connect <host>`. A single-player recording is played as it is; a client or multiview recording is
+converted to one when it is opened (`client/demo_convert.hpp`; a multiview recording rides the
+lowest slot playing). `games/shooters_edge/net/classic_tv_netgame.hpp` is the face. A client on the same machine as setv
+binds 26000 itself, so it starts with another port (`-port 26100`) and connects with
+`connect "127.0.0.1:26000"` (quoted: its console splits a line at a colon). Checked by hand with
+the original single-player client of the time, built outside the tree and run as a black box,
+watching a 4on4 multiview recording for minutes.
+
+**The transport.** Every datagram but a control one is an 8-byte header, big-endian (the flags
+over the whole length, then a sequence), and its payload. The client asks to connect with a
+control packet; the accept names the face's own port, so a viewer behind a NAT keeps the one hole
+it opened and the face tells viewers apart by their address. A reliable message goes in fragments
+of at most 1024 bytes, one in flight at a time, each resent after a second until acknowledged; an
+unreliable message is one datagram of at most 1024 bytes, which the oldest client will not exceed.
+
+**The signon is the recording's own.** Each level's blocks are cut at its stages. The first part,
+the server info and everything up to stage 1, goes as one reliable message: the client loads the
+level inside that message and drops the connection if another reliable one arrives while it
+loads. The second goes when the client asks `prespawn`, the third at `spawn`, and `begin` seats
+it in the play. The face drops the recording's own stage numbers and sends its own, one at the
+end of each part, so a recording that marks only one stage still signs a client on. Stuffed text
+from the recording is never sent: its commands were its player's, not a viewer's.
+
+**The play** runs on one clock for every viewer, the recording's own times (a silence over a
+second cut to one). Each due block is cut at its messages: the frame's own (the time, the client
+data, the entity updates, sounds, particles, effects, damage) go unreliable, with the recorder's
+view angles added as a `setangle`, so the viewer sees what the recorder saw; prints, names, frags
+and light styles join the reliable queue. A viewer who joins late misses nothing an update needs,
+since every frame carries every entity in view as a delta from its baseline, which the signon
+holds. A new level in the recording, and the loop at its end, send every seated viewer
+`reconnect` and the level's first part again, as a netgame's level change does; a viewer still
+loading is turned round when it next asks.
+
+Measured black-box: an unmodified current single-player client watched the shareware pack's first
+demo through `setv` for 90 s, through the loop, with no error, and then a real 4on4 on dm2
+converted from its multiview recording, with the frag messages, the team chat and the scoreboard.
+The test (`tests/shooters_edge_classic_tv_netgame_test.cpp`) has a client written from the
+transport's facts sign on, read every frame with the game's own reader, take the loop's
+`reconnect`, and sign on over an awful link by resends.
+
 ## The sequel's recordings
 
 The sequel's client recording (a `.dm2`: blocks of a 32-bit length and one server packet's messages,

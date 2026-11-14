@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -58,8 +59,21 @@ cl::Args folders(const gc::Ctx& ctx) {
     a.basedir = cl::expand_home(ctx.flag("basedir"));
     a.basedir_set = true;
   }
+  // `--game=N`: the Nth classic game's kept install, as the window's `-game N`; `--mod=<folder>`
+  // the game folder over it, as its `-mod` (a `--game` that is no number reads as that folder).
   if (ctx.has("game")) {
-    a.game = ctx.flag("game");
+    const std::string g = ctx.flag("game");
+    const int n = std::atoi(g.c_str());
+    if (n >= 1 && n <= static_cast<int>(std::size(ge::classicenhance::kProfiles)) &&
+        std::to_string(n) == g) {
+      a.game_number = n;
+    } else {
+      a.game = g;
+      a.game_set = true;
+    }
+  }
+  if (ctx.has("mod")) {
+    a.game = ctx.flag("mod");
     a.game_set = true;
   }
   cl::choose_folder(a, gc::prefs_dir("gameengine2", "shooters_edge"));
@@ -111,14 +125,14 @@ bool locate(const gc::Ctx& ctx, gc::Places& out, std::string& error) {
 
 void join_words(const gc::Ctx& ctx, const std::string& address, std::vector<std::string>& w) {
   const cl::Args a = folders(ctx);
-  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "+connect", address});
+  w.insert(w.end(), {"-basedir", a.basedir, "-mod", a.game, "+connect", address});
 }
 
 // A hub's Spectate link: the window joins as a spectator (the `spectator` setting it sends).
 void spectate_words(const gc::Ctx& ctx, const std::string& address, std::vector<std::string>& w) {
   const cl::Args a = folders(ctx);
   w.insert(w.end(),
-           {"-basedir", a.basedir, "-game", a.game, "+set", "spectator", "1", "+connect", address});
+           {"-basedir", a.basedir, "-mod", a.game, "+set", "spectator", "1", "+connect", address});
 }
 
 // A hub's Play link: the replay file (version 2) the CLI fetched, unpacked beside it into the
@@ -150,14 +164,14 @@ bool demo_words(const gc::Ctx& ctx, const std::string& path, std::vector<std::st
     return false;
   }
   const cl::Args a = folders(ctx);
-  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "-playdemo", out.string()});
+  w.insert(w.end(), {"-basedir", a.basedir, "-mod", a.game, "-playdemo", out.string()});
   return true;
 }
 
 void listen_words(const gc::Ctx& ctx, const gc::HostAsk& ask, std::vector<std::string>& w) {
   const cl::Args a = folders(ctx);
   // As HOST GAME's START does it: the server's lines (`sv <name> <value>`), then the map.
-  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "+sv_port", std::to_string(ask.port),
+  w.insert(w.end(), {"-basedir", a.basedir, "-mod", a.game, "+sv_port", std::to_string(ask.port),
                      "+sv", "deathmatch", "1"});
   if (ask.maxclients > 0) w.insert(w.end(), {"+sv", "maxclients", std::to_string(ask.maxclients)});
   const std::string map =
@@ -210,17 +224,16 @@ int cmd_demos_play(gc::Ctx& ctx) {
     if (f.stem() == ctx.words[0] || f.filename() == ctx.words[0]) file = f;
   if (file.empty())
     return gc::refuse(ctx, 1, "no recording is called '" + ctx.words[0] + "'", "secli demos");
-  const std::vector<std::string> argv = {
-      gc::program_path(ctx.flag("bin", ctx.self_dir), "shooters_edge"),
-      "-basedir",
-      a.basedir,
-      "-game",
-      a.game,
-      "-playdemo",
-      file.string()};
+  const std::vector<std::string> argv = {gc::program_path(ctx.flag("bin", ctx.self_dir), "se"),
+                                         "-basedir",
+                                         a.basedir,
+                                         "-mod",
+                                         a.game,
+                                         "-playdemo",
+                                         file.string()};
   if (!fs::exists(argv[0]))
     return gc::refuse(ctx, 1, argv[0] + " is not there",
-                      "build it, or pass --bin=<the folder holding shooters_edge>");
+                      "build it, or pass --bin=<the folder holding se>");
   const std::string log = (fs::path(ctx.places.logs) / "demo.log").string();
   std::error_code ec;
   fs::create_directories(ctx.places.logs, ec);
@@ -420,7 +433,7 @@ gc::Spec make() {
   s.game = "shooters_edge";
   s.title = "Shooter's Edge";
   s.cli = "secli";
-  s.window = "shooters_edge";
+  s.window = "se";
   s.server = "sesv";
   s.prefs_app = "shooters_edge";
   s.default_port = 27500;
@@ -453,7 +466,8 @@ gc::Spec make() {
   s.commands.push_back({"demos unpack", "<name>", "a replay file (.ged) back to the recording",
                         "demos unpack final.ged", "shooters_edge", cmd_demos_unpack});
   s.flags = {{"basedir", "<dir>", "the classic game's install (default: the one loaded last)"},
-             {"game", "<folder>", "the game folder over it (default: the multiplayer one)"}};
+             {"game", "1|2", "the classic game or its sequel, from the install kept for it"},
+             {"mod", "<folder>", "the game folder over it (default: the multiplayer one)"}};
   s.notes =
       "Shooter's Edge plays the player's own classic packs: `--basedir` is their install (the "
       "game remembers the last one loaded, so it is rarely needed), and `content` says which game "

@@ -21,11 +21,13 @@
 
 #include <filesystem>
 #include <map>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/hud/sequel_layout.hpp"
 #include "shooters_edge/server/rules_world.hpp"
@@ -50,7 +52,18 @@ struct SequelBar {
   // The game's binds (key to command), for the inventory's hotkeys; null: none shown.
   const std::map<std::string, std::string>* binds = nullptr;
   double now = 0;  // the real time, s (the inventory's cursor blinks by it)
+  std::shared_ptr<server::RulesWorld> recorded{};  // a recording's world (draw_recorded_sequel_bar)
 };
+
+// The world a sequel recording or a joined sequel server gives its bar (the bar's program, the
+// pictures and item names, the player's stats, screen and inventory, the players' names), filled
+// into `out` for `run_sequel_bar` at slot `ds.player`; false when `ds` is not the sequel's or
+// carries no bar program (the window's own HUD is drawn instead).
+bool sequel_world_of(const DemoState& ds, server::RulesWorld& out);
+// A recording's (or a joined server's) sequel bar run and drawn on `dl` over a `width` x
+// `height` window; false when `ds` has none to draw (`sequel_world_of`).
+bool draw_recorded_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, const DemoState& ds, int width,
+                              int height);
 
 // The whole number the bar is drawn larger by on a window `height` px high.
 int sequel_bar_scale(int height);
