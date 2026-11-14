@@ -93,6 +93,19 @@ LoadResult load_mod(const std::filesystem::path& path, const GameOffer& offer, L
     return r;
   }
   const Manifest& m = out.manifest;
+  static const std::vector<TrustedKey> kNoKeys;
+  out.signature =
+      check_signature(out.dir, ss.str(), offer.trusted != nullptr ? *offer.trusted : kNoKeys);
+  if (out.signature.state == Signed::broken) {
+    r.errors.push_back(out.signature.error);
+    return r;
+  }
+  if (offer.trusted_only && out.signature.state != Signed::trusted) {
+    r.errors.push_back(signature_words(out.signature, m.name, m.version) +
+                       ", and this game loads only packages signed by a key it trusts; next: "
+                       "add the author's key to the trusted keys, or get a signed package");
+    return r;
+  }
 
   if (m.abi_major != GE_MOD_ABI_MAJOR || m.abi_minor > GE_MOD_ABI_MINOR) {
     r.errors.push_back(m.name + " " + m.version + " needs mod ABI " +

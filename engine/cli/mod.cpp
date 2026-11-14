@@ -14,6 +14,9 @@
 #include "cli/scaffold.hpp"
 #include "mod/loader.hpp"
 #include "mod/manifest.hpp"
+#include "mod/signature.hpp"
+#include "net/crypto.hpp"
+#include "net/token.hpp"
 
 namespace ge::cli {
 
@@ -51,6 +54,20 @@ bool loader_findings(const mod::LoadResult& r, const std::string& where, Outcome
   return r.ok();
 }
 
+const char* signed_word(mod::Signed s) {
+  switch (s) {
+    case mod::Signed::trusted:
+      return "trusted";
+    case mod::Signed::unknown:
+      return "unknown-key";
+    case mod::Signed::broken:
+      return "broken";
+    case mod::Signed::no:
+      break;
+  }
+  return "unsigned";
+}
+
 std::string table_json(const mod::LoadedMod& m) {
   const ge_mod_v1* t = m.table;
   const uint32_t hooks = t && t->hooks ? *static_cast<const uint32_t*>(t->hooks) : 0;
@@ -62,7 +79,9 @@ std::string table_json(const mod::LoadedMod& m) {
                                     std::to_string(GE_MOD_ABI_MINOR_OF(t->abi)))},
                    {"game_api", json_num(t->game_api)},
                    {"state_bytes", json_num(t->state_bytes)},
-                   {"hooks_bytes", json_num(hooks)}});
+                   {"hooks_bytes", json_num(hooks)},
+                   {"signed", json_str(signed_word(m.signature.state))},
+                   {"signer", json_str(m.signature.signer)}});
 }
 
 mod::GameOffer offer_of(const std::string& game) {
@@ -211,12 +230,28 @@ Outcome run_mod_check(const ModOptions& o) {
     out.exit = 2;
     return out;
   }
-  const mod::LoadResult r = mod::load_mod(o.dir, offer_of(game), m);
+  std::vector<mod::TrustedKey> trusted;
+  if (!o.trusted.empty()) {
+    std::string error;
+    const std::optional<std::string> text = read_text(o.trusted);
+    if (!text || !mod::parse_trusted_keys(*text, o.trusted, trusted, error)) {
+      out.findings.push_back(mod_finding(
+          Severity::error,
+          text ? error : o.trusted + " cannot be read; next: pass a trusted-keys file", o.trusted));
+      out.exit = 2;
+      return out;
+    }
+  }
+  mod::GameOffer offer = offer_of(game);
+  offer.trusted = &trusted;
+  offer.trusted_only = o.trusted_only;
+  const mod::LoadResult r = mod::load_mod(o.dir, offer, m);
   if (!loader_findings(r, o.dir.generic_string(), out)) return out;
   out.result = table_json(m);
-  out.summary = m.manifest.name + " " + m.manifest.version + " loads for " + m.manifest.game +
-                " on " + m.platform + " (mod ABI " + std::to_string(m.manifest.abi_major) + "." +
-                std::to_string(m.manifest.abi_minor) + ")";
+  out.summary = mod::signature_words(m.signature, m.manifest.name, m.manifest.version) +
+                "; loads for " + m.manifest.game + " on " + m.platform + " (mod ABI " +
+                std::to_string(m.manifest.abi_major) + "." + std::to_string(m.manifest.abi_minor) +
+                ")";
   out.next = "ge mod pack " + o.dir.generic_string();
   return out;
 }
@@ -304,6 +339,73 @@ Outcome run_mod_pack(const ModOptions& o) {
   out.summary = merged.name + " " + merged.version + " packed for " +
                 std::to_string(platforms.size()) + " platform(s) in " + dest.generic_string();
   out.next = "ge mod check " + dest.generic_string();
+  return out;
+}
+
+Outcome run_mod_key() {
+  Outcome out;
+  net::Key seed{};
+  net::os_random_bytes(seed.data(), seed.size());
+  net::SignKeys keys = net::sign_keys(seed);
+  const std::string secret = net::key_to_hex(seed), pub = net::key_to_hex(keys.pub);
+  net::wipe(seed.data(), seed.size());
+  net::wipe(keys.secret.data(), keys.secret.size());
+  out.result = json_obj({{"secret", json_str(secret)}, {"public", json_str(pub)}});
+  out.summary =
+      "a new signing key: keep the secret out of every repository; the public key is "
+      "the line a game's trusted keys list: " +
+      pub + " <your name>";
+  out.next = "export GE_MOD_KEY=<the secret>, then ge mod sign <package>";
+  return out;
+}
+
+Outcome run_mod_sign(const ModOptions& o) {
+  Outcome out;
+  const std::string var = o.key_env.empty() ? "GE_MOD_KEY" : o.key_env;
+  net::Key seed{};
+  std::string error;
+  if (!net::key_from_env(var.c_str(), seed, error)) {
+    out.findings.push_back({Severity::error, error, "the environment",
+                            "ge mod key makes a key; export its secret as " + var});
+    out.exit = 2;
+    return out;
+  }
+  const fs::path dir = fs::is_directory(o.dir) ? o.dir : o.dir.parent_path();
+  const fs::path manifest = dir / mod::kManifestName;
+  const std::optional<std::string> text = read_text(manifest);
+  if (!text) {
+    out.findings.push_back({Severity::error, manifest.generic_string() + ": no manifest there",
+                            manifest.generic_string(),
+                            "point ge mod sign at a package (ge mod build writes one)"});
+    return out;
+  }
+  // The package is checked first: a signature vouches for what is there, so it must load.
+  mod::LoadedMod m;
+  mod::Manifest peek;
+  (void)mod::parse_manifest(*text, manifest.generic_string(), peek);
+  if (mod::file_for(peek, mod::this_platform())) {
+    const mod::LoadResult r = mod::load_mod(dir, offer_of(peek.game), m);
+    if (!r.ok() && m.signature.state != mod::Signed::broken) {
+      loader_findings(r, dir.generic_string(), out);
+      return out;
+    }
+  }
+  net::SignKeys keys = net::sign_keys(seed);
+  net::wipe(seed.data(), seed.size());
+  const std::string sig = mod::signature_text(keys, *text);
+  net::wipe(keys.secret.data(), keys.secret.size());
+  if (!write_text(dir / mod::kSignatureName, sig, error)) {
+    out.findings.push_back({Severity::error, error, dir.generic_string(), "check the package"});
+    return out;
+  }
+  out.written.push_back((dir / mod::kSignatureName).generic_string());
+  const std::string pub = net::key_to_hex(keys.pub);
+  out.result = json_obj({{"name", json_str(peek.name)},
+                         {"version", json_str(peek.version)},
+                         {"public", json_str(pub)}});
+  out.summary = peek.name + " " + peek.version + " signed by " + pub;
+  out.next =
+      "ge mod check " + dir.generic_string() + " --trusted=<a file with: " + pub + " <your name>>";
   return out;
 }
 
