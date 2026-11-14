@@ -50,6 +50,7 @@ enum class SayKind : uint8_t {
   plan,  // the team's strategy (`Strategy`)
   pack,  // a backpack worth having lies there ("rl pack [mh]": an enemy's launcher, or one dropped)
   ack,   // "ok", "k", "np": a line taken in
+  trap,  // "trap [X]": a floor trap's floor just slid away (floor_trap.hpp): off it, not into it
 };
 const char* say_kind_name(SayKind k);
 

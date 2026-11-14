@@ -59,6 +59,18 @@ MoveCmd pilot_next(void* ctx, const Server& sv, int slot, int msec) {
   s.others = std::span<const OtherBox>(b.others.data(), others);
   s.grenade_ready = b.grenade_ready;
   s.rocket_ready = b.rocket_ready;
+  if (b.retarget >= 0) {
+    for (int32_t& d : p.barred) d = -1;
+    p.cut = p.failed;
+    if (!pilot_retarget(p, b.retarget, s)) {
+      p.mode = PilotMode::idle;
+    } else if (b.then >= 0 && pilot_chain(p, b.then, b.then_at)) {
+      b.goals.assign(1, b.then);
+      b.next_goal = 0;
+    }
+    b.retarget = -1;
+    b.then = -1;
+  }
   if ((p.mode == PilotMode::idle || p.mode == PilotMode::arrived) && !b.goals.empty()) {
     if (p.mode == PilotMode::arrived) b.arrivals++;
     for (int32_t& d : p.barred) d = -1;
@@ -66,8 +78,15 @@ MoveCmd pilot_next(void* ctx, const Server& sv, int slot, int msec) {
     for (size_t tries = 0; tries < b.goals.size(); tries++) {
       const int32_t goal = b.goals[b.next_goal];
       b.next_goal = (b.next_goal + 1) % b.goals.size();
-      if (pilot_go(p, goal, s)) break;
+      if (pilot_go(p, goal, s)) {
+        if (b.then >= 0 && pilot_chain(p, b.then, b.then_at)) {
+          b.goals.assign(1, b.then);
+          b.next_goal = 0;
+        }
+        break;
+      }
     }
+    b.then = -1;
   }
   ai::Why* why = b.why ? b.why->follow(slot, b.command) : nullptr;
   b.command++;

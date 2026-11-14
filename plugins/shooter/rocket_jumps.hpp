@@ -120,4 +120,8 @@ void read_rocket_jumps(std::span<const TrackPoint> track, const HopReading& hops
 // none when weaker than `least`.
 uint8_t keys_of_wish(Vec3f wish, float yaw, float least);
 
+// The wish at frame `i` of `hops` (across, units/s/s): the acceleration over `set.window_s` either
+// side, the ground's friction put back on the ground. False when a cut lies that near.
+bool read_wish(const HopReading& hops, size_t i, const RocketJumpReadSettings& set, Vec3f& out);
+
 }  // namespace ge::shooter
