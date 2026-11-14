@@ -39,8 +39,10 @@ struct DemoScript {
 // The single-player demo: the music track line, a signon block, a block a frame, a disconnect.
 std::vector<uint8_t> write_single_demo(const DemoScript& script);
 // The client recording: the signon packets, then a command and a packet a frame; `cmd_size` 24
-// or 28 (a client that pads its command struct).
-std::vector<uint8_t> write_client_demo(const DemoScript& script, int cmd_size = 24);
+// or 28 (a client that pads its command struct). The recorder's info carries his command (his
+// yaw, a forward move) in `protocol`'s form: 28, or 26 (the yaw always, a byte a move).
+std::vector<uint8_t> write_client_demo(const DemoScript& script, int cmd_size = 24,
+                                       int protocol = 28);
 // A scripted walk round `map`'s floor: `frames` frames along a closed loop of `radius` units
 // about `centre`, turning to look along it, a full turn of the view's pitch's sway.
 // The multiview recording: the signon to everyone, two players' stats records, then a frame
