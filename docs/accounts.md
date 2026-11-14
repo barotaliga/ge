@@ -455,7 +455,9 @@ servers that offer their seats; every game it makes is a rated one on the ladder
 - **A server offers its own seats** with `sv_ranked <mode>` (the mode as its reports name it:
   `1on1`, `2on2`): every 20 seconds its free player seats go to its master, signed with the key its
   reports are signed with (`server.key`), or in process when it is its own master. A master that
-  does not trust the key says so once in the server's log.
+  does not trust the key says so once in the server's log. Both of Shooter's Edge's servers do:
+  the classic game's seats are offered under `id1`, the sequel's under `baseq2`, so the ladders
+  stay apart; spectators take no seat.
 - **Our client asks from its console**: `ranked 1on1`, or `ranked 2on2 <your duo's name>`, with the
   ticket `account signin` kept (`engine/account/client_queue.hpp`). It asks every 3 seconds, in
   the menus or in a game, says "Game found: 1on1 against Ann on 203.0.113.4:27500." and connects
