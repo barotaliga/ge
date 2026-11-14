@@ -517,3 +517,14 @@ TEST(gl_texturemode_draws_the_textures_crisp_or_smooth_in_either_look) {
   con.execute("gl_texturemode bogus");
   CHECK(lk::crisp_textures(pic, lk::Look::classic) && !lk::crisp_textures(pic, lk::Look::modern));
 }
+
+TEST(gl_picmip_draws_the_textures_from_a_coarser_mip_in_either_look) {
+  namespace lk = shooters_edge::look;
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  CHECK(lk::world_options(lk::Look::classic, {}, pic).picmip == 0);
+  con.execute("gl_picmip 2");
+  for (const auto look : {lk::Look::classic, lk::Look::modern})
+    CHECK(lk::world_options(look, {}, pic).picmip == 2);
+}
