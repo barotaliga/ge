@@ -102,6 +102,10 @@ Taken matches_add(Matches& m, const net::Key& server, const net::MatchReport& r)
 DuoAnswer matches_duo_ask(Matches& m, uint64_t asker, uint64_t partner, std::string_view name);
 // A line of the log read back (a report or a duo); false with `error` naming what does not read.
 bool matches_line(Matches& m, const std::string& line, std::string& error);
+// A demo joined to the match it closes with (its trailer's report: id, start, server's name): the
+// kept match's `demo_sha256` set, so its page links the demo. False when no kept match is it.
+bool matches_link_demo(Matches& m, uint64_t id, int64_t start_s, std::string_view server,
+                       std::string_view sha);
 // Every game, mode and map the filter keeps, summed (`matches` 0: none).
 Totals totals_sum(const Matches& m, uint64_t account, const TotalsFilter& f);
 // Whether the filter keeps a key's game, mode, map and ping band.

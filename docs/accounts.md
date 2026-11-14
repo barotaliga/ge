@@ -259,6 +259,11 @@ classic names as synonyms (`docs/servers.md` § A game's own names):
 
 What a finished match leaves, generic in `engine/net/report.hpp`, and the same record as the replay
 file's closing summary, so a demo's stats and the hub's are one thing, joined by the demo's SHA-256.
+A server's recording (`engine/tv/server_source.hpp`) closes with the last match the game reported
+while it ran: the report's bytes in hex as the trailer's `report` meta word (`report_text`), beside
+the archive's own `score`, `team_score` and `duration_ms` words. The hub's archive reads the
+report's id, start and server off the trailer, and a hub run with `--accounts` joins the demo to
+the match it keeps (`matches_link_demo`), so the Match page links the demo by its SHA-256.
 The game fills its part when a match ends (`ServerGame::match_report`, asked after every frame and
 true once per match) and `engine/server` adds its own (the id, the game and its version, the
 server's name and address, the start in Unix seconds); the server keeps its last 16 on

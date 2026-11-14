@@ -17,6 +17,7 @@
 #include "check.hpp"
 #include "core/json_read.hpp"
 #include "hub/pages.hpp"
+#include "net/report.hpp"
 #include "replay/stream.hpp"
 
 using namespace ge::hub;
@@ -32,7 +33,8 @@ struct DemoSpec {
   std::vector<std::pair<std::string, int>> scores = {{"Vale", 41}, {"sable", 39}};
   std::vector<std::string> tags;
   bool finished = true;
-  int salt = 0;  // makes the bytes differ
+  bool report = false;  // the trailer closes with a match report
+  int salt = 0;         // makes the bytes differ
 };
 
 std::string tabbed(const std::string& a, const std::string& b) {
@@ -61,6 +63,14 @@ std::vector<uint8_t> demo(const DemoSpec& d) {
     gr::Meta fin = {{"duration_ms", "1200000"}, {"team_score", "red\t122"}};
     for (const auto& [name, s] : d.scores)
       fin.emplace_back("score", tabbed(name, std::to_string(s)));
+    if (d.report) {
+      ge::net::MatchReport r;
+      r.id = 0xabc;
+      r.server = d.server;
+      r.start_s = d.start;
+      std::string text, err;
+      if (ge::net::report_text(r, text, err)) fin.emplace_back("report", text);
+    }
     gr::stream_finish(w, fin);
   }
   return out;
@@ -90,6 +100,12 @@ TEST(row_from_meta_words_and_trailer) {
   DemoSpec cut;
   cut.finished = false;
   CHECK(demo_row(demo(cut), r, err) && r.duration_ms == -1 && !r.players[0].scored);
+  CHECK(r.report_id == 0);
+  DemoSpec summed;
+  summed.report = true;
+  CHECK(demo_row(demo(summed), r, err) && r.report_id == 0xabc);
+  CHECK(r.report_start_s == 1794450000 && r.report_server == "Night Arena");
+  CHECK(has(demo_json(r), "\"match\":\"0000000000000abc\""));
   const std::vector<uint8_t> junk = {'n', 'o', 't', ' ', 'a', ' ', 'd', 'e', 'm', 'o'};
   CHECK(!demo_row(junk, r, err) && !err.empty());
 }

@@ -111,3 +111,16 @@ TEST(report_damage_is_refused) {
   CHECK(!gn::report_read(other.data(), other.size(), out, error));
   CHECK(error.find("version 9") != std::string::npos);
 }
+
+TEST(report_as_text_round_trips_and_refuses_what_is_not_hex) {
+  std::string text, err;
+  CHECK(gn::report_text(sample(), text, err));
+  CHECK(text.rfind("67654d52", 0) == 0);  // "geMR"
+  gn::MatchReport back;
+  CHECK(gn::report_from_text(text, back, err));
+  CHECK(back.id == sample().id && back.players.size() == 2 && back.players[0].name == "Niclas");
+  CHECK(!gn::report_from_text(text.substr(1), back, err) && !err.empty());  // odd length
+  std::string bad = text;
+  bad[4] = 'g';
+  CHECK_MSG(!gn::report_from_text(bad, back, err) && err.find("not hex") != std::string::npos, err);
+}

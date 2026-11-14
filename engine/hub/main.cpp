@@ -322,6 +322,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
   std::fflush(stdout);
   int64_t next_line = static_cast<int64_t>(o.status_line_s * 1e6);
   std::unordered_set<std::string> packed;  // demos whose content pack is made or failed
+  std::unordered_set<std::string> linked;  // demos joined to their match (matches_link_demo)
   for (;;) {
     const int64_t now = now_us();
     if (o.for_s > 0 && now >= static_cast<int64_t>(o.for_s * 1e6)) break;
@@ -348,6 +349,16 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
         std::fflush(stdout);
       }
       next_archive = now + 5000000;  // the inbox every 5 s
+      // A demo that closes with a match's report links that match's page to it (the join by the
+      // closing summary, docs/accounts.md § The match report); tried again until the report is in.
+      if (accounts.open) {
+        for (const DemoRow& r : archive.rows) {
+          if (r.report_id == 0 || linked.count(r.sha)) continue;
+          if (ge::account::matches_link_demo(accounts.svc.matches, r.report_id, r.report_start_s,
+                                             r.report_server, r.sha))
+            linked.insert(r.sha);
+        }
+      }
       // Each new demo's content pack made now, a few a pass, so no visitor waits on the first.
       if (!http.viewer_dir.empty() && spec.demo_files) {
         const Site site{&archive, http.unix_s, "", http.viewer_dir};
