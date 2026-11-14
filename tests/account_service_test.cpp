@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "account/friends_service.hpp"
+#include "account/matchmaker_service.hpp"
 #include "check.hpp"
 #include "net/sim_network.hpp"
 
@@ -291,6 +292,58 @@ TEST(service_a_long_friends_list_comes_in_pages) {
     seen += rows.size();
   }
   CHECK(seen == 39 && !more);
+  CHECK(w.biggest_answer <= ga::kAccountAskSize);
+}
+
+// The matchmaker's ops: a server's signed offer of seats (`time_s` its clock).
+std::vector<std::string> offer_fields(const gn::SignKeys& server, const char* mode, int seats,
+                                      int64_t time_s) {
+  const std::string text = ga::offer_text("se", mode, 27500, seats, time_s);
+  const gn::Signature sig =
+      gn::sign(server, reinterpret_cast<const uint8_t*>(text.data()), text.size());
+  return {std::string(server.pub.begin(), server.pub.end()),
+          std::string(sig.begin(), sig.end()),
+          "se",
+          mode,
+          "27500",
+          std::to_string(seats),
+          std::to_string(time_s)};
+}
+
+TEST(service_matchmaker_queues_by_ticket_and_pairs_on_a_trusted_servers_offer) {
+  World w;
+  auto ticket_of = [&](const char* name, uint8_t fresh) {
+    CHECK(w.ask(w.client, ga::Op::create, {name, "correct horse"}, fresh).reply.refusal ==
+          ga::Refusal::none);
+    const ga::Ask in = w.ask(w.client, ga::Op::sign_in, {name, "correct horse"}, fresh + 1);
+    return std::string(in.reply.ticket.begin(), in.reply.ticket.end());
+  };
+  const std::string ann = ticket_of("Ann", 60), bob = ticket_of("Bob", 62);
+  ga::QueueView v;
+  ga::Ask a = w.ask(w.client, ga::Op::queue, {ann, "join", "se", "duel", ""}, 64);
+  CHECK(a.reply.words.find("Looking for a game (0 s, within 100 points)") == 0);
+  CHECK(ga::queue_read(a.reply.ticket, v) && v.state == ga::LookState::waiting);
+  CHECK(w.ask(w.client, ga::Op::queue, {bob, "join", "se", "duel", ""}, 65).reply.refusal ==
+        ga::Refusal::none);
+  // An untrusted server's offer, and a trusted one's with a stale time, are refused.
+  const gn::SignKeys server = gn::sign_keys(key_of(9));
+  const int64_t now_s = w.now / 1000000;
+  CHECK(w.ask(w.server, ga::Op::offer, offer_fields(server, "duel", 8, now_s), 66).reply.refusal ==
+        ga::Refusal::wrong);
+  ga::matches_trust(w.svc.matches, server.pub);
+  CHECK(w.ask(w.server, ga::Op::offer, offer_fields(server, "duel", 8, now_s - 600), 67)
+            .reply.refusal == ga::Refusal::wrong);
+  std::vector<std::string> bent = offer_fields(server, "duel", 8, now_s);
+  bent[5] = "64";  // more seats than it signed
+  CHECK(w.ask(w.server, ga::Op::offer, bent, 68).reply.refusal == ga::Refusal::wrong);
+  CHECK(w.ask(w.server, ga::Op::offer, offer_fields(server, "duel", 8, now_s), 69).reply.refusal ==
+        ga::Refusal::none);
+  a = w.ask(w.client, ga::Op::queue, {ann, "look", "se", "duel", ""}, 70);
+  CHECK(ga::queue_read(a.reply.ticket, v));
+  CHECK(v.state == ga::LookState::matched);
+  CHECK(v.address == gn::to_string(kServerAt));  // the offer's own address, its port named
+  CHECK(v.mine.size() == 1 && v.mine[0] == "Ann" && v.theirs.size() == 1 && v.theirs[0] == "Bob");
+  CHECK(a.reply.words.find("Game found: duel against Bob on ") == 0);
   CHECK(w.biggest_answer <= ga::kAccountAskSize);
 }
 

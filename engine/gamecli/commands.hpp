@@ -51,6 +51,9 @@ int cmd_friends_unblock(Ctx& ctx);
 int cmd_friends_invite(Ctx& ctx);
 int cmd_friends_invites(Ctx& ctx);
 int cmd_friends_status(Ctx& ctx);
+int cmd_ranked_find(Ctx& ctx);
+int cmd_ranked_status(Ctx& ctx);
+int cmd_ranked_leave(Ctx& ctx);
 
 // The window's program, and the window started with `argv` (its output in `<logs>/<log_name>.log`;
 // `--dry-run` shows the command only); `what` finishes "the game is starting ...".
