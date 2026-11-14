@@ -11,8 +11,14 @@
 // faces in the shader's order (kSkyBoxLook and kSkyBoxUp), each resampled from its picture by the
 // direction its texel looks along, bilinear in the picture's own texels.
 //
-// ge:summary A map's own sky box: six pictures turned into the scene's sky box atlas
+// THE TURN (`sky_box_turn`): a map may turn its box about an axis (the map's own axes) at a rate in
+// degrees a second, by the right hand (looking down the axis from its tip, the box turns
+// counter-clockwise as the angle grows). The axis is made unit first; one shorter than 0.001, or
+// a rate of 0, is no turn. The shader finds a direction's texel by turning it back.
+//
+// ge:summary A map's own sky box: six pictures turned into the scene's sky box atlas, and its turn
 // ge:keywords sky-box skybox sky env rt bk lf ft up dn build_sky_box sky-pictures cube-map
+// ge:keywords skyrotate skyaxis sky_box_turn sky-turn
 // ge:keywords worldspawn-sky sky-orientation
 // ge:skill brush render
 // ge:test tests/brush_sky_box_test.cpp
@@ -54,5 +60,11 @@ inline constexpr int kSkyBoxMaxFace = 1024;
 // naming the picture, when one is empty or its pixels do not fill its size.
 bool build_sky_box(const std::array<assets::Image, 6>& pictures, Scene* scene,
                    std::string* why = nullptr);
+
+// The rows of the matrix that turns a direction from the eye (engine axes) back into the box's own
+// at `seconds` into the level: the box turned by `degrees_per_second` times `seconds` about
+// `axis` (the map's axes, any length). The identity when there is no turn (above).
+void sky_box_turn(const double axis[3], double degrees_per_second, double seconds,
+                  double rows[3][3]);
 
 }  // namespace ge::brush::app
