@@ -30,9 +30,17 @@ target_link_libraries(shooters_edge_server PUBLIC shooters_edge_sim shooters_edg
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_server)
 
 # Its own rules in C++ (rules/, M52h): native programs on the mod server (progs/native.hpp), the
-# arena's deathmatch first, as a library the server links (skills: progs, shooter).
+# arena's deathmatch and the campaign, as a library the server links (skills: progs, shooter). The
+# shared rules (rules/common_*.cpp) are compiled twice: once for the arena with the rest, and once
+# for the campaign (SE_RULES_CAMPAIGN, rules/variant.hpp), each against its own declaration.
 file(GLOB SHOOTERS_EDGE_RULES_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/rules/*.cpp)
-add_library(shooters_edge_rules STATIC ${SHOOTERS_EDGE_RULES_SOURCES})
+file(GLOB SHOOTERS_EDGE_RULES_COMMON CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/rules/common_*.cpp)
+add_library(shooters_edge_rules_campaign OBJECT ${SHOOTERS_EDGE_RULES_COMMON})
+target_compile_definitions(shooters_edge_rules_campaign PRIVATE SE_RULES_CAMPAIGN=1)
+target_include_directories(shooters_edge_rules_campaign PUBLIC ${PROJECT_SOURCE_DIR}/games)
+target_link_libraries(shooters_edge_rules_campaign PUBLIC ge_progs)
+add_library(shooters_edge_rules STATIC ${SHOOTERS_EDGE_RULES_SOURCES}
+                                       $<TARGET_OBJECTS:shooters_edge_rules_campaign>)
 target_include_directories(shooters_edge_rules PUBLIC ${PROJECT_SOURCE_DIR}/games)
 target_link_libraries(shooters_edge_rules PUBLIC ge_progs)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_rules)

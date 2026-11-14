@@ -1,7 +1,7 @@
 ---
 title: A spawn function sees only the entities spawned before it
 date: 2026-11-04
-scope: games/shooters_edge/qc/campaign/, tests/shooters_edge_campaign_monsters_test.cpp
+scope: games/shooters_edge/rules/, tests/shooters_edge_campaign_monsters_test.cpp
 concepts: [qc, spawn-order, entity-text, think, find, teleport-train, path-corner]
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: One call helper puts any program function under test, and a field beats a borrowed one
 date: 2026-11-04
-scope: tests/shooters_edge_campaign_monsters_test.cpp, games/shooters_edge/qc/campaign/
+scope: tests/shooters_edge_campaign_monsters_test.cpp, games/shooters_edge/rules/
 concepts: [qc, monsters, enter-qc, run-qc, radius-damage, blast-share, fields]
 ---
 

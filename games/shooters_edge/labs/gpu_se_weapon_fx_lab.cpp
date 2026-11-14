@@ -266,7 +266,7 @@ void run(gl::Lab& lab) {
     turn_yaw = static_cast<float>(sweep_deg * (0.5 - u));
     turn_pitch = static_cast<float>(0.12 * sweep_deg * ge::core::libm::sin(ge::core::kPi * u));
   };
-  // Every weapon and its ammunition (qc/common/defs.qc's W_ bits and the ammo fields).
+  // Every weapon and its ammunition (rules/common_decl.hpp's W_ bits and the ammo fields).
   const auto arm = [&] {
     cl::set_field_named(l, 1, "items", 1 + 2 + 4 + 8 + 16 + 32 + 64 + 4096);
     cl::set_field_named(l, 1, "ammo_shells", 100);

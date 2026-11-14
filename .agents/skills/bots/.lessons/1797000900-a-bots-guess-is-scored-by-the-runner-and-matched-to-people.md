@@ -1,7 +1,7 @@
 ---
 title: A bot's guess about what it cannot see is scored by the runner, and the want matched to people first
 date: 2026-11-09
-scope: games/shooters_edge/bots/packs.cpp, games/shooters_edge/net/classic_team.cpp, games/shooters_edge/labs/se_team_lab.cpp, games/shooters_edge/labs/se_people_lab.cpp, games/shooters_edge/qc/common/player.qc
+scope: games/shooters_edge/bots/packs.cpp, games/shooters_edge/net/classic_team.cpp, games/shooters_edge/labs/se_team_lab.cpp, games/shooters_edge/labs/se_people_lab.cpp, games/shooters_edge/rules/common_player.cpp
 concepts: [packs, backpack, pack-guess, packinfer, truth, refire, weapon-switch, se-people, item-control, a-b]
 ---
 

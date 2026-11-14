@@ -38,8 +38,8 @@ namespace {
 namespace pg = ge::progs;
 namespace ai = ge::ai;
 
-// The baseline mod's weapon bits (games/shooters_edge/qc/common/defs.qc) and ammunition maxima
-// (items.qc).
+// The baseline mod's weapon bits (games/shooters_edge/rules/common_decl.hpp) and ammunition maxima
+// (common_items.cpp).
 constexpr float kAmmoMax = 100;
 constexpr int32_t kItQuad = 4194304;  // the quad's IT_ bit
 constexpr int32_t kItPent = 1048576;  // the shield's

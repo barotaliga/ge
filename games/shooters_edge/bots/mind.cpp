@@ -23,7 +23,7 @@ namespace {
 
 constexpr size_t kDangerKept = 12;  // the danger spots kept (mind_danger)
 
-constexpr int32_t kItQuad = 4194304;  // the quad's IT_ bit (games/shooters_edge/qc)
+constexpr int32_t kItQuad = 4194304;  // the quad's IT_ bit (games/shooters_edge/rules)
 constexpr double kHelp_s = 6;         // a call for help holds this long
 constexpr double kHoldsFresh_s = 40;  // a mate's `safe` this old still says he holds his area
 constexpr double kPackClaim_s = 6;    // a bare `coming` this soon after a pack's call claims it

@@ -1,7 +1,7 @@
 ---
 title: A bot that passes the test hall stalls on a real map's set pieces: play the map, read where it stood
 date: 2026-11-05
-scope: games/shooters_edge/bots/way_through.cpp, games/shooters_edge/bots/coop_episode.cpp, plugins/shooter/pilot.cpp, games/shooters_edge/qc/common/map.qc
+scope: games/shooters_edge/bots/way_through.cpp, games/shooters_edge/bots/coop_episode.cpp, plugins/shooter/pilot.cpp, games/shooters_edge/rules/common_map.cpp
 concepts: [way-through, campaign, episode, real-map, set-piece, stuck, water, bridge, zombie, seeds]
 ---
 

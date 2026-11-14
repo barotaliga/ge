@@ -9,9 +9,9 @@
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
 
-#include "shooters_edge/rules/arena_decl.hpp"
+#include "shooters_edge/rules/variant.hpp"
 
-namespace shooters_edge::server::arena {
+namespace shooters_edge::server::rules::SE_RULES_NS {
 
 // score_death(targ, attacker): the frags a death is worth (+1 a kill, -1 to the killer for a
 // teammate, -1 for one's own hand or the world's), told in the loaded game's words when it has
@@ -36,7 +36,7 @@ void score_death(A& q, int32_t targ, int32_t attacker) {
     } else {
       q.set_f(attacker, q.L.f.frags, q.f(attacker, q.L.f.frags) + 1);
     }
-    q.logfrag(attacker, targ);
+    note_frag(q, attacker, targ);
     if (!q.is(told, "")) {
       say_all(q, kPrintMedium, {told});
       return;
@@ -80,7 +80,7 @@ void damage(A& q, int32_t targ, int32_t inflictor, int32_t attacker, float point
     }
   }
   if (q.f(attacker, f_super_damage_finished) > q.time()) {  // the quad (deathmatch 4: eight)
-    if (q.g(g_deathmatch) == 4) {
+    if (q.deathmatch() == 4) {
       amount = amount * 8;
     } else {
       amount = amount * 4;
@@ -136,7 +136,7 @@ void telefrag(A& q, int32_t who) {
     const int32_t next = q.i(p, q.L.f.chain);  // a death may search the world again
     if ((p != who) & q.is(q.i(p, q.L.f.classname), "player") & (q.f(p, q.L.f.health) > 0)) {
       q.set_g(g_telefragging, 1);
-      if ((q.g(g_deathmatch) == 4) & (q.f(p, f_shield_finished) > q.time())) {
+      if ((q.deathmatch() == 4) & (q.f(p, f_shield_finished) > q.time())) {
         // Deathmatch 4 onto a protected player: both protected, both die; else `who` does.
         if (q.f(who, f_shield_finished) > q.time()) {
           q.set_f(p, f_shield_finished, 0);
@@ -184,4 +184,4 @@ void radius_damage(A& q, int32_t inflictor, int32_t attacker, float points, int3
   }
 }
 
-}  // namespace shooters_edge::server::arena
+}  // namespace shooters_edge::server::rules::SE_RULES_NS

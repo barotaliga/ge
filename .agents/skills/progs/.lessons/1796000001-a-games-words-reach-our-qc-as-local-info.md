@@ -1,7 +1,7 @@
 ---
 title: A loaded game's words reach our QC as local info under the class name
 date: 2026-11-04
-scope: games/shooters_edge/qc/, games/shooters_edge/profiles/items.hpp, games/shooters_edge/client/game_folder.cpp
+scope: games/shooters_edge/rules/, games/shooters_edge/profiles/items.hpp, games/shooters_edge/client/game_folder.cpp
 concepts: [qc, localinfo, infokey, item-name, pickup-message, profile, glue]
 ---
 

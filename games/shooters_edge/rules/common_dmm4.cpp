@@ -23,9 +23,9 @@
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
 
-#include "shooters_edge/rules/arena_decl.hpp"
+#include "shooters_edge/rules/variant.hpp"
 
-namespace shooters_edge::server::arena {
+namespace shooters_edge::server::rules::SE_RULES_NS {
 
 namespace {
 
@@ -187,4 +187,4 @@ void dmm4_precache(A& q) {
   q.precache_sound(q.s(s_pkup_wav));
 }
 
-}  // namespace shooters_edge::server::arena
+}  // namespace shooters_edge::server::rules::SE_RULES_NS

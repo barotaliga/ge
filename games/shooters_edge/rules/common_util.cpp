@@ -9,9 +9,9 @@
 #include <cstdint>
 #include <string_view>
 
-#include "shooters_edge/rules/arena_decl.hpp"
+#include "shooters_edge/rules/variant.hpp"
 
-namespace shooters_edge::server::arena {
+namespace shooters_edge::server::rules::SE_RULES_NS {
 
 // void() noop: nothing.
 void noop(A&) {}
@@ -174,4 +174,4 @@ float number_of(A& q, int32_t s) {
   return whole / scale;
 }
 
-}  // namespace shooters_edge::server::arena
+}  // namespace shooters_edge::server::rules::SE_RULES_NS
