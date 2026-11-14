@@ -338,8 +338,8 @@ the loop's digest (with no mod it is the loop's own).
   compiled module (`RunnerCalls::program_seam`). A function of the mod's stored in a field is
   called by the loop, never by the bytecode: a bytecode program that calls an entity's think or
   touch itself (`self.think()`) and finds a mod's number there faults. The sequel's rules keep
-  their own entities off that seam, so they refuse a mod at `start` until their own hooks land
-  (M52g).
+  their own entities off that seam and lay the mods over them themselves (`RunnerCalls::own_mods`,
+  below).
 - **Where a server finds one.** `sv_mod` (`--mod=`) names folders, comma-separated: a folder
   holding a `mod.manifest`, under `--root` or as given, is a package, loaded and stacked in that
   order; the others are game folders as before. A package the loader refuses stops the server with
@@ -348,9 +348,36 @@ the loop's digest (with no mod it is the loop's own).
   included. A sound a mod starts reaches only the clients that have its name in the server's
   sound list.
 
+### On the sequel's rules
+
+The sequel's rules keep their own players and map entities and mirror them into the loop's pool
+only to send them (`games/shooters_edge/server/sequel_mods.hpp`). The same tables reach them, so one
+package stacks on either game's rules:
+
+- **The hooks at the sequel's points.** `match_start` once the map is spawned, `start_frame` at
+  the top of each 100 ms rules frame, the pre- and post-think around each command a packet brings,
+  `put_client_in_server` at every spawn, connect and disconnect, and two the hook table grew for
+  these rules (entries added at its end, so an older mod's shorter table still loads): `damage`, a
+  blow about to land on a player, which each mod answers with the points to deal, the lowest first,
+  and `death`, once a death is scored. The classic rules do not call those two: their damage and
+  deaths are the program's own.
+- **The services over the sequel's state,** numbered as the pool's rows are: 0 the world, 1..32
+  the players, then the map's entities in the map's order. A player's origin and velocity (packed
+  to the eighth of a unit, as the move keeps them, and settable), his view, box and health
+  (settable; at 0 or under he dies by the world); an entity's origin, angles, velocity, box and
+  health. What these rules keep for themselves (a mod's own entity, its functions, the movers'
+  places, a field with no slot here) is refused like a bad field: a warning in the mod's log, a
+  getter's 0, and the match goes on.
+  *Not taken:* mirroring the sequel's state into the loop's entities and running the classic seam
+  over them, because the sequel's rules would then have to read every field back after each hook
+  (two copies of every player, kept in step by hand), and a field the sequel has no meaning for
+  (a think, a touch) would look settable and do nothing.
+
 `tests/shooters_edge_rules_mod_test.cpp` holds it: the sample stacked on a bytecode runner speeds
-its rockets, is in the digest and replays to the bit; the sequel's runner refuses; the playable
-server takes the package from `sv_mod` and replays, and refuses one built for ABI 2.0.
+its rockets, is in the digest and replays to the bit; the sample `vampire` on the sequel's runner
+feeds the shooter by her blows, sees the kill, replays to the bit and is refused what those rules
+keep; the playable server takes the package from `sv_mod` and replays, and refuses one built for
+ABI 2.0. The `mod` lab draws the sequel's duel with and without it.
 
 ## Rows
 

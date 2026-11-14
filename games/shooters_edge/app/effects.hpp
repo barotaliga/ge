@@ -53,6 +53,15 @@ namespace shooters_edge::effects {
 
 using Particles = std::vector<ge::render::Particle>;
 using Light = ge::brush::app::DynamicLight;
+// The kinds of light a setting can put out (`Light::group`): a rocket's or a missile's glow in
+// flight, an explosion's, a power's glow round its carrier; the rest (a muzzle's flash, a bolt)
+// none.
+enum LightGroup : uint8_t {
+  kLightOther = 0,
+  kLightRocket = 1,
+  kLightExplosion = 2,
+  kLightPower = 3
+};
 // The pack's palette, 256 RGB triples (gfx/palette.lmp); empty: each index a grey of its number.
 using Palette = std::span<const uint8_t>;
 

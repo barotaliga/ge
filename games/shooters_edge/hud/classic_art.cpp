@@ -183,6 +183,7 @@ bool classic_art_from_packs(const FileFind& find, HudArt* out, std::string* erro
   };
   if (!classic_art(pictures, "the packs' gfx.wad", out, error)) return false;
   out->density = static_cast<float>(density);
+  out->palette.assign(palette.begin(), palette.end());  // crosshaircolor's indices
   out->finish();
   return true;
 }
