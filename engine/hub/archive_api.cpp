@@ -45,6 +45,13 @@ bool is_sha(std::string_view s) {
   return true;
 }
 
+std::string id_hex(uint64_t v) {
+  static constexpr char kDigits[] = "0123456789abcdef";
+  std::string h(16, '0');
+  for (int i = 15; i >= 0; i--, v >>= 4) h[static_cast<size_t>(i)] = kDigits[v & 15];
+  return h;
+}
+
 std::string row_json(const DemoRow& r, bool scores) {
   std::vector<std::string> players, teams;
   players.reserve(r.players.size());
@@ -76,7 +83,9 @@ std::string row_json(const DemoRow& r, bool scores) {
                    {"players", json_arr(players)},
                    {"teams", json_arr(teams)},
                    {"file", json_str("/" + archive_path(r.sha))},
-                   {"map_page", json_str(r.radar ? "/radar/" + r.sha : "")}});
+                   {"map_page", json_str(r.radar ? "/radar/" + r.sha : "")},
+                   // the closing summary's match (16 hex digits, /match/{id}); "" none
+                   {"match", json_str(r.report_id ? id_hex(r.report_id) : "")}});
 }
 
 }  // namespace

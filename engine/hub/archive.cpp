@@ -18,6 +18,7 @@
 
 #include "hub/api.hpp"
 #include "mod/sha256.hpp"
+#include "net/report.hpp"
 #include "replay/stream.hpp"
 
 namespace ge::hub {
@@ -185,6 +186,14 @@ bool demo_row(std::span<const uint8_t> bytes, DemoRow& out, std::string& error) 
     for (const auto& [k, v] : t->meta) {
       if (k == "duration_ms") {
         out.duration_ms = to_i64(v, 0);
+      } else if (k == "report") {
+        net::MatchReport summary;
+        std::string why;
+        if (net::report_from_text(v, summary, why)) {  // a damaged summary is the game's, unread
+          out.report_id = summary.id;
+          out.report_start_s = summary.start_s;
+          out.report_server = summary.server;
+        }
       } else if (k == "score" || k == "team_score") {
         const auto [name, score] = split_tab(v);
         const int32_t s = static_cast<int32_t>(to_i64(score, 0));
