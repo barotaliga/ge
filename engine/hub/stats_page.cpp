@@ -15,6 +15,7 @@
 
 #include "account/store.hpp"
 #include "core/json_write.hpp"
+#include "hub/ladder_page.hpp"
 #include "hub/page_parts.hpp"
 #include "hub/pages.hpp"
 
@@ -798,7 +799,7 @@ bool stats_path(std::string_view path) {
            (path.size() > p.size() && path.substr(0, p.size()) == p && path[p.size()] == '/');
   };
   return under("/player") || under("/match") || path == "/leaders" || under("/v1/players") ||
-         under("/v1/matches") || path == "/v1/leaders";
+         under("/v1/matches") || path == "/v1/leaders" || path == "/ladder" || path == "/v1/ladder";
 }
 
 bool stats_answer(const HubSpec& spec, const account::Service* svc, std::string_view target,
@@ -842,6 +843,10 @@ bool stats_answer(const HubSpec& spec, const account::Service* svc, std::string_
     }
     out = api ? json_answer(200, match_json(*r, counted))
               : html(200, match_html(spec, *svc, *r, counted), 60);
+    return true;
+  }
+  if (path == "/ladder" || path == "/v1/ladder") {
+    out = ladder_answer(spec, *svc, target, unix_s, api);
     return true;
   }
   const LeadersView v = leaders_view(*svc, target, unix_s);

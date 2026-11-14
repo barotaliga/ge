@@ -13,6 +13,10 @@
 //   shooters_edge_hops proxy-far --port=<p> --allow=<host[:port],...> | --open [--copies=3]
 //   shooters_edge_hops tv --port=27900 --server=<host:stream port> [--server-password=<pw>]
 //                         [--password=<pw>] [--delay=7] [--name=tv]
+//   shooters_edge_hops tv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]
+//                         a client recording played round and round to any classic client, the
+//                         oldest too, over plain protocol 28   (classic_tv_udp.hpp,
+//                         classic_tv_recording.hpp)
 //   shooters_edge_hops sequel-tv --port=27911 --server=<sequel host:port> [--server-password=<pw>]
 //                         [--password=<pw>] [--delay=7] [--name=tv]   (sequel_tv_relay.hpp)
 //   shooters_edge_hops sequel-tv --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
@@ -29,6 +33,7 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <iterator>
 #include <memory>
@@ -45,8 +50,10 @@
 #include "proxy/proxy.hpp"
 #include "shooters_edge/net/classic_forward.hpp"
 #include "shooters_edge/net/classic_tv.hpp"
+#include "shooters_edge/net/classic_tv_recording.hpp"
 #include "shooters_edge/net/sequel_tv_demo.hpp"
 #include "shooters_edge/net/sequel_tv_relay.hpp"
+#include "webtransport/forward.hpp"
 
 namespace sn = shooters_edge::net;
 namespace gn = ge::net;
@@ -71,6 +78,8 @@ void usage() {
       "  forward     --port=30000 --allow=<host[:port],...> | --open   (the route in prx)\n"
       "  forward     --port=<p> --server=<host:port>: every client to that server, for a\n"
       "              client that cannot name a route (the sequel's, any game's)\n"
+      "  forward     ... --webtransport=<port>: pages in a browser too, on that UDP port\n"
+      "              (https://host:port/play?to=<server>; the certificate's hash is printed)\n"
       "  proxy       --port=<near> --server=<host:port> [--link-loss=0..1]: near on --port,\n"
       "              far on the next, a link between them losing --link-loss each way\n"
       "  proxy-near  --port=<p> --far=<host:port> --server=<host:port>\n"
@@ -106,7 +115,7 @@ bool open_upstream(gn::Transport& out) {
 
 struct Options {
   std::string kind, name, bind, server_password, password, demo;
-  int port = 0, copies = 3;
+  int port = 0, copies = 3, webtransport = 0;
   double link_loss = 0, delay = 7, seconds = 0, status = 10;
   bool open = false;
   std::vector<gn::Address> allow;
@@ -150,6 +159,8 @@ struct Hops {
   gn::Transport fwd_port, near_client, near_link, far_link;
   gn::FakeLink near_fake, far_fake;
   fw::Forward fwd;
+  ge::webtransport::WebForward web;  // pages' sessions, when --webtransport
+  bool has_web = false;
   sn::ClassicFace face;
   fw::FixedFace fixed;
   bool fixed_route = false;
@@ -162,6 +173,10 @@ struct Hops {
   sn::SequelTvFace sq_demo_face;  // --demo: the face fed from a recording, no watcher
   sn::SequelTvDemo sq_demo;
   bool has_sq_demo = false;
+  gn::Transport qw_face;  // tv --demo: the face for classic clients fed from a recording
+  sn::ClassicTvUdp cl_demo_face;
+  sn::UdpTvRecording cl_demo;
+  bool has_cl_demo = false;
   bool forward = false, has_near = false, has_far = false, has_tv = false;
 };
 
@@ -175,6 +190,16 @@ std::string status_line(const Hops& h) {
     s += "forward: clients " + std::to_string(h.fwd.clients.size()) + ", accepted " +
          std::to_string(h.face.counts.accepted) + ", refused " +
          std::to_string(h.face.counts.refused) + ". ";
+  if (h.has_web) {
+    uint64_t up = 0, down = 0;
+    for (const auto& c : h.web.fwd.clients) {
+      up += c->packets_up;
+      down += c->packets_down;
+    }
+    s += "pages: " + std::to_string(h.web.sessions.size()) + " on, " +
+         std::to_string(h.web.stats.opened) + " came, " + std::to_string(h.web.stats.refused) +
+         " refused, packets " + std::to_string(up) + " up and " + std::to_string(down) + " down. ";
+  }
   if (h.has_near) {
     uint64_t up = 0, game = 0;
     for (const auto& n : h.near.clients) {
@@ -214,6 +239,10 @@ std::string status_line(const Hops& h) {
          std::to_string(h.sq.face.blocks) + ", whole frames " +
          std::to_string(h.sq.face.whole_frames) + ", viewers " +
          std::to_string(sn::sequel_tv_viewers(h.sq.face)) + ". ";
+  if (h.has_cl_demo)
+    s += "tv: recording packets " + std::to_string(h.cl_demo.packets) + ", rounds " +
+         std::to_string(h.cl_demo.rounds) + (h.cl_demo.ended ? " (ended)" : "") + ", viewers " +
+         std::to_string(sn::udp_tv_viewers(h.cl_demo_face)) + ". ";
   if (h.has_sq_demo)
     s += "sequel tv: recording frames " + std::to_string(h.sq_demo.frames) + ", rounds " +
          std::to_string(h.sq_demo.rounds) + (h.sq_demo.ended ? " (ended)" : "") + ", viewers " +
@@ -236,6 +265,10 @@ int run(int argc, char** argv) {
       return 0;
     } else if (flag(a, "port", v)) {
       o.port = std::atoi(v.c_str());
+    } else if (flag(a, "webtransport", v)) {
+      o.webtransport = std::atoi(v.c_str());
+      if (o.webtransport <= 0 || o.webtransport > 65535)
+        return fail("--webtransport=" + v + " is no port", "--webtransport=<udp port>");
     } else if (flag(a, "bind", v)) {
       o.bind = v;
     } else if (flag(a, "allow", v)) {
@@ -301,6 +334,20 @@ int run(int argc, char** argv) {
       sn::classic_forward_attach(h.fwd, h.face);
       std::printf("forward on %s\n", gn::to_string(bind).c_str());
     }
+    if (o.webtransport > 0) {
+      ge::webtransport::Certificate cert;
+      const auto unix_now = static_cast<int64_t>(std::time(nullptr));
+      if (!ge::webtransport::make_certificate(cert, unix_now, fc.name, &error))
+        return fail("the forward's certificate could not be made: " + error, "run it again");
+      const gn::Address web_bind = at(o.bind, o.webtransport);
+      if (!ge::webtransport::web_forward_start(h.web, cert, web_bind, fc, open_upstream, &error))
+        return fail(
+            "the WebTransport socket did not open on " + gn::to_string(web_bind) + ": " + error,
+            "pick a free --webtransport port");
+      h.has_web = true;
+      std::printf("webtransport on %s, certificate %s\n", gn::to_string(web_bind).c_str(),
+                  ge::webtransport::hash_hex(cert).c_str());
+    }
   } else if (o.kind == "proxy" || o.kind == "proxy-near" || o.kind == "proxy-far") {
     const bool near = o.kind != "proxy-far", far = o.kind != "proxy-near";
     if (near && !o.has_server)
@@ -355,6 +402,26 @@ int run(int argc, char** argv) {
       std::printf("the link loses %s of its frames each way (a test)\n",
                   ge::core::num::to_fixed(o.link_loss, 2).c_str());
     }
+  } else if (o.kind == "tv" && !o.demo.empty()) {
+    std::ifstream in(o.demo, std::ios::binary);
+    std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                               std::istreambuf_iterator<char>());
+    if (bytes.empty())
+      return fail("the recording " + o.demo + " did not open",
+                  "name a client recording that exists");
+    if (!sn::udp_tv_recording_open(h.cl_demo, std::move(bytes), true, error))
+      return fail(o.demo + ": " + error, "name a multiplayer client's recording");
+    const gn::Address bind = at(o.bind, o.port > 0 ? o.port : 27900);
+    if (!gn::open_udp_transport(h.qw_face, bind, &error))
+      return fail("the TV's socket did not open on " + gn::to_string(bind) + ": " + error,
+                  "pick a free --port");
+    sn::UdpTvConfig fc;
+    fc.name = o.name.empty() ? "Shooter's Edge TV" : o.name;
+    fc.password = o.password;
+    sn::udp_tv_start(h.cl_demo_face, h.qw_face, fc);
+    h.has_cl_demo = true;
+    std::printf("tv on %s, playing %s round and round to classic clients\n",
+                gn::to_string(bind).c_str(), o.demo.c_str());
   } else if (o.kind == "tv") {
     if (!o.has_server)
       return fail("a TV node relays one server's stream port", "--server=<host:port>");
@@ -417,7 +484,7 @@ int run(int argc, char** argv) {
   std::signal(SIGTERM, on_signal);
   const auto start = std::chrono::steady_clock::now();
   double next_status = o.status;
-  size_t tv_log = 0, sq_log = 0, face_log = 0;
+  size_t tv_log = 0, sq_log = 0, face_log = 0, web_log = 0;
   while (g_stop == 0) {
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
     const int64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -425,6 +492,11 @@ int run(int argc, char** argv) {
                                .count();
     const double now = static_cast<double>(now_us) / 1e6;
     if (h.forward) fw::forward_update(h.fwd, now_us);
+    if (h.has_web) {
+      ge::webtransport::web_forward_update(h.web, now_us);
+      for (; web_log < h.web.log.size(); web_log++)
+        std::printf("webtransport: %s\n", h.web.log[web_log].c_str());
+    }
     if (h.has_near) px::proxy_near_update(h.near, now_us);
     if (h.has_far) px::proxy_far_update(h.far, now_us);
     if (h.has_tv) {
@@ -436,6 +508,12 @@ int run(int argc, char** argv) {
       for (; sq_log < h.sq.log.size(); sq_log++) std::printf("tv: %s\n", h.sq.log[sq_log].c_str());
       for (; face_log < h.sq.face.log.size(); face_log++)
         std::printf("tv: %s\n", h.sq.face.log[face_log].c_str());
+    }
+    if (h.has_cl_demo) {
+      sn::udp_tv_recording_update(h.cl_demo, h.cl_demo_face, now_us);
+      sn::udp_tv_frame(h.cl_demo_face, now_us);
+      for (; face_log < h.cl_demo_face.log.size(); face_log++)
+        std::printf("tv: %s\n", h.cl_demo_face.log[face_log].c_str());
     }
     if (h.has_sq_demo) {
       sn::sequel_tv_demo_update(h.sq_demo, h.sq_demo_face, now_us);
@@ -452,10 +530,12 @@ int run(int argc, char** argv) {
   }
   std::printf("stopped: %s\n", status_line(h).c_str());
   if (h.forward) fw::forward_close(h.fwd);
+  if (h.has_web) ge::webtransport::web_forward_close(h.web);
   if (h.has_far) px::proxy_far_close(h.far);
   if (h.has_tv) sn::tv_close(h.tv);
   if (h.has_sq) sn::sequel_tv_relay_close(h.sq);
   if (h.has_sq_demo) sn::sequel_tv_stop(h.sq_demo_face);
+  if (h.has_cl_demo) sn::udp_tv_stop(h.cl_demo_face);
   return 0;
 }
 

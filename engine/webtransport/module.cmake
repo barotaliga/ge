@@ -7,7 +7,7 @@ if(NOT GE_WEB)
   file(GLOB GE_WEBTRANSPORT_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/engine/webtransport/*.cpp)
   add_library(ge_webtransport STATIC ${GE_WEBTRANSPORT_SOURCES} $<TARGET_OBJECTS:ge_quic>)
-  target_link_libraries(ge_webtransport PUBLIC ge_core ge_net)
+  target_link_libraries(ge_webtransport PUBLIC ge_core ge_net ge_forward)
   # Their headers as the system's: their warnings are not ours (the tree builds -Wpedantic).
   target_include_directories(ge_webtransport SYSTEM PRIVATE ${GE_QUIC_INCLUDES})
   target_compile_definitions(ge_webtransport PRIVATE ${GE_QUIC_DEFINES})

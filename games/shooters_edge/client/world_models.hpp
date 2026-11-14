@@ -153,6 +153,9 @@ struct ModelKind {
   // same frame.
   std::vector<int> frame_map;
   uint32_t worn = ~0u;  // a weapon of a figure's folder: the skin-only model its picture is in
+  // A first-game player's figure from another game: its folder's `weapon.md2` (an index into the
+  // figure kinds, in its own picture), drawn in its hand on the same frame; kNone: none.
+  uint32_t held = kNone;
 };
 
 // THE PLAYERS' SKINS: the figure every player is drawn as, and the most pictures under `skins/`

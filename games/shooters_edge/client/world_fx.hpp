@@ -128,6 +128,8 @@ struct HeldBeam {
   uint32_t melt_serial = 0;
   bool across = false;  // the arc across the player's gun's prongs (fx::prong_arc_look)
   bool rail = false;    // the sequel's rail (fx::rail_look): fired once, then fading
+  bool coil = false;    // with `rail`: the line circling it (fx::rail_coil_look)
+  bool plasma = false;  // a bolt's streak (fx::plasma_look), riding it while it flies
   double seen = 0;
 };
 

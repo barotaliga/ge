@@ -50,7 +50,9 @@ constexpr Command kEngine[] = {
      "settings check autoexec.cfg", "engine", cmd_settings_check},
     {"settings format", "[<file>]",
      "a config written back tidy (--comments: each setting's help above it; --pretty: sections, "
-     "a fixed order, values aligned; --write: in place)",
+     "a fixed order, values aligned; --defaults: with --pretty, every other setting at its "
+     "default; "
+     "--write: in place)",
      "settings format --pretty --write", "engine", cmd_settings_format},
     {"server check", "[<file>]",
      "a server cfg's mistakes, as settings check finds them (server.cfg when no file is named)",
@@ -140,10 +142,12 @@ const std::vector<CommandFlags>& flag_table() {
       {"settings format",
        {{"comments", "", "each setting's one sentence of help above it"},
         {"pretty", "", "sections in a fixed order, values aligned, and the comments"},
+        {"defaults", "", "with --pretty: every setting the file leaves alone too, at its default"},
         {"write", "", "rewrite the file in place (default: print it)"}}},
       {"server format",
        {{"comments", "", "each setting's one sentence of help above it"},
         {"pretty", "", "sections in a fixed order, values aligned, and the comments"},
+        {"defaults", "", "with --pretty: every setting the file leaves alone too, at its default"},
         {"write", "", "rewrite the file in place (default: print it)"}}},
       {"servers",
        {{"lan", "<0|1>", "look on the LAN (default: the player's sb_lan)"},
