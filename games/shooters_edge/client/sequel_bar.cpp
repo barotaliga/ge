@@ -53,6 +53,75 @@ const BarPicture* picture(SequelBar& bar, const std::string& path) {
   return it->second.image.empty() ? nullptr : &it->second;
 }
 
+constexpr int kInventoryRows = 17;
+
+std::string lower(std::string_view s) {
+  std::string out(s);
+  for (char& c : out)
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  return out;
+}
+
+// The first key bound exactly to `use <name>`, compared without case; "" none.
+std::string hotkey(const std::map<std::string, std::string>* binds, std::string_view name) {
+  if (binds == nullptr) return {};
+  const std::string want = "use " + lower(name);
+  for (const auto& [key, command] : *binds)
+    if (lower(command) == want) return key;
+  return {};
+}
+
+std::string right(std::string text, size_t width) {
+  if (text.size() > width) text.resize(width);
+  return std::string(width - text.size(), ' ') + text;
+}
+
+void add_text(std::vector<hud::LayoutOp>& ops, int x, int y, std::string text, bool alt) {
+  hud::LayoutOp op;
+  op.kind = hud::LayoutOp::Kind::text;
+  op.x = x;
+  op.y = y;
+  op.text = std::move(text);
+  op.alt = alt;
+  ops.push_back(std::move(op));
+}
+
+// The inventory screen (sequel_bar.hpp) into `ops`, on a `w` x `h` screen.
+void inventory(const SequelBar& bar, const server::RulesWorld& world, int slot, int selected, int w,
+               int h, std::vector<hud::LayoutOp>& ops) {
+  const std::vector<int16_t>& counts = world.clients[slot].inventory;
+  std::vector<int> held;
+  for (size_t n = 1; n < counts.size(); n++)
+    if (counts[n] != 0) held.push_back(static_cast<int>(n));
+  int at = -1;
+  for (size_t i = 0; i < held.size(); i++)
+    if (held[i] == selected) at = static_cast<int>(i);
+  int top = std::max(at, 0) - kInventoryRows / 2;
+  if (static_cast<int>(held.size()) >= kInventoryRows)
+    top = std::min(top, static_cast<int>(held.size()) - kInventoryRows);
+  top = std::max(top, 0);
+  const int ox = (w - 256) / 2, oy = (h - 240) / 2;
+  hud::LayoutOp pic;
+  pic.name = "inventory";
+  pic.x = ox;
+  pic.y = oy + 8;
+  ops.push_back(std::move(pic));
+  add_text(ops, ox + 24, oy + 24, "hotkey ### item", false);
+  add_text(ops, ox + 24, oy + 32, "------ --- ----", false);
+  int y = oy + 40;
+  for (int i = top; i < static_cast<int>(held.size()) && i < top + kInventoryRows; i++, y += 8) {
+    const int n = held[static_cast<size_t>(i)];
+    std::string scratch;
+    const std::string name(sequel_world_string(world, 1056 + n, scratch));
+    std::string row = right(hotkey(bar.binds, name), 6) + " " +
+                      right(std::to_string(counts[static_cast<size_t>(n)]), 3) + " " + name;
+    const bool chosen = n == selected;
+    if (chosen && (static_cast<int64_t>(bar.now * 10) & 1) != 0)
+      add_text(ops, ox + 16, y, std::string(1, '\x0f'), false);
+    add_text(ops, ox + 24, y, std::move(row), !chosen);
+  }
+}
+
 struct Strings {
   const server::RulesWorld& world;
   mutable std::string scratch;
@@ -99,11 +168,14 @@ void run_sequel_bar(SequelBar& bar, const server::RulesWorld& world, int slot, i
   };
   hud::run_layout(in, bar.ops);  // its text copied out of the strings as they are read
   const server::WorldClient& me = world.clients[slot];
-  if ((in.stats[13] & 1) == 0 || me.layout.empty()) return;
-  std::vector<hud::LayoutOp> over;  // the screen the rules sent him, over the bar
-  in.program = me.layout;
-  hud::run_layout(in, over);
-  for (hud::LayoutOp& op : over) bar.ops.push_back(std::move(op));
+  if ((in.stats[13] & 1) != 0 && !me.layout.empty()) {
+    std::vector<hud::LayoutOp> over;  // the screen the rules sent him, over the bar
+    in.program = me.layout;
+    hud::run_layout(in, over);
+    for (hud::LayoutOp& op : over) bar.ops.push_back(std::move(op));
+  }
+  if ((in.stats[13] & 2) != 0 && !me.inventory.empty())
+    inventory(bar, world, slot, in.stats[12], in.width, in.height, bar.ops);
 }
 
 void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, int width,

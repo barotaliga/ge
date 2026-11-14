@@ -414,8 +414,8 @@ int run_main(int argc, char** argv) {
   };
   cl::SearchPath files;
   // The sequel's status bar, drawn from its rules' own program (sequel_bar.hpp).
-  cl::SequelBar sequel_bar;
-  sequel_bar.files = &files;
+  cl::SequelBar sequel_bar{.files = &files,
+                           .binds = &console.binds().table(ge::console::BindMode::game)};
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
   cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
@@ -808,18 +808,19 @@ int run_main(int argc, char** argv) {
     listen.opt.files = remix.wearing() ? &remix.files : &files;
     in_hand = {};
     in_hand.hand.at_eye = cl::load_worn_held(adapter, remix, files, model_dirs, weapons);
+    picture.all_figures = remix.figure != nullptr ? std::string(remix.figure->folder) : "";
     console.print(cl::worn_line(remix));
   };
   bool remix_enabled = false;
   std::string remix_for;
-  int32_t remix_items = 0;
+  std::pair<int32_t, int32_t> remix_items;  // cr_items, cr_models
   const auto remix_sync = [&] {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
     if (remix_settings.enabled == remix_enabled && remix_for == args.basedir &&
-        remix_settings.items == remix_items)
+        std::pair(remix_settings.items, remix_settings.models) == remix_items)
       return;
     if (cl::busy(loader)) return;  // its threads may read the other game's files: next frame
-    remix_items = remix_settings.items;
+    remix_items = {remix_settings.items, remix_settings.models};
     if (remix_settings.enabled == remix_enabled && remix_for == args.basedir) return remix_wear();
     remix_enabled = remix_settings.enabled;
     remix_for = args.basedir;
@@ -1099,8 +1100,7 @@ int run_main(int argc, char** argv) {
     in_hand.hand.at_eye = at_eye;
     held_fire.shots = {};
     user_info.sent_to = nullptr;
-    remix.worn = nullptr;  // the new game's own: the remix's are worked out again for it
-    remix.looks = nullptr;
+    remix.undress(), picture.all_figures.clear();  // the remix's worked out again for the new game
     remix_for.clear();
   };
   // The window's own game heard this frame (`dt` s), at the player's volume.
@@ -1916,7 +1916,7 @@ int run_main(int argc, char** argv) {
     const shooters_edge::server::SequelServer* sequel =
         listen.rules ? shooters_edge::server::sequel_of(*listen.rules) : nullptr;
     if (sequel != nullptr && remix.looks == nullptr && listen.campaign.end == cl::LevelEnd::none) {
-      // The sequel's own bar, from the program its rules send.
+      sequel_bar.now = t;  // the sequel's own bar from its rules' program (the cursor's clock)
       cl::run_sequel_bar(sequel_bar, sequel->world, 0, sequel->frame_number, w, h);
       // Its crosshair (the HUD's, shown unless hidden) and its centre print in its own letters.
       const int cross = hud.layout.find("crosshair");

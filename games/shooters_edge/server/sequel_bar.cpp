@@ -141,6 +141,24 @@ bool sq_selects(int n) {
   return (n >= 5 && n <= 17) || (n >= 23 && n <= 27);
 }
 
+int sq_count(const SqBody& b, int n) {
+  if (n <= 0 || n >= kSqItemNumbers || n == 4 || n == kHealthNumber) return 0;
+  if (n == kSqBlasterNumber) return b.blaster ? 1 : 0;
+  for (int a = 0; a < kSqAmmoKinds; a++)
+    if (ammo_number(static_cast<SqAmmo>(a)) == n) return b.ammo[a];
+  if (n <= 3) {  // the armour worn: 1 body, 2 combat, 3 jacket
+    const int worn = static_cast<int>(b.armour);
+    const int number = worn == 3 ? 1 : worn == 2 ? 2 : worn == 1 ? 3 : 0;
+    return number == n ? b.armour_count : 0;
+  }
+  const int row = sq_item(kNumbered[n].classname);
+  return row >= 0 ? b.counts[row] : 0;
+}
+
+std::string_view sq_item_name(int n) {
+  return n > 0 && n < kSqItemNumbers ? kNumbered[n].name : std::string_view();
+}
+
 std::string_view sq_icon(int n) {
   return n > 0 && n < kSqItemNumbers ? kNumbered[n].icon : std::string_view();
 }
@@ -212,7 +230,8 @@ void bar_rows(SequelServer& s) {
       break;
     }
     if (p.help_unread >= 1 && flash_on) st[11] = static_cast<int16_t>(image(s, "i_help"));
-    if (p.screen != kScreenNone) st[13] |= 1;  // a screen over the bar (sequel_screens.hpp)
+    if (p.screen != kScreenNone) st[13] |= 1;
+    if (p.inven_open && p.alive) st[13] |= 2;  // a screen over the bar (sequel_screens.hpp)
     st[14] = clamp16(p.frags);
     // A blow in this frame, or between the last frame and this one (a move's fall), shows once a
     // frame's rows are sent.
