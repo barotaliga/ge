@@ -7,6 +7,8 @@
 //   POST /account/signup     name, password, again   -> the recovery code, shown once
 //   POST /account/code       name, password          -> the code and the line to type
 //   POST /account/recover    name, recovery, password -> a new recovery code
+//   POST /account/duo        name, password, partner, duo -> a duo asked for or made
+//                            (account/ladder.hpp: made when the partner asks under that name)
 //
 // A PASSWORD ONLY OVER HTTPS. The hub speaks plain HTTP; an operator's reverse proxy adds TLS and
 // says so (`X-Forwarded-Proto: https`). Without that, and not from this machine, the forms are

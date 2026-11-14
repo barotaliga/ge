@@ -357,6 +357,30 @@ The JSON API: `/v1/players/{name}`, `/v1/matches?game=&mode=&player=&page=`, `/v
 keeps no player stats. The hub's line that it has no accounts and no login (`docs/hub.md`) holds
 for every page but these and Account.
 
+## The ladders
+
+A chess-style ranking for duels and for two-on-two duos, in league seasons (the maintainer,
+2026-11-13), kept by the master from the reports it counts (`engine/account/ladder.hpp`) and shown
+on the hub's Ladder page (`engine/hub/ladder_page.hpp`).
+
+- **A rated match** is a counted report with two sides of one or two people each, every one logged
+  in, no bot. One a side rates both accounts on that game and mode's duel ladder; two a side rates
+  both duos on its pair ladder, only when each side is a registered duo. The higher score wins;
+  equal scores draw.
+- **The rating** is Elo, kept in tenths: 1500 to start, K 32 for an entry's first 30 matches and 16
+  after, expected result 1 / (1 + 10^(difference / 400)) by the vendored `pow`.
+- **A duo** is made when each of two players asks for the other under the same name: the Account
+  page's duo form (name, password, partner, duo name). A player may be in several duos; a duo's name
+  is its own (case folded).
+- **Seasons** are 14 days by default (`--season-days`), counted from 2026-01-05 UTC. Each ladder
+  keeps an all-time rating and a season rating that starts again every season. When a season ends
+  (the first report of a later one, or the master's clock), its best three with 5 matches or more are
+  kept for good as its champions. Duo lines (`duo <account> <partner> <name in hex>`) go in
+  `reports.log` beside the reports, so a master read back has the same ladders and history.
+- **The Ladder page** `/ladder?game=&mode=`: a link per ladder, the season's dates and days left,
+  its standings (the ranked first, the rest dimmed with the matches they lack), the all-time
+  ratings, and every past season's champions; `/v1/ladder` the same as JSON.
+
 ## The plan
 
 | Row | What | Labs |
@@ -370,6 +394,7 @@ for every page but these and Account.
 | M59d | The sequel's prompt and `login` line, one account logged in on both games' servers | `se-login` |
 | M59e | The match report, the replay file's closing summary, the master's totals, trusted servers | `match-report` |
 | M59f | The hub's Player, Match and Leaders pages and their API; the classic adapter's recent stats | `hub-players` |
+| M59g | The ranked ladders: Elo for duels and registered duos, league seasons, past champions; the Ladder page | `hub-players` |
 
 Friends, presence and invites stay M17j's, on these accounts. A store's sign-in (Steam) linked to
 an account comes with M20c.

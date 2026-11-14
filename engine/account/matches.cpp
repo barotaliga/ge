@@ -102,6 +102,7 @@ Taken take(Matches& m, const net::Key& server, const net::MatchReport& r) {
   const bool counted = m.trusted.count(server) != 0;
   if (counted) {
     add_totals(m.totals, r);
+    ladder_add(m.ladder, r);
     m.counted++;
   }
   m.kept.push_back({server, counted, r});
@@ -130,7 +131,15 @@ Taken matches_add(Matches& m, const net::Key& server, const net::MatchReport& r)
   return t;
 }
 
+DuoAnswer matches_duo_ask(Matches& m, uint64_t asker, uint64_t partner, std::string_view name) {
+  const DuoAnswer a = ladder_duo_ask(m.ladder, asker, partner, name);
+  m.log += m.ladder.log;
+  m.ladder.log.clear();
+  return a;
+}
+
 bool matches_line(Matches& m, const std::string& line, std::string& error) {
+  if (line.rfind("duo ", 0) == 0) return ladder_line(m.ladder, line, error);
   const size_t a = line.find(' '), b = line.find(' ', a + 1);
   if (line.compare(0, a, "report") != 0 || a == std::string::npos || b == std::string::npos) {
     error = "not a report line";

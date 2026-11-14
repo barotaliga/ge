@@ -173,7 +173,8 @@ static bool load_reports(const std::string& path, Matches& m, std::string& warni
 }
 
 bool host_open(Host& h, const std::string& dir, const net::Address& bind, HashCost cost,
-               int64_t unix_us, std::string& error, const std::vector<net::Key>& trusted) {
+               int64_t unix_us, std::string& error, const std::vector<net::Key>& trusted,
+               int season_days) {
   std::error_code ec;
   fs::create_directories(dir, ec);
   h.dir = dir;
@@ -200,6 +201,7 @@ bool host_open(Host& h, const std::string& dir, const net::Address& bind, HashCo
   net::wipe(config.seed.data(), config.seed.size());
   for (const net::Key& k : trusted) matches_trust(h.svc.matches, k);
   matches_trust(h.svc.matches, h.svc.keys.pub);
+  h.svc.matches.ladder.season_days = season_days;  // before the reports are read back
   const std::string reports_path = (fs::path(dir) / "reports.log").string();
   if (!load_reports(reports_path, h.svc.matches, h.warning, error)) {
     host_close_files(h);
@@ -218,6 +220,7 @@ bool host_open(Host& h, const std::string& dir, const net::Address& bind, HashCo
 void host_update(Host& h, int64_t unix_us) {
   if (!h.open) return;
   service_update(h.svc, unix_us);
+  ladder_close_due(h.svc.matches.ladder, unix_us / 1000000);  // a season ends with no match due
   if (!h.svc.matches.log.empty()) {
     std::fwrite(h.svc.matches.log.data(), 1, h.svc.matches.log.size(), h.reports);
     std::fflush(h.reports);
