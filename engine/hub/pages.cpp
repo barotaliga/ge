@@ -1,6 +1,6 @@
-// The hub's pages, defined: the routes, the HTML of each page, the stylesheet.
+// The hub's pages, defined: the routes and the HTML of each page (the stylesheet is style.cpp).
 //
-// ge:summary The hub's pages defined: routing, servers' cards, players, scoreboard, stylesheet
+// ge:summary The hub's pages defined: routing, servers' cards, players, scoreboard
 // ge:keywords hub pages html route card scoreboard players stylesheet escape
 // ge:skill net
 // ge:test tests/hub_pages_test.cpp
@@ -49,7 +49,9 @@ std::string clock(int32_t seconds) {
 
 std::string head(const HubSpec& spec, const std::string& title, bool refresh) {
   std::string h =
-      "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
+      "<!doctype html>\n<html lang=\"en\"" +
+      (spec.look.empty() ? std::string() : " data-look=\"" + html_escape(spec.look) + "\"") +
+      "><head><meta charset=\"utf-8\">"
       "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">";
   if (refresh)
     h += "<meta http-equiv=\"refresh\" content=\"" + std::to_string(kPageRefreshS) + "\">";
@@ -116,6 +118,18 @@ std::string colour_dot(uint32_t rgb) {
   return out;
 }
 
+// A map's banner hue (0..359), the same for a name on every page and every hub: FNV-1a of it.
+int map_hue(std::string_view map) {
+  uint32_t h = 2166136261u;
+  for (const char ch : map) h = (h ^ static_cast<uint8_t>(ch)) * 16777619u;
+  return static_cast<int>(h % 360u);
+}
+
+// A count in the sums: the number large, its word after ("1 server", "3 servers").
+std::string sum_count(size_t n, const char* one, const char* many) {
+  return "<span><b>" + std::to_string(n) + "</b>" + (n == 1 ? one : many) + "</span>";
+}
+
 // The scoreboard: the teams' lines, then the players' rows.
 std::string scoreboard(const HubSpec& spec, const gn::Status& s) {
   std::string h = "<table class=\"score\">";
@@ -142,8 +156,9 @@ std::string card(const HubSpec& spec, const HubNode& n, bool page_forward) {
   const Counts c = counts(s);
   const std::string addr = gn::to_string(n.address);
   std::string h = "<article class=\"card phase-" + std::string(phase_word(s.phase)) + "\">";
-  h += "<div class=\"map\"><span class=\"mapname\">" + html_escape(s.map) +
-       "</span><span class=\"phase\">" + phase_word(s.phase) +
+  h += "<div class=\"map\" style=\"--h:" + std::to_string(map_hue(s.map)) +
+       "\"><span class=\"mapname\">" + html_escape(s.map) + "</span><span class=\"phase" +
+       (s.phase == gn::StatusPhase::playing ? " live" : "") + "\">" + phase_word(s.phase) +
        (s.time_left_s >= 0 ? " " + clock(s.time_left_s) : std::string()) + "</span></div>";
   h += "<h2>" + html_escape(s.name) + (s.locked ? " <small>locked</small>" : "") + "</h2>";
   h += "<p class=\"meta\"><b>" + html_escape(s.mode.empty() ? "-" : s.mode) + "</b> · " +
@@ -151,6 +166,17 @@ std::string card(const HubSpec& spec, const HubNode& n, bool page_forward) {
   if (c.bots) h += " · " + std::to_string(c.bots) + " bots";
   if (s.country[0]) h += " · " + html_escape(s.country);
   h += "</p>";
+  // The teams' bar: each team's share of the scores, in its colour (two teams or more).
+  if (s.teams.size() >= 2) {
+    h += "<div class=\"teambar\">";
+    for (const gn::StatusTeam& t : s.teams) {
+      char bar[96];
+      std::snprintf(bar, sizeof bar, "<i style=\"flex:%d;background:#%06x\"></i>",
+                    std::max(t.score, 0) + 1, t.colour & 0xffffffu);
+      h += bar;
+    }
+    h += "</div>";
+  }
   h += scoreboard(spec, s);
   if (c.spectators || c.viewers) {
     h += "<p class=\"watchers\">" + std::to_string(c.spectators) + " spectating · " +
@@ -241,8 +267,9 @@ std::string servers_page(const Poller& p, const HubSpec& spec, std::string_view 
          (m.name == mode ? " class=\"on\"" : "") + ">" + html_escape(m.name) + "</a>";
   }
   h += "</div>";
-  h += "<p class=\"sum\">" + std::to_string(live.size() + empty.size()) + " servers · " +
-       std::to_string(people) + " playing · " + std::to_string(broadcasts) + " broadcasts</p>";
+  h += "<p class=\"sum\">" + sum_count(live.size() + empty.size(), " server", " servers") +
+       "<span class=\"live\"><b>" + std::to_string(people) + "</b> playing</span>" +
+       sum_count(static_cast<size_t>(broadcasts), " broadcast", " broadcasts") + "</p>";
   h += "<section class=\"cards\">\n";
   for (const auto& r : live)
     h += card(spec, *r.second, poller_page_forward(p, r.second->address) != nullptr);
@@ -279,8 +306,10 @@ std::string players_page(const Poller& p, const HubSpec& spec, int64_t now_us) {
     return a.player->score > b.player->score;
   });
   std::string h = head(spec, "Players", true) + nav(spec, "Players") + "<main>";
-  h += "<p class=\"sum\">" + std::to_string(rows.size()) + " on " +
-       std::to_string(poller_count(p, gn::kind_bit(gn::NodeKind::game))) + " servers</p>";
+  h += "<p class=\"sum\">" + sum_count(rows.size(), " person", " people") + "<span>on</span>" +
+       sum_count(static_cast<size_t>(poller_count(p, gn::kind_bit(gn::NodeKind::game))), " server",
+                 " servers") +
+       "</p>";
   h += "<table class=\"players\"><tr><th>name</th><th>doing</th><th>server</th><th>mode</th><th>" +
        html_escape(spec.score) + "</th></tr>";
   for (const Row& r : rows) {
@@ -340,7 +369,8 @@ std::string demos_page(const Site& site, const HubSpec& spec, std::string_view t
   const DemoPage page = archive_search(*a, q, unix_s);
   h += "<form class=\"search\" action=\"/demos\" method=\"get\">";
   h += "<input name=\"player\" placeholder=\"player\" value=\"" + html_escape(q.player) + "\">";
-  h += "<input name=\"map\" placeholder=\"map\" value=\"" + html_escape(q.map) + "\">";
+  h += "<input name=\"map\" placeholder=\"" + html_escape(spec.map_word) + "\" value=\"" +
+       html_escape(q.map) + "\">";
   h += "<select name=\"mode\"><option value=\"\">any mode</option>";
   for (const HubMode& m : spec.modes) {
     h += "<option" + std::string(m.name == q.mode ? " selected" : "") + ">" + html_escape(m.name) +
@@ -348,14 +378,15 @@ std::string demos_page(const Site& site, const HubSpec& spec, std::string_view t
   }
   h += "</select><input name=\"tag\" placeholder=\"tag\" value=\"" + html_escape(q.tag) +
        "\"><button>Search</button></form>";
-  h += "<p class=\"sum\">" + std::to_string(page.total) + (page.total == 1 ? " demo" : " demos");
+  h += "<p class=\"sum\">" + sum_count(static_cast<size_t>(page.total), " demo", " demos");
   if (page.pages > 1) {
-    h += " · page " + std::to_string(page.page) + " of " + std::to_string(page.pages);
+    h +=
+        "<span>page " + std::to_string(page.page) + " of " + std::to_string(page.pages) + "</span>";
   }
   h += "</p>";
   const std::string scheme = spec.id.empty() ? "game" : spec.id;
-  h += "<table class=\"demos\"><tr><th>when</th><th>mode</th><th>map</th><th>players</th>"
-       "<th>length</th><th></th></tr>";
+  h += "<table class=\"demos\"><tr><th>when</th><th>mode</th><th>" + html_escape(spec.map_word) +
+       "</th><th>players</th><th>length</th><th></th></tr>";
   for (const DemoRow* r : page.rows) {
     std::string who;
     if (!r->teams.empty()) {
@@ -399,7 +430,9 @@ std::string demos_page(const Site& site, const HubSpec& spec, std::string_view t
       }
       h += "\">Play</a>";
     }
-    h += "<a class=\"small\" href=\"/demo/" + r->sha + "\">Watch</a><a class=\"small\" href=\"/";
+    // A run's Watch is its one way in, so it is the button; a demo's is the game's Play.
+    h += std::string("<a class=\"") + (r->run ? "btn watch" : "small") + "\" href=\"/demo/" +
+         r->sha + "\">Watch</a><a class=\"small\" href=\"/";
     h += row_path(*r);
     h += "\" download>Download</a>";
     if (r->radar) h += "<a class=\"small\" href=\"/radar/" + r->sha + "\">Map</a>";
@@ -423,96 +456,6 @@ std::string demos_page(const Site& site, const HubSpec& spec, std::string_view t
     h += "</p>";
   }
   return h + "</main>" + foot();
-}
-
-const std::string& hub_stylesheet() {
-  static const std::string css =
-      R"css(:root{--bg:#101513;--panel:#18201d;--panel2:#1f2925;--ink:#e8f1ec;--dim:#8fa59c;
---accent:#3fc79a;--hot:#ffb44d;--line:#2b3833;color-scheme:dark}
-@media (prefers-color-scheme:light){:root{--bg:#f4f6f5;--panel:#fff;--panel2:#eef2f0;--ink:#16201c;
---dim:#5d6e67;--accent:#138a63;--hot:#b8690a;--line:#d5ddd9;color-scheme:light}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
-font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
-a{color:var(--accent);text-decoration:none}header{display:flex;gap:16px;align-items:center;
-padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.brand{font-weight:700;font-size:18px;color:var(--ink)}nav{display:flex;gap:12px}
-nav a{color:var(--dim)}nav a.on{color:var(--ink);font-weight:600}
-main{max-width:1280px;margin:0 auto;padding:16px}
-.filters{display:flex;gap:8px;flex-wrap:wrap}.filters a{padding:4px 12px;border-radius:999px;
-background:var(--panel2);color:var(--dim)}.filters a.on{background:var(--accent);color:var(--bg)}
-.sum{color:var(--dim)}.cards{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.map{display:flex;justify-content:space-between;padding:28px 14px 10px;
-background:linear-gradient(135deg,#2c4a3f,#1b2a40);color:#fff;font-weight:600}
-.phase-scores .map{background:linear-gradient(135deg,#4a3f2c,#2a1b30)}
-.phase-waiting .map,.phase-starting .map{background:linear-gradient(135deg,#2c3f4a,#20283a)}
-.card h2{margin:10px 14px 0;font-size:18px}.card h2 small{color:var(--hot);font-size:12px}
-.meta{margin:4px 14px;color:var(--dim)}.meta b{color:var(--ink)}
-table.score{width:calc(100% - 28px);margin:8px 14px;border-collapse:collapse;font-size:14px}
-table.score td,table.score th{padding:3px 4px;text-align:left}table.score td+td,table.score th+th{text-align:right}
-table.score th{color:var(--dim);font-weight:500;border-bottom:1px solid var(--line)}
-tr.team td{font-weight:700}small{color:var(--dim)}small.bot{color:var(--hot)}
-.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
-.watchers{margin:4px 14px;color:var(--dim);font-size:13px}
-.act{display:flex;gap:8px;align-items:center;margin:10px 14px;flex-wrap:wrap}
-.btn{padding:6px 12px;border-radius:8px;background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
-.btn.watch{background:var(--accent);color:var(--bg);border-color:var(--accent)}.act .small{margin-left:auto;font-size:13px}
-.addr{margin:0 14px 12px;color:var(--dim);font-size:13px}ul.empty{color:var(--dim);padding-left:18px}
-table.players{width:100%;border-collapse:collapse}table.players td,table.players th{padding:6px 8px;
-text-align:left;border-bottom:1px solid var(--line)}table.players th{color:var(--dim);font-weight:500}
-td.bot{color:var(--hot)}td.spectating,td.watching{color:var(--dim)}
-.overlay{max-width:420px;background:var(--panel);border-radius:12px;margin:16px}
-footer{color:var(--dim);font-size:13px;padding:24px 16px;text-align:center}.none{color:var(--dim)}
-main.acct{padding:16px;max-width:640px}.acct form{display:grid;gap:10px;max-width:420px;
-margin:8px 0}.acct label{display:grid;gap:4px;color:var(--dim);font-size:14px}.acct input{
-font:inherit;padding:8px 10px;border-radius:6px;border:1px solid var(--line);
-background:var(--panel2);color:var(--ink)}.acct button{font:inherit;padding:8px 14px;
-border-radius:6px;border:0;background:var(--accent);color:var(--bg);cursor:pointer;
-justify-self:start}.acct :disabled{opacity:.5;cursor:not-allowed}.acct .warn{color:var(--hot)}
-.acct .code{font:600 28px ui-monospace,monospace;letter-spacing:.08em}
-form.search{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}form.search input,form.search select,
-form.search button{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid var(--line);
-background:var(--panel);color:var(--ink)}form.search button{background:var(--accent);color:var(--bg);
-border-color:var(--accent)}table.demos{width:100%;border-collapse:collapse}table.demos td,table.demos th{
-padding:8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
-table.demos th{color:var(--dim);font-weight:500}table.demos .act{margin:0;flex-wrap:nowrap}details{color:var(--dim);font-size:13px}summary{cursor:pointer}
-.tag{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--panel2);color:var(--hot)}
-.pager{display:flex;gap:16px}
-.radar figure{margin:12px 0}svg.radar{width:100%;max-width:760px;height:auto;display:block;
-border-radius:12px;background:var(--panel)}svg.radar .ground{fill:var(--panel)}svg.radar .outline{
-stroke:var(--dim)}svg.radar .who{font:600 22px system-ui,sans-serif;fill:var(--ink);paint-order:stroke;
-stroke:var(--bg);stroke-width:4px}ul.legend{display:flex;flex-wrap:wrap;gap:6px 16px;list-style:none;
-padding:0}.swatch{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px}
-@media (max-width:480px){main{padding:12px}.cards{grid-template-columns:1fr}
-table.demos th:nth-child(3),table.demos td:nth-child(3),table.demos th:nth-child(5),
-table.demos td:nth-child(5){display:none}table.demos .act{flex-direction:column;align-items:flex-start}}
-main.watch{display:grid;grid-template-columns:minmax(0,3fr) minmax(220px,1fr);gap:18px}
-main.watch h3{margin:8px 0}.viewer{background:#000;aspect-ratio:16/9;border-radius:8px;display:flex;
-align-items:center;justify-content:center;overflow:hidden;position:relative}.viewer canvas{width:100%;
-height:100%;display:block}.viewer .none{color:#c8c8c8;padding:16px;text-align:center;max-width:36em}
-#viewer-status{position:absolute;left:0;right:0;bottom:0;margin:0;padding:8px 12px;color:#e8e8e8;
-background:rgba(0,0,0,.6)}#viewer-status:empty{display:none}#viewer-bar{position:absolute;left:12px;
-right:12px;bottom:44px;width:calc(100% - 24px);height:6px;appearance:none;border:0;border-radius:3px;
-background:#333}#viewer-bar::-webkit-progress-bar{background:#333;border-radius:3px}
-#viewer-bar::-webkit-progress-value{background:#1b8a5a;border-radius:3px}
-#viewer-bar::-moz-progress-bar{background:#1b8a5a;border-radius:3px}
-ul.also{list-style:none;padding:0;margin:0}ul.also li{margin:6px 0}
-ul.maps{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;list-style:none;
-padding:0}ul.maps a{display:block;padding:12px;border-radius:8px;background:var(--panel);
-text-decoration:none;font-weight:600}
-main.stats h3{margin:20px 0 8px}.tiles{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
-.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;
-min-width:96px;display:grid}.tile b{font-size:22px}.wide{overflow-x:auto}
-table.num{border-collapse:collapse;display:block;max-width:100%;overflow-x:auto}table.num td,table.num th{padding:5px 10px;
-text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}table.num td:first-child,
-table.num th:first-child{text-align:left}table.num th{color:var(--dim);font-weight:500}table.rank td:nth-child(2),
-table.rank th:nth-child(2){text-align:left}
-article.result{margin:14px 0}article.result h3 small{color:var(--dim)}
-tr.unranked td{color:var(--dim)}table.champions td{text-align:left}
-label.without{color:var(--dim);font-size:14px;align-self:center}.warn{color:var(--hot)}
-@media(max-width:700px){main.watch{grid-template-columns:1fr}}
-)css";
-  return css;
 }
 
 Answer hub_answer(const Poller& p, const HubSpec& spec, std::string_view target, int64_t now_us,

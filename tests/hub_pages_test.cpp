@@ -91,7 +91,11 @@ TEST(routes_answer_pages_api_css_and_404) {
   CHECK(hub_answer(p, s, "/players", 0).code == 200);
   Answer css = hub_answer(p, s, "/style.css", 0);
   CHECK(css.code == 200 && css.type == "text/css" && css.max_age_s == 3600);
-  CHECK(has(css.body, "prefers-color-scheme:light"));
+  CHECK(has(css.body, "prefers-color-scheme:dark") && has(css.body, "data-look=arena"));
+  CHECK(!has(a.body, "data-look"));  // the engine's own look: no attribute
+  HubSpec looked = s;
+  looked.look = "alpine";
+  CHECK(has(hub_answer(p, looked, "/", 0).body, "<html lang=\"en\" data-look=\"alpine\">"));
   Answer missing = hub_answer(p, s, "/nowhere<x>", 0);
   CHECK(missing.code == 404 && missing.type == "text/html");
   CHECK(has(missing.body, "/nowhere&lt;x&gt;") && !has(missing.body, "<x>"));
@@ -111,7 +115,10 @@ TEST(servers_page_orders_by_interest_and_escapes) {
   CHECK(has(h, "test_game://join/") && has(h, "test_game://spectate/"));
   CHECK(has(h, "href=\"/watch/sim:20:28000/3\">Watch</a>"));  // the Watch page
   CHECK(has(h, "2:05"));                                      // the time left
-  CHECK(has(h, "4 servers") && has(h, "10 playing") && has(h, "1 broadcasts"));
+  CHECK(has(h, "<b>4</b> servers") && has(h, "<b>10</b> playing") && has(h, "<b>1</b> broadcast<"));
+  // A map's banner hue is its name's, the same on every page; a match being played is live.
+  CHECK(has(h, "class=\"map\" style=\"--h:") && has(h, "class=\"phase live\""));
+  CHECK(!has(h, "teambar"));  // no server here reports teams
   CHECK(has(h, "<th>frags</th>"));
 }
 
@@ -128,7 +135,7 @@ TEST(servers_page_filters_by_mode) {
 TEST(players_page_puts_people_before_bots) {
   const Poller p = sample();
   const std::string h = players_page(p, spec(), 0);
-  CHECK(has(h, "16 on 4 servers"));
+  CHECK(has(h, "<b>16</b> people") && has(h, "<b>4</b> servers"));
   CHECK(at(h, "human0") < at(h, "botty0"));
   CHECK(has(h, "class=\"bot\">bot</td>"));
 }

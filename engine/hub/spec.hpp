@@ -49,7 +49,13 @@ struct HubSpec {
   std::string score = "score";   // what a player's score column is called ("frags", "time")
   bool score_low_first = false;  // a time sorts lowest first
   bool score_ms = false;         // a score is a time in milliseconds, shown as m:ss.cc
-  uint16_t http_port = 28080;    // the hub's web port when none is given
+  // The pages' look (style.cpp): "" the engine's own, "arena" (warm charcoal and ember), "alpine"
+  // (glacier and night sky). Only colours change; every page has the same shapes.
+  std::string look;
+  // What a game's place is called on the pages ("map"; Fall Line's runs name a "seed"): the Demos
+  // page's column and search field, and the word before a place that is only a number.
+  std::string map_word = "map";
+  uint16_t http_port = 28080;  // the hub's web port when none is given
   // The game's own status protocol (net/server_list.hpp), when its servers speak one the engine's
   // status record does not: `--browse-master` and `--browse-server` list them (browse.hpp). Empty:
   // the hub reads only the engine's masters.
@@ -84,6 +90,8 @@ struct HubSpec {
 
 // A score as the page shows it: the number, or a time (`score_ms`) as m:ss.cc.
 std::string score_text(const HubSpec& spec, int64_t score);
+// A row's place as a page shows it: the map's name, or "seed 38" when the game's word is not "map".
+std::string map_text(const HubSpec& spec, std::string_view map);
 
 // How long a match may sit in its intermission before it drops to the bottom.
 constexpr int64_t kStaleIntermissionUs = 300000000;

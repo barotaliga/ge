@@ -42,6 +42,11 @@ int64_t interest(const HubSpec& spec, const HubNode& node, int64_t now_us) {
   return score < 2 ? 2 : score;
 }
 
+std::string map_text(const HubSpec& spec, std::string_view map) {
+  if (map.empty() || spec.map_word.empty() || spec.map_word == "map") return std::string(map);
+  return spec.map_word + " " + std::string(map);
+}
+
 std::string score_text(const HubSpec& spec, int64_t score) {
   if (!spec.score_ms) return std::to_string(score);
   const int64_t cs = (score < 0 ? 0 : score) / 10;
