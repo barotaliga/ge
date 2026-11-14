@@ -1068,6 +1068,10 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   game's, 2 the sequel's) draws every player as that game's figure from the next map, its frames
   played from the played game's by kind (the sequel's marine with its weapon in hand on the
   classic game's players; the classic figure, its weapon in its own mesh, on the sequel's).
+  So are the moves: `cr_moves` gives the played game's move the other game's running speed,
+  friction, air and landing pause from the next map (the classic rules by the settings
+  `sv_maxspeed`, `sv_friction`, `pm_airaccel`, `pm_airwish` and `pm_landpause`; the sequel's by
+  `sv_moves classic`), each move keeping its own code; lab `se-remix-moves` compares them.
 
 Lab `se-remix` draws a real map of each game from above with its own items and with the other
 game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`); `se-client
