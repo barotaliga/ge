@@ -258,7 +258,7 @@ Shrink shrink_lines(const ui::Image& cap, int d) {
   for (const auto& [cost, x] : cols) {
     if (static_cast<int>(out.cols.size()) == kDropCols) break;
     if (std::none_of(out.cols.begin(), out.cols.end(),
-                     [x = x](int c) { return std::abs(c - x) <= 1; }))
+                     [col = x](int c) { return std::abs(c - col) <= 1; }))
       out.cols.push_back(x);
   }
   return out;
