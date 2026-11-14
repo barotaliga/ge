@@ -50,6 +50,7 @@
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/sequel_wire.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -169,6 +170,46 @@ gl::Picture overhead(const ge::brush::Map& map, const Walk& walk, const std::str
   }
   gl::draw_text(p, 12, kSize + 36, title + ": ITEMS FROM ABOVE, THE WALK IN RED", {230, 230, 230});
   return p;
+}
+
+// A view of the open sky: under the ceiling of sky nearest `at` (at most 128 units under it, never
+// below `at`), looking steeply up; else toward the nearest face of sky; `found` false when the map
+// shows no sky.
+struct SkySpot {
+  bool found = false;
+  sh::Vec3f eye;
+  float yaw = 0, pitch = 0;  // degrees, pitch up positive
+};
+SkySpot sky_spot(const ge::brush::Map& m, sh::Vec3f at) {
+  SkySpot best;
+  float best_d = 1e30f;
+  bool ceiling = false;
+  for (const ge::brush::Surface& sf : m.surfaces) {
+    if (sf.texture >= m.textures.size() || !m.textures[sf.texture].sky) continue;
+    for (uint32_t i = sf.first; i + 2 < sf.first + sf.count; i += 3) {
+      float c[3] = {0, 0, 0};
+      for (uint32_t k = 0; k < 3; k++)
+        for (int j = 0; j < 3; j++) c[j] += m.vertices[m.indices[i + k]].pos[j] / 3.0f;
+      const bool up = m.vertices[m.indices[i]].nrm[2] < -0.7f && c[2] > at.z;
+      if (ceiling && !up) continue;
+      const float dx = c[0] - at.x, dy = c[1] - at.y, dz = c[2] - at.z;
+      const float d = dx * dx + dy * dy + dz * dz;
+      if (up == ceiling && d >= best_d) continue;
+      ceiling = ceiling || up;
+      best_d = d;
+      best.found = true;
+      if (up) {
+        best.eye = {c[0], c[1], std::max(at.z, c[2] - 128.0f)};
+        best.yaw = 0;
+        best.pitch = 55;
+      } else {
+        best.eye = at;
+        best.yaw = std::atan2(dy, dx) * 57.29578f;
+        best.pitch = std::atan2(dz, std::sqrt(dx * dx + dy * dy)) * 57.29578f;
+      }
+    }
+  }
+  return best;
 }
 
 Walk walk(const std::vector<uint8_t>& file, const std::string& name, float turn,
@@ -371,6 +412,7 @@ void run(gl::Lab& lab) {
       std::vector<std::string> ids;
       for (const char* way : kWays) ids.push_back(name + "-" + way);
       if (walked.started) ids.push_back(name + "-walked");
+      if (sky_spot(read, at).found) ids.push_back(name + "-sky");
       for (const std::string& id : ids) {
         gl::Picture none = gl::create_picture(160, 90, {40, 40, 48});
         gl::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
@@ -441,6 +483,37 @@ void run(gl::Lab& lab) {
                 "the floor",
                 {{"map", name}, {"game", own ? "fixture" : "local packs"}}},
                side_by_side(looks[0], looks[1]), gl::Det::measured);
+    }
+    if (const SkySpot sky = sky_spot(read, at); sky.found) {
+      // The sky the server sends for the map: its world's, else the server's own.
+      shooters_edge::server::SequelWireOptions sent;
+      shooters_edge::server::sequel_sky(read, sent);
+      ge::render::FrameView view;
+      const ge::camera::Vec3 eye = cl::engine_point(sky.eye);
+      view.eye[0] = eye.x;
+      view.eye[1] = eye.y;
+      view.eye[2] = eye.z;
+      view.heading = cl::engine_heading(sky.yaw);
+      view.pitch = sky.pitch * 0.0174533;
+      view.fov_y = 1.2;
+      view.time_s = 1;
+      ge::gpu::Image looks[2];
+      for (int side = 0; side < 2; side++) {
+        look.look = side == 0 ? "classic" : "modern";
+        const cl::FxFrame fx;
+        cl::draw_world(*device, *world, view, fx, nullptr, 0, {}, out.view);
+        looks[side] = ge::gpu::read_now(*device, out);
+      }
+      lab.shot(
+          {name + "-sky",
+           (info.title.empty() ? name : info.title) + ", the sky",
+           "Looking up into the sky nearest the start on " + name +
+               " (the map's sky box through its sky faces): the classic look on the left, "
+               "the modern look on the right.",
+           "the map's own sky pictures (" + sent.sky +
+               ") where the sky faces are, no seams at the box's edges, the walls round it lit",
+           {{"map", name}, {"game", own ? "fixture" : "local packs"}}},
+          side_by_side(looks[0], looks[1]), gl::Det::measured);
     }
     world.reset();
   }

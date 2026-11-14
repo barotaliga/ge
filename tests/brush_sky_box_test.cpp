@@ -1,11 +1,14 @@
 // tests/brush_sky_box_test.cpp: a map's own sky box: every texel of the atlas looks along the
 // same direction as the picture texel it was read from; the up picture's corner lands where the
-// table says; the box's size is the rt picture's smaller side; an empty picture refuses the box.
+// table says; the box's size is the rt picture's smaller side; an empty picture refuses the box;
+// the box's turn goes the right hand's way about the map's axis, and a short axis is no turn.
 //
 // ge:summary Tests for the sky box built from a map's six pictures
 // ge:keywords test brush sky-box skybox build_sky_box orientation rt bk lf ft up dn
+// ge:keywords sky_box_turn skyrotate skyaxis
 // ge:skill brush testing
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <string>
 
@@ -112,4 +115,43 @@ TEST(an_empty_picture_refuses_the_whole_box) {
   CHECK(!ba::build_sky_box(set, &scene, &why));
   CHECK(scene.sky_box.levels.empty() && scene.sky_box_face == 0);
   CHECK(why.find("up") != std::string::npos);
+}
+
+namespace {
+
+// A direction (engine axes) turned back into the box by `rows`.
+std::array<double, 3> turned(const double rows[3][3], double x, double y, double z) {
+  return {rows[0][0] * x + rows[0][1] * y + rows[0][2] * z,
+          rows[1][0] * x + rows[1][1] * y + rows[1][2] * z,
+          rows[2][0] * x + rows[2][1] * y + rows[2][2] * z};
+}
+
+bool near(const std::array<double, 3>& a, double x, double y, double z) {
+  return std::fabs(a[0] - x) < 1e-9 && std::fabs(a[1] - y) < 1e-9 && std::fabs(a[2] - z) < 1e-9;
+}
+
+}  // namespace
+
+TEST(the_box_turns_counter_clockwise_seen_from_its_axis_tip) {
+  // About the map's +z (up, the engine's +y), 90 degrees a second, a second in: the box's map +x
+  // face has turned to the map's +y (the engine's +z), so looking there reads the box's +x.
+  const double up[3] = {0, 0, 5};
+  double rows[3][3];
+  ba::sky_box_turn(up, 90, 1, rows);
+  CHECK(near(turned(rows, 0, 0, 1), 1, 0, 0));
+  CHECK(near(turned(rows, 0, 1, 0), 0, 1, 0));  // straight up is up still
+  // About the map's +x (the engine's +x): the box's map +y face has turned to the map's +z.
+  const double east[3] = {1, 0, 0};
+  ba::sky_box_turn(east, 90, 1, rows);
+  CHECK(near(turned(rows, 0, 1, 0), 0, 0, 1));
+}
+
+TEST(a_short_axis_or_no_rate_is_no_turn) {
+  const double tiny[3] = {0.0005, 0, 0};
+  const double up[3] = {0, 0, 1};
+  double rows[3][3];
+  ba::sky_box_turn(tiny, 90, 3, rows);
+  CHECK(near(turned(rows, 0.6, 0, 0.8), 0.6, 0, 0.8));
+  ba::sky_box_turn(up, 0, 3, rows);
+  CHECK(near(turned(rows, 0.6, 0, 0.8), 0.6, 0, 0.8));
 }
