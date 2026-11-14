@@ -473,11 +473,12 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
     // The question in its box, no title.
   } else if (banner != nullptr) {
     pen.picture(banner, std::floor((kScreenW - art.width_of(*banner)) / 2), -16);
-  } else if (art.plates() && !page.title.empty() && banner_title(pen, page.title, -16)) {
-    // The page's title written on a banner of its own.
   } else if (art.plates() && !page.title.empty()) {
-    const std::string s = sentence(page.title);
-    pen.text(s, std::floor((kScreenW - 8 * static_cast<float>(s.size())) / 2), 0, true);
+    // The page's title written on a banner of its own, else in the glyphs.
+    if (!banner_title(pen, page.title, -16)) {
+      const std::string s = sentence(page.title);
+      pen.text(s, std::floor((kScreenW - 8 * static_cast<float>(s.size())) / 2), 0, true);
+    }
   } else if (title != nullptr) {
     pen.picture(title, std::floor((kScreenW - art.width_of(*title)) / 2), 4);
   } else if (!page.title.empty()) {
