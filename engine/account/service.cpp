@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "account/friends_service.hpp"
 #include "net/wire.hpp"
 
 namespace ge::account {
@@ -137,7 +138,9 @@ net::Key fresh_key(Service& svc) {
 
 // The op's answer from the store.
 Answer run(Service& svc, Op op, const std::vector<std::string>& f, const net::Address& from,
-           int64_t now_us, Ticket* ticket) {
+           int64_t now_us, Ticket* ticket, std::vector<uint8_t>& listed) {
+  if (static_cast<uint8_t>(op) >= static_cast<uint8_t>(Op::friend_))
+    return friends_run(svc, op, f, now_us / 1000000, listed);
   Store& s = svc.store;
   const std::string at = net::to_string(from);
   Answer a;
@@ -191,6 +194,8 @@ Answer run(Service& svc, Op op, const std::vector<std::string>& f, const net::Ad
         a.id = acc != nullptr ? acc->id : 0;
       }
       break;
+    default:  // the friends' ops, answered above
+      break;
   }
   if (a.refusal == Refusal::none && (op == Op::sign_in || op == Op::login)) {
     const Account* acc = find(s, a.id);
@@ -241,6 +246,16 @@ const char* op_name(Op op) {
       return "ticket-code";
     case Op::name:
       return "name";
+    case Op::friend_:
+      return "friend";
+    case Op::friends:
+      return "friends";
+    case Op::presence:
+      return "presence";
+    case Op::invite:
+      return "invite";
+    case Op::invites:
+      return "invites";
   }
   return "?";
 }
@@ -329,7 +344,7 @@ bool service_read(Service& svc, const uint8_t* data, size_t size, const net::Add
   const uint8_t count = net::read_u8(b);
   std::vector<std::string> fields;
   for (uint8_t i = 0; i < count && i < 8 && !b.bad; i++) fields.push_back(read_text(b));
-  if (b.bad || op_byte < 1 || op_byte > 7 || count > 8) {
+  if (b.bad || op_byte < 1 || op_byte > kOpLast || count > 8) {
     svc.stats.refused++;
     return true;
   }
@@ -337,7 +352,8 @@ bool service_read(Service& svc, const uint8_t* data, size_t size, const net::Add
   svc.stats.asks++;
   svc.stats.by_op[op_byte]++;
   Ticket ticket;
-  const Answer a = run(svc, op, fields, from, now_us, &ticket);
+  std::vector<uint8_t> listed;  // a friends' op's list, in the ticket's slot
+  const Answer a = run(svc, op, fields, from, now_us, &ticket, listed);
   for (std::string& f : fields) net::wipe(f.data(), f.size());
 
   uint8_t out[kAccountAskSize];
@@ -355,8 +371,13 @@ bool service_read(Service& svc, const uint8_t* data, size_t size, const net::Add
   write_text(w, a.words);
   uint8_t tbytes[kTicketMax];
   const size_t tn = ticket.account ? ticket_write(ticket, tbytes, sizeof tbytes) : 0;
-  net::write_u16(w, static_cast<uint16_t>(tn));
-  net::write_bytes(w, tbytes, tn);
+  if (tn == 0 && !listed.empty()) {
+    net::write_u16(w, static_cast<uint16_t>(listed.size()));
+    net::write_bytes(w, listed.data(), listed.size());
+  } else {
+    net::write_u16(w, static_cast<uint16_t>(tn));
+    net::write_bytes(w, tbytes, tn);
+  }
   if (w.overflow) {
     svc.stats.refused++;
     return true;

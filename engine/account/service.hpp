@@ -15,7 +15,7 @@
 //           op u8, then its fields, each a length u8 and its bytes
 //   answer  "geAC" 4, the ask's exchange key (32), tag (16), sealed body:
 //           refusal u8, wait_us u64, account u64, code (u8 length), words (u8 length),
-//           ticket (u16 length)
+//           bytes (u16 length): a ticket, or a friends' op's list (friends_service.hpp)
 //   report  "geAC" 5, the server's public key (32), its signature (64) over the report, the report
 //           (net/report.hpp's bytes)                     (unsealed: a report is no secret)
 //   taken   "geAC" 6, the report's id u64, how it was taken u8 (matches.hpp's Taken), the
@@ -43,6 +43,7 @@
 //   name     a name's key, folded by the asking game's rules
 //                                           -> the account that reserves it (0: none), asked by a
 //            game server whose master is elsewhere, to keep a registered name from a guest
+//   friend, friends, presence, invite, invites   a ticket first: friends_service.hpp
 // The throttle's address is the asker's; for `login` it is the server's and the player's
 // together, so one player's wrong codes do not hold the whole server's.
 //
@@ -64,6 +65,7 @@
 #include <string>
 #include <vector>
 
+#include "account/friends.hpp"
 #include "account/matches.hpp"
 #include "account/store.hpp"
 #include "account/ticket.hpp"
@@ -85,8 +87,14 @@ enum class Op : uint8_t {
   login = 4,
   recover = 5,
   ticket_code = 6,
-  name = 7
+  name = 7,
+  friend_ = 8,  // the friends' ops (friends_service.hpp): each asked with a ticket
+  friends = 9,
+  presence = 10,
+  invite = 11,
+  invites = 12
 };
+constexpr uint8_t kOpLast = 12;
 const char* op_name(Op op);
 
 // New random bytes for one call: the operating system's (net::os_random_bytes) or a lab's stream.
@@ -102,7 +110,7 @@ struct ServiceConfig {
 struct ServiceStats {
   uint64_t key_asks = 0, asks = 0, answers = 0, resent = 0;
   uint64_t refused = 0;  // short, unknown, not padded, or not sealed to our key
-  uint64_t by_op[8] = {};
+  uint64_t by_op[kOpLast + 1] = {};
   uint64_t tickets = 0;
   uint64_t reports = 0;  // match reports taken (sent again ones too)
 };
@@ -139,6 +147,7 @@ struct Service {
   size_t recent_next = 0;
   ServiceStats stats;
   Matches matches;  // the match reports servers sent (matches.hpp)
+  Friends friends;  // friends, presence and invites between accounts (friends.hpp)
   std::vector<Piecing> pieces;
   uint8_t buffer[net::kMaxDatagram];
 };

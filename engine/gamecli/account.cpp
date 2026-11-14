@@ -13,10 +13,12 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <thread>
 
 #include "account/account_file.hpp"
+#include "account/friends_service.hpp"
 #include "account/names.hpp"
 #include "account/service.hpp"
 #include "account/ticket.hpp"
@@ -31,6 +33,7 @@ namespace ge::gamecli {
 namespace fs = std::filesystem;
 namespace gn = ge::net;
 namespace ga = ge::account;
+using core::json_arr;
 using core::json_num;
 using core::json_obj;
 using core::json_str;
@@ -297,6 +300,149 @@ int cmd_account_show(Ctx& ctx) {
   return answer(
       ctx, json_obj({{"master", json_str(s.master)}, {"key", json_str(s.key)}, {"ticket", ticket}}),
       text, "the account file");
+}
+
+// THE FRIENDS' COMMANDS: each asked with the ticket `account signin` kept, never a password.
+namespace {
+
+// The kept ticket's bytes, or a refusal that says to sign in.
+bool ticket_field(Ctx& ctx, const Saved& saved, std::string& out) {
+  if (saved.ticket.empty()) {
+    refuse(ctx, 2, "not signed in", std::string(ctx.spec.cli) + " account signin <name>");
+    return false;
+  }
+  const std::vector<uint8_t> bytes = unhex(saved.ticket);
+  out.assign(bytes.begin(), bytes.end());
+  return true;
+}
+
+const char* row_kind_name(ga::FriendRowKind k) {
+  return k == ga::FriendRowKind::friend_    ? "friend"
+         : k == ga::FriendRowKind::asks_you ? "asks_you"
+                                            : "you_asked";
+}
+
+}  // namespace
+
+int cmd_friends_list(Ctx& ctx) {
+  if (!need_places(ctx)) return 1;
+  Saved saved = load(ctx);
+  std::string t;
+  if (!ticket_field(ctx, saved, t)) return 2;
+  std::vector<ga::FriendRow> all;
+  bool more = true;
+  for (int page = 0; more && page < 64; page++) {
+    ga::Reply r;
+    if (!ask(ctx, ga::Op::friends, {t, std::to_string(page)}, saved, r)) return 1;
+    std::vector<ga::FriendRow> rows;
+    if (!ga::friends_page_read(r.ticket, rows, more))
+      return refuse(ctx, 1, "the service's friends list did not read", "try again");
+    all.insert(all.end(), rows.begin(), rows.end());
+  }
+  std::vector<std::string> v;
+  v.reserve(all.size());
+  std::string text;
+  for (const ga::FriendRow& f : all) {
+    v.push_back(json_obj({{"name", json_str(f.name)},
+                          {"kind", json_str(row_kind_name(f.kind))},
+                          {"state", json_str(ga::presence_state_name(f.presence.state))},
+                          {"game", json_str(f.presence.game)},
+                          {"where", json_str(f.presence.where)},
+                          {"words", json_str(f.presence.words)}}));
+    if (f.kind == ga::FriendRowKind::asks_you) {
+      text +=
+          f.name + " wants to be your friend (" + ctx.spec.cli + " friends add " + f.name + ")\n";
+    } else if (f.kind == ga::FriendRowKind::you_asked) {
+      text += f.name + " has not answered your request yet\n";
+    } else {
+      text += f.name + ": " + ga::presence_state_name(f.presence.state);
+      if (!f.presence.words.empty()) text += ", " + f.presence.words;
+      if (!f.presence.where.empty()) text += " on " + f.presence.where;
+      text += "\n";
+    }
+  }
+  if (all.empty())
+    text = "No friends yet. Add one: " + std::string(ctx.spec.cli) + " friends add <name>\n";
+  return answer(ctx, json_obj({{"friends", json_arr(v)}}), text, "the friends list");
+}
+
+int cmd_friends_change(Ctx& ctx, const char* verb) {
+  if (!need_places(ctx)) return 1;
+  if (ctx.words.size() != 1)
+    return refuse(ctx, 2, std::string("friends ") + verb + " takes a player's name",
+                  std::string(ctx.spec.cli) + " friends " + verb + " <name>");
+  Saved saved = load(ctx);
+  std::string t;
+  if (!ticket_field(ctx, saved, t)) return 2;
+  static const std::map<std::string, std::string> kVerb = {
+      {"add", "ask"}, {"remove", "drop"}, {"block", "block"}, {"unblock", "unblock"}};
+  ga::Reply r;
+  if (!ask(ctx, ga::Op::friend_, {t, kVerb.at(verb), ctx.words[0]}, saved, r)) return 1;
+  return answer(ctx, json_obj({{"answer", json_str(r.code)}, {"words", json_str(r.words)}}),
+                r.words, r.code.c_str());
+}
+
+int cmd_friends_add(Ctx& ctx) { return cmd_friends_change(ctx, "add"); }
+int cmd_friends_remove(Ctx& ctx) { return cmd_friends_change(ctx, "remove"); }
+int cmd_friends_block(Ctx& ctx) { return cmd_friends_change(ctx, "block"); }
+int cmd_friends_unblock(Ctx& ctx) { return cmd_friends_change(ctx, "unblock"); }
+
+int cmd_friends_invite(Ctx& ctx) {
+  if (!need_places(ctx)) return 1;
+  if (ctx.words.size() != 1 || !ctx.has("where"))
+    return refuse(ctx, 2, "friends invite takes a friend's name and --where=<server address>",
+                  std::string(ctx.spec.cli) + " friends invite <name> --where=<host:port>");
+  Saved saved = load(ctx);
+  std::string t;
+  if (!ticket_field(ctx, saved, t)) return 2;
+  ga::Reply r;
+  if (!ask(ctx, ga::Op::invite,
+           {t, ctx.words[0], ctx.spec.game, ctx.flag("where"), ctx.flag("note")}, saved, r))
+    return 1;
+  return answer(ctx, json_obj({{"words", json_str(r.words)}}), r.words, "invited");
+}
+
+int cmd_friends_invites(Ctx& ctx) {
+  if (!need_places(ctx)) return 1;
+  Saved saved = load(ctx);
+  std::string t;
+  if (!ticket_field(ctx, saved, t)) return 2;
+  ga::Reply r;
+  if (!ask(ctx, ga::Op::invites, {t}, saved, r)) return 1;
+  std::vector<ga::InviteRow> inv;
+  if (!ga::invites_read(r.ticket, inv))
+    return refuse(ctx, 1, "the service's invites did not read", "try again");
+  std::vector<std::string> v;
+  v.reserve(inv.size());
+  std::string text;
+  for (const ga::InviteRow& i : inv) {
+    v.push_back(json_obj({{"from", json_str(i.from)},
+                          {"game", json_str(i.game)},
+                          {"where", json_str(i.where)},
+                          {"note", json_str(i.note)},
+                          {"age_s", json_num(i.age_s)}}));
+    text += i.from + " invites you to " + i.where + (i.note.empty() ? "" : ": " + i.note) +
+            " (join: " + ctx.spec.cli + " join " + i.where + ")\n";
+  }
+  if (inv.empty()) text = "No invites waiting.\n";
+  return answer(ctx, json_obj({{"invites", json_arr(v)}}), text, "the invites");
+}
+
+int cmd_friends_status(Ctx& ctx) {
+  if (!need_places(ctx)) return 1;
+  ga::PresenceState st;
+  if (ctx.words.size() != 1 || !ga::presence_state_from(ctx.words[0], st))
+    return refuse(ctx, 2, "friends status takes offline, online, lobby or playing",
+                  std::string(ctx.spec.cli) + " friends status playing --where=<host:port>");
+  Saved saved = load(ctx);
+  std::string t;
+  if (!ticket_field(ctx, saved, t)) return 2;
+  ga::Reply r;
+  if (!ask(ctx, ga::Op::presence,
+           {t, ctx.words[0], ctx.spec.game, ctx.flag("where"), ctx.flag("words")}, saved, r))
+    return 1;
+  return answer(ctx, json_obj({{"state", json_str(ctx.words[0])}}),
+                std::string("Your friends now see you as ") + ctx.words[0] + ".", "status set");
 }
 
 }  // namespace ge::gamecli

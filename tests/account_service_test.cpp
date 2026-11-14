@@ -9,9 +9,11 @@
 // ge:skill net testing
 #include "account/service.hpp"
 
+#include <cstdio>
 #include <string>
 #include <vector>
 
+#include "account/friends_service.hpp"
 #include "check.hpp"
 #include "net/sim_network.hpp"
 
@@ -208,6 +210,88 @@ TEST(service_trades_its_own_ticket_for_a_login_code) {
   const size_t n = ga::ticket_write(other, buf, sizeof buf);
   CHECK(w.ask(w.client, ga::Op::ticket_code, {std::string(reinterpret_cast<char*>(buf), n)}, 15)
             .reply.refusal == ga::Refusal::wrong);
+}
+
+TEST(service_friends_ask_list_presence_and_invite_by_ticket) {
+  World w;
+  auto ticket_of = [&](const char* name, uint8_t fresh) {
+    CHECK(w.ask(w.client, ga::Op::create, {name, "correct horse"}, fresh).reply.refusal ==
+          ga::Refusal::none);
+    const ga::Ask in = w.ask(w.client, ga::Op::sign_in, {name, "correct horse"}, fresh + 1);
+    return std::string(in.reply.ticket.begin(), in.reply.ticket.end());
+  };
+  const std::string ann = ticket_of("Ann", 20), bob = ticket_of("Bob", 22),
+                    cid = ticket_of("Cid", 24);
+  // Ann asks Bob; Bob sees the ask; Bob asks back: friends.
+  ga::Ask a = w.ask(w.client, ga::Op::friend_, {ann, "ask", "bob"}, 30);
+  CHECK(a.reply.refusal == ga::Refusal::none && a.reply.code == "asked");
+  CHECK(a.reply.words.find("Friend request sent to Bob") == 0);
+  std::vector<ga::FriendRow> rows;
+  bool more = true;
+  CHECK(ga::friends_page_read(w.ask(w.client, ga::Op::friends, {bob, "0"}, 31).reply.ticket, rows,
+                              more));
+  CHECK(rows.size() == 1 && rows[0].kind == ga::FriendRowKind::asks_you && rows[0].name == "Ann" &&
+        !more);
+  CHECK(w.ask(w.client, ga::Op::friend_, {bob, "ask", "Ann"}, 32).reply.code == "made");
+  // Bob says where he plays; Ann sees it on her list.
+  CHECK(w.ask(w.client, ga::Op::presence,
+              {bob, "playing", "shooters_edge", "203.0.113.4:27500", "dm4 duel"}, 33)
+            .reply.refusal == ga::Refusal::none);
+  CHECK(ga::friends_page_read(w.ask(w.client, ga::Op::friends, {ann, "0"}, 34).reply.ticket, rows,
+                              more));
+  CHECK(rows.size() == 1 && rows[0].kind == ga::FriendRowKind::friend_ && rows[0].name == "Bob");
+  CHECK(rows[0].presence.state == ga::PresenceState::playing &&
+        rows[0].presence.words == "dm4 duel");
+  // Ann invites Bob; Bob reads it once. Cid, no friend, cannot invite.
+  CHECK(w.ask(w.client, ga::Op::invite, {ann, "Bob", "shooters_edge", "203.0.113.9:27500", "2on2?"},
+              35)
+            .reply.words == "Invite sent to Bob.");
+  CHECK(
+      w.ask(w.client, ga::Op::invite, {cid, "Bob", "shooters_edge", "x", "hi"}, 36).reply.refusal ==
+      ga::Refusal::unknown);
+  std::vector<ga::InviteRow> inv;
+  CHECK(ga::invites_read(w.ask(w.client, ga::Op::invites, {bob}, 37).reply.ticket, inv));
+  CHECK(inv.size() == 1 && inv[0].from == "Ann" && inv[0].note == "2on2?");
+  CHECK(ga::invites_read(w.ask(w.client, ga::Op::invites, {bob}, 38).reply.ticket, inv) &&
+        inv.empty());
+  // No such player; a bent ticket.
+  CHECK(w.ask(w.client, ga::Op::friend_, {ann, "ask", "zed"}, 39).reply.words ==
+        "There is no player called zed.");
+  std::string bent = ann;
+  bent[bent.size() - 1] = static_cast<char>(bent[bent.size() - 1] ^ 1);
+  CHECK(w.ask(w.client, ga::Op::friends, {bent, "0"}, 40).reply.refusal == ga::Refusal::wrong);
+  CHECK(w.biggest_answer <= ga::kAccountAskSize);  // no answer outgrows its ask
+  CHECK(w.svc.friends.log.find("friend ask") != std::string::npos);
+}
+
+TEST(service_a_long_friends_list_comes_in_pages) {
+  World w;
+  ga::Friends& f = w.svc.friends;
+  for (int i = 0; i < 40; i++) {
+    ga::Fresh fr{};
+    fr.fill(static_cast<uint8_t>(i + 1));
+    char name[16];
+    std::snprintf(name, sizeof name, "player%02d", i);
+    const uint64_t id = ga::create(w.svc.store, name, "correct horse", w.now, fr).id;
+    if (i == 0) continue;
+    ga::friend_ask(f, 1, id);
+    ga::friend_ask(f, id, 1);
+  }
+  const ga::Ask in = w.ask(w.client, ga::Op::sign_in, {"player00", "correct horse"}, 50);
+  const std::string t(in.reply.ticket.begin(), in.reply.ticket.end());
+  size_t seen = 0;
+  bool more = true;
+  for (int page = 0; more && page < 10; page++) {
+    std::vector<ga::FriendRow> rows;
+    CHECK(ga::friends_page_read(
+        w.ask(w.client, ga::Op::friends, {t, std::to_string(page)}, static_cast<uint8_t>(51 + page))
+            .reply.ticket,
+        rows, more));
+    CHECK(!rows.empty());
+    seen += rows.size();
+  }
+  CHECK(seen == 39 && !more);
+  CHECK(w.biggest_answer <= ga::kAccountAskSize);
 }
 
 namespace {
