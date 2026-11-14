@@ -18,7 +18,7 @@
 //
 // ge:summary The sequel's tag letters cut a cell each, the missing ones pieced, small ones shrunk
 // ge:keywords menu sequel plates tag carved-letters cells alphabet small-capitals pieced-letters
-// ge:keywords plate-print lit select-game
+// ge:keywords plate-print lit select-game banner page-title
 // ge:skill ui
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -44,5 +44,18 @@ void cut_plate_letters(ClassicArt* art);
 // (classic px) into `xs` when it is given, `text.size() + 2` of them (the left end first); the
 // tag's width, 0 when a letter is not cut.
 float plate_layout(const ClassicArt& art, std::string_view text, std::vector<float>* xs);
+
+// A PAGE'S TITLE ON A BANNER, for a page the pack has no banner for: the frame of GAME's banner
+// (its hole and logo left of x 40, its maker's mark from x 236), plain banner between (its column
+// 80, stretched), and the title in tag letters centred on the plain; the plain at least as wide as
+// the pack's own (196 px), wider for a longer title.
+inline constexpr std::string_view kBannerFrame = "m_banner_game";
+inline constexpr float kBannerLeft = 40, kBannerRight = 236, kBannerPlain = 80;
+// The banner's width (classic px) and each letter's left edge from the banner's into `xs` (one a
+// character of `text`, a space a piece too); 0 when the frame is missing or a letter is not cut.
+float banner_layout(const ClassicArt& art, std::string_view text, std::vector<float>* xs);
+// The frame's brightness times this meets the letters' surface (the banners are a tenth brighter
+// than the darkest tag the letters are shaded to); 1 when either is missing.
+float banner_shade(const ClassicArt& art);
 
 }  // namespace shooters_edge::menu

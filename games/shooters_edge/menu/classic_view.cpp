@@ -330,6 +330,63 @@ ClassicLayout classic_screen(const ClassicArt& art, int width, int height) {
   return l;
 }
 
+bool banner_title(const ClassicPen& pen, std::string_view title, float y) {
+  const ClassicArt& art = pen.art;
+  if (!art.plates() || art.letters.empty()) return false;
+  // The title in capitals, then each word's first letter a capital and the rest small.
+  std::string caps, mixed;
+  bool start = true;
+  for (char c : title) {
+    if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 'a' + 'A');
+    if (c != ' ' && art.letters.count(c) == 0) continue;
+    if (c == ' ' && (caps.empty() || caps.back() == ' ')) continue;
+    caps += c;
+    mixed += start || c == ' ' ? c : static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+    start = c == ' ';
+  }
+  while (!caps.empty() && caps.back() == ' ') {
+    caps.pop_back();
+    mixed.pop_back();
+  }
+  if (caps.empty()) return false;
+  for (const std::string& text : {caps, mixed}) {
+    std::vector<float> xs;
+    const float wide = banner_layout(art, text, &xs);
+    if (wide <= 0 || wide > kScreenW) continue;
+    const float x = std::floor((kScreenW - wide) / 2);
+    const ui::Image& frame = *art.find(kBannerFrame);
+    const float d = static_cast<float>(frame.height) / art.height_of(frame);
+    const float shade = banner_shade(art);
+    const float right = art.width_of(frame) - kBannerRight;
+    // The frame's left end, its plain stretched, its right end; then the letters.
+    const auto piece = [&](float from, float w, float at, float span) {
+      ui::Box b;
+      b.fill = ui::solid({shade, shade, shade, 1});
+      b.rect = pen.at(x + at, y, span, kPlateLine);
+      b.image = &frame;
+      b.uv = {from * d, 0, w * d, static_cast<float>(frame.height)};
+      b.nearest = art.density <= 1;
+      b.feather = 0;
+      pen.dl.box(b);
+    };
+    piece(0, kBannerLeft, 0, kBannerLeft);
+    piece(kBannerPlain, 1, kBannerLeft, wide - kBannerLeft - right);
+    piece(kBannerRight, right, wide - right, right);
+    for (size_t i = 0; i < text.size(); i++) {
+      const ui::Image& img = art.letters.at(text[i]);
+      ui::Box b;
+      b.rect = pen.at(x + xs[i], y, art.width_of(img), kPlateLine);
+      b.image = &img;
+      b.uv = {0, 0, static_cast<float>(img.width), static_cast<float>(img.height)};
+      b.nearest = art.density <= 1;
+      b.feather = 0;
+      pen.dl.box(b);
+    }
+    return true;
+  }
+  return false;
+}
+
 std::string_view banner_of(std::string_view page) {
   for (const auto& [id, banner] : kBanners)
     if (id == page) return banner;
@@ -417,8 +474,11 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
   } else if (banner != nullptr) {
     pen.picture(banner, std::floor((kScreenW - art.width_of(*banner)) / 2), -16);
   } else if (art.plates() && !page.title.empty()) {
-    const std::string s = sentence(page.title);
-    pen.text(s, std::floor((kScreenW - 8 * static_cast<float>(s.size())) / 2), 0, true);
+    // The page's title written on a banner of its own, else in the glyphs.
+    if (!banner_title(pen, page.title, -16)) {
+      const std::string s = sentence(page.title);
+      pen.text(s, std::floor((kScreenW - 8 * static_cast<float>(s.size())) / 2), 0, true);
+    }
   } else if (title != nullptr) {
     pen.picture(title, std::floor((kScreenW - art.width_of(*title)) / 2), 4);
   } else if (!page.title.empty()) {
