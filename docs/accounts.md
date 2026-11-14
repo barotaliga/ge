@@ -208,7 +208,9 @@ community's master, and a server joins that master by setting `sv_accountmaster`
   password). The throttle's address for `login` is the server's and the player's together, so one
   player's wrong codes do not hold the server's other players.
 - **Hosted.** `account::Host` runs the service on a UDP socket (port 27901 by default) over the
-  store and key in a folder: the hub's `--accounts=<dir>` (beside `--serve-master`), and a server
+  store and key in a folder: the hub's `--accounts=<dir>` (beside `--serve-master` and
+  `--rendezvous`, so the accounts, the friends, the matchmaker, the rendezvous and its relay are
+  one process a community runs), and a server
   with no `sv_accountmaster` (M59c). The slow hash runs on the service's own loop: a sign-in costs
   one Argon2id hash (about 100 ms at 64 MiB), held back by the throttle.
 

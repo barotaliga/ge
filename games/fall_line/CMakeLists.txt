@@ -88,3 +88,14 @@ if(GE_PLATFORM AND GE_GPU)
   target_link_libraries(fall_line PRIVATE ge_platform fall_line_app fall_line_sound fall_line_cfg
                                           fall_line_controls)
 endif()
+
+# The hub (hub/), named `fall_line_hub` on disk at the build's root: the engine's hub (engine/hub,
+# docs/hub.md) with Fall Line's words, keeping the game's runs (input logs) and showing them with
+# the web viewer. No live games until Fall Line has a dedicated server (M17k). A host tool.
+if(GE_HOST_TOOLS AND TARGET ge_hub)
+  add_library(fall_line_hub_runs STATIC hub/runs.cpp)
+  target_link_libraries(fall_line_hub_runs PUBLIC fall_line_sim ge_hub)
+  set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_hub_runs)  # its test links it
+  ge_add_hub(fall_line_hub_bin OUTPUT_NAME fall_line_hub SOURCES hub/main.cpp
+             LINK fall_line_hub_runs)
+endif()

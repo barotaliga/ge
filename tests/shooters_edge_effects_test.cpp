@@ -469,3 +469,20 @@ TEST(r_rocketlight_r_explosionlight_and_r_powerupglow_put_out_their_own_kind) {
   left = lk::kept_lights(pic, lights, kept);
   CHECK(left.size() == 3 && left[2].group == fx::kLightPower);
 }
+
+TEST(r_waterwarp_breathes_the_view_in_a_liquid_and_holds_it_in_the_air) {
+  namespace lk = shooters_edge::look;
+  namespace fx = shooters_edge::effects;
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  const double fov = 1.2, quarter = 0.25 / lk::kWaterWarpHz;  // the breath at its widest
+  CHECK(lk::warped_fov(pic, fx::Medium::air, fov, quarter) == fov);
+  for (const auto m : {fx::Medium::water, fx::Medium::slime, fx::Medium::lava}) {
+    const double wide = lk::warped_fov(pic, m, fov, quarter);
+    CHECK(wide > fov * (1 + lk::kWaterWarp * 0.99) && wide < fov * (1 + lk::kWaterWarp * 1.01));
+    CHECK(lk::warped_fov(pic, m, fov, 3 * quarter) < fov);
+  }
+  con.execute("r_waterwarp 0");
+  CHECK(lk::warped_fov(pic, fx::Medium::water, fov, quarter) == fov);
+}

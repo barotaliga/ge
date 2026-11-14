@@ -56,6 +56,15 @@ void categorize(Mover& m) {
     s.origin = tr.endpos;
 }
 
+// THE LANDING PAUSE (pm_landpause): a landing at `falling` (from the air, `airborne`) faster
+// than 200 down holds the next jump a moment. Checked where the ground is found: as a command
+// starts, and after its move.
+void land_pause(Mover& m, bool airborne, float falling) {
+  MoveState& s = m.s;
+  if (m.set.landpause && airborne && s.ground != -1 && falling < -kLandPauseSpeed)
+    s.land_time = falling < -2 * kLandPauseSpeed ? kLandPauseLong : kLandPauseShort;
+}
+
 // UNSTICK (pmove.hpp step 5): a client's copy of a position sits on a grid of 1/8 unit, so it may
 // be a hair inside a wall; a map may sink a spawn into the floor.
 void nudge(Mover& m) {
@@ -120,7 +129,8 @@ void jump(Mover& m, const MoveCmd& cmd) {
     return;
   }
   if (s.ground == -1) return;
-  if (s.jump_held) return;  // no pogo: the button must be let go between jumps
+  if (s.jump_held) return;      // no pogo: the button must be let go between jumps
+  if (s.land_time > 0) return;  // the landing pause (pm_landpause) still running
 
   if (dot(s.velocity, s.ground_normal) < -0.1 && s.velocity.z < 0)
     s.velocity = clip_velocity(s.velocity, s.ground_normal, 1);
@@ -348,7 +358,10 @@ MoveResult player_move(MoveState& s, const MoveCmd& cmd, const MoveSettings& set
   }
 
   nudge(m);
+  if (s.land_time > 0) s.land_time = s.land_time > m.dt ? s.land_time - m.dt : 0;
+  const bool was_airborne = s.ground == -1;
   categorize(m);
+  land_pause(m, was_airborne, s.velocity.z);
 
   if (!set.program_jumps) {
     if (s.waterlevel == 2 && !flying(s)) check_water_jump(m, ax);
@@ -364,6 +377,7 @@ MoveResult player_move(MoveState& s, const MoveCmd& cmd, const MoveSettings& set
   }
   friction(m);
 
+  const float falling = s.velocity.z;  // before the move's slide clips it on the floor
   if (s.waterlevel >= 2)
     r.blocked = swim_or_fly_move(m, cmd, ax, true);
   else if (flying(s))
@@ -371,7 +385,9 @@ MoveResult player_move(MoveState& s, const MoveCmd& cmd, const MoveSettings& set
   else
     r.blocked = walk_move(m, cmd, ax);
 
+  const bool airborne = s.ground == -1;
   categorize(m);
+  land_pause(m, airborne, falling);
 
   // THE LANDING FIX: a hard landing into the ground plane is clipped to it.
   if (!set.pground && s.ground != -1 && s.velocity.z < -kLandingSpeed &&
