@@ -28,7 +28,7 @@ struct Draw {
   blends: vec4f,  // now's share, last's share, glow, outdoor
   info: vec4u,    // model, tint row A, tint row B, 1 if smooth
   ambient: vec4f,
-  shade: vec4f,
+  shade: vec4f,  // w: the share a face turned away loses
   shade_dir: vec4f,
   warp: Warp,  // render/wgsl/warp.wgsl (MorphWarp)
   burn: vec4f,  // charred, embers, etched, seed (MorphBurn)
@@ -234,7 +234,9 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   let y = in.rel.y + frame.eye.y;
   let outdoor = d.blends.w;
   let sun = sun_light_open(y) * max(dot(n, frame.sun.xyz), 0.0);
-  var own = d.ambient.rgb + d.shade.rgb * max(dot(n, d.shade_dir.xyz), 0.0);
+  // Toward the light it gains the shade; turned away it loses `shade.w` of it (MorphDraw::shade_back).
+  let toward = dot(n, d.shade_dir.xyz);
+  var own = d.ambient.rgb + d.shade.rgb * (max(toward, 0.0) + d.shade.w * min(toward, 0.0));
   if (d.ambient.w > 0.5) {
     own = own * (PI * white_luminance());  // in the scene's white (MorphDraw::light_in_white)
   }
