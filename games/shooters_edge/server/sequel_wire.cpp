@@ -22,7 +22,7 @@ namespace sh = ge::shooter;
 // Server message ids.
 constexpr uint8_t kPrint = 10, kStuffText = 11, kServerData = 12, kConfigString = 13,
                   kBaseline = 14, kCenterPrint = 15, kPlayerInfo = 17, kPacketEntities = 18,
-                  kFrame = 20, kSound = 9, kLayout = 4;
+                  kFrame = 20, kSound = 9, kLayout = 4, kInventory = 5;
 
 // Configstring slots.
 constexpr int kCsName = 0, kCsSky = 2, kCsSkyAxis = 3, kCsSkyRotate = 4, kCsStatusBar = 5,
@@ -458,6 +458,13 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
     w.layout = c.world.clients[w.slot].layout;
     r.u8(kLayout);
     r.str(w.layout.substr(0, kLayoutMost));
+  }
+  // His inventory's counts when he opened it anew.
+  if (w.slot >= 0 && w.slot < sh::kMaxClients && c.world.clients[w.slot].inventory != w.inventory) {
+    w.inventory = c.world.clients[w.slot].inventory;
+    r.u8(kInventory);
+    for (int n = 0; n < kSqInventorySlots; n++)
+      r.i16(size_t(n) < w.inventory.size() ? w.inventory[size_t(n)] : 0);
   }
   const std::vector<NetEvent>& events = c.out.events;
   const int64_t first = c.out.events_total - static_cast<int64_t>(events.size());

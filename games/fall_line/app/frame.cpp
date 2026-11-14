@@ -108,6 +108,8 @@ constexpr int kPasses = static_cast<int>(std::size(kPassTable));
 // The trails' maps' texels a side while they are off (made at the load all the same, so a stop
 // turns them on live: render/snow_marks.hpp's resize_snow_marks).
 constexpr uint32_t kTrailsAsleep = 16;
+constexpr uint32_t kSnowTextures =
+    18;  // the snow material's draw: textures its fragment stage reads
 
 // The lamps' tiles each casting family carries slots for (none without the lamps' shadows).
 int lamp_slots(const GameFrame& f) {
@@ -272,10 +274,15 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   if (!options.trails) maps.fine_size = maps.coarse_size = kTrailsAsleep;
   ge::mountain::app::create_trails(device, f->pipelines, f->trails, level, maps);
   ge::mountain::app::create_snow(device, f->snow, level, {}, f->tracks ? &f->trails : nullptr);
-  source.shader = ge::mountain::app::snow_shader();
-  source.shader_label = "snow";
-  source.material = f->snow.layout;
-  source.plain_too = true;
+  // The snow's material reads 18 textures in its fragment stage (the frame's lean ground group,
+  // the terrain's own, the sun's shadows and the snow's); a device on WebGPU's default limits
+  // (16, a browser's software adapter and many a Chrome) draws the ground in the default material.
+  if (device.limits.maxSampledTexturesPerShaderStage >= kSnowTextures) {
+    source.shader = ge::mountain::app::snow_shader();
+    source.shader_label = "snow";
+    source.material = f->snow.layout;
+    source.plain_too = true;
+  }
   r::create_terrain(device, f->pipelines, f->terrain, source, f->frame_layout);
   r::create_particles(device, f->pipelines, f->particles, f->frame_layout, f->terrain,
                       options.particles);

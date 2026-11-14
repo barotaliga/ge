@@ -30,7 +30,16 @@
 // ge:skill render agent-interface
 #pragma once
 
+#include <array>
+#include <optional>
+#include <string_view>
+
 #include "play/game.hpp"
+#include "render/view.hpp"
+
+namespace fall_line::sim {
+struct GameState;
+}
 
 namespace fall_line::app {
 
@@ -39,5 +48,12 @@ inline constexpr int kSettle = 8;
 
 // The renderer: `GE_RENDERER(fall_line::app::kRenderer)` in the play executable registers it.
 extern const ge::play::RendererSpec kRenderer;
+
+// The camera of view `name` (a rung of the ladder, `chase` or `high`, or one of the map's named
+// views) on run state `s`, at the map's hour and the run's clock, into `view`; a rung also says the
+// point it frames (`subject`), a view of the mountain none. False when no view has that name. The
+// web viewer (web/viewer.cpp) watches a run through it as the renderer pictures one.
+bool run_camera(const sim::GameState& s, std::string_view name, ge::render::FrameView& view,
+                std::optional<std::array<double, 3>>& subject);
 
 }  // namespace fall_line::app

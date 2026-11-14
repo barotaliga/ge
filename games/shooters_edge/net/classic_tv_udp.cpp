@@ -912,8 +912,12 @@ void udp_tv_frame(ClassicTvUdp& f, int64_t now_us) {
     }
     UdpTvStream& st = f.streams[static_cast<size_t>(v.stream)];
     if (v.stage == UdpViewerStage::active) {
-      // Every packet carries the newest frame (the sounds and effects since the last first).
-      if (!st.fresh && f.now - v.sent < 1.0) continue;
+      // Every packet carries the newest frame (the sounds and effects since the last first). A
+      // packet answers each one the viewer sent too, the newest frame again when no new one has
+      // come: a classic client stops moving its view when the server's packets fall too far
+      // behind its own (a recording of 10 frames a second against a client's 72), as a server
+      // answering every packet never lets them.
+      if (!st.fresh && v.ch.last_received < v.sent && f.now - v.sent < 1.0) continue;
       std::vector<uint8_t> dgram = st.fresh ? st.events : std::vector<uint8_t>{};
       if (dgram.size() + st.frame.size() > kMaxPacket - 16 - kUnit) dgram.clear();
       dgram.insert(dgram.end(), st.frame.begin(), st.frame.end());

@@ -11,6 +11,10 @@
 #include <set>
 #include <unordered_map>
 
+#include "save/picture.hpp"
+#include "save/qoi.hpp"
+#include "save/xxh64.hpp"
+
 namespace ge::save {
 
 namespace {
@@ -86,7 +90,41 @@ bool Store::check(std::string_view slot, std::span<const uint8_t> file, Entry* e
     entry->slot = text(slot);
     entry->meta = r.meta();
     entry->bytes = file.size();
+    entry->picture = {};
+    if (const ChunkInfo* c = r.find(kPictTag); c != nullptr && c->codec == Codec::stored) {
+      Reader in = r.reader(*c);
+      SavePicture head;
+      in(head.width);
+      in(head.height);
+      if (in.ok()) entry->picture = {c->offset, c->stored, c->checksum, head.width, head.height};
+    }
   }
+  return true;
+}
+
+bool Store::picture(std::string_view slot_in, int& width, int& height, std::vector<uint8_t>& rgba) {
+  problem_.clear();
+  const std::string slot = text(slot_in);
+  const Entry* e = find(slot);
+  if (e == nullptr)
+    return fail("there is no save in " + slot, "list the store's slots and pick one of them");
+  std::string why;
+  const PicturePlace& at = e->picture;
+  if (at.bytes > 0 && disk_->read(slot, scratch_, at.offset + at.bytes) &&
+      scratch_.size() == at.offset + at.bytes &&
+      xxh64(scratch_.data() + at.offset, at.bytes) == at.checksum) {
+    Reader in(scratch_.data() + at.offset, at.bytes, kPictVersion);
+    SavePicture p;
+    in(p);
+    if (in.ok() && in.at_end() && qoi_decode(p.qoi, width, height, rgba, why)) return true;
+  }
+  // Not known, or the file changed under the index: the whole file.
+  if (!read(slot, scratch_)) return false;
+  FileReader r;
+  if (!r.open(scratch_, slot, spec_.game) || !read_picture(r, width, height, rgba, why))
+    return fail(
+        "the save in " + slot + " has no picture to show: " + (why.empty() ? r.problem() : why),
+        "save it again with a picture (put_picture)");
   return true;
 }
 
@@ -198,7 +236,7 @@ bool Store::open(StoreOpen* report) {
       rep.damaged.push_back(f.name);
       continue;
     }
-    entries_.push_back({f.name, std::move(m), f.bytes});
+    entries_.push_back({f.name, std::move(m), f.bytes, {}});
   }
   if (entries_.size() != indexed.size()) changed = true;  // a slot the index named is gone
   std::sort(entries_.begin(), entries_.end(),
