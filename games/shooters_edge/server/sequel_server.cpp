@@ -118,11 +118,11 @@ void register_cvars(SequelServer& s) {
                        "map (classic remix).",
                .kind = con::CvarKind::text,
                .values = "\"\": the game's own (the default); classic: the classic game's"});
-  s.cvars.add({.name = "sv_moves",
+  s.cvars.add({.name = "sv_physics",
                .fallback = "",
                .flags = con::kServer,
-               .help = "Whose running, friction and air the players move with, from the next map "
-                       "(classic remix).",
+               .help = "Whose physics the players' bodies take (running, friction, the air, the "
+                       "landing, swimming, harm from a fall), from the next map (classic remix).",
                .kind = con::CvarKind::text,
                .values = "\"\": the game's own (the default); classic: the classic game's"});
   s.cvars.add({.name = "k_midair",
@@ -422,11 +422,14 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   }
   pm.changed = p.changed;
   pm.air_accelerate = sequel_air_accelerate(s);
-  if (s.classic_moves) {  // the classic game's ground and air (profiles/remix_arsenal.hpp)
+  if (s.classic_physics) {  // the classic game's ground and air (profiles/remix_arsenal.hpp)
     pm.max_speed = profiles::kClassicFeel.max_speed;
     pm.friction = profiles::kClassicFeel.friction;
     pm.air_accelerate = profiles::kClassicFeel.air_accelerate;
     pm.land_pause = profiles::kClassicFeel.land_pause;
+    pm.swim_scale = profiles::kClassicFeel.swim_scale;
+    pm.water_friction = profiles::kClassicFeel.water_friction;
+    pm.water_jump = profiles::kClassicFeel.water_jump;
   }
   MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
   sh::sequel_move(pm, mw.world());
@@ -803,7 +806,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
           profiles::remix_looks("sequel", s.cvars.find("sv_wear")->value);
       worn != nullptr)
     s.looks = worn->looks;
-  s.classic_moves = s.cvars.find("sv_moves")->value == "classic";
+  s.classic_physics = s.cvars.find("sv_physics")->value == "classic";
   s.entities.clear();
   for (size_t i = 1; i < s.map->entities.size(); i++) {
     const ge::brush::Entity& b = s.map->entities[i];

@@ -941,7 +941,10 @@ void fight_body_frame(SequelServer& s, int slot) {
   if (p.water_level == 2) delta *= 0.25f;
   if (p.water_level == 1) delta *= 0.5f;
   sh::sequel_view_fall(p.view, delta);  // a hard landing dips the view
-  const bool no_falling = deathmatch(s) && (s.cvars.find("dmflags")->integer() & 8) != 0;
+  // No harm under dmflags 8, nor under the classic game's physics (`sv_physics classic`): its
+  // arena hurts nobody for a fall.
+  const bool no_falling =
+      (deathmatch(s) && (s.cvars.find("dmflags")->integer() & 8) != 0) || s.classic_physics;
   if (delta <= 30 || no_falling) return;
   hurt(s, slot, -1, {0, 0, -1}, std::max(1, static_cast<int>((delta - 30) / 2)), 0, false,
        kSqByFall);

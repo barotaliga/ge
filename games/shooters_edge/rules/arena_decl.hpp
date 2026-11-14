@@ -107,7 +107,8 @@ namespace pg = ge::progs;
   X(body_next, kTypeFloat)             \
   X(body_first, kTypeFloat)            \
   X(body_step, kTypeFloat)             \
-  X(splash_next, kTypeFloat)
+  X(splash_next, kTypeFloat)           \
+  X(fall_speed, kTypeFloat)
 
 // THE STRINGS the rules store or pass.
 #define SE_ARENA_STRINGS(X)                                                                        \
@@ -185,6 +186,7 @@ namespace pg = ge::progs;
   X(drowned, "drowned")                                                                            \
   X(electrocuted, "electrocuted")                                                                  \
   X(entered_the_game, " entered the game\n")                                                       \
+  X(falling, "falling")                                                                            \
   X(fell_out, "an item fell out of the map at ")                                                   \
   X(flame2_mdl, "progs/flame2.mdl")                                                                \
   X(flame_mdl, "progs/flame.mdl")                                                                  \
@@ -226,6 +228,7 @@ namespace pg = ge::progs;
   X(item_spikes, "item_spikes")                                                                    \
   X(itembk2_wav, "items/itembk2.wav")                                                              \
   X(k_disallow_weapons, "k_disallow_weapons")                                                      \
+  X(land2_wav, "player/land2.wav")                                                                 \
   X(left, "left")                                                                                  \
   X(left_the_game_with, " left the game with ")                                                    \
   X(lock4_wav, "weapons/lock4.wav")                                                                \
@@ -333,6 +336,7 @@ namespace pg = ge::progs;
   X(style1, "mmnmmommommnonmmonqnmmo")                                                             \
   X(style2, "abcdefghijklmnopqrstuvwxyzyxwvutsrqponmlkjihgfedcba")                                 \
   X(suicides, "suicides")                                                                          \
+  X(sv_falldamage, "sv_falldamage")                                                                \
   X(switch02_wav, "buttons/switch02.wav")                                                          \
   X(switch04_wav, "buttons/switch04.wav")                                                          \
   X(switch21_wav, "buttons/switch21.wav")                                                          \
@@ -364,6 +368,7 @@ namespace pg = ge::progs;
   X(weapon_supershotgun, "weapon_supershotgun")                                                    \
   X(world_died, "world_died")                                                                      \
   X(world_drown, "world_drown")                                                                    \
+  X(world_fall, "world_fall")                                                                      \
   X(world_lava, "world_lava")                                                                      \
   X(world_lava_gib, "world_lava_gib")                                                              \
   X(world_slime, "world_slime")                                                                    \
