@@ -27,6 +27,8 @@
 
 #include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/hud/status.hpp"
+#include "shooters_edge/profiles/remix_arsenal.hpp"
+#include "ui/draw.hpp"
 
 namespace shooters_edge::client {
 
@@ -41,5 +43,10 @@ std::string_view worn_image(int index);
 // `run_sequel_bar` does for the sequel's own world (draw it with `draw_sequel_bar`).
 void run_worn_bar(SequelBar& bar, const hud::Status& st, bool match, int64_t frame, int width,
                   int height);
+
+// Runs and draws the sequel's bar over `st` while the rules wear the sequel's things (`worn`);
+// false, drawing nothing, otherwise (the game's own HUD is drawn instead).
+bool draw_worn_bar(ge::ui::DrawList& dl, SequelBar& bar, const profiles::RemixArsenal* worn,
+                   const hud::Status& st, bool match, int width, int height);
 
 }  // namespace shooters_edge::client

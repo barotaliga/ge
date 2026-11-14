@@ -36,6 +36,7 @@
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/profiles/remix.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
+#include "viewmodel/held.hpp"
 
 namespace shooters_edge::client {
 
@@ -120,6 +121,19 @@ struct RemixFiles {
   // profiles/remix_arsenal.hpp), or null: its models and sounds are read from `files`.
   const profiles::RemixArsenal* worn = nullptr;
 };
+
+// The server's arsenal lines while `worn` is worn (the game's `own` when null).
+std::vector<std::string> worn_lines(const profiles::RemixArsenal* worn,
+                                    const std::vector<std::string>& own);
+
+// The console's line when the worn arsenal changes to `worn`, in the game's words.
+std::string worn_line(const profiles::RemixArsenal* worn);
+
+// The held weapons the window draws while `remix.worn` is worn: its view models through the
+// remix's files, else the game's own from `own` (held.hpp's `load_held_set`). True when they are
+// authored at the eye.
+bool load_worn_held(const GameAdapter& game, const RemixFiles& remix, const SearchPath& own,
+                    std::span<const std::string> dirs, std::vector<ge::viewmodel::HeldModel>& out);
 
 // The arsenal the played game's rules wear while `state` is on: `cr_items`'s game's things on the
 // played game's numbers, or null (off, the played game's own, or no row for the pair).

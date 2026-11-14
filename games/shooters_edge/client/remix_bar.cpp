@@ -149,4 +149,12 @@ void run_worn_bar(SequelBar& bar, const hud::Status& st, bool match, int64_t fra
   hud::run_layout(in, bar.ops);
 }
 
+bool draw_worn_bar(ge::ui::DrawList& dl, SequelBar& bar, const profiles::RemixArsenal* worn,
+                   const hud::Status& st, bool match, int width, int height) {
+  if (worn == nullptr || worn->items != "sequel") return false;
+  run_worn_bar(bar, st, match, static_cast<int64_t>(st.t * 10), width, height);
+  draw_sequel_bar(dl, bar, sequel_bar_scale(height));
+  return true;
+}
+
 }  // namespace shooters_edge::client

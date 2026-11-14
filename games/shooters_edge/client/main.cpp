@@ -796,19 +796,32 @@ int run_main(int argc, char** argv) {
   // The sequel's bar over the classic status while the rules wear its weapons (remix_bar.hpp).
   cl::SequelBar worn_bar;
   worn_bar.files = &remix.files;
+  cl::HeldState in_hand;
+  in_hand.hand.at_eye = weapons_at_eye;
+  // `cr_items` (remix.hpp's `worn_arsenal`): from the next map the played game's rules wear the
+  // other game's weapons: the server's rows and files, the weapons in the hand.
+  const auto remix_wear = [&] {
+    const auto* worn = cl::worn_arsenal(remix_settings, remix.state, args.profile);
+    if (worn == remix.worn) return;
+    remix.worn = worn;
+    worn_bar.pictures.clear();  // read again from the files now open
+    listen.opt.arsenal = cl::worn_lines(worn, game_content.arsenal);
+    listen.opt.files = worn != nullptr ? &remix.files : &files;
+    in_hand = {};
+    in_hand.hand.at_eye = cl::load_worn_held(adapter, remix, files, model_dirs, weapons);
+    console.print(cl::worn_line(worn));
+  };
   bool remix_enabled = false;
   std::string remix_for;
   int32_t remix_items = 0;
-  bool remix_rewear = false;  // the arsenal the rules wear is to be worked out again (below)
   const auto remix_sync = [&] {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
     if (remix_settings.enabled == remix_enabled && remix_for == args.basedir &&
         remix_settings.items == remix_items)
       return;
     if (cl::busy(loader)) return;  // its threads may read the other game's files: next frame
-    remix_rewear = true;
     remix_items = remix_settings.items;
-    if (remix_settings.enabled == remix_enabled && remix_for == args.basedir) return;
+    if (remix_settings.enabled == remix_enabled && remix_for == args.basedir) return remix_wear();
     remix_enabled = remix_settings.enabled;
     remix_for = args.basedir;
     const cl::RemixState st = cl::remix_check(remix_settings, args.profile,
@@ -824,6 +837,7 @@ int run_main(int argc, char** argv) {
     } else if (!st.why.empty()) {
       console.print(st.why);
     }
+    remix_wear();
   };
   ge::platform::DevicesPtr devices = ge::platform::open_devices();
   if (!devices) return 1;
@@ -984,37 +998,6 @@ int run_main(int argc, char** argv) {
     for (const std::string& f : faults) console.print("particles: " + f);
     fx_palette_read = true;
   };
-  cl::HeldState in_hand;
-  in_hand.hand.at_eye = weapons_at_eye;
-  // Classic remix's `cr_items` (client/remix.hpp's `worn_arsenal`): the played game's rules wear
-  // the other game's weapons and armour from the next map on: the rows the server is given, the
-  // files its models and sounds are read from, the weapons in the hand.
-  const auto remix_wear = [&] {
-    const shooters_edge::profiles::RemixArsenal* worn =
-        cl::worn_arsenal(remix_settings, remix.state, args.profile);
-    if (worn == remix.worn) return;
-    remix.worn = worn;
-    worn_bar.pictures.clear();  // read again from the files now open
-    listen.opt.arsenal = worn != nullptr ? shooters_edge::profiles::arsenal_lines(worn->arsenal)
-                                         : game_content.arsenal;
-    listen.opt.files = worn != nullptr ? &remix.files : &files;
-    weapons.clear();
-    in_hand = {};
-    if (worn != nullptr) {
-      shooters_edge::profiles::GameProfile dressed = *adapter.game;
-      dressed.held_weapons = worn->held;
-      cl::GameAdapter wearing = adapter;
-      wearing.game = &dressed;
-      in_hand.hand.at_eye = cl::load_held_set(wearing, remix.files, model_dirs, weapons);
-    } else {
-      in_hand.hand.at_eye = cl::load_held_set(adapter, files, model_dirs, weapons);
-    }
-    const ge::classicenhance::Profile* other =
-        ge::classicenhance::find_profile(worn != nullptr ? worn->items : args.profile);
-    const std::string what = other != nullptr ? std::string(other->what) : "the game";
-    console.print(worn != nullptr ? "From the next map the weapons and armour are " + what + "'s."
-                                  : "From the next map the weapons and armour are the game's own.");
-  };
   // LOAD GAME's folder and the console's `basedir` (client/game_folder.hpp): the install opened in
   // place of the one playing (the old world and servers let go first: they view its packs), its
   // first map started where the map changes, its packs enhanced in the background, kept for the
@@ -1118,7 +1101,7 @@ int run_main(int argc, char** argv) {
     held_fire.shots = {};
     user_info.sent_to = nullptr;
     remix.worn = nullptr;  // the new game's own: the remix's are worked out again for it
-    remix_rewear = true;
+    remix_for.clear();
   };
   // The window's own game heard this frame (`dt` s), at the player's volume.
   const auto hear_here = [&](double dt) {
@@ -1513,10 +1496,6 @@ int run_main(int argc, char** argv) {
     const bool elsewhere = bench.active || remote.active || bench_map;  // the world is theirs
     if (elsewhere) heard_here.stop();  // a demo or a server joined is heard instead
     remix_sync();
-    if (remix_rewear) {
-      remix_rewear = false;
-      remix_wear();
-    }
     if (!next_map.empty() && !loader.map.valid() && !elsewhere) {
       cl::load_map(loader, files, next_map, t);
       next_map.clear();
@@ -1941,12 +1920,8 @@ int run_main(int argc, char** argv) {
       cl::draw_sequel_bar(overlay, sequel_bar, cl::sequel_bar_scale(h));
     } else if (listen.campaign.end == cl::LevelEnd::none) {
       se::Status hud_status = cl::status_of(listen, t);
-      if (remix.worn != nullptr && remix.worn->items == "sequel") {
-        // The rules wear the sequel's weapons: its own bar shows them (remix_bar.hpp).
-        cl::run_worn_bar(worn_bar, hud_status, listen.campaign_host == nullptr,
-                         static_cast<int64_t>(t * 10), w, h);
-        cl::draw_sequel_bar(overlay, worn_bar, cl::sequel_bar_scale(h));
-      } else {
+      if (!cl::draw_worn_bar(overlay, worn_bar, remix.worn, hud_status, !listen.campaign_host, w,
+                             h)) {
         cl::group_status(controls.groups, hud_status, t);  // the weapon group (weapon_groups.hpp)
         se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
         const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());

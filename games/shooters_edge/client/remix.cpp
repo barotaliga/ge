@@ -16,6 +16,7 @@
 #include "classicenhance/profile.hpp"
 #include "progs/entity_text.hpp"
 #include "shooters_edge/client/game_folder.hpp"
+#include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/profiles/remix.hpp"
 
@@ -181,6 +182,28 @@ const profiles::RemixArsenal* worn_arsenal(const RemixSettings& s, const RemixSt
                                            std::string_view played) {
   if (!state.on) return nullptr;
   return profiles::remix_arsenal(played, items_game(s, played));
+}
+
+std::vector<std::string> worn_lines(const profiles::RemixArsenal* worn,
+                                    const std::vector<std::string>& own) {
+  return worn != nullptr ? profiles::arsenal_lines(worn->arsenal) : own;
+}
+
+std::string worn_line(const profiles::RemixArsenal* worn) {
+  if (worn == nullptr) return "From the next map the weapons and armour are the game's own.";
+  const ce::Profile* other = ce::find_profile(worn->items);
+  return "From the next map the weapons and armour are " +
+         (other != nullptr ? std::string(other->what) : std::string(worn->items)) + "'s.";
+}
+
+bool load_worn_held(const GameAdapter& game, const RemixFiles& remix, const SearchPath& own,
+                    std::span<const std::string> dirs, std::vector<ge::viewmodel::HeldModel>& out) {
+  if (remix.worn == nullptr) return load_held_set(game, own, dirs, out);
+  profiles::GameProfile dressed = *game.game;
+  dressed.held_weapons = remix.worn->held;
+  GameAdapter wearing = game;
+  wearing.game = &dressed;
+  return load_held_set(wearing, remix.files, dirs, out);
 }
 
 namespace {

@@ -61,8 +61,8 @@ inline constexpr WeaponRow kClassicAsSequelWeapons[] = {
 // Its three armours as the sequel's jacket, combat and body armour.
 inline constexpr ArmourRow kClassicAsSequelArmour[] = {
     {1, 0.3f, 100, 0, "models/items/armor/jacket/tris.md2", "misc/ar1_pkup.wav"},
-    {2, 0.6f, 150, 0, "models/items/armor/combat/tris.md2", "misc/ar2_pkup.wav"},
-    {3, 0.8f, 200, 0, "models/items/armor/body/tris.md2", "misc/ar3_pkup.wav"},
+    {2, 0.6f, 150, 0, "models/items/armor/combat/tris.md2", "misc/ar1_pkup.wav"},
+    {3, 0.8f, 200, 0, "models/items/armor/body/tris.md2", "misc/ar1_pkup.wav"},
 };
 // Its ammunition and health as the sequel's: the nails the bullets, the cells the slugs, the
 // small health the medium, the plain one the large, the mega health the sequel's own.

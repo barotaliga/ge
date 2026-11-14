@@ -796,11 +796,9 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       view = cl::frame_view(l, shown, 0, t, 0);
       ge::ui::DrawList overlay;
       overlay.begin(static_cast<int>(w), static_cast<int>(h));
-      if (worn != nullptr && worn->items == "sequel") {  // the sequel's bar (remix_bar.hpp)
-        cl::run_worn_bar(worn_bar, cl::status_of(l, t), l.campaign_host == nullptr,
-                         static_cast<int64_t>(t * 10), static_cast<int>(w), static_cast<int>(h));
-        cl::draw_sequel_bar(overlay, worn_bar, cl::sequel_bar_scale(static_cast<int>(h)));
-        hand.lift = 0;
+      if (cl::draw_worn_bar(overlay, worn_bar, worn, cl::status_of(l, t), !l.campaign_host,
+                            static_cast<int>(w), static_cast<int>(h))) {
+        hand.lift = 0;  // the sequel's bar (remix_bar.hpp)
       } else {
         se::fill_hud(hud, cl::status_of(l, t), art);
         hud.layout.draw(overlay,
