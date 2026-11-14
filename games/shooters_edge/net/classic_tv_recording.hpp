@@ -15,7 +15,7 @@
 // ge:summary A client recording played at its pace into the classic clients' face, looping
 // ge:keywords classic-tv tv demo client-recording recording playback loop old-clients protocol-28
 // ge:keywords udp_tv_recording_open udp_tv_recording_update mvd multiview views-on-request
-// ge:keywords lazy-view udp_tv_multiview_open udp_tv_multiview_update
+// ge:keywords lazy-view udp_tv_multiview_open udp_tv_multiview_update autotrack follow-hottest
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_tv_udp_test.cpp
 #pragma once
@@ -25,6 +25,7 @@
 #include <utility>
 #include <vector>
 
+#include "shooters_edge/client/demo_autotrack.hpp"
 #include "shooters_edge/client/demo_convert.hpp"
 #include "shooters_edge/net/classic_tv_udp.hpp"
 
@@ -61,7 +62,14 @@ void udp_tv_recording_update(UdpTvRecording& d, ClassicTvUdp& face, int64_t now_
 // face's views on request: a spectator's track keys, or fire for the next player): a stream is
 // turned to that player, read up to where the match is with no view written, then his view starts
 // there with a whole signon, and the viewers who asked move to it. A stream nobody has watched for
-// `kIdleS` seconds is let go. Every view rides one clock, the followed view's.
+// `kIdleS` seconds is let go. Every view rides one clock, the first stream's.
+//
+// AUTO TRACK (`autotrack` given to the open): the view the TV follows is the hottest player's
+// (client/demo_autotrack.hpp, the plan worked out over the whole recording when it is opened, so a
+// cut can land before a fight). At each cut the pick's view is turned on like a view asked for, and
+// once it has a level the face follows it (`udp_tv_follow`): every viewer that chose no player of
+// its own moves there. A move to another player's seat is a level change for a classic client, so
+// the TV's settings hold each pick longer than a video's do (`tv_autotrack_settings`).
 struct UdpTvMultiview {
   struct View {
     client::DemoConvert convert;
@@ -77,6 +85,10 @@ struct UdpTvMultiview {
   // Where the followed view's conversion stood: source bytes fed and its newest record's time, so
   // a view turned on later is read up to the match's moment before its own view is written.
   std::vector<std::pair<size_t, double>> marks;
+  bool autotrack = false;
+  client::AutotrackPlan plan;  // its cuts on the recording's timeline (s from its first frame)
+  int tracked = -1;            // the pick the face follows now (-1: the first stream's player)
+  int64_t cuts = 0;            // follows moved to a new pick
   bool loop = true;
   int64_t start_us = -1;
   int64_t rounds = 0, started = 0, let_go = 0;
@@ -85,9 +97,14 @@ struct UdpTvMultiview {
 };
 
 // The multiview recording in `bytes` opened, `streams` the face's streams (its views at once, at
-// least 1). False with `error` when it is not a multiview recording.
+// least 1), its auto track planned with `autotrack` when given. False with `error` when it is not
+// a multiview recording, or its frames do not read for the plan.
 bool udp_tv_multiview_open(UdpTvMultiview& d, std::vector<uint8_t> bytes, int streams, bool loop,
-                           std::string& error);
+                           std::string& error,
+                           const client::AutotrackSettings* autotrack = nullptr);
+// The auto track's settings for the TV: a pick held at least 8 s, and cuts at least 4 s apart,
+// since each move reseats a classic viewer.
+client::AutotrackSettings tv_autotrack_settings();
 // The views' records due by `now_us` handed to `face` (started with as many streams), the views
 // viewers want turned on and the unwatched ones let go.
 void udp_tv_multiview_update(UdpTvMultiview& d, ClassicTvUdp& face, int64_t now_us);

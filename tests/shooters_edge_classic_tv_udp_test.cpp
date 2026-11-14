@@ -275,3 +275,60 @@ TEST(a_multiview_recording_gives_any_players_view_on_request_and_only_then) {
   CHECK(mv.let_go == 1);
   CHECK_MSG(face.error.empty(), face.error);
 }
+
+TEST(a_multiview_recordings_followed_view_rides_the_auto_tracks_pick) {
+  namespace cl = shooters_edge::client;
+  // The written match, with the followed player (slot 0) killed by slot 2 at 12 s and down until
+  // 20 s: the plan cuts to slot 2, the hottest alive, once he has been down 2 s.
+  cl::MatchScript m = cl::highlight_match();
+  for (size_t i = 240; i < 400; i++) m.players[0].health[i] = -30;
+  for (size_t i = 240; i < m.players[2].frags.size(); i++) m.players[2].frags[i]++;
+  gn::LinkConditions lan;
+  gn::conditions_preset("lan", lan);
+  gn::SimNetwork net = gn::make_sim_network(2, lan);
+  gn::Transport face_t, viewer_t;
+  gn::open_sim_transport(face_t, net, gn::sim_address(0, kPortTv));
+  cn::ClassicTvUdp face;
+  cn::udp_tv_start(face, face_t, {}, 8);
+  face.views_on_request = true;
+  cn::UdpTvMultiview mv;
+  std::string error;
+  const cl::AutotrackSettings track = cn::tv_autotrack_settings();
+  CHECK_MSG(cn::udp_tv_multiview_open(mv, cl::write_multiview_match(m), 8, false, error, &track),
+            error);
+  CHECK(mv.autotrack);
+  CHECK_MSG(mv.plan.cuts.size() >= 2, "the plan has a cut after the start");
+  CHECK(cl::autotrack_at(mv.plan, 1) == 0);
+  CHECK(cl::autotrack_at(mv.plan, 16) == 2);
+  gn::open_sim_transport(viewer_t, net, gn::sim_address(1, cn::kPortClient));
+  cn::ClientConfig cc;
+  cc.name = "viewer";
+  cc.qport = 301;
+  cc.ask = cn::Ext{};
+  cc.fetch_looks = false;
+  cc.brain = [](int) { return ge::shooter::MoveCmd{}; };
+  cn::ClassicClientEnd v;
+  cn::client_start(v, viewer_t, gn::sim_address(0, kPortTv), cc, 0);
+  int64_t now = 0;
+  const auto run_to = [&](double s) {
+    while (now < static_cast<int64_t>(s * 1e6)) {
+      now += 13000;
+      gn::sim_advance(net, now);
+      cn::udp_tv_multiview_update(mv, face, now);
+      cn::udp_tv_frame(face, now);
+      cn::client_tick(v, now);
+    }
+  };
+  run_to(8);
+  CHECK_MSG(v.stage == cn::ClientStage::active, "the viewer never got in: " + v.refused);
+  CHECK(v.playernum == 0);  // the plan's first pick
+  CHECK(mv.started == 0);   // nothing else converted yet
+  run_to(19);
+  CHECK_MSG(mv.error.empty(), mv.error);
+  CHECK(mv.tracked == 2);
+  CHECK(mv.cuts == 1);
+  CHECK(mv.started == 1);  // the pick's view turned on when the cut came, not before
+  CHECK_MSG(v.stage == cn::ClientStage::active, "the viewer did not come back: " + v.refused);
+  CHECK(v.playernum == 2);  // moved with the TV's pick: it chose no player of its own
+  CHECK_MSG(face.error.empty(), face.error);
+}

@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_scan.hpp"
 
 namespace shooters_edge::net {
 
@@ -197,10 +198,63 @@ bool pump(UdpTvMultiview& d, UdpTvMultiview::View& v, double clock, bool mark) {
   return true;
 }
 
+// The stream whose view is `slot`'s now (its level come), or -1.
+int stream_of(const UdpTvMultiview& d, const ClassicTvUdp& face, int slot) {
+  for (size_t s = 0; s < d.views.size() && s < face.streams.size(); s++)
+    if (d.views[s].on && face.streams[s].level && face.streams[s].pov == slot)
+      return static_cast<int>(s);
+  return -1;
+}
+
+// `slot`'s view turned on a free stream when none carries it, read to the match's moment: false
+// when its conversion failed.
+bool turn_on(UdpTvMultiview& d, ClassicTvUdp& face, int slot, double clock) {
+  for (size_t s = 0; s < d.views.size(); s++) {
+    const UdpTvMultiview::View& v = d.views[s];
+    if (v.on && (v.slot == slot || (s == 0 && face.streams[0].pov == slot))) return true;
+  }
+  for (size_t s = 1; s < d.views.size(); s++) {
+    if (d.views[s].on) continue;
+    UdpTvMultiview::View& v = d.views[s];
+    begin_view(v, slot, static_cast<int>(s), d.start_us, d.views[0].play.first_time);
+    size_t upto = 0;
+    for (const auto& [fed, t] : d.marks)
+      if (t <= clock) upto = fed;
+    if (!feed(d, v, upto)) return false;
+    client::convert_set_pov(v.convert, slot);
+    udp_tv_clear(face, static_cast<int>(s));  // its last player's view is gone
+    d.started++;
+    return true;
+  }
+  return true;  // every stream busy: the view waits for one to be let go
+}
+
+// The auto track's pick at `t` on the recording's timeline: his view turned on, and followed once
+// it has a level. False when a conversion failed.
+bool follow_pick(UdpTvMultiview& d, ClassicTvUdp& face, double t) {
+  const int slot = client::autotrack_at(d.plan, t);
+  if (slot < 0 || !face.streams[0].level) return true;  // the first stream's player not known yet
+  const int s = stream_of(d, face, slot);
+  if (s < 0) return turn_on(d, face, slot, static_cast<double>(d.views[0].play.first_time) + t);
+  if (face.follow != s) {
+    udp_tv_follow(face, s);
+    if (slot != d.tracked) d.cuts++;
+  }
+  d.tracked = slot;
+  return true;
+}
+
 }  // namespace
 
+client::AutotrackSettings tv_autotrack_settings() {
+  client::AutotrackSettings a;
+  a.dwell_s = 8;
+  a.gap_s = 4;
+  return a;
+}
+
 bool udp_tv_multiview_open(UdpTvMultiview& d, std::vector<uint8_t> bytes, int streams, bool loop,
-                           std::string& error) {
+                           std::string& error, const client::AutotrackSettings* autotrack) {
   d = UdpTvMultiview{};
   d.loop = loop;
   client::Demo demo;
@@ -208,6 +262,13 @@ bool udp_tv_multiview_open(UdpTvMultiview& d, std::vector<uint8_t> bytes, int st
   if (demo.state.format != client::DemoFormat::multiview) {
     error = "the file is not a multiview recording";
     return false;
+  }
+  if (autotrack != nullptr) {  // the hottest player's cuts, over the whole recording
+    client::DemoScan scan;
+    if (!client::scan_demo(demo, scan, error) ||
+        !client::autotrack_plan(demo, scan, *autotrack, d.plan, error))
+      return false;
+    d.autotrack = true;
   }
   d.source.assign(demo.bytes.begin() + static_cast<std::ptrdiff_t>(demo.pos), demo.bytes.end());
   d.views.resize(static_cast<size_t>(std::max(1, streams)));
@@ -227,6 +288,7 @@ void udp_tv_multiview_update(UdpTvMultiview& d, ClassicTvUdp& face, int64_t now_
       return;
     }
     lead.play.first_time = f32_at(lead.play.bytes, 0);
+    d.tracked = -1;  // the plan picks again from the start
     for (size_t s = 1; s < d.views.size(); s++)
       if (d.views[s].on) {  // a view watched last round goes on from the start
         const int slot = d.views[s].slot;
@@ -238,24 +300,9 @@ void udp_tv_multiview_update(UdpTvMultiview& d, ClassicTvUdp& face, int64_t now_
   const double clock = static_cast<double>(t0) + static_cast<double>(now_us - d.start_us) / 1e6;
   const double now_s = static_cast<double>(now_us) / 1e6;
   // The views wanted and not carried: each turned on a free stream, read to the match's moment.
-  for (const int slot : udp_tv_wanted(face)) {
-    bool carried = false;
-    for (const auto& v : d.views) carried = carried || (v.on && v.slot == slot);
-    if (carried) continue;
-    for (size_t s = 1; s < d.views.size(); s++) {
-      if (d.views[s].on) continue;
-      UdpTvMultiview::View& v = d.views[s];
-      begin_view(v, slot, static_cast<int>(s), d.start_us, t0);
-      size_t upto = 0;
-      for (const auto& [fed, t] : d.marks)
-        if (t <= clock) upto = fed;
-      if (!feed(d, v, upto)) return;
-      client::convert_set_pov(v.convert, slot);
-      udp_tv_clear(face, static_cast<int>(s));  // its last player's view is gone
-      d.started++;
-      break;
-    }
-  }
+  for (const int slot : udp_tv_wanted(face))
+    if (!turn_on(d, face, slot, clock)) return;
+  if (d.autotrack && !follow_pick(d, face, clock - static_cast<double>(t0))) return;
   for (size_t s = 0; s < d.views.size(); s++) {
     UdpTvMultiview::View& v = d.views[s];
     if (!v.on) continue;
