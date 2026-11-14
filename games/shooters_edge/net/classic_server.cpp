@@ -22,9 +22,9 @@
 #include "shooter/client.hpp"
 #include "shooter/settings.hpp"
 #include "shooters_edge/net/classic_admin.hpp"
-#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/net/classic_talk.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/server/commands.hpp"
 
 namespace shooters_edge::net {

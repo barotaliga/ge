@@ -7,6 +7,8 @@
 #include "hub/poller.hpp"
 
 #include <algorithm>
+#include <cstdlib>
+#include <string>
 
 #include "forward/forward.hpp"
 
@@ -113,6 +115,42 @@ void poller_init(Poller& p, const PollerConfig& config, int64_t now_us) {
   p.rng = config.seed * 0x2545f4914f6cdd1dull + 11;
 }
 
+void poller_attach_broadcasts(Poller& p) {
+  for (HubNode& n : p.nodes) {
+    std::erase_if(n.status.streams,
+                  [](const gn::StatusStream& st) { return (st.flags & kStreamNamedByNode) != 0; });
+  }
+  for (const HubNode& tv : p.nodes) {
+    if (!tv.have || tv.kind != gn::NodeKind::tv) continue;
+    std::string source, viewers;
+    for (const auto& [k, v] : tv.status.keys) {
+      if (k == kSourceKey) source = v;
+      if (k == "viewers") viewers = v;
+    }
+    gn::Address server;
+    if (source.empty() || !gn::parse_address(source, server)) continue;
+    const bool here = server.family == gn::Family::ipv4 &&
+                      (server.bytes[0] == 127 || (server.bytes[0] | server.bytes[1] |
+                                                  server.bytes[2] | server.bytes[3]) == 0);
+    if (here) {
+      const uint16_t port = server.port;
+      server = tv.address;
+      server.port = port;
+    }
+    for (HubNode& n : p.nodes) {
+      if (n.kind != gn::NodeKind::game || !(n.address == server)) continue;
+      if (n.status.streams.size() >= static_cast<size_t>(gn::kStatusMaxRows)) break;
+      gn::StatusStream st;
+      st.node = tv.address;
+      st.stream = 1;
+      st.viewers = static_cast<uint16_t>(std::clamp(std::atoi(viewers.c_str()), 0, 65535));
+      st.flags = kStreamNamedByNode;
+      n.status.streams.push_back(st);
+      break;
+    }
+  }
+}
+
 void poller_update(Poller& p, gn::Transport& t, int64_t now_us) {
   if (!p.querying && now_us >= p.next_list_us && !p.config.masters.empty()) {
     gn::MasterQueryConfig qc;
@@ -160,6 +198,7 @@ void poller_update(Poller& p, gn::Transport& t, int64_t now_us) {
       send_ask(p, t, n, now_us);
     }
   }
+  poller_attach_broadcasts(p);
 }
 
 bool poller_read(Poller& p, gn::Transport& t, const uint8_t* data, size_t size,
@@ -198,6 +237,7 @@ bool poller_read(Poller& p, gn::Transport& t, const uint8_t* data, size_t size,
   if (!n->have || s.phase != n->status.phase) n->phase_us = now_us;
   n->status = std::move(s);
   n->have = true;
+  poller_attach_broadcasts(p);
   n->heard_us = now_us;
   n->asked_us = -1;
   n->tries = 0;

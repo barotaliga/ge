@@ -1,11 +1,12 @@
-// THE CLASSIC NET CHANNEL: what every in-band packet of the classic protocol carries, on either
-// side. No socket here: `channel_transmit` returns a datagram's bytes and `channel_process` reads
-// one, so the endpoint (classic_server.hpp) and the scripted client own the sending.
+// THE NET CHANNEL of the classic protocol family: what every in-band packet carries, on either
+// side, in the first game's protocol and its sequel's alike. No socket here: `channel_transmit`
+// returns a datagram's bytes and `channel_process` reads one, so a game's endpoints (its server
+// and its client) own the sending.
 //
 // THE HEADER: u32 sequence (bit 31 set when the packet carries the reliable message); u32 the last
 // sequence received (bit 31 the even/odd bit of the last reliable message received); from a
 // client, a u16 qport after it, so the server finds the client when a NAT moves its port. A packet
-// whose first word is 0xFFFFFFFF is out of band (classic_server.hpp reads those), never a
+// whose first word is 0xFFFFFFFF is out of band (a game's server reads those), never a
 // channel's.
 //
 // ONE RELIABLE MESSAGE IN FLIGHT: it is resent while the peer has acknowledged something newer
@@ -25,16 +26,16 @@
 // ge:summary The classic net channel: sequences, the reliable bit and resend, qport, rate, choke
 // ge:keywords net-channel netchan sequence ack reliable-bit resend qport rate clear-time choke
 // ge:keywords backbuf dupe channel_transmit channel_process channel_can_packet drop-count
-// ge:skill net shooter
-// ge:test tests/shooters_edge_classic_channel_test.cpp
+// ge:skill shooter net
+// ge:test tests/shooter_protocol_channel_test.cpp
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
 
-#include "shooters_edge/net/classic_wire.hpp"
+#include "shooter/protocol/wire.hpp"
 
-namespace shooters_edge::net {
+namespace ge::shooter::protocol {
 
 constexpr int kBackBuffers = 8;
 constexpr double kRateBurstBytes = 400;
@@ -97,4 +98,4 @@ bool peek_qport(const uint8_t* data, size_t size, uint16_t& qport);
 // True when a datagram is out of band (its first word 0xFFFFFFFF).
 bool is_out_of_band(const uint8_t* data, size_t size);
 
-}  // namespace shooters_edge::net
+}  // namespace ge::shooter::protocol
