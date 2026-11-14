@@ -34,6 +34,8 @@
 
 namespace ge::hub {
 
+struct DemoRow;  // archive.hpp
+
 struct HubMode {
   std::string name;  // as the game's record says it ("4on4", "race")
   int weight = 1;    // its place among the cards: higher first
@@ -46,6 +48,7 @@ struct HubSpec {
   std::vector<HubMode> modes;    // the filter buttons, in this order
   std::string score = "score";   // what a player's score column is called ("frags", "time")
   bool score_low_first = false;  // a time sorts lowest first
+  bool score_ms = false;         // a score is a time in milliseconds, shown as m:ss.cc
   uint16_t http_port = 28080;    // the hub's web port when none is given
   // The game's own status protocol (net/server_list.hpp), when its servers speak one the engine's
   // status record does not: `--browse-master` and `--browse-server` list them (browse.hpp). Empty:
@@ -74,7 +77,13 @@ struct HubSpec {
   bool results = false;
   // Whether a map the packs hold is one to play (a game keeps some models as maps). Unset: all.
   std::function<bool(std::string_view map)> map_shown;
+  // A run's input log read into its archive row (archive.hpp § Runs): the game's map, mode,
+  // racers and times. Unset: the hub keeps replay files only.
+  std::function<bool(std::span<const uint8_t> log, DemoRow& out, std::string& error)> run_row;
 };
+
+// A score as the page shows it: the number, or a time (`score_ms`) as m:ss.cc.
+std::string score_text(const HubSpec& spec, int64_t score);
 
 // How long a match may sit in its intermission before it drops to the bottom.
 constexpr int64_t kStaleIntermissionUs = 300000000;

@@ -361,6 +361,7 @@ characters.
 | `games/fall_line/controls/` | Fall Line's controls (`fall_line_controls`, no GPU): the actions and default bindings, the player's file, the rebinding walk, what is felt, the run played by hand, scripted sessions | `input` |
 | `games/fall_line/hud/` | Fall Line's HUD (`fall_line_hud`, no GPU): the free ride's snapshot, the news, the words, the view | `ui` |
 | `games/fall_line/labs/` | Fall Line's labs, the headless ones and the GPU's | `sim`, `labs`, `audio` |
+| `games/fall_line/hub/` | Fall Line's hub (`fall_line_hub`): the engine's hub keeping the game's runs (input logs), each row read by playing the run out headless | `net`, `sim` |
 | `games/fall_line/app/` | Fall Line's presentation (`fall_line_app`): the pass table, the look, the scene, the views, the `fall_line` window; then the HUD | `platform`, `gpu`, `render`, `ui`, `audio` |
 | `games/shooters_edge/view/` | Shooter's Edge's held weapons (`shooters_edge_view`, no GPU): the free set's mounts, kicks and muzzle lights, the hand that switches and fires them, the view-model cvars | `render`, `shooter` |
 | `games/shooters_edge/hud/` | Shooter's Edge's HUDs (`shooters_edge_hud`, no GPU): the classic, modern and compact looks, `hud_style`, the free art, the classic set's pictures | `ui` |
