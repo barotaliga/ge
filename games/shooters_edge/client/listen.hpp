@@ -126,9 +126,11 @@ std::unique_ptr<LoadedMap> load_named_map(const SearchPath& files, const std::st
 // `rules` and `map`), so the listen reads the game playing without knowing its type.
 struct ListenHost {
   const ge::progs::Progs* progs = nullptr;  // the program (outlives the server)
-  std::shared_ptr<LoadedMap> map;           // the first map, read
-  const SearchPath* files = nullptr;        // where the next map is read (null: the arena only)
-  std::vector<std::string> lines;           // server lines before each map's rules start
+  // A mod's compiled module (its qwprogs.qvm) that plays in place of `progs`; null or empty: none.
+  const std::vector<uint8_t>* module = nullptr;
+  std::shared_ptr<LoadedMap> map;     // the first map, read
+  const SearchPath* files = nullptr;  // where the next map is read (null: the arena only)
+  std::vector<std::string> lines;     // server lines before each map's rules start
   bool lobby = false;
   sv::LobbySettings lobby_settings;
   std::string player = "player";  // slot 0, the window's own player: a local seat
@@ -216,6 +218,9 @@ struct ListenOptions {
   // A campaign in coop is served to others on `port` (or `transport`) through this door
   // (net/classic_coop.hpp's `classic_coop()`); null: a coop game is the window's alone.
   const CampaignDoor* door = nullptr;
+  // A mod's compiled module (GameContent's `module`) that plays a match in place of the program;
+  // null or empty: the program (outlives the listen).
+  const std::vector<uint8_t>* module = nullptr;
   std::vector<std::string> console = {"deathmatch 1"};  // server lines before each map loads
   std::vector<std::string> item_names;  // a match's server lines before `console` (GameContent's)
   std::vector<std::string>

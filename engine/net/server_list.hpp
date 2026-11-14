@@ -63,8 +63,9 @@ struct ServerInfo {
   std::string state;  // what the match is doing, when it says ("Countdown", "Standby")
   int players = 0, max_players = 0;
   int spectators = 0, max_spectators = 0;
-  int skill = -1;       // the bots' or the monsters' skill; -1: not said
-  bool locked = false;  // a password is needed
+  int skill = -1;                 // the bots' or the monsters' skill; -1: not said
+  bool locked = false;            // a password is needed
+  std::vector<std::string> mods;  // the mod packages it runs, each "name version"
   std::vector<ServerPlayer> roster;
   std::vector<std::pair<std::string, std::string>> keys;  // every key it sent, in its order
 };

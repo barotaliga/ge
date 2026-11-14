@@ -262,9 +262,9 @@ struct RemixPhysics {
 };
 
 inline constexpr std::string_view kClassicPhysicsAsSequel[] = {
-    "sv_maxspeed 300",  "sv_friction 6",    "pm_airaccel 1",
-    "pm_airwish 0",     "pm_landpause 1",   "sv_waterfriction 1",
-    "pm_swimscale 0.5", "pm_waterjump 350", "set sv_falldamage 1"};
+    "sv_maxspeed 300", "sv_friction 6",      "pm_airaccel 1",    "pm_airwish 0",
+    "pm_landpause 1",  "sv_waterfriction 1", "pm_swimscale 0.5", "pm_waterjump 350",
+    "pm_airclimb 1",   "set sv_falldamage 1"};
 inline constexpr std::string_view kSequelPhysicsAsClassic[] = {"set sv_physics \"classic\""};
 
 inline constexpr RemixPhysics kRemixPhysics[] = {
@@ -287,8 +287,9 @@ struct MoveFeel {
   float max_speed = 300, friction = 6, air_accelerate = 0;
   bool land_pause = true;
   float swim_scale = 0.5f, water_friction = 1, water_jump = 350;
+  bool air_step = true;  // false: no step climbed in the air, so no stair's double jump
 };
-inline constexpr MoveFeel kClassicFeel{320, 4, 10, false, 0.7f, 4, 310};
+inline constexpr MoveFeel kClassicFeel{320, 4, 10, false, 0.7f, 4, 310, false};
 
 // A view model whose file holds every animation: the frame it rests on and its firing frames.
 struct HeldFrames {

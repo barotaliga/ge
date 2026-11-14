@@ -553,8 +553,22 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
     if (s.cfg.list_files) names = s.cfg.list_files();
     for (const ServedFile& f : s.cfg.files) names.push_back(f.path);
     client_print(s, slot, 2, looks_offered(names, s.cfg.allow_download));
-  } else if (cmd == "ptrack" || cmd == "snap" || cmd == "upload") {
-    // Spectator tracking, screenshots and uploads: not built.
+  } else if (cmd == "ptrack") {
+    // A spectator tracks a player by slot; a bare `ptrack`, or more than one word, stops it. A
+    // slot out of range, not in the game or a spectator's is refused, and tracking stops.
+    if (!c.spectator) return;
+    c.track = -1;
+    if (w.count != 2) return;
+    const long v = std::strtol(pg::word(w, 1), nullptr, 0);  // words that are no number: slot 0
+    if (v < 0 || v >= sh::kMaxClients ||
+        s.clients[static_cast<size_t>(v)].state != ConnState::spawned ||
+        s.clients[static_cast<size_t>(v)].spectator) {
+      client_print(s, slot, 2, "Invalid client to track\n");
+      return;
+    }
+    c.track = static_cast<int>(v);
+  } else if (cmd == "snap" || cmd == "upload") {
+    // Screenshots and uploads: not built.
   } else {
     // A chat line held to the flood rule first (a dropped one tells only its sender why).
     // A `login` line counts too (classic_login.hpp): it is a chat line a client sent as a command.

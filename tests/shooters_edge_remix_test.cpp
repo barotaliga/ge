@@ -592,6 +592,7 @@ TEST(the_classic_games_map_plays_on_the_sequels_rules_with_the_sequels_items) {
                   double(e.origin.x), double(e.origin.y), double(e.origin.z));
       ++shown;
     }
+  std::printf("  %d shown\n", shown);
   const auto me = [&] { return l.server->sv.edicts[1]; };
   for (int i = 0; i < 120; i++) cl::listen_frame(l, {});
   const sh::Vec3f stood = me().origin;
@@ -651,8 +652,8 @@ bool listed(const std::vector<std::string>& names, std::string_view name) {
 
 // The players' bodies (M18u6): `cr_physics` gives the played game's move the other game's physics
 // by server lines from the next map: the classic rules' settings the sequel's run, friction, air,
-// landing and water (each line one the settings take) and the arena's harm from a fall, the
-// sequel's `sv_physics classic`.
+// landing, the stair jump and water (each line one the settings take) and the arena's harm from a
+// fall, the sequel's `sv_physics classic`.
 TEST(cr_physics_sets_the_other_games_physics_by_server_lines) {
   namespace sv = shooters_edge::server;
   ge::console::Cvars cvars;
@@ -677,6 +678,7 @@ TEST(cr_physics_sets_the_other_games_physics_by_server_lines) {
   CHECK(set.move.maxspeed == 300 && set.move.friction == 6);
   CHECK(set.move.air_accel == 1 && set.move.air_wish_cap == 0 && set.move.landpause);
   CHECK(set.move.swimscale == 0.5 && set.move.waterfriction == 1 && set.move.waterjump == 350);
+  CHECK(set.move.airclimb);  // the stair's double jump (the se-remix-physics lab's stair table)
   CHECK(std::find(lines.begin(), lines.end(), "set sv_falldamage 1") != lines.end());
   CHECK(cl::worn_line(r).ends_with(
       "move as " + std::string(ge::classicenhance::find_profile("sequel")->what) + "'s."));
@@ -692,6 +694,7 @@ TEST(cr_physics_sets_the_other_games_physics_by_server_lines) {
   map.brushes = things_hall();
   CHECK_MSG(run.start(map, error), error);
   CHECK(sv::sequel_of(run)->classic_physics);
+  CHECK(!shooters_edge::profiles::kClassicFeel.air_step);  // no stair's double jump
 }
 
 // The sequel's rules in the classic game's things (M18u4c): `cr_items 1` in the sequel sets the

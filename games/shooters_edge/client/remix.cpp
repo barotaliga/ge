@@ -240,10 +240,10 @@ const profiles::RemixPhysics* worn_physics(const RemixSettings& s, const RemixSt
 }
 
 bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played) {
-  const profiles::RemixArsenal* worn = worn_arsenal(s, r.state, played);
-  const profiles::RemixLooks* looks = worn_looks(s, r.state, played);
+  const profiles::RemixArsenal* worn = r.mod_rules ? nullptr : worn_arsenal(s, r.state, played);
+  const profiles::RemixLooks* looks = r.mod_rules ? nullptr : worn_looks(s, r.state, played);
   const profiles::RemixFigure* figure = worn_figure(s, r.state, played);
-  const profiles::RemixPhysics* physics = worn_physics(s, r.state, played);
+  const profiles::RemixPhysics* physics = r.mod_rules ? nullptr : worn_physics(s, r.state, played);
   if (worn == r.worn && looks == r.looks && figure == r.figure && physics == r.physics)
     return false;
   r.worn = worn;

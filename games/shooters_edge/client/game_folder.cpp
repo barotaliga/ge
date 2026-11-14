@@ -266,18 +266,38 @@ bool remember_game(const std::string& prefs, const std::string& basedir,
   return !ec;
 }
 
+namespace {
+
+// The compiled module `qwprogs.qvm` a mod folder of `files` holds, into `out`; false when none.
+bool qvm_of(const SearchPath& files, std::vector<uint8_t>& out) {
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> found = find_file(files, "qwprogs.qvm", store);
+  if (found.empty()) return false;
+  out.assign(found.begin(), found.end());
+  return true;
+}
+
+}  // namespace
+
 bool load_programs(const GameAdapter& adapter, const SearchPath& files,
                    const std::string& progs_path, GameContent& out, std::string& error,
                    const profiles::GameProfile& game) {
   out.campaign = nullptr;
   out.progs = {};
   out.pack_progs = {};
+  out.module.clear();
   out.item_names.clear();
   out.arsenal.clear();
   bool loaded = false;
   if (!progs_path.empty()) {
     std::string source;
     loaded = shooters_edge::server::load_mod(progs_path, out.progs, source, error);
+  } else if (adapter.game != nullptr && adapter.game->id == std::string_view("classic") &&
+             qvm_of(files, out.module)) {
+    // A mod folder's compiled module: it plays the match; the baseline stands in for the rest
+    // (a campaign is still the packs' own program).
+    out::status("shooters_edge: the mod's compiled module qwprogs.qvm runs");
+    loaded = baseline_progs(out.progs, error);
   } else {
     FoundProgram found;
     std::string why;

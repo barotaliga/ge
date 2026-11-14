@@ -733,6 +733,7 @@ int run_main(int argc, char** argv) {
   listen_opt.episodes = game_content.episodes;
   listen_opt.item_names = game_content.item_names;
   listen_opt.arsenal = game_content.arsenal;
+  listen_opt.module = &game_content.module;  // a mod folder's qwprogs.qvm plays its matches
   listen_opt.voice = remote.voip;  // cl_voip: the window's match relays its players' voices
   // The saves (the campaign's whole game: listen.hpp's `listen_save`), `<game>/saves/<name>.save`.
   std::string load_ask;  // a save the console asked to load (loaded where a map change is made)
@@ -801,6 +802,7 @@ int run_main(int argc, char** argv) {
   // `cr_items` (remix.hpp's `worn_arsenal`): from the next map the played game's rules wear the
   // other game's weapons: the server's rows and files, the weapons in the hand.
   const auto remix_wear = [&] {
+    remix.mod_rules = !game_content.module.empty();  // a mod's module sets its own boundaries
     if (!cl::remix_dress(remix, remix_settings, args.profile)) return;
     cl::worn_hud_reset(worn_hud, remix);  // read again from the files now open
     listen.opt.arsenal = cl::worn_lines(remix, game_content.arsenal);

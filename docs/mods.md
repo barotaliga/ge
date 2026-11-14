@@ -316,11 +316,22 @@ names the signer. Sign after `ge mod pack`: packing writes a new manifest.
 - **A broken signature is refused even where unsigned packages load.** Unsigned says nothing; a
   signature that does not hold says the package was changed after someone vouched for it.
 
-**Later rows:**
+### Distribution
 
-- **Distribution (M52d).** A server sends its mod list (name, version, manifest hash) to a
-  joining client, which fetches each package from where the server says, checks it, and loads
-  it. Two players in a match always run the same mods, or the client is refused with the list.
+A server says which mods it runs, and a client never fetches them. In Shooter's Edge the server
+alone runs a mod; a client draws what it is sent and predicts only the move, so it needs no
+package to join a modded server. Shooter's Edge's server puts
+`*mods` in its serverinfo and its public status: each package's name and version, ", " between
+(`rocket-bounce 1.0.0, low-grav 0.2.1`, cut with "+N more" past 120 bytes). The browser reads it
+into `ServerInfo::mods` and shows it on the selected server's line; the hub's API carries it among
+the server's keys.
+
+**Decisions:**
+
+- **Listed, never downloaded** (Niclas, 2026-11-14). Downloading a mod would put native code on a
+  player's machine that nothing there runs. *Not taken:* the server's list sent to a joining client
+  with each package fetched, checked by hash and signature, and loaded; it comes back only for a
+  game whose clients run mods (prediction with a mod's hooks, a match replayed from its inputs).
 
 ## The commands
 

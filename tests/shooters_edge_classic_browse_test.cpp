@@ -1,7 +1,8 @@
 // games/shooters_edge/net/classic_browse.hpp: the status query's bytes; a reply with players,
 // a spectator and teams read into the server list's words; the mode from the server's keys
 // (its own `mode`, coop, team, ffa, single); a password and the skill; a reply that is not one
-// refused; the master's reply read into addresses; an install's list of masters.
+// refused; the C++ mods it runs (`*mods`); the master's reply read into addresses; an install's
+// list of masters.
 //
 // ge:summary Test: the classic status reply and master reply read for the server browser
 // ge:keywords test classic status-query status-reply master-reply mode coop team spectator
@@ -27,6 +28,14 @@ bool read(const std::string& text, gn::ServerInfo& info) {
 }
 
 }  // namespace
+
+TEST(classic_status_reply_names_the_mods_a_server_runs) {
+  gn::ServerInfo info;
+  CHECK(read("\\hostname\\bouncy\\map\\dm2\\*mods\\rocket-bounce 1.0.0, low-grav 0.2.1\n", info));
+  CHECK(info.mods.size() == 2);
+  CHECK(info.mods.size() == 2 && info.mods[0] == "rocket-bounce 1.0.0" &&
+        info.mods[1] == "low-grav 0.2.1");
+}
 
 TEST(classic_status_query_bytes) {
   uint8_t out[64];
@@ -55,6 +64,7 @@ TEST(classic_status_reply_read) {
   CHECK(info.spectators == 1 && info.max_spectators == 4);
   CHECK(info.skill == -1);
   CHECK(!info.locked);
+  CHECK(info.mods.empty());
   CHECK(info.roster.size() == 3);
   CHECK(info.roster[1].name == "bravo two");
   CHECK(info.roster[1].frags == -2);
