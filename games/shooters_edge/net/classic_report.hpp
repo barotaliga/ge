@@ -90,7 +90,7 @@ std::array<ge::shooter::AimSpread*, ge::shooter::kMaxClients> tally_aims(MatchTa
 
 // The report's last column, every seat's aim spread (shooter/aim_spread.hpp) in thousandths of
 // a half-box, -1 with too few samples: a bot-likeness number to read, never a verdict.
-inline constexpr const char* kAimSpreadColumn = "aim_spread";
+inline constexpr const char* kAimSpreadColumn = "aim_spread_min";
 
 // The seats `stats_frame` reads into: those counting now, null for the rest.
 std::array<SeatStats*, ge::shooter::kMaxClients> tally_stats(MatchTally& t);
