@@ -507,6 +507,7 @@ LightProbe make_probe(const br::Map& map) {
     if (s >= map.surfaces.size()) break;
     const br::Surface& surf = map.surfaces[s];
     if (surf.lightmap < 0 || surf.kind != br::SurfaceKind::planar) continue;
+    if (const float a = map.textures[surf.texture].alpha; a >= 0 && a < 1) continue;  // a window
     for (uint32_t t = surf.first; t + 2 < surf.first + surf.count; t += 3) {
       const float* a = map.vertices[map.indices[t]].pos;
       const float* b = map.vertices[map.indices[t + 1]].pos;
