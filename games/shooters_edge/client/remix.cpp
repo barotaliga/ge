@@ -11,6 +11,8 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "brush/cells.hpp"
+#include "brush/read.hpp"
 #include "classicenhance/profile.hpp"
 #include "progs/entity_text.hpp"
 #include "shooters_edge/client/game_folder.hpp"
@@ -431,6 +433,19 @@ bool remix_entities(std::string_view text, std::string_view from, std::string_vi
       }
     }
     if (!has_flags && now != 0) b.pairs.emplace_back("spawnflags", std::to_string(now));
+    // The middle of its floor kept (profiles::item_foot), a little above it.
+    const float* was = pf::item_foot(from, it->cls);
+    const float* is = pf::item_foot(to, it->becomes);
+    if (was != nullptr && is != nullptr) {
+      float at[3];
+      for (int a = 0; a < 3; a++) at[a] = it->at[a] + was[a] - is[a];
+      at[2] += pf::kFootLift;
+      char place[96];
+      std::snprintf(place, sizeof place, "%g %g %g", static_cast<double>(at[0]),
+                    static_cast<double>(at[1]), static_cast<double>(at[2]));
+      for (auto& [k, v] : b.pairs)
+        if (k == "origin") v = place;
+    }
     write_block(b, out);
   }
   return true;
@@ -500,9 +515,16 @@ std::unique_ptr<LoadedMap> load_remixed_map(const SearchPath& files, const std::
   if (!m) return nullptr;  // the played game's own refusal stands
   const ce::Profile* mine = ce::find_profile(remix->played);
   const std::string whose = mine != nullptr ? std::string(mine->what) : remix->played;
+  // The sequel's rules trace brushes: a map of the classic family is given them, its point
+  // tree's cells made brushes (brush/cells.hpp).
+  std::shared_ptr<ge::brush::Map> cells;
   if (m->spec.brushes == nullptr && remix->played != "classic") {
-    error = "Classic remix cannot play " + name + " in " + whose + " yet.";
-    return nullptr;
+    if (!m->from_file) {
+      error = "Classic remix cannot play " + name + " in " + whose + ".";
+      return nullptr;
+    }
+    cells = std::make_shared<ge::brush::Map>(m->bsp.map);
+    ge::brush::cells_as_brushes(*cells);
   }
   RemixReport rep;
   std::string text;
@@ -510,6 +532,14 @@ std::unique_ptr<LoadedMap> load_remixed_map(const SearchPath& files, const std::
                       remix->balance)) {
     error = "Classic remix could not read " + name + "'s items: " + why;
     return nullptr;
+  }
+  if (cells) {
+    if (!ge::brush::parse_entities(text, &cells->entities, &why)) {
+      error = "Classic remix could not read " + name + "'s items: " + why;
+      return nullptr;
+    }
+    cells->entity_text = text;
+    m->spec.brushes = std::move(cells);
   }
   m->spec.entities = std::move(text);
   m->from_game = remix->state.other;

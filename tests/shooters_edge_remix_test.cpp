@@ -24,6 +24,7 @@
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/remix.hpp"
 #include "shooters_edge/server/qc_server.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 #include "vfs/pak.hpp"
 
 namespace cl = shooters_edge::client;
@@ -100,7 +101,10 @@ TEST(a_map_rewritten_keeps_what_is_not_an_item_and_the_mode_bits) {
   CHECK(value(b[1], "classname") == "info_player_deathmatch");
   CHECK(value(b[2], "classname") == "item_health_mega");
   CHECK(value(b[2], "spawnflags") == "2048");  // not in deathmatch: kept; the mega bit: gone
-  CHECK(value(b[2], "origin") == "8 8 0");
+  // The middle of its floor kept: the classic box's corner moved to the sequel's middle, 15 up
+  // to its middle and 1 off the floor.
+  CHECK(value(b[2], "origin") == "24 24 16");
+  CHECK(value(b[4], "origin") == "128 0 16");  // a classic weapon stands on its middle already
   CHECK(value(b[3], "classname") == "ammo_rockets" && value(b[3], "spawnflags") == "0");
   CHECK(value(b[4], "classname") == "weapon_railgun" && value(b[4], "spawnflags").empty());
   CHECK(rep.items == 4 && rep.swapped == 3 && rep.dropped == 1);
@@ -139,7 +143,8 @@ TEST(the_sequels_small_pickups_are_gathered_into_the_classic_games_sizes) {
   if (b.size() != 6) return;
   CHECK(value(b[0], "classname") == "item_rockets" && value(b[0], "spawnflags") == "1");
   CHECK(value(b[1], "classname") == "item_health" && value(b[1], "spawnflags") == "1");
-  CHECK(value(b[1], "origin") == "1000 0 0");  // on the pool's first spot
+  // On the pool's first spot, the sequel's middle moved to the classic box's corner, 1 up.
+  CHECK(value(b[1], "origin") == "984 -16 -14");
   for (int i = 2; i <= 4; i++)
     CHECK(value(b[i], "classname") == "item_health" && value(b[i], "spawnflags").empty());
   CHECK(value(b[5], "classname") == "item_armor1");
@@ -344,4 +349,71 @@ TEST(the_sequels_map_plays_on_the_classic_rules_with_the_classic_items) {
   const float items =
       std::bit_cast<float>(*ge::progs::entity_field(qc->q.vm, 1, ge::progs::kFItems));
   CHECK_MSG((static_cast<int>(items) & 64) != 0, "items " + std::to_string(items));
+}
+
+// The classic game's map in the sequel (M18u3): its point tree's cells made brushes so the
+// sequel's rules trace it, its items the sequel's: the player stands on its floor, walks through a
+// door and stops at the far wall.
+TEST(the_classic_games_map_plays_on_the_sequels_rules_with_the_sequels_items) {
+  br::Fixture f = br::sample_fixture();
+  br::Entity health;
+  health.pairs = {{"classname", "item_health"}, {"origin", "300 100 24"}};
+  br::Entity lg;
+  lg.pairs = {{"classname", "weapon_lightning"}, {"origin", "300 300 24"}};
+  f.entities = {health, lg};
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK_MSG(br::write_bsp(f, br::Family::v29, &bytes, &error), error);
+  cl::SearchPath mine;  // the sequel's own files: no such map
+  cl::RemixFiles remix;
+  remix.played = "sequel";
+  remix.state.on = true;
+  remix.state.other = "classic";
+  CHECK(cl::add_archive(remix.files, "pak0.pak", pack({{"maps/halls.bsp", bytes}}), error));
+  std::unique_ptr<cl::LoadedMap> map = cl::load_remixed_map(mine, "halls", &remix, error);
+  CHECK_MSG(map != nullptr, error);
+  if (!map) return;
+  CHECK(map->from_game == "classic" && !map->program_rules && map->spec.brushes != nullptr);
+  CHECK(!map->spec.brushes->brushes.empty());
+  CHECK(map->spec.entities.find("weapon_railgun") != std::string::npos);
+  CHECK(map->spec.entities.find("item_health_large") != std::string::npos);
+  bool rail = false;
+  for (const br::Entity& e : map->spec.brushes->entities)
+    rail = rail || e.get("classname") == "weapon_railgun";
+  CHECK(rail);  // the rules read the rewritten blocks
+
+  static const ge::progs::Progs progs = [] {
+    ge::progs::Progs out;
+    std::string why;
+    CHECK_MSG(cl::baseline_progs(out, why), why);
+    return out;
+  }();
+  cl::Listen l;
+  CHECK_MSG(cl::listen_start(l, progs, std::move(map), shooters_edge::net::listen_options(), error),
+            error);
+  if (l.rules == nullptr) return;
+  shooters_edge::server::SequelServer* sq = shooters_edge::server::sequel_of(*l.rules);
+  CHECK(sq != nullptr);
+  if (sq == nullptr) return;
+  int shown = 0;
+  for (const auto& e : sq->world.entities)
+    if (!e.free && e.modelindex > 0 && size_t(e.modelindex) < sq->world.models.size()) {
+      std::printf("  shown: %s at %.0f %.0f %.0f\n", sq->world.models[size_t(e.modelindex)].c_str(),
+                  double(e.origin.x), double(e.origin.y), double(e.origin.z));
+      ++shown;
+    }
+  const auto me = [&] { return l.server->sv.edicts[1]; };
+  for (int i = 0; i < 120; i++) cl::listen_frame(l, {});
+  const sh::Vec3f stood = me().origin;
+  CHECK_MSG(stood.z > 23 && stood.z < 25.5f, "stood at z " + std::to_string(stood.z));
+  sh::MoveCmd walk;
+  walk.angles = {0, 0, 0};  // east, along +x
+  walk.forward = 400;
+  for (int i = 0; i < 400; i++) cl::listen_frame(l, walk);
+  const sh::Vec3f at = me().origin;
+  // From the start (256 192) east through the hall's door into the side room, stopped by its
+  // east wall at x 864 less the box's half width.
+  CHECK_MSG(at.x > 800 && at.x < 864 - 16 + 1,
+            "walked to x " + std::to_string(at.x) + " y " + std::to_string(at.y));
+  CHECK(std::fabs(at.z - stood.z) < 1.0f);
 }

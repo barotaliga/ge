@@ -1034,8 +1034,10 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   packs lack is found in the other game's, read from the other game's packs with the played
   game's mounted over them (`RemixFiles`: its walls and sky its own, in its own palette, every
   model, sound and picture the rules name the played game's), and its items become the played
-  game's (M18u2; the sequel's rules on the classic game's maps are M18u3). The classic rules run
-  on a sequel map by tracing its models through their brushes (`sh::Server::model_solids`).
+  game's (M18u2, M18u3). The classic rules run on a sequel map by tracing its models through
+  their brushes (`sh::Server::model_solids`); the sequel's rules run on a classic map by giving its
+  point tree's cells brushes (`brush/cells.hpp`). An item keeps the middle of its floor where it
+  was (`profiles::item_foot`), and the map's textures are read by its own game's adapter.
 - **The balance** (`profiles::RemixBalance`): the weapons a map gets are weighed by tier against
   the rest of its weapons: fewer than `cr_strong_min` strong ones and the best weak one is raised
   to the strong kind the map has fewest of; more than `cr_strong_share` of them strong and the
