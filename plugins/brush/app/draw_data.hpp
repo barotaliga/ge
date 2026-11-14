@@ -205,6 +205,10 @@ struct Scene {
   // along +x, -x, +y, -y, +z, -z (kSkyBoxLook), each with its top edge toward kSkyBoxUp.
   Atlas sky_box;
   uint32_t sky_box_face = 0;
+  // The box's turn (sky_box.hpp's `sky_box_turn`): its axis (the map's axes) and degrees a second
+  // of the level's clock; no turn by default.
+  double sky_axis[3] = {0, 0, 0};
+  double sky_rotate = 0;
   uint32_t counts[kKinds] = {};  // triangles of each kind
   Rebaked rebaked;               // the map's light rebaked (attach_rebake), or empty
 };

@@ -117,10 +117,12 @@ bool hub_options(const std::vector<std::string>& args, HubOptions& out, std::str
     }
   }
   if (out.masters.empty() && !out.help && out.serve_master == 0 && out.browse_masters.empty() &&
-      out.browse_servers.empty() && out.accounts.empty() && out.rendezvous == 0) {
+      out.browse_servers.empty() && out.accounts.empty() && out.rendezvous == 0 &&
+      out.archive.empty()) {
     error =
         "no master to read; next: pass --master=<host:port> (several: comma-separated), or "
-        "--serve-master to run one here, or --browse-master for the game's own";
+        "--serve-master to run one here, or --browse-master for the game's own, or "
+        "--archive=<dir> alone for a hub of demos and runs";
     return false;
   }
   return true;
@@ -145,8 +147,8 @@ std::string hub_help(const HubSpec& spec) {
          "\n"
          "  --browse-server=<h:p,...> servers on the game's own status query, named by hand\n"
          "  --browse-every=<s>        the browse's refresh (default 30)\n"
-         "  --archive=<dir>           keep demos there: replay files dropped in <dir>/inbox are "
-         "taken\n"
+         "  --archive=<dir>           keep demos there: replay files (and a game's runs, input "
+         "logs) dropped in <dir>/inbox are taken\n"
          "  --keep-gb=<n>             the archive's size cap, oldest untagged first (default "
          "none)\n"
          "  --keep-days=<n>           the archive's age cap for untagged demos (default none)\n"
@@ -323,6 +325,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
   };
   Archive archive;
   if (!o.archive.empty()) {
+    archive.run_row = spec.run_row;  // a game that keeps runs as input logs reads them
     if (!archive_open(archive, o.archive, error)) {
       std::fprintf(stderr, "%s_hub: %s\n", spec.id.c_str(), error.c_str());
       close_accounts();

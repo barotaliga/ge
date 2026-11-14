@@ -14,6 +14,7 @@
 #include <string>
 
 #include "brush/map_fog.hpp"
+#include "core/libm/libm.hpp"
 #include "shooters_edge/app/classic_models.hpp"
 
 namespace shooters_edge::look {
@@ -232,7 +233,9 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
                         Kind{"r_explosionlight", "Whether an explosion lights the walls round it.",
                              "1: it does (the default); 0: it does not", &picture.explosion_light},
                         Kind{"r_powerupglow", "Whether a player with a power glows.",
-                             "1: they do (the default); 0: they do not", &picture.power_glow}})
+                             "1: they do (the default); 0: they do not", &picture.power_glow},
+                        Kind{"r_waterwarp", "Whether the view sways while you are under water.",
+                             "1: it does (the default); 0: it holds still", &picture.water_warp}})
     cv.bind({.name = k.name,
              .fallback = "1",
              .flags = gc::kArchive,
@@ -594,6 +597,11 @@ std::span<const effects::Light> kept_lights(const Picture& picture,
     if (!off) out.push_back(l);
   }
   return out;
+}
+
+double warped_fov(const Picture& picture, effects::Medium medium, double fov_y, double t) {
+  if (!picture.water_warp || medium == effects::Medium::air) return fov_y;
+  return fov_y * (1 + kWaterWarp * ge::core::libm::sin(2 * 3.14159265358979 * kWaterWarpHz * t));
 }
 
 void toned_blend(const Picture& picture, const effects::Screen& s, double rgba[4]) {

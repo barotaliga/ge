@@ -348,7 +348,7 @@ std::string demos_page(const Site& site, const HubSpec& spec, std::string_view t
   }
   h += "</select><input name=\"tag\" placeholder=\"tag\" value=\"" + html_escape(q.tag) +
        "\"><button>Search</button></form>";
-  h += "<p class=\"sum\">" + std::to_string(page.total) + " demos";
+  h += "<p class=\"sum\">" + std::to_string(page.total) + (page.total == 1 ? " demo" : " demos");
   if (page.pages > 1) {
     h += " · page " + std::to_string(page.page) + " of " + std::to_string(page.pages);
   }
@@ -372,7 +372,7 @@ std::string demos_page(const Site& site, const HubSpec& spec, std::string_view t
       if (t.scored) scores += html_escape(t.name) + " " + std::to_string(t.score) + " · ";
     }
     for (const DemoPlayer& p : r->players) {
-      if (p.scored) scores += html_escape(p.name) + " " + std::to_string(p.score) + " · ";
+      if (p.scored) scores += html_escape(p.name) + " " + score_text(spec, p.score) + " · ";
     }
     if (scores.size() >= 4) scores.resize(scores.size() - 4);  // the last " · "
     const std::string length = r->duration_ms >= 0
@@ -387,17 +387,20 @@ std::string demos_page(const Site& site, const HubSpec& spec, std::string_view t
     for (const std::string& t : r->tags) h += " <span class=\"tag\">" + html_escape(t) + "</span>";
     h += "</td><td>";
     h += length;
-    h += "</td><td><div class=\"act\"><a class=\"btn\" href=\"";
-    h += scheme;
-    h += "://demo/";
-    h += r->sha;
-    if (link_host(site.host)) {
-      h += "?hub=";
-      h += site.host;
+    h += "</td><td><div class=\"act\">";
+    if (!r->run) {  // a run is watched in the page; the game opens replay files
+      h += "<a class=\"btn\" href=\"";
+      h += scheme;
+      h += "://demo/";
+      h += r->sha;
+      if (link_host(site.host)) {
+        h += "?hub=";
+        h += site.host;
+      }
+      h += "\">Play</a>";
     }
-    h += "\">Play</a><a class=\"small\" href=\"/demo/" + r->sha +
-         "\">Watch</a><a class=\"small\" href=\"/";
-    h += archive_path(r->sha);
+    h += "<a class=\"small\" href=\"/demo/" + r->sha + "\">Watch</a><a class=\"small\" href=\"/";
+    h += row_path(*r);
     h += "\" download>Download</a>";
     if (r->radar) h += "<a class=\"small\" href=\"/radar/" + r->sha + "\">Map</a>";
     h += "</div></td></tr>";

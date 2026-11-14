@@ -603,6 +603,23 @@ It is built from the layers above, not bolted on:
 Not in scope, by design: kernel drivers, scanning the player's machine, or obfuscation. They
 are an arms race the engine does not enter, and the checks above hold without them.
 
+**Built (M17l, first part): the guard.** `engine/net/guard.hpp` is the checks on arrival, set on a
+replication server (`ReplicateServer::guard`). A game names its input's fields (offset, size,
+signed, range, grid step). Each new input is checked as it arrives:
+
+- A field off its range is clamped and flagged. A field off its grid is snapped to the nearest
+  step and flagged.
+- More new inputs over a two-second window than it has ticks, past a slack of 12, is a flood. The
+  server still applies one input a tick.
+- A view past the server's tick by more than two ticks is held to the server's tick and flagged.
+- `guard_motion` judges a peer game's stated places, a step at most a tick.
+
+Each flag adds its weight to a score that loses 1 a second. Past 40 the client is out, which the
+game reads. `guard_trial.hpp` runs honest players and five cheaters over a link, and the `cheats`
+lab runs it on every preset. Every cheat is out within two seconds, the teleporter at its sixth
+40 m jump. No honest player is flagged, even on `awful`. No cheat moves a mover faster than full
+stick.
+
 ## Pressure tests (M17m)
 
 The simulated network runs on virtual time, so an hour of play takes seconds and every run is
