@@ -101,6 +101,10 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // r_dynamic: the moment's lights (a muzzle's flash, a rocket's glow, an explosion) light the
   // walls and the models; off, none do.
   bool dynamic = true;
+  // r_rocketlight, r_explosionlight, r_powerupglow: each kind of the moment's lights on its own (a
+  // rocket's glow in flight, an explosion's, a power's round its carrier); off, that kind lights
+  // nothing (`kept_lights`). Either look.
+  bool rocket_light = true, explosion_light = true, power_glow = true;
   // gl_polyblend: 0 the view never tinted (below).
   bool poly_blend = true;
   // r_fastsky: the sky in one colour, r_skycolor ("R G B", 0..255). Either look.
@@ -162,7 +166,8 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
 };
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
 // r_farland, r_farland_warm, r_skyname, r_skyfog, r_drawflat, r_wallcolor, r_floorcolor,
-// r_fastsky, r_skycolor, r_dynamic, r_fullbrightskins, r_lerpmodels, r_lerpmove, r_arrival,
+// r_fastsky, r_skycolor, r_dynamic, r_rocketlight, r_explosionlight, r_powerupglow,
+// r_fullbrightskins, r_lerpmodels, r_lerpmove, r_arrival,
 // ce_bubbles_share, ce_water_specks, r_quality, r_budget, every ce_ switch, the three
 // ce_<id>_quality levels, r_wateralpha and its kin, noskins, baseskin and the weather's cvars over
 // `picture` (it must outlive `con`), and the `fog` and `allskins` commands.
@@ -170,6 +175,12 @@ void add_cvars(ge::console::Console& con, Picture& picture);
 // The screen's tint (effects::screen_blend) of `s` as the player tones it: each layer at its v_
 // share, all of them at gl_cshiftpercent, none with gl_polyblend 0.
 void toned_blend(const Picture& picture, const effects::Screen& s, double rgba[4]);
+// The moment's lights the player keeps: `lights` less each kind its setting puts out
+// (r_rocketlight, r_explosionlight, r_powerupglow), into `out` (cleared first); `lights` itself
+// when every kind is on, `out` otherwise.
+std::span<const effects::Light> kept_lights(const Picture& picture,
+                                            std::span<const effects::Light> lights,
+                                            std::vector<effects::Light>& out);
 // r_lightmap's faces: a middle grey (sRGB), so the light reads as it falls, neither burnt white
 // nor lost in the dark.
 inline constexpr double kLightmapGrey = 0.5;
