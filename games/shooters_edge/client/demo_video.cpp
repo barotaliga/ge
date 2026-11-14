@@ -227,7 +227,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     return false;
   }
   Timedemo t;
-  if (!timedemo_start(files, o.demo, t, error)) return false;
+  if (!timedemo_start(files, o.demo, t, error, o.game != nullptr ? *o.game : classic_adapter()))
+    return false;
   t.demo.track = o.track;
   t.start.track = o.track;
   t.smooth = o.lerp;
@@ -546,6 +547,8 @@ int demo_video_main(ge::console::Console& console, const Args& args, const Searc
   o.fps = args.fps_given ? args.fps : video.fps;
   o.codec = codec == "none" ? "" : codec;
   o.hud = video.hud;
+  const shooters_edge::profiles::GameProfile* game = shooters_edge::profiles::find_game(args.profile);
+  if (game != nullptr) o.game = &adapter_of(*game);  // its own recordings (the sequel's too)
   o.text = video.text;
   o.messages = video.messages;
   o.seconds = args.to > args.from ? args.to - args.from : args.seconds;

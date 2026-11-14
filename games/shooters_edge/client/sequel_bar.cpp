@@ -147,9 +147,7 @@ std::string_view sequel_world_string(const server::RulesWorld& w, int index, std
 }
 
 bool sequel_world_of(const DemoState& ds, server::RulesWorld& out) {
-  // The sequel's protocol 34, or its extended recordings' 3434 to 3436.
-  const bool sequel = ds.protocol == 34 || (ds.protocol >= 3434 && ds.protocol <= 3436);
-  if (!sequel || ds.status_bar.empty()) return false;
+  if (ds.format != DemoFormat::sequel || ds.status_bar.empty()) return false;
   if (ds.player < 0 || ds.player >= ge::shooter::kMaxClients) return false;
   out.status_bar = ds.status_bar;
   out.images = ds.images;
