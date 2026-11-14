@@ -2,7 +2,7 @@
 // operator's table, the inbox, retention and search.
 //
 // ge:summary The hub's demo archive defined: rows from meta, files by hash, inbox, prune, search
-// ge:keywords hub archive demo sha256 search inbox prune retention archive-tsv
+// ge:keywords hub archive demo sha256 search inbox prune retention archive-tsv run input-log
 // ge:skill net
 // ge:test tests/hub_archive_test.cpp
 #include "hub/archive.hpp"
@@ -146,10 +146,35 @@ bool is_hex_sha(std::string_view s) {
   return true;
 }
 
+bool is_run(std::span<const uint8_t> bytes) {
+  const std::string_view head(reinterpret_cast<const char*>(bytes.data()),
+                              std::min(bytes.size(), kRunMagic.size()));
+  return head == kRunMagic;
+}
+
+// A replay file's row, or a run's by the game's reader.
+bool read_row(const Archive& a, std::span<const uint8_t> bytes, DemoRow& out, std::string& error) {
+  if (!is_run(bytes)) return demo_row(bytes, out, error);
+  if (!a.run_row) {
+    error = "this hub's game keeps no runs (an input log), only replay files (.ged)";
+    return false;
+  }
+  out = DemoRow{};
+  if (!a.run_row(bytes, out, error)) return false;
+  out.run = true;
+  out.size = static_cast<int64_t>(bytes.size());
+  return true;
+}
+
 }  // namespace
 
 std::string archive_path(std::string_view sha) {
   return "d/" + std::string(sha.substr(0, 3)) + "/" + std::string(sha) + ".ged";
+}
+
+std::string row_path(const DemoRow& r) {
+  if (!r.run) return archive_path(r.sha);
+  return "r/" + r.sha.substr(0, 3) + "/" + r.sha + ".inputs";
 }
 
 bool demo_row(std::span<const uint8_t> bytes, DemoRow& out, std::string& error) {
@@ -218,40 +243,51 @@ bool demo_row(std::span<const uint8_t> bytes, DemoRow& out, std::string& error) 
 }
 
 bool archive_open(Archive& a, const std::string& dir, std::string& error) {
+  RunReader run_row = std::move(a.run_row);
   a = Archive{};
   a.dir = dir;
+  a.run_row = std::move(run_row);
   std::error_code ec;
   fs::create_directories(fs::path(dir) / "d", ec);
   fs::create_directories(fs::path(dir) / "inbox", ec);
+  if (a.run_row) fs::create_directories(fs::path(dir) / "r", ec);
   if (ec || !fs::is_directory(fs::path(dir) / "d", ec)) {
     error = "the archive's directory " + dir + " cannot be made (" + ec.message() +
             "); pass --archive=<a writable directory>";
     return false;
   }
   const std::map<std::string, Kept> table = read_table(fs::path(dir) / "archive.tsv");
-  for (fs::recursive_directory_iterator it(fs::path(dir) / "d", ec), end; !ec && it != end;
-       it.increment(ec)) {
-    if (!it->is_regular_file(ec) || it->path().extension() != ".ged") continue;
-    const std::string sha = it->path().stem().string();
-    if (!is_hex_sha(sha)) continue;
-    const std::optional<std::vector<uint8_t>> bytes = read_file(it->path());
-    DemoRow row;
-    std::string why;
-    if (!bytes || !demo_row(*bytes, row, why)) continue;
-    row.sha = sha;
-    const auto k = table.find(sha);
-    if (k != table.end()) {
-      row.added_s = k->second.added_s;
-      for (const std::string& t : k->second.tags) add_tag(row.tags, t);
+  for (const char* kind : {"d", "r"}) {
+    const bool runs = kind[0] == 'r';
+    if (runs && !fs::is_directory(fs::path(dir) / kind, ec)) {
+      ec.clear();
+      continue;
     }
-    if (row.start_s == 0) row.start_s = row.added_s;
-    a.bytes += row.size;
-    a.rows.push_back(std::move(row));
-  }
-  if (ec) {
-    error = "the archive's directory " + dir + "/d cannot be read (" + ec.message() +
-            "); check its permissions";
-    return false;
+    for (fs::recursive_directory_iterator it(fs::path(dir) / kind, ec), end; !ec && it != end;
+         it.increment(ec)) {
+      if (!it->is_regular_file(ec) || it->path().extension() != (runs ? ".inputs" : ".ged"))
+        continue;
+      const std::string sha = it->path().stem().string();
+      if (!is_hex_sha(sha)) continue;
+      const std::optional<std::vector<uint8_t>> bytes = read_file(it->path());
+      DemoRow row;
+      std::string why;
+      if (!bytes || !read_row(a, *bytes, row, why)) continue;
+      row.sha = sha;
+      const auto k = table.find(sha);
+      if (k != table.end()) {
+        row.added_s = k->second.added_s;
+        for (const std::string& t : k->second.tags) add_tag(row.tags, t);
+      }
+      if (row.start_s == 0) row.start_s = row.added_s;
+      a.bytes += row.size;
+      a.rows.push_back(std::move(row));
+    }
+    if (ec) {
+      error = "the archive's directory " + dir + "/" + kind + " cannot be read (" + ec.message() +
+              "); check its permissions";
+      return false;
+    }
   }
   sort_rows(a);
   return true;
@@ -260,7 +296,7 @@ bool archive_open(Archive& a, const std::string& dir, std::string& error) {
 AddResult archive_add(Archive& a, std::span<const uint8_t> bytes, int64_t now_s,
                       const std::vector<std::string>& tags, std::string& error, DemoRow* row) {
   DemoRow r;
-  if (!demo_row(bytes, r, error)) {
+  if (!read_row(a, bytes, r, error)) {
     a.stats.refused++;
     return AddResult::refused;
   }
@@ -276,8 +312,9 @@ AddResult archive_add(Archive& a, std::span<const uint8_t> bytes, int64_t now_s,
   r.added_s = now_s;
   if (r.start_s == 0) r.start_s = now_s;
   for (const std::string& t : tags) add_tag(r.tags, t);
-  if (!a.dir.empty() && !write_file(fs::path(a.dir) / archive_path(r.sha), bytes)) {
-    error = "the demo cannot be written under " + a.dir + "/d; check the disk and its permissions";
+  if (!a.dir.empty() && !write_file(fs::path(a.dir) / row_path(r), bytes)) {
+    error = std::string(r.run ? "the run" : "the demo") + " cannot be written under " + a.dir +
+            (r.run ? "/r" : "/d") + "; check the disk and its permissions";
     a.stats.refused++;
     return AddResult::refused;
   }
@@ -296,7 +333,8 @@ int archive_ingest(Archive& a, int64_t now_s, std::vector<std::string>& errors) 
   std::error_code ec;
   std::vector<fs::path> files;
   for (fs::directory_iterator it(inbox, ec), end; !ec && it != end; it.increment(ec)) {
-    if (it->is_regular_file(ec) && it->path().extension() == ".ged") files.push_back(it->path());
+    const fs::path ext = it->path().extension();
+    if (it->is_regular_file(ec) && (ext == ".ged" || ext == ".inputs")) files.push_back(it->path());
   }
   std::sort(files.begin(), files.end());
   int taken = 0;
@@ -327,7 +365,7 @@ int archive_prune(Archive& a, int64_t max_bytes, int64_t max_age_s, int64_t now_
     if (!too_old && !too_big) continue;
     if (!a.dir.empty()) {
       std::error_code ec;
-      fs::remove(fs::path(a.dir) / archive_path(r.sha), ec);
+      fs::remove(fs::path(a.dir) / row_path(r), ec);
     }
     a.bytes -= r.size;
     a.rows.erase(a.rows.begin() + static_cast<std::ptrdiff_t>(i));

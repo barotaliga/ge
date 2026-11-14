@@ -11,5 +11,5 @@ on the loading screen. Answer with the refusal (svc 41: size -1, percent 0) and 
 A bot's client recording may hold a long silence between its signon and its first frame (24 s
 while the bot loaded its routes), so a recording played at its own pace looks hung: cut a
 silence longer than a second. To make a long recording for a black-box run, use
-`shooters_edge_bots --out=<folder>`: each bot's client recording lands there. With several bots
+`sebots --out=<folder>`: each bot's client recording lands there. With several bots
 from one host, only one got in ("Bad challenge"), because our server keeps one challenge per host.

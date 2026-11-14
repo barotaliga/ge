@@ -6,6 +6,8 @@
 // ge:test tests/hub_api_test.cpp
 #include "hub/spec.hpp"
 
+#include <string>
+
 namespace ge::hub {
 
 namespace gn = ge::net;
@@ -38,6 +40,15 @@ int64_t interest(const HubSpec& spec, const HubNode& node, int64_t now_us) {
   if (people > 0)
     score = score * (int64_t{10} * humans_in + (people - humans_in)) / (int64_t{10} * people);
   return score < 2 ? 2 : score;
+}
+
+std::string score_text(const HubSpec& spec, int64_t score) {
+  if (!spec.score_ms) return std::to_string(score);
+  const int64_t cs = (score < 0 ? 0 : score) / 10;
+  const int64_t sec = cs / 100 % 60;
+  const int64_t hund = cs % 100;
+  return std::to_string(cs / 6000) + (sec < 10 ? ":0" : ":") + std::to_string(sec) +
+         (hund < 10 ? ".0" : ".") + std::to_string(hund);
 }
 
 }  // namespace ge::hub

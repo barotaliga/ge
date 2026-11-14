@@ -268,3 +268,52 @@ TEST(demos_page_lists_and_folds_the_scores) {
   CHECK(has(hub_answer(p, spec, "/demos", 0, Site{}).body, "This hub keeps no demos."));
   CHECK(utc_text(0) == "1970-01-01 00:00" && utc_text(951782400) == "2000-02-29 00:00");
 }
+
+TEST(runs_are_kept_beside_demos_when_the_game_reads_them) {
+  const fs::path dir = fresh_dir("runs");
+  const std::string text = "ge-inputs 1\ngame downhill\nseed 7\nhz 120\naxes steer\nsteps 2\n2 0\n";
+  const std::vector<uint8_t> log(text.begin(), text.end());
+  Archive a;
+  std::string err;
+  CHECK(archive_open(a, dir.string(), err));
+  // A hub whose game reads no runs refuses one, saying so.
+  CHECK(archive_add(a, log, 1794450000, {}, err) == AddResult::refused && has(err, "no runs"));
+  a.run_row = [](std::span<const uint8_t> bytes, DemoRow& out, std::string& error) {
+    if (bytes.size() < 20) {
+      error = "too short";
+      return false;
+    }
+    out.map = "seed 7";
+    out.mode = "race";
+    out.duration_ms = 17;
+    out.players.push_back({"Player", "", 61234, true});
+    return true;
+  };
+  CHECK(archive_open(a, dir.string(), err) && a.run_row);  // the reader kept across a reopen
+  DemoRow row;
+  CHECK(archive_add(a, log, 1794450000, {}, err, &row) == AddResult::added);
+  CHECK(row.run && row.map == "seed 7" && row.size == static_cast<int64_t>(log.size()));
+  CHECK(row_path(row) == "r/" + row.sha.substr(0, 3) + "/" + row.sha + ".inputs");
+  CHECK(fs::exists(dir / row_path(row)));
+  CHECK(archive_add(a, demo(DemoSpec{}), 1794450001, {}, err) == AddResult::added);
+  // The file, served as text; the summary says it is a run.
+  Answer out;
+  CHECK(archive_answer(&a, "/" + row_path(row), 0, out) && out.code == 200);
+  CHECK(out.type == "text/plain" && out.body == text);
+  CHECK(archive_answer(&a, "/d/" + row.sha.substr(0, 3) + "/" + row.sha + ".ged", 0, out) &&
+        out.code == 404);
+  CHECK(archive_answer(&a, "/v1/demos/" + row.sha, 0, out) && has(out.body, "\"kind\":\"run\"") &&
+        has(out.body, "\"file\":\"/r/"));
+  // Reopened from the files: both kinds come back.
+  Archive b;
+  b.run_row = a.run_row;
+  CHECK(archive_open(b, dir.string(), err) && b.rows.size() == 2);
+  const DemoRow* again = archive_find(b, row.sha);
+  CHECK(again != nullptr && again->run && again->players.size() == 1);
+  // The inbox takes a run too.
+  const std::string other = text + "1 0\n";
+  std::ofstream(dir / "inbox" / "mine.inputs") << other;
+  std::vector<std::string> errors;
+  CHECK(archive_ingest(b, 1794450002, errors) == 1 && errors.empty() && b.rows.size() == 3);
+  fs::remove_all(dir);
+}

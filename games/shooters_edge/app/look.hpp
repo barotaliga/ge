@@ -105,6 +105,8 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // rocket's glow in flight, an explosion's, a power's round its carrier); off, that kind lights
   // nothing (`kept_lights`). Either look.
   bool rocket_light = true, explosion_light = true, power_glow = true;
+  // r_waterwarp: the view breathes while the eye is in a liquid (`warped_fov`); 0 it holds still.
+  bool water_warp = true;
   // gl_polyblend: 0 the view never tinted (below).
   bool poly_blend = true;
   // r_fastsky: the sky in one colour, r_skycolor ("R G B", 0..255). Either look.
@@ -166,7 +168,7 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
 };
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
 // r_farland, r_farland_warm, r_skyname, r_skyfog, r_drawflat, r_wallcolor, r_floorcolor,
-// r_fastsky, r_skycolor, r_dynamic, r_rocketlight, r_explosionlight, r_powerupglow,
+// r_fastsky, r_skycolor, r_dynamic, r_rocketlight, r_explosionlight, r_powerupglow, r_waterwarp,
 // r_fullbrightskins, r_lerpmodels, r_lerpmove, r_arrival,
 // ce_bubbles_share, ce_water_specks, r_quality, r_budget, every ce_ switch, the three
 // ce_<id>_quality levels, r_wateralpha and its kin, noskins, baseskin and the weather's cvars over
@@ -181,6 +183,12 @@ void toned_blend(const Picture& picture, const effects::Screen& s, double rgba[4
 std::span<const effects::Light> kept_lights(const Picture& picture,
                                             std::span<const effects::Light> lights,
                                             std::vector<effects::Light>& out);
+// r_waterwarp's breath: the view's height swells and shrinks by kWaterWarp of itself, kWaterWarpHz
+// times a second, while the eye is in water, slime or lava, so the liquid reads as a lens round it.
+inline constexpr double kWaterWarp = 0.035, kWaterWarpHz = 0.45;
+// The field of view `fov_y` (rad) `t` s after the eye went into `medium`: as it is in the air or
+// with r_waterwarp 0, breathing by kWaterWarp at kWaterWarpHz in a liquid, from rest at t = 0.
+double warped_fov(const Picture& picture, effects::Medium medium, double fov_y, double t);
 // r_lightmap's faces: a middle grey (sRGB), so the light reads as it falls, neither burnt white
 // nor lost in the dark.
 inline constexpr double kLightmapGrey = 0.5;

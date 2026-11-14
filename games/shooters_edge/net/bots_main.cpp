@@ -1,4 +1,4 @@
-// THE BOT TEAM, HEADLESS: `shooters_edge_bots --server=<host:port> --bots=4 --team=<name>
+// THE BOT TEAM, HEADLESS: `sebots --server=<host:port> --bots=4 --team=<name>
 // --basedir=<the player's packs>` joins a classic server with a team of bots
 // (classic_bot_team.hpp) and plays until stopped: a tick every 13 ms on the wall clock, every line
 // typed on stdin a console line for the bots (`bot2 skill novice`, `ready`, `status`, `quit`),
@@ -13,7 +13,7 @@
 // docs/architecture.md § Player text).
 //
 // ge:summary The bot team headless: N bots join a classic server, a stdin console, a match folder
-// ge:keywords shooters_edge_bots bots-cli headless-bots live-server stdin-console match-folder
+// ge:keywords sebots bots-cli headless-bots live-server stdin-console match-folder
 // ge:skill bots net
 #include <algorithm>
 #include <chrono>
@@ -92,7 +92,7 @@ std::vector<std::string> split(const std::string& s) {
 
 void usage() {
   std::printf(
-      "shooters_edge_bots --server=<host:port> [--bots=4] [--team=bots] [--colour=4]\n"
+      "sebots --server=<host:port> [--bots=4] [--team=bots] [--colour=4]\n"
       "  [--basedir=<folder holding id1>] [--skills=expert,average,...] [--traits=<a,b,...>]\n"
       "  [--features=<-name,+name,...: every bot's; ';' between bots' own> "
       "(shooter/features.hpp)]\n"
@@ -179,7 +179,7 @@ int run(int argc, char** argv) {
       view_fps = std::atof(v.c_str());
     } else if (flag(a, "view-size", v)) {
       if (std::sscanf(v.c_str(), "%dx%d", &view_w, &view_h) != 2) {
-        std::fprintf(stderr, "shooters_edge_bots: --view-size=%s is not WxH\n", v.c_str());
+        std::fprintf(stderr, "sebots: --view-size=%s is not WxH\n", v.c_str());
         return 2;
       }
     } else if (flag(a, "snapshot", v)) {
@@ -193,7 +193,7 @@ int run(int argc, char** argv) {
     } else if (flag(a, "paths", v)) {
       cfg.paths = v != "0";
     } else {
-      std::fprintf(stderr, "shooters_edge_bots: unknown argument '%s'; next: --help\n", a.c_str());
+      std::fprintf(stderr, "sebots: unknown argument '%s'; next: --help\n", a.c_str());
       return 2;
     }
   }
@@ -205,8 +205,7 @@ int run(int argc, char** argv) {
   if (!named) cfg.names = shooters_edge::bots::bot_handles(cfg.seed, cfg.bots);
   std::FILE* feed = feed_file.empty() ? nullptr : std::fopen(feed_file.c_str(), "a");
   if (!feed_file.empty() && feed == nullptr) {
-    std::fprintf(stderr,
-                 "shooters_edge_bots: --feed=%s does not open; next: a folder that exists\n",
+    std::fprintf(stderr, "sebots: --feed=%s does not open; next: a folder that exists\n",
                  feed_file.c_str());
     return 1;
   }
@@ -229,7 +228,7 @@ int run(int argc, char** argv) {
   sn::TeamViewVideo video;
   if (!view_file.empty() &&
       !sn::team_view_video_open(video, view_file, view_w & ~1, view_h & ~1, view_fps, error)) {
-    std::fprintf(stderr, "shooters_edge_bots: --view=%s: %s\n", view_file.c_str(), error.c_str());
+    std::fprintf(stderr, "sebots: --view=%s: %s\n", view_file.c_str(), error.c_str());
     return 1;
   }
   double next_view = 0, next_snapshot = 0, next_feed = 0;
@@ -289,7 +288,7 @@ int run(int argc, char** argv) {
       next_view += 1.0 / view_fps;
       if (!sn::team_view_video_frame(video, sn::team_view(view, team, view_w & ~1, view_h & ~1),
                                      error))
-        std::fprintf(stderr, "shooters_edge_bots: the view's video: %s\n", error.c_str());
+        std::fprintf(stderr, "sebots: the view's video: %s\n", error.c_str());
     }
     if (!snapshot_file.empty() && t >= next_snapshot) {
       next_snapshot += snapshot_every;
@@ -304,7 +303,7 @@ int run(int argc, char** argv) {
     if (seconds > 0 && t >= seconds) break;
   }
   if (!sn::team_view_video_close(video, error))
-    std::fprintf(stderr, "shooters_edge_bots: the view's video: %s\n", error.c_str());
+    std::fprintf(stderr, "sebots: the view's video: %s\n", error.c_str());
   else if (!view_file.empty())
     std::printf("bots: the team's view is %s (%lld pictures)\n", view_file.c_str(),
                 static_cast<long long>(video.frames));
@@ -327,7 +326,7 @@ int main(int argc, char** argv) {
     return run(argc, argv);
   } catch (const std::exception& e) {
     std::fprintf(stderr,
-                 "shooters_edge_bots: stopped by an error: %s; next: run it again, and report it "
+                 "sebots: stopped by an error: %s; next: run it again, and report it "
                  "with the command line\n",
                  e.what());
     return 1;

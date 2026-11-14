@@ -1,7 +1,7 @@
 // THE SEQUEL'S DEDICATED SERVER GAME: the engine's server core (engine/server) running the sequel's
 // rules (server/sequel_server.hpp) on a sequel map and serving them over the sequel's own protocol
 // (sequel_net_server.hpp, protocol 34) on the game's port, so an existing client of the sequel
-// connects to `sesv --sequel` and plays.
+// connects to `sesv -game 2` and plays.
 //
 // THE MAP is `sv_map` (default `q2dm1`) read from the sequel's game folder under `--root`
 // (`baseq2`, loose or in its packs: the content row `sequel`, classicenhance/profile.hpp). The

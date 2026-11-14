@@ -88,7 +88,8 @@ struct WorldDraw {
   std::vector<float> casters;  // this frame's models as world triangles, for their shadows
   std::vector<ba::CasterBox> caster_boxes;  // and each one's box
   std::vector<effects::Light> kept;         // this frame's lights less the kinds put out
-  std::vector<gr::BeamShape> beam_shapes;   // kMaxBeamDraws, built each frame
+  double in_liquid_s = 0;  // s the eye has been in a liquid (0 in the air): r_waterwarp's clock
+  std::vector<gr::BeamShape> beam_shapes;  // kMaxBeamDraws, built each frame
   std::vector<gr::BeamDraw> beam_draws;
   // This frame's births, blasts and flames with the room's light on their smoke (light_at).
   std::vector<gr::Particle> lit_births;
@@ -641,6 +642,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   GE_ZONE("world");
   const look::Look lk = look::look_of(*f.picture);
   const int p = lk == look::Look::classic ? 0 : 1;
+  // In a liquid the view breathes (r_waterwarp).
+  f.in_liquid_s = fx.screen.medium == effects::Medium::air ? 0 : f.in_liquid_s + dt;
+  view.fov_y = look::warped_fov(*f.picture, fx.screen.medium, view.fov_y, f.in_liquid_s);
   {
     std::string refused;
     f.stops = look::picture_stops(*f.picture, f.w, f.h, f.kept_stops, refused);

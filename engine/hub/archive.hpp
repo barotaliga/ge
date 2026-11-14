@@ -12,20 +12,29 @@
 // (the closing summary: the match report's bytes in hex, net/report.hpp), whose id, start and
 // server join the demo to the match the hub keeps. Anything else is the game's and kept unread.
 //
-// Files come in through `archive_add` (bytes) or the inbox: every `.ged` an operator's recorder
-// drops in `<dir>/inbox/` is taken by `archive_ingest`. Search is the Demos page's: by mode, map,
-// player (any part of a name, any case), team, tag, server and age, newest first, 15 a page.
-// Retention drops the oldest untagged demos past a size or an age. The index lives in memory and
-// is rebuilt from the files when the hub starts (docs/hub.md § Decisions).
+// RUNS. A game whose runs are kept as input logs (engine/play/inputs.hpp's text, `ge-inputs` on its
+// first line: the setup and every step's input, a few kilobytes) has them archived beside the
+// demos the same way: by the SHA-256 of their bytes under `r/abc/abc….inputs`, one row each, found
+// by the same search and watched with the viewer's `--run`. The row is the game's to read
+// (`Archive::run_row`, from `HubSpec::run_row`): an input log carries no meta words, so the game
+// names its map, mode and racers, and their times, from the setup and the run played out. A hub
+// whose game reads none refuses a run.
+//
+// Files come in through `archive_add` (bytes) or the inbox: every `.ged` (or `.inputs`) an
+// operator's recorder drops in `<dir>/inbox/` is taken by `archive_ingest`. Search is the Demos
+// page's: by mode, map, player (any part of a name, any case), team, tag, server and age, newest
+// first, 15 a page. Retention drops the oldest untagged demos past a size or an age. The index
+// lives in memory and is rebuilt from the files when the hub starts (docs/hub.md § Decisions).
 //
 // ge:summary The hub's demo archive: replay files by SHA-256, rows from their meta, search, inbox
 // ge:keywords hub archive demo demos sha256 fan-out search player map mode tag retention inbox
-// ge:keywords replay-v2 meta-words index page
+// ge:keywords replay-v2 meta-words index page run runs input-log run_row row_path
 // ge:skill net
 // ge:test tests/hub_archive_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -62,6 +71,7 @@ struct DemoRow {
   std::vector<DemoTeam> teams;
   std::vector<std::string> tags;  // the header's and the operator's
   bool radar = false;             // the file has a radar track: the hub can draw its map
+  bool run = false;  // a run's input log (`r/…/.inputs`), watched with the viewer's `--run`
   // The trailer's closing summary (`report`, net/report.hpp): the match's id, start and server,
   // which join the demo to the hub's match (account/matches.hpp). report_id 0: none.
   uint64_t report_id = 0;
@@ -73,8 +83,18 @@ struct ArchiveStats {
   uint64_t added = 0, duplicates = 0, refused = 0, pruned = 0;
 };
 
+// A game's reader of a run's input log: the row's map, mode, title, players and their scores
+// (`score` as the game's HubSpec counts it), and `duration_ms`. False with the reason in `error`
+// (another game's log, a damaged one).
+using RunReader =
+    std::function<bool(std::span<const uint8_t> log, DemoRow& out, std::string& error)>;
+
+// The first word of an input log's text, which tells a run from a replay file.
+inline constexpr std::string_view kRunMagic = "ge-inputs ";
+
 struct Archive {
   std::string dir;            // "" when the hub keeps no archive
+  RunReader run_row;          // unset: runs are refused (kept across `archive_open`)
   std::vector<DemoRow> rows;  // newest first (start, then the hash)
   int64_t bytes = 0;
   ArchiveStats stats;
@@ -94,7 +114,8 @@ AddResult archive_add(Archive& a, std::span<const uint8_t> bytes, int64_t now_s,
                       const std::vector<std::string>& tags, std::string& error,
                       DemoRow* row = nullptr);
 
-// Every `.ged` in `<dir>/inbox/` added and removed from there (a refused one is moved to
+// Every `.ged` and `.inputs` in `<dir>/inbox/` added and removed from there (a refused one is moved
+// to
 // `<dir>/inbox/refused/`). The number taken.
 int archive_ingest(Archive& a, int64_t now_s, std::vector<std::string>& errors);
 
@@ -106,6 +127,8 @@ int archive_prune(Archive& a, int64_t max_bytes, int64_t max_age_s, int64_t now_
 const DemoRow* archive_find(const Archive& a, std::string_view sha);
 // A demo's file under the archive, relative to its directory: "d/abc/abc….ged".
 std::string archive_path(std::string_view sha);
+// A row's file under the archive: a demo's as above, a run's "r/abc/abc….inputs".
+std::string row_path(const DemoRow& r);
 // A row read from a replay file's bytes alone (no hash, no times); false with `error`.
 bool demo_row(std::span<const uint8_t> bytes, DemoRow& out, std::string& error);
 
@@ -125,8 +148,9 @@ DemoPage archive_search(const Archive& a, const DemoQuery& q, int64_t now_s);
 
 // THE ARCHIVE'S PATHS (archive_api.cpp): `/v1/demos` (the search as JSON: rows, total, page,
 // pages), `/v1/demos/{sha256}` (one demo's summary), `/d/{abc}/{sha256}.ged` (the file, cached a
-// year) and `/d/{abc}/{sha256}.json` (its summary). True when `target` is one of them, with the
-// answer in `out`; a hub with no archive (`a` null) answers them 404 with the flag to pass.
+// year), `/r/{abc}/{sha256}.inputs` (a run's) and `/d/{abc}/{sha256}.json` (its summary). True when
+// `target` is one of them, with the answer in `out`; a hub with no archive (`a` null) answers them
+// 404 with the flag to pass.
 bool archive_answer(const Archive* a, std::string_view target, int64_t now_s, Answer& out);
 std::string demo_json(const DemoRow& r);
 

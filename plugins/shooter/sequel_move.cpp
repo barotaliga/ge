@@ -18,11 +18,9 @@ namespace {
 
 constexpr float kStepSize = 18;
 constexpr float kStopSpeed = 100;
-constexpr float kMaxSpeed = 300;
 constexpr float kDuckSpeed = 100;
 constexpr float kAccelerate = 10;
 constexpr float kWaterAccelerate = 10;
-constexpr float kFriction = 6;
 constexpr float kWaterFriction = 1;
 constexpr float kWaterSpeed = 400;
 constexpr double kStopEpsilon = 0.1;
@@ -173,7 +171,7 @@ struct Move {
     float drop = 0;
     if ((pm.ground_entity >= 0 && !(ground_surface & kSqSurfSlick)) || ladder) {
       const float control = speed < kStopSpeed ? kStopSpeed : speed;
-      drop += control * kFriction * seconds;
+      drop += control * pm.friction * seconds;
     }
     if (pm.water_level && !ladder) {
       drop += speed * kWaterFriction * float(pm.water_level) * seconds;
@@ -231,7 +229,7 @@ struct Move {
     currents(wish);
     Vec3f dir = wish;
     float speed = normalize(dir);
-    if (speed > kMaxSpeed) speed = kMaxSpeed;
+    if (speed > pm.max_speed) speed = pm.max_speed;
     speed *= 0.5f;
     accelerate(dir, speed, kWaterAccelerate);
     step_slide();
@@ -245,7 +243,7 @@ struct Move {
     currents(wish);
     Vec3f dir = wish;
     float speed = normalize(dir);
-    const float cap = (pm.s.flags & kSqDucked) ? kDuckSpeed : kMaxSpeed;
+    const float cap = (pm.s.flags & kSqDucked) ? kDuckSpeed : pm.max_speed;
     if (speed > cap) {
       wish = wish * (cap / speed);
       speed = cap;
@@ -306,7 +304,7 @@ struct Move {
         }
         if (!(pm.s.flags & kSqOnGround)) {
           pm.s.flags |= kSqOnGround;
-          if (velocity.z < -200) {  // a long fall: no jump until the pause runs out
+          if (pm.land_pause && velocity.z < -200) {  // a long fall: no jump until the pause
             pm.s.flags |= kSqTimeLand;
             pm.s.time = velocity.z < -400 ? 25 : 18;
           }
@@ -399,7 +397,7 @@ struct Move {
     if (speed < 1) {
       velocity = {};
     } else {
-      const auto fric = float(double(kFriction) * 1.5);
+      const auto fric = float(double(pm.friction) * 1.5);
       const float control = speed < kStopSpeed ? kStopSpeed : speed;
       const float drop = control * fric * seconds;
       float scale = speed - drop;
@@ -415,7 +413,7 @@ struct Move {
     wish.z += float(pm.cmd.up);
     Vec3f dir = wish;
     float wspeed = normalize(dir);
-    if (wspeed > kMaxSpeed) wspeed = kMaxSpeed;
+    if (wspeed > pm.max_speed) wspeed = pm.max_speed;
     accelerate(dir, wspeed, kAccelerate);
     origin = mad(origin, seconds, velocity);
   }
