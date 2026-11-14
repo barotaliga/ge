@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "assets/pcx.hpp"
+#include "classicenhance/cached.hpp"
 
 namespace shooters_edge::client {
 
@@ -19,25 +20,37 @@ namespace {
 
 constexpr int kClear = 255;  // the pictures' see-through colour
 
-const ge::ui::Image* picture(SequelBar& bar, const std::string& path) {
+const BarPicture* picture(SequelBar& bar, const std::string& path) {
   auto it = bar.pictures.find(path);
   if (it == bar.pictures.end()) {
-    ge::ui::Image out;
+    BarPicture out;
     std::vector<uint8_t> store;
     const std::span<const uint8_t> bytes =
         bar.files != nullptr ? find_file(*bar.files, path, store) : std::span<const uint8_t>();
     ge::assets::IndexedImage img;
     std::string why;
     if (!bytes.empty() && ge::assets::decode_pcx(bytes, path, &img, &why) && !img.palette.empty()) {
-      out.width = img.width;
-      out.height = img.height;
-      out.rgba = ge::assets::pcx_rgba(img);
+      out.image.width = img.width;
+      out.image.height = img.height;
+      out.image.rgba = ge::assets::pcx_rgba(img);
       for (size_t i = 0; i < img.indices.size(); i++)
-        if (img.indices[i] == kClear) out.rgba[i * 4 + 3] = 0;
+        if (img.indices[i] == kClear) out.image.rgba[i * 4 + 3] = 0;
+      // Its enhanced copy, by the cache's name for it (the path without ".pcx").
+      ge::assets::Image big;
+      const std::string name = path.ends_with(".pcx") ? path.substr(0, path.size() - 4) : path;
+      if (const uint32_t k =
+              ge::classicenhance::cached_picture(bar.cache, name, static_cast<uint32_t>(img.width),
+                                                 static_cast<uint32_t>(img.height), &big);
+          k > 1) {
+        out.image.width = big.width;
+        out.image.height = big.height;
+        out.image.rgba = std::move(big.rgba);
+        out.k = static_cast<int>(k);
+      }
     }
     it = bar.pictures.emplace(path, std::move(out)).first;
   }
-  return it->second.empty() ? nullptr : &it->second;
+  return it->second.image.empty() ? nullptr : &it->second;
 }
 
 struct Strings {
@@ -100,9 +113,9 @@ void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, i
   if (crosshair >= 1 && crosshair <= 3) {
     hud::LayoutOp op;
     op.name = "ch" + std::to_string(crosshair);
-    if (const ge::ui::Image* img = picture(bar, hud::layout_picture_path(op.name))) {
-      op.x = (w - img->width) / 2;
-      op.y = (h - img->height) / 2;
+    if (const BarPicture* img = picture(bar, hud::layout_picture_path(op.name))) {
+      op.x = (w - static_cast<int>(img->width())) / 2;
+      op.y = (h - static_cast<int>(img->height())) / 2;
       bar.ops.insert(bar.ops.begin(), std::move(op));  // under the bar
     }
   }
@@ -128,32 +141,30 @@ void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, i
 bool draw_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, int scale) {
   const auto f = static_cast<float>(scale);
   bool drew = false;
-  const auto box = [&](const ge::ui::Image* img, float x, float y, float w, float h,
-                       ge::ui::Rect uv) {
+  const auto box = [&](const BarPicture* img, float x, float y, float w, float h, ge::ui::Rect uv) {
     ge::ui::Box b;
     b.rect = {x * f, y * f, w * f, h * f};
-    b.image = img;
+    b.image = &img->image;
     b.uv = uv;
-    b.nearest = true;
+    b.nearest = img->k == 1;
     b.feather = 0;
     dl.box(b);
     drew = true;
   };
-  const ge::ui::Image* glyphs = nullptr;
+  const BarPicture* glyphs = nullptr;
   for (const hud::LayoutOp& op : bar.ops) {
     if (op.kind == hud::LayoutOp::Kind::picture) {
-      const ge::ui::Image* img = picture(bar, hud::layout_picture_path(op.name));
+      const BarPicture* img = picture(bar, hud::layout_picture_path(op.name));
       if (img == nullptr && !op.fallback.empty())
         img = picture(bar, hud::layout_picture_path(op.fallback));
       if (img == nullptr) continue;
-      box(img, static_cast<float>(op.x), static_cast<float>(op.y), static_cast<float>(img->width),
-          static_cast<float>(img->height),
-          {0, 0, static_cast<float>(img->width), static_cast<float>(img->height)});
+      box(img, static_cast<float>(op.x), static_cast<float>(op.y), img->width(), img->height(),
+          {0, 0, static_cast<float>(img->image.width), static_cast<float>(img->image.height)});
       continue;
     }
     if (glyphs == nullptr) glyphs = picture(bar, "pics/conchars.pcx");
     if (glyphs == nullptr) return drew;
-    const float cell = static_cast<float>(glyphs->width) / 16;
+    const float cell = static_cast<float>(glyphs->image.width) / 16;
     for (size_t i = 0; i < op.text.size(); i++) {
       auto code = static_cast<uint8_t>(op.text[i]);
       if (op.alt) code = static_cast<uint8_t>(code | 0x80);
