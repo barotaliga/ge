@@ -150,6 +150,40 @@ struct Progress {
   }
 };
 
+// THE SKIER'S CAREER (profile.hpp): his statistics over every run his profile was carried
+// through, this one's not yet added. A run opened fresh has none; `Driver::carry` brings a
+// profile's in.
+struct Career {
+  int32_t runs = 0;      // runs his profile was taken from
+  int32_t finishes = 0;  // races finished, free rides ended at a foot
+  double best_time = 0;  // s, his fastest race to the line (0: none finished)
+  double seconds = 0;    // s skied, every run's clock
+  double distance = 0;   // m: the free ride's odometer, a finished race's piste
+  double top_speed = 0;  // m/s, his fastest
+  double max_landing_g = 0;
+  int32_t flights = 0;
+  int32_t wipeouts = 0;
+  int32_t resets = 0;
+  int32_t missed_gates = 0;
+  int32_t lifts = 0;  // lifts ridden to the top
+  template <class Io>
+  friend void describe(Io& io, Career& v) {
+    io(v.runs);
+    io(v.finishes);
+    io(v.best_time);
+    io(v.seconds);
+    io(v.distance);
+    io(v.top_speed);
+    io(v.max_landing_g);
+    io(v.flights);
+    io(v.wipeouts);
+    io(v.resets);
+    io(v.missed_gates);
+    io(v.lifts);
+  }
+  bool operator==(const Career&) const = default;
+};
+
 // How a racer rides when the bot has his controls (field.hpp deals it): the share of the bot's
 // speed plan he dares, and how far right of the piste's centre he holds his line, m.
 struct Rider {

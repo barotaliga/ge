@@ -119,6 +119,12 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
     if (static_cast<int>(n) == me || !s.entities[n].present) continue;
     if (s.format != DemoFormat::single && n <= s.players.size()) continue;  // players: below
     put(static_cast<int>(n), s.entities[n]);
+    // A single-player demo's players are its first entities, in their slots' colours.
+    if (s.format == DemoFormat::single && n <= static_cast<size_t>(s.max_clients) &&
+        n <= s.top.size() && !out.empty() && out.back().entity == static_cast<int>(n)) {
+      out.back().top = static_cast<uint32_t>(s.top[n - 1]);
+      out.back().bottom = static_cast<uint32_t>(s.bottom[n - 1]);
+    }
   }
   if (s.format != DemoFormat::single) {
     bool teamplay = false;

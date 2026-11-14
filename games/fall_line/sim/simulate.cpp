@@ -110,6 +110,11 @@ bool Driver::over() const {
   return true;
 }
 
+void Driver::carry(const Career& career, const ge::skier::BodyState& body) {
+  carried_ = career;
+  state_.racers[0].body = body;
+}
+
 RunReport Driver::report(double seed) const {
   RunReport rep;
   const Racer& me = state_.racers[0];

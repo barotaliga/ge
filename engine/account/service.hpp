@@ -43,7 +43,7 @@
 //   name     a name's key, folded by the asking game's rules
 //                                           -> the account that reserves it (0: none), asked by a
 //            game server whose master is elsewhere, to keep a registered name from a guest
-//   friend, friends, presence, invite, invites   a ticket first: friends_service.hpp
+//   friend, friends, presence, invite, invites, queue, offer: friends_service, matchmaker_service
 // The throttle's address is the asker's; for `login` it is the server's and the player's
 // together, so one player's wrong codes do not hold the whole server's.
 //
@@ -67,6 +67,7 @@
 
 #include "account/friends.hpp"
 #include "account/matches.hpp"
+#include "account/matchmaker.hpp"
 #include "account/store.hpp"
 #include "account/ticket.hpp"
 #include "net/address.hpp"
@@ -92,9 +93,11 @@ enum class Op : uint8_t {
   friends = 9,
   presence = 10,
   invite = 11,
-  invites = 12
+  invites = 12,
+  queue = 13,  // the matchmaker's ops (matchmaker_service.hpp)
+  offer = 14
 };
-constexpr uint8_t kOpLast = 12;
+constexpr uint8_t kOpLast = 14;
 const char* op_name(Op op);
 
 // New random bytes for one call: the operating system's (net::os_random_bytes) or a lab's stream.
@@ -146,8 +149,10 @@ struct Service {
   std::vector<Recent> recent;  // a ring of `config.recent`
   size_t recent_next = 0;
   ServiceStats stats;
-  Matches matches;  // the match reports servers sent (matches.hpp)
-  Friends friends;  // friends, presence and invites between accounts (friends.hpp)
+  Matches matches;        // the match reports servers sent (matches.hpp)
+  Friends friends;        // friends, presence and invites between accounts (friends.hpp)
+  Matchmaker matchmaker;  // the ranked queue and the servers' offered seats (matchmaker.hpp)
+  int64_t paired_s = 0;   // when service_update last paired the queue
   std::vector<Piecing> pieces;
   uint8_t buffer[net::kMaxDatagram];
 };

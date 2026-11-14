@@ -6,9 +6,11 @@
 // ge:test tests/server_login_test.cpp
 #include "server/login.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 
+#include "account/matchmaker_service.hpp"
 #include "account/ticket.hpp"
 #include "core/num.hpp"
 #include "net/udp_socket.hpp"
@@ -379,6 +381,7 @@ void logins_frame(Logins& l, double now_s, int64_t unix_us) {
       if (s.state == LoginState::asking) account::ask_update(s.ask, *l.link, unix_us);
     for (NameCheck& c : l.names)
       if (!c.answered) account::ask_update(c.ask, *l.link, unix_us);
+    if (l.offering) account::ask_update(l.offer_ask, *l.link, unix_us);
     net::Address from;
     for (;;) {
       const int n = net::transport_receive(*l.link, l.buffer, sizeof l.buffer, from, unix_us);
@@ -403,6 +406,17 @@ void logins_frame(Logins& l, double now_s, int64_t unix_us) {
         }
       for (size_t k = 0; !read && k < l.names.size(); k++)
         read = !l.names[k].answered && account::ask_read(l.names[k].ask, l.buffer, size, from);
+      if (!read && l.offering) account::ask_read(l.offer_ask, l.buffer, size, from);
+    }
+    if (l.offering && l.offer_ask.done) {
+      l.offering = false;
+      if (l.offer_ask.answered && l.offer_ask.reply.refusal == ga::Refusal::none) {
+        l.stats.offers_taken++;
+      } else if (l.offer_ask.answered) {
+        l.notes.push_back("the account master did not take this server's ranked seats: " +
+                          l.offer_ask.reply.words +
+                          " (its owner trusts a server by the key printed at its start)");
+      }
     }
     for (size_t k = 0; k < l.names.size();) {
       NameCheck& c = l.names[k];
@@ -482,5 +496,34 @@ bool login_key(const Logins& l, net::Key& out) {
 }
 
 std::string login_key_tag(const net::Key& key) { return net::key_to_hex(key).substr(0, 16); }
+
+void logins_offer(Logins& l, std::string_view game, std::string_view address, uint16_t port,
+                  int free_seats, int64_t unix_us) {
+  if (l.set.ranked.empty() || unix_us < l.offer_due_us || l.offering) return;
+  l.offer_due_us = unix_us + kOfferEvery_us;
+  const int seats = std::max(0, std::min(free_seats, 64));
+  const int64_t now_s = unix_us / 1000000;
+  if (l.own != nullptr) {
+    account::service_offer(*l.own, l.own->keys.pub, game, l.set.ranked, address, seats, now_s);
+    l.stats.offers++;
+    l.stats.offers_taken++;
+    return;
+  }
+  if (l.link == nullptr || !l.key_known || l.signer == nullptr) return;
+  const std::string text = account::offer_text(game, l.set.ranked, port, seats, now_s);
+  const net::Signature sig =
+      net::sign(*l.signer, reinterpret_cast<const uint8_t*>(text.data()), text.size());
+  net::Key fresh{};
+  l.fresh(l.fresh_ctx, fresh.data(), fresh.size());
+  account::ask_start(l.offer_ask, ga::Op::offer, l.master, l.master_key,
+                     {std::string(l.signer->pub.begin(), l.signer->pub.end()),
+                      std::string(sig.begin(), sig.end()), std::string(game), l.set.ranked,
+                      std::to_string(port), std::to_string(seats), std::to_string(now_s)},
+                     fresh, unix_us);
+  net::wipe(fresh.data(), fresh.size());
+  account::ask_update(l.offer_ask, *l.link, unix_us);
+  l.offering = true;
+  l.stats.offers++;
+}
 
 }  // namespace ge::server

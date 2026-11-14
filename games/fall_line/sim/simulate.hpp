@@ -138,6 +138,10 @@ class Driver {
   ge::racing::ControlTape tape() const { return recorder_.seal(); }
   // The run so far, as the sim lab's table prints it.
   RunReport report(double seed) const;
+  // THE PROFILE CARRIED IN (profile.hpp): the career from earlier runs, and the player's body
+  // set to `body`. Call it before the first step; nothing else of the run changes.
+  void carry(const Career& career, const ge::skier::BodyState& body);
+  const Career& carried() const { return carried_; }
 
  private:
   GameState state_;
@@ -162,6 +166,7 @@ class Driver {
   double top_speed_ = 0;
   int32_t flights_ = 0;
   double max_landing_g_ = 0;
+  Career carried_;  // the career a profile brought in (profile.hpp); never stepped nor hashed
   template <class Io>
   friend void describe(Io& io, Driver& v) {
     io(v.state_);
@@ -185,6 +190,7 @@ class Driver {
     io(v.top_speed_);
     io(v.flights_);
     io(v.max_landing_g_);
+    io.since(2, v.carried_, Career{});
   }
 };
 

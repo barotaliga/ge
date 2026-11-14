@@ -371,6 +371,7 @@ characters.
 | `games/shooters_edge/server/` | Shooter's Edge's server: the host, its slots and input log, the dedicated binary; the mod server (QC builtins and extensions, hooks, the test and baseline mods, a progs from a path) | `shooter`, `progs` |
 | `games/shooters_edge/rules/` | Shooter's Edge's own rules in C++ as native programs (M52h): the classic server's calls typed for them; the arena and the campaign on the rules they share | `progs`, `shooter` |
 | `games/shooters_edge/hub/` | Shooter's Edge's hub binary (`shooters_edge_hub`): the engine's hub with the game's modes and words | `net` |
+| `games/fall_line/web/` | Fall Line's web viewer (`fall_line_viewer`, the `web` preset with `GE_WEB_GAME=fall_line`): a run's input log fetched, played again and drawn on the page's canvas | `net`, `render` |
 | `games/shooters_edge/web/` | Shooter's Edge's web viewer (`shooters_edge_viewer`, the `web` preset): the packs and a demo fetched from a hub, the match played on the page's canvas | `net` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (the harness), `golden.hpp`, `golden/` | `testing` |
 | `porting/` | The WORKING AREA (above): the porting guide, the porting map, the golden-table generators. Deleted when porting ends | `port` |

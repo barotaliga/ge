@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "assets/pcx.hpp"
+#include "classicenhance/cached.hpp"
 
 namespace shooters_edge::client {
 
@@ -19,25 +20,106 @@ namespace {
 
 constexpr int kClear = 255;  // the pictures' see-through colour
 
-const ge::ui::Image* picture(SequelBar& bar, const std::string& path) {
+const BarPicture* picture(SequelBar& bar, const std::string& path) {
   auto it = bar.pictures.find(path);
   if (it == bar.pictures.end()) {
-    ge::ui::Image out;
+    BarPicture out;
     std::vector<uint8_t> store;
     const std::span<const uint8_t> bytes =
         bar.files != nullptr ? find_file(*bar.files, path, store) : std::span<const uint8_t>();
     ge::assets::IndexedImage img;
     std::string why;
     if (!bytes.empty() && ge::assets::decode_pcx(bytes, path, &img, &why) && !img.palette.empty()) {
-      out.width = img.width;
-      out.height = img.height;
-      out.rgba = ge::assets::pcx_rgba(img);
+      out.image.width = img.width;
+      out.image.height = img.height;
+      out.image.rgba = ge::assets::pcx_rgba(img);
       for (size_t i = 0; i < img.indices.size(); i++)
-        if (img.indices[i] == kClear) out.rgba[i * 4 + 3] = 0;
+        if (img.indices[i] == kClear) out.image.rgba[i * 4 + 3] = 0;
+      // Its enhanced copy, by the cache's name for it (the path without ".pcx").
+      ge::assets::Image big;
+      const std::string name = path.ends_with(".pcx") ? path.substr(0, path.size() - 4) : path;
+      if (const uint32_t k =
+              ge::classicenhance::cached_picture(bar.cache, name, static_cast<uint32_t>(img.width),
+                                                 static_cast<uint32_t>(img.height), &big);
+          k > 1) {
+        out.image.width = big.width;
+        out.image.height = big.height;
+        out.image.rgba = std::move(big.rgba);
+        out.k = static_cast<int>(k);
+      }
     }
     it = bar.pictures.emplace(path, std::move(out)).first;
   }
-  return it->second.empty() ? nullptr : &it->second;
+  return it->second.image.empty() ? nullptr : &it->second;
+}
+
+constexpr int kInventoryRows = 17;
+
+std::string lower(std::string_view s) {
+  std::string out(s);
+  for (char& c : out)
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  return out;
+}
+
+// The first key bound exactly to `use <name>`, compared without case; "" none.
+std::string hotkey(const std::map<std::string, std::string>* binds, std::string_view name) {
+  if (binds == nullptr) return {};
+  const std::string want = "use " + lower(name);
+  for (const auto& [key, command] : *binds)
+    if (lower(command) == want) return key;
+  return {};
+}
+
+std::string right(std::string text, size_t width) {
+  if (text.size() > width) text.resize(width);
+  return std::string(width - text.size(), ' ') + text;
+}
+
+void add_text(std::vector<hud::LayoutOp>& ops, int x, int y, std::string text, bool alt) {
+  hud::LayoutOp op;
+  op.kind = hud::LayoutOp::Kind::text;
+  op.x = x;
+  op.y = y;
+  op.text = std::move(text);
+  op.alt = alt;
+  ops.push_back(std::move(op));
+}
+
+// The inventory screen (sequel_bar.hpp) into `ops`, on a `w` x `h` screen.
+void inventory(const SequelBar& bar, const server::RulesWorld& world, int slot, int selected, int w,
+               int h, std::vector<hud::LayoutOp>& ops) {
+  const std::vector<int16_t>& counts = world.clients[slot].inventory;
+  std::vector<int> held;
+  for (size_t n = 1; n < counts.size(); n++)
+    if (counts[n] != 0) held.push_back(static_cast<int>(n));
+  int at = -1;
+  for (size_t i = 0; i < held.size(); i++)
+    if (held[i] == selected) at = static_cast<int>(i);
+  int top = std::max(at, 0) - kInventoryRows / 2;
+  if (static_cast<int>(held.size()) >= kInventoryRows)
+    top = std::min(top, static_cast<int>(held.size()) - kInventoryRows);
+  top = std::max(top, 0);
+  const int ox = (w - 256) / 2, oy = (h - 240) / 2;
+  hud::LayoutOp pic;
+  pic.name = "inventory";
+  pic.x = ox;
+  pic.y = oy + 8;
+  ops.push_back(std::move(pic));
+  add_text(ops, ox + 24, oy + 24, "hotkey ### item", false);
+  add_text(ops, ox + 24, oy + 32, "------ --- ----", false);
+  int y = oy + 40;
+  for (int i = top; i < static_cast<int>(held.size()) && i < top + kInventoryRows; i++, y += 8) {
+    const int n = held[static_cast<size_t>(i)];
+    std::string scratch;
+    const std::string name(sequel_world_string(world, 1056 + n, scratch));
+    std::string row = right(hotkey(bar.binds, name), 6) + " " +
+                      right(std::to_string(counts[static_cast<size_t>(n)]), 3) + " " + name;
+    const bool chosen = n == selected;
+    if (chosen && (static_cast<int64_t>(bar.now * 10) & 1) != 0)
+      add_text(ops, ox + 16, y, std::string(1, '\x0f'), false);
+    add_text(ops, ox + 24, y, std::move(row), !chosen);
+  }
 }
 
 struct Strings {
@@ -85,6 +167,15 @@ void run_sequel_bar(SequelBar& bar, const server::RulesWorld& world, int slot, i
     return sequel_world_string(s.world, index, s.scratch);
   };
   hud::run_layout(in, bar.ops);  // its text copied out of the strings as they are read
+  const server::WorldClient& me = world.clients[slot];
+  if ((in.stats[13] & 1) != 0 && !me.layout.empty()) {
+    std::vector<hud::LayoutOp> over;  // the screen the rules sent him, over the bar
+    in.program = me.layout;
+    hud::run_layout(in, over);
+    for (hud::LayoutOp& op : over) bar.ops.push_back(std::move(op));
+  }
+  if ((in.stats[13] & 2) != 0 && !me.inventory.empty())
+    inventory(bar, world, slot, in.stats[12], in.width, in.height, bar.ops);
 }
 
 void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, int width,
@@ -94,9 +185,9 @@ void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, i
   if (crosshair >= 1 && crosshair <= 3) {
     hud::LayoutOp op;
     op.name = "ch" + std::to_string(crosshair);
-    if (const ge::ui::Image* img = picture(bar, hud::layout_picture_path(op.name))) {
-      op.x = (w - img->width) / 2;
-      op.y = (h - img->height) / 2;
+    if (const BarPicture* img = picture(bar, hud::layout_picture_path(op.name))) {
+      op.x = (w - static_cast<int>(img->width())) / 2;
+      op.y = (h - static_cast<int>(img->height())) / 2;
       bar.ops.insert(bar.ops.begin(), std::move(op));  // under the bar
     }
   }
@@ -122,32 +213,30 @@ void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, i
 bool draw_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, int scale) {
   const auto f = static_cast<float>(scale);
   bool drew = false;
-  const auto box = [&](const ge::ui::Image* img, float x, float y, float w, float h,
-                       ge::ui::Rect uv) {
+  const auto box = [&](const BarPicture* img, float x, float y, float w, float h, ge::ui::Rect uv) {
     ge::ui::Box b;
     b.rect = {x * f, y * f, w * f, h * f};
-    b.image = img;
+    b.image = &img->image;
     b.uv = uv;
-    b.nearest = true;
+    b.nearest = img->k == 1;
     b.feather = 0;
     dl.box(b);
     drew = true;
   };
-  const ge::ui::Image* glyphs = nullptr;
+  const BarPicture* glyphs = nullptr;
   for (const hud::LayoutOp& op : bar.ops) {
     if (op.kind == hud::LayoutOp::Kind::picture) {
-      const ge::ui::Image* img = picture(bar, hud::layout_picture_path(op.name));
+      const BarPicture* img = picture(bar, hud::layout_picture_path(op.name));
       if (img == nullptr && !op.fallback.empty())
         img = picture(bar, hud::layout_picture_path(op.fallback));
       if (img == nullptr) continue;
-      box(img, static_cast<float>(op.x), static_cast<float>(op.y), static_cast<float>(img->width),
-          static_cast<float>(img->height),
-          {0, 0, static_cast<float>(img->width), static_cast<float>(img->height)});
+      box(img, static_cast<float>(op.x), static_cast<float>(op.y), img->width(), img->height(),
+          {0, 0, static_cast<float>(img->image.width), static_cast<float>(img->image.height)});
       continue;
     }
     if (glyphs == nullptr) glyphs = picture(bar, "pics/conchars.pcx");
     if (glyphs == nullptr) return drew;
-    const float cell = static_cast<float>(glyphs->width) / 16;
+    const float cell = static_cast<float>(glyphs->image.width) / 16;
     for (size_t i = 0; i < op.text.size(); i++) {
       auto code = static_cast<uint8_t>(op.text[i]);
       if (op.alt) code = static_cast<uint8_t>(code | 0x80);

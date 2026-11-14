@@ -127,6 +127,10 @@ struct ServerConfig {
   account::Service* accounts = nullptr;
   net::Transport* account_link = nullptr;
   int64_t (*unix_us)() = nullptr;
+  // The server's own key (its reports' and its ranked offers' signer, sv_ranked): set by the
+  // dedicated process once a master elsewhere's key is known; null: no offers to a master
+  // elsewhere.
+  const net::SignKeys* account_signer = nullptr;
 };
 
 // What a replay found.

@@ -89,6 +89,12 @@ struct WorldClient {
   int ping_ms = 0;
   double entered_at = 0;  // the server's time it connected, s
   PlayerNumbers numbers;  // zero while the slot is empty
+  // A layout game's last layout program sent this client (the scoreboard, the help computer),
+  // drawn over its bar while its stat 13 has bit 1; "" none.
+  std::string layout;
+  // Its last inventory message: 256 counts by item number (the sequel's item list), drawn while
+  // stat 13 has bit 2; empty none.
+  std::vector<int16_t> inventory;
 };
 
 struct WorldStatic {

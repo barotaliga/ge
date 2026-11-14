@@ -574,8 +574,21 @@ round and round (`net/classic_tv_recording.hpp`). The recording is played at its
 first packet, and a silence longer than a second is cut to one. Each command record's angles are
 the view. Each time round, the spawn count goes up by one, so every viewer signs on again.
 
+A single-player recording (`setv --demo=<file.dem>`) is converted whole to a client recording
+when it is opened (`client/demo_convert.hpp`: the recorder's view as the recording's player,
+whole entity lists, a command record a frame), then played the same way, monsters and all.
+
+**A packet for each of the viewer's.** The face answers every packet a viewer sends with the
+newest frame, again if no new one has come, besides sending each new frame. A classic client
+stops moving its view when the server's packets fall too far behind its own, as they would from a
+recording of 10 frames a second against a client sending 72; a server that answers every packet
+never lets them. Measured black-box: an existing client watching the shareware game's demo1
+through the TV had a frozen view (the HUD and prints still came) until the face answered every
+packet.
+
 **A multiview recording** (`setv --demo=<file.mvd>`, `UdpTvMultiview`) gives every player's view.
-The face has eight streams. The first is the view the TV follows (the lowest slot playing),
+The face has eight streams. The first is the clock (the lowest slot playing, followed when auto
+track is off),
 converted from the start (`client/demo_convert.hpp`, a multiview recording to one player's client
 recording, as it is read). Every other view is converted only while someone watches it: when a
 viewer asks for a player no stream carries (its track keys, or fire for the next player in the
@@ -586,6 +599,16 @@ view's clock, a little ahead of it, so a switch lands at the same moment of the 
 that speak the stream protocol keep the multiview stream and free look; this face never converts
 for them.
 
+**Auto track.** The view the TV follows is the hottest player's, not the lowest slot's. When the
+recording is opened, the cuts are worked out over the whole of it (`client/demo_autotrack.hpp`,
+the same plan a demo video's auto track uses), so a cut can land before a fight. At each cut the
+pick's view is turned on like a view asked for, and once it has a level the face follows it
+(`udp_tv_follow`): every viewer that chose no player of its own moves there. A move to another
+player's seat is a level change for a classic client, so the TV's settings
+(`tv_autotrack_settings`) hold a pick at least 8 s and keep cuts 4 s apart, against a video's 4 s
+and 1 s. A view the TV has left is let go like any other nobody watches. `--autotrack=0` follows
+the lowest slot instead.
+
 Measured black-box: an existing client asked for no extensions, joined the TV playing a bot's dm4
 recording from our server, and watched it with the HUD, the prints and the team chat. Moving the
 mouse did not turn the view. The test (`tests/shooters_edge_classic_tv_udp_test.cpp`) records a
@@ -595,7 +618,8 @@ late, and a third is refused for a wrong password.
 
 A multiview recording, black-box: the same client watched a real 4on4 recording on dm2 through
 `setv`, and each press of fire moved it to the next player's view (three views converting at
-most, the one it left let go ten seconds later). The test plays a written match: nothing but the
+most, the one it left let go ten seconds later). With auto track on, the same client chose no
+player and rode nine cuts in 150 s, each one a reconnect, and stayed connected. The test plays a written match: nothing but the
 followed view is converted until the viewer's track keys ask for slot 2, it is seated in slot 2's
 view, and that view is let go once it is back on the followed one.
 

@@ -44,7 +44,7 @@ TEST(wrong_words_are_refused_with_what_the_viewer_takes) {
   ViewerArgs a;
   std::string error;
   CHECK(!parse({}, a, error) &&
-        error.find("none of --demo, --tv, --play and --join") != std::string::npos);
+        error.find("none of --demo, --run, --tv, --play and --join") != std::string::npos);
   CHECK(!parse({"--demo=/d/x", "--tv=ws://h:1/", "--stream=1"}, a, error));
   CHECK(error.find("more than one") != std::string::npos);
   CHECK(!parse({"--tv=ws://h:1/"}, a, error) && error.find("--stream") != std::string::npos);
@@ -113,5 +113,20 @@ TEST(a_join_page_s_websocket_is_read_beside_or_instead_of_webtransport) {
   CHECK(!parse({"--join=ws://h:1/play?to=x:1", "--cert=" + hash}, a, error) &&
         error.find("goes with --join") != std::string::npos);
   CHECK(!parse({"--play=dm3", "--join=ws://h:1/play?to=x:1"}, a, error) &&
+        error.find("more than one") != std::string::npos);
+}
+
+TEST(a_run_page_s_words_are_read) {
+  ViewerArgs a;
+  std::string error;
+  CHECK(parse({"--run=/r/ab/fall_line-38.inputs", "--view=high", "--speed=2"}, a, error));
+  CHECK(a.run == "/r/ab/fall_line-38.inputs" && a.view == "high" && a.speed == 2);
+  CHECK(parse({"--run=/r/x.inputs"}, a, error) && a.view.empty());
+  CHECK(!parse({"--run="}, a, error) && error.find("names no run") != std::string::npos);
+  CHECK(!parse({"--run=/r/x.inputs", "--view=a b"}, a, error) &&
+        error.find("not a view") != std::string::npos);
+  CHECK(!parse({"--demo=/d/x", "--view=chase"}, a, error) &&
+        error.find("goes with --run") != std::string::npos);
+  CHECK(!parse({"--demo=/d/x", "--run=/r/x.inputs"}, a, error) &&
         error.find("more than one") != std::string::npos);
 }

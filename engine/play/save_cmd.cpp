@@ -1,13 +1,14 @@
 // The `play save` commands (saves.hpp): a run saved off an input log, a save loaded and played on,
 // the check of a log's saves against the run never saved, and two saves compared.
 //
-//   play save write <log> --step=N --out=<file> [--title=..] [--place=..]
+//   play save write <log> --step=N --out=<file> [--title=..] [--place=..] [--picture[=view]]
 //   play save load <file> [--steps=N]        loaded, then the game's pilot plays N steps on
 //   play save check <log> [--every=S]        saved every S seconds, each loaded and played on
 //   play save diff <a> <b>                   chunk by chunk, then field by field through `state`
+//   play save part <file> --out=<file>       the run's save cut down to the game's character
 //
 // ge:summary play save write, load, check and diff: the run's saves on the play command line
-// ge:keywords play save write load check diff command-line json chunk state field
+// ge:keywords play save write load check diff part character command-line json chunk state field
 // ge:skill save agent-interface
 // ge:test tests/play_saves_test.cpp
 #include <chrono>
@@ -17,6 +18,7 @@
 #include "core/num_text.hpp"
 #include "play/saves.hpp"
 #include "play/session.hpp"
+#include "save/part.hpp"
 
 namespace ge::play {
 
@@ -110,7 +112,10 @@ int write_cmd(const GameSpec& spec, const std::vector<std::string>& words,
   meta.place = flag(flags, "place");
   std::vector<uint8_t> bytes;
   const auto t0 = std::chrono::steady_clock::now();
-  if (!save_run(spec, setup, s.run(), at, meta, bytes, error)) {
+  const bool pictured = flags.count("picture") != 0;
+  if (!(pictured ? save_run_pictured(spec, setup, s.run(), at, meta, bytes, error,
+                                     flag(flags, "picture"))
+                 : save_run(spec, setup, s.run(), at, meta, bytes, error))) {
     return problem(out, 1, error, spec.name,
                    "give the game's Run a save and a load (skill: save, docs/saves.md)");
   }
@@ -121,6 +126,32 @@ int write_cmd(const GameSpec& spec, const std::vector<std::string>& words,
   out << "{\"file\":" << quote(file) << ",\"step\":" << at << ",\"bytes\":" << bytes.size()
       << ",\"save_ms\":" << core::num::to_fixed(save_ms, 3)
       << ",\"digest\":" << quote(hex64(s.run().digest())) << ",\"chunks\":[" << chunks_json(bytes)
+      << "]}\n";
+  return 0;
+}
+
+int part_cmd(const GameSpec& spec, const std::vector<std::string>& words,
+             const std::map<std::string, std::string>& flags, std::ostream& out) {
+  const std::string file = flag(flags, "out");
+  if (words.size() != 2 || file.empty()) {
+    return problem(out, 2, "save part takes a run's save and --out", "the command line",
+                   "play save part saves/a.save --out=saves/skier.character");
+  }
+  if (spec.character.empty()) {
+    return problem(out, 1, std::string("the game ") + spec.name + " carries no character",
+                   spec.name, "name the character's chunks in its GameSpec (skill: save)");
+  }
+  std::vector<uint8_t> bytes, part;
+  if (!read_bytes(words[1], bytes))
+    return problem(out, 1, "cannot read " + words[1], words[1], "pass a save file");
+  std::string error;
+  if (!save::extract(bytes, spec.name, spec.character, flag(flags, "title"), part, error))
+    return problem(out, 1, error, words[1], "ge save inspect " + words[1]);
+  std::ofstream f(file, std::ios::binary);
+  f.write(reinterpret_cast<const char*>(part.data()), static_cast<std::streamsize>(part.size()));
+  if (!f) return problem(out, 1, "cannot write " + file, file, "pass a writable --out");
+  out << "{\"file\":" << quote(file) << ",\"bytes\":" << part.size()
+      << ",\"chunk_count\":" << spec.character.size() << ",\"chunks\":[" << chunks_json(part)
       << "]}\n";
   return 0;
 }
@@ -259,7 +290,8 @@ int save_command(const GameSpec& spec, const std::vector<std::string>& words,
   if (sub == "load") return load_cmd(spec, words, flags, out);
   if (sub == "check") return check_cmd(spec, words, flags, out);
   if (sub == "diff") return diff_cmd(spec, words, out);
-  return problem(out, 2, "save takes write, load, check or diff", "the command line",
+  if (sub == "part") return part_cmd(spec, words, flags, out);
+  return problem(out, 2, "save takes write, load, check, diff or part", "the command line",
                  "play save write <log> --step=N --out=<file>");
 }
 

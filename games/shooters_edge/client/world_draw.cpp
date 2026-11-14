@@ -777,6 +777,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     f.models.skin_choice = {.noskins = f.picture->noskins,
                             .base = f.picture->base_skin,
                             .all = f.picture->all_skins,
+                            .figure = f.picture->all_figures,
                             .team = f.picture->team_skin,
                             .enemy = f.picture->enemy_skin,
                             .team_top = f.picture->team_top,
@@ -789,7 +790,13 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   }
   // Under a lava's or a slime's level the modern look draws the liquid round the eye itself.
   const bool round = f.extras && liquid_round_eye(*f.extras);
-  gr::set_post_blend(d, f.post[p], round ? fx.blend_dry : fx.blend);
+  {
+    // The screen's tint toned by the player (v_contentblend and kin, gl_cshiftpercent,
+    // gl_polyblend).
+    double blend[4];
+    look::toned_blend(*f.picture, round ? fx.screen_dry : fx.screen, blend);
+    gr::set_post_blend(d, f.post[p], blend);
+  }
   // The local player's own arrival opens the whole view out of a flash and a warp (r_arrival).
   gr::set_post_warp(
       d, f.post[p],

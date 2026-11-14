@@ -108,8 +108,9 @@ Player player(std::string label, std::string name, int server, double join_s,
 struct Session {
   std::string error;
   std::vector<Player> players;
-  int leaks = 0;  // login lines (or a code) printed to anyone
-  int agent = 0;  // lines in an agent's syntax
+  int leaks = 0;          // login lines (or a code) printed to anyone
+  int agent = 0;          // lines in an agent's syntax
+  int ranked_seats = -1;  // the seats the community's server last offered (-1: none taken)
   // Our client's presence as its friend Niclas sees it at the end, and the invites it said.
   std::string presence;
   int invites = 0;
@@ -190,6 +191,11 @@ Session run_session(uint32_t seed, double seconds, double login_time_s) {
   c[1].login.master = gn::to_string(master_at);
   c[1].login.key = gn::key_to_hex(ga::service_key(master));
   c[1].account_link = &link;
+  // The community's server offers its seats for ranked duels; its master trusts its key.
+  const gn::SignKeys server_key = gn::sign_keys(key_of(seed, 3));
+  c[1].login.ranked = "1on1";
+  c[1].account_signer = &server_key;
+  ga::matches_trust(master.matches, server_key.pub);
   gs::Server s[2];
   for (int i = 0; i < 2; i++)
     if (!gs::server_open(s[i], se::classic_game(), c[i], &ports[i], nullptr, r.error)) return r;
@@ -298,6 +304,9 @@ Session run_session(uint32_t seed, double seconds, double login_time_s) {
     ga::service_update(master, g_unix);
     gn::sim_advance(net, now);
   }
+  for (const ga::Offer& o : master.matchmaker.offers)
+    if (o.mode == "1on1") r.ranked_seats = o.seats;
+  fold(r.digest, std::to_string(r.ranked_seats));
   const ga::Presence seen = ga::presence_of(master.friends, 2, g_unix / 1000000, 1);
   r.presence =
       std::string(ga::presence_state_name(seen.state)) + " " + seen.where + " " + seen.words;
@@ -497,9 +506,14 @@ void run(gl::Lab& lab) {
   lab.metric("disagreeing_runs", a.digest == b.digest ? 0 : 1, "runs");
   lab.metric("our_client_seen_playing", a.presence.rfind("playing ", 0) == 0 ? 1 : 0, "players");
   lab.metric("invites_said", a.invites, "invites");
+  lab.metric("ranked_seats_offered", a.ranked_seats, "seats");
   lab.table(std::move(table));
   lab.note("digest " + hex(a.digest) + ", again " + hex(b.digest));
   lab.note("our client as its friend sees it: " + a.presence);
+  if (a.ranked_seats < 0)
+    lab.fail("the community's server never offered its seats to the matchmaker (sv_ranked 1on1)",
+             "Look at logins_offer (engine/server/login.cpp) and ranked_offer "
+             "(games/shooters_edge/net/classic_login.cpp); skill: net.");
   if (a.presence.rfind("playing ", 0) != 0 || a.invites != 1)
     lab.fail("our client's presence or its friend's invite did not arrive (seen as '" + a.presence +
                  "', " + std::to_string(a.invites) + " invites said)",

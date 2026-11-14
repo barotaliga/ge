@@ -170,14 +170,14 @@ std::vector<uint8_t> write_single_demo(const DemoScript& s) {
   return file.b;
 }
 
-std::vector<uint8_t> write_client_demo(const DemoScript& s, int cmd_size) {
+std::vector<uint8_t> write_client_demo(const DemoScript& s, int cmd_size, int protocol) {
   Out file;
   uint32_t seq = 0;
   const size_t frames = s.origins.size();
 
   Out sign;
   sign.u8(11);  // serverdata, no extensions
-  sign.i32(28);
+  sign.i32(protocol);
   sign.i32(1);  // the spawn count
   sign.str("baseline");
   sign.u8(0);  // the player's slot
@@ -247,14 +247,26 @@ std::vector<uint8_t> write_client_demo(const DemoScript& s, int cmd_size) {
     file.f32(a.z);
 
     Out m;
-    m.u8(42);  // playerinfo: the slot, the flags (msec, velocity x), the origin, the frame
+    m.u8(42);  // playerinfo: the slot, the flags (msec, command, velocity x), the origin, the frame
     m.u8(0);
-    m.i16(0x1 | 0x4);
+    m.i16(0x1 | 0x2 | 0x4);
     m.coord(o.x);
     m.coord(o.y);
     m.coord(o.z);
     m.u8(6);
     m.u8(13);
+    const int yaw = static_cast<int>(std::lround(a.y * 65536 / 360)) & 0xFFFF;
+    if (protocol <= 26) {  // the command: the yaw always, the forward move a byte (times 8), msec
+      m.u8(0x04 | 0x80);
+      m.i16(yaw);
+      m.u8(50);
+      m.u8(13);
+    } else {  // the yaw under 0x80, the forward move a short, msec always
+      m.u8(0x04 | 0x80);
+      m.i16(yaw);
+      m.i16(400);
+      m.u8(13);
+    }
     m.i16(320);
     // The rocket: a full list on the first frame, a delta list after it.
     if (i == 0) {
@@ -507,6 +519,15 @@ std::vector<uint8_t> write_multiview_match(const MatchScript& s) {
       m.u8(14);
       m.u8(static_cast<int>(k));
       m.i16(frags);
+    }
+    if (i == s.intermission) {
+      m.u8(30);  // intermission: the spot, the look in 1/256 of a turn
+      m.coord(s.spot.x);
+      m.coord(s.spot.y);
+      m.coord(s.spot.z);
+      m.angle(s.look.x);
+      m.angle(s.look.y);
+      m.angle(s.look.z);
     }
     for (const MatchRocket& rk : s.rockets)  // a rocket's blast where its flight ends
       if (i == rk.to) {

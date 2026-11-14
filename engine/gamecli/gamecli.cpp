@@ -129,6 +129,14 @@ constexpr Command kEngine[] = {
      "what your friends see of you (--where=<host:port>, --words=<map and mode>); the game sets it "
      "itself while it runs",
      "friends status playing --where=192.168.1.20:27500 --words=dm4", "engine", cmd_friends_status},
+    {"ranked find", "<mode>",
+     "a ranked game found by your ladder rating on a server that offered seats (--duo=<name> for "
+     "2on2, --for=<s> to keep looking)",
+     "ranked find 1on1 --for=120", "engine", cmd_ranked_find},
+    {"ranked status", "", "whether you are waiting for a ranked game, or where it is",
+     "ranked status", "engine", cmd_ranked_status},
+    {"ranked leave", "", "stop looking for a ranked game", "ranked leave", "engine",
+     cmd_ranked_leave},
     {"logs", "[<name>]", "the logs of what this CLI started, or the end of one",
      "logs dedicated-27500 --lines=40", "engine", cmd_logs},
 };
@@ -226,6 +234,10 @@ const std::vector<CommandFlags>& flag_table() {
       {"friends status",
        with(kFriendsFlags, {{"where", "<host:port>", "the server you are on"},
                             {"words", "<text>", "the map and mode, as friends read them"}})},
+      {"ranked find", with(kFriendsFlags, {{"duo", "<name>", "your duo, for a 2on2"},
+                                           {"for", "<s>", "keep looking this long"}})},
+      {"ranked status", kFriendsFlags},
+      {"ranked leave", kFriendsFlags},
   };
   return table;
 }

@@ -1844,9 +1844,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                                      : fx::Medium::air;
   }
   fx::screen_blend(screen, out.blend);
+  out.screen = screen;
   if (screen.medium == fx::Medium::lava || screen.medium == fx::Medium::slime)
     screen.medium = fx::Medium::air;
   fx::screen_blend(screen, out.blend_dry);
+  out.screen_dry = screen;
 }
 
 bool load_held_fire(HeldFire& f, std::string* error, std::span<const std::string_view> at_eye) {

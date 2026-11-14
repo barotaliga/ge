@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "assets/pcx.hpp"
 #include "vfs/pak.hpp"
 
 namespace ge::classicenhance {
@@ -123,15 +124,17 @@ bool pack_pictures(std::span<const uint8_t> pack_bytes, Palette* palette,
   if (!vfs::read_pak(pack_bytes, &pak, error)) return false;
   if (!read_palette(profile, pak, pack_bytes, palette, error)) return false;
   const std::string wad_name(profile.wad);
-  const vfs::PakEntry* wad_entry = vfs::pak_find(pak, wad_name);
-  if (wad_entry == nullptr) {
+  const vfs::PakEntry* wad_entry = wad_name.empty() ? nullptr : vfs::pak_find(pak, wad_name);
+  if (!wad_name.empty() && wad_entry == nullptr) {
     *error = "the pack has no " + wad_name + ", where the status bar's pictures are; it is not " +
              std::string(profile.what) + "'s pack (profile " + std::string(profile.id) + ")";
     return false;
   }
-  const std::span<const uint8_t> wad_bytes = vfs::pak_file(pack_bytes, *wad_entry);
+  // A row with no wad (the sequel) keeps all its pictures as files.
+  const std::span<const uint8_t> wad_bytes =
+      wad_entry != nullptr ? vfs::pak_file(pack_bytes, *wad_entry) : std::span<const uint8_t>{};
   vfs::Wad wad;
-  if (!vfs::read_wad(wad_bytes, &wad, error)) {
+  if (wad_entry != nullptr && !vfs::read_wad(wad_bytes, &wad, error)) {
     *error = wad_name + ": " + *error;
     return false;
   }
@@ -159,9 +162,19 @@ bool pack_pictures(std::span<const uint8_t> pack_bytes, Palette* palette,
   for (const vfs::PakEntry* e : assets_of(pak, profile.pictures)) {
     PackPicture p;
     std::string ignored;
-    // The palette and the colour map are tables, not pictures: their sizes do not add up.
-    if (!vfs::read_picture(vfs::pak_file(pack_bytes, *e), &p.picture, &ignored)) continue;
-    if (size_t(8) + p.picture.indices.size() != e->size) continue;
+    if (profile.pictures.ext == ".pcx") {
+      // A PCX picture, in the game's palette whatever its own (the palette file is one too).
+      if (e->path == profile.palette) continue;
+      assets::IndexedImage img;
+      if (!assets::decode_pcx(vfs::pak_file(pack_bytes, *e), e->path, &img, &ignored)) continue;
+      p.picture.width = img.width;
+      p.picture.height = img.height;
+      p.picture.indices = std::move(img.indices);
+    } else {
+      // The palette and the colour map are tables, not pictures: their sizes do not add up.
+      if (!vfs::read_picture(vfs::pak_file(pack_bytes, *e), &p.picture, &ignored)) continue;
+      if (size_t(8) + p.picture.indices.size() != e->size) continue;
+    }
     p.name = lower(e->path.substr(0, e->path.size() - profile.pictures.ext.size()));
     p.from = e->path;
     out->push_back(std::move(p));

@@ -11,7 +11,8 @@
 // selected item, 7 and 8 the item last picked up (for 3 s), 9 and 10 the first power-up running
 // (quad, invulnerability, suit, rebreather) and its whole seconds left, 11 the help computer's icon
 // flashing while its news is unread, 14 the frags, 15 the blow taken this frame (bit 1 health,
-// bit 2 armour). 13 (the scoreboard and help screens), 16 and 17 (spectators) stay 0 for now.
+// bit 2 armour). 13 bit 1 a screen up over the bar, bit 2 the inventory (sequel_screens.hpp), 16
+// and 17 (spectators) stay 0 for now.
 //
 // The items are numbered as the game's own list numbers them (1 the body armour .. 41 health; 0
 // none), so an item's name is item string 1056 + its number, and a stock client's `use` and
@@ -35,6 +36,7 @@
 namespace shooters_edge::server {
 
 struct SequelServer;
+struct SqBody;
 
 inline constexpr int kSqItemNumbers = 42;  // the game's item list: 0 none, 1..41
 inline constexpr int kSqBlasterNumber = 7;
@@ -46,6 +48,11 @@ int sq_item_number(int row);
 int sq_weapon_number(int weapon);
 // Whether picking up item number `n` makes it the selected item (it has a use).
 bool sq_selects(int n);
+// How many of item number `n` the body holds, as the inventory counts it: a weapon or key 1 each,
+// ammo its rounds, the armour worn its points; 0 for the shard and health.
+int sq_count(const SqBody& body, int n);
+// Item number `n`'s name as a player reads it ("Shotgun"), "" for none.
+std::string_view sq_item_name(int n);
 // An item number's icon (its picture's name under `pics/`), "" for none.
 std::string_view sq_icon(int n);
 

@@ -189,14 +189,24 @@ every few minutes on the free ride); the engine gives the ring and a minimum spa
 
 ## Pictures of a save (M25d)
 
-Optional, per game: a `PICT` chunk holding a small picture (a few hundred pixels wide) in QOI
-(a lossless picture format with a one-page public specification, a few hundred lines to read and
-write, faster than PNG and about its size). It comes from either source a game has:
+Optional, per game: a `PICT` chunk (`engine/save/picture.hpp`) holding a small picture (its
+widest side 320 pixels by default, shrunk by a box filter) in QOI (`engine/save/qoi.hpp`: a
+lossless picture format with a one-page public specification, a few dozen lines each way, faster
+than PNG and about its size). It is written FIRST after the meta, so a menu reads it off the
+file's front. It comes from either source a game has:
 
 - the run's CPU view (`Run::shoot`), which works headless and needs no GPU, so every lab and
-  every test save has one;
+  every test save can have one: `play::save_run_pictured` (and `ge save write --picture`) shoots
+  the game's first view, or the one named;
 - the renderer's last presented frame, read back without stalling (`engine/gpu/target.hpp`'s
-  readback ring), when the game has a window.
+  readback ring), when the game has a window: any RGBA goes through `save::put_picture`.
+
+The store keeps the picture's place in its index (`PicturePlace`: offset, bytes, checksum and
+size, in the `SLOT` chunk from its version 2), so `Store::picture` reads only the file's front up
+to the picture's end and checks it against the checksum; a slot only peeked when the index was
+rebuilt, or one changed under it, gives its picture out of the whole file. The `save-picture`
+lab saves Fall Line's race on three seeds at four moments each, every one with its picture, and
+a menu's read of all twelve takes the index once and 18% of the files' bytes.
 
 Because a load is fast, a menu can also show a save LIVE: open it in the background, draw the
 run as it stands, and let the camera drift. That is the game's choice; the engine's part is that
@@ -205,25 +215,62 @@ a load is cheap enough to do on a highlight.
 ## Part of a run: characters (M25e)
 
 A save is chunks, so PART of a run is a chunk set. A game names which chunks make a character
-(its stats, its outfit, its inventory, its skills) and the store keeps characters as files of
-their own kind (`character` in the header), in the same format, read by the same tools:
+(`GameSpec::character`: their tags) and keeps a character as a file of its own kind (`character`
+in the header), in the same format, read by the same tools:
 
-- `save::extract`: a character's chunks copied out of a run's save (or written straight from the
-  run, `Run::save_part`);
-- `Run::import`: those chunks read into a run opened on ANOTHER setup (another seed, another map),
-  replacing that run's own character and nothing else.
+- `save::extract` (`engine/save/part.hpp`): a character's chunks copied out of a whole run's
+  save, byte for byte, under the run's meta with its kind set to `character` (`ge save part`);
+- `Run::save_part`: the character written straight from the run (`play::save_character`);
+- `Run::import`: those chunks read into a run opened on ANOTHER setup (another seed, another map)
+  and never stepped, replacing that run's own character and nothing else
+  (`play::import_character`, which refuses a whole run's save: that is loaded, not imported).
 
 That is the shape of a game that keeps its heroes apart from its worlds: the character is a file,
 the world is made new each time, and the character walks into it. Fall Line's is the skier's
-profile (the outfit, the skis, the body and its injuries, the statistics), carried from one
-mountain to another.
+profile (`games/fall_line/sim/profile.hpp`, the `PROF` chunk, which every whole save also
+carries): his body (the injuries he has taken, worst by part; this run's blow in progress and
+owed load stay behind) and his career (every run his profile was taken from: runs, finishes, the
+best race time, seconds and metres skied, the top speed, flights, wipeouts, resets, missed gates,
+lifts), this run's added when it is taken. A skier killed in a run carries nothing. Skis and an
+outfit join it when the game gives each skier his own; today every racer stands on the same pair.
+The `save-character` lab takes the profile from seed 38 into seed 7: the fields equal, the run
+otherwise seed 7's to the byte and to the digest at every step, the career both runs summed.
 
 ## Saves on every device (M25f)
 
-With the platform services (M20): each slot is a cloud file of the same name, written after the
-local one is safe, and the index is rebuilt on each device from the slots it has. A slot changed
-on two devices since they last met is resolved by its play time and date, and the loser is kept as
-`<slot>.conflict` for the player to choose from. The cloud's quota is when LZ4 earns its place.
+`save::sync(store, disk, cloud, "saves/", &report, problem)` (`engine/save/cloud.hpp`) brings a
+store's slots and the player's cloud to the same slots. The cloud is any `save::Cloud`: the
+platform services' cloud files through `services::SaveCloud` (`engine/services/save_cloud.hpp`),
+or `MemCloud` in a test. Each slot is a cloud file of the same name under the prefix, beside a
+`manifest`: every slot's checksum (xxh64 of the file), size, play time and date as `SYNC` chunks.
+A sync reads the manifest, not every file.
+
+Each slot is compared three ways: the local file, the cloud's, and the BASE, what both held when
+this device last synced. The base is kept in the store's directory as `sync` (the store lists
+only slot names, so it never shows in a menu).
+
+| Local against base | Cloud against base | What the sync does |
+| --- | --- | --- |
+| the same | changed | the cloud's comes down through `Store::write`, as safe as any save; removed in the cloud, removed here |
+| changed | the same | it goes up; removed here, removed in the cloud |
+| changed | changed, to another file | a CONFLICT: the one played longer (then saved later, then the greater checksum, so every device picks the same) wins on both sides; the other is kept as `<slot>.conflict` here and in the cloud, and every other device fetches it |
+| removed | changed (or the other way) | a save beats a removal: the save is kept |
+
+- A local slot whose size, play time and date are the base's is taken as unchanged without
+  reading it: a sync with nothing to do reads the manifest and writes nothing to the cloud.
+- A device stopped mid-sync leaves nothing wrong: a file uploaded before its manifest is read
+  and hashed by the next sync; a download is a store write, safe to the unit (§ Slots).
+- A cloud file that is not a save of this game is left alone on both sides, never taken for a
+  removal.
+- The index is the store's own, rebuilt on each device from the slots it has (`Store::open`).
+- No compression: a Fall Line save with its picture is tens of KB against a store's 100 MB quota
+  (the simulated store's, as Steam's), so LZ4 waits until a game's saves come near the quota.
+  The chunk's `Codec` field keeps the room for it without a format change.
+
+The `save-cloud` lab tells the story of two devices step by step (first upload, first download,
+a save on each, a conflict, a removal, an idle sync) through the simulated store, drawn as the
+three sides' slots, then plays 200 rounds of three devices saving, overwriting and removing at
+random: in step after every round (72 conflicts kept along the way).
 
 ## Fast loads: the content cache (M25h)
 
@@ -250,8 +297,8 @@ missing, stale or damaged, it is rebuilt from the setup and the save still loads
 | `save-file` | Does a file of every kind of field round-trip to the byte, is every truncation and flipped byte refused with the chunk named, do old chunk versions read with their defaults, and at how many GB/s are files written and read? | M25a |
 | `save-run` | Saved at many steps and loaded, does Fall Line's run step on to the digests of the run never saved, and what do a save and a load cost, and how many bytes is each chunk? | M25b |
 | `save-slots` | Are a thousand save slots listed with one read (and rebuilt when the index is gone), and does a write killed at every unit leave the last good save loadable? | M25c |
-| `save-picture` | A save's picture from the CPU view, headless, on a contact sheet of slots | M25d |
-| `save-character` | A skier's profile taken from seed 38 into seed 7: the profile's fields equal, the rest of the run seed 7's own | M25e |
+| `save-picture` | Does every slot of a store get a picture headless, and does a menu read them all through the index onto a contact sheet? | M25d |
+| `save-character` | A skier's profile taken from seed 38 into seed 7: the profile's fields equal, the rest of the run seed 7's own (its bytes, its digest at every step), the career summed | M25e |
 | `save-cloud` | Two devices on the simulated store: do their slots converge, and is a conflict kept? | M25f |
 
 Every one runs headless on the GPU-less Linux container.

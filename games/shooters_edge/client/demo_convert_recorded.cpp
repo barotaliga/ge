@@ -163,7 +163,11 @@ struct ClientToMultiview final : ConvertStream {
   bool server_data(DemoConvert& c, std::span<const uint8_t> m, ConvOut& o, std::string& error) {
     size_t at = 1;
     o.u8(11);
-    while (at + 8 <= m.size() && u32_at(m, at) != 28) {
+    auto version = [&](size_t i) {
+      const uint32_t v = u32_at(m, i);
+      return v >= 26 && v <= 28;
+    };
+    while (at + 8 <= m.size() && !version(at)) {
       const uint32_t tag = u32_at(m, at);
       if (tag == kFamilyFte || (tag != kFamilyFte2 && tag != kFamilyMvd)) {
         error =
@@ -178,13 +182,15 @@ struct ClientToMultiview final : ConvertStream {
       error = "the server data runs past its packet's end: the file is damaged";
       return false;
     }
-    o.bytes(m.subspan(at, 8));  // the protocol, the server count
+    o.i32(28);  // the protocol: an older recording's messages are written in 28's form
+    o.bytes(m.subspan(at + 4, 4));  // the server count
     at += 8;
     const size_t game = at;
     while (at < m.size() && m[at] != 0) at++;
     o.bytes(m.subspan(game, std::min(at + 1, m.size()) - game));
     at++;
     pov = at < m.size() ? m[at] & 127 : 0;  // a spectator's slot has its top bit set
+    c.recorder = pov;
     at++;
     o.f32(0);
     if (at < m.size()) o.bytes(m.subspan(at));  // the title, the movement
@@ -281,15 +287,21 @@ struct ClientToMultiview final : ConvertStream {
     if ((flags & 0x1) != 0) byte();  // msec
     if ((flags & 0x2) != 0) {        // his command: the angles he is drawn with
       const int bits = byte();
+      // Protocol 26: the yaw always there, the moves a byte each, the msec under bit 0x80.
+      const bool old = d.state.protocol <= 26;
       if ((bits & 0x01) != 0) p.angles[0] = word() & 0xFFFF;
-      if ((bits & 0x80) != 0) p.angles[1] = word() & 0xFFFF;
+      if (old || (bits & 0x80) != 0) p.angles[1] = word() & 0xFFFF;
       if ((bits & 0x02) != 0) p.angles[2] = word() & 0xFFFF;
-      if ((bits & 0x04) != 0) word();
-      if ((bits & 0x08) != 0) word();
-      if ((bits & 0x10) != 0) word();
+      for (int k : {0x04, 0x08, 0x10}) {
+        if ((bits & k) == 0) continue;
+        if (old)
+          byte();
+        else
+          word();
+      }
       if ((bits & 0x20) != 0) byte();
       if ((bits & 0x40) != 0) byte();
-      byte();  // msec
+      if (!old || (bits & 0x80) != 0) byte();  // msec
     }
     for (int i = 0; i < 3; i++)
       if ((flags & (0x4 << i)) != 0) word();  // velocity: the multiview form has none

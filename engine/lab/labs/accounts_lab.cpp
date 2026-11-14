@@ -342,6 +342,102 @@ void service_section(gl::Lab& lab, ga::HashCost cost) {
       gl::to_picture(chart.plot));
 }
 
+// THE MATCHMAKER (M17j): players of spread ratings ask for a ranked duel over two minutes and keep
+// asking until paired; two servers offer 8 seats every 20 s. Every pair must be within both
+// players' windows when made; the chart shows each pair's wait against its rating gap.
+void matchmaker_section(gl::Lab& lab) {
+  const int players = static_cast<int>(lab.arg_num("mm_players"));
+  gc::Rng rng = gc::make_rng(static_cast<uint32_t>(lab.arg_num("seed")) * 104729 + 3);
+  ga::Ladder ladder;
+  ga::Matchmaker mm;
+  struct One {
+    int64_t rating = 0, arrive_s = 0, matched_s = -1;
+  };
+  std::vector<One> who(static_cast<size_t>(players));
+  for (int i = 0; i < players; i++) {
+    One& o = who[static_cast<size_t>(i)];
+    // A spread like a ladder's: most near 1500, a few far out (the sum of three draws).
+    const double r = gc::range(rng, -1, 1) + gc::range(rng, -1, 1) + gc::range(rng, -1, 1);
+    o.rating = 15000 + static_cast<int64_t>(r * 1500);
+    o.arrive_s = static_cast<int64_t>(gc::range(rng, 0, 120));
+    ladder.tables[{"se", "duel", ga::LadderKind::duel}]
+        .all_time[static_cast<uint64_t>(i) + 1]
+        .rating = o.rating;
+  }
+  constexpr int64_t kT0 = 1794500000;
+  gl::Trace pairs{"pairs", {}, {}};
+  std::vector<double> waits;
+  int outside = 0, matches = 0;
+  for (int64_t t = 0; t <= 300; t++) {
+    if (t % 20 == 0)
+      for (uint8_t srv = 1; srv <= 2; srv++) {
+        gn::Key k{};
+        k[0] = srv;
+        ga::matchmaker_offer(mm, k, "se", "duel", "203.0.113." + std::to_string(srv) + ":27500", 8,
+                             kT0 + t);
+      }
+    for (int i = 0; i < players; i++) {
+      const One& o = who[static_cast<size_t>(i)];
+      if (t >= o.arrive_s && o.matched_s < 0 && (t - o.arrive_s) % 3 == 0)
+        ga::matchmaker_join(mm, ladder, static_cast<uint64_t>(i) + 1, "se", "duel", "", kT0 + t);
+    }
+    for (const uint64_t id : ga::matchmaker_pair(mm, kT0 + t)) {
+      const auto it = std::find_if(mm.made.begin(), mm.made.end(),
+                                   [&](const ga::MadeMatch& one) { return one.id == id; });
+      if (it == mm.made.end()) continue;
+      const ga::MadeMatch& m = *it;
+      One& a = who[m.side_a[0] - 1];
+      One& b = who[m.side_b[0] - 1];
+      a.matched_s = b.matched_s = t;
+      const int64_t gap = a.rating > b.rating ? a.rating - b.rating : b.rating - a.rating;
+      if (gap > ga::queue_window(kT0 + a.arrive_s, kT0 + t) ||
+          gap > ga::queue_window(kT0 + b.arrive_s, kT0 + t))
+        outside++;
+      matches++;
+      const double wait = static_cast<double>(std::max(t - a.arrive_s, t - b.arrive_s));
+      waits.push_back(wait);
+      pairs.x.push_back(wait);
+      pairs.y.push_back(static_cast<double>(gap) / 10);
+    }
+  }
+  int unmatched = 0;
+  for (const One& o : who) unmatched += o.matched_s < 0 ? 1 : 0;
+  std::sort(waits.begin(), waits.end());
+  const double median = waits.empty() ? 0 : waits[waits.size() / 2];
+  double widest = 0;
+  for (const double g : pairs.y) widest = std::max(widest, g);
+  lab.metric("mm_matches", matches, "pairs");
+  lab.metric("mm_unmatched", unmatched, "players");
+  lab.metric("mm_median_wait", median, "s");
+  lab.metric("mm_widest_gap", widest, "points");
+  lab.metric("mm_outside_window", outside, "pairs");
+  gl::LineChart c;
+  c.frame = {"EACH RANKED DUEL THE MATCHMAKER MADE: THE WAIT AGAINST THE RATING GAP",
+             "seed " + lab.arg("seed") + ", " + std::to_string(players) +
+                 " players arriving over 2 minutes, two servers of 8 seats",
+             "the longer wait of the two (s)", "rating gap (points)"};
+  c.traces = {pairs};
+  c.points = true;
+  c.spikes = false;
+  const gl::Chart chart = gl::line_chart(c);
+  lab.shot({"matchmaker",
+            chart.title,
+            "Players with ratings spread round 1500 ask for a ranked duel at random over two "
+            "minutes and keep asking every 3 seconds until the matchmaker pairs them; two servers "
+            "offer 8 seats each every 20 seconds. A pair is made only within both players' "
+            "windows: 100 points at first, 50 more every 10 seconds waited.",
+            "close ratings paired within seconds; a gap over 100 points only after 10 seconds or "
+            "more; nobody left waiting but an odd one out",
+            {{"seed", lab.arg("seed")}, {"mm_players", lab.arg("mm_players")}}},
+           gl::to_picture(chart.plot));
+  if (outside != 0 || unmatched > 1)
+    lab.fail("the matchmaker made " + std::to_string(outside) +
+                 " pairs outside their windows and left " + std::to_string(unmatched) +
+                 " players waiting",
+             "Run tests/account_matchmaker_test; look at matchmaker_pair (account/matchmaker.cpp); "
+             "skill: net.");
+}
+
 // FRIENDS ON THE NETWORK (M17j): the friends' ops asked with the players' tickets, at a loss.
 void friends_section(gl::Lab& lab, ga::HashCost cost) {
   const int players = static_cast<int>(lab.arg_num("friends_players"));
@@ -709,6 +805,7 @@ void run(gl::Lab& lab) {
   // network, at three levels of loss, and a game server logs each in by the code it made.
   service_section(lab, cost);
   friends_section(lab, cost);
+  matchmaker_section(lab);
 
   gl::LabTable totals{"the month in numbers", {"what", "count", "expected"}, {}};
   totals.rows.push_back({"accounts", std::to_string(made.size()), "every new name"});
@@ -781,7 +878,8 @@ const gl::LabSpec kSpec{
     "accounts",
     gl::LabKind::sim,
     "engine",
-    "engine/account (store, names, store_text, ticket, service, friends), engine/net/crypto.hpp",
+    "engine/account (store, names, store_text, ticket, service, friends, matchmaker), "
+    "engine/net/crypto.hpp",
     "net",
     "Does a master's account store keep names to one player however they are spelled, let players "
     "in with the right secret and the right kind of secret only (a code once), hold back a brute "
@@ -797,9 +895,11 @@ const gl::LabSpec kSpec{
         {"service_loss", "0,0.1,0.3", "the network's loss at each level of the service's run"},
         {"friends_players", "24", "players making friends on the network (at 10% loss)"},
         {"friends_asks", "3", "friend requests each sends"},
+        {"mm_players", "60", "players asking the matchmaker for a ranked duel"},
         {"seed", "1", "the names', passwords' and fresh bytes' stream"},
     },
-    "--players=60 --attack_hours=4 --bench_kib=1024 --service_players=12 --friends_players=10",
+    "--players=60 --attack_hours=4 --bench_kib=1024 --service_players=12 --friends_players=10 "
+    "--mm_players=20",
     run,
 };
 GE_LAB(kSpec);

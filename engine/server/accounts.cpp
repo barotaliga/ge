@@ -16,8 +16,8 @@ namespace gn = ge::net;
 namespace {
 
 // The reports' half with a master elsewhere: its address and key, the server's own key, a socket.
-bool open_reports(ServerAccounts& a, const ServerConfig& c, const std::string& dir,
-                  std::string& said, std::string& error) {
+bool open_reports(ServerAccounts& a, ServerConfig& c, const std::string& dir, std::string& said,
+                  std::string& error) {
   if (c.login.stats == 0) return true;
   if (c.login.key.empty()) {
     said = "match reports are off: set sv_accountkey to the master's key to send them";
@@ -46,6 +46,7 @@ bool open_reports(ServerAccounts& a, const ServerConfig& c, const std::string& d
     return false;
   }
   a.reporting = true;
+  c.account_signer = &a.server;
   said = "match reports go to " + gn::to_string(a.master) + ", signed with this server's key " +
          gn::key_to_hex(a.server.pub) + " (the master counts them once its owner trusts it)";
   return true;

@@ -13,6 +13,7 @@
 #include "net/crypto.hpp"
 #include "net/udp_socket.hpp"
 #include "shooter/speedjump_assist.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_login.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
@@ -374,6 +375,60 @@ void remote_login_from(Remote& r, const std::string& path, int64_t (*unix_us)(),
   r.login->link = link;
 }
 
+bool remote_ranked(Remote& r, const std::string& game, const std::string& mode,
+                   const std::string& duo, std::string& said) {
+  if (!r.login) {
+    said = "Ranked games need an account. Sign in with the game's command line first.";
+    return false;
+  }
+  RemoteLogin& l = *r.login;
+  ge::account::ClientLogin c;
+  if (!ge::account::client_login_load(c, l.path, unix_now(l) / 1000000, said)) return false;
+  if (l.link == nullptr && !l.queue_opened) {
+    std::string error;
+    if (!gn::open_udp_transport(l.queue_own, gn::ipv4(0, 0, 0, 0, 0), &error)) {
+      said = "Couldn't reach the account server.";
+      return false;
+    }
+    l.queue_opened = true;
+  }
+  ge::account::client_queue_start(l.queue, c, game, mode, duo, l.fresh, l.fresh_ctx);
+  said = "Looking for a ranked " + mode + " game as " + c.file.name + ".";
+  return true;
+}
+
+bool remote_ranked_leave(Remote& r) {
+  if (!r.login || r.login->queue.step != ge::account::QueueStep::waiting) return false;
+  RemoteLogin& l = *r.login;
+  ge::account::client_queue_leave(l.queue, l.link != nullptr ? *l.link : l.queue_own, unix_now(l));
+  return true;
+}
+
+std::string remote_queue_step(Remote& r, std::vector<std::string>& said) {
+  if (!r.login) return "";
+  RemoteLogin& l = *r.login;
+  ge::account::ClientQueue& q = l.queue;
+  if (q.step != ge::account::QueueStep::waiting) return "";
+  gn::Transport& link = l.link != nullptr ? *l.link : l.queue_own;
+  const bool found = ge::account::client_queue_update(q, link, unix_now(l));
+  if (q.step == ge::account::QueueStep::refused) {
+    said.push_back(q.words.empty() ? "The matchmaker couldn't take you." : q.words);
+    return "";
+  }
+  if (!found) return "";
+  said.push_back(q.words);
+  if (l.queue_opened) gn::close_transport(l.queue_own);
+  l.queue_opened = false;
+  return q.view.address;
+}
+
+void remote_queue_frame(Remote& r, ge::console::Console& con) {
+  std::vector<std::string> said;
+  const std::string found = remote_queue_step(r, said);
+  for (const std::string& line : said) con.print(line);
+  if (!found.empty()) con.execute("connect " + found);
+}
+
 void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const ClientConfig& cfg) {
   remote_disconnect(r);
   r.transport = &t;
@@ -732,6 +787,24 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
           c.print("watch: " + error);
         else
           c.print(remote_status(r));
+      });
+  con.add_command(
+      "ranked",
+      "ranked <mode> [duo]: find a ranked game by your rating (1on1, or 2on2 with your duo's "
+      "name); ranked leave: stop looking",
+      [&r](Con& c, const Args& a) {
+        if (a.size() < 2) {
+          c.print("ranked: name a mode (ranked 1on1, or ranked 2on2 <your duo's name>)");
+          return;
+        }
+        if (a[1] == "leave") {
+          c.print(remote_ranked_leave(r) ? "You stopped looking for a ranked game."
+                                         : "You aren't looking for a ranked game.");
+          return;
+        }
+        std::string said;
+        remote_ranked(r, kGameFolder, a[1], a.size() > 2 ? a[2] : "", said);
+        c.print(said);
       });
   con.add_command("reconnect", "reconnect: join the last server again",
                   [&r, join](Con& c, const Args&) {

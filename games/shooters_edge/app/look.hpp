@@ -45,6 +45,7 @@
 #include "classicenhance/switches.hpp"
 #include "console/console.hpp"
 #include "render/post.hpp"
+#include "shooters_edge/app/effects.hpp"
 
 namespace shooters_edge::look {
 
@@ -63,7 +64,7 @@ bool parse_look(std::string_view word, Look* out);
 const char* look_name(Look look);
 
 // The picture as the player set it (the r_ cvars); the defaults are the modern look's tuning.
-struct Picture {
+struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a window, read by name
   std::string look = "modern";  // r_look
   double fx_lights = 0.2;       // r_fx_lights: the dynamic lights' strength, the classic's 1
   double fx_glow = 0.15;        // r_fx_glow: the glowing particles' light, the classic's 1
@@ -97,17 +98,29 @@ struct Picture {
   // r_loadlit: 1 a map's coloured light read from its .lit file (client/files.hpp's `map_lit`) and
   // fetched from a server joined when the files lack it; 0 every map in its own grey light.
   bool load_lit = true;
+  // r_dynamic: the moment's lights (a muzzle's flash, a rocket's glow, an explosion) light the
+  // walls and the models; off, none do.
+  bool dynamic = true;
+  // gl_polyblend: 0 the view never tinted (below).
+  bool poly_blend = true;
+  // r_fastsky: the sky in one colour, r_skycolor ("R G B", 0..255). Either look.
+  bool fast_sky = false;
+  // r_lightmap: 1 every solid face drawn a plain grey under its light, the light alone to see (over
+  // r_drawflat). Either look.
+  bool lightmap_only = false;
   // r_drawflat: the walls and floors in one colour each in place of their textures, under their
   // light (0 off, 1 both, 2 the walls alone, 3 the floors alone); r_wallcolor and r_floorcolor
-  // their colours ("R G B", 0..255). r_fastsky: the sky in one colour, r_skycolor. Either look.
-  // r_dynamic: the moment's lights (a muzzle's flash, a rocket's glow, an explosion) light the
-  // walls and the models; off, none do. r_fullbrightskins: how far the players are lifted toward
-  // full light wherever they stand (0 lit as the floor under them, 1 fully lit and unshaded).
-  bool dynamic = true;
-  bool fast_sky = false;
+  // their colours ("R G B", 0..255). Either look.
   int draw_flat = 0;
-  double fullbright_skins = 0;
   std::string wall_colour = "150 140 125", floor_colour = "85 95 110", sky_colour = "70 90 120";
+  // r_fullbrightskins: how far the players are lifted toward full light wherever they stand (0 lit
+  // as the floor under them, 1 fully lit and unshaded).
+  double fullbright_skins = 0;
+  // The screen's tint: v_contentblend (the water, slime or lava round the eye), v_damagecshift (a
+  // hit's flash), v_quadcshift, v_pentcshift, v_suitcshift, v_ringcshift (each power's), 0..1
+  // each, how much of it shows; gl_cshiftpercent (0..100) all of them together. Either look.
+  double content_blend = 1, damage_blend = 1, quad_blend = 1, pent_blend = 1, suit_blend = 1,
+         ring_blend = 1, cshift_percent = 100;
   // r_skyfog: the share of a map's fog laid over its sky, where the map's own `skyfog` does not
   // say (0..1, either look).
   double sky_fog = 0.5;
@@ -123,10 +136,11 @@ struct Picture {
   // noskins: 0 each player drawn in their own skin (`skins/<name>.pcx`), 1 every player in the
   // figure's own skin (still in their colours), 2 as 0 with nothing fetched from a server;
   // baseskin: the skin of a player who names none or one the files lack; the `allskins` command's
-  // one skin on every player ("": each their own).
+  // one skin on every player ("": each their own); all_figures: the folder of the one figure
+  // every player is drawn as (classic remix's `cr_models`, "": each their own).
   int noskins = 0;
   int fog_serial = 0;  // how many times the `fog` command was given (above)
-  std::string base_skin = "base", all_skins;
+  std::string base_skin = "base", all_skins, all_figures;
   // teamskin, enemyskin: every teammate's or every enemy's skin ("": their own); the teamcolor and
   // enemycolor commands' shirt and pants colours (-1: their own). A teammate shares your team
   // with teamplay on; with it off everyone is an enemy.
@@ -153,6 +167,12 @@ struct Picture {
 // ce_<id>_quality levels, r_wateralpha and its kin, noskins, baseskin and the weather's cvars over
 // `picture` (it must outlive `con`), and the `fog` and `allskins` commands.
 void add_cvars(ge::console::Console& con, Picture& picture);
+// The screen's tint (effects::screen_blend) of `s` as the player tones it: each layer at its v_
+// share, all of them at gl_cshiftpercent, none with gl_polyblend 0.
+void toned_blend(const Picture& picture, const effects::Screen& s, double rgba[4]);
+// r_lightmap's faces: a middle grey (sRGB), so the light reads as it falls, neither burnt white
+// nor lost in the dark.
+inline constexpr double kLightmapGrey = 0.5;
 // A colour cvar's words ("R G B", each 0..255; one number a grey) into `out` (0..1 each); false,
 // and `out` kept, for anything else.
 bool rgb_words(std::string_view text, double out[3]);
