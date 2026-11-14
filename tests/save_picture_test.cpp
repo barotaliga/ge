@@ -77,9 +77,9 @@ TEST(every_op_round_trips_and_damage_is_refused) {
 TEST(a_picture_is_shrunk_to_its_side_and_kept_in_its_chunk) {
   std::vector<uint8_t> small;
   int w = 0, h = 0;
-  shrink(640, 360, std::vector<uint8_t>(640 * 360 * 4, 77), 320, small, w, h);
+  shrink(640, 360, std::vector<uint8_t>(size_t{640} * 360 * 4, 77), 320, small, w, h);
   CHECK(w == 320 && h == 180 && small[0] == 77);
-  shrink(100, 50, std::vector<uint8_t>(100 * 50 * 4, 9), 320, small, w, h);
+  shrink(100, 50, std::vector<uint8_t>(size_t{100} * 50 * 4, 9), 320, small, w, h);
   CHECK(w == 100 && h == 50);  // never grown
   const std::vector<uint8_t> file = save_with_picture("one", 200, 100);
   FileReader r;
@@ -88,7 +88,7 @@ TEST(a_picture_is_shrunk_to_its_side_and_kept_in_its_chunk) {
   std::vector<uint8_t> rgba;
   std::string problem;
   CHECK_MSG(read_picture(r, w, h, rgba, problem), problem);
-  CHECK(w == 50 && h == 25 && rgba.size() == 50u * 25 * 4);
+  CHECK(w == 50 && h == 25 && rgba.size() == size_t{50} * 25 * 4);
 }
 
 TEST(a_store_shows_each_slot_s_picture_off_the_file_s_front) {
