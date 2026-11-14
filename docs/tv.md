@@ -650,7 +650,8 @@ lowest slot playing). `games/shooters_edge/net/classic_tv_netgame.hpp` is the fa
 binds 26000 itself, so it starts with another port (`-port 26100`) and connects with
 `connect "127.0.0.1:26000"` (quoted: its console splits a line at a colon). Checked by hand with
 the original single-player client of the time, built outside the tree and run as a black box,
-watching a 4on4 multiview recording for minutes.
+watching a 4on4 multiview recording for minutes. The `se-tv-netgame` lab measures the sign-on and the
+frames that arrive over each link, with the scripted client of `net/classic_netgame_watcher.hpp`.
 
 **The transport.** Every datagram but a control one is an 8-byte header, big-endian (the flags
 over the whole length, then a sequence), and its payload. The client asks to connect with a

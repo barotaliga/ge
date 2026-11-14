@@ -1,8 +1,9 @@
 // Fall Line's runs on a hub, defined (runs.hpp): the log parsed and fitted to the game, the run
-// stepped to its end, its racers' times read off the state.
+// stepped to its end and held to the digest it records (play_audited), its racers' times read off
+// the state.
 //
 // ge:summary Fall Line's runs on a hub defined: the log played out, the racers' finish times
-// ge:keywords hub run input-log run_row finish-time
+// ge:keywords hub run input-log run_row finish-time audit anti-cheat forged-ghost
 // ge:skill net sim
 // ge:test tests/fall_line_hub_runs_test.cpp
 #include "fall_line/hub/runs.hpp"
@@ -25,12 +26,10 @@ bool run_row(std::span<const uint8_t> log, ge::hub::DemoRow& out, std::string& e
   const std::optional<ge::play::InputLog> parsed = ge::play::parse_inputs(text, error);
   if (!parsed) return false;
   if (!ge::play::fits(*parsed, sim::kGame, error)) return false;
-  ge::play::Setup setup;
-  if (!ge::play::setup_of(sim::kGame, *parsed, setup, error)) return false;
-  std::unique_ptr<ge::play::Run> run = sim::kGame.open(setup, error);
+  // Played to the digest it records, or refused: its times are read off the run, never claimed.
+  const std::unique_ptr<ge::play::Run> run = ge::play::play_audited(sim::kGame, *parsed, error);
   if (!run) return false;
   const int64_t steps = parsed->steps();
-  for (int64_t i = 0; i < steps && !run->over(); i++) run->step(parsed->at(i));
   const sim::GameState* s = sim::state_of(*run);
   if (s == nullptr) {
     error = "the run opened no Fall Line state";

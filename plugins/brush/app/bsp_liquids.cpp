@@ -179,7 +179,7 @@ LiquidWorld liquid_world(const Scene& scene, const LiquidRows& rows, double wind
     water::Stuff stuff = water::liquid(p.kind == kLava    ? rows.lava
                                        : p.kind == kSlime ? rows.slime
                                                           : rows.water);
-    if (p.kind == kWater) stuff.look = rows.water_look;
+    if (p.kind == kWater) stuff.look = p.alpha >= 1 ? rows.opaque_water_look : rows.water_look;
     PoolSite site = pool_site(scene.map, p, from);
     // The bed's light: the lightmaps under a grid of points just over the top.
     double sum[3] = {0, 0, 0};
