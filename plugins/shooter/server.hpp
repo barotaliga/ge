@@ -115,6 +115,7 @@ struct ClientSlot {
   Vec3f ground_normal;          // the plane the move last stood on (its jump and landing fix)
   int speed_bank_ms = 0;        // the speed check's banked surplus, 0..500
   double speed_check_time = 0;  // the server time of the last speed check
+  int64_t speed_cut_ms = 0;     // what the speed check cut off this client's commands, ms
   int last_msec = 0;            // ms since the server last ran this player's command (for others)
   double last_cmd_time = 0;     // the server time its last command ran
   MoveCmd latest;               // the original move on the single-player clock: the command the

@@ -64,6 +64,7 @@ gn::ReportPlayer player_of(const TallySeat& s, bool teams, double end, bool stat
   if (teams) p.team = s.team;
   p.account = s.account;
   p.bot = s.bot;
+  p.flagged = s.flagged;
   p.frags = s.frags - s.base;
   p.score = p.frags;
   p.deaths = s.deaths;
@@ -134,6 +135,12 @@ void tally_frame(MatchTally& t, const sv::RulesWorld& w, bool counting,
     s.team = info(c, "team");
     if (accounts[i] != 0) s.account = accounts[i];
   }
+}
+
+void tally_flag(MatchTally& t, int slot, const std::string& verdict) {
+  if (slot < 0 || slot >= static_cast<int>(t.seats.size()) || t.ended || !t.counting) return;
+  TallySeat& s = t.seats[static_cast<size_t>(slot)];
+  if (s.on) s.flagged = verdict;
 }
 
 std::array<SeatStats*, ge::shooter::kMaxClients> tally_stats(MatchTally& t) {

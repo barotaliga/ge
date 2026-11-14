@@ -22,9 +22,9 @@
 #include "net/sim_network.hpp"
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_login.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
+#include "shooters_edge/net/protocol.hpp"
 
 namespace ga = ge::account;
 namespace gn = ge::net;

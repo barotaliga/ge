@@ -12,8 +12,8 @@
 #include <string_view>
 #include <utility>
 
-#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
+#include "shooters_edge/net/protocol.hpp"
 
 namespace shooters_edge::net {
 

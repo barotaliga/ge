@@ -106,6 +106,8 @@ struct MultiviewRecorder {
   int statics = 0, static_sounds = 0;  // written so far
   int32_t stats[32][kStats] = {};
   bool stats_known[32][kStats] = {};
+  int frags[32] = {};  // each player's frags as last written (the scoreboard a viewer reads)
+  bool frags_known[32] = {};
   std::string info[32];  // each slot's public user info as last written (name, team, colours)
   struct Held {
     int kind = 6;  // all, multiple or single

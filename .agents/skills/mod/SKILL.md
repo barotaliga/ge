@@ -20,6 +20,7 @@ the rows are `docs/goals.md` M52a–M52e. The QC mods of the classic game are th
 | `cmake/Fp.cmake` | `ge_fp`, `ge_isa`: shared by the engine's build and every mod's |
 | `games/shooters_edge/sim/mod_api.hpp` | Shooter's Edge's hooks, services and field ids (`SE_MOD_API`) |
 | `games/shooters_edge/sim/mod_host.hpp` | The seam: the composite program, the checked services, `ModRun`, `mod_hash` |
+| `games/shooters_edge/sim/rules_api.hpp`, `server/rules_package.hpp` | A whole program of rules as a package (`SE_RULES_GAME`, `se_rules_v1`): the arena's and campaign's tables, built in and built as the `arena` and `campaign` packages; `load_rules_package` |
 | `games/shooters_edge/mods/rocket_bounce/` | The sample mod, built by the tree into `build/<preset>/mods/rocket-bounce/` |
 | `engine/cli/mod.hpp`, `templates/mod-<game>/` | `ge mod new/build/check/pack`; `kModGames` |
 

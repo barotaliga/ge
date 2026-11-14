@@ -14,8 +14,23 @@ namespace sh = ge::shooter;
 TEST(the_presets_are_every_feature_or_none_and_a_novice_does_not_glance) {
   for (size_t k = 0; k < sh::kFeatures; k++) {
     const auto x = static_cast<sh::Feature>(k);
-    // A trial is never on by default.
-    CHECK(sh::features_all()[x] == (x != sh::Feature::trial));
+    // A trial is never on by default, nor a feature not judged or dropped.
+    bool off = false;
+    for (sh::Feature o : {sh::Feature::trial,       sh::Feature::lookway,    sh::Feature::press,
+                          sh::Feature::counter,     sh::Feature::chains,     sh::Feature::retarget,
+                          sh::Feature::runupkeys,   sh::Feature::underway,   sh::Feature::gappast,
+                          sh::Feature::airgap,      sh::Feature::pilotcast,  sh::Feature::landwall,
+                          sh::Feature::circlekeys,  sh::Feature::circleview, sh::Feature::circleaim,
+                          sh::Feature::leadmean,    sh::Feature::leadarc,    sh::Feature::airarc,
+                          sh::Feature::hopopen,     sh::Feature::fightway,   sh::Feature::letgo,
+                          sh::Feature::retreatrun,  sh::Feature::nogoal,     sh::Feature::tripkeep,
+                          sh::Feature::routetime,   sh::Feature::fetch,      sh::Feature::liftbrake,
+                          sh::Feature::scriptentry, sh::Feature::calmvel,    sh::Feature::lookturn,
+                          sh::Feature::viewbook,    sh::Feature::gapturn,    sh::Feature::brinkline,
+                          sh::Feature::sidebrink,   sh::Feature::fallseen,   sh::Feature::liplook,
+                          sh::Feature::sidehop,     sh::Feature::lostdry,    sh::Feature::jumpcuts})
+      off = off || x == o;
+    CHECK(sh::features_all()[x] == !off);
     CHECK(!sh::features_none()[x]);
   }
   sh::Features skilled = sh::features_all();
@@ -57,6 +72,9 @@ TEST(the_text_form_reads_back_to_the_same_set) {
   sh::Features t = sh::features_all();
   CHECK(sh::apply_features("+trial", t, error));
   CHECK(sh::features_text(t) == std::string("all,+trial"));
+  sh::Features k = sh::features_all();
+  CHECK(sh::apply_features("+lookway", k, error));
+  CHECK(sh::features_text(k) == std::string("all,+lookway"));
   for (const sh::Features& x : {f, g, t}) {
     sh::Features back = sh::features_all();
     CHECK(sh::apply_features(sh::features_text(x), back, error));

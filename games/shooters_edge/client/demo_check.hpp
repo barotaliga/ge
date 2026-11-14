@@ -49,5 +49,8 @@ bool check_demo_bytes(std::vector<uint8_t> bytes, const GameAdapter& game, DemoF
 
 // The facts as one line: "MULTIVIEW  ·  E1M2  ·  8 PLAYERS  ·  GZIP + TAR".
 std::string facts_line(const DemoFacts& f);
+// `path` checked by `game` with its facts as one line (the DEMOS page's check: ENTER on a file).
+bool check_demo_line(const std::string& path, const GameAdapter& game, std::string& facts,
+                     std::string& why);
 
 }  // namespace shooters_edge::client

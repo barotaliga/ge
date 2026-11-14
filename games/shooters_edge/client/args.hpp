@@ -54,6 +54,7 @@ struct Args {
   int gif_width = 480;     // -demovideo to a .gif: its width in pixels
   std::string codec = "auto";
   std::string playdemo;  // a demo to play at its own pace ("": none)
+  std::string tv;        // a live broadcast to watch, its TV node's host:port ("": none)
   long frames = 0;       // 0: until quit
   int width = 1280, height = 720;
   // Whether --fps, --codec and --size (--resolution) were given: -demovideo takes video.cfg's

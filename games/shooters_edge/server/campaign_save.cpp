@@ -33,8 +33,8 @@ constexpr uint16_t kChunkVersion = 1;
 // A field added to one of these is a field the save must walk (below): the sizes say so.
 static_assert(sizeof(sh::Edict) == 304, "a field added to Edict: walk it in `edict` below");
 // (`speedjump` and `aimhelp` are not walked: the user info sets them again; nor `aim_helped`,
-// a count the players list shows.)
-static_assert(sizeof(sh::ClientSlot) == 120, "a field added to ClientSlot: walk it in `slot`");
+// a count the players list shows, nor `speed_cut_ms`, a count the cheat check reads.)
+static_assert(sizeof(sh::ClientSlot) == 128, "a field added to ClientSlot: walk it in `slot`");
 static_assert(sizeof(sh::Globals) == 24, "a field added to Globals: walk it in `loop` below");
 
 // The program a save was written by: its crc, its sizes and a hash of its code and initial
