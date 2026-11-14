@@ -794,10 +794,17 @@ int run_main(int argc, char** argv) {
   loader.remix = &remix;
   bool remix_enabled = false;
   std::string remix_for;
+  int32_t remix_items = 0;
+  bool remix_rewear = false;  // the arsenal the rules wear is to be worked out again (below)
   const auto remix_sync = [&] {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
-    if (remix_settings.enabled == remix_enabled && remix_for == args.basedir) return;
+    if (remix_settings.enabled == remix_enabled && remix_for == args.basedir &&
+        remix_settings.items == remix_items)
+      return;
     if (cl::busy(loader)) return;  // its threads may read the other game's files: next frame
+    remix_rewear = true;
+    remix_items = remix_settings.items;
+    if (remix_settings.enabled == remix_enabled && remix_for == args.basedir) return;
     remix_enabled = remix_settings.enabled;
     remix_for = args.basedir;
     const cl::RemixState st = cl::remix_check(remix_settings, args.profile,
@@ -975,6 +982,34 @@ int run_main(int argc, char** argv) {
   };
   cl::HeldState in_hand;
   in_hand.hand.at_eye = weapons_at_eye;
+  // Classic remix's `cr_items` (client/remix.hpp's `worn_arsenal`): the played game's rules wear
+  // the other game's weapons and armour from the next map on: the rows the server is given, the
+  // files its models and sounds are read from, the weapons in the hand.
+  const auto remix_wear = [&] {
+    const shooters_edge::profiles::RemixArsenal* worn =
+        cl::worn_arsenal(remix_settings, remix.state, args.profile);
+    if (worn == remix.worn) return;
+    remix.worn = worn;
+    listen.opt.arsenal = worn != nullptr ? shooters_edge::profiles::arsenal_lines(worn->arsenal)
+                                         : game_content.arsenal;
+    listen.opt.files = worn != nullptr ? &remix.files : &files;
+    weapons.clear();
+    in_hand = {};
+    if (worn != nullptr) {
+      shooters_edge::profiles::GameProfile dressed = *adapter.game;
+      dressed.held_weapons = worn->held;
+      cl::GameAdapter wearing = adapter;
+      wearing.game = &dressed;
+      in_hand.hand.at_eye = cl::load_held_set(wearing, remix.files, model_dirs, weapons);
+    } else {
+      in_hand.hand.at_eye = cl::load_held_set(adapter, files, model_dirs, weapons);
+    }
+    const ge::classicenhance::Profile* other =
+        ge::classicenhance::find_profile(worn != nullptr ? worn->items : args.profile);
+    const std::string what = other != nullptr ? std::string(other->what) : "the game";
+    console.print(worn != nullptr ? "From the next map the weapons and armour are " + what + "'s."
+                                  : "From the next map the weapons and armour are the game's own.");
+  };
   // LOAD GAME's folder and the console's `basedir` (client/game_folder.hpp): the install opened in
   // place of the one playing (the old world and servers let go first: they view its packs), its
   // first map started where the map changes, its packs enhanced in the background, kept for the
@@ -1077,11 +1112,13 @@ int run_main(int argc, char** argv) {
     in_hand.hand.at_eye = at_eye;
     held_fire.shots = {};
     user_info.sent_to = nullptr;
+    remix.worn = nullptr;  // the new game's own: the remix's are worked out again for it
+    remix_rewear = true;
   };
   // The window's own game heard this frame (`dt` s), at the player's volume.
   const auto hear_here = [&](double dt) {
     synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
-    heard_here.frame(listen, files, static_cast<float>(dt));
+    heard_here.frame(listen, remix.worn != nullptr ? remix.files : files, static_cast<float>(dt));
   };
   // THE BOT CLIENT (`--bots=N --server=<host:port> --team=<name>`): a team of bots joins the
   // server (net/classic_bot_team.hpp) and the window shows the team's world as its bots believe it
@@ -1471,6 +1508,10 @@ int run_main(int argc, char** argv) {
     const bool elsewhere = bench.active || remote.active || bench_map;  // the world is theirs
     if (elsewhere) heard_here.stop();  // a demo or a server joined is heard instead
     remix_sync();
+    if (remix_rewear) {
+      remix_rewear = false;
+      remix_wear();
+    }
     if (!next_map.empty() && !loader.map.valid() && !elsewhere) {
       cl::load_map(loader, files, next_map, t);
       next_map.clear();

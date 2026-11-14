@@ -177,6 +177,12 @@ std::string_view items_game(const RemixSettings& s, std::string_view played) {
   return ce::kProfiles[n - 1].id;
 }
 
+const profiles::RemixArsenal* worn_arsenal(const RemixSettings& s, const RemixState& state,
+                                           std::string_view played) {
+  if (!state.on) return nullptr;
+  return profiles::remix_arsenal(played, items_game(s, played));
+}
+
 namespace {
 
 // One item of the map as the remix carries it.

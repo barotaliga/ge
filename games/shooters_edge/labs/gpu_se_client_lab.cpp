@@ -35,7 +35,8 @@
 // program, a coop game in which `--say="addbot"` seats a companion beside the player.
 //
 // `--remix=<install>` turns classic remix on with that install the other full game, so `--map` may
-// name one of its maps: its walls in its own textures, its items the played game's.
+// name one of its maps: its walls in its own textures, its items the played game's; with
+// `--remix-items=1` the played game's rules wear the other game's weapons and armour (`cr_items`).
 //
 // `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
 // two wall torches, their textures enhanced into a cache of the lab's own (classic-enhance's
@@ -95,6 +96,7 @@
 #include "shooters_edge/labs/warp_film.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -561,6 +563,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   // `--remix=<install>`: classic remix on, that install the other full game (`--remix-game`, the
   // sequel by default), so `--map` may name one of its maps, played here with this game's items.
   cl::RemixFiles remix;
+  const shooters_edge::profiles::RemixArsenal* worn = nullptr;
   std::unique_ptr<cl::LoadedMap> map;
   if (const std::string& other = lab.arg("remix"); !other.empty() && folder != "fixture") {
     const size_t cut = folder.find_last_of('/');
@@ -581,7 +584,11 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       return;
     }
     lab.note(said);
-    if (!map->from_game.empty()) {
+    // `--remix-items=1` (`cr_items` naming the other game): this game's rules wear its things.
+    if (lab.arg("remix-items") == "1")
+      worn = shooters_edge::profiles::remix_arsenal(played, state.other);
+    if (worn != nullptr) lo.arsenal = shooters_edge::profiles::arsenal_lines(worn->arsenal);
+    if (!map->from_game.empty() || worn != nullptr) {
       files = std::move(remix.files);
       lo.files = &files;
     }
@@ -631,7 +638,13 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   const bool in_hand = lab.arg("hand") == "1";
   cl::HeldState held;
   if (swings > 0 || death || change || in_hand) {
-    held.hand.at_eye = cl::load_held_set(cl::classic_adapter(), files, {}, weapons);
+    shooters_edge::profiles::GameProfile dressed = *cl::classic_adapter().game;
+    cl::GameAdapter wearing = cl::classic_adapter();
+    if (worn != nullptr) {  // the other game's weapons in the hand
+      dressed.held_weapons = worn->held;
+      wearing.game = &dressed;
+    }
+    held.hand.at_eye = cl::load_held_set(wearing, files, {}, weapons);
     if (!held.hand.at_eye) lab.note("no weapon is drawn: the game's held weapons did not load");
   } else if (warp && !shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error)) {
     lab.note("no weapon is drawn: " + error);
@@ -1122,6 +1135,9 @@ const gl::LabSpec kSpec{
       "played with this game's items"},
      {"remix-game", "sequel",
       "with --remix: that install's game (a profile id: classic or sequel)"},
+     {"remix-items", "0",
+      "with --remix: 1 dresses this game's rules in the other game's weapons and armour "
+      "(cr_items)"},
      {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},
      {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"},
      {"hud", "auto", "with --game: the HUD's art: auto, classic or free"},

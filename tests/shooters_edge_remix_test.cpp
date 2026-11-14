@@ -23,6 +23,7 @@
 #include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/remix.hpp"
+#include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "vfs/pak.hpp"
@@ -349,6 +350,80 @@ TEST(the_sequels_map_plays_on_the_classic_rules_with_the_classic_items) {
   const float items =
       std::bit_cast<float>(*ge::progs::entity_field(qc->q.vm, 1, ge::progs::kFItems));
   CHECK_MSG((static_cast<int>(items) & 64) != 0, "items " + std::to_string(items));
+}
+
+// The classic game's rules wearing the sequel's things (M18u4, `cr_items 2`): only with the remix
+// on and another game named; the rules keep every number and the map its class names, while the
+// server's weapon and armour rows name the sequel's models and sounds, so the beam weapon lies on
+// the floor as the sequel's railgun and the hand holds the sequel's view models.
+TEST(the_classic_rules_wear_the_sequels_weapons_and_armour_with_cr_items) {
+  ge::console::Cvars cvars;
+  cl::RemixSettings s;
+  cl::bind_remix(cvars, &s);
+  cl::RemixState state;
+  cvars.set("cr_items", "2", ge::console::Source::local);
+  CHECK(cl::worn_arsenal(s, state, "classic") == nullptr);  // the remix off
+  state.on = true;
+  state.other = "sequel";
+  const pf::RemixArsenal* worn = cl::worn_arsenal(s, state, "classic");
+  CHECK(worn != nullptr && worn->items == "sequel");
+  if (worn == nullptr) return;
+  cvars.set("cr_items", "1", ge::console::Source::local);
+  CHECK(cl::worn_arsenal(s, state, "classic") == nullptr);  // the game's own
+  // The numbers are the classic game's; every name is the sequel's.
+  CHECK(worn->arsenal.weapons.size() == std::size(pf::kClassicWeapons));
+  CHECK(worn->held.size() == worn->arsenal.weapons.size());
+  for (size_t i = 0; i < worn->arsenal.weapons.size(); i++) {
+    const pf::WeaponRow& w = worn->arsenal.weapons[i];
+    const pf::WeaponRow& c = pf::kClassicWeapons[i];
+    CHECK(w.slot == c.slot && w.fire == c.fire && w.ammo == c.ammo && w.cost == c.cost);
+    CHECK(w.refire == c.refire && w.damage == c.damage && w.reach == c.reach);
+    CHECK(w.splash == c.splash && w.pickup_ammo == c.pickup_ammo);
+    CHECK(worn->held[i] == w.view);
+    for (const std::string_view n : {w.view, w.fire_sound, w.missile, w.pickup})
+      CHECK_MSG(n == "-" || !n.starts_with("progs/"), std::string(n));
+    const pf::HeldFrames* f = pf::held_frames(w.view);
+    CHECK_MSG(f != nullptr && f->fire_first <= f->fire_last && f->rest > f->fire_last,
+              std::string(w.view));
+  }
+  for (size_t i = 0; i < worn->arsenal.armour.size(); i++)
+    CHECK(worn->arsenal.armour[i].absorb == pf::kClassicArmour[i].absorb &&
+          worn->arsenal.armour[i].model.starts_with("models/items/armor/"));
+  CHECK(pf::held_frames("progs/v_shot.mdl") == nullptr);
+
+  // On the server: the rows given as its settings, the rail lying where the beam weapon was.
+  cl::SearchPath mine;
+  cl::RemixFiles remix;
+  remix.played = "classic";
+  remix.state = state;
+  std::string error;
+  CHECK(cl::add_archive(remix.files, "pak0.pak", pack({{"maps/hall.bsp", sequel_hall()}}), error));
+  std::unique_ptr<cl::LoadedMap> map = cl::load_remixed_map(mine, "hall", &remix, error);
+  CHECK_MSG(map != nullptr, error);
+  if (!map) return;
+  static const ge::progs::Progs progs = [] {
+    ge::progs::Progs out;
+    std::string why;
+    CHECK_MSG(cl::baseline_progs(out, why), why);
+    return out;
+  }();
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.arsenal = pf::arsenal_lines(worn->arsenal);
+  cl::Listen l;
+  CHECK_MSG(cl::listen_start(l, progs, std::move(map), opt, error), error);
+  if (l.server == nullptr) return;
+  const auto listed = [](const std::vector<std::string>& names, std::string_view name) {
+    for (const std::string& n : names)
+      if (n == name) return true;
+    return false;
+  };
+  for (const std::string_view m :
+       {"models/weapons/g_rail/tris.md2", "models/weapons/v_rail/tris.md2",
+        "models/weapons/v_blast/tris.md2", "models/objects/rocket/tris.md2"})
+    CHECK_MSG(listed(l.server->models, m), std::string(m));
+  CHECK(!listed(l.server->models, "progs/g_light.mdl"));
+  CHECK(listed(l.server->sounds, "weapons/railgf1a.wav"));
+  CHECK(listed(l.server->sounds, "weapons/rocklx1a.wav"));
 }
 
 // The classic game's map in the sequel (M18u3): its point tree's cells made brushes so the

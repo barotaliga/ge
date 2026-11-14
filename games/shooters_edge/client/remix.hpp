@@ -13,7 +13,9 @@
 //   packs is played in the played game, its items made the played game's (or `cr_items`'s) by
 //   the remix table (profiles/remix.hpp).
 // - **Another game's items** (`items_game`): with `cr_items` naming the other game, a game's own
-//   maps are played with that game's items, and the HUD that shows them is that game's.
+//   maps are played with that game's items, and the HUD that shows them is that game's. The
+//   played game's rules keep their numbers and wear the other game's things (`worn_arsenal`):
+//   its weapons in the hand and on the floor, their missiles and sounds, its armour.
 //
 // ge:summary Classic remix: cr_enabled and cr_items, the two-full-games check, items swapped
 // ge:keywords remix classic-remix cr_enabled cr_items remix_check remix_entities items_game
@@ -33,6 +35,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/profiles/remix.hpp"
+#include "shooters_edge/profiles/remix_arsenal.hpp"
 
 namespace shooters_edge::client {
 
@@ -113,7 +116,15 @@ struct RemixFiles {
   std::string played;              // the played game's profile id
   SearchPath files;                // the other game's, the played game's over it (empty while off)
   profiles::RemixBalance balance;  // the settings' (the window copies them before a load)
+  // The other game's weapons and armour the played game's rules wear (`cr_items`,
+  // profiles/remix_arsenal.hpp), or null: its models and sounds are read from `files`.
+  const profiles::RemixArsenal* worn = nullptr;
 };
+
+// The arsenal the played game's rules wear while `state` is on: `cr_items`'s game's things on the
+// played game's numbers, or null (off, the played game's own, or no row for the pair).
+const profiles::RemixArsenal* worn_arsenal(const RemixSettings& s, const RemixState& state,
+                                           std::string_view played);
 
 // Opens the other game's files for `state` under the played game's install `basedir` (its game
 // folder `game`); closes them when it is off. False with the reason in the game's words when an

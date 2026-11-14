@@ -1048,10 +1048,18 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   played game's packs by the total they held, a lone one left out.
 - **Another game's items** (`cr_items`: 0 the played game's, 1 the classic game's, 2 the
   sequel's): a game's own maps played with the other game's items, and the HUD that shows them is
-  that game's (M18u4).
+  that game's (M18u4). The played game's rules keep their numbers and the map its class names;
+  from the next map they wear the other game's things (`profiles/remix_arsenal.hpp`, by role as
+  the item table): the server is given the other game's weapon and armour rows (view models,
+  pickups, missiles, fire, bounce and blast sounds, armour models and pickup sounds), the window
+  reads models and sounds through the remix's files and holds the other game's view models (its
+  idle frame the rest, its firing frames the shot, `profiles::held_frames`), and another game's
+  model keeps its skin's own colours (each picture through its own palette).
 
 Lab `se-remix` draws a real map of each game from above with its own items and with the other
-game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`).
+game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`); `se-client
+--remix=<install> --remix-items=1` draws a game's own map with the other game's weapons in hand
+and on the floor.
 
 ### The re-release: words by key
 
