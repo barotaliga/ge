@@ -178,8 +178,8 @@ sh::NavRoute route_into(const sh::NavGraph& g, int32_t from, const Trigger& t, g
       if (pass == 1) {
         const float ox = std::max({t.lo.x - o.x, 0.0f, o.x - t.hi.x});
         const float oy = std::max({t.lo.y - o.y, 0.0f, o.y - t.hi.y});
-        if (touches(t, o) || std::hypot(ox, oy) > kHullHalf + kExitNear || o.z + kHullUp < t.lo.z ||
-            o.z - kHullDown > t.hi.z)
+        if (touches(t, o) || static_cast<float>(ge::core::hypot(ox, oy)) > kHullHalf + kExitNear ||
+            o.z + kHullUp < t.lo.z || o.z - kHullDown > t.hi.z)
           continue;
       }
       sh::NavRoute r = sh::nav_route(g, from, static_cast<int32_t>(k), s, 1, {}, {}, jumper);
@@ -299,7 +299,7 @@ void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<T
     std::vector<std::pair<float, int32_t>> across;
     for (const int32_t b : rim) {
       const sh::Vec3f B = g.nodes[static_cast<size_t>(b)].origin;
-      const float d = std::hypot(B.x - A.x, B.y - A.y);
+      const float d = static_cast<float>(ge::core::hypot(B.x - A.x, B.y - A.y));
       if (d < kRimNear || d > kRimFar || B.z > A.z + 40) continue;
       const sh::Vec3f mid{(A.x + B.x) / 2, (A.y + B.y) / 2, A.z};
       bool pit = false;
@@ -314,7 +314,8 @@ void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<T
       if (taken >= kRimAcross) break;
       const sh::Vec3f B = g.nodes[static_cast<size_t>(b)].origin;
       bool seen = false;
-      for (const sh::Vec3f& o : spots) seen = seen || std::hypot(o.x - B.x, o.y - B.y) < kSpot;
+      for (const sh::Vec3f& o : spots)
+        seen = seen || static_cast<float>(ge::core::hypot(o.x - B.x, o.y - B.y)) < kSpot;
       if (seen) continue;
       const sh::NavRoute r = sh::nav_route(g, a, b, search, 1, {}, {}, jumper);
       if (!r.nodes.empty() && r.time_s < 2 * d / 320) continue;  // walked round as quickly
@@ -329,7 +330,7 @@ void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<T
     tried++;
     const sh::Vec3f A = g.nodes[static_cast<size_t>(a)].origin;
     const sh::Vec3f B = g.nodes[static_cast<size_t>(b)].origin;
-    const float d = std::hypot(B.x - A.x, B.y - A.y);
+    const float d = static_cast<float>(ge::core::hypot(B.x - A.x, B.y - A.y));
     for (float v = kGapSlowest; v <= fastest; v += kGapStep) {
       // A HOP'S PROOF: the jump flown at `v` toward B comes DOWN by it (the pilot's own test of a
       // gap's jump, pilot_gaps.hpp `gap_lands`), not standing on it: a block too small to stop on
@@ -337,7 +338,9 @@ void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<T
       const sh::Vec3f vel{(B.x - A.x) / d * v, (B.y - A.y) / d * v, 0};
       const sh::JumpFlight f = sh::fly_jump(world, move, A, vel, B, kPilotMsec, 1.5f, strafed);
       const float dz = f.end.z - B.z;
-      if (!f.landed || std::hypot(f.end.x - B.x, f.end.y - B.y) > kHopLand || dz > 32 || dz < -32)
+      if (!f.landed ||
+          static_cast<float>(ge::core::hypot(f.end.x - B.x, f.end.y - B.y)) > kHopLand || dz > 32 ||
+          dz < -32)
         continue;
       sh::NavExtraLink l{a, b, sh::NavKind::jump, f.time_s + kHopCost_s};
       l.speed = v;
@@ -539,7 +542,8 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
   std::string own;
   float near = 512;
   for (const auto& [dn, o] : dests) {
-    const float d = std::hypot(o.x - spawn.x, o.y - spawn.y, o.z - spawn.z);
+    const float d =
+        static_cast<float>(ge::core::hypot3(o.x - spawn.x, o.y - spawn.y, o.z - spawn.z));
     if (d < near) near = d, own = dn;
   }
   std::set<std::string> visited{own};
@@ -586,7 +590,8 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
         pick = static_cast<int>(t);
       }
       const sh::Vec3f c{(tr.lo.x + tr.hi.x) / 2, (tr.lo.y + tr.hi.y) / 2, (tr.lo.z + tr.hi.z) / 2};
-      const float d = std::hypot(c.x - start.x, c.y - start.y, c.z - start.z);
+      const float d =
+          static_cast<float>(ge::core::hypot3(c.x - start.x, c.y - start.y, c.z - start.z));
       if (d < nearest) nearest = d, near_pick = static_cast<int>(t);
     }
     if (pick < 0) {
@@ -606,7 +611,7 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
         for (size_t k = 0; k < g.nodes.size(); k++) {
           if (!reach.reached(static_cast<int32_t>(k)) || dead[k] != 0) continue;
           const sh::Vec3f o = g.nodes[k].origin;
-          const float d = std::hypot(o.x - c.x, o.y - c.y, o.z - c.z);
+          const float d = static_cast<float>(ge::core::hypot3(o.x - c.x, o.y - c.y, o.z - c.z));
           if (d < nearest_reach) nearest_reach = d, pick = static_cast<int>(t);
         }
       }
@@ -621,7 +626,7 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
       const sh::Vec3f to{(exit.lo.x + exit.hi.x) / 2, (exit.lo.y + exit.hi.y) / 2, start.z};
       sh::Vec3f off, on;
       if (pit_on_line(nav.world, g.nodes[static_cast<size_t>(a)].origin, to, off, on)) {
-        sec.pit = std::hypot(on.x - off.x, on.y - off.y);
+        sec.pit = static_cast<float>(ge::core::hypot(on.x - off.x, on.y - off.y));
         sec.lip = off;
         sh::MoveSettings move;
         sh::NavGapSettings gs;
@@ -654,7 +659,7 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
         bool in_trigger = false;
         for (const Trigger& t : triggers) in_trigger = in_trigger || touches(t, o);
         if (in_trigger) continue;
-        const float d = std::hypot(o.x - c.x, o.y - c.y, o.z - c.z);
+        const float d = static_cast<float>(ge::core::hypot3(o.x - c.x, o.y - c.y, o.z - c.z));
         if (d < sec.reach_left) sec.reach_left = d, sec.reach = o;
       }
     }
@@ -679,12 +684,12 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
       for (size_t k = 0; k < g.nodes.size(); k++) {
         const sh::Vec3f o = g.nodes[k].origin;
         if (dead[k] != 0 || std::fabs(o.z - s0.z) > 8 ||
-            std::hypot(o.x - s0.x, o.y - s0.y) > kBackup)
+            static_cast<float>(ge::core::hypot(o.x - s0.x, o.y - s0.y)) > kBackup)
           continue;
         const sh::NavRoute r =
             sh::nav_route(g, a, static_cast<int32_t>(k), search, 1, {}, {}, ps.jumper);
         if (r.nodes.empty() || r.time_s > kBackup / 200) continue;
-        const float d = std::hypot(o.x - sec.exit.x, o.y - sec.exit.y);
+        const float d = static_cast<float>(ge::core::hypot(o.x - sec.exit.x, o.y - sec.exit.y));
         if (d > far) far = d, from = static_cast<int32_t>(k);
       }
     }
@@ -708,7 +713,7 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
         const sh::Vec3f o = r.trail.back();
         const float ox = std::max({exit.lo.x - o.x, 0.0f, o.x - exit.hi.x});
         const float oy = std::max({exit.lo.y - o.y, 0.0f, o.y - exit.hi.y});
-        if (std::hypot(ox, oy) <= kHullHalf + kExitNear) {
+        if (static_cast<float>(ge::core::hypot(ox, oy)) <= kHullHalf + kExitNear) {
           tr.end = static_cast<int32_t>(r.trail.size()) - 1;
           tr.through = true;
         }
@@ -728,7 +733,8 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
           *trace << name << '\t' << s + 1 << '\t' << k + 1 << '\t'
                  << to_fixed(0.013 * static_cast<double>(i + 1), 3) << '\t' << to_fixed(o.x, 0)
                  << '\t' << to_fixed(o.y, 0) << '\t' << to_fixed(o.z - kHullDown, 0) << '\t'
-                 << to_fixed(std::hypot(v.x, v.y), 0) << '\t' << to_fixed(v.z, 0) << '\t'
+                 << to_fixed(static_cast<float>(ge::core::hypot(v.x, v.y)), 0) << '\t'
+                 << to_fixed(v.z, 0) << '\t'
                  << sh::pilot_mode_name(static_cast<sh::PilotMode>(r.modes[i])) << '\t'
                  << r.links[i] << '\t' << to_fixed(r.yaw[i], 1) << '\t' << to_fixed(r.forward[i], 2)
                  << '\t' << to_fixed(r.side[i], 2) << '\t'
@@ -860,8 +866,10 @@ std::string lip_speed(const Section& sec) {
   float best = 96, v = -1;
   for (size_t i = 1; i < r.trail.size(); i++) {
     if (!takes_off(r, i)) continue;
-    const float d = std::hypot(r.trail[i].x - sec.lip.x, r.trail[i].y - sec.lip.y);
-    if (d < best) best = d, v = std::hypot(r.velocity[i - 1].x, r.velocity[i - 1].y);
+    const float d =
+        static_cast<float>(ge::core::hypot(r.trail[i].x - sec.lip.x, r.trail[i].y - sec.lip.y));
+    if (d < best)
+      best = d, v = static_cast<float>(ge::core::hypot(r.velocity[i - 1].x, r.velocity[i - 1].y));
   }
   return v < 0 ? "-" : to_fixed(v, 0);
 }
@@ -954,7 +962,8 @@ void run(gl::Lab& lab) {
         if (t.takeoff >= 0) {
           const auto j = static_cast<size_t>(t.takeoff);
           off = v3(r.trail[j]);
-          speed = to_fixed(std::hypot(r.velocity[j - 1].x, r.velocity[j - 1].y), 0);
+          speed = to_fixed(
+              static_cast<float>(ge::core::hypot(r.velocity[j - 1].x, r.velocity[j - 1].y)), 0);
           why_off = r.because[j - 1] != nullptr ? r.because[j - 1] : "-";
         }
         fails.rows.push_back({name, std::to_string(s + 1), std::to_string(k + 1), v3(r.trail[at]),
