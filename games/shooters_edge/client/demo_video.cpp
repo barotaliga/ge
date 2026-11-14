@@ -297,7 +297,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     load_effects(files, book, faults);
   }
   fx_state.book = &book;
-  const DemoState& read = t.demo.state;  // the last frame read (what is heard)
+  const DemoState& read = t.demo.state;   // the last frame read (what is heard)
   SequelBar sequel_bar{.files = &files};  // a sequel recording's own bar, from its program
 
   double from = std::max(o.from_s, 0.0);  // the clip's start on the demo's timeline, s
@@ -547,7 +547,8 @@ int demo_video_main(ge::console::Console& console, const Args& args, const Searc
   o.fps = args.fps_given ? args.fps : video.fps;
   o.codec = codec == "none" ? "" : codec;
   o.hud = video.hud;
-  const shooters_edge::profiles::GameProfile* game = shooters_edge::profiles::find_game(args.profile);
+  const shooters_edge::profiles::GameProfile* game =
+      shooters_edge::profiles::find_game(args.profile);
   if (game != nullptr) o.game = &adapter_of(*game);  // its own recordings (the sequel's too)
   o.text = video.text;
   o.messages = video.messages;

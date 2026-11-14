@@ -62,8 +62,8 @@ struct SequelBar {
 bool sequel_world_of(const DemoState& ds, server::RulesWorld& out);
 // A recording's (or a joined server's) sequel bar run and drawn on `dl` over a `width` x
 // `height` window; false when `ds` has none to draw (`sequel_world_of`).
-bool draw_recorded_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, const DemoState& ds,
-                              int width, int height);
+bool draw_recorded_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, const DemoState& ds, int width,
+                              int height);
 
 // The whole number the bar is drawn larger by on a window `height` px high.
 int sequel_bar_scale(int height);

@@ -164,8 +164,8 @@ bool sequel_world_of(const DemoState& ds, server::RulesWorld& out) {
   return true;
 }
 
-bool draw_recorded_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, const DemoState& ds,
-                              int width, int height) {
+bool draw_recorded_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, const DemoState& ds, int width,
+                              int height) {
   if (!bar.recorded) bar.recorded = std::make_shared<server::RulesWorld>();
   if (!sequel_world_of(ds, *bar.recorded)) return false;
   run_sequel_bar(bar, *bar.recorded, ds.player, ds.frames, width, height);
