@@ -1076,10 +1076,13 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   So is the body's physics: `cr_physics` gives the played game's move the other game's running
   speed, friction, air, landing pause, swimming and harm from a fall from the next map (the
   classic rules by the settings `sv_maxspeed`, `sv_friction`, `pm_airaccel`, `pm_airwish`,
-  `pm_landpause`, `sv_waterfriction`, `pm_swimscale`, `pm_waterjump` and the arena's
+  `pm_landpause`, `sv_waterfriction`, `pm_swimscale`, `pm_waterjump`, `pm_airclimb` (the
+  sequel's stair jump: a ledge reached still rising climbed and the rise kept) and the arena's
   `sv_falldamage`; the sequel's by `sv_physics classic`), each move keeping its own code, and
   nothing a weapon does; lab `se-remix-physics` compares them. A remixed map keeps at most
   `cr_weak_same` copies of a weak weapon, the rest laid down as its ammunition.
+  A classic mod with a compiled module (`qwprogs.qvm`) plays the window's match on it, on the
+  sequel's maps too; the mod sets the boundaries, so `cr_items` and `cr_physics` step aside.
 
 Lab `se-remix` draws a real map of each game from above with its own items and with the other
 game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`); `se-client
@@ -1581,7 +1584,9 @@ every pass, and judged by captioned screenshots:
   a straight line to their radius; the modern draws them as point lights. **The screen's blend**
   (`render/post.hpp`'s `set_post_blend`): the liquid round the eye, the powers held and a hurt's
   fading red folded into one colour and share the post pass mixes in after its grade.
-- **Two looks, one renderer** (`games/shooters_edge/app/look.hpp`): the classic look (crisp
+- **Two looks, one renderer** (`plugins/shooter/app/look.hpp`, every shooter's on classic maps, its
+  cvars registered with each game's own defaults; the game's joins in
+  `games/shooters_edge/app/look.hpp`): the classic look (crisp
   texels, the lightmaps and their styles, the map's own sky, no bloom, and the post pass's grade
   pulling every colour to the nearest of the palette's 256) and the modern look (filtered,
   real-time lights with shadows, our sky and liquids, bloom). In the window
@@ -1764,9 +1769,10 @@ The sequel's menu is drawn in its own pictures too (`client/sequel_adapter.cpp` 
 screen with the 320 x 200 one in its middle. The root is its main menu: the plaque and the logo
 down the left, a plate for each row, the lit plate and the spinning cursor on the focused row.
 Each page under it has its banner over the top. SELECT GAME and DEMOS have no plate of
-their own, so each is built from the other plates' letters, a 17 px cell each. The C, the H and
-the K are pieced from O, N, R and Y (`kPlate*`, held to the plates' print). SELECT GAME's title and
-the two games' names on it are plates built the same way. The lobby and the scoreboard stay
+their own, so each is built from the other plates' letters cut out as see-through ink, the
+missing ones pieced from them, laid on a tag of the banners' dirty metal as wide as the word
+(`menu/plate_letters.hpp`, held to the plates' print). SELECT GAME's title and the two games'
+names on it are built the same way. The lobby and the scoreboard stay
 modern in the sequel until their pictures are read.
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only

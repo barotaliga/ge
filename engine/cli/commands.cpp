@@ -405,7 +405,11 @@ constexpr FlagSpec kModNewFlags[] = {
     kEngine};
 constexpr FlagSpec kModBuildFlags[] = {kEngine};
 constexpr FlagSpec kModCheckFlags[] = {
-    {"game", "<id>", "check it against this game (default: the game its manifest names)"}};
+    {"game", "<id>", "check it against this game (default: the game its manifest names)"},
+    {"trusted", "<file>", "the trusted keys (`<key> <name>` a line): name the package's signer"},
+    {"trusted-only", "", "refuse a package no trusted key signed, as a game that asks for that"}};
+constexpr FlagSpec kModSignFlags[] = {
+    {"key-env", "<VAR>", "the environment variable holding the secret (default GE_MOD_KEY)"}};
 constexpr FlagSpec kModPackFlags[] = {
     {"out", "<dir>", "where the package goes (default dist/<name>-<version>)"}};
 constexpr FlagSpec kSnowShowFlags[] = {
@@ -692,6 +696,20 @@ const CommandSpec kCommands[] = {
      "one package from several platforms' builds of one mod: manifests merged, libraries copied, "
      "the result checked",
      kModPackFlags, "ge mod pack linux/faster-rockets windows/faster-rockets --out=dist/fr", "mod"},
+    {"mod key",
+     "",
+     0,
+     0,
+     "create",
+     "a new signing key for mod packages: the secret to keep out of every repository and the "
+     "public key a game's trusted keys list",
+     {},
+     "ge mod key",
+     "mod"},
+    {"mod sign", "<package>", 1, 1, "build",
+     "the package checked, then signed: mod.sig beside its manifest, the signature over the "
+     "manifest (which holds every file's hash) by the key in the environment",
+     kModSignFlags, "ge mod sign dist/fr --key-env=MY_MOD_KEY", "mod"},
     {"snow show", "<file.snow>", 1, 1, "see",
      "a saved snow layer read without its game: its tiles and memory, the samples pressed, the "
      "deepest drop and the densest snow, the mass held, and depth, density and state maps",

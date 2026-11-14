@@ -45,9 +45,11 @@ enum Kind : uint32_t {
   kLava = 4,
   kHidden = 5,
   kWarp = 6,
-  kTele = 7  // a teleporter's face (its texture named for one)
+  kTele = 7,      // a teleporter's face (its texture named for one)
+  kGlass = 8,     // a face its map draws two thirds opaque (Texture::alpha), unlit: a window
+  kGlassThin = 9  // one third opaque
 };
-inline constexpr int kKinds = 8;
+inline constexpr int kKinds = 10;
 
 // One vertex: engine metres, the texture's texels, the lightmap atlas's uv (its first style's
 // layer), the normal, the texture's rectangle in the atlas (mip 0 texels: x, y, w, h), its kind,

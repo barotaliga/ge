@@ -7,8 +7,8 @@
 // rocket trails, explosions and their light, the screen's blend), the weapon in hand (held.hpp:
 // switched, kicked and flashing as the mod fires it), the HUD (hud/layout.hpp) and the console.
 //
-//   se [-game 1|2] [-basedir <dir>] [-mod <folder>] [-progs <file>] [-models <dir>]
-//                 [-timedemo <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH] [-config <f>]
+//   se [-game 1|2] [-basedir <dir>] [-mod <folder>] [-progs <file>] [-models <dir>] [-config <f>]
+//                 [-timedemo <demo>] [-playdemo <demo>] [-tv <node>] [--frames=N] [--size=WxH]
 //                 [-demovideo <demo> <file> [--from=m:ss --to=m:ss | --highlight=N] ...]
 //                 [-logfile <file>] [+<command> ...]
 //
@@ -77,6 +77,7 @@
 
 #include "capture/screenshot.hpp"
 #include "console/cfg.hpp"
+#include "console/lex.hpp"
 #include "console/view.hpp"
 #include "core/output.hpp"
 #include "gpu/device.hpp"
@@ -131,6 +132,7 @@
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/title.hpp"
+#include "shooters_edge/client/tv_live.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/window_cvars.hpp"
 #include "shooters_edge/client/world_draw.hpp"
@@ -667,13 +669,9 @@ int run_main(int argc, char** argv) {
   };
   game_menu.demos().set_extensions(cl::listed_extensions(adapter.game->demo_extensions));
   demo_places();
-  game_menu.demos().set_check(
-      [&adapter](const std::string& path, std::string& facts, std::string& why) {
-        cl::DemoFacts f;
-        if (!cl::check_demo_file(path, adapter, f, why)) return false;
-        facts = cl::facts_line(f);
-        return true;
-      });
+  game_menu.demos().set_check([&adapter](const std::string& p, std::string& f, std::string& why) {
+    return cl::check_demo_line(p, adapter, f, why);
+  });
   menu_host.maps.emplace_back("arena");
   menu_host.table = &adapter.menu(adapter);  // the game's own pages
   game_menu.set_table(*menu_host.table);
@@ -714,7 +712,7 @@ int run_main(int argc, char** argv) {
   // With no map asked for, the game opens on the title with the main menu up, the first map
   // loading behind it; a measured run (a timedemo, --frames) loads its map before its first frame.
   const bool measured = !args.timedemo.empty() || !args.playdemo.empty() || args.frames != 0;
-  bool on_title = next_map.empty() && !measured;
+  bool on_title = next_map.empty() && !measured && args.tv.empty();  // -tv: the broadcast
   bool menu_at_start = on_title;
   // A classic game opened on its title plays its recordings behind the main menu (`menu_attract`,
   // below) in place of loading its first map; the first map loads when they cannot play.
@@ -735,6 +733,7 @@ int run_main(int argc, char** argv) {
   listen_opt.episodes = game_content.episodes;
   listen_opt.item_names = game_content.item_names;
   listen_opt.arsenal = game_content.arsenal;
+  listen_opt.module = &game_content.module;  // a mod folder's qwprogs.qvm plays its matches
   listen_opt.voice = remote.voip;  // cl_voip: the window's match relays its players' voices
   // The saves (the campaign's whole game: listen.hpp's `listen_save`), `<game>/saves/<name>.save`.
   std::string load_ask;  // a save the console asked to load (loaded where a map change is made)
@@ -803,6 +802,7 @@ int run_main(int argc, char** argv) {
   // `cr_items` (remix.hpp's `worn_arsenal`): from the next map the played game's rules wear the
   // other game's weapons: the server's rows and files, the weapons in the hand.
   const auto remix_wear = [&] {
+    remix.mod_rules = !game_content.module.empty();  // a mod's module sets its own boundaries
     if (!cl::remix_dress(remix, remix_settings, args.profile)) return;
     cl::worn_hud_reset(worn_hud, remix);  // read again from the files now open
     listen.opt.arsenal = cl::worn_lines(remix, game_content.arsenal);
@@ -889,6 +889,7 @@ int run_main(int argc, char** argv) {
     bench_ask = args.playdemo;
     play_ask = true;
   }
+  cl::TvWatch tv_watch{args.tv};  // `-tv <node>`: a live broadcast watched (client/tv_live.hpp)
   // The world drawn again for `map`, with the models on `load` standing in it, through `from`
   // (the demo's game folder while one plays, else the window's).
   const auto rebuild_world = [&](const cl::LoadedMap& map, const cl::ModelLoad& load,
@@ -916,12 +917,7 @@ int run_main(int argc, char** argv) {
   const auto start_attract = [&] {
     const std::string list =
         attract_demos == "auto" ? std::string(adapter.game->attract) : attract_demos;
-    std::vector<std::string> words;
-    for (size_t at = 0; at < list.size();) {
-      const size_t end = std::min(list.find(' ', at), list.size());
-      if (end > at) words.push_back(list.substr(at, end - at));
-      at = end + 1;
-    }
+    const std::vector<std::string> words = ge::console::tokenize(list);
     if (words.empty() || cl::archive_paths(files).empty()) return false;
     bench_ask = words[attract_next++ % words.size()];
     play_ask = true;
@@ -930,6 +926,7 @@ int run_main(int argc, char** argv) {
   };
   const auto end_bench = [&](const std::string& why, double now_s, bool by_player = false) {
     attract = false;
+    cl::tv_watch_stop(tv_watch);
     const std::string setup = std::to_string(w) + "x" + std::to_string(h) +
                               ", drawn offscreen, shown at 30 Hz, r_look " + picture.look + ", " +
                               device->report.name + " on " + device->report.backend;
@@ -1620,13 +1617,17 @@ int run_main(int argc, char** argv) {
       if (!end_bench("Escape pressed", t, true)) return 1;
       continue;
     }
+    if (std::string why; !cl::tv_watch_feed(tv_watch, bench, now / 1000, why) && !end_bench(why, t))
+      return 1;  // a live broadcast's blocks onto the demo, played once the lead came (tv_live.hpp)
     if (bench.active || drawn_remote) {
       std::vector<std::string> said;
       const bool paced = bench.paced || drawn_remote;  // every frame shown, nothing timed
       bench.lerp.strides = picture.lerp_move;          // r_lerpmove: a monster's strides glide
       const cl::TimedemoStep step =
-          drawn_remote ? (joined == decltype(joined)::new_level ? cl::TimedemoStep::new_level
-                                                                : cl::TimedemoStep::frame)
+          drawn_remote  ? (joined == decltype(joined)::new_level ? cl::TimedemoStep::new_level
+                                                                 : cl::TimedemoStep::frame)
+          : tv_watch.on ? cl::tv_live_hold(tv_watch.live, tv_watch.client.watch,
+                                           cl::playdemo_step(bench, wall, 1.0, error), bench)
           : bench.paced
               // The menu or the console up: the play bar and its keys left alone.
               ? (con_view.open() || game_menu.open()

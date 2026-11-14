@@ -257,7 +257,9 @@ int walk_move(Mover& m, const MoveCmd& cmd, const ViewAxes& ax) {
 
   air_accelerate(m, wishdir, wishspeed, m.set.air_accel != 0 ? m.set.air_accel : m.set.accelerate);
   s.velocity.z = s.velocity.z - fall;
-  const int blocked = m.set.airstep ? step_slide_move(m, true) : slide_move(m);
+  const int blocked = m.set.airclimb  ? step_slide_move(m, false)
+                      : m.set.airstep ? step_slide_move(m, true)
+                                      : slide_move(m);
   if (m.set.pground && (blocked & kBlockedFloor) != 0) {
     s.ground = m.floor_ent;
     s.ground_normal = m.floor_normal;

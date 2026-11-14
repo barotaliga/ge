@@ -13,6 +13,11 @@
 //   ge mod pack <package>...       one package from several platforms' builds of the same mod:
 //                                  each checked, their manifests merged, their libraries copied
 //                                  into --out (default dist/<name>-<version>/)
+//   ge mod key                     a new signing key: the secret (kept out of every repository,
+//                                  handed to sign by the environment) and its public key
+//   ge mod sign <package>          mod.sig beside the manifest: the signature over it by the key in
+//                                  --key-env (default GE_MOD_KEY); check then names the signer
+//                                  against --trusted=<file> (mod/signature.hpp)
 //
 // THE GAMES THAT OFFER MODS (`kModGames`): the game id, the version of its mod API, and where its
 // header lives in the engine tree. One row a game; Shooter's Edge's is the first.
@@ -20,6 +25,7 @@
 // ge:summary ge mod new, build, check and pack: a C++ mod scaffolded, built, checked and packed
 // ge:keywords cli ge mod mods modding new build check pack package manifest template mod-games
 // ge:keywords run_mod_new run_mod_build run_mod_check run_mod_pack kmodgames
+// ge:keywords run_mod_key run_mod_sign signing signature trusted-keys key-env
 // ge:skill agent-interface mod
 // ge:test tests/cli_mod_test.cpp
 #pragma once
@@ -51,12 +57,17 @@ struct ModOptions {
   std::string name;    // --name (new): default the directory's name
   std::vector<fs::path> packages;  // pack
   std::string out;                 // pack: --out
+  std::string key_env;             // sign: --key-env (default GE_MOD_KEY)
+  std::string trusted;             // check: --trusted, a trusted-keys file
+  bool trusted_only = false;       // check: --trusted-only
 };
 
 Outcome run_mod_new(const ModOptions& o);
 Outcome run_mod_build(const ModOptions& o);
 Outcome run_mod_check(const ModOptions& o);
 Outcome run_mod_pack(const ModOptions& o);
+Outcome run_mod_key();
+Outcome run_mod_sign(const ModOptions& o);
 
 // A loader message "<what>; next: <next>" as a finding at `where`.
 Finding mod_finding(Severity s, const std::string& message, const std::string& where);

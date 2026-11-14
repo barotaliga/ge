@@ -540,6 +540,15 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   }
   cl::ListenOptions lo = shooters_edge::net::listen_options();
   lo.files = &files;  // as the window: the next map, and a brush model file's bounds
+  // A mod folder's compiled module (its qwprogs.qvm) plays the match, as in the window.
+  std::vector<uint8_t> module;
+  if (lab.arg("progs").empty()) {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> qvm = cl::find_file(files, "qwprogs.qvm", store);
+    module.assign(qvm.begin(), qvm.end());
+    if (!module.empty()) lab.note("the mod's compiled module qwprogs.qvm plays the match");
+  }
+  lo.module = &module;
   if (cl::single_player(progs)) lo.console.emplace_back("deathmatch 0");  // as NEW GAME starts it
   // `--episodes=<done>`: a campaign as the full game, the episodes done that many bits
   // (sv_episodes_done), the start map's bars shut in front of the ones not open yet.
@@ -724,7 +733,10 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     }
     a = b + 1;
   }
-  if (!say.empty()) lab.metric("said.prints", static_cast<double>(l.prints.size()), "");
+  if (!say.empty()) {
+    lab.metric("said.prints", static_cast<double>(l.prints.size()), "");
+    for (const std::string& line : l.prints) lab.note("said: " + line);
+  }
   // `--botinfo="model cyborg;skin oni911"`: those user info keys on every player but you (the
   // companions `--say=addbot` seated), as if each had set them.
   const std::string botinfo = lab.arg("botinfo");
@@ -804,7 +816,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       // status, or the game's HUD (the classic bar over the sequel's player wearing its things).
       const shooters_edge::server::SequelServer* sq =
           l.rules ? shooters_edge::server::sequel_of(*l.rules) : nullptr;
-      const shooters_edge::hud::CrosshairSettings crosshair;  // the default mark
+      const ge::hud::CrosshairSettings crosshair;  // the default mark
       if (cl::draw_sequel_bars(overlay, own_bar, worn_bar, sq, remix,
                                sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t),
                                !l.campaign_host, &crosshair, {}, t, static_cast<int>(w),

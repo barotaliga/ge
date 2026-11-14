@@ -19,7 +19,7 @@ The CLI is built in the three homes every feature lives in (docs/architecture.md
 | --- | --- | --- |
 | Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset/check/format`, `server settings/set/check/format`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `join`, `logs`, `account signup/signin/code/recover/show`, `friends list/add/remove/block/unblock/invite/invites/status`, `ranked find/status/leave` |
 | Toolkit | `engine/toolkit/` (`ge::toolkit`) | The command groups `ge` and every game's CLI share, run under the program's own name: `pak ls/extract/build/convert/sum` |
-| Plugin | `plugins/<name>/cli/` (built into `ge_<name>_cli`) | A group of rows any game linking the plugin adds: classic enhance's `content` (the install's packs, their release by SHA-256, the enhanced cache) |
+| Plugin | `plugins/<name>/cli/` (built into `ge_<name>_cli`) | A group of rows any game linking the plugin adds, with the flags each row takes (`Spec::command_flags`): classic enhance's `content` (the install's packs, their release by SHA-256, the enhanced cache); the brush maps' `map build` and `map plan` (a map compiled from a plan or an SVG floor plan, docs/levels.md) |
 | Game | `games/<game>/cli/` | The game's `Spec` (its programs, ports, protocol, places, launch words, the settings it registers) and its own rows: Shooter's Edge's `demos`, `demos play`, `demos pack`, `demos unpack` |
 
 ### The toolkit

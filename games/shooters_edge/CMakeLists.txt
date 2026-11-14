@@ -48,6 +48,14 @@ add_library(shooters_edge_rules STATIC ${SHOOTERS_EDGE_RULES_SOURCES}
 target_include_directories(shooters_edge_rules PUBLIC ${PROJECT_SOURCE_DIR}/games)
 target_link_libraries(shooters_edge_rules PUBLIC ge_progs)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_rules)
+# The rules evaluate both sides of every `and` and `or` (a call on the right runs whatever the
+# left gave: "asked either way: no short circuit" where it matters), written as `|` and `&` on
+# booleans on purpose; Clang's -Wbitwise-instead-of-logical would make each an error under -Werror.
+# Set on the sources, so it follows the tree's -Wall (a target option goes before it and is undone).
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  set_source_files_properties(${SHOOTERS_EDGE_RULES_SOURCES} PROPERTIES COMPILE_OPTIONS
+                                                                        -Wno-bitwise-instead-of-logical)
+endif()
 
 # Its bots (bots/): the pilot (plugins/shooter/pilot.hpp) played on the game's maps, on the nav
 # course through the move and on the arena through the server's bot slots, for the tests and the
@@ -154,8 +162,8 @@ if(TARGET ge_brush_app)
   file(GLOB SHOOTERS_EDGE_APP_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/app/*.cpp)
   add_library(shooters_edge_app STATIC ${SHOOTERS_EDGE_APP_SOURCES})
   target_include_directories(shooters_edge_app PUBLIC ${PROJECT_SOURCE_DIR}/games)
-  target_link_libraries(shooters_edge_app PUBLIC ge_render ge_brush_app ge_classicenhance ge_console
-                                                ge_morph ge_assets)
+  target_link_libraries(shooters_edge_app PUBLIC ge_render ge_brush_app ge_shooter_app
+                                                ge_classicenhance ge_console ge_morph ge_assets)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_app)
 endif()
 
@@ -192,7 +200,7 @@ target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_
                                                   shooters_edge_view shooters_edge_sound ge_vfs
                                                   ge_brush ge_camera ge_input ge_audio ge_net
                                                   ge_ui ge_replay ge_morph shooters_edge_menu
-                                                  ge_classicenhance)
+                                                  ge_classicenhance ge_tv)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_client)
 # The world's frame (client/world_draw.cpp), the modern look's water, liquids, flames and weather
 # behind the classic-enhance switches (client/world_extras.cpp), the effects fed to it
@@ -242,12 +250,12 @@ if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
 endif()
 
 # Its player CLI (cli/): the engine's game CLI (engine/gamecli, docs/gamecli.md) over the game's
-# Spec, classic enhance's group and the game's own rows, as a library the tests link and the
+# Spec, classic enhance's and the brush maps' groups and the game's own rows, as a library the tests link and the
 # `secli` executable at the build's root beside the window and the dedicated server
 # (skills: agent-interface, shooter).
 if(TARGET ge_gamecli)
   add_library(shooters_edge_gamecli STATIC cli/spec.cpp)
-  target_link_libraries(shooters_edge_gamecli PUBLIC ge_gamecli ge_classicenhance_cli
+  target_link_libraries(shooters_edge_gamecli PUBLIC ge_gamecli ge_classicenhance_cli ge_brush_cli
                                                      shooters_edge_classic)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_gamecli)
   ge_add_game_cli(shooters_edge_cli OUTPUT_NAME secli SOURCES cli/main.cpp

@@ -141,6 +141,9 @@ struct RemixFiles {
   const profiles::RemixFigure* figure = nullptr;
   // How the players move (`cr_physics`): the server lines that set the other game's, or null.
   const profiles::RemixPhysics* physics = nullptr;
+  // A mod's own module plays the rules (its qwprogs.qvm): it sets the weapons, the HUD's numbers
+  // and the physics, so `cr_items` and `cr_physics` take nothing; the maps and figures still swap.
+  bool mod_rules = false;
   // True while the rules or the players wear the other game's things: read from `files`.
   bool wearing() const { return worn != nullptr || looks != nullptr || figure != nullptr; }
   void undress() { worn = nullptr, looks = nullptr, figure = nullptr, physics = nullptr; }

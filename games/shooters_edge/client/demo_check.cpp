@@ -107,4 +107,12 @@ std::string facts_line(const DemoFacts& f) {
   return s;
 }
 
+bool check_demo_line(const std::string& path, const GameAdapter& game, std::string& facts,
+                     std::string& why) {
+  DemoFacts f;
+  if (!check_demo_file(path, game, f, why)) return false;
+  facts = facts_line(f);
+  return true;
+}
+
 }  // namespace shooters_edge::client

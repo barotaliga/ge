@@ -281,14 +281,57 @@ player can read it and a diff can show it; it is the table of contents a signatu
   manifest, because a line format this small needs no parser library, and its errors can name
   the line.
 
-**Later rows:**
+### Signing
 
-- **Signing (M52d).** An Ed25519 signature over the manifest by the author's key, in a
-  `mod.sig` beside it; the game keeps a list of keys it trusts (its own, its community's) and
-  says, for an unsigned or unknown package, what a player is about to run.
-- **Distribution (M52d).** A server sends its mod list (name, version, manifest hash) to a
-  joining client, which fetches each package from where the server says, checks it, and loads
-  it. Two players in a match always run the same mods, or the client is refused with the list.
+`mod.sig` beside the manifest is the author's signature over the manifest's bytes
+(`engine/mod/signature.hpp`):
+
+```
+# A mod package's signature (docs/mods.md § Signing). Written by ge mod sign.
+key = 3b6a27bc...        the signer's public key, 64 hex digits
+signature = 9f1c0d2e...  over mod.manifest's bytes, 128 hex digits
+```
+
+The manifest holds every file's SHA-256, so a signature over it covers the package: a changed
+library fails its hash and the loader names the file; a changed manifest fails the signature and
+the loader names the manifest. A game keeps a list of keys it trusts, one `<64 hex digits> <name>`
+a line, and the loader's verdict is one of four: not signed, signed by a key nobody listed, signed
+by a listed key (named), or a signature that does not hold (always refused). `GameOffer::trusted`
+hands the list and `trusted_only` refuses anything but the third; `signature_words` says to a
+player what they are about to run ("rocket-bounce 1.0.0, signed by shooters-edge").
+
+`ge mod key` makes a key (the secret stays out of every repository; the public key is the line for
+a trusted-keys file), `ge mod sign <package>` checks the package and writes `mod.sig` with the
+key in `GE_MOD_KEY` (`--key-env` names another variable), and `ge mod check --trusted=<file>`
+names the signer. Sign after `ge mod pack`: packing writes a new manifest.
+
+**Decisions:**
+
+- **The engine's one signature scheme** (`net/crypto.hpp`: EdDSA on Curve25519 over BLAKE2b, the
+  scheme a master signs its tickets with), so `engine/mod` links `engine/net` for it. *Not taken:*
+  Ed25519 with SHA-512, because a second hash in the engine buys only keys from other tools, which
+  no author needs: `ge mod key` makes them.
+- **The signature beside the manifest, not inside it**, so the manifest a player reads is the
+  bytes signed, and an unsigned package is the same package with one file fewer.
+- **A broken signature is refused even where unsigned packages load.** Unsigned says nothing; a
+  signature that does not hold says the package was changed after someone vouched for it.
+
+### Distribution
+
+A server says which mods it runs, and a client never fetches them. In Shooter's Edge the server
+alone runs a mod; a client draws what it is sent and predicts only the move, so it needs no
+package to join a modded server. Shooter's Edge's server puts
+`*mods` in its serverinfo and its public status: each package's name and version, ", " between
+(`rocket-bounce 1.0.0, low-grav 0.2.1`, cut with "+N more" past 120 bytes). The browser reads it
+into `ServerInfo::mods` and shows it on the selected server's line; the hub's API carries it among
+the server's keys.
+
+**Decisions:**
+
+- **Listed, never downloaded** (Niclas, 2026-11-14). Downloading a mod would put native code on a
+  player's machine that nothing there runs. *Not taken:* the server's list sent to a joining client
+  with each package fetched, checked by hash and signature, and loaded; it comes back only for a
+  game whose clients run mods (prediction with a mod's hooks, a match replayed from its inputs).
 
 ## The commands
 

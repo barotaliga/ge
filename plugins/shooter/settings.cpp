@@ -105,6 +105,13 @@ constexpr Setting kSettings[] = {
     {"pm_pground", "Whether standing on the ground carries over from one move to the next.", 0, 1,
      true, true, true, "0: found again each move (the default); 1: carried over",
      GE_SETTING_SWITCH(move.pground)},
+    {"pm_airclimb",
+     "Whether a jump climbs a ledge it reaches still rising, by a whole step, and keeps the rise "
+     "(the sequel's stair jump).",
+     0, 1, true, true, true,
+     "0: a ledge is climbed only by rising past it (the default); 1: climbed by a step, the rise "
+     "kept, so a jump off it goes higher",
+     GE_SETTING_SWITCH(move.airclimb)},
     {"pm_speedjump",
      "How much of the best strafe's gain the easy jump gives a player who turns it on with "
      "cl_speedjump 1.",

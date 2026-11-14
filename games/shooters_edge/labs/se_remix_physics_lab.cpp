@@ -6,6 +6,9 @@
 // under four rules: the classic move as itself and told the sequel's numbers, and the sequel's move
 // as itself and given the classic game's (`sv_physics classic`). The harm a fall does is the rules'
 // (the classic arena's `sv_falldamage`), held by tests/shooters_edge_remix_test.cpp, not here.
+// THE STAIR JUMP: the player runs at a ledge 24 or 32 high, jumps short of it and holds the jump,
+// so a second jump goes off on the first step on the ledge; the table gives each rule's best
+// height over the ledge, and a chart draws the best double jump onto the 32 ledge.
 //
 // What it shows: a chart of each run's speed over time, and a table of the speed it runs at, the
 // speed after four seconds of strafe-jumping, the most it reached and the swimming speed. Read it
@@ -16,6 +19,7 @@
 // ge:summary Lab: the classic and sequel moves under cr_physics, run and strafe-jumped on a floor
 // ge:keywords lab se-remix-physics cr_physics classic-remix movement-feel strafe-jump bunny-hop
 // ge:keywords sv_physics pm_airaccel pm_airwish pm_swimscale run-speed air-gain swim-speed
+// ge:keywords stair-jump double-jump pm_airclimb air-step
 // ge:skill shooter labs
 // ge:test tests/shooters_edge_remix_test.cpp
 #include <algorithm>
@@ -63,11 +67,15 @@ struct Floor {
   bool ok = false;
   std::string error;
 
-  explicit Floor(bool pool) {
+  // `ledge`: a step that high fills the floor's +x half (its edge at x 0), for the stair jump.
+  explicit Floor(bool pool, float ledge = 0) {
     br::BrushWorld w;
     w.models.resize(1);
     const float lo[3] = {-kFloorHalf, -kFloorHalf, -16}, hi[3] = {kFloorHalf, kFloorHalf, 0};
     w.models[0].push_back(br::box_brush(lo, hi, sh::kSqSolid, "world/floor"));
+    const float step_lo[3] = {0, -kFloorHalf, 0}, step_hi[3] = {kFloorHalf, kFloorHalf, ledge};
+    if (ledge > 0)
+      w.models[0].push_back(br::box_brush(step_lo, step_hi, sh::kSqSolid, "world/floor"));
     // A ceiling far above, so the air between is inside the map (outside its bounds is solid).
     const float top_lo[3] = {-kFloorHalf, -kFloorHalf, 1024},
                 top_hi[3] = {kFloorHalf, kFloorHalf, 1040};
@@ -187,6 +195,7 @@ void sequel_run(Floor& f, Run& r, bool swim, const pr::MoveFeel& feel) {
   pm.swim_scale = feel.swim_scale;
   pm.water_friction = feel.water_friction;
   pm.water_jump = feel.water_jump;
+  pm.air_step = feel.air_step;
   pm.changed = true;
   const double wish = std::min(400.0, double(feel.max_speed));
   // The sequel's air: the strafing rule at 10 with a set air acceleration, else 1 by the whole
@@ -211,6 +220,87 @@ void sequel_run(Floor& f, Run& r, bool swim, const pr::MoveFeel& feel) {
     pm.changed = false;
     sample(r, swim, t, pm.s.velocity[0] * 0.125, pm.s.velocity[1] * 0.125);
   }
+}
+
+// THE STAIR JUMP: running at +x toward a ledge `ledge` high, the player jumps `before` units short
+// of its edge, lets go a step, then holds the jump, so a second jump goes off on the first step
+// he stands on the ledge. Returns how high his feet rose over the ledge (the higher of the two
+// jumps' tops), so a move that adds the jump to the rise it still carries (a double jump) shows
+// it. `twice` false: the one jump alone.
+constexpr float kRunUp = 400;     // the run starts this far short of the edge
+constexpr int kStairSteps = 240;  // the run-up and 0.9 s after the jump at the least
+
+float classic_stair(Floor& f, std::span<const std::string_view> lines, float ledge, float before,
+                    bool twice, Run* trace = nullptr) {
+  sh::ServerSettings set;
+  std::string error;
+  for (const std::string_view line : lines) {
+    const size_t sp = line.find(' ');
+    if (line.starts_with("set ")) continue;
+    if (!sh::set_setting(set, line.substr(0, sp), line.substr(sp + 1), error)) return 0;
+  }
+  sh::MoveWorld world;
+  world.solids[0] = sh::brushes_solid(*f.tracer, 0, {0, 0, 0}, {-kFloorHalf, -kFloorHalf, -16},
+                                      {kFloorHalf, kFloorHalf, 1040});
+  world.count = 1;
+  sh::MoveState s;
+  s.origin = {-kRunUp, 0, 24.5f};
+  s.maxspeed = set.move.maxspeed;
+  int jumped_at = -1;
+  float top = 0;
+  for (int i = 0; i < kStairSteps; ++i) {
+    sh::MoveCmd c;
+    c.msec = kMsec;
+    c.forward = 400;
+    if (jumped_at < 0 && s.ground >= 0 && s.origin.x + 16 >= -before) jumped_at = i;
+    const bool held = i == jumped_at || (twice && jumped_at >= 0 && i > jumped_at + 1);
+    c.buttons = held ? sh::kButtonJump : 0;
+    sh::player_move(s, c, set.move, world);
+    if (jumped_at >= 0) top = std::max(top, s.origin.z - 24 - ledge);
+    if (trace != nullptr && jumped_at >= 0 && i - jumped_at <= 90) {
+      trace->t.push_back((i - jumped_at) * kMsec * 0.001);
+      trace->speed.push_back(s.origin.z - 24);
+    }
+  }
+  return top;
+}
+
+float sequel_stair(Floor& f, const pr::MoveFeel& feel, float ledge, float before, bool twice,
+                   Run* trace = nullptr) {
+  sh::SequelBrushWorld brushes;
+  brushes.tracer = f.tracer.get();
+  sh::SequelMove pm;
+  pm.s.origin[0] = int16_t(-kRunUp * 8);
+  pm.s.origin[2] = int16_t(24.5f * 8);
+  pm.max_speed = feel.max_speed;
+  pm.friction = feel.friction;
+  pm.air_accelerate = feel.air_accelerate;
+  pm.land_pause = feel.land_pause;
+  pm.swim_scale = feel.swim_scale;
+  pm.water_friction = feel.water_friction;
+  pm.water_jump = feel.water_jump;
+  pm.air_step = feel.air_step;
+  pm.changed = true;
+  int jumped_at = -1;
+  float top = 0;
+  for (int i = 0; i < kStairSteps; ++i) {
+    sh::SequelCmd c;
+    c.msec = kMsec;
+    c.forward = 400;
+    const float x = pm.s.origin[0] * 0.125f;
+    if (jumped_at < 0 && pm.ground_entity >= 0 && x + 16 >= -before) jumped_at = i;
+    const bool held = i == jumped_at || (twice && jumped_at >= 0 && i > jumped_at + 1);
+    c.up = held ? sh::kSqJumpUp : 0;
+    pm.cmd = c;
+    sh::sequel_move(pm, brushes.world());
+    pm.changed = false;
+    if (jumped_at >= 0) top = std::max(top, pm.s.origin[2] * 0.125f - 24 - ledge);
+    if (trace != nullptr && jumped_at >= 0 && i - jumped_at <= 90) {
+      trace->t.push_back((i - jumped_at) * kMsec * 0.001);
+      trace->speed.push_back(pm.s.origin[2] * 0.125 - 24);
+    }
+  }
+  return top;
 }
 
 void run(gl::Lab& lab) {
@@ -256,6 +346,74 @@ void run(gl::Lab& lab) {
                           ge::core::num::to_fixed(r.swim_speed, 0)});
   }
   lab.table(table);
+
+  // The stair jump over ledges 24 and 32 high (above a step, so climbed only by jumping): each
+  // rule's one jump, and its best second jump off the ledge, over every take-off point from the
+  // edge to 160 short of it. The best double jump over the 32 ledge is drawn.
+  gl::LabTable stairs{"THE STAIR JUMP (feet over the ledge, units)",
+                      {"rules", "one jump, 24 ledge", "double jump, 24 ledge", "one jump, 32 ledge",
+                       "double jump, 32 ledge"},
+                      {}};
+  const std::vector<std::string_view> none;
+  std::vector<Run> climbs(runs.size());
+  const auto stair = [&](size_t k, Floor& step, float ledge, float before, bool twice, Run* tr) {
+    return k == 0   ? classic_stair(step, none, ledge, before, twice, tr)
+           : k == 1 ? classic_stair(step, as_sequel->lines, ledge, before, twice, tr)
+           : k == 2 ? sequel_stair(step, pr::MoveFeel{}, ledge, before, twice, tr)
+                    : sequel_stair(step, pr::kClassicFeel, ledge, before, twice, tr);
+  };
+  for (size_t k = 0; k < runs.size(); ++k) {
+    std::vector<std::string> row{runs[k].label};
+    for (const float ledge : {24.0f, 32.0f}) {
+      Floor step(false, ledge);
+      for (const bool twice : {false, true}) {
+        float best = 0, best_before = 0;
+        for (int n = 0; n <= 80; ++n) {
+          const float before = static_cast<float>(2 * n);
+          const float top = stair(k, step, ledge, before, twice, nullptr);
+          if (top > best) {
+            best = top;
+            best_before = before;
+          }
+        }
+        if (twice && ledge == 32) {
+          climbs[k].label = runs[k].label;
+          stair(k, step, ledge, best_before, twice, &climbs[k]);
+        }
+        const std::string key = runs[k].label.substr(0, runs[k].label.find(',')) +
+                                (k % 2 == 1 ? ".remixed" : "") + ".stair" +
+                                std::to_string(int(ledge)) + (twice ? ".double" : ".single");
+        lab.metric(key, best, "u");
+        row.push_back(ge::core::num::to_fixed(best, 1));
+      }
+    }
+    stairs.rows.push_back(row);
+  }
+  lab.table(stairs);
+  if (lab.wants("stair")) {
+    gl::LineChart c;
+    c.spikes = false;
+    c.frame = {"THE STAIR JUMP UNDER CR_PHYSICS",
+               "the best double jump onto a 32 ledge and off it",
+               "t after the first jump (s)",
+               "feet over the floor (units)",
+               960,
+               420};
+    for (const Run& r : climbs) c.traces.push_back({r.label, r.t, r.speed});
+    c.rules = {32};
+    const gl::Chart ch = gl::line_chart(c);
+    lab.shot({"stair",
+              ch.title,
+              "Running at a ledge 32 high, each rule's best take-off: a jump short of the edge, "
+              "then the jump held, so a second one goes off on the first step on the ledge. The "
+              "sequel's move climbs the ledge a step while still rising and keeps the rise, so its "
+              "second jump adds to it. The classic move rises past the edge first. The dashed "
+              "line is the ledge.",
+              "each remixed line climbs like the other game's: cr_physics 2 gives the classic "
+              "game the sequel's stair jump, cr_physics 1 takes it from the sequel",
+              {{"msec", std::to_string(kMsec)}}},
+             gl::to_picture(ch.plot));
+  }
 
   if (lab.wants("speed")) {
     gl::LineChart c;

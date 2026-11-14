@@ -33,12 +33,12 @@ struct Params {
 // among them): x the indices drawn, y its state: 0 not drawn, 1 hidden early (for the late
 // phase), 2 drawn early, 3 drawn late.
 @group(1) @binding(5) var<storage, read_write> chunk_words: array<vec2u>;
-// Two phases of eight kinds' indexed draws (five words each), then the counters.
+// Two phases of ten kinds' indexed draws (five words each), then the counters.
 @group(1) @binding(6) var<storage, read_write> args: array<atomic<u32>>;
 @group(1) @binding(7) var hiz: texture_2d<f32>;
 
-const kKinds = 8u;
-const kStats = 80u;  // 2 x 8 x 5
+const kKinds = 10u;
+const kStats = 100u;  // 2 x 10 x 5
 const kStatPvs = 0u;
 const kStatFrustum = 1u;
 const kStatOccluded = 2u;
@@ -157,7 +157,7 @@ fn test_late(@builtin(global_invocation_id) id: vec3u) {
 // between its first chunk's offset and the next kind's.
 const kThreads = 256u;
 var<workgroup> sums: array<u32, 256>;
-var<workgroup> kind_at: array<u32, 9>;  // each kind's first offset, and the end
+var<workgroup> kind_at: array<u32, 11>;  // each kind's first offset, and the end
 
 fn scan(lid: u32, phase: u32) {
   let n = params.info.x;

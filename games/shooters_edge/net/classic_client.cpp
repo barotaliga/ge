@@ -776,6 +776,13 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
     c.sent_seq[c.ch.outgoing_sequence & 63] = c.ch.outgoing_sequence;
     c.sent_at[c.ch.outgoing_sequence & 63] = c.now;
     if (c.record) record_command(*c.record, c.now, cmd);
+    if (c.tmove) {  // a spectator's teleport (classic_follow.hpp)
+      ClcMsg t;
+      t.id = clc::tmove;
+      t.origin = c.tmove_to;
+      write_clc(w, t);
+      c.tmove = false;
+    }
     if (c.valid_frame >= 0) {
       write_byte(w, clc::delta);
       write_byte(w, c.valid_frame & 0xff);
