@@ -143,6 +143,7 @@ struct Peer {
   uint64_t send_counter = 0;
   uint64_t recv_newest = 0;  // the newest counter opened; bit i of recv_seen: newest - i
   uint64_t recv_seen[4] = {};
+  uint32_t forged = 0, replayed = 0;  // its sealed packets refused (also in the node's NodeStats)
   Bucket packets;
 };
 

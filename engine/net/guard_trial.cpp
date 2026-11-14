@@ -12,10 +12,13 @@
 #include <memory>
 
 #include "core/prng.hpp"
+#include "net/capture.hpp"
 #include "net/node.hpp"
+#include "net/packet.hpp"
 #include "net/replicate.hpp"
 #include "net/replicate_wire.hpp"
 #include "net/sim_network.hpp"
+#include "net/token.hpp"
 #include "net/transport.hpp"
 #include "net/wire.hpp"
 
@@ -35,9 +38,19 @@ void step_mover(void* ctx, double* v, const uint8_t* input) {
   v[kHeading] += static_cast<int8_t>(input[2]) * scale / 8;
 }
 
+constexpr uint64_t kHostId = 1;
+constexpr size_t kKeptPackets = 64;  // a replayer's own sent packets, newest last
+constexpr int kReplayBack = 30;      // ticks: the old packet a replayer sends again
+
+uint32_t trial_protocol() { return protocol_id("net-guard", 1); }
+
+void draw_bytes(core::Rng& rng, uint8_t* out, size_t n) {
+  for (size_t i = 0; i < n; i++) out[i] = static_cast<uint8_t>(core::int_in(rng, 0, 255));
+}
+
 NodeConfig node_config(bool host, uint64_t seed) {
   NodeConfig c;
-  c.protocol = protocol_id("net-guard", 1);
+  c.protocol = trial_protocol();
   c.accept = host;
   c.max_peers = host ? kMaxPeers : 1;
   c.channels.count = 2;
@@ -62,7 +75,66 @@ struct Player {
   uint16_t entity = kNoEntity;
   double place[2] = {};  // the place it reports (a peer game's), x and z
   bool placed = false;
+  Capture seen;                            // what its transport sent this tick (replay, forge)
+  std::vector<std::vector<uint8_t>> kept;  // its sealed payloads to the server, newest last
+  uint32_t checked = 0;                    // the newest snapshot whose rows were checked
 };
+
+// What a replayer or a forger sends this tick, from the packets it sent before.
+void send_bad(Player& p, SimNetwork& net, const Address& host, GuardTrialPlayer& out) {
+  if (p.seen.packets > 0) {
+    std::vector<CapturedDatagram> got;
+    if (read_capture(p.seen.bytes.data(), p.seen.bytes.size(), got, nullptr)) {
+      for (const CapturedDatagram& g : got) {
+        if (g.to != host || g.data.size() <= kSealedHeader ||
+            g.data[4] != static_cast<uint8_t>(PacketType::payload))
+          continue;
+        p.kept.push_back(g.data);
+        if (p.kept.size() > kKeptPackets) p.kept.erase(p.kept.begin());
+      }
+    }
+    p.seen = make_capture();
+  }
+  if (p.kept.empty()) return;
+  if (p.cheat == TrialCheat::replay) {
+    const std::vector<uint8_t>& newest = p.kept.back();
+    sim_send(net, p.address, host, newest.data(), newest.size());
+    out.sent_bad++;
+    if (p.kept.size() > static_cast<size_t>(kReplayBack)) {
+      const std::vector<uint8_t>& old = p.kept[p.kept.size() - 1 - kReplayBack];
+      sim_send(net, p.address, host, old.data(), old.size());
+      out.sent_bad++;
+    }
+  } else if (p.cheat == TrialCheat::forge) {
+    std::vector<uint8_t> f = p.kept.back();
+    f[12] ^= 0x40;             // the counter's top byte: far ahead of any the window has seen
+    f[f.size() - 20] ^= 0x7f;  // a byte of the input under the tag: the stick pushed past full
+    sim_send(net, p.address, host, f.data(), f.size());
+    out.sent_bad++;
+  }
+}
+
+// The newest snapshot's rows against the own one: a row further than the radius is a player the
+// server should not have sent.
+void check_rows(Player& p, const Schema& schema, double radius, GuardTrialPlayer& out) {
+  if (!p.r.has_snapshot || p.r.newest == p.checked || radius <= 0) return;
+  p.checked = p.r.newest;
+  const Snap& s = p.r.ring[p.r.newest % p.r.ring.size()];
+  if (!s.valid || s.tick != p.r.newest) return;
+  const Row* own = nullptr;
+  for (const Row& r : s.rows)
+    if (r.id == p.r.own) own = &r;
+  if (own == nullptr) return;
+  const double ox = dequantize(schema.spec[kX], own->q[kX]);
+  const double oz = dequantize(schema.spec[kZ], own->q[kZ]);
+  const double most = (radius + 0.01) * (radius + 0.01);
+  for (const Row& r : s.rows) {
+    const double dx = dequantize(schema.spec[kX], r.q[kX]) - ox;
+    const double dz = dequantize(schema.spec[kZ], r.q[kZ]) - oz;
+    if (&r != own) out.rows_seen++;
+    if (dx * dx + dz * dz > most) out.hidden_seen++;
+  }
+}
 
 // The future cheater's input message: one input, its view three seconds past what it draws.
 void send_future(Player& p, const ReplicateConfig& k, int hz) {
@@ -98,6 +170,12 @@ const char* trial_cheat_name(TrialCheat c) {
       return "future";
     case TrialCheat::teleport:
       return "teleport";
+    case TrialCheat::replay:
+      return "replay";
+    case TrialCheat::forge:
+      return "forge";
+    case TrialCheat::fish:
+      return "fish";
   }
   return "?";
 }
@@ -126,20 +204,34 @@ GuardTrial run_guard_trial(const GuardTrialConfig& k) {
   Guard guard;
   guard_init(guard, rules);
 
+  // The matchmaker's master key, the host's derived from it, and a token for each player.
+  core::Rng keys = core::make_rng(k.seed ^ 0x6b657973u);
+  Key master{};
+  draw_bytes(keys, master.data(), master.size());
+
   SimNetwork net = make_sim_network(k.seed, k.link);
   Transport host_t;
   open_sim_transport(host_t, net, sim_address(0, 1));
   auto host_n = std::make_unique<Node>();
-  node_init(*host_n, node_config(true, uint64_t{k.seed} * 7 + 1), host_t);
+  NodeConfig host_config = node_config(true, uint64_t{k.seed} * 7 + 1);
+  host_config.security.on = true;
+  host_config.security.host_id = kHostId;
+  host_config.security.key = host_key(master, kHostId);
+  node_init(*host_n, host_config, host_t);
   ReplicateConfig config;
   config.tick_hz = hz;
-  config.max_entities = k.honest + 8;
+  config.max_entities = k.honest + 12;
+  config.interest_x = kX;
+  config.interest_z = kZ;
+  config.interest_radius = std::max(0.0, k.interest_radius);
   auto server = std::make_unique<ReplicateServer>();
   replicate_server_init(*server, schema, config, *host_n);
   server->guard = &guard;
 
-  const TrialCheat cheats[] = {TrialCheat::speed, TrialCheat::off_grid, TrialCheat::flood,
-                               TrialCheat::future, TrialCheat::teleport};
+  const TrialCheat cheats[] = {TrialCheat::speed,  TrialCheat::off_grid, TrialCheat::flood,
+                               TrialCheat::future, TrialCheat::teleport, TrialCheat::replay,
+                               TrialCheat::forge,  TrialCheat::fish};
+  const auto expire = static_cast<int64_t>((k.seconds + 60) * 1e6);
   std::vector<std::unique_ptr<Player>> ps;
   const int count = std::max(0, k.honest) + static_cast<int>(std::size(cheats));
   for (int i = 0; i < count; i++) {
@@ -149,7 +241,18 @@ GuardTrial run_guard_trial(const GuardTrialConfig& k) {
     p->address = sim_address(id, 1);
     open_sim_transport(p->t, net, p->address);
     node_init(p->n, node_config(false, uint64_t{k.seed} * 1000 + id), p->t);
-    p->peer = node_connect(p->n, sim_address(0, 1), 0);
+    TokenGrant grant;
+    grant.client_id = id;
+    grant.host_id = kHostId;
+    grant.expire_us = expire;
+    uint8_t random[kTokenRandomBytes];
+    draw_bytes(keys, random, sizeof random);
+    p->peer = node_connect_secure(p->n, sim_address(0, 1),
+                                  token_make(master, trial_protocol(), grant, random), 0);
+    if (p->cheat == TrialCheat::replay || p->cheat == TrialCheat::forge) {
+      p->seen = make_capture();
+      p->t.capture = &p->seen;
+    }
     replicate_client_init(p->r, schema, config, p->n, p->peer);
     p->hand = core::make_rng(k.seed * 977 + id);
     ps.push_back(std::move(p));
@@ -202,6 +305,19 @@ GuardTrial run_guard_trial(const GuardTrialConfig& k) {
       p.place[0] = place[0];
       p.place[1] = place[1];
       p.placed = true;
+      // Whether anyone is out of its sight now: what a fisher would want to be sent.
+      if (config.interest_radius > 0) {
+        const double most = config.interest_radius * config.interest_radius;
+        for (const auto& q : ps) {
+          const double* w = q->entity == kNoEntity ? nullptr : replicate_get(*server, q->entity);
+          if (w == nullptr) continue;
+          const double dx = w[kX] - v[kX], dz = w[kZ] - v[kZ];
+          if (dx * dx + dz * dz > most) {
+            o.players[i].out_of_sight++;
+            break;
+          }
+        }
+      }
       // How far the server moved it, and its fastest second.
       if (seen[i]) {
         const double dx = v[kX] - last_x[i], dz = v[kZ] - last_z[i];
@@ -225,6 +341,8 @@ GuardTrial run_guard_trial(const GuardTrialConfig& k) {
       Player& p = *pp;
       node_update(p.n, now);
       replicate_client_receive(p.r);
+      const size_t pi = static_cast<size_t>(&pp - &ps.front());
+      check_rows(p, schema, config.interest_radius, o.players[pi]);
       if (t % std::max(1, hz / 2) == 0) {
         p.held[0] = static_cast<uint8_t>(static_cast<int8_t>(core::int_in(p.hand, -8, 8) * 10));
         p.held[1] = static_cast<uint8_t>(static_cast<int8_t>(core::int_in(p.hand, -8, 8) * 10));
@@ -243,6 +361,7 @@ GuardTrial run_guard_trial(const GuardTrialConfig& k) {
         for (int j = 0; j < times; j++) replicate_client_input(p.r, p.held);
       }
       node_flush(p.n, now);
+      send_bad(p, net, sim_address(0, 1), o.players[pi]);
     }
 
     for (; flags_read < guard.flags.size() && guard.raised <= kMaxFlags; flags_read++) {
@@ -275,6 +394,14 @@ GuardTrial run_guard_trial(const GuardTrialConfig& k) {
     o.players[i].worst = g.worst;
     o.players[i].out = g.out;
   }
+  for (size_t i = 0; i < ps.size(); i++) {
+    const int slot = ps[i]->slot;
+    if (slot < 0) continue;
+    const Peer& peer = host_n->peers[static_cast<size_t>(slot)];
+    o.players[i].refused = peer.forged + peer.replayed;
+  }
+  o.forged = host_n->stats.forged;
+  o.replayed = host_n->stats.replayed;
   o.flags = guard.raised;
   return o;
 }
