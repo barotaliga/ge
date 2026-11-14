@@ -85,10 +85,29 @@ std::string at_offset(size_t pos) { return " at byte " + std::to_string(pos); }
 
 }  // namespace
 
+// Whether the record's messages reach the server data past prints, stuffed text and nops only
+// (a converter's banner may stand before it).
+static bool opens_with_server_data(std::span<const uint8_t> body) {
+  size_t at = 0;
+  for (int k = 0; k < 64 && at < body.size(); k++) {
+    const uint8_t id = body[at];
+    if (id == kServerData) return true;
+    if (id == 1) {  // nop
+      at++;
+      continue;
+    }
+    if (id != 8 && id != 9) return false;  // a print (its level first) or stuffed text
+    at += id == 8 ? 2 : 1;
+    while (at < body.size() && body[at] != 0) at++;
+    at++;
+  }
+  return false;
+}
+
 bool is_multiview(std::span<const uint8_t> bytes) {
   Record r;
   if (!record_at(bytes, 0, r) || (r.kind != kAll && r.kind != kRead) || r.size == 0 ||
-      bytes[r.body] != kServerData)
+      !opens_with_server_data(bytes.subspan(r.body, r.size)))
     return false;
   // The next record reads too (or the file ends on its edge); damage further on is the reader's
   // to report with its place, not a reason to read the file as another format.

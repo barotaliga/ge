@@ -66,6 +66,14 @@ HullTrace clip_to_entity(const Server& sv, int ent, Vec3f start, Vec3f mins, Vec
   HullTrace tr;
   const bool original = sv.set.single_player_clock || sv.original_walk;
   auto walk = original ? &trace_hull_original : &trace_hull;
+  if (e.solid == kSolidBsp && static_cast<size_t>(e.modelindex) < sv.model_solids.size() &&
+      sv.model_solids[static_cast<size_t>(e.modelindex)].kind == SolidKind::brushes) {
+    Solid s = sv.model_solids[static_cast<size_t>(e.modelindex)];
+    s.origin = e.origin;
+    tr = solid_box_trace(s, start, mins, maxs, end);
+    tr.ent = tr.fraction < 1 || tr.startsolid ? ent : -1;
+    return tr;
+  }
   if (e.solid == kSolidBsp) {
     const BrushModel& m = sv.models[static_cast<size_t>(e.modelindex)];
     const float width = maxs.x - mins.x;

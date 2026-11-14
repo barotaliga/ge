@@ -7,7 +7,9 @@
 //
 //   menu      the classic root, SELECT GAME first, its focus
 //   games     SELECT GAME: the games by their names' pictures, the one playing, its edition
-//   watched   ESCAPE: the menu closed, the recording watched with its play bar
+//   start     a game picked: the console over the screen with its packs added
+//   sliding   the game up: the console sliding up at scr_conspeed over the recording
+//   watched   ESCAPE: the menu closed, the recording watched (no play bar: it is the game's own)
 //   console   the console down, in the game's glyph sheet over the game's console background
 //   demos     DEMOS in the classic look, listing the install's own folder
 //   servers   JOIN A GAME in the classic look, four servers answering on the simulated network
@@ -51,6 +53,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/game_folder.hpp"
+#include "shooters_edge/client/game_start.hpp"
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
@@ -58,6 +61,7 @@
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/layout.hpp"
+#include "shooters_edge/menu/carved_letters.hpp"
 #include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
@@ -208,7 +212,7 @@ void run(gl::Lab& lab) {
   const int iw = static_cast<int>(w), ih = static_cast<int>(h);
   int problems = 0;
   // The pages, each a picture taken by `shot` with `behind` (words) under them; `watched`, when
-  // set, draws ESCAPE's picture (the recording watched with its play bar).
+  // set, draws ESCAPE's picture (the recording watched).
   using Over = std::function<void(ge::ui::DrawList&)>;
   using Shot = std::function<void(const char*, const std::string&, const std::string&,
                                   const std::string&, const Over&)>;
@@ -243,10 +247,33 @@ void run(gl::Lab& lab) {
          "the title picture centred at the top; the rows' labels right-aligned to the cursor",
          [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
     menu.hide();
+    // A game picked: the console over the screen, then sliding up (client/game_start.hpp).
+    {
+      cl::GameStart start;
+      cl::add_start_cvars(con, start, *adapter.game);
+      cl::start_apply_speed(con, start);
+      cl::start_begin(
+          start, con_view, con, 0,
+          {"Added packfile id1/pak0.pak", "Added packfile id1/pak1.pak", "playdemo: demo1"});
+      shot("start", "A GAME PICKED: THE CONSOLE DOWN",
+           "SELECT GAME's choice starts the game as the classic games start: the menu gone, the "
+           "console over the whole screen in the game's letters, its packs added.",
+           "the console background over the whole screen; the packs' lines at its foot",
+           [&](ge::ui::DrawList& dl) { sm::draw_game_console(dl, con_view, con_look, t); });
+      cl::start_step(start, con_view, cl::kStartHold, true);
+      con_view.frame(0.25);
+      shot("sliding", "THE GAME UP: THE CONSOLE SLIDING AWAY",
+           "Its recording playing, the console slides up at scr_conspeed (300 lines a second of "
+           "the classic 200-line screen), the recording seen under it.",
+           "the console's foot part way up the screen; the recording below it",
+           [&](ge::ui::DrawList& dl) { sm::draw_game_console(dl, con_view, con_look, t); });
+      for (int k = 0; k < 60; k++) con_view.frame(1 / 30.0);
+    }
     if (watched)
       shot("watched", "ESCAPE: THE RECORDING WATCHED",
-           "ESCAPE closes the menu over the recording, which plays on: watched with its play bar.",
-           "the play bar along the bottom over the HUD; no menu", watched);
+           "ESCAPE closes the menu over the recording, which plays on with no play bar: it is the "
+           "game's own recording, not one the player picked.",
+           "the recording and its HUD; no menu, no play bar", watched);
     con.print("]map dm4");
     con.print("Can't find maps/dm4.bsp in this install.");
     con.print(behind_line);
@@ -289,6 +316,46 @@ void run(gl::Lab& lab) {
          "simulated network, the name, map, players and ping, the selected one's address below.",
          "four rows; the cursor on the first; the footer's address",
          [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    // Every carved letter on the measured lines: a capital's top and foot (rows 1 and 16, red), a
+    // small capital's (rows 3 and 15, green), the 20 px row (blue).
+    shot("letters", "EVERY CARVED LETTER ON ITS LINES",
+         "A to Z and a to z in the menu's carved letters, four classic px to a pixel: the ones "
+         "the strips hold cut from them, the ones they hold in the other size only grown or shrunk "
+         "from it, the F from the E and the I; the B, X and Z pieced from the I, the O and the E. "
+         "Red: a capital's top and foot; green: a small capital's; blue: the row.",
+         "every letter between its lines; no stray pixels beside a letter",
+         [&](ge::ui::DrawList& dl) {
+           constexpr float kZ = 4;
+           const std::string_view lines[] = {"ABCDEFGHI", "JKLMNOPQR", "STUVWXYZ",
+                                             "abcdefghi", "jklmnopqr", "stuvwxyz"};
+           const auto bar = [&](float y, uint32_t rgb) {
+             ge::ui::Box b;
+             b.rect = {0, y * kZ, static_cast<float>(iw), 1};
+             b.fill = ge::ui::solid(ge::ui::hex(rgb));
+             b.feather = 0;
+             dl.box(b);
+           };
+           const sm::ClassicArt& art = menu.art();
+           for (size_t k = 0; k < std::size(lines); k++) {
+             const float top = 4 + 28 * static_cast<float>(k);
+             bar(top + 1, 0xff4646), bar(top + 17, 0xff4646);
+             bar(top + 3, 0x46e646), bar(top + 16, 0x46e646), bar(top + 20, 0x5a78ff);
+             float x = 4;
+             for (const char c : lines[k]) {
+               const auto it = art.letters.find(c);
+               if (it == art.letters.end()) continue;
+               ge::ui::Box b;
+               b.rect = {x * kZ, top * kZ, art.width_of(it->second) * kZ, sm::kCarvedLine * kZ};
+               b.image = &it->second;
+               b.uv = {0, 0, static_cast<float>(it->second.width),
+                       static_cast<float>(it->second.height)};
+               b.nearest = true;
+               b.feather = 0;
+               dl.box(b);
+               x += art.width_of(it->second) + 4;
+             }
+           }
+         });
   };
 
   // `--demo=none`: the menu over the title's dark, drawn on the CPU (a game whose recordings
@@ -356,7 +423,8 @@ void run(gl::Lab& lab) {
     if (ls::gpu_required())
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
-    ls::placeholders(lab, {"menu", "games", "watched", "console", "demos", "servers"});
+    ls::placeholders(lab, {"menu", "games", "start", "sliding", "watched", "console", "demos",
+                           "servers", "letters"});
     ls::checked(lab, 0, 0);
     return;
   }
@@ -410,10 +478,7 @@ void run(gl::Lab& lab) {
   pages(shot,
         "its recording (" + bench.name + " on " + ds.map +
             ") playing behind it in place of the title's night",
-        t, [&](ge::ui::DrawList& dl) {
-          playback.shown_until = t + 10;
-          cl::playback_draw(dl, playback, bench, iw, ih, t);
-        });
+        t, [](ge::ui::DrawList&) {});
   lab.metric("problems", problems, "count", det);
   ls::checked(lab, static_cast<int>(device->errors.load()),
               static_cast<int>(device->pipelines_after_load));

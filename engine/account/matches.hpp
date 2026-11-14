@@ -11,12 +11,14 @@
 // (account 0) and a bot add to no totals.
 //
 // THE LOG. Every report taken is a line appended to `log` (`report <server key> <bytes>`, both in
-// hex), which the master writes to its file and clears; reading the file back gives the same
-// totals, counted by the trust the master has when it reads them.
+// hex), and every duo asked for is a `duo` line (ladder.hpp), which the master writes to its file
+// and clears; reading the file back gives the same totals and ladders, counted by the trust the
+// master has when it reads them.
 //
 //   matches_trust(m, key)                     a server's key the owner trusts
 //   matches_add(m, server, report) -> Taken   new or again, counted or shown only
 //   matches_line(m, line, error)              one log line read back
+//   matches_duo_ask(m, asker, partner, name)  a duo for the two-on-two ladder (ladder.hpp)
 //   totals_sum(m, account, filter)            an account's totals over what the filter keeps
 //   totals_by_account(m, filter, since_s)     every account's, for the hub's Leaders (since_s > 0:
 //                                             summed from the kept reports started since then)
@@ -34,10 +36,12 @@
 #include <map>
 #include <set>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
 
+#include "account/ladder.hpp"
 #include "net/crypto.hpp"
 #include "net/report.hpp"
 
@@ -82,6 +86,7 @@ struct Matches {
   std::deque<KeptMatch> kept;                    // the last kMatchesKept, newest last
   std::map<TotalsKey, Totals> totals;
   uint64_t taken = 0, counted = 0, again = 0;
+  Ladder ladder;    // the ranked ladders the counted reports rate (ladder.hpp)
   std::string log;  // the lines since the master last wrote them
 };
 
@@ -93,8 +98,14 @@ enum class Taken : uint8_t {
 
 void matches_trust(Matches& m, const net::Key& server);
 Taken matches_add(Matches& m, const net::Key& server, const net::MatchReport& r);
-// A line of the log read back; false with `error` naming what does not read.
+// A duo asked for (ladder.hpp), its line appended to `log`.
+DuoAnswer matches_duo_ask(Matches& m, uint64_t asker, uint64_t partner, std::string_view name);
+// A line of the log read back (a report or a duo); false with `error` naming what does not read.
 bool matches_line(Matches& m, const std::string& line, std::string& error);
+// A demo joined to the match it closes with (its trailer's report: id, start, server's name): the
+// kept match's `demo_sha256` set, so its page links the demo. False when no kept match is it.
+bool matches_link_demo(Matches& m, uint64_t id, int64_t start_s, std::string_view server,
+                       std::string_view sha);
 // Every game, mode and map the filter keeps, summed (`matches` 0: none).
 Totals totals_sum(const Matches& m, uint64_t account, const TotalsFilter& f);
 // Whether the filter keeps a key's game, mode, map and ping band.

@@ -171,14 +171,14 @@ timedemo) waits for its map before its first frame.
 brew install cmake ninja                 # once
 make build PRESET=release                # or only the window: cmake --preset release &&
                                          #   cmake --build --preset release --target shooters_edge
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic +map dm6
+build/release/se -basedir ~/Games/classic +map dm6
 ```
 
 **On Linux (Vulkan through Dawn; `sudo tools/setup-ubuntu.sh` installs what the build needs):**
 
 ```sh
 make build PRESET=release
-build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm6
+build/release/se -basedir ~/games/classic +map dm6
 ```
 
 - **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
@@ -253,7 +253,7 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
   showing its save's line. On a Mac:
 
   ```sh
-  build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic
+  build/release/se -basedir ~/Games/classic
   # then ESCAPE, SINGLE PLAYER, NEW GAME; later the console: save s1 ... load s1
   ```
 - **A rocket jump**: 7 for the launcher, look straight down, then SPACE and the left button
@@ -358,10 +358,10 @@ as one of the line's words; `-benchmark` says it is now `-timedemo`. A negative 
 a word:
 
 ```sh
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic -timedemo demo1
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic +vid_display 2 \
+build/release/se -basedir ~/Games/classic -timedemo demo1
+build/release/se -basedir ~/Games/classic +vid_display 2 \
     +vid_fullscreen 1 +r_look modern -timedemo demo1
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=2560x1600 \
+build/release/se -basedir ~/Games/classic --size=2560x1600 \
     -timedemo ~/Downloads/match.dem
 ```
 
@@ -450,7 +450,7 @@ coloured letters and the colour marks clients write into chat taken out), and a 
 the HUD's centre for two seconds. A seek plays nothing of what it skipped.
 
 ```sh
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+build/release/se -basedir ~/Games/classic \
     -playdemo ~/Downloads/match.mvd.gz +demo_track 2 +cl_demospeed 2
 ```
 
@@ -593,13 +593,13 @@ GIF (no sound, `--gif-width=N` wide, 480 by default; `--fps=15` keeps it small) 
 encoder; `.webm`, `.mp4` and `.mkv` are videos with sound as above.
 
 ```sh
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+build/release/se -basedir ~/Games/classic \
     -demovideo demo1 ~/Movies/demo1.mp4
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+build/release/se -basedir ~/Games/classic \
     -demovideo ~/Downloads/match.mvdv ~/Movies/match.mp4 +demo_track 3
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+build/release/se -basedir ~/Games/classic \
     -demovideo ~/Downloads/match.mvd.gz ~/Movies/airgib.webm --highlight=3 +demo_track 2
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+build/release/se -basedir ~/Games/classic \
     -demovideo ~/Downloads/match.mvd.gz ~/Movies/airgib.gif --from=4:31 --to=4:39 --fps=15
 ```
 
@@ -661,7 +661,7 @@ server's frames go on under it). Its pages are the classic game's:
 
 | Page | Rows |
 | --- | --- |
-| main | SINGLE PLAYER, MULTIPLAYER, OPTIONS, HELP, QUIT |
+| main | SELECT GAME, SINGLE PLAYER, MULTIPLAYER, DEMOS, OPTIONS, QUIT |
 | SINGLE PLAYER | NEW GAME (`newgame`: the packs' campaign from `start`), LOAD and SAVE (twelve slots `s0`..`s11`, each its save's line: `load s<i>`, `save s<i>`) |
 | MULTIPLAYER | JOIN A GAME, NEW GAME (the rules, then START), SETUP (name, shirt and pants colours) |
 | NEW GAME | MAX PLAYERS, GAME TYPE (`deathmatch`), TEAMPLAY, SKILL, FRAG LIMIT, TIME LIMIT, MAP, START |
@@ -676,7 +676,7 @@ server's frames go on under it). Its pages are the classic game's:
 | WATER, LAVA AND SKY | `ce_water`, `ce_lava`, `r_lava_glow`, `ce_slime`, `r_slime_glow`, `ce_teleports`, `ce_warps`, `ce_skies`, `ce_clouds` |
 | FIRE AND WIND | `ce_flames`, `ce_bonfires`, `ce_wind` |
 | WEATHER | `sv_weather`, `sv_rain` (snow, sleet, rain), `sv_precip`, `sv_wind`, `r_lightning`, `r_snowcover`, `r_wet`, `ce_fog` |
-| HELP | the keys (in the classic look, the pack's help pages) |
+| HELP | no row: the free episode's end shows it (in the classic look, the pack's help pages) |
 | QUIT | YES (`quit`), NO |
 
 - **Every row is the console's.** A setting reads its cvar when the menu opens and writes it with
@@ -738,7 +738,7 @@ the guide, and `ge qc build` compiles it with the tree's own QC compiler
   over (the base game's own `progs.dat` is its campaign, found the same way for SINGLE
   PLAYER), and with none the baseline mod runs; the status line says which.
 - **Or ship it compiled** (M18p): a mod folder whose packs hold a `qwprogs.qvm` runs that
-  module on the dedicated server (`shooters_edge_server --root=<game> --mod=<folder>
+  module on the dedicated server (`sesv --root=<game> --mod=<folder>
   --map=<map>`) ahead of any `qwprogs.dat`, on the module server
   (`server/qvm_server.hpp`, the system calls in `server/qvm_calls.cpp`, the adapter to the loop
   `sim/qvm_program.hpp`). The module starts the map itself (it reads the map's entity text token
@@ -1030,8 +1030,20 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   The low spawnflags bits (an item's variant: the small and mega health, the large boxes) are
   replaced, the bits above (the skills and modes it is left out of) kept; an item with no match
   is left out and counted, so a map never spawns a class the rules do not know.
-- **Another game's map**: a map the played game's packs lack is found in the other game's, and
-  its items become the played game's (M18u2, M18u3).
+- **Another game's map** (`client/remix.hpp`'s `load_remixed_map`): a map the played game's
+  packs lack is found in the other game's, read from the other game's packs with the played
+  game's mounted over them (`RemixFiles`: its walls and sky its own, in its own palette, every
+  model, sound and picture the rules name the played game's), and its items become the played
+  game's (M18u2; the sequel's rules on the classic game's maps are M18u3). The classic rules run
+  on a sequel map by tracing its models through their brushes (`sh::Server::model_solids`).
+- **The balance** (`profiles::RemixBalance`): the weapons a map gets are weighed by tier against
+  the rest of its weapons: fewer than `cr_strong_min` strong ones and the best weak one is raised
+  to the strong kind the map has fewest of; more than `cr_strong_share` of them strong and the
+  last are lowered to the best weak one the map has fewest of; and no more than `cr_strong_same`
+  copies of one strong weapon (two by default: three lightning guns leave a super nailgun), the
+  copy nearest a strong armour or the mega health lowered first so the power is spread out. Small pickups that the played game has no size for (the
+  sequel's stimpacks and shards) are gathered within `cr_pool_radius` units and laid down as the
+  played game's packs by the total they held, a lone one left out.
 - **Another game's items** (`cr_items`: 0 the played game's, 1 the classic game's, 2 the
   sequel's): a game's own maps played with the other game's items, and the HUD that shows them is
   that game's (M18u4).
@@ -1397,7 +1409,8 @@ every pass, and judged by captioned screenshots:
   folder's picture of the player's skin name, else the folder's first. The server still animates
   the game's own figure; each frame is drawn as the named figure's frame of the same kind, matched
   by the frames' names (`app/figure_frames.hpp`). A folder you lack, or `noskins 1`, draws the
-  game's own figure. Your own `model` goes to the server beside your skin.
+  game's own figure. Your own `model` goes to the server beside your skin. A figure copied in with
+  its folder's `weapon.md2` holds that weapon, drawn on the same frame (M18i21).
 - **Skins and figures from the server** (M18i19): joining a server, a client asks for the
   pictures and figures the players wear that it lacks before it begins: `skins/<skin>.pcx`, and for
   a `model`, `players/<model>/tris.md2` (`tris.mdl` only when the server has no `.md2`) and the
@@ -1521,7 +1534,7 @@ events, the packets, the hash after it), and the log replays the run to the bit 
 all, naming the first frame that leaves it. The host on the engine's server core
 (`server/dedicated.hpp`), its slots filled by a seeded stand-in that wanders the arena and fires
 at whoever is ahead, is what the `se-server` lab runs and replays. The headless
-`shooters_edge_server` binary is the engine's dedicated process (`engine/server`, docs/servers.md)
+`sesv` binary is the engine's dedicated process (`engine/server`, docs/servers.md)
 over the PLAYABLE server (`net/classic_game.hpp`): the baseline mod's deathmatch served over the
 classic protocol on the game's port, so a classic client connects and plays; it reads
 `server.cfg` in layers and its flags (the mod's rules among them: `+set fraglimit 20`, or a line
@@ -1538,7 +1551,7 @@ the page:
 - A listen server: the server's frame runs in the player's own process beside the client, on
   the same run clock, and the host plays over a loopback link like any other client (no special
   case in the game program). The match ends when the host leaves.
-- A dedicated server: the game spawns the same `shooters_edge_server` binary M18f builds as its
+- A dedicated server: the game spawns the same `sesv` binary M18f builds as its
   own process, hands it the settings as a cfg, and joins it. It keeps running after the window
   that started it closes; the menu finds it again by its local address and can stop it.
 
@@ -1573,7 +1586,7 @@ keeps the modern look.
 **Hosting from the window (M53a).** The window's match is the dedicated server's game run in the
 window's process (`client/listen.hpp`, `net/classic_game.hpp`): the same server core, the same
 lobby and bots, the player a seat of it. With `sv_port <port>` set before `map <name>`, others join
-it over UDP with a classic client (`connect <address>:<port>`) as they would `shooters_edge_server`;
+it over UDP with a classic client (`connect <address>:<port>`) as they would `sesv`;
 `sv_maxclients` is its slots (32). `sv_port 0`, the default, keeps the match the window's alone.
 
 **Who is on, and the easy jump for one player (M53f).** `users` lists every player on the
@@ -1645,10 +1658,15 @@ install of it loaded last (`client/installs.hpp`: `<prefs>/installs.txt`, a line
 install's edition, read from its packs the moment it is picked (the profile's `full_game` file
 found or not: Shareware or Registered, the sequel's Demo or Full game). ENTER on a game with a
 kept install opens it; on one never found, or FIND ANOTHER INSTALL, the window's folder chooser,
-and the folder is taken by whichever game's base folder it holds (`install_of`). Once a classic
-game is open, the title's night gives way to its own recordings played behind the menu in turn
-(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game and q2demo1 from the sequel's `demos/` folder; "" keeps the night), ESCAPE closes the menu onto the
-recording to watch it, and nothing modern is left on screen: the console is written in the
+and the folder is taken by whichever game's base folder it holds (`install_of`). Picked, a game starts as the
+classic games start (`client/game_start.hpp`): the menu goes, the console covers the screen with the
+packs added, and once the game's first recording plays (or its first map has loaded) the console
+slides up at `scr_conspeed`, the game's own name and unit for the speed (the classic game's lines a
+second of its 200-line screen, 300 by default; the sequel's screens a second, 3), turned into the
+console's `con_speed`. Once a classic
+game is open, the title's night gives way to its own recordings played in turn, with no play bar,
+(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game and q2demo1 from the sequel's `demos/` folder; "" keeps the night), ESCAPE opens the menu over the
+recording, and closes it again, and nothing modern is left on screen: the console is written in the
 game's glyph sheet over its own console background (`menu/classic_console.hpp`, the engine's
 `ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
 GAME and SELECT GAME are drawn in the game's letters under carved titles (`menu/classic_pages.hpp`;
@@ -1664,7 +1682,7 @@ The sequel's menu is drawn in its own pictures too (`client/sequel_adapter.cpp` 
 `pics/*.pcx`; `ClassicArt::plates`, `menu/classic_view.hpp`). They are drawn on a 320 x 240
 screen with the 320 x 200 one in its middle. The root is its main menu: the plaque and the logo
 down the left, a plate for each row, the lit plate and the spinning cursor on the focused row.
-Each page under it has its banner over the top. SELECT GAME, DEMOS and HELP have no plate of
+Each page under it has its banner over the top. SELECT GAME and DEMOS have no plate of
 their own, so each is built from the other plates' letters, a 17 px cell each. The C, the H and
 the K are pieced from O, N, R and Y (`kPlate*`, held to the plates' print). SELECT GAME's title and
 the two games' names on it are plates built the same way. The lobby and the scoreboard stay

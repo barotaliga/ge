@@ -148,3 +148,17 @@ TEST(matches_a_max_column_keeps_its_largest_and_the_rest_sum) {
   CHECK(t.columns.at("rl_hits") == 8);
   CHECK(t.columns.at("streak_max") == 7);
 }
+
+TEST(matches_a_demo_links_to_the_match_it_closes_with) {
+  ga::Matches m;
+  gn::MatchReport r = duel(5);
+  r.server = "Old Fort";
+  r.start_s = 1794500000;
+  ga::matches_add(m, key(1), r);
+  const std::string sha(64, 'c');
+  CHECK(!ga::matches_link_demo(m, 5, 1794500001, "Old Fort", sha));  // another start
+  CHECK(!ga::matches_link_demo(m, 5, 1794500000, "New Fort", sha));  // another server
+  CHECK(!ga::matches_link_demo(m, 5, 1794500000, "Old Fort", ""));   // no demo's name
+  CHECK(ga::matches_link_demo(m, 5, 1794500000, "Old Fort", sha));
+  CHECK(m.kept.back().report.demo_sha256 == sha);
+}

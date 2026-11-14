@@ -319,7 +319,9 @@ struct Demo {
   int32_t server_count = 0;
   int32_t last_frame = -1;
   // When set, the sequel reader lists each block's messages here (cleared at each block): what a
-  // relay that passes the blocks on reads them by (net/sequel_tv_face.hpp).
+  // relay that passes the blocks on reads them by (net/sequel_tv_face.hpp). The multiplayer
+  // readers append each message they read (never cleared: the caller clears; offsets within the
+  // packet or record read): what a converter passes on (demo_convert_multiview.cpp).
   std::vector<DemoSpan>* spans = nullptr;
 };
 

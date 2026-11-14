@@ -19,15 +19,20 @@
 #include <string>
 #include <vector>
 
+#include "account/ladder.hpp"
 #include "account/matches.hpp"
 #include "account/service.hpp"
 #include "account/store.hpp"
 #include "core/prng.hpp"
+#include "hub/archive.hpp"
 #include "hub/pages.hpp"
 #include "hub/spec.hpp"
 #include "hub/stats_page.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/hub_browser.hpp"
+#include "mod/sha256.hpp"
+#include "net/report.hpp"
+#include "replay/stream.hpp"
 
 namespace {
 
@@ -103,6 +108,8 @@ struct Night {
   uint64_t fresh_n = 1;
   std::vector<uint64_t> ids;
   uint64_t first_team_match = 0;
+  gn::MatchReport recorded;  // the match whose server recorded it
+  std::string demo_sha;      // its demo, joined to it by the closing summary ("" not joined)
 };
 
 void build(Night& night) {
@@ -161,9 +168,111 @@ void build(Night& night) {
       r.teams = {{"red", red, 4}, {"blue", blue, 13}};
       if (r.mode == "4on4" && night.first_team_match == 0) night.first_team_match = r.id;
     }
-    if (m == 20) r.demo_sha256 = std::string(64, 'a');
+    if (r.id == night.first_team_match) night.recorded = r;  // the match page drawn
     ga::matches_add(night.svc.matches, m == 23 ? unlisted : trusted, r);
   }
+  // The recorded match's demo, as a server's recorder closes it (tv/server_source.hpp): the
+  // report in the trailer. The hub reads it as the archive would and joins the two.
+  ge::replay::StreamHeader h;
+  h.game = "shooters_edge";
+  h.meta = {{"map", night.recorded.map}, {"server", night.recorded.server}};
+  h.tracks = {{1, ge::replay::TrackKind::meta, ge::replay::TrackCodec::stored, "meta"}};
+  std::vector<uint8_t> file;
+  ge::replay::StreamWriter w;
+  ge::replay::stream_begin(w, h, file);
+  const uint8_t tick[] = {1};
+  ge::replay::stream_add(w, 1, 0, tick);
+  ge::replay::stream_end_block(w, true);
+  std::string text, error;
+  if (!gn::report_text(night.recorded, text, error)) return;
+  ge::replay::stream_finish(w, {{"report", text}});
+  ge::hub::DemoRow row;
+  if (!ge::hub::demo_row(file, row, error)) return;
+  row.sha = ge::mod::sha256_hex(file.data(), file.size());  // the archive names a demo so
+  if (ga::matches_link_demo(night.svc.matches, row.report_id, row.report_start_s, row.report_server,
+                            row.sha))
+    night.demo_sha = row.sha;
+}
+
+// The ladders' sample: the same eight accounts over three seasons (14 days each) of duels, and of
+// two-on-two matches between four duos they registered; each match won by the better player's
+// side more often than not.
+void build_ladder(Night& night) {
+  ga::Store store;
+  ga::store_init(store, ga::HashCost{8, 1});
+  ga::ServiceConfig c;
+  c.seed.fill(6);
+  ga::service_init(
+      night.svc, c, std::move(store), night.unused,
+      [](void* ctx, uint8_t* out, size_t size) {
+        auto* n = static_cast<uint64_t*>(ctx);
+        for (size_t i = 0; i < size; i++) out[i] = static_cast<uint8_t>(*n * 41 + i * 13);
+        (*n)++;
+      },
+      &night.fresh_n);
+  for (size_t i = 0; i < std::size(kWho); i++) {
+    ga::Fresh f{};
+    f.fill(static_cast<uint8_t>(i + 1));
+    night.ids.push_back(ga::create(night.svc.store, kWho[i].name, "a long password",
+                                   (kNow_s - int64_t{90} * 86400) * 1000000, f)
+                            .id);
+  }
+  gn::Key trusted{};
+  trusted.fill(1);
+  ga::matches_trust(night.svc.matches, trusted);
+  const char* duos[] = {"Night Owls", "Iron Pair", "Slow Burn", "Last Stand"};
+  for (size_t d = 0; d < 4; d++) {
+    ga::matches_duo_ask(night.svc.matches, night.ids[2 * d], night.ids[2 * d + 1], duos[d]);
+    ga::matches_duo_ask(night.svc.matches, night.ids[2 * d + 1], night.ids[2 * d], duos[d]);
+  }
+  ge::core::Rng rng = ge::core::make_rng(1600);
+  const int64_t first = ga::season_start(night.svc.matches.ladder,
+                                         ga::season_of(night.svc.matches.ladder, kNow_s) - 2);
+  uint64_t id = 0x7000;
+  for (int64_t t = first; t < kNow_s - 3600; t += int64_t{3} * 3600) {
+    gn::MatchReport r;
+    r.id = id++;
+    r.game = "shooters_edge";
+    r.server = "Duel Hall";
+    r.map = "arena";
+    r.start_s = t;
+    r.duration_ms = 600000;
+    const bool pair = (id % 3) == 0;
+    r.mode = pair ? "2on2" : "1on1";
+    const auto score = [&](double skill) {
+      return static_cast<int64_t>(ge::core::range(rng, 5, 25) * (0.6 + skill));
+    };
+    if (pair) {
+      const size_t a = ge::core::pick_index(rng, 4), b = (a + 1 + ge::core::pick_index(rng, 3)) % 4;
+      const int64_t sa = score((kWho[2 * a].skill + kWho[2 * a + 1].skill) / 2);
+      const int64_t sb = score((kWho[2 * b].skill + kWho[2 * b + 1].skill) / 2);
+      r.teams = {{"red", sa, 4}, {"blue", sb, 13}};
+      for (size_t k = 0; k < 2; k++) {
+        gn::ReportPlayer p;
+        p.name = kWho[2 * a + k].name;
+        p.account = night.ids[2 * a + k];
+        p.team = "red";
+        p.score = p.frags = sa / 2 + static_cast<int64_t>(k) * (sa % 2);
+        r.players.push_back(p);
+        p.name = kWho[2 * b + k].name;
+        p.account = night.ids[2 * b + k];
+        p.team = "blue";
+        p.score = p.frags = sb / 2 + static_cast<int64_t>(k) * (sb % 2);
+        r.players.push_back(p);
+      }
+    } else {
+      const size_t a = ge::core::pick_index(rng, 8), b = (a + 1 + ge::core::pick_index(rng, 7)) % 8;
+      for (size_t w : {a, b}) {
+        gn::ReportPlayer p;
+        p.name = kWho[w].name;
+        p.account = night.ids[w];
+        p.score = p.frags = score(kWho[w].skill);
+        r.players.push_back(p);
+      }
+    }
+    ga::matches_add(night.svc.matches, trusted, r);
+  }
+  ga::ladder_close_due(night.svc.matches.ladder, kNow_s);
 }
 
 std::string id_hex(uint64_t id) {
@@ -194,6 +303,27 @@ void run(gl::Lab& lab) {
   const std::string leaders = get("/leaders");
   const std::string accuracy = get("/leaders?stat=rl_acc&without=ffa");
   const std::string json = get("/v1/players/ranger");
+  Night ladder_night;
+  build_ladder(ladder_night);
+  const auto ladder_get = [&](const std::string& target) {
+    gh::Answer a;
+    if (!gh::stats_answer(spec, &ladder_night.svc, target, kNow_s, a) || a.code != 200)
+      lab.fail("the hub did not answer " + target + " with a page",
+               "next: read ladder_answer in engine/hub/ladder_page.cpp");
+    return a.body;
+  };
+  const std::string ladder_duel = ladder_get("/ladder?mode=1on1");
+  const std::string ladder_pair = ladder_get("/ladder?mode=2on2");
+  lab.attach("ladder-1on1.html", bytes(ladder_duel));
+  lab.attach("ladder-2on2.html", bytes(ladder_pair));
+  lab.attach("ladder.json", bytes(ladder_get("/v1/ladder?mode=1on1")));
+  const ga::Ladder& lad = ladder_night.svc.matches.ladder;
+  lab.metric("ladder_rated", static_cast<double>(lad.rated), "matches");
+  lab.metric("ladder_seasons_closed", static_cast<double>(lad.history.size()), "records");
+  lab.metric("ladder_duos", static_cast<double>(lad.duos.size()), "duos");
+  if (lad.history.empty())
+    lab.fail("no past season was closed into the history",
+             "next: read ladder_close_due in engine/account/ladder.cpp");
   lab.attach("player.html", bytes(player));
   lab.attach("player-duels.html", bytes(duels));
   lab.attach("player-good-ping.html", bytes(good));
@@ -206,6 +336,11 @@ void run(gl::Lab& lab) {
   ga::TotalsFilter f;
   f.modes = {"1on1"};
   const ga::Totals one = ga::totals_sum(night.svc.matches, night.ids[0], f);
+  lab.metric("demo_joined", night.demo_sha.empty() ? 0 : 1, "demos");
+  if (night.demo_sha.empty())
+    lab.fail("the recorded match's demo was not joined to it by its closing summary",
+             "Run tests/hub_archive_test and tests/account_matches_test (matches_link_demo); "
+             "skill: net.");
   lab.metric("reports_kept", static_cast<double>(night.svc.matches.kept.size()), "reports");
   lab.metric("ranger_matches", static_cast<double>(all.matches), "matches");
   lab.metric("ranger_duels", static_cast<double>(one.matches), "matches");
@@ -261,8 +396,20 @@ void run(gl::Lab& lab) {
        "GET /leaders?stat=rl_acc&without=ffa: a ratio, counted over three matches or more.",
        "percentages, the line on the minimum of matches below the table."},
   };
+  const View more[] = {
+      {"ladder-1on1", "THE 1ON1 LADDER", &ladder_duel, 1280, 1700, true,
+       "GET /ladder?mode=1on1: this season's standings (five matches to be ranked, the rest "
+       "dimmed), the all-time ratings, and the champions of the two seasons before.",
+       "the ranked players above the dimmed rows that lack matches, each dimmed row saying how "
+       "many more; two past seasons with three champions each."},
+      {"ladder-2on2", "THE 2ON2 LADDER OF DUOS", &ladder_pair, 390, 2000, false,
+       "GET /ladder?mode=2on2 on a phone: the registered duos by name with their two players.",
+       "Night Owls (Ranger and Vex) leading; every duo's two players linked to their pages."},
+  };
   int drawn = 0;
-  for (const View& v : views) {
+  std::vector<View> shown(std::begin(views), std::end(views));
+  shown.insert(shown.end(), std::begin(more), std::end(more));
+  for (const View& v : shown) {
     const std::optional<gl::Picture> pic =
         ge::lab::hub_browser::hub_draw(browser, dir, v.id, *v.page, v.w, v.h, v.dark);
     if (!pic) {
@@ -273,7 +420,7 @@ void run(gl::Lab& lab) {
     lab.shot({v.id, v.title, v.what, v.look, {{"width", std::to_string(v.w)}}}, *pic,
              gl::Det::measured);
   }
-  lab.metric("pages_drawn", drawn, "of 6", gl::Det::measured);
+  lab.metric("pages_drawn", drawn, "of 8", gl::Det::measured);
   fs::remove_all(dir, ec);
 }
 

@@ -71,7 +71,7 @@ struct BeamLook {
   float wander = 0.35f;   // the sideways kick a step, a share of the step
   float pull = 0.35f;     // how much of its offset a point gives back toward the axis a step
   float filaments = 1;    // channels round the axis (1..kBeamFilaments)
-  float braid_m = 0;      // a filament's helix off the axis
+  float braid_m = 0;      // a filament's helix off the axis (one alone: a coil round it)
   float twist = 0;        // the helix's turns a metre
   float spin_hz = 0;      // turns a second the helix spins
   float fork_chance = 0;  // a fork's chance a step

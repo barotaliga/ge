@@ -1,34 +1,47 @@
-// THE HOPS, HEADLESS: `shooters_edge_hops <kind> ...` runs one of our hops between a player's
-// client and a classic server as a process of its own, so any classic client (ours or an existing
-// one) goes through it: a forward (engine/forward with the classic face, classic_forward.hpp: the
-// route in the connect's `prx`), the near or far proxy (engine/proxy) or both with a lossy link
-// between them, or a TV node (classic_tv.hpp) relaying a server's stream port to classic viewers.
-// It runs on the wall clock, a frame every millisecond, until stopped or `--seconds`, and writes a
-// status line every `--status` seconds.
+// THE HOPS, HEADLESS: one source built as three executables, one per hop, each run between a
+// player's client and a server as a process of its own, so any client (ours or an existing one)
+// goes through it. `SE_HOP` (set by the CMake target) picks the binary:
 //
-//   shooters_edge_hops forward --port=30000 --allow=<host[:port],...> | --open
-//   shooters_edge_hops forward --port=<p> --server=<host:port>   (a fixed route: fixed.hpp)
-//   shooters_edge_hops proxy --port=<near> --server=<host:port> [--link-loss=0.1] [--copies=3]
-//   shooters_edge_hops proxy-near --port=<p> --far=<host:port> --server=<host:port> [--copies=3]
-//   shooters_edge_hops proxy-far --port=<p> --allow=<host[:port],...> | --open [--copies=3]
-//   shooters_edge_hops tv --port=27900 --server=<host:stream port> [--server-password=<pw>]
-//                         [--password=<pw>] [--delay=7] [--name=tv]
-//   shooters_edge_hops sequel-tv --port=27911 --server=<sequel host:port> [--server-password=<pw>]
-//                         [--password=<pw>] [--delay=7] [--name=tv]   (sequel_tv_relay.hpp)
-//   shooters_edge_hops sequel-tv --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
-//                         a recording played round and round instead   (sequel_tv_demo.hpp)
+//   sefwd   a forward (engine/forward with the classic face, classic_forward.hpp: the route in the
+//           connect's `prx`), or a fixed route to one server (fixed.hpp)
+//   seproxy the near or far proxy (engine/proxy), or both with a lossy link between them
+//   setv    a TV node (classic_tv.hpp) relaying a server's stream port to classic viewers, or with
+//           --sequel the sequel's TV (sequel_tv_relay.hpp, sequel_tv_demo.hpp)
+//
+// Each runs on the wall clock, a frame every millisecond, until stopped or `--seconds`, and writes
+// a status line every `--status` seconds.
+//
+//   sefwd --port=30000 --allow=<host[:port],...> | --open
+//   sefwd --port=<p> --server=<host:port>   (a fixed route: fixed.hpp)
+//   sefwd ... --webtransport=<port>   pages in a browser too, on that UDP port
+//   sefwd ... --master=<host[:port],...>   listed there, so a hub offers its pages
+//   seproxy --port=<near> --server=<host:port> [--link-loss=0.1] [--copies=3]
+//   seproxy near --port=<p> --far=<host:port> --server=<host:port> [--copies=3]
+//   seproxy far --port=<p> --allow=<host[:port],...> | --open [--copies=3]
+//   setv --port=27900 --server=<host:stream port> [--server-password=<pw>] [--password=<pw>]
+//        [--delay=7] [--name=tv]
+//   setv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]
+//        a client recording played round and round to any classic client, the oldest too,
+//        over plain protocol 28   (classic_tv_udp.hpp, classic_tv_recording.hpp)
+//   setv --sequel --port=27911 --server=<sequel host:port> [--server-password=<pw>]
+//        [--password=<pw>] [--delay=7] [--name=tv]   (sequel_tv_relay.hpp)
+//   setv --sequel --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
+//        a recording played round and round instead   (sequel_tv_demo.hpp)
 //
 // voice: agent (a command-line tool's main: its errors are for whoever runs it;
 // docs/architecture.md § Player text).
 //
-// ge:summary The hops headless: our forward, proxies or TV node as a process for any classic client
-// ge:keywords shooters_edge_hops hops-cli forward proxy tv-node relay headless live-server
+// ge:summary The hops headless (sefwd, seproxy, setv): our forward, proxies or TV node as a process
+// ge:keywords sefwd seproxy setv shooters_edge_hops hops-cli forward proxy tv-node relay headless
+// ge:keywords live-server
 // ge:keywords prx link-loss stream-port
 // ge:skill net
 #include <chrono>
 #include <csignal>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <iterator>
 #include <memory>
@@ -41,12 +54,16 @@
 #include "forward/forward.hpp"
 #include "net/address.hpp"
 #include "net/conditions.hpp"
+#include "net/master.hpp"
+#include "net/packet.hpp"
 #include "net/transport.hpp"
 #include "proxy/proxy.hpp"
 #include "shooters_edge/net/classic_forward.hpp"
 #include "shooters_edge/net/classic_tv.hpp"
+#include "shooters_edge/net/classic_tv_recording.hpp"
 #include "shooters_edge/net/sequel_tv_demo.hpp"
 #include "shooters_edge/net/sequel_tv_relay.hpp"
+#include "webtransport/forward.hpp"
 
 namespace sn = shooters_edge::net;
 namespace gn = ge::net;
@@ -65,24 +82,47 @@ bool flag(const std::string& a, const char* name, std::string& out) {
   return true;
 }
 
+#ifndef SE_HOP
+#error "SE_HOP names the binary: 1 sefwd, 2 seproxy, 3 setv (games/shooters_edge/CMakeLists.txt)"
+#endif
+enum class Hop : uint8_t { forward = 1, proxy = 2, tv = 3 };
+constexpr Hop kHop = static_cast<Hop>(SE_HOP);
+constexpr const char* kBinary = kHop == Hop::forward ? "sefwd"
+                                : kHop == Hop::proxy ? "seproxy"
+                                                     : "setv";
+
 void usage() {
+  if (kHop == Hop::forward)
+    std::printf(
+        "sefwd [flags]: our forward, for any classic client\n"
+        "  --port=30000 --allow=<host[:port],...> | --open   (the route in prx)\n"
+        "  --port=<p> --server=<host:port>: every client to that server, for a client that\n"
+        "      cannot name a route (the sequel's, any game's)\n"
+        "  ... --webtransport=<port>: pages in a browser too, on that UDP port\n"
+        "      (https://host:port/play?to=<server>; the certificate's hash is printed)\n"
+        "  ... --master=<host[:port],...>: listed there, so a hub offers its pages\n");
+  else if (kHop == Hop::proxy)
+    std::printf(
+        "seproxy [near|far] [flags]: our proxies, for any classic client\n"
+        "  seproxy --port=<near> --server=<host:port> [--link-loss=0..1]: near on --port,\n"
+        "      far on the next, a link between them losing --link-loss each way\n"
+        "  seproxy near --port=<p> --far=<host:port> --server=<host:port>\n"
+        "  seproxy far --port=<p> --allow=<host[:port],...> | --open\n");
+  else
+    std::printf(
+        "setv [--sequel] [flags]: our TV node\n"
+        "  setv --port=27900 --server=<host:stream port> [--server-password=<pw>]\n"
+        "      [--password=<pw>] [--delay=7] [--name=tv]\n"
+        "  setv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]: a\n"
+        "      client recording played round and round to any classic client, the oldest\n"
+        "      too, over plain protocol 28\n"
+        "  setv --sequel --port=27911 --server=<host:port> [--server-password=<pw>]\n"
+        "      [--password=<pw>] [--delay=7] [--name=tv]: a watcher on a server of the\n"
+        "      sequel, its match served to the sequel's own clients\n"
+        "      or --demo=<file.dm2> in place of --server: a recording, played round and\n"
+        "      round at the game's pace\n");
   std::printf(
-      "shooters_edge_hops <kind> [flags]: one of our hops for any classic client\n"
-      "  forward     --port=30000 --allow=<host[:port],...> | --open   (the route in prx)\n"
-      "  forward     --port=<p> --server=<host:port>: every client to that server, for a\n"
-      "              client that cannot name a route (the sequel's, any game's)\n"
-      "  proxy       --port=<near> --server=<host:port> [--link-loss=0..1]: near on --port,\n"
-      "              far on the next, a link between them losing --link-loss each way\n"
-      "  proxy-near  --port=<p> --far=<host:port> --server=<host:port>\n"
-      "  proxy-far   --port=<p> --allow=<host[:port],...> | --open\n"
-      "  tv          --port=27900 --server=<host:stream port> [--server-password=<pw>]\n"
-      "              [--password=<pw>] [--delay=7] [--name=tv]\n"
-      "  sequel-tv   --port=27911 --server=<host:port> [--server-password=<pw>]\n"
-      "              [--password=<pw>] [--delay=7] [--name=tv]: a watcher on a server of the\n"
-      "              sequel, its match served to the sequel's own clients\n"
-      "              or --demo=<file.dm2> in place of --server: a recording, played round and\n"
-      "              round at the game's pace\n"
-      "Every kind: [--bind=<ip>] (default every interface; the proxy's pair: 127.0.0.1)\n"
+      "Every one: [--bind=<ip>] (default every interface; the proxy's pair: 127.0.0.1)\n"
       "  [--copies=3] [--name=<name>] [--seconds=<n>, 0 until stopped] [--status=10]\n");
 }
 
@@ -106,16 +146,16 @@ bool open_upstream(gn::Transport& out) {
 
 struct Options {
   std::string kind, name, bind, server_password, password, demo;
-  int port = 0, copies = 3;
+  int port = 0, copies = 3, webtransport = 0;
   double link_loss = 0, delay = 7, seconds = 0, status = 10;
   bool open = false;
-  std::vector<gn::Address> allow;
+  std::vector<gn::Address> allow, masters;
   gn::Address server{}, far{};
   bool has_server = false, has_far = false;
 };
 
 int fail(const std::string& what, const std::string& next) {
-  std::fprintf(stderr, "shooters_edge_hops: %s; next: %s\n", what.c_str(), next.c_str());
+  std::fprintf(stderr, "%s: %s; next: %s\n", kBinary, what.c_str(), next.c_str());
   return 2;
 }
 
@@ -150,19 +190,23 @@ struct Hops {
   gn::Transport fwd_port, near_client, near_link, far_link;
   gn::FakeLink near_fake, far_fake;
   fw::Forward fwd;
+  ge::webtransport::WebForward web;  // pages' sessions, when --webtransport
+  gn::MasterBeat beat;               // the forward listed at --master's masters
   sn::ClassicFace face;
   fw::FixedFace fixed;
-  bool fixed_route = false;
   px::ProxyNear near;
   px::ProxyFar far;
   sn::TvNode tv;
   gn::Transport sq_watcher, sq_face;
   sn::SequelTvRelay sq;
-  bool has_sq = false;
   sn::SequelTvFace sq_demo_face;  // --demo: the face fed from a recording, no watcher
   sn::SequelTvDemo sq_demo;
-  bool has_sq_demo = false;
+  gn::Transport qw_face;  // tv --demo: the face for classic clients fed from a recording
+  sn::ClassicTvUdp cl_demo_face;
+  sn::UdpTvRecording cl_demo;
   bool forward = false, has_near = false, has_far = false, has_tv = false;
+  bool has_web = false, beating = false, fixed_route = false;
+  bool has_sq = false, has_sq_demo = false, has_cl_demo = false;
 };
 
 std::string status_line(const Hops& h) {
@@ -175,6 +219,16 @@ std::string status_line(const Hops& h) {
     s += "forward: clients " + std::to_string(h.fwd.clients.size()) + ", accepted " +
          std::to_string(h.face.counts.accepted) + ", refused " +
          std::to_string(h.face.counts.refused) + ". ";
+  if (h.has_web) {
+    uint64_t up = 0, down = 0;
+    for (const auto& c : h.web.fwd.clients) {
+      up += c->packets_up;
+      down += c->packets_down;
+    }
+    s += "pages: " + std::to_string(h.web.sessions.size()) + " on, " +
+         std::to_string(h.web.stats.opened) + " came, " + std::to_string(h.web.stats.refused) +
+         " refused, packets " + std::to_string(up) + " up and " + std::to_string(down) + " down. ";
+  }
   if (h.has_near) {
     uint64_t up = 0, game = 0;
     for (const auto& n : h.near.clients) {
@@ -214,6 +268,10 @@ std::string status_line(const Hops& h) {
          std::to_string(h.sq.face.blocks) + ", whole frames " +
          std::to_string(h.sq.face.whole_frames) + ", viewers " +
          std::to_string(sn::sequel_tv_viewers(h.sq.face)) + ". ";
+  if (h.has_cl_demo)
+    s += "tv: recording packets " + std::to_string(h.cl_demo.packets) + ", rounds " +
+         std::to_string(h.cl_demo.rounds) + (h.cl_demo.ended ? " (ended)" : "") + ", viewers " +
+         std::to_string(sn::udp_tv_viewers(h.cl_demo_face)) + ". ";
   if (h.has_sq_demo)
     s += "sequel tv: recording frames " + std::to_string(h.sq_demo.frames) + ", rounds " +
          std::to_string(h.sq_demo.rounds) + (h.sq_demo.ended ? " (ended)" : "") + ", viewers " +
@@ -227,8 +285,17 @@ int run(int argc, char** argv) {
     return argc < 2 ? 2 : 0;
   }
   Options o;
-  o.kind = argv[1];
-  for (int i = 2; i < argc; i++) {
+  int first = 1;
+  if (kHop == Hop::forward) {
+    o.kind = "forward";
+  } else if (kHop == Hop::proxy) {
+    const std::string end = argv[1];
+    o.kind = end == "near" ? "proxy-near" : end == "far" ? "proxy-far" : "proxy";
+    if (o.kind != "proxy") first = 2;
+  } else {
+    o.kind = "tv";
+  }
+  for (int i = first; i < argc; i++) {
     const std::string a = argv[i];
     std::string v;
     if (a == "--help" || a == "-h") {
@@ -236,11 +303,22 @@ int run(int argc, char** argv) {
       return 0;
     } else if (flag(a, "port", v)) {
       o.port = std::atoi(v.c_str());
+    } else if (flag(a, "webtransport", v)) {
+      o.webtransport = std::atoi(v.c_str());
+      if (o.webtransport <= 0 || o.webtransport > 65535)
+        return fail("--webtransport=" + v + " is no port", "--webtransport=<udp port>");
     } else if (flag(a, "bind", v)) {
       o.bind = v;
     } else if (flag(a, "allow", v)) {
       if (!addresses(v, o.allow))
         return fail("--allow=" + v + " holds no address", "host:port,...");
+    } else if (a == "--sequel" && kHop == Hop::tv) {
+      o.kind = "sequel-tv";
+    } else if (flag(a, "master", v)) {
+      if (!addresses(v, o.masters))
+        return fail("--master=" + v + " holds no address", "host[:port],...");
+      for (gn::Address& m : o.masters)
+        if (m.port == 0) m.port = gn::kMasterPort;
     } else if (a == "--open") {
       o.open = true;
     } else if (flag(a, "server", v)) {
@@ -270,7 +348,7 @@ int run(int argc, char** argv) {
     } else if (flag(a, "status", v)) {
       o.status = std::atof(v.c_str());
     } else {
-      return fail("unknown argument '" + a + "'", "shooters_edge_hops --help");
+      return fail("unknown argument '" + a + "'", std::string(kBinary) + " --help");
     }
   }
   auto owned = std::make_unique<Hops>();
@@ -301,6 +379,39 @@ int run(int argc, char** argv) {
       sn::classic_forward_attach(h.fwd, h.face);
       std::printf("forward on %s\n", gn::to_string(bind).c_str());
     }
+    if (o.webtransport > 0) {
+      ge::webtransport::Certificate cert;
+      const auto unix_now = static_cast<int64_t>(std::time(nullptr));
+      if (!ge::webtransport::make_certificate(cert, unix_now, fc.name, &error))
+        return fail("the forward's certificate could not be made: " + error, "run it again");
+      const gn::Address web_bind = at(o.bind, o.webtransport);
+      if (!ge::webtransport::web_forward_start(h.web, cert, web_bind, fc, open_upstream, &error))
+        return fail(
+            "the WebTransport socket did not open on " + gn::to_string(web_bind) + ": " + error,
+            "pick a free --webtransport port");
+      h.has_web = true;
+      // The forward's record says where pages connect and how they trust it (a hub reads it).
+      h.fwd.config.keys.emplace_back(fw::kWebTransportKey, std::to_string(o.webtransport));
+      fw::status_put_cert(h.fwd.config.keys, ge::webtransport::hash_hex(cert));
+      std::printf("webtransport on %s, certificate %s\n", gn::to_string(web_bind).c_str(),
+                  ge::webtransport::hash_hex(cert).c_str());
+    }
+    if (!o.masters.empty()) {
+      gn::MasterBeatConfig bc;
+      bc.masters = o.masters;
+      bc.protocol = gn::protocol_id("shooters_edge", 1);  // listed among the game's nodes
+      bc.kind = gn::NodeKind::forward;
+      bc.version = fc.version;
+      bc.seed = fc.seed;
+      gn::master_beat_init(h.beat, bc);
+      h.fwd_port.on_public = [](void* ctx, const uint8_t* d, size_t n, const gn::Address& from,
+                                int64_t now_us) {
+        return gn::master_beat_read(*static_cast<gn::MasterBeat*>(ctx), d, n, from, now_us);
+      };
+      h.fwd_port.public_ctx = &h.beat;
+      h.beating = true;
+      std::printf("listed at %zu master(s)\n", o.masters.size());
+    }
   } else if (o.kind == "proxy" || o.kind == "proxy-near" || o.kind == "proxy-far") {
     const bool near = o.kind != "proxy-far", far = o.kind != "proxy-near";
     if (near && !o.has_server)
@@ -313,6 +424,7 @@ int run(int argc, char** argv) {
     px::ProxyConfig pc;
     pc.link.repeat = o.copies;
     pc.link.pack = true;
+    pc.link.code = true;
     pc.allow = o.kind == "proxy" ? std::vector<gn::Address>{o.server} : o.allow;
     pc.open = o.open;
     const auto seed =
@@ -355,6 +467,26 @@ int run(int argc, char** argv) {
       std::printf("the link loses %s of its frames each way (a test)\n",
                   ge::core::num::to_fixed(o.link_loss, 2).c_str());
     }
+  } else if (o.kind == "tv" && !o.demo.empty()) {
+    std::ifstream in(o.demo, std::ios::binary);
+    std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                               std::istreambuf_iterator<char>());
+    if (bytes.empty())
+      return fail("the recording " + o.demo + " did not open",
+                  "name a client recording that exists");
+    if (!sn::udp_tv_recording_open(h.cl_demo, std::move(bytes), true, error))
+      return fail(o.demo + ": " + error, "name a multiplayer client's recording");
+    const gn::Address bind = at(o.bind, o.port > 0 ? o.port : 27900);
+    if (!gn::open_udp_transport(h.qw_face, bind, &error))
+      return fail("the TV's socket did not open on " + gn::to_string(bind) + ": " + error,
+                  "pick a free --port");
+    sn::UdpTvConfig fc;
+    fc.name = o.name.empty() ? "Shooter's Edge TV" : o.name;
+    fc.password = o.password;
+    sn::udp_tv_start(h.cl_demo_face, h.qw_face, fc);
+    h.has_cl_demo = true;
+    std::printf("tv on %s, playing %s round and round to classic clients\n",
+                gn::to_string(bind).c_str(), o.demo.c_str());
   } else if (o.kind == "tv") {
     if (!o.has_server)
       return fail("a TV node relays one server's stream port", "--server=<host:port>");
@@ -409,22 +541,27 @@ int run(int argc, char** argv) {
     std::printf("sequel tv on %s, watching %s, %.0f s behind\n", gn::to_string(bind).c_str(),
                 gn::to_string(o.server).c_str(), o.delay);
   } else {
-    return fail("no kind '" + o.kind + "'",
-                "forward, proxy, proxy-near, proxy-far, tv or sequel-tv");
+    return fail("no hop '" + o.kind + "'", std::string(kBinary) + " --help");
   }
   std::fflush(stdout);
   std::signal(SIGINT, on_signal);
   std::signal(SIGTERM, on_signal);
   const auto start = std::chrono::steady_clock::now();
   double next_status = o.status;
-  size_t tv_log = 0, sq_log = 0, face_log = 0;
+  size_t tv_log = 0, sq_log = 0, face_log = 0, web_log = 0;
   while (g_stop == 0) {
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
     const int64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
                                std::chrono::steady_clock::now() - start)
                                .count();
     const double now = static_cast<double>(now_us) / 1e6;
+    if (h.beating) gn::master_beat_update(h.beat, h.fwd_port, now_us);
     if (h.forward) fw::forward_update(h.fwd, now_us);
+    if (h.has_web) {
+      ge::webtransport::web_forward_update(h.web, now_us);
+      for (; web_log < h.web.log.size(); web_log++)
+        std::printf("webtransport: %s\n", h.web.log[web_log].c_str());
+    }
     if (h.has_near) px::proxy_near_update(h.near, now_us);
     if (h.has_far) px::proxy_far_update(h.far, now_us);
     if (h.has_tv) {
@@ -436,6 +573,12 @@ int run(int argc, char** argv) {
       for (; sq_log < h.sq.log.size(); sq_log++) std::printf("tv: %s\n", h.sq.log[sq_log].c_str());
       for (; face_log < h.sq.face.log.size(); face_log++)
         std::printf("tv: %s\n", h.sq.face.log[face_log].c_str());
+    }
+    if (h.has_cl_demo) {
+      sn::udp_tv_recording_update(h.cl_demo, h.cl_demo_face, now_us);
+      sn::udp_tv_frame(h.cl_demo_face, now_us);
+      for (; face_log < h.cl_demo_face.log.size(); face_log++)
+        std::printf("tv: %s\n", h.cl_demo_face.log[face_log].c_str());
     }
     if (h.has_sq_demo) {
       sn::sequel_tv_demo_update(h.sq_demo, h.sq_demo_face, now_us);
@@ -451,11 +594,19 @@ int run(int argc, char** argv) {
     if (o.seconds > 0 && now >= o.seconds) break;
   }
   std::printf("stopped: %s\n", status_line(h).c_str());
+  if (h.beating) {
+    const int64_t end_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                               std::chrono::steady_clock::now() - start)
+                               .count();
+    gn::master_beat_stop(h.beat, h.fwd_port, end_us);
+  }
   if (h.forward) fw::forward_close(h.fwd);
+  if (h.has_web) ge::webtransport::web_forward_close(h.web);
   if (h.has_far) px::proxy_far_close(h.far);
   if (h.has_tv) sn::tv_close(h.tv);
   if (h.has_sq) sn::sequel_tv_relay_close(h.sq);
   if (h.has_sq_demo) sn::sequel_tv_stop(h.sq_demo_face);
+  if (h.has_cl_demo) sn::udp_tv_stop(h.cl_demo_face);
   return 0;
 }
 

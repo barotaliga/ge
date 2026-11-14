@@ -75,7 +75,7 @@ void browse_init(Browse& b, const BrowseConfig& config, const gn::ServerQuery& q
   b.on = !config.masters.empty() || !config.servers.empty();
 }
 
-void browse_update(Browse& b, Poller& p, int64_t now_us) {
+void browse_update(Browse& b, Poller& p, int64_t now_us, int64_t unix_s) {
   if (!b.on) return;
   if (now_us >= b.next_refresh_us) {
     gn::server_list_refresh(b.list, now_us);
@@ -108,7 +108,13 @@ void browse_update(Browse& b, Poller& p, int64_t now_us) {
       b.stats.changes++;
       p.serial++;
     }
-    if (!it->have || s.phase != it->status.phase) it->phase_us = now_us;
+    bool ended = false;
+    if (it->have) {
+      // The match's start is known only when the hub saw its phase begin.
+      const int64_t since = it->phase_us > it->first_us ? it->phase_us : -1;
+      ended = results_see(b.results, it->address, it->status, since, s, now_us, unix_s);
+    }
+    if (!it->have || s.phase != it->status.phase || ended) it->phase_us = now_us;
     it->record_hash = h;
     it->status = std::move(s);
     it->have = true;

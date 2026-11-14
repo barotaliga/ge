@@ -172,4 +172,40 @@ bool report_read(const uint8_t* data, size_t size, MatchReport& out, std::string
   return true;
 }
 
+bool report_text(const MatchReport& r, std::string& out, std::string& error) {
+  std::vector<uint8_t> bytes;
+  if (!report_write(r, bytes, error)) return false;
+  static constexpr char kDigits[] = "0123456789abcdef";
+  out.clear();
+  out.reserve(bytes.size() * 2);
+  for (const uint8_t b : bytes) {
+    out += kDigits[b >> 4];
+    out += kDigits[b & 15];
+  }
+  return true;
+}
+
+bool report_from_text(std::string_view text, MatchReport& out, std::string& error) {
+  const auto nibble = [](char c) -> int {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+  };
+  if (text.size() % 2 != 0) {
+    error = "a report's hex has an odd length (" + std::to_string(text.size()) + " characters)";
+    return false;
+  }
+  std::vector<uint8_t> bytes(text.size() / 2);
+  for (size_t i = 0; i < bytes.size(); i++) {
+    const int hi = nibble(text[2 * i]), lo = nibble(text[2 * i + 1]);
+    if (hi < 0 || lo < 0) {
+      error = "a report's hex has a character that is not hex at " + std::to_string(2 * i);
+      return false;
+    }
+    bytes[i] = static_cast<uint8_t>(hi << 4 | lo);
+  }
+  return report_read(bytes.data(), bytes.size(), out, error);
+}
+
 }  // namespace ge::net

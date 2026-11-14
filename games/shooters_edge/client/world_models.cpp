@@ -341,6 +341,26 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
       carried_here.emplace_back(std::move(key), uint32_t(m.figure_kinds.size()));
       m.figure_kinds.push_back(std::move(wk));
     }
+    // A figure of the second game worn by a first-game player: the folder's weapon in its hand,
+    // since the first game's figure has its weapon in its own mesh and the server names none.
+    if (painted && !m.player_frames.empty()) {
+      std::string at = "players/";
+      at.append(folder).append("/weapon.md2");
+      OpenedModel w;
+      std::vector<uint8_t> store;
+      if (!find_file(files, at, store).empty() && game.open_model(game, files, at, w, error) &&
+          w.form == ModelForm::morph) {
+        ModelKind hk;
+        hk.figure = true;  // its own picture's colours
+        add_figure_kind(w.morph, palette, hk, m.morphs, nullptr, true);
+        std::vector<std::string> names;
+        names.reserve(w.morph.frames.size());
+        for (const mo::Frame& fr : w.morph.frames) names.push_back(fr.name);
+        hk.frame_map = models::figure_frames(m.player_frames, names);
+        m.figure_kinds[body].held = uint32_t(m.figure_kinds.size());
+        m.figure_kinds.push_back(std::move(hk));
+      }
+    }
     uint32_t worn = gr::kOwnSkin;
     if (weapon_skin.width > 0) {
       worn = uint32_t(m.morphs.size());
@@ -354,7 +374,8 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
                                " is drawn as the default figure: the atlas is full");
       continue;
     }
-    for (size_t i = body + 1; i < m.figure_kinds.size(); i++) m.figure_kinds[i].worn = worn;
+    for (size_t i = body + 1; i < m.figure_kinds.size(); i++)
+      if (!m.figure_kinds[i].carried.empty()) m.figure_kinds[i].worn = worn;
     m.figures.emplace(folder, body);
     for (auto& [key, at] : carried_here) m.figure_carried.emplace(key, at);
   }
@@ -1005,6 +1026,21 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     g.smooth = smooth;
     g.light_in_white = true;
     m.morph_draws.push_back(g);
+    // The weapon in a copied-in figure's hand: the same place, light and frame, its own picture.
+    if (k.held != ModelKind::kNone && k.held < m.figure_kinds.size() &&
+        m.morph_draws.size() < gr::kMaxMorphDraws) {
+      const ModelKind& h = m.figure_kinds[k.held];
+      gr::MorphDraw hw = g;
+      hw.model = h.first;
+      frames_of(h, p, at, hw.now.frame_a, hw.now.frame_b, hw.now.blend);
+      hw.skin = gr::kOwnSkin;
+      hw.slot = gr::kNoSlot;
+      const int held_entity = p.entity + kCarriedEntity;
+      const auto held_last = m.last_pose.find(held_entity);
+      hw.last = held_last == m.last_pose.end() || p.warp.shown < 1 ? hw.now : held_last->second;
+      m.last_pose[held_entity] = hw.now;
+      m.morph_draws.push_back(hw);
+    }
   }
   if (m.has_morph) gr::prepare_morph(d, m.morph, m.morph_draws, view);
   if (m.has_sprites) gr::prepare_sprites(d, m.sprites, m.sprite_draws, view);

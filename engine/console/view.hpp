@@ -36,7 +36,7 @@
 // ge:keywords console view drop-down tilde backquote toggleconsole scrollback history input-line
 // ge:keywords chat say say_team say_near proximity whisper message server event notify
 // ge:keywords chat-line messagemode chat-prompt typing
-// ge:keywords completion tab con_height con_chat con_speed con_lines slash-command
+// ge:keywords completion tab con_height con_chat con_speed con_lines slash-command loading full
 // ge:keywords background gradient colour con_bgtop con_bgbottom con_bgalpha con_bgimage con_font
 // ge:keywords autocomplete suggestion suggestions hint con_suggest
 // ge:skill console
@@ -138,6 +138,10 @@ class ConsoleView {
   void set_open(bool open) { open_ = open; }
   bool open() const { return open_; }
   void frame(double dt_s);
+  // LOADING: the whole screen covered at once (a game loading, as the classic games start); let go,
+  // it slides up at con_speed to where open() puts it.
+  void set_full(bool full);
+  bool full() const { return full_; }
   // How far down it is: 0 closed .. 1 at con_height.
   double drop() const { return drop_; }
   // The screen's share it covers now: drop() × con_height.
@@ -212,6 +216,8 @@ class ConsoleView {
   int32_t suggest_ = 8;
   std::map<std::string, int> uses_;  // submissions by command name
   double drop_ = 0, clock_ = 0;
+  bool full_ = false;
+  double over_ = 0;  // the share of the screen held past the drop: 1 while full, then sliding up
   double height_ = 0.5, speed_ = 3;
   int32_t keep_ = 1024, notify_lines_ = 4;
   double notify_time_ = 4;

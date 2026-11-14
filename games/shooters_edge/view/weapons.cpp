@@ -6,6 +6,7 @@
 #include "shooters_edge/view/weapons.hpp"
 
 #include <filesystem>
+#include <iterator>
 #include <system_error>
 
 #include "assets/gltf.hpp"
@@ -51,9 +52,35 @@ constexpr WeaponLook kLooks[kWeapons] = {
 
 }  // namespace
 
+// The sequel's held weapons, in its rules' weapon order: drawn at the eye (no mount), so only the
+// kick and the shot's light are read; the fire is the model's (classicenhance's classic_fire_of).
+// clang-format off
+constexpr WeaponLook kSequelLooks[] = {
+    {"blaster",          0, {0, 0, 0}, 0.4, 0.5, 0.1, {1.0f, 0.78f, 0.3f}, 0.35f, 5.0f, Weapon(0), false, "", ""},
+    {"shotgun",          0, {0, 0, 0}, 1.0, 1.0, 0.1, {1.0f, 0.78f, 0.42f}, 0.35f, 6.0f, Weapon(1), false, "", ""},
+    {"super_shotgun",    0, {0, 0, 0}, 1.6, 1.0, 0.12, {1.0f, 0.78f, 0.42f}, 0.55f, 7.0f, Weapon(2), false, "", ""},
+    {"machinegun",       0, {0, 0, 0}, 0.3, 0.1, 0.05, {1.0f, 0.7f, 0.35f}, 0.22f, 4.0f, Weapon(3), false, "", ""},
+    {"chaingun",         0, {0, 0, 0}, 0.25, 0.1, 0.05, {1.0f, 0.7f, 0.35f}, 0.25f, 4.5f, Weapon(4), false, "", ""},
+    {"grenade_launcher", 0, {0, 0, 0}, 1.2, 1.0, 0.1, {1.0f, 0.78f, 0.42f}, 0.3f, 5.0f, Weapon(5), false, "", ""},
+    {"rocket_launcher",  0, {0, 0, 0}, 1.5, 0.8, 0.14, {1.0f, 0.72f, 0.38f}, 0.45f, 7.0f, Weapon(6), false, "", ""},
+    {"hyperblaster",     0, {0, 0, 0}, 0.2, 0.1, 0.06, {1.0f, 0.78f, 0.3f}, 0.25f, 5.0f, Weapon(7), false, "", ""},
+    {"railgun",          0, {0, 0, 0}, 1.4, 1.5, 0.2, {0.45f, 0.6f, 1.0f}, 0.5f, 6.0f, Weapon(8), false, "", ""},
+    {"bfg",              0, {0, 0, 0}, 1.8, 1.0, 0.3, {0.4f, 1.0f, 0.4f}, 0.7f, 8.0f, Weapon(9), false, "", ""},
+    {"hand_grenade",     0, {0, 0, 0}, 0.5, 1.0, 0.0, {0, 0, 0}, 0.0f, 0.0f, Weapon(10), false, "", ""},
+};
+// clang-format on
+
 std::span<const WeaponLook> weapon_looks() { return kLooks; }
 
-const WeaponLook& weapon_look(Weapon w) { return kLooks[static_cast<int>(w)]; }
+const WeaponLook& sequel_weapon_look(int w) {
+  return kSequelLooks[w >= 0 && w < static_cast<int>(std::size(kSequelLooks)) ? w : 0];
+}
+
+const WeaponLook& weapon_look(Weapon w) {
+  // Past our own set (another game's weapon, held at the eye: its look is not read): the first.
+  const int k = static_cast<int>(w);
+  return kLooks[k < kWeapons ? k : 0];
+}
 
 bool weapon_of_impulse(int impulse, Weapon& out) {
   if (impulse < 1 || impulse > kWeapons) return false;

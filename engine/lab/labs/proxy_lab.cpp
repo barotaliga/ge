@@ -1,9 +1,9 @@
 // LAB `proxy`: A GAME THROUGH A NEAR AND A FAR PROXY OVER A LOSSY LINK (engine/proxy). The proxies'
 // link is given each loss in turn; the game's client (a 24-byte command at 60 Hz) and server (a
 // 400-byte snapshot at 20 Hz, each much like the last) talk through the pair with the proxies
-// sending each frame once, twice or three times, plain or packed. For each it answers the share of
-// the game's datagrams lost and the link's bytes a second each way, against the game's own. The
-// loss the game sees is charted per setting; it all runs on a virtual clock off one seed.
+// sending each frame once, twice or three times, plain, packed or coded. For each it answers the
+// share of the game's datagrams lost and the link's bytes a second each way, against the game's
+// own. The loss the game sees is charted per setting; it all runs on a virtual clock off one seed.
 //
 // ge:summary Lab: a game through a proxy pair at each loss: repeats, packing, loss seen, link bytes
 // ge:keywords lab proxy repeat pack loss link bytes near far
@@ -47,12 +47,15 @@ void run(gl::Lab& lab) {
     const char* name;
     int repeat;
     bool pack;
+    bool code;
   };
-  const Setting settings[] = {{"plain", 1, false},
-                              {"twice", 2, false},
-                              {"three times", 3, false},
-                              {"packed", 1, true},
-                              {"three times packed", 3, true}};
+  const Setting settings[] = {{"plain", 1, false, false},
+                              {"twice", 2, false, false},
+                              {"three times", 3, false, false},
+                              {"packed", 1, true, false},
+                              {"three times packed", 3, true, false},
+                              {"coded", 1, true, true},
+                              {"three times coded", 3, true, true}};
   const int seconds = static_cast<int>(lab.arg_num("seconds"));
   const auto seed = static_cast<uint32_t>(lab.arg_num("seed"));
   gl::LabTable table{
@@ -61,7 +64,7 @@ void run(gl::Lab& lab) {
       {}};
   std::vector<gl::Trace> lines;
   for (const Setting& s : settings) lines.push_back({s.name, {}, {}});
-  double plain10 = -1, three10 = -1, plain_down = -1, packed_down = -1;
+  double plain10 = -1, three10 = -1, plain_down = -1, packed_down = -1, coded_down = -1;
   for (const double loss_pct : numbers(lab.arg("losses"))) {
     for (size_t k = 0; k < std::size(settings); k++) {
       const Setting& s = settings[k];
@@ -69,6 +72,7 @@ void run(gl::Lab& lab) {
       c.loss = loss_pct / 100.0;
       c.repeat = s.repeat;
       c.pack = s.pack;
+      c.code = s.code;
       c.seconds = seconds;
       c.seed = seed;
       const px::TrialResult r = px::run_proxy_trial(c);
@@ -87,6 +91,7 @@ void run(gl::Lab& lab) {
       if (loss_pct == 10 && k == 2) three10 = lost;
       if (loss_pct == 0 && k == 0) plain_down = down;
       if (loss_pct == 0 && k == 3) packed_down = down;
+      if (loss_pct == 0 && k == 5) coded_down = down;
     }
   }
   lab.table(table);
@@ -95,6 +100,9 @@ void run(gl::Lab& lab) {
              fmt(three10, 2) + "% with three copies");
   if (plain_down > 0 && packed_down > 0)
     lab.note("packing sent " + fmt(100.0 * packed_down / plain_down, 0) +
+             "% of the plain link's bytes down");
+  if (plain_down > 0 && coded_down > 0)
+    lab.note("coding sent " + fmt(100.0 * coded_down / plain_down, 0) +
              "% of the plain link's bytes down");
   const gl::ChartFrame frame{"THE LOSS THE GAME SEES, BY THE PROXIES' SETTING",
                              "a 60 Hz client and a 20 Hz server; " + lab.arg("seconds") +
@@ -113,16 +121,19 @@ void run(gl::Lab& lab) {
   if (plain_down > 0 && packed_down * 2 > plain_down)
     lab.fail("packing did not halve the link's bytes",
              "next: read pack_datagram in engine/proxy/proxy.cpp; skill: net.");
+  if (packed_down > 0 && coded_down * 2 > packed_down)
+    lab.fail("coding did not halve the packed link's bytes",
+             "next: read code_datagram in engine/proxy/link_code.cpp; skill: net.");
 }
 
 const gl::LabSpec kSpec{
     "proxy",
     gl::LabKind::sim,
     "engine",
-    "engine/proxy (the near and far proxies, repeats, packing)",
+    "engine/proxy (the near and far proxies, repeats, packing, the link coder)",
     "net",
     "Through a near and a far proxy over a lossy link, how much of a game's traffic is lost with "
-    "each number of copies, and how many bytes does packing save?",
+    "each number of copies, and how many bytes do packing and the coder save?",
     {
         {"losses", "0,2,5,10,20", "the proxies' link's loss, percent, comma-separated"},
         {"seconds", "20", "each setting's counted run"},

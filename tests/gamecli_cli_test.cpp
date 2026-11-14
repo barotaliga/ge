@@ -178,7 +178,7 @@ TEST(host_and_join_as_dry_runs) {
             out, root) == 0);
   ge::core::FlatJson j = parse(out);
   const std::string cmd = j["result.command"].text;
-  CHECK(cmd.find("shooters_edge_server") != std::string::npos);
+  CHECK(cmd.find("sesv") != std::string::npos);
   CHECK(cmd.find("--root=" + root.string()) != std::string::npos);
   CHECK(cmd.find("--map=dm4") != std::string::npos && cmd.find("--for=0") != std::string::npos);
   CHECK_MSG(cmd.find("pw") == std::string::npos && cmd.find("--password=***") != std::string::npos,
@@ -220,7 +220,7 @@ TEST(a_started_program_is_kept_listed_and_stopped) {
   }
   // A stand-in for the dedicated server: it runs and never answers, so `host` says it started
   // but does not answer yet, `host list` sees it run and `host stop` ends it.
-  const fs::path server = root / "bin" / "shooters_edge_server";
+  const fs::path server = root / "bin" / "sesv";
   std::ofstream(server) << "#!/bin/sh\necho \"serving $*\"\nexec sleep 600\n";
   fs::permissions(server, fs::perms::owner_all);
   std::string out;
