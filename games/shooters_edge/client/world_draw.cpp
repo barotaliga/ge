@@ -686,9 +686,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (o.mode == ba::Mode::v2 && f.has_map && f.scene.map.family == ge::brush::Family::v38) {
     // A sequel map's light is mostly its lamps' and its sky's faces', bounced round its rooms
     // when it was built, which no point light restates: the modern look lights it by its own
-    // lightmaps, coloured as they are. Its sky is its own box, part of the map as its light is.
+    // lightmaps, coloured as they are. Its sky and its liquids are ours, as on every map (the
+    // map's own box with ce_skies off, or in the classic look).
     if (o.lighting == ba::Lighting::lights) o.lighting = ba::Lighting::lightmaps;
-    if (!f.scene.sky_box.levels.empty()) o.pack_sky = true;
   }
   if (f.warm_cubes >= 0) {  // warmed up over frames: the first frame's cubes under a budget too
     o.first_all = false;
