@@ -174,6 +174,8 @@ struct NavLink {
       false;            // a teleporter's: walked INTO its trigger (at the link's start), not across
   int32_t escape = -1;  // a rocket out of a pit's liquid: its index in `NavGraph::escapes`
   bool brink = false;   // a walk or drop along the lip over lava or slime (`nav_mark_harm`)
+  bool brink_side =
+      false;  // a walk or drop whose side step falls into lava or slime (`nav_mark_side_harm`)
   bool gap = false;  // a jump over a gap at a hopper's speed (`speed` past a run's; nav_gaps.hpp)
 };
 
@@ -191,8 +193,17 @@ struct NavJumper {
   bool scripts = true;   // the scripted ways taken (a game's switch)
   bool escapes = false;  // the rockets out of a pit's liquid (`NavLink::escape`) taken
   bool gaps = false;     // the jumps over a gap at a hopper's speed (`NavLink::gap`) taken
+  // A hopper not yet at a gap's speed takes a gap whose takeoff the route reaches this long or
+  // more after setting off (room to hop up to the speed on the way); negative: never.
+  float gap_build_s = -1;
   uint8_t level = 2;
   float extra_s = 0;
+  // A walk or drop along a lip over lava or slime (`brink` or `brink_side`) costs this share of
+  // its time more (`sidebrink`: a route up a ramp over a pit keeps to its middle, off the edge).
+  float lip_share = 0;
+  // `jumpcuts`: every cut link kept off the route (a jump missed twice, pilot.cpp `missed_jump`);
+  // off, only those through a mover or a gap trick.
+  bool cuts_all = false;
   // Whether he takes `l` at all (any link but a blast jump or a gap's: always).
   bool takes(const NavLink& l) const {
     if (l.kind == NavKind::script) return scripts;
@@ -201,8 +212,15 @@ struct NavJumper {
     if (!nav_blast(l.kind)) return true;
     return (l.kind == NavKind::rocket ? rockets : grenades) && l.level <= level;
   }
+  // Whether he takes the gap `l` reached `at_s` into the route, building the speed on the way.
+  bool builds_to(const NavLink& l, double at_s) const {
+    return l.gap && gap_build_s >= 0 && l.level <= level && at_s >= gap_build_s;
+  }
   // What `l` costs him, s.
-  float cost_s(const NavLink& l) const { return nav_blast(l.kind) ? l.time_s + extra_s : l.time_s; }
+  float cost_s(const NavLink& l) const {
+    if (nav_blast(l.kind)) return l.time_s + extra_s;
+    return l.brink || l.brink_side ? l.time_s * (1 + lip_share) : l.time_s;
+  }
 };
 
 // How the build went, for the lab.
@@ -376,16 +394,21 @@ struct NavRoute {
 // straight distance at the fastest speed any link has); links through a mover cost
 // `mover_penalty_s` more, links through a mover in `barred` (a door found shut) are not taken, and
 // nor is any link in `cut` (its `from` and `to`: a way an open door's leaf still stands across);
-// rocket jumps as `jumper` takes them.
+// rocket jumps as `jumper` takes them. `cut` is read on links through a mover and gap tricks only;
+// `shut` on every link (a bridge or a floor door the nav holds as a solid carries no mover, so its
+// links shut while it is in were taken as `cut`: `bridgeseen`).
 NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& search,
                    float mover_penalty_s = 1, std::span<const int32_t> barred = {},
-                   std::span<const NavExtraLink> cut = {}, const NavJumper& jumper = {});
+                   std::span<const NavExtraLink> cut = {}, const NavJumper& jumper = {},
+                   std::span<const NavExtraLink> shut = {});
 
 // Every node a player at node `from` can get to (`search.reached(n)` after; costs the links'
 // times), and how many, `from` itself included; rocket jumps as `jumper` takes them, and no link
-// through a mover in `shut` (a door shut that no route goes through).
+// through a mover in `shut` (a door shut that no route goes through), nor any in `shut_links`
+// (onto a bridge still in: `nav_route`'s `shut`).
 int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, const NavJumper& jumper = {},
-                  std::span<const int32_t> shut = {});
+                  std::span<const int32_t> shut = {},
+                  std::span<const NavExtraLink> shut_links = {});
 
 // Adds `extra` to each node's run of links (after the proven ones), keeping the runs contiguous.
 void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra);
@@ -405,6 +428,17 @@ int64_t nav_close_entries(NavGraph& g, std::span<const uint8_t> closed,
 int64_t nav_mark_harm(NavGraph& g, std::span<const uint8_t> harm, float reach = 40);
 // Whether a harm node lies within `reach` across of `p` and a step or more under it.
 bool nav_harm_near(const NavGraph& g, Vec3f p, float reach);
+// THE SIDE STEP INTO THE HARM (`nav_mark_side_harm`): a walk or drop over a deep pit (a ramp or a
+// walkway high over its lava: dm2's ramp up to the yellow armour runs 100-160 over it) has no harm
+// floor within `nav_mark_harm`'s reach, yet a run that cuts a corner off it falls in. Along every
+// walk and drop within `near` across of a harm node lower than it, every 16 units, the player's box
+// is swept `side` units out to each side (a wall stops it) and dropped to the floor: lava or slime
+// at its feet marks the link `brink_side`. Needs `NavGraph::harm` (`nav_mark_harm` first). Returns
+// how many links it marked.
+int64_t nav_mark_side_harm(NavGraph& g, const MoveWorld& world, float side = 72, float near = 320);
+// Whether the player's box swept from `p` toward `to` (a wall stops it; a stair's step or two
+// climbed), then dropped to the floor (400 units at most), stands in lava or slime.
+bool nav_falls_in_harm(const MoveWorld& world, Vec3f p, Vec3f to);
 
 // REPAIRING POCKETS (`nav_bridge_pockets`): after the build (and the water, the teleporters),
 // a POCKET is a set of nodes, joined by links among themselves, that the map's main part (the

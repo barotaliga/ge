@@ -430,6 +430,7 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
     pm.swim_scale = profiles::kClassicFeel.swim_scale;
     pm.water_friction = profiles::kClassicFeel.water_friction;
     pm.water_jump = profiles::kClassicFeel.water_jump;
+    pm.air_step = profiles::kClassicFeel.air_step;
   }
   MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
   const bool was_on_ground = p.on_ground;

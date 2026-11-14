@@ -33,13 +33,14 @@
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/client/sequel_party.hpp"
 #include "shooters_edge/net/classic_admin.hpp"
+#include "shooters_edge/net/classic_cheats.hpp"
 #include "shooters_edge/net/classic_coop.hpp"
 #include "shooters_edge/net/classic_coop_game.hpp"
-#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_login.hpp"
 #include "shooters_edge/net/classic_qtv.hpp"
 #include "shooters_edge/net/classic_report.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -102,6 +103,7 @@ struct Game {
   // The match being played, tallied each frame, and the report of the one that just ended (taken
   // once by the core: `match_report`).
   MatchTally tally;
+  CheatWatch cheats;     // the speed check's cuts scored (classic_cheats.hpp), into the report
   StatsEyes stats_eyes;  // the weapon stats' last frame (classic_stats.hpp)
   ge::net::MatchReport report;
   bool report_ready = false;
@@ -771,6 +773,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   if (c.host != nullptr) {  // a listen server: the window's program, folder and first map
     g->host = static_cast<cl::ListenHost*>(c.host);
     g->program = g->host->progs;
+    if (g->host->module != nullptr) g->module = *g->host->module;  // a mod's compiled module
     if (g->host->files != nullptr) g->files = *g->host->files;
     g->map = g->host->map;
   } else {
@@ -1126,6 +1129,9 @@ void tally(Game& g) {
   const bool counting =
       rule_number(g, "deathmatch") != 0 && (!lobby || g.room->lobby.phase == gs::LobbyPhase::match);
   tally_frame(g.tally, g.rules->world, counting, accounts);
+  cheat_watch_frame(g.cheats, g.rules->sv);
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (cheat_watch_out(g.cheats, i)) tally_flag(g.tally, i, cheat_watch_verdict(g.cheats, i));
   if (const sv::QcServer* q = sv::qc_of(g.rules))
     stats_frame(g.stats_eyes, tally_stats(g.tally), *q);
 }

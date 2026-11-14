@@ -295,6 +295,39 @@ TEST(the_walk_foreseen_flies_round_a_player_standing_on_its_line) {
                 " into the player: a way that bumps less was not chosen");
 }
 
+TEST(the_walk_foreseen_brakes_off_a_lava_edge_a_turn_would_slide_over) {
+  // A ledge (y 0 up, its top at z 0) over a pit of lava (y under 0, 150 down). Running south at
+  // 320 u/s 50 units from the edge, the hands still pressing south (the walk's turn not yet in
+  // them), the aim turned west along the edge: the pursuit's flight slides on over the edge into
+  // the lava. With the harm foreseen a way that does not fall is pressed (the brake); without it
+  // nothing is even flown (no wall ahead).
+  sh::Brush lava = FlipRoom::box({-512, -512, -200}, {512, 0, -150});
+  lava.contents = sh::kContentsLava;
+  FlipRoom room({FlipRoom::box({-512, 0, -256}, {512, 512, 0}),
+                 FlipRoom::box({-512, -512, -256}, {512, 0, -200}), lava},
+                {-512, -512, -256}, {512, 512, 256}, {0, 200, 24});
+  sh::WalkStart st;
+  st.origin = {0, 50, 24};
+  st.velocity = {0, -320, 0};
+  st.pressed = {-90, 1, 0};  // forward, south, while the hands catch up
+  st.delay = 0.1f;
+  st.horizon = 0.35f;
+  const sh::Vec3f aim{-400, 40, 24}, near{-100, 200, 24};
+  sh::WalkKeys keys;
+  sh::WalkSeen seen[sh::kWalkWays];
+  bool flown = true;
+  sh::WalkWay way = sh::foresee_walk(room.world, st, aim, near, keys, seen, flown);
+  CHECK_MSG(!flown && way == sh::WalkWay::pursue,
+            "with no harm looked for, a floor with no wall ahead was flown");
+  st.harm = true;
+  way = sh::foresee_walk(room.world, st, aim, near, keys, seen, flown);
+  CHECK_MSG(flown && seen[0].falls,
+            "the pursuit's flight was not seen to slide over the edge into the lava");
+  CHECK_MSG(way != sh::WalkWay::pursue && !seen[static_cast<int>(way)].falls,
+            std::string("the walk pressed ") + sh::walk_way_name(way) +
+                " over the edge: a way that does not fall was not chosen");
+}
+
 TEST(a_player_standing_on_the_way_is_walked_round_or_waited_for) {
   // A player standing 100 units along the walk's line on an open floor: the walk aims beside him
   // and just past him. In a corridor no wider than two boxes there is no room: it waits.
@@ -320,4 +353,112 @@ TEST(a_player_standing_on_the_way_is_walked_round_or_waited_for) {
   CHECK_MSG(sh::body_on_way(corridor.world, {0, 0, 24}, {400, 0, 24}, others, round) &&
                 round.x == 0 && round.y == 0,
             "no room round him in a corridor, yet the walk did not wait");
+}
+
+TEST(a_goal_chained_past_a_pickup_is_run_through_not_stopped_at) {
+  // An open floor: from the west to an item 384 east, and on past it 384 north (`pilot_chain`).
+  // The route runs on through the item's node, the walk runs through the item itself (beside its
+  // node) at a run, and arrives at the chain's goal; cut back (`pilot_unchain`), the goal is the
+  // item again.
+  FlipRoom room({FlipRoom::box({-512, -512, -64}, {1024, 1024, 0})}, {-512, -512, -64},
+                {1024, 1024, 256}, {0, 0, 24});
+  const sh::NavGraph& g = room.g;
+  const int32_t start = sh::nav_nearest(g, {0, 0, 24}), item = sh::nav_nearest(g, {384, 0, 24});
+  const int32_t then = sh::nav_nearest(g, {384, 384, 24});
+  const sh::Vec3f item_at = g.nodes[static_cast<size_t>(item)].origin + sh::Vec3f{8, -12, -24};
+  sh::Pilot p;
+  sh::pilot_init(p, g, sh::PilotSettings{}, sh::pilot_hands(sh::PilotHands::none), 77, 1);
+  sh::MoveState st;
+  st.origin = g.nodes[static_cast<size_t>(start)].origin;
+  const sh::MoveSettings move;
+  st.maxspeed = move.maxspeed;
+  sh::MoveCmd still;
+  still.msec = pr::kPilotMsec;
+  sh::run_command(st, still, move, room.world);
+  sh::PilotSense s;
+  auto sense = [&] {
+    s.origin = st.origin;
+    s.velocity = st.velocity;
+    s.onground = st.ground >= 0;
+    s.maxspeed = st.maxspeed;
+    s.world = &room.world;
+  };
+  sense();
+  CHECK(sh::pilot_go(p, item, s));
+  const size_t to_item = p.route.size();
+  CHECK_MSG(sh::pilot_chain(p, then, item_at) && p.goal == then && p.route.back() == then &&
+                p.via_k == static_cast<int32_t>(to_item) - 1,
+            "the route was not chained on past the item to the next goal");
+  sh::pilot_unchain(p);
+  CHECK_MSG(p.goal == item && p.route.size() == to_item && p.via_k < 0,
+            "cut back, the route does not end at the item");
+  CHECK(sh::pilot_chain(p, then, item_at));
+  bool arrived = false;
+  for (int i = 0; i < 77 * 6 && !arrived; i++) {
+    const sh::MoveCmd cmd = sh::pilot_step(p, s, pr::kPilotMsec);
+    sh::run_command(st, cmd, move, room.world);
+    sense();
+    arrived = p.mode == sh::PilotMode::arrived;
+  }
+  CHECK_MSG(arrived, "the chain's goal was not reached: read pilot_step's mode on the way");
+  CHECK_MSG(p.stats.via_touched == 1 && p.stats.via_missed == 0,
+            "the item was not run through (" + std::to_string(p.stats.via_touched) + " through, " +
+                std::to_string(p.stats.via_missed) + " missed)");
+  CHECK_MSG(p.stats.via_speed > 200, "the item was run through at " +
+                                         std::to_string(p.stats.via_speed) +
+                                         " u/s: the walk slowed into it as into a goal");
+}
+
+// A route's every node passed in one command (a fast run over a dense stretch, a flight landing
+// at the goal): the pass loop's guard ends on the route's last node, which is the goal, not a
+// node to read past (the next node read past the route's end: a crash in a 4on4 on dm2).
+TEST(a_route_passed_to_its_last_node_in_one_command_arrives) {
+  FlipRoom room({FlipRoom::box({-512, -512, -64}, {1024, 1024, 0})}, {-512, -512, -64},
+                {1024, 1024, 256}, {0, 0, 24});
+  const sh::NavGraph& g = room.g;
+  const int32_t start = sh::nav_nearest(g, {0, 0, 24});
+  sh::Pilot p;
+  sh::pilot_init(p, g, sh::PilotSettings{}, sh::pilot_hands(sh::PilotHands::none), 77, 1);
+  sh::PilotSense s;
+  s.origin = g.nodes[static_cast<size_t>(start)].origin;
+  s.onground = true;
+  s.world = &room.world;
+  // A goal east whose route is nine nodes: eight links, the guard's eight passes.
+  int32_t goal = -1;
+  for (float x = 192; x <= 384 && goal < 0; x += 8) {
+    const int32_t n = sh::nav_nearest(g, {x, 0, 24});
+    CHECK(sh::pilot_go(p, n, s));
+    if (p.route.size() == 9) goal = n;
+  }
+  CHECK_MSG(goal >= 0, "no goal east has a route of nine nodes: the floor's grid changed");
+  if (goal < 0) return;
+  s.origin = g.nodes[static_cast<size_t>(goal)].origin;  // already there: every node passed
+  sh::pilot_step(p, s, pr::kPilotMsec);
+  CHECK_MSG(p.mode == sh::PilotMode::arrived,
+            "a route passed to its goal in one command did not arrive (pilot_step's pass loop)");
+}
+
+// `jumpfly`: on human hands the run at the pit's jump reaches its start off the line or the speed,
+// and a jump that lands from there is taken as it is (flown by the move first): no more run-ups
+// than lining up again each time, and still across.
+TEST(a_jump_that_lands_from_off_its_line_is_taken_not_lined_up_again) {
+  const pr::Course& c = course();
+  int32_t ups_off = 0, ups_on = 0, flown = 0;
+  for (uint32_t seed = 1; seed <= 6; seed++) {
+    sh::PilotSettings set;
+    const pr::RunResult off =
+        pr::run_course(c, c.map.platform, c.map.east_ledge, sh::PilotHands::human, seed, set);
+    set.jump_fly = true;
+    const pr::RunResult on =
+        pr::run_course(c, c.map.platform, c.map.east_ledge, sh::PilotHands::human, seed, set);
+    CHECK_MSG(on.arrived, "seed " + std::to_string(seed) +
+                              ": with `jumpfly` the pilot did not cross the pit (a flown jump "
+                              "fell short: read jump_flies's landing check)");
+    ups_off += off.stats.run_ups;
+    ups_on += on.stats.run_ups;
+    flown += on.stats.jumps_flown;
+  }
+  std::printf("pit, human hands, 6 seeds: run-ups %d without jumpfly, %d with (%d flown)\n",
+              ups_off, ups_on, flown);
+  CHECK_MSG(ups_on <= ups_off, "jumpfly lined up more often than without it");
 }

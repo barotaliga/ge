@@ -277,7 +277,11 @@ struct Move {
         accelerate(dir, speed, 1);
       }
       velocity.z -= g * seconds;
-      step_slide();
+      if (pm.air_step) {
+        step_slide();
+      } else {
+        slide();
+      }
     }
   }
 

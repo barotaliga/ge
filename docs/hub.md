@@ -157,6 +157,17 @@ engine's one web build (G5) with its one sibling, the player of § Playing in a 
 | The page glue | The few lines of script a page needs to start the viewer, hand it the stream's address and wire the buttons: platform glue, kept as small as the platform allows, as Apple's and Android's app shells are |
 | Content rights | A hub serves only content its operator may share. For the classic game that is the free pack and the operator's own; a level whose content the hub may not serve is shown in the installed game instead |
 
+IN THE GAME'S WINDOW. The Watch page's "Open in the game" hands the player's client a
+`<game>://tv/<node>/<stream>` link; Shooter's Edge's game CLI turns it into `se -tv <host:port>`,
+and the window joins the TV node over UDP as a native spectator (`engine/tv/net_link.hpp`'s TV
+client) and plays the broadcast as the viewer does, from the same code (Shooter's Edge's
+`client/tv_live.hpp`: the stream unpacked onto a growing demo, opened two blocks in, the last frame
+held while the next block is late, the end only once the broadcast has ended). The TV link drops a
+peer after 30 s of silence, not the node's usual 5, so a level's load in the window does not
+end it. It is a played demo
+from there: paced, heard and drawn between frames, its pause, speed and camera keys the demo's. A
+broadcast that turns the window away or breaks off ends the demo with the reason in the console.
+
 THE BUILD. The `web` preset (`cmake --preset web`, with `EMSDK` set: Emscripten's toolchain)
 sets `GE_WEB` and builds only `GE_WEB_GAME`'s viewer (`shooters_edge` by default) and what it
 links: no host tools, no packaging, no encoders, no window layer. Dawn's own browser binding

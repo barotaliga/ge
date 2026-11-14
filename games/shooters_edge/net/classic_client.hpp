@@ -50,8 +50,8 @@
 #include "net/voice_codec.hpp"
 #include "shooter/predict.hpp"
 #include "shooters_edge/client/voice_out.hpp"
-#include "shooters_edge/net/classic_channel.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
+#include "shooters_edge/net/protocol.hpp"
 
 namespace shooters_edge::net {
 

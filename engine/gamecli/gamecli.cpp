@@ -149,11 +149,6 @@ constexpr Flag kCommon[] = {
     {"bin", "<dir>", "where the game's programs are (default: beside this CLI)"},
 };
 
-struct CommandFlags {
-  const char* command;
-  std::vector<Flag> flags;
-};
-
 const std::vector<Flag> kAccountFlags = {
     {"master", "<host[:port]>",
      "the account service (a hub run with --accounts, or a server that is its own master); kept "
@@ -298,6 +293,13 @@ std::span<const Flag> command_flags(std::string_view command) {
     if (command == c.command) return c.flags;
   return {};
 }
+std::vector<Flag> flags_of(const Spec& spec, std::string_view command) {
+  const std::span<const Flag> own = command_flags(command);
+  std::vector<Flag> out(own.begin(), own.end());
+  for (const CommandFlags& c : spec.command_flags)
+    if (command == c.command) out.insert(out.end(), c.flags.begin(), c.flags.end());
+  return out;
+}
 
 bool try_places(Ctx& ctx) {
   if (ctx.located) return true;
@@ -370,7 +372,7 @@ std::string help_text(const Spec& spec, std::string_view command) {
       out += std::string(spec.cli) + " " + c->name +
              (c->args[0] ? std::string(" ") + c->args : "") + "\n  " + c->summary + "\n  e.g. " +
              spec.cli + " " + c->example + "\n";
-      for (const Flag& f : command_flags(c->name))
+      for (const Flag& f : flags_of(spec, c->name))
         out += "  " + flags_line(f) + "  " + f.help + "\n";
     }
     out += "every command: --json (one JSON object), --settings=<dir>, --bin=<dir>";
@@ -411,7 +413,7 @@ std::string catalog_json(const Spec& spec) {
                                  {"summary", json_str(c->summary)},
                                  {"example", json_str(std::string(spec.cli) + " " + c->example)},
                                  {"group", json_str(c->group)},
-                                 {"flags", flags_json(command_flags(c->name))}}));
+                                 {"flags", flags_json(flags_of(spec, c->name))}}));
   std::vector<Flag> every(kCommon, kCommon + std::size(kCommon));
   every.insert(every.end(), spec.flags.begin(), spec.flags.end());
   return json_obj({{"command", json_str("help")},
@@ -535,7 +537,7 @@ int run(const Spec& spec, const std::vector<std::string>& args, std::string& out
     bool known = false;
     for (const Flag& f : kCommon) known = known || name == f.name;
     for (const Flag& f : spec.flags) known = known || name == f.name;
-    for (const Flag& f : command_flags(c->name)) known = known || name == f.name;
+    for (const Flag& f : flags_of(spec, c->name)) known = known || name == f.name;
     if (!known) {
       const int rc = refuse(ctx, 2, "--" + name + " is no flag of '" + c->name + "'",
                             std::string(spec.cli) + " help " + c->name);

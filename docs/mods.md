@@ -281,11 +281,43 @@ player can read it and a diff can show it; it is the table of contents a signatu
   manifest, because a line format this small needs no parser library, and its errors can name
   the line.
 
+### Signing
+
+`mod.sig` beside the manifest is the author's signature over the manifest's bytes
+(`engine/mod/signature.hpp`):
+
+```
+# A mod package's signature (docs/mods.md § Signing). Written by ge mod sign.
+key = 3b6a27bc...        the signer's public key, 64 hex digits
+signature = 9f1c0d2e...  over mod.manifest's bytes, 128 hex digits
+```
+
+The manifest holds every file's SHA-256, so a signature over it covers the package: a changed
+library fails its hash and the loader names the file; a changed manifest fails the signature and
+the loader names the manifest. A game keeps a list of keys it trusts, one `<64 hex digits> <name>`
+a line, and the loader's verdict is one of four: not signed, signed by a key nobody listed, signed
+by a listed key (named), or a signature that does not hold (always refused). `GameOffer::trusted`
+hands the list and `trusted_only` refuses anything but the third; `signature_words` says to a
+player what they are about to run ("rocket-bounce 1.0.0, signed by shooters-edge").
+
+`ge mod key` makes a key (the secret stays out of every repository; the public key is the line for
+a trusted-keys file), `ge mod sign <package>` checks the package and writes `mod.sig` with the
+key in `GE_MOD_KEY` (`--key-env` names another variable), and `ge mod check --trusted=<file>`
+names the signer. Sign after `ge mod pack`: packing writes a new manifest.
+
+**Decisions:**
+
+- **The engine's one signature scheme** (`net/crypto.hpp`: EdDSA on Curve25519 over BLAKE2b, the
+  scheme a master signs its tickets with), so `engine/mod` links `engine/net` for it. *Not taken:*
+  Ed25519 with SHA-512, because a second hash in the engine buys only keys from other tools, which
+  no author needs: `ge mod key` makes them.
+- **The signature beside the manifest, not inside it**, so the manifest a player reads is the
+  bytes signed, and an unsigned package is the same package with one file fewer.
+- **A broken signature is refused even where unsigned packages load.** Unsigned says nothing; a
+  signature that does not hold says the package was changed after someone vouched for it.
+
 **Later rows:**
 
-- **Signing (M52d).** An Ed25519 signature over the manifest by the author's key, in a
-  `mod.sig` beside it; the game keeps a list of keys it trusts (its own, its community's) and
-  says, for an unsigned or unknown package, what a player is about to run.
 - **Distribution (M52d).** A server sends its mod list (name, version, manifest hash) to a
   joining client, which fetches each package from where the server says, checks it, and loads
   it. Two players in a match always run the same mods, or the client is refused with the list.
@@ -378,6 +410,43 @@ its rockets, is in the digest and replays to the bit; the sample `vampire` on th
 feeds the shooter by her blows, sees the kill, replays to the bit and is refused what those rules
 keep; the playable server takes the package from `sv_mod` and replays, and refuses one built for
 ABI 2.0. The `mod` lab draws the sequel's duel with and without it.
+
+## Rules as a package
+
+A mod stacks hooks on rules the game already runs; a RULES PACKAGE is the rules: the whole
+program the classic server runs in place of a compiled one
+(`games/shooters_edge/sim/rules_api.hpp`). It is an ordinary package (the manifest, the library,
+`ge_mod_entry`) whose `game` is `shooters_edge_rules` and whose `hooks` points at an `se_rules_v1`:
+
+- **The declaration.** The program's form (multiplayer or single-player), its own globals and
+  fields by name and type, its strings, and its functions by name with their parameters' sizes.
+  The server lays it out as a compiled program is laid out (`plugins/progs/native.hpp`), so the
+  game, the bots and the saves find `attack_finished` or `info_player_start` by name as they
+  would in bytecode. `state_bytes` is 0: the program's state is its globals and fields, in the
+  game's VM, so snapshots, saves and the digest already hold it.
+- **The call.** Each function runs with one argument: the services and the game's context, where
+  the declaration landed (each own global's and field's offset, each string, each function's
+  number) and the form's offsets. Every word is read and written through the services, never
+  through a pointer into the game, and checked: a field of no entity faults the call, as the
+  bytecode's fault does, and every later access in it answers 0. The server's calls are the
+  classic builtins by their numbers, so a rule reaches exactly the code a compiled program
+  reaches.
+- **The game's own.** The arena and the campaign (`games/shooters_edge/rules/`) are written
+  against this table. The game builds the same table in (`baseline_mod.hpp`'s `baseline_mod`,
+  `campaign_mod`), so a build that loads no libraries (the web's) still has its rules, and the
+  build makes them as the `arena` and `campaign` packages too (`build/<preset>/mods/`);
+  `server/rules_package.hpp`'s `load_rules_package` loads one and keeps it open for the process.
+  A rules package offered where a mod is asked for is refused by the loader, its game named.
+
+`tests/shooters_edge_rules_package_test.cpp` holds it: each package plays the built-in copy's
+match to the bit (the arena's deathmatch to its time limit, the campaign's coop hall), and the
+loader and the layout refuse what they should. Every word through a service costs the rules a
+few percent (the arena's pinned deathmatches 20.3 s against 21.4 s, the campaign's coop runs
+34.0 s against 34.2 s, in the debug build with its sanitizers).
+
+*Not taken:* a pointer to the VM's globals in the call, which would save the services' calls on
+the hottest reads, because a store-form package (a WebAssembly module, above) cannot address the
+game's memory, and the cost measured above is small.
 
 ## Rows
 
