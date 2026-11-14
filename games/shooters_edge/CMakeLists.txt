@@ -48,9 +48,11 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_bots)
 # The classic protocol (net/classic_*): the codec, the net channel, the classic server over the
 # QC server on engine/net's sockets, the scripted client and the measured trial (skill: net); and
 # the sequel's live protocol beside it (net/sequel_*: its client and server). Only the classic_ and
-# sequel_ files: net/host_* belong to the host's own library.
+# sequel_ files, and the window console's game words (net/game_commands): net/host_* belong to the
+# host's own library.
 file(GLOB SHOOTERS_EDGE_CLASSIC_SOURCES CONFIGURE_DEPENDS
-     ${CMAKE_CURRENT_SOURCE_DIR}/net/classic_*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/sequel_*.cpp)
+     ${CMAKE_CURRENT_SOURCE_DIR}/net/classic_*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/sequel_*.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/net/game_commands.cpp)
 add_library(shooters_edge_classic STATIC ${SHOOTERS_EDGE_CLASSIC_SOURCES})
 target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters_edge_client ge_net ge_play
                       ge_forward ge_tv)
