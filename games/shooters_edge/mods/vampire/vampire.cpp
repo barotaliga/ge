@@ -38,7 +38,7 @@ int32_t damage(void* state, const ge_mod_host_v1* h, int32_t target, int32_t att
   if (attacker < 1 || attacker > players || attacker == target || points <= 0) return points;
   const float health = g->get_float(h->ctx, attacker, SE_FIELD_HEALTH);
   if (health <= 0 || health >= kMostHealth) return points;
-  float fed = static_cast<float>(points / 2);
+  float fed = static_cast<float>(points) * 0.5f;
   if (health + fed > kMostHealth) fed = kMostHealth - health;
   g->set_float(h->ctx, attacker, SE_FIELD_HEALTH, health + fed);
   s.blows_fed++;
