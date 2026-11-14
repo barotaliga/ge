@@ -83,6 +83,9 @@ bool hub_options(const std::vector<std::string>& args, HubOptions& out, std::str
     } else if (key == "--accounts-port") {
       ok = number(value, d) && d >= 1 && d <= 65535 && d == static_cast<int>(d);
       out.accounts_port = static_cast<int>(d);
+    } else if (key == "--season-days") {
+      ok = number(value, d) && d >= 1 && d <= 365 && d == static_cast<int>(d);
+      out.season_days = static_cast<int>(d);
     } else if (key == "--viewer") {
       out.viewer = value;
       ok = !value.empty();
@@ -144,6 +147,8 @@ std::string hub_help(const HubSpec& spec) {
          "  --accounts=<dir>          run the account service here: the store and its key in "
          "<dir> (docs/accounts.md)\n"
          "  --accounts-port=<n>       the account service's UDP port (default 27901)\n"
+         "  --season-days=<n>         the ranked ladders' season, after which its champions are "
+         "kept and the season ratings start again (default 14)\n"
          "  --trusted-servers=<file>  game servers' keys, one a line, whose match reports count "
          "toward players' totals\n"
          "  --viewer=<dir>            serve the game's web viewer from <dir> (the build's "
@@ -249,7 +254,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
          !ge::account::load_trusted(o.trusted_servers, trusted, error)) ||
         !gn::parse_address(o.ip + ":" + std::to_string(port), accounts_at) ||
         !ge::account::host_open(accounts, o.accounts, accounts_at, ge::account::HashCost{},
-                                unix_us(), error, trusted)) {
+                                unix_us(), error, trusted, o.season_days)) {
       std::fprintf(stderr, "%s_hub: --accounts: %s\n", spec.id.c_str(), error.c_str());
       close_udp();
       if (o.serve_master) gn::close_transport(master_port);

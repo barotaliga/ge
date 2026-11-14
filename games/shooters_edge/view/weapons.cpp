@@ -53,7 +53,11 @@ constexpr WeaponLook kLooks[kWeapons] = {
 
 std::span<const WeaponLook> weapon_looks() { return kLooks; }
 
-const WeaponLook& weapon_look(Weapon w) { return kLooks[static_cast<int>(w)]; }
+const WeaponLook& weapon_look(Weapon w) {
+  // Past our own set (another game's weapon, held at the eye: its look is not read): the first.
+  const int k = static_cast<int>(w);
+  return kLooks[k < kWeapons ? k : 0];
+}
 
 bool weapon_of_impulse(int impulse, Weapon& out) {
   if (impulse < 1 || impulse > kWeapons) return false;

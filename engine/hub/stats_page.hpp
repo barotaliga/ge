@@ -14,6 +14,7 @@
 //                      Player page's filters, all time or over the last `days` (the kept reports)
 //   /v1/players/{name}, /v1/matches?game=&mode=&player=&page=, /v1/matches/{id},
 //   /v1/leaders?game=&mode=&stat=&days=   the same as JSON
+//   /ladder, /v1/ladder   the ranked ladders and their seasons (ladder_page.hpp)
 //
 // THE GAME'S COLUMNS. Columns named `<w>_attacks`, `<w>_hits`, `<w>_kills` and `<w>_deaths` are a
 // weapon's, shown as one row with its accuracy (hits over attacks), the weapons ordered by kills;

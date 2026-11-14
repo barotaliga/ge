@@ -69,3 +69,14 @@ TEST(words_fault_names_what_is_wrong) {
   CHECK(fault("h", "The slots.", "1: one; \"\": none", "").empty());
   CHECK(fault("i", "The slots.", "1..M: some", "").find("no range") != std::string::npos);
 }
+
+// The default a values text names: a literal entry marked "(the default)", or the value inside
+// "(<value> the default)"; none when it names none.
+TEST(the_values_name_their_default) {
+  CHECK(con::stated_default("0: easy; 1: normal (the default); 2: hard") == "1");
+  CHECK(con::stated_default("0..1000: that rate (10 the default)") == "10");
+  CHECK(con::stated_default("lan: on the LAN (the default); listed: on the masters") == "lan");
+  CHECK(con::stated_default("N: that many").empty());
+  CHECK(con::stated_default("1..N: that many (the default)").empty());  // a range names no value
+  CHECK(con::stated_default("").empty());
+}

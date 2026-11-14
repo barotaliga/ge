@@ -47,9 +47,11 @@ bool load_or_make_key(const std::string& path, net::Key& out, bool& made, std::s
 bool load_store(const std::string& path, Store& s, HashCost cost, int64_t unix_us,
                 std::string& warning, std::string& error);
 
-// Open the service at `bind` (UDP) over the store and key in `dir`.
+// Open the service at `bind` (UDP) over the store and key in `dir`; the ladders' seasons last
+// `season_days` (account/ladder.hpp).
 bool host_open(Host& h, const std::string& dir, const net::Address& bind, HashCost cost,
-               int64_t unix_us, std::string& error, const std::vector<net::Key>& trusted = {});
+               int64_t unix_us, std::string& error, const std::vector<net::Key>& trusted = {},
+               int season_days = kSeasonDaysDefault);
 // The servers' keys in `path`: one per line, 64 hex digits, a `#` starting a comment. False with
 // `error` naming the line that does not read.
 bool load_trusted(const std::string& path, std::vector<net::Key>& out, std::string& error);

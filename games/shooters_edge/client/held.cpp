@@ -12,12 +12,50 @@
 #include "core/output.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/view.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::client {
 
 namespace {
 
 constexpr double kWalking = 0.5;  // m/s along the ground the stride's clock runs above
+
+// The sequel's hand: the weapon its rules hold and the frame its hand is on (activate, fire, idle,
+// deactivate, all the model's own), drawn from the last over the time its frames last; the hand's
+// place (look, stride, sinking at death) as any game's. No shot yet: the frames are the fire.
+view::HandFrame step_sequel_held(const server::SequelServer& sq, const PlayerState& p,
+                                 const ViewState& v, HeldState& s,
+                                 const view::ViewSettings& settings,
+                                 std::span<const ge::viewmodel::HeldModel> models, double t,
+                                 double dt) {
+  const server::SqHand& hand = sq.players[0].hand;
+  view::HandInput in;
+  const int w = hand.weapon;
+  in.weapon = static_cast<view::Weapon>(w);
+  in.dead = p.dead;
+  in.place.look_yaw = v.pose.yaw;
+  in.place.look_pitch = v.pose.pitch;
+  const double vx = p.velocity.x, vy = p.velocity.y;
+  in.place.ground_speed = std::sqrt(vx * vx + vy * vy) * ge::brush::kUnitM;
+  in.place.grounded = p.on_ground;
+  if (p.on_ground && in.place.ground_speed > kWalking) s.stride_s += dt;
+  in.place.stride_s = s.stride_s;
+  view::HandFrame f = view::step_hand(s.hand, in, settings, models, v.pose, dt);
+  const auto held = static_cast<size_t>(f.weapon);
+  if (held < models.size() && static_cast<int>(held) == w) {
+    int wf = hand.frame;
+    if (wf < 0 || static_cast<size_t>(wf) >= models[held].frames.size()) wf = 0;
+    if (s.recorded_weapon != w) s.recorded = FrameTrack{};
+    s.recorded_weapon = w;
+    int from = -1;
+    float g = 1;
+    track_frame(s.recorded, wf, t, from, g);
+    f.frame_b = wf;
+    f.frame_a = settings.lerp && from >= 0 ? from : wf;
+    f.frame_t = settings.lerp && from >= 0 ? g : 0;
+  }
+  return f;
+}
 
 }  // namespace
 
@@ -49,6 +87,9 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
                           std::span<const ge::viewmodel::HeldModel> models, double t, double dt) {
   const PlayerState p = player_state(l);
   view::HandInput in;
+  // The sequel's rules keep the hand themselves: its weapon and the frame it is on.
+  if (const server::SequelServer* sq = l.rules ? server::sequel_of(*l.rules) : nullptr)
+    return step_sequel_held(*sq, p, v, s, settings, models, t, dt);
   const auto game = static_cast<view::Weapon>(status_of(l, t).weapon);
   in.weapon = s.show >= 0 ? static_cast<view::Weapon>(s.show) : game;
   in.dead = p.dead;  // the weapon sinks out of view (view/hand.hpp)
