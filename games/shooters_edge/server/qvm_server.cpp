@@ -303,7 +303,14 @@ bool qvm_load_map(QvmServer& s, const MapSpec& map, std::string& error) {
   const std::string& move = s.cvars.find("sv_playermove")->value;
   set.playermove = move == "original" ? sh::PlayerMove::original : sh::PlayerMove::arena;
   settings_from_cvars(s, set, false);
-  sh::create_server(s.sv, set, map.models, sim::qvm_program(q));
+  std::vector<sh::BrushModel> brush_models;
+  const std::vector<sh::BrushModel>& models = map_models(map, s.tracer, brush_models);
+  if (models.empty()) {
+    error = "the map " + map.name + " has no models to play on";
+    return false;
+  }
+  sh::create_server(s.sv, set, models, sim::qvm_program(q));
+  brush_solids(s.sv, s.tracer.get(), models);
   settings_from_cvars(s, s.sv.set, true);
   q.home = &s.sv;
   q.sv = nullptr;
@@ -311,7 +318,7 @@ bool qvm_load_map(QvmServer& s, const MapSpec& map, std::string& error) {
   s.map_name = map.name;
   s.models.assign(1, "");
   s.models.push_back("maps/" + map.name + ".bsp");
-  for (size_t i = 1; i < map.models.size(); i++) s.models.push_back("*" + std::to_string(i));
+  for (size_t i = 1; i < models.size(); i++) s.models.push_back("*" + std::to_string(i));
   s.models.reserve(kMaxModels);
   s.sounds.assign(1, "");
   s.sounds.reserve(kMaxSounds);  // never reallocated: the loop's sounds point into it
