@@ -101,8 +101,12 @@ bool recipe_choose(Pilot& p, const PilotSense& s, float way, int32_t end) {
       }
     }
   }
-  std::sort(best.begin(), best.begin() + n,
-            [](const Near& a, const Near& b) { return a.score < b.score; });
+  // Nearest first, by insertion (stable; GCC's -O3 reads std::sort's unguarded loop over a short
+  // std::array as indexing past its end, -Warray-bounds).
+  for (int i = 1; i < n; i++)
+    for (int j = i;
+         j > 0 && best[static_cast<size_t>(j)].score < best[static_cast<size_t>(j - 1)].score; j--)
+      std::swap(best[static_cast<size_t>(j)], best[static_cast<size_t>(j - 1)]);
   MoveSettings move = p.g->move;
   move.maxspeed = s.maxspeed;
   for (int c = 0; c < n; c++) {
