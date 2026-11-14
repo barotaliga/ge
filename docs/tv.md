@@ -646,7 +646,11 @@ view, and that view is let go once it is back on the followed one.
 address names none; 0 turns it off), so an unmodified single-player client watches it with
 `connect <host>`. A single-player recording is played as it is; a client or multiview recording is
 converted to one when it is opened (`client/demo_convert.hpp`; a multiview recording rides the
-lowest slot playing). `games/shooters_edge/net/classic_tv_netgame.hpp` is the face.
+lowest slot playing). `games/shooters_edge/net/classic_tv_netgame.hpp` is the face. A client on the same machine as setv
+binds 26000 itself, so it starts with another port (`-port 26100`) and connects with
+`connect "127.0.0.1:26000"` (quoted: its console splits a line at a colon). Checked by hand with
+the original single-player client of the time, built outside the tree and run as a black box,
+watching a 4on4 multiview recording for minutes.
 
 **The transport.** Every datagram but a control one is an 8-byte header, big-endian (the flags
 over the whole length, then a sequence), and its payload. The client asks to connect with a
