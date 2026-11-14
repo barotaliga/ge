@@ -39,7 +39,7 @@ by a lab or a test over free content (§ Content and test data).
 
 | Content | Formats | What compatible means |
 | --- | --- | --- |
-| Archives and search paths | `pak` (a directory of files in one blob), `pk3` (a zip, stored or deflated, with its own directory tree), a `.pk3dir` directory standing in for an unpacked pk3 while a mod is developed; loose files over them | The base directory, then a game directory per mod (`-game`, the server's `*gamedir`), archives in numeric then name order, later ones overriding earlier; the same file names a mod expects |
+| Archives and search paths | `pak` (a directory of files in one blob), `pk3` (a zip, stored or deflated, with its own directory tree), a `.pk3dir` directory standing in for an unpacked pk3 while a mod is developed; loose files over them | The base directory, then a game directory per mod (`-mod`, the server's `*gamedir`), archives in numeric then name order, later ones overriding earlier; the same file names a mod expects |
 | Maps | BSP version 29, BSP2 (the larger-limits variant), the `.lit` coloured lightmaps beside them, BSPX lumps (extra data in the same file) | Every lump read: planes, nodes, leaves, the visibility (PVS, run-length coded), faces, lightmaps with up to four styles a face, textures (with animated and random sequences, liquids, sky), clip hulls (point, player, large), brush models, the entity lump |
 | Models | MDL (vertex-animated, frame groups, skin groups, 8-bit packed vertices and normals from a fixed table), SPR (sprites with orientation types) | Every frame and skin a mod names; the player model's colours (top and bottom) remapped at draw time; frame interpolation as a modern client does it |
 | Images | The 256-colour palette, the colour map (light levels to palette), LMP pictures, WAD2 (the 2D graphics: the status bar, the font) | Drawn as the classic game draws them, and also as true colour (§ The picture) |
@@ -181,10 +181,15 @@ make build PRESET=release
 build/release/se -basedir ~/games/classic +map dm6
 ```
 
+- **`-game 1`** plays the classic game and **`-game 2`** its sequel, each from the install kept
+  for it on this computer (the one SELECT GAME last opened for that game). With none kept, and
+  the window not started inside one, the folder chooser asks for the folder the game is installed
+  in, checks that it is that game's install (asking again, with the reason, when it is not) and
+  keeps it, so the next `-game 1` opens at once (`client/game_folder.hpp`'s `choose_folder`).
 - **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
   with spaces goes in quotes (`-basedir "/Volumes/Old Games/classic"`). When the install has the
   multiplayer client's folder (its player skins, its multiplayer program), that folder is
-  played over `id1` unless `-game` names another. **`-game <folder>`**
+  played over `id1` unless `-mod` names another. **`-mod <folder>`**
   plays a mod: its folder is mounted over `id1`, so the mod's files win and everything it does
   not ship comes from the base game (saves go to the mod's folder). **`-progs <file>`** runs a mod's progs in place of the
   baseline mod (§ Running your own mod), and **`-models <dir>`** names the held weapons' folder
@@ -429,9 +434,9 @@ the map from the recorded eye, the HUD, and every entity the demo holds (the oth
 their colours, the items, the missiles, the level's statics), as `-demovideo` draws them.
 
 **The demo's game folder.** A multiplayer recording names the game folder its server ran
-(`fortress` for a team mod). When the window was opened on the base folder (no `-game`) and that
+(`fortress` for a team mod). When the window was opened on the base folder (no `-mod`) and that
 folder is beside it under `-basedir`, the demo plays from it, the base under it, so the mod's own
-models, skins and maps are found; a `-game` you pass always wins. A folder that is not there is
+models, skins and maps are found; a `-mod` you pass always wins. A folder that is not there is
 named in the console with what to do.
 
 **Heard and read.** The window's own game, a match on its listen server or the campaign, is heard
@@ -734,7 +739,7 @@ stays for community mods' sources.
   multiplayer program files in order, `qwprogs.dat` and then `progs.dat`
   (`games/shooters_edge/profiles/game_profile.hpp`, looked for by the game's adapter, § The game
   adapter), and runs the first of the multiplayer form; the console's `mods` lists the mod
-  folders there are; so `-game mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
+  folders there are; so `-mod mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
   over (the base game's own `progs.dat` is its campaign, found the same way for SINGLE
   PLAYER), and with none the baseline mod runs; the status line says which.
 - **Or ship it compiled** (M18p): a mod folder whose packs hold a `qwprogs.qvm` runs that

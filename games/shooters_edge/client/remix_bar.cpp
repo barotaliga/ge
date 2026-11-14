@@ -208,13 +208,14 @@ bool draw_worn_bar(ge::ui::DrawList& dl, SequelBar& bar, const profiles::RemixAr
 
 bool draw_sequel_bars(ge::ui::DrawList& dl, SequelBar& own, SequelBar& worn,
                       const server::SequelServer* sq, const RemixFiles& remix,
-                      const hud::Status& st, bool match, int crosshair, std::string_view centre,
-                      double t, int width, int height) {
+                      const hud::Status& st, bool match, const hud::CrosshairSettings* crosshair,
+                      std::string_view centre, double t, int width, int height) {
   if (sq == nullptr || remix.looks != nullptr)
     return draw_worn_bar(dl, worn, remix.worn, st, match, width, height);
   own.now = t;  // the inventory's cursor blinks by it
   run_sequel_bar(own, sq->world, 0, sq->frame_number, width, height);
-  add_sequel_screen(own, crosshair, centre, width, height);
+  if (crosshair != nullptr) draw_sequel_crosshair(dl, own, *crosshair, width, height);
+  add_sequel_screen(own, 0, centre, width, height);
   draw_sequel_bar(dl, own, sequel_bar_scale(height));
   return true;
 }

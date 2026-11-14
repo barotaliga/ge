@@ -21,12 +21,15 @@
 
 #include <filesystem>
 #include <map>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/hud/crosshair.hpp"
 #include "shooters_edge/hud/sequel_layout.hpp"
 #include "shooters_edge/server/rules_world.hpp"
 #include "ui/draw.hpp"
@@ -38,6 +41,7 @@ namespace shooters_edge::client {
 struct BarPicture {
   ge::ui::Image image;
   int k = 1;
+  std::vector<uint8_t> palette;  // the picture's own 256 colours (768 bytes)
   float width() const { return static_cast<float>(image.width) / static_cast<float>(k); }
   float height() const { return static_cast<float>(image.height) / static_cast<float>(k); }
 };
@@ -50,7 +54,18 @@ struct SequelBar {
   // The game's binds (key to command), for the inventory's hotkeys; null: none shown.
   const std::map<std::string, std::string>* binds = nullptr;
   double now = 0;  // the real time, s (the inventory's cursor blinks by it)
+  std::shared_ptr<server::RulesWorld> recorded{};  // a recording's world (draw_recorded_sequel_bar)
 };
+
+// The world a sequel recording or a joined sequel server gives its bar (the bar's program, the
+// pictures and item names, the player's stats, screen and inventory, the players' names), filled
+// into `out` for `run_sequel_bar` at slot `ds.player`; false when `ds` is not the sequel's or
+// carries no bar program (the window's own HUD is drawn instead).
+bool sequel_world_of(const DemoState& ds, server::RulesWorld& out);
+// A recording's (or a joined server's) sequel bar run and drawn on `dl` over a `width` x
+// `height` window; false when `ds` has none to draw (`sequel_world_of`).
+bool draw_recorded_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, const DemoState& ds, int width,
+                              int height);
 
 // The whole number the bar is drawn larger by on a window `height` px high.
 int sequel_bar_scale(int height);
@@ -72,6 +87,13 @@ void run_sequel_bar(SequelBar& bar, const server::RulesWorld& world, int slot, i
 // letters; the first at 35% of the screen's height, or at 48 for more than 4 lines, 8 apart).
 void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, int width,
                        int height);
+
+// Draws the crosshair as the player sets it (hud/crosshair.hpp: `crosshair`, `crosshaircolor`,
+// `crosshairsize`, `crosshairalpha`) centred on a `width` x `height` screen, at the bar's scale:
+// mark 1 the pack's own `ch1`, palette numbers from that picture's own colours. Draw it before the
+// bar, so it lies under it. Nothing when the settings hide it or the pack has no `ch1`.
+void draw_sequel_crosshair(ge::ui::DrawList& dl, SequelBar& bar,
+                           const shooters_edge::hud::CrosshairSettings& s, int width, int height);
 
 // Draws `bar.ops` on `dl`, `scale` px a bar pixel; true when the bar drew anything.
 bool draw_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, int scale);

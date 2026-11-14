@@ -13,6 +13,8 @@
 #include "fall_line/controls/thumbs.hpp"
 #include "fall_line/sim/play.hpp"
 #include "fall_line/sim/state.hpp"
+#include "play/saves.hpp"
+#include "save/file.hpp"
 
 namespace fall_line::controls {
 
@@ -42,6 +44,8 @@ std::unique_ptr<HandRun> open_hand_run(double seed, int rivals, in::ActionMap ma
   h->touch = in::make_touch_frame(h->thumbs);
   h->values = in::make_values(h->map);
   h->recorder = pl::InputRecorder(pl::new_log(spec, setup));
+  h->setup = setup;
+  h->setup_text = pl::setup_text(spec, setup);
   h->step_in.assign(spec.axes.size(), 0);
   h->most_steps = static_cast<int64_t>(ge::core::num::round(spec.most_seconds * spec.hz));
   return h;
@@ -84,6 +88,40 @@ pl::InputLog hand_log(const HandRun& h) {
   pl::InputLog log = h.recorder.log();
   log.digest = h.run->digest();
   return log;
+}
+
+bool hand_save(HandRun& h, std::string title, int64_t now_unix, std::vector<uint8_t>& out,
+               std::string& error) {
+  ge::save::Meta meta;
+  meta.title = std::move(title);
+  meta.saved_unix = now_unix;
+  return pl::save_run_pictured(sim::kGame, h.setup, *h.run, h.steps, std::move(meta), out, error);
+}
+
+bool hand_load(HandRun& h, std::span<const uint8_t> bytes, std::string& error) {
+  ge::save::Header header;
+  ge::save::Meta meta;
+  std::string why;
+  if (!ge::save::peek(bytes, header, meta, why)) {
+    error = "That save could not be read.";
+    return false;
+  }
+  if (meta.setup != h.setup_text) {
+    error = "That save is from another run. Start the game on its mountain to load it.";
+    return false;
+  }
+  std::unique_ptr<pl::Run> fresh = sim::open_run_on(hand_state(h).level, h.setup, why);
+  int64_t step = 0;
+  if (fresh) fresh = pl::load_run_into(sim::kGame, bytes, std::move(fresh), step, why);
+  if (!fresh) {
+    error = "That save could not be loaded.";
+    return false;
+  }
+  h.run = std::move(fresh);
+  h.steps = step;
+  h.loaded_at = step;
+  h.recorder = pl::InputRecorder(pl::new_log(sim::kGame, h.setup));
+  return true;
 }
 
 }  // namespace fall_line::controls

@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "core/output.hpp"
+#include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
@@ -130,6 +131,37 @@ void play_found(Args& args, const FoundInstall& f, const std::string& how) {
 
 void choose_folder(Args& args, const std::string& prefs, const std::vector<std::string>& places,
                    std::vector<FoundInstall>* found) {
+  if (args.game_number > 0 && !args.basedir_set) {
+    // `-game N`: that game's install kept on this computer, else the one the game was started
+    // inside when it is that game, else the window asks for its folder (`ask_install`).
+    const ge::classicenhance::Profile& want =
+        ge::classicenhance::kProfiles[static_cast<size_t>(args.game_number) - 1];
+    std::string basedir, why, kept_why;
+    const auto kept = remembered_installs(prefs);
+    const auto it = kept.find(want.id);
+    const std::string number = std::to_string(args.game_number);
+    if (it != kept.end() && check_game_folder(it->second, &basedir, &kept_why, want)) {
+      out::status("shooters_edge: game " + number + ", " + std::string(want.what) + " in " +
+                  basedir + " (-basedir names another)");
+    } else if (check_game_folder(args.basedir, &basedir, &why, want)) {
+      out::status("shooters_edge: game " + number + ", " + std::string(want.what) +
+                  " in the folder the game runs in, " + basedir);
+    } else {
+      if (!kept_why.empty())
+        out::warn("shooters_edge: the install kept for game " + number +
+                  " no longer opens: " + kept_why + "; next: pick its folder in the chooser");
+      else
+        out::status("shooters_edge: no install kept for game " + number + " (" +
+                    std::string(want.what) + "); asking for its folder");
+      args.ask_install = true;
+      if (!args.game_set) args.game = game_of(args.basedir, want);
+      return;
+    }
+    args.basedir = basedir;
+    args.profile = std::string(want.id);
+    if (!args.game_set) args.game = game_of(basedir, want);
+    return;
+  }
   if (!args.basedir_set) {
     const KeptGame kept = remembered_game(prefs);
     // Started inside an install, or placed above some: played at once, ahead of the one kept.

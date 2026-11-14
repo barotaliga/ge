@@ -73,6 +73,10 @@ TEST(lockstep_a_planted_desync_is_caught_on_its_step) {
     CHECK(o.caught);
     CHECK(o.caught_step == 200);
     CHECK(o.caught_after_ms > 0 && o.caught_after_ms < 2000);
+    // Every peer, the one astray too, names the seat whose state was changed.
+    CHECK_MSG(o.odd == 2 && o.named_by == o.connected, std::string(preset) + ": named seat " +
+                                                           std::to_string(o.odd) + " by " +
+                                                           std::to_string(o.named_by));
   }
 }
 

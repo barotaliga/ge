@@ -96,7 +96,7 @@ const ui::Image& crosshair_mark(int32_t mark) {
   return mark >= 2 && mark <= kCrosshairMarks ? marks[static_cast<size_t>(mark)] : none;
 }
 
-ui::Color crosshair_colour(std::string_view text, const HudArt& art) {
+ui::Color crosshair_colour(std::string_view text, std::span<const uint8_t> palette) {
   if (text.find_first_not_of(" \t") == std::string_view::npos) return {1, 1, 1, 1};
   double v[3];
   size_t n = 0, i = 0;
@@ -118,8 +118,8 @@ ui::Color crosshair_colour(std::string_view text, const HudArt& art) {
             static_cast<float>(v[2] / 255), 1};
   if (n != 1) return {1, 1, 1, 1};
   const auto index = static_cast<size_t>(v[0]);
-  if (art.palette.size() == 768) {
-    const uint8_t* p = &art.palette[index * 3];
+  if (palette.size() == 768) {
+    const uint8_t* p = &palette[std::min<size_t>(index, 255) * 3];
     return {p[0] / 255.0f, p[1] / 255.0f, p[2] / 255.0f, 1};
   }
   const float grey = static_cast<float>(v[0] / 255);
@@ -164,17 +164,30 @@ void add_crosshair_cvars(gc::Console& con, CrosshairSettings& s) {
                    &s.alpha);
 }
 
-void fill_crosshair(ge::hud::Content& c, const CrosshairSettings& s, const HudArt& art, bool dead) {
+ge::hud::Picture crosshair_picture(const CrosshairSettings& s, const ui::Image& own,
+                                   float own_density, std::span<const uint8_t> palette,
+                                   bool* shown) {
   const double size = std::clamp(s.size, 0.25, 4.0);
+  ge::hud::Picture p;
   if (s.mark >= 2 && s.mark <= kCrosshairMarks) {
-    c.image = &crosshair_mark(s.mark);
-    c.density = static_cast<float>(kMarkDensity / size);
+    p.image = &crosshair_mark(s.mark);
+    p.density = static_cast<float>(kMarkDensity / size);
   } else {
-    c.image = &art.crosshair;
-    c.density = static_cast<float>(art.density / size);
+    p.image = &own;
+    p.density = static_cast<float>(own_density / size);
   }
-  c.color = crosshair_colour(s.colour, art);
-  c.color.a = static_cast<float>(std::clamp(s.alpha, 0.0, 1.0));
+  p.tint = crosshair_colour(s.colour, palette);
+  p.tint.a = static_cast<float>(std::clamp(s.alpha, 0.0, 1.0));
+  *shown = s.mark != 0 && p.tint.a > 0 && p.image->width > 0;
+  return p;
+}
+
+void fill_crosshair(ge::hud::Content& c, const CrosshairSettings& s, const HudArt& art, bool dead) {
+  bool shown = false;
+  const ge::hud::Picture p = crosshair_picture(s, art.crosshair, art.density, art.palette, &shown);
+  c.image = p.image;
+  c.density = p.density;
+  c.color = p.tint;
   c.on = c.on && !dead && s.mark != 0 && c.color.a > 0;
 }
 

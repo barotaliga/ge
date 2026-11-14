@@ -12,7 +12,8 @@
 //   - label:   words that are not a stop (a heading, a note); the focus skips them;
 //   - back:    returns to the page below (the same as the back press).
 // An item may be `disabled` (shown, skipped by the focus) and `prominent` (a bigger slab: the
-// one press most players want, PLAY or RESUME).
+// one press most players want, PLAY or RESUME), and may carry a `picture` the view shows large
+// beside the column while it has the focus (a save slot's, a level's).
 //
 // INPUT is what the game's input layer (M19's `menu` context) made of this frame's presses, each
 // an edge (true on the frame it was pressed): up, down, left, right, accept, back; and the pointer
@@ -61,6 +62,9 @@ struct Item {
   int choice = 0;
   double value = 0, min = 0, max = 1, step = 0.1;  // slider
   std::string unit{};                              // slider: shown after the value ("%")
+  // A picture shown large beside the column while the item has the focus (a save's, a level's,
+  // a replay's); the game owns it and keeps it alive while the item stands.
+  const Image* picture = nullptr;
 
   bool stop() const { return kind != ItemKind::label && !disabled; }
 };

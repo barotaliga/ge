@@ -30,6 +30,7 @@ const BarPicture* picture(SequelBar& bar, const std::string& path) {
     ge::assets::IndexedImage img;
     std::string why;
     if (!bytes.empty() && ge::assets::decode_pcx(bytes, path, &img, &why) && !img.palette.empty()) {
+      out.palette.assign(img.palette.begin(), img.palette.end());
       out.image.width = img.width;
       out.image.height = img.height;
       out.image.rgba = ge::assets::pcx_rgba(img);
@@ -146,6 +147,33 @@ std::string_view sequel_world_string(const server::RulesWorld& w, int index, std
   return {};
 }
 
+bool sequel_world_of(const DemoState& ds, server::RulesWorld& out) {
+  if (ds.format != DemoFormat::sequel || ds.status_bar.empty()) return false;
+  if (ds.player < 0 || ds.player >= ge::shooter::kMaxClients) return false;
+  out.status_bar = ds.status_bar;
+  out.images = ds.images;
+  out.item_names = ds.item_names;
+  for (int i = 0; i < ge::shooter::kMaxClients; i++) {
+    server::WorldClient& c = out.clients[i];
+    c.name = ds.names[static_cast<size_t>(i)];
+    c.active = !c.name.empty() || i == ds.player;
+  }
+  server::WorldClient& me = out.clients[ds.player];
+  std::copy(ds.sequel_stats.begin(), ds.sequel_stats.end(), std::begin(me.numbers.stats));
+  me.layout = ds.layout;
+  me.inventory = ds.inventory;
+  return true;
+}
+
+bool draw_recorded_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, const DemoState& ds, int width,
+                              int height) {
+  if (!bar.recorded) bar.recorded = std::make_shared<server::RulesWorld>();
+  if (!sequel_world_of(ds, *bar.recorded)) return false;
+  run_sequel_bar(bar, *bar.recorded, ds.player, ds.frames, width, height);
+  draw_sequel_bar(dl, bar, sequel_bar_scale(height));
+  return true;
+}
+
 int sequel_bar_scale(int height) { return std::max(1, height / 400); }
 
 void run_sequel_bar(SequelBar& bar, const server::RulesWorld& world, int slot, int64_t frame,
@@ -208,6 +236,22 @@ void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, i
     bar.ops.push_back(std::move(op));
     y += 8;
   }
+}
+
+void draw_sequel_crosshair(ge::ui::DrawList& dl, SequelBar& bar,
+                           const shooters_edge::hud::CrosshairSettings& s, int width, int height) {
+  const BarPicture* own = picture(bar, hud::layout_picture_path("ch1"));
+  static const ge::ui::Image kNone;
+  bool shown = false;
+  const ge::hud::Picture p = shooters_edge::hud::crosshair_picture(
+      s, own != nullptr ? own->image : kNone, own != nullptr ? static_cast<float>(own->k) : 1,
+      own != nullptr ? std::span<const uint8_t>(own->palette) : std::span<const uint8_t>(), &shown);
+  if (!shown) return;
+  const auto u = static_cast<float>(sequel_bar_scale(height));
+  const ge::hud::Size z = ge::hud::measure(p, u);
+  ge::hud::draw(
+      dl, p,
+      {(static_cast<float>(width) - z.w) / 2, (static_cast<float>(height) - z.h) / 2, z.w, z.h}, u);
 }
 
 bool draw_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, int scale) {
