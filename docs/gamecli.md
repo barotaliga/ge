@@ -17,7 +17,7 @@ The CLI is built in the three homes every feature lives in (docs/architecture.md
 
 | Layer | Where | What it gives |
 | --- | --- | --- |
-| Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset/check/format`, `server settings/set/check/format`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `join`, `logs`, `account signup/signin/code/recover/show`, `friends list/add/remove/block/unblock/invite/invites/status` |
+| Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset/check/format`, `server settings/set/check/format`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `join`, `logs`, `account signup/signin/code/recover/show`, `friends list/add/remove/block/unblock/invite/invites/status`, `ranked find/status/leave` |
 | Plugin | `plugins/<name>/cli/` (built into `ge_<name>_cli`) | A group of rows any game linking the plugin adds: classic enhance's `content` (the install's packs, their release by SHA-256, the enhanced cache) |
 | Game | `games/<game>/cli/` | The game's `Spec` (its programs, ports, protocol, places, launch words, the settings it registers) and its own rows: Shooter's Edge's `demos`, `demos play`, `demos pack`, `demos unpack` |
 
@@ -139,6 +139,15 @@ unblock <name>`, `friends invite <name> --where=<host:port> --note=<words>`, `fr
 ticket `account signin` kept (`docs/accounts.md` § Friends); without one they are refused with the
 `account signin` to run. `friends list` walks every page of the list; `friends invites` takes the
 invites waiting, so a second call shows none.
+
+## Ranked games
+
+`ranked find <mode>` asks the master's matchmaker for a ranked game of this game in that mode
+(`docs/accounts.md` § The matchmaker): a duel, or a two-on-two with `--duo=<your duo's name>`.
+Alone it asks once and answers `waiting` (with the seconds waited and the rating window) or
+`matched` (the server's address and both sides' names); `--for=<s>` keeps asking every 3 seconds
+until matched or the time is up. `ranked status` looks without asking again; `ranked leave` stops.
+Each uses the ticket `account signin` kept.
 
 ## Places
 
