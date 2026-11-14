@@ -205,21 +205,23 @@ struct SequelPlayer {
   int water_level = 0;
   int32_t water_type = 0;  // the liquid he is in (contents bits)
   bool on_ground = false;
+  bool carried = false, has_entered = false;  // the campaign's (below), here so the struct packs
   // The weapon in hand (sequel_combat.hpp), stepped once a rules frame: by the first command of the
   // frame that presses attack, else at the frame's end (`stepped` says which).
   SqHand hand;
   bool stepped = false;
+  // Power armour switched on (below), died under −40 so his body is gone (no model), and the
+  // screen up over his bar (sequel_screens.hpp: none, the scores, the help computer); kept here
+  // beside the other small fields so the struct packs.
+  bool power_on = false, gibbed = false;
+  uint8_t screen = 0;
   int killer = -1;  // the slot that killed him last; his own for a suicide, -1 the world
-  // The powerups in use (level time each ends; 0 none), the silencer's shots left, power armour
-  // switched on, and the body's state the frame reads: his air, the next drowning blow and its
-  // size, and his fall speed at the last frame's end.
+  // The powerups in use (level time each ends; 0 none) and the body's state the frame reads: his
+  // air, the next drowning blow and its size, and his fall speed at the last frame's end.
   double quad_until = 0, invulnerable_until = 0, breather_until = 0, suit_until = 0;
-  int silencer_shots = 0;
-  bool power_on = false;
   double air_until = 0, drown_at = 0;
   int drown_damage = 2;
   float old_fall = 0;
-  bool gibbed = false;        // died under −40: his body is gone (no model)
   int ground = -1;            // the world row he stands on (0 the world, a mover's row), -1 none
   double windfly_at = -10;    // the last push's sound
   int64_t noise_frame = -10;  // the rules frame of his last noise a monster may hear (his weapon)
@@ -227,11 +229,9 @@ struct SequelPlayer {
   // The campaign's (sequel_campaign.hpp): the help news seen and its beeps, the screen open; the
   // body carried to the next level and the one he entered this level with.
   int help_seen = 0, help_unread = 0;
-  // The screen up over his bar (sequel_screens.hpp: none, the scores, the help computer) and the
-  // last layout program sent him, which his client keeps until the next.
-  uint8_t screen = 0;
+  int silencer_shots = 0;  // the silencer's shots left (beside the ints here so the struct packs)
+  // The last layout program sent him (the screen's, above), which his client keeps until the next.
   std::string layout;
-  bool carried = false, has_entered = false;
   ge::shooter::MidairTally midair;  // his counted midairs this level (plugins/shooter/midair.hpp)
   SqBody carry, entered;
   SqPose pose;  // the frame his body shows (sequel_poses.hpp)
