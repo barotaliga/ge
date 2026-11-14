@@ -747,6 +747,20 @@ first block is the only keyframe, so a late viewer is sent the match from its st
 broadcast does. What a viewer gets is what one spectator was sent: the watcher follows the play as a
 spectator does and does not see the whole map, as a multiview recording would.
 
+FOLLOWING THE PLAY (`classic_follow.hpp`, M56q): the watcher rides a player's view. It picks the
+top fragger in the game (a tie to the lowest slot), keeps him at least 4 s and while he leads, and
+moves on once he has been dead 2 s, left or turned spectator. It tells the server `ptrack <slot>`,
+so the server sends it his stats, his weapon frame and his record wherever he is, and every move it
+sends no movement, his view angles and a teleport (`tmove`) to his origin when he has moved, so the
+entities it is sent are the ones he sees. Our classic server takes `ptrack` from spectators: a slot
+out of range, not in the game or a spectator's is refused with "Invalid client to track", and a
+bare `ptrack` stops it. The recording does not name whom it tracked, so playback finds him: a
+spectator's client recording rides the player whose command's view is within 2 degrees of the
+recorded view (and near the recorder, when its own record came), and falls back to the recorder's
+own view after 0.3 s with none (`client/demo.hpp` § Client). `tests/shooters_edge_classic_follow_test.cpp`
+holds it: the server tracks the watcher's pick, it stands where he does, it gets his stats, and its
+recording plays as his view; a player's `ptrack` is ignored and a bad slot refused.
+
 `tests/shooters_edge_classic_watcher_test.cpp`: on the simulated network, a watcher on our classic
 server while a player runs, a viewer there from the start and one who joins half way, both given
 the watcher's whole recording, which reads to its end. The `se-watcher` lab does the same, and with
