@@ -5,7 +5,7 @@
 # same seam (sim/mod_host.hpp, skill: mod). Its content registry
 # (content/) is data and builds nothing. Its sound (sound/) is a second library: what the game
 # plays on the engine's synth, over the brush world's leaves. Its server (server/) is a library and
-# the headless `shooters_edge_server` executable. Its HUD (hud/) is a library
+# the headless `sesv` executable. Its HUD (hud/) is a library
 # of its own, and so are its held weapons (view/). Its bots (bots/) are a library over the server; its app half (app/) is the picture's game side, with the GPU. mods/ holds the sample C++ mod, built as a package (cmake/Mods.cmake) the tests and
 # the `mod` lab load.
 file(GLOB SHOOTERS_EDGE_SIM_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sim/*.cpp)
@@ -64,18 +64,13 @@ target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters
                       ge_forward ge_tv)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 
-# The headless dedicated server (server/bin/), named `shooters_edge_server` on disk, at the build's
-# root (build/<preset>/shooters_edge_server): the engine's dedicated process (engine/server) over
-# the game's playable ServerGame (net/classic_game.hpp: the mod's deathmatch on the classic
-# protocol). `--help` lists its flags.
-ge_add_server(shooters_edge_dedicated OUTPUT_NAME shooters_edge_server SOURCES server/bin/main.cpp
+# The headless dedicated server (server/bin/), named `sesv` on disk, at the build's root
+# (build/<preset>/sesv): the engine's dedicated process (engine/server) over the game's playable
+# ServerGame (net/classic_game.hpp: the mod's deathmatch on the classic protocol), or with
+# `--sequel` the same core over the sequel's rules on its own protocol (net/sequel_game.hpp), so an
+# existing client of the sequel joins it. `--help` lists its flags.
+ge_add_server(shooters_edge_dedicated OUTPUT_NAME sesv SOURCES server/bin/main.cpp
               LINK shooters_edge_classic)
-
-# The sequel's dedicated server (server/bin/sequel_main.cpp), `shooters_edge_sequel_server` on
-# disk at the build's root: the same core over the sequel's rules on its own protocol
-# (net/sequel_game.hpp), so an existing client of the sequel joins it.
-ge_add_server(shooters_edge_sequel_dedicated OUTPUT_NAME shooters_edge_sequel_server
-              SOURCES server/bin/sequel_main.cpp LINK shooters_edge_classic)
 
 # The hub (hub/), named `shooters_edge_hub` on disk at the build's root: the engine's hub
 # (engine/hub, docs/hub.md) with the game's modes and words. `--help` lists its flags.
@@ -94,13 +89,20 @@ target_link_libraries(shooters_edge_bots_cli PRIVATE shooters_edge_classic ge_fl
 set_target_properties(shooters_edge_bots_cli PROPERTIES OUTPUT_NAME shooters_edge_bots
                       RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-# The hops, headless (net/hops_main.cpp), named `shooters_edge_hops` on disk at the build's root:
-# our forward, proxies or TV node as a process of its own, for any classic client. `--help` lists
-# its kinds and flags.
-add_executable(shooters_edge_hops_cli net/hops_main.cpp)
-target_link_libraries(shooters_edge_hops_cli PRIVATE shooters_edge_classic ge_proxy ge_webtransport ge_flags)
-set_target_properties(shooters_edge_hops_cli PROPERTIES OUTPUT_NAME shooters_edge_hops
-                      RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+# The hops, headless (net/hops_main.cpp, one source built three times), at the build's root: our
+# forward (`sefwd`), proxies (`seproxy`) or TV node (`setv`) as a process of its own, for any
+# classic client. `SE_HOP` picks which; `--help` lists each one's flags.
+foreach(hop sefwd:1 seproxy:2 setv:3)
+  string(REPLACE ":" ";" hop "${hop}")
+  list(GET hop 0 hop_name)
+  list(GET hop 1 hop_id)
+  add_executable(shooters_edge_${hop_name} net/hops_main.cpp)
+  target_link_libraries(shooters_edge_${hop_name} PRIVATE shooters_edge_classic ge_proxy ge_webtransport
+                        ge_flags)
+  target_compile_definitions(shooters_edge_${hop_name} PRIVATE SE_HOP=${hop_id})
+  set_target_properties(shooters_edge_${hop_name} PROPERTIES OUTPUT_NAME ${hop_name}
+                        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+endforeach()
 
 # Its HUD (hud/): the player's status snapshot, the HUD's pictures (the free set painted in code),
 # and the three looks over the engine's HUD layout with their hud_ cvars. No GPU: the CPU raster
@@ -202,7 +204,11 @@ if(TARGET shooters_edge_client_gpu)
                     DEFINES SE_WEB_PLAY=1)
 endif()
 if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
+  # The window, `se` on disk at the build's root (build/<preset>/se) beside `sesv` and the hops;
+  # the target keeps the game's name, so `make run:shooters_edge` builds it.
   add_executable(shooters_edge client/main.cpp client/window_cvars.cpp client/bot_view.cpp)
+  set_target_properties(shooters_edge PROPERTIES OUTPUT_NAME se
+                        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
   target_link_libraries(shooters_edge PRIVATE shooters_edge_client_gpu shooters_edge_classic
                                               shooters_edge_menu
                                               ge_platform ge_hud ge_console)

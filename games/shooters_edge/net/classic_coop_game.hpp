@@ -1,4 +1,4 @@
-// THE DEDICATED COOP SERVER: `shooters_edge_server` with `sv_coop 1` runs the campaign in coop
+// THE DEDICATED COOP SERVER: `sesv` with `sv_coop 1` runs the campaign in coop
 // (server/campaign.hpp) in place of a match, with nobody's window behind it, and serves it over
 // the classic protocol through the coop door (classic_coop.hpp) as the window's coop game is
 // served. Clients who connect enter the campaign on a free coop start and are carried from map

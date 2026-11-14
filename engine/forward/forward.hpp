@@ -42,7 +42,8 @@
 //
 // ge:summary Forward: an opaque hop for any game's datagrams, chained by the route in its setup
 // ge:keywords forward forwarder hop route chain proxy-chain better-path allow-list keepalive
-// ge:keywords nat-rebinding cookie amplification stun status dial face forward_admit
+// ge:keywords nat-rebinding cookie amplification stun status dial face forward_admit reach
+// ge:keywords status-keys status_reaches
 // ge:skill net
 // ge:test tests/forward_test.cpp
 #pragma once
@@ -54,9 +55,11 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "net/address.hpp"
+#include "net/status.hpp"
 #include "net/transport.hpp"
 
 namespace ge::forward {
@@ -111,7 +114,25 @@ struct ForwardConfig {
   int64_t idle_us = 15000000;  // nothing either way this long: the client is dropped
   uint32_t version = 1;        // in its status
   uint64_t seed = 0;           // the secret's and the salts' stream
+  // More of its status record's keys (a WebTransport face's port and certificate, below).
+  std::vector<std::pair<std::string, std::string>> keys;
 };
+
+// WHAT A FORWARD'S STATUS RECORD SAYS, beside its clients: whether it is open, the destinations
+// it allows (`kReachKey`: each one's address, port 0 any port on that host, comma between, the
+// first kMostReachShown), and for a forward that takes pages (webtransport/forward.hpp) its
+// WebTransport endpoint's UDP port and the SHA-256 of its certificate in hex, which a hub hands a
+// page so the page can trust it: 64 digits, past a record value's 63, so in two keys of 32
+// (`kCertKey` the first half, `kCertKey2` the second).
+inline constexpr std::string_view kReachKey = "reach";
+inline constexpr std::string_view kWebTransportKey = "webtransport";
+inline constexpr std::string_view kCertKey = "cert", kCertKey2 = "cert2";
+inline constexpr size_t kMostReachShown = 8;
+// A forward's record read: it reaches `to` (open, or `to` in its reach).
+bool status_reaches(const net::Status& s, const net::Address& to);
+// The certificate's hash (64 hex digits) put in a record's keys, and read back ("" when absent).
+void status_put_cert(std::vector<std::pair<std::string, std::string>>& keys, std::string_view hex);
+std::string status_cert(const net::Status& s);
 
 // A socket of its own toward the next hop for one client; false when none can be opened.
 using OpenUpstream = std::function<bool(net::Transport& out)>;

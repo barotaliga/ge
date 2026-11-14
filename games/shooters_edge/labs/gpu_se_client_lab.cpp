@@ -34,6 +34,9 @@
 // `--server="coop 1"` gives the server those lines before the map starts: with the packs' own
 // program, a coop game in which `--say="addbot"` seats a companion beside the player.
 //
+// `--remix=<install>` turns classic remix on with that install the other full game, so `--map` may
+// name one of its maps: its walls in its own textures, its items the played game's.
+//
 // `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
 // two wall torches, their textures enhanced into a cache of the lab's own (classic-enhance's
 // texture enhancer, the kernel at 4x, its height, normal and roughness maps) as the in-game menu's
@@ -45,7 +48,7 @@
 // ge:keywords axe-swing swings two-swings weaponframe film_swings breath exertion film-hand
 // ge:keywords fire explobox film_death death jump-sound film_switch weapon-change cl_gunswitch
 // ge:keywords say vote notify-feed episodes bars sv_episodes_done start-map
-// ge:keywords coop-server-lines addbot
+// ge:keywords coop-server-lines addbot remix classic-remix other-game-map
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
@@ -80,6 +83,7 @@
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -547,7 +551,33 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     if (b > a) lo.console.push_back(server_lines.substr(a, b - a));
     a = b + 1;
   }
-  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, lab.arg("map"), error);
+  // `--remix=<install>`: classic remix on, that install the other full game (`--remix-game`, the
+  // sequel by default), so `--map` may name one of its maps, played here with this game's items.
+  cl::RemixFiles remix;
+  std::unique_ptr<cl::LoadedMap> map;
+  if (const std::string& other = lab.arg("remix"); !other.empty() && folder != "fixture") {
+    const size_t cut = folder.find_last_of('/');
+    cl::RemixState state;
+    state.on = true;
+    state.other = lab.arg("remix-game").empty() ? "sequel" : lab.arg("remix-game");
+    state.other_basedir = other;
+    std::string said;
+    if (cl::open_remix(remix, state, "classic",
+                       cut == std::string::npos ? "." : folder.substr(0, cut),
+                       cut == std::string::npos ? folder : folder.substr(cut + 1), error))
+      map = cl::load_remixed_map(files, lab.arg("map"), &remix, error, &said);
+    if (!map) {
+      lab.fail(error, "Read the reason above. Skill: shooter.");
+      return;
+    }
+    lab.note(said);
+    if (!map->from_game.empty()) {
+      files = std::move(remix.files);
+      lo.files = &files;
+    }
+  } else {
+    map = cl::load_named_map(files, lab.arg("map"), error);
+  }
   if (!map || !cl::listen_start(l, progs, std::move(map), lo, error)) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
     return;
@@ -1065,6 +1095,10 @@ const gl::LabSpec kSpec{
       "a game folder of packs to draw instead of the halls (private pictures only), or fixture: "
       "the halls torch-lit with their textures enhanced"},
      {"map", "start", "with --game: the map's name"},
+     {"remix", "",
+      "with --game: another full game's install, classic remix on: --map may name its maps, "
+      "played with this game's items"},
+     {"remix-game", "sequel", "with --remix: that install's game (a profile id)"},
      {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},
      {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"},
      {"hud", "auto", "with --game: the HUD's art: auto, classic or free"},

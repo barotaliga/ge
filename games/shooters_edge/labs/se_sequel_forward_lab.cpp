@@ -123,6 +123,7 @@ void open_proxies(gl::Lab& lab, Hops& h, const gn::Address& near_at, const gn::A
   px::ProxyConfig pc;
   pc.link.repeat = static_cast<int>(lab.arg_num("copies"));
   pc.link.pack = true;
+  pc.link.code = true;
   pc.allow = {to};
   pc.name = "near";
   pc.seed = 5;

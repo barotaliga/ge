@@ -8,6 +8,8 @@
 
 #include <algorithm>
 
+#include "forward/forward.hpp"
+
 namespace ge::hub {
 
 namespace gn = ge::net;
@@ -40,7 +42,10 @@ int64_t period(const Poller& p, const HubNode& n) {
 
 void send_ask(Poller& p, gn::Transport& t, HubNode& n, int64_t now_us) {
   uint8_t ask[gn::kStatusAskSize];
-  gn::status_ask(p.config.protocol, n.nonce, n.cookie, ask);
+  // A forwarder answers on the forward's own protocol, whatever game it serves.
+  const uint32_t protocol =
+      n.kind == gn::NodeKind::forward ? ge::forward::forward_protocol() : p.config.protocol;
+  gn::status_ask(protocol, n.nonce, n.cookie, ask);
   gn::transport_send(t, n.address, ask, sizeof ask, now_us);
   n.asked_us = now_us;
   p.stats.asks++;
@@ -222,6 +227,21 @@ int poller_count(const Poller& p, uint8_t kinds) {
   int c = 0;
   for (const HubNode& n : p.nodes) c += n.have && (gn::kind_bit(n.kind) & kinds) ? 1 : 0;
   return c;
+}
+
+const HubNode* poller_page_forward(const Poller& p, const gn::Address& server) {
+  const HubNode* best = nullptr;
+  for (const HubNode& n : p.nodes) {
+    if (!n.have || n.kind != gn::NodeKind::forward) continue;
+    bool port = false;
+    for (const auto& [k, v] : n.status.keys)
+      port = port || (k == ge::forward::kWebTransportKey && !v.empty());
+    if (!port || ge::forward::status_cert(n.status).empty() ||
+        !ge::forward::status_reaches(n.status, server))
+      continue;
+    if (best == nullptr || n.status.players.size() < best->status.players.size()) best = &n;
+  }
+  return best;
 }
 
 }  // namespace ge::hub

@@ -85,6 +85,7 @@ const char* const kPaths[] = {
     "/v1/matches/{id}",
     "/v1/leaders",
     "/v1/ladder",
+    "/v1/results",
 };
 
 std::string paths_json() {

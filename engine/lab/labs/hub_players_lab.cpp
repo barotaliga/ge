@@ -24,11 +24,15 @@
 #include "account/service.hpp"
 #include "account/store.hpp"
 #include "core/prng.hpp"
+#include "hub/archive.hpp"
 #include "hub/pages.hpp"
 #include "hub/spec.hpp"
 #include "hub/stats_page.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/hub_browser.hpp"
+#include "mod/sha256.hpp"
+#include "net/report.hpp"
+#include "replay/stream.hpp"
 
 namespace {
 
@@ -104,6 +108,8 @@ struct Night {
   uint64_t fresh_n = 1;
   std::vector<uint64_t> ids;
   uint64_t first_team_match = 0;
+  gn::MatchReport recorded;  // the match whose server recorded it
+  std::string demo_sha;      // its demo, joined to it by the closing summary ("" not joined)
 };
 
 void build(Night& night) {
@@ -162,9 +168,30 @@ void build(Night& night) {
       r.teams = {{"red", red, 4}, {"blue", blue, 13}};
       if (r.mode == "4on4" && night.first_team_match == 0) night.first_team_match = r.id;
     }
-    if (m == 20) r.demo_sha256 = std::string(64, 'a');
+    if (r.id == night.first_team_match) night.recorded = r;  // the match page drawn
     ga::matches_add(night.svc.matches, m == 23 ? unlisted : trusted, r);
   }
+  // The recorded match's demo, as a server's recorder closes it (tv/server_source.hpp): the
+  // report in the trailer. The hub reads it as the archive would and joins the two.
+  ge::replay::StreamHeader h;
+  h.game = "shooters_edge";
+  h.meta = {{"map", night.recorded.map}, {"server", night.recorded.server}};
+  h.tracks = {{1, ge::replay::TrackKind::meta, ge::replay::TrackCodec::stored, "meta"}};
+  std::vector<uint8_t> file;
+  ge::replay::StreamWriter w;
+  ge::replay::stream_begin(w, h, file);
+  const uint8_t tick[] = {1};
+  ge::replay::stream_add(w, 1, 0, tick);
+  ge::replay::stream_end_block(w, true);
+  std::string text, error;
+  if (!gn::report_text(night.recorded, text, error)) return;
+  ge::replay::stream_finish(w, {{"report", text}});
+  ge::hub::DemoRow row;
+  if (!ge::hub::demo_row(file, row, error)) return;
+  row.sha = ge::mod::sha256_hex(file.data(), file.size());  // the archive names a demo so
+  if (ga::matches_link_demo(night.svc.matches, row.report_id, row.report_start_s, row.report_server,
+                            row.sha))
+    night.demo_sha = row.sha;
 }
 
 // The ladders' sample: the same eight accounts over three seasons (14 days each) of duels, and of
@@ -309,6 +336,11 @@ void run(gl::Lab& lab) {
   ga::TotalsFilter f;
   f.modes = {"1on1"};
   const ga::Totals one = ga::totals_sum(night.svc.matches, night.ids[0], f);
+  lab.metric("demo_joined", night.demo_sha.empty() ? 0 : 1, "demos");
+  if (night.demo_sha.empty())
+    lab.fail("the recorded match's demo was not joined to it by its closing summary",
+             "Run tests/hub_archive_test and tests/account_matches_test (matches_link_demo); "
+             "skill: net.");
   lab.metric("reports_kept", static_cast<double>(night.svc.matches.kept.size()), "reports");
   lab.metric("ranger_matches", static_cast<double>(all.matches), "matches");
   lab.metric("ranger_duels", static_cast<double>(one.matches), "matches");

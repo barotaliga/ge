@@ -195,6 +195,7 @@ void start_sound(Server& sv, int e, int channel, const char* sample, float volum
 
 int world_contents(const Server& sv, Vec3f p) {
   if (sv.brushes != nullptr) return solid_point_contents(*sv.brushes, p);
+  if (sv.model_solids.size() > 1) return solid_point_contents(sv.model_solids[1], p);
   return point_contents(sv.models[1].hulls[0], p);
 }
 

@@ -207,4 +207,15 @@ std::map<uint64_t, Totals> totals_by_account(const Matches& m, const TotalsFilte
   return out;
 }
 
+bool matches_link_demo(Matches& m, uint64_t id, int64_t start_s, std::string_view server,
+                       std::string_view sha) {
+  if (id == 0 || sha.size() != 64) return false;  // no summary, or not a demo's name
+  for (KeptMatch& k : m.kept) {
+    if (k.report.id != id || k.report.start_s != start_s || k.report.server != server) continue;
+    k.report.demo_sha256 = std::string(sha);
+    return true;
+  }
+  return false;
+}
+
 }  // namespace ge::account

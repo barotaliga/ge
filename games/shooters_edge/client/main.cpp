@@ -123,6 +123,7 @@
 #include "shooters_edge/client/own_sounds.hpp"
 #include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/settings.hpp"
@@ -785,6 +786,34 @@ int run_main(int argc, char** argv) {
   cl::WorldDrawPtr world;      // the map's, made behind the window (client/map_load.hpp)
   bool world_current = false;  // the world is the server's map's (not the last map's)
   cl::MapLoad loader;
+  // Classic remix (client/remix.hpp): the other full game's files while `cr_enabled` is on, opened
+  // again whenever the switch or the played game changes.
+  cl::RemixSettings remix_settings;
+  cl::bind_remix(console.cvars(), &remix_settings);
+  cl::RemixFiles remix;
+  loader.remix = &remix;
+  bool remix_enabled = false;
+  std::string remix_for;
+  const auto remix_sync = [&] {
+    remix.balance = remix_settings.balance;  // the next map read weighs by them
+    if (remix_settings.enabled == remix_enabled && remix_for == args.basedir) return;
+    if (cl::busy(loader)) return;  // its threads may read the other game's files: next frame
+    remix_enabled = remix_settings.enabled;
+    remix_for = args.basedir;
+    const cl::RemixState st = cl::remix_check(remix_settings, args.profile,
+                                              cl::known_games(prefs, args.profile, args.basedir));
+    std::string why;
+    if (!cl::open_remix(remix, st, args.profile, args.basedir, args.game, why)) {
+      console.print(why);
+    } else if (st.on) {
+      const ge::classicenhance::Profile* other = ge::classicenhance::find_profile(st.other);
+      console.print(
+          "Classic remix is on: " + std::string(other != nullptr ? other->what : st.other) +
+          "'s maps can be played too.");
+    } else if (!st.why.empty()) {
+      console.print(st.why);
+    }
+  };
   ge::platform::DevicesPtr devices = ge::platform::open_devices();
   if (!devices) return 1;
   const auto pull = [](float* out, int frames, void* user) {
@@ -1441,6 +1470,7 @@ int run_main(int argc, char** argv) {
       next_map = listen.pending_map;
     const bool elsewhere = bench.active || remote.active || bench_map;  // the world is theirs
     if (elsewhere) heard_here.stop();  // a demo or a server joined is heard instead
+    remix_sync();
     if (!next_map.empty() && !loader.map.valid() && !elsewhere) {
       cl::load_map(loader, files, next_map, t);
       next_map.clear();

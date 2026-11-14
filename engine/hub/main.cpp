@@ -302,6 +302,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
   if (accounts.open) http.accounts = &accounts.svc;  // the Account page works its store
   HubSpec site_spec = spec;
   site_spec.stats = accounts.open;  // the pages link the Leaders page
+  site_spec.results = browsing;     // ... and the classic servers' Results
   if (!o.viewer.empty()) {
     http.viewer_dir = o.viewer;
     std::printf("%s_hub: viewer files from %s\n", spec.id.c_str(), o.viewer.c_str());
@@ -315,13 +316,17 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
   Poller p;
   poller_init(p, pc, 0);
   Browse browse;
-  if (browsing) browse_init(browse, bc, spec.browse, browse_port, 0);
+  if (browsing) {
+    browse_init(browse, bc, spec.browse, browse_port, 0);
+    http.results = &browse.results;
+  }
   std::printf("%s_hub: reading %zu master(s) and %zu of the game's own, serving http://%s/\n",
               spec.id.c_str(), pc.masters.size(), bc.masters.size() + bc.servers.size(),
               gn::to_string(http_at).c_str());
   std::fflush(stdout);
   int64_t next_line = static_cast<int64_t>(o.status_line_s * 1e6);
   std::unordered_set<std::string> packed;  // demos whose content pack is made or failed
+  std::unordered_set<std::string> linked;  // demos joined to their match (matches_link_demo)
   for (;;) {
     const int64_t now = now_us();
     if (o.for_s > 0 && now >= static_cast<int64_t>(o.for_s * 1e6)) break;
@@ -331,7 +336,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     poller_pump(p, udp, now);
     if (browsing) {
       gn::transport_pump(browse_port, now);
-      browse_update(browse, p, now);
+      browse_update(browse, p, now, unix_s());
     }
     http.unix_s = unix_s();
     if (!o.archive.empty() && now >= next_archive) {
@@ -348,6 +353,16 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
         std::fflush(stdout);
       }
       next_archive = now + 5000000;  // the inbox every 5 s
+      // A demo that closes with a match's report links that match's page to it (the join by the
+      // closing summary, docs/accounts.md § The match report); tried again until the report is in.
+      if (accounts.open) {
+        for (const DemoRow& r : archive.rows) {
+          if (r.report_id == 0 || linked.count(r.sha)) continue;
+          if (ge::account::matches_link_demo(accounts.svc.matches, r.report_id, r.report_start_s,
+                                             r.report_server, r.sha))
+            linked.insert(r.sha);
+        }
+      }
       // Each new demo's content pack made now, a few a pass, so no visitor waits on the first.
       if (!http.viewer_dir.empty() && spec.demo_files) {
         const Site site{&archive, http.unix_s, "", http.viewer_dir};

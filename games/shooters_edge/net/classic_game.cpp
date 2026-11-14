@@ -570,7 +570,9 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
   const float speedjump = g.host != nullptr ? g.host->speedjump : 0.0f;  // pm_speedjump
   // A map of the family that carries brushes runs on the rules that trace them (the sequel's),
   // whatever the program: the programs' rules trace clip hulls (docs/goals/M18v.md, M18v2).
-  const bool brushes = map->spec.brushes != nullptr;
+  // Classic remix (client/remix.hpp) plays such a map on the program's rules instead, its models
+  // traced through their brushes (`program_rules`).
+  const bool brushes = map->spec.brushes != nullptr && !map->program_rules;
   if (brushes) {
     sv::SequelServerOptions so;
     so.seed = c.seed;
@@ -675,7 +677,7 @@ bool open_room(Game& g, std::string& error) {
   if (c.lobby == 0) r.lobby.phase = gs::LobbyPhase::match;
   // The bots find their way on clip hulls; on a map of brushes they wait for their lift
   // (docs/goals/M18v.md, M18v8), and the match plays without them.
-  const int bots = g.map->spec.brushes != nullptr ? 0 : c.bots;
+  const int bots = g.map->spec.brushes != nullptr ? 0 : c.bots;  // a remix's map of brushes too
   if (bots < c.bots)
     g.rules->console.push_back("The bots do not play this kind of map yet, so the match has none.");
   for (int i = 0; i < bots; i++)
@@ -1669,7 +1671,7 @@ void host_bind(Game& g) {
 
 gs::ServerGame make() {
   gs::ServerGame g;
-  g.binary = "shooters_edge_server";
+  g.binary = "sesv";
   g.title = "Shooter's Edge";
   g.protocol = ge::net::protocol_id("shooters_edge", 1);
   g.default_port = server::kServerPort;
