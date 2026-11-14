@@ -24,6 +24,7 @@
 #include "account/service.hpp"
 #include "hub/api.hpp"
 #include "hub/archive.hpp"
+#include "hub/results.hpp"
 #include "net/tcp_socket.hpp"
 
 namespace ge::hub {
@@ -82,6 +83,7 @@ struct HttpServer {
   const Archive* archive = nullptr;      // the demo archive the pages read (null: none)
   std::string viewer_dir;                // the web viewer's files (watch.hpp; "" none)
   account::Service* accounts = nullptr;  // the account service the Account page works (null: none)
+  const Results* results = nullptr;      // the classic servers' results (null: none read)
   int64_t unix_s = 0;                    // the wall clock's time, set by the process each turn
 };
 

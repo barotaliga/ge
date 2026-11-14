@@ -302,6 +302,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
   if (accounts.open) http.accounts = &accounts.svc;  // the Account page works its store
   HubSpec site_spec = spec;
   site_spec.stats = accounts.open;  // the pages link the Leaders page
+  site_spec.results = browsing;     // ... and the classic servers' Results
   if (!o.viewer.empty()) {
     http.viewer_dir = o.viewer;
     std::printf("%s_hub: viewer files from %s\n", spec.id.c_str(), o.viewer.c_str());
@@ -315,7 +316,10 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
   Poller p;
   poller_init(p, pc, 0);
   Browse browse;
-  if (browsing) browse_init(browse, bc, spec.browse, browse_port, 0);
+  if (browsing) {
+    browse_init(browse, bc, spec.browse, browse_port, 0);
+    http.results = &browse.results;
+  }
   std::printf("%s_hub: reading %zu master(s) and %zu of the game's own, serving http://%s/\n",
               spec.id.c_str(), pc.masters.size(), bc.masters.size() + bc.servers.size(),
               gn::to_string(http_at).c_str());
@@ -331,7 +335,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     poller_pump(p, udp, now);
     if (browsing) {
       gn::transport_pump(browse_port, now);
-      browse_update(browse, p, now);
+      browse_update(browse, p, now, unix_s());
     }
     http.unix_s = unix_s();
     if (!o.archive.empty() && now >= next_archive) {

@@ -12,7 +12,10 @@
 // `drop_us`. The clock is the caller's, so a refresh over the simulated network replays to the bit.
 //
 //   browse_init(b, config, game_query, socket)   a socket of its own, not the poller's
-//   every turn: browse_update(b, poller, now)     the list stepped, answers merged
+//   every turn: browse_update(b, poller, now, unix_s)   the list stepped, answers merged
+//
+// A record that shows a match ending keeps the match as a result (results.hpp), the hub's one
+// record of what was played on a server that reports to nobody.
 //
 // ge:summary The hub's browse: servers on a game's own status protocol read into the index
 // ge:keywords hub browse classic adapter server-list status-query master foreign protocol
@@ -25,6 +28,7 @@
 #include <vector>
 
 #include "hub/poller.hpp"
+#include "hub/results.hpp"
 #include "net/server_list.hpp"
 
 namespace ge::hub {
@@ -45,12 +49,14 @@ struct Browse {
   net::ServerList list;
   int64_t next_refresh_us = 0;
   BrowseStats stats;
+  Results results;  // the matches its servers were seen to finish (results.hpp)
   bool on = false;
 };
 
 void browse_init(Browse& b, const BrowseConfig& config, const net::ServerQuery& query,
                  net::Transport& socket, int64_t now_us);
-void browse_update(Browse& b, Poller& p, int64_t now_us);
+// `unix_s` dates the results.
+void browse_update(Browse& b, Poller& p, int64_t now_us, int64_t unix_s = 0);
 
 // A server's answer in the game's own protocol as the engine's status record.
 net::Status status_of(const net::ServerInfo& info);
