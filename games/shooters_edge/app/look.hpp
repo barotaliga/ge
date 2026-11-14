@@ -63,7 +63,7 @@ bool parse_look(std::string_view word, Look* out);
 const char* look_name(Look look);
 
 // The picture as the player set it (the r_ cvars); the defaults are the modern look's tuning.
-struct Picture {
+struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a window, read by name
   std::string look = "modern";  // r_look
   double fx_lights = 0.2;       // r_fx_lights: the dynamic lights' strength, the classic's 1
   double fx_glow = 0.15;        // r_fx_glow: the glowing particles' light, the classic's 1
