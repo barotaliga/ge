@@ -69,6 +69,7 @@
 
 #include "account/client_login.hpp"
 #include "account/client_presence.hpp"
+#include "account/client_queue.hpp"
 #include "console/console.hpp"
 #include "console/talk.hpp"
 #include "input/state.hpp"
@@ -121,6 +122,11 @@ struct RemoteLogin {
   gn::Transport presence_own;
   bool presence_tried = false;   // this join's: the file read for it
   bool presence_opened = false;  // `presence_own` open
+  // A RANKED GAME asked of the matchmaker (`ranked <mode>`), in the menus or in a game, on a
+  // socket of its own (`queue_own`, or `link` in a test): when it is found, the window connects.
+  ge::account::ClientQueue queue;
+  gn::Transport queue_own;
+  bool queue_opened = false;
 };
 
 struct Remote {
@@ -198,6 +204,18 @@ void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const 
 // game CLI's `<state>/account.txt`). `unix_us` is the wall clock (the ask runs on it, apart from
 // the game's tick clock); `link`, when given, is the socket the master is asked over (the simulated
 // network's), else one is opened for each ask.
+// `ranked <mode> [duo]`: the matchmaker asked for a ranked game of `game` (its ladder's: the
+// game folder) with the account file's ticket. False with `said` (why, in a player's words).
+bool remote_ranked(Remote& r, const std::string& game, const std::string& mode,
+                   const std::string& duo, std::string& said);
+// `ranked leave`: out of the queue. False when it was not looking.
+bool remote_ranked_leave(Remote& r);
+// Every frame, connected or not: the queue's asks; its news said; the address to connect to once
+// the game is found ("" otherwise).
+std::string remote_queue_step(Remote& r, std::vector<std::string>& said);
+// The window's frame of it: its news printed on the console, and `connect` run once found.
+void remote_queue_frame(Remote& r, ge::console::Console& con);
+
 void remote_login_from(Remote& r, const std::string& path, int64_t (*unix_us)(),
                        gn::Transport* link = nullptr);
 // The level's brush models the prediction moves through ([0] the world), the window's once it

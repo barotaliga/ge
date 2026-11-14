@@ -253,6 +253,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   const std::string reserved = std::to_string(c.login.reserved);
   const std::string account_port = std::to_string(c.login.port);
   const std::string stats = std::to_string(c.login.stats);
+  const std::string ranked = c.login.ranked;
   bind("sv_login", login, latched, "Whether players must log in to an account to play.",
        CvarKind::integer, 0, 2,
        "0: nobody is asked, a login still counts (the default); 1: players must log in, "
@@ -290,6 +291,12 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
        "0: no reports; 1: every match the game reports, to sv_accountmaster or to the server's "
        "own accounts (the default)",
        &c.login.stats);
+  bind("sv_ranked", ranked, cn::kServer,
+       "The ranked mode whose games the account master's matchmaker may send to this server.",
+       CvarKind::text, -kAny, kAny,
+       "\"\": none (the default); TEXT: that mode, as the server's match reports name it (1on1, "
+       "2on2): its free seats are offered every 20 seconds, to a master that trusts its key",
+       &c.login.ranked);
   for (int i = 0; i < game.rule_count; i++) {
     const GameRule& r = game.rules[i];
     std::string& field = c.rules[r.name];  // a map's node: its address outlives the inserts

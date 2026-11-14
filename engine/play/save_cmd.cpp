@@ -1,7 +1,7 @@
 // The `play save` commands (saves.hpp): a run saved off an input log, a save loaded and played on,
 // the check of a log's saves against the run never saved, and two saves compared.
 //
-//   play save write <log> --step=N --out=<file> [--title=..] [--place=..]
+//   play save write <log> --step=N --out=<file> [--title=..] [--place=..] [--picture[=view]]
 //   play save load <file> [--steps=N]        loaded, then the game's pilot plays N steps on
 //   play save check <log> [--every=S]        saved every S seconds, each loaded and played on
 //   play save diff <a> <b>                   chunk by chunk, then field by field through `state`
@@ -112,7 +112,10 @@ int write_cmd(const GameSpec& spec, const std::vector<std::string>& words,
   meta.place = flag(flags, "place");
   std::vector<uint8_t> bytes;
   const auto t0 = std::chrono::steady_clock::now();
-  if (!save_run(spec, setup, s.run(), at, meta, bytes, error)) {
+  const bool pictured = flags.count("picture") != 0;
+  if (!(pictured ? save_run_pictured(spec, setup, s.run(), at, meta, bytes, error,
+                                     flag(flags, "picture"))
+                 : save_run(spec, setup, s.run(), at, meta, bytes, error))) {
     return problem(out, 1, error, spec.name,
                    "give the game's Run a save and a load (skill: save, docs/saves.md)");
   }

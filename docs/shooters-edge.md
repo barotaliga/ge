@@ -1059,7 +1059,11 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   `arsenal_ammo<n>`, `arsenal_health<n>` and `arsenal_pickup`: a model drawn about its middle is
   stood in the middle of the item's box and raised as far as that game's items stand over the
   floor), and the HUD is the other game's own bar, its program run over the played game's status
-  (`client/remix_bar.hpp`).
+  (`client/remix_bar.hpp`). Rules that name their things in code (the sequel's) wear the other
+  game's by name instead: the server setting `sv_wear` (`cr_items 1` in the sequel sets it to
+  `classic`) renames every model and sound as the players are told it, stands each item where
+  that game stands it, and the window colours the classic models through the classic palette
+  and spreads the sequel hand's firing frames over the classic view models' own.
 
 Lab `se-remix` draws a real map of each game from above with its own items and with the other
 game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`); `se-client

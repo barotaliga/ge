@@ -132,7 +132,7 @@ constexpr Command kEngine[] = {
     {"ranked find", "<mode>",
      "a ranked game found by your ladder rating on a server that offered seats (--duo=<name> for "
      "2on2, --for=<s> to keep looking)",
-     "ranked find duel --for=120", "engine", cmd_ranked_find},
+     "ranked find 1on1 --for=120", "engine", cmd_ranked_find},
     {"ranked status", "", "whether you are waiting for a ranked game, or where it is",
      "ranked status", "engine", cmd_ranked_status},
     {"ranked leave", "", "stop looking for a ranked game", "ranked leave", "engine",

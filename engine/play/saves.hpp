@@ -30,6 +30,7 @@
 #include "play/game.hpp"
 #include "play/inputs.hpp"
 #include "save/file.hpp"
+#include "save/picture.hpp"
 
 namespace ge::play {
 
@@ -51,6 +52,13 @@ bool save_character(const GameSpec& spec, const Setup& setup, const Run& run, sa
 // read into `run`, opened on any setup and never stepped. False with `error`.
 bool import_character(const GameSpec& spec, Run& run, std::span<const uint8_t> bytes,
                       std::string& error, std::string_view name = "character");
+
+// `save_run` with a picture of the run as it stands (save/picture.hpp's `PICT` chunk, first after
+// the meta): the game's view `view` (its first when empty) shot on the CPU. A game that draws no
+// views saves without one.
+bool save_run_pictured(const GameSpec& spec, const Setup& setup, Run& run, int64_t step,
+                       save::Meta meta, std::vector<uint8_t>& out, std::string& error,
+                       std::string_view view = {}, int side = save::kPictureSide);
 
 // A run opened on the save's setup and loaded from it, with `step` the step it was saved at; null
 // with `error` naming the file's problem and the next action. `name` names the file in errors.

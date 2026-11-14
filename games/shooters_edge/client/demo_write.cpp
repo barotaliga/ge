@@ -508,6 +508,15 @@ std::vector<uint8_t> write_multiview_match(const MatchScript& s) {
       m.u8(static_cast<int>(k));
       m.i16(frags);
     }
+    if (i == s.intermission) {
+      m.u8(30);  // intermission: the spot, the look in 1/256 of a turn
+      m.coord(s.spot.x);
+      m.coord(s.spot.y);
+      m.coord(s.spot.z);
+      m.angle(s.look.x);
+      m.angle(s.look.y);
+      m.angle(s.look.z);
+    }
     for (const MatchRocket& rk : s.rockets)  // a rocket's blast where its flight ends
       if (i == rk.to) {
         m.u8(23);  // temp entity: an explosion

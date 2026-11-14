@@ -243,12 +243,15 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
       device, source.shader.empty() ? wgsl::terrain : source.shader, source.shader_label);
   t.shadows = no_sun_shadows(device);
   t.has_material = source.material != nullptr;
+  // Group 0 as the ground reads it (kFrameGround): the plain ground fits a browser's 16 sampled
+  // textures a stage.
+  const wgpu::BindGroupLayout ground = frame_layout(device, kFrameGround);
   const wgpu::PipelineLayout draw_layout =
       t.has_material
           ? make_pipeline_layout(device, "terrain.draw",
-                                 {frame, t.layout, sun_shadow_layout(device), source.material})
+                                 {ground, t.layout, sun_shadow_layout(device), source.material})
           : make_pipeline_layout(device, "terrain.draw",
-                                 {frame, t.layout, sun_shadow_layout(device)});
+                                 {ground, t.layout, sun_shadow_layout(device)});
   wgpu::ConstantEntry tile{};
   tile.key = "kTile";
   tile.value = kTileQuads;
@@ -306,8 +309,8 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
   t.plain = false;
   if (t.has_plain) {
     const wgpu::ShaderModule plain = gpu::create_shader(device, wgsl::terrain, "terrain.plain");
-    const wgpu::PipelineLayout plain_layout =
-        make_pipeline_layout(device, "terrain.plain", {frame, t.layout, sun_shadow_layout(device)});
+    const wgpu::PipelineLayout plain_layout = make_pipeline_layout(
+        device, "terrain.plain", {ground, t.layout, sun_shadow_layout(device)});
     t.p_depth_plain = pipeline_of(plain, plain_layout, "terrain.depth.plain", nullptr, {}, true,
                                   CF::Greater, false);
     t.p_draw_plain = pipeline_of(plain, plain_layout, "terrain.draw.plain", "fs_main",
@@ -394,10 +397,9 @@ namespace {
 
 // `material`: the pipeline is the game's material's (its group 3 bound), not the plain one's.
 void draw_tiles(const Terrain& t, wgpu::RenderPassEncoder& pass, uint32_t pipeline_id,
-                const gpu::PipelineSet& pipelines, const wgpu::BindGroup& frame,
-                bool material = true) {
+                const gpu::PipelineSet& pipelines, const FrameGroup& frame, bool material = true) {
   pass.SetPipeline(pipelines.render(pipeline_id));
-  pass.SetBindGroup(0, frame);
+  pass.SetBindGroup(0, frame.ground);
   pass.SetBindGroup(1, t.group);
   pass.SetBindGroup(2, t.shadows);
   if (t.has_material && material) pass.SetBindGroup(3, t.material);
@@ -422,7 +424,7 @@ wgpu::RenderPassDepthStencilAttachment depth_attachment(const FrameTargets& targ
 
 void encode_terrain_depth(const Terrain& t, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                           wgpu::CommandEncoder& encoder, const FrameTargets& targets,
-                          const wgpu::BindGroup& frame) {
+                          const FrameGroup& frame) {
   const wgpu::RenderPassDepthStencilAttachment depth = depth_attachment(targets, true);
   wgpu::RenderPassDescriptor desc{};
   desc.depthStencilAttachment = &depth;
@@ -434,7 +436,7 @@ void encode_terrain_depth(const Terrain& t, const gpu::PipelineSet& pipelines, F
 
 void encode_terrain(const Terrain& t, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                     wgpu::CommandEncoder& encoder, const FrameTargets& targets,
-                    const wgpu::BindGroup& frame) {
+                    const FrameGroup& frame) {
   wgpu::RenderPassColorAttachment colours[2]{};
   colours[0].view = targets.hdr_view;
   colours[1].view = targets.motion_view;
@@ -457,7 +459,7 @@ void encode_terrain(const Terrain& t, const gpu::PipelineSet& pipelines, FrameRe
 
 void encode_terrain_overdraw(const Terrain& t, const gpu::PipelineSet& pipelines,
                              wgpu::CommandEncoder& encoder, const FrameTargets& targets,
-                             const wgpu::BindGroup& frame, const wgpu::TextureView& count,
+                             const FrameGroup& frame, const wgpu::TextureView& count,
                              bool after_prepass) {
   wgpu::RenderPassColorAttachment colour{};
   colour.view = count;
@@ -477,8 +479,7 @@ void encode_terrain_overdraw(const Terrain& t, const gpu::PipelineSet& pipelines
 
 void encode_terrain_wire(const Terrain& t, const gpu::PipelineSet& pipelines,
                          wgpu::CommandEncoder& encoder, const FrameTargets& targets,
-                         const wgpu::BindGroup& frame, const wgpu::TextureView& colour,
-                         bool clear) {
+                         const FrameGroup& frame, const wgpu::TextureView& colour, bool clear) {
   if (!t.wire) return;
   // The tiles the cull kept this frame: its instance count into the lines' draw.
   encoder.CopyBufferToBuffer(t.indirect, 4, t.wire_args, 4, 4);
@@ -495,7 +496,7 @@ void encode_terrain_wire(const Terrain& t, const gpu::PipelineSet& pipelines,
   desc.depthStencilAttachment = &depth;
   wgpu::RenderPassEncoder pass = gpu::begin_render_pass(encoder, desc);
   pass.SetPipeline(pipelines.render(t.p_wire));
-  pass.SetBindGroup(0, frame);
+  pass.SetBindGroup(0, frame.ground);
   pass.SetBindGroup(1, t.group);
   pass.SetBindGroup(2, t.shadows);
   if (t.has_material) pass.SetBindGroup(3, t.material);

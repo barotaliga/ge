@@ -23,7 +23,8 @@
 //        [--delay=7] [--name=tv]
 //   setv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]
 //        a client recording played round and round to any classic client, the oldest too,
-//        over plain protocol 28; a multiview recording gives every player's view on request
+//        over plain protocol 28; a multiview recording gives every player's view on request,
+//        the hottest player's followed by default ([--autotrack=0] the lowest slot's)
 //        (classic_tv_udp.hpp, classic_tv_recording.hpp)
 //   setv --sequel --port=27911 --server=<sequel host:port> [--server-password=<pw>]
 //        [--password=<pw>] [--delay=7] [--name=tv]   (sequel_tv_relay.hpp)
@@ -121,7 +122,8 @@ void usage() {
         "  setv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]: a\n"
         "      client recording played round and round to any classic client, the oldest\n"
         "      too, over plain protocol 28; a multiview recording (.mvd) gives every\n"
-        "      player's view, chosen with the track keys or fire\n"
+        "      player's view, chosen with the track keys or fire, the hottest player's\n"
+        "      followed until then (--autotrack=0: the lowest slot's)\n"
         "  setv --sequel --port=27911 --server=<host:port> [--server-password=<pw>]\n"
         "      [--password=<pw>] [--delay=7] [--name=tv]: a watcher on a server of the\n"
         "      sequel, its match served to the sequel's own clients\n"
@@ -154,6 +156,7 @@ struct Options {
   std::string kind, name, bind, server_password, password, demo;
   int port = 0, copies = 3, webtransport = 0, websocket = 0;
   double link_loss = 0, delay = 7, seconds = 0, status = 10;
+  bool autotrack = true;  // a multiview recording's followed view rides the hottest player
   bool open = false;
   std::vector<gn::Address> allow, masters;
   gn::Address server{}, far{};
@@ -287,6 +290,9 @@ std::string status_line(const Hops& h) {
     s += "tv: multiview recording, views converting " + std::to_string(views) + ", started " +
          std::to_string(h.cl_mv.started) + ", let go " + std::to_string(h.cl_mv.let_go) +
          ", rounds " + std::to_string(h.cl_mv.rounds) + (h.cl_mv.ended ? " (ended)" : "") +
+         (h.cl_mv.autotrack ? ", following slot " + std::to_string(h.cl_mv.tracked) + " (cuts " +
+                                  std::to_string(h.cl_mv.cuts) + ")"
+                            : "") +
          ", viewers " + std::to_string(sn::udp_tv_viewers(h.cl_demo_face)) + ". ";
   } else if (h.has_cl_demo) {
     s += "tv: recording packets " + std::to_string(h.cl_demo.packets) + ", rounds " +
@@ -366,6 +372,8 @@ int run(int argc, char** argv) {
       o.delay = std::atof(v.c_str());
     } else if (flag(a, "demo", v)) {
       o.demo = v;
+    } else if (flag(a, "autotrack", v)) {
+      o.autotrack = v != "0";
     } else if (flag(a, "name", v)) {
       o.name = v;
     } else if (flag(a, "seconds", v)) {
@@ -510,7 +518,9 @@ int run(int argc, char** argv) {
                   "name a client recording that exists");
     // A multiview recording: every player's view on request, converted while watched.
     std::string why;
-    h.cl_multiview = sn::udp_tv_multiview_open(h.cl_mv, bytes, 8, true, why);
+    const shooters_edge::client::AutotrackSettings track = sn::tv_autotrack_settings();
+    h.cl_multiview =
+        sn::udp_tv_multiview_open(h.cl_mv, bytes, 8, true, why, o.autotrack ? &track : nullptr);
     if (!h.cl_multiview && !sn::udp_tv_recording_open(h.cl_demo, std::move(bytes), true, error))
       return fail(o.demo + ": " + error,
                   "name a multiplayer client's recording or a multiview recording");

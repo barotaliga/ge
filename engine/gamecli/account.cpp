@@ -28,6 +28,7 @@
 #include "net/token.hpp"
 #include "net/transport.hpp"
 #include "net/udp_socket.hpp"
+#include "server/server.hpp"
 
 namespace ge::gamecli {
 
@@ -471,10 +472,16 @@ int ranked_answer(Ctx& ctx, const ga::Reply& r, const char* done) {
                 r.words, done);
 }
 
+// The game a ladder names: the server game's folder, as its match reports name it.
+std::string ladder_game(const Ctx& ctx) {
+  const server::ServerGame* g = ctx.spec.server_game;
+  return g != nullptr && g->base_dir != nullptr ? g->base_dir : ctx.spec.game;
+}
+
 // One queue ask (`verb`) with the saved ticket; false having refused.
 bool ranked_ask(Ctx& ctx, Saved& saved, const std::string& t, const char* verb,
                 const std::string& mode, ga::Reply& r) {
-  return ask(ctx, ga::Op::queue, {t, verb, ctx.spec.game, mode, ctx.flag("duo")}, saved, r);
+  return ask(ctx, ga::Op::queue, {t, verb, ladder_game(ctx), mode, ctx.flag("duo")}, saved, r);
 }
 
 }  // namespace
@@ -482,8 +489,8 @@ bool ranked_ask(Ctx& ctx, Saved& saved, const std::string& t, const char* verb,
 int cmd_ranked_find(Ctx& ctx) {
   if (!need_places(ctx)) return 1;
   if (ctx.words.size() != 1)
-    return refuse(ctx, 2, "ranked find takes a mode (duel, or 2on2 with --duo=<your duo's name>)",
-                  std::string(ctx.spec.cli) + " ranked find duel --for=120");
+    return refuse(ctx, 2, "ranked find takes a mode (1on1, or 2on2 with --duo=<your duo's name>)",
+                  std::string(ctx.spec.cli) + " ranked find 1on1 --for=120");
   Saved saved = load(ctx);
   std::string t;
   if (!ticket_field(ctx, saved, t)) return 2;
