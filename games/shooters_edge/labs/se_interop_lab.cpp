@@ -5,7 +5,7 @@
 // and every message kind it read. `--basedir` is the game's folder the client reads the map from,
 // for the checksum its first `prespawn` carries. The server is any program that speaks the protocol
 // (an existing server built beside the checkout, never in the tree, or our own
-// `shooters_edge_server`). Without
+// `sesv`). Without
 // `--server` (the smoke run) it reports "not run" with the commands a session runs, so the lab
 // stays deterministic in CI and the gap stays visible.
 //
@@ -49,7 +49,7 @@ void not_run(gl::Lab& lab) {
   steps.rows.push_back({"2. our scripted client joins it and plays",
                         "make lab LAB=se-interop ARGS=--server=127.0.0.1:27500"});
   steps.rows.push_back({"3. an existing client joins our server",
-                        "build/<preset>/shooters_edge_server; <client> +connect 127.0.0.1:27500"});
+                        "build/<preset>/sesv; <client> +connect 127.0.0.1:27500"});
   lab.table(steps);
   lab.metric("interop.run", 0, "bool");
   lab.note("se-interop: not run. Give --server=<host:port> of a live classic server.");

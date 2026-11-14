@@ -1,11 +1,11 @@
 // LAB `se-demo-convert`: DOES A DEMO CONVERTED TO ANOTHER FORMAT SHOW THE SAME GAME, without a GPU.
 // Each recording is converted (client/demo_convert.hpp: a single-player demo to a multiview
-// recording, a sequel recording to protocol 34) and both are read to their ends by the window's
-// own reader (client/demo.hpp), frame by frame: the eye, the view's angles, the status (health,
-// armour, ammunition, the weapon) and, for a pair of one format, the entities in view, compared
-// frame for frame (a frame a reading of the demo's clock). By default
-// it converts recordings written in code (demo_write.hpp's scripted walk, sequel_demo.hpp's
-// fixture); `--file=<a,b,...>` adds real ones (any wrapper).
+// recording and to a client recording, a sequel recording to protocol 34) and both are read to
+// their ends by the window's own reader (client/demo.hpp), frame by frame: the eye, the view's
+// angles, the status (health, armour, ammunition, the weapon) and, for a pair of one format, the
+// entities in view, compared frame for frame (a frame a reading of the demo's clock). By default it
+// converts recordings written in code (demo_write.hpp's scripted walk, sequel_demo.hpp's fixture);
+// `--file=<a,b,...>` adds real ones (any wrapper).
 //
 // What it shows: a table a recording (the pair, the frames each side, the largest eye and angle
 // difference, the frames whose status or entities differ, the bytes each side, what was dropped
@@ -117,56 +117,65 @@ void run(gl::Lab& lab) {
                "next: check the file; skill: shooter");
       return;
     }
-    const cl::DemoFormat to = fa == cl::DemoFormat::single ? cl::DemoFormat::multiview : fa;
-    std::vector<uint8_t> out;
-    cl::ConvertNotes notes;
-    if (!cl::convert_demo(s.bytes, to, {}, out, notes, error)) {
-      lab.fail("se-demo-convert: " + s.name + " does not convert: " + error,
-               "next: read client/demo_convert.hpp's pairs; skill: shooter");
-      return;
-    }
-    const size_t out_bytes = out.size();
-    if (!read_frames(std::move(out), b, fb, error)) {
-      lab.fail("se-demo-convert: " + s.name + " converted does not read back: " + error,
-               "next: the converter wrote a message the reader refuses; skill: shooter");
-      return;
-    }
-    // A single-player demo reads its signon as a frame of its own; the target's rides its first.
-    const size_t lead = a.size() > b.size() ? a.size() - b.size() : 0;
-    double eye = 0, ang = 0;
-    int64_t status = 0, ents = 0;
-    for (size_t k = 0; k < b.size() && lead + k < a.size(); k++) {
-      const Frame& x = a[lead + k];
-      const Frame& y = b[k];
-      eye = std::max({eye, std::fabs(static_cast<double>(x.eye.x) - y.eye.x),
-                      std::fabs(static_cast<double>(x.eye.y) - y.eye.y),
-                      std::fabs(static_cast<double>(x.eye.z) - y.eye.z)});
-      ang = std::max({ang, angle_gap(x.angles.x, y.angles.x), angle_gap(x.angles.y, y.angles.y)});
-      status += std::equal(std::begin(x.status), std::end(x.status), std::begin(y.status)) ? 0 : 1;
-      // A single-player demo's reader keeps an entity once seen, so only same-format pairs count.
-      if (fa == to) ents += x.entities == y.entities ? 0 : 1;
-      if (i == 0) {
-        src_z.x.push_back(static_cast<double>(k));
-        src_z.y.push_back(x.eye.z);
-        dst_z.x.push_back(static_cast<double>(k));
-        dst_z.y.push_back(y.eye.z);
+    for (const cl::DemoFormat to :
+         fa == cl::DemoFormat::single
+             ? std::vector<cl::DemoFormat>{cl::DemoFormat::multiview, cl::DemoFormat::client}
+             : std::vector<cl::DemoFormat>{fa}) {
+      b.clear();
+      const std::string key = std::to_string(i) + (to == cl::DemoFormat::client ? "c" : "");
+      std::vector<uint8_t> out;
+      cl::ConvertNotes notes;
+      if (!cl::convert_demo(s.bytes, to, {}, out, notes, error)) {
+        lab.fail("se-demo-convert: " + s.name + " does not convert: " + error,
+                 "next: read client/demo_convert.hpp's pairs; skill: shooter");
+        return;
       }
+      const size_t out_bytes = out.size();
+      if (!read_frames(std::move(out), b, fb, error)) {
+        lab.fail("se-demo-convert: " + s.name + " converted does not read back: " + error,
+                 "next: the converter wrote a message the reader refuses; skill: shooter");
+        return;
+      }
+      // A single-player demo reads its signon as a frame of its own; the target's rides its first.
+      // A client recording reads its signon packets as frames of their own: the target leads then.
+      const size_t lead = a.size() > b.size() ? a.size() - b.size() : 0;
+      const size_t lead_b = b.size() > a.size() ? b.size() - a.size() : 0;
+      double eye = 0, ang = 0;
+      int64_t status = 0, ents = 0;
+      for (size_t k = 0; lead_b + k < b.size() && lead + k < a.size(); k++) {
+        const Frame& x = a[lead + k];
+        const Frame& y = b[lead_b + k];
+        eye = std::max({eye, std::fabs(static_cast<double>(x.eye.x) - y.eye.x),
+                        std::fabs(static_cast<double>(x.eye.y) - y.eye.y),
+                        std::fabs(static_cast<double>(x.eye.z) - y.eye.z)});
+        ang = std::max({ang, angle_gap(x.angles.x, y.angles.x), angle_gap(x.angles.y, y.angles.y)});
+        status +=
+            std::equal(std::begin(x.status), std::end(x.status), std::begin(y.status)) ? 0 : 1;
+        // A single-player demo's reader keeps an entity once seen, so only same-format pairs count.
+        if (fa == to) ents += x.entities == y.entities ? 0 : 1;
+        if (i == 0 && to == cl::DemoFormat::client) {
+          src_z.x.push_back(static_cast<double>(k));
+          src_z.y.push_back(x.eye.z);
+          dst_z.x.push_back(static_cast<double>(k));
+          dst_z.y.push_back(y.eye.z);
+        }
+      }
+      int64_t dropped = 0, rewritten = 0;
+      for (const auto& [w, n] : notes.dropped) dropped += n;
+      for (const auto& [w, n] : notes.rewritten) rewritten += n;
+      t.rows.push_back({s.name, cl::format_words(fa) + " to " + cl::format_words(to),
+                        std::to_string(a.size()) + " / " + std::to_string(b.size()),
+                        to_fixed(eye, 3), to_fixed(ang, 4), std::to_string(status),
+                        std::to_string(ents),
+                        std::to_string(s.bytes.size()) + " / " + std::to_string(out_bytes),
+                        std::to_string(dropped), std::to_string(rewritten)});
+      frames_total += static_cast<int64_t>(b.size());
+      differ_total += status + ents + (eye > 0.25 ? 1 : 0);
+      lab.metric("convert." + key + ".frames", static_cast<double>(b.size()), "count");
+      lab.metric("convert." + key + ".eye-gap", eye, "u");
+      lab.metric("convert." + key + ".status-differs", static_cast<double>(status), "count");
+      lab.metric("convert." + key + ".bytes", static_cast<double>(out_bytes), "bytes");
     }
-    int64_t dropped = 0, rewritten = 0;
-    for (const auto& [w, n] : notes.dropped) dropped += n;
-    for (const auto& [w, n] : notes.rewritten) rewritten += n;
-    t.rows.push_back({s.name, cl::format_words(fa) + " to " + cl::format_words(to),
-                      std::to_string(a.size()) + " / " + std::to_string(b.size()), to_fixed(eye, 3),
-                      to_fixed(ang, 4), std::to_string(status), std::to_string(ents),
-                      std::to_string(s.bytes.size()) + " / " + std::to_string(out_bytes),
-                      std::to_string(dropped), std::to_string(rewritten)});
-    frames_total += static_cast<int64_t>(b.size());
-    differ_total += status + ents + (eye > 0.25 ? 1 : 0);
-    lab.metric("convert." + std::to_string(i) + ".frames", static_cast<double>(b.size()), "count");
-    lab.metric("convert." + std::to_string(i) + ".eye-gap", eye, "u");
-    lab.metric("convert." + std::to_string(i) + ".status-differs", static_cast<double>(status),
-               "count");
-    lab.metric("convert." + std::to_string(i) + ".bytes", static_cast<double>(out_bytes), "bytes");
   }
   lab.table(t);
   lab.metric("convert.frames", static_cast<double>(frames_total), "count");

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "check.hpp"
+#include "net/report.hpp"
 #include "replay/stream.hpp"
 #include "server/sample.hpp"
 #include "server/server.hpp"
@@ -91,6 +92,62 @@ TEST(viewers_of_the_sample_game_reach_the_servers_digest_through_a_tv_node) {
   // The file itself: the trailer holds the frames and the digest.
   const auto t = rp::read_trailer(src.bytes);
   CHECK(t.has_value() && t->index.size() == 25);
+  sv::server_close(s);
+}
+
+TEST(a_stream_that_saw_a_match_end_closes_with_its_report) {
+  // The sample game with a match that ends at its 300th frame, reported once.
+  static int frames = 0;
+  sv::ServerGame g = sv::sample_game();
+  g.match_report = [](void*, ge::net::MatchReport& out) {
+    if (++frames != 300) return false;
+    out.mode = "ffa";
+    out.duration_ms = 2500;
+    out.teams = {{"red", 7, 0}};
+    ge::net::ReportPlayer p;
+    p.name = "walker";
+    p.team = "red";
+    p.score = 7;
+    out.players = {p};
+    return true;
+  };
+  sv::ServerConfig c;
+  c.map = "ring";
+  c.bots = 2;
+  c.offline = true;
+  c.hostname = "Ring Night";
+  sv::Server s;
+  std::string error;
+  CHECK_MSG(sv::server_open(s, g, c, nullptr, nullptr, error), error);
+  tv::ServerSource src;
+  CHECK_MSG(tv::server_source_begin(src, s, error), error);
+  for (int f = 0; f < 400; f++) {
+    sv::server_frame(s);
+    tv::server_source_frame(src, s);
+  }
+  tv::server_source_finish(src, s);
+  CHECK(src.summarised && s.reports.size() == 1);
+  const auto t = rp::read_trailer(src.bytes);
+  CHECK(t.has_value());
+  if (!t) return;
+  std::string report_hex;
+  bool scored = false, team_scored = false;
+  for (const auto& [k, v] : t->meta) {
+    if (k == "report") report_hex = v;
+    scored |= k == "score" && v == "walker\t7";
+    team_scored |= k == "team_score" && v == "red\t7";
+  }
+  CHECK(scored && team_scored);
+  ge::net::MatchReport back;
+  CHECK_MSG(ge::net::report_from_text(report_hex, back, error), error);
+  CHECK(back.id == s.reports.back().id && back.server == "Ring Night" && back.mode == "ffa");
+  // A stream begun after that match closes without it.
+  tv::ServerSource later;
+  CHECK_MSG(tv::server_source_begin(later, s, error), error);
+  sv::server_frame(s);
+  tv::server_source_frame(later, s);
+  tv::server_source_finish(later, s);
+  CHECK(!later.summarised);
   sv::server_close(s);
 }
 

@@ -11,7 +11,7 @@
 //   for the browser, the connectionless remote console.
 // - THE WINDOW joins with `+connect <address>` and hosts as HOST GAME's START does: `+sv_port`,
 //   the server's lines (`+sv deathmatch 1`, `+sv maxclients <n>`) and `+map`; the dedicated server
-//   is `shooters_edge_server` (net/classic_game.hpp's ServerGame).
+//   is `sesv` (net/classic_game.hpp's ServerGame).
 // - ITS OWN ROWS: `demos` (the recordings in the game folder) and `demos play <name>`.
 //
 // ge:summary Shooter's Edge's player CLI: its Spec, places, protocol, launch words and demos

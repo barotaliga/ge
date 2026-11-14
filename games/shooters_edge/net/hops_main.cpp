@@ -1,36 +1,44 @@
-// THE HOPS, HEADLESS: `shooters_edge_hops <kind> ...` runs one of our hops between a player's
-// client and a classic server as a process of its own, so any classic client (ours or an existing
-// one) goes through it: a forward (engine/forward with the classic face, classic_forward.hpp: the
-// route in the connect's `prx`), the near or far proxy (engine/proxy) or both with a lossy link
-// between them, or a TV node (classic_tv.hpp) relaying a server's stream port to classic viewers.
-// It runs on the wall clock, a frame every millisecond, until stopped or `--seconds`, and writes a
-// status line every `--status` seconds.
+// THE HOPS, HEADLESS: one source built as three executables, one per hop, each run between a
+// player's client and a server as a process of its own, so any client (ours or an existing one)
+// goes through it. `SE_HOP` (set by the CMake target) picks the binary:
 //
-//   shooters_edge_hops forward --port=30000 --allow=<host[:port],...> | --open
-//   shooters_edge_hops forward --port=<p> --server=<host:port>   (a fixed route: fixed.hpp)
-//   shooters_edge_hops proxy --port=<near> --server=<host:port> [--link-loss=0.1] [--copies=3]
-//   shooters_edge_hops proxy-near --port=<p> --far=<host:port> --server=<host:port> [--copies=3]
-//   shooters_edge_hops proxy-far --port=<p> --allow=<host[:port],...> | --open [--copies=3]
-//   shooters_edge_hops tv --port=27900 --server=<host:stream port> [--server-password=<pw>]
-//                         [--password=<pw>] [--delay=7] [--name=tv]
-//   shooters_edge_hops tv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]
-//                         a client recording played round and round to any classic client, the
-//                         oldest too, over plain protocol 28   (classic_tv_udp.hpp,
-//                         classic_tv_recording.hpp)
-//   shooters_edge_hops sequel-tv --port=27911 --server=<sequel host:port> [--server-password=<pw>]
-//                         [--password=<pw>] [--delay=7] [--name=tv]   (sequel_tv_relay.hpp)
-//   shooters_edge_hops sequel-tv --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
-//                         a recording played round and round instead   (sequel_tv_demo.hpp)
+//   sefwd   a forward (engine/forward with the classic face, classic_forward.hpp: the route in the
+//           connect's `prx`), or a fixed route to one server (fixed.hpp)
+//   seproxy the near or far proxy (engine/proxy), or both with a lossy link between them
+//   setv    a TV node (classic_tv.hpp) relaying a server's stream port to classic viewers, or with
+//           --sequel the sequel's TV (sequel_tv_relay.hpp, sequel_tv_demo.hpp)
+//
+// Each runs on the wall clock, a frame every millisecond, until stopped or `--seconds`, and writes
+// a status line every `--status` seconds.
+//
+//   sefwd --port=30000 --allow=<host[:port],...> | --open
+//   sefwd --port=<p> --server=<host:port>   (a fixed route: fixed.hpp)
+//   sefwd ... --webtransport=<port>   pages in a browser too, on that UDP port
+//   sefwd ... --master=<host[:port],...>   listed there, so a hub offers its pages
+//   seproxy --port=<near> --server=<host:port> [--link-loss=0.1] [--copies=3]
+//   seproxy near --port=<p> --far=<host:port> --server=<host:port> [--copies=3]
+//   seproxy far --port=<p> --allow=<host[:port],...> | --open [--copies=3]
+//   setv --port=27900 --server=<host:stream port> [--server-password=<pw>] [--password=<pw>]
+//        [--delay=7] [--name=tv]
+//   setv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]
+//        a client recording played round and round to any classic client, the oldest too,
+//        over plain protocol 28   (classic_tv_udp.hpp, classic_tv_recording.hpp)
+//   setv --sequel --port=27911 --server=<sequel host:port> [--server-password=<pw>]
+//        [--password=<pw>] [--delay=7] [--name=tv]   (sequel_tv_relay.hpp)
+//   setv --sequel --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
+//        a recording played round and round instead   (sequel_tv_demo.hpp)
 //
 // voice: agent (a command-line tool's main: its errors are for whoever runs it;
 // docs/architecture.md § Player text).
 //
-// ge:summary The hops headless: our forward, proxies or TV node as a process for any classic client
-// ge:keywords shooters_edge_hops hops-cli forward proxy tv-node relay headless live-server
+// ge:summary The hops headless (sefwd, seproxy, setv): our forward, proxies or TV node as a process
+// ge:keywords sefwd seproxy setv shooters_edge_hops hops-cli forward proxy tv-node relay headless
+// ge:keywords live-server
 // ge:keywords prx link-loss stream-port
 // ge:skill net
 #include <chrono>
 #include <csignal>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -74,27 +82,47 @@ bool flag(const std::string& a, const char* name, std::string& out) {
   return true;
 }
 
+#ifndef SE_HOP
+#error "SE_HOP names the binary: 1 sefwd, 2 seproxy, 3 setv (games/shooters_edge/CMakeLists.txt)"
+#endif
+enum class Hop : uint8_t { forward = 1, proxy = 2, tv = 3 };
+constexpr Hop kHop = static_cast<Hop>(SE_HOP);
+constexpr const char* kBinary = kHop == Hop::forward ? "sefwd"
+                                : kHop == Hop::proxy ? "seproxy"
+                                                     : "setv";
+
 void usage() {
+  if (kHop == Hop::forward)
+    std::printf(
+        "sefwd [flags]: our forward, for any classic client\n"
+        "  --port=30000 --allow=<host[:port],...> | --open   (the route in prx)\n"
+        "  --port=<p> --server=<host:port>: every client to that server, for a client that\n"
+        "      cannot name a route (the sequel's, any game's)\n"
+        "  ... --webtransport=<port>: pages in a browser too, on that UDP port\n"
+        "      (https://host:port/play?to=<server>; the certificate's hash is printed)\n"
+        "  ... --master=<host[:port],...>: listed there, so a hub offers its pages\n");
+  else if (kHop == Hop::proxy)
+    std::printf(
+        "seproxy [near|far] [flags]: our proxies, for any classic client\n"
+        "  seproxy --port=<near> --server=<host:port> [--link-loss=0..1]: near on --port,\n"
+        "      far on the next, a link between them losing --link-loss each way\n"
+        "  seproxy near --port=<p> --far=<host:port> --server=<host:port>\n"
+        "  seproxy far --port=<p> --allow=<host[:port],...> | --open\n");
+  else
+    std::printf(
+        "setv [--sequel] [flags]: our TV node\n"
+        "  setv --port=27900 --server=<host:stream port> [--server-password=<pw>]\n"
+        "      [--password=<pw>] [--delay=7] [--name=tv]\n"
+        "  setv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]: a\n"
+        "      client recording played round and round to any classic client, the oldest\n"
+        "      too, over plain protocol 28\n"
+        "  setv --sequel --port=27911 --server=<host:port> [--server-password=<pw>]\n"
+        "      [--password=<pw>] [--delay=7] [--name=tv]: a watcher on a server of the\n"
+        "      sequel, its match served to the sequel's own clients\n"
+        "      or --demo=<file.dm2> in place of --server: a recording, played round and\n"
+        "      round at the game's pace\n");
   std::printf(
-      "shooters_edge_hops <kind> [flags]: one of our hops for any classic client\n"
-      "  forward     --port=30000 --allow=<host[:port],...> | --open   (the route in prx)\n"
-      "  forward     --port=<p> --server=<host:port>: every client to that server, for a\n"
-      "              client that cannot name a route (the sequel's, any game's)\n"
-      "  forward     ... --webtransport=<port>: pages in a browser too, on that UDP port\n"
-      "              (https://host:port/play?to=<server>; the certificate's hash is printed)\n"
-      "  forward     ... --master=<host[:port],...>: listed there, so a hub offers its pages\n"
-      "  proxy       --port=<near> --server=<host:port> [--link-loss=0..1]: near on --port,\n"
-      "              far on the next, a link between them losing --link-loss each way\n"
-      "  proxy-near  --port=<p> --far=<host:port> --server=<host:port>\n"
-      "  proxy-far   --port=<p> --allow=<host[:port],...> | --open\n"
-      "  tv          --port=27900 --server=<host:stream port> [--server-password=<pw>]\n"
-      "              [--password=<pw>] [--delay=7] [--name=tv]\n"
-      "  sequel-tv   --port=27911 --server=<host:port> [--server-password=<pw>]\n"
-      "              [--password=<pw>] [--delay=7] [--name=tv]: a watcher on a server of the\n"
-      "              sequel, its match served to the sequel's own clients\n"
-      "              or --demo=<file.dm2> in place of --server: a recording, played round and\n"
-      "              round at the game's pace\n"
-      "Every kind: [--bind=<ip>] (default every interface; the proxy's pair: 127.0.0.1)\n"
+      "Every one: [--bind=<ip>] (default every interface; the proxy's pair: 127.0.0.1)\n"
       "  [--copies=3] [--name=<name>] [--seconds=<n>, 0 until stopped] [--status=10]\n");
 }
 
@@ -127,7 +155,7 @@ struct Options {
 };
 
 int fail(const std::string& what, const std::string& next) {
-  std::fprintf(stderr, "shooters_edge_hops: %s; next: %s\n", what.c_str(), next.c_str());
+  std::fprintf(stderr, "%s: %s; next: %s\n", kBinary, what.c_str(), next.c_str());
   return 2;
 }
 
@@ -257,8 +285,17 @@ int run(int argc, char** argv) {
     return argc < 2 ? 2 : 0;
   }
   Options o;
-  o.kind = argv[1];
-  for (int i = 2; i < argc; i++) {
+  int first = 1;
+  if (kHop == Hop::forward) {
+    o.kind = "forward";
+  } else if (kHop == Hop::proxy) {
+    const std::string end = argv[1];
+    o.kind = end == "near" ? "proxy-near" : end == "far" ? "proxy-far" : "proxy";
+    if (o.kind != "proxy") first = 2;
+  } else {
+    o.kind = "tv";
+  }
+  for (int i = first; i < argc; i++) {
     const std::string a = argv[i];
     std::string v;
     if (a == "--help" || a == "-h") {
@@ -275,6 +312,8 @@ int run(int argc, char** argv) {
     } else if (flag(a, "allow", v)) {
       if (!addresses(v, o.allow))
         return fail("--allow=" + v + " holds no address", "host:port,...");
+    } else if (a == "--sequel" && kHop == Hop::tv) {
+      o.kind = "sequel-tv";
     } else if (flag(a, "master", v)) {
       if (!addresses(v, o.masters))
         return fail("--master=" + v + " holds no address", "host[:port],...");
@@ -309,7 +348,7 @@ int run(int argc, char** argv) {
     } else if (flag(a, "status", v)) {
       o.status = std::atof(v.c_str());
     } else {
-      return fail("unknown argument '" + a + "'", "shooters_edge_hops --help");
+      return fail("unknown argument '" + a + "'", std::string(kBinary) + " --help");
     }
   }
   auto owned = std::make_unique<Hops>();
@@ -502,8 +541,7 @@ int run(int argc, char** argv) {
     std::printf("sequel tv on %s, watching %s, %.0f s behind\n", gn::to_string(bind).c_str(),
                 gn::to_string(o.server).c_str(), o.delay);
   } else {
-    return fail("no kind '" + o.kind + "'",
-                "forward, proxy, proxy-near, proxy-far, tv or sequel-tv");
+    return fail("no hop '" + o.kind + "'", std::string(kBinary) + " --help");
   }
   std::fflush(stdout);
   std::signal(SIGINT, on_signal);

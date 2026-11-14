@@ -66,6 +66,7 @@ std::string nav(const HubSpec& spec, const char* on) {
   return "<header><a class=\"brand\" href=\"/\">" + html_escape(spec.game) + "</a><nav>" +
          link("/", "Servers") + link("/players", "Players") + link("/demos", "Demos") +
          (spec.stats ? link("/leaders", "Leaders") + link("/ladder", "Ladder") : std::string()) +
+         (spec.results ? link("/results", "Results") : std::string()) +
          (spec.map_files ? link("/play", "Play") : std::string()) + link("/v1", "API") +
          "</nav></header>\n";
 }
@@ -503,6 +504,7 @@ table.num{border-collapse:collapse;display:block;max-width:100%;overflow-x:auto}
 text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}table.num td:first-child,
 table.num th:first-child{text-align:left}table.num th{color:var(--dim);font-weight:500}table.rank td:nth-child(2),
 table.rank th:nth-child(2){text-align:left}
+article.result{margin:14px 0}article.result h3 small{color:var(--dim)}
 tr.unranked td{color:var(--dim)}table.champions td{text-align:left}
 label.without{color:var(--dim);font-size:14px;align-self:center}.warn{color:var(--hot)}
 @media(max-width:700px){main.watch{grid-template-columns:1fr}}

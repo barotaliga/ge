@@ -47,6 +47,7 @@ bool server_source_begin(ServerSource& src, const server::Server& s, std::string
   const int keyframe_seconds = src.keyframe_seconds;
   src = ServerSource{};
   src.keyframe_seconds = keyframe_seconds;
+  src.reports_before = s.reports.empty() ? 0 : s.reports.back().id;
   src.per_block = std::max<int64_t>(1, std::llround(1.0 / s.frame_s));
   replay::StreamHeader h;
   h.game = s.game->binary;
@@ -87,8 +88,24 @@ std::span<const uint8_t> server_source_fresh(ServerSource& src) {
 void server_source_finish(ServerSource& src, const server::Server& s) {
   if (!src.open || src.finished) return;
   replay::stream_end_block(src.writer, src.block_keyframe);
-  replay::stream_finish(
-      src.writer, {{"frames", std::to_string(s.frame)}, {"digest", hex(server::server_digest(s))}});
+  replay::Meta fin = {{"frames", std::to_string(s.frame)},
+                      {"digest", hex(server::server_digest(s))}};
+  // THE CLOSING SUMMARY: the last match the game reported while this stream ran, whole, and its
+  // scores in the hub's meta words, so a demo's stats and the hub's are the same record.
+  if (!s.reports.empty() && s.reports.back().id != src.reports_before) {
+    const net::MatchReport& r = s.reports.back();
+    std::string text, error;
+    if (net::report_text(r, text, error)) {
+      fin.emplace_back("report", std::move(text));
+      fin.emplace_back("duration_ms", std::to_string(r.duration_ms));
+      for (const net::ReportTeam& t : r.teams)
+        fin.emplace_back("team_score", t.name + "\t" + std::to_string(t.score));
+      for (const net::ReportPlayer& p : r.players)
+        fin.emplace_back("score", p.name + "\t" + std::to_string(p.score));
+      src.summarised = true;
+    }
+  }
+  replay::stream_finish(src.writer, fin);
   src.finished = true;
 }
 

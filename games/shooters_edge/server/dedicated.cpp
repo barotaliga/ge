@@ -87,7 +87,7 @@ bool replay(const std::vector<uint8_t>& bytes, gs::ServerReplay& out, std::strin
 
 gs::ServerGame make() {
   gs::ServerGame g;
-  g.binary = "shooters_edge_server";
+  g.binary = "sesv";
   g.title = "Shooter's Edge";
   g.protocol = ge::net::protocol_id("shooters_edge", 1);
   g.default_port = kServerPort;

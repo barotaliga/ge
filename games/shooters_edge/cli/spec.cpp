@@ -426,7 +426,7 @@ gc::Spec make() {
   s.title = "Shooter's Edge";
   s.cli = "shooters_edge_cli";
   s.window = "shooters_edge";
-  s.server = "shooters_edge_server";
+  s.server = "sesv";
   s.prefs_app = "shooters_edge";
   s.default_port = 27500;
   s.lan_first = shooters_edge::net::kLanFirstPort;
