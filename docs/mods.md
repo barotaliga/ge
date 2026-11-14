@@ -212,8 +212,9 @@ engine owns, in C++, with no JIT.**
   (`--target=wasm32`), so a player writes one source and `ge mod build` makes both forms. The
   manifest gets a `file.wasm32` row beside the native ones, and a store build loads only that
   row.
-- The interpreter is ours (`engine/mod/wasm`, M52c), small (the MVP instruction set, no threads,
-  no SIMD to start), and deterministic: WebAssembly's arithmetic is IEEE 754 with defined
+- The interpreter is ours (`engine/mod/wasm`, M52c), small (the MVP instruction set with what
+  clang emits by default: sign extension, the saturating conversions, multiple values from a
+  block, `memory.copy` and `memory.fill`; no threads, no SIMD), and deterministic: WebAssembly's arithmetic is IEEE 754 with defined
   rounding, its one non-determinism (the bits of a NaN) is canonicalised by the interpreter,
   and the transcendentals are the host table's imports, as in the native form. It has no JIT, so
   it needs no executable memory and falls under both stores' exemptions.
@@ -232,6 +233,17 @@ engine owns, in C++, with no JIT.**
   (a console, or a store build with a set of mods chosen by the developer): the mod's source is
   compiled into the game like any other code, and its entry is registered instead of looked up.
   It is fast and allowed everywhere, but a player cannot add a mod to it.
+
+**How the interpreter runs** (`engine/mod/wasm/`): `read_module` reads the binary and checks
+every function body by the format's typing rules, compiling it as it goes into one instruction a
+slot with its immediates decoded and every branch resolved (the instruction it goes to, the values
+it keeps, the stack height it cuts back to). The run loop then keeps no control stack and checks
+no types: a module that passed validation cannot read past its stack or run an instruction on the
+wrong operands, which `tests/mod_wasm_test.cpp` holds by changing every byte of a clang-built
+module and running whatever still reads under ASan. An `Instance` is plain data (memory, globals,
+table, value stack), so copying it copies the mod. The host reaches into it by imports matched by
+name and type, and by `add_host_function`, which puts a host function in the module's table so the
+module calls it through a function pointer, as a mod calls the ABI's tables.
 
 *Not taken:*
 
