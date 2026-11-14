@@ -387,7 +387,7 @@ bool watch_answer(const Poller& p, const HubSpec& spec, std::string_view target,
                   const Site& site, Answer& out) {
   std::string path = target_path(target);
   while (path.size() > 1 && path.back() == '/') path.pop_back();
-  if (content_answer(path, site, out)) return true;
+  if (content_answer(path, site, out, &spec)) return true;
   if (spec.map_files && path == "/play") {
     out = play_list(spec, site);
     return true;
