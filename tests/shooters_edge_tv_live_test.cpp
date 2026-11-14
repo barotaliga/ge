@@ -12,12 +12,12 @@
 #include <vector>
 
 #include "check.hpp"
+#include "net/address.hpp"
+#include "net/transport.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/client/recording_tv.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/tv_live.hpp"
-#include "net/address.hpp"
-#include "net/transport.hpp"
 #include "tv/net_link.hpp"
 #include "tv/node.hpp"
 

@@ -51,7 +51,6 @@
 // included, and the voice formats (`.qwdv`, `.mvdv`) with their voices. A played demo is watched
 // like a video (client/demo_playback.hpp); `-demovideo <demo> <file>` turns one, or a clip of it,
 // into a video or a GIF with no window and quits (client/demo_video.hpp, client/video_cfg.hpp).
-// `-tv <host:port>` plays a live broadcast from a TV node the same way (client/tv_live.hpp).
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console relative-
 // ge:keywords mouse mouse-look hud first-person effects r_look quit shooters-edge benchmark title

@@ -162,7 +162,9 @@ IN THE GAME'S WINDOW. The Watch page's "Open in the game" hands the player's cli
 and the window joins the TV node over UDP as a native spectator (`engine/tv/net_link.hpp`'s TV
 client) and plays the broadcast as the viewer does, from the same code (Shooter's Edge's
 `client/tv_live.hpp`: the stream unpacked onto a growing demo, opened two blocks in, the last frame
-held while the next block is late, the end only once the broadcast has ended). It is a played demo
+held while the next block is late, the end only once the broadcast has ended). The TV link drops a
+peer after 30 s of silence, not the node's usual 5, so a level's load in the window does not
+end it. It is a played demo
 from there: paced, heard and drawn between frames, its pause, speed and camera keys the demo's. A
 broadcast that turns the window away or breaks off ends the demo with the reason in the console.
 
