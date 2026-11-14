@@ -208,13 +208,17 @@ WebSocket carries the datagrams only for a browser without WebTransport.
 | --- | --- |
 | The endpoint | `engine/webtransport` (`ge_webtransport`, native only): a WebTransport server and client over QUIC (ngtcp2) and TLS 1.3 (picotls with its own cryptography; no OpenSSL), and the small part of HTTP/3 a browser's session needs (`h3.hpp`: the control stream's SETTINGS, QPACK with the static table only, the extended CONNECT and its answer, the datagram's session id). A server takes a socket's datagrams and reports sessions opened, datagrams and closes as events |
 | Its certificate | Self-signed over a P-256 key, made in memory when the endpoint starts and good for 13 days (`certificate.hpp`). The page trusts it by its SHA-256 (`serverCertificateHashes`), which the hub hands it from the forwarder's status record, so no certificate authority is needed. A browser takes such a certificate only for at most 14 days, with a P-256 key and with extensions (it refused ours until it carried a subjectAltName) |
-| The check | The `webtransport` lab opens a session over each network preset on the simulated network and sends a game's datagrams through it beside plain UDP: the same round trip and loss. Headless Chromium opened a session to the endpoint, echoed datagrams and closed it (M56i2a's pull request shows it) |
+| The forwarder's face | `webtransport/forward.hpp` (`WebForward`): a forward (`engine/forward`) whose client socket is a pipe transport over the endpoint, each session a client at an address of its own. A session opens on `/play?to=<host:port>` and is admitted to that server under the forward's allow list and limit; a refusal closes the session with its words; either end's close reaches the other. An open session is its own keepalive, so a page that stalls (a tab in the background, a slow first frame) keeps its place. `sefwd --webtransport=<port>` runs it beside the UDP forward and prints the certificate's hash |
+| The page's side | `engine/web`'s session (`wt_open`, `wt_state`, `wt_why`, `wt_close`) and `wt_pipe`, which makes it a pipe transport (`net::open_pipe_transport`), so the game's own client runs over it exactly as over a socket. Shooter's Edge's player takes `--join=https://<host>:<port>/play?to=<server>` with `--cert=<hash>` (`web/join.cpp`) |
+| The check | The `webtransport` lab opens a session over each network preset on the simulated network and sends a game's datagrams through it beside plain UDP: the same round trip and loss. `tests/webtransport_forward_test.cpp` carries a session through the face to a UDP server and back. Headless Chromium joined a dedicated server on a shareware map through `sefwd --webtransport` and the server listed the page's player (M56i2c's pull request shows it) |
 
-Next, in order: the forwarder's WebTransport face (each session a client of the forwarder, sent
-on as UDP to the server its path names, with the allow list and the limits a forwarder has); the
-page's side in `engine/web` (the session, its datagrams, the WebSocket fallback) and the page
-joining a server from its card; files cached in the browser by their hash, so a second map
-fetches only what it lacks; the sound through the browser's audio; touch controls.
+In that check Chromium refused the session to a loopback forwarder (its local network checks)
+until they were turned off with `--disable-features=LocalNetworkAccessChecks`; a hub and a
+forwarder on public addresses do not meet them.
+
+Next, in order: the forwarder's certificate hash in its status record and Join on a server's card
+opening the page; the WebSocket fallback; files cached in the browser by their hash, so a second
+map fetches only what it lacks; the sound through the browser's audio; touch controls.
 
 ## The plan
 

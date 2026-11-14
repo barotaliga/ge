@@ -89,7 +89,8 @@ foreach(hop sefwd:1 seproxy:2 setv:3)
   list(GET hop 0 hop_name)
   list(GET hop 1 hop_id)
   add_executable(shooters_edge_${hop_name} net/hops_main.cpp)
-  target_link_libraries(shooters_edge_${hop_name} PRIVATE shooters_edge_classic ge_proxy ge_flags)
+  target_link_libraries(shooters_edge_${hop_name} PRIVATE shooters_edge_classic ge_proxy ge_webtransport
+                        ge_flags)
   target_compile_definitions(shooters_edge_${hop_name} PRIVATE SE_HOP=${hop_id})
   set_target_properties(shooters_edge_${hop_name} PROPERTIES OUTPUT_NAME ${hop_name}
                         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -190,7 +191,7 @@ endif()
 # so a page that only watches downloads no server.
 if(TARGET shooters_edge_client_gpu)
   ge_add_web_viewer(shooters_edge SOURCES web/viewer.cpp LIBS shooters_edge_client_gpu ge_tv)
-  ge_add_web_viewer(shooters_edge NAME shooters_edge_play SOURCES web/viewer.cpp web/play.cpp
+  ge_add_web_viewer(shooters_edge NAME shooters_edge_play SOURCES web/viewer.cpp web/play.cpp web/join.cpp
                     LIBS shooters_edge_client_gpu shooters_edge_classic ge_tv
                     DEFINES SE_WEB_PLAY=1)
 endif()

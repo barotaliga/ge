@@ -1,7 +1,7 @@
 // The web viewer's arguments, read (viewer_args.hpp).
 //
-// ge:summary The web viewer's arguments read: --demo, --tv, --stream, --play, --bots, --pack
-// ge:summary and --speed
+// ge:summary The web viewer's arguments read: --demo, --tv, --stream, --play, --bots, --join,
+// ge:summary --cert, --pack and --speed
 // ge:keywords web viewer arguments parse_viewer_args
 // ge:skill net
 // ge:test tests/web_viewer_args_test.cpp
@@ -15,7 +15,8 @@ namespace {
 
 constexpr const char* kTakes =
     "the viewer takes --demo=<url>, --tv=ws://<host>:<port>/ with --stream=<n>, --play=<map> with "
-    "--bots=<0..15>, --pack=<url> and --speed=<0..20>";
+    "--bots=<0..15>, --join=https://<host>:<port>/play?to=<server> with --cert=<64 hex digits>, "
+    "--pack=<url> and --speed=<0..20>";
 
 bool value_of(std::string_view arg, std::string_view key, std::string_view& value) {
   if (arg.substr(0, key.size()) != key) return false;
@@ -44,12 +45,34 @@ bool map_name(std::string_view v) {
   return true;
 }
 
+bool hex_hash(std::string_view v) {
+  if (v.size() != 64) return false;
+  for (const char c : v)
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) return false;
+  return true;
+}
+
+// The server a join URL names: its `to=` query value, up to the next `&`.
+std::string_view join_target(std::string_view url) {
+  const size_t q = url.find('?');
+  if (q == std::string_view::npos) return {};
+  std::string_view rest = url.substr(q + 1);
+  while (!rest.empty()) {
+    const size_t amp = rest.find('&');
+    const std::string_view part = rest.substr(0, amp);
+    if (part.substr(0, 3) == "to=") return part.substr(3);
+    if (amp == std::string_view::npos) break;
+    rest = rest.substr(amp + 1);
+  }
+  return {};
+}
+
 }  // namespace
 
 bool parse_viewer_args(std::span<const std::string_view> args, ViewerArgs& out,
                        std::string& error) {
   out = ViewerArgs{};
-  bool have_stream = false, have_bots = false;
+  bool have_stream = false, have_bots = false, have_cert = false;
   for (const std::string_view a : args) {
     std::string_view v;
     if (value_of(a, "--demo=", v)) {
@@ -82,6 +105,21 @@ bool parse_viewer_args(std::span<const std::string_view> args, ViewerArgs& out,
       }
       out.bots = static_cast<int>(n);
       have_bots = true;
+    } else if (value_of(a, "--join=", v)) {
+      if (v.substr(0, 8) != "https://" || join_target(v).empty()) {
+        error = "--join=" + std::string(v) +
+                " is not an endpoint's address with the server it plays on; " + kTakes;
+        return false;
+      }
+      out.join = std::string(v);
+      out.join_to = std::string(join_target(v));
+    } else if (value_of(a, "--cert=", v)) {
+      if (!hex_hash(v)) {
+        error = "--cert=" + std::string(v) + " is not a certificate's hash; " + kTakes;
+        return false;
+      }
+      out.cert = std::string(v);
+      have_cert = true;
     } else if (value_of(a, "--pack=", v)) {
       if (v.empty()) {
         error = std::string("--pack= names no pack; ") + kTakes;
@@ -102,12 +140,17 @@ bool parse_viewer_args(std::span<const std::string_view> args, ViewerArgs& out,
       return false;
     }
   }
-  const int modes =
-      (out.demo.empty() ? 0 : 1) + (out.tv.empty() ? 0 : 1) + (out.play.empty() ? 0 : 1);
+  const int modes = (out.demo.empty() ? 0 : 1) + (out.tv.empty() ? 0 : 1) +
+                    (out.play.empty() ? 0 : 1) + (out.join.empty() ? 0 : 1);
   if (modes != 1) {
-    error = std::string(modes == 0 ? "none of --demo, --tv and --play was given"
-                                   : "more than one of --demo, --tv and --play was given") +
+    error = std::string(modes == 0 ? "none of --demo, --tv, --play and --join was given"
+                                   : "more than one of --demo, --tv, --play and --join was given") +
             "; " + kTakes;
+    return false;
+  }
+  if (have_cert && out.join.empty()) {
+    error =
+        "--cert goes with --join=<url>, a server played on from the page; " + std::string(kTakes);
     return false;
   }
   if (have_bots && out.play.empty()) {

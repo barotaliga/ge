@@ -438,16 +438,18 @@ bool flush(Conn& c, uint64_t now) {
   return true;
 }
 
-// A last packet that tells the peer the connection is over (`app`: an HTTP/3 code, else QUIC's
-// own error `liberr`).
-void send_close(Conn& c, uint64_t now, int liberr, bool app) {
+// A last packet that tells the peer the connection is over (`app`: an HTTP/3 code with `reason`,
+// the words the other end reports, else QUIC's own error `liberr`).
+void send_close(Conn& c, uint64_t now, int liberr, bool app, std::string_view reason = {}) {
   if (!c.conn || ngtcp2_conn_in_closing_period(c.conn) || ngtcp2_conn_in_draining_period(c.conn)) {
     return;
   }
   ngtcp2_ccerr err;
   ngtcp2_ccerr_default(&err);
   if (app) {
-    ngtcp2_ccerr_set_application_error(&err, kH3NoError, nullptr, 0);
+    reason = reason.substr(0, 200);  // a close fits one packet
+    ngtcp2_ccerr_set_application_error(
+        &err, kH3NoError, reinterpret_cast<const uint8_t*>(reason.data()), reason.size());
   } else if (liberr == NGTCP2_ERR_CRYPTO) {
     ngtcp2_ccerr_set_tls_alert(&err, ngtcp2_conn_get_tls_alert(c.conn), nullptr, 0);
   } else {
@@ -467,6 +469,10 @@ bool read_packet(Conn& c, const uint8_t* data, size_t size, uint64_t now) {
   if (rv != 0) {
     if (rv != NGTCP2_ERR_DRAINING && rv != NGTCP2_ERR_DROP_CONN) send_close(c, now, rv, false);
     c.dead = true;
+    // The peer closed: its own words, when it gave any.
+    const ngtcp2_ccerr* peer = rv == NGTCP2_ERR_DRAINING ? ngtcp2_conn_get_ccerr(c.conn) : nullptr;
+    if (c.why.empty() && peer != nullptr && peer->reasonlen > 0)
+      c.why.assign(reinterpret_cast<const char*>(peer->reason), peer->reasonlen);
     if (c.why.empty()) c.why = std::string("QUIC: ") + ngtcp2_strerror(rv);
     return false;
   }
@@ -735,7 +741,7 @@ void Server::close(uint32_t session, std::string_view why) {
   if (it == s.by_session.end()) return;
   Conn& c = *it->second;
   flush(c, s.now);
-  send_close(c, s.now, 0, true);
+  send_close(c, s.now, 0, true, why);
   end_session(c, std::string(why));
   c.dead = true;
   s.reap();
@@ -959,7 +965,7 @@ void Client::close(std::string_view why) {
   Impl& s = *impl_;
   if (!s.conn || s.conn->dead) return;
   flush(*s.conn, s.now);
-  send_close(*s.conn, s.now, 0, true);
+  send_close(*s.conn, s.now, 0, true, why);
   s.conn->dead = true;
   s.conn->why = std::string(why);
   s.settle();

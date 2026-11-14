@@ -105,6 +105,14 @@ bool open_udp_transport(Transport& t, const Address& bind, std::string* error) {
   return true;
 }
 
+bool open_pipe_transport(Transport& t, const DatagramPipe& pipe) {
+  close_transport(t);
+  if (pipe.send == nullptr || pipe.receive == nullptr) return false;
+  t.kind = TransportKind::pipe;
+  t.pipe = pipe;
+  return true;
+}
+
 void close_transport(Transport& t) {
   if (t.kind == TransportKind::udp) udp_close(t.udp);
   if (t.kind == TransportKind::sim && t.sim) sim_unbind(*t.sim, t.local);
@@ -114,6 +122,7 @@ void close_transport(Transport& t) {
   tcp_close_listener(t.listener);
   t.kind = TransportKind::none;
   t.sim = nullptr;
+  t.pipe = DatagramPipe{};
   t.local = Address{};
 }
 
@@ -130,6 +139,9 @@ bool send_now(Transport& t, const Address& to, const uint8_t* data, size_t size,
       break;
     case TransportKind::tcp:
       if (TcpStream* s = stream_to(t, to)) ok = tcp_send_frame(*s, data, size);
+      break;
+    case TransportKind::pipe:
+      ok = t.pipe.send(t.pipe.ctx, to, data, size);
       break;
     case TransportKind::none:
       break;
@@ -221,6 +233,9 @@ int receive_one(Transport& t, uint8_t* buffer, size_t capacity, Address& from, i
       break;
     case TransportKind::tcp:
       n = tcp_receive(t, buffer, capacity, from);
+      break;
+    case TransportKind::pipe:
+      n = t.pipe.receive(t.pipe.ctx, buffer, capacity, from);
       break;
     case TransportKind::none:
       break;
