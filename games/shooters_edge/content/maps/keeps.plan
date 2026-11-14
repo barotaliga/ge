@@ -1,0 +1,87 @@
+# THE KEEPS: a team map for four against four, written as a map plan (plugins/brush/compile/plan.hpp)
+# and built with `secli map build keeps.plan --textures=<the game folder>`. Two keeps face each other
+# across an open atrium under the sky; everything below the symmetry line is the west keep's half,
+# and the east keep is the same turned half round the map's centre. The pictures are the game's own
+# (named here, taken from the player's packs at build time; nothing of them is in this file).
+#
+# Ways between the keeps: the run straight into the atrium, the north corridor (which drops into
+# the atrium by its north door and runs on to the other keep's armory), and the south corridor from
+# the armory (the same, turned). The quad stands on a low platform in the middle of the atrium;
+# a red armour lies in each long corridor, the rocket launchers in the armories, a megahealth at the
+# bottom of each keep's pool.
+
+world message="The Keeps" light=12 worldtype=2 _sunlight=170 "_sun_mangle=40 -55 0"
+textures floor=sfloor4_6 wall=city4_6 ceil=metal1_3 solid=tech04_1
+symmetry rotate=1024,768
+
+# The west keep's hall, a ledge along its west wall with stairs up, a pool sunk in its floor.
+room westhall z=0..224 box 64,448 512,1088
+solid ledge z=0..96 box 64,448 224,1088 tex=tech04_1 top=metal2_4
+stairs z=0..96 box 224,960 320,1088 up=-x tex=tech04_1 top=metal2_4
+room pool z=-96..0 box 320,512 448,640 floor=floor01_5 wall=wbrick1_5
+liquid z=-96..-16 box 320,512 448,640 kind=water tex=*water1
+
+# The armory south of the hall and the door between them.
+room armory z=0..144 box 64,128 448,384 floor=metal2_4 wall=tech06_1
+room armorydoor z=0..112 box 192,384 320,448 floor=metal2_4 wall=tech04_2
+
+# The runs: east into the atrium, south from the armory, north from the hall.
+room westrun z=0..128 box 512,704 832,832 floor=metal2_4 wall=tech04_2
+room southrun z=0..128 box 448,192 960,320 floor=metal2_4 wall=tech04_2
+room northdoor z=0..128 box 384,1088 512,1216 floor=metal2_4 wall=tech04_2
+room northrun z=0..128 box 384,1216 1088,1344 floor=metal2_4 wall=tech04_2
+room atriumdoor z=0..128 box 960,1152 1088,1216 floor=metal2_4 wall=tech04_2
+
+# The atrium, open to the sky, its floor a step lower; stairs down from each door; pillars for
+# cover; the quad's platform with a ramp up from each side.
+room atrium z=-64..288 box 832,384 1216,1152 floor=floor01_5 wall=wbrick1_5 ceil=sky4 once
+stairs z=-64..0 box 832,704 912,832 up=-x tex=tech04_1 top=metal2_4
+stairs z=-64..0 box 960,1072 1088,1152 up=+y tex=tech04_1 top=metal2_4
+solid pillar z=-64..288 box 880,448 928,496 tex=tech04_2
+solid pillar z=-64..288 box 880,1040 928,1088 tex=tech04_2
+solid platform z=-64..-48 box 976,720 1072,816 tex=tech04_1 top=metal2_4 once
+ramp z=-64..-48 box 912,720 976,816 up=+x tex=tech04_1 top=metal2_4
+
+# Light.
+light 160,600,200 value=300
+light 160,936,200 value=300
+light 400,768,200 value=300
+light 288,512,160 value=250
+light 384,576,-40 value=200
+light 672,768,100 value=250
+light 256,256,120 value=300
+light 576,256,100 value=250
+light 832,256,100 value=250
+light 448,1150,100 value=250
+light 480,1280,100 value=250
+light 736,1280,100 value=250
+light 992,1280,100 value=250
+light 880,768,200 value=300
+light 1024,1100,200 value=300
+
+# The team's starts.
+spawn 128,560,120 angle=0
+spawn 128,1000,120 angle=0
+spawn 448,960,24 angle=0
+spawn 128,192,24 angle=45
+spawn 400,320,24 angle=135
+entity info_player_start 400,880,24 angle=0 once
+
+# Weapons, armour, health and ammunition.
+entity weapon_supershotgun 480,600,24
+entity weapon_grenadelauncher 144,768,104
+entity weapon_rocketlauncher 256,192,24
+entity weapon_nailgun 704,256,24
+entity weapon_lightning 880,560,-56
+entity weapon_supernailgun 880,1000,-56
+entity item_armorInv 736,1280,24
+entity item_armor2 144,1020,104
+entity item_armor1 128,320,24
+entity item_artifact_super_damage 1024,768,-40 once
+entity item_health 416,1040,24
+entity item_health 160,256,24
+entity item_health 384,576,-88 spawnflags=2
+entity item_rockets 288,192,24
+entity item_cells 880,620,-56
+entity item_shells 480,1040,24
+entity item_spikes 576,288,24
