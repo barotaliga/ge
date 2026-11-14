@@ -260,7 +260,8 @@ PlayerState player_state(const ClassicServer& s, int about, int to) {
   p.modelindex = row.modelindex == s.player_model ? 0 : row.modelindex;
   p.skin = row.skin;
   p.effects = row.effects;
-  if (about == to && w.weapon_frames) {
+  // The weapon frame goes to the player himself and to a spectator tracking him.
+  if ((about == to || s.clients[static_cast<size_t>(to)].track == about) && w.weapon_frames) {
     p.has_weaponframe = true;
     p.weaponframe = static_cast<int>(w.clients[about].numbers.weapon_frame);
   }
@@ -298,7 +299,9 @@ namespace {
 void update_stats(ClassicServer& s, int slot) {
   ClassicClient& c = s.clients[slot];
   int32_t st[kStats] = {};
-  player_stats(s, slot, st, c.ext.has(ExtFamily::z, kZViewHeight));
+  // A spectator tracking a player is sent his stats: his health, weapon and ammunition on its bar.
+  const int from = c.spectator && c.track >= 0 ? c.track : slot;
+  player_stats(s, from, st, c.ext.has(ExtFamily::z, kZViewHeight));
   for (int i = 0; i < kStats; i++) {
     if (c.stats_known[i] && c.stats[i] == st[i]) continue;
     if (i == 16 && !c.ext.has(ExtFamily::z, kZViewHeight)) continue;
@@ -427,7 +430,9 @@ void send_frames(ClassicServer& s) {
         if (!s.game->sv.clients[static_cast<size_t>(k)].active) continue;
         const sh::Vec3f me = s.game->sv.edicts[static_cast<size_t>(j) + 1].origin;
         const sh::Vec3f it = s.game->sv.edicts[static_cast<size_t>(k) + 1].origin;
-        if (k != j && s.game->vis && !s.game->vis(s.game->vis_ctx, me, it, true)) continue;
+        // The player a spectator tracks is sent wherever he is, so its camera never loses him.
+        if (k != j && k != c.track && s.game->vis && !s.game->vis(s.game->vis_ctx, me, it, true))
+          continue;
         write_byte(w, svc::playerinfo);
         write_playerinfo(w, player_state(s, k, j), c.ext);
       }

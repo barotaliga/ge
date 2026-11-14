@@ -181,6 +181,8 @@ struct ClassicClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): 
 
   // Play.
   sh::MoveCmd cmds[3];
+  bool tmove = false;  // a spectator's teleport to `tmove_to` goes with the next move
+  sh::Vec3f tmove_to;  // (classic_follow.hpp)
   std::vector<EntityState> baselines;
   ClientFrame frames[64];
   PlayerState players[32];

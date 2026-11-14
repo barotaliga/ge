@@ -25,6 +25,8 @@ void feed(ClassicWatcher& w) {
 void watcher_start(ClassicWatcher& w, gn::Transport& t, const gn::Address& server, ClientConfig cfg,
                    const ge::replay::Meta& meta, int64_t now_us) {
   cfg.spectator = true;
+  w.camera = ClassicFollow{};
+  if (w.follow) cfg.brain = [&w](int) { return follow_command(w.camera, w.client); };
   record_start(w.recording, false);
   w.fed = 0;
   w.ended = false;
@@ -37,6 +39,7 @@ void watcher_start(ClassicWatcher& w, gn::Transport& t, const gn::Address& serve
 
 void watcher_tick(ClassicWatcher& w, int64_t now_us) {
   if (w.ended) return;
+  if (w.follow) follow_tick(w.camera, w.client);
   client_tick(w.client, now_us);
   feed(w);
   client::recording_broadcast_tick(w.cast, now_us / 1000);
