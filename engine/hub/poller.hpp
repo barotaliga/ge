@@ -20,6 +20,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 #include "net/address.hpp"
@@ -89,6 +90,17 @@ bool poller_read(Poller& p, net::Transport& t, const uint8_t* data, size_t size,
                  const net::Address& from, int64_t now_us);
 // Everything waiting on the socket read, then the asks due: one call a frame.
 void poller_pump(Poller& p, net::Transport& t, int64_t now_us);
+
+// The status key a TV node names the game server it broadcasts under (tv/net_link.hpp writes it).
+inline constexpr std::string_view kSourceKey = "source";
+// A stream the hub added to a game server's record because a TV node's record names that server
+// as its source (`kSourceKey`): the server says nothing of the broadcast itself (a classic
+// server, or ours with a TV node watching it). Never on the wire; put back after every update.
+inline constexpr uint8_t kStreamNamedByNode = 0x80;
+// Every TV node's broadcast laid on the record of the server it names (`kStreamNamedByNode`),
+// those of the last call taken off first; `poller_update` calls it. A source on loopback or
+// "any" is the TV node's own host.
+void poller_attach_broadcasts(Poller& p);
 
 // The node at `address`, or null.
 const HubNode* poller_find(const Poller& p, const net::Address& address);
