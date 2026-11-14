@@ -2,7 +2,7 @@
 title: A baked data table links wherever its lookup is called, so keep the lookup with its users
 date: 2026-11-14
 scope: plugins/mountain/mapgen/generate.cpp
-concepts: [real-face, real-hints, link-size, web-viewer, wasm, gc-sections, lay_real_face]
+concepts: [real-face, real-hints, link-size, web-viewer, wasm, gc-sections, lay-real-face]
 ---
 
 `generate_level` called `real_face(id)` and `real_hints(id)` itself, so every program that made a
