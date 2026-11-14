@@ -349,10 +349,14 @@ Answer join_page(const Poller& p, const HubSpec& spec, std::string_view rest, co
         "No forwarder this hub knows takes players from a browser to this server, so it "
         "cannot be played here. Join it in the game below.";
   } else {
-    args = {"--join=https://" + host_of(fwd->address) + ":" +
-                status_key(fwd->status, ge::forward::kWebTransportKey) +
-                "/play?to=" + gn::to_string(server),
-            "--cert=" + ge::forward::status_cert(fwd->status)};
+    // WebTransport first; the WebSocket for a browser without it (the page tries them in turn).
+    const std::string to = "/play?to=" + gn::to_string(server);
+    const std::string wt = status_key(fwd->status, ge::forward::kWebTransportKey);
+    const std::string cert = ge::forward::status_cert(fwd->status);
+    const std::string ws = status_key(fwd->status, ge::forward::kWebSocketKey);
+    if (!wt.empty() && !cert.empty())
+      args = {"--join=https://" + host_of(fwd->address) + ":" + wt + to, "--cert=" + cert};
+    if (!ws.empty()) args.push_back("--join=ws://" + host_of(fwd->address) + ":" + ws + to);
   }
   ContentPack pack;
   std::string why;

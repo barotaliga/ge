@@ -15,8 +15,8 @@ namespace {
 
 constexpr const char* kTakes =
     "the viewer takes --demo=<url>, --tv=ws://<host>:<port>/ with --stream=<n>, --play=<map> with "
-    "--bots=<0..15>, --join=https://<host>:<port>/play?to=<server> with --cert=<64 hex digits>, "
-    "--pack=<url> and --speed=<0..20>";
+    "--bots=<0..15>, --join=https://<host>:<port>/play?to=<server> with --cert=<64 hex digits> "
+    "and or --join=ws://<host>:<port>/play?to=<server>, --pack=<url> and --speed=<0..20>";
 
 bool value_of(std::string_view arg, std::string_view key, std::string_view& value) {
   if (arg.substr(0, key.size()) != key) return false;
@@ -106,12 +106,18 @@ bool parse_viewer_args(std::span<const std::string_view> args, ViewerArgs& out,
       out.bots = static_cast<int>(n);
       have_bots = true;
     } else if (value_of(a, "--join=", v)) {
-      if (v.substr(0, 8) != "https://" || join_target(v).empty()) {
+      const bool web_transport = v.substr(0, 8) == "https://";
+      const bool web_socket = v.substr(0, 5) == "ws://" || v.substr(0, 6) == "wss://";
+      if (!(web_transport || web_socket) || join_target(v).empty() ||
+          (!out.join_to.empty() && out.join_to != join_target(v)) ||
+          !(web_transport ? out.join : out.join_ws).empty()) {
         error = "--join=" + std::string(v) +
-                " is not an endpoint's address with the server it plays on; " + kTakes;
+                " is not an endpoint's address with the server it plays on (one WebTransport and "
+                "one WebSocket at most, to the same server); " +
+                kTakes;
         return false;
       }
-      out.join = std::string(v);
+      (web_transport ? out.join : out.join_ws) = std::string(v);
       out.join_to = std::string(join_target(v));
     } else if (value_of(a, "--cert=", v)) {
       if (!hex_hash(v)) {
@@ -141,7 +147,7 @@ bool parse_viewer_args(std::span<const std::string_view> args, ViewerArgs& out,
     }
   }
   const int modes = (out.demo.empty() ? 0 : 1) + (out.tv.empty() ? 0 : 1) +
-                    (out.play.empty() ? 0 : 1) + (out.join.empty() ? 0 : 1);
+                    (out.play.empty() ? 0 : 1) + (out.join_to.empty() ? 0 : 1);
   if (modes != 1) {
     error = std::string(modes == 0 ? "none of --demo, --tv, --play and --join was given"
                                    : "more than one of --demo, --tv, --play and --join was given") +
@@ -149,8 +155,8 @@ bool parse_viewer_args(std::span<const std::string_view> args, ViewerArgs& out,
     return false;
   }
   if (have_cert && out.join.empty()) {
-    error =
-        "--cert goes with --join=<url>, a server played on from the page; " + std::string(kTakes);
+    error = "--cert goes with --join=https://<url>, a server played on from the page; " +
+            std::string(kTakes);
     return false;
   }
   if (have_bots && out.play.empty()) {

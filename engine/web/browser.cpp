@@ -80,7 +80,7 @@ EM_JS(void, ge_web_say, (const char* line), {
 // The page's WebSockets, by number: each one's messages queued as they come, taken in order.
 EM_JS(int, ge_web_ws_open, (const char* url), {
   if (!Module.geSockets) Module.geSockets = [];
-  const s = {queue : [], state : 0};
+  const s = {queue : [], state : 0, why : ""};
   try {
     s.ws = new WebSocket(UTF8ToString(url));
   } catch (e) {
@@ -88,7 +88,11 @@ EM_JS(int, ge_web_ws_open, (const char* url), {
   }
   s.ws.binaryType = "arraybuffer";
   s.ws.onopen = function() { s.state = 1; };
-  s.ws.onclose = function() { s.state = 2; };
+  s.ws.onclose = function(e) {
+    s.state = 2;
+    if (!s.why)
+      s.why = e.reason || (e.wasClean ? "the other end closed it" : "the connection failed");
+  };
   s.ws.onerror = function() { s.state = 2; };
   s.ws.onmessage = function(m) {
     if (m.data instanceof ArrayBuffer) s.queue.push(new Uint8Array(m.data));
@@ -118,6 +122,15 @@ EM_JS(int, ge_web_ws_peek, (int id), {
 EM_JS(void, ge_web_ws_take, (int id, uint8_t* out), {
   const s = Module.geSockets[id];
   HEAPU8.set(s.queue.shift(), out);
+});
+
+EM_JS(char*, ge_web_ws_why, (int id), {
+  const s = Module.geSockets && Module.geSockets[id];
+  const t = s ? s.why : "no such socket";
+  const n = lengthBytesUTF8(t) + 1;
+  const p = _malloc(n);
+  stringToUTF8(t, p, n);
+  return p;
 });
 
 EM_JS(void, ge_web_ws_close, (int id), {
@@ -453,6 +466,13 @@ bool ws_take(int socket, std::vector<uint8_t>& msg) {
   return true;
 }
 
+std::string ws_why(int socket) {
+  char* p = ge_web_ws_why(socket);
+  std::string why = p;
+  std::free(p);
+  return why;
+}
+
 void ws_close(int socket) { ge_web_ws_close(socket); }
 
 int wt_open(const std::string& url, const std::string& cert_hash) {
@@ -487,42 +507,60 @@ std::string wt_why(int session) {
 
 namespace {
 
-// The session and the address its datagrams are reported from.
+// The session (or the WebSocket) and the address its datagrams are reported from.
 struct PipeEnd {
   int session = -1;
   net::Address peer;
+  bool socket = false;  // a WebSocket's messages, not a session's datagrams
 };
 
 bool pipe_send(void* ctx, const net::Address&, const uint8_t* data, size_t size) {
-  return ge_web_wt_send(static_cast<PipeEnd*>(ctx)->session, data, static_cast<int>(size)) != 0;
+  const PipeEnd& end = *static_cast<PipeEnd*>(ctx);
+  const int n = static_cast<int>(size);
+  return (end.socket ? ge_web_ws_send(end.session, data, n)
+                     : ge_web_wt_send(end.session, data, n)) != 0;
 }
 
 int pipe_receive(void* ctx, uint8_t* buffer, size_t capacity, net::Address& from) {
   const PipeEnd& end = *static_cast<PipeEnd*>(ctx);
   const int id = end.session;
-  const int n = ge_web_wt_peek(id);
+  const int n = end.socket ? ge_web_ws_peek(id) : ge_web_wt_peek(id);
   if (n < 0) return -1;
+  const auto take = [&end, id](uint8_t* out) {
+    if (end.socket)
+      ge_web_ws_take(id, out);
+    else
+      ge_web_wt_take(id, out);
+  };
   if (static_cast<size_t>(n) > capacity) {
     std::vector<uint8_t> drop(static_cast<size_t>(n));  // too big for the caller: dropped
-    ge_web_wt_take(id, drop.data());
+    take(drop.data());
     return -1;
   }
-  ge_web_wt_take(id, buffer);
+  take(buffer);
   from = end.peer;
   return n;
 }
 
-}  // namespace
-
-net::DatagramPipe wt_pipe(int session, const net::Address& peer) {
-  // One end a session, kept for the page's life (a page opens a handful at most).
+net::DatagramPipe pipe_over(int id, const net::Address& peer, bool socket) {
+  // One end a session or a socket, kept for the page's life (a page opens a handful at most).
   static std::vector<std::unique_ptr<PipeEnd>> ends;
-  ends.push_back(std::make_unique<PipeEnd>(PipeEnd{session, peer}));
+  ends.push_back(std::make_unique<PipeEnd>(PipeEnd{id, peer, socket}));
   net::DatagramPipe p;
   p.send = pipe_send;
   p.receive = pipe_receive;
   p.ctx = ends.back().get();
   return p;
+}
+
+}  // namespace
+
+net::DatagramPipe wt_pipe(int session, const net::Address& peer) {
+  return pipe_over(session, peer, false);
+}
+
+net::DatagramPipe ws_pipe(int socket, const net::Address& peer) {
+  return pipe_over(socket, peer, true);
 }
 
 bool fetch_bytes(const std::string& url, std::vector<uint8_t>& out, std::string& error,

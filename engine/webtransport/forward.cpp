@@ -17,26 +17,6 @@ namespace {
 
 constexpr uint16_t kSessionPort = 443;
 
-int hex(char c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return -1;
-}
-
-std::string unescape(std::string_view s) {
-  std::string out;
-  for (size_t i = 0; i < s.size(); i++) {
-    if (s[i] == '%' && i + 2 < s.size() && hex(s[i + 1]) >= 0 && hex(s[i + 2]) >= 0) {
-      out += static_cast<char>(hex(s[i + 1]) * 16 + hex(s[i + 2]));
-      i += 2;
-    } else {
-      out += s[i] == '+' ? ' ' : s[i];
-    }
-  }
-  return out;
-}
-
 WebForward::Session* find_session(WebForward& w, uint32_t number) {
   for (WebForward::Session& s : w.sessions)
     if (s.number == number) return &s;
@@ -106,20 +86,6 @@ void closed(WebForward& w, const Event& e) {
 }  // namespace
 
 net::Address session_address(uint32_t session) { return net::sim_address(session, kSessionPort); }
-
-bool path_destination(std::string_view path, net::Address& out) {
-  const size_t q = path.find('?');
-  if (q == std::string_view::npos) return false;
-  std::string_view query = path.substr(q + 1);
-  while (!query.empty()) {
-    const size_t amp = query.find('&');
-    const std::string_view pair = query.substr(0, amp);
-    if (pair.substr(0, 3) == "to=") return net::parse_address(unescape(pair.substr(3)), out);
-    if (amp == std::string_view::npos) break;
-    query.remove_prefix(amp + 1);
-  }
-  return false;
-}
 
 bool web_forward_start(WebForward& w, const Certificate& cert, const net::Address& bind,
                        const forward::ForwardConfig& config, forward::OpenUpstream open_upstream,

@@ -24,40 +24,24 @@
 #include <vector>
 
 #include "net/address.hpp"
-#include "net/sha1.hpp"
 #include "net/tcp_socket.hpp"
+#include "net/websocket.hpp"
 #include "tv/node.hpp"
 
 namespace ge::tv {
 
-inline constexpr int kWebLinks = 1 << 16;                // the first link number a web viewer takes
-inline constexpr size_t kWsMostFrame = size_t{1} << 20;  // a bigger frame drops the link
-inline constexpr size_t kWsMostHandshake = 8192;
-
-using ge::net::sha1;  // the handshake's digest (net/sha1.hpp)
-std::string base64(std::span<const uint8_t> bytes);
-// The `Sec-WebSocket-Accept` for a client's `Sec-WebSocket-Key`.
-std::string ws_accept(std::string_view key);
-
-// The HTTP upgrade request at the start of `in`: 1 and the response in `reply` with the request's
-// length in `used`; 0 when it is not whole yet; -1 with `error` when it is not an upgrade.
-int ws_handshake(std::span<const uint8_t> in, std::string& reply, size_t& used, std::string& error);
-
-enum class WsOp : uint8_t { more = 0, text = 1, binary = 2, close = 8, ping = 9, pong = 10 };
-
-struct WsFrame {
-  WsOp op = WsOp::binary;
-  bool fin = true;
-  std::vector<uint8_t> payload;  // unmasked
-  size_t size = 0;               // the frame's bytes in the stream
-};
-
-// A frame (`mask` a client's 4 bytes, or none from a server).
-std::vector<uint8_t> ws_frame(WsOp op, std::span<const uint8_t> payload,
-                              const uint8_t* mask = nullptr);
-// The frame at the start of `in`: 1 and `out`; 0 when it is not whole; -1 when it breaks the rules
-// (too big, a reserved bit).
-int ws_parse(std::span<const uint8_t> in, WsFrame& out);
+inline constexpr int kWebLinks = 1 << 16;  // the first link number a web viewer takes
+// The codec is net/websocket.hpp's, named here as the node's viewers have always used it.
+using net::base64;
+using net::kWsMostFrame;
+using net::kWsMostHandshake;
+using net::sha1;
+using net::ws_accept;
+using net::ws_frame;
+using net::ws_handshake;
+using net::ws_parse;
+using net::WsFrame;
+using net::WsOp;
 
 struct WebLink {
   int link = -1;
