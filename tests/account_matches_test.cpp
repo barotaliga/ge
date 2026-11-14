@@ -173,6 +173,7 @@ TEST(matches_a_flagged_player_is_banned_and_the_match_rated_on_no_ladder) {
   ga::matches_add(m, key(1), r);
   const ga::Ban* b = ga::matches_ban(m, 7, r.start_s + 700);
   CHECK(b != nullptr && b->why == "flood x3; out" && b->report == 3);
+  if (b == nullptr) return;
   CHECK(b->until_s == r.start_s + 600 + ga::kBanDays * 24 * 3600);
   CHECK(ga::matches_ban(m, 7, b->until_s) == nullptr);  // over when it ends
   CHECK(ga::matches_ban(m, 8, r.start_s) == nullptr);
