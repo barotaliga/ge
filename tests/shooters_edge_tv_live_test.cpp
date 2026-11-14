@@ -39,7 +39,7 @@ std::vector<std::vector<uint8_t>> broadcast(int frames, int seconds) {
     const size_t at = std::min(demo.size(), piece * static_cast<size_t>(s));
     const size_t to = std::min(demo.size(), at + piece);
     cl::recording_broadcast_add(b, std::span<const uint8_t>(demo).subspan(at, to - at));
-    cl::recording_broadcast_tick(b, 1000 * (s + 1));
+    cl::recording_broadcast_tick(b, 1000 * (int64_t{s} + 1));
     out.push_back(b.out);
   }
   cl::recording_broadcast_end(b);
