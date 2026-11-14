@@ -7,10 +7,16 @@
 // ge:keywords test sequel centre-print crosshair status-bar scale add_sequel_screen
 // ge:skill ui testing
 // ge:test tests/shooters_edge_sequel_screen_test.cpp
+#include <filesystem>
 #include <string>
+#include <vector>
 
+#include "assets/pcx.hpp"
 #include "check.hpp"
+#include "lab/png.hpp"
+#include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/sequel_bar.hpp"
+#include "vfs/pak.hpp"
 
 namespace {
 
@@ -60,4 +66,49 @@ TEST(no_crosshair_is_drawn_when_the_packs_hold_no_picture_of_it) {
   CHECK(bar.ops.empty());
   cl::add_sequel_screen(bar, 0, "", 640, 480);
   CHECK(bar.ops.empty());
+}
+
+TEST(an_enhanced_picture_is_drawn_at_the_packs_size_filtered_from_the_cache) {
+  // The crosshair's picture is in the packs' cache at 4x (classic-enhance's pictures stage), the
+  // health icon is not: the crosshair is placed and drawn by its pack size from the cache's
+  // pixels, filtered; the icon is the pack's own, sharp.
+  const auto pcx = [](int w, int h) {
+    ge::assets::IndexedImage img;
+    img.width = w;
+    img.height = h;
+    img.indices.assign(size_t(w) * size_t(h), 7);
+    img.palette.assign(768, 90);
+    return ge::assets::encode_pcx(img);
+  };
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"pics/ch1.pcx", pcx(8, 8)}, {"pics/i_health.pcx", pcx(24, 24)}}, &pak,
+                           &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  const std::filesystem::path cache =
+      std::filesystem::temp_directory_path() / "ge_se_sequel_bar_enhanced";
+  std::filesystem::remove_all(cache);
+  std::filesystem::create_directories(cache / "pictures" / "enhanced" / "pics");
+  ge::lab::Picture big{32, 32, std::vector<uint8_t>(size_t{32} * 32 * 4, 200)};
+  CHECK(ge::lab::write_png((cache / "pictures" / "enhanced" / "pics" / "ch1.png").string(), big));
+  cl::SequelBar bar;
+  bar.files = &files;
+  bar.cache = cache;
+  cl::add_sequel_screen(bar, 1, "", 640, 480);
+  CHECK(bar.ops.size() == 1 && bar.ops[0].x == 316 && bar.ops[0].y == 236);
+  shooters_edge::hud::LayoutOp icon;
+  icon.name = "i_health";
+  bar.ops.push_back(icon);
+  ge::ui::DrawList dl;
+  dl.begin(640, 480);
+  CHECK(cl::draw_sequel_bar(dl, bar, 2));
+  CHECK(dl.cmds().size() == 2);
+  if (dl.cmds().size() == 2) {
+    const ge::ui::Box& ch = dl.cmds()[0].box;
+    CHECK(ch.rect.w == 16 && ch.image->width == 32 && !ch.nearest);
+    const ge::ui::Box& hp = dl.cmds()[1].box;
+    CHECK(hp.rect.w == 48 && hp.image->width == 24 && hp.nearest);
+  }
+  std::filesystem::remove_all(cache);
 }

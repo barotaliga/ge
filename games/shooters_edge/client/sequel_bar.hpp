@@ -8,6 +8,10 @@
 // (one step for every 400 px of height, at least one), and draws every pixel that many times over,
 // sharp. The crosshair (under the bar) and the centre print (over it) are drawn the same way.
 //
+// ENHANCED (`ce_pictures`, `cache` set): a picture is classic-enhance's upscaled copy from the
+// packs' cache (`pics/<name>`) where it has one, drawn filtered at the picture's own size from its
+// more pixels; the pack's own, sharp, where it has none.
+//
 // ge:summary The sequel's status bar drawn in the window from its program and the game's pictures
 // ge:keywords sequel status-bar layout pictures conchars pcx draw scale sequel-hud crosshair
 // ge:keywords centre-print ch1 layout-message scoreboard help-computer
@@ -15,6 +19,7 @@
 // ge:test tests/shooters_edge_sequel_screen_test.cpp
 #pragma once
 
+#include <filesystem>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -28,10 +33,19 @@
 
 namespace shooters_edge::client {
 
+// A picture of the bar: `image` at `k` pixels a pixel of the pack's picture (1: the pack's own).
+struct BarPicture {
+  ge::ui::Image image;
+  int k = 1;
+  float width() const { return static_cast<float>(image.width) / static_cast<float>(k); }
+  float height() const { return static_cast<float>(image.height) / static_cast<float>(k); }
+};
+
 struct SequelBar {
   const SearchPath* files = nullptr;  // where the pictures are read (outlives the bar)
-  std::unordered_map<std::string, ge::ui::Image> pictures;  // by path; empty: not in the packs
-  std::vector<hud::LayoutOp> ops;                           // the last frame's
+  std::filesystem::path cache;        // the packs' enhanced cache (ce_pictures), empty: none
+  std::unordered_map<std::string, BarPicture> pictures;  // by path; empty: not in the packs
+  std::vector<hud::LayoutOp> ops;                        // the last frame's
 };
 
 // The whole number the bar is drawn larger by on a window `height` px high.

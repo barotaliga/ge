@@ -680,7 +680,8 @@ int run_main(int argc, char** argv) {
   // again when it flips and when an enhance run ends (client/classic_pictures.hpp). The first read
   // is on a thread, behind the title; the menu opens once they are in.
   const auto use_pictures = [&](cl::ClassicPictures pics, bool say) {
-    sequel_bar.pictures.clear();  // read again from the packs now open
+    sequel_bar.pictures.clear();    // read again from the packs now open
+    sequel_bar.cache = pics.cache;  // enhanced from the cache under ce_pictures
     // Always the loaded game's own: another game's install loaded leaves none of the last one's.
     game_menu.set_art(std::move(pics.menu));
     shooters_edge::menu::classic_console(game_menu.art(), con_look);
