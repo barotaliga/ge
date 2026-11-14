@@ -36,6 +36,7 @@
 #include "brush/wal.hpp"
 #include "brush/write.hpp"
 #include "classicenhance/profile.hpp"
+#include "core/libm/libm.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
@@ -204,8 +205,8 @@ SkySpot sky_spot(const ge::brush::Map& m, sh::Vec3f at) {
         best.pitch = 55;
       } else {
         best.eye = at;
-        best.yaw = std::atan2(dy, dx) * 57.29578f;
-        best.pitch = std::atan2(dz, std::sqrt(dx * dx + dy * dy)) * 57.29578f;
+        best.yaw = float(ge::core::libm::atan2(dy, dx)) * 57.29578f;
+        best.pitch = float(ge::core::libm::atan2(dz, std::sqrt(dx * dx + dy * dy))) * 57.29578f;
       }
     }
   }
