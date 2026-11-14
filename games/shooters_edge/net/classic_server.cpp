@@ -60,7 +60,9 @@ bool same_host(const gn::Address& a, const gn::Address& b) {
 int32_t new_challenge(ClassicServer& s, const gn::Address& from) {
   int slot = 0;
   for (int i = 0; i < 64; i++) {
-    if (s.challenges[i].made > 0 && same_host(s.challenges[i].address, from)) {
+    // One challenge an address (its port too), so clients sharing a host (players behind one
+    // router, bots from one machine) do not replace each other's before they connect.
+    if (s.challenges[i].made > 0 && s.challenges[i].address == from) {
       slot = i;
       break;
     }
@@ -164,8 +166,12 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   const int32_t challenge = std::atoi(pg::word(w, 3));
   std::string userinfo = pg::word(w, 4);
   int found = -1;
+  // The host's challenge that matches; any of the host's when none does (its reason a bad one). A
+  // port that moved between the two asks still finds its challenge by the host and the value.
   for (int i = 0; i < 64; i++)
-    if (s.challenges[i].made > 0 && same_host(s.challenges[i].address, from)) found = i;
+    if (s.challenges[i].made > 0 && same_host(s.challenges[i].address, from) &&
+        (found < 0 || s.challenges[i].value == challenge))
+      found = i;
   if (found < 0) {
     reject(s, from, "No challenge for address.");
     return;
