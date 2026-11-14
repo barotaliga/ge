@@ -9,9 +9,14 @@
 // table), the sounds started, the prints and centre messages, and the temporary entities the
 // window draws (hits, blood, explosions, trails). The rest of each message is read past.
 //
+// Protocols 26 to 34, and the extended recordings 3434 to 3436 a server with the extended limits
+// writes: longer settings lists, entity numbers to 8191, models and sounds by a word, alpha and
+// scale, int23 points and 64 stats (3435 on), fog (3436), blocks to 32 KB.
+//
 // ge:summary The sequel's .dm2 client recording read frame by frame into the demo state
 // ge:keywords sequel dm2 demo playback frame playerinfo packetentities configstring baseline
 // ge:keywords temp_entity sound print centerprint next_sequel is_sequel_demo delta ring
+// ge:keywords extended-limits protocol-3436 int23 varint fog alpha scale
 // ge:skill shooter replay
 // ge:test tests/shooters_edge_demo_sequel_test.cpp
 #include <algorithm>
@@ -52,11 +57,22 @@ enum : uint8_t {
   kFrame = 20,
 };
 
-// The settings strings' ranges.
-constexpr int kCsModels = 32, kCsSounds = 288, kCsImages = 544, kCsSkins = 1312, kCsMax = 2080;
-constexpr int kCsMaxClients = 30;
-constexpr int kMostEntities = 1024;
-constexpr int kMostBlock = 1400;  // the protocol's largest message
+// The settings strings' ranges: protocol 34's, and the extended limits' (3434 to 3436), whose
+// lists are longer and start further on.
+struct CsLayout {
+  int max_clients, models, sounds, images, skins, general, max;
+};
+constexpr CsLayout kClassicCs{30, 32, 288, 544, 1312, 1568, 2080};
+constexpr CsLayout kExtendedCs{60, 62, 8254, 10302, 12862, 13118, 13630};
+constexpr int kMostEntities = 1024, kMostEntitiesExt = 8192;
+constexpr int kMostBlock = 1400;      // the protocol's largest message
+constexpr int kMostBlockExt = 32768;  // an extended recording's
+
+// The extended recording's level: 0 protocol 34 and older, 1 3434 (wider fields), 2 3435 (int23
+// points, 64 stats), 3 3436 (fog).
+int ext_of(int protocol) { return protocol >= 3434 && protocol <= 3436 ? protocol - 3433 : 0; }
+const CsLayout& layout_of(int protocol) { return ext_of(protocol) > 0 ? kExtendedCs : kClassicCs; }
+int most_entities(int protocol) { return ext_of(protocol) > 0 ? kMostEntitiesExt : kMostEntities; }
 constexpr int kDirections = 162;  // the direction table's entries
 
 // The entity header's flag bits.
@@ -114,88 +130,133 @@ constexpr int kSeqHealth = 1, kSeqAmmo = 3, kSeqArmour = 5;
 
 using Frame = std::vector<std::pair<int, DemoEntity>>;
 
-float coord(DemoMsg& m) { return static_cast<float>(m.i16()) * 0.125f; }
+// An int23 coordinate in 1/8 unit: a word whose bit 0 clear makes bits 1 to 15 a delta from
+// `base`; set, a byte more and bits 1 to 23 are the value itself.
+int32_t int23(DemoMsg& m, int32_t base) {
+  const uint32_t w = static_cast<uint32_t>(m.u16());
+  if ((w & 1u) == 0) {
+    int32_t d = static_cast<int32_t>(w >> 1);
+    if (d >= 1 << 14) d -= 1 << 15;
+    return base + d;
+  }
+  int32_t v = static_cast<int32_t>((w | static_cast<uint32_t>(m.u8()) << 16) >> 1);
+  if (v >= 1 << 22) v -= 1 << 23;
+  return v;
+}
+float coord(DemoMsg& m) { return static_cast<float>(m.int23 ? int23(m, 0) : m.i16()) * 0.125f; }
 sh::Vec3f pos(DemoMsg& m) {
   const float x = coord(m), y = coord(m), z = coord(m);
   return {x, y, z};
 }
+// An entity's origin coordinate: a short, or on 3435 on an int23 against its base's (the base
+// is a whole number of eighths, exact in a float under 2^24 eighths, so the cast is exact).
+float origin_coord(DemoMsg& m, float base) {
+  if (!m.int23) return static_cast<float>(m.i16()) * 0.125f;
+  return static_cast<float>(int23(m, static_cast<int32_t>(base * 8.0f))) * 0.125f;
+}
 float angle8(DemoMsg& m) { return static_cast<float>(m.i8()) * (360.0f / 256.0f); }
 float angle16(int16_t a) { return static_cast<float>(a) * (360.0f / 65536.0f); }
 
-// A size picked by two flags: low alone a byte, high alone a short, both a long.
-int32_t sized(DemoMsg& m, uint32_t bits, uint32_t low, uint32_t high) {
+// The extended header's bits (3434 on): bit 31 a fifth byte (bits 32 to 39).
+constexpr uint64_t kMore4 = 1ull << 31, kModel16 = 1ull << 28, kMoreFxLow = 1ull << 29,
+                   kAlpha = 1ull << 30, kScale = 1ull << 32, kMoreFxHigh = 1ull << 33;
+
+// The entity header: its flags and number. `ext` (3434 on) reads a fifth flags byte.
+uint64_t entity_bits(DemoMsg& m, int& number, int ext) {
+  uint64_t bits = static_cast<uint32_t>(m.u8());
+  if ((bits & kMore1) != 0) bits |= static_cast<uint64_t>(m.u8()) << 8;
+  if ((bits & kMore2) != 0) bits |= static_cast<uint64_t>(m.u8()) << 16;
+  if ((bits & kMore3) != 0) bits |= static_cast<uint64_t>(m.u8()) << 24;
+  if (ext > 0 && (bits & kMore4) != 0) bits |= static_cast<uint64_t>(m.u8()) << 32;
+  number = (bits & kNumber16) != 0 ? m.u16() : m.u8();
+  return bits;
+}
+
+// A size picked by two flags of the header: low alone a byte, high alone a short, both a long.
+int32_t sized64(DemoMsg& m, uint64_t bits, uint64_t low, uint64_t high) {
   if ((bits & low) != 0 && (bits & high) != 0) return m.i32();
   if ((bits & low) != 0) return m.u8();
   if ((bits & high) != 0) return m.i16();
   return 0;
 }
 
-// The entity header: its flags and number.
-uint32_t entity_bits(DemoMsg& m, int& number) {
-  uint32_t bits = static_cast<uint32_t>(m.u8());
-  if ((bits & kMore1) != 0) bits |= static_cast<uint32_t>(m.u8()) << 8;
-  if ((bits & kMore2) != 0) bits |= static_cast<uint32_t>(m.u8()) << 16;
-  if ((bits & kMore3) != 0) bits |= static_cast<uint32_t>(m.u8()) << 24;
-  number = (bits & kNumber16) != 0 ? m.u16() : m.u8();
-  return bits;
-}
-
-// The entity's fields after its number, onto `e` (its base).
-void entity_delta(DemoMsg& m, uint32_t bits, DemoEntity& e) {
-  if ((bits & kModel) != 0) e.model = m.u8();
-  if ((bits & kModel2) != 0) m.u8();
-  if ((bits & kModel3) != 0) m.u8();
-  if ((bits & kModel4) != 0) m.u8();
+// The entity's fields after its number, onto `e` (its base). `ext` as `ext_of`: model indices
+// shorts under bit 28, the sound a word, the solid a long, then more effects, alpha and scale.
+void entity_delta(DemoMsg& m, uint64_t bits, DemoEntity& e, int ext) {
+  const bool wide_model = ext > 0 && (bits & kModel16) != 0;
+  const auto model = [&] { return wide_model ? m.u16() : m.u8(); };
+  if ((bits & kModel) != 0) e.model = model();
+  if ((bits & kModel2) != 0) model();
+  if ((bits & kModel3) != 0) model();
+  if ((bits & kModel4) != 0) model();
   if ((bits & kFrame8) != 0) e.frame = m.u8();
   if ((bits & kFrame16) != 0) e.frame = m.i16();
-  if ((bits & (kSkinLow | kSkinHigh)) != 0) e.skin = sized(m, bits, kSkinLow, kSkinHigh);
+  if ((bits & (kSkinLow | kSkinHigh)) != 0) e.skin = sized64(m, bits, kSkinLow, kSkinHigh);
   if ((bits & (kEffectsLow | kEffectsHigh)) != 0)
-    e.effects = sized(m, bits, kEffectsLow, kEffectsHigh);
-  if ((bits & (kRenderFxLow | kRenderFxHigh)) != 0) sized(m, bits, kRenderFxLow, kRenderFxHigh);
-  if ((bits & kOriginX) != 0) e.origin.x = coord(m);
-  if ((bits & kOriginY) != 0) e.origin.y = coord(m);
-  if ((bits & kOriginZ) != 0) e.origin.z = coord(m);
+    e.effects = sized64(m, bits, kEffectsLow, kEffectsHigh);
+  if ((bits & (kRenderFxLow | kRenderFxHigh)) != 0) sized64(m, bits, kRenderFxLow, kRenderFxHigh);
+  if ((bits & kOriginX) != 0) e.origin.x = origin_coord(m, e.origin.x);
+  if ((bits & kOriginY) != 0) e.origin.y = origin_coord(m, e.origin.y);
+  if ((bits & kOriginZ) != 0) e.origin.z = origin_coord(m, e.origin.z);
   if ((bits & kAngle1) != 0) e.angles.x = angle8(m);
   if ((bits & kAngle2) != 0) e.angles.y = angle8(m);
   if ((bits & kAngle3) != 0) e.angles.z = angle8(m);
   if ((bits & kOldOrigin) != 0) pos(m);
-  if ((bits & kSoundBit) != 0) m.u8();
+  if ((bits & kSoundBit) != 0) {
+    if (ext > 0) {  // the index in bits 0 to 13; a loop volume (bit 14), a loop attenuation (15)
+      const int w = m.u16();
+      if ((w & 0x4000) != 0) m.u8();
+      if ((w & 0x8000) != 0) m.u8();
+    } else {
+      m.u8();
+    }
+  }
   if ((bits & kEvent) != 0) m.u8();
-  if ((bits & kSolid) != 0) m.i16();
+  if ((bits & kSolid) != 0) {
+    if (ext > 0)
+      m.i32();
+    else
+      m.i16();
+  }
+  if (ext == 0) return;
+  if ((bits & (kMoreFxLow | kMoreFxHigh)) != 0) sized64(m, bits, kMoreFxLow, kMoreFxHigh);
+  if ((bits & kAlpha) != 0) e.alpha = static_cast<float>(m.u8()) / 255.0f;
+  if ((bits & kScale) != 0) e.scale = static_cast<float>(m.u8()) / 16.0f;
 }
 
 std::string at_byte(const DemoMsg& m) { return " at byte " + std::to_string(m.at); }
 
-bool bad_number(int n, const DemoMsg& m, const char* what, std::string& error) {
-  if (n >= 0 && n < kMostEntities) return false;
+bool bad_number(int n, int most, const DemoMsg& m, const char* what, std::string& error) {
+  if (n >= 0 && n < most) return false;
   error = std::string("the ") + what + " names entity " + std::to_string(n) + at_byte(m) +
-          ", past the game's 1023: the recording is damaged";
+          ", past the game's " + std::to_string(most - 1) + ": the recording is damaged";
   return true;
 }
 
 void set_string(Demo& d, int index, std::string text) {
   DemoState& s = d.state;
+  const CsLayout& cs = layout_of(s.protocol);
   const auto put = [](std::vector<std::string>& list, int i, std::string v) {
     if (static_cast<size_t>(i) >= list.size()) list.resize(static_cast<size_t>(i) + 1);
     list[static_cast<size_t>(i)] = std::move(v);
   };
-  if (index == kCsMaxClients) {
+  if (index == cs.max_clients) {
     // Entities 1 to this are the players: kept by slot, so the rest number past `players`.
     d.max_clients = std::clamp(std::atoi(text.c_str()), 1, 32);
     s.players.assign(static_cast<size_t>(d.max_clients), DemoEntity{});
-  } else if (index >= kCsModels && index < kCsSounds) {
+  } else if (index >= cs.models && index < cs.sounds) {
     // The world is model 1; a recording that puts it elsewhere is read by the first map named.
     const std::string map = map_of_model(text);
-    if (!map.empty() && (index == kCsModels + 1 || s.map.empty())) s.map = map;
-    put(s.models, index - kCsModels, std::move(text));
-  } else if (index >= kCsSounds && index < kCsImages) {
-    put(s.sounds, index - kCsSounds, std::move(text));
-  } else if (index >= kCsImages && index < kCsImages + 256) {
-    put(s.images, index - kCsImages, std::move(text));
-  } else if (index >= kCsSkins && index < kCsSkins + 32) {
+    if (!map.empty() && (index == cs.models + 1 || s.map.empty())) s.map = map;
+    put(s.models, index - cs.models, std::move(text));
+  } else if (index >= cs.sounds && index < cs.images) {
+    put(s.sounds, index - cs.sounds, std::move(text));
+  } else if (index >= cs.images && index < cs.images + (cs.sounds - cs.models)) {
+    put(s.images, index - cs.images, std::move(text));
+  } else if (index >= cs.skins && index < cs.skins + 32) {
     // "<name>\<model>/<skin>": the name, then the look.
     const size_t cut = text.find('\\');
-    const size_t slot = static_cast<size_t>(index - kCsSkins);
+    const size_t slot = static_cast<size_t>(index - cs.skins);
     s.names[slot] = text.substr(0, cut);
     s.looks[slot] = cut == std::string::npos ? "" : text.substr(cut + 1);
   }
@@ -219,7 +280,7 @@ void server_data(Demo& d, DemoMsg& m) {
   s.entities.clear();
   s.statics.clear();
   s.static_sounds.clear();
-  d.baselines.assign(kMostEntities, DemoEntity{});
+  d.baselines.assign(static_cast<size_t>(most_entities(s.protocol)), DemoEntity{});
   for (Frame& f : d.ring) f.clear();
   d.views.fill(SequelView{});
   d.framed = false;
@@ -233,15 +294,31 @@ void server_data(Demo& d, DemoMsg& m) {
   for (std::string& n : s.looks) n.clear();
 }
 
-void player_info(DemoMsg& m, SequelView& v) {
-  const int bits = m.u16();
+// A base-128 varint, least significant group first (3435's stats mask).
+uint64_t varint(DemoMsg& m) {
+  uint64_t v = 0;
+  for (int shift = 0; shift < 64 && !m.bad; shift += 7) {
+    const int b = m.u8();
+    v |= static_cast<uint64_t>(b & 127) << shift;
+    if ((b & 128) == 0) break;
+  }
+  return v;
+}
+
+// The player's state. `ext` as `ext_of`: the gun model a short (3434 on); int23 origin and
+// velocity, words of movement time and flags, a blend by channel and 64 stats under a varint mask
+// (3435 on); fog under a third flags byte (3436).
+void player_info(DemoMsg& m, SequelView& v, int ext) {
+  int bits = m.u16();
+  if (ext >= 3 && (bits & 0x8000) != 0) bits |= m.u8() << 16;
+  const auto point = [&](int32_t& c) { c = ext >= 2 ? int23(m, c) : m.i16(); };
   if ((bits & kPmType) != 0) v.pm_type = m.u8();
   if ((bits & kPmOrigin) != 0)
-    for (int16_t& c : v.origin) c = static_cast<int16_t>(m.i16());
+    for (int32_t& c : v.origin) point(c);
   if ((bits & kPmVelocity) != 0)
-    for (int16_t& c : v.velocity) c = static_cast<int16_t>(m.i16());
-  if ((bits & kPmTime) != 0) v.pm_time = m.u8();
-  if ((bits & kPmFlags) != 0) v.pm_flags = m.u8();
+    for (int32_t& c : v.velocity) point(c);
+  if ((bits & kPmTime) != 0) v.pm_time = ext >= 2 ? m.u16() : m.u8();
+  if ((bits & kPmFlags) != 0) v.pm_flags = ext >= 2 ? m.u16() : m.u8();
   if ((bits & kPmGravity) != 0) v.gravity = m.i16();
   if ((bits & kPmDelta) != 0)
     for (int16_t& c : v.delta) c = static_cast<int16_t>(m.i16());
@@ -251,18 +328,38 @@ void player_info(DemoMsg& m, SequelView& v) {
     for (int16_t& c : v.angles) c = static_cast<int16_t>(m.i16());
   if ((bits & kKick) != 0)
     for (int8_t& c : v.kick) c = static_cast<int8_t>(m.i8());
-  if ((bits & kGunModel) != 0) v.gun_model = m.u8();
+  if ((bits & kGunModel) != 0) v.gun_model = ext >= 1 ? m.u16() : m.u8();
   if ((bits & kGunFrame) != 0) {
     v.gun_frame = m.u8();
     for (int8_t& c : v.gun_offset) c = static_cast<int8_t>(m.i8());
     for (int8_t& c : v.gun_angles) c = static_cast<int8_t>(m.i8());
   }
-  if ((bits & kBlend) != 0)
-    for (uint8_t& c : v.blend) c = static_cast<uint8_t>(m.u8());
+  if ((bits & kBlend) != 0) {
+    if (ext >= 2) {  // a flag byte: bits 0 to 3 the blend's channels, 4 to 7 the damage blend's
+      const int which = m.u8();
+      for (int i = 0; i < 4; i++)
+        if ((which >> i & 1) != 0) v.blend[i] = static_cast<uint8_t>(m.u8());
+      for (int i = 4; i < 8; i++)
+        if ((which >> i & 1) != 0) m.u8();
+    } else {
+      for (uint8_t& c : v.blend) c = static_cast<uint8_t>(m.u8());
+    }
+  }
+  if ((bits & (1 << 16)) != 0) {  // fog: a flag byte, then the parts it names
+    const int f = m.u8();
+    if ((f & 1) != 0) m.skip(3);      // colour
+    if ((f & 2) != 0) m.skip(4);      // density, sky factor
+    if ((f & 4) != 0) m.skip(2);      // height density
+    if ((f & 8) != 0) m.skip(2);      // height falloff
+    if ((f & 16) != 0) m.skip(3);     // height start colour
+    if ((f & 32) != 0) m.skip(3);     // height end colour
+    if ((f & 64) != 0) int23(m, 0);   // height start distance
+    if ((f & 128) != 0) int23(m, 0);  // height end distance
+  }
   if ((bits & kFov) != 0) v.fov = m.u8();
   if ((bits & kRdFlags) != 0) v.rdflags = m.u8();
-  const uint32_t mask = static_cast<uint32_t>(m.i32());
-  for (int i = 0; i < 32; i++)
+  const uint64_t mask = ext >= 2 ? varint(m) : static_cast<uint32_t>(m.i32());
+  for (int i = 0; i < (ext >= 2 ? 64 : 32); i++)
     if ((mask >> i & 1u) != 0) v.stats[i] = static_cast<int16_t>(m.i16());
 }
 
@@ -270,22 +367,23 @@ void player_info(DemoMsg& m, SequelView& v) {
 bool packet_entities(Demo& d, DemoMsg& m, const Frame* from, Frame& to, std::string& error) {
   to.clear();
   size_t old = 0;
+  const int ext = ext_of(d.state.protocol);
   for (;;) {
     int n = 0;
-    const uint32_t bits = entity_bits(m, n);
+    const uint64_t bits = entity_bits(m, n, ext);
     if (m.bad) {
       error = "the entity list runs past its block's end" + at_byte(m) +
               ": the recording is cut or damaged";
       return false;
     }
-    if (bad_number(n, m, "entity list", error)) return false;
+    if (bad_number(n, most_entities(d.state.protocol), m, "entity list", error)) return false;
     for (; from != nullptr && old < from->size() && (n == 0 || (*from)[old].first < n); old++)
       to.push_back((*from)[old]);
     if (n == 0) break;
     DemoEntity e = d.baselines[static_cast<size_t>(n)];
     if (from != nullptr && old < from->size() && (*from)[old].first == n) e = (*from)[old++].second;
     if ((bits & kRemove) != 0) continue;
-    entity_delta(m, bits, e);
+    entity_delta(m, bits, e, ext);
     to.emplace_back(n, e);
   }
   return true;
@@ -307,7 +405,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   const size_t base_slot = static_cast<size_t>(delta) & 15;
   const bool have_base = delta > 0 && d.views[base_slot].frame == delta;
   SequelView v = have_base ? d.views[base_slot] : SequelView{};
-  player_info(m, v);
+  player_info(m, v, ext_of(s.protocol));
   v.frame = number;
   if (m.u8() != kPacketEntities) {
     error =
@@ -362,7 +460,8 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
 void sound(DemoState& s, DemoMsg& m) {
   const int flags = m.u8();
   DemoSound o;
-  o.sound = m.u8();
+  // An extended recording's index is a word under flag 32.
+  o.sound = ext_of(s.protocol) > 0 && (flags & 32) != 0 ? m.u16() : m.u8();
   if ((flags & 1) != 0) o.volume = byte_volume(m.u8());
   if ((flags & 2) != 0) o.attenuation = byte_attenuation(m.u8());
   if ((flags & 16) != 0) m.u8();  // the offset in the frame, ms
@@ -519,6 +618,33 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       point(DemoEffectKind::spike);
       keep = false;
       break;
+    // The kinds a newer game's server sends, in any protocol's recording.
+    case 31:  // a lighter rail's line
+    case 57:  // a bolt's zap
+      line(DemoEffectKind::beam);
+      break;
+    case 56:  // a blue bolt's hit
+    case 58:  // a slam on the ground
+      if (!point_dir(DemoEffectKind::spike)) return false;
+      break;
+    case 59:  // a cable or a beam: entity, start, end
+    case 61:
+      e.entity = m.i16();
+      line(DemoEffectKind::beam);
+      break;
+    case 60:  // a power splash: entity, size
+      m.i16();
+      m.u8();
+      keep = false;
+      break;
+    case 62:
+    case 63:  // explosions that give no light
+      point(DemoEffectKind::explosion);
+      break;
+    case 128:  // damage dealt: a number for the screen alone
+      m.i16();
+      keep = false;
+      break;
     default:
       error = "a temporary entity of kind " + std::to_string(kind) + at_byte(m) +
               " that this game's recordings do not carry: the recording is damaged";
@@ -534,6 +660,7 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
   if (d.spans != nullptr) d.spans->clear();
   while (!m.done()) {
     const size_t at = m.at;
+    m.int23 = ext_of(s.protocol) >= 2;  // set again after a server data
     const int id = m.u8();
     switch (id) {
       case kMuzzleFlash:
@@ -582,9 +709,10 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
       case kConfigString: {
         const int index = m.i16();
         std::string text = m.str();
-        if (index < 0 || index >= kCsMax) {
+        const int most = layout_of(s.protocol).max;
+        if (index < 0 || index >= most) {
           error = "a settings string numbered " + std::to_string(index) + at_byte(m) +
-                  ", past the game's " + std::to_string(kCsMax - 1) + ": the recording is damaged";
+                  ", past the game's " + std::to_string(most - 1) + ": the recording is damaged";
           return false;
         }
         set_string(d, index, std::move(text));
@@ -592,12 +720,15 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
       }
       case kSpawnBaseline: {
         int n = 0;
-        const uint32_t bits = entity_bits(m, n);
-        if (bad_number(n, m, "baseline", error)) return false;
-        if (d.baselines.size() < kMostEntities) d.baselines.resize(kMostEntities);
+        const int ext = ext_of(s.protocol);
+        const uint64_t bits = entity_bits(m, n, ext);
+        const int most = most_entities(s.protocol);
+        if (bad_number(n, most, m, "baseline", error)) return false;
+        if (d.baselines.size() < static_cast<size_t>(most))
+          d.baselines.resize(static_cast<size_t>(most));
         DemoEntity& e = d.baselines[static_cast<size_t>(n)];
         e = DemoEntity{};
-        entity_delta(m, bits, e);
+        entity_delta(m, bits, e, ext);
         break;
       }
       case kDownload: {
@@ -643,15 +774,17 @@ void sequel_stream_begin(Demo& d) {
   d.state.format = DemoFormat::sequel;
   d.state.protocol = 34;
   d.ring.resize(16);
-  d.baselines.resize(kMostEntities);
+  d.baselines.resize(kMostEntitiesExt);
 }
 
 bool is_sequel_demo(std::span<const uint8_t> bytes) {
   if (bytes.size() < 13) return false;
   const int32_t len = i32_at(bytes, 0);
-  if (len < 9 || len > kMostBlock || bytes[4] != kServerData) return false;
+  if (len < 9 || bytes[4] != kServerData) return false;
   const int32_t protocol = i32_at(bytes, 5);
-  return protocol >= 26 && protocol <= 34 && bytes[13] <= 2;
+  const bool extended = ext_of(protocol) > 0;
+  if (len > (extended ? kMostBlockExt : kMostBlock)) return false;
+  return (extended || (protocol >= 26 && protocol <= 34)) && bytes[13] <= 2;
 }
 
 DemoRead next_sequel(Demo& d, std::string& error) {
@@ -664,9 +797,14 @@ DemoRead next_sequel(Demo& d, std::string& error) {
       d.ended = true;
       return DemoRead::end;
     }
-    if (len <= 0 || len > kMostBlock) {
+    // An extended recording's blocks run to 32768 bytes (its first, the server data, says so).
+    const bool extended =
+        ext_of(d.state.protocol) > 0 ||
+        (block + 9 <= b.size() && b[block + 4] == kServerData && ext_of(i32_at(b, block + 5)) > 0);
+    const int32_t most = extended ? kMostBlockExt : kMostBlock;
+    if (len <= 0 || len > most) {
       error = "the block length " + std::to_string(len) + " at byte " + std::to_string(block) +
-              " is not a block's (1 to 1400): the recording is damaged";
+              " is not a block's (1 to " + std::to_string(most) + "): the recording is damaged";
       return DemoRead::error;
     }
     if (block + 4 + static_cast<size_t>(len) > b.size()) return DemoRead::end;  // cut short
