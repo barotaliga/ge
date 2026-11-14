@@ -3,7 +3,7 @@
 // ge:summary WebSocket defined: base64, the upgrade, frames
 // ge:keywords websocket sha1 base64 handshake frame
 // ge:skill net
-// ge:test tests/net_websocket_test.cpp
+// ge:test tests/tv_web_test.cpp
 #include "net/websocket.hpp"
 
 #include <cstring>

@@ -7,7 +7,7 @@
 // ge:summary WebSocket: the upgrade, frames, masks; base64 for the accept
 // ge:keywords websocket ws rfc6455 browser handshake upgrade sha1 base64 frame mask ping pong close
 // ge:skill net
-// ge:test tests/net_websocket_test.cpp
+// ge:test tests/tv_web_test.cpp
 #pragma once
 
 #include <cstddef>
