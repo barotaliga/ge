@@ -6,10 +6,12 @@
 // ge:test tests/shooters_edge_classic_login_test.cpp
 #include "shooters_edge/net/classic_login.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <vector>
 
 #include "net/token.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/classic_info.hpp"
 
 namespace shooters_edge::net {
@@ -56,6 +58,21 @@ void advertise_key(ClassicLogin& l) {
   if (!s.serverinfo.empty()) info_set(s.serverinfo, kAccountKeyInfo, tag, kServerInfoBytes);
 }
 
+// sv_ranked: the free player seats offered to the matchmaker, at the logins' own pace.
+void ranked_offer(ClassicLogin& l) {
+  ClassicServer& s = *l.server;
+  if (l.logins.set.ranked.empty() || s.transport == nullptr) return;
+  const int maxclients = s.game->sv.set.maxclients;
+  const int most =
+      maxclients - std::max(0, s.cfg.max_spectators) - std::max(0, s.cfg.max_vip_spectators);
+  int taken = 0;  // players and bots in the players' seats
+  for (int i = 0; i < maxclients && i < sh::kMaxClients; i++)
+    if (s.clients[i].state != ConnState::free ? !s.clients[i].spectator : s.game->clients[i].active)
+      taken++;
+  gs::logins_offer(l.logins, kGameFolder, ge::net::to_string(s.transport->local),
+                   s.transport->local.port, most - taken, unix_now(l));
+}
+
 }  // namespace
 
 ge::account::NameRules classic_name_rules() { return {15, true, false}; }
@@ -71,6 +88,7 @@ bool classic_login_open(ClassicLogin& l, ClassicServer& s, const gs::ServerConfi
   if (!gs::logins_open(l.logins, c.login, classic_name_rules(), c.accounts, c.account_link,
                        os_fresh, nullptr, unix_now(l), error))
     return false;
+  l.logins.signer = c.account_signer;
   s.name_rule = name_rule;
   s.name_ctx = &l;
   advertise_key(l);
@@ -101,6 +119,7 @@ void classic_login_frame(ClassicLogin& l) {
       gs::login_seat(l.logins, i, c.userid, c.spectator, ge::net::to_string(c.address), now);
   }
   gs::logins_frame(l.logins, now, unix_now(l));
+  ranked_offer(l);
   advertise_key(l);
   for (const std::string& note : l.logins.notes) {
     s.log.push_back("login: " + note);
