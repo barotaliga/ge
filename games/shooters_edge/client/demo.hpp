@@ -293,6 +293,7 @@ struct Demo {
   uint32_t incoming = 0;              // the last packet's sequence
   uint32_t ext_fte = 0, ext_mvd = 0;  // the client format's protocol extensions
   int cmd_size = 0;                   // the client format's usercmd struct: 24 or 28 (0: unknown)
+  uint32_t single_flags = 0;          // a single-player demo of protocol 999: its encoding flags
   int player_model = 0;  // the client format's `progs/player.mdl` index: a playerinfo's default
   bool ended = false;
   // The stream is a live connection's that agreed the game's own set (the ge set): its ids 120
@@ -344,8 +345,10 @@ struct DemoMsg {
   std::span<const uint8_t> b;
   size_t at = 0;
   bool bad = false;
-  bool int23 =
-      false;  // a sequel stream of protocol 3435 on: its points are int23 (demo_sequel.cpp)
+  // A sequel stream of protocol 3435 on: its points are int23 (demo_sequel.cpp).
+  bool int23 = false;
+  // A single-player stream of protocol 999: its coordinate and angle encodings (demo_single.cpp).
+  uint32_t single_flags = 0;
   int u8();
   int i8();
   int i16();
