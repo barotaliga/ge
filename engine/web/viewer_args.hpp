@@ -3,6 +3,9 @@
 // into one struct. The same words on every platform, so the reading is tested natively.
 //
 //   --demo=<url>      a demo to play, fetched from the hub (`/d/ab/<sha256>.ger`)
+//   --run=<url>       a run of a game on the play contract watched again (M56j): its input log
+//                     (`.inputs` text, play/inputs.hpp), played off the game's own simulation
+//   --view=<name>     with --run, the camera it is watched from (a view the game names)
 //   --tv=ws://h:p/    a live broadcast's TV node, its WebSocket (with --stream)
 //   --stream=<n>      the broadcast's stream on that node
 //   --play=<map>      a game played on the page on that map (M56i): the game's own server runs in
@@ -17,12 +20,13 @@
 //   --pack=<url>      a content pack the world is drawn from, fetched; repeated, in mount order
 //   --speed=<x>       the demo's pace, 0..20 (1 by default)
 //
-// One of --demo, --tv, --play and --join is needed. A word the viewer does not know is refused with
-// its name, so a hub that hands a newer viewer's words to an older one says which.
+// One of --demo, --run, --tv, --play and --join is needed. A word the viewer does not know is
+// refused with its name, so a hub that hands a newer viewer's words to an older one says which.
 //
 // ge:summary The web viewer's arguments from the hub's page: the demo, the broadcast, a map to
 // ge:summary play, the packs
 // ge:keywords web viewer arguments module-arguments demo tv stream pack speed parse_viewer_args
+// ge:keywords run input-log view watch-again
 // ge:keywords play bots play-in-browser join join-ws cert webtransport server-certificate-hashes
 // ge:skill net
 // ge:test tests/web_viewer_args_test.cpp
@@ -41,6 +45,8 @@ inline constexpr int kMostBots = 15;
 
 struct ViewerArgs {
   std::string demo;                // the demo's URL ("": none)
+  std::string run;                 // a run's input log's URL ("": none)
+  std::string view;                // with `run`: the view it is watched from ("": the game's first)
   std::string tv;                  // the TV node's WebSocket URL ("": none)
   uint32_t stream = 0;             // with `tv`
   std::string play;                // the map a game is played on ("": none)

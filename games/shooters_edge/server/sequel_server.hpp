@@ -182,7 +182,7 @@ struct SequelMonster {
   SqMonsterPose pose;    // the frame it shows (sequel_poses.hpp)
 };
 
-struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): grouped by subject
+struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
   sh::SequelState move;
   uint32_t last_sequence = 0;
   bool alive = false;
