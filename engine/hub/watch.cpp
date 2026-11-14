@@ -249,15 +249,25 @@ Answer demo_page(const HubSpec& spec, std::string_view sha, const Site& site) {
   h += "</p>";
   ContentPack pack;
   std::string why;
+  // A run needs no content: the viewer grows its world again from the log's setup.
   const std::string content =
-      viewer_built(site, spec) && demo_content(site, spec, r->sha, pack, why)
+      !r->run && viewer_built(site, spec) && demo_content(site, spec, r->sha, pack, why)
           ? content_path(pack.sha)
           : "";
-  h += viewer_slot(site, spec, {"--demo=/" + archive_path(r->sha)}, "", content);
-  h += "<p class=\"act\"><a class=\"btn watch\" href=\"" + scheme_of(spec) + "://demo/" + r->sha;
-  if (link_host(site.host)) h += "?hub=" + site.host;
-  h += "\">Play in the game</a><a class=\"small\" href=\"/" + archive_path(r->sha) +
-       "\" download>Download</a>";
+  // A run opens in no game (no link is registered for one): the page is the only place to watch.
+  const std::string no_viewer =
+      r->run && !built(site, viewer_name(spec))
+          ? "This hub does not serve the game's viewer yet, so the run cannot be watched here."
+          : "";
+  h += viewer_slot(site, spec, {(r->run ? "--run=/" : "--demo=/") + row_path(*r)}, no_viewer,
+                   content);
+  h += "<p class=\"act\">";
+  if (!r->run) {
+    h += "<a class=\"btn watch\" href=\"" + scheme_of(spec) + "://demo/" + r->sha;
+    if (link_host(site.host)) h += "?hub=" + site.host;
+    h += "\">Play in the game</a>";
+  }
+  h += "<a class=\"small\" href=\"/" + row_path(*r) + "\" download>Download</a>";
   if (r->radar) h += "<a class=\"small\" href=\"/radar/" + r->sha + "\">Map</a>";
   h += "</p></section><aside><h3>Players</h3><ul class=\"also\">";
   for (const DemoPlayer& pl : r->players) {

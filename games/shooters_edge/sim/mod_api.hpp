@@ -12,6 +12,14 @@
 // by its number (the game's or the mod's), so a mod that takes over an entity's touch can still run
 // the game's after its own.
 //
+// ON THE SEQUEL'S RULES (games/shooters_edge/server/sequel_mods.hpp), which keep their own
+// entities, the same tables reach them: the hooks at the sequel's points (match_start once its
+// map is spawned, start_frame each 100 ms rules frame, the pre- and post-think around each
+// command, put_client_in_server at every spawn, connect and disconnect, and `damage` and `death`,
+// which only these rules call), and the services over its players (1..max_players) and its map's
+// entities (after them). What those rules have no place for (a mod's own entity, its functions,
+// fields they lack) is refused like a bad field: a warning in the log and 0.
+//
 // THE SERVICES never hand out a pointer into the game: an entity is a NUMBER (0 the world,
 // 1..max_players the players), a field is an SE_FIELD_* id, and every argument is checked (a bad
 // entity or field is refused with a warning in the game's log and answers 0), so the same mod
@@ -117,4 +125,12 @@ typedef struct se_mod_hooks_v1 {
   void (*client_disconnect)(void* state, const ge_mod_host_v1* host, int32_t player);
   // The mod's own function k, come due as an entity's think, touch or blocked.
   void (*call)(void* state, const ge_mod_host_v1* host, uint32_t k, int32_t self, int32_t other);
+  // A blow about to land on `target` from `attacker` (0 the world): the points the game is about to
+  // deal; the mod answers the points to deal instead (0 none, the push still lands). Before armour.
+  // Each mod in turn sees what the one below it answered. The rules that call it: the sequel's.
+  int32_t (*damage)(void* state, const ge_mod_host_v1* host, int32_t target, int32_t attacker,
+                    int32_t points);
+  // `victim` has just died by `killer` (0 the world, the victim himself a suicide), after the
+  // game scored it. The rules that call it: the sequel's.
+  void (*death)(void* state, const ge_mod_host_v1* host, int32_t victim, int32_t killer);
 } se_mod_hooks_v1;

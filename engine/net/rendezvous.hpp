@@ -47,6 +47,9 @@
 
 namespace ge::net {
 
+// A rendezvous's port when an address names none: STUN's own, since it answers STUN there.
+constexpr uint16_t kRendezvousPort = 3478;
+
 struct RendezvousConfig {
   Address public_address;              // the server as players reach it (none: its transport's)
   int max_sessions = 1024;             // registered sessions held at once

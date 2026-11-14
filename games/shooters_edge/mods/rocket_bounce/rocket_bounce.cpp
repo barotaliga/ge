@@ -95,6 +95,8 @@ const se_mod_hooks_v1 kHooks = {
     nullptr,  // put_client_in_server
     nullptr,  // client_disconnect
     call,
+    nullptr,  // damage
+    nullptr,  // death
 };
 
 const ge_mod_v1 kMod = {

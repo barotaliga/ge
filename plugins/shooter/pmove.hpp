@@ -96,7 +96,13 @@ struct MoveSettings {
   // with 1 and the whole wish (sequel_move.hpp).
   float air_accel = 0;
   float air_wish_cap = 30;
+  // pm_landpause: a landing faster than 200 down holds the next jump 0.144 s (0.2 s past 400
+  // down), as a move that does not let a hop chain on the landing does.
+  bool landpause = false;
 };
+
+inline constexpr float kLandPauseSpeed = 200;
+inline constexpr float kLandPauseShort = 0.144f, kLandPauseLong = 0.2f;
 
 // What a player carries from one command to the next.
 struct MoveState {
@@ -113,6 +119,7 @@ struct MoveState {
   // The player's own values the game's logic sets.
   float entgravity = 1;  // the entity's gravity factor
   float maxspeed = 320;  // the player's own cap (the game sets it, sv_maxspeed by default)
+  float land_time = 0;   // seconds left of a landing pause (pm_landpause), 0 when none
 };
 
 // The solids a move touched, each once, in the order touched.

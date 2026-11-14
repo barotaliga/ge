@@ -137,7 +137,9 @@ se_mod_hooks_v1 counting_hooks() {
           nullptr,
           nullptr,
           nullptr,
-          count_call};
+          count_call,
+          nullptr,   // damage
+          nullptr};  // death
 }
 
 ge_mod_v1 table_of(const se_mod_hooks_v1* hooks) {

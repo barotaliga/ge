@@ -16,8 +16,8 @@
 // rules' own function first and each mod's after it in the order named, and runs each mod's
 // match_start once the map's entities are spawned. A mod's state lives for one map, as the
 // rules' own globals do. Its log lines go to the server console after each call. A runner whose
-// rules keep their own entities off the loop's program seam (the sequel's: `program_seam` false in
-// its calls) refuses a mod at `start` until its own hooks land (docs/goals/M52g.md).
+// rules keep their own entities off the loop's program seam lays the mods over them itself
+// (`own_mods`: the sequel's, sequel_mods.hpp); one with neither refuses a mod at `start`.
 //
 // ge:summary The rules runner: the table of calls a host runs a game's rules through, and the
 // ge:summary common part every runner keeps (the loop, the lists, the sink, the world)
@@ -203,6 +203,9 @@ struct RunnerCalls {
   void (*destroy)(void* rules);  // null: the runner does not own its state
   // The rules run on the loop's program seam (sv.program), so C++ mods can stack on them.
   bool program_seam = false;
+  // Rules that keep their own entities off the seam lay the mods over them themselves: a host of
+  // each of `mods.tables` in `mods.hosts`, each match_start run (null: they take no mods).
+  bool (*own_mods)(RulesCommon& common, std::string& error) = nullptr;
 };
 
 // After a runner's own `start`: each mod's seam laid over the loop's program and its

@@ -479,20 +479,44 @@ std::vector<std::string> check_hooks(const ge_mod_v1* t) {
   return e;
 }
 
-std::vector<std::string> create_mod_host(ModHost& h, const ge_mod_v1* table,
-                                         const sh::Program& base, uint32_t seed) {
+std::vector<std::string> create_mod_host_over(ModHost& h, const ge_mod_v1* table,
+                                              const se_mod_services_v1& services, void* rules,
+                                              uint32_t seed) {
   std::vector<std::string> e = check_hooks(table);
   if (!e.empty()) return e;
   h.table = table;
   h.hooks = static_cast<const se_mod_hooks_v1*>(table->hooks);
-  h.base = base;
+  h.base = sh::Program{};
   h.sv = nullptr;
+  h.rules = rules;
   h.log.clear();
   h.log_dropped = 0;
   h.sounds.clear();
+  h.services = services;
 
-  se_mod_services_v1& s = h.services;
-  s = se_mod_services_v1{};
+  ge::mod::fill_host(h.host);
+  h.host.ctx = &h;
+  h.host.random_u32 = svc_random_u32;
+  h.host.random = svc_random;
+  h.host.log_line = svc_log;
+  h.host.game = &h.services;
+
+  h.run = ModRun{};
+  h.run.state.assign(table->state_bytes, 0);
+  h.run.rng = ge::core::make_rng(seed);
+  if (table->init) table->init(state_of(h), &h.host);
+  return e;
+}
+
+void mod_refuse(ModHost& h, const char* service, const std::string& why) {
+  refuse(h, service, why);
+}
+
+void* mod_state(ModHost& h) { return state_of(h); }
+
+std::vector<std::string> create_mod_host(ModHost& h, const ge_mod_v1* table,
+                                         const sh::Program& base, uint32_t seed) {
+  se_mod_services_v1 s{};
   s.size = sizeof(se_mod_services_v1);
   s.api = SE_MOD_API;
   s.time = svc_time;
@@ -515,18 +539,8 @@ std::vector<std::string> create_mod_host(ModHost& h, const ge_mod_v1* table,
   s.function = svc_function;
   s.call_function = svc_call_function;
   s.sound = svc_sound;
-
-  ge::mod::fill_host(h.host);
-  h.host.ctx = &h;
-  h.host.random_u32 = svc_random_u32;
-  h.host.random = svc_random;
-  h.host.log_line = svc_log;
-  h.host.game = &h.services;
-
-  h.run = ModRun{};
-  h.run.state.assign(table->state_bytes, 0);
-  h.run.rng = ge::core::make_rng(seed);
-  if (table->init) table->init(state_of(h), &h.host);
+  std::vector<std::string> e = create_mod_host_over(h, table, s, nullptr, seed);
+  if (e.empty()) h.base = base;
   return e;
 }
 

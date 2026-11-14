@@ -342,6 +342,9 @@ struct SequelServer : RulesCommon {
   // own). Read as a map starts.
   std::span<const profiles::Look> looks;
   std::vector<const profiles::Look*> model_looks;
+  // The ground and air the players move on (`sv_moves`): the sequel's own, or the classic game's
+  // (classic remix's `cr_moves`). Read as a map starts.
+  bool classic_moves = false;
   // The intermission: level time it began (0 none) and the map it leads to; everyone stands frozen
   // at its spot, and after 5 s any button leaves.
   double intermission_at = 0;
@@ -378,6 +381,8 @@ struct SequelServer : RulesCommon {
   float rocket_from_z = std::numeric_limits<float>::quiet_NaN();
   int midair_frags = 0;
   float midair_rise = 0;
+  // The C++ mods' `self` and `other` while a hook runs (sequel_mods.hpp's rows; 0 none).
+  int32_t mod_self = 0, mod_other = 0;
 
   SequelServer();
   ~SequelServer();
