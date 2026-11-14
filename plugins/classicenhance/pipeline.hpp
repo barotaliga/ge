@@ -7,8 +7,11 @@
 // are the first game's row.
 //
 // 2. **textures**: every texture of every map in the pack (`maps/*.bsp`), once each by name,
-//    enhanced (texture.hpp) into `textures/<name>/`, with `textures/index.txt`. Textures nobody
-//    sees drawn (`never_drawn`) are left out.
+//    enhanced (texture.hpp) into `textures/<name>/`, with `textures/index.txt`: the pixels the map
+//    carries, or, for a family that keeps them outside, the texture's own wall texture file
+//    (`textures/<name>.wal`, a texture some face is drawn with). Its material is the map's sky and
+//    liquid marks, else the words of the content row (`Profile::words`). Textures nobody sees
+//    drawn (`never_drawn`, a sky kept outside, a file missing) are left out.
 // 3. **lightmaps**: each map's light (lightmaps.hpp) into `lightmaps/`.
 // 4. **sounds**: every sound in the pack (`sound/**.wav`) enhanced (sound.hpp) to 48 kHz 16-bit
 //    WAV under `sounds/` at the same relative path, with `sounds/index.txt`.
@@ -114,11 +117,14 @@ struct RunReport {
 bool run_pipeline(const Source& source, const std::filesystem::path& root, const RunOptions& opts,
                   RunReport* report, std::string* error);
 
-// One map's textures, as the textures stage reads them out of the pack.
+// One map's textures, as the textures stage reads them out of the pack: the pixels the map
+// carries, or its own wall texture file's (`textures/<name>.wal`) for a family that keeps them
+// outside.
 struct PackTexture {
   std::string name, map;  // the texture's name and the first map that carries it
   int width = 0, height = 0;
   std::vector<uint8_t> indexed;
+  TextureMarks marks;  // the map's sky and liquid marks
 };
 // The palette and every drawn texture of every map in `pack` (the profile's maps), once each by
 // name, in the order the maps (sorted by path) and their texture lumps give; false with the reason.

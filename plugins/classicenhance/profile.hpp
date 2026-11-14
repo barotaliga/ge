@@ -15,7 +15,10 @@
 //   the sounds, the models and sprites, the 2D pictures), matched by `asset_name`, which also
 //   gives the asset's name (the path without the kind's folder and extension);
 // - **the named files**: the palette, the picture wad, the map a new game starts on, and the file
-//   whose presence says the packs are the full game rather than the shareware part.
+//   whose presence says the packs are the full game rather than the shareware part;
+// - **the material words**: the words of a texture's name that say it is metal, wood or stone
+//   (`MaterialWords`, texture.hpp), the base of its enhanced roughness, each game's own since
+//   each names its textures its own way (a sky or a liquid is told by the map's marks instead).
 //
 // The rows are `kProfiles`; `classic_profile()` is the first, which every function taking a
 // profile uses when none is given, so the first game reads exactly as before the profiles. The
@@ -73,7 +76,25 @@ struct Profile {
   std::string_view wad;        // the picture wad (the status bar's pictures, the font sheet); ""
   std::string_view start_map;  // the map a new game starts on, by name
   std::string_view full_game;  // present only in the full game's packs
+  MaterialWords words;         // what a texture's name says it is made of
 };
+
+// The classic game's material words.
+inline constexpr std::string_view kClassicMetal[] = {"met",  "tech",  "comp",  "light", "plat",
+                                                     "pipe", "rivet", "steel", "iron"};
+inline constexpr std::string_view kClassicWood[] = {"wood", "plank", "crate", "box"};
+inline constexpr std::string_view kClassicStone[] = {
+    "brick", "bric", "rock", "stone", "city",  "wall", "wiz",   "floor", "ground",
+    "cop",   "slab", "tile", "rune",  "stair", "step", "cliff", "dirt"};
+// The sequel's: its bases are of metal, grating, pipes and machines, its floors, walls, roofs
+// and ceilings of stone and concrete ("florr" and "supprt" as its files spell them).
+inline constexpr std::string_view kSequelMetal[] = {
+    "met",  "mtal", "comp", "grat",   "pip",   "lite",  "light",  "plat",    "rivet", "steel",
+    "iron", "tech", "mach", "timpod", "alarm", "lever", "supprt", "support", "door"};
+inline constexpr std::string_view kSequelWood[] = {"wood", "plank"};
+inline constexpr std::string_view kSequelStone[] = {"rock",   "floor", "florr", "ceil",  "wall",
+                                                    "roof",   "sewer", "brick", "stone", "dirt",
+                                                    "ground", "cliff", "slab",  "tile",  "stair"};
 
 inline constexpr Profile kProfiles[] = {
     {
@@ -96,6 +117,7 @@ inline constexpr Profile kProfiles[] = {
         .wad = "gfx.wad",
         .start_map = "start",
         .full_game = "gfx/pop.lmp",
+        .words = {kClassicMetal, kClassicWood, kClassicStone},
     },
     {
         // The sequel: its maps keep their textures in wall texture files (`textures/*.wal`,
@@ -117,6 +139,7 @@ inline constexpr Profile kProfiles[] = {
         .wad = "",
         .start_map = "base1",
         .full_game = "maps/base1.bsp",
+        .words = {kSequelMetal, kSequelWood, kSequelStone},
     },
 };
 
