@@ -160,6 +160,10 @@ if(TARGET ge_brush_app)
 endif()
 
 include(${PROJECT_SOURCE_DIR}/cmake/Mods.cmake)
+# The headers a mod for this game compiles against, installed in the engine's mod SDK
+# (cmake/Packaging.cmake, docs/mods.md § The SDK) at their paths under the tree.
+set_property(GLOBAL APPEND PROPERTY GE_MOD_SDK_FILES games/shooters_edge/sim/mod_api.hpp
+                                                     games/shooters_edge/sim/rules_api.hpp)
 ge_add_mod(shooters_edge_mod_rocket_bounce NAME rocket-bounce VERSION 1.0.0 GAME shooters_edge
   GAME_API 1 SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mods/rocket_bounce/rocket_bounce.cpp
   INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/games)

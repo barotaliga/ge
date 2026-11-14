@@ -339,9 +339,26 @@ where its header is. The consumer skill `mod` (`consumer-skills/mod/SKILL.md`) i
 author reads: the loop, the rules a mod keeps, and what each refusal means. The engine's own
 `mod` skill (`.agents/skills/mod/SKILL.md`) is for changing the format.
 
+### The SDK
+
+The engine's release package carries what a mod builds against, laid out as the tree is, under
+`share/gameengine2/sdk/`: `cmake/Mods.cmake` and `cmake/Fp.cmake`, `engine/mod/abi.hpp`, and each
+game's mod headers (`games/shooters_edge/sim/mod_api.hpp`, `rules_api.hpp`). So a mod repo needs
+no engine tree: `ge mod new <dir> --game=<id> --engine=<prefix>/share/gameengine2/sdk`, then
+`ge mod build` and `ge mod check` as with a tree. `cmake --install <build> --component mod_sdk
+--prefix <dir>` installs the SDK alone. A game adds its headers to the global property
+`GE_MOD_SDK_FILES` (its CMakeLists.txt); `cmake/Packaging.cmake` installs them. The packaging
+workflow builds and loads a mod from the installed SDK on Linux, macOS and Windows.
+
+**Decisions:**
+
+- **The tree's layout, not a CMake package.** `Mods.cmake` already finds the ABI and the flags
+  beside itself, so the SDK is a subset of the tree and a mod's `GE_ENGINE_DIR` names either one.
+  *Not taken:* `find_package(gameengine2)` for a mod, because a mod links nothing of the engine
+  and the package's targets would bring the engine's libraries along.
+
 Later (M52b): `ge mod check --run` plays the game's mod scenario with the package twice and
-compares the digests; the SDK (`abi.hpp`, `Mods.cmake` and the games' headers) installs with the
-engine's release package, so `ge mod build` needs no engine tree.
+compares the digests.
 
 ## The sample and the lab
 
