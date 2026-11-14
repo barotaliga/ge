@@ -17,13 +17,7 @@
 //   then three f32 view angles), 1 a packet as received (i32 length, the 8-byte channel header,
 //   the multiplayer protocol's messages, version 28: demo_client.cpp), 2 the sequences (two
 //   i32). A frame ends at each packet. The eye is the recording player's own `playerinfo` origin.
-//   A SPECTATOR'S recording that tracked a player (its server data's slot with bit 7) rides that
-//   player: the file does not name him, so each frame the view goes to the player who is not a
-//   spectator, whose command's pitch and yaw are both within 2 degrees of the recorded view and,
-//   when the recorder's own record came, whose origin is within 200 units of it on every axis (the
-//   one already ridden first, then the lowest slot); with no such player for 0.3 s of the demo's
-//   clock the view is the recorder's own again. Ridden, he is the view's player (`player`): his
-//   origin, his model left out, his weapon; the stats are his already, as the server sent them.
+//   A spectator's recording that tracked a player rides him (`Demo::recorder` says how).
 // - MULTIVIEW (the server's recording of every player, `.mvd`): records of a milliseconds byte, a
 //   type byte (the low 3 bits the kind, the high 5 a player) and a body; the messages are the
 //   multiplayer protocol's as a client that sees everything would get them, the players as the
@@ -320,7 +314,14 @@ struct Demo {
   int track = -1;
   std::vector<std::array<int32_t, kStatCount>> player_stats;
   // The client format: the recording's own slot, whether it was a spectator's, and since when no
-  // player has matched its view (the tracking spectator above; -1: one matches).
+  // player has matched its view (-1: one matches). A SPECTATOR'S recording that tracked a player
+  // (its server data's slot with bit 7) rides that player: the file does not name him, so each
+  // frame the view goes to the player who is not a spectator, whose command's pitch and yaw are
+  // both within 2 degrees of the recorded view and, when the recorder's own record came, whose
+  // origin is within 200 units of it on every axis (the one already ridden first, then the lowest
+  // slot); with no such player for 0.3 s of the demo's clock the view is the recorder's own again.
+  // Ridden, he is the view's player (`DemoState::player`): his origin, his model left out, his
+  // weapon; the stats are his already, as the server sent them.
   int recorder = -1;
   bool recorder_watches = false;
   double unmatched_since = -1;

@@ -44,13 +44,11 @@ void follow_tick(ClassicFollow& f, ClassicClientEnd& c) {
     f.died_at = -1;
   }
   const int top = top_fragger(c);
-  int want = f.slot;
-  if (!in || (f.died_at >= 0 && c.now - f.died_at >= f.deathwait_s)) {
-    want = top;  // gone, or dead long enough: the top fragger at once
-  } else if (top >= 0 && top != f.slot && c.frags[top] > c.frags[f.slot] &&
-             c.now - f.since >= f.dwell_s) {
-    want = top;
-  }
+  // Gone, or dead long enough: the top fragger at once; else one with more frags after the dwell.
+  const bool lost = !in || (f.died_at >= 0 && c.now - f.died_at >= f.deathwait_s);
+  const bool beaten =
+      in && top >= 0 && c.frags[top] > c.frags[f.slot] && c.now - f.since >= f.dwell_s;
+  const int want = lost || beaten ? top : f.slot;
   if (want != f.slot) {
     if (f.slot >= 0 && want >= 0) f.switches++;
     f.slot = want;

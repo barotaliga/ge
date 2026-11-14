@@ -757,7 +757,7 @@ out of range, not in the game or a spectator's is refused with "Invalid client t
 bare `ptrack` stops it. The recording does not name whom it tracked, so playback finds him: a
 spectator's client recording rides the player whose command's view is within 2 degrees of the
 recorded view (and near the recorder, when its own record came), and falls back to the recorder's
-own view after 0.3 s with none (`client/demo.hpp` § Client). `tests/shooters_edge_classic_follow_test.cpp`
+own view after 0.3 s with none (`client/demo.hpp`, `Demo::recorder`). `tests/shooters_edge_classic_follow_test.cpp`
 holds it: the server tracks the watcher's pick, it stands where he does, it gets his stats, and its
 recording plays as his view; a player's `ptrack` is ignored and a bad slot refused.
 

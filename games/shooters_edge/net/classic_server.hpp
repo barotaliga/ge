@@ -229,10 +229,10 @@ struct ClassicClient {
   Channel ch;
   std::string userinfo, name;
   int userid = 0;
-  bool spectator = false;
   // The player a spectator tracks (`ptrack <slot>`; -1: none): his stats, his weapon frame and his
   // record wherever he is are sent to it (the camera itself is the spectator's own, by `tmove`).
   int track = -1;
+  bool spectator = false;
   bool rules_active = false;  // the mod placed the player (after `begin`)
   bool aids_told = false;     // told the player aids on the server, at his first `begin`
   Ext ext;
