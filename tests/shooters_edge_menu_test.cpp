@@ -86,9 +86,9 @@ sm::FindFile fixture_find(const std::map<std::string, std::vector<uint8_t>, std:
 TEST(menu_has_the_classic_pages_and_rows) {
   const Menu m = sm::build_menu();
   const Page& root = *m.page("main");
-  CHECK(root.items.size() == 7);
-  const char* rows[] = {"games", "single", "multi", "demos", "options", "help", "quit"};
-  for (size_t i = 0; i < 7; i++) CHECK(root.items[i].id == rows[i]);
+  CHECK(root.items.size() == 6);  // no HELP: its pages show only at the free episode's end
+  const char* rows[] = {"games", "single", "multi", "demos", "options", "quit"};
+  for (size_t i = 0; i < 6; i++) CHECK(root.items[i].id == rows[i]);
   for (const char* p : {"single", "multi", "host", "setup", "options", "video", "help", "quit"})
     CHECK_MSG(m.page(p) != nullptr, std::string("no page ") + p);
   for (const Page* p : {m.page("single"), m.page("multi")})
@@ -664,7 +664,7 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   CHECK(art.screen_height() == 240);
   CHECK(sm::banner_of("options") == "m_banner_options" && sm::banner_of("help").empty());
 
-  // Every page reads on the 320 x 240 screen; the root a plate a row, 32 classic px apart.
+  // Every page reads on the 320 x 240 screen; the root a plate a row, 36 classic px apart.
   World w;
   sm::GameMenu g;
   g.add_cvars(w.con);
@@ -682,11 +682,11 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   g.show(host, "main");
   const sm::ClassicLayout l = sm::layout_classic(g.main(), art, 1280, 720);
   CHECK(l.plates && !l.strip && l.scale == 3);
-  CHECK(l.items[1].y - l.items[0].y == 96);
+  CHECK(l.items[1].y - l.items[0].y == 108);
   CHECK(l.items[1].w == 99 * 3);  // SINGLE PLAYER is the sequel's GAME plate
   for (const Rect& r : l.items) CHECK(r.w <= 0 || (r.y >= 0 && r.bottom() <= 720));
 
-  // SELECT GAME, DEMOS and HELP built from the plates only where they were measured: elsewhere in
+  // SELECT GAME and DEMOS built from the plates only where they were measured: elsewhere in
   // big glyphs.
   const auto glyphs = [&](const sm::ClassicArt& a) {
     DrawList dl;
@@ -699,7 +699,7 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   sm::ClassicArt pack = art;
   pack.strip_print = 0xfd50f20825e19f40ULL;
   CHECK(sm::carved_width(art, "games") == 0 && sm::carved_width(pack, "games") == 206);
-  CHECK(glyphs(art) == 10 + 5 + 4);  // SELECT GAME (no space drawn), DEMOS, HELP
+  CHECK(glyphs(art) == 10 + 5);  // SELECT GAME (no space drawn), DEMOS
   CHECK(glyphs(pack) == 0);
 
   // A page under the root takes its banner; SELECT GAME's title and the names are plates: 17

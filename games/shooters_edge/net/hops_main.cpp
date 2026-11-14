@@ -14,6 +14,7 @@
 //   sefwd --port=30000 --allow=<host[:port],...> | --open
 //   sefwd --port=<p> --server=<host:port>   (a fixed route: fixed.hpp)
 //   sefwd ... --webtransport=<port>   pages in a browser too, on that UDP port
+//   sefwd ... --master=<host[:port],...>   listed there, so a hub offers its pages
 //   seproxy --port=<near> --server=<host:port> [--link-loss=0.1] [--copies=3]
 //   seproxy near --port=<p> --far=<host:port> --server=<host:port> [--copies=3]
 //   seproxy far --port=<p> --allow=<host[:port],...> | --open [--copies=3]
@@ -53,6 +54,8 @@
 #include "forward/forward.hpp"
 #include "net/address.hpp"
 #include "net/conditions.hpp"
+#include "net/master.hpp"
+#include "net/packet.hpp"
 #include "net/transport.hpp"
 #include "proxy/proxy.hpp"
 #include "shooters_edge/net/classic_forward.hpp"
@@ -96,7 +99,8 @@ void usage() {
         "  --port=<p> --server=<host:port>: every client to that server, for a client that\n"
         "      cannot name a route (the sequel's, any game's)\n"
         "  ... --webtransport=<port>: pages in a browser too, on that UDP port\n"
-        "      (https://host:port/play?to=<server>; the certificate's hash is printed)\n");
+        "      (https://host:port/play?to=<server>; the certificate's hash is printed)\n"
+        "  ... --master=<host[:port],...>: listed there, so a hub offers its pages\n");
   else if (kHop == Hop::proxy)
     std::printf(
         "seproxy [near|far] [flags]: our proxies, for any classic client\n"
@@ -145,7 +149,7 @@ struct Options {
   int port = 0, copies = 3, webtransport = 0;
   double link_loss = 0, delay = 7, seconds = 0, status = 10;
   bool open = false;
-  std::vector<gn::Address> allow;
+  std::vector<gn::Address> allow, masters;
   gn::Address server{}, far{};
   bool has_server = false, has_far = false;
 };
@@ -187,24 +191,22 @@ struct Hops {
   gn::FakeLink near_fake, far_fake;
   fw::Forward fwd;
   ge::webtransport::WebForward web;  // pages' sessions, when --webtransport
-  bool has_web = false;
+  gn::MasterBeat beat;               // the forward listed at --master's masters
   sn::ClassicFace face;
   fw::FixedFace fixed;
-  bool fixed_route = false;
   px::ProxyNear near;
   px::ProxyFar far;
   sn::TvNode tv;
   gn::Transport sq_watcher, sq_face;
   sn::SequelTvRelay sq;
-  bool has_sq = false;
   sn::SequelTvFace sq_demo_face;  // --demo: the face fed from a recording, no watcher
   sn::SequelTvDemo sq_demo;
-  bool has_sq_demo = false;
   gn::Transport qw_face;  // tv --demo: the face for classic clients fed from a recording
   sn::ClassicTvUdp cl_demo_face;
   sn::UdpTvRecording cl_demo;
-  bool has_cl_demo = false;
   bool forward = false, has_near = false, has_far = false, has_tv = false;
+  bool has_web = false, beating = false, fixed_route = false;
+  bool has_sq = false, has_sq_demo = false, has_cl_demo = false;
 };
 
 std::string status_line(const Hops& h) {
@@ -312,6 +314,11 @@ int run(int argc, char** argv) {
         return fail("--allow=" + v + " holds no address", "host:port,...");
     } else if (a == "--sequel" && kHop == Hop::tv) {
       o.kind = "sequel-tv";
+    } else if (flag(a, "master", v)) {
+      if (!addresses(v, o.masters))
+        return fail("--master=" + v + " holds no address", "host[:port],...");
+      for (gn::Address& m : o.masters)
+        if (m.port == 0) m.port = gn::kMasterPort;
     } else if (a == "--open") {
       o.open = true;
     } else if (flag(a, "server", v)) {
@@ -383,8 +390,27 @@ int run(int argc, char** argv) {
             "the WebTransport socket did not open on " + gn::to_string(web_bind) + ": " + error,
             "pick a free --webtransport port");
       h.has_web = true;
+      // The forward's record says where pages connect and how they trust it (a hub reads it).
+      h.fwd.config.keys.emplace_back(fw::kWebTransportKey, std::to_string(o.webtransport));
+      fw::status_put_cert(h.fwd.config.keys, ge::webtransport::hash_hex(cert));
       std::printf("webtransport on %s, certificate %s\n", gn::to_string(web_bind).c_str(),
                   ge::webtransport::hash_hex(cert).c_str());
+    }
+    if (!o.masters.empty()) {
+      gn::MasterBeatConfig bc;
+      bc.masters = o.masters;
+      bc.protocol = gn::protocol_id("shooters_edge", 1);  // listed among the game's nodes
+      bc.kind = gn::NodeKind::forward;
+      bc.version = fc.version;
+      bc.seed = fc.seed;
+      gn::master_beat_init(h.beat, bc);
+      h.fwd_port.on_public = [](void* ctx, const uint8_t* d, size_t n, const gn::Address& from,
+                                int64_t now_us) {
+        return gn::master_beat_read(*static_cast<gn::MasterBeat*>(ctx), d, n, from, now_us);
+      };
+      h.fwd_port.public_ctx = &h.beat;
+      h.beating = true;
+      std::printf("listed at %zu master(s)\n", o.masters.size());
     }
   } else if (o.kind == "proxy" || o.kind == "proxy-near" || o.kind == "proxy-far") {
     const bool near = o.kind != "proxy-far", far = o.kind != "proxy-near";
@@ -398,6 +424,7 @@ int run(int argc, char** argv) {
     px::ProxyConfig pc;
     pc.link.repeat = o.copies;
     pc.link.pack = true;
+    pc.link.code = true;
     pc.allow = o.kind == "proxy" ? std::vector<gn::Address>{o.server} : o.allow;
     pc.open = o.open;
     const auto seed =
@@ -528,6 +555,7 @@ int run(int argc, char** argv) {
                                std::chrono::steady_clock::now() - start)
                                .count();
     const double now = static_cast<double>(now_us) / 1e6;
+    if (h.beating) gn::master_beat_update(h.beat, h.fwd_port, now_us);
     if (h.forward) fw::forward_update(h.fwd, now_us);
     if (h.has_web) {
       ge::webtransport::web_forward_update(h.web, now_us);
@@ -566,6 +594,12 @@ int run(int argc, char** argv) {
     if (o.seconds > 0 && now >= o.seconds) break;
   }
   std::printf("stopped: %s\n", status_line(h).c_str());
+  if (h.beating) {
+    const int64_t end_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                               std::chrono::steady_clock::now() - start)
+                               .count();
+    gn::master_beat_stop(h.beat, h.fwd_port, end_us);
+  }
   if (h.forward) fw::forward_close(h.fwd);
   if (h.has_web) ge::webtransport::web_forward_close(h.web);
   if (h.has_far) px::proxy_far_close(h.far);

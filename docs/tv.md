@@ -359,6 +359,20 @@ proxies each datagram travels in a link frame that each sending end may:
 - **pack**: XOR it with the newest datagram the other end said it has, then write its runs of zero
   bytes as counts. A lost frame costs only itself, because the reference is always one the other
   end confirmed; a frame that would not get smaller goes plain.
+- **code** (`link_code.hpp`): XOR it with the same reference and range code each byte (the field
+  codec's coder) through a bit tree under a context, the reference byte's high nibble at that
+  place (or one more past its end); the length goes first, less the reference's. The models learn
+  along the references: a datagram's coding starts from the models as they stood after its
+  reference was coded, kept beside each of the 64 kept datagrams at both ends, so both reach the
+  same models whatever the link lost, and nothing about the game is in it. The coder is flushed to
+  the value with the most trailing zero bits and its zeros cut, so a datagram like its reference
+  costs a byte or two. A coding that would not be smaller packs, and then goes plain.
+
+**The frame**: a byte for its kind (plain, packed, coded, ack, and the session's three), the
+session's 32 bits, the frame's number and the newest the other end has as their low 16 bits (each
+read as the number nearest the newest one the reader knows), and for a packed or coded frame its
+reference as a distance back (under 48). Ten bytes on a coded frame, nine on a plain one; it was
+eighteen and fourteen.
 
 The session opens like forward's route (a padded open, a cookie, then opened or a refusal in
 words), and the far proxy reaches only the servers on its allow list. Lag and loss for practice are
@@ -384,8 +398,19 @@ against an open-source classic server and match mod built beside the checkout, 2
 The loss the game sees doubles on a lossy link with one copy because the server leaves a gap in its
 own sequence for each command of the client's that does not arrive, as well as the replies the link
 loses; three copies take both away. Packing does not shrink the classic game's datagrams (they are
-already deltas, and short), so its link costs the frame's header on each; the field codec is what
-would make that link smaller.
+already deltas, and short), so its link costs the frame's header on each.
+
+The coder does (`se-interop --proxy=<port> --code=1`, against our own server with four bots on
+dm4, 20 s each, the shorter header in both columns):
+
+| Link | Packed: up / down per game byte | Coded: up / down per game byte |
+| --- | --- | --- |
+| Clean, one copy | 1.09 / 0.93 | 0.67 / 0.66 |
+| 10% loss each way, three copies | 3.28 / 3.08 | 2.05 / 2.02 |
+
+A classic datagram averages under 60 bytes, so the frame's ten bytes are a third of a coded frame;
+the coded body itself is about 0.4 of the game's bytes. Against the link as it was (plain, and the
+eighteen-byte frame) the coder halves it; three coded copies cost about two of the game's bytes.
 
 **Recording** (`engine/proxy/record.hpp`): either proxy hands every game datagram it passes on to
 `ProxyConfig::tap`, with its session and direction, and `proxy_record` keeps them as a replay file:
@@ -406,15 +431,15 @@ its start. `tests/proxy_test.cpp`: an observer who joins half way holds every da
 The `proxy` lab runs a 60 Hz client and a 20 Hz server through the pair at each loss on the link
 between them:
 
-| Link loss | Plain | Twice | Three times | Packed | Three times packed |
-| --- | --- | --- | --- | --- | --- |
-| 2% | 1.45% lost | 0.06% | 0% | 1.45% | 0% |
-| 10% | 10.30% | 0.91% | 0.12% | 10.30% | 0.12% |
-| 20% | 21.03% | 4.42% | 0.91% | 21.03% | 0.91% |
-| Link bytes down a second | 8284 | 16564 | 24844 | 2514 | 7532 |
+| Link loss | Plain | Twice | Three times | Packed | Three times packed | Coded | Three times coded |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2% | 1.45% lost | 0.06% | 0% | 1.45% | 0% | 1.45% | 0% |
+| 10% | 10.30% | 0.91% | 0.12% | 10.30% | 0.12% | 10.30% | 0.12% |
+| 20% | 21.03% | 4.42% | 0.91% | 21.03% | 0.91% | 21.03% | 0.91% |
+| Link bytes down a second | 8184 | 16364 | 24544 | 2353 | 7052 | 968 | 2898 |
 
-Three copies cut the loss at 10% about eighty times; packing sends 30% of the plain bytes down, so
-three copies packed cost less than one plain.
+Three copies cut the loss at 10% about eighty times; packing sends 29% of the plain bytes down and
+coding 12%, so three copies coded cost about a third of one plain.
 
 ## The sequel's hops
 
