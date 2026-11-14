@@ -154,4 +154,8 @@ std::string guard_summary(const Guard& g, int client) {
   return out;
 }
 
+std::string guard_verdict(const Guard& g, int client) {
+  return guard_out(g, client) ? guard_summary(g, client) : std::string();
+}
+
 }  // namespace ge::net

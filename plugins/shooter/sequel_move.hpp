@@ -126,7 +126,9 @@ inline constexpr int kSqMaxTouch = 32;
 struct SequelMove {
   // In: the state, the command, whether the game changed the state since the last move, and
   // the air acceleration the server set (only whether it is 0 matters). A game may run it on
-  // other ground (classic remix's `sv_moves`): the running speed's cap and the ground's friction.
+  // other ground (classic remix's `sv_physics`): the running speed's cap, the ground's friction,
+  // the landing pause and the water (the swimmer's share of the wish, the water's friction, the
+  // speed up a water jump gives).
   SequelState s;
   SequelCmd cmd;
   bool changed = false;
@@ -134,6 +136,9 @@ struct SequelMove {
   float max_speed = 300;
   float friction = 6;
   bool land_pause = true;  // a landing from a long fall holds the next jump (step 6)
+  float swim_scale = 0.5f;
+  float water_friction = 1;
+  float water_jump = 350;
   // Out.
   int touch[kSqMaxTouch] = {};
   int touches = 0;

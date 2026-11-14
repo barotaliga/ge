@@ -12,8 +12,14 @@
 
 namespace ge::render {
 
+#if GE_MOON_FACE
 extern const char* const kMoonTable[];  // render/moon_data.cpp: generated, nullptr-ended
 extern const double kMoonTableScale;
+#else
+// A web build leaves the table out (engine/render/module.cmake): the page fetches it when a night
+// sky first shows the moon. The scale is the table's own, given by the build.
+const double kMoonTableScale = GE_MOON_TABLE_SCALE;
+#endif
 
 namespace {
 
@@ -42,18 +48,70 @@ double texel(const std::vector<uint8_t>& m, int x, int y) {
 
 }  // namespace
 
-const std::vector<uint8_t>& moon_albedo() {
-  static const std::vector<uint8_t> map = [] {
+namespace {
+
+// The face the sky draws: the table's bytes once decoded, or, before a web build's page has
+// fetched them, every texel the near side's mean (a plain disc that keeps the phase's light).
+struct Face {
+  std::vector<uint8_t> map;
+  uint32_t generation = 0;  // counts the maps set; a texture uploads again when it moves
+  bool missing = true;      // the table not decoded yet (a web build's, until it is fetched)
+  bool wanted = false;      // a night sky showed the moon without it, and nobody took that yet
+};
+
+Face& face() {
+  static Face f = [] {
+    Face out;
+#if GE_MOON_FACE
     std::string text;
     for (const char* const* line = kMoonTable; *line; ++line) text += *line;
-    std::vector<uint8_t> m;
-    if (!decode_moon_map(text, m) ||
-        m.size() != static_cast<size_t>(kMoonMapWidth) * kMoonMapHeight) {
-      m.assign(static_cast<size_t>(kMoonMapWidth) * kMoonMapHeight, 255);
+    if (decode_moon_map(text, out.map) &&
+        out.map.size() == static_cast<size_t>(kMoonMapWidth) * kMoonMapHeight) {
+      out.missing = false;
+      return out;
     }
-    return m;
+#endif
+    const double mean = std::clamp(255.0 / kMoonTableScale, 0.0, 255.0);
+    out.map.assign(static_cast<size_t>(kMoonMapWidth) * kMoonMapHeight,
+                   static_cast<uint8_t>(std::lround(mean)));
+    return out;
   }();
-  return map;
+  return f;
+}
+
+}  // namespace
+
+const std::vector<uint8_t>& moon_albedo() { return face().map; }
+
+bool moon_face_missing() { return face().missing; }
+
+uint32_t moon_face_generation() { return face().generation; }
+
+void want_moon_face() {
+  Face& f = face();
+  if (f.missing) f.wanted = true;
+}
+
+bool take_moon_face_want() {
+  Face& f = face();
+  const bool was = f.wanted;
+  f.wanted = false;
+  if (was) f.missing = false;  // asked once: a fetch that fails leaves the plain disc for good
+  return was;
+}
+
+bool set_moon_face(std::string_view table) {
+  std::vector<uint8_t> m;
+  if (!decode_moon_map(table, m) ||
+      m.size() != static_cast<size_t>(kMoonMapWidth) * kMoonMapHeight) {
+    return false;
+  }
+  Face& f = face();
+  f.map = std::move(m);
+  f.missing = false;
+  f.wanted = false;
+  ++f.generation;
+  return true;
 }
 
 double moon_albedo_scale() { return kMoonTableScale; }
@@ -69,18 +127,35 @@ double albedo_at(double longitude, double latitude) {
   return (top * (1 - fy) + bottom * fy) / 255.0 * moon_albedo_scale();
 }
 
-MoonTexture create_moon_texture(gpu::Device& device) {
-  const std::vector<uint8_t>& top = moon_albedo();
+namespace {
+
+uint32_t moon_levels() {
   uint32_t levels = 1;
   while ((kMoonMapHeight >> levels) >= 1) ++levels;
+  return levels;
+}
+
+}  // namespace
+
+MoonTexture create_moon_texture(gpu::Device& device) {
   MoonTexture t;
   wgpu::TextureDescriptor td{};
   td.label = "sky.moon";
   td.size = {static_cast<uint32_t>(kMoonMapWidth), static_cast<uint32_t>(kMoonMapHeight), 1};
   td.format = wgpu::TextureFormat::R8Unorm;
-  td.mipLevelCount = levels;
+  td.mipLevelCount = moon_levels();
   td.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
   t.texture = device.device.CreateTexture(&td);
+  t.queue = device.queue;
+  upload_moon_texture(t);
+  t.view = t.texture.CreateView();
+  return t;
+}
+
+void upload_moon_texture(MoonTexture& t) {
+  const std::vector<uint8_t>& top = moon_albedo();
+  const uint32_t levels = moon_levels();
+  t.generation = moon_face_generation();
   // Each level the box filter of the one above (the map is linear light already).
   std::vector<double> level(top.begin(), top.end());
   uint32_t w = kMoonMapWidth, h = kMoonMapHeight;
@@ -102,7 +177,7 @@ MoonTexture create_moon_texture(gpu::Device& device) {
     layout.bytesPerRow = row;
     layout.rowsPerImage = h;
     const wgpu::Extent3D size{w, h, 1};
-    device.queue.WriteTexture(&dst, bytes.data(), bytes.size(), &layout, &size);
+    t.queue.WriteTexture(&dst, bytes.data(), bytes.size(), &layout, &size);
     if (mip + 1 == levels) break;
     const uint32_t nw = std::max(1u, w / 2), nh = std::max(1u, h / 2);
     std::vector<double> next(static_cast<size_t>(nw) * nh);
@@ -120,8 +195,6 @@ MoonTexture create_moon_texture(gpu::Device& device) {
     w = nw;
     h = nh;
   }
-  t.view = t.texture.CreateView();
-  return t;
 }
 
 double linear_luminance(double r, double g, double b) {

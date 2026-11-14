@@ -980,7 +980,7 @@ bool body_frame(SequelServer& s, int slot) {
   const double kept = std::max(p.breather_until, p.suit_until);
   if (kept > now) {
     p.air_until = std::max(p.air_until, now + 10);
-    const int64_t left = static_cast<int64_t>((kept - now) * 10 + 0.5);  // frames of 0.1 s
+    const auto left = static_cast<int64_t>(std::floor((kept - now) * 10 + 0.5));  // 0.1 s frames
     if (p.water_level == 3 && left % 25 == 0) {
       p.breath_second = !p.breath_second;
       body_sound(s, slot, kAutoChannel,
@@ -1042,7 +1042,10 @@ bool body_frame(SequelServer& s, int slot) {
   }
   body_sound(s, slot, kAutoChannel, delta >= 55 ? "*fall1.wav" : "*fall2.wav");
   p.pain_sound_at = now;
-  const bool no_falling = deathmatch(s) && (s.cvars.find("dmflags")->integer() & 8) != 0;
+  // No harm under dmflags 8, nor under the classic game's physics (`sv_physics classic`): its
+  // arena hurts nobody for a fall.
+  const bool no_falling =
+      (deathmatch(s) && (s.cvars.find("dmflags")->integer() & 8) != 0) || s.classic_physics;
   if (no_falling) return true;
   hurt(s, slot, -1, {0, 0, -1}, std::max(1, static_cast<int>((delta - 30) / 2)), 0, false,
        kSqByFall);

@@ -99,6 +99,11 @@ struct MoveSettings {
   // pm_landpause: a landing faster than 200 down holds the next jump 0.144 s (0.2 s past 400
   // down), as a move that does not let a hop chain on the landing does.
   bool landpause = false;
+  // THE WATER (a game whose swimmers move another way): pm_swimscale, the share of the wish speed
+  // a swimmer takes (0.7, the sequel's 0.5), and pm_waterjump, the speed up a water jump out
+  // onto a bank gives (310, the sequel's 350).
+  double swimscale = 0.7;  // a double: the wish times it in double, then to float
+  float waterjump = 310;
 };
 
 inline constexpr float kLandPauseSpeed = 200;

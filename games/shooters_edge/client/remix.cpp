@@ -90,7 +90,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
                         "sequel's"},
              &out->models);
-  cvars.bind({.name = "cr_moves",
+  cvars.bind({.name = "cr_physics",
               .fallback = "0",
               .flags = ge::console::kArchive,
               .help = "Whose movement the players run, jump and strafe with under classic remix, "
@@ -100,7 +100,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .max = static_cast<double>(std::size(ce::kProfiles)),
               .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
                         "sequel's"},
-             &out->moves);
+             &out->physics);
   cvars.bind({.name = "cr_strong_min",
               .fallback = "1",
               .flags = ge::console::kArchive,
@@ -131,6 +131,16 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .max = 8,
               .values = "0: no limit; 2: two of a kind at most (the default)"},
              &out->balance.strong_same);
+  cvars.bind({.name = "cr_weak_same",
+              .fallback = "2",
+              .flags = ge::console::kArchive,
+              .help = "How many copies of one weak weapon (the shotguns' kind) a remixed map keeps "
+                      "at most; the rest become boxes of its ammunition.",
+              .kind = ge::console::CvarKind::integer,
+              .min = 0,
+              .max = 16,
+              .values = "0: no limit; N: at most that many (2 the default)"},
+             &out->balance.weak_same);
   cvars.bind({.name = "cr_pool_radius",
               .fallback = "160",
               .flags = ge::console::kArchive,
@@ -221,24 +231,25 @@ const profiles::RemixFigure* worn_figure(const RemixSettings& s, const RemixStat
   return profiles::remix_figure(played, items_game(of_models, played));
 }
 
-const profiles::RemixMoves* worn_moves(const RemixSettings& s, const RemixState& state,
-                                       std::string_view played) {
+const profiles::RemixPhysics* worn_physics(const RemixSettings& s, const RemixState& state,
+                                           std::string_view played) {
   if (!state.on) return nullptr;
-  RemixSettings of_moves = s;
-  of_moves.items = s.moves;
-  return profiles::remix_moves(played, items_game(of_moves, played));
+  RemixSettings of_physics = s;
+  of_physics.items = s.physics;
+  return profiles::remix_physics(played, items_game(of_physics, played));
 }
 
 bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played) {
   const profiles::RemixArsenal* worn = worn_arsenal(s, r.state, played);
   const profiles::RemixLooks* looks = worn_looks(s, r.state, played);
   const profiles::RemixFigure* figure = worn_figure(s, r.state, played);
-  const profiles::RemixMoves* moves = worn_moves(s, r.state, played);
-  if (worn == r.worn && looks == r.looks && figure == r.figure && moves == r.moves) return false;
+  const profiles::RemixPhysics* physics = worn_physics(s, r.state, played);
+  if (worn == r.worn && looks == r.looks && figure == r.figure && physics == r.physics)
+    return false;
   r.worn = worn;
   r.looks = looks;
   r.figure = figure;
-  r.moves = moves;
+  r.physics = physics;
   return true;
 }
 
@@ -246,8 +257,8 @@ std::vector<std::string> worn_lines(const RemixFiles& r, const std::vector<std::
   std::vector<std::string> lines =
       r.worn != nullptr ? profiles::arsenal_lines(r.worn->arsenal) : own;
   if (r.looks != nullptr) lines.push_back("set sv_wear \"" + std::string(r.looks->items) + "\"");
-  if (r.moves != nullptr)
-    for (const std::string_view line : r.moves->lines) lines.emplace_back(line);
+  if (r.physics != nullptr)
+    for (const std::string_view line : r.physics->lines) lines.emplace_back(line);
   return lines;
 }
 
@@ -263,8 +274,8 @@ std::string worn_line(const RemixFiles& r) {
                                    : "From the next map the weapons and armour are " + whose(items);
   line += r.figure == nullptr ? "; the players are the game's own"
                               : "; the players are " + whose(r.figure->models);
-  line +=
-      r.moves == nullptr ? " and move as its own." : " and move as " + whose(r.moves->moves) + ".";
+  line += r.physics == nullptr ? " and move as its own."
+                               : " and move as " + whose(r.physics->physics) + ".";
   return line;
 }
 
@@ -424,6 +435,23 @@ void balance_weapons(std::vector<Item>& items, std::string_view to, const pf::Re
   while (strong_count() > cap && lower("", "the map had too many strong weapons")) {
   }
   r.strong = strong_count();
+  // Too many of one weak weapon (after the strong ones were lowered into it): the copies past
+  // `weak_same`, the last in the map first, laid down as its ammunition's box.
+  if (bal.weak_same <= 0) return;
+  for (const pf::WeaponTier& w : pf::kWeaponTiers) {
+    if (w.game != to || w.tier >= pf::kStrongTier || w.ammo.empty()) continue;
+    int seen = 0;
+    for (size_t i : weapons) {
+      Item& it = items[i];
+      if (it.becomes != w.class_name || ++seen <= bal.weak_same) continue;
+      r.notes.push_back(it.cls + " " + where(it) + ": " + it.becomes + " laid down as " +
+                        std::string(w.ammo) + ", the map had more than " +
+                        std::to_string(bal.weak_same) + " of it");
+      it.becomes = std::string(w.ammo);
+      it.bits = 0;  // the small box
+      r.to_ammo++;
+    }
+  }
 }
 
 // The pools: small pickups near one another added up and laid down as the target's own sizes.
