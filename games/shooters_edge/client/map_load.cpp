@@ -23,10 +23,10 @@ std::string failed_on(const std::string& what, const std::exception& e) {
 }
 
 // The threads' steps: a throw is the step's failure, with its reason.
-MapRead read_map(const SearchPath* files, const std::string& name) {
+MapRead read_map(const SearchPath* files, const RemixFiles* remix, const std::string& name) {
   MapRead r;
   try {
-    r.map = load_named_map(*files, name, r.error);
+    r.map = load_remixed_map(*files, name, remix, r.error, &r.said);
   } catch (const std::exception& e) {
     r.map.reset();
     r.error = failed_on("the map " + name, e);
@@ -71,7 +71,7 @@ void load_map(MapLoad& l, const SearchPath& files, const std::string& name, doub
   l.what = name;
   l.since_s = now_s;
   l.began = std::chrono::steady_clock::now();
-  l.map = std::async(std::launch::async, read_map, &files, name);
+  l.map = std::async(std::launch::async, read_map, &files, l.remix, name);
 }
 
 void load_world(MapLoad& l, const SearchPath& files, const LoadedMap& map,
@@ -90,9 +90,14 @@ void load_world(MapLoad& l, const SearchPath& files, const LoadedMap& map,
   copy->name = map.name;
   copy->from_file = map.from_file;
   copy->file = map.file;
+  copy->from_game = map.from_game;
   std::shared_ptr<const LoadedMap> at = std::move(copy);
+  // Another game's map (classic remix): its world from both games' files, its textures in its own
+  // palette (world_draw.cpp).
+  const bool other = !map.from_game.empty() && l.remix != nullptr && l.remix->state.on;
+  const SearchPath* from = other ? &l.remix->files : &files;
   auto listed = std::make_shared<const std::vector<std::string>>(models.begin(), models.end());
-  l.world = std::async(std::launch::async, read_world_of, &files, &game, at, listed, picture);
+  l.world = std::async(std::launch::async, read_world_of, from, &game, at, listed, picture);
 }
 
 LoadStep step_load(MapLoad& l, ge::gpu::Device& device, uint32_t width, uint32_t height,
@@ -104,6 +109,7 @@ LoadStep step_load(MapLoad& l, ge::gpu::Device& device, uint32_t width, uint32_t
   if (l.map.valid() && (wait || done(l.map))) {
     MapRead r = l.map.get();
     out.map = std::move(r.map);
+    out.said = std::move(r.said);
     if (!out.map) {
       out.failed = LoadFailed::map;
       out.error = r.error;
@@ -160,6 +166,7 @@ int take_load(MapLoad& l, const LoadWindow& at, Listen& listen, ge::console::Con
         step.map = load_named_map(*at.files, "arena", error);
     }
     if (step.map) {
+      if (!step.said.empty()) con.print(step.said);
       if (!start_map(listen, *at.content, std::move(step.map), error)) {
         out::error("shooters_edge: the map change failed: " + error +
                    "; see docs/shooters-edge.md § Playing it");

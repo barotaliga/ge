@@ -343,8 +343,18 @@ ping, from the same records (the maintainer, 2026-11-13). The game's own columns
 beside the common ones, but for one whose name ends `_max` (the longest streak, the highest mid-air),
 which keeps its largest.
 
-The classic servers already on the internet report nothing to us; the hub's classic adapter reads
-their recent-stats answer into the same record, best effort and without accounts.
+## The classic servers' results
+
+The classic servers already on the internet report nothing to us, but their status answers, which
+the hub's classic adapter reads every refresh (`engine/hub/browse.hpp`), show a match being played
+and then ending. The hub keeps each match it sees end as a result (`engine/hub/results.hpp`): the
+server, the map and mode, when it ended, how long it ran (when the hub saw it start), and the final
+scoreboard by name. A match ends when a `playing` record with two or more players scoring is
+followed by an intermission (whose scores are the final ones), a return to warmup, another map, or
+every score dropping (a restart). Best effort and without accounts: a result counts in no player's
+totals and no ladder, and the newest 200 are kept in the hub's memory. `/results` (filtered by
+`server=`) and `/v1/results` serve them; the nav bar links Results on a hub that reads classic
+servers (the maintainer, 2026-11-13: stats from the servers already out there).
 
 ## The hub's pages
 
@@ -398,7 +408,7 @@ on the hub's Ladder page (`engine/hub/ladder_page.hpp`).
 | M59c2 | Our client logs itself in by its ticket; reserved names on a server whose master is elsewhere (a name ask); logins on a listen server and in a coop campaign | `se-login` |
 | M59d | The sequel's prompt and `login` line, one account logged in on both games' servers | `se-login` |
 | M59e | The match report, the replay file's closing summary, the master's totals, trusted servers | `match-report` |
-| M59f | The hub's Player, Match and Leaders pages and their API; the classic adapter's recent stats | `hub-players` |
+| M59f | The hub's Player, Match and Leaders pages and their API; the classic servers' results | `hub-players`, `se-hub` |
 | M59g | The ranked ladders: Elo for duels and registered duos, league seasons, past champions; the Ladder page | `hub-players` |
 
 Friends, presence and invites stay M17j's, on these accounts. A store's sign-in (Steam) linked to

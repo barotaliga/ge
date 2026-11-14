@@ -10,9 +10,12 @@
 //              players with their teams and the team game's totals, the match's phase
 //   silent     the master's dead entry never listed; the engine's status ask sent to nobody
 //   gone       one server stops answering: dropped once no refresh has heard it for `drop_us`
+//   results    the 4on4's and the duel's matches seen ending (engine/hub/results.hpp): their real
+//              records given frags (the lab's clients do not fight), then an intermission on the
+//              4on4 and another map on the duel; both kept as results, best score first
 //
-// and the Servers and Players pages are written from that index (attached, hashed) and, when a
-// headless Chromium is on the machine, drawn at a desktop's and a phone's width (measured).
+// and the Servers, Players and Results pages are written from that index (attached, hashed) and,
+// when a headless Chromium is on the machine, drawn at a desktop's and a phone's width (measured).
 //
 // ge:summary Lab: Shooter's Edge's hub lists running classic servers read by the classic query
 // ge:keywords lab se-hub hub browse classic adapter master status-query index pages chromium
@@ -29,6 +32,7 @@
 #include "hub/browse.hpp"
 #include "hub/pages.hpp"
 #include "hub/poller.hpp"
+#include "hub/results.hpp"
 #include "hub/spec.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/hub_browser.hpp"
@@ -51,6 +55,7 @@ namespace fs = std::filesystem;
 
 constexpr uint16_t kNetPort = 27510, kMasterPort = 27000;
 constexpr uint32_t kHub = 1, kMaster = 60, kSilent = 25;
+constexpr int64_t kResultsUnix_s = 1800000000;  // the results' clock (the lab's own, fixed)
 
 struct Plan {
   const char* name;
@@ -278,6 +283,54 @@ void run(gl::Lab& lab) {
   lab.attach("players.html", bytes(players_html));
   lab.attach("servers.json", bytes(api.body));
 
+  // RESULTS: two matches seen ending, on the records the hub read (frags given by the lab).
+  gh::Results results;
+  int ended = 0;
+  for (const uint32_t node : {20u, 21u}) {
+    const gh::HubNode* n = gh::poller_find(poller, listed_at(node));
+    if (!n) continue;
+    gn::Status during = n->status;
+    during.phase = gn::StatusPhase::playing;
+    int32_t frags = 31;
+    for (gn::StatusPlayer& p : during.players) {
+      p.score = frags;
+      frags -= 7;
+    }
+    for (gn::StatusTeam& tm : during.teams) {
+      tm.score = 0;
+      for (const gn::StatusPlayer& p : during.players)
+        if (p.team == tm.name) tm.score += p.score;
+    }
+    std::stable_sort(
+        during.teams.begin(), during.teams.end(),
+        [](const gn::StatusTeam& a, const gn::StatusTeam& b) { return a.score > b.score; });
+    gn::Status after = during;
+    if (node == 20) {
+      after.phase = gn::StatusPhase::intermission;
+    } else {
+      after.map = "arena2";
+      for (gn::StatusPlayer& p : after.players) p.score = 0;
+    }
+    const int64_t length_us = node == 20 ? 1200000000 : 600000000;
+    ended += gh::results_see(results, n->address, during, ev.now_us, after, ev.now_us + length_us,
+                             kResultsUnix_s)
+                 ? 1
+                 : 0;
+  }
+  lab.metric("results.kept", ended, "of 2");
+  if (ended != 2 || results.kept.size() != 2 || results.kept.back().players.front().score != 31) {
+    lab.fail(
+        "the hub kept " + std::to_string(results.kept.size()) + " of the two matches seen ending",
+        "run tests/hub_results_test and read results_see (engine/hub/results.cpp)");
+  }
+  gh::HubSpec rs = hs;
+  rs.results = true;
+  gh::Answer results_page, results_json;
+  gh::results_answer(rs, &results, "/results", kResultsUnix_s + 300, results_page);
+  gh::results_answer(rs, &results, "/v1/results", kResultsUnix_s + 300, results_json);
+  lab.attach("results.html", bytes(results_page.body));
+  lab.attach("results.json", bytes(results_json.body));
+
   // GONE: the slipgate server stops; the next refreshes miss it, and it is dropped.
   ev.boxes[3]->running = false;
   const int64_t stopped = ev.now_us;
@@ -321,6 +374,11 @@ void run(gl::Lab& lab) {
       {"players-desktop", "EVERY CLASSIC PLAYER", &players_html, 1280, 760,
        "GET /players: the twelve who joined, by their server's interest.",
        "names with their teams and frags, the server each is on."},
+      {"results-desktop", "THE MATCHES SEEN ENDING", &results_page.body, 1280, 900,
+       "GET /results: the 4on4's match ended in an intermission and the duel's by another map, "
+       "read off the servers' status answers (the frags given by the lab).",
+       "the duel first (the newest), then the 4on4 with its two teams' totals; each with its "
+       "server, five minutes ago and its length."},
   };
   int drawn = 0;
   for (const View& v : views) {
@@ -334,7 +392,7 @@ void run(gl::Lab& lab) {
     lab.shot({v.id, v.title, v.what, v.look, {{"width", std::to_string(v.w)}}}, *pic,
              gl::Det::measured);
   }
-  lab.metric("pages_drawn", drawn, "of 3", gl::Det::measured);
+  lab.metric("pages_drawn", drawn, "of 4", gl::Det::measured);
   fs::remove_all(dir, ec);
 }
 

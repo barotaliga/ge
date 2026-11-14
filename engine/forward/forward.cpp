@@ -115,6 +115,11 @@ net::Status status_of(const Forward& f, int64_t now_us) {
   s.keys = {{"clients", std::to_string(f.clients.size())},
             {"open", f.config.open ? "1" : "0"},
             {"allow", std::to_string(f.config.allow.size())}};
+  std::string reach;
+  for (size_t i = 0; i < f.config.allow.size() && i < kMostReachShown; i++)
+    reach += (i ? "," : "") + net::to_string(f.config.allow[i]);
+  if (!reach.empty()) s.keys.emplace_back(kReachKey, reach);
+  for (const auto& k : f.config.keys) s.keys.push_back(k);
   return s;
 }
 
@@ -229,6 +234,40 @@ bool is_forward(const uint8_t* data, size_t size) {
 }
 
 uint32_t forward_protocol() { return net::protocol_id("forward", 1); }
+
+void status_put_cert(std::vector<std::pair<std::string, std::string>>& keys, std::string_view hex) {
+  keys.emplace_back(kCertKey, hex.substr(0, 32));
+  keys.emplace_back(kCertKey2, hex.size() > 32 ? hex.substr(32) : std::string_view());
+}
+
+std::string status_cert(const net::Status& s) {
+  std::string a, b;
+  for (const auto& [k, v] : s.keys) {
+    if (k == kCertKey) a = v;
+    if (k == kCertKey2) b = v;
+  }
+  return a.size() == 32 && b.size() == 32 ? a + b : std::string();
+}
+
+bool status_reaches(const net::Status& s, const net::Address& to) {
+  std::string_view reach;
+  for (const auto& [k, v] : s.keys) {
+    if (k == "open" && v == "1") return true;
+    if (k == kReachKey) reach = v;
+  }
+  while (!reach.empty()) {
+    const size_t comma = reach.find(',');
+    net::Address a;
+    if (net::parse_address(reach.substr(0, comma), a)) {
+      net::Address host = to;
+      if (a.port == 0) host.port = 0;
+      if (a == host) return true;
+    }
+    if (comma == std::string_view::npos) break;
+    reach.remove_prefix(comma + 1);
+  }
+  return false;
+}
 
 void dial_start(Dial& d, std::span<const net::Address> chain, uint64_t seed, int64_t now_us) {
   const int64_t retry = d.retry_us, timeout = d.timeout_us, alive = d.alive_us;

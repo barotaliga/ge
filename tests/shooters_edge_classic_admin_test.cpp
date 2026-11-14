@@ -15,6 +15,7 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include "check.hpp"
@@ -355,7 +356,8 @@ TEST(rcon_takes_a_hashed_password_and_sv_rconcrypt_requires_it) {
 TEST(the_ban_list_refuses_its_addresses_and_saves_itself) {
   const std::string file =
       (std::filesystem::temp_directory_path() / "se_admin_listip.cfg").string();
-  std::filesystem::remove(file);
+  std::error_code stale;
+  std::filesystem::remove(file, stale);  // a run before this one's file, if any
   auto owned = std::make_unique<Rig>();
   Rig& rig = *owned;
   cn::ServerConfig cfg;
@@ -373,9 +375,12 @@ TEST(the_ban_list_refuses_its_addresses_and_saves_itself) {
   CHECK_MSG(rig.c[1].refused.find("banned") != std::string::npos, rig.c[1].refused);
   rig.oob("rcon secret writeip\n");
   CHECK(any_has(rig.answers(), "Saved 1 addresses"));
-  std::ifstream f(file);
-  std::string line;
-  CHECK(std::getline(f, line) && line == "addip 198.18.0.2");
+  {
+    // Closed before the file is removed: Windows refuses to delete a file that is open.
+    std::ifstream f(file);
+    std::string line;
+    CHECK(std::getline(f, line) && line == "addip 198.18.0.2");
+  }
   rig.oob("rcon secret addip 198.18.0.9\n");  // the console's own address
   CHECK(any_has(rig.answers(), "added"));
   rig.oob("rcon secret listip\n");
@@ -383,7 +388,9 @@ TEST(the_ban_list_refuses_its_addresses_and_saves_itself) {
   rig.server.cfg.ban_mode = 0;   // only the list joins: the console's address again
   rig.oob("rcon secret listip\n");
   CHECK(any_has(rig.answers(), "2 addresses listed"));
-  std::filesystem::remove(file);
+  std::error_code gone;
+  std::filesystem::remove(file, gone);
+  CHECK_MSG(!gone, "the ban file was not removed: " + gone.message());
 }
 
 // VIPs: a client whose password is a word of sv_vippassword skips the server's password and

@@ -55,6 +55,7 @@ TrialResult run_proxy_trial(const TrialConfig& c) {
   ProxyConfig pc;
   pc.link.repeat = c.repeat;
   pc.link.pack = c.pack;
+  pc.link.code = c.code;
   pc.seed = c.seed + 1;
   ProxyRecording near_rec, far_rec;
   if (c.record) {
