@@ -210,6 +210,7 @@ bool pit_on_line(const sh::MoveWorld& w, sh::Vec3f from, sh::Vec3f to, sh::Vec3f
   bool in_pit = false;
   float last_floor = feet;
   sh::Vec3f last{from.x, from.y, feet};
+  // NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter): steps of 4, exact in float
   for (float d = 0; d <= len; d += 4) {
     const float x = from.x + dx * d / len, y = from.y + dy * d / len;
     const sh::HullTrace tr = sh::trace_hull(hull, {x, y, feet + 64}, {x, y, feet - 1024});
@@ -331,6 +332,7 @@ void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<T
     const sh::Vec3f A = g.nodes[static_cast<size_t>(a)].origin;
     const sh::Vec3f B = g.nodes[static_cast<size_t>(b)].origin;
     const float d = static_cast<float>(ge::core::hypot(B.x - A.x, B.y - A.y));
+    // NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter): whole steps, exact in float
     for (float v = kGapSlowest; v <= fastest; v += kGapStep) {
       // A HOP'S PROOF: the jump flown at `v` toward B comes DOWN by it (the pilot's own test of a
       // gap's jump, pilot_gaps.hpp `gap_lands`), not standing on it: a block too small to stop on

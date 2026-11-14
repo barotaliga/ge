@@ -227,7 +227,7 @@ std::vector<Way> ways_in(const std::vector<const Approach*>& as, double from, fl
 double quantile(std::vector<double> v, double q) {
   if (v.empty()) return 0;
   std::sort(v.begin(), v.end());
-  return v[static_cast<size_t>(q * static_cast<double>(v.size() - 1) + 0.5)];
+  return v[static_cast<size_t>(std::lround(q * static_cast<double>(v.size() - 1)))];
 }
 
 struct Side {

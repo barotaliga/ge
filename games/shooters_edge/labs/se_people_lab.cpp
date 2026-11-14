@@ -411,8 +411,9 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   double hand_next = 0, hand_at = -1;
   std::vector<la::KeysState> keys(32);
   std::vector<la::BumpState> bumps(32);
-  std::vector<double> seen_at(32, -1e9);       // by slot: the last sample with an enemy in view
-  std::vector<uint8_t> clear_was(32 * 32, 0);  // by pair (i, j): j in a clear line of i last sample
+  std::vector<double> seen_at(32, -1e9);  // by slot: the last sample with an enemy in view
+  std::vector<uint8_t> clear_was(size_t{32} * 32,
+                                 0);  // by pair (i, j): j in a clear line of i last sample
   const sh::Hull& body = m.bsp.models[0].hulls[1];
   for (;;) {
     const cl::DemoRead rd = cl::next_frame(d, out.error);

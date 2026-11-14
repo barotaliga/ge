@@ -173,6 +173,7 @@ float lip_crossing(const MoveWorld& world, Vec3f o, float vh, float way) {
                     0};
     const double turn = core::libm::cos(static_cast<double>(a) * (core::kPi / 180));
     bool gap = false;
+    // NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter): whole steps, exact in float
     for (float d = kCrossEvery; d <= kCrossMost; d += kCrossEvery) {
       const Vec3f at = o + dir * d;
       const HullTrace tr = player_trace(world, at, {at.x, at.y, at.z - kStepHeight - 2});

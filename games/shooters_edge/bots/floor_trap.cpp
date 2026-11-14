@@ -61,6 +61,7 @@ bool flee_clear(const server::RulesCommon& s, int me, sh::Vec3f self, sh::Vec3f 
                      {o.x, o.y, up}, sh::kTraceNoMonsters, me);
   if (go.startsolid || go.fraction < 1) return false;
   const float d = flat(self, o);
+  // NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter): steps of 16, exact in float
   for (float u = 16; u < d; u += 16) {
     const float k = u / d;
     const sh::Vec3f p{self.x + (o.x - self.x) * k, self.y + (o.y - self.y) * k, up};

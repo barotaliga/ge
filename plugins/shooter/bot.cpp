@@ -210,6 +210,7 @@ int aim_air_set(Vec3f v, float view_yaw, float way_yaw, float maxspeed, float ac
   if (wall != nullptr && wall->arc && ground == nullptr) {
     // (`airarc`) The set held for the look: its wish fixed in the world (the view held), the
     // velocity turning under it; a wall met takes the velocity's part into it.
+    // NOLINTNEXTLINE(bugprone-incorrect-roundings): positive, the bits held by the bot's digests
     const int steps = static_cast<int>(kArcLook_s / dt + 0.5);
     const auto flown = [&](int k) {
       double wx = 0, wy = 0;
@@ -954,16 +955,12 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
         cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
         b.stats.air_keys++;
-      } else if (circle_view && !shot_due) {
+      } else if ((circle_view && !shot_due) ||
+                 (b.circlekeys && !swim3d && !shot_due && hp.circling_now &&
+                  (self.flags & kFlagOnGround) != 0)) {
         // (`circleview`: the set the ground move carries furthest under the view the keys land
         // under: forward and the side key once the hand is on the velocity; while it swings
-        // there, the set that does not brake.)
-        circle_keys(
-            b, sv, self, me,
-            b.airview ? wrap(cmd.angles.y + wrap(b.yaw - yaw_was) * kKeyLand) : wrap(cmd.angles.y),
-            msec, cmd);
-      } else if (b.circlekeys && !swim3d && !shot_due && hp.circling_now &&
-                 (self.flags & kFlagOnGround) != 0) {
+        // there, the set that does not brake. `circlekeys` presses the same.)
         circle_keys(
             b, sv, self, me,
             b.airview ? wrap(cmd.angles.y + wrap(b.yaw - yaw_was) * kKeyLand) : wrap(cmd.angles.y),

@@ -574,6 +574,7 @@ void run(gl::Lab& lab) {
     std::vector<int> who;
     for (size_t i : spots[g].members) who.push_back(starts[i].player);
     std::vector<std::string> names;
+    names.reserve(who.size());
     for (int w : who) names.push_back(players[static_cast<size_t>(w)].name);
     std::sort(names.begin(), names.end());
     names.erase(std::unique(names.begin(), names.end()), names.end());
@@ -770,6 +771,7 @@ void run(gl::Lab& lab) {
       c.e.level = static_cast<uint8_t>(lv);
       const sh::Vec3f v0 = fr.front().velocity;
       const float sp0 = sh::root_of(v0.x * v0.x + v0.y * v0.y);
+      // NOLINTNEXTLINE(bugprone-incorrect-roundings): a speed, never negative; the book's rows
       c.e.speed = static_cast<int16_t>(sp0 + 0.5f);
       float h0 = 0;
       if (sp0 > 30) {
@@ -791,6 +793,7 @@ void run(gl::Lab& lab) {
         while (y > 180) y -= 360;
         while (y < -180) y += 360;
         sh::RecipeStep step;
+        // NOLINTNEXTLINE(bugprone-incorrect-roundings): a time since the start, never negative
         step.ms = static_cast<uint16_t>((fr[k].t - fr.front().t) * 1000 + 0.5f);
         step.yaw10 = static_cast<int16_t>(y * 10);
         step.keys = fr[k].keys;

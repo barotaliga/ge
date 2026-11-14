@@ -258,6 +258,7 @@ JumpFlight hop_cast(const Pilot& p, const PilotSense& s, int msec) {
       else if (m >= kKeyPressMin) {
         float ang = heading(fw, sd);  // 0 forward, clockwise to the right
         if (ang < 0) ang += 360;
+        // NOLINTNEXTLINE(bugprone-incorrect-roundings): ang is 0..360, the bits held by the digests
         set = static_cast<int>(ang / 45 + 0.5f) % 8;
       }
       constexpr int8_t kF[8] = {1, 1, 0, -1, -1, -1, 0, 1}, kS[8] = {0, 1, 1, 1, 0, -1, -1, -1};
