@@ -107,6 +107,8 @@ struct WeaponLook {
 
 std::span<const WeaponLook> weapon_looks();
 const WeaponLook& weapon_look(Weapon w);
+// The sequel's weapon `w` (its rules' weapon order): its kick and its shot's light.
+const WeaponLook& sequel_weapon_look(int w);
 // The weapon number `impulse` (1..8) selects, or false when it names none.
 bool weapon_of_impulse(int impulse, Weapon& out);
 

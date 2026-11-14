@@ -104,7 +104,7 @@ void classic_login_frame(ClassicLogin& l) {
   advertise_key(l);
   for (const std::string& note : l.logins.notes) {
     s.log.push_back("login: " + note);
-    std::printf("shooters_edge_server: %s\n", note.c_str());
+    std::printf("sesv: %s\n", note.c_str());
   }
   l.logins.notes.clear();
   std::vector<gs::LoginOut> out;

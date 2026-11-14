@@ -1,5 +1,5 @@
 // THE HOST ON THE ENGINE'S SERVER CORE: a `ServerGame` (engine/server/server.hpp) over the server's
-// host, what the `se-server` lab and the core's tests run (`shooters_edge_server` itself serves the
+// host, what the `se-server` lab and the core's tests run (`sesv` itself serves the
 // playable mod over the classic protocol: net/classic_game.hpp). It runs the server's host
 // (host.hpp) on the config's map with its bot slots filled by stand-in wanderers (stand_in.hpp)
 // until the real bots take them (M18r), keeps the input log when one is asked for, and replays one.
@@ -8,7 +8,7 @@
 // digest the host gives when driven by hand (tests/server_core_test.cpp holds both).
 //
 // ge:summary Shooter's Edge's ServerGame: the host, stand-in bots, the input log, the replay
-// ge:keywords dedicated-server servergame server-core shooters_edge_server stand-in bots
+// ge:keywords dedicated-server servergame server-core sesv stand-in bots
 // ge:keywords input-log replay dedicated_game
 // ge:skill shooter net
 // ge:test tests/server_core_test.cpp

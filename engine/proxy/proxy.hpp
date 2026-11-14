@@ -10,6 +10,12 @@
 //             then its runs of zero bytes written as counts: a game whose next datagram is much
 //             like its last sends a fraction of the bytes. A frame whose reference the receiver no
 //             longer holds is dropped and counted; a frame that would not get smaller goes plain.
+//   coded     XORed with the same reference and range coded by models both ends learn along the
+//             references (link_code.hpp); a coding that would not get smaller packs instead.
+//
+// A FRAME is its kind (which says plain, packed or coded), the session, its number and the newest
+// the other end has as their low 16 bits (each widened to the nearest the reader knows), and for
+// a packed or coded frame its reference as a distance back: ten bytes on a coded frame.
 //
 // Both are chosen per direction at the sending end (`LinkConfig`), the classic proxies' rule: only
 // the slow hop needs them. The game's datagrams to and from the client and the server stay as the
@@ -33,6 +39,7 @@
 //
 // ge:summary Proxy: a near and a far hop that repeat and pack a game's datagrams over a slow link
 // ge:keywords proxy repeat redundancy packet-loss link-codec pack xor zero-run near far session
+// ge:keywords range-coded learned-models frame-header
 // ge:keywords lossy-link compression allow-list
 // ge:skill net
 // ge:test tests/proxy_test.cpp
@@ -50,6 +57,7 @@
 #include "net/address.hpp"
 #include "net/sim_network.hpp"
 #include "net/transport.hpp"
+#include "proxy/link_code.hpp"
 
 namespace ge::proxy {
 
@@ -62,6 +70,7 @@ struct LinkConfig {
   int repeat = 1;          // copies of each frame, 1..5
   int64_t gap_us = 4000;   // between copies
   bool pack = false;       // XOR against the last datagram the other end has, zero runs counted
+  bool code = false;       // XOR against it, range coded by learned models (link_code.hpp)
   int64_t ack_us = 50000;  // an ack frame when nothing else went for this long
 };
 
@@ -81,6 +90,7 @@ struct Kept {
 
 struct LinkStats {
   uint64_t datagrams_out = 0, frames_out = 0, bytes_out = 0, payload_out = 0, packed = 0;
+  uint64_t coded = 0;
   uint64_t datagrams_in = 0, frames_in = 0, duplicates = 0, late = 0, no_ref = 0, broken = 0;
 };
 
@@ -94,6 +104,8 @@ struct LinkEnd {
   uint32_t newest = 0;  // the newest received
   uint64_t window = 0;  // bit i: newest - i received
   std::array<Kept, kKept> sent{}, got{};
+  // The coder's models beside each kept datagram (empty until the link codes: every model fresh).
+  std::vector<LinkModels> sent_models, got_models;
   struct Copy {
     int64_t at_us = 0;
     uint16_t size = 0;

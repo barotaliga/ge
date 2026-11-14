@@ -17,6 +17,7 @@
 #include <set>
 
 #include "brush/read.hpp"
+#include "brush/wal.hpp"
 #include "classicenhance/cache.hpp"
 #include "classicenhance/lightmaps.hpp"
 #include "classicenhance/pictures.hpp"
@@ -41,6 +42,12 @@ std::string fnv_hex(const std::string& text) {
   static constexpr char kHex[] = "0123456789abcdef";
   std::string out(16, '0');
   for (int i = 15; i >= 0; i--, h >>= 4) out[size_t(i)] = kHex[h & 15];
+  return out;
+}
+
+std::string lower_ascii(std::string_view s) {
+  std::string out(s);
+  for (char& c : out) c = c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c;
   return out;
 }
 
@@ -238,7 +245,8 @@ bool run_textures(const Source& src, const fs::path& dir, const RunOptions& o, R
       if (!rep.item(t.name, error)) return false;
       continue;
     }
-    const Enhanced e = enhance_texture(t.name, t.indexed, t.width, t.height, palette, o.textures);
+    const Enhanced e = enhance_texture(t.name, material_of(t.name, t.marks, src.profile->words),
+                                       t.indexed, t.width, t.height, palette, o.textures);
     const uint32_t files_before = r.files;
     const std::string folder = safe_name(t.name);
     const fs::path at = dir / "textures" / folder;
@@ -489,10 +497,35 @@ bool pack_textures(std::span<const uint8_t> pack_bytes, Palette* palette,
       *error = e->path + ": " + *error;
       return false;
     }
+    // A texture some face is drawn with: a family that keeps its pictures outside lists every
+    // brush side's texture, the clip and trigger brushes' among them, and draws none of those.
+    std::vector<bool> drawn(map.textures.size(), false);
+    for (const brush::Surface& s : map.surfaces) {
+      if (s.texture < drawn.size()) drawn[s.texture] = true;
+    }
+    const std::string map_name(asset_name(profile.maps, e->path));
     for (const brush::Texture& t : map.textures) {
-      if (t.indexed.empty() || never_drawn(t.name) || !seen.insert(t.name).second) continue;
-      out->push_back({t.name, std::string(asset_name(profile.maps, e->path)), int(t.width),
-                      int(t.height), t.indexed});
+      if (never_drawn(t.name) || seen.count(t.name) != 0) continue;
+      const TextureMarks marks{.sky = t.sky, .liquid = t.liquid != brush::Liquid::none};
+      if (!t.indexed.empty()) {
+        seen.insert(t.name);
+        out->push_back({t.name, map_name, int(t.width), int(t.height), t.indexed, marks});
+        continue;
+      }
+      // Its own wall texture file (the sequel's). A sky face shows the sky box, never this.
+      if (t.sky || !drawn[size_t(&t - map.textures.data())]) continue;
+      const vfs::PakEntry* file = vfs::pak_find(pak, brush::wal_path(t.name));
+      if (file == nullptr) file = vfs::pak_find(pak, brush::wal_path(lower_ascii(t.name)));
+      brush::MapPicture pic;
+      std::string why;
+      if (file == nullptr ||
+          !brush::read_wal(vfs::pak_file(pack_bytes, *file), file->path, &pic, &why)) {
+        continue;  // drawn as the game draws a texture it cannot find
+      }
+      seen.insert(t.name);
+      const size_t texels = size_t(pic.width) * size_t(pic.height);
+      out->push_back({t.name, map_name, int(pic.width), int(pic.height),
+                      std::vector<uint8_t>(pic.level[0], pic.level[0] + texels), marks});
     }
   }
   return true;

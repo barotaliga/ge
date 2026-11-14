@@ -319,22 +319,33 @@ const char* material_name(Material m) {
   return "other";
 }
 
-Material material_of(std::string_view raw) {
+namespace {
+
+bool any_in(const std::string& name, std::span<const std::string_view> words) {
+  for (const std::string_view w : words) {
+    if (has(name, w)) return true;
+  }
+  return false;
+}
+
+}  // namespace
+
+Material material_of(std::string_view raw, const TextureMarks& marks, const MaterialWords& words) {
+  if (marks.liquid) return Material::liquid;
+  if (marks.sky) return Material::sky;
   const std::string name = lower(raw);
-  if (!name.empty() && name[0] == '*') return Material::liquid;
-  if (name.rfind("sky", 0) == 0) return Material::sky;
-  for (const char* w : {"met", "tech", "comp", "light", "plat", "pipe", "rivet", "steel", "iron"}) {
-    if (has(name, w)) return Material::metal;
-  }
-  for (const char* w : {"wood", "plank", "crate", "box"}) {
-    if (has(name, w)) return Material::wood;
-  }
-  for (const char* w : {"brick", "bric", "rock", "stone", "city", "wall", "wiz", "floor", "ground",
-                        "cop", "slab", "tile", "rune", "stair", "step", "cliff", "dirt"}) {
-    if (has(name, w)) return Material::stone;
-  }
+  if (any_in(name, words.metal)) return Material::metal;
+  if (any_in(name, words.wood)) return Material::wood;
+  if (any_in(name, words.stone)) return Material::stone;
   return Material::other;
 }
+
+TextureMarks marks_by_name(std::string_view raw) {
+  const std::string name = lower(raw);
+  return {.sky = name.rfind("sky", 0) == 0, .liquid = !name.empty() && name[0] == '*'};
+}
+
+Material material_of(std::string_view name) { return material_of(name, marks_by_name(name)); }
 
 bool never_drawn(std::string_view raw) {
   const std::string name = lower(raw);
@@ -356,8 +367,13 @@ assets::Image to_rgba(std::span<const uint8_t> indexed, int width, int height,
 
 Enhanced enhance_texture(std::string_view name, std::span<const uint8_t> indexed, int width,
                          int height, const Palette& palette, const EnhanceOptions& o) {
+  return enhance_texture(name, material_of(name), indexed, width, height, palette, o);
+}
+
+Enhanced enhance_texture(std::string_view name, Material material, std::span<const uint8_t> indexed,
+                         int width, int height, const Palette& palette, const EnhanceOptions& o) {
   Enhanced out;
-  out.material = material_of(name);
+  out.material = material;
   const int scale = std::clamp(o.scale, 1, 8);
   Rgb src{Plane(width, height), Plane(width, height), Plane(width, height)};
   Plane glow(width, height);

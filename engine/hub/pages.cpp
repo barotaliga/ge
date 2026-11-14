@@ -65,7 +65,8 @@ std::string nav(const HubSpec& spec, const char* on) {
   };
   return "<header><a class=\"brand\" href=\"/\">" + html_escape(spec.game) + "</a><nav>" +
          link("/", "Servers") + link("/players", "Players") + link("/demos", "Demos") +
-         (spec.stats ? link("/leaders", "Leaders") : std::string()) +
+         (spec.stats ? link("/leaders", "Leaders") + link("/ladder", "Ladder") : std::string()) +
+         (spec.results ? link("/results", "Results") : std::string()) +
          (spec.map_files ? link("/play", "Play") : std::string()) + link("/v1", "API") +
          "</nav></header>\n";
 }
@@ -135,7 +136,8 @@ std::string scoreboard(const HubSpec& spec, const gn::Status& s) {
   return h + "</table>";
 }
 
-std::string card(const HubSpec& spec, const HubNode& n) {
+// `page_forward`: a forwarder takes a browser page to this server (Play here opens /join/...).
+std::string card(const HubSpec& spec, const HubNode& n, bool page_forward) {
   const gn::Status& s = n.status;
   const Counts c = counts(s);
   const std::string addr = gn::to_string(n.address);
@@ -158,6 +160,8 @@ std::string card(const HubSpec& spec, const HubNode& n) {
   h += "<p class=\"act\"><a class=\"btn\" href=\"" + scheme + "://join/" + html_escape(addr) +
        "\">Join</a><a class=\"btn\" href=\"" + scheme + "://spectate/" + html_escape(addr) +
        "\">Spectate</a>";
+  if (page_forward)
+    h += "<a class=\"btn play\" href=\"/join/" + html_escape(addr) + "\">Play here</a>";
   for (const gn::StatusStream& st : s.streams) {
     h += "<a class=\"btn watch\" href=\"" + watch_path(st.node, st.stream) + "\">Watch</a>";
     break;
@@ -240,7 +244,8 @@ std::string servers_page(const Poller& p, const HubSpec& spec, std::string_view 
   h += "<p class=\"sum\">" + std::to_string(live.size() + empty.size()) + " servers · " +
        std::to_string(people) + " playing · " + std::to_string(broadcasts) + " broadcasts</p>";
   h += "<section class=\"cards\">\n";
-  for (const auto& r : live) h += card(spec, *r.second);
+  for (const auto& r : live)
+    h += card(spec, *r.second, poller_page_forward(p, r.second->address) != nullptr);
   h += "</section>";
   if (live.empty()) h += "<p class=\"none\">Nobody is playing right now.</p>";
   if (!empty.empty()) {
@@ -499,6 +504,8 @@ table.num{border-collapse:collapse;display:block;max-width:100%;overflow-x:auto}
 text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}table.num td:first-child,
 table.num th:first-child{text-align:left}table.num th{color:var(--dim);font-weight:500}table.rank td:nth-child(2),
 table.rank th:nth-child(2){text-align:left}
+article.result{margin:14px 0}article.result h3 small{color:var(--dim)}
+tr.unranked td{color:var(--dim)}table.champions td{text-align:left}
 label.without{color:var(--dim);font-size:14px;align-self:center}.warn{color:var(--hot)}
 @media(max-width:700px){main.watch{grid-template-columns:1fr}}
 )css";

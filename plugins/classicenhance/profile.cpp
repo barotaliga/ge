@@ -14,6 +14,8 @@ namespace ge::classicenhance {
 
 const Profile& classic_profile() { return kProfiles[0]; }
 
+const MaterialWords& classic_words() { return kProfiles[0].words; }
+
 const Profile* find_profile(std::string_view id) {
   for (const Profile& p : kProfiles) {
     if (p.id == id) return &p;

@@ -20,7 +20,9 @@
 #include <cmath>
 #include <map>
 #include <memory>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "brush/read.hpp"
@@ -37,6 +39,7 @@
 #include "shooter/sequel_move.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
+#include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/world_draw.hpp"
@@ -62,11 +65,15 @@ constexpr double kTic = 0.013;
 struct Shot {
   const char* id;
   const char* look_for;
-  int ticks;  // frames from the trigger to the picture
+  int ticks;  // frames from the trigger to the picture (`eye`: at most, the shot's next frame)
   sv::SqWeapon weapon;
   // At the floor a few steps ahead, the trigger pulled once and the picture from the eye: the marks
   // the hits leave (bullet holes, a blast's scorch).
   bool wall = false;
+  // Not fired: the weapon in hand at rest, level, from the eye (`--held=1`).
+  bool held = false;
+  // Fired, and the picture from the eye: the shot's flash, light and kick on the weapon in hand.
+  bool eye = false;
 };
 constexpr Shot kShots[] = {
     {"blaster", "a yellow bolt in flight, its glow on the walls", 14, sv::SqWeapon::blaster},
@@ -78,7 +85,17 @@ constexpr Shot kShots[] = {
     {"rocket-launcher", "a rocket's smoke and flame trail", 18, sv::SqWeapon::rocket_launcher},
     {"hyperblaster", "a stream of yellow bolts, lit", 24, sv::SqWeapon::hyperblaster},
     {"railgun", "the rail's straight blue line from gun to wall", 4, sv::SqWeapon::railgun},
+    {"railgun-fading", "the line circling the beam fading, the walls lit blue along it", 30,
+     sv::SqWeapon::railgun},
     {"bfg", "the green ball in flight, the room lit green", 95, sv::SqWeapon::bfg},
+    {"shotgun-flash", "the flash and smoke at the muzzle, the gun kicked back, its light", 40,
+     sv::SqWeapon::shotgun, false, false, true},
+    {"machinegun-flash", "a small bullet's flash at the muzzle as it fires", 40,
+     sv::SqWeapon::machinegun, false, false, true},
+    {"rocket-launcher-flash", "the rocket's flare at the muzzle, the launcher kicked", 40,
+     sv::SqWeapon::rocket_launcher, false, false, true},
+    {"railgun-flash", "the rail's blue light on the gun as it fires, the gun kicked", 40,
+     sv::SqWeapon::railgun, false, false, true},
     {"super-shotgun-marks", "a bullet hole where each pellet struck, spread as the shot spread",
      200, sv::SqWeapon::super_shotgun, true},
     {"rocket-marks", "the black scorch the rocket's blast left on the floor", 160,
@@ -262,14 +279,36 @@ void run(gl::Lab& lab) {
     lab.note("No GPU adapter on this machine: no pictures.");
     return;
   }
+  // The game's own weapons in hand (its view models, at the eye).
+  std::vector<ge::viewmodel::HeldModel> weapons;
+  const bool at_eye = cl::load_held_set(adapter, files, {}, weapons);
+  lab.metric("held.models", static_cast<double>(weapons.size()), "count", gl::Det::measured);
+  if (!at_eye)
+    lab.fail("the sequel's held weapons did not load",
+             "Read the shooters_edge: line above for the model it lacks. Skill: shooter.");
   const std::string map_name = lab.arg("map");
   const auto nums = lab.arg_nums("aim");
   float yaw = nums.size() > 0 ? static_cast<float>(nums[0]) : 0.0f;
   const float pitch = nums.size() > 1 ? static_cast<float>(nums[1]) : 0.0f;
   const std::string only = lab.arg("weapon");
-  for (const Shot& shot : kShots) {
+  // `--held=1`: every weapon at rest in hand instead of the shots.
+  const bool held_only = lab.arg("held") == "1";
+  std::vector<std::string> held_ids;
+  std::vector<Shot> shots;
+  if (held_only) {
+    for (int k = 0; k < sv::kSqWeaponCount; k++)
+      held_ids.push_back(std::string("held-") + std::to_string(k + 1));
+    for (int k = 0; k < sv::kSqWeaponCount; k++)
+      shots.push_back({held_ids[size_t(k)].c_str(),
+                       "the weapon at rest in the right hand, in its own skin, at the eye", 30,
+                       static_cast<sv::SqWeapon>(k), false, true});
+  } else {
+    shots.assign(std::begin(kShots), std::end(kShots));
+  }
+  for (const Shot& shot : shots) {
     if (!only.empty() && only != shot.id) continue;
     for (const char* look_name : kLooks) {
+      if (shot.held && std::string_view(look_name) != "modern") continue;
       cl::ListenOptions opt = shooters_edge::net::listen_options();
       opt.console = {"deathmatch 1"};
       cl::Listen l;
@@ -297,9 +336,9 @@ void run(gl::Lab& lab) {
         for (const ge::classicenhance::SwitchSpec& sw : ge::classicenhance::switches())
           look.ce.*sw.field = false;
       const cl::ModelLoad load{l.server->models, {}};
-      cl::WorldDrawPtr frame =
-          cl::create_world_draw(*device, files, *l.map, uint32_t(w), uint32_t(h),
-                                wgpu::TextureFormat::RGBA8Unorm, look, {}, error, load, adapter);
+      cl::WorldDrawPtr frame = cl::create_world_draw(*device, files, *l.map, uint32_t(w),
+                                                     uint32_t(h), wgpu::TextureFormat::RGBA8Unorm,
+                                                     look, weapons, error, load, adapter);
       if (!frame) {
         lab.fail(error, "Read the gpu: lines above. Skill: render.");
         return;
@@ -314,12 +353,26 @@ void run(gl::Lab& lab) {
       ge::render::FrameView v = cl::frame_view(l, shown, 1, t, kTic);
       Seen seen;
       std::vector<cl::Missile> missiles;
+      cl::HeldState held;
+      held.hand.at_eye = at_eye;
+      cl::HeldFire held_fire;
+      if (std::string why; !cl::load_held_fire(held_fire, &why,
+                                               at_eye && adapter.game != nullptr
+                                                   ? adapter.game->held_weapons
+                                                   : std::span<const std::string_view>{})) {
+        lab.fail(why,
+                 "Fix the weapon's fire in plugins/classicenhance/weapons.cpp. Skill: render.");
+        return;
+      }
+      shooters_edge::view::HandFrame hand;
       const auto step = [&](int) {
         t += kTic;
         count(l, missiles, seen);
         v = cl::frame_view(l, shown, 1, t, kTic);
         cl::step_fx(l, shown, fx_state, t, kTic, fx);
-        cl::draw_world(*device, *frame, v, fx, nullptr, kTic, {}, out.view);
+        hand = cl::step_held(l, shown, held, {}, weapons, t, kTic);
+        cl::fire_held(held_fire, hand, fx_state.on.muzzles, t, fx);
+        cl::draw_world(*device, *frame, v, fx, &hand, kTic, {}, out.view);
       };
       sh::MoveCmd aim;
       aim.angles = {tilt, yaw, 0};
@@ -331,36 +384,51 @@ void run(gl::Lab& lab) {
         step(i);
       }
       seen = {};
+      int fired_at = -1;
       for (int i = 0; i < shot.ticks; i++) {
         sh::MoveCmd cmd = aim;
-        if (!shot.wall || i < 4) cmd.buttons = sh::kButtonAttack;
+        if (!shot.held && (!shot.wall || i < 4)) cmd.buttons = sh::kButtonAttack;
         cl::listen_frame(l, cmd);
         step(i);
+        // From the eye: the picture a frame after the shot leaves the muzzle (the flash lasts a
+        // few hundredths of a second; the hand steps once a rules frame).
+        if (shot.eye && hand.fired) fired_at = i;
+        if (shot.eye && fired_at >= 0 && i >= fired_at + 1) break;
       }
-      if (std::string_view(look_name) == "modern" && !shot.wall) report(lab, shot, l, seen);
-      // The eye a step behind the player and beside him, so the shot is seen across its path.
+      if (std::string_view(look_name) == "modern" && !shot.wall && !shot.eye)
+        report(lab, shot, l, seen);
+      // The eye a step ahead of the player and beside him, turned in, so the shot is seen across
+      // its path.
       const double fx_ = ge::core::libm::sin(v.heading), fz = ge::core::libm::cos(v.heading);
-      if (!shot.wall) {
-        v.eye[0] += -fx_ * 0.8 + fz * 0.5;
-        v.eye[2] += -fz * 0.8 - fx_ * 0.5;
-        v.eye[1] += 0.3;
-        v.heading -= 0.2;
+      if (!shot.wall && !shot.held && !shot.eye) {
+        v.eye[0] += fx_ * 0.6 + fz * 0.9;
+        v.eye[2] += fz * 0.6 - fx_ * 0.9;
+        v.eye[1] += 0.25;
+        v.heading -= 0.55;
       }
       cl::FxFrame still = fx;  // the same moment again: nothing born twice, nothing moved
       still.births.clear();
-      cl::draw_world(*device, *frame, v, still, nullptr, 0, {}, out.view);
+      // The weapon in hand only where the picture is the eye's own.
+      cl::draw_world(*device, *frame, v, still,
+                     shot.wall || shot.held || shot.eye ? &hand : nullptr, 0, {}, out.view);
       const ge::gpu::Image img = ge::gpu::read_now(*device, out);
       const std::string id = std::string(shot.id) + "-" + look_name;
-      lab.shot({id,
-                std::string(sv::kSqWeapons[static_cast<int>(shot.weapon)].name) + ", " + look_name,
-                std::string("The ") + sv::kSqWeapons[static_cast<int>(shot.weapon)].name +
-                    " fired on " + map_name + " in the " + look_name +
-                    (shot.wall ? " look at the floor a few steps ahead, seen from the eye "
-                               : " look, seen from behind and beside the player ") +
-                    std::to_string(shot.ticks) + " frames after the trigger.",
-                shot.look_for,
-                {{"map", map_name}, {"weapon", shot.id}, {"look", look_name}}},
-               gl::Picture{int(img.width), int(img.height), img.rgba}, gl::Det::measured);
+      lab.shot(
+          {id,
+           std::string(sv::kSqWeapons[static_cast<int>(shot.weapon)].name) + ", " + look_name,
+           shot.held ? std::string("The ") + sv::kSqWeapons[static_cast<int>(shot.weapon)].name +
+                           " at rest in the player's hand on " + map_name +
+                           ", the game's own view model drawn at the eye."
+                     : std::string("The ") + sv::kSqWeapons[static_cast<int>(shot.weapon)].name +
+                           " fired on " + map_name + " in the " + look_name +
+                           (shot.wall  ? " look at the floor a few steps ahead, seen from the eye "
+                            : shot.eye ? " look, seen from the eye "
+                                       : " look, seen from a step ahead and beside the player ") +
+                           (shot.eye ? std::string("a frame after the shot left the muzzle.")
+                                     : std::to_string(shot.ticks) + " frames after the trigger."),
+           shot.look_for,
+           {{"map", map_name}, {"weapon", shot.id}, {"look", look_name}}},
+          gl::Picture{int(img.width), int(img.height), img.rgba}, gl::Det::measured);
       cl::listen_stop(l);
     }
   }
@@ -379,6 +447,7 @@ const gl::LabSpec kSpec{
     "the modern look add glows, the rail's beam and the BFG's burst over the classic one?",
     {{"size", "640,400", "the screen's width and height, px"},
      {"game", "", "the folder holding the sequel's base folder (empty: a hall, counts only)"},
+     {"held", "0", "1: every weapon at rest in hand from the eye, in place of the shots"},
      {"weapon", "", "only this weapon's pictures, by its id (blaster, railgun, ...; empty: all)"},
      {"map", "q2dm1", "the map to fire on (with --game)"},
      {"aim", "", "the view's yaw and pitch, degrees (empty: the longest clear line, level)"}},

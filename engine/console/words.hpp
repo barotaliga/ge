@@ -24,7 +24,7 @@
 //
 // ge:summary A setting's words: one-sentence help, what each value does, and whether a value fits
 // ge:keywords help values cvar-help explanation value-pattern value_fits words_fault sentence
-// ge:keywords setting-words cfg-check cfg-comments
+// ge:keywords setting-words cfg-check cfg-comments stated_default
 // ge:skill console
 // ge:test tests/console_words_test.cpp
 #pragma once
@@ -54,5 +54,9 @@ bool value_fits(const Cvar& cvar, std::string_view value);
 std::string value_meaning(const Cvar& cvar, std::string_view value);
 // What is wrong with a cvar's words, or "" when nothing is.
 std::string words_fault(const Cvar& cvar);
+// The default the values text names: a literal entry whose meaning says "(the default)" ("1"
+// from "1: normal (the default)"), or the value inside "(<value> the default)" ("10" from
+// "0..1000: that rate (10 the default)"); "" when it names none.
+std::string stated_default(std::string_view values);
 
 }  // namespace ge::console

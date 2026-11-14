@@ -36,6 +36,7 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "viewmodel/held.hpp"
 
@@ -44,6 +45,7 @@ namespace shooters_edge::client {
 struct MapRead {
   std::unique_ptr<LoadedMap> map;
   std::string error;
+  std::string said;  // classic remix's line for another game's map ("" none)
 };
 struct WorldReadDone {
   WorldReadPtr read;
@@ -60,6 +62,10 @@ struct MapLoad {
   WorldDrawPtr warming;    // made, warmed up offscreen a few frames before it is shown (warm_world)
   int warmed = 0;          // the warm-up frames it has had
   std::vector<std::future<WorldReadDone>> dropped;  // reads let run out
+  // Classic remix's other game (client/remix.hpp): a map its packs hold is read from them and its
+  // world drawn with its own files; null or off: the played game's alone. The window's, outliving
+  // the load.
+  const RemixFiles* remix = nullptr;
 };
 
 // Whether `f` holds a result now; with `wait`, waited for (false only when it holds none).
@@ -92,6 +98,7 @@ struct LoadStep {
   WorldDrawPtr world;
   LoadFailed failed = LoadFailed::none;
   std::string error;
+  std::string said;  // classic remix's line for another game's map ("" none)
 };
 // One frame's look at the load: what has finished, and the next step begun. With `wait` each step
 // in flight is waited for (a measured run, which must not draw a frame before its map).

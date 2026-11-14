@@ -14,15 +14,15 @@
 //   its 2nd and 98th percentiles. Dark reads as low: a crevice, a seam, mortar.
 // - **normal**: the height's slopes (Sobel) in tangent space, +Y up the picture, encoded
 //   `n * 0.5 + 0.5`.
-// - **roughness**: a base by the material the texture's name suggests (`material_of`), rougher in
-//   the crevices.
+// - **roughness**: a base by the texture's material (`material_of`: the map's own sky and liquid
+//   marks, else the words of its name the game's content row lists), rougher in the crevices.
 // - **emissive**: the colour of the texels drawn from the palette's last 32 entries, which the
 //   classic renderer draws at full brightness whatever the light, upscaled by the same kernel;
 //   black where nothing glows (`Enhanced::glows` false).
 //
-// A liquid (a name starting '*') gets a flattened relief and a smooth surface; a sky (a name
-// starting "sky") gets the albedo only. Pure and deterministic: the grain is hashed from the
-// texel and the name, and the work is split in bands whose outputs never overlap.
+// A liquid gets a flattened relief and a smooth surface; a sky gets the albedo only. Pure and
+// deterministic: the grain is hashed from the texel and the name, and the work is split in bands
+// whose outputs never overlap.
 //
 // ge:summary One classic texture upscaled with its height, normal, roughness and glow maps
 // ge:keywords texture upscale super-resolution kernel-regression anisotropic structure-tensor
@@ -49,8 +49,28 @@ inline constexpr int kFullbrightFirst = 224;
 
 enum class Material : uint8_t { stone, metal, wood, liquid, sky, other };
 const char* material_name(Material m);
-// What a texture's name suggests it is made of ('*' liquids, "sky", and words such as metal,
-// tech, wood, brick, rock, stone); `other` when nothing matches.
+
+// What a map says of a texture, as its reader marks it (brush::Texture's `sky` and `liquid`).
+struct TextureMarks {
+  bool sky = false;
+  bool liquid = false;
+};
+// The words of a texture's name that say what it is made of, each list one material's, tried in
+// the order metal, wood, stone; lower case, matched anywhere in the lower-cased name. A game's
+// content row holds its own (profile.hpp), since each game names its textures in its own way.
+struct MaterialWords {
+  std::span<const std::string_view> metal, wood, stone;
+};
+// The classic game's words (the first content row's).
+const MaterialWords& classic_words();
+// The texture's material: `sky` or `liquid` by its marks, else the first list of `words` with a
+// word in its name; `other` when none has.
+Material material_of(std::string_view name, const TextureMarks& marks,
+                     const MaterialWords& words = classic_words());
+// The marks a map of the first family gives by name alone (a '*' name a liquid, a name starting
+// "sky" the sky), for a picture known only by its name (a lab's, a test's).
+TextureMarks marks_by_name(std::string_view name);
+// material_of with marks_by_name's marks and the classic game's words.
 Material material_of(std::string_view name);
 // A texture no one ever sees drawn (trigger volumes, clip brushes): not worth enhancing.
 bool never_drawn(std::string_view name);
@@ -82,7 +102,12 @@ struct Enhanced {
 assets::Image to_rgba(std::span<const uint8_t> indexed, int width, int height,
                       const Palette& palette);
 
-// The surface set for texture `name`; `indexed` holds width × height palette indices.
+// The surface set for texture `name` of `material`; `indexed` holds width × height palette
+// indices. The name seeds the grain.
+Enhanced enhance_texture(std::string_view name, Material material, std::span<const uint8_t> indexed,
+                         int width, int height, const Palette& palette,
+                         const EnhanceOptions& options = {});
+// The same with the material `material_of(name)` gives.
 Enhanced enhance_texture(std::string_view name, std::span<const uint8_t> indexed, int width,
                          int height, const Palette& palette, const EnhanceOptions& options = {});
 

@@ -22,7 +22,9 @@ setup:
 # A game in its window: make run:<game> builds only that game's executable, on the release preset
 # (RUN_PRESET=debug for the sanitizers), then runs it with ARGS: make run:fall_line ARGS=--bot,
 # make run:shooters_edge ARGS="-basedir ~/Games/classic +map dm6". `make run` lists the games.
+# A game whose window has a short name of its own sits at the build's root under it (RUN_EXE_<game>).
 GAMES := $(notdir $(wildcard games/*))
+RUN_EXE_shooters_edge := se
 RUN_PRESET ?= release
 run:
 	@echo "make run:<game> builds a game and opens its window; the games: $(GAMES)"
@@ -33,7 +35,7 @@ run\:%:
 	@[ -f build/$(RUN_PRESET)/build.ninja ] || cmake --preset $(RUN_PRESET)
 	cmake --build --preset $(RUN_PRESET) --target $*
 	@tools/ccache-share.sh save
-	build/$(RUN_PRESET)/games/$*/$* $(ARGS)
+	build/$(RUN_PRESET)/$(or $(RUN_EXE_$*),games/$*/$*) $(ARGS)
 
 # A new cloud container first takes the shared build caches (tools/ccache-share.sh: the compiler
 # cache and .cache/deps; a no-op elsewhere and once the local caches have entries), and a good
