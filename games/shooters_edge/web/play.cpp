@@ -174,9 +174,9 @@ int play_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
 
     const bool locked = ge::web::take_play_input(canvas_id, in);
     if (!locked) in.mouse.dx = in.mouse.dy = 0;
-    if (told != (locked ? 1 : 0)) {
-      ge::web::say(locked ? "" : "Click the picture to play. Escape lets the mouse go.");
-      told = locked ? 1 : 0;
+    if (told != (locked || touch.seen ? 1 : 0)) {  // a thumb on the screen needs no click
+      told = locked || touch.seen ? 1 : 0;
+      ge::web::say(told != 0 ? "" : "Click the picture to play. Escape lets the mouse go.");
     }
     // The lobby's keys: F1 ready or break, F2 the other team, F4 the warmup or the lobby's screen;
     // on the screen F5 and F6 a bot more or less, ENTER the start.
