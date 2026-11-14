@@ -107,6 +107,13 @@ bool setup_of(const GameSpec& spec, const InputLog& log, Setup& out, std::string
 // `log` played back on its setup, every step of it.
 std::optional<Played> replay(const GameSpec& spec, const InputLog& log, std::string& error);
 
+// THE AUDIT a server makes of a run it is sent (a ghost, a record, a hub's run): `log` played on a
+// fresh run of its setup, every step of it, and the run handed back only when it reaches the
+// digest the log records. A log that records none is refused (nothing to hold it to), and so is
+// one whose steps play to another digest: a tape edited after it was recorded, or recorded by
+// another build. What the run scored is then read off the run itself, never taken from a claim.
+std::unique_ptr<Run> play_audited(const GameSpec& spec, const InputLog& log, std::string& error);
+
 // The run's state after `step` steps of `log` (0: before the first).
 std::optional<std::string> state_at(const GameSpec& spec, const InputLog& log, int64_t step,
                                     std::string& error);
