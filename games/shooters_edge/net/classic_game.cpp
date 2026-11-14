@@ -1130,6 +1130,8 @@ void tally(Game& g) {
       rule_number(g, "deathmatch") != 0 && (!lobby || g.room->lobby.phase == gs::LobbyPhase::match);
   tally_frame(g.tally, g.rules->world, counting, accounts);
   cheat_watch_frame(g.cheats, g.rules->sv);
+  const std::array<sh::AimSpread*, sh::kMaxClients> aims = tally_aims(g.tally);
+  sh::aim_spread_frame(g.rules->sv, aims);
   for (int i = 0; i < sh::kMaxClients; i++)
     if (cheat_watch_out(g.cheats, i)) tally_flag(g.tally, i, cheat_watch_verdict(g.cheats, i));
   if (const sv::QcServer* q = sv::qc_of(g.rules))

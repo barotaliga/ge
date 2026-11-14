@@ -669,6 +669,15 @@ more than 50 ms cut; five such seconds put the player out, and the match report'
 it. The `se-cheats` lab: clocks 10% and 50% fast are out six seconds in; an honest player, a clock
 3% fast, a two-second stall's burst and a bot are never out.
 
+**Built (M17l, seventh part): the aim spread, a bot-likeness number.** A person's aim wanders
+over a target; an aim bot puts its line on the same point every time. `plugins/shooter/aim_spread.hpp`
+samples, each frame a player holds the attack, where its line crosses another living player's
+box (edge to edge, -1..1 across and up), and keeps the spread of those points. The classic server
+keeps one per player and the match report carries it as the `aim_spread` column (thousandths;
+-1 under 30 samples). It is shown, not judged: nothing is banned on it, since a steady hand at
+range is tight too. The `se-aim-spread` lab: aim bots on the head and the middle read 0.000, a
+hand on a mouse 0.63, a flicker 0.77, and the server's own bots in a match 0.48 to 0.73.
+
 ## Pressure tests (M17m)
 
 The simulated network runs on virtual time, so an hour of play takes seconds and every run is
