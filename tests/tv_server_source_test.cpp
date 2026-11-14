@@ -129,6 +129,7 @@ TEST(a_stream_that_saw_a_match_end_closes_with_its_report) {
   CHECK(src.summarised && s.reports.size() == 1);
   const auto t = rp::read_trailer(src.bytes);
   CHECK(t.has_value());
+  if (!t) return;
   std::string report_hex;
   bool scored = false, team_scored = false;
   for (const auto& [k, v] : t->meta) {
