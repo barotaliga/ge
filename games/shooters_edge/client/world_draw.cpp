@@ -783,6 +783,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                             .team_bottom = f.picture->team_bottom,
                             .enemy_top = f.picture->enemy_top,
                             .enemy_bottom = f.picture->enemy_bottom};
+    f.models.fullbright = f.picture->fullbright_skins;
     prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
                    in_place, fx.lights, o.dynamic_strength, &f.burning);
   }
