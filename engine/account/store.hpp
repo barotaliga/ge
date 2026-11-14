@@ -99,14 +99,15 @@ struct Store {
 
 enum class Refusal : uint8_t {
   none,
-  bad_name,       // not a name an account may have
-  name_taken,     // an account holds its key
-  bad_secret,     // a password of the wrong length
-  unknown,        // no such account (said to a player as `wrong`: a name is not confirmed)
-  wrong,          // the secret does not match
-  held,           // too many wrong secrets: wait
-  blocked,        // the master's owner blocked it
-  too_many_codes  // 4 codes live already
+  bad_name,        // not a name an account may have
+  name_taken,      // an account holds its key
+  bad_secret,      // a password of the wrong length
+  unknown,         // no such account (said to a player as `wrong`: a name is not confirmed)
+  wrong,           // the secret does not match
+  held,            // too many wrong secrets: wait
+  blocked,         // the master's owner blocked it
+  too_many_codes,  // 4 codes live already
+  banned           // a trusted server's anti-cheat put it out of a match: `wait_us` until it ends
 };
 
 struct Answer {

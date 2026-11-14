@@ -26,6 +26,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "classicenhance/profile.hpp"
+#include "console/console.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
@@ -302,6 +303,11 @@ void run(gl::Lab& lab) {
     return p;
   }();
   const std::string map_name = lab.arg("map");
+  // The crosshair as the player sets it (--hudcvars), the pack's own by default.
+  ge::hud::CrosshairSettings crosshair;
+  ge::console::Console crosshair_con;
+  ge::hud::add_crosshair_cvars(crosshair_con.cvars(), crosshair);
+  crosshair_con.execute(lab.arg("hudcvars"));
   for (int m = 0; m < int(std::size(kMoments)); m++) {
     cl::ListenOptions opt = shooters_edge::net::listen_options();
     opt.console = {"deathmatch 0"};
@@ -346,9 +352,10 @@ void run(gl::Lab& lab) {
     bar.binds = &kBinds;
     bar.now = 0.15;  // the cursor's on half
     cl::run_sequel_bar(bar, s.world, 0, s.frame_number, w, h);
-    cl::add_sequel_screen(bar, 1, kMoments[m].centre, w, h);  // the crosshair, a centre print
+    cl::add_sequel_screen(bar, 0, kMoments[m].centre, w, h);  // a centre print
     ge::ui::DrawList dl;
     dl.begin(w, h);
+    cl::draw_sequel_crosshair(dl, bar, crosshair, w, h);  // as --hudcvars sets it, under the bar
     const bool drew = cl::draw_sequel_bar(dl, bar, cl::sequel_bar_scale(h));
     ge::ui::render(dl, canvas);
     lab.metric(std::string(kMoments[m].id) + ".drawn", double(bar.ops.size()), "count",
@@ -381,7 +388,9 @@ const gl::LabSpec kSpec{
     "game's own pictures, where its program puts them?",
     {{"size", "640,480", "the screen's width and height, px"},
      {"game", "", "the folder holding the sequel's base folder (empty: a hall, plans only)"},
-     {"map", "base1", "the map to stand in (with --game)"}},
+     {"map", "base1", "the map to stand in (with --game)"},
+     {"hudcvars", "",
+      "the crosshair's cvars (crosshair, crosshaircolor, crosshairsize, crosshairalpha)"}},
     "",
     run,
 };

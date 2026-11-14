@@ -170,6 +170,7 @@ int32_t death_words(A& q, int32_t targ, int32_t attacker) {
     return say(s_obit_other);
   }
   if (q.is(how, "drowned")) return pick(s_world_drown);
+  if (q.is(how, "falling")) return pick(s_world_fall);
   if (q.is(how, "dissolved")) return pick(s_world_slime);
   if (q.is(how, "burned")) {
     const int32_t key = pick(s_world_lava);  // drawn before the flames are looked at

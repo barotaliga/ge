@@ -674,9 +674,18 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
                                                 {"m_main_quit", 100},
                                                 {"m_main_video", 118}};
   for (const auto& [name, w] : plates) {
-    art.pictures.emplace(name, make_image(w, 32, hex(0x404040)));
-    art.pictures.emplace(std::string(name) + "_sel", make_image(w, 32, hex(0x606060)));
+    art.pictures.emplace(name, make_image(w, 32, hex(0x2c2c2c)));
+    art.pictures.emplace(std::string(name) + "_sel", make_image(w, 32, hex(0x303030)));
   }
+  // One letter's ink on MULTIPLAYER's tag: a bright bar in its I's cell (x 86 to 102), plain and
+  // lit, reaching the pad of its T's cell (to x 89).
+  for (const auto& [name, v] :
+       {std::pair{"m_main_multiplayer", 0xc0}, {"m_main_multiplayer_sel", 0xe0}})
+    for (int y = 8; y <= 21; y++)
+      for (int x = 89; x <= 95; x++)
+        for (int c = 0; c < 3; c++)
+          art.pictures.at(name).rgba[(static_cast<size_t>(y) * 215 + static_cast<size_t>(x)) * 4 +
+                                     static_cast<size_t>(c)] = static_cast<uint8_t>(v);
   art.pictures.emplace("m_main_plaque", make_image(38, 166, hex(0x303030)));
   art.pictures.emplace("m_main_logo", make_image(36, 42, hex(0x303030)));
   for (int f = 0; f < 15; f++)
@@ -725,8 +734,9 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   sm::cut_plate_letters(&art);  // not the measured plates: nothing cut
   CHECK(art.letters.empty() && art.letters_lit.empty());
   sm::cut_plate_letters(&pack);
-  // A to Z and a to z, both ends and the space, plain and lit; every cell the tag's height, a
-  // small letter three px narrower than its capital, a lit letter as wide as its plain one.
+  // A to Z and a to z, both ends and the metal, plain and lit; every letter the tag's height with
+  // a 4 px pad each side of its cell, a small letter three px narrower than its capital, a lit
+  // letter as wide as its plain one.
   CHECK(pack.letters.size() == 55 && pack.letters_lit.size() == 55);
   for (const auto& [c, img] : pack.letters) {
     CHECK(img.height == 32 && img.width > 0);
@@ -734,9 +744,27 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
     if (c >= 'a' && c <= 'z')
       CHECK(img.width + 3 == pack.letters.at(static_cast<char>(c - 32)).width);
   }
-  // Every piece shaded to the darkest tag's surface: the flat fixture's plates all one grey.
-  CHECK(pack.letters.at('B').rgba[0] == 0x40 && pack.letters_lit.at('B').rgba[0] == 0x60);
-  // The tag's ends, the space and the letters laid edge to edge: 19 + 7 x 17 + 3 x 16 + 6 + 13.
+  CHECK(pack.letters.at('I').width == 17 + 8 && pack.letters.at('_').width == 120);
+  // The I is its bar and a rim of the tag around it, see-through beyond; the T beside it holds
+  // none of the I's ink, though the bar reaches its pad.
+  const auto px = [](const Image& img, int x, int y) {
+    const size_t at = (static_cast<size_t>(y) * static_cast<size_t>(img.width) + x) * 4;
+    return std::pair{img.rgba[at], img.rgba[at + 3]};
+  };
+  const Image& ink = pack.letters.at('I');
+  CHECK((px(ink, 4 + 3 + 3, 14) == std::pair<uint8_t, uint8_t>{0xc0, 255}));  // the bar
+  CHECK(px(pack.letters_lit.at('I'), 4 + 3 + 3, 14).first == 0xe0);
+  CHECK((px(ink, 4 + 3 - 1, 14) == std::pair<uint8_t, uint8_t>{0x2c, 255}));  // the rim, whole
+  CHECK(px(ink, 4 + 3 - 3, 14).second == 63);                                 // fading
+  CHECK(px(ink, 4 + 3 - 4, 14).second == 0 && px(ink, 10, 2).second == 0);    // see-through
+  const Image& t = pack.letters.at('T');
+  bool clear = true;
+  for (size_t i = 3; i < t.rgba.size(); i += 4) clear = clear && t.rgba[i] == 0;
+  CHECK(clear);
+  // The metal is the banner's, shaded to GAME's tag (0x50 to 0x2c); the banner's frame with it.
+  CHECK(pack.letters.at('_').rgba[0] == 0x2c);
+  CHECK(std::abs(sm::banner_shade(pack) - 44.0f / 80.0f) < 1e-3f);
+  // The tag's ends, the space and the letters' cells edge to edge: 19 + 7 x 17 + 3 x 16 + 6 + 13.
   std::vector<float> xs;
   CHECK(sm::plate_layout(pack, "SELECT GAME", &xs) == 19 + 7 * 17 + 3 * 16 + 6 + 13);
   CHECK(xs.size() == 13 && xs[0] == 0 && xs[1] == 19 && xs[2] == 36);
@@ -746,8 +774,18 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   CHECK(glyphs(art) == 10 + 5);  // SELECT GAME (no space drawn), DEMOS
   CHECK(glyphs(pack) == 0);
 
-  // A page under the root takes its banner; SELECT GAME's title and the names are on tags: 13
-  // pieces for the title, 7 for the first game, 10 for the sequel's (its ends and space included).
+  // A title the pack has no banner for, on a banner of its own: GAME's frame, the plain at least
+  // as wide as the pack's (196 px), the letters centred on it; wider for a longer title.
+  std::vector<float> bx;
+  CHECK(sm::banner_layout(pack, "DEMOS", &bx) == 275);
+  CHECK(bx.size() == 5 && bx[0] == 40 + std::floor((196 - (16 + 16 + 17 + 17 + 17)) / 2.0f));
+  CHECK(sm::banner_layout(pack, "TEXTURES AND MODELS", nullptr) ==
+        40 + 17 * 12 + 16 * 5 + 12 + 8 + 39);
+  CHECK(sm::banner_layout(art, "DEMOS", nullptr) == 0);  // no letters cut
+
+  // A page under the root takes its banner; SELECT GAME's title is on a banner and the names on
+  // tags: the title's 10 letters over 2 strips of metal, the first game's 5 letters, its ends and
+  // a strip, the sequel's 7 letters, its ends and 2 strips (a space draws nothing).
   g.show(host, "options");
   {
     DrawList dl;
@@ -767,7 +805,7 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   for (const auto& c : dl.cmds())
     for (const auto* set : {&pack.letters, &pack.letters_lit})
       for (const auto& [ch, img] : *set) pieces += c.box.image == &img ? 1 : 0;
-  CHECK(pieces == 13 + 7 + 10);
+  CHECK(pieces == 12 + 8 + 11);
 }
 
 TEST(enhanced_pictures_draw_at_the_classic_sizes) {

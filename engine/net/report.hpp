@@ -9,7 +9,8 @@
 //   start_s, duration_ms, ended u8, columns (count u8, each a name), teams (count u8, each name,
 //   score, colour u32), players (count u8, each name, team, account u64, bot u8, score, frags,
 //   deaths, suicides, team_kills, seconds, ping_min, ping_avg, ping_max, then one number per
-//   column)
+//   column, then in version 2 `flagged`)
+// Version 2 is written only when a player is flagged, so a clean match's bytes are version 1's.
 // A report past its limits (kReportPlayers, kReportTeams, kReportColumns) is refused by the
 // writer, never cut: a report that says less than the match is worse than none. The reader refuses
 // damage (a short record, a count past its limit, an unknown version) with what and where.
@@ -58,6 +59,9 @@ struct ReportPlayer {
   int64_t seconds = 0;                               // played
   int64_t ping_min = 0, ping_avg = 0, ping_max = 0;  // ms over the time played (0: not known)
   std::vector<int64_t> columns;                      // one per MatchReport::columns, in order
+  // The server's anti-cheat verdict when it put this player out (net/guard.hpp's summary, a
+  // line); "" for a clean player. A master trusting the server bans the account (accounts.md).
+  std::string flagged;
 };
 
 struct MatchReport {

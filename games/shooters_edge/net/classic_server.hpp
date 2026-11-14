@@ -72,8 +72,8 @@
 #include "server/bans.hpp"
 #include "server/guards.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
-#include "shooters_edge/net/classic_channel.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::net {

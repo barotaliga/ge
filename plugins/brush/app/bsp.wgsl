@@ -173,6 +173,8 @@ fn grid_cell(p: vec3f) -> i32 {
 // v2 lit in real time with no weather (the modern look's usual frame), so its shader carries no
 // code for the lightmaps', the rebake's or the weather's paths. The picture is the same either way.
 override kLitOnly: bool = false;
+// The largest colour the half-float target keeps short of infinity, with a margin.
+const kMaxHalf = 60000.0;
 // THE SEE-THROUGH PASS (bsp_draw.hpp's "bsp.liquids"): the liquids' faces blended over the world
 // drawn, by their kind's `bsp.liquid_alpha`, after the fog.
 override kSeeThrough: bool = false;
@@ -919,6 +921,10 @@ fn fs_main(in: VsOut) -> FsOut {
     discard;
   }
   var out = shade(in);
+  // The colour target holds half floats: a brighter texel (a lamp's face under its own lightmap
+  // in daylight units) would store as infinity, which the bloom's average turns to NaN and
+  // spreads over the screen.
+  out.colour = vec4f(min(out.colour.rgb, vec3f(kMaxHalf)), out.colour.a);
   if (out.mask.x < 0.5) {
     let d = length(in.world - frame.eye.xyz);
     var c = flat_fog(out.colour.rgb, select(d, 1e30, in.kind == kSky));

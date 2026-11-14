@@ -3,6 +3,13 @@
 //   (the view is on him, so the side is across), from shooter/dodge.hpp at the fighter's own
 //   `dodge` trait; not on a jump the route proved, a lift, a door, in water, on a button's errand
 //   or as a co-op companion (who keeps its place by the leader).
+// - THE PRESS (`press`, unjudged): the forward key drawn with the dodge's side for a stretch, on
+//   at him or back off (with a loaded launcher less on, more back), else the route's own; never on
+//   at him nearer than kPressNear, never onto a step not clear (dodge_clear turned forward). With
+//   it the footwork runs whenever the bot aims (any mode but a retreat's forward, the aim held on
+//   where he was too). People close in on an enemy faced (se-people `fight.dry.along` +68 units/s,
+//   the bots' +7); `team.press.*` says how often it runs and what held it off, the trace's `press`
+//   column each command's note.
 // - THE LANDING: just climbed out of the water (shooter/swim.hpp's exit), straight onto the exit
 //   node before the route from the nearest node takes over: that node may stand in the water,
 //   and the route from it led a bot straight back in.
@@ -15,7 +22,7 @@
 //
 // ge:summary A fighter's footwork past its route: the dodge, the landing, the side key's change
 // ge:keywords footwork dodge side-step landing swim-exit fighter_dodge fighter_landing
-// ge:keywords fighter_keys key-change socd snap-tap perfect-strafe strafe-change
+// ge:keywords fighter_keys key-change socd snap-tap perfect-strafe strafe-change press closing-in
 // ge:skill bots
 // ge:test tests/shooters_edge_footwork_test.cpp
 #pragma once

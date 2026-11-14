@@ -108,8 +108,8 @@ struct Hud {
   int32_t guns_all = 1;         // hud_guns_all: every gun, those not owned dim (0: owned ones)
   int32_t ammo_all = 1;         // hud_ammo_all: all four counts (0: the kind in hand alone)
   ge::hud::Feed notify{4, 4.0, 0.8, 0.15};
-  CrosshairSettings crosshair;  // crosshair, crosshaircolor, crosshairsize, crosshairalpha
-  std::string centre;           // the centre message; empty for none
+  ge::hud::CrosshairSettings crosshair;  // crosshair, crosshaircolor, crosshairsize, crosshairalpha
+  std::string centre;                    // the centre message; empty for none
   double centre_until = 0;
 };
 

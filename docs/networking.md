@@ -644,6 +644,40 @@ or more seats astray, nobody is named. In the `net-lockstep` lab a desync plante
 four-seat strategy game is named by all four peers on every preset. The two-seat fighting game
 catches it but names nobody.
 
+**Built (M17l, fourth part): runs checked by playing them.** A run sent to a server (a ghost, a
+record, a hub's run) is a tape of inputs whose log records the digest it plays to.
+`play::play_audited` plays the tape on a fresh run of its setup, every step, and hands the run
+back only if it reaches that digest. A tape changed after it was recorded, or one with no digest,
+is refused. What the run scored is read off the run itself, never taken from a claim. Fall Line's
+hub reads its runs this way, and `tests/fall_line_hub_runs_test.cpp` refuses the bot's race with
+one stretch of steering turned the other way.
+
+**Built (M17l, fifth part): bans on the accounts.** A guard that puts a player out writes its
+verdict (`guard_verdict`), and the match report carries it per player (`ReportPlayer::flagged`,
+report version 2; a report with nobody flagged stays version 1). The accounts master takes a
+flagged player from a trusted server's counted report as a ban of 14 days from the match's end,
+and that match adds nothing to the ladder. While the ban lasts, signing in, a login code and a
+ticket are refused with the days left. Bans are derived from the reports log, so a restarted
+master keeps them (`docs/accounts.md` § Bans).
+
+**Built (M17l, sixth part): the classic server's speed check in the report.** Shooter's Edge's
+classic move already cuts a command that claims more time than passed (`speed_check`, a bank of
+500 ms for a stall's burst); the cut is now counted per player (`ClientSlot::speed_cut_ms`). The
+cheat watch (`games/shooters_edge/net/classic_cheats.hpp`) reads it once a second and raises a
+`flood` flag on the engine's guard (`guard_flag`, a game's own check scored like the guard's) for
+more than 50 ms cut; five such seconds put the player out, and the match report's `flagged` names
+it. The `se-cheats` lab: clocks 10% and 50% fast are out six seconds in; an honest player, a clock
+3% fast, a two-second stall's burst and a bot are never out.
+
+**Built (M17l, seventh part): the aim spread, a bot-likeness number.** A person's aim wanders
+over a target; an aim bot puts its line on the same point every time. `plugins/shooter/aim_spread.hpp`
+samples, each frame a player holds the attack, where its line crosses another living player's
+box (edge to edge, -1..1 across and up), and keeps the spread of those points. The classic server
+keeps one per player and the match report carries it as the `aim_spread` column (thousandths;
+-1 under 30 samples). It is shown, not judged: nothing is banned on it, since a steady hand at
+range is tight too. The `se-aim-spread` lab: aim bots on the head and the middle read 0.000, a
+hand on a mouse 0.63, a flicker 0.77, and the server's own bots in a match 0.48 to 0.73.
+
 ## Pressure tests (M17m)
 
 The simulated network runs on virtual time, so an hour of play takes seconds and every run is

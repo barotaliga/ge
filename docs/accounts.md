@@ -398,6 +398,24 @@ on the hub's Ladder page (`engine/hub/ladder_page.hpp`).
   its standings (the ranked first, the rest dimmed with the matches they lack), the all-time
   ratings, and every past season's champions; `/v1/ladder` the same as JSON.
 
+## Bans
+
+A server's anti-cheat (`engine/net/guard.hpp`, docs/networking.md § Anti-cheat) puts a cheating
+player out of a match. Its match report then carries that player's verdict
+(`ReportPlayer::flagged`, the guard's summary from `guard_verdict`). A report with a flagged player
+is written as version 2; a clean report keeps version 1's bytes.
+
+- **A ban** is earned only from a counted report, one sent by a server the master's owner trusts.
+  An unlisted server's verdict is shown with its report and bans nobody.
+- **It runs 14 days** (`kBanDays`, `Matches::ban_s`) from the match's end. A later verdict runs
+  from its own match. The bans are worked out from the reports, so `reports.log` read back gives
+  the same bans.
+- **It holds every way in.** A banned account gets no ticket (`sign_in`), no login code (`code`,
+  `ticket_code`) and no seat on a classic server (`login`). It is refused with `Refusal::banned`
+  and the words "This account is banned for cheating. The ban ends in 14 days."
+- **The match is rated on no ladder.** The other players' ratings do not move for a game played
+  against a cheat. Their totals still count.
+
 ## Friends
 
 Friends, presence and invites (M17j) ride on the accounts: one list for every game, kept by the

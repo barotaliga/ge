@@ -745,7 +745,7 @@ Hud make_hud() {
 }
 
 void add_cvars(ge::console::Console& con, Hud& hud) {
-  add_crosshair_cvars(con, hud.crosshair);
+  ge::hud::add_crosshair_cvars(con.cvars(), hud.crosshair);
   con.cvars().bind(
       {.name = "hud_style",
        .fallback = std::string(look_name(Look::classic)),

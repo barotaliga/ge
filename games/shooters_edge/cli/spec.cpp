@@ -15,6 +15,7 @@
 #include <iterator>
 #include <memory>
 
+#include "brush/cli/commands.hpp"
 #include "capture/screenshot.hpp"
 #include "classicenhance/cli/commands.hpp"
 #include "classicenhance/profile.hpp"
@@ -133,6 +134,14 @@ void spectate_words(const gc::Ctx& ctx, const std::string& address, std::vector<
   const cl::Args a = folders(ctx);
   w.insert(w.end(),
            {"-basedir", a.basedir, "-mod", a.game, "+set", "spectator", "1", "+connect", address});
+}
+
+// A hub's Watch link ("Open in the game"): the window plays the TV node's live broadcast
+// (client/tv_live.hpp); a node carries one stream, so `stream` names nothing more.
+void tv_words(const gc::Ctx& ctx, const std::string& node, uint32_t /*stream*/,
+              std::vector<std::string>& w) {
+  const cl::Args a = folders(ctx);
+  w.insert(w.end(), {"-basedir", a.basedir, "-mod", a.game, "-tv", node});
 }
 
 // A hub's Play link: the replay file (version 2) the CLI fetched, unpacked beside it into the
@@ -450,8 +459,11 @@ gc::Spec make() {
   s.join_words = join_words;
   s.listen_words = listen_words;
   s.spectate_words = spectate_words;
+  s.tv_words = tv_words;
   s.demo_words = demo_words;
   s.commands = ge::classicenhance::cli::commands();
+  for (const ge::gamecli::Command& c : ge::brush::cli::commands()) s.commands.push_back(c);
+  s.command_flags = ge::brush::cli::command_flags();
   s.commands.push_back({"demos", "", "the recordings in the game folder: name, size, file",
                         "demos --json", "shooters_edge", cmd_demos});
   s.commands.push_back({"demos play", "<name>", "watch a recording in the window",
@@ -478,7 +490,9 @@ gc::Spec make() {
       "`demos` lists recordings and `demos play <name>` watches one; `demos pack <name>` writes "
       "the replay file (.ged), about half the size of a packed recording; `demos convert <name> "
       "<file>` "
-      "writes it in another format (`demo1.dem` to `demo1.mvd`).";
+      "writes it in another format (`demo1.dem` to `demo1.mvd`). `map build <plan|svg>` makes a "
+      "map from a text plan or an SVG floor plan with the install's own textures; put the .bsp in "
+      "the game folder's `maps` and start it with `map <name>`.";
   return s;
 }
 

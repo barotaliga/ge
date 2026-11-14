@@ -28,6 +28,10 @@
 //        the hottest player's followed by default ([--autotrack=0] the lowest slot's)
 //        (classic_tv_udp.hpp, classic_tv_recording.hpp); the same recording as a netgame to
 //        single-player clients on [--netgame-port=26000] (0: none; classic_tv_netgame.hpp)
+//   setv --port=27900 --watch=<server host:port> [--web=<tcp port>] [--master=<host[:port],...>]
+//        [--server-password=<pw>] [--delay=7] [--name=<name>]   a spectator on any server
+//        broadcast live on our TV wire: game windows (se -tv) and browsers (the hub's Watch)
+//        (classic_watch_tv.hpp)
 //   setv -game 2 --port=27911 --server=<sequel host:port> [--server-password=<pw>]
 //        [--password=<pw>] [--delay=7] [--name=tv]   (sequel_tv_relay.hpp)
 //   setv -game 2 --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
@@ -68,6 +72,7 @@
 #include "shooters_edge/net/classic_tv.hpp"
 #include "shooters_edge/net/classic_tv_netgame.hpp"
 #include "shooters_edge/net/classic_tv_recording.hpp"
+#include "shooters_edge/net/classic_watch_tv.hpp"
 #include "shooters_edge/net/sequel_tv_demo.hpp"
 #include "shooters_edge/net/sequel_tv_relay.hpp"
 #include "webtransport/forward.hpp"
@@ -120,6 +125,11 @@ void usage() {
   else
     std::printf(
         "setv [-game 1|2] [flags]: our TV node (-game 2: the sequel's)\n"
+        "  setv --port=27900 --watch=<server host:port> [--web=<tcp port>]\n"
+        "      [--master=<host[:port],...>] [--server-password=<pw>] [--delay=7] [--name=<n>]:\n"
+        "      a spectator on any server, its view broadcast live to game windows\n"
+        "      (se -tv <host:port>) and, with --web, to browsers; listed at --master so the\n"
+        "      game's hub shows Watch on that server's card\n"
         "  setv --port=27900 --server=<host:stream port> [--server-password=<pw>]\n"
         "      [--password=<pw>] [--delay=7] [--name=tv]\n"
         "  setv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]: a\n"
@@ -159,14 +169,15 @@ bool open_upstream(gn::Transport& out) {
 
 struct Options {
   std::string kind, name, bind, server_password, password, demo;
-  int port = 0, copies = 3, webtransport = 0, websocket = 0;
+  int port = 0, copies = 3, webtransport = 0, websocket = 0, web = 0;
   int netgame_port = 26000;  // tv --demo: the netgame face for single-player clients (0: none)
   double link_loss = 0, delay = 7, seconds = 0, status = 10;
   bool autotrack = true;  // a multiview recording's followed view rides the hottest player
   bool open = false;
   std::vector<gn::Address> allow, masters;
   gn::Address server{}, far{};
-  bool has_server = false, has_far = false;
+  bool has_server = false, has_far = false, has_watch = false;
+  gn::Address watch;  // setv --watch: the server a spectator broadcasts
 };
 
 int fail(const std::string& what, const std::string& next) {
@@ -213,6 +224,7 @@ struct Hops {
   px::ProxyNear near;
   px::ProxyFar far;
   sn::TvNode tv;
+  sn::WatchTv watch;  // --watch: a spectator's view broadcast live
   gn::Transport sq_watcher, sq_face;
   sn::SequelTvRelay sq;
   sn::SequelTvFace sq_demo_face;  // --demo: the face fed from a recording, no watcher
@@ -227,7 +239,7 @@ struct Hops {
   bool cl_multiview = false;
   bool forward = false, has_near = false, has_far = false, has_tv = false;
   bool has_web = false, has_ws = false, beating = false, fixed_route = false;
-  bool has_sq = false, has_sq_demo = false, has_cl_demo = false;
+  bool has_sq = false, has_sq_demo = false, has_cl_demo = false, has_watch = false;
 };
 
 std::string status_line(const Hops& h) {
@@ -308,10 +320,12 @@ std::string status_line(const Hops& h) {
          std::to_string(h.cl_demo.rounds) + (h.cl_demo.ended ? " (ended)" : "") + ", viewers " +
          std::to_string(sn::udp_tv_viewers(h.cl_demo_face)) + ". ";
   }
+  if (h.has_watch) s += sn::watch_tv_status(h.watch) + ". ";
   if (h.has_nq)
     s += "netgame tv: frames " + std::to_string(h.nq.frames) + ", rounds " +
          std::to_string(h.nq.rounds) + ", viewers " +
-         std::to_string(sn::udp_tv_netgame_viewers(h.nq)) + ". ";
+         std::to_string(sn::udp_tv_netgame_viewers(h.nq)) + sn::udp_tv_netgame_following(h.nq) +
+         ". ";
   if (h.has_sq_demo)
     s += "sequel tv: recording frames " + std::to_string(h.sq_demo.frames) + ", rounds " +
          std::to_string(h.sq_demo.rounds) + (h.sq_demo.ended ? " (ended)" : "") + ", viewers " +
@@ -372,6 +386,14 @@ int run(int argc, char** argv) {
       if (!sn::classic_destination(v, o.server))
         return fail("--server=" + v + " is no address", "host:port");
       o.has_server = true;
+    } else if (kHop == Hop::tv && flag(a, "watch", v)) {
+      if (!sn::classic_destination(v, o.watch))
+        return fail("--watch=" + v + " is no address", "--watch=<server host:port>");
+      o.has_watch = true;
+    } else if (kHop == Hop::tv && flag(a, "web", v)) {
+      o.web = std::atoi(v.c_str());
+      if (o.web <= 0 || o.web > 65535)
+        return fail("--web=" + v + " is no port", "--web=<tcp port>");
     } else if (flag(a, "far", v)) {
       if (!sn::classic_destination(v, o.far))
         return fail("--far=" + v + " is no address", "host:port");
@@ -527,6 +549,23 @@ int run(int argc, char** argv) {
       std::printf("the link loses %s of its frames each way (a test)\n",
                   ge::core::num::to_fixed(o.link_loss, 2).c_str());
     }
+  } else if (o.kind == "tv" && o.has_watch) {
+    sn::WatchTvConfig wc;
+    if (!o.name.empty()) wc.name = o.name;
+    wc.server_password = o.server_password;
+    wc.delay_s = o.delay;
+    wc.web_port = static_cast<uint16_t>(o.web);
+    wc.masters = o.masters;
+    wc.seed = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+    const gn::Address bind = at(o.bind, o.port > 0 ? o.port : 27900);
+    if (!sn::watch_tv_open(h.watch, bind, o.watch, wc, error))
+      return fail("the TV node did not open on " + gn::to_string(bind) + ": " + error,
+                  "pick a free --port (and --web)");
+    h.has_watch = true;
+    std::printf("tv on %s, watching %s, %.0f s behind%s%s\n", gn::to_string(bind).c_str(),
+                gn::to_string(o.watch).c_str(), o.delay,
+                o.web > 0 ? (", browsers on tcp " + std::to_string(o.web)).c_str() : "",
+                o.masters.empty() ? "" : ", listed at the masters");
   } else if (o.kind == "tv" && !o.demo.empty()) {
     std::ifstream in(o.demo, std::ios::binary);
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)),
@@ -568,6 +607,7 @@ int run(int argc, char** argv) {
       } else {
         sn::NetgameTvConfig nc;
         nc.name = fc.name;
+        nc.convert_in_background = true;  // a new view never holds up the play
         sn::udp_tv_netgame_start(h.nq, h.nq_face, nc);
         h.has_nq = true;
         std::printf("netgame on %s for single-player clients: connect \"<host>:%d\"\n",
@@ -675,6 +715,11 @@ int run(int argc, char** argv) {
       for (; face_log < h.cl_demo_face.log.size(); face_log++)
         std::printf("tv: %s\n", h.cl_demo_face.log[face_log].c_str());
     }
+    if (h.has_watch) {
+      sn::watch_tv_update(h.watch, now_us);
+      for (; tv_log < h.watch.log.size(); tv_log++)
+        std::printf("tv: %s\n", h.watch.log[tv_log].c_str());
+    }
     if (h.has_nq) sn::udp_tv_netgame_frame(h.nq, now_us);
     if (h.has_sq_demo) {
       sn::sequel_tv_demo_update(h.sq_demo, h.sq_demo_face, now_us);
@@ -701,6 +746,12 @@ int run(int argc, char** argv) {
   if (h.has_ws) fw::ws_forward_close(h.ws);
   if (h.has_far) px::proxy_far_close(h.far);
   if (h.has_tv) sn::tv_close(h.tv);
+  if (h.has_watch) {
+    const int64_t end_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                               std::chrono::steady_clock::now() - start)
+                               .count();
+    sn::watch_tv_close(h.watch, end_us);
+  }
   if (h.has_sq) sn::sequel_tv_relay_close(h.sq);
   if (h.has_sq_demo) sn::sequel_tv_stop(h.sq_demo_face);
   if (h.has_cl_demo) sn::udp_tv_stop(h.cl_demo_face);

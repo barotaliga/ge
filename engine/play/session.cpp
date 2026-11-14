@@ -270,6 +270,32 @@ std::optional<Played> replay(const GameSpec& spec, const InputLog& log, std::str
   return played_of(s);
 }
 
+std::unique_ptr<Run> play_audited(const GameSpec& spec, const InputLog& log, std::string& error) {
+  if (!log.digest) {
+    error = "the run records no digest to check it against; record it again to its end";
+    return nullptr;
+  }
+  Setup setup;
+  if (!setup_of(spec, log, setup, error)) return nullptr;
+  std::unique_ptr<Run> run = spec.open(setup, error);
+  if (!run) return nullptr;
+  std::vector<double> snapped(spec.axes.size());
+  for (int64_t i = 0; i < log.steps(); i++) {
+    const std::span<const double> in = log.at(i);
+    for (size_t k = 0; k < snapped.size(); k++)
+      snapped[k] = snap_axis(k < in.size() ? in[k] : 0, spec.axes[k].kind);
+    run->step(snapped);
+  }
+  if (run->digest() != *log.digest) {
+    error = "the run does not play to the digest it records (" + hex64(*log.digest) +
+            " recorded, " + hex64(run->digest()) +
+            " played): its inputs were changed after it was recorded, or another build of the "
+            "game recorded it";
+    return nullptr;
+  }
+  return run;
+}
+
 namespace {
 
 // The entry of `list` named `name` ("" the first), or null with `error` listing them.

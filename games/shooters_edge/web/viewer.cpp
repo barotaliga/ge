@@ -33,6 +33,7 @@
 #include "gpu/device.hpp"
 #include "gpu/surface.hpp"
 #include "platform/window.hpp"
+#include "render/moon.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_fx.hpp"
@@ -43,6 +44,7 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/timedemo.hpp"
+#include "shooters_edge/client/tv_live.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/web/join.hpp"
@@ -60,8 +62,6 @@ namespace cl = shooters_edge::client;
 namespace {
 
 constexpr const char* kCanvas = "#view";
-// Blocks in hand before a live broadcast starts playing (each one second of the match).
-constexpr int64_t kLiveLead = 2;
 // Paints a WebSocket has to open in (about ten seconds).
 constexpr int kOpenPaints = 600;
 
@@ -114,42 +114,20 @@ bool mount_packs(const ge::web::ViewerArgs& a, cl::SearchPath& files, ge::web::F
 struct Live {
   int socket = -1;
   ge::tv::Watch watch;
-  cl::DemoUnpacker unpacker;
-  std::vector<uint8_t> opening;  // the recording before it opens (`kLiveLead` blocks)
-  bool open = false;             // the recording is `t.demo` and grows there
+  cl::TvLive live;  // the stream onto the demo (client/tv_live.hpp)
+  bool open = false;
 };
 
 // What the node sent since the last paint taken in, and the blocks it completed unpacked. False
 // with the page's line in `line` and the detail in `error` when the broadcast cannot go on.
 bool pump(Live& live, cl::Timedemo& t, std::string& line, std::string& error) {
   std::vector<uint8_t> msg;
-  while (ge::web::ws_take(live.socket, msg)) {
-    if (!ge::tv::watch_receive(live.watch, msg)) {
-      line = "The broadcast sent something this viewer cannot read.";
-      error = live.watch.error;
-      return false;
-    }
-  }
-  if (!live.watch.refused.empty()) {
-    line = "The broadcast turned this viewer away: " + live.watch.refused;
+  while (ge::web::ws_take(live.socket, msg)) ge::tv::watch_receive(live.watch, msg);
+  if (cl::tv_live_take(live.live, live.watch, t, line, error) == cl::TvLiveTake::failed) {
+    if (line.rfind("This broadcast cannot", 0) == 0) line += " Open it in the game below.";
     return false;
   }
-  if (!live.watch.have_header) return true;
-  std::vector<uint8_t>& into = live.open ? t.demo.bytes : live.opening;
-  std::string cut;
-  if (!cl::unpack_more(live.unpacker, live.watch.stream, into, cut)) {
-    line = "This broadcast cannot be shown here. Open it in the game below.";
-    error = cut;
-    return false;
-  }
-  if (!live.open && live.unpacker.blocks >= kLiveLead && !live.opening.empty()) {
-    if (!cl::open_demo(std::move(live.opening), t.demo, error)) {
-      line = "This broadcast cannot be shown here. Open it in the game below.";
-      return false;
-    }
-    t.start = t.demo;
-    live.open = true;
-  }
+  live.open = live.live.open;
   return true;
 }
 
@@ -254,6 +232,7 @@ int main(int argc, char** argv) {
   double last_ms = ge::web::next_frame();
   for (uint64_t frame = 0;; frame++) {
     const double now_ms = ge::web::next_frame();
+    ge::render::fetch_moon_face();  // the moon's face, the first night it is up
     const double dt = std::min((now_ms - last_ms) / 1000.0, cl::kMostPlayStep);
     last_ms = now_ms;
     if (live) {
@@ -295,7 +274,7 @@ int main(int argc, char** argv) {
         ge::web::ws_close(broadcast.socket);
         return 0;
       }
-      t.clock = t.demo.state.time;  // ran out before the next block: hold the last frame
+      cl::tv_live_hold(broadcast.live, broadcast.watch, st, t);  // the last frame held
     }
     const cl::DemoState& read = t.demo.state;
     if (st == cl::TimedemoStep::new_level) {

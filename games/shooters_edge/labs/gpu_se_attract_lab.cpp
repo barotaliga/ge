@@ -247,6 +247,17 @@ void run(gl::Lab& lab) {
          "screen's top), its rows in the game's glyph sheet.",
          "the title picture centred at the top; the rows' labels right-aligned to the cursor",
          [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    if (menu.art().plates()) {
+      // A page the sequel's pack has no banner for: its title written on one of its own.
+      menu.show(host, "enhanced");
+      menu.settle();
+      shot("written-banner", "A TITLE WRITTEN ON A BANNER",
+           "A page the pack has no banner for: GAME's banner frame, its dirty metal tiled between, "
+           "the title in the tags' letters cut out as ink (small letters after each capital when "
+           "capitals would not fit the screen).",
+           "one banner across the top, no box around a letter",
+           [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    }
     menu.hide();
     // A game picked: the console over the screen, then sliding up (client/game_start.hpp).
     {
@@ -322,14 +333,16 @@ void run(gl::Lab& lab) {
     const bool tags = menu.art().plates();
     shot("letters", "EVERY CARVED LETTER ON ITS LINES",
          tags ? "A to Z and a to z on the sequel's tags, four classic px to a pixel: the capitals "
-                "the tags hold cut a cell each, B C F H J K W X Z pieced from them, every small "
-                "letter its capital shrunk; then two words on whole tags, the second lit."
+                "the tags hold cut out as see-through ink, B C F H J K W X Z pieced from them, "
+                "every small letter its capital shrunk, each line on a tag of dirty metal as wide "
+                "as it; then two words, the second on the lit tag."
               : "A to Z and a to z in the menu's carved letters, four classic px to a pixel: the "
                 "ones the strips hold cut from them, the ones they hold in the other size only "
                 "grown or shrunk from it, the F from the E and the I; the B, X and Z pieced from "
                 "the I, the O and the E. Red: a capital's top and foot; green: a small capital's; "
                 "blue: the row.",
-         tags ? "every cell the tag's height; no seam where two cells meet in a word"
+         tags ? "no piece of a neighbouring letter and no grey box around a letter; the metal "
+                "unbroken behind the words"
               : "every letter between its lines; no stray pixels beside a letter",
          [&](ge::ui::DrawList& dl) {
            constexpr float kZ = 4;
@@ -353,30 +366,28 @@ void run(gl::Lab& lab) {
              dl.box(b);
            };
            if (art.plates()) {
-             // The sequel's tag letters a cell each, 4 px apart; then two words on whole tags,
-             // the second lit.
+             // The sequel's tag letters cut out as ink, each line of them on a tag of its own
+             // (the metal as wide as the line); then two words, the second on the lit tag.
+             const auto tag = [&](std::string_view text, bool lit, float x, float y) {
+               float wide = 0;
+               for (const sm::TagPiece& p : sm::tag_pieces(art, text, lit, &wide)) {
+                 const float d = static_cast<float>(p.image->height) / art.height_of(*p.image);
+                 ge::ui::Box b;
+                 b.rect = {(x + p.x) * kZ, y * kZ, p.w * kZ, sm::kPlateLine * kZ};
+                 b.image = p.image;
+                 b.uv = {p.from * d, 0, p.w * d, static_cast<float>(p.image->height)};
+                 b.nearest = true;
+                 b.feather = 0;
+                 dl.box(b);
+               }
+               return wide;
+             };
              const std::string_view cells[] = {"ABCDEFGHIJKLM", "NOPQRSTUVWXYZ", "abcdefghijklm",
                                                "nopqrstuvwxyz"};
-             for (size_t k = 0; k < std::size(cells); k++) {
-               float x = 4;
-               for (const char c : cells[k])
-                 if (const auto it = art.letters.find(c); it != art.letters.end()) {
-                   letter(it->second, x, 4 + 36 * static_cast<float>(k), sm::kPlateLine);
-                   x += art.width_of(it->second) + 4;
-                 }
-             }
-             const std::string_view words[] = {"Select Game", "Menu"};
-             float x = 4;
-             for (size_t k = 0; k < std::size(words); k++) {
-               std::vector<float> xs;
-               const float wide = sm::plate_layout(art, words[k], &xs);
-               const auto& set = k == 1 && !art.letters_lit.empty() ? art.letters_lit : art.letters;
-               for (size_t i = 0; wide > 0 && i < xs.size(); i++) {
-                 const char c = i == 0 ? '[' : i == words[k].size() + 1 ? ']' : words[k][i - 1];
-                 letter(set.at(c), x + xs[i], 4 + 36 * 4, sm::kPlateLine);
-               }
-               x += wide + 8;
-             }
+             for (size_t k = 0; k < std::size(cells); k++)
+               tag(cells[k], false, 4, 4 + 36 * static_cast<float>(k));
+             const float x = 4 + tag("Select Game", false, 4, 4 + 36 * 4) + 8;
+             tag("Menu", true, x, 4 + 36 * 4);
              return;
            }
            for (size_t k = 0; k < std::size(lines); k++) {

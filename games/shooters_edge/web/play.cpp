@@ -17,6 +17,7 @@
 #include "gpu/surface.hpp"
 #include "input/state.hpp"
 #include "platform/window.hpp"
+#include "render/moon.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
@@ -154,6 +155,7 @@ int play_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
   double last_ms = ge::web::next_frame();
   for (uint64_t frame = 0;; frame++) {
     const double now_ms = ge::web::next_frame();
+    ge::render::fetch_moon_face();  // the moon's face, the first night it is up
     const double dt = std::min((now_ms - last_ms) / 1000.0, cl::kMostPlayStep);
     last_ms = now_ms;
     t += dt;

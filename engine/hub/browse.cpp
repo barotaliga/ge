@@ -121,6 +121,7 @@ void browse_update(Browse& b, Poller& p, int64_t now_us, int64_t unix_s) {
     it->heard_us = now_us;
     b.stats.merged++;
   }
+  poller_attach_broadcasts(p);  // a record taken here lost the broadcasts laid on it
   const size_t before = p.nodes.size();
   p.nodes.erase(std::remove_if(p.nodes.begin(), p.nodes.end(),
                                [&](const HubNode& n) {

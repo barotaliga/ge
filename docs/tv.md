@@ -646,11 +646,23 @@ view, and that view is let go once it is back on the followed one.
 address names none; 0 turns it off), so an unmodified single-player client watches it with
 `connect <host>`. A single-player recording is played as it is; a client or multiview recording is
 converted to one when it is opened (`client/demo_convert.hpp`; a multiview recording rides the
-lowest slot playing). `games/shooters_edge/net/classic_tv_netgame.hpp` is the face. A client on the same machine as setv
+lowest slot playing). `games/shooters_edge/net/classic_tv_netgame.hpp` is the face.
+
+**Who a viewer follows.** Each viewer of a multiview recording picks the player it watches: fire
+follows the next player, jump the one before, a weapon key (impulse 1 to 8) that player, and
+`cmd follow <name or number>` (a name's start, in any case) any of them; a seated viewer is told
+which player it follows and these keys. A player's view is a feed: the recording converted to his
+view the first time someone asks for it, kept for the next viewer. In `setv` the conversion runs on
+its own thread (a 20-minute 4on4 takes seconds), the play goes on, and the viewer is told the view
+is on its way. Every feed keeps the first feed's clock and levels, so the viewer is sent
+"reconnect" and the new view's signon and joins it where the match is now. A viewer seated partway
+into a level (a switch, or a late join) is also sent each player's name, frags and colours, each
+light style and each stat as the level has set them so far, since only the frames carry the rest. A client on the same machine as setv
 binds 26000 itself, so it starts with another port (`-port 26100`) and connects with
 `connect "127.0.0.1:26000"` (quoted: its console splits a line at a colon). Checked by hand with
 the original single-player client of the time, built outside the tree and run as a black box,
-watching a 4on4 multiview recording for minutes.
+watching a 4on4 multiview recording for minutes. The `se-tv-netgame` lab measures the sign-on and the
+frames that arrive over each link, with the scripted client of `net/classic_netgame_watcher.hpp`.
 
 **The transport.** Every datagram but a control one is an 8-byte header, big-endian (the flags
 over the whole length, then a sequence), and its payload. The client asks to connect with a
@@ -743,6 +755,12 @@ off, built beside the checkout, 25 s gave a 116 KB recording as a 37 KB broadcas
 sent 7 blocks to catch up, both viewers whole. That server refuses a second connection from the same
 address for a few seconds after the last attempt (`reconnect rejected: too soon`), so a watcher and
 a player on one machine join one after the other.
+
+AS A PROCESS: `setv --watch=<server host:port>` (`classic_watch_tv.hpp`) runs a watcher into a
+native TV node (`TvHost`) with WebSocket viewers (`--web=<tcp port>`), listed on `--master` as a TV
+node under the game's protocol and naming its server under the `source` key, which a hub reads to
+put Watch on that server's card (docs/hub.md § Watching in a browser). A dropped watcher ends the
+broadcast; after five seconds a new one starts and the node's viewers join it anew.
 
 The sequel's half (a watcher on an unmodified sequel server) waits on the sequel's network protocol
 (M18v9).

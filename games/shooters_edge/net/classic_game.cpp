@@ -33,13 +33,14 @@
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/client/sequel_party.hpp"
 #include "shooters_edge/net/classic_admin.hpp"
+#include "shooters_edge/net/classic_cheats.hpp"
 #include "shooters_edge/net/classic_coop.hpp"
 #include "shooters_edge/net/classic_coop_game.hpp"
-#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_login.hpp"
 #include "shooters_edge/net/classic_qtv.hpp"
 #include "shooters_edge/net/classic_report.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -102,6 +103,7 @@ struct Game {
   // The match being played, tallied each frame, and the report of the one that just ended (taken
   // once by the core: `match_report`).
   MatchTally tally;
+  CheatWatch cheats;     // the speed check's cuts scored (classic_cheats.hpp), into the report
   StatsEyes stats_eyes;  // the weapon stats' last frame (classic_stats.hpp)
   ge::net::MatchReport report;
   bool report_ready = false;
@@ -350,6 +352,25 @@ constexpr gs::SettingName kSettingNames[] = {
     {"vip_values", "sv_vipvalues"},
     {"maxvip_spectators", "sv_maxvipspectators"},
 };
+
+// `*mods`: each package's name and version, ", " between, cut with "+N more" past what one
+// serverinfo value should take of the whole string's 512 bytes.
+std::string mods_info(const std::vector<std::unique_ptr<ge::mod::LoadedMod>>& packages) {
+  constexpr size_t kMax = 120;
+  std::string out;
+  for (size_t k = 0; k < packages.size(); k++) {
+    const ge::mod::Manifest& m = packages[k]->manifest;
+    std::string one = m.name + " " + m.version;
+    const std::string more = " +" + std::to_string(packages.size() - k) + " more";
+    if (out.size() + 2 + one.size() > kMax - (k + 1 < packages.size() ? more.size() : 0)) {
+      out += more;
+      break;
+    }
+    if (!out.empty()) out += ", ";
+    out += one;
+  }
+  return out;
+}
 
 // The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
 // own table before they start: each mod sees the server it runs on, not a default of its own.
@@ -614,6 +635,9 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
       rules.console("serverinfo *gamedir \"" + g.cfg.gamedir + "\"");
     for (const std::string& line : g.info_lines) rules.console(line);
   }
+  // The C++ mods it runs, for a browser and a hub to show (docs/mods.md § Distribution).
+  if (const std::string mods = mods_info(g.packages); !mods.empty())
+    rules.console("serverinfo *mods \"" + mods + "\"");
   game_names(*rules, c);
   for (const auto& [rule, value] : c.rules) {
     // A module checks a client's rate against the endpoint's cap, so it is told the cap.
@@ -771,6 +795,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   if (c.host != nullptr) {  // a listen server: the window's program, folder and first map
     g->host = static_cast<cl::ListenHost*>(c.host);
     g->program = g->host->progs;
+    if (g->host->module != nullptr) g->module = *g->host->module;  // a mod's compiled module
     if (g->host->files != nullptr) g->files = *g->host->files;
     g->map = g->host->map;
   } else {
@@ -1126,6 +1151,11 @@ void tally(Game& g) {
   const bool counting =
       rule_number(g, "deathmatch") != 0 && (!lobby || g.room->lobby.phase == gs::LobbyPhase::match);
   tally_frame(g.tally, g.rules->world, counting, accounts);
+  cheat_watch_frame(g.cheats, g.rules->sv);
+  const std::array<sh::AimSpread*, sh::kMaxClients> aims = tally_aims(g.tally);
+  sh::aim_spread_frame(g.rules->sv, aims);
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (cheat_watch_out(g.cheats, i)) tally_flag(g.tally, i, cheat_watch_verdict(g.cheats, i));
   if (const sv::QcServer* q = sv::qc_of(g.rules))
     stats_frame(g.stats_eyes, tally_stats(g.tally), *q);
 }
@@ -1560,6 +1590,8 @@ void fill_status(const void* g, ge::net::Status& st) {
   for (const char* name : {"fraglimit", "timelimit"}) {
     st.keys.emplace_back(name, std::to_string(number(name)));
   }
+  if (const std::string mods = mods_info(game.packages); !mods.empty())
+    st.keys.emplace_back("*mods", mods);
   if (game.classic) status_players(*game.classic, st.players);
 }
 
