@@ -288,7 +288,9 @@ Next: Fall Line's live races on its hub, once it has a dedicated server (M17k).
   function of the index. `http.hpp` carries it: HTTP/1.1 GET and HEAD (and POST to the Account page's `/account/...` alone, a form of at most 2 KB), CORS open, the cache time
   of the busy period, server-sent events for one node's record with a comment line every 15 s.
   `main.hpp` is the process (`ge_add_hub`, cmake/Hub.cmake); `--serve-master` runs the master in
-  the same process, so one binary is a community's whole service. Shooter's Edge's is
+  the same process, `--rendezvous` the rendezvous (net/rendezvous.hpp: hosts behind home routers
+  register, players join them by id, STUN, a relay port when no hole opens; port 3478 by default)
+  and `--accounts` the account service, so one binary is a community's whole service. Shooter's Edge's is
   `shooters_edge_hub`; Fall Line has no dedicated server yet, so no hub.
 
 - **M56b, part two**: a server whose game speaks its own protocol (`ServerGame::serve`, Shooter's

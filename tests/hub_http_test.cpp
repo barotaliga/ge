@@ -68,6 +68,14 @@ TEST(hub_reads_its_flags) {
   HubOptions acc;  // a hub that only keeps the accounts
   CHECK(hub_options({"--accounts=/srv/accounts", "--accounts-port=27911"}, acc, err));
   CHECK(acc.accounts == "/srv/accounts" && acc.accounts_port == 27911);
+  HubOptions rv;  // a hub that only runs the rendezvous, on STUN's port or another
+  CHECK(hub_options({"--rendezvous"}, rv, err) && rv.rendezvous == 3478);
+  HubOptions rv2;
+  CHECK(hub_options({"--rendezvous=3479", "--accounts=/srv/a"}, rv2, err) &&
+        rv2.rendezvous == 3479);
+  HubOptions rv3;
+  CHECK(!hub_options({"--rendezvous=0"}, rv3, err) &&
+        err.find("--rendezvous") != std::string::npos);
   std::vector<Address> masters;
   CHECK(master_list("sim:1:27900, sim:2:27900", masters, err) && masters.size() == 2);
 }

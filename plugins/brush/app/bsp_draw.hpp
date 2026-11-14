@@ -256,6 +256,8 @@ struct DynamicLight {
   // The entity it rides on (0: none): that entity's own model is not lit by it, so a glow that
   // comes off part of a model (a grenade's painted ends) lights the room, not the rest of it.
   int entity = 0;
+  // The game's own kind of light (0: none given), for the settings that put one kind out.
+  uint8_t group = 0;
 };
 
 struct GpuJob {

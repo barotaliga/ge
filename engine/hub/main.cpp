@@ -2,6 +2,7 @@
 //
 // ge:summary A hub's process defined: flags, sockets, the wall-clock loop, status lines
 // ge:keywords hub hub_main flags loop wall-clock status archive inbox retention accounts-flag
+// ge:keywords rendezvous-flag
 // ge:skill net
 // ge:test tests/hub_http_test.cpp
 #include "hub/main.hpp"
@@ -22,7 +23,9 @@
 #include "hub/watch.hpp"
 #include "net/address.hpp"
 #include "net/master.hpp"
+#include "net/rendezvous.hpp"
 #include "net/transport.hpp"
+#include "net/udp_socket.hpp"
 
 namespace ge::hub {
 
@@ -52,6 +55,9 @@ bool hub_options(const std::vector<std::string>& args, HubOptions& out, std::str
     if (key == "--serve-master") {
       ok = value.empty() || (number(value, d) && d >= 1 && d <= 65535 && d == static_cast<int>(d));
       out.serve_master = value.empty() ? gn::kMasterPort : static_cast<int>(d);
+    } else if (key == "--rendezvous") {
+      ok = value.empty() || (number(value, d) && d >= 1 && d <= 65535 && d == static_cast<int>(d));
+      out.rendezvous = value.empty() ? gn::kRendezvousPort : static_cast<int>(d);
     } else if (key == "--master") {
       out.masters = value;
     } else if (key == "--ip") {
@@ -111,7 +117,8 @@ bool hub_options(const std::vector<std::string>& args, HubOptions& out, std::str
     }
   }
   if (out.masters.empty() && !out.help && out.serve_master == 0 && out.browse_masters.empty() &&
-      out.browse_servers.empty() && out.accounts.empty() && out.archive.empty()) {
+      out.browse_servers.empty() && out.accounts.empty() && out.rendezvous == 0 &&
+      out.archive.empty()) {
     error =
         "no master to read; next: pass --master=<host:port> (several: comma-separated), or "
         "--serve-master to run one here, or --browse-master for the game's own, or "
@@ -145,6 +152,8 @@ std::string hub_help(const HubSpec& spec) {
          "  --keep-gb=<n>             the archive's size cap, oldest untagged first (default "
          "none)\n"
          "  --keep-days=<n>           the archive's age cap for untagged demos (default none)\n"
+         "  --rendezvous[=<port>]     run the rendezvous here (default port 3478): hosts behind "
+         "home routers register, players join them by id, STUN, and a relay when no hole opens\n"
          "  --accounts=<dir>          run the account service here: the store and its key in "
          "<dir> (docs/accounts.md)\n"
          "  --accounts-port=<n>       the account service's UDP port (default 27901)\n"
@@ -241,6 +250,32 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     }
     gn::master_init(master, gn::MasterConfig{}, master_port);
   }
+  // The rendezvous: its own port beside the master's (the relays' ports are the system's).
+  gn::Transport rendezvous_port;
+  gn::Rendezvous rendezvous;
+  if (o.rendezvous) {
+    gn::Address rendezvous_at;
+    if (!gn::parse_address(o.ip + ":" + std::to_string(o.rendezvous), rendezvous_at) ||
+        !gn::open_udp_transport(rendezvous_port, rendezvous_at, &error)) {
+      std::fprintf(stderr,
+                   "%s_hub: cannot run the rendezvous on port %d: %s; next: pass another "
+                   "--rendezvous port\n",
+                   spec.id.c_str(), o.rendezvous, error.c_str());
+      close_udp();
+      if (o.serve_master) gn::close_transport(master_port);
+      return 1;
+    }
+    gn::RendezvousConfig rc;
+    rc.seed = gn::os_entropy();
+    gn::rendezvous_init(rendezvous, rc, rendezvous_port);
+    std::printf("%s_hub: rendezvous on %s (STUN, joins by id, relays)\n", spec.id.c_str(),
+                gn::to_string(rendezvous_at).c_str());
+  }
+  const auto close_rendezvous = [&] {
+    if (!o.rendezvous) return;
+    gn::rendezvous_close(rendezvous);
+    gn::close_transport(rendezvous_port);
+  };
   const auto unix_us = [] {
     return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
                                     std::chrono::system_clock::now().time_since_epoch())
@@ -257,6 +292,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
         !ge::account::host_open(accounts, o.accounts, accounts_at, ge::account::HashCost{},
                                 unix_us(), error, trusted, o.season_days)) {
       std::fprintf(stderr, "%s_hub: --accounts: %s\n", spec.id.c_str(), error.c_str());
+      close_rendezvous();
       close_udp();
       if (o.serve_master) gn::close_transport(master_port);
       return 1;
@@ -277,6 +313,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
   if (!http_open(http, http_at, error)) {
     close_accounts();
     std::fprintf(stderr, "%s_hub: %s\n", spec.id.c_str(), error.c_str());
+    close_rendezvous();
     close_udp();
     if (o.serve_master) gn::close_transport(master_port);
     return 1;
@@ -293,6 +330,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
       std::fprintf(stderr, "%s_hub: %s\n", spec.id.c_str(), error.c_str());
       close_accounts();
       http_close(http);
+      close_rendezvous();
       close_udp();
       if (o.serve_master) gn::close_transport(master_port);
       return 1;
@@ -333,6 +371,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
     const int64_t now = now_us();
     if (o.for_s > 0 && now >= static_cast<int64_t>(o.for_s * 1e6)) break;
     if (o.serve_master) gn::master_update(master, now);
+    if (o.rendezvous) gn::rendezvous_update(rendezvous, now);
     ge::account::host_update(accounts, unix_us());
     gn::transport_pump(udp, now);
     poller_pump(p, udp, now);
@@ -393,6 +432,14 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
           static_cast<unsigned long long>(p.stats.asks),
           static_cast<unsigned long long>(p.stats.records),
           static_cast<unsigned long long>(http.stats.answered), http.conns.size());
+      if (o.rendezvous) {
+        const gn::RendezvousStats& r = rendezvous.stats;
+        std::printf("%s_hub: rendezvous: %llu registered, %llu joined, %llu STUN, %d relays open\n",
+                    spec.id.c_str(), static_cast<unsigned long long>(r.registered),
+                    static_cast<unsigned long long>(r.joined),
+                    static_cast<unsigned long long>(r.stun),
+                    gn::rendezvous_open_relays(rendezvous));
+      }
       std::fflush(stdout);
       next_line = now + static_cast<int64_t>(o.status_line_s * 1e6);
     }
@@ -400,6 +447,7 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
   }
   close_accounts();
   http_close(http);
+  close_rendezvous();
   close_udp();
   if (o.serve_master) gn::close_transport(master_port);
   return 0;
