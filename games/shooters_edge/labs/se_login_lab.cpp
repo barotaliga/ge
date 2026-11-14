@@ -110,6 +110,9 @@ struct Session {
   std::vector<Player> players;
   int leaks = 0;  // login lines (or a code) printed to anyone
   int agent = 0;  // lines in an agent's syntax
+  // Our client's presence as its friend Niclas sees it at the end, and the invites it said.
+  std::string presence;
+  int invites = 0;
   uint64_t digest = 1469598103934665603ull;
 };
 
@@ -210,6 +213,11 @@ Session run_session(uint32_t seed, double seconds, double login_time_s) {
   // account file from the community's master, asked over a socket of its own.
   gn::Transport our_login;
   gn::open_sim_transport(our_login, net, gn::sim_address(12, 5000));
+  // On the community's master, Ann (our client's account) and Niclas are friends: Niclas sees
+  // where she plays, and invites her at 10 s.
+  ga::friend_ask(master.friends, 1, 2);
+  ga::friend_ask(master.friends, 2, 1);
+  bool invited = false;
   auto ours = std::make_unique<se::Remote>();
   std::vector<std::string> ours_said;
   size_t ours_heard = 0;
@@ -281,10 +289,19 @@ Session run_session(uint32_t seed, double seconds, double login_time_s) {
         p.console.push_back(line);
       }
     }
+    if (!invited && t >= 10.0) {
+      invited = true;
+      ga::invite_send(master.friends, 1, 2, {0, "shooters_edge", "10.0.0.9:27500", "duel?", 0},
+                      g_unix / 1000000);
+    }
     for (gs::Server& one : s) gs::server_frame(one);
     ga::service_update(master, g_unix);
     gn::sim_advance(net, now);
   }
+  const ga::Presence seen = ga::presence_of(master.friends, 2, g_unix / 1000000, 1);
+  r.presence =
+      std::string(ga::presence_state_name(seen.state)) + " " + seen.where + " " + seen.words;
+  fold(r.digest, r.presence);
   const std::vector<std::string> codes = {niclas_own, ann_own, niclas_master};
   for (size_t i = 0; i < n; i++) {
     Player& p = r.players[i];
@@ -300,6 +317,7 @@ Session run_session(uint32_t seed, double seconds, double login_time_s) {
       const std::string& line = p.console[k];
       if (line.empty() || line[0] == ']') continue;
       if (agent_syntax(line)) r.agent++;
+      if (line.find(" invites you to join them on ") != std::string::npos) r.invites++;
       for (const std::string& code : codes)
         if (line.find(code) != std::string::npos) r.leaks++;
       if (line.find("login niclas") != std::string::npos ||
@@ -383,6 +401,7 @@ void sequel_session(uint32_t seed, Session& r) {
       while (!line.empty() && line.back() == '\n') line.pop_back();
       who[i].console.push_back(line);
       if (agent_syntax(line)) r.agent++;
+      if (line.find(" invites you to join them on ") != std::string::npos) r.invites++;
       if (line.find(code) != std::string::npos) r.leaks++;
       fold(r.digest, line);
     }
@@ -476,8 +495,16 @@ void run(gl::Lab& lab) {
   lab.metric("login_lines_shown", a.leaks, "lines");
   lab.metric("lines_in_agent_syntax", a.agent, "lines");
   lab.metric("disagreeing_runs", a.digest == b.digest ? 0 : 1, "runs");
+  lab.metric("our_client_seen_playing", a.presence.rfind("playing ", 0) == 0 ? 1 : 0, "players");
+  lab.metric("invites_said", a.invites, "invites");
   lab.table(std::move(table));
   lab.note("digest " + hex(a.digest) + ", again " + hex(b.digest));
+  lab.note("our client as its friend sees it: " + a.presence);
+  if (a.presence.rfind("playing ", 0) != 0 || a.invites != 1)
+    lab.fail("our client's presence or its friend's invite did not arrive (seen as '" + a.presence +
+                 "', " + std::to_string(a.invites) + " invites said)",
+             "Look at games/shooters_edge/net/classic_remote.cpp (presence_step) and "
+             "engine/account/client_presence.cpp, then run the lab again; skill: net.");
   const int w = static_cast<int>(lab.arg_num("width"));
   const int h = static_cast<int>(lab.arg_num("height"));
   struct Shot {

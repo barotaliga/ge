@@ -421,8 +421,14 @@ ticket a client holds from signing in, never the password (`engine/account/frien
   <name>`, `friends invites` and `friends status <state>` (`docs/gamecli.md` § Friends), each using
   the ticket `account signin` kept.
 
-The game client setting its presence itself, invites shown in the game, and the matchmaker are
-M17j's next parts.
+- **Our own client** keeps its presence itself (`engine/account/client_presence.hpp`): once in a
+  game, with the ticket in the account file `account signin` wrote, it tells the master it is
+  playing on this server and its map, again whenever that changes and every minute, and offline
+  when it leaves. Every 15 seconds it asks for the invites waiting, and says each on the console
+  ("Ann invites you to join them on 10.0.0.9:27500: 2on2?", then how to connect). A refused
+  ticket stops the asks.
+
+The matchmaker is M17j's next part.
 
 ## The plan
 
