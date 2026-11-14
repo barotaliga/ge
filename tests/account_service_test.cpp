@@ -403,6 +403,33 @@ TEST(service_a_trusted_server_s_report_counts_once_however_often_sent) {
   CHECK(ga::totals_sum(w.svc.matches, 1, {.map = "dm3"}).frags == 10);
 }
 
+TEST(service_a_cheat_a_trusted_server_reports_bans_the_account_every_way_in) {
+  World w;
+  CHECK(w.ask(w.client, ga::Op::create, {"Ann", "correct horse"}, 10).reply.account == 1);
+  const gn::SignKeys trusted = gn::sign_keys(key_of(9)), other = gn::sign_keys(key_of(8));
+  ga::matches_trust(w.svc.matches, trusted.pub);
+  gn::MatchReport r = report_of(6);
+  r.start_s = w.now / 1000000;
+  r.players[0].flagged = "off-range x40; worst score 80.0; out";
+  // A server the owner has not listed bans nobody.
+  CHECK(send_report(w, other, r).taken == ga::Taken::shown);
+  CHECK(w.ask(w.client, ga::Op::sign_in, {"Ann", "correct horse"}, 11).reply.refusal ==
+        ga::Refusal::none);
+  // A trusted one does: no ticket, no code, no seat for the ban's length.
+  r.id = 7;
+  CHECK(send_report(w, trusted, r).taken == ga::Taken::counted);
+  const ga::Ask in = w.ask(w.client, ga::Op::sign_in, {"Ann", "correct horse"}, 12);
+  CHECK(in.reply.refusal == ga::Refusal::banned && in.reply.ticket.empty());
+  CHECK_MSG(in.reply.words == "This account is banned for cheating. The ban ends in 14 days.",
+            in.reply.words);
+  CHECK(w.ask(w.client, ga::Op::code, {"Ann", "correct horse"}, 13).reply.refusal ==
+        ga::Refusal::banned);
+  // When it has run, Ann signs in again.
+  w.now += (ga::kBanDays * 24 * 3600 + 60) * 1000000;
+  CHECK(w.ask(w.client, ga::Op::sign_in, {"Ann", "correct horse"}, 14).reply.refusal ==
+        ga::Refusal::none);
+}
+
 TEST(service_an_unlisted_server_s_report_is_shown_and_a_forged_one_refused) {
   World w;
   const gn::SignKeys server = gn::sign_keys(key_of(9));

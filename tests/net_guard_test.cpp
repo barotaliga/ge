@@ -95,6 +95,8 @@ TEST(guard_flags_a_step_past_the_most_and_scores_decay) {
   CHECK(!gn::guard_out(g, 4));
   for (int k = 0; k < 3; k++) gn::guard_motion(g, 4, a, far, 200);
   CHECK(gn::guard_out(g, 4));
+  CHECK(gn::guard_verdict(g, 4).find("motion x4") == 0);  // what the match report carries
+  CHECK(gn::guard_verdict(g, 3).empty());
   gn::guard_reset(g, 4);
   CHECK(!gn::guard_out(g, 4) && g.clients[4].score == 0);
 }

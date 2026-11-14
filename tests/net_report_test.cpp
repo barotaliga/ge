@@ -124,3 +124,24 @@ TEST(report_as_text_round_trips_and_refuses_what_is_not_hex) {
   bad[4] = 'g';
   CHECK_MSG(!gn::report_from_text(bad, back, err) && err.find("not hex") != std::string::npos, err);
 }
+
+TEST(report_a_flagged_player_is_kept_in_version_2_and_a_clean_report_stays_version_1) {
+  gn::MatchReport r;
+  r.id = 4;
+  r.game = "id1";
+  gn::ReportPlayer p;
+  p.name = "Ann";
+  p.account = 7;
+  r.players = {p, p};
+  std::vector<uint8_t> clean, flagged;
+  std::string error;
+  CHECK(gn::report_write(r, clean, error) && clean[4] == 1);
+  r.players[1].flagged = "motion x6; worst score 48.0; out";
+  CHECK(gn::report_write(r, flagged, error) && flagged[4] == 2);
+  gn::MatchReport back;
+  CHECK_MSG(gn::report_read(flagged.data(), flagged.size(), back, error), error);
+  CHECK(back.players.size() == 2 && back.players[0].flagged.empty() &&
+        back.players[1].flagged == "motion x6; worst score 48.0; out");
+  CHECK(gn::report_read(clean.data(), clean.size(), back, error) &&
+        back.players[1].flagged.empty());
+}

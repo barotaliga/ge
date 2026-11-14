@@ -112,5 +112,8 @@ void guard_reset(Guard& g, int client);
 bool guard_out(const Guard& g, int client);
 // One line for a log or a report: "flood x3, future x1; score 12.0".
 std::string guard_summary(const Guard& g, int client);
+// What a match report says of the client (net/report.hpp's ReportPlayer::flagged): its summary
+// when the guard put it out, else "". A master that trusts the server bans the account.
+std::string guard_verdict(const Guard& g, int client);
 
 }  // namespace ge::net

@@ -102,7 +102,18 @@ Taken take(Matches& m, const net::Key& server, const net::MatchReport& r) {
   const bool counted = m.trusted.count(server) != 0;
   if (counted) {
     add_totals(m.totals, r);
-    ladder_add(m.ladder, r);
+    // A match a player was put out of for cheating is rated on no ladder: the others' ratings do
+    // not move for a game they played against a cheat.
+    bool clean = true;
+    const int64_t end_s = r.start_s + r.duration_ms / 1000;
+    for (const net::ReportPlayer& p : r.players) {
+      if (p.flagged.empty()) continue;
+      clean = false;
+      if (p.account == 0) continue;
+      Ban& b = m.bans[p.account];
+      if (end_s + m.ban_s > b.until_s) b = {end_s + m.ban_s, r.game, r.server, p.flagged, r.id};
+    }
+    if (clean) ladder_add(m.ladder, r);
     m.counted++;
   }
   m.kept.push_back({server, counted, r});
@@ -119,6 +130,11 @@ int ping_band(int64_t ping_ms) {
 }
 
 void matches_trust(Matches& m, const net::Key& server) { m.trusted.insert(server); }
+
+const Ban* matches_ban(const Matches& m, uint64_t account, int64_t now_s) {
+  const auto it = m.bans.find(account);
+  return it != m.bans.end() && it->second.until_s > now_s ? &it->second : nullptr;
+}
 
 Taken matches_add(Matches& m, const net::Key& server, const net::MatchReport& r) {
   const Taken t = take(m, server, r);

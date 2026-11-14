@@ -1,7 +1,7 @@
 // The matches a master keeps (engine/account/matches.hpp): a report from a trusted server adds to
 // its logged-in players' totals once however often it is sent; one from a server the owner has not
 // listed is kept and counted for nobody; guests and bots add to nothing; the log reads back to the
-// same totals.
+// same totals; a player a trusted server flagged is banned.
 //
 // ge:summary Tests a master's match reports: trusted totals, reports sent again, the log
 // ge:keywords match-report totals trusted-servers reports-log
@@ -161,4 +161,27 @@ TEST(matches_a_demo_links_to_the_match_it_closes_with) {
   CHECK(!ga::matches_link_demo(m, 5, 1794500000, "Old Fort", ""));   // no demo's name
   CHECK(ga::matches_link_demo(m, 5, 1794500000, "Old Fort", sha));
   CHECK(m.kept.back().report.demo_sha256 == sha);
+}
+
+TEST(matches_a_flagged_player_is_banned_and_the_match_rated_on_no_ladder) {
+  ga::Matches m;
+  ga::matches_trust(m, key(1));
+  gn::MatchReport r = duel(3);
+  r.start_s = 1794500000;
+  r.duration_ms = 600000;
+  r.players[0].flagged = "flood x3; out";
+  ga::matches_add(m, key(1), r);
+  const ga::Ban* b = ga::matches_ban(m, 7, r.start_s + 700);
+  CHECK(b != nullptr && b->why == "flood x3; out" && b->report == 3);
+  if (b == nullptr) return;
+  CHECK(b->until_s == r.start_s + 600 + ga::kBanDays * 24 * 3600);
+  CHECK(ga::matches_ban(m, 7, b->until_s) == nullptr);  // over when it ends
+  CHECK(ga::matches_ban(m, 8, r.start_s) == nullptr);
+  // The log reads back to the same ban.
+  ga::Matches back;
+  ga::matches_trust(back, key(1));
+  std::string error;
+  CHECK_MSG(ga::matches_line(back, m.log.substr(0, m.log.size() - 1), error), error);
+  const ga::Ban* again = ga::matches_ban(back, 7, r.start_s + 700);
+  CHECK(again != nullptr && again->until_s == b->until_s);
 }
