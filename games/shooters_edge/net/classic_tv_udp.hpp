@@ -3,8 +3,8 @@
 // served to any multiplayer client of the classic game over plain protocol 28, so a player watches
 // through our TV with the client they already have, the oldest one too: the client connects to
 // the TV as to a server, as a spectator. The packets come from wherever the caller takes them: a
-// recording played (classic_tv_recording.hpp), later a watcher or a multiview stream turned to one
-// player's view.
+// recording played (classic_tv_recording.hpp), or a multiview recording turned to each player's
+// view a viewer asks for (views on request, below).
 //
 // PLAIN PROTOCOL 28 OUT, whatever came in: the server data names no extension, so a viewer's
 // client is never sent a message it may not know. Players and entities are read under the
@@ -40,7 +40,7 @@
 //
 // ge:summary Our TV node's face for classic clients: one player's packets served in plain 28
 // ge:keywords tv-node classic-face spectate viewer protocol-28 plain-protocol signon
-// ge:keywords client-recording
+// ge:keywords client-recording views-on-request udp_tv_wanted udp_tv_watching udp_tv_clear
 // ge:keywords old-clients full-entity-list udp_tv_start udp_tv_packet udp_tv_frame udp_tv_stop
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_tv_udp_test.cpp
@@ -85,7 +85,8 @@ struct UdpViewer {
   int stream = 0;                          // the view it watches
   bool chose = false;                      // it asked for a player of its own (ptrack, fire)
   bool fire = false;                       // its fire button held (a press is the next view)
-  int64_t frames = 0;                      // packets sent with a frame
+  int want = -1;       // a player it asked for whose view no stream has yet (views on request)
+  int64_t frames = 0;  // packets sent with a frame
 };
 
 // One player's line of the recorded game.
@@ -134,6 +135,10 @@ struct ClassicTvUdp {
   // player's while the face has a stream of his view.
   std::vector<UdpTvStream> streams;
   int follow = 0;
+  // VIEWS ON REQUEST (a multiview match, classic_tv_recording.hpp): a viewer may ask for any
+  // player's view, with its track keys or fire, though no stream carries it yet; the source reads
+  // what is wanted (`udp_tv_wanted`) and turns a stream to it, and the viewer moves when it comes.
+  bool views_on_request = false;
   int32_t count_raise = 0;  // added to every count read (a recording's rounds)
   int viewer_slot = 31;     // the slot every viewer is told is its own (one no player holds)
   std::array<UdpViewer, 32> viewers;
@@ -154,6 +159,13 @@ bool udp_tv_packet(ClassicTvUdp& f, int s, std::span<const uint8_t> packet);
 void udp_tv_view(ClassicTvUdp& f, int s, sh::Vec3f angles);
 // The stream the TV follows (its director's pick): every viewer that chose none moves to it.
 void udp_tv_follow(ClassicTvUdp& f, int s);
+// Stream `s` emptied: no level until its source sends one (a view let go, or turned to another
+// player).
+void udp_tv_clear(ClassicTvUdp& f, int s);
+// The player slots viewers asked for that no stream carries yet (views on request).
+std::vector<int> udp_tv_wanted(const ClassicTvUdp& f);
+// How many viewers watch stream `s`, or wait for its player (views on request).
+int udp_tv_watching(const ClassicTvUdp& f, int s);
 // Reads every viewer's datagrams and sends what is due.
 void udp_tv_frame(ClassicTvUdp& f, int64_t now_us);
 // Every viewer sent the disconnect.

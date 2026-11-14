@@ -399,9 +399,14 @@ void string_command(ClassicTvUdp& f, UdpViewer& v, const std::string& line) {
     for (size_t s = 0; s < f.streams.size(); s++)
       if (f.streams[s].pov == want && f.streams[s].level) {
         v.chose = true;
+        v.want = -1;
         move_to(f, v, static_cast<int>(s));
         return;
       }
+    if (f.views_on_request && want >= 0 && want < 32) {  // the source turns a stream to it
+      v.chose = true;
+      v.want = want;
+    }
   } else if (cmd == "download") {
     // The broadcast offers no files: the client goes on without the one it lacks.
     SvcMsg m;
@@ -414,9 +419,36 @@ void string_command(ClassicTvUdp& f, UdpViewer& v, const std::string& line) {
   // The rest (chat, user info, pings) is a viewer's: the broadcast does not take it.
 }
 
-// The fire button: the next player's view the face has.
+// The fire button: the next player's view the face has; with views on request, the next player
+// of the recorded game, his view asked for when no stream carries it yet.
 void next_view(ClassicTvUdp& f, UdpViewer& v) {
   const int n = static_cast<int>(f.streams.size());
+  if (f.views_on_request) {
+    const UdpTvStream& st = f.streams[static_cast<size_t>(v.stream)];
+    const int from = v.want >= 0 ? v.want : st.pov;
+    for (int k = 1; k <= 32; k++) {
+      const int slot = (from + k + 32) % 32;
+      const UdpTvSlot& p = st.slots[static_cast<size_t>(slot)];
+      if (!p.used || info_get(p.info, "name").empty() || !info_get(p.info, "*spectator").empty())
+        continue;
+      if (slot == st.pov) {
+        v.want = -1;
+        return;
+      }
+      for (int s = 0; s < n; s++)
+        if (f.streams[static_cast<size_t>(s)].pov == slot &&
+            f.streams[static_cast<size_t>(s)].level) {
+          v.chose = true;
+          v.want = -1;
+          move_to(f, v, s);
+          return;
+        }
+      v.chose = true;
+      v.want = slot;
+      return;
+    }
+    return;
+  }
   for (int k = 1; k < n; k++) {
     const int s = (v.stream + k) % n;
     if (f.streams[static_cast<size_t>(s)].level) {
@@ -805,8 +837,43 @@ void udp_tv_follow(ClassicTvUdp& f, int s) {
     if (v.stage != UdpViewerStage::free && !v.chose) move_to(f, v, s);
 }
 
+void udp_tv_clear(ClassicTvUdp& f, int s) {
+  if (s < 0 || s >= static_cast<int>(f.streams.size())) return;
+  UdpTvStream& st = f.streams[static_cast<size_t>(s)];
+  st = UdpTvStream{};
+  st.baselines.resize(kMostEntity + 1);
+}
+
+std::vector<int> udp_tv_wanted(const ClassicTvUdp& f) {
+  std::vector<int> out;
+  for (const UdpViewer& v : f.viewers)
+    if (v.stage != UdpViewerStage::free && v.want >= 0 &&
+        std::find(out.begin(), out.end(), v.want) == out.end())
+      out.push_back(v.want);
+  return out;
+}
+
+int udp_tv_watching(const ClassicTvUdp& f, int s) {
+  if (s < 0 || s >= static_cast<int>(f.streams.size())) return 0;
+  const int pov = f.streams[static_cast<size_t>(s)].pov;
+  int n = 0;
+  for (const UdpViewer& v : f.viewers)
+    if (v.stage != UdpViewerStage::free && (v.stream == s || (pov >= 0 && v.want == pov))) n++;
+  return n;
+}
+
 void udp_tv_frame(ClassicTvUdp& f, int64_t now_us) {
   f.now = static_cast<double>(now_us) / 1e6;
+  // A view asked for has come: its viewers move to it.
+  for (UdpViewer& v : f.viewers) {
+    if (v.stage == UdpViewerStage::free || v.want < 0) continue;
+    for (size_t s = 0; s < f.streams.size(); s++)
+      if (f.streams[s].pov == v.want && f.streams[s].level) {
+        v.want = -1;
+        move_to(f, v, static_cast<int>(s));
+        break;
+      }
+  }
   gn::transport_pump(*f.transport, now_us);
   uint8_t buf[gn::kMaxDatagram];
   gn::Address from;
