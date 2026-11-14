@@ -49,6 +49,8 @@ struct Game {
   ge::account::Service* accounts = nullptr;
   ge::net::Transport* account_link = nullptr;
   int64_t (*unix_us)() = nullptr;
+  const ge::net::SignKeys* signer = nullptr;  // signs the seats `sv_ranked` offers a master
+  std::string base;                           // the ladder's game: the sequel's folder
   bool logins_wanted = false;
   std::unique_ptr<SequelLogin> login;
 };
@@ -96,6 +98,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->accounts = c.accounts;
   g->account_link = c.account_link;
   g->unix_us = c.unix_us;
+  g->signer = c.account_signer;
+  g->base = base;
   g->logins_wanted = c.login.login > 0 || c.accounts != nullptr || c.account_link != nullptr;
   return g.release();
 }
@@ -160,8 +164,12 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   if (!sequel_net_start(*game.net, game.rules, port, game.cfg, error)) return false;
   if (!game.logins_wanted) return true;
   game.login = std::make_unique<SequelLogin>();
-  return sequel_login_open(*game.login, *game.net, game.login_set, game.accounts, game.account_link,
-                           game.unix_us, error);
+  game.login->game = game.base;
+  if (!sequel_login_open(*game.login, *game.net, game.login_set, game.accounts, game.account_link,
+                         game.unix_us, error))
+    return false;
+  game.login->logins.signer = game.signer;
+  return true;
 }
 
 void net_frame(void* g, int64_t now_us) {

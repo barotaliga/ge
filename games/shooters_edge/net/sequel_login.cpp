@@ -6,6 +6,8 @@
 // ge:test tests/shooters_edge_sequel_login_test.cpp
 #include "shooters_edge/net/sequel_login.hpp"
 
+#include <algorithm>
+
 #include "net/token.hpp"
 #include "shooters_edge/net/classic_info.hpp"
 
@@ -60,6 +62,18 @@ void tell(SequelNetServer& s, int slot, const std::string& text) {
   for (const std::string& line : sequel_wrap(text)) sequel_net_print(s, slot, line + "\n");
 }
 
+// `sv_ranked`: the players' seats nobody has (spectators take none) offered to the matchmaker.
+void ranked_offer(SequelLogin& l) {
+  SequelNetServer& s = *l.server;
+  if (l.logins.set.ranked.empty() || s.transport == nullptr) return;
+  const int most = std::min(s.cfg.max_clients, sh::kMaxClients);
+  int taken = 0;
+  for (int i = 0; i < most; i++)
+    if (s.clients[i].stage != SequelSlot::free && !s.clients[i].spectator) taken++;
+  gs::logins_offer(l.logins, l.game, ge::net::to_string(s.transport->local),
+                   s.transport->local.port, most - taken, unix_now(l));
+}
+
 }  // namespace
 
 ge::account::NameRules sequel_name_rules() { return {15, false, false}; }
@@ -96,6 +110,7 @@ void sequel_login_frame(SequelLogin& l) {
   SequelNetServer& s = *l.server;
   for (int i = 0; i < sh::kMaxClients && i < gs::kLoginSeats; i++) sync_seat(l, i);
   gs::logins_frame(l.logins, now_s(l), unix_now(l));
+  ranked_offer(l);
   for (const std::string& note : l.logins.notes) s.log.push_back("login: " + note);
   l.logins.notes.clear();
   std::vector<gs::LoginOut> out;

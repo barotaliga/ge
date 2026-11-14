@@ -90,6 +90,17 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
                         "sequel's"},
              &out->models);
+  cvars.bind({.name = "cr_moves",
+              .fallback = "0",
+              .flags = ge::console::kArchive,
+              .help = "Whose movement the players run, jump and strafe with under classic remix, "
+                      "from the next map.",
+              .kind = ge::console::CvarKind::integer,
+              .min = 0,
+              .max = static_cast<double>(std::size(ce::kProfiles)),
+              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
+                        "sequel's"},
+             &out->moves);
   cvars.bind({.name = "cr_strong_min",
               .fallback = "1",
               .flags = ge::console::kArchive,
@@ -210,21 +221,33 @@ const profiles::RemixFigure* worn_figure(const RemixSettings& s, const RemixStat
   return profiles::remix_figure(played, items_game(of_models, played));
 }
 
+const profiles::RemixMoves* worn_moves(const RemixSettings& s, const RemixState& state,
+                                       std::string_view played) {
+  if (!state.on) return nullptr;
+  RemixSettings of_moves = s;
+  of_moves.items = s.moves;
+  return profiles::remix_moves(played, items_game(of_moves, played));
+}
+
 bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played) {
   const profiles::RemixArsenal* worn = worn_arsenal(s, r.state, played);
   const profiles::RemixLooks* looks = worn_looks(s, r.state, played);
   const profiles::RemixFigure* figure = worn_figure(s, r.state, played);
-  if (worn == r.worn && looks == r.looks && figure == r.figure) return false;
+  const profiles::RemixMoves* moves = worn_moves(s, r.state, played);
+  if (worn == r.worn && looks == r.looks && figure == r.figure && moves == r.moves) return false;
   r.worn = worn;
   r.looks = looks;
   r.figure = figure;
+  r.moves = moves;
   return true;
 }
 
 std::vector<std::string> worn_lines(const RemixFiles& r, const std::vector<std::string>& own) {
-  if (r.worn != nullptr) return profiles::arsenal_lines(r.worn->arsenal);
-  std::vector<std::string> lines = own;
+  std::vector<std::string> lines =
+      r.worn != nullptr ? profiles::arsenal_lines(r.worn->arsenal) : own;
   if (r.looks != nullptr) lines.push_back("set sv_wear \"" + std::string(r.looks->items) + "\"");
+  if (r.moves != nullptr)
+    for (const std::string_view line : r.moves->lines) lines.emplace_back(line);
   return lines;
 }
 
@@ -238,8 +261,10 @@ std::string worn_line(const RemixFiles& r) {
   };
   std::string line = items.empty() ? "From the next map the weapons and armour are the game's own"
                                    : "From the next map the weapons and armour are " + whose(items);
-  line += r.figure == nullptr ? ", and the players are the game's own."
-                              : ", and the players are " + whose(r.figure->models) + ".";
+  line += r.figure == nullptr ? "; the players are the game's own"
+                              : "; the players are " + whose(r.figure->models);
+  line +=
+      r.moves == nullptr ? " and move as its own." : " and move as " + whose(r.moves->moves) + ".";
   return line;
 }
 

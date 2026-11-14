@@ -110,6 +110,19 @@ name), `start` (Unix seconds), `title`, `team` (a team's name), `player` (`name`
 `tag`; and in the trailer's final meta: `duration_ms`, `score` (`name<TAB>score`) and `team_score`
 (`team<TAB>score`). Anything else is the game's own and the hub leaves it unread.
 
+**Runs.** A game that keeps a run as its input log (`engine/play/inputs.hpp`: the setup and every
+step's input as text, about 300 KB for a four-minute race) has its runs archived beside the demos
+the same way: by hash under `r/abc/abc….inputs`, found by the same search on the Demos page, its
+file at `/r/{abc}/{sha256}.inputs`, its summary saying `"kind":"run"`. A log carries no meta words,
+so the game reads the row (`HubSpec::run_row`): Fall Line's hub (`fall_line_hub`,
+`games/fall_line/hub/`) plays the run out headless (about a second for a four-minute race in a
+release build) and names the map by its seed, the mode, the player and his rivals, and each
+racer's time at the line (`HubSpec::score_ms`: shown as m:ss.cc). A run's Watch page hands the
+game's web viewer `--run=` and no content: the viewer grows the world again from the log's setup.
+A run opens in no game, so its page has no Play button. A hub whose game reads no runs refuses one,
+and a hub with `--archive` alone (no master) is a hub of demos and runs: Fall Line's, until it has
+a dedicated server (M17k).
+
 ### Locations
 
 A server's country comes from an IP-to-country table the operator drops beside the hub (a free
@@ -176,7 +189,7 @@ queries (not asked for on the web). A native run asks for exactly the defaults w
 a browser.
 
 FALL LINE'S VIEWER (M56j). Fall Line's runs are kept as input logs (`play/inputs.hpp`: the
-game's setup and every step's input, a few kilobytes), not as recordings, so its viewer
+game's setup and every step's input, about 300 KB for a four-minute race), not as recordings, so its viewer
 (`games/fall_line/web/viewer.cpp`, built with `-DGE_WEB_GAME=fall_line`) takes `--run=<url>`:
 it fetches the log, grows the mountain again from the log's seed in the page (about a second; no
 map is downloaded) and steps the run with the replay's player (`replay/player.hpp`), so the page
@@ -234,8 +247,7 @@ In that check Chromium refused the session to a loopback forwarder (its local ne
 until they were turned off with `--disable-features=LocalNetworkAccessChecks`; a hub and a
 forwarder on public addresses do not meet them.
 
-Next: Fall Line's runs on a hub: the input logs kept in the archive by hash and a Run page
-that hands the viewer `--run`.
+Next: Fall Line's live races on its hub, once it has a dedicated server (M17k).
 
 ## The plan
 
@@ -276,8 +288,10 @@ that hands the viewer `--run`.
   function of the index. `http.hpp` carries it: HTTP/1.1 GET and HEAD (and POST to the Account page's `/account/...` alone, a form of at most 2 KB), CORS open, the cache time
   of the busy period, server-sent events for one node's record with a comment line every 15 s.
   `main.hpp` is the process (`ge_add_hub`, cmake/Hub.cmake); `--serve-master` runs the master in
-  the same process, so one binary is a community's whole service. Shooter's Edge's is
-  `shooters_edge_hub`; Fall Line has no dedicated server yet, so no hub.
+  the same process, `--rendezvous` the rendezvous (net/rendezvous.hpp: hosts behind home routers
+  register, players join them by id, STUN, a relay port when no hole opens; port 3478 by default)
+  and `--accounts` the account service, so one binary is a community's whole service. Shooter's Edge's is
+  `sehub`; Fall Line has no dedicated server yet, so no hub.
 
 - **M56b, part two**: a server whose game speaks its own protocol (`ServerGame::serve`, Shooter's
   Edge's classic one) beats and answers too. The core sets the socket's public hook
@@ -285,7 +299,7 @@ that hands the viewer `--run`.
   takes the master's acks and answers the hub's status asks, so the game never sees either.
   Shooter's Edge's record has the map, the mode its rules make (coop, 2on2 or 4on4 with teamplay,
   1on1 or ffa), the score screen, the frag and time limits and every client (bots and spectators
-  flagged). `sesv +set sv_master <hub>` appears on `shooters_edge_hub`.
+  flagged). `sesv +set sv_master <hub>` appears on `sehub`.
 
 - **M56c** (`hub-pages`): `pages.hpp` writes the pages from the same index, as plain HTML with
   one stylesheet and no script, refreshed every 5 s by a meta refresh. `/` is the Servers page: a
@@ -324,7 +338,7 @@ that hands the viewer `--run`.
   Such a node is `browsed`: the poller never sends it the engine's ask, and it is dropped once no
   refresh has heard it for 5 minutes; if the engine's master lists the same address it becomes the
   poller's, and its own record wins. Shooter's Edge's hub hands it the classic query, so
-  `shooters_edge_hub --browse-master=<a classic master>` lists the classic servers on the internet
+  `sehub --browse-master=<a classic master>` lists the classic servers on the internet
   beside the game's own. The classic broadcasters' pages wait for the TV node (M57b).
 
 - **M56h** (`hub-radar`): the map. The radar track (`replay/radar.hpp`) holds a roster chunk,
@@ -335,7 +349,7 @@ that hands the viewer `--run`.
   animation (no script) or still at a moment (`?at=`) with links a second and five seconds either
   way; the Demos page links Map where the file has a radar. Shooter's Edge reads the radar off a
   multiview recording (`client/demo_radar.hpp`), with the outline from the level's map sliced at the
-  height played most, and `shooters_edge_cli demos pack` writes it. A two-minute 4on4 of bots adds
+  height played most, and `secli demos pack` writes it. A two-minute 4on4 of bots adds
   26 KiB (11 %) to its file. A live match's map waits for the TV node to carry the track.
 
 - **M56g, the pages** (`hub/watch.hpp`, in `hub-pages`): `/watch/{tv-node}/{stream}` holds the

@@ -6,7 +6,7 @@
 //           connect's `prx`), or a fixed route to one server (fixed.hpp)
 //   seproxy the near or far proxy (engine/proxy), or both with a lossy link between them
 //   setv    a TV node (classic_tv.hpp) relaying a server's stream port to classic viewers, or with
-//           --sequel the sequel's TV (sequel_tv_relay.hpp, sequel_tv_demo.hpp)
+//           -game 2 the sequel's TV (sequel_tv_relay.hpp, sequel_tv_demo.hpp)
 //
 // Each runs on the wall clock, a frame every millisecond, until stopped or `--seconds`, and writes
 // a status line every `--status` seconds.
@@ -27,9 +27,9 @@
 //        recording gives every player's view on request,
 //        the hottest player's followed by default ([--autotrack=0] the lowest slot's)
 //        (classic_tv_udp.hpp, classic_tv_recording.hpp)
-//   setv --sequel --port=27911 --server=<sequel host:port> [--server-password=<pw>]
+//   setv -game 2 --port=27911 --server=<sequel host:port> [--server-password=<pw>]
 //        [--password=<pw>] [--delay=7] [--name=tv]   (sequel_tv_relay.hpp)
-//   setv --sequel --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
+//   setv -game 2 --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
 //        a recording played round and round instead   (sequel_tv_demo.hpp)
 //
 // voice: agent (a command-line tool's main: its errors are for whoever runs it;
@@ -117,7 +117,7 @@ void usage() {
         "  seproxy far --port=<p> --allow=<host[:port],...> | --open\n");
   else
     std::printf(
-        "setv [--sequel] [flags]: our TV node\n"
+        "setv [-game 1|2] [flags]: our TV node (-game 2: the sequel's)\n"
         "  setv --port=27900 --server=<host:stream port> [--server-password=<pw>]\n"
         "      [--password=<pw>] [--delay=7] [--name=tv]\n"
         "  setv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]: a\n"
@@ -126,7 +126,7 @@ void usage() {
         "      them; a multiview recording (.mvd) gives every\n"
         "      player's view, chosen with the track keys or fire, the hottest player's\n"
         "      followed until then (--autotrack=0: the lowest slot's)\n"
-        "  setv --sequel --port=27911 --server=<host:port> [--server-password=<pw>]\n"
+        "  setv -game 2 --port=27911 --server=<host:port> [--server-password=<pw>]\n"
         "      [--password=<pw>] [--delay=7] [--name=tv]: a watcher on a server of the\n"
         "      sequel, its match served to the sequel's own clients\n"
         "      or --demo=<file.dm2> in place of --server: a recording, played round and\n"
@@ -345,8 +345,11 @@ int run(int argc, char** argv) {
     } else if (flag(a, "allow", v)) {
       if (!addresses(v, o.allow))
         return fail("--allow=" + v + " holds no address", "host:port,...");
-    } else if (a == "--sequel" && kHop == Hop::tv) {
-      o.kind = "sequel-tv";
+    } else if (kHop == Hop::tv && (a == "-game" || a.rfind("--game=", 0) == 0)) {
+      if (a == "-game" && i + 1 >= argc) return fail("-game needs a number", "-game 1 or -game 2");
+      const std::string n = a == "-game" ? argv[++i] : a.substr(7);
+      if (n != "1" && n != "2") return fail("-game " + n + " is no game", "-game 1 or -game 2");
+      o.kind = n == "2" ? "sequel-tv" : "tv";
     } else if (flag(a, "master", v)) {
       if (!addresses(v, o.masters))
         return fail("--master=" + v + " holds no address", "host[:port],...");

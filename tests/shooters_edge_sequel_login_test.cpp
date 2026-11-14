@@ -1,10 +1,11 @@
 // games/shooters_edge/net/sequel_login.hpp: logins on the sequel's server. A stock client of the
 // sequel is told how to log in in lines its console shows whole, logs in with a one-time code by
 // a console line the rules never see, is shown by its account's name; a guest under a registered
-// name plays as "player"; a seat that must log in and does not is dropped.
+// name plays as "player"; a seat that must log in and does not is dropped; with `sv_ranked` the
+// players' seats nobody has are offered to the matchmaker under the sequel's folder.
 //
 // ge:summary Test: logins on the sequel's server, our scripted sequel client on a simulated net
-// ge:keywords test sequel-login login prompt one-time-code reserved-names timeout
+// ge:keywords test sequel-login login prompt one-time-code reserved-names timeout sv_ranked
 // ge:skill net shooter testing
 #include <memory>
 #include <string>
@@ -34,7 +35,8 @@ namespace sv = shooters_edge::server;
 namespace cn = shooters_edge::net;
 
 constexpr int64_t kT0 = 1794500000ll * 1000000;
-int64_t fixed_unix() { return kT0; }
+int64_t g_unix = kT0;  // the wall clock the logins read
+int64_t fixed_unix() { return g_unix; }
 
 void counter_fresh(void* ctx, uint8_t* out, size_t size) {
   auto* n = static_cast<uint64_t*>(ctx);
@@ -94,7 +96,7 @@ struct Rig {
   int64_t now = 0;
 };
 
-std::unique_ptr<Rig> rig(int login, double time_s = 60) {
+std::unique_ptr<Rig> rig(int login, double time_s = 60, const std::string& ranked = "") {
   auto r = std::make_unique<Rig>();
   r->rules = sv::sequel_runner(sv::make_sequel_server({}));
   r->rules.console("deathmatch 1");
@@ -116,6 +118,7 @@ std::unique_ptr<Rig> rig(int login, double time_s = 60) {
   gs::LoginSettings set;
   set.login = login;
   set.time_s = time_s;
+  set.ranked = ranked;
   CHECK_MSG(cn::sequel_login_open(r->login, r->server, set, &r->svc, nullptr, fixed_unix, error),
             error);
   return r;
@@ -194,4 +197,25 @@ TEST(sequel_login_a_seat_that_must_log_in_and_does_not_is_dropped) {
   run(*r, 400);  // 5 s
   CHECK(cn::sequel_net_clients(r->server) == 0);
   CHECK_MSG(c.stage != cn::ClientStage::active, "still in");
+}
+
+TEST(sequel_login_a_ranked_server_offers_its_free_seats_under_its_folder) {
+  g_unix = kT0;
+  auto r = rig(0, 60, "1on1");
+  run(*r, 1);  // empty: every seat offered
+  const auto& offers = r->svc.matchmaker.offers;
+  CHECK(offers.size() == 1 && offers[0].seats == cn::SequelNetConfig{}.max_clients);
+  join(*r, "eve");
+  run(*r, 120);
+  CHECK(cn::sequel_net_clients(r->server) == 1);
+  g_unix += gs::kOfferEvery_us;  // the next offer due
+  run(*r, 1);
+  g_unix = kT0;
+  CHECK(offers.size() == 1);
+  if (offers.empty()) return;
+  CHECK_MSG(offers[0].game == "baseq2", offers[0].game);
+  CHECK(offers[0].mode == "1on1");
+  CHECK_MSG(offers[0].seats == cn::SequelNetConfig{}.max_clients - 1,
+            std::to_string(offers[0].seats));
+  CHECK(r->login.logins.stats.offers >= 1);
 }

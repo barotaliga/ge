@@ -310,6 +310,7 @@ bool blast_light(const gr::Blast& b, double now_s, Light* out) {
   out->radius = gr::look_of(b).light_range_m * (0.6 + 0.4 * k);
   const double level = 2.6 * k;
   for (int i = 0; i < 3; ++i) out->colour[i] = level * flash.colour[i];
+  out->group = kLightExplosion;
   return true;
 }
 
@@ -384,6 +385,7 @@ Light motor_light(const double at[3], const double dir[3], uint32_t seed, double
   const double level = kMotorLevel * (0.8 + 0.2 * waver);
   constexpr double kFlame[3] = {1.0, 0.66, 0.34};  // a motor's flame, about 1900 K
   for (int k = 0; k < 3; ++k) l.colour[k] = level * kFlame[k];
+  l.group = kLightRocket;
   return l;
 }
 

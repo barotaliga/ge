@@ -35,6 +35,7 @@ struct HubOptions {
   std::string ip = "0.0.0.0";
   int port = 0, http = 0;  // http 0: the spec's
   int serve_master = 0;    // the master's own port (0: none run here)
+  int rendezvous = 0;      // the rendezvous's port (0: none run here; net/rendezvous.hpp)
   double list_s = 60, status_s = 30, busy_s = 4;
   double for_s = 0, status_line_s = 60;
   std::string browse_masters, browse_servers;  // the game's own masters and servers (browse.hpp)

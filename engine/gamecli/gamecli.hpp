@@ -25,7 +25,7 @@
 // it never falls behind them.
 //
 // ge:summary A player's game CLI: the command table, the game's Spec, the answer, help and skill
-// ge:keywords gamecli game-cli player-cli shooters_edge_cli agentic settings servers host join
+// ge:keywords gamecli game-cli player-cli secli agentic settings servers host join
 // ge:keywords rcon players logs command-table spec places answer json help skill catalog
 // ge:keywords engine_commands locate join_words listen_words
 // ge:skill agent-interface

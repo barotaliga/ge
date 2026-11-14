@@ -1030,6 +1030,10 @@ bool listen_lobby(Listen& l, std::string_view line) {
   return taken;
 }
 
+bool listen_is_sequel(const Listen& l) {
+  return l.rules != nullptr && sv::sequel_of(*l.rules) != nullptr;
+}
+
 bool listen_say(Listen& l, const std::string& line) {
   if (l.rules == nullptr || l.server == nullptr) return false;
   l.rules->client_command(0, line);

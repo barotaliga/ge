@@ -663,7 +663,8 @@ void run(gl::Lab& lab) {
       ba::DynamicLight lights[2];
       fx::explosion_light(boom, 0.12, &lights[0]);
       lights[1] = fx::rocket_light(to);
-      ba::set_dynamic_lights(first.bsp, lights);
+      std::vector<ba::DynamicLight> kept;  // less the kinds put out (r_rocketlight and its kin)
+      ba::set_dynamic_lights(first.bsp, lk::kept_lights(f.picture, lights, kept));
       draw(d, f, first, fv, look, true, 0.12);  // the births flown a moment
       pics.push_back(draw(d, f, first, fv, look, true, 0));
       lab.metric(std::string("effects.") + lk::look_name(look) + ".births", double(births.size()),

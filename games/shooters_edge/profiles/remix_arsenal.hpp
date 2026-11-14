@@ -17,7 +17,7 @@
 // ge:summary Classic remix's arsenals: a game's rules with another game's weapons, armour, sounds
 // ge:keywords remix classic-remix cr_items remix-arsenal held-frames sequel-weapons
 // ge:keywords view-model pickup-model fire-sound by-role remix_arsenal held_frames
-// ge:keywords cr_models remix_figure player-figure
+// ge:keywords cr_models remix_figure player-figure cr_moves remix_moves sv_moves movement-feel
 // ge:skill shooter
 // ge:test tests/shooters_edge_remix_test.cpp
 #pragma once
@@ -247,6 +247,44 @@ constexpr const RemixFigure* remix_figure(std::string_view played, std::string_v
     if (f.played == played && f.models == models) return &f;
   return nullptr;
 }
+
+// THE MOVES (`cr_moves`): the played game's players move as another game's do. Each game's move
+// keeps its own code (the step, the duck, the slide); what differs is set on it: the running speed,
+// the ground's friction and how the air steers. `lines` are the played game's server lines from
+// the next map: the classic rules' move told the sequel's (300 and 6, the air steered at 1 by the
+// whole wish, the landing pause), the sequel's told the classic game's by `sv_moves`
+// (`kClassicFeel`).
+struct RemixMoves {
+  std::string_view played;  // the content profile id whose rules play
+  std::string_view moves;   // the content profile id whose moves they take
+  std::span<const std::string_view> lines;
+};
+
+inline constexpr std::string_view kClassicMovesAsSequel[] = {
+    "sv_maxspeed 300", "sv_friction 6", "pm_airaccel 1", "pm_airwish 0", "pm_landpause 1"};
+inline constexpr std::string_view kSequelMovesAsClassic[] = {"set sv_moves \"classic\""};
+
+inline constexpr RemixMoves kRemixMoves[] = {
+    {"classic", "sequel", kClassicMovesAsSequel},
+    {"sequel", "classic", kSequelMovesAsClassic},
+};
+
+// The moves `played`'s rules take as `moves`'s, or null (the same game, or no row).
+constexpr const RemixMoves* remix_moves(std::string_view played, std::string_view moves) {
+  if (played == moves) return nullptr;
+  for (const RemixMoves& m : kRemixMoves)
+    if (m.played == played && m.moves == moves) return &m;
+  return nullptr;
+}
+
+// The classic game's ground and air as the sequel's move takes them (`sv_moves classic`): its
+// running speed, its friction, its air steered by the strafing rule in every mode, and no landing
+// pause, so a hop chains on the landing.
+struct MoveFeel {
+  float max_speed = 300, friction = 6, air_accelerate = 0;
+  bool land_pause = true;
+};
+inline constexpr MoveFeel kClassicFeel{320, 4, 10, false};
 
 // A view model whose file holds every animation: the frame it rests on and its firing frames.
 struct HeldFrames {

@@ -141,13 +141,13 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
-#include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_bot_team.hpp"
 #include "shooters_edge/net/classic_browse.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/classic_team_areas.hpp"
 #include "shooters_edge/net/classic_team_view.hpp"
+#include "shooters_edge/net/game_commands.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
@@ -282,7 +282,7 @@ int run_main(int argc, char** argv) {
     console.print("Nobody is here to read that: chat works in a multiplayer game.");
     return false;
   });
-  sn::add_admin_commands(console, listen, remote);  // users, status, speedjump, rcon
+  sn::add_server_commands(console, listen, remote);  // users, status, rcon, cmd, score, inven
   // The vote on a setting (engine/server/vote.hpp): to the server joined, else the window's own.
   for (const char* word : {"vote", "yes", "no"})
     console.add_command(word,
@@ -813,14 +813,14 @@ int run_main(int argc, char** argv) {
   };
   bool remix_enabled = false;
   std::string remix_for;
-  std::pair<int32_t, int32_t> remix_items;  // cr_items, cr_models
+  std::array<int32_t, 3> remix_items{};  // cr_items, cr_models, cr_moves
   const auto remix_sync = [&] {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
     if (remix_settings.enabled == remix_enabled && remix_for == args.basedir &&
-        std::pair(remix_settings.items, remix_settings.models) == remix_items)
+        cl::remix_parts(remix_settings) == remix_items)
       return;
     if (cl::busy(loader)) return;  // its threads may read the other game's files: next frame
-    remix_items = {remix_settings.items, remix_settings.models};
+    remix_items = cl::remix_parts(remix_settings);
     if (remix_settings.enabled == remix_enabled && remix_for == args.basedir) return remix_wear();
     remix_enabled = remix_settings.enabled;
     remix_for = args.basedir;
@@ -1140,7 +1140,7 @@ int run_main(int argc, char** argv) {
     if (!sn::bot_team_start(bot_team, bc, error)) {
       out::error("shooters_edge: the bot client could not start its team (--bots=" +
                  std::to_string(args.bots) + " --server=" + args.server + "): " + error +
-                 "; next: check the server answers (shooters_edge_bots --server=" + args.server +
+                 "; next: check the server answers (sebots --server=" + args.server +
                  " --bots=1), then try again");
       return 1;
     }
