@@ -296,6 +296,7 @@ std::vector<Piece> make_pieces(const std::vector<Brush>& brushes,
     p.contents = br.contents;
     p.brush = int(b);
     std::vector<int> ids;
+    ids.reserve(br.sides.size());
     for (const Side& s : br.sides) ids.push_back(planes->find(s.plane));
     for (size_t i = 0; i < br.sides.size(); ++i) {
       bool dup = false;
@@ -572,7 +573,7 @@ void subdivide_faces(Tree* tree, const Planes& planes, const std::vector<TexInfo
     const TexInfo& ti = texinfos[size_t(f.texinfo)];
     bool cut = false;
     if (!(ti.flags & 1)) {
-      for (int a = 0; a < 2 && !cut; ++a) {
+      for (int a = 0; a < 2; ++a) {
         const V3 v = {ti.vecs[a][0], ti.vecs[a][1], ti.vecs[a][2]};
         const double len = length(v);
         if (!(len > 0)) continue;
@@ -592,11 +593,13 @@ void subdivide_faces(Tree* tree, const Planes& planes, const std::vector<TexInfo
         split_winding(f.w, pl, kOnEps, &fw, &bw);
         if (tiny(fw) || tiny(bw)) continue;
         Face g = f;
-        f.w = std::move(fw);
+        Face h = f;
+        h.w = std::move(fw);
         g.w = std::move(bw);
-        work.push_back(std::move(f));
+        work.push_back(std::move(h));
         work.push_back(std::move(g));
         cut = true;
+        break;
       }
     }
     if (!cut) out.push_back(std::move(f));

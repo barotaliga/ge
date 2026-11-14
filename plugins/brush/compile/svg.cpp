@@ -261,7 +261,13 @@ bool svg_to_plan(std::string_view svg_text, std::string* plan, std::string* erro
         fault(e.line, "z= of a point is one number", "write z=24");
         continue;
       }
-      out += head + " " + at(cx, cy) + "," + fmt(zz) + rest + "\n";
+      out += head;
+      out += ' ';
+      out += at(cx, cy);
+      out += ',';
+      out += fmt(zz);
+      out += rest;
+      out += '\n';
       continue;
     }
     // A shape.
@@ -368,7 +374,10 @@ bool svg_to_plan(std::string_view svg_text, std::string* plan, std::string* erro
       for (const auto& [x, y] : pts) shape += " " + at(x, y);
     }
     // The shape goes after the statement's verb and name: room NAME ..., solid NAME ...
-    out += stmt + " " + shape + "\n";
+    out += stmt;
+    out += ' ';
+    out += shape;
+    out += '\n';
   }
   if (!errors.empty()) {
     errors.pop_back();

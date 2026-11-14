@@ -208,7 +208,7 @@ bool point(const std::string& s, size_t dims, std::vector<double>* out) {
   return out->size() == dims;
 }
 
-enum class Op { carve, solid, liquid };
+enum class Op : uint8_t { carve, solid, liquid };
 
 struct Shape {
   Op op = Op::solid;
@@ -275,6 +275,7 @@ Ent mirrored(Ent e, int sym, const double c[2]) {
 
 void bounds_of(const Brush& b, V3* lo, V3* hi) {
   std::vector<PlaneD> planes;
+  planes.reserve(b.sides.size());
   for (const Side& s : b.sides) planes.push_back(s.plane);
   for (size_t i = 0; i < planes.size(); ++i) {
     Winding w = base_winding(planes[i]);

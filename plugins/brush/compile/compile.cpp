@@ -54,7 +54,7 @@ struct Texinfos {
     for (int a = 0; a < 2; ++a) {
       for (int k = 0; k < 4; ++k) {
         ti.vecs[a][k] = float(s.vecs[a][k]);
-        std::memcpy(&key[size_t(a * 4 + k)], &ti.vecs[a][k], 4);
+        std::memcpy(&key[(size_t(a) * 4) + size_t(k)], &ti.vecs[a][k], 4);
       }
     }
     ti.texture = t;
@@ -93,6 +93,7 @@ bool build_model(const std::vector<Brush>& brushes, bool world, const std::vecto
     if (!world && (c.contents == kTrigger || c.contents == kClip)) c.contents = kSolid;
     if (c.contents == kClip || c.contents == kTrigger) continue;
     std::vector<int> ti;
+    ti.reserve(c.sides.size());
     for (const Side& s : c.sides) ti.push_back(tx->add(s));
     infos.push_back(std::move(ti));
     drawn.push_back(std::move(c));
@@ -197,7 +198,6 @@ bool compile_map(const Source& source, const CompileOptions& options, std::vecto
         if (const std::string* c = e->get("classname")) cls = *c;
       }
       report->leak_entity = cls + " at " + where(o);
-      std::string way;
       const size_t n = report->leak_path.size();
       const V3 last = n ? report->leak_path.back() : o;
       const V3 gap = n >= 2 ? report->leak_path[n - 2] : last;
@@ -257,7 +257,13 @@ bool compile_map(const Source& source, const CompileOptions& options, std::vecto
   std::string text;
   for (const Entity& e : src.entities) {
     text += "{\n";
-    for (const auto& [k, v] : e.keys) text += "\"" + k + "\" \"" + v + "\"\n";
+    for (const auto& [k, v] : e.keys) {
+      text += '"';
+      text += k;
+      text += "\" \"";
+      text += v;
+      text += "\"\n";
+    }
     text += "}\n";
   }
   L.entities = text;

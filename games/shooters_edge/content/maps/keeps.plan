@@ -77,7 +77,7 @@ entity weapon_supernailgun 880,1000,-56
 entity item_armorInv 736,1280,24
 entity item_armor2 144,1020,104
 entity item_armor1 128,320,24
-entity item_artifact_super_damage 1024,768,-40 once
+entity item_artifact_super_damage 1024,768,-24 once
 entity item_health 416,1040,24
 entity item_health 160,256,24
 entity item_health 384,576,-88 spawnflags=2

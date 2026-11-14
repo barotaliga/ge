@@ -130,7 +130,9 @@ lab::Picture above(const br::Map& m, const Frame& f) {
       // Down from the top: the first open space, then the floor under it.
       bool open = false, sky = false, water = false;
       double floor_z = 0;
-      for (double z = f.hi[2]; z >= f.lo[2]; z -= 4) {
+      const int rows = int((f.hi[2] - f.lo[2]) / 4);
+      for (int r = 0; r <= rows; ++r) {
+        const double z = f.hi[2] - (r * 4.0);
         const int32_t c = contents_at(m, wx, wy, z);
         if (c == -6) sky = true;
         if (!open && (c == -1 || c == -3 || c == -4 || c == -5)) open = true;
