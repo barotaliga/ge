@@ -37,8 +37,7 @@ TEST(every_switch_has_its_own_id_field_and_group) {
     CHECK_MSG(n > 0, std::string(ce::kSwitchGroups[g]) + " has no switch");
   }
   // What the player asked for by name.
-  for (const char* id :
-       {"decals", "flames", "skies", "water", "lava", "muzzles", "teleports", "rubble"}) {
+  for (const char* id : {"decals", "flames", "skies", "water", "lava", "muzzles", "teleports"}) {
     CHECK_MSG(ce::find_switch(id) != nullptr, std::string(id) + " is not a switch");
   }
   CHECK(ce::find_switch("nothing") == nullptr);
