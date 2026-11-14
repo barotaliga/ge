@@ -20,6 +20,7 @@
 #include "vfs/pak.hpp"
 #include "vfs/search.hpp"
 #include "vfs/zstd.hpp"
+#include "web/file_list.hpp"
 
 namespace ge::hub {
 
@@ -70,6 +71,14 @@ std::string content_path(std::string_view sha) {
   return "content/" + std::string(sha) + ".pak.zst";
 }
 
+std::string content_list_path(std::string_view sha) {
+  return "content/" + std::string(sha) + ".files";
+}
+
+std::string content_file_path(std::string_view sha) {
+  return "content/f/" + std::string(sha) + ".zst";
+}
+
 namespace {
 
 // A pack made before: the index names it. False when there is none (or its pack is gone).
@@ -80,8 +89,9 @@ bool read_index(const Site& site, const fs::path& index, ContentPack& out) {
   size_t files = 0, missing = 0;
   std::error_code ec;
   if (!(f >> sha >> raw >> files >> missing) || !is_hex64(sha) ||
-      !fs::is_regular_file(fs::path(site.archive->dir) / content_path(sha), ec))
-    return false;
+      !fs::is_regular_file(fs::path(site.archive->dir) / content_path(sha), ec) ||
+      !fs::is_regular_file(fs::path(site.archive->dir) / content_list_path(sha), ec))
+    return false;  // a pack made before its files were kept by hash is made again
   out.sha = sha;
   out.bytes = fs::file_size(fs::path(site.archive->dir) / content_path(sha), ec);
   out.raw = raw;
@@ -175,6 +185,28 @@ bool make_pack(const Site& site, const HubSpec& spec, const vfs::SearchPath& sp,
   const fs::path file = fs::path(site.archive->dir) / content_path(out.sha);
   if (!fs::is_regular_file(file, ec) && !write_file(file, packed)) {
     error = "the content pack could not be written under " + file.parent_path().string();
+    return false;
+  }
+  // Each file on its own by the hash of its plain bytes, and their list (web/file_list.hpp).
+  web::FileList listed;
+  listed.pack = out.sha;
+  for (const auto& [name, bytes] : files) {
+    web::ListedFile l;
+    l.sha = mod::sha256_hex(bytes.data(), bytes.size());
+    l.bytes = bytes.size();
+    l.name = name;
+    const fs::path one = fs::path(site.archive->dir) / content_file_path(l.sha);
+    if (!fs::is_regular_file(one, ec) &&
+        !write_file(one, vfs::zstd_pack(bytes, vfs::ZstdLevel{}))) {
+      error = "a content file could not be written under " + one.parent_path().string();
+      return false;
+    }
+    listed.files.push_back(std::move(l));
+  }
+  const std::string list = web::write_file_list(listed);
+  if (!write_file(fs::path(site.archive->dir) / content_list_path(out.sha),
+                  {reinterpret_cast<const uint8_t*>(list.data()), list.size()})) {
+    error = "the content pack's file list could not be written";
     return false;
   }
   const std::string line = out.sha + " " + std::to_string(out.raw) + " " +
@@ -288,12 +320,52 @@ std::vector<std::string> viewer_maps(const Site& site) {
   return maps;
 }
 
-bool content_answer(std::string_view path, const Site& site, Answer& out) {
-  constexpr std::string_view kPrefix = "/content/", kExt = ".pak.zst";
+bool content_answer(std::string_view path, const Site& site, Answer& out, const HubSpec* spec) {
+  constexpr std::string_view kPrefix = "/content/", kExt = ".pak.zst", kList = ".files";
+  constexpr std::string_view kFile = "f/", kFileExt = ".zst", kMap = "map/";
   if (path.rfind(kPrefix, 0) != 0) return false;
   const std::string_view name = path.substr(kPrefix.size());
   out = {};
   out.type = "text/plain; charset=utf-8";
+  const bool kept = site.archive != nullptr && !site.archive->dir.empty();
+  const auto serve = [&](const std::string& rel, bool text, std::string_view missing) {
+    std::vector<uint8_t> bytes;
+    if (rel.empty() || !kept || !read_file(fs::path(site.archive->dir) / rel, bytes)) {
+      out.code = 404;
+      out.body = std::string(missing) + "\n";
+      return true;
+    }
+    out.type = text ? "text/plain; charset=utf-8" : "application/octet-stream";
+    out.body.assign(bytes.begin(), bytes.end());
+    out.max_age_s = kContentMaxAgeS;
+    return true;
+  };
+  // One file by its hash, and a pack's list (web/file_list.hpp): named by hashes, never changing.
+  if (name.rfind(kFile, 0) == 0) {
+    const std::string_view f = name.substr(kFile.size());
+    const bool ok =
+        f.size() == 64 + kFileExt.size() && f.substr(64) == kFileExt && is_hex64(f.substr(0, 64));
+    return serve(ok ? content_file_path(f.substr(0, 64)) : "", false,
+                 "no such content file: a file is /content/f/<64 hex>.zst, kept for a pack");
+  }
+  if (name.size() == 64 + kList.size() && name.substr(64) == kList && is_hex64(name.substr(0, 64)))
+    return serve(content_list_path(name.substr(0, 64)), true,
+                 "no such file list: a list is /content/<64 hex>.files, beside its pack");
+  // A map's list by the map's name: made the first time, as the map's Play page makes it.
+  if (name.rfind(kMap, 0) == 0) {
+    const std::string_view m = name.substr(kMap.size());
+    ContentPack pack;
+    std::string why = "this hub makes no map's files";
+    if (spec == nullptr || m.size() <= kList.size() || m.substr(m.size() - kList.size()) != kList ||
+        !map_content(site, *spec, m.substr(0, m.size() - kList.size()), pack, why)) {
+      out.code = 404;
+      out.body = "no files for that map: " + why + "\n";
+      return true;
+    }
+    serve(content_list_path(pack.sha), true, "the map's file list is gone");
+    out.max_age_s = 0;  // the map's files may change when the packs beside the viewer do
+    return true;
+  }
   const bool shaped =
       name.size() == 64 + kExt.size() && name.substr(64) == kExt && is_hex64(name.substr(0, 64));
   std::vector<uint8_t> bytes;

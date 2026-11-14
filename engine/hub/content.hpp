@@ -14,6 +14,10 @@
 // The Demo page hands the viewer `--pack=/content/<sha>.pak.zst` when the pack can be made, else
 // every pack beside the viewer as before.
 //
+// EACH FILE ON ITS OWN: beside every pack the hub keeps each file in it zstd-packed and named by
+// the SHA-256 of its plain bytes, and the pack's list of them (web/file_list.hpp), so a page
+// fetches only the files its browser does not hold yet.
+//
 // A MAP'S PACK (`map_content`, docs/hub.md § Playing in a browser): the files a match on that map
 // draws from (`HubSpec::map_files`), made the same way the first time the map's Play page is
 // asked for, its index `content/map-<map>.txt`. `viewer_maps` lists the maps the packs beside the
@@ -22,7 +26,7 @@
 // ge:summary A demo's content pack: only the files it needs out of the hub's packs, zstd, by hash
 // ge:keywords hub content pack demo files minimal download zstd pak viewer cache content-address
 // ge:keywords demo_content content_answer demo_files file_needs map_content map_files viewer_maps
-// ge:keywords play-page map-pack
+// ge:keywords play-page map-pack content-file file-list by-hash content_list_path
 // ge:skill net
 // ge:test tests/hub_content_test.cpp
 #pragma once
@@ -63,7 +67,13 @@ bool map_name_ok(std::string_view map);
 // The maps (`maps/<name>.bsp`) the packs beside the viewer hold, by name; the packs read again
 // only when they change.
 std::vector<std::string> viewer_maps(const Site& site);
-// `/content/...` answered into `out` (the pack, cached a year); false for any other path.
-bool content_answer(std::string_view path, const Site& site, Answer& out);
+// The archive's paths of a pack's file list and of one file by its hash (web/file_list.hpp).
+std::string content_list_path(std::string_view sha);
+std::string content_file_path(std::string_view sha);
+// `/content/...` answered into `out`: a pack, its file list or one of its files by hash (each
+// cached a year), or with `spec` a map's file list by the map's name (`/content/map/<map>.files`,
+// made the first time, never cached); false for any other path.
+bool content_answer(std::string_view path, const Site& site, Answer& out,
+                    const HubSpec* spec = nullptr);
 
 }  // namespace ge::hub

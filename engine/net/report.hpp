@@ -16,6 +16,8 @@
 //
 //   report_write(report, out, error) -> false when past a limit
 //   report_read(bytes, size, out, error) -> false when damaged
+//   report_text(report, out, error) / report_from_text(text, out, error)   the bytes as hex, the
+//       value of a replay file's `report` meta word (the closing summary, docs/accounts.md)
 //
 // ge:summary A finished match's report: the match, its teams, its players and the game's columns
 // ge:keywords match-report report_write report_read scoreboard frags deaths suicides team-kills
@@ -27,6 +29,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace ge::net {
@@ -71,5 +74,9 @@ struct MatchReport {
 
 bool report_write(const MatchReport& r, std::vector<uint8_t>& out, std::string& error);
 bool report_read(const uint8_t* data, size_t size, MatchReport& out, std::string& error);
+// The bytes as lower-case hex, for a text field (a replay file's trailer meta); false past a limit.
+bool report_text(const MatchReport& r, std::string& out, std::string& error);
+// The hex read back; false when it is not hex or the bytes are damaged.
+bool report_from_text(std::string_view text, MatchReport& out, std::string& error);
 
 }  // namespace ge::net

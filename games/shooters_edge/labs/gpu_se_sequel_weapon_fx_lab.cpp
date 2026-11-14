@@ -20,7 +20,9 @@
 #include <cmath>
 #include <map>
 #include <memory>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "brush/read.hpp"
@@ -63,13 +65,15 @@ constexpr double kTic = 0.013;
 struct Shot {
   const char* id;
   const char* look_for;
-  int ticks;  // frames from the trigger to the picture
+  int ticks;  // frames from the trigger to the picture (`eye`: at most, the shot's next frame)
   sv::SqWeapon weapon;
   // At the floor a few steps ahead, the trigger pulled once and the picture from the eye: the marks
   // the hits leave (bullet holes, a blast's scorch).
   bool wall = false;
   // Not fired: the weapon in hand at rest, level, from the eye (`--held=1`).
   bool held = false;
+  // Fired, and the picture from the eye: the shot's flash, light and kick on the weapon in hand.
+  bool eye = false;
 };
 constexpr Shot kShots[] = {
     {"blaster", "a yellow bolt in flight, its glow on the walls", 14, sv::SqWeapon::blaster},
@@ -84,6 +88,14 @@ constexpr Shot kShots[] = {
     {"railgun-fading", "the line circling the beam fading, the walls lit blue along it", 30,
      sv::SqWeapon::railgun},
     {"bfg", "the green ball in flight, the room lit green", 95, sv::SqWeapon::bfg},
+    {"shotgun-flash", "the flash and smoke at the muzzle, the gun kicked back, its light", 40,
+     sv::SqWeapon::shotgun, false, false, true},
+    {"machinegun-flash", "a small bullet's flash at the muzzle as it fires", 40,
+     sv::SqWeapon::machinegun, false, false, true},
+    {"rocket-launcher-flash", "the rocket's flare at the muzzle, the launcher kicked", 40,
+     sv::SqWeapon::rocket_launcher, false, false, true},
+    {"railgun-flash", "the rail's blue light on the gun as it fires, the gun kicked", 40,
+     sv::SqWeapon::railgun, false, false, true},
     {"super-shotgun-marks", "a bullet hole where each pellet struck, spread as the shot spread",
      200, sv::SqWeapon::super_shotgun, true},
     {"rocket-marks", "the black scorch the rocket's blast left on the floor", 160,
@@ -343,6 +355,15 @@ void run(gl::Lab& lab) {
       std::vector<cl::Missile> missiles;
       cl::HeldState held;
       held.hand.at_eye = at_eye;
+      cl::HeldFire held_fire;
+      if (std::string why; !cl::load_held_fire(held_fire, &why,
+                                               at_eye && adapter.game != nullptr
+                                                   ? adapter.game->held_weapons
+                                                   : std::span<const std::string_view>{})) {
+        lab.fail(why,
+                 "Fix the weapon's fire in plugins/classicenhance/weapons.cpp. Skill: render.");
+        return;
+      }
       shooters_edge::view::HandFrame hand;
       const auto step = [&](int) {
         t += kTic;
@@ -350,6 +371,7 @@ void run(gl::Lab& lab) {
         v = cl::frame_view(l, shown, 1, t, kTic);
         cl::step_fx(l, shown, fx_state, t, kTic, fx);
         hand = cl::step_held(l, shown, held, {}, weapons, t, kTic);
+        cl::fire_held(held_fire, hand, fx_state.on.muzzles, t, fx);
         cl::draw_world(*device, *frame, v, fx, &hand, kTic, {}, out.view);
       };
       sh::MoveCmd aim;
@@ -362,17 +384,23 @@ void run(gl::Lab& lab) {
         step(i);
       }
       seen = {};
+      int fired_at = -1;
       for (int i = 0; i < shot.ticks; i++) {
         sh::MoveCmd cmd = aim;
         if (!shot.held && (!shot.wall || i < 4)) cmd.buttons = sh::kButtonAttack;
         cl::listen_frame(l, cmd);
         step(i);
+        // From the eye: the picture a frame after the shot leaves the muzzle (the flash lasts a
+        // few hundredths of a second; the hand steps once a rules frame).
+        if (shot.eye && hand.fired) fired_at = i;
+        if (shot.eye && fired_at >= 0 && i >= fired_at + 1) break;
       }
-      if (std::string_view(look_name) == "modern" && !shot.wall) report(lab, shot, l, seen);
+      if (std::string_view(look_name) == "modern" && !shot.wall && !shot.eye)
+        report(lab, shot, l, seen);
       // The eye a step ahead of the player and beside him, turned in, so the shot is seen across
       // its path.
       const double fx_ = ge::core::libm::sin(v.heading), fz = ge::core::libm::cos(v.heading);
-      if (!shot.wall && !shot.held) {
+      if (!shot.wall && !shot.held && !shot.eye) {
         v.eye[0] += fx_ * 0.6 + fz * 0.9;
         v.eye[2] += fz * 0.6 - fx_ * 0.9;
         v.eye[1] += 0.25;
@@ -381,8 +409,8 @@ void run(gl::Lab& lab) {
       cl::FxFrame still = fx;  // the same moment again: nothing born twice, nothing moved
       still.births.clear();
       // The weapon in hand only where the picture is the eye's own.
-      cl::draw_world(*device, *frame, v, still, shot.wall || shot.held ? &hand : nullptr, 0, {},
-                     out.view);
+      cl::draw_world(*device, *frame, v, still,
+                     shot.wall || shot.held || shot.eye ? &hand : nullptr, 0, {}, out.view);
       const ge::gpu::Image img = ge::gpu::read_now(*device, out);
       const std::string id = std::string(shot.id) + "-" + look_name;
       lab.shot(
@@ -393,9 +421,11 @@ void run(gl::Lab& lab) {
                            ", the game's own view model drawn at the eye."
                      : std::string("The ") + sv::kSqWeapons[static_cast<int>(shot.weapon)].name +
                            " fired on " + map_name + " in the " + look_name +
-                           (shot.wall ? " look at the floor a few steps ahead, seen from the eye "
-                                      : " look, seen from a step ahead and beside the player ") +
-                           std::to_string(shot.ticks) + " frames after the trigger.",
+                           (shot.wall  ? " look at the floor a few steps ahead, seen from the eye "
+                            : shot.eye ? " look, seen from the eye "
+                                       : " look, seen from a step ahead and beside the player ") +
+                           (shot.eye ? std::string("a frame after the shot left the muzzle.")
+                                     : std::to_string(shot.ticks) + " frames after the trigger."),
            shot.look_for,
            {{"map", map_name}, {"weapon", shot.id}, {"look", look_name}}},
           gl::Picture{int(img.width), int(img.height), img.rgba}, gl::Det::measured);

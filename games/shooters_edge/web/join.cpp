@@ -31,6 +31,7 @@
 #include "shooters_edge/net/classic_remote.hpp"
 #include "ui/draw.hpp"
 #include "web/browser.hpp"
+#include "web/file_list.hpp"
 #include "web/page_audio.hpp"
 
 namespace shooters_edge::web {
@@ -52,9 +53,21 @@ int fail(const std::string& line, const std::string& detail = "") {
   return 1;
 }
 
+// The files of a map the page does not hold, asked of the hub by the map's name and mounted over
+// the rest; only those the browser lacks are fetched.
+bool fetch_map(const std::string& map, cl::SearchPath& files, ge::web::FileStore& store,
+               std::string& error) {
+  const std::string said = "Loading " + map + "...";
+  std::vector<uint8_t> pak;
+  size_t n = 0;
+  if (!ge::web::fetch_listed(ge::web::map_list_url(map), store, pak, n, error, said)) return false;
+  std::fprintf(stderr, "shooters_edge_viewer: %s: %zu files fetched\n", map.c_str(), n);
+  return pak.empty() || cl::add_archive(files, "map-" + map + ".pak", std::move(pak), error);
+}
+
 }  // namespace
 
-int join_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
+int join_in_page(const ge::web::ViewerArgs& args, cl::SearchPath& files, ge::web::FileStore& kept,
                  const char* canvas_id) {
   std::string error;
   ge::web::say("Joining the server...");
@@ -177,6 +190,11 @@ int join_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
     const cl::DemoState& s = remote.demo.state;
     if (step == net::RemoteStep::new_level) {
       say("Loading " + s.map + "...");
+      std::vector<uint8_t> held;
+      if (cl::find_file(files, "maps/" + s.map + ".bsp", held).empty() &&
+          !fetch_map(s.map, files, kept, error))
+        return fail("This hub does not have the map " + s.map + ", so the game cannot be shown.",
+                    error);
       map = cl::load_named_map(files, s.map, error);
       if (!map)
         return fail("This hub does not have the map " + s.map + ", so the game cannot be shown.",

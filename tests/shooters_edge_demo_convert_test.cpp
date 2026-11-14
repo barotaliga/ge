@@ -3,11 +3,19 @@
 // reads back frame for frame: the same map, the eye on the same path, the same view angles, the
 // same status, the rocket renumbered past the player slots where the source had it; fed a few
 // bytes at a time, the stream gives the same bytes as the whole file, every take whole records;
-// the loop's form leaves the end out; what the target cannot hold is counted; a pair that does
-// not exist and a damaged demo are refused with the reason; a file's format is told by its name.
+// the loop's form leaves the end out; the same demo converts to a client recording the oldest
+// clients play (packets within their size, the header's two words one rising sequence, a command
+// record leading each frame's packet with its angles, the commands one sequence ahead, a
+// disconnect at the end) that reads back frame for frame, and a frame of more entities than the
+// oldest client holds keeps the 64 nearest the view; a multiview recording converts to one
+// player's view the same way, read back frame for frame, and a view chosen partway or switched
+// starts with a whole signon and plays to the end; what the target cannot hold is counted; a pair
+// that does not exist and a damaged demo are refused with the reason; a file's format is told by
+// its name.
 //
 // ge:summary Tests: a .dem converted to .mvd as a stream, read back frame for frame
 // ge:keywords test demo-convert dem mvd stream whole-records no-end dropped format_of_name
+// ge:keywords client-recording old-client 64-entities command-record multiview-to-client pov
 // ge:skill shooter testing
 #include <cmath>
 #include <cstring>
@@ -17,6 +25,7 @@
 #include "check.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_convert.hpp"
+#include "shooters_edge/client/demo_convert_client.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/client/sequel_demo.hpp"
@@ -161,6 +170,262 @@ TEST(the_loops_form_leaves_the_end_out) {
   loop.no_end = true;
   CHECK(whole_records(converted(dem, notes, loop), count, last));
   CHECK(last != 2);
+}
+
+// A client recording's records walked, against what the oldest client asks of one.
+struct ClientWalk {
+  bool whole = true;         // no record cut short
+  size_t largest = 0;        // the largest packet record's length, header included
+  bool one_sequence = true;  // both header words equal, rising by one a packet
+  int sequences = 0;         // sequences records
+  int frames_led = 0;        // packets with a command record just before them at their time
+  int packets = 0;
+  int last_id = -1;  // the last packet's first message
+};
+
+ClientWalk walk_client(const std::vector<uint8_t>& b) {
+  ClientWalk w;
+  size_t at = 0;
+  uint32_t seq = 0;
+  bool cmd_before = false;
+  float cmd_time = -1;
+  auto f32 = [&](size_t i) {
+    float f = 0;
+    std::memcpy(&f, &b[i], 4);
+    return f;
+  };
+  auto u32 = [&](size_t i) {
+    uint32_t v = 0;
+    std::memcpy(&v, &b[i], 4);
+    return v;
+  };
+  while (at < b.size()) {
+    if (at + 5 > b.size()) return w.whole = false, w;
+    const float t = f32(at);
+    const int type = b[at + 4];
+    at += 5;
+    if (type == 0) {
+      if (at + 36 > b.size()) return w.whole = false, w;
+      cmd_before = true;
+      cmd_time = t;
+      at += 36;
+    } else if (type == 2) {
+      w.sequences++;
+      at += 8;
+    } else if (type == 1) {
+      const uint32_t len = u32(at);
+      if (at + 4 + len > b.size() || len < 8) return w.whole = false, w;
+      w.largest = std::max<size_t>(w.largest, len);
+      const uint32_t a = u32(at + 4), ack = u32(at + 8);
+      if (a != ack || a != seq + 1) w.one_sequence = false;
+      seq = a;
+      if (cmd_before && cmd_time == t) w.frames_led++;
+      cmd_before = false;
+      w.packets++;
+      w.last_id = len > 8 ? b[at + 12] : -1;
+      at += 4 + len;
+    } else {
+      return w.whole = false, w;
+    }
+  }
+  return w;
+}
+
+TEST(a_single_player_demo_converts_to_a_client_recording_the_oldest_clients_play) {
+  const cl::DemoScript s = script();
+  const std::vector<uint8_t> dem = cl::write_single_demo(s);
+  cl::ConvertNotes notes;
+  std::vector<uint8_t> rec;
+  std::string error;
+  CHECK_MSG(cl::convert_demo(dem, cl::DemoFormat::client, {}, rec, notes, error), error);
+
+  const ClientWalk w = walk_client(rec);
+  CHECK(w.whole && w.one_sequence);
+  CHECK(w.largest <= 1450);
+  CHECK(w.sequences == 1);
+  CHECK(w.frames_led == static_cast<int>(s.origins.size()));  // every frame's packet led
+  CHECK(w.last_id == 2);                                      // a disconnect ends it
+
+  const Frames a = read_frames(dem, cl::DemoFormat::single, 2);
+  const Frames b = read_frames(rec, cl::DemoFormat::client, 33);
+  CHECK_MSG(b.end == cl::DemoRead::end, b.error);
+  CHECK(b.last.map == "halls" && b.last.protocol == 28 && b.last.player == 0);
+  CHECK(b.last.models == a.last.models && b.last.sounds == a.last.sounds);
+  // The ends line up: the signon packets read as frames of their own ahead of the first.
+  CHECK(b.eyes.size() >= s.origins.size());
+  const size_t la = a.eyes.size() - s.origins.size(), lb = b.eyes.size() - s.origins.size();
+  for (size_t i = 0; i < s.origins.size(); i++) {
+    const sh::Vec3f o = s.origins[i];
+    CHECK(b.eyes[lb + i].x == o.x && b.eyes[lb + i].y == o.y && b.eyes[lb + i].z == o.z + 22);
+    CHECK(same_angle(b.angles[lb + i].y, a.angles[la + i].y, 0.001f));
+    CHECK(b.health[lb + i] == a.health[la + i] && b.rockets[lb + i] == a.rockets[la + i]);
+    CHECK(b.rocket_seen[lb + i] == a.rocket_seen[la + i]);
+  }
+
+  // Fed a few bytes at a time, the same bytes.
+  cl::DemoConvert c;
+  CHECK_MSG(cl::convert_begin(c, cl::DemoFormat::single, cl::DemoFormat::client, {}, error), error);
+  std::vector<uint8_t> all;
+  for (size_t at = 0; at < dem.size(); at += 7) {
+    cl::convert_feed(c, std::span(dem).subspan(at, std::min<size_t>(7, dem.size() - at)));
+    CHECK_MSG(cl::convert_take(c, all, error), error);
+  }
+  cl::convert_end(c);
+  CHECK_MSG(cl::convert_take(c, all, error), error);
+  CHECK(all == rec);
+}
+
+TEST(a_frame_of_more_entities_than_the_oldest_client_holds_keeps_the_64_nearest) {
+  cl::ClientRecording rec;
+  cl::ConvertNotes notes;
+  std::vector<uint8_t> out;
+  cl::ClientLevel l;
+  l.game = "id1";
+  l.title = "test";
+  l.models = {"maps/halls.bsp", "progs/player.mdl", "progs/missile.mdl"};
+  l.sounds = {"weapons/rocket1i.wav"};
+  rec.level(out, 0, l, notes);
+  cl::ClientFrame f;
+  f.time = 0.1;
+  f.players[0].present = true;
+  for (int i = 0; i < 100; i++) {
+    cl::ConvEnt e;
+    e.model = 3;
+    e.origin = {static_cast<int16_t>(8 * 10 * i), 0, 0};  // entity 33 + i, 10 units further a step
+    f.entities.emplace(33 + i, e);
+  }
+  rec.frame(out, f, {}, notes);
+  CHECK(notes.dropped["an entity past the 64 a frame holds"] == 36);
+  const ClientWalk w = walk_client(out);
+  CHECK(w.whole && w.one_sequence && w.largest <= 1450);
+  // Read back: entities 33..96 are there, 97 on are not.
+  std::vector<uint8_t> file = out;
+  rec.end(file, 0.2, true, notes);
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(std::move(file), d, error), error);
+  bool saw = false;
+  while (cl::next_frame(d, error) == cl::DemoRead::frame) {
+    const auto& ents = d.state.entities;
+    int present = 0;
+    for (const auto& e : ents) present += e.present ? 1 : 0;
+    if (present == 0) continue;
+    saw = true;
+    CHECK(present == 64);
+    CHECK(ents.size() > 96 && ents[96].present && (ents.size() <= 97 || !ents[97].present));
+  }
+  CHECK(saw);
+}
+
+// The eye a client recording's frames end on, and the view's slot, read back.
+struct ViewRead {
+  std::vector<sh::Vec3f> eyes;
+  int player = -1, levels = 0;
+  cl::DemoRead end = cl::DemoRead::frame;
+  std::string error;
+};
+
+ViewRead read_view(std::vector<uint8_t> bytes) {
+  ViewRead v;
+  cl::Demo d;
+  if (!cl::open_demo(std::move(bytes), d, v.error)) {
+    v.end = cl::DemoRead::error;
+    return v;
+  }
+  CHECK(d.state.format == cl::DemoFormat::client);
+  std::string map;
+  while ((v.end = cl::next_frame(d, v.error)) == cl::DemoRead::frame) {
+    if (d.state.map.empty()) continue;
+    v.eyes.push_back(d.state.eye);
+    v.player = d.state.player;
+  }
+  return v;
+}
+
+bool near_eye(sh::Vec3f eye, sh::Vec3f origin) {
+  return std::fabs(eye.x - origin.x) <= 0.125f && std::fabs(eye.y - origin.y) <= 0.125f &&
+         std::fabs(eye.z - (origin.z + 22)) <= 0.125f;
+}
+
+std::vector<uint8_t> multiview_to_client(const std::vector<uint8_t>& mvd, int pov, size_t switch_at,
+                                         int then, cl::ConvertNotes& notes) {
+  cl::DemoConvert c;
+  std::string error;
+  cl::ConvertOptions opt;
+  opt.pov = pov;
+  CHECK_MSG(cl::convert_begin(c, cl::DemoFormat::multiview, cl::DemoFormat::client, opt, error),
+            error);
+  std::vector<uint8_t> out;
+  for (size_t at = 0; at < mvd.size(); at += 97) {
+    if (at >= switch_at && c.options.pov != then) {
+      cl::convert_set_pov(c, then);
+      if (pov == -2) CHECK(out.empty());  // nothing written while no one watches
+    }
+    cl::convert_feed(c, std::span(mvd).subspan(at, std::min<size_t>(97, mvd.size() - at)));
+    CHECK_MSG(cl::convert_take(c, out, error), error);
+  }
+  cl::convert_end(c);
+  CHECK_MSG(cl::convert_take(c, out, error), error);
+  notes = c.notes;
+  return out;
+}
+
+TEST(a_multiview_recording_converts_to_one_players_view_for_the_oldest_clients) {
+  const cl::MatchScript m = cl::highlight_match();
+  const std::vector<uint8_t> mvd = cl::write_multiview_match(m);
+  cl::ConvertNotes notes;
+  std::vector<uint8_t> rec;
+  std::string error;
+  CHECK_MSG(cl::convert_demo(mvd, cl::DemoFormat::client, {}, rec, notes, error), error);
+  const ClientWalk w = walk_client(rec);
+  CHECK(w.whole && w.one_sequence && w.largest <= 1450);
+  CHECK(w.sequences == 1 && w.last_id == 2);
+  CHECK_MSG(w.frames_led == m.frames,
+            "frames led " + std::to_string(w.frames_led) + " of " + std::to_string(m.frames));
+  const ViewRead v = read_view(rec);
+  CHECK_MSG(v.end == cl::DemoRead::end, v.error);
+  CHECK(v.player == 0);  // the lowest slot playing
+  CHECK(v.eyes.size() >= static_cast<size_t>(m.frames));
+  // The ends line up: every frame's eye on slot 0's origin.
+  const auto& o = m.players[0].origins;
+  const size_t lead = v.eyes.size() - static_cast<size_t>(m.frames);
+  for (int i = 0; i < m.frames; i++) {
+    const sh::Vec3f e = v.eyes[lead + static_cast<size_t>(i)];
+    const sh::Vec3f want = o[std::min(static_cast<size_t>(i), o.size() - 1)];
+    CHECK_MSG(near_eye(e, want), "frame " + std::to_string(i) + ": eye " + std::to_string(e.x) +
+                                     " " + std::to_string(e.y) + " " + std::to_string(e.z) +
+                                     ", origin " + std::to_string(want.x) + " " +
+                                     std::to_string(want.y) + " " + std::to_string(want.z));
+  }
+
+  // Fed a few bytes at a time, the same bytes.
+  cl::ConvertNotes again;
+  CHECK(multiview_to_client(mvd, -1, mvd.size(), -1, again) == rec);
+}
+
+TEST(a_view_chosen_partway_starts_with_a_whole_signon_and_a_view_switched_starts_again) {
+  const cl::MatchScript m = cl::highlight_match();
+  const std::vector<uint8_t> mvd = cl::write_multiview_match(m);
+  // No one watches until halfway: then slot 2.
+  cl::ConvertNotes notes;
+  const std::vector<uint8_t> late = multiview_to_client(mvd, -2, mvd.size() / 2, 2, notes);
+  ClientWalk w = walk_client(late);
+  CHECK(w.whole && w.one_sequence && w.largest <= 1450 && w.sequences == 1);
+  ViewRead v = read_view(late);
+  CHECK_MSG(v.end == cl::DemoRead::end, v.error);
+  CHECK(v.player == 2);
+  CHECK(v.eyes.size() > 10 && v.eyes.size() < static_cast<size_t>(m.frames));
+  const auto& o2 = m.players[2].origins;
+  CHECK(near_eye(v.eyes.back(), o2.back()));
+
+  // Slot 0 first, then slot 1 from halfway: a second signon, the rest on slot 1.
+  const std::vector<uint8_t> both = multiview_to_client(mvd, 0, mvd.size() / 2, 1, notes);
+  w = walk_client(both);
+  CHECK(w.whole && w.one_sequence && w.largest <= 1450 && w.sequences == 2);
+  v = read_view(both);
+  CHECK_MSG(v.end == cl::DemoRead::end, v.error);
+  CHECK(v.player == 1);
+  CHECK(near_eye(v.eyes.back(), m.players[1].origins.back()));
 }
 
 TEST(a_pair_that_does_not_exist_and_a_damaged_demo_are_refused) {

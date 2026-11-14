@@ -3,7 +3,7 @@
 // listen server plays it) and serving it over the classic protocol (classic_server.hpp) on the
 // game's port. The core keeps the frame clock, the settings (server.cfg in layers, the flags) and
 // the process; the endpoint answers its own clients (`ServerGame::serve`), so a classic client
-// connects to `shooters_edge_server` and plays.
+// connects to `sesv` and plays.
 //
 // THE SETTINGS it reads: `sv_hostname` and `sv_password` (the server info and the connect's
 // check), `sv_maxclients` (the loop's slots), `sv_map` (`arena`, built in, or `maps/<name>.bsp`
