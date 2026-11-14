@@ -29,6 +29,7 @@
 // ge:test tests/shooters_edge_sequel_bar_test.cpp
 #pragma once
 
+#include <string>
 #include <string_view>
 
 namespace shooters_edge::server {
@@ -47,6 +48,9 @@ int sq_weapon_number(int weapon);
 bool sq_selects(int n);
 // An item number's icon (its picture's name under `pics/`), "" for none.
 std::string_view sq_icon(int n);
+
+// The bar's program: single player and co-op's, or deathmatch's (`match`: the frags too).
+std::string sq_bar_program(bool match);
 
 // The program, the pictures and the item names into the world's rows (once the map is loaded).
 void bar_start(SequelServer& s);

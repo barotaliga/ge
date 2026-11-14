@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <memory>
 
+#include "input/event.hpp"
 #include "input/state.hpp"
 
 namespace {
@@ -327,7 +328,8 @@ EM_JS(int, ge_web_attach, (const char* selector, int play), {
         at(e);
         g.b = 1;
         c.focus();
-        if (g.play && document.pointerLockElement != c && c.requestPointerLock) {
+        if (g.play && e.pointerType != "touch" && document.pointerLockElement != c &&
+            c.requestPointerLock) {
           const p = c.requestPointerLock();
           if (p && p.catch) p.catch(function(){});
         }
@@ -353,9 +355,38 @@ EM_JS(int, ge_web_attach, (const char* selector, int play), {
                        if (e.deltaY) g.wh += e.deltaY > 0 ? -1 : 1;
                      },
                      {passive : false});
+  // A finger on the canvas: its id, phase (0 down, 1 moved, 2 lifted) and place (0..1 of the
+  // canvas), four numbers each, for a game played by touch (input/touch.hpp).
+  g.touch = [];
+  const touched = function(e, phase) {
+    if (!g.play) return;
+    e.preventDefault();
+    const r = c.getBoundingClientRect();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      g.touch.push(t.identifier & 65535, phase, (t.clientX - r.left) / r.width,
+                   (t.clientY - r.top) / r.height);
+    }
+  };
+  c.addEventListener("touchstart", function(e) { touched(e, 0); }, {passive : false});
+  c.addEventListener("touchmove", function(e) { touched(e, 1); }, {passive : false});
+  c.addEventListener("touchend", function(e) { touched(e, 2); }, {passive : false});
+  c.addEventListener("touchcancel", function(e) { touched(e, 2); }, {passive : false});
+  if (play) c.style.touchAction = "none";
   c.geInput = g;
   Module.geIn = g;
   return 1;
+});
+
+// The fingers' changes since the last call into `out` (four numbers each: id, phase, x, y; at most
+// `most` changes); the count.
+EM_JS(int, ge_web_touches, (float* out, int most), {
+  const g = Module.geIn;
+  if (!g || !g.touch) return 0;
+  const n = Math.min(g.touch.length / 4, most);
+  for (let i = 0; i < 4 * n; i++) HEAPF32[(out >> 2) + i] = g.touch[i];
+  g.touch = g.touch.slice(4 * n);
+  return n;
 });
 
 // The keys that went down since the last call into `keys` (at most `most`) and the pointer into
@@ -391,6 +422,10 @@ EM_JS(int, ge_web_play, (int* ev, int most, float* m), {
   return n;
 });
 
+}  // namespace
+
+namespace {
+constexpr ge::input::DeviceId kTouchScreen = 1;  // the page's touch screen, its one device
 }  // namespace
 
 namespace ge::web {
@@ -431,6 +466,16 @@ bool take_play_input(const char* selector, ge::input::InputState& s) {
   b.pressed = bits & ~b.held;
   b.released = b.held & ~bits;
   b.held = bits;
+  float t[4 * 32];
+  const int touches = ge_web_touches(t, 32);
+  for (int i = 0; i < touches; i++) {
+    const float* f = t + 4 * i;
+    const auto phase = static_cast<ge::input::TouchPhase>(static_cast<int>(f[1]));
+    ge::input::apply(s,
+                     ge::input::touch_event(0, kTouchScreen, ge::input::EventType::touch,
+                                            static_cast<uint16_t>(f[0]), phase, f[2], f[3]),
+                     {});
+  }
   return m[4] != 0;
 }
 
