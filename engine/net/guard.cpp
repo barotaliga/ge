@@ -129,6 +129,10 @@ bool guard_motion(Guard& g, int client, const double* before, const double* afte
   return false;
 }
 
+void guard_flag(Guard& g, int client, Cheat cheat, uint32_t tick, int32_t value) {
+  if (valid(g, client) && cheat != Cheat::count) raise(g, client, cheat, tick, value);
+}
+
 void guard_reset(Guard& g, int client) {
   if (valid(g, client)) g.clients[static_cast<size_t>(client)] = GuardClient{};
 }

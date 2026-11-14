@@ -28,6 +28,9 @@ net::NodeConfig tv_node_config(bool host, int max_peers, uint64_t seed) {
   c.channels.count = 1;
   c.channels.delivery[0] = net::Delivery::reliable;
   c.channels.largest[0] = static_cast<uint32_t>(net::kMaxBigMessage);
+  // A viewer's window loads a level between two frames (seconds on a slow machine), and the link
+  // must outlast it: a peer is dropped after 30 s of silence, not the node's usual 5.
+  c.timeout_us = 30'000'000;
   c.seed = seed;
   c.keep_foreign = host;  // status asks and the masters' acks arrive on the host's socket
   return c;
