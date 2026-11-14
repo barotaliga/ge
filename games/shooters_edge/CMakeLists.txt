@@ -176,7 +176,7 @@ target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_
                                                   shooters_edge_view shooters_edge_sound ge_vfs
                                                   ge_brush ge_camera ge_input ge_audio ge_net
                                                   ge_ui ge_replay ge_morph shooters_edge_menu
-                                                  ge_classicenhance)
+                                                  ge_classicenhance ge_tv)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_client)
 # The world's frame (client/world_draw.cpp), the modern look's water, liquids, flames and weather
 # behind the classic-enhance switches (client/world_extras.cpp), the effects fed to it
