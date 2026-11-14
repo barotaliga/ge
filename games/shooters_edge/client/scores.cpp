@@ -69,6 +69,8 @@ menu::LevelStats level_stats_of(const Listen& l) {
 
 ScoresScreen scores_screen(const Listen& l, bool held) {
   if (l.server == nullptr) return ScoresScreen::none;
+  // The sequel's rules draw its own screens (its layout, TAB bound to `inven` by its config).
+  if (listen_is_sequel(l)) return ScoresScreen::none;
   if (l.campaign_host)
     return held && l.campaign.end == LevelEnd::none ? ScoresScreen::solo : ScoresScreen::none;
   if (held) return ScoresScreen::players;

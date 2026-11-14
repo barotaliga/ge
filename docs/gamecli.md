@@ -1,7 +1,7 @@
 # A player's game CLI
 
 Every game on the engine gets a command line for its **players' agents**: `<game>_cli`
-(`shooters_edge_cli` for Shooter's Edge). It does everything a player does with a game except
+(`secli` for Shooter's Edge). It does everything a player does with a game except
 the playing: change a setting, find a server and who is on it, host a game or join a friend's,
 run a command on a server's console, read what went wrong. A person asks their agent ("host a
 game for four of us on e1m2", "join Ann's server", "turn my mouse down"), and the agent runs the
@@ -38,13 +38,13 @@ Text by default, a few lines; with `--json`, one object:
 
 ```json
 {"command":"settings set","ok":true,"result":{"name":"sensitivity","before":"0.066","value":"0.09",...},"summary":"...","next":"..."}
-{"command":"settings set","ok":false,"exit":1,"error":"no setting is called 'sensitivty'; the nearest is 'sensitivity'","next":"shooters_edge_cli settings list sen --json"}
+{"command":"settings set","ok":false,"exit":1,"error":"no setting is called 'sensitivty'; the nearest is 'sensitivity'","next":"secli settings list sen --json"}
 ```
 
 Exit codes: 0 done, 1 refused (the error says why, `next` the step), 2 a usage error (an unknown
 command or flag is refused, never ignored). `help --json` is the catalog. `skill` prints a
 `SKILL.md` generated from the same rows (the loop, every command, the rules an agent keeps): a
-player's agent installs it with `shooters_edge_cli skill > ~/.claude/skills/shooters-edge/SKILL.md`.
+player's agent installs it with `secli skill > ~/.claude/skills/shooters-edge/SKILL.md`.
 
 ## Settings
 

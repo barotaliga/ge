@@ -31,7 +31,8 @@ menu::Scoreboard scores_of(const Listen& l);
 menu::LevelStats level_stats_of(const Listen& l);
 
 enum class ScoresScreen : uint8_t { none, players, teams, solo };
-// What the scores key (`held`) and the game playing show.
+// What the scores key (`held`) and the game playing show; none in the sequel, whose rules
+// draw its screens.
 ScoresScreen scores_screen(const Listen& l, bool held);
 
 // That screen drawn over the game: a campaign's intermission or text, else its solo scorebar

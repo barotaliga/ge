@@ -82,7 +82,8 @@ std::string row_json(const DemoRow& r, bool scores) {
                    {"tags", json_strs(r.tags)},
                    {"players", json_arr(players)},
                    {"teams", json_arr(teams)},
-                   {"file", json_str("/" + archive_path(r.sha))},
+                   {"file", json_str("/" + row_path(r))},
+                   {"kind", json_str(r.run ? "run" : "demo")},
                    {"map_page", json_str(r.radar ? "/radar/" + r.sha : "")},
                    // the closing summary's match (16 hex digits, /match/{id}); "" none
                    {"match", json_str(r.report_id ? id_hex(r.report_id) : "")}});
@@ -96,7 +97,7 @@ bool archive_answer(const Archive* a, std::string_view target, int64_t now_s, An
   std::string path = target_path(target);
   while (path.size() > 1 && path.back() == '/') path.pop_back();
   const bool api = path == "/v1/demos" || path.rfind("/v1/demos/", 0) == 0;
-  const bool file = path.rfind("/d/", 0) == 0;
+  const bool file = path.rfind("/d/", 0) == 0 || path.rfind("/r/", 0) == 0;
   if (!api && !file) return false;
   if (!a) {
     out = missing("this hub keeps no demo archive",
@@ -126,17 +127,20 @@ bool archive_answer(const Archive* a, std::string_view target, int64_t now_s, An
                       "GET /v1/demos lists the demos; a demo is named by its SHA-256");
     return true;
   }
-  // /d/{abc}/{sha}.ged or .json
+  // /d/{abc}/{sha}.ged or .json; /r/{abc}/{sha}.inputs
   const size_t slash = path.find('/', 3);
   const size_t dot = path.rfind('.');
   const std::string sha = slash != std::string::npos && dot != std::string::npos && dot > slash
                               ? path.substr(slash + 1, dot - slash - 1)
                               : "";
   const std::string ext = dot != std::string::npos ? path.substr(dot) : "";
-  const DemoRow* r = is_sha(sha) && path == "/" + archive_path(sha).substr(0, 6) + sha + ext
-                         ? archive_find(*a, sha)
-                         : nullptr;
-  if (!r || (ext != ".ged" && ext != ".json")) {
+  const DemoRow* r =
+      is_sha(sha) && path.substr(3, 4) == sha.substr(0, 3) + "/" ? archive_find(*a, sha) : nullptr;
+  const bool runs = path[1] == 'r';
+  if (r && (r->run != runs || (runs ? ext != ".inputs" : ext != ".ged" && ext != ".json"))) {
+    r = nullptr;
+  }
+  if (!r) {
     out = missing("no file " + path + " in this archive",
                   "GET /v1/demos lists the demos and each one's file");
     return true;
@@ -145,15 +149,17 @@ bool archive_answer(const Archive* a, std::string_view target, int64_t now_s, An
     out = json_answer(200, demo_json(*r), kYearS);
     return true;
   }
-  std::ifstream f(fs::path(a->dir) / archive_path(sha), std::ios::binary);
+  std::ifstream f(fs::path(a->dir) / row_path(*r), std::ios::binary);
   if (!f) {
-    out = missing("the file of demo " + sha + " is gone from the disk",
-                  "the operator restores it under the archive's d/ or restarts the hub");
+    out = missing(
+        std::string("the file of ") + (runs ? "run " : "demo ") + sha + " is gone from the disk",
+        std::string("the operator restores it under the archive's ") + (runs ? "r/" : "d/") +
+            " or restarts the hub");
     return true;
   }
   out = Answer{};
   out.code = 200;
-  out.type = "application/octet-stream";
+  out.type = runs ? "text/plain" : "application/octet-stream";
   out.body.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
   out.max_age_s = kYearS;
   return true;

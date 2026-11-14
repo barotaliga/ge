@@ -1,7 +1,7 @@
 // Shooter's Edge's player CLI's Spec and its own commands (spec.hpp).
 //
 // ge:summary Shooter's Edge's player CLI: the Spec's functions and the demos commands
-// ge:keywords shooters_edge_cli locate join_words listen_words demos demos-play demos-pack
+// ge:keywords secli locate join_words listen_words demos demos-play demos-pack
 // ge:keywords demos-unpack ged replay-v2
 // ge:skill shooter agent-interface
 // ge:test tests/gamecli_cli_test.cpp
@@ -197,21 +197,19 @@ int cmd_demos(gc::Ctx& ctx) {
   return gc::answer(ctx, json_obj({{"demos", json_arr(rows)}}), text,
                     std::to_string(rows.size()) + " recordings in " + a.basedir + "/" + a.game,
                     rows.empty() ? "record one in the game's console: record <name>"
-                                 : "shooters_edge_cli demos play <name> watches one");
+                                 : "secli demos play <name> watches one");
 }
 
 int cmd_demos_play(gc::Ctx& ctx) {
   if (ctx.words.size() != 1)
-    return gc::refuse(ctx, 2, "demos play takes one recording's name",
-                      "shooters_edge_cli demos (lists them)");
+    return gc::refuse(ctx, 2, "demos play takes one recording's name", "secli demos (lists them)");
   if (!gc::need_places(ctx)) return 1;
   const cl::Args a = folders(ctx);
   fs::path file;
   for (const fs::path& f : demo_files(a))
     if (f.stem() == ctx.words[0] || f.filename() == ctx.words[0]) file = f;
   if (file.empty())
-    return gc::refuse(ctx, 1, "no recording is called '" + ctx.words[0] + "'",
-                      "shooters_edge_cli demos");
+    return gc::refuse(ctx, 1, "no recording is called '" + ctx.words[0] + "'", "secli demos");
   const std::vector<std::string> argv = {
       gc::program_path(ctx.flag("bin", ctx.self_dir), "shooters_edge"),
       "-basedir",
@@ -231,7 +229,7 @@ int cmd_demos_play(gc::Ctx& ctx) {
   if (!gc::spawn_detached(argv, "", log, pid, error))
     return gc::refuse(ctx, 1, error, "read " + log);
   return gc::answer(ctx, json_obj({{"file", json_str(file.string())}, {"pid", json_num(pid)}}),
-                    "playing " + file.string(), "", "shooters_edge_cli logs demo says what it did");
+                    "playing " + file.string(), "", "secli logs demo says what it did");
 }
 
 // The recording a name or a file names: one of `demos`' list, else a path.
@@ -262,12 +260,11 @@ std::string kib(size_t bytes) { return std::to_string((bytes + 512) / 1024) + " 
 int cmd_demos_pack(gc::Ctx& ctx) {
   if (ctx.words.size() != 1)
     return gc::refuse(ctx, 2, "demos pack takes one recording's name or file",
-                      "shooters_edge_cli demos (lists them)");
+                      "secli demos (lists them)");
   if (!gc::need_places(ctx)) return 1;
   const fs::path file = find_demo_file(ctx, ctx.words[0]);
   if (file.empty())
-    return gc::refuse(ctx, 1, "no recording is called '" + ctx.words[0] + "'",
-                      "shooters_edge_cli demos");
+    return gc::refuse(ctx, 1, "no recording is called '" + ctx.words[0] + "'", "secli demos");
   std::vector<uint8_t> bytes;
   if (!read_bytes(file, bytes))
     return gc::refuse(ctx, 1, "cannot read " + file.string(), "check the file's permissions");
@@ -277,12 +274,12 @@ int cmd_demos_pack(gc::Ctx& ctx) {
     std::string error;
     if (!ge::vfs::unpack_one(std::move(bytes), u, error))
       return gc::refuse(ctx, 1, file.string() + " does not unpack: " + error,
-                        "shooters_edge_cli demos (pick another)");
+                        "secli demos (pick another)");
     bytes = std::move(u.bytes);
   }
   if (ge::replay::is_stream(bytes))
     return gc::refuse(ctx, 1, file.string() + " is already a replay file",
-                      "shooters_edge_cli demos unpack " + ctx.words[0]);
+                      "secli demos unpack " + ctx.words[0]);
   const fs::path out = fs::path(file).replace_extension(".ged");
   if (fs::exists(out))
     return gc::refuse(ctx, 1, out.string() + " is already there",
@@ -322,7 +319,7 @@ int cmd_demos_pack(gc::Ctx& ctx) {
       out.string() + "  " + kib(packed.size()) + " (" + file.filename().string() + " " +
           kib(on_disk) + ", plain " + kib(bytes.size()) + ")\n",
       "packed " + std::to_string(std::lround(share * 100)) + "% of " + file.filename().string(),
-      "shooters_edge_cli demos play " + out.filename().string());
+      "secli demos play " + out.filename().string());
 }
 
 // `demos convert <name> <file>`: the recording converted to the format `<file>`'s name asks for
@@ -331,12 +328,11 @@ int cmd_demos_pack(gc::Ctx& ctx) {
 int cmd_demos_convert(gc::Ctx& ctx) {
   if (ctx.words.size() != 2)
     return gc::refuse(ctx, 2, "demos convert takes a recording and the file to write",
-                      "shooters_edge_cli demos convert demo1.dem demo1.mvd");
+                      "secli demos convert demo1.dem demo1.mvd");
   if (!gc::need_places(ctx)) return 1;
   const fs::path file = find_demo_file(ctx, ctx.words[0]);
   if (file.empty())
-    return gc::refuse(ctx, 1, "no recording is called '" + ctx.words[0] + "'",
-                      "shooters_edge_cli demos");
+    return gc::refuse(ctx, 1, "no recording is called '" + ctx.words[0] + "'", "secli demos");
   fs::path out = ctx.words[1];
   if (!out.has_parent_path()) out = file.parent_path() / out;
   client::DemoFormat to{};
@@ -356,7 +352,7 @@ int cmd_demos_convert(gc::Ctx& ctx) {
   std::string error;
   if (!client::convert_demo(std::move(bytes), to, {}, converted, notes, error))
     return gc::refuse(ctx, 1, file.filename().string() + " does not convert: " + error,
-                      "shooters_edge_cli demos convert <a .dem> <name>.mvd");
+                      "secli demos convert <a .dem> <name>.mvd");
   const std::string ext = out.extension().string();
   const bool packed = ext.size() == 5 && (ext.back() == 'z' || ext.back() == 'Z');
   if (packed) converted = ge::vfs::zstd_pack(converted);
@@ -384,21 +380,20 @@ int cmd_demos_convert(gc::Ctx& ctx) {
                               {"dropped", json_arr(dropped)},
                               {"rewritten", json_arr(rewritten)}}),
                     text, "converted to a " + client::format_words(to),
-                    "shooters_edge_cli demos play " + out.filename().string());
+                    "secli demos play " + out.filename().string());
 }
 
 // `demos unpack <name>`: a replay file version 2 back to the recording's own bytes beside it.
 int cmd_demos_unpack(gc::Ctx& ctx) {
   if (ctx.words.size() != 1)
     return gc::refuse(ctx, 2, "demos unpack takes one replay file's name or file",
-                      "shooters_edge_cli demos (lists them)");
+                      "secli demos (lists them)");
   if (!gc::need_places(ctx)) return 1;
   fs::path file = find_demo_file(ctx, ctx.words[0] + ".ged");
   if (file.empty()) file = find_demo_file(ctx, ctx.words[0]);
   std::vector<uint8_t> bytes;
   if (file.empty() || !read_bytes(file, bytes) || !ge::replay::is_stream(bytes))
-    return gc::refuse(ctx, 1, "no replay file is called '" + ctx.words[0] + "'",
-                      "shooters_edge_cli demos");
+    return gc::refuse(ctx, 1, "no replay file is called '" + ctx.words[0] + "'", "secli demos");
   std::vector<uint8_t> plain;
   std::string cut;
   if (!client::unpack_demo(bytes, plain, cut))
@@ -417,14 +412,14 @@ int cmd_demos_unpack(gc::Ctx& ctx) {
                 {"cut", json_str(cut)}}),
       out.string() + "  " + kib(plain.size()) + "\n",
       cut.empty() ? "unpacked " + file.filename().string() : "unpacked what was whole: " + cut,
-      "shooters_edge_cli demos play " + out.filename().string());
+      "secli demos play " + out.filename().string());
 }
 
 gc::Spec make() {
   gc::Spec s;
   s.game = "shooters_edge";
   s.title = "Shooter's Edge";
-  s.cli = "shooters_edge_cli";
+  s.cli = "secli";
   s.window = "shooters_edge";
   s.server = "sesv";
   s.prefs_app = "shooters_edge";

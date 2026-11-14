@@ -383,6 +383,8 @@ bool listen_lobby(Listen& l, std::string_view line);
 // The player's chat line (`say "..."` or `say_team "..."`) on the window's own server, as slot 0
 // says it: false when no game is playing.
 bool listen_say(Listen& l, const std::string& line);
+// True when the window's own game runs the sequel's rules (server/sequel_server.hpp).
+bool listen_is_sequel(const Listen& l);
 // An administrator's line on the window's own server (`users`, `status`, `speedjump`: ListenHost's
 // `admin`): false when no match is hosted or the line is none of them, the answer in `out`.
 bool listen_admin(Listen& l, const std::string& line, std::string& out);
