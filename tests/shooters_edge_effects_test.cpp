@@ -390,3 +390,18 @@ TEST(r_drawflat_and_r_fastsky_paint_walls_floors_and_sky_in_one_colour_each) {
   CHECK(!lk::rgb_words("-1 0 0", c) && c[0] == 0.5);                                // refused: kept
   CHECK(lk::rgb_words(" 510  0\t255 ", c) && c[0] == 1 && c[1] == 0 && c[2] == 1);  // clamped
 }
+
+TEST(r_dynamic_0_puts_out_the_moments_lights_in_either_look) {
+  namespace lk = shooters_edge::look;
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  CHECK(lk::world_options(lk::Look::classic, {}, pic).dynamic_strength == 1);
+  CHECK(lk::world_options(lk::Look::modern, {}, pic).dynamic_strength == pic.fx_lights);
+  con.execute("r_dynamic 0; r_fullbrightskins 0.5");
+  CHECK(lk::world_options(lk::Look::classic, {}, pic).dynamic_strength == 0);
+  CHECK(lk::world_options(lk::Look::modern, {}, pic).dynamic_strength == 0);
+  CHECK(pic.fullbright_skins == 0.5);
+  con.execute("r_fullbrightskins 3");
+  CHECK(pic.fullbright_skins == 1);  // clamped to the cvar's range
+}

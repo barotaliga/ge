@@ -214,6 +214,22 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
              .kind = gc::CvarKind::text,
              .values = "TEXT: red, green and blue, each 0 to 255 (one number: a grey)"},
             f.value);
+  cv.bind({.name = "r_dynamic",
+           .fallback = "1",
+           .flags = gc::kArchive,
+           .help = "Whether flashes, rockets and explosions light the walls and the models.",
+           .kind = gc::CvarKind::boolean,
+           .values = "1: they do (the default); 0: none do"},
+          &picture.dynamic);
+  cv.bind({.name = "r_fullbrightskins",
+           .fallback = "0",
+           .flags = gc::kArchive,
+           .help = "How brightly players are lit wherever they stand.",
+           .min = 0,
+           .max = 1,
+           .values = "0: lit as the floor under them (the default); 0..1: lifted that far toward "
+                     "full light; 1: fully lit, unshaded"},
+          &picture.fullbright_skins);
   cv.bind({.name = "r_fastsky",
            .fallback = "0",
            .flags = gc::kArchive,
@@ -541,6 +557,7 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   rgb_words(picture.sky_colour, base.sky_colour);
   if (look == Look::classic) {
     base.mode = ba::Mode::classic;
+    if (!picture.dynamic) base.dynamic_strength = 0;  // r_dynamic 0: no moment's light
     base.lighting = ba::Lighting::lightmaps;
     base.crisp = true;
     base.weather = false;
@@ -548,7 +565,7 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
     base.mode = ba::Mode::v2;
     base.lighting = ba::Lighting::lights;
     base.crisp = false;
-    base.dynamic_strength = picture.fx_lights;
+    base.dynamic_strength = picture.dynamic ? picture.fx_lights : 0;
     base.lava_glow = picture.lava_glow;
     base.slime_glow = picture.slime_glow;
     base.fire_glow = picture.fire_glow;

@@ -207,6 +207,9 @@ struct WorldModels {
   // The skins listed (skin_key -> its `skin_files` row) and the player's choice this frame.
   std::unordered_map<std::string, uint32_t> player_skins;
   SkinChoice skin_choice;
+  // r_fullbrightskins this frame: how far a player (the first game's figure, a figure from a
+  // folder) is lifted toward full light, unshaded at 1 (0..1).
+  double fullbright = 0;
   // The second game's figures (folder -> its kind in `figure_kinds`) and the weapons carried on
   // each ("<folder>/<file>" -> its kind there).
   std::unordered_map<std::string, uint32_t> figures, figure_carried;
