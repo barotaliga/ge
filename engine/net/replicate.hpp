@@ -55,7 +55,7 @@
 // ge:summary Replication: snapshots and deltas, interest, prediction, interpolation, rewind
 // ge:keywords net replicate replication snapshot delta quantize interest prediction reconcile
 // ge:keywords interpolation lag-compensation rewind server-authoritative input redundancy
-// ge:keywords priority bandwidth entity schema predicted-world contact-events horizon
+// ge:keywords priority bandwidth entity schema predicted-world contact-events horizon anti-cheat
 // ge:skill net
 // ge:test tests/net_replicate_test.cpp
 #pragma once
@@ -64,6 +64,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "net/guard.hpp"
 #include "net/node.hpp"
 
 namespace ge::net {
@@ -258,6 +259,10 @@ struct ReplicateServer {
   std::vector<uint8_t> history_alive;        // ring x max_entities
   std::vector<ReplicateClientSlot> clients;  // per peer slot
   ReplicateStats stats;
+  // ANTI-CHEAT (M17l, guard.hpp): when set, every new input is checked (clamped and snapped in
+  // place), every view held to the server's tick, the flood window kept; the game reads
+  // `guard_out` to drop a client.
+  Guard* guard = nullptr;
 };
 
 void replicate_server_init(ReplicateServer& s, const Schema& schema, const ReplicateConfig& config,
