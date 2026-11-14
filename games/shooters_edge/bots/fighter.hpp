@@ -449,7 +449,7 @@ struct Fighter {
   sh::Vec3f shot_view;
   // For the trace alone: what the brink guard did this command (-1 it did not run: not near a
   // harm node, or the feet not free; else the ways round into a pit, +10 the run heading in,
-  // +100 the keys changed).
+  // +20 instead its flight landing in (`brinkfall`), +100 the keys changed).
   int32_t brink_note = -1;
   int32_t press = 0;
   ge::core::Rng press_rng{1};

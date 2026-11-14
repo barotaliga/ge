@@ -228,6 +228,11 @@
 //   with whatever was in hand (shooter/pilot.cpp, bots/fighter.cpp; M18r.md 0c).
 // - `jumpcuts`: a jump the pilot missed twice is kept off its routes for the match (shooter/nav.cpp
 //   `nav_route`); off, only a cut through a mover or a gap trick is honoured (M18r.md 0c).
+// - `brinkfall`: the brink guard flies the player's box along its run (gravity, walls, a stair's
+//   steps) and brakes in the air when the flight, or the run on after it lands, ends in lava or
+//   slime (dm2's YA stair: a run off its top step at 360 lands on the lip of a lower one, and the
+//   guard on the ground braked 10 units too late; shooter/brink.cpp `fall_into_harm`, M18r.md 0c);
+//   on (head to head dm2 +0.9, lava deaths 10.4 -> 6.75 a match, speed +3.6).
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
@@ -243,7 +248,7 @@
 // ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot liftbrake lift-shaft scriptfresh script-step scriptentry script-entry calmvel calm-view facing lookturn view-lead viewbook gapturn gap-refused gapnear placeheard place-heard loc-region gaplava gap-over-lava brinkline lip-corner sidebrink side-step fallseen fall-foreseen liplook brinkkeys floortrap floor-trap trapflee trap-flee bridgeseen bridge-seen sidehop side-hop lostdry lost-dry liftoff lift-off shotjump shot-jump rjready launcher-ready jumpcuts failed-jumps
+// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot liftbrake lift-shaft scriptfresh script-step scriptentry script-entry calmvel calm-view facing lookturn view-lead viewbook gapturn gap-refused gapnear placeheard place-heard loc-region gaplava gap-over-lava brinkline lip-corner sidebrink side-step fallseen fall-foreseen liplook brinkkeys floortrap floor-trap trapflee trap-flee bridgeseen bridge-seen sidehop side-hop lostdry lost-dry liftoff lift-off shotjump shot-jump rjready launcher-ready jumpcuts failed-jumps brinkfall fall-into-harm
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -372,9 +377,10 @@ enum class Feature : uint8_t {
   shotjump,
   rjready,
   jumpcuts,
+  brinkfall,
   trial,
 };
-constexpr size_t kFeatures = 116;
+constexpr size_t kFeatures = 117;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

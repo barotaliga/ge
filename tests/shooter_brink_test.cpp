@@ -1,12 +1,15 @@
 // THE BRINK: beside a pit of lava, a forward key over the lip is let go of, a run into it is
 // braked and its jump let go of, a key along the lip or away from it is kept, and far from any
 // harm nothing changes; the nav marks the walks along a lip and no other, and a walk whose side
-// step falls into lava far below.
+// step falls into lava far below; a run off a stair's step whose flight lands in the lava is
+// braked in the air (`fall`), and one that lands on a wide step left alone.
 //
 // ge:summary Tests: the brink guard's keys by a lava pit, and the nav's brink links
 // ge:keywords test brink brink_guard over_harm nav_mark_harm nav_harm_near lava-lip lava pit
+// ge:keywords fall_into_harm stair-fall
 // ge:skill shooter testing
 #include <algorithm>
+#include <vector>
 
 #include "check.hpp"
 #include "shooter/brink.hpp"
@@ -159,11 +162,76 @@ TEST(a_walk_whose_side_step_falls_into_lava_far_below_is_marked_and_one_further_
   world.count = 1;
   // Column order: the pit's floor (0,-160) 0, the edge walk's (-64,24) 1 and (64,24) 3, the
   // middle walk's (-64,120) 2 and (64,120) 4.
-  sh::NavGraph g = graph(
-      {{0, -160, -176}, {-64, 24, 24}, {-64, 120, 24}, {64, 24, 24}, {64, 120, 24}},
-      {{1, 3}, {2, 4}});
+  sh::NavGraph g =
+      graph({{0, -160, -176}, {-64, 24, 24}, {-64, 120, 24}, {64, 24, 24}, {64, 120, 24}},
+            {{1, 3}, {2, 4}});
   CHECK(!g.links[0].brink && !g.links[1].brink);  // nothing harms within a lip's reach
   CHECK(sh::nav_mark_side_harm(g, world) == 1);
   CHECK(g.links[0].brink_side);   // 24 from the edge: a side step off it falls in
   CHECK(!g.links[1].brink_side);  // 120 in: a side step lands on the ledge
+}
+
+namespace {
+
+// A stair down east: the top step (z 0) west of x 0, a lower step (z -64) from x 0 to `lower_to`,
+// and past it a pit floored at -192 with lava to -128; with `wall`, a wall north of y 64.
+void stair(Bench& b, float lower_to, bool wall = false) {
+  sh::Brush lava = box({lower_to, -1024, -192}, {1024, 1024, -128});
+  lava.contents = sh::kContentsLava;
+  std::vector<sh::Brush> brushes = {box({-1024, -1024, -64}, {0, 1024, 0}),
+                                    box({0, -1024, -128}, {lower_to, 1024, -64}),
+                                    box({-1024, -1024, -256}, {1024, 1024, -192}), lava};
+  if (wall) brushes.push_back(box({-1024, 64, -256}, {1024, 128, 128}));
+  b.start(brushes);
+}
+
+}  // namespace
+
+TEST(a_run_off_a_step_whose_flight_lands_in_the_lava_is_braked_in_time) {
+  // A narrow lower step (96 across): off the top at 360 the box flies ~140 and lands in the lava.
+  Bench b;
+  stair(b, 96);
+  const sh::NavGraph g = graph({{160, 0, -152}, {-600, 0, 24}}, {});
+  const sh::Vec3f top{-8, 0, 24};
+  // Without the flight looked along: too far from the pit to run, nothing changes.
+  sh::MoveCmd c = keys(0, 320, 0);
+  sh::BrinkGuard bg = sh::brink_guard(b.sv, g, -1, top, {360, 0, 0}, c);
+  CHECK(!bg.changed);
+  // With it: the flight lands in, the forward key turned back and the jump let go of.
+  c = keys(0, 320, 0);
+  bg = sh::brink_guard(b.sv, g, -1, top, {360, 0, 0}, c, true);
+  CHECK(bg.ran && bg.run_in && bg.fall_in && bg.changed);
+  CHECK(c.forward < 0);
+  CHECK((c.buttons & sh::kButtonJump) == 0);
+  // Already in the air over the lower step, falling: braked too.
+  c = keys(0, 0, 0);
+  bg = sh::brink_guard(b.sv, g, -1, {30, 0, 10}, {360, 0, -200}, c, true);
+  CHECK(bg.fall_in && c.forward < 0);
+  CHECK(sh::fall_into_harm(b.sv, top, {360, 0, 0}, 80, -1));
+}
+
+TEST(a_run_off_a_step_that_lands_on_a_wide_one_is_left_alone) {
+  // A wide lower step (256 across): the flight lands at ~150 and its run on stops short of the lip.
+  Bench b;
+  stair(b, 256);
+  const sh::NavGraph g = graph({{300, 0, -152}, {-600, 0, 24}}, {});
+  sh::MoveCmd c = keys(0, 320, 0);
+  const sh::BrinkGuard bg = sh::brink_guard(b.sv, g, -1, {-8, 0, 24}, {360, 0, 0}, c, true);
+  CHECK(bg.ran && !bg.run_in && !bg.changed);
+  CHECK(c.forward == sh::quantize_axis(320) && (c.buttons & sh::kButtonJump) != 0);
+  CHECK(!sh::fall_into_harm(b.sv, {-8, 0, 24}, {360, 0, 0}, 80, -1));
+}
+
+TEST(a_run_into_a_wall_that_slides_it_off_the_lip_is_braked) {
+  // On the wide lower step 36 from its lip, running north-east into a wall: the move slides it
+  // east along the wall's face and off the lip; a box stopped dead at the wall would see no fall.
+  Bench b;
+  stair(b, 256, true);
+  const sh::NavGraph g = graph({{300, 0, -152}, {-600, 0, 24}}, {});
+  const sh::Vec3f at{220, 40, -40};
+  const sh::Vec3f run{200, 300, 0};
+  CHECK(sh::fall_into_harm(b.sv, at, run, 80, -1));
+  sh::MoveCmd c = keys(90, 320, 0);
+  const sh::BrinkGuard bg = sh::brink_guard(b.sv, g, -1, at, run, c, true);
+  CHECK(bg.fall_in && bg.changed);
 }
