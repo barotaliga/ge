@@ -653,3 +653,37 @@ TEST(the_sequels_rules_wear_the_classic_games_things_with_cr_items) {
   CHECK(shells->origin.y == -16);
   CHECK(w.models[size_t(health->modelindex)] == "maps/b_bh25.bsp");
 }
+
+// The classic status bar over the sequel's player while it wears the classic game's things
+// (M18u4d): each weapon as the classic gun it wears, the counters by the gun in hand, the armour
+// by class, a power-up's seconds and the frags.
+TEST(the_classic_bar_shows_the_sequels_player_in_the_classic_things) {
+  namespace sv = shooters_edge::server;
+  namespace hud = shooters_edge::hud;
+  sv::RulesRunner run = sv::sequel_runner(sv::make_sequel_server({}));
+  run.console("set sv_wear classic");
+  sv::MapSpec map;
+  map.name = "hall";
+  map.brushes = things_hall();
+  std::string error;
+  CHECK_MSG(run.start(map, error), error);
+  run.connect(0, "Ana", false, false);
+  sv::SequelServer& sq = *sv::sequel_of(run);
+  sv::SequelPlayer& p = sq.players[0];
+  p.body.ammo[int(sv::SqAmmo::shells)] = 20;
+  p.body.ammo[int(sv::SqAmmo::bullets)] = 50;
+  p.body.ammo[int(sv::SqAmmo::slugs)] = 7;
+  p.body.ammo[int(sv::SqAmmo::cells)] = 90;
+  p.body.armour = sv::SqArmour::combat;
+  p.body.armour_count = 50;
+  p.body.counts[sv::sq_item("weapon_railgun")] = 1;
+  p.hand.weapon = 8;  // the railgun: the beam, its slugs in the cells' counter
+  p.quad_until = sq.level_time + 12.5;
+  const hud::Status s = cl::worn_status(sq, 1);
+  CHECK(s.weapon == hud::Weapon::beam_gun);
+  CHECK(s.has(hud::Weapon::beam_gun) && s.has(hud::Weapon::shotgun));  // the blaster's
+  CHECK(s.ammo_for(hud::Weapon::beam_gun) == 7);
+  CHECK(s.ammo[0] == 20 && s.ammo[1] == 50);
+  CHECK(s.armour == 50 && s.armour_class == hud::ArmourClass::medium);
+  CHECK(s.powered(hud::Power::damage) && s.power_s[size_t(hud::Power::damage)] > 12);
+}

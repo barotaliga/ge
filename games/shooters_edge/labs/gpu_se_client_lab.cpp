@@ -99,6 +99,7 @@
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -803,7 +804,13 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
                             static_cast<int>(w), static_cast<int>(h))) {
         hand.lift = 0;  // the sequel's bar (remix_bar.hpp)
       } else {
-        se::fill_hud(hud, cl::status_of(l, t), art);
+        // The sequel wearing the classic game's things: the classic bar over its player.
+        const shooters_edge::server::SequelServer* sq =
+            l.rules ? shooters_edge::server::sequel_of(*l.rules) : nullptr;
+        se::fill_hud(
+            hud,
+            sq != nullptr && remix.looks != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t),
+            art);
         hud.layout.draw(overlay,
                         hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
                         se::hud_style());

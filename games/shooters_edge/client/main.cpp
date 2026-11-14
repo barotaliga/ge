@@ -794,15 +794,15 @@ int run_main(int argc, char** argv) {
   cl::RemixFiles remix;
   loader.remix = &remix;
   // The sequel's bar over the classic status while the rules wear its weapons (remix_bar.hpp).
-  cl::SequelBar worn_bar;
-  worn_bar.files = &remix.files;
+  cl::WornHud worn_hud;
+  worn_hud.bar.files = &remix.files;
   cl::HeldState in_hand;
   in_hand.hand.at_eye = weapons_at_eye;
   // `cr_items` (remix.hpp's `worn_arsenal`): from the next map the played game's rules wear the
   // other game's weapons: the server's rows and files, the weapons in the hand.
   const auto remix_wear = [&] {
     if (!cl::remix_dress(remix, remix_settings, args.profile)) return;
-    worn_bar.pictures.clear();  // read again from the files now open
+    cl::worn_hud_reset(worn_hud, remix);  // read again from the files now open
     listen.opt.arsenal = cl::worn_lines(remix, game_content.arsenal);
     listen.opt.files = remix.wearing() ? &remix.files : &files;
     in_hand = {};
@@ -1913,7 +1913,7 @@ int run_main(int argc, char** argv) {
     overlay.begin(w, h);
     const shooters_edge::server::SequelServer* sequel =
         listen.rules ? shooters_edge::server::sequel_of(*listen.rules) : nullptr;
-    if (sequel != nullptr && listen.campaign.end == cl::LevelEnd::none) {
+    if (sequel != nullptr && remix.looks == nullptr && listen.campaign.end == cl::LevelEnd::none) {
       // The sequel's own bar, from the program its rules send.
       cl::run_sequel_bar(sequel_bar, sequel->world, 0, sequel->frame_number, w, h);
       // Its crosshair (the HUD's, shown unless hidden) and its centre print in its own letters.
@@ -1923,11 +1923,12 @@ int run_main(int argc, char** argv) {
           t < hud.centre_until ? std::string_view(hud.centre) : std::string_view(), w, h);
       cl::draw_sequel_bar(overlay, sequel_bar, cl::sequel_bar_scale(h));
     } else if (listen.campaign.end == cl::LevelEnd::none) {
-      se::Status hud_status = cl::status_of(listen, t);
-      if (!cl::draw_worn_bar(overlay, worn_bar, remix.worn, hud_status, !listen.campaign_host, w,
-                             h)) {
+      se::Status hud_status = sequel ? cl::worn_status(*sequel, t) : cl::status_of(listen, t);
+      if (!cl::draw_worn_bar(overlay, worn_hud.bar, remix.worn, hud_status, !listen.campaign_host,
+                             w, h)) {
         cl::group_status(controls.groups, hud_status, t);  // the weapon group (weapon_groups.hpp)
-        se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
+        se::fill_hud(hud, hud_status,
+                     sequel ? worn_hud.art : cl::hud_art_of(files, classic_art, free_art));
         const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
         hud.layout.draw(overlay, hf, hud_look());
         hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar

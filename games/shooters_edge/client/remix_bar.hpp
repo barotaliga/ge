@@ -15,6 +15,13 @@
 //   whole seconds left (the classic ring has no picture of the sequel's and is not shown).
 // - **The frags** (14) in a match.
 //
+// And the reverse (M18u4d): while the sequel's rules wear the classic game's things (`sv_wear`),
+// the classic status bar is drawn over the sequel's player (`worn_status`): each of its weapons
+// as the classic gun it wears (by `profiles::kSequelAsClassic`'s roles), its ammunition in the
+// classic counters (bullets the nails, grenades or rockets the rockets and slugs or cells the
+// cells by the gun in hand), its armour by class, its power-ups' seconds, its frags; the
+// pictures read from the remix's files (`WornHud::art`).
+//
 // ge:summary Classic remix's worn bar: the sequel's status bar drawn over the classic status
 // ge:keywords remix classic-remix cr_items worn-bar sequel-hud status-bar stats remix-hud
 // ge:skill ui shooter
@@ -25,12 +32,32 @@
 #include <cstdint>
 #include <string_view>
 
+#include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/sequel_bar.hpp"
+#include "shooters_edge/hud/art.hpp"
 #include "shooters_edge/hud/status.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "ui/draw.hpp"
 
+namespace shooters_edge::server {
+struct SequelServer;
+}
+
 namespace shooters_edge::client {
+
+// The HUD while the rules wear the other game's things: the sequel's bar (`bar`) over the classic
+// status, the classic status bar's pictures (`art`) over the sequel's.
+struct WornHud {
+  SequelBar bar;
+  hud::HudArt art;
+};
+
+// Ready for what `remix` now wears: the bar's pictures read again, the classic pictures read from
+// the remix's files while the sequel wears the classic game's things (else none).
+void worn_hud_reset(WornHud& h, const RemixFiles& remix);
+
+// The classic status for the sequel's player 0 at time `t` s (`sv_wear classic`).
+hud::Status worn_status(const server::SequelServer& sq, double t);
 
 // The sequel's 32 stats for the classic status `st` at time `t` s (`st.t`); `match` puts the
 // frags in.
