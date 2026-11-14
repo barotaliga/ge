@@ -1,4 +1,5 @@
-// Proxy (proxy.hpp): the link frames, repeats and packing, the near and the far proxies' sessions.
+// Proxy (proxy.hpp): the link frames, repeats, packing and coding, the near and the far proxies'
+// sessions.
 //
 // ge:summary Proxy: link frames, repeats, the XOR and zero-run packing, near and far sessions
 // ge:keywords proxy link frame repeat pack window session open cookie
@@ -15,10 +16,27 @@ namespace ge::proxy {
 
 namespace {
 
-enum class Kind : uint8_t { data = 1, ack = 2, open = 3, cookie = 4, opened = 5 };
+// A datagram's frame says by its kind how the datagram is written: as it came, packed or coded.
+enum class Kind : uint8_t {
+  data = 1,
+  ack = 2,
+  open = 3,
+  cookie = 4,
+  opened = 5,
+  packed = 6,
+  coded = 7
+};
 constexpr uint8_t kMark = 0xA0;
 constexpr uint32_t kPackWithin = 48;  // a reference this far back still sits in the other's ring
 constexpr size_t kMostWhy = 120;
+// A number from its low 16 bits: the one nearest `near` (the newest this end knows of); 0 when it
+// would fall at or below zero.
+uint32_t widen(uint32_t near, uint16_t low) {
+  const int16_t step =
+      static_cast<int16_t>(static_cast<uint16_t>(low - static_cast<uint16_t>(near)));
+  const int64_t v = int64_t{near} + step;
+  return v > 0 && v <= int64_t{UINT32_MAX} ? static_cast<uint32_t>(v) : 0;
+}
 
 uint64_t mix(uint64_t z) {
   z += 0x9e3779b97f4a7c15ull;
@@ -166,20 +184,36 @@ void link_send(LinkEnd& e, std::span<const uint8_t> d, int64_t now_us, const Fra
   if (d.size() > kMostDatagram) return;
   send_due_copies(e, now_us, out);
   const uint32_t seq = e.next_seq++;
-  uint8_t buf[net::kMaxDatagram];
-  net::Writer w = frame(buf, sizeof buf, Kind::data, e.session);
-  net::write_u32(w, seq);
-  net::write_u32(w, e.newest);
   const Kept& ref = e.sent[e.acked % kKept];
-  size_t packed = 0;
+  const bool held = e.acked != 0 && ref.seq == e.acked && seq - e.acked < kPackWithin;
+  size_t size = 0;
+  Kind kind = Kind::data;
   uint8_t pbuf[net::kMaxDatagram];
-  if (e.config.pack && e.acked != 0 && ref.seq == e.acked && seq - e.acked < kPackWithin)
-    packed = pack_datagram(d, kept(ref), pbuf, d.size());
-  net::write_u8(w, packed ? 1 : 0);
-  if (packed) {
-    net::write_u32(w, e.acked);
-    net::write_bytes(w, pbuf, packed);
-    e.stats.packed++;
+  if (e.config.code) {
+    if (e.sent_models.empty()) e.sent_models.resize(kKept);
+    LinkModels& now = e.sent_models[seq % kKept];
+    if (held) {
+      LinkModels m = e.sent_models[e.acked % kKept];
+      size = code_datagram(d, kept(ref), m, pbuf, d.size());
+      if (size) {
+        now = m;
+        kind = Kind::coded;
+      }
+    }
+    if (!size) now = LinkModels{};
+  }
+  if (!size && e.config.pack && held) {
+    size = pack_datagram(d, kept(ref), pbuf, d.size());
+    if (size) kind = Kind::packed;
+  }
+  uint8_t buf[net::kMaxDatagram];
+  net::Writer w = frame(buf, sizeof buf, kind, e.session);
+  net::write_u16(w, static_cast<uint16_t>(seq));
+  net::write_u16(w, static_cast<uint16_t>(e.newest));
+  if (kind != Kind::data) {
+    net::write_u8(w, static_cast<uint8_t>(seq - e.acked));
+    net::write_bytes(w, pbuf, size);
+    (kind == Kind::coded ? e.stats.coded : e.stats.packed)++;
   } else {
     net::write_bytes(w, d.data(), d.size());
   }
@@ -201,7 +235,7 @@ void link_update(LinkEnd& e, int64_t now_us, const FrameOut& out) {
   if (e.newest != 0 && now_us - e.last_out_us >= e.config.ack_us) {
     uint8_t buf[16];
     net::Writer w = frame(buf, sizeof buf, Kind::ack, e.session);
-    net::write_u32(w, e.newest);
+    net::write_u16(w, static_cast<uint16_t>(e.newest));
     emit(e, w, now_us, out);
   }
 }
@@ -210,19 +244,22 @@ int link_receive(LinkEnd& e, std::span<const uint8_t> f, std::vector<uint8_t>& d
   net::Reader r = net::make_reader(f.data(), f.size());
   Kind kind{};
   uint32_t session = 0;
-  if (!read_kind(r, kind, session) || (kind != Kind::data && kind != Kind::ack)) return -1;
+  if (!read_kind(r, kind, session) ||
+      (kind != Kind::data && kind != Kind::ack && kind != Kind::packed && kind != Kind::coded))
+    return -1;
   e.stats.frames_in++;
-  const auto take_ack = [&](uint32_t ack) {
+  // An ack names a datagram this end sent: the one nearest the newest sent with those low bits.
+  const auto take_ack = [&](uint16_t low) {
+    const uint32_t ack = widen(e.next_seq - 1, low);
     if (ack > e.acked && ack < e.next_seq) e.acked = ack;
   };
   if (kind == Kind::ack) {
-    const uint32_t ack = net::read_u32(r);
+    const uint16_t ack = net::read_u16(r);
     if (!r.bad) take_ack(ack);
     return 0;
   }
-  const uint32_t seq = net::read_u32(r);
-  const uint32_t ack = net::read_u32(r);
-  const uint8_t flags = net::read_u8(r);
+  const uint32_t seq = widen(e.newest, net::read_u16(r));
+  const uint16_t ack = net::read_u16(r);
   if (r.bad || seq == 0) {
     e.stats.broken++;
     return 0;
@@ -240,20 +277,31 @@ int link_receive(LinkEnd& e, std::span<const uint8_t> f, std::vector<uint8_t>& d
       return 0;
     }
   }
-  if ((flags & 1) != 0) {
-    const uint32_t ref = net::read_u32(r);
+  if (kind == Kind::coded && e.got_models.empty()) e.got_models.resize(kKept);  // all fresh so far
+  if (kind != Kind::data) {
+    const uint32_t ref = seq - net::read_u8(r);
     const Kept& k = e.got[ref % kKept];
-    if (r.bad || k.seq != ref) {
+    if (r.bad || ref == seq || k.seq != ref) {
       e.stats.no_ref++;
       return 0;
     }
-    if (!unpack_datagram({f.data() + r.at, f.size() - r.at}, kept(k), datagram)) {
+    const std::span<const uint8_t> body{f.data() + r.at, f.size() - r.at};
+    bool ok = false;
+    if (kind == Kind::coded) {
+      LinkModels m = e.got_models[ref % kKept];
+      ok = decode_datagram(body, kept(k), m, datagram, kMostDatagram);
+      if (ok) e.got_models[seq % kKept] = m;
+    } else {
+      ok = unpack_datagram(body, kept(k), datagram);
+    }
+    if (!ok) {
       e.stats.broken++;
       return 0;
     }
   } else {
     datagram.assign(f.begin() + static_cast<std::ptrdiff_t>(r.at), f.end());
   }
+  if (kind != Kind::coded && !e.got_models.empty()) e.got_models[seq % kKept] = LinkModels{};
   if (seq > e.newest) {
     const uint32_t shift = seq - e.newest;
     e.window = shift >= 64 ? 0 : e.window << shift;

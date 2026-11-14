@@ -17,6 +17,7 @@
 #include "check.hpp"
 #include "core/prng.hpp"
 #include "net/sim_network.hpp"
+#include "proxy/link_code.hpp"
 #include "proxy/proxy.hpp"
 #include "proxy/record.hpp"
 #include "proxy/trial.hpp"
@@ -58,6 +59,84 @@ TEST(packing_round_trips_and_never_grows) {
     CHECK(back == d);
     CHECK(!px::unpack_datagram({out, n - 1}, ref, back));  // cut short: refused
   }
+}
+
+// The coder (link_code.hpp): a datagram back to the byte from its coding and the same reference,
+// both ends' models left the same, never bigger than the datagram, a cut or damaged coding never
+// read past its bounds; and a snapshot like the last costs a small share of its bytes.
+TEST(coding_round_trips_leaves_both_models_alike_and_never_grows) {
+  ge::core::Rng rng = ge::core::make_rng(4);
+  px::LinkModels sent, got;
+  size_t coded = 0, plain = 0;
+  for (int k = 0; k < 200; k++) {
+    std::vector<uint8_t> ref = snapshot(k, 300 + static_cast<size_t>(k));
+    std::vector<uint8_t> d = snapshot(k + 1, 300 + static_cast<size_t>(k + k % 4));
+    if (k % 5 == 0)
+      for (uint8_t& b : d) b = static_cast<uint8_t>(ge::core::int_in(rng, 0, 255));  // noise
+    uint8_t out[2000];
+    const px::LinkModels before = sent;
+    const size_t n = px::code_datagram(d, ref, sent, out, sizeof out);
+    if (n == 0) {
+      CHECK(k % 5 == 0);  // only noise fails to get smaller, and leaves the models as they were
+      CHECK(sent.tree == before.tree);
+      continue;
+    }
+    CHECK(n < d.size());
+    std::vector<uint8_t> back;
+    CHECK(px::decode_datagram({out, n}, ref, got, back, px::kMostDatagram));
+    CHECK(back == d);
+    CHECK(got.tree == sent.tree);
+    if (k >= 100 && k % 5 != 0) {
+      coded += n;
+      plain += d.size();
+    }
+    // Damaged: whatever comes back stays within the bound and leaves the models untouched.
+    px::LinkModels scratch = got;
+    out[n / 2] ^= 0x5A;
+    if (px::decode_datagram({out, n}, ref, scratch, back, px::kMostDatagram))
+      CHECK(back.size() <= px::kMostDatagram);
+    CHECK(!px::decode_datagram({out, n}, ref, scratch, back, 3) || back.size() <= 3);
+  }
+  CHECK(plain > 0 && coded * 8 < plain);  // learned: an eighth of the bytes and less
+}
+
+// A coding link under loss: every datagram that arrives is the one sent, frames whose reference
+// was lost are dropped and counted, and the two ends' models never part (no frame is broken).
+TEST(a_coding_link_under_loss_keeps_both_ends_models_in_step) {
+  px::LinkEnd a, b;
+  a.config.code = true;
+  a.config.pack = true;
+  ge::core::Rng rng = ge::core::make_rng(9);
+  std::vector<std::vector<uint8_t>> sent;
+  std::vector<std::vector<uint8_t>> wire;
+  const px::FrameOut out = [&](std::span<const uint8_t> f) {
+    wire.emplace_back(f.begin(), f.end());
+  };
+  std::vector<uint8_t> d;
+  int got = 0;
+  for (int64_t k = 0; k < 400; k++) {
+    const auto s = snapshot(static_cast<int>(k), 120 + static_cast<size_t>(k % 7) * 9);
+    px::link_send(a, s, k * 10000, out);
+    for (const auto& f : wire) {
+      if (ge::core::int_in(rng, 0, 99) < 15) continue;  // 15% lost
+      if (px::link_receive(b, f, d) == 1) {
+        got++;
+        CHECK(d == s);
+      }
+    }
+    wire.clear();
+    if (k % 3 == 0) {  // b's ack back, now and then, itself lost at times
+      b.last_out_us = 0;
+      px::link_update(b, k * 10000 + 100000, [&](std::span<const uint8_t> f) {
+        std::vector<uint8_t> none;
+        if (ge::core::int_in(rng, 0, 99) >= 15) CHECK(px::link_receive(a, f, none) == 0);
+      });
+    }
+  }
+  CHECK(b.stats.broken == 0);
+  CHECK(a.stats.coded > 250);
+  CHECK(got + static_cast<int>(b.stats.no_ref) > 300);
+  CHECK(a.stats.bytes_out * 4 < a.stats.payload_out);  // a quarter of the game's bytes and less
 }
 
 TEST(one_end_drops_repeats_and_packs_only_against_what_the_other_holds) {
@@ -126,21 +205,27 @@ TEST(due_copies_go_before_a_newer_datagram) {
 }
 
 TEST(repeats_cut_the_loss_a_game_sees_and_packing_halves_the_link) {
-  const auto trial = [](double loss, int repeat, bool pack) {
+  const auto trial = [](double loss, int repeat, bool pack, bool code = false) {
     px::TrialConfig c;
     c.loss = loss;
     c.repeat = repeat;
     c.pack = pack;
+    c.code = code;
     return px::run_proxy_trial(c);
   };
   const px::TrialResult plain = trial(0.10, 1, false), repeated = trial(0.10, 3, false);
   const px::TrialResult packed = trial(0, 1, true), unpacked = trial(0, 1, false);
+  const px::TrialResult coded = trial(0, 1, true, true), coded_lossy = trial(0.10, 3, true, true);
   const auto lost = [](const px::TrialResult& r) { return px::trial_lost(r); };
   CHECK(lost(plain) > 0.05);
   CHECK(lost(repeated) * 5 < lost(plain));
   CHECK(lost(unpacked) < 0.01);
   CHECK(packed.got_down == packed.sent_down);
   CHECK(packed.link_down * 2 <= unpacked.link_down);
+  // Coding halves the packed link again, and loses nothing more than plain copies do.
+  CHECK(coded.got_down == coded.sent_down);
+  CHECK(coded.link_down * 2 <= packed.link_down);
+  CHECK(lost(coded_lossy) * 5 < lost(plain));
 }
 
 TEST(a_server_off_the_far_proxys_allow_list_is_refused_with_the_reason) {

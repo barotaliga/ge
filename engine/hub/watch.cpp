@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "core/json_write.hpp"
+#include "forward/forward.hpp"
 #include "hub/archive.hpp"
 #include "hub/content.hpp"
 #include "hub/link.hpp"
@@ -327,6 +328,53 @@ Answer play_page(const HubSpec& spec, std::string_view map, const Site& site) {
   return html(200, std::move(h), 3600);
 }
 
+// `/join/{host:port}`: the game server played in the page, through a forwarder that takes pages
+// (its WebTransport endpoint, the certificate trusted by the hash its record names), with the
+// pack of the map the server is on.
+Answer join_page(const Poller& p, const HubSpec& spec, std::string_view rest, const Site& site) {
+  gn::Address server;
+  const HubNode* n = gn::parse_address(rest, server) ? poller_find(p, server) : nullptr;
+  if (n == nullptr || !n->have || n->kind != gn::NodeKind::game) {
+    return not_found(spec, "No such server",
+                     "The hub has not heard from a server at that address. The servers are on "
+                     "<a href=\"/\">the front page</a>.",
+                     "");
+  }
+  const gn::Status& s = n->status;
+  const HubNode* fwd = poller_page_forward(p, server);
+  std::string no_viewer;
+  std::vector<std::string> args;
+  if (fwd == nullptr) {
+    no_viewer =
+        "No forwarder this hub knows takes players from a browser to this server, so it "
+        "cannot be played here. Join it in the game below.";
+  } else {
+    args = {"--join=https://" + host_of(fwd->address) + ":" +
+                status_key(fwd->status, ge::forward::kWebTransportKey) +
+                "/play?to=" + gn::to_string(server),
+            "--cert=" + ge::forward::status_cert(fwd->status)};
+  }
+  ContentPack pack;
+  std::string why;
+  const std::string content =
+      spec.map_files && built(site, player_name(spec)) && map_content(site, spec, s.map, pack, why)
+          ? content_path(pack.sha)
+          : "";
+  std::string h = head(spec, s.name, false) + nav(spec, "") + "<main class=\"watch\">";
+  h += "<section class=\"stage\"><h2>" + html_escape(s.name) + "</h2>";
+  h += "<p class=\"meta\"><b>" + html_escape(s.mode.empty() ? "-" : s.mode) + "</b> · " +
+       html_escape(s.map) + "</p>";
+  h += viewer_slot(site, spec, args, no_viewer, content, true);
+  h += "<p class=\"small\">Click the picture to play: W A S D move, the mouse looks, the left "
+       "button fires, SPACE jumps, 1 to 8 or the wheel pick a weapon, TAB shows the scores, "
+       "Escape lets the mouse go.</p>";
+  h += "<p class=\"act\"><a class=\"btn\" href=\"" + scheme_of(spec) + "://join/" +
+       html_escape(gn::to_string(server)) + "\">Join in the game</a></p>";
+  h += "</section><aside><h3>Scoreboard</h3>" + scoreboard_html(spec, s) + "</aside></main>" +
+       foot();
+  return html(200, std::move(h), kPageRefreshS);
+}
+
 Answer viewer_file(const HubSpec& spec, std::string_view name, const Site& site) {
   const auto refuse = [&](const std::string& why) {
     Answer a;
@@ -393,7 +441,7 @@ bool watch_answer(const Poller& p, const HubSpec& spec, std::string_view target,
     return true;
   }
   const std::pair<std::string_view, int> kinds[] = {
-      {"/watch/", 0}, {"/demo/", 1}, {"/viewer/", 2}, {"/play/", 3}};
+      {"/watch/", 0}, {"/demo/", 1}, {"/viewer/", 2}, {"/play/", 3}, {"/join/", 4}};
   for (const auto& [prefix, kind] : kinds) {
     if (path.rfind(prefix, 0) != 0) continue;
     if (kind == 3 && !spec.map_files) continue;
@@ -401,7 +449,8 @@ bool watch_answer(const Poller& p, const HubSpec& spec, std::string_view target,
     out = kind == 0   ? watch_page(p, spec, rest, now_us, site)
           : kind == 1 ? demo_page(spec, rest, site)
           : kind == 2 ? viewer_file(spec, rest, site)
-                      : play_page(spec, rest, site);
+          : kind == 3 ? play_page(spec, rest, site)
+                      : join_page(p, spec, rest, site);
     return true;
   }
   return false;
