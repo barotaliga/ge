@@ -64,6 +64,7 @@
 #include "shooters_edge/menu/carved_letters.hpp"
 #include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
+#include "shooters_edge/menu/plate_letters.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "ui/raster.hpp"
 #include "vfs/pak.hpp"
@@ -318,12 +319,18 @@ void run(gl::Lab& lab) {
          [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
     // Every carved letter on the measured lines: a capital's top and foot (rows 1 and 16, red), a
     // small capital's (rows 3 and 15, green), the 20 px row (blue).
+    const bool tags = menu.art().plates();
     shot("letters", "EVERY CARVED LETTER ON ITS LINES",
-         "A to Z and a to z in the menu's carved letters, four classic px to a pixel: the ones "
-         "the strips hold cut from them, the ones they hold in the other size only grown or shrunk "
-         "from it, the F from the E and the I; the B, X and Z pieced from the I, the O and the E. "
-         "Red: a capital's top and foot; green: a small capital's; blue: the row.",
-         "every letter between its lines; no stray pixels beside a letter",
+         tags ? "A to Z and a to z on the sequel's tags, four classic px to a pixel: the capitals "
+                "the tags hold cut a cell each, B C F H J K W X Z pieced from them, every small "
+                "letter its capital shrunk; then two words on whole tags, the second lit."
+              : "A to Z and a to z in the menu's carved letters, four classic px to a pixel: the "
+                "ones the strips hold cut from them, the ones they hold in the other size only "
+                "grown or shrunk from it, the F from the E and the I; the B, X and Z pieced from "
+                "the I, the O and the E. Red: a capital's top and foot; green: a small capital's; "
+                "blue: the row.",
+         tags ? "every cell the tag's height; no seam where two cells meet in a word"
+              : "every letter between its lines; no stray pixels beside a letter",
          [&](ge::ui::DrawList& dl) {
            constexpr float kZ = 4;
            const std::string_view lines[] = {"ABCDEFGHI", "JKLMNOPQR", "STUVWXYZ",
@@ -336,6 +343,42 @@ void run(gl::Lab& lab) {
              dl.box(b);
            };
            const sm::ClassicArt& art = menu.art();
+           const auto letter = [&](const ge::ui::Image& img, float x, float y, float tall) {
+             ge::ui::Box b;
+             b.rect = {x * kZ, y * kZ, art.width_of(img) * kZ, tall * kZ};
+             b.image = &img;
+             b.uv = {0, 0, static_cast<float>(img.width), static_cast<float>(img.height)};
+             b.nearest = true;
+             b.feather = 0;
+             dl.box(b);
+           };
+           if (art.plates()) {
+             // The sequel's tag letters a cell each, 4 px apart; then two words on whole tags,
+             // the second lit.
+             const std::string_view cells[] = {"ABCDEFGHIJKLM", "NOPQRSTUVWXYZ", "abcdefghijklm",
+                                               "nopqrstuvwxyz"};
+             for (size_t k = 0; k < std::size(cells); k++) {
+               float x = 4;
+               for (const char c : cells[k])
+                 if (const auto it = art.letters.find(c); it != art.letters.end()) {
+                   letter(it->second, x, 4 + 36 * static_cast<float>(k), sm::kPlateLine);
+                   x += art.width_of(it->second) + 4;
+                 }
+             }
+             const std::string_view words[] = {"Select Game", "Menu"};
+             float x = 4;
+             for (size_t k = 0; k < std::size(words); k++) {
+               std::vector<float> xs;
+               const float wide = sm::plate_layout(art, words[k], &xs);
+               const auto& set = k == 1 && !art.letters_lit.empty() ? art.letters_lit : art.letters;
+               for (size_t i = 0; wide > 0 && i < xs.size(); i++) {
+                 const char c = i == 0 ? '[' : i == words[k].size() + 1 ? ']' : words[k][i - 1];
+                 letter(set.at(c), x + xs[i], 4 + 36 * 4, sm::kPlateLine);
+               }
+               x += wide + 8;
+             }
+             return;
+           }
            for (size_t k = 0; k < std::size(lines); k++) {
              const float top = 4 + 28 * static_cast<float>(k);
              bar(top + 1, 0xff4646), bar(top + 17, 0xff4646);
@@ -344,14 +387,7 @@ void run(gl::Lab& lab) {
              for (const char c : lines[k]) {
                const auto it = art.letters.find(c);
                if (it == art.letters.end()) continue;
-               ge::ui::Box b;
-               b.rect = {x * kZ, top * kZ, art.width_of(it->second) * kZ, sm::kCarvedLine * kZ};
-               b.image = &it->second;
-               b.uv = {0, 0, static_cast<float>(it->second.width),
-                       static_cast<float>(it->second.height)};
-               b.nearest = true;
-               b.feather = 0;
-               dl.box(b);
+               letter(it->second, x, top, sm::kCarvedLine);
                x += art.width_of(it->second) + 4;
              }
            }
