@@ -53,6 +53,7 @@ LightProbe make_light_probe(const Map& map) {
     if (s >= map.surfaces.size()) break;
     const Surface& sf = map.surfaces[s];
     if (sf.lightmap < 0 || sf.kind == SurfaceKind::sky || sf.kind == SurfaceKind::liquid) continue;
+    if (const float a = map.textures[sf.texture].alpha; a >= 0 && a < 1) continue;  // a window
     for (uint32_t i = sf.first; i + 2 < sf.first + sf.count; i += 3) {
       const float* c[3];
       corners(map, i, c);

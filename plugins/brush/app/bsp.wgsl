@@ -186,6 +186,8 @@ const kSlime = 3u;
 const kLava = 4u;
 const kWarp = 6u;
 const kTele = 7u;
+const kGlass = 8u;  // a window: two thirds opaque, drawn as painted
+const kGlassThin = 9u;  // one third
 
 struct VsIn {
   @location(0) pos: vec3f,
@@ -942,6 +944,9 @@ fn fs_main(in: VsOut) -> FsOut {
     let a = bsp.liquid_alpha;
     out.colour.a = select(select(select(a.x, a.w, in.kind == kTele), a.z, in.kind == kLava), a.y,
                           in.kind == kSlime);
+    if (in.kind == kGlass || in.kind == kGlassThin) {
+      out.colour.a = select(2.0 / 3.0, 1.0 / 3.0, in.kind == kGlassThin);
+    }
   }
   return out;
 }
@@ -1054,7 +1059,7 @@ fn shade(in: VsOut) -> FsOut {
       glow = 0.0;
     }
   }
-  if (warped) {
+  if (warped || in.kind == kGlass || in.kind == kGlassThin) {
     out.colour = vec4f(albedo * white, 1.0);
     return out;
   }
