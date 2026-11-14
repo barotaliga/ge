@@ -240,11 +240,11 @@ Answer demo_page(const HubSpec& spec, std::string_view sha, const Site& site) {
                      "href=\"/demos\">the Demos page</a>.",
                      "Demos");
   }
-  const std::string title = r->title.empty() ? r->map : r->title;
+  const std::string title = r->title.empty() ? map_text(spec, r->map) : r->title;
   std::string h = head(spec, title, false) + nav(spec, "Demos") + "<main class=\"watch\">";
   h += "<section class=\"stage\"><h2>" + html_escape(title) + "</h2>";
   h += "<p class=\"meta\"><b>" + html_escape(r->mode.empty() ? "-" : r->mode) + "</b> · " +
-       html_escape(r->map) + " · " + utc_text(r->start_s);
+       html_escape(map_text(spec, r->map)) + " · " + utc_text(r->start_s);
   if (!r->server.empty()) h += " · " + html_escape(r->server);
   h += "</p>";
   ContentPack pack;

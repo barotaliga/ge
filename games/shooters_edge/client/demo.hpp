@@ -228,16 +228,24 @@ struct DemoState {
   int32_t stats[kStatCount] = {};  // health, ammo, items ... (DemoStat)
   std::vector<std::string> models, sounds;  // precache lists, index 1 first ([0] is "")
   std::vector<std::string> images;          // sequel: the pictures it names (`pics/<name>.pcx`)
-  std::array<std::string, 32> looks;        // sequel: each slot's model and skin ("male/grunt")
-  std::vector<DemoEntity> entities;         // by number
-  std::vector<DemoEntity> players;          // client, multiview: by slot (32)
-  std::array<int32_t, 32> frags{};          // client, multiview: each slot's frags (updatefrags)
-  std::array<std::string, 32> names;        // client, multiview: each slot's name (its userinfo)
-  std::array<std::string, 32> teams;        // client, multiview: each slot's team ("": none)
-  std::array<bool, 32> spectator{};         // client, multiview: the slot watches (`*spectator`)
-  std::array<int, 32> top{}, bottom{};      // each slot's colours (0..13)
-  std::array<std::string, 32> skins;        // client, multiview: each slot's `skin` ("": none)
-  std::array<std::string, 32> figures;      // client, multiview: each slot's `model` ("": none)
+  // Sequel: what its own status bar runs (client/sequel_bar.hpp): the bar's program, the item
+  // names by number, the player state's 32 stats as sent, the last screen the server put up (a
+  // scoreboard's or the help computer's program) and the last inventory's counts by item number.
+  std::string status_bar;
+  std::vector<std::string> item_names;
+  std::array<int16_t, 32> sequel_stats{};
+  std::string layout;
+  std::vector<int16_t> inventory;
+  std::array<std::string, 32> looks;    // sequel: each slot's model and skin ("male/grunt")
+  std::vector<DemoEntity> entities;     // by number
+  std::vector<DemoEntity> players;      // client, multiview: by slot (32)
+  std::array<int32_t, 32> frags{};      // client, multiview: each slot's frags (updatefrags)
+  std::array<std::string, 32> names;    // client, multiview: each slot's name (its userinfo)
+  std::array<std::string, 32> teams;    // client, multiview: each slot's team ("": none)
+  std::array<bool, 32> spectator{};     // client, multiview: the slot watches (`*spectator`)
+  std::array<int, 32> top{}, bottom{};  // each slot's colours (0..13)
+  std::array<std::string, 32> skins;    // client, multiview: each slot's `skin` ("": none)
+  std::array<std::string, 32> figures;  // client, multiview: each slot's `model` ("": none)
   std::string game;  // client, multiview: the game folder the server ran ("fortress"; "" unnamed)
   // Client, multiview: the server's info keys in the order first seen (the signon's
   // `fullserverinfo`, then each `serverinfo` change): `hostname`, `teamplay`, `maxclients` ...
@@ -293,6 +301,7 @@ struct Demo {
   uint32_t incoming = 0;              // the last packet's sequence
   uint32_t ext_fte = 0, ext_mvd = 0;  // the client format's protocol extensions
   int cmd_size = 0;                   // the client format's usercmd struct: 24 or 28 (0: unknown)
+  uint32_t single_flags = 0;          // a single-player demo of protocol 999: its encoding flags
   int player_model = 0;  // the client format's `progs/player.mdl` index: a playerinfo's default
   bool ended = false;
   // The stream is a live connection's that agreed the game's own set (the ge set): its ids 120
@@ -344,8 +353,10 @@ struct DemoMsg {
   std::span<const uint8_t> b;
   size_t at = 0;
   bool bad = false;
-  bool int23 =
-      false;  // a sequel stream of protocol 3435 on: its points are int23 (demo_sequel.cpp)
+  // A sequel stream of protocol 3435 on: its points are int23 (demo_sequel.cpp).
+  bool int23 = false;
+  // A single-player stream of protocol 999: its coordinate and angle encodings (demo_single.cpp).
+  uint32_t single_flags = 0;
   int u8();
   int i8();
   int i16();

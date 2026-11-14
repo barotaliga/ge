@@ -39,7 +39,7 @@ by a lab or a test over free content (§ Content and test data).
 
 | Content | Formats | What compatible means |
 | --- | --- | --- |
-| Archives and search paths | `pak` (a directory of files in one blob), `pk3` (a zip, stored or deflated, with its own directory tree), a `.pk3dir` directory standing in for an unpacked pk3 while a mod is developed; loose files over them | The base directory, then a game directory per mod (`-game`, the server's `*gamedir`), archives in numeric then name order, later ones overriding earlier; the same file names a mod expects |
+| Archives and search paths | `pak` (a directory of files in one blob), `pk3` (a zip, stored or deflated, with its own directory tree), a `.pk3dir` directory standing in for an unpacked pk3 while a mod is developed; loose files over them | The base directory, then a game directory per mod (`-mod`, the server's `*gamedir`), archives in numeric then name order, later ones overriding earlier; the same file names a mod expects |
 | Maps | BSP version 29, BSP2 (the larger-limits variant), the `.lit` coloured lightmaps beside them, BSPX lumps (extra data in the same file) | Every lump read: planes, nodes, leaves, the visibility (PVS, run-length coded), faces, lightmaps with up to four styles a face, textures (with animated and random sequences, liquids, sky), clip hulls (point, player, large), brush models, the entity lump |
 | Models | MDL (vertex-animated, frame groups, skin groups, 8-bit packed vertices and normals from a fixed table), SPR (sprites with orientation types) | Every frame and skin a mod names; the player model's colours (top and bottom) remapped at draw time; frame interpolation as a modern client does it |
 | Images | The 256-colour palette, the colour map (light levels to palette), LMP pictures, WAD2 (the 2D graphics: the status bar, the font) | Drawn as the classic game draws them, and also as true colour (§ The picture) |
@@ -181,10 +181,15 @@ make build PRESET=release
 build/release/se -basedir ~/games/classic +map dm6
 ```
 
+- **`-game 1`** plays the classic game and **`-game 2`** its sequel, each from the install kept
+  for it on this computer (the one SELECT GAME last opened for that game). With none kept, and
+  the window not started inside one, the folder chooser asks for the folder the game is installed
+  in, checks that it is that game's install (asking again, with the reason, when it is not) and
+  keeps it, so the next `-game 1` opens at once (`client/game_folder.hpp`'s `choose_folder`).
 - **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
   with spaces goes in quotes (`-basedir "/Volumes/Old Games/classic"`). When the install has the
   multiplayer client's folder (its player skins, its multiplayer program), that folder is
-  played over `id1` unless `-game` names another. **`-game <folder>`**
+  played over `id1` unless `-mod` names another. **`-mod <folder>`**
   plays a mod: its folder is mounted over `id1`, so the mod's files win and everything it does
   not ship comes from the base game (saves go to the mod's folder). **`-progs <file>`** runs a mod's progs in place of the
   baseline mod (§ Running your own mod), and **`-models <dir>`** names the held weapons' folder
@@ -291,7 +296,7 @@ the game removed (a secret wall the mod does not keep) is not drawn: `brush/app/
 modern look stay where the map built them. Not yet: sounds and the network (the rest of M18h,
 M18i).
 
-The baseline mod's POWERS (`qc/items.qc`): the quad (`item_artifact_super_damage`, four times
+The baseline mod's POWERS (`rules/common_items.cpp`): the quad (`item_artifact_super_damage`, four times
 the damage dealt) and the shield (`item_artifact_invulnerability`, no damage taken), 30 s each,
 back 60 s after they are taken. A power held glows round its holder (`effects`: blue the quad's,
 red the shield's; the window lights the walls round him and tints his own screen). The torches
@@ -303,7 +308,7 @@ engine's burning gas is the flame.
 profile has a table of names by class name (`profiles/items.hpp`'s `names`; the classic game's
 `kClassicNames`: "shells", "nailgun", "Double-barrelled Shotgun", "Red Armor", "Pentagram of
 Protection"), which the window gives the server as local info (`localinfo weapon_nailgun
-"nailgun"`) when the mod plays a game's packs, and the mod's `name_of` (each variant's `glue.qc`)
+"nailgun"`) when the mod plays a game's packs, and the mod's `name_of` (each variant's `rules/<variant>_glue.cpp`)
 reads it under the item's class name. So "You got the rockets", "You got the Red Armor", and a
 backpack lists what was in it ("You get the Rocket Launcher, 20 shells, 5 rockets", the weapon only
 when it is new to its taker). On the built-in arena, with no packs, the mod speaks its own words
@@ -429,9 +434,9 @@ the map from the recorded eye, the HUD, and every entity the demo holds (the oth
 their colours, the items, the missiles, the level's statics), as `-demovideo` draws them.
 
 **The demo's game folder.** A multiplayer recording names the game folder its server ran
-(`fortress` for a team mod). When the window was opened on the base folder (no `-game`) and that
+(`fortress` for a team mod). When the window was opened on the base folder (no `-mod`) and that
 folder is beside it under `-basedir`, the demo plays from it, the base under it, so the mod's own
-models, skins and maps are found; a `-game` you pass always wins. A folder that is not there is
+models, skins and maps are found; a `-mod` you pass always wins. A folder that is not there is
 named in the console with what to do.
 
 **Heard and read.** The window's own game, a match on its listen server or the campaign, is heard
@@ -716,12 +721,12 @@ wrote it, and a NATIVE program (`plugins/progs/native.hpp`) in the same place: a
 functions are C++. The game's own deathmatch, the **baseline mod** (M18d: weapons, ammunition,
 armour, health, deaths and respawns, frags, doors, plats, buttons and triggers), is one: the
 arena's rules in C++ (`games/shooters_edge/rules/arena*.cpp`, M52h), which the `se-baseline` lab
-plays against bots. The campaign is still QC until it is carried over too (M52h):
-`qc/campaign/` (M18s7), the classic maps' single-player game on the single-player program form,
-run by the campaign host and played on a pack's maps by
-`se-campaign --progs=games/shooters_edge/qc/campaign/progs.src`, on `qc/common/`; its README is
-the guide, and `ge qc build` compiles it with the tree's own QC compiler
-(`plugins/progs/qc_compile.hpp`, the language in `porting/shooters-edge/qc-language.md`).
+plays against bots. The campaign is another (M18s7, carried to C++ in M52h):
+`games/shooters_edge/rules/campaign*.cpp`, the classic maps' single-player game on the
+single-player program form, on the rules both share (`rules/common_*.cpp`, compiled once for each
+variant), run by the campaign host and played on a pack's maps by `se-campaign --progs=campaign`.
+No QC of our own is left; the tree's QC compiler (`plugins/progs/qc_compile.hpp`, `ge qc build`)
+stays for community mods' sources.
 
 - **Point the game at it** with a path: `--progs=<file>` on the command line, or the `sv_progs`
   cvar in the server's console lines (`sv_progs mods/arena/progs.dat`, or `set sv_progs ...`).
@@ -734,7 +739,7 @@ the guide, and `ge qc build` compiles it with the tree's own QC compiler
   multiplayer program files in order, `qwprogs.dat` and then `progs.dat`
   (`games/shooters_edge/profiles/game_profile.hpp`, looked for by the game's adapter, § The game
   adapter), and runs the first of the multiplayer form; the console's `mods` lists the mod
-  folders there are; so `-game mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
+  folders there are; so `-mod mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
   over (the base game's own `progs.dat` is its campaign, found the same way for SINGLE
   PLAYER), and with none the baseline mod runs; the status line says which.
 - **Or ship it compiled** (M18p): a mod folder whose packs hold a `qwprogs.qvm` runs that
@@ -1001,7 +1006,7 @@ armour, or both, once the sequel's profile lands. The design makes that possible
 - **Our programs read the arsenal, never their own copies.** (Landed: the rows are
   `games/shooters_edge/profiles/arsenal.hpp`, handed to the program as the server settings
   `arsenal_weapon1..8` and `arsenal_armour1..3`; a slot with no row keeps the program's own.) The weapons and armour in
-  `qc/common/` (the arena and campaign variants share them) fire, pick up and absorb through the
+  `rules/common_*.cpp` (the arena and campaign variants share them) fire, pick up and absorb through the
   arsenal's rows. The settings `sv_weapons <profile>` and `sv_armour <profile>` pick which set a
   map's items give. They default to the content's own sets, and each can be set without the
   other.
@@ -1102,11 +1107,11 @@ own programs are the same pair:
 | | Arena (multiplayer) | Campaign (single player) |
 | --- | --- | --- |
 | The classic game's own | the player's multiplayer `progs` | the player's single-player `progs` in its first pack: the exact campaign, episode 1 on the shareware pack, all four with the full game |
-| Ours (free) | `rules/arena*.cpp`: today's deathmatch in C++ | `qc/campaign/progs.src`: monsters, the level flow, runes, skill, coop on `qc/common/` (QC until it is carried to C++) |
+| Ours (free) | `rules/arena*.cpp`: today's deathmatch in C++ | `rules/campaign*.cpp`: monsters, the level flow, runes, skill, coop, on `rules/common_*.cpp`, in C++ |
 
 Choosing single or multiplayer is choosing a program: the menu's SINGLE PLAYER ▸ NEW GAME loads
 the profile's campaign program (the pack's own when present, else ours), MULTIPLAYER its arena
-program. Our campaign is built by `ge qc build` from its `progs.src`; the arena is C++.
+program. Both of ours are C++ (`campaign_mod`, `baseline_mod` in `server/baseline_mod.hpp`).
 
 ### Co-op and its companions
 

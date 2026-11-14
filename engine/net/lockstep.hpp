@@ -30,7 +30,11 @@
 // DESYNCS: after each step whose inputs are all real (CONFIRMED: every step in lockstep), the
 // game's digest of its state is kept and sent the same way, and every peer compares each seat's
 // digests with its own, step by step. The first step two seats differ on is the desync, caught on
-// the step it happened (`lockstep_desync`), a round trip after it was stepped.
+// the step it happened (`lockstep_desync`), a round trip after it was stepped. Once every seat's
+// digest for that step is held, the ODD SEAT is named: the one seat whose digest differs from the
+// rest's (`LockstepDesync::odd`). A seat that changed its own state, a cheat or a broken build, is
+// then known to every honest peer, which leaves it out; a peer that finds itself the odd seat
+// knows it is the one astray. With two seats, or two or more seats astray, nobody is named.
 //
 // Like the node, nothing here reads a clock or draws randomness; the caller's updates are the
 // clock, and a session over the simulated network replays to the bit.
@@ -42,6 +46,7 @@
 // ge:summary Lockstep and rollback: inputs-only turns, input delay, prediction, desync digests
 // ge:keywords net lockstep rollback turns input-delay orders deterministic desync digest
 // ge:keywords prediction resimulation rts strategy fighting peer-to-peer mesh seats stall
+// ge:keywords anti-cheat odd-seat majority
 // ge:skill net
 // ge:test tests/net_lockstep_test.cpp
 #pragma once
@@ -103,6 +108,8 @@ struct LockstepDesync {
   int seat = -1;      // the seat whose digest differs from this peer's
   uint64_t mine = 0, theirs = 0;
   uint32_t caught_at = 0;  // the step this peer had reached when it saw it
+  int odd = -1;  // the one seat whose digest at `step` differs from every other seat's (-1: none)
+  bool judged = false;  // every seat's digest at `step` was held and compared
 };
 
 // One seat's input for one turn.

@@ -25,6 +25,7 @@
 #include "fall_line/sim/course.hpp"
 #include "fall_line/sim/field.hpp"
 #include "fall_line/sim/game.hpp"
+#include "fall_line/sim/map_cache.hpp"
 #include "fall_line/sim/profile.hpp"
 #include "fall_line/sim/simulate.hpp"
 #include "mountain/mapgen/generate.hpp"
@@ -430,8 +431,10 @@ std::unique_ptr<ge::play::Run> open_run(const ge::play::Setup& setup, std::strin
     static double last_version = -1;
     static std::shared_ptr<const mg::Level> last;
     if (!last || last_seed != setup.seed || last_version != version) {
+      const int v = static_cast<int>(num::round(version));
+      ge::save::ContentCache* cache = content_cache();
       last = std::make_shared<const mg::Level>(
-          race_map(setup.seed, static_cast<int>(num::round(version))));
+          cache != nullptr ? cached_race_map(setup.seed, v, *cache) : race_map(setup.seed, v));
       last_seed = setup.seed;
       last_version = version;
     }

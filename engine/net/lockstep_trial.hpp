@@ -5,7 +5,8 @@
 // other). The trial answers what a link costs the session: how often a peer waits, how long an
 // order takes to be felt, the bytes each peer sends, how often and how deep a rollback goes, and
 // that every peer's state agrees. A desync can be PLANTED (one seat's state nudged on one step)
-// to show it is caught on that step. A pure function of its config: the same trial, the same
+// to show it is caught on that step, and that every peer names the seat astray (with three or
+// more seats). A pure function of its config: the same trial, the same
 // hash.
 //
 // ge:summary A lockstep trial: a strategy game in turns or a fighting game with rollback, measured
@@ -54,6 +55,8 @@ struct LockstepTrial {
   bool caught = false;             // a desync seen by some peer
   uint32_t caught_step = 0;        // the step it names (the earliest any peer named)
   double caught_after_ms = 0;      // from that step being run to the first peer seeing it
+  int odd = -1;                    // the seat the most peers named as the one astray (-1: none)
+  int named_by = 0;                // how many peers named it
   std::vector<double> t_s, steps;  // seat 0's steps run by each second
   uint64_t hash = 0;
 };

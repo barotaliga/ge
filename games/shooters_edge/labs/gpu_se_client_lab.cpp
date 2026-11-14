@@ -82,7 +82,6 @@
 #include "lab/labs/liquid_scene.hpp"
 #include "lab/png.hpp"
 #include "progs/file.hpp"
-#include "progs/qc_compile.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/held.hpp"
@@ -100,6 +99,7 @@
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
@@ -519,7 +519,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     }
   }
   if (!shooters_edge::labs::stage_asked(lab, files)) return;
-  // `--progs`: a program of our own compiled from its progs.src (the campaign variant, say), or
+  // `--progs`: a program of our own by name (campaign), or
   // `pack` for the packs' own progs.dat; else the arena variant.
   if (lab.arg("progs") == "pack") {
     std::vector<uint8_t> store;
@@ -530,16 +530,10 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       return;
     }
   } else if (const std::string& own = lab.arg("progs"); !own.empty()) {
-    const ge::progs::QcProject built = ge::progs::compile_project(own);
-    if (!built.result.ok) {
-      std::string why;
-      for (const ge::progs::QcDiagnostic& d : built.result.diagnostics)
-        why += ge::progs::diagnostic_text(d) + "\n";
-      lab.fail("se-client: " + own + " does not compile:\n" + why,
-               "Fix the first error at its file and line. Skill: progs.");
+    if (!shooters_edge::server::own_mod(own, progs, error)) {
+      lab.fail("se-client: " + error, "Pass --progs=campaign or pack. Skill: progs.");
       return;
     }
-    progs = built.result.progs;
   } else if (!cl::baseline_progs(progs, error)) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
     return;
@@ -1130,7 +1124,8 @@ void run(gl::Lab& lab) {
   lab.metric("hand.shots", held.shots, "count");
   if (peak - ground < 100)
     lab.fail("the rocket jump rose only " + std::to_string(peak - ground) + " units",
-             "Read combat.qc's push and the rocket's blast (games/shooters_edge/qc). Skill: "
+             "Read the push and the rocket's blast (games/shooters_edge/rules/common_combat.cpp). "
+             "Skill: "
              "shooter.");
   // With no adapter the same two metrics are written as zero, so the digest is one on every row.
   if (device)
@@ -1170,8 +1165,7 @@ const gl::LabSpec kSpec{
      {"hud", "auto", "with --game: the HUD's art: auto, classic or free"},
      {"hudcvars", "",
       "with --game: the HUD's cvars (hud_style, viewsize, hud_*), as the console takes them"},
-     {"progs", "",
-      "with --game: a progs.src compiled and run instead of the arena variant, or pack"},
+     {"progs", "", "with --game: a program of ours run instead of the arena (campaign), or pack"},
      {"settle", "4", "with --game: host frames run at each view before it is drawn (at least 4)"},
      {"fire", "0",
       "with --game: the player then holds attack this many frames at each view and it is drawn "

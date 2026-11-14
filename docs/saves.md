@@ -275,11 +275,59 @@ random: in step after every round (72 conflicts kept along the way).
 ## Fast loads: the content cache (M25h)
 
 Reading a save is milliseconds; rebuilding its setup may not be. Fall Line's mountain is
-generated from its seed, which takes far longer than reading the save. The content cache writes
-what a setup builds (the compiled map and its indices) to disk once, keyed by the generator's
-version and the setup, in a layout that is read with one read (or mapped) and used where it
-lies: a second load of the same mountain skips the generator entirely. The cache is a cache:
-missing, stale or damaged, it is rebuilt from the setup and the save still loads.
+generated from its seed, which takes far longer than reading the save. The content cache
+(`engine/save/cache.hpp`) writes what a setup builds to a disk once, under a KEY, and a later load
+reads it back instead of building it again.
+
+- **The key** names everything the content depends on: the game's words for the setup (the map's
+  kind, seed and generator version) and the STAMP of the code that builds it. `ge_source_stamp`
+  (`cmake/SourceStamp.cmake`) hashes every source file under the directories named
+  (`plugins/mountain` and `engine/core` for Fall Line's maps) into a constant, rebuilt when any
+  of them changes. Changed generator code is a new key, so it never reads a stale map.
+- **An entry** is a save file of kind `content`, named by the key's hash. Its meta holds the whole
+  key, which is checked, and one chunk holds the value.
+- **A cache is a cache:** a miss, a damaged entry, another key behind the same name, or a chunk
+  newer than this build reads makes `get` answer false. The caller builds the content and `put`s
+  it, and a bad entry is removed. A full disk costs only the next load's speed.
+- **The map described:** `plugins/mountain/mapgen/level_io.hpp` describes every type a `Level`
+  holds. That covers the ski area's runs, lifts, courses and routes, a race course with the map
+  it was set over, and a ski jump's venue surface. `tests/mountain_level_io_test.cpp` holds the
+  round trip to the map's digest and to the same bytes written again.
+- **Fall Line** (`games/fall_line/sim/map_cache.hpp`): `cached_race_map` and `cached_free_map`
+  go through the cache. The play contract's runs open through the cache the host set
+  (`use_content_cache`). The window keeps one in the player's folder (`cache/`).
+  `tests/fall_line_map_cache_test.cpp` steps a field on the cached map and on the generated one
+  to the same digests, step after step.
+
+The `save-run` lab loads each map twice through the cache, timed to the run's first step. In a
+debug build, the race map took 7.1 s the first time and 0.11 s the second. The free ride took
+32 s the first time and 3.1 s the second, where the rest is the free ride's own setup (its lifts
+and crowd), not the map. An entry is the map's fields as they lie: the free ride's heightfields
+make it tens of MB. A compressor is the next step when the cache's size matters (the chunk's
+`Codec` keeps the room).
+
+## Fall Line's saves in the game (M25g)
+
+The saves a player meets are the store (§ Slots) and the pictures (§ Pictures) put on the menus.
+
+- **A menu item may carry a picture** (`ui::Item::picture`). The view (`ui/menu_view.hpp`) shows
+  the focused item's picture large beside the column in landscape and above it in portrait, in
+  `MenuLayout::preview`. The game owns the image.
+- **The shell** (`games/fall_line/app/menus.hpp`): once the app hands it the store's rows
+  (`set_saves`, from `rows_of_store`), the front door shows CONTINUE first (the newest save) and
+  LOAD (the newest saves of this run's setup, a save of another seed is never listed). The pause
+  page shows SAVE (six numbered slots, a used one with its picture and title, the rest EMPTY) and
+  LOAD. The shell answers the slot (`ShellStep::load`, `save`); the app reads and writes the store.
+- **The run** (`games/fall_line/controls/by_hand.hpp`): `hand_save` writes the player's run with
+  the game's first view as its picture (`play::save_run_pictured`). `hand_load` opens a run on the
+  same map and loads the save into it (`play::load_run_into`), refusing a save of another setup in a
+  game's words. A loaded run's input log starts at the save, so the window does not write it.
+- **The window** keeps the store in the player's folder (`saves/`) and autosaves into its ring
+  every three minutes of play (`StoreSpec::autosave_spacing_s`).
+
+The `front-door` lab saves the bot's run at four moments into a store on a simulated disk and
+shoots the front door with CONTINUE, the load card and the save card at every size, each slot's
+picture beside the column.
 
 ## Relation to replays and the network
 
@@ -300,5 +348,7 @@ missing, stale or damaged, it is rebuilt from the setup and the save still loads
 | `save-picture` | Does every slot of a store get a picture headless, and does a menu read them all through the index onto a contact sheet? | M25d |
 | `save-character` | A skier's profile taken from seed 38 into seed 7: the profile's fields equal, the rest of the run seed 7's own (its bytes, its digest at every step), the career summed | M25e |
 | `save-cloud` | Two devices on the simulated store: do their slots converge, and is a conflict kept? | M25f |
+| `front-door` (saves) | Do CONTINUE, the load card and the save card read over the live mountain at every size, every slot pictured? | M25g |
+| `save-run` (cache) | A load's map through the content cache: the second load reads it, the same map, and how much faster to the first step? | M25h |
 
 Every one runs headless on the GPU-less Linux container.

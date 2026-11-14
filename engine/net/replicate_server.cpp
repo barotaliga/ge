@@ -234,7 +234,7 @@ void on_input(ReplicateServer& s, int client, const uint8_t* data, size_t size) 
     c.acked = ack;
     c.has_ack = true;
   }
-  c.view_tick = view;
+  c.view_tick = s.guard ? guard_view(*s.guard, client, view, s.tick) : view;
   c.rate = rate;
   c.update_rate = update_rate;
   const uint8_t* inputs = data + r.at;
@@ -242,7 +242,7 @@ void on_input(ReplicateServer& s, int client, const uint8_t* data, size_t size) 
   for (uint32_t k = 0; k < count; k++) {
     const uint8_t* in = inputs + k * stride;
     const uint32_t back = static_cast<uint32_t>(in[n] | (in[n + 1] << 8));
-    const uint32_t drawn = view > back ? view - back : 0;
+    const uint32_t drawn = c.view_tick > back ? c.view_tick - back : 0;
     const uint32_t seq = newest - count + 1 + k;
     const uint32_t expect = c.queue_seq.empty() ? c.next_seq : c.queue_seq.back() + 1;
     if (seq < expect) continue;  // had it
@@ -272,6 +272,7 @@ void on_input(ReplicateServer& s, int client, const uint8_t* data, size_t size) 
     c.queue_seq.push_back(seq);
     c.queue_view.push_back(drawn);
     c.inputs.insert(c.inputs.end(), in, in + n);
+    if (s.guard) guard_input(*s.guard, client, &c.inputs[c.inputs.size() - n], s.tick);
   }
   while (c.queue_seq.size() > kMaxQueued) {
     s.stats.trimmed++;
@@ -460,6 +461,7 @@ void replicate_server_receive(ReplicateServer& s) {
       std::vector<uint32_t> queue_view = std::move(c.queue_view);
       std::vector<uint8_t> touching = std::move(c.touching);
       c = ReplicateClientSlot{};
+      if (s.guard) guard_reset(*s.guard, e.peer);
       std::fill(touching.begin(), touching.end(), uint8_t{0});
       c.touching = std::move(touching);
       for (Snap& snap : sent) snap.valid = false;
@@ -480,6 +482,7 @@ void replicate_server_receive(ReplicateServer& s) {
 
 void replicate_server_tick(ReplicateServer& s) {
   s.tick++;
+  if (s.guard) guard_tick(*s.guard, s.tick);
   const int nf = s.schema.fields;
   const auto n = static_cast<size_t>(s.schema.input_size);
   for (size_t k = 0; k < s.clients.size(); k++) {

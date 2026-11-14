@@ -3,7 +3,9 @@
 // capture match, a public deathmatch half bots, a server of bots alone, a match on its score
 // screen, empty servers and a TV node) is written as the Servers page, the Players page, a filtered
 // page, one scoreboard overlay and the broadcast's Watch page, then the Account page (its forms
-// over HTTPS and over plain HTTP, and a login code made); their HTML is attached and hashed.
+// over HTTPS and over plain HTTP, and a login code made), the Demos page over an archive's rows,
+// and a player's, a match's and the Leaders page over a master's reports; their HTML is attached
+// and hashed. The pages wear the game's look (`HubSpec::look`, here `arena`).
 // When a headless Chromium is on the machine (GE_CHROMIUM, or the container's
 // /opt/pw-browsers/chromium), each page is drawn at a desktop's and a phone's width and shown:
 // those pictures are the browser's, so they are measured, never hashed. It answers whether the
@@ -12,7 +14,7 @@
 //
 // ge:summary Lab: the hub's HTML pages written from a sample index and drawn by headless Chromium
 // ge:keywords lab hub pages html browser chromium screenshot phone desktop cards overlay
-// ge:keywords account-page
+// ge:keywords account-page demos-page player-page match-page leaders-page look
 // ge:skill net labs
 // ge:test tests/hub_pages_test.cpp
 #include <cstdint>
@@ -24,16 +26,21 @@
 #include <string>
 #include <vector>
 
+#include "account/matches.hpp"
 #include "account/service.hpp"
+#include "account/store.hpp"
 #include "hub/account_page.hpp"
+#include "hub/archive.hpp"
 #include "hub/pages.hpp"
 #include "hub/poller.hpp"
 #include "hub/spec.hpp"
+#include "hub/stats_page.hpp"
 #include "hub/watch.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/hub_browser.hpp"
 #include "lab/png.hpp"
 #include "net/packet.hpp"
+#include "net/report.hpp"
 #include "net/status.hpp"
 
 namespace {
@@ -50,6 +57,7 @@ gh::HubSpec sample_spec() {
   s.protocol = 42;
   s.modes = {{"4on4", 9}, {"2on2", 8}, {"1on1", 7}, {"ctf", 6}, {"ffa", 3}};
   s.score = "frags";
+  s.look = "arena";
   return s;
 }
 
@@ -150,6 +158,196 @@ gh::Poller sample_index() {
 
 std::vector<uint8_t> bytes(const std::string& s) { return {s.begin(), s.end()}; }
 
+constexpr int64_t kNowS = 1794500000;  // the sample evening's wall clock (2026-11-12)
+
+// The archive's sample rows (no files: the Demos page reads only the rows): the evening's matches,
+// newest first, one with its scores and a tag.
+gh::Archive sample_archive() {
+  struct Sample {
+    const char* map;
+    const char* mode;
+    const char* server;
+    int64_t ago_s, duration_s;
+    std::vector<std::pair<const char*, int>> players;
+    std::vector<std::pair<const char*, int>> teams;
+    const char* tag;
+  };
+  const Sample samples[] = {
+      {"tower",
+       "4on4",
+       "Night Arena <EU>",
+       1800,
+       1200,
+       {{"vale", 41},
+        {"sable", 39},
+        {"orrin", 37},
+        {"wren", 33},
+        {"ash", 30},
+        {"kit", 25},
+        {"moss", 19},
+        {"fen", 12}},
+       {{"red", 122}, {"blue", 114}},
+       "final"},
+      {"crypt", "1on1", "Duel Hall", 5400, 600, {{"quill", 27}, {"brand", 19}}, {}, ""},
+      {"aqueduct",
+       "2on2",
+       "Team Two",
+       9000,
+       900,
+       {{"nyx", 25}, {"oak", 22}, {"ivy", 18}, {"elm", 15}},
+       {{"red", 47}, {"blue", 33}},
+       ""},
+      {"foundry", "ffa", "Open Pit", 30000, 900, {{"tamsin", 23}, {"cole", 14}}, {}, ""},
+      {"bridges",
+       "ctf",
+       "Flag Yard",
+       90000,
+       1200,
+       {{"pike", 6}, {"rook", 4}, {"lark", 5}, {"dune", 3}},
+       {{"red", 3}, {"blue", 2}},
+       ""},
+  };
+  gh::Archive a;
+  a.dir = "sample";
+  int n = 0;
+  for (const Sample& m : samples) {
+    gh::DemoRow r;
+    char sha[65];
+    std::snprintf(sha, sizeof sha, "%064x", 0x5eed0 + n++);
+    r.sha = sha;
+    r.game = "shooters_edge";
+    r.map = m.map;
+    r.mode = m.mode;
+    r.server = m.server;
+    r.start_s = kNowS - m.ago_s;
+    r.duration_ms = m.duration_s * 1000;
+    r.size = 180000 + n * 37000;
+    r.added_s = r.start_s + m.duration_s;
+    const char* sides[] = {"red", "blue"};
+    int i = 0;
+    for (const auto& [name, score] : m.players)
+      r.players.push_back({name, m.teams.empty() ? "" : sides[i++ % 2], score, true});
+    for (const auto& [name, score] : m.teams) r.teams.push_back({name, score, true});
+    if (*m.tag) r.tags.push_back(m.tag);
+    a.rows.push_back(r);
+  }
+  return a;
+}
+
+// A downhill game's hub (Fall Line's spec, `alpine`): runs found by their seed, times as m:ss.cc.
+gh::HubSpec runs_spec() {
+  gh::HubSpec s;
+  s.game = "Fall Line";
+  s.id = "fall_line";
+  s.modes = {{"race", 3}, {"free ride", 2}};
+  s.score = "time";
+  s.score_low_first = true;
+  s.score_ms = true;
+  s.look = "alpine";
+  s.map_word = "seed";
+  return s;
+}
+
+gh::Archive sample_runs() {
+  struct Sample {
+    const char* seed;
+    const char* mode;
+    int64_t ago_s;
+    std::vector<std::pair<const char*, int>> racers;  // their times in ms
+  };
+  const Sample samples[] = {
+      {"38", "race", 900, {{"Player", 214370}, {"Rival 1", 218050}, {"Rival 2", 223910}}},
+      {"38", "race", 4200, {{"Player", 216880}, {"Rival 1", 217420}}},
+      {"7",
+       "race",
+       9600,
+       {{"Player", 187240}, {"Rival 1", 190010}, {"Rival 2", 191550}, {"Rival 3", 199800}}},
+      {"112", "free ride", 30000, {{"Player", 0}}},
+  };
+  gh::Archive a;
+  a.dir = "sample";
+  int n = 0;
+  for (const Sample& m : samples) {
+    gh::DemoRow r;
+    char sha[65];
+    std::snprintf(sha, sizeof sha, "%064x", 0xf1a0 + n++);
+    r.sha = sha;
+    r.game = "fall_line";
+    r.run = true;
+    r.map = m.seed;
+    r.mode = m.mode;
+    r.title = std::string(std::string(m.mode) == "race" ? "A race" : "A free ride") + " on seed " +
+              m.seed;
+    r.start_s = kNowS - m.ago_s;
+    r.duration_ms = m.racers.front().second ? m.racers.front().second + 4000 : 600000;
+    r.size = 2400 + n * 300;
+    r.added_s = r.start_s;
+    for (const auto& [name, ms] : m.racers) r.players.push_back({name, "", ms, ms > 0});
+    a.rows.push_back(r);
+  }
+  return a;
+}
+
+// The match reports a master keeps (account/matches.hpp): an evening of duels and a team match,
+// for the Player, Match and Leaders pages.
+void sample_reports(ge::account::Service& svc) {
+  namespace ga = ge::account;
+  const char* names[] = {"vale", "sable", "orrin", "wren", "quill", "brand"};
+  uint64_t ids[6] = {};
+  for (int i = 0; i < 6; i++) {
+    ga::Fresh f{};
+    f.fill(static_cast<uint8_t>(20 + i));
+    ids[i] = ga::create(svc.store, names[i], "a long password", kNowS * 1000000, f).id;
+  }
+  gn::Key trusted{};
+  trusted.fill(7);
+  ga::matches_trust(svc.matches, trusted);
+  auto seat = [&](int who, const char* team, int64_t frags, int64_t deaths, int64_t ping,
+                  int64_t rl_shots, int64_t rl_hits, int64_t lg_shots, int64_t lg_hits) {
+    gn::ReportPlayer p;
+    p.name = names[who];
+    p.account = ids[who];
+    p.team = team;
+    p.score = p.frags = frags;
+    p.deaths = deaths;
+    p.seconds = 1200;
+    p.ping_min = ping - 4;
+    p.ping_avg = ping;
+    p.ping_max = ping + 9;
+    p.columns = {rl_shots, rl_hits,   frags * 2 / 3, deaths / 2, lg_shots,
+                 lg_hits,  frags / 3, deaths / 3,    frags / 6};
+    return p;
+  };
+  auto report = [](uint64_t id, const char* mode, const char* map, const char* server,
+                   int64_t ago_s) {
+    gn::MatchReport r;
+    r.id = id;
+    r.game = "shooters_edge";
+    r.server = server;
+    r.mode = mode;
+    r.map = map;
+    r.start_s = kNowS - ago_s;
+    r.duration_ms = 1200000;
+    r.columns = {"rl_attacks", "rl_hits",  "rl_kills",  "rl_deaths", "lg_attacks",
+                 "lg_hits",    "lg_kills", "lg_deaths", "streak_max"};
+    return r;
+  };
+  gn::MatchReport team = report(0x4a11, "4on4", "tower", "Night Arena <EU>", 1800);
+  team.teams = {{"red", 78, 0xd94a4a}, {"blue", 72, 0x4a7ad9}};
+  team.players = {seat(0, "red", 41, 22, 22, 120, 52, 900, 310),
+                  seat(2, "red", 37, 25, 31, 110, 41, 760, 220),
+                  seat(1, "blue", 39, 24, 27, 130, 49, 820, 290),
+                  seat(3, "blue", 33, 29, 25, 95, 33, 640, 180)};
+  ga::matches_add(svc.matches, trusted, team);
+  for (int i = 0; i < 5; i++) {
+    gn::MatchReport duel = report(0x4b00 + static_cast<uint64_t>(i), "1on1",
+                                  i % 2 ? "crypt" : "tower", "Duel Hall", 5400 + i * 86400);
+    duel.players = {seat(i % 2 ? 4 : 0, "", 27 - i, 19 + i, 14, 80, 36 - i, 500, 170),
+                    seat(i % 2 ? 5 : 1, "", 19 + i, 27 - i, 18, 85, 30, 520, 150)};
+    ga::matches_add(svc.matches, trusted, duel);
+  }
+}
+
 void run(gl::Lab& lab) {
   const gh::HubSpec spec = sample_spec();
   const gh::Poller index = sample_index();
@@ -195,6 +393,40 @@ void run(gl::Lab& lab) {
       spec, &accounts,
       {"POST", "/account/code", "name=ranger&password=long+enough", true, "a", kUnix},
       account_code);
+  // The archive's Demos page, and the Player, Match and Leaders pages over a master's reports.
+  const gh::Archive archive = sample_archive();
+  gh::Site site;
+  site.archive = &archive;
+  site.unix_s = kNowS;
+  site.host = "hub.example";
+  const std::string demos = gh::demos_page(site, spec, "/demos");
+  gh::HubSpec stats_spec = spec;
+  stats_spec.stats = true;
+  sample_reports(accounts);
+  gh::Answer player_page, match_page, leaders_page;
+  gh::stats_answer(stats_spec, &accounts, "/player/vale", kNowS, player_page);
+  gh::stats_answer(stats_spec, &accounts, "/match/0000000000004a11", kNowS, match_page);
+  gh::stats_answer(stats_spec, &accounts, "/leaders", kNowS, leaders_page);
+  const gh::HubSpec fl_spec = runs_spec();
+  const gh::Archive runs = sample_runs();
+  gh::Site fl_site = site;
+  fl_site.archive = &runs;
+  const std::string runs_page = gh::demos_page(fl_site, fl_spec, "/demos");
+  const std::string seed_page = gh::demos_page(fl_site, fl_spec, "/demos?map=38");
+  lab.metric(
+      "runs_on_seed_38",
+      static_cast<double>(gh::archive_search(runs, gh::demo_query("/demos?map=38"), kNowS).total),
+      "runs");
+  lab.attach("runs.html", bytes(runs_page));
+  lab.attach("demos.html", bytes(demos));
+  lab.attach("player.html", bytes(player_page.body));
+  lab.attach("match.html", bytes(match_page.body));
+  lab.attach("leaders.html", bytes(leaders_page.body));
+  if (player_page.code != 200 || match_page.code != 200 || leaders_page.code != 200 ||
+      demos.find("Night Arena &lt;EU&gt;") == std::string::npos) {
+    lab.fail("the Demos, Player, Match or Leaders page did not show the sample evening",
+             "next: hub/pages.cpp (demos), hub/stats_page.cpp; skill: net");
+  }
   lab.attach("account.html", bytes(account_forms.body));
   lab.attach("account-code.html", bytes(account_code.body));
   if (made.code != 200 || account_code.code != 200 ||
@@ -287,6 +519,31 @@ void run(gl::Lab& lab) {
       {"account-code", "A LOGIN CODE MADE", &account_code.body, 1280, 520, true,
        "POST /account/code: the code a classic client's console takes, and the line to type.",
        "the code large, 'login Ranger <code>' below it, good once within 15 minutes."},
+      {"demos", "THE DEMOS PAGE", &demos, 1280, 900, false,
+       "GET /demos: the archive searched by player, map, mode and tag, newest first; each row's "
+       "scores folded away until asked.",
+       "the search form above, five matches below with their maps, modes, players and the 'final' "
+       "tag, Watch and Download on each."},
+      {"demos-phone", "THE DEMOS PAGE ON A PHONE", &demos, 390, 1400, true,
+       "The same page at a phone's width in the dark scheme.",
+       "the less needed columns gone, the buttons stacked, no sideways scroll."},
+      {"player", "A PLAYER'S PAGE", &player_page.body, 1280, 1300, true,
+       "GET /player/vale: an account's totals as tiles, by mode, the weapons' accuracy and the "
+       "recent matches.",
+       "the totals large; rocket and lightning accuracy; six matches, newest first."},
+      {"match", "ONE MATCH'S PAGE", &match_page.body, 1280, 1000, false,
+       "GET /match/{id}: a kept report: the teams, the scoreboard, each player's accuracy.",
+       "red 78 to blue 72 on tower; four players with their weapons."},
+      {"runs", "A DOWNHILL GAME'S RUNS, ITS OWN LOOK", &runs_page, 1280, 700, false,
+       "GET /demos on Fall Line's hub (look `alpine`): the archive's runs, each found by its seed, "
+       "the racers' times at the line.",
+       "the glacier blue look; the column and the search field say 'seed'; times as m:ss.cc."},
+      {"runs-seed-dark", "THE RUNS DOWN ONE SEED, IN THE DARK", &seed_page, 1280, 600, true,
+       "GET /demos?map=38: only the runs down seed 38, in the alpine look's night scheme.",
+       "two races, both on seed 38, the newest first."},
+      {"leaders", "THE LEADERS PAGE", &leaders_page.body, 1280, 900, true,
+       "GET /leaders: the best accounts by frags (a stat chosen above), all time.",
+       "vale first; the top three ranks in the accent colour."},
   };
   int drawn = 0;
   for (const View& v : views) {
@@ -300,7 +557,7 @@ void run(gl::Lab& lab) {
     lab.shot({v.id, v.title, v.what, v.look, {{"width", std::to_string(v.w)}}}, *pic,
              gl::Det::measured);
   }
-  lab.metric("pages_drawn", drawn, "of 9", gl::Det::measured);
+  lab.metric("pages_drawn", drawn, "of 16", gl::Det::measured);
   fs::remove_all(dir, ec);
 }
 

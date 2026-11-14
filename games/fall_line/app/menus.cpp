@@ -6,7 +6,11 @@
 // ge:test tests/fall_line_menus_test.cpp
 #include "fall_line/app/menus.hpp"
 
+#include <algorithm>
 #include <string>
+#include <utility>
+
+#include "core/num_text.hpp"
 
 namespace fall_line::app {
 
@@ -63,6 +67,99 @@ const ge::ui::MenuStyle& style_up(const Shell& shell) {
   return shell.mode == Mode::pause ? shell.pause_style : shell.style;
 }
 
+// "1:05" from seconds played.
+std::string clock_of(double play_s) {
+  const auto whole = static_cast<int64_t>(play_s);
+  const int64_t m = whole / 60, sec = whole % 60;
+  return std::to_string(m) + (sec < 10 ? ":0" : ":") + std::to_string(sec);
+}
+
+// The LOAD page: the newest saves, each with its picture. On `m`, rebuilt from `rows`.
+void load_page(Menu& m, const std::vector<SaveRow>& rows) {
+  const MenuText& t = kMenuText;
+  Page* had = m.page("load");
+  Page& p = had != nullptr ? *had : m.add_page("load", s(t.load));
+  p.items.clear();
+  p.focus = -1;
+  p.items.push_back({.id = "h-saves", .text = s(t.saved_runs), .kind = ItemKind::label});
+  for (size_t i = 0; i < rows.size() && i < static_cast<size_t>(kLoadRows); i++) {
+    const SaveRow& r = rows[i];
+    Item it{.id = "load:" + r.slot, .text = save_line(r)};
+    it.hint = r.place.empty() ? clock_of(r.play_s) + " " + s(t.played)
+                              : r.place + ", " + clock_of(r.play_s) + " " + s(t.played);
+    it.picture = r.picture.empty() ? nullptr : &r.picture;
+    p.items.push_back(std::move(it));
+  }
+  p.items.push_back({.id = "back", .text = s(t.back), .kind = ItemKind::back});
+}
+
+// The SAVE page: the numbered slots, a used one with its picture.
+void save_page(Menu& m, const std::vector<SaveRow>& rows) {
+  const MenuText& t = kMenuText;
+  Page* had = m.page("save");
+  Page& p = had != nullptr ? *had : m.add_page("save", s(t.save));
+  p.items.clear();
+  p.focus = -1;
+  p.items.push_back({.id = "h-into", .text = s(t.save_into), .kind = ItemKind::label});
+  for (int n = 1; n <= kSaveSlots; n++) {
+    const std::string slot = "slot-" + std::to_string(n);
+    const SaveRow* used = nullptr;
+    for (const SaveRow& r : rows)
+      if (r.slot == slot) used = &r;
+    Item it{.id = "save:" + slot};
+    if (used != nullptr) {
+      it.text = save_line(*used);
+      it.hint = used->place.empty()
+                    ? clock_of(used->play_s) + " " + s(t.played)
+                    : used->place + ", " + clock_of(used->play_s) + " " + s(t.played);
+      it.picture = used->picture.empty() ? nullptr : &used->picture;
+    } else {
+      it.text = slot_name(slot) + "  " + s(t.empty_slot);
+    }
+    p.items.push_back(std::move(it));
+  }
+  p.items.push_back({.id = "back", .text = s(t.back), .kind = ItemKind::back});
+}
+
+// The front door's and the pause page's save items, there when the shell saves.
+void save_items(Shell& sh) {
+  const MenuText& t = kMenuText;
+  auto drop = [](Page& p, std::string_view id) {
+    for (size_t i = 0; i < p.items.size(); i++)
+      if (p.items[i].id == id) {
+        p.items.erase(p.items.begin() + static_cast<std::ptrdiff_t>(i));
+        return;
+      }
+  };
+  Page& front = *sh.front.page("front");
+  Page& pause = *sh.pause.page("pause");
+  for (const char* id : {"continue", "load"}) drop(front, id);
+  for (const char* id : {"save", "load"}) drop(pause, id);
+  if (!sh.saving) return;
+  const bool any = !sh.saves.empty();
+  if (any) {
+    // CONTINUE first and prominent; PLAY behind it, a slab like the rest.
+    front.items.insert(front.items.begin(), Item{.id = "continue",
+                                                 .text = s(t.continue_),
+                                                 .hint = s(t.continue_hint),
+                                                 .prominent = true});
+    if (Item* play = front.find("play")) play->prominent = false;
+    front.items.insert(
+        front.items.begin() + 2,
+        Item{.id = "load", .text = s(t.load), .hint = s(t.load_hint), .opens = "load"});
+  } else if (Item* play = front.find("play")) {
+    play->prominent = true;
+  }
+  pause.items.insert(
+      pause.items.begin() + 1,
+      Item{.id = "save", .text = s(t.save), .hint = s(t.save_hint), .opens = "save"});
+  pause.items.insert(pause.items.begin() + 2, Item{.id = "load",
+                                                   .text = s(t.load),
+                                                   .hint = s(t.load_hint),
+                                                   .opens = "load",
+                                                   .disabled = !any});
+}
+
 MenuCue louder(MenuCue a, MenuCue b) { return static_cast<int>(b) > static_cast<int>(a) ? b : a; }
 
 }  // namespace
@@ -93,6 +190,53 @@ Shell make_shell(const MenuSettings& settings, std::string_view footer) {
   sh.pause_style = sh.style;
   sh.pause_style.logo = s(t.paused);
   return sh;
+}
+
+std::string slot_name(std::string_view slot) {
+  const MenuText& t = kMenuText;
+  if (slot == "quick") return s(t.quicksave);
+  if (slot.substr(0, 5) == "auto-") return s(t.autosave) + " " + s(slot.substr(5));
+  if (slot.substr(0, 5) == "slot-") return s(t.slot) + " " + s(slot.substr(5));
+  return s(slot);
+}
+
+std::vector<SaveRow> rows_of_store(ge::save::Store& store, std::string_view setup_text) {
+  std::vector<SaveRow> rows;
+  for (const ge::save::Entry& e : store.list()) {
+    if (e.meta.setup != setup_text) continue;
+    SaveRow row;
+    row.slot = e.slot;
+    row.title = e.meta.title;
+    row.place = e.meta.place;
+    row.play_s = e.meta.play_s;
+    row.saved_unix = e.meta.saved_unix;
+    if (e.picture.bytes > 0) {
+      ge::ui::Image& p = row.picture;
+      if (!store.picture(e.slot, p.width, p.height, p.rgba)) p = {};
+    }
+    rows.push_back(std::move(row));
+  }
+  std::stable_sort(rows.begin(), rows.end(),
+                   [](const SaveRow& a, const SaveRow& b) { return a.saved_unix > b.saved_unix; });
+  return rows;
+}
+
+std::string save_line(const SaveRow& row) { return slot_name(row.slot) + "  " + row.title; }
+
+void set_saves(Shell& shell, std::vector<SaveRow> saves) {
+  shell.saving = true;
+  shell.saves = std::move(saves);
+  for (Menu* m : {&shell.front, &shell.pause}) load_page(*m, shell.saves);
+  save_page(shell.pause, shell.saves);
+  save_items(shell);
+  // The page up keeps a focus it can still hold.
+  for (Menu* m : {&shell.front, &shell.pause}) {
+    Page& top = m->top();
+    if (top.focus >= static_cast<int>(top.items.size()) ||
+        (top.focus >= 0 && !top.items[static_cast<size_t>(top.focus)].stop()))
+      top.focus = -1;
+    m->move_focus(0);
+  }
 }
 
 Menu* menu_up(Shell& shell) {
@@ -141,6 +285,12 @@ ShellStep step_shell(Shell& shell, const ge::ui::MenuInput& in) {
           out.resume = true;
         } else if (e.item == "to-title") {
           out.to_front = true;
+        } else if (e.item == "continue" && !shell.saves.empty()) {
+          out.load = shell.saves.front().slot;
+        } else if (e.item.rfind("load:", 0) == 0) {
+          out.load = e.item.substr(5);
+        } else if (e.item.rfind("save:", 0) == 0) {
+          out.save = e.item.substr(5);
         }
         break;
       case ge::ui::EventKind::changed:
@@ -167,9 +317,14 @@ ShellStep step_shell(Shell& shell, const ge::ui::MenuInput& in) {
   const Item* after = m.focused();
   const std::string now = after ? after->id + "@" + m.top().id : std::string();
   if (now != was && out.cue == MenuCue::none) out.cue = MenuCue::focus;
-  if (out.play) {
+  if (out.play || !out.load.empty()) {
     shell.mode = Mode::run;
     shell.front.reset();
+    shell.pause.reset();
+  } else if (!out.save.empty()) {
+    shell.pause.reset();  // saved: back to the pause page's root, RESUME under the focus
+    shell.pause.top().focus = -1;
+    shell.pause.move_focus(0);
   } else if (out.resume) {
     shell.mode = Mode::run;
   } else if (out.to_front) {
@@ -221,7 +376,7 @@ std::vector<std::string> shell_layout_problems(const Shell& shell, int width, in
   std::vector<std::string> out;
   for (const Menu* menu : {&shell.front, &shell.pause}) {
     const ge::ui::MenuStyle& style = menu == &shell.pause ? shell.pause_style : shell.style;
-    for (const char* page : {"", "options"}) {
+    for (const char* page : {"", "options", "load", "save"}) {
       Menu m = *menu;
       if (*page && !m.open(page)) continue;
       m.move_focus(0);
