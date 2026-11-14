@@ -13,6 +13,7 @@
 // ge:test tests/shooters_edge_classic_tv_netgame_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -30,13 +31,19 @@ struct NetgameWatcher {
   // Counts of what came in: reliable messages, frame datagrams, entities present over every frame,
   // the recorded view's `setangle`s, the loops back to the start.
   int reliable_messages = 0, frames = 0, entity_updates = 0, setangles = 0, reconnects = 0;
-  int resends = 0;                   // reliable commands sent again after a second
-  int seatings = 0;                  // times signon 3 was answered: once, then once after each loop
-  int64_t bytes_in = 0;              // every datagram's bytes from the server, headers in
-  int64_t first_connect_us = -1;     // when the first connect went out
-  int64_t seated_us = -1;            // when signon 3 was first answered
-  float last_time = -1;              // the server's time on the last frame
-  bool time_fell = false;            // a frame's time below the one before it, outside a loop
+  int resends = 0;                // reliable commands sent again after a second
+  int seatings = 0;               // times signon 3 was answered: once, then once after each loop
+  int64_t bytes_in = 0;           // every datagram's bytes from the server, headers in
+  int64_t first_connect_us = -1;  // when the first connect went out
+  int64_t seated_us = -1;         // when signon 3 was first answered
+  int64_t last_seated_us = -1;    // when it was last answered (after a loop or a switch)
+  float last_time = -1;           // the server's time on the last frame
+  bool time_fell = false;         // a frame's time below the one before it, outside a loop
+  // What the next moves carry (a press is a change from 0), and the lines the server printed.
+  uint8_t buttons = 0, impulse = 0;
+  std::vector<std::string> prints;
+  std::array<int, 16>
+      frags{};  // each player's frags, as the server last said (reset at a reconnect)
   shooters_edge::client::Demo view;  // what the client knows, as the game's reader reads it
   std::string read_error;            // the first message the reader refused, with why
 
@@ -50,6 +57,8 @@ struct NetgameWatcher {
 
 // Points the watcher at the face: `t` is its own socket, `server` the face's address.
 void netgame_watch(NetgameWatcher& w, ge::net::Transport& t, const ge::net::Address& server);
+// A console command sent to the server (`cmd <text>` on a client), reliable.
+void netgame_watch_command(NetgameWatcher& w, const std::string& text);
 // One tick at `now`: a connect every half second until accepted, then every datagram in, the
 // commands out, and a move once seated.
 void netgame_watch_tick(NetgameWatcher& w, int64_t now);
