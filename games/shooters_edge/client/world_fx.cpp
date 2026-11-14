@@ -1811,6 +1811,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     light.colour[0] = red ? 1.6 : blue ? 0.35 : 1.0;
     light.colour[1] = red && blue ? 0.5 : blue || red ? 0.35 : 0.9;
     light.colour[2] = blue ? 1.6 : red ? 0.35 : 0.7;
+    light.group = fx::kLightPower;
     out.lights.push_back(light);
   };
   for (const Placed& m : out.models) glow(m.effects, m.origin);
