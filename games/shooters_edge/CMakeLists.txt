@@ -47,9 +47,10 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_rules)
 # The rules evaluate both sides of every `and` and `or` (a call on the right runs whatever the
 # left gave: "asked either way: no short circuit" where it matters), written as `|` and `&` on
 # booleans on purpose; Clang's -Wbitwise-instead-of-logical would make each an error under -Werror.
+# Set on the sources, so it follows the tree's -Wall (a target option goes before it and is undone).
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  target_compile_options(shooters_edge_rules_campaign PRIVATE -Wno-bitwise-instead-of-logical)
-  target_compile_options(shooters_edge_rules PRIVATE -Wno-bitwise-instead-of-logical)
+  set_source_files_properties(${SHOOTERS_EDGE_RULES_SOURCES} PROPERTIES COMPILE_OPTIONS
+                                                                        -Wno-bitwise-instead-of-logical)
 endif()
 
 # Its bots (bots/): the pilot (plugins/shooter/pilot.hpp) played on the game's maps, on the nav
