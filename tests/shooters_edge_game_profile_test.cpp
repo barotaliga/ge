@@ -93,8 +93,9 @@ TEST(the_arsenal_rows_become_server_lines_our_programs_read) {
             lines[8]);
   // Our programs' rows are strings of their declaration (games/shooters_edge/rules/).
   const auto holds = [](const std::string& t) {
-    for (const char* s : shooters_edge::server::native_campaign().strings)
-      if (t == s) return true;
+    const se_rules_v1& r = shooters_edge::server::campaign_rules();
+    for (uint32_t k = 0; k < r.string_count; k++)
+      if (t == r.strings[k]) return true;
     return false;
   };
   for (const pf::WeaponRow& w : a.weapons) CHECK_MSG(holds(pf::weapon_text(w)), pf::weapon_text(w));

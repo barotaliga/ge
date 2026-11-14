@@ -108,6 +108,11 @@ bool build_native_progs(const NativeProgram& program, Progs& out, NativeOffsets&
     // Bounded by the record's slots as well (checked above), so the optimizer sees no overflow.
     for (size_t k = 0; k < fn.parms.size() && k < std::size(rec.parm_size); k++)
       rec.parm_size[k] = fn.parms[k];
+    if (fn.run == nullptr && program.dispatch == nullptr) {
+      error = std::string("native program: function ") + fn.name +
+              " has no C++ to run and the program no dispatch";
+      return false;
+    }
     offsets.functions.push_back(at);
     offsets.runs.push_back(fn.run);
   }
@@ -137,6 +142,8 @@ bool build_native_progs(const NativeProgram& program, Progs& out, NativeOffsets&
     }
     offsets.fields.push_back(d->offset);
   }
+  offsets.dispatch = program.dispatch;
+  offsets.user = program.user;
   out.natives = std::make_shared<const NativeOffsets>(offsets);
   return true;
 }
@@ -176,6 +183,16 @@ void set_field_float(Vm& vm, int32_t ent, int field, float v) {
 void set_field_int(Vm& vm, int32_t ent, int field, int32_t v) {
   const int n = entity_of(vm, ent, field, 1);
   if (n >= 0 && !world_refused(vm, n)) *entity_field(vm, n, field) = static_cast<uint32_t>(v);
+}
+void field_words(Vm& vm, int32_t ent, int field, int words, uint32_t* out) {
+  const int n = entity_of(vm, ent, field, words);
+  for (int k = 0; k < words; k++) out[k] = n < 0 ? 0u : entity_field(vm, n, field)[k];
+}
+void set_field_words(Vm& vm, int32_t ent, int field, int words, const uint32_t* in) {
+  const int n = entity_of(vm, ent, field, words);
+  if (n < 0 || world_refused(vm, n)) return;
+  uint32_t* w = entity_field(vm, n, field);
+  for (int k = 0; k < words; k++) w[k] = in[k];
 }
 void set_field_vec(Vm& vm, int32_t ent, int field, Vec3 v) {
   const int n = entity_of(vm, ent, field, 3);

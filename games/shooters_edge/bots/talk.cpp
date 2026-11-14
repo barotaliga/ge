@@ -163,6 +163,8 @@ const char* say_kind_name(SayKind k) {
       return "pack";
     case SayKind::ack:
       return "ack";
+    case SayKind::trap:
+      return "trap";
     case SayKind::timer:
       break;
   }
@@ -235,6 +237,8 @@ std::string say_text(const Said& s) {
       static const char* const kAcks[4] = {"ok", "k", "np", "ok!"};
       return kAcks[s.variant % 4];
     }
+    case SayKind::trap:
+      return "trap" + at;
     case SayKind::timer:
       break;
   }
@@ -330,7 +334,9 @@ Said parse_say(std::string_view text) {
     out.kind = SayKind::ack;
     return out;
   }
-  if (has({"took", "got"})) {
+  if (has({"trap"})) {
+    out.kind = SayKind::trap;
+  } else if (has({"took", "got"})) {
     out.kind = SayKind::took;
   } else if (has({"safe"})) {
     out.kind = SayKind::safe;

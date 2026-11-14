@@ -146,6 +146,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   // The nav graph off the world and the movers (bots/map_nav.hpp).
   TeamNav tn;
   tn.given = opt.locs;
+  if (!opt.view_book.entries.empty()) tn.view_book = &opt.view_book;
   bt::MapNav& nav = tn.nav;
   if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, r.error)) {
     r.error = "run_team_match: " + r.error;
@@ -161,6 +162,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   r.swim_wet = swim.wet;
   r.swim_leading = swim.leading;
   r.nav_build_ms = nav.build_ms;
+  r.nav_brink_links = nav.brink_links;
+  r.nav_side_brink_links = nav.side_brink_links;
   r.lo = graph.lo;
   r.hi = graph.hi;
   r.nav_nodes = static_cast<int64_t>(graph.nodes.size());
@@ -389,6 +392,17 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           why = std::max(why, w);
         }
         r.lying_why[ki][static_cast<size_t>(why)]++;
+        // Whether anyone alive could take it: an armour is refused to one whose own protection
+        // (type times value) is at least its own; anything else anyone takes.
+        const float gives = kind == 0 ? 0.3f * 100 : kind == 1 ? 0.6f * 150 : 0.8f * 200;
+        bool taker = kind > 2;
+        for (int k = 0; k < n && !taker; k++) {
+          const int sl = r.players[static_cast<size_t>(k)].slot;
+          if (sl < 0 || s.sv.edicts[static_cast<size_t>(sl) + 1].health <= 0) continue;
+          const auto& num = s.world.clients[static_cast<size_t>(sl)].numbers;
+          taker = num.armour_type * num.armour < gives;
+        }
+        if (taker) r.lying_takers[ki]++;
       }
     }
 
@@ -434,6 +448,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
                              : d.watertype == sh::kContentsSlime ? "slime"
                              : d.watertype == sh::kContentsWater ? "water"
                                                                  : "-";
+        if (d.watertype == sh::kContentsLava || d.watertype == sh::kContentsSlime) p.lava_deaths++;
         // And its way in: where it was 2, 1 and a half second before.
         std::string way;
         for (const double ago : {3.0, 2.5, 2.0, 1.5, 1.0, 0.5}) {
@@ -723,6 +738,9 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.teams[t].messages = ts.messages;
     r.teams[t].lost_seen = ts.lost_seen;
     r.teams[t].retakes = ts.retakes;
+    r.teams[t].fetches = ts.fetches;
+    r.teams[t].fetched = ts.fetched;
+    for (int e = 0; e < 5; e++) r.teams[t].fetch_end[e] = ts.fetch_end[e];
     r.teams[t].pushes = ts.pushes;
     r.teams[t].joins = ts.joins;
     r.teams[t].spam_shots = ts.spam_shots;
@@ -748,17 +766,47 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].sound_chases = fi.stats.sound_chases;
     r.players[k].dodging = fi.stats.dodging;
     r.players[k].dodge_turns = fi.stats.dodge_turns;
+    r.players[k].press_weighed = fi.stats.press_weighed;
+    r.players[k].press_on = fi.stats.press_on;
+    r.players[k].press_back = fi.stats.press_back;
+    r.players[k].press_near = fi.stats.press_near;
+    r.players[k].press_blocked = fi.stats.press_blocked;
     r.players[k].rocket_jumps = fi.bot.pilot.pilot.stats.rocket_jumps;
     r.players[k].flips = fi.bot.pilot.pilot.stats.flips;
     r.players[k].escapes = fi.bot.pilot.pilot.stats.escapes;
     r.players[k].escapes_out = fi.bot.pilot.pilot.stats.escapes_out;
     r.players[k].gap_jumps = fi.bot.pilot.pilot.stats.gap_jumps;
+    r.players[k].trap_presses = fi.stats.trap_presses;
+    r.players[k].trap_fired = fi.stats.trap_fired;
+    r.players[k].trap_opens = fi.stats.trap_opens;
+    r.players[k].trap_kept = fi.stats.trap_kept;
+    r.players[k].trap_flees = fi.stats.trap_flees;
+    r.players[k].bridges_seen_gone = fi.stats.bridges_seen_gone;
     r.players[k].gap_landed = fi.bot.pilot.pilot.stats.gap_landed;
     r.players[k].gap_refused = fi.bot.pilot.pilot.stats.gap_refused;
+    r.players[k].gap_near = fi.bot.pilot.pilot.stats.gap_near;
     r.players[k].hops = fi.bot.pilot.pilot.stats.hops;
     r.players[k].hop_jumps = fi.bot.pilot.pilot.stats.hop_jumps;
     r.players[k].circles = fi.bot.pilot.pilot.stats.circles;
     r.players[k].circle_speed = fi.bot.pilot.pilot.stats.circle_speed;
+    {
+      const sh::PilotStats& ps = fi.bot.pilot.pilot.stats;
+      r.players[k].recipe_asks = ps.recipe_asks;
+      r.players[k].recipe_commits = ps.recipe_commits;
+      r.players[k].recipe_aborts = ps.recipe_aborts;
+      r.players[k].recipe_takeoffs = ps.recipe_takeoffs;
+      r.players[k].recipe_speed = ps.recipe_speed;
+      r.players[k].chained = fi.stats.chained;
+      r.players[k].vias = ps.vias;
+      r.players[k].retargets = ps.retargets;
+      r.players[k].turned_round = fi.stats.turned_round;
+      r.players[k].run_ups = ps.run_ups;
+      r.players[k].jumps = ps.jumps;
+      r.players[k].jumps_flown = ps.jumps_flown;
+      r.players[k].via_touched = ps.via_touched;
+      r.players[k].via_missed = ps.via_missed;
+      r.players[k].via_speed = ps.via_speed;
+    }
     r.players[k].watching = fi.stats.watching;
     r.players[k].speed_sum = fi.stats.speed_sum;
     for (int m = 0; m <= sh::kPilotModes; m++) {

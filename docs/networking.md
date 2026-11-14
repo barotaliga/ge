@@ -660,6 +660,15 @@ and that match adds nothing to the ladder. While the ban lasts, signing in, a lo
 ticket are refused with the days left. Bans are derived from the reports log, so a restarted
 master keeps them (`docs/accounts.md` § Bans).
 
+**Built (M17l, sixth part): the classic server's speed check in the report.** Shooter's Edge's
+classic move already cuts a command that claims more time than passed (`speed_check`, a bank of
+500 ms for a stall's burst); the cut is now counted per player (`ClientSlot::speed_cut_ms`). The
+cheat watch (`games/shooters_edge/net/classic_cheats.hpp`) reads it once a second and raises a
+`flood` flag on the engine's guard (`guard_flag`, a game's own check scored like the guard's) for
+more than 50 ms cut; five such seconds put the player out, and the match report's `flagged` names
+it. The `se-cheats` lab: clocks 10% and 50% fast are out six seconds in; an honest player, a clock
+3% fast, a two-second stall's burst and a bot are never out.
+
 ## Pressure tests (M17m)
 
 The simulated network runs on virtual time, so an hour of play takes seconds and every run is

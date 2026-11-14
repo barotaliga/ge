@@ -107,6 +107,9 @@ uint32_t guard_view(Guard& g, int client, uint32_t view_x256, uint32_t tick);
 void guard_tick(Guard& g, uint32_t tick);
 // Peer games: false (and flagged) when `after` is further from `before` than a tick allows.
 bool guard_motion(Guard& g, int client, const double* before, const double* after, uint32_t tick);
+// A flag a game's own check raised (a classic server's speed check: a client whose commands claim
+// more time than passed is `flood`), scored like the guard's own. `value` is the check's measure.
+void guard_flag(Guard& g, int client, Cheat cheat, uint32_t tick, int32_t value);
 // A client gone or a new one in its slot: its record cleared.
 void guard_reset(Guard& g, int client);
 bool guard_out(const Guard& g, int client);

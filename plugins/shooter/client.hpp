@@ -13,7 +13,8 @@
 // `elapsed` the whole milliseconds of server time since the last check (rounded to nearest), a
 // command longer than `elapsed` is paid from a banked surplus, or cut to `elapsed + bank` (the
 // bank emptied) when that is not enough; a shorter one banks the difference; the bank stays within
-// 0..500 ms. Then a command over 50 ms is split into halves (msec / 2, the second without its
+// 0..500 ms; what it cuts is counted on the slot (`speed_cut_ms`, a game's cheat check reads it).
+// Then a command over 50 ms is split into halves (msec / 2, the second without its
 // impulse, each split again while too long), which skip the check. Each piece:
 //  1. buttons: bit 1 -> button0 (attack), bit 2 -> button2 (jump), bit 4 -> button1 (use); a
 //     non-zero impulse is kept in `impulse` (a zero one does not clear it);
