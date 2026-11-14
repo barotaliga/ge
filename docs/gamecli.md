@@ -143,7 +143,8 @@ invites waiting, so a second call shows none.
 ## Ranked games
 
 `ranked find <mode>` asks the master's matchmaker for a ranked game of this game in that mode
-(`docs/accounts.md` § The matchmaker): a duel, or a two-on-two with `--duo=<your duo's name>`.
+(`docs/accounts.md` § The matchmaker), the mode as the game's servers report it: `1on1`, or `2on2`
+with `--duo=<your duo's name>`. The game is the one its ladders name (the server game's folder).
 Alone it asks once and answers `waiting` (with the seconds waited and the rating window) or
 `matched` (the server's address and both sides' names); `--for=<s>` keeps asking every 3 seconds
 until matched or the time is up. `ranked status` looks without asking again; `ranked leave` stops.

@@ -295,3 +295,43 @@ TEST(login_remote_master_keeps_a_registered_name_from_a_guest) {
   gs::login_seat(w.logins, 2, 13, false, "10.0.0.9:27001", w.game_s);
   CHECK(contains(w.told(2), "The name Ann belongs to a registered player"));
 }
+
+TEST(login_ranked_server_offers_its_seats_to_a_master_that_trusts_it) {
+  World w;
+  w.settings.master = gn::to_string(kMasterAt);
+  w.settings.key = gn::key_to_hex(ga::service_key(w.svc));
+  w.settings.ranked = "1on1";
+  std::string error;
+  CHECK_MSG(gs::logins_open(w.logins, w.settings, ga::NameRules{}, nullptr, &w.link, counter_fresh,
+                            &w.fresh_n, w.now, error),
+            error);
+  const gn::SignKeys server = gn::sign_keys(key_of(7));
+  w.logins.signer = &server;
+  // Not trusted yet: refused, said once in the server's log.
+  gs::logins_offer(w.logins, "id1", "", 27500, 6, w.now);
+  w.run(1);
+  CHECK(w.svc.matchmaker.offers.empty());
+  CHECK(!w.logins.notes.empty() &&
+        w.logins.notes.back().find("did not take this server's ranked seats") != std::string::npos);
+  ga::matches_trust(w.svc.matches, server.pub);
+  gs::logins_offer(w.logins, "id1", "", 27500, 6, w.now);  // not due again yet
+  w.run(1);
+  CHECK(w.svc.matchmaker.offers.empty());
+  w.now += gs::kOfferEvery_us;
+  gs::logins_offer(w.logins, "id1", "", 27500, 6, w.now);
+  w.run(1);
+  CHECK(w.svc.matchmaker.offers.size() == 1);
+  if (w.svc.matchmaker.offers.empty()) return;
+  const ga::Offer& o = w.svc.matchmaker.offers[0];
+  CHECK(o.game == "id1" && o.mode == "1on1" && o.seats == 6);
+  CHECK(o.address == gn::to_string(gn::sim_address(2, 27500)));  // the ask's IP, its port named
+  CHECK(w.logins.stats.offers == 2 && w.logins.stats.offers_taken == 1);
+}
+
+TEST(login_ranked_server_that_is_its_own_master_offers_in_process) {
+  World w;
+  w.settings.ranked = "2on2";
+  CHECK(open_own(w));
+  gs::logins_offer(w.logins, "id1", "203.0.113.4:27500", 27500, 8, w.now);
+  CHECK(w.svc.matchmaker.offers.size() == 1);
+}
