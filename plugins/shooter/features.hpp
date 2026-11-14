@@ -271,7 +271,8 @@ namespace ge::shooter {
 // - `aimland`: with the view on a fight, a hop's jump whose flight straight on meets a wall within
 //   0.3 s is neither held for the landing nor pressed on it; the landing runs on and jumps once
 //   clear (shooter/pilot.cpp; the air under a fight's view turns only with the mouse, and 91 % of
-//   such flights taken off 30 degrees off the hop's aim met a wall on dm2; M18r.md 0c). Judging.
+//   such flights taken off 30 degrees off the hop's aim met a wall on dm2; M18r.md 0c); on (head
+//   to head dm2 -3.6, e1m2 +1.2; dm2's fast flights meeting a wall 60.2 -> 57.0 %).
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.

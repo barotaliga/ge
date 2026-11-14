@@ -93,7 +93,9 @@ constexpr Features kKeys =
 // hand (no blast) were a third of every rocket jump asked for. `brinkfall` on: +0.9 on dm2 (+2.1 /
 // -0.2) a match head to head; with both sides on it lava deaths 10.4 -> 6.75 a match (8 traced
 // seeds: the YA stair's 33 -> 3, the RA pit's 11 -> 3), frags a minute 9.38 -> 10.26, speed
-// 227.9 -> 231.6 (e1m2 has no lava or slime: no change).
+// 227.9 -> 231.6 (e1m2 has no lava or slime: no change). `aimland` on: -3.6 on dm2 (-6.1 / -1.1)
+// and +1.2 on e1m2 (+6.8 / -4.3) a match head to head, inside the sides' noise; with both sides on
+// it dm2's fast hop flights meet a wall 60.2 -> 57.0 % (people 27 %), speed even.
 constexpr Features kJudging =
     of({Feature::runupkeys, Feature::underway,    Feature::gappast,    Feature::airgap,
         Feature::pilotcast, Feature::landwall,    Feature::circlekeys, Feature::circleview,
@@ -103,7 +105,7 @@ constexpr Features kJudging =
         Feature::liftbrake, Feature::scriptentry, Feature::calmvel,    Feature::lookturn,
         Feature::viewbook,  Feature::gapturn,     Feature::brinkline,  Feature::sidebrink,
         Feature::fallseen,  Feature::liplook,     Feature::sidehop,    Feature::lostdry,
-        Feature::jumpcuts,  Feature::aimland});
+        Feature::jumpcuts});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
