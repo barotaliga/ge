@@ -58,5 +58,9 @@ std::string words_fault(const Cvar& cvar);
 // from "1: normal (the default)"), or the value inside "(<value> the default)" ("10" from
 // "0..1000: that rate (10 the default)"); "" when it names none.
 std::string stated_default(std::string_view values);
+// `values` for a cvar whose default is `fallback`: as written when it states that default or none,
+// else with each "(... the default ...)" mark taken out, so a game that registers a shared cvar
+// with its own default never reads another's named as its default.
+std::string values_for_default(std::string_view values, std::string_view fallback);
 
 }  // namespace ge::console

@@ -1584,7 +1584,9 @@ every pass, and judged by captioned screenshots:
   a straight line to their radius; the modern draws them as point lights. **The screen's blend**
   (`render/post.hpp`'s `set_post_blend`): the liquid round the eye, the powers held and a hurt's
   fading red folded into one colour and share the post pass mixes in after its grade.
-- **Two looks, one renderer** (`games/shooters_edge/app/look.hpp`): the classic look (crisp
+- **Two looks, one renderer** (`plugins/shooter/app/look.hpp`, every shooter's on classic maps, its
+  cvars registered with each game's own defaults; the game's joins in
+  `games/shooters_edge/app/look.hpp`): the classic look (crisp
   texels, the lightmaps and their styles, the map's own sky, no bloom, and the post pass's grade
   pulling every colour to the nearest of the palette's 256) and the modern look (filtered,
   real-time lights with shadows, our sky and liquids, bloom). In the window
@@ -1767,9 +1769,10 @@ The sequel's menu is drawn in its own pictures too (`client/sequel_adapter.cpp` 
 screen with the 320 x 200 one in its middle. The root is its main menu: the plaque and the logo
 down the left, a plate for each row, the lit plate and the spinning cursor on the focused row.
 Each page under it has its banner over the top. SELECT GAME and DEMOS have no plate of
-their own, so each is built from the other plates' letters, a 17 px cell each. The C, the H and
-the K are pieced from O, N, R and Y (`kPlate*`, held to the plates' print). SELECT GAME's title and
-the two games' names on it are plates built the same way. The lobby and the scoreboard stay
+their own, so each is built from the other plates' letters cut out as see-through ink, the
+missing ones pieced from them, laid on a tag of the banners' dirty metal as wide as the word
+(`menu/plate_letters.hpp`, held to the plates' print). SELECT GAME's title and the two games'
+names on it are built the same way. The lobby and the scoreboard stay
 modern in the sequel until their pictures are read.
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only

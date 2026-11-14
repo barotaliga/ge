@@ -27,9 +27,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include "hud/crosshair.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
-#include "shooters_edge/hud/crosshair.hpp"
 #include "shooters_edge/hud/sequel_layout.hpp"
 #include "shooters_edge/server/rules_world.hpp"
 #include "ui/draw.hpp"
@@ -93,7 +93,7 @@ void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, i
 // mark 1 the pack's own `ch1`, palette numbers from that picture's own colours. Draw it before the
 // bar, so it lies under it. Nothing when the settings hide it or the pack has no `ch1`.
 void draw_sequel_crosshair(ge::ui::DrawList& dl, SequelBar& bar,
-                           const shooters_edge::hud::CrosshairSettings& s, int width, int height);
+                           const ge::hud::CrosshairSettings& s, int width, int height);
 
 // Draws `bar.ops` on `dl`, `scale` px a bar pixel; true when the bar drew anything.
 bool draw_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, int scale);

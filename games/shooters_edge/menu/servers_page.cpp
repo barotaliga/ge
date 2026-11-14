@@ -296,6 +296,7 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
     std::string facts = gn::to_string(e->address);
     if (!e->info.game.empty()) facts += std::string(kSep) + upper(e->info.game);
     if (!e->info.state.empty()) facts += std::string(kSep) + upper(printable(e->info.state));
+    for (const std::string& m : e->info.mods) facts += std::string(kSep) + upper(printable(m));
     if (e->info.max_spectators > 0 || e->info.spectators > 0)
       facts += std::string(kSep) + std::to_string(e->info.spectators) + "/" +
                std::to_string(e->info.max_spectators) + " WATCHING";
