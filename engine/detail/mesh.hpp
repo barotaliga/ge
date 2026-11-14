@@ -1,6 +1,6 @@
 // THE TRIANGLES A DETAIL PASS WORKS ON: a `TriMesh` is an indexed triangle list with one tag a
 // triangle (the surface's material or class, whatever the caller numbers), the one shape decals
-// are clipped to, props are scattered over and solids are written out as. A level's floors and
+// are clipped to and solids are written out as. A level's floors and
 // walls reach the detail passes as one of these, whatever format they were loaded from.
 //
 // WINDING: a triangle's front is the side its (b - a) x (c - a) points to, the engine's own cross
