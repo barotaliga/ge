@@ -32,6 +32,9 @@
 //   The view is `ConvertOptions::pov` or `convert_set_pov`, chosen or changed at any frame: the
 //   whole recording is read whether or not anyone watches, so a view starts with a whole signon
 //   and a whole frame wherever it starts (a TV converts a view only while someone watches it).
+// - CLIENT TO MULTIVIEW: demo_convert_recorded.cpp. A player's own recording in the form every
+//   multiview player reads: every player he saw, his view from his commands, his status as his
+//   stats, his own messages (a view set, a kick, damage) to him alone.
 // - SEQUEL TO SEQUEL (`.dm2` to `.dm2`): demo_convert_sequel.cpp. Any protocol the reader takes
 //   (26 to 34) written as protocol 34, which every stock client and the TV's viewers take; a
 //   protocol 34 recording comes back byte for byte.
@@ -130,5 +133,6 @@ std::unique_ptr<ConvertStream> single_to_multiview_stream();
 std::unique_ptr<ConvertStream> single_to_client_stream();
 std::unique_ptr<ConvertStream> sequel_to_34_stream();
 std::unique_ptr<ConvertStream> multiview_to_client_stream();
+std::unique_ptr<ConvertStream> client_to_multiview_stream();
 
 }  // namespace shooters_edge::client
