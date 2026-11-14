@@ -8,7 +8,8 @@
 // (game_adapter.hpp's `open_sound`: the first game's WAVs under `sound/`, any rate) the first time
 // a level lists it, and kept for the
 // player's whole life: the synth reads a recording in place, so none is freed while it may sound.
-// A name the packs lack is counted (`missing`) and plays nothing.
+// A name the packs lack is counted (`missing`) and plays nothing. A name starting `*` is a
+// player's own voice, read when it first sounds from that player's model's folder (`own`).
 //
 // HEARING: a sound's level falls off as the protocol says, `volume * (1 - distance *
 // attenuation / 1000)` in map units (audio/channels.hpp's `hear` with attenuation / 1000 a unit);
@@ -77,6 +78,10 @@ class DemoSounds {
 
  private:
   const ge::audio::Pcm* recording(int index);
+  // A player's own sound (a `*` name) for `d`'s entity: its model's (`players/<model>/`, the
+  // model from `DemoState::looks`, "male" when none), else the base voice's
+  // (`sound/player/male/`); null when neither is there.
+  const ge::audio::Pcm* own(const DemoState& s, const DemoSound& d);
   const ge::audio::Pcm* load(const std::string& name);  // as the game names it
 
   ge::audio::Synth& synth_;

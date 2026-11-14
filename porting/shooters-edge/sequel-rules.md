@@ -324,7 +324,8 @@ quad), radius 165. It explodes as a grenade.
   fixed-fov flag in deathmatch.
 - **Air**: under water (level 3) the air runs out after 12 s (a rebreather or suit refills it to
   10 s each frame); then each second the drowning damage grows by 2, starting at 2, up to 15, with
-  no armour protection. Surfacing resets the damage to 2.
+  no armour protection (the +2 comes before the blow, so the first deals 4: `sequel-player-sounds.md`
+  § 10, read). Surfacing resets the damage to 2.
 - **Lava** hurts 3 × the water level a frame (1 × with the suit), **slime** 1 × the water level a
   frame (none with the suit), each frame the player is in it.
 - **Falling**: from the change of the vertical speed between frames (the last frame's speed when

@@ -28,6 +28,7 @@
 #include "shooters_edge/client/demo_fx.hpp"
 #include "shooters_edge/client/demo_heard.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
+#include "shooters_edge/client/demo_sound.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/timedemo.hpp"
@@ -675,6 +676,39 @@ TEST(a_demo_stopped_keeps_its_recordings_until_their_voices_have_faded) {
   CHECK(synth.stats().samples == 0);
   hearing.frame(s, h, 0.01f, lines, centre);
   CHECK(hearing.retired() == 0);  // faded: freed
+}
+
+TEST(a_players_own_sound_comes_from_its_models_folder_else_the_base_voice) {
+  // The sequel's `*` names: the model's folder under players/ first, then the base voice under
+  // sound/player/male/; a name in neither plays nothing, and none counts as missing at the level.
+  std::vector<float> tone(4410);
+  for (size_t i = 0; i < tone.size(); i++) tone[i] = (i / 20) % 2 == 0 ? 0.3f : -0.3f;
+  cl::SearchPath files;
+  std::string error;
+  std::vector<uint8_t> pak;
+  CHECK(ge::vfs::write_pak({{"players/female/pain25_1.wav", ge::audio::wav_bytes(tone, 1, 22050)},
+                            {"sound/player/male/jump1.wav", ge::audio::wav_bytes(tone, 1, 22050)}},
+                           &pak, &error));
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  ge::audio::Synth synth;
+  cl::DemoSounds sounds(synth, files);
+  cl::DemoState s;
+  s.sounds = {"", "*pain25_1.wav", "*jump1.wav", "*death1.wav"};
+  s.looks[0] = "female/first";
+  s.entities.resize(4);
+  sounds.level(s, nullptr);
+  CHECK(sounds.stats().missing == 0);
+  std::vector<cl::DemoSound> started(3);
+  for (int i = 0; i < 3; i++) {
+    started[size_t(i)].entity = 1;
+    started[size_t(i)].channel = i;
+    started[size_t(i)].sound = i + 1;
+  }
+  sounds.frame(s, started, {}, 1, 0.01f);
+  CHECK_MSG(sounds.stats().started == 2, std::to_string(sounds.stats().started));
+  s.looks[0] = "robot/first";  // a model without the pain: the base voice has none either
+  sounds.frame(s, std::span<const cl::DemoSound>(started.data(), 2), {}, 1, 0.01f);
+  CHECK_MSG(sounds.stats().started == 3, std::to_string(sounds.stats().started));
 }
 
 TEST(a_printed_line_shows_without_the_charset_s_own_letters) {

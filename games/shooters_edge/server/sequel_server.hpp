@@ -221,6 +221,12 @@ struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few,
   double air_until = 0, drown_at = 0;
   int drown_damage = 2;
   float old_fall = 0;
+  // His body's sounds: the blows this frame (with what armour took) for its pain cry, the last
+  // cry's time, the water level at the last frame's end, the rebreather's breath in turn.
+  int frame_damage = 0;
+  double pain_sound_at = -100;
+  int old_water_level = 0;
+  bool breath_second = false;
   bool gibbed = false;        // died under −40: his body is gone (no model)
   int ground = -1;            // the world row he stands on (0 the world, a mover's row), -1 none
   double windfly_at = -10;    // the last push's sound
