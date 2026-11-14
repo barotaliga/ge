@@ -639,8 +639,9 @@ std::string format_cfg(const Console& c, std::string_view text, const CfgFormat&
       const std::string help = p.s.cvar != nullptr ? help_comment(*p.s.cvar) : "";
       std::string own = p.item->beside;  // less the help a pretty writer put there before
       if (!help.empty() && own.starts_with(help)) own = trim(own.substr(help.size()));
-      Row l{setting_line(p.s, pad), help.empty() ? own : (own.empty() ? help : help + " " + own),
-            kept_above(*p.item, p.s.cvar, true)};
+      std::string beside = help.empty() ? own : help;
+      if (!help.empty() && !own.empty()) beside.append(" ").append(own);
+      Row l{setting_line(p.s, pad), std::move(beside), kept_above(*p.item, p.s.cvar, true)};
       if (l.head.size() <= kCommentColumnMost) column = std::max(column, l.head.size());
       rows[rank].push_back(std::move(l));
     }
