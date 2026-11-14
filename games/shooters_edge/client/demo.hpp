@@ -235,7 +235,7 @@ struct DemoState {
   std::array<std::string, 32> names;        // client, multiview: each slot's name (its userinfo)
   std::array<std::string, 32> teams;        // client, multiview: each slot's team ("": none)
   std::array<bool, 32> spectator{};         // client, multiview: the slot watches (`*spectator`)
-  std::array<int, 32> top{}, bottom{};      // client, multiview: each slot's colours (0..13)
+  std::array<int, 32> top{}, bottom{};      // each slot's colours (0..13)
   std::array<std::string, 32> skins;        // client, multiview: each slot's `skin` ("": none)
   std::array<std::string, 32> figures;      // client, multiview: each slot's `model` ("": none)
   std::string game;  // client, multiview: the game folder the server ran ("fortress"; "" unnamed)

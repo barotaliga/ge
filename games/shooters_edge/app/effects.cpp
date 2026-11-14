@@ -245,7 +245,7 @@ double fade_hurt(double hurt, double dt) { return std::max(hurt - kHurtFade * dt
 
 double take_hurt(double hurt, double damage) { return std::min(hurt + 3 * damage, 150.0); }
 
-void screen_blend(const Screen& s, double rgba[4]) {
+void screen_blend(const Screen& s, double rgba[4], const BlendShares& k) {
   // Each layer mixed over the last: the medium, the powers, then the hurt on top.
   double c[3] = {0, 0, 0}, a = 0;
   const auto over = [&](double r, double g, double b, double share) {
@@ -259,23 +259,23 @@ void screen_blend(const Screen& s, double rgba[4]) {
   };
   switch (s.medium) {
     case Medium::water:
-      over(0.16, 0.34, 0.38, 0.35);
+      over(0.16, 0.34, 0.38, 0.35 * k.content);
       break;
     case Medium::slime:
-      over(0.22, 0.40, 0.06, 0.55);
+      over(0.22, 0.40, 0.06, 0.55 * k.content);
       break;
     case Medium::lava:
-      over(0.92, 0.36, 0.04, 0.65);
+      over(0.92, 0.36, 0.04, 0.65 * k.content);
       break;
     case Medium::air:
       break;
   }
-  if (s.suit) over(0.25, 0.55, 0.20, 0.18);
-  if (s.stealth) over(0.45, 0.45, 0.45, 0.25);
-  if (s.shield) over(0.95, 0.80, 0.25, 0.22);
-  if (s.power) over(0.20, 0.30, 0.95, 0.22);
-  over(0.62, 0.42, 0.12, std::min(s.armour / 300.0, 0.3));
-  over(0.75, 0.05, 0.02, std::min(s.hurt / 300.0, 0.45));
+  if (s.suit) over(0.25, 0.55, 0.20, 0.18 * k.suit);
+  if (s.stealth) over(0.45, 0.45, 0.45, 0.25 * k.ring);
+  if (s.shield) over(0.95, 0.80, 0.25, 0.22 * k.pent);
+  if (s.power) over(0.20, 0.30, 0.95, 0.22 * k.quad);
+  over(0.62, 0.42, 0.12, std::min(s.armour / 300.0, 0.3) * k.damage);
+  over(0.75, 0.05, 0.02, std::min(s.hurt / 300.0, 0.45) * k.damage);
   rgba[0] = c[0], rgba[1] = c[1], rgba[2] = c[2], rgba[3] = a;
 }
 

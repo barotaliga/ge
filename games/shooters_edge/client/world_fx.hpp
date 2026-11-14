@@ -285,6 +285,9 @@ struct FxFrame {
   double blend[4] = {0, 0, 0, 0};  // the screen's: sRGB colour and share
   // The same without a lava's or a slime's tint, for a look that draws the liquid round the eye.
   double blend_dry[4] = {0, 0, 0, 0};
+  // What `blend` and `blend_dry` were made of, for a window that lets the player tone each layer
+  // (look::Picture's v_ cvars, world_draw.cpp).
+  effects::Screen screen, screen_dry;
   std::vector<Placed> models;  // the entities with a model (world_models.hpp)
   // The local player's own arrival (ce_warps): s into it (below 0: none), and the colour of its
   // flash, the pack's teleport fog's brightest (sRGB-encoded), for the post pass's warp of the

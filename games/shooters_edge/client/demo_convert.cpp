@@ -9,17 +9,65 @@
 
 #include <algorithm>
 #include <cctype>
+#include <memory>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "shooters_edge/client/demo_pack.hpp"
 
 namespace shooters_edge::client {
 
+namespace {
+
+// A client recording to a single-player demo, in two stages: the recording made a multiview one
+// (every player its recorder saw), then that read back riding the recorder's slot.
+struct ClientToSingle final : ConvertStream {
+  DemoConvert first, second;
+  bool begun = false;
+  std::vector<uint8_t> between;
+
+  bool step(DemoConvert& c, std::vector<uint8_t>& out, std::string& error) override {
+    if (!begun) {
+      first.from = DemoFormat::client;
+      first.to = second.from = DemoFormat::multiview;
+      second.to = DemoFormat::single;
+      first.options = second.options = c.options;
+      first.stream = client_to_multiview_stream();
+      second.stream = multiview_to_single_stream();
+      begun = true;
+    }
+    first.in.insert(first.in.end(), c.in.begin(), c.in.end());
+    c.in.clear();
+    first.ended = c.ended;
+    between.clear();
+    if (!first.stream->step(first, between, error)) return false;
+    if (c.options.pov == -1 && first.recorder >= 0) second.options.pov = first.recorder;
+    c.recorder = first.recorder;
+    second.in.insert(second.in.end(), between.begin(), between.end());
+    second.ended = first.ended;
+    if (!second.stream->step(second, out, error)) return false;
+    // The notes: what the first stage dropped and rewrote, what the second did; its counts.
+    c.notes = second.notes;
+    for (const auto& [k, n] : first.notes.dropped) c.notes.dropped[k] += n;
+    for (const auto& [k, n] : first.notes.rewritten) c.notes.rewritten[k] += n;
+    return true;
+  }
+};
+
+}  // namespace
+
+std::unique_ptr<ConvertStream> client_to_single_stream() {
+  return std::make_unique<ClientToSingle>();
+}
+
 bool convert_supported(DemoFormat from, DemoFormat to) {
   return (from == DemoFormat::single &&
           (to == DemoFormat::multiview || to == DemoFormat::client)) ||
-         (from == DemoFormat::multiview && to == DemoFormat::client) ||
-         (from == DemoFormat::client && to == DemoFormat::multiview) ||
+         (from == DemoFormat::multiview &&
+          (to == DemoFormat::client || to == DemoFormat::single)) ||
+         (from == DemoFormat::client &&
+          (to == DemoFormat::multiview || to == DemoFormat::single)) ||
          (from == DemoFormat::sequel && to == DemoFormat::sequel);
 }
 
@@ -59,14 +107,23 @@ bool convert_begin(DemoConvert& c, DemoFormat from, DemoFormat to, const Convert
     c.stream = multiview_to_client_stream();
     return true;
   }
+  if (from == DemoFormat::multiview && to == DemoFormat::single) {
+    c.stream = multiview_to_single_stream();
+    return true;
+  }
+  if (from == DemoFormat::client && to == DemoFormat::single) {
+    c.stream = client_to_single_stream();
+    return true;
+  }
   if (from == DemoFormat::sequel && to == DemoFormat::sequel) {
     c.stream = sequel_to_34_stream();
     return true;
   }
+  const std::string cl = plain_extension(DemoFormat::client);
   error = "a " + format_words(from) + " does not convert to a " + format_words(to) +
-          " yet: a .dem converts to a .mvd or a " + plain_extension(DemoFormat::client) +
-          ", a .mvd to a " + plain_extension(DemoFormat::client) + " of one player's view, a " +
-          plain_extension(DemoFormat::client) + " to a .mvd, and a .dm2 to a protocol 34 .dm2";
+          " yet: a .dem converts to a .mvd or a " + cl + ", a .mvd to a " + cl +
+          " or a .dem of one player's view, a " + cl + " to a .mvd or a .dem, and a .dm2 to a" +
+          " protocol 34 .dm2";
   return false;
 }
 

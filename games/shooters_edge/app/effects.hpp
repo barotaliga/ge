@@ -147,7 +147,13 @@ inline constexpr double kHurtFade = 150;  // damage a second the flash fades by
 // The hurt's flash after `dt` s more (the next frame's `hurt`), and a hit of `damage` on it.
 double fade_hurt(double hurt, double dt);
 double take_hurt(double hurt, double damage);
-// The one colour (sRGB-encoded) and share the post pass mixes the picture toward.
-void screen_blend(const Screen& s, double rgba[4]);
+// How much of each layer the player lets through (the v_ cvars, app/look.hpp): the medium round
+// the eye, the hurt's flash and the armour's, and each power's tint; 0..1 each, 1 the full.
+struct BlendShares {
+  double content = 1, damage = 1, quad = 1, pent = 1, suit = 1, ring = 1;
+};
+// The one colour (sRGB-encoded) and share the post pass mixes the picture toward, each layer at
+// its share of `k`.
+void screen_blend(const Screen& s, double rgba[4], const BlendShares& k = {});
 
 }  // namespace shooters_edge::effects

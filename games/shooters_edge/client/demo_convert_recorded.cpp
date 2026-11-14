@@ -185,6 +185,7 @@ struct ClientToMultiview final : ConvertStream {
     o.bytes(m.subspan(game, std::min(at + 1, m.size()) - game));
     at++;
     pov = at < m.size() ? m[at] & 127 : 0;  // a spectator's slot has its top bit set
+    c.recorder = pov;
     at++;
     o.f32(0);
     if (at < m.size()) o.bytes(m.subspan(at));  // the title, the movement
