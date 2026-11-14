@@ -124,6 +124,7 @@
 #include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/remix.hpp"
+#include "shooters_edge/client/remix_bar.hpp"
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/settings.hpp"
@@ -792,6 +793,9 @@ int run_main(int argc, char** argv) {
   cl::bind_remix(console.cvars(), &remix_settings);
   cl::RemixFiles remix;
   loader.remix = &remix;
+  // The sequel's bar over the classic status while the rules wear its weapons (remix_bar.hpp).
+  cl::SequelBar worn_bar;
+  worn_bar.files = &remix.files;
   bool remix_enabled = false;
   std::string remix_for;
   int32_t remix_items = 0;
@@ -990,6 +994,7 @@ int run_main(int argc, char** argv) {
         cl::worn_arsenal(remix_settings, remix.state, args.profile);
     if (worn == remix.worn) return;
     remix.worn = worn;
+    worn_bar.pictures.clear();  // read again from the files now open
     listen.opt.arsenal = worn != nullptr ? shooters_edge::profiles::arsenal_lines(worn->arsenal)
                                          : game_content.arsenal;
     listen.opt.files = worn != nullptr ? &remix.files : &files;
@@ -1936,11 +1941,18 @@ int run_main(int argc, char** argv) {
       cl::draw_sequel_bar(overlay, sequel_bar, cl::sequel_bar_scale(h));
     } else if (listen.campaign.end == cl::LevelEnd::none) {
       se::Status hud_status = cl::status_of(listen, t);
-      cl::group_status(controls.groups, hud_status, t);  // the weapon group (weapon_groups.hpp)
-      se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
-      const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
-      hud.layout.draw(overlay, hf, hud_look());
-      hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
+      if (remix.worn != nullptr && remix.worn->items == "sequel") {
+        // The rules wear the sequel's weapons: its own bar shows them (remix_bar.hpp).
+        cl::run_worn_bar(worn_bar, hud_status, listen.campaign_host == nullptr,
+                         static_cast<int64_t>(t * 10), w, h);
+        cl::draw_sequel_bar(overlay, worn_bar, cl::sequel_bar_scale(h));
+      } else {
+        cl::group_status(controls.groups, hud_status, t);  // the weapon group (weapon_groups.hpp)
+        se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
+        const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
+        hud.layout.draw(overlay, hf, hud_look());
+        hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
+      }
     }
     if (listen.room && listen.server != nullptr) {
       // The warmup's banner in the packs' own menu pictures when they carry them, else modern.

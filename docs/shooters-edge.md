@@ -1054,7 +1054,12 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   pickups, missiles, fire, bounce and blast sounds, armour models and pickup sounds), the window
   reads models and sounds through the remix's files and holds the other game's view models (its
   idle frame the rest, its firing frames the shot, `profiles::held_frames`), and another game's
-  model keeps its skin's own colours (each picture through its own palette).
+  model keeps its skin's own colours (each picture through its own palette). The ammunition and
+  health boxes take the other game's models and pickup sounds too (the rules' settings
+  `arsenal_ammo<n>`, `arsenal_health<n>` and `arsenal_pickup`: a model drawn about its middle is
+  stood in the middle of the item's box and raised as far as that game's items stand over the
+  floor), and the HUD is the other game's own bar, its program run over the played game's status
+  (`client/remix_bar.hpp`).
 
 Lab `se-remix` draws a real map of each game from above with its own items and with the other
 game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`); `se-client

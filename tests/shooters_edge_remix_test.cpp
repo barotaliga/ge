@@ -21,6 +21,7 @@
 #include "shooter/sequel_move.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/remix.hpp"
+#include "shooters_edge/client/remix_bar.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/remix.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
@@ -390,6 +391,20 @@ TEST(the_classic_rules_wear_the_sequels_weapons_and_armour_with_cr_items) {
     CHECK(worn->arsenal.armour[i].absorb == pf::kClassicArmour[i].absorb &&
           worn->arsenal.armour[i].model.starts_with("models/items/armor/"));
   CHECK(pf::held_frames("progs/v_shot.mdl") == nullptr);
+  // The ammunition and health in the sequel's boxes, the weapons picked up with its sound.
+  const std::vector<std::string> lines = pf::arsenal_lines(worn->arsenal);
+  const auto said = [&](std::string_view line) {
+    for (const std::string& l : lines)
+      if (l == line) return true;
+    return false;
+  };
+  CHECK(said("set arsenal_ammo1 \"models/items/ammo/shells/medium/tris.md2 misc/am_pkup.wav 15\""));
+  CHECK(said("set arsenal_health3 \"models/items/mega_h/tris.md2 items/m_health.wav 15\""));
+  CHECK(said("set arsenal_pickup \"misc/w_pkup.wav\""));
+  for (const std::string& l : pf::arsenal_lines(pf::kClassicArsenal))
+    CHECK_MSG(l.find("arsenal_ammo") == std::string::npos &&
+                  l.find("arsenal_pickup") == std::string::npos,
+              l);
 
   // On the server: the rows given as its settings, the rail lying where the beam weapon was.
   cl::SearchPath mine;
@@ -424,6 +439,44 @@ TEST(the_classic_rules_wear_the_sequels_weapons_and_armour_with_cr_items) {
   CHECK(!listed(l.server->models, "progs/g_light.mdl"));
   CHECK(listed(l.server->sounds, "weapons/railgf1a.wav"));
   CHECK(listed(l.server->sounds, "weapons/rocklx1a.wav"));
+}
+
+// The sequel's bar over the classic status (M18u4b): the classic numbers in the sequel's stats,
+// each picture by the sequel's own name, and the program run into pictures where the sequel's
+// own bar puts them.
+TEST(the_sequels_bar_shows_the_classic_status_while_its_weapons_are_worn) {
+  namespace hud = shooters_edge::hud;
+  hud::Status st;
+  st.t = 10;
+  st.health = 73;
+  st.armour = 150;
+  st.armour_class = hud::ArmourClass::medium;
+  st.weapon = hud::Weapon::nailgun;
+  st.ammo[size_t(hud::Ammo::nails)] = 88;
+  st.picked_at[size_t(hud::Weapon::beam_gun) - 1] = 9;  // the beam weapon a second ago
+  st.power_s[size_t(hud::Power::damage)] = 12.5;
+  st.frags = 7;
+  const auto s = cl::worn_stats(st, true);
+  CHECK(cl::worn_image(s[0]) == "i_health" && s[1] == 73);
+  CHECK(cl::worn_image(s[2]) == "a_bullets" && s[3] == 88);  // the nailgun wears the machinegun
+  CHECK(cl::worn_image(s[4]) == "i_combatarmor" && s[5] == 150);
+  CHECK(cl::worn_image(s[7]) == "w_railgun" && s[8] == 1056 + 6);
+  CHECK(cl::worn_image(s[9]) == "p_quad" && s[10] == 12);
+  CHECK(s[14] == 7);
+  st.weapon = hud::Weapon::melee;
+  st.t = 20;  // the pickup long gone
+  const auto m = cl::worn_stats(st, false);
+  CHECK(m[2] == 0 && m[3] == 0 && m[7] == 0 && m[14] == 0);
+
+  cl::SequelBar bar;
+  cl::run_worn_bar(bar, st, true, 0, 640, 480);
+  const auto drawn = [&](std::string_view name) {
+    for (const hud::LayoutOp& op : bar.ops)
+      if (op.kind == hud::LayoutOp::Kind::picture && op.name == name) return true;
+    return false;
+  };
+  CHECK(drawn("i_health") && drawn("i_combatarmor") && drawn("p_quad") && drawn("num_7"));
+  CHECK(!drawn("a_bullets"));  // nothing to fire with the melee weapon
 }
 
 // The classic game's map in the sequel (M18u3): its point tree's cells made brushes so the

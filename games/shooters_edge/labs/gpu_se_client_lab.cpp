@@ -87,6 +87,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/remix.hpp"
+#include "shooters_edge/client/remix_bar.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -788,16 +789,25 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
     }
     ge::render::FrameView view;
+    cl::SequelBar worn_bar;
+    worn_bar.files = &files;
     const auto shoot = [&](const std::string& tag) {
       fx.births.clear();
       view = cl::frame_view(l, shown, 0, t, 0);
       ge::ui::DrawList overlay;
       overlay.begin(static_cast<int>(w), static_cast<int>(h));
-      se::fill_hud(hud, cl::status_of(l, t), art);
-      hud.layout.draw(overlay,
-                      hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
-                      se::hud_style());
-      hand.lift = se::status_lift(hud, static_cast<int>(h));
+      if (worn != nullptr && worn->items == "sequel") {  // the sequel's bar (remix_bar.hpp)
+        cl::run_worn_bar(worn_bar, cl::status_of(l, t), l.campaign_host == nullptr,
+                         static_cast<int64_t>(t * 10), static_cast<int>(w), static_cast<int>(h));
+        cl::draw_sequel_bar(overlay, worn_bar, cl::sequel_bar_scale(static_cast<int>(h)));
+        hand.lift = 0;
+      } else {
+        se::fill_hud(hud, cl::status_of(l, t), art);
+        hud.layout.draw(overlay,
+                        hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
+                        se::hud_style());
+        hand.lift = se::status_lift(hud, static_cast<int>(h));
+      }
       const shooters_edge::view::HandFrame* shown_hand = in_hand && hand.drawn ? &hand : nullptr;
       for (int k = 0; k < 2; ++k) {
         // The weather, the flames and the bonfires' sparks run a second in, ending on the view's

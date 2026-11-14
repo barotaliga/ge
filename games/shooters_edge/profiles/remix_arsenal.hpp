@@ -6,7 +6,8 @@
 //
 // - **By role** (`kRemixArsenals`): the weapon in a slot takes the other game's weapon of the
 //   same place, as the item table does (profiles/remix.hpp: the nail weapons the bullet ones, the
-//   beam the rail), and the three armours the other game's three, weakest first.
+//   beam the rail), the three armours the other game's three, weakest first, and the ammunition
+//   and health boxes the other game's of the same kind and size (`ItemLook`).
 // - **The held set** (`RemixArsenal::held`): the view models by slot, which the window draws in
 //   the hand in place of the game's own.
 // - **The frames** (`HeldFrames`, `held_frames`): a view model of the sequel's runs every
@@ -20,12 +21,17 @@
 // ge:test tests/shooters_edge_remix_test.cpp
 #pragma once
 
+#include <cstdint>
 #include <span>
 #include <string_view>
 
 #include "shooters_edge/profiles/arsenal.hpp"
 
 namespace shooters_edge::profiles {
+
+// How far above the floor the sequel's items stand: its items are measured from their middle,
+// 15 units over the floor (profiles/remix.hpp's `kItemFeet`).
+inline constexpr int32_t kSequelLift = 15;
 
 // The classic game's eight weapons, their numbers its own, as the sequel's: the axe's slot the
 // blaster, the nailguns the machinegun and chaingun, the lightning gun the railgun.
@@ -58,6 +64,17 @@ inline constexpr ArmourRow kClassicAsSequelArmour[] = {
     {2, 0.6f, 150, 0, "models/items/armor/combat/tris.md2", "misc/ar2_pkup.wav"},
     {3, 0.8f, 200, 0, "models/items/armor/body/tris.md2", "misc/ar3_pkup.wav"},
 };
+// Its ammunition and health as the sequel's: the nails the bullets, the cells the slugs, the
+// small health the medium, the plain one the large, the mega health the sequel's own.
+inline constexpr ItemLook kClassicAsSequelLooks[] = {
+    {"arsenal_ammo1", "models/items/ammo/shells/medium/tris.md2", "misc/am_pkup.wav", kSequelLift},
+    {"arsenal_ammo2", "models/items/ammo/bullets/medium/tris.md2", "misc/am_pkup.wav", kSequelLift},
+    {"arsenal_ammo3", "models/items/ammo/rockets/medium/tris.md2", "misc/am_pkup.wav", kSequelLift},
+    {"arsenal_ammo4", "models/items/ammo/slugs/medium/tris.md2", "misc/am_pkup.wav", kSequelLift},
+    {"arsenal_health1", "models/items/healing/medium/tris.md2", "items/n_health.wav", kSequelLift},
+    {"arsenal_health2", "models/items/healing/large/tris.md2", "items/l_health.wav", kSequelLift},
+    {"arsenal_health3", "models/items/mega_h/tris.md2", "items/m_health.wav", kSequelLift},
+};
 // The view models by slot, 1..8.
 inline constexpr std::string_view kClassicAsSequelHeld[] = {
     "models/weapons/v_blast/tris.md2",  "models/weapons/v_shotg/tris.md2",
@@ -73,7 +90,10 @@ struct RemixArsenal {
 };
 
 inline constexpr RemixArsenal kRemixArsenals[] = {
-    {"classic", "sequel", {kClassicAsSequelWeapons, kClassicAsSequelArmour}, kClassicAsSequelHeld},
+    {"classic",
+     "sequel",
+     {kClassicAsSequelWeapons, kClassicAsSequelArmour, kClassicAsSequelLooks, "misc/w_pkup.wav"},
+     kClassicAsSequelHeld},
 };
 
 // The arsenal `played`'s rules wear with `items`'s things, or null (the same game, or no row).
