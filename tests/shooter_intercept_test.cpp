@@ -57,6 +57,38 @@ TEST(a_player_in_the_air_comes_down_on_his_arc) {
   CHECK(std::fabs(late.x - 300) < 0.01f);  // and on across
 }
 
+TEST(a_player_running_at_a_wall_is_led_along_it_not_through_it) {
+  // A wall at y = 500 the slide stops him at: his way across ends there (`leadwall`).
+  const sh::SlideAcross wall = [](const void*, sh::Vec3f from, sh::Vec3f to) {
+    (void)from;
+    return sh::Vec3f{to.x, to.y > 500 ? 500.f : to.y, to.z};
+  };
+  sh::MovingTarget m;
+  m.at = {1000, 0, 0};
+  m.velocity = {0, 320, 0};
+  m.slide = wall;
+  CHECK(sh::mover_at(m, 1).y == 320);  // short of the wall: as before
+  CHECK(sh::mover_at(m, 3).y == 500);  // past it: held at it
+  const sh::Intercept ic = sh::intercept({0, 0, 0}, m, 2, sh::Shot{}, 3);
+  CHECK(ic.at.y == 500);
+  CHECK(std::fabs(dist({0, 0, 0}, ic.at) / 1000 - ic.flight_s) < 0.002);
+}
+
+TEST(a_hopper_turning_is_led_along_his_arc) {
+  // 300 units/s along +x turning 90 degrees a second, counter-clockwise (`leadarc`): after a
+  // second a quarter circle of radius 300 / (pi / 2), then on straight along +y.
+  sh::MovingTarget m;
+  m.velocity = {300, 0, 0};
+  m.turn = 90;
+  const float r = static_cast<float>(300 / (3.141592653589793 / 2));
+  const sh::Vec3f q = sh::mover_at(m, 1);
+  CHECK(std::fabs(q.x - r) < 0.5f && std::fabs(q.y - r) < 0.5f);
+  const sh::Vec3f on = sh::mover_at(m, 2);  // held straight past `kArcMost`
+  CHECK(std::fabs(on.x - r) < 0.5f && std::fabs(on.y - (r + 300)) < 0.5f);
+  m.turn = -90;  // clockwise: the mirror
+  CHECK(std::fabs(sh::mover_at(m, 1).y + r) < 0.5f);
+}
+
 TEST(a_grenade_at_the_solved_pitch_passes_through_the_point) {
   const sh::Shot g{600, true, 200, sh::kServerGravity};
   const sh::Vec3f from{0, 0, 0};

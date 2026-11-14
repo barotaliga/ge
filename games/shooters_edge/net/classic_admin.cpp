@@ -18,8 +18,8 @@
 #include "net/sha1.hpp"
 #include "progs/text.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
+#include "shooters_edge/net/protocol.hpp"
 
 namespace shooters_edge::net {
 

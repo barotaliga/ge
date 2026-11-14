@@ -58,6 +58,12 @@ constexpr double kSpinDegPerS = 100;    // how fast
 constexpr float kAmbientShare = 0.75f;  // of the floor's light, from every side
 constexpr float kShadeShare = 0.6f;     // and from above and ahead
 constexpr float kRelightUnits = 1;      // a move that takes the light again
+// The 38 family's rule for a model's light: the floor's light in full from every side,
+// as much again toward a light fixed 45 degrees above the map's +x, and a face turned away from it
+// losing 0.3 of that; a floor looked for up to 8192 units down.
+constexpr float kSequelBack = 0.3f;
+constexpr double kSequelDir[3] = {0.70710678118654752, 0.70710678118654752, 0};
+constexpr float kSequelReach = 8192;
 
 uint32_t colour_row(const sv::ClientInfo& c, const char* key, uint32_t fallback) {
   const std::string v = sv::info_value(c.userinfo, key);
@@ -937,6 +943,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                     std::span<const ge::brush::app::DynamicLight> dynamic, double dynamic_strength,
                     const Burning* burning) {
   const bool bare_flames = in_place.flames;
+  const bool sequel = map.family == br::Family::v38;
   m.morph_draws.clear();
   m.sprite_draws.clear();
   m.near.clear();
@@ -1049,7 +1056,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                      std::abs(lit.at.z - p.origin.z);
     if (fresh || dm > kRelightUnits) {
       const float above[3] = {p.origin.x, p.origin.y, p.origin.z + 8};
-      if (!models::light_under(m.probe, map, above, lit.rgb))
+      if (!models::light_under(m.probe, map, above, lit.rgb, sequel ? kSequelReach : 512))
         lit.rgb[0] = lit.rgb[1] = lit.rgb[2] = 1;
       lit.at = p.origin;
     }
@@ -1068,8 +1075,9 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       const double raw = lit.rgb[c];
       const double floor = std::sqrt(raw * raw + minlight * minlight);
       const float l = float((floor + dyn[c]) * brightness);
-      g.ambient[c] = kAmbientShare * l * p.colormod[c];  // the tint on its light, not its glow
-      g.shade[c] = kShadeShare * l * p.colormod[c];
+      // The tint on its light, not its glow.
+      g.ambient[c] = (sequel ? 1 : kAmbientShare) * l * p.colormod[c];
+      g.shade[c] = (sequel ? 1 : kShadeShare) * l * p.colormod[c];
       if (fullbright > 0) {
         // r_fullbrightskins: lifted toward full light (a lightmap's 1, a wall as painted, at this
         // brightness, or its own light where that is more) with its shading gone; never darker.
@@ -1083,7 +1091,11 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     // From above and a little toward the eye, so a face turned to the player is never black;
     // turned toward the dynamic lights by their share of the light.
     const double len = std::sqrt(dist) + 1e-9;
+    // On a 38 map, from the fixed light above the map's +x.
     double sd[3] = {-0.3 * (w[0] - view.eye[0]) / len, 0.9, -0.3 * (w[2] - view.eye[2]) / len};
+    if (sequel)
+      for (int c = 0; c < 3; c++) sd[c] = kSequelDir[c];
+    g.shade_back = sequel ? kSequelBack : 0;
     const double sd_len = std::sqrt(sd[0] * sd[0] + sd[1] * sd[1] + sd[2] * sd[2]);
     const double share = dyn_lum / (dyn_lum + floor_lum + 1e-9);
     for (int c = 0; c < 3; c++) sd[c] = (1 - share) * sd[c] / sd_len + share * toward[c];

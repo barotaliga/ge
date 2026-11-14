@@ -290,7 +290,7 @@ constexpr float kMsgEffect = 0;
 // THE RULES' VIEW of the server's calls: Q's over the single-player form, plus the campaign's own
 // globals, fields, strings and functions by their enums.
 struct A : Q {
-  explicit A(pg::Vm& v) : Q(v) {}
+  explicit A(const se_rules_call_v1& c) : Q(c) {}
   using Q::f;
   using Q::i;
   using Q::set_f;

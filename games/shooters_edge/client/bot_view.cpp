@@ -17,7 +17,7 @@
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
 #include "shooters_edge/client/view.hpp"
-#include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "ui/font.hpp"
 
 namespace shooters_edge::client {

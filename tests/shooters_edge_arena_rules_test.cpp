@@ -50,7 +50,7 @@ uint64_t fold(const sv::ModMatchReport& r) {
 
 void same_match(const std::vector<std::string>& console, const Pin& qc) {
   sv::ModMatchOptions o;
-  o.native = &sv::native_arena();
+  o.native = &sv::arena_rules();
   o.entities = sv::kBaselineArenaEntities;
   o.bots = 2;
   o.max_frames = 5100;

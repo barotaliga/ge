@@ -41,9 +41,13 @@ struct NativeDef {
   uint16_t type;  // kTypeFloat, kTypeVector, kTypeString, kTypeEntity, kTypeFunction
 };
 
+// A function the VM runs by its index in the declaration, with what the program handed it: how a
+// program whose functions come from elsewhere (a mod package's table) is run.
+using NativeDispatch = void (*)(Vm& vm, size_t index, const void* user);
+
 struct NativeFunction {
   const char* name;
-  Builtin run;
+  Builtin run;                          // null: the program's `dispatch` runs it
   std::span<const uint8_t> parms = {};  // each parameter's words (1, or 3 for a vector)
 };
 
@@ -54,6 +58,8 @@ struct NativeProgram {
   std::span<const NativeDef> fields;
   std::span<const char* const> strings;
   std::span<const NativeFunction> functions;
+  NativeDispatch dispatch = nullptr;  // runs a function whose `run` is null
+  const void* user = nullptr;         // what `dispatch` is handed; must outlive the progs
 };
 
 // Where the declaration landed, by its index in each list: a global's offset, a field's offset,
@@ -62,6 +68,8 @@ struct NativeOffsets {
   std::vector<int> globals, fields;
   std::vector<int32_t> strings, functions;
   std::vector<Builtin> runs;  // the functions' C++, by index (what `bind_natives` points at)
+  NativeDispatch dispatch = nullptr;
+  const void* user = nullptr;
 };
 
 // `program` laid out as a progs in `out`, with where each declaration landed. False with `error`
@@ -87,6 +95,9 @@ float field_float(Vm& vm, int32_t ent, int field);
 int32_t field_int(Vm& vm, int32_t ent, int field);  // an entity, string or function
 Vec3 field_vec(Vm& vm, int32_t ent, int field);
 void set_field_float(Vm& vm, int32_t ent, int field, float v);
+// `words` words of a field from `field` on, as they are stored (0 after a fault).
+void field_words(Vm& vm, int32_t ent, int field, int words, uint32_t* out);
+void set_field_words(Vm& vm, int32_t ent, int field, int words, const uint32_t* in);
 void set_field_int(Vm& vm, int32_t ent, int field, int32_t v);
 void set_field_vec(Vm& vm, int32_t ent, int field, Vec3 v);
 

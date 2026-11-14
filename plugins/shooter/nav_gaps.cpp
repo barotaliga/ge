@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "ai/path.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "shooter/framemove.hpp"
@@ -27,8 +28,12 @@ struct Near {
 
 }  // namespace
 
+constexpr float kHeldSlack_s = 0.3f;  // a graph's way this much slower than a run's jump holds it
+constexpr float kStrafeOn = 1;  // `strafe`: the aim this far off the velocity: its side, degrees
+constexpr int kStrafeLate = 8;  // and the strafe begun this many commands into the flight (hands)
+
 JumpFlight fly_jump(const MoveWorld& world, const MoveSettings& move, Vec3f origin, Vec3f velocity,
-                    Vec3f aim, int msec, float limit_s) {
+                    Vec3f aim, int msec, float limit_s, bool strafe) {
   JumpFlight out;
   MoveState s;
   s.origin = origin;
@@ -45,6 +50,18 @@ JumpFlight fly_jump(const MoveWorld& world, const MoveSettings& move, Vec3f orig
     c.angles = {0, yaw, 0};
     c.forward = static_cast<int16_t>(move.maxspeed);
     c.buttons = i == 0 ? kButtonJump : 0;
+    if (strafe && i > kStrafeLate && (s.velocity.x != 0 || s.velocity.y != 0)) {
+      const float vh =
+          static_cast<float>(core::libm::atan2(s.velocity.y, s.velocity.x) * (180.0 / core::kPi));
+      float err = yaw - vh;  // the aim's way off the velocity, counter-clockwise positive
+      while (err > 180) err -= 360;
+      while (err < -180) err += 360;
+      // The side key toward the aim: right (positive) turns the velocity clockwise.
+      const int side = err < -kStrafeOn ? 1 : err > kStrafeOn ? -1 : (i % 2 == 0 ? 1 : -1);
+      c.angles = {0, vh, 0};
+      c.forward = 0;
+      c.side = static_cast<int16_t>(static_cast<float>(side) * move.maxspeed);
+    }
     player_move(s, c, move, world);
     out.end = s.origin;
     out.time_s = static_cast<float>(i + 1) * step_s;
@@ -77,6 +94,16 @@ NavGapCounts nav_add_gap_tricks(const MoveWorld& world, const MoveSettings& move
     const bool there = across_of(o, people) <= set.land && pz <= 32 && pz >= -32;
     return on && there ? q : -1;
   };
+  // A run's jump that lands a trick is left to the graph when the graph's own way from `a` to its
+  // landing `r` takes no longer than the jump and `kHeldSlack_s`: its jumps are tried no further
+  // than `NavSettings::reach` across and need a run-up behind, so a trick a run makes can still
+  // be missing from it (e1m2's YA walkway to the east walkway, 290 across: the graph's way was a
+  // drop to the floor and the stairs, 1.5 s).
+  ai::Search search(g.nodes.size());
+  const auto held = [&](int32_t a, int32_t r, float jump_s) {
+    const NavRoute way = nav_route(g, a, r, search);
+    return !way.nodes.empty() && way.time_s <= jump_s + kHeldSlack_s;
+  };
   std::vector<NavExtraLink> extra;
   for (size_t t = 0; t < tricks.size(); t++) {
     const NavGapTrick& tr = tricks[t];
@@ -108,9 +135,10 @@ NavGapCounts nav_add_gap_tricks(const MoveWorld& world, const MoveSettings& move
         const Vec3f from = g.nodes[static_cast<size_t>(a)].origin;
         const Vec3f to = g.nodes[static_cast<size_t>(b)].origin;
         out.proofs++;
-        if (landed(prove_link(world, move, from, to, NavKind::jump, move.maxspeed, g.set), tr.to) >=
-            0) {
-          run_made = true;  // a run's jump: no speed jump
+        const NavProof run = prove_link(world, move, from, to, NavKind::jump, move.maxspeed, g.set);
+        const int32_t r = landed(run, tr.to);
+        if (r >= 0 && held(a, r, run.time_s)) {
+          run_made = true;  // a run's jump the graph holds already: no speed jump
           continue;
         }
         for (const float v : speeds) {

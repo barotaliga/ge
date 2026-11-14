@@ -18,8 +18,8 @@
 #include "net/sim_network.hpp"
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_forward.hpp"
-#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 

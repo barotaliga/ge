@@ -6,21 +6,114 @@
 // ge:test tests/shooter_features_test.cpp
 #include "shooter/features.hpp"
 
+#include <initializer_list>
+
 namespace ge::shooter {
 
 namespace {
 
 constexpr const char* kNames[kFeatures] = {
-    "calm",      "pace",       "swimaim",    "screen", "keep",   "lead",     "lane",
-    "hop",       "shortgoals", "commit",     "danger", "dodge",  "watch",    "spam",
-    "packs",     "talk",       "plan",       "rj",     "gj",     "airsteer", "surface",
-    "glance",    "eye",        "selfaim",    "pools",  "routes", "corner",   "mouse",
-    "packinfer", "listen",     "stairs",     "locked", "escape", "brink",    "gapjump",
-    "headroom",  "liphop",     "circlejump", "ahead",  "bodies", "beat",     "trial"};
+    "calm",       "pace",       "swimaim",     "screen",      "keep",      "lead",
+    "lane",       "hop",        "shortgoals",  "commit",      "danger",    "dodge",
+    "watch",      "spam",       "packs",       "talk",        "plan",      "rj",
+    "gj",         "airsteer",   "surface",     "glance",      "eye",       "selfaim",
+    "pools",      "routes",     "corner",      "mouse",       "packinfer", "listen",
+    "stairs",     "locked",     "escape",      "brink",       "gapjump",   "headroom",
+    "liphop",     "circlejump", "ahead",       "bodies",      "beat",      "keys",
+    "keysteer",   "lookway",    "press",       "slopes",      "counter",   "jumpkey",
+    "backstep",   "runupkeys",  "gapbuild",    "curvekeys",   "underway",  "recipes",
+    "chains",     "retarget",   "uturn",       "jumpfly",     "gappast",   "lipjump",
+    "airgap",     "pilotcast",  "aimhop",      "airkeys",     "airview",   "chainhop",
+    "airwall",    "landwall",   "circlekeys",  "circleview",  "circleaim", "leadwall",
+    "leadmean",   "leadarc",    "airwalk",     "airarc",      "hopjump",   "hopside",
+    "noback",     "levelview",  "hopopen",     "fightway",    "letgo",     "paceback",
+    "retreatrun", "hide",       "nogoal",      "tripkeep",    "routetime", "fetch",
+    "pokestand",  "liftbrake",  "scriptfresh", "scriptentry", "calmvel",   "lookturn",
+    "viewbook",   "gapturn",    "gapnear",     "placeheard",  "gaplava",   "brinkline",
+    "sidebrink",  "fallseen",   "liplook",     "brinkkeys",   "floortrap", "trapflee",
+    "bridgeseen", "sidehop",    "lostdry",     "liftoff",     "shotjump",  "rjready",
+    "jumpcuts",   "brinkfall",  "trial"};
+// A name for every feature: one missing leaves the last null (and `feature_name` crashing).
+static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
-// Every switch but `trial` (the last).
-constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);
-constexpr uint64_t kAll = kTrial - 1;
+// Every switch but `trial` (the last) and those not judged or dropped (`lookway`, `press`,
+// `counter`, `chains`, `retarget`). The keyboard (`keys`, `keysteer`) is on: a person's hands are
+// on keys (realism first; the frags it costs, -3.8 a match head to head, won back by fixing
+// movement and strategy).
+constexpr Features of(std::initializer_list<Feature> list) {
+  Features f;
+  for (Feature x : list) f.set(x, true);
+  return f;
+}
+constexpr Features kKeys =
+    of({Feature::lookway, Feature::press, Feature::counter, Feature::chains, Feature::retarget});
+// `runupkeys` and `underway` wait for their judgment (`gapbuild` and `curvekeys` on: together
+// +7.0 frags a match head to head on e1m2, the gap jumps landed 2.5 a match; `recipes` on: even
+// head to head over 12 seeds, people's hop starts taking off at ~405 against the bots' 341;
+// `uturn` on: +4.5 frags a match head to head on dm2, stops 18.8 -> 14.8 a bot-minute; `jumpfly`
+// on: +1.6 on dm2 and +2.4 on e1m2 a match head to head, run-ups 147 -> 86 a match; `lipjump`
+// on: +0.4 on dm2 and +5.9 on e1m2 a match head to head, dm2's lava deaths 14.1 -> ~11 a match;
+// `airkeys` on: +4.6 on dm2 and +1.0 on e1m2 a match head to head, the hop's air no longer
+// braking: -1.5 -> -0.3 units/s a command, the expert's hop gain p50 -105 -> -0.7; `aimhop` on:
+// -2.9 on dm2 and +1.3 on e1m2 a match head to head, the air share 0.33 -> 0.44 (people 0.46);
+// `airview` on: +1.7 on dm2 and +4.8 on e1m2 a match head to head; `airwall` on: even head to
+// head, +0.05 on dm2 and -0.4 on e1m2, hop flights colliding 36 -> 31 %; `chainhop` on: +4.5 on
+// dm2 and +2.4 on e1m2 a match head to head, the side with it faster; `leadwall` on: even head
+// to head, +0.4 on dm2 and 0.0 on e1m2, the rocket drill's direct hits on dm2 11.8 -> 12.5 %;
+// `airwalk` on: +3.2 on dm2 and +1.4 on e1m2 a match head to head, the side with it 3-4 units/s
+// faster, a chained hop's landing 176 -> 257 units/s on dm2; `hopjump` and `hopside` on: +2.3 on
+// dm2 and +0.3 on e1m2 a match head to head, faster, the landing's jump on its first ground frame
+// 2 -> 33 %, no forward key in a hop: a player's bunny hop; `noback` and `levelview` on: +0.8 on
+// dm2 and +1.0 on e1m2 a match head to head, looks past 45 degrees down 4.6 -> 1.9 %, people's;
+// `paceback` on: -2.9 on dm2 and +4.3 on e1m2 a match head to head, a lost aim back on the way by
+// the hand's stroke, not creeping: backwards 20.6 -> 18.4 % by one rule, people 13.8; `hide` on:
+// +5.0 on dm2 and -0.8 on e1m2 a match head to head, a launcher owner's weapon in hand at his
+// death near people's: dm2 77 / 22 % launcher / scattergun, people 72 / 25; `pokestand` on:
+// -0.2 on dm2 and -0.2 on e1m2 a match head to head, no more running round under a button it
+// fires at without a shot; `scriptfresh` on: a bug fixed, +1.7 / -3.7 on e1m2 a match head to
+// head (mean -1.0, inside the sides' noise), dm2 alike (no scripted way), the YA's climb no longer
+// resumed at the walkway's step from the floor); `gapnear` on: +6.0 on dm2 (+4.2 / +7.8) and -0.2
+// on e1m2 a match head to head, e1m2's gaps given up 75 -> 63 a match for half the field;
+// `placeheard` on: a heard place read as the room round the speaker, not the middle of every point
+// of its name in a loc file: -1.25 on dm2 (-7.8 / +5.2) and +0.5 on e1m2 a match head to head;
+// `brinkkeys` on: +6.2 on dm2 (+11.1 / +1.3) a match head to head, lava deaths 12.75 -> 9.0 a match
+// with both sides on it, frags a minute 9.33 -> 10.71 (e1m2 has no lava or slime: no change);
+// `gaplava` on (over `brinkkeys`): even head to head on dm2 (-4.7 / +4.8), dm2's gap tricks over
+// lava jumped 0 -> ~0.8 a match a side (about half landed; people ~7), lava deaths 9.0 -> 9.1-9.7;
+// `floortrap` on: +5.0 on dm2 (-4.8 / +14.8) a match head to head, ~2.5 presses a match each
+// firing, the enemy's lava deaths +2.5 / +3.7 a match and the presser's own +0.25 / -0.9;
+// `bridgeseen` on: +7.4 on dm2 (+7.9 / +6.9) and -0.3 on e1m2 a match head to head, the side with
+// it dying in lava 8.8 -> 5.6 and 7.2 -> 5.2 a match (the shut links onto a bridge still in were
+// never honoured); `trapflee` on (over `bridgeseen`): -2.7 on dm2 (+2.1 / -7.4, inside the sides'
+// noise; it runs ~2 times a match) a match head to head, the side with it in lava 6.4 -> 4.5 and
+// 5.4 -> 5.0: a person runs off a floor going from under him. `liftoff`, `shotjump` and `rjready`
+// on together: even head to head (dm2 -1.9: +3.3 / -7.0; e1m2 +2.7, where no rocket jump is made),
+// dm2's south pit falls 16 -> 3 over 8 seeds, its lava deaths 9.5 -> 7.7-8.9 a match: the flips
+// that burst under a player still on the ground (the jump key late) or with another weapon in
+// hand (no blast) were a third of every rocket jump asked for. `brinkfall` on: +0.9 on dm2 (+2.1 /
+// -0.2) a match head to head; with both sides on it lava deaths 10.4 -> 6.75 a match (8 traced
+// seeds: the YA stair's 33 -> 3, the RA pit's 11 -> 3), frags a minute 9.38 -> 10.26, speed
+// 227.9 -> 231.6 (e1m2 has no lava or slime: no change).
+constexpr Features kJudging =
+    of({Feature::runupkeys, Feature::underway,    Feature::gappast,    Feature::airgap,
+        Feature::pilotcast, Feature::landwall,    Feature::circlekeys, Feature::circleview,
+        Feature::circleaim, Feature::leadmean,    Feature::leadarc,    Feature::airarc,
+        Feature::hopopen,   Feature::fightway,    Feature::letgo,      Feature::retreatrun,
+        Feature::nogoal,    Feature::tripkeep,    Feature::routetime,  Feature::fetch,
+        Feature::liftbrake, Feature::scriptentry, Feature::calmvel,    Feature::lookturn,
+        Feature::viewbook,  Feature::gapturn,     Feature::brinkline,  Feature::sidebrink,
+        Feature::fallseen,  Feature::liplook,     Feature::sidehop,    Feature::lostdry,
+        Feature::jumpcuts});
+// Every feature below `trial`, less those two.
+constexpr Features all_bits() {
+  Features f;
+  for (size_t k = 0; k + 1 < kFeatures; k++) {
+    const auto x = static_cast<Feature>(k);
+    f.set(x, !kKeys[x] && !kJudging[x]);
+  }
+  return f;
+}
+constexpr Features kAll = all_bits();
 
 bool separator(char c) { return c == ',' || c == ' ' || c == '/' || c == '\t'; }
 
@@ -28,8 +121,8 @@ bool separator(char c) { return c == ',' || c == ' ' || c == '/' || c == '\t'; }
 
 const char* feature_name(Feature f) { return kNames[static_cast<size_t>(f)]; }
 
-Features features_all() { return {kAll}; }
-Features features_none() { return {0}; }
+Features features_all() { return kAll; }
+Features features_none() { return {}; }
 Features features_of(AimSkill skill) {
   Features f = features_all();
   // No skill reads a turn a whole reaction late (`eye`): it held every level's aim under people's
@@ -77,17 +170,23 @@ bool apply_features(std::string_view text, Features& f, std::string& error) {
 }
 
 std::string features_text(const Features& f) {
-  // What no preset holds (`trial`, `ahead`) is written after the preset's part, when on.
-  constexpr uint64_t kExtra = ~kAll & ((kTrial << 1) - 1);
+  // What no preset holds (`trial`, the ones judged) is written after the preset's part, when on.
   std::string extra;
-  for (size_t k = 0; k < kFeatures; k++)
-    if (((kExtra >> k) & 1u) && f[static_cast<Feature>(k)]) extra += std::string(",+") + kNames[k];
-  const uint64_t bits = f.bits & kAll;
-  if (bits == kAll) return "all" + extra;
-  if (bits == 0) return "none" + extra;
+  bool all = true, none = true;
+  for (size_t k = 0; k < kFeatures; k++) {
+    const auto x = static_cast<Feature>(k);
+    if (!kAll[x]) {
+      if (f[x]) extra += std::string(",+") + kNames[k];
+      continue;
+    }
+    all = all && f[x];
+    none = none && !f[x];
+  }
+  if (all) return "all" + extra;
+  if (none) return "none" + extra;
   std::string off = "all", on = "none";
   for (size_t k = 0; k < kFeatures; k++) {
-    if ((kExtra >> k) & 1u) continue;
+    if (!kAll[static_cast<Feature>(k)]) continue;
     if (f[static_cast<Feature>(k)])
       on += std::string(",+") + kNames[k];
     else

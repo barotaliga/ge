@@ -46,13 +46,26 @@ constexpr double kCalmAbout = 360;  // and for an about-face
 // recordings): the view turns 103 degrees a second on average, 7 % of it past 360 (people 107 and
 // 6 %; the aim's flick back gave 162 and 14 %); at 180 the bots fought less (frags -0.9 a minute).
 constexpr double kBackTurn = 360;
+// `paceback`: the hand's stroke back to the way this much slower than its aim's (Fitts time).
+constexpr double kBackPace = 2.0;
+// `retreatrun`: a player coming on faster than this is chasing, units/s.
+constexpr double kChasing = 100;
+// `noback`: roaming, a player more than this far off the way walked is not aimed at, degrees.
+constexpr float kFrontOnly = 100;
 
 bool walking_mode(PilotMode pm) {
   return pm == PilotMode::walk || pm == PilotMode::idle || pm == PilotMode::wait ||
          pm == PilotMode::ride || pm == PilotMode::arrived;
 }
-constexpr double kCalmDrift = 3;   // degrees a second of the hand's drift, at most
-constexpr float kCalmAhead = 320;  // units on along the route the calm view looks at
+constexpr double kCalmDrift = 3;      // degrees a second of the hand's drift, at most
+constexpr float kCalmAhead = 320;     // units on along the route the calm view looks at
+constexpr float kCalmVelSpeed = 150;  // (`calmvel`) past this, units/s, the calm view on the run
+constexpr double kCalmVelBand = 8;    // and held within this of it, degrees
+constexpr float kLookTurnMax = 60;    // (`lookturn`) the calm look this near the walk at most
+// (`viewbook`) people's view at a spot read off this many frames at least, this consistent
+// (hundredths of the mean resultant length), moving past this, units/s.
+constexpr int32_t kBookFrames = 30, kBookConsistency = 50;
+constexpr float kBookSpeed = 150;
 // The glance (bot.hpp `glance`): how often, how far round, what counts as open, how long held.
 constexpr double kGlanceMin_s = 1.2, kGlanceSpread_s = 1.3;
 constexpr float kGlanceSide = 75, kGlanceBack = 120;
@@ -106,6 +119,244 @@ void hand_step(Bot& b, const double want[2], double dt, double tol_x, double tol
   out[1] = std::fmax(-70.0, std::fmin(80.0, -y));
 }
 
+// A HOP'S KEYS IN THE AIR under a view the pilot did not press (the aim's `aimhop`, the hand's or
+// a spot watched `airkeys`): of the key sets allowed (0 forward, clockwise by 45 degrees; -1 none),
+// the one whose air move (pmove's air accelerate: the wish's share along the velocity capped at
+// 30) leaves the velocity best: the most speed, less `kAirTurnCost` a degree it lies past
+// `kAirBand` off the hop's way, plus `kAirCurve` a degree it bends toward `curve` (the side the
+// pilot holds: a flight kept curving, not let go into a plain arc, which an enemy's aim reads
+// exactly; dm2 head to head: -5.6 a match without the curve, +4.6 with it). The set held last is
+// kept unless another beats it by `kAirKeep`.
+constexpr double kAirBand = 15, kAirTurnCost = 0.5, kAirKeep = 0.3, kAirCurve = 0.3;
+// `airview`: the hop's view in the air this far toward the turn off the velocity, degrees, once
+// the flight is past this speed, units/s.
+constexpr float kAirViewLead = 2, kAirViewSpeed = 100;
+// and the keys chosen for the view this many commands on, when a key pressed now goes down.
+constexpr float kKeyLand = 1.5f;
+// `circleview`: a circle jump's view this far ahead of the velocity into the turn, degrees.
+constexpr float kCircleViewLead = 12;
+// `airwall`: each set's velocity looked along this far ahead, s, and a look all walled charged
+// this.
+constexpr double kWallLook_s = 0.4, kWallCost = 60;
+// `airwalk`: a walk in the air pressed by the air's sets past this speed, units/s.
+constexpr float kAirWalkSpeed = 100;
+
+// `airwall`: where the flight is (its server, its origin, its slot), to charge a set whose velocity
+// runs into a wall or a player within `kWallLook_s`; null: no look.
+struct AirWall {
+  const Server* sv = nullptr;
+  Vec3f at;
+  int me = 0;
+  // `airarc`: each set FLOWN held through the look (the air move a command, the way traced each
+  // `kArcTrace` commands, the velocity clipped along a wall it meets) and scored by the speed it
+  // keeps, not its velocity of one command run straight on: a set that turns the flight clear of a
+  // corner beats none, which meets the wall square.
+  bool arc = false;
+};
+// `airarc`: the look's way traced every this many commands, and the look, s (a set is judged as
+// held through it, which undervalues none now and a turn later: the shorter the look, the less;
+// 0.15-0.4 s all halved the wall hits on dm2, 0.15 kept the most speed).
+constexpr int kArcTrace = 4;
+constexpr double kArcLook_s = 0.15;
+
+// On the GROUND (`ground`: `circlekeys`, a circle jump's curve), friction first (`friction` a
+// second of the speed, at least `stopspeed`'s) and the wish's share along the velocity capped at
+// maxspeed.
+int aim_air_set(Vec3f v, float view_yaw, float way_yaw, float maxspeed, float accel, double dt,
+                int held, uint8_t allowed = 0xff, int curve = 0, const AirWall* wall = nullptr,
+                const MoveSettings* ground = nullptr) {
+  if (ground != nullptr) {
+    const double sp = std::sqrt(static_cast<double>(v.x) * v.x + static_cast<double>(v.y) * v.y);
+    if (sp > 1) {
+      const double drop = std::fmax(sp, static_cast<double>(ground->stopspeed)) *
+                          static_cast<double>(ground->friction) * dt;
+      const double k = std::fmax(0.0, sp - drop) / sp;
+      v = {static_cast<float>(v.x * k), static_cast<float>(v.y * k), v.z};
+    }
+  }
+  const double cap = ground != nullptr ? static_cast<double>(maxspeed) : 30.0;
+  const double h0 =
+      core::libm::atan2(static_cast<double>(v.y), static_cast<double>(v.x)) * (180 / core::kPi);
+  const auto off_way = [&](double vx, double vy) {
+    const double h = core::libm::atan2(vy, vx) * (180 / core::kPi);
+    double e = h - way_yaw;
+    while (e > 180) e -= 360;
+    while (e < -180) e += 360;
+    e = std::fabs(e) - kAirBand;
+    return e > 0 ? e : 0.0;
+  };
+  const auto score = [&](double vx, double vy) {
+    double sc = std::sqrt(vx * vx + vy * vy) - kAirTurnCost * off_way(vx, vy);
+    if (curve != 0) {
+      // The curve the side held turns (the right side clockwise), worth `kAirCurve` a degree: a
+      // flight kept bending, not let go into a plain arc.
+      double d = core::libm::atan2(vy, vx) * (180 / core::kPi) - h0;
+      while (d > 180) d -= 360;
+      while (d < -180) d += 360;
+      sc += kAirCurve * (-d * curve);
+    }
+    if (wall != nullptr) {
+      // The velocity flown on `kWallLook_s` (level: the arc's drop left out) with the player's box:
+      // the share of it short of a wall or a body, charged `kWallCost` a whole look.
+      const Vec3f to{wall->at.x + static_cast<float>(vx * kWallLook_s),
+                     wall->at.y + static_cast<float>(vy * kWallLook_s), wall->at.z};
+      const HullTrace tr =
+          trace_move(*wall->sv, wall->at, kPlayerMins, kPlayerMaxs, to, 0, wall->me);
+      sc -= kWallCost * (1.0 - static_cast<double>(tr.fraction));
+    }
+    return sc;
+  };
+  const double reach = static_cast<double>(accel) * maxspeed * dt;
+  if (wall != nullptr && wall->arc && ground == nullptr) {
+    // (`airarc`) The set held for the look: its wish fixed in the world (the view held), the
+    // velocity turning under it; a wall met takes the velocity's part into it.
+    // NOLINTNEXTLINE(bugprone-incorrect-roundings): positive, the bits held by the bot's digests
+    const int steps = static_cast<int>(kArcLook_s / dt + 0.5);
+    const auto flown = [&](int k) {
+      double wx = 0, wy = 0;
+      if (k >= 0) {
+        const double a = (view_yaw - 45.0 * k) * (core::kPi / 180);
+        wx = core::libm::cos(a);
+        wy = core::libm::sin(a);
+      }
+      double vx = v.x, vy = v.y;
+      Vec3f from = wall->at;
+      double px = from.x, py = from.y;
+      double first_vx = 0, first_vy = 0;
+      for (int i = 1; i <= steps; i++) {
+        if (k >= 0) {
+          const double add = cap - (vx * wx + vy * wy);
+          if (add > 0) {
+            const double sp = add < reach ? add : reach;
+            vx += sp * wx;
+            vy += sp * wy;
+          }
+        }
+        if (i == 1) {
+          first_vx = vx;
+          first_vy = vy;
+        }
+        px += vx * dt;
+        py += vy * dt;
+        if (i % kArcTrace != 0 && i != steps) continue;
+        const Vec3f to{static_cast<float>(px), static_cast<float>(py), from.z};
+        const HullTrace tr = trace_move(*wall->sv, from, kPlayerMins, kPlayerMaxs, to, 0, wall->me);
+        if (tr.fraction < 1 && !tr.startsolid) {
+          const double nx = tr.plane.normal.x, ny = tr.plane.normal.y;
+          const double into = vx * nx + vy * ny;
+          if (into < 0) {
+            vx -= into * nx;
+            vy -= into * ny;
+          }
+          px = tr.endpos.x;
+          py = tr.endpos.y;
+        }
+        from = {static_cast<float>(px), static_cast<float>(py), from.z};
+      }
+      // The speed kept, less the turn off the way at the look's end, and the curve of the
+      // command itself.
+      double sc = std::sqrt(vx * vx + vy * vy) - kAirTurnCost * off_way(vx, vy);
+      if (curve != 0) {
+        double d = core::libm::atan2(first_vy, first_vx) * (180 / core::kPi) - h0;
+        while (d > 180) d -= 360;
+        while (d < -180) d += 360;
+        sc += kAirCurve * (-d * curve);
+      }
+      return sc;
+    };
+    int best = -1;
+    double best_score = flown(-1);
+    double held_score = held < 0 ? best_score : -1e30;
+    for (int k = 0; k < 8; k++) {
+      if (((allowed >> k) & 1u) == 0) continue;
+      const double sc = flown(k);
+      if (k == held) held_score = sc;
+      if (sc > best_score) {
+        best_score = sc;
+        best = k;
+      }
+    }
+    return held_score + kAirKeep >= best_score ? held : best;
+  }
+  int best = -1;
+  double best_score = score(v.x, v.y);
+  double held_score = held < 0 ? best_score : -1e30;
+  for (int k = 0; k < 8; k++) {
+    if (((allowed >> k) & 1u) == 0) continue;
+    const double a = (view_yaw - 45.0 * k) * (core::kPi / 180);
+    const double wx = core::libm::cos(a), wy = core::libm::sin(a);
+    const double add = cap - (v.x * wx + v.y * wy);
+    double vx = v.x, vy = v.y;
+    if (add > 0) {
+      const double sp = add < reach ? add : reach;
+      vx += sp * wx;
+      vy += sp * wy;
+    }
+    const double sc = score(vx, vy);
+    if (k == held) held_score = sc;
+    if (sc > best_score) {
+      best_score = sc;
+      best = k;
+    }
+  }
+  return held_score + kAirKeep >= best_score ? held : best;
+}
+
+// `hopside`: the strafe key alone in a hop's air, the side the view turns toward (the mouse moving
+// right: the right key, set 2; left: set 6), past `kTurnSeen` degrees a command; a still view keeps
+// the side held (`held`), else the pilot's.
+constexpr float kTurnSeen = 0.05f;
+uint8_t side_by_turn(float turn, int held, int pilot_side) {
+  if (turn < -kTurnSeen) return 1u << 2;
+  if (turn > kTurnSeen) return 1u << 6;
+  if (held == 2 || held == 6) return static_cast<uint8_t>(1u << held);
+  return pilot_side > 0 ? 1u << 2 : pilot_side < 0 ? 1u << 6 : (1u << 2) | (1u << 6);
+}
+
+// `leadwall`: a target's way across slid along the walls (intercept.hpp `SlideAcross`): the
+// player's box traced a step up (stairs are climbed), and what is left past a wall projected along
+// it, twice, as the move bumps.
+struct LeadWall {
+  const Server* sv = nullptr;
+  int ent = 0;  // the target, passed through
+};
+Vec3f lead_slide(const void* ctx, Vec3f from, Vec3f to) {
+  const LeadWall& w = *static_cast<const LeadWall*>(ctx);
+  constexpr float kUp = 18;  // the move's step
+  Vec3f a{from.x, from.y, from.z + kUp};
+  Vec3f b{to.x, to.y, from.z + kUp};
+  for (int bump = 0; bump < 2; bump++) {
+    const HullTrace tr = trace_move(*w.sv, a, kPlayerMins, kPlayerMaxs, b, kTraceNoMonsters, w.ent);
+    if (tr.startsolid) return to;  // no room a step up: on as before
+    if (tr.fraction >= 1) return {b.x, b.y, to.z};
+    const Vec3f n = tr.plane.normal;
+    Vec3f left{b.x - tr.endpos.x, b.y - tr.endpos.y, 0};
+    const float into = left.x * n.x + left.y * n.y;
+    left = {left.x - n.x * into, left.y - n.y * into, 0};
+    a = tr.endpos;
+    b = {a.x + left.x, a.y + left.y, a.z};
+  }
+  const HullTrace tr = trace_move(*w.sv, a, kPlayerMins, kPlayerMaxs, b, kTraceNoMonsters, w.ent);
+  return {tr.endpos.x, tr.endpos.y, to.z};
+}
+
+// `circlekeys`: a circle jump's curve on the ground pressed under the view the keys land under
+// (`land_yaw`): the set the ground move carries furthest on round the hop's way, bending to the
+// curve's side, charged for a wall as the air's (`airwall`); held as the air's set is.
+void circle_keys(Bot& b, const Server& sv, const Edict& self, int me, float land_yaw, int msec,
+                 MoveCmd& cmd) {
+  const Pilot& hp = b.pilot.pilot;
+  const float ms = self.maxspeed > 0 ? self.maxspeed : sv.set.move.maxspeed;
+  const AirWall wall{&sv, self.origin, me, b.airarc};
+  b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms, sv.set.move.accelerate,
+                          msec / 1000.0, b.air_set, 0xff, hp.circle_side,
+                          b.airwall ? &wall : nullptr, &sv.set.move);
+  const int k = b.air_set;
+  cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
+  cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
+  b.stats.circle_keys++;
+}
+
 MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   Bot& b = *static_cast<Bot*>(ctx);
   const int me = slot + 1;
@@ -118,6 +369,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   // The pilot's command, with its own trace (pilot_next advances the command count). Under the
   // mouse hand a rocket jump's shot waits for the hand's view (pilot.hpp `shot_hand`).
   b.pilot.pilot.shot_hand = b.mouse && b.aim.mouse;
+  b.pilot.pilot.no_circle = b.circleaim && b.aiming;
   MoveCmd cmd = pilot_source(b.pilot).next(&b.pilot, sv, slot, msec);
   const float pilot_yaw = b.pilot.pilot.yaw;
   // Swimming (`pools`), the pilot's wish is pressed again under another view in three dimensions:
@@ -143,9 +395,34 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       }
     }
   }
-  const bool fresh =
-      c && ai::known(c->seen) && (c->visible || ai::age(c->seen, sv.time) <= b.aim.hold_s);
+  bool fresh = c && ai::known(c->seen) && (c->visible || ai::age(c->seen, sv.time) <= b.aim.hold_s);
+  // (`noback`, M18r.md 0w) Roaming on its way, a player off behind it is not turned to: the view
+  // stays on the way walked (the back key is a chased fight's, not a walk's).
+  if (fresh && b.aim_front_only && !b.aiming && walking_mode(b.pilot.pilot.mode)) {
+    const double dx = c->seen.x - eye.x, dy = c->seen.y - eye.y;
+    const double to = core::libm::atan2(dy, dx) * (180 / core::kPi);
+    if (std::fabs(wrap(static_cast<float>(to) - pilot_yaw)) > kFrontOnly) fresh = false;
+  }
+  // (`retreatrun`, M18r.md 0w) Backing off, one off behind the way walked who is not coming on is
+  // not fired at: the bot runs for what it went for, facing its way (the back key is for a
+  // chaser).
+  if (fresh && b.run_front_only && walking_mode(b.pilot.pilot.mode)) {
+    const double dx = c->seen.x - eye.x, dy = c->seen.y - eye.y;
+    const double to = core::libm::atan2(dy, dx) * (180 / core::kPi);
+    const double d = std::sqrt(dx * dx + dy * dy);
+    const double coming = d > 1 ? -(c->course.x * dx + c->course.y * dy) / d : 0;
+    if (coming < kChasing && std::fabs(wrap(static_cast<float>(to) - pilot_yaw)) > kFrontOnly)
+      fresh = false;
+  }
+  // (`letgo`, M18r.md 0w) The hold on one lost from sight goes once he lies off behind
+  // the way walked: a person turns back to his way, not walks it backwards watching a corner.
+  if (fresh && b.hold_front_only && b.aiming && !c->visible && walking_mode(b.pilot.pilot.mode)) {
+    const double dx = c->seen.x - eye.x, dy = c->seen.y - eye.y;
+    const double to = core::libm::atan2(dy, dx) * (180 / core::kPi);
+    if (std::fabs(wrap(static_cast<float>(to) - pilot_yaw)) > kFrontOnly) fresh = false;
+  }
   double want[2];
+  bool back_stroke = false;  // (`paceback`) the view back to the way by the hand's own stroke
   if (fresh) {
     // The lead for the hands' lag (`aim.lead_s`): the mouse hand leads its own strokes by the
     // target's motion over each stroke's time (ai/mouse.hpp), so none is added for it.
@@ -168,6 +445,12 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     m.at = {static_cast<float>(c->seen.x), static_cast<float>(c->seen.y),
             static_cast<float>(c->seen.z)};
     m.velocity = c->course;
+    if (b.leadarc && b.shot_speed > 0) m.turn = c->turn;  // (`leadarc`: a hopper's curve)
+    const LeadWall lead_wall{&sv, c->ent};
+    if (b.leadwall && c->ent >= 1 && c->ent <= sv.set.maxclients) {
+      m.slide = lead_slide;
+      m.slide_ctx = &lead_wall;
+    }
     if (b.target_arc && c->ent >= 1 &&
         c->ent <= sv.set.maxclients) {  // a player falls; a monster flies
       const Vec3f down{m.at.x, m.at.y, m.at.z - 4096};
@@ -185,7 +468,15 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       shot.speed = b.shot_speed;
       shot.lob = b.lob;
       const Vec3f muzzle = b.lob ? self.origin : eye;
-      const Intercept ic = intercept(muzzle, m, lead, shot, b.intercepts);
+      Intercept ic = intercept(muzzle, m, lead, shot, b.intercepts);
+      if (b.leadmean && b.shot_speed > 0) {
+        // THE DODGER'S MIDDLE (`leadmean`): led on his course for a short flight, on his drift
+        // (the course averaged over `kDrift_s`) for one that long or more: a person dodging turns
+        // back every 0.3-0.5 s, so the course of now misses after his next turn.
+        const double w = std::fmin(1.0, (lead + ic.flight_s) / static_cast<double>(kDrift_s));
+        m.velocity = c->course + (c->drift - c->course) * static_cast<float>(w);
+        ic = intercept(muzzle, m, lead, shot, b.intercepts);
+      }
       at = ic.at;
       at.z += b.aim_dz;
       aim_angles(look_from, at, yaw, pitch);
@@ -204,7 +495,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       b.strafe = b.pilot.pilot.set.strafe;
       b.hop = b.pilot.pilot.set.hop;
       b.pilot.pilot.set.strafe = false;
-      b.pilot.pilot.set.hop = false;
+      if (!b.aimhop) b.pilot.pilot.set.hop = false;  // (`aimhop`: the hop goes on under the aim)
     }
     const bool resight = c->ent == b.target && sv.time - b.target_seen_at > kResight_s;
     if (c->visible && (!b.aiming || c->ent != b.target || resight) && b.aim.react_med > 0) {
@@ -264,7 +555,11 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     }
     // A calm view goes back onto the way, or over to a spot watched, at a hand's pace
     // (`kBackTurn`), not the aim's flick: nothing is in sight to snap onto.
-    if (b.calm && b.paced) {
+    // (`paceback`) Under the mouse hand the hand's own stroke is the pace: a want paced from the
+    // view a few degrees a command gave the hand one small stroke a look (about 15 degrees a
+    // second back to the way, the bot walking it backwards meanwhile).
+    back_stroke = b.calm && b.paced && b.paceback && b.mouse && b.aim.mouse;
+    if (b.calm && b.paced && !back_stroke) {
       const double dt = msec / 1000.0;
       const double dy = want[0] - b.yaw, dp = want[1] - b.pitch;
       want[0] = b.yaw + std::fmax(-kBackTurn * dt, std::fmin(kBackTurn * dt, dy));
@@ -301,15 +596,21 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   // coming: under the hand, the stroke onto the jump's view starts its Fitts time before the
   // shot, so it lands as the jump goes (the aim and a look give way to it).
   Pilot& jp = b.pilot.pilot;
+  const float view_was =
+      b.yaw;  // (`airwalk`: the view's turn this command, carried on as keys land)
   const bool blast_shot = jp.shot_now;
   const double shot_dx = wrap(jp.shot_yaw - b.yaw), shot_dy = jp.shot_pitch - b.pitch;
   const bool shot_due =
       b.mouse && b.aim.mouse && !swim3d && jp.shot_pitch != 0 && !blast_shot &&
       jp.shot_in_s <=
           b.hand.fitts(std::sqrt(shot_dx * shot_dx + shot_dy * shot_dy), kShotWidth) + kShotSpare_s;
-  if ((b.aiming || b.looking) && !blast_shot && !shot_due) {
+  // People's hop start under way (pilot.hpp `recipes`): its view is the recording's, a person's
+  // own mouse already, so it is played as it is, with no watch over it (an aim still comes first).
+  const bool recipe_on = jp.recipe >= 0 && jp.mode == PilotMode::hop;
+  if ((b.aiming || (b.looking && !recipe_on)) && !blast_shot && !shot_due) {
     static constexpr const char* kNames[2] = {"aim_yaw", "aim_pitch"};
     ai::record_intent(why, kNames, want);
+    const float aim_yaw_was = b.yaw;
     double out[2];
     if (b.mouse && b.aim.mouse) {
       // The hand: onto the enemy within his width (his middle's half width, 16 units, at his
@@ -318,10 +619,15 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       const bool sighted = b.aiming && c && c->visible;
       const double half = core::libm::atan2(16.0, std::fmax(1.0, static_cast<double>(b.aim_dist))) *
                           (180 / core::kPi);
-      const double tol = sighted ? std::fmax(0.4, half * 0.7) : 3;
+      double tol = sighted ? std::fmax(0.4, half * 0.7) : 3;
+      // (`levelview`) A view paced back from a look (`kBackTurn`) moves under 3 degrees a command
+      // in pitch: inside a 3-degree tolerance the hand never strokes, and a look down at the feet
+      // stayed there (79 degrees, 35 s on the run). The tolerance under the pace's step.
+      if (b.levelview && !b.aiming && b.calm && b.paced) tol = 0.5;
       const double due = sighted && !b.beam ? b.shot_due_s : 0;
-      hand_step(b, want, msec / 1000.0, tol, tol, std::fmax(1.0, half * 2), due, b.aiming ? 1 : 1.3,
-                sighted, out);
+      const double pace = back_stroke ? kBackPace : b.aiming ? 1 : 1.3;
+      hand_step(b, want, msec / 1000.0, tol, tol, std::fmax(1.0, half * 2), due, pace, sighted,
+                out);
     } else {
       b.aim_hands.step(want, out);
     }
@@ -338,15 +644,78 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     else
       turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
     cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
+    const Pilot& hp = b.pilot.pilot;
+    // (`airkeys`: a spot watched in a hop's air is pressed for the same way.)
+    if (((b.aimhop && b.aiming) || (b.airkeys && !b.aiming)) && !swim3d &&
+        hp.mode == PilotMode::hop && (self.flags & kFlagOnGround) == 0 && !hp.gap_flight &&
+        hp.lip_pressed_s < 0 && hp.recipe < 0) {
+      // The hop while aiming, in the air: the set that carries the velocity on round the way.
+      const float ms = self.maxspeed > 0 ? self.maxspeed : sv.set.move.maxspeed;
+      const float land_yaw = b.airview ? wrap(cmd.angles.y + wrap(b.yaw - aim_yaw_was) * kKeyLand)
+                                       : wrap(cmd.angles.y);
+      const AirWall wall{&sv, self.origin, me, b.airarc};
+      const uint8_t allowed =
+          b.hopside ? side_by_turn(wrap(b.yaw - aim_yaw_was), b.air_set, hp.strafe_side) : 0xff;
+      b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms, sv.set.move.accelerate,
+                              msec / 1000.0, b.air_set, allowed, 0, b.airwall ? &wall : nullptr);
+      const int k = b.air_set;
+      cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
+      cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
+      if (b.aiming)
+        b.stats.aim_hop_air++;
+      else
+        b.stats.air_keys++;
+      if (why) {
+        why->decide("aimhop");
+        why->fact("way_yaw", hp.hop_aim_yaw);
+        why->fact("set", k);
+        why->choose(k < 0 ? "none" : "keys", "the hop in the air under the aim's view");
+      }
+    } else if (b.circlekeys && !swim3d && hp.circling_now && (self.flags & kFlagOnGround) != 0) {
+      circle_keys(b, sv, self, me,
+                  b.airview ? wrap(cmd.angles.y + wrap(b.yaw - aim_yaw_was) * kKeyLand)
+                            : wrap(cmd.angles.y),
+                  msec, cmd);
+    } else {
+      b.air_set = -1;
+    }
   } else {
-    if (b.calm && walking_mode(b.pilot.pilot.mode)) {
+    if (recipe_on) {
+      b.view_by = "recipe";
+      b.yaw = pilot_yaw;
+      cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
+    } else if (b.calm && walking_mode(b.pilot.pilot.mode)) {
       // The calm view (bot.hpp): still in the band, turned at a hand's pace past it, drifting.
       const double dt = msec / 1000.0;
       b.calm_t += dt;
       // Where it looks: the route's point about `kCalmAhead` units on, so the view turns before a
       // corner to see round it and holds still on a straight; else the way it walks.
       float look_yaw = pilot_yaw;
-      {
+      if (b.lookway) {
+        // The way in sight (bot.hpp `lookway`): the furthest point on that the eye still sees.
+        const Edict& me_ent = sv.edicts[static_cast<size_t>(me)];
+        std::vector<uint8_t> breaks;
+        const std::vector<Vec3f> path = pilot_path(b.pilot.pilot, me_ent.origin, &breaks);
+        const float vh = b.senses.set.view_height;
+        const Vec3f eye_at{me_ent.origin.x, me_ent.origin.y, me_ent.origin.z + vh};
+        float run = 0;
+        size_t best = 0;
+        for (size_t k = 1; k < path.size() && k < breaks.size() && !breaks[k]; k++) {
+          const Vec3f d = path[k] - path[k - 1];
+          run += std::sqrt(d.x * d.x + d.y * d.y);
+          const Vec3f to_eye{path[k].x, path[k].y, path[k].z + vh};
+          if (trace_move(sv, eye_at, {}, {}, to_eye, kTraceNoMonsters, me).fraction < 1) break;
+          best = k;
+          if (run >= kCalmAhead) break;
+        }
+        const Vec3f to = path[best] - me_ent.origin;
+        if (best > 0 && to.x * to.x + to.y * to.y > 64 * 64) {
+          float py = 0, pp = 0;
+          aim_angles(me_ent.origin, path[best], py, pp);
+          // A point behind the walk (a node just passed): the walk's heading instead.
+          if (std::fabs(wrap(py - pilot_yaw)) <= 90) look_yaw = py;
+        }
+      } else {
         const Edict& me_ent = sv.edicts[static_cast<size_t>(me)];
         const std::vector<Vec3f> path = pilot_path(b.pilot.pilot, me_ent.origin, nullptr);
         float run = 0;
@@ -364,7 +733,32 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
           }
         }
       }
+      if (b.look_turn && std::fabs(wrap(look_yaw - pilot_yaw)) > kLookTurnMax) look_yaw = pilot_yaw;
+      bool booked = false;
+      if (b.view_booked && b.view_book != nullptr) {
+        const Edict& me_ent = sv.edicts[static_cast<size_t>(me)];
+        const float vx = me_ent.velocity.x, vy = me_ent.velocity.y;
+        float book_yaw = 0;
+        if (vx * vx + vy * vy > kBookSpeed * kBookSpeed &&
+            view_book_yaw(*b.view_book, me_ent.origin,
+                          static_cast<float>(core::libm::atan2(vy, vx) * (180 / core::kPi)),
+                          kBookFrames, kBookConsistency, book_yaw)) {
+          look_yaw = book_yaw;
+          booked = true;
+        }
+      }
+      // (`calmvel`) Moving at a run, the calm view looks the way it moves: an enemy appearing ahead
+      // of the run was on the screen 25 % of the time with the view on the route's point 320 on
+      // (through a corner's wall), 83 % with it on the way it moved (e1m2).
       double band = kCalmBand;
+      if (b.calm_vel) {
+        const Edict& me_ent = sv.edicts[static_cast<size_t>(me)];
+        const float vx = me_ent.velocity.x, vy = me_ent.velocity.y;
+        if (vx * vx + vy * vy > kCalmVelSpeed * kCalmVelSpeed) {
+          look_yaw = pilot_yaw;
+          band = kCalmVelBand;  // the mouse steers the run: the keys stay on W
+        }
+      }
       if (b.listen) {
         // THE SOUND'S SWIPE (bot.hpp): an enemy heard where none was known, looked at.
         const Vec3f o_at = sv.edicts[static_cast<size_t>(me)].origin;
@@ -446,11 +840,15 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
           b.glance_back_until = b.glance_until + 0.6;
         }
       }
+      b.walk_yaw = pilot_yaw;
+      b.look_yaw = look_yaw;
       const double off = wrap(look_yaw - b.yaw);
       // A swipe there and back at a turn meant's pace (the glance, the sound's).
       const bool swipe =
           (b.glance && sv.time < b.glance_back_until) || (b.listen && sv.time < b.sound_back_until);
-      b.view_by = "calm";
+      b.view_by = !swipe                                       ? (booked ? "book" : "calm")
+                  : (b.listen && sv.time < b.sound_back_until) ? "sound"
+                                                               : "glance";
       if (b.mouse && b.aim.mouse) {
         // The hand's strokes onto the look, at ease (an about-face at a turn meant's pace); the
         // pitch let lie within kCalmPitchTol of level.
@@ -483,6 +881,35 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       // are the same); a blast jump's pitched view stays the pilot's. Under water it looks along
       // the swim within kSwimBand, at ease.
       double want_view[2] = {b.yaw + wrap(pilot_yaw - b.yaw), 0};
+      const Pilot& vp = b.pilot.pilot;
+      const float flat_v =
+          std::sqrt(self.velocity.x * self.velocity.x + self.velocity.y * self.velocity.y);
+      const bool circle_view = b.circleview && !swim3d && vp.circling_now &&
+                               (self.flags & kFlagOnGround) != 0 && flat_v > kAirViewSpeed;
+      if (circle_view) {
+        // A CIRCLE JUMP'S VIEW (`circleview`): on the velocity's heading, as people's.
+        const float vh =
+            static_cast<float>(core::libm::atan2(static_cast<double>(self.velocity.y),
+                                                 static_cast<double>(self.velocity.x)) *
+                               (180 / core::kPi));
+        // (Led into the turn, the right side turning clockwise: the hand runs behind it.)
+        want_view[0] =
+            b.yaw + wrap(vh - static_cast<float>(vp.circle_side) * kCircleViewLead - b.yaw);
+      }
+      if (b.airview && !swim3d && vp.mode == PilotMode::hop && (self.flags & kFlagOnGround) == 0 &&
+          !vp.gap_flight && vp.lip_pressed_s < 0 && vp.recipe < 0 && vp.strafe_side != 0 &&
+          flat_v > kAirViewSpeed) {
+        // THE HOP'S VIEW IN THE AIR (`airview`): on the velocity, `kAirViewLead` toward the turn
+        // (the right side turns clockwise), as people's sits 2-4 degrees off it; the pilot's view
+        // is already a hand's lag late, and the mouse's strokes after it put it past the window
+        // where the side key gains.
+        const float vh =
+            static_cast<float>(core::libm::atan2(static_cast<double>(self.velocity.y),
+                                                 static_cast<double>(self.velocity.x)) *
+                               (180 / core::kPi));
+        want_view[0] = b.yaw + wrap(vh - static_cast<float>(vp.strafe_side) * kAirViewLead - b.yaw);
+      }
+      const float yaw_was = b.yaw;
       double out[2];
       b.view_by = swim3d ? "swim" : "air";
       if (shot_due) {  // the stroke onto the jump's view, timed to land with its shot
@@ -504,6 +931,43 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       else
         turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
       cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
+      const Pilot& hp = b.pilot.pilot;
+      if (b.airkeys && !swim3d && !shot_due && hp.mode == PilotMode::hop &&
+          (self.flags & kFlagOnGround) == 0 && !hp.gap_flight && hp.lip_pressed_s < 0 &&
+          hp.recipe < 0 && hp.strafe_side != 0) {
+        // THE HOP'S AIR UNDER THE HAND (`airkeys`): the hand's view runs a little behind the
+        // pilot's, and the side key turned under it brakes past 90 degrees off the velocity: the
+        // pilot's side key, alone or with forward, pressed while it carries the velocity on, else
+        // let go (as a person lets go of a key the mouse has not caught up with).
+        const uint8_t sides = b.hopside
+                                  ? side_by_turn(wrap(b.yaw - yaw_was), b.air_set, hp.strafe_side)
+                              : hp.strafe_side > 0 ? (1u << 1) | (1u << 2)
+                                                   : (1u << 6) | (1u << 7);
+        const float ms = self.maxspeed > 0 ? self.maxspeed : sv.set.move.maxspeed;
+        // (`airview`: the view the keys will land under, the hand's turn carried on that long.)
+        const float land_yaw =
+            b.airview ? wrap(cmd.angles.y + wrap(b.yaw - yaw_was) * kKeyLand) : wrap(cmd.angles.y);
+        const AirWall wall{&sv, self.origin, me, b.airarc};
+        b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms, sv.set.move.accelerate,
+                                msec / 1000.0, b.air_set, sides, hp.strafe_side,
+                                b.airwall ? &wall : nullptr);
+        const int k = b.air_set;
+        cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
+        cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
+        b.stats.air_keys++;
+      } else if ((circle_view && !shot_due) ||
+                 (b.circlekeys && !swim3d && !shot_due && hp.circling_now &&
+                  (self.flags & kFlagOnGround) != 0)) {
+        // (`circleview`: the set the ground move carries furthest under the view the keys land
+        // under: forward and the side key once the hand is on the velocity; while it swings
+        // there, the set that does not brake. `circlekeys` presses the same.)
+        circle_keys(
+            b, sv, self, me,
+            b.airview ? wrap(cmd.angles.y + wrap(b.yaw - yaw_was) * kKeyLand) : wrap(cmd.angles.y),
+            msec, cmd);
+      } else if (!b.aiming) {
+        b.air_set = -1;
+      }
     } else if (b.mouse && b.aim.mouse) {
       // The pilot's pitched view (a grenade jump's throw, a rocket jump's shot): the hand's
       // strokes there; the command that fires takes the view exactly (the stroke timed to land
@@ -527,6 +991,32 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     }
     b.wanted[0] = b.pressed[0] = b.yaw;
     b.wanted[1] = b.pressed[1] = b.pitch;
+  }
+  // A WALK IN THE AIR (`airwalk`): a hop's stretch ended mid-flight or a drop off an edge, the
+  // walk's forward key turned under the view pressed brakes (37 units/s a chained hop's flight on
+  // dm2): the air's key set under the view the keys land under that carries the velocity on round
+  // toward the walk's target, as the hop's air (`aim_air_set`), charged for a wall (`airwall`).
+  if (b.airwalk && !swim3d && jp.walk_air && (self.flags & kFlagOnGround) == 0 &&
+      std::sqrt(self.velocity.x * self.velocity.x + self.velocity.y * self.velocity.y) >
+          kAirWalkSpeed) {
+    const float ms = self.maxspeed > 0 ? self.maxspeed : sv.set.move.maxspeed;
+    const float land_yaw =
+        b.airview ? wrap(cmd.angles.y + wrap(b.yaw - view_was) * kKeyLand) : wrap(cmd.angles.y);
+    const AirWall wall{&sv, self.origin, me, b.airarc};
+    b.walk_air_set =
+        aim_air_set(self.velocity, land_yaw, jp.walk_air_yaw, ms, sv.set.move.accelerate,
+                    msec / 1000.0, b.walk_air_set, 0xff, 0, b.airwall ? &wall : nullptr);
+    const int k = b.walk_air_set;
+    cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
+    cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
+    if (why) {
+      why->decide("airwalk");
+      why->fact("way_yaw", jp.walk_air_yaw);
+      why->fact("set", k);
+      why->choose(k < 0 ? "none" : "keys", "a walk in the air: the set that keeps the speed");
+    }
+  } else {
+    b.walk_air_set = -1;
   }
   // The view near enough the coming shot's for it to go (read by the pilot's next command).
   {
@@ -593,7 +1083,28 @@ float bot_hand_override(Bot& b, MoveCmd& cmd, int msec, bool wet) {
 void bot_goal(Bot& b, int32_t goal) {
   b.pilot.goals.assign(1, goal);
   b.pilot.next_goal = 0;
+  b.pilot.then = -1;
+  b.pilot.retarget = -1;
+  const PilotMode m = b.pilot.pilot.mode;
+  if (b.pilot.pilot.set.retarget &&
+      (m == PilotMode::walk || m == PilotMode::hop || m == PilotMode::strafe)) {
+    b.pilot.retarget = goal;  // run on to it from the route under way (`pilot_retarget`)
+    return;
+  }
   b.pilot.pilot.mode = PilotMode::idle;
+}
+
+void bot_goal(Bot& b, int32_t goal, int32_t then, Vec3f at) {
+  bot_goal(b, goal);
+  b.pilot.then = then;
+  b.pilot.then_at = at;
+}
+
+bool bot_chain(Bot& b, int32_t then, Vec3f at) {
+  if (!pilot_chain(b.pilot.pilot, then, at)) return false;
+  b.pilot.goals.assign(1, then);
+  b.pilot.next_goal = 0;
+  return true;
 }
 
 void bot_aim(Bot& b, const AimProfile& aim) {
