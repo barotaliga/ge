@@ -39,7 +39,10 @@ namespace ge::brush::app {
 
 struct LiquidRows {
   std::string water = "water", water_look = "nordic-clear";  // the liquid's row, the water's look
-  std::string lava = "lava", slime = "slime";                // rows of water/liquids.hpp
+  // The look of a water the map draws opaque (LiquidPatch::alpha 1): thick with silt, nothing
+  // seen of its bed.
+  std::string opaque_water_look = "muddy-river";
+  std::string lava = "lava", slime = "slime";  // rows of water/liquids.hpp
   double least_depth = 0.5;  // m: a pool's volume reaches at least this far under its top
   double lava_cover = 0.3;   // the share of the lava crusted over (the classic's lava is molten)
   // degrees C: the melt, cooler than a basalt's 1150 so its light sits among the torch-lit rooms
