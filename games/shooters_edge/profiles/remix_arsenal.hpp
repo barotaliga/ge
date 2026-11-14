@@ -17,6 +17,7 @@
 // ge:summary Classic remix's arsenals: a game's rules with another game's weapons, armour, sounds
 // ge:keywords remix classic-remix cr_items remix-arsenal held-frames sequel-weapons
 // ge:keywords view-model pickup-model fire-sound by-role remix_arsenal held_frames
+// ge:keywords cr_models remix_figure player-figure
 // ge:skill shooter
 // ge:test tests/shooters_edge_remix_test.cpp
 #pragma once
@@ -219,6 +220,31 @@ constexpr const Look* look_of(std::span<const Look> looks, std::string_view name
     }
     if (same) return &l;
   }
+  return nullptr;
+}
+
+// THE FIGURES (`cr_models`): the one figure every player is drawn as while the played game's
+// players wear another game's. The window reads it as the folder `folder` under players/; `file`
+// names where the worn game keeps it when that is not players/<folder>/ (the classic game's own
+// figure, which stands alone), its frames mapped from the played game's figure's by kind
+// (app/figure_frames.hpp).
+struct RemixFigure {
+  std::string_view played;  // the content profile id whose players are drawn
+  std::string_view models;  // the content profile id whose figure they wear
+  std::string_view folder;
+  std::string_view file;  // "": players/<folder>/tris.*
+};
+
+inline constexpr RemixFigure kRemixFigures[] = {
+    {"classic", "sequel", "male", ""},
+    {"sequel", "classic", "classic", "progs/player.mdl"},
+};
+
+// The figure `played`'s players wear as `models`'s, or null (the same game, or no row).
+constexpr const RemixFigure* remix_figure(std::string_view played, std::string_view models) {
+  if (played == models) return nullptr;
+  for (const RemixFigure& f : kRemixFigures)
+    if (f.played == played && f.models == models) return &f;
   return nullptr;
 }
 

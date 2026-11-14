@@ -1064,6 +1064,10 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   `classic`) renames every model and sound as the players are told it, stands each item where
   that game stands it, and the window colours the classic models through the classic palette
   and spreads the sequel hand's firing frames over the classic view models' own.
+  The players' figure is a part of its own: `cr_models` (0 each game's own, 1 the classic
+  game's, 2 the sequel's) draws every player as that game's figure from the next map, its frames
+  played from the played game's by kind (the sequel's marine with its weapon in hand on the
+  classic game's players; the classic figure, its weapon in its own mesh, on the sequel's).
 
 Lab `se-remix` draws a real map of each game from above with its own items and with the other
 game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`); `se-client
