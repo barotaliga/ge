@@ -124,24 +124,26 @@ void set_letters(const ClassicPen& pen, std::string_view text, float x, float y)
   }
 }
 
-// `text` on a tag, its top left at (x, y), classic px; each piece from the lit tags' letters when
-// `lit` and they have it.
-void set_tag(const ClassicPen& pen, std::string_view text, float x, float y, bool lit) {
+// Tag or banner pieces (plate_letters.hpp) from (x, y), classic px.
+void draw_pieces(const ClassicPen& pen, const std::vector<TagPiece>& pieces, float x, float y) {
   const ClassicArt& art = pen.art;
-  std::vector<float> xs;
-  plate_layout(art, text, &xs);
-  for (size_t i = 0; i < xs.size(); i++) {
-    const char c = i == 0 ? '[' : i == text.size() + 1 ? ']' : text[i - 1];
-    const auto glow = lit ? art.letters_lit.find(c) : art.letters_lit.end();
-    const ui::Image& img = glow != art.letters_lit.end() ? glow->second : art.letters.at(c);
+  for (const TagPiece& p : pieces) {
+    const float d = static_cast<float>(p.image->height) / art.height_of(*p.image);
     ui::Box b;
-    b.rect = pen.at(x + xs[i], y, art.width_of(img), kPlateLine);
-    b.image = &img;
-    b.uv = {0, 0, static_cast<float>(img.width), static_cast<float>(img.height)};
+    if (p.shade != 1) b.fill = ui::solid({p.shade, p.shade, p.shade, 1});
+    b.rect = pen.at(x + p.x, y, p.w, kPlateLine);
+    b.image = p.image;
+    b.uv = {p.from * d, 0, p.w * d, static_cast<float>(p.image->height)};
     b.nearest = art.density <= 1;
     b.feather = 0;
     pen.dl.box(b);
   }
+}
+
+// `text` on a tag, its top left at (x, y), classic px; from the lit tags' letters when `lit` and
+// they have them.
+void set_tag(const ClassicPen& pen, std::string_view text, float x, float y, bool lit) {
+  draw_pieces(pen, tag_pieces(pen.art, text, lit, nullptr), x, y);
 }
 
 // Row `id`'s word at (x, y), classic px: in the strips' cut letters, or on the sequel's tags; false
@@ -350,38 +352,10 @@ bool banner_title(const ClassicPen& pen, std::string_view title, float y) {
   }
   if (caps.empty()) return false;
   for (const std::string& text : {caps, mixed}) {
-    std::vector<float> xs;
-    const float wide = banner_layout(art, text, &xs);
+    float wide = 0;
+    const std::vector<TagPiece> pieces = banner_pieces(art, text, &wide);
     if (wide <= 0 || wide > kScreenW) continue;
-    const float x = std::floor((kScreenW - wide) / 2);
-    const ui::Image& frame = *art.find(kBannerFrame);
-    const float d = static_cast<float>(frame.height) / art.height_of(frame);
-    const float shade = banner_shade(art);
-    const float right = art.width_of(frame) - kBannerRight;
-    // The frame's left end, its plain stretched, its right end; then the letters.
-    const auto piece = [&](float from, float w, float at, float span) {
-      ui::Box b;
-      b.fill = ui::solid({shade, shade, shade, 1});
-      b.rect = pen.at(x + at, y, span, kPlateLine);
-      b.image = &frame;
-      b.uv = {from * d, 0, w * d, static_cast<float>(frame.height)};
-      b.nearest = art.density <= 1;
-      b.feather = 0;
-      pen.dl.box(b);
-    };
-    piece(0, kBannerLeft, 0, kBannerLeft);
-    piece(kBannerPlain, 1, kBannerLeft, wide - kBannerLeft - right);
-    piece(kBannerRight, right, wide - right, right);
-    for (size_t i = 0; i < text.size(); i++) {
-      const ui::Image& img = art.letters.at(text[i]);
-      ui::Box b;
-      b.rect = pen.at(x + xs[i], y, art.width_of(img), kPlateLine);
-      b.image = &img;
-      b.uv = {0, 0, static_cast<float>(img.width), static_cast<float>(img.height)};
-      b.nearest = art.density <= 1;
-      b.feather = 0;
-      pen.dl.box(b);
-    }
+    draw_pieces(pen, pieces, std::floor((kScreenW - wide) / 2), y);
     return true;
   }
   return false;
