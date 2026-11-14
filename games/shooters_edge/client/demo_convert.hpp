@@ -139,6 +139,11 @@ std::string format_words(DemoFormat f);
 std::unique_ptr<ConvertStream> single_to_multiview_stream();
 std::unique_ptr<ConvertStream> single_to_client_stream();
 std::unique_ptr<ConvertStream> sequel_to_34_stream();
+// One block of an extended sequel recording (3434 to 3436), its messages `spans` already read
+// into `d`, rewritten as protocol 34's blocks (demo_convert_sequel_ext.cpp). False with the reason.
+bool extended_block_to_34(const Demo& d, std::span<const uint8_t> body,
+                          const std::vector<DemoSpan>& spans, ConvertNotes& notes,
+                          std::vector<std::vector<uint8_t>>& blocks, std::string& error);
 std::unique_ptr<ConvertStream> multiview_to_client_stream();
 std::unique_ptr<ConvertStream> client_to_multiview_stream();
 std::unique_ptr<ConvertStream> multiview_to_single_stream();

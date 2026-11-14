@@ -19,7 +19,7 @@ namespace {
 namespace pg = ge::progs;
 namespace sh = ge::shooter;
 
-// The baseline mod's weapon bits (games/shooters_edge/qc/common/defs.qc) and the quad's.
+// The baseline mod's weapon bits (games/shooters_edge/rules/common_decl.hpp) and the quad's.
 constexpr int32_t kScatter = 1, kDouble = 2, kSpiker = 4, kHeavy = 8, kGrenades = 16;
 constexpr int32_t kRockets = 32, kArc = 64;
 constexpr int32_t kQuadBit = 4194304;

@@ -620,6 +620,21 @@ lab runs it on every preset. Every cheat is out within two seconds, the teleport
 40 m jump. No honest player is flagged, even on `awful`. No cheat moves a mover faster than full
 stick.
 
+**Built (M17l, second part): what is refused before the game.** The trial's connections are sealed
+with a connect token's keys (M17i), and its server sends each player only those within 45 m
+(`interest_radius`). Three more cheaters play:
+
+- The replayer sends its own sealed packets again: the newest, and one half a second old. The
+  replay window refuses both.
+- The forger sends its newest packet with the counter moved on and a byte of the input changed.
+  It does not open.
+- The fisher plays honestly and reads every row it is sent, looking for players out of its sight.
+
+The node counts what it refused for each peer as well as in total (`Peer::forged`,
+`Peer::replayed`). A link's duplicates are counted there too, so the guard does not score them.
+On every preset the server refuses each bad packet that arrives, and none reaches the guard. No
+player is ever sent a row past its sight.
+
 ## Pressure tests (M17m)
 
 The simulated network runs on virtual time, so an hour of play takes seconds and every run is

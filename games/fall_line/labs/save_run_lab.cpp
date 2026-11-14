@@ -19,6 +19,7 @@
 // ge:keywords save-ms load-ms map-build
 // ge:skill save sim labs
 // ge:test tests/play_saves_test.cpp
+#include <algorithm>
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -32,6 +33,7 @@
 #include "fall_line/sim/game.hpp"
 #include "fall_line/sim/hands.hpp"
 #include "fall_line/sim/heli_outing.hpp"
+#include "fall_line/sim/map_cache.hpp"
 #include "fall_line/sim/outing.hpp"
 #include "fall_line/sim/para_outing.hpp"
 #include "fall_line/sim/para_ride.hpp"
@@ -39,6 +41,10 @@
 #include "fall_line/sim/simulate.hpp"
 #include "fall_line/sim/sled_outing.hpp"
 #include "lab/lab.hpp"
+#include "lab/raster.hpp"
+#include "mountain/mapgen/digest.hpp"
+#include "save/cache.hpp"
+#include "save/disk.hpp"
 #include "save/file.hpp"
 
 namespace {
@@ -157,6 +163,65 @@ Result check(const Scene& scene, int64_t limit, int64_t every, ge::lab::Lab& lab
 }
 
 // The bytes of each part of `d`'s state as the save writes it.
+struct CacheLoad {
+  std::string kind;  // race or free
+  bool second = false;
+  bool hit = false;
+  double ms = 0;      // the map from the cache or the generator, the run created, its first step
+  bool same = false;  // the map's digest is the generator's
+};
+
+// The content cache's loads: held (the second of each a hit, every map the generator's), timed,
+// and drawn as bars.
+void report_cache(ge::lab::Lab& lab, const std::vector<CacheLoad>& loads,
+                  const ge::save::ContentCache& cache) {
+  using ge::lab::Det;
+  ge::lab::LabTable t{"a load's map, first and cached, to the run's first step (measured)",
+                      {"map", "load", "from", "ms"},
+                      {}};
+  int wrong = 0;
+  for (const CacheLoad& l : loads) {
+    t.rows.push_back({l.kind, l.second ? "second" : "first", l.hit ? "the cache" : "the generator",
+                      fmt(l.ms, 1)});
+    lab.metric("cache." + l.kind + (l.second ? ".cached-ms" : ".first-ms"), l.ms, "ms",
+               Det::measured);
+    if (l.hit != l.second || !l.same) wrong++;
+  }
+  lab.table(std::move(t), Det::measured);
+  lab.metric("cache.wrong", wrong, "count");
+  lab.metric("cache.bytes", static_cast<double>(cache.counts().bytes_written), "bytes");
+  if (wrong > 0)
+    lab.fail(
+        std::to_string(wrong) +
+            " loads through the content cache missed on the second load "
+            "or built another map",
+        "next: run make test T=map_cache; read games/fall_line/sim/map_cache.cpp; skill: save");
+  // Bars: each load's milliseconds, the first grey and the cached blue.
+  const int w = 760, row = 34, h = 70 + row * static_cast<int>(loads.size());
+  ge::lab::Picture p = ge::lab::create_picture(w, h, {24, 27, 32});
+  double most = 1;
+  for (const CacheLoad& l : loads) most = std::max(most, l.ms);
+  ge::lab::draw_text(p, 12, 10, "A LOAD'S MAP: FIRST AND CACHED", {240, 200, 90}, 2);
+  ge::lab::draw_text(p, 12, 32, "ms from asking for the map to the run's first step",
+                     {150, 158, 170});
+  for (size_t i = 0; i < loads.size(); i++) {
+    const CacheLoad& l = loads[i];
+    const double y = 56 + static_cast<double>(i) * row;
+    const double len = (w - 330) * l.ms / most;
+    ge::lab::draw_text(p, 12, y + 8, l.kind + (l.second ? ", cached" : ", first"), {210, 214, 220});
+    ge::lab::fill_rect(p, 140, y, std::max(1.0, len), row - 10,
+                       l.second ? ge::lab::Rgba{90, 170, 255} : ge::lab::Rgba{130, 136, 148});
+    ge::lab::draw_text(p, 150 + len, y + 8, fmt(l.ms, 0) + " ms", {210, 214, 220});
+  }
+  lab.shot({"cache",
+            "A LOAD'S MAP: FIRST AND CACHED",
+            "Each map loaded twice through the content cache: the first builds it and keeps it, "
+            "the second reads it; each timed to the run's first step on it.",
+            "the cached bars far shorter than the first ones; every map the generator's",
+            {}},
+           p, Det::measured);  // its bars are times
+}
+
 void parts(const std::string& name, const fs::Driver& d, ge::lab::LabTable& t) {
   const fs::GameState& s = d.state();
   const auto size = [](const auto& v) {
@@ -207,6 +272,29 @@ void run(ge::lab::Lab& lab) {
     free = std::make_shared<const mg::Level>(fs::free_map(seed));
     free_build = ms_since(t0);
   }
+
+  // The content cache: the first load builds the map and keeps it, the second reads it; each
+  // timed to the run's first step on it.
+  ge::save::SimDisk cache_disk;
+  ge::save::ContentCache cache(cache_disk, "fall_line");
+  std::vector<CacheLoad> loads;
+  const auto load_twice = [&](const std::string& kind,
+                              const std::shared_ptr<const mg::Level>& built, auto build) {
+    for (int pass = 0; pass < 2; pass++) {
+      const auto t = std::chrono::steady_clock::now();
+      bool hit = false;
+      auto level = std::make_shared<const mg::Level>(build(hit));
+      fs::Driver d =
+          kind == "race" ? fs::Driver(level, rivals) : fs::Driver(fs::create_free_ride(level, 0));
+      d.step(fs::bot_controls(d.state(), 0, d.plan()));
+      loads.push_back({kind, pass == 1, hit, ms_since(t),
+                       mg::level_digest(*level) == mg::level_digest(*built)});
+    }
+  };
+  load_twice("race", race, [&](bool& hit) { return fs::cached_race_map(seed, {}, cache, &hit); });
+  if (free)
+    load_twice("free", free,
+               [&](bool& hit) { return fs::cached_free_map(seed, std::nullopt, cache, &hit); });
 
   std::vector<Scene> scenes;
   if (picked("race")) {
@@ -317,6 +405,7 @@ void run(ge::lab::Lab& lab) {
   lab.table(std::move(sizes), Det::measured);
   lab.metric("map-build.race-ms", race_build, "ms", Det::measured);
   if (free) lab.metric("map-build.free-ms", free_build, "ms", Det::measured);
+  report_cache(lab, loads, cache);
   lab.note("A load opens the run on its setup first, which builds the map: " + fmt(race_build, 0) +
            " ms for the race map" +
            (free ? ", " + fmt(free_build, 0) + " ms for the free ride's" : std::string()) +
