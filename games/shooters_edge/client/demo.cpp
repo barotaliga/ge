@@ -96,13 +96,24 @@ void track_player(Demo& d) {
     const auto& st = d.player_stats[static_cast<size_t>(s.player)];
     std::copy(st.begin(), st.end(), s.stats);
   }
-  if (playing(s.player)) s.angles = s.players[static_cast<size_t>(s.player)].angles;
+  // In the intermission the view looks the way its message says, not the way the player does.
+  if (playing(s.player) && !s.intermission)
+    s.angles = s.players[static_cast<size_t>(s.player)].angles;
 }
 
 void finish_frame(Demo& d) {
   DemoState& s = d.state;
   s.frames++;
   if (s.format == DemoFormat::multiview) track_player(d);
+  // A single-player demo's intermission views from the view entity's own origin and angles,
+  // wherever the server puts it; the multiplayer formats' intermission message sets the eye.
+  if (s.intermission && s.format == DemoFormat::single) {
+    if (s.view_entity >= 0 && static_cast<size_t>(s.view_entity) < s.entities.size()) {
+      s.eye = s.entities[static_cast<size_t>(s.view_entity)].origin;
+      s.angles = s.entities[static_cast<size_t>(s.view_entity)].angles;
+    }
+    return;
+  }
   if (s.intermission) return;
   if (s.format == DemoFormat::single) {
     if (s.view_entity >= 0 && static_cast<size_t>(s.view_entity) < s.entities.size()) {
@@ -151,7 +162,9 @@ DemoRead next_client(Demo& d, std::string& error) {
       const size_t n = static_cast<size_t>(d.cmd_size) + 12;
       if (at + n > b.size()) return DemoRead::end;
       at += static_cast<size_t>(d.cmd_size);
-      d.state.angles = {f32_at(b, at), f32_at(b, at + 4), f32_at(b, at + 8)};
+      // The command's angles are the view's, but in the intermission its message's stand.
+      if (!d.state.intermission)
+        d.state.angles = {f32_at(b, at), f32_at(b, at + 4), f32_at(b, at + 8)};
       d.pos = at + 12;
     } else if (type == 2) {
       if (at + 8 > b.size()) return DemoRead::end;

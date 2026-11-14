@@ -35,6 +35,11 @@
 // - CLIENT TO MULTIVIEW: demo_convert_recorded.cpp. A player's own recording in the form every
 //   multiview player reads: every player he saw, his view from his commands, his status as his
 //   stats, his own messages (a view set, a kick, damage) to him alone.
+// - MULTIVIEW OR CLIENT TO SINGLE (`.dem`, one player's view, for the oldest single-player
+//   client and current ones): demo_convert_single_out.hpp writes it; a multiview source is read by
+//   demo_convert_multiview.cpp (the view as for a client recording), a client recording is made a
+//   multiview recording first and read back riding its recorder. Sixteen player slots, a block a
+//   frame with the view's angles, every entity in view a delta from its baseline.
 // - SEQUEL TO SEQUEL (`.dm2` to `.dm2`): demo_convert_sequel.cpp. Any protocol the reader takes
 //   (26 to 34) written as protocol 34, which every stock client and the TV's viewers take; a
 //   protocol 34 recording comes back byte for byte.
@@ -44,6 +49,7 @@
 // ge:keywords stream on-the-fly tv
 // ge:keywords convert_begin convert_feed convert_take convert_end convert-notes dropped
 // ge:keywords single-to-multiview multiview-to-client convert_set_pov pov format-name
+// ge:keywords mvd-to-dem client-to-dem multiview-to-single
 // ge:skill shooter replay
 // ge:test tests/shooters_edge_demo_convert_test.cpp
 #pragma once
@@ -94,6 +100,7 @@ struct DemoConvert {
   ConvertOptions options;
   ConvertNotes notes;
   std::vector<uint8_t> in;  // source bytes fed and not yet read
+  int recorder = -1;        // a source of one view: the slot it was recorded from, once read
   bool ended = false;       // convert_end was called
   bool failed = false;
   std::string error;
@@ -134,5 +141,9 @@ std::unique_ptr<ConvertStream> single_to_client_stream();
 std::unique_ptr<ConvertStream> sequel_to_34_stream();
 std::unique_ptr<ConvertStream> multiview_to_client_stream();
 std::unique_ptr<ConvertStream> client_to_multiview_stream();
+std::unique_ptr<ConvertStream> multiview_to_single_stream();
+// A client recording to a single-player demo: made a multiview recording first, then read back
+// riding the recorder (demo_convert.cpp).
+std::unique_ptr<ConvertStream> client_to_single_stream();
 
 }  // namespace shooters_edge::client

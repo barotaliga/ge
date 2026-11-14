@@ -74,6 +74,10 @@ struct MatchScript {
   std::vector<MatchRocket> rockets;
   // The server's info keys, each sent as a `serverinfo` message after the lists (none: none sent).
   std::vector<std::pair<std::string, std::string>> serverinfo;
+  // The intermission from this frame on (-1 none): its message's spot and look, in the frame's
+  // record after the players.
+  int intermission = -1;
+  ge::shooter::Vec3f spot{}, look{};
 };
 std::vector<uint8_t> write_multiview_match(const MatchScript& script);
 // The highlight finder's match: 30 s at 20 frames a second on `map` (laid out in the fixture
