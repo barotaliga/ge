@@ -5,6 +5,7 @@
 // ge:skill shooter ui
 // ge:test tests/shooters_edge_sequel_bar_test.cpp
 #include "shooters_edge/server/sequel_bar.hpp"
+#include "shooters_edge/server/sequel_screens.hpp"
 
 #include <algorithm>
 #include <string>
@@ -211,6 +212,7 @@ void bar_rows(SequelServer& s) {
       break;
     }
     if (p.help_unread >= 1 && flash_on) st[11] = static_cast<int16_t>(image(s, "i_help"));
+    if (p.screen != kScreenNone) st[13] |= 1;  // a screen over the bar (sequel_screens.hpp)
     st[14] = clamp16(p.frags);
     // A blow in this frame, or between the last frame and this one (a move's fall), shows once a
     // frame's rows are sent.
