@@ -15,6 +15,7 @@
 // ge:keywords lab aim-spread aimbot bot-likeness anti-cheat match-report column
 // ge:skill shooter net labs
 // ge:test tests/shooter_aim_spread_test.cpp
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -47,7 +48,7 @@ sh::Vec3f unit(sh::Vec3f v) {
   return v;
 }
 
-enum class Shooter { head, middle, mouse, flick, count };
+enum class Shooter : uint8_t { head, middle, mouse, flick, count };
 const char* shooter_name(Shooter s) {
   switch (s) {
     case Shooter::head:
