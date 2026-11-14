@@ -116,7 +116,7 @@ void campaign_start(SequelServer& s) {
   }
   s.next_spawn.clear();
   s.next_unit = false;
-  for (SequelPlayer& p : s.players) p.help_open = false;
+  for (SequelPlayer& p : s.players) p.screen = 0;
 }
 
 const SequelEntity* campaign_spot(const SequelServer& s, int slot) {
@@ -168,39 +168,30 @@ void campaign_frame(SequelServer& s) {
   }
 }
 
+namespace {
+
+// Text a layout string may hold: its quotes would end it early.
+std::string layout_text(std::string_view text) {
+  std::string out = "\"";
+  for (const char c : text)
+    if (c != '"') out += c;
+  return out + "\"";
+}
+
+}  // namespace
+
 std::string campaign_help_screen(const SequelServer& s) {
   char counts[96];
   std::snprintf(counts, sizeof counts, "%3d/%3d     %d/%d       %d/%d", s.monsters_killed,
                 s.monsters_total, s.goals_found, s.goals, s.secrets_found, s.secrets);
-  std::string out = skill_name(s) + "\n" + level_name(s) + "\n\n";
-  out += s.help[0] + "\n\n" + s.help[1] + "\n\n";
-  out += "kills     goals     secrets\n";
-  out += counts;
+  std::string out = "xv 32 yv 8 picn help ";
+  out += "xv 202 yv 12 string2 " + layout_text(skill_name(s)) + " ";
+  out += "xv 0 yv 24 cstring2 " + layout_text(level_name(s)) + " ";
+  out += "xv 0 yv 54 cstring2 " + layout_text(s.help[0]) + " ";
+  out += "xv 0 yv 110 cstring2 " + layout_text(s.help[1]) + " ";
+  out += "xv 50 yv 164 string2 \" kills     goals    secrets\" ";
+  out += "xv 50 yv 172 string2 " + layout_text(counts) + " ";
   return out;
-}
-
-bool campaign_command(SequelServer& s, int slot, const std::string& cmd) {
-  SequelPlayer& p = s.players[slot];
-  if (cmd == "putaway" || cmd == "inven") {
-    p.help_open = false;
-    return cmd == "putaway";
-  }
-  if (cmd != "help" || deathmatch(s)) return false;
-  if (p.help_open && p.help_seen == s.help_changed) {
-    p.help_open = false;
-    return true;
-  }
-  p.help_open = true;
-  p.help_unread = 0;
-  NetEvent ev;
-  ev.kind = EventKind::centerprint;
-  ev.to = 1u << slot;
-  ev.reliable = true;
-  ev.text = campaign_help_screen(s);
-  ev.time = s.level_time;
-  s.out.events.push_back(std::move(ev));
-  s.out.events_total++;
-  return true;
 }
 
 }  // namespace shooters_edge::server

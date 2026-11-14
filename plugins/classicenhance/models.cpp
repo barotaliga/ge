@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "assets/pcx.hpp"
 #include "brush/map.hpp"
 #include "classicenhance/cache.hpp"
 #include "classicenhance/replace.hpp"
@@ -32,17 +33,26 @@ std::vector<uint8_t> png_of(const assets::Image& img) {
 }
 
 // "progs/name.mdl" to "name".
-std::string stem_of(const std::string& path) {
-  const size_t slash = path.rfind('/'), dot = path.rfind('.');
-  const size_t from = slash == std::string::npos ? 0 : slash + 1;
-  return path.substr(from, (dot == std::string::npos || dot < from ? path.size() : dot) - from);
+// A picture the game keeps outside a model or sprite (`skin_paths`, a frame's `picture`), out of
+// the pack as palette indices; false when the pack has none or it does not read.
+bool outside_picture(const vfs::Pak& pak, std::span<const uint8_t> pack, std::string_view path,
+                     assets::IndexedImage* out) {
+  const vfs::PakEntry* e = vfs::pak_find(pak, path);
+  std::string ignored;
+  return e != nullptr && assets::decode_pcx(vfs::pak_file(pack, *e), path, out, &ignored);
 }
 
-bool write_model(const vfs::PakEntry& e, std::span<const uint8_t> pack, const Palette& palette,
-                 const fs::path& dir, const ModelOptions& o, const EnhanceOptions& textures,
-                 std::string& index, ModelStats* stats, std::string* error) {
+bool write_model(const vfs::PakEntry& e, const vfs::Pak& pak, std::span<const uint8_t> pack,
+                 const Palette& palette, const fs::path& dir, const ModelOptions& o,
+                 const EnhanceOptions& textures, std::string& index, ModelStats* stats,
+                 std::string* error) {
   morph::Model m;
   if (!morph::read_model(vfs::pak_file(pack, e), e.path, &m, error)) return false;
+  for (const std::string& path : m.skin_paths) {
+    assets::IndexedImage img;
+    if (!outside_picture(pak, pack, path, &img)) continue;
+    m.skins.push_back({img.width, img.height, std::move(img.indices), 0.0f, int(m.skins.size())});
+  }
   const Replacement* rep = replacement_of(e.path);
   if (rep != nullptr && !rep->keep_glowing) m = drop_glowing(m);
   if (o.round > 1) {
@@ -50,7 +60,7 @@ bool write_model(const vfs::PakEntry& e, std::span<const uint8_t> pack, const Pa
     s.level = o.round;
     m = morph::smooth_model(m, s);
   }
-  const std::string name = safe_name(stem_of(e.path));
+  const std::string name = safe_name(model_name(e.path));
   if (m.indices.empty()) {  // all of it glowed: the engine's effect is the whole of it
     stats->models++;
     index += "model " + name + " " + e.path + " 0 0 - - - " +
@@ -90,11 +100,20 @@ bool write_model(const vfs::PakEntry& e, std::span<const uint8_t> pack, const Pa
   return true;
 }
 
-bool write_sprite(const vfs::PakEntry& e, std::span<const uint8_t> pack, const Palette& palette,
-                  const fs::path& dir, std::string& index, ModelStats* stats, std::string* error) {
+bool write_sprite(const vfs::PakEntry& e, const vfs::Pak& pak, std::span<const uint8_t> pack,
+                  const Palette& palette, const fs::path& dir, std::string& index,
+                  ModelStats* stats, std::string* error) {
   morph::Sprite s;
   if (!morph::read_sprite(vfs::pak_file(pack, e), e.path, &s, error)) return false;
-  const std::string name = safe_name(stem_of(e.path));
+  for (morph::SpriteFrame& f : s.frames) {
+    assets::IndexedImage img;
+    if (f.picture.empty() || !outside_picture(pak, pack, f.picture, &img)) continue;
+    f.width = img.width;
+    f.height = img.height;
+    f.indices = std::move(img.indices);
+  }
+  std::erase_if(s.frames, [](const morph::SpriteFrame& f) { return f.indices.empty(); });
+  const std::string name = safe_name(model_name(e.path));
   for (size_t f = 0; f < s.frames.size(); f++) {
     const morph::SpriteFrame& fr = s.frames[f];
     assets::Image img = to_rgba(fr.indices, fr.width, fr.height, palette);
@@ -117,6 +136,14 @@ bool write_sprite(const vfs::PakEntry& e, std::span<const uint8_t> pack, const P
 }
 
 }  // namespace
+
+std::string model_name(std::string_view path) {
+  const size_t slash = path.find('/');
+  const size_t from = slash == std::string_view::npos ? 0 : slash + 1;
+  const size_t dot = path.rfind('.');
+  return std::string(
+      path.substr(from, (dot == std::string_view::npos || dot < from ? path.size() : dot) - from));
+}
 
 morph::Model drop_glowing(const morph::Model& m) {
   if (m.skins.empty()) return m;
@@ -198,9 +225,10 @@ bool enhance_models(std::span<const uint8_t> pack, const Palette& palette, const
   if (opts.each && !opts.each({}, 0, uint32_t(files.size()))) return false;
   uint32_t done = 0;
   for (const vfs::PakEntry* e : files) {
-    const bool ok = !asset_name(profile.models, e->path).empty()
-                        ? write_model(*e, pack, palette, dir, opts, textures, index, stats, error)
-                        : write_sprite(*e, pack, palette, dir, index, stats, error);
+    const bool ok =
+        !asset_name(profile.models, e->path).empty()
+            ? write_model(*e, pak, pack, palette, dir, opts, textures, index, stats, error)
+            : write_sprite(*e, pak, pack, palette, dir, index, stats, error);
     if (!ok) return false;
     const std::string_view kind_dir =
         !asset_name(profile.models, e->path).empty() ? profile.models.dir : profile.sprites.dir;

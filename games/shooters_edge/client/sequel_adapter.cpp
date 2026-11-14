@@ -23,12 +23,14 @@
 #include <vector>
 
 #include "assets/pcx.hpp"
+#include "classicenhance/cached.hpp"
 #include "classicenhance/texture.hpp"
 #include "classicenhance/weapons.hpp"
 #include "shooters_edge/client/adapter_parts.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
+#include "ui/image.hpp"
 
 namespace shooters_edge::client {
 
@@ -76,15 +78,43 @@ constexpr int kPrinted = 5;
 // the menu's pictures (above, the same colour see-through), the first five printed so words cut
 // from their letters are cut only from the plates they were measured on. The status bar is the
 // sequel's own, drawn from the program its rules send (sequel_bar.hpp).
+//
+// ENHANCED (`ce_pictures`): each picture is classic-enhance's upscaled copy from the packs' cache
+// (`pics/<name>`, its pictures stage), at the glyph sheet's density; one the cache lacks is the
+// pack's scaled up nearest to the same density, as the first game's are (menu/classic_art.cpp).
 ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhance,
-                         const std::filesystem::path&) {
+                         const std::filesystem::path& cache_root) {
   ClassicPictures out;
   out.enhanced = enhance;
+  if (enhance && !content_packs(files).empty())
+    out.cache = ge::classicenhance::find_cache(content_packs(files), cache_root);
   out.hud_why = "the sequel draws its own bar, from the program its rules send";
-  out.menu.glyphs = pcx_picture(files, "conchars", 255);
-  if (out.menu.glyphs.width != 128 || out.menu.glyphs.height != 128) out.menu.glyphs = {};
+  uint32_t density = 0;
+  const auto picture = [&](std::string_view name, ge::ui::Image img) {
+    if (img.empty()) return img;
+    ge::assets::Image big;
+    const uint32_t k = out.cache.empty() ? 0
+                                         : ge::classicenhance::cached_picture(
+                                               out.cache, "pics/" + std::string(name),
+                                               static_cast<uint32_t>(img.width),
+                                               static_cast<uint32_t>(img.height), &big);
+    if (density == 0) density = k == 0 ? 1 : k;
+    if (k > 0 && density % k == 0) {  // a copy at the set's density, or a whole step under it
+      ge::ui::Image up;
+      up.width = big.width;
+      up.height = big.height;
+      up.rgba = std::move(big.rgba);
+      return ge::ui::scaled_nearest(up, static_cast<int>(density / k));
+    }
+    return ge::ui::scaled_nearest(img, static_cast<int>(density));
+  };
+  ge::ui::Image glyphs = pcx_picture(files, "conchars", 255);
+  if (glyphs.width == 128 && glyphs.height == 128)
+    out.menu.glyphs = picture("conchars", std::move(glyphs));
+  if (density == 0) density = 1;
+  out.menu.density = static_cast<float>(density);
   if (ge::ui::Image back = pcx_picture(files, "conback", -1); !back.empty())
-    out.menu.pictures.emplace("conback", std::move(back));
+    out.menu.pictures.emplace("conback", picture("conback", std::move(back)));
   uint64_t print = 0xcbf29ce484222325ULL;
   int printed = 0;
   for (size_t i = 0; i < std::size(kMenuPictures); i++) {
@@ -92,12 +122,13 @@ ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhan
     ge::ui::Image pic = pcx_picture(files, kMenuPictures[i], 255, printing ? &print : nullptr);
     if (pic.empty()) continue;
     if (printing) printed++;
-    out.menu.pictures.emplace(std::string(kMenuPictures[i]), std::move(pic));
+    out.menu.pictures.emplace(std::string(kMenuPictures[i]),
+                              picture(kMenuPictures[i], std::move(pic)));
   }
   for (int f = 0; f < kCursorFrames; f++) {
     const std::string name = "m_cursor" + std::to_string(f);
     if (ge::ui::Image pic = pcx_picture(files, name, 255); !pic.empty())
-      out.menu.pictures.emplace(name, std::move(pic));
+      out.menu.pictures.emplace(name, picture(name, std::move(pic)));
   }
   if (printed == kPrinted) out.menu.strip_print = print;
   return out;

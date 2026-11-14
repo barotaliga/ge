@@ -625,7 +625,7 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       }
       if (!load.cache.empty() && !model.skins.empty() && !any_stand_in) {
         std::vector<ge::assets::Image> big;
-        const std::string stem = std::filesystem::path(name).stem().string();
+        const std::string stem = ge::classicenhance::model_name(name);
         if (ge::classicenhance::cached_skins(load.cache, stem, uint32_t(model.skins[0].width),
                                              uint32_t(model.skins[0].height), &big) &&
             big.size() == model.skins.size()) {
@@ -1000,6 +1000,9 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     double dyn[3], toward[3];
     const double mid[3] = {w[0], w[1] + 16 * br::kUnitM, w[2]};
     effects::dynamic_light_at(dynamic, mid, dynamic_strength, dyn, toward, p.entity);
+    // A player's figure under r_fullbrightskins.
+    const bool a_player = (k.player || k.figure) && p.entity > 0 && p.entity <= sh::kMaxClients;
+    const double fullbright = a_player ? std::clamp(m.fullbright, 0.0, 1.0) : 0;
     double floor_lum = 0, dyn_lum = 0;
     for (int c = 0; c < 3; c++) {
       // The world's own soft floor (bsp_draw's r_minlight), so a thing in a dark corner reads
@@ -1009,6 +1012,13 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       const float l = float((floor + dyn[c]) * brightness);
       g.ambient[c] = kAmbientShare * l * p.colormod[c];  // the tint on its light, not its glow
       g.shade[c] = kShadeShare * l * p.colormod[c];
+      if (fullbright > 0) {
+        // r_fullbrightskins: lifted toward full light (a lightmap's 1, a wall as painted, at this
+        // brightness, or its own light where that is more) with its shading gone; never darker.
+        const float full = std::max(float(brightness) * p.colormod[c], g.ambient[c] + g.shade[c]);
+        g.ambient[c] += float(fullbright) * (full - g.ambient[c]);
+        g.shade[c] *= float(1 - fullbright);
+      }
       floor_lum += floor;
       dyn_lum += dyn[c];
     }

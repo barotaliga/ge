@@ -1613,6 +1613,7 @@ int run_main(int argc, char** argv) {
       for (const std::string& line : lines) tell(line, t);
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
+    sn::remote_queue_frame(remote, console);  // `ranked`: the game found is joined
     const bool drawn_remote = remote.active && (bench_map || joined == decltype(joined)::new_level);
     if (bench.active && !bench.paced && input.tapped(ge::platform::Key::escape)) {
       if (!end_bench("Escape pressed", t, true)) return 1;

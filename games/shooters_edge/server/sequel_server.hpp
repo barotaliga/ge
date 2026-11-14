@@ -229,7 +229,10 @@ struct SequelPlayer {
   // The campaign's (sequel_campaign.hpp): the help news seen and its beeps, the screen open; the
   // body carried to the next level and the one he entered this level with.
   int help_seen = 0, help_unread = 0;
-  bool help_open = false;
+  // The screen up over his bar (sequel_screens.hpp: none, the scores, the help computer) and the
+  // last layout program sent him, which his client keeps until the next.
+  uint8_t screen = 0;
+  std::string layout;
   bool carried = false, has_entered = false;
   ge::shooter::MidairTally midair;  // his counted midairs this level (plugins/shooter/midair.hpp)
   SqBody carry, entered;

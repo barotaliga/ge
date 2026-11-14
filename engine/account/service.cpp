@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include "account/friends_service.hpp"
+#include "account/matchmaker_service.hpp"
 #include "net/wire.hpp"
 
 namespace ge::account {
@@ -139,6 +140,8 @@ net::Key fresh_key(Service& svc) {
 // The op's answer from the store.
 Answer run(Service& svc, Op op, const std::vector<std::string>& f, const net::Address& from,
            int64_t now_us, Ticket* ticket, std::vector<uint8_t>& listed) {
+  if (static_cast<uint8_t>(op) >= static_cast<uint8_t>(Op::queue))
+    return matchmaker_run(svc, op, f, from, now_us / 1000000, listed);
   if (static_cast<uint8_t>(op) >= static_cast<uint8_t>(Op::friend_))
     return friends_run(svc, op, f, now_us / 1000000, listed);
   Store& s = svc.store;
@@ -254,6 +257,10 @@ const char* op_name(Op op) {
       return "presence";
     case Op::invite:
       return "invite";
+    case Op::queue:
+      return "queue";
+    case Op::offer:
+      return "offer";
     case Op::invites:
       return "invites";
   }
@@ -397,6 +404,10 @@ bool service_read(Service& svc, const uint8_t* data, size_t size, const net::Add
 }
 
 void service_update(Service& svc, int64_t now_us) {
+  if (now_us / 1000000 != svc.paired_s) {  // the queue paired once a second, as its windows widen
+    svc.paired_s = now_us / 1000000;
+    matchmaker_pair(svc.matchmaker, svc.paired_s);
+  }
   net::Address from;
   int n = 0;
   while ((n = net::transport_receive(*svc.transport, svc.buffer, sizeof svc.buffer, from,

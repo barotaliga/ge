@@ -26,6 +26,7 @@
 #include "assets/image.hpp"
 #include "assets/iqm.hpp"
 #include "assets/pcx.hpp"
+#include "assets/sha256.hpp"
 #include "assets/test_model.hpp"
 #include "assets/tga.hpp"
 #include "audio/wav.hpp"
@@ -34,8 +35,10 @@
 #include "brush/wal.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "classicenhance/cache.hpp"
 #include "classicenhance/profile.hpp"
 #include "console/console.hpp"
+#include "lab/png.hpp"
 #include "morph/write.hpp"
 #include "progs/assembler.hpp"
 #include "progs/layout.hpp"
@@ -403,6 +406,49 @@ TEST(the_sequel_s_menu_pictures_are_read_from_its_pics_folder) {
   // The words cut from the five plates are cut only when all five were read: their print.
   CHECK(art.strip_print != 0);
   CHECK(read(false).strip_print == 0);
+}
+
+TEST(the_sequel_s_menu_pictures_come_enhanced_from_the_packs_cache) {
+  // The packs' cache holds the glyph sheet and one plate at 4x (classic-enhance's pictures stage):
+  // those come from it, the rest are the pack's own scaled up nearest to the same density.
+  const auto pcx = [](int w, int h) {
+    as::IndexedImage img;
+    img.width = w;
+    img.height = h;
+    img.indices.assign(size_t(w) * size_t(h), 7);
+    img.palette.assign(768, 90);
+    return as::encode_pcx(img);
+  };
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"pics/conchars.pcx", pcx(128, 128)},
+                            {"pics/m_main_game.pcx", pcx(99, 32)},
+                            {"pics/m_main_quit.pcx", pcx(100, 32)}},
+                           &pak, &error));
+  const fs::path root = fs::temp_directory_path() / "ge_se_sequel_enhanced_pictures";
+  fs::remove_all(root);
+  const fs::path dir = ge::classicenhance::pack_dir(root, ge::assets::sha256_hex(pak));
+  CHECK(ge::classicenhance::write_record(dir, "textures", "k"));
+  const auto png = [&](const std::string& name, int w, int h) {
+    fs::create_directories((dir / "pictures" / "enhanced" / name).parent_path());
+    ge::lab::Picture p{w, h, std::vector<uint8_t>(size_t(w) * size_t(h) * 4, 200)};
+    CHECK(ge::lab::write_png((dir / "pictures" / "enhanced" / (name + ".png")).string(), p));
+  };
+  png("pics/conchars", 512, 512);
+  png("pics/m_main_game", 396, 128);
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  const cl::GameAdapter& a = cl::sequel_adapter();
+  const cl::ClassicPictures got = a.pictures(a, files, true, root);
+  CHECK(got.cache == dir && got.menu.density == 4);
+  CHECK(got.menu.glyphs.width == 512 && got.menu.glyphs.rgba[0] == 200);
+  const ge::ui::Image* game = got.menu.find("m_main_game");
+  const ge::ui::Image* quit = got.menu.find("m_main_quit");
+  CHECK(game != nullptr && game->width == 396 && game->rgba[0] == 200);
+  CHECK(quit != nullptr && quit->width == 400 && quit->rgba[0] == 90);
+  // Without ce_pictures the pack's own, at their own size.
+  CHECK(a.pictures(a, files, false, root).menu.find("m_main_game")->width == 99);
+  fs::remove_all(root);
 }
 
 TEST(a_config_file_in_the_games_packs_runs_through_exec_after_the_players_own) {

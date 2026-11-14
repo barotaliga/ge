@@ -266,6 +266,25 @@ TEST(classic_login_our_client_shows_friends_where_it_plays_and_says_their_invite
   CHECK(ga::presence_of(w.own.friends, 1, g_unix / 1000000, 2).state == ga::PresenceState::offline);
 }
 
+TEST(classic_login_our_client_finds_a_ranked_game_and_is_given_its_server) {
+  OwnClient w;
+  CHECK(w.start(true));
+  ga::service_offer(w.own, gn::Key{}, "id1", "1on1", "203.0.113.4:27500", 8, g_unix / 1000000);
+  CHECK(ga::matchmaker_join(w.own.matchmaker, w.own.matches.ladder, 2, "id1", "1on1", "",
+                            g_unix / 1000000) == ga::QueueAnswer::queued);
+  std::string said;
+  CHECK_MSG(se::remote_ranked(w.remote, "id1", "1on1", "", said), said);
+  CHECK(said == "Looking for a ranked 1on1 game as Niclas.");
+  std::string found;
+  for (int f = 0; f < 77 * 3 && found.empty(); f++) {
+    w.run(1);
+    found = se::remote_queue_step(w.remote, w.said);
+  }
+  CHECK(found == "203.0.113.4:27500");
+  CHECK(w.told("Game found: 1on1 against Ann on 203.0.113.4:27500."));
+  CHECK(!se::remote_ranked_leave(w.remote));  // found: nothing to leave
+}
+
 TEST(classic_login_our_client_with_another_masters_ticket_stays_a_guest) {
   OwnClient w;
   CHECK(w.start(false));

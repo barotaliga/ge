@@ -9,10 +9,11 @@
 //   and `precache`, cut into blocks the way the game's own recorder cuts them (a configstring
 //   starts a new block past 1400 bytes with a 32-byte margin, a baseline with a 64-byte one).
 // - **A frame** (`sequel_frame`): the reliable messages first (changed configstrings, prints,
-//   centred prints, stuffed lines), then the frame (its number, the one it deltas from, area bits
-//   that show every area), the player state as a delta from the last frame's, the entities as a
-//   delta list against the last frame's (an entity new to the list from its baseline, a player
-//   always with its old origin, a gone one removed), then the frame's sounds.
+//   centred prints, stuffed lines, the viewer's layout program when it changed), then the frame
+//   (its number, the one it deltas from, area bits that show every area), the player state as a
+//   delta from the last frame's, the entities as a delta list against the last frame's (an entity
+//   new to the list from its baseline, a player always with its old origin, a gone one removed),
+//   then the frame's sounds.
 //
 // The configstrings: 0 the map's title, 30 the most clients, 31 the map's checksum (the caller's:
 // the MD4 of the whole map file, its four little-endian words XORed, as signed decimal, measured
@@ -103,6 +104,7 @@ struct SequelWire {
   SequelPlayerState last_player;
   std::vector<std::string> sent;  // the configstrings the viewer holds
   int64_t events_done = 0;        // the sink's events already written (`events_total`)
+  std::string layout;             // the layout program the viewer holds
 };
 
 // The map's checksum as configstring 31 carries it: the MD4 of the whole map file, its four

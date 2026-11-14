@@ -11,6 +11,7 @@
 #include <iterator>
 #include <thread>
 
+#include "account/matchmaker_service.hpp"
 #include "account/service.hpp"
 #include "check.hpp"
 #include "core/json_read.hpp"
@@ -47,7 +48,9 @@ struct Running {
   std::atomic<bool> stop{false};
   std::thread thread;
 
-  explicit Running(uint8_t seed_byte) {
+  // `offer`: a server's seats for Shooter's Edge's 1on1s (its ladder's game: the folder), offered
+  // before the service starts.
+  explicit Running(uint8_t seed_byte, bool offer = false) {
     gn::Address bind;
     gn::parse_address("127.0.0.1:0", bind);
     std::string error;
@@ -57,6 +60,11 @@ struct Running {
     ga::ServiceConfig c;
     c.seed.fill(seed_byte);
     ga::service_init(svc, c, std::move(store), port, counter_fresh, &fresh_n);
+    if (offer) {
+      const auto now = std::chrono::system_clock::now().time_since_epoch();
+      ga::service_offer(svc, gn::Key{}, "id1", "1on1", "192.0.2.7:27500", 8,
+                        std::chrono::duration_cast<std::chrono::seconds>(now).count());
+    }
     thread = std::thread([this] {
       while (!stop) {
         const auto now = std::chrono::system_clock::now().time_since_epoch();
@@ -185,4 +193,27 @@ TEST(gamecli_friends_add_see_each_other_and_invite) {
   CHECK_MSG(run({"friends", "list", "--master=" + service.at()}, out, cid) == 2, out);
   CHECK_MSG(parse(out)["error"].text == "not signed in", out);
   for (const fs::path& p : {ann, bob, cid}) fs::remove_all(p);
+}
+
+TEST(gamecli_ranked_find_pairs_two_players_on_an_offered_server) {
+  const fs::path ann = fresh("ge_gamecli_ranked_ann"), bob = fresh("ge_gamecli_ranked_bob");
+  Running service(10, true);
+  std::string out;
+  for (const auto& [root, name] : {std::pair{ann, "Ann"}, std::pair{bob, "Bob"}}) {
+    CHECK_MSG(run({"account", "signup", name, "--master=" + service.at(), "--password=long enough"},
+                  out, root) == 0,
+              out);
+    CHECK_MSG(run({"account", "signin", name, "--password=long enough"}, out, root) == 0, out);
+  }
+  CHECK_MSG(run({"ranked", "find", "1on1"}, out, ann) == 0, out);
+  CHECK_MSG(parse(out)["result.state"].text == "waiting", out);
+  CHECK_MSG(run({"ranked", "find", "1on1"}, out, bob) == 0, out);
+  ge::core::FlatJson j = parse(out);
+  CHECK_MSG(j["result.state"].text == "matched", out);
+  CHECK_MSG(j["result.address"].text == "192.0.2.7:27500", out);
+  CHECK_MSG(j["result.theirs.0"].text == "Ann", out);
+  CHECK_MSG(run({"ranked", "status"}, out, ann) == 0, out);
+  CHECK_MSG(parse(out)["result.theirs.0"].text == "Bob", out);
+  CHECK_MSG(run({"ranked", "find", "2on2"}, out, ann) == 1, out);  // no duo named
+  for (const fs::path& p : {ann, bob}) fs::remove_all(p);
 }

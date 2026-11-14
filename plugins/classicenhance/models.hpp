@@ -8,6 +8,12 @@
 //   alone keeps the silhouettes the artists drew.
 // - A sprite (`progs/<name>.spr`) becomes `sprites/<name>/<frame>.png`, each frame with its
 //   transparent texels (index 255) clear, at the source size.
+// - The second family's models and sprites keep their pictures outside, in the game's picture
+//   files (`skin_paths`, a frame's `picture`): each is read out of the pack as the game reads it.
+// - A model's or sprite's name in the cache is `model_name` of its path: the path under its
+//   kind's folder (`progs/armor.mdl` is `armor`, `models/items/armor/tris.md2` is
+//   `items/armor/tris`), so the sequel's many `tris` models never land on one another;
+//   `safe_name` (cache.hpp) makes it a folder name.
 // - `models/index.txt` lists every model and sprite, and `replaced.txt` what the engine draws in
 //   their place (`replace.hpp`); a replaced model with glowing parts loses those pieces, and
 //   one that is all glow (a bonfire's flame) writes no file, only its index line.
@@ -31,7 +37,12 @@
 namespace ge::classicenhance {
 
 // The stage's version: a rerun redoes the stage when it moves.
-inline constexpr int kModelStageVersion = 2;  // 2: each skin also as models/<name>/skin<k>.png
+// 2: each skin also as models/<name>/skin<k>.png; 3: named by `model_name`, outside skins read.
+inline constexpr int kModelStageVersion = 3;
+
+// A model's or sprite's name in the cache, from its path in the game's files: the path without
+// its first folder and its extension ("progs/armor.mdl" -> "armor").
+std::string model_name(std::string_view path);
 
 struct ModelOptions {
   // Called with done 0 and the file count before the first file, then after each file with its
