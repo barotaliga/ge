@@ -188,8 +188,13 @@ Owners owners(const ui::Image& img, const PlateCells& cells, int d) {
     return kNobody;
   };
   o.own.assign(n, kNobody);
-  for (const std::vector<int>& part : parts(bright, w)) {
+  std::vector<std::vector<int>> small;
+  for (std::vector<int>& part : parts(bright, w)) {
     if (part.size() < 3) continue;
+    if (part.size() < 15) {
+      small.push_back(std::move(part));
+      continue;
+    }
     std::map<int, int> count;
     double mid = 0;
     for (const int p : part) {
@@ -200,6 +205,43 @@ Owners owners(const ui::Image& img, const PlateCells& cells, int d) {
     for (const auto& [k, c] : count) big += k >= 0 && c >= 15 ? 1 : 0;
     const int whole = cell(static_cast<int>(mid / static_cast<double>(part.size())));
     for (const int p : part) o.own[static_cast<size_t>(p)] = big >= 2 ? cell(p % w) : whole;
+  }
+  // A small bright part (a serif's tip past its cell) is the letter of the nearest big one within
+  // 5 px.
+  const std::vector<int> big = o.own;
+  for (const std::vector<int>& part : small) {
+    int best = kNobody;
+    for (int r = 1; r <= 5 && best == kNobody; r++)
+      for (size_t k = 0; k < part.size() && best == kNobody; k++) {
+        const int x = part[k] % w, y = part[k] / w;
+        for (int dy = -r; dy <= r && best == kNobody; dy++)
+          for (int dx = -r; dx <= r && best == kNobody; dx++) {
+            const int a = x + dx, b = y + dy;
+            if (std::max(std::abs(dx), std::abs(dy)) == r && a >= 0 && b >= 0 && a < w &&
+                b < kLine && big[idx(a, b, w)] >= 0)
+              best = big[idx(a, b, w)];
+          }
+      }
+    for (const int p : part) o.own[static_cast<size_t>(p)] = best;
+  }
+  // A tip a cell's edge split off a letter (under 10 px) touching another letter's is that one's.
+  for (int k = 0; k < static_cast<int>(cells.starts.size()); k++) {
+    std::vector<uint8_t> mine(n, 0);
+    for (size_t i = 0; i < n; i++) mine[i] = o.own[i] == k ? 1 : 0;
+    for (const std::vector<int>& part : parts(mine, w)) {
+      if (part.size() >= 10) continue;
+      int other = kNobody;
+      for (const int p : part)
+        for (int dy = -1; dy <= 1; dy++)
+          for (int dx = -1; dx <= 1; dx++) {
+            const int a = p % w + dx, b = p / w + dy;
+            if (a >= 0 && b >= 0 && a < w && b < kLine && o.own[idx(a, b, w)] >= 0 &&
+                o.own[idx(a, b, w)] != k)
+              other = o.own[idx(a, b, w)];
+          }
+      if (other != kNobody)
+        for (const int p : part) o.own[static_cast<size_t>(p)] = other;
+    }
   }
   std::vector<int> res = o.own;
   for (int y = 0; y < kLine; y++)
@@ -271,17 +313,19 @@ std::vector<Recipe> recipes() {
   out.push_back({'J', 15, {part('U', 8, 0, 20, 31, -2), part('U', 0, 18, 7, 31, -2)}});
   out.push_back(
       {'K', 17, {part('R', -4, 0, 6, 31), part('R', 7, 17, 20, 31), part('Y', 7, 6, 20, 16, -3)}});
-  out.push_back({'W', 24, {full('V'), part('V', 4, 0, 20, 31, 7)}});
+  // W: two V's, the second's left serif on the first's right one.
+  out.push_back({'W', 28, {full('V'), part('V', -4, 0, 20, 31, 11)}});
   Bit under = part('Y', -4, 7, 20, 14, 0, 8);
   under.flip = true;
   out.push_back(
       {'X', 17, {part('Y', -4, 0, 20, 14), under, part('A', -4, 19, 20, 31), clear(5, 19, 5, 2)}});
-  // Z: A's left leg (rows 11 to 18) leaned the other way, a row at a time.
-  Recipe z{'Z', 17, {part('T', -4, 0, 20, 9), clear(12, 9, 8, 3), part('L', -4, 19, 20, 31)}};
-  constexpr std::array<int, 8> kLean = {6, 5, 5, 4, 3, 2, 2, 1};
-  for (int k = 0; k < 8; k++)
-    z.bits.push_back(part('A', 0, 11 + k, 8, 11 + k, kLean[static_cast<size_t>(k)]));
-  out.push_back(std::move(z));
+  // Z: T's bar without its stem or its right tip, Y's right arm twice, one below and left of the
+  // other, down to L's foot without its stem.
+  out.push_back({'Z',
+                 17,
+                 {part('T', -4, 0, 20, 9), clear(-4, 9, 30, 5), clear(14, 0, 10, 9),
+                  part('L', -4, 19, 20, 31), clear(-4, 19, 9, 1), part('Y', 8, 8, 17, 14, 0, 1),
+                  part('Y', 8, 8, 17, 14, -6, 7)}});
   return out;
 }
 
