@@ -561,7 +561,6 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   // `--remix=<install>`: classic remix on, that install the other full game (`--remix-game`, the
   // sequel by default), so `--map` may name one of its maps, played here with this game's items.
   cl::RemixFiles remix;
-  const shooters_edge::profiles::RemixArsenal* worn = nullptr;
   std::unique_ptr<cl::LoadedMap> map;
   if (const std::string& other = lab.arg("remix"); !other.empty() && folder != "fixture") {
     const size_t cut = folder.find_last_of('/');
@@ -587,7 +586,6 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     if (lab.arg("remix-items") == "1") {
       remix.worn = shooters_edge::profiles::remix_arsenal(played, state.other);
       remix.looks = shooters_edge::profiles::remix_looks(played, state.other);
-      worn = remix.worn;
       lo.arsenal = cl::worn_lines(remix, lo.arsenal);
     }
     // `--remix-models=1` (`cr_models` naming the other game): every player its figure.
@@ -794,24 +792,26 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
     }
     ge::render::FrameView view;
-    cl::SequelBar worn_bar;
+    cl::SequelBar worn_bar, own_bar;
     worn_bar.files = &files;
+    own_bar.files = &files;
     const auto shoot = [&](const std::string& tag) {
       fx.births.clear();
       view = cl::frame_view(l, shown, 0, t, 0);
       ge::ui::DrawList overlay;
       overlay.begin(static_cast<int>(w), static_cast<int>(h));
-      if (cl::draw_worn_bar(overlay, worn_bar, worn, cl::status_of(l, t), !l.campaign_host,
-                            static_cast<int>(w), static_cast<int>(h))) {
-        hand.lift = 0;  // the sequel's bar (remix_bar.hpp)
+      // The window's choice (remix_bar.hpp): the sequel's own bar, the sequel's over the classic
+      // status, or the game's HUD (the classic bar over the sequel's player wearing its things).
+      const shooters_edge::server::SequelServer* sq =
+          l.rules ? shooters_edge::server::sequel_of(*l.rules) : nullptr;
+      const shooters_edge::hud::CrosshairSettings crosshair;  // the default mark
+      if (cl::draw_sequel_bars(overlay, own_bar, worn_bar, sq, remix,
+                               sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t),
+                               !l.campaign_host, &crosshair, {}, t, static_cast<int>(w),
+                               static_cast<int>(h))) {
+        hand.lift = 0;  // the sequel's bar
       } else {
-        // The sequel wearing the classic game's things: the classic bar over its player.
-        const shooters_edge::server::SequelServer* sq =
-            l.rules ? shooters_edge::server::sequel_of(*l.rules) : nullptr;
-        se::fill_hud(
-            hud,
-            sq != nullptr && remix.looks != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t),
-            art);
+        se::fill_hud(hud, sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t), art);
         hud.layout.draw(overlay,
                         hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
                         se::hud_style());

@@ -324,7 +324,8 @@ std::string status_line(const Hops& h) {
   if (h.has_nq)
     s += "netgame tv: frames " + std::to_string(h.nq.frames) + ", rounds " +
          std::to_string(h.nq.rounds) + ", viewers " +
-         std::to_string(sn::udp_tv_netgame_viewers(h.nq)) + ". ";
+         std::to_string(sn::udp_tv_netgame_viewers(h.nq)) + sn::udp_tv_netgame_following(h.nq) +
+         ". ";
   if (h.has_sq_demo)
     s += "sequel tv: recording frames " + std::to_string(h.sq_demo.frames) + ", rounds " +
          std::to_string(h.sq_demo.rounds) + (h.sq_demo.ended ? " (ended)" : "") + ", viewers " +
@@ -606,6 +607,7 @@ int run(int argc, char** argv) {
       } else {
         sn::NetgameTvConfig nc;
         nc.name = fc.name;
+        nc.convert_in_background = true;  // a new view never holds up the play
         sn::udp_tv_netgame_start(h.nq, h.nq_face, nc);
         h.has_nq = true;
         std::printf("netgame on %s for single-player clients: connect \"<host>:%d\"\n",

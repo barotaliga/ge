@@ -137,28 +137,30 @@ inline constexpr RemixRow kRemixRows[] = {
 //   the largest that fits first, on the spots they lay on: four stimpacks and a box of ten make
 //   one fifteen, three boxes of twenty-five make two twenty-fives and a fifteen. A pool too small
 //   for the target's smallest by half is left out.
+// `ammo` is the box of what it fires, which a weak copy past `RemixBalance::weak_same` becomes.
 struct WeaponTier {
   std::string_view game;
   std::string_view class_name;
   int32_t tier = 1;
+  std::string_view ammo;
 };
 
 inline constexpr WeaponTier kWeaponTiers[] = {
-    {"classic", "weapon_supershotgun", 1},
-    {"classic", "weapon_nailgun", 1},
-    {"classic", "weapon_supernailgun", 2},
-    {"classic", "weapon_grenadelauncher", 2},
-    {"classic", "weapon_rocketlauncher", 3},
-    {"classic", "weapon_lightning", 3},
-    {"sequel", "weapon_shotgun", 1},
-    {"sequel", "weapon_supershotgun", 1},
-    {"sequel", "weapon_machinegun", 1},
-    {"sequel", "weapon_chaingun", 2},
-    {"sequel", "weapon_grenadelauncher", 2},
-    {"sequel", "weapon_hyperblaster", 2},
-    {"sequel", "weapon_rocketlauncher", 3},
-    {"sequel", "weapon_railgun", 3},
-    {"sequel", "weapon_bfg", 4},
+    {"classic", "weapon_supershotgun", 1, "item_shells"},
+    {"classic", "weapon_nailgun", 1, "item_spikes"},
+    {"classic", "weapon_supernailgun", 2, "item_spikes"},
+    {"classic", "weapon_grenadelauncher", 2, "item_rockets"},
+    {"classic", "weapon_rocketlauncher", 3, "item_rockets"},
+    {"classic", "weapon_lightning", 3, "item_cells"},
+    {"sequel", "weapon_shotgun", 1, "ammo_shells"},
+    {"sequel", "weapon_supershotgun", 1, "ammo_shells"},
+    {"sequel", "weapon_machinegun", 1, "ammo_bullets"},
+    {"sequel", "weapon_chaingun", 2, "ammo_bullets"},
+    {"sequel", "weapon_grenadelauncher", 2, "ammo_grenades"},
+    {"sequel", "weapon_hyperblaster", 2, "ammo_cells"},
+    {"sequel", "weapon_rocketlauncher", 3, "ammo_rockets"},
+    {"sequel", "weapon_railgun", 3, "ammo_slugs"},
+    {"sequel", "weapon_bfg", 4, "ammo_cells"},
 };
 inline constexpr int32_t kStrongTier = 3;
 
@@ -181,6 +183,7 @@ struct RemixBalance {
   int32_t strong_min = 1;     // strong weapons at least, on a map of two weapons or more
   float strong_share = 0.4f;  // strong weapons at most: this share of them, rounded up
   int32_t strong_same = 2;    // copies of one strong weapon at most (0: no limit)
+  int32_t weak_same = 2;      // copies of one weak weapon at most, the rest its ammo (0: no limit)
   float pool_radius = 160;    // u: small pickups this near one another are added up
 };
 
