@@ -23,7 +23,8 @@
 //        [--delay=7] [--name=tv]
 //   setv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]
 //        a client recording played round and round to any classic client, the oldest too,
-//        over plain protocol 28; a multiview recording gives every player's view on request,
+//        over plain protocol 28; a single-player one (.dem) converted for them; a multiview
+//        recording gives every player's view on request,
 //        the hottest player's followed by default ([--autotrack=0] the lowest slot's)
 //        (classic_tv_udp.hpp, classic_tv_recording.hpp)
 //   setv --sequel --port=27911 --server=<sequel host:port> [--server-password=<pw>]
@@ -121,7 +122,8 @@ void usage() {
         "      [--password=<pw>] [--delay=7] [--name=tv]\n"
         "  setv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]: a\n"
         "      client recording played round and round to any classic client, the oldest\n"
-        "      too, over plain protocol 28; a multiview recording (.mvd) gives every\n"
+        "      too, over plain protocol 28; a single-player one (.dem) converted for\n"
+        "      them; a multiview recording (.mvd) gives every\n"
         "      player's view, chosen with the track keys or fire, the hottest player's\n"
         "      followed until then (--autotrack=0: the lowest slot's)\n"
         "  setv --sequel --port=27911 --server=<host:port> [--server-password=<pw>]\n"
@@ -523,7 +525,7 @@ int run(int argc, char** argv) {
         sn::udp_tv_multiview_open(h.cl_mv, bytes, 8, true, why, o.autotrack ? &track : nullptr);
     if (!h.cl_multiview && !sn::udp_tv_recording_open(h.cl_demo, std::move(bytes), true, error))
       return fail(o.demo + ": " + error,
-                  "name a multiplayer client's recording or a multiview recording");
+                  "name a client recording, a single-player recording or a multiview recording");
     const gn::Address bind = at(o.bind, o.port > 0 ? o.port : 27900);
     if (!gn::open_udp_transport(h.qw_face, bind, &error))
       return fail("the TV's socket did not open on " + gn::to_string(bind) + ": " + error,

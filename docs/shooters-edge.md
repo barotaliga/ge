@@ -1158,6 +1158,52 @@ client who joins enters the campaign and is carried from map to map with his par
 is (every client signs on again on each next map), and the ninth player is refused as the server
 being full.
 
+### A third classic game: the checklist
+
+The sequel was carried in by these steps, in this order, and a third classic game follows them.
+Each step names where the sequel's work lives, so the third's is a file of its own beside it. Every
+step lands with its test and its lab. The source of any GPL program is read only by a reader
+(the `clean-room` skill).
+
+1. **The content row** (`plugins/classicenhance/profile.hpp`'s `Profile`): the base folder, the
+   multiplayer folder, the pack names, the asset kinds (folders and extensions), the palette in
+   the form the game keeps it, its picture wad or none, the start map, the file only the full game
+   has, and the material words its texture names use. The packs are named by SHA-256 in the
+   known releases. Nothing in the shell may branch on the row's id; a difference is a field.
+2. **The install found and its load order** (`client/game_folder.hpp`, `client/install_search.hpp`,
+   `client/load_order.hpp`): the folder checked against the row, the game told apart from the
+   other rows, its files ranked as its own client ranks them (packs over loose files or under,
+   a root archive), its startup configs in its order, and its `default.cfg` from its packs.
+3. **The readers** under the adapter: the map family into `plugins/brush`'s one view (the 46
+   family is read already), the model and sprite families into `plugins/morph`'s one form, the
+   picture formats into `ge::ui::Image`. A damaged file is refused with what is wrong.
+4. **The adapter** (`client/game_adapter.hpp`, a file of the game's own beside
+   `client/sequel_adapter.cpp`, the shared helpers in `client/adapter_parts.hpp`): every call in
+   the table above. The window, the console, the menus and the labs ask through it alone.
+5. **The window plays a map**: the map drawn with its light, the move (a profile's own or the
+   arena's), its sky, liquids and fog. Lab: the game's own, as `se-sequel` walks the sequel's maps.
+6. **Models and their animation** (`client/world_models.cpp`, `client/model_lerp.hpp`; the
+   sequel's poses in `server/sequel_poses.hpp`): items turn, players and monsters pose, the held
+   weapons fire. Labs as `se-sequel-models` and `se-sequel-weapon-fx`.
+7. **Pictures and sounds**: the status bar (the sequel's is a layout program,
+   `hud/sequel_layout.hpp` and `client/sequel_bar.hpp`), the console font and background, the
+   menus in the game's own art, its sounds by name. Lab as `se-sequel-hud`.
+8. **Classic-enhance on it**: every stage of `plugins/classicenhance` run on the row, each
+   stage's count checked against the packs (a stage that reports zero is a gap, not a pass: the
+   sequel's textures were outside its maps, its models all shared one file name, its palette was
+   a picture). Then the window draws every stage's output under the same `ce_` switches.
+9. **Its rules** (the sequel's in `server/sequel_*.hpp`: items, combat, the map's movers and
+   targets, monsters, the campaign, the help screens), as C++ on the rules runner, never QC of our
+   own; played by bots with a golden digest. Labs as `se-sequel-fight` and `se-sequel-coop`.
+10. **Its bots** (`plugins/shooter`'s pilot and routes on the game's map; the companion,
+    `bots/companion.hpp`). Lab as `se-sequel-bots`.
+11. **Its recordings and its network** (`client/demo_sequel.cpp`, `net/sequel_game.hpp`,
+    `net/sequel_client.hpp`, `net/sequel_net_server.hpp`): its demos played, converted (M18w) and
+    sent to TV; our client joins its servers and its clients join ours, measured black-box
+    against an unmodified client.
+12. **Remix** (§ Classic remix): its weapons, items, models and maps offered to the other games,
+    shown only when both full games are loaded.
+
 ## Licensing and the clean room
 
 **The engine.** gameengine2 is under the PolyForm Noncommercial License 1.0.0 (`LICENSE`): open to

@@ -78,6 +78,9 @@ if(GE_GPU)
     target_link_libraries(play PRIVATE fall_line_app)
     target_compile_definitions(play PRIVATE FALL_LINE_PLAY_GPU=1)
   endif()
+  # Its web viewer (web/viewer.cpp): a run's input log watched again on a hub's page; made only by
+  # a `web` build of this game (`cmake --preset web -DGE_WEB_GAME=fall_line`).
+  ge_add_web_viewer(fall_line SOURCES web/viewer.cpp LIBS fall_line_app ge_replay)
 endif()
 if(GE_PLATFORM AND GE_GPU)
   add_executable(fall_line app/main.cpp)

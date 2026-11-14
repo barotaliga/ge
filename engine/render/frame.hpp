@@ -262,12 +262,19 @@ inline constexpr uint32_t kFrameBlock = frame_bits({0, 6});
 inline constexpr uint32_t kFrameSurface = frame_bits({0, 1, 2, 4, 6, 7, 8, 9, 11});
 // Water: a surface's, and the aerial volume, the local lights, the lamps' atlas, the shafts.
 inline constexpr uint32_t kFrameWater = kFrameSurface | frame_bits({5, 10, 13, 14, 16});
+// The ground (render/terrain.hpp's draw, its prepass and probes, and a material over it): a
+// water's, and the ambient occlusion and the last frame's mirror; all but the multiscattering
+// table, which leaves the plain ground at 16 sampled textures a stage.
+inline constexpr uint32_t kFrameGround = kFrameWater | frame_bits({12, 15});
+// The fog's light (render/fog.hpp's inject, a compute pass): the block, the sun through the air,
+// the sky's light, the clouds, the local lights and the lamps' atlas.
+inline constexpr uint32_t kFrameFog = frame_bits({0, 1, 2, 6, 8, 9, 10, 13, 14});
 
 // Group 0 made over one set of inputs: `all` for most passes, and the same inputs as a pass that
-// reads a few of them binds them (`kFrameBlock`, `kFrameSurface`, `kFrameWater`). Passes that take
-// a plain group take `all`.
+// reads a few of them binds them (`kFrameBlock`, `kFrameSurface`, `kFrameWater`, `kFrameGround`,
+// `kFrameFog`). Passes that take a plain group take `all`.
 struct FrameGroup {
-  wgpu::BindGroup all, block, surface, water;
+  wgpu::BindGroup all, block, surface, water, ground, fog;
   operator const wgpu::BindGroup&() const { return all; }  // NOLINT(google-explicit-constructor)
   explicit operator bool() const { return bool(all); }
 };
