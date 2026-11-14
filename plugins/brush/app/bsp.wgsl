@@ -260,6 +260,13 @@ fn vs_main(v: VsIn, @builtin(vertex_index) vi: u32) -> VsOut {
   return o;
 }
 
+// Whether both are finite numbers: tested on the bits (an exponent of all ones is an infinity or
+// a NaN), which no compiler may fold away as it may `x != x`.
+fn finite2(v: vec2f) -> bool {
+  let e = vec2u(0x7f800000u);
+  return all((bitcast<vec2u>(v) & e) != e);
+}
+
 // The texel at `st` (texels of mip 0) of the texture at `rect`, at mip `lod`, wrapped.
 fn texel(st: vec2f, rect: vec4f, lod: f32) -> vec4f {
   let k = u32(clamp(lod, 0.0, f32(textureNumLevels(atlas) - 1u)));
@@ -945,14 +952,18 @@ fn shade(in: VsOut) -> FsOut {
   out.mask = vec4f();
   let classic = !kLitOnly && bsp.info.x < 0.5;
   let t = bsp.info2.x;
-  var st = in.st;
+  // A coordinate the rasterizer left not a number (seen on a sliver of a triangle edge on, a pixel
+  // now and then) reads the texture's corner: one wrong texel, never a NaN the bloom would smear
+  // over the picture.
+  var st = select(vec2f(0.0), in.st, finite2(in.st));
   let warped = in.kind == kWater || in.kind == kSlime || in.kind == kLava || in.kind == kWarp ||
                in.kind == kTele;
   if (warped) {
     st = st + 8.0 * sin(st.yx * (6.2831853 / 128.0) + vec2f(t));
   }
-  let dx = dpdx(st);
-  let dy = dpdy(st);
+  // A neighbour's broken coordinate breaks the derivatives too: a pixel without them is sharp.
+  let dx = select(vec2f(0.0), dpdx(st), finite2(dpdx(st)));
+  let dy = select(vec2f(0.0), dpdy(st), finite2(dpdy(st)));
   let lod = log2(max(max(length(dx), length(dy)), 1e-6));
   let dpx = dpdx(in.world);
   let dpy = dpdy(in.world);
