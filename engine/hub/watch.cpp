@@ -319,7 +319,8 @@ Answer play_page(const HubSpec& spec, std::string_view map, const Site& site) {
                   "", content, true);
   h += "<p class=\"small\">Click the picture to play: W A S D move, the mouse looks, the left "
        "button fires, SPACE jumps, 1 to 8 or the wheel pick a weapon, TAB shows the scores, "
-       "Escape lets the mouse go.</p>";
+       "Escape lets the mouse go. On a phone or a tablet the left thumb walks, the right one "
+       "looks, and the round buttons at the right fire, jump and change weapon.</p>";
   h += "</section><aside><h3>Other maps</h3><ul class=\"also\">";
   for (const std::string& m : maps)
     if (m != map)
@@ -349,10 +350,14 @@ Answer join_page(const Poller& p, const HubSpec& spec, std::string_view rest, co
         "No forwarder this hub knows takes players from a browser to this server, so it "
         "cannot be played here. Join it in the game below.";
   } else {
-    args = {"--join=https://" + host_of(fwd->address) + ":" +
-                status_key(fwd->status, ge::forward::kWebTransportKey) +
-                "/play?to=" + gn::to_string(server),
-            "--cert=" + ge::forward::status_cert(fwd->status)};
+    // WebTransport first; the WebSocket for a browser without it (the page tries them in turn).
+    const std::string to = "/play?to=" + gn::to_string(server);
+    const std::string wt = status_key(fwd->status, ge::forward::kWebTransportKey);
+    const std::string cert = ge::forward::status_cert(fwd->status);
+    const std::string ws = status_key(fwd->status, ge::forward::kWebSocketKey);
+    if (!wt.empty() && !cert.empty())
+      args = {"--join=https://" + host_of(fwd->address) + ":" + wt + to, "--cert=" + cert};
+    if (!ws.empty()) args.push_back("--join=ws://" + host_of(fwd->address) + ":" + ws + to);
   }
   ContentPack pack;
   std::string why;
@@ -367,7 +372,8 @@ Answer join_page(const Poller& p, const HubSpec& spec, std::string_view rest, co
   h += viewer_slot(site, spec, args, no_viewer, content, true);
   h += "<p class=\"small\">Click the picture to play: W A S D move, the mouse looks, the left "
        "button fires, SPACE jumps, 1 to 8 or the wheel pick a weapon, TAB shows the scores, "
-       "Escape lets the mouse go.</p>";
+       "Escape lets the mouse go. On a phone or a tablet the left thumb walks, the right one "
+       "looks, and the round buttons at the right fire, jump and change weapon.</p>";
   h += "<p class=\"act\"><a class=\"btn\" href=\"" + scheme_of(spec) + "://join/" +
        html_escape(gn::to_string(server)) + "\">Join in the game</a></p>";
   h += "</section><aside><h3>Scoreboard</h3>" + scoreboard_html(spec, s) + "</aside></main>" +
@@ -435,7 +441,7 @@ bool watch_answer(const Poller& p, const HubSpec& spec, std::string_view target,
                   const Site& site, Answer& out) {
   std::string path = target_path(target);
   while (path.size() > 1 && path.back() == '/') path.pop_back();
-  if (content_answer(path, site, out)) return true;
+  if (content_answer(path, site, out, &spec)) return true;
   if (spec.map_files && path == "/play") {
     out = play_list(spec, site);
     return true;

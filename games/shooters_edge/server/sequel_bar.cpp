@@ -144,11 +144,14 @@ std::string_view sq_icon(int n) {
   return n > 0 && n < kSqItemNumbers ? kNumbered[n].icon : std::string_view();
 }
 
+std::string sq_bar_program(bool match) {
+  return std::string(kBottom) + kHelp + (match ? kTimerMatch : kTimerSingle) +
+         (match ? kMatch : "");
+}
+
 void bar_start(SequelServer& s) {
   RulesWorld& w = s.world;
-  const bool match = s.cvars.find("deathmatch")->on();
-  w.status_bar =
-      std::string(kBottom) + kHelp + (match ? kTimerMatch : kTimerSingle) + (match ? kMatch : "");
+  w.status_bar = sq_bar_program(s.cvars.find("deathmatch")->on());
   w.images.assign(1, std::string());
   const auto add = [&](std::string_view name) {
     if (name.empty() || std::find(w.images.begin(), w.images.end(), name) != w.images.end()) return;

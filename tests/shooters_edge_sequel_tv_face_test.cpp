@@ -9,6 +9,7 @@
 // ge:summary Test: the sequel face of our TV, viewers watching a match relayed from a watcher
 // ge:keywords test sequel tv-node sequel-face viewer late-joiner whole-frame lossy password
 // ge:skill net shooter testing
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -19,6 +20,7 @@
 #include "check.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
+#include "shooters_edge/client/sequel_demo.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
 #include "shooters_edge/net/sequel_net_server.hpp"
@@ -268,6 +270,17 @@ TEST(a_recording_plays_to_viewers_at_the_games_pace_and_loops) {
   CHECK(!cn::sequel_tv_demo_open(demo, std::vector<uint8_t>(16, 0), true, error));
   CHECK_MSG(!error.empty(), "a refusal says why");
   CHECK_MSG(cn::sequel_tv_demo_open(demo, recording, true, error), error);
+  CHECK(demo.from_protocol == 0);
+  // The same recording in the older protocol plays as 34: converted when it is opened.
+  {
+    cn::SequelTvDemo old;
+    const std::vector<uint8_t> as26 = shooters_edge::client::sequel_as_protocol_26(recording);
+    CHECK(!as26.empty() && as26 != recording);
+    CHECK_MSG(cn::sequel_tv_demo_open(old, as26, true, error), error);
+    CHECK(old.from_protocol == 26);
+    CHECK(old.bytes.size() <= recording.size());
+    CHECK(std::equal(old.bytes.begin(), old.bytes.end(), recording.begin()));
+  }
   cn::SequelClientEnd v;
   cn::SequelClientConfig cfg;
   cfg.name = "couch";
@@ -295,4 +308,18 @@ TEST(a_recording_plays_to_viewers_at_the_games_pace_and_loops) {
   CHECK(v.levels >= 3);
   CHECK(v.demo.state.map == "hall");
   CHECK_MSG(v.frames > 100, std::to_string(v.frames) + " frames");
+  // A file the viewer asks for is refused at once, and the viewer goes on watching.
+  const int64_t before = v.frames;
+  cn::sequel_client_command(v, "download models/none/tris.md2");
+  for (int i = 0; i < 100; i++) {
+    r->now += 13000;
+    gn::sim_advance(r->net, r->now);
+    cn::sequel_client_tick(v, r->now);
+    cn::sequel_tv_demo_update(demo, face, r->now);
+    cn::sequel_tv_frame(face, r->now);
+  }
+  CHECK_MSG(v.error.empty(), v.error);
+  CHECK(face.downloads_refused == 1);
+  CHECK(v.stage == cn::ClientStage::active);
+  CHECK(v.frames > before);
 }

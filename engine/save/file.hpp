@@ -46,6 +46,7 @@ inline constexpr size_t kEntryBytes = 48;
 enum class Kind : uint16_t {  // NOLINT(performance-enum-size): the header's 16-bit field
   run = 1,                    // a whole run: what `Run::save` writes
   character = 2,              // part of a run carried to another (docs/saves.md § Part of a run)
+  index = 3,                  // a save store's index of its slots (store.hpp)
 };
 
 // A chunk's tag from its four letters: tag("PLYR").

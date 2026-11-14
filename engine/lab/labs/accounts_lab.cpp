@@ -11,18 +11,25 @@
 // Then players ask the account service on the simulated network at three levels of loss: sign up,
 // sign in, a code, a game server's login by it; every ticket is checked as a server would, and
 // tickets made wrong on purpose (old, changed, another master's) must each be refused.
+// Last, friends (M17j) over a lossy network with the tickets the players hold: each asks a few
+// others, who answer by asking back when they see the request; each says where they play; one
+// player blocks another (who must be told nothing different and see them offline); each invites a
+// friend, and the invites must arrive once. The lists are read back in pages, never an answer
+// bigger than its ask.
 //
 // ge:summary Lab: accounts signed up, look-alike names refused, logins, codes, a brute force held
 // ge:keywords lab accounts account sign-up sign-in login-code one-time-code throttle brute-force
 // ge:keywords look-alike reserved-name argon2id cost log snapshot service ticket sealed-ask loss
 // ge:skill net labs
 // ge:test tests/account_store_test.cpp
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "account/friends_service.hpp"
 #include "account/names.hpp"
 #include "account/service.hpp"
 #include "account/store.hpp"
@@ -335,6 +342,166 @@ void service_section(gl::Lab& lab, ga::HashCost cost) {
       gl::to_picture(chart.plot));
 }
 
+// FRIENDS ON THE NETWORK (M17j): the friends' ops asked with the players' tickets, at a loss.
+void friends_section(gl::Lab& lab, ga::HashCost cost) {
+  const int players = static_cast<int>(lab.arg_num("friends_players"));
+  const int asks_each = static_cast<int>(lab.arg_num("friends_asks"));
+  gc::Rng rng = gc::make_rng(static_cast<uint32_t>(lab.arg_num("seed")) * 7919 + 17);
+  gn::LinkConditions c;
+  c.latency_ms = 40;
+  c.loss = 0.1;
+  gn::SimNetwork net = gn::make_sim_network(static_cast<uint32_t>(gc::int_in(rng, 1, 1 << 30)), c);
+  const gn::Address service_at = gn::sim_address(1, ga::kAccountPort);
+  gn::Transport service_port, client;
+  gn::open_sim_transport(service_port, net, service_at);
+  gn::open_sim_transport(client, net, gn::sim_address(9, 5000));
+  ga::Store store;
+  ga::store_init(store, cost);
+  ga::ServiceConfig config;
+  config.seed = draw_key(rng);
+  auto svc = std::make_unique<ga::Service>();
+  ga::service_init(*svc, config, std::move(store), service_port, fresh_from, &rng);
+  int64_t now = kStart;
+  size_t biggest = 0;
+  int unanswered = 0;
+  const auto ask = [&](ga::Op op, const std::vector<std::string>& fields) {
+    ga::Ask a;
+    ga::ask_start(a, op, service_at, ga::service_key(*svc), fields, draw_key(rng), now);
+    a.max_tries = 12;
+    for (int i = 0; i < 400 && !a.done; i++) {
+      ga::ask_update(a, client, now);
+      now += 20000;
+      gn::sim_advance(net, now);
+      ga::service_update(*svc, now);
+      gn::sim_advance(net, now);
+      uint8_t buf[gn::kMaxDatagram];
+      gn::Address from;
+      int n = 0;
+      while ((n = gn::transport_receive(client, buf, sizeof buf, from, now)) >= 0) {
+        biggest = std::max(biggest, static_cast<size_t>(n));
+        ga::ask_read(a, buf, static_cast<size_t>(n), from);
+      }
+    }
+    if (!a.answered) unanswered++;
+    return a.reply;
+  };
+  // The players and their tickets (signed by the service's key, as a sign-in makes them).
+  std::vector<std::string> names, tickets;
+  for (int i = 0; i < players; i++) {
+    names.push_back("friend" + std::to_string(i));
+    const ga::Answer made = ga::create(svc->store, names.back(), "a long password", now, draw(rng));
+    const ga::Ticket t = ga::ticket_issue(svc->keys, made.id, names.back(), now / kSecond);
+    uint8_t b[ga::kTicketMax];
+    const size_t n = ga::ticket_write(t, b, sizeof b);
+    tickets.emplace_back(reinterpret_cast<const char*>(b), n);
+  }
+  const auto list = [&](int who) {
+    std::vector<ga::FriendRow> all;
+    bool more = true;
+    for (int page = 0; more && page < 16; page++) {
+      std::vector<ga::FriendRow> rows;
+      if (!ga::friends_page_read(ask(ga::Op::friends, {tickets[who], std::to_string(page)}).ticket,
+                                 rows, more))
+        break;
+      all.insert(all.end(), rows.begin(), rows.end());
+    }
+    return all;
+  };
+  // Asks out; then each answers what waits on them.
+  int asked = 0;
+  for (int i = 0; i < players; i++)
+    for (int k = 0; k < asks_each; k++) {
+      const int j = (i + 1 + gc::int_in(rng, 0, players - 2)) % players;
+      if (ask(ga::Op::friend_, {tickets[i], "ask", names[j]}).code == "asked") asked++;
+    }
+  int answered_back = 0;
+  for (int i = 0; i < players; i++)
+    for (const ga::FriendRow& r : list(i))
+      if (r.kind == ga::FriendRowKind::asks_you &&
+          ask(ga::Op::friend_, {tickets[i], "ask", r.name}).code == "made")
+        answered_back++;
+  // Presence: each says where they are.
+  const char* states[] = {"online", "lobby", "playing"};
+  std::vector<std::string> said(players);
+  for (int i = 0; i < players; i++) {
+    said[i] = states[gc::int_in(rng, 0, 2)];
+    ask(ga::Op::presence,
+        {tickets[i], said[i], "shooters_edge", "203.0.113." + std::to_string(i + 1) + ":27500",
+         i % 2 ? "dm4 duel" : "e1m2 4on4"});
+  }
+  int seen_right = 0, seen_rows = 0;
+  std::vector<std::vector<ga::FriendRow>> lists(players);
+  for (int i = 0; i < players; i++) {
+    lists[i] = list(i);
+    for (const ga::FriendRow& r : lists[i]) {
+      if (r.kind != ga::FriendRowKind::friend_) continue;
+      seen_rows++;
+      const int j = std::stoi(r.name.substr(6));
+      seen_right += r.presence.state != ga::PresenceState::offline &&
+                            said[j] == ga::presence_state_name(r.presence.state)
+                        ? 1
+                        : 0;
+    }
+  }
+  // A block: player 0 blocks its first friend, who asks again and looks.
+  int block_silent = 0;
+  const std::vector<uint64_t> f0 = ga::friends_of(svc->friends, 1);
+  if (!f0.empty()) {
+    const int b = static_cast<int>(f0[0]) - 1;
+    ask(ga::Op::friend_, {tickets[0], "block", names[b]});
+    const ga::Reply again = ask(ga::Op::friend_, {tickets[b], "ask", names[0]});
+    block_silent += again.code == "asked" ? 1 : 0;
+    bool sees = false;
+    for (const ga::FriendRow& r : list(b)) sees |= r.name == names[0];
+    block_silent += sees ? 0 : 1;
+  }
+  // Invites: each invites one friend; each reads theirs.
+  int sent = 0, got = 0;
+  for (int i = 0; i < players; i++) {
+    const std::vector<uint64_t> fr = ga::friends_of(svc->friends, static_cast<uint64_t>(i) + 1);
+    if (fr.empty()) continue;
+    const ga::Reply r =
+        ask(ga::Op::invite, {tickets[i], names[fr[0] - 1], "shooters_edge",
+                             "203.0.113." + std::to_string(i + 1) + ":27500", "join me?"});
+    sent += r.refusal == ga::Refusal::none ? 1 : 0;
+  }
+  for (int i = 0; i < players; i++) {
+    std::vector<ga::InviteRow> inv;
+    if (ga::invites_read(ask(ga::Op::invites, {tickets[i]}).ticket, inv))
+      got += static_cast<int>(inv.size());
+  }
+  // One player's list, as the game CLI prints it.
+  gl::LabTable shown{"friend0's friends list read back over the network",
+                     {"name", "kind", "state", "where", "words"},
+                     {}};
+  for (const ga::FriendRow& r : list(0))
+    shown.rows.push_back({r.name,
+                          r.kind == ga::FriendRowKind::friend_    ? "friend"
+                          : r.kind == ga::FriendRowKind::asks_you ? "asks you"
+                                                                  : "you asked",
+                          ga::presence_state_name(r.presence.state), r.presence.where,
+                          r.presence.words});
+  lab.table(std::move(shown));
+  lab.metric("friends_asked", asked, "count");
+  lab.metric("friends_made", static_cast<double>(svc->friends.pairs.size()), "pairs");
+  lab.metric("friends_answered_back", answered_back, "count");
+  lab.metric("presence_rows", seen_rows, "count");
+  lab.metric("presence_seen_right", seen_right, "count");
+  lab.metric("block_silent", block_silent, "of 2");
+  lab.metric("invites_sent", sent, "count");
+  lab.metric("invites_got", got, "count");
+  lab.metric("friends_biggest_answer", static_cast<double>(biggest), "bytes");
+  lab.metric("friends_unanswered", unanswered, "asks");
+  if (unanswered != 0 || seen_right != seen_rows || block_silent != 2 || got != sent ||
+      biggest > ga::kAccountAskSize)
+    lab.fail("friends over the network went wrong: " + std::to_string(unanswered) +
+                 " asks unanswered, " + std::to_string(seen_right) + " of " +
+                 std::to_string(seen_rows) + " presences right, block silent " +
+                 std::to_string(block_silent) + " of 2, invites " + std::to_string(got) + " of " +
+                 std::to_string(sent),
+             "Run tests/account_friends_test and tests/account_service_test; skill: net.");
+}
+
 void run(gl::Lab& lab) {
   const int players = static_cast<int>(lab.arg_num("players"));
   const double copycats = lab.arg_num("copycats");
@@ -541,6 +708,7 @@ void run(gl::Lab& lab) {
   // 6. The service over the network: players ask a master's account service on the simulated
   // network, at three levels of loss, and a game server logs each in by the code it made.
   service_section(lab, cost);
+  friends_section(lab, cost);
 
   gl::LabTable totals{"the month in numbers", {"what", "count", "expected"}, {}};
   totals.rows.push_back({"accounts", std::to_string(made.size()), "every new name"});
@@ -613,7 +781,7 @@ const gl::LabSpec kSpec{
     "accounts",
     gl::LabKind::sim,
     "engine",
-    "engine/account (store, names, store_text, ticket, service), engine/net/crypto.hpp",
+    "engine/account (store, names, store_text, ticket, service, friends), engine/net/crypto.hpp",
     "net",
     "Does a master's account store keep names to one player however they are spelled, let players "
     "in with the right secret and the right kind of secret only (a code once), hold back a brute "
@@ -627,9 +795,11 @@ const gl::LabSpec kSpec{
         {"bench_kib", "19456,65536", "hash memories timed, KiB (measured)"},
         {"service_players", "40", "players asking the account service on the network"},
         {"service_loss", "0,0.1,0.3", "the network's loss at each level of the service's run"},
+        {"friends_players", "24", "players making friends on the network (at 10% loss)"},
+        {"friends_asks", "3", "friend requests each sends"},
         {"seed", "1", "the names', passwords' and fresh bytes' stream"},
     },
-    "--players=60 --attack_hours=4 --bench_kib=1024 --service_players=12",
+    "--players=60 --attack_hours=4 --bench_kib=1024 --service_players=12 --friends_players=10",
     run,
 };
 GE_LAB(kSpec);

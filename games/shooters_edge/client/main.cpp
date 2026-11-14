@@ -124,6 +124,7 @@
 #include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/remix.hpp"
+#include "shooters_edge/client/remix_bar.hpp"
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/settings.hpp"
@@ -792,12 +793,35 @@ int run_main(int argc, char** argv) {
   cl::bind_remix(console.cvars(), &remix_settings);
   cl::RemixFiles remix;
   loader.remix = &remix;
+  // The sequel's bar over the classic status while the rules wear its weapons (remix_bar.hpp).
+  cl::SequelBar worn_bar;
+  worn_bar.files = &remix.files;
+  cl::HeldState in_hand;
+  in_hand.hand.at_eye = weapons_at_eye;
+  // `cr_items` (remix.hpp's `worn_arsenal`): from the next map the played game's rules wear the
+  // other game's weapons: the server's rows and files, the weapons in the hand.
+  const auto remix_wear = [&] {
+    const auto* worn = cl::worn_arsenal(remix_settings, remix.state, args.profile);
+    if (worn == remix.worn) return;
+    remix.worn = worn;
+    worn_bar.pictures.clear();  // read again from the files now open
+    listen.opt.arsenal = cl::worn_lines(worn, game_content.arsenal);
+    listen.opt.files = worn != nullptr ? &remix.files : &files;
+    in_hand = {};
+    in_hand.hand.at_eye = cl::load_worn_held(adapter, remix, files, model_dirs, weapons);
+    console.print(cl::worn_line(worn));
+  };
   bool remix_enabled = false;
   std::string remix_for;
+  int32_t remix_items = 0;
   const auto remix_sync = [&] {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
-    if (remix_settings.enabled == remix_enabled && remix_for == args.basedir) return;
+    if (remix_settings.enabled == remix_enabled && remix_for == args.basedir &&
+        remix_settings.items == remix_items)
+      return;
     if (cl::busy(loader)) return;  // its threads may read the other game's files: next frame
+    remix_items = remix_settings.items;
+    if (remix_settings.enabled == remix_enabled && remix_for == args.basedir) return remix_wear();
     remix_enabled = remix_settings.enabled;
     remix_for = args.basedir;
     const cl::RemixState st = cl::remix_check(remix_settings, args.profile,
@@ -813,6 +837,7 @@ int run_main(int argc, char** argv) {
     } else if (!st.why.empty()) {
       console.print(st.why);
     }
+    remix_wear();
   };
   ge::platform::DevicesPtr devices = ge::platform::open_devices();
   if (!devices) return 1;
@@ -973,8 +998,6 @@ int run_main(int argc, char** argv) {
     for (const std::string& f : faults) console.print("particles: " + f);
     fx_palette_read = true;
   };
-  cl::HeldState in_hand;
-  in_hand.hand.at_eye = weapons_at_eye;
   // LOAD GAME's folder and the console's `basedir` (client/game_folder.hpp): the install opened in
   // place of the one playing (the old world and servers let go first: they view its packs), its
   // first map started where the map changes, its packs enhanced in the background, kept for the
@@ -1077,11 +1100,13 @@ int run_main(int argc, char** argv) {
     in_hand.hand.at_eye = at_eye;
     held_fire.shots = {};
     user_info.sent_to = nullptr;
+    remix.worn = nullptr;  // the new game's own: the remix's are worked out again for it
+    remix_for.clear();
   };
   // The window's own game heard this frame (`dt` s), at the player's volume.
   const auto hear_here = [&](double dt) {
     synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
-    heard_here.frame(listen, files, static_cast<float>(dt));
+    heard_here.frame(listen, remix.worn != nullptr ? remix.files : files, static_cast<float>(dt));
   };
   // THE BOT CLIENT (`--bots=N --server=<host:port> --team=<name>`): a team of bots joins the
   // server (net/classic_bot_team.hpp) and the window shows the team's world as its bots believe it
@@ -1892,14 +1917,22 @@ int run_main(int argc, char** argv) {
     if (sequel != nullptr && listen.campaign.end == cl::LevelEnd::none) {
       // The sequel's own bar, from the program its rules send.
       cl::run_sequel_bar(sequel_bar, sequel->world, 0, sequel->frame_number, w, h);
+      // Its crosshair (the HUD's, shown unless hidden) and its centre print in its own letters.
+      const int cross = hud.layout.find("crosshair");
+      cl::add_sequel_screen(
+          sequel_bar, cross >= 0 && hud.layout[static_cast<size_t>(cross)].place.show ? 1 : 0,
+          t < hud.centre_until ? std::string_view(hud.centre) : std::string_view(), w, h);
       cl::draw_sequel_bar(overlay, sequel_bar, cl::sequel_bar_scale(h));
     } else if (listen.campaign.end == cl::LevelEnd::none) {
       se::Status hud_status = cl::status_of(listen, t);
-      cl::group_status(controls.groups, hud_status, t);  // the weapon group (weapon_groups.hpp)
-      se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
-      const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
-      hud.layout.draw(overlay, hf, hud_look());
-      hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
+      if (!cl::draw_worn_bar(overlay, worn_bar, remix.worn, hud_status, !listen.campaign_host, w,
+                             h)) {
+        cl::group_status(controls.groups, hud_status, t);  // the weapon group (weapon_groups.hpp)
+        se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
+        const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
+        hud.layout.draw(overlay, hf, hud_look());
+        hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
+      }
     }
     if (listen.room && listen.server != nullptr) {
       // The warmup's banner in the packs' own menu pictures when they carry them, else modern.

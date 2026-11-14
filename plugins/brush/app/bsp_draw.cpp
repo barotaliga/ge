@@ -926,6 +926,17 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   // How opaque each liquid is (the see-through pass reads it).
   set4(d.staged.liquid_alpha, o.liquid_alpha[0], o.liquid_alpha[1], o.liquid_alpha[2],
        o.liquid_alpha[3]);
+  // The flat colours, linear (the shader multiplies them as it does a texel).
+  const auto lin = [](double c) {
+    c = std::clamp(c, 0.0, 1.0);
+    return c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4);
+  };
+  set4(d.staged.flat_wall, lin(o.wall_colour[0]), lin(o.wall_colour[1]), lin(o.wall_colour[2]),
+       o.flat_walls ? 1 : 0);
+  set4(d.staged.flat_floor, lin(o.floor_colour[0]), lin(o.floor_colour[1]), lin(o.floor_colour[2]),
+       o.flat_floors ? 1 : 0);
+  set4(d.staged.fast_sky, lin(o.sky_colour[0]), lin(o.sky_colour[1]), lin(o.sky_colour[2]),
+       o.fast_sky ? 1 : 0);
   set4(d.staged.info4, o.bump, o.pack_sky ? 1 : 0, parallax > 0 ? o.parallax_reach : 0,
        relief ? o.specular : 0);
   set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers,

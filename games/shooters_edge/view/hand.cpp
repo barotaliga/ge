@@ -214,7 +214,8 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
     hand.settle_t = -1;
   }
 
-  const WeaponLook& look = weapon_look(hand.held);
+  const WeaponLook& look =
+      in.sequel ? sequel_weapon_look(static_cast<int>(hand.held)) : weapon_look(hand.held);
   vm::PlaceRow row = hand.at_eye ? eye_row(s) : held_row(look, s);
   const bool down = hand.held != hand.wanted || in.dead;
   if (in.dead)

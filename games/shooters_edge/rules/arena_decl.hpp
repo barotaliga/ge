@@ -118,9 +118,17 @@ namespace pg = ge::progs;
   X(armour_row1, "0.3 100 0 progs/armor.mdl items/armor1.wav")                                     \
   X(armour_row2, "0.6 150 1 progs/armor.mdl items/armor1.wav")                                     \
   X(armour_row3, "0.8 200 2 progs/armor.mdl items/armor1.wav")                                     \
+  X(arsenal_ammo1, "arsenal_ammo1")                                                                \
+  X(arsenal_ammo2, "arsenal_ammo2")                                                                \
+  X(arsenal_ammo3, "arsenal_ammo3")                                                                \
+  X(arsenal_ammo4, "arsenal_ammo4")                                                                \
   X(arsenal_armour1, "arsenal_armour1")                                                            \
   X(arsenal_armour2, "arsenal_armour2")                                                            \
   X(arsenal_armour3, "arsenal_armour3")                                                            \
+  X(arsenal_health1, "arsenal_health1")                                                            \
+  X(arsenal_health2, "arsenal_health2")                                                            \
+  X(arsenal_health3, "arsenal_health3")                                                            \
+  X(arsenal_pickup, "arsenal_pickup")                                                              \
   X(arsenal_weapon1, "arsenal_weapon1")                                                            \
   X(arsenal_weapon2, "arsenal_weapon2")                                                            \
   X(arsenal_weapon3, "arsenal_weapon3")                                                            \

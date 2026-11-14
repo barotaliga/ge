@@ -132,6 +132,30 @@ bool pack_better(A& q, int32_t pickup, float had) {
   return fresh & has & ranked;
 }
 
+// An item in another game's look (classic remix, `cr_items`): the setting `setting`'s row,
+// "<model> <sound> <lift>" ("-" keeps the item's own sound), else its own `mdl` and `snd`. Another
+// game's model is drawn about its origin, where a brush model of ours starts at it: an item whose
+// box starts at its origin takes the box's middle as its origin and a box about it, so the trigger
+// stays where it was and the model stands in its middle; its origin is raised by the lift (that
+// game's models stand that far above the floor) and its box lowered as far.
+void dressed_start(A& q, int32_t setting, int32_t mdl, int32_t snd, Vec3 lo, Vec3 hi,
+                   float respawn) {
+  const int32_t row = q.cvar_string(setting);
+  if (!q.is(row, "")) {
+    const float words = q.tokenize(row);
+    mdl = q.strzone(q.argv(0));  // held by the item for as long as the map runs
+    if (words > 1 && !q.is(q.argv(1), "-")) snd = q.strzone(q.argv(1));
+    const float lift = words > 2 ? number_of(q, q.argv(2)) : 0;
+    const int32_t me = q.self();
+    const Vec3 mid{(lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f, -lift};
+    const Vec3 at = q.v(me, q.L.f.origin);
+    q.set_v(me, q.L.f.origin, {at.x + mid.x, at.y + mid.y, at.z - mid.z});
+    lo = {lo.x - mid.x, lo.y - mid.y, lo.z - lift};
+    hi = {hi.x - mid.x, hi.y - mid.y, hi.z - lift};
+  }
+  item_start(q, mdl, snd, lo, hi, respawn);
+}
+
 void armour_start(A& q, float slot, float bit) {
   int32_t row;
   if (slot == 1) {
@@ -162,7 +186,7 @@ void armour_start(A& q, float slot, float bit) {
   item_start(q, mdl, snd, {-16, -16, 0}, {16, 16, 56}, 20);
 }
 
-void ammo_start(A& q, int32_t mdl) {
+void ammo_start(A& q, int32_t mdl, int32_t setting) {
   const int32_t me = q.self();
   if (q.g(g_deathmatch) == 4) {  // none lies on the map in deathmatch 4
     q.remove(me);
@@ -175,7 +199,7 @@ void ammo_start(A& q, int32_t mdl) {
   q.set_f(me, q.L.f.ammo_rockets, q.f(me, q.L.f.ammo_rockets) * n);
   q.set_f(me, q.L.f.ammo_cells, q.f(me, q.L.f.ammo_cells) * n);
   q.set_i(me, q.L.f.touch, q.fn(fn_ammo_touch));
-  item_start(q, mdl, q.s(s_lock4_wav), {0, 0, 0}, {32, 32, 56}, 20);
+  dressed_start(q, setting, mdl, q.s(s_lock4_wav), {0, 0, 0}, {32, 32, 56}, 20);
 }
 
 // A weapon lying in slot `w`'s place: the arsenal's row gives its pickup model and ammunition;
@@ -208,7 +232,11 @@ void weapon_start(A& q, float w, int32_t name, int32_t mdl) {
       q.set_f(me, q.L.f.ammo_cells, n);
     }
   }
-  item_start(q, mdl, q.s(s_pkup_wav), {-16, -16, 0}, {16, 16, 56}, 30);
+  // Another game's weapons (classic remix) bring their own pickup sound.
+  int32_t snd = q.s(s_pkup_wav);
+  if (const int32_t own = q.cvar_string(q.s(s_arsenal_pickup)); !q.is(own, ""))
+    snd = q.strzone(own);
+  item_start(q, mdl, snd, {-16, -16, 0}, {16, 16, 56}, 30);
 }
 
 int32_t pack_weapon_name(A& q, float w) {
@@ -355,13 +383,16 @@ void item_health(A& q) {
   q.set_i(me, q.L.f.touch, q.fn(fn_health_touch));
   if (on(band(flags, 1))) {
     q.set_f(me, q.L.f.health, 15);
-    item_start(q, q.s(s_b_bh10), q.s(s_r_item1_wav), {0, 0, 0}, {32, 32, 56}, 20);
+    dressed_start(q, q.s(s_arsenal_health1), q.s(s_b_bh10), q.s(s_r_item1_wav), {0, 0, 0},
+                  {32, 32, 56}, 20);
   } else if (on(band(flags, 2))) {
     q.set_f(me, q.L.f.health, 100);
-    item_start(q, q.s(s_b_bh100), q.s(s_r_item2_wav), {0, 0, 0}, {32, 32, 56}, 20);
+    dressed_start(q, q.s(s_arsenal_health3), q.s(s_b_bh100), q.s(s_r_item2_wav), {0, 0, 0},
+                  {32, 32, 56}, 20);
   } else {
     q.set_f(me, q.L.f.health, 25);
-    item_start(q, q.s(s_b_bh25), q.s(s_health1_wav), {0, 0, 0}, {32, 32, 56}, 20);
+    dressed_start(q, q.s(s_arsenal_health2), q.s(s_b_bh25), q.s(s_health1_wav), {0, 0, 0},
+                  {32, 32, 56}, 20);
   }
 }
 
@@ -407,19 +438,19 @@ void ammo_touch(A& q) {
 
 void item_shells(A& q) {
   q.set_f(q.self(), q.L.f.ammo_shells, 20);
-  ammo_start(q, q.s(s_b_shell0));
+  ammo_start(q, q.s(s_b_shell0), q.s(s_arsenal_ammo1));
 }
 void item_spikes(A& q) {
   q.set_f(q.self(), q.L.f.ammo_nails, 25);
-  ammo_start(q, q.s(s_b_nail0));
+  ammo_start(q, q.s(s_b_nail0), q.s(s_arsenal_ammo2));
 }
 void item_rockets(A& q) {
   q.set_f(q.self(), q.L.f.ammo_rockets, 5);
-  ammo_start(q, q.s(s_b_rock0));
+  ammo_start(q, q.s(s_b_rock0), q.s(s_arsenal_ammo3));
 }
 void item_cells(A& q) {
   q.set_f(q.self(), q.L.f.ammo_cells, 6);
-  ammo_start(q, q.s(s_b_batt0));
+  ammo_start(q, q.s(s_b_batt0), q.s(s_arsenal_ammo4));
 }
 
 void weapon_touch(A& q) {

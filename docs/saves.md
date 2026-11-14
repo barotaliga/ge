@@ -150,28 +150,42 @@ setup builds: 0.3 s for the race map, 1.3 s for the free ride's. That is M25h's 
 
 ## Slots and the store (M25c)
 
-`save::Store` keeps one directory (the platform's per-user data directory, from
-`engine/platform`: Application Support on Apple, `XDG_DATA_HOME` on Linux, Saved Games on
-Windows, the app's sandbox on iOS and Android; any directory given, headless). A slot is a file:
+`save::Store` (`engine/save/store.hpp`) keeps one directory through a `save::Disk`
+(`engine/save/disk.hpp`): `DirDisk` is a real directory (the game passes the platform's per-user
+place, `platform::prefs_dir`, plus a `saves/` folder; any directory, headless), and `SimDisk` is
+one in memory that counts its reads and can be killed after any number of units (a byte written,
+a rename, a remove, a flush), which is how every crash is tested. A slot is a file:
 
-- `auto-<n>`: the autosave ring, `n` of a size the game sets; a new autosave overwrites the oldest;
+- `auto-<n>`: the autosave ring, `n` up to the game's `StoreSpec::autosaves`; a new autosave takes
+  an empty one, else the oldest;
 - `quick`: the quicksave;
-- `slot-<n>`: the player's numbered slots, as many as the game allows;
-- `index`: one small record a slot (the meta chunk and the picture's place), so a menu lists a
-  thousand saves with one read. The index is a cache: missing or damaged, it is rebuilt from the
-  slots' headers, and a slot the index does not name is still found.
+- `slot-<n>`: the player's numbered slots, up to `StoreSpec::slots`;
+- `index`: a save file of kind `index` (`Kind::index`), one `SLOT` chunk a slot (its name, its
+  size and its meta), so a menu lists a thousand saves with one read. The index is a cache:
+  missing or damaged, it is rebuilt from the slots' headers (`peek`, one read each; `StoreOpen`
+  says so), a slot the index does not name is peeked and listed, and one it names but is gone or
+  of another size is dropped or peeked again.
 
-Writing never risks the last good save: the bytes go to `<slot>.tmp`, are flushed to the disk,
-read back and checked, then renamed over the slot (atomic on every platform), and the previous
-version stays as `<slot>.bak` until the new one has read back. A crash at any byte leaves either
-the old save or the new one, never half of each; the lab kills a write at every offset to prove
-it. The game thread only serializes into a buffer; a writer thread does the disk, and the game
-is told when the save is safe (an event the HUD turns into its "saved" mark).
+Every name is refused unless it is one of those (no paths), and every file written is opened
+first: one that is not a save, or another game's, is refused with the reason.
 
-Delete, copy and rename are slot operations on the store; an autosave is a store call with the
-ring's next number. WHEN to autosave is the game's (Fall Line: at a run's foot, on leaving a
-lift, every few minutes on the free ride); the engine gives the ring and a minimum spacing so a
-burst of triggers writes once.
+Writing never risks the last good save: the bytes go to `<slot>.tmp` and are flushed, read back
+and compared; the slot is renamed to `<slot>.bak`, the `.tmp` renamed over the slot, the
+directory flushed, and only then is the `.bak` removed and the index rewritten. Opening the store
+finishes or undoes whatever a crash left: a `.tmp` is removed, a `.bak` with no slot beside it is
+renamed back, one beside a whole slot is removed. A crash at any unit leaves either the old save
+or the new one, never half of each, and never touches another slot: the `save-slots` lab kills
+one write at every unit (1352 of them) and finds the slot whole every time.
+
+The game thread only serializes into a buffer: `save::StoreWriter` (`store_writer.hpp`) owns the
+store on a thread of its own, takes `post(slot, bytes)` and `post_autosave(bytes, now)`, and
+answers each with a `StoreDone` in the order posted (`poll()` on the game thread; ok, skipped by
+the spacing, or the problem), which the HUD turns into its "saved" mark.
+
+Delete, copy and rename are slot operations on the store; an autosave is a store call that picks
+the ring's slot. WHEN to autosave is the game's (Fall Line: at a run's foot, on leaving a lift,
+every few minutes on the free ride); the engine gives the ring and a minimum spacing
+(`autosave_spacing_s`) so a burst of triggers writes once.
 
 ## Pictures of a save (M25d)
 
@@ -235,7 +249,7 @@ missing, stale or damaged, it is rebuilt from the setup and the save still loads
 | --- | --- | --- |
 | `save-file` | Does a file of every kind of field round-trip to the byte, is every truncation and flipped byte refused with the chunk named, do old chunk versions read with their defaults, and at how many GB/s are files written and read? | M25a |
 | `save-run` | Saved at many steps and loaded, does Fall Line's run step on to the digests of the run never saved, and what do a save and a load cost, and how many bytes is each chunk? | M25b |
-| `save-slots` | A thousand slots written, listed, copied and deleted: how long does the list take, and does a write killed at every offset leave the last good save loadable? | M25c |
+| `save-slots` | Are a thousand save slots listed with one read (and rebuilt when the index is gone), and does a write killed at every unit leave the last good save loadable? | M25c |
 | `save-picture` | A save's picture from the CPU view, headless, on a contact sheet of slots | M25d |
 | `save-character` | A skier's profile taken from seed 38 into seed 7: the profile's fields equal, the rest of the run seed 7's own | M25e |
 | `save-cloud` | Two devices on the simulated store: do their slots converge, and is a conflict kept? | M25f |

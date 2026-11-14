@@ -147,3 +147,42 @@ TEST(gamecli_account_refuses_a_service_whose_key_changed) {
   CHECK_MSG(j["error"].text.find("another key") != std::string::npos, out);
   fs::remove_all(root);
 }
+
+TEST(gamecli_friends_add_see_each_other_and_invite) {
+  const fs::path ann = fresh("ge_gamecli_friends_ann"), bob = fresh("ge_gamecli_friends_bob");
+  Running service(9);
+  std::string out;
+  for (const auto& [root, name] : {std::pair{ann, "Ann"}, std::pair{bob, "Bob"}}) {
+    CHECK_MSG(run({"account", "signup", name, "--master=" + service.at(), "--password=long enough"},
+                  out, root) == 0,
+              out);
+    CHECK_MSG(run({"account", "signin", name, "--password=long enough"}, out, root) == 0, out);
+  }
+  CHECK_MSG(run({"friends", "add", "Bob"}, out, ann) == 0, out);
+  CHECK_MSG(parse(out)["result.answer"].text == "asked", out);
+  CHECK_MSG(run({"friends", "list"}, out, bob) == 0, out);
+  CHECK_MSG(parse(out)["result.friends.0.kind"].text == "asks_you", out);
+  CHECK_MSG(run({"friends", "add", "ann"}, out, bob) == 0, out);
+  CHECK_MSG(parse(out)["result.words"].text == "You are now friends with Ann.", out);
+  CHECK_MSG(run({"friends", "status", "playing", "--where=192.0.2.8:27500", "--words=dm4 duel"},
+                out, bob) == 0,
+            out);
+  CHECK_MSG(run({"friends", "list"}, out, ann) == 0, out);
+  ge::core::FlatJson j = parse(out);
+  CHECK_MSG(
+      j["result.friends.0.name"].text == "Bob" && j["result.friends.0.state"].text == "playing",
+      out);
+  CHECK_MSG(j["result.friends.0.where"].text == "192.0.2.8:27500", out);
+  CHECK_MSG(
+      run({"friends", "invite", "Bob", "--where=192.0.2.9:27500", "--note=2on2?"}, out, ann) == 0,
+      out);
+  CHECK_MSG(run({"friends", "invites"}, out, bob) == 0, out);
+  j = parse(out);
+  CHECK_MSG(j["result.invites.0.from"].text == "Ann" && j["result.invites.0.note"].text == "2on2?",
+            out);
+  // Not signed in: told to sign in.
+  const fs::path cid = fresh("ge_gamecli_friends_cid");
+  CHECK_MSG(run({"friends", "list", "--master=" + service.at()}, out, cid) == 2, out);
+  CHECK_MSG(parse(out)["error"].text == "not signed in", out);
+  for (const fs::path& p : {ann, bob, cid}) fs::remove_all(p);
+}

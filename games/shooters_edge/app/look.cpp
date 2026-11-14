@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <string>
 
 #include "brush/map_fog.hpp"
@@ -183,6 +184,59 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .values = "1: each map in its coloured light where it has one (the default); 0: every "
                      "map in its own grey light, and none fetched"},
           &picture.load_lit);
+  cv.bind({.name = "r_drawflat",
+           .fallback = "0",
+           .flags = gc::kArchive,
+           .help = "Walls and floors drawn in one colour each instead of their textures.",
+           .kind = gc::CvarKind::integer,
+           .min = 0,
+           .max = 3,
+           .values = "0: textured (the default); 1: walls and floors flat; 2: the walls alone; "
+                     "3: the floors alone"},
+          &picture.draw_flat);
+  const struct {
+    const char* name;
+    const char* help;
+    const char* fallback;
+    std::string* value;
+  } flats[] = {
+      {"r_wallcolor", "The walls' colour when r_drawflat is on.", "150 140 125",
+       &picture.wall_colour},
+      {"r_floorcolor", "The floors' colour when r_drawflat is on.", "85 95 110",
+       &picture.floor_colour},
+      {"r_skycolor", "The sky's colour when r_fastsky is on.", "70 90 120", &picture.sky_colour},
+  };
+  for (const auto& f : flats)
+    cv.bind({.name = f.name,
+             .fallback = f.fallback,
+             .flags = gc::kArchive,
+             .help = f.help,
+             .kind = gc::CvarKind::text,
+             .values = "TEXT: red, green and blue, each 0 to 255 (one number: a grey)"},
+            f.value);
+  cv.bind({.name = "r_dynamic",
+           .fallback = "1",
+           .flags = gc::kArchive,
+           .help = "Whether flashes, rockets and explosions light the walls and the models.",
+           .kind = gc::CvarKind::boolean,
+           .values = "1: they do (the default); 0: none do"},
+          &picture.dynamic);
+  cv.bind({.name = "r_fullbrightskins",
+           .fallback = "0",
+           .flags = gc::kArchive,
+           .help = "How brightly players are lit wherever they stand.",
+           .min = 0,
+           .max = 1,
+           .values = "0: lit as the floor under them (the default); 0..1: lifted that far toward "
+                     "full light; 1: fully lit, unshaded"},
+          &picture.fullbright_skins);
+  cv.bind({.name = "r_fastsky",
+           .fallback = "0",
+           .flags = gc::kArchive,
+           .help = "The sky drawn in one plain colour, r_skycolor.",
+           .kind = gc::CvarKind::boolean,
+           .values = "0: the map's sky (the default); 1: one plain colour"},
+          &picture.fast_sky);
   cv.bind({.name = "r_skyfog",
            .fallback = "0.5",
            .flags = gc::kArchive,
@@ -465,13 +519,45 @@ bool watervis_allowed(const std::vector<std::pair<std::string, std::string>>& se
   return true;
 }
 
+bool rgb_words(std::string_view text, double out[3]) {
+  double v[3];
+  size_t n = 0, i = 0;
+  while (i < text.size()) {
+    while (i < text.size() && (text[i] == ' ' || text[i] == '\t')) ++i;
+    if (i == text.size()) break;
+    size_t end = i;
+    while (end < text.size() && text[end] != ' ' && text[end] != '\t') ++end;
+    if (n == 3) return false;
+    const std::string word(text.substr(i, end - i));
+    char* stop = nullptr;
+    const double x = std::strtod(word.c_str(), &stop);
+    if (stop == word.c_str() || *stop != '\0' || !(x >= 0)) return false;
+    v[n++] = std::min(x, 255.0) / 255.0;
+    i = end;
+  }
+  if (n == 1)
+    v[1] = v[2] = v[0];
+  else if (n != 3)
+    return false;
+  for (size_t k = 0; k < 3; ++k) out[k] = v[k];
+  return true;
+}
+
 ba::Options world_options(Look look, ba::Options base, const Picture& picture) {
   return world_options(look, base, picture, custom_stops(picture));
 }
 
 ba::Options world_options(Look look, ba::Options base, const Picture& picture, const Stops& stops) {
+  // r_drawflat and r_fastsky, either look.
+  base.flat_walls = picture.draw_flat == 1 || picture.draw_flat == 2;
+  base.flat_floors = picture.draw_flat == 1 || picture.draw_flat == 3;
+  base.fast_sky = picture.fast_sky;
+  rgb_words(picture.wall_colour, base.wall_colour);
+  rgb_words(picture.floor_colour, base.floor_colour);
+  rgb_words(picture.sky_colour, base.sky_colour);
   if (look == Look::classic) {
     base.mode = ba::Mode::classic;
+    if (!picture.dynamic) base.dynamic_strength = 0;  // r_dynamic 0: no moment's light
     base.lighting = ba::Lighting::lightmaps;
     base.crisp = true;
     base.weather = false;
@@ -479,7 +565,7 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
     base.mode = ba::Mode::v2;
     base.lighting = ba::Lighting::lights;
     base.crisp = false;
-    base.dynamic_strength = picture.fx_lights;
+    base.dynamic_strength = picture.dynamic ? picture.fx_lights : 0;
     base.lava_glow = picture.lava_glow;
     base.slime_glow = picture.slime_glow;
     base.fire_glow = picture.fire_glow;

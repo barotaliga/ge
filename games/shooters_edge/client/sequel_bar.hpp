@@ -6,12 +6,13 @@
 // The language places in screen pixels and draws pictures at their own size; on a large window
 // that is a small bar, so the window runs it on a smaller screen, a whole number of times smaller
 // (one step for every 400 px of height, at least one), and draws every pixel that many times over,
-// sharp.
+// sharp. The crosshair (under the bar) and the centre print (over it) are drawn the same way.
 //
 // ge:summary The sequel's status bar drawn in the window from its program and the game's pictures
-// ge:keywords sequel status-bar layout pictures conchars pcx draw scale sequel-hud
+// ge:keywords sequel status-bar layout pictures conchars pcx draw scale sequel-hud crosshair
+// ge:keywords centre-print ch1
 // ge:skill ui shooter
-// ge:test tests/shooters_edge_sequel_layout_test.cpp
+// ge:test tests/shooters_edge_sequel_screen_test.cpp
 #pragma once
 
 #include <string>
@@ -40,6 +41,13 @@ int sequel_bar_scale(int height);
 // window into `bar.ops`, in screen pixels of the smaller screen (`sequel_bar_scale`).
 void run_sequel_bar(SequelBar& bar, const server::RulesWorld& world, int slot, int64_t frame,
                     int width, int height);
+
+// Adds what the window draws round the bar to `bar.ops`, in the bar's pixels (`run_sequel_bar`'s
+// screen): the crosshair `ch<crosshair>` (1..3; 0 none) centred on the screen, under the bar, and
+// the centre print `centre` over it (its lines in the plain letters, each centred, at most 40
+// letters; the first at 35% of the screen's height, or at 48 for more than 4 lines, 8 apart).
+void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, int width,
+                       int height);
 
 // Draws `bar.ops` on `dl`, `scale` px a bar pixel; true when the bar drew anything.
 bool draw_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, int scale);

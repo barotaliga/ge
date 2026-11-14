@@ -298,5 +298,18 @@ TEST(a_server_is_played_in_the_page_through_a_forwarder_that_takes_pages) {
   CHECK(!has(front, "href=\"/join/" + to_string(p.nodes[2].address) + "\""));
   CHECK(watch_answer(p, spec(), "/join/10.0.0.9:30000", 0, site, a) && a.code == 404);
   CHECK(watch_answer(p, spec(), "/join/nowhere", 0, site, a) && a.code == 404);
+
+  // A forward with the WebSocket face too: the page is handed both ways in, WebTransport first.
+  p.nodes.back().status.keys.emplace_back(std::string(ge::forward::kWebSocketKey), "4434");
+  CHECK(watch_answer(p, spec(), "/join/" + to_string(server), 0, site, a) && a.code == 200);
+  CHECK(has(a.body, "\"--cert=" + hash +
+                        "\",\"--join=ws://10.0.0.9:4434/play?to=" + to_string(server) + "\""));
+  // One with only the WebSocket face still takes pages, with no certificate to hand.
+  p.nodes.back().status.keys = {{std::string(ge::forward::kReachKey), to_string(server)},
+                                {std::string(ge::forward::kWebSocketKey), "4434"}};
+  CHECK(poller_page_forward(p, server) != nullptr);
+  CHECK(watch_answer(p, spec(), "/join/" + to_string(server), 0, site, a) && a.code == 200);
+  CHECK(has(a.body, "\"--join=ws://10.0.0.9:4434/play?to=" + to_string(server) + "\"") &&
+        !has(a.body, "--join=https") && !has(a.body, "--cert="));
   fs::remove_all(site.viewer_dir);
 }

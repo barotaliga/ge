@@ -19,6 +19,7 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "progs/file.hpp"
+#include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/net/classic_server.hpp"
@@ -210,4 +211,67 @@ TEST(a_wrong_password_is_refused_in_a_players_words) {
   CHECK(w.viewer[0]->refused.find("password") != std::string::npos);
   CHECK(w.viewer[0]->refused.find("next:") == std::string::npos);
   CHECK(w.face.refused >= 1);
+}
+
+// A MULTIVIEW RECORDING at the face: the followed view (the lowest slot playing) from the start,
+// any other player's view converted only once a viewer asks for it, the viewer moved to it there,
+// and the view let go once nobody watches it.
+TEST(a_multiview_recording_gives_any_players_view_on_request_and_only_then) {
+  namespace cl = shooters_edge::client;
+  const cl::MatchScript m = cl::highlight_match();
+  CHECK(m.players.size() >= 3);
+  gn::LinkConditions lan;
+  gn::conditions_preset("lan", lan);
+  gn::SimNetwork net = gn::make_sim_network(2, lan);
+  gn::Transport face_t, viewer_t;
+  gn::open_sim_transport(face_t, net, gn::sim_address(0, kPortTv));
+  cn::ClassicTvUdp face;
+  cn::udp_tv_start(face, face_t, {}, 8);
+  face.views_on_request = true;
+  cn::UdpTvMultiview mv;
+  std::string error;
+  CHECK(!cn::udp_tv_multiview_open(mv, recorded().recording, 8, false, error));  // one view only
+  CHECK_MSG(!error.empty(), "a refusal says why");
+  CHECK_MSG(cn::udp_tv_multiview_open(mv, cl::write_multiview_match(m), 8, false, error), error);
+  gn::open_sim_transport(viewer_t, net, gn::sim_address(1, cn::kPortClient));
+  cn::ClientConfig cc;
+  cc.name = "viewer";
+  cc.qport = 300;
+  cc.ask = cn::Ext{};  // the oldest client: no extension
+  cc.fetch_looks = false;
+  cc.brain = [](int) { return ge::shooter::MoveCmd{}; };  // hands off: no fire pressed
+  cn::ClassicClientEnd v;
+  cn::client_start(v, viewer_t, gn::sim_address(0, kPortTv), cc, 0);
+  int64_t now = 0;
+  const auto run = [&](int ticks) {
+    for (int f = 0; f < ticks; f++) {
+      now += 13000;
+      gn::sim_advance(net, now);
+      cn::udp_tv_multiview_update(mv, face, now);
+      cn::udp_tv_frame(face, now);
+      cn::client_tick(v, now);
+    }
+  };
+  run(200);
+  CHECK_MSG(v.stage == cn::ClientStage::active, "the viewer never got in: " + v.refused);
+  CHECK_MSG(mv.error.empty(), mv.error);
+  CHECK(v.playernum == 0);  // the followed view: the lowest slot playing
+  CHECK(mv.started == 0);   // nobody asked for another: nothing else converted
+  int on = 0;
+  for (const auto& view : mv.views) on += view.on ? 1 : 0;
+  CHECK(on == 1);
+  // The track keys ask for slot 2: its view is turned on partway and the viewer seated in it.
+  cn::client_command(v, "ptrack 2");
+  run(200);
+  CHECK(mv.started == 1);
+  CHECK_MSG(v.stage == cn::ClientStage::active, "the viewer did not come back: " + v.refused);
+  CHECK(v.playernum == 2);
+  CHECK(face.switches >= 1);
+  // Back to the followed view; slot 2's is let go once nobody has watched it for a while.
+  cn::client_command(v, "ptrack");
+  run(1000);
+  CHECK(v.stage == cn::ClientStage::active);
+  CHECK(v.playernum == 0);
+  CHECK(mv.let_go == 1);
+  CHECK_MSG(face.error.empty(), face.error);
 }

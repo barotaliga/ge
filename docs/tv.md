@@ -526,11 +526,15 @@ of a live server (`net/sequel_tv_demo.hpp`). It feeds the recording's blocks to 
 the game's pace: a block that holds a frame is 100 ms. At the end the recording starts again. Each
 time round, the server data's count goes up by one, and the face tells every viewer the level
 changed (`changing`, then `reconnect`, as a server does). A client keeps its loading picture up
-until it signs on with a count it has not seen. The recording must be protocol 34. The full game's
-own `demos/*.dm2` are from an older protocol, and an unmodified client refuses them.
+until it signs on with a count it has not seen. A recording of an older protocol (26 on: the full
+game's own `demos/*.dm2` are 26) is converted to 34 when it is opened
+(`client/demo_convert.hpp`), since 34 is what every stock client takes; a packed file is unpacked
+the same way. A file a viewer asks to download (a model the recording names that its packs lack:
+the full game's demo1 names one) is refused at once (`svc_download`, size -1), so the client goes
+on rather than waiting on its loading screen.
 
 Measured black-box: an unmodified client watched a 30 s recording of q2dm1 for 75 s, through 15
-rounds, and stayed connected. The test plays a recording to a viewer three times round at ten
+rounds, and stayed connected; and the full game's own demo1 (protocol 26, base2) round and round. The test plays a recording to a viewer three times round at ten
 frames a second.
 
 ### Classic clients at the TV
@@ -570,12 +574,30 @@ round and round (`net/classic_tv_recording.hpp`). The recording is played at its
 first packet, and a silence longer than a second is cut to one. Each command record's angles are
 the view. Each time round, the spawn count goes up by one, so every viewer signs on again.
 
+**A multiview recording** (`setv --demo=<file.mvd>`, `UdpTvMultiview`) gives every player's view.
+The face has eight streams. The first is the view the TV follows (the lowest slot playing),
+converted from the start (`client/demo_convert.hpp`, a multiview recording to one player's client
+recording, as it is read). Every other view is converted only while someone watches it: when a
+viewer asks for a player no stream carries (its track keys, or fire for the next player in the
+match), a free stream is turned to him. Its conversion reads the recording up to where the match
+is with no view written, then starts his view there with a whole signon, and the viewers who asked
+move to it. A stream nobody has watched for ten seconds is let go. All views ride the followed
+view's clock, a little ahead of it, so a switch lands at the same moment of the match. Clients
+that speak the stream protocol keep the multiview stream and free look; this face never converts
+for them.
+
 Measured black-box: an existing client asked for no extensions, joined the TV playing a bot's dm4
 recording from our server, and watched it with the HUD, the prints and the team chat. Moving the
 mouse did not turn the view. The test (`tests/shooters_edge_classic_tv_udp_test.cpp`) records a
 match on our server and has a viewer with no extensions walk the signon, seated in the recorder's
 slot. That viewer sees the players move and stays on through the loop. A second test viewer joins
 late, and a third is refused for a wrong password.
+
+A multiview recording, black-box: the same client watched a real 4on4 recording on dm2 through
+`setv`, and each press of fire moved it to the next player's view (three views converting at
+most, the one it left let go ten seconds later). The test plays a written match: nothing but the
+followed view is converted until the viewer's track keys ask for slot 2, it is seated in slot 2's
+view, and that view is let go once it is back on the followed one.
 
 ## The sequel's recordings
 

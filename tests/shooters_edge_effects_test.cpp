@@ -362,3 +362,46 @@ TEST(a_maps_liquid_keys_and_a_servers_watervis) {
   CHECK(lk::watervis_allowed({{"hostname", "x"}, {"watervis", "1"}}));
   CHECK(!lk::watervis_allowed({{"watervis", "0"}}));  // the server keeps them solid
 }
+
+TEST(r_drawflat_and_r_fastsky_paint_walls_floors_and_sky_in_one_colour_each) {
+  namespace lk = shooters_edge::look;
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  auto o = lk::world_options(lk::Look::classic, {}, pic);
+  CHECK(!o.flat_walls && !o.flat_floors && !o.fast_sky);  // textured, the map's sky, by default
+  con.execute("r_drawflat 1; r_wallcolor \"255 0 51\"; r_floorcolor 102; r_fastsky 1");
+  con.execute("r_skycolor \"0 0 255\"");
+  for (const auto look : {lk::Look::classic, lk::Look::modern}) {
+    o = lk::world_options(look, {}, pic);
+    CHECK(o.flat_walls && o.flat_floors && o.fast_sky);
+    CHECK(o.wall_colour[0] == 1 && o.wall_colour[1] == 0 && o.wall_colour[2] == 0.2);
+    CHECK(o.floor_colour[0] == 0.4 && o.floor_colour[2] == 0.4);  // one number: a grey
+    CHECK(o.sky_colour[0] == 0 && o.sky_colour[2] == 1);
+  }
+  con.execute("r_drawflat 2");
+  o = lk::world_options(lk::Look::modern, {}, pic);
+  CHECK(o.flat_walls && !o.flat_floors);
+  con.execute("r_drawflat 3");
+  o = lk::world_options(lk::Look::modern, {}, pic);
+  CHECK(!o.flat_walls && o.flat_floors);
+  double c[3] = {0.5, 0.5, 0.5};
+  CHECK(!lk::rgb_words("red", c) && !lk::rgb_words("1 2", c) && !lk::rgb_words("1 2 3 4", c));
+  CHECK(!lk::rgb_words("-1 0 0", c) && c[0] == 0.5);                                // refused: kept
+  CHECK(lk::rgb_words(" 510  0\t255 ", c) && c[0] == 1 && c[1] == 0 && c[2] == 1);  // clamped
+}
+
+TEST(r_dynamic_0_puts_out_the_moments_lights_in_either_look) {
+  namespace lk = shooters_edge::look;
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  CHECK(lk::world_options(lk::Look::classic, {}, pic).dynamic_strength == 1);
+  CHECK(lk::world_options(lk::Look::modern, {}, pic).dynamic_strength == pic.fx_lights);
+  con.execute("r_dynamic 0; r_fullbrightskins 0.5");
+  CHECK(lk::world_options(lk::Look::classic, {}, pic).dynamic_strength == 0);
+  CHECK(lk::world_options(lk::Look::modern, {}, pic).dynamic_strength == 0);
+  CHECK(pic.fullbright_skins == 0.5);
+  con.execute("r_fullbrightskins 3");
+  CHECK(pic.fullbright_skins == 1);  // clamped to the cvar's range
+}
