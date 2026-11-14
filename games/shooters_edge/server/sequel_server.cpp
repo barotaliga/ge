@@ -110,6 +110,13 @@ void register_cvars(SequelServer& s) {
        .kind = con::CvarKind::text,
        .values =
            "\"\": the same map again (the default); TEXT: these maps, spaces or commas between"});
+  s.cvars.add({.name = "sv_wear",
+               .fallback = "",
+               .flags = con::kServer,
+               .help = "Whose weapons, armour, ammunition and health the rules wear, from the next "
+                       "map (classic remix).",
+               .kind = con::CvarKind::text,
+               .values = "\"\": the game's own (the default); classic: the classic game's"});
   s.cvars.add({.name = "k_midair",
                .fallback = "0",
                .flags = con::kServer,
@@ -637,6 +644,12 @@ void fill_rows(SequelServer& s) {
     e.modelindex = unseen ? 0 : static_cast<int>(s.models.size()) - 1;
     e.carried_model = unseen || !p.alive ? 0 : s.carried_models[p.hand.weapon];
   }
+  // The frame's sounds by the names the players were told (`sv_wear`).
+  if (!s.looks.empty())
+    for (NetEvent& ev : s.out.events)
+      if (ev.kind == EventKind::sound)
+        if (const profiles::Look* l = profiles::look_of(s.looks, ev.text); l != nullptr)
+          ev.text = std::string(l->to);
   for (size_t i = 0; i < s.entities.size(); i++) {  // the items shown or hidden
     const SequelEntity& m = s.entities[i];
     if (m.item >= 0) w.entities[1 + sh::kMaxClients + i].free = m.gone || m.hidden;
@@ -717,6 +730,17 @@ void fill_lists(SequelServer& s) {
   w.map_name = s.map_name;
   w.map_title.clear();
   if (!s.map->entities.empty()) w.map_title = s.map->entities[0].get("message");
+  // The other game's things the rules wear (`sv_wear`): every name as the players are told it,
+  // in the lists the window and the wire both read; the names were looked up as the map started.
+  s.model_looks.assign(s.models.size(), nullptr);
+  for (size_t i = 0; i < s.models.size(); i++)
+    if (const profiles::Look* l = profiles::look_of(s.looks, s.models[i]); l != nullptr) {
+      s.model_looks[i] = l;
+      s.models[i] = std::string(l->to);
+    }
+  for (std::string& name : s.sounds)
+    if (const profiles::Look* l = profiles::look_of(s.looks, name); l != nullptr)
+      name = std::string(l->to);
   w.models = s.models;
   w.sounds = s.sounds;
   w.vwep.clear();
@@ -740,6 +764,7 @@ void fill_lists(SequelServer& s) {
     // An item turns where it lies, unless the map placed it untouchable (its spawn flag 1).
     e.turns = m.item >= 0 && sq_turns(m.item) && (m.spawnflags & 1) == 0;
     e.effects = e.turns ? kSqTurnEffect : 0;
+    sq_dress(s, e);
   }
 }
 
@@ -754,6 +779,11 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   s.map = map.brushes;
   s.tracer = std::make_unique<ge::brush::BrushTracer>(*s.map);
   s.map_name = map.name;
+  s.looks = {};
+  if (const profiles::RemixLooks* worn =
+          profiles::remix_looks("sequel", s.cvars.find("sv_wear")->value);
+      worn != nullptr)
+    s.looks = worn->looks;
   s.entities.clear();
   for (size_t i = 1; i < s.map->entities.size(); i++) {
     const ge::brush::Entity& b = s.map->entities[i];
@@ -939,6 +969,8 @@ bool sq_console(void* r, const std::string& line) {
     s.pending_change = MapChange::restart;
     return true;
   }
+  if (cmd == "set" && w.count >= 3 && s.cvars.find(ge::progs::word(w, 1)) != nullptr)
+    return sq_console(r, std::string(ge::progs::word(w, 1)) + " \"" + ge::progs::word(w, 2) + "\"");
   if (s.cvars.find(cmd) != nullptr) {
     if (w.count >= 2) {
       s.cvars.set(cmd, ge::progs::word(w, 1), con::Source::local);
@@ -1014,6 +1046,18 @@ sh::MoveState sequel_aid_state(const SequelServer& s, int slot) {
 
 float sequel_air_accelerate(const SequelServer& s) {
   return deathmatch(s) ? static_cast<float>(s.cvars.find("sv_airaccelerate")->number) : 0;
+}
+
+void sq_dress(const SequelServer& s, WorldEntity& e) {
+  if (e.modelindex <= 0 || size_t(e.modelindex) >= s.model_looks.size()) return;
+  const profiles::Look* l = s.model_looks[size_t(e.modelindex)];
+  if (l == nullptr) return;
+  e.skin = l->skin;
+  e.origin = e.origin + sh::Vec3f{l->offset[0], l->offset[1], l->offset[2]};
+  if (l->to.ends_with(".bsp")) {
+    e.turns = false;
+    e.effects = 0;
+  }
 }
 
 }  // namespace shooters_edge::server

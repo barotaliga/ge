@@ -1,7 +1,8 @@
 // LAB `se-demo-convert`: DOES A DEMO CONVERTED TO ANOTHER FORMAT SHOW THE SAME GAME, without a GPU.
 // Each recording is converted (client/demo_convert.hpp: a single-player demo to a multiview
 // recording and to a client recording, a multiview recording to a client recording of the lowest
-// playing slot's view and a client recording back to a multiview one, a sequel recording to
+// playing slot's view and to a single-player demo of the same view, a client recording back to a
+// multiview one and to a single-player demo of its recorder's view, a sequel recording to
 // protocol 34) and both are read to
 // their ends by the window's own reader (client/demo.hpp), frame by frame: the eye, the view's
 // angles, the status (health, armour, ammunition, the weapon) and, for a pair of one format, the
@@ -128,6 +129,7 @@ void run(gl::Lab& lab) {
     cl::DemoFormat fa{}, fb{};
     std::string error;
     int recorder = -1;  // a client recording's own slot
+    int rode = -1;      // the view a multiview recording's client recording rode
     if (!read_frames(s.bytes, a, fa, error, -1, &recorder)) {
       lab.fail("se-demo-convert: " + s.name + " does not read: " + error,
                "next: check the file; skill: shooter");
@@ -136,14 +138,21 @@ void run(gl::Lab& lab) {
     for (const cl::DemoFormat to :
          fa == cl::DemoFormat::single
              ? std::vector<cl::DemoFormat>{cl::DemoFormat::multiview, cl::DemoFormat::client}
-         : fa == cl::DemoFormat::multiview ? std::vector<cl::DemoFormat>{cl::DemoFormat::client}
-         : fa == cl::DemoFormat::client    ? std::vector<cl::DemoFormat>{cl::DemoFormat::multiview}
-                                           : std::vector<cl::DemoFormat>{fa}) {
+         : fa == cl::DemoFormat::multiview
+             ? std::vector<cl::DemoFormat>{cl::DemoFormat::client, cl::DemoFormat::single}
+         : fa == cl::DemoFormat::client
+             ? std::vector<cl::DemoFormat>{cl::DemoFormat::multiview, cl::DemoFormat::single}
+             : std::vector<cl::DemoFormat>{fa}) {
       b.clear();
-      const std::string key = std::to_string(i) + (to == cl::DemoFormat::client ? "c" : "");
+      const std::string key = std::to_string(i) + (to == cl::DemoFormat::client   ? "c"
+                                                   : to == cl::DemoFormat::single ? "s"
+                                                                                  : "");
       std::vector<uint8_t> out;
       cl::ConvertNotes notes;
-      if (!cl::convert_demo(s.bytes, to, {}, out, notes, error)) {
+      cl::ConvertOptions opt;
+      // A multiview recording made a single-player demo: the view its client recording rode.
+      if (fa == cl::DemoFormat::multiview && to == cl::DemoFormat::single) opt.pov = rode;
+      if (!cl::convert_demo(s.bytes, to, opt, out, notes, error)) {
         lab.fail("se-demo-convert: " + s.name + " does not convert: " + error,
                  "next: read client/demo_convert.hpp's pairs; skill: shooter");
         return;
@@ -157,8 +166,10 @@ void run(gl::Lab& lab) {
                  "next: the converter wrote a message the reader refuses; skill: shooter");
         return;
       }
+      if (to == cl::DemoFormat::client) rode = view;
       // One view of a multiview recording: the source read riding the same player.
-      if (fa == cl::DemoFormat::multiview && to == cl::DemoFormat::client) {
+      if (fa == cl::DemoFormat::multiview && to != fa) {
+        if (to == cl::DemoFormat::single) view = rode;
         a.clear();
         if (!read_frames(s.bytes, a, fa, error, view)) {
           lab.fail("se-demo-convert: " + s.name + " does not read riding slot " +
@@ -192,16 +203,51 @@ void run(gl::Lab& lab) {
       }
       double eye = 0, ang = 0;
       int64_t status = 0, ents = 0;
-      for (size_t k = 0; lead_b + k < b.size() && lead + k < a.size(); k++) {
-        const Frame& x = a[lead + k];
-        const Frame& y = b[lead_b + k];
+      // The frames paired: one for one from the leads; a single-player demo fills a gap longer
+      // than a tenth of a second with frames of its own, so there each source frame is paired
+      // with the converted frame at its time (the clocks apart by the leads' difference).
+      std::vector<std::pair<size_t, size_t>> pairs;
+      if (to == cl::DemoFormat::single && lead < a.size() && lead_b < b.size()) {
+        // The clocks' difference: at the first source frame whose eye moved, the converted frame
+        // near it with the same eye (a still eye matches many frames).
+        double shift = b[lead_b].time - a[lead].time;
+        auto same = [](const Frame& x, const Frame& y) {
+          return x.eye.x == y.eye.x && x.eye.y == y.eye.y && x.eye.z == y.eye.z;
+        };
+        bool found = false;
+        for (size_t ia = lead + 1; ia < a.size() && !found; ia++) {
+          if (!a[ia].view || same(a[ia], a[ia - 1])) continue;
+          const size_t near = lead_b + (ia - lead);
+          for (size_t ib = near > 32 ? near - 32 : 0; ib < std::min(b.size(), near + 32); ib++)
+            if (b[ib].view && same(a[ia], b[ib])) {
+              shift = b[ib].time - a[ia].time;
+              found = true;
+              break;
+            }
+        }
+        for (size_t ia = lead, ib = lead_b; ia < a.size(); ia++) {
+          while (ib < b.size() && b[ib].time - shift < a[ia].time - 0.0007) ib++;
+          if (ib == b.size()) break;
+          if (b[ib].time - shift <= a[ia].time + 0.0007) pairs.emplace_back(ia, ib);
+        }
+      } else {
+        for (size_t k = 0; lead_b + k < b.size() && lead + k < a.size(); k++)
+          pairs.emplace_back(lead + k, lead_b + k);
+      }
+      for (size_t k = 0; k < pairs.size(); k++) {
+        const Frame& x = a[pairs[k].first];
+        const Frame& y = b[pairs[k].second];
         if (!x.view || !y.view) continue;  // a signon's frame: no eye yet
         eye = std::max({eye, std::fabs(static_cast<double>(x.eye.x) - y.eye.x),
                         std::fabs(static_cast<double>(x.eye.y) - y.eye.y),
                         std::fabs(static_cast<double>(x.eye.z) - y.eye.z)});
         ang = std::max({ang, angle_gap(x.angles.x, y.angles.x), angle_gap(x.angles.y, y.angles.y)});
-        status +=
-            std::equal(std::begin(x.status), std::end(x.status), std::begin(y.status)) ? 0 : 1;
+        // A single-player demo's armour and ammunition are bytes: past 255 they show as 255.
+        int want[5];
+        for (int j = 0; j < 5; j++)
+          want[j] = to == cl::DemoFormat::single && (j == 1 || j == 2) ? std::min(x.status[j], 255)
+                                                                       : x.status[j];
+        status += std::equal(std::begin(want), std::end(want), std::begin(y.status)) ? 0 : 1;
         // A single-player demo's reader keeps an entity once seen, so only same-format pairs count.
         if (fa == to) ents += x.entities == y.entities ? 0 : 1;
         if (i == 0 && to == cl::DemoFormat::client) {

@@ -259,6 +259,7 @@ constexpr FlagSpec kSaveWriteFlags[] = {
     {"out", "<file>", "the save file to write"},
     {"title", "<text>", "the line a menu shows"},
     {"place", "<text>", "where in the run, as a menu shows it"},
+    {"picture", "[<view>]", "with a picture of the run (the game's view; its first by default)"},
     kPreset,
     kEngine,
     kRepo};

@@ -189,14 +189,24 @@ every few minutes on the free ride); the engine gives the ring and a minimum spa
 
 ## Pictures of a save (M25d)
 
-Optional, per game: a `PICT` chunk holding a small picture (a few hundred pixels wide) in QOI
-(a lossless picture format with a one-page public specification, a few hundred lines to read and
-write, faster than PNG and about its size). It comes from either source a game has:
+Optional, per game: a `PICT` chunk (`engine/save/picture.hpp`) holding a small picture (its
+widest side 320 pixels by default, shrunk by a box filter) in QOI (`engine/save/qoi.hpp`: a
+lossless picture format with a one-page public specification, a few dozen lines each way, faster
+than PNG and about its size). It is written FIRST after the meta, so a menu reads it off the
+file's front. It comes from either source a game has:
 
 - the run's CPU view (`Run::shoot`), which works headless and needs no GPU, so every lab and
-  every test save has one;
+  every test save can have one: `play::save_run_pictured` (and `ge save write --picture`) shoots
+  the game's first view, or the one named;
 - the renderer's last presented frame, read back without stalling (`engine/gpu/target.hpp`'s
-  readback ring), when the game has a window.
+  readback ring), when the game has a window: any RGBA goes through `save::put_picture`.
+
+The store keeps the picture's place in its index (`PicturePlace`: offset, bytes, checksum and
+size, in the `SLOT` chunk from its version 2), so `Store::picture` reads only the file's front up
+to the picture's end and checks it against the checksum; a slot only peeked when the index was
+rebuilt, or one changed under it, gives its picture out of the whole file. The `save-picture`
+lab saves Fall Line's race on three seeds at four moments each, every one with its picture, and
+a menu's read of all twelve takes the index once and 18% of the files' bytes.
 
 Because a load is fast, a menu can also show a save LIVE: open it in the background, draw the
 run as it stands, and let the camera drift. That is the game's choice; the engine's part is that
@@ -258,7 +268,7 @@ missing, stale or damaged, it is rebuilt from the setup and the save still loads
 | `save-file` | Does a file of every kind of field round-trip to the byte, is every truncation and flipped byte refused with the chunk named, do old chunk versions read with their defaults, and at how many GB/s are files written and read? | M25a |
 | `save-run` | Saved at many steps and loaded, does Fall Line's run step on to the digests of the run never saved, and what do a save and a load cost, and how many bytes is each chunk? | M25b |
 | `save-slots` | Are a thousand save slots listed with one read (and rebuilt when the index is gone), and does a write killed at every unit leave the last good save loadable? | M25c |
-| `save-picture` | A save's picture from the CPU view, headless, on a contact sheet of slots | M25d |
+| `save-picture` | Does every slot of a store get a picture headless, and does a menu read them all through the index onto a contact sheet? | M25d |
 | `save-character` | A skier's profile taken from seed 38 into seed 7: the profile's fields equal, the rest of the run seed 7's own (its bytes, its digest at every step), the career summed | M25e |
 | `save-cloud` | Two devices on the simulated store: do their slots converge, and is a conflict kept? | M25f |
 

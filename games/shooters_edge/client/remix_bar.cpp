@@ -12,7 +12,9 @@
 #include <string_view>
 #include <utility>
 
+#include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/server/sequel_bar.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::client {
 
@@ -84,7 +86,54 @@ int16_t ammo_icon(hud::Weapon w) {
   return kNone;
 }
 
+// The classic gun each of the sequel's weapons wears, in its weapon order (as kSequelAsClassic's
+// view models): the blaster the shotgun, the shotguns the double, the machinegun and chaingun the
+// nailguns, the launchers theirs, the hyperblaster, railgun and BFG the beam, the hand grenades
+// the grenade launcher.
+constexpr hud::Weapon kWorn[server::kSqWeaponCount] = {
+    hud::Weapon::shotgun,         hud::Weapon::double_shotgun,  hud::Weapon::double_shotgun,
+    hud::Weapon::nailgun,         hud::Weapon::heavy_nailgun,   hud::Weapon::grenade_launcher,
+    hud::Weapon::rocket_launcher, hud::Weapon::beam_gun,        hud::Weapon::beam_gun,
+    hud::Weapon::beam_gun,        hud::Weapon::grenade_launcher};
+
 }  // namespace
+
+void worn_hud_reset(WornHud& h, const RemixFiles& remix) {
+  h.bar.pictures.clear();
+  h.art = {};
+  if (remix.looks == nullptr) return;
+  h.art = load_classic_pictures(remix.files, false).hud;
+  h.art.finish();
+}
+
+hud::Status worn_status(const server::SequelServer& sq, double t) {
+  using server::SqAmmo;
+  hud::Status s;
+  s.t = t;
+  const server::SequelPlayer& p = sq.players[0];
+  const server::SqBody& b = p.body;
+  s.health = static_cast<int>(p.health);
+  s.dead = !p.alive;
+  s.armour = b.armour_count;
+  s.armour_class = static_cast<hud::ArmourClass>(b.armour);  // jacket, combat, body: light up
+  const auto ammo = [&b](SqAmmo a) { return b.ammo[static_cast<int>(a)]; };
+  const int w = std::clamp(p.hand.weapon, 0, server::kSqWeaponCount - 1);
+  const server::SqAmmo held = server::kSqWeapons[size_t(w)].ammo;
+  s.ammo = {ammo(SqAmmo::shells), ammo(SqAmmo::bullets),
+            ammo(held == SqAmmo::grenades ? SqAmmo::grenades : SqAmmo::rockets),
+            ammo(held == SqAmmo::slugs ? SqAmmo::slugs : SqAmmo::cells)};
+  for (int k = 0; k < server::kSqWeaponCount; k++)
+    if (server::sq_holds(b, k))
+      s.owned = static_cast<uint8_t>(s.owned | (1u << (static_cast<int>(kWorn[k]) - 1)));
+  s.weapon = kWorn[w];
+  const double now = sq.level_time;
+  const auto left = [now](double until) { return until > now ? until - now : 0.0; };
+  s.power_s[size_t(hud::Power::damage)] = left(p.quad_until);
+  s.power_s[size_t(hud::Power::shield)] = left(p.invulnerable_until);
+  s.power_s[size_t(hud::Power::suit)] = left(p.suit_until);
+  s.frags = static_cast<int>(p.frags);
+  return s;
+}
 
 std::array<int16_t, hud::kLayoutStats> worn_stats(const hud::Status& st, bool match) {
   std::array<int16_t, hud::kLayoutStats> s{};

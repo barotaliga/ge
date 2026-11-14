@@ -44,7 +44,7 @@
 namespace ge::save {
 
 inline constexpr uint32_t kSlotTag = tag("SLOT");
-inline constexpr uint16_t kSlotVersion = 1;
+inline constexpr uint16_t kSlotVersion = 2;   // 2: the picture's place
 inline constexpr uint32_t kIndexVersion = 1;  // the index file's game version
 inline constexpr const char* kIndexName = "index";
 
@@ -56,10 +56,31 @@ struct StoreSpec {
 };
 
 // A slot as the store lists it.
+// Where a slot's picture (picture.hpp's `PICT` chunk) lies in its file, so a menu reads only the
+// file's front up to it. `bytes` 0: none, or not known (a slot only peeked when the index was
+// rebuilt); `picture` then reads the whole file.
+struct PicturePlace {
+  uint64_t offset = 0;
+  uint64_t bytes = 0;
+  uint64_t checksum = 0;  // the chunk's, as its directory holds it
+  uint16_t width = 0;
+  uint16_t height = 0;
+};
+
+template <class Io>
+void describe(Io& io, PicturePlace& p) {
+  io(p.offset);
+  io(p.bytes);
+  io(p.checksum);
+  io(p.width);
+  io(p.height);
+}
+
 struct Entry {
   std::string slot;    // "auto-2", "quick", "slot-17"
   Meta meta;           // its meta chunk
   uint64_t bytes = 0;  // the file's size
+  PicturePlace picture;
 };
 
 template <class Io>
@@ -67,6 +88,7 @@ void describe(Io& io, Entry& e) {
   io(e.slot);
   io(e.meta);
   io(e.bytes);
+  io.since(2, e.picture, PicturePlace{});
 }
 
 // What `open` found and did.
@@ -94,6 +116,9 @@ class Store {
   bool write(std::string_view slot, std::span<const uint8_t> file);
   // The slot's file, checked to open.
   bool read(std::string_view slot, std::vector<uint8_t>& out);
+  // The slot's picture (picture.hpp), decoded: read off the file's front when the index knows its
+  // place, else out of the whole file. False when the slot has none or it does not decode.
+  bool picture(std::string_view slot, int& width, int& height, std::vector<uint8_t>& rgba);
   bool remove(std::string_view slot);
   bool copy(std::string_view from, std::string_view to);
   bool rename(std::string_view from, std::string_view to);
