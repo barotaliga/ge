@@ -1,6 +1,6 @@
 // The sequel's plate letters cut one cell each from its main menu's tags (plate_letters.hpp).
 //
-// ge:summary Cuts, pieces and shrinks the sequel's tag letters, shaded to one surface, and lays words
+// ge:summary Cuts, pieces and shrinks the sequel's tag letters to one surface, and lays words
 // ge:keywords menu sequel plates tag carved-letters cells pieced-letters small-capitals shading
 // ge:skill ui
 // ge:test tests/shooters_edge_menu_test.cpp
