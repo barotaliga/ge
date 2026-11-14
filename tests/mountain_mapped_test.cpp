@@ -29,7 +29,7 @@ namespace tn = ge::mountain::tarn;
 const mg::Level& alpine1() {
   static const std::unique_ptr<mg::Level> built = [] {
     mg::GenerateOptions opts;
-    opts.face = "alpine-1";
+    CHECK(mg::lay_real_face(opts, "alpine-1"));
     return std::make_unique<mg::Level>(mg::generate_level(38, opts));
   }();
   return *built;

@@ -144,9 +144,9 @@ double smooth(double s) { return s * s * (3 - 2 * s); }
 
 std::vector<mg::MapLake> mapped_lakes(const mg::Level& level) {
   std::vector<mg::MapLake> out;
-  if (!level.face) return out;
-  const std::optional<mg::RealHints> hints = mg::real_hints(*level.face);
-  if (!hints) return out;
+  // The face's hints as the generator kept them (Level::hints): none on a dealt map.
+  const std::shared_ptr<const mg::RealHints>& hints = level.hints;
+  if (!level.face || !hints) return out;
   for (const mg::HintLake& h : hints->lakes) {
     // The centroid and the area of the shore's polygon (its winding either way).
     double a = 0, cx = 0, cz = 0;
