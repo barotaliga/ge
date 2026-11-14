@@ -148,6 +148,15 @@ inline constexpr std::string_view kSequelDemos[] = {".dm2"};
 // 6 hand grenades, 7 grenade launcher, 8 rocket launcher, 9 hyperblaster, 10 railgun, 11 BFG):
 // 1 the explosives (rockets, the grenade launcher, hand grenades), 2 the railgun, 3 the shotguns,
 // 4 the rapid fire guns (hyperblaster, chaingun, machinegun), 5 the blaster, 6 the BFG.
+// The sequel's held weapons' models, in its weapon order (its rules' table): each fires as its
+// model's folder names it (classicenhance's `classic_fire_of`).
+inline constexpr std::string_view kSequelHeld[] = {
+    "models/weapons/v_blast/tris.md2",  "models/weapons/v_shotg/tris.md2",
+    "models/weapons/v_shotg2/tris.md2", "models/weapons/v_machn/tris.md2",
+    "models/weapons/v_chain/tris.md2",  "models/weapons/v_launch/tris.md2",
+    "models/weapons/v_rocket/tris.md2", "models/weapons/v_hyperb/tris.md2",
+    "models/weapons/v_rail/tris.md2",   "models/weapons/v_bfg/tris.md2",
+    "models/weapons/v_handgr/tris.md2"};
 inline constexpr std::string_view kSequelGroups[] = {"8 7 6", "10", "3 2", "9 5 4", "1", "11"};
 
 inline constexpr GameProfile kGameProfiles[] = {
@@ -173,7 +182,7 @@ inline constexpr GameProfile kGameProfiles[] = {
      .demo_extensions = kSequelDemos,
      .demo_folder = "demos/",
      .tables = {},
-     .held_weapons = {},
+     .held_weapons = kSequelHeld,
      .arsenal = {},
      .words = {},
      .episode_maps = {},

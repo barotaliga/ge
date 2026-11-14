@@ -139,8 +139,9 @@ struct HandInput {
   vm::PlaceInput place;  // the look and the stride (its `shot` and `lowered` are the hand's)
   Weapon weapon = Weapon::shotgun;  // the game's weapon
   bool fired = false;               // a shot of it this frame
-  int fire_frame = 0;  // the model's frame the game says the shot starts on (0: not said)
-  bool dead = false;   // the player is dead: the weapon sinks out of view (kDeathLowerS)
+  int fire_frame = 0;   // the model's frame the game says the shot starts on (0: not said)
+  bool dead = false;    // the player is dead: the weapon sinks out of view (kDeathLowerS)
+  bool sequel = false;  // the weapon is the sequel's (its looks: sequel_weapon_look)
 };
 
 struct HandFrame {
