@@ -170,7 +170,12 @@ writes `<game>_viewer.js` and `.wasm` into `build/web/<game>_viewer/`, each with
 
 THE FIRST VISIT. What a visitor downloads before the first picture is kept small: the wasm leaves
 out the other worlds' moon maps (2.8 MB a hub's matches never show; `GE_MOON_MAPS`), goes gzip
-(4.0 MB to 1.7 MB), and the demo's own content pack comes in place of every pack. The page
+(4.0 MB to 1.7 MB), and the demo's own content pack comes in place of every pack. Our own moon's
+face, a quarter of what was left, is a file beside the viewer (`moon.data`, written by
+`cmake/WebMoonFace.cmake` from the table a native build compiles in) that the viewer fetches only
+the first night the moon is up (`render/moon.hpp` § A web build); until it comes the moon is a
+plain disc with the phase's light. Shooter's Edge's viewer went from 1.84 MB to 1.36 MB gzipped and
+its player from 3.10 MB to 2.61 MB; a day map never fetches the face. The page
 fetches the wasm itself and hands it to the viewer's script, so a bar under the picture and the
 status line follow the download in megabytes; the viewer's own fetches (the demo, the content)
 do the same (`web::fetch_bytes` with a label).

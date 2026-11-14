@@ -170,3 +170,20 @@ TEST(set_night_lays_the_face_in_and_a_bare_moon_gets_one) {
   CHECK(std::fabs(bx - e[0]) < 1e-9);
   CHECK(p[1] > 0);
 }
+
+TEST(a_face_set_late_replaces_the_map_and_moves_its_count) {
+  // A native build has its face from the start: nothing to ask for, and no ask to take.
+  CHECK(!gr::moon_face_missing());
+  gr::want_moon_face();
+  CHECK(!gr::take_moon_face_want());
+  // A text that is not a whole map is refused and changes nothing.
+  const uint32_t before = gr::moon_face_generation();
+  const std::vector<uint8_t> kept = gr::moon_albedo();
+  CHECK(!gr::set_moon_face("not base64!"));
+  CHECK(!gr::set_moon_face(gr::encode_moon_map(std::vector<uint8_t>(100, 7))));
+  CHECK(gr::moon_face_generation() == before);
+  // The same map's text (what a web build's file holds) sets it again and moves the count.
+  CHECK(gr::set_moon_face(gr::encode_moon_map(kept)));
+  CHECK(gr::moon_face_generation() == before + 1);
+  CHECK(gr::moon_albedo() == kept);
+}
