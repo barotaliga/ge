@@ -14,6 +14,10 @@
 //   browser): the maps the packs beside the viewer hold, and a match on one played in the page
 //   against `kPlayBots` bots by the player build (`<id>_play.js`: the viewer with the game's server
 //   in it), handed the map's own content pack (content.hpp's `map_content`).
+// - `/join/{host:port}`: a live game server played in the page by the player build's join mode,
+//   through the forwarder `poller_page_forward` picks (its WebTransport port and certificate hash
+//   from its record: `--join=https://<forwarder>:<port>/play?to=<server>`, `--cert=<hash>`), with
+//   the pack of the server's map. A server's card shows Play here when such a forwarder exists.
 // - `/viewer/{file}`: the viewer's files (`<id>_viewer.js`, its `.wasm`, its data) from the hub's
 //   `--viewer=<dir>`, the build's `ge_add_web_viewer` output, and the content packs (`.pak`,
 //   `.pk3`) the hub's operator puts beside it for the viewer to draw from, handed to it by name
@@ -30,7 +34,8 @@
 //
 // ge:summary The hub's Watch, Demo and Play pages around the web viewer, and its files served
 // ge:keywords hub watch demo page web-viewer canvas websocket tv viewer-files wasm loader
-// ge:keywords watch_answer watch_path viewer_built player_built play-page play_page
+// ge:keywords watch_answer watch_path viewer_built player_built play-page play_page join-page
+// ge:keywords join_page play-here
 // ge:skill net
 // ge:test tests/hub_watch_test.cpp
 #pragma once

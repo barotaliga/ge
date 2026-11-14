@@ -135,7 +135,8 @@ std::string scoreboard(const HubSpec& spec, const gn::Status& s) {
   return h + "</table>";
 }
 
-std::string card(const HubSpec& spec, const HubNode& n) {
+// `page_forward`: a forwarder takes a browser page to this server (Play here opens /join/...).
+std::string card(const HubSpec& spec, const HubNode& n, bool page_forward) {
   const gn::Status& s = n.status;
   const Counts c = counts(s);
   const std::string addr = gn::to_string(n.address);
@@ -158,6 +159,8 @@ std::string card(const HubSpec& spec, const HubNode& n) {
   h += "<p class=\"act\"><a class=\"btn\" href=\"" + scheme + "://join/" + html_escape(addr) +
        "\">Join</a><a class=\"btn\" href=\"" + scheme + "://spectate/" + html_escape(addr) +
        "\">Spectate</a>";
+  if (page_forward)
+    h += "<a class=\"btn play\" href=\"/join/" + html_escape(addr) + "\">Play here</a>";
   for (const gn::StatusStream& st : s.streams) {
     h += "<a class=\"btn watch\" href=\"" + watch_path(st.node, st.stream) + "\">Watch</a>";
     break;
@@ -240,7 +243,8 @@ std::string servers_page(const Poller& p, const HubSpec& spec, std::string_view 
   h += "<p class=\"sum\">" + std::to_string(live.size() + empty.size()) + " servers · " +
        std::to_string(people) + " playing · " + std::to_string(broadcasts) + " broadcasts</p>";
   h += "<section class=\"cards\">\n";
-  for (const auto& r : live) h += card(spec, *r.second);
+  for (const auto& r : live)
+    h += card(spec, *r.second, poller_page_forward(p, r.second->address) != nullptr);
   h += "</section>";
   if (live.empty()) h += "<p class=\"none\">Nobody is playing right now.</p>";
   if (!empty.empty()) {
