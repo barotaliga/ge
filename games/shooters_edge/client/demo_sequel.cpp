@@ -64,6 +64,7 @@ struct CsLayout {
 };
 constexpr CsLayout kClassicCs{30, 32, 288, 544, 1312, 1568, 2080};
 constexpr CsLayout kExtendedCs{60, 62, 8254, 10302, 12862, 13118, 13630};
+constexpr int kCsStatusBar = 5;  // the bar's program, in either layout (its items: skins - 256)
 constexpr int kMostEntities = 1024, kMostEntitiesExt = 8192;
 constexpr int kMostBlock = 1400;      // the protocol's largest message
 constexpr int kMostBlockExt = 32768;  // an extended recording's
@@ -253,6 +254,10 @@ void set_string(Demo& d, int index, std::string text) {
     put(s.sounds, index - cs.sounds, std::move(text));
   } else if (index >= cs.images && index < cs.images + (cs.sounds - cs.models)) {
     put(s.images, index - cs.images, std::move(text));
+  } else if (index == kCsStatusBar) {
+    s.status_bar = std::move(text);
+  } else if (index >= cs.skins - 256 && index < cs.skins) {
+    put(s.item_names, index - (cs.skins - 256), std::move(text));
   } else if (index >= cs.skins && index < cs.skins + 32) {
     // "<name>\<model>/<skin>": the name, then the look.
     const size_t cut = text.find('\\');
@@ -276,6 +281,10 @@ void server_data(Demo& d, DemoMsg& m) {
   s.models.assign(1, "");
   s.sounds.assign(1, "");
   s.images.assign(1, "");
+  s.item_names.assign(1, "");
+  s.status_bar.clear();
+  s.layout.clear();
+  s.inventory.clear();
   s.intermission = false;
   s.entities.clear();
   s.statics.clear();
@@ -450,6 +459,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
     s.eye.z += s.view_height;
   }
   std::fill(std::begin(s.stats), std::end(s.stats), 0);
+  std::copy(v.stats, v.stats + s.sequel_stats.size(), s.sequel_stats.begin());  // the bar reads 32
   s.stats[kStatHealth] = v.stats[kSeqHealth];
   s.stats[kStatAmmo] = v.stats[kSeqAmmo];
   s.stats[kStatArmour] = v.stats[kSeqArmour];
@@ -670,8 +680,8 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
       case kTempEntity:
         if (!temp_entity(s, m, error)) return false;
         break;
-      case kLayout:
-        m.str();
+      case kLayout:  // the screen the server put up (a scoreboard, the help computer)
+        s.layout = m.str();
         break;
       case kStuffText: {  // a place name the recording kept read; the rest kept for the caller
         std::string text = m.str();
@@ -679,8 +689,9 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         if (d.stuffed.size() < kSequelStuffedKept) d.stuffed.push_back(std::move(text));
         break;
       }
-      case kInventory:
-        m.skip(512);
+      case kInventory:  // the counts by item number
+        s.inventory.resize(256);
+        for (int16_t& n : s.inventory) n = static_cast<int16_t>(m.i16());
         break;
       case kNop:
         break;
