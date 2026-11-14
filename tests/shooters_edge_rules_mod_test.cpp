@@ -221,6 +221,12 @@ TEST(the_playable_server_takes_a_package_from_sv_mod) {
   }
   CHECK(same);
   CHECK(differs);
+  // It says which mods it runs, to a browser (serverinfo) and to a hub (the public status).
+  bool listed = false;
+  for (const auto& [k, v] : gs::server_public_status(modded).keys)
+    listed = listed || (k == "*mods" && v == "rocket-bounce 1.0.0");
+  CHECK(listed);
+  for (const auto& [k, v] : gs::server_public_status(plain).keys) CHECK(k != "*mods");
 
   gs::Server refused;
   CHECK(!open(std::string(GE_MOD_DIR) + "/abi-two", refused, error));

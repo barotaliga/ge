@@ -353,6 +353,25 @@ constexpr gs::SettingName kSettingNames[] = {
     {"maxvip_spectators", "sv_maxvipspectators"},
 };
 
+// `*mods`: each package's name and version, ", " between, cut with "+N more" past what one
+// serverinfo value should take of the whole string's 512 bytes.
+std::string mods_info(const std::vector<std::unique_ptr<ge::mod::LoadedMod>>& packages) {
+  constexpr size_t kMax = 120;
+  std::string out;
+  for (size_t k = 0; k < packages.size(); k++) {
+    const ge::mod::Manifest& m = packages[k]->manifest;
+    std::string one = m.name + " " + m.version;
+    const std::string more = " +" + std::to_string(packages.size() - k) + " more";
+    if (out.size() + 2 + one.size() > kMax - (k + 1 < packages.size() ? more.size() : 0)) {
+      out += more;
+      break;
+    }
+    if (!out.empty()) out += ", ";
+    out += one;
+  }
+  return out;
+}
+
 // The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
 // own table before they start: each mod sees the server it runs on, not a default of its own.
 void game_names(sv::RulesCommon& rules, const gs::ServerConfig& c) {
@@ -616,6 +635,9 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
       rules.console("serverinfo *gamedir \"" + g.cfg.gamedir + "\"");
     for (const std::string& line : g.info_lines) rules.console(line);
   }
+  // The C++ mods it runs, for a browser and a hub to show (docs/mods.md § Distribution).
+  if (const std::string mods = mods_info(g.packages); !mods.empty())
+    rules.console("serverinfo *mods \"" + mods + "\"");
   game_names(*rules, c);
   for (const auto& [rule, value] : c.rules) {
     // A module checks a client's rate against the endpoint's cap, so it is told the cap.
@@ -1568,6 +1590,8 @@ void fill_status(const void* g, ge::net::Status& st) {
   for (const char* name : {"fraglimit", "timelimit"}) {
     st.keys.emplace_back(name, std::to_string(number(name)));
   }
+  if (const std::string mods = mods_info(game.packages); !mods.empty())
+    st.keys.emplace_back("*mods", mods);
   if (game.classic) status_players(*game.classic, st.players);
 }
 
