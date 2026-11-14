@@ -309,3 +309,37 @@ TEST(the_bots_run_on_the_thumbs_reads_back_as_the_thumbs_give_it_and_finishes) {
   CHECK_MSG(replayed.has_value() && replayed->digest == log.digest.value_or(0),
             "the thumbs' log replays to its digest");
 }
+
+TEST(a_saved_run_loads_back_where_it_stood_and_a_foreign_save_is_refused) {
+  std::string error;
+  auto hand = fc::open_hand_run(kSeed, 0, fc::default_map(), error);
+  CHECK_MSG(hand != nullptr, error.c_str());
+  if (!hand) return;
+  hand->pilot = true;
+  in::InputState held;
+  const auto ski = [&](int steps) {
+    for (int k = 0; k < steps && fc::hand_playing(*hand); ++k) {
+      fc::hand_frame(*hand, held, 1.0 / 120, 0);
+      fc::hand_step(*hand, held, 0);
+    }
+  };
+  ski(600);
+  std::vector<uint8_t> file;
+  CHECK_MSG(fc::hand_save(*hand, "Seed 38", 1'800'000'000, file, error), error.c_str());
+  const uint64_t saved = hand->run->digest();
+  const int64_t at = hand->steps;
+  ski(400);
+  CHECK(hand->run->digest() != saved);
+  CHECK_MSG(fc::hand_load(*hand, file, error), error.c_str());
+  CHECK(hand->run->digest() == saved && hand->steps == at && hand->loaded_at == at);
+  ski(10);
+  CHECK(hand->steps == at + 10);
+  // A save of another seed is refused in a game's words and the run stays as it was.
+  auto other = fc::open_hand_run(kSeed + 1, 0, fc::default_map(), error);
+  CHECK(other != nullptr);
+  if (!other) return;
+  const uint64_t before = other->run->digest();
+  CHECK(!fc::hand_load(*other, file, error));
+  CHECK(error.find("another run") != std::string::npos && error.find("next:") == std::string::npos);
+  CHECK(other->run->digest() == before);
+}
