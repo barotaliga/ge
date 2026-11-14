@@ -156,6 +156,7 @@ struct OwnClient {
     ga::Store store;
     ga::store_init(store, ga::HashCost{8, 1});
     ga::create(store, "Niclas", "correct horse", g_unix, fresh_of(1));
+    ga::create(store, "Ann", "battery staple", g_unix, fresh_of(2));
     ga::ServiceConfig sc;
     ga::service_init(own, sc, std::move(store), master_port, counter_fresh, &fresh_n);
     // The file `account signin` leaves, its ticket signed by this master or another.
@@ -237,6 +238,32 @@ TEST(classic_login_our_client_logs_itself_in_by_its_ticket) {
   CHECK(se::info_get(w.remote.end.userinfos[me], "*auth") == "Niclas");
   CHECK(se::info_get(w.remote.end.serverinfo, se::kAccountKeyInfo) ==
         gn::key_to_hex(ga::service_key(w.own)).substr(0, 16));
+}
+
+TEST(classic_login_our_client_shows_friends_where_it_plays_and_says_their_invites) {
+  OwnClient w;
+  CHECK(w.start(true));
+  ga::friend_ask(w.own.friends, 1, 2);
+  ga::friend_ask(w.own.friends, 2, 1);
+  w.run(77 * 6);
+  CHECK(w.remote.end.stage == se::ClientStage::active);
+  const ga::Presence seen = ga::presence_of(w.own.friends, 1, g_unix / 1000000, 2);
+  CHECK(seen.state == ga::PresenceState::playing);
+  CHECK(seen.game == "shooters_edge");
+  CHECK(seen.where == w.remote.server_name);
+  CHECK(seen.words == "arena");
+  CHECK(ga::invite_send(w.own.friends, 2, 1, {0, "shooters_edge", "10.0.0.9:27500", "2on2?", 0},
+                        g_unix / 1000000));
+  w.run(77 * 20);
+  CHECK_MSG(w.told("Ann invites you to join them on 10.0.0.9:27500: 2on2?"), "no invite said");
+  CHECK(w.told("Type connect 10.0.0.9:27500 to join."));
+  se::remote_disconnect(w.remote);
+  for (int i = 0; i < 10; i++) {
+    g_unix += 20000;
+    gn::sim_advance(w.mnet, g_unix);
+    ga::service_update(w.own, g_unix);
+  }
+  CHECK(ga::presence_of(w.own.friends, 1, g_unix / 1000000, 2).state == ga::PresenceState::offline);
 }
 
 TEST(classic_login_our_client_with_another_masters_ticket_stays_a_guest) {
