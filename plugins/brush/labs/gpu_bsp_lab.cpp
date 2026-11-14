@@ -18,6 +18,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -507,9 +508,12 @@ void run(gl::Lab& lab) {
     }
     const ba::Scene& s = m->scene;
     gl::LabTable table{names[i] + ": what the map holds", {"what", "count"}, {}};
-    const char* kinds[] = {"solid", "sky",    "water",  "slime",
-                           "lava",  "hidden", "warped", "teleport"};
+    const char* kinds[] = {"solid",  "sky",    "water",    "slime", "lava",
+                           "hidden", "warped", "teleport", "glass", "thin-glass"};
+    static_assert(std::size(kinds) == ba::kKinds, "a name for every draw kind");
     for (int k = 0; k < ba::kKinds; ++k) {
+      // A map with no windows (every map but the 38 family's) says nothing of them.
+      if ((k == ba::kGlass || k == ba::kGlassThin) && s.counts[k] == 0) continue;
       table.rows.push_back({std::string(kinds[k]) + " triangles", std::to_string(s.counts[k])});
       lab.metric(names[i] + ".tris." + kinds[k], s.counts[k], "count");
     }

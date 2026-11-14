@@ -1,9 +1,9 @@
-// Surface classes: the name's words and the colour test.
+// Surface classes: the name's words.
 //
-// ge:summary Surface classes by a texture's name's words and its colour
-// ge:keywords detail surface class texture name colour classify
+// ge:summary Surface classes by a texture's name's words
+// ge:keywords detail surface class texture name classify
 // ge:skill detail
-// ge:test tests/detail_clutter_test.cpp
+// ge:test tests/detail_surfaces_test.cpp
 #include "detail/surfaces.hpp"
 
 #include <string>
@@ -40,8 +40,6 @@ constexpr Word kWords[] = {
     {"cliff", SurfaceClass::stone},
 };
 
-bool green(const double* c) { return c[1] > 0.12 && c[1] > c[0] * 1.12 && c[1] > c[2] * 1.15; }
-
 }  // namespace
 
 std::string_view surface_name(SurfaceClass c) {
@@ -59,20 +57,6 @@ SurfaceClass classify_name(std::string_view name) {
     if (low.find(w.word) != std::string::npos) return w.cls;
   }
   return SurfaceClass::unknown;
-}
-
-SurfaceClass classify_surface(std::string_view name, const double* mean_rgb) {
-  const SurfaceClass by_name = classify_name(name);
-  if (mean_rgb == nullptr || !green(mean_rgb)) return by_name;
-  switch (by_name) {
-    case SurfaceClass::unknown:
-    case SurfaceClass::stone:
-    case SurfaceClass::dirt:
-    case SurfaceClass::sand:
-      return SurfaceClass::grass;
-    default:
-      return by_name;
-  }
 }
 
 }  // namespace ge::detail

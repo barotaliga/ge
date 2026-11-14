@@ -20,6 +20,13 @@ fn luma(c: vec3f) -> f32 {
   return dot(c, vec3f(0.2126, 0.7152, 0.0722));
 }
 
+// Whether every channel is a finite number: tested on the bits (an exponent of all ones is an
+// infinity or a NaN), which no compiler may fold away as it may `x != x`.
+fn finite3(c: vec3f) -> bool {
+  let e = vec3u(0x7f800000u);
+  return all((bitcast<vec3u>(c) & e) != e);
+}
+
 // The 13-tap downsample at `uv` (a texel of the source is `t`): the centre 2x2 box at half the
 // weight and the four corner boxes at an eighth each. `karis`: each box weighed by 1 / (1 +
 // its brightness), so one bright texel cannot dominate.
@@ -46,12 +53,17 @@ fn down13(uv: vec2f, t: vec2f, karis: bool) -> vec3f {
   for (var n = 0; n < 5; n++) {
     var w = weights[n];
     if (karis) {
+      // A box with a texel that is not a number (an infinity, a NaN) is left out: the blur
+      // would smear it over a block of the picture, which the post pass shows black.
+      if (!finite3(boxes[n])) {
+        continue;
+      }
       w /= 1.0 + luma(boxes[n]);
     }
     sum += boxes[n] * w;
     total += w;
   }
-  return sum / total;
+  return select(vec3f(0.0), sum / total, total > 0.0);
 }
 
 fn downsample(id: vec2u, karis: bool) {

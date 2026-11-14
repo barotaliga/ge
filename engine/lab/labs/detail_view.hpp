@@ -22,8 +22,6 @@
 #include "detail/bevel.hpp"
 #include "detail/decals.hpp"
 #include "detail/mesh.hpp"
-#include "detail/prop_shapes.hpp"
-#include "detail/props.hpp"
 #include "lab/raster.hpp"
 
 namespace ge::lab::detail_view {
@@ -72,8 +70,6 @@ Canvas make_canvas(int w, int h, const Cam& cam, const Light& light = {}, int ss
 
 // The mesh's triangles, each painted by `paint` and lit by its own face's normal.
 void draw_mesh(Canvas& c, const gd::TriMesh& mesh, Paint paint);
-// A prop's faceted shape at its frame in one material.
-void draw_prop(Canvas& c, const gd::PropMesh& shape, const gd::PropFrame& frame, Material m);
 // A decal's triangles, its mask and its look at `age_s` blended into the surface under it.
 void draw_decal(Canvas& c, std::span<const gd::DecalVertex> verts, gd::DecalKind kind,
                 uint32_t variant, double age_s);
@@ -93,10 +89,5 @@ void label(Picture& p, int x, int y, const std::string& text);
 
 // The test hall's materials: flagstones, ashlar walls, timber, a dark wet basin.
 Material hall_paint(uint16_t tag, const gd::Vec3& p, const gd::Vec3& n);
-// The test yard's (test_hall.hpp `test_yard`): lawn, a dirt path, green ground, stone flags,
-// brick, a metal deck, a wood floor and a roof, by tag.
-Material yard_paint(uint16_t tag, const gd::Vec3& p, const gd::Vec3& n);
-// A prop's material by its kind and variant.
-Material prop_material(gd::PropKind kind, uint32_t variant);
 
 }  // namespace ge::lab::detail_view
