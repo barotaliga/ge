@@ -295,6 +295,17 @@ LockstepTrial run_lockstep_trial(const LockstepTrialConfig& k) {
       if (!first_caught || p->caught_tick < first_caught) first_caught = p->caught_tick;
     }
   }
+  // The seat astray: the one the most peers named.
+  std::vector<int> named(static_cast<size_t>(seats), 0);
+  for (auto& p : ps)
+    if (p->ls.desync.odd >= 0 && p->ls.desync.odd < seats)
+      named[static_cast<size_t>(p->ls.desync.odd)]++;
+  for (int seat = 0; seat < seats; seat++) {
+    if (named[static_cast<size_t>(seat)] > o.named_by) {
+      o.named_by = named[static_cast<size_t>(seat)];
+      o.odd = seat;
+    }
+  }
   if (o.caught && planted && first_caught >= planted)
     o.caught_after_ms = (first_caught - planted) * tick_ms;
   uint64_t h = 0xcbf29ce484222325ull;
