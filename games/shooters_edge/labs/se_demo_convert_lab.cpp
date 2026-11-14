@@ -1,10 +1,12 @@
 // LAB `se-demo-convert`: DOES A DEMO CONVERTED TO ANOTHER FORMAT SHOW THE SAME GAME, without a GPU.
 // Each recording is converted (client/demo_convert.hpp: a single-player demo to a multiview
-// recording and to a client recording, a sequel recording to protocol 34) and both are read to
+// recording and to a client recording, a multiview recording to a client recording of the lowest
+// playing slot's view, a sequel recording to protocol 34) and both are read to
 // their ends by the window's own reader (client/demo.hpp), frame by frame: the eye, the view's
 // angles, the status (health, armour, ammunition, the weapon) and, for a pair of one format, the
 // entities in view, compared frame for frame (a frame a reading of the demo's clock). By default it
-// converts recordings written in code (demo_write.hpp's scripted walk, sequel_demo.hpp's fixture);
+// converts recordings written in code (demo_write.hpp's scripted walk and match, sequel_demo.hpp's
+// fixture);
 // `--file=<a,b,...>` adds real ones (any wrapper).
 //
 // What it shows: a table a recording (the pair, the frames each side, the largest eye and angle
@@ -42,14 +44,18 @@ struct Frame {
   ge::shooter::Vec3f eye, angles;
   int status[5] = {};
   int entities = 0;  // entities in view
+  bool view = true;  // the view's player is there (a client recording's signon has none yet)
   double time = 0;   // the demo's clock, s
 };
 
+// `track`: a multiview recording's player to ride (-1 the reader's own choice); `player`: the
+// view's slot at the end.
 bool read_frames(std::vector<uint8_t> bytes, std::vector<Frame>& out, cl::DemoFormat& format,
-                 std::string& error) {
+                 std::string& error, int track = -1, int* player = nullptr) {
   cl::Demo d;
   if (!cl::open_demo(std::move(bytes), d, error)) return false;
   format = d.state.format;
+  d.track = track;
   cl::DemoRead r;
   while ((r = cl::next_frame(d, error)) == cl::DemoRead::frame) {
     const cl::DemoState& s = d.state;
@@ -62,6 +68,9 @@ bool read_frames(std::vector<uint8_t> bytes, std::vector<Frame>& out, cl::DemoFo
     for (int i = 0; i < 5; i++) f.status[i] = s.stats[k[i]];
     for (const cl::DemoEntity& e : s.entities) f.entities += e.present ? 1 : 0;
     f.time = s.time;
+    if (s.format == cl::DemoFormat::client || s.format == cl::DemoFormat::multiview)
+      f.view = s.player >= 0 && static_cast<size_t>(s.player) < s.players.size() &&
+               s.players[static_cast<size_t>(s.player)].present;
     // Frames at one clock reading are one server frame (a single-player demo's reliable blocks
     // read as frames of their own): the last one stands.
     if (!out.empty() && out.back().time == f.time)
@@ -69,6 +78,7 @@ bool read_frames(std::vector<uint8_t> bytes, std::vector<Frame>& out, cl::DemoFo
     else
       out.push_back(f);
   }
+  if (player != nullptr) *player = d.state.player;
   return r == cl::DemoRead::end;
 }
 
@@ -83,9 +93,11 @@ struct Source {
 };
 
 void run(gl::Lab& lab) {
-  std::vector<Source> sources = {{"scripted .dem (halls)", cl::write_single_demo(cl::loop_script(
-                                                               "halls", {128, 192, 24}, 64, 240))},
-                                 {"sequel fixture .dm2", cl::sequel_fixture(6, 7)}};
+  std::vector<Source> sources = {
+      {"scripted .dem (halls)",
+       cl::write_single_demo(cl::loop_script("halls", {128, 192, 24}, 64, 240))},
+      {"sequel fixture .dm2", cl::sequel_fixture(6, 7)},
+      {"scripted match .mvd (halls)", cl::write_multiview_match(cl::highlight_match())}};
   const std::string files = lab.arg("file");
   for (size_t at = 0; at < files.size();) {
     size_t comma = files.find(',', at);
@@ -120,7 +132,8 @@ void run(gl::Lab& lab) {
     for (const cl::DemoFormat to :
          fa == cl::DemoFormat::single
              ? std::vector<cl::DemoFormat>{cl::DemoFormat::multiview, cl::DemoFormat::client}
-             : std::vector<cl::DemoFormat>{fa}) {
+         : fa == cl::DemoFormat::multiview ? std::vector<cl::DemoFormat>{cl::DemoFormat::client}
+                                           : std::vector<cl::DemoFormat>{fa}) {
       b.clear();
       const std::string key = std::to_string(i) + (to == cl::DemoFormat::client ? "c" : "");
       std::vector<uint8_t> out;
@@ -131,20 +144,51 @@ void run(gl::Lab& lab) {
         return;
       }
       const size_t out_bytes = out.size();
-      if (!read_frames(std::move(out), b, fb, error)) {
+      int view = -1;
+      if (!read_frames(std::move(out), b, fb, error, -1, &view)) {
         lab.fail("se-demo-convert: " + s.name + " converted does not read back: " + error,
                  "next: the converter wrote a message the reader refuses; skill: shooter");
         return;
       }
-      // A single-player demo reads its signon as a frame of its own; the target's rides its first.
-      // A client recording reads its signon packets as frames of their own: the target leads then.
-      const size_t lead = a.size() > b.size() ? a.size() - b.size() : 0;
-      const size_t lead_b = b.size() > a.size() ? b.size() - a.size() : 0;
+      // One view of a multiview recording: the source read riding the same player.
+      if (fa == cl::DemoFormat::multiview && to == cl::DemoFormat::client) {
+        a.clear();
+        if (!read_frames(s.bytes, a, fa, error, view)) {
+          lab.fail("se-demo-convert: " + s.name + " does not read riding slot " +
+                       std::to_string(view) + ": " + error,
+                   "next: check the file; skill: shooter");
+          return;
+        }
+      }
+      // The two sides start apart by a few frames (a single-player demo reads its signon as a
+      // frame of its own; a client recording its signon packets): the offset within 8 frames
+      // where the most eyes agree is where they line up.
+      size_t lead = 0, lead_b = 0;
+      int64_t best = -1;
+      for (int off = -8; off <= 8; off++) {
+        const size_t la = off > 0 ? static_cast<size_t>(off) : 0;
+        const size_t lb = off < 0 ? static_cast<size_t>(-off) : 0;
+        int64_t agree = 0;
+        for (size_t k = 0; la + k < a.size() && lb + k < b.size(); k++) {
+          const Frame& x = a[la + k];
+          const Frame& y = b[lb + k];
+          agree += std::fabs(x.eye.x - y.eye.x) <= 0.25f && std::fabs(x.eye.y - y.eye.y) <= 0.25f &&
+                           std::fabs(x.eye.z - y.eye.z) <= 0.25f
+                       ? 1
+                       : 0;
+        }
+        if (agree > best) {
+          best = agree;
+          lead = la;
+          lead_b = lb;
+        }
+      }
       double eye = 0, ang = 0;
       int64_t status = 0, ents = 0;
       for (size_t k = 0; lead_b + k < b.size() && lead + k < a.size(); k++) {
         const Frame& x = a[lead + k];
         const Frame& y = b[lead_b + k];
+        if (!x.view || !y.view) continue;  // a signon's frame: no eye yet
         eye = std::max({eye, std::fabs(static_cast<double>(x.eye.x) - y.eye.x),
                         std::fabs(static_cast<double>(x.eye.y) - y.eye.y),
                         std::fabs(static_cast<double>(x.eye.z) - y.eye.z)});

@@ -95,6 +95,9 @@ struct ClientLevel {
   int server_count = 1;
   std::vector<std::string> models, sounds;  // from slot 1
   std::array<float, 10> movevars{800, 100, 320, 500, 10, 10, 10, 4, 4, 1};
+  // The server's info and the lists written by `level`; off: the server data alone, the source's
+  // own signon carrying them (a multiview source's).
+  bool lists = true;
 };
 
 // A player in a frame.
@@ -124,6 +127,8 @@ class ClientRecording {
   void baseline(int q, const ConvEnt& e) { baselines_[q] = e; }
   // Messages before the level's first frame (statics, baselines, light styles, names).
   void signon(std::vector<uint8_t>& out, double time, const ConvMessages& m);
+  // The signon packet being filled written now, at `time`.
+  void flush(std::vector<uint8_t>& out, double time) { flush_signon(out, time); }
   // A frame and the messages it brought.
   void frame(std::vector<uint8_t>& out, const ClientFrame& f, const ConvMessages& events,
              ConvertNotes& notes);
