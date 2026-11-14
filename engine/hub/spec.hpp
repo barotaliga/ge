@@ -46,6 +46,9 @@ struct HubSpec {
   std::vector<HubMode> modes;    // the filter buttons, in this order
   std::string score = "score";   // what a player's score column is called ("frags", "time")
   bool score_low_first = false;  // a time sorts lowest first
+  // The pages' look (style.cpp): "" the engine's own, "arena" (warm charcoal and ember), "alpine"
+  // (glacier and night sky). Only colours change; every page has the same shapes.
+  std::string look;
   uint16_t http_port = 28080;    // the hub's web port when none is given
   // The game's own status protocol (net/server_list.hpp), when its servers speak one the engine's
   // status record does not: `--browse-master` and `--browse-server` list them (browse.hpp). Empty:
