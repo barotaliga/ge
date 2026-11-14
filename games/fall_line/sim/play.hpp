@@ -47,7 +47,7 @@ inline constexpr double kBendAhead = 30;
 
 // The chunks a saved run is written as, each with the newest version this build reads.
 inline constexpr uint32_t kDriverTag = ge::save::tag("DRVR");
-inline constexpr uint16_t kDriverVersion = 1;
+inline constexpr uint16_t kDriverVersion = 2;  // 2: the career carried in
 inline constexpr uint32_t kPilotTag = ge::save::tag("PILT");
 inline constexpr uint16_t kPilotVersion = 1;
 
