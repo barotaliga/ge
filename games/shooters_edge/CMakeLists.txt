@@ -162,7 +162,7 @@ ge_add_mod(shooters_edge_mod_vampire NAME vampire VERSION 1.0.0 GAME shooters_ed
 # the GPU and the platform are built. Headers are spelled "shooters_edge/client/<file>.hpp".
 file(GLOB SHOOTERS_EDGE_CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/client/*.cpp)
 list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX
-     "/client/(main|window_cvars|bot_view|world_draw|world_extras|world_fx|world_fx_book|world_models|burning|demo_video|title|map_load)\.cpp$")
+     "/client/(main|window_cvars|install_ask|bot_view|world_draw|world_extras|world_fx|world_fx_book|world_models|burning|demo_video|title|map_load)\.cpp$")
 add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
 target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_bots shooters_edge_hud
                                                   shooters_edge_view shooters_edge_sound ge_vfs
@@ -203,7 +203,8 @@ endif()
 if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
   # The window, `se` on disk at the build's root (build/<preset>/se) beside `sesv` and the hops;
   # the target keeps the game's name, so `make run:shooters_edge` builds it.
-  add_executable(shooters_edge client/main.cpp client/window_cvars.cpp client/bot_view.cpp)
+  add_executable(shooters_edge client/main.cpp client/window_cvars.cpp client/bot_view.cpp
+                 client/install_ask.cpp)
   set_target_properties(shooters_edge PROPERTIES OUTPUT_NAME se
                         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
   target_link_libraries(shooters_edge PRIVATE shooters_edge_client_gpu shooters_edge_classic
