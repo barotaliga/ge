@@ -620,6 +620,30 @@ lab runs it on every preset. Every cheat is out within two seconds, the teleport
 40 m jump. No honest player is flagged, even on `awful`. No cheat moves a mover faster than full
 stick.
 
+**Built (M17l, second part): what is refused before the game.** The trial's connections are sealed
+with a connect token's keys (M17i), and its server sends each player only those within 45 m
+(`interest_radius`). Three more cheaters play:
+
+- The replayer sends its own sealed packets again: the newest, and one half a second old. The
+  replay window refuses both.
+- The forger sends its newest packet with the counter moved on and a byte of the input changed.
+  It does not open.
+- The fisher plays honestly and reads every row it is sent, looking for players out of its sight.
+
+The node counts what it refused for each peer as well as in total (`Peer::forged`,
+`Peer::replayed`). A link's duplicates are counted there too, so the guard does not score them.
+On every preset the server refuses each bad packet that arrives, and none reaches the guard. No
+player is ever sent a row past its sight.
+
+**Built (M17l, third part): the seat astray.** In lockstep there is no server to trust, so a peer
+that changes its own state (a cheat, or a broken build) shows up as a desync. Once a peer holds
+every seat's digest for the desync's step, it names the ODD SEAT: the one seat whose digest
+differs from all the others', which agree (`LockstepDesync::odd`, `judged`). The honest peers
+then know whom to leave out, and the peer astray knows it is the one. With two seats, or with two
+or more seats astray, nobody is named. In the `net-lockstep` lab a desync planted on seat 1 of the
+four-seat strategy game is named by all four peers on every preset. The two-seat fighting game
+catches it but names nobody.
+
 ## Pressure tests (M17m)
 
 The simulated network runs on virtual time, so an hour of play takes seconds and every run is

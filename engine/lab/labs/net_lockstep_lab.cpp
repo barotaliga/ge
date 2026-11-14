@@ -97,9 +97,10 @@ void run(gl::Lab& lab) {
                      {"preset", "pace", "waits", "pad ms p50", "p95", "rollbacks/s", "depth mean",
                       "deepest", "mispredicted", "up kbit/s", "agree", "log"},
                      {}};
-  gl::LabTable desync{"A desync planted on step " + std::to_string(plant) + " of seat 1",
-                      {"preset", "game", "caught", "named step", "seen after ms"},
-                      {}};
+  gl::LabTable desync{
+      "A desync planted on step " + std::to_string(plant) + " of seat 1",
+      {"preset", "game", "caught", "named step", "seen after ms", "seat astray", "named by"},
+      {}};
   gl::LineChart progress{
       {"STRATEGY SESSION PROGRESS, EACH PRESET", "seat 0's steps run", "t (s)", "steps"},
       {},
@@ -169,9 +170,25 @@ void run(gl::Lab& lab) {
       s.plant_seat = f.plant_seat = 1;
       for (const auto& [game, cfg] : {std::pair{"strategy", &s}, std::pair{"fighting", &f}}) {
         const gn::LockstepTrial p = gn::run_lockstep_trial(*cfg);
-        desync.rows.push_back({name, game, p.caught ? "yes" : "NO",
-                               p.caught ? std::to_string(p.caught_step) : "-",
-                               p.caught ? fmt(p.caught_after_ms, 0) : "-"});
+        desync.rows.push_back(
+            {name, game, p.caught ? "yes" : "NO", p.caught ? std::to_string(p.caught_step) : "-",
+             p.caught ? fmt(p.caught_after_ms, 0) : "-", p.odd >= 0 ? std::to_string(p.odd) : "-",
+             std::to_string(p.named_by) + " of " + std::to_string(p.connected)});
+        // With three seats or more every peer names the seat whose state was changed; two seats
+        // cannot tell which of them is astray.
+        if (p.connected >= 3 && (p.odd != 1 || p.named_by != p.connected)) {
+          std::string what = name;
+          what += ": the ";
+          what += game;
+          what += " desync's seat astray was named as ";
+          what += std::to_string(p.odd);
+          what += " by ";
+          what += std::to_string(p.named_by);
+          what += " peers, not seat 1 by all";
+          lab.fail(what,
+                   "Read judge_desync in engine/net/lockstep.cpp: the one seat whose digest "
+                   "differs from all the others'; skill: net.");
+        }
         if (!p.caught || p.caught_step != static_cast<uint32_t>(plant))
           lab.fail(name + ": the " + std::string(game) + " desync planted on step " +
                        std::to_string(plant) + " was " +
@@ -195,7 +212,10 @@ void run(gl::Lab& lab) {
       "state, all peers; depth: steps run again each time. agree: every peer's digest equal at "
       "the last step all of them ran. log: a hash of every peer's end. named step: the first "
       "step two seats' digests differ on; seen after: from the planted step being run to the "
-      "first peer naming it.");
+      "first peer naming it. seat astray: the one seat whose digest differs from every other "
+      "seat's, "
+      "as each peer judged it once it held every digest of that step (none with two seats); "
+      "named by: the peers that named it.");
   const auto shoot = [&](const std::string& id, const gl::Chart& chart, const std::string& caption,
                          const std::string& look_for) {
     const std::string svg = gl::to_svg(chart.plot);

@@ -16,11 +16,13 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 
 #include "console/console.hpp"
 #include "hud/layout.hpp"
+#include "hud/pictures.hpp"
 #include "shooters_edge/hud/art.hpp"
 #include "ui/image.hpp"
 
@@ -37,14 +39,25 @@ struct CrosshairSettings {
 // Registers crosshair, crosshaircolor, crosshairsize and crosshairalpha (`s` must outlive `con`).
 void add_crosshair_cvars(ge::console::Console& con, CrosshairSettings& s);
 
-// The colour `text` names: one number a palette index (the set's palette, else a grey of that
-// level), or "R G B" 0..255; white (no tint) for nothing or anything else.
-ge::ui::Color crosshair_colour(std::string_view text, const HudArt& art);
+// The colour `text` names: one number an index into `palette` (256 RGB triples; empty: a grey of
+// that level), or "R G B" 0..255; white (no tint) for nothing or anything else.
+ge::ui::Color crosshair_colour(std::string_view text, std::span<const uint8_t> palette);
+inline ge::ui::Color crosshair_colour(std::string_view text, const HudArt& art) {
+  return crosshair_colour(text, art.palette);
+}
 
 // Built mark `mark` (2..kCrosshairMarks), painted white at kMarkDensity pixels per art pixel; an
 // empty picture for any other.
 inline constexpr float kMarkDensity = 4;
 const ge::ui::Image& crosshair_mark(int32_t mark);
+
+// The crosshair as a picture for any game's screen: the built mark `s` picks, or `own` (a game's
+// own crosshair, `own_density` of its pixels an art pixel) for mark 1, at `s`'s size, tinted by
+// its colour (palette numbers from `palette`) at its alpha. `*shown`: false when nothing would
+// show (mark 0, alpha 0, no picture).
+ge::hud::Picture crosshair_picture(const CrosshairSettings& s, const ge::ui::Image& own,
+                                   float own_density, std::span<const uint8_t> palette,
+                                   bool* shown);
 
 // The crosshair element's content this frame from the settings and the set (`dead`: none).
 void fill_crosshair(ge::hud::Content& c, const CrosshairSettings& s, const HudArt& art, bool dead);
