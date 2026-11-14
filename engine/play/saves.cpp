@@ -10,6 +10,7 @@
 #include <chrono>
 
 #include "play/session.hpp"
+#include "save/picture.hpp"
 
 namespace ge::play {
 
@@ -41,20 +42,44 @@ void step_on(const GameSpec& spec, Run& run, const InputLog& log, int64_t i,
 
 }  // namespace
 
-bool save_run(const GameSpec& spec, const Setup& setup, const Run& run, int64_t step,
-              save::Meta meta, std::vector<uint8_t>& out, std::string& error) {
+namespace {
+
+bool write_run(const GameSpec& spec, const Setup& setup, const Run& run, int64_t step,
+               save::Meta meta, std::vector<uint8_t>& out, std::string& error,
+               const lab::Picture* picture, int side) {
   meta.game = spec.name;
   meta.kind = save::Kind::run;
   meta.play_s = static_cast<double>(step) / spec.hz;
   InputLog header = new_log(spec, setup);
   meta.setup = to_text(header);
   save::FileWriter w(out, meta);
+  // The picture first after the meta: a menu reads it off the file's front (save/store.hpp).
+  if (picture != nullptr)
+    save::put_picture(w, picture->width, picture->height, picture->rgba, side);
   w.put(kPlayTag, 0, kPlayVersion, PlayChunk{step});
   if (!run.save(w)) {
     error = std::string("the game ") + spec.name + " keeps no saves (its Run::save returns false)";
     return false;
   }
   return w.finish(&error);
+}
+
+}  // namespace
+
+bool save_run(const GameSpec& spec, const Setup& setup, const Run& run, int64_t step,
+              save::Meta meta, std::vector<uint8_t>& out, std::string& error) {
+  return write_run(spec, setup, run, step, std::move(meta), out, error, nullptr, 0);
+}
+
+bool save_run_pictured(const GameSpec& spec, const Setup& setup, Run& run, int64_t step,
+                       save::Meta meta, std::vector<uint8_t>& out, std::string& error,
+                       std::string_view view, int side) {
+  if (view.empty() && !spec.views.empty()) view = spec.views[0].name;
+  lab::Picture picture;
+  std::string caption, why;
+  const bool shot = !view.empty() && run.shoot(view, picture, caption, why);
+  return write_run(spec, setup, run, step, std::move(meta), out, error, shot ? &picture : nullptr,
+                   side);
 }
 
 bool save_character(const GameSpec& spec, const Setup& setup, const Run& run, save::Meta meta,
