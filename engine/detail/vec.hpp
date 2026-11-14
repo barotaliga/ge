@@ -1,6 +1,6 @@
 // THE SMALL VECTOR ARITHMETIC the detail passes share: `core::Vec3` added, scaled, dotted, crossed
-// and normalised, inline. Exact IEEE operations only (sqrt is correctly rounded), so every bevel,
-// decal and prop placed from them keeps its bits on every compiler.
+// and normalised, inline. Exact IEEE operations only (sqrt is correctly rounded), so every bevel
+// and decal placed from them keeps its bits on every compiler.
 //
 // ge:summary Inline Vec3 arithmetic for the detail passes: add, sub, dot, cross, normalise
 // ge:keywords detail vec3 vector dot cross normalize length add sub scale ramp smoothstep
