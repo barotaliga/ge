@@ -39,7 +39,7 @@ constexpr std::string_view kImages[] = {"",
                                         "p_quad",
                                         "p_invulnerability",
                                         "p_envirosuit"};
-enum Image : int16_t {
+enum Image : uint8_t {
   kNone,
   kHealth,
   kShells,
