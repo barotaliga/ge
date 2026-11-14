@@ -205,8 +205,8 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
     if (!follows)
       c.drift = c.course;
     else
-      c.drift = c.drift + (c.course - c.drift) *
-                              static_cast<float>(gap >= kDrift_s ? 1 : gap / kDrift_s);
+      c.drift =
+          c.drift + (c.course - c.drift) * static_cast<float>(gap >= kDrift_s ? 1 : gap / kDrift_s);
     ai::see(c.seen, v.origin.x, v.origin.y, v.origin.z, t);
     c.visible = true;
     c.since = t;

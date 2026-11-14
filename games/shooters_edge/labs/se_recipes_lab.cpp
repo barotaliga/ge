@@ -26,8 +26,8 @@
 // ge:skill bots labs
 // ge:test tests/shooter_recipes_test.cpp
 #include <algorithm>
-#include <cmath>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -87,8 +87,8 @@ struct Stop {
   float to320 = -1, to_target = -1;
   int takeoffs = 0;  // jumps before the target (or within the window)
   StopKind kind = kStill;
-  float still_s = 0;   // under `stood` this long
-  float from = 0;      // the fastest in the 1.5 s before it, units/s
+  float still_s = 0;  // under `stood` this long
+  float from = 0;     // the fastest in the 1.5 s before it, units/s
 };
 
 // The frame `dt` seconds from frame i (back when negative), within the track.
@@ -490,8 +490,8 @@ void run(gl::Lab& lab) {
       }
       const double mins = minutes[static_cast<size_t>(lv)];
       const auto pm = [&](int k) { return to_fixed(mins > 0 ? k / mins : 0, 2); };
-      tb.rows.push_back({lv == kLevels ? "every player" : kLevelName[lv], pm(n), pm(run),
-                         pm(brief), pm(kinds[kStill]), pm(kinds[kReversed]), pm(kinds[kTurned]),
+      tb.rows.push_back({lv == kLevels ? "every player" : kLevelName[lv], pm(n), pm(run), pm(brief),
+                         pm(kinds[kStill]), pm(kinds[kReversed]), pm(kinds[kTurned]),
                          pm(kinds[kOn]), pm(rev_brief)});
       const std::string key = std::string("stop.") + (lv == kLevels ? "all" : kLevelName[lv]) + ".";
       lab.metric(key + "from-run-per-min", mins > 0 ? run / mins : 0, "1/min");

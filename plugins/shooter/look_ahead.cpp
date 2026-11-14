@@ -255,8 +255,8 @@ WalkWay foresee_walk(const MoveWorld& world, const WalkStart& st, Vec3f aim, Vec
     if (st.harm) {
       const float speed = flat_speed(st.velocity);
       const float run = st.horizon + 32 / speed;
-      const HullTrace on = player_trace(
-          world, a, {a.x + st.velocity.x * run, a.y + st.velocity.y * run, a.z});
+      const HullTrace on =
+          player_trace(world, a, {a.x + st.velocity.x * run, a.y + st.velocity.y * run, a.z});
       harm = !on.startsolid && harm_under(world, on.endpos);
     }
     if (near_others == 0 && (tr.fraction >= 1 || !wall(tr)) && !harm) return WalkWay::pursue;
@@ -300,11 +300,10 @@ WalkWay foresee_walk(const MoveWorld& world, const WalkStart& st, Vec3f aim, Vec
     // A fall first (the worst), then a bump; among the clean the nearest the aim wins, among the
     // others the least bumped.
     const bool clean = seen[k].bump <= 0, best_clean = seen[best].bump <= 0;
-    if (seen[k].falls != seen[best].falls
-            ? !seen[k].falls
-            : clean != best_clean
-                  ? clean
-                  : (clean ? seen[k].nearer > seen[best].nearer : seen[k].bump < seen[best].bump))
+    if (seen[k].falls != seen[best].falls ? !seen[k].falls
+        : clean != best_clean
+            ? clean
+            : (clean ? seen[k].nearer > seen[best].nearer : seen[k].bump < seen[best].bump))
       best = k;
   }
   const auto chosen = static_cast<WalkWay>(best);

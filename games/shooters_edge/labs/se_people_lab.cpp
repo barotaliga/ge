@@ -118,8 +118,8 @@ struct Player {
   int64_t fight_n = 0, fight_wide = 0, fight_turns = 0;
   // Alive with the waist under water, slime or lava (a swimmer), and of those, with an enemy faced.
   int64_t wet = 0, wet_faced = 0;
-  // AN ENEMY APPEARING: one who comes into a clear line (none the sample before, alive both), and of
-  // those, met on the screen, beside it (within 120 degrees of the view's yaw), or behind: where
+  // AN ENEMY APPEARING: one who comes into a clear line (none the sample before, alive both), and
+  // of those, met on the screen, beside it (within 120 degrees of the view's yaw), or behind: where
   // he looks is where enemies come from, or not.
   int64_t appear = 0, appear_faced = 0, appear_beside = 0;
   // and those met moving (past 150 units/s), by where he lies against the run: ahead (within 60
@@ -411,7 +411,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   double hand_next = 0, hand_at = -1;
   std::vector<la::KeysState> keys(32);
   std::vector<la::BumpState> bumps(32);
-  std::vector<double> seen_at(32, -1e9);  // by slot: the last sample with an enemy in view
+  std::vector<double> seen_at(32, -1e9);       // by slot: the last sample with an enemy in view
   std::vector<uint8_t> clear_was(32 * 32, 0);  // by pair (i, j): j in a clear line of i last sample
   const sh::Hull& body = m.bsp.models[0].hulls[1];
   for (;;) {
@@ -621,7 +621,8 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
           const sh::Vec3f mv = p.origin - was[static_cast<size_t>(i)];
           const float ms = std::sqrt(mv.x * mv.x + mv.y * mv.y) / static_cast<float>(every);
           if (ms > 150 && flat > 1) {
-            const float rc = (mv.x * h.x + mv.y * h.y) / (std::sqrt(mv.x * mv.x + mv.y * mv.y) * flat);
+            const float rc =
+                (mv.x * h.x + mv.y * h.y) / (std::sqrt(mv.x * mv.x + mv.y * mv.y) * flat);
             const int band = rc > 0.5f ? 0 : rc > -0.5f ? 1 : 2;
             pl.run_appear[band]++;
             pl.run_faced[band] += on;
@@ -1005,9 +1006,9 @@ void run(gl::Lab& lab) {
     return all.appear > 0 ? static_cast<double>(k) / static_cast<double>(all.appear) : 0;
   };
   lab.metric("people.appear-per-min",
-             all.alive > 0 ? static_cast<double>(all.appear) * 60 /
-                                 (static_cast<double>(all.alive) * every)
-                           : 0,
+             all.alive > 0
+                 ? static_cast<double>(all.appear) * 60 / (static_cast<double>(all.alive) * every)
+                 : 0,
              "per-min");
   lab.metric("people.appear-faced", of_appear(all.appear_faced), "share");
   lab.metric("people.appear-beside", of_appear(all.appear_beside), "share");
@@ -1127,7 +1128,8 @@ const gl::LabSpec kSpec{
     "How much of a team match do players spend with an enemy in plain view, near one, and how "
     "fast do they move: people's recordings and our bots' measured by the same rules?",
     {
-        {"dir", "", "a folder of recordings (.mvd or .ged) of one map (people's, or se-team --save's)"},
+        {"dir", "",
+         "a folder of recordings (.mvd or .ged) of one map (people's, or se-team --save's)"},
         {"file", "", "one recording's path (with --dir: read too)"},
         {"basedir", "", "a folder holding the game folder the recordings' map is read from"},
         {"game", "id1", "the game folder under --basedir"},

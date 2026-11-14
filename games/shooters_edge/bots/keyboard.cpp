@@ -142,8 +142,8 @@ void fighter_keyboard_init(Fighter& f, uint8_t moves, uint32_t seed) {
   key_hand_init(f.keys, moves, seed);
 }
 
-void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool onground,
-                      bool brinked, sh::Vec3f origin) {
+void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool onground, bool brinked,
+                      sh::Vec3f origin) {
   const sh::Pilot& p = f.bot.pilot.pilot;
   int8_t curve = sh::kNoCurveKeys;
   // The pilot's curve, while the command is still the pilot's: a hop's (no aim takes the view in
@@ -239,7 +239,8 @@ void press_keys(KeyHand& keys, const sh::Features& features, sh::MoveCmd& cmd, s
   if (set >= 1 && set <= 3) want |= bit(kRight);
   if (set >= 3 && set <= 5) want |= bit(kBack);
   if (set >= 5 && set <= 7) want |= bit(kLeft);
-  if (near != nullptr && features[sh::Feature::brinkkeys]) want = keys_off_brink(*near, cmd, velocity, want);
+  if (near != nullptr && features[sh::Feature::brinkkeys])
+    want = keys_off_brink(*near, cmd, velocity, want);
   // A JUMP ASKED FOR is pressed (`jumpkey`): wanted until its key goes down (`kJumpLatch_s` at
   // most), not only on the commands that ask (a pilot lets go between two asks, and a press
   // cancelled before the finger lands, ai/keys.hpp, never landed a jump under a novice's hand).

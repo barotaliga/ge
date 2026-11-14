@@ -29,6 +29,27 @@
 // key areas. The calls that matter most (the quad's and the shield's) are said again more often
 // when he believes no teammate is near them.
 //
+// THE OPENING, THE TAKER, THE PUSH and THE STRATEGY: at the top of the namespace below.
+// ge:summary A fighter's own mind: team lines read by skill, its role chosen alone, its calls
+// ge:keywords mind team-message read-by-skill beliefs mates claims timers role rush hold carry
+// ge:keywords point give-up opening-rush safe report spam quad-call separate-brains
+// ge:keywords push attack gather regroup retake-together base-lost staging
+// ge:skill shooter bots
+// ge:test tests/shooters_edge_team_test.cpp
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include "shooter/locs.hpp"
+#include "shooter/vec.hpp"
+#include "shooters_edge/bots/talk.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
+
+namespace shooters_edge::bots {
+
 // THE OPENING: at the match's start every player first says where he spawned (his status with
 // his place); at his next plan, the team's spawns read, the two of a team who believe themselves
 // nearest the quad (a mate's spawn as he said it) claim it and rush it, and the rest claim the
@@ -60,25 +81,6 @@
 //
 // Deterministic: a pure function of what the fighter saw, heard and drew from its own stream.
 //
-// ge:summary A fighter's own mind: team lines read by skill, its role chosen alone, its calls
-// ge:keywords mind team-message read-by-skill beliefs mates claims timers role rush hold carry
-// ge:keywords point give-up opening-rush safe report spam quad-call separate-brains
-// ge:keywords push attack gather regroup retake-together base-lost staging
-// ge:skill shooter bots
-// ge:test tests/shooters_edge_team_test.cpp
-#pragma once
-
-#include <cstdint>
-#include <string>
-#include <string_view>
-#include <vector>
-
-#include "shooter/locs.hpp"
-#include "shooter/vec.hpp"
-#include "shooters_edge/bots/talk.hpp"
-#include "shooters_edge/server/rules_runner.hpp"
-
-namespace shooters_edge::bots {
 
 constexpr double kRepeatWindow_s = 12;     // a line said again within this reads as a repeat
 constexpr double kTake_s = 45;             // a TAKE plan holds this long
@@ -151,7 +153,7 @@ struct Mind {
   // THE TAKER (`fetch`): the armour it goes for as its team's taker (-1: none), since when.
   int32_t fetch = -1;
   double fetch_t = -1e9;
-  double retake_t = -1e9;        // when it was last believed lost
+  double retake_t = -1e9;  // when it was last believed lost
   // THE TEAM'S STRATEGY (talk.hpp `Strategy`), as its leader last said it and this player read
   // it: the items it is about (-1: none), when it was taken up, and an "ok" owed for it.
   Strategy strategy = Strategy::none;

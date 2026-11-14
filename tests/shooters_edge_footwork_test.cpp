@@ -15,11 +15,11 @@
 
 #include "check.hpp"
 #include "progs/entity_text.hpp"
+#include "shooter/brush_hull.hpp"
+#include "shooter/nav.hpp"
 #include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/footwork.hpp"
 #include "shooters_edge/bots/keyboard.hpp"
-#include "shooter/brush_hull.hpp"
-#include "shooter/nav.hpp"
 
 namespace sh = ge::shooter;
 namespace fb = shooters_edge::bots;

@@ -4,6 +4,41 @@
 // does it at all: a feature on still plays at the traits' level (a rocket jump needs the moves
 // trait as well), and a feature off is that behaviour gone, the bot playing on without it.
 //
+// THE FEATURES, each with what it does and its judgment: above `Feature` below.
+// THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
+// `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
+// ge:summary A bot's features: each behaviour switched on or off by name, and the presets
+// ge:keywords features feature-switch bot-features apply_features features_text presets keys calm
+// ge:keywords pace swimaim screen keep lead lane hop shortgoals commit danger dodge watch spam
+// ge:keywords packs talk plan rocket-jump grenade-jump airsteer surface glance plain-bot ab-test
+// ge:keywords trial eye selfaim course-change own-motion pools pool-floor swim-under-view corner
+// ge:keywords lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen sound-swipe
+// ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
+// ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
+// ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes chains
+// ge:keywords goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast
+// ge:keywords lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys
+// ge:keywords circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback
+// ge:keywords levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-
+// ge:keywords hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot
+// ge:keywords liftbrake lift-shaft scriptfresh script-step scriptentry script-entry calmvel calm-
+// ge:keywords view facing lookturn view-lead viewbook gapturn gap-refused gapnear placeheard place-
+// ge:keywords heard loc-region gaplava gap-over-lava brinkline lip-corner sidebrink side-step
+// ge:keywords fallseen fall-foreseen liplook brinkkeys floortrap floor-trap trapflee trap-flee
+// ge:keywords bridgeseen bridge-seen sidehop side-hop lostdry lost-dry liftoff lift-off shotjump
+// ge:keywords shot-jump rjready launcher-ready jumpcuts failed-jumps brinkfall fall-into-harm
+// ge:skill shooter bots
+// ge:test tests/shooter_features_test.cpp
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <string_view>
+
+#include "shooter/aim.hpp"
+
+namespace ge::shooter {
+
 // THE FEATURES (`Feature`, by the name a command line or a console writes):
 // - `calm`: with nobody to aim at, the view a hand on a mouse looking along the route (bot.hpp).
 // - `pace`: the view at a hand's pace, not the aim's flick, back from a lost enemy and swimming.
@@ -237,30 +272,6 @@
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
-// THE PRESETS: `features_all` (every one), each skill's (`features_of`: none `eye`, a novice no
-// `glance`), `features_none` (a plain bot). Text (`apply_features`): all, none/plain, +x, -x.
-// ge:summary A bot's features: each behaviour switched on or off by name, and the presets
-// ge:keywords features feature-switch bot-features apply_features features_text presets keys calm
-// ge:keywords pace swimaim screen keep lead lane hop shortgoals commit danger dodge watch spam
-// ge:keywords packs talk plan rocket-jump grenade-jump airsteer surface glance plain-bot ab-test
-// ge:keywords trial eye selfaim course-change own-motion pools pool-floor swim-under-view corner
-// ge:keywords lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen sound-swipe
-// ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip gapjump headroom
-// ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
-// ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes
-// ge:keywords chains goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot liftbrake lift-shaft scriptfresh script-step scriptentry script-entry calmvel calm-view facing lookturn view-lead viewbook gapturn gap-refused gapnear placeheard place-heard loc-region gaplava gap-over-lava brinkline lip-corner sidebrink side-step fallseen fall-foreseen liplook brinkkeys floortrap floor-trap trapflee trap-flee bridgeseen bridge-seen sidehop side-hop lostdry lost-dry liftoff lift-off shotjump shot-jump rjready launcher-ready jumpcuts failed-jumps brinkfall fall-into-harm
-// ge:skill shooter bots
-// ge:test tests/shooter_features_test.cpp
-#pragma once
-
-#include <cstdint>
-#include <string>
-#include <string_view>
-
-#include "shooter/aim.hpp"
-
-namespace ge::shooter {
-
 enum class Feature : uint8_t {
   calm,
   pace,

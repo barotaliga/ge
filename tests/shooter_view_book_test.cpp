@@ -35,8 +35,8 @@ TEST(a_lookup_finds_its_cell_the_height_beside_and_keeps_to_the_bars) {
   // x 100 -> cell 1, y -10 -> -1, z 130 -> 2; heading 90 -> octant 2.
   CHECK(sh::view_book_yaw(b, {100, -10, 130}, 90, 30, 50, yaw));
   CHECK(yaw == -90.5f);
-  CHECK(sh::view_book_yaw(b, {100, -10, 200}, 90, 30, 50, yaw));  // the cell under
-  CHECK(!sh::view_book_yaw(b, {100, -10, 130}, 0, 30, 50, yaw));  // another octant
+  CHECK(sh::view_book_yaw(b, {100, -10, 200}, 90, 30, 50, yaw));   // the cell under
+  CHECK(!sh::view_book_yaw(b, {100, -10, 130}, 0, 30, 50, yaw));   // another octant
   CHECK(!sh::view_book_yaw(b, {100, -10, 130}, 90, 41, 50, yaw));  // too few frames
   CHECK(!sh::view_book_yaw(b, {100, -10, 130}, 90, 30, 81, yaw));  // too loose
 }

@@ -289,7 +289,8 @@ TEST(a_shut_link_with_no_mover_is_kept_off_the_route_a_cut_one_is_not) {
   const Course& c = course();
   const sh::NavGraph& g = c.graph;
   ge::ai::Search search;
-  const int32_t from = sh::nav_nearest(g, c.map.platform), to = sh::nav_nearest(g, c.map.east_ledge);
+  const int32_t from = sh::nav_nearest(g, c.map.platform),
+                to = sh::nav_nearest(g, c.map.east_ledge);
   const sh::NavRoute r = sh::nav_route(g, from, to, search);
   CHECK_MSG(r.nodes.size() > 2, "no route from the west platform to the east ledge");
   int32_t a = -1, b = -1;

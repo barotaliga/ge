@@ -407,7 +407,7 @@ struct Fighter {
   int32_t dive_off = -1;      // the item whose dive it last gave up (-1: none)
   int32_t swim_exit = -1;     // the exit node it is climbing out onto (shooter/swim.hpp), -1 none
   double swim_exit_until = 0;
-  int32_t short_item = -1;  // a short goal on the way (fighter.cpp on_the_way), -1 none
+  int32_t short_item = -1;  // a short goal on the way (fighter_items.cpp on_the_way), -1 none
   int32_t door_avoid = -1;  // the door a button's errand cannot reach round (above), -1 none
   double short_until = 0;
   bool swim_view_on = false;  // the swimmer's view turned at a hand's pace (fighter.cpp)

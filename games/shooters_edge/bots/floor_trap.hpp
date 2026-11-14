@@ -13,8 +13,8 @@
 // - THE PRESS (`floor_trap_think`): an enemy seen or heard within `kTrapFresh_s` over the floor
 //   (inside its box, his feet within `kTrapAbove` of its top), no mate over it as far as it knows
 //   (each mate's last place seen, sent or not, and a team line's lately), the floor at rest, this
-//   fighter on the button's level within `kTrapReach` of it, the straight way to it off the floor: it
-//   goes to the button's node and walks into the button (the keys toward it under the view, the
+//   fighter on the button's level within `kTrapReach` of it, the straight way to it off the floor:
+//   it goes to the button's node and walks into the button (the keys toward it under the view, the
 //   aim kept), for at most `kTrapPress_s`.
 // - THE STAY: the presser's goal is the button's node until the floor is back (`trap_stay`), and
 //   while the floor is away its nodes are shut (`watch_bridges`), so no route crosses the gap.
@@ -31,8 +31,7 @@
 //   ledge (the route's floor nodes stay where the floor was). dm2: 47 of 82 trap deaths stood on
 //   the floor as it went and fell ~3 s later.
 //
-// ge:summary The floor trap: a floor over lava a touch button slides away, never brushed by accident,
-// ge:summary pressed only when an enemy stands on it, the presser staying put till it returns
+// ge:summary The floor trap: a button sliding a floor off lava, pressed only with an enemy on it
 // ge:keywords floor-trap floortrap trap-button dm2 big-room lava floor-door touch-button press
 // ge:keywords floor_traps_init floor_trap_think floor_trap_cmd
 // ge:skill bots shooter
@@ -52,15 +51,15 @@ constexpr float kTrapReach = 250;     // the fighter this near the button (acros
 constexpr double kTrapPress_s = 3;    // a press given up after this long
 constexpr float kTrapKeep = 24;       // not pressing: the box kept this clear of the button, units
 constexpr float kTrapKeep_s = 0.2f;   // and a run braked that would close the rest in this long, s
-constexpr double kTrapTold_s = 4;     // a mate's `trap` call read: the floor taken as away this long
+constexpr double kTrapTold_s = 4;  // a mate's `trap` call read: the floor taken as away this long
 constexpr double kTrapMateFresh_s = 5;  // a mate a team line put over the floor this lately
 constexpr float kTrapLevel = 64;        // the presser's feet within this of the button's bottom
-constexpr float kFleeStep = 18;    // `trapflee`: a step (lower or higher: walked onto)
-constexpr float kFleeJump = 40;    // a way off the floor up to this higher (jumped onto), units
-constexpr float kFleeUp = 48;      // the straight run's sweep this high (over a ledge), units
+constexpr float kFleeStep = 18;         // `trapflee`: a step (lower or higher: walked onto)
+constexpr float kFleeJump = 40;     // a way off the floor up to this higher (jumped onto), units
+constexpr float kFleeUp = 48;       // the straight run's sweep this high (over a ledge), units
 constexpr float kFleeJumpAt = 100;  // a higher way jumped at from this near, units
-constexpr float kFleeReach = 640;  // and this near across, units
-constexpr int kFleeTries = 24;     // the nearest this many tried by the trace
+constexpr float kFleeReach = 640;   // and this near across, units
+constexpr int kFleeTries = 24;      // the nearest this many tried by the trace
 constexpr float kTeleKeep = 48;  // the floor away: kept this far off its teleporters' link starts
 
 // The map's floor traps off its buttons and bridges (after `buttons_init` and the bridges).

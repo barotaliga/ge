@@ -7,9 +7,9 @@
 #include <algorithm>
 #include <cmath>
 
+#include "ai/path.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
-#include "ai/path.hpp"
 #include "shooter/framemove.hpp"
 
 namespace ge::shooter {
@@ -51,8 +51,8 @@ JumpFlight fly_jump(const MoveWorld& world, const MoveSettings& move, Vec3f orig
     c.forward = static_cast<int16_t>(move.maxspeed);
     c.buttons = i == 0 ? kButtonJump : 0;
     if (strafe && i > kStrafeLate && (s.velocity.x != 0 || s.velocity.y != 0)) {
-      const float vh = static_cast<float>(
-          core::libm::atan2(s.velocity.y, s.velocity.x) * (180.0 / core::kPi));
+      const float vh =
+          static_cast<float>(core::libm::atan2(s.velocity.y, s.velocity.x) * (180.0 / core::kPi));
       float err = yaw - vh;  // the aim's way off the velocity, counter-clockwise positive
       while (err > 180) err -= 360;
       while (err < -180) err += 360;

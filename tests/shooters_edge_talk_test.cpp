@@ -129,5 +129,6 @@ TEST(a_floor_traps_call_reads_back_as_a_trap) {
   const std::string text = bt::say_text(s);
   CHECK(text == "trap [big]");
   CHECK(bt::parse_say(text).kind == bt::SayKind::trap);
-  CHECK(bt::parse_say("TRAP!").kind == bt::SayKind::trap || bt::parse_say("trap").kind == bt::SayKind::trap);
+  CHECK(bt::parse_say("TRAP!").kind == bt::SayKind::trap ||
+        bt::parse_say("trap").kind == bt::SayKind::trap);
 }

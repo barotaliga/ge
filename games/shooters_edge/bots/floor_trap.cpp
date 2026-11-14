@@ -1,7 +1,6 @@
 // The floor trap: a floor over lava a touch button slides away (floor_trap.hpp).
 //
-// ge:summary The floor trap: a floor over lava a touch button slides away, never brushed by accident,
-// ge:summary pressed only when an enemy stands on it, the presser staying put till it returns
+// ge:summary The floor trap: a button sliding a floor off lava, pressed only with an enemy on it
 // ge:keywords floor-trap floortrap trap-button dm2 big-room lava floor-door touch-button press
 // ge:skill bots shooter
 // ge:test tests/shooters_edge_footwork_test.cpp
@@ -146,12 +145,12 @@ void floor_traps_init(Fighter& f, const sh::NavGraph& g, const server::RulesComm
                            0.5f;
         if (!sh::nav_harm_near(g, mid, half + 32)) continue;
         tr.floors.push_back(static_cast<int32_t>(b));
-        tr.lo = first ? d.absmin : sh::Vec3f{std::fmin(tr.lo.x, d.absmin.x),
-                                             std::fmin(tr.lo.y, d.absmin.y),
-                                             std::fmin(tr.lo.z, d.absmin.z)};
-        tr.hi = first ? d.absmax : sh::Vec3f{std::fmax(tr.hi.x, d.absmax.x),
-                                             std::fmax(tr.hi.y, d.absmax.y),
-                                             std::fmax(tr.hi.z, d.absmax.z)};
+        tr.lo = first ? d.absmin
+                      : sh::Vec3f{std::fmin(tr.lo.x, d.absmin.x), std::fmin(tr.lo.y, d.absmin.y),
+                                  std::fmin(tr.lo.z, d.absmin.z)};
+        tr.hi = first ? d.absmax
+                      : sh::Vec3f{std::fmax(tr.hi.x, d.absmax.x), std::fmax(tr.hi.y, d.absmax.y),
+                                  std::fmax(tr.hi.z, d.absmax.z)};
         first = false;
       }
     if (tr.floors.empty()) continue;
@@ -331,8 +330,8 @@ void floor_trap_cmd(Fighter& f, const server::RulesCommon& s, int me, sh::MoveCm
       // Up onto a ledge: jumped near it, else no jump (a hop on the floor lands where it went).
       const bool up = to.z > o.z + kFleeStep && d < kFleeJumpAt &&
                       (static_cast<int>(self.flags) & sh::kFlagOnGround) != 0;
-      cmd.buttons = static_cast<uint8_t>(up ? cmd.buttons | sh::kButtonJump
-                                            : cmd.buttons & ~sh::kButtonJump);
+      cmd.buttons =
+          static_cast<uint8_t>(up ? cmd.buttons | sh::kButtonJump : cmd.buttons & ~sh::kButtonJump);
       changed = true;
     }
   }

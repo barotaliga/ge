@@ -515,8 +515,7 @@ void run(gl::Lab& lab) {
   std::string mapname = lab.arg("mapname");
   if (mapname.empty() && lab.arg("map").empty() && !lab.arg("basedir").empty())
     mapname = recorded_map(lab.arg("file"), lab.arg("dir"));
-  if (!la::load_study_map(lab.arg("map"), lab.arg("basedir"), lab.arg("game"), mapname, m,
-                          error)) {
+  if (!la::load_study_map(lab.arg("map"), lab.arg("basedir"), lab.arg("game"), mapname, m, error)) {
     lab.fail("se-moves: " + error, "next: make lab LAB=se-moves ARGS=--help; skill: shooter");
     return;
   }
@@ -884,7 +883,8 @@ const gl::LabSpec kSpec{
     {
         {"file", "", "a demo's path (plain or gzip); empty: a walk written in code"},
         {"dir", "",
-         "a folder of one map's recordings (.mvd or .ged): who moves fastest and the weave by speed"},
+         "a folder of one map's recordings (.mvd or .ged): who moves fastest and the weave by "
+         "speed"},
         {"map", "", "the map's .bsp path (the demo's map); empty: --basedir, else the fixture"},
         {"basedir", "", "a folder holding a game folder, to read --mapname from"},
         {"game", "id1", "the game folder under --basedir"},

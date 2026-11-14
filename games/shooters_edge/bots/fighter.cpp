@@ -9,18 +9,16 @@
 #include "shooters_edge/bots/floor_trap.hpp"
 
 #include <cmath>
-#include <cstdlib>
-#include <cstring>
 
 #include "ai/choose.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
-#include "progs/entity_text.hpp"
 #include "shooter/brink.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/ears.hpp"
+#include "shooters_edge/bots/fighter_parts.hpp"
 #include "shooters_edge/bots/footwork.hpp"
 #include "shooters_edge/bots/hop_start_book.hpp"
 #include "shooters_edge/bots/item_routes.hpp"
@@ -52,14 +50,9 @@ void keys_mark(Fighter& f, const sh::MoveCmd& c, KeysSeen& was, const char* by) 
   was = now;
 }
 
-namespace pg = ge::progs;
 namespace ai = ge::ai;
 
-// The baseline mod's weapon bits (games/shooters_edge/qc/common/defs.qc) and ammunition maxima
-// (items.qc).
-constexpr float kAmmoMax = 100;
-constexpr int32_t kItQuad = 4194304;  // the quad's IT_ bit
-constexpr int32_t kItPent = 1048576;  // the shield's
+using namespace fighter_parts;
 
 constexpr float kRetreatBelow = 50;   // health plus armour's protection: weak under this
 constexpr float kStrongAgain = 80;    // and strong again at this
@@ -69,7 +62,6 @@ constexpr double kShotWait_s = 0.15;  // a rocket jump's shot waits this long fo
 constexpr double kGoalTire_s = 30;    // one goal item held this long in vain is let go of
 constexpr double kHealTire_s = 8;     // and sooner by a weak player, who cannot wait for it
 constexpr double kTired_s = 20;       // for this long
-constexpr double kTired = 0.2;        // its worth meanwhile, as a share
 constexpr float kRetakeStrong = 120;  // strength (a launcher counted) to go and take an area back
 constexpr double kRetake_s = 20;      // a key area believed lost this long ago is still retaken
 constexpr double kHeardChase_s = 2;   // and one heard this long ago is gone after
@@ -77,10 +69,7 @@ constexpr float kCornered = 350;      // units: an enemy in sight this near is f
                                       // range: a back turned on him this close is shot)
 constexpr float kCowardCornered = 192;  // a coward still runs from one farther than this
 constexpr double kImpulseGap_s = 0.5;
-constexpr double kWait_s = 20;     // an item back within this is worth going to wait for
-constexpr double kHealWait_s = 3;  // but a retreat goes for health that is there
-constexpr double kKeepGoal = 1.5;  // the goal's score is held up by this against the others
-constexpr double kDecide_s = 4;    // with no news, its item goal is chosen again this often
+constexpr double kDecide_s = 4;  // with no news, its item goal is chosen again this often
 // A chain's pickup run through (`chains`): the item still believed there this long after is the
 // news of its taking still to come, not a miss to go back for, s.
 constexpr double kViaNews_s = 0.6;
@@ -88,33 +77,13 @@ constexpr double kViaNews_s = 0.6;
 // velocity is pressed this far across it instead (degrees); past `kTurnStraight` (straight back)
 // the view's side is the side.
 constexpr double kTurnBackSpeed = 30, kTurnBack = 110, kTurnAcross = 95, kTurnStraight = 170;
-constexpr float bt_gap_past = 160;  // `gappast`: a gap's jump lands this far on past its node
 constexpr double kTurnRoom =
-    48;                      // and the room it needs across, units (the circle's ~32 and a box)
-constexpr float kRun = 320;  // units/s, the run to an item
-constexpr double kCallAgain_s = 8;  // an enemy in sight is called out again after this
-constexpr double kTold_s = 10;      // a point at an item is followed this long
-constexpr float kRocketNear = 400;  // a rocket at a man nearer than this is aimed at his middle
-// A hurt player does not walk back into a fight his side is losing: health within this of a danger
-// spot (where he died, where a mate died, an area called lost, a call for help: mind.hpp) is worth
-// this share while he heals, and health an enemy he knows of now stands nearer to than he does is
-// worth half.
-constexpr double kDangerMemory_s = 40;
-constexpr float kDangerReach = 384;
-constexpr double kDangerScale = 0.25;
-constexpr double kEnemyNearScale = 0.5;
-constexpr double kEnemyKnown_s = 3;  // an enemy seen or heard this lately is known of now
-constexpr double kHotSpot_s = 60;    // two danger spots this lately near an item: no healing there
-constexpr double kMegaHealBonus = 10;  // the mega's worth to a healer over the health it gives
-constexpr double kSwimExit_s = 3;      // a climb out of the water kept this long at most
-constexpr double kSwimWayFlat = 48;    // a swim's way nearer than this across is risen or sunk to
-constexpr double kLanding_s = 2;   // out of the water, its exit node walked onto this long at most
-constexpr double kBaseHeal = 1.4;  // health in the team's base is worth this more to a healer
-constexpr double kLauncherWorth = 240;   // the launcher lacked: worth a long run
-constexpr double kBridgeSpare_s = 2.5;   // a bridge left this long before it goes back, s
-constexpr float kGoneSight = 800;        // `bridgeseen`: a bridge's node looked at this near, units
-constexpr float kGoneDrop = 64;          // and no floor this far under it: gone
-constexpr double kFloorBack_s = 10;      // `bridgeseen`: a floor door seen away, unseen since, back
+    48;  // and the room it needs across, units (the circle's ~32 and a box)
+constexpr double kCallAgain_s = 8;   // an enemy in sight is called out again after this
+constexpr float kRocketNear = 400;   // a rocket at a man nearer than this is aimed at his middle
+constexpr double kSwimExit_s = 3;    // a climb out of the water kept this long at most
+constexpr double kSwimWayFlat = 48;  // a swim's way nearer than this across is risen or sunk to
+constexpr double kLanding_s = 2;  // out of the water, its exit node walked onto this long at most
 constexpr float kRocketJumpHealth = 70;  // the health a rocket jump is tried with (it costs ~50)
 // A hopper plans the map's gap tricks only this fast or faster, units/s (people take off at
 // 420 to 500; a gap's jump is flown only when the move says it lands across).
@@ -126,26 +95,13 @@ constexpr float kRocketJumpMoves = 4;  // and the moves trait (an amateur jumper
 // the hands, the more a jump must be worth.
 constexpr float kRocketLevelMoves[3] = {4, 6, 8};
 constexpr float kRocketLevelExtra_s[3] = {3, 1.5f, 0.5f};
-constexpr float kRocketsLow = 25;          // a launcher with fewer rockets than this wants more
-constexpr float kRocketsStock = 50;        // rockets stocked with no launcher yet, up to this
-constexpr double kRocketsStockWorth = 15;  // and worth this from none
 constexpr float kBlastClear = 140;  // a rocket or grenade is held with a mate this near its aim
-// What a fighter sees: a player's screen, 120 degrees across and as high as a 16:9 monitor shows
-// at that width (2 atan(tan 60 * 9/16)), people's own field of view.
-constexpr float kViewWide = 120;
-// A short goal on the way: within this many units, and its floor within this of the player's.
-constexpr float kOnTheWay = 256;
-constexpr float kOnTheWayRise = 40;
-constexpr float kFeet = 24;         // a player's origin over the floor
 constexpr double kShortHold_s = 3;  // a short goal is given up after this
-constexpr float kBeside = 96;       // nearer than this, any way it lies
-constexpr float kAhead = 0.34f;     // else the cosine off its motion, at least
 // Swimming, the view turns this many degrees a second past a band this wide off the swim's way
 // (an about-face faster), as the calm view walks (shooter/bot.cpp).
 constexpr double kSwimTurn = 180;
 constexpr double kSwimAbout = 360;
 constexpr float kSwimBand = 20;
-constexpr float kViewHigh = 88.5f;
 // The finger clicks while the view is within this many times the trigger's tolerance of him.
 constexpr float kClickWide = 2.5f;
 // A view set for a shot (a button, a doorway) is fired at once the hand is this near it, degrees.
@@ -236,67 +192,6 @@ void swim_view(Fighter& f, const server::RulesCommon& s, int me, int msec, bool 
   f.view_sent[1] = yaw;
 }
 
-float protection(float type, float value) { return type * value; }
-
-// What item `it` is worth to a player with `st` now (0: nothing).
-double raw_value(const ItemSpot& it, const Stats& st) {
-  const float worn = protection(st.armortype, st.armor);
-  switch (it.kind) {
-    case ItemKind::health:
-      return st.health >= 100 ? 0 : std::fmin(it.amount, 100 - st.health);
-    case ItemKind::mega:
-      return st.health >= 250 ? 0 : 20 + 0.8 * (250 - st.health);
-    case ItemKind::armor1:
-      return std::fmax(0.f, protection(0.3f, 100) - worn);
-    case ItemKind::armor2:
-      return std::fmax(0.f, protection(0.6f, 150) - worn);
-    case ItemKind::armor3:
-      return std::fmax(0.f, protection(0.8f, 200) - worn) * 1.2;
-    case ItemKind::quad:
-      return (st.items & kItQuad) ? 0 : 150;
-    case ItemKind::pent:
-      return (st.items & kItPent) ? 0 : 130;
-    case ItemKind::weapon: {
-      if (st.items & it.weapon) return 4;
-      // The launcher wins a team game (people take it 60 times in 20 min): worth a long run
-      // while it is there, not a long wait while it is away.
-      if (it.weapon == st.arsenal->launcher) return it.present ? kLauncherWorth : 120;
-      const BotWeapon* w = weapon_row(*st.arsenal, it.weapon);
-      return w ? w->worth : 30;
-    }
-    default:
-      break;
-  }
-  // Ammunition: worth what it fills of a weapon carried that uses it.
-  const BotArsenal& arsenal = *st.arsenal;
-  int a = arsenal.item_ammo(it.kind);
-  if (a < 0) a = 0;
-  bool uses = false;
-  for (const BotWeapon& w : arsenal.weapons) uses |= w.ammo == a && (st.items & w.bit) != 0;
-  const float have = ammo_of(st, a);
-  // Rockets are stocked for the launcher still to come, as people stock them: worth something to
-  // a player who has neither launcher yet.
-  if (a == arsenal.launcher_ammo && !uses)
-    return have >= kRocketsStock ? 1
-                                 : std::fmax(1.0, kRocketsStockWorth * (1 - have / kRocketsStock));
-  if (!uses || have >= kAmmoMax) return 1;
-  const double fill = 30.0 * (kAmmoMax - have) / kAmmoMax;
-  // Rockets for a launcher in hand running dry are worth half the launcher: it is no use without.
-  if (a == arsenal.launcher_ammo && (st.items & arsenal.launcher) != 0 && have < kRocketsLow)
-    return std::fmax(fill, 0.5 * kLauncherWorth * (1.0 - have / kRocketsLow));
-  return fill;
-}
-
-// What an item is worth to it now, as it rates the map.
-double item_value(const ItemSpot& it, const Stats& st) { return raw_value(it, st) * it.weight; }
-
-bool heals(const ItemSpot& it) {
-  return it.kind == ItemKind::health || it.kind == ItemKind::mega || it.kind == ItemKind::armor1 ||
-         it.kind == ItemKind::armor2 || it.kind == ItemKind::armor3;
-}
-
-float strength(const Stats& st) { return st.health + protection(st.armortype, st.armor); }
-
 bool alive_slot(const server::RulesCommon& s, int slot) {
   return s.sv.clients[static_cast<size_t>(slot)].active &&
          s.world.entities[static_cast<size_t>(slot) + 1].health > 0;
@@ -377,12 +272,6 @@ void go_to(Fighter& f, int32_t node, int32_t then = -1, sh::Vec3f at = {}) {
   sh::bot_goal(f.bot, node);
 }
 
-bool door_shut(const server::RulesCommon& s, const ItemSpot& it) {
-  if (it.door_ent < 0) return false;
-  const sh::Vec3f d = s.world.entities[static_cast<size_t>(it.door_ent)].origin - it.door_rest;
-  return d.x * d.x + d.y * d.y + d.z * d.z < 1;
-}
-
 // Goes for item `i`: through its button first while its door is shut. With `then` (an item,
 // `chains`) and `i` there to take, on through it to `then` without a stop.
 void go_item(Fighter& f, const server::RulesCommon& s, int32_t i, int32_t then = -1) {
@@ -410,132 +299,6 @@ void go_item(Fighter& f, const server::RulesCommon& s, int32_t i, int32_t then =
   }
   f.chain_item = then_node >= 0 ? then : -1;
   go_to(f, unlock ? it.button_node : it.node, then_node, it.at);
-}
-
-// What the player holds once it has taken `it` (`chains`: the goal after it chosen as if taken).
-Stats after_taking(Stats st, const ItemSpot& it) {
-  switch (it.kind) {
-    case ItemKind::health:
-      if (st.health < 100) st.health = std::fmin(100.f, st.health + it.amount);
-      break;
-    case ItemKind::mega:
-      st.health = std::fmin(250.f, st.health + 100);
-      break;
-    case ItemKind::armor1:
-    case ItemKind::armor2:
-    case ItemKind::armor3: {
-      const float type = it.kind == ItemKind::armor1   ? 0.3f
-                         : it.kind == ItemKind::armor2 ? 0.6f
-                                                       : 0.8f;
-      const float value = it.kind == ItemKind::armor1   ? 100.f
-                          : it.kind == ItemKind::armor2 ? 150.f
-                                                        : 200.f;
-      if (protection(type, value) > protection(st.armortype, st.armor)) {
-        st.armortype = type;
-        st.armor = value;
-      }
-      break;
-    }
-    case ItemKind::quad:
-      st.items |= kItQuad;
-      break;
-    case ItemKind::pent:
-      st.items |= kItPent;
-      break;
-    case ItemKind::weapon:
-      st.items |= it.weapon;
-      break;
-    default: {
-      // Ammunition: the arsenal's index of it.
-      const int a = st.arsenal->item_ammo ? st.arsenal->item_ammo(it.kind) : -1;
-      if (a >= 0 && a < kMaxAmmo) st.ammo[a] += it.amount;
-      break;
-    }
-  }
-  return st;
-}
-
-// The best item for the player at `me` with `st`: worth over time to have it, `away` from a known
-// enemy (when `heal`, health and armour alone, and never nearer the enemy than this player is).
-int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
-                  double t, bool heal, const sh::Vec3f* enemy, ai::Why* why, int32_t skip = -1) {
-  const auto score = [&](int32_t i) {
-    const ItemSpot& it = f.items[static_cast<size_t>(i)];
-    if (i == skip || it.node < 0 || (heal && !heals(it))) return 0.0;
-    // Only what it knows of (or sees). One gone is waited for at its time back as the player
-    // knows it: exact when timed, a guess (late) when not (knowledge.hpp).
-    if (!item_in_mind(f, i)) return 0.0;
-    if (f.trap && (*f.trap)[static_cast<size_t>(it.node)]) return 0.0;  // no way back out of it
-    // No way there from here, unless by its dive (from a node there is a way to).
-    const bool by_dive = f.reach_at >= 0 && !f.reach.reached(it.node);
-    if (by_dive && (!it.dive || !f.reach.reached(it.dive_node) || it.dive_s > kDiveMost_s ||
-                    (i == f.dive_off && t < f.dive_off_until)))
-      return 0.0;
-    if (door_shut(s, it) &&
-        (it.button_node < 0 || (f.reach_at >= 0 && !f.reach.reached(it.button_node))))
-      return 0.0;  // shut, and its button out of reach
-    if (it.after >= 0 && f.features[sh::Feature::routes] && item_in_mind(f, it.after)) {
-      // An item rule: not while the one to be had first is believed up or due.
-      const ItemSpot& first = f.items[static_cast<size_t>(it.after)];
-      if (first.present || first.back_at - t < it.after_due_s) return 0.0;
-    }
-    // The map's weights are a team's plan (what to hold); a weak player, or one alone, wants
-    // what does him good soonest.
-    double v = heal || !f.team ? raw_value(it, st) : item_value(it, st);
-    // Healing, the mega health is worth the health it gives back to 100, as a box is: a hurt player
-    // takes the health near him, not the room every hurt player of both teams runs to.
-    if (heal && it.kind == ItemKind::mega) v = std::fmax(0.f, 100 - st.health) + kMegaHealBonus;
-    if (v <= 0) return 0.0;
-    // The team's base (the map plan's) is where a hurt player falls back to.
-    if (heal && f.plan && f.plan->base >= 0 && plan_area_of(*f.plan, it.node) == f.plan->base)
-      v *= kBaseHeal;
-    if (heal) {  // where two or more of its side fell lately is not healed at at all
-      int fell = 0;
-      for (const auto& [where, when] : f.danger)
-        fell += t - when < kHotSpot_s && dist(where, it.at) < kDangerReach ? 1 : 0;
-      if (fell >= 2) return 0.0;
-    }
-    // (`routetime`, M18r.md 3) The run by the route's time (the reach's, worked out each second),
-    // not the straight line: e1m2's YA is near in a line from below and 13 s by its stairs, and
-    // as the route went round other items came nearer in a line: 6 of 371 trips took it.
-    const bool by_route = f.features[sh::Feature::routetime] && f.reach_at >= 0 && it.node >= 0 &&
-                          f.reach.reached(it.node);
-    const double run =
-        (by_route ? f.reach.cost(it.node) : dist(me, it.at) / kRun) + (by_dive ? it.dive_s : 0);
-    const double wait = it.present ? 0 : it.back_at - t;
-    // Only the items a game turns on are waited for; the rest are taken when they are there.
-    const bool key = key_item(it);
-    if (wait > (heal || (!key && f.team) ? kHealWait_s : kWait_s)) return 0.0;
-    double sc = v / (1 + std::fmax(run, wait));
-    if (i == f.goal_item) sc *= kKeepGoal;  // the goal held unless another is clearly better
-    if (i == f.tired_item && t < f.tired_until) sc *= kTired;  // gone for in vain lately
-    if (enemy && (heal || f.outmatched) && dist(*enemy, it.at) < dist(me, it.at)) sc *= 0.2;
-    // A teammate who said he goes for it has it; one in sight it is no use to, or the quad's
-    // carrier, gets it; a strong player leaves health to the others; a point is followed.
-    if (mate_going(f, i, t)) sc *= 0.15;
-    if (gives_up(f, s, f.slot + 1, i, st, t)) return 0.0;
-    if (f.team && heals(it) && it.kind != ItemKind::mega && strength(st) >= 150) sc *= 0.3;
-    if (f.mind.told == i && t - f.mind.told_t < kTold_s) sc *= 4;
-    // A weak player falls back to his own: health near his area is worth more.
-    if (f.team && heal && f.mind.claim >= 0 &&
-        dist(it.at, f.items[static_cast<size_t>(f.mind.claim)].at) < kLeash)
-      sc *= 1.5;
-    if (heal) {
-      for (const auto& [where, when] : f.danger)
-        if (t - when < kDangerMemory_s && dist(where, it.at) < kDangerReach) sc *= kDangerScale;
-      for (const sh::Contact& k : f.bot.senses.contacts) {
-        if (k.ent < 0) continue;
-        const bool seen = ai::known(k.seen) && ai::age(k.seen, t) <= kEnemyKnown_s;
-        const bool heard = ai::known(k.heard) && ai::age(k.heard, t) <= kEnemyKnown_s;
-        if (!seen && !heard) continue;
-        if (dist(at_of(seen ? k.seen : k.heard), it.at) < dist(me, it.at)) sc *= kEnemyNearScale;
-      }
-    }
-    return sc;
-  };
-  const auto name = [&](int32_t i) { return f.items[static_cast<size_t>(i)].name.c_str(); };
-  return ai::pick_best(static_cast<int32_t>(f.items.size()), score, why,
-                       heal ? "heal_goal" : "item_goal", name, "worth over the time to have it", 0);
 }
 
 // THE TURN BACK TAKEN ROUND (fighter_command, `uturn`): `cmd`'s wish turned across `velocity`
@@ -577,88 +340,6 @@ bool turn_back_round(sh::MoveCmd& cmd, sh::Vec3f origin, sh::Vec3f velocity,
   cmd.forward = sh::quantize_axis(static_cast<float>(ge::core::libm::cos(rel) * wish));
   cmd.side = sh::quantize_axis(static_cast<float>(-ge::core::libm::sin(rel) * wish));
   return true;
-}
-
-// THE GOAL AFTER (`chains`): the item the player would go for once it has item `i`, chosen as
-// it would choose then (from where `i` stands, holding what `i` gives); -1 with none, or `i` not
-// there to take now (it waits for it there).
-int32_t chain_after(const Fighter& f, const server::RulesCommon& s, const Stats& st, int32_t i,
-                    double t, bool heal, const sh::Vec3f* enemy) {
-  if (!f.features[sh::Feature::chains] || i < 0) return -1;
-  const ItemSpot& it = f.items[static_cast<size_t>(i)];
-  if (!it.present) return -1;
-  return best_item(f, s, after_taking(st, it), it.at, t, heal, enemy, nullptr, i);
-}
-
-// A SHORT GOAL ON THE WAY: an item there now that a person turns aside for, on its own floor within
-// kOnTheWay and ahead of where it runs (or beside it), that a way reaches, nobody of its side said
-// he takes, and not the goal itself; the nearest, or -1. Taken before the long goal, as a person
-// picks up what lies by his way: the goal is chosen again once it has it (a pickup is news).
-int32_t on_the_way(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
-                   sh::Vec3f velocity, double t) {
-  const float speed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
-  int32_t best = -1;
-  float best_d = kOnTheWay;
-  for (size_t k = 0; k < f.items.size(); k++) {
-    const auto i = static_cast<int32_t>(k);
-    const ItemSpot& it = f.items[k];
-    if (i == f.goal_item || !it.present || it.node < 0 || !item_in_mind(f, i)) continue;
-    if (f.reach_at >= 0 && !f.reach.reached(it.node)) continue;
-    if (std::fabs(it.at.z - (me.z - kFeet)) > kOnTheWayRise || door_shut(s, it)) continue;
-    // What a person turns aside for: health it lacks, better armour, a weapon it has not got,
-    // rockets; shells and nails are taken as they lie on the way, not gone for.
-    const bool ammo =
-        it.kind == ItemKind::shells || it.kind == ItemKind::nails || it.kind == ItemKind::cells;
-    if (ammo || (it.kind == ItemKind::weapon && (st.items & it.weapon) != 0)) continue;
-    if (raw_value(it, st) <= 0 || mate_going(f, i, t) || gives_up(f, s, f.slot + 1, i, st, t))
-      continue;
-    const float d = dist(me, it.at);
-    // Ahead of where it runs (within about 70 degrees of its motion), or beside it.
-    if (d > kBeside && speed > 100) {
-      const float dx = it.at.x - me.x, dy = it.at.y - me.y;
-      const float flat = std::sqrt(dx * dx + dy * dy);
-      if (flat > 1 && (dx * velocity.x + dy * velocity.y) / (flat * speed) < kAhead) continue;
-    }
-    if (d < best_d) {
-      best = i;
-      best_d = d;
-    }
-  }
-  return best;
-}
-
-// A backpack within `reach` worth going for (ammunition short or a weapon lacking), or -1: one
-// in sight on its screen (no wall, door or water's surface between), or the one already gone for
-// while it lies there.
-int32_t pack_near(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
-                  float reach) {
-  const BotArsenal& arsenal = *f.arsenal;
-  bool short_of = false;
-  for (int k = 0; k < arsenal.ammo_count; k++) short_of |= st.ammo[k] < arsenal.short_of[k];
-  short_of |= (st.items & (arsenal.launcher | arsenal.lob)) == 0;
-  // A novice wants every pack he sees (`packinfer`), whatever he carries.
-  short_of |= f.sense == MapSense::novice && f.features[sh::Feature::packinfer];
-  if (!short_of) return -1;
-  sh::SenseSettings look = f.bot.senses.set;
-  look.range = reach;
-  const sh::Vec3f eye{me.x, me.y, me.z + look.view_height};
-  int32_t best = -1;
-  float best_d = reach;
-  for (const sh::ViewEntity& v : f.bot.view.entities) {
-    if (v.modelindex <= 0 || static_cast<size_t>(v.modelindex) >= s.models.size() ||
-        s.models[static_cast<size_t>(v.modelindex)] != "progs/backpack.mdl")
-      continue;
-    const float d = dist(v.origin, me);
-    if (d >= best_d) continue;
-    // A pack lies on the floor: seen at a few units over it (as a player's origin less his eye).
-    if (v.ent != f.pack_ent &&
-        !sh::sees_player(s.sv, look, f.slot + 1, eye, {f.bot.pitch, f.bot.yaw, 0},
-                         {v.origin.x, v.origin.y, v.origin.z + 8 - look.view_height}))
-      continue;
-    best_d = d;
-    best = v.ent;
-  }
-  return best;
 }
 
 // The role's goal (team.hpp), true when it set one; false leaves the goal to the items.
@@ -902,162 +583,6 @@ void hide_launcher(Fighter& f, const Stats& st, bool seen_now, double t, ai::Why
   if (why) {
     why->decide("hide");
     why->choose(sg->name, "no one in sight: the launcher kept out of a dropped pack");
-  }
-}
-
-// (`bridgeseen`) Whether bridge `b`, left out of what this player is sent, is SEEN gone: one of its
-// nodes in sight within `kGoneSight` with no floor under it (the lava where it stands out). A
-// client keeps a mover it is no longer sent where it last saw it: dm2's red armour's bridge, seen
-// out and gone back into its wall out of view, stood out in the bot's mind, and the route walked
-// off the lip into the pit (22 of 25 lava deaths there in 8 matches).
-bool bridge_seen_gone(const Fighter::Bridge& b, const server::RulesCommon& s, int me, sh::Vec3f eye,
-                      const sh::NavGraph& g) {
-  if (!s.world.entities[static_cast<size_t>(b.ent)].free) return false;  // sent: its place stands
-  for (const int32_t n : b.nodes) {
-    const sh::Vec3f o = g.nodes[static_cast<size_t>(n)].origin;
-    if (dist(o, eye) > kGoneSight) continue;
-    const sh::HullTrace look = sh::trace_move(s.sv, eye, {}, {}, o, sh::kTraceNoMonsters, me);
-    if (look.fraction < 1) continue;
-    const sh::HullTrace down =
-        sh::trace_move(s.sv, o, sh::kPlayerMins, sh::kPlayerMaxs, {o.x, o.y, o.z - kGoneDrop},
-                       sh::kTraceNoMonsters, me);
-    if (down.fraction >= 1 || sh::over_harm(s.sv, o, o, me)) return true;
-  }
-  return false;
-}
-
-// The bridges as seen now (fighter.hpp `Bridge`): on a change, the links onto those still in are
-// shut and the way planned again.
-void watch_bridges(Fighter& f, const server::RulesCommon& s, int me) {
-  if (f.bridges.empty()) return;
-  bool changed = !f.bridges_seen;
-  f.bridges_seen = true;
-  for (Fighter::Bridge& b : f.bridges) {
-    if (b.ent < 0 || static_cast<size_t>(b.ent) >= s.world.entities.size()) continue;
-    const sh::Vec3f o = s.world.entities[static_cast<size_t>(b.ent)].origin;
-    bool in = false;
-    if (b.floor) {
-      in = dist(o, b.spawn) >= 1;  // a floor door: there only at rest
-      // (`bridgeseen`) Out of sight (not sent), seen away: back once its time out is over (a
-      // client keeps it where it last saw it; one stood away in a bot's mind for 48 s).
-      if (f.features[sh::Feature::bridgeseen]) {
-        if (in && !s.world.entities[static_cast<size_t>(b.ent)].free) b.out_since = s.sv.time;
-        if (in && s.world.entities[static_cast<size_t>(b.ent)].free && b.out_since >= 0 &&
-            s.sv.time - b.out_since > kFloorBack_s)
-          in = false;
-      }
-      // (`floortrap`) or a mate just called it gone (`trap`), unseen yet
-      if (f.features[sh::Feature::floortrap] && s.sv.time - f.trap_told < kTrapTold_s) in = true;
-    } else {
-      // A bridge: a floor only all the way out where the map drew it, and not in the last
-      // moments of its wait (it goes back from under whoever is on it: dm2's red armour's).
-      const bool out = dist(o, sh::Vec3f{}) < 1;
-      if (!out) b.out_since = -1;
-      if (out && b.out_since < 0) b.out_since = s.sv.time;
-      in = !out || (b.wait > 0 && s.sv.time - b.out_since > b.wait - kBridgeSpare_s);
-    }
-    if (!in && f.features[sh::Feature::bridgeseen]) {
-      const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
-      const sh::Vec3f eye{self.origin.x, self.origin.y,
-                          self.origin.z + f.bot.senses.set.view_height};
-      if (bridge_seen_gone(b, s, me, eye, *f.bot.pilot.pilot.g)) {
-        in = true;
-        f.stats.bridges_seen_gone += b.in ? 0 : 1;
-      }
-    }
-    changed = changed || in != b.in;
-    b.in = in;
-  }
-  if (!changed) return;
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
-  std::vector<uint8_t> on(g.nodes.size(), 0);
-  for (const Fighter::Bridge& b : f.bridges)
-    if (b.in)
-      for (const int32_t n : b.nodes) on[static_cast<size_t>(n)] = 1;
-  std::vector<sh::NavExtraLink>& shut = f.bot.pilot.pilot.shut_links;
-  shut.clear();
-  for (size_t a = 0; a < g.nodes.size(); a++) {
-    const sh::NavNode& n = g.nodes[a];
-    for (int32_t k = 0; k < n.links; k++) {
-      const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
-      if (on[static_cast<size_t>(l.to)] && !on[a])
-        shut.push_back({static_cast<int32_t>(a), l.to, l.kind, l.time_s});
-    }
-  }
-  floor_trap_shut(f, shut);  // the teleporters onto a floor trap's floor while it is away
-  f.goal_node = -1;          // planned again
-  if (f.features[sh::Feature::bridgeseen]) f.reach_at = -1;  // and where it can get to
-}
-
-// A DOOR ON THE WAY (`locked`): the doors only something else opens, while they rest shut. When
-// the route planned crosses one a known button opens, the button is gone to (round the door: no
-// route through it meanwhile) and pressed (walked into, or shot: button_poke_cmd) before the goal,
-// as a person hits the button by a shut door (dm2's yellow armour and its teleporter, behind a
-// touch button's doors). A button no way reaches but through its own door (pressed from the far
-// side) leaves that door off the routes a while. A door no known button opens (a trigger walked
-// into opens it, or nothing does) is waited at as before (the pilot bars it after `wait_s`).
-bool door_resting(const Fighter& f, const server::RulesCommon& s, int ent) {
-  for (size_t k = 0; k < f.locked.size(); k++)
-    if (f.locked[k] == ent)
-      return dist(s.world.entities[static_cast<size_t>(ent)].origin, f.locked_rest[k]) < 1;
-  return false;
-}
-
-// Whether this fighter runs the doors' errands: `locked`, and its own player (a companion and
-// the campaign's leader keep their own doors: companion.cpp, way_through.cpp).
-bool locked_errands(const Fighter& f) {
-  return f.features[sh::Feature::locked] && f.escort.leader < 0;
-}
-
-void door_errand(Fighter& f, const server::RulesCommon& s, double t) {
-  sh::Pilot& p = f.bot.pilot.pilot;
-  p.shut.clear();
-  if (f.door_button >= 0) {
-    const bool open = !door_resting(f, s, f.door_ent);
-    // No way to the button but through its door: that door off the routes a while.
-    const bool no_way = p.mode == sh::PilotMode::idle &&
-                        f.goal_node == f.button_spots[static_cast<size_t>(f.door_button)].node &&
-                        p.route.empty();
-    if (!open && !no_way && t < f.door_until) {
-      p.shut.push_back(f.door_ent);  // round it to the button
-      return;
-    }
-    if (no_way) {
-      f.door_avoid = f.door_ent;
-      f.door_avoid_until = t + kDoorAvoid_s;
-      f.reach_at = -1;  // where it can get to, worked out again without the door
-    }
-    f.door_button = -1;
-    f.door_ent = -1;
-    f.poke = -1;
-    f.goal_node = -1;  // the goal planned again, through the door now open (or round it)
-  }
-  if (f.door_avoid >= 0 && t < f.door_avoid_until && door_resting(f, s, f.door_avoid))
-    p.shut.push_back(f.door_avoid);
-  // A shut one on the route planned: its button first.
-  const sh::NavGraph& g = *p.g;
-  for (size_t i = p.k; i + 1 < p.route.size(); i++) {
-    const sh::NavNode& n = g.nodes[static_cast<size_t>(p.route[i])];
-    int32_t mover = -1;
-    for (int32_t j = 0; j < n.links; j++) {
-      const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(j)];
-      if (l.to == p.route[i + 1]) mover = l.mover;
-    }
-    if (mover < 0 || !door_resting(f, s, mover)) continue;
-    for (size_t b = 0; b < f.button_spots.size(); b++) {
-      const ButtonSpot& bs = f.button_spots[b];
-      bool opens = false;
-      for (const int d : bs.doors) opens |= d == mover;
-      if (!opens || bs.node < 0 || (f.reach_at >= 0 && !f.reach.reached(bs.node))) continue;
-      f.door_button = static_cast<int32_t>(b);
-      f.door_ent = mover;
-      f.door_until = t + kDoorErrand_s;
-      f.poke = f.door_button;
-      f.poke_until = f.door_until;
-      f.stats.door_errands++;
-      p.shut.push_back(mover);
-      return;
-    }
   }
 }
 
@@ -1544,215 +1069,6 @@ void fighter_go(Fighter& f, int32_t node) { go_to(f, node); }
 float fighter_strength(const Stats& st) {
   return st.health + protection(st.armortype, st.armor) +
          ((st.items & st.arsenal->launcher) ? 50.f : 0.f);
-}
-
-Stats read_stats(const server::RulesCommon& s, int ent, const BotArsenal& arsenal) {
-  const server::PlayerNumbers& n = s.world.clients[static_cast<size_t>(ent) - 1].numbers;
-  Stats st;
-  st.arsenal = &arsenal;
-  st.health = n.health;
-  st.armor = n.armour;
-  st.armortype = n.armour_type;
-  arsenal.read(n, st);
-  return st;
-}
-
-sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& traits,
-                                sh::AimSkill skill, sh::PilotHands& hands) {
-  // Moves: an expert's the bunny hop on practised hands (shooter/pilot.hpp); an average player's
-  // the simple hop (forward and the side key of the turn) on steady hands; a novice's a walk and a
-  // strafe on a person's hands.
-  const sh::AimSkill moves = sh::tier_of(traits[sh::Trait::moves]);
-  const bool expert = moves == sh::AimSkill::expert;
-  const bool average = moves == sh::AimSkill::average;
-  sh::PilotSettings ps;
-  ps.hop = (expert || average) && features[sh::Feature::hop];
-  ps.hop_simple = average;
-  ps.hop_stairs_walked = features[sh::Feature::stairs];
-  ps.slopes = features[sh::Feature::slopes];
-  ps.backstep = features[sh::Feature::backstep];
-  ps.runup_keys = features[sh::Feature::runupkeys];
-  ps.jump_fly = features[sh::Feature::jumpfly];
-  ps.gap_past = features[sh::Feature::gappast] ? bt_gap_past : 0;
-  ps.lip_jump = features[sh::Feature::lipjump];
-  ps.gap_strafe = features[sh::Feature::airgap];
-  ps.pilot_cast = features[sh::Feature::pilotcast];
-  ps.gap_circle = features[sh::Feature::gapbuild];
-  ps.gap_lava = features[sh::Feature::gaplava];
-  ps.shut_every = features[sh::Feature::bridgeseen];
-  ps.hop_side_off = features[sh::Feature::sidehop];
-  ps.brink_line = features[sh::Feature::brinkline];
-  ps.brink_side = features[sh::Feature::sidebrink];
-  ps.walk_falls = features[sh::Feature::fallseen];
-  ps.lip_look_s = features[sh::Feature::liplook] ? 0.3f : 0;
-  ps.jumper.lip_share = features[sh::Feature::sidebrink] ? kLipShare : 0;
-  ps.curve_keys = features[sh::Feature::keys] && features[sh::Feature::curvekeys];
-  ps.under_way = features[sh::Feature::underway];
-  ps.lift_off = features[sh::Feature::liftoff];
-  ps.rocket_wait = features[sh::Feature::rjready];
-  ps.retarget = features[sh::Feature::retarget];
-  ps.hop_headroom = features[sh::Feature::headroom];
-  ps.hop_lips = features[sh::Feature::liphop];
-  // The circle jump by skill: an expert curves up to 0.3 s for ~430 (people's standing jumps
-  // take off at 433, p50), an average player a shorter curve for less (people's p25: 377).
-  ps.hop_circle = features[sh::Feature::circlejump];
-  ps.hop_chain = features[sh::Feature::chainhop];
-  ps.hop_land_wall_s = features[sh::Feature::landwall] ? 0.15f : 0.f;
-  ps.hop_jump_held = features[sh::Feature::hopjump];
-  ps.hop_side_only = features[sh::Feature::hopside];
-  ps.hop_open = features[sh::Feature::hopopen];
-  ps.lift_brake = features[sh::Feature::liftbrake];
-  ps.script_fresh = features[sh::Feature::scriptfresh];
-  ps.gap_turn = features[sh::Feature::gapturn];
-  ps.gap_near = features[sh::Feature::gapnear];
-  ps.script_entry = features[sh::Feature::scriptentry];
-  ps.circle.target = expert ? 430.f : 380.f;
-  ps.circle.most_s = expert ? 0.3f : 0.2f;
-  // People's hop starts (`recipes`): a hopper copies its level's out of the book.
-  if (ps.hop && features[sh::Feature::recipes]) ps.recipes = hop_start_book();
-  ps.recipe_level = expert ? 2 : average ? 1 : 0;
-  ps.recipe_keys_s = features[sh::Feature::keys] ? (expert ? 0.03f : average ? 0.04f : 0.05f) : 0.f;
-  ps.brink = features[sh::Feature::brink];
-  ps.ahead = features[sh::Feature::ahead];
-  ps.ahead_bodies = features[sh::Feature::bodies];
-  // Its lane off the route's line (shooter/pilot.hpp): a person never walks the line; the less
-  // practised wander wider. A perfect player keeps to it.
-  ps.lane = skill == sh::AimSkill::perfect || !features[sh::Feature::lane] ? 0.f
-            : expert                                                       ? 0.45f
-            : average                                                      ? 0.6f
-                                                                           : 0.75f;
-  ps.air_steer = features[sh::Feature::airsteer];
-  hands = expert    ? sh::PilotHands::practised
-          : average ? sh::PilotHands::steady
-                    : sh::PilotHands::human;
-  return ps;
-}
-
-void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s, int slot,
-                  const char* entities, sh::AimSkill skill, const sh::Traits& traits, double hz,
-                  uint32_t seed) {
-  sh::PilotHands hands = sh::PilotHands::none;
-  const sh::PilotSettings ps = fighter_pilot(f.features, traits, skill, hands);
-  // The aim: the scattergun's to start with, another weapon's taken up as it is
-  // (`fighter_command`).
-  f.aim_slot = 0;
-  sh::bot_init(f.bot, g, ps, hands,
-               skill == sh::AimSkill::perfect
-                   ? sh::aim_profile(skill)
-                   : sh::aim_profile(traits[sh::Trait::aim_sg], traits[sh::Trait::reaction]),
-               hz, seed);
-  f.slot = slot;
-  f.skill = skill;
-  f.traits = traits;
-  f.temper = sh::temper_of(traits);
-  f.sense = map_sense_of(sh::tier_of(traits[sh::Trait::knowledge]));
-  f.timing = map_sense_of(sh::tier_of(traits[sh::Trait::timing]));
-  f.comms = map_sense_of(sh::tier_of(traits[sh::Trait::comms]));
-  f.teamwork = map_sense_of(sh::tier_of(traits[sh::Trait::teamplay]));
-  f.hearing = map_sense_of(sh::tier_of(traits[sh::Trait::hearing]));
-  f.camp = map_sense_of(sh::tier_of(traits[sh::Trait::camping]));
-  f.rash = sh::tier_of(traits[sh::Trait::discipline]) == sh::AimSkill::novice;
-  f.edge = sh::edge_of(sh::mean_aim(traits));
-  f.hear_react_s =
-      f.bot.aim.react_med > 0
-          ? f.bot.aim.react_med +
-                static_cast<float>(sh::scale(traits[sh::Trait::reaction], {0.2, 0.15, 0.1, 0.08}))
-          : 0;
-  f.rng = ge::core::make_rng(seed * 2654435761u + 12345u);
-  f.keys_rng = ge::core::make_rng(seed * 2246822519u + 777u);
-  f.clean_keys = static_cast<float>(sh::scale(traits[sh::Trait::moves], {0.08, 0.2, 0.4, 0.5}));
-  fighter_keyboard_init(f, traits[sh::Trait::moves], seed);
-  sh::dodge_init(f.dodge, seed);
-  f.press_rng = ge::core::make_rng(seed ^ 0x2545f491u);
-  f.dodge_k = sh::dodge_skill(traits[sh::Trait::dodge]);
-  const int me = slot + 1;
-  sh::client_view(s.sv, me, f.bot.view);
-  std::vector<pg::EntityBlock> blocks;
-  std::string error;
-  f.items.clear();
-  if (!pg::parse_entity_text(entities, blocks, error)) return;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    if (!cn) continue;
-    const char* flags = pg::block_value(b, "spawnflags");
-    ItemSpot it;
-    if (!item_of(cn, flags ? std::atoi(flags) : 0, it, *f.arsenal)) continue;
-    sh::Vec3f origin;
-    parse_vec(pg::block_value(b, "origin"), origin);
-    // The entity sent nearest the map's place, across the floor.
-    float best = 48;
-    for (const sh::ViewEntity& v : f.bot.view.entities) {
-      if (v.ent <= s.sv.set.maxclients) continue;
-      const server::WorldEntity& e = s.world.entities[static_cast<size_t>(v.ent)];
-      // The middle of its box on the floor; its origin when its row carries no box (the sequel's).
-      const bool boxed = e.absmax.x > e.absmin.x || e.absmax.z > e.absmin.z;
-      const sh::Vec3f mid = boxed ? sh::Vec3f{(e.absmin.x + e.absmax.x) * 0.5f,
-                                              (e.absmin.y + e.absmax.y) * 0.5f, e.absmin.z}
-                                  : e.origin;
-      const float dx = v.origin.x - origin.x, dy = v.origin.y - origin.y;
-      const float d = std::sqrt(dx * dx + dy * dy);
-      if (d < best) {
-        best = d;
-        it.ent = v.ent;
-        it.at = mid;
-      }
-    }
-    if (it.ent < 0) continue;
-    it.node = sh::nav_nearest(g, {it.at.x, it.at.y, it.at.z + 24});
-    f.items.push_back(it);
-  }
-  // The map's item rules (item_routes.hpp): an item no goal while another is to be had first.
-  for (const ItemRule& r : item_rules(s.map_name))
-    for (ItemSpot& it : f.items) {
-      const float dx = it.at.x - r.x, dy = it.at.y - r.y, dz = it.at.z - r.z;
-      if (std::strcmp(item_call(it), r.item) != 0 || dx * dx + dy * dy + dz * dz > 48 * 48)
-        continue;
-      for (size_t q = 0; q < f.items.size(); q++)
-        if (std::strcmp(item_call(f.items[q]), r.after) == 0) {
-          it.after = static_cast<int32_t>(q);
-          it.after_due_s = r.due_s;
-          break;
-        }
-    }
-  knowledge_init(f);
-  buttons_init(f, g, s, entities);
-  exits_init(f, g, s, entities);
-  ears_init(f, sh::tier_of(traits[sh::Trait::hearing]), entities);
-  spam_init(f, entities);
-  // A screen 120 degrees across (`screen`), or the round cone of the senses' own setting.
-  if (f.features[sh::Feature::screen]) {
-    f.bot.senses.set.fov = kViewWide;
-    f.bot.senses.set.fov_y = kViewHigh;
-  }
-  f.bot.keep = f.features[sh::Feature::keep];
-  f.bot.aimhop = f.features[sh::Feature::aimhop];
-  f.bot.airkeys = f.features[sh::Feature::airkeys];
-  f.bot.airview = f.features[sh::Feature::airview];
-  f.bot.airwall = f.features[sh::Feature::airwall];
-  f.bot.airwalk = f.features[sh::Feature::airwalk];
-  f.bot.airarc = f.features[sh::Feature::airarc];
-  f.bot.hopside = f.features[sh::Feature::hopside];
-  f.bot.levelview = f.features[sh::Feature::levelview];
-  f.bot.paceback = f.features[sh::Feature::paceback];
-  f.bot.circlekeys = f.features[sh::Feature::circlekeys];
-  f.bot.circleview = f.features[sh::Feature::circleview];
-  f.bot.circleaim = f.features[sh::Feature::circleaim];
-  f.bot.leadwall = f.features[sh::Feature::leadwall];
-  f.bot.leadmean = f.features[sh::Feature::leadmean];
-  f.bot.leadarc = f.features[sh::Feature::leadarc];
-  f.bot.paced = f.features[sh::Feature::pace];
-  f.bot.trial = f.features[sh::Feature::trial];
-  // A change of course read a reaction late (`eye`), and the aim from its eye ahead (`selfaim`).
-  f.bot.senses.set.course_s = f.features[sh::Feature::eye] ? f.bot.aim.react_med : 0;
-  f.bot.selfaim = f.features[sh::Feature::selfaim];
-  f.bot.corner = f.features[sh::Feature::corner];
-  f.bot.glance = f.features[sh::Feature::glance];
-  f.bot.lookway = f.features[sh::Feature::lookway];
-  f.bot.calm_vel = f.features[sh::Feature::calmvel];
-  f.bot.look_turn = f.features[sh::Feature::lookturn];
-  f.bot.view_booked = f.features[sh::Feature::viewbook];
-  f.bot.listen = f.features[sh::Feature::listen];
-  f.bot.pools = f.bot.pilot.pilot.set.floor_swim = f.features[sh::Feature::pools];
 }
 
 sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, int msec) {

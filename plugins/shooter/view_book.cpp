@@ -82,9 +82,8 @@ bool view_book_yaw(const ViewBook& book, Vec3f origin, float heading_deg, int32_
   const int64_t oct = view_book_octant(heading_deg);
   for (int64_t dz : {0, -1, 1}) {
     const int64_t key = pack(cx, cy, cz + dz, oct);
-    const auto it = std::lower_bound(
-        book.entries.begin(), book.entries.end(), key,
-        [](const ViewBookEntry& e, int64_t k) { return e.key < k; });
+    const auto it = std::lower_bound(book.entries.begin(), book.entries.end(), key,
+                                     [](const ViewBookEntry& e, int64_t k) { return e.key < k; });
     if (it == book.entries.end() || it->key != key) continue;
     if (it->frames < min_frames || it->consistency < min_consistency) continue;
     yaw_deg = static_cast<float>(it->yaw_tenths) / 10.f;

@@ -51,14 +51,14 @@ using ge::core::num::to_fixed;
 
 constexpr int kKinds = 7;
 const char* const kNames[kKinds] = {"ga", "ya", "ra", "mh", "quad", "pent", "rl"};
-const char* const kLong[kKinds] = {"GREEN ARMOUR", "YELLOW ARMOUR", "RED ARMOUR", "MEGA HEALTH",
+const char* const kLong[kKinds] = {"GREEN ARMOUR", "YELLOW ARMOUR", "RED ARMOUR",     "MEGA HEALTH",
                                    "QUAD",         "PENTAGRAM",     "ROCKET LAUNCHER"};
-constexpr float kReachXY = 64;      // the taker this near the spot across, units
-constexpr float kReachZ = 96;       // and this near in height
-constexpr double kStep_s = 0.05;    // a path's point every this many seconds
-constexpr double kTail_s = 2;       // the speed is read over the path's last this many seconds
-constexpr float kJumpGap = 96;      // a step this long between two points is a teleport or a spawn
-constexpr int kMaxPx = 1100;        // a panel's longer side, pixels
+constexpr float kReachXY = 64;    // the taker this near the spot across, units
+constexpr float kReachZ = 96;     // and this near in height
+constexpr double kStep_s = 0.05;  // a path's point every this many seconds
+constexpr double kTail_s = 2;     // the speed is read over the path's last this many seconds
+constexpr float kJumpGap = 96;    // a step this long between two points is a teleport or a spawn
+constexpr int kMaxPx = 1100;      // a panel's longer side, pixels
 
 int item_kind(const std::string& model, int skin) {
   if (model == "progs/armor.mdl") return skin >= 0 && skin <= 2 ? skin : -1;
@@ -194,7 +194,7 @@ const Point& at_back(const Approach& a, double back) {
 }
 
 struct Way {
-  sh::Vec3f at;        // its first point (the leader)
+  sh::Vec3f at;  // its first point (the leader)
   sh::Vec3f sum{0, 0, 0};
   std::vector<size_t> members;
 };
@@ -284,13 +284,13 @@ void run(gl::Lab& lab) {
   if (!lab.arg("dir").empty()) dirs.push_back({lab.arg("label"), lab.arg("dir")});
   if (!lab.arg("versus").empty()) dirs.push_back({lab.arg("versus-label"), lab.arg("versus")});
   if (dirs.empty()) {
-    lab.note("se-approach: no --dir: nothing to read (people's recordings of one map, and "
-             "--versus=<se-team --save's folder>)");
+    lab.note(
+        "se-approach: no --dir: nothing to read (people's recordings of one map, and "
+        "--versus=<se-team --save's folder>)");
     return;
   }
   la::StudyMap m;
-  if (!la::load_study_map("", lab.arg("basedir"), lab.arg("game"), lab.arg("mapname"), m,
-                          error)) {
+  if (!la::load_study_map("", lab.arg("basedir"), lab.arg("game"), lab.arg("mapname"), m, error)) {
     lab.fail("se-approach: " + error, "next: make lab LAB=se-approach ARGS=--help; skill: bots");
     return;
   }
@@ -319,13 +319,13 @@ void run(gl::Lab& lab) {
     sides.push_back(std::move(sd));
   }
 
-  gl::LabTable ways_t{"each item's ways in (the path " + to_fixed(from, 1) +
-                          " s before the pickup, grouped within " + to_fixed(group, 0) +
-                          " units): share, the time from there (s, p50), the speed over the "
-                          "last 2 s (units/s, p50), the path in the air, the height climbed (p50)",
-                      {"side", "item", "way", "x y z", "pickups", "share", "time", "speed", "air",
-                       "climb"},
-                      {}};
+  gl::LabTable ways_t{
+      "each item's ways in (the path " + to_fixed(from, 1) +
+          " s before the pickup, grouped within " + to_fixed(group, 0) +
+          " units): share, the time from there (s, p50), the speed over the "
+          "last 2 s (units/s, p50), the path in the air, the height climbed (p50)",
+      {"side", "item", "way", "x y z", "pickups", "share", "time", "speed", "air", "climb"},
+      {}};
   std::string tsv = "side\titem\trecording\tpickup_t\tt_before\tx\ty\tz\tair\n";
   for (int kind = 0; kind < kKinds; kind++) {
     std::vector<std::vector<const Approach*>> per(sides.size());
@@ -355,8 +355,8 @@ void run(gl::Lab& lab) {
       const std::vector<const Approach*>& as = per[si];
       const std::string pre = "approach." + sd.label + "." + key;
       lab.metric(pre + ".pickups", static_cast<double>(as.size()), "count");
-      lab.metric(pre + ".per-min",
-                 sd.minutes > 0 ? static_cast<double>(as.size()) / sd.minutes : 0, "per-min");
+      lab.metric(pre + ".per-min", sd.minutes > 0 ? static_cast<double>(as.size()) / sd.minutes : 0,
+                 "per-min");
       std::vector<double> speed, air, climb, run;
       for (const Approach* a : as) {
         const Point& tail = at_back(*a, kTail_s);
@@ -402,14 +402,14 @@ void run(gl::Lab& lab) {
           wa.push_back(air[mi]);
           wc.push_back(climb[mi]);
         }
-        ways_t.rows.push_back(
-            {sd.label, key, std::to_string(w + 1),
-             to_fixed(way.sum.x / k, 0) + " " + to_fixed(way.sum.y / k, 0) + " " +
-                 to_fixed(way.sum.z / k, 0),
-             std::to_string(way.members.size()),
-             to_fixed(100 * k / static_cast<double>(as.size()), 0) + "%",
-             to_fixed(quantile(wt, 0.5), 1), to_fixed(quantile(ws, 0.5), 0),
-             to_fixed(100 * quantile(wa, 0.5), 0) + "%", to_fixed(quantile(wc, 0.5), 0)});
+        ways_t.rows.push_back({sd.label, key, std::to_string(w + 1),
+                               to_fixed(way.sum.x / k, 0) + " " + to_fixed(way.sum.y / k, 0) + " " +
+                                   to_fixed(way.sum.z / k, 0),
+                               std::to_string(way.members.size()),
+                               to_fixed(100 * k / static_cast<double>(as.size()), 0) + "%",
+                               to_fixed(quantile(wt, 0.5), 1), to_fixed(quantile(ws, 0.5), 0),
+                               to_fixed(100 * quantile(wa, 0.5), 0) + "%",
+                               to_fixed(quantile(wc, 0.5), 0)});
       }
       panels.push_back(panel(*m.world, view, as, ways, sd.label, from));
     }
@@ -418,23 +418,23 @@ void run(gl::Lab& lab) {
     const double scale = std::min(1.0, static_cast<double>(kMaxPx) / std::max(pw, ph));
     const int sw = std::max(1, static_cast<int>(pw * scale)),
               shh = std::max(1, static_cast<int>(ph * scale));
-    gl::Picture out =
-        gl::create_picture(sw * static_cast<int>(panels.size()) + 8 * static_cast<int>(panels.size() - 1),
-                           shh, {255, 255, 255, 255});
+    gl::Picture out = gl::create_picture(
+        sw * static_cast<int>(panels.size()) + 8 * static_cast<int>(panels.size() - 1), shh,
+        {255, 255, 255, 255});
     for (size_t i = 0; i < panels.size(); i++)
       gl::blit(out, gl::resized(panels[i], sw, shh), static_cast<int>(i) * (sw + 8), 0);
     std::string counts;
     for (size_t si = 0; si < sides.size(); si++)
       counts += (si ? ", " : "") + sides[si].label + " " + std::to_string(per[si].size()) +
                 " pickups in " + to_fixed(sides[si].minutes, 0) + " match-minutes";
-    lab.shot({"approach-" + key, std::string("THE WAY TO THE ") + kLong[kind],
+    lab.shot({"approach-" + key,
+              std::string("THE WAY TO THE ") + kLong[kind],
               "From above, to scale, north up, the floor shaded by height (walls dark), cropped "
               "round the paths. Every pickup's taker's last " +
                   to_fixed(before, 1) +
                   " s: blue at its start to orange at the pickup, thin where he was in the air; "
                   "the item a red ring; each way in (where the path was " +
-                  to_fixed(from, 1) +
-                  " s before) a numbered disc with its share. " + counts + ".",
+                  to_fixed(from, 1) + " s before) a numbered disc with its share. " + counts + ".",
               "the ways people come in drawn thick where many paths agree; the item at the "
               "paths' orange ends; a way one side takes and the other never does",
               {{"before", to_fixed(before, 1)},

@@ -32,8 +32,8 @@
 // ge:test tests/shooters_edge_team_test.cpp
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <cstdlib>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -200,8 +200,8 @@ struct Scene {
   std::vector<Thing> things;
   std::vector<Item> items;
   std::vector<sh::Vec3f> spawns;
-  sh::Vec3f at;                // the spot (feet)
-  float r = 384;               // the box's half side
+  sh::Vec3f at;   // the spot (feet)
+  float r = 384;  // the box's half side
   // `--clip-top`: the top view cut away over this height and every roof under it stepped through
   // (nav_top.hpp `floor_below`), a level under another seen; NaN: from the spot's eye height.
   float clip_top = std::numeric_limits<float>::quiet_NaN();
@@ -812,7 +812,10 @@ void run(gl::Lab& lab) {
   const std::string where =
       to_fixed(s.at.x, 0) + " " + to_fixed(s.at.y, 0) + " " + to_fixed(s.at.z, 0);
   const std::vector<std::pair<std::string, std::string>> inputs = {
-      {"map", s.name},           {"at", where}, {"r", to_fixed(s.r, 0)}, {"route", lab.arg("route")},
+      {"map", s.name},
+      {"at", where},
+      {"r", to_fixed(s.r, 0)},
+      {"route", lab.arg("route")},
       {"clip-top", lab.arg("clip-top")}};
   const std::string id0 = lab.arg("id");
   auto id = [&](const std::string& v) { return id0.empty() ? v : id0 + "-" + v; };

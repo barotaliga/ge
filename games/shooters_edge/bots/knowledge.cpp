@@ -190,7 +190,8 @@ ItemNews knowledge_update(Fighter& f, const server::RulesCommon& s, int me, sh::
     // The item bits gained, less the held ammunition's icon (256..2048: it moves with the weapon).
     const int32_t new_bits = st.items & ~was.items & ~0xf00;
     bool ammo = false;
-    for (int a = 0; a < st.arsenal->ammo_count && a < kMaxAmmo; a++) ammo |= st.ammo[a] > was.ammo[a];
+    for (int a = 0; a < st.arsenal->ammo_count && a < kMaxAmmo; a++)
+      ammo |= st.ammo[a] > was.ammo[a];
     // An item gives what the bar shows: its own amount (a box's, a pack's is any), or up to the
     // cap; a weapon its bit (or, held already, ammunition and no new bit).
     const auto rose_by = [](float was_v, float now, float amount, float cap) {

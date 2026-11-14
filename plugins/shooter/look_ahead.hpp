@@ -80,8 +80,8 @@ struct WalkStart {
 };
 
 struct WalkSeen {
-  float bump = 0;    // the speed walls took in the flight, u/s summed
-  float nearer = 0;  // how much nearer the aim it ends, units
+  float bump = 0;      // the speed walls took in the flight, u/s summed
+  float nearer = 0;    // how much nearer the aim it ends, units
   bool falls = false;  // (`WalkStart::harm`) its box left the floor over lava or slime
 };
 

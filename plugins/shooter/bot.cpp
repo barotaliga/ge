@@ -57,8 +57,8 @@ bool walking_mode(PilotMode pm) {
   return pm == PilotMode::walk || pm == PilotMode::idle || pm == PilotMode::wait ||
          pm == PilotMode::ride || pm == PilotMode::arrived;
 }
-constexpr double kCalmDrift = 3;   // degrees a second of the hand's drift, at most
-constexpr float kCalmAhead = 320;  // units on along the route the calm view looks at
+constexpr double kCalmDrift = 3;      // degrees a second of the hand's drift, at most
+constexpr float kCalmAhead = 320;     // units on along the route the calm view looks at
 constexpr float kCalmVelSpeed = 150;  // (`calmvel`) past this, units/s, the calm view on the run
 constexpr double kCalmVelBand = 8;    // and held within this of it, degrees
 constexpr float kLookTurnMax = 60;    // (`lookturn`) the calm look this near the walk at most
@@ -845,7 +845,9 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       // A swipe there and back at a turn meant's pace (the glance, the sound's).
       const bool swipe =
           (b.glance && sv.time < b.glance_back_until) || (b.listen && sv.time < b.sound_back_until);
-      b.view_by = !swipe ? (booked ? "book" : "calm") : (b.listen && sv.time < b.sound_back_until) ? "sound" : "glance";
+      b.view_by = !swipe                                       ? (booked ? "book" : "calm")
+                  : (b.listen && sv.time < b.sound_back_until) ? "sound"
+                                                               : "glance";
       if (b.mouse && b.aim.mouse) {
         // The hand's strokes onto the look, at ease (an about-face at a turn meant's pace); the
         // pitch let lie within kCalmPitchTol of level.
