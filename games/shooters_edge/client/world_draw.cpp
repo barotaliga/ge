@@ -87,6 +87,7 @@ struct WorldDraw {
   gr::Haze haze;               // the hot air behind a nail or a rocket (ce_trails)
   std::vector<float> casters;  // this frame's models as world triangles, for their shadows
   std::vector<ba::CasterBox> caster_boxes;  // and each one's box
+  std::vector<effects::Light> kept;         // this frame's lights less the kinds put out
   std::vector<gr::BeamShape> beam_shapes;   // kMaxBeamDraws, built each frame
   std::vector<gr::BeamDraw> beam_draws;
   // This frame's births, blasts and flames with the room's light on their smoke (light_at).
@@ -681,9 +682,13 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   gr::fill_uniforms(f.staged, view, f.w, f.h);
   d.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
   gr::prepare_sky(f.skypass, view);
+  // The moment's lights less the kinds the player puts out (r_rocketlight and its kin).
+  const std::span<const effects::Light> lights =
+      f.picture ? look::kept_lights(*f.picture, fx.lights, f.kept)
+                : std::span<const effects::Light>(fx.lights);
   if (f.has_map) {
     GE_ZONE("world.bsp");
-    ba::set_dynamic_lights(f.bsp, fx.lights);
+    ba::set_dynamic_lights(f.bsp, lights);
     // The moving models' shadows (M54): every model near the eye and the player himself.
     shadow_casters(f.models, fx.models, fx.has_self ? &fx.self : nullptr, view, f.casters,
                    f.caster_boxes);
@@ -786,7 +791,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                             .enemy_bottom = f.picture->enemy_bottom};
     f.models.fullbright = f.picture->fullbright_skins;
     prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
-                   in_place, fx.lights, o.dynamic_strength, &f.burning);
+                   in_place, lights, o.dynamic_strength, &f.burning);
   }
   // Under a lava's or a slime's level the modern look draws the liquid round the eye itself.
   const bool round = f.extras && liquid_round_eye(*f.extras);

@@ -221,6 +221,25 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .kind = gc::CvarKind::boolean,
            .values = "1: they do (the default); 0: none do"},
           &picture.dynamic);
+  struct Kind {
+    const char* name;
+    const char* help;
+    const char* values;
+    bool* value;
+  };
+  for (const Kind& k : {Kind{"r_rocketlight", "Whether a rocket lights the walls as it flies.",
+                             "1: it does (the default); 0: it does not", &picture.rocket_light},
+                        Kind{"r_explosionlight", "Whether an explosion lights the walls round it.",
+                             "1: it does (the default); 0: it does not", &picture.explosion_light},
+                        Kind{"r_powerupglow", "Whether a player with a power glows.",
+                             "1: they do (the default); 0: they do not", &picture.power_glow}})
+    cv.bind({.name = k.name,
+             .fallback = "1",
+             .flags = gc::kArchive,
+             .help = k.help,
+             .kind = gc::CvarKind::boolean,
+             .values = k.values},
+            k.value);
   cv.bind({.name = "r_fullbrightskins",
            .fallback = "0",
            .flags = gc::kArchive,
@@ -561,6 +580,20 @@ bool watervis_allowed(const std::vector<std::pair<std::string, std::string>>& se
     return !ge::console::parse_number(value, v) || v > 0;
   }
   return true;
+}
+
+std::span<const effects::Light> kept_lights(const Picture& picture,
+                                            std::span<const effects::Light> lights,
+                                            std::vector<effects::Light>& out) {
+  out.clear();
+  if (picture.rocket_light && picture.explosion_light && picture.power_glow) return lights;
+  for (const effects::Light& l : lights) {
+    const bool off = (l.group == effects::kLightRocket && !picture.rocket_light) ||
+                     (l.group == effects::kLightExplosion && !picture.explosion_light) ||
+                     (l.group == effects::kLightPower && !picture.power_glow);
+    if (!off) out.push_back(l);
+  }
+  return out;
 }
 
 void toned_blend(const Picture& picture, const effects::Screen& s, double rgba[4]) {

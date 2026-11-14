@@ -18,14 +18,19 @@
 //   its weapons in the hand and on the floor, their missiles and sounds, its armour. Rules that
 //   name their things in code (the sequel's) wear the other game's by name instead
 //   (`worn_looks`): the server's `sv_wear` renames each model and sound as the players are told it.
+// - **The players** (`worn_figure`, `worn_moves`): `cr_models` draws every player as that game's
+//   figure, read from the remix's files; `cr_moves` gives the played game's move that game's
+//   running speed, friction and air by server lines (profiles/remix_arsenal.hpp).
 //
 // ge:summary Classic remix: cr_enabled and cr_items, the two-full-games check, items swapped
 // ge:keywords remix classic-remix cr_enabled cr_items remix_check remix_entities items_game
+// ge:keywords cr_models cr_moves worn_figure worn_moves
 // ge:keywords other-game-map item-swap full-game entity-text map-items
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_remix_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -49,10 +54,16 @@ struct RemixSettings {
   bool enabled = false;            // cr_enabled
   int32_t items = 0;               // cr_items: 0 the played game's; N the Nth classic game's
   int32_t models = 0;              // cr_models: the same for the players' figure
+  int32_t moves = 0;               // cr_moves: the same for how the players move
   profiles::RemixBalance balance;  // cr_strong_min, cr_strong_share, cr_pool_radius
 };
 
-// `cr_enabled` and `cr_items`, writing `out`.
+// The parts the remix swaps, as the window compares them: cr_items, cr_models, cr_moves.
+inline std::array<int32_t, 3> remix_parts(const RemixSettings& s) {
+  return {s.items, s.models, s.moves};
+}
+
+// `cr_enabled`, `cr_items`, `cr_models`, `cr_moves` and the balance's, writing `out`.
 void bind_remix(ge::console::Cvars& cvars, RemixSettings* out);
 
 // A classic game the window knows: its content profile id, its install and its edition.
@@ -127,17 +138,19 @@ struct RemixFiles {
   const profiles::RemixLooks* looks = nullptr;
   // The figure every player is drawn as (`cr_models`), or null: each their own.
   const profiles::RemixFigure* figure = nullptr;
+  // How the players move (`cr_moves`): the server lines that set the other game's, or null.
+  const profiles::RemixMoves* moves = nullptr;
   // True while the rules or the players wear the other game's things: read from `files`.
   bool wearing() const { return worn != nullptr || looks != nullptr || figure != nullptr; }
-  void undress() { worn = nullptr, looks = nullptr, figure = nullptr; }
+  void undress() { worn = nullptr, looks = nullptr, figure = nullptr, moves = nullptr; }
 };
 
 // What the played game's rules wear while `r` is on (`worn_arsenal`, `worn_looks`) and the
-// players' figure (`worn_figure`) set in `r`; true when it changed.
+// players' figure (`worn_figure`) and moves (`worn_moves`) set in `r`; true when it changed.
 bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played);
 
 // The server's lines while `r` wears the other game's things: the worn arsenal's, or the game's
-// `own` with `sv_wear` naming the game worn.
+// `own` with `sv_wear` naming the game worn; then the lines of the moves taken (`cr_moves`).
 std::vector<std::string> worn_lines(const RemixFiles& r, const std::vector<std::string>& own);
 
 // The console's line when what the rules wear changes to `r`'s, in the game's words.
@@ -164,6 +177,11 @@ const profiles::RemixLooks* worn_looks(const RemixSettings& s, const RemixState&
 // the played game's own, or no row for the pair).
 const profiles::RemixFigure* worn_figure(const RemixSettings& s, const RemixState& state,
                                          std::string_view played);
+
+// The moves the players take while `state` is on: `cr_moves`'s game's, or null (off, the played
+// game's own, or no row for the pair).
+const profiles::RemixMoves* worn_moves(const RemixSettings& s, const RemixState& state,
+                                       std::string_view played);
 
 // Opens the other game's files for `state` under the played game's install `basedir` (its game
 // folder `game`); closes them when it is off. False with the reason in the game's words when an

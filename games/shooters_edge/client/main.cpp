@@ -813,14 +813,14 @@ int run_main(int argc, char** argv) {
   };
   bool remix_enabled = false;
   std::string remix_for;
-  std::pair<int32_t, int32_t> remix_items;  // cr_items, cr_models
+  std::array<int32_t, 3> remix_items{};  // cr_items, cr_models, cr_moves
   const auto remix_sync = [&] {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
     if (remix_settings.enabled == remix_enabled && remix_for == args.basedir &&
-        std::pair(remix_settings.items, remix_settings.models) == remix_items)
+        cl::remix_parts(remix_settings) == remix_items)
       return;
     if (cl::busy(loader)) return;  // its threads may read the other game's files: next frame
-    remix_items = {remix_settings.items, remix_settings.models};
+    remix_items = cl::remix_parts(remix_settings);
     if (remix_settings.enabled == remix_enabled && remix_for == args.basedir) return remix_wear();
     remix_enabled = remix_settings.enabled;
     remix_for = args.basedir;

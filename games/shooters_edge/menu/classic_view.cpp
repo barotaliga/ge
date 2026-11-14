@@ -46,6 +46,7 @@ constexpr PageArt kPageArt[] = {
     {"multi", "p_multi", "mp_menu", kMultiRows},
     {"host", "p_multi", ""},
     {"setup", "p_multi", ""},
+    {"ranked", "p_multi", ""},
     {"options", "p_option", ""},
     {"video", "p_option", ""},
 };
@@ -166,6 +167,7 @@ struct LetterWord {
 constexpr LetterWord kLetterWords[] = {
     {"demos", "Demos"},
     {"games", "Select Game"},
+    {"ranked", "Ranked Game"},
     {"game-classic", std::string_view(kClassicName, std::size(kClassicName))},
     {"game-sequel", std::string_view(kSequelName, std::size(kSequelName))}};
 
