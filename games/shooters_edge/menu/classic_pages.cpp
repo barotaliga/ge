@@ -82,7 +82,7 @@ void classic_list_frame(const ClassicPen& pen, std::string_view page, std::strin
   pen.dl.rect({0, 0, static_cast<float>(pen.dl.width()), static_cast<float>(pen.dl.height())},
               ui::hex(0x000000, 0.6f));
   pen.picture(pen.art.find("qplaque"), 16, 4);
-  // The sequel's plates: its banner, or a plate of the page's word, above the 200 px screen.
+  // The sequel's plates: its banner, or the page's words on a banner, above the 200 px screen.
   const bool plates = pen.art.plates();
   const float top = plates ? -16.0f : 4.0f;
   if (plates) title = banner_of(page);
@@ -90,6 +90,7 @@ void classic_list_frame(const ClassicPen& pen, std::string_view page, std::strin
     pen.picture(pic, std::floor((kScreenW - pen.art.width_of(*pic)) / 2), top);
     return;
   }
+  if (plates && banner_title(pen, words, top)) return;
   if (const float cw = carved.empty() ? 0 : carved_width(pen.art, carved); cw > 0) {
     carve_word(pen, carved, std::floor((kScreenW - cw) / 2), top);
     return;

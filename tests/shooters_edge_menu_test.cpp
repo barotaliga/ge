@@ -746,8 +746,19 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   CHECK(glyphs(art) == 10 + 5);  // SELECT GAME (no space drawn), DEMOS
   CHECK(glyphs(pack) == 0);
 
-  // A page under the root takes its banner; SELECT GAME's title and the names are on tags: 13
-  // pieces for the title, 7 for the first game, 10 for the sequel's (its ends and space included).
+  // A title the pack has no banner for, on a banner of its own: GAME's frame, the plain at least
+  // as wide as the pack's (196 px), the letters centred on it; wider for a longer title.
+  std::vector<float> bx;
+  CHECK(sm::banner_layout(pack, "DEMOS", &bx) == 275);
+  CHECK(bx.size() == 5 && bx[0] == 40 + std::floor((196 - (16 + 16 + 17 + 17 + 17)) / 2.0f));
+  CHECK(sm::banner_layout(pack, "TEXTURES AND MODELS", nullptr) ==
+        40 + 17 * 12 + 16 * 5 + 12 + 8 + 39);
+  CHECK(sm::banner_layout(art, "DEMOS", nullptr) == 0);    // no letters cut
+  CHECK(std::abs(sm::banner_shade(pack) - 0.8f) < 1e-3f);  // the frame's 0x50 to the tags' 0x40
+
+  // A page under the root takes its banner; SELECT GAME's title is on a banner and the names on
+  // tags: 11 letters for the title, 7 pieces for the first game, 10 for the sequel's (their ends
+  // and space included).
   g.show(host, "options");
   {
     DrawList dl;
@@ -767,7 +778,7 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   for (const auto& c : dl.cmds())
     for (const auto* set : {&pack.letters, &pack.letters_lit})
       for (const auto& [ch, img] : *set) pieces += c.box.image == &img ? 1 : 0;
-  CHECK(pieces == 13 + 7 + 10);
+  CHECK(pieces == 11 + 7 + 10);
 }
 
 TEST(enhanced_pictures_draw_at_the_classic_sizes) {

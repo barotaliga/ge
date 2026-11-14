@@ -247,6 +247,17 @@ void run(gl::Lab& lab) {
          "screen's top), its rows in the game's glyph sheet.",
          "the title picture centred at the top; the rows' labels right-aligned to the cursor",
          [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    if (menu.art().plates()) {
+      // A page the sequel's pack has no banner for: its title written on one of its own.
+      menu.show(host, "enhanced");
+      menu.settle();
+      shot("written-banner", "A TITLE WRITTEN ON A BANNER",
+           "A page the pack has no banner for: GAME's banner frame, its plain stretched, the title "
+           "in the tags' own letters (small letters after each capital when capitals would not "
+           "fit the screen).",
+           "one banner across the top, no seam where the letters meet the plain",
+           [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    }
     menu.hide();
     // A game picked: the console over the screen, then sliding up (client/game_start.hpp).
     {

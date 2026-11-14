@@ -89,6 +89,9 @@ struct LiquidPatch {
   double area = 0;            // m^2 of the top surfaces in it
   double centre[2] = {0, 0};  // x, z of its largest top surface's middle, m
   double largest = 0;         // that surface's area, m^2
+  // How opaque its tops are drawn where the map says (the least of their textures' alpha);
+  // -1 where it says nothing. A water patch whose map says 1 is opaque: mud, a dark tank.
+  float alpha = -1;
 };
 
 // A teleporter's face as one panel: its middle (engine metres), the way it faces (unit, level),
