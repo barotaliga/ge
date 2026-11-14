@@ -39,7 +39,7 @@ TEST(a_race_s_log_is_read_into_its_row) {
   ge::hub::DemoRow row;
   std::string error;
   CHECK(fall_line::hub::run_row(log, row, error));
-  CHECK(row.game == "fall_line" && row.map == "seed 38" && row.mode == "race");
+  CHECK(row.game == "fall_line" && row.map == "38" && row.mode == "race");
   CHECK(row.title == "A race on seed 38");
   CHECK(row.players.size() == 1 && row.players[0].name == "Player");
   // The bot finishes: a time at the line, in milliseconds, within the run's length.

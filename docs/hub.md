@@ -116,8 +116,10 @@ the same way: by hash under `r/abc/abc….inputs`, found by the same search on t
 file at `/r/{abc}/{sha256}.inputs`, its summary saying `"kind":"run"`. A log carries no meta words,
 so the game reads the row (`HubSpec::run_row`): Fall Line's hub (`fall_line_hub`,
 `games/fall_line/hub/`) plays the run out headless (about a second for a four-minute race in a
-release build) and names the map by its seed, the mode, the player and his rivals, and each
-racer's time at the line (`HubSpec::score_ms`: shown as m:ss.cc). A run's Watch page hands the
+release build) and names the map by its seed, the mode, the player and the rivals, and each
+racer's time at the line (`HubSpec::score_ms`: shown as m:ss.cc). The game calls its place a seed
+(`HubSpec::map_word`), so the Demos page's column and search field say "seed" and `?map=38` finds
+every run down seed 38. A run's Watch page hands the
 game's web viewer `--run=` and no content: the viewer grows the world again from the log's setup.
 A run opens in no game, so its page has no Play button. A hub whose game reads no runs refuses one,
 and a hub with `--archive` alone (no master) is a hub of demos and runs: Fall Line's, until it has

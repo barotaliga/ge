@@ -307,8 +307,8 @@ std::string players_page(const Poller& p, const HubSpec& spec, int64_t now_us) {
   });
   std::string h = head(spec, "Players", true) + nav(spec, "Players") + "<main>";
   h += "<p class=\"sum\">" + sum_count(rows.size(), " person", " people") + "<span>on</span>" +
-       sum_count(static_cast<size_t>(poller_count(p, gn::kind_bit(gn::NodeKind::game))),
-                 " server", " servers") +
+       sum_count(static_cast<size_t>(poller_count(p, gn::kind_bit(gn::NodeKind::game))), " server",
+                 " servers") +
        "</p>";
   h += "<table class=\"players\"><tr><th>name</th><th>doing</th><th>server</th><th>mode</th><th>" +
        html_escape(spec.score) + "</th></tr>";
@@ -369,7 +369,8 @@ std::string demos_page(const Site& site, const HubSpec& spec, std::string_view t
   const DemoPage page = archive_search(*a, q, unix_s);
   h += "<form class=\"search\" action=\"/demos\" method=\"get\">";
   h += "<input name=\"player\" placeholder=\"player\" value=\"" + html_escape(q.player) + "\">";
-  h += "<input name=\"map\" placeholder=\"map\" value=\"" + html_escape(q.map) + "\">";
+  h += "<input name=\"map\" placeholder=\"" + html_escape(spec.map_word) + "\" value=\"" +
+       html_escape(q.map) + "\">";
   h += "<select name=\"mode\"><option value=\"\">any mode</option>";
   for (const HubMode& m : spec.modes) {
     h += "<option" + std::string(m.name == q.mode ? " selected" : "") + ">" + html_escape(m.name) +
@@ -377,14 +378,15 @@ std::string demos_page(const Site& site, const HubSpec& spec, std::string_view t
   }
   h += "</select><input name=\"tag\" placeholder=\"tag\" value=\"" + html_escape(q.tag) +
        "\"><button>Search</button></form>";
-  h += "<p class=\"sum\">" + std::to_string(page.total) + (page.total == 1 ? " demo" : " demos");
+  h += "<p class=\"sum\">" + sum_count(static_cast<size_t>(page.total), " demo", " demos");
   if (page.pages > 1) {
-    h += " · page " + std::to_string(page.page) + " of " + std::to_string(page.pages);
+    h +=
+        "<span>page " + std::to_string(page.page) + " of " + std::to_string(page.pages) + "</span>";
   }
   h += "</p>";
   const std::string scheme = spec.id.empty() ? "game" : spec.id;
-  h += "<table class=\"demos\"><tr><th>when</th><th>mode</th><th>map</th><th>players</th>"
-       "<th>length</th><th></th></tr>";
+  h += "<table class=\"demos\"><tr><th>when</th><th>mode</th><th>" + html_escape(spec.map_word) +
+       "</th><th>players</th><th>length</th><th></th></tr>";
   for (const DemoRow* r : page.rows) {
     std::string who;
     if (!r->teams.empty()) {
@@ -428,7 +430,9 @@ std::string demos_page(const Site& site, const HubSpec& spec, std::string_view t
       }
       h += "\">Play</a>";
     }
-    h += "<a class=\"small\" href=\"/demo/" + r->sha + "\">Watch</a><a class=\"small\" href=\"/";
+    // A run's Watch is its one way in, so it is the button; a demo's is the game's Play.
+    h += std::string("<a class=\"") + (r->run ? "btn watch" : "small") + "\" href=\"/demo/" +
+         r->sha + "\">Watch</a><a class=\"small\" href=\"/";
     h += row_path(*r);
     h += "\" download>Download</a>";
     if (r->radar) h += "<a class=\"small\" href=\"/radar/" + r->sha + "\">Map</a>";
