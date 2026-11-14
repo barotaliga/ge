@@ -70,7 +70,6 @@ constexpr Entry kEntries[] = {
      .text = "OPTIONS",
      .hint = "The mouse, the picture, the HUD and classic enhance.",
      .opens = "options"},
-    {.page = "main", .id = "help", .text = "HELP", .hint = "The keys.", .opens = "help"},
     {.page = "main", .id = "quit", .text = "QUIT", .hint = "Leave the game.", .opens = "quit"},
 
     {.page = "single",

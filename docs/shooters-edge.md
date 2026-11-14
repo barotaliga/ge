@@ -661,7 +661,7 @@ server's frames go on under it). Its pages are the classic game's:
 
 | Page | Rows |
 | --- | --- |
-| main | SINGLE PLAYER, MULTIPLAYER, OPTIONS, HELP, QUIT |
+| main | SELECT GAME, SINGLE PLAYER, MULTIPLAYER, DEMOS, OPTIONS, QUIT |
 | SINGLE PLAYER | NEW GAME (`newgame`: the packs' campaign from `start`), LOAD and SAVE (twelve slots `s0`..`s11`, each its save's line: `load s<i>`, `save s<i>`) |
 | MULTIPLAYER | JOIN A GAME, NEW GAME (the rules, then START), SETUP (name, shirt and pants colours) |
 | NEW GAME | MAX PLAYERS, GAME TYPE (`deathmatch`), TEAMPLAY, SKILL, FRAG LIMIT, TIME LIMIT, MAP, START |
@@ -676,7 +676,7 @@ server's frames go on under it). Its pages are the classic game's:
 | WATER, LAVA AND SKY | `ce_water`, `ce_lava`, `r_lava_glow`, `ce_slime`, `r_slime_glow`, `ce_teleports`, `ce_warps`, `ce_skies`, `ce_clouds` |
 | FIRE AND WIND | `ce_flames`, `ce_bonfires`, `ce_wind` |
 | WEATHER | `sv_weather`, `sv_rain` (snow, sleet, rain), `sv_precip`, `sv_wind`, `r_lightning`, `r_snowcover`, `r_wet`, `ce_fog` |
-| HELP | the keys (in the classic look, the pack's help pages) |
+| HELP | no row: the free episode's end shows it (in the classic look, the pack's help pages) |
 | QUIT | YES (`quit`), NO |
 
 - **Every row is the console's.** A setting reads its cvar when the menu opens and writes it with
@@ -1645,10 +1645,15 @@ install of it loaded last (`client/installs.hpp`: `<prefs>/installs.txt`, a line
 install's edition, read from its packs the moment it is picked (the profile's `full_game` file
 found or not: Shareware or Registered, the sequel's Demo or Full game). ENTER on a game with a
 kept install opens it; on one never found, or FIND ANOTHER INSTALL, the window's folder chooser,
-and the folder is taken by whichever game's base folder it holds (`install_of`). Once a classic
-game is open, the title's night gives way to its own recordings played behind the menu in turn
-(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game and q2demo1 from the sequel's `demos/` folder; "" keeps the night), ESCAPE closes the menu onto the
-recording to watch it, and nothing modern is left on screen: the console is written in the
+and the folder is taken by whichever game's base folder it holds (`install_of`). Picked, a game starts as the
+classic games start (`client/game_start.hpp`): the menu goes, the console covers the screen with the
+packs added, and once the game's first recording plays (or its first map has loaded) the console
+slides up at `scr_conspeed`, the game's own name and unit for the speed (the classic game's lines a
+second of its 200-line screen, 300 by default; the sequel's screens a second, 3), turned into the
+console's `con_speed`. Once a classic
+game is open, the title's night gives way to its own recordings played in turn, with no play bar,
+(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game and q2demo1 from the sequel's `demos/` folder; "" keeps the night), ESCAPE opens the menu over the
+recording, and closes it again, and nothing modern is left on screen: the console is written in the
 game's glyph sheet over its own console background (`menu/classic_console.hpp`, the engine's
 `ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
 GAME and SELECT GAME are drawn in the game's letters under carved titles (`menu/classic_pages.hpp`;
@@ -1664,7 +1669,7 @@ The sequel's menu is drawn in its own pictures too (`client/sequel_adapter.cpp` 
 `pics/*.pcx`; `ClassicArt::plates`, `menu/classic_view.hpp`). They are drawn on a 320 x 240
 screen with the 320 x 200 one in its middle. The root is its main menu: the plaque and the logo
 down the left, a plate for each row, the lit plate and the spinning cursor on the focused row.
-Each page under it has its banner over the top. SELECT GAME, DEMOS and HELP have no plate of
+Each page under it has its banner over the top. SELECT GAME and DEMOS have no plate of
 their own, so each is built from the other plates' letters, a 17 px cell each. The C, the H and
 the K are pieced from O, N, R and Y (`kPlate*`, held to the plates' print). SELECT GAME's title and
 the two games' names on it are plates built the same way. The lobby and the scoreboard stay

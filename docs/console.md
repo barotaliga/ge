@@ -246,6 +246,9 @@ output, the commands typed (after `]`), chat to everyone, to the team, to the pl
 messages and the game's events. Closed, the newest few lines show at the top of the screen for
 a few seconds (the notify lines).
 
+While a game loads, the game can hold the console over the whole screen (`set_full`, as the
+classic games start); let go, it slides up at `con_speed` to where it was.
+
 The input line edits in place (left, right, home, end, backspace, delete). Page Up and Page
 Down scroll the lines. Up and Down walk the history while no list of suggestions is showing.
 
