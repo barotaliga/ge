@@ -430,3 +430,16 @@ TEST(the_v_cvars_tone_each_layer_of_the_screens_tint) {
   fx::screen_blend(hit, b, {.damage = 0.5});
   CHECK(std::fabs(b[3] - a[3] / 2) < 1e-12);  // half the flash
 }
+
+TEST(r_lightmap_draws_every_solid_face_white_under_its_light) {
+  namespace lk = shooters_edge::look;
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  con.execute("r_drawflat 2; r_lightmap 1");
+  for (const auto look : {lk::Look::classic, lk::Look::modern}) {
+    const auto o = lk::world_options(look, {}, pic);
+    CHECK(o.flat_walls && o.flat_floors);
+    CHECK(o.wall_colour[0] == lk::kLightmapGrey && o.floor_colour[2] == lk::kLightmapGrey);
+  }
+}

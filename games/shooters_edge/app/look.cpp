@@ -267,6 +267,13 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .kind = gc::CvarKind::boolean,
            .values = "1: it is (the default); 0: never"},
           &picture.poly_blend);
+  cv.bind({.name = "r_lightmap",
+           .fallback = "0",
+           .flags = gc::kArchive,
+           .help = "Every wall and floor drawn plain grey, so only the light on it shows.",
+           .kind = gc::CvarKind::boolean,
+           .values = "0: textured (the default); 1: plain grey under its light"},
+          &picture.lightmap_only);
   cv.bind({.name = "r_fastsky",
            .fallback = "0",
            .flags = gc::kArchive,
@@ -603,6 +610,10 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   rgb_words(picture.wall_colour, base.wall_colour);
   rgb_words(picture.floor_colour, base.floor_colour);
   rgb_words(picture.sky_colour, base.sky_colour);
+  if (picture.lightmap_only) {  // r_lightmap: grey faces, the light alone
+    base.flat_walls = base.flat_floors = true;
+    for (int k = 0; k < 3; ++k) base.wall_colour[k] = base.floor_colour[k] = kLightmapGrey;
+  }
   if (look == Look::classic) {
     base.mode = ba::Mode::classic;
     if (!picture.dynamic) base.dynamic_strength = 0;  // r_dynamic 0: no moment's light

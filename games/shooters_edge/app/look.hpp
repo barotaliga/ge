@@ -105,6 +105,9 @@ struct Picture {
   bool poly_blend = true;
   // r_fastsky: the sky in one colour, r_skycolor ("R G B", 0..255). Either look.
   bool fast_sky = false;
+  // r_lightmap: 1 every solid face drawn a plain grey under its light, the light alone to see (over
+  // r_drawflat). Either look.
+  bool lightmap_only = false;
   // r_drawflat: the walls and floors in one colour each in place of their textures, under their
   // light (0 off, 1 both, 2 the walls alone, 3 the floors alone); r_wallcolor and r_floorcolor
   // their colours ("R G B", 0..255). Either look.
@@ -166,6 +169,9 @@ void add_cvars(ge::console::Console& con, Picture& picture);
 // The screen's tint (effects::screen_blend) of `s` as the player tones it: each layer at its v_
 // share, all of them at gl_cshiftpercent, none with gl_polyblend 0.
 void toned_blend(const Picture& picture, const effects::Screen& s, double rgba[4]);
+// r_lightmap's faces: a middle grey (sRGB), so the light reads as it falls, neither burnt white
+// nor lost in the dark.
+inline constexpr double kLightmapGrey = 0.5;
 // A colour cvar's words ("R G B", each 0..255; one number a grey) into `out` (0..1 each); false,
 // and `out` kept, for anything else.
 bool rgb_words(std::string_view text, double out[3]);
