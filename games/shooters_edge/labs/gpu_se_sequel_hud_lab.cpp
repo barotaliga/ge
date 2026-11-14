@@ -1,10 +1,11 @@
 // LAB `se-sequel-hud`: THE SEQUEL'S STATUS BAR. The sequel's rules write their own bar program,
 // each player's stats and the pictures and item names they point at (server/sequel_bar.hpp); the
 // window runs the program (hud/sequel_layout.hpp) and draws it in the game's own pictures
-// (client/sequel_bar.hpp). Five moments are staged on the player: a fresh start (health, the
+// (client/sequel_bar.hpp). Moments are staged on the player: a fresh start (health, the
 // blaster selected), armed (a shotgun just picked up, its shells, combat armour), hurt (low health
 // flashing, the blow's background behind the numbers), the quad running (its timer, the help icon
-// flashing) and a deathmatch (the frags in the corner, power armour's cells).
+// flashing), a deathmatch (the frags in the corner, power armour's cells), a centre print, the
+// scoreboard and the help computer (server/sequel_screens.hpp) over the bar.
 //
 // Without `--game` the moments are staged on a hall built here and each is pictured as a plan of
 // what the program draws (a box per picture, its name, the text), with the stats as deterministic
@@ -14,7 +15,7 @@
 //
 // ge:summary Lab: the sequel's status bar: stats, program and pictures over the player's view
 // ge:keywords lab se-sequel-hud sequel status-bar stats layout pickup timer flash deathmatch
-// ge:keywords power-shield sequel-hud screenshot
+// ge:keywords power-shield sequel-hud screenshot scoreboard help-computer
 // ge:skill ui labs
 // ge:test tests/shooters_edge_sequel_bar_test.cpp
 #include <memory>
@@ -81,6 +82,12 @@ constexpr Moment kMoments[] = {
      "the message's two lines centred a third of the way down in the game's own letters, the "
      "crosshair in the middle",
      "The door is locked.\nFind the key to open it."},
+    {"scores", "The scoreboard",
+     "two blocks over the view: the leader's face, name, score, ping and minutes, and the "
+     "player's own under it behind the dog tag"},
+    {"help", "The help computer",
+     "the help computer's screen in the middle: the skill, the level's name, both messages in the "
+     "orange letters, and the kills, goals and secrets"},
 };
 
 // The moment `m` staged on slot 0's player, then the stats written (deathmatch's program too).
@@ -125,6 +132,19 @@ void stage(sv::RulesRunner& r, sv::SequelServer& s, int m) {
       p.power_on = true;
       p.body.ammo[static_cast<int>(sv::SqAmmo::cells)] = 80;
       give("item_power_shield");
+      break;
+    case 6:
+      r.console("deathmatch 1");
+      sv::bar_start(s);
+      r.connect(1, "Ben", false, false);
+      p.frags = 3;
+      s.players[1].frags = 7;
+      r.client_command(0, "score");
+      break;
+    case 7:
+      s.help[0] = "Find the data cd\nin the hangar.";
+      s.help[1] = "Destroy the comm\nsatellite.";
+      r.client_command(0, "help");
       break;
     default:
       break;

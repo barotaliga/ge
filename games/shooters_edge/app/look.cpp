@@ -230,6 +230,43 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .values = "0: lit as the floor under them (the default); 0..1: lifted that far toward "
                      "full light; 1: fully lit, unshaded"},
           &picture.fullbright_skins);
+  const struct {
+    const char* name;
+    const char* help;
+    double* value;
+  } tints[] = {
+      {"v_contentblend", "How strongly water, slime or lava round your eyes tints the view.",
+       &picture.content_blend},
+      {"v_damagecshift", "How strongly a hit flashes the view red.", &picture.damage_blend},
+      {"v_quadcshift", "How strongly quad damage tints the view.", &picture.quad_blend},
+      {"v_pentcshift", "How strongly invulnerability tints the view.", &picture.pent_blend},
+      {"v_suitcshift", "How strongly the environment suit tints the view.", &picture.suit_blend},
+      {"v_ringcshift", "How strongly invisibility tints the view.", &picture.ring_blend},
+  };
+  for (const auto& t : tints)
+    cv.bind({.name = t.name,
+             .fallback = "1",
+             .flags = gc::kArchive,
+             .help = t.help,
+             .min = 0,
+             .max = 1,
+             .values = "0: none; 0..1: that share of it; 1: all of it (the default)"},
+            t.value);
+  cv.bind({.name = "gl_cshiftpercent",
+           .fallback = "100",
+           .flags = gc::kArchive,
+           .help = "How strongly every tint of the view shows, in percent.",
+           .min = 0,
+           .max = 100,
+           .values = "0: none; 0..100: that percent of each; 100: all of it (the default)"},
+          &picture.cshift_percent);
+  cv.bind({.name = "gl_polyblend",
+           .fallback = "1",
+           .flags = gc::kArchive,
+           .help = "Whether the view is tinted at all, by water, hits or powers.",
+           .kind = gc::CvarKind::boolean,
+           .values = "1: it is (the default); 0: never"},
+          &picture.poly_blend);
   cv.bind({.name = "r_fastsky",
            .fallback = "0",
            .flags = gc::kArchive,
@@ -517,6 +554,17 @@ bool watervis_allowed(const std::vector<std::pair<std::string, std::string>>& se
     return !ge::console::parse_number(value, v) || v > 0;
   }
   return true;
+}
+
+void toned_blend(const Picture& picture, const effects::Screen& s, double rgba[4]) {
+  const effects::BlendShares k{.content = picture.content_blend,
+                               .damage = picture.damage_blend,
+                               .quad = picture.quad_blend,
+                               .pent = picture.pent_blend,
+                               .suit = picture.suit_blend,
+                               .ring = picture.ring_blend};
+  effects::screen_blend(s, rgba, k);
+  rgba[3] *= picture.poly_blend ? std::clamp(picture.cshift_percent, 0.0, 100.0) / 100.0 : 0;
 }
 
 bool rgb_words(std::string_view text, double out[3]) {

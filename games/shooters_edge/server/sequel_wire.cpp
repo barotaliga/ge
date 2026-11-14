@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include "shooters_edge/server/md4.hpp"
+#include "shooters_edge/server/sequel_screens.hpp"
 
 namespace shooters_edge::server {
 
@@ -21,7 +22,7 @@ namespace sh = ge::shooter;
 // Server message ids.
 constexpr uint8_t kPrint = 10, kStuffText = 11, kServerData = 12, kConfigString = 13,
                   kBaseline = 14, kCenterPrint = 15, kPlayerInfo = 17, kPacketEntities = 18,
-                  kFrame = 20, kSound = 9;
+                  kFrame = 20, kSound = 9, kLayout = 4;
 
 // Configstring slots.
 constexpr int kCsName = 0, kCsSky = 2, kCsSkyAxis = 3, kCsSkyRotate = 4, kCsStatusBar = 5,
@@ -451,6 +452,13 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
       r.str(now[size_t(i)]);
       w.sent[size_t(i)] = now[size_t(i)];
     }
+  // The viewer's layout program (a scoreboard, the help computer) when it changed: his client
+  // keeps the last one.
+  if (w.slot >= 0 && w.slot < sh::kMaxClients && c.world.clients[w.slot].layout != w.layout) {
+    w.layout = c.world.clients[w.slot].layout;
+    r.u8(kLayout);
+    r.str(w.layout.substr(0, kLayoutMost));
+  }
   const std::vector<NetEvent>& events = c.out.events;
   const int64_t first = c.out.events_total - static_cast<int64_t>(events.size());
   const size_t from = static_cast<size_t>(std::max<int64_t>(0, w.events_done - first));

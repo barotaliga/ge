@@ -29,6 +29,7 @@
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_mods.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
+#include "shooters_edge/server/sequel_screens.hpp"
 #include "shooters_edge/server/sequel_targets.hpp"
 #include "shooters_edge/server/shot_help.hpp"
 
@@ -450,6 +451,7 @@ void take_packet(SequelServer& s, const sh::Packet& pk) {
 // weapon and no model, until a button is pressed 5 s on.
 void start_intermission(SequelServer& s) {
   s.intermission_at = s.level_time;
+  screens_intermission(s);
   if (deathmatch(s) || s.cvars.find("coop")->on())  // the scores, for everyone
     for (const std::string& l : fight_scores(s)) fight_print(s, -1, l + "\n");
   for (const std::string& l : fight_midair_report(s)) fight_print(s, -1, l);
@@ -534,6 +536,7 @@ void rules_frame(SequelServer& s) {
   s.level_time = double(s.frame_number) * kFrameSeconds;
   sequel_mods_start_frame(s);
   item_frame(s);
+  screens_frame(s);
   if (s.intermission_at > 0) {
     intermission_frame(s);
     return;
@@ -592,6 +595,7 @@ void fill_rows(SequelServer& s) {
     wc.userinfo = c.userinfo;
     wc.ping_ms = c.ping_ms;
     wc.entered_at = c.entered_at;
+    if (wc.layout != p.layout) wc.layout = c.active ? p.layout : std::string();
     wc.numbers = {};
     WorldEntity& e = w.entities[size_t(i) + 1];
     e = {};
@@ -903,8 +907,11 @@ CommandResult sq_client_command(void* r, int slot, const std::string& line) {
   ge::progs::tokenize_words(line.c_str(), w);
   if (w.count == 0) return CommandResult::bad;
   const std::string cmd = ge::progs::word(w, 0);
-  if (campaign_command(s, slot, cmd)) return CommandResult::mod;
-  if (cmd == "score" || cmd == "players" || cmd == "help") {
+  if (screens_command(s, slot, cmd)) {
+    fill_rows(s);
+    return CommandResult::mod;
+  }
+  if (cmd == "players") {
     for (const std::string& l : fight_scores(s)) fight_print(s, slot, l + "\n");
     return CommandResult::mod;
   }

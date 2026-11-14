@@ -60,7 +60,10 @@ struct LoginSettings {
   int32_t reserved = 1;  // sv_reservednames: 1 guests may not use an account's name
   int32_t port = 0;      // sv_accountport: the own master's service port (0: kAccountPort)
   int32_t stats = 1;     // sv_stats: 1 each finished match's report goes to the master
+  std::string ranked;    // sv_ranked: "" none; a mode ("1on1", "2on2") the matchmaker may fill
 };
+
+constexpr int64_t kOfferEvery_us = 20000000;  // a ranked server's seats offered again
 
 enum class LoginState : uint8_t { empty, guest, code_next, asking, in };
 
@@ -98,6 +101,7 @@ struct LoginOut {
 struct LoginStats {
   uint64_t lines = 0, asked = 0, in = 0, refused = 0, unanswered = 0, bad_tickets = 0;
   uint64_t timed_out = 0, chat_held = 0, renamed = 0, names_asked = 0;
+  uint64_t offers = 0, offers_taken = 0;  // sv_ranked: seats offered to the matchmaker, taken
 };
 
 struct Logins {
@@ -116,6 +120,12 @@ struct Logins {
   std::vector<NameCheck> names;    // names asked of a master elsewhere
   std::vector<LoginOut> out;       // what the game must do, in order; it empties it
   std::vector<std::string> notes;  // lines for the server's own log (a key learned)
+  // sv_ranked: the server's seats offered to the matchmaker (logins_offer), signed by `signer`
+  // (its report key) when the master is elsewhere.
+  const net::SignKeys* signer = nullptr;
+  account::Ask offer_ask;
+  bool offering = false;
+  int64_t offer_due_us = 0;
   LoginStats stats;
   uint8_t buffer[net::kMaxDatagram];
 };
@@ -127,6 +137,12 @@ bool logins_open(Logins& l, const LoginSettings& set, const account::NameRules& 
                  account::Service* own, net::Transport* link, account::FreshFn fresh,
                  void* fresh_ctx, int64_t unix_us, std::string& error);
 bool logins_active(const Logins& l);  // a service to ask: own or a master
+
+// With sv_ranked set, the server's free seats offered to the matchmaker every kOfferEvery_us:
+// `game` its ladder's game (ServerGame::base_dir), `address` where players connect (its own
+// master's offer; a master elsewhere takes the ask's own IP and `port`). Once a frame is enough.
+void logins_offer(Logins& l, std::string_view game, std::string_view address, uint16_t port,
+                  int free_seats, int64_t unix_us);
 
 // A seat taken by `userid` (a new player, or the same one again: nothing). Tells it how to log in
 // when it must, or when logins are asked of players and it may.

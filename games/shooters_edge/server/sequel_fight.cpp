@@ -26,6 +26,7 @@
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_mods.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
+#include "shooters_edge/server/sequel_screens.hpp"
 #include "shooters_edge/server/shot_help.hpp"
 
 namespace shooters_edge::server {
@@ -859,6 +860,7 @@ void fight_spawn(SequelServer& s, int slot) {
   p.hand = SqHand{};
   p.stepped = false;
   p.killer = -1;
+  screens_spawned(s, slot);
   p.quad_until = p.invulnerable_until = p.breather_until = p.suit_until = 0;
   p.silencer_shots = 0;
   p.power_on = false;
@@ -1143,6 +1145,7 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
   p.died_at = s.level_time;
   p.killer = killer;
   p.move.type = sh::SequelType::dead;
+  screens_died(s, slot);
   const std::string& victim = name_of(s, slot);
   std::string line;
   if (killer >= 0 && killer != slot && fight_midair(s) && s.midair_frags > 0 &&

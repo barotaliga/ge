@@ -11,7 +11,8 @@
 // selected item, 7 and 8 the item last picked up (for 3 s), 9 and 10 the first power-up running
 // (quad, invulnerability, suit, rebreather) and its whole seconds left, 11 the help computer's icon
 // flashing while its news is unread, 14 the frags, 15 the blow taken this frame (bit 1 health,
-// bit 2 armour). 13 (the scoreboard and help screens), 16 and 17 (spectators) stay 0 for now.
+// bit 2 armour). 13 bit 1 a screen up over the bar (sequel_screens.hpp), 16 and 17 (spectators)
+// stay 0 for now.
 //
 // The items are numbered as the game's own list numbers them (1 the body armour .. 41 health; 0
 // none), so an item's name is item string 1056 + its number, and a stock client's `use` and

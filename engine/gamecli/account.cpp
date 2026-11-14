@@ -19,6 +19,7 @@
 
 #include "account/account_file.hpp"
 #include "account/friends_service.hpp"
+#include "account/matchmaker_service.hpp"
 #include "account/names.hpp"
 #include "account/service.hpp"
 #include "account/ticket.hpp"
@@ -27,6 +28,7 @@
 #include "net/token.hpp"
 #include "net/transport.hpp"
 #include "net/udp_socket.hpp"
+#include "server/server.hpp"
 
 namespace ge::gamecli {
 
@@ -443,6 +445,87 @@ int cmd_friends_status(Ctx& ctx) {
     return 1;
   return answer(ctx, json_obj({{"state", json_str(ctx.words[0])}}),
                 std::string("Your friends now see you as ") + ctx.words[0] + ".", "status set");
+}
+
+namespace {
+
+// The queue's state as the answer's JSON and words.
+int ranked_answer(Ctx& ctx, const ga::Reply& r, const char* done) {
+  ga::QueueView v;
+  if (!ga::queue_read(r.ticket, v))
+    return refuse(ctx, 1, "the service's queue answer did not read", "try again");
+  static const char* const kState[] = {"none", "waiting", "matched"};
+  const auto names = [](const std::vector<std::string>& side) {
+    std::vector<std::string> out;
+    out.reserve(side.size());
+    for (const std::string& n : side) out.push_back(json_str(n));
+    return json_arr(out);
+  };
+  return answer(ctx,
+                json_obj({{"state", json_str(kState[static_cast<int>(v.state)])},
+                          {"waited_s", std::to_string(v.waited_s)},
+                          {"window_points", std::to_string(v.window_points)},
+                          {"address", json_str(v.address)},
+                          {"mode", json_str(v.mode)},
+                          {"mine", names(v.mine)},
+                          {"theirs", names(v.theirs)}}),
+                r.words, done);
+}
+
+// The game a ladder names: the server game's folder, as its match reports name it.
+std::string ladder_game(const Ctx& ctx) {
+  const server::ServerGame* g = ctx.spec.server_game;
+  return g != nullptr && g->base_dir != nullptr ? g->base_dir : ctx.spec.game;
+}
+
+// One queue ask (`verb`) with the saved ticket; false having refused.
+bool ranked_ask(Ctx& ctx, Saved& saved, const std::string& t, const char* verb,
+                const std::string& mode, ga::Reply& r) {
+  return ask(ctx, ga::Op::queue, {t, verb, ladder_game(ctx), mode, ctx.flag("duo")}, saved, r);
+}
+
+}  // namespace
+
+int cmd_ranked_find(Ctx& ctx) {
+  if (!need_places(ctx)) return 1;
+  if (ctx.words.size() != 1)
+    return refuse(ctx, 2, "ranked find takes a mode (1on1, or 2on2 with --duo=<your duo's name>)",
+                  std::string(ctx.spec.cli) + " ranked find 1on1 --for=120");
+  Saved saved = load(ctx);
+  std::string t;
+  if (!ticket_field(ctx, saved, t)) return 2;
+  const double for_s = ctx.has("for") ? std::atof(ctx.flag("for").c_str()) : 0;
+  const Clock::time_point t0 = Clock::now();
+  ga::Reply r;
+  for (;;) {
+    if (!ranked_ask(ctx, saved, t, "join", ctx.words[0], r)) return 1;
+    ga::QueueView v;
+    if (!ga::queue_read(r.ticket, v) || v.state == ga::LookState::matched ||
+        static_cast<double>(since_us(t0)) * 1e-6 + 3 > for_s)
+      break;
+    std::this_thread::sleep_for(std::chrono::seconds(3));  // asked again: the place kept
+  }
+  return ranked_answer(ctx, r, "queued");
+}
+
+int cmd_ranked_status(Ctx& ctx) {
+  if (!need_places(ctx)) return 1;
+  Saved saved = load(ctx);
+  std::string t;
+  if (!ticket_field(ctx, saved, t)) return 2;
+  ga::Reply r;
+  if (!ranked_ask(ctx, saved, t, "look", "", r)) return 1;
+  return ranked_answer(ctx, r, "looked");
+}
+
+int cmd_ranked_leave(Ctx& ctx) {
+  if (!need_places(ctx)) return 1;
+  Saved saved = load(ctx);
+  std::string t;
+  if (!ticket_field(ctx, saved, t)) return 2;
+  ga::Reply r;
+  if (!ranked_ask(ctx, saved, t, "leave", "", r)) return 1;
+  return ranked_answer(ctx, r, "left");
 }
 
 }  // namespace ge::gamecli

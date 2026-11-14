@@ -625,7 +625,7 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       }
       if (!load.cache.empty() && !model.skins.empty() && !any_stand_in) {
         std::vector<ge::assets::Image> big;
-        const std::string stem = std::filesystem::path(name).stem().string();
+        const std::string stem = ge::classicenhance::model_name(name);
         if (ge::classicenhance::cached_skins(load.cache, stem, uint32_t(model.skins[0].width),
                                              uint32_t(model.skins[0].height), &big) &&
             big.size() == model.skins.size()) {
