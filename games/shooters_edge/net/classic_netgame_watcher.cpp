@@ -21,7 +21,8 @@ namespace gn = ge::net;
 // The header's flags (porting/shooters-edge/netgame-transport.md § The header).
 constexpr uint32_t kData = 0x00010000u, kAck = 0x00020000u, kEom = 0x00080000u,
                    kUnreliable = 0x00100000u, kControl = 0x80000000u;
-constexpr uint8_t kNop = 1, kTime = 7, kStuffText = 9, kSetAngle = 10, kSignonNum = 25;
+constexpr uint8_t kNop = 1, kTime = 7, kUpdateFrags = 14, kStuffText = 9, kSetAngle = 10,
+                  kSignonNum = 25;
 constexpr uint8_t kCcAccept = 0x81, kClcStringCmd = 4, kClcMove = 3;
 
 void be32(std::vector<uint8_t>& o, uint32_t v) {
@@ -74,9 +75,16 @@ void messages(NetgameWatcher& w, const std::vector<uint8_t>& m, bool reliable, i
   if (m.size() == 1 && m[0] == kNop) return;  // a keepalive
   cl::DemoMsg dm;
   dm.b = m;
+  std::vector<uint32_t> marks;
+  dm.marks = &marks;
   std::string why;
   if (!cl::read_single_messages(w.view, dm, why) && w.read_error.empty())
     w.read_error = why.empty() ? "a message did not read" : why;
+  for (const cl::DemoPrint& p : w.view.state.prints) w.prints.push_back(p.text);
+  for (const uint32_t at : marks)  // the frags: the reader keeps no scoreboard
+    if (m[at] == kUpdateFrags && at + 3 < m.size() && m[at + 1] < w.frags.size())
+      w.frags[m[at + 1]] = static_cast<int16_t>(m[at + 2] | m[at + 3] << 8);
+  w.view.state.prints.clear();
   if (!reliable) {
     w.frames++;
     if (m[0] == kTime && m.size() >= 5) {
@@ -104,6 +112,7 @@ void messages(NetgameWatcher& w, const std::vector<uint8_t>& m, bool reliable, i
       if (n == 3) {
         w.outbox.push_back("begin");
         w.seatings++;
+        w.last_seated_us = now;
         if (w.seated_us < 0) w.seated_us = now;
       }
     }
@@ -113,6 +122,7 @@ void messages(NetgameWatcher& w, const std::vector<uint8_t>& m, bool reliable, i
     if (m[i] == kStuffText && std::memcmp(m.data() + i + 1, kRe.data(), kRe.size()) == 0) {
       w.reconnects++;
       w.signon = 0;
+      w.frags = {};
       w.last_time = -1;  // the level starts again: its clock with it
     }
 }
@@ -123,6 +133,8 @@ void netgame_watch(NetgameWatcher& w, gn::Transport& t, const gn::Address& serve
   w.t = &t;
   w.server = server;
 }
+
+void netgame_watch_command(NetgameWatcher& w, const std::string& text) { w.outbox.push_back(text); }
 
 void netgame_watch_tick(NetgameWatcher& w, int64_t now) {
   if (!w.accepted && (w.first_connect_us < 0 || (now - w.first_connect_us) % 500000 < 13000))
@@ -173,7 +185,9 @@ void netgame_watch_tick(NetgameWatcher& w, int64_t now) {
     be32(d, kUnreliable | 24u);
     be32(d, w.unrel_out++);
     d.push_back(kClcMove);
-    d.resize(24, 0);
+    d.resize(8 + 14, 0);  // the time, the angles, the three speeds
+    d.push_back(w.buttons);
+    d.push_back(w.impulse);
     send_raw(w, d, now);
   }
 }
