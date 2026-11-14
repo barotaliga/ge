@@ -103,9 +103,13 @@ struct Texture {
   //   contents); `none` on any other texture.
   // - `next`: the next frame of the texture's animation, a texture of this map, or -1 (38: the
   //   texinfo's chain; 29 names its frames instead: anim.hpp).
+  // - `alpha`: how opaque the face is drawn, where the family stores it (38: a third with the
+  //   flag 0x10, two thirds with 0x20, else whole; the least of the name's faces); -1 where it
+  //   stores none (29, BSP2, 46).
   bool sky = false;
   Liquid liquid = Liquid::none;
   int32_t next = -1;
+  float alpha = -1;
 };
 
 // A liquid's kind told by its texture's name, where the family stores nothing better: "lava",

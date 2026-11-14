@@ -331,4 +331,44 @@ float plate_layout(const ClassicArt& art, std::string_view text, std::vector<flo
   return x;
 }
 
+float banner_layout(const ClassicArt& art, std::string_view text, std::vector<float>* xs) {
+  if (xs != nullptr) xs->assign(text.size(), 0);
+  const ui::Image* frame = art.find(kBannerFrame);
+  if (frame == nullptr || art.width_of(*frame) <= kBannerRight) return 0;
+  float word = 0;
+  for (size_t i = 0; i < text.size(); i++) {
+    const auto it = art.letters.find(text[i]);
+    if (it == art.letters.end()) return 0;
+    if (xs != nullptr) (*xs)[i] = word;
+    word += art.width_of(it->second);
+  }
+  const float plain = std::max(kBannerRight - kBannerLeft, word + 8);
+  const float start = kBannerLeft + static_cast<float>(static_cast<int>((plain - word) / 2));
+  if (xs != nullptr)
+    for (float& x : *xs) x += start;
+  return kBannerLeft + plain + art.width_of(*frame) - kBannerRight;
+}
+
+float banner_shade(const ClassicArt& art) {
+  const ui::Image* frame = art.find(kBannerFrame);
+  const auto it = art.letters.find('I');
+  if (frame == nullptr || it == art.letters.end()) return 1;
+  const int d = std::max(1, static_cast<int>(art.density));
+  // The frame's plain left of the title, and the letter cell's rows above its letter.
+  const auto mean = [d](const ui::Image& img, int x0, int x1) {
+    double sum = 0;
+    int n = 0;
+    for (int y = 2 * d; y < 6 * d && y < img.height; y++)
+      for (int x = x0 * d; x < x1 * d && x < img.width; x++) {
+        const size_t at = offset(img, x, y);
+        sum += 0.3 * img.rgba[at] + 0.6 * img.rgba[at + 1] + 0.1 * img.rgba[at + 2];
+        n++;
+      }
+    return n > 0 ? sum / n : 0.0;
+  };
+  const double f = mean(*frame, static_cast<int>(kBannerLeft), 100);
+  const double l = mean(it->second, 0, it->second.width / d);
+  return f > 0 && l > 0 ? static_cast<float>(std::min(1.0, l / f)) : 1;
+}
+
 }  // namespace shooters_edge::menu

@@ -261,17 +261,18 @@ void blast(const double p[3], const double* normal, uint32_t seed, double now_s,
   std::vector<gr::Spark> thrown(gr::blast_births_max(blast_look(), 1));
   const size_t n = gr::blast_births(main, thrown);
   for (size_t i = 0; i < n; ++i) births->push_back(gr::spark_particle(thrown[i]));
-  // The classic's ember ball: fast embers flung out that fall, slow ones that hang and drift.
-  for (int i = 0; i < 220; ++i) {
+  // The classic's ember ball: fast embers flung out that fall, slow ones that hang and drift
+  // (toned down a little from a fuller ball: fewer and finer, so they read as sparks, not squares).
+  for (int i = 0; i < 160; ++i) {
     double d[3];
     unit(r, d);
     if (normal != nullptr) away_from(normal, d);
     const double q[3] = {p[0] + d[0] * 0.2, p[1] + d[1] * 0.2, p[2] + d[2] * 0.2};
     Particle e = ember(q, d, rnd(r, 4, 10), 2500, rnd(r, 0.4, 0.6), rnd(r, 0.6, 1.2), r);
-    e.size = float(rnd(r, 0.045, 0.07));
+    e.size = float(rnd(r, 0.035, 0.055));
     births->push_back(e);
   }
-  for (int i = 0; i < 120; ++i) {
+  for (int i = 0; i < 85; ++i) {
     double d[3];
     unit(r, d);
     if (normal != nullptr) away_from(normal, d);
@@ -279,11 +280,11 @@ void blast(const double p[3], const double* normal, uint32_t seed, double now_s,
     Particle e = ember(q, d, rnd(r, 1.5, 4.5), 2300, rnd(r, 0.6, 0.9), rnd(r, 0.9, 1.6), r);
     e.drag = 2.6f;
     e.fall = 0.2f;
-    e.size = float(rnd(r, 0.06, 0.09));
+    e.size = float(rnd(r, 0.045, 0.07));
     births->push_back(e);
   }
   // White-hot sparks, fast and streaked.
-  for (int i = 0; i < 48; ++i) {
+  for (int i = 0; i < 40; ++i) {
     double d[3];
     unit(r, d);
     if (normal != nullptr) away_from(normal, d);

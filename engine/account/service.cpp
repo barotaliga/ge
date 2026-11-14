@@ -200,6 +200,18 @@ Answer run(Service& svc, Op op, const std::vector<std::string>& f, const net::Ad
     default:  // the friends' ops, answered above
       break;
   }
+  // A ban a trusted server's report earned holds every way in: a ticket, a code, a seat.
+  if (a.refusal == Refusal::none && a.id != 0 &&
+      (op == Op::sign_in || op == Op::login || op == Op::code || op == Op::ticket_code)) {
+    if (const Ban* b = matches_ban(svc.matches, a.id, now_us / 1000000)) {
+      const uint64_t id = a.id;
+      a = Answer{};
+      a.refusal = Refusal::banned;
+      a.id = id;
+      a.wait_us = (b->until_s - now_us / 1000000) * 1000000;
+      a.words = refusal_words(a.refusal, a.wait_us);
+    }
+  }
   if (a.refusal == Refusal::none && (op == Op::sign_in || op == Op::login)) {
     const Account* acc = find(s, a.id);
     if (acc) {
