@@ -117,6 +117,13 @@ void register_cvars(SequelServer& s) {
                        "map (classic remix).",
                .kind = con::CvarKind::text,
                .values = "\"\": the game's own (the default); classic: the classic game's"});
+  s.cvars.add({.name = "sv_moves",
+               .fallback = "",
+               .flags = con::kServer,
+               .help = "Whose running, friction and air the players move with, from the next map "
+                       "(classic remix).",
+               .kind = con::CvarKind::text,
+               .values = "\"\": the game's own (the default); classic: the classic game's"});
   s.cvars.add({.name = "k_midair",
                .fallback = "0",
                .flags = con::kServer,
@@ -412,6 +419,12 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   }
   pm.changed = p.changed;
   pm.air_accelerate = sequel_air_accelerate(s);
+  if (s.classic_moves) {  // the classic game's ground and air (profiles/remix_arsenal.hpp)
+    pm.max_speed = profiles::kClassicFeel.max_speed;
+    pm.friction = profiles::kClassicFeel.friction;
+    pm.air_accelerate = profiles::kClassicFeel.air_accelerate;
+    pm.land_pause = profiles::kClassicFeel.land_pause;
+  }
   MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
   sh::sequel_move(pm, mw.world());
   p.move = pm.s;
@@ -785,6 +798,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
           profiles::remix_looks("sequel", s.cvars.find("sv_wear")->value);
       worn != nullptr)
     s.looks = worn->looks;
+  s.classic_moves = s.cvars.find("sv_moves")->value == "classic";
   s.entities.clear();
   for (size_t i = 1; i < s.map->entities.size(); i++) {
     const ge::brush::Entity& b = s.map->entities[i];
