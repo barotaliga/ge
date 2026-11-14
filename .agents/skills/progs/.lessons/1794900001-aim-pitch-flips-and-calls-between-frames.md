@@ -1,7 +1,7 @@
 ---
 title: A direction's angles pitch the other way from a view's, and a QC call between frames goes through enter_qc
 date: 2026-11-04
-scope: games/shooters_edge/qc/campaign/, tests/shooters_edge_campaign_monsters_test.cpp
+scope: games/shooters_edge/rules/, tests/shooters_edge_campaign_monsters_test.cpp
 concepts: [qc, monsters, aim, vectoangles, makevectors, pitch, enter-qc, run-qc, mirror]
 ---
 

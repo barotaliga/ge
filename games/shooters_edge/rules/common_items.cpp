@@ -17,9 +17,9 @@
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
 
-#include "shooters_edge/rules/arena_decl.hpp"
+#include "shooters_edge/rules/variant.hpp"
 
-namespace shooters_edge::server::arena {
+namespace shooters_edge::server::rules::SE_RULES_NS {
 
 namespace {
 
@@ -38,7 +38,7 @@ void item_taken(A& q) {
   q.set_f(me, q.L.f.modelindex, 0);
   q.set_f(me, q.L.f.nextthink, q.time() + q.f(me, f_respawn_time));
   q.set_i(me, q.L.f.think, q.fn(fn_item_return));
-  if (!items_come_back()) {
+  if (!items_come_back(q)) {
     q.set_f(me, q.L.f.nextthink, q.time());
     q.set_i(me, q.L.f.think, q.fn(fn_remove_self));
   }
@@ -75,7 +75,7 @@ bool can_pick_up(A& q) {
 // And may take health, armour or a pack: in deathmatch 4 not while a shield holds him.
 bool can_heal(A& q) {
   if (!can_pick_up(q)) return false;
-  const bool not_dm4 = q.g(g_deathmatch) != 4;
+  const bool not_dm4 = q.deathmatch() != 4;
   const bool open = !dmm4_shielded(q, q.other());
   return not_dm4 | open;
 }
@@ -188,7 +188,7 @@ void armour_start(A& q, float slot, float bit) {
 
 void ammo_start(A& q, int32_t mdl, int32_t setting) {
   const int32_t me = q.self();
-  if (q.g(g_deathmatch) == 4) {  // none lies on the map in deathmatch 4
+  if (q.deathmatch() == 4) {  // none lies on the map in deathmatch 4
     q.remove(me);
     return;
   }
@@ -206,7 +206,7 @@ void ammo_start(A& q, int32_t mdl, int32_t setting) {
 // a row with none leaves the map's own.
 void weapon_start(A& q, float w, int32_t name, int32_t mdl) {
   const int32_t me = q.self();
-  if (q.g(g_deathmatch) == 4) {  // every player holds them all in deathmatch 4
+  if (q.deathmatch() == 4) {  // every player holds them all in deathmatch 4
     q.remove(me);
     return;
   }
@@ -347,7 +347,7 @@ void health_decay(A& q) {
     return;
   }
   q.set_i(me, q.L.f.owner, q.world());
-  if (!items_come_back()) {
+  if (!items_come_back(q)) {
     q.remove(me);
     return;
   }
@@ -376,7 +376,7 @@ void health_touch(A& q) {
 void item_health(A& q) {
   const int32_t me = q.self();
   const float flags = q.f(me, q.L.f.spawnflags);
-  if ((q.g(g_deathmatch) == 4) & (band(flags, 2) != 0)) {  // no mega health in deathmatch 4
+  if ((q.deathmatch() == 4) & (band(flags, 2) != 0)) {  // no mega health in deathmatch 4
     q.remove(me);
     return;
   }
@@ -495,7 +495,7 @@ void weapon_lightning(A& q) {
 // A backpack: what a dead player carried, for a living player who touches it.
 void backpack_touch(A& q) {
   if (!can_heal(q)) return;
-  if (q.g(g_deathmatch) == 4) {  // health, and the bonus powers
+  if (q.deathmatch() == 4) {  // health, and the bonus powers
     dmm4_pack_take(q);
     q.remove(q.self());
     return;
@@ -553,7 +553,7 @@ void power_touch(A& q) {
   const int32_t me = q.self();
   const int32_t o = q.other();
   const float bit = q.f(me, q.L.f.items);
-  if ((bit == kItQuad) & (q.g(g_deathmatch) == 4)) {  // the OctaPower
+  if ((bit == kItQuad) & (q.deathmatch() == 4)) {  // the OctaPower
     q.set_f(o, f_super_damage_finished, q.time() + kPowerTime);
     clear_bit(q, o, q.own_field(f_power_said), kItQuad);
     say_to(q, o, kPrintLow, {q.s(s_got_octapower)});
@@ -583,7 +583,7 @@ void item_artifact_invulnerability(A& q) {
 
 // Each frame for a living player: the powers that ran out taken away, the glow of those held.
 void power_frame(A& q) {
-  if (q.g(g_deathmatch) == 4) dmm4_frame(q);
+  if (q.deathmatch() == 4) dmm4_frame(q);
   power_warn(q, kItQuad, q.f(q.self(), f_super_damage_finished), q.s(s_power_quad_off),
              q.s(s_damage2_wav));
   power_warn(q, kItInvulnerability, q.f(q.self(), f_invincible_finished), q.s(s_power_pent_off),
@@ -594,7 +594,7 @@ void power_frame(A& q) {
     q.set_f(me, f_super_damage_finished, 0);
     clear_bit(q, me, q.own_field(f_power_said), kItQuad);
     clear_bit(q, me, q.L.f.items, kItQuad);
-    if (q.g(g_deathmatch) == 4) dmm4_octa_off(q);
+    if (q.deathmatch() == 4) dmm4_octa_off(q);
   }
   const float shield = q.f(me, f_invincible_finished);
   if ((shield != 0) & (shield < q.time())) {
@@ -611,4 +611,4 @@ void power_frame(A& q) {
 
 void item_precache(A& q) { q.precache_sound(q.s(s_itembk2_wav)); }
 
-}  // namespace shooters_edge::server::arena
+}  // namespace shooters_edge::server::rules::SE_RULES_NS
