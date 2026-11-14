@@ -146,6 +146,14 @@ own mark and its palette into a `Picture` any screen draws: Shooter's Edge's HUD
 (`hud/crosshair.hpp` in the game) and its sequel's status screen (`client/sequel_bar.hpp`) both go
 through it.
 
+### The corner readouts
+
+`hud/frame_graph.hpp` draws the frame rate (`scr_showfps`) in the top-right corner, and
+`hud/corner_readouts.hpp` stacks any game's readouts under it: `show_speed` (1 the speed over the
+ground, 2 the whole speed) and `scr_clock` (1 the time of day, 2 the game's time). The game fills a
+`Readings` each frame (its player's speed in its units a second, the clock); `add_readout_cvars`
+takes the `ReadoutSettings` it is handed as the defaults, as the crosshair's do.
+
 ## Skins: the player's and the game's own textures
 
 A **skin** is a directory of images, `skins/<name>/`, that replaces an element's drawn parts.

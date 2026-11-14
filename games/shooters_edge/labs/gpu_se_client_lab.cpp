@@ -82,6 +82,7 @@
 #include "lab/labs/liquid_scene.hpp"
 #include "lab/png.hpp"
 #include "progs/file.hpp"
+#include "shooters_edge/client/corners.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/held.hpp"
@@ -829,6 +830,10 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
                         se::hud_style());
         hand.lift = se::status_lift(hud, static_cast<int>(h));
       }
+      // The corner's readouts (show_speed, scr_clock; the frame rate is the window's alone).
+      const ge::platform::Pacing no_rate;
+      cl::draw_corners(overlay, static_cast<int>(w), static_cast<int>(h), no_rate, hud.readouts,
+                       cl::corner_readings(&l));
       const shooters_edge::view::HandFrame* shown_hand = in_hand && hand.drawn ? &hand : nullptr;
       for (int k = 0; k < 2; ++k) {
         // The weather, the flames and the bonfires' sparks run a second in, ending on the view's
