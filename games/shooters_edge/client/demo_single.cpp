@@ -1,4 +1,5 @@
-// The single-player protocol's messages (version 15) as a demo block carries them (demo.hpp):
+// The single-player protocol's messages (versions 15, 666 and 999) as a demo block carries them
+// (demo.hpp):
 // every message read to its end so the next one is found, and the few that matter kept: the
 // level's start and its precache lists, the view entity, the entities' baselines and updates,
 // the clientdata's view height and status, the clock, the intermission.
@@ -8,11 +9,22 @@
 // byte); every other id is one of the table below. An entity update's fields are deltas from the
 // entity's BASELINE (a field not sent is the baseline's), never from the last update.
 //
+// THE LARGER LIMITS (666 and 999, the facts in porting/shooters-edge/demo-formats-single.md § A):
+// an entity update's and the clientdata's flags run on to a third and fourth byte (bit 15, then
+// 23), carrying an entity's alpha, scale, the high bytes of its model and frame and its next
+// step's time, and the high bytes of the status's numbers; baselines and statics come in a
+// second form with flags (wide model and frame, alpha, scale); a sound may name its entity and
+// index by a word; and the skybox, fog, bonus flash, static sound by a word, achievement and
+// local sound messages. 999 adds a flags word that picks the coordinates' (eighths, sixteenths in
+// an i32, an i16 and a fraction byte, or a float) and the angles' (a byte, a short or a float)
+// encodings. Protocol 15's own bit 15 is the older transparency (two or three floats).
+//
 // ge:summary The single-player protocol's messages read off a demo block: level, view, entities
 // ge:keywords single-player protocol-15 serverinfo setview clientdata entity-update baseline
 // ge:keywords spawnbaseline spawnstatic temp-entity svc read_single_messages
+// ge:keywords protocol-666 protocol-999 larger-limits alpha scale skybox fog wide-coordinates
 // ge:skill shooter
-// ge:test tests/shooters_edge_demo_test.cpp
+// ge:test tests/shooters_edge_demo_test.cpp tests/shooters_edge_demo_single_test.cpp
 #include <algorithm>
 #include <cstdint>
 #include <string>
@@ -60,10 +72,19 @@ enum : uint8_t {
   kCdTrack = 32,
   kSellScreen = 33,
   kCutscene = 34,
+  // The larger limits' (666 and 999).
+  kSkybox = 37,
+  kBonusFlash = 40,
+  kFog = 41,
+  kSpawnBaseline2 = 42,
+  kSpawnStatic2 = 43,
+  kSpawnStaticSound2 = 44,
+  kAchievement = 52,
+  kLocalSound = 56,
 };
 
 // An entity update's flags: the first byte's low 7 bits, then a second byte when kMoreBits.
-enum : uint16_t {
+enum : uint32_t {
   kMoreBits = 1 << 0,
   kOrigin1 = 1 << 1,
   kOrigin2 = 1 << 2,
@@ -77,10 +98,17 @@ enum : uint16_t {
   kSkin = 1 << 12,
   kEffects = 1 << 13,
   kLongEntity = 1 << 14,
+  kExtend1 = 1 << 15,  // 666 and 999: a third byte (15: the older transparency)
+  kAlpha = 1 << 16,
+  kFrameHigh = 1 << 17,
+  kModelHigh = 1 << 18,
+  kLerpFinish = 1 << 19,
+  kScale = 1 << 20,
+  kExtend2 = 1 << 23,  // a fourth byte
 };
 
 // clientdata's flags.
-enum : uint16_t {
+enum : uint32_t {
   kViewHeight = 1 << 0,
   kIdealPitch = 1 << 1,
   kPunch1 = 1 << 2,
@@ -89,23 +117,68 @@ enum : uint16_t {
   kWeaponFrame = 1 << 12,
   kArmour = 1 << 13,
   kWeapon = 1 << 14,
+  // 666 and 999: the high bytes after the status, and the view model's alpha.
+  kMore = 1 << 15,
+  kWeaponHigh = 1 << 16,
+  kArmourHigh = 1 << 17,
+  kAmmoHigh = 1 << 18,
+  kShellsHigh = 1 << 19,
+  kNailsHigh = 1 << 20,
+  kRocketsHigh = 1 << 21,
+  kCellsHigh = 1 << 22,
+  kMore2 = 1 << 23,
+  kWeaponFrameHigh = 1 << 24,
+  kWeaponAlpha = 1 << 25,
+};
+
+// Protocol 999's encoding flags.
+enum : uint8_t {
+  kShortAngles = 1 << 1,
+  kFloatAngles = 1 << 2,
+  kCoord24 = 1 << 3,
+  kFloatCoords = 1 << 4,
+  kIntCoords = 1 << 7,
 };
 
 constexpr int kMostEntities = 8192;
 
-float coord(DemoMsg& m) { return static_cast<float>(m.i16()) * 0.125f; }
-float angle(DemoMsg& m) { return static_cast<float>(m.i8()) * (360.0f / 256.0f); }
+// A coordinate in the stream's encoding: a float, sixteenths in an i32, an i16 and a fraction
+// byte, or (protocol 15 and 666) eighths in an i16.
+float coord(DemoMsg& m) {
+  const uint32_t f = m.single_flags;
+  if ((f & kFloatCoords) != 0) return m.f32();
+  if ((f & kIntCoords) != 0) return static_cast<float>(m.i32()) * 0.0625f;
+  if ((f & kCoord24) != 0) {
+    const float whole = static_cast<float>(m.i16());
+    return whole + static_cast<float>(m.u8()) / 255.0f;
+  }
+  return static_cast<float>(m.i16()) * 0.125f;
+}
+// An angle: a float in degrees, a short of 1/65536 turn, or a byte of 1/256.
+float angle(DemoMsg& m) {
+  const uint32_t f = m.single_flags;
+  if ((f & kFloatAngles) != 0) return m.f32();
+  if ((f & kShortAngles) != 0) return static_cast<float>(m.i16()) * (360.0f / 65536.0f);
+  return static_cast<float>(m.i8()) * (360.0f / 256.0f);
+}
+// The larger limits' alpha byte: 0 the default (whole), 1 unseen, else (b - 1) / 254.
+float wide_alpha(int b) { return b == 0 ? 1.0f : static_cast<float>(b - 1) / 254.0f; }
+bool larger_limits(const DemoState& s) { return s.protocol == 666 || s.protocol == 999; }
 
 DemoEntity& slot(std::vector<DemoEntity>& v, int n) {
   if (static_cast<size_t>(n) >= v.size()) v.resize(static_cast<size_t>(n) + 1);
   return v[static_cast<size_t>(n)];
 }
 
-// model, frame, colormap, skin, then origin and angle by axis: a baseline's or a static's body.
-DemoEntity read_spawn(DemoMsg& m) {
+// The second form's flags (666 and 999): a word's model, a word's frame, alpha, scale.
+enum : uint8_t { kLargeModel = 1, kLargeFrame = 2, kSpawnAlpha = 4, kSpawnScale = 8 };
+
+// model, frame, colormap, skin, then origin and angle by axis: a baseline's or a static's body,
+// the second form's `flags` widening it.
+DemoEntity read_spawn(DemoMsg& m, int flags = 0) {
   DemoEntity e;
-  e.model = m.u8();
-  e.frame = m.u8();
+  e.model = (flags & kLargeModel) != 0 ? m.u16() : m.u8();
+  e.frame = (flags & kLargeFrame) != 0 ? m.u16() : m.u8();
   m.u8();  // colormap
   e.skin = m.u8();
   float o[3], a[3];
@@ -115,12 +188,17 @@ DemoEntity read_spawn(DemoMsg& m) {
   }
   e.origin = {o[0], o[1], o[2]};
   e.angles = {a[0], a[1], a[2]};
+  if ((flags & kSpawnAlpha) != 0) e.alpha = wide_alpha(m.u8());
+  if ((flags & kSpawnScale) != 0) e.scale = byte_scale(m.u8());
   return e;
 }
 
 bool entity_update(Demo& d, DemoMsg& m, int first, std::string& error) {
-  int bits = first & 0x7F;
-  if ((bits & kMoreBits) != 0) bits |= m.u8() << 8;
+  const bool wide = larger_limits(d.state);
+  uint32_t bits = static_cast<uint32_t>(first & 0x7F);
+  if ((bits & kMoreBits) != 0) bits |= static_cast<uint32_t>(m.u8()) << 8;
+  if (wide && (bits & kExtend1) != 0) bits |= static_cast<uint32_t>(m.u8()) << 16;
+  if (wide && (bits & kExtend2) != 0) bits |= static_cast<uint32_t>(m.u8()) << 24;
   const int n = (bits & kLongEntity) != 0 ? m.i16() : m.u8();
   if (n < 0 || n >= kMostEntities) {
     error = "an entity update names entity " + std::to_string(n);
@@ -139,13 +217,28 @@ bool entity_update(Demo& d, DemoMsg& m, int first, std::string& error) {
   if ((bits & kAngle2) != 0) e.angles.y = angle(m);
   if ((bits & kOrigin3) != 0) e.origin.z = coord(m);
   if ((bits & kAngle3) != 0) e.angles.z = angle(m);
+  if (!wide && (bits & kExtend1) != 0) {  // the older transparency: a mode, the alpha, a glow
+    const float mode = m.f32();
+    e.alpha = std::clamp(m.f32(), 0.0f, 1.0f);
+    if (mode == 2.0f) m.f32();
+  }
+  if (wide) {
+    if ((bits & kAlpha) != 0) e.alpha = wide_alpha(m.u8());
+    if ((bits & kScale) != 0) e.scale = byte_scale(m.u8());
+    if ((bits & kFrameHigh) != 0) e.frame |= m.u8() << 8;
+    if ((bits & kModelHigh) != 0) e.model |= m.u8() << 8;
+    if ((bits & kLerpFinish) != 0) m.u8();  // the next step's time, for the lerp
+  }
   e.present = true;
   slot(d.state.entities, n) = e;
   return true;
 }
 
 void client_data(DemoState& s, DemoMsg& m) {
-  const int bits = m.u16();
+  uint32_t bits = static_cast<uint32_t>(m.u16());
+  const bool wide = larger_limits(s);
+  if (wide && (bits & kMore) != 0) bits |= static_cast<uint32_t>(m.u8()) << 16;
+  if (wide && (bits & kMore2) != 0) bits |= static_cast<uint32_t>(m.u8()) << 24;
   s.view_height = (bits & kViewHeight) != 0 ? static_cast<float>(m.i8()) : 22.0f;
   if ((bits & kIdealPitch) != 0) m.i8();
   for (int i = 0; i < 3; i++) {
@@ -163,16 +256,37 @@ void client_data(DemoState& s, DemoMsg& m) {
   s.stats[kStatRockets] = m.u8();
   s.stats[kStatCells] = m.u8();
   s.stats[kStatActiveWeapon] = m.u8();
+  if (!wide) return;
+  const auto high = [&](uint32_t bit, auto& v) {
+    if ((bits & bit) != 0) v |= m.u8() << 8;
+  };
+  high(kWeaponHigh, s.stats[kStatWeapon]);
+  high(kArmourHigh, s.stats[kStatArmour]);
+  high(kAmmoHigh, s.stats[kStatAmmo]);
+  high(kShellsHigh, s.stats[kStatShells]);
+  high(kNailsHigh, s.stats[kStatNails]);
+  high(kRocketsHigh, s.stats[kStatRockets]);
+  high(kCellsHigh, s.stats[kStatCells]);
+  if ((bits & kWeaponFrameHigh) != 0) s.weapon_frame |= m.u8() << 8;
+  if ((bits & kWeaponAlpha) != 0) m.u8();
 }
 
 bool server_info(Demo& d, DemoMsg& m, std::string& error) {
   DemoState& s = d.state;
   s.protocol = m.i32();
-  if (s.protocol != 15) {
-    error = "the level starts in protocol " + std::to_string(s.protocol) +
-            ", and only protocol 15 demos can be played";
+  if (s.protocol == 0x58455446 || s.protocol == 0x32455446) {
+    error =
+        "the level starts with a protocol extension's marker, whose entity messages this "
+        "player does not read";
     return false;
   }
+  if (s.protocol != 15 && s.protocol != 666 && s.protocol != 999) {
+    error = "the level starts in protocol " + std::to_string(s.protocol) +
+            ", and only protocols 15, 666 and 999 can be played";
+    return false;
+  }
+  d.single_flags = s.protocol == 999 ? static_cast<uint32_t>(m.i32()) : 0u;
+  m.single_flags = d.single_flags;
   s.max_clients = m.u8();  // the most clients: the players' entities
   m.u8();                  // the game type
   m.str();                 // the level's title
@@ -194,16 +308,22 @@ bool server_info(Demo& d, DemoMsg& m, std::string& error) {
 }
 
 // The sound message: a mask (volume, attenuation), its fields, the entity and channel packed in
-// a short, the sound's index, the point.
+// a short, the sound's index, the point. 666 and 999: mask bit 3 the entity a word and the
+// channel a byte, bit 4 the index a word.
 void sound(DemoState& s, DemoMsg& m) {
   DemoSound e;
   const int mask = m.u8();
   e.volume = byte_volume((mask & 1) != 0 ? m.u8() : 255);
   e.attenuation = byte_attenuation((mask & 2) != 0 ? m.u8() : 64);
-  const int packed = m.u16();
-  e.entity = packed >> 3;
-  e.channel = packed & 7;
-  e.sound = m.u8();
+  if ((mask & 8) != 0) {
+    e.entity = m.u16();
+    e.channel = m.u8();
+  } else {
+    const int packed = m.u16();
+    e.entity = packed >> 3;
+    e.channel = packed & 7;
+  }
+  e.sound = (mask & 16) != 0 ? m.u16() : m.u8();
   const float x = coord(m), y = coord(m), z = coord(m);
   e.origin = {x, y, z};
   if (!m.bad) s.started.push_back(e);
@@ -261,6 +381,7 @@ bool temp_entity(DemoMsg& m, DemoState& s, std::string& error) {
 
 bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
   DemoState& s = d.state;
+  m.single_flags = d.single_flags;
   while (!m.done() && !m.bad) {
     const size_t at = m.at;
     const int id = m.u8();
@@ -339,7 +460,10 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
           break;
         }
         case kParticle:
-          m.skip(6 + 3 + 2);
+          coord(m);
+          coord(m);
+          coord(m);
+          m.skip(3 + 2);
           break;
         case kDamage: {  // the armour, the blood, where it came from
           DemoBlow b;
@@ -353,14 +477,21 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
         case kSpawnStatic:
           s.statics.push_back(read_spawn(m));
           break;
-        case kSpawnBaseline: {
+        case kSpawnStatic2: {
+          const int flags = m.u8();
+          s.statics.push_back(read_spawn(m, flags));
+          break;
+        }
+        case kSpawnBaseline:
+        case kSpawnBaseline2: {
           const int n = m.i16();
           if (n < 0 || n >= kMostEntities) {
             error = "a baseline names entity " + std::to_string(n);
             ok = false;
             break;
           }
-          slot(d.baselines, n) = read_spawn(m);
+          const int flags = id == kSpawnBaseline2 ? m.u8() : 0;
+          slot(d.baselines, n) = read_spawn(m, flags);
           break;
         }
         case kTempEntity:
@@ -378,11 +509,12 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
           break;
         case kSellScreen:
           break;
-        case kSpawnStaticSound: {
+        case kSpawnStaticSound:
+        case kSpawnStaticSound2: {
           DemoStaticSound e;
           const float x = coord(m), y = coord(m), z = coord(m);
           e.origin = {x, y, z};
-          e.sound = m.u8();
+          e.sound = id == kSpawnStaticSound2 ? m.u16() : m.u8();
           e.volume = byte_volume(m.u8());
           e.attenuation = byte_attenuation(m.u8());
           s.static_sounds.push_back(e);
@@ -394,6 +526,23 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
         case kCdTrack:
           m.skip(2);
           break;
+        case kSkybox:
+        case kAchievement:
+          m.str();
+          break;
+        case kBonusFlash:
+          break;
+        case kFog:  // density, red, green, blue, the fade's time
+          m.skip(4 + 2);
+          break;
+        case kLocalSound: {  // a sound for this player alone
+          const int mask = m.u8();
+          DemoSound e;
+          e.sound = (mask & 16) != 0 ? m.u16() : m.u8();
+          e.origin = s.eye;
+          if (!m.bad) s.started.push_back(e);
+          break;
+        }
         default:
           error = "message id " + std::to_string(id) +
                   (id == kBad || id == kSpawnBinary ? " is never valid"
