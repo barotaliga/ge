@@ -574,12 +574,30 @@ round and round (`net/classic_tv_recording.hpp`). The recording is played at its
 first packet, and a silence longer than a second is cut to one. Each command record's angles are
 the view. Each time round, the spawn count goes up by one, so every viewer signs on again.
 
+**A multiview recording** (`setv --demo=<file.mvd>`, `UdpTvMultiview`) gives every player's view.
+The face has eight streams. The first is the view the TV follows (the lowest slot playing),
+converted from the start (`client/demo_convert.hpp`, a multiview recording to one player's client
+recording, as it is read). Every other view is converted only while someone watches it: when a
+viewer asks for a player no stream carries (its track keys, or fire for the next player in the
+match), a free stream is turned to him. Its conversion reads the recording up to where the match
+is with no view written, then starts his view there with a whole signon, and the viewers who asked
+move to it. A stream nobody has watched for ten seconds is let go. All views ride the followed
+view's clock, a little ahead of it, so a switch lands at the same moment of the match. Clients
+that speak the stream protocol keep the multiview stream and free look; this face never converts
+for them.
+
 Measured black-box: an existing client asked for no extensions, joined the TV playing a bot's dm4
 recording from our server, and watched it with the HUD, the prints and the team chat. Moving the
 mouse did not turn the view. The test (`tests/shooters_edge_classic_tv_udp_test.cpp`) records a
 match on our server and has a viewer with no extensions walk the signon, seated in the recorder's
 slot. That viewer sees the players move and stays on through the loop. A second test viewer joins
 late, and a third is refused for a wrong password.
+
+A multiview recording, black-box: the same client watched a real 4on4 recording on dm2 through
+`setv`, and each press of fire moved it to the next player's view (three views converting at
+most, the one it left let go ten seconds later). The test plays a written match: nothing but the
+followed view is converted until the viewer's track keys ask for slot 2, it is seated in slot 2's
+view, and that view is let go once it is back on the followed one.
 
 ## The sequel's recordings
 

@@ -233,12 +233,13 @@ const HubNode* poller_page_forward(const Poller& p, const gn::Address& server) {
   const HubNode* best = nullptr;
   for (const HubNode& n : p.nodes) {
     if (!n.have || n.kind != gn::NodeKind::forward) continue;
-    bool port = false;
-    for (const auto& [k, v] : n.status.keys)
-      port = port || (k == ge::forward::kWebTransportKey && !v.empty());
-    if (!port || ge::forward::status_cert(n.status).empty() ||
-        !ge::forward::status_reaches(n.status, server))
-      continue;
+    bool transport = false, socket = false;
+    for (const auto& [k, v] : n.status.keys) {
+      transport = transport || (k == ge::forward::kWebTransportKey && !v.empty());
+      socket = socket || (k == ge::forward::kWebSocketKey && !v.empty());
+    }
+    transport = transport && !ge::forward::status_cert(n.status).empty();
+    if (!(transport || socket) || !ge::forward::status_reaches(n.status, server)) continue;
     if (best == nullptr || n.status.players.size() < best->status.players.size()) best = &n;
   }
   return best;

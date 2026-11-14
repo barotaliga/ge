@@ -229,6 +229,48 @@ inline const PoolItem* pool_item(std::string_view from, std::string_view to,
   return nullptr;
 }
 
+// WHERE AN ITEM STANDS: the games measure an item's place from different points of its box. The
+// classic game's ammunition and health boxes stand on their origin as a corner (their box runs 0
+// to 32 across), its weapons and armour on their origin as the middle of their floor, its
+// artifacts 24 above their floor; the sequel's items are boxes 15 each way about their origin. A
+// rewritten item keeps the middle of its floor where it was (`foot`: from the origin to that
+// point), so an item dropped onto its floor does not start inside it. `kFootLift` raises the
+// new place off the floor: a box resting on a plane counts as in it.
+struct ItemFoot {
+  std::string_view game;
+  std::string_view class_name;  // a class, or a prefix ending in '_'; "" the game's other items
+  float foot[3] = {0, 0, 0};
+};
+
+inline constexpr ItemFoot kItemFeet[] = {
+    {"classic", "item_health", {16, 16, 0}},
+    {"classic", "item_shells", {16, 16, 0}},
+    {"classic", "item_spikes", {16, 16, 0}},
+    {"classic", "item_rockets", {16, 16, 0}},
+    {"classic", "item_cells", {16, 16, 0}},
+    {"classic", "item_weapon", {16, 16, 0}},
+    {"classic", "item_artifact_", {0, 0, -24}},
+    {"classic", "", {0, 0, 0}},
+    {"sequel", "", {0, 0, -15}},
+};
+inline constexpr float kFootLift = 1;
+
+// The foot of `class_name` in `game` (above): its own row, else its prefix's, else the game's.
+inline const float* item_foot(std::string_view game, std::string_view class_name) {
+  const float* fallback = nullptr;
+  const float* by_prefix = nullptr;
+  for (const ItemFoot& f : kItemFeet) {
+    if (f.game != game) continue;
+    if (f.class_name == class_name) return f.foot;
+    if (f.class_name.empty())
+      fallback = f.foot;
+    else if (f.class_name.back() == '_' &&
+             class_name.substr(0, f.class_name.size()) == f.class_name)
+      by_prefix = f.foot;
+  }
+  return by_prefix != nullptr ? by_prefix : fallback;
+}
+
 // Whether `class_name` is an item in either game (`kItemPrefixes`).
 inline bool is_item_class(std::string_view class_name) {
   for (std::string_view p : kItemPrefixes)

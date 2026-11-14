@@ -378,8 +378,12 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   }
   // The map's textures as the game's adapter reads them.
   std::vector<uint8_t> picture_store;
+  // Another game's map (classic remix) reads its textures as its own game stores them.
+  const GameAdapter& map_game = map.from_game == "classic"  ? classic_adapter()
+                                : map.from_game == "sequel" ? sequel_adapter()
+                                                            : game;
   const std::vector<ge::brush::MapPicture> pictures =
-      game.map_textures(game, files, map.name, map.file, picture_store);
+      map_game.map_textures(map_game, files, map.name, map.file, picture_store);
   source.pictures = &pictures;
   // The map's coloured light, a .lit file beside it or in lits/, over the light it carries.
   std::vector<uint8_t> lit_store;
@@ -779,6 +783,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                             .team_bottom = f.picture->team_bottom,
                             .enemy_top = f.picture->enemy_top,
                             .enemy_bottom = f.picture->enemy_bottom};
+    f.models.fullbright = f.picture->fullbright_skins;
     prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
                    in_place, fx.lights, o.dynamic_strength, &f.burning);
   }

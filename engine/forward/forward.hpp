@@ -118,14 +118,22 @@ struct ForwardConfig {
   std::vector<std::pair<std::string, std::string>> keys;
 };
 
+// The server a page's path names (`/play?to=host:port`, percent-encoding read): the destination a
+// browser's session or socket asks for (webtransport/forward.hpp, forward/websocket.hpp); false
+// when none.
+bool path_destination(std::string_view path, net::Address& out);
+
 // WHAT A FORWARD'S STATUS RECORD SAYS, beside its clients: whether it is open, the destinations
 // it allows (`kReachKey`: each one's address, port 0 any port on that host, comma between, the
 // first kMostReachShown), and for a forward that takes pages (webtransport/forward.hpp) its
 // WebTransport endpoint's UDP port and the SHA-256 of its certificate in hex, which a hub hands a
 // page so the page can trust it: 64 digits, past a record value's 63, so in two keys of 32
-// (`kCertKey` the first half, `kCertKey2` the second).
+// (`kCertKey` the first half, `kCertKey2` the second). A forward with the WebSocket face
+// (forward/websocket.hpp), a page's way in when WebTransport is missing, names its TCP port in
+// `kWebSocketKey`.
 inline constexpr std::string_view kReachKey = "reach";
 inline constexpr std::string_view kWebTransportKey = "webtransport";
+inline constexpr std::string_view kWebSocketKey = "websocket";
 inline constexpr std::string_view kCertKey = "cert", kCertKey2 = "cert2";
 inline constexpr size_t kMostReachShown = 8;
 // A forward's record read: it reaches `to` (open, or `to` in its reach).

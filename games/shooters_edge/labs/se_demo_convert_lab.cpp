@@ -1,7 +1,8 @@
 // LAB `se-demo-convert`: DOES A DEMO CONVERTED TO ANOTHER FORMAT SHOW THE SAME GAME, without a GPU.
 // Each recording is converted (client/demo_convert.hpp: a single-player demo to a multiview
 // recording and to a client recording, a multiview recording to a client recording of the lowest
-// playing slot's view, a sequel recording to protocol 34) and both are read to
+// playing slot's view and a client recording back to a multiview one, a sequel recording to
+// protocol 34) and both are read to
 // their ends by the window's own reader (client/demo.hpp), frame by frame: the eye, the view's
 // angles, the status (health, armour, ammunition, the weapon) and, for a pair of one format, the
 // entities in view, compared frame for frame (a frame a reading of the demo's clock). By default it
@@ -97,6 +98,8 @@ void run(gl::Lab& lab) {
       {"scripted .dem (halls)",
        cl::write_single_demo(cl::loop_script("halls", {128, 192, 24}, 64, 240))},
       {"sequel fixture .dm2", cl::sequel_fixture(6, 7)},
+      {"scripted client recording (halls)",
+       cl::write_client_demo(cl::loop_script("halls", {128, 192, 24}, 64, 240))},
       {"scripted match .mvd (halls)", cl::write_multiview_match(cl::highlight_match())}};
   const std::string files = lab.arg("file");
   for (size_t at = 0; at < files.size();) {
@@ -124,7 +127,8 @@ void run(gl::Lab& lab) {
     std::vector<Frame> a, b;
     cl::DemoFormat fa{}, fb{};
     std::string error;
-    if (!read_frames(s.bytes, a, fa, error)) {
+    int recorder = -1;  // a client recording's own slot
+    if (!read_frames(s.bytes, a, fa, error, -1, &recorder)) {
       lab.fail("se-demo-convert: " + s.name + " does not read: " + error,
                "next: check the file; skill: shooter");
       return;
@@ -133,6 +137,7 @@ void run(gl::Lab& lab) {
          fa == cl::DemoFormat::single
              ? std::vector<cl::DemoFormat>{cl::DemoFormat::multiview, cl::DemoFormat::client}
          : fa == cl::DemoFormat::multiview ? std::vector<cl::DemoFormat>{cl::DemoFormat::client}
+         : fa == cl::DemoFormat::client    ? std::vector<cl::DemoFormat>{cl::DemoFormat::multiview}
                                            : std::vector<cl::DemoFormat>{fa}) {
       b.clear();
       const std::string key = std::to_string(i) + (to == cl::DemoFormat::client ? "c" : "");
@@ -145,7 +150,9 @@ void run(gl::Lab& lab) {
       }
       const size_t out_bytes = out.size();
       int view = -1;
-      if (!read_frames(std::move(out), b, fb, error, -1, &view)) {
+      // A client recording made multiview: read riding the recorder.
+      const int ride = fa == cl::DemoFormat::client ? recorder : -1;
+      if (!read_frames(std::move(out), b, fb, error, ride, &view)) {
         lab.fail("se-demo-convert: " + s.name + " converted does not read back: " + error,
                  "next: the converter wrote a message the reader refuses; skill: shooter");
         return;

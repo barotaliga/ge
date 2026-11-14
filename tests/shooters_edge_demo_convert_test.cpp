@@ -9,13 +9,16 @@
 // disconnect at the end) that reads back frame for frame, and a frame of more entities than the
 // oldest client holds keeps the 64 nearest the view; a multiview recording converts to one
 // player's view the same way, read back frame for frame, and a view chosen partway or switched
-// starts with a whole signon and plays to the end; what the target cannot hold is counted; a pair
+// starts with a whole signon and plays to the end; a client recording (written in code, or
+// converted from a single-player demo) converts to a multiview recording that reads back frame for
+// frame; what the target cannot hold is counted; a pair
 // that does not exist and a damaged demo are refused with the reason; a file's format is told by
 // its name.
 //
 // ge:summary Tests: a .dem converted to .mvd as a stream, read back frame for frame
 // ge:keywords test demo-convert dem mvd stream whole-records no-end dropped format_of_name
 // ge:keywords client-recording old-client 64-entities command-record multiview-to-client pov
+// ge:keywords client-to-multiview
 // ge:skill shooter testing
 #include <cmath>
 #include <cstring>
@@ -333,7 +336,6 @@ ViewRead read_view(std::vector<uint8_t> bytes) {
     return v;
   }
   CHECK(d.state.format == cl::DemoFormat::client);
-  std::string map;
   while ((v.end = cl::next_frame(d, v.error)) == cl::DemoRead::frame) {
     if (d.state.map.empty()) continue;
     v.eyes.push_back(d.state.eye);
@@ -426,6 +428,56 @@ TEST(a_view_chosen_partway_starts_with_a_whole_signon_and_a_view_switched_starts
   CHECK_MSG(v.end == cl::DemoRead::end, v.error);
   CHECK(v.player == 1);
   CHECK(near_eye(v.eyes.back(), m.players[1].origins.back()));
+}
+
+TEST(a_client_recording_converts_to_a_multiview_recording_frame_for_frame) {
+  const cl::DemoScript s = script();
+  // Two client recordings: one written in code, one converted from a single-player demo.
+  cl::ConvertNotes notes;
+  std::vector<uint8_t> from_dem;
+  std::string error;
+  CHECK_MSG(cl::convert_demo(cl::write_single_demo(s), cl::DemoFormat::client, {}, from_dem, notes,
+                             error),
+            error);
+  for (const std::vector<uint8_t>& rec : {cl::write_client_demo(s), from_dem}) {
+    std::vector<uint8_t> mvd;
+    cl::ConvertNotes n;
+    CHECK_MSG(cl::convert_demo(rec, cl::DemoFormat::multiview, {}, mvd, n, error), error);
+    int records = 0, last = -1;
+    CHECK(whole_records(mvd, records, last));
+    CHECK(last == 2);  // a disconnect ends it
+    const Frames a = read_frames(rec, cl::DemoFormat::client, 33);
+    const Frames b = read_frames(mvd, cl::DemoFormat::multiview, 33);
+    CHECK_MSG(b.end == cl::DemoRead::end, b.error);
+    CHECK(b.last.map == a.last.map && b.last.models == a.last.models);
+    CHECK_MSG(b.eyes.size() >= s.origins.size() && a.eyes.size() >= s.origins.size(),
+              std::to_string(a.eyes.size()) + " / " + std::to_string(b.eyes.size()) + " of " +
+                  std::to_string(s.origins.size()));
+    if (b.eyes.size() < s.origins.size() || a.eyes.size() < s.origins.size()) continue;
+    const size_t la = a.eyes.size() - s.origins.size(), lb = b.eyes.size() - s.origins.size();
+    for (size_t i = 0; i < s.origins.size(); i++) {
+      const sh::Vec3f x = a.eyes[la + i], y = b.eyes[lb + i];
+      CHECK_MSG(x.x == y.x && x.y == y.y && x.z == y.z,
+                "frame " + std::to_string(i) + " of " + std::to_string(a.eyes.size()) + "/" +
+                    std::to_string(b.eyes.size()) + ": " + std::to_string(x.x) + "," +
+                    std::to_string(x.z) + " vs " + std::to_string(y.x) + "," + std::to_string(y.z));
+      CHECK(same_angle(b.angles[lb + i].y, a.angles[la + i].y, 0.01f));
+      CHECK(b.health[lb + i] == a.health[la + i] && b.rockets[lb + i] == a.rockets[la + i]);
+      CHECK(b.rocket_seen[lb + i] == a.rocket_seen[la + i]);
+    }
+    // Fed a few bytes at a time, the same bytes.
+    cl::DemoConvert c;
+    CHECK_MSG(cl::convert_begin(c, cl::DemoFormat::client, cl::DemoFormat::multiview, {}, error),
+              error);
+    std::vector<uint8_t> all;
+    for (size_t at = 0; at < rec.size(); at += 11) {
+      cl::convert_feed(c, std::span(rec).subspan(at, std::min<size_t>(11, rec.size() - at)));
+      CHECK_MSG(cl::convert_take(c, all, error), error);
+    }
+    cl::convert_end(c);
+    CHECK_MSG(cl::convert_take(c, all, error), error);
+    CHECK(all == mvd);
+  }
 }
 
 TEST(a_pair_that_does_not_exist_and_a_damaged_demo_are_refused) {

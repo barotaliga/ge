@@ -24,6 +24,7 @@
 
 #include "assets/image.hpp"
 #include "assets/iqm.hpp"
+#include "assets/pcx.hpp"
 #include "assets/tga.hpp"
 #include "brush/read.hpp"
 #include "classicenhance/cached.hpp"
@@ -38,6 +39,7 @@
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
+#include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "vfs/search.hpp"
 
 namespace shooters_edge::client {
@@ -46,8 +48,27 @@ namespace {
 
 namespace fs = std::filesystem;
 namespace pf = shooters_edge::profiles;
-using parts::open_model;
 using parts::stand_in;
+
+// A model as the classic game opens it. Another game's model of the second family (classic
+// remix's `cr_items`: a weapon or an armour of the sequel's) keeps its skins' own colours: each
+// picture through its own palette stands in for the skin, so the classic palette never paints it.
+bool open_model_(const GameAdapter& self, const SearchPath& files, const std::string& name,
+                 OpenedModel& out, std::string& error) {
+  if (!parts::open_model(self, files, name, out, error)) return false;
+  if (out.form != ModelForm::morph || !name.ends_with(".md2")) return true;
+  out.skins.assign(out.morph.skins.size(), {});
+  for (size_t s = 0; s < out.morph.skin_paths.size() && s < out.skins.size(); s++) {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> bytes = find_file(files, out.morph.skin_paths[s], store);
+    ge::assets::IndexedImage img;
+    std::string why;
+    if (bytes.empty() || !ge::assets::decode_pcx(bytes, out.morph.skin_paths[s], &img, &why))
+      continue;
+    out.skins[s] = {img.width, img.height, ge::assets::pcx_rgba(img)};
+  }
+  return true;
+}
 
 bool held_weapons(const GameAdapter& self, const SearchPath& files,
                   std::vector<ge::viewmodel::HeldModel>& out, std::string& why) {
@@ -66,13 +87,23 @@ bool held_weapons(const GameAdapter& self, const SearchPath& files,
   for (const std::string_view name : self.game->held_weapons) {
     OpenedModel m;
     std::string error;
-    if (!open_model(self, files, std::string(name), m, error) || m.form != ModelForm::morph) {
+    if (!open_model_(self, files, std::string(name), m, error) || m.form != ModelForm::morph) {
       missing += missing.empty() ? "" : ", ";
       missing.append(name);
       if (!error.empty()) missing += " (" + error + ")";
       continue;
     }
     found++;
+    // A view model of another game's (classic remix): its rest and firing frames alone, in the
+    // order the hand reads them (profiles/remix_arsenal.hpp).
+    if (const pf::HeldFrames* f = pf::held_frames(name); f != nullptr) {
+      const auto at = [&m](int i) {
+        return m.morph.frames[size_t(std::clamp<int>(i, 0, int(m.morph.frames.size()) - 1))];
+      };
+      std::vector<ge::morph::Frame> kept{at(f->rest)};
+      for (int i = f->fire_first; i <= f->fire_last; ++i) kept.push_back(at(i));
+      m.morph.frames = std::move(kept);
+    }
     ge::viewmodel::HeldModel h = ge::classicenhance::held_from_morph(m.morph, palette, 0);
     if (!m.skins.empty() && m.skins[0].width > 0) {  // a picture beside it, alpha and all
       h.skin.image = std::move(m.skins[0]);
@@ -170,7 +201,7 @@ const GameAdapter kClassic{.game = &pf::kGameProfiles[0],
                            .list_maps = parts::list_maps,
                            .map_info = parts::map_info,
                            .map_textures = parts::map_textures,
-                           .open_model = parts::open_model,
+                           .open_model = open_model_,
                            .open_sound = parts::open_sound,
                            .pictures = pictures,
                            .find_config = parts::find_config,

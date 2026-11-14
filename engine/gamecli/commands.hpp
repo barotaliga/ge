@@ -43,6 +43,14 @@ int cmd_account_signin(Ctx& ctx);
 int cmd_account_code(Ctx& ctx);
 int cmd_account_recover(Ctx& ctx);
 int cmd_account_show(Ctx& ctx);
+int cmd_friends_list(Ctx& ctx);
+int cmd_friends_add(Ctx& ctx);
+int cmd_friends_remove(Ctx& ctx);
+int cmd_friends_block(Ctx& ctx);
+int cmd_friends_unblock(Ctx& ctx);
+int cmd_friends_invite(Ctx& ctx);
+int cmd_friends_invites(Ctx& ctx);
+int cmd_friends_status(Ctx& ctx);
 
 // The window's program, and the window started with `argv` (its output in `<logs>/<log_name>.log`;
 // `--dry-run` shows the command only); `what` finishes "the game is starting ...".

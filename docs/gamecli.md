@@ -17,7 +17,7 @@ The CLI is built in the three homes every feature lives in (docs/architecture.md
 
 | Layer | Where | What it gives |
 | --- | --- | --- |
-| Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset/check/format`, `server settings/set/check/format`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `join`, `logs`, `account signup/signin/code/recover/show` |
+| Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset/check/format`, `server settings/set/check/format`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `join`, `logs`, `account signup/signin/code/recover/show`, `friends list/add/remove/block/unblock/invite/invites/status` |
 | Plugin | `plugins/<name>/cli/` (built into `ge_<name>_cli`) | A group of rows any game linking the plugin adds: classic enhance's `content` (the install's packs, their release by SHA-256, the enhanced cache) |
 | Game | `games/<game>/cli/` | The game's `Spec` (its programs, ports, protocol, places, launch words, the settings it registers) and its own rows: Shooter's Edge's `demos`, `demos play`, `demos pack`, `demos unpack` |
 
@@ -130,6 +130,15 @@ of standard input. `account code` prints the line a classic client's console tak
 <code>`), good once within 15 minutes. After `signin` it asks no password: the ticket kept buys the
 code (the service's `ticket_code`), and our own client logs itself in the same way, so neither the
 password nor the ticket ever crosses a classic game's plain-text wire.
+
+## Friends
+
+`friends list`, `friends add <name>`, `friends remove <name>`, `friends block <name>`, `friends
+unblock <name>`, `friends invite <name> --where=<host:port> --note=<words>`, `friends invites` and
+`friends status <offline|online|lobby|playing> --where= --words=` reach the same service with the
+ticket `account signin` kept (`docs/accounts.md` § Friends); without one they are refused with the
+`account signin` to run. `friends list` walks every page of the list; `friends invites` takes the
+invites waiting, so a second call shows none.
 
 ## Places
 

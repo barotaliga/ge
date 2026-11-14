@@ -16,7 +16,8 @@
 // - `take_input`: the canvas's keys pressed since the last call (by scancode, the USB HID usage
 //   the platform layer uses) and its pointer in canvas pixels; a click focuses the canvas.
 // - `take_play_input`: a game played on the page: keys held and let go, the mouse's buttons,
-//   wheel and movement with the pointer locked to the canvas, as `ge::input::InputState`.
+//   wheel and movement with the pointer locked to the canvas, and the fingers on a touch screen
+//   (the state's `fingers`, 0..1 of the canvas), as `ge::input::InputState`.
 // - `say`: a line in the page's status line (`#viewer-status`) and the console: what is loading,
 //   or why there is no picture, in a viewer's words.
 //
@@ -27,6 +28,7 @@
 // ge:keywords web browser emscripten jspi fetch_bytes next_frame request-animation-frame canvas
 // ge:keywords canvas_size say viewer-status websocket ws_open ws_take ws_send
 // ge:keywords take_play_input pointer-lock play-in-browser webtransport wt_open wt_pipe datagram
+// ge:keywords ws_pipe ws_why websocket-fallback touch touchstart fingers
 // ge:skill net
 #pragma once
 
@@ -74,7 +76,12 @@ WsState ws_state(int socket);
 bool ws_send(int socket, std::span<const uint8_t> msg);
 // The oldest message not taken yet into `msg`; false when none has come.
 bool ws_take(int socket, std::vector<uint8_t>& msg);
+// Why the socket closed: the close's reason when the other end gave one ("" while it is open).
+std::string ws_why(int socket);
 void ws_close(int socket);
+// The socket as a transport's pipe (net::open_pipe_transport), each message one datagram: the
+// forwarder's WebSocket face (forward/websocket.hpp), for a browser without WebTransport.
+net::DatagramPipe ws_pipe(int socket, const net::Address& peer);
 
 enum class WtState : uint8_t { connecting, open, closed };
 // A WebTransport session to `url` (`https://host:port/path`), its certificate trusted by
