@@ -135,6 +135,14 @@ void spectate_words(const gc::Ctx& ctx, const std::string& address, std::vector<
            {"-basedir", a.basedir, "-mod", a.game, "+set", "spectator", "1", "+connect", address});
 }
 
+// A hub's Watch link ("Open in the game"): the window plays the TV node's live broadcast
+// (client/tv_live.hpp); a node carries one stream, so `stream` names nothing more.
+void tv_words(const gc::Ctx& ctx, const std::string& node, uint32_t /*stream*/,
+              std::vector<std::string>& w) {
+  const cl::Args a = folders(ctx);
+  w.insert(w.end(), {"-basedir", a.basedir, "-mod", a.game, "-tv", node});
+}
+
 // A hub's Play link: the replay file (version 2) the CLI fetched, unpacked beside it into the
 // recording the demo player reads (client/demo_v2.hpp), then played.
 bool demo_words(const gc::Ctx& ctx, const std::string& path, std::vector<std::string>& w,
@@ -450,6 +458,7 @@ gc::Spec make() {
   s.join_words = join_words;
   s.listen_words = listen_words;
   s.spectate_words = spectate_words;
+  s.tv_words = tv_words;
   s.demo_words = demo_words;
   s.commands = ge::classicenhance::cli::commands();
   s.commands.push_back({"demos", "", "the recordings in the game folder: name, size, file",

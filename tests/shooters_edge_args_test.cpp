@@ -115,3 +115,13 @@ TEST(sizes_by_name_or_width_and_height) {
 }
 
 }  // namespace
+
+TEST(a_broadcast_is_named_by_its_node) {
+  cl::Args a;
+  std::string why;
+  CHECK(parse_words({"-tv", "tv.example.org:28000"}, a, why));
+  CHECK(a.tv == "tv.example.org:28000");
+  cl::Args b;
+  CHECK(parse_words({"--tv", "10.0.0.2"}, b, why));
+  CHECK(b.tv == "10.0.0.2");
+}
