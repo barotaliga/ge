@@ -1699,8 +1699,7 @@ int run_main(int argc, char** argv) {
         for (const std::string& line : lines) tell(line, t);
       }
       if (!world) continue;  // no level of the demo's yet
-      // The first game's bob, strafe roll and damage kick rebuilt on the recorded eye (the
-      // player's camera cvars), a game joined moving by its prediction (demo_eyes.hpp).
+      // Bob, roll and kick rebuilt on the recorded eye; a game joined by its prediction.
       cl::apply_view_cvars(camera_cvars, shown);
       cl::DemoBody body;
       if (drawn_remote && remote.predicted) {
@@ -1720,11 +1719,12 @@ int run_main(int argc, char** argv) {
       view.frame = static_cast<uint64_t>(presented);
       overlay.begin(w, h);
       se::Status hud_status = cl::demo_status(ds, t);
-      if (drawn_remote) cl::group_status(controls.groups, hud_status, t);  // the weapon group
-      se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
-      const auto placed =
-          hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), hud_look());
-      playback.bar_bottom_px = cl::hud_inset(placed, h);
+      if (drawn_remote) cl::group_status(controls.groups, hud_status, t);       // the weapon group
+      if (!cl::draw_recorded_sequel_bar(overlay, sequel_bar, ds_read, w, h)) {  // its own bar
+        se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
+        playback.bar_bottom_px = cl::hud_inset(
+            hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), hud_look()), h);
+      }
       if (bench.paced && !attract && !game_menu.open())
         cl::playback_draw(overlay, playback, bench, w, h, t);
       ge::hud::draw_frame_rate(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(),

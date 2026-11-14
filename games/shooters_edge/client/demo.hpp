@@ -228,6 +228,14 @@ struct DemoState {
   int32_t stats[kStatCount] = {};  // health, ammo, items ... (DemoStat)
   std::vector<std::string> models, sounds;  // precache lists, index 1 first ([0] is "")
   std::vector<std::string> images;          // sequel: the pictures it names (`pics/<name>.pcx`)
+  // Sequel: what its own status bar runs (client/sequel_bar.hpp): the bar's program, the item
+  // names by number, the player state's 32 stats as sent, the last screen the server put up (a
+  // scoreboard's or the help computer's program) and the last inventory's counts by item number.
+  std::string status_bar;
+  std::vector<std::string> item_names;
+  std::array<int16_t, 32> sequel_stats{};
+  std::string layout;
+  std::vector<int16_t> inventory;
   std::array<std::string, 32> looks;        // sequel: each slot's model and skin ("male/grunt")
   std::vector<DemoEntity> entities;         // by number
   std::vector<DemoEntity> players;          // client, multiview: by slot (32)
