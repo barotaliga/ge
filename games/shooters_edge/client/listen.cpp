@@ -36,8 +36,9 @@ namespace pg = ge::progs;
 
 namespace {
 
-// The message bytes of the baseline mod's temporary entities (rules/common_decl.hpp's SVC_TEMPENTITY
-// and its TE_ kinds, the multiplayer protocol's layout: a gunshot and blood carry a count).
+// The message bytes of the baseline mod's temporary entities (rules/common_decl.hpp's
+// SVC_TEMPENTITY and its TE_ kinds, the multiplayer protocol's layout: a gunshot and blood carry a
+// count).
 constexpr uint8_t kTempEntity = 23, kExplosion = 3;
 
 // The player's own server lets the easy jump (pm_speedjump) take 0.8 of the best strafe's gain; it

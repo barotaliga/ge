@@ -61,8 +61,8 @@ constexpr const char* kStrings[] = {SE_RULES_STRINGS(SE_X)};
 #undef SE_X
 #define SE_X(name, qc_name) {qc_name, &run<&cp::name>},
 const pg::NativeFunction kFunctions[] = {
-    SE_COMMON_FUNCTIONS(SE_X) SE_CAMPAIGN_FUNCTIONS(SE_X)
-    {"damage", &run<&cp::damage_call>, kDamageParms},
+    SE_COMMON_FUNCTIONS(SE_X)
+        SE_CAMPAIGN_FUNCTIONS(SE_X){"damage", &run<&cp::damage_call>, kDamageParms},
     {"radius_damage", &run<&cp::radius_damage_call>, kRadiusParms},
     {"teleport_arrived", &run<&cp::teleport_arrived_call>, kOneParm}};
 #undef SE_X

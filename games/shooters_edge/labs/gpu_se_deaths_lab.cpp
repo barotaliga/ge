@@ -47,7 +47,6 @@
 #include "lab/lab.hpp"
 #include "lab/labs/explosion_scene.hpp"
 #include "progs/file.hpp"
-#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -56,6 +55,7 @@
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "vfs/pak.hpp"
 
 namespace {

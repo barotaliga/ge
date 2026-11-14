@@ -1,7 +1,7 @@
 ---
 title: A single-player program leaves a model file's size to setmodel; the multiplayer one sets it
 date: 2026-11-09
-scope: games/shooters_edge/server/bi_world.cpp, games/shooters_edge/qc/campaign/set_pieces.qc
+scope: games/shooters_edge/server/bi_world.cpp, games/shooters_edge/rules/campaign_set_pieces.cpp
 concepts: [setmodel, setsize, explobox, model-bounds, single-player, brush-model-file, pointlike, traceline]
 ---
 

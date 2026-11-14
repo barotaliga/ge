@@ -3,7 +3,8 @@
 // flyer and the eel. The classnames are the maps'; the models and sounds are the pack's names,
 // mapped to our own by content/classic.assetmap.
 //
-// ge:summary The campaign's smaller monsters in C++: rifleman, hound, swordsman, brute, ghoul, flyer
+// ge:summary The campaign's smaller monsters in C++: rifleman, hound, swordsman, brute,
+// ge:summary ghoul, flyer
 // ge:keywords campaign native-campaign monster_army monster_dog monster_knight monster_ogre
 // ge:keywords monster_zombie monster_wizard monster_fish roster
 // ge:skill progs shooter
@@ -76,8 +77,10 @@ void army_flinch(A& q) { flinch(q, fn_army_flinch, 3); }
 
 void army_pain(A& q) {
   hold_pain(q, 1);
-  if (q.random() < 0.5f) q.sound(q.self(), kChanVoice, q.s(s_soldier_pain1_wav), 1, kAttnNorm);
-  else q.sound(q.self(), kChanVoice, q.s(s_soldier_pain2_wav), 1, kAttnNorm);
+  if (q.random() < 0.5f)
+    q.sound(q.self(), kChanVoice, q.s(s_soldier_pain1_wav), 1, kAttnNorm);
+  else
+    q.sound(q.self(), kChanVoice, q.s(s_soldier_pain2_wav), 1, kAttnNorm);
   anim_begin(q, q.v(q.self(), f_fr_pain));
   army_flinch(q);
 }
@@ -234,8 +237,10 @@ void knight_swing(A& q) {
   anim_tick(q);
   ai_charge(q, 10);
   if (anim_step(q) == 1) {
-    if (q.random() < 0.5f) q.sound(q.self(), kChanWeapon, q.s(s_knight_sword1_wav), 1, kAttnNorm);
-    else q.sound(q.self(), kChanWeapon, q.s(s_knight_sword2_wav), 1, kAttnNorm);
+    if (q.random() < 0.5f)
+      q.sound(q.self(), kChanWeapon, q.s(s_knight_sword1_wav), 1, kAttnNorm);
+    else
+      q.sound(q.self(), kChanWeapon, q.s(s_knight_sword2_wav), 1, kAttnNorm);
   }
   if ((anim_step(q) == 3) | (anim_step(q) == 5)) melee_blow(q, 3);
   if (anim_step(q) >= 6) monster_run(q);
@@ -358,9 +363,9 @@ void monster_ogre(A& q) {
   q.precache_model(q.s(s_ogre_mdl));
   q.precache_model(q.s(s_h_ogre_mdl));
   q.precache_model(q.s(s_grenade_mdl));
-  precache_sounds(q, {s_ogre_ogdrag_wav, s_ogre_ogdth_wav, s_ogre_ogidle_wav, s_ogre_ogpain1_wav,
-                      s_ogre_ogsawatk_wav, s_ogre_ogwake_wav, s_weapons_grenade_wav,
-                      s_weapons_bounce_wav});
+  precache_sounds(
+      q, {s_ogre_ogdrag_wav, s_ogre_ogdth_wav, s_ogre_ogidle_wav, s_ogre_ogpain1_wav,
+          s_ogre_ogsawatk_wav, s_ogre_ogwake_wav, s_weapons_grenade_wav, s_weapons_bounce_wav});
   monster_kind(q, s_ogre_ogwake_wav, s_ogre_ogdth_wav, s_h_ogre_mdl, -80, 2, 14);
   const int32_t me = q.self();
   q.set_i(me, f_th_melee, q.fn(fn_ogre_melee));
@@ -460,10 +465,10 @@ void monster_zombie(A& q) {
   q.precache_model(q.s(s_zombie_mdl));
   q.precache_model(q.s(s_h_zombie_mdl));
   q.precache_model(q.s(s_zom_gib_mdl));
-  precache_sounds(q, {s_zombie_z_idle_wav, s_zombie_z_idle1_wav, s_zombie_z_shot1_wav,
-                      s_zombie_z_gib_wav, s_zombie_z_pain_wav, s_zombie_z_pain1_wav,
-                      s_zombie_z_fall_wav, s_zombie_z_miss_wav, s_zombie_z_hit_wav,
-                      s_zombie_idle_w2_wav});
+  precache_sounds(
+      q, {s_zombie_z_idle_wav, s_zombie_z_idle1_wav, s_zombie_z_shot1_wav, s_zombie_z_gib_wav,
+          s_zombie_z_pain_wav, s_zombie_z_pain1_wav, s_zombie_z_fall_wav, s_zombie_z_miss_wav,
+          s_zombie_z_hit_wav, s_zombie_idle_w2_wav});
   monster_kind(q, s_zombie_z_idle_wav, s_zombie_z_gib_wav, s_h_zombie_mdl, 0, 1, 6);
   const int32_t me = q.self();
   q.set_i(me, f_gib_noise, q.s(s_zombie_z_gib_wav));
@@ -521,9 +526,9 @@ void monster_wizard(A& q) {
   q.precache_model(q.s(s_wizard_mdl));
   q.precache_model(q.s(s_h_wizard_mdl));
   q.precache_model(q.s(s_w_spike_mdl));
-  precache_sounds(q, {s_wizard_hit_wav, s_wizard_wattack_wav, s_wizard_wdeath_wav,
-                      s_wizard_widle1_wav, s_wizard_widle2_wav, s_wizard_wpain_wav,
-                      s_wizard_wsight_wav});
+  precache_sounds(q,
+                  {s_wizard_hit_wav, s_wizard_wattack_wav, s_wizard_wdeath_wav, s_wizard_widle1_wav,
+                   s_wizard_widle2_wav, s_wizard_wpain_wav, s_wizard_wsight_wav});
   monster_kind(q, s_wizard_wsight_wav, s_wizard_wdeath_wav, s_h_wizard_mdl, -40, 8, 16);
   const int32_t me = q.self();
   q.set_i(me, f_th_missile, q.fn(fn_wizard_missile));

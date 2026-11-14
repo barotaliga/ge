@@ -1,15 +1,15 @@
-// Tests: the monsters of our campaign mod (games/shooters_edge/rules/campaign_ai.cpp, campaign_monsters*.cpp)
-// on the campaign host, in the arena's west room. Each counts at spawn; a rifleman facing the
-// player notices him and shoots; one facing away notices only a player who made noise; a death
-// counts, is told and fires the monster's targets; a hound bites a player beside it; a hound on a
-// path walks it corner to corner. The kinds that fight up close and in the air: a swordsman and a
-// brute hurt a player near them, a ghoul shrugs off a small hit and is knocked down by a big one
-// and gets up again whole, and only its whole health in one blow ends it; a flyer keeps its height
-// and spits at the player. The big and late kinds: each counts at spawn and hurts a player in front
-// of it, the giant takes half of a blast, and a spawn bursts when it dies. The bosses: the lava
-// boss rises when used, throws, and falls to three strikes; arriving inside the final boss kills
-// it and ends the game; a teleport train rides its path. A rifleman shows its model's frames
-// for standing, shooting and falling.
+// Tests: the monsters of our campaign mod (games/shooters_edge/rules/campaign_ai.cpp,
+// campaign_monsters*.cpp) on the campaign host, in the arena's west room. Each counts at spawn; a
+// rifleman facing the player notices him and shoots; one facing away notices only a player who made
+// noise; a death counts, is told and fires the monster's targets; a hound bites a player beside it;
+// a hound on a path walks it corner to corner. The kinds that fight up close and in the air: a
+// swordsman and a brute hurt a player near them, a ghoul shrugs off a small hit and is knocked down
+// by a big one and gets up again whole, and only its whole health in one blow ends it; a flyer
+// keeps its height and spits at the player. The big and late kinds: each counts at spawn and hurts
+// a player in front of it, the giant takes half of a blast, and a spawn bursts when it dies. The
+// bosses: the lava boss rises when used, throws, and falls to three strikes; arriving inside the
+// final boss kills it and ends the game; a teleport train rides its path. A rifleman shows its
+// model's frames for standing, shooting and falling.
 //
 // ge:summary Tests: our campaign mod's monsters: counting, noticing, attacking, paths, each kind
 // ge:keywords test campaign-mod monsters monster-ai rifleman hound path-corner killed-monsters

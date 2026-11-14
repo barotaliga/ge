@@ -17,8 +17,8 @@
 #include "progs/layout.hpp"
 #include "progs/qc_compile.hpp"
 #include "progs/vm.hpp"
-#include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
+#include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
 namespace sv = shooters_edge::server;

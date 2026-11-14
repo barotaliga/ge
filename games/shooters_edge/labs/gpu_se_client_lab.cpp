@@ -75,7 +75,6 @@
 #include "lab/labs/liquid_scene.hpp"
 #include "lab/png.hpp"
 #include "progs/file.hpp"
-#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/held.hpp"
@@ -90,6 +89,7 @@
 #include "shooters_edge/labs/warp_film.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -1039,7 +1039,8 @@ void run(gl::Lab& lab) {
   lab.metric("hand.shots", held.shots, "count");
   if (peak - ground < 100)
     lab.fail("the rocket jump rose only " + std::to_string(peak - ground) + " units",
-             "Read the push and the rocket's blast (games/shooters_edge/rules/common_combat.cpp). Skill: "
+             "Read the push and the rocket's blast (games/shooters_edge/rules/common_combat.cpp). "
+             "Skill: "
              "shooter.");
   // With no adapter the same two metrics are written as zero, so the digest is one on every row.
   if (device)
@@ -1069,8 +1070,7 @@ const gl::LabSpec kSpec{
      {"hud", "auto", "with --game: the HUD's art: auto, classic or free"},
      {"hudcvars", "",
       "with --game: the HUD's cvars (hud_style, viewsize, hud_*), as the console takes them"},
-     {"progs", "",
-      "with --game: a program of ours run instead of the arena (campaign), or pack"},
+     {"progs", "", "with --game: a program of ours run instead of the arena (campaign), or pack"},
      {"settle", "4", "with --game: host frames run at each view before it is drawn (at least 4)"},
      {"fire", "0",
       "with --game: the player then holds attack this many frames at each view and it is drawn "

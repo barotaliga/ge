@@ -250,8 +250,10 @@ void lightning_use(A& q) {
   int32_t e = q.find(q.world(), q.L.f.target, q.s(s_lightning));
   while (e != 0) {
     if (q.is(q.i(e, q.L.f.classname), "func_door")) {
-      if (a == 0) a = e;
-      else if (b == 0) b = e;
+      if (a == 0)
+        a = e;
+      else if (b == 0)
+        b = e;
     }
     e = q.find(e, q.L.f.target, q.s(s_lightning));
   }
@@ -297,12 +299,14 @@ void oldone_gibs(A& q) {
       const float x = -64 + 32 * static_cast<float>(xi);
       for (int yi = 0; yi < 5; yi++) {
         const float y = -64 + 32 * static_cast<float>(yi);
-        const Vec3 org = q.v(q.self(), q.L.f.origin) + fv(x, {1, 0, 0}) + fv(y, {0, 1, 0}) +
-                         fv(z, {0, 0, 1});
+        const Vec3 org =
+            q.v(q.self(), q.L.f.origin) + fv(x, {1, 0, 0}) + fv(y, {0, 1, 0}) + fv(z, {0, 0, 1});
         const float r = q.random();
         St mdl = s_gib3_mdl;
-        if (r < 0.3f) mdl = s_gib1_mdl;
-        else if (r < 0.6f) mdl = s_gib2_mdl;
+        if (r < 0.3f)
+          mdl = s_gib1_mdl;
+        else if (r < 0.6f)
+          mdl = s_gib2_mdl;
         throw_gib_at(q, q.s(mdl), org, -999);
       }
     }
@@ -362,7 +366,7 @@ void monster_oldone(A& q) {
   q.set_f(me, q.L.f.takedamage, kDamageYes);
   q.set_i(me, f_th_hurt, q.fn(fn_noop));  // it does not flinch
   q.set_i(me, f_th_die, q.fn(fn_oldone_die));
-  set_frames(q, f_fr_stand, 0, 45);  // its sway
+  set_frames(q, f_fr_stand, 0, 45);   // its sway
   set_frames(q, f_fr_death, 46, 66);  // its shaking apart
   q.set_i(me, q.L.f.think, q.fn(fn_oldone_sway));
   const float t = q.time() + 0.1f;

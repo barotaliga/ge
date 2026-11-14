@@ -98,6 +98,5 @@ TEST(the_arsenal_rows_become_server_lines_our_programs_read) {
     return false;
   };
   for (const pf::WeaponRow& w : a.weapons) CHECK_MSG(holds(pf::weapon_text(w)), pf::weapon_text(w));
-  for (const pf::ArmourRow& r : a.armour)
-    CHECK_MSG(holds(pf::armour_text(r)), pf::armour_text(r));
+  for (const pf::ArmourRow& r : a.armour) CHECK_MSG(holds(pf::armour_text(r)), pf::armour_text(r));
 }

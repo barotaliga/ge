@@ -481,7 +481,8 @@ const gl::LabSpec kSpec{
     "se-swim",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "the baseline mod's body cycles (games/shooters_edge/rules/common_player.cpp, player_body) on the "
+    "the baseline mod's body cycles (games/shooters_edge/rules/common_player.cpp, player_body) on "
+    "the "
     "listen server (client/listen.hpp), drawn by client/world_models.hpp",
     "shooter",
     "Does a swimming player run? The frame the program gives his body while he swims, lets go and "

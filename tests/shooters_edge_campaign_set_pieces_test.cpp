@@ -1,11 +1,11 @@
 // Tests: the set pieces of our campaign (games/shooters_edge/rules/campaign_set_pieces.cpp) and
-// the words at an episode's end (campaign_world.cpp), on the campaign host in the arena's west room. A
-// train rides its path of corners and back; a secret door shot moves back, then aside, and closes
-// again; an exploding box shot blows and hurts a player beside it, the shotgun hits it, and a box
-// in another's blast goes up in the same blow; a single-player setmodel sizes a brush model file; a
-// spike trap used fires at the player; a fireball spout throws; bubbles rise; an ambient sound
-// leaves nothing behind; a rune taken holds its episode's closing words, and the intermission shows
-// them before it leaves.
+// the words at an episode's end (campaign_world.cpp), on the campaign host in the arena's west
+// room. A train rides its path of corners and back; a secret door shot moves back, then aside, and
+// closes again; an exploding box shot blows and hurts a player beside it, the shotgun hits it, and
+// a box in another's blast goes up in the same blow; a single-player setmodel sizes a brush model
+// file; a spike trap used fires at the player; a fireball spout throws; bubbles rise; an ambient
+// sound leaves nothing behind; a rune taken holds its episode's closing words, and the intermission
+// shows them before it leaves.
 //
 // ge:summary Tests: our campaign mod's set pieces and an episode's closing words
 // ge:keywords test campaign-mod set-pieces func-train func-door-secret explobox trap-spikeshooter

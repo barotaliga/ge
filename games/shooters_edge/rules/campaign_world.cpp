@@ -104,9 +104,9 @@ void worldspawn(A& q) {
   weapon_precache(q);
   item_precache(q);
   ai_precache(q);
-  for (St s : {s_r_tele1_wav, s_drclos4_wav, s_doormv1_wav, s_plat1_wav, s_plat2_wav,
-               s_switch21_wav, s_lock4_wav, s_pkup_wav, s_armor1_wav, s_misc_secret_wav,
-               s_misc_talk_wav})
+  for (St s :
+       {s_r_tele1_wav, s_drclos4_wav, s_doormv1_wav, s_plat1_wav, s_plat2_wav, s_switch21_wav,
+        s_lock4_wav, s_pkup_wav, s_armor1_wav, s_misc_secret_wav, s_misc_talk_wav})
     q.precache_sound(q.s(s));
   q.lightstyle(0, q.s(s_style0));
   q.lightstyle(1, q.s(s_style1));
@@ -132,8 +132,10 @@ void info_notnull(A&) {}
 void intermission_start(A& q) {
   q.set_g(g_intermission_running, 1);
   q.set_g(g_match_over, 1);
-  if (on(q.deathmatch())) q.set_g(g_intermission_exit, q.time() + 5);
-  else q.set_g(g_intermission_exit, q.time() + 2);
+  if (on(q.deathmatch()))
+    q.set_g(g_intermission_exit, q.time() + 5);
+  else
+    q.set_g(g_intermission_exit, q.time() + 2);
   const int32_t spot = intermission_spot(q);
   int32_t p = q.find(q.world(), q.L.f.classname, q.s(s_player));
   while (p != 0) {

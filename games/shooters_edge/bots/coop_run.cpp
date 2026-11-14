@@ -14,8 +14,8 @@
 #include <filesystem>
 #include <memory>
 
-#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooter/nav.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/sim/arena.hpp"

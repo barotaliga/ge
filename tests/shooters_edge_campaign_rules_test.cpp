@@ -5,9 +5,11 @@
 // state, every player's origin, view and health; the kills and who made them, the door, the
 // button, the exit); a change that moves one is a change to the rules.
 //
-// ge:summary Tests: the campaign's rules in C++ play the QC campaign's co-op runs to the bit, pinned
+// ge:summary Tests: the campaign's rules in C++ play the QC campaign's co-op runs to the bit,
+// ge:summary pinned
 // ge:keywords test campaign native-campaign parity coop-run campaign_mod loop-digest pinned
 // ge:skill progs shooter testing
+#include <cmath>
 #include <cstdint>
 #include <string>
 
@@ -55,7 +57,7 @@ uint64_t fold(const sb::CoopReport& r) {
   return h;
 }
 
-int ms(double s) { return s < 0 ? -1 : static_cast<int>(s * 1000.0 + 0.5); }
+int ms(double s) { return s < 0 ? -1 : static_cast<int>(std::lround(s * 1000.0)); }
 
 void same_run(sb::CoopOptions o, const Pin& qc) {
   o.root = GE_SOURCE_DIR;
@@ -63,20 +65,13 @@ void same_run(sb::CoopOptions o, const Pin& qc) {
   const sb::CoopReport n = sb::run_coop(o);
   CHECK_MSG(n.ok, n.error);
   CHECK(n.faults == 0);
-  const Pin got = {n.digests.size(),
-                   n.kills.size(),
-                   n.monsters_total,
-                   ms(n.button_pressed_at),
-                   ms(n.door_open_at),
-                   n.leader_deaths,
-                   n.exited,
-                   fold(n)};
-  const std::string seen = "{" + std::to_string(got.frames) + ", " + std::to_string(got.kills) +
-                           ", " + std::to_string(got.monsters) + ", " +
-                           std::to_string(got.button_ms) + ", " + std::to_string(got.door_ms) +
-                           ", " + std::to_string(got.leader_deaths) + ", " +
-                           (got.exited ? "true" : "false") + ", " + std::to_string(got.hash) +
-                           "ull}";
+  const Pin got = {n.digests.size(),   n.kills.size(),  n.monsters_total, ms(n.button_pressed_at),
+                   ms(n.door_open_at), n.leader_deaths, n.exited,         fold(n)};
+  const std::string seen =
+      "{" + std::to_string(got.frames) + ", " + std::to_string(got.kills) + ", " +
+      std::to_string(got.monsters) + ", " + std::to_string(got.button_ms) + ", " +
+      std::to_string(got.door_ms) + ", " + std::to_string(got.leader_deaths) + ", " +
+      (got.exited ? "true" : "false") + ", " + std::to_string(got.hash) + "ull}";
   CHECK_MSG(got.frames == qc.frames && got.kills == qc.kills && got.monsters == qc.monsters &&
                 got.button_ms == qc.button_ms && got.door_ms == qc.door_ms &&
                 got.leader_deaths == qc.leader_deaths && got.exited == qc.exited &&

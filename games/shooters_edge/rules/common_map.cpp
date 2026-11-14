@@ -26,7 +26,6 @@ constexpr int kDoorGold = 8;
 constexpr int kDoorSilver = 16;
 constexpr int kDoorToggle = 32;  // opens on one use and stays, shuts on the next
 
-
 void flame_start(A& q, int32_t mdl, float fr) {
   q.precache_model(mdl);
   q.setmodel(q.self(), mdl);
@@ -44,7 +43,6 @@ void brush_start(A& q) {
   q.setorigin(me, q.v(me, q.L.f.origin));
   q.setmodel(q.self(), q.i(q.self(), q.L.f.model));
 }
-
 
 // A trigger field the size of `self`'s brush, invisible.
 void trigger_start(A& q) {

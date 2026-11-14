@@ -29,7 +29,7 @@ bool campaign_mod(ge::progs::Progs& out, std::string& error) {
 bool own_mod(const std::string& name, ge::progs::Progs& out, std::string& error) {
   if (name == "arena") return baseline_mod(out, error);
   if (name == "campaign") return campaign_mod(out, error);
-  error = "no program of ours is named \"" + name + "\"; next: pass arena or campaign";
+  error = "no program of ours is named \"" + name + "\"; the programs are arena and campaign";
   return false;
 }
 

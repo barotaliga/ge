@@ -1,7 +1,7 @@
-// The campaign mod's tests' fixture: our campaign program (the rules in C++) on the campaign host in the arena's
-// west room (with the door's and the plat's brushes as "*1" and "*2"), the player at its start,
-// the test's own entities after; reading and setting fields, calling the program's functions as
-// an entity, a blow, a blast and a host frame.
+// The campaign mod's tests' fixture: our campaign program (the rules in C++) on the campaign host
+// in the arena's west room (with the door's and the plat's brushes as "*1" and "*2"), the player at
+// its start, the test's own entities after; reading and setting fields, calling the program's
+// functions as an entity, a blow, a blast and a host frame.
 //
 // ge:summary Tests' fixture: the campaign mod on the campaign host, fields, calls and frames
 // ge:keywords test fixture campaign-mod campaign-host qc-call arena
@@ -16,8 +16,8 @@
 #include "check.hpp"
 #include "progs/layout.hpp"
 #include "progs/vm.hpp"
-#include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
+#include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/sim/qc_program.hpp"
 

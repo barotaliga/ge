@@ -43,7 +43,6 @@
 #include "lab/labs/explosion_scene.hpp"
 #include "lab/labs/liquid_scene.hpp"
 #include "morph/write.hpp"
-#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooter/trace.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -53,6 +52,7 @@
 #include "shooters_edge/client/world_models.hpp"
 #include "shooters_edge/labs/warp_film.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "vfs/pak.hpp"
 
 namespace {

@@ -197,7 +197,8 @@ bool face_enemy(A& q) {
   return (delta <= 45) | (delta >= 315);
 }
 
-// The monster has an enemy: it calls out, tells the room, heads for him and holds its fire a second.
+// The monster has an enemy: it calls out, tells the room, heads for him and holds its fire a
+// second.
 void found_target(A& q) {
   const int32_t me = q.self();
   const int32_t enemy = q.i(me, q.L.f.enemy);
@@ -212,8 +213,7 @@ void found_target(A& q) {
   q.set_f(me, f_search_time, q.time() + 5);
   q.set_f(me, f_attack_finished, q.time() + 1);
   q.set_f(me, f_attack_state, kAsStraight);
-  if (!q.is(q.i(me, q.L.f.noise), ""))
-    q.sound(me, kChanVoice, q.i(me, q.L.f.noise), 1, kAttnNorm);
+  if (!q.is(q.i(me, q.L.f.noise), "")) q.sound(me, kChanVoice, q.i(me, q.L.f.noise), 1, kAttnNorm);
   run_field(q, me, f_th_run);
 }
 
@@ -273,9 +273,12 @@ bool check_attack(A& q) {
   if (r == kRangeFar) return false;
   const bool melee = q.i(me, f_th_melee) != 0;
   float chance = 0;
-  if (r == kRangeMelee) chance = 0.9f;
-  else if (r == kRangeNear) chance = melee ? 0.2f : 0.4f;
-  else chance = melee ? 0.05f : 0.1f;
+  if (r == kRangeMelee)
+    chance = 0.9f;
+  else if (r == kRangeNear)
+    chance = melee ? 0.2f : 0.4f;
+  else
+    chance = melee ? 0.05f : 0.1f;
   if (q.random() < chance) {
     q.set_f(me, f_attack_state, kAsMissile);
     q.set_f(me, f_attack_finished, q.time() + 2 * q.random());
@@ -314,8 +317,10 @@ void frame_loop(A& q, Vec3 r) {
   if (r.z == 0) return;
   const int32_t me = q.self();
   const float fr = q.f(me, q.L.f.frame);
-  if ((fr < r.x) | (fr >= r.y)) q.set_f(me, q.L.f.frame, r.x);
-  else q.set_f(me, q.L.f.frame, fr + 1);
+  if ((fr < r.x) | (fr >= r.y))
+    q.set_f(me, q.L.f.frame, r.x);
+  else
+    q.set_f(me, q.L.f.frame, fr + 1);
 }
 
 // An attack, a leap or a pain begins: its frames from the first.
@@ -439,14 +444,17 @@ void monster_die(A& q) {
   q.set_f(me, q.L.f.flags, flags - band(flags, kFlMonster));
   set_think(q, me, fn_noop, -1);
   if (q.f(me, q.L.f.health) < q.f(me, f_gib_health)) {
-    if (!q.is(q.i(me, f_gib_noise), "")) q.sound(me, kChanVoice, q.i(me, f_gib_noise), 1, kAttnNorm);
-    else q.sound(me, kChanVoice, q.s(s_udeath_wav), 1, kAttnNorm);
+    if (!q.is(q.i(me, f_gib_noise), ""))
+      q.sound(me, kChanVoice, q.i(me, f_gib_noise), 1, kAttnNorm);
+    else
+      q.sound(me, kChanVoice, q.s(s_udeath_wav), 1, kAttnNorm);
     if (on(q.f(me, f_gib_first))) throw_pieces(q);
     become_head(q, q.i(me, f_head_model));
     if (q.f(me, f_gib_first) == 0) throw_pieces(q);
     return;
   }
-  if (!q.is(q.i(me, q.L.f.noise1), "")) q.sound(me, kChanVoice, q.i(me, q.L.f.noise1), 1, kAttnNorm);
+  if (!q.is(q.i(me, q.L.f.noise1), ""))
+    q.sound(me, kChanVoice, q.i(me, q.L.f.noise1), 1, kAttnNorm);
   if (q.v(me, f_fr_death).z == 0) {  // a kind with no death frames is laid on its side
     q.set_f(me, q.L.f.solid, kSolidNot);
     Vec3 a = q.v(me, q.L.f.angles);
@@ -458,8 +466,10 @@ void monster_die(A& q) {
   if (q.f(me, f_death_solid) == 0) q.set_f(me, q.L.f.solid, kSolidNot);
   const bool two = q.v(me, f_fr_death2).z != 0;
   const bool half = q.random() < 0.5f;  // drawn either way
-  if (two & half) anim_begin(q, q.v(me, f_fr_death2));
-  else anim_begin(q, q.v(me, f_fr_death));
+  if (two & half)
+    anim_begin(q, q.v(me, f_fr_death2));
+  else
+    anim_begin(q, q.v(me, f_fr_death));
   corpse_fall(q);
 }
 
@@ -472,8 +482,7 @@ void monster_begin(A& q) {
     if ((corner != 0) & q.is(q.i(corner, q.L.f.classname), "path_corner")) {
       q.set_i(me, f_movetarget, corner);
       q.set_i(me, q.L.f.goalentity, corner);
-      q.set_f(me, q.L.f.ideal_yaw,
-              q.vectoyaw(q.v(corner, q.L.f.origin) - q.v(me, q.L.f.origin)));
+      q.set_f(me, q.L.f.ideal_yaw, q.vectoyaw(q.v(corner, q.L.f.origin) - q.v(me, q.L.f.origin)));
       q.set_f(me, f_pausetime, 0);
       run_field(q, me, f_th_walk);
       return;
@@ -513,8 +522,8 @@ void walkmonster_start(A& q, int32_t mdl, float hp, Vec3 lo, Vec3 hi) {
   const int32_t me = q.self();
   q.setorigin(me, q.v(me, q.L.f.origin) + Vec3{0, 0, 1});
   if (q.droptofloor() == 0)
-    q.dprint({q.i(me, q.L.f.classname), q.s(s_in_a_wall_at), q.vtos(q.v(me, q.L.f.origin)),
-              q.s(s_nl)});
+    q.dprint(
+        {q.i(me, q.L.f.classname), q.s(s_in_a_wall_at), q.vtos(q.v(me, q.L.f.origin)), q.s(s_nl)});
 }
 
 // A flyer: stays where it is placed, turns at half a walker's rate.
@@ -568,8 +577,10 @@ int32_t monster_missile(A& q, int32_t mdl, float spd, float points, float lob) {
   const int32_t me = q.self();
   aim_along(q, eye(q, q.i(me, q.L.f.enemy)) - eye(q, me));
   int32_t m = 0;
-  if (on(lob)) m = launch(q, mdl, kMovetypeToss, spd, 5);
-  else m = launch(q, mdl, kMovetypeFlymissile, spd, 5);
+  if (on(lob))
+    m = launch(q, mdl, kMovetypeToss, spd, 5);
+  else
+    m = launch(q, mdl, kMovetypeFlymissile, spd, 5);
   q.set_v(m, q.L.f.velocity, q.v(m, q.L.f.velocity) + fv(lob, {0, 0, 1}));
   q.set_i(m, q.L.f.classname, q.s(s_monster_missile));
   q.set_f(m, f_dmg, points);

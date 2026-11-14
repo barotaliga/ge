@@ -1,7 +1,7 @@
 ---
 title: A test reads an entity field with entity_number, and a world draw needs the model list
 date: 2026-10-31
-scope: games/shooters_edge/qc/campaign/, games/shooters_edge/labs/
+scope: games/shooters_edge/rules/, games/shooters_edge/labs/
 concepts: [qc, monsters, entity-field, entity-number, world-draw, model-list, se-client, deathmatch]
 ---
 

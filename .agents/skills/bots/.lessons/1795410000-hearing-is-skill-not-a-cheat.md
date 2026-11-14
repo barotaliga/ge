@@ -1,7 +1,7 @@
 ---
 title: Hear through the client's sounds by skill, and snap a sound only to spots the listener knows
 date: 2026-11-01
-scope: plugins/shooter/hearing.cpp, games/shooters_edge/bots/ears.cpp, games/shooters_edge/bots/buttons.cpp, games/shooters_edge/qc/common/player.qc
+scope: plugins/shooter/hearing.cpp, games/shooters_edge/bots/ears.cpp, games/shooters_edge/bots/buttons.cpp, games/shooters_edge/rules/common_player.cpp
 concepts: [hearing, pickup-sound, spawn-sound, telefrag, buttons, team-map]
 ---
 

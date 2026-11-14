@@ -127,8 +127,7 @@ int32_t next_spot(A& q, int32_t kind) {
 // A spot no living player stands on (within a player's width), self aside.
 bool spot_free(A& q, int32_t spot) {
   for (int32_t e = q.findradius(q.v(spot, q.L.f.origin), 40); e != 0; e = q.i(e, q.L.f.chain)) {
-    if ((e != q.self()) & (band(q.f(e, q.L.f.flags), kFlClient) != 0) &
-        (q.f(e, q.L.f.health) > 0))
+    if ((e != q.self()) & (band(q.f(e, q.L.f.flags), kFlClient) != 0) & (q.f(e, q.L.f.health) > 0))
       return false;
   }
   return true;
@@ -166,9 +165,12 @@ void player_jump(A& q) {
   if (band(q.f(me, q.L.f.flags), kFlWaterjump) != 0) return;
   if (q.f(me, q.L.f.waterlevel) >= 2) {
     const float wt = q.f(me, q.L.f.watertype);
-    if (wt == kContentWater) set_velocity_z(q, me, 100);
-    else if (wt == kContentSlime) set_velocity_z(q, me, 80);
-    else set_velocity_z(q, me, 50);
+    if (wt == kContentWater)
+      set_velocity_z(q, me, 100);
+    else if (wt == kContentSlime)
+      set_velocity_z(q, me, 80);
+    else
+      set_velocity_z(q, me, 50);
     swim_sound(q);
     return;
   }
@@ -206,15 +208,18 @@ void SetChangeParms(A& q) {
     return;
   }
   const float items = q.f(me, q.L.f.items);
-  q.set_f(me, q.L.f.items,
-          items - band(items, static_cast<float>(kItKey1 | kItKey2 | kItQuad | kItInvulnerability)));
+  q.set_f(
+      me, q.L.f.items,
+      items - band(items, static_cast<float>(kItKey1 | kItKey2 | kItQuad | kItInvulnerability)));
   if (q.f(me, q.L.f.health) > 100) q.set_f(me, q.L.f.health, 100);
   if (q.f(me, q.L.f.health) < 50) q.set_f(me, q.L.f.health, 50);
   q.set_gf(q.parm(1), q.f(me, q.L.f.items));
   q.set_gf(q.parm(2), q.f(me, q.L.f.health));
   q.set_gf(q.parm(3), q.f(me, q.L.f.armorvalue));
-  if (q.f(me, q.L.f.ammo_shells) < 25) q.set_gf(q.parm(4), 25);
-  else q.set_gf(q.parm(4), q.f(me, q.L.f.ammo_shells));
+  if (q.f(me, q.L.f.ammo_shells) < 25)
+    q.set_gf(q.parm(4), 25);
+  else
+    q.set_gf(q.parm(4), q.f(me, q.L.f.ammo_shells));
   q.set_gf(q.parm(5), q.f(me, q.L.f.ammo_nails));
   q.set_gf(q.parm(6), q.f(me, q.L.f.ammo_rockets));
   q.set_gf(q.parm(7), q.f(me, q.L.f.ammo_cells));
@@ -226,8 +231,10 @@ void SetChangeParms(A& q) {
 // when the map has none of the kind asked for.
 int32_t spawn_point(A& q) {
   int32_t spot = q.world();
-  if (on(q.coop())) spot = coop_spot(q);
-  else if (on(q.deathmatch())) spot = next_spot(q, q.s(s_info_player_deathmatch));
+  if (on(q.coop()))
+    spot = coop_spot(q);
+  else if (on(q.deathmatch()))
+    spot = next_spot(q, q.s(s_info_player_deathmatch));
   if (spot == 0) spot = q.find(q.world(), q.L.f.classname, q.s(s_info_player_start));
   if (spot == 0) q.error({q.s(s_the_map_has_no)});
   return spot;

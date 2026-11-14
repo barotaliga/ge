@@ -1,7 +1,7 @@
 ---
 title: The window's match is the baseline mod even on the classic packs; check its own QC before blaming the move
 date: 2026-11-09
-scope: games/shooters_edge/qc/common/player.qc, games/shooters_edge/client/game_folder.cpp, games/shooters_edge/labs/gpu_se_swim_lab.cpp
+scope: games/shooters_edge/rules/common_player.cpp, games/shooters_edge/client/game_folder.cpp, games/shooters_edge/labs/gpu_se_swim_lab.cpp
 concepts: [baseline-mod, player-frame, body-cycle, swim, find-program, progs, listen-server]
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: A monster names its frame ranges once; the mind's steps show them
 date: 2026-11-05
-scope: games/shooters_edge/qc/campaign/ai.qc, games/shooters_edge/qc/campaign/monsters*.qc
+scope: games/shooters_edge/rules/campaign_ai.cpp, games/shooters_edge/rules/campaign_monsters*.cpp
 concepts: [qc, animation, frames, monster, anim-step, frame-range]
 ---
 

@@ -1,6 +1,6 @@
 // A GAME'S ARSENAL AS DATA: its weapons and its armour, one row each, which our programs
-// (games/shooters_edge/rules/common_*.cpp) fire, show, pick up and absorb through instead of naming a
-// weapon by a constant (docs/shooters-edge.md § Weapons and armour).
+// (games/shooters_edge/rules/common_*.cpp) fire, show, pick up and absorb through instead of naming
+// a weapon by a constant (docs/shooters-edge.md § Weapons and armour).
 //
 // - **A weapon row** (`WeaponRow`): its slot (the number key, 1..8, and the order the best-weapon
 //   choice prefers); how it fires (`Fire`: a cut in front, pellets, a spike, a bouncing grenade,

@@ -15,11 +15,11 @@
 #include "net/sim_network.hpp"
 #include "progs/qc_compile.hpp"
 #include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/net/classic_coop_game.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
 namespace {

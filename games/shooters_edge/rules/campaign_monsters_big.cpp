@@ -120,9 +120,8 @@ void monster_demon1(A& q) {
   if (no_monsters_here(q)) return;
   q.precache_model(q.s(s_demon_mdl));
   q.precache_model(q.s(s_h_demon_mdl));
-  precache_sounds(q, {s_demon_ddeath_wav, s_demon_dhit2_wav, s_demon_djump_wav,
-                      s_demon_dpain1_wav, s_demon_idle1_wav, s_demon_sight2_wav,
-                      s_demon_dland2_wav});
+  precache_sounds(q, {s_demon_ddeath_wav, s_demon_dhit2_wav, s_demon_djump_wav, s_demon_dpain1_wav,
+                      s_demon_idle1_wav, s_demon_sight2_wav, s_demon_dland2_wav});
   monster_kind(q, s_demon_sight2_wav, s_demon_ddeath_wav, s_h_demon_mdl, -80, 8, 20);
   const int32_t me = q.self();
   q.set_i(me, f_th_melee, q.fn(fn_demon_melee));
@@ -179,8 +178,7 @@ void shambler_bolt(A& q) {
   if (anim_step(q) == 1) q.sound(me, kChanWeapon, q.s(s_shambler_sattck1_wav), 1, kAttnNorm);
   if ((anim_step(q) >= 4) & (anim_step(q) <= 6)) {
     const Vec3 from = q.v(me, q.L.f.origin) + Vec3{0, 0, 40};
-    const Vec3 dir =
-        q.normalize(enemy_origin(q) + q.v(enemy(q), q.L.f.view_ofs) - from);
+    const Vec3 dir = q.normalize(enemy_origin(q) + q.v(enemy(q), q.L.f.view_ofs) - from);
     q.traceline(from, from + dir * 600, 1, me);
     effect_beam(q, from, q.gv(q.L.g.trace_endpos));
     q.traceline(from, from + dir * 600, 0, me);
@@ -245,8 +243,7 @@ void caster_ball_touch(A& q) {
     q.set_i(other, f_deathtype, q.s(s_exploded_by_a_homing_ball));
     damage(q, other, me, q.i(me, q.L.f.owner), 110);
   }
-  radius_damage(q, q.self(), q.i(q.self(), q.L.f.owner), 40, q.other(),
-                q.s(s_caught_by_a_homing));
+  radius_damage(q, q.self(), q.i(q.self(), q.L.f.owner), 40, q.other(), q.s(s_caught_by_a_homing));
   q.sound(q.self(), kChanVoice, q.s(s_weapons_r_exp3_wav), 1, kAttnNorm);
   effect_explosion(q, q.v(q.self(), q.L.f.origin));
   q.remove(q.self());
@@ -300,9 +297,9 @@ void monster_shalrath(A& q) {
   q.precache_model(q.s(s_shalrath_mdl));
   q.precache_model(q.s(s_h_shal_mdl));
   q.precache_model(q.s(s_v_spike_mdl));
-  precache_sounds(q, {s_shalrath_attack_wav, s_shalrath_attack2_wav, s_shalrath_death_wav,
-                      s_shalrath_idle_wav, s_shalrath_pain_wav, s_shalrath_sight_wav,
-                      s_weapons_r_exp3_wav});
+  precache_sounds(
+      q, {s_shalrath_attack_wav, s_shalrath_attack2_wav, s_shalrath_death_wav, s_shalrath_idle_wav,
+          s_shalrath_pain_wav, s_shalrath_sight_wav, s_weapons_r_exp3_wav});
   monster_kind(q, s_shalrath_sight_wav, s_shalrath_death_wav, s_h_shal_mdl, -90, 6, 6);
   const int32_t me = q.self();
   q.set_i(me, f_th_missile, q.fn(fn_caster_missile));
@@ -343,8 +340,10 @@ void enforcer_flinch(A& q) { flinch(q, fn_enforcer_flinch, 3); }
 
 void enforcer_pain(A& q) {
   hold_pain(q, 1);
-  if (q.random() < 0.5f) q.sound(q.self(), kChanVoice, q.s(s_enforcer_pain1_wav), 1, kAttnNorm);
-  else q.sound(q.self(), kChanVoice, q.s(s_enforcer_pain2_wav), 1, kAttnNorm);
+  if (q.random() < 0.5f)
+    q.sound(q.self(), kChanVoice, q.s(s_enforcer_pain1_wav), 1, kAttnNorm);
+  else
+    q.sound(q.self(), kChanVoice, q.s(s_enforcer_pain2_wav), 1, kAttnNorm);
   anim_begin(q, q.v(q.self(), f_fr_pain));
   enforcer_flinch(q);
 }
@@ -354,15 +353,18 @@ void monster_enforcer(A& q) {
   q.precache_model(q.s(s_enforcer_mdl));
   q.precache_model(q.s(s_h_mega_mdl));
   q.precache_model(q.s(s_laser_mdl));
-  precache_sounds(q, {s_enforcer_death1_wav, s_enforcer_enfire_wav, s_enforcer_enfstop_wav,
-                      s_enforcer_idle1_wav, s_enforcer_pain1_wav, s_enforcer_pain2_wav,
-                      s_enforcer_sight1_wav, s_enforcer_sight2_wav, s_enforcer_sight3_wav,
-                      s_enforcer_sight4_wav});
+  precache_sounds(
+      q, {s_enforcer_death1_wav, s_enforcer_enfire_wav, s_enforcer_enfstop_wav,
+          s_enforcer_idle1_wav, s_enforcer_pain1_wav, s_enforcer_pain2_wav, s_enforcer_sight1_wav,
+          s_enforcer_sight2_wav, s_enforcer_sight3_wav, s_enforcer_sight4_wav});
   const float r = q.random();  // one of four sight calls
   St sight = s_enforcer_sight4_wav;
-  if (r < 0.25f) sight = s_enforcer_sight1_wav;
-  else if (r < 0.5f) sight = s_enforcer_sight2_wav;
-  else if (r < 0.75f) sight = s_enforcer_sight3_wav;
+  if (r < 0.25f)
+    sight = s_enforcer_sight1_wav;
+  else if (r < 0.5f)
+    sight = s_enforcer_sight2_wav;
+  else if (r < 0.75f)
+    sight = s_enforcer_sight3_wav;
   monster_kind(q, sight, s_enforcer_death1_wav, s_h_mega_mdl, -35, 2, 14);
   const int32_t me = q.self();
   q.set_i(me, f_th_missile, q.fn(fn_enforcer_missile));
@@ -408,7 +410,7 @@ void tarbaby_bounce(A& q) {
   anim_tick(q);
   if (((anim_step(q) > 2) & on_ground(q)) | (anim_step(q) > 30)) {
     const bool alive = q.f(enemy(q), q.L.f.health) > 0;
-    const bool seen = can_see(q, enemy(q));                   // asked either way
+    const bool seen = can_see(q, enemy(q));                 // asked either way
     const bool near = range_to(q, enemy(q)) <= kRangeNear;  // and this
     if (alive & seen & near) {
       tarbaby_jump(q);
@@ -556,9 +558,9 @@ void monster_hell_knight(A& q) {
   q.precache_model(q.s(s_hknight_mdl));
   q.precache_model(q.s(s_h_hellkn_mdl));
   q.precache_model(q.s(s_k_spike_mdl));
-  precache_sounds(q, {s_hknight_attack1_wav, s_hknight_death1_wav, s_hknight_pain1_wav,
-                      s_hknight_sight1_wav, s_hknight_hit_wav, s_hknight_slash1_wav,
-                      s_hknight_idle_wav, s_hknight_grunt_wav});
+  precache_sounds(
+      q, {s_hknight_attack1_wav, s_hknight_death1_wav, s_hknight_pain1_wav, s_hknight_sight1_wav,
+          s_hknight_hit_wav, s_hknight_slash1_wav, s_hknight_idle_wav, s_hknight_grunt_wav});
   monster_kind(q, s_hknight_sight1_wav, s_hknight_death1_wav, s_h_hellkn_mdl, -40, 2, 16);
   const int32_t me = q.self();
   q.set_i(me, f_th_melee, q.fn(fn_hknight_melee));

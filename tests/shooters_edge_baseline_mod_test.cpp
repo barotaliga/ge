@@ -1,10 +1,11 @@
-// Tests: the baseline mod (the arena's rules in C++, games/shooters_edge/rules/) played by four bots on the arena with its door and plat. It compiles with the engine-side
-// layout (crc and offsets, so the loader's layout check takes it), spawns every entity of its
-// entity text (nothing inhibited, no unknown key or classname), and plays a deathmatch: pickups,
-// hits and frags with obituaries by weapon, missiles in the air, the door opening for a player,
-// the frag log adding up to the frags, the time limit ending the match; and the same match twice
-// is the same to the bit. Its pickups name an item in the loaded game's words when the game's
-// profile gives them (`localinfo` under each class name), in its own when none is given.
+// Tests: the baseline mod (the arena's rules in C++, games/shooters_edge/rules/) played by four
+// bots on the arena with its door and plat. It compiles with the engine-side layout (crc and
+// offsets, so the loader's layout check takes it), spawns every entity of its entity text (nothing
+// inhibited, no unknown key or classname), and plays a deathmatch: pickups, hits and frags with
+// obituaries by weapon, missiles in the air, the door opening for a player, the frag log adding up
+// to the frags, the time limit ending the match; and the same match twice is the same to the bit.
+// Its pickups name an item in the loaded game's words when the game's profile gives them
+// (`localinfo` under each class name), in its own when none is given.
 //
 // ge:summary Tests: the baseline QC mod compiles with the engine's layout and plays a deathmatch
 // ge:keywords test baseline-mod baseline_mod mod-match deathmatch bots door plat frags

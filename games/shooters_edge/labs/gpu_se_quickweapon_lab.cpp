@@ -177,8 +177,8 @@ void run(gl::Lab& lab) {
   const shooters_edge::view::ViewSettings view_settings;
   shooters_edge::view::HandFrame hand;
   double t = 0;
-  // The shotgun, the double shotgun, the launcher and the beam gun (rules/common_decl.hpp's W_ bits),
-  // a few rockets and cells.
+  // The shotgun, the double shotgun, the launcher and the beam gun (rules/common_decl.hpp's W_
+  // bits), a few rockets and cells.
   const auto arm = [&] {
     cl::set_field_named(l, 1, "items", 1 + 2 + 32 + 64 + 4096);
     if (cl::field_named(l, 1, "ammo_shells") < 1) cl::set_field_named(l, 1, "ammo_shells", 25);

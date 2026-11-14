@@ -40,7 +40,8 @@ void train_blocked(A& q) { crush(q, s_crushed); }
 
 void train_arrived(A& q) {
   const int32_t me = q.self();
-  if (!q.is(q.i(me, q.L.f.noise1), "")) q.sound(me, kChanVoice, q.i(me, q.L.f.noise1), 1, kAttnNorm);
+  if (!q.is(q.i(me, q.L.f.noise1), ""))
+    q.sound(me, kChanVoice, q.i(me, q.L.f.noise1), 1, kAttnNorm);
   if (q.f(me, f_wait) < 0) {  // stops here until used
     q.set_i(me, q.L.f.use, q.fn(fn_train_next));
     return;
@@ -77,8 +78,10 @@ void train_place(A& q) {
   }
   q.set_i(me, q.L.f.target, q.i(corner, q.L.f.target));
   q.setorigin(me, q.v(corner, q.L.f.origin) - q.v(me, q.L.f.mins));
-  if (q.is(q.i(me, q.L.f.targetname), "")) then_at(q, fn_train_next, ltime(q) + 0.1f);
-  else q.set_i(me, q.L.f.use, q.fn(fn_train_next));
+  if (q.is(q.i(me, q.L.f.targetname), ""))
+    then_at(q, fn_train_next, ltime(q) + 0.1f);
+  else
+    q.set_i(me, q.L.f.use, q.fn(fn_train_next));
 }
 
 void func_train(A& q) {
@@ -117,7 +120,8 @@ void secret_leg(A& q, Vec3 to, Fn then) {
 
 void secret_stop(A& q) {
   const int32_t me = q.self();
-  if (!q.is(q.i(me, q.L.f.noise3), "")) q.sound(me, kChanVoice, q.i(me, q.L.f.noise3), 1, kAttnNorm);
+  if (!q.is(q.i(me, q.L.f.noise3), ""))
+    q.sound(me, kChanVoice, q.i(me, q.L.f.noise3), 1, kAttnNorm);
 }
 
 }  // namespace
@@ -167,7 +171,8 @@ void secret_use(A& q) {
   q.set_f(q.self(), q.L.f.takedamage, kDamageNo);
   use_targets(q);
   const int32_t me = q.self();
-  if (!q.is(q.i(me, q.L.f.noise1), "")) q.sound(me, kChanVoice, q.i(me, q.L.f.noise1), 1, kAttnNorm);
+  if (!q.is(q.i(me, q.L.f.noise1), ""))
+    q.sound(me, kChanVoice, q.i(me, q.L.f.noise1), 1, kAttnNorm);
   secret_leg(q, q.v(me, f_dest1), fn_secret_open_rest);
 }
 
@@ -348,8 +353,10 @@ void trap_fire(A& q) {
     q.set_i(m, f_deathtype, q.s(s_lasered));
   } else {
     q.sound(me, kChanVoice, q.s(s_weapons_spike2_wav), 1, kAttnNorm);
-    if (on(band(flags, 1))) m = launch(q, q.s(s_s_spike_mdl), kMovetypeFlymissile, 500, 6);
-    else m = launch(q, q.s(s_spike_mdl), kMovetypeFlymissile, 500, 6);
+    if (on(band(flags, 1)))
+      m = launch(q, q.s(s_s_spike_mdl), kMovetypeFlymissile, 500, 6);
+    else
+      m = launch(q, q.s(s_spike_mdl), kMovetypeFlymissile, 500, 6);
     q.set_i(m, q.L.f.classname, q.s(s_spike));
     q.set_f(m, f_dmg, 9);
     if (on(band(q.f(q.self(), q.L.f.spawnflags), 1))) q.set_f(m, f_dmg, 15);
