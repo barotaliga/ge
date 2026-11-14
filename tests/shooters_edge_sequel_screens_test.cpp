@@ -6,6 +6,7 @@
 // ge:keywords sequel scoreboard help-computer layout screen test
 // ge:skill testing shooter
 #include <algorithm>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -198,4 +199,87 @@ TEST(the_window_draws_the_scoreboard_over_the_bar_only_while_it_is_up) {
   CHECK(g->r.client_command(0, "score") == sv::CommandResult::mod);
   cl::run_sequel_bar(bar, g->r->world, 0, g->s().frame_number, 640, 480);
   CHECK(bar.ops.size() == bare);
+}
+
+TEST(inven_sends_the_counts_and_shows_while_alive) {
+  auto g = game("0", 1);
+  run(*g, 20);
+  sv::SqBody& b = g->p(0).body;
+  b.counts[sv::sq_item("weapon_shotgun")] = 1;
+  b.ammo[static_cast<int>(sv::SqAmmo::shells)] = 25;
+  CHECK(g->r.client_command(0, "inven") == sv::CommandResult::mod);
+  const std::vector<int16_t>& inv = g->seen(0).inventory;
+  CHECK(inv.size() == 256 && inv[7] == 1 && inv[8] == 1 && inv[18] == 25 && inv[9] == 0);
+  CHECK(g->seen(0).numbers.stats[13] == 2);
+  b.ammo[static_cast<int>(sv::SqAmmo::shells)] = 5;  // not sent again while open
+  run(*g, 20);
+  CHECK(g->seen(0).inventory[18] == 25);
+  CHECK(g->r.client_command(0, "help") == sv::CommandResult::mod);  // help closes it
+  CHECK(!g->p(0).inven_open && g->seen(0).numbers.stats[13] == 1);
+}
+
+TEST(the_selection_commands_step_through_what_is_held) {
+  auto g = game("0", 1);
+  run(*g, 20);
+  sv::SqBody& b = g->p(0).body;
+  b.counts[sv::sq_item("weapon_shotgun")] = 1;
+  b.counts[sv::sq_item("item_quad")] = 1;
+  b.selected = 7;
+  CHECK(g->r.client_command(0, "invnext") == sv::CommandResult::mod);
+  CHECK(b.selected == 8);
+  CHECK(g->r.client_command(0, "invnext") == sv::CommandResult::mod);
+  CHECK(b.selected == 23);
+  CHECK(g->r.client_command(0, "invnext") == sv::CommandResult::mod);
+  CHECK(b.selected == 7);  // wrapped
+  CHECK(g->r.client_command(0, "invprevw") == sv::CommandResult::mod);
+  CHECK(b.selected == 8);
+  CHECK(g->r.client_command(0, "invnextp") == sv::CommandResult::mod);
+  CHECK(b.selected == 23);
+  b.counts[sv::sq_item("item_quad")] = 0;
+  CHECK(g->r.client_command(0, "invnextp") == sv::CommandResult::mod);
+  CHECK(b.selected == -1);  // none found: none selected, weapons or not
+}
+
+TEST(invuse_uses_the_selected_item_and_says_when_there_is_none) {
+  auto g = game("0", 1);
+  run(*g, 20);
+  sv::SqBody& b = g->p(0).body;
+  b.counts[sv::sq_item("item_quad")] = 1;
+  b.selected = 23;
+  CHECK(g->r.client_command(0, "invuse") == sv::CommandResult::mod);
+  CHECK(g->p(0).quad_until > g->s().level_time && b.counts[sv::sq_item("item_quad")] == 0);
+  b.selected = -1;
+  const int64_t before = g->s().out.events_total;
+  CHECK(g->r.client_command(0, "invuse") == sv::CommandResult::mod);
+  bool told = false;
+  for (const sv::NetEvent& e : g->s().out.events)
+    told |= e.kind == sv::EventKind::print && e.text == "No item to use.\n";
+  CHECK(told && g->s().out.events_total > before);
+}
+
+TEST(the_window_draws_the_inventory_with_its_hotkeys) {
+  auto g = game("0", 1);
+  run(*g, 20);
+  sv::SqBody& b = g->p(0).body;
+  b.counts[sv::sq_item("weapon_shotgun")] = 1;
+  b.selected = 8;
+  CHECK(g->r.client_command(0, "inven") == sv::CommandResult::mod);
+  sv::bar_rows(g->s());
+  const std::map<std::string, std::string> binds = {{"2", "use Shotgun"}, {"q", "+attack"}};
+  cl::SequelBar bar;
+  bar.binds = &binds;
+  bar.now = 0.15;  // the cursor's on half
+  cl::run_sequel_bar(bar, g->r->world, 0, g->s().frame_number, 640, 480);
+  const auto find = [&](const std::string& text) {
+    return std::find_if(bar.ops.begin(), bar.ops.end(),
+                        [&](const auto& op) { return op.text == text; });
+  };
+  const auto blaster = find("         1 Blaster");
+  const auto shotgun = find("     2   1 Shotgun");
+  CHECK(blaster != bar.ops.end() && blaster->alt);
+  CHECK(shotgun != bar.ops.end() && !shotgun->alt && shotgun->x == 192 + 24 &&
+        shotgun->y == 120 + 48);
+  CHECK(find(std::string(1, '\x0f')) != bar.ops.end());
+  CHECK(std::any_of(bar.ops.begin(), bar.ops.end(),
+                    [](const auto& op) { return op.name == "inventory"; }));
 }

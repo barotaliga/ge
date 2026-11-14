@@ -591,6 +591,7 @@ void fill_rows(SequelServer& s) {
     wc.ping_ms = c.ping_ms;
     wc.entered_at = c.entered_at;
     if (wc.layout != p.layout) wc.layout = c.active ? p.layout : std::string();
+    if (wc.inventory != p.inventory) wc.inventory = c.active ? p.inventory : std::vector<int16_t>();
     wc.numbers = {};
     WorldEntity& e = w.entities[size_t(i) + 1];
     e = {};

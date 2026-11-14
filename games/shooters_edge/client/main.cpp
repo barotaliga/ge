@@ -1915,7 +1915,9 @@ int run_main(int argc, char** argv) {
     const shooters_edge::server::SequelServer* sequel =
         listen.rules ? shooters_edge::server::sequel_of(*listen.rules) : nullptr;
     if (sequel != nullptr && listen.campaign.end == cl::LevelEnd::none) {
-      // The sequel's own bar, from the program its rules send.
+      // The sequel's own bar from its rules' program; the inventory's hotkeys from the binds.
+      sequel_bar.binds = &console.binds().table(ge::console::BindMode::game);
+      sequel_bar.now = t;
       cl::run_sequel_bar(sequel_bar, sequel->world, 0, sequel->frame_number, w, h);
       // Its crosshair (the HUD's, shown unless hidden) and its centre print in its own letters.
       const int cross = hud.layout.find("crosshair");
