@@ -150,6 +150,11 @@ ClassicLayout classic_screen(int width, int height);
 ClassicLayout classic_screen(const ClassicArt& art, int width, int height);
 // The sequel's banner for a page (`m_banner_options`), or empty.
 std::string_view banner_of(std::string_view page);
+// A page's title written on a banner of the sequel's (plate_letters.hpp), centred on the 320 px
+// screen with its top at classic y `y`: in capitals, or in small letters after each word's capital
+// when the capitals would not fit the screen; a character no tag has is left out. False when the
+// art has no tag letters or the title does not fit either way (the caller writes it in glyphs).
+bool banner_title(const ClassicPen& pen, std::string_view title, float y);
 
 // The page up laid out on a `width` x `height` screen.
 ClassicLayout layout_classic(const ge::ui::Menu& menu, const ClassicArt& art, int width,

@@ -5,7 +5,8 @@
 #   ge_add_web_viewer(<game> [NAME <target>] SOURCES <file>... LIBS <target>... [DEFINES <d>...])
 #
 # makes `<game>_viewer.js` and `<game>_viewer.wasm` (or NAME's) in `<build>/<game>_viewer/`, each with a gzip
-# copy beside it (`.gz`, cmake/WebGzip.cmake), the folder a hub's `--viewer=<dir>` serves. The C++ waits (a fetch, a paint, the GPU's) suspend through JSPI,
+# copy beside it (`.gz`, cmake/WebGzip.cmake), and the moon's face the wasm leaves out (`moon.data`,
+# cmake/WebMoonFace.cmake), the folder a hub's `--viewer=<dir>` serves. The C++ waits (a fetch, a paint, the GPU's) suspend through JSPI,
 # so the viewer is a plain loop in `main`; memory grows as the packs need.
 include_guard(GLOBAL)
 
@@ -30,5 +31,7 @@ function(ge_add_web_viewer game)
   add_custom_command(TARGET ${target} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -DNAME=${target}.js -P ${PROJECT_SOURCE_DIR}/cmake/WebGzip.cmake
     COMMAND ${CMAKE_COMMAND} -DNAME=${target}.wasm -P ${PROJECT_SOURCE_DIR}/cmake/WebGzip.cmake
+    COMMAND ${CMAKE_COMMAND} -DSOURCE=${PROJECT_SOURCE_DIR}/engine/render/moon_data.cpp
+            -P ${PROJECT_SOURCE_DIR}/cmake/WebMoonFace.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${game}_viewer VERBATIM)
 endfunction()

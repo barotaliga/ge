@@ -644,6 +644,22 @@ or more seats astray, nobody is named. In the `net-lockstep` lab a desync plante
 four-seat strategy game is named by all four peers on every preset. The two-seat fighting game
 catches it but names nobody.
 
+**Built (M17l, fourth part): runs checked by playing them.** A run sent to a server (a ghost, a
+record, a hub's run) is a tape of inputs whose log records the digest it plays to.
+`play::play_audited` plays the tape on a fresh run of its setup, every step, and hands the run
+back only if it reaches that digest. A tape changed after it was recorded, or one with no digest,
+is refused. What the run scored is read off the run itself, never taken from a claim. Fall Line's
+hub reads its runs this way, and `tests/fall_line_hub_runs_test.cpp` refuses the bot's race with
+one stretch of steering turned the other way.
+
+**Built (M17l, fifth part): bans on the accounts.** A guard that puts a player out writes its
+verdict (`guard_verdict`), and the match report carries it per player (`ReportPlayer::flagged`,
+report version 2; a report with nobody flagged stays version 1). The accounts master takes a
+flagged player from a trusted server's counted report as a ban of 14 days from the match's end,
+and that match adds nothing to the ladder. While the ban lasts, signing in, a login code and a
+ticket are refused with the days left. Bans are derived from the reports log, so a restarted
+master keeps them (`docs/accounts.md` § Bans).
+
 ## Pressure tests (M17m)
 
 The simulated network runs on virtual time, so an hour of play takes seconds and every run is
