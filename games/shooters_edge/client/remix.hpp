@@ -23,19 +23,26 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "console/cvar.hpp"
+#include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/installs.hpp"
+#include "shooters_edge/profiles/remix.hpp"
 
 namespace shooters_edge::client {
 
+struct GameAdapter;
+struct LoadedMap;
+
 struct RemixSettings {
-  bool enabled = false;  // cr_enabled
-  int32_t items = 0;     // cr_items: 0 the played game's; N the Nth classic game's
+  bool enabled = false;            // cr_enabled
+  int32_t items = 0;               // cr_items: 0 the played game's; N the Nth classic game's
+  profiles::RemixBalance balance;  // cr_strong_min, cr_strong_share, cr_pool_radius
 };
 
 // `cr_enabled` and `cr_items`, writing `out`.
@@ -55,6 +62,11 @@ struct RemixState {
   std::string why;            // when off but enabled: what is missing, in the game's words
 };
 
+// The classic games this computer knows: the played one at `played_basedir`, the others from the
+// installs kept in `prefs` (installs.hpp), each with its edition.
+std::vector<KnownGame> known_games(const std::string& prefs, std::string_view played,
+                                   const std::string& played_basedir);
+
 // Whether the remix is on while `played` is played, from the games the window knows.
 RemixState remix_check(const RemixSettings& s, std::string_view played,
                        std::span<const KnownGame> games);
@@ -69,19 +81,52 @@ struct RemixSwap {
   int count = 0;
 };
 struct RemixReport {
-  std::vector<RemixSwap> swaps;  // in the order first met
-  int items = 0;                 // items met
-  int swapped = 0;               // items given another class name
-  int dropped = 0;               // items left out
+  std::vector<RemixSwap> swaps;    // in the order first met
+  int items = 0;                   // items met
+  int swapped = 0;                 // items given another class name
+  int dropped = 0;                 // items left out (no match, or a pool too small)
+  int weapons = 0;                 // weapons laid down
+  int strong_by_role = 0;          // strong weapons the role table alone gave
+  int strong = 0;                  // strong weapons after the balance
+  int pooled = 0;                  // small pickups added into pools
+  int laid = 0;                    // the pools' pickups laid down again
+  std::vector<std::string> notes;  // each balance step, for the lab and the console's log
 };
 
 // The entity text `text` of a map whose items are `from`'s, with every item made `to`'s by the
-// remix table, into `out`. The same text when the games are the same. False with `error` when
-// the text does not parse.
+// remix table and the map then balanced (profiles/remix.hpp: the weapons' tiers, the pools), into
+// `out`. The same text when the games are the same. False with `error` when the text does not
+// parse.
 bool remix_entities(std::string_view text, std::string_view from, std::string_view to,
-                    std::string& out, RemixReport* report, std::string& error);
+                    std::string& out, RemixReport* report, std::string& error,
+                    const profiles::RemixBalance& balance = {});
 
 // The line the console prints for a rewrite, in the game's words.
 std::string remix_line(const RemixReport& r, std::string_view to);
+
+// THE OTHER GAME'S FILES while the remix is on: its search path, opened from its install, with
+// the played game's own mounted over it, so another game's map reads its own wall textures and
+// sky while every model, sound and picture the played game's rules name is the played game's.
+// The window keeps one and opens it again when the settings or the game change (`open_remix`).
+struct RemixFiles {
+  RemixState state;
+  std::string played;              // the played game's profile id
+  SearchPath files;                // the other game's, the played game's over it (empty while off)
+  profiles::RemixBalance balance;  // the settings' (the window copies them before a load)
+};
+
+// Opens the other game's files for `state` under the played game's install `basedir` (its game
+// folder `game`); closes them when it is off. False with the reason in the game's words when an
+// install does not open.
+bool open_remix(RemixFiles& r, const RemixState& state, std::string_view played,
+                const std::string& basedir, const std::string& game, std::string& error);
+
+// The map `name`: the played game's own from `files`, else (the remix on) the other game's from
+// `remix->files`, its items made the played game's (`said`: the line saying so). A map of brushes
+// the classic game plays is played on its programs' rules, traced through its brushes; a map of
+// clip hulls the sequel would play is refused for now in the game's words.
+std::unique_ptr<LoadedMap> load_remixed_map(const SearchPath& files, const std::string& name,
+                                            const RemixFiles* remix, std::string& error,
+                                            std::string* said = nullptr);
 
 }  // namespace shooters_edge::client
