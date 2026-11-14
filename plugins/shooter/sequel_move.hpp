@@ -139,6 +139,10 @@ struct SequelMove {
   float swim_scale = 0.5f;
   float water_friction = 1;
   float water_jump = 350;
+  // Steps climbed in the air as on the ground (the step slide), so a jump that reaches a ledge
+  // still rising lands on it carrying the rise, and a jump from there adds to it: the stair's
+  // double jump. False: the air's plain slide, the ledge climbed only by rising past it.
+  bool air_step = true;
   // Out.
   int touch[kSqMaxTouch] = {};
   int touches = 0;

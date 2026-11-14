@@ -473,7 +473,12 @@ Outcome run(const Args& a) {
     m.engine = flag_value(a, "engine");
     m.name = flag_value(a, "name");
     m.out = flag_value(a, "out");
+    m.key_env = flag_value(a, "key-env");
+    m.trusted = flag_value(a, "trusted");
+    m.trusted_only = has_flag(a, "trusted-only");
     for (const std::string& w : a.words) m.packages.emplace_back(w);
+    if (name == "mod key") return run_mod_key();
+    if (name == "mod sign") return run_mod_sign(m);
     if (name == "mod new") return run_mod_new(m);
     if (name == "mod build") return run_mod_build(m);
     if (name == "mod check") return run_mod_check(m);

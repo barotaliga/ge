@@ -82,7 +82,8 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   a game both include (`abi.hpp`, a versioned table each way that grows only at its end), the
   package's manifest and the SHA-256 of its files, the loader and its checks, and the one file
   that opens a shared library (`library.cpp`: `dlopen`, `LoadLibraryW`). It depends on
-  `engine/core` only; a game's hooks and services are the game's own header, and the mod's state
+  `engine/core`, and on `engine/net` for the one signature scheme a package is signed in
+  (`signature.hpp`); a game's hooks and services are the game's own header, and the mod's state
   is a block the game keeps in its snapshots. `cmake/Mods.cmake` builds a mod as a package.
 - **`engine/console`**: the console and cfg files (M21; `docs/console.md` is the design): cvars
   in three tiers (the player's, the server's, code's), bound to the settings structs the
