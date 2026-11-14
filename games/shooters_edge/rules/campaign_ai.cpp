@@ -87,7 +87,7 @@ void ai_run(A& q, float dist) {
   float decided = 0;
   if (q.i(me, f_th_check) != 0) {
     run_field(q, me, f_th_check);
-    decided = pg::result_float(q.vm);
+    decided = q.result_f();
   } else {
     decided = check_attack(q) ? 1 : 0;
   }

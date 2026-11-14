@@ -23,12 +23,12 @@
 
 #include <cstdint>
 
-#include "progs/native.hpp"
 #include "shooters_edge/rules/calls.hpp"
+#include "shooters_edge/sim/rules_api.hpp"
 
 namespace shooters_edge::server {
 
 // The arena's declaration: its globals, fields, strings and functions.
-const ge::progs::NativeProgram& native_arena();
+const se_rules_v1& arena_rules();
 
 }  // namespace shooters_edge::server

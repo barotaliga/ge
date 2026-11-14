@@ -11,6 +11,7 @@
 //
 // ge:summary TV over engine/net: a host viewers connect to, a viewer's end, and a relay of both
 // ge:keywords tv net host client relay tree fan-out tv_host tv_client tv_relay channel
+// ge:keywords source-server broadcast-source
 // ge:skill replay net
 // ge:test tests/tv_net_test.cpp
 #pragma once
@@ -18,6 +19,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "net/master.hpp"
 #include "net/node.hpp"
@@ -38,7 +40,17 @@ struct TvHost {
   net::MasterBeat beat;  // listed on these masters once `tv_host_list` named them
   bool listed = false;
   int64_t status_answers = 0;
+  // The game server this node broadcasts, as `host:port` ("": none named): its record says so
+  // under `kSourceKey`, so a hub shows the broadcast's Watch on that server's card.
+  std::string source;
+  // The protocol the masters list this node under and its status asks come on (0: the TV wire's
+  // own): a game's, so that game's hub finds its broadcasts among its servers.
+  uint32_t public_protocol = 0;
 };
+
+// The status key a TV node names the game server it broadcasts under (`TvHost::source`); a hub
+// reads it (hub/poller.hpp's `kSourceKey`).
+inline constexpr std::string_view kSourceKey = "source";
 
 // A host on an open transport (`max_peers` up to engine/net's 32).
 void tv_host_init(TvHost& h, const Config& config, net::Transport& transport, int max_peers,

@@ -45,7 +45,7 @@
 
 #include "net/transport.hpp"
 #include "shooters_edge/client/demo.hpp"
-#include "shooters_edge/net/classic_channel.hpp"
+#include "shooters_edge/net/protocol.hpp"
 
 namespace shooters_edge::net {
 

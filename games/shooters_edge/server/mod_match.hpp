@@ -44,6 +44,7 @@
 #include "progs/native.hpp"
 #include "shooter/vec.hpp"
 #include "shooters_edge/server/qc_server.hpp"
+#include "shooters_edge/sim/rules_api.hpp"
 
 namespace shooters_edge::server {
 
@@ -53,8 +54,9 @@ struct ModMatchOptions {
   std::string progs;  // a progs file's path ("" : sv_progs, else the test mod)
   const ge::progs::Progs* compiled = nullptr;  // a progs in memory (a compiler's), before `progs`
   std::string compiled_name;                   // what the report calls it
-  // A native program (progs/native.hpp) in place of a progs: built, then run as one.
-  const ge::progs::NativeProgram* native = nullptr;
+  // A program of rules from its table (sim/rules_api.hpp) in place of a progs: laid out, then
+  // run as one.
+  const se_rules_v1* native = nullptr;
   std::string entities;  // the arena's entity text ("": the test mod's, the doorway open); a
                          // text of its own gets the arena's door and plat as models "*1", "*2"
   std::vector<std::string> console;  // server console lines run before the map loads

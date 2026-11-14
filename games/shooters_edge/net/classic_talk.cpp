@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/server/chat_rules.hpp"
 
 namespace shooters_edge::net {

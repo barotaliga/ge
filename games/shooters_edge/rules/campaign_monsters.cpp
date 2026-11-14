@@ -190,7 +190,7 @@ bool dog_decides(A& q) {
 
 }  // namespace
 
-void dog_check(A& q) { pg::set_return_float(q.vm, dog_decides(q) ? 1 : 0); }
+void dog_check(A& q) { q.ret_f(dog_decides(q) ? 1 : 0); }
 
 void dog_flinch(A& q) { flinch(q, fn_dog_flinch, 3); }
 
@@ -258,7 +258,7 @@ void knight_check(A& q) {
     q.set_f(q.self(), f_attack_state, kAsMelee);
     yes = true;
   }
-  pg::set_return_float(q.vm, yes ? 1 : 0);
+  q.ret_f(yes ? 1 : 0);
 }
 
 void knight_flinch(A& q) { flinch(q, fn_knight_flinch, 3); }

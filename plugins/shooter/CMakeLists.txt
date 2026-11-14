@@ -9,7 +9,7 @@
 # the r_ and ce_ cvars with a game's defaults, the world's and the post's options): it draws
 # through the brush plugin's renderer (ge_brush_app, linked below) and reads the classic enhance
 # switches (PLUGINS classicenhance).
-ge_add_plugin(shooter ENGINE core ai move water PLUGINS brush classicenhance
+ge_add_plugin(shooter ENGINE core ai move water net PLUGINS brush classicenhance
   APP gpu render water wind console)
 if(TARGET ge_shooter_app)
   target_link_libraries(ge_shooter_app PUBLIC ge_brush_app)

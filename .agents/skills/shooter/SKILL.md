@@ -34,6 +34,7 @@ edges. `docs/shooters-edge.md` is the design;
 | `games/shooters_edge/server/rjump_rules.hpp` | The helpers on every runner: `sv_rjump`, `sv_rrjump`, the `*rjump` grant, `rjump_packet` before the QC and sequel runners' frames; the `se-rjump` lab (`labs/gpu_se_rjump_lab.cpp`) |
 | `games/shooters_edge/labs/gpu_se_speedjump_lab.cpp` | The `se-speedjump` lab: the easy jump (`pm_speedjump`, `cl_speedjump`) against the classic move and the best strafe, alone and on the listen server |
 | `games/shooters_edge/labs/gpu_se_sequel_speedjump_lab.cpp` | The `se-sequel-speedjump` lab: the easy jump on the sequel's move (both air laws, the steer on foot) and on the window's own sequel server; `--game` draws the eyes on a real map |
+| `shooter/protocol/wire.hpp`, `channel.hpp`, `info.hpp` | The classic protocol family both classic games' protocols share (`ge::shooter::protocol`): sizes, quantization, field readers and writers, CRC-16; the net channel; info strings and names. A game's own version, ports, move checksum and usercmd stay in its module (`games/shooters_edge/net/classic_wire.hpp`); `net/protocol.hpp` names these in the game's net namespace |
 | `shooter/program.hpp` | The game-program seam: hooks and functions by number, the globals |
 | `shooter/entity.hpp`, `server.hpp/.cpp` | The entity record and pool, linking, trigger and impact touches, sounds, `server_hash` |
 | `shooter/area.hpp/.cpp`, `trace.hpp/.cpp` | The 31-node area tree and its listing; world traces and `test_entity_position` |
