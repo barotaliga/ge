@@ -96,6 +96,11 @@ overshoots a quick move), a slew limit (travel a second), the reach (`lo`, `hi`)
 - **Late hands need a bot that looks further ahead.** The bot steers from where it will be when
   its hands catch up (`BotHands::lead()`, Fall Line's `bot_controls(..., lead_s)`): without it a
   0.2 s delay turns a pursuit into a limit cycle from one end of the stick to the other.
+  Lower the loop's gain (a longer look); predicting the body a delay ahead feeds the same cycle.
+- **A spring settled in two commands or less rings or sticks** (it is explicit Euler): a move that
+  needs every command exact (a hop's view on the velocity) takes settle 0 and no delay.
+- **A look-ahead or a rollout presses through a COPY of the bot's own hands** (and keyboard): they
+  copy cheaply and replay the same wander, so it picks only what the hands can do.
 
 ## How human it looks
 
@@ -211,7 +216,12 @@ video is never a checkpoint's step: checkpoints are judged headless (below).
 (the sets, head to head, the staging). The build gates (`make precheck`, the lint, every lab's
 smoke digests) are NOT run at a checkpoint: the handoff names the last commit they ran on, and the
 agent asked for a pull request runs them first (a golden or digest a change moves on purpose
-rewritten then, and the commit says why). No video and no live server: every match runs on our
+rewritten then, and the commit says why). A change in `plugins/shooter` or
+`games/shooters_edge/bots` moves labs precheck does not reach: run EVERY lab's smoke digests
+(`labs --all --smoke --shard=i/8 --quiet --check-digests=tests/digests`, eight at once) and rewrite
+moved ones one lab at a time (parallel writers keep one file). A test held by a few short matches
+that flips is fixed by measuring what it says or by more seeds; never lower its floor, and name
+the outlier runs in the commit. No video and no live server: every match runs on our
 own server, in process (`se-team`), headless.
 
 **How a change is judged.**
@@ -241,9 +251,56 @@ own server, in process (`se-team`), headless.
   `se-people --file=<it>` measures it exactly as it measures people's (`--dir=<demos>/<map>`).
 - **What it newly triggers**: a change that should help and hurts is read for what it set off;
   break a number down by its cause before tuning a knob. **A behaviour that rarely runs cannot
-  move a number**: count how often it runs first.
+  move a number**: count how often it runs, and what holds it off, first. **Test a guessed cause
+  against its base rate**: the bad outcome's odds with and without the state, and the same state
+  in people's recordings, before building for it.
 - **Ask people's recordings before guessing**: where the bots lag people, measure how people play
-  that place, item or moment (se-people `--samples`, se-moves, se-rj) and copy it.
+  that place, item or moment (se-people `--samples`, se-moves, se-rj) and copy it. When the
+  maintainer describes how a move is done or names a fault seen in a match, build or check it at
+  once; the measures then judge it.
+- **The recording is the yardstick, the trace finds the cause**: speed, keys, bumps, stops and
+  facing are compared off recordings by one rule (se-people, se-moves, se-recipes on `se-team
+  --save` matches; experts against people's experts, `--skills=expert`), at the finest rate both
+  sides have (a 0.1 s sample hid the brief stops); never off the trace (its speed counts blasts, it
+  sees through walls). The trace (`--trace --trace-every=1`) splits a number by cause: who turned
+  the view (`view`), who wrote the keys (`keys`), the pilot's `because`.
+- **A small set is read for the behaviour's own measure**: a six-seed 5-minute set swings frags
+  ±30 %; a fight change shows first in `team.accuracy`, a projectile's lead in `--drill=rockets`.
+  A variant on the same seeds as an earlier set repeats its base bit for bit: compare against it. A
+  collapsed match is often one bot stuck in one cell or players stacked at one point: read "where
+  they stand still" first.
+- **A switch is judged before a preset gets it**: `kAll` is every bit under `trial`, so a new
+  switch sits after `trial` (out of `features_all`) until its verdict; bit-identical sets mean the
+  variant never ran. `--features=all,+x` also turns on what a preset keeps off: write `+x`. A
+  pilot fix not yet a switch is gated whole on `trial` (`Bot::trial`) for its A/B.
+- **Rare moves are staged, not played**: gap tricks, escapes, a pit's falls (`se-reach
+  --gaps=fly`, `--escapes=fly`, `--walk`), under the keyboard and the trailing view matches press
+  with (`keys` in `--gap-features`, `--walk-view-lag`). A staging that disagrees with the match is
+  the staging's bug first: say which switches it holds under.
+
+**The pilot's rules** (a first-person bot):
+
+- **Test under human hands and the keyboard from the first line.** Plain hands hide orbits,
+  overruns and late jumps.
+- **Keys and views land late** (a hand's delay; the keyboard's 1-3 commands): choose keys for the
+  view when they land (`view_when_keys_land`), never the view now or wanted. A pair a person presses
+  as one move (fire and jump) waits for the slower path (`shotjump`); "landed" after a jump ask
+  waits a lift-off grace (`liftoff`), or every late jump reads as a miss.
+- **A bot knows how its body meets the room**: predict by flying the box through `player_move`
+  (gravity, landings, the slide along walls) for the keys it will press, never a swept line or a
+  guess. A guard looks as far as the flight carries and runs in the air too.
+- **A proof is a move the pilot can start and reproduce**: one keys function and the move's water
+  level for both, a start it reaches (lined up, room to run up and to turn), no view a hand cannot
+  have (it stops at 80 degrees pitch). A refusal on a route's first command is the planner's.
+- **Every view goes through the one hand** (`engine/ai/mouse.hpp`; `bot_hand_override` for a view
+  set after the step), and a writer turns the wish under its view (`turn_axes`, `turn_axes_swim`).
+  A one-command view (a rocket jump's shot) is a contract: announced (`Pilot::shot_*`), fired at
+  `shot_ready`. After a change to who writes the view, read a move's OUTCOME, not its count.
+- **A swimmer is never `onground`**: ask what each check gated on it does in water.
+- **The planner reads what it reads**: a shut link is honoured by `nav_route` AND `nav_reach`, or
+  the goal stays "reachable" and the bot stands planning. A fix to a belief that moves no bit means
+  the planner never saw it: print what it is handed. State kept per link resets when the pilot
+  comes back to the link.
 
 **COPYING MOVEMENT OFF RECORDINGS** (M18r.md § 0r). A hard move is copied whole from people's
 recordings, never rebuilt by hand from their averages: `plugins/shooter/recipes.hpp` cuts a track
