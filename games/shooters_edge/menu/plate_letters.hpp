@@ -7,8 +7,9 @@
 // around it, so no piece of a neighbour and no box of tag comes along. The nine the tags lack are
 // pieced from those cut-outs before the rim is grown (B: P's bowl over D's foot; C: an O open on
 // the right; F: E without its lower bar; H: an N without its diagonal, E's bar across; J: U's right
-// stem and curve; K: R's stem and leg with Y's right arm; W: two V's; X: Y's arms over the same
-// arms upside down; Z: T's bar, A's leg leaned, L's foot). Each small letter is its capital shrunk
+// stem and curve; K: R's stem and leg with Y's right arm; W: two V's sharing a top serif; X: Y's
+// arms over the same arms upside down; Z: T's bar, Y's right arm twice, L's foot). A serif's tip
+// past its cell stays its own letter's. Each small letter is its capital shrunk
 // (four rows and three columns dropped where they are most like their neighbour, never a stem's
 // column), its foot on the capitals' foot.
 //
