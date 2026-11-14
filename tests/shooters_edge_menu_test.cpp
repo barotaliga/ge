@@ -34,6 +34,7 @@
 #include "shooters_edge/menu/classic_view.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/main_menu.hpp"
+#include "shooters_edge/menu/plate_letters.hpp"
 #include "ui/raster.hpp"
 
 namespace sm = shooters_edge::menu;
@@ -720,13 +721,33 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
     return n;
   };
   sm::ClassicArt pack = art;
-  pack.strip_print = 0xfd50f20825e19f40ULL;
-  CHECK(sm::carved_width(art, "games") == 0 && sm::carved_width(pack, "games") == 206);
+  pack.strip_print = sm::kPlatePrint;
+  sm::cut_plate_letters(&art);  // not the measured plates: nothing cut
+  CHECK(art.letters.empty() && art.letters_lit.empty());
+  sm::cut_plate_letters(&pack);
+  // A to Z and a to z, both ends and the space, plain and lit; every cell the tag's height, a
+  // small letter three px narrower than its capital, a lit letter as wide as its plain one.
+  CHECK(pack.letters.size() == 55 && pack.letters_lit.size() == 55);
+  for (const auto& [c, img] : pack.letters) {
+    CHECK(img.height == 32 && img.width > 0);
+    CHECK(pack.letters_lit.at(c).width == img.width);
+    if (c >= 'a' && c <= 'z')
+      CHECK(img.width + 3 == pack.letters.at(static_cast<char>(c - 32)).width);
+  }
+  // Every piece shaded to the darkest tag's surface: the flat fixture's plates all one grey.
+  CHECK(pack.letters.at('B').rgba[0] == 0x40 && pack.letters_lit.at('B').rgba[0] == 0x60);
+  // The tag's ends, the space and the letters laid edge to edge: 19 + 7 x 17 + 3 x 16 + 6 + 13.
+  std::vector<float> xs;
+  CHECK(sm::plate_layout(pack, "SELECT GAME", &xs) == 19 + 7 * 17 + 3 * 16 + 6 + 13);
+  CHECK(xs.size() == 13 && xs[0] == 0 && xs[1] == 19 && xs[2] == 36);
+  CHECK(sm::plate_layout(pack, "Ab", nullptr) == 19 + 17 + 14 + 13);
+  CHECK(sm::plate_layout(pack, "A!", nullptr) == 0);  // a letter no tag gives
+  CHECK(sm::carved_width(art, "games") == 0 && sm::carved_width(pack, "games") == 205);
   CHECK(glyphs(art) == 10 + 5);  // SELECT GAME (no space drawn), DEMOS
   CHECK(glyphs(pack) == 0);
 
-  // A page under the root takes its banner; SELECT GAME's title and the names are plates: 17
-  // pieces for the title, 8 for the first game, 13 for the sequel's.
+  // A page under the root takes its banner; SELECT GAME's title and the names are on tags: 13
+  // pieces for the title, 7 for the first game, 10 for the sequel's (its ends and space included).
   g.show(host, "options");
   {
     DrawList dl;
@@ -744,9 +765,9 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   page.draw_classic(dl, pack, 1280, 720, 0);
   int pieces = 0;
   for (const auto& c : dl.cmds())
-    for (const auto& [name, img] : pack.pictures)
-      if (c.box.image == &img && name.rfind("m_main_", 0) == 0) pieces++;
-  CHECK(pieces == 17 + 8 + 13);
+    for (const auto* set : {&pack.letters, &pack.letters_lit})
+      for (const auto& [ch, img] : *set) pieces += c.box.image == &img ? 1 : 0;
+  CHECK(pieces == 13 + 7 + 10);
 }
 
 TEST(enhanced_pictures_draw_at_the_classic_sizes) {

@@ -95,6 +95,11 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // r_skyname: the sky box drawn through every map's sky in place of the one its settings name
   // (client/files.hpp's `sky_box_files`); empty, each map's own. Read when the world is made.
   std::string sky_name;
+  // gl_texturemode: how the map's textures are sampled, either look: empty the look's own (the
+  // classic crisp, the modern filtered); a mode whose first filter is nearest (GL_NEAREST,
+  // GL_NEAREST_MIPMAP_NEAREST, ...) crisp, each texel a square; one that starts linear filtered
+  // (`crisp_textures`).
+  std::string texture_mode;
   // r_loadlit: 1 a map's coloured light read from its .lit file (client/files.hpp's `map_lit`) and
   // fetched from a server joined when the files lack it; 0 every map in its own grey light.
   bool load_lit = true;
@@ -121,6 +126,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // light (0 off, 1 both, 2 the walls alone, 3 the floors alone); r_wallcolor and r_floorcolor
   // their colours ("R G B", 0..255). Either look.
   int draw_flat = 0;
+  // gl_picmip: the map's textures drawn at a half (1), a quarter (2), an eighth (3) or a
+  // sixteenth (4) of their detail, nearest; 0 their own. Either look.
+  int picmip = 0;
   std::string wall_colour = "150 140 125", floor_colour = "85 95 110", sky_colour = "70 90 120";
   // r_fullbrightskins: how far the players are lifted toward full light wherever they stand (0 lit
   // as the floor under them, 1 fully lit and unshaded).
@@ -191,6 +199,9 @@ template <class T>
 std::span<const T> drawn_models(const Picture& picture, std::span<const T> placed) {
   return picture.draw_entities ? placed : std::span<const T>{};
 }
+// Whether the map's textures are drawn crisp in `look` under gl_texturemode: its first filter
+// (NEAREST or LINEAR, any case, the GL_ prefix optional), else the look's own (classic crisp).
+bool crisp_textures(const Picture& picture, Look look);
 // r_waterwarp's breath: the view's height swells and shrinks by kWaterWarp of itself, kWaterWarpHz
 // times a second, while the eye is in water, slime or lava, so the liquid reads as a lens round it.
 inline constexpr double kWaterWarp = 0.035, kWaterWarpHz = 0.45;

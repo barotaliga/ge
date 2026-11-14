@@ -1,7 +1,7 @@
 ---
 title: The baseline mod's QC is compiled into the build; a QC edit moves goldens and many digests
 date: 2026-11-09
-scope: games/shooters_edge/qc, games/shooters_edge/client/held.cpp, games/shooters_edge/view/hand.cpp
+scope: games/shooters_edge/rules, games/shooters_edge/client/held.cpp, games/shooters_edge/view/hand.cpp
 concepts: [baseline-mod, jump-sound, qc, digests, golden, death, held-weapon, before-after]
 ---
 

@@ -47,6 +47,7 @@ enum class Kind : uint16_t {  // NOLINT(performance-enum-size): the header's 16-
   run = 1,                    // a whole run: what `Run::save` writes
   character = 2,              // part of a run carried to another (docs/saves.md § Part of a run)
   index = 3,                  // a save store's index of its slots (store.hpp)
+  content = 4,                // a content cache's entry (cache.hpp)
 };
 
 // A chunk's tag from its four letters: tag("PLYR").

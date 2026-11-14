@@ -32,6 +32,7 @@
 #include "shooters_edge/client/demo_sound.hpp"
 #include "shooters_edge/client/demo_voice.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/hud/classic_art.hpp"
@@ -226,7 +227,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     return false;
   }
   Timedemo t;
-  if (!timedemo_start(files, o.demo, t, error)) return false;
+  if (!timedemo_start(files, o.demo, t, error, o.game != nullptr ? *o.game : classic_adapter()))
+    return false;
   t.demo.track = o.track;
   t.start.track = o.track;
   t.smooth = o.lerp;
@@ -295,7 +297,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     load_effects(files, book, faults);
   }
   fx_state.book = &book;
-  const DemoState& read = t.demo.state;  // the last frame read (what is heard)
+  const DemoState& read = t.demo.state;   // the last frame read (what is heard)
+  SequelBar sequel_bar{.files = &files};  // a sequel recording's own bar, from its program
 
   double from = std::max(o.from_s, 0.0);  // the clip's start on the demo's timeline, s
   double length = o.seconds;              // its length (0: to the end)
@@ -406,7 +409,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     view.frame = static_cast<uint64_t>(k);
     ge::ui::DrawList overlay;
     overlay.begin(o.width, o.height);
-    if (o.hud && !s.intermission) {
+    if (o.hud && !s.intermission &&
+        !draw_recorded_sequel_bar(overlay, sequel_bar, read, o.width, o.height)) {  // its own
       se::fill_hud(hud, demo_status(s, at), art);
       hud.layout.draw(overlay, hud.layout.frame(o.width, o.height, se::hud_style()),
                       se::hud_style(art));
@@ -543,6 +547,9 @@ int demo_video_main(ge::console::Console& console, const Args& args, const Searc
   o.fps = args.fps_given ? args.fps : video.fps;
   o.codec = codec == "none" ? "" : codec;
   o.hud = video.hud;
+  const shooters_edge::profiles::GameProfile* game =
+      shooters_edge::profiles::find_game(args.profile);
+  if (game != nullptr) o.game = &adapter_of(*game);  // its own recordings (the sequel's too)
   o.text = video.text;
   o.messages = video.messages;
   o.seconds = args.to > args.from ? args.to - args.from : args.seconds;

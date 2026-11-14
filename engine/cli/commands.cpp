@@ -663,7 +663,7 @@ const CommandSpec kCommands[] = {
      "QC sources compiled to a progs: a project file (progs.src: the output, then the sources in "
      "order) or one .qc file; the progs and its .lines written, every mistake a finding at its "
      "file and line",
-     kQcBuild, "ge qc build games/shooters_edge/qc/campaign/progs.src", "progs"},
+     kQcBuild, "ge qc build mods/mymod/progs.src", "progs"},
     {"qc disasm", "<progs>", 1, 1, "see",
      "a QC program (a progs file) checked and disassembled: its counts, then every function's "
      "statements with operands named by their definitions and the source lines when a .lines "
@@ -765,8 +765,9 @@ const CommandSpec kCommands[] = {
      "--human measures how human it looks; the game's options go after --",
      kSimFlags, "ge sim --seeds=38,7", "play-test"},
     {"replay", "<log>", 1, 1, "play",
-     "an input log played back; a digest it misses is a determinism break", kBuildFlags,
-     "ge replay runs/fall_line-38.inputs", "play-test"},
+     "an input log (or a run's replay file, .ger, when the game's play executable registers "
+     "GE_REPLAY_LOGS) played back; a digest it misses is a determinism break",
+     kBuildFlags, "ge replay runs/fall_line-38.inputs", "play-test"},
     {"state", "<log>", 1, 1, "play",
      "everything that decides the next step, after a number of a log's steps", kStateFlags,
      "ge state runs/fall_line-38.inputs --step=600", "play-test"},

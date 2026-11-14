@@ -146,6 +146,33 @@ std::string_view sequel_world_string(const server::RulesWorld& w, int index, std
   return {};
 }
 
+bool sequel_world_of(const DemoState& ds, server::RulesWorld& out) {
+  if (ds.format != DemoFormat::sequel || ds.status_bar.empty()) return false;
+  if (ds.player < 0 || ds.player >= ge::shooter::kMaxClients) return false;
+  out.status_bar = ds.status_bar;
+  out.images = ds.images;
+  out.item_names = ds.item_names;
+  for (int i = 0; i < ge::shooter::kMaxClients; i++) {
+    server::WorldClient& c = out.clients[i];
+    c.name = ds.names[static_cast<size_t>(i)];
+    c.active = !c.name.empty() || i == ds.player;
+  }
+  server::WorldClient& me = out.clients[ds.player];
+  std::copy(ds.sequel_stats.begin(), ds.sequel_stats.end(), std::begin(me.numbers.stats));
+  me.layout = ds.layout;
+  me.inventory = ds.inventory;
+  return true;
+}
+
+bool draw_recorded_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, const DemoState& ds, int width,
+                              int height) {
+  if (!bar.recorded) bar.recorded = std::make_shared<server::RulesWorld>();
+  if (!sequel_world_of(ds, *bar.recorded)) return false;
+  run_sequel_bar(bar, *bar.recorded, ds.player, ds.frames, width, height);
+  draw_sequel_bar(dl, bar, sequel_bar_scale(height));
+  return true;
+}
+
 int sequel_bar_scale(int height) { return std::max(1, height / 400); }
 
 void run_sequel_bar(SequelBar& bar, const server::RulesWorld& world, int slot, int64_t frame,

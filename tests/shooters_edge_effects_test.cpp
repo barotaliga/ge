@@ -498,3 +498,33 @@ TEST(r_drawentities_0_draws_no_model_but_the_map) {
   con.execute("r_drawentities 0");
   CHECK(lk::drawn_models(pic, std::span<const int>(placed)).empty());
 }
+
+TEST(gl_texturemode_draws_the_textures_crisp_or_smooth_in_either_look) {
+  namespace lk = shooters_edge::look;
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  // Empty: each look's own.
+  CHECK(lk::world_options(lk::Look::classic, {}, pic).crisp);
+  CHECK(!lk::world_options(lk::Look::modern, {}, pic).crisp);
+  con.execute("gl_texturemode GL_NEAREST");
+  CHECK(lk::world_options(lk::Look::modern, {}, pic).crisp);
+  con.execute("gl_texturemode gl_nearest_mipmap_linear");
+  CHECK(lk::crisp_textures(pic, lk::Look::modern));
+  con.execute("gl_texturemode GL_LINEAR_MIPMAP_LINEAR");
+  CHECK(!lk::world_options(lk::Look::classic, {}, pic).crisp &&
+        lk::world_options(lk::Look::classic, {}, pic).classic_filtered);
+  con.execute("gl_texturemode bogus");
+  CHECK(lk::crisp_textures(pic, lk::Look::classic) && !lk::crisp_textures(pic, lk::Look::modern));
+}
+
+TEST(gl_picmip_draws_the_textures_from_a_coarser_mip_in_either_look) {
+  namespace lk = shooters_edge::look;
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  CHECK(lk::world_options(lk::Look::classic, {}, pic).picmip == 0);
+  con.execute("gl_picmip 2");
+  for (const auto look : {lk::Look::classic, lk::Look::modern})
+    CHECK(lk::world_options(look, {}, pic).picmip == 2);
+}

@@ -223,6 +223,7 @@ void connect_peer(Node& n, int slot, uint64_t key, int64_t now_us) {
   p.send_counter = 0;
   p.recv_newest = 0;
   p.recv_seen[0] = p.recv_seen[1] = p.recv_seen[2] = p.recv_seen[3] = 0;
+  p.forged = p.replayed = 0;
   p.packets = Bucket{};
   p.state = PeerState::connected;
   p.last_recv_us = now_us;
@@ -501,10 +502,12 @@ void node_update(Node& node, int64_t now_us) {
         const uint64_t counter = get_u64(node.buffer + 5);
         if (!window_allows(*sealed_by, counter)) {
           node.stats.replayed++;
+          sealed_by->replayed++;
           continue;
         }
         if (!open_after_header(node.buffer, n, sealed_by->recv_key, counter)) {
           node.stats.forged++;
+          sealed_by->forged++;
           continue;
         }
         push(node, EventType::disconnected, at, Reason::remote_closed);
@@ -567,15 +570,18 @@ void node_update(Node& node, int64_t now_us) {
       // the payload reads as an unsealed one.
       if (n < kPayloadHeader + kTagBytes) {
         node.stats.forged++;
+        p.forged++;
         continue;
       }
       const uint64_t counter = get_u64(node.buffer + 5);
       if (!window_allows(p, counter)) {
         node.stats.replayed++;
+        p.replayed++;
         continue;
       }
       if (!open_after_header(node.buffer, n, p.recv_key, counter)) {
         node.stats.forged++;
+        p.forged++;
         continue;
       }
       window_mark(p, counter);
