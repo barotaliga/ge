@@ -9,12 +9,15 @@
 #include <span>
 #include <utility>
 
+#include "shooters_edge/client/demo_convert.hpp"
+
 namespace shooters_edge::net {
 
 namespace {
 
 constexpr uint8_t kSvcServerData = 12, kSvcFrame = 20;
 constexpr int64_t kFrameUs = 100000;  // the sequel's server frame
+constexpr uint32_t kProtocol = 34;    // what the face serves
 
 uint32_t u32_at(const std::vector<uint8_t>& b, size_t at) {
   return uint32_t(b[at]) | uint32_t(b[at + 1]) << 8 | uint32_t(b[at + 2]) << 16 |
@@ -36,7 +39,22 @@ bool sequel_tv_demo_open(SequelTvDemo& d, std::vector<uint8_t> bytes, bool loop,
   d = SequelTvDemo{};
   d.bytes = std::move(bytes);
   d.loop = loop;
-  const std::span<const uint8_t> first = block_at(d.bytes, 0);
+  std::span<const uint8_t> first = block_at(d.bytes, 0);
+  // An older protocol (or a packed file) converted first: every stock client takes 34.
+  if (first.size() < 5 || first[0] != kSvcServerData || u32_at(d.bytes, 5) != kProtocol) {
+    client::ConvertOptions options;
+    options.no_end = true;
+    client::ConvertNotes notes;
+    std::vector<uint8_t> out;
+    std::string why;
+    if (client::convert_demo(d.bytes, client::DemoFormat::sequel, options, out, notes, why)) {
+      d.from_protocol = first.size() >= 5 && first[0] == kSvcServerData
+                            ? static_cast<int>(u32_at(d.bytes, 5))
+                            : 0;
+      d.bytes = std::move(out);
+      first = block_at(d.bytes, 0);
+    }
+  }
   if (first.size() < 10 || first[0] != kSvcServerData) {
     error = "the file is not a recording of the sequel: its first block is not the server data";
     return false;

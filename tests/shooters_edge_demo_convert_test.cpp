@@ -183,44 +183,9 @@ TEST(a_pair_that_does_not_exist_and_a_damaged_demo_are_refused) {
   CHECK(!cl::convert_take(c, out, error));  // it stays stopped
 }
 
-// A protocol 34 recording made protocol 26: the server data's number, and each frame's suppress
-// count taken out (the blocks walked by the reader's spans, back to front).
-std::vector<uint8_t> as_protocol_26(const std::vector<uint8_t>& dm2) {
-  cl::Demo d;
-  cl::sequel_stream_begin(d);
-  std::vector<cl::DemoSpan> spans;
-  d.spans = &spans;
-  std::vector<uint8_t> out;
-  size_t pos = 0;
-  std::string error;
-  while (pos + 4 <= dm2.size()) {
-    int32_t len = 0;
-    std::memcpy(&len, &dm2[pos], 4);
-    if (len == -1) {
-      out.insert(out.end(), dm2.begin() + static_cast<std::ptrdiff_t>(pos), dm2.end());
-      break;
-    }
-    d.bytes.assign(dm2.begin() + static_cast<std::ptrdiff_t>(pos),
-                   dm2.begin() + static_cast<std::ptrdiff_t>(pos + 4 + static_cast<size_t>(len)));
-    d.pos = 0;
-    CHECK_MSG(cl::next_sequel(d, error) != cl::DemoRead::error, error);
-    std::vector<uint8_t> body(d.bytes.begin() + 4, d.bytes.end());
-    for (auto sp = spans.rbegin(); sp != spans.rend(); ++sp) {
-      if (sp->id == 12) body[sp->at + 1] = 26;
-      if (sp->id == 20) body.erase(body.begin() + static_cast<std::ptrdiff_t>(sp->at) + 9);
-    }
-    const auto n = static_cast<int32_t>(body.size());
-    const auto* p = reinterpret_cast<const uint8_t*>(&n);
-    out.insert(out.end(), p, p + 4);
-    out.insert(out.end(), body.begin(), body.end());
-    pos += 4 + static_cast<size_t>(len);
-  }
-  return out;
-}
-
 TEST(a_sequel_recording_of_protocol_26_becomes_protocol_34_byte_for_byte) {
   const std::vector<uint8_t> dm2 = cl::sequel_fixture(4, 7);
-  const std::vector<uint8_t> old = as_protocol_26(dm2);
+  const std::vector<uint8_t> old = cl::sequel_as_protocol_26(dm2);
   CHECK(old.size() < dm2.size());
   for (const std::vector<uint8_t>* from : {&old, &dm2}) {
     std::vector<uint8_t> out;
