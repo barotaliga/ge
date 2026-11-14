@@ -431,7 +431,7 @@ TEST(the_v_cvars_tone_each_layer_of_the_screens_tint) {
   CHECK(std::fabs(b[3] - a[3] / 2) < 1e-12);  // half the flash
 }
 
-TEST(r_lightmap_draws_every_solid_face_white_under_its_light) {
+TEST(r_lightmap_draws_every_solid_face_grey_under_its_light) {
   namespace lk = shooters_edge::look;
   ge::console::Console con;
   lk::Picture pic;
