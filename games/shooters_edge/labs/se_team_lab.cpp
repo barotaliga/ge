@@ -737,8 +737,9 @@ void run(gl::Lab& lab) {
   // heading the pilot's wish runs along (`walk`) and the calm view's target (`look`), and what the
   // feet did with the aim (`press`: footwork.hpp's note), and the heading the air steers for
   // (`way`: a hop's aim, a walk's target in the air), which piece of the fighter last changed the
-  // move's keys (`keys`: fighter.hpp `keys_by`) and whether the launcher is in hand and ready
-  // (`rl`). Both this run's own: a set (--seeds) runs several matches at once.
+  // move's keys (`keys`: fighter.hpp `keys_by`), whether the launcher is in hand and ready
+  // (`rl`) and the side the hop's pilot holds (`hside`: 1 the right key, turning clockwise; -1
+  // the left; 0 none). Both this run's own: a set (--seeds) runs several matches at once.
   std::ofstream trace;
   Watch watch;
   if (!lab.arg("trace").empty()) {
@@ -754,7 +755,7 @@ void run(gl::Lab& lab) {
              "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
              "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
              "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
-             "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\n";
+             "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\thside\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -1038,7 +1039,8 @@ void run(gl::Lab& lab) {
     if (f.trap_flee >= 0) out << "/f" << f.trap_exit;
     out << '\t' << ((f.bot.senses.friends & 1u) != 0 || f.slot == 0 ? 1 : 0) << '\t' << f.keys_by
         << '\t'  // who wrote the move's keys (fighter.hpp `keys_by`)
-        << (f.bot.pilot.rocket_ready ? 1 : 0) << '\n';  // the rocket launcher in hand
+        << (f.bot.pilot.rocket_ready ? 1 : 0)  // the rocket launcher in hand
+        << '\t' << static_cast<int>(p.strafe_side) << '\n';  // the hop's side (+1 right turn)
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
