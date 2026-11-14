@@ -248,17 +248,24 @@ void player_info(Demo& d, DemoMsg& m) {
   if ((flags & 0x1) != 0) m.u8();  // msec
   if ((flags & 0x2) != 0) {        // a delta usercmd from the null command
     const int bits = m.u8();
+    // Protocol 26 and older: the yaw always there, the moves a byte each (times 8), the msec only
+    // under bit 0x80; 27 and 28: the yaw under 0x80, the moves shorts, the msec always.
+    const bool old = d.state.protocol <= 26;
     float a[3] = {0, 0, 0};
     if ((bits & 0x01) != 0) a[0] = angle16(m);
-    if ((bits & 0x80) != 0) a[1] = angle16(m);
+    if (old || (bits & 0x80) != 0) a[1] = angle16(m);
     if ((bits & 0x02) != 0) a[2] = angle16(m);
     p.angles = {a[0], a[1], a[2]};
-    if ((bits & 0x04) != 0) m.i16();
-    if ((bits & 0x08) != 0) m.i16();
-    if ((bits & 0x10) != 0) m.i16();
+    for (int k : {0x04, 0x08, 0x10}) {
+      if ((bits & k) == 0) continue;
+      if (old)
+        m.u8();
+      else
+        m.i16();
+    }
     if ((bits & 0x20) != 0) m.u8();
     if ((bits & 0x40) != 0) m.u8();
-    m.u8();  // msec
+    if (!old || (bits & 0x80) != 0) m.u8();  // msec
   }
   float vel[3] = {0, 0, 0};  // a part left out is 0
   for (int i = 0; i < 3; i++)
@@ -330,9 +337,10 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
       break;
   }
   s.protocol = v;
-  if (v != 28) {
+  // 26 differs from 28 only in the command inside a player's info; 27 is read as 28.
+  if (v < 26 || v > 28) {
     error = "the server data names protocol " + std::to_string(v) +
-            ", and only protocol 28 recordings can be played";
+            ", and only protocol 26 to 28 recordings can be played";
     return false;
   }
   m.i32();  // the spawn count

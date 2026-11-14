@@ -323,11 +323,18 @@ void ClientRecording::frame(std::vector<uint8_t>& out, const ClientFrame& f,
     }
   }
   stats_any_ = true;
-  // The messages, those waiting first, as many whole ones as the packet holds.
+  // The messages, those waiting first, as many whole ones as the packet holds; an intermission
+  // goes ahead of them all, so the view moves to its spot in its own frame (the scores and prints
+  // that end a match can fill several packets).
   size_t from = 0;
   for (size_t end : events.ends) {
-    waiting_.emplace_back(events.out.b.begin() + static_cast<std::ptrdiff_t>(from),
-                          events.out.b.begin() + static_cast<std::ptrdiff_t>(end));
+    const auto b = events.out.b.begin();
+    if (end > from && events.out.b[from] == 30)
+      waiting_.emplace(waiting_.begin(), b + static_cast<std::ptrdiff_t>(from),
+                       b + static_cast<std::ptrdiff_t>(end));
+    else
+      waiting_.emplace_back(b + static_cast<std::ptrdiff_t>(from),
+                            b + static_cast<std::ptrdiff_t>(end));
     from = end;
   }
   size_t used = 0;
