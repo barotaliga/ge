@@ -1140,7 +1140,7 @@ int run_main(int argc, char** argv) {
     if (!sn::bot_team_start(bot_team, bc, error)) {
       out::error("shooters_edge: the bot client could not start its team (--bots=" +
                  std::to_string(args.bots) + " --server=" + args.server + "): " + error +
-                 "; next: check the server answers (shooters_edge_bots --server=" + args.server +
+                 "; next: check the server answers (sebots --server=" + args.server +
                  " --bots=1), then try again");
       return 1;
     }

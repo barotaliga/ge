@@ -277,7 +277,7 @@ that hands the viewer `--run`.
   of the busy period, server-sent events for one node's record with a comment line every 15 s.
   `main.hpp` is the process (`ge_add_hub`, cmake/Hub.cmake); `--serve-master` runs the master in
   the same process, so one binary is a community's whole service. Shooter's Edge's is
-  `shooters_edge_hub`; Fall Line has no dedicated server yet, so no hub.
+  `sehub`; Fall Line has no dedicated server yet, so no hub.
 
 - **M56b, part two**: a server whose game speaks its own protocol (`ServerGame::serve`, Shooter's
   Edge's classic one) beats and answers too. The core sets the socket's public hook
@@ -285,7 +285,7 @@ that hands the viewer `--run`.
   takes the master's acks and answers the hub's status asks, so the game never sees either.
   Shooter's Edge's record has the map, the mode its rules make (coop, 2on2 or 4on4 with teamplay,
   1on1 or ffa), the score screen, the frag and time limits and every client (bots and spectators
-  flagged). `sesv +set sv_master <hub>` appears on `shooters_edge_hub`.
+  flagged). `sesv +set sv_master <hub>` appears on `sehub`.
 
 - **M56c** (`hub-pages`): `pages.hpp` writes the pages from the same index, as plain HTML with
   one stylesheet and no script, refreshed every 5 s by a meta refresh. `/` is the Servers page: a
@@ -324,7 +324,7 @@ that hands the viewer `--run`.
   Such a node is `browsed`: the poller never sends it the engine's ask, and it is dropped once no
   refresh has heard it for 5 minutes; if the engine's master lists the same address it becomes the
   poller's, and its own record wins. Shooter's Edge's hub hands it the classic query, so
-  `shooters_edge_hub --browse-master=<a classic master>` lists the classic servers on the internet
+  `sehub --browse-master=<a classic master>` lists the classic servers on the internet
   beside the game's own. The classic broadcasters' pages wait for the TV node (M57b).
 
 - **M56h** (`hub-radar`): the map. The radar track (`replay/radar.hpp`) holds a roster chunk,
@@ -335,7 +335,7 @@ that hands the viewer `--run`.
   animation (no script) or still at a moment (`?at=`) with links a second and five seconds either
   way; the Demos page links Map where the file has a radar. Shooter's Edge reads the radar off a
   multiview recording (`client/demo_radar.hpp`), with the outline from the level's map sliced at the
-  height played most, and `shooters_edge_cli demos pack` writes it. A two-minute 4on4 of bots adds
+  height played most, and `secli demos pack` writes it. A two-minute 4on4 of bots adds
   26 KiB (11 %) to its file. A live match's map waits for the TV node to carry the track.
 
 - **M56g, the pages** (`hub/watch.hpp`, in `hub-pages`): `/watch/{tv-node}/{stream}` holds the

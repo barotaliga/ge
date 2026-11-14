@@ -1909,7 +1909,7 @@ joins a live classic server running the common match mod and plays a 4on4 agains
 every match leaves data that is read here, learnt from, and played again. The server is an
 existing one, built beside the checkout and never in the tree; the bots are ours.
 
-- **One process, one team.** `shooters_edge_bots --server=<host:port>` runs a whole team: each
+- **One process, one team.** `sebots --server=<host:port>` runs a whole team: each
   bot is its own classic client (`net/classic_client.hpp`) on its own UDP socket, one move a tick
   at the server's rate, paced by the wall clock as the window's remote client is. The map is
   loaded from the player's own packs by the name serverdata carries, and its nav built as

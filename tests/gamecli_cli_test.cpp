@@ -5,7 +5,7 @@
 // classic enhance's content refusing a folder with no packs.
 //
 // ge:summary Tests the game CLI: catalog, skill, refusals, servers, players, rcon, host, join
-// ge:keywords test gamecli shooters_edge_cli help catalog skill servers players rcon host join
+// ge:keywords test gamecli secli help catalog skill servers players rcon host join
 // ge:keywords spawn_detached process_alive process_stop demos content logs demos-pack ged
 // ge:skill agent-interface testing
 #include <atomic>
@@ -114,7 +114,7 @@ TEST(help_catalog_and_skill_cover_every_row) {
   CHECK(run({"skill"}, out, root) == 0);
   CHECK(out.rfind("---\nname: shooters-edge\n", 0) == 0);
   for (const std::string& n : names)
-    CHECK_MSG(out.find("`shooters_edge_cli " + n) != std::string::npos, "skill lacks " + n);
+    CHECK_MSG(out.find("`secli " + n) != std::string::npos, "skill lacks " + n);
   CHECK(run({"help", "servers"}, out, root) == 0);
   CHECK(out.find("--has=<text>") != std::string::npos);
   fs::remove_all(root);
@@ -126,7 +126,7 @@ TEST(refusals_keep_the_answer_shape) {
   CHECK(run({"fly", "--json"}, out, root) == 2);
   ge::core::FlatJson j = parse(out);
   CHECK(j["ok"].boolean == false && j["exit"].text == "2");
-  CHECK(j["next"].text == "shooters_edge_cli help");
+  CHECK(j["next"].text == "secli help");
   CHECK(run({"servers", "--colour=red", "--json"}, out, root) == 2);
   j = parse(out);
   CHECK(j["error"].text.find("--colour") != std::string::npos);
