@@ -36,6 +36,7 @@ struct Host {
   std::string dir;
   std::FILE* log = nullptr;
   std::FILE* reports = nullptr;  // reports.log
+  std::FILE* friends = nullptr;  // friends.log (friends.hpp)
   std::string warning;           // what the start dropped, if anything ("" when nothing)
   bool open = false;
 };

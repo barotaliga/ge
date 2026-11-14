@@ -396,6 +396,34 @@ on the hub's Ladder page (`engine/hub/ladder_page.hpp`).
   its standings (the ranked first, the rest dimmed with the matches they lack), the all-time
   ratings, and every past season's champions; `/v1/ladder` the same as JSON.
 
+## Friends
+
+Friends, presence and invites (M17j) ride on the accounts: one list for every game, kept by the
+master beside the store (`engine/account/friends.hpp`) and asked over the same service by the
+ticket a client holds from signing in, never the password (`engine/account/friends_service.hpp`).
+
+- **Friends are made when both ask.** A asks B; the ask waits among B's asks until B asks A back.
+  Either drops the other at any time. At most 200 friends and waiting asks to an account.
+- **A block is one-sided and silent.** B blocks A: the friendship and any ask between them go, A's
+  next asks answer as if B had not answered yet, A's invites to B are dropped, and A sees B
+  offline. A is never told. Asking someone back ends one's own block on them.
+- **Presence** is where a player is now: online, in a lobby or playing, with the game, the server's
+  address and the game's own words (the map, the mode; at most 64 characters). The client sets it
+  when it changes and every minute; one not set again for 150 seconds lapses to offline, so a
+  crashed client goes offline on its own. It is never logged.
+- **An invite** is a friend's ask to join them: the game, the address and a note. It waits 10
+  minutes, at most 8 to one player (the oldest dropped), and is gone once read. Never logged.
+- **The record** is `friends.log` beside the store, one line per change (`friend ask|drop|block|unblock
+  a b`), read back in order when the master starts, so the friendships survive a restart.
+- **The answers are small.** A friends list comes in pages of at most 320 bytes (the friends by
+  name, then the asks to you, then yours), so no answer outgrows an ask on the sealed channel.
+- **The game CLI** has `friends list`, `friends add|remove|block|unblock <name>`, `friends invite
+  <name>`, `friends invites` and `friends status <state>` (`docs/gamecli.md` § Friends), each using
+  the ticket `account signin` kept.
+
+The game client setting its presence itself, invites shown in the game, and the matchmaker are
+M17j's next parts.
+
 ## The plan
 
 | Row | What | Labs |
@@ -411,7 +439,7 @@ on the hub's Ladder page (`engine/hub/ladder_page.hpp`).
 | M59f | The hub's Player, Match and Leaders pages and their API; the classic servers' results | `hub-players`, `se-hub` |
 | M59g | The ranked ladders: Elo for duels and registered duos, league seasons, past champions; the Ladder page | `hub-players` |
 
-Friends, presence and invites stay M17j's, on these accounts. A store's sign-in (Steam) linked to
+Friends, presence and invites are M17j's, on these accounts (§ Friends above). A store's sign-in (Steam) linked to
 an account comes with M20c.
 
 ## Decisions
@@ -432,7 +460,7 @@ an account comes with M20c.
 
 | Lab | Row | What it shows |
 | --- | --- | --- |
-| `accounts` | M59a, M59b | Sign-ups, a taken and a look-alike name refused, logins, a wrong password held, codes spent, tickets checked, the store read back after a restart; on the simulated network |
+| `accounts` | M59a, M59b, M17j | Sign-ups, a taken and a look-alike name refused, logins, a wrong password held, codes spent, tickets checked, the store read back after a restart; players befriending, seeing each other's presence, a silent block and invites at 10% loss; on the simulated network |
 | `se-login` | M59c, M59d | A first-game and a sequel server: our client by ticket, a stock client's prompt and `login` line, a guest renamed off a registered name, the timeout; the console as the player sees it |
 | `match-report` | M59e | Bots' matches on both games reported to a master, the totals, an untrusted server's report kept out of them |
 | `hub-players` | M59f | The Player, Match and Leaders pages drawn in Chromium |

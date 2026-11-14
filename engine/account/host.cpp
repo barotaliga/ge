@@ -107,7 +107,8 @@ bool load_store(const std::string& path, Store& s, HashCost cost, int64_t unix_u
 static void host_close_files(Host& h) {
   if (h.log) std::fclose(h.log);
   if (h.reports) std::fclose(h.reports);
-  h.log = h.reports = nullptr;
+  if (h.friends) std::fclose(h.friends);
+  h.log = h.reports = h.friends = nullptr;
   net::close_transport(h.port);
 }
 
@@ -172,6 +173,33 @@ static bool load_reports(const std::string& path, Matches& m, std::string& warni
   return true;
 }
 
+static bool load_friends(const std::string& path, Friends& f, std::string& warning,
+                         std::string& error) {
+  std::string text;
+  if (!read_file(path, text)) return true;
+  size_t at = 0;
+  int n = 0;
+  while (at < text.size()) {
+    const size_t end = text.find('\n', at);
+    if (end == std::string::npos) {
+      warning +=
+          (warning.empty() ? "" : "; ") + path + ": its last line was cut short and is dropped";
+      break;
+    }
+    n++;
+    std::string why;
+    if (end > at && !friends_line(f, text.substr(at, end - at), why)) {
+      if (why.empty()) why = "not a friend line";
+      error = path;
+      error += " line " + std::to_string(n) + ": " + why;
+      error += "; next: fix or remove that line (it is one friend's ask, drop or block)";
+      return false;
+    }
+    at = end + 1;
+  }
+  return true;
+}
+
 bool host_open(Host& h, const std::string& dir, const net::Address& bind, HashCost cost,
                int64_t unix_us, std::string& error, const std::vector<net::Key>& trusted,
                int season_days) {
@@ -213,6 +241,17 @@ bool host_open(Host& h, const std::string& dir, const net::Address& bind, HashCo
     error = "cannot append to " + reports_path + "; next: make it writable";
     return false;
   }
+  const std::string friends_path = (fs::path(dir) / "friends.log").string();
+  if (!load_friends(friends_path, h.svc.friends, h.warning, error)) {
+    host_close_files(h);
+    return false;
+  }
+  h.friends = std::fopen(friends_path.c_str(), "ab");
+  if (!h.friends) {
+    host_close_files(h);
+    error = "cannot append to " + friends_path + "; next: make it writable";
+    return false;
+  }
   h.open = true;
   return true;
 }
@@ -225,6 +264,11 @@ void host_update(Host& h, int64_t unix_us) {
     std::fwrite(h.svc.matches.log.data(), 1, h.svc.matches.log.size(), h.reports);
     std::fflush(h.reports);
     h.svc.matches.log.clear();
+  }
+  if (!h.svc.friends.log.empty()) {
+    std::fwrite(h.svc.friends.log.data(), 1, h.svc.friends.log.size(), h.friends);
+    std::fflush(h.friends);
+    h.svc.friends.log.clear();
   }
   if (!h.svc.store.log.empty()) {
     std::fwrite(h.svc.store.log.data(), 1, h.svc.store.log.size(), h.log);

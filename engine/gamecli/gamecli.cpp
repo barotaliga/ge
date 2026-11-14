@@ -109,6 +109,26 @@ constexpr Command kEngine[] = {
      "account recover Ranger K7QF-29MD-AB12-CD34 --password=<new>", "engine", cmd_account_recover},
     {"account show", "", "the account service used last, its key, and whose ticket is kept",
      "account show --json", "engine", cmd_account_show},
+    {"friends list", "", "your friends, where each plays now, and the requests waiting",
+     "friends list", "engine", cmd_friends_list},
+    {"friends add", "<name>",
+     "a friend request sent, or one you got accepted: friends once both have asked",
+     "friends add Ranger", "engine", cmd_friends_add},
+    {"friends remove", "<name>", "a friend, or a request, removed", "friends remove Ranger",
+     "engine", cmd_friends_remove},
+    {"friends block", "<name>",
+     "a player blocked: they can no longer ask you, invite you or see where you play",
+     "friends block Ranger", "engine", cmd_friends_block},
+    {"friends unblock", "<name>", "a block lifted", "friends unblock Ranger", "engine",
+     cmd_friends_unblock},
+    {"friends invite", "<name>", "a friend invited to a server (--where=<host:port>, --note=)",
+     "friends invite Ranger --where=192.168.1.20:27500 --note=2on2?", "engine", cmd_friends_invite},
+    {"friends invites", "", "the invites friends sent you, read once", "friends invites", "engine",
+     cmd_friends_invites},
+    {"friends status", "<offline|online|lobby|playing>",
+     "what your friends see of you (--where=<host:port>, --words=<map and mode>); the game sets it "
+     "itself while it runs",
+     "friends status playing --where=192.168.1.20:27500 --words=dm4", "engine", cmd_friends_status},
     {"logs", "[<name>]", "the logs of what this CLI started, or the end of one",
      "logs dedicated-27500 --lines=40", "engine", cmd_logs},
 };
@@ -133,6 +153,14 @@ const std::vector<Flag> kAccountFlags = {
     {"key", "<hex>", "the service's key, when known (otherwise learned at the first contact)"},
     {"password", "<text>", "the password (otherwise one line of standard input)"},
     {"wait", "<s>", "the most seconds to wait for the service (default 4)"}};
+
+// The friends' commands ask with the kept ticket: the service and the wait, no password.
+const std::vector<Flag> kFriendsFlags = {kAccountFlags[0], kAccountFlags[3]};
+
+std::vector<Flag> with(std::vector<Flag> a, const std::vector<Flag>& b) {
+  a.insert(a.end(), b.begin(), b.end());
+  return a;
+}
 
 const std::vector<CommandFlags>& flag_table() {
   static const std::vector<CommandFlags> table = {
@@ -187,6 +215,17 @@ const std::vector<CommandFlags>& flag_table() {
       {"account signin", kAccountFlags},
       {"account code", kAccountFlags},
       {"account recover", kAccountFlags},
+      {"friends list", kFriendsFlags},
+      {"friends add", kFriendsFlags},
+      {"friends remove", kFriendsFlags},
+      {"friends block", kFriendsFlags},
+      {"friends unblock", kFriendsFlags},
+      {"friends invites", kFriendsFlags},
+      {"friends invite", with(kFriendsFlags, {{"where", "<host:port>", "the server to meet on"},
+                                              {"note", "<text>", "a few words to the friend"}})},
+      {"friends status",
+       with(kFriendsFlags, {{"where", "<host:port>", "the server you are on"},
+                            {"words", "<text>", "the map and mode, as friends read them"}})},
   };
   return table;
 }

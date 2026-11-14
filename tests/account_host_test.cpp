@@ -85,6 +85,16 @@ TEST(account_host_opens_on_loopback) {
   CHECK(ga::host_open(h, dir, bind, ga::HashCost{8, 1}, kT0, error));
   CHECK(fs::exists(dir + "/account.key") && fs::exists(dir + "/accounts.log"));
   ga::host_update(h, kT0);
+  // Friends are kept in friends.log and read back when the host opens again.
+  ga::friend_ask(h.svc.friends, 3, 4);
+  ga::friend_ask(h.svc.friends, 4, 3);
+  ga::friend_block(h.svc.friends, 5, 3);
   ga::host_close(h);
+  CHECK(fs::exists(dir + "/friends.log"));
+  ga::Host again;
+  CHECK_MSG(ga::host_open(again, dir, bind, ga::HashCost{8, 1}, kT0, error), error);
+  CHECK(ga::are_friends(again.svc.friends, 3, 4) && ga::blocks(again.svc.friends, 5, 3));
+  CHECK(again.svc.friends.log.empty());
+  ga::host_close(again);
   fs::remove_all(dir);
 }
