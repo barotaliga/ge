@@ -1,4 +1,4 @@
-// SHOOTER'S EDGE'S PLAYER CLI (`shooters_edge_cli`, docs/gamecli.md): the engine's generic
+// SHOOTER'S EDGE'S PLAYER CLI (`secli`, docs/gamecli.md): the engine's generic
 // commands (engine/gamecli) over this game's Spec, classic enhance's group (the install's packs),
 // and the rows only this game has:
 //
@@ -15,7 +15,7 @@
 // - ITS OWN ROWS: `demos` (the recordings in the game folder) and `demos play <name>`.
 //
 // ge:summary Shooter's Edge's player CLI: its Spec, places, protocol, launch words and demos
-// ge:keywords shooters_edge_cli gamecli player-cli spec locate basedir game-folder join host
+// ge:keywords secli gamecli player-cli spec locate basedir game-folder join host
 // ge:keywords demos playdemo recordings mvd
 // ge:skill shooter agent-interface
 // ge:test tests/gamecli_cli_test.cpp
@@ -25,7 +25,7 @@
 
 namespace shooters_edge::cli {
 
-// The Spec `shooters_edge_cli` runs.
+// The Spec `secli` runs.
 const ge::gamecli::Spec& spec();
 
 }  // namespace shooters_edge::cli

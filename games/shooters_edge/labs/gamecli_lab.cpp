@@ -1,4 +1,4 @@
-// LAB `gamecli`: the player's CLI an agent drives for a player (`shooters_edge_cli`,
+// LAB `gamecli`: the player's CLI an agent drives for a player (`secli`,
 // engine/gamecli), run through the same code the executable runs, session by session, each drawn
 // as the terminal an agent or a person reads: the settings changed and refused, the servers found
 // and who is on one, the remote console, hosting and joining (as dry runs, so nothing starts), a
@@ -10,8 +10,8 @@
 // (shown, not hashed); each command's exit code and what the scripted answers must hold are the
 // digest.
 //
-// ge:summary Lab: shooters_edge_cli's sessions (settings, servers, rcon, host, join) as terminals
-// ge:keywords lab gamecli player-cli shooters_edge_cli terminal session settings servers players
+// ge:summary Lab: secli's sessions (settings, servers, rcon, host, join) as terminals
+// ge:keywords lab gamecli player-cli secli terminal session settings servers players
 // ge:keywords rcon host join dry-run skill json
 // ge:skill agent-interface labs
 // ge:test tests/gamecli_cli_test.cpp
@@ -181,7 +181,7 @@ void run(gl::Lab& lab) {
                            const std::vector<std::pair<std::vector<std::string>, int>>& calls) {
     std::vector<Line> lines;
     for (const auto& [words, want] : calls) {
-      std::string typed = "shooters_edge_cli";
+      std::string typed = "secli";
       for (const std::string& w : words)
         typed += " " + (w.find(' ') != std::string::npos ? "\"" + w + "\"" : w);
       lines.push_back({shown(typed), true});
@@ -256,8 +256,7 @@ void run(gl::Lab& lab) {
             "the release named and verified", {{{"content"}, 0}});
   std::string skill;
   ge::gamecli::run(shooters_edge::cli::spec(), {"skill"}, skill, ".");
-  std::vector<Line> lines = {
-      {"shooters_edge_cli skill > ~/.claude/skills/shooters-edge/SKILL.md", true}};
+  std::vector<Line> lines = {{"secli skill > ~/.claude/skills/shooters-edge/SKILL.md", true}};
   size_t at = 0;
   for (int k = 0; k < 40 && at < skill.size(); k++) {
     const size_t nl = skill.find('\n', at);
@@ -279,10 +278,10 @@ const gl::LabSpec kSpec{
     "gamecli",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "engine/gamecli (the player's game CLI) over games/shooters_edge/cli (shooters_edge_cli)",
+    "engine/gamecli (the player's game CLI) over games/shooters_edge/cli (secli)",
     "agent-interface",
     "Can an agent change a player's settings, find a server and who is on it, run its remote "
-    "console, host a game and join one with shooters_edge_cli alone?",
+    "console, host a game and join one with secli alone?",
     {
         {"server", "", "a real server to ask, host:port (default: a stand-in on the loopback)"},
         {"basedir", "", "an install holding the classic packs: adds the content session"},

@@ -5,7 +5,7 @@ scope: engine/server/main.cpp
 concepts: [gamecli, dedicated-server, log, stdout-buffering, spawn-detached, asan]
 ---
 
-`shooters_edge_cli host --dedicated` starts the server with its output in a log file. Into a file
+`secli host --dedicated` starts the server with its output in a log file. Into a file
 (or a pipe) the C library buffers stdout by the 4 KiB block, so the log stayed empty for minutes
 and an agent told to read it saw nothing. `stdbuf -oL` does not help a debug build: ASan refuses to
 start when a library is preloaded before it. The fix is in the server (`setvbuf(stdout, nullptr,

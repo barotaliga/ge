@@ -59,26 +59,26 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 # The headless dedicated server (server/bin/), named `sesv` on disk, at the build's root
 # (build/<preset>/sesv): the engine's dedicated process (engine/server) over the game's playable
 # ServerGame (net/classic_game.hpp: the mod's deathmatch on the classic protocol), or with
-# `--sequel` the same core over the sequel's rules on its own protocol (net/sequel_game.hpp), so an
+# `-game 2` the same core over the sequel's rules on its own protocol (net/sequel_game.hpp), so an
 # existing client of the sequel joins it. `--help` lists its flags.
 ge_add_server(shooters_edge_dedicated OUTPUT_NAME sesv SOURCES server/bin/main.cpp
               LINK shooters_edge_classic)
 
-# The hub (hub/), named `shooters_edge_hub` on disk at the build's root: the engine's hub
+# The hub (hub/), named `sehub` on disk at the build's root: the engine's hub
 # (engine/hub, docs/hub.md) with the game's modes and words. `--help` lists its flags.
 # The classic protocol's library gives it the classic status query (net/classic_browse,
 # net/classic_info) and the match a Play page's map is started on to name its files
 # (client/play_content.hpp); the client's demo reader names a demo's (client/demo_content.hpp).
-ge_add_hub(shooters_edge_hub_bin OUTPUT_NAME shooters_edge_hub SOURCES hub/main.cpp
+ge_add_hub(shooters_edge_hub_bin OUTPUT_NAME sehub SOURCES hub/main.cpp
            LINK shooters_edge_classic)
 target_include_directories(shooters_edge_hub_bin PRIVATE ${PROJECT_SOURCE_DIR}/games)
 
-# The bot team, headless (net/bots_main.cpp), named `shooters_edge_bots` on disk at the build's
+# The bot team, headless (net/bots_main.cpp), named `sebots` on disk at the build's
 # root: a team of bots joins a classic server, any server (net/classic_bot_team.hpp). `--help`
 # lists its flags.
 add_executable(shooters_edge_bots_cli net/bots_main.cpp)
 target_link_libraries(shooters_edge_bots_cli PRIVATE shooters_edge_classic ge_flags)
-set_target_properties(shooters_edge_bots_cli PROPERTIES OUTPUT_NAME shooters_edge_bots
+set_target_properties(shooters_edge_bots_cli PROPERTIES OUTPUT_NAME sebots
                       RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # The hops, headless (net/hops_main.cpp, one source built three times), at the build's root: our
@@ -216,13 +216,13 @@ endif()
 
 # Its player CLI (cli/): the engine's game CLI (engine/gamecli, docs/gamecli.md) over the game's
 # Spec, classic enhance's group and the game's own rows, as a library the tests link and the
-# `shooters_edge_cli` executable at the build's root beside the window and the dedicated server
+# `secli` executable at the build's root beside the window and the dedicated server
 # (skills: agent-interface, shooter).
 if(TARGET ge_gamecli)
   add_library(shooters_edge_gamecli STATIC cli/spec.cpp)
   target_link_libraries(shooters_edge_gamecli PUBLIC ge_gamecli ge_classicenhance_cli
                                                      shooters_edge_classic)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_gamecli)
-  ge_add_game_cli(shooters_edge_cli OUTPUT_NAME shooters_edge_cli SOURCES cli/main.cpp
+  ge_add_game_cli(shooters_edge_cli OUTPUT_NAME secli SOURCES cli/main.cpp
                   LINK shooters_edge_gamecli)
 endif()
