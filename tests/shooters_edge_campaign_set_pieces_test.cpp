@@ -1,5 +1,5 @@
-// Tests: the set pieces of our campaign mod (games/shooters_edge/qc/campaign/set_pieces.qc) and
-// the words at an episode's end (world.qc), on the campaign host in the arena's west room. A
+// Tests: the set pieces of our campaign (games/shooters_edge/rules/campaign_set_pieces.cpp) and
+// the words at an episode's end (campaign_world.cpp), on the campaign host in the arena's west room. A
 // train rides its path of corners and back; a secret door shot moves back, then aside, and closes
 // again; an exploding box shot blows and hurts a player beside it, the shotgun hits it, and a box
 // in another's blast goes up in the same blow; a single-player setmodel sizes a brush model file; a
@@ -212,7 +212,7 @@ TEST(a_single_player_setmodel_sizes_a_brush_model_file_from_its_bounds_one_wider
   CHECK(box > 0);
   CHECK(g_asked == 1);  // the spawn's setmodel asked; its setsize then set 0..32 x 0..64
   const uint32_t model = *pg::entity_field(g.s().q.vm, box, g.f().model);
-  CHECK(g.call("setmodel", {g.ent(box), model}));
+  CHECK(g.builtin(3, {g.ent(box), model}));  // setmodel
   CHECK(g_asked == 2);
   CHECK(g.ed(box).mins.x == -1 && g.ed(box).mins.z == -1);
   CHECK(g.ed(box).maxs.x == 33 && g.ed(box).maxs.y == 33 && g.ed(box).maxs.z == 65);

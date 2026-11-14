@@ -8,7 +8,7 @@
 //
 // ge:summary The baseline deathmatch mod (the arena's rules in C++), and its arena's entity text
 // ge:keywords baseline-mod baseline_mod kbaselinearenaentities deathmatch native-arena
-// ge:keywords func_door func_plat weapons items armour arena
+// ge:keywords func_door func_plat weapons items armour arena campaign_mod native-campaign own_mod
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_baseline_mod_test.cpp
 #pragma once
@@ -25,5 +25,13 @@ extern const char* const kBaselineArenaEntities;
 // The baseline mod built as a progs (its functions C++, bound by any VM made over it). False with
 // `error` only when the program's declaration is wrong, which is the game built wrong.
 bool baseline_mod(ge::progs::Progs& out, std::string& error);
+
+// The campaign (the single-player game's rules in C++, games/shooters_edge/rules/campaign*.cpp)
+// built as a progs on the single-player form, the same way.
+bool campaign_mod(ge::progs::Progs& out, std::string& error);
+
+// One of our own programs by name, as a lab's `--progs` names it: "arena" (the baseline mod) or
+// "campaign". False with `error` (naming both) for any other name.
+bool own_mod(const std::string& name, ge::progs::Progs& out, std::string& error);
 
 }  // namespace shooters_edge::server

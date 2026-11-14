@@ -224,7 +224,7 @@ void run(gl::Lab& lab) {
   const shooters_edge::view::ViewSettings view_settings;
   shooters_edge::view::HandFrame hand;
   double t = 0;
-  // Every weapon (qc/common/defs.qc's W_ bits: shotgun 1 .. beam gun 64), and ammunition for each.
+  // Every weapon (rules/common_decl.hpp's W_ bits: shotgun 1 .. beam gun 64), and ammunition for each.
   const auto arm = [&] {
     cl::set_field_named(l, 1, "items", 1 + 2 + 4 + 8 + 16 + 32 + 64 + 4096);
     for (const char* f : {"ammo_shells", "ammo_nails", "ammo_rockets", "ammo_cells"})

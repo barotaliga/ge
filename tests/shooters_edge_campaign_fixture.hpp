@@ -1,4 +1,4 @@
-// The campaign mod's tests' fixture: our campaign program on the campaign host in the arena's
+// The campaign mod's tests' fixture: our campaign program (the rules in C++) on the campaign host in the arena's
 // west room (with the door's and the plat's brushes as "*1" and "*2"), the player at its start,
 // the test's own entities after; reading and setting fields, calling the program's functions as
 // an entity, a blow, a blast and a host frame.
@@ -15,9 +15,9 @@
 
 #include "check.hpp"
 #include "progs/layout.hpp"
-#include "progs/qc_compile.hpp"
 #include "progs/vm.hpp"
 #include "shooters_edge/server/campaign.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/sim/qc_program.hpp"
 
@@ -46,11 +46,10 @@ inline bool load(void* /*ctx*/, const std::string& /*name*/, sv::MapSpec& out,
 
 inline const pg::Progs& mod() {
   static const pg::Progs p = [] {
-    const pg::QcProject built = pg::compile_project(std::filesystem::path(GE_SOURCE_DIR) /
-                                                    "games/shooters_edge/qc/campaign/progs.src");
-    for (const pg::QcDiagnostic& d : built.result.diagnostics)
-      CHECK_MSG(!d.error, pg::diagnostic_text(d));
-    return built.result.progs;
+    pg::Progs out;
+    std::string error;
+    CHECK_MSG(shooters_edge::server::campaign_mod(out, error), error);
+    return out;
   }();
   return p;
 }
@@ -81,9 +80,16 @@ struct Game {
     return pg::entity_number(s().q.vm, static_cast<int32_t>(*pg::entity_field(s().q.vm, e, ofs)));
   }
   // Entity `e`'s field `name` (the program's own fields, by name).
+  // A vector's component by its name with _x, _y or _z after.
   float named(int e, const char* name) {
     const pg::Def* d = pg::find_field(mod(), name);
-    return d ? field(e, d->offset) : -1;
+    if (d != nullptr) return field(e, d->offset);
+    const std::string n = name;
+    if (n.size() < 3 || n[n.size() - 2] != '_') return -1;
+    const char axis = n.back();
+    const int k = axis == 'x' ? 0 : axis == 'y' ? 1 : axis == 'z' ? 2 : -1;
+    d = pg::find_field(mod(), n.substr(0, n.size() - 2).c_str());
+    return d != nullptr && k >= 0 ? field(e, d->offset + k) : -1;
   }
   float global(const char* name) {
     const pg::Def* d = pg::find_global(mod(), name);
@@ -114,6 +120,16 @@ struct Game {
     int i = 0;
     for (uint32_t a : args) vm.globals[static_cast<size_t>(pg::parm(i++))] = a;
     const bool ok = se::run_qc(s().q, fn);
+    se::leave_qc(s().q);
+    return ok;
+  }
+  // A builtin by its number called with these parameter words, the way a program calls it.
+  bool builtin(int number, std::initializer_list<uint32_t> args) {
+    pg::Vm& vm = s().q.vm;
+    se::enter_qc(s().q, s().sv);
+    int i = 0;
+    for (uint32_t a : args) vm.globals[static_cast<size_t>(pg::parm(i++))] = a;
+    const bool ok = pg::call_builtin(vm, number, i);
     se::leave_qc(s().q);
     return ok;
   }

@@ -18,6 +18,7 @@
 #include "progs/qc_compile.hpp"
 #include "progs/vm.hpp"
 #include "shooters_edge/server/campaign.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
 namespace sv = shooters_edge::server;
@@ -63,11 +64,10 @@ bool load(void* /*ctx*/, const std::string& /*name*/, sv::MapSpec& out, std::str
 
 const pg::Progs& mod() {
   static const pg::Progs p = [] {
-    const pg::QcProject built = pg::compile_project(std::filesystem::path(GE_SOURCE_DIR) /
-                                                    "games/shooters_edge/qc/campaign/progs.src");
-    for (const pg::QcDiagnostic& d : built.result.diagnostics)
-      CHECK_MSG(!d.error, pg::diagnostic_text(d));
-    return built.result.progs;
+    pg::Progs out;
+    std::string error;
+    CHECK_MSG(shooters_edge::server::campaign_mod(out, error), error);
+    return out;
   }();
   return p;
 }

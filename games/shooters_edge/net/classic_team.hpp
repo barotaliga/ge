@@ -77,7 +77,7 @@ struct TeamMatchOptions {
   int frames = 46154;  // server frames of 13 ms (ten minutes)
   int timelimit = 0;   // minutes the mod ends the match at (0: none)
   // The deathmatch mode: 1 the items on the map; 4 every spawn armed with everything and full of
-  // it, nothing to gather (the baseline mod's common/dmm4.qc): the duel that tests aim and move.
+  // it, nothing to gather (the baseline mod's rules/common_dmm4.cpp): the duel that tests aim and move.
   int deathmatch = 1;
   // More of the server's settings, each a console line ("k_disallow_weapons 16"), set before
   // the map starts.

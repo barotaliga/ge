@@ -1,5 +1,5 @@
-// Tests: our campaign mod (games/shooters_edge/qc/campaign/) compiled from its sources and played
-// on the campaign host. It compiles to the single-player form's layout; a new game starts the
+// Tests: our campaign (games/shooters_edge/rules/campaign*.cpp, in C++) played on the campaign
+// host. It builds to the single-player form's layout; a new game starts the
 // player on the map's start with a new game's inventory; a secret counts at spawn and is found
 // once by touching it; an exit holds the player at the intermission and a button after its wait
 // changes the level, the inventory carried in the parms; and a death in single player restarts
@@ -18,6 +18,7 @@
 #include "progs/qc_compile.hpp"
 #include "progs/vm.hpp"
 #include "shooters_edge/server/campaign.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
 namespace sv = shooters_edge::server;
@@ -58,11 +59,10 @@ bool load(void* /*ctx*/, const std::string& /*name*/, sv::MapSpec& out, std::str
 
 const pg::Progs& mod() {
   static const pg::Progs p = [] {
-    const pg::QcProject built = pg::compile_project(std::filesystem::path(GE_SOURCE_DIR) /
-                                                    "games/shooters_edge/qc/campaign/progs.src");
-    for (const pg::QcDiagnostic& d : built.result.diagnostics)
-      CHECK_MSG(!d.error, pg::diagnostic_text(d));
-    return built.result.progs;
+    pg::Progs out;
+    std::string error;
+    CHECK_MSG(shooters_edge::server::campaign_mod(out, error), error);
+    return out;
   }();
   return p;
 }

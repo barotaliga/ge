@@ -7,9 +7,6 @@
 // ge:summary Tests the game profile rows: content rows, program names, the items and sounds
 // ge:keywords test shooters-edge game-profile program qwprogs multiplayer items
 // ge:skill shooter testing
-#include <filesystem>
-#include <fstream>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -18,6 +15,7 @@
 #include "shooters_edge/bots/ears.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "shooters_edge/rules/campaign.hpp"
 #include "shooters_edge/server/dedicated.hpp"
 
 namespace pf = shooters_edge::profiles;
@@ -93,17 +91,13 @@ TEST(the_arsenal_rows_become_server_lines_our_programs_read) {
             lines[0]);
   CHECK_MSG(lines[8] == "set arsenal_armour1 \"0.3 100 0 progs/armor.mdl items/armor1.wav\"",
             lines[8]);
-  const auto text_of = [](const char* rel) {
-    std::ifstream in(std::filesystem::path(GE_SOURCE_DIR) / rel);
-    std::stringstream ss;
-    ss << in.rdbuf();
-    return ss.str();
+  // Our programs' rows are strings of their declaration (games/shooters_edge/rules/).
+  const auto holds = [](const std::string& t) {
+    for (const char* s : shooters_edge::server::native_campaign().strings)
+      if (t == s) return true;
+    return false;
   };
-  const std::string weapons = text_of("games/shooters_edge/qc/common/weapons.qc");
-  const std::string items = text_of("games/shooters_edge/qc/common/items.qc");
-  for (const pf::WeaponRow& w : a.weapons)
-    CHECK_MSG(weapons.find('"' + pf::weapon_text(w) + '"') != std::string::npos,
-              pf::weapon_text(w));
+  for (const pf::WeaponRow& w : a.weapons) CHECK_MSG(holds(pf::weapon_text(w)), pf::weapon_text(w));
   for (const pf::ArmourRow& r : a.armour)
-    CHECK_MSG(items.find('"' + pf::armour_text(r) + '"') != std::string::npos, pf::armour_text(r));
+    CHECK_MSG(holds(pf::armour_text(r)), pf::armour_text(r));
 }

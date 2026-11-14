@@ -1,5 +1,4 @@
-// Tests: the baseline mod (games/shooters_edge/qc/) compiled from its sources by the QC compiler
-// and played by four bots on the arena with its door and plat. It compiles with the engine-side
+// Tests: the baseline mod (the arena's rules in C++, games/shooters_edge/rules/) played by four bots on the arena with its door and plat. It compiles with the engine-side
 // layout (crc and offsets, so the loader's layout check takes it), spawns every entity of its
 // entity text (nothing inhibited, no unknown key or classname), and plays a deathmatch: pickups,
 // hits and frags with obituaries by weapon, missiles in the air, the door opening for a player,

@@ -14,9 +14,9 @@
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
 
-#include "shooters_edge/rules/arena_decl.hpp"
+#include "shooters_edge/rules/variant.hpp"
 
-namespace shooters_edge::server::arena {
+namespace shooters_edge::server::rules::SE_RULES_NS {
 
 namespace {
 
@@ -108,7 +108,7 @@ float ammo_bit(A& q, float w) {
 }
 
 void ammo_spend(A& q, float w, float n) {
-  if (q.g(g_deathmatch) == 4) return;  // never used up in deathmatch 4
+  if (q.deathmatch() == 4) return;  // never used up in deathmatch 4
   const int32_t kind = weapon_word(q, w, 1);
   const int32_t me = q.self();
   if (q.is(kind, "shells")) {
@@ -128,6 +128,8 @@ bool carried_and_loaded(A& q, float w) {
   const bool loaded = ammo_for(q, w) >= weapon_cost(q, w);
   return carried & loaded;
 }
+
+}  // namespace
 
 // A hitscan line from the eye along v_forward with a spread, `reach` long, per pellet.
 void fire_pellets_far(A& q, float pellets, float points, float spread, float reach) {
@@ -166,6 +168,8 @@ void fire_pellets_far(A& q, float pellets, float points, float spread, float rea
   if (summed > 0) damage(q, struck, me, me, summed);
 }
 
+namespace {
+
 // A cut `reach` in front: `points` to what bleeds, the weapon's land sound on a wall.
 void fire_blade(A& q, float w) {
   const int32_t me = q.self();
@@ -174,7 +178,7 @@ void fire_blade(A& q, float w) {
   if (q.gf(q.L.g.trace_fraction) == 1) return;
   if (on(q.f(q.gi(q.L.g.trace_ent), q.L.f.takedamage))) {
     q.set_i(q.gi(q.L.g.trace_ent), f_deathtype, q.s(s_cut_down));
-    if (q.g(g_deathmatch) == 4) {
+    if (q.deathmatch() == 4) {
       damage(q, q.gi(q.L.g.trace_ent), me, me, 75);  // deathmatch 4's blade
     } else {
       damage(q, q.gi(q.L.g.trace_ent), me, me, weapon_number(q, w, 5));
@@ -184,6 +188,13 @@ void fire_blade(A& q, float w) {
     weapon_sound(q, me, w, 13);
     effect_impact(q, q.gv(q.L.g.trace_endpos), 3, 0);
   }
+}
+
+}  // namespace
+
+// fire_pellets(pellets, points, spread): fire_pellets_far's to 2048 units.
+void fire_pellets(A& q, float pellets, float points, float spread) {
+  fire_pellets_far(q, pellets, points, spread, 2048);
 }
 
 // A missile spawned at the eye, flying along v_forward at `spd`, removed after `life` seconds.
@@ -201,9 +212,11 @@ int32_t launch(A& q, int32_t mdl, float mtype, float spd, float life) {
   q.setsize(m, {0, 0, 0}, {0, 0, 0});
   q.setorigin(m,
               q.v(me, q.L.f.origin) + q.v(me, q.L.f.view_ofs) + q.v_forward() * 8 - Vec3{0, 0, 8});
-  q.set_newmis(m);  // the multiplayer form: a missile made this frame runs once at once
+  missile_now(q, m);
   return m;
 }
+
+namespace {
 
 // Weapon `w`'s missile at its row's speed and life, carrying `w` for its touch and blast.
 int32_t launch_weapon(A& q, float w, float mtype) {
@@ -259,7 +272,7 @@ void fire_arc(A& q, float w) {
   effect_beam(q, from, q.gv(q.L.g.trace_endpos));
   if (q.f(me, q.L.f.waterlevel) > 1) {
     // Deathmatch 4: one time in two it kills the firer outright (the draw made either way).
-    const bool dm4 = q.g(g_deathmatch) == 4;
+    const bool dm4 = q.deathmatch() == 4;
     const bool half = q.random() < 0.5f;
     if (dm4 & half) {
       q.set_i(me, f_deathtype, q.s(s_discharged));
@@ -488,4 +501,4 @@ void weapon_precache(A& q) {
   }
 }
 
-}  // namespace shooters_edge::server::arena
+}  // namespace shooters_edge::server::rules::SE_RULES_NS

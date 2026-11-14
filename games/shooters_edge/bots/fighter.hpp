@@ -1,5 +1,5 @@
 // THE FIGHTER: a bot (plugins/shooter/bot.hpp) that plays the baseline deathmatch mod
-// (games/shooters_edge/qc): it chooses where to go, what to hold and when to shoot, on `ai/choose`,
+// (games/shooters_edge/rules): it chooses where to go, what to hold and when to shoot, on `ai/choose`,
 // from what a player's client has and nothing else.
 //
 // WHAT IT KNOWS:

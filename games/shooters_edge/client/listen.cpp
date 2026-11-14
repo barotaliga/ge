@@ -36,7 +36,7 @@ namespace pg = ge::progs;
 
 namespace {
 
-// The message bytes of the baseline mod's temporary entities (qc/common/defs.qc's SVC_TEMPENTITY
+// The message bytes of the baseline mod's temporary entities (rules/common_decl.hpp's SVC_TEMPENTITY
 // and its TE_ kinds, the multiplayer protocol's layout: a gunshot and blood carry a count).
 constexpr uint8_t kTempEntity = 23, kExplosion = 3;
 

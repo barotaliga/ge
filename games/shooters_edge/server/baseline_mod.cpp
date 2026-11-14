@@ -8,6 +8,7 @@
 
 #include "progs/native.hpp"
 #include "shooters_edge/rules/arena.hpp"
+#include "shooters_edge/rules/campaign.hpp"
 
 namespace shooters_edge::server {
 
@@ -15,6 +16,20 @@ bool baseline_mod(ge::progs::Progs& out, std::string& error) {
   ge::progs::NativeOffsets offsets;
   if (ge::progs::build_native_progs(native_arena(), out, offsets, error)) return true;
   error = "the baseline mod: " + error + "; the game is built wrong (games/shooters_edge/rules)";
+  return false;
+}
+
+bool campaign_mod(ge::progs::Progs& out, std::string& error) {
+  ge::progs::NativeOffsets offsets;
+  if (ge::progs::build_native_progs(native_campaign(), out, offsets, error)) return true;
+  error = "the campaign: " + error + "; the game is built wrong (games/shooters_edge/rules)";
+  return false;
+}
+
+bool own_mod(const std::string& name, ge::progs::Progs& out, std::string& error) {
+  if (name == "arena") return baseline_mod(out, error);
+  if (name == "campaign") return campaign_mod(out, error);
+  error = "no program of ours is named \"" + name + "\"; next: pass arena or campaign";
   return false;
 }
 

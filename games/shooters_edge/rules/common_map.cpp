@@ -15,9 +15,9 @@
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
 
-#include "shooters_edge/rules/arena_decl.hpp"
+#include "shooters_edge/rules/variant.hpp"
 
-namespace shooters_edge::server::arena {
+namespace shooters_edge::server::rules::SE_RULES_NS {
 
 namespace {
 
@@ -26,11 +26,6 @@ constexpr int kDoorGold = 8;
 constexpr int kDoorSilver = 16;
 constexpr int kDoorToggle = 32;  // opens on one use and stays, shuts on the next
 
-constexpr float kStateTop = 0;
-constexpr float kStateBottom = 1;
-constexpr float kStateUp = 2;
-constexpr float kStateDown = 3;
-constexpr float kStateWaiting = 4;  // a named plat at its top, until it is used
 
 void flame_start(A& q, int32_t mdl, float fr) {
   q.precache_model(mdl);
@@ -38,6 +33,8 @@ void flame_start(A& q, int32_t mdl, float fr) {
   q.set_f(q.self(), q.L.f.frame, fr);
   q.makestatic(q.self());
 }
+
+}  // namespace
 
 // A brush entity: its own model, standing still, blocking.
 void brush_start(A& q) {
@@ -47,6 +44,7 @@ void brush_start(A& q) {
   q.setorigin(me, q.v(me, q.L.f.origin));
   q.setmodel(q.self(), q.i(q.self(), q.L.f.model));
 }
+
 
 // A trigger field the size of `self`'s brush, invisible.
 void trigger_start(A& q) {
@@ -58,6 +56,8 @@ void trigger_start(A& q) {
   q.set_f(q.self(), q.L.f.modelindex, 0);
   q.set_i(q.self(), q.L.f.model, 0);
 }
+
+namespace {
 
 // The movers' sounds: `noise1` moving, `noise2` stopped.
 void mover_sounds(A& q, St a, St b) {
@@ -242,6 +242,8 @@ void button_fire(A& q) {
   calc_move(q, q.v(q.self(), f_pos2), q.f(q.self(), f_speed), q.fn(fn_button_pressed));
 }
 
+}  // namespace
+
 void trigger_fire(A& q) {
   const int32_t me = q.self();
   if (q.f(me, q.L.f.nextthink) > q.time()) return;  // still waiting since the last time
@@ -257,6 +259,8 @@ void trigger_fire(A& q) {
     q.set_i(s, q.L.f.think, q.fn(fn_remove_self));
   }
 }
+
+namespace {
 
 // A mover's far end: `movedir` x (the brush's extent along it, less the lip).
 Vec3 far_end(A& q, int32_t me) {
@@ -694,4 +698,4 @@ void trigger_hurt(A& q) {
   if (q.f(q.self(), f_dmg) == 0) q.set_f(q.self(), f_dmg, 5);
 }
 
-}  // namespace shooters_edge::server::arena
+}  // namespace shooters_edge::server::rules::SE_RULES_NS

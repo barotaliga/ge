@@ -1,4 +1,4 @@
-// The arena's declaration put together: the X-lists of arena_decl.hpp as the native program's
+// The arena's declaration put together: the X-lists of common_decl.hpp and arena_decl.hpp as the native program's
 // globals, fields, strings and functions, each function a C++ rule run by the VM.
 //
 // ge:summary The arena's native program declaration assembled from its lists
@@ -15,7 +15,7 @@ namespace shooters_edge::server {
 
 namespace {
 
-namespace ar = arena;
+namespace ar = rules::arena;
 
 // A rule as the VM runs it: the rules' view made over the VM, the rule run.
 template <void (*Rule)(ar::A&)>
@@ -25,16 +25,17 @@ void run(pg::Vm& vm) {
 }
 
 #define SE_X(name, type) {#name, pg::type},
-constexpr pg::NativeDef kGlobals[] = {SE_ARENA_GLOBALS(SE_X)};
-constexpr pg::NativeDef kFields[] = {SE_ARENA_FIELDS(SE_X)};
+constexpr pg::NativeDef kGlobals[] = {SE_COMMON_GLOBALS(SE_X) SE_ARENA_GLOBALS(SE_X)};
+constexpr pg::NativeDef kFields[] = {SE_COMMON_FIELDS(SE_X)};
 #undef SE_X
 #define SE_X(name, text) text,
 // Every entry is its own literal (the list is long and alike, which the comma check misreads).
 // NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
-constexpr const char* kStrings[] = {SE_ARENA_STRINGS(SE_X)};
+constexpr const char* kStrings[] = {SE_RULES_STRINGS(SE_X)};
 #undef SE_X
 #define SE_X(name, qc_name) {qc_name, &run<&ar::name>},
-constexpr pg::NativeFunction kFunctions[] = {SE_ARENA_FUNCTIONS(SE_X)};
+constexpr pg::NativeFunction kFunctions[] = {SE_COMMON_FUNCTIONS(SE_X)
+                                                  SE_ARENA_FUNCTIONS(SE_X)};
 #undef SE_X
 
 static_assert(std::size(kGlobals) == ar::kGlobalCount && std::size(kFields) == ar::kFieldCount &&

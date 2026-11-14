@@ -27,7 +27,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "progs/file.hpp"
-#include "progs/qc_compile.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "progs/vm.hpp"
 #include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/mod_match.hpp"
@@ -225,16 +225,12 @@ struct Leg {
 
 }  // namespace fr
 
-// `seconds` of the scripted player on the free episode; `root` the repository (our program's
-// sources).
-inline void free_campaign(ge::lab::Lab& lab, const std::string& root, double seconds) {
+// `seconds` of the scripted player on the free episode, on the campaign in C++.
+inline void free_campaign(ge::lab::Lab& lab, double seconds) {
   using namespace fr;
-  const std::filesystem::path src =
-      std::filesystem::path(root) / "games/shooters_edge/qc/campaign/progs.src";
-  const pg::QcProject built = pg::compile_project(src);
-  if (!built.result.ok) {
-    lab.fail("se-campaign --free: " + src.generic_string() + " does not compile",
-             "next: `ge qc build " + src.generic_string() + "` from the repository root");
+  pg::Progs progs;
+  if (std::string error; !sv::campaign_mod(progs, error)) {
+    lab.fail("se-campaign --free: the campaign: " + error, "next: fix the campaign's rules");
     return;
   }
   sv::Campaign c;
@@ -243,13 +239,13 @@ inline void free_campaign(ge::lab::Lab& lab, const std::string& root, double sec
   o.load = &free_load;
   o.settings = {"deathmatch 0", "skill 1"};
   std::string error;
-  if (!sv::campaign_new_game(c, built.result.progs, o, "start", error)) {
+  if (!sv::campaign_new_game(c, progs, o, "start", error)) {
     lab.fail("se-campaign --free: the free episode did not start: " + error,
              "next: read the error; skill: progs");
     return;
   }
   sv::campaign_join(c, 0, "player");
-  const pg::Progs& p = built.result.progs;
+  const pg::Progs& p = progs;
   const auto field = [&](const char* name) {
     const pg::Def* d = pg::find_field(p, name);
     return d ? d->offset : -1;

@@ -43,7 +43,7 @@
 #include "lab/labs/explosion_scene.hpp"
 #include "lab/labs/liquid_scene.hpp"
 #include "morph/write.hpp"
-#include "progs/qc_compile.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooter/trace.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -157,7 +157,7 @@ constexpr Subject kSubjects[] = {
      "the classic's flat sprite beside a round warm glow fading to nothing, no square edge"},
     {"bubbles", "BUBBLES UNDER WATER",
      "Air bubbles rising from a water's floor (the campaign's air_bubbles: pass "
-     "--progs=games/shooters_edge/qc/campaign/progs.src): the pack's bubble sprite in the classic "
+     "--progs=campaign): the pack's bubble sprite in the classic "
      "look; in the enhanced look the engine's bubbles in its place (ce_bubbles), each a clear "
      "ball wobbling off its path as it rises.",
      "the classic's flat sprite beside small clear balls with a bright rim and a highlight"},
@@ -211,20 +211,14 @@ void run(gl::Lab& lab) {
       return;
     }
   }
-  // The baseline mod (its arena), or `--progs`: a progs.src compiled here (the campaign's, whose
+  // The baseline mod (its arena), or `--progs`: a program of ours by name (the campaign, whose
   // set pieces the arena removes: air bubbles), played as a single game.
   cl::ListenOptions opt = shooters_edge::net::listen_options();
-  if (const std::string& src = lab.arg("progs"); !src.empty()) {
-    const ge::progs::QcProject built = ge::progs::compile_project(src);
-    if (!built.result.ok) {
-      std::string why;
-      for (const ge::progs::QcDiagnostic& d : built.result.diagnostics)
-        why += ge::progs::diagnostic_text(d) + "\n";
-      lab.fail("se-models: " + src + " does not compile:\n" + why,
-               "next: fix the first error at its file and line. Skill: progs.");
+  if (const std::string& which = lab.arg("progs"); !which.empty()) {
+    if (!shooters_edge::server::own_mod(which, progs, error)) {
+      lab.fail("se-models: " + error, "next: pass --progs=campaign. Skill: progs.");
       return;
     }
-    progs = built.result.progs;
     opt.console = {"deathmatch 0"};
     opt.files = &files;
   } else if (!cl::baseline_progs(progs, error)) {
@@ -1086,7 +1080,7 @@ const gl::LabSpec kSpec{
      {"pak", "", "a pack holding the map, its models and gfx/palette.lmp (empty: the fixture)"},
      {"map", "e1m1", "the pack's map to stand in (with --pak)"},
      {"models", "mdl", "the fixture's models: mdl (classic) or iqm (a skeletal model, baked)"},
-     {"progs", "", "a progs.src compiled and played as a single game (empty: the arena mod)"},
+     {"progs", "", "a program of ours played as a single game: campaign (empty: the arena)"},
      {"cvars", "", "picture cvars run before the frames (r_look is set per shot)"}},
     "--size=480,270",
     run,

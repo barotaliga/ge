@@ -14,7 +14,7 @@
 #include <filesystem>
 #include <memory>
 
-#include "progs/qc_compile.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
@@ -142,18 +142,15 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
     r.error = "run_coop_episode: 1..3 companions and a map loader; next: check the options";
     return r;
   }
-  pg::QcProject built;
+  pg::Progs own;
   const pg::Progs* progs = opt.progs;
   if (!progs) {
-    const std::filesystem::path src =
-        std::filesystem::path(opt.root) / "games/shooters_edge/qc/campaign/progs.src";
-    built = pg::compile_project(src);
-    if (!built.result.ok) {
-      r.error = "run_coop_episode: " + src.generic_string() +
-                " did not compile; next: `ge qc build games/shooters_edge/qc/campaign/progs.src`";
+    std::string error;
+    if (!sv::campaign_mod(own, error)) {
+      r.error = "run_coop_episode: the campaign: " + error;
       return r;
     }
-    progs = &built.result.progs;
+    progs = &own;
   }
   sv::Campaign c;
   sv::CampaignOptions co;

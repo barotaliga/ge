@@ -290,7 +290,7 @@ struct NavExtraLink {
   bool gap = false;       // a jump over a gap at a hopper's speed (NavLink::gap)
 };
 
-// THE ROCKET JUMP, as the baseline mod makes it (games/shooters_edge/qc: weapons.qc's `launch`,
+// THE ROCKET JUMP, as the baseline mod makes it (games/shooters_edge/rules: common_weapons.cpp's `launch`,
 // combat.qc's `radius_damage` and `blow_push`): the player runs at the target at `speed`, and on
 // one command presses jump and fires with the view `pitch` degrees down; the rocket starts at
 // the eye less 8 (and 8 down), flies at `missile_speed` and bursts `back_off` short of where it

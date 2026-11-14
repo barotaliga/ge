@@ -1,4 +1,4 @@
-// Tests: the monsters of our campaign mod (games/shooters_edge/qc/campaign/ai.qc, monsters.qc)
+// Tests: the monsters of our campaign mod (games/shooters_edge/rules/campaign_ai.cpp, campaign_monsters*.cpp)
 // on the campaign host, in the arena's west room. Each counts at spawn; a rifleman facing the
 // player notices him and shoots; one facing away notices only a player who made noise; a death
 // counts, is told and fires the monster's targets; a hound bites a player beside it; a hound on a

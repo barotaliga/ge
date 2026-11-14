@@ -1,5 +1,5 @@
-// Tests: our programs fire and absorb through the arsenal's rows (games/shooters_edge/qc/common/
-// weapons.qc and items.qc; the rows' C++ side is profiles/arsenal.hpp), on the campaign host in the
+// Tests: our programs fire and absorb through the arsenal's rows (games/shooters_edge/rules/
+// common_weapons.cpp and common_items.cpp; the rows' C++ side is profiles/arsenal.hpp), on the campaign host in the
 // arena's west room. With no rows a slot keeps the program's own (a shot of the scattergun costs a
 // shell, green armour is 100 at 30 %); a row the server is given changes what the slot does (a
 // shot's cost, the armour's amount and share); the program parses a row's numbers the same way in

@@ -9,9 +9,9 @@
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
 
-#include "shooters_edge/rules/arena_decl.hpp"
+#include "shooters_edge/rules/variant.hpp"
 
-namespace shooters_edge::server::arena {
+namespace shooters_edge::server::rules::SE_RULES_NS {
 
 namespace {
 
@@ -123,7 +123,7 @@ void PutClientInServer(A& q) {
   q.setmodel(s, q.s(s_player_mdl));
   q.setsize(q.self(), {-16, -16, -24}, {16, 16, 32});
   q.setorigin(q.self(), q.v(q.self(), q.L.f.origin));
-  if (on(q.g(g_deathmatch))) {
+  if (on(q.deathmatch())) {
     // A deathmatch spawn is heard, and it takes the spot, for when every spawn point is taken.
     q.sound(q.self(), kChanVoice, q.s(s_r_tele1_wav), 1, kAttnNorm);
     telefrag(q, q.self());
@@ -250,4 +250,4 @@ void player_precache(A& q) {
     q.precache_sound(q.s(s));
 }
 
-}  // namespace shooters_edge::server::arena
+}  // namespace shooters_edge::server::rules::SE_RULES_NS

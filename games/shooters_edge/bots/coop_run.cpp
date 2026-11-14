@@ -14,7 +14,7 @@
 #include <filesystem>
 #include <memory>
 
-#include "progs/qc_compile.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooter/nav.hpp"
 #include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/mod_match.hpp"
@@ -201,17 +201,15 @@ CoopReport run_coop(const CoopOptions& opt) {
     r.error = "run_coop: 1..3 companions; next: pass fewer skills";
     return r;
   }
-  const std::filesystem::path src =
-      std::filesystem::path(opt.root) / "games/shooters_edge/qc/campaign/progs.src";
-  const pg::QcProject built = pg::compile_project(src);
-  if (!built.result.ok) {
-    r.error = "run_coop: " + src.generic_string() + " did not compile";
-    for (const pg::QcDiagnostic& d : built.result.diagnostics)
-      if (d.error) r.error += "; " + pg::diagnostic_text(d);
-    r.error += "; next: `ge qc build games/shooters_edge/qc/campaign/progs.src`";
-    return r;
+  pg::Progs own;
+  if (opt.progs == nullptr) {
+    std::string error;
+    if (!sv::campaign_mod(own, error)) {
+      r.error = "run_coop: the campaign: " + error;
+      return r;
+    }
   }
-  const pg::Progs& progs = built.result.progs;
+  const pg::Progs& progs = opt.progs != nullptr ? *opt.progs : own;
 
   sv::Campaign c;
   sv::CampaignOptions co;

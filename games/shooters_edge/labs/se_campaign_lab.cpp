@@ -36,7 +36,7 @@
 #include "lab/chart.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
-#include "progs/qc_compile.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/client/campaign_view.hpp"
 #include "shooters_edge/server/bsp_map.hpp"
 #include "shooters_edge/server/campaign.hpp"
@@ -132,19 +132,13 @@ bool load_program(gl::Lab& lab, Loaded& out) {
     lab.fail("se-campaign: the packs hold no progs.dat", "next: pass the game's own folder");
     return false;
   }
-  // `--progs`: a campaign program of our own (a progs.src compiled here) on the pack's maps.
+  // `--progs`: a program of our own (campaign) on the pack's maps.
   if (const std::string& own = lab.arg("progs"); !own.empty()) {
-    const pg::QcProject built = pg::compile_project(own);
-    if (!built.result.ok) {
-      std::string why;
-      for (const pg::QcDiagnostic& d : built.result.diagnostics)
-        why += pg::diagnostic_text(d) + "\n";
-      lab.fail("se-campaign: " + own + " does not compile:\n" + why,
-               "next: fix the first error at its file and line");
+    if (!sv::own_mod(own, out.progs, error)) {
+      lab.fail("se-campaign: " + error, "next: pass --progs=campaign");
       return false;
     }
-    out.progs = built.result.progs;
-    out.from = own + " (compiled here)";
+    out.from = "our " + own;
     return true;
   }
   const std::span<const uint8_t> bytes = ge::vfs::pak_file(content, *e);
@@ -883,7 +877,7 @@ void run(gl::Lab& lab) {
   autoaim(lab, in);
   campaign_flow(lab);
   if (!lab.arg("game").empty()) pack_campaign(lab, l);
-  if (lab.arg_num("free") > 0) la::free_campaign(lab, lab.arg("root"), lab.arg_num("free"));
+  if (lab.arg_num("free") > 0) la::free_campaign(lab, lab.arg_num("free"));
 }
 
 const gl::LabSpec kSpec{
@@ -900,8 +894,8 @@ const gl::LabSpec kSpec{
          "the player's classic game: a release zip, a pack or a folder (empty: the stub)"},
         {"rise", "60", "how far above the shooter the autoaim's target stands, units"},
         {"progs", "",
-         "with --game: a campaign program of our own to run on the pack's maps, as its progs.src "
-         "(games/shooters_edge/qc/campaign/progs.src); empty: the pack's own progs.dat"},
+         "with --game: a program of our own to run on the pack's maps (campaign); empty: the "
+         "pack's own progs.dat"},
         {"map", "start", "with --game: the map the campaign starts on"},
         {"skill", "1", "with --game: the skill the campaign is played at"},
         {"coop", "0", "with --game: the `coop` setting the campaign starts with"},
@@ -917,14 +911,13 @@ const gl::LabSpec kSpec{
          "with --game, s: first every door and plat of the map set off in turn and run this long, "
          "the sounds each plays (and a key door's without its key) tabled and folded by kind"},
         {"free", "0",
-         "s: our campaign program (compiled from --root) on the free episode: three fixture maps "
+         "s: our campaign on the free episode: three fixture maps "
          "(a hall, five monsters to an exit, a key door and the rune) played by a scripted player "
          "this long"},
         {"pickups", "0",
          "with --game, s: every item and weapon of the map touched by the player in turn, then "
          "the map run this long: whether each is still shown (in single player and co-op a taken "
          "item never is)"},
-        {"root", ".", "the repository's root (our campaign program's sources are under it)"},
         {"exit", "0",
          "with --game, 1: then the player stood in the map's exit, the level's end read as the "
          "window reads it and the attack held until the next map"},

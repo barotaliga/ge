@@ -93,9 +93,9 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   Blender, and no other scripting enters the tree. The one runtime exception is Shooter's
   Edge's QC VM and compiled-module VM (`plugins/progs`, `docs/shooters-edge.md`), which execute
   existing mods' bytecode (a `.dat` or a `.qvm`) for compatibility ONLY: **no QC of our own.**
-  Our own game rules are C++ (`engine/mod` packages, `docs/mods.md`); the baseline mod's QC
-  sources (`games/shooters_edge/qc/`) take no new code and are being carried to C++ packages
-  and deleted (M52h); the only QC left is the VMs' own test fixtures, built inside their tests.
+  Our own game rules are C++ (`engine/mod` packages, `docs/mods.md`; Shooter's Edge's arena and
+  campaign in `games/shooters_edge/rules/`, M52h); the only QC left is the VMs' own test
+  fixtures, built inside their tests.
   Nothing about the reference sources' architecture (their layers, module split, file layout,
   state shape, names or data formats) is assumed to carry over: each design decision is made
   here, for this engine, and recorded in `docs/architecture.md`. Where a carried-over module
@@ -369,10 +369,9 @@ characters.
 | `games/shooters_edge/labs/` | Shooter's Edge's labs | `labs`, `ui` |
 | `games/shooters_edge/cli/` | Shooter's Edge's player CLI (`shooters_edge_cli`): its Spec over engine/gamecli (places, the classic protocol, launch words, settings), classic enhance's group, its demos | `agent-interface`, `shooter` |
 | `games/shooters_edge/server/` | Shooter's Edge's server: the host, its slots and input log, the dedicated binary; the mod server (QC builtins and extensions, hooks, the test and baseline mods, a progs from a path) | `shooter`, `progs` |
-| `games/shooters_edge/rules/` | Shooter's Edge's own rules in C++ as native programs (M52h): the classic server's calls typed for them; the arena, then the campaign, in place of the QC | `progs`, `shooter` |
+| `games/shooters_edge/rules/` | Shooter's Edge's own rules in C++ as native programs (M52h): the classic server's calls typed for them; the arena and the campaign on the rules they share | `progs`, `shooter` |
 | `games/shooters_edge/hub/` | Shooter's Edge's hub binary (`shooters_edge_hub`): the engine's hub with the game's modes and words | `net` |
 | `games/shooters_edge/web/` | Shooter's Edge's web viewer (`shooters_edge_viewer`, the `web` preset): the packs and a demo fetched from a hub, the match played on the page's canvas | `net` |
-| `games/shooters_edge/qc/` | Shooter's Edge's last QC, frozen and being carried to C++ (M52h): `campaign/` the single-player game and `common/` it shares (the arena is C++ now, `rules/`) | `progs` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (the harness), `golden.hpp`, `golden/` | `testing` |
 | `porting/` | The WORKING AREA (above): the porting guide, the porting map, the golden-table generators. Deleted when porting ends | `port` |
 | `tools/` | The repository's checks and scripts: `check-agents.sh`, `agents-index.mjs` (the `ge:` tags, `docs/index.md`, `make find`), `skill-lessons.mjs`, `precheck.sh`, `lint.sh` | `write-code` |
@@ -462,7 +461,7 @@ and the directories agree.
 | `brush` | `plugins/brush`: maps in the classic BSP families (version 29, BSP2, 38, 46) read into one view (surfaces, lightmaps, tree, clusters, visibility, entities, 46's patches tessellated), refusing damage; the fixture writers; the `bsp` lab |
 | `morph` | `plugins/morph`: classic vertex-animated models and sprites read into one view (skins and groups, the seam split, frames as morph targets), refusing damage; the fixture writers; per-frame smooth normals and the optional rounding; the `morph` lab |
 | `rooms` | `plugins/rooms`: the engine's own level format (rooms, openings, solids, materials with a texture reference and a relief), its bytes (.gelv) and text form, growing rooms from their seeds (rock, crag, stones, ashlar, tiles, planks, corrugated, dents; caves by surface nets), the `rooms` lab |
-| `progs` | `plugins/progs`: the QC VM (`call_function`, every opcode on 32-bit floats, the call convention and its guards, faults with QC stack traces, the profile), the progs loader and checker, the classic engine-side layout, strings, the builtin table and the extension registry, the assembler and the sample program, the QC compiler (`compile_qc`, `ge qc build`), `ge qc` and the `qc` lab; the standard builtins, the entity text and the mod server (`games/shooters_edge/server`: the catalogue, the hooks, a progs from a path, the `se-mod` lab); the baseline mod (`games/shooters_edge/qc`, the `se-baseline` lab); the M18c, M18d and M18p rows |
+| `progs` | `plugins/progs`: the QC VM (`call_function`, every opcode on 32-bit floats, the call convention and its guards, faults with QC stack traces, the profile), the progs loader and checker, the classic engine-side layout, strings, the builtin table and the extension registry, the assembler and the sample program, the QC compiler (`compile_qc`, `ge qc build`), `ge qc` and the `qc` lab; the standard builtins, the entity text and the mod server (`games/shooters_edge/server`: the catalogue, the hooks, a progs from a path, the `se-mod` lab); the baseline mod and the campaign in C++ (`games/shooters_edge/rules`, the `se-baseline` lab); the M18c, M18d and M18p rows |
 | `shooter` | `plugins/shooter`: the classic player move in 32-bit floats (`player_move`, `run_command`, every move type and server setting), clip hulls and the line trace, hulls from brushes, the move's solids, the recorded scenarios and the `pmove` lab; the M18o rows |
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |

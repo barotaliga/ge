@@ -15,6 +15,7 @@
 #include "net/sim_network.hpp"
 #include "progs/qc_compile.hpp"
 #include "shooters_edge/net/classic_client.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/net/classic_coop_game.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/classic_info.hpp"
@@ -34,11 +35,10 @@ constexpr uint16_t kPort = 27500, kClientPort = 27001, kBrowserPort = 27002;
 // Our campaign mod, compiled from its sources.
 const ge::progs::Progs& campaign_mod() {
   static const ge::progs::Progs p = [] {
-    const ge::progs::QcProject built = ge::progs::compile_project(
-        std::filesystem::path(GE_SOURCE_DIR) / "games/shooters_edge/qc/campaign/progs.src");
-    for (const ge::progs::QcDiagnostic& d : built.result.diagnostics)
-      CHECK_MSG(!d.error, ge::progs::diagnostic_text(d));
-    return built.result.progs;
+    ge::progs::Progs out;
+    std::string error;
+    CHECK_MSG(shooters_edge::server::campaign_mod(out, error), error);
+    return out;
   }();
   return p;
 }

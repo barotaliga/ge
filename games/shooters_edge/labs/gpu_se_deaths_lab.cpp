@@ -1,6 +1,6 @@
 // LAB `se-deaths`: DO MONSTERS DIE AS THE CLASSIC GAME'S DO? A campaign on the listen server
-// (client/listen.hpp) with a single-player program (our campaign variant, games/shooters_edge/qc/
-// campaign; `--progs=pack` the packs' own progs.dat). For each kind in `--kinds`, on a fresh map,
+// (client/listen.hpp) with a single-player program (our campaign in C++, games/shooters_edge/
+// rules; `--progs=pack` the packs' own progs.dat). For each kind in `--kinds`, on a fresh map,
 // the map's first monster of that kind is found and the player stood `--range` units from it,
 // looking at it, unseen (no-target) and unhurt (god mode), and shoots it twice over:
 //
@@ -47,7 +47,7 @@
 #include "lab/lab.hpp"
 #include "lab/labs/explosion_scene.hpp"
 #include "progs/file.hpp"
-#include "progs/qc_compile.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -414,18 +414,10 @@ void run(gl::Lab& lab) {
       return;
     }
   } else {
-    const std::filesystem::path src =
-        std::filesystem::path(lab.arg("root")) / "games/shooters_edge/qc/campaign/progs.src";
-    const ge::progs::QcProject built = ge::progs::compile_project(src);
-    if (!built.result.ok) {
-      std::string why;
-      for (const ge::progs::QcDiagnostic& d : built.result.diagnostics)
-        why += ge::progs::diagnostic_text(d) + "\n";
-      lab.fail("se-deaths: " + src.generic_string() + " does not compile:\n" + why,
-               "Fix the first error at its file and line. Skill: progs.");
+    if (!shooters_edge::server::campaign_mod(progs, error)) {
+      lab.fail("se-deaths: the campaign: " + error, "Fix the campaign's rules. Skill: progs.");
       return;
     }
-    progs = built.result.progs;
   }
   Setup s;
   {
@@ -476,7 +468,7 @@ const gl::LabSpec kSpec{
     "se-deaths",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "the campaign's monsters' deaths (games/shooters_edge/qc/campaign/ai.qc, monster_die) and "
+    "the campaign's monsters' deaths (games/shooters_edge/rules/campaign_ai.cpp, monster_die) and "
     "their gibs and blood as the window draws them (client/world_fx.hpp, world_models.hpp)",
     "shooter",
     "Do monsters die as the classic game's do? Each kind shot dead (its death frames) and gibbed "
@@ -486,7 +478,6 @@ const gl::LabSpec kSpec{
         {"game", "", "a game folder (<base>/<folder>); empty: the fixture halls and one soldier"},
         {"map", "e1m1", "with --game: the map"},
         {"progs", "", "pack: the packs' own progs.dat; else our campaign program"},
-        {"root", ".", "the repository's root (our campaign program's sources are under it)"},
         {"kinds", "soldier,dog", "with --game: the monsters by model name (soldier, dog, ogre...)"},
         {"range", "192", "units from the monster the player stands"},
         {"seconds", "2.5", "seconds read (and filmed) after the shot"},
