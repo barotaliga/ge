@@ -299,10 +299,12 @@ bool run_lightmaps(const Source& src, const fs::path& dir, const RunOptions& o, 
   if (!vfs::read_pak(src.content(), &pak, error)) return false;
   const Profile& profile = *src.profile;
   const std::vector<const vfs::PakEntry*> maps = assets_of(pak, profile.maps);
+  // The game's palette, in whichever form its row keeps it (the sequel's at a PCX picture's end);
+  // none read: the textures' means fall back to grey.
+  Palette pal;
+  std::string no_palette;
   std::span<const uint8_t> palette;
-  if (const vfs::PakEntry* pal = vfs::pak_find(pak, profile.palette); pal && pal->size >= 768) {
-    palette = vfs::pak_file(src.content(), *pal).first(768);
-  }
+  if (read_palette(profile, pak, src.content(), &pal, &no_palette)) palette = pal.rgb;
   rep.started(maps.size());
   uint64_t luxels = 0, bytes = 0;
   for (const vfs::PakEntry* e : maps) {

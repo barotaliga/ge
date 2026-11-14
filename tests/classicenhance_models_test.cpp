@@ -7,17 +7,22 @@
 // ge:keywords test classicenhance models drop-glowing fullbright replace effect torch
 // ge:skill classicenhance testing
 #include <algorithm>
+#include <filesystem>
 #include <set>
 #include <string>
 #include <vector>
 
+#include "assets/pcx.hpp"
 #include "check.hpp"
+#include "classicenhance/cached.hpp"
 #include "classicenhance/models.hpp"
 #include "classicenhance/replace.hpp"
 #include "morph/write.hpp"
+#include "vfs/pak.hpp"
 
 namespace ce = ge::classicenhance;
 namespace mo = ge::morph;
+namespace fs = std::filesystem;
 
 namespace {
 
@@ -95,4 +100,72 @@ TEST(replacements_name_each_file_once) {
   }
   CHECK(ce::replacement_of("progs/flame.mdl")->effect == "fire.wall_torch");
   CHECK(ce::replacement_of("progs/player.mdl") == nullptr);
+}
+
+TEST(model_name_is_the_path_under_its_kinds_folder) {
+  CHECK(ce::model_name("progs/armor.mdl") == "armor");
+  CHECK(ce::model_name("progs/s_light.spr") == "s_light");
+  CHECK(ce::model_name("models/items/armor/tris.md2") == "items/armor/tris");
+  CHECK(ce::model_name("sprites/s_bfg1.sp2") == "s_bfg1");
+}
+
+TEST(the_sequels_models_keep_their_own_names_and_their_outside_skins_and_frames) {
+  // Two models both called tris in their folders, their skins PCX pictures in the pack, and a
+  // sprite whose frames are pictures too: each lands in its own place with its pictures.
+  const ce::Profile& sequel = *ce::find_profile("sequel");
+  mo::Model m = mo::sample_model();
+  const mo::Skin skin = m.skins[0];
+  m.skins.clear();
+  m.skin_width = skin.width;
+  m.skin_height = skin.height;
+  m.skin_paths = {"models/items/armor/skin.pcx"};
+  const auto pcx_of = [](int w, int h, uint8_t index) {
+    ge::assets::IndexedImage img;
+    img.width = w, img.height = h;
+    img.indices.assign(size_t(w) * size_t(h), index);
+    img.palette.assign(768, 0);
+    return ge::assets::encode_pcx(img);
+  };
+  mo::Model health = m;
+  health.skin_paths = {"models/items/health/skin.pcx"};
+  mo::Sprite sp = mo::sample_sprite();
+  for (mo::SpriteFrame& f : sp.frames) {
+    f.picture = "sprites/flash" + std::to_string(&f - sp.frames.data()) + ".pcx";
+    f.indices.clear();
+  }
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
+      {std::string(sequel.palette), pcx_of(8, 8, 1)},
+      {"models/items/armor/tris.md2", mo::write_model2(m)},
+      {"models/items/armor/skin.pcx", pcx_of(skin.width, skin.height, 40)},
+      {"models/items/health/tris.md2", mo::write_model2(health)},
+      {"sprites/flash.sp2", mo::write_sprite2(sp)}};
+  for (const mo::SpriteFrame& f : sp.frames) files.push_back({f.picture, pcx_of(8, 8, 50)});
+  std::vector<uint8_t> pack;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak(files, &pack, &error), error);
+  ce::Palette palette;
+  for (size_t i = 0; i < palette.rgb.size(); i++) palette.rgb[i] = uint8_t(i);
+  const fs::path dir = fs::temp_directory_path() / "ge_ce_sequel_models_test";
+  fs::remove_all(dir);
+  ce::ModelStats stats;
+  ce::EnhanceOptions t;
+  t.scale = 1;
+  ce::ModelOptions o;
+  o.skin_scale = 1;
+  CHECK_MSG(ce::enhance_models(pack, palette, dir, o, t, &stats, &error, sequel), error);
+  CHECK(stats.models == 2 && stats.sprites == 1);
+  CHECK(fs::exists(dir / "models" / "items_armor_tris.glb"));
+  CHECK(fs::exists(dir / "models" / "items_health_tris.glb"));
+  // The armour's skin came from its picture; the health's names one the pack lacks: no skin.
+  CHECK(fs::exists(dir / "models" / "items_armor_tris" / "skin0.png"));
+  CHECK(!fs::exists(dir / "models" / "items_health_tris" / "skin0.png"));
+  std::vector<ge::assets::Image> big;
+  CHECK(ce::cached_skins(dir, ce::model_name("models/items/armor/tris.md2"), uint32_t(skin.width),
+                         uint32_t(skin.height), &big) &&
+        big.size() == 1);
+  for (size_t f = 0; f < sp.frames.size(); f++) {
+    CHECK(
+        fs::exists(dir / "sprites" / "flash" / ((f < 10 ? "0" : "") + std::to_string(f) + ".png")));
+  }
+  fs::remove_all(dir);
 }
