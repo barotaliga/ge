@@ -343,6 +343,9 @@ struct DemoMsg {
   std::span<const uint8_t> b;
   size_t at = 0;
   bool bad = false;
+  // When set, read_single_messages pushes each message's offset in `b` (where its id is), so a
+  // caller can cut a block at its messages (net/classic_tv_netgame.hpp).
+  std::vector<uint32_t>* marks = nullptr;
   int u8();
   int i8();
   int i16();

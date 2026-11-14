@@ -263,6 +263,7 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
   DemoState& s = d.state;
   while (!m.done() && !m.bad) {
     const size_t at = m.at;
+    if (m.marks != nullptr) m.marks->push_back(static_cast<uint32_t>(at));
     const int id = m.u8();
     bool ok = true;
     if ((id & 0x80) != 0) {
