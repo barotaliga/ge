@@ -55,10 +55,10 @@ build/debug/sesv --name="Arena Night" --description="the arena" --port=27500 \
 build/debug/sesv --root=<install> --map=dm6 --port=27512 --realtime --for=0 \
   +set fraglimit 20 +set timelimit 10
 build/debug/sesv --root=servers --mod=arena --cfg=duel --explain=sv_
-build/debug/sesv --sequel --root=<install> --map=q2dm1 --port=27910 --realtime --for=0
+build/debug/sesv -game 2 --root=<install> --map=q2dm1 --port=27910 --realtime --for=0
 ```
 
-`sesv --sequel` is the same process over the sequel's rules on its own protocol
+`sesv -game 2` is the same process over the sequel's rules on its own protocol
 (`games/shooters_edge/net/sequel_game.hpp`): `--root` holds the sequel's game folder, and an
 unmodified client of the sequel joins it. Its levels go round `sv_maprotation` after `sv_map`
 when `fraglimit` or `timelimit` ends one; every client stays connected and signs on again.

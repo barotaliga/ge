@@ -3,7 +3,7 @@
 // status query, so `--browse-master` lists the classic servers already running
 // (engine/hub/browse.hpp), and each demo's content pack names only the files the demo draws from
 // (client/demo_content.hpp), and a map played in the page its own (client/play_content.hpp: the
-// Play page). Built as `shooters_edge_hub` at the build's root by `ge_add_hub`;
+// Play page). Built as `sehub` at the build's root by `ge_add_hub`;
 // `--help` lists its flags.
 //
 // ge:summary Shooter's Edge's hub binary: the engine's hub with the game's modes and words

@@ -120,7 +120,7 @@ example and consumer skill); the parser, `ge help` and `ge help --json` all read
 
 ## The player's game CLI (`engine/gamecli`, `docs/gamecli.md`)
 
-`ge` is the developer's; `<game>_cli` (`shooters_edge_cli`) is the player's agent's: settings,
+`ge` is the developer's; `<game>_cli` (`secli`) is the player's agent's: settings,
 servers, players, the remote console, hosting, joining, logs. It is layered like everything else:
 the engine's rows and frame in `engine/gamecli/` (the table, the parser, `answer`/`refuse`, `help
 --json`, `skill`), a plugin's group in `plugins/<name>/cli/` (`ge_<name>_cli`: classic enhance's
